@@ -13,6 +13,7 @@
 ## Solution
 
 PWA that wraps ttyd terminals with:
+
 - Touch gestures mapped to common shortcuts (swipe → Ctrl+C, Tab, arrows)
 - Virtual keyboard toolbar for modifier keys
 - Session management via tmux integration
@@ -26,13 +27,14 @@ PWA that wraps ttyd terminals with:
 
 ## Tech Decisions
 
-| Decision | Rationale |
-|----------|-----------|
-| React + Vite | Fast dev, good PWA support |
-| xterm.js | Standard terminal emulator, ttyd protocol compatible |
-| tmux backend | Persistent sessions, window management API |
-| nginx proxy | Basic auth, WebSocket, single origin for PWA |
-| TailwindCSS | Rapid styling, responsive utilities |
+| Decision      | Rationale                                            |
+| ------------- | ---------------------------------------------------- |
+| React + Vite  | Fast dev, good PWA support                           |
+| xterm.js      | Standard terminal emulator, ttyd protocol compatible |
+| tmux backend  | Persistent sessions, window management               |
+| Go (tmux-api) | Lightweight HTTP API for tmux control, single binary |
+| nginx proxy   | Basic auth, WebSocket, single origin for PWA         |
+| TailwindCSS   | Rapid styling, responsive utilities                  |
 
 ## Success Metrics
 

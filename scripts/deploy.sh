@@ -1,22 +1,12 @@
 #!/bin/bash
 # Deploy script for Termote
 # Usage:
-#   ./deploy.sh --docker                        # All in docker
-#   ./deploy.sh --native                        # Native local (no SSL)
-#   ./deploy.sh --native --production           # Native production (SSL)
+#   ./deploy.sh --docker                        # All-in-one container
+#   ./deploy.sh --docker --tailscale <hostname> # Docker with Tailscale HTTPS
+#   ./deploy.sh --hybrid                        # Docker nginx+api, native ttyd
+#   ./deploy.sh --hybrid --tailscale <hostname> # Hybrid with Tailscale HTTPS
+#   ./deploy.sh --native                        # All native
 #   ./deploy.sh --native --tailscale <hostname> # Native with Tailscale HTTPS
-#   ./deploy.sh --hybrid [options]              # Mix docker + native
-#
-# Options:
-#   --production            Use production nginx (SSL, domain required)
-#   --tailscale <hostname>  Use Tailscale HTTPS (auto SSL certs)
-#   --nginx=docker|native   (default: docker for hybrid)
-#   --ttyd=docker|native    (default: native for hybrid)
-#   --api=docker|native     (default: native for hybrid)
-#
-# Example:
-#   ./deploy.sh --native
-#   ./deploy.sh --native --tailscale myhost
 
 set -e
 
@@ -25,10 +15,6 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
 # Parse arguments
 MODE=""
-NGINX_MODE=""
-TTYD_MODE=""
-API_MODE=""
-PRODUCTION=false
 TAILSCALE=""
 
 args=("$@")
@@ -38,237 +24,239 @@ for i in "${!args[@]}"; do
         --docker)
             MODE="docker"
             ;;
-        --native)
-            MODE="native"
-            ;;
         --hybrid)
             MODE="hybrid"
             ;;
-        --production)
-            PRODUCTION=true
+        --native)
+            MODE="native"
             ;;
         --tailscale)
             TAILSCALE="${args[$((i+1))]}"
-            ;;
-        --nginx=*)
-            NGINX_MODE="${arg#*=}"
-            ;;
-        --ttyd=*)
-            TTYD_MODE="${arg#*=}"
-            ;;
-        --api=*)
-            API_MODE="${arg#*=}"
             ;;
     esac
 done
 
 # Validate mode
 if [[ -z "$MODE" ]]; then
-    echo "Usage: ./deploy.sh <--docker|--native|--hybrid> [options]"
+    echo "Usage: ./deploy.sh <--docker|--hybrid|--native> [options]"
     echo ""
     echo "Modes:"
-    echo "  --docker   All in docker"
-    echo "  --native   All native (local, basic auth)"
-    echo "  --hybrid   Mix docker + native"
+    echo "  --docker   All-in-one container (nginx+ttyd+tmux-api)"
+    echo "  --hybrid   Docker (nginx+tmux-api) + native ttyd"
+    echo "  --native   All native (requires system packages)"
     echo ""
     echo "Options:"
-    echo "  --tailscale <host[:port]>  Tailscale HTTPS (default port: 8080)"
-    echo "  --production           Production SSL (manual certs)"
-    echo "  --nginx=docker|native  Hybrid: nginx mode"
-    echo "  --ttyd=docker|native   Hybrid: ttyd mode"
-    echo "  --api=docker|native    Hybrid: API mode"
+    echo "  --tailscale <host[:port]>  Enable Tailscale HTTPS (default port: 8080)"
     echo ""
     echo "Examples:"
+    echo "  ./deploy.sh --docker"
+    echo "  ./deploy.sh --docker --tailscale myhost.ts.net"
+    echo "  ./deploy.sh --hybrid --tailscale myhost.ts.net:443"
     echo "  ./deploy.sh --native"
-    echo "  ./deploy.sh --native --tailscale myhost.ts.net"
-    echo "  ./deploy.sh --hybrid --nginx=docker"
     exit 1
 fi
 
-# Set defaults for hybrid mode
-if [[ "$MODE" == "hybrid" ]]; then
-    NGINX_MODE="${NGINX_MODE:-docker}"
-    TTYD_MODE="${TTYD_MODE:-native}"
-    API_MODE="${API_MODE:-native}"
-elif [[ "$MODE" == "docker" ]]; then
-    NGINX_MODE="docker"
-    TTYD_MODE="docker"
-    API_MODE="docker"
-elif [[ "$MODE" == "native" ]]; then
-    NGINX_MODE="native"
-    TTYD_MODE="native"
-    API_MODE="native"
+# Parse Tailscale hostname:port
+if [[ -n "$TAILSCALE" ]]; then
+    if [[ "$TAILSCALE" == *":"* ]]; then
+        TS_HOST="${TAILSCALE%%:*}"
+        TS_PORT="${TAILSCALE##*:}"
+    else
+        TS_HOST="$TAILSCALE"
+        TS_PORT="8080"
+    fi
+
+    # Generate Tailscale certs
+    echo "Generating Tailscale certs for $TS_HOST..."
+    sudo mkdir -p /var/lib/tailscale/certs
+    sudo tailscale cert --cert-file /var/lib/tailscale/certs/${TS_HOST}.crt \
+                        --key-file /var/lib/tailscale/certs/${TS_HOST}.key \
+                        "$TS_HOST" 2>/dev/null || true
+    sudo chmod 644 /var/lib/tailscale/certs/${TS_HOST}.crt
+    sudo chmod 644 /var/lib/tailscale/certs/${TS_HOST}.key
 fi
 
-echo "=== Termote Deployment ==="
-echo "nginx: $NGINX_MODE | ttyd: $TTYD_MODE | api: $API_MODE"
+echo "=== Termote Deployment ($MODE) ==="
 echo ""
 
 # Build PWA
-echo "[1/4] Building PWA..."
+echo "[1/3] Building PWA..."
 cd "$PROJECT_DIR/pwa"
 pnpm install --frozen-lockfile
 pnpm build
 cd "$PROJECT_DIR"
 
-# Deploy PWA files
-echo "[2/4] Deploying PWA..."
-if [[ "$NGINX_MODE" == "docker" ]]; then
-    # PWA served from docker volume
-    mkdir -p "$PROJECT_DIR/pwa/dist"
-else
-    # PWA served from /var/www/termote
-    sudo mkdir -p /var/www/termote/scripts
-    sudo cp -r "$PROJECT_DIR/pwa/dist/"* /var/www/termote/
-    sudo cp "$PROJECT_DIR/scripts/tmux-api.sh" /var/www/termote/scripts/
-    sudo chmod +x /var/www/termote/scripts/tmux-api.sh
-    sudo chown -R www-data:www-data /var/www/termote
+# Create .htpasswd if not exists
+echo "[2/3] Checking auth..."
+if [ ! -f "$PROJECT_DIR/.htpasswd" ]; then
+    echo "Creating .htpasswd (enter password):"
+    echo "admin:$(openssl passwd -apr1)" > "$PROJECT_DIR/.htpasswd"
 fi
 
-# Deploy services
-echo "[3/4] Deploying services..."
-USER=$(whoami)
+# Deploy based on mode
+echo "[3/3] Starting services..."
+export USER_ID=$(id -u)
+export GROUP_ID=$(id -g)
 
-# nginx
-if [[ "$NGINX_MODE" == "docker" ]]; then
-    if [ ! -f "$PROJECT_DIR/.htpasswd" ]; then
-        echo "Creating .htpasswd (enter password):"
-        echo "admin:$(openssl passwd -apr1)" > "$PROJECT_DIR/.htpasswd"
-    fi
-elif [[ "$NGINX_MODE" == "native" ]]; then
-    # Create htpasswd for nginx auth
-    if [ ! -f "/etc/nginx/.htpasswd" ]; then
-        echo "Creating /etc/nginx/.htpasswd (enter password):"
-        echo "admin:$(openssl passwd -apr1)" | sudo tee /etc/nginx/.htpasswd > /dev/null
-    fi
-    # Check if nginx is installed
-    if ! command -v nginx &> /dev/null; then
-        echo "  Error: nginx not installed. Run: sudo apt install nginx"
-        exit 1
-    fi
+case $MODE in
+    docker)
+        # All-in-one container
+        docker compose down 2>/dev/null || true
 
-    # Determine nginx config directory
-    if [ -d "/etc/nginx/sites-available" ]; then
-        NGINX_CONF="/etc/nginx/sites-available/termote"
-        NGINX_LINK="/etc/nginx/sites-enabled/termote"
-    elif [ -d "/etc/nginx/conf.d" ]; then
-        NGINX_CONF="/etc/nginx/conf.d/termote.conf"
-        NGINX_LINK=""
-    else
-        # Create conf.d if neither exists
-        sudo mkdir -p /etc/nginx/conf.d
-        NGINX_CONF="/etc/nginx/conf.d/termote.conf"
-        NGINX_LINK=""
-    fi
+        if [[ -n "$TAILSCALE" ]]; then
+            # Generate nginx config with Tailscale
+            TS_IP=$(tailscale ip -4 2>/dev/null || echo "0.0.0.0")
+            sed -e "s/<hostname>/$TS_HOST/g" \
+                -e "s/<port>/$TS_PORT/g" \
+                -e "s/<tailscale_ip>/$TS_IP/g" \
+                -e "s|/var/lib/tailscale|/certs|g" \
+                "$PROJECT_DIR/nginx/nginx-tailscale.conf" > "$PROJECT_DIR/nginx/nginx-docker.conf.tmp"
 
-    # Install nginx config
-    if [[ -n "$TAILSCALE" ]]; then
-        # Parse hostname:port format
-        if [[ "$TAILSCALE" == *":"* ]]; then
-            TS_HOST="${TAILSCALE%%:*}"
-            TS_PORT="${TAILSCALE##*:}"
+            # Create override with cert mounts
+            cat > "$PROJECT_DIR/docker-compose.override.yml" << EOF
+services:
+  termote:
+    volumes:
+      - \${WORKSPACE:-./workspace}:/workspace:rw
+      - ./nginx/nginx-docker.conf.tmp:/etc/nginx/nginx.conf:ro
+      - /var/lib/tailscale/certs:/certs:ro
+EOF
+            docker compose --profile docker up -d --build
+            rm -f "$PROJECT_DIR/docker-compose.override.yml"
+
+            echo ""
+            echo "=== Deployment complete ==="
+            echo "Access at: https://$TS_HOST:$TS_PORT"
         else
-            TS_HOST="$TAILSCALE"
-            TS_PORT="8080"
+            docker compose --profile docker up -d --build
+            echo ""
+            echo "=== Deployment complete ==="
+            echo "Access at: http://localhost:8080"
+        fi
+        ;;
+
+    hybrid)
+        # Single container (nginx + tmux-api), native ttyd
+        docker compose down 2>/dev/null || true
+
+        # Build tmux-api binary
+        echo "  Building tmux-api..."
+        cd "$PROJECT_DIR/tmux-api"
+        CGO_ENABLED=0 go build -ldflags="-s -w" -o tmux-api . 2>/dev/null || true
+        cd "$PROJECT_DIR"
+
+        # Start native ttyd
+        echo "  Starting native ttyd..."
+        if systemctl is-active "termote@$(whoami)" &>/dev/null; then
+            sudo systemctl restart "termote@$(whoami)"
+        elif ! pgrep -f "ttyd.*tmux" > /dev/null; then
+            # Check ttyd version for -W flag support (1.7.0+)
+            TTYD_VERSION=$(ttyd --version 2>&1 | grep -oP '\d+\.\d+' | head -1)
+            if [[ "$(printf '%s\n' "1.7" "$TTYD_VERSION" | sort -V | head -1)" == "1.7" ]]; then
+                nohup ttyd -W -p 7681 tmux new-session -A -s main > /dev/null 2>&1 &
+            else
+                nohup ttyd -p 7681 tmux new-session -A -s main > /dev/null 2>&1 &
+            fi
+            sleep 1
         fi
 
-        echo "  Installing Tailscale nginx config for $TS_HOST:$TS_PORT..."
+        # Set tmux socket dir based on OS
+        if [[ "$(uname)" == "Darwin" ]]; then
+            export TMUX_SOCKET_DIR="/private/tmp/tmux-$(id -u)"
+        else
+            export TMUX_SOCKET_DIR="/tmp/tmux-$(id -u)"
+        fi
 
-        # Get Tailscale IP (bind only to this - not LAN accessible)
-        TS_IP=$(tailscale ip -4 2>/dev/null || echo "127.0.0.1")
-        echo "  Tailscale IP: $TS_IP (LAN not accessible)"
+        if [[ -n "$TAILSCALE" ]]; then
+            # Generate nginx config with Tailscale
+            TS_IP=$(tailscale ip -4 2>/dev/null || echo "0.0.0.0")
+            sed -e "s/<hostname>/$TS_HOST/g" \
+                -e "s/<port>/$TS_PORT/g" \
+                -e "s/<tailscale_ip>/$TS_IP/g" \
+                "$PROJECT_DIR/nginx/nginx-tailscale.conf" > "$PROJECT_DIR/nginx/nginx-hybrid.conf"
 
-        # Generate Tailscale certs
-        sudo mkdir -p /var/lib/tailscale/certs
-        sudo tailscale cert --cert-file /var/lib/tailscale/certs/${TS_HOST}.crt \
-                            --key-file /var/lib/tailscale/certs/${TS_HOST}.key \
-                            "$TS_HOST" 2>/dev/null || true
-        # Update config with hostname, port, and Tailscale IP
-        sed -e "s/<hostname>/$TS_HOST/g" \
-            -e "s/<port>/$TS_PORT/g" \
-            -e "s/<tailscale_ip>/$TS_IP/g" \
-            "$PROJECT_DIR/nginx/nginx-tailscale.conf" | sudo tee "$NGINX_CONF" > /dev/null
-    elif [[ "$PRODUCTION" == true ]]; then
-        echo "  Installing production nginx config..."
-        sudo cp "$PROJECT_DIR/nginx/nginx-production.conf" "$NGINX_CONF"
-    else
-        echo "  Installing local nginx config..."
-        sudo cp "$PROJECT_DIR/nginx/nginx-local.conf" "$NGINX_CONF"
-    fi
+            docker compose --profile hybrid up -d --build
 
-    # Create symlink if using sites-available
-    if [ -n "$NGINX_LINK" ]; then
-        sudo ln -sf "$NGINX_CONF" "$NGINX_LINK"
-    fi
-    sudo nginx -t
-fi
+            echo ""
+            echo "=== Deployment complete ==="
+            echo "Access at: https://$TS_HOST:$TS_PORT"
+        else
+            docker compose --profile hybrid up -d --build
 
-# Install systemd services
-NEED_RELOAD=false
-if [[ "$TTYD_MODE" == "native" ]]; then
-    if [ ! -f "/etc/systemd/system/termote@.service" ]; then
-        sudo cp "$PROJECT_DIR/systemd/termote.service" "/etc/systemd/system/termote@.service"
-        NEED_RELOAD=true
-    fi
-fi
-if [[ "$API_MODE" == "native" ]]; then
-    if [ ! -f "/etc/systemd/system/tmux-api@.service" ]; then
-        sudo cp "$PROJECT_DIR/systemd/tmux-api.service" "/etc/systemd/system/tmux-api@.service"
-        NEED_RELOAD=true
-    fi
-fi
-if [[ "$NEED_RELOAD" == true ]]; then
-    sudo systemctl daemon-reload
-fi
+            echo ""
+            echo "=== Deployment complete ==="
+            echo "Access at: http://localhost:8080"
+        fi
+        ;;
 
-# Start native services
-if [[ "$TTYD_MODE" == "native" ]]; then
-    sudo systemctl enable "termote@$USER" 2>/dev/null || true
-    sudo systemctl restart "termote@$USER"
-fi
-if [[ "$API_MODE" == "native" ]]; then
-    sudo systemctl enable "tmux-api@$USER" 2>/dev/null || true
-    sudo systemctl restart "tmux-api@$USER"
-fi
+    native)
+        # All native
+        USER=$(whoami)
 
-# Start docker services if needed
-if [[ "$NGINX_MODE" == "docker" || "$TTYD_MODE" == "docker" ]]; then
-    echo "[4/4] Starting docker services..."
+        # Stop docker services
+        docker compose down 2>/dev/null || true
 
-    # Generate docker-compose override for hybrid
-    if [[ "$MODE" == "hybrid" ]]; then
-        cat > "$PROJECT_DIR/docker-compose.override.yml" << EOF
-services:
-  ttyd:
-    profiles: [${TTYD_MODE/native/disabled}]
-  nginx:
-    profiles: [${NGINX_MODE/native/disabled}]
-EOF
-    else
-        rm -f "$PROJECT_DIR/docker-compose.override.yml"
-    fi
+        # Install nginx config
+        if [[ -n "$TAILSCALE" ]]; then
+            # TS_HOST, TS_PORT, certs already set at top-level
+            echo "  Installing Tailscale config for $TS_HOST:$TS_PORT..."
+            TS_IP=$(tailscale ip -4 2>/dev/null || echo "127.0.0.1")
 
-    docker compose down 2>/dev/null || true
-    docker compose up -d
-else
-    echo "[4/4] Reloading nginx..."
-    sudo systemctl reload nginx 2>/dev/null || true
-fi
+            # Install config
+            NGINX_CONF="/etc/nginx/sites-available/termote"
+            sed -e "s/<hostname>/$TS_HOST/g" \
+                -e "s/<port>/$TS_PORT/g" \
+                -e "s/<tailscale_ip>/$TS_IP/g" \
+                "$PROJECT_DIR/nginx/nginx-tailscale.conf" | sudo tee "$NGINX_CONF" > /dev/null
+            sudo ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/termote
+        else
+            echo "  Installing local nginx config..."
+            sudo cp "$PROJECT_DIR/nginx/nginx-local.conf" /etc/nginx/sites-available/termote
+            sudo ln -sf /etc/nginx/sites-available/termote /etc/nginx/sites-enabled/termote
+        fi
 
-# Verify
-echo ""
-"$SCRIPT_DIR/health-check.sh" || true
+        # Deploy files
+        sudo mkdir -p /var/www/termote
+        sudo cp -r "$PROJECT_DIR/pwa/dist/"* /var/www/termote/
+        if [ ! -f "/etc/nginx/.htpasswd" ]; then
+            sudo cp "$PROJECT_DIR/.htpasswd" /etc/nginx/.htpasswd
+        fi
 
-echo ""
-echo "=== Deployment complete ==="
-if [[ -n "$TAILSCALE" ]]; then
-    if [[ "$TAILSCALE" == *":"* ]]; then
-        echo "Access at: https://$TAILSCALE"
-    else
-        echo "Access at: https://$TAILSCALE:8080"
-    fi
-elif [[ "$PRODUCTION" == true ]]; then
-    echo "Access at: https://your-domain.com"
-else
-    echo "Access at: http://localhost:8080"
-fi
+        # Build tmux-api binary
+        echo "  Building tmux-api..."
+        cd "$PROJECT_DIR/tmux-api"
+        CGO_ENABLED=0 go build -ldflags="-s -w" -o tmux-api . 2>/dev/null || true
+        cd "$PROJECT_DIR"
+        sudo cp "$PROJECT_DIR/tmux-api/tmux-api" /usr/local/bin/tmux-api
+        sudo chmod +x /usr/local/bin/tmux-api
+
+        # Install systemd services
+        NEED_RELOAD=false
+        if [ ! -f "/etc/systemd/system/termote@.service" ]; then
+            sudo cp "$PROJECT_DIR/systemd/termote.service" "/etc/systemd/system/termote@.service"
+            NEED_RELOAD=true
+        fi
+        if [ ! -f "/etc/systemd/system/tmux-api@.service" ]; then
+            sudo cp "$PROJECT_DIR/systemd/tmux-api.service" "/etc/systemd/system/tmux-api@.service"
+            NEED_RELOAD=true
+        fi
+        if [[ "$NEED_RELOAD" == true ]]; then
+            sudo systemctl daemon-reload
+        fi
+
+        # Start services
+        sudo systemctl enable "termote@$USER" 2>/dev/null || true
+        sudo systemctl restart "termote@$USER"
+        sudo systemctl enable "tmux-api@$USER" 2>/dev/null || true
+        sudo systemctl restart "tmux-api@$USER"
+        sudo nginx -t && sudo systemctl reload nginx
+
+        echo ""
+        echo "=== Deployment complete ==="
+        if [[ -n "$TAILSCALE" ]]; then
+            echo "Access at: https://$TS_HOST:$TS_PORT"
+        else
+            echo "Access at: http://localhost:8080"
+        fi
+        ;;
+esac

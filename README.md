@@ -12,49 +12,69 @@ Remote control CLI tools (Claude Code, GitHub Copilot, any terminal) from mobile
 - **PWA**: Installable to homescreen, offline-capable
 - **Persistent sessions**: tmux keeps sessions alive
 
-## Deployment
+## Deployment Modes
 
-### Docker
+| Mode       | Description          | Containers              | Native |
+| ---------- | -------------------- | ----------------------- | ------ |
+| `--docker` | All-in-one container | 1 (nginx+ttyd+tmux-api) | -      |
+| `--hybrid` | Docker + native ttyd | 1 (nginx+tmux-api)      | ttyd   |
+| `--native` | All native           | -                       | all    |
+
+### Docker (recommended for simplicity)
 
 ```bash
 ./scripts/deploy.sh --docker
-# Access: http://localhost:8080 (basic auth)
+# Access: http://localhost:8080
 ```
 
-### Native (local)
+### Hybrid (recommended for host binary access)
+
+Use when you need ttyd to access host binaries (claude, git, etc):
 
 ```bash
-sudo apt install ttyd tmux nginx socat
-./scripts/deploy.sh --native
-# Access: http://localhost:8080 (basic auth)
-```
+# Install ttyd first
+sudo apt install ttyd tmux  # Ubuntu/Debian
+# Or: brew install ttyd tmux  # macOS
 
-### Native + Tailscale (recommended for remote)
-
-```bash
-sudo apt install ttyd tmux nginx socat
-./scripts/deploy.sh --native --tailscale myhost.ts.net
-# Access: https://myhost.ts.net:8080
-
-# Custom port
-./scripts/deploy.sh --native --tailscale myhost.ts.net:9000
-# Access: https://myhost.ts.net:9000
-```
-
-### Hybrid
-
-```bash
 ./scripts/deploy.sh --hybrid
-# Customize: --nginx=docker --ttyd=native --api=native
+# Access: http://localhost:8080
+```
+
+### Native (no Docker)
+
+```bash
+sudo apt install ttyd tmux nginx
+./scripts/deploy.sh --native
+# Access: http://localhost:8080
+```
+
+### With Tailscale HTTPS (all modes)
+
+```bash
+# Any mode with Tailscale
+./scripts/deploy.sh --docker --tailscale myhost.ts.net
+./scripts/deploy.sh --hybrid --tailscale myhost.ts.net:443
+./scripts/deploy.sh --native --tailscale myhost.ts.net
+
+# Access: https://myhost.ts.net:8080 (or custom port)
 ```
 
 ### Uninstall
 
 ```bash
-./scripts/uninstall.sh --docker   # Docker only
-./scripts/uninstall.sh --native   # Native only
+./scripts/uninstall.sh --docker   # Docker mode
+./scripts/uninstall.sh --hybrid   # Hybrid mode
+./scripts/uninstall.sh --native   # Native mode
 ./scripts/uninstall.sh --all      # Everything
 ```
+
+## Platform Support
+
+| Platform | Docker   | Hybrid | Native |
+| -------- | -------- | ------ | ------ |
+| Linux    | ✓        | ✓      | ✓      |
+| macOS    | ✓        | ✓      | ✓      |
+| Windows  | ✓ (WSL2) | -      | -      |
 
 ## Mobile Usage
 
@@ -73,24 +93,28 @@ Virtual toolbar provides: Tab, Esc, Ctrl, Arrow keys, and common Ctrl combos.
 
 ```
 termote/
-├── docker compose.yml      # Dev environment
+├── Dockerfile              # All-in-one (nginx+ttyd+tmux-api)
+├── Dockerfile.hybrid       # Hybrid (nginx+tmux-api)
+├── docker-compose.yml
 ├── nginx/
-│   ├── nginx.conf          # Dev config
-│   └── nginx-production.conf
+│   ├── nginx-docker.conf   # For docker mode
+│   ├── nginx-hybrid.conf   # For hybrid mode
+│   ├── nginx-local.conf    # For native mode
+│   └── nginx-tailscale.conf
 ├── pwa/                    # React PWA
-│   ├── src/
-│   │   ├── components/
-│   │   ├── hooks/
-│   │   └── utils/
-│   └── package.json
+│   └── src/
+│       ├── components/
+│       ├── hooks/
+│       └── utils/
+├── tmux-api/               # Go API server
+│   └── main.go
 ├── scripts/
-│   ├── deploy.sh           # Deploy (--docker|--native)
-│   ├── uninstall.sh        # Uninstall
-│   ├── health-check.sh     # Service health check
-│   └── tmux-api.sh         # tmux REST API server
+│   ├── deploy.sh
+│   ├── uninstall.sh
+│   └── health-check.sh
 └── systemd/
-    ├── termote.service     # ttyd WebSocket
-    └── tmux-api.service    # tmux API
+    ├── termote.service
+    └── tmux-api.service
 ```
 
 ## Troubleshooting
@@ -109,6 +133,11 @@ termote/
 
 - Ensure viewport meta tag is present
 - Test on real device, not emulator
+
+### Hybrid mode: tmux-api can't find session
+
+- Verify tmux socket: `ls -la /tmp/tmux-$(id -u)/`
+- Check TMUX_SOCKET env in container
 
 ## Security Notes
 

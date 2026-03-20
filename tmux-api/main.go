@@ -3,10 +3,21 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 )
+
+var tmuxSocket = os.Getenv("TMUX_SOCKET")
+
+// tmuxCmd creates a tmux command with optional socket flag
+func tmuxCmd(args ...string) *exec.Cmd {
+	if tmuxSocket != "" {
+		args = append([]string{"-S", tmuxSocket}, args...)
+	}
+	return exec.Command("tmux", args...)
+}
 
 type Window struct {
 	ID     int    `json:"id"`
@@ -26,7 +37,7 @@ func main() {
 }
 
 func handleWindows(w http.ResponseWriter, r *http.Request) {
-	out, err := exec.Command("tmux", "list-windows", "-F",
+	out, err := tmuxCmd("list-windows", "-F",
 		"#{window_index}:#{window_name}:#{window_active}").Output()
 	if err != nil {
 		jsonError(w, err.Error(), 500)
@@ -50,7 +61,7 @@ func handleWindows(w http.ResponseWriter, r *http.Request) {
 
 func handleSelect(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, "/select/")
-	err := exec.Command("tmux", "select-window", "-t", id).Run()
+	err := tmuxCmd("select-window", "-t", id).Run()
 	if err != nil {
 		jsonError(w, err.Error(), 500)
 		return
@@ -64,7 +75,7 @@ func handleNew(w http.ResponseWriter, r *http.Request) {
 	if name != "" {
 		args = append(args, "-n", name)
 	}
-	err := exec.Command("tmux", args...).Run()
+	err := tmuxCmd(args...).Run()
 	if err != nil {
 		jsonError(w, err.Error(), 500)
 		return
@@ -74,7 +85,7 @@ func handleNew(w http.ResponseWriter, r *http.Request) {
 
 func handleKill(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, "/kill/")
-	err := exec.Command("tmux", "kill-window", "-t", id).Run()
+	err := tmuxCmd("kill-window", "-t", id).Run()
 	if err != nil {
 		jsonError(w, err.Error(), 500)
 		return
@@ -88,7 +99,7 @@ func handleSendKeys(w http.ResponseWriter, r *http.Request) {
 		Keys   string `json:"keys"`
 	}
 	json.NewDecoder(r.Body).Decode(&body)
-	err := exec.Command("tmux", "send-keys", "-t", body.Target, body.Keys).Run()
+	err := tmuxCmd("send-keys", "-t", body.Target, body.Keys).Run()
 	if err != nil {
 		jsonError(w, err.Error(), 500)
 		return

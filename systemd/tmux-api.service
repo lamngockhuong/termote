@@ -5,7 +5,7 @@ After=network.target
 [Service]
 Type=simple
 User=%i
-ExecStart=/var/www/termote/scripts/tmux-api.sh 7682 main
+ExecStart=/usr/local/bin/tmux-api
 Restart=always
 RestartSec=3
 Environment=HOME=/home/%i

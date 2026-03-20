@@ -12,21 +12,21 @@
 // Functional components only
 export function ComponentName({ prop1, prop2 }: Props) {
   // Hooks at top
-  const [state, setState] = useState()
-  const ref = useRef()
+  const [state, setState] = useState();
+  const ref = useRef();
 
   // Callbacks with useCallback
   const handleAction = useCallback(() => {
     // ...
-  }, [deps])
+  }, [deps]);
 
   // Effects
   useEffect(() => {
     // ...
-  }, [deps])
+  }, [deps]);
 
   // Render
-  return <div>...</div>
+  return <div>...</div>;
 }
 ```
 
@@ -38,10 +38,10 @@ export function ComponentName({ prop1, prop2 }: Props) {
 
 ```typescript
 export interface Session {
-  id: string
-  name: string
-  icon: string
-  description: string
+  id: string;
+  name: string;
+  icon: string;
+  description: string;
 }
 ```
 
@@ -75,12 +75,12 @@ export interface Session {
 5. Types
 
 ```tsx
-import { useState, useCallback } from 'react'
-import { Terminal } from 'xterm'
-import { KeyboardToolbar } from './components/keyboard-toolbar'
-import { useGestures } from './hooks/use-gestures'
-import { sendKeyToTerminal } from './utils/terminal-bridge'
-import type { Session } from './types/session'
+import { useState, useCallback } from "react";
+import { Terminal } from "xterm";
+import { KeyboardToolbar } from "./components/keyboard-toolbar";
+import { useGestures } from "./hooks/use-gestures";
+import { sendKeyToTerminal } from "./utils/terminal-bridge";
+import type { Session } from "./types/session";
 ```
 
 ## Error Handling

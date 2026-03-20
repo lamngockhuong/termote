@@ -17,12 +17,16 @@ A PWA for remotely controlling CLI tools (Claude Code, GitHub Copilot, any termi
 | Terminal        | ttyd (WebSocket terminal)                  |
 | Proxy           | nginx (reverse proxy + basic auth)         |
 | Sessions        | tmux (persistent sessions)                 |
+| API             | Go (tmux-api)                              |
 | Package Manager | pnpm                                       |
 
 ## Project Structure
 
 ```
 termote/
+├── Dockerfile              # All-in-one (nginx+ttyd+tmux-api)
+├── Dockerfile.hybrid       # Hybrid (nginx+tmux-api)
+├── docker-compose.yml
 ├── pwa/                    # React PWA frontend
 │   ├── src/
 │   │   ├── components/     # React components
@@ -32,10 +36,32 @@ termote/
 │   ├── package.json
 │   └── vite.config.ts
 ├── nginx/                  # Nginx configurations
+│   ├── nginx-docker.conf   # For docker mode
+│   ├── nginx-hybrid.conf   # For hybrid mode
+│   ├── nginx-local.conf    # For native mode
+│   └── nginx-tailscale.conf
+├── tmux-api/               # Go API server
+│   └── main.go
 ├── scripts/                # Shell scripts
-├── systemd/                # Systemd service files
-├── docker compose.yml      # Dev environment
-└── README.md
+│   ├── deploy.sh
+│   ├── uninstall.sh
+│   └── health-check.sh
+└── systemd/                # Systemd service files
+```
+
+## Deployment Modes
+
+| Mode       | Description          | Use Case             |
+| ---------- | -------------------- | -------------------- |
+| `--docker` | All-in-one container | Simple deployment    |
+| `--hybrid` | Docker + native ttyd | Access host binaries |
+| `--native` | All native           | No Docker            |
+
+```bash
+./scripts/deploy.sh --docker              # All-in-one
+./scripts/deploy.sh --hybrid              # Docker + native ttyd
+./scripts/deploy.sh --native              # All native
+./scripts/deploy.sh --docker --tailscale myhost.ts.net  # With HTTPS
 ```
 
 ## Development Commands
@@ -53,17 +79,25 @@ pnpm tsc --noEmit
 # Build for production
 pnpm build
 
-# Start Docker environment
-docker compose up -d
+# Build tmux-api
+cd tmux-api && CGO_ENABLED=0 go build -ldflags="-s -w" -o tmux-api .
 ```
 
 ## Architecture
 
 ```
-PWA (React) → nginx (proxy + auth) → ttyd instances → tmux sessions
-                                      ├── :7681 claude
-                                      ├── :7682 copilot
-                                      └── :7683 shell
+┌─────────────────────────────────────────────────────────┐
+│ Docker mode (all-in-one)                                │
+│   nginx:8080 → ttyd:7681 → tmux                         │
+│             → tmux-api:7682                             │
+└─────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────┐
+│ Hybrid mode                                             │
+│   [Container] nginx:8080 → host.docker.internal:7681    │
+│               tmux-api:7682 → host tmux socket          │
+│   [Native]    ttyd:7681 → tmux                          │
+└─────────────────────────────────────────────────────────┘
 ```
 
 ## Code Conventions
@@ -81,9 +115,9 @@ PWA (React) → nginx (proxy + auth) → ttyd instances → tmux sessions
 | `pwa/src/App.tsx`                         | Main app with gestures, toolbar, sessions |
 | `pwa/src/components/keyboard-toolbar.tsx` | Virtual keyboard for mobile               |
 | `pwa/src/hooks/use-gestures.ts`           | Hammer.js gesture handling                |
-| `pwa/src/utils/terminal-bridge.ts`        | Iframe keystroke injection                |
-| `docker compose.yml`                      | ttyd + nginx dev environment              |
-| `nginx/nginx.conf`                        | Dev proxy with WebSocket support          |
+| `tmux-api/main.go`                        | tmux REST API (Go)                        |
+| `Dockerfile`                              | All-in-one container                      |
+| `Dockerfile.hybrid`                       | Hybrid mode container                     |
 
 ## Security Notes
 
@@ -100,11 +134,7 @@ cd pwa && pnpm tsc --noEmit
 
 # Build verification
 pnpm build
+
+# Test tmux-api
+curl http://localhost:7682/windows
 ```
-
-## Deployment
-
-1. Build PWA: `cd pwa && pnpm build`
-2. Install systemd services: `sudo cp systemd/*.service /etc/systemd/system/`
-3. Configure nginx with SSL
-4. Run `scripts/deploy.sh`

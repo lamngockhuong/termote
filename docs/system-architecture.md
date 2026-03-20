@@ -5,10 +5,10 @@
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                         Client (Browser)                        │
-│  ┌───────────────┐  ┌───────────────┐  ┌───────────────────┐   │
-│  │ Session       │  │ xterm.js      │  │ Keyboard Toolbar  │   │
-│  │ Sidebar       │  │ Terminal      │  │ + Gestures        │   │
-│  └───────┬───────┘  └───────┬───────┘  └─────────┬─────────┘   │
+│  ┌───────────────┐  ┌───────────────┐  ┌───────────────────┐    │
+│  │ Session       │  │ xterm.js      │  │ Keyboard Toolbar  │    │
+│  │ Sidebar       │  │ Terminal      │  │ + Gestures        │    │
+│  └───────┬───────┘  └───────┬───────┘  └─────────┬─────────┘    │
 │          │                  │                    │              │
 │          │    WebSocket     │      postMessage   │              │
 │          └────────┬─────────┴──────────┬─────────┘              │
@@ -26,18 +26,18 @@
          ┌───────────────┼───────────────┐
          ▼               ▼               ▼
 ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
-│ ttyd :7681  │  │ tmux API    │  │ PWA Assets  │
-│ WebSocket   │  │ (optional)  │  │ /dist       │
+│ ttyd :7681  │  │ tmux-api    │  │ PWA Assets  │
+│ WebSocket   │  │ Go :7682    │  │ /dist       │
 └──────┬──────┘  └──────┬──────┘  └─────────────┘
        │                │
        └────────┬───────┘
                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                         tmux Session                            │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐                      │
-│  │ Window 0 │  │ Window 1 │  │ Window 2 │  ...                 │
-│  │ claude   │  │ copilot  │  │ shell    │                      │
-│  └──────────┘  └──────────┘  └──────────┘                      │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐                       │
+│  │ Window 0 │  │ Window 1 │  │ Window 2 │  ...                  │
+│  │ claude   │  │ copilot  │  │ shell    │                       │
+│  └──────────┘  └──────────┘  └──────────┘                       │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -46,6 +46,7 @@
 ### PWA Frontend
 
 React SPA with:
+
 - **xterm.js**: Terminal emulator connecting to ttyd via WebSocket
 - **Hammer.js**: Touch gesture recognition
 - **Session Sidebar**: Switch between tmux windows
@@ -54,11 +55,13 @@ React SPA with:
 ### nginx Proxy
 
 Routes requests to appropriate backends:
+
 - `/` → Static PWA files
 - `/terminal/*` → ttyd WebSocket server
 - `/api/tmux/*` → tmux control API (optional)
 
 Provides:
+
 - Basic authentication
 - SSL termination (production)
 - WebSocket proxying with proper headers
@@ -66,6 +69,7 @@ Provides:
 ### ttyd Server
 
 Terminal-over-WebSocket server:
+
 - Runs on port 7681 (default)
 - Connects to tmux session with `-A` (attach-or-create)
 - WebSocket protocol with message types:
@@ -76,10 +80,19 @@ Terminal-over-WebSocket server:
 ### tmux Backend
 
 Session manager providing:
+
 - Persistent terminal sessions
 - Multiple windows per session
 - Detach/reattach capability
-- HTTP API for window management (via wrapper script)
+
+### tmux-api (Go)
+
+Lightweight HTTP API server (tmux-api/main.go):
+
+- Port 7682
+- TMUX_SOCKET env for custom socket path (hybrid mode)
+- Window management: list, select, create, kill
+- Send keystrokes to tmux targets
 
 ## Communication Protocols
 
@@ -110,56 +123,51 @@ POST /api/tmux/send-keys      → {ok: true}
 
 ## Deployment Modes
 
-### Docker
+### Docker (All-in-one)
 
 ```bash
 ./scripts/deploy.sh --docker
 ```
 
-All services in containers (ttyd + nginx).
-
-### Native (local)
-
-```bash
-./scripts/deploy.sh --native
-```
-
-- termote@.service (ttyd:7681, localhost only)
-- tmux-api@.service (API:7682)
-- nginx (port 8080, basic auth)
-
-### Native + Tailscale
-
-```bash
-./scripts/deploy.sh --native --tailscale <hostname[:port]>
-```
-
-- Auto SSL via Tailscale certs
-- Default port: 8080
-- Access via Tailscale network
-- No basic auth (Tailscale handles auth)
-
-### Native (production)
-
-```bash
-./scripts/deploy.sh --native --production
-```
-
-nginx with SSL + domain (manual cert setup).
+Single container with nginx + ttyd + tmux + tmux-api.
+Uses `Dockerfile` and `entrypoint-allinone.sh`.
 
 ### Hybrid
 
 ```bash
 ./scripts/deploy.sh --hybrid
-./scripts/deploy.sh --hybrid --nginx=docker --ttyd=native --api=native
 ```
 
-Mix docker + native per service.
+- Container: nginx + tmux-api (uses `Dockerfile.hybrid`)
+- Native: ttyd connects to host tmux socket
+- Use case: Access host binaries (claude, git, etc.)
+
+### Native
+
+```bash
+./scripts/deploy.sh --native
+```
+
+- termote.service (ttyd:7681)
+- tmux-api.service (API:7682)
+- nginx (port 8080, basic auth)
+
+### With Tailscale
+
+```bash
+./scripts/deploy.sh --docker --tailscale myhost.ts.net
+./scripts/deploy.sh --hybrid --tailscale myhost.ts.net
+./scripts/deploy.sh --native --tailscale myhost.ts.net
+```
+
+- Auto SSL via Tailscale certs
+- Access via Tailscale network
 
 ### Uninstall
 
 ```bash
 ./scripts/uninstall.sh --docker   # Docker containers
+./scripts/uninstall.sh --hybrid   # Hybrid mode
 ./scripts/uninstall.sh --native   # Systemd + files
 ./scripts/uninstall.sh --all      # Everything
 ```
