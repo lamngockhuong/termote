@@ -59,9 +59,12 @@ if [[ "$MODE" == "--native" || "$MODE" == "--all" ]]; then
     echo "Stopping systemd services..."
     sudo systemctl stop "termote@$USER" 2>/dev/null || true
     sudo systemctl disable "termote@$USER" 2>/dev/null || true
+    sudo systemctl stop "tmux-api@$USER" 2>/dev/null || true
+    sudo systemctl disable "tmux-api@$USER" 2>/dev/null || true
 
     echo "Removing systemd services..."
     sudo rm -f /etc/systemd/system/termote@.service
+    sudo rm -f /etc/systemd/system/tmux-api@.service
     sudo systemctl daemon-reload
 
     echo "Removing deployed files..."

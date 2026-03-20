@@ -32,3 +32,4 @@ pwa/e2e/*.png
 # Plans and reports (generated)
 pwa/plans/
 plans/
+.certs

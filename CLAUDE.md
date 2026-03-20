@@ -46,7 +46,11 @@ termote/
 │   ├── deploy.sh
 │   ├── uninstall.sh
 │   └── health-check.sh
-└── systemd/                # Systemd service files
+├── tests/                  # Test suite
+│   ├── test-deploy.sh
+│   └── test-uninstall.sh
+├── systemd/                # Systemd service files
+└── Makefile                # Build/test/deploy commands
 ```
 
 ## Deployment Modes
@@ -58,29 +62,25 @@ termote/
 | `--native` | All native           | No Docker            |
 
 ```bash
-./scripts/deploy.sh --docker              # All-in-one
-./scripts/deploy.sh --hybrid              # Docker + native ttyd
-./scripts/deploy.sh --native              # All native
-./scripts/deploy.sh --docker --tailscale myhost.ts.net  # With HTTPS
+./scripts/deploy.sh --docker                    # localhost only
+./scripts/deploy.sh --docker --lan              # LAN accessible
+./scripts/deploy.sh --docker --tailscale host   # Tailscale HTTPS
+./scripts/deploy.sh --docker --tailscale host --lan  # Both
 ```
 
 ## Development Commands
 
 ```bash
-# Install dependencies
-cd pwa && pnpm install
+# Using Makefile (recommended)
+make build          # Build PWA + tmux-api
+make test           # Run all tests (24 tests)
+make deploy-docker  # Deploy docker mode
+make health         # Check services
 
-# Development server
-pnpm dev
-
-# Type check
-pnpm tsc --noEmit
-
-# Build for production
-pnpm build
-
-# Build tmux-api
-cd tmux-api && CGO_ENABLED=0 go build -ldflags="-s -w" -o tmux-api .
+# Manual commands
+cd pwa && pnpm install && pnpm dev     # Dev server
+cd pwa && pnpm tsc --noEmit            # Type check
+cd tmux-api && go build -o tmux-api .  # Build API
 ```
 
 ## Architecture
@@ -129,12 +129,11 @@ cd tmux-api && CGO_ENABLED=0 go build -ldflags="-s -w" -o tmux-api .
 ## Testing
 
 ```bash
-# Type check
-cd pwa && pnpm tsc --noEmit
+make test             # Run all tests (24 tests)
+make test-deploy      # Test deploy.sh only
+make test-uninstall   # Test uninstall.sh only
 
-# Build verification
-pnpm build
-
-# Test tmux-api
-curl http://localhost:7682/windows
+# Manual checks
+cd pwa && pnpm tsc --noEmit   # Type check
+curl http://localhost:7682/windows  # Test tmux-api
 ```

@@ -12,6 +12,14 @@ Remote control CLI tools (Claude Code, GitHub Copilot, any terminal) from mobile
 - **PWA**: Installable to homescreen, offline-capable
 - **Persistent sessions**: tmux keeps sessions alive
 
+## Quick Start
+
+```bash
+make deploy-docker    # All-in-one container
+make test             # Run tests
+make health           # Check services
+```
+
 ## Deployment Modes
 
 | Mode       | Description          | Containers              | Native |
@@ -20,10 +28,18 @@ Remote control CLI tools (Claude Code, GitHub Copilot, any terminal) from mobile
 | `--hybrid` | Docker + native ttyd | 1 (nginx+tmux-api)      | ttyd   |
 | `--native` | All native           | -                       | all    |
 
+### Options
+
+| Flag                        | Description                             |
+| --------------------------- | --------------------------------------- |
+| `--lan`                     | Expose to LAN (default: localhost only) |
+| `--tailscale <host[:port]>` | Enable Tailscale HTTPS                  |
+
 ### Docker (recommended for simplicity)
 
 ```bash
-./scripts/deploy.sh --docker
+./scripts/deploy.sh --docker           # localhost only
+./scripts/deploy.sh --docker --lan     # LAN accessible
 # Access: http://localhost:8080
 ```
 
@@ -51,10 +67,14 @@ sudo apt install ttyd tmux nginx
 ### With Tailscale HTTPS (all modes)
 
 ```bash
-# Any mode with Tailscale
+# Tailscale only (private network)
 ./scripts/deploy.sh --docker --tailscale myhost.ts.net
+
+# Tailscale + LAN accessible
+./scripts/deploy.sh --docker --tailscale myhost.ts.net --lan
+
+# Custom port
 ./scripts/deploy.sh --hybrid --tailscale myhost.ts.net:443
-./scripts/deploy.sh --native --tailscale myhost.ts.net
 
 # Access: https://myhost.ts.net:8080 (or custom port)
 ```
@@ -93,6 +113,7 @@ Virtual toolbar provides: Tab, Esc, Ctrl, Arrow keys, and common Ctrl combos.
 
 ```
 termote/
+├── Makefile                # Build/test/deploy commands
 ├── Dockerfile              # All-in-one (nginx+ttyd+tmux-api)
 ├── Dockerfile.hybrid       # Hybrid (nginx+tmux-api)
 ├── docker-compose.yml
@@ -112,9 +133,21 @@ termote/
 │   ├── deploy.sh
 │   ├── uninstall.sh
 │   └── health-check.sh
+├── tests/                  # Test suite
+│   ├── test-deploy.sh
+│   └── test-uninstall.sh
 └── systemd/
     ├── termote.service
     └── tmux-api.service
+```
+
+## Development
+
+```bash
+make build          # Build PWA and tmux-api
+make test           # Run all tests (24 tests)
+make health         # Check service health
+make clean          # Stop containers
 ```
 
 ## Troubleshooting
@@ -141,6 +174,7 @@ termote/
 
 ## Security Notes
 
+- **Default: localhost only** - not exposed to LAN unless `--lan` flag used
 - Basic auth over HTTPS (or Tailscale)
 - Consider fail2ban for brute-force protection
 - Restrict to trusted networks/VPN
