@@ -91,6 +91,21 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Download PWA artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: pwa-dist
+          path: pwa/dist
+
+      - name: Download tmux-api binary
+        uses: actions/download-artifact@v7
+        with:
+          name: tmux-api
+          path: tmux-api
+
+      - name: Create .htpasswd
+        run: echo 'termote:$apr1$dummy$hash' > .htpasswd
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
