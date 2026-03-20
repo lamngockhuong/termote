@@ -2,10 +2,11 @@ import { useEffect, useRef, RefObject } from 'react'
 import Hammer from 'hammerjs'
 
 export interface GestureHandlers {
+  onTap?: () => void // Focus terminal
   onSwipeLeft?: () => void // Ctrl+C
   onSwipeRight?: () => void // Tab
-  onSwipeUp?: () => void // History prev
-  onSwipeDown?: () => void // History next
+  onSwipeUp?: () => void // Scroll up
+  onSwipeDown?: () => void // Scroll down
   onLongPress?: () => void // Paste
   onPinchIn?: () => void // Font smaller
   onPinchOut?: () => void // Font larger
@@ -36,6 +37,7 @@ export function useGestures(
     hammer.get('press').set({ time: 500 })
 
     // Bind handlers
+    hammer.on('tap', () => handlersRef.current.onTap?.())
     hammer.on('swipeleft', () => handlersRef.current.onSwipeLeft?.())
     hammer.on('swiperight', () => handlersRef.current.onSwipeRight?.())
     hammer.on('swipeup', () => handlersRef.current.onSwipeUp?.())

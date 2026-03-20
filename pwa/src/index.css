@@ -1,5 +1,27 @@
 @import "tailwindcss";
 
+/* Enable class-based dark mode for Tailwind v4 */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Theme CSS Variables */
+:root {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f4f4f5;
+  --bg-tertiary: #e4e4e7;
+  --text-primary: #18181b;
+  --text-secondary: #52525b;
+  --border-color: #d4d4d8;
+}
+
+.dark {
+  --bg-primary: #18181b;
+  --bg-secondary: #27272a;
+  --bg-tertiary: #3f3f46;
+  --text-primary: #fafafa;
+  --text-secondary: #a1a1aa;
+  --border-color: #3f3f46;
+}
+
 html, body, #root {
   height: 100%;
   margin: 0;
@@ -28,4 +50,31 @@ body {
 /* Touch optimization */
 .touch-manipulation {
   touch-action: manipulation;
+}
+
+/* Theme-aware glass surface */
+.glass-surface {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+:root .glass-surface,
+.light .glass-surface {
+  background: rgba(255, 255, 255, 0.7);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.dark .glass-surface {
+  background: #27272a; /* zinc-800 solid */
+  border-color: #3f3f46; /* zinc-700 */
+}
+
+/* Animation utilities */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-fade-in {
+  animation: fade-in 150ms ease-out;
 }

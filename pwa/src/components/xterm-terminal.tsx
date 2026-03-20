@@ -11,18 +11,25 @@ export interface XtermTerminalHandle {
 
 interface Props {
   fontSize?: number
+  theme?: 'light' | 'dark'
   onConnect?: () => void
   onDisconnect?: () => void
 }
 
+const THEMES = {
+  light: { background: '#ffffff', foreground: '#1e1e1e', cursor: '#1e1e1e' },
+  dark: { background: '#1e1e1e', foreground: '#d4d4d4', cursor: '#d4d4d4' },
+}
+
 export const XtermTerminal = forwardRef<XtermTerminalHandle, Props>(
-  ({ fontSize = 14, onConnect, onDisconnect }, ref) => {
+  ({ fontSize = 14, theme = 'dark', onConnect, onDisconnect }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null)
     const terminalRef = useRef<Terminal | null>(null)
     const wsRef = useRef<WebSocket | null>(null)
     const fitAddonRef = useRef<FitAddon | null>(null)
     const mountedRef = useRef(true)
     const connectingRef = useRef(false)
+    const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
     // Store callbacks in refs to avoid dependency issues
     const onConnectRef = useRef(onConnect)
@@ -127,7 +134,7 @@ export const XtermTerminal = forwardRef<XtermTerminalHandle, Props>(
           wsRef.current = null
           // Only reconnect if still mounted
           if (mountedRef.current) {
-            setTimeout(connect, 3000)
+            reconnectTimeoutRef.current = setTimeout(connect, 3000)
           }
         }
 
@@ -155,7 +162,7 @@ export const XtermTerminal = forwardRef<XtermTerminalHandle, Props>(
         console.error('[xterm] Connection failed:', err)
         connectingRef.current = false
         if (mountedRef.current) {
-          setTimeout(connect, 3000)
+          reconnectTimeoutRef.current = setTimeout(connect, 3000)
         }
       }
     }, [])
@@ -169,11 +176,7 @@ export const XtermTerminal = forwardRef<XtermTerminalHandle, Props>(
       const terminal = new Terminal({
         fontSize,
         fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-        theme: {
-          background: '#1e1e1e',
-          foreground: '#d4d4d4',
-          cursor: '#d4d4d4',
-        },
+        theme: THEMES[theme],
         cursorBlink: true,
         allowProposedApi: true,
       })
@@ -194,24 +197,29 @@ export const XtermTerminal = forwardRef<XtermTerminalHandle, Props>(
       return () => {
         mountedRef.current = false
         window.removeEventListener('resize', handleResize)
+        if (reconnectTimeoutRef.current) {
+          clearTimeout(reconnectTimeoutRef.current)
+        }
         wsRef.current?.close()
         terminal.dispose()
         terminalRef.current = null
       }
-    }, [connect, fontSize])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [connect])
 
-    // Update font size
+    // Update font size and theme
     useEffect(() => {
       if (terminalRef.current) {
         terminalRef.current.options.fontSize = fontSize
+        terminalRef.current.options.theme = THEMES[theme]
         fitAddonRef.current?.fit()
       }
-    }, [fontSize])
+    }, [fontSize, theme])
 
     return (
       <div
         ref={containerRef}
-        className="flex-1 w-full h-full bg-[#1e1e1e]"
+        className={`flex-1 w-full h-full ${theme === 'light' ? 'bg-white' : 'bg-[#1e1e1e]'}`}
         style={{ padding: '4px' }}
       />
     )

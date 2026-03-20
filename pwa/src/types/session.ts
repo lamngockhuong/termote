@@ -5,11 +5,9 @@ export interface Session {
   description: string
 }
 
-// Default sessions (can be customized by user)
+// Default sessions (single session on fresh install)
 export const DEFAULT_SESSIONS: Session[] = [
-  { id: 'claude', name: 'Claude', icon: '🤖', description: 'Claude Code CLI' },
-  { id: 'copilot', name: 'Copilot', icon: '🐙', description: 'GitHub Copilot' },
-  { id: 'shell', name: 'Shell', icon: '💻', description: 'General terminal' },
+  { id: 'shell', name: 'Shell', icon: '💻', description: 'Terminal' },
 ]
 
 // Storage key for persisting sessions

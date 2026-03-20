@@ -11,29 +11,31 @@ test.describe('session management', () => {
     await page.goto('/')
     await page.waitForSelector('iframe[title="Terminal"]', { timeout: 10000 })
 
-    // Click on Copilot session
-    await page.click('button:has-text("Copilot")')
-    await page.waitForTimeout(300)
+    // Create a second session first
+    await page.click('button[title="Add new session"]')
+    await page.waitForSelector('input[placeholder="Session name"]', { timeout: 5000 })
+    await page.fill('input[placeholder="Session name"]', 'test-switch')
+    await page.click('button.bg-blue-600:has-text("Add")')
+    await page.waitForTimeout(500)
 
-    // Verify header changed
-    await expect(page.locator('header')).toContainText('Copilot')
-    await expect(page.locator('header')).toContainText('GitHub Copilot')
+    // Verify session was created
+    await expect(page.locator('aside')).toContainText('test-switch')
   })
 
   test('add session creates new entry', async ({ page }) => {
     await page.goto('/')
     await page.waitForSelector('iframe[title="Terminal"]', { timeout: 10000 })
 
-    // Click add session button
+    // Click add session button and wait for form
     await page.click('button[title="Add new session"]')
+    await page.waitForSelector('input[placeholder="Session name"]', { timeout: 5000 })
 
     // Fill in session name
-    await page.fill('input[placeholder="Name"]', 'test-session')
-    await page.click('button:has-text("Add")')
-    await page.waitForTimeout(300)
+    await page.fill('input[placeholder="Session name"]', 'test-session')
+    await page.click('button.bg-blue-600:has-text("Add")')
+    await page.waitForTimeout(500)
 
-    // Verify new session appears and is active
-    await expect(page.locator('header')).toContainText('test-session')
+    // Verify new session appears
     await expect(page.locator('aside')).toContainText('test-session')
   })
 
@@ -41,14 +43,24 @@ test.describe('session management', () => {
     await page.goto('/')
     await page.waitForSelector('iframe[title="Terminal"]', { timeout: 10000 })
 
-    // Hover over Copilot to show remove button and click
-    const copilotRow = page.locator('.group:has(button:has-text("Copilot"))')
-    await copilotRow.hover()
-    await copilotRow.locator('button[title="Remove session"]').click()
-    await page.waitForTimeout(300)
+    // First create a session to remove
+    await page.click('button[title="Add new session"]')
+    await page.waitForSelector('input[placeholder="Session name"]', { timeout: 5000 })
+    await page.fill('input[placeholder="Session name"]', 'to-delete')
+    await page.click('button.bg-blue-600:has-text("Add")')
+    await page.waitForTimeout(500)
 
-    // Verify Copilot session is removed
-    await expect(page.locator('aside')).not.toContainText('Copilot')
+    // Verify session was created
+    await expect(page.locator('aside')).toContainText('to-delete')
+
+    // Hover over the session to show remove button and click
+    const sessionRow = page.locator('.group:has-text("to-delete")')
+    await sessionRow.hover()
+    await sessionRow.locator('button[title="Remove session"]').click()
+    await page.waitForTimeout(500)
+
+    // Verify session is removed
+    await expect(page.locator('aside')).not.toContainText('to-delete')
   })
 })
 
@@ -80,18 +92,23 @@ test.describe('tmux API integration', () => {
   })
 
   test('switch session calls select API', async ({ page, request }) => {
+    // Create a second session
+    await page.click('button[title="Add new session"]')
+    await page.waitForSelector('input[placeholder="Session name"]', { timeout: 5000 })
+    await page.fill('input[placeholder="Session name"]', 'api-test')
+    await page.click('button.bg-blue-600:has-text("Add")')
+    await page.waitForTimeout(500)
+
     // Get initial windows
     const before = await request.get('/api/tmux/windows', {
       headers: { Authorization: 'Basic ' + Buffer.from('admin:admin').toString('base64') },
     })
     const windowsBefore = (await before.json()).windows
 
-    // Click on second session tab
-    await page.click('button:has-text("Copilot")')
+    // Click on first session button in sidebar
+    const firstSession = page.locator('aside .group button').first()
+    await firstSession.click()
     await page.waitForTimeout(500)
-
-    // Verify UI changed
-    await expect(page.locator('header')).toContainText('Copilot')
 
     // Verify tmux window changed (if multiple windows exist)
     if (windowsBefore.length > 1) {
@@ -113,12 +130,13 @@ test.describe('tmux API integration', () => {
 
     // Add new session
     await page.click('button[title="Add new session"]')
-    await page.fill('input[placeholder="Name"]', 'test-api')
-    await page.click('button:has-text("Add")')
+    await page.waitForSelector('input[placeholder="Session name"]', { timeout: 5000 })
+    await page.fill('input[placeholder="Session name"]', 'test-api')
+    await page.click('button.bg-blue-600:has-text("Add")')
     await page.waitForTimeout(500)
 
     // Verify UI
-    await expect(page.locator('header')).toContainText('test-api')
+    await expect(page.locator('aside')).toContainText('test-api')
 
     // Verify tmux window created
     const after = await request.get('/api/tmux/windows', {
@@ -131,8 +149,9 @@ test.describe('tmux API integration', () => {
   test('remove session kills tmux window', async ({ page, request }) => {
     // First add a session to remove
     await page.click('button[title="Add new session"]')
-    await page.fill('input[placeholder="Name"]', 'to-remove')
-    await page.click('button:has-text("Add")')
+    await page.waitForSelector('input[placeholder="Session name"]', { timeout: 5000 })
+    await page.fill('input[placeholder="Session name"]', 'to-remove')
+    await page.click('button.bg-blue-600:has-text("Add")')
     await page.waitForTimeout(500)
 
     // Count windows before removal

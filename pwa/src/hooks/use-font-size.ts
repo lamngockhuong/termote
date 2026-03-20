@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 
-const MIN_SIZE = 10
+const MIN_SIZE = 6
 const MAX_SIZE = 24
 const DEFAULT_SIZE = 14
 const STORAGE_KEY = 'terminal-font-size'
