@@ -1,0 +1,53 @@
+---
+title: Termote
+description: Remote control CLI tools from mobile/desktop via PWA
+template: splash
+hero:
+  title: |
+    Termote
+    <span class="text-accent">Terminal + Remote</span>
+  tagline: Control Claude Code, GitHub Copilot, and any CLI from your phone
+  image:
+    file: ../../assets/demo-placeholder.svg
+    alt: Termote demo
+  actions:
+    - text: Get Started
+      link: /getting-started/
+      icon: right-arrow
+      variant: primary
+    - text: View on GitHub
+      link: https://github.com/lamngockhuong/termote
+      icon: external
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## Features
+
+<CardGrid stagger>
+  <Card title="Session Switching" icon="rocket">
+    Switch between Claude, Copilot, and Shell terminals instantly
+  </Card>
+  <Card title="Mobile Optimized" icon="setting">
+    Virtual keyboard toolbar with Tab, Esc, Ctrl, arrows
+  </Card>
+  <Card title="Gesture Support" icon="pencil">
+    Swipe left for Ctrl+C, right for Tab, up/down for history
+  </Card>
+  <Card title="PWA Ready" icon="puzzle">
+    Install to homescreen, works offline
+  </Card>
+</CardGrid>
+
+## Quick Install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
+```
+
+## Deployment Modes
+
+| Mode | Description | Use Case | Platform |
+|------|-------------|----------|----------|
+| Container | All-in-one container | Simple deployment, isolated env | macOS, Linux |
+| Native | All native | Host tool access (claude, gh) | macOS, Linux |

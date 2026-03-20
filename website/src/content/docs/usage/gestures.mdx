@@ -1,0 +1,40 @@
+---
+title: Mobile Gestures
+description: Touch controls for terminal interaction
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Termote supports touch gestures for common terminal operations.
+
+## Gesture Reference
+
+| Gesture | Action | Terminal Command |
+|---------|--------|------------------|
+| Swipe left | Cancel/interrupt | Ctrl+C |
+| Swipe right | Tab completion | Tab |
+| Swipe up | History up | Up Arrow |
+| Swipe down | History down | Down Arrow |
+| Long press | Paste clipboard | Paste |
+| Pinch in | Decrease font | - |
+| Pinch out | Increase font | - |
+
+## Gesture Zone
+
+Gestures work in the terminal area only. The keyboard toolbar and navigation are excluded.
+
+<Aside>
+Gestures are disabled on desktop where mouse interactions are preferred.
+</Aside>
+
+## Font Size
+
+- Range: 6px - 24px
+- Default: 14px
+- Adjust with pinch or toolbar buttons
+
+## Tips
+
+1. **Quick cancel**: Swipe left to send Ctrl+C when a command hangs
+2. **Tab complete**: Swipe right to autocomplete file/command names
+3. **History**: Swipe up/down to navigate command history

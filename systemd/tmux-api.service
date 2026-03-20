@@ -1,0 +1,14 @@
+[Unit]
+Description=Termote tmux API Server
+After=network.target
+
+[Service]
+Type=simple
+User=%i
+ExecStart=/usr/local/bin/tmux-api
+Restart=always
+RestartSec=3
+Environment=HOME=/home/%i
+
+[Install]
+WantedBy=multi-user.target

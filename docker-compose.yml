@@ -1,0 +1,17 @@
+# Termote Docker Compose
+# --docker: all-in-one container (tmux-api + ttyd)
+
+services:
+  termote:
+    build: .
+    container_name: termote
+    profiles: [docker]
+    user: "${USER_ID:-1000}:${GROUP_ID:-1000}"
+    # ports set via deploy.sh override
+    volumes:
+      - ${WORKSPACE:-./workspace}:/workspace:rw
+    working_dir: /workspace
+    environment:
+      - NO_AUTH=${NO_AUTH:-false}
+      - TERMOTE_PASS=${TERMOTE_PASS:-}
+    restart: unless-stopped

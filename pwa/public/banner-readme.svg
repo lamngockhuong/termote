@@ -1,0 +1,21 @@
+<svg viewBox="0 0 800 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Termote - Remote control your terminal">
+  <title>Termote</title>
+  <!-- Dark background for visibility on light/dark GitHub -->
+  <rect width="800" height="200" rx="16" fill="#1e1e1e"/>
+
+  <!-- Terminal window icon -->
+  <g transform="translate(40, 40)">
+    <rect width="120" height="120" rx="16" fill="#1e1e1e" stroke="#3f3f46" stroke-width="1.5"/>
+    <path d="M0 28V28C0 12.536 12.536 0 28 0H92C107.464 0 120 12.536 120 28V32H0V28Z" fill="#282c34"/>
+    <circle cx="22" cy="16" r="6" fill="#ff5f56"/>
+    <circle cx="40" cy="16" r="6" fill="#ffbd2e"/>
+    <circle cx="58" cy="16" r="6" fill="#27c93f"/>
+    <text x="20" y="85" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="36" font-weight="bold" fill="#06b6d4">$ _</text>
+  </g>
+
+  <!-- Title -->
+  <text x="200" y="95" font-family="system-ui, -apple-system, BlinkMacSystemFont, sans-serif" font-size="64" font-weight="700" fill="#ffffff">TERMOTE</text>
+
+  <!-- Tagline -->
+  <text x="200" y="140" font-family="system-ui, -apple-system, BlinkMacSystemFont, sans-serif" font-size="24" fill="#a1a1aa">Remote control your terminal</text>
+</svg>
