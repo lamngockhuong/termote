@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-pwa:
+    name: Build PWA
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pwa/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: pwa
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        working-directory: pwa
+        run: pnpm tsc --noEmit
+
+      - name: Lint
+        working-directory: pwa
+        run: pnpm lint
+
+      - name: Build
+        working-directory: pwa
+        run: pnpm build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: pwa-dist
+          path: pwa/dist
+          retention-days: 7
+
+  build-api:
+    name: Build tmux-api
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.24"
+          cache-dependency-path: tmux-api/go.sum
+
+      - name: Build
+        working-directory: tmux-api
+        run: CGO_ENABLED=0 go build -ldflags="-s -w" -o tmux-api .
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v7
+        with:
+          name: tmux-api
+          path: tmux-api/tmux-api
+          retention-days: 7
+
+  test-scripts:
+    name: Test Scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Run deploy tests
+        run: ./tests/test-deploy.sh
+
+      - name: Run uninstall tests
+        run: ./tests/test-uninstall.sh
+
+  docker-build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: [build-pwa, build-api]
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false
+          tags: termote:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build Hybrid image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.hybrid
+          push: false
+          tags: termote-hybrid:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
