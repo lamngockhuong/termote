@@ -17,6 +17,8 @@ interface Props {
   onScroll?: (direction: 'up' | 'down', pages?: boolean) => void
   onTmuxCopy?: () => void
   onToggleKeyboard?: () => void
+  ctrlActive?: boolean
+  onCtrlChange?: (active: boolean) => void
 }
 
 interface KeyConfig {
@@ -63,6 +65,7 @@ const CTRL_COMBOS = [
   { label: 'B', combo: 'b' },
   { label: 'C', combo: 'c' },
   { label: 'D', combo: 'd' },
+  { label: 'X', combo: 'x' },
   { label: 'Z', combo: 'z' },
   { label: 'L', combo: 'l' },
   { label: 'A', combo: 'a' },
@@ -75,9 +78,18 @@ export function KeyboardToolbar({
   onScroll,
   onTmuxCopy,
   onToggleKeyboard,
+  ctrlActive: externalCtrlActive,
+  onCtrlChange,
 }: Props) {
-  const [ctrlActive, setCtrlActive] = useState(false)
+  const [internalCtrlActive, setInternalCtrlActive] = useState(false)
+  const ctrlActive = externalCtrlActive ?? internalCtrlActive
   const { trigger: haptic } = useHaptic()
+
+  const setCtrlActive = (value: boolean | ((prev: boolean) => boolean)) => {
+    const newValue = typeof value === 'function' ? value(ctrlActive) : value
+    setInternalCtrlActive(newValue)
+    onCtrlChange?.(newValue)
+  }
 
   const handleKey = useCallback(
     (

@@ -1,6 +1,7 @@
 import { Menu } from 'lucide-react'
-import { useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AboutModal } from './components/about-modal'
+import { HelpModal } from './components/help-modal'
 import { BottomNavigation } from './components/bottom-navigation'
 import { KeyboardToolbar } from './components/keyboard-toolbar'
 import { SessionSidebar } from './components/session-sidebar'
@@ -26,9 +27,12 @@ export default function App() {
   const terminalRef = useRef<HTMLIFrameElement>(null)
   const gestureRef = useRef<HTMLDivElement>(null)
   const terminalContainerRef = useRef<HTMLDivElement>(null)
+  const ctrlInputRef = useRef<HTMLInputElement>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
   const [showTitleTooltip, setShowTitleTooltip] = useState(false)
+  const [ctrlActive, setCtrlActive] = useState(false)
   const isMobile = useIsMobile()
   const { isVisible: keyboardVisible, keyboardHeight } = useKeyboardVisible()
   const {
@@ -78,6 +82,28 @@ export default function App() {
       focusTerminal(terminalRef.current)
     }
   }
+
+  // Handle Ctrl+key input from hidden input field
+  const handleCtrlInput = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const value = e.target.value
+      if (value.length === 1 && /^[a-zA-Z]$/.test(value)) {
+        sendKeyToTerminal(terminalRef.current, value.toLowerCase(), true)
+        setCtrlActive(false)
+        focusTerminal(terminalRef.current)
+      }
+      e.target.value = ''
+    },
+    [],
+  )
+
+  // Focus hidden input when Ctrl is active
+  useEffect(() => {
+    if (ctrlActive && ctrlInputRef.current) {
+      blurTerminal(terminalRef.current)
+      ctrlInputRef.current.focus()
+    }
+  }, [ctrlActive])
 
   useGestures(gestureRef, gestureHandlers)
 
@@ -201,7 +227,10 @@ export default function App() {
               >
                 A+
               </button>
-              <SettingsMenu onOpenAbout={() => setAboutOpen(true)} />
+              <SettingsMenu
+                onOpenAbout={() => setAboutOpen(true)}
+                onOpenHelp={() => setHelpOpen(true)}
+              />
             </div>
           </header>
           <div
@@ -240,6 +269,8 @@ export default function App() {
         onScroll={handleScroll}
         onTmuxCopy={handleTmuxCopy}
         onToggleKeyboard={toggleKeyboard}
+        ctrlActive={ctrlActive}
+        onCtrlChange={setCtrlActive}
       />
 
       {/* Mobile bottom navigation */}
@@ -253,8 +284,20 @@ export default function App() {
         />
       )}
 
-      {/* About modal */}
+      {/* Hidden input for Ctrl+key capture - programmatically focused only */}
+      <input
+        ref={ctrlInputRef}
+        type="text"
+        className="sr-only"
+        tabIndex={-1}
+        autoComplete="off"
+        onChange={handleCtrlInput}
+        onBlur={() => setCtrlActive(false)}
+      />
+
+      {/* Modals */}
       <AboutModal isOpen={aboutOpen} onClose={() => setAboutOpen(false)} />
+      <HelpModal isOpen={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>
   )
 }
