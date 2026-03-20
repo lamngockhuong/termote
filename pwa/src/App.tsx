@@ -1,8 +1,8 @@
 import { Menu } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AboutModal } from './components/about-modal'
-import { HelpModal } from './components/help-modal'
 import { BottomNavigation } from './components/bottom-navigation'
+import { HelpModal } from './components/help-modal'
 import { KeyboardToolbar } from './components/keyboard-toolbar'
 import { SessionSidebar } from './components/session-sidebar'
 import { SettingsMenu } from './components/settings-menu'
@@ -20,6 +20,7 @@ import {
   pasteToTerminal,
   scrollTmux,
   sendKeyToTerminal,
+  sendTextToTerminal,
   toggleTmuxCopyMode,
 } from './utils/terminal-bridge'
 
@@ -123,6 +124,10 @@ export default function App() {
     toggleTmuxCopyMode(terminalRef.current)
   }
 
+  const handleSendText = (text: string) => {
+    sendTextToTerminal(terminalRef.current, text)
+  }
+
   const handleMobileSelect = (id: string) => {
     switchSession(id)
     setSidebarOpen(false)
@@ -179,7 +184,11 @@ export default function App() {
             <div
               className="relative flex items-center min-w-0 flex-1 mr-2 cursor-pointer"
               onClick={() => setShowTitleTooltip(!showTitleTooltip)}
-              title={!isMobile ? `${activeSession.name}${activeSession.description ? ` - ${activeSession.description}` : ''}` : undefined}
+              title={
+                !isMobile
+                  ? `${activeSession.name}${activeSession.description ? ` - ${activeSession.description}` : ''}`
+                  : undefined
+              }
             >
               <span className="shrink-0 text-lg">{activeSession.icon}</span>
               <span className="ml-2 font-medium text-zinc-900 dark:text-white truncate">
@@ -203,7 +212,9 @@ export default function App() {
                   <div className="absolute left-0 top-full mt-1 z-50 px-3 py-2 bg-zinc-900 dark:bg-zinc-700 text-white text-sm rounded-lg shadow-lg max-w-[80vw] break-words">
                     <div className="font-medium">{activeSession.name}</div>
                     {activeSession.description && (
-                      <div className="text-zinc-300 text-xs mt-1">{activeSession.description}</div>
+                      <div className="text-zinc-300 text-xs mt-1">
+                        {activeSession.description}
+                      </div>
                     )}
                   </div>
                 </>
@@ -269,6 +280,7 @@ export default function App() {
         onScroll={handleScroll}
         onTmuxCopy={handleTmuxCopy}
         onToggleKeyboard={toggleKeyboard}
+        onSendText={handleSendText}
         ctrlActive={ctrlActive}
         onCtrlChange={setCtrlActive}
       />

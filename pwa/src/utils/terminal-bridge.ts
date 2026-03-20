@@ -118,6 +118,16 @@ export function sendCommandToTerminal(
   sendData(term, command + '\r')
 }
 
+// Send text to terminal (without Enter/newline) - for IME input
+export function sendTextToTerminal(
+  iframe: HTMLIFrameElement | null,
+  text: string,
+) {
+  const term = getTerm(iframe)
+  if (!term || !text) return
+  sendData(term, text)
+}
+
 // Scroll terminal viewport (for non-tmux terminals)
 export function scrollTerminal(
   iframe: HTMLIFrameElement | null,
