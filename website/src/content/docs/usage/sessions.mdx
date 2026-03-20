@@ -1,0 +1,61 @@
+---
+title: Session Management
+description: Managing terminal sessions with tmux
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Termote uses tmux for persistent sessions that survive disconnects.
+
+## Session Types
+
+| Session | Purpose |
+|---------|---------|
+| Claude | Claude Code CLI |
+| Copilot | GitHub Copilot CLI |
+| Shell | Standard shell |
+
+## Switching Sessions
+
+<Steps>
+1. Tap session icon in sidebar (desktop) or bottom nav (mobile)
+2. Session loads immediately
+3. Previous session continues in background
+</Steps>
+
+## Session Persistence
+
+Sessions persist until:
+- Explicitly closed
+- Server restart
+- tmux session killed
+
+<Aside type="tip">
+Sessions survive network disconnects. Reconnect to pick up where you left off.
+</Aside>
+
+## tmux Commands
+
+```bash
+# List sessions
+tmux ls
+
+# Attach to session
+tmux attach -t claude
+
+# Kill session
+tmux kill-session -t shell
+```
+
+## Troubleshooting
+
+### Session not persisting
+
+1. Check tmux is running: `tmux ls`
+2. Verify ttyd uses `-A` flag (attach-or-create)
+3. Check container logs: `docker logs termote`
+
+### WebSocket errors
+
+1. Check tmux-api logs: `docker logs termote`
+2. Verify ttyd is running on port 7681

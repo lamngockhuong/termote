@@ -1,0 +1,155 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      pwa: ${{ steps.filter.outputs.pwa }}
+      api: ${{ steps.filter.outputs.api }}
+      scripts: ${{ steps.filter.outputs.scripts }}
+      docker: ${{ steps.filter.outputs.docker }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            pwa:
+              - 'pwa/**'
+            api:
+              - 'tmux-api/**'
+            scripts:
+              - 'scripts/**'
+              - 'tests/**'
+              - 'Makefile'
+            docker:
+              - 'Dockerfile'
+              - 'systemd/**'
+
+  build-pwa:
+    name: Build PWA
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.pwa == 'true' || needs.changes.outputs.docker == 'true'
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pwa/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: pwa
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        working-directory: pwa
+        run: pnpm tsc --noEmit
+
+      - name: Lint
+        working-directory: pwa
+        run: pnpm lint:ci
+
+      - name: Build
+        working-directory: pwa
+        run: pnpm build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: pwa-dist
+          path: pwa/dist
+          retention-days: 7
+
+  build-api:
+    name: Build tmux-api
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.docker == 'true'
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.26"
+          cache-dependency-path: tmux-api/go.mod
+
+      - name: Build
+        working-directory: tmux-api
+        run: CGO_ENABLED=0 go build -ldflags="-s -w" -o tmux-api .
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v7
+        with:
+          name: tmux-api
+          path: tmux-api/tmux-api
+          retention-days: 7
+
+  test-scripts:
+    name: Test Scripts
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.scripts == 'true'
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Run CLI tests
+        run: ./tests/test-termote.sh
+
+      - name: Run entrypoint tests
+        run: ./tests/test-entrypoints.sh
+
+  docker-build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: [changes, build-pwa, build-api]
+    if: |
+      needs.build-pwa.result == 'success' &&
+      needs.build-api.result == 'success'
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download PWA artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: pwa-dist
+          path: pwa/dist
+
+      - name: Download tmux-api binary
+        uses: actions/download-artifact@v8
+        with:
+          name: tmux-api
+          path: tmux-api
+
+      - name: Create .htpasswd
+        run: echo 'termote:$apr1$dummy$hash' > .htpasswd
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false
+          tags: termote:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

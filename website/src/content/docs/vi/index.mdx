@@ -1,0 +1,53 @@
+---
+title: Termote
+description: Điều khiển công cụ CLI từ xa từ điện thoại/máy tính qua PWA
+template: splash
+hero:
+  title: |
+    Termote
+    <span class="text-accent">Terminal + Từ xa</span>
+  tagline: Điều khiển Claude Code, GitHub Copilot và bất kỳ CLI nào từ điện thoại
+  image:
+    file: ../../../assets/demo-placeholder.svg
+    alt: Termote demo
+  actions:
+    - text: Bắt đầu
+      link: /vi/getting-started/
+      icon: right-arrow
+      variant: primary
+    - text: Xem trên GitHub
+      link: https://github.com/lamngockhuong/termote
+      icon: external
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## Tính năng
+
+<CardGrid stagger>
+  <Card title="Chuyển đổi phiên" icon="rocket">
+    Chuyển nhanh giữa Claude, Copilot và Shell
+  </Card>
+  <Card title="Tối ưu cho di động" icon="setting">
+    Thanh công cụ bàn phím với Tab, Esc, Ctrl, phím mũi tên
+  </Card>
+  <Card title="Hỗ trợ cử chỉ" icon="pencil">
+    Vuốt trái Ctrl+C, phải Tab, lên/xuống lịch sử lệnh
+  </Card>
+  <Card title="PWA" icon="puzzle">
+    Cài đặt về màn hình chính, hoạt động offline
+  </Card>
+</CardGrid>
+
+## Cài đặt nhanh
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
+```
+
+## Chế độ triển khai
+
+| Chế độ | Mô tả | Trường hợp sử dụng | Nền tảng |
+|--------|-------|-------------------|----------|
+| Container | Container tất-cả-trong-một | Triển khai đơn giản, môi trường cô lập | macOS, Linux |
+| Native | Tất cả native | Truy cập công cụ host (claude, gh) | macOS, Linux |

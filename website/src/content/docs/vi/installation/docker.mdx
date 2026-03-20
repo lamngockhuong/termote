@@ -1,0 +1,68 @@
+---
+title: Cài đặt Container
+description: Triển khai container tất-cả-trong-một
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Container đơn với tmux-api (PWA + proxy) + ttyd + tmux.
+
+## Bắt đầu nhanh
+
+<Steps>
+1. Chạy lệnh deploy
+   ```bash
+   ./scripts/termote.sh install container
+   ```
+
+2. Truy cập tại http://localhost:7680
+
+3. (Tùy chọn) Mở ra LAN
+   ```bash
+   ./scripts/termote.sh install container --lan
+   ```
+</Steps>
+
+## Docker Run
+
+```bash
+# Cơ bản (tự động tạo credentials, kiểm tra logs: docker logs termote)
+docker run -d --name termote -p 7680:7680 ghcr.io/lamngockhuong/termote:latest
+
+# Với credentials tùy chỉnh
+docker run -d --name termote -p 7680:7680 \
+  -e TERMOTE_USER=admin -e TERMOTE_PASS=secret \
+  ghcr.io/lamngockhuong/termote:latest
+
+# Không xác thực (chỉ dev local)
+docker run -d --name termote -p 7680:7680 \
+  -e NO_AUTH=true \
+  ghcr.io/lamngockhuong/termote:latest
+
+# Với lưu trữ
+docker run -d --name termote -p 7680:7680 \
+  -v termote-data:/home/termote \
+  ghcr.io/lamngockhuong/termote:latest
+```
+
+## Tùy chọn
+
+| Cờ | Mô tả |
+|----|-------|
+| `--lan` | Mở ra LAN (mặc định: localhost) |
+| `--no-auth` | Tắt xác thực cơ bản |
+| `--port <port>` | Cổng tùy chỉnh (mặc định: 7680) |
+
+<Aside type="tip">
+Script tự động phát hiện `podman` hoặc `docker` - cả hai hoạt động giống nhau.
+</Aside>
+
+<Aside type="note">
+Sử dụng chế độ Container khi bạn không cần truy cập binary host (như `claude` hoặc `git`).
+</Aside>
+
+## Gỡ cài đặt
+
+```bash
+./scripts/termote.sh uninstall container
+```

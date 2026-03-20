@@ -1,0 +1,60 @@
+---
+title: Tailscale HTTPS
+description: Auto SSL via tailscale serve
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Automatic HTTPS using `tailscale serve`. No manual certificate management.
+
+## Prerequisites
+
+- [Tailscale](https://tailscale.com) installed and authenticated
+- MagicDNS enabled
+
+## Installation
+
+<Steps>
+1. Deploy with Tailscale flag
+   ```bash
+   ./scripts/termote.sh install container --tailscale myhost.ts.net
+   ```
+
+2. Access at https://myhost.ts.net
+</Steps>
+
+## Options
+
+```bash
+# Custom port
+./scripts/termote.sh install native --tailscale myhost.ts.net:8765
+
+# Tailscale + LAN
+./scripts/termote.sh install container --tailscale myhost.ts.net --lan
+```
+
+<Aside type="tip">
+Tailscale is the recommended way to expose Termote securely over the internet.
+</Aside>
+
+## How It Works
+
+```
+Internet → Tailscale (HTTPS) → localhost:7680 → tmux-api → ttyd
+```
+
+Tailscale handles:
+- TLS certificates (auto-renewed)
+- Authentication (Tailscale ACLs)
+- NAT traversal
+
+## With Docker
+
+```bash
+docker run -d --name termote -p 7680:7680 \
+  -e TERMOTE_USER=admin -e TERMOTE_PASS=secret \
+  ghcr.io/lamngockhuong/termote:latest
+
+sudo tailscale serve --bg --https=443 http://127.0.0.1:7680
+# Access at: https://your-hostname.tailnet-name.ts.net
+```

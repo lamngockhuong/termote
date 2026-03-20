@@ -1,0 +1,86 @@
+---
+title: Native Installation
+description: All services run natively on host
+---
+
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+No Docker required. Access host binaries like `claude`, `git`, `gh`, etc.
+
+## Prerequisites
+
+<Tabs>
+  <TabItem label="Linux">
+    ```bash
+    sudo apt install ttyd tmux
+    # Or: sudo snap install ttyd
+    ```
+  </TabItem>
+  <TabItem label="macOS">
+    ```bash
+    brew install ttyd tmux go
+    ```
+  </TabItem>
+</Tabs>
+
+## Installation
+
+<Steps>
+1. Install dependencies (see above)
+
+2. Run deploy command
+   ```bash
+   ./scripts/termote.sh install native
+   ```
+
+3. Access at http://localhost:7680
+</Steps>
+
+## When to Use
+
+- Need access to host binaries (claude, git, gh, etc.)
+- No Docker/Podman available
+- Full control over services
+- Custom systemd integration (Linux)
+
+<Aside type="tip">
+Native mode is recommended when you need to use Claude Code or other host CLI tools.
+</Aside>
+
+## Service Management
+
+### Linux (systemd)
+
+```bash
+# Check status
+sudo systemctl status termote
+sudo systemctl status tmux-api
+
+# Restart
+sudo systemctl restart termote
+```
+
+### macOS (launchd)
+
+```bash
+# Check processes
+ps aux | grep ttyd
+ps aux | grep tmux-api
+
+# Restart
+./scripts/termote.sh install native
+```
+
+## Troubleshooting
+
+```bash
+ps aux | grep ttyd         # Check if ttyd is running
+ps aux | grep tmux-api     # Check if tmux-api is running
+lsof -i :7680              # Verify port is in use
+```
+
+## Uninstall
+
+```bash
+./scripts/termote.sh uninstall native
+```

@@ -1,0 +1,60 @@
+---
+title: Getting Started
+description: Quick start guide for Termote
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+## Prerequisites
+
+- Docker or Podman (for Container mode)
+- or ttyd + tmux + Go (for Native mode)
+
+## One-Liner Install
+
+```bash
+# Defaults to native mode (access host binaries like claude, gh, etc.)
+curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
+
+# With explicit mode
+curl -fsSL .../get.sh | bash -s -- --container --lan
+curl -fsSL .../get.sh | bash -s -- --native --tailscale myhost
+```
+
+<Aside type="tip">
+The install script auto-detects your environment and chooses the best deployment mode.
+</Aside>
+
+## Quick Start
+
+<Steps>
+1. Clone the repository
+   ```bash
+   git clone https://github.com/lamngockhuong/termote.git
+   cd termote
+   ```
+
+2. Install with container (simplest)
+   ```bash
+   ./scripts/termote.sh install container
+   ```
+
+3. Access at http://localhost:7680
+</Steps>
+
+## CLI Commands
+
+```bash
+./scripts/termote.sh                   # Interactive menu
+./scripts/termote.sh install container # Container mode
+./scripts/termote.sh install native    # Native mode (host tools)
+./scripts/termote.sh uninstall all     # Uninstall everything
+./scripts/termote.sh health            # Check service health
+```
+
+## What's Next
+
+- [Container Installation](/installation/docker/) - Full container setup
+- [Native Installation](/installation/native/) - Access host binaries
+- [Tailscale HTTPS](/installation/tailscale/) - Secure remote access
+- [Mobile Gestures](/usage/gestures/) - Touch controls
