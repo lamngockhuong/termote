@@ -1,0 +1,40 @@
+---
+title: Cử chỉ di động
+description: Điều khiển cảm ứng cho tương tác terminal
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Termote hỗ trợ cử chỉ cảm ứng cho các thao tác terminal phổ biến.
+
+## Tham chiếu cử chỉ
+
+| Cử chỉ | Hành động | Lệnh Terminal |
+|--------|-----------|---------------|
+| Vuốt trái | Hủy/ngắt | Ctrl+C |
+| Vuốt phải | Tab completion | Tab |
+| Vuốt lên | Lịch sử lên | Phím lên |
+| Vuốt xuống | Lịch sử xuống | Phím xuống |
+| Nhấn giữ | Dán clipboard | Paste |
+| Chụm vào | Giảm font | - |
+| Chụm ra | Tăng font | - |
+
+## Vùng cử chỉ
+
+Cử chỉ hoạt động trong vùng terminal. Thanh công cụ bàn phím và điều hướng được loại trừ.
+
+<Aside>
+Cử chỉ bị tắt trên desktop nơi tương tác chuột được ưu tiên.
+</Aside>
+
+## Kích thước font
+
+- Phạm vi: 6px - 24px
+- Mặc định: 14px
+- Điều chỉnh bằng chụm hoặc nút toolbar
+
+## Mẹo
+
+1. **Hủy nhanh**: Vuốt trái để gửi Ctrl+C khi lệnh bị treo
+2. **Tab complete**: Vuốt phải để tự động hoàn thành tên file/lệnh
+3. **Lịch sử**: Vuốt lên/xuống để duyệt lịch sử lệnh

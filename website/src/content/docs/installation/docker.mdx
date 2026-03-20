@@ -1,0 +1,68 @@
+---
+title: Container Installation
+description: All-in-one container deployment
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Single container with tmux-api (PWA + proxy) + ttyd + tmux.
+
+## Quick Start
+
+<Steps>
+1. Run deploy command
+   ```bash
+   ./scripts/termote.sh install container
+   ```
+
+2. Access at http://localhost:7680
+
+3. (Optional) Expose to LAN
+   ```bash
+   ./scripts/termote.sh install container --lan
+   ```
+</Steps>
+
+## Docker Run
+
+```bash
+# Basic (auto-generates credentials, check logs: docker logs termote)
+docker run -d --name termote -p 7680:7680 ghcr.io/lamngockhuong/termote:latest
+
+# With custom credentials
+docker run -d --name termote -p 7680:7680 \
+  -e TERMOTE_USER=admin -e TERMOTE_PASS=secret \
+  ghcr.io/lamngockhuong/termote:latest
+
+# Without auth (local dev only)
+docker run -d --name termote -p 7680:7680 \
+  -e NO_AUTH=true \
+  ghcr.io/lamngockhuong/termote:latest
+
+# With persistence
+docker run -d --name termote -p 7680:7680 \
+  -v termote-data:/home/termote \
+  ghcr.io/lamngockhuong/termote:latest
+```
+
+## Options
+
+| Flag | Description |
+|------|-------------|
+| `--lan` | Expose to LAN (default: localhost) |
+| `--no-auth` | Disable basic auth |
+| `--port <port>` | Custom port (default: 7680) |
+
+<Aside type="tip">
+Scripts auto-detect `podman` or `docker` - both work identically.
+</Aside>
+
+<Aside type="note">
+Use Container mode when you don't need access to host binaries (like `claude` or `git`).
+</Aside>
+
+## Uninstall
+
+```bash
+./scripts/termote.sh uninstall container
+```

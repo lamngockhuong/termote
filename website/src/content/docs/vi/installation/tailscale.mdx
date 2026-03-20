@@ -1,0 +1,60 @@
+---
+title: Tailscale HTTPS
+description: Tự động SSL qua tailscale serve
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Tự động HTTPS sử dụng `tailscale serve`. Không cần quản lý chứng chỉ thủ công.
+
+## Yêu cầu
+
+- [Tailscale](https://tailscale.com) đã cài đặt và xác thực
+- MagicDNS đã bật
+
+## Cài đặt
+
+<Steps>
+1. Triển khai với cờ Tailscale
+   ```bash
+   ./scripts/termote.sh install container --tailscale myhost.ts.net
+   ```
+
+2. Truy cập tại https://myhost.ts.net
+</Steps>
+
+## Tùy chọn
+
+```bash
+# Cổng tùy chỉnh
+./scripts/termote.sh install native --tailscale myhost.ts.net:8765
+
+# Tailscale + LAN
+./scripts/termote.sh install container --tailscale myhost.ts.net --lan
+```
+
+<Aside type="tip">
+Tailscale là cách được khuyến nghị để expose Termote an toàn qua internet.
+</Aside>
+
+## Cách hoạt động
+
+```
+Internet → Tailscale (HTTPS) → localhost:7680 → tmux-api → ttyd
+```
+
+Tailscale xử lý:
+- Chứng chỉ TLS (tự động gia hạn)
+- Xác thực (Tailscale ACLs)
+- NAT traversal
+
+## Với Docker
+
+```bash
+docker run -d --name termote -p 7680:7680 \
+  -e TERMOTE_USER=admin -e TERMOTE_PASS=secret \
+  ghcr.io/lamngockhuong/termote:latest
+
+sudo tailscale serve --bg --https=443 http://127.0.0.1:7680
+# Truy cập tại: https://your-hostname.tailnet-name.ts.net
+```
