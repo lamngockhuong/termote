@@ -13,6 +13,8 @@ services:
     volumes:
       - ${WORKSPACE:-./workspace}:/workspace:rw
     working_dir: /workspace
+    environment:
+      - NO_AUTH=${NO_AUTH:-false}
     restart: unless-stopped
 
   # Hybrid mode: nginx + tmux-api (ttyd runs native)
@@ -29,4 +31,5 @@ services:
       - ${TMUX_SOCKET_DIR:-/tmp/tmux-1000}:/tmp/tmux-socket:rw
     environment:
       - TMUX_SOCKET=/tmp/tmux-socket/default
+      - NO_AUTH=${NO_AUTH:-false}
     restart: unless-stopped

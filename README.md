@@ -34,12 +34,15 @@ make health           # Check services
 | --------------------------- | --------------------------------------- |
 | `--lan`                     | Expose to LAN (default: localhost only) |
 | `--tailscale <host[:port]>` | Enable Tailscale HTTPS                  |
+| `--no-auth`                 | Disable basic authentication            |
+| `--port <port>`             | Host port (default: 7680)               |
 
 ### Docker (recommended for simplicity)
 
 ```bash
-./scripts/deploy.sh --docker           # localhost only
-./scripts/deploy.sh --docker --lan     # LAN accessible
+./scripts/deploy.sh --docker             # localhost with basic auth
+./scripts/deploy.sh --docker --no-auth   # localhost without auth
+./scripts/deploy.sh --docker --lan       # LAN accessible
 # Access: http://localhost:7680
 ```
 
@@ -181,7 +184,8 @@ cd pwa && pnpm test:e2e:ui    # Run with UI debugger
 ## Security Notes
 
 - **Default: localhost only** - not exposed to LAN unless `--lan` flag used
-- Basic auth over HTTPS (or Tailscale)
+- **Basic auth enabled by default** - use `--no-auth` to disable for local dev
+- Use HTTPS (Tailscale) for production
 - Consider fail2ban for brute-force protection
 - Restrict to trusted networks/VPN
 

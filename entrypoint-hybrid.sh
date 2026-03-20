@@ -1,6 +1,11 @@
 #!/bin/bash
 # Hybrid entrypoint: nginx + tmux-api (ttyd runs native on host)
 
+# Disable basic auth if NO_AUTH=true
+if [[ "$NO_AUTH" == "true" ]]; then
+    sed -i '/auth_basic/d' /etc/nginx/nginx.conf
+fi
+
 # Start tmux-api in background
 /usr/local/bin/tmux-api &
 TMUX_API_PID=$!

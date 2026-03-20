@@ -13,6 +13,11 @@ fi
 mkdir -p /home/termote/.local/share/nano 2>/dev/null || true
 export HOME=/home/termote
 
+# Disable basic auth if NO_AUTH=true
+if [[ "$NO_AUTH" == "true" ]]; then
+    sed -i '/auth_basic/d' /etc/nginx/nginx.conf
+fi
+
 # Start nginx
 nginx -g 'daemon off;' &
 NGINX_PID=$!

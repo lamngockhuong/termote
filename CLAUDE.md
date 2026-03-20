@@ -61,7 +61,8 @@ termote/
 | `--native` | All native           | No Docker            |
 
 ```bash
-./scripts/deploy.sh --docker                    # localhost only
+./scripts/deploy.sh --docker                    # localhost only (with basic auth)
+./scripts/deploy.sh --docker --no-auth          # localhost without auth
 ./scripts/deploy.sh --docker --lan              # LAN accessible
 ./scripts/deploy.sh --docker --tailscale host   # Tailscale HTTPS
 ./scripts/deploy.sh --docker --tailscale host --lan  # Both
@@ -120,6 +121,7 @@ cd tmux-api && go build -o tmux-api .  # Build API
 
 ## Security Notes
 
+- Basic auth enabled by default (use `--no-auth` to disable for local dev)
 - Basic auth over HTTPS required for production
 - Same-origin iframe setup via nginx proxy
 - PostMessage uses explicit origin (not wildcard)

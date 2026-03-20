@@ -17,6 +17,7 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 MODE=""
 TAILSCALE=""
 LAN=false
+NO_AUTH=false
 
 args=("$@")
 for i in "${!args[@]}"; do
@@ -39,6 +40,9 @@ for i in "${!args[@]}"; do
             ;;
         --port)
             PORT="${args[$((i+1))]}"
+            ;;
+        --no-auth)
+            NO_AUTH=true
             ;;
     esac
 done
@@ -67,10 +71,12 @@ if [[ -z "$MODE" ]]; then
     echo "  --port <port>              Host port (default: 7680)"
     echo "  --tailscale <host[:port]>  Enable Tailscale HTTPS (default port: 443)"
     echo "  --lan                      Expose to LAN (default: localhost only)"
+    echo "  --no-auth                  Disable basic authentication"
     echo ""
     echo "Examples:"
     echo "  ./deploy.sh --docker                              # localhost only"
     echo "  ./deploy.sh --docker --lan                        # LAN accessible"
+    echo "  ./deploy.sh --docker --no-auth                    # No basic auth"
     echo "  ./deploy.sh --docker --tailscale myhost.ts.net    # Tailscale HTTPS on :443"
     echo "  ./deploy.sh --hybrid --tailscale myhost.ts.net:8765"
     echo "  ./deploy.sh --native"
@@ -98,17 +104,24 @@ pnpm install --frozen-lockfile
 pnpm build
 cd "$PROJECT_DIR"
 
-# Create .htpasswd if not exists
+# Create .htpasswd if not exists (skip if --no-auth)
 echo "[2/3] Checking auth..."
-if [ ! -f "$PROJECT_DIR/.htpasswd" ]; then
-    echo "Creating .htpasswd (enter password):"
-    echo "admin:$(openssl passwd -apr1)" > "$PROJECT_DIR/.htpasswd"
+if [[ "$NO_AUTH" == true ]]; then
+    echo "  Basic auth disabled (--no-auth)"
+    # Create empty .htpasswd to satisfy COPY in Dockerfile
+    touch "$PROJECT_DIR/.htpasswd"
+else
+    if [ ! -f "$PROJECT_DIR/.htpasswd" ]; then
+        echo "Creating .htpasswd (enter password):"
+        echo "admin:$(openssl passwd -apr1)" > "$PROJECT_DIR/.htpasswd"
+    fi
 fi
 
 # Deploy based on mode
 echo "[3/3] Starting services..."
 export USER_ID=$(id -u)
 export GROUP_ID=$(id -g)
+export NO_AUTH
 
 case $MODE in
     docker)
@@ -214,14 +227,21 @@ EOF
         # Install nginx config (always use local config, Tailscale serve handles HTTPS)
         NGINX_CONF="/etc/nginx/sites-available/termote"
         echo "  Installing nginx config..."
-        sed -e "s/<bind_addr>/$BIND_ADDR/g" \
-            "$PROJECT_DIR/nginx/nginx-local.conf" | sudo tee "$NGINX_CONF" > /dev/null
+        if [[ "$NO_AUTH" == true ]]; then
+            # Remove auth_basic lines
+            sed -e "s/<bind_addr>/$BIND_ADDR/g" \
+                -e '/auth_basic/d' \
+                "$PROJECT_DIR/nginx/nginx-local.conf" | sudo tee "$NGINX_CONF" > /dev/null
+        else
+            sed -e "s/<bind_addr>/$BIND_ADDR/g" \
+                "$PROJECT_DIR/nginx/nginx-local.conf" | sudo tee "$NGINX_CONF" > /dev/null
+        fi
         sudo ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/termote
 
         # Deploy files
         sudo mkdir -p /var/www/termote
         sudo cp -r "$PROJECT_DIR/pwa/dist/"* /var/www/termote/
-        if [ ! -f "/etc/nginx/.htpasswd" ]; then
+        if [[ "$NO_AUTH" != true ]] && [ ! -f "/etc/nginx/.htpasswd" ]; then
             sudo cp "$PROJECT_DIR/.htpasswd" /etc/nginx/.htpasswd
         fi
 
