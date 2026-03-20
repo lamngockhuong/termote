@@ -30,6 +30,7 @@ func main() {
 	http.HandleFunc("/select/", handleSelect)
 	http.HandleFunc("/new", handleNew)
 	http.HandleFunc("/kill/", handleKill)
+	http.HandleFunc("/rename/", handleRename)
 	http.HandleFunc("/send-keys", handleSendKeys)
 	http.HandleFunc("/health", handleHealth)
 
@@ -86,6 +87,21 @@ func handleNew(w http.ResponseWriter, r *http.Request) {
 func handleKill(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, "/kill/")
 	err := tmuxCmd("kill-window", "-t", id).Run()
+	if err != nil {
+		jsonError(w, err.Error(), 500)
+		return
+	}
+	jsonOK(w, map[string]any{"ok": true})
+}
+
+func handleRename(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimPrefix(r.URL.Path, "/rename/")
+	name := r.URL.Query().Get("name")
+	if name == "" {
+		jsonError(w, "name is required", 400)
+		return
+	}
+	err := tmuxCmd("rename-window", "-t", id, name).Run()
 	if err != nil {
 		jsonError(w, err.Error(), 500)
 		return

@@ -165,9 +165,9 @@ export function SwipeableSessionItem({
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        <div className="p-3 text-left text-zinc-900 dark:text-zinc-50 select-none">
-          <span className="text-xl">{session.icon}</span>
-          <span className="ml-2 text-sm">{session.name}</span>
+        <div className="p-3 text-left text-zinc-900 dark:text-zinc-50 select-none flex items-center min-w-0">
+          <span className="text-xl shrink-0">{session.icon}</span>
+          <span className="ml-2 text-sm truncate">{session.name}</span>
         </div>
       </div>
     </div>

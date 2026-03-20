@@ -62,25 +62,29 @@ export function SessionSidebar({
 
   // Edit form (shared)
   const renderEditForm = () => (
-    <div className="p-3 border-b border-zinc-300/30 dark:border-zinc-700/30">
-      <input
-        type="text"
-        value={editName}
-        onChange={(e) => setEditName(e.target.value)}
-        className="w-full px-2 py-1 text-sm bg-zinc-200/50 dark:bg-zinc-800/50 border border-zinc-400/30 dark:border-zinc-600/30 rounded-lg focus:border-blue-500 outline-none mb-2"
-        autoFocus
-      />
-      <IconPicker value={editIcon} onChange={setEditIcon} />
-      <div className="flex gap-1 mt-2">
+    <div className="p-3 border-b border-zinc-300/30 dark:border-zinc-700/30 overflow-hidden">
+      {/* Icon + Name on same row */}
+      <div className="flex items-center gap-2 mb-2 min-w-0">
+        <IconPicker value={editIcon} onChange={setEditIcon} />
+        <input
+          type="text"
+          value={editName}
+          onChange={(e) => setEditName(e.target.value)}
+          className="flex-1 min-w-0 px-2 py-2 text-sm bg-zinc-200/50 dark:bg-zinc-800/50 border border-zinc-400/30 dark:border-zinc-600/30 rounded-lg focus:border-blue-500 outline-none"
+          autoFocus
+        />
+      </div>
+      {/* Buttons */}
+      <div className="flex gap-2">
         <button
           onClick={saveEdit}
-          className="flex-1 px-2 py-1 text-xs bg-blue-600 hover:bg-blue-500 rounded-lg text-white"
+          className="flex-1 px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 rounded-lg text-white"
         >
           Save
         </button>
         <button
           onClick={cancelEdit}
-          className="px-2 py-1 text-xs bg-zinc-300/50 dark:bg-zinc-700/50 hover:bg-zinc-400/50 dark:hover:bg-zinc-600/50 rounded-lg"
+          className="px-3 py-1.5 text-xs bg-zinc-300/50 dark:bg-zinc-700/50 hover:bg-zinc-400/50 dark:hover:bg-zinc-600/50 rounded-lg"
         >
           Cancel
         </button>
@@ -100,10 +104,10 @@ export function SessionSidebar({
       <button
         onClick={() => onSelect(session.id)}
         onDoubleClick={() => onUpdate && startEdit(session)}
-        className="flex-1 p-3 text-left text-zinc-900 dark:text-zinc-50"
+        className="flex-1 p-3 text-left text-zinc-900 dark:text-zinc-50 flex items-center min-w-0"
       >
-        <span className="text-xl">{session.icon}</span>
-        <span className="hidden md:inline ml-2 text-sm">{session.name}</span>
+        <span className="text-xl shrink-0">{session.icon}</span>
+        <span className="ml-2 text-sm truncate">{session.name}</span>
       </button>
       <div className="hidden group-hover:flex absolute right-1 top-1/2 -translate-y-1/2 gap-1">
         {onUpdate && (
@@ -232,7 +236,7 @@ export function SessionSidebar({
 
   // Desktop: normal sidebar
   return (
-    <aside className="w-16 md:w-48 h-full min-h-0 bg-zinc-50 dark:bg-zinc-800 flex flex-col border-r border-zinc-200 dark:border-zinc-700">
+    <aside className="w-56 h-full min-h-0 bg-zinc-50 dark:bg-zinc-800 flex flex-col border-r border-zinc-200 dark:border-zinc-700 shrink-0">
       <div className="flex-1 min-h-0 overflow-y-auto">{sessionList}</div>
     </aside>
   )

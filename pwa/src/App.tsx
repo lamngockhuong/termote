@@ -28,6 +28,7 @@ export default function App() {
   const terminalContainerRef = useRef<HTMLDivElement>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
+  const [showTitleTooltip, setShowTitleTooltip] = useState(false)
   const isMobile = useIsMobile()
   const { isVisible: keyboardVisible, keyboardHeight } = useKeyboardVisible()
   const {
@@ -149,13 +150,40 @@ export default function App() {
                 <Menu size={20} />
               </button>
             )}
-            <span className="font-medium text-zinc-900 dark:text-white">
-              {activeSession.icon} {activeSession.name}
-            </span>
-            <span className="ml-2 text-sm text-zinc-500 dark:text-zinc-400 hidden sm:inline">
-              {activeSession.description}
-            </span>
-            <div className="ml-auto flex items-center gap-2">
+            <div
+              className="relative flex items-center min-w-0 flex-1 mr-2 cursor-pointer"
+              onClick={() => setShowTitleTooltip(!showTitleTooltip)}
+              title={!isMobile ? `${activeSession.name}${activeSession.description ? ` - ${activeSession.description}` : ''}` : undefined}
+            >
+              <span className="shrink-0 text-lg">{activeSession.icon}</span>
+              <span className="ml-2 font-medium text-zinc-900 dark:text-white truncate">
+                {activeSession.name}
+              </span>
+              {activeSession.description && (
+                <span className="ml-2 text-sm text-zinc-500 dark:text-zinc-400 hidden sm:inline truncate">
+                  {activeSession.description}
+                </span>
+              )}
+              {/* Mobile tooltip with backdrop */}
+              {showTitleTooltip && isMobile && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setShowTitleTooltip(false)
+                    }}
+                  />
+                  <div className="absolute left-0 top-full mt-1 z-50 px-3 py-2 bg-zinc-900 dark:bg-zinc-700 text-white text-sm rounded-lg shadow-lg max-w-[80vw] break-words">
+                    <div className="font-medium">{activeSession.name}</div>
+                    {activeSession.description && (
+                      <div className="text-zinc-300 text-xs mt-1">{activeSession.description}</div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
               <button
                 onClick={decrease}
                 className="px-2 py-1 text-xs bg-zinc-200/70 dark:bg-zinc-700/70 rounded-lg hover:bg-zinc-300/70 dark:hover:bg-zinc-600/70 touch-manipulation transition-colors"
