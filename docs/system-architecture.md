@@ -160,8 +160,8 @@ Uses `Dockerfile` and `entrypoint-allinone.sh`.
 ./scripts/deploy.sh --native --tailscale myhost.ts.net
 ```
 
-- Auto SSL via Tailscale certs
-- Access via Tailscale network
+- Auto SSL via `tailscale serve` (no manual cert management)
+- Access via Tailscale network (default port 443)
 
 ### Uninstall
 

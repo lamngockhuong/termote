@@ -74,18 +74,18 @@ test_tailscale_parsing() {
     echo ""
     echo "=== Testing Tailscale hostname:port parsing ==="
 
-    # Test 1: hostname only (default port)
+    # Test 1: hostname only (default port 443)
     TAILSCALE="myhost.ts.net"
     if [[ "$TAILSCALE" == *":"* ]]; then
         TS_HOST="${TAILSCALE%%:*}"
         TS_PORT="${TAILSCALE##*:}"
     else
         TS_HOST="$TAILSCALE"
-        TS_PORT="7680"
+        TS_PORT="443"
     fi
-    [[ "$TS_HOST" == "myhost.ts.net" && "$TS_PORT" == "7680" ]] && \
-        pass "hostname only: host=myhost.ts.net, port=7680" || \
-        fail "hostname only" "host=myhost.ts.net,port=7680" "host=$TS_HOST,port=$TS_PORT"
+    [[ "$TS_HOST" == "myhost.ts.net" && "$TS_PORT" == "443" ]] && \
+        pass "hostname only: host=myhost.ts.net, port=443 (default)" || \
+        fail "hostname only" "host=myhost.ts.net,port=443" "host=$TS_HOST,port=$TS_PORT"
 
     # Test 2: hostname:port
     TAILSCALE="myhost.ts.net:443"
@@ -107,7 +107,7 @@ test_tailscale_parsing() {
         TS_PORT="${TAILSCALE##*:}"
     else
         TS_HOST="$TAILSCALE"
-        TS_PORT="7680"
+        TS_PORT="443"
     fi
     [[ "$TS_HOST" == "company.bigscale-ruffe.ts.net" && "$TS_PORT" == "9000" ]] && \
         pass "complex hostname:port parsed correctly" || \
@@ -164,15 +164,6 @@ test_nginx_config_templates() {
     else
         fail "nginx-local.conf" "<bind_addr> placeholder" "not found"
     fi
-
-    # Test nginx-tailscale.conf has placeholders
-    if grep -q "<hostname>" "$PROJECT_DIR/nginx/nginx-tailscale.conf" && \
-       grep -q "<port>" "$PROJECT_DIR/nginx/nginx-tailscale.conf" && \
-       grep -q "<tailscale_ip>" "$PROJECT_DIR/nginx/nginx-tailscale.conf"; then
-        pass "nginx-tailscale.conf has all placeholders"
-    else
-        fail "nginx-tailscale.conf" "all placeholders" "missing some"
-    fi
 }
 
 test_sed_substitution() {
@@ -186,20 +177,6 @@ test_sed_substitution() {
         pass "sed substitutes <bind_addr> correctly"
     else
         fail "sed <bind_addr>" "127.0.0.1:7680" "$RESULT"
-    fi
-
-    # Test sed on nginx-tailscale.conf
-    TS_HOST="test.ts.net"
-    TS_PORT="8443"
-    TS_IP="100.64.0.1"
-    RESULT=$(sed -e "s/<hostname>/$TS_HOST/g" \
-                 -e "s/<port>/$TS_PORT/g" \
-                 -e "s/<tailscale_ip>/$TS_IP/g" \
-                 "$PROJECT_DIR/nginx/nginx-tailscale.conf" | grep "listen")
-    if [[ "$RESULT" == *"100.64.0.1:8443"* ]]; then
-        pass "sed substitutes tailscale placeholders correctly"
-    else
-        fail "sed tailscale" "100.64.0.1:8443" "$RESULT"
     fi
 }
 

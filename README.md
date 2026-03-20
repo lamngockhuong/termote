@@ -66,17 +66,19 @@ sudo apt install ttyd tmux nginx
 
 ### With Tailscale HTTPS (all modes)
 
+Uses `tailscale serve` for automatic HTTPS (no manual cert management):
+
 ```bash
-# Tailscale only (private network)
+# Tailscale only (default port 443)
 ./scripts/deploy.sh --docker --tailscale myhost.ts.net
+
+# Custom port
+./scripts/deploy.sh --hybrid --tailscale myhost.ts.net:8765
 
 # Tailscale + LAN accessible
 ./scripts/deploy.sh --docker --tailscale myhost.ts.net --lan
 
-# Custom port
-./scripts/deploy.sh --hybrid --tailscale myhost.ts.net:443
-
-# Access: https://myhost.ts.net:7680 (or custom port)
+# Access: https://myhost.ts.net (or :8765 for custom port)
 ```
 
 ### Uninstall
@@ -120,8 +122,7 @@ termote/
 ├── nginx/
 │   ├── nginx-docker.conf   # For docker mode
 │   ├── nginx-hybrid.conf   # For hybrid mode
-│   ├── nginx-local.conf    # For native mode
-│   └── nginx-tailscale.conf
+│   └── nginx-local.conf    # For native mode
 ├── pwa/                    # React PWA
 │   └── src/
 │       ├── components/

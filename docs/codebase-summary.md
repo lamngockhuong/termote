@@ -35,7 +35,6 @@ termote/
 │   ├── nginx-docker.conf       # Docker mode
 │   ├── nginx-hybrid.conf       # Hybrid mode
 │   ├── nginx-local.conf        # Native local (basic auth)
-│   ├── nginx-tailscale.conf    # Native Tailscale (auto SSL)
 │   └── nginx-production.conf   # Native production (manual SSL)
 ├── tmux-api/                   # Go API server
 │   ├── main.go                 # HTTP API for tmux control

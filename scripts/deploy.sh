@@ -43,7 +43,7 @@ for i in "${!args[@]}"; do
     esac
 done
 
-# Default port
+# Default port (internal)
 PORT="${PORT:-7680}"
 
 # Determine bind address (localhost by default, 0.0.0.0 with --lan)
@@ -65,37 +65,27 @@ if [[ -z "$MODE" ]]; then
     echo ""
     echo "Options:"
     echo "  --port <port>              Host port (default: 7680)"
-    echo "  --tailscale <host[:port]>  Enable Tailscale HTTPS (default port: 7680)"
+    echo "  --tailscale <host[:port]>  Enable Tailscale HTTPS (default port: 443)"
     echo "  --lan                      Expose to LAN (default: localhost only)"
     echo ""
     echo "Examples:"
     echo "  ./deploy.sh --docker                              # localhost only"
     echo "  ./deploy.sh --docker --lan                        # LAN accessible"
-    echo "  ./deploy.sh --docker --tailscale myhost.ts.net    # Tailscale HTTPS"
-    echo "  ./deploy.sh --hybrid --tailscale myhost.ts.net:443"
+    echo "  ./deploy.sh --docker --tailscale myhost.ts.net    # Tailscale HTTPS on :443"
+    echo "  ./deploy.sh --hybrid --tailscale myhost.ts.net:8765"
     echo "  ./deploy.sh --native"
     exit 1
 fi
 
-# Parse Tailscale hostname:port
+# Parse Tailscale hostname:port (separate from internal PORT)
 if [[ -n "$TAILSCALE" ]]; then
     if [[ "$TAILSCALE" == *":"* ]]; then
         TS_HOST="${TAILSCALE%%:*}"
         TS_PORT="${TAILSCALE##*:}"
     else
         TS_HOST="$TAILSCALE"
-        TS_PORT="7680"
+        TS_PORT="443"
     fi
-
-    # Generate Tailscale certs (copy to project for Docker access)
-    echo "Generating Tailscale certs for $TS_HOST..."
-    CERT_DIR="$PROJECT_DIR/.certs"
-    mkdir -p "$CERT_DIR"
-    sudo tailscale cert --cert-file "$CERT_DIR/${TS_HOST}.crt" \
-                        --key-file "$CERT_DIR/${TS_HOST}.key" \
-                        "$TS_HOST" 2>/dev/null || true
-    sudo chown $(id -u):$(id -g) "$CERT_DIR"/${TS_HOST}.*
-    chmod 644 "$CERT_DIR"/${TS_HOST}.*
 fi
 
 echo "=== Termote Deployment ($MODE) ==="
@@ -125,69 +115,31 @@ case $MODE in
         # All-in-one container
         docker compose down 2>/dev/null || true
 
-        if [[ -n "$TAILSCALE" ]]; then
-            # Generate nginx config with Tailscale (wrap in events/http for Docker)
-            # Use 0.0.0.0 in container (container has no Tailscale interface)
-            cat > "$PROJECT_DIR/nginx/nginx-docker.conf.tmp" << 'NGINX_HEADER'
-events {
-    worker_connections 1024;
-}
-
-http {
-    include /etc/nginx/mime.types;
-    default_type application/octet-stream;
-
-    map $http_upgrade $connection_upgrade {
-        default upgrade;
-        '' close;
-    }
-
-NGINX_HEADER
-            sed -e "s/<hostname>/$TS_HOST/g" \
-                -e "s/<port>/$TS_PORT/g" \
-                -e "s/<tailscale_ip>/0.0.0.0/g" \
-                -e "s|/var/lib/tailscale/certs|/certs|g" \
-                "$PROJECT_DIR/nginx/nginx-tailscale.conf" >> "$PROJECT_DIR/nginx/nginx-docker.conf.tmp"
-            echo "}" >> "$PROJECT_DIR/nginx/nginx-docker.conf.tmp"
-
-            # Create override with cert mounts and port binding
-            cat > "$PROJECT_DIR/docker-compose.override.yml" << EOF
-services:
-  termote:
-    ports:
-      - "${BIND_ADDR}:${TS_PORT}:7680"
-    volumes:
-      - \${WORKSPACE:-./workspace}:/workspace:rw
-      - ./nginx/nginx-docker.conf.tmp:/etc/nginx/nginx.conf:ro
-      - ./.certs:/certs:ro
-EOF
-            docker compose --profile docker up -d --build
-            rm -f "$PROJECT_DIR/docker-compose.override.yml"
-
-            echo ""
-            echo "=== Deployment complete ==="
-            echo "Tailscale: https://$TS_HOST:$TS_PORT"
-            if [[ "$LAN" == true ]]; then
-                echo "LAN: http://$LAN_IP:${TS_PORT}"
-            fi
-        else
-            # Create override with port binding (localhost by default)
-            cat > "$PROJECT_DIR/docker-compose.override.yml" << EOF
+        # Create override with port binding
+        cat > "$PROJECT_DIR/docker-compose.override.yml" << EOF
 services:
   termote:
     ports:
       - "${BIND_ADDR}:${PORT}:7680"
 EOF
-            docker compose --profile docker up -d --build
-            rm -f "$PROJECT_DIR/docker-compose.override.yml"
+        docker compose --profile docker up -d --build
+        rm -f "$PROJECT_DIR/docker-compose.override.yml"
 
-            echo ""
-            echo "=== Deployment complete ==="
-            if [[ "$LAN" == true ]]; then
-                echo "LAN: http://$LAN_IP:$PORT"
-            else
-                echo "Access at: http://localhost:$PORT"
-            fi
+        # Setup Tailscale serve if requested
+        if [[ -n "$TAILSCALE" ]]; then
+            echo "  Setting up Tailscale serve..."
+            command -v tailscale &>/dev/null && sudo tailscale serve --bg --https=$TS_PORT http://127.0.0.1:$PORT
+        fi
+
+        echo ""
+        echo "=== Deployment complete ==="
+        if [[ -n "$TAILSCALE" ]]; then
+            echo "Tailscale: https://$TS_HOST:$TS_PORT"
+        fi
+        if [[ "$LAN" == true ]]; then
+            echo "LAN: http://$LAN_IP:$PORT"
+        elif [[ -z "$TAILSCALE" ]]; then
+            echo "Access at: http://localhost:$PORT"
         fi
         ;;
 
@@ -199,20 +151,23 @@ EOF
         echo "  Building tmux-api..."
         (cd "$PROJECT_DIR/tmux-api" && CGO_ENABLED=0 go build -ldflags="-s -w" -o tmux-api .) 2>/dev/null || true
 
-        # Start native ttyd
+        # Start native ttyd (no -i flag for hybrid mode - container needs to reach host)
         echo "  Starting native ttyd..."
+        # Stop systemd service if running (it binds to 127.0.0.1 which blocks container access)
         if systemctl is-active "termote@$(whoami)" &>/dev/null; then
-            sudo systemctl restart "termote@$(whoami)"
-        elif ! pgrep -f "ttyd.*tmux" > /dev/null; then
-            # Check ttyd version for -W flag support (1.7.0+)
-            TTYD_VERSION=$(ttyd --version 2>&1 | grep -oP '\d+\.\d+' | head -1)
-            if [[ "$(printf '%s\n' "1.7" "$TTYD_VERSION" | sort -V | head -1)" == "1.7" ]]; then
-                nohup ttyd -W -p 7681 tmux new-session -A -s main > /dev/null 2>&1 &
-            else
-                nohup ttyd -p 7681 tmux new-session -A -s main > /dev/null 2>&1 &
-            fi
-            sleep 1
+            sudo systemctl stop "termote@$(whoami)" 2>/dev/null || true
         fi
+        # Kill any existing ttyd and start fresh without -i flag
+        pkill -f "ttyd.*tmux" 2>/dev/null || true
+        sleep 0.5
+        # Check ttyd version for -W flag support (1.7.0+)
+        TTYD_VERSION=$(ttyd --version 2>&1 | grep -oP '\d+\.\d+' | head -1)
+        if [[ "$(printf '%s\n' "1.7" "$TTYD_VERSION" | sort -V | head -1)" == "1.7" ]]; then
+            nohup ttyd -W -p 7681 tmux new-session -A -s main > /dev/null 2>&1 &
+        else
+            nohup ttyd -p 7681 tmux new-session -A -s main > /dev/null 2>&1 &
+        fi
+        sleep 1
 
         # Set tmux socket dir based on OS
         if [[ "$(uname)" == "Darwin" ]]; then
@@ -228,35 +183,24 @@ services:
     ports:
       - "${BIND_ADDR}:${PORT}:7680"
 EOF
+        docker compose --profile hybrid up -d --build
+        rm -f "$PROJECT_DIR/docker-compose.override.yml"
 
+        # Setup Tailscale serve if requested
         if [[ -n "$TAILSCALE" ]]; then
-            # Generate nginx config with Tailscale
-            TS_IP=$(tailscale ip -4 2>/dev/null || echo "0.0.0.0")
-            sed -e "s/<hostname>/$TS_HOST/g" \
-                -e "s/<port>/$TS_PORT/g" \
-                -e "s/<tailscale_ip>/$TS_IP/g" \
-                "$PROJECT_DIR/nginx/nginx-tailscale.conf" > "$PROJECT_DIR/nginx/nginx-hybrid.conf"
+            echo "  Setting up Tailscale serve..."
+            command -v tailscale &>/dev/null && sudo tailscale serve --bg --https=$TS_PORT http://127.0.0.1:$PORT
+        fi
 
-            docker compose --profile hybrid up -d --build
-            rm -f "$PROJECT_DIR/docker-compose.override.yml"
-
-            echo ""
-            echo "=== Deployment complete ==="
+        echo ""
+        echo "=== Deployment complete ==="
+        if [[ -n "$TAILSCALE" ]]; then
             echo "Tailscale: https://$TS_HOST:$TS_PORT"
-            if [[ "$LAN" == true ]]; then
-                echo "LAN: http://$LAN_IP:$PORT"
-            fi
-        else
-            docker compose --profile hybrid up -d --build
-            rm -f "$PROJECT_DIR/docker-compose.override.yml"
-
-            echo ""
-            echo "=== Deployment complete ==="
-            if [[ "$LAN" == true ]]; then
-                echo "LAN: http://$LAN_IP:$PORT"
-            else
-                echo "Access at: http://localhost:$PORT"
-            fi
+        fi
+        if [[ "$LAN" == true ]]; then
+            echo "LAN: http://$LAN_IP:$PORT"
+        elif [[ -z "$TAILSCALE" ]]; then
+            echo "Access at: http://localhost:$PORT"
         fi
         ;;
 
@@ -267,22 +211,11 @@ EOF
         # Stop docker services
         docker compose down 2>/dev/null || true
 
-        # Install nginx config
+        # Install nginx config (always use local config, Tailscale serve handles HTTPS)
         NGINX_CONF="/etc/nginx/sites-available/termote"
-        if [[ -n "$TAILSCALE" ]]; then
-            # TS_HOST, TS_PORT, certs already set at top-level
-            echo "  Installing Tailscale config for $TS_HOST:$TS_PORT..."
-            TS_IP=$(tailscale ip -4 2>/dev/null || echo "127.0.0.1")
-
-            sed -e "s/<hostname>/$TS_HOST/g" \
-                -e "s/<port>/$TS_PORT/g" \
-                -e "s/<tailscale_ip>/$TS_IP/g" \
-                "$PROJECT_DIR/nginx/nginx-tailscale.conf" | sudo tee "$NGINX_CONF" > /dev/null
-        else
-            echo "  Installing local nginx config..."
-            sed -e "s/<bind_addr>/$BIND_ADDR/g" \
-                "$PROJECT_DIR/nginx/nginx-local.conf" | sudo tee "$NGINX_CONF" > /dev/null
-        fi
+        echo "  Installing nginx config..."
+        sed -e "s/<bind_addr>/$BIND_ADDR/g" \
+            "$PROJECT_DIR/nginx/nginx-local.conf" | sudo tee "$NGINX_CONF" > /dev/null
         sudo ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/termote
 
         # Deploy files
@@ -319,16 +252,20 @@ EOF
         sudo systemctl restart "tmux-api@$USER"
         sudo nginx -t && sudo systemctl reload nginx
 
+        # Setup Tailscale serve if requested
+        if [[ -n "$TAILSCALE" ]]; then
+            echo "  Setting up Tailscale serve..."
+            command -v tailscale &>/dev/null && sudo tailscale serve --bg --https=$TS_PORT http://127.0.0.1:$PORT
+        fi
+
         echo ""
         echo "=== Deployment complete ==="
         if [[ -n "$TAILSCALE" ]]; then
             echo "Tailscale: https://$TS_HOST:$TS_PORT"
-            if [[ "$LAN" == true ]]; then
-                echo "LAN: http://$LAN_IP:$PORT"
-            fi
-        elif [[ "$LAN" == true ]]; then
+        fi
+        if [[ "$LAN" == true ]]; then
             echo "LAN: http://$LAN_IP:$PORT"
-        else
+        elif [[ -z "$TAILSCALE" ]]; then
             echo "Access at: http://localhost:$PORT"
         fi
         ;;

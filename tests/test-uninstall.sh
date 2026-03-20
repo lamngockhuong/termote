@@ -123,6 +123,17 @@ test_systemd_services() {
     fi
 }
 
+test_tailscale_cleanup() {
+    echo ""
+    echo "=== Testing Tailscale cleanup ==="
+
+    if grep -q "tailscale serve reset" "$PROJECT_DIR/scripts/uninstall.sh"; then
+        pass "tailscale serve reset present"
+    else
+        fail "tailscale cleanup" "tailscale serve reset" "not found"
+    fi
+}
+
 # Run all tests
 echo "Running uninstall.sh tests..."
 echo ""
@@ -132,6 +143,7 @@ test_mode_patterns
 test_script_syntax
 test_temp_file_paths
 test_systemd_services
+test_tailscale_cleanup
 
 # Summary
 echo ""

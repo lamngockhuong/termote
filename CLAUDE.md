@@ -38,8 +38,7 @@ termote/
 ├── nginx/                  # Nginx configurations
 │   ├── nginx-docker.conf   # For docker mode
 │   ├── nginx-hybrid.conf   # For hybrid mode
-│   ├── nginx-local.conf    # For native mode
-│   └── nginx-tailscale.conf
+│   └── nginx-local.conf    # For native mode
 ├── tmux-api/               # Go API server
 │   └── main.go
 ├── scripts/                # Shell scripts

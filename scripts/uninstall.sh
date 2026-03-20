@@ -78,6 +78,12 @@ if [[ "$MODE" == "--native" || "$MODE" == "--all" ]]; then
     sudo systemctl reload nginx 2>/dev/null || true
 fi
 
+# Reset Tailscale serve (if installed)
+if command -v tailscale &>/dev/null; then
+    echo "Resetting Tailscale serve..."
+    sudo tailscale serve reset 2>/dev/null || true
+fi
+
 # Full cleanup
 if [[ "$MODE" == "--all" ]]; then
     echo "Removing .htpasswd..."
