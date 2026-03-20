@@ -1,0 +1,33 @@
+FROM tsl0922/ttyd:latest
+
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tmux nano vim curl git htop \
+    && rm -rf /var/lib/apt/lists/*
+
+# Bash config
+RUN echo 'alias ll="ls -la"' >> /etc/bash.bashrc && \
+    echo 'alias la="ls -A"' >> /etc/bash.bashrc && \
+    echo 'alias l="ls -CF"' >> /etc/bash.bashrc && \
+    echo 'export PS1="\[\e[32m\]termote\[\e[0m\]:\[\e[34m\]\w\[\e[0m\]\$ "' >> /etc/bash.bashrc
+
+# tmux config
+RUN echo "set-option -g default-shell /bin/bash" > /etc/tmux.conf && \
+    echo "set-option -g default-command /bin/bash" >> /etc/tmux.conf
+
+# Make passwd/group writable for entrypoint
+RUN chmod 666 /etc/passwd /etc/group
+
+# Create home directory for termote user
+RUN mkdir -p /home/termote/.local/share/nano && chmod -R 777 /home/termote
+
+# Copy tmux-api binary (pre-built)
+COPY tmux-api/tmux-api /usr/local/bin/tmux-api
+RUN chmod +x /usr/local/bin/tmux-api
+
+# Entrypoint to fix user/group
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENV SHELL=/bin/bash
+ENTRYPOINT ["/entrypoint.sh"]

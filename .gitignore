@@ -1,0 +1,34 @@
+# Environment
+.env
+.htpasswd
+
+# Node
+node_modules/
+pwa/node_modules/
+
+# Build output
+pwa/dist/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Go binary
+tmux-api/tmux-api
+
+# Test results and screenshots
+pwa/test-results/
+pwa/e2e/*.png
+
+# Plans and reports (generated)
+pwa/plans/
+plans/

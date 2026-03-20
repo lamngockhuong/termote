@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* Prevent iOS bounce/overscroll */
+body {
+  position: fixed;
+  width: 100%;
+  overscroll-behavior: none;
+}
+
+/* Dynamic viewport height for mobile */
+.h-dvh {
+  height: 100dvh;
+  height: -webkit-fill-available;
+}
+
+/* Safe area insets for notched devices */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Touch optimization */
+.touch-manipulation {
+  touch-action: manipulation;
+}
