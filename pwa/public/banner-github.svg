@@ -1,0 +1,48 @@
+<svg viewBox="0 0 1280 640" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Termote - Remote control your terminal">
+  <title>Termote - Remote control your terminal</title>
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e1e1e"/>
+      <stop offset="100%" stop-color="#282c34"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1280" height="640" fill="url(#bg)"/>
+
+  <!-- Terminal window icon -->
+  <g transform="translate(120, 180)">
+    <rect width="200" height="200" rx="24" fill="#1e1e1e" stroke="#3f3f46" stroke-width="2"/>
+    <path d="M0 40V40C0 17.9086 17.9086 0 40 0H160C182.091 0 200 17.9086 200 40V52H0V40Z" fill="#282c34"/>
+    <circle cx="36" cy="26" r="10" fill="#ff5f56"/>
+    <circle cx="64" cy="26" r="10" fill="#ffbd2e"/>
+    <circle cx="92" cy="26" r="10" fill="#27c93f"/>
+    <text x="32" y="140" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="56" font-weight="bold" fill="#06b6d4">$ _</text>
+  </g>
+
+  <!-- Title -->
+  <text x="380" y="260" font-family="system-ui, -apple-system, BlinkMacSystemFont, sans-serif" font-size="96" font-weight="700" fill="#ffffff">TERMOTE</text>
+
+  <!-- Tagline -->
+  <text x="380" y="320" font-family="system-ui, -apple-system, BlinkMacSystemFont, sans-serif" font-size="32" fill="#a1a1aa">Remote control your terminal</text>
+
+  <!-- Feature badges -->
+  <g transform="translate(380, 400)" font-family="system-ui, -apple-system, sans-serif" font-size="20">
+    <g>
+      <rect x="0" y="0" width="90" height="40" rx="8" fill="#27272a"/>
+      <text x="45" y="26" text-anchor="middle" fill="#06b6d4">PWA</text>
+    </g>
+    <g transform="translate(110, 0)">
+      <rect x="0" y="0" width="110" height="40" rx="8" fill="#27272a"/>
+      <text x="55" y="26" text-anchor="middle" fill="#06b6d4">Gestures</text>
+    </g>
+    <g transform="translate(240, 0)">
+      <rect x="0" y="0" width="100" height="40" rx="8" fill="#27272a"/>
+      <text x="50" y="26" text-anchor="middle" fill="#06b6d4">Secure</text>
+    </g>
+    <g transform="translate(360, 0)">
+      <rect x="0" y="0" width="110" height="40" rx="8" fill="#27272a"/>
+      <text x="55" y="26" text-anchor="middle" fill="#06b6d4">Sessions</text>
+    </g>
+  </g>
+</svg>
