@@ -1,6 +1,6 @@
 import { Monitor, Plus } from 'lucide-react'
-import { Session } from '../types/session'
 import { useHaptic } from '../hooks/use-haptic'
+import type { Session } from '../types/session'
 
 interface Props {
   sessions: Session[]

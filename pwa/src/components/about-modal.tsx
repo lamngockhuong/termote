@@ -39,7 +39,9 @@ export function AboutModal({ isOpen, onClose }: Props) {
       <div className="p-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold text-zinc-900 dark:text-white">About {APP_INFO.name}</h2>
+          <h2 className="text-xl font-bold text-zinc-900 dark:text-white">
+            About {APP_INFO.name}
+          </h2>
           <button
             onClick={onClose}
             className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
@@ -51,11 +53,15 @@ export function AboutModal({ isOpen, onClose }: Props) {
 
         {/* Content */}
         <div className="space-y-4">
-          <p className="text-zinc-600 dark:text-zinc-300">{APP_INFO.description}</p>
+          <p className="text-zinc-600 dark:text-zinc-300">
+            {APP_INFO.description}
+          </p>
 
           <div className="grid grid-cols-2 gap-2 text-sm">
             <div className="text-zinc-500 dark:text-zinc-400">Version</div>
-            <div className="text-zinc-900 dark:text-zinc-100">{APP_INFO.version}</div>
+            <div className="text-zinc-900 dark:text-zinc-100">
+              {APP_INFO.version}
+            </div>
 
             <div className="text-zinc-500 dark:text-zinc-400">Author</div>
             <a
@@ -68,7 +74,9 @@ export function AboutModal({ isOpen, onClose }: Props) {
             </a>
 
             <div className="text-zinc-500 dark:text-zinc-400">License</div>
-            <div className="text-zinc-900 dark:text-zinc-100">{APP_INFO.license}</div>
+            <div className="text-zinc-900 dark:text-zinc-100">
+              {APP_INFO.license}
+            </div>
           </div>
 
           {/* Links */}

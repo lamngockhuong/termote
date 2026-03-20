@@ -1,6 +1,13 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
-import { Session, SESSIONS_STORAGE_KEY } from '../types/session'
-import { selectWindow, createWindow, killWindow, fetchWindows, TmuxWindow } from './use-tmux-api'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { SESSIONS_STORAGE_KEY, type Session } from '../types/session'
+import {
+  createWindow,
+  fetchWindows,
+  killWindow,
+  renameWindow,
+  selectWindow,
+  type TmuxWindow,
+} from './use-tmux-api'
 
 // Store metadata (icon, description) in localStorage since tmux only stores window names
 interface SessionMeta {
@@ -23,7 +30,10 @@ function saveMeta(meta: Record<string, SessionMeta>) {
 }
 
 // Convert tmux window to Session
-function windowToSession(win: TmuxWindow, meta: Record<string, SessionMeta>): Session {
+function windowToSession(
+  win: TmuxWindow,
+  meta: Record<string, SessionMeta>,
+): Session {
   const m = meta[win.name] || { icon: '📺', description: '' }
   return {
     id: String(win.id),
@@ -47,7 +57,9 @@ export function useLocalSessions() {
         // No windows, create default one
         await createWindow('shell')
         const newWindows = await fetchWindows()
-        const newSessions = newWindows.map((w) => windowToSession(w, metaRef.current))
+        const newSessions = newWindows.map((w) =>
+          windowToSession(w, metaRef.current),
+        )
         setSessions(newSessions)
         const active = newWindows.find((w) => w.active)
         if (active) {
@@ -56,7 +68,9 @@ export function useLocalSessions() {
           setActiveSession(newSessions[0])
         }
       } else {
-        const newSessions = windows.map((w) => windowToSession(w, metaRef.current))
+        const newSessions = windows.map((w) =>
+          windowToSession(w, metaRef.current),
+        )
         setSessions(newSessions)
         const active = windows.find((w) => w.active)
         if (active) {
@@ -69,7 +83,12 @@ export function useLocalSessions() {
     } catch (err) {
       console.warn('[tmux] API not available:', err)
       // Fallback: create a default session
-      const fallback: Session = { id: '0', name: 'shell', icon: '💻', description: 'Terminal' }
+      const fallback: Session = {
+        id: '0',
+        name: 'shell',
+        icon: '💻',
+        description: 'Terminal',
+      }
       setSessions([fallback])
       setActiveSession(fallback)
       setIsReady(true)
@@ -92,7 +111,7 @@ export function useLocalSessions() {
         setActiveSession(session)
       }
     },
-    [sessions, activeSession?.id]
+    [sessions, activeSession?.id],
   )
 
   const addSession = useCallback(
@@ -107,7 +126,7 @@ export function useLocalSessions() {
       // Refresh to get new window
       await refreshSessions()
     },
-    [refreshSessions]
+    [refreshSessions],
   )
 
   const removeSession = useCallback(
@@ -127,17 +146,29 @@ export function useLocalSessions() {
       // Refresh to update list
       await refreshSessions()
     },
-    [sessions, refreshSessions]
+    [sessions, refreshSessions],
   )
 
   const updateSession = useCallback(
-    (sessionId: string, updates: Partial<Omit<Session, 'id'>>) => {
+    async (sessionId: string, updates: Partial<Omit<Session, 'id'>>) => {
       const session = sessions.find((s) => s.id === sessionId)
       if (!session) return
 
-      // Update metadata
-      const oldMeta = metaRef.current[session.name] || { icon: '📺', description: '' }
-      metaRef.current[session.name] = {
+      const oldName = session.name
+      const newName = updates.name ?? oldName
+      const oldMeta = metaRef.current[oldName] || {
+        icon: '📺',
+        description: '',
+      }
+
+      // If name changed, rename tmux window and re-key metadata
+      if (updates.name && updates.name !== oldName) {
+        await renameWindow(sessionId, updates.name).catch(() => {})
+        delete metaRef.current[oldName]
+      }
+
+      // Update metadata under new name
+      metaRef.current[newName] = {
         icon: updates.icon ?? oldMeta.icon,
         description: updates.description ?? oldMeta.description,
       }
@@ -145,17 +176,22 @@ export function useLocalSessions() {
 
       // Update local state
       setSessions((prev) =>
-        prev.map((s) => (s.id === sessionId ? { ...s, ...updates } : s))
+        prev.map((s) => (s.id === sessionId ? { ...s, ...updates } : s)),
       )
       if (activeSession?.id === sessionId) {
         setActiveSession((prev) => (prev ? { ...prev, ...updates } : prev))
       }
     },
-    [sessions, activeSession?.id]
+    [sessions, activeSession?.id],
   )
 
   return {
-    activeSession: activeSession || { id: '0', name: 'Loading...', icon: '⏳', description: '' },
+    activeSession: activeSession || {
+      id: '0',
+      name: 'Loading...',
+      icon: '⏳',
+      description: '',
+    },
     sessions,
     switchSession,
     addSession,

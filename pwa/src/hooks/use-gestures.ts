@@ -1,5 +1,5 @@
-import { useEffect, useRef, RefObject } from 'react'
 import Hammer from 'hammerjs'
+import { type RefObject, useEffect, useRef } from 'react'
 
 export interface GestureHandlers {
   onTap?: () => void // Focus terminal
@@ -14,7 +14,7 @@ export interface GestureHandlers {
 
 export function useGestures(
   elementRef: RefObject<HTMLElement | null>,
-  handlers: GestureHandlers
+  handlers: GestureHandlers,
 ) {
   const hammerRef = useRef<HammerManager | null>(null)
   const handlersRef = useRef(handlers)

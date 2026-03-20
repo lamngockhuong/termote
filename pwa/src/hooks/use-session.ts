@@ -1,6 +1,10 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
-import { Session, DEFAULT_SESSIONS, SESSIONS_STORAGE_KEY } from '../types/session'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { XtermTerminalHandle } from '../components/xterm-terminal'
+import {
+  DEFAULT_SESSIONS,
+  SESSIONS_STORAGE_KEY,
+  type Session,
+} from '../types/session'
 
 // Load sessions from localStorage or use defaults
 function loadSessions(): Session[] {
@@ -40,11 +44,11 @@ export function useSession() {
         setActiveSession(session)
         // Switch tmux window, create if not exists
         terminalRef.current?.sendCommand(
-          `tmux select-window -t ${session.id} 2>/dev/null || tmux new-window -n ${session.id}`
+          `tmux select-window -t ${session.id} 2>/dev/null || tmux new-window -n ${session.id}`,
         )
       }
     },
-    [sessions, activeSession.id]
+    [sessions, activeSession.id],
   )
 
   const addSession = useCallback(
@@ -59,7 +63,7 @@ export function useSession() {
       // Create new tmux window
       terminalRef.current?.sendCommand(`tmux new-window -n ${id}`)
     },
-    [sessions]
+    [sessions],
   )
 
   const removeSession = useCallback(
@@ -77,10 +81,12 @@ export function useSession() {
 
       if (activeSession.id === sessionId) {
         setActiveSession(nextSession)
-        terminalRef.current?.sendCommand(`tmux select-window -t ${nextSession.id}`)
+        terminalRef.current?.sendCommand(
+          `tmux select-window -t ${nextSession.id}`,
+        )
       }
     },
-    [sessions, activeSession.id]
+    [sessions, activeSession.id],
   )
 
   return {

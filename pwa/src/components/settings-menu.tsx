@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from 'react'
 import { Settings } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { ThemeToggle } from './theme-toggle'
 
 interface Props {
@@ -37,7 +37,9 @@ export function SettingsMenu({ onOpenAbout }: Props) {
         <div className="absolute right-0 top-full mt-2 w-56 rounded-xl bg-white dark:bg-zinc-800 shadow-lg p-2 z-50 border border-zinc-200 dark:border-zinc-700">
           {/* Theme Section */}
           <div className="px-3 py-2">
-            <div className="text-xs text-zinc-500 dark:text-zinc-400 mb-2">Theme</div>
+            <div className="text-xs text-zinc-500 dark:text-zinc-400 mb-2">
+              Theme
+            </div>
             <ThemeToggle />
           </div>
 

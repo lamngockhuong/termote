@@ -1,26 +1,26 @@
-import { useRef, useMemo, useState } from 'react'
-import { useGestures } from './hooks/use-gestures'
-import { useFontSize } from './hooks/use-font-size'
-import { useIsMobile } from './hooks/use-media-query'
-import { useKeyboardVisible } from './hooks/use-keyboard-visible'
-import { useTheme } from './contexts/theme-context'
-import { SessionSidebar } from './components/session-sidebar'
-import { BottomNavigation } from './components/bottom-navigation'
-import { SettingsMenu } from './components/settings-menu'
-import { AboutModal } from './components/about-modal'
-import { TerminalFrame } from './components/terminal-frame'
-import { KeyboardToolbar } from './components/keyboard-toolbar'
 import { Menu } from 'lucide-react'
+import { useMemo, useRef, useState } from 'react'
+import { AboutModal } from './components/about-modal'
+import { BottomNavigation } from './components/bottom-navigation'
+import { KeyboardToolbar } from './components/keyboard-toolbar'
+import { SessionSidebar } from './components/session-sidebar'
+import { SettingsMenu } from './components/settings-menu'
+import { TerminalFrame } from './components/terminal-frame'
+import { useTheme } from './contexts/theme-context'
+import { useFontSize } from './hooks/use-font-size'
+import { useGestures } from './hooks/use-gestures'
+import { useKeyboardVisible } from './hooks/use-keyboard-visible'
+import { useLocalSessions } from './hooks/use-local-sessions'
+import { useIsMobile } from './hooks/use-media-query'
 import {
-  sendKeyToTerminal,
-  focusTerminal,
   blurTerminal,
+  focusTerminal,
+  isInCopyMode,
   pasteToTerminal,
   scrollTmux,
+  sendKeyToTerminal,
   toggleTmuxCopyMode,
-  isInCopyMode,
 } from './utils/terminal-bridge'
-import { useLocalSessions } from './hooks/use-local-sessions'
 
 export default function App() {
   const terminalRef = useRef<HTMLIFrameElement>(null)
@@ -30,8 +30,14 @@ export default function App() {
   const [aboutOpen, setAboutOpen] = useState(false)
   const isMobile = useIsMobile()
   const { isVisible: keyboardVisible, keyboardHeight } = useKeyboardVisible()
-  const { activeSession, sessions, switchSession, addSession, removeSession, updateSession } =
-    useLocalSessions()
+  const {
+    activeSession,
+    sessions,
+    switchSession,
+    addSession,
+    removeSession,
+    updateSession,
+  } = useLocalSessions()
   const { fontSize, increase, decrease } = useFontSize()
   const { resolvedTheme } = useTheme()
 
@@ -61,7 +67,7 @@ export default function App() {
       onPinchIn: decrease,
       onPinchOut: increase,
     }),
-    [decrease, increase, keyboardVisible]
+    [decrease, increase, keyboardVisible],
   )
 
   const toggleKeyboard = () => {
@@ -98,7 +104,10 @@ export default function App() {
   return (
     <div
       className="flex flex-col bg-zinc-100 dark:bg-zinc-900 text-zinc-900 dark:text-white overflow-hidden"
-      style={{ height: keyboardHeight > 0 ? `calc(100dvh - ${keyboardHeight}px)` : '100dvh' }}
+      style={{
+        height:
+          keyboardHeight > 0 ? `calc(100dvh - ${keyboardHeight}px)` : '100dvh',
+      }}
     >
       <div className="flex flex-1 min-h-0">
         {/* Desktop sidebar */}
@@ -154,7 +163,9 @@ export default function App() {
               >
                 A-
               </button>
-              <span className="text-xs text-zinc-500 dark:text-zinc-400 w-8 text-center">{fontSize}</span>
+              <span className="text-xs text-zinc-500 dark:text-zinc-400 w-8 text-center">
+                {fontSize}
+              </span>
               <button
                 onClick={increase}
                 className="px-2 py-1 text-xs bg-zinc-200/70 dark:bg-zinc-700/70 rounded-lg hover:bg-zinc-300/70 dark:hover:bg-zinc-600/70 touch-manipulation transition-colors"
@@ -168,18 +179,40 @@ export default function App() {
           <div
             ref={terminalContainerRef}
             className="flex-1 relative min-h-0 overflow-y-auto scroll-smooth"
-            style={{ height: keyboardHeight > 0 ? `calc(100dvh - ${keyboardHeight}px - 48px - 56px)` : undefined }}
+            style={{
+              height:
+                keyboardHeight > 0
+                  ? `calc(100dvh - ${keyboardHeight}px - 48px - 56px)`
+                  : undefined,
+            }}
           >
-            <div style={{ height: keyboardHeight > 0 ? '100dvh' : '100%', minHeight: '100%' }}>
-              <TerminalFrame ref={terminalRef} fontSize={fontSize} theme={resolvedTheme} />
+            <div
+              style={{
+                height: keyboardHeight > 0 ? '100dvh' : '100%',
+                minHeight: '100%',
+              }}
+            >
+              <TerminalFrame
+                ref={terminalRef}
+                fontSize={fontSize}
+                theme={resolvedTheme}
+              />
             </div>
             {/* Gesture overlay - captures touch gestures (mobile only) */}
-            {isMobile && <div ref={gestureRef} className="absolute inset-0 touch-none" />}
+            {isMobile && (
+              <div ref={gestureRef} className="absolute inset-0 touch-none" />
+            )}
           </div>
         </main>
       </div>
 
-      <KeyboardToolbar onKey={handleKey} onCtrlKey={handleCtrlKey} onScroll={handleScroll} onTmuxCopy={handleTmuxCopy} onToggleKeyboard={toggleKeyboard} />
+      <KeyboardToolbar
+        onKey={handleKey}
+        onCtrlKey={handleCtrlKey}
+        onScroll={handleScroll}
+        onTmuxCopy={handleTmuxCopy}
+        onToggleKeyboard={toggleKeyboard}
+      />
 
       {/* Mobile bottom navigation */}
       {isMobile && (

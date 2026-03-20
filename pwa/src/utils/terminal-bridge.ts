@@ -59,7 +59,7 @@ function sendData(term: XtermInternal, data: string): boolean {
 export function sendKeyToTerminal(
   iframe: HTMLIFrameElement | null,
   key: string,
-  ctrl = false
+  ctrl = false,
 ) {
   const term = getTerm(iframe)
   if (!term) return
@@ -109,14 +109,21 @@ export async function pasteToTerminal(iframe: HTMLIFrameElement | null) {
 }
 
 // Send a command string to terminal
-export function sendCommandToTerminal(iframe: HTMLIFrameElement | null, command: string) {
+export function sendCommandToTerminal(
+  iframe: HTMLIFrameElement | null,
+  command: string,
+) {
   const term = getTerm(iframe)
   if (!term) return
   sendData(term, command + '\r')
 }
 
 // Scroll terminal viewport (for non-tmux terminals)
-export function scrollTerminal(iframe: HTMLIFrameElement | null, direction: 'up' | 'down', pages = false) {
+export function scrollTerminal(
+  iframe: HTMLIFrameElement | null,
+  direction: 'up' | 'down',
+  pages = false,
+) {
   const term = getTerm(iframe)
   if (!term) {
     console.warn('[terminal-bridge] scrollTerminal: term not found')
@@ -140,7 +147,9 @@ export function scrollTerminal(iframe: HTMLIFrameElement | null, direction: 'up'
     const doc = iframe?.contentDocument
     const viewport = doc?.querySelector('.xterm-viewport') as HTMLElement
     if (viewport) {
-      const scrollAmount = pages ? viewport.clientHeight : viewport.clientHeight / 3
+      const scrollAmount = pages
+        ? viewport.clientHeight
+        : viewport.clientHeight / 3
       viewport.scrollTop += direction === 'up' ? -scrollAmount : scrollAmount
     }
   } catch (e) {
@@ -179,7 +188,10 @@ export function enterTmuxCopyMode(iframe: HTMLIFrameElement | null) {
 }
 
 // Scroll terminal viewport (xterm.js viewport, not tmux history)
-export function scrollTerminalViewport(iframe: HTMLIFrameElement | null, direction: 'up' | 'down') {
+export function scrollTerminalViewport(
+  iframe: HTMLIFrameElement | null,
+  direction: 'up' | 'down',
+) {
   try {
     const doc = iframe?.contentDocument
     const viewport = doc?.querySelector('.xterm-viewport') as HTMLElement
@@ -194,7 +206,10 @@ export function scrollTerminalViewport(iframe: HTMLIFrameElement | null, directi
 
 // Scroll in tmux copy mode (PageUp/PageDown)
 // Sends PageUp/PageDown - only effective when in tmux copy mode
-export function scrollTmux(iframe: HTMLIFrameElement | null, direction: 'up' | 'down') {
+export function scrollTmux(
+  iframe: HTMLIFrameElement | null,
+  direction: 'up' | 'down',
+) {
   const term = getTerm(iframe)
   if (!term) return
 
@@ -216,7 +231,10 @@ export function resetCopyModeState() {
 }
 
 // Set terminal font size
-export function setTerminalFontSize(iframe: HTMLIFrameElement | null, size: number) {
+export function setTerminalFontSize(
+  iframe: HTMLIFrameElement | null,
+  size: number,
+) {
   const term = getTerm(iframe)
   if (!term) return
   term.options.fontSize = size

@@ -19,7 +19,9 @@ export async function selectWindow(id: number | string): Promise<boolean> {
 }
 
 export async function createWindow(name?: string): Promise<boolean> {
-  const url = name ? `${API_BASE}/new?name=${encodeURIComponent(name)}` : `${API_BASE}/new`
+  const url = name
+    ? `${API_BASE}/new?name=${encodeURIComponent(name)}`
+    : `${API_BASE}/new`
   const res = await fetch(url, { method: 'POST' })
   const data = await res.json()
   return data.ok === true
@@ -27,6 +29,18 @@ export async function createWindow(name?: string): Promise<boolean> {
 
 export async function killWindow(id: number | string): Promise<boolean> {
   const res = await fetch(`${API_BASE}/kill/${id}`, { method: 'DELETE' })
+  const data = await res.json()
+  return data.ok === true
+}
+
+export async function renameWindow(
+  id: number | string,
+  name: string,
+): Promise<boolean> {
+  const res = await fetch(
+    `${API_BASE}/rename/${id}?name=${encodeURIComponent(name)}`,
+    { method: 'POST' },
+  )
   const data = await res.json()
   return data.ok === true
 }

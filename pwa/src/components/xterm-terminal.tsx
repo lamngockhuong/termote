@@ -1,6 +1,12 @@
-import { useEffect, useRef, useImperativeHandle, forwardRef, useCallback } from 'react'
-import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+import { Terminal } from '@xterm/xterm'
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+} from 'react'
 import '@xterm/xterm/css/xterm.css'
 
 export interface XtermTerminalHandle {
@@ -29,7 +35,9 @@ export const XtermTerminal = forwardRef<XtermTerminalHandle, Props>(
     const fitAddonRef = useRef<FitAddon | null>(null)
     const mountedRef = useRef(true)
     const connectingRef = useRef(false)
-    const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+      null,
+    )
 
     // Store callbacks in refs to avoid dependency issues
     const onConnectRef = useRef(onConnect)
@@ -90,25 +98,41 @@ export const XtermTerminal = forwardRef<XtermTerminalHandle, Props>(
 
           // ttyd expects first message to be JSON with AuthToken + size
           const { cols, rows } = terminal
-          const initMsg = JSON.stringify({ AuthToken: token, columns: cols, rows: rows })
+          const initMsg = JSON.stringify({
+            AuthToken: token,
+            columns: cols,
+            rows: rows,
+          })
           console.log('[xterm] Sending init:', initMsg)
           ws.send(initMsg)
         }
 
         ws.onmessage = (event) => {
-          console.log('[xterm] Message received, data type:', typeof event.data, event.data instanceof Blob ? 'Blob' : '')
+          console.log(
+            '[xterm] Message received, data type:',
+            typeof event.data,
+            event.data instanceof Blob ? 'Blob' : '',
+          )
           // Handle both text and binary messages
           if (typeof event.data === 'string') {
             // Text message: <type><data>
             const msg = event.data
-            console.log('[xterm] Text msg len:', msg.length, 'type char:', msg.charCodeAt(0))
+            console.log(
+              '[xterm] Text msg len:',
+              msg.length,
+              'type char:',
+              msg.charCodeAt(0),
+            )
             if (msg.length > 0) {
               const msgType = msg.charCodeAt(0)
-              if (msgType === 48) { // '0' = output
+              if (msgType === 48) {
+                // '0' = output
                 terminal.write(msg.substring(1))
-              } else if (msgType === 49) { // '1' = title
+              } else if (msgType === 49) {
+                // '1' = title
                 console.log('[xterm] Title:', msg.substring(1))
-              } else if (msgType === 50) { // '2' = prefs
+              } else if (msgType === 50) {
+                // '2' = prefs
                 console.log('[xterm] Prefs:', msg.substring(1))
               }
             }
@@ -116,7 +140,12 @@ export const XtermTerminal = forwardRef<XtermTerminalHandle, Props>(
             // Binary blob - read as text
             console.log('[xterm] Blob size:', event.data.size)
             event.data.text().then((text) => {
-              console.log('[xterm] Blob text len:', text.length, 'type char:', text.charCodeAt(0))
+              console.log(
+                '[xterm] Blob text len:',
+                text.length,
+                'type char:',
+                text.charCodeAt(0),
+              )
               if (text.length > 0) {
                 const msgType = text.charCodeAt(0)
                 if (msgType === 48) {
@@ -128,7 +157,14 @@ export const XtermTerminal = forwardRef<XtermTerminalHandle, Props>(
         }
 
         ws.onclose = (event) => {
-          console.log('[xterm] Disconnected, code:', event.code, 'reason:', event.reason, 'wasClean:', event.wasClean)
+          console.log(
+            '[xterm] Disconnected, code:',
+            event.code,
+            'reason:',
+            event.reason,
+            'wasClean:',
+            event.wasClean,
+          )
           connectingRef.current = false
           onDisconnectRef.current?.()
           wsRef.current = null
@@ -204,7 +240,7 @@ export const XtermTerminal = forwardRef<XtermTerminalHandle, Props>(
         terminal.dispose()
         terminalRef.current = null
       }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [connect])
 
     // Update font size and theme
@@ -223,7 +259,7 @@ export const XtermTerminal = forwardRef<XtermTerminalHandle, Props>(
         style={{ padding: '4px' }}
       />
     )
-  }
+  },
 )
 
 XtermTerminal.displayName = 'XtermTerminal'

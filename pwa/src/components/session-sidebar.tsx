@@ -1,7 +1,8 @@
+import { Pencil, Plus, X } from 'lucide-react'
 import { useState } from 'react'
-import { Pencil, X, Plus } from 'lucide-react'
-import { Session } from '../types/session'
+import type { Session } from '../types/session'
 import { IconPicker } from './icon-picker'
+import { SwipeableSessionItem } from './swipeable-session-item'
 
 interface Props {
   sessions: Session[]
@@ -59,73 +60,93 @@ export function SessionSidebar({
     setEditingId(null)
   }
 
+  // Edit form (shared)
+  const renderEditForm = () => (
+    <div className="p-3 border-b border-zinc-300/30 dark:border-zinc-700/30">
+      <input
+        type="text"
+        value={editName}
+        onChange={(e) => setEditName(e.target.value)}
+        className="w-full px-2 py-1 text-sm bg-zinc-200/50 dark:bg-zinc-800/50 border border-zinc-400/30 dark:border-zinc-600/30 rounded-lg focus:border-blue-500 outline-none mb-2"
+        autoFocus
+      />
+      <IconPicker value={editIcon} onChange={setEditIcon} />
+      <div className="flex gap-1 mt-2">
+        <button
+          onClick={saveEdit}
+          className="flex-1 px-2 py-1 text-xs bg-blue-600 hover:bg-blue-500 rounded-lg text-white"
+        >
+          Save
+        </button>
+        <button
+          onClick={cancelEdit}
+          className="px-2 py-1 text-xs bg-zinc-300/50 dark:bg-zinc-700/50 hover:bg-zinc-400/50 dark:hover:bg-zinc-600/50 rounded-lg"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  )
+
+  // Desktop session item
+  const renderDesktopItem = (session: Session) => (
+    <div
+      className={`group relative flex items-center hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors ${
+        activeId === session.id
+          ? 'bg-zinc-200 dark:bg-zinc-700 border-l-2 border-blue-500'
+          : ''
+      }`}
+    >
+      <button
+        onClick={() => onSelect(session.id)}
+        onDoubleClick={() => onUpdate && startEdit(session)}
+        className="flex-1 p-3 text-left text-zinc-900 dark:text-zinc-50"
+      >
+        <span className="text-xl">{session.icon}</span>
+        <span className="hidden md:inline ml-2 text-sm">{session.name}</span>
+      </button>
+      <div className="hidden group-hover:flex absolute right-1 top-1/2 -translate-y-1/2 gap-1">
+        {onUpdate && (
+          <button
+            onClick={() => startEdit(session)}
+            className="w-6 h-6 text-xs text-zinc-500 dark:text-zinc-400 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-zinc-300/50 dark:hover:bg-zinc-600/50 rounded transition-colors flex items-center justify-center"
+            title="Edit session"
+          >
+            <Pencil size={14} />
+          </button>
+        )}
+        {sessions.length > 1 && (
+          <button
+            onClick={() => onRemove(session.id)}
+            className="w-6 h-6 text-xs text-zinc-500 dark:text-zinc-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-zinc-300/50 dark:hover:bg-zinc-600/50 rounded transition-colors flex items-center justify-center"
+            title="Remove session"
+          >
+            <X size={14} />
+          </button>
+        )}
+      </div>
+    </div>
+  )
+
   // Session list content (shared between mobile and desktop)
   const sessionList = (
     <>
       {sessions.map((session) => (
         <div key={session.id}>
           {editingId === session.id ? (
-            // Edit mode
-            <div className="p-3 border-b border-zinc-300/30 dark:border-zinc-700/30">
-              <input
-                type="text"
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                className="w-full px-2 py-1 text-sm bg-zinc-200/50 dark:bg-zinc-800/50 border border-zinc-400/30 dark:border-zinc-600/30 rounded-lg focus:border-blue-500 outline-none mb-2"
-                autoFocus
-              />
-              <IconPicker value={editIcon} onChange={setEditIcon} />
-              <div className="flex gap-1 mt-2">
-                <button
-                  onClick={saveEdit}
-                  className="flex-1 px-2 py-1 text-xs bg-blue-600 hover:bg-blue-500 rounded-lg text-white"
-                >
-                  Save
-                </button>
-                <button
-                  onClick={cancelEdit}
-                  className="px-2 py-1 text-xs bg-zinc-300/50 dark:bg-zinc-700/50 hover:bg-zinc-400/50 dark:hover:bg-zinc-600/50 rounded-lg"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
+            renderEditForm()
+          ) : isMobile ? (
+            <SwipeableSessionItem
+              session={session}
+              isActive={activeId === session.id}
+              onSelect={() => onSelect(session.id)}
+              onEdit={() => startEdit(session)}
+              onRemove={() => onRemove(session.id)}
+              canRemove={sessions.length > 1}
+              canEdit={!!onUpdate}
+            />
           ) : (
-            // Normal view
-            <div
-              className={`group relative flex items-center hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors ${
-                activeId === session.id ? 'bg-zinc-200 dark:bg-zinc-700 border-l-2 border-blue-500' : ''
-              }`}
-            >
-              <button
-                onClick={() => onSelect(session.id)}
-                onDoubleClick={() => onUpdate && startEdit(session)}
-                className="flex-1 p-3 text-left text-zinc-900 dark:text-zinc-50"
-              >
-                <span className="text-xl">{session.icon}</span>
-                <span className={`${isMobile ? 'inline' : 'hidden md:inline'} ml-2 text-sm`}>{session.name}</span>
-              </button>
-              <div className="hidden group-hover:flex absolute right-1 top-1/2 -translate-y-1/2 gap-1">
-                {onUpdate && (
-                  <button
-                    onClick={() => startEdit(session)}
-                    className="w-6 h-6 text-xs text-zinc-500 dark:text-zinc-400 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-zinc-300/50 dark:hover:bg-zinc-600/50 rounded transition-colors flex items-center justify-center"
-                    title="Edit session"
-                  >
-                    <Pencil size={14} />
-                  </button>
-                )}
-                {sessions.length > 1 && (
-                  <button
-                    onClick={() => onRemove(session.id)}
-                    className="w-6 h-6 text-xs text-zinc-500 dark:text-zinc-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-zinc-300/50 dark:hover:bg-zinc-600/50 rounded transition-colors flex items-center justify-center"
-                    title="Remove session"
-                  >
-                    <X size={14} />
-                  </button>
-                )}
-              </div>
-            </div>
+            renderDesktopItem(session)
           )}
         </div>
       ))}
@@ -161,11 +182,13 @@ export function SessionSidebar({
       ) : (
         <button
           onClick={() => setShowAddForm(true)}
-          className="p-3 text-left hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors border-t border-zinc-200 dark:border-zinc-700 w-full text-zinc-600 dark:text-zinc-400"
+          className="p-3 text-left hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors border-t border-zinc-200 dark:border-zinc-700 w-full text-zinc-600 dark:text-zinc-400 flex items-center"
           title="Add new session"
         >
           <Plus size={20} />
-          <span className={`${isMobile ? 'inline' : 'hidden md:inline'} ml-2 text-sm`}>
+          <span
+            className={`${isMobile ? 'inline' : 'hidden md:inline'} ml-2 text-sm`}
+          >
             Add session
           </span>
         </button>
@@ -191,7 +214,9 @@ export function SessionSidebar({
           }`}
         >
           <div className="p-4 border-b border-zinc-200 dark:border-zinc-700 flex justify-between items-center shrink-0">
-            <span className="font-semibold text-zinc-900 dark:text-zinc-50">Sessions</span>
+            <span className="font-semibold text-zinc-900 dark:text-zinc-50">
+              Sessions
+            </span>
             <button
               onClick={onClose}
               className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-200/50 dark:hover:bg-zinc-700/50 transition-colors"
@@ -208,9 +233,7 @@ export function SessionSidebar({
   // Desktop: normal sidebar
   return (
     <aside className="w-16 md:w-48 h-full min-h-0 bg-zinc-50 dark:bg-zinc-800 flex flex-col border-r border-zinc-200 dark:border-zinc-700">
-      <div className="flex-1 min-h-0 overflow-y-auto">
-        {sessionList}
-      </div>
+      <div className="flex-1 min-h-0 overflow-y-auto">{sessionList}</div>
     </aside>
   )
 }

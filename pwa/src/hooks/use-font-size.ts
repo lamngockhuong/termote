@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useCallback, useState } from 'react'
 
 const MIN_SIZE = 6
 const MAX_SIZE = 24

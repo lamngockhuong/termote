@@ -37,7 +37,7 @@ jobs:
 
       - name: Lint
         working-directory: pwa
-        run: pnpm lint
+        run: pnpm lint:ci
 
       - name: Build
         working-directory: pwa

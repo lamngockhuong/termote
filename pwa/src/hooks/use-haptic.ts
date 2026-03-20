@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { vibrate, canVibrate } from '../utils/haptic'
+import { canVibrate, vibrate } from '../utils/haptic'
 
 interface UseHapticOptions {
   enabled?: boolean
@@ -13,7 +13,7 @@ export function useHaptic(options: UseHapticOptions = {}) {
       if (!enabled) return
       vibrate(pattern)
     },
-    [enabled]
+    [enabled],
   )
 
   return {

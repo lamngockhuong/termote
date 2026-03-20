@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useRef, useImperativeHandle } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 
 interface Props {
   fontSize?: number
@@ -65,7 +65,9 @@ export const TerminalFrame = forwardRef<HTMLIFrameElement, Props>(
       const applyTheme = () => {
         try {
           const doc = iframe.contentDocument
-          const win = iframe.contentWindow as { term?: { options: { theme: unknown } } }
+          const win = iframe.contentWindow as {
+            term?: { options: { theme: unknown } }
+          }
 
           if (win?.term) {
             win.term.options.theme = THEMES[theme]
@@ -137,7 +139,7 @@ export const TerminalFrame = forwardRef<HTMLIFrameElement, Props>(
         allow="clipboard-read; clipboard-write"
       />
     )
-  }
+  },
 )
 
 TerminalFrame.displayName = 'TerminalFrame'
