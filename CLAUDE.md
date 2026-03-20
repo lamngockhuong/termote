@@ -88,13 +88,13 @@ cd tmux-api && go build -o tmux-api .  # Build API
 ```
 ┌─────────────────────────────────────────────────────────┐
 │ Docker mode (all-in-one)                                │
-│   nginx:8080 → ttyd:7681 → tmux                         │
+│   nginx:7680 → ttyd:7681 → tmux                         │
 │             → tmux-api:7682                             │
 └─────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────┐
 │ Hybrid mode                                             │
-│   [Container] nginx:8080 → host.docker.internal:7681    │
+│   [Container] nginx:7680 → host.docker.internal:7681    │
 │               tmux-api:7682 → host tmux socket          │
 │   [Native]    ttyd:7681 → tmux                          │
 └─────────────────────────────────────────────────────────┘
@@ -136,4 +136,9 @@ make test-uninstall   # Test uninstall.sh only
 # Manual checks
 cd pwa && pnpm tsc --noEmit   # Type check
 curl http://localhost:7682/windows  # Test tmux-api
+
+# E2E tests (requires running server)
+./scripts/deploy.sh --docker  # Start server first
+cd pwa && pnpm test:e2e       # Run Playwright tests
+cd pwa && pnpm test:e2e:ui    # Run with UI debugger
 ```

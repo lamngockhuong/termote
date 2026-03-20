@@ -24,7 +24,7 @@ else
 fi
 
 # Check nginx
-PORT="${1:-8080}"
+PORT="${1:-7680}"
 
 # Try Tailscale IP first
 TS_IP=$(tailscale ip -4 2>/dev/null)

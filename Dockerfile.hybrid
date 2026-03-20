@@ -21,6 +21,6 @@ RUN chmod +x /usr/local/bin/tmux-api
 COPY entrypoint-hybrid.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-EXPOSE 8080
+EXPOSE 7680
 
 ENTRYPOINT ["/entrypoint.sh"]

@@ -37,8 +37,14 @@ for i in "${!args[@]}"; do
         --lan)
             LAN=true
             ;;
+        --port)
+            PORT="${args[$((i+1))]}"
+            ;;
     esac
 done
+
+# Default port
+PORT="${PORT:-7680}"
 
 # Determine bind address (localhost by default, 0.0.0.0 with --lan)
 if [[ "$LAN" == true ]]; then
@@ -58,7 +64,8 @@ if [[ -z "$MODE" ]]; then
     echo "  --native   All native (requires system packages)"
     echo ""
     echo "Options:"
-    echo "  --tailscale <host[:port]>  Enable Tailscale HTTPS (default port: 8080)"
+    echo "  --port <port>              Host port (default: 7680)"
+    echo "  --tailscale <host[:port]>  Enable Tailscale HTTPS (default port: 7680)"
     echo "  --lan                      Expose to LAN (default: localhost only)"
     echo ""
     echo "Examples:"
@@ -77,7 +84,7 @@ if [[ -n "$TAILSCALE" ]]; then
         TS_PORT="${TAILSCALE##*:}"
     else
         TS_HOST="$TAILSCALE"
-        TS_PORT="8080"
+        TS_PORT="7680"
     fi
 
     # Generate Tailscale certs (copy to project for Docker access)
@@ -148,7 +155,7 @@ NGINX_HEADER
 services:
   termote:
     ports:
-      - "${BIND_ADDR}:${TS_PORT}:8080"
+      - "${BIND_ADDR}:${TS_PORT}:7680"
     volumes:
       - \${WORKSPACE:-./workspace}:/workspace:rw
       - ./nginx/nginx-docker.conf.tmp:/etc/nginx/nginx.conf:ro
@@ -169,7 +176,7 @@ EOF
 services:
   termote:
     ports:
-      - "${BIND_ADDR}:8080:8080"
+      - "${BIND_ADDR}:${PORT}:7680"
 EOF
             docker compose --profile docker up -d --build
             rm -f "$PROJECT_DIR/docker-compose.override.yml"
@@ -177,9 +184,9 @@ EOF
             echo ""
             echo "=== Deployment complete ==="
             if [[ "$LAN" == true ]]; then
-                echo "LAN: http://$LAN_IP:8080"
+                echo "LAN: http://$LAN_IP:$PORT"
             else
-                echo "Access at: http://localhost:8080"
+                echo "Access at: http://localhost:$PORT"
             fi
         fi
         ;;
@@ -190,9 +197,7 @@ EOF
 
         # Build tmux-api binary
         echo "  Building tmux-api..."
-        cd "$PROJECT_DIR/tmux-api"
-        CGO_ENABLED=0 go build -ldflags="-s -w" -o tmux-api . 2>/dev/null || true
-        cd "$PROJECT_DIR"
+        (cd "$PROJECT_DIR/tmux-api" && CGO_ENABLED=0 go build -ldflags="-s -w" -o tmux-api .) 2>/dev/null || true
 
         # Start native ttyd
         echo "  Starting native ttyd..."
@@ -221,7 +226,7 @@ EOF
 services:
   termote-hybrid:
     ports:
-      - "${BIND_ADDR}:8080:8080"
+      - "${BIND_ADDR}:${PORT}:7680"
 EOF
 
         if [[ -n "$TAILSCALE" ]]; then
@@ -239,7 +244,7 @@ EOF
             echo "=== Deployment complete ==="
             echo "Tailscale: https://$TS_HOST:$TS_PORT"
             if [[ "$LAN" == true ]]; then
-                echo "LAN: http://$LAN_IP:8080"
+                echo "LAN: http://$LAN_IP:$PORT"
             fi
         else
             docker compose --profile hybrid up -d --build
@@ -248,9 +253,9 @@ EOF
             echo ""
             echo "=== Deployment complete ==="
             if [[ "$LAN" == true ]]; then
-                echo "LAN: http://$LAN_IP:8080"
+                echo "LAN: http://$LAN_IP:$PORT"
             else
-                echo "Access at: http://localhost:8080"
+                echo "Access at: http://localhost:$PORT"
             fi
         fi
         ;;
@@ -289,9 +294,7 @@ EOF
 
         # Build tmux-api binary
         echo "  Building tmux-api..."
-        cd "$PROJECT_DIR/tmux-api"
-        CGO_ENABLED=0 go build -ldflags="-s -w" -o tmux-api . 2>/dev/null || true
-        cd "$PROJECT_DIR"
+        (cd "$PROJECT_DIR/tmux-api" && CGO_ENABLED=0 go build -ldflags="-s -w" -o tmux-api .) 2>/dev/null || true
         sudo cp "$PROJECT_DIR/tmux-api/tmux-api" /usr/local/bin/tmux-api
         sudo chmod +x /usr/local/bin/tmux-api
 
@@ -321,12 +324,12 @@ EOF
         if [[ -n "$TAILSCALE" ]]; then
             echo "Tailscale: https://$TS_HOST:$TS_PORT"
             if [[ "$LAN" == true ]]; then
-                echo "LAN: http://$LAN_IP:8080"
+                echo "LAN: http://$LAN_IP:$PORT"
             fi
         elif [[ "$LAN" == true ]]; then
-            echo "LAN: http://$LAN_IP:8080"
+            echo "LAN: http://$LAN_IP:$PORT"
         else
-            echo "Access at: http://localhost:8080"
+            echo "Access at: http://localhost:$PORT"
         fi
         ;;
 esac

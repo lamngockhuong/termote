@@ -49,6 +49,6 @@ COPY entrypoint-allinone.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 ENV SHELL=/bin/bash
-EXPOSE 8080
+EXPOSE 7680
 
 ENTRYPOINT ["/entrypoint.sh"]

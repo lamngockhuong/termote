@@ -81,11 +81,11 @@ test_tailscale_parsing() {
         TS_PORT="${TAILSCALE##*:}"
     else
         TS_HOST="$TAILSCALE"
-        TS_PORT="8080"
+        TS_PORT="7680"
     fi
-    [[ "$TS_HOST" == "myhost.ts.net" && "$TS_PORT" == "8080" ]] && \
-        pass "hostname only: host=myhost.ts.net, port=8080" || \
-        fail "hostname only" "host=myhost.ts.net,port=8080" "host=$TS_HOST,port=$TS_PORT"
+    [[ "$TS_HOST" == "myhost.ts.net" && "$TS_PORT" == "7680" ]] && \
+        pass "hostname only: host=myhost.ts.net, port=7680" || \
+        fail "hostname only" "host=myhost.ts.net,port=7680" "host=$TS_HOST,port=$TS_PORT"
 
     # Test 2: hostname:port
     TAILSCALE="myhost.ts.net:443"
@@ -94,7 +94,7 @@ test_tailscale_parsing() {
         TS_PORT="${TAILSCALE##*:}"
     else
         TS_HOST="$TAILSCALE"
-        TS_PORT="8080"
+        TS_PORT="7680"
     fi
     [[ "$TS_HOST" == "myhost.ts.net" && "$TS_PORT" == "443" ]] && \
         pass "hostname:port: host=myhost.ts.net, port=443" || \
@@ -107,7 +107,7 @@ test_tailscale_parsing() {
         TS_PORT="${TAILSCALE##*:}"
     else
         TS_HOST="$TAILSCALE"
-        TS_PORT="8080"
+        TS_PORT="7680"
     fi
     [[ "$TS_HOST" == "company.bigscale-ruffe.ts.net" && "$TS_PORT" == "9000" ]] && \
         pass "complex hostname:port parsed correctly" || \
@@ -182,10 +182,10 @@ test_sed_substitution() {
     # Test sed on nginx-local.conf
     BIND_ADDR="127.0.0.1"
     RESULT=$(sed -e "s/<bind_addr>/$BIND_ADDR/g" "$PROJECT_DIR/nginx/nginx-local.conf" | grep "listen")
-    if [[ "$RESULT" == *"127.0.0.1:8080"* ]]; then
+    if [[ "$RESULT" == *"127.0.0.1:7680"* ]]; then
         pass "sed substitutes <bind_addr> correctly"
     else
-        fail "sed <bind_addr>" "127.0.0.1:8080" "$RESULT"
+        fail "sed <bind_addr>" "127.0.0.1:7680" "$RESULT"
     fi
 
     # Test sed on nginx-tailscale.conf

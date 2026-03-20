@@ -150,7 +150,7 @@ Uses `Dockerfile` and `entrypoint-allinone.sh`.
 
 - termote.service (ttyd:7681)
 - tmux-api.service (API:7682)
-- nginx (port 8080, basic auth)
+- nginx (port 7680, basic auth)
 
 ### With Tailscale
 

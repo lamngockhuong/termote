@@ -40,7 +40,7 @@ make health           # Check services
 ```bash
 ./scripts/deploy.sh --docker           # localhost only
 ./scripts/deploy.sh --docker --lan     # LAN accessible
-# Access: http://localhost:8080
+# Access: http://localhost:7680
 ```
 
 ### Hybrid (recommended for host binary access)
@@ -53,7 +53,7 @@ sudo apt install ttyd tmux  # Ubuntu/Debian
 # Or: brew install ttyd tmux  # macOS
 
 ./scripts/deploy.sh --hybrid
-# Access: http://localhost:8080
+# Access: http://localhost:7680
 ```
 
 ### Native (no Docker)
@@ -61,7 +61,7 @@ sudo apt install ttyd tmux  # Ubuntu/Debian
 ```bash
 sudo apt install ttyd tmux nginx
 ./scripts/deploy.sh --native
-# Access: http://localhost:8080
+# Access: http://localhost:7680
 ```
 
 ### With Tailscale HTTPS (all modes)
@@ -76,7 +76,7 @@ sudo apt install ttyd tmux nginx
 # Custom port
 ./scripts/deploy.sh --hybrid --tailscale myhost.ts.net:443
 
-# Access: https://myhost.ts.net:8080 (or custom port)
+# Access: https://myhost.ts.net:7680 (or custom port)
 ```
 
 ### Uninstall
@@ -148,6 +148,11 @@ make build          # Build PWA and tmux-api
 make test           # Run all tests (24 tests)
 make health         # Check service health
 make clean          # Stop containers
+
+# E2E tests (requires running server)
+./scripts/deploy.sh --docker  # Start server first
+cd pwa && pnpm test:e2e       # Run Playwright tests
+cd pwa && pnpm test:e2e:ui    # Run with UI debugger
 ```
 
 ## Troubleshooting

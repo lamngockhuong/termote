@@ -9,8 +9,7 @@ services:
     container_name: termote
     profiles: [docker]
     user: "${USER_ID:-1000}:${GROUP_ID:-1000}"
-    ports:
-      - "8080:8080"
+    # ports set via deploy.sh override
     volumes:
       - ${WORKSPACE:-./workspace}:/workspace:rw
     working_dir: /workspace
@@ -23,8 +22,7 @@ services:
       dockerfile: Dockerfile.hybrid
     container_name: termote-hybrid
     profiles: [hybrid]
-    ports:
-      - "8080:8080"
+    # ports set via deploy.sh override
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
