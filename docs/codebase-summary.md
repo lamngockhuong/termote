@@ -14,21 +14,32 @@ termote/
 │   │   ├── App.tsx             # Main app component
 │   │   ├── main.tsx            # Entry point
 │   │   ├── components/
+│   │   │   ├── about-modal.tsx        # About dialog
+│   │   │   ├── bottom-navigation.tsx  # Mobile bottom nav
+│   │   │   ├── icon-picker.tsx        # Emoji icon selector
 │   │   │   ├── keyboard-toolbar.tsx   # Virtual keyboard buttons
 │   │   │   ├── session-sidebar.tsx    # Session switcher sidebar
-│   │   │   ├── terminal-frame.tsx     # Terminal container
+│   │   │   ├── settings-menu.tsx      # Settings dropdown
+│   │   │   ├── terminal-frame.tsx     # Terminal iframe wrapper
+│   │   │   ├── theme-toggle.tsx       # Theme switcher buttons
 │   │   │   └── xterm-terminal.tsx     # xterm.js WebSocket terminal
+│   │   ├── contexts/
+│   │   │   └── theme-context.tsx      # Theme provider (light/dark/system)
 │   │   ├── hooks/
+│   │   │   ├── use-font-size.ts       # Font size state (6-24)
 │   │   │   ├── use-gestures.ts        # Hammer.js gesture handling
-│   │   │   ├── use-font-size.ts       # Font size zoom state
+│   │   │   ├── use-haptic.ts          # Haptic feedback
+│   │   │   ├── use-keyboard-visible.ts # Mobile keyboard detection
 │   │   │   ├── use-local-sessions.ts  # Session CRUD + tmux sync
-│   │   │   ├── use-session.ts         # Basic session state
-│   │   │   ├── use-tmux-api.ts        # tmux HTTP API client
-│   │   │   └── use-viewport.ts        # Viewport dimension hook
+│   │   │   ├── use-media-query.ts     # Responsive hooks
+│   │   │   └── use-tmux-api.ts        # tmux HTTP API client
 │   │   ├── types/
-│   │   │   └── session.ts             # Session interface + defaults
+│   │   │   └── session.ts             # Session interface
 │   │   └── utils/
+│   │       ├── app-info.ts            # App metadata
+│   │       ├── haptic.ts              # Vibration API wrapper
 │   │       └── terminal-bridge.ts     # Iframe keystroke injection
+│   ├── e2e/                    # Playwright e2e tests
 │   └── package.json
 ├── nginx/
 │   ├── nginx.conf              # Base config
@@ -40,7 +51,7 @@ termote/
 │   ├── main.go                 # HTTP API for tmux control
 │   └── go.mod
 ├── scripts/
-│   ├── deploy.sh               # Deploy (--docker|--hybrid|--native)
+│   ├── deploy.sh               # Deploy (--docker|--hybrid|--native) [--no-auth]
 │   ├── uninstall.sh            # Uninstall
 │   └── health-check.sh         # Service health check
 ├── systemd/
@@ -51,16 +62,18 @@ termote/
 
 ## Key Components
 
-### App.tsx (82 lines)
+### App.tsx (~200 lines)
 
 Main orchestrator combining:
 
-- Session sidebar
-- Terminal frame with iframe
-- Keyboard toolbar
-- Gesture handlers → terminal commands
+- Session sidebar (desktop) / slide-over panel (mobile)
+- Terminal frame with ttyd iframe
+- Keyboard toolbar with special keys
+- Settings menu with theme toggle
+- Font size controls (A-/A+)
+- Gesture handlers → terminal commands (mobile only)
 
-### xterm-terminal.tsx (222 lines)
+### xterm-terminal.tsx (~230 lines)
 
 Direct xterm.js WebSocket terminal:
 
@@ -69,13 +82,15 @@ Direct xterm.js WebSocket terminal:
 - Auto-reconnects on disconnect
 - Exposes `sendInput`, `sendCommand`, `focus` methods
 
-### keyboard-toolbar.tsx (74 lines)
+### keyboard-toolbar.tsx (~90 lines)
 
 Virtual keyboard for mobile:
 
 - Standard keys: Tab, Esc, Ctrl, Arrow keys
-- Ctrl mode: reveals ^C, ^D, ^Z, ^L, ^A, ^E combos
-- Toggle state for Ctrl modifier
+- Ctrl combos: ^C, ^D, ^Z, ^L, ^A, ^E
+- Scroll controls: PageUp/PageDown for tmux copy mode
+- Keyboard toggle button
+- Haptic feedback on key press
 
 ### use-gestures.ts (52 lines)
 
@@ -85,13 +100,14 @@ Hammer.js integration:
 - Long press (paste)
 - Pinch in/out (font size)
 
-### use-local-sessions.ts (110 lines)
+### use-local-sessions.ts (~170 lines)
 
 Session management + tmux sync:
 
-- LocalStorage persistence
+- Sessions loaded from tmux windows via API
+- LocalStorage for metadata (icons, descriptions)
 - tmux window create/select/kill via API
-- Default sessions: Claude, Copilot, Shell
+- Polling every 5s for external changes
 
 ### use-tmux-api.ts (43 lines)
 

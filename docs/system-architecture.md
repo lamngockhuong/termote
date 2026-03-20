@@ -47,10 +47,13 @@
 
 React SPA with:
 
-- **xterm.js**: Terminal emulator connecting to ttyd via WebSocket
-- **Hammer.js**: Touch gesture recognition
-- **Session Sidebar**: Switch between tmux windows
-- **Keyboard Toolbar**: Virtual keys for mobile
+- **Terminal Frame**: ttyd iframe with xterm.js terminal
+- **Hammer.js**: Touch gesture recognition (mobile only)
+- **Session Sidebar**: Switch between tmux windows, add/edit/remove
+- **Keyboard Toolbar**: Virtual keys, Ctrl combos, scroll controls
+- **Settings Menu**: Theme toggle (light/dark/system)
+- **Font Controls**: Adjustable font size (6-24px)
+- **Responsive Layout**: Desktop sidebar, mobile slide-over panel
 
 ### nginx Proxy
 
@@ -62,7 +65,7 @@ Routes requests to appropriate backends:
 
 Provides:
 
-- Basic authentication
+- Basic authentication (enabled by default, use `--no-auth` to disable)
 - SSL termination (production)
 - WebSocket proxying with proper headers
 
@@ -175,7 +178,7 @@ Uses `Dockerfile` and `entrypoint-allinone.sh`.
 ## Security Model
 
 1. **Network**: VPN/Tailscale or local network only
-2. **Auth**: nginx basic auth over HTTPS
+2. **Auth**: nginx basic auth over HTTPS (use `--no-auth` for local dev only)
 3. **Session**: tmux isolates terminal processes
 4. **Origin**: Same-origin iframe (no cross-origin postMessage)
 
