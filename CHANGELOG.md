@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.5](https://github.com/lamngockhuong/termote/compare/v0.1.4...v0.1.5) (2026-03-21)
+
+
+### Features
+
+* **install:** add interactive mode selection and usage help ([2e64c40](https://github.com/lamngockhuong/termote/commit/2e64c40ab1bf7eef856b324ef032af45be18ee42))
+
+
+### Bug Fixes
+
+* **auth:** auto-generate and display credentials for non-interactive installs ([5b61384](https://github.com/lamngockhuong/termote/commit/5b61384d0187e33e8884db4459ef0bcfb97193e1))
+* **ci:** add Docker Hub README sync for hybrid image ([1af27df](https://github.com/lamngockhuong/termote/commit/1af27df63d23b8ab6600684b90c312770bffda66))
+
 ## [0.1.4](https://github.com/lamngockhuong/termote/compare/termote-v0.1.3...termote-v0.1.4) (2026-03-21)
 
 
