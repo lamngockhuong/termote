@@ -1,7 +1,7 @@
 # Termote Makefile
 # Usage: make <target>
 
-.PHONY: help build test test-deploy test-uninstall deploy-docker deploy-hybrid deploy-native clean release release-dry
+.PHONY: help build test test-deploy test-uninstall test-install test-get test-health-check test-setup-auth test-entrypoints deploy-docker deploy-hybrid deploy-native clean release release-dry
 
 # Default target
 help:
@@ -18,9 +18,14 @@ help:
 	@echo "  make deploy-native  Deploy native (systemd + nginx)"
 	@echo ""
 	@echo "Test:"
-	@echo "  make test           Run all tests"
-	@echo "  make test-deploy    Test deploy.sh"
-	@echo "  make test-uninstall Test uninstall.sh"
+	@echo "  make test              Run all tests"
+	@echo "  make test-deploy       Test deploy.sh"
+	@echo "  make test-uninstall    Test uninstall.sh"
+	@echo "  make test-install      Test install.sh"
+	@echo "  make test-get          Test get.sh"
+	@echo "  make test-health-check Test health-check.sh"
+	@echo "  make test-setup-auth   Test setup-auth.sh"
+	@echo "  make test-entrypoints  Test entrypoint scripts"
 	@echo ""
 	@echo "Release:"
 	@echo "  make release        Tag and push new release (VERSION=x.y.z)"
@@ -62,7 +67,7 @@ deploy-native-lan:
 	./scripts/deploy.sh --native --lan
 
 # Test targets
-test: test-deploy test-uninstall
+test: test-deploy test-uninstall test-install test-get test-health-check test-setup-auth test-entrypoints
 	@echo ""
 	@echo "All tests completed!"
 
@@ -73,6 +78,26 @@ test-deploy:
 test-uninstall:
 	@chmod +x tests/test-uninstall.sh
 	@./tests/test-uninstall.sh
+
+test-install:
+	@chmod +x tests/test-install.sh
+	@./tests/test-install.sh
+
+test-get:
+	@chmod +x tests/test-get.sh
+	@./tests/test-get.sh
+
+test-health-check:
+	@chmod +x tests/test-health-check.sh
+	@./tests/test-health-check.sh
+
+test-setup-auth:
+	@chmod +x tests/test-setup-auth.sh
+	@./tests/test-setup-auth.sh
+
+test-entrypoints:
+	@chmod +x tests/test-entrypoints.sh
+	@./tests/test-entrypoints.sh
 
 # Health check
 health:
