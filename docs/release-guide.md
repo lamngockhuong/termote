@@ -137,11 +137,13 @@ Each release produces:
 
 ### Tags
 
-| Tag      | Description           |
-| -------- | --------------------- |
-| `latest` | Latest stable release |
-| `x.y.z`  | Specific version      |
-| `x.y`    | Latest patch of minor |
+| Tag      | Description                                |
+| -------- | ------------------------------------------ |
+| `latest` | Latest stable release (not RC/pre-release) |
+| `x.y.z`  | Specific version                           |
+| `x.y`    | Latest patch of minor                      |
+
+**Note:** Pre-release versions (`-rc1`, `-beta`) don't update `latest` tag.
 
 ### Variants
 
