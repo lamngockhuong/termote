@@ -51,9 +51,10 @@ RUN if [ -f "/tmp/tmux-api-linux-${TARGETARCH}" ]; then \
     chmod +x /usr/local/bin/tmux-api && \
     rm -f /tmp/tmux-api*
 
-# Copy entrypoint
+# Copy shared auth script and entrypoint
+COPY scripts/setup-auth.sh /usr/local/bin/setup-auth.sh
 COPY entrypoint-allinone.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+RUN chmod +x /usr/local/bin/setup-auth.sh /entrypoint.sh
 
 ENV SHELL=/bin/bash
 EXPOSE 7680
