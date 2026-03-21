@@ -34,5 +34,6 @@ cleanup() {
 trap cleanup SIGTERM SIGINT
 
 # Start ttyd with tmux (foreground)
-exec ttyd -W -p 7681 -t fontSize=14 -t theme='{"background":"#1e1e1e"}' \
+# Note: Theme is applied via CSS injection from PWA, not here
+exec ttyd -W -p 7681 -t fontSize=14 \
     tmux new-session -A -s main

@@ -1,4 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
+import { setTerminalFontSize, setTerminalTheme } from '../utils/terminal-bridge'
 
 interface Props {
   fontSize?: number
@@ -7,30 +8,36 @@ interface Props {
 
 const THEMES = {
   light: {
-    foreground: '#1e1e1e',
-    background: '#ffffff',
-    cursor: '#1e1e1e',
-    black: '#000000',
-    red: '#cd3131',
-    green: '#00bc00',
-    yellow: '#949800',
-    blue: '#0451a5',
-    magenta: '#bc05bc',
-    cyan: '#0598bc',
-    white: '#555555',
-    brightBlack: '#666666',
-    brightRed: '#cd3131',
-    brightGreen: '#14ce14',
-    brightYellow: '#b5ba00',
-    brightBlue: '#0451a5',
-    brightMagenta: '#bc05bc',
-    brightCyan: '#0598bc',
-    brightWhite: '#a5a5a5',
+    background: '#f6f8fa',
+    foreground: '#24292e',
+    cursor: '#24292e',
+    cursorAccent: '#f6f8fa',
+    selectionBackground: 'rgba(3, 102, 214, 0.3)',
+    selectionForeground: '#24292e',
+    black: '#24292e',
+    red: '#d73a49',
+    green: '#22863a',
+    yellow: '#b08800',
+    blue: '#0366d6',
+    magenta: '#6f42c1',
+    cyan: '#1b7c83',
+    white: '#6a737d',
+    brightBlack: '#586069',
+    brightRed: '#cb2431',
+    brightGreen: '#28a745',
+    brightYellow: '#dbab09',
+    brightBlue: '#2188ff',
+    brightMagenta: '#8a63d2',
+    brightCyan: '#3192aa',
+    brightWhite: '#959da5',
   },
   dark: {
-    foreground: '#d2d2d2',
     background: '#2b2b2b',
+    foreground: '#d2d2d2',
     cursor: '#adadad',
+    cursorAccent: '#2b2b2b',
+    selectionBackground: 'rgba(255, 255, 255, 0.2)',
+    selectionForeground: '#ffffff',
     black: '#000000',
     red: '#d81e00',
     green: '#5ea702',
@@ -54,87 +61,45 @@ export const TerminalFrame = forwardRef<HTMLIFrameElement, Props>(
   ({ fontSize = 14, theme = 'dark' }, ref) => {
     const iframeRef = useRef<HTMLIFrameElement>(null)
 
-    // Forward ref to parent
     useImperativeHandle(ref, () => iframeRef.current as HTMLIFrameElement)
 
-    // Apply theme on load
+    // Apply theme and font size after iframe loads
     useEffect(() => {
       const iframe = iframeRef.current
       if (!iframe) return
 
-      const applyTheme = () => {
-        try {
-          const doc = iframe.contentDocument
-          const win = iframe.contentWindow as {
-            term?: { options: { theme: unknown } }
-          }
+      let attempts = 0
+      let intervalId: ReturnType<typeof setInterval> | null = null
 
-          if (win?.term) {
-            win.term.options.theme = THEMES[theme]
-          }
-
-          const viewport = doc?.querySelector('.xterm-viewport') as HTMLElement
-          if (viewport) {
-            viewport.style.backgroundColor = THEMES[theme].background
-          }
-
-          const screen = doc?.querySelector('.xterm-screen') as HTMLElement
-          if (screen) {
-            screen.style.backgroundColor = THEMES[theme].background
-          }
-        } catch {
-          // Cross-origin or not loaded yet
+      const applySettings = () => {
+        const themeApplied = setTerminalTheme(iframe, THEMES[theme])
+        if (themeApplied) {
+          setTerminalFontSize(iframe, fontSize)
+          if (intervalId) clearInterval(intervalId)
+        } else if (++attempts >= 30) {
+          if (intervalId) clearInterval(intervalId)
         }
       }
 
-      applyTheme()
-      iframe.addEventListener('load', applyTheme)
-      return () => iframe.removeEventListener('load', applyTheme)
-    }, [theme])
-
-    // Update font size dynamically via xterm API
-    useEffect(() => {
-      const iframe = iframeRef.current
-      if (!iframe) return
-
-      const applyFontSize = () => {
-        try {
-          const win = iframe.contentWindow as {
-            term?: {
-              setOption?: (key: string, value: unknown) => void
-              options?: { fontSize: number }
-            }
-            fitAddon?: { fit: () => void }
-          }
-
-          if (win?.term) {
-            // Try setOption (older xterm API)
-            if (typeof win.term.setOption === 'function') {
-              win.term.setOption('fontSize', fontSize)
-            }
-            // Try options property (newer xterm API)
-            else if (win.term.options) {
-              win.term.options.fontSize = fontSize
-            }
-
-            // Call fit to resize
-            win.fitAddon?.fit()
-          }
-        } catch {
-          // Cross-origin or API not available
-        }
+      const handleLoad = () => {
+        attempts = 0
+        intervalId = setInterval(applySettings, 100)
       }
 
-      // Apply with delay to ensure terminal is ready
-      const timer = setTimeout(applyFontSize, 300)
-      return () => clearTimeout(timer)
-    }, [fontSize])
+      iframe.addEventListener('load', handleLoad)
+      return () => {
+        if (intervalId) clearInterval(intervalId)
+        iframe.removeEventListener('load', handleLoad)
+      }
+    }, [theme, fontSize])
 
+    // key={theme} forces iframe reload when theme changes
     return (
       <iframe
+        key={theme}
         ref={iframeRef}
         src="/terminal/"
-        className={`flex-1 w-full h-full border-none ${theme === 'light' ? 'bg-white' : 'bg-[#2b2b2b]'}`}
+        className={`flex-1 w-full h-full border-none ${theme === 'light' ? 'bg-[#f6f8fa]' : 'bg-[#2b2b2b]'}`}
         title="Terminal"
         allow="clipboard-read; clipboard-write"
       />

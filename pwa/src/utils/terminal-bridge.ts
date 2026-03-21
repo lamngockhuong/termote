@@ -25,11 +25,25 @@ interface XtermInternal {
     coreService?: {
       triggerDataEvent(data: string, wasUserInput?: boolean): void
     }
+    _renderService?: {
+      _renderer?: { clearTextureAtlas?: () => void }
+      refreshRows?: (start: number, end: number) => void
+    }
   }
   focus(): void
-  options: { theme: unknown; fontSize: number }
+  // Newer xterm.js API
+  options?: { theme?: unknown; fontSize?: number }
+  // Older xterm.js API
+  setOption?: (key: string, value: unknown) => void
+  getOption?: (key: string) => unknown
   scrollLines(amount: number): void
   scrollPages(amount: number): void
+  // Refresh/redraw methods
+  refresh?: (start: number, end: number) => void
+  rows?: number
+  cols?: number
+  // Force re-render
+  clearTextureAtlas?: () => void
 }
 
 // Get xterm terminal instance from iframe
@@ -247,5 +261,81 @@ export function setTerminalFontSize(
 ) {
   const term = getTerm(iframe)
   if (!term) return
-  term.options.fontSize = size
+
+  // Try newer API first, then older API
+  if (term.options) {
+    term.options.fontSize = size
+  } else if (term.setOption) {
+    term.setOption('fontSize', size)
+  }
+}
+
+// Set terminal theme and apply background to all elements
+export function setTerminalTheme(
+  iframe: HTMLIFrameElement | null,
+  theme: Record<string, unknown>,
+): boolean {
+  const term = getTerm(iframe)
+  if (!term) return false
+
+  // Apply theme to xterm.js - try newer API first, then older API
+  let themeApplied = false
+  if (term.options) {
+    term.options.theme = theme
+    themeApplied = true
+  } else if (term.setOption) {
+    term.setOption('theme', theme)
+    themeApplied = true
+  }
+
+  // Force redraw to apply theme immediately
+  if (themeApplied) {
+    // Clear texture atlas to force re-render with new colors
+    if (term.clearTextureAtlas) {
+      term.clearTextureAtlas()
+    }
+    if (term._core?._renderService?._renderer?.clearTextureAtlas) {
+      term._core._renderService._renderer.clearTextureAtlas()
+    }
+    // Refresh all rows
+    if (term.refresh && term.rows) {
+      term.refresh(0, term.rows - 1)
+    }
+    // Also try internal refresh
+    if (term._core?._renderService?.refreshRows && term.rows) {
+      term._core._renderService.refreshRows(0, term.rows - 1)
+    }
+  }
+
+  // Apply background via CSS (fallback for elements not covered by xterm API)
+  try {
+    const doc = iframe?.contentDocument
+    if (!doc) return themeApplied
+
+    const bg = theme.background as string
+
+    // Inject/update CSS for background
+    const styleId = 'termote-theme-override'
+    let style = doc.getElementById(styleId) as HTMLStyleElement
+    if (!style) {
+      style = doc.createElement('style')
+      style.id = styleId
+      doc.head.appendChild(style)
+    }
+    style.textContent = `
+      body, .xterm, .xterm-viewport, .xterm-screen {
+        background-color: ${bg} !important;
+      }
+    `
+  } catch {
+    // Cross-origin or not available
+  }
+
+  return themeApplied
+}
+
+// Check if terminal is ready (has options or setOption API)
+export function isTerminalReady(iframe: HTMLIFrameElement | null): boolean {
+  const term = getTerm(iframe)
+  return term !== null && (!!term.options || !!term.setOption)
 }
