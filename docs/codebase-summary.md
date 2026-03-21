@@ -14,15 +14,17 @@ termote/
 │   │   ├── App.tsx             # Main app component
 │   │   ├── main.tsx            # Entry point
 │   │   ├── components/
-│   │   │   ├── about-modal.tsx        # About dialog
-│   │   │   ├── bottom-navigation.tsx  # Mobile bottom nav
-│   │   │   ├── icon-picker.tsx        # Emoji icon selector
-│   │   │   ├── keyboard-toolbar.tsx   # Virtual keyboard buttons
-│   │   │   ├── session-sidebar.tsx    # Session switcher sidebar
-│   │   │   ├── settings-menu.tsx      # Settings dropdown
-│   │   │   ├── terminal-frame.tsx     # Terminal iframe wrapper
-│   │   │   ├── theme-toggle.tsx       # Theme switcher buttons
-│   │   │   └── xterm-terminal.tsx     # xterm.js WebSocket terminal
+│   │   │   ├── about-modal.tsx              # About dialog
+│   │   │   ├── bottom-navigation.tsx        # Mobile bottom nav
+│   │   │   ├── help-modal.tsx               # Help/gestures guide
+│   │   │   ├── icon-picker.tsx              # Emoji icon selector
+│   │   │   ├── keyboard-toolbar.tsx         # Virtual keyboard buttons
+│   │   │   ├── session-sidebar.tsx          # Session switcher sidebar
+│   │   │   ├── settings-menu.tsx            # Settings dropdown
+│   │   │   ├── swipeable-session-item.tsx   # Swipe-to-delete session
+│   │   │   ├── terminal-frame.tsx           # Terminal iframe wrapper
+│   │   │   ├── theme-toggle.tsx             # Theme switcher buttons
+│   │   │   └── xterm-terminal.tsx           # xterm.js WebSocket terminal
 │   │   ├── contexts/
 │   │   │   └── theme-context.tsx      # Theme provider (light/dark/system)
 │   │   ├── hooks/
