@@ -85,6 +85,8 @@ cd termote
 make deploy-docker
 ```
 
+> **Note**: `install.sh` is for end-users (uses pre-built artifacts when available, interactive mode selection). `deploy.sh` is for developers (always builds from source). Both support the same `--docker|--hybrid|--native` modes.
+
 ## Deployment Modes
 
 | Mode       | Description          | Containers              | Native |
@@ -199,8 +201,11 @@ termote/
 ├── tmux-api/               # Go API server
 │   └── main.go
 ├── scripts/
-│   ├── deploy.sh
+│   ├── get.sh            # Online installer (curl | bash)
+│   ├── install.sh        # End-user installer (release + dev mode)
+│   ├── deploy.sh         # Developer deployment (always builds)
 │   ├── uninstall.sh
+│   ├── setup-auth.sh     # Shared auth setup for containers
 │   └── health-check.sh
 ├── tests/                  # Test suite
 │   ├── test-deploy.sh

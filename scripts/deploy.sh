@@ -104,7 +104,6 @@ pnpm install --frozen-lockfile
 pnpm build
 cd "$PROJECT_DIR"
 
-# Create .htpasswd if not exists (skip if --no-auth)
 echo "[2/3] Checking auth..."
 if [[ "$NO_AUTH" == true ]]; then
     echo "  Basic auth disabled (--no-auth)"
@@ -112,8 +111,19 @@ if [[ "$NO_AUTH" == true ]]; then
     touch "$PROJECT_DIR/.htpasswd"
 else
     if [ ! -f "$PROJECT_DIR/.htpasswd" ]; then
-        echo "Creating .htpasswd (enter password):"
-        echo "admin:$(openssl passwd -apr1)" > "$PROJECT_DIR/.htpasswd"
+        if [[ -t 0 ]]; then
+            # Interactive mode - prompt for password
+            echo "Creating .htpasswd (enter password):"
+            echo "admin:$(openssl passwd -apr1)" > "$PROJECT_DIR/.htpasswd"
+        elif [[ "$MODE" == "native" ]]; then
+            # Native mode - generate credentials directly (no Docker container)
+            GENERATED_PASS=$(openssl rand -base64 16 | tr -dc 'a-zA-Z0-9' | head -c 12)
+            echo "admin:$(openssl passwd -apr1 "$GENERATED_PASS")" > "$PROJECT_DIR/.htpasswd"
+        else
+            # Docker/Hybrid mode - use placeholder for container to generate credentials
+            echo "  Auth will be auto-generated on container start..."
+            echo "placeholder" > "$PROJECT_DIR/.htpasswd"
+        fi
     fi
 fi
 
@@ -153,6 +163,12 @@ EOF
             echo "LAN: http://$LAN_IP:$PORT"
         elif [[ -z "$TAILSCALE" ]]; then
             echo "Access at: http://localhost:$PORT"
+        fi
+        # Show credentials hint for non-interactive Docker installs
+        if [[ "$NO_AUTH" != true ]] && grep -q 'placeholder' "$PROJECT_DIR/.htpasswd" 2>/dev/null; then
+            echo ""
+            echo "View auto-generated credentials:"
+            echo "  docker logs termote 2>&1 | grep -A3 'TERMOTE CREDENTIALS'"
         fi
         ;;
 
@@ -219,6 +235,12 @@ EOF
             echo "LAN: http://$LAN_IP:$PORT"
         elif [[ -z "$TAILSCALE" ]]; then
             echo "Access at: http://localhost:$PORT"
+        fi
+        # Show credentials hint for non-interactive Hybrid installs
+        if [[ "$NO_AUTH" != true ]] && grep -q 'placeholder' "$PROJECT_DIR/.htpasswd" 2>/dev/null; then
+            echo ""
+            echo "View auto-generated credentials:"
+            echo "  docker logs termote-hybrid 2>&1 | grep -A3 'TERMOTE CREDENTIALS'"
         fi
         ;;
 
@@ -292,6 +314,15 @@ EOF
             echo "LAN: http://$LAN_IP:$PORT"
         elif [[ -z "$TAILSCALE" ]]; then
             echo "Access at: http://localhost:$PORT"
+        fi
+        # Show generated credentials for non-interactive native installs
+        if [[ "$NO_AUTH" != true ]] && [[ -n "$GENERATED_PASS" ]]; then
+            echo ""
+            echo "============================================"
+            echo "  TERMOTE CREDENTIALS (auto-generated)"
+            echo "  Username: admin"
+            echo "  Password: $GENERATED_PASS"
+            echo "============================================"
         fi
         ;;
 esac

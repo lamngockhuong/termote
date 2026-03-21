@@ -183,14 +183,25 @@ setup_api() {
     fi
 }
 
-# Setup auth
 setup_auth() {
     if [[ "$NO_AUTH" == true ]]; then
         info "Basic auth disabled"
         touch "$PROJECT_DIR/.htpasswd"
     elif [[ ! -f "$PROJECT_DIR/.htpasswd" ]]; then
-        info "Creating .htpasswd (enter password):"
-        echo "admin:$(openssl passwd -apr1)" > "$PROJECT_DIR/.htpasswd"
+        if [[ -t 0 ]]; then
+            # Interactive mode - prompt for password
+            info "Creating .htpasswd (enter password):"
+            echo "admin:$(openssl passwd -apr1)" > "$PROJECT_DIR/.htpasswd"
+        elif [[ "$MODE" == "native" ]]; then
+            # Native mode - generate credentials directly (no Docker container)
+            local pass=$(openssl rand -base64 16 | tr -dc 'a-zA-Z0-9' | head -c 12)
+            echo "admin:$(openssl passwd -apr1 "$pass")" > "$PROJECT_DIR/.htpasswd"
+            GENERATED_PASS="$pass"
+        else
+            # Docker/Hybrid mode - use placeholder for container to generate credentials
+            info "Auth will be auto-generated on container start..."
+            echo "placeholder" > "$PROJECT_DIR/.htpasswd"
+        fi
     fi
 }
 
@@ -328,4 +339,24 @@ if [[ "$LAN" == true ]]; then
     echo "LAN: http://$LAN_IP:$PORT"
 elif [[ -z "$TAILSCALE" ]]; then
     echo "Access at: http://localhost:$PORT"
+fi
+
+# Show credentials for non-interactive installs
+if [[ "$NO_AUTH" != true ]]; then
+    if [[ -n "$GENERATED_PASS" ]]; then
+        # Native mode - show generated credentials directly
+        echo ""
+        echo "============================================"
+        echo "  TERMOTE CREDENTIALS (auto-generated)"
+        echo "  Username: admin"
+        echo "  Password: $GENERATED_PASS"
+        echo "============================================"
+    elif [[ "$MODE" != "native" ]] && grep -q 'placeholder' "$PROJECT_DIR/.htpasswd" 2>/dev/null; then
+        # Docker/Hybrid mode - show hint to view logs
+        CONTAINER_NAME="termote"
+        [[ "$MODE" == "hybrid" ]] && CONTAINER_NAME="termote-hybrid"
+        echo ""
+        echo "View auto-generated credentials:"
+        echo "  docker logs $CONTAINER_NAME 2>&1 | grep -A3 'TERMOTE CREDENTIALS'"
+    fi
 fi

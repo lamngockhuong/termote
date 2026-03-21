@@ -5,7 +5,7 @@ USER root
 
 # Install nginx and tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    nginx tmux nano vim curl git htop \
+    nginx tmux nano vim curl git htop openssl \
     && rm -rf /var/lib/apt/lists/*
 
 # Bash config
@@ -37,8 +37,9 @@ COPY nginx/nginx-docker.conf /etc/nginx/nginx.conf
 # Copy PWA files
 COPY pwa/dist /var/www/termote
 
-# Copy htpasswd (create if not exists)
+# Copy htpasswd (create if not exists) - writable for non-root user
 COPY .htpasswd /etc/nginx/.htpasswd
+RUN chmod 666 /etc/nginx/.htpasswd
 
 # Copy tmux-api binary (supports both single binary and multi-arch builds)
 ARG TARGETARCH

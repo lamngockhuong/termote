@@ -2,7 +2,7 @@
 FROM nginx:alpine
 
 # Install tmux for tmux-api to communicate with host's tmux
-RUN apk add --no-cache tmux bash
+RUN apk add --no-cache tmux bash openssl
 
 # Copy nginx config
 COPY nginx/nginx-hybrid.conf /etc/nginx/nginx.conf
