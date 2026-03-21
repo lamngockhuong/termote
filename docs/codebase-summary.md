@@ -196,3 +196,5 @@ Merge PR → creates tag → triggers release.yml
 make release VERSION=1.0.0      # Local: create + push tag
 # Or: GitHub Actions UI → Run workflow → enter version
 ```
+
+See [release-guide.md](release-guide.md) for full details.
