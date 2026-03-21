@@ -11,9 +11,40 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      pwa: ${{ steps.filter.outputs.pwa }}
+      api: ${{ steps.filter.outputs.api }}
+      scripts: ${{ steps.filter.outputs.scripts }}
+      docker: ${{ steps.filter.outputs.docker }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            pwa:
+              - 'pwa/**'
+            api:
+              - 'tmux-api/**'
+            scripts:
+              - 'scripts/**'
+              - 'tests/**'
+              - 'Makefile'
+            docker:
+              - 'Dockerfile'
+              - 'Dockerfile.hybrid'
+              - 'nginx/**'
+              - 'systemd/**'
+
   build-pwa:
     name: Build PWA
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.pwa == 'true' || needs.changes.outputs.docker == 'true'
     steps:
       - uses: actions/checkout@v6
 
@@ -53,6 +84,8 @@ jobs:
   build-api:
     name: Build tmux-api
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.docker == 'true'
     steps:
       - uses: actions/checkout@v6
 
@@ -75,6 +108,8 @@ jobs:
   test-scripts:
     name: Test Scripts
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.scripts == 'true'
     steps:
       - uses: actions/checkout@v6
 
@@ -87,7 +122,11 @@ jobs:
   docker-build:
     name: Docker Build
     runs-on: ubuntu-latest
-    needs: [build-pwa, build-api]
+    needs: [changes, build-pwa, build-api]
+    if: |
+      always() &&
+      !failure() &&
+      (needs.changes.outputs.docker == 'true' || needs.changes.outputs.pwa == 'true' || needs.changes.outputs.api == 'true')
     steps:
       - uses: actions/checkout@v6
 
