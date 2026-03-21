@@ -359,12 +359,22 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Update Docker Hub description
+      - name: Update Docker Hub description (all-in-one)
         uses: peter-evans/dockerhub-description@v5
         continue-on-error: true
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           repository: lamngockhuong/termote
+          short-description: ${{ github.event.repository.description }}
+          readme-filepath: ./README.md
+
+      - name: Update Docker Hub description (hybrid)
+        uses: peter-evans/dockerhub-description@v5
+        continue-on-error: true
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: lamngockhuong/termote-hybrid
           short-description: ${{ github.event.repository.description }}
           readme-filepath: ./README.md
