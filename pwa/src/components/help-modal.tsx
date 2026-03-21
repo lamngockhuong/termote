@@ -32,6 +32,7 @@ const TOOLBAR_GUIDE: GuideSection[] = [
       { key: '⌨️ Keyboard', desc: 'Toggle virtual keyboard' },
       { key: 'Tab', desc: 'Tab key / autocomplete' },
       { key: 'Esc', desc: 'Escape key' },
+      { key: '↵ Enter', desc: 'Submit command' },
       { key: 'Ctrl', desc: 'Toggle Ctrl modifier' },
       { key: '↑↓←→', desc: 'Arrow keys' },
       { key: '⏱ History', desc: 'Toggle tmux copy mode' },
