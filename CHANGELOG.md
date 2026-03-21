@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.4](https://github.com/lamngockhuong/termote/compare/termote-v0.1.3...termote-v0.1.4) (2026-03-21)
+
+
+### Features
+
+* **pwa:** add favicon and banner assets ([f06a793](https://github.com/lamngockhuong/termote/commit/f06a7933e992f4c8ed118b9d989c89b7be36806b))
+
+
+### Bug Fixes
+
+* **ci:** add continue-on-error for Docker Hub README sync ([1cff17e](https://github.com/lamngockhuong/termote/commit/1cff17e92384affceea75c5ffff347f19519e940))
+
 ## [0.1.3](https://github.com/lamngockhuong/termote/compare/termote-v0.1.2...termote-v0.1.3) (2026-03-21)
 
 
