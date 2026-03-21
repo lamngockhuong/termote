@@ -63,7 +63,7 @@ export const TerminalFrame = forwardRef<HTMLIFrameElement, Props>(
 
     useImperativeHandle(ref, () => iframeRef.current as HTMLIFrameElement)
 
-    // Apply theme and font size after iframe loads
+    // Apply theme after iframe loads
     useEffect(() => {
       const iframe = iframeRef.current
       if (!iframe) return
@@ -91,7 +91,14 @@ export const TerminalFrame = forwardRef<HTMLIFrameElement, Props>(
         if (intervalId) clearInterval(intervalId)
         iframe.removeEventListener('load', handleLoad)
       }
-    }, [theme, fontSize])
+    }, [theme])
+
+    // Apply font size changes immediately (without reloading iframe)
+    useEffect(() => {
+      const iframe = iframeRef.current
+      if (!iframe) return
+      setTerminalFontSize(iframe, fontSize)
+    }, [fontSize])
 
     // key={theme} forces iframe reload when theme changes
     return (
