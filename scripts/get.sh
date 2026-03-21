@@ -1,7 +1,10 @@
 #!/bin/bash
 # Termote online installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
-# Or: curl ... | bash -s -- --docker --lan
+# Usage:
+#   curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
+#     -> Defaults to hybrid mode (best for accessing host binaries)
+#   curl ... | bash -s -- --docker --lan
+#     -> Explicit mode with options
 
 set -e
 
@@ -57,6 +60,7 @@ verify_checksum() {
 # Main
 main() {
     info "Termote Installer"
+    info "Install path: $INSTALL_DIR"
     echo ""
 
     # Check dependencies

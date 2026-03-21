@@ -45,6 +45,24 @@ else
     info "Development mode (building from source)"
 fi
 
+# Show usage
+show_usage() {
+    echo "Usage: ./install.sh [--docker|--hybrid|--native] [options]"
+    echo ""
+    echo "Modes:"
+    echo "  --docker   All-in-one container (nginx+ttyd+tmux-api)"
+    echo "  --hybrid   Docker (nginx+tmux-api) + native ttyd [default]"
+    echo "  --native   All native (requires system packages)"
+    echo ""
+    echo "Options:"
+    echo "  --port <port>              Host port (default: 7680)"
+    echo "  --tailscale <host[:port]>  Enable Tailscale HTTPS"
+    echo "  --lan                      Expose to LAN (default: localhost only)"
+    echo "  --no-auth                  Disable basic authentication"
+    echo "  -h, --help                 Show this help message"
+    exit 0
+}
+
 # Parse arguments
 MODE=""
 TAILSCALE=""
@@ -56,6 +74,7 @@ args=("$@")
 for i in "${!args[@]}"; do
     arg="${args[$i]}"
     case $arg in
+        -h|--help) show_usage ;;
         --docker) MODE="docker" ;;
         --hybrid) MODE="hybrid" ;;
         --native) MODE="native" ;;
@@ -69,21 +88,40 @@ done
 # Default port
 PORT="${PORT:-7680}"
 
-# Validate mode
+# Interactive mode selection if no mode provided
 if [[ -z "$MODE" ]]; then
-    echo "Usage: ./install.sh <--docker|--hybrid|--native> [options]"
     echo ""
-    echo "Modes:"
-    echo "  --docker   All-in-one container (nginx+ttyd+tmux-api)"
-    echo "  --hybrid   Docker (nginx+tmux-api) + native ttyd"
-    echo "  --native   All native (requires system packages)"
+    echo "Select installation mode:"
     echo ""
-    echo "Options:"
-    echo "  --port <port>              Host port (default: 7680)"
-    echo "  --tailscale <host[:port]>  Enable Tailscale HTTPS"
-    echo "  --lan                      Expose to LAN (default: localhost only)"
-    echo "  --no-auth                  Disable basic authentication"
-    exit 1
+    echo "  1) docker  - All-in-one container (nginx+ttyd+tmux-api)"
+    echo "               Best for: Simple deployment, isolated environment"
+    echo ""
+    echo "  2) hybrid  - Docker (nginx+tmux-api) + native ttyd"
+    echo "               Best for: Access host binaries (claude, gh, etc.)"
+    echo ""
+    echo "  3) native  - All native (requires nginx, ttyd, systemd)"
+    echo "               Best for: No Docker, full system integration"
+    echo ""
+
+    # Check if stdin is a terminal
+    if [[ -t 0 ]]; then
+        read -p "Enter choice [1-3, default=2]: " choice
+    else
+        # Piped input - default to hybrid (most common use case)
+        echo "Non-interactive mode detected, defaulting to hybrid..."
+        choice="2"
+    fi
+
+    case "${choice:-2}" in
+        1|docker)  MODE="docker" ;;
+        2|hybrid)  MODE="hybrid" ;;
+        3|native)  MODE="native" ;;
+        *)
+            error "Invalid choice: $choice"
+            ;;
+    esac
+
+    info "Selected mode: $MODE"
 fi
 
 # Determine bind address
@@ -282,6 +320,7 @@ fi
 
 echo ""
 echo "=== Installation complete ==="
+echo "Installed to: $PROJECT_DIR"
 if [[ -n "$TAILSCALE" ]]; then
     echo "Tailscale: https://$TS_HOST:$TS_PORT"
 fi
