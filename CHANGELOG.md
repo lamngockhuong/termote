@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.3](https://github.com/lamngockhuong/termote/compare/termote-v0.1.2...termote-v0.1.3) (2026-03-21)
+
+
+### Features
+
+* **ci:** sync README to Docker Hub on release ([0ed1738](https://github.com/lamngockhuong/termote/commit/0ed17384ec373da861c038db6cc9f5e6b0747f45))
+
+
+### Bug Fixes
+
+* **ci:** skip sync-version job when called by release-please ([00caf5b](https://github.com/lamngockhuong/termote/commit/00caf5bca5c7a8141c308a14e1a66544c0f6fad0))
+* **ci:** use paths-filter v4 (v5 doesn't exist) ([2bd4ef5](https://github.com/lamngockhuong/termote/commit/2bd4ef5f367a8d3de09954ca4bef33d54b54fec5))
+
 ## [0.1.2](https://github.com/lamngockhuong/termote/compare/termote-v0.1.1...termote-v0.1.2) (2026-03-21)
 
 
