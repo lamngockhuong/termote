@@ -1,7 +1,14 @@
 {
   "name": "termote",
   "private": true,
-  "version": "1.0.0",
+  "version": "0.1.0",
+  "description": "PWA for remotely controlling CLI tools from mobile/desktop",
+  "author": "Lam Ngoc Khuong <hi@khuong.dev>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lamngockhuong/termote.git"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",
