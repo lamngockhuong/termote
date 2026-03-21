@@ -1,38 +1,67 @@
 ---
 name: Bug report
-about: Create a report to help us improve
-title: ''
-labels: ''
-assignees: ''
-
+about: Report a bug with Termote
+title: "[BUG] "
+labels: "bug"
+assignees: ""
 ---
 
 **Describe the bug**
 A clear and concise description of what the bug is.
 
+**Deployment Mode**
+
+- [ ] Docker (all-in-one)
+- [ ] Hybrid (Docker + native ttyd)
+- [ ] Native (no Docker)
+
+**Environment**
+
+- Host OS: [e.g., Ubuntu 22.04, macOS 14]
+- Docker version (if applicable): [e.g., 24.0.7]
+- ttyd version (if native/hybrid): [e.g., 1.7.4]
+
+**Client Information**
+
+- Device: [e.g., iPhone 15, Desktop PC]
+- OS: [e.g., iOS 17, Windows 11, Android 14]
+- Browser: [e.g., Chrome 120, Safari 17]
+- PWA installed: [Yes/No]
+
 **To Reproduce**
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
+
+1. Deploy with '...'
+2. Open terminal at '...'
+3. Perform action '...'
 4. See error
 
 **Expected behavior**
-A clear and concise description of what you expected to happen.
+What you expected to happen.
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
+**Actual behavior**
+What actually happened.
 
-**Desktop (please complete the following information):**
- - OS: [e.g. iOS]
- - Browser [e.g. chrome, safari]
- - Version [e.g. 22]
+**Screenshots/Logs**
+If applicable, add screenshots or relevant logs.
 
-**Smartphone (please complete the following information):**
- - Device: [e.g. iPhone6]
- - OS: [e.g. iOS8.1]
- - Browser [e.g. stock browser, safari]
- - Version [e.g. 22]
+```
+# Paste logs here if available
+# docker logs termote
+# journalctl -u termote-ttyd
+```
+
+**Component affected**
+
+- [ ] PWA/Frontend
+- [ ] Terminal (ttyd/tmux)
+- [ ] Gestures/Touch
+- [ ] Keyboard toolbar
+- [ ] Session management
+- [ ] tmux-api
+- [ ] nginx/Proxy
+- [ ] Authentication
+- [ ] Deployment scripts
+- [ ] Other: \_\_\_
 
 **Additional context**
-Add any other context about the problem here.
+Any other context about the problem.
