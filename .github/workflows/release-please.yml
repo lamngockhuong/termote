@@ -27,6 +27,8 @@ jobs:
         with:
           manifest-file: .release-please-manifest.json
           config-file: release-please-config.json
+          skip-github-pull-request: ${{ inputs.dry_run }}
+          skip-github-release: ${{ inputs.dry_run }}
 
   # Trigger release workflow when release is created
   call-release:
