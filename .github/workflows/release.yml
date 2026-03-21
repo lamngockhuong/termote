@@ -60,14 +60,7 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "dry_run=$DRY_RUN" >> $GITHUB_OUTPUT
           echo "Release version: $VERSION (dry_run: $DRY_RUN)"
-
-      - name: Create and push tag (manual trigger only)
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "v${{ steps.version.outputs.version }}" -m "Release v${{ steps.version.outputs.version }}"
-          git push origin "v${{ steps.version.outputs.version }}"
+          # Note: Tag is created by softprops/action-gh-release, no need to push here
 
   # ─────────────────────────────────────────────────────────────
   # Build Jobs (parallel)
@@ -216,9 +209,10 @@ jobs:
             ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}
             ${{ env.REGISTRY_DOCKER }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest
+            type=semver,pattern={{version}},value=v${{ needs.prepare.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=v${{ needs.prepare.outputs.version }}
+            type=raw,value=latest,enable=${{ !contains(needs.prepare.outputs.version, '-') }}
+            type=raw,value=${{ needs.prepare.outputs.version }}
 
       - name: Docker meta (hybrid)
         id: meta-hybrid
@@ -228,9 +222,10 @@ jobs:
             ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}-hybrid
             ${{ env.REGISTRY_DOCKER }}/${{ env.IMAGE_NAME }}-hybrid
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest
+            type=semver,pattern={{version}},value=v${{ needs.prepare.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=v${{ needs.prepare.outputs.version }}
+            type=raw,value=latest,enable=${{ !contains(needs.prepare.outputs.version, '-') }}
+            type=raw,value=${{ needs.prepare.outputs.version }}
 
       - name: Build & push (all-in-one)
         uses: docker/build-push-action@v7
@@ -291,10 +286,15 @@ jobs:
           cp artifacts/tmux-api-linux-arm64/tmux-api-linux-arm64 release/
           chmod +x release/tmux-api-*
 
-          # Create tarball (scripts, configs, nginx, install.sh)
+          # Create tarball (all files needed for install.sh)
           mkdir -p termote-v${VERSION}
           cp -r scripts nginx systemd Makefile README.md termote-v${VERSION}/
+          cp docker-compose.yml Dockerfile Dockerfile.hybrid termote-v${VERSION}/
+          cp entrypoint-allinone.sh entrypoint-hybrid.sh termote-v${VERSION}/
           cp -r artifacts/pwa-dist termote-v${VERSION}/pwa-dist
+          # Include pre-built binaries
+          cp artifacts/tmux-api-linux-amd64/tmux-api-linux-amd64 termote-v${VERSION}/
+          cp artifacts/tmux-api-linux-arm64/tmux-api-linux-arm64 termote-v${VERSION}/
           tar czf release/termote-v${VERSION}.tar.gz termote-v${VERSION}
 
           # Copy install script standalone
