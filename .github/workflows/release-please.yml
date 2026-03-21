@@ -1,13 +1,9 @@
 name: Release Please
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
-    inputs:
-      dry_run:
-        description: 'Dry run (only show what would be released)'
-        required: false
-        type: boolean
-        default: false
 
 permissions:
   contents: write
@@ -27,13 +23,11 @@ jobs:
         with:
           manifest-file: .release-please-manifest.json
           config-file: release-please-config.json
-          skip-github-pull-request: ${{ inputs.dry_run }}
-          skip-github-release: ${{ inputs.dry_run }}
 
   # Trigger release workflow when release is created
   call-release:
     needs: release-please
-    if: needs.release-please.outputs.release_created == 'true' && github.event.inputs.dry_run != 'true'
+    if: needs.release-please.outputs.release_created == 'true'
     uses: ./.github/workflows/release.yml
     with:
       version: ${{ needs.release-please.outputs.version }}
