@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.6](https://github.com/lamngockhuong/termote/compare/v0.1.5...v0.1.6) (2026-03-21)
+
+
+### Bug Fixes
+
+* **pwa:** font size buttons (A-/A+) now apply changes immediately ([5d5d916](https://github.com/lamngockhuong/termote/commit/5d5d916c14bbd0643c05bc4376125693dd257ed7))
+
 ## [0.1.5](https://github.com/lamngockhuong/termote/compare/v0.1.4...v0.1.5) (2026-03-21)
 
 
