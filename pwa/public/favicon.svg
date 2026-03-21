@@ -1,0 +1,16 @@
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Termote terminal icon">
+  <title>Termote</title>
+  <!-- Background with rounded corners -->
+  <rect x="32" y="32" width="448" height="448" rx="64" fill="#1e1e1e"/>
+
+  <!-- Title bar -->
+  <path d="M32 96V96C32 60.6538 60.6538 32 96 32H416C451.346 32 480 60.6538 480 96V128H32V96Z" fill="#282c34"/>
+
+  <!-- Dots -->
+  <circle cx="100" cy="80" r="22" fill="#ff5f56"/>
+  <circle cx="164" cy="80" r="22" fill="#ffbd2e"/>
+  <circle cx="228" cy="80" r="22" fill="#27c93f"/>
+
+  <!-- Prompt $ _ -->
+  <text x="80" y="340" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="160" font-weight="bold" fill="#06b6d4">$ _</text>
+</svg>

@@ -1,4 +1,6 @@
-# Termote
+<p align="center">
+  <img src="pwa/public/banner-readme.svg" alt="Termote" width="600" />
+</p>
 
 Remote control CLI tools (Claude Code, GitHub Copilot, any terminal) from mobile/desktop via PWA.
 
