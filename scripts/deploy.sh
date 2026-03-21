@@ -166,12 +166,17 @@ EOF
 
         # Start native ttyd (no -i flag for hybrid mode - container needs to reach host)
         echo "  Starting native ttyd..."
-        # Stop systemd service if running (it binds to 127.0.0.1 which blocks container access)
+        # Stop systemd services if running (they bind to 127.0.0.1 which blocks container access)
         if systemctl is-active "termote@$(whoami)" &>/dev/null; then
             sudo systemctl stop "termote@$(whoami)" 2>/dev/null || true
         fi
+        # Stop system ttyd.service if running (it may use different command like login)
+        if systemctl is-active ttyd &>/dev/null; then
+            echo "  Stopping system ttyd.service..."
+            sudo systemctl stop ttyd 2>/dev/null || true
+        fi
         # Kill any existing ttyd and start fresh without -i flag
-        pkill -f "ttyd.*tmux" 2>/dev/null || true
+        pkill -f "ttyd" 2>/dev/null || true
         sleep 0.5
         # Check ttyd version for -W flag support (1.7.0+)
         TTYD_VERSION=$(ttyd --version 2>&1 | grep -oP '\d+\.\d+' | head -1)
