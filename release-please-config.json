@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
-  "release-type": "node",
+  "release-type": "simple",
   "packages": {
     ".": {
       "package-name": "termote",
@@ -8,7 +8,11 @@
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true,
       "extra-files": [
-        "pwa/package.json"
+        {
+          "type": "json",
+          "path": "pwa/package.json",
+          "jsonpath": "$.version"
+        }
       ]
     }
   }

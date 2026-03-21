@@ -25,8 +25,6 @@ jobs:
       - uses: googleapis/release-please-action@v4
         id: release
         with:
-          release-type: node
-          package-name: termote
           manifest-file: .release-please-manifest.json
           config-file: release-please-config.json
 
