@@ -89,11 +89,13 @@ make deploy-docker
 
 ## Deployment Modes
 
-| Mode       | Description          | Containers              | Native |
-| ---------- | -------------------- | ----------------------- | ------ |
-| `--docker` | All-in-one container | 1 (nginx+ttyd+tmux-api) | -      |
-| `--hybrid` | Docker + native ttyd | 1 (nginx+tmux-api)      | ttyd   |
-| `--native` | All native           | -                       | all    |
+| Mode       | Description             | Containers              | Native | Platform     |
+| ---------- | ----------------------- | ----------------------- | ------ | ------------ |
+| `--docker` | All-in-one container    | 1 (nginx+ttyd+tmux-api) | -      | macOS, Linux |
+| `--hybrid` | Container + native ttyd | 1 (nginx+tmux-api)      | ttyd   | macOS, Linux |
+| `--native` | All native              | -                       | all    | macOS, Linux |
+
+> **Note**: On macOS, both `--hybrid` (with podman) and `--native` run fully native using tmux-api's built-in serve mode. On Linux, `--native` uses systemd + nginx.
 
 ### Options
 
@@ -104,7 +106,9 @@ make deploy-docker
 | `--no-auth`                 | Disable basic authentication            |
 | `--port <port>`             | Host port (default: 7680)               |
 
-### Docker (recommended for simplicity)
+### Docker/Podman (recommended for simplicity)
+
+Scripts auto-detect `podman` or `docker` — both work identically.
 
 ```bash
 ./scripts/deploy.sh --docker             # localhost with basic auth
@@ -128,8 +132,15 @@ sudo apt install ttyd tmux  # Ubuntu/Debian
 
 ### Native (no Docker)
 
+Auto-detects OS: systemd + nginx on Linux, tmux-api serve mode on macOS.
+
 ```bash
+# Linux
 sudo apt install ttyd tmux nginx
+./scripts/deploy.sh --native
+
+# macOS
+brew install ttyd tmux go
 ./scripts/deploy.sh --native
 # Access: http://localhost:7680
 ```
@@ -162,11 +173,11 @@ Uses `tailscale serve` for automatic HTTPS (no manual cert management):
 
 ## Platform Support
 
-| Platform | Docker   | Hybrid | Native |
-| -------- | -------- | ------ | ------ |
-| Linux    | ✓        | ✓      | ✓      |
-| macOS    | ✓        | ✓      | ✓      |
-| Windows  | ✓ (WSL2) | -      | -      |
+| Platform | Docker/Podman | Hybrid           | Native         |
+| -------- | ------------- | ---------------- | -------------- |
+| Linux    | ✓             | ✓ (container)    | ✓ (systemd)    |
+| macOS    | ✓             | ✓ (native serve) | ✓ (serve mode) |
+| Windows  | ✓ (WSL2)      | -                | -              |
 
 ## Mobile Usage
 
@@ -199,7 +210,9 @@ termote/
 │       ├── hooks/
 │       └── utils/
 ├── tmux-api/               # Go API server
-│   └── main.go
+│   ├── main.go           # Entry point (API-only or serve mode)
+│   ├── tmux.go           # tmux window handlers
+│   └── serve.go          # Full server (PWA, ttyd proxy, auth)
 ├── scripts/
 │   ├── get.sh            # Online installer (curl | bash)
 │   ├── install.sh        # End-user installer (release + dev mode)
@@ -250,6 +263,13 @@ cd pwa && pnpm test:e2e:ui    # Run with UI debugger
 
 - Verify tmux socket: `ls -la /tmp/tmux-$(id -u)/`
 - Check TMUX_SOCKET env in container
+- Ensure socket dir has 700 permissions: `chmod 700 /tmp/tmux-$(id -u)`
+
+### Podman on macOS
+
+- Run `podman machine start` before deploying
+- Hybrid mode auto-switches to native serve mode (no container needed)
+- If `host-gateway` errors appear, the scripts handle this automatically
 
 ## Security Notes
 

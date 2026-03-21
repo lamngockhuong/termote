@@ -4,8 +4,10 @@ FROM nginx:alpine
 # Install tmux for tmux-api to communicate with host's tmux
 RUN apk add --no-cache tmux bash openssl
 
-# Copy nginx config
+# Copy nginx config (replace tmux API host placeholder)
+ARG TMUX_API_HOST=127.0.0.1
 COPY nginx/nginx-hybrid.conf /etc/nginx/nginx.conf
+RUN sed -i "s/<tmux_api_host>/${TMUX_API_HOST}/g" /etc/nginx/nginx.conf
 
 # Copy PWA files
 COPY pwa/dist /usr/share/nginx/html

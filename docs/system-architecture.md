@@ -2,6 +2,8 @@
 
 ## High-Level Overview
 
+**Docker Mode (nginx-based):**
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                         Client (Browser)                        │
@@ -28,6 +30,47 @@
 ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
 │ ttyd :7681  │  │ tmux-api    │  │ PWA Assets  │
 │ WebSocket   │  │ Go :7682    │  │ /dist       │
+└──────┬──────┘  └──────┬──────┘  └─────────────┘
+       │                │
+       └────────┬───────┘
+                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                         tmux Session                            │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐                       │
+│  │ Window 0 │  │ Window 1 │  │ Window 2 │  ...                  │
+│  │ claude   │  │ copilot  │  │ shell    │                       │
+│  └──────────┘  └──────────┘  └──────────┘                       │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Hybrid+macOS+podman Mode (tmux-api serve mode):**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         Client (Browser)                        │
+│  ┌───────────────┐  ┌───────────────┐  ┌───────────────────┐    │
+│  │ Session       │  │ xterm.js      │  │ Keyboard Toolbar  │    │
+│  │ Sidebar       │  │ Terminal      │  │ + Gestures        │    │
+│  └───────┬───────┘  └───────┬───────┘  └─────────┬─────────┘    │
+│          │                  │                    │              │
+│          │    WebSocket     │      postMessage   │              │
+│          └────────┬─────────┴──────────┬─────────┘              │
+└───────────────────┼────────────────────┼────────────────────────┘
+                    │                    │
+                    ▼                    ▼
+┌─────────────────────────────────────────────────────────────────┐
+│           tmux-api --serve (Built-in Proxy)                    │
+│  - Basic Auth (env vars)                                        │
+│  - WebSocket tunneling                                          │
+│  - Static file serving (PWA)                                    │
+│  - tmux API endpoints                                           │
+└────────────────────────┬────────────────────────────────────────┘
+                         │
+         ┌───────────────┼───────────────┐
+         ▼               ▼               ▼
+┌─────────────┐  ┌─────────────┐  ┌─────────────┐
+│ ttyd :7681  │  │ tmux-api    │  │ PWA Assets  │
+│ WebSocket   │  │ API calls   │  │ /dist       │
 └──────┬──────┘  └──────┬──────┘  └─────────────┘
        │                │
        └────────┬───────┘
@@ -90,12 +133,29 @@ Session manager providing:
 
 ### tmux-api (Go)
 
-Lightweight HTTP API server (tmux-api/main.go):
+HTTP server with two operational modes:
 
-- Port 7682
+**API-only mode (backward compatible):**
+
+- Port 7682 (default)
 - TMUX_SOCKET env for custom socket path (hybrid mode)
 - Window management: list, select, create, kill
 - Send keystrokes to tmux targets
+- REST endpoints: `/windows`, `/select/:id`, `/new`, `/kill/:id`, `/rename/:id`, `/send-keys`
+
+**Full serve mode (`--serve` flag or `TERMOTE_SERVE=true`):**
+
+- REST endpoints: `/windows`, `/select/:id`, `/new`, `/kill/:id`, `/rename/:id`, `/send-keys`
+
+**Full serve mode (`--serve` flag or `TERMOTE_SERVE=true`):**
+
+- Port 7680 (configurable via TERMOTE_PORT)
+- Serves PWA static files from TERMOTE_PWA_DIR
+- Reverse proxies WebSocket to ttyd (TERMOTE_TTYD_URL)
+- HTTP basic auth (TERMOTE_USER, TERMOTE_PASS, TERMOTE_NO_AUTH)
+- Binds to address via TERMOTE_BIND (default: 0.0.0.0)
+- Built-in WebSocket tunneling for ttyd connections
+- Replaces nginx in hybrid mode on macOS+podman
 
 ## Communication Protocols
 
@@ -135,15 +195,25 @@ POST /api/tmux/send-keys      → {ok: true}
 Single container with nginx + ttyd + tmux + tmux-api.
 Uses `Dockerfile` and `entrypoint-allinone.sh`.
 
+**Container Runtime:** Auto-detects podman or docker (podman preferred if available).
+
 ### Hybrid
 
 ```bash
 ./scripts/deploy.sh --hybrid
 ```
 
-- Container: nginx + tmux-api (uses `Dockerfile.hybrid`)
-- Native: ttyd connects to host tmux socket
-- Use case: Access host binaries (claude, git, etc.)
+- **Linux + docker/podman:** Container (nginx + tmux-api) + Native ttyd
+  - Uses `Dockerfile.hybrid`
+  - ttyd connects to host tmux socket
+  - Use case: Access host binaries (claude, git, etc.)
+
+- **macOS + podman:** Fully native (no container)
+  - tmux-api runs in `--serve` mode (port 7680)
+  - ttyd runs natively
+  - Replaces nginx with built-in proxy in tmux-api
+
+**Container Runtime:** Auto-detects podman or docker. On macOS+podman, skips container entirely.
 
 ### Native
 
@@ -151,9 +221,10 @@ Uses `Dockerfile` and `entrypoint-allinone.sh`.
 ./scripts/deploy.sh --native
 ```
 
-- termote.service (ttyd:7681)
-- tmux-api.service (API:7682)
-- nginx (port 7680, basic auth)
+- **Linux:** systemd services (termote@, tmux-api@) + nginx (port 7680)
+- **macOS:** tmux-api `--serve` (port 7680) + native ttyd — same as hybrid+podman behavior
+
+Auto-detects OS via `$(uname)`.
 
 ### With Tailscale
 

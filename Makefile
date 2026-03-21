@@ -15,7 +15,7 @@ help:
 	@echo "Deploy:"
 	@echo "  make deploy-docker  Deploy all-in-one container"
 	@echo "  make deploy-hybrid  Deploy hybrid (docker + native ttyd)"
-	@echo "  make deploy-native  Deploy native (systemd + nginx)"
+	@echo "  make deploy-native  Deploy native (systemd on Linux, serve on macOS)"
 	@echo ""
 	@echo "Test:"
 	@echo "  make test              Run all tests"
@@ -103,11 +103,14 @@ test-entrypoints:
 health:
 	./scripts/health-check.sh
 
+# Container runtime detection
+CONTAINER_RT := $(shell command -v podman 2>/dev/null || command -v docker 2>/dev/null)
+
 # Cleanup
 clean:
-	docker compose down 2>/dev/null || true
-	docker stop termote termote-hybrid 2>/dev/null || true
-	docker rm termote termote-hybrid 2>/dev/null || true
+	$(CONTAINER_RT) compose down 2>/dev/null || true
+	$(CONTAINER_RT) stop termote termote-hybrid 2>/dev/null || true
+	$(CONTAINER_RT) rm termote termote-hybrid 2>/dev/null || true
 	rm -f docker-compose.override.yml
 	rm -f nginx/nginx-docker.conf.tmp
 	rm -f nginx/nginx-hybrid.conf.tmp

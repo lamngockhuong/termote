@@ -3,7 +3,7 @@
 # Usage:
 #   ./uninstall.sh --docker   # Remove docker containers (all-in-one)
 #   ./uninstall.sh --hybrid   # Remove hybrid setup (docker + native ttyd)
-#   ./uninstall.sh --native   # Remove native setup (systemd + nginx)
+#   ./uninstall.sh --native   # Remove native setup (systemd on Linux, serve on macOS)
 #   ./uninstall.sh --all      # Remove everything
 
 set -e
@@ -15,7 +15,7 @@ if [[ -z "$MODE" ]]; then
     echo ""
     echo "  --docker  Remove docker containers (all-in-one)"
     echo "  --hybrid  Remove hybrid setup (docker + native ttyd)"
-    echo "  --native  Remove native setup (systemd + nginx)"
+    echo "  --native  Remove native setup (systemd on Linux, serve on macOS)"
     echo "  --all     Remove everything"
     exit 1
 fi
@@ -24,19 +24,30 @@ echo "=== Termote Uninstall ==="
 echo "Mode: $MODE"
 echo ""
 
-USER=$(whoami)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+OS="$(uname)"
 
-# Docker cleanup (docker & hybrid modes)
+# Detect container runtime (podman or docker)
+if command -v podman &>/dev/null; then
+    CONTAINER_RT="podman"
+elif command -v docker &>/dev/null; then
+    CONTAINER_RT="docker"
+else
+    CONTAINER_RT=""
+fi
+
+# Container cleanup (docker & hybrid modes)
 if [[ "$MODE" == "--docker" || "$MODE" == "--hybrid" || "$MODE" == "--all" ]]; then
-    echo "Stopping docker containers..."
+    echo "Stopping containers..."
     cd "$PROJECT_DIR"
-    # Stop all profiles
-    docker compose --profile docker --profile hybrid down -v 2>/dev/null || true
-    # Also stop any running containers by name
-    docker stop termote termote-hybrid 2>/dev/null || true
-    docker rm termote termote-hybrid 2>/dev/null || true
+    if [[ -n "$CONTAINER_RT" ]]; then
+        # Stop all profiles
+        $CONTAINER_RT compose --profile docker --profile hybrid down -v 2>/dev/null || true
+        # Also stop any running containers by name
+        $CONTAINER_RT stop termote termote-hybrid 2>/dev/null || true
+        $CONTAINER_RT rm termote termote-hybrid 2>/dev/null || true
+    fi
 
     echo "Cleaning temp files..."
     rm -f docker-compose.override.yml
@@ -46,36 +57,53 @@ fi
 
 # Native ttyd cleanup (hybrid mode)
 if [[ "$MODE" == "--hybrid" || "$MODE" == "--all" ]]; then
-    echo "Stopping native ttyd..."
+    echo "Stopping native ttyd and tmux-api..."
     pkill -f "ttyd.*tmux" 2>/dev/null || true
+    pkill -f "tmux-api" 2>/dev/null || true
 
-    # Stop systemd ttyd if running
-    sudo systemctl stop "termote@$USER" 2>/dev/null || true
-    sudo systemctl disable "termote@$USER" 2>/dev/null || true
+    # Stop systemd ttyd if running (Linux only)
+    if command -v systemctl &>/dev/null; then
+        sudo systemctl stop "termote@$USER" 2>/dev/null || true
+        sudo systemctl disable "termote@$USER" 2>/dev/null || true
+    fi
 fi
 
 # Native cleanup (native mode)
 if [[ "$MODE" == "--native" || "$MODE" == "--all" ]]; then
-    echo "Stopping systemd services..."
-    sudo systemctl stop "termote@$USER" 2>/dev/null || true
-    sudo systemctl disable "termote@$USER" 2>/dev/null || true
-    sudo systemctl stop "tmux-api@$USER" 2>/dev/null || true
-    sudo systemctl disable "tmux-api@$USER" 2>/dev/null || true
+    if [[ "$OS" == "Darwin" ]]; then
+        # macOS: stop native processes
+        echo "Stopping native ttyd and tmux-api..."
+        pkill -f "ttyd" 2>/dev/null || true
+        pkill -f "tmux-api" 2>/dev/null || true
+    else
+        # Linux: stop systemd services
+        if command -v systemctl &>/dev/null; then
+            echo "Stopping systemd services..."
+            sudo systemctl stop "termote@$USER" 2>/dev/null || true
+            sudo systemctl disable "termote@$USER" 2>/dev/null || true
+            sudo systemctl stop "tmux-api@$USER" 2>/dev/null || true
+            sudo systemctl disable "tmux-api@$USER" 2>/dev/null || true
 
-    echo "Removing systemd services..."
-    sudo rm -f /etc/systemd/system/termote@.service
-    sudo rm -f /etc/systemd/system/tmux-api@.service
-    sudo systemctl daemon-reload
+            echo "Removing systemd services..."
+            sudo rm -f /etc/systemd/system/termote@.service
+            sudo rm -f /etc/systemd/system/tmux-api@.service
+            sudo systemctl daemon-reload
+        fi
 
-    echo "Removing deployed files..."
-    sudo rm -rf /var/www/termote
+        echo "Removing deployed files..."
+        sudo rm -rf /var/www/termote
 
-    echo "Removing nginx config..."
-    sudo rm -f /etc/nginx/sites-enabled/termote
-    sudo rm -f /etc/nginx/sites-available/termote
-    sudo rm -f /etc/nginx/conf.d/termote.conf
-    sudo rm -f /etc/nginx/.htpasswd
-    sudo systemctl reload nginx 2>/dev/null || true
+        echo "Removing nginx config..."
+        sudo rm -f /etc/nginx/sites-enabled/termote
+        sudo rm -f /etc/nginx/sites-available/termote
+        sudo rm -f /etc/nginx/conf.d/termote.conf
+        sudo rm -f /etc/nginx/.htpasswd
+        if command -v systemctl &>/dev/null; then
+            sudo systemctl reload nginx 2>/dev/null || true
+        elif command -v nginx &>/dev/null; then
+            sudo nginx -s reload 2>/dev/null || true
+        fi
+    fi
 fi
 
 # Reset Tailscale serve (if installed)

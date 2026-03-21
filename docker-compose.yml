@@ -26,7 +26,7 @@ services:
     profiles: [hybrid]
     # ports set via deploy.sh override
     extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - "host.docker.internal:${HOST_GATEWAY:-host-gateway}"
     volumes:
       - ${TMUX_SOCKET_DIR:-/tmp/tmux-1000}:/tmp/tmux-socket:rw
     environment:

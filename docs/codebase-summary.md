@@ -127,13 +127,15 @@ tmux HTTP API client:
 - `killWindow(id)` - close window
 - `sendKeys(target, keys)` - send keystrokes
 
-### tmux-api/main.go (124 lines)
+### tmux-api/ (3 files)
 
-Go HTTP server for tmux control:
+Go HTTP server for tmux control, split into modules:
 
-- Listens on port 7682
+- **main.go** — Entry point; `--serve` flag enables full server mode, otherwise API-only on port 7682
+- **tmux.go** — tmux handlers: /windows, /select/:id, /new, /kill/:id, /rename/:id, /send-keys, /health
+- **serve.go** — Full server mode (port 7680): PWA static files, ttyd WebSocket reverse proxy, basic auth
 - Supports optional TMUX_SOCKET env for custom socket path
-- Endpoints: /windows, /select/:id, /new, /kill/:id, /send-keys, /health
+- Env vars for serve mode: TERMOTE_PORT, TERMOTE_BIND, TERMOTE_PWA_DIR, TERMOTE_USER, TERMOTE_PASS, TERMOTE_NO_AUTH
 
 ## Data Flow
 

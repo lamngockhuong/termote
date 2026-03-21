@@ -54,11 +54,11 @@ termote/
 
 ## Deployment Modes
 
-| Mode       | Description          | Use Case             |
-| ---------- | -------------------- | -------------------- |
-| `--docker` | All-in-one container | Simple deployment    |
-| `--hybrid` | Docker + native ttyd | Access host binaries |
-| `--native` | All native           | No Docker            |
+| Mode       | Description                                             | Use Case                   | Platform     |
+| ---------- | ------------------------------------------------------- | -------------------------- | ------------ |
+| `--docker` | All-in-one container                                    | Simple deployment          | macOS, Linux |
+| `--hybrid` | Container + ttyd (Linux) or Native serve (macOS+podman) | Access host binaries       | macOS, Linux |
+| `--native` | All native (auto-detects OS)                            | No Docker/Podman available | macOS, Linux |
 
 ```bash
 ./scripts/deploy.sh --docker                    # localhost only (with basic auth)
@@ -80,7 +80,30 @@ make health         # Check services
 # Manual commands
 cd pwa && pnpm install && pnpm dev     # Dev server
 cd pwa && pnpm tsc --noEmit            # Type check
-cd tmux-api && go build -o tmux-api .  # Build API
+cd tmux-api && go build -o tmux-api .  # Build API (native binary)
+```
+
+### Cross-Compilation (macOS for Linux Container)
+
+When building Docker images on macOS, tmux-api is cross-compiled to Linux:
+
+```bash
+# Automatic (deploy.sh handles this)
+cd tmux-api && GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o tmux-api .
+
+# For ARM64 (Apple Silicon):
+cd tmux-api && GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o tmux-api .
+```
+
+API-only vs. Serve Mode:
+
+```bash
+# API-only (backward compatible, port 7682)
+./tmux-api
+
+# Full serve mode (port 7680, PWA + proxy + auth)
+TERMOTE_SERVE=true ./tmux-api --serve
+# Or: ./tmux-api --serve
 ```
 
 ## Architecture
@@ -90,13 +113,42 @@ cd tmux-api && go build -o tmux-api .  # Build API
 │ Docker mode (all-in-one)                                │
 │   nginx:7680 → ttyd:7681 → tmux                         │
 │             → tmux-api:7682                             │
+│   Container Runtime: auto-detect podman or docker       │
 └─────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────┐
-│ Hybrid mode                                             │
+│ Hybrid mode - Linux                                     │
 │   [Container] nginx:7680 → host.docker.internal:7681    │
 │               tmux-api:7682 → host tmux socket          │
 │   [Native]    ttyd:7681 → tmux                          │
+│   Container Runtime: auto-detect podman or docker       │
+└─────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────┐
+│ Hybrid mode - macOS                                     │
+│   tmux-api --serve:7680 (built-in proxy)                │
+│   ├→ static PWA files                                   │
+│   ├→ WebSocket proxy to ttyd:7681                       │
+│   └→ tmux API endpoints                                 │
+│   [Native]    ttyd:7681 → tmux                          │
+│   Auto-native on podman, fully native (no container)    │
+└─────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────┐
+│ Native mode - Linux                                     │
+│   nginx:7680 → ttyd:7681 → tmux                         │
+│             → tmux-api:7682                             │
+│   Requires systemd                                       │
+└─────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────┐
+│ Native mode - macOS                                     │
+│   tmux-api --serve:7680 (built-in proxy)                │
+│   ├→ static PWA files                                   │
+│   ├→ WebSocket proxy to ttyd:7681                       │
+│   └→ tmux API endpoints                                 │
+│   [Native]    ttyd:7681 → tmux                          │
+│   No container, no systemd needed                        │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -108,6 +160,14 @@ cd tmux-api && go build -o tmux-api .  # Build API
 - **State**: React hooks (useState, useCallback, useMemo)
 - **Styling**: TailwindCSS utility classes
 
+### Shell Scripts (Cross-Platform)
+
+- Use `grep -oE` (extended regex) instead of `grep -oP` (Perl regex, Linux-only)
+- Use `ipconfig getifaddr en0` fallback for `hostname -I` on macOS
+- Wrap `systemctl` calls with `command -v systemctl` checks (macOS has no systemd)
+- Use `$(uname)` to detect Darwin (macOS) vs Linux
+- Use `$(uname -m)` for architecture detection (x86_64, aarch64)
+
 ## Key Files
 
 | File                                      | Purpose                                   |
@@ -115,17 +175,44 @@ cd tmux-api && go build -o tmux-api .  # Build API
 | `pwa/src/App.tsx`                         | Main app with gestures, toolbar, sessions |
 | `pwa/src/components/keyboard-toolbar.tsx` | Virtual keyboard for mobile               |
 | `pwa/src/hooks/use-gestures.ts`           | Hammer.js gesture handling                |
-| `tmux-api/main.go`                        | tmux REST API (Go)                        |
+| `tmux-api/main.go`                        | Entry point (API-only or serve mode)      |
+| `tmux-api/tmux.go`                        | tmux window handlers (shared)             |
+| `tmux-api/serve.go`                       | Full server mode (PWA, proxy, auth)       |
 | `Dockerfile`                              | All-in-one container                      |
-| `Dockerfile.hybrid`                       | Hybrid mode container                     |
+| `Dockerfile.hybrid`                       | Hybrid mode container (nginx + api)       |
+| `nginx/nginx-docker.conf`                 | Reverse proxy for docker mode             |
+| `nginx/nginx-hybrid.conf`                 | Reverse proxy for hybrid mode             |
+
+## Container Runtime Support
+
+Scripts auto-detect container runtime in this priority:
+
+1. **podman** (preferred, lighter-weight)
+2. **docker** (fallback)
+
+Both Docker Desktop and Podman work on all platforms (macOS, Linux).
+
+### macOS + Podman Special Behavior
+
+When podman is detected on macOS with hybrid mode:
+
+### macOS + Podman Special Behavior
+
+When podman is detected on macOS with hybrid mode:
+
+- Automatically switches to fully native deployment (no container)
+- tmux-api runs in `--serve` mode (replaces nginx)
+- ttyd runs natively
+- Provides native access to system binaries and development tools
 
 ## Security Notes
 
 - Basic auth enabled by default (use `--no-auth` to disable for local dev)
 - Basic auth over HTTPS required for production
-- Same-origin iframe setup via nginx proxy
+- Same-origin iframe setup via nginx proxy or tmux-api serve proxy
 - PostMessage uses explicit origin (not wildcard)
 - Exclude sensitive dirs (.ssh, .gnupg) from volume mounts
+- Serve mode uses constant-time comparison for password verification
 
 ## Testing
 
