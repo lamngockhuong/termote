@@ -325,7 +325,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [prepare, release]
     # Skip when called by release-please (it handles version sync via extra-files)
-    if: github.event_name != 'workflow_call'
+    # Use inputs.version to detect workflow_call since event_name check is unreliable
+    if: inputs.version == ''
     permissions:
       contents: write
     steps:
