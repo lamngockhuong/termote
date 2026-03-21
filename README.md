@@ -27,27 +27,41 @@ make health           # Check services
 ### One-liner (recommended)
 
 ```bash
+# Defaults to hybrid mode (access host binaries like claude, gh, etc.)
 curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
-```
 
-With options:
-
-```bash
+# With explicit mode and options
 curl -fsSL .../get.sh | bash -s -- --docker --lan
-curl -fsSL .../get.sh | bash -s -- --hybrid
+curl -fsSL .../get.sh | bash -s -- --native --tailscale myhost
 ```
 
 ### Docker
 
 ```bash
-# All-in-one (simplest)
+# All-in-one (auto-generates credentials, check logs: docker logs termote)
 docker run -d --name termote -p 7680:7680 ghcr.io/lamngockhuong/termote:latest
 
+# With custom credentials
+docker run -d --name termote -p 7680:7680 \
+  -e TERMOTE_USER=admin -e TERMOTE_PASS=secret \
+  ghcr.io/lamngockhuong/termote:latest
+
+# Without auth (local dev only)
+docker run -d --name termote -p 7680:7680 \
+  -e NO_AUTH=true \
+  ghcr.io/lamngockhuong/termote:latest
+
 # With volume for persistence
-docker run -d --name termote \
-  -p 7680:7680 \
+docker run -d --name termote -p 7680:7680 \
   -v termote-data:/home/termote \
   ghcr.io/lamngockhuong/termote:latest
+
+# With Tailscale HTTPS (requires Tailscale on host)
+docker run -d --name termote -p 7680:7680 \
+  -e TERMOTE_USER=admin -e TERMOTE_PASS=secret \
+  ghcr.io/lamngockhuong/termote:latest
+sudo tailscale serve --bg --https=443 http://127.0.0.1:7680
+# Access at: https://your-hostname.tailnet-name.ts.net
 ```
 
 ### From Release
