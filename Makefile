@@ -1,7 +1,7 @@
 # Termote Makefile
 # Usage: make <target>
 
-.PHONY: help build test test-deploy test-uninstall deploy-docker deploy-hybrid deploy-native clean
+.PHONY: help build test test-deploy test-uninstall deploy-docker deploy-hybrid deploy-native clean release release-dry
 
 # Default target
 help:
@@ -21,6 +21,10 @@ help:
 	@echo "  make test           Run all tests"
 	@echo "  make test-deploy    Test deploy.sh"
 	@echo "  make test-uninstall Test uninstall.sh"
+	@echo ""
+	@echo "Release:"
+	@echo "  make release        Tag and push new release (VERSION=x.y.z)"
+	@echo "  make release-dry    Show what would be released"
 	@echo ""
 	@echo "Other:"
 	@echo "  make health         Check service health"
@@ -85,3 +89,26 @@ clean:
 
 uninstall:
 	./scripts/uninstall.sh --all
+
+# Release targets
+release-dry:
+	@echo "=== Current version ===" && \
+	grep '"version"' pwa/package.json && \
+	echo "" && \
+	echo "=== Recent tags ===" && \
+	(git tag --sort=-version:refname | head -5 || echo "(no tags)") && \
+	echo "" && \
+	echo "=== Unreleased commits ===" && \
+	git --no-pager log $$(git describe --tags --abbrev=0 2>/dev/null || echo "HEAD~10")..HEAD --oneline
+
+release:
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Usage: make release VERSION=1.2.3"; \
+		exit 1; \
+	fi
+	@echo "Creating release v$(VERSION)..."
+	git tag -a "v$(VERSION)" -m "Release v$(VERSION)"
+	git push origin "v$(VERSION)"
+	@echo ""
+	@echo "Release v$(VERSION) triggered!"
+	@echo "Monitor: https://github.com/lamngockhuong/termote/actions"

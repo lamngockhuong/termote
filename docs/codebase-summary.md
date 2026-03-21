@@ -52,8 +52,14 @@ termote/
 │   └── go.mod
 ├── scripts/
 │   ├── deploy.sh               # Deploy (--docker|--hybrid|--native) [--no-auth]
+│   ├── install.sh              # Release mode installer
+│   ├── get.sh                  # Online curl|bash installer
 │   ├── uninstall.sh            # Uninstall
 │   └── health-check.sh         # Service health check
+├── .github/workflows/
+│   ├── ci.yml                  # CI (build, lint, test)
+│   ├── release.yml             # Release (Docker push, GitHub Release)
+│   └── release-please.yml      # Auto versioning from commits
 ├── systemd/
 │   ├── termote.service         # ttyd WebSocket service
 │   └── tmux-api.service        # tmux API service
@@ -86,7 +92,7 @@ Direct xterm.js WebSocket terminal:
 
 Virtual keyboard for mobile:
 
-- Standard keys: Tab, Esc, Ctrl, Arrow keys
+- Standard keys: Tab, Esc, Enter, Ctrl, Arrow keys
 - Ctrl combos: ^C, ^D, ^Z, ^L, ^A, ^E
 - Scroll controls: PageUp/PageDown for tmux copy mode
 - Keyboard toggle button
@@ -163,3 +169,32 @@ Terminal output → xterm.js → display
 | `/api/tmux/new`        | POST   | Create window       |
 | `/api/tmux/kill/:id`   | DELETE | Kill window         |
 | `/api/tmux/send-keys`  | POST   | Send keystrokes     |
+
+## CI/CD Workflows
+
+| Workflow             | Trigger                            | Purpose                                           |
+| -------------------- | ---------------------------------- | ------------------------------------------------- |
+| `ci.yml`             | Push/PR to main                    | Build, lint, type check, test                     |
+| `release-please.yml` | Manual (workflow_dispatch)         | Create release PR with version bump from commits  |
+| `release.yml`        | Tag push / Manual / Release Please | Build + push Docker images, create GitHub Release |
+
+### Release Flow
+
+```
+Multiple commits → main
+       ↓
+Manual trigger: Release Please workflow
+       ↓
+Creates PR "chore: release x.y.z" (with CHANGELOG)
+       ↓
+Merge PR → creates tag → triggers release.yml
+```
+
+### Manual Release
+
+```bash
+make release VERSION=1.0.0      # Local: create + push tag
+# Or: GitHub Actions UI → Run workflow → enter version
+```
+
+See [release-guide.md](release-guide.md) for full details.
