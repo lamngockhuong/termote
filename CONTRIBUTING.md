@@ -25,7 +25,7 @@ cd pwa
 pnpm install
 pnpm dev          # Dev server at http://localhost:5173
 pnpm tsc --noEmit # Type check
-pnpm lint         # ESLint
+pnpm lint         # Biome
 ```
 
 ### tmux-api Development
