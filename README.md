@@ -20,6 +20,55 @@ make test             # Run tests
 make health           # Check services
 ```
 
+## Installation
+
+### One-liner (recommended)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
+```
+
+With options:
+
+```bash
+curl -fsSL .../get.sh | bash -s -- --docker --lan
+curl -fsSL .../get.sh | bash -s -- --hybrid
+```
+
+### Docker
+
+```bash
+# All-in-one (simplest)
+docker run -d --name termote -p 7680:7680 ghcr.io/lamngockhuong/termote:latest
+
+# With volume for persistence
+docker run -d --name termote \
+  -p 7680:7680 \
+  -v termote-data:/home/termote \
+  ghcr.io/lamngockhuong/termote:latest
+```
+
+### From Release
+
+```bash
+# Download latest release
+VERSION=$(curl -s https://api.github.com/repos/lamngockhuong/termote/releases/latest | grep tag_name | cut -d '"' -f4)
+wget https://github.com/lamngockhuong/termote/releases/download/${VERSION}/termote-${VERSION}.tar.gz
+tar xzf termote-${VERSION}.tar.gz
+cd termote-${VERSION#v}
+
+# Install
+./scripts/install.sh --docker
+```
+
+### From Source
+
+```bash
+git clone https://github.com/lamngockhuong/termote.git
+cd termote
+make deploy-docker
+```
+
 ## Deployment Modes
 
 | Mode       | Description          | Containers              | Native |

@@ -40,9 +40,16 @@ COPY pwa/dist /var/www/termote
 # Copy htpasswd (create if not exists)
 COPY .htpasswd /etc/nginx/.htpasswd
 
-# Copy tmux-api binary
-COPY tmux-api/tmux-api /usr/local/bin/tmux-api
-RUN chmod +x /usr/local/bin/tmux-api
+# Copy tmux-api binary (supports both single binary and multi-arch builds)
+ARG TARGETARCH
+COPY tmux-api/tmux-api* /tmp/
+RUN if [ -f "/tmp/tmux-api-linux-${TARGETARCH}" ]; then \
+      cp "/tmp/tmux-api-linux-${TARGETARCH}" /usr/local/bin/tmux-api; \
+    else \
+      cp /tmp/tmux-api /usr/local/bin/tmux-api; \
+    fi && \
+    chmod +x /usr/local/bin/tmux-api && \
+    rm -f /tmp/tmux-api*
 
 # Copy entrypoint
 COPY entrypoint-allinone.sh /entrypoint.sh
