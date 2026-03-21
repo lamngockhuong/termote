@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/lamngockhuong/termote/compare/termote-v0.1.1...termote-v0.1.2) (2026-03-21)
+
+
+### Bug Fixes
+
+* **ci:** detect workflow_call by inputs.version instead of event_name ([1d1cdc0](https://github.com/lamngockhuong/termote/commit/1d1cdc0cc23088ce42c25d31f2b417d2bc9b7c93))
+
 ## [0.1.1](https://github.com/lamngockhuong/termote/compare/termote-v0.1.0...termote-v0.1.1) (2026-03-21)
 
 
