@@ -47,20 +47,18 @@ jobs:
       - name: Extract version
         id: version
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          # inputs.version is set when called via workflow_call or workflow_dispatch
+          if [ -n "${{ inputs.version }}" ]; then
             VERSION="${{ inputs.version }}"
-            DRY_RUN="${{ inputs.dry_run }}"
-          elif [ "${{ github.event_name }}" = "workflow_call" ]; then
-            VERSION="${{ inputs.version }}"
-            DRY_RUN="false"
+            DRY_RUN="${{ inputs.dry_run || 'false' }}"
           else
+            # Tag push trigger (refs/tags/v1.2.3)
             VERSION="${GITHUB_REF#refs/tags/v}"
             DRY_RUN="false"
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "dry_run=$DRY_RUN" >> $GITHUB_OUTPUT
           echo "Release version: $VERSION (dry_run: $DRY_RUN)"
-          # Note: Tag is created by softprops/action-gh-release, no need to push here
 
   # ─────────────────────────────────────────────────────────────
   # Build Jobs (parallel)
