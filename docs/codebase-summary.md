@@ -20,9 +20,8 @@ termote/
 │   │   │   ├── session-sidebar.tsx          # Session switcher sidebar
 │   │   │   ├── settings-menu.tsx            # Settings dropdown
 │   │   │   ├── swipeable-session-item.tsx   # Swipe-to-delete session
-│   │   │   ├── terminal-frame.tsx           # Terminal iframe wrapper
-│   │   │   ├── theme-toggle.tsx             # Theme switcher buttons
-│   │   │   └── xterm-terminal.tsx           # xterm.js WebSocket terminal
+│   │   │   ├── terminal-frame.tsx           # Terminal iframe wrapper (ttyd)
+│   │   │   └── theme-toggle.tsx             # Theme switcher buttons
 │   │   ├── contexts/
 │   │   │   └── theme-context.tsx      # Theme provider (light/dark/system)
 │   │   ├── hooks/
@@ -32,7 +31,8 @@ termote/
 │   │   │   ├── use-keyboard-visible.ts # Mobile keyboard detection
 │   │   │   ├── use-local-sessions.ts  # Session CRUD + tmux sync
 │   │   │   ├── use-media-query.ts     # Responsive hooks
-│   │   │   └── use-tmux-api.ts        # tmux HTTP API client
+│   │   │   ├── use-tmux-api.ts        # tmux HTTP API client
+│   │   │   └── use-viewport.ts        # Viewport height + keyboard detection
 │   │   ├── types/
 │   │   │   └── session.ts             # Session interface
 │   │   └── utils/
@@ -65,7 +65,7 @@ termote/
 
 ## Key Components
 
-### App.tsx (~200 lines)
+### App.tsx (~315 lines)
 
 Main orchestrator combining:
 
@@ -76,16 +76,16 @@ Main orchestrator combining:
 - Font size controls (A-/A+)
 - Gesture handlers → terminal commands (mobile only)
 
-### xterm-terminal.tsx (~230 lines)
+### terminal-frame.tsx (~118 lines)
 
-Direct xterm.js WebSocket terminal:
+Terminal iframe wrapper:
 
-- Connects to ttyd via WebSocket
-- Handles ttyd protocol (auth token, resize)
-- Auto-reconnects on disconnect
-- Exposes `sendInput`, `sendCommand`, `focus` methods
+- Embeds ttyd terminal via iframe (`/terminal/`)
+- Applies theme (light/dark) via postMessage
+- Handles font size changes dynamically
+- Forces iframe reload on theme change
 
-### keyboard-toolbar.tsx (~90 lines)
+### keyboard-toolbar.tsx (~301 lines)
 
 Virtual keyboard for mobile:
 
@@ -95,7 +95,7 @@ Virtual keyboard for mobile:
 - Keyboard toggle button
 - Haptic feedback on key press
 
-### use-gestures.ts (52 lines)
+### use-gestures.ts (~53 lines)
 
 Hammer.js integration:
 
@@ -103,7 +103,7 @@ Hammer.js integration:
 - Long press (paste)
 - Pinch in/out (font size)
 
-### use-local-sessions.ts (~170 lines)
+### use-local-sessions.ts (~203 lines)
 
 Session management + tmux sync:
 
@@ -112,7 +112,7 @@ Session management + tmux sync:
 - tmux window create/select/kill via API
 - Polling every 5s for external changes
 
-### use-tmux-api.ts (43 lines)
+### use-tmux-api.ts (~56 lines)
 
 tmux HTTP API client:
 
@@ -140,7 +140,7 @@ Go HTTP server:
 - Length limits: 4096 bytes for keys, 64 chars for targets
 - Constant-time password comparison
 
-**Test coverage:** 71% (unit + integration)
+**Test coverage:** ~59% (unit), ~71% with integration tests
 
 Configuration via env vars: TERMOTE_PORT, TERMOTE_BIND, TERMOTE_PWA_DIR, TERMOTE_USER, TERMOTE_PASS, TERMOTE_NO_AUTH
 
@@ -151,21 +151,22 @@ User Input
     ↓
 Gesture/Toolbar → sendKeyToTerminal()
     ↓
-postMessage → iframe
+postMessage → iframe (ttyd)
     ↓
 ttyd WebSocket → tmux session
     ↓
-Terminal output → xterm.js → display
+Terminal output → ttyd (xterm.js) → display
 ```
 
 ## External Dependencies
 
 | Package          | Purpose              |
 | ---------------- | -------------------- |
-| react            | UI framework         |
-| xterm            | Terminal emulator    |
+| react            | UI framework (v19)   |
+| @xterm/xterm     | Terminal emulator    |
 | @xterm/addon-fit | Terminal auto-resize |
 | hammerjs         | Touch gestures       |
+| lucide-react     | Icons                |
 | vite-plugin-pwa  | PWA generation       |
 | tailwindcss      | Styling              |
 

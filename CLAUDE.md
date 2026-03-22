@@ -12,7 +12,7 @@ A PWA for remotely controlling CLI tools (Claude Code, GitHub Copilot, any termi
 
 | Layer           | Technology                                 |
 | --------------- | ------------------------------------------ |
-| Frontend        | React 18 + TypeScript + Vite + TailwindCSS |
+| Frontend        | React 19 + TypeScript + Vite + TailwindCSS |
 | PWA             | vite-plugin-pwa + Workbox                  |
 | Terminal        | ttyd (WebSocket terminal)                  |
 | Server          | Go (tmux-api serve mode)                   |

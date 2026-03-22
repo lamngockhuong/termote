@@ -207,7 +207,9 @@ termote/
 ├── pwa/                    # React PWA
 │   └── src/
 │       ├── components/
+│       ├── contexts/
 │       ├── hooks/
+│       ├── types/
 │       └── utils/
 ├── tmux-api/               # Go server
 │   ├── main.go             # Entry point
@@ -216,10 +218,10 @@ termote/
 ├── scripts/
 │   ├── termote.sh          # Unified CLI (install/uninstall/health)
 │   └── get.sh              # Online installer (curl | bash)
-├── tests/                  # Test suite
-│   ├── test-termote.sh
-│   ├── test-get.sh
-└── test-entrypoints.sh
+└── tests/                  # Test suite
+    ├── test-termote.sh
+    ├── test-get.sh
+    └── test-entrypoints.sh
 ```
 
 ## Development
