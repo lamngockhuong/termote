@@ -21,6 +21,7 @@ Single container with tmux-api (PWA + proxy) + ttyd + tmux.
    ```bash
    ./scripts/termote.sh install container --lan
    ```
+
 </Steps>
 
 ## Docker Run
@@ -47,11 +48,11 @@ docker run -d --name termote -p 7680:7680 \
 
 ## Options
 
-| Flag | Description |
-|------|-------------|
-| `--lan` | Expose to LAN (default: localhost) |
-| `--no-auth` | Disable basic auth |
-| `--port <port>` | Custom port (default: 7680) |
+| Flag            | Description                        |
+| --------------- | ---------------------------------- |
+| `--lan`         | Expose to LAN (default: localhost) |
+| `--no-auth`     | Disable basic auth                 |
+| `--port <port>` | Custom port (default: 7680)        |
 
 <Aside type="tip">
 Scripts auto-detect `podman` or `docker` - both work identically.
@@ -60,6 +61,74 @@ Scripts auto-detect `podman` or `docker` - both work identically.
 <Aside type="note">
 Use Container mode when you don't need access to host binaries (like `claude` or `git`).
 </Aside>
+
+## Troubleshooting
+
+### Quick Diagnostics
+
+```bash
+./scripts/termote.sh health   # Health check
+docker ps -a | grep termote   # Check container status
+```
+
+### View Logs
+
+```bash
+docker logs termote           # View logs
+docker logs -f termote        # Follow logs (live)
+
+# Or with podman:
+podman logs termote
+```
+
+### Container won't start
+
+```bash
+# Check startup errors
+docker logs termote
+
+# Port already in use?
+lsof -i :7680
+
+# Use different port
+./scripts/termote.sh install container --port 7690
+```
+
+### Debug inside container
+
+```bash
+docker exec -it termote /bin/sh
+# Inside container:
+ps aux                        # Check processes
+curl localhost:7681           # Test ttyd
+curl localhost:7680/api/tmux/health
+```
+
+### Common Issues
+
+| Issue            | Solution                                   |
+| ---------------- | ------------------------------------------ |
+| Port in use      | `lsof -i :7680` then kill or use `--port`  |
+| Container crash  | `docker logs termote` to see error         |
+| Auth not working | Restart container, check logs for password |
+| WebSocket error  | Check ttyd running inside container        |
+
+### Restart / Reset
+
+```bash
+docker restart termote
+
+# Full reset
+./scripts/termote.sh uninstall container
+./scripts/termote.sh install container
+```
+
+### API Test
+
+```bash
+curl http://localhost:7680/api/tmux/health
+curl -u admin:password http://localhost:7680/api/tmux/sessions
+```
 
 ## Uninstall
 

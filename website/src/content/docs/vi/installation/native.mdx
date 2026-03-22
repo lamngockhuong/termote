@@ -34,7 +34,7 @@ Không cần Docker. Truy cập binary host như `claude`, `git`, `gh`, v.v.
    ```
 
 3. Truy cập tại http://localhost:7680
-</Steps>
+   </Steps>
 
 ## Khi nào sử dụng
 
@@ -59,10 +59,61 @@ ps aux | grep tmux-api
 
 ## Khắc phục sự cố
 
+### Chẩn đoán nhanh
+
+```bash
+./scripts/termote.sh health   # Kiểm tra sức khỏe
+ss -tlnp | grep -E "7680|7681"  # Kiểm tra cổng
+```
+
+### Kiểm tra tiến trình
+
 ```bash
 ps aux | grep ttyd         # Kiểm tra ttyd đang chạy
 ps aux | grep tmux-api     # Kiểm tra tmux-api đang chạy
-lsof -i :7680              # Xác minh cổng đang sử dụng
+lsof -i :7680              # Xác minh cổng chính
+lsof -i :7681              # Xác minh cổng ttyd
+```
+
+### Debug với logs
+
+Chế độ native mặc định không ghi logs. Để xem logs:
+
+```bash
+# Dừng dịch vụ
+./scripts/termote.sh uninstall native
+
+# Chạy ttyd với logs (terminal 1)
+ttyd -W -i lo -p 7681 tmux new-session -A -s main
+
+# Chạy tmux-api với logs (terminal 2)
+cd tmux-api
+TERMOTE_PORT=7680 TERMOTE_BIND=127.0.0.1 \
+TERMOTE_PWA_DIR=../pwa/dist ./tmux-api-native
+```
+
+### Lỗi thường gặp
+
+| Lỗi            | Giải pháp                                           |
+| -------------- | --------------------------------------------------- |
+| Cổng đang dùng | `lsof -i :7680` rồi kill process                    |
+| Thiếu ttyd     | `brew install ttyd` (macOS) hoặc `apt install ttyd` |
+| Thiếu binary   | `cd tmux-api && go build -o tmux-api-native .`      |
+| PWA chưa build | `cd pwa && pnpm build`                              |
+
+### tmux Session
+
+```bash
+tmux list-sessions         # Liệt kê sessions
+tmux attach -t main        # Kết nối vào session
+tmux kill-session -t main  # Reset session
+```
+
+### Test API
+
+```bash
+curl http://localhost:7680/api/tmux/health
+curl http://localhost:7680/api/tmux/sessions
 ```
 
 ## Gỡ cài đặt

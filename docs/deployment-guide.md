@@ -130,35 +130,208 @@ curl http://localhost:7680/api/tmux/health
 
 ## Troubleshooting
 
-### Session not persisting
+### Quick Diagnostics
 
 ```bash
-tmux ls                    # Check tmux sessions
-docker logs termote        # Check container logs
+# Health check (works for both modes)
+./scripts/termote.sh health
+
+# Check ports
+ss -tlnp | grep -E "7680|7681"
+lsof -i :7680
+lsof -i :7681
 ```
 
-### WebSocket errors
+---
 
-- Verify ttyd is running on port 7681
-- Check tmux-api logs for proxy errors
+### Container Mode
 
-### Container won't start
+#### View Logs
 
 ```bash
 docker logs termote
+docker logs -f termote      # Follow logs
+
 # Or with podman:
 podman logs termote
-# Common: port already in use
-lsof -i :7680
+podman logs -f termote
 ```
 
-### Native mode: processes not starting
+#### Container won't start
 
 ```bash
-ps aux | grep ttyd         # Check if ttyd is running
-ps aux | grep tmux-api     # Check if tmux-api is running
-lsof -i :7680              # Verify port is in use
-lsof -i :7681              # Verify ttyd port
+# Check container status
+docker ps -a | grep termote
+
+# View startup errors
+docker logs termote
+
+# Common: port already in use
+lsof -i :7680
+# Kill conflicting process or change port
+./scripts/termote.sh install container --port 7690
+```
+
+#### Enter container for debugging
+
+```bash
+docker exec -it termote /bin/sh
+# Inside container:
+ps aux                      # Check processes
+curl localhost:7681         # Test ttyd
+curl localhost:7680/api/tmux/health  # Test API
+```
+
+#### Restart container
+
+```bash
+docker restart termote
+# Or full reinstall:
+./scripts/termote.sh uninstall container
+./scripts/termote.sh install container
+```
+
+---
+
+### Native Mode
+
+#### Check running processes
+
+```bash
+ps aux | grep ttyd
+ps aux | grep tmux-api
+pgrep -f "ttyd|tmux-api"
+```
+
+#### View logs (debug mode)
+
+By default, native mode discards logs. To debug with logs:
+
+```bash
+# Stop existing services
+./scripts/termote.sh uninstall native
+
+# Start ttyd manually (foreground with logs)
+ttyd -W -i lo -p 7681 tmux new-session -A -s main
+
+# In another terminal, start tmux-api manually
+cd tmux-api
+TERMOTE_PORT=7680 \
+TERMOTE_BIND=127.0.0.1 \
+TERMOTE_PWA_DIR=../pwa/dist \
+./tmux-api-native
+```
+
+#### ttyd not starting
+
+```bash
+# Check if ttyd is installed
+which ttyd
+ttyd --version
+
+# Check if port is in use
+lsof -i :7681
+
+# Test ttyd directly
+ttyd -p 7681 tmux new-session -A -s main
+```
+
+#### tmux-api not starting
+
+```bash
+# Check if binary exists
+ls -la tmux-api/tmux-api-native
+
+# Rebuild if missing
+cd tmux-api && go build -o tmux-api-native .
+
+# Check PWA dist exists
+ls -la pwa/dist/
+
+# Rebuild PWA if missing
+cd pwa && pnpm build
+```
+
+#### tmux session issues
+
+```bash
+# List sessions
+tmux list-sessions
+
+# Attach to session
+tmux attach -t main
+
+# Kill and recreate session
+tmux kill-session -t main
+tmux new-session -d -s main
+```
+
+---
+
+### Common Issues (Both Modes)
+
+#### WebSocket connection failed
+
+1. Verify ttyd running on port 7681
+2. Check browser console for errors
+3. Test WebSocket proxy:
+   ```bash
+   curl -v http://localhost:7680/  # Should return HTML
+   ```
+
+#### Authentication issues
+
+```bash
+# Check if auth is enabled
+curl -v http://localhost:7680/
+
+# 401 = auth enabled, need credentials
+# 200 = auth disabled or credentials correct
+
+# Reset credentials (container mode)
+docker rm -f termote
+./scripts/termote.sh install container  # New password generated
+```
+
+#### Session not persisting
+
+```bash
+# Check tmux sessions exist
+tmux ls
+
+# Container mode: check volume
+docker inspect termote | grep -A5 Mounts
+
+# Native mode: check tmux server
+tmux list-sessions
+```
+
+#### PWA not loading / blank page
+
+```bash
+# Check PWA files exist
+ls -la pwa/dist/
+
+# Rebuild PWA
+cd pwa && pnpm install && pnpm build
+
+# Container mode: rebuild image
+docker build -t termote .
+```
+
+---
+
+### API Debugging
+
+```bash
+# Health check
+curl http://localhost:7680/api/tmux/health
+
+# List sessions
+curl http://localhost:7680/api/tmux/sessions
+
+# With auth
+curl -u admin:password http://localhost:7680/api/tmux/health
 ```
 
 ## Uninstall

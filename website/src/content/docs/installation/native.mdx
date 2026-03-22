@@ -34,7 +34,7 @@ No Docker required. Access host binaries like `claude`, `git`, `gh`, etc.
    ```
 
 3. Access at http://localhost:7680
-</Steps>
+   </Steps>
 
 ## When to Use
 
@@ -59,10 +59,61 @@ ps aux | grep tmux-api
 
 ## Troubleshooting
 
+### Quick Diagnostics
+
+```bash
+./scripts/termote.sh health   # Health check
+ss -tlnp | grep -E "7680|7681"  # Check ports
+```
+
+### Check Processes
+
 ```bash
 ps aux | grep ttyd         # Check if ttyd is running
 ps aux | grep tmux-api     # Check if tmux-api is running
-lsof -i :7680              # Verify port is in use
+lsof -i :7680              # Verify main port
+lsof -i :7681              # Verify ttyd port
+```
+
+### Debug with Logs
+
+Native mode discards logs by default. To see logs:
+
+```bash
+# Stop services
+./scripts/termote.sh uninstall native
+
+# Start ttyd with logs (terminal 1)
+ttyd -W -i lo -p 7681 tmux new-session -A -s main
+
+# Start tmux-api with logs (terminal 2)
+cd tmux-api
+TERMOTE_PORT=7680 TERMOTE_BIND=127.0.0.1 \
+TERMOTE_PWA_DIR=../pwa/dist ./tmux-api-native
+```
+
+### Common Issues
+
+| Issue          | Solution                                          |
+| -------------- | ------------------------------------------------- |
+| Port in use    | `lsof -i :7680` then kill process                 |
+| ttyd missing   | `brew install ttyd` (macOS) or `apt install ttyd` |
+| Binary missing | `cd tmux-api && go build -o tmux-api-native .`    |
+| PWA not built  | `cd pwa && pnpm build`                            |
+
+### tmux Session
+
+```bash
+tmux list-sessions         # List sessions
+tmux attach -t main        # Attach to session
+tmux kill-session -t main  # Reset session
+```
+
+### API Test
+
+```bash
+curl http://localhost:7680/api/tmux/health
+curl http://localhost:7680/api/tmux/sessions
 ```
 
 ## Uninstall
