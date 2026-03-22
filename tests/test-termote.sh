@@ -223,6 +223,56 @@ test_security() {
     else
         fail "password input" "read -s" "not found"
     fi
+
+    # Verify ttyd binds to localhost only
+    if grep -q '\-i lo' "$SCRIPT"; then
+        pass "ttyd binds to localhost only (-i lo)"
+    else
+        fail "ttyd binding" "-i lo" "not found"
+    fi
+}
+
+# =============================================================================
+# HEALTH CHECK TESTS
+# =============================================================================
+test_health_check() {
+    echo ""
+    echo "=== Health Check ==="
+
+    # Verify CONTAINER_NAME constant
+    if grep -q 'CONTAINER_NAME=' "$SCRIPT"; then
+        pass "CONTAINER_NAME constant defined"
+    else
+        fail "CONTAINER_NAME" "constant" "not found"
+    fi
+
+    # Verify container mode detection
+    if grep -q 'container_mode=false' "$SCRIPT" && grep -q 'container_mode=true' "$SCRIPT"; then
+        pass "container mode detection"
+    else
+        fail "container detection" "container_mode var" "not found"
+    fi
+
+    # Verify format_status helper
+    if grep -q 'format_status()' "$SCRIPT"; then
+        pass "format_status helper present"
+    else
+        fail "format_status" "function" "not found"
+    fi
+
+    # Verify ss output caching
+    if grep -q 'ss_cache=' "$SCRIPT"; then
+        pass "ss output cached for efficiency"
+    else
+        fail "ss caching" "ss_cache var" "not found"
+    fi
+
+    # Verify health output shows LAN/localhost
+    if grep -q 'LAN' "$SCRIPT" && grep -q 'localhost' "$SCRIPT"; then
+        pass "health shows bind info (LAN/localhost)"
+    else
+        fail "bind info" "LAN/localhost" "not found"
+    fi
 }
 
 # =============================================================================
@@ -240,6 +290,7 @@ test_docker_compose
 test_interactive
 test_entrypoints
 test_security
+test_health_check
 
 # Summary
 echo ""

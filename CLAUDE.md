@@ -157,6 +157,8 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
 
 - Basic auth enabled by default (use `--no-auth` to disable for local dev)
 - Basic auth over HTTPS required for production
+- **ttyd binds to localhost only** - external access via tmux-api proxy (handles auth)
+- tmux-api binds to localhost by default, use `--lan` to expose to network
 - Same-origin iframe setup via tmux-api proxy
 - PostMessage uses explicit origin (not wildcard)
 - Exclude sensitive dirs (.ssh, .gnupg) from volume mounts
