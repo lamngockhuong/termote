@@ -36,8 +36,6 @@ jobs:
               - 'Makefile'
             docker:
               - 'Dockerfile'
-              - 'Dockerfile.hybrid'
-              - 'nginx/**'
               - 'systemd/**'
 
   build-pwa:
@@ -113,11 +111,11 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Run deploy tests
-        run: ./tests/test-deploy.sh
+      - name: Run CLI tests
+        run: ./tests/test-termote.sh
 
-      - name: Run uninstall tests
-        run: ./tests/test-uninstall.sh
+      - name: Run entrypoint tests
+        run: ./tests/test-entrypoints.sh
 
   docker-build:
     name: Docker Build
@@ -153,15 +151,5 @@ jobs:
           context: .
           push: false
           tags: termote:test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Build Hybrid image
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: Dockerfile.hybrid
-          push: false
-          tags: termote-hybrid:test
           cache-from: type=gha
           cache-to: type=gha,mode=max

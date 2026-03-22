@@ -1,7 +1,7 @@
 # Termote Makefile
 # Usage: make <target>
 
-.PHONY: help build test test-deploy test-uninstall test-install test-get test-health-check test-setup-auth test-entrypoints deploy-docker deploy-hybrid deploy-native clean release release-dry
+.PHONY: help build test test-cli test-get test-entrypoints install-container install-native clean release release-dry
 
 # Default target
 help:
@@ -12,19 +12,14 @@ help:
 	@echo "  make build-pwa      Build PWA only"
 	@echo "  make build-api      Build tmux-api only"
 	@echo ""
-	@echo "Deploy:"
-	@echo "  make deploy-docker  Deploy all-in-one container"
-	@echo "  make deploy-hybrid  Deploy hybrid (docker + native ttyd)"
-	@echo "  make deploy-native  Deploy native (systemd on Linux, serve on macOS)"
+	@echo "Install:"
+	@echo "  make install-container  Install container mode (docker/podman)"
+	@echo "  make install-native     Install native mode (host tools)"
 	@echo ""
 	@echo "Test:"
 	@echo "  make test              Run all tests"
-	@echo "  make test-deploy       Test deploy.sh"
-	@echo "  make test-uninstall    Test uninstall.sh"
-	@echo "  make test-install      Test install.sh"
-	@echo "  make test-get          Test get.sh"
-	@echo "  make test-health-check Test health-check.sh"
-	@echo "  make test-setup-auth   Test setup-auth.sh"
+	@echo "  make test-cli          Test termote.sh CLI"
+	@echo "  make test-get          Test get.sh online installer"
 	@echo "  make test-entrypoints  Test entrypoint scripts"
 	@echo ""
 	@echo "Release:"
@@ -47,53 +42,31 @@ build-api:
 	@echo "Building tmux-api..."
 	cd tmux-api && CGO_ENABLED=0 go build -ldflags="-s -w" -o tmux-api .
 
-# Deploy targets
-deploy-docker:
-	./scripts/deploy.sh --docker
+# Install targets (uses unified CLI)
+install-container:
+	./scripts/termote.sh install container
 
-deploy-docker-lan:
-	./scripts/deploy.sh --docker --lan
+install-container-lan:
+	./scripts/termote.sh install container --lan
 
-deploy-hybrid:
-	./scripts/deploy.sh --hybrid
+install-native:
+	./scripts/termote.sh install native
 
-deploy-hybrid-lan:
-	./scripts/deploy.sh --hybrid --lan
-
-deploy-native:
-	./scripts/deploy.sh --native
-
-deploy-native-lan:
-	./scripts/deploy.sh --native --lan
+install-native-lan:
+	./scripts/termote.sh install native --lan
 
 # Test targets
-test: test-deploy test-uninstall test-install test-get test-health-check test-setup-auth test-entrypoints
+test: test-cli test-get test-entrypoints
 	@echo ""
 	@echo "All tests completed!"
 
-test-deploy:
-	@chmod +x tests/test-deploy.sh
-	@./tests/test-deploy.sh
-
-test-uninstall:
-	@chmod +x tests/test-uninstall.sh
-	@./tests/test-uninstall.sh
-
-test-install:
-	@chmod +x tests/test-install.sh
-	@./tests/test-install.sh
+test-cli:
+	@chmod +x tests/test-termote.sh
+	@./tests/test-termote.sh
 
 test-get:
 	@chmod +x tests/test-get.sh
 	@./tests/test-get.sh
-
-test-health-check:
-	@chmod +x tests/test-health-check.sh
-	@./tests/test-health-check.sh
-
-test-setup-auth:
-	@chmod +x tests/test-setup-auth.sh
-	@./tests/test-setup-auth.sh
 
 test-entrypoints:
 	@chmod +x tests/test-entrypoints.sh
@@ -101,7 +74,7 @@ test-entrypoints:
 
 # Health check
 health:
-	./scripts/health-check.sh
+	./scripts/termote.sh health
 
 # Container runtime detection
 CONTAINER_RT := $(shell command -v podman 2>/dev/null || command -v docker 2>/dev/null)
@@ -109,14 +82,12 @@ CONTAINER_RT := $(shell command -v podman 2>/dev/null || command -v docker 2>/de
 # Cleanup
 clean:
 	$(CONTAINER_RT) compose down 2>/dev/null || true
-	$(CONTAINER_RT) stop termote termote-hybrid 2>/dev/null || true
-	$(CONTAINER_RT) rm termote termote-hybrid 2>/dev/null || true
+	$(CONTAINER_RT) stop termote 2>/dev/null || true
+	$(CONTAINER_RT) rm termote 2>/dev/null || true
 	rm -f docker-compose.override.yml
-	rm -f nginx/nginx-docker.conf.tmp
-	rm -f nginx/nginx-hybrid.conf.tmp
 
 uninstall:
-	./scripts/uninstall.sh --all
+	./scripts/termote.sh uninstall all
 
 # Release targets
 release-dry:

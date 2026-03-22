@@ -193,16 +193,16 @@ test_install_script_call() {
     echo ""
     echo "=== Testing install script invocation ==="
 
-    # Verify install.sh is called
-    if grep -q "scripts/install.sh" "$PROJECT_DIR/scripts/get.sh"; then
-        pass "calls scripts/install.sh"
+    # Verify termote.sh install is called
+    if grep -q "termote.sh install" "$PROJECT_DIR/scripts/get.sh"; then
+        pass "calls termote.sh install"
     else
-        fail "install.sh call" "present" "not found"
+        fail "termote.sh install" "present" "not found"
     fi
 
     # Verify arguments are forwarded
-    if grep -q 'install.sh "\$@"' "$PROJECT_DIR/scripts/get.sh"; then
-        pass "forwards arguments to install.sh"
+    if grep -q 'install "\$@"' "$PROJECT_DIR/scripts/get.sh"; then
+        pass "forwards arguments to termote.sh"
     else
         fail "arg forwarding" '$@' "not found"
     fi

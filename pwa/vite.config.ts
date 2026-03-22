@@ -44,9 +44,9 @@ export default defineConfig({
         ws: true,
         rewrite: (path) => path.replace(/^\/terminal/, ''),
       },
+      // Dev: proxy to tmux-api serve mode (no rewrite, routes are /api/tmux/*)
       '/api/tmux': {
-        target: 'http://localhost:7682',
-        rewrite: (path) => path.replace(/^\/api\/tmux/, ''),
+        target: 'http://localhost:7680',
       },
     },
   },

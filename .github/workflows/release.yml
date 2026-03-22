@@ -212,20 +212,7 @@ jobs:
             type=raw,value=latest,enable=${{ !contains(needs.prepare.outputs.version, '-') }}
             type=raw,value=${{ needs.prepare.outputs.version }}
 
-      - name: Docker meta (hybrid)
-        id: meta-hybrid
-        uses: docker/metadata-action@v6
-        with:
-          images: |
-            ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}-hybrid
-            ${{ env.REGISTRY_DOCKER }}/${{ env.IMAGE_NAME }}-hybrid
-          tags: |
-            type=semver,pattern={{version}},value=v${{ needs.prepare.outputs.version }}
-            type=semver,pattern={{major}}.{{minor}},value=v${{ needs.prepare.outputs.version }}
-            type=raw,value=latest,enable=${{ !contains(needs.prepare.outputs.version, '-') }}
-            type=raw,value=${{ needs.prepare.outputs.version }}
-
-      - name: Build & push (all-in-one)
+      - name: Build & push
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -233,18 +220,6 @@ jobs:
           push: ${{ needs.prepare.outputs.dry_run != 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Build & push (hybrid)
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: Dockerfile.hybrid
-          platforms: linux/amd64,linux/arm64
-          push: ${{ needs.prepare.outputs.dry_run != 'true' }}
-          tags: ${{ steps.meta-hybrid.outputs.tags }}
-          labels: ${{ steps.meta-hybrid.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -284,19 +259,18 @@ jobs:
           cp artifacts/tmux-api-linux-arm64/tmux-api-linux-arm64 release/
           chmod +x release/tmux-api-*
 
-          # Create tarball (all files needed for install.sh)
+          # Create tarball (all files needed for termote.sh)
           mkdir -p termote-v${VERSION}
-          cp -r scripts nginx systemd Makefile README.md termote-v${VERSION}/
-          cp docker-compose.yml Dockerfile Dockerfile.hybrid termote-v${VERSION}/
-          cp entrypoint-allinone.sh entrypoint-hybrid.sh termote-v${VERSION}/
+          cp -r scripts systemd Makefile README.md termote-v${VERSION}/
+          cp docker-compose.yml Dockerfile entrypoint.sh termote-v${VERSION}/
           cp -r artifacts/pwa-dist termote-v${VERSION}/pwa-dist
           # Include pre-built binaries
           cp artifacts/tmux-api-linux-amd64/tmux-api-linux-amd64 termote-v${VERSION}/
           cp artifacts/tmux-api-linux-arm64/tmux-api-linux-arm64 termote-v${VERSION}/
           tar czf release/termote-v${VERSION}.tar.gz termote-v${VERSION}
 
-          # Copy install script standalone
-          cp scripts/install.sh release/
+          # Copy CLI script standalone
+          cp scripts/termote.sh release/
 
           # Generate checksums
           cd release
@@ -313,7 +287,7 @@ jobs:
             release/pwa-dist-v${{ needs.prepare.outputs.version }}.zip
             release/tmux-api-linux-amd64
             release/tmux-api-linux-arm64
-            release/install.sh
+            release/termote.sh
             release/checksums.txt
 
   # ─────────────────────────────────────────────────────────────
@@ -359,22 +333,12 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Update Docker Hub description (all-in-one)
+      - name: Update Docker Hub description
         uses: peter-evans/dockerhub-description@v5
         continue-on-error: true
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           repository: lamngockhuong/termote
-          short-description: ${{ github.event.repository.description }}
-          readme-filepath: ./README.md
-
-      - name: Update Docker Hub description (hybrid)
-        uses: peter-evans/dockerhub-description@v5
-        continue-on-error: true
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-          repository: lamngockhuong/termote-hybrid
           short-description: ${{ github.event.repository.description }}
           readme-filepath: ./README.md

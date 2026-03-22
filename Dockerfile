@@ -1,11 +1,11 @@
-# All-in-one: nginx + ttyd + tmux + tmux-api
+# All-in-one: ttyd + tmux + tmux-api (serve mode)
 FROM tsl0922/ttyd:latest
 
 USER root
 
-# Install nginx and tools
+# Install tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    nginx tmux nano vim curl git htop openssl \
+    tmux nano vim curl git htop openssl \
     && rm -rf /var/lib/apt/lists/*
 
 # Bash config
@@ -25,21 +25,8 @@ RUN chmod 666 /etc/passwd /etc/group
 RUN mkdir -p /home/termote/.local/share/nano && chmod -R 777 /home/termote
 RUN mkdir -p /var/www/termote
 
-# Fix nginx permissions for non-root user
-RUN mkdir -p /var/lib/nginx/body /var/lib/nginx/proxy /var/lib/nginx/fastcgi \
-             /var/lib/nginx/uwsgi /var/lib/nginx/scgi \
-             /var/log/nginx /var/run && \
-    chmod -R 777 /var/lib/nginx /var/log/nginx /var/run
-
-# Copy nginx config
-COPY nginx/nginx-docker.conf /etc/nginx/nginx.conf
-
 # Copy PWA files
 COPY pwa/dist /var/www/termote
-
-# Copy htpasswd (create if not exists) - writable for non-root user
-COPY .htpasswd /etc/nginx/.htpasswd
-RUN chmod 666 /etc/nginx/.htpasswd
 
 # Copy tmux-api binary (supports both single binary and multi-arch builds)
 ARG TARGETARCH
@@ -52,10 +39,9 @@ RUN if [ -f "/tmp/tmux-api-linux-${TARGETARCH}" ]; then \
     chmod +x /usr/local/bin/tmux-api && \
     rm -f /tmp/tmux-api*
 
-# Copy shared auth script and entrypoint
-COPY scripts/setup-auth.sh /usr/local/bin/setup-auth.sh
-COPY entrypoint-allinone.sh /entrypoint.sh
-RUN chmod +x /usr/local/bin/setup-auth.sh /entrypoint.sh
+# Copy entrypoint
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 ENV SHELL=/bin/bash
 EXPOSE 7680

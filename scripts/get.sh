@@ -2,9 +2,9 @@
 # Termote online installer
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
-#     -> Defaults to hybrid mode (best for accessing host binaries)
-#   curl ... | bash -s -- --docker --lan
-#     -> Explicit mode with options
+#     -> Defaults to native mode (access host binaries like claude, gh, etc.)
+#   curl ... | bash -s -- --container --lan
+#     -> Container mode with LAN access
 
 set -e
 
@@ -103,10 +103,10 @@ main() {
     tar xzf "$TARBALL" --strip-components=1
     rm -f "$TARBALL"
 
-    # Run install script with forwarded arguments
+    # Run termote CLI with forwarded arguments
     info "Running installer..."
-    chmod +x scripts/install.sh
-    ./scripts/install.sh "$@"
+    chmod +x scripts/termote.sh
+    ./scripts/termote.sh install "$@"
 }
 
 main "$@"

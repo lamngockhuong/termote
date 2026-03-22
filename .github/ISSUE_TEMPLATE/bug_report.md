@@ -11,15 +11,14 @@ A clear and concise description of what the bug is.
 
 **Deployment Mode**
 
-- [ ] Docker (all-in-one)
-- [ ] Hybrid (Docker + native ttyd)
-- [ ] Native (no Docker)
+- [ ] Container (all-in-one container)
+- [ ] Native (no container)
 
 **Environment**
 
 - Host OS: [e.g., Ubuntu 22.04, macOS 14]
 - Docker version (if applicable): [e.g., 24.0.7]
-- ttyd version (if native/hybrid): [e.g., 1.7.4]
+- ttyd version (if native): [e.g., 1.7.4]
 
 **Client Information**
 
@@ -58,7 +57,7 @@ If applicable, add screenshots or relevant logs.
 - [ ] Keyboard toolbar
 - [ ] Session management
 - [ ] tmux-api
-- [ ] nginx/Proxy
+- [ ] WebSocket proxy
 - [ ] Authentication
 - [ ] Deployment scripts
 - [ ] Other: \_\_\_

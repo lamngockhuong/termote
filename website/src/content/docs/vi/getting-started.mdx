@@ -1,0 +1,61 @@
+---
+title: Bắt đầu
+description: Hướng dẫn bắt đầu nhanh với Termote
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+## Yêu cầu
+
+- Docker hoặc Podman (cho chế độ Container)
+- hoặc ttyd + tmux + Go (cho chế độ Native)
+
+## Cài đặt một dòng
+
+```bash
+# Mặc định chế độ native (truy cập binary host như claude, gh, v.v.)
+curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
+
+# Với chế độ rõ ràng
+curl -fsSL .../get.sh | bash -s -- --container --lan
+curl -fsSL .../get.sh | bash -s -- --native --tailscale myhost
+```
+
+<Aside type="tip">
+Script cài đặt tự động phát hiện môi trường và chọn chế độ triển khai phù hợp nhất.
+</Aside>
+
+## Bắt đầu nhanh
+
+<Steps>
+1. Clone repository
+   ```bash
+   git clone https://github.com/lamngockhuong/termote.git
+   cd termote
+   ```
+
+2. Triển khai với Container (đơn giản nhất)
+   ```bash
+   ./scripts/termote.sh install container
+   ```
+
+3. Truy cập tại http://localhost:7680
+</Steps>
+
+## Các lệnh CLI
+
+```bash
+./scripts/termote.sh                 # Menu tương tác
+./scripts/termote.sh install container  # Chế độ Container
+./scripts/termote.sh install native     # Chế độ Native
+./scripts/termote.sh install           # Cài đặt (dùng artifacts có sẵn)
+./scripts/termote.sh uninstall all     # Gỡ cài đặt tất cả
+./scripts/termote.sh health            # Kiểm tra sức khỏe dịch vụ
+```
+
+## Tiếp theo
+
+- [Cài đặt Container](/vi/installation/docker/) - Thiết lập container đầy đủ
+- [Cài đặt Native](/vi/installation/native/) - Truy cập binary host
+- [Tailscale HTTPS](/vi/installation/tailscale/) - Truy cập từ xa an toàn
+- [Cử chỉ di động](/vi/usage/gestures/) - Điều khiển cảm ứng

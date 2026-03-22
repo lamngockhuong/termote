@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-// serveConfig holds configuration for full server mode
+// serveConfig holds configuration for the server
 type serveConfig struct {
 	Port    string
 	PWADir  string
@@ -26,7 +26,7 @@ type serveConfig struct {
 
 // newServeConfigFromEnv creates config from environment variables with defaults
 func newServeConfigFromEnv() serveConfig {
-	cfg := serveConfig{
+	return serveConfig{
 		Port:    envOr("TERMOTE_PORT", "7680"),
 		PWADir:  envOr("TERMOTE_PWA_DIR", "./pwa/dist"),
 		TTYDUrl: envOr("TERMOTE_TTYD_URL", "http://127.0.0.1:7681"),
@@ -35,7 +35,6 @@ func newServeConfigFromEnv() serveConfig {
 		NoAuth:  os.Getenv("TERMOTE_NO_AUTH") == "true",
 		Bind:    envOr("TERMOTE_BIND", "0.0.0.0"),
 	}
-	return cfg
 }
 
 func envOr(key, fallback string) string {
@@ -45,7 +44,7 @@ func envOr(key, fallback string) string {
 	return fallback
 }
 
-// startServeMode starts the full server (PWA + ttyd proxy + tmux API + auth)
+// startServeMode starts the server (PWA static files + ttyd WebSocket proxy + tmux API + basic auth)
 func startServeMode(cfg serveConfig) {
 	mux := http.NewServeMux()
 
@@ -123,15 +122,16 @@ func spaHandler(dir string) http.Handler {
 
 // newWebSocketProxy creates a reverse proxy that supports WebSocket upgrades
 func newWebSocketProxy(target *url.URL) http.Handler {
+	// Create HTTP proxy once and reuse
+	httpProxy := httputil.NewSingleHostReverseProxy(target)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// WebSocket upgrade
 		if isWebSocket(r) {
 			proxyWebSocket(w, r, target)
 			return
 		}
-		// Regular HTTP reverse proxy
-		proxy := httputil.NewSingleHostReverseProxy(target)
-		proxy.ServeHTTP(w, r)
+		// Regular HTTP reverse proxy (reused)
+		httpProxy.ServeHTTP(w, r)
 	})
 }
 
@@ -177,11 +177,12 @@ func proxyWebSocket(w http.ResponseWriter, r *http.Request, target *url.URL) {
 	r.Host = target.Host
 	r.Write(upstream)
 
-	// Bidirectional copy
+	// Bidirectional copy - wait for both directions to complete
 	done := make(chan struct{}, 2)
 	go func() { io.Copy(upstream, client); done <- struct{}{} }()
 	go func() { io.Copy(client, upstream); done <- struct{}{} }()
 	<-done
+	<-done // Wait for both goroutines to prevent leak
 }
 
 // noCacheMiddleware adds no-cache headers to all responses

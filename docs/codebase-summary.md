@@ -4,11 +4,9 @@
 
 ```
 termote/
-├── Dockerfile                  # All-in-one (nginx+ttyd+tmux-api)
-├── Dockerfile.hybrid           # Hybrid (nginx+tmux-api)
+├── Dockerfile                  # Docker mode (tmux-api + ttyd)
 ├── docker-compose.yml          # Docker deployment
-├── entrypoint-allinone.sh      # Docker entrypoint
-├── entrypoint-hybrid.sh        # Hybrid entrypoint
+├── entrypoint.sh      # Docker entrypoint
 ├── pwa/                        # React PWA frontend
 │   ├── src/
 │   │   ├── App.tsx             # Main app component
@@ -43,26 +41,26 @@ termote/
 │   │       └── terminal-bridge.ts     # Iframe keystroke injection
 │   ├── e2e/                    # Playwright e2e tests
 │   └── package.json
-├── nginx/
-│   ├── nginx.conf              # Base config
-│   ├── nginx-docker.conf       # Docker mode
-│   ├── nginx-hybrid.conf       # Hybrid mode
-│   ├── nginx-local.conf        # Native local (basic auth)
-│   └── nginx-production.conf   # Native production (manual SSL)
-├── tmux-api/                   # Go API server
-│   ├── main.go                 # HTTP API for tmux control
+├── tmux-api/                   # Go server
+│   ├── main.go                 # Entry point
+│   ├── serve.go                # Server (PWA, proxy, auth)
+│   ├── tmux.go                 # tmux API handlers
+│   ├── serve_test.go           # Server unit tests
+│   ├── tmux_test.go            # tmux handler unit tests
+│   ├── integration_test.go     # Integration tests (requires tmux)
 │   └── go.mod
 ├── scripts/
-│   ├── deploy.sh               # Deploy (--docker|--hybrid|--native) [--no-auth]
-│   ├── install.sh              # Release mode installer
-│   ├── get.sh                  # Online curl|bash installer
-│   ├── uninstall.sh            # Uninstall
-│   └── health-check.sh         # Service health check
+│   ├── termote.sh              # Unified CLI (install/uninstall/health)
+│   └── get.sh                  # Online curl|bash installer
+├── tests/                      # Shell script tests
+│   ├── test-termote.sh         # CLI tests
+│   ├── test-get.sh             # Online installer tests
+│   └── test-entrypoints.sh     # Docker entrypoint tests
 ├── .github/workflows/
 │   ├── ci.yml                  # CI (build, lint, test)
 │   ├── release.yml             # Release (Docker push, GitHub Release)
 │   └── release-please.yml      # Auto versioning from commits
-├── systemd/
+├── systemd/                    # Systemd service files (optional)
 │   ├── termote.service         # ttyd WebSocket service
 │   └── tmux-api.service        # tmux API service
 └── docs/                       # Documentation
@@ -127,15 +125,27 @@ tmux HTTP API client:
 - `killWindow(id)` - close window
 - `sendKeys(target, keys)` - send keystrokes
 
-### tmux-api/ (3 files)
+### tmux-api/ (6 files)
 
-Go HTTP server for tmux control, split into modules:
+Go HTTP server:
 
-- **main.go** — Entry point; `--serve` flag enables full server mode, otherwise API-only on port 7682
-- **tmux.go** — tmux handlers: /windows, /select/:id, /new, /kill/:id, /rename/:id, /send-keys, /health
-- **serve.go** — Full server mode (port 7680): PWA static files, ttyd WebSocket reverse proxy, basic auth
-- Supports optional TMUX_SOCKET env for custom socket path
-- Env vars for serve mode: TERMOTE_PORT, TERMOTE_BIND, TERMOTE_PWA_DIR, TERMOTE_USER, TERMOTE_PASS, TERMOTE_NO_AUTH
+- **main.go** — Entry point, starts serve mode
+- **serve.go** — Server: PWA static files, ttyd WebSocket proxy, basic auth
+- **tmux.go** — tmux handlers with input validation and method checks
+- **serve_test.go** — Server unit tests (auth, middleware, proxy)
+- **tmux_test.go** — Handler unit tests (validation, errors)
+- **integration_test.go** — Integration tests requiring real tmux
+
+**Security:**
+
+- Input validation: regex `^[a-zA-Z0-9_\-:.]+$` for tmux targets
+- HTTP method enforcement: POST for mutations, GET for reads
+- Length limits: 4096 bytes for keys, 64 chars for targets
+- Constant-time password comparison
+
+**Test coverage:** 71% (unit + integration)
+
+Configuration via env vars: TERMOTE_PORT, TERMOTE_BIND, TERMOTE_PWA_DIR, TERMOTE_USER, TERMOTE_PASS, TERMOTE_NO_AUTH
 
 ## Data Flow
 
@@ -164,15 +174,18 @@ Terminal output → xterm.js → display
 
 ## API Endpoints
 
-| Endpoint               | Method | Purpose             |
-| ---------------------- | ------ | ------------------- |
-| `/terminal/token`      | GET    | Get ttyd auth token |
-| `/terminal/ws`         | WS     | ttyd WebSocket      |
-| `/api/tmux/windows`    | GET    | List tmux windows   |
-| `/api/tmux/select/:id` | POST   | Switch window       |
-| `/api/tmux/new`        | POST   | Create window       |
-| `/api/tmux/kill/:id`   | DELETE | Kill window         |
-| `/api/tmux/send-keys`  | POST   | Send keystrokes     |
+| Endpoint               | Method      | Purpose           |
+| ---------------------- | ----------- | ----------------- |
+| `/terminal/`           | WS          | ttyd WebSocket    |
+| `/api/tmux/windows`    | GET         | List tmux windows |
+| `/api/tmux/select/:id` | POST        | Switch window     |
+| `/api/tmux/new`        | POST        | Create window     |
+| `/api/tmux/kill/:id`   | POST/DELETE | Kill window       |
+| `/api/tmux/rename/:id` | POST        | Rename window     |
+| `/api/tmux/send-keys`  | POST        | Send keystrokes   |
+| `/api/tmux/health`     | GET         | Health check      |
+
+All endpoints validate inputs and enforce HTTP methods. Invalid requests return 400/405 JSON errors.
 
 ## CI/CD Workflows
 

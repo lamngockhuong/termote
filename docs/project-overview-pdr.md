@@ -32,8 +32,7 @@ PWA that wraps ttyd terminals with:
 | React + Vite  | Fast dev, good PWA support                           |
 | xterm.js      | Standard terminal emulator, ttyd protocol compatible |
 | tmux backend  | Persistent sessions, window management               |
-| Go (tmux-api) | Lightweight HTTP API for tmux control, single binary |
-| nginx proxy   | Basic auth, WebSocket, single origin for PWA         |
+| Go (tmux-api) | Unified server: PWA, auth, WebSocket proxy, API      |
 | TailwindCSS   | Rapid styling, responsive utilities                  |
 
 ## Success Metrics

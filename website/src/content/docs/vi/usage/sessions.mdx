@@ -1,0 +1,61 @@
+---
+title: Quản lý phiên
+description: Quản lý phiên terminal với tmux
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Termote sử dụng tmux cho các phiên liên tục tồn tại qua ngắt kết nối.
+
+## Loại phiên
+
+| Phiên | Mục đích |
+|-------|----------|
+| Claude | Claude Code CLI |
+| Copilot | GitHub Copilot CLI |
+| Shell | Shell chuẩn |
+
+## Chuyển phiên
+
+<Steps>
+1. Chạm icon phiên trong sidebar (desktop) hoặc nav dưới (di động)
+2. Phiên tải ngay lập tức
+3. Phiên trước tiếp tục chạy nền
+</Steps>
+
+## Lưu trữ phiên
+
+Phiên tồn tại cho đến khi:
+- Đóng rõ ràng
+- Khởi động lại server
+- tmux session bị kill
+
+<Aside type="tip">
+Phiên tồn tại qua ngắt kết nối mạng. Kết nối lại để tiếp tục từ chỗ đã dừng.
+</Aside>
+
+## Lệnh tmux
+
+```bash
+# Liệt kê phiên
+tmux ls
+
+# Attach vào phiên
+tmux attach -t claude
+
+# Kill phiên
+tmux kill-session -t shell
+```
+
+## Xử lý sự cố
+
+### Phiên không lưu trữ
+
+1. Kiểm tra tmux đang chạy: `tmux ls`
+2. Xác minh ttyd sử dụng cờ `-A` (attach-or-create)
+3. Kiểm tra log container: `docker logs termote`
+
+### Lỗi WebSocket
+
+1. Kiểm tra log tmux-api: `docker logs termote`
+2. Xác minh ttyd đang chạy trên cổng 7681

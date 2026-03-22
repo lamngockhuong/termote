@@ -17,9 +17,10 @@ Remote control CLI tools (Claude Code, GitHub Copilot, any terminal) from mobile
 ## Quick Start
 
 ```bash
-make deploy-docker    # All-in-one container
-make test             # Run tests
-make health           # Check services
+./scripts/termote.sh                   # Interactive menu
+./scripts/termote.sh install container # Container mode (docker/podman)
+./scripts/termote.sh install native    # Native mode (host tools)
+make test                              # Run tests
 ```
 
 ## Installation
@@ -27,11 +28,11 @@ make health           # Check services
 ### One-liner (recommended)
 
 ```bash
-# Defaults to hybrid mode (access host binaries like claude, gh, etc.)
+# Defaults to native mode (access host binaries like claude, gh, etc.)
 curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
 
 # With explicit mode and options
-curl -fsSL .../get.sh | bash -s -- --docker --lan
+curl -fsSL .../get.sh | bash -s -- --container --lan
 curl -fsSL .../get.sh | bash -s -- --native --tailscale myhost
 ```
 
@@ -56,6 +57,11 @@ docker run -d --name termote -p 7680:7680 \
   -v termote-data:/home/termote \
   ghcr.io/lamngockhuong/termote:latest
 
+# Mount custom workspace directory
+docker run -d --name termote -p 7680:7680 \
+  -v ~/projects:/workspace \
+  ghcr.io/lamngockhuong/termote:latest
+
 # With Tailscale HTTPS (requires Tailscale on host)
 docker run -d --name termote -p 7680:7680 \
   -e TERMOTE_USER=admin -e TERMOTE_PASS=secret \
@@ -73,8 +79,9 @@ wget https://github.com/lamngockhuong/termote/releases/download/${VERSION}/termo
 tar xzf termote-${VERSION}.tar.gz
 cd termote-${VERSION#v}
 
-# Install
-./scripts/install.sh --docker
+# Install (interactive menu or with mode)
+./scripts/termote.sh install
+./scripts/termote.sh install container
 ```
 
 ### From Source
@@ -82,20 +89,17 @@ cd termote-${VERSION#v}
 ```bash
 git clone https://github.com/lamngockhuong/termote.git
 cd termote
-make deploy-docker
+./scripts/termote.sh install container
 ```
 
-> **Note**: `install.sh` is for end-users (uses pre-built artifacts when available, interactive mode selection). `deploy.sh` is for developers (always builds from source). Both support the same `--docker|--hybrid|--native` modes.
+> **Note**: `termote.sh` is the unified CLI supporting `install` (builds from source, uses pre-built artifacts when available), `uninstall`, and `health` commands.
 
 ## Deployment Modes
 
-| Mode       | Description             | Containers              | Native | Platform     |
-| ---------- | ----------------------- | ----------------------- | ------ | ------------ |
-| `--docker` | All-in-one container    | 1 (nginx+ttyd+tmux-api) | -      | macOS, Linux |
-| `--hybrid` | Container + native ttyd | 1 (nginx+tmux-api)      | ttyd   | macOS, Linux |
-| `--native` | All native              | -                       | all    | macOS, Linux |
-
-> **Note**: On macOS, both `--hybrid` (with podman) and `--native` run fully native using tmux-api's built-in serve mode. On Linux, `--native` uses systemd + nginx.
+| Mode          | Description    | Use Case                        | Platform     |
+| ------------- | -------------- | ------------------------------- | ------------ |
+| `--container` | Container mode | Simple deployment, isolated env | macOS, Linux |
+| `--native`    | All native     | Host tool access (claude, gh)   | macOS, Linux |
 
 ### Options
 
@@ -106,42 +110,43 @@ make deploy-docker
 | `--no-auth`                 | Disable basic authentication            |
 | `--port <port>`             | Host port (default: 7680)               |
 
-### Docker/Podman (recommended for simplicity)
+| Environment Variable | Description                                      |
+| -------------------- | ------------------------------------------------ |
+| `WORKSPACE`          | Host directory to mount (default: `./workspace`) |
+| `TERMOTE_USER`       | Basic auth username (default: auto-generated)    |
+| `TERMOTE_PASS`       | Basic auth password (default: auto-generated)    |
+| `NO_AUTH`            | Set to `true` to disable authentication          |
+
+### Container Mode (recommended for simplicity)
 
 Scripts auto-detect `podman` or `docker` — both work identically.
 
 ```bash
-./scripts/deploy.sh --docker             # localhost with basic auth
-./scripts/deploy.sh --docker --no-auth   # localhost without auth
-./scripts/deploy.sh --docker --lan       # LAN accessible
+./scripts/termote.sh install container             # localhost with basic auth
+./scripts/termote.sh install container --no-auth   # localhost without auth
+./scripts/termote.sh install container --lan       # LAN accessible
 # Access: http://localhost:7680
+
+# Custom workspace directory (mounted to /workspace in container)
+WORKSPACE=~/projects ./scripts/termote.sh install container
+WORKSPACE=/path/to/code make install-container
 ```
 
-### Hybrid (recommended for host binary access)
+> **Security note**: Avoid mounting `$HOME` directly — sensitive directories like `.ssh`, `.gnupg` will be accessible in container. Mount specific project directories instead.
 
-Use when you need ttyd to access host binaries (claude, git, etc):
+### Native (recommended for host binary access)
 
-```bash
-# Install ttyd first
-sudo apt install ttyd tmux  # Ubuntu/Debian
-# Or: brew install ttyd tmux  # macOS
-
-./scripts/deploy.sh --hybrid
-# Access: http://localhost:7680
-```
-
-### Native (no Docker)
-
-Auto-detects OS: systemd + nginx on Linux, tmux-api serve mode on macOS.
+Use when you need access to host binaries (claude, git, etc):
 
 ```bash
 # Linux
-sudo apt install ttyd tmux nginx
-./scripts/deploy.sh --native
+sudo apt install ttyd tmux
+# Or: sudo snap install ttyd
+./scripts/termote.sh install native
 
 # macOS
 brew install ttyd tmux go
-./scripts/deploy.sh --native
+./scripts/termote.sh install native
 # Access: http://localhost:7680
 ```
 
@@ -151,13 +156,13 @@ Uses `tailscale serve` for automatic HTTPS (no manual cert management):
 
 ```bash
 # Tailscale only (default port 443)
-./scripts/deploy.sh --docker --tailscale myhost.ts.net
+./scripts/termote.sh install container --tailscale myhost.ts.net
 
 # Custom port
-./scripts/deploy.sh --hybrid --tailscale myhost.ts.net:8765
+./scripts/termote.sh install native --tailscale myhost.ts.net:8765
 
 # Tailscale + LAN accessible
-./scripts/deploy.sh --docker --tailscale myhost.ts.net --lan
+./scripts/termote.sh install container --tailscale myhost.ts.net --lan
 
 # Access: https://myhost.ts.net (or :8765 for custom port)
 ```
@@ -165,19 +170,18 @@ Uses `tailscale serve` for automatic HTTPS (no manual cert management):
 ### Uninstall
 
 ```bash
-./scripts/uninstall.sh --docker   # Docker mode
-./scripts/uninstall.sh --hybrid   # Hybrid mode
-./scripts/uninstall.sh --native   # Native mode
-./scripts/uninstall.sh --all      # Everything
+./scripts/termote.sh uninstall container   # Container mode
+./scripts/termote.sh uninstall native      # Native mode
+./scripts/termote.sh uninstall all         # Everything
 ```
 
 ## Platform Support
 
-| Platform | Docker/Podman | Hybrid           | Native         |
-| -------- | ------------- | ---------------- | -------------- |
-| Linux    | ✓             | ✓ (container)    | ✓ (systemd)    |
-| macOS    | ✓             | ✓ (native serve) | ✓ (serve mode) |
-| Windows  | ✓ (WSL2)      | -                | -              |
+| Platform | Container | Native |
+| -------- | --------- | ------ |
+| Linux    | ✓         | ✓      |
+| macOS    | ✓         | ✓      |
+| Windows  | ✓ (WSL2)  | -      |
 
 ## Mobile Usage
 
@@ -197,33 +201,26 @@ Virtual toolbar provides: Tab, Esc, Ctrl, Arrow keys, and common Ctrl combos.
 ```
 termote/
 ├── Makefile                # Build/test/deploy commands
-├── Dockerfile              # All-in-one (nginx+ttyd+tmux-api)
-├── Dockerfile.hybrid       # Hybrid (nginx+tmux-api)
+├── Dockerfile              # Docker mode (tmux-api + ttyd)
 ├── docker-compose.yml
-├── nginx/
-│   ├── nginx-docker.conf   # For docker mode
-│   ├── nginx-hybrid.conf   # For hybrid mode
-│   └── nginx-local.conf    # For native mode
+├── entrypoint.sh  # Docker entrypoint
 ├── pwa/                    # React PWA
 │   └── src/
 │       ├── components/
 │       ├── hooks/
 │       └── utils/
-├── tmux-api/               # Go API server
-│   ├── main.go           # Entry point (API-only or serve mode)
-│   ├── tmux.go           # tmux window handlers
-│   └── serve.go          # Full server (PWA, ttyd proxy, auth)
+├── tmux-api/               # Go server
+│   ├── main.go             # Entry point
+│   ├── serve.go            # Server (PWA, proxy, auth)
+│   └── tmux.go             # tmux API handlers
 ├── scripts/
-│   ├── get.sh            # Online installer (curl | bash)
-│   ├── install.sh        # End-user installer (release + dev mode)
-│   ├── deploy.sh         # Developer deployment (always builds)
-│   ├── uninstall.sh
-│   ├── setup-auth.sh     # Shared auth setup for containers
-│   └── health-check.sh
+│   ├── termote.sh          # Unified CLI (install/uninstall/health)
+│   └── get.sh              # Online installer (curl | bash)
 ├── tests/                  # Test suite
-│   ├── test-deploy.sh
-│   └── test-uninstall.sh
-└── systemd/
+│   ├── test-termote.sh
+│   ├── test-get.sh
+│   └── test-entrypoints.sh
+└── systemd/                # Optional systemd services
     ├── termote.service
     └── tmux-api.service
 ```
@@ -232,12 +229,12 @@ termote/
 
 ```bash
 make build          # Build PWA and tmux-api
-make test           # Run all tests (24 tests)
+make test           # Run all tests
 make health         # Check service health
 make clean          # Stop containers
 
 # E2E tests (requires running server)
-./scripts/deploy.sh --docker  # Start server first
+./scripts/termote.sh install container  # Start server first
 cd pwa && pnpm test:e2e       # Run Playwright tests
 cd pwa && pnpm test:e2e:ui    # Run with UI debugger
 ```
@@ -251,25 +248,21 @@ cd pwa && pnpm test:e2e:ui    # Run with UI debugger
 
 ### WebSocket errors
 
-- Check nginx `proxy_read_timeout`
-- Verify WebSocket upgrade headers
+- Check tmux-api logs: `docker logs termote`
+- Verify ttyd is running on port 7681
 
 ### Mobile keyboard issues
 
 - Ensure viewport meta tag is present
 - Test on real device, not emulator
 
-### Hybrid mode: tmux-api can't find session
+### Native mode: processes not starting
 
-- Verify tmux socket: `ls -la /tmp/tmux-$(id -u)/`
-- Check TMUX_SOCKET env in container
-- Ensure socket dir has 700 permissions: `chmod 700 /tmp/tmux-$(id -u)`
-
-### Podman on macOS
-
-- Run `podman machine start` before deploying
-- Hybrid mode auto-switches to native serve mode (no container needed)
-- If `host-gateway` errors appear, the scripts handle this automatically
+```bash
+ps aux | grep ttyd         # Check if ttyd is running
+ps aux | grep tmux-api     # Check if tmux-api is running
+lsof -i :7680              # Verify port is in use
+```
 
 ## Security Notes
 

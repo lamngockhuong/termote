@@ -1,0 +1,86 @@
+---
+title: Cài đặt Native
+description: Tất cả dịch vụ chạy native trên host
+---
+
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+Không cần Docker. Truy cập binary host như `claude`, `git`, `gh`, v.v.
+
+## Yêu cầu
+
+<Tabs>
+  <TabItem label="Linux">
+    ```bash
+    sudo apt install ttyd tmux
+    # Hoặc: sudo snap install ttyd
+    ```
+  </TabItem>
+  <TabItem label="macOS">
+    ```bash
+    brew install ttyd tmux go
+    ```
+  </TabItem>
+</Tabs>
+
+## Cài đặt
+
+<Steps>
+1. Cài đặt dependencies (xem ở trên)
+
+2. Chạy lệnh deploy
+   ```bash
+   ./scripts/termote.sh install native
+   ```
+
+3. Truy cập tại http://localhost:7680
+</Steps>
+
+## Khi nào sử dụng
+
+- Cần truy cập binary host (claude, git, gh, v.v.)
+- Không có Docker/Podman
+- Kiểm soát đầy đủ dịch vụ
+- Tích hợp systemd tùy chỉnh (Linux)
+
+<Aside type="tip">
+Chế độ Native được khuyến nghị khi bạn cần sử dụng Claude Code hoặc các công cụ CLI host khác.
+</Aside>
+
+## Quản lý dịch vụ
+
+### Linux (systemd)
+
+```bash
+# Kiểm tra trạng thái
+sudo systemctl status termote
+sudo systemctl status tmux-api
+
+# Khởi động lại
+sudo systemctl restart termote
+```
+
+### macOS (launchd)
+
+```bash
+# Kiểm tra processes
+ps aux | grep ttyd
+ps aux | grep tmux-api
+
+# Khởi động lại
+./scripts/termote.sh install native
+```
+
+## Khắc phục sự cố
+
+```bash
+ps aux | grep ttyd         # Kiểm tra ttyd đang chạy
+ps aux | grep tmux-api     # Kiểm tra tmux-api đang chạy
+lsof -i :7680              # Xác minh cổng đang sử dụng
+```
+
+## Gỡ cài đặt
+
+```bash
+./scripts/termote.sh uninstall native
+```

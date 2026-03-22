@@ -24,6 +24,7 @@ Thumbs.db
 
 # Go binary
 tmux-api/tmux-api
+tmux-api/tmux-api-native
 
 # Test results and screenshots
 pwa/test-results/

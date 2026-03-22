@@ -1,9 +1,7 @@
 # Termote Docker Compose
-# --docker: all-in-one container
-# --hybrid: nginx+tmux-api container + native ttyd
+# --docker: all-in-one container (tmux-api + ttyd)
 
 services:
-  # Docker mode: all-in-one (nginx + ttyd + tmux-api)
   termote:
     build: .
     container_name: termote
@@ -15,21 +13,5 @@ services:
     working_dir: /workspace
     environment:
       - NO_AUTH=${NO_AUTH:-false}
-    restart: unless-stopped
-
-  # Hybrid mode: nginx + tmux-api (ttyd runs native)
-  termote-hybrid:
-    build:
-      context: .
-      dockerfile: Dockerfile.hybrid
-    container_name: termote-hybrid
-    profiles: [hybrid]
-    # ports set via deploy.sh override
-    extra_hosts:
-      - "host.docker.internal:${HOST_GATEWAY:-host-gateway}"
-    volumes:
-      - ${TMUX_SOCKET_DIR:-/tmp/tmux-1000}:/tmp/tmux-socket:rw
-    environment:
-      - TMUX_SOCKET=/tmp/tmux-socket/default
-      - NO_AUTH=${NO_AUTH:-false}
+      - TERMOTE_PASS=${TERMOTE_PASS:-}
     restart: unless-stopped

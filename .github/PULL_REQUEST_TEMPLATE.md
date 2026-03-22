@@ -24,7 +24,7 @@
 - [ ] `make test` passes
 - [ ] `pnpm tsc --noEmit` passes (if PWA changes)
 - [ ] Manual testing in browser
-- [ ] Tested deployment mode: <!-- docker / hybrid / native -->
+- [ ] Tested deployment mode: <!-- container / native -->
 
 ## Checklist
 

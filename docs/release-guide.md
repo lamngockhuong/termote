@@ -123,7 +123,7 @@ Each release produces:
 | `pwa-dist-vX.Y.Z.zip`   | PWA static files     |
 | `tmux-api-linux-amd64`  | API binary (x86_64)  |
 | `tmux-api-linux-arm64`  | API binary (ARM64)   |
-| `install.sh`            | Standalone installer |
+| `termote.sh`            | Unified CLI          |
 | `checksums.txt`         | SHA256 checksums     |
 
 ## Docker Images
@@ -145,12 +145,11 @@ Each release produces:
 
 **Note:** Pre-release versions (`-rc1`, `-beta`) don't update `latest` tag.
 
-### Variants
+### Image
 
-| Image            | Description                          |
-| ---------------- | ------------------------------------ |
-| `termote`        | All-in-one (nginx+ttyd+tmux-api)     |
-| `termote-hybrid` | Hybrid (nginx+tmux-api, native ttyd) |
+| Image     | Description                  |
+| --------- | ---------------------------- |
+| `termote` | All-in-one (tmux-api + ttyd) |
 
 ## Troubleshooting
 

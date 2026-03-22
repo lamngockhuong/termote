@@ -13,6 +13,10 @@
           "type": "json",
           "path": "pwa/package.json",
           "jsonpath": "$.version"
+        },
+        {
+          "type": "generic",
+          "path": "scripts/termote.sh"
         }
       ]
     }

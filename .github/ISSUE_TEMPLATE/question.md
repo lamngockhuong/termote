@@ -11,7 +11,7 @@ What would you like to know?
 
 **Context**
 
-- Deployment mode: [Docker/Hybrid/Native]
+- Deployment mode: [Container/Native]
 - What are you trying to achieve?
 
 **What you've tried**

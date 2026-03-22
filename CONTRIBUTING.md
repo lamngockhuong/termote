@@ -6,7 +6,7 @@
 git clone https://github.com/lamngockhuong/termote.git
 cd termote
 make build
-make deploy-docker
+make deploy-container
 ```
 
 ## Development Setup
@@ -89,8 +89,7 @@ chore: update dependencies
 ```
 termote/
 ├── pwa/           # React PWA frontend
-├── tmux-api/      # Go API server
-├── nginx/         # Nginx configurations
+├── tmux-api/      # Go server (PWA + proxy + API + auth)
 ├── scripts/       # Shell scripts
 ├── tests/         # Test suite
 └── docs/          # Documentation

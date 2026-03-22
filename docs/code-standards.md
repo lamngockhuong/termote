@@ -94,3 +94,32 @@ import type { Session } from "./types/session";
 - Inline comments for non-obvious logic only
 - Interface comments for API documentation
 - No redundant comments
+
+## Go Standards
+
+### File Naming
+
+- **snake_case** for Go files: `serve_test.go`, `integration_test.go`
+- Test files: `*_test.go`
+- Integration tests: use `//go:build integration` tag
+
+### Security
+
+- **Input validation**: All tmux targets validated with regex `^[a-zA-Z0-9_\-:.]+$`
+- **HTTP methods**: Mutations require POST/DELETE, reads require GET
+- **Length limits**: Keys limited to 4096 bytes, targets to 64 chars
+- **Constant-time comparison**: Password verification uses `subtle.ConstantTimeCompare`
+
+### Testing
+
+```bash
+go test                           # Unit tests only (59%)
+go test -tags=integration         # Unit + Integration (71%)
+go test -tags=integration -cover  # With coverage
+```
+
+### Error Handling
+
+- Return JSON errors with `jsonError(w, msg, code)`
+- Validate all user inputs before passing to exec.Command
+- Handle JSON decode errors explicitly

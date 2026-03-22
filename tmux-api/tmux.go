@@ -5,11 +5,30 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 )
 
 var tmuxSocket = os.Getenv("TMUX_SOCKET")
+
+// validTmuxID matches safe tmux target identifiers (alphanumeric, underscore, dash, colon, dot)
+var validTmuxID = regexp.MustCompile(`^[a-zA-Z0-9_\-:.]+$`)
+
+// validateTmuxTarget checks if target is a safe tmux identifier
+func validateTmuxTarget(target string) bool {
+	return target != "" && len(target) <= 64 && validTmuxID.MatchString(target)
+}
+
+// requireMethod returns true if method matches, otherwise writes 405 error
+func requireMethod(w http.ResponseWriter, r *http.Request, method string) bool {
+	if r.Method != method {
+		w.Header().Set("Allow", method)
+		jsonError(w, "method not allowed", http.StatusMethodNotAllowed)
+		return false
+	}
+	return true
+}
 
 // tmuxCmd creates a tmux command with optional socket flag
 func tmuxCmd(args ...string) *exec.Cmd {
@@ -27,6 +46,9 @@ type Window struct {
 }
 
 func handleWindows(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodGet) {
+		return
+	}
 	out, err := tmuxCmd("list-windows", "-F",
 		"#{window_index}:#{window_name}:#{window_active}").Output()
 	if err != nil {
@@ -50,7 +72,14 @@ func handleWindows(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleSelect(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
 	id := lastPathSegment(r.URL.Path)
+	if !validateTmuxTarget(id) {
+		jsonError(w, "invalid window id", http.StatusBadRequest)
+		return
+	}
 	err := tmuxCmd("select-window", "-t", id).Run()
 	if err != nil {
 		jsonError(w, err.Error(), 500)
@@ -60,9 +89,16 @@ func handleSelect(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleNew(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
 	name := r.URL.Query().Get("name")
 	args := []string{"new-window"}
 	if name != "" {
+		if !validateTmuxTarget(name) {
+			jsonError(w, "invalid window name", http.StatusBadRequest)
+			return
+		}
 		args = append(args, "-n", name)
 	}
 	err := tmuxCmd(args...).Run()
@@ -74,7 +110,16 @@ func handleNew(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleKill(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodDelete {
+		w.Header().Set("Allow", "POST, DELETE")
+		jsonError(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	id := lastPathSegment(r.URL.Path)
+	if !validateTmuxTarget(id) {
+		jsonError(w, "invalid window id", http.StatusBadRequest)
+		return
+	}
 	err := tmuxCmd("kill-window", "-t", id).Run()
 	if err != nil {
 		jsonError(w, err.Error(), 500)
@@ -84,10 +129,21 @@ func handleKill(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleRename(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
 	id := lastPathSegment(r.URL.Path)
+	if !validateTmuxTarget(id) {
+		jsonError(w, "invalid window id", http.StatusBadRequest)
+		return
+	}
 	name := r.URL.Query().Get("name")
 	if name == "" {
-		jsonError(w, "name is required", 400)
+		jsonError(w, "name is required", http.StatusBadRequest)
+		return
+	}
+	if !validateTmuxTarget(name) {
+		jsonError(w, "invalid window name", http.StatusBadRequest)
 		return
 	}
 	err := tmuxCmd("rename-window", "-t", id, name).Run()
@@ -99,11 +155,27 @@ func handleRename(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleSendKeys(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
 	var body struct {
 		Target string `json:"target"`
 		Keys   string `json:"keys"`
 	}
-	json.NewDecoder(r.Body).Decode(&body)
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		jsonError(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
+	if !validateTmuxTarget(body.Target) {
+		jsonError(w, "invalid target", http.StatusBadRequest)
+		return
+	}
+	// Keys are passed as literal string to tmux send-keys, which handles escaping
+	// Limit key length to prevent abuse
+	if len(body.Keys) > 4096 {
+		jsonError(w, "keys too long", http.StatusBadRequest)
+		return
+	}
 	err := tmuxCmd("send-keys", "-t", body.Target, body.Keys).Run()
 	if err != nil {
 		jsonError(w, err.Error(), 500)
