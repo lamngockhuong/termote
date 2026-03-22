@@ -200,11 +200,18 @@ test_install_script_call() {
         fail "termote.sh install" "present" "not found"
     fi
 
-    # Verify arguments are forwarded
-    if grep -q 'install "\$@"' "$PROJECT_DIR/scripts/get.sh"; then
-        pass "forwards arguments to termote.sh"
+    # Verify default mode is native
+    if grep -q 'mode="native"' "$PROJECT_DIR/scripts/get.sh"; then
+        pass "default mode is native"
     else
-        fail "arg forwarding" '$@' "not found"
+        fail "default mode" "native" "not found"
+    fi
+
+    # Verify mode extraction from args
+    if grep -q 'container|native) mode=' "$PROJECT_DIR/scripts/get.sh"; then
+        pass "mode extraction from args"
+    else
+        fail "mode extraction" "case pattern" "not found"
     fi
 }
 

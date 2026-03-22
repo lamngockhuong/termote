@@ -104,9 +104,23 @@ main() {
     rm -f "$TARBALL"
 
     # Run termote CLI with forwarded arguments
+    # Default to native mode if no mode specified (allows host tool access like claude, gh)
     info "Running installer..."
     chmod +x scripts/termote.sh
-    ./scripts/termote.sh install "$@"
+
+    local mode=""
+    local args=()
+    for arg in "$@"; do
+        case "$arg" in
+            container|native) mode="$arg" ;;
+            *) args+=("$arg") ;;
+        esac
+    done
+
+    # Default to native if no mode specified
+    [[ -z "$mode" ]] && mode="native"
+
+    ./scripts/termote.sh install "$mode" "${args[@]}"
 }
 
 main "$@"

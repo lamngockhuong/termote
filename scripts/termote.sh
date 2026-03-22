@@ -20,6 +20,7 @@ ARCH="$(case "$(uname -m)" in x86_64|amd64) echo amd64;; aarch64|arm64) echo arm
 # Constants
 PORT_MAIN=7680
 PORT_TTYD=7681
+CONTAINER_NAME="termote"
 
 # =============================================================================
 # COLORS & UI
@@ -78,12 +79,13 @@ get_lan_ip() {
 }
 
 start_ttyd() {
+    # Always bind ttyd to localhost - external access via tmux-api proxy only
     local ttyd_ver
     ttyd_ver=$(ttyd --version 2>&1 | grep -oE '[0-9]+\.[0-9]+' | head -1)
     if [[ "$(printf '%s\n' "1.7" "$ttyd_ver" | sort -V | head -1)" == "1.7" ]]; then
-        nohup ttyd -W -p $PORT_TTYD tmux new-session -A -s main > /dev/null 2>&1 &
+        nohup ttyd -W -i lo -p $PORT_TTYD tmux new-session -A -s main > /dev/null 2>&1 &
     else
-        nohup ttyd -p $PORT_TTYD tmux new-session -A -s main > /dev/null 2>&1 &
+        nohup ttyd -i lo -p $PORT_TTYD tmux new-session -A -s main > /dev/null 2>&1 &
     fi
     sleep 1
 }
@@ -477,37 +479,86 @@ cmd_health() {
     local failed=0
     local port="${PORT:-$PORT_MAIN}"
 
+    # Detect container mode (check if container is running)
+    local container_mode=false
+    local runtime=""
+    if [[ -n "$(docker ps -q --filter "name=$CONTAINER_NAME" 2>/dev/null)" ]]; then
+        container_mode=true; runtime="docker"
+    elif [[ -n "$(podman ps -q --filter "name=$CONTAINER_NAME" 2>/dev/null)" ]]; then
+        container_mode=true; runtime="podman"
+    fi
+
+    # Cache ss output once for bind info lookups
+    local ss_cache=$(ss -tlnp 2>/dev/null || true)
+
+    # Helper to format HTTP status
+    format_status() {
+        case "$1" in
+            000) echo "not running" ;;
+            200) echo "running" ;;
+            401) echo "running (auth)" ;;
+            *) echo "HTTP $1" ;;
+        esac
+    }
+
+    # Get bind info from cached ss output
+    get_bind_info() {
+        local p="$1"
+        local bind=$(echo "$ss_cache" | grep ":$p " | awk '{print $4}' | head -1)
+        if [[ "$bind" == "0.0.0.0:"* || "$bind" == "*:"* ]]; then
+            echo "LAN"
+        elif [[ -n "$bind" ]]; then
+            echo "localhost"
+        fi
+    }
+
     # Check ttyd
-    local status=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:$PORT_TTYD/" 2>/dev/null)
-    if [[ "$status" == "200" ]]; then
-        echo -e "  ${GREEN}[OK]${NC} ttyd (port $PORT_TTYD)"
+    if [[ "$container_mode" == true ]]; then
+        local status=$($runtime exec $CONTAINER_NAME curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:$PORT_TTYD/" 2>/dev/null || true)
+        if [[ "$status" == "200" ]]; then
+            echo -e "  ${GREEN}[OK]${NC} ttyd :$PORT_TTYD - running (container)"
+        else
+            echo -e "  ${RED}[--]${NC} ttyd :$PORT_TTYD - $(format_status $status) (container)"
+            : $((failed++))
+        fi
     else
-        echo -e "  ${RED}[FAIL]${NC} ttyd (port $PORT_TTYD) - HTTP $status"
-        ((failed++))
+        local status=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:$PORT_TTYD/" 2>/dev/null || true)
+        local bind_ttyd=$(get_bind_info $PORT_TTYD)
+        local ttyd_info="$(format_status $status)"
+        [[ -n "$bind_ttyd" ]] && ttyd_info="$ttyd_info ($bind_ttyd)"
+        if [[ "$status" == "200" ]]; then
+            echo -e "  ${GREEN}[OK]${NC} ttyd :$PORT_TTYD - $ttyd_info"
+        else
+            echo -e "  ${RED}[--]${NC} ttyd :$PORT_TTYD - $ttyd_info"
+            : $((failed++))
+        fi
     fi
 
     # Check main server
-    status=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$port/" 2>/dev/null)
+    status=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$port/" 2>/dev/null || true)
+    local bind_api=$(get_bind_info $port)
+    local api_info="$(format_status $status)"
+    [[ -n "$bind_api" ]] && api_info="$api_info ($bind_api)"
     if [[ "$status" == "200" || "$status" == "401" ]]; then
-        echo -e "  ${GREEN}[OK]${NC} termote (port $port)"
+        echo -e "  ${GREEN}[OK]${NC} tmux-api :$port - $api_info"
     else
-        echo -e "  ${RED}[FAIL]${NC} termote (port $port) - HTTP $status"
-        ((failed++))
+        echo -e "  ${RED}[--]${NC} tmux-api :$port - $api_info"
+        : $((failed++))
     fi
 
-    # Check API
-    status=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:$port/api/tmux/health" 2>/dev/null)
+    # Check API endpoint
+    status=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:$port/api/tmux/health" 2>/dev/null || true)
     if [[ "$status" == "200" || "$status" == "401" ]]; then
-        echo -e "  ${GREEN}[OK]${NC} API (/api/tmux/health)"
+        echo -e "  ${GREEN}[OK]${NC} API /api/tmux/health - $(format_status $status)"
     else
-        echo -e "  ${YELLOW}[WARN]${NC} API - HTTP $status"
+        echo -e "  ${YELLOW}[--]${NC} API /api/tmux/health - $(format_status $status)"
     fi
 
     echo ""
     if [[ $failed -eq 0 ]]; then
         echo -e "${GREEN}All services healthy!${NC}"
     else
-        echo -e "${RED}$failed service(s) unhealthy${NC}"
+        echo -e "${YELLOW}$failed service(s) not running${NC}"
         exit 1
     fi
 }
