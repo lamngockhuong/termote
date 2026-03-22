@@ -403,10 +403,21 @@ cmd_install() {
 
     # Setup API
     step "2/4" "Setting up tmux-api..."
-    if [[ "$RELEASE_MODE" == true ]] && [[ -f "$PROJECT_DIR/tmux-api-linux-$ARCH" ]]; then
-        mkdir -p "$PROJECT_DIR/tmux-api"
-        cp "$PROJECT_DIR/tmux-api-linux-$ARCH" "$PROJECT_DIR/tmux-api/tmux-api"
-        chmod +x "$PROJECT_DIR/tmux-api/tmux-api"
+    if [[ "$RELEASE_MODE" == true ]]; then
+        # Determine correct pre-built binary for the target
+        local api_os="linux"
+        if [[ "$mode" == "native" ]]; then
+            # Native mode: use host OS binary (darwin or linux)
+            api_os="$(echo "$OS" | tr '[:upper:]' '[:lower:]')"
+        fi
+        local prebuilt="$PROJECT_DIR/tmux-api-${api_os}-${ARCH}"
+        if [[ -f "$prebuilt" ]]; then
+            mkdir -p "$PROJECT_DIR/tmux-api"
+            cp "$prebuilt" "$PROJECT_DIR/tmux-api/tmux-api"
+            chmod +x "$PROJECT_DIR/tmux-api/tmux-api"
+        else
+            error "Pre-built binary not found: tmux-api-${api_os}-${ARCH}"
+        fi
     elif [[ ("$mode" == "container" || "$mode" == "docker") && "$OS" != "Linux" ]]; then
         (cd "$PROJECT_DIR/tmux-api" && CGO_ENABLED=0 GOOS=linux GOARCH="$ARCH" go build -ldflags="-s -w" -o tmux-api .)
     else
