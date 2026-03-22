@@ -219,10 +219,7 @@ termote/
 ├── tests/                  # Test suite
 │   ├── test-termote.sh
 │   ├── test-get.sh
-│   └── test-entrypoints.sh
-└── systemd/                # Optional systemd services
-    ├── termote.service
-    └── tmux-api.service
+└── test-entrypoints.sh
 ```
 
 ## Development

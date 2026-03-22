@@ -60,9 +60,6 @@ termote/
 │   ├── ci.yml                  # CI (build, lint, test)
 │   ├── release.yml             # Release (Docker push, GitHub Release)
 │   └── release-please.yml      # Auto versioning from commits
-├── systemd/                    # Systemd service files (optional)
-│   ├── termote.service         # ttyd WebSocket service
-│   └── tmux-api.service        # tmux API service
 └── docs/                       # Documentation
 ```
 

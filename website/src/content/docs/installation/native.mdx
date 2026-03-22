@@ -41,26 +41,12 @@ No Docker required. Access host binaries like `claude`, `git`, `gh`, etc.
 - Need access to host binaries (claude, git, gh, etc.)
 - No Docker/Podman available
 - Full control over services
-- Custom systemd integration (Linux)
 
 <Aside type="tip">
 Native mode is recommended when you need to use Claude Code or other host CLI tools.
 </Aside>
 
 ## Service Management
-
-### Linux (systemd)
-
-```bash
-# Check status
-sudo systemctl status termote
-sudo systemctl status tmux-api
-
-# Restart
-sudo systemctl restart termote
-```
-
-### macOS (launchd)
 
 ```bash
 # Check processes
