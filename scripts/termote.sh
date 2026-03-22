@@ -80,12 +80,16 @@ get_lan_ip() {
 
 start_ttyd() {
     # Always bind ttyd to localhost - external access via tmux-api proxy only
+    # Loopback interface: lo (Linux) or lo0 (macOS)
+    local lo_iface="lo"
+    [[ "$OS" == "Darwin" ]] && lo_iface="lo0"
+
     local ttyd_ver
     ttyd_ver=$(ttyd --version 2>&1 | grep -oE '[0-9]+\.[0-9]+' | head -1)
     if [[ "$(printf '%s\n' "1.7" "$ttyd_ver" | sort -V | head -1)" == "1.7" ]]; then
-        nohup ttyd -W -i lo -p $PORT_TTYD tmux new-session -A -s main > /dev/null 2>&1 &
+        nohup ttyd -W -i "$lo_iface" -p $PORT_TTYD tmux new-session -A -s main > /dev/null 2>&1 &
     else
-        nohup ttyd -i lo -p $PORT_TTYD tmux new-session -A -s main > /dev/null 2>&1 &
+        nohup ttyd -i "$lo_iface" -p $PORT_TTYD tmux new-session -A -s main > /dev/null 2>&1 &
     fi
     sleep 1
 }
