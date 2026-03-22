@@ -261,7 +261,7 @@ jobs:
 
           # Create tarball (all files needed for termote.sh)
           mkdir -p termote-v${VERSION}
-          cp -r scripts systemd Makefile README.md termote-v${VERSION}/
+          cp -r scripts Makefile README.md termote-v${VERSION}/
           cp docker-compose.yml Dockerfile entrypoint.sh termote-v${VERSION}/
           cp -r artifacts/pwa-dist termote-v${VERSION}/pwa-dist
           # Include pre-built binaries

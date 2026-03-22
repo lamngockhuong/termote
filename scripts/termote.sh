@@ -452,14 +452,6 @@ cmd_uninstall() {
         info "Stopping native services..."
         pkill -f "ttyd" 2>/dev/null || true
         pkill -f "tmux-api" 2>/dev/null || true
-
-        # Systemd cleanup (Linux only)
-        if command -v systemctl &>/dev/null; then
-            sudo systemctl stop "termote@$USER" 2>/dev/null || true
-            sudo systemctl disable "termote@$USER" 2>/dev/null || true
-            sudo rm -f /etc/systemd/system/termote@.service
-            sudo systemctl daemon-reload 2>/dev/null || true
-        fi
     fi
 
     # Tailscale reset

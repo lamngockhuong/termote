@@ -41,26 +41,12 @@ Không cần Docker. Truy cập binary host như `claude`, `git`, `gh`, v.v.
 - Cần truy cập binary host (claude, git, gh, v.v.)
 - Không có Docker/Podman
 - Kiểm soát đầy đủ dịch vụ
-- Tích hợp systemd tùy chỉnh (Linux)
 
 <Aside type="tip">
 Chế độ Native được khuyến nghị khi bạn cần sử dụng Claude Code hoặc các công cụ CLI host khác.
 </Aside>
 
 ## Quản lý dịch vụ
-
-### Linux (systemd)
-
-```bash
-# Kiểm tra trạng thái
-sudo systemctl status termote
-sudo systemctl status tmux-api
-
-# Khởi động lại
-sudo systemctl restart termote
-```
-
-### macOS (launchd)
 
 ```bash
 # Kiểm tra processes

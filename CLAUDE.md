@@ -44,7 +44,6 @@ termote/
 │   ├── test-termote.sh     # CLI tests
 │   ├── test-get.sh         # Online installer tests
 │   └── test-entrypoints.sh # Docker entrypoint tests
-├── systemd/                # Systemd service files (optional)
 └── Makefile                # Build/test/deploy commands
 ```
 
@@ -129,7 +128,6 @@ Both modes use tmux-api as the unified server (PWA + WebSocket proxy + API + aut
 
 - Use `grep -oE` (extended regex) instead of `grep -oP` (Perl regex, Linux-only)
 - Use `ipconfig getifaddr en0` fallback for `hostname -I` on macOS
-- Wrap `systemctl` calls with `command -v systemctl` checks (macOS has no systemd)
 - Use `$(uname)` to detect Darwin (macOS) vs Linux
 - Use `$(uname -m)` for architecture detection (x86_64, aarch64)
 

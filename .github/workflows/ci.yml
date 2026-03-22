@@ -36,7 +36,6 @@ jobs:
               - 'Makefile'
             docker:
               - 'Dockerfile'
-              - 'systemd/**'
 
   build-pwa:
     name: Build PWA
