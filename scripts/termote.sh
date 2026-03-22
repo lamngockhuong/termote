@@ -80,8 +80,11 @@ detect_container_runtime() {
 get_arch() { echo "$ARCH"; }
 
 get_lan_ip() {
-    hostname -I 2>/dev/null | awk '{print $1}' || \
-    ipconfig getifaddr en0 2>/dev/null || \
+    local ip
+    ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+    [ -n "$ip" ] && echo "$ip" && return
+    ip=$(ipconfig getifaddr en0 2>/dev/null)
+    [ -n "$ip" ] && echo "$ip" && return
     echo "0.0.0.0"
 }
 
