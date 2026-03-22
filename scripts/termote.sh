@@ -28,6 +28,7 @@ fi
 PORT_MAIN=7680
 PORT_TTYD=7681
 CONTAINER_NAME="termote"
+LOG_DIR="$HOME/.termote/logs"
 
 # =============================================================================
 # COLORS & UI
@@ -94,25 +95,30 @@ start_ttyd() {
     local lo_iface="lo"
     [[ "$OS" == "Darwin" ]] && lo_iface="lo0"
 
+    # Ensure log directory exists
+    mkdir -p "$LOG_DIR"
+
     local ttyd_ver
     ttyd_ver=$(ttyd --version 2>&1 | grep -oE '[0-9]+\.[0-9]+' | head -1)
     if [[ "$(printf '%s\n' "1.7" "$ttyd_ver" | sort -V | head -1)" == "1.7" ]]; then
-        nohup ttyd -W -i "$lo_iface" -p $PORT_TTYD tmux new-session -A -s main > /dev/null 2>&1 &
+        nohup ttyd -W -i "$lo_iface" -p $PORT_TTYD tmux new-session -A -s main >> "$LOG_DIR/ttyd.log" 2>&1 &
     else
-        nohup ttyd -i "$lo_iface" -p $PORT_TTYD tmux new-session -A -s main > /dev/null 2>&1 &
+        nohup ttyd -i "$lo_iface" -p $PORT_TTYD tmux new-session -A -s main >> "$LOG_DIR/ttyd.log" 2>&1 &
     fi
     sleep 1
 }
 
 start_serve_mode() {
     local binary="$1" pwa_dir="$2"
+    # Ensure log directory exists
+    mkdir -p "$LOG_DIR"
     TERMOTE_PORT="$PORT" \
     TERMOTE_BIND="$BIND_ADDR" \
     TERMOTE_PWA_DIR="$pwa_dir" \
     TERMOTE_USER="admin" \
     TERMOTE_PASS="${TERMOTE_PASS:-}" \
     TERMOTE_NO_AUTH="${NO_AUTH}" \
-    nohup "$binary" > /dev/null 2>&1 &
+    nohup "$binary" >> "$LOG_DIR/tmux-api.log" 2>&1 &
 }
 
 stop_native_services() {
@@ -328,12 +334,16 @@ interactive_menu() {
         "Install" \
         "Uninstall" \
         "Health check" \
+        "View logs" \
+        "Clean logs" \
         "Exit")
 
     case "$cmd" in
         "Install"*) interactive_install ;;
         "Uninstall"*) interactive_uninstall ;;
         "Health"*) cmd_health ;;
+        "View logs"*) cmd_logs follow ;;
+        "Clean logs"*) cmd_logs_clean ;;
         "Exit"|*) exit 0 ;;
     esac
 }
@@ -588,6 +598,53 @@ cmd_health() {
     fi
 }
 
+cmd_logs() {
+    local service="$1"
+    local lines="${2:-50}"
+
+    if [[ ! -d "$LOG_DIR" ]]; then
+        warn "No logs found (log dir: $LOG_DIR)"
+        return 0
+    fi
+
+    case "$service" in
+        ttyd)
+            [[ -f "$LOG_DIR/ttyd.log" ]] && tail -n "$lines" "$LOG_DIR/ttyd.log" || warn "No ttyd logs"
+            ;;
+        tmux-api|api)
+            [[ -f "$LOG_DIR/tmux-api.log" ]] && tail -n "$lines" "$LOG_DIR/tmux-api.log" || warn "No tmux-api logs"
+            ;;
+        follow|tail|-f)
+            # Follow all logs
+            tail -f "$LOG_DIR"/*.log 2>/dev/null || warn "No logs to follow"
+            ;;
+        clean)
+            cmd_logs_clean
+            ;;
+        ""|all)
+            echo -e "${BOLD}=== ttyd logs ===${NC}"
+            [[ -f "$LOG_DIR/ttyd.log" ]] && tail -n "$lines" "$LOG_DIR/ttyd.log" || echo "(empty)"
+            echo ""
+            echo -e "${BOLD}=== tmux-api logs ===${NC}"
+            [[ -f "$LOG_DIR/tmux-api.log" ]] && tail -n "$lines" "$LOG_DIR/tmux-api.log" || echo "(empty)"
+            ;;
+        *)
+            error "Unknown service: $service. Use: ttyd, tmux-api, all, follow, clean"
+            ;;
+    esac
+}
+
+cmd_logs_clean() {
+    if [[ ! -d "$LOG_DIR" ]]; then
+        info "No logs to clean"
+        return 0
+    fi
+
+    local size_before=$(du -sh "$LOG_DIR" 2>/dev/null | cut -f1)
+    rm -f "$LOG_DIR"/*.log
+    info "Logs cleaned (was: $size_before)"
+}
+
 cmd_help() {
     show_header
     echo "Usage: termote.sh [command] [options]"
@@ -596,6 +653,7 @@ cmd_help() {
     echo "  install <mode>    Install and start services"
     echo "  uninstall <mode>  Remove installation"
     echo "  health            Check service health"
+    echo "  logs [service]    View logs (ttyd, tmux-api, all, follow, clean)"
     echo "  help              Show this help"
     echo ""
     echo "Modes:"
@@ -640,6 +698,7 @@ case "$CMD" in
     install)  cmd_install "$@" ;;
     uninstall) cmd_uninstall "$@" ;;
     health)   cmd_health ;;
+    logs)     cmd_logs "$@" ;;
     help|-h|--help) cmd_help ;;
     *)
         error "Unknown command: $CMD"
