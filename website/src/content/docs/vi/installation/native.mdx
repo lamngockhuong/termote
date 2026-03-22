@@ -3,7 +3,7 @@ title: Cài đặt Native
 description: Tất cả dịch vụ chạy native trên host
 ---
 
-import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+import { Steps, Tabs, TabItem, Aside } from "@astrojs/starlight/components";
 
 Không cần Docker. Truy cập binary host như `claude`, `git`, `gh`, v.v.
 
@@ -11,16 +11,9 @@ Không cần Docker. Truy cập binary host như `claude`, `git`, `gh`, v.v.
 
 <Tabs>
   <TabItem label="Linux">
-    ```bash
-    sudo apt install ttyd tmux
-    # Hoặc: sudo snap install ttyd
-    ```
+    ```bash sudo apt install ttyd tmux # Hoặc: sudo snap install ttyd ```
   </TabItem>
-  <TabItem label="macOS">
-    ```bash
-    brew install ttyd tmux go
-    ```
-  </TabItem>
+  <TabItem label="macOS">```bash brew install ttyd tmux go ```</TabItem>
 </Tabs>
 
 ## Cài đặt
@@ -29,11 +22,13 @@ Không cần Docker. Truy cập binary host như `claude`, `git`, `gh`, v.v.
 1. Cài đặt dependencies (xem ở trên)
 
 2. Chạy lệnh deploy
+
    ```bash
    ./scripts/termote.sh install native
    ```
 
 3. Truy cập tại http://localhost:7680
+
 </Steps>
 
 ## Khi nào sử dụng
@@ -43,7 +38,8 @@ Không cần Docker. Truy cập binary host như `claude`, `git`, `gh`, v.v.
 - Kiểm soát đầy đủ dịch vụ
 
 <Aside type="tip">
-Chế độ Native được khuyến nghị khi bạn cần sử dụng Claude Code hoặc các công cụ CLI host khác.
+  Chế độ Native được khuyến nghị khi bạn cần sử dụng Claude Code hoặc các công
+  cụ CLI host khác.
 </Aside>
 
 ## Quản lý dịch vụ

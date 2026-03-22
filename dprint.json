@@ -5,10 +5,12 @@
   "useTabs": false,
   "markdown": {
     "lineWidth": 120,
-    "textWrap": "maintain"
+    "textWrap": "maintain",
+    "associations": ["**/*.mdx"]
   },
   "includes": [
-    "**/*.md"
+    "**/*.md",
+    "**/*.mdx"
   ],
   "excludes": [
     "**/node_modules",
