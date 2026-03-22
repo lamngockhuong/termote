@@ -17,7 +17,7 @@ async function waitForTerminal(page: import('@playwright/test').Page) {
 }
 
 test.describe('Capture screenshots for README', () => {
-  test('mobile terminal view', async ({ browser }) => {
+  test('mobile terminal with toolbar', async ({ browser }) => {
     const context = await browser.newContext(mobileViewport)
     const page = await context.newPage()
     await page.goto('/')
@@ -30,35 +30,24 @@ test.describe('Capture screenshots for README', () => {
     await context.close()
   })
 
-  test('keyboard toolbar', async ({ browser }) => {
+  test('mobile with session sidebar', async ({ browser }) => {
     const context = await browser.newContext(mobileViewport)
     const page = await context.newPage()
     await page.goto('/')
     await waitForTerminal(page)
 
-    const terminal = page.locator('.xterm-screen').first()
-    if (await terminal.isVisible()) {
-      await terminal.click({ force: true })
-      await page.waitForTimeout(300)
+    // Open sidebar by clicking hamburger menu or swipe
+    const menuButton = page.locator('button[aria-label="Toggle sidebar"]')
+    if (await menuButton.isVisible()) {
+      await menuButton.click()
+    } else {
+      // Try clicking the session area in header
+      await page.click('header button').catch(() => {})
     }
+    await page.waitForTimeout(300)
 
     await page.screenshot({
-      path: join(screenshotsDir, 'keyboard-toolbar.png'),
-      fullPage: false,
-    })
-    await context.close()
-  })
-
-  test('desktop view', async ({ browser }) => {
-    const context = await browser.newContext({
-      viewport: { width: 1280, height: 720 },
-    })
-    const page = await context.newPage()
-    await page.goto('/')
-    await waitForTerminal(page)
-
-    await page.screenshot({
-      path: join(screenshotsDir, 'desktop-terminal.png'),
+      path: join(screenshotsDir, 'mobile-sidebar.png'),
       fullPage: false,
     })
     await context.close()

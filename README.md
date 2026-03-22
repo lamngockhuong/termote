@@ -17,8 +17,9 @@ Remote control CLI tools (Claude Code, GitHub Copilot, any terminal) from mobile
 ## Screenshots
 
 <p align="center">
-  <img src="docs/images/screenshots/mobile-terminal.png" alt="Mobile Terminal" width="300" />
-  <img src="docs/images/screenshots/keyboard-toolbar.png" alt="Keyboard Toolbar" width="300" />
+  <img src="docs/images/screenshots/mobile-terminal.png" alt="Mobile Terminal" width="280" />
+  &nbsp;&nbsp;
+  <img src="docs/images/screenshots/mobile-sidebar.png" alt="Session Sidebar" width="280" />
 </p>
 
 ## Architecture
