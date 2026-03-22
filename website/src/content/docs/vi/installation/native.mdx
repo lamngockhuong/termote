@@ -120,6 +120,29 @@ curl http://localhost:7680/api/tmux/health
 curl http://localhost:7680/api/tmux/sessions
 ```
 
+## Cập nhật
+
+### Qua One-liner
+
+Chạy lại installer - sẽ so sánh version và hỏi trước khi cập nhật:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
+```
+
+Tùy chọn:
+
+- `--yes` - Tự động cập nhật không hỏi
+- `--download-only` - Chỉ tải về, không cài đặt
+
+### Cập nhật thủ công
+
+```bash
+./scripts/termote.sh uninstall native
+git pull origin main
+./scripts/termote.sh install native
+```
+
 ## Gỡ cài đặt
 
 ```bash

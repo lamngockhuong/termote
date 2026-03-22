@@ -44,6 +44,8 @@ termote/
 │   ├── test-termote.sh     # CLI tests
 │   ├── test-get.sh         # Online installer tests
 │   └── test-entrypoints.sh # Docker entrypoint tests
+├── website/                # Documentation site (Astro Starlight)
+│   └── src/content/docs/   # MDX docs (EN + VI)
 └── Makefile                # Build/test/deploy commands
 ```
 
