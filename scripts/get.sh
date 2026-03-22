@@ -70,7 +70,7 @@ confirm_install() {
         echo -e "Install Termote? [y/N] \c"
     fi
 
-    read -r response
+    read -r response </dev/tty
     case "$response" in
         [yY]|[yY][eE][sS]) return 0 ;;
         *) return 1 ;;
@@ -154,7 +154,7 @@ main() {
             stop_services
         else
             echo -e "Stop services before update? [Y/n] \c"
-            read -r response
+            read -r response </dev/tty
             case "$response" in
                 [nN]|[nN][oO])
                     error "Cannot update while services are running. Stop manually: ./scripts/termote.sh uninstall [native|container]"
