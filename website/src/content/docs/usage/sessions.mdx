@@ -3,59 +3,81 @@ title: Session Management
 description: Managing terminal sessions with tmux
 ---
 
-import { Aside, Steps } from '@astrojs/starlight/components';
+import { Aside, Steps } from "@astrojs/starlight/components";
 
-Termote uses tmux for persistent sessions that survive disconnects.
+Termote uses tmux windows for persistent sessions that survive disconnects.
 
-## Session Types
+## Default Session
 
-| Session | Purpose |
-|---------|---------|
-| Claude | Claude Code CLI |
-| Copilot | GitHub Copilot CLI |
-| Shell | Standard shell |
+Fresh installs start with a single **Shell** session. Create additional sessions as needed for different workflows (e.g., Claude Code, Copilot, builds).
 
-## Switching Sessions
+## Managing Sessions
 
-<Steps>
-1. Tap session icon in sidebar (desktop) or bottom nav (mobile)
-2. Session loads immediately
-3. Previous session continues in background
-</Steps>
+### Desktop
 
-## Session Persistence
+- **Switch**: Click session in left sidebar
+- **Edit**: Double-click session name, or hover and click pencil icon
+- **Remove**: Hover and click X icon (requires 2+ sessions)
+- **Add**: Click "+ Add session" at bottom
 
-Sessions persist until:
-- Explicitly closed
-- Server restart
-- tmux session killed
+### Mobile
+
+- **Switch**: Swipe right to open sidebar, tap session
+- **Edit**: Swipe left on session, tap Edit
+- **Remove**: Swipe left on session, tap Remove
+- **Add**: Tap "+ Add session" in sidebar
+
+## Session Features
+
+| Feature      | Description                            |
+| ------------ | -------------------------------------- |
+| Custom icons | Choose emoji icon for each session     |
+| Rename       | Change session name anytime            |
+| Auto-sync    | Sessions sync across browsers every 5s |
+| Persistence  | Sessions backed by tmux windows        |
 
 <Aside type="tip">
-Sessions survive network disconnects. Reconnect to pick up where you left off.
+  Sessions survive network disconnects. Reconnect to pick up where you left off.
 </Aside>
 
 ## tmux Commands
 
 ```bash
-# List sessions
-tmux ls
+# List windows (sessions)
+tmux list-windows
 
-# Attach to session
-tmux attach -t claude
+# Create new window
+tmux new-window -n myproject
 
-# Kill session
-tmux kill-session -t shell
+# Switch to window
+tmux select-window -t 0
+
+# Kill window
+tmux kill-window -t 0
 ```
+
+## API Endpoints
+
+Sessions are managed via tmux-api:
+
+| Endpoint                       | Method      | Description       |
+| ------------------------------ | ----------- | ----------------- |
+| `/api/tmux/windows`            | GET         | List all sessions |
+| `/api/tmux/new?name=X`         | POST        | Create session    |
+| `/api/tmux/select/{id}`        | POST        | Switch session    |
+| `/api/tmux/rename/{id}?name=X` | POST        | Rename session    |
+| `/api/tmux/kill/{id}`          | POST/DELETE | Remove session    |
 
 ## Troubleshooting
 
 ### Session not persisting
 
-1. Check tmux is running: `tmux ls`
+1. Check tmux is running: `tmux list-windows`
 2. Verify ttyd uses `-A` flag (attach-or-create)
-3. Check container logs: `docker logs termote`
+3. Check container logs: `docker logs termote` or `podman logs termote`
 
 ### WebSocket errors
 
-1. Check tmux-api logs: `docker logs termote`
+1. Check container logs: `docker logs termote` or `podman logs termote`
 2. Verify ttyd is running on port 7681
+3. Check API health: `curl http://localhost:7680/api/tmux/health`
