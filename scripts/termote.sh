@@ -15,7 +15,14 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
 # Cached system info (computed once)
 OS="$(uname)"
-ARCH="$(case "$(uname -m)" in x86_64|amd64) echo amd64;; aarch64|arm64) echo arm64;; *) echo amd64;; esac)"
+_uname_m="$(uname -m)"
+if [ "$_uname_m" = "x86_64" ] || [ "$_uname_m" = "amd64" ]; then
+    ARCH="amd64"
+elif [ "$_uname_m" = "aarch64" ] || [ "$_uname_m" = "arm64" ]; then
+    ARCH="arm64"
+else
+    ARCH="amd64"
+fi
 
 # Constants
 PORT_MAIN=7680
@@ -284,8 +291,8 @@ select_with_gum() {
 
 select_with_bash() {
     local header="$1"; shift
-    echo "$header"
-    echo ""
+    echo "$header" >&2
+    echo "" >&2
     select choice in "$@"; do
         [[ -n "$choice" ]] && echo "$choice" && break
     done

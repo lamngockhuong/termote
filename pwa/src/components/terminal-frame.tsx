@@ -1,5 +1,9 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
-import { setTerminalFontSize, setTerminalTheme } from '../utils/terminal-bridge'
+import {
+  sendKeyToTerminal,
+  setTerminalFontSize,
+  setTerminalTheme,
+} from '../utils/terminal-bridge'
 
 interface Props {
   fontSize?: number
@@ -75,6 +79,10 @@ export const TerminalFrame = forwardRef<HTMLIFrameElement, Props>(
         const themeApplied = setTerminalTheme(iframe, THEMES[theme])
         if (themeApplied) {
           setTerminalFontSize(iframe, fontSize)
+          // Clear DA response artifacts (e.g. "1;2c0;276;0c") leaked by xterm.js
+          // when ttyd+tmux connection is established. Ctrl+U clears the input line.
+          // Delay to ensure DA responses have arrived before clearing.
+          setTimeout(() => sendKeyToTerminal(iframe, 'u', true), 300)
           if (intervalId) clearInterval(intervalId)
         } else if (++attempts >= 30) {
           if (intervalId) clearInterval(intervalId)
