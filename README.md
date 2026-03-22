@@ -14,6 +14,49 @@ Remote control CLI tools (Claude Code, GitHub Copilot, any terminal) from mobile
 - **PWA**: Installable to homescreen, offline-capable
 - **Persistent sessions**: tmux keeps sessions alive
 
+## Screenshots
+
+<p align="center">
+  <img src="docs/images/screenshots/mobile-terminal.png" alt="Mobile Terminal" width="280" />
+  &nbsp;&nbsp;
+  <img src="docs/images/screenshots/mobile-sidebar.png" alt="Session Sidebar" width="280" />
+</p>
+
+## Architecture
+
+```mermaid
+flowchart TB
+    subgraph Client["Client (Mobile/Desktop)"]
+        PWA["PWA - React + TypeScript"]
+        Gestures["Gesture Controls"]
+        Keyboard["Virtual Keyboard"]
+    end
+
+    subgraph Server["tmux-api Server :7680"]
+        Static["Static Files"]
+        Proxy["WebSocket Proxy"]
+        API["REST API /api/tmux/*"]
+        Auth["Basic Auth"]
+    end
+
+    subgraph Backend["Backend Services"]
+        ttyd["ttyd :7681"]
+        tmux["tmux"]
+        Shell["Shell"]
+        Tools["CLI Tools"]
+    end
+
+    Gestures --> PWA
+    Keyboard --> PWA
+    PWA --> Static
+    PWA <--> Proxy
+    PWA --> API
+    Auth -.-> Static & Proxy & API
+    Proxy <--> ttyd
+    API --> tmux
+    ttyd --> tmux --> Shell --> Tools
+```
+
 ## Quick Start
 
 ```bash
@@ -101,6 +144,21 @@ cd termote
 > **Note**: `termote.sh` is the unified CLI supporting `install` (builds from source, uses pre-built artifacts when available), `uninstall`, and `health` commands.
 
 ## Deployment Modes
+
+```mermaid
+flowchart LR
+    subgraph Container["Container Mode"]
+        direction TB
+        C1["Docker/Podman"] --> C2["tmux-api :7680"] --> C3["ttyd :7681"] --> C4["tmux"]
+    end
+
+    subgraph Native["Native Mode"]
+        direction TB
+        N1["Host System"] --> N2["tmux-api :7680"] --> N3["ttyd :7681"] --> N4["tmux + Host Tools"]
+    end
+
+    User["User"] --> Container & Native
+```
 
 | Mode          | Description    | Use Case                        | Platform     |
 | ------------- | -------------- | ------------------------------- | ------------ |
@@ -221,7 +279,9 @@ termote/
 ├── Makefile                # Build/test/deploy commands
 ├── Dockerfile              # Docker mode (tmux-api + ttyd)
 ├── docker-compose.yml
-├── entrypoint.sh  # Docker entrypoint
+├── entrypoint.sh           # Docker entrypoint
+├── docs/                   # Documentation
+│   └── images/screenshots/ # App screenshots
 ├── pwa/                    # React PWA
 │   └── src/
 │       ├── components/
@@ -236,10 +296,12 @@ termote/
 ├── scripts/
 │   ├── termote.sh          # Unified CLI (install/uninstall/health)
 │   └── get.sh              # Online installer (curl | bash)
-└── tests/                  # Test suite
-    ├── test-termote.sh
-    ├── test-get.sh
-    └── test-entrypoints.sh
+├── tests/                  # Test suite
+│   ├── test-termote.sh
+│   ├── test-get.sh
+│   └── test-entrypoints.sh
+└── website/                # Astro Starlight docs site
+    └── src/content/docs/   # MDX documentation
 ```
 
 ## Development

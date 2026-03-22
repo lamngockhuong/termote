@@ -129,19 +129,20 @@ jobs:
     needs: [changes, build-pwa, build-api]
     if: |
       always() &&
-      (needs.build-pwa.result == 'success' || needs.build-pwa.result == 'skipped') &&
-      (needs.build-api.result == 'success' || needs.build-api.result == 'skipped') &&
-      (needs.changes.outputs.docker == 'true' || needs.build-pwa.result == 'success' || needs.build-api.result == 'success')
+      needs.build-pwa.result == 'success' &&
+      needs.build-api.result == 'success'
     steps:
       - uses: actions/checkout@v6
 
       - name: Download PWA artifacts
+        if: needs.build-pwa.result == 'success'
         uses: actions/download-artifact@v8
         with:
           name: pwa-dist
           path: pwa/dist
 
       - name: Download tmux-api binary
+        if: needs.build-api.result == 'success'
         uses: actions/download-artifact@v8
         with:
           name: tmux-api
