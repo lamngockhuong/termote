@@ -3,7 +3,7 @@ title: Cài đặt Native
 description: Tất cả dịch vụ chạy native trên host
 ---
 
-import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+import { Steps, Tabs, TabItem, Aside } from "@astrojs/starlight/components";
 
 Không cần Docker. Truy cập binary host như `claude`, `git`, `gh`, v.v.
 
@@ -11,16 +11,9 @@ Không cần Docker. Truy cập binary host như `claude`, `git`, `gh`, v.v.
 
 <Tabs>
   <TabItem label="Linux">
-    ```bash
-    sudo apt install ttyd tmux
-    # Hoặc: sudo snap install ttyd
-    ```
+    ```bash sudo apt install ttyd tmux # Hoặc: sudo snap install ttyd ```
   </TabItem>
-  <TabItem label="macOS">
-    ```bash
-    brew install ttyd tmux go
-    ```
-  </TabItem>
+  <TabItem label="macOS">```bash brew install ttyd tmux go ```</TabItem>
 </Tabs>
 
 ## Cài đặt
@@ -29,11 +22,13 @@ Không cần Docker. Truy cập binary host như `claude`, `git`, `gh`, v.v.
 1. Cài đặt dependencies (xem ở trên)
 
 2. Chạy lệnh deploy
+
    ```bash
    ./scripts/termote.sh install native
    ```
 
 3. Truy cập tại http://localhost:7680
+
 </Steps>
 
 ## Khi nào sử dụng
@@ -43,7 +38,8 @@ Không cần Docker. Truy cập binary host như `claude`, `git`, `gh`, v.v.
 - Kiểm soát đầy đủ dịch vụ
 
 <Aside type="tip">
-Chế độ Native được khuyến nghị khi bạn cần sử dụng Claude Code hoặc các công cụ CLI host khác.
+  Chế độ Native được khuyến nghị khi bạn cần sử dụng Claude Code hoặc các công
+  cụ CLI host khác.
 </Aside>
 
 ## Quản lý dịch vụ
@@ -59,10 +55,61 @@ ps aux | grep tmux-api
 
 ## Khắc phục sự cố
 
+### Chẩn đoán nhanh
+
+```bash
+./scripts/termote.sh health   # Kiểm tra sức khỏe
+ss -tlnp | grep -E "7680|7681"  # Kiểm tra cổng
+```
+
+### Kiểm tra tiến trình
+
 ```bash
 ps aux | grep ttyd         # Kiểm tra ttyd đang chạy
 ps aux | grep tmux-api     # Kiểm tra tmux-api đang chạy
-lsof -i :7680              # Xác minh cổng đang sử dụng
+lsof -i :7680              # Xác minh cổng chính
+lsof -i :7681              # Xác minh cổng ttyd
+```
+
+### Debug với logs
+
+Chế độ native mặc định không ghi logs. Để xem logs:
+
+```bash
+# Dừng dịch vụ
+./scripts/termote.sh uninstall native
+
+# Chạy ttyd với logs (terminal 1)
+ttyd -W -i lo -p 7681 tmux new-session -A -s main
+
+# Chạy tmux-api với logs (terminal 2)
+cd tmux-api
+TERMOTE_PORT=7680 TERMOTE_BIND=127.0.0.1 \
+TERMOTE_PWA_DIR=../pwa/dist ./tmux-api-native
+```
+
+### Lỗi thường gặp
+
+| Lỗi            | Giải pháp                                           |
+| -------------- | --------------------------------------------------- |
+| Cổng đang dùng | `lsof -i :7680` rồi kill process                    |
+| Thiếu ttyd     | `brew install ttyd` (macOS) hoặc `apt install ttyd` |
+| Thiếu binary   | `cd tmux-api && go build -o tmux-api-native .`      |
+| PWA chưa build | `cd pwa && pnpm build`                              |
+
+### tmux Session
+
+```bash
+tmux list-sessions         # Liệt kê sessions
+tmux attach -t main        # Kết nối vào session
+tmux kill-session -t main  # Reset session
+```
+
+### Test API
+
+```bash
+curl http://localhost:7680/api/tmux/health
+curl http://localhost:7680/api/tmux/sessions
 ```
 
 ## Gỡ cài đặt

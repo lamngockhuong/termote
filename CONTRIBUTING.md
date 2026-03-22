@@ -45,6 +45,25 @@ go build -o tmux-api .
 
 See [docs/code-standards.md](docs/code-standards.md) for details.
 
+## Formatting
+
+```bash
+make fmt         # Format markdown/mdx files
+make fmt-check   # Check formatting (CI)
+```
+
+**MDX Caveat:** When editing MDX files with Astro components (`<Steps>`, `<Tabs>`), ensure closing tags are NOT indented:
+
+```mdx
+<Steps>
+1. Step one
+2. Step two
+
+</Steps>   <!-- Correct: at line start -->
+```
+
+Indented closing tags break the build.
+
 ## Testing
 
 ```bash

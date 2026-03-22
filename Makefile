@@ -1,7 +1,7 @@
 # Termote Makefile
 # Usage: make <target>
 
-.PHONY: help build test test-cli test-get test-entrypoints install-container install-native clean release release-dry
+.PHONY: help build test test-cli test-get test-entrypoints install-container install-native clean release release-dry fmt fmt-check
 
 # Default target
 help:
@@ -25,6 +25,10 @@ help:
 	@echo "Release:"
 	@echo "  make release        Tag and push new release (VERSION=x.y.z)"
 	@echo "  make release-dry    Show what would be released"
+	@echo ""
+	@echo "Format:"
+	@echo "  make fmt            Format markdown/mdx files (dprint)"
+	@echo "  make fmt-check      Check markdown/mdx formatting"
 	@echo ""
 	@echo "Other:"
 	@echo "  make health         Check service health"
@@ -71,6 +75,13 @@ test-get:
 test-entrypoints:
 	@chmod +x tests/test-entrypoints.sh
 	@./tests/test-entrypoints.sh
+
+# Format targets (dprint)
+fmt:
+	npx dprint fmt
+
+fmt-check:
+	npx dprint check
 
 # Health check
 health:

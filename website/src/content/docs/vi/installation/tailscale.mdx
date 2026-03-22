@@ -3,7 +3,7 @@ title: Tailscale HTTPS
 description: Tự động SSL qua tailscale serve
 ---
 
-import { Aside, Steps } from '@astrojs/starlight/components';
+import { Aside, Steps } from "@astrojs/starlight/components";
 
 Tự động HTTPS sử dụng `tailscale serve`. Không cần quản lý chứng chỉ thủ công.
 
@@ -21,6 +21,7 @@ Tự động HTTPS sử dụng `tailscale serve`. Không cần quản lý chứn
    ```
 
 2. Truy cập tại https://myhost.ts.net
+
 </Steps>
 
 ## Tùy chọn
@@ -34,7 +35,7 @@ Tự động HTTPS sử dụng `tailscale serve`. Không cần quản lý chứn
 ```
 
 <Aside type="tip">
-Tailscale là cách được khuyến nghị để expose Termote an toàn qua internet.
+  Tailscale là cách được khuyến nghị để expose Termote an toàn qua internet.
 </Aside>
 
 ## Cách hoạt động
@@ -44,6 +45,7 @@ Internet → Tailscale (HTTPS) → localhost:7680 → tmux-api → ttyd
 ```
 
 Tailscale xử lý:
+
 - Chứng chỉ TLS (tự động gia hạn)
 - Xác thực (Tailscale ACLs)
 - NAT traversal
