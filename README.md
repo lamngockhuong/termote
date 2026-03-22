@@ -66,6 +66,8 @@ flowchart TB
 make test                              # Run tests
 ```
 
+> **Tip**: Install [gum](https://github.com/charmbracelet/gum) for enhanced interactive menus (optional, bash fallback available)
+
 ## Installation
 
 ### One-liner (recommended)
