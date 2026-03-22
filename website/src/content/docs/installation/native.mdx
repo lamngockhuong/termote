@@ -21,7 +21,7 @@ No Docker required. Access host binaries like `claude`, `git`, `gh`, etc.
       brew install ttyd tmux go
     ```
 
-  </TabItem>
+</TabItem>
 </Tabs>
 
 ## Installation
@@ -118,6 +118,29 @@ tmux kill-session -t main  # Reset session
 ```bash
 curl http://localhost:7680/api/tmux/health
 curl http://localhost:7680/api/tmux/sessions
+```
+
+## Updating
+
+### Via One-liner
+
+Re-run the installer - it compares versions and prompts before updating:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
+```
+
+Options:
+
+- `--yes` - Auto-update without prompt
+- `--download-only` - Download only, no install
+
+### Manual Update
+
+```bash
+./scripts/termote.sh uninstall native
+git pull origin main
+./scripts/termote.sh install native
 ```
 
 ## Uninstall

@@ -28,12 +28,18 @@ make test                              # Run tests
 ### One-liner (recommended)
 
 ```bash
-# Defaults to native mode (access host binaries like claude, gh, etc.)
+# Download and prompt before install (defaults to native mode)
 curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
 
+# Auto-install without prompt
+curl -fsSL .../get.sh | bash -s -- --yes
+
+# Download only (no install)
+curl -fsSL .../get.sh | bash -s -- --download-only
+
 # With explicit mode and options
-curl -fsSL .../get.sh | bash -s -- --container --lan
-curl -fsSL .../get.sh | bash -s -- --native --tailscale myhost
+curl -fsSL .../get.sh | bash -s -- --yes --container --lan
+curl -fsSL .../get.sh | bash -s -- --yes --native --tailscale myhost
 ```
 
 ### Docker
@@ -173,6 +179,18 @@ Uses `tailscale serve` for automatic HTTPS (no manual cert management):
 ./scripts/termote.sh uninstall container   # Container mode
 ./scripts/termote.sh uninstall native      # Native mode
 ./scripts/termote.sh uninstall all         # Everything
+```
+
+### Updating
+
+```bash
+# Option 1: Re-run one-liner (compares versions, prompts before install)
+curl -fsSL .../get.sh | bash
+
+# Option 2: Manual update
+./scripts/termote.sh uninstall [container|native]
+git pull origin main                    # If installed from source
+./scripts/termote.sh install [container|native] [--lan] [--tailscale ...]
 ```
 
 ## Platform Support

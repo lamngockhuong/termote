@@ -334,6 +334,34 @@ curl http://localhost:7680/api/tmux/sessions
 curl -u admin:password http://localhost:7680/api/tmux/health
 ```
 
+## Updating
+
+### Via One-liner (Recommended)
+
+Re-run the installer - it compares versions and prompts before updating:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
+```
+
+Options:
+
+- `--yes` - Auto-update without prompt
+- `--download-only` - Download only, no install
+
+### Manual Update
+
+```bash
+# 1. Stop services
+./scripts/termote.sh uninstall [container|native]
+
+# 2. Pull latest
+git pull origin main  # If installed from source
+
+# 3. Reinstall with same options
+./scripts/termote.sh install [container|native] [--lan] [--tailscale ...]
+```
+
 ## Uninstall
 
 ```bash

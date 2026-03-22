@@ -3,7 +3,7 @@ title: Cài đặt Container
 description: Triển khai container tất-cả-trong-một
 ---
 
-import { Aside, Steps } from '@astrojs/starlight/components';
+import { Aside, Steps } from "@astrojs/starlight/components";
 
 Container đơn với tmux-api (PWA + proxy) + ttyd + tmux.
 
@@ -55,11 +55,12 @@ docker run -d --name termote -p 7680:7680 \
 | `--port <port>` | Cổng tùy chỉnh (mặc định: 7680) |
 
 <Aside type="tip">
-Script tự động phát hiện `podman` hoặc `docker` - cả hai hoạt động giống nhau.
+  Script tự động phát hiện `podman` hoặc `docker` - cả hai hoạt động giống nhau.
 </Aside>
 
 <Aside type="note">
-Sử dụng chế độ Container khi bạn không cần truy cập binary host (như `claude` hoặc `git`).
+  Sử dụng chế độ Container khi bạn không cần truy cập binary host (như `claude`
+  hoặc `git`).
 </Aside>
 
 ## Khắc phục sự cố
@@ -128,6 +129,29 @@ docker restart termote
 ```bash
 curl http://localhost:7680/api/tmux/health
 curl -u admin:password http://localhost:7680/api/tmux/sessions
+```
+
+## Cập nhật
+
+### Qua One-liner
+
+Chạy lại installer - sẽ so sánh version và hỏi trước khi cập nhật:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash -s -- --container
+```
+
+Tùy chọn:
+
+- `--yes` - Tự động cập nhật không hỏi
+- `--download-only` - Chỉ tải về, không cài đặt
+
+### Cập nhật thủ công
+
+```bash
+./scripts/termote.sh uninstall container
+git pull origin main
+./scripts/termote.sh install container
 ```
 
 ## Gỡ cài đặt

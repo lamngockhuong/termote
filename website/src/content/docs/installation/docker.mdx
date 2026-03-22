@@ -3,7 +3,7 @@ title: Container Installation
 description: All-in-one container deployment
 ---
 
-import { Aside, Steps } from '@astrojs/starlight/components';
+import { Aside, Steps } from "@astrojs/starlight/components";
 
 Single container with tmux-api (PWA + proxy) + ttyd + tmux.
 
@@ -55,11 +55,12 @@ docker run -d --name termote -p 7680:7680 \
 | `--port <port>` | Custom port (default: 7680)        |
 
 <Aside type="tip">
-Scripts auto-detect `podman` or `docker` - both work identically.
+  Scripts auto-detect `podman` or `docker` - both work identically.
 </Aside>
 
 <Aside type="note">
-Use Container mode when you don't need access to host binaries (like `claude` or `git`).
+  Use Container mode when you don't need access to host binaries (like `claude`
+  or `git`).
 </Aside>
 
 ## Troubleshooting
@@ -128,6 +129,29 @@ docker restart termote
 ```bash
 curl http://localhost:7680/api/tmux/health
 curl -u admin:password http://localhost:7680/api/tmux/sessions
+```
+
+## Updating
+
+### Via One-liner
+
+Re-run the installer - it compares versions and prompts before updating:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash -s -- --container
+```
+
+Options:
+
+- `--yes` - Auto-update without prompt
+- `--download-only` - Download only, no install
+
+### Manual Update
+
+```bash
+./scripts/termote.sh uninstall container
+git pull origin main
+./scripts/termote.sh install container
 ```
 
 ## Uninstall
