@@ -224,11 +224,11 @@ test_security() {
         fail "password input" "read -s" "not found"
     fi
 
-    # Verify ttyd binds to localhost only
-    if grep -q '\-i lo' "$SCRIPT"; then
-        pass "ttyd binds to localhost only (-i lo)"
+    # Verify ttyd binds to localhost only (lo on Linux, lo0 on macOS)
+    if grep -q 'lo_iface=' "$SCRIPT" && grep -q '\-i.*lo_iface' "$SCRIPT"; then
+        pass "ttyd binds to localhost only (cross-platform)"
     else
-        fail "ttyd binding" "-i lo" "not found"
+        fail "ttyd binding" "lo_iface" "not found"
     fi
 }
 

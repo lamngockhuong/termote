@@ -207,11 +207,11 @@ test_install_script_call() {
         fail "default mode" "native" "not found"
     fi
 
-    # Verify mode extraction from args
-    if grep -q 'container|native) mode=' "$PROJECT_DIR/scripts/get.sh"; then
-        pass "mode extraction from args"
+    # Verify mode extraction from args (supports --container/--native flags)
+    if grep -q '\-\-container|container)' "$PROJECT_DIR/scripts/get.sh"; then
+        pass "mode extraction from args (--container/container)"
     else
-        fail "mode extraction" "case pattern" "not found"
+        fail "mode extraction" "--container pattern" "not found"
     fi
 }
 

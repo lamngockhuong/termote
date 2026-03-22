@@ -112,7 +112,8 @@ main() {
     local args=()
     for arg in "$@"; do
         case "$arg" in
-            container|native) mode="$arg" ;;
+            --container|container) mode="container" ;;
+            --native|native) mode="native" ;;
             *) args+=("$arg") ;;
         esac
     done
