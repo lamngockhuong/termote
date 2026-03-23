@@ -49,7 +49,8 @@ export default function App() {
 
   const gestureHandlers = useMemo(
     () => ({
-      onSwipeLeft: () => sendKeyToTerminal(terminalRef.current, 'c', true),
+      onSwipeLeft: () =>
+        sendKeyToTerminal(terminalRef.current, 'c', { ctrl: true }),
       onSwipeRight: () => sendKeyToTerminal(terminalRef.current, 'Tab'),
       onSwipeUp: () => {
         if (keyboardVisible && terminalContainerRef.current) {
@@ -89,7 +90,9 @@ export default function App() {
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const value = e.target.value
       if (value.length === 1 && /^[a-zA-Z]$/.test(value)) {
-        sendKeyToTerminal(terminalRef.current, value.toLowerCase(), true)
+        sendKeyToTerminal(terminalRef.current, value.toLowerCase(), {
+          ctrl: true,
+        })
         setCtrlActive(false)
         focusTerminal(terminalRef.current)
       }
@@ -108,25 +111,37 @@ export default function App() {
 
   useGestures(gestureRef, gestureHandlers)
 
-  const handleKey = (key: string) => {
+  const handleKey = useCallback((key: string) => {
     sendKeyToTerminal(terminalRef.current, key)
-  }
+  }, [])
 
-  const handleCtrlKey = (key: string) => {
-    sendKeyToTerminal(terminalRef.current, key, true)
-  }
+  const handleCtrlKey = useCallback((key: string) => {
+    sendKeyToTerminal(terminalRef.current, key, { ctrl: true })
+  }, [])
 
-  const handleScroll = (direction: 'up' | 'down') => {
+  const handleShiftKey = useCallback((key: string) => {
+    sendKeyToTerminal(terminalRef.current, key, { shift: true })
+  }, [])
+
+  const handleCtrlShiftKey = useCallback((key: string) => {
+    if (key === 'v') {
+      pasteToTerminal(terminalRef.current)
+      return
+    }
+    sendKeyToTerminal(terminalRef.current, key, { ctrl: true, shift: true })
+  }, [])
+
+  const handleScroll = useCallback((direction: 'up' | 'down') => {
     scrollTmux(terminalRef.current, direction)
-  }
+  }, [])
 
-  const handleTmuxCopy = () => {
+  const handleTmuxCopy = useCallback(() => {
     toggleTmuxCopyMode(terminalRef.current)
-  }
+  }, [])
 
-  const handleSendText = (text: string) => {
+  const handleSendText = useCallback((text: string) => {
     sendTextToTerminal(terminalRef.current, text)
-  }
+  }, [])
 
   const handleMobileSelect = (id: string) => {
     switchSession(id)
@@ -277,6 +292,8 @@ export default function App() {
       <KeyboardToolbar
         onKey={handleKey}
         onCtrlKey={handleCtrlKey}
+        onShiftKey={handleShiftKey}
+        onCtrlShiftKey={handleCtrlShiftKey}
         onScroll={handleScroll}
         onTmuxCopy={handleTmuxCopy}
         onToggleKeyboard={toggleKeyboard}

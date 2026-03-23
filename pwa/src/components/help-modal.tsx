@@ -29,11 +29,13 @@ const TOOLBAR_GUIDE: GuideSection[] = [
   {
     title: 'Toolbar Buttons',
     items: [
+      { key: '⛶/⊟', desc: 'Expand/collapse keyboard' },
       { key: '⌨️ Keyboard', desc: 'Toggle virtual keyboard' },
       { key: 'Tab', desc: 'Tab key / autocomplete' },
       { key: 'Esc', desc: 'Escape key' },
       { key: '↵ Enter', desc: 'Submit command' },
-      { key: 'Ctrl', desc: 'Toggle Ctrl modifier' },
+      { key: 'Ctrl', desc: 'Toggle Ctrl modifier (sticky)' },
+      { key: 'Shift', desc: 'Toggle Shift modifier (sticky)' },
       { key: '↑↓←→', desc: 'Arrow keys' },
       { key: '⏱ History', desc: 'Toggle tmux copy mode' },
       { key: '⇈⇊ Scroll', desc: 'Page up/down in copy mode' },
@@ -48,8 +50,23 @@ const TOOLBAR_GUIDE: GuideSection[] = [
       { key: '^L', desc: 'Clear screen' },
       { key: '^A', desc: 'Move to line start' },
       { key: '^E', desc: 'Move to line end' },
-      { key: '^B', desc: 'tmux prefix' },
-      { key: '^X', desc: 'Cut (in editors)' },
+      { key: '^B', desc: 'tmux prefix (expanded mode)' },
+    ],
+  },
+  {
+    title: 'Ctrl+Shift Combos',
+    items: [
+      { key: '^⇧V', desc: 'Paste from clipboard' },
+      { key: '^⇧C', desc: 'Copy (terminal)' },
+      { key: '^⇧Z', desc: 'Redo' },
+    ],
+  },
+  {
+    title: 'Expanded Mode Keys',
+    items: [
+      { key: 'Home/End', desc: 'Jump to line start/end' },
+      { key: 'Del/Bksp', desc: 'Delete forward/backward' },
+      { key: 'PgUp/PgDn', desc: 'Page up/down' },
     ],
   },
 ]

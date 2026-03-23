@@ -9,7 +9,7 @@ Remote control CLI tools (Claude Code, GitHub Copilot, any terminal) from mobile
 ## Features
 
 - **Session switching**: Claude, Copilot, Shell terminals
-- **Mobile-friendly**: Virtual keyboard toolbar (Tab/Ctrl/Esc/arrows)
+- **Mobile-friendly**: Virtual keyboard toolbar (Tab/Ctrl/Shift/arrows, expandable)
 - **Gesture support**: Swipe for Ctrl+C, Tab, history navigation
 - **PWA**: Installable to homescreen, offline-capable
 - **Persistent sessions**: tmux keeps sessions alive
@@ -272,7 +272,7 @@ git pull origin main                    # If installed from source
 | Paste            | Long press          |
 | Font size        | Pinch in/out        |
 
-Virtual toolbar provides: Tab, Esc, Ctrl, Arrow keys, and common Ctrl combos.
+Virtual toolbar provides: Tab, Esc, Ctrl, Shift, Arrow keys, and common key combos. Supports Ctrl+Shift combinations (paste, copy). Toggle between minimal and expanded mode for additional keys (Home, End, Delete, etc.).
 
 ## Project Structure
 

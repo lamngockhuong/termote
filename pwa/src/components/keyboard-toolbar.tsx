@@ -3,43 +3,62 @@ import {
   ArrowLeft,
   ArrowRight,
   ArrowUp,
+  ChevronFirst,
+  ChevronLast,
   ChevronsDown,
   ChevronsUp,
   CornerDownLeft,
+  Delete,
+  Expand,
   History,
   Keyboard,
   Languages,
+  Minimize2,
   Send,
   X,
 } from 'lucide-react'
-import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { useHaptic } from '../hooks/use-haptic'
 
 interface Props {
   onKey: (key: string) => void
   onCtrlKey: (key: string) => void
+  onShiftKey?: (key: string) => void
+  onCtrlShiftKey?: (key: string) => void
   onScroll?: (direction: 'up' | 'down', pages?: boolean) => void
   onTmuxCopy?: () => void
   onToggleKeyboard?: () => void
   onSendText?: (text: string) => void
   ctrlActive?: boolean
   onCtrlChange?: (active: boolean) => void
+  shiftActive?: boolean
+  onShiftChange?: (active: boolean) => void
 }
 
 interface KeyConfig {
   label: ReactNode
   key: string
-  isModifier?: boolean
+  isCtrlModifier?: boolean
+  isShiftModifier?: boolean
   isScroll?: boolean
   scrollDir?: 'up' | 'down'
   isTmuxCopy?: boolean
   isKeyboardToggle?: boolean
   isImeToggle?: boolean
+  isExpandToggle?: boolean
 }
 
 const ICON_SIZE = 18
 
-const KEYS: KeyConfig[] = [
+// Minimal mode keys (essential for terminal use)
+const MINIMAL_KEYS: KeyConfig[] = [
   {
     label: <Keyboard size={ICON_SIZE} />,
     key: 'Keyboard',
@@ -53,11 +72,27 @@ const KEYS: KeyConfig[] = [
   { label: 'Tab', key: 'Tab' },
   { label: 'Esc', key: 'Escape' },
   { label: <CornerDownLeft size={ICON_SIZE} />, key: 'Enter' },
-  { label: 'Ctrl', key: 'Control', isModifier: true },
+  { label: 'Ctrl', key: 'Control', isCtrlModifier: true },
+  { label: 'Shift', key: 'Shift', isShiftModifier: true },
   { label: <ArrowUp size={ICON_SIZE} />, key: 'ArrowUp' },
   { label: <ArrowDown size={ICON_SIZE} />, key: 'ArrowDown' },
   { label: <ArrowLeft size={ICON_SIZE} />, key: 'ArrowLeft' },
   { label: <ArrowRight size={ICON_SIZE} />, key: 'ArrowRight' },
+]
+
+// Extra keys for full mode
+const EXTRA_KEYS: KeyConfig[] = [
+  { label: <ChevronFirst size={ICON_SIZE} />, key: 'Home' },
+  { label: <ChevronLast size={ICON_SIZE} />, key: 'End' },
+  { label: <Delete size={ICON_SIZE} />, key: 'Delete' },
+  { label: 'Bksp', key: 'Backspace' },
+  { label: 'PgUp', key: 'PageUp' },
+  { label: 'PgDn', key: 'PageDown' },
+  { label: 'Ins', key: 'Insert' },
+]
+
+// Utility keys (always at end)
+const UTILITY_KEYS: KeyConfig[] = [
   { label: <History size={ICON_SIZE} />, key: 'TmuxCopy', isTmuxCopy: true },
   {
     label: <ChevronsUp size={ICON_SIZE} />,
@@ -73,20 +108,47 @@ const KEYS: KeyConfig[] = [
   },
 ]
 
-const CTRL_COMBOS = [
-  { label: 'B', combo: 'b' },
+// Minimal Ctrl combos (most used)
+const CTRL_COMBOS_MINIMAL = [
   { label: 'C', combo: 'c' },
   { label: 'D', combo: 'd' },
-  { label: 'X', combo: 'x' },
   { label: 'Z', combo: 'z' },
   { label: 'L', combo: 'l' },
   { label: 'A', combo: 'a' },
   { label: 'E', combo: 'e' },
 ]
 
+// Extra Ctrl combos for full mode
+const CTRL_COMBOS_EXTRA = [
+  { label: 'B', combo: 'b' },
+  { label: 'X', combo: 'x' },
+  { label: 'K', combo: 'k' },
+  { label: 'U', combo: 'u' },
+  { label: 'W', combo: 'w' },
+  { label: 'R', combo: 'r' },
+  { label: 'P', combo: 'p' },
+  { label: 'N', combo: 'n' },
+]
+
+// Pre-computed full Ctrl combos to avoid spread on render
+const CTRL_COMBOS_FULL = [...CTRL_COMBOS_MINIMAL, ...CTRL_COMBOS_EXTRA]
+
+const CTRL_SHIFT_COMBOS = [
+  { label: 'C', combo: 'c' },
+  { label: 'V', combo: 'v' },
+  { label: 'Z', combo: 'z' },
+  { label: 'X', combo: 'x' },
+]
+
 // Button background color based on key type
-function getKeyButtonBg(key: KeyConfig, ctrlActive: boolean): string {
-  if (key.isModifier && ctrlActive) return 'bg-blue-600 text-white'
+function getKeyButtonBg(
+  key: KeyConfig,
+  ctrlActive: boolean,
+  shiftActive: boolean,
+): string {
+  if (key.isCtrlModifier && ctrlActive) return 'bg-blue-600 text-white'
+  if (key.isShiftModifier && shiftActive) return 'bg-orange-500 text-white'
+  if (key.isExpandToggle) return 'bg-indigo-200/70 dark:bg-indigo-700/50'
   if (key.isImeToggle) return 'bg-teal-200/70 dark:bg-teal-700/50'
   if (key.isKeyboardToggle) return 'bg-purple-200/70 dark:bg-purple-700/50'
   if (key.isTmuxCopy) return 'bg-amber-200/70 dark:bg-amber-700/50'
@@ -97,19 +159,26 @@ function getKeyButtonBg(key: KeyConfig, ctrlActive: boolean): string {
 export function KeyboardToolbar({
   onKey,
   onCtrlKey,
+  onShiftKey,
+  onCtrlShiftKey,
   onScroll,
   onTmuxCopy,
   onToggleKeyboard,
   onSendText,
   ctrlActive: externalCtrlActive,
   onCtrlChange,
+  shiftActive: externalShiftActive,
+  onShiftChange,
 }: Props) {
   const [internalCtrlActive, setInternalCtrlActive] = useState(false)
+  const [internalShiftActive, setInternalShiftActive] = useState(false)
+  const [expanded, setExpanded] = useState(false)
   const [imeMode, setImeMode] = useState(false)
   const [imeText, setImeText] = useState('')
   const imeInputRef = useRef<HTMLInputElement>(null)
   const imeFocusTimeoutRef = useRef<number | null>(null)
   const ctrlActive = externalCtrlActive ?? internalCtrlActive
+  const shiftActive = externalShiftActive ?? internalShiftActive
   const { trigger: haptic } = useHaptic()
 
   // Cleanup timeout on unmount
@@ -119,13 +188,29 @@ export function KeyboardToolbar({
     }
   }, [])
 
-  // Filter out IME toggle if handler not provided
-  const visibleKeys = onSendText ? KEYS : KEYS.filter((k) => !k.isImeToggle)
+  // Build visible keys based on mode (memoized to avoid re-creating arrays)
+  const visibleKeys = useMemo(() => {
+    const baseKeys = onSendText
+      ? MINIMAL_KEYS
+      : MINIMAL_KEYS.filter((k) => !k.isImeToggle)
+    return expanded
+      ? [...baseKeys, ...EXTRA_KEYS, ...UTILITY_KEYS]
+      : [...baseKeys, ...UTILITY_KEYS]
+  }, [expanded, onSendText])
+
+  // Ctrl combos based on mode
+  const ctrlCombos = expanded ? CTRL_COMBOS_FULL : CTRL_COMBOS_MINIMAL
 
   const setCtrlActive = (value: boolean | ((prev: boolean) => boolean)) => {
     const newValue = typeof value === 'function' ? value(ctrlActive) : value
     setInternalCtrlActive(newValue)
     onCtrlChange?.(newValue)
+  }
+
+  const setShiftActive = (value: boolean | ((prev: boolean) => boolean)) => {
+    const newValue = typeof value === 'function' ? value(shiftActive) : value
+    setInternalShiftActive(newValue)
+    onShiftChange?.(newValue)
   }
 
   const toggleImeMode = useCallback(() => {
@@ -162,11 +247,18 @@ export function KeyboardToolbar({
     [handleImeSend],
   )
 
+  const toggleExpanded = useCallback(() => {
+    haptic('medium')
+    setExpanded((prev) => !prev)
+  }, [haptic])
+
   const handleKey = useCallback(
     (
       key: string,
       opts?: {
-        isModifier?: boolean
+        isCtrlModifier?: boolean
+        isShiftModifier?: boolean
+        isExpandToggle?: boolean
         scrollDir?: 'up' | 'down'
         isTmuxCopy?: boolean
         isKeyboardToggle?: boolean
@@ -174,6 +266,10 @@ export function KeyboardToolbar({
       },
     ) => {
       haptic('light')
+      if (opts?.isExpandToggle) {
+        toggleExpanded()
+        return
+      }
       if (opts?.isImeToggle) {
         toggleImeMode()
         return
@@ -190,23 +286,43 @@ export function KeyboardToolbar({
         onScroll(opts.scrollDir)
         return
       }
-      if (opts?.isModifier) {
+      if (opts?.isCtrlModifier) {
         setCtrlActive((prev) => !prev)
-      } else if (ctrlActive) {
-        onCtrlKey(key.toLowerCase())
+        return
+      }
+      if (opts?.isShiftModifier) {
+        setShiftActive((prev) => !prev)
+        return
+      }
+      // Handle key with modifiers
+      // Only lowercase single letters, preserve special key names (Tab, ArrowUp, etc.)
+      const keyToSend = /^[a-z]$/i.test(key) ? key.toLowerCase() : key
+      if (ctrlActive && shiftActive) {
+        onCtrlShiftKey?.(keyToSend)
         setCtrlActive(false)
+        setShiftActive(false)
+      } else if (ctrlActive) {
+        onCtrlKey(keyToSend)
+        setCtrlActive(false)
+      } else if (shiftActive) {
+        onShiftKey?.(keyToSend)
+        setShiftActive(false)
       } else {
         onKey(key)
       }
     },
     [
       ctrlActive,
+      shiftActive,
       onKey,
       onCtrlKey,
+      onShiftKey,
+      onCtrlShiftKey,
       onScroll,
       onTmuxCopy,
       onToggleKeyboard,
       toggleImeMode,
+      toggleExpanded,
       haptic,
     ],
   )
@@ -257,6 +373,22 @@ export function KeyboardToolbar({
       className="flex items-center gap-2 px-3 py-2 pb-safe glass-surface border-t border-zinc-300/30 dark:border-zinc-700/30 overflow-x-auto"
       style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.5rem)' }}
     >
+      {/* Expand/collapse toggle */}
+      <button
+        onMouseDown={(e) => e.preventDefault()}
+        onTouchStart={(e) => e.preventDefault()}
+        onContextMenu={(e) => e.preventDefault()}
+        onClick={() => handleKey('Expand', { isExpandToggle: true })}
+        className="min-w-11 h-11 px-3 flex items-center justify-center rounded-xl text-sm font-mono bg-indigo-200/70 dark:bg-indigo-700/50 active:bg-indigo-300 dark:active:bg-indigo-600 touch-manipulation transition-colors"
+        aria-label={expanded ? 'Collapse keyboard' : 'Expand keyboard'}
+      >
+        {expanded ? (
+          <Minimize2 size={ICON_SIZE} />
+        ) : (
+          <Expand size={ICON_SIZE} />
+        )}
+      </button>
+
       {visibleKeys.map((keyConfig) => (
         <button
           key={keyConfig.key}
@@ -267,22 +399,43 @@ export function KeyboardToolbar({
           onContextMenu={(e) => e.preventDefault()}
           onClick={() =>
             handleKey(keyConfig.key, {
-              isModifier: keyConfig.isModifier,
+              isCtrlModifier: keyConfig.isCtrlModifier,
+              isShiftModifier: keyConfig.isShiftModifier,
+              isExpandToggle: keyConfig.isExpandToggle,
               scrollDir: keyConfig.scrollDir,
               isTmuxCopy: keyConfig.isTmuxCopy,
               isKeyboardToggle: keyConfig.isKeyboardToggle,
               isImeToggle: keyConfig.isImeToggle,
             })
           }
-          className={`min-w-11 h-11 px-3 flex items-center justify-center rounded-xl text-sm font-mono ${getKeyButtonBg(keyConfig, ctrlActive)} active:bg-zinc-300 dark:active:bg-zinc-600 touch-manipulation transition-colors`}
+          className={`min-w-11 h-11 px-3 flex items-center justify-center rounded-xl text-sm font-mono ${getKeyButtonBg(keyConfig, ctrlActive, shiftActive)} active:bg-zinc-300 dark:active:bg-zinc-600 touch-manipulation transition-colors`}
         >
           {keyConfig.label}
         </button>
       ))}
 
-      {ctrlActive && (
+      {/* Ctrl+Shift combos */}
+      {ctrlActive && shiftActive && (
         <div className="flex gap-1 ml-1 pl-2 border-l border-zinc-300 dark:border-zinc-600">
-          {CTRL_COMBOS.map(({ label, combo }) => (
+          {CTRL_SHIFT_COMBOS.map(({ label, combo }) => (
+            <button
+              key={combo}
+              onMouseDown={(e) => e.preventDefault()}
+              onTouchStart={(e) => e.preventDefault()}
+              onContextMenu={(e) => e.preventDefault()}
+              onClick={() => handleKey(combo)}
+              className="min-w-11 h-11 px-2 flex items-center justify-center rounded-xl text-sm font-mono bg-gradient-to-r from-blue-500/30 to-orange-500/30 dark:from-blue-600/40 dark:to-orange-600/40 text-purple-700 dark:text-purple-300 active:from-blue-500/50 active:to-orange-500/50 touch-manipulation transition-colors"
+            >
+              ^⇧{label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Ctrl only combos */}
+      {ctrlActive && !shiftActive && (
+        <div className="flex gap-1 ml-1 pl-2 border-l border-zinc-300 dark:border-zinc-600">
+          {ctrlCombos.map(({ label, combo }) => (
             <button
               key={combo}
               onMouseDown={(e) => e.preventDefault()}

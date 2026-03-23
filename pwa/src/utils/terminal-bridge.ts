@@ -5,16 +5,27 @@
  */
 
 // Key mappings for special keys (xterm escape sequences)
-const KEY_MAP: Record<string, string> = {
-  Tab: '\t',
-  Escape: '\x1b',
-  Enter: '\r',
-  ArrowUp: '\x1b[A',
-  ArrowDown: '\x1b[B',
-  ArrowRight: '\x1b[C',
-  ArrowLeft: '\x1b[D',
-  Backspace: '\x7f',
-  Delete: '\x1b[3~',
+// Format: { base: unmodified sequence, code: CSI code for modifiers }
+const KEY_MAP: Record<string, { base: string; code?: string }> = {
+  Tab: { base: '\t' }, // Shift+Tab handled specially as \x1b[Z
+  Escape: { base: '\x1b' },
+  Enter: { base: '\r' },
+  ArrowUp: { base: '\x1b[A', code: 'A' },
+  ArrowDown: { base: '\x1b[B', code: 'B' },
+  ArrowRight: { base: '\x1b[C', code: 'C' },
+  ArrowLeft: { base: '\x1b[D', code: 'D' },
+  Backspace: { base: '\x7f' },
+  Delete: { base: '\x1b[3~', code: '3~' },
+  Home: { base: '\x1b[H', code: 'H' },
+  End: { base: '\x1b[F', code: 'F' },
+  PageUp: { base: '\x1b[5~', code: '5~' },
+  PageDown: { base: '\x1b[6~', code: '6~' },
+  Insert: { base: '\x1b[2~', code: '2~' },
+}
+
+// Calculate xterm modifier value: 1 + (shift?1:0) + (alt?2:0) + (ctrl?4:0)
+function getModifierValue(shift: boolean, ctrl: boolean, alt = false): number {
+  return 1 + (shift ? 1 : 0) + (alt ? 2 : 0) + (ctrl ? 4 : 0)
 }
 
 // xterm.js Terminal with internal API
@@ -69,26 +80,48 @@ function sendData(term: XtermInternal, data: string): boolean {
   return false
 }
 
-// Send a key to the terminal
+// Send a key to the terminal with modifier support
+// Uses xterm CSI encoding: ESC[1;{mod}{code} for special keys with modifiers
 export function sendKeyToTerminal(
   iframe: HTMLIFrameElement | null,
   key: string,
-  ctrl = false,
+  modifiers: { ctrl?: boolean; shift?: boolean } = {},
 ) {
   const term = getTerm(iframe)
   if (!term) return
 
+  const { ctrl = false, shift = false } = modifiers
+  const hasModifier = ctrl || shift
+  const mapped = KEY_MAP[key]
+
   let data: string
-  if (ctrl) {
-    // Convert to control character (Ctrl+C = \x03, etc.)
+
+  // Special case: Shift+Tab = backtab
+  if (shift && !ctrl && key === 'Tab') {
+    data = '\x1b[Z'
+  }
+  // Special keys with modifiers: use CSI encoding
+  else if (hasModifier && mapped?.code) {
+    const mod = getModifierValue(shift, ctrl)
+    // Format: ESC[1;{mod}{code} (e.g., Shift+Up = ESC[1;2A)
+    data = `\x1b[1;${mod}${mapped.code}`
+  }
+  // Ctrl+letter: control character
+  else if (ctrl && /^[a-z]$/i.test(key)) {
     const code = key.toLowerCase().charCodeAt(0) - 96
     if (code >= 1 && code <= 26) {
       data = String.fromCharCode(code)
     } else {
       return
     }
-  } else {
-    data = KEY_MAP[key] ?? key
+  }
+  // Shift+letter: uppercase
+  else if (shift && /^[a-z]$/i.test(key)) {
+    data = key.toUpperCase()
+  }
+  // No modifier or unhandled: use base mapping
+  else {
+    data = mapped?.base ?? key
   }
 
   sendData(term, data)
