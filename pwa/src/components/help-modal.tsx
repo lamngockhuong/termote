@@ -32,7 +32,7 @@ const TOOLBAR_GUIDE: GuideSection[] = [
       { key: '⛶/⊟', desc: 'Expand/collapse keyboard' },
       { key: '⌨️ Keyboard', desc: 'Toggle virtual keyboard' },
       { key: 'Tab', desc: 'Tab key / autocomplete' },
-      { key: 'Esc', desc: 'Escape key' },
+      { key: 'Esc', desc: 'Escape key (clears modifiers if active)' },
       { key: '↵ Enter', desc: 'Submit command' },
       { key: 'Ctrl', desc: 'Toggle Ctrl modifier (sticky)' },
       { key: 'Shift', desc: 'Toggle Shift modifier (sticky)' },

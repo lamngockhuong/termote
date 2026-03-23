@@ -294,6 +294,12 @@ export function KeyboardToolbar({
         setShiftActive((prev) => !prev)
         return
       }
+      // Escape clears active modifiers instead of sending Escape key
+      if (key === 'Escape' && (ctrlActive || shiftActive)) {
+        setCtrlActive(false)
+        setShiftActive(false)
+        return
+      }
       // Handle key with modifiers
       // Only lowercase single letters, preserve special key names (Tab, ArrowUp, etc.)
       const keyToSend = /^[a-z]$/i.test(key) ? key.toLowerCase() : key
