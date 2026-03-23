@@ -40,6 +40,8 @@ interface Props {
   onCtrlChange?: (active: boolean) => void
   shiftActive?: boolean
   onShiftChange?: (active: boolean) => void
+  imeMode?: boolean
+  onImeModeChange?: (active: boolean) => void
 }
 
 interface KeyConfig {
@@ -169,11 +171,14 @@ export function KeyboardToolbar({
   onCtrlChange,
   shiftActive: externalShiftActive,
   onShiftChange,
+  imeMode: externalImeMode,
+  onImeModeChange,
 }: Props) {
   const [internalCtrlActive, setInternalCtrlActive] = useState(false)
   const [internalShiftActive, setInternalShiftActive] = useState(false)
   const [expanded, setExpanded] = useState(false)
-  const [imeMode, setImeMode] = useState(false)
+  const [internalImeMode, setInternalImeMode] = useState(false)
+  const imeMode = externalImeMode ?? internalImeMode
   const [imeText, setImeText] = useState('')
   const imeInputRef = useRef<HTMLInputElement>(null)
   const imeFocusTimeoutRef = useRef<number | null>(null)
@@ -213,20 +218,26 @@ export function KeyboardToolbar({
     onShiftChange?.(newValue)
   }
 
+  const setImeMode = useCallback(
+    (value: boolean) => {
+      setInternalImeMode(value)
+      onImeModeChange?.(value)
+    },
+    [onImeModeChange],
+  )
+
   const toggleImeMode = useCallback(() => {
     haptic('medium')
-    setImeMode((prev) => {
-      const next = !prev
-      if (next) {
-        imeFocusTimeoutRef.current = window.setTimeout(
-          () => imeInputRef.current?.focus(),
-          50,
-        )
-      }
-      return next
-    })
+    const next = !imeMode
+    setImeMode(next)
+    if (next) {
+      imeFocusTimeoutRef.current = window.setTimeout(
+        () => imeInputRef.current?.focus(),
+        50,
+      )
+    }
     setImeText('')
-  }, [haptic])
+  }, [haptic, imeMode, setImeMode])
 
   const handleImeSend = useCallback(() => {
     if (imeText.trim() && onSendText) {

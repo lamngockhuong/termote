@@ -34,6 +34,7 @@ export default function App() {
   const [helpOpen, setHelpOpen] = useState(false)
   const [showTitleTooltip, setShowTitleTooltip] = useState(false)
   const [ctrlActive, setCtrlActive] = useState(false)
+  const [imeMode, setImeMode] = useState(false)
   const isMobile = useIsMobile()
   const { isVisible: keyboardVisible, keyboardHeight } = useKeyboardVisible()
   const {
@@ -53,8 +54,8 @@ export default function App() {
         sendKeyToTerminal(terminalRef.current, 'c', { ctrl: true }),
       onSwipeRight: () => sendKeyToTerminal(terminalRef.current, 'Tab'),
       onSwipeUp: () => {
-        if (keyboardVisible && terminalContainerRef.current) {
-          // Keyboard open - scroll container to see hidden content
+        if ((keyboardVisible || imeMode) && terminalContainerRef.current) {
+          // Keyboard or IME mode - scroll container to see hidden content
           terminalContainerRef.current.scrollTop += 150
         } else if (isInCopyMode()) {
           // In copy mode - send PageDown
@@ -62,8 +63,8 @@ export default function App() {
         }
       },
       onSwipeDown: () => {
-        if (keyboardVisible && terminalContainerRef.current) {
-          // Keyboard open - scroll container to see hidden content
+        if ((keyboardVisible || imeMode) && terminalContainerRef.current) {
+          // Keyboard or IME mode - scroll container to see hidden content
           terminalContainerRef.current.scrollTop -= 150
         } else if (isInCopyMode()) {
           // In copy mode - send PageUp
@@ -74,7 +75,7 @@ export default function App() {
       onPinchIn: decrease,
       onPinchOut: increase,
     }),
-    [decrease, increase, keyboardVisible],
+    [decrease, increase, keyboardVisible, imeMode],
   )
 
   const toggleKeyboard = () => {
@@ -300,6 +301,8 @@ export default function App() {
         onSendText={handleSendText}
         ctrlActive={ctrlActive}
         onCtrlChange={setCtrlActive}
+        imeMode={imeMode}
+        onImeModeChange={setImeMode}
       />
 
       {/* Mobile bottom navigation */}
