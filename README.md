@@ -5,10 +5,12 @@
 Remote control CLI tools (Claude Code, GitHub Copilot, any terminal) from mobile/desktop via PWA.
 
 > **Termote** = Terminal + Remote
+>
+> [Tiếng Việt](README.vi.md)
 
 ## Features
 
-- **Session switching**: Claude, Copilot, Shell terminals
+- **Session switching**: Multiple tmux sessions with create/edit/delete
 - **Mobile-friendly**: Virtual keyboard toolbar (Tab/Ctrl/Shift/arrows, expandable)
 - **Gesture support**: Swipe for Ctrl+C, Tab, history navigation
 - **PWA**: Installable to homescreen, offline-capable
@@ -319,6 +321,8 @@ make clean          # Stop containers
 cd pwa && pnpm test:e2e       # Run Playwright tests
 cd pwa && pnpm test:e2e:ui    # Run with UI debugger
 ```
+
+**Manual Testing:** See [Self-Test Checklist](docs/self-test-checklist.md)
 
 ## Troubleshooting
 
