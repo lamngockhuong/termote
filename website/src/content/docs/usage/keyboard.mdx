@@ -3,29 +3,48 @@ title: Keyboard Toolbar
 description: Virtual keyboard for mobile terminal control
 ---
 
-The keyboard toolbar provides touch-friendly buttons for common terminal keys.
+The keyboard toolbar provides touch-friendly buttons for common terminal keys. It has two modes: **minimal** (default) and **expanded** (full keyboard).
 
-## Button Groups
+## Modes
 
-### Modifiers
+| Mode     | Toggle          | Keys Available                             |
+| -------- | --------------- | ------------------------------------------ |
+| Minimal  | Default         | Essential keys for terminal use            |
+| Expanded | Tap expand icon | All keys including Home, End, Delete, etc. |
 
-| Button | Key           | Use Case            |
-| ------ | ------------- | ------------------- |
-| Tab    | Tab           | Autocomplete        |
-| Esc    | Escape        | Exit modes, cancel  |
-| Enter  | Enter         | Submit command      |
-| Ctrl   | Ctrl (sticky) | Modifier for combos |
+## Modifiers
+
+| Button | Key     | Behavior                                |
+| ------ | ------- | --------------------------------------- |
+| Ctrl   | Control | Sticky - tap once, then tap another key |
+| Shift  | Shift   | Sticky - tap once, then tap another key |
+
+### Modifier Combinations
+
+- **Ctrl only**: Shows Ctrl combos (^C, ^D, etc.)
+- **Shift only**: Modifies next key (Shift+Tab = backtab)
+- **Ctrl+Shift**: Shows Ctrl+Shift combos (^⇧C, ^⇧V, etc.)
+
+## Minimal Mode Keys
+
+### Basic Keys
+
+| Button | Key    | Use Case           |
+| ------ | ------ | ------------------ |
+| Tab    | Tab    | Autocomplete       |
+| Esc    | Escape | Exit modes, cancel |
+| Enter  | Enter  | Submit command     |
 
 ### Arrow Keys
 
 | Button | Key         |
 | ------ | ----------- |
-| up     | Up Arrow    |
-| down   | Down Arrow  |
-| left   | Left Arrow  |
-| right  | Right Arrow |
+| ↑      | Up Arrow    |
+| ↓      | Down Arrow  |
+| ←      | Left Arrow  |
+| →      | Right Arrow |
 
-### Ctrl Combos
+### Ctrl Combos (Minimal)
 
 | Button | Combo  | Use Case         |
 | ------ | ------ | ---------------- |
@@ -35,16 +54,48 @@ The keyboard toolbar provides touch-friendly buttons for common terminal keys.
 | L      | Ctrl+L | Clear screen     |
 | A      | Ctrl+A | Line start       |
 | E      | Ctrl+E | Line end         |
-| U      | Ctrl+U | Clear line       |
+
+### Ctrl+Shift Combos
+
+| Button | Combo        | Use Case        |
+| ------ | ------------ | --------------- |
+| C      | Ctrl+Shift+C | Copy (terminal) |
+| V      | Ctrl+Shift+V | Paste           |
+| Z      | Ctrl+Shift+Z | Redo            |
+| X      | Ctrl+Shift+X | Cut             |
+
+### Utility Keys
+
+| Button    | Action                |
+| --------- | --------------------- |
+| Copy icon | Toggle tmux copy mode |
+| PgUp      | Scroll up (tmux)      |
+| PgDn      | Scroll down (tmux)    |
+
+## Expanded Mode (Additional Keys)
+
+| Button | Key       | Use Case           |
+| ------ | --------- | ------------------ |
+| Home   | Home      | Jump to line start |
+| End    | End       | Jump to line end   |
+| Del    | Delete    | Delete forward     |
+| Bksp   | Backspace | Delete backward    |
+| PgUp   | Page Up   | Scroll up          |
+| PgDn   | Page Down | Scroll down        |
+| Ins    | Insert    | Toggle insert mode |
+
+### Extra Ctrl Combos
+
+| Button | Combo  | Use Case         |
+| ------ | ------ | ---------------- |
+| B      | Ctrl+B | tmux prefix      |
+| X      | Ctrl+X | Cut/prefix       |
 | K      | Ctrl+K | Delete to end    |
-
-### Scroll Controls
-
-| Button | Action           |
-| ------ | ---------------- |
-| PgUp   | Page up          |
-| PgDn   | Page down        |
-| Copy   | Toggle copy mode |
+| U      | Ctrl+U | Delete to start  |
+| W      | Ctrl+W | Delete word      |
+| R      | Ctrl+R | Reverse search   |
+| P      | Ctrl+P | Previous command |
+| N      | Ctrl+N | Next command     |
 
 ## Touch Targets
 
@@ -54,6 +105,8 @@ The keyboard toolbar provides touch-friendly buttons for common terminal keys.
 
 ## Tips
 
-1. **Ctrl is sticky**: Tap once, then tap another key
-2. **Copy mode**: Enable to select text, disable to resume typing
-3. **Quick clear**: Tap L (Ctrl+L) to clear screen
+1. **Modifiers are sticky**: Tap Ctrl or Shift once, then tap another key
+2. **Combine modifiers**: Tap both Ctrl and Shift for Ctrl+Shift combos
+3. **Shift+Tab**: Navigate backwards in completion/menus
+4. **Copy mode**: Enable to select text, disable to resume typing
+5. **Expand for more**: Tap expand icon for full keyboard with Home, End, etc.

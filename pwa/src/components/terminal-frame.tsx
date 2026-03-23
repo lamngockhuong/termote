@@ -82,7 +82,7 @@ export const TerminalFrame = forwardRef<HTMLIFrameElement, Props>(
           // Clear DA response artifacts (e.g. "1;2c0;276;0c") leaked by xterm.js
           // when ttyd+tmux connection is established. Ctrl+U clears the input line.
           // Delay to ensure DA responses have arrived before clearing.
-          setTimeout(() => sendKeyToTerminal(iframe, 'u', true), 300)
+          setTimeout(() => sendKeyToTerminal(iframe, 'u', { ctrl: true }), 300)
           if (intervalId) clearInterval(intervalId)
         } else if (++attempts >= 30) {
           if (intervalId) clearInterval(intervalId)

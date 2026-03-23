@@ -3,18 +3,37 @@ title: Thanh công cụ bàn phím
 description: Bàn phím ảo cho điều khiển terminal di động
 ---
 
-Thanh công cụ bàn phím cung cấp các nút thân thiện cảm ứng cho các phím terminal phổ biến.
+Thanh công cụ bàn phím cung cấp các nút thân thiện cảm ứng cho các phím terminal phổ biến. Có hai chế độ: **tối giản** (mặc định) và **mở rộng** (đầy đủ).
 
-## Nhóm nút
+## Chế độ
 
-### Bộ điều chỉnh
+| Chế độ   | Chuyển đổi        | Phím có sẵn                                 |
+| -------- | ----------------- | ------------------------------------------- |
+| Tối giản | Mặc định          | Phím cần thiết cho terminal                 |
+| Mở rộng  | Chạm icon mở rộng | Tất cả phím bao gồm Home, End, Delete, v.v. |
 
-| Nút   | Phím        | Trường hợp              |
-| ----- | ----------- | ----------------------- |
-| Tab   | Tab         | Tự động hoàn thành      |
-| Esc   | Escape      | Thoát chế độ, hủy       |
-| Enter | Enter       | Gửi lệnh                |
-| Ctrl  | Ctrl (dính) | Bộ điều chỉnh cho combo |
+## Bộ điều chỉnh
+
+| Nút   | Phím    | Hành vi                                 |
+| ----- | ------- | --------------------------------------- |
+| Ctrl  | Control | Dính - chạm một lần, rồi chạm phím khác |
+| Shift | Shift   | Dính - chạm một lần, rồi chạm phím khác |
+
+### Kết hợp bộ điều chỉnh
+
+- **Chỉ Ctrl**: Hiện combo Ctrl (^C, ^D, v.v.)
+- **Chỉ Shift**: Điều chỉnh phím tiếp theo (Shift+Tab = backtab)
+- **Ctrl+Shift**: Hiện combo Ctrl+Shift (^⇧C, ^⇧V, v.v.)
+
+## Phím chế độ tối giản
+
+### Phím cơ bản
+
+| Nút   | Phím   | Trường hợp         |
+| ----- | ------ | ------------------ |
+| Tab   | Tab    | Tự động hoàn thành |
+| Esc   | Escape | Thoát chế độ, hủy  |
+| Enter | Enter  | Gửi lệnh           |
 
 ### Phím mũi tên
 
@@ -25,7 +44,7 @@ Thanh công cụ bàn phím cung cấp các nút thân thiện cảm ứng cho c
 | ←   | Phím trái  |
 | →   | Phím phải  |
 
-### Combo Ctrl
+### Combo Ctrl (Tối giản)
 
 | Nút | Combo  | Trường hợp   |
 | --- | ------ | ------------ |
@@ -35,16 +54,48 @@ Thanh công cụ bàn phím cung cấp các nút thân thiện cảm ứng cho c
 | L   | Ctrl+L | Xóa màn hình |
 | A   | Ctrl+A | Đầu dòng     |
 | E   | Ctrl+E | Cuối dòng    |
-| U   | Ctrl+U | Xóa dòng     |
-| K   | Ctrl+K | Xóa đến cuối |
 
-### Điều khiển cuộn
+### Combo Ctrl+Shift
 
-| Nút  | Hành động               |
-| ---- | ----------------------- |
-| PgUp | Trang lên               |
-| PgDn | Trang xuống             |
-| Copy | Bật/tắt chế độ sao chép |
+| Nút | Combo        | Trường hợp          |
+| --- | ------------ | ------------------- |
+| C   | Ctrl+Shift+C | Sao chép (terminal) |
+| V   | Ctrl+Shift+V | Dán                 |
+| Z   | Ctrl+Shift+Z | Làm lại             |
+| X   | Ctrl+Shift+X | Cắt                 |
+
+### Phím tiện ích
+
+| Nút       | Hành động                    |
+| --------- | ---------------------------- |
+| Icon Copy | Bật/tắt chế độ sao chép tmux |
+| PgUp      | Cuộn lên (tmux)              |
+| PgDn      | Cuộn xuống (tmux)            |
+
+## Chế độ mở rộng (Phím bổ sung)
+
+| Nút  | Phím      | Trường hợp          |
+| ---- | --------- | ------------------- |
+| Home | Home      | Nhảy đến đầu dòng   |
+| End  | End       | Nhảy đến cuối dòng  |
+| Del  | Delete    | Xóa tiến            |
+| Bksp | Backspace | Xóa lùi             |
+| PgUp | Page Up   | Cuộn lên            |
+| PgDn | Page Down | Cuộn xuống          |
+| Ins  | Insert    | Bật/tắt chế độ chèn |
+
+### Combo Ctrl bổ sung
+
+| Nút | Combo  | Trường hợp     |
+| --- | ------ | -------------- |
+| B   | Ctrl+B | Tiền tố tmux   |
+| X   | Ctrl+X | Cắt/tiền tố    |
+| K   | Ctrl+K | Xóa đến cuối   |
+| U   | Ctrl+U | Xóa đến đầu    |
+| W   | Ctrl+W | Xóa từ         |
+| R   | Ctrl+R | Tìm kiếm ngược |
+| P   | Ctrl+P | Lệnh trước     |
+| N   | Ctrl+N | Lệnh sau       |
 
 ## Mục tiêu cảm ứng
 
@@ -54,6 +105,8 @@ Thanh công cụ bàn phím cung cấp các nút thân thiện cảm ứng cho c
 
 ## Mẹo
 
-1. **Ctrl dính**: Chạm một lần, sau đó chạm phím khác
-2. **Chế độ sao chép**: Bật để chọn văn bản, tắt để tiếp tục gõ
-3. **Xóa nhanh**: Chạm L (Ctrl+L) để xóa màn hình
+1. **Bộ điều chỉnh dính**: Chạm Ctrl hoặc Shift một lần, rồi chạm phím khác
+2. **Kết hợp bộ điều chỉnh**: Chạm cả Ctrl và Shift cho combo Ctrl+Shift
+3. **Shift+Tab**: Điều hướng lùi trong hoàn thành/menu
+4. **Chế độ sao chép**: Bật để chọn văn bản, tắt để tiếp tục gõ
+5. **Mở rộng thêm**: Chạm icon mở rộng để có đầy đủ bàn phím với Home, End, v.v.
