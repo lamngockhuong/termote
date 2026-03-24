@@ -54,3 +54,10 @@ export async function sendKeys(target: string, keys: string): Promise<boolean> {
   const data = await res.json()
   return data.ok === true
 }
+
+export async function fetchTerminalToken(): Promise<string> {
+  const res = await fetch(`${API_BASE}/terminal-token`)
+  if (!res.ok) throw new Error(`Token request failed: ${res.status}`)
+  const data = await res.json()
+  return data.token
+}

@@ -4,7 +4,7 @@
 
 **Unified Architecture (tmux-api serve mode):**
 
-```
+```bash
 ┌─────────────────────────────────────────────────────────────────┐
 │                         Client (Browser)                        │
 │  ┌───────────────┐  ┌───────────────┐  ┌───────────────────┐    │
@@ -63,7 +63,7 @@ Go HTTP server providing:
 
 - **Static file serving**: PWA assets from /pwa/dist
 - **WebSocket proxy**: Tunnels connections to ttyd
-- **Basic authentication**: Username/password via env vars
+- **Authentication**: Basic auth + iframe-only access with single-use tokens
 - **tmux API endpoints**: Window management REST API
 
 Configuration via environment variables:
@@ -101,7 +101,7 @@ Session manager providing:
 
 ### ttyd WebSocket Protocol
 
-```
+```bash
 Client → Server:
   - JSON {AuthToken, columns, rows}  (init)
   - '0' + data                       (input)
@@ -115,7 +115,7 @@ Server → Client:
 
 ### tmux API (REST)
 
-```
+```bash
 GET  /api/tmux/windows        → {windows: [{id, name, active}]}
 POST /api/tmux/select/:id     → {ok: true}
 POST /api/tmux/new?name=x     → {ok: true}
@@ -172,8 +172,12 @@ Auto-detects OS via `$(uname)`. Works on both macOS and Linux.
 
 1. **Network**: VPN/Tailscale or local network only
 2. **Auth**: Basic auth over HTTPS (use `--no-auth` for local dev only)
-3. **Session**: tmux isolates terminal processes
-4. **Origin**: Same-origin iframe (no cross-origin postMessage)
+3. **Terminal access** (`/terminal/`): Three-layer protection:
+   - **Basic auth**: All requests require authentication
+   - **Sec-Fetch-Dest**: Blocks direct URL navigation (`document`) and non-browser clients (missing header). Only allows browser iframe/sub-resource requests
+   - **Single-use token**: PWA fetches a 30s TTL token via `/api/tmux/terminal-token`, passes it as `?token=` query param. Server validates and consumes on iframe load (`Sec-Fetch-Dest: iframe`). Sub-resources (JS/CSS/WebSocket) don't need token
+4. **Session**: tmux isolates terminal processes
+5. **Origin**: Same-origin iframe (no cross-origin postMessage)
 
 ## Scalability Notes
 

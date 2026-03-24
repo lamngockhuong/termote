@@ -1,4 +1,12 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from 'react'
+import { fetchTerminalToken } from '../hooks/use-tmux-api'
 import {
   sendKeyToTerminal,
   setTerminalFontSize,
@@ -64,8 +72,19 @@ const THEMES = {
 export const TerminalFrame = forwardRef<HTMLIFrameElement, Props>(
   ({ fontSize = 14, theme = 'dark' }, ref) => {
     const iframeRef = useRef<HTMLIFrameElement>(null)
+    const [terminalSrc, setTerminalSrc] = useState<string | null>(null)
 
     useImperativeHandle(ref, () => iframeRef.current as HTMLIFrameElement)
+
+    // Fetch a new token each time the iframe needs to load (theme change triggers key change)
+    const loadTerminal = useCallback(async () => {
+      const token = await fetchTerminalToken()
+      setTerminalSrc(`/terminal/?token=${token}`)
+    }, [])
+
+    useEffect(() => {
+      loadTerminal()
+    }, [loadTerminal, theme])
 
     // Apply theme after iframe loads
     useEffect(() => {
@@ -108,12 +127,13 @@ export const TerminalFrame = forwardRef<HTMLIFrameElement, Props>(
       setTerminalFontSize(iframe, fontSize)
     }, [fontSize])
 
-    // key={theme} forces iframe reload when theme changes
+    // key={terminalSrc} forces iframe reload when token or theme changes
+    if (!terminalSrc) return null
     return (
       <iframe
-        key={theme}
+        key={terminalSrc}
         ref={iframeRef}
-        src="/terminal/"
+        src={terminalSrc}
         className={`flex-1 w-full h-full border-none ${theme === 'light' ? 'bg-[#f6f8fa]' : 'bg-[#2b2b2b]'}`}
         title="Terminal"
         allow="clipboard-read; clipboard-write"
