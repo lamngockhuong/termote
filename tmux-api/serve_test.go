@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestEnvOr(t *testing.T) {
@@ -137,7 +138,8 @@ func TestBasicAuth(t *testing.T) {
 		{"wrong user", "/api/test", "wrong", "secret", http.StatusUnauthorized},
 		{"wrong pass", "/api/test", "admin", "wrong", http.StatusUnauthorized},
 		{"correct auth", "/api/test", "admin", "secret", http.StatusOK},
-		{"terminal skip auth", "/terminal/ws", "", "", http.StatusOK},
+		{"terminal requires auth", "/terminal/", "", "", http.StatusUnauthorized},
+		{"terminal with auth", "/terminal/", "admin", "secret", http.StatusOK},
 	}
 
 	for _, tt := range tests {
@@ -171,6 +173,165 @@ func TestNewServeConfigFromEnv(t *testing.T) {
 	}
 	if !cfg.NoAuth {
 		t.Error("cfg.NoAuth = false, want true")
+	}
+}
+
+func TestTerminalTokenStore(t *testing.T) {
+	store := newTerminalTokenStore()
+
+	t.Run("generate and validate", func(t *testing.T) {
+		token, err := store.generate()
+		if err != nil {
+			t.Fatalf("generate() error: %v", err)
+		}
+		if len(token) != 32 { // 16 bytes = 32 hex chars
+			t.Errorf("token length = %d, want 32", len(token))
+		}
+		if !store.validate(token) {
+			t.Error("validate() = false for fresh token")
+		}
+	})
+
+	t.Run("single use", func(t *testing.T) {
+		token, _ := store.generate()
+		store.validate(token) // consume
+		if store.validate(token) {
+			t.Error("validate() = true for already-consumed token")
+		}
+	})
+
+	t.Run("invalid token", func(t *testing.T) {
+		if store.validate("nonexistent") {
+			t.Error("validate() = true for invalid token")
+		}
+	})
+
+	t.Run("expired token", func(t *testing.T) {
+		token, _ := store.generate()
+		// Manually expire it
+		store.mu.Lock()
+		store.tokens[token] = time.Now().Add(-1 * time.Second)
+		store.mu.Unlock()
+		if store.validate(token) {
+			t.Error("validate() = true for expired token")
+		}
+	})
+
+	t.Run("sweep expired on generate", func(t *testing.T) {
+		// Add an expired token manually
+		store.mu.Lock()
+		store.tokens["expired1"] = time.Now().Add(-1 * time.Second)
+		store.mu.Unlock()
+
+		store.generate() // should sweep
+
+		store.mu.Lock()
+		_, exists := store.tokens["expired1"]
+		store.mu.Unlock()
+		if exists {
+			t.Error("expired token not swept during generate()")
+		}
+	})
+}
+
+func TestIframeOnly(t *testing.T) {
+	store := newTerminalTokenStore()
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := iframeOnly(store, inner)
+
+	tests := []struct {
+		name     string
+		dest     string // Sec-Fetch-Dest header value ("" = not set)
+		token    string // query param ("" = not set, "valid" = generate one, else literal)
+		wantCode int
+	}{
+		{"direct navigation", "document", "", http.StatusForbidden},
+		{"no header (curl)", "", "", http.StatusForbidden},
+		{"iframe without token", "iframe", "", http.StatusForbidden},
+		{"iframe with invalid token", "iframe", "bad", http.StatusForbidden},
+		{"iframe with valid token", "iframe", "valid", http.StatusOK},
+		{"websocket", "websocket", "", http.StatusOK},
+		{"script sub-resource", "script", "", http.StatusOK},
+		{"style sub-resource", "style", "", http.StatusOK},
+		{"fetch/XHR", "empty", "", http.StatusOK},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tokenParam := tt.token
+			if tokenParam == "valid" {
+				tokenParam, _ = store.generate()
+			}
+
+			path := "/terminal/"
+			if tokenParam != "" {
+				path += "?token=" + tokenParam
+			}
+			req := httptest.NewRequest("GET", path, nil)
+			if tt.dest != "" {
+				req.Header.Set("Sec-Fetch-Dest", tt.dest)
+			}
+			rec := httptest.NewRecorder()
+
+			handler.ServeHTTP(rec, req)
+
+			if rec.Code != tt.wantCode {
+				t.Errorf("iframeOnly(%s) status = %d, want %d", tt.name, rec.Code, tt.wantCode)
+			}
+		})
+	}
+}
+
+func TestTerminalTokenEndpoint(t *testing.T) {
+	store := newTerminalTokenStore()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/tmux/terminal-token", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		dest := r.Header.Get("Sec-Fetch-Dest")
+		if dest == "document" || dest == "" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		token, err := store.generate()
+		if err != nil {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"token":"` + token + `"}`))
+	})
+
+	tests := []struct {
+		name     string
+		method   string
+		dest     string
+		wantCode int
+	}{
+		{"POST rejected", "POST", "empty", http.StatusMethodNotAllowed},
+		{"direct browser", "GET", "document", http.StatusForbidden},
+		{"no header (curl)", "GET", "", http.StatusForbidden},
+		{"fetch/XHR allowed", "GET", "empty", http.StatusOK},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, "/api/tmux/terminal-token", nil)
+			if tt.dest != "" {
+				req.Header.Set("Sec-Fetch-Dest", tt.dest)
+			}
+			rec := httptest.NewRecorder()
+
+			mux.ServeHTTP(rec, req)
+
+			if rec.Code != tt.wantCode {
+				t.Errorf("terminal-token(%s) status = %d, want %d", tt.name, rec.Code, tt.wantCode)
+			}
+		})
 	}
 }
 
