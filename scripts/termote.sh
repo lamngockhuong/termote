@@ -242,9 +242,11 @@ load_config() {
         # Re-parse network opts with merged values
         parse_network_opts
 
-        # Decrypt saved password
+        # Decrypt saved password (try AES-256 first, fallback to legacy base64)
         if [[ -n "$saved_pass_enc" ]]; then
-            SAVED_PASS=$(echo "$saved_pass_enc" | openssl enc -aes-256-cbc -a -A -d -salt -pbkdf2 -pass pass:"$(_derive_key)" 2>/dev/null || true)
+            SAVED_PASS=$(echo "$saved_pass_enc" | openssl enc -aes-256-cbc -a -A -d -salt -pbkdf2 -pass pass:"$(_derive_key)" 2>/dev/null) || \
+            SAVED_PASS=$(echo "$saved_pass_enc" | openssl base64 -d 2>/dev/null) || \
+            SAVED_PASS=""
         fi
     fi
 }

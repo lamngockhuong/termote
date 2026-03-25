@@ -61,11 +61,15 @@ services_running() {
     pgrep -f "tmux-api" >/dev/null 2>&1 || pgrep -f "ttyd" >/dev/null 2>&1
 }
 
-# Stop running services
+# Stop running services (without removing config)
 stop_services() {
+    info "Stopping running services..."
     if [ -f "$TERMOTE_SCRIPT" ]; then
-        info "Stopping running services..."
-        "$TERMOTE_SCRIPT" uninstall all 2>/dev/null || true
+        "$TERMOTE_SCRIPT" uninstall container 2>/dev/null || true
+        "$TERMOTE_SCRIPT" uninstall native 2>/dev/null || true
+    else
+        pkill -f "tmux-api" 2>/dev/null || true
+        pkill -f "ttyd" 2>/dev/null || true
     fi
 }
 
