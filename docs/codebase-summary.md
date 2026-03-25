@@ -2,7 +2,7 @@
 
 ## Directory Structure
 
-```
+```bash
 termote/
 ├── Dockerfile                  # Docker mode (tmux-api + ttyd)
 ├── docker-compose.yml          # Docker deployment
@@ -127,7 +127,7 @@ tmux HTTP API client:
 Go HTTP server:
 
 - **main.go** — Entry point, starts serve mode
-- **serve.go** — Server: PWA static files, ttyd WebSocket proxy, basic auth
+- **serve.go** — Server: PWA static files, ttyd WebSocket proxy, auth (basic + iframe-only + token)
 - **tmux.go** — tmux handlers with input validation and method checks
 - **serve_test.go** — Server unit tests (auth, middleware, proxy)
 - **tmux_test.go** — Handler unit tests (validation, errors)
@@ -139,6 +139,7 @@ Go HTTP server:
 - HTTP method enforcement: POST for mutations, GET for reads
 - Length limits: 4096 bytes for keys, 64 chars for targets
 - Constant-time password comparison
+- `/terminal/` protected: basic auth + Sec-Fetch-Dest check + single-use token (30s TTL)
 
 **Test coverage:** ~59% (unit), ~71% with integration tests
 
@@ -146,7 +147,7 @@ Configuration via env vars: TERMOTE_PORT, TERMOTE_BIND, TERMOTE_PWA_DIR, TERMOTE
 
 ## Data Flow
 
-```
+```bash
 User Input
     ↓
 Gesture/Toolbar → sendKeyToTerminal()
@@ -172,16 +173,17 @@ Terminal output → ttyd (xterm.js) → display
 
 ## API Endpoints
 
-| Endpoint               | Method      | Purpose           |
-| ---------------------- | ----------- | ----------------- |
-| `/terminal/`           | WS          | ttyd WebSocket    |
-| `/api/tmux/windows`    | GET         | List tmux windows |
-| `/api/tmux/select/:id` | POST        | Switch window     |
-| `/api/tmux/new`        | POST        | Create window     |
-| `/api/tmux/kill/:id`   | POST/DELETE | Kill window       |
-| `/api/tmux/rename/:id` | POST        | Rename window     |
-| `/api/tmux/send-keys`  | POST        | Send keystrokes   |
-| `/api/tmux/health`     | GET         | Health check      |
+| Endpoint                   | Method      | Purpose                                      |
+| -------------------------- | ----------- | -------------------------------------------- |
+| `/terminal/?token=`        | WS          | ttyd WebSocket (iframe-only, token required) |
+| `/api/tmux/terminal-token` | GET         | Generate single-use terminal token           |
+| `/api/tmux/windows`        | GET         | List tmux windows                            |
+| `/api/tmux/select/:id`     | POST        | Switch window                                |
+| `/api/tmux/new`            | POST        | Create window                                |
+| `/api/tmux/kill/:id`       | POST/DELETE | Kill window                                  |
+| `/api/tmux/rename/:id`     | POST        | Rename window                                |
+| `/api/tmux/send-keys`      | POST        | Send keystrokes                              |
+| `/api/tmux/health`         | GET         | Health check                                 |
 
 All endpoints validate inputs and enforce HTTP methods. Invalid requests return 400/405 JSON errors.
 
@@ -195,7 +197,7 @@ All endpoints validate inputs and enforce HTTP methods. Invalid requests return 
 
 ### Release Flow
 
-```
+```bash
 Multiple commits → main
        ↓
 Manual trigger: Release Please workflow
