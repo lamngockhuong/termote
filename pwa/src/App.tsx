@@ -1,4 +1,4 @@
-import { Menu } from 'lucide-react'
+import { Maximize, Menu, Minimize } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AboutModal } from './components/about-modal'
 import { BottomNavigation } from './components/bottom-navigation'
@@ -9,10 +9,12 @@ import { SettingsMenu } from './components/settings-menu'
 import { TerminalFrame } from './components/terminal-frame'
 import { useTheme } from './contexts/theme-context'
 import { useFontSize } from './hooks/use-font-size'
+import { useFullscreen } from './hooks/use-fullscreen'
 import { useGestures } from './hooks/use-gestures'
 import { useKeyboardVisible } from './hooks/use-keyboard-visible'
 import { useLocalSessions } from './hooks/use-local-sessions'
 import { useIsMobile } from './hooks/use-media-query'
+import { useSidebarCollapsed } from './hooks/use-sidebar-collapsed'
 import {
   blurTerminal,
   focusTerminal,
@@ -30,6 +32,8 @@ export default function App() {
   const terminalContainerRef = useRef<HTMLDivElement>(null)
   const ctrlInputRef = useRef<HTMLInputElement>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const { isCollapsed: sidebarCollapsed, toggle: toggleSidebarCollapsed } =
+    useSidebarCollapsed()
   const [aboutOpen, setAboutOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [showTitleTooltip, setShowTitleTooltip] = useState(false)
@@ -47,6 +51,7 @@ export default function App() {
   } = useLocalSessions()
   const { fontSize, increase, decrease } = useFontSize()
   const { resolvedTheme } = useTheme()
+  const { isFullscreen, toggleFullscreen } = useFullscreen()
 
   const gestureHandlers = useMemo(
     () => ({
@@ -167,6 +172,8 @@ export default function App() {
             onAdd={addSession}
             onRemove={removeSession}
             onUpdate={updateSession}
+            isCollapsed={sidebarCollapsed}
+            onToggleCollapse={toggleSidebarCollapsed}
           />
         )}
 
@@ -254,6 +261,22 @@ export default function App() {
               >
                 A+
               </button>
+              {!isMobile && (
+                <button
+                  onClick={toggleFullscreen}
+                  className="px-2 py-1 text-xs bg-zinc-200/70 dark:bg-zinc-700/70 rounded-lg hover:bg-zinc-300/70 dark:hover:bg-zinc-600/70 transition-colors"
+                  aria-label={
+                    isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'
+                  }
+                  title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+                >
+                  {isFullscreen ? (
+                    <Minimize size={14} />
+                  ) : (
+                    <Maximize size={14} />
+                  )}
+                </button>
+              )}
               <SettingsMenu
                 onOpenAbout={() => setAboutOpen(true)}
                 onOpenHelp={() => setHelpOpen(true)}

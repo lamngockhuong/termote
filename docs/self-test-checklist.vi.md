@@ -19,14 +19,14 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 
 - [ ] `./scripts/termote.sh install container` hoàn thành không lỗi
 - [ ] Container đang chạy: `docker ps | grep termote`
-- [ ] PWA truy cập được tại http://localhost:7680
+- [ ] PWA truy cập được tại <http://localhost:7680>
 - [ ] Thông tin đăng nhập tự sinh hiển thị trong logs: `docker logs termote`
 
 ### Chế Độ Native
 
 - [ ] `./scripts/termote.sh install native` hoàn thành không lỗi
 - [ ] Các process đang chạy: `ps aux | grep -E 'ttyd|tmux-api'`
-- [ ] PWA truy cập được tại http://localhost:7680
+- [ ] PWA truy cập được tại <http://localhost:7680>
 
 ### Tùy Chọn
 
@@ -83,12 +83,21 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 
 - [ ] Sidebar mở (vuốt từ cạnh trái hoặc nhấn icon hamburger)
 - [ ] Sidebar scroll được khi có nhiều session
+- [ ] Sidebar thu gọn/mở rộng hoạt động (desktop)
+- [ ] Sidebar thu gọn chỉ hiện icon với tooltip (desktop)
 - [ ] Tạo session mới hoạt động
 - [ ] Sửa tên session hoạt động
 - [ ] Xóa session hoạt động
 - [ ] Nhấn session chuyển terminal
 - [ ] Session đang active được highlight trong sidebar
 - [ ] Sessions giữ nguyên sau khi refresh trang
+
+### Fullscreen (Desktop)
+
+- [ ] Nút fullscreen hiện trên header (chỉ desktop)
+- [ ] Nhấn bật/tắt chế độ toàn màn hình
+- [ ] Icon đổi giữa Maximize/Minimize
+- [ ] Esc/F11 thoát fullscreen và đồng bộ trạng thái nút
 
 ### Thao Tác Session (Mobile)
 

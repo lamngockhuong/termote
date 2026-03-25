@@ -1,8 +1,14 @@
-import { Pencil, Plus, X } from 'lucide-react'
+import { PanelLeftClose, PanelLeftOpen, Pencil, Plus, X } from 'lucide-react'
 import { useState } from 'react'
 import type { Session } from '../types/session'
 import { IconPicker } from './icon-picker'
 import { SwipeableSessionItem } from './swipeable-session-item'
+
+const ACTIVE_SESSION_CLASSES =
+  'bg-zinc-200 dark:bg-zinc-700 border-l-2 border-blue-500'
+const SIDEBAR_BASE_CLASSES =
+  'h-full min-h-0 bg-zinc-50 dark:bg-zinc-800 flex flex-col border-r border-zinc-200 dark:border-zinc-700 shrink-0'
+const DESKTOP_TRANSITION_CLASSES = 'transition-[width] duration-200'
 
 interface Props {
   sessions: Session[]
@@ -14,6 +20,8 @@ interface Props {
   isOpen?: boolean
   onClose?: () => void
   isMobile?: boolean
+  isCollapsed?: boolean
+  onToggleCollapse?: () => void
 }
 
 export function SessionSidebar({
@@ -26,6 +34,8 @@ export function SessionSidebar({
   isOpen = true,
   onClose,
   isMobile = false,
+  isCollapsed = false,
+  onToggleCollapse,
 }: Props) {
   const [showAddForm, setShowAddForm] = useState(false)
   const [newName, setNewName] = useState('')
@@ -96,9 +106,7 @@ export function SessionSidebar({
   const renderDesktopItem = (session: Session) => (
     <div
       className={`group relative flex items-center hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors ${
-        activeId === session.id
-          ? 'bg-zinc-200 dark:bg-zinc-700 border-l-2 border-blue-500'
-          : ''
+        activeId === session.id ? ACTIVE_SESSION_CLASSES : ''
       }`}
     >
       <button
@@ -234,9 +242,69 @@ export function SessionSidebar({
     )
   }
 
-  // Desktop: normal sidebar
+  // Desktop: collapsible sidebar
+  if (isCollapsed) {
+    return (
+      <aside
+        className={`w-12 ${SIDEBAR_BASE_CLASSES} ${DESKTOP_TRANSITION_CLASSES}`}
+      >
+        <button
+          onClick={onToggleCollapse}
+          className="p-3 flex items-center justify-center hover:bg-zinc-200/50 dark:hover:bg-zinc-700/50 transition-colors"
+          title="Expand sidebar"
+          aria-label="Expand sidebar"
+        >
+          <PanelLeftOpen
+            size={18}
+            className="text-zinc-500 dark:text-zinc-400"
+          />
+        </button>
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          {sessions.map((session) => (
+            <button
+              key={session.id}
+              onClick={() => onSelect(session.id)}
+              className={`w-full p-2 flex items-center justify-center hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors ${
+                activeId === session.id ? ACTIVE_SESSION_CLASSES : ''
+              }`}
+              title={session.name}
+            >
+              <span className="text-lg">{session.icon}</span>
+            </button>
+          ))}
+          <button
+            onClick={() => {
+              onToggleCollapse?.()
+              setShowAddForm(true)
+            }}
+            className="w-full p-2 flex items-center justify-center hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors border-t border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400"
+            title="Add new session"
+          >
+            <Plus size={18} />
+          </button>
+        </div>
+      </aside>
+    )
+  }
+
+  // Desktop: expanded sidebar
   return (
-    <aside className="w-56 h-full min-h-0 bg-zinc-50 dark:bg-zinc-800 flex flex-col border-r border-zinc-200 dark:border-zinc-700 shrink-0">
+    <aside
+      className={`w-56 ${SIDEBAR_BASE_CLASSES} ${DESKTOP_TRANSITION_CLASSES}`}
+    >
+      <div className="p-2 flex justify-end shrink-0">
+        <button
+          onClick={onToggleCollapse}
+          className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-zinc-200/50 dark:hover:bg-zinc-700/50 transition-colors"
+          title="Collapse sidebar"
+          aria-label="Collapse sidebar"
+        >
+          <PanelLeftClose
+            size={16}
+            className="text-zinc-500 dark:text-zinc-400"
+          />
+        </button>
+      </div>
       <div className="flex-1 min-h-0 overflow-y-auto">{sessionList}</div>
     </aside>
   )

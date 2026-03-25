@@ -51,11 +51,12 @@ React SPA with:
 
 - **Terminal Frame**: ttyd iframe with xterm.js terminal
 - **Hammer.js**: Touch gesture recognition (mobile only)
-- **Session Sidebar**: Switch between tmux windows, add/edit/remove
+- **Session Sidebar**: Switch between tmux windows, add/edit/remove (collapsible on desktop)
 - **Keyboard Toolbar**: Virtual keys, Ctrl combos, scroll controls
 - **Settings Menu**: Theme toggle (light/dark/system)
 - **Font Controls**: Adjustable font size (6-24px)
-- **Responsive Layout**: Desktop sidebar, mobile slide-over panel
+- **Fullscreen Toggle**: Desktop-only fullscreen mode via Fullscreen API
+- **Responsive Layout**: Collapsible desktop sidebar, mobile slide-over panel
 
 ### tmux-api Server
 
