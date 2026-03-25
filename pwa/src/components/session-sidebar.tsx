@@ -245,14 +245,19 @@ export function SessionSidebar({
   // Desktop: collapsible sidebar
   if (isCollapsed) {
     return (
-      <aside className={`w-12 ${SIDEBAR_BASE_CLASSES} ${DESKTOP_TRANSITION_CLASSES}`}>
+      <aside
+        className={`w-12 ${SIDEBAR_BASE_CLASSES} ${DESKTOP_TRANSITION_CLASSES}`}
+      >
         <button
           onClick={onToggleCollapse}
           className="p-3 flex items-center justify-center hover:bg-zinc-200/50 dark:hover:bg-zinc-700/50 transition-colors"
           title="Expand sidebar"
           aria-label="Expand sidebar"
         >
-          <PanelLeftOpen size={18} className="text-zinc-500 dark:text-zinc-400" />
+          <PanelLeftOpen
+            size={18}
+            className="text-zinc-500 dark:text-zinc-400"
+          />
         </button>
         <div className="flex-1 min-h-0 overflow-y-auto">
           {sessions.map((session) => (
@@ -284,7 +289,9 @@ export function SessionSidebar({
 
   // Desktop: expanded sidebar
   return (
-    <aside className={`w-56 ${SIDEBAR_BASE_CLASSES} ${DESKTOP_TRANSITION_CLASSES}`}>
+    <aside
+      className={`w-56 ${SIDEBAR_BASE_CLASSES} ${DESKTOP_TRANSITION_CLASSES}`}
+    >
       <div className="p-2 flex justify-end shrink-0">
         <button
           onClick={onToggleCollapse}
@@ -292,7 +299,10 @@ export function SessionSidebar({
           title="Collapse sidebar"
           aria-label="Collapse sidebar"
         >
-          <PanelLeftClose size={16} className="text-zinc-500 dark:text-zinc-400" />
+          <PanelLeftClose
+            size={16}
+            className="text-zinc-500 dark:text-zinc-400"
+          />
         </button>
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto">{sessionList}</div>

@@ -10,11 +10,11 @@ import { TerminalFrame } from './components/terminal-frame'
 import { useTheme } from './contexts/theme-context'
 import { useFontSize } from './hooks/use-font-size'
 import { useFullscreen } from './hooks/use-fullscreen'
-import { useSidebarCollapsed } from './hooks/use-sidebar-collapsed'
 import { useGestures } from './hooks/use-gestures'
 import { useKeyboardVisible } from './hooks/use-keyboard-visible'
 import { useLocalSessions } from './hooks/use-local-sessions'
 import { useIsMobile } from './hooks/use-media-query'
+import { useSidebarCollapsed } from './hooks/use-sidebar-collapsed'
 import {
   blurTerminal,
   focusTerminal,
@@ -265,10 +265,16 @@ export default function App() {
                 <button
                   onClick={toggleFullscreen}
                   className="px-2 py-1 text-xs bg-zinc-200/70 dark:bg-zinc-700/70 rounded-lg hover:bg-zinc-300/70 dark:hover:bg-zinc-600/70 transition-colors"
-                  aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+                  aria-label={
+                    isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'
+                  }
                   title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
                 >
-                  {isFullscreen ? <Minimize size={14} /> : <Maximize size={14} />}
+                  {isFullscreen ? (
+                    <Minimize size={14} />
+                  ) : (
+                    <Maximize size={14} />
+                  )}
                 </button>
               )}
               <SettingsMenu
