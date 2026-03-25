@@ -107,25 +107,7 @@ func startServeMode(cfg serveConfig) {
 	mux.HandleFunc("/api/tmux/health", handleHealth)
 
 	// Terminal token endpoint — only accessible via fetch/XHR from PWA, not direct browser navigation
-	mux.HandleFunc("/api/tmux/terminal-token", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		// Block direct browser navigation — allow only fetch/XHR (Sec-Fetch-Dest: empty)
-		dest := r.Header.Get("Sec-Fetch-Dest")
-		if dest == "document" || dest == "" {
-			http.Error(w, "Forbidden", http.StatusForbidden)
-			return
-		}
-		token, err := tokenStore.generate()
-		if err != nil {
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"token":"` + token + `"}`))
-	})
+	mux.HandleFunc("/api/tmux/terminal-token", handleTerminalToken(tokenStore))
 
 	// ttyd reverse proxy (WebSocket support) - only accessible via iframe with valid token
 	ttydURL, err := url.Parse(cfg.TTYDUrl)
@@ -272,6 +254,29 @@ func iframeOnly(tokens *terminalTokenStore, next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// handleTerminalToken returns a handler that generates single-use tokens for terminal iframe access.
+// Only accessible via fetch/XHR (Sec-Fetch-Dest != document and != empty).
+func handleTerminalToken(tokens *terminalTokenStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		dest := r.Header.Get("Sec-Fetch-Dest")
+		if dest == "document" || dest == "" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		token, err := tokens.generate()
+		if err != nil {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"token":"` + token + `"}`))
+	}
 }
 
 // noCacheMiddleware adds no-cache headers to all responses

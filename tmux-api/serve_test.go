@@ -287,24 +287,7 @@ func TestIframeOnly(t *testing.T) {
 func TestTerminalTokenEndpoint(t *testing.T) {
 	store := newTerminalTokenStore()
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/tmux/terminal-token", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		dest := r.Header.Get("Sec-Fetch-Dest")
-		if dest == "document" || dest == "" {
-			http.Error(w, "Forbidden", http.StatusForbidden)
-			return
-		}
-		token, err := store.generate()
-		if err != nil {
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"token":"` + token + `"}`))
-	})
+	mux.HandleFunc("/api/tmux/terminal-token", handleTerminalToken(store))
 
 	tests := []struct {
 		name     string
