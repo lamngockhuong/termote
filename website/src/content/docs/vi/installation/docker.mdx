@@ -66,6 +66,26 @@ docker run -d --name termote -p 7680:7680 \
   hoặc `git`).
 </Aside>
 
+## Ngăn macOS Sleep
+
+macOS tự động sleep sau một khoảng thời gian không hoạt động, làm mất kết nối terminal từ xa — ngay cả khi container đang chạy. Dùng `caffeinate` để giữ máy luôn thức:
+
+```bash
+# Ngăn system sleep (chạy cho đến khi bạn nhấn Ctrl+C)
+caffeinate -s
+
+# Hoặc chạy nền
+caffeinate -s &
+
+# Dừng caffeinate nền
+pkill caffeinate
+```
+
+<Aside type="tip">
+  Dùng `caffeinate -s` (chỉ ngăn system sleep) thay vì `-d` (ngăn tắt màn hình)
+  — bạn không cần màn hình sáng cho truy cập từ xa.
+</Aside>
+
 ## Khắc phục sự cố
 
 ### Chẩn đoán nhanh

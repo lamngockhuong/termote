@@ -61,6 +61,26 @@ ps aux | grep tmux-api
 ./scripts/termote.sh install native
 ```
 
+## Prevent macOS Sleep
+
+macOS automatically sleeps after inactivity, disconnecting remote terminal sessions. Use `caffeinate` to keep the machine awake while Termote is running:
+
+```bash
+# Prevent system sleep (runs until you press Ctrl+C)
+caffeinate -s
+
+# Or run in background
+caffeinate -s &
+
+# Stop background caffeinate
+pkill caffeinate
+```
+
+<Aside type="tip">
+  Use `caffeinate -s` (system sleep only) instead of `-d` (display sleep) — you
+  don't need the display on for remote access.
+</Aside>
+
 ## Troubleshooting
 
 ### Quick Diagnostics

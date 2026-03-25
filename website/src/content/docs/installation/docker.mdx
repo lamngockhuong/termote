@@ -66,6 +66,26 @@ docker run -d --name termote -p 7680:7680 \
   or `git`).
 </Aside>
 
+## Prevent macOS Sleep
+
+macOS automatically sleeps after inactivity, disconnecting remote terminal sessions — even with containers running. Use `caffeinate` to keep the machine awake:
+
+```bash
+# Prevent system sleep (runs until you press Ctrl+C)
+caffeinate -s
+
+# Or run in background
+caffeinate -s &
+
+# Stop background caffeinate
+pkill caffeinate
+```
+
+<Aside type="tip">
+  Use `caffeinate -s` (system sleep only) instead of `-d` (display sleep) — you
+  don't need the display on for remote access.
+</Aside>
+
 ## Troubleshooting
 
 ### Quick Diagnostics
