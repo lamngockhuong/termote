@@ -19,14 +19,14 @@ Manual testing checklist for Termote features before release.
 
 - [ ] `./scripts/termote.sh install container` completes without error
 - [ ] Container running: `docker ps | grep termote`
-- [ ] PWA accessible at http://localhost:7680
+- [ ] PWA accessible at <http://localhost:7680>
 - [ ] Auto-generated credentials shown in logs: `docker logs termote`
 
 ### Native Mode
 
 - [ ] `./scripts/termote.sh install native` completes without error
 - [ ] Processes running: `ps aux | grep -E 'ttyd|tmux-api'`
-- [ ] PWA accessible at http://localhost:7680
+- [ ] PWA accessible at <http://localhost:7680>
 
 ### Options
 
@@ -83,12 +83,21 @@ Manual testing checklist for Termote features before release.
 
 - [ ] Sidebar opens (swipe from left edge or hamburger icon)
 - [ ] Sidebar scrollable when many sessions exist
+- [ ] Sidebar collapse/expand toggle works (desktop)
+- [ ] Collapsed sidebar shows icons only with tooltips (desktop)
 - [ ] Create new session works
 - [ ] Edit session name works
 - [ ] Delete session works
 - [ ] Clicking session switches terminal
 - [ ] Active session highlighted in sidebar
 - [ ] Sessions persist after page refresh
+
+### Fullscreen (Desktop)
+
+- [ ] Fullscreen button visible in header (desktop only)
+- [ ] Click toggles fullscreen mode
+- [ ] Icon changes between Maximize/Minimize
+- [ ] Esc/F11 exits fullscreen and syncs button state
 
 ### Session Actions (Mobile)
 

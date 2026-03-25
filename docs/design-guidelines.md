@@ -43,20 +43,20 @@ colors: {
 
 ### Breakpoints
 
-| Breakpoint | Width   | Layout                    |
-| ---------- | ------- | ------------------------- |
-| Mobile     | < 768px | Bottom nav, slide sidebar |
-| Desktop    | ≥ 768px | Fixed sidebar, top header |
+| Breakpoint | Width   | Layout                                             |
+| ---------- | ------- | -------------------------------------------------- |
+| Mobile     | < 768px | Bottom nav, slide sidebar                          |
+| Desktop    | ≥ 768px | Collapsible sidebar, top header, fullscreen toggle |
 
 ### Component Structure
 
-```
+```bash
 ┌──────────────────────────────────────────┐
 │ Header (desktop) / Hidden (mobile)       │
 ├──────────────────────────────────────────┤
 │ ┌──────────┐ ┌─────────────────────────┐ │
 │ │ Sidebar  │ │ Terminal Frame          │ │
-│ │ (fixed)  │ │                         │ │
+│ │(collapse)│ │                         │ │
 │ │          │ │                         │ │
 │ │          │ │                         │ │
 │ └──────────┘ └─────────────────────────┘ │
@@ -141,4 +141,10 @@ colors: {
 ### Sidebar
 
 - Slide animation on mobile
-- No animation on desktop (always visible)
+- Collapsible on desktop (icon-only when collapsed, PanelLeftClose/PanelLeftOpen toggle)
+
+### Fullscreen
+
+- Desktop only (uses Fullscreen API)
+- Toggle button in header (Maximize/Minimize icons)
+- Syncs with browser fullscreen state (F11/Esc)

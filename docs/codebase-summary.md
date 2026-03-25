@@ -69,11 +69,12 @@ termote/
 
 Main orchestrator combining:
 
-- Session sidebar (desktop) / slide-over panel (mobile)
+- Session sidebar with collapse toggle (desktop) / slide-over panel (mobile)
 - Terminal frame with ttyd iframe
 - Keyboard toolbar with special keys
 - Settings menu with theme toggle
 - Font size controls (A-/A+)
+- Fullscreen toggle (desktop only, Fullscreen API)
 - Gesture handlers → terminal commands (mobile only)
 
 ### terminal-frame.tsx (~118 lines)
