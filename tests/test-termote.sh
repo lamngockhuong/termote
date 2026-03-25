@@ -405,6 +405,32 @@ test_health_check() {
 # =============================================================================
 # RUN ALL TESTS
 # =============================================================================
+test_version_display() {
+    echo ""
+    echo "=== Version Display ==="
+
+    # Verify git-aware version override exists
+    if grep -q 'git -C.*rev-parse.*git-dir' "$SCRIPT"; then
+        pass "git-aware version detection present"
+    else
+        fail "git detection" "git rev-parse check" "not found"
+    fi
+
+    # Verify .version file read for installed mode
+    if grep -q '\.version' "$SCRIPT"; then
+        pass ".version file support present"
+    else
+        fail ".version support" "reads .version" "not found"
+    fi
+
+    # Verify VERSION constant still exists (for release-please)
+    if grep -q '^VERSION=.*x-release-please-version' "$SCRIPT"; then
+        pass "release-please VERSION marker present"
+    else
+        fail "VERSION marker" "x-release-please-version" "not found"
+    fi
+}
+
 echo "Running termote.sh tests..."
 echo ""
 
@@ -420,6 +446,7 @@ test_security
 test_config_persistence
 test_password_encryption
 test_health_check
+test_version_display
 
 # Summary
 echo ""

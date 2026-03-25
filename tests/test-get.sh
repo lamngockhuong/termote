@@ -328,6 +328,33 @@ test_helper_functions() {
     fi
 }
 
+test_version_file() {
+    echo ""
+    echo "=== Testing .version file support ==="
+
+    # Verify .version file is written after extraction
+    if grep -q 'echo.*VERSION.*>.*\.version' "$PROJECT_DIR/scripts/get.sh"; then
+        pass ".version file written at install time"
+    else
+        fail ".version write" "echo to .version" "not found"
+    fi
+
+    # Verify get_installed_version reads .version first
+    if grep -q '\.version' "$PROJECT_DIR/scripts/get.sh" &&
+       grep -A2 'get_installed_version' "$PROJECT_DIR/scripts/get.sh" | grep -q '\.version'; then
+        pass "get_installed_version reads .version file"
+    else
+        fail "get_installed_version" ".version read" "not found"
+    fi
+
+    # Verify fallback to termote.sh VERSION for pre-.version installs
+    if grep -A10 'get_installed_version' "$PROJECT_DIR/scripts/get.sh" | grep -q 'elif.*TERMOTE_SCRIPT'; then
+        pass "fallback to termote.sh VERSION for old installs"
+    else
+        fail "version fallback" "elif TERMOTE_SCRIPT" "not found"
+    fi
+}
+
 # Run all tests
 echo "Running get.sh tests..."
 echo ""
@@ -343,6 +370,7 @@ test_tarball_extraction
 test_install_script_call
 test_update_mode
 test_version_pinning
+test_version_file
 test_help_output
 test_helper_functions
 
