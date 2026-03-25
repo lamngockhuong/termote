@@ -217,7 +217,7 @@ EOF
     chmod 600 "$CONFIG_FILE"
 }
 
-# Load all saved config as defaults (CLI args override these)
+# Load saved config as defaults (only for values not already set by CLI)
 load_config() {
     if [[ -f "$CONFIG_FILE" ]]; then
         local saved_lan saved_noauth saved_port saved_tailscale saved_pass_enc
@@ -227,11 +227,14 @@ load_config() {
         saved_tailscale=$(grep '^TERMOTE_TAILSCALE=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2-)
         saved_pass_enc=$(grep '^TERMOTE_SAVED_PASS=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2-)
 
-        # Apply saved values as defaults (only if not already set by CLI)
-        [[ "$saved_lan" == "true" ]] && LAN=true
-        [[ "$saved_noauth" == "true" ]] && NO_AUTH=true
-        [[ -n "$saved_port" && "$saved_port" != "$PORT_MAIN" ]] && PORT="$saved_port"
-        [[ -n "$saved_tailscale" ]] && TAILSCALE="$saved_tailscale"
+        # Apply saved values only if CLI didn't explicitly set them
+        [[ "$CLI_LAN" != true && "$saved_lan" == "true" ]] && LAN=true
+        [[ "$CLI_NO_AUTH" != true && "$saved_noauth" == "true" ]] && NO_AUTH=true
+        [[ "$CLI_PORT" != true && -n "$saved_port" && "$saved_port" != "$PORT_MAIN" ]] && PORT="$saved_port"
+        [[ "$CLI_TAILSCALE" != true && -n "$saved_tailscale" ]] && TAILSCALE="$saved_tailscale"
+
+        # Re-parse network opts with merged values
+        parse_network_opts
 
         # Decode saved password
         if [[ -n "$saved_pass_enc" ]]; then
@@ -241,13 +244,14 @@ load_config() {
 }
 
 # Parse common command options (--lan, --port, --tailscale, --no-auth, --fresh)
+# Sets CLI_* flags to track which options were explicitly provided
 parse_cmd_opts() {
     while [[ $# -gt 0 ]]; do
         case $1 in
-            --tailscale) TAILSCALE="$2"; shift 2 ;;
-            --lan) LAN=true; shift ;;
-            --port) PORT="$2"; shift 2 ;;
-            --no-auth) NO_AUTH=true; shift ;;
+            --tailscale) TAILSCALE="$2"; CLI_TAILSCALE=true; shift 2 ;;
+            --lan) LAN=true; CLI_LAN=true; shift ;;
+            --port) PORT="$2"; CLI_PORT=true; shift 2 ;;
+            --no-auth) NO_AUTH=true; CLI_NO_AUTH=true; shift ;;
             --fresh) FRESH=true; shift ;;
             *) shift ;;
         esac
@@ -316,13 +320,14 @@ start_native_mode() {
     start_ttyd
 }
 
-# Setup Tailscale serve (reset if previously configured but now disabled)
+# Setup Tailscale serve (only reset if saved config had Tailscale previously)
 setup_tailscale() {
     if [[ -n "$TAILSCALE" ]]; then
         info "Setting up Tailscale serve..."
         command -v tailscale &>/dev/null && sudo tailscale serve --bg --https="$TS_PORT" http://127.0.0.1:"$PORT"
-    else
-        # Reset Tailscale serve if it was previously configured
+    elif [[ -f "$CONFIG_FILE" ]] && grep -q '^TERMOTE_TAILSCALE=.' "$CONFIG_FILE" 2>/dev/null; then
+        # Reset Tailscale serve only if previously configured (avoid disrupting unrelated setups)
+        info "Resetting previous Tailscale serve config..."
         command -v tailscale &>/dev/null && sudo tailscale serve reset 2>/dev/null || true
     fi
 }
@@ -446,11 +451,9 @@ cmd_install() {
     local mode="$1"; shift
     [[ -z "$mode" ]] && error "Usage: termote.sh install <container|native> [options]"
 
-    # Load saved config as defaults unless --fresh is passed
-    local has_fresh=false
-    for arg in "$@"; do [[ "$arg" == "--fresh" ]] && has_fresh=true; done
-    [[ "$has_fresh" == false ]] && load_config
+    # Parse CLI args first, then load saved config for unset values
     parse_cmd_opts "$@"
+    [[ "$FRESH" != true ]] && load_config
 
     # Check if release mode (pre-built artifacts)
     local RELEASE_MODE=false
@@ -764,6 +767,10 @@ PORT=""
 TAILSCALE=""
 FRESH=false
 SAVED_PASS=""
+CLI_LAN=false
+CLI_NO_AUTH=false
+CLI_PORT=false
+CLI_TAILSCALE=false
 
 # No args = interactive mode
 if [[ $# -eq 0 ]]; then

@@ -43,13 +43,17 @@ get_installed_version() {
     fi
 }
 
-# Load saved config for --update mode
+# Load saved config for --update mode (parse key=value, never source)
 load_config() {
     local config="$HOME/.termote/config"
     if [[ ! -f "$config" ]]; then
         error "No saved config found. Run 'termote.sh install' first."
     fi
-    . "$config"
+    TERMOTE_MODE=$(grep '^TERMOTE_MODE=' "$config" 2>/dev/null | cut -d= -f2-)
+    TERMOTE_LAN=$(grep '^TERMOTE_LAN=' "$config" 2>/dev/null | cut -d= -f2-)
+    TERMOTE_NO_AUTH=$(grep '^TERMOTE_NO_AUTH=' "$config" 2>/dev/null | cut -d= -f2-)
+    TERMOTE_PORT=$(grep '^TERMOTE_PORT=' "$config" 2>/dev/null | cut -d= -f2-)
+    TERMOTE_TAILSCALE=$(grep '^TERMOTE_TAILSCALE=' "$config" 2>/dev/null | cut -d= -f2-)
 }
 
 # Check if services are running
@@ -172,7 +176,12 @@ main() {
             --yes|-y) AUTO_YES=true; shift ;;
             --download-only) DOWNLOAD_ONLY=true; shift ;;
             --update) UPDATE_MODE=true; AUTO_YES=true; shift ;;
-            --version) PIN_VERSION="${2#v}"; shift 2 ;;
+            --version)
+                PIN_VERSION="${2#v}"
+                if [[ ! "$PIN_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                    error "Invalid version format: $2 (expected: X.Y.Z)"
+                fi
+                shift 2 ;;
             --container|container) mode="container"; shift ;;
             --native|native) mode="native"; shift ;;
             *) args+=("$1"); shift ;;

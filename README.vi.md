@@ -32,7 +32,7 @@
 - **Sessions bền vững**: tmux giữ sessions sống
 - **Sidebar thu gọn**: Giao diện desktop với thanh sidebar bật/tắt
 - **Chế độ toàn màn hình**: Trải nghiệm terminal toàn màn hình
-- **Lưu cấu hình**: Tự động lưu cài đặt với mật khẩu mã hóa
+- **Lưu cấu hình**: Tự động lưu cài đặt với mật khẩu base64-encoded
 
 ## Ảnh Chụp Màn Hình
 
