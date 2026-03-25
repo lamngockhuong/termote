@@ -8,6 +8,7 @@ const ACTIVE_SESSION_CLASSES =
   'bg-zinc-200 dark:bg-zinc-700 border-l-2 border-blue-500'
 const SIDEBAR_BASE_CLASSES =
   'h-full min-h-0 bg-zinc-50 dark:bg-zinc-800 flex flex-col border-r border-zinc-200 dark:border-zinc-700 shrink-0'
+const DESKTOP_TRANSITION_CLASSES = 'transition-[width] duration-200'
 
 interface Props {
   sessions: Session[]
@@ -244,11 +245,12 @@ export function SessionSidebar({
   // Desktop: collapsible sidebar
   if (isCollapsed) {
     return (
-      <aside className={SIDEBAR_BASE_CLASSES}>
+      <aside className={`w-12 ${SIDEBAR_BASE_CLASSES} ${DESKTOP_TRANSITION_CLASSES}`}>
         <button
           onClick={onToggleCollapse}
           className="p-3 flex items-center justify-center hover:bg-zinc-200/50 dark:hover:bg-zinc-700/50 transition-colors"
           title="Expand sidebar"
+          aria-label="Expand sidebar"
         >
           <PanelLeftOpen size={18} className="text-zinc-500 dark:text-zinc-400" />
         </button>
@@ -282,12 +284,13 @@ export function SessionSidebar({
 
   // Desktop: expanded sidebar
   return (
-    <aside className={`w-56 ${SIDEBAR_BASE_CLASSES}`}>
+    <aside className={`w-56 ${SIDEBAR_BASE_CLASSES} ${DESKTOP_TRANSITION_CLASSES}`}>
       <div className="p-2 flex justify-end shrink-0">
         <button
           onClick={onToggleCollapse}
           className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-zinc-200/50 dark:hover:bg-zinc-700/50 transition-colors"
           title="Collapse sidebar"
+          aria-label="Collapse sidebar"
         >
           <PanelLeftClose size={16} className="text-zinc-500 dark:text-zinc-400" />
         </button>

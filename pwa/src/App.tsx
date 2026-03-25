@@ -10,6 +10,7 @@ import { TerminalFrame } from './components/terminal-frame'
 import { useTheme } from './contexts/theme-context'
 import { useFontSize } from './hooks/use-font-size'
 import { useFullscreen } from './hooks/use-fullscreen'
+import { useSidebarCollapsed } from './hooks/use-sidebar-collapsed'
 import { useGestures } from './hooks/use-gestures'
 import { useKeyboardVisible } from './hooks/use-keyboard-visible'
 import { useLocalSessions } from './hooks/use-local-sessions'
@@ -31,7 +32,8 @@ export default function App() {
   const terminalContainerRef = useRef<HTMLDivElement>(null)
   const ctrlInputRef = useRef<HTMLInputElement>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const { isCollapsed: sidebarCollapsed, toggle: toggleSidebarCollapsed } =
+    useSidebarCollapsed()
   const [aboutOpen, setAboutOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [showTitleTooltip, setShowTitleTooltip] = useState(false)
@@ -171,7 +173,7 @@ export default function App() {
             onRemove={removeSession}
             onUpdate={updateSession}
             isCollapsed={sidebarCollapsed}
-            onToggleCollapse={() => setSidebarCollapsed((c) => !c)}
+            onToggleCollapse={toggleSidebarCollapsed}
           />
         )}
 

@@ -13,7 +13,7 @@ export function useFullscreen() {
     if (document.fullscreenElement) {
       document.exitFullscreen()
     } else {
-      document.documentElement.requestFullscreen()
+      document.documentElement.requestFullscreen().catch(() => {})
     }
   }, [])
 
