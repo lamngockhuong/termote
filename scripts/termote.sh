@@ -9,7 +9,7 @@
 
 set -e
 
-VERSION="0.0.5" # x-release-please-version
+VERSION="0.0.6" # x-release-please-version
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
