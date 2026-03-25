@@ -49,11 +49,11 @@ load_config() {
     if [[ ! -f "$config" ]]; then
         error "No saved config found. Run 'termote.sh install' first."
     fi
-    TERMOTE_MODE=$(grep '^TERMOTE_MODE=' "$config" 2>/dev/null | cut -d= -f2-)
-    TERMOTE_LAN=$(grep '^TERMOTE_LAN=' "$config" 2>/dev/null | cut -d= -f2-)
-    TERMOTE_NO_AUTH=$(grep '^TERMOTE_NO_AUTH=' "$config" 2>/dev/null | cut -d= -f2-)
-    TERMOTE_PORT=$(grep '^TERMOTE_PORT=' "$config" 2>/dev/null | cut -d= -f2-)
-    TERMOTE_TAILSCALE=$(grep '^TERMOTE_TAILSCALE=' "$config" 2>/dev/null | cut -d= -f2-)
+    TERMOTE_MODE=$(grep '^TERMOTE_MODE=' "$config" 2>/dev/null | cut -d= -f2- | tr -d '"')
+    TERMOTE_LAN=$(grep '^TERMOTE_LAN=' "$config" 2>/dev/null | cut -d= -f2- | tr -d '"')
+    TERMOTE_NO_AUTH=$(grep '^TERMOTE_NO_AUTH=' "$config" 2>/dev/null | cut -d= -f2- | tr -d '"')
+    TERMOTE_PORT=$(grep '^TERMOTE_PORT=' "$config" 2>/dev/null | cut -d= -f2- | tr -d '"')
+    TERMOTE_TAILSCALE=$(grep '^TERMOTE_TAILSCALE=' "$config" 2>/dev/null | cut -d= -f2- | tr -d '"')
 }
 
 # Check if services are running

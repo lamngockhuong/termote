@@ -213,12 +213,12 @@ save_config() {
     fi
     cat > "$CONFIG_FILE" << EOF
 # Termote config (auto-generated)
-TERMOTE_MODE=$mode
-TERMOTE_LAN=$LAN
-TERMOTE_NO_AUTH=$NO_AUTH
-TERMOTE_PORT=${PORT:-$PORT_MAIN}
-TERMOTE_TAILSCALE=$TAILSCALE
-TERMOTE_SAVED_PASS=$encrypted_pass
+TERMOTE_MODE="$mode"
+TERMOTE_LAN="$LAN"
+TERMOTE_NO_AUTH="$NO_AUTH"
+TERMOTE_PORT="${PORT:-$PORT_MAIN}"
+TERMOTE_TAILSCALE="$TAILSCALE"
+TERMOTE_SAVED_PASS="$encrypted_pass"
 EOF
     chmod 600 "$CONFIG_FILE"
 }
@@ -227,11 +227,11 @@ EOF
 load_config() {
     if [[ -f "$CONFIG_FILE" ]]; then
         local saved_lan saved_noauth saved_port saved_tailscale saved_pass_enc
-        saved_lan=$(grep '^TERMOTE_LAN=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2-)
-        saved_noauth=$(grep '^TERMOTE_NO_AUTH=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2-)
-        saved_port=$(grep '^TERMOTE_PORT=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2-)
-        saved_tailscale=$(grep '^TERMOTE_TAILSCALE=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2-)
-        saved_pass_enc=$(grep '^TERMOTE_SAVED_PASS=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2-)
+        saved_lan=$(grep '^TERMOTE_LAN=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2- | tr -d '"')
+        saved_noauth=$(grep '^TERMOTE_NO_AUTH=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2- | tr -d '"')
+        saved_port=$(grep '^TERMOTE_PORT=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2- | tr -d '"')
+        saved_tailscale=$(grep '^TERMOTE_TAILSCALE=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2- | tr -d '"')
+        saved_pass_enc=$(grep '^TERMOTE_SAVED_PASS=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2- | tr -d '"')
 
         # Apply saved values only if CLI didn't explicitly set them
         [[ "$CLI_LAN" != true && "$saved_lan" == "true" ]] && LAN=true
