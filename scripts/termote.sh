@@ -476,15 +476,12 @@ cmd_install() {
         info "Release mode (using pre-built artifacts)"
     fi
 
-    # Stop the other mode to avoid port conflicts
-    if [[ "$mode" == "container" || "$mode" == "docker" ]]; then
-        stop_native_services
-    else
-        local crt=""
-        command -v podman &>/dev/null && crt="podman"
-        command -v docker &>/dev/null && crt="${crt:-docker}"
-        [[ -n "$crt" ]] && $crt compose --profile docker down 2>/dev/null || true
-    fi
+    # Stop running services to avoid port conflicts and "Text file busy" on binary overwrite
+    stop_native_services
+    local crt=""
+    command -v podman &>/dev/null && crt="podman"
+    command -v docker &>/dev/null && crt="${crt:-docker}"
+    [[ -n "$crt" ]] && $crt compose --profile docker down 2>/dev/null || true
 
     echo ""
     echo -e "${BOLD}=== Termote Install ($mode) ===${NC}"
