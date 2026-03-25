@@ -233,6 +233,133 @@ test_security() {
 }
 
 # =============================================================================
+# CONFIG PERSISTENCE TESTS
+# =============================================================================
+test_config_persistence() {
+    echo ""
+    echo "=== Config Persistence ==="
+
+    # Verify save_config function
+    if grep -q 'save_config()' "$SCRIPT"; then
+        pass "save_config() present"
+    else
+        fail "save_config" "function present" "not found"
+    fi
+
+    # Verify load_config function
+    if grep -q 'load_config()' "$SCRIPT"; then
+        pass "load_config() present"
+    else
+        fail "load_config" "function present" "not found"
+    fi
+
+    # Verify config file chmod 600
+    if grep -q 'chmod 600.*CONFIG_FILE' "$SCRIPT"; then
+        pass "config file chmod 600"
+    else
+        fail "chmod" "600" "not found"
+    fi
+
+    # Verify --fresh flag handling
+    if grep -q 'FRESH=true' "$SCRIPT"; then
+        pass "--fresh flag handling"
+    else
+        fail "--fresh" "FRESH=true" "not found"
+    fi
+
+    # Verify CLI override tracking
+    if grep -q 'CLI_LAN=true' "$SCRIPT" && grep -q 'CLI_NO_AUTH=true' "$SCRIPT"; then
+        pass "CLI override flags tracked"
+    else
+        fail "CLI flags" "CLI_LAN/CLI_NO_AUTH" "not found"
+    fi
+
+    # Verify interactive install forces --fresh
+    if grep -q 'cmd_install.*--fresh' "$SCRIPT"; then
+        pass "interactive install forces --fresh"
+    else
+        fail "interactive --fresh" "cmd_install --fresh" "not found"
+    fi
+
+    # Verify config values are quoted
+    if grep -q 'TERMOTE_MODE="' "$SCRIPT"; then
+        pass "config values are quoted"
+    else
+        fail "quoting" "quoted values" "unquoted"
+    fi
+
+    # Verify quote stripping on read
+    if grep -q 'tr -d.*"' "$SCRIPT"; then
+        pass "quotes stripped on config read"
+    else
+        fail "strip quotes" "tr -d" "not found"
+    fi
+}
+
+# =============================================================================
+# PASSWORD ENCRYPTION TESTS
+# =============================================================================
+test_password_encryption() {
+    echo ""
+    echo "=== Password Encryption ==="
+
+    # Verify AES-256-CBC encryption
+    if grep -q 'aes-256-cbc' "$SCRIPT"; then
+        pass "AES-256-CBC encryption used"
+    else
+        fail "encryption" "aes-256-cbc" "not found"
+    fi
+
+    # Verify PBKDF2 key derivation
+    if grep -q 'pbkdf2' "$SCRIPT"; then
+        pass "PBKDF2 key derivation"
+    else
+        fail "pbkdf2" "present" "not found"
+    fi
+
+    # Verify machine-derived key
+    if grep -q '_derive_key()' "$SCRIPT"; then
+        pass "_derive_key() function present"
+    else
+        fail "_derive_key" "function" "not found"
+    fi
+
+    # Verify single-line output (-A flag)
+    if grep -q '\-A' "$SCRIPT" && grep -q 'aes-256-cbc -a -A' "$SCRIPT"; then
+        pass "single-line ciphertext (-A flag)"
+    else
+        fail "-A flag" "present" "not found"
+    fi
+
+    # Verify legacy base64 fallback
+    if grep -q 'openssl base64 -d' "$SCRIPT"; then
+        pass "legacy base64 decrypt fallback"
+    else
+        fail "base64 fallback" "openssl base64 -d" "not found"
+    fi
+
+    # Verify password hidden on reuse
+    if grep -q 'REUSED_PASS' "$SCRIPT"; then
+        pass "password hidden on reuse (REUSED_PASS flag)"
+    else
+        fail "REUSED_PASS" "flag" "not found"
+    fi
+
+    # Functional: encrypt/decrypt roundtrip
+    local key
+    key=$(echo -n "$(hostname)-$(whoami)-termote" | openssl dgst -sha256 -r | cut -d' ' -f1)
+    local test_pass="TestP@ss!123"
+    local encrypted decrypted
+    encrypted=$(echo -n "$test_pass" | openssl enc -aes-256-cbc -a -A -salt -pbkdf2 -pass pass:"$key" 2>/dev/null)
+    decrypted=$(echo "$encrypted" | openssl enc -aes-256-cbc -a -A -d -salt -pbkdf2 -pass pass:"$key" 2>/dev/null)
+    if [[ "$decrypted" == "$test_pass" ]]; then
+        pass "AES-256 encrypt/decrypt roundtrip"
+    else
+        fail "roundtrip" "$test_pass" "$decrypted"
+    fi
+}
+
+# =============================================================================
 # HEALTH CHECK TESTS
 # =============================================================================
 test_health_check() {
@@ -290,6 +417,8 @@ test_docker_compose
 test_interactive
 test_entrypoints
 test_security
+test_config_persistence
+test_password_encryption
 test_health_check
 
 # Summary

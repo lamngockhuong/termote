@@ -20,6 +20,12 @@ curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/
 # With explicit mode
 curl -fsSL .../get.sh | bash -s -- --container --lan
 curl -fsSL .../get.sh | bash -s -- --native --tailscale myhost
+
+# Auto-update with saved config
+curl -fsSL .../get.sh | bash -s -- --update
+
+# Install specific version
+curl -fsSL .../get.sh | bash -s -- --version 0.0.4
 ```
 
 <Aside type="tip">

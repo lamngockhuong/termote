@@ -215,6 +215,93 @@ test_install_script_call() {
     fi
 }
 
+test_update_mode() {
+    echo ""
+    echo "=== Testing --update mode ==="
+
+    # Verify UPDATE_MODE variable
+    if grep -q 'UPDATE_MODE=true' "$PROJECT_DIR/scripts/get.sh"; then
+        pass "--update flag sets UPDATE_MODE"
+    else
+        fail "--update" "UPDATE_MODE=true" "not found"
+    fi
+
+    # Verify --update implies --yes
+    if grep -q 'UPDATE_MODE=true.*AUTO_YES=true' "$PROJECT_DIR/scripts/get.sh" || \
+       grep -A1 'UPDATE_MODE=true' "$PROJECT_DIR/scripts/get.sh" | grep -q 'AUTO_YES=true'; then
+        pass "--update implies auto-yes"
+    else
+        fail "--update auto-yes" "AUTO_YES=true" "not found"
+    fi
+
+    # Verify config loading uses grep/cut (not sourcing)
+    if grep -q "grep.*TERMOTE_MODE.*cut" "$PROJECT_DIR/scripts/get.sh"; then
+        pass "config parsed safely (grep/cut, no sourcing)"
+    else
+        fail "safe parsing" "grep/cut" "not found"
+    fi
+
+    # Verify quote stripping on read
+    if grep -q 'tr -d.*"' "$PROJECT_DIR/scripts/get.sh"; then
+        pass "quotes stripped on config read"
+    else
+        fail "strip quotes" "tr -d" "not found"
+    fi
+
+    # Verify stop_services preserves config (no 'uninstall all')
+    if grep -A5 'stop_services()' "$PROJECT_DIR/scripts/get.sh" | grep -q 'uninstall all'; then
+        fail "stop_services" "no uninstall all" "found uninstall all"
+    else
+        pass "stop_services preserves config (no uninstall all)"
+    fi
+}
+
+test_version_pinning() {
+    echo ""
+    echo "=== Testing --version pinning ==="
+
+    # Verify PIN_VERSION variable
+    if grep -q 'PIN_VERSION=' "$PROJECT_DIR/scripts/get.sh"; then
+        pass "PIN_VERSION variable present"
+    else
+        fail "PIN_VERSION" "variable" "not found"
+    fi
+
+    # Verify version format validation
+    if grep -q '\^\\[0-9\\]' "$PROJECT_DIR/scripts/get.sh" || \
+       grep -q 'Invalid version format' "$PROJECT_DIR/scripts/get.sh"; then
+        pass "version format validation"
+    else
+        fail "version validation" "regex check" "not found"
+    fi
+
+    # Verify v-prefix stripping
+    if grep -q '{2#v}' "$PROJECT_DIR/scripts/get.sh"; then
+        pass "strips v prefix from version"
+    else
+        fail "v-prefix" "strip" "not found"
+    fi
+}
+
+test_help_output() {
+    echo ""
+    echo "=== Testing --help ==="
+
+    # Verify show_help function
+    if grep -q 'show_help()' "$PROJECT_DIR/scripts/get.sh"; then
+        pass "show_help() function present"
+    else
+        fail "show_help" "function" "not found"
+    fi
+
+    # Verify --help exits early
+    if grep -q '\-\-help|-h) show_help; exit 0' "$PROJECT_DIR/scripts/get.sh"; then
+        pass "--help exits before download"
+    else
+        fail "--help exit" "early exit" "not found"
+    fi
+}
+
 test_helper_functions() {
     echo ""
     echo "=== Testing helper functions ==="
@@ -254,6 +341,9 @@ test_dependency_checks
 test_error_handling
 test_tarball_extraction
 test_install_script_call
+test_update_mode
+test_version_pinning
+test_help_output
 test_helper_functions
 
 # Summary

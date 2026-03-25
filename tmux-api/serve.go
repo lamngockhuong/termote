@@ -214,9 +214,15 @@ func basicAuth(user, pass string, next http.Handler) http.Handler {
 			return
 		}
 		u, p, ok := r.BasicAuth()
-		if !ok ||
-			subtle.ConstantTimeCompare([]byte(u), []byte(user)) != 1 ||
+		if !ok {
+			// No credentials provided — prompt browser, don't count as failure
+			w.Header().Set("WWW-Authenticate", `Basic realm="Terminal Access"`)
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if subtle.ConstantTimeCompare([]byte(u), []byte(user)) != 1 ||
 			subtle.ConstantTimeCompare([]byte(p), []byte(pass)) != 1 {
+			// Wrong credentials — count as failed attempt
 			limiter.record(ip)
 			w.Header().Set("WWW-Authenticate", `Basic realm="Terminal Access"`)
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)

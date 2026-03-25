@@ -29,6 +29,7 @@ PORT_MAIN=7680
 PORT_TTYD=7681
 CONTAINER_NAME="termote"
 LOG_DIR="$HOME/.termote/logs"
+CONFIG_FILE="$HOME/.termote/config"
 
 # =============================================================================
 # COLORS & UI
@@ -143,6 +144,14 @@ setup_auth() {
         return
     fi
 
+    # Reuse saved password unless --fresh
+    if [[ "$FRESH" != true && -n "$SAVED_PASS" ]]; then
+        export TERMOTE_PASS="$SAVED_PASS"
+        REUSED_PASS=true
+        info "Using saved password (use --fresh to reset)"
+        return
+    fi
+
     if [[ -t 0 ]]; then
         # Interactive mode
         local prompt="Enter password for admin (Enter = auto-generate): "
@@ -189,14 +198,69 @@ parse_network_opts() {
     fi
 }
 
-# Parse common command options (--lan, --port, --tailscale, --no-auth)
+# Derive encryption key from machine-specific data (hostname + username)
+_derive_key() {
+    echo -n "$(hostname)-$(whoami)-termote" | openssl dgst -sha256 -r | cut -d' ' -f1
+}
+
+# Save config after successful install
+save_config() {
+    local mode="$1"
+    mkdir -p "$(dirname "$CONFIG_FILE")"
+    local encrypted_pass=""
+    if [[ -n "$TERMOTE_PASS" ]]; then
+        encrypted_pass=$(echo -n "$TERMOTE_PASS" | openssl enc -aes-256-cbc -a -A -salt -pbkdf2 -pass pass:"$(_derive_key)" 2>/dev/null)
+    fi
+    cat > "$CONFIG_FILE" << EOF
+# Termote config (auto-generated)
+TERMOTE_MODE="$mode"
+TERMOTE_LAN="$LAN"
+TERMOTE_NO_AUTH="$NO_AUTH"
+TERMOTE_PORT="${PORT:-$PORT_MAIN}"
+TERMOTE_TAILSCALE="$TAILSCALE"
+TERMOTE_SAVED_PASS="$encrypted_pass"
+EOF
+    chmod 600 "$CONFIG_FILE"
+}
+
+# Load saved config as defaults (only for values not already set by CLI)
+load_config() {
+    if [[ -f "$CONFIG_FILE" ]]; then
+        local saved_lan saved_noauth saved_port saved_tailscale saved_pass_enc
+        saved_lan=$(grep '^TERMOTE_LAN=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2- | tr -d '"')
+        saved_noauth=$(grep '^TERMOTE_NO_AUTH=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2- | tr -d '"')
+        saved_port=$(grep '^TERMOTE_PORT=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2- | tr -d '"')
+        saved_tailscale=$(grep '^TERMOTE_TAILSCALE=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2- | tr -d '"')
+        saved_pass_enc=$(grep '^TERMOTE_SAVED_PASS=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2- | tr -d '"')
+
+        # Apply saved values only if CLI didn't explicitly set them
+        [[ "$CLI_LAN" != true && "$saved_lan" == "true" ]] && LAN=true
+        [[ "$CLI_NO_AUTH" != true && "$saved_noauth" == "true" ]] && NO_AUTH=true
+        [[ "$CLI_PORT" != true && -n "$saved_port" && "$saved_port" != "$PORT_MAIN" ]] && PORT="$saved_port"
+        [[ "$CLI_TAILSCALE" != true && -n "$saved_tailscale" ]] && TAILSCALE="$saved_tailscale"
+
+        # Re-parse network opts with merged values
+        parse_network_opts
+
+        # Decrypt saved password (try AES-256 first, fallback to legacy base64)
+        if [[ -n "$saved_pass_enc" ]]; then
+            SAVED_PASS=$(echo "$saved_pass_enc" | openssl enc -aes-256-cbc -a -A -d -salt -pbkdf2 -pass pass:"$(_derive_key)" 2>/dev/null) || \
+            SAVED_PASS=$(echo "$saved_pass_enc" | openssl base64 -d 2>/dev/null) || \
+            SAVED_PASS=""
+        fi
+    fi
+}
+
+# Parse common command options (--lan, --port, --tailscale, --no-auth, --fresh)
+# Sets CLI_* flags to track which options were explicitly provided
 parse_cmd_opts() {
     while [[ $# -gt 0 ]]; do
         case $1 in
-            --tailscale) TAILSCALE="$2"; shift 2 ;;
-            --lan) LAN=true; shift ;;
-            --port) PORT="$2"; shift 2 ;;
-            --no-auth) NO_AUTH=true; shift ;;
+            --tailscale) TAILSCALE="$2"; CLI_TAILSCALE=true; shift 2 ;;
+            --lan) LAN=true; CLI_LAN=true; shift ;;
+            --port) PORT="$2"; CLI_PORT=true; shift 2 ;;
+            --no-auth) NO_AUTH=true; CLI_NO_AUTH=true; shift ;;
+            --fresh) FRESH=true; shift ;;
             *) shift ;;
         esac
     done
@@ -264,11 +328,15 @@ start_native_mode() {
     start_ttyd
 }
 
-# Setup Tailscale serve
+# Setup Tailscale serve (only reset if saved config had Tailscale previously)
 setup_tailscale() {
     if [[ -n "$TAILSCALE" ]]; then
         info "Setting up Tailscale serve..."
         command -v tailscale &>/dev/null && sudo tailscale serve --bg --https="$TS_PORT" http://127.0.0.1:"$PORT"
+    elif [[ -f "$CONFIG_FILE" ]] && grep -q '^TERMOTE_TAILSCALE=.' "$CONFIG_FILE" 2>/dev/null; then
+        # Reset Tailscale serve only if previously configured (avoid disrupting unrelated setups)
+        info "Resetting previous Tailscale serve config..."
+        command -v tailscale &>/dev/null && sudo tailscale serve reset 2>/dev/null || true
     fi
 }
 
@@ -285,7 +353,11 @@ show_access_info() {
     fi
 
     if [[ "$NO_AUTH" != true && -n "$TERMOTE_PASS" ]]; then
-        show_credentials "$TERMOTE_PASS"
+        if [[ "$REUSED_PASS" == true ]]; then
+            info "Using saved password (use --fresh to reset and show)"
+        else
+            show_credentials "$TERMOTE_PASS"
+        fi
     fi
 }
 
@@ -373,7 +445,8 @@ interactive_install() {
         [[ -n "$ts_host" ]] && opts+=("--tailscale" "$ts_host")
     fi
 
-    cmd_install "$mode" "${opts[@]}"
+    # Interactive = user chose everything explicitly, override saved config
+    cmd_install "$mode" --fresh "${opts[@]}"
 }
 
 interactive_uninstall() {
@@ -390,7 +463,9 @@ cmd_install() {
     local mode="$1"; shift
     [[ -z "$mode" ]] && error "Usage: termote.sh install <container|native> [options]"
 
+    # Parse CLI args first, then load saved config for unset values
     parse_cmd_opts "$@"
+    [[ "$FRESH" != true ]] && load_config
 
     # Check if release mode (pre-built artifacts)
     local RELEASE_MODE=false
@@ -399,6 +474,16 @@ cmd_install() {
         RELEASE_MODE=true
         PWA_DIST="$PROJECT_DIR/pwa-dist"
         info "Release mode (using pre-built artifacts)"
+    fi
+
+    # Stop the other mode to avoid port conflicts
+    if [[ "$mode" == "container" || "$mode" == "docker" ]]; then
+        stop_native_services
+    else
+        local crt=""
+        command -v podman &>/dev/null && crt="podman"
+        command -v docker &>/dev/null && crt="${crt:-docker}"
+        [[ -n "$crt" ]] && $crt compose --profile docker down 2>/dev/null || true
     fi
 
     echo ""
@@ -456,6 +541,9 @@ cmd_install() {
 
     setup_tailscale
 
+    # Save config for future restarts/updates
+    save_config "$mode"
+
     show_access_info
 }
 
@@ -500,6 +588,10 @@ cmd_uninstall() {
     # Full cleanup
     if [[ "$mode" == "all" ]]; then
         rm -f "$PROJECT_DIR/tmux-api/tmux-api-native"
+        if [[ -f "$CONFIG_FILE" ]]; then
+            info "Removing saved config..."
+            rm -f "$CONFIG_FILE"
+        fi
     fi
 
     echo ""
@@ -666,6 +758,7 @@ cmd_help() {
     echo "  --lan             Expose to LAN"
     echo "  --tailscale <h>   Enable Tailscale HTTPS"
     echo "  --no-auth         Disable authentication"
+    echo "  --fresh           Ignore saved password, prompt again"
     echo ""
     echo "Examples:"
     echo "  termote.sh                           # Interactive menu"
@@ -684,6 +777,13 @@ LAN=false
 NO_AUTH=false
 PORT=""
 TAILSCALE=""
+FRESH=false
+SAVED_PASS=""
+REUSED_PASS=false
+CLI_LAN=false
+CLI_NO_AUTH=false
+CLI_PORT=false
+CLI_TAILSCALE=false
 
 # No args = interactive mode
 if [[ $# -eq 0 ]]; then

@@ -127,13 +127,20 @@ curl http://localhost:7680/api/tmux/sessions
 Re-run the installer - it compares versions and prompts before updating:
 
 ```bash
+# Auto-update with saved config
+curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash -s -- --update
+
+# Or standard update
 curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
 ```
 
 Options:
 
+- `--update` - Auto-update using saved config (mode, flags, password)
 - `--yes` - Auto-update without prompt
 - `--download-only` - Download only, no install
+- `--fresh` - Force new password prompt
+- `--version <ver>` - Install specific version
 
 ### Manual Update
 

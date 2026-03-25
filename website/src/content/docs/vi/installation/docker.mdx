@@ -48,11 +48,14 @@ docker run -d --name termote -p 7680:7680 \
 
 ## Tùy chọn
 
-| Cờ              | Mô tả                           |
-| --------------- | ------------------------------- |
-| `--lan`         | Mở ra LAN (mặc định: localhost) |
-| `--no-auth`     | Tắt xác thực cơ bản             |
-| `--port <port>` | Cổng tùy chỉnh (mặc định: 7680) |
+| Cờ                | Mô tả                                         |
+| ----------------- | --------------------------------------------- |
+| `--lan`           | Mở ra LAN (mặc định: localhost)               |
+| `--no-auth`       | Tắt xác thực cơ bản                           |
+| `--port <port>`   | Cổng tùy chỉnh (mặc định: 7680)               |
+| `--fresh`         | Buộc nhập mật khẩu mới (bỏ qua config đã lưu) |
+| `--update`        | Cập nhật tự động với config đã lưu            |
+| `--version <ver>` | Cài đặt phiên bản cụ thể                      |
 
 <Aside type="tip">
   Script tự động phát hiện `podman` hoặc `docker` - cả hai hoạt động giống nhau.
@@ -138,13 +141,19 @@ curl -u admin:password http://localhost:7680/api/tmux/sessions
 Chạy lại installer - sẽ so sánh version và hỏi trước khi cập nhật:
 
 ```bash
+# Cập nhật tự động với config đã lưu
+curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash -s -- --update
+
+# Hoặc cập nhật chuẩn
 curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash -s -- --container
 ```
 
 Tùy chọn:
 
+- `--update` - Cập nhật tự động dùng config đã lưu (mode, flags, password)
 - `--yes` - Tự động cập nhật không hỏi
 - `--download-only` - Chỉ tải về, không cài đặt
+- `--fresh` - Buộc nhập mật khẩu mới
 
 ### Cập nhật thủ công
 

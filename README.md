@@ -30,6 +30,9 @@ Remote control CLI tools (Claude Code, GitHub Copilot, any terminal) from mobile
 - **Gesture support**: Swipe for Ctrl+C, Tab, history navigation
 - **PWA**: Installable to homescreen, offline-capable
 - **Persistent sessions**: tmux keeps sessions alive
+- **Collapsible sidebar**: Desktop UI with toggleable session sidebar
+- **Fullscreen mode**: Immersive terminal experience
+- **Config persistence**: Auto-save installation settings with AES-256 encrypted password
 
 ## Screenshots
 
@@ -99,9 +102,18 @@ curl -fsSL .../get.sh | bash -s -- --yes
 # Download only (no install)
 curl -fsSL .../get.sh | bash -s -- --download-only
 
+# Auto-update with saved config
+curl -fsSL .../get.sh | bash -s -- --update
+
+# Install specific version
+curl -fsSL .../get.sh | bash -s -- --version 0.0.4
+
 # With explicit mode and options
 curl -fsSL .../get.sh | bash -s -- --yes --container --lan
 curl -fsSL .../get.sh | bash -s -- --yes --native --tailscale myhost
+
+# Force new password (ignore saved config)
+curl -fsSL .../get.sh | bash -s -- --yes --container --fresh
 ```
 
 ### Docker
@@ -186,12 +198,15 @@ flowchart LR
 
 ### Options
 
-| Flag                        | Description                             |
-| --------------------------- | --------------------------------------- |
-| `--lan`                     | Expose to LAN (default: localhost only) |
-| `--tailscale <host[:port]>` | Enable Tailscale HTTPS                  |
-| `--no-auth`                 | Disable basic authentication            |
-| `--port <port>`             | Host port (default: 7680)               |
+| Flag                        | Description                                     |
+| --------------------------- | ----------------------------------------------- |
+| `--lan`                     | Expose to LAN (default: localhost only)         |
+| `--tailscale <host[:port]>` | Enable Tailscale HTTPS                          |
+| `--no-auth`                 | Disable basic authentication                    |
+| `--port <port>`             | Host port (default: 7680)                       |
+| `--fresh`                   | Force new password prompt (ignore saved config) |
+| `--update`                  | Auto-update with saved config                   |
+| `--version <ver>`           | Install specific version (with or without `v`)  |
 
 | Environment Variable | Description                                      |
 | -------------------- | ------------------------------------------------ |
@@ -261,10 +276,13 @@ Uses `tailscale serve` for automatic HTTPS (no manual cert management):
 ### Updating
 
 ```bash
-# Option 1: Re-run one-liner (compares versions, prompts before install)
+# Option 1: Auto-update with saved config
+curl -fsSL .../get.sh | bash -s -- --update
+
+# Option 2: Re-run one-liner (compares versions, prompts before install)
 curl -fsSL .../get.sh | bash
 
-# Option 2: Manual update
+# Option 3: Manual update
 ./scripts/termote.sh uninstall [container|native]
 git pull origin main                    # If installed from source
 ./scripts/termote.sh install [container|native] [--lan] [--tailscale ...]

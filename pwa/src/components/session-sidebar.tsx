@@ -9,6 +9,8 @@ const ACTIVE_SESSION_CLASSES =
 const SIDEBAR_BASE_CLASSES =
   'h-full min-h-0 bg-zinc-50 dark:bg-zinc-800 flex flex-col border-r border-zinc-200 dark:border-zinc-700 shrink-0'
 const DESKTOP_TRANSITION_CLASSES = 'transition-[width] duration-200'
+const HOVER_CLASSES =
+  'hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors'
 
 interface Props {
   sessions: Session[]
@@ -105,7 +107,7 @@ export function SessionSidebar({
   // Desktop session item
   const renderDesktopItem = (session: Session) => (
     <div
-      className={`group relative flex items-center hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors ${
+      className={`group relative flex items-center ${HOVER_CLASSES} ${
         activeId === session.id ? ACTIVE_SESSION_CLASSES : ''
       }`}
     >
@@ -194,7 +196,7 @@ export function SessionSidebar({
       ) : (
         <button
           onClick={() => setShowAddForm(true)}
-          className="p-3 text-left hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors border-t border-zinc-200 dark:border-zinc-700 w-full text-zinc-600 dark:text-zinc-400 flex items-center"
+          className={`p-3 text-left ${HOVER_CLASSES} border-t border-zinc-200 dark:border-zinc-700 w-full text-zinc-600 dark:text-zinc-400 flex items-center`}
           title="Add new session"
         >
           <Plus size={20} />
@@ -249,7 +251,7 @@ export function SessionSidebar({
         className={`w-12 ${SIDEBAR_BASE_CLASSES} ${DESKTOP_TRANSITION_CLASSES}`}
       >
         <button
-          onClick={onToggleCollapse}
+          onClick={() => onToggleCollapse?.()}
           className="p-3 flex items-center justify-center hover:bg-zinc-200/50 dark:hover:bg-zinc-700/50 transition-colors"
           title="Expand sidebar"
           aria-label="Expand sidebar"
@@ -264,7 +266,7 @@ export function SessionSidebar({
             <button
               key={session.id}
               onClick={() => onSelect(session.id)}
-              className={`w-full p-2 flex items-center justify-center hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors ${
+              className={`w-full p-2 flex items-center justify-center ${HOVER_CLASSES} ${
                 activeId === session.id ? ACTIVE_SESSION_CLASSES : ''
               }`}
               title={session.name}
@@ -277,7 +279,7 @@ export function SessionSidebar({
               onToggleCollapse?.()
               setShowAddForm(true)
             }}
-            className="w-full p-2 flex items-center justify-center hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors border-t border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400"
+            className={`w-full p-2 flex items-center justify-center ${HOVER_CLASSES} border-t border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400`}
             title="Add new session"
           >
             <Plus size={18} />
@@ -294,7 +296,7 @@ export function SessionSidebar({
     >
       <div className="p-2 flex justify-end shrink-0">
         <button
-          onClick={onToggleCollapse}
+          onClick={() => onToggleCollapse?.()}
           className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-zinc-200/50 dark:hover:bg-zinc-700/50 transition-colors"
           title="Collapse sidebar"
           aria-label="Collapse sidebar"
