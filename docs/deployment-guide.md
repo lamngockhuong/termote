@@ -68,7 +68,7 @@ Installation settings are automatically saved to `~/.termote/config` (chmod 600)
 - Mode (container/native)
 - Network flags (--lan, --tailscale)
 - Authentication setting (--no-auth)
-- Base64-encoded password (chmod 600 file protection)
+- AES-256 encrypted password (machine-derived key + chmod 600)
 
 **Reusing saved config:**
 

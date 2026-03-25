@@ -32,7 +32,7 @@ Remote control CLI tools (Claude Code, GitHub Copilot, any terminal) from mobile
 - **Persistent sessions**: tmux keeps sessions alive
 - **Collapsible sidebar**: Desktop UI with toggleable session sidebar
 - **Fullscreen mode**: Immersive terminal experience
-- **Config persistence**: Auto-save installation settings with base64-encoded password
+- **Config persistence**: Auto-save installation settings with AES-256 encrypted password
 
 ## Screenshots
 

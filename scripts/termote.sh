@@ -147,6 +147,7 @@ setup_auth() {
     # Reuse saved password unless --fresh
     if [[ "$FRESH" != true && -n "$SAVED_PASS" ]]; then
         export TERMOTE_PASS="$SAVED_PASS"
+        REUSED_PASS=true
         info "Using saved password (use --fresh to reset)"
         return
     fi
@@ -197,13 +198,18 @@ parse_network_opts() {
     fi
 }
 
+# Derive encryption key from machine-specific data (hostname + username)
+_derive_key() {
+    echo -n "$(hostname)-$(whoami)-termote" | openssl dgst -sha256 -r | cut -d' ' -f1
+}
+
 # Save config after successful install
 save_config() {
     local mode="$1"
     mkdir -p "$(dirname "$CONFIG_FILE")"
-    local encoded_pass=""
+    local encrypted_pass=""
     if [[ -n "$TERMOTE_PASS" ]]; then
-        encoded_pass=$(echo -n "$TERMOTE_PASS" | openssl base64)
+        encrypted_pass=$(echo -n "$TERMOTE_PASS" | openssl enc -aes-256-cbc -a -A -salt -pbkdf2 -pass pass:"$(_derive_key)" 2>/dev/null)
     fi
     cat > "$CONFIG_FILE" << EOF
 # Termote config (auto-generated)
@@ -212,7 +218,7 @@ TERMOTE_LAN=$LAN
 TERMOTE_NO_AUTH=$NO_AUTH
 TERMOTE_PORT=${PORT:-$PORT_MAIN}
 TERMOTE_TAILSCALE=$TAILSCALE
-TERMOTE_SAVED_PASS=$encoded_pass
+TERMOTE_SAVED_PASS=$encrypted_pass
 EOF
     chmod 600 "$CONFIG_FILE"
 }
@@ -236,9 +242,9 @@ load_config() {
         # Re-parse network opts with merged values
         parse_network_opts
 
-        # Decode saved password
+        # Decrypt saved password
         if [[ -n "$saved_pass_enc" ]]; then
-            SAVED_PASS=$(echo "$saved_pass_enc" | openssl base64 -d 2>/dev/null || true)
+            SAVED_PASS=$(echo "$saved_pass_enc" | openssl enc -aes-256-cbc -a -A -d -salt -pbkdf2 -pass pass:"$(_derive_key)" 2>/dev/null || true)
         fi
     fi
 }
@@ -345,7 +351,11 @@ show_access_info() {
     fi
 
     if [[ "$NO_AUTH" != true && -n "$TERMOTE_PASS" ]]; then
-        show_credentials "$TERMOTE_PASS"
+        if [[ "$REUSED_PASS" == true ]]; then
+            info "Using saved password (use --fresh to reset and show)"
+        else
+            show_credentials "$TERMOTE_PASS"
+        fi
     fi
 }
 
@@ -767,6 +777,7 @@ PORT=""
 TAILSCALE=""
 FRESH=false
 SAVED_PASS=""
+REUSED_PASS=false
 CLI_LAN=false
 CLI_NO_AUTH=false
 CLI_PORT=false
