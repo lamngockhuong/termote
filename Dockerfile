@@ -3,9 +3,11 @@ FROM tsl0922/ttyd:latest
 
 USER root
 
-# Install tools
+# Install tools + locale support
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    tmux nano vim curl git htop openssl \
+    tmux nano vim curl git htop openssl locales \
+    && sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen \
+    && locale-gen \
     && rm -rf /var/lib/apt/lists/*
 
 # Bash config
@@ -18,8 +20,8 @@ RUN echo 'alias ll="ls -la"' >> /etc/bash.bashrc && \
 RUN echo "set-option -g default-shell /bin/bash" > /etc/tmux.conf && \
     echo "set-option -g default-command /bin/bash" >> /etc/tmux.conf
 
-# Make passwd/group writable for entrypoint
-RUN chmod 666 /etc/passwd /etc/group
+# Make passwd/group writable for entrypoint (locked to 644 after writes)
+RUN chmod 644 /etc/passwd /etc/group
 
 # Create directories
 RUN mkdir -p /home/termote/.local/share/nano && chmod -R 777 /home/termote
@@ -44,6 +46,8 @@ COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 ENV SHELL=/bin/bash
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
 EXPOSE 7680
 
 ENTRYPOINT ["/entrypoint.sh"]

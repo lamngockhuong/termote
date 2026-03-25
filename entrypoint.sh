@@ -8,6 +8,8 @@ fi
 if ! getent passwd $(id -u) >/dev/null 2>&1; then
     echo "termote:x:$(id -u):$(id -g)::/home/termote:/bin/bash" >> /etc/passwd 2>/dev/null || true
 fi
+# Lock down passwd/group after entrypoint writes
+chmod 644 /etc/passwd /etc/group 2>/dev/null || true
 
 # Create home directory structure
 mkdir -p /home/termote/.local/share/nano 2>/dev/null || true

@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/hex"
+	"encoding/json"
 	"io"
 	"log"
 	"net"
@@ -132,16 +133,91 @@ func startServeMode(cfg serveConfig) {
 
 	addr := cfg.Bind + ":" + cfg.Port
 	log.Printf("Termote server listening on %s (PWA: %s)", addr, absDir)
-	log.Fatal(http.ListenAndServe(addr, handler))
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+	log.Fatal(srv.ListenAndServe())
 }
 
-// basicAuth wraps a handler with HTTP basic authentication
+// authRateLimiter tracks failed auth attempts per IP to prevent brute force attacks.
+type authRateLimiter struct {
+	mu       sync.Mutex
+	failures map[string][]time.Time // IP → timestamps of recent failures
+}
+
+func newAuthRateLimiter() *authRateLimiter {
+	return &authRateLimiter{failures: make(map[string][]time.Time)}
+}
+
+// isBlocked returns true if the IP has exceeded 5 failed attempts in the last minute.
+func (rl *authRateLimiter) isBlocked(ip string) bool {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	cutoff := time.Now().Add(-1 * time.Minute)
+	recent := rl.failures[ip]
+	// Sweep old entries
+	filtered := recent[:0]
+	for _, t := range recent {
+		if t.After(cutoff) {
+			filtered = append(filtered, t)
+		}
+	}
+	if len(filtered) == 0 {
+		delete(rl.failures, ip)
+		return false
+	}
+	rl.failures[ip] = filtered
+	return len(filtered) >= 5
+}
+
+// record adds a failed attempt for the given IP.
+// Sweeps all expired entries when map exceeds 1000 IPs to prevent unbounded growth.
+func (rl *authRateLimiter) record(ip string) {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	now := time.Now()
+	rl.failures[ip] = append(rl.failures[ip], now)
+	if len(rl.failures) > 1000 {
+		cutoff := now.Add(-1 * time.Minute)
+		for k, times := range rl.failures {
+			filtered := times[:0]
+			for _, t := range times {
+				if t.After(cutoff) {
+					filtered = append(filtered, t)
+				}
+			}
+			if len(filtered) == 0 {
+				delete(rl.failures, k)
+			} else {
+				rl.failures[k] = filtered
+			}
+		}
+	}
+}
+
+// basicAuth wraps a handler with HTTP basic authentication.
+// Note: uses r.RemoteAddr for rate limiting. Behind a reverse proxy, all clients
+// may share one IP — consider the proxy's own rate limiting in that setup.
 func basicAuth(user, pass string, next http.Handler) http.Handler {
+	limiter := newAuthRateLimiter()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Extract client IP (strip port)
+		ip, _, _ := net.SplitHostPort(r.RemoteAddr)
+		if ip == "" {
+			ip = r.RemoteAddr
+		}
+		if limiter.isBlocked(ip) {
+			http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
+			return
+		}
 		u, p, ok := r.BasicAuth()
 		if !ok ||
 			subtle.ConstantTimeCompare([]byte(u), []byte(user)) != 1 ||
 			subtle.ConstantTimeCompare([]byte(p), []byte(pass)) != 1 {
+			limiter.record(ip)
 			w.Header().Set("WWW-Authenticate", `Basic realm="Terminal Access"`)
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
@@ -198,7 +274,7 @@ func proxyWebSocket(w http.ResponseWriter, r *http.Request, target *url.URL) {
 		}
 	}
 
-	upstream, err := net.Dial("tcp", targetAddr)
+	upstream, err := net.DialTimeout("tcp", targetAddr, 2*time.Second)
 	if err != nil {
 		http.Error(w, "Bad Gateway", http.StatusBadGateway)
 		return
@@ -213,7 +289,8 @@ func proxyWebSocket(w http.ResponseWriter, r *http.Request, target *url.URL) {
 	}
 	client, _, err := hijacker.Hijack()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Printf("WebSocket hijack error: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 	defer client.Close()
@@ -232,20 +309,28 @@ func proxyWebSocket(w http.ResponseWriter, r *http.Request, target *url.URL) {
 	<-done // Wait for both goroutines to prevent leak
 }
 
+// allowNonNavigationOnly blocks direct browser navigation (Sec-Fetch-Dest: document)
+// and non-browser clients (empty Sec-Fetch-Dest). Returns true if the request is allowed.
+func allowNonNavigationOnly(w http.ResponseWriter, r *http.Request) bool {
+	dest := r.Header.Get("Sec-Fetch-Dest")
+	if dest == "document" || dest == "" {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return false
+	}
+	return true
+}
+
 // iframeOnly enforces that /terminal/ is only accessible via the PWA iframe.
 // Layer 1: Sec-Fetch-Dest — blocks direct navigation (document) and non-browser clients (empty).
 // Layer 2: Token — the initial iframe load (Sec-Fetch-Dest: iframe) must carry a valid single-use token.
 // Sub-resources (script, style, websocket) loaded by the iframe page are allowed without token.
 func iframeOnly(tokens *terminalTokenStore, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		dest := r.Header.Get("Sec-Fetch-Dest")
-		// Block direct browser navigation and non-browser clients
-		if dest == "document" || dest == "" {
-			http.Error(w, "Forbidden", http.StatusForbidden)
+		if !allowNonNavigationOnly(w, r) {
 			return
 		}
 		// Initial iframe load must carry a valid token
-		if dest == "iframe" {
+		if r.Header.Get("Sec-Fetch-Dest") == "iframe" {
 			token := r.URL.Query().Get("token")
 			if !tokens.validate(token) {
 				http.Error(w, "Forbidden", http.StatusForbidden)
@@ -264,9 +349,7 @@ func handleTerminalToken(tokens *terminalTokenStore) http.HandlerFunc {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		dest := r.Header.Get("Sec-Fetch-Dest")
-		if dest == "document" || dest == "" {
-			http.Error(w, "Forbidden", http.StatusForbidden)
+		if !allowNonNavigationOnly(w, r) {
 			return
 		}
 		token, err := tokens.generate()
@@ -275,7 +358,7 @@ func handleTerminalToken(tokens *terminalTokenStore) http.HandlerFunc {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"token":"` + token + `"}`))
+		json.NewEncoder(w).Encode(map[string]string{"token": token})
 	}
 }
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -18,6 +19,12 @@ var validTmuxID = regexp.MustCompile(`^[a-zA-Z0-9_\-:.]+$`)
 // validateTmuxTarget checks if target is a safe tmux identifier
 func validateTmuxTarget(target string) bool {
 	return target != "" && len(target) <= 64 && validTmuxID.MatchString(target)
+}
+
+// tmuxError logs a tmux command error and writes a generic JSON error response.
+func tmuxError(w http.ResponseWriter, op string, err error) {
+	log.Printf("tmux %s error: %v", op, err)
+	jsonError(w, "tmux command failed", http.StatusInternalServerError)
 }
 
 // requireMethod returns true if method matches, otherwise writes 405 error
@@ -52,7 +59,7 @@ func handleWindows(w http.ResponseWriter, r *http.Request) {
 	out, err := tmuxCmd("list-windows", "-F",
 		"#{window_index}:#{window_name}:#{window_active}").Output()
 	if err != nil {
-		jsonError(w, err.Error(), 500)
+		tmuxError(w, "list-windows", err)
 		return
 	}
 
@@ -82,7 +89,7 @@ func handleSelect(w http.ResponseWriter, r *http.Request) {
 	}
 	err := tmuxCmd("select-window", "-t", id).Run()
 	if err != nil {
-		jsonError(w, err.Error(), 500)
+		tmuxError(w, "select-window", err)
 		return
 	}
 	jsonOK(w, map[string]any{"ok": true})
@@ -103,7 +110,7 @@ func handleNew(w http.ResponseWriter, r *http.Request) {
 	}
 	err := tmuxCmd(args...).Run()
 	if err != nil {
-		jsonError(w, err.Error(), 500)
+		tmuxError(w, "new-window", err)
 		return
 	}
 	jsonOK(w, map[string]any{"ok": true})
@@ -122,7 +129,7 @@ func handleKill(w http.ResponseWriter, r *http.Request) {
 	}
 	err := tmuxCmd("kill-window", "-t", id).Run()
 	if err != nil {
-		jsonError(w, err.Error(), 500)
+		tmuxError(w, "kill-window", err)
 		return
 	}
 	jsonOK(w, map[string]any{"ok": true})
@@ -148,7 +155,7 @@ func handleRename(w http.ResponseWriter, r *http.Request) {
 	}
 	err := tmuxCmd("rename-window", "-t", id, name).Run()
 	if err != nil {
-		jsonError(w, err.Error(), 500)
+		tmuxError(w, "rename-window", err)
 		return
 	}
 	jsonOK(w, map[string]any{"ok": true})
@@ -158,6 +165,8 @@ func handleSendKeys(w http.ResponseWriter, r *http.Request) {
 	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
+	// Limit request body to 8KB to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, 8*1024)
 	var body struct {
 		Target string `json:"target"`
 		Keys   string `json:"keys"`
@@ -178,7 +187,7 @@ func handleSendKeys(w http.ResponseWriter, r *http.Request) {
 	}
 	err := tmuxCmd("send-keys", "-t", body.Target, body.Keys).Run()
 	if err != nil {
-		jsonError(w, err.Error(), 500)
+		tmuxError(w, "send-keys", err)
 		return
 	}
 	jsonOK(w, map[string]any{"ok": true})
