@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -313,6 +314,175 @@ func TestTerminalTokenEndpoint(t *testing.T) {
 
 			if rec.Code != tt.wantCode {
 				t.Errorf("terminal-token(%s) status = %d, want %d", tt.name, rec.Code, tt.wantCode)
+			}
+		})
+	}
+}
+
+func TestAuthRateLimiter(t *testing.T) {
+	t.Run("allows under limit", func(t *testing.T) {
+		rl := newAuthRateLimiter()
+		for i := 0; i < 4; i++ {
+			rl.record("1.2.3.4")
+		}
+		if rl.isBlocked("1.2.3.4") {
+			t.Error("should not be blocked with 4 failures")
+		}
+	})
+
+	t.Run("blocks at limit", func(t *testing.T) {
+		rl := newAuthRateLimiter()
+		for i := 0; i < 5; i++ {
+			rl.record("1.2.3.4")
+		}
+		if !rl.isBlocked("1.2.3.4") {
+			t.Error("should be blocked after 5 failures")
+		}
+	})
+
+	t.Run("different IPs independent", func(t *testing.T) {
+		rl := newAuthRateLimiter()
+		for i := 0; i < 5; i++ {
+			rl.record("1.2.3.4")
+		}
+		if rl.isBlocked("5.6.7.8") {
+			t.Error("different IP should not be blocked")
+		}
+	})
+
+	t.Run("expires after window", func(t *testing.T) {
+		rl := newAuthRateLimiter()
+		// Manually insert old failures
+		rl.mu.Lock()
+		old := time.Now().Add(-2 * time.Minute)
+		rl.failures["1.2.3.4"] = []time.Time{old, old, old, old, old}
+		rl.mu.Unlock()
+
+		if rl.isBlocked("1.2.3.4") {
+			t.Error("expired failures should not block")
+		}
+	})
+
+	t.Run("cleans up empty entries", func(t *testing.T) {
+		rl := newAuthRateLimiter()
+		// Insert expired failures
+		rl.mu.Lock()
+		old := time.Now().Add(-2 * time.Minute)
+		rl.failures["1.2.3.4"] = []time.Time{old}
+		rl.mu.Unlock()
+
+		rl.isBlocked("1.2.3.4") // triggers sweep
+
+		rl.mu.Lock()
+		_, exists := rl.failures["1.2.3.4"]
+		rl.mu.Unlock()
+		if exists {
+			t.Error("empty IP entry should be deleted after sweep")
+		}
+	})
+
+	t.Run("record sweeps when map exceeds 1000", func(t *testing.T) {
+		rl := newAuthRateLimiter()
+		old := time.Now().Add(-2 * time.Minute)
+		// Fill with 1001 expired IPs
+		rl.mu.Lock()
+		for i := 0; i < 1001; i++ {
+			ip := fmt.Sprintf("10.0.%d.%d", i/256, i%256)
+			rl.failures[ip] = []time.Time{old}
+		}
+		rl.mu.Unlock()
+
+		// Record triggers sweep since map > 1000
+		rl.record("99.99.99.99")
+
+		rl.mu.Lock()
+		size := len(rl.failures)
+		rl.mu.Unlock()
+		// Only the newly recorded IP should remain (all others expired)
+		if size != 1 {
+			t.Errorf("after sweep: map size = %d, want 1", size)
+		}
+	})
+}
+
+func TestBasicAuthRateLimiting(t *testing.T) {
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := basicAuth("admin", "secret", inner)
+
+	// Send 5 failed attempts
+	for i := 0; i < 5; i++ {
+		req := httptest.NewRequest("GET", "/", nil)
+		req.SetBasicAuth("admin", "wrong")
+		req.RemoteAddr = "1.2.3.4:12345"
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("attempt %d: got %d, want 401", i+1, rec.Code)
+		}
+	}
+
+	// 6th attempt should be rate limited
+	req := httptest.NewRequest("GET", "/", nil)
+	req.SetBasicAuth("admin", "wrong")
+	req.RemoteAddr = "1.2.3.4:12345"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusTooManyRequests {
+		t.Errorf("rate limited request: got %d, want 429", rec.Code)
+	}
+
+	// Correct credentials from same IP should also be blocked
+	req = httptest.NewRequest("GET", "/", nil)
+	req.SetBasicAuth("admin", "secret")
+	req.RemoteAddr = "1.2.3.4:12345"
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusTooManyRequests {
+		t.Errorf("rate limited correct auth: got %d, want 429", rec.Code)
+	}
+
+	// Different IP should still work
+	req = httptest.NewRequest("GET", "/", nil)
+	req.SetBasicAuth("admin", "secret")
+	req.RemoteAddr = "5.6.7.8:12345"
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("different IP: got %d, want 200", rec.Code)
+	}
+}
+
+func TestAllowNonNavigationOnly(t *testing.T) {
+	tests := []struct {
+		name     string
+		dest     string
+		setHeader bool
+		wantOK   bool
+	}{
+		{"document blocked", "document", true, false},
+		{"no header blocked", "", false, false},
+		{"iframe allowed", "iframe", true, true},
+		{"empty (fetch) allowed", "empty", true, true},
+		{"script allowed", "script", true, true},
+		{"websocket allowed", "websocket", true, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/", nil)
+			if tt.setHeader {
+				req.Header.Set("Sec-Fetch-Dest", tt.dest)
+			}
+			rec := httptest.NewRecorder()
+
+			got := allowNonNavigationOnly(rec, req)
+			if got != tt.wantOK {
+				t.Errorf("allowNonNavigationOnly(%s) = %v, want %v", tt.name, got, tt.wantOK)
+			}
+			if !tt.wantOK && rec.Code != http.StatusForbidden {
+				t.Errorf("status = %d, want 403", rec.Code)
 			}
 		})
 	}

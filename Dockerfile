@@ -18,8 +18,8 @@ RUN echo 'alias ll="ls -la"' >> /etc/bash.bashrc && \
 RUN echo "set-option -g default-shell /bin/bash" > /etc/tmux.conf && \
     echo "set-option -g default-command /bin/bash" >> /etc/tmux.conf
 
-# Make passwd/group writable for entrypoint
-RUN chmod 666 /etc/passwd /etc/group
+# Make passwd/group writable for entrypoint (locked to 644 after writes)
+RUN chmod 644 /etc/passwd /etc/group
 
 # Create directories
 RUN mkdir -p /home/termote/.local/share/nano && chmod -R 777 /home/termote

@@ -368,8 +368,8 @@ lsof -i :7680              # Verify port is in use
 
 - **Default: localhost only** - not exposed to LAN unless `--lan` flag used
 - **Basic auth enabled by default** - use `--no-auth` to disable for local dev
+- **Built-in brute-force protection** - rate limiting (5 attempts/min per IP)
 - Use HTTPS (Tailscale) for production
-- Consider fail2ban for brute-force protection
 - Restrict to trusted networks/VPN
 
 ## License

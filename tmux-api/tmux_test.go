@@ -3,8 +3,10 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -142,13 +144,13 @@ func TestHandleKillMethodValidation(t *testing.T) {
 		t.Errorf("handleKill(GET) status = %d, want %d", rec.Code, http.StatusMethodNotAllowed)
 	}
 
-	// DELETE should be allowed
-	req = httptest.NewRequest("DELETE", "/api/tmux/kill/0", nil)
+	// DELETE should be allowed (use invalid target to avoid killing real windows)
+	req = httptest.NewRequest("DELETE", "/api/tmux/kill/nonexistent-test-window-99", nil)
 	rec = httptest.NewRecorder()
 
 	handleKill(rec, req)
 
-	// Will fail because tmux not running, but should not be 405
+	// Will fail because window doesn't exist, but should not be 405
 	if rec.Code == http.StatusMethodNotAllowed {
 		t.Error("handleKill(DELETE) should allow DELETE method")
 	}
@@ -299,6 +301,40 @@ func TestJsonError(t *testing.T) {
 	json.NewDecoder(rec.Body).Decode(&resp)
 	if resp["error"] != "test error" {
 		t.Errorf("jsonError response = %v, want error=test error", resp)
+	}
+}
+
+func TestTmuxError(t *testing.T) {
+	rec := httptest.NewRecorder()
+	tmuxError(rec, "test-op", fmt.Errorf("some internal detail"))
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("tmuxError status = %d, want 500", rec.Code)
+	}
+
+	var resp map[string]string
+	json.NewDecoder(rec.Body).Decode(&resp)
+	if resp["error"] != "tmux command failed" {
+		t.Errorf("tmuxError response = %q, want generic message", resp["error"])
+	}
+	// Must NOT leak internal error details
+	body := rec.Body.String()
+	if bytes.Contains([]byte(body), []byte("internal detail")) {
+		t.Error("tmuxError leaked internal error to client")
+	}
+}
+
+func TestSendKeysBodyLimit(t *testing.T) {
+	// 8KB+ body should be rejected by MaxBytesReader
+	largeBody := `{"target":"main","keys":"` + strings.Repeat("x", 9000) + `"}`
+	req := httptest.NewRequest("POST", "/api/tmux/send-keys", bytes.NewReader([]byte(largeBody)))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	handleSendKeys(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("oversized body: got %d, want 400", rec.Code)
 	}
 }
 

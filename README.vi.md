@@ -368,8 +368,8 @@ lsof -i :7680              # Xác minh port đang dùng
 
 - **Mặc định: chỉ localhost** - không mở LAN trừ khi dùng flag `--lan`
 - **Basic auth bật mặc định** - dùng `--no-auth` để tắt cho dev local
+- **Chống brute-force tích hợp** - rate limiting (5 lần thử/phút mỗi IP)
 - Dùng HTTPS (Tailscale) cho production
-- Cân nhắc fail2ban để chống brute-force
 - Giới hạn trong mạng tin cậy/VPN
 
 ## Giấy Phép

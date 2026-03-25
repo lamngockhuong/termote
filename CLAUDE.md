@@ -166,6 +166,9 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
 - PostMessage uses explicit origin (not wildcard)
 - Exclude sensitive dirs (.ssh, .gnupg) from volume mounts
 - Serve mode uses constant-time comparison for password verification
+- **Brute-force protection**: built-in rate limiter (5 failed attempts/min per IP → 429)
+- **Server hardening**: ReadHeaderTimeout (Slowloris protection), request body size limits (8KB on send-keys)
+- **Error sanitization**: internal errors logged server-side only, generic messages returned to clients
 
 ## Testing
 
