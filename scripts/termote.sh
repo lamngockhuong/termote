@@ -13,6 +13,11 @@ VERSION="0.0.6" # x-release-please-version
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
+# Override VERSION when running from installed location (not git repo)
+if ! git -C "$SCRIPT_DIR" rev-parse --git-dir &>/dev/null && [ -f "$PROJECT_DIR/.version" ]; then
+    VERSION=$(cat "$PROJECT_DIR/.version")
+fi
+
 # Cached system info (computed once)
 OS="$(uname)"
 _uname_m="$(uname -m)"

@@ -36,9 +36,13 @@ error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 # Path to termote CLI (reused in multiple functions)
 TERMOTE_SCRIPT="${INSTALL_DIR}/scripts/termote.sh"
 
-# Get installed version (if any)
+# Get installed version from .version file (written at install time)
 get_installed_version() {
-    if [ -f "$TERMOTE_SCRIPT" ]; then
+    local version_file="${INSTALL_DIR}/.version"
+    if [ -f "$version_file" ]; then
+        cat "$version_file"
+    elif [ -f "$TERMOTE_SCRIPT" ]; then
+        # Fallback: read VERSION from termote.sh (for pre-.version installs)
         grep 'VERSION=' "$TERMOTE_SCRIPT" 2>/dev/null | head -1 | cut -d'"' -f2
     fi
 }
@@ -263,6 +267,9 @@ main() {
     info "Extracting..."
     tar xzf "$TARBALL" --strip-components=1
     rm -f "$TARBALL"
+
+    # Save installed version (tag-based, works for RC and official releases)
+    echo "$VERSION" > "${INSTALL_DIR}/.version"
 
     # Download only mode - stop here
     if [ "$DOWNLOAD_ONLY" = true ]; then
