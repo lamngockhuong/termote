@@ -48,11 +48,14 @@ docker run -d --name termote -p 7680:7680 \
 
 ## Options
 
-| Flag            | Description                        |
-| --------------- | ---------------------------------- |
-| `--lan`         | Expose to LAN (default: localhost) |
-| `--no-auth`     | Disable basic auth                 |
-| `--port <port>` | Custom port (default: 7680)        |
+| Flag              | Description                              |
+| ----------------- | ---------------------------------------- |
+| `--lan`           | Expose to LAN (default: localhost)       |
+| `--no-auth`       | Disable basic auth                       |
+| `--port <port>`   | Custom port (default: 7680)              |
+| `--fresh`         | Force new password prompt (ignore saved) |
+| `--update`        | Auto-update with saved config            |
+| `--version <ver>` | Install specific version                 |
 
 <Aside type="tip">
   Scripts auto-detect `podman` or `docker` - both work identically.
@@ -138,13 +141,19 @@ curl -u admin:password http://localhost:7680/api/tmux/sessions
 Re-run the installer - it compares versions and prompts before updating:
 
 ```bash
+# Auto-update with saved config
+curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash -s -- --update
+
+# Or without saved config
 curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash -s -- --container
 ```
 
 Options:
 
+- `--update` - Auto-update using saved config (mode, flags, password)
 - `--yes` - Auto-update without prompt
 - `--download-only` - Download only, no install
+- `--fresh` - Force new password prompt
 
 ### Manual Update
 

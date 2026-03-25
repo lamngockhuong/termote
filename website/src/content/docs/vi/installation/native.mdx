@@ -127,13 +127,20 @@ curl http://localhost:7680/api/tmux/sessions
 Chạy lại installer - sẽ so sánh version và hỏi trước khi cập nhật:
 
 ```bash
+# Cập nhật tự động với config đã lưu
+curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash -s -- --update
+
+# Hoặc cập nhật chuẩn
 curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
 ```
 
 Tùy chọn:
 
+- `--update` - Cập nhật tự động dùng config đã lưu (mode, flags, password)
 - `--yes` - Tự động cập nhật không hỏi
 - `--download-only` - Chỉ tải về, không cài đặt
+- `--fresh` - Buộc nhập mật khẩu mới
+- `--version <ver>` - Cài đặt phiên bản cụ thể
 
 ### Cập nhật thủ công
 

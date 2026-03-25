@@ -13,7 +13,9 @@ export function useFullscreen() {
     if (document.fullscreenElement) {
       document.exitFullscreen()
     } else {
-      document.documentElement.requestFullscreen().catch(() => {})
+      document.documentElement
+        .requestFullscreen()
+        .catch((e) => console.warn('Fullscreen request denied:', e))
     }
   }, [])
 

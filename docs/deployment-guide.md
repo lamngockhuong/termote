@@ -53,12 +53,44 @@ brew install ttyd tmux go
 
 ## Command Options
 
-| Flag                        | Description                             |
-| --------------------------- | --------------------------------------- |
-| `--lan`                     | Expose to LAN (default: localhost only) |
-| `--tailscale <host[:port]>` | Enable Tailscale HTTPS                  |
-| `--no-auth`                 | Disable basic authentication            |
-| `--port <port>`             | Host port (default: 7680)               |
+| Flag                        | Description                                     |
+| --------------------------- | ----------------------------------------------- |
+| `--lan`                     | Expose to LAN (default: localhost only)         |
+| `--tailscale <host[:port]>` | Enable Tailscale HTTPS                          |
+| `--no-auth`                 | Disable basic authentication                    |
+| `--port <port>`             | Host port (default: 7680)                       |
+| `--fresh`                   | Force new password prompt (ignore saved config) |
+
+## Config Persistence
+
+Installation settings are automatically saved to `~/.termote/config` (chmod 600):
+
+- Mode (container/native)
+- Network flags (--lan, --tailscale)
+- Authentication setting (--no-auth)
+- Encrypted password (base64-encoded)
+
+**Reusing saved config:**
+
+**Reusing saved config:**
+
+- On restart, existing config is loaded automatically
+- Password is reused unless `--fresh` flag is provided
+- Useful for quick restarts without re-entering settings
+
+```bash
+# First install (saves config)
+./scripts/termote.sh install container --lan
+
+# Restart later (reuses saved mode, flags, password)
+./scripts/termote.sh install container --lan
+
+# Force new password
+./scripts/termote.sh install container --lan --fresh
+
+# Remove saved config on uninstall
+./scripts/termote.sh uninstall all
+```
 
 ## Tailscale HTTPS
 
@@ -275,6 +307,7 @@ tmux new-session -d -s main
 1. Verify ttyd running on port 7681
 2. Check browser console for errors
 3. Test WebSocket proxy:
+
    ```bash
    curl -v http://localhost:7680/  # Should return HTML
    ```
@@ -341,13 +374,20 @@ curl -u admin:password http://localhost:7680/api/tmux/health
 Re-run the installer - it compares versions and prompts before updating:
 
 ```bash
+# Auto-update using saved config
+curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash -s -- --update
+
+# Or standard update
 curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
 ```
 
 Options:
 
+- `--update` - Auto-update using saved config (mode, flags, password)
 - `--yes` - Auto-update without prompt
 - `--download-only` - Download only, no install
+- `--fresh` - Force new password prompt
+- `--version <ver>` - Install specific version
 
 ### Manual Update
 
@@ -367,5 +407,7 @@ git pull origin main  # If installed from source
 ```bash
 ./scripts/termote.sh uninstall container   # Container mode
 ./scripts/termote.sh uninstall native      # Native processes
-./scripts/termote.sh uninstall all         # Everything
+./scripts/termote.sh uninstall all         # Everything (including saved config)
 ```
+
+**Note:** `uninstall all` removes the saved config file at `~/.termote/config`. Use this when fully removing Termote or wanting to reset installation settings.

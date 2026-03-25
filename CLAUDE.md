@@ -58,11 +58,13 @@ termote/
 
 ```bash
 ./scripts/termote.sh                                   # Interactive menu
-./scripts/termote.sh install container                 # Container mode
+./scripts/termote.sh install container                 # Container mode (saves config)
 ./scripts/termote.sh install container --lan           # LAN accessible
 ./scripts/termote.sh install native                    # Native mode (host tools)
 ./scripts/termote.sh install container --no-auth       # Without auth
 ./scripts/termote.sh install container --tailscale host  # Tailscale HTTPS
+./scripts/termote.sh install container --fresh         # Force new password (ignore saved)
+curl -fsSL https://... | bash -s -- --update           # Auto-update with saved config
 ```
 
 ## Development Commands

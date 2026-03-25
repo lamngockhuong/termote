@@ -9,6 +9,10 @@
 #     -> Container mode with LAN access
 #   curl ... | bash -s -- --download-only
 #     -> Download only, no install
+#   curl ... | bash -s -- --update
+#     -> Auto-update using saved config from previous install
+#   curl ... | bash -s -- --version 0.0.4
+#     -> Install/downgrade to a specific version
 
 set -e
 
@@ -16,6 +20,8 @@ REPO="lamngockhuong/termote"
 INSTALL_DIR="${TERMOTE_INSTALL_DIR:-$HOME/.termote}"
 AUTO_YES=false
 DOWNLOAD_ONLY=false
+UPDATE_MODE=false
+PIN_VERSION=""
 
 # Colors
 RED='\033[0;31m'
@@ -35,6 +41,15 @@ get_installed_version() {
     if [ -f "$TERMOTE_SCRIPT" ]; then
         grep 'VERSION=' "$TERMOTE_SCRIPT" 2>/dev/null | head -1 | cut -d'"' -f2
     fi
+}
+
+# Load saved config for --update mode
+load_config() {
+    local config="$HOME/.termote/config"
+    if [[ ! -f "$config" ]]; then
+        error "No saved config found. Run 'termote.sh install' first."
+    fi
+    . "$config"
 }
 
 # Check if services are running
@@ -58,12 +73,12 @@ confirm_install() {
     echo ""
     if [ -n "$current" ]; then
         if [ "$current" = "$latest" ]; then
-            info "Current version: v${current} (same as latest)"
+            info "Current version: v${current} (same as target)"
             echo -e "Re-install? [y/N] \c"
         else
             info "Current version: v${current}"
-            info "Latest version:  v${latest}"
-            echo -e "Update to v${latest}? [y/N] \c"
+            info "Target version:  v${latest}"
+            echo -e "Switch to v${latest}? [y/N] \c"
         fi
     else
         info "Latest version: v${latest}"
@@ -113,20 +128,54 @@ verify_checksum() {
     info "Checksum verified"
 }
 
+show_help() {
+    echo "Termote Installer"
+    echo ""
+    echo "Usage: curl -fsSL <url>/get.sh | bash -s -- [options]"
+    echo ""
+    echo "Modes:"
+    echo "  --native              Native mode (default)"
+    echo "  --container           Container mode (docker/podman)"
+    echo ""
+    echo "Options:"
+    echo "  --yes, -y             Auto-install without prompt"
+    echo "  --version <ver>       Install specific version (e.g. 0.0.4)"
+    echo "  --update              Re-install with saved config"
+    echo "  --download-only       Download without installing"
+    echo "  --lan                 Expose to LAN"
+    echo "  --no-auth             Disable authentication"
+    echo "  --tailscale <host>    Enable Tailscale HTTPS"
+    echo "  --help, -h            Show this help"
+    echo ""
+    echo "Examples:"
+    echo "  bash -s --                          # Interactive install (native)"
+    echo "  bash -s -- --container --lan        # Container + LAN"
+    echo "  bash -s -- --update                 # Update with saved config"
+    echo "  bash -s -- --version 0.0.4          # Install specific version"
+    echo "  bash -s -- --update --version 0.0.3 # Downgrade with saved config"
+}
+
 # Main
 main() {
+    # Check for --help before printing header
+    for arg in "$@"; do
+        case "$arg" in --help|-h) show_help; exit 0 ;; esac
+    done
+
     info "Termote Installer"
     info "Install path: $INSTALL_DIR"
 
     local mode=""
     local args=()
-    for arg in "$@"; do
-        case "$arg" in
-            --yes|-y) AUTO_YES=true ;;
-            --download-only) DOWNLOAD_ONLY=true ;;
-            --container|container) mode="container" ;;
-            --native|native) mode="native" ;;
-            *) args+=("$arg") ;;
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --yes|-y) AUTO_YES=true; shift ;;
+            --download-only) DOWNLOAD_ONLY=true; shift ;;
+            --update) UPDATE_MODE=true; AUTO_YES=true; shift ;;
+            --version) PIN_VERSION="${2#v}"; shift 2 ;;
+            --container|container) mode="container"; shift ;;
+            --native|native) mode="native"; shift ;;
+            *) args+=("$1"); shift ;;
         esac
     done
 
@@ -134,10 +183,15 @@ main() {
     command -v curl >/dev/null || error "curl is required"
     command -v tar >/dev/null || error "tar is required"
 
-    # Get versions (lightweight API call, no download yet)
+    # Get versions
     CURRENT_VERSION=$(get_installed_version)
-    VERSION=$(get_latest_version)
-    [ -z "$VERSION" ] && error "Failed to get latest version"
+    if [ -n "$PIN_VERSION" ]; then
+        VERSION="$PIN_VERSION"
+        info "Target version: v${VERSION}"
+    else
+        VERSION=$(get_latest_version)
+        [ -z "$VERSION" ] && error "Failed to get latest version"
+    fi
 
     # Prompt BEFORE download (unless --yes or --download-only)
     if [ "$AUTO_YES" = false ] && [ "$DOWNLOAD_ONLY" = false ]; then
@@ -207,6 +261,17 @@ main() {
     # Run termote CLI
     info "Running installer..."
     chmod +x scripts/termote.sh
+
+    # --update mode: load saved config
+    if [[ "$UPDATE_MODE" == true ]]; then
+        load_config
+        mode="${TERMOTE_MODE:-native}"
+        [[ "$TERMOTE_LAN" == true ]] && args+=("--lan")
+        [[ "$TERMOTE_NO_AUTH" == true ]] && args+=("--no-auth")
+        [[ -n "$TERMOTE_PORT" && "$TERMOTE_PORT" != "7680" ]] && args+=("--port" "$TERMOTE_PORT")
+        [[ -n "$TERMOTE_TAILSCALE" ]] && args+=("--tailscale" "$TERMOTE_TAILSCALE")
+        info "Using saved config: mode=$mode ${args[*]}"
+    fi
 
     # Default to native if no mode specified
     [[ -z "$mode" ]] && mode="native"
