@@ -42,6 +42,7 @@ interface Props {
   onShiftChange?: (active: boolean) => void
   imeMode?: boolean
   onImeModeChange?: (active: boolean) => void
+  defaultExpanded?: boolean
 }
 
 interface KeyConfig {
@@ -180,10 +181,11 @@ export function KeyboardToolbar({
   onShiftChange,
   imeMode: externalImeMode,
   onImeModeChange,
+  defaultExpanded = false,
 }: Props) {
   const [internalCtrlActive, setInternalCtrlActive] = useState(false)
   const [internalShiftActive, setInternalShiftActive] = useState(false)
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(defaultExpanded)
   const [internalImeMode, setInternalImeMode] = useState(false)
   const imeMode = externalImeMode ?? internalImeMode
   const [imeText, setImeText] = useState('')
@@ -373,7 +375,7 @@ export function KeyboardToolbar({
           value={imeText}
           onChange={(e) => setImeText(e.target.value)}
           onKeyDown={handleImeKeyDown}
-          placeholder="Gõ tiếng Việt..."
+          placeholder="Type non-Latin text here... (Vietnamese, CJK, ...)"
           className="flex-1 h-11 px-4 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-600 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
           autoComplete="off"
           autoCorrect="off"

@@ -5,6 +5,7 @@ import { ThemeToggle } from './theme-toggle'
 interface Props {
   onOpenAbout: () => void
   onOpenHelp: () => void
+  onOpenSettings: () => void
 }
 
 async function clearCacheAndReload() {
@@ -22,7 +23,11 @@ async function clearCacheAndReload() {
   }
 }
 
-export function SettingsMenu({ onOpenAbout, onOpenHelp }: Props) {
+export function SettingsMenu({
+  onOpenAbout,
+  onOpenHelp,
+  onOpenSettings,
+}: Props) {
   const [isOpen, setIsOpen] = useState(false)
   const [clearing, setClearing] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -64,6 +69,16 @@ export function SettingsMenu({ onOpenAbout, onOpenHelp }: Props) {
             </div>
             <ThemeToggle />
           </div>
+
+          <button
+            onClick={() => {
+              onOpenSettings()
+              setIsOpen(false)
+            }}
+            className="w-full px-3 py-2 text-left rounded-lg hover:bg-zinc-200/50 dark:hover:bg-zinc-700/50 transition-colors"
+          >
+            Preferences
+          </button>
 
           <hr className="my-2 border-zinc-300/30 dark:border-zinc-700/30" />
 
