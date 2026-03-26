@@ -130,12 +130,13 @@ curl localhost:7680/api/tmux/health
 
 ### Common Issues
 
-| Issue            | Solution                                   |
-| ---------------- | ------------------------------------------ |
-| Port in use      | `lsof -i :7680` then kill or use `--port`  |
-| Container crash  | `docker logs termote` to see error         |
-| Auth not working | Restart container, check logs for password |
-| WebSocket error  | Check ttyd running inside container        |
+| Issue            | Solution                                     |
+| ---------------- | -------------------------------------------- |
+| Port in use      | `lsof -i :7680` then kill or use `--port`    |
+| Container crash  | `docker logs termote` to see error           |
+| Auth not working | Restart container, check logs for password   |
+| WebSocket error  | Check ttyd running inside container          |
+| Stale PWA cache  | Settings → "Clear Cache & Reload" to refresh |
 
 ### Restart / Reset
 

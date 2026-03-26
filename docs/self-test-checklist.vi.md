@@ -62,6 +62,7 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 - [ ] Desktop: Danh sách icon hiển thị đúng (không lỗi layout)
 - [ ] Trang About đẹp trong dark mode
 - [ ] Nút Settings nhấn được trên mobile
+- [ ] Nút Clear Cache & Reload hoạt động (hủy SW, xóa cache, reload trang)
 
 ### Cài Đặt/Offline
 
