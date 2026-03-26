@@ -33,7 +33,7 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 - [ ] Flag `--lan` mở truy cập LAN (test từ thiết bị khác)
 - [ ] `--no-auth` tắt xác thực
 - [ ] `/terminal/` bị chặn khi truy cập trực tiếp URL trên trình duyệt (403)
-- [ ] `/terminal/` bị chặn qua curl (403, không có Sec-Fetch-Dest)
+- [ ] `/terminal/` truy cập được từ trình duyệt mobile qua LAN/Tailscale (không có header Sec-Fetch-Dest)
 - [ ] `/terminal/` load được trong iframe PWA với token hợp lệ
 - [ ] `--port <port>` đổi port đúng
 - [ ] `--tailscale <host>` cấu hình Tailscale HTTPS

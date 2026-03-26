@@ -35,16 +35,18 @@ Launch parallel review agents for each relevant area. Pass the diff or file cont
 ### Area: Auth & Access Control (`tmux-api/serve.go`)
 
 Check against [checklist.md](checklist.md#auth--access-control):
+
 - Basic auth on ALL endpoints (no bypass paths)
 - Rate limiting on auth failures
 - Constant-time password comparison
-- `/terminal/` 3-layer protection: auth + Sec-Fetch-Dest + single-use token
+- `/terminal/` 3-layer protection: auth + Sec-Fetch-Dest (blocks direct navigation) + single-use token
 - Token entropy (>= 128 bits), TTL (<= 30s), single-use enforcement
 - No auth credentials in logs or error responses
 
 ### Area: API & Command Injection (`tmux-api/tmux.go`)
 
 Check against [checklist.md](checklist.md#api--command-injection):
+
 - All tmux targets validated against `validTmuxID` regex
 - No user input passed to shell commands without validation
 - Request body size limits on POST endpoints
@@ -55,6 +57,7 @@ Check against [checklist.md](checklist.md#api--command-injection):
 ### Area: Terminal & WebSocket (`tmux-api/serve.go`, `pwa/src/`)
 
 Check against [checklist.md](checklist.md#terminal--websocket-proxy):
+
 - ttyd binds to localhost only (not 0.0.0.0)
 - WebSocket proxy has dial timeout
 - iframeOnly middleware blocks direct navigation
@@ -65,6 +68,7 @@ Check against [checklist.md](checklist.md#terminal--websocket-proxy):
 ### Area: Docker & Container (`Dockerfile`, `entrypoint.sh`)
 
 Check against [checklist.md](checklist.md#docker--container):
+
 - No world-writable sensitive files (/etc/passwd, /etc/shadow)
 - No secrets in image layers
 - Minimal installed packages
@@ -74,6 +78,7 @@ Check against [checklist.md](checklist.md#docker--container):
 ### Area: Shell Scripts (`scripts/termote.sh`, `scripts/get.sh`)
 
 Check against [checklist.md](checklist.md#shell-scripts):
+
 - Variables quoted in commands ("$VAR" not $VAR)
 - No eval or unquoted command substitution with user input
 - Input validation on ports, IPs, hostnames
@@ -108,6 +113,7 @@ Output a structured report:
 ## Step 4: Fix (if requested)
 
 If the user asks to fix issues, apply changes directly. For each fix:
+
 1. Edit the source file
 2. Run `go build` to verify (for Go changes)
 3. Run `go test` to verify tests pass
