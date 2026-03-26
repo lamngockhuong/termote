@@ -79,15 +79,19 @@ export const TerminalFrame = forwardRef<TerminalFrameHandle, Props>(
     const iframeRef = useRef<HTMLIFrameElement>(null)
     const [terminalSrc, setTerminalSrc] = useState<string | null>(null)
     const [tokenError, setTokenError] = useState<string | null>(null)
+    const [loading, setLoading] = useState(false)
 
     // Fetch a new token each time the iframe needs to load (theme change triggers key change)
     const loadTerminal = useCallback(async () => {
       try {
         setTokenError(null)
+        setLoading(true)
         const token = await fetchTerminalToken()
         setTerminalSrc(`/terminal/?token=${token}`)
       } catch {
         setTokenError('Failed to load terminal')
+      } finally {
+        setLoading(false)
       }
     }, [])
 
@@ -150,7 +154,7 @@ export const TerminalFrame = forwardRef<TerminalFrameHandle, Props>(
     // key={terminalSrc} forces iframe reload when token or theme changes
     if (tokenError) {
       return (
-        <div className="flex-1 flex flex-col items-center justify-center text-red-400">
+        <div className="flex-1 flex flex-col items-center justify-center text-red-400 relative z-10">
           <p>{tokenError}</p>
           <button
             onClick={loadTerminal}
@@ -161,7 +165,13 @@ export const TerminalFrame = forwardRef<TerminalFrameHandle, Props>(
         </div>
       )
     }
-    if (!terminalSrc) return null
+    if (loading || !terminalSrc) {
+      return (
+        <div className="flex-1 flex items-center justify-center text-zinc-400 relative z-10">
+          Connecting...
+        </div>
+      )
+    }
     return (
       <iframe
         key={terminalSrc}
