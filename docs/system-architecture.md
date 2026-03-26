@@ -175,7 +175,7 @@ Auto-detects OS via `$(uname)`. Works on both macOS and Linux.
 2. **Auth**: Basic auth over HTTPS (use `--no-auth` for local dev only)
 3. **Terminal access** (`/terminal/`): Three-layer protection:
    - **Basic auth**: All requests require authentication
-   - **Sec-Fetch-Dest**: Blocks direct URL navigation (`document`) and non-browser clients (missing header). Only allows browser iframe/sub-resource requests
+   - **Sec-Fetch-Dest**: Blocks direct URL navigation (`document`). Allows missing header for mobile browser compatibility (LAN/Tailscale access)
    - **Single-use token**: PWA fetches a 30s TTL token via `/api/tmux/terminal-token`, passes it as `?token=` query param. Server validates and consumes on iframe load (`Sec-Fetch-Dest: iframe`). Sub-resources (JS/CSS/WebSocket) don't need token
 4. **Session**: tmux isolates terminal processes
 5. **Origin**: Same-origin iframe (no cross-origin postMessage)

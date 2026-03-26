@@ -140,7 +140,7 @@ Go HTTP server:
 - HTTP method enforcement: POST for mutations, GET for reads
 - Length limits: 4096 bytes for keys, 64 chars for targets
 - Constant-time password comparison
-- `/terminal/` protected: basic auth + Sec-Fetch-Dest check + single-use token (30s TTL)
+- `/terminal/` protected: basic auth + Sec-Fetch-Dest check (blocks direct navigation) + single-use token (30s TTL)
 
 **Test coverage:** ~59% (unit), ~71% with integration tests
 

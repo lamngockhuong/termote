@@ -33,7 +33,7 @@ Manual testing checklist for Termote features before release.
 - [ ] `--lan` flag exposes to LAN (test from another device)
 - [ ] `--no-auth` disables basic auth
 - [ ] `/terminal/` blocked via direct browser URL (403 Forbidden)
-- [ ] `/terminal/` blocked via curl (403 Forbidden, no Sec-Fetch-Dest)
+- [ ] `/terminal/` accessible from mobile browser via LAN/Tailscale (no Sec-Fetch-Dest header)
 - [ ] `/terminal/` loads in PWA iframe with valid token
 - [ ] `--port <port>` changes port correctly
 - [ ] `--tailscale <host>` configures Tailscale HTTPS
