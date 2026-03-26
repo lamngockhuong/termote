@@ -315,11 +315,11 @@ func proxyWebSocket(w http.ResponseWriter, r *http.Request, target *url.URL) {
 	<-done // Wait for both goroutines to prevent leak
 }
 
-// allowNonNavigationOnly blocks direct browser navigation (Sec-Fetch-Dest: document)
-// and non-browser clients (empty Sec-Fetch-Dest). Returns true if the request is allowed.
+// allowNonNavigationOnly blocks direct browser navigation (Sec-Fetch-Dest: document).
+// Allows requests without the header (mobile browsers via LAN/Tailscale may omit it).
+// Returns true if the request is allowed.
 func allowNonNavigationOnly(w http.ResponseWriter, r *http.Request) bool {
-	dest := r.Header.Get("Sec-Fetch-Dest")
-	if dest == "document" || dest == "" {
+	if r.Header.Get("Sec-Fetch-Dest") == "document" {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return false
 	}
