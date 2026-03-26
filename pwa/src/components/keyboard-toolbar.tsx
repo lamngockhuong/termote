@@ -425,11 +425,15 @@ export function KeyboardToolbar({
               : undefined
           }
         >
-          {keyConfig.isExpandToggle
-            ? expanded
-              ? <Minimize2 size={ICON_SIZE} />
-              : <Expand size={ICON_SIZE} />
-            : keyConfig.label}
+          {keyConfig.isExpandToggle ? (
+            expanded ? (
+              <Minimize2 size={ICON_SIZE} />
+            ) : (
+              <Expand size={ICON_SIZE} />
+            )
+          ) : (
+            keyConfig.label
+          )}
         </button>
       ))}
 
