@@ -198,12 +198,38 @@ func (rl *authRateLimiter) record(ip string) {
 	}
 }
 
+// pwaPublicPaths are paths that must be accessible without authentication.
+// Service workers and manifest fetches don't include credentials by default.
+var pwaPublicPaths = []string{
+	"/manifest.webmanifest",
+	"/sw.js",
+}
+
+// isPWAPublicPath checks if a path should bypass authentication.
+func isPWAPublicPath(path string) bool {
+	for _, p := range pwaPublicPaths {
+		if path == p {
+			return true
+		}
+	}
+	// Workbox scripts (e.g., /workbox-*.js)
+	if strings.HasPrefix(path, "/workbox-") && strings.HasSuffix(path, ".js") {
+		return true
+	}
+	return false
+}
+
 // basicAuth wraps a handler with HTTP basic authentication.
 // Note: uses r.RemoteAddr for rate limiting. Behind a reverse proxy, all clients
 // may share one IP — consider the proxy's own rate limiting in that setup.
 func basicAuth(user, pass string, next http.Handler) http.Handler {
 	limiter := newAuthRateLimiter()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Skip auth for PWA public paths (manifest, service worker)
+		if isPWAPublicPath(r.URL.Path) {
+			next.ServeHTTP(w, r)
+			return
+		}
 		// Extract client IP (strip port)
 		ip, _, _ := net.SplitHostPort(r.RemoteAddr)
 		if ip == "" {

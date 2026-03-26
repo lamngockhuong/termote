@@ -24,7 +24,7 @@ RUN echo "set-option -g default-shell /bin/bash" > /etc/tmux.conf && \
 RUN chmod 644 /etc/passwd /etc/group
 
 # Create directories
-RUN mkdir -p /home/termote/.local/share/nano && chmod -R 777 /home/termote
+RUN mkdir -p /home/termote/.local/share/nano && chmod -R 755 /home/termote
 RUN mkdir -p /var/www/termote
 
 # Copy PWA files

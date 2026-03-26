@@ -122,6 +122,32 @@ func TestNoCacheMiddleware(t *testing.T) {
 	}
 }
 
+func TestIsPWAPublicPath(t *testing.T) {
+	tests := []struct {
+		path string
+		want bool
+	}{
+		{"/manifest.webmanifest", true},
+		{"/sw.js", true},
+		{"/workbox-abc123.js", true},
+		{"/workbox-window.js", true},
+		{"/", false},
+		{"/api/test", false},
+		{"/terminal/", false},
+		{"/index.html", false},
+		{"/workbox-.js", true},     // edge case: minimal workbox name
+		{"/workbox-test.ts", false}, // not .js extension
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			if got := isPWAPublicPath(tt.path); got != tt.want {
+				t.Errorf("isPWAPublicPath(%q) = %v, want %v", tt.path, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestBasicAuth(t *testing.T) {
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -141,6 +167,10 @@ func TestBasicAuth(t *testing.T) {
 		{"correct auth", "/api/test", "admin", "secret", http.StatusOK},
 		{"terminal requires auth", "/terminal/", "", "", http.StatusUnauthorized},
 		{"terminal with auth", "/terminal/", "admin", "secret", http.StatusOK},
+		// PWA public paths bypass auth
+		{"manifest no auth", "/manifest.webmanifest", "", "", http.StatusOK},
+		{"sw.js no auth", "/sw.js", "", "", http.StatusOK},
+		{"workbox no auth", "/workbox-abc123.js", "", "", http.StatusOK},
 	}
 
 	for _, tt := range tests {

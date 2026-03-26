@@ -386,6 +386,7 @@ Options:
 - `--download-only` - Download only, no install
 - `--fresh` - Force new password prompt
 - `--version <ver>` - Install specific version
+- `--strict` - Require checksum verification (fail if unavailable)
 
 ### Manual Update
 
