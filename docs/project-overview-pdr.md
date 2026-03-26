@@ -18,6 +18,23 @@ PWA that wraps ttyd terminals with:
 - Virtual keyboard toolbar for modifier keys
 - Session management via tmux integration
 - Responsive UI for phone/tablet/desktop
+- Customizable settings (IME send behavior, toolbar expand preference)
+- Persistent storage for user preferences
+
+## Features
+
+| Feature                | Description                                   |
+| ---------------------- | --------------------------------------------- |
+| Session Management     | Create, switch, delete tmux windows via UI    |
+| Virtual Keyboard       | Touch-friendly buttons for special keys       |
+| Keyboard Gestures      | Swipe, long-press, pinch for common shortcuts |
+| Theme Support          | Light/dark/system theme toggle                |
+| Font Scaling           | Adjustable terminal font size (6-24px)        |
+| Fullscreen Mode        | Desktop-only fullscreen terminal view         |
+| Settings / Preferences | IME send behavior, toolbar default state      |
+| Persistent Settings    | User preferences saved to localStorage        |
+| Basic Authentication   | HTTP basic auth + iframe-only terminal access |
+| Brute-force Protection | Rate limiter (5 failed attempts/min per IP)   |
 
 ## Target Users
 

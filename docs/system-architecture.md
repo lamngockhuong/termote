@@ -52,8 +52,9 @@ React SPA with:
 - **Terminal Frame**: ttyd iframe with xterm.js terminal
 - **Hammer.js**: Touch gesture recognition (mobile only)
 - **Session Sidebar**: Switch between tmux windows, add/edit/remove (collapsible on desktop)
-- **Keyboard Toolbar**: Virtual keys, Ctrl combos, scroll controls
-- **Settings Menu**: Theme toggle (light/dark/system), Clear Cache & Reload
+- **Keyboard Toolbar**: Virtual keys, Ctrl combos, scroll controls (respects default expanded setting)
+- **Settings Menu**: Theme toggle (light/dark/system), Clear Cache & Reload, Preferences
+- **Settings Modal**: IME send behavior (send text only vs. send + Enter), toolbar default expanded toggle
 - **Font Controls**: Adjustable font size (6-24px)
 - **Fullscreen Toggle**: Desktop-only fullscreen mode via Fullscreen API
 - **Responsive Layout**: Collapsible desktop sidebar, mobile slide-over panel

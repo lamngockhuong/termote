@@ -31,6 +31,7 @@ export default defineConfig({
             { label: 'Gestures', link: '/usage/gestures/' },
             { label: 'Keyboard', link: '/usage/keyboard/' },
             { label: 'Sessions', link: '/usage/sessions/' },
+            { label: 'Settings', link: '/usage/settings/' },
           ],
         },
       ],
