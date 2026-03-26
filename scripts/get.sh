@@ -22,6 +22,7 @@ AUTO_YES=false
 DOWNLOAD_ONLY=false
 UPDATE_MODE=false
 PIN_VERSION=""
+STRICT_CHECKSUM=false
 
 # Colors
 RED='\033[0;31m'
@@ -154,6 +155,7 @@ show_help() {
     echo "  --version <ver>       Install specific version (e.g. 0.0.4)"
     echo "  --update              Re-install with saved config"
     echo "  --download-only       Download without installing"
+    echo "  --strict              Require checksum verification (fail if unavailable)"
     echo "  --lan                 Expose to LAN"
     echo "  --no-auth             Disable authentication"
     echo "  --tailscale <host>    Enable Tailscale HTTPS"
@@ -184,6 +186,7 @@ main() {
             --yes|-y) AUTO_YES=true; shift ;;
             --download-only) DOWNLOAD_ONLY=true; shift ;;
             --update) UPDATE_MODE=true; AUTO_YES=true; shift ;;
+            --strict) STRICT_CHECKSUM=true; shift ;;
             --version)
                 PIN_VERSION="${2#v}"
                 if [[ ! "$PIN_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -259,9 +262,15 @@ main() {
         if [ -n "$EXPECTED" ]; then
             verify_checksum "$TARBALL" "$EXPECTED"
         else
+            if [ "$STRICT_CHECKSUM" = true ]; then
+                error "Checksum not found for ${TARBALL} (--strict mode)"
+            fi
             warn "Checksum not found for ${TARBALL}, skipping verification"
         fi
     else
+        if [ "$STRICT_CHECKSUM" = true ]; then
+            error "Could not download checksums (--strict mode requires verification)"
+        fi
         warn "Could not download checksums, skipping verification"
     fi
 

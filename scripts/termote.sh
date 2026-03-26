@@ -293,6 +293,20 @@ validate_port() {
     [[ "$port" =~ ^[0-9]+$ ]] && (( port >= 1 && port <= 65535 ))
 }
 
+# Warn if mounting directory contains sensitive subdirectories
+warn_sensitive_dirs() {
+    local workspace="${WORKSPACE:-./workspace}"
+    local sensitive_dirs=(".ssh" ".gnupg" ".aws" ".config/gcloud")
+    local found=()
+    for dir in "${sensitive_dirs[@]}"; do
+        [[ -d "$workspace/$dir" ]] && found+=("$dir")
+    done
+    if [[ ${#found[@]} -gt 0 ]]; then
+        warn "WORKSPACE contains sensitive directories: ${found[*]}"
+        warn "These will be accessible inside the container. Consider using a subdirectory."
+    fi
+}
+
 # Start docker mode
 start_docker_mode() {
     local container_rt=$(detect_container_runtime)
@@ -301,6 +315,9 @@ start_docker_mode() {
     # Validate inputs before using in YAML
     validate_ip "$BIND_ADDR" || error "Invalid bind address: $BIND_ADDR"
     validate_port "$PORT" || error "Invalid port: $PORT"
+
+    # Warn about sensitive directories in WORKSPACE
+    warn_sensitive_dirs
 
     # Cross-compile for Linux on macOS
     if [[ "$OS" != "Linux" ]]; then
