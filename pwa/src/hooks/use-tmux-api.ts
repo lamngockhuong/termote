@@ -56,8 +56,34 @@ export async function sendKeys(target: string, keys: string): Promise<boolean> {
 }
 
 export async function fetchTerminalToken(): Promise<string> {
-  const res = await fetch(`${API_BASE}/terminal-token`)
-  if (!res.ok) throw new Error(`Token request failed: ${res.status}`)
-  const data = await res.json()
-  return data.token
+  const attempts = 3
+  const delay = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+  for (let i = 0; i < attempts; i++) {
+    const ctrl = new AbortController()
+    const timeout = setTimeout(() => ctrl.abort(), 5000)
+    try {
+      const res = await fetch(`${API_BASE}/terminal-token`, {
+        signal: ctrl.signal,
+      })
+      clearTimeout(timeout)
+      const isRetryable =
+        [502, 503, 504].includes(res.status) && i < attempts - 1
+      if (isRetryable) {
+        await delay(1000 * (i + 1))
+        continue
+      }
+      if (!res.ok) throw new Error(`Token request failed: ${res.status}`)
+      const data = await res.json()
+      return data.token
+    } catch (err) {
+      clearTimeout(timeout)
+      if (i < attempts - 1) {
+        await delay(1000 * (i + 1))
+        continue
+      }
+      throw err
+    }
+  }
+  throw new Error('Token request failed after retries')
 }
