@@ -13,6 +13,11 @@ import {
   setTerminalTheme,
 } from '../utils/terminal-bridge'
 
+export interface TerminalFrameHandle {
+  iframe: HTMLIFrameElement | null
+  reconnect: () => void
+}
+
 interface Props {
   fontSize?: number
   theme?: 'light' | 'dark'
@@ -69,13 +74,11 @@ const THEMES = {
   },
 }
 
-export const TerminalFrame = forwardRef<HTMLIFrameElement, Props>(
+export const TerminalFrame = forwardRef<TerminalFrameHandle, Props>(
   ({ fontSize = 14, theme = 'dark' }, ref) => {
     const iframeRef = useRef<HTMLIFrameElement>(null)
     const [terminalSrc, setTerminalSrc] = useState<string | null>(null)
     const [tokenError, setTokenError] = useState<string | null>(null)
-
-    useImperativeHandle(ref, () => iframeRef.current as HTMLIFrameElement)
 
     // Fetch a new token each time the iframe needs to load (theme change triggers key change)
     const loadTerminal = useCallback(async () => {
@@ -87,6 +90,17 @@ export const TerminalFrame = forwardRef<HTMLIFrameElement, Props>(
         setTokenError('Failed to load terminal')
       }
     }, [])
+
+    useImperativeHandle(
+      ref,
+      () => ({
+        get iframe() {
+          return iframeRef.current
+        },
+        reconnect: loadTerminal,
+      }),
+      [loadTerminal],
+    )
 
     useEffect(() => {
       loadTerminal()

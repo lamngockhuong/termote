@@ -7,7 +7,10 @@ import { KeyboardToolbar } from './components/keyboard-toolbar'
 import { SessionSidebar } from './components/session-sidebar'
 import { SettingsMenu } from './components/settings-menu'
 import { SettingsModal } from './components/settings-modal'
-import { TerminalFrame } from './components/terminal-frame'
+import {
+  TerminalFrame,
+  type TerminalFrameHandle,
+} from './components/terminal-frame'
 import { useTheme } from './contexts/theme-context'
 import { useFontSize } from './hooks/use-font-size'
 import { useFullscreen } from './hooks/use-fullscreen'
@@ -21,6 +24,7 @@ import {
   blurTerminal,
   focusTerminal,
   isInCopyMode,
+  isTerminalDisconnected,
   pasteToTerminal,
   scrollTmux,
   sendKeyToTerminal,
@@ -29,7 +33,8 @@ import {
 } from './utils/terminal-bridge'
 
 export default function App() {
-  const terminalRef = useRef<HTMLIFrameElement>(null)
+  const terminalRef = useRef<TerminalFrameHandle>(null)
+  const getIframe = () => terminalRef.current?.iframe ?? null
   const gestureRef = useRef<HTMLDivElement>(null)
   const terminalContainerRef = useRef<HTMLDivElement>(null)
   const ctrlInputRef = useRef<HTMLInputElement>(null)
@@ -60,15 +65,15 @@ export default function App() {
   const gestureHandlers = useMemo(
     () => ({
       onSwipeLeft: () =>
-        sendKeyToTerminal(terminalRef.current, 'c', { ctrl: true }),
-      onSwipeRight: () => sendKeyToTerminal(terminalRef.current, 'Tab'),
+        sendKeyToTerminal(getIframe(), 'c', { ctrl: true }),
+      onSwipeRight: () => sendKeyToTerminal(getIframe(), 'Tab'),
       onSwipeUp: () => {
         if ((keyboardVisible || imeMode) && terminalContainerRef.current) {
           // Keyboard or IME mode - scroll container to see hidden content
           terminalContainerRef.current.scrollTop += 150
         } else if (isInCopyMode()) {
           // In copy mode - send PageDown
-          scrollTmux(terminalRef.current, 'down')
+          scrollTmux(getIframe(), 'down')
         }
       },
       onSwipeDown: () => {
@@ -77,10 +82,10 @@ export default function App() {
           terminalContainerRef.current.scrollTop -= 150
         } else if (isInCopyMode()) {
           // In copy mode - send PageUp
-          scrollTmux(terminalRef.current, 'up')
+          scrollTmux(getIframe(), 'up')
         }
       },
-      onLongPress: () => pasteToTerminal(terminalRef.current),
+      onLongPress: () => pasteToTerminal(getIframe()),
       onPinchIn: decrease,
       onPinchOut: increase,
     }),
@@ -89,9 +94,9 @@ export default function App() {
 
   const toggleKeyboard = () => {
     if (keyboardVisible) {
-      blurTerminal(terminalRef.current)
+      blurTerminal(getIframe())
     } else {
-      focusTerminal(terminalRef.current)
+      focusTerminal(getIframe())
     }
   }
 
@@ -100,11 +105,11 @@ export default function App() {
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const value = e.target.value
       if (value.length === 1 && /^[a-zA-Z]$/.test(value)) {
-        sendKeyToTerminal(terminalRef.current, value.toLowerCase(), {
+        sendKeyToTerminal(getIframe(), value.toLowerCase(), {
           ctrl: true,
         })
         setCtrlActive(false)
-        focusTerminal(terminalRef.current)
+        focusTerminal(getIframe())
       }
       e.target.value = ''
     },
@@ -114,7 +119,7 @@ export default function App() {
   // Focus hidden input when Ctrl is active
   useEffect(() => {
     if (ctrlActive && ctrlInputRef.current) {
-      blurTerminal(terminalRef.current)
+      blurTerminal(getIframe())
       ctrlInputRef.current.focus()
     }
   }, [ctrlActive])
@@ -122,38 +127,44 @@ export default function App() {
   useGestures(gestureRef, gestureHandlers)
 
   const handleKey = useCallback((key: string) => {
-    sendKeyToTerminal(terminalRef.current, key)
+    // When terminal is disconnected (ttyd shows "Press ⏎ to Reconnect"),
+    // reload iframe with new token since we can't simulate trusted keyboard events.
+    if (key === 'Enter' && isTerminalDisconnected(getIframe())) {
+      terminalRef.current?.reconnect()
+      return
+    }
+    sendKeyToTerminal(getIframe(), key)
   }, [])
 
   const handleCtrlKey = useCallback((key: string) => {
-    sendKeyToTerminal(terminalRef.current, key, { ctrl: true })
+    sendKeyToTerminal(getIframe(), key, { ctrl: true })
   }, [])
 
   const handleShiftKey = useCallback((key: string) => {
-    sendKeyToTerminal(terminalRef.current, key, { shift: true })
+    sendKeyToTerminal(getIframe(), key, { shift: true })
   }, [])
 
   const handleCtrlShiftKey = useCallback((key: string) => {
     if (key === 'v') {
-      pasteToTerminal(terminalRef.current)
+      pasteToTerminal(getIframe())
       return
     }
-    sendKeyToTerminal(terminalRef.current, key, { ctrl: true, shift: true })
+    sendKeyToTerminal(getIframe(), key, { ctrl: true, shift: true })
   }, [])
 
   const handleScroll = useCallback((direction: 'up' | 'down') => {
-    scrollTmux(terminalRef.current, direction)
+    scrollTmux(getIframe(), direction)
   }, [])
 
   const handleTmuxCopy = useCallback(() => {
-    toggleTmuxCopyMode(terminalRef.current)
+    toggleTmuxCopyMode(getIframe())
   }, [])
 
   const handleSendText = useCallback(
     (text: string) => {
-      sendTextToTerminal(terminalRef.current, text)
+      sendTextToTerminal(getIframe(), text)
       if (settings.imeSendBehavior === 'send-enter') {
-        sendKeyToTerminal(terminalRef.current, 'Enter')
+        sendKeyToTerminal(getIframe(), 'Enter')
       }
     },
     [settings.imeSendBehavior],

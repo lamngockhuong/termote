@@ -80,6 +80,22 @@ function sendData(term: XtermInternal, data: string): boolean {
   return false
 }
 
+// Check if ttyd terminal is disconnected by looking for the reconnect overlay.
+// ttyd appends an overlay div with "Reconnect" text to .xterm when disconnected.
+export function isTerminalDisconnected(
+  iframe: HTMLIFrameElement | null,
+): boolean {
+  try {
+    const xtermEl = iframe?.contentDocument?.querySelector('.xterm')
+    if (!xtermEl) return false
+    return Array.from(xtermEl.children).some((el) =>
+      el.textContent?.includes('Reconnect'),
+    )
+  } catch {
+    return false
+  }
+}
+
 // Send a key to the terminal with modifier support
 // Uses xterm CSI encoding: ESC[1;{mod}{code} for special keys with modifiers
 export function sendKeyToTerminal(
