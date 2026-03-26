@@ -76,9 +76,9 @@ export function SettingsModal({
 
         <div className="space-y-5">
           <div>
-            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+            <p className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
               Text input send behavior
-            </label>
+            </p>
             <div className="space-y-2">
               {IME_SEND_OPTIONS.map((opt) => (
                 <label
@@ -115,9 +115,9 @@ export function SettingsModal({
           <div>
             <div className="flex items-center justify-between">
               <div>
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                <p className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                   Toolbar default expanded
-                </label>
+                </p>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
                   Show all keys when toolbar loads
                 </p>

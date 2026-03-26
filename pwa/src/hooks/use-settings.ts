@@ -18,7 +18,7 @@ const DEFAULTS: Settings = {
 const listeners = new Set<() => void>()
 
 function notifyListeners() {
-  listeners.forEach((fn) => fn())
+  for (const fn of listeners) fn()
 }
 
 function subscribe(listener: () => void) {
