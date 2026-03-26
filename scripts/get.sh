@@ -220,6 +220,8 @@ main() {
 
     # Stop services if running (to avoid "Text file busy" error)
     if services_running; then
+        # Pre-cache sudo for tailscale commands so the flow runs uninterrupted
+        command -v tailscale >/dev/null 2>&1 && sudo -v 2>/dev/null || true
         warn "Services are running"
         if [ "$AUTO_YES" = true ]; then
             stop_services

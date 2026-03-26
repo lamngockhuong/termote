@@ -333,6 +333,11 @@ start_native_mode() {
     start_ttyd
 }
 
+# Pre-cache sudo credentials once so tailscale commands don't prompt mid-flow
+precache_sudo_for_tailscale() {
+    command -v tailscale &>/dev/null && sudo -v 2>/dev/null || true
+}
+
 # Setup Tailscale serve (only reset if saved config had Tailscale previously)
 setup_tailscale() {
     if [[ -n "$TAILSCALE" ]]; then
@@ -541,6 +546,10 @@ cmd_install() {
         *) error "Unknown mode: $mode" ;;
     esac
 
+    # Only pre-cache sudo if tailscale commands will actually run
+    if [[ -n "$TAILSCALE" ]] || { [[ -f "$CONFIG_FILE" ]] && grep -q '^TERMOTE_TAILSCALE=.' "$CONFIG_FILE" 2>/dev/null; }; then
+        precache_sudo_for_tailscale
+    fi
     setup_tailscale
 
     # Save config for future restarts/updates
@@ -583,6 +592,7 @@ cmd_uninstall() {
 
     # Tailscale reset
     if command -v tailscale &>/dev/null; then
+        precache_sudo_for_tailscale
         info "Resetting Tailscale serve..."
         sudo tailscale serve reset 2>/dev/null || true
     fi
