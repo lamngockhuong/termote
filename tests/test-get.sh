@@ -254,6 +254,13 @@ test_update_mode() {
     else
         pass "stop_services preserves config (no uninstall all)"
     fi
+
+    # Verify sudo credentials pre-cache before stop_services
+    if grep -B15 'stop_services' "$PROJECT_DIR/scripts/get.sh" | grep -q 'sudo -v'; then
+        pass "sudo credentials pre-cached before stop_services"
+    else
+        fail "sudo pre-cache" "sudo -v before stop_services" "not found"
+    fi
 }
 
 test_version_pinning() {

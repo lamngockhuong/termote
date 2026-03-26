@@ -123,6 +123,23 @@ test_arg_parsing() {
     else
         fail "--tailscale" "TAILSCALE=" "not found"
     fi
+
+    # Verify sudo pre-cache helper exists and is used
+    if grep -q 'precache_sudo_for_tailscale' "$SCRIPT"; then
+        pass "precache_sudo_for_tailscale helper defined"
+    else
+        fail "sudo helper" "precache_sudo_for_tailscale" "not found"
+    fi
+    if grep -B5 'setup_tailscale' "$SCRIPT" | grep -q 'precache_sudo_for_tailscale'; then
+        pass "sudo pre-cache before setup_tailscale"
+    else
+        fail "sudo pre-cache install" "precache_sudo_for_tailscale before setup_tailscale" "not found"
+    fi
+    if grep -B3 'sudo tailscale serve reset' "$SCRIPT" | grep -q 'precache_sudo_for_tailscale'; then
+        pass "sudo pre-cache before tailscale reset in uninstall"
+    else
+        fail "sudo pre-cache uninstall" "precache_sudo_for_tailscale before serve reset" "not found"
+    fi
 }
 
 # =============================================================================
