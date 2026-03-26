@@ -137,16 +137,18 @@ Both modes use tmux-api as the unified server (PWA + WebSocket proxy + API + aut
 
 ## Key Files
 
-| File                                      | Purpose                                   |
-| ----------------------------------------- | ----------------------------------------- |
-| `pwa/src/App.tsx`                         | Main app with gestures, toolbar, sessions |
-| `pwa/src/components/keyboard-toolbar.tsx` | Virtual keyboard for mobile               |
-| `pwa/src/hooks/use-gestures.ts`           | Hammer.js gesture handling                |
-| `tmux-api/main.go`                        | Entry point                               |
-| `tmux-api/serve.go`                       | Server (PWA, WebSocket proxy, auth)       |
-| `tmux-api/tmux.go`                        | tmux API handlers                         |
-| `Dockerfile`                              | Docker mode container                     |
-| `entrypoint.sh`                           | Container entrypoint                      |
+| File                                      | Purpose                                             |
+| ----------------------------------------- | --------------------------------------------------- |
+| `pwa/src/App.tsx`                         | Main app with gestures, toolbar, settings, sessions |
+| `pwa/src/components/keyboard-toolbar.tsx` | Virtual keyboard for mobile                         |
+| `pwa/src/components/settings-modal.tsx`   | Settings dialog (IME send behavior, toolbar expand) |
+| `pwa/src/hooks/use-settings.ts`           | Settings state with localStorage persistence        |
+| `pwa/src/hooks/use-gestures.ts`           | Hammer.js gesture handling                          |
+| `tmux-api/main.go`                        | Entry point                                         |
+| `tmux-api/serve.go`                       | Server (PWA, WebSocket proxy, auth)                 |
+| `tmux-api/tmux.go`                        | tmux API handlers                                   |
+| `Dockerfile`                              | Docker mode container                               |
+| `entrypoint.sh`                           | Container entrypoint                                |
 
 ## Container Runtime Support
 

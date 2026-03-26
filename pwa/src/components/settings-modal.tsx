@@ -1,0 +1,152 @@
+import { useEffect, useRef } from 'react'
+import type { ImeSendBehavior, Settings } from '../hooks/use-settings'
+
+interface Props {
+  isOpen: boolean
+  onClose: () => void
+  settings: Settings
+  onUpdateSetting: <K extends keyof Settings>(
+    key: K,
+    value: Settings[K],
+  ) => void
+}
+
+const IME_SEND_OPTIONS: {
+  value: ImeSendBehavior
+  label: string
+  desc: string
+}[] = [
+  {
+    value: 'send-only',
+    label: 'Send text only',
+    desc: 'Send text to terminal without Enter',
+  },
+  {
+    value: 'send-enter',
+    label: 'Send + Enter',
+    desc: 'Send text then press Enter automatically',
+  },
+]
+
+export function SettingsModal({
+  isOpen,
+  onClose,
+  settings,
+  onUpdateSetting,
+}: Props) {
+  const dialogRef = useRef<HTMLDialogElement>(null)
+
+  useEffect(() => {
+    const dialog = dialogRef.current
+    if (!dialog) return
+    if (isOpen) {
+      dialog.showModal()
+      const handleCancel = (e: Event) => {
+        e.preventDefault()
+        onClose()
+      }
+      dialog.addEventListener('cancel', handleCancel)
+      return () => dialog.removeEventListener('cancel', handleCancel)
+    } else {
+      dialog.close()
+    }
+  }, [isOpen, onClose])
+
+  if (!isOpen) return null
+
+  return (
+    <dialog
+      ref={dialogRef}
+      className="fixed inset-0 z-50 m-auto w-[90vw] max-w-md rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 p-0 backdrop:bg-black/50 shadow-xl"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className="p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-bold text-zinc-900 dark:text-white">
+            Settings
+          </h2>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="space-y-5">
+          <div>
+            <p className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+              Text input send behavior
+            </p>
+            <div className="space-y-2">
+              {IME_SEND_OPTIONS.map((opt) => (
+                <label
+                  key={opt.value}
+                  className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                    settings.imeSendBehavior === opt.value
+                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                      : 'border-zinc-200 dark:border-zinc-600 hover:bg-zinc-50 dark:hover:bg-zinc-700/50'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="imeSendBehavior"
+                    value={opt.value}
+                    checked={settings.imeSendBehavior === opt.value}
+                    onChange={() =>
+                      onUpdateSetting('imeSendBehavior', opt.value)
+                    }
+                    className="mt-0.5 accent-blue-500"
+                  />
+                  <div>
+                    <div className="text-sm font-medium text-zinc-900 dark:text-white">
+                      {opt.label}
+                    </div>
+                    <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                      {opt.desc}
+                    </div>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  Toolbar default expanded
+                </p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                  Show all keys when toolbar loads
+                </p>
+              </div>
+              <button
+                role="switch"
+                aria-checked={settings.toolbarDefaultExpanded}
+                onClick={() =>
+                  onUpdateSetting(
+                    'toolbarDefaultExpanded',
+                    !settings.toolbarDefaultExpanded,
+                  )
+                }
+                className={`relative w-11 h-6 rounded-full transition-colors ${
+                  settings.toolbarDefaultExpanded
+                    ? 'bg-blue-500'
+                    : 'bg-zinc-300 dark:bg-zinc-600'
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                    settings.toolbarDefaultExpanded ? 'translate-x-5' : ''
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </dialog>
+  )
+}

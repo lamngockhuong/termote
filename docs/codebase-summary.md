@@ -19,6 +19,7 @@ termote/
 │   │   │   ├── keyboard-toolbar.tsx         # Virtual keyboard buttons
 │   │   │   ├── session-sidebar.tsx          # Session switcher sidebar
 │   │   │   ├── settings-menu.tsx            # Settings dropdown
+│   │   │   ├── settings-modal.tsx           # Settings dialog (IME behavior, toolbar expand)
 │   │   │   ├── swipeable-session-item.tsx   # Swipe-to-delete session
 │   │   │   ├── terminal-frame.tsx           # Terminal iframe wrapper (ttyd)
 │   │   │   └── theme-toggle.tsx             # Theme switcher buttons
@@ -31,6 +32,7 @@ termote/
 │   │   │   ├── use-keyboard-visible.ts # Mobile keyboard detection
 │   │   │   ├── use-local-sessions.ts  # Session CRUD + tmux sync
 │   │   │   ├── use-media-query.ts     # Responsive hooks
+│   │   │   ├── use-settings.ts        # Settings state with localStorage
 │   │   │   ├── use-tmux-api.ts        # tmux HTTP API client
 │   │   │   └── use-viewport.ts        # Viewport height + keyboard detection
 │   │   ├── types/
@@ -95,6 +97,27 @@ Virtual keyboard for mobile:
 - Scroll controls: PageUp/PageDown for tmux copy mode
 - Keyboard toggle button
 - Haptic feedback on key press
+- Respects `defaultExpanded` prop from settings
+
+### settings-modal.tsx (~153 lines)
+
+Settings dialog with radio buttons and toggles:
+
+- **IME send behavior**: "Send text only" (default) or "Send + Enter" (auto-press Enter after text)
+- **Toolbar default expanded**: Toggle to show all keys on load (vs. collapsed by default)
+- Accessible dialog with custom styling
+- Persists changes via `useSettings()` hook
+
+### use-settings.ts (~66 lines)
+
+Settings state management using `useSyncExternalStore`:
+
+- Stores settings in localStorage (`termote-settings` key) as JSON
+- Provides `settings` object with type-safe config:
+  - `imeSendBehavior`: 'send-only' | 'send-enter'
+  - `toolbarDefaultExpanded`: boolean
+- `updateSetting()` callback to update individual settings
+- Defaults to send-only + collapsed toolbar
 
 ### use-gestures.ts (~53 lines)
 

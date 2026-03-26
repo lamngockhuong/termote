@@ -52,6 +52,45 @@ export interface Session {
 - `useMemo` for expensive computations
 - `useRef` for mutable values and DOM refs
 - `forwardRef` + `useImperativeHandle` for exposing methods
+- `useSyncExternalStore` for persistent state (localStorage) — see `use-settings.ts`
+
+## Persistent State (localStorage)
+
+When storing user preferences:
+
+```tsx
+// Use useSyncExternalStore with listener pattern
+const STORAGE_KEY = "termote-settings";
+const listeners = new Set<() => void>();
+
+function getSnapshot() {
+  const json = localStorage.getItem(STORAGE_KEY) ?? "";
+  return json ? { ...DEFAULTS, ...JSON.parse(json) } : DEFAULTS;
+}
+
+function writeSettings(settings: Settings) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  listeners.forEach((fn) => fn());
+}
+
+export function useSettings() {
+  const settings = useSyncExternalStore(subscribe, getSnapshot, () => DEFAULTS);
+  const updateSetting = useCallback(
+    <K extends keyof Settings>(key: K, value: Settings[K]) => {
+      writeSettings({ ...settings, [key]: value });
+    },
+    [settings],
+  );
+  return { settings, updateSetting };
+}
+```
+
+**Key points:**
+
+- Provide sensible defaults for new users
+- Cache values to avoid repeated JSON parsing
+- Use explicit listener subscription for SSR compatibility
+- Return DEFAULTS on server/SSR to avoid hydration mismatch
 
 ## Styling
 

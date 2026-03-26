@@ -6,6 +6,7 @@ import { HelpModal } from './components/help-modal'
 import { KeyboardToolbar } from './components/keyboard-toolbar'
 import { SessionSidebar } from './components/session-sidebar'
 import { SettingsMenu } from './components/settings-menu'
+import { SettingsModal } from './components/settings-modal'
 import { TerminalFrame } from './components/terminal-frame'
 import { useTheme } from './contexts/theme-context'
 import { useFontSize } from './hooks/use-font-size'
@@ -14,6 +15,7 @@ import { useGestures } from './hooks/use-gestures'
 import { useKeyboardVisible } from './hooks/use-keyboard-visible'
 import { useLocalSessions } from './hooks/use-local-sessions'
 import { useIsMobile } from './hooks/use-media-query'
+import { useSettings } from './hooks/use-settings'
 import { useSidebarCollapsed } from './hooks/use-sidebar-collapsed'
 import {
   blurTerminal,
@@ -36,6 +38,8 @@ export default function App() {
     useSidebarCollapsed()
   const [aboutOpen, setAboutOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const { settings, updateSetting } = useSettings()
   const [showTitleTooltip, setShowTitleTooltip] = useState(false)
   const [ctrlActive, setCtrlActive] = useState(false)
   const [imeMode, setImeMode] = useState(false)
@@ -145,9 +149,15 @@ export default function App() {
     toggleTmuxCopyMode(terminalRef.current)
   }, [])
 
-  const handleSendText = useCallback((text: string) => {
-    sendTextToTerminal(terminalRef.current, text)
-  }, [])
+  const handleSendText = useCallback(
+    (text: string) => {
+      sendTextToTerminal(terminalRef.current, text)
+      if (settings.imeSendBehavior === 'send-enter') {
+        sendKeyToTerminal(terminalRef.current, 'Enter')
+      }
+    },
+    [settings.imeSendBehavior],
+  )
 
   const handleMobileSelect = (id: string) => {
     switchSession(id)
@@ -280,6 +290,7 @@ export default function App() {
               <SettingsMenu
                 onOpenAbout={() => setAboutOpen(true)}
                 onOpenHelp={() => setHelpOpen(true)}
+                onOpenSettings={() => setSettingsOpen(true)}
               />
             </div>
           </header>
@@ -326,6 +337,7 @@ export default function App() {
         onCtrlChange={setCtrlActive}
         imeMode={imeMode}
         onImeModeChange={setImeMode}
+        defaultExpanded={settings.toolbarDefaultExpanded}
       />
 
       {/* Mobile bottom navigation */}
@@ -353,6 +365,12 @@ export default function App() {
       {/* Modals */}
       <AboutModal isOpen={aboutOpen} onClose={() => setAboutOpen(false)} />
       <HelpModal isOpen={helpOpen} onClose={() => setHelpOpen(false)} />
+      <SettingsModal
+        isOpen={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        settings={settings}
+        onUpdateSetting={updateSetting}
+      />
     </div>
   )
 }
