@@ -249,7 +249,7 @@ func TestIframeOnly(t *testing.T) {
 		wantCode int
 	}{
 		{"direct navigation", "document", "", http.StatusForbidden},
-		{"no header (mobile/curl)", "", "", http.StatusOK},
+		{"no header (curl)", "", "", http.StatusForbidden},
 		{"iframe without token", "iframe", "", http.StatusForbidden},
 		{"iframe with invalid token", "iframe", "bad", http.StatusForbidden},
 		{"iframe with valid token", "iframe", "valid", http.StatusOK},
@@ -298,7 +298,7 @@ func TestTerminalTokenEndpoint(t *testing.T) {
 	}{
 		{"POST rejected", "POST", "empty", http.StatusMethodNotAllowed},
 		{"direct browser", "GET", "document", http.StatusForbidden},
-		{"no header (mobile/curl)", "GET", "", http.StatusOK},
+		{"no header (curl)", "GET", "", http.StatusForbidden},
 		{"fetch/XHR allowed", "GET", "empty", http.StatusOK},
 	}
 
@@ -462,7 +462,7 @@ func TestAllowNonNavigationOnly(t *testing.T) {
 		wantOK   bool
 	}{
 		{"document blocked", "document", true, false},
-		{"no header allowed (mobile)", "", false, true},
+		{"no header blocked", "", false, false},
 		{"iframe allowed", "iframe", true, true},
 		{"empty (fetch) allowed", "empty", true, true},
 		{"script allowed", "script", true, true},
