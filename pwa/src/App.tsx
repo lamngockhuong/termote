@@ -64,8 +64,7 @@ export default function App() {
 
   const gestureHandlers = useMemo(
     () => ({
-      onSwipeLeft: () =>
-        sendKeyToTerminal(getIframe(), 'c', { ctrl: true }),
+      onSwipeLeft: () => sendKeyToTerminal(getIframe(), 'c', { ctrl: true }),
       onSwipeRight: () => sendKeyToTerminal(getIframe(), 'Tab'),
       onSwipeUp: () => {
         if ((keyboardVisible || imeMode) && terminalContainerRef.current) {
