@@ -72,7 +72,7 @@ Main orchestrator combining:
 - Session sidebar with collapse toggle (desktop) / slide-over panel (mobile)
 - Terminal frame with ttyd iframe
 - Keyboard toolbar with special keys
-- Settings menu with theme toggle
+- Settings menu with theme toggle and cache clearing
 - Font size controls (A-/A+)
 - Fullscreen toggle (desktop only, Fullscreen API)
 - Gesture handlers → terminal commands (mobile only)

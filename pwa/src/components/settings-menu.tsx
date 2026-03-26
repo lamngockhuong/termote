@@ -7,9 +7,30 @@ interface Props {
   onOpenHelp: () => void
 }
 
+async function clearCacheAndReload() {
+  try {
+    if ('serviceWorker' in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations()
+      await Promise.all(registrations.map((r) => r.unregister()))
+    }
+    if ('caches' in window) {
+      const cacheNames = await caches.keys()
+      await Promise.all(cacheNames.map((name) => caches.delete(name)))
+    }
+  } finally {
+    window.location.reload()
+  }
+}
+
 export function SettingsMenu({ onOpenAbout, onOpenHelp }: Props) {
   const [isOpen, setIsOpen] = useState(false)
+  const [clearing, setClearing] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+
+  const handleClearCache = async () => {
+    setClearing(true)
+    await clearCacheAndReload()
+  }
 
   // Close on click outside
   useEffect(() => {
@@ -66,6 +87,16 @@ export function SettingsMenu({ onOpenAbout, onOpenHelp }: Props) {
             className="w-full px-3 py-2 text-left rounded-lg hover:bg-zinc-200/50 dark:hover:bg-zinc-700/50 transition-colors"
           >
             About Termote
+          </button>
+
+          <hr className="my-2 border-zinc-300/30 dark:border-zinc-700/30" />
+
+          <button
+            onClick={handleClearCache}
+            disabled={clearing}
+            className="w-full px-3 py-2 text-left rounded-lg hover:bg-zinc-200/50 dark:hover:bg-zinc-700/50 transition-colors text-red-600 dark:text-red-400 disabled:opacity-50"
+          >
+            {clearing ? 'Clearing...' : 'Clear Cache & Reload'}
           </button>
         </div>
       )}

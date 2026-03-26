@@ -118,12 +118,13 @@ TERMOTE_PWA_DIR=../pwa/dist ./tmux-api-native
 
 ### Common Issues
 
-| Issue          | Solution                                          |
-| -------------- | ------------------------------------------------- |
-| Port in use    | `lsof -i :7680` then kill process                 |
-| ttyd missing   | `brew install ttyd` (macOS) or `apt install ttyd` |
-| Binary missing | `cd tmux-api && go build -o tmux-api-native .`    |
-| PWA not built  | `cd pwa && pnpm build`                            |
+| Issue           | Solution                                          |
+| --------------- | ------------------------------------------------- |
+| Port in use     | `lsof -i :7680` then kill process                 |
+| ttyd missing    | `brew install ttyd` (macOS) or `apt install ttyd` |
+| Binary missing  | `cd tmux-api && go build -o tmux-api-native .`    |
+| PWA not built   | `cd pwa && pnpm build`                            |
+| Stale PWA cache | Settings → "Clear Cache & Reload" to refresh      |
 
 ### tmux Session
 
