@@ -110,6 +110,13 @@ const UTILITY_KEYS: KeyConfig[] = [
   },
 ]
 
+// Expand/collapse toggle key (position: after arrow/extra keys, before utility keys)
+const EXPAND_TOGGLE_KEY: KeyConfig = {
+  label: <Expand size={ICON_SIZE} />,
+  key: 'Expand',
+  isExpandToggle: true,
+}
+
 // Minimal Ctrl combos (most used)
 const CTRL_COMBOS_MINIMAL = [
   { label: 'C', combo: 'c' },
@@ -199,8 +206,8 @@ export function KeyboardToolbar({
       ? MINIMAL_KEYS
       : MINIMAL_KEYS.filter((k) => !k.isImeToggle)
     return expanded
-      ? [...baseKeys, ...EXTRA_KEYS, ...UTILITY_KEYS]
-      : [...baseKeys, ...UTILITY_KEYS]
+      ? [...baseKeys, ...EXTRA_KEYS, EXPAND_TOGGLE_KEY, ...UTILITY_KEYS]
+      : [...baseKeys, EXPAND_TOGGLE_KEY, ...UTILITY_KEYS]
   }, [expanded, onSendText])
 
   // Ctrl combos based on mode
@@ -390,22 +397,6 @@ export function KeyboardToolbar({
       className="flex items-center gap-2 px-3 py-2 pb-safe glass-surface border-t border-zinc-300/30 dark:border-zinc-700/30 overflow-x-auto"
       style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.5rem)' }}
     >
-      {/* Expand/collapse toggle */}
-      <button
-        onMouseDown={(e) => e.preventDefault()}
-        onTouchStart={(e) => e.preventDefault()}
-        onContextMenu={(e) => e.preventDefault()}
-        onClick={() => handleKey('Expand', { isExpandToggle: true })}
-        className="min-w-11 h-11 px-3 flex items-center justify-center rounded-xl text-sm font-mono bg-indigo-200/70 dark:bg-indigo-700/50 active:bg-indigo-300 dark:active:bg-indigo-600 touch-manipulation transition-colors"
-        aria-label={expanded ? 'Collapse keyboard' : 'Expand keyboard'}
-      >
-        {expanded ? (
-          <Minimize2 size={ICON_SIZE} />
-        ) : (
-          <Expand size={ICON_SIZE} />
-        )}
-      </button>
-
       {visibleKeys.map((keyConfig) => (
         <button
           key={keyConfig.key}
@@ -426,8 +417,19 @@ export function KeyboardToolbar({
             })
           }
           className={`min-w-11 h-11 px-3 flex items-center justify-center rounded-xl text-sm font-mono ${getKeyButtonBg(keyConfig, ctrlActive, shiftActive)} active:bg-zinc-300 dark:active:bg-zinc-600 touch-manipulation transition-colors`}
+          aria-label={
+            keyConfig.isExpandToggle
+              ? expanded
+                ? 'Collapse keyboard'
+                : 'Expand keyboard'
+              : undefined
+          }
         >
-          {keyConfig.label}
+          {keyConfig.isExpandToggle
+            ? expanded
+              ? <Minimize2 size={ICON_SIZE} />
+              : <Expand size={ICON_SIZE} />
+            : keyConfig.label}
         </button>
       ))}
 
