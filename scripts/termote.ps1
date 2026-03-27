@@ -28,7 +28,8 @@ param(
     [switch]$Lan,
     [switch]$NoAuth,
     [int]$Port = 7680,
-    [string]$Tailscale
+    [string]$Tailscale,
+    [switch]$Fresh
 )
 
 # =============================================================================
@@ -43,6 +44,12 @@ $script:PORT_TTYD = 7681
 $script:CONTAINER_NAME = "termote"
 $script:HOME_DIR = if ($env:USERPROFILE) { $env:USERPROFILE } else { $env:HOME }
 $script:LOG_DIR = Join-Path $script:HOME_DIR ".termote/logs"
+$script:CONFIG_FILE = Join-Path $script:HOME_DIR ".termote/config.json"
+
+# Saved config state (loaded once)
+$script:SAVED_CONFIG = $null
+$script:SAVED_PASS = $null
+$script:REUSED_PASS = $false
 
 # Check if gum is available for fancy UI
 $script:HAS_GUM = $null -ne (Get-Command gum -ErrorAction SilentlyContinue)
@@ -61,6 +68,95 @@ function Show-Header {
     Write-Host "  TERMOTE - Terminal + Remote" -ForegroundColor Blue
     Write-Host "  Windows CLI v$script:VERSION" -ForegroundColor DarkGray
     Write-Host ""
+}
+
+# =============================================================================
+# CONFIG PERSISTENCE (encrypted with DPAPI)
+# =============================================================================
+
+function Save-Config {
+    param(
+        [string]$Mode,
+        [switch]$Lan,
+        [switch]$NoAuth,
+        [int]$Port,
+        [string]$Tailscale,
+        [string]$Password
+    )
+
+    $configDir = Split-Path $script:CONFIG_FILE -Parent
+    if (-not (Test-Path $configDir)) {
+        New-Item -ItemType Directory -Path $configDir -Force | Out-Null
+    }
+
+    # Encrypt password using DPAPI (Windows Data Protection API)
+    $encryptedPass = ""
+    if ($Password) {
+        try {
+            $bytes = [System.Text.Encoding]::UTF8.GetBytes($Password)
+            $encrypted = [Security.Cryptography.ProtectedData]::Protect(
+                $bytes, $null, [Security.Cryptography.DataProtectionScope]::CurrentUser
+            )
+            $encryptedPass = [Convert]::ToBase64String($encrypted)
+        } catch {
+            Write-Warn "Could not encrypt password: $_"
+        }
+    }
+
+    $config = @{
+        Mode = $Mode
+        Lan = $Lan.IsPresent -or $Lan
+        NoAuth = $NoAuth.IsPresent -or $NoAuth
+        Port = $Port
+        Tailscale = $Tailscale
+        EncryptedPass = $encryptedPass
+        SavedAt = (Get-Date).ToString("o")
+    }
+
+    $config | ConvertTo-Json | Set-Content -Path $script:CONFIG_FILE -Encoding UTF8
+    # Restrict permissions (Windows equivalent of chmod 600)
+    $acl = Get-Acl $script:CONFIG_FILE
+    $acl.SetAccessRuleProtection($true, $false)
+    $rule = New-Object Security.AccessControl.FileSystemAccessRule(
+        [Environment]::UserName, "FullControl", "Allow"
+    )
+    $acl.SetAccessRule($rule)
+    Set-Acl -Path $script:CONFIG_FILE -AclObject $acl -ErrorAction SilentlyContinue
+}
+
+function Get-SavedConfig {
+    if ($script:SAVED_CONFIG) { return $script:SAVED_CONFIG }
+
+    if (-not (Test-Path $script:CONFIG_FILE)) { return $null }
+
+    try {
+        $config = Get-Content $script:CONFIG_FILE -Raw | ConvertFrom-Json
+
+        # Decrypt password
+        if ($config.EncryptedPass) {
+            try {
+                $encrypted = [Convert]::FromBase64String($config.EncryptedPass)
+                $decrypted = [Security.Cryptography.ProtectedData]::Unprotect(
+                    $encrypted, $null, [Security.Cryptography.DataProtectionScope]::CurrentUser
+                )
+                $script:SAVED_PASS = [System.Text.Encoding]::UTF8.GetString($decrypted)
+            } catch {
+                Write-Warn "Could not decrypt saved password"
+                $script:SAVED_PASS = $null
+            }
+        }
+
+        $script:SAVED_CONFIG = $config
+        return $config
+    } catch {
+        Write-Warn "Could not load config: $_"
+        return $null
+    }
+}
+
+function Test-SavedTailscaleConfig {
+    $config = Get-SavedConfig
+    return $config -and $config.Tailscale
 }
 
 # =============================================================================
@@ -97,8 +193,28 @@ function Test-ValidPort {
     return $Port -ge 1 -and $Port -le 65535
 }
 
+function Test-SensitiveDirs {
+    param([string]$Workspace = ".\workspace")
+
+    $sensitiveDirs = @(".ssh", ".gnupg", ".aws", ".config\gcloud")
+    $found = @()
+
+    foreach ($dir in $sensitiveDirs) {
+        $path = Join-Path $Workspace $dir
+        if (Test-Path $path) { $found += $dir }
+    }
+
+    if ($found.Count -gt 0) {
+        Write-Warn "WORKSPACE contains sensitive directories: $($found -join ', ')"
+        Write-Warn "These will be accessible inside the container. Consider using a subdirectory."
+    }
+}
+
 function Setup-Auth {
-    param([switch]$NoAuth)
+    param(
+        [switch]$NoAuth,
+        [switch]$Fresh
+    )
 
     if ($NoAuth) {
         Write-Info "Basic auth disabled"
@@ -108,6 +224,14 @@ function Setup-Auth {
     }
 
     $env:NO_AUTH = ""
+
+    # Reuse saved password unless -Fresh
+    if (-not $Fresh -and $script:SAVED_PASS) {
+        $env:TERMOTE_PASS = $script:SAVED_PASS
+        $script:REUSED_PASS = $true
+        Write-Info "Using saved password (use -Fresh to reset)"
+        return
+    }
 
     # Interactive password prompt
     if ([Environment]::UserInteractive) {
@@ -486,8 +610,25 @@ function Invoke-Install {
         [switch]$Lan,
         [switch]$NoAuth,
         [int]$Port = 7680,
-        [string]$Tailscale
+        [string]$Tailscale,
+        [switch]$Fresh
     )
+
+    # Load saved config (unless -Fresh) and apply as defaults
+    if (-not $Fresh) {
+        $savedConfig = Get-SavedConfig
+        if ($savedConfig) {
+            # Apply saved values only if not explicitly provided
+            if (-not $PSBoundParameters.ContainsKey('Lan') -and $savedConfig.Lan) { $Lan = $true }
+            if (-not $PSBoundParameters.ContainsKey('NoAuth') -and $savedConfig.NoAuth) { $NoAuth = $true }
+            if (-not $PSBoundParameters.ContainsKey('Port') -and $savedConfig.Port -and $savedConfig.Port -ne $script:PORT_MAIN) {
+                $Port = $savedConfig.Port
+            }
+            if (-not $PSBoundParameters.ContainsKey('Tailscale') -and $savedConfig.Tailscale) {
+                $Tailscale = $savedConfig.Tailscale
+            }
+        }
+    }
 
     $bindAddr = if ($Lan) { "0.0.0.0" } else { "127.0.0.1" }
     $lanIP = if ($Lan) { Get-LanIP } else { "" }
@@ -531,10 +672,15 @@ function Invoke-Install {
 
     # Step 3: Setup auth
     Write-Step "3/4" "Setting up auth..."
-    Setup-Auth -NoAuth:$NoAuth
+    Setup-Auth -NoAuth:$NoAuth -Fresh:$Fresh
 
     # Step 4: Start services
     Write-Step "4/4" "Starting services..."
+
+    # Warn about sensitive directories (container mode only)
+    if ($Mode -eq "container") {
+        Test-SensitiveDirs
+    }
 
     switch ($Mode) {
         "container" {
@@ -556,6 +702,9 @@ function Invoke-Install {
             & tailscale serve --bg --https=$tsPort http://127.0.0.1:$Port
         }
     }
+
+    # Save config for future restarts/updates
+    Save-Config -Mode $Mode -Lan:$Lan -NoAuth:$NoAuth -Port $Port -Tailscale $Tailscale -Password $env:TERMOTE_PASS
 
     Show-AccessInfo -Port $Port -Lan:$Lan -LanIP $lanIP -Tailscale $Tailscale -NoAuth:$NoAuth
 }
@@ -840,12 +989,14 @@ function Show-Help {
     Write-Host "  -Lan              Expose to LAN"
     Write-Host "  -Tailscale <h>    Enable Tailscale HTTPS"
     Write-Host "  -NoAuth           Disable authentication"
+    Write-Host "  -Fresh            Ignore saved config, prompt for new password"
     Write-Host ""
     Write-Host "Examples:"
     Write-Host "  .\termote.ps1                           # Interactive menu"
     Write-Host "  .\termote.ps1 install container         # Container mode"
     Write-Host "  .\termote.ps1 install native -Lan       # Native + LAN"
     Write-Host "  .\termote.ps1 install native -NoAuth    # Without auth"
+    Write-Host "  .\termote.ps1 install native -Fresh     # Reset password"
     Write-Host "  .\termote.ps1 uninstall all             # Full cleanup"
 }
 
@@ -865,7 +1016,7 @@ switch ($Command) {
         if (-not $Mode) {
             Write-Err "Usage: termote.ps1 install <container|native> [options]"
         }
-        Invoke-Install -Mode $Mode -Lan:$Lan -NoAuth:$NoAuth -Port $Port -Tailscale $Tailscale
+        Invoke-Install -Mode $Mode -Lan:$Lan -NoAuth:$NoAuth -Port $Port -Tailscale $Tailscale -Fresh:$Fresh
     }
     "uninstall" {
         if (-not $Mode) {

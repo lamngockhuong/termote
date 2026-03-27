@@ -76,10 +76,16 @@ curl -fsSL https://... | bash -s -- --update           # Auto-update with saved 
 ```powershell
 # Windows (PowerShell)
 .\scripts\termote.ps1                                  # Interactive menu
-.\scripts\termote.ps1 install container                # Container mode (Docker Desktop)
+.\scripts\termote.ps1 install container                # Container mode (saves config)
 .\scripts\termote.ps1 install native                   # Native mode (psmux + ttyd)
 .\scripts\termote.ps1 install container -Lan           # LAN accessible
 .\scripts\termote.ps1 install native -NoAuth           # Without auth
+.\scripts\termote.ps1 install native -Tailscale host   # Tailscale HTTPS
+.\scripts\termote.ps1 install native -Fresh            # Force new password (ignore saved)
+.\scripts\termote.ps1 link                             # Create 'termote' global command
+.\scripts\termote.ps1 unlink                           # Remove global command
+irm https://... | iex                                  # Online installer
+$env:TERMOTE_UPDATE="true"; irm ... | iex              # Auto-update with saved config
 ```
 
 ## Development Commands

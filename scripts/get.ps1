@@ -16,6 +16,7 @@
 param(
     [switch]$Yes,
     [switch]$DownloadOnly,
+    [switch]$Update,
     [ValidateSet("container", "native", "")]
     [string]$Mode = "",
     [switch]$Lan,
@@ -27,18 +28,35 @@ $ErrorActionPreference = "Stop"
 # Configuration
 $script:REPO = "lamngockhuong/termote"
 $script:INSTALL_DIR = if ($env:TERMOTE_INSTALL_DIR) { $env:TERMOTE_INSTALL_DIR } else { Join-Path $env:USERPROFILE ".termote" }
+$script:CONFIG_FILE = Join-Path $env:USERPROFILE ".termote\config.json"
 
 # Check environment variables for options (for piped execution)
 if ($env:TERMOTE_AUTO_YES -eq "true") { $Yes = $true }
 if ($env:TERMOTE_DOWNLOAD_ONLY -eq "true") { $DownloadOnly = $true }
+if ($env:TERMOTE_UPDATE -eq "true") { $Update = $true }
 if ($env:TERMOTE_MODE) { $Mode = $env:TERMOTE_MODE }
 if ($env:TERMOTE_LAN -eq "true") { $Lan = $true }
 if ($env:TERMOTE_NO_AUTH -eq "true") { $NoAuth = $true }
+
+# Update mode implies auto-yes
+if ($Update) { $Yes = $true }
 
 # UI Helpers
 function Write-Info { param([string]$Message) Write-Host "[INFO] $Message" -ForegroundColor Green }
 function Write-Warn { param([string]$Message) Write-Host "[WARN] $Message" -ForegroundColor Yellow }
 function Write-Err { param([string]$Message) Write-Host "[ERROR] $Message" -ForegroundColor Red; exit 1 }
+
+# Load saved config for -Update mode
+function Get-SavedConfig {
+    if (-not (Test-Path $script:CONFIG_FILE)) {
+        Write-Err "No saved config found. Run 'termote.ps1 install' first."
+    }
+    try {
+        return Get-Content $script:CONFIG_FILE -Raw | ConvertFrom-Json
+    } catch {
+        Write-Err "Could not load config: $_"
+    }
+}
 
 # Get installed version
 function Get-InstalledVersion {
@@ -201,6 +219,15 @@ function Main {
 
         # Run termote CLI
         Write-Info "Running installer..."
+
+        # -Update mode: load saved config
+        if ($Update) {
+            $savedConfig = Get-SavedConfig
+            if (-not $Mode) { $Mode = $savedConfig.Mode }
+            if ($savedConfig.Lan) { $Lan = $true }
+            if ($savedConfig.NoAuth) { $NoAuth = $true }
+            Write-Info "Using saved config (mode: $Mode)"
+        }
 
         # Default to native if no mode specified
         if (-not $Mode) { $Mode = "native" }

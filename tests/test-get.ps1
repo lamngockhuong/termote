@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-    Test suite for termote.ps1
+    Test suite for get.ps1 (Windows online installer)
 .DESCRIPTION
     Validates PowerShell script syntax and basic functionality.
-    Run from repo root: ./tests/test-termote.ps1
+    Run from repo root: ./tests/test-get.ps1
 #>
 
 $ErrorActionPreference = "Stop"
@@ -28,13 +28,13 @@ function Write-TestResult {
 }
 
 Write-Host ""
-Write-Host "=== Termote PowerShell Tests ===" -ForegroundColor Cyan
+Write-Host "=== Termote get.ps1 Tests ===" -ForegroundColor Cyan
 Write-Host ""
 
 # Determine script path
 $TestDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
 if (-not $TestDir) { $TestDir = Get-Location }
-$ScriptPath = Join-Path $TestDir ".." "scripts" "termote.ps1"
+$ScriptPath = Join-Path $TestDir ".." "scripts" "get.ps1"
 $ScriptPath = [System.IO.Path]::GetFullPath($ScriptPath)
 if (-not (Test-Path $ScriptPath)) {
     Write-Host "[ERROR] Script not found: $ScriptPath" -ForegroundColor Red
@@ -56,119 +56,105 @@ try {
 }
 
 # ─────────────────────────────────────────────────────────────
-# Test 2: Help command works (check script contains Show-Help function)
+# Test 2: Required parameters defined
 # ─────────────────────────────────────────────────────────────
 try {
     $content = Get-Content $ScriptPath -Raw
-    $hasShowHelp = $content -match "function Show-Help"
-    $hasUsageText = $content -match 'Usage: termote\.ps1'
-    Write-TestResult -Name "Help command works" -Passed ($hasShowHelp -and $hasUsageText)
-} catch {
-    Write-TestResult -Name "Help command works" -Passed $false -Error $_.Exception.Message
-}
-
-# ─────────────────────────────────────────────────────────────
-# Test 3: Version is defined
-# ─────────────────────────────────────────────────────────────
-try {
-    $content = Get-Content $ScriptPath -Raw
-    $hasVersion = $content -match '\$script:VERSION\s*=\s*"[0-9]+\.[0-9]+\.[0-9]+"'
-    Write-TestResult -Name "Version is defined" -Passed $hasVersion
-} catch {
-    Write-TestResult -Name "Version is defined" -Passed $false -Error $_.Exception.Message
-}
-
-# ─────────────────────────────────────────────────────────────
-# Test 4: Container runtime detection function exists
-# ─────────────────────────────────────────────────────────────
-try {
-    $content = Get-Content $ScriptPath -Raw
-    $hasFunction = $content -match "function Get-ContainerRuntime"
-    Write-TestResult -Name "Get-ContainerRuntime function exists" -Passed $hasFunction
-} catch {
-    Write-TestResult -Name "Get-ContainerRuntime function exists" -Passed $false -Error $_.Exception.Message
-}
-
-# ─────────────────────────────────────────────────────────────
-# Test 5: Health function exists
-# ─────────────────────────────────────────────────────────────
-try {
-    $content = Get-Content $ScriptPath -Raw
-    $hasFunction = $content -match "function Invoke-Health"
-    Write-TestResult -Name "Invoke-Health function exists" -Passed $hasFunction
-} catch {
-    Write-TestResult -Name "Invoke-Health function exists" -Passed $false -Error $_.Exception.Message
-}
-
-# ─────────────────────────────────────────────────────────────
-# Test 6: Native mode functions exist
-# ─────────────────────────────────────────────────────────────
-try {
-    $content = Get-Content $ScriptPath -Raw
-    $hasPsmux = $content -match "function Test-Psmux"
-    $hasTtyd = $content -match "function Get-TtydBinary"
-    $hasNative = $content -match "function Start-NativeMode"
-    $allExist = $hasPsmux -and $hasTtyd -and $hasNative
-    Write-TestResult -Name "Native mode functions exist" -Passed $allExist
-} catch {
-    Write-TestResult -Name "Native mode functions exist" -Passed $false -Error $_.Exception.Message
-}
-
-# ─────────────────────────────────────────────────────────────
-# Test 7: Required parameters are defined
-# ─────────────────────────────────────────────────────────────
-try {
-    $content = Get-Content $ScriptPath -Raw
-    $hasCommand = $content -match '\[string\]\$Command'
+    $hasYes = $content -match '\[switch\]\$Yes'
+    $hasDownloadOnly = $content -match '\[switch\]\$DownloadOnly'
+    $hasUpdate = $content -match '\[switch\]\$Update'
     $hasMode = $content -match '\[string\]\$Mode'
     $hasLan = $content -match '\[switch\]\$Lan'
     $hasNoAuth = $content -match '\[switch\]\$NoAuth'
-    $hasPort = $content -match '\[int\]\$Port'
-    $allExist = $hasCommand -and $hasMode -and $hasLan -and $hasNoAuth -and $hasPort
+    $allExist = $hasYes -and $hasDownloadOnly -and $hasUpdate -and $hasMode -and $hasLan -and $hasNoAuth
     Write-TestResult -Name "Required parameters defined" -Passed $allExist
 } catch {
     Write-TestResult -Name "Required parameters defined" -Passed $false -Error $_.Exception.Message
 }
 
 # ─────────────────────────────────────────────────────────────
-# Test 8: Link/Unlink functions exist
+# Test 3: Environment variable support
 # ─────────────────────────────────────────────────────────────
 try {
     $content = Get-Content $ScriptPath -Raw
-    $hasLink = $content -match "function Invoke-Link"
-    $hasUnlink = $content -match "function Invoke-Unlink"
-    $hasLinkCmd = $content -match '"link"'
-    $hasUnlinkCmd = $content -match '"unlink"'
-    $allExist = $hasLink -and $hasUnlink -and $hasLinkCmd -and $hasUnlinkCmd
-    Write-TestResult -Name "Link/Unlink functions exist" -Passed $allExist
+    $hasAutoYes = $content -match 'TERMOTE_AUTO_YES'
+    $hasDownloadOnlyEnv = $content -match 'TERMOTE_DOWNLOAD_ONLY'
+    $hasUpdateEnv = $content -match 'TERMOTE_UPDATE'
+    $hasModeEnv = $content -match 'TERMOTE_MODE'
+    $allExist = $hasAutoYes -and $hasDownloadOnlyEnv -and $hasUpdateEnv -and $hasModeEnv
+    Write-TestResult -Name "Environment variable support" -Passed $allExist
 } catch {
-    Write-TestResult -Name "Link/Unlink functions exist" -Passed $false -Error $_.Exception.Message
+    Write-TestResult -Name "Environment variable support" -Passed $false -Error $_.Exception.Message
 }
 
 # ─────────────────────────────────────────────────────────────
-# Test 9: Config persistence functions exist
+# Test 4: Core functions exist
 # ─────────────────────────────────────────────────────────────
 try {
     $content = Get-Content $ScriptPath -Raw
-    $hasSaveConfig = $content -match "function Save-Config"
-    $hasGetConfig = $content -match "function Get-SavedConfig"
-    $hasConfigFile = $content -match '\$script:CONFIG_FILE'
-    $allExist = $hasSaveConfig -and $hasGetConfig -and $hasConfigFile
-    Write-TestResult -Name "Config persistence functions exist" -Passed $allExist
+    $hasGetInstalledVersion = $content -match "function Get-InstalledVersion"
+    $hasGetLatestVersion = $content -match "function Get-LatestVersion"
+    $hasTestChecksum = $content -match "function Test-Checksum"
+    $hasMain = $content -match "function Main"
+    $allExist = $hasGetInstalledVersion -and $hasGetLatestVersion -and $hasTestChecksum -and $hasMain
+    Write-TestResult -Name "Core functions exist" -Passed $allExist
 } catch {
-    Write-TestResult -Name "Config persistence functions exist" -Passed $false -Error $_.Exception.Message
+    Write-TestResult -Name "Core functions exist" -Passed $false -Error $_.Exception.Message
 }
 
 # ─────────────────────────────────────────────────────────────
-# Test 10: Fresh parameter defined
+# Test 5: GitHub API integration
 # ─────────────────────────────────────────────────────────────
 try {
     $content = Get-Content $ScriptPath -Raw
-    $hasFreshParam = $content -match '\[switch\]\$Fresh'
-    $hasFreshUsage = $content -match '-Fresh'
-    Write-TestResult -Name "Fresh parameter defined" -Passed ($hasFreshParam -and $hasFreshUsage)
+    $hasRepo = $content -match 'lamngockhuong/termote'
+    $hasGitHubApi = $content -match 'api\.github\.com/repos'
+    $hasReleasesDownload = $content -match 'github\.com.*releases/download'
+    $allExist = $hasRepo -and $hasGitHubApi -and $hasReleasesDownload
+    Write-TestResult -Name "GitHub API integration" -Passed $allExist
 } catch {
-    Write-TestResult -Name "Fresh parameter defined" -Passed $false -Error $_.Exception.Message
+    Write-TestResult -Name "GitHub API integration" -Passed $false -Error $_.Exception.Message
+}
+
+# ─────────────────────────────────────────────────────────────
+# Test 6: Checksum verification
+# ─────────────────────────────────────────────────────────────
+try {
+    $content = Get-Content $ScriptPath -Raw
+    $hasChecksums = $content -match 'checksums\.txt'
+    $hasSHA256 = $content -match 'SHA256'
+    $hasVerify = $content -match 'Checksum verified'
+    $allExist = $hasChecksums -and $hasSHA256 -and $hasVerify
+    Write-TestResult -Name "Checksum verification" -Passed $allExist
+} catch {
+    Write-TestResult -Name "Checksum verification" -Passed $false -Error $_.Exception.Message
+}
+
+# ─────────────────────────────────────────────────────────────
+# Test 7: Update mode support
+# ─────────────────────────────────────────────────────────────
+try {
+    $content = Get-Content $ScriptPath -Raw
+    $hasUpdateParam = $content -match '\[switch\]\$Update'
+    $hasGetSavedConfig = $content -match "function Get-SavedConfig"
+    $hasUpdateLogic = $content -match 'if \(\$Update\)'
+    $allExist = $hasUpdateParam -and $hasGetSavedConfig -and $hasUpdateLogic
+    Write-TestResult -Name "Update mode support" -Passed $allExist
+} catch {
+    Write-TestResult -Name "Update mode support" -Passed $false -Error $_.Exception.Message
+}
+
+# ─────────────────────────────────────────────────────────────
+# Test 8: Service management
+# ─────────────────────────────────────────────────────────────
+try {
+    $content = Get-Content $ScriptPath -Raw
+    $hasTestServices = $content -match "function Test-ServicesRunning"
+    $hasStopServices = $content -match "function Stop-Services"
+    $allExist = $hasTestServices -and $hasStopServices
+    Write-TestResult -Name "Service management" -Passed $allExist
+} catch {
+    Write-TestResult -Name "Service management" -Passed $false -Error $_.Exception.Message
 }
 
 # ─────────────────────────────────────────────────────────────

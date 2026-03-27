@@ -68,6 +68,8 @@ winget install psmux
 
 ## Command Options
 
+**Unix (termote.sh):**
+
 | Flag                        | Description                                     |
 | --------------------------- | ----------------------------------------------- |
 | `--lan`                     | Expose to LAN (default: localhost only)         |
@@ -76,23 +78,37 @@ winget install psmux
 | `--port <port>`             | Host port (default: 7680)                       |
 | `--fresh`                   | Force new password prompt (ignore saved config) |
 
+**Windows (termote.ps1):**
+
+| Flag             | Description                                     |
+| ---------------- | ----------------------------------------------- |
+| `-Lan`           | Expose to LAN (default: localhost only)         |
+| `-Tailscale <h>` | Enable Tailscale HTTPS                          |
+| `-NoAuth`        | Disable basic authentication                    |
+| `-Port <port>`   | Host port (default: 7680)                       |
+| `-Fresh`         | Force new password prompt (ignore saved config) |
+
 ## Config Persistence
 
-Installation settings are automatically saved to `~/.termote/config` (chmod 600):
+Installation settings are automatically saved:
 
+- **Unix:** `~/.termote/config` (AES-256 encrypted, chmod 600)
+- **Windows:** `~/.termote/config.json` (DPAPI encrypted)
+
+Saved settings include:
 - Mode (container/native)
 - Network flags (--lan, --tailscale)
 - Authentication setting (--no-auth)
-- AES-256 encrypted password (machine-derived key + chmod 600)
+- Encrypted password
 
 **Reusing saved config:**
 
 - On restart, existing config is loaded automatically
-- Password is reused unless `--fresh` flag is provided
+- Password is reused unless `--fresh`/`-Fresh` flag is provided
 - Useful for quick restarts without re-entering settings
 
 ```bash
-# First install (saves config)
+# Unix: First install (saves config)
 ./scripts/termote.sh install container --lan
 
 # Restart later (reuses saved mode, flags, password)
@@ -100,9 +116,17 @@ Installation settings are automatically saved to `~/.termote/config` (chmod 600)
 
 # Force new password
 ./scripts/termote.sh install container --lan --fresh
+```
 
-# Remove saved config on uninstall
-./scripts/termote.sh uninstall all
+```powershell
+# Windows: First install (saves config)
+.\scripts\termote.ps1 install container -Lan
+
+# Restart later (reuses saved config)
+.\scripts\termote.ps1 install container -Lan
+
+# Force new password
+.\scripts\termote.ps1 install container -Lan -Fresh
 ```
 
 ## Tailscale HTTPS

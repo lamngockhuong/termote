@@ -132,6 +132,9 @@ $env:TERMOTE_AUTO_YES = "true"; irm .../get.ps1 | iex
 
 # With explicit mode
 $env:TERMOTE_MODE = "container"; irm .../get.ps1 | iex
+
+# Auto-update with saved config
+$env:TERMOTE_UPDATE = "true"; irm .../get.ps1 | iex
 ```
 
 ### Docker
