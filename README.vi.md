@@ -293,11 +293,26 @@ git pull origin main                    # Nếu cài từ source
 
 ## Hỗ Trợ Nền Tảng
 
-| Nền Tảng | Container | Native |
-| -------- | --------- | ------ |
-| Linux    | ✓         | ✓      |
-| macOS    | ✓         | ✓      |
-| Windows  | ✓ (WSL2)  | -      |
+| Nền Tảng | Container       | Native          | CLI Script  |
+| -------- | --------------- | --------------- | ----------- |
+| Linux    | ✓               | ✓               | termote.sh  |
+| macOS    | ✓               | ✓               | termote.sh  |
+| Windows  | ⚠️ (thử nghiệm) | ⚠️ (thử nghiệm) | termote.ps1 |
+
+> **⚠️ Hỗ trợ Windows (Thử nghiệm)**: Hỗ trợ Windows hiện đang trong giai đoạn đầu và cần kiểm tra thêm. Chế độ container yêu cầu Docker Desktop, chế độ native yêu cầu psmux. Vui lòng báo cáo lỗi trên GitHub.
+
+### Chế Độ Native Windows
+
+Chế độ native Windows sử dụng [psmux](https://github.com/psmux/psmux) (terminal multiplexer tương thích tmux cho Windows):
+
+```powershell
+# Cài đặt psmux
+winget install psmux
+
+# Chạy Termote
+.\scripts\termote.ps1 install native
+.\scripts\termote.ps1 install container  # Hoặc container mode với Docker Desktop
+```
 
 ## Sử Dụng Mobile
 

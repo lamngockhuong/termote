@@ -7,11 +7,26 @@ import { Aside, Steps } from "@astrojs/starlight/components";
 
 ## Yêu cầu
 
+**macOS/Linux:**
+
 - Docker hoặc Podman (cho chế độ Container)
 - hoặc ttyd + tmux + Go (cho chế độ Native)
 - Tùy chọn: [gum](https://github.com/charmbracelet/gum) để có menu tương tác đẹp hơn
 
+**Windows:**
+
+- Docker Desktop hoặc Podman Desktop (cho chế độ Container)
+- hoặc [psmux](https://github.com/psmux/psmux) + ttyd (cho chế độ Native): `winget install psmux`
+
+<Aside type="caution" title="Thử nghiệm">
+  Hỗ trợ Windows hiện đang trong giai đoạn thử nghiệm và cần kiểm tra thêm. Vui
+  lòng báo cáo lỗi tại
+  [GitHub](https://github.com/lamngockhuong/termote/issues).
+</Aside>
+
 ## Cài đặt một dòng
+
+**macOS/Linux:**
 
 ```bash
 # Mặc định chế độ native (truy cập binary host như claude, gh, v.v.)
@@ -26,6 +41,16 @@ curl -fsSL .../get.sh | bash -s -- --update
 
 # Cài đặt phiên bản cụ thể
 curl -fsSL .../get.sh | bash -s -- --version 0.0.4
+```
+
+**Windows (PowerShell):**
+
+```powershell
+# Mặc định chế độ native (psmux)
+irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
+
+# Với chế độ rõ ràng
+$env:TERMOTE_MODE = "container"; irm .../get.ps1 | iex
 ```
 
 <Aside type="tip">
@@ -54,6 +79,8 @@ curl -fsSL .../get.sh | bash -s -- --version 0.0.4
 
 ## Các lệnh CLI
 
+**macOS/Linux:**
+
 ```bash
 ./scripts/termote.sh                    # Menu tương tác
 ./scripts/termote.sh install container  # Chế độ Container
@@ -64,11 +91,29 @@ curl -fsSL .../get.sh | bash -s -- --version 0.0.4
 ./scripts/termote.sh unlink             # Xóa lệnh toàn cục
 ```
 
+**Windows (PowerShell):**
+
+```powershell
+.\scripts\termote.ps1                    # Menu tương tác
+.\scripts\termote.ps1 install container  # Chế độ Container (Docker Desktop)
+.\scripts\termote.ps1 install native     # Chế độ Native (psmux)
+.\scripts\termote.ps1 uninstall all      # Gỡ cài đặt tất cả
+.\scripts\termote.ps1 health             # Kiểm tra sức khỏe dịch vụ
+.\scripts\termote.ps1 link               # Tạo lệnh 'termote' toàn cục
+.\scripts\termote.ps1 unlink             # Xóa lệnh toàn cục
+```
+
 <Aside type="tip">
   Sau khi chạy `link`, bạn có thể dùng `termote` từ bất kỳ đâu:
   ```bash
+  # macOS/Linux
   termote health
   termote install native --lan
+  ```
+  ```powershell
+  # Windows
+  termote health
+  termote install native -Lan
   ```
 
 </Aside>

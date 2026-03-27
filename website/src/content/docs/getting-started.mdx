@@ -7,11 +7,25 @@ import { Aside, Steps } from "@astrojs/starlight/components";
 
 ## Prerequisites
 
+**macOS/Linux:**
+
 - Docker or Podman (for Container mode)
 - or ttyd + tmux + Go (for Native mode)
 - Optional: [gum](https://github.com/charmbracelet/gum) for enhanced interactive menus
 
+**Windows:**
+
+- Docker Desktop or Podman Desktop (for Container mode)
+- or [psmux](https://github.com/psmux/psmux) + ttyd (for Native mode): `winget install psmux`
+
+<Aside type="caution" title="Experimental">
+  Windows support is currently experimental and needs more testing. Please
+  report issues on [GitHub](https://github.com/lamngockhuong/termote/issues).
+</Aside>
+
 ## One-Liner Install
+
+**macOS/Linux:**
 
 ```bash
 # Defaults to native mode (access host binaries like claude, gh, etc.)
@@ -26,6 +40,16 @@ curl -fsSL .../get.sh | bash -s -- --update
 
 # Install specific version
 curl -fsSL .../get.sh | bash -s -- --version 0.0.4
+```
+
+**Windows (PowerShell):**
+
+```powershell
+# Defaults to native mode (psmux)
+irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
+
+# With explicit mode
+$env:TERMOTE_MODE = "container"; irm .../get.ps1 | iex
 ```
 
 <Aside type="tip">
@@ -54,6 +78,8 @@ curl -fsSL .../get.sh | bash -s -- --version 0.0.4
 
 ## CLI Commands
 
+**macOS/Linux:**
+
 ```bash
 ./scripts/termote.sh                   # Interactive menu
 ./scripts/termote.sh install container # Container mode
@@ -64,11 +90,29 @@ curl -fsSL .../get.sh | bash -s -- --version 0.0.4
 ./scripts/termote.sh unlink            # Remove global command
 ```
 
+**Windows (PowerShell):**
+
+```powershell
+.\scripts\termote.ps1                   # Interactive menu
+.\scripts\termote.ps1 install container # Container mode (Docker Desktop)
+.\scripts\termote.ps1 install native    # Native mode (psmux)
+.\scripts\termote.ps1 uninstall all     # Uninstall everything
+.\scripts\termote.ps1 health            # Check service health
+.\scripts\termote.ps1 link              # Create 'termote' global command
+.\scripts\termote.ps1 unlink            # Remove global command
+```
+
 <Aside type="tip">
   After running `link`, you can use `termote` from anywhere:
   ```bash
+  # macOS/Linux
   termote health
   termote install native --lan
+  ```
+  ```powershell
+  # Windows
+  termote health
+  termote install native -Lan
   ```
 
 </Aside>

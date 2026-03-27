@@ -95,6 +95,8 @@ make test                              # Run tests
 
 ### One-liner (recommended)
 
+**macOS/Linux:**
+
 ```bash
 # Download and prompt before install (defaults to native mode)
 curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
@@ -117,6 +119,22 @@ curl -fsSL .../get.sh | bash -s -- --yes --native --tailscale myhost
 
 # Force new password (ignore saved config)
 curl -fsSL .../get.sh | bash -s -- --yes --container --fresh
+```
+
+**Windows (PowerShell):**
+
+```powershell
+# Download and prompt before install (defaults to native mode)
+irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
+
+# Auto-install without prompt
+$env:TERMOTE_AUTO_YES = "true"; irm .../get.ps1 | iex
+
+# With explicit mode
+$env:TERMOTE_MODE = "container"; irm .../get.ps1 | iex
+
+# Auto-update with saved config
+$env:TERMOTE_UPDATE = "true"; irm .../get.ps1 | iex
 ```
 
 ### Docker
@@ -293,11 +311,26 @@ git pull origin main                    # If installed from source
 
 ## Platform Support
 
-| Platform | Container | Native |
-| -------- | --------- | ------ |
-| Linux    | ✓         | ✓      |
-| macOS    | ✓         | ✓      |
-| Windows  | ✓ (WSL2)  | -      |
+| Platform | Container         | Native            | CLI Script  |
+| -------- | ----------------- | ----------------- | ----------- |
+| Linux    | ✓                 | ✓                 | termote.sh  |
+| macOS    | ✓                 | ✓                 | termote.sh  |
+| Windows  | ⚠️ (experimental) | ⚠️ (experimental) | termote.ps1 |
+
+> **⚠️ Windows Support (Experimental)**: Windows support is currently in early stages and needs more testing. Container mode requires Docker Desktop, native mode requires psmux. Please report issues on GitHub.
+
+### Windows Native Mode
+
+Windows native mode uses [psmux](https://github.com/psmux/psmux) (tmux-compatible terminal multiplexer for Windows):
+
+```powershell
+# Install psmux
+winget install psmux
+
+# Run Termote
+.\scripts\termote.ps1 install native
+.\scripts\termote.ps1 install container  # Or container mode with Docker Desktop
+```
 
 ## Mobile Usage
 
@@ -334,10 +367,13 @@ termote/
 │   ├── serve.go            # Server (PWA, proxy, auth)
 │   └── tmux.go             # tmux API handlers
 ├── scripts/
-│   ├── termote.sh          # Unified CLI (install/uninstall/health)
-│   └── get.sh              # Online installer (curl | bash)
+│   ├── termote.sh          # Unix CLI (install/uninstall/health)
+│   ├── termote.ps1         # Windows PowerShell CLI
+│   ├── get.sh              # Unix online installer (curl | bash)
+│   └── get.ps1             # Windows online installer (irm | iex)
 ├── tests/                  # Test suite
 │   ├── test-termote.sh
+│   ├── test-termote.ps1    # Windows tests
 │   ├── test-get.sh
 │   └── test-entrypoints.sh
 └── website/                # Astro Starlight docs site

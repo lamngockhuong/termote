@@ -2,12 +2,15 @@
 
 ## Prerequisites
 
-| Dependency    | Container Mode | Native Mode |
-| ------------- | -------------- | ----------- |
-| Docker/Podman | Required       | -           |
-| ttyd          | -              | Required    |
-| tmux          | -              | Required    |
-| Go 1.21+      | -              | Required    |
+| Dependency    | Container Mode | Native Mode (Unix) | Native Mode (Windows)             |
+| ------------- | -------------- | ------------------ | --------------------------------- |
+| Docker/Podman | Required       | -                  | -                                 |
+| ttyd          | -              | Required           | Auto-downloaded                   |
+| tmux          | -              | Required           | -                                 |
+| psmux         | -              | -                  | Required (`winget install psmux`) |
+| Go 1.21+      | -              | Required (build)   | Required (build)                  |
+
+> **⚠️ Windows Support (Experimental)**: Windows support is currently in early stages and needs more testing. Please report issues on GitHub.
 
 ## Deployment Modes
 
@@ -50,9 +53,22 @@ brew install ttyd tmux go
 ./scripts/termote.sh install native --lan
 ```
 
+**Windows (PowerShell):**
+
+```powershell
+# Install psmux (tmux-compatible for Windows)
+winget install psmux
+
+# ttyd is auto-downloaded on first run
+.\scripts\termote.ps1 install native
+.\scripts\termote.ps1 install native -Lan
+```
+
 **When to use:** Need host tool access (claude, git, node), no container overhead.
 
 ## Command Options
+
+**Unix (termote.sh):**
 
 | Flag                        | Description                                     |
 | --------------------------- | ----------------------------------------------- |
@@ -62,23 +78,37 @@ brew install ttyd tmux go
 | `--port <port>`             | Host port (default: 7680)                       |
 | `--fresh`                   | Force new password prompt (ignore saved config) |
 
+**Windows (termote.ps1):**
+
+| Flag             | Description                                     |
+| ---------------- | ----------------------------------------------- |
+| `-Lan`           | Expose to LAN (default: localhost only)         |
+| `-Tailscale <h>` | Enable Tailscale HTTPS                          |
+| `-NoAuth`        | Disable basic authentication                    |
+| `-Port <port>`   | Host port (default: 7680)                       |
+| `-Fresh`         | Force new password prompt (ignore saved config) |
+
 ## Config Persistence
 
-Installation settings are automatically saved to `~/.termote/config` (chmod 600):
+Installation settings are automatically saved:
 
+- **Unix:** `~/.termote/config` (AES-256 encrypted, chmod 600)
+- **Windows:** `~/.termote/config.json` (DPAPI encrypted)
+
+Saved settings include:
 - Mode (container/native)
 - Network flags (--lan, --tailscale)
 - Authentication setting (--no-auth)
-- AES-256 encrypted password (machine-derived key + chmod 600)
+- Encrypted password
 
 **Reusing saved config:**
 
 - On restart, existing config is loaded automatically
-- Password is reused unless `--fresh` flag is provided
+- Password is reused unless `--fresh`/`-Fresh` flag is provided
 - Useful for quick restarts without re-entering settings
 
 ```bash
-# First install (saves config)
+# Unix: First install (saves config)
 ./scripts/termote.sh install container --lan
 
 # Restart later (reuses saved mode, flags, password)
@@ -86,9 +116,17 @@ Installation settings are automatically saved to `~/.termote/config` (chmod 600)
 
 # Force new password
 ./scripts/termote.sh install container --lan --fresh
+```
 
-# Remove saved config on uninstall
-./scripts/termote.sh uninstall all
+```powershell
+# Windows: First install (saves config)
+.\scripts\termote.ps1 install container -Lan
+
+# Restart later (reuses saved config)
+.\scripts\termote.ps1 install container -Lan
+
+# Force new password
+.\scripts\termote.ps1 install container -Lan -Fresh
 ```
 
 ## Tailscale HTTPS
