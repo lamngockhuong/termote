@@ -46,6 +46,12 @@ Manual testing checklist for Termote features before release.
 - [ ] `./scripts/termote.sh uninstall native` stops processes
 - [ ] `./scripts/termote.sh uninstall all` cleans everything
 
+### Link/Unlink
+
+- [ ] `./scripts/termote.sh link` creates symlink (tries /usr/local/bin, falls back to ~/.local/bin)
+- [ ] `termote help` works after linking
+- [ ] `./scripts/termote.sh unlink` removes symlink and shows restore hint
+
 ---
 
 ## PWA Features

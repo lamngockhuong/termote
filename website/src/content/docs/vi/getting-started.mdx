@@ -55,13 +55,23 @@ curl -fsSL .../get.sh | bash -s -- --version 0.0.4
 ## Các lệnh CLI
 
 ```bash
-./scripts/termote.sh                 # Menu tương tác
+./scripts/termote.sh                    # Menu tương tác
 ./scripts/termote.sh install container  # Chế độ Container
 ./scripts/termote.sh install native     # Chế độ Native
-./scripts/termote.sh install           # Cài đặt (dùng artifacts có sẵn)
-./scripts/termote.sh uninstall all     # Gỡ cài đặt tất cả
-./scripts/termote.sh health            # Kiểm tra sức khỏe dịch vụ
+./scripts/termote.sh uninstall all      # Gỡ cài đặt tất cả
+./scripts/termote.sh health             # Kiểm tra sức khỏe dịch vụ
+./scripts/termote.sh link               # Tạo lệnh 'termote' toàn cục
+./scripts/termote.sh unlink             # Xóa lệnh toàn cục
 ```
+
+<Aside type="tip">
+  Sau khi chạy `link`, bạn có thể dùng `termote` từ bất kỳ đâu:
+  ```bash
+  termote health
+  termote install native --lan
+  ```
+
+</Aside>
 
 ## Tiếp theo
 

@@ -308,6 +308,11 @@ main() {
     [[ -z "$mode" ]] && mode="native"
 
     ./scripts/termote.sh install "$mode" "${args[@]}"
+
+    # Create 'termote' command symlink (skip if old version without link command)
+    if grep -q 'cmd_link()' ./scripts/termote.sh 2>/dev/null; then
+        ./scripts/termote.sh link
+    fi
 }
 
 main "$@"

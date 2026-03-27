@@ -781,6 +781,8 @@ cmd_help() {
     echo "  uninstall <mode>  Remove installation"
     echo "  health            Check service health"
     echo "  logs [service]    View logs (ttyd, tmux-api, all, follow, clean)"
+    echo "  link              Create 'termote' symlink in /usr/local/bin"
+    echo "  unlink            Remove 'termote' symlink"
     echo "  help              Show this help"
     echo ""
     echo "Modes:"
@@ -801,6 +803,95 @@ cmd_help() {
     echo "  termote.sh install native --lan      # Native + LAN"
     echo "  termote.sh install native --no-auth  # Without auth"
     echo "  termote.sh uninstall all             # Full cleanup"
+    echo "  termote.sh link                      # Create 'termote' command"
+}
+
+# =============================================================================
+# LINK/UNLINK COMMANDS
+# =============================================================================
+
+cmd_link() {
+    local target="/usr/local/bin/termote"
+    local source="$SCRIPT_DIR/termote.sh"
+    local display_source="${source/#$HOME/\$HOME}"
+
+    # Detect context: git repo (dev) or installed (~/.termote)
+    local context="installed"
+    if git -C "$SCRIPT_DIR" rev-parse --git-dir &>/dev/null; then
+        context="development"
+    fi
+
+    # Check if already linked to this source
+    if [[ -L "$target" ]]; then
+        local current_target
+        current_target=$(readlink "$target")
+        if [[ "$current_target" == "$source" ]]; then
+            info "Already linked: $target -> $display_source"
+            return 0
+        else
+            # Linked to different location
+            local display_current="${current_target/#$HOME/\$HOME}"
+            warn "Currently linked to: $display_current"
+            info "Updating to: $display_source"
+        fi
+    fi
+
+    # Try to create symlink: /usr/local/bin first, then ~/.local/bin
+    if ln -sf "$source" "$target" 2>/dev/null; then
+        info "Created symlink: $target -> $display_source"
+        [[ "$context" == "development" ]] && info "Linked to git repo (development mode)"
+        info "You can now run 'termote' from anywhere"
+    else
+        # Try ~/.local/bin (user-writable, no sudo needed)
+        local user_bin="$HOME/.local/bin"
+        local user_target="$user_bin/termote"
+        mkdir -p "$user_bin" 2>/dev/null
+        if ln -sf "$source" "$user_target" 2>/dev/null; then
+            info "Created symlink: $user_target -> $display_source"
+            [[ "$context" == "development" ]] && info "Linked to git repo (development mode)"
+            # Check if ~/.local/bin is in PATH
+            if [[ ":$PATH:" != *":$user_bin:"* ]]; then
+                warn "\$HOME/.local/bin is not in PATH"
+                echo "Add to ~/.bashrc or ~/.zshrc:"
+                echo -e "  ${CYAN}export PATH=\"\$HOME/.local/bin:\$PATH\"${NC}"
+            else
+                info "You can now run 'termote' from anywhere"
+            fi
+        else
+            # Both failed, show manual instructions
+            warn "Cannot create symlink (no write permission)"
+            echo ""
+            echo "Run with sudo:"
+            echo -e "  ${CYAN}sudo ln -sf \"$display_source\" $target${NC}"
+        fi
+    fi
+}
+
+cmd_unlink() {
+    local removed=false
+
+    # Check both locations
+    for target in "/usr/local/bin/termote" "$HOME/.local/bin/termote"; do
+        if [[ -L "$target" ]]; then
+            local current_target
+            current_target=$(readlink "$target")
+            local display_current="${current_target/#$HOME/\$HOME}"
+            local display_target="${target/#$HOME/\$HOME}"
+
+            if rm "$target" 2>/dev/null; then
+                info "Removed symlink: $display_target"
+                removed=true
+                info "To restore: ./scripts/termote.sh link"
+                info "If 'termote' still cached, run 'hash -r' (bash) or 'rehash' (zsh)"
+            else
+                warn "Cannot remove $display_target (no write permission)"
+                echo -e "Run: ${CYAN}sudo rm $target${NC}"
+            fi
+        fi
+    done
+
+    [[ "$removed" == false ]] && info "No symlink found"
+    return 0
 }
 
 # =============================================================================
@@ -830,10 +921,12 @@ fi
 CMD="$1"; shift
 
 case "$CMD" in
-    install)  cmd_install "$@" ;;
+    install)   cmd_install "$@" ;;
     uninstall) cmd_uninstall "$@" ;;
-    health)   cmd_health ;;
-    logs)     cmd_logs "$@" ;;
+    health)    cmd_health ;;
+    logs)      cmd_logs "$@" ;;
+    link)      cmd_link ;;
+    unlink)    cmd_unlink ;;
     help|-h|--help) cmd_help ;;
     *)
         error "Unknown command: $CMD"

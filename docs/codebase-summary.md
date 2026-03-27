@@ -52,7 +52,7 @@ termote/
 │   ├── integration_test.go     # Integration tests (requires tmux)
 │   └── go.mod
 ├── scripts/
-│   ├── termote.sh              # Unified CLI (install/uninstall/health)
+│   ├── termote.sh              # Unified CLI (install/uninstall/health/link)
 │   └── get.sh                  # Online curl|bash installer
 ├── tests/                      # Shell script tests
 │   ├── test-termote.sh         # CLI tests

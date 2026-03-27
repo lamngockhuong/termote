@@ -83,8 +83,11 @@ flowchart TB
 ./scripts/termote.sh                   # Interactive menu
 ./scripts/termote.sh install container # Container mode (docker/podman)
 ./scripts/termote.sh install native    # Native mode (host tools)
+./scripts/termote.sh link              # Create 'termote' global command
 make test                              # Run tests
 ```
+
+> After `link`, use `termote` from anywhere: `termote health`, `termote install native --lan`
 
 > **Tip**: Install [gum](https://github.com/charmbracelet/gum) for enhanced interactive menus (optional, bash fallback available)
 
