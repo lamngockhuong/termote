@@ -535,6 +535,30 @@ test_link_unlink() {
     else
         fail "shell cache hint" "hash -r and rehash" "not found"
     fi
+
+    # Symlink resolution - critical for link command to work
+    if grep -q 'while.*-L.*_script_path' "$SCRIPT" && grep -q 'readlink' "$SCRIPT"; then
+        pass "symlink resolution logic present"
+    else
+        fail "symlink resolution" "while loop with readlink" "not found"
+    fi
+
+    # Functional test: symlink resolves to correct PROJECT_DIR
+    local test_link="/tmp/termote-symlink-test-$$"
+    ln -sf "$SCRIPT" "$test_link" 2>/dev/null
+    if [ -L "$test_link" ]; then
+        # Run from /tmp, verify it finds pwa directory
+        local output
+        output=$("$test_link" health 2>&1 | head -5)
+        rm -f "$test_link"
+        if echo "$output" | grep -q "Health Check"; then
+            pass "symlink execution works from different dir"
+        else
+            fail "symlink execution" "health check output" "$output"
+        fi
+    else
+        fail "symlink creation" "create test symlink" "failed"
+    fi
 }
 
 echo "Running termote.sh tests..."
