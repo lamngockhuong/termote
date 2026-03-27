@@ -86,6 +86,10 @@ detect_container_runtime() {
 
 get_arch() { echo "$ARCH"; }
 
+has_saved_tailscale_config() {
+    [[ -f "$CONFIG_FILE" ]] && grep -q '^TERMOTE_TAILSCALE="[^"]' "$CONFIG_FILE" 2>/dev/null
+}
+
 get_lan_ip() {
     local ip
     ip=$(hostname -I 2>/dev/null | awk '{print $1}')
@@ -360,7 +364,7 @@ setup_tailscale() {
     if [[ -n "$TAILSCALE" ]]; then
         info "Setting up Tailscale serve..."
         command -v tailscale &>/dev/null && sudo tailscale serve --bg --https="$TS_PORT" http://127.0.0.1:"$PORT"
-    elif [[ -f "$CONFIG_FILE" ]] && grep -q '^TERMOTE_TAILSCALE=.' "$CONFIG_FILE" 2>/dev/null; then
+    elif has_saved_tailscale_config; then
         # Reset Tailscale serve only if previously configured (avoid disrupting unrelated setups)
         info "Resetting previous Tailscale serve config..."
         command -v tailscale &>/dev/null && sudo tailscale serve reset 2>/dev/null || true
@@ -564,7 +568,7 @@ cmd_install() {
     esac
 
     # Only pre-cache sudo if tailscale commands will actually run
-    if [[ -n "$TAILSCALE" ]] || { [[ -f "$CONFIG_FILE" ]] && grep -q '^TERMOTE_TAILSCALE=.' "$CONFIG_FILE" 2>/dev/null; }; then
+    if [[ -n "$TAILSCALE" ]] || { has_saved_tailscale_config; }; then
         precache_sudo_for_tailscale
     fi
     setup_tailscale
@@ -607,11 +611,13 @@ cmd_uninstall() {
         pkill -f "tmux-api" 2>/dev/null || true
     fi
 
-    # Tailscale reset
-    if command -v tailscale &>/dev/null; then
-        precache_sudo_for_tailscale
-        info "Resetting Tailscale serve..."
-        sudo tailscale serve reset 2>/dev/null || true
+    # Tailscale reset - only if Termote was using Tailscale
+    if has_saved_tailscale_config; then
+        if command -v tailscale &>/dev/null; then
+            precache_sudo_for_tailscale
+            info "Resetting Tailscale serve..."
+            sudo tailscale serve reset 2>/dev/null || true
+        fi
     fi
 
     # Full cleanup
