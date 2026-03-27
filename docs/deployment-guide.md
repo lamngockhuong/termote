@@ -2,12 +2,15 @@
 
 ## Prerequisites
 
-| Dependency    | Container Mode | Native Mode |
-| ------------- | -------------- | ----------- |
-| Docker/Podman | Required       | -           |
-| ttyd          | -              | Required    |
-| tmux          | -              | Required    |
-| Go 1.21+      | -              | Required    |
+| Dependency    | Container Mode | Native Mode (Unix) | Native Mode (Windows)             |
+| ------------- | -------------- | ------------------ | --------------------------------- |
+| Docker/Podman | Required       | -                  | -                                 |
+| ttyd          | -              | Required           | Auto-downloaded                   |
+| tmux          | -              | Required           | -                                 |
+| psmux         | -              | -                  | Required (`winget install psmux`) |
+| Go 1.21+      | -              | Required (build)   | Required (build)                  |
+
+> **⚠️ Windows Support (Experimental)**: Windows support is currently in early stages and needs more testing. Please report issues on GitHub.
 
 ## Deployment Modes
 
@@ -48,6 +51,17 @@ brew install ttyd tmux go
 
 ./scripts/termote.sh install native
 ./scripts/termote.sh install native --lan
+```
+
+**Windows (PowerShell):**
+
+```powershell
+# Install psmux (tmux-compatible for Windows)
+winget install psmux
+
+# ttyd is auto-downloaded on first run
+.\scripts\termote.ps1 install native
+.\scripts\termote.ps1 install native -Lan
 ```
 
 **When to use:** Need host tool access (claude, git, node), no container overhead.

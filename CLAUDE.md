@@ -37,11 +37,14 @@ termote/
 │   ├── main.go             # Entry point
 │   ├── serve.go            # Server (static files, proxy, auth)
 │   └── tmux.go             # tmux API handlers
-├── scripts/                # Shell scripts
-│   ├── termote.sh          # Unified CLI (install/uninstall/health/link)
-│   └── get.sh              # Online installer (curl-able)
+├── scripts/                # CLI scripts
+│   ├── termote.sh          # Unix CLI (install/uninstall/health/link)
+│   ├── termote.ps1         # Windows PowerShell CLI
+│   ├── get.sh              # Unix online installer (curl | bash)
+│   └── get.ps1             # Windows online installer (irm | iex)
 ├── tests/                  # Test suite
-│   ├── test-termote.sh     # CLI tests
+│   ├── test-termote.sh     # Unix CLI tests
+│   ├── test-termote.ps1    # Windows CLI tests
 │   ├── test-get.sh         # Online installer tests
 │   └── test-entrypoints.sh # Docker entrypoint tests
 ├── website/                # Documentation site (Astro Starlight)
@@ -51,12 +54,13 @@ termote/
 
 ## Deployment Modes
 
-| Mode          | Description               | Use Case                        | Platform     |
-| ------------- | ------------------------- | ------------------------------- | ------------ |
-| `--container` | Container mode            | Simple deployment, isolated env | macOS, Linux |
-| `--native`    | All native (no container) | Host tool access (Claude Code)  | macOS, Linux |
+| Mode          | Description               | Use Case                        | Platform              |
+| ------------- | ------------------------- | ------------------------------- | --------------------- |
+| `--container` | Container mode            | Simple deployment, isolated env | macOS, Linux, Windows |
+| `--native`    | All native (no container) | Host tool access (Claude Code)  | macOS, Linux, Windows |
 
 ```bash
+# Unix (macOS/Linux)
 ./scripts/termote.sh                                   # Interactive menu
 ./scripts/termote.sh install container                 # Container mode (saves config)
 ./scripts/termote.sh install container --lan           # LAN accessible
@@ -67,6 +71,15 @@ termote/
 ./scripts/termote.sh link                              # Create 'termote' global command
 ./scripts/termote.sh unlink                            # Remove global command
 curl -fsSL https://... | bash -s -- --update           # Auto-update with saved config
+```
+
+```powershell
+# Windows (PowerShell)
+.\scripts\termote.ps1                                  # Interactive menu
+.\scripts\termote.ps1 install container                # Container mode (Docker Desktop)
+.\scripts\termote.ps1 install native                   # Native mode (psmux + ttyd)
+.\scripts\termote.ps1 install container -Lan           # LAN accessible
+.\scripts\termote.ps1 install native -NoAuth           # Without auth
 ```
 
 ## Development Commands
@@ -119,6 +132,16 @@ Both modes use tmux-api as the unified server (PWA + WebSocket proxy + API + aut
 │   └→ tmux API endpoints                                 │
 │   ttyd:7681 → tmux                                      │
 │   No container required                                 │
+└─────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────┐
+│ Native mode (Windows with psmux)                        │
+│   tmux-api.exe:7680 (PWA + proxy + API + auth)          │
+│   ├→ static PWA files                                   │
+│   ├→ WebSocket proxy to ttyd:7681                       │
+│   └→ tmux API endpoints → psmux                         │
+│   ttyd.exe:7681 → psmux (tmux-compatible)               │
+│   Requires: winget install psmux                        │
 └─────────────────────────────────────────────────────────┘
 ```
 

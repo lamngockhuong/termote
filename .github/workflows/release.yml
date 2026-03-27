@@ -174,6 +174,31 @@ jobs:
           path: tmux-api/tmux-api-darwin-${{ matrix.goarch }}
           retention-days: 1
 
+  build-api-windows:
+    name: Build API (windows-amd64)
+    runs-on: ubuntu-latest
+    needs: [prepare]
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.26"
+          cache-dependency-path: tmux-api/go.mod
+
+      - name: Build
+        working-directory: tmux-api
+        run: |
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
+            go build -ldflags="-s -w" -o tmux-api-windows-amd64.exe .
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v7
+        with:
+          name: tmux-api-windows-amd64
+          path: tmux-api/tmux-api-windows-amd64.exe
+          retention-days: 1
+
   # ─────────────────────────────────────────────────────────────
   # Docker Build & Push (depends on all builds)
   # ─────────────────────────────────────────────────────────────
@@ -258,7 +283,7 @@ jobs:
   release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    needs: [prepare, docker, build-api-darwin]
+    needs: [prepare, docker, build-api-darwin, build-api-windows]
     if: needs.prepare.outputs.dry_run != 'true'
     permissions:
       contents: write
@@ -287,6 +312,7 @@ jobs:
           cp artifacts/tmux-api-linux-arm64/tmux-api-linux-arm64 release/
           cp artifacts/tmux-api-darwin-amd64/tmux-api-darwin-amd64 release/
           cp artifacts/tmux-api-darwin-arm64/tmux-api-darwin-arm64 release/
+          cp artifacts/tmux-api-windows-amd64/tmux-api-windows-amd64.exe release/
           chmod +x release/tmux-api-*
 
           # Create tarball (all files needed for termote.sh)
@@ -294,15 +320,17 @@ jobs:
           cp -r scripts Makefile README.md termote-v${VERSION}/
           cp docker-compose.yml Dockerfile entrypoint.sh termote-v${VERSION}/
           cp -r artifacts/pwa-dist termote-v${VERSION}/pwa-dist
-          # Include pre-built binaries (Linux for container, Darwin for native on macOS)
+          # Include pre-built binaries (Linux for container, Darwin for native on macOS, Windows for native)
           cp artifacts/tmux-api-linux-amd64/tmux-api-linux-amd64 termote-v${VERSION}/
           cp artifacts/tmux-api-linux-arm64/tmux-api-linux-arm64 termote-v${VERSION}/
           cp artifacts/tmux-api-darwin-amd64/tmux-api-darwin-amd64 termote-v${VERSION}/
           cp artifacts/tmux-api-darwin-arm64/tmux-api-darwin-arm64 termote-v${VERSION}/
+          cp artifacts/tmux-api-windows-amd64/tmux-api-windows-amd64.exe termote-v${VERSION}/
           tar czf release/termote-v${VERSION}.tar.gz termote-v${VERSION}
 
-          # Copy CLI script standalone
+          # Copy CLI scripts standalone
           cp scripts/termote.sh release/
+          cp scripts/termote.ps1 release/
 
           # Generate checksums
           cd release
@@ -321,7 +349,9 @@ jobs:
             release/tmux-api-linux-arm64
             release/tmux-api-darwin-amd64
             release/tmux-api-darwin-arm64
+            release/tmux-api-windows-amd64.exe
             release/termote.sh
+            release/termote.ps1
             release/checksums.txt
 
   # ─────────────────────────────────────────────────────────────
