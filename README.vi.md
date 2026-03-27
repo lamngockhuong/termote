@@ -83,8 +83,11 @@ flowchart TB
 ./scripts/termote.sh                   # Menu tương tác
 ./scripts/termote.sh install container # Chế độ container (docker/podman)
 ./scripts/termote.sh install native    # Chế độ native (công cụ host)
+./scripts/termote.sh link              # Tạo lệnh 'termote' toàn cục
 make test                              # Chạy tests
 ```
+
+> Sau khi `link`, dùng `termote` từ bất kỳ đâu: `termote health`, `termote install native --lan`
 
 > **Mẹo**: Cài [gum](https://github.com/charmbracelet/gum) để có menu tương tác đẹp hơn (tùy chọn, có fallback bash)
 

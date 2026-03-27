@@ -38,7 +38,7 @@ termote/
 │   ├── serve.go            # Server (static files, proxy, auth)
 │   └── tmux.go             # tmux API handlers
 ├── scripts/                # Shell scripts
-│   ├── termote.sh          # Unified CLI (install/uninstall/health)
+│   ├── termote.sh          # Unified CLI (install/uninstall/health/link)
 │   └── get.sh              # Online installer (curl-able)
 ├── tests/                  # Test suite
 │   ├── test-termote.sh     # CLI tests
@@ -64,6 +64,8 @@ termote/
 ./scripts/termote.sh install container --no-auth       # Without auth
 ./scripts/termote.sh install container --tailscale host  # Tailscale HTTPS
 ./scripts/termote.sh install container --fresh         # Force new password (ignore saved)
+./scripts/termote.sh link                              # Create 'termote' global command
+./scripts/termote.sh unlink                            # Remove global command
 curl -fsSL https://... | bash -s -- --update           # Auto-update with saved config
 ```
 

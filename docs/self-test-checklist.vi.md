@@ -46,6 +46,12 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 - [ ] `./scripts/termote.sh uninstall native` dừng các process
 - [ ] `./scripts/termote.sh uninstall all` dọn sạch tất cả
 
+### Link/Unlink
+
+- [ ] `./scripts/termote.sh link` tạo symlink (thử /usr/local/bin, fallback ~/.local/bin)
+- [ ] `termote help` hoạt động sau khi link
+- [ ] `./scripts/termote.sh unlink` xóa symlink và hiện hướng dẫn khôi phục
+
 ---
 
 ## Tính Năng PWA

@@ -20,6 +20,7 @@ Single container with tmux-api + ttyd + tmux.
 ./scripts/termote.sh install container          # localhost with basic auth
 ./scripts/termote.sh install container --no-auth  # localhost without auth
 ./scripts/termote.sh install container --lan    # LAN accessible
+./scripts/termote.sh link                       # Create 'termote' global command
 ```
 
 **Container Runtime:** Auto-detects podman (preferred) or docker.

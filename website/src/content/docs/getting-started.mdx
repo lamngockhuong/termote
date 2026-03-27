@@ -60,7 +60,18 @@ curl -fsSL .../get.sh | bash -s -- --version 0.0.4
 ./scripts/termote.sh install native    # Native mode (host tools)
 ./scripts/termote.sh uninstall all     # Uninstall everything
 ./scripts/termote.sh health            # Check service health
+./scripts/termote.sh link              # Create 'termote' global command
+./scripts/termote.sh unlink            # Remove global command
 ```
+
+<Aside type="tip">
+  After running `link`, you can use `termote` from anywhere:
+  ```bash
+  termote health
+  termote install native --lan
+  ```
+
+</Aside>
 
 ## What's Next
 

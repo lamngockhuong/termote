@@ -40,6 +40,13 @@ test_syntax() {
     else
         fail "get.sh syntax" "valid bash" "syntax error"
     fi
+
+    # get.sh auto-links after install
+    if grep -q 'termote.sh link' "$PROJECT_DIR/scripts/get.sh"; then
+        pass "get.sh auto-links after install"
+    else
+        fail "get.sh auto-link" "calls termote.sh link" "not found"
+    fi
 }
 
 # =============================================================================
@@ -448,6 +455,88 @@ test_version_display() {
     fi
 }
 
+test_link_unlink() {
+    echo ""
+    echo "=== Link/Unlink Commands ==="
+
+    # cmd_link function exists
+    if grep -q 'cmd_link()' "$SCRIPT"; then
+        pass "cmd_link() function present"
+    else
+        fail "cmd_link" "function defined" "not found"
+    fi
+
+    # cmd_unlink function exists
+    if grep -q 'cmd_unlink()' "$SCRIPT"; then
+        pass "cmd_unlink() function present"
+    else
+        fail "cmd_unlink" "function defined" "not found"
+    fi
+
+    # Help shows link command
+    if grep -q 'link.*symlink' "$SCRIPT"; then
+        pass "help shows link command"
+    else
+        fail "help link" "link command in help" "not found"
+    fi
+
+    # Help shows unlink command
+    if grep -q 'unlink.*symlink' "$SCRIPT"; then
+        pass "help shows unlink command"
+    else
+        fail "help unlink" "unlink command in help" "not found"
+    fi
+
+    # Uses $HOME substitution for cleaner output
+    if grep -q '\${.*/#\$HOME' "$SCRIPT"; then
+        pass "\$HOME path substitution present"
+    else
+        fail "\$HOME substitution" "path display with \$HOME" "not found"
+    fi
+
+    # Detects git repo vs installed context
+    if grep -q 'context=.*development\|installed' "$SCRIPT"; then
+        pass "context detection (dev vs installed)"
+    else
+        fail "context detection" "dev/installed detection" "not found"
+    fi
+
+    # Fallback options when no write permission
+    if grep -q 'sudo ln -sf' "$SCRIPT"; then
+        pass "sudo fallback option present"
+    else
+        fail "sudo fallback" "sudo ln -sf suggestion" "not found"
+    fi
+
+    # Case statement includes link/unlink
+    if grep -q 'link).*cmd_link' "$SCRIPT" && grep -q 'unlink).*cmd_unlink' "$SCRIPT"; then
+        pass "link/unlink in command dispatch"
+    else
+        fail "command dispatch" "link/unlink cases" "not found"
+    fi
+
+    # Auto-fallback to ~/.local/bin
+    if grep -q '\.local/bin' "$SCRIPT"; then
+        pass "~/.local/bin fallback present"
+    else
+        fail "local bin fallback" "~/.local/bin" "not found"
+    fi
+
+    # Unlink checks both locations
+    if grep -q 'for target in.*local/bin' "$SCRIPT"; then
+        pass "unlink checks both locations"
+    else
+        fail "unlink locations" "checks /usr/local/bin and ~/.local/bin" "not found"
+    fi
+
+    # Shell cache hint (bash + zsh)
+    if grep -q 'hash -r.*bash.*rehash.*zsh' "$SCRIPT"; then
+        pass "shell cache hint (bash/zsh)"
+    else
+        fail "shell cache hint" "hash -r and rehash" "not found"
+    fi
+}
+
 echo "Running termote.sh tests..."
 echo ""
 
@@ -464,6 +553,7 @@ test_config_persistence
 test_password_encryption
 test_health_check
 test_version_display
+test_link_unlink
 
 # Summary
 echo ""
