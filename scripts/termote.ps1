@@ -547,9 +547,14 @@ function Invoke-Install {
 
     # Setup Tailscale if requested
     if ($Tailscale) {
-        Write-Info "Setting up Tailscale serve..."
-        $tsPort = if ($Tailscale -match ":") { ($Tailscale -split ":")[-1] } else { "443" }
-        & tailscale serve --bg --https=$tsPort http://127.0.0.1:$Port
+        if (-not (Get-Command tailscale -ErrorAction SilentlyContinue)) {
+            Write-Warn "Tailscale not found in PATH. Skipping Tailscale setup."
+            Write-Warn "Install Tailscale or add it to PATH: https://tailscale.com/download"
+        } else {
+            Write-Info "Setting up Tailscale serve..."
+            $tsPort = if ($Tailscale -match ":") { ($Tailscale -split ":")[-1] } else { "443" }
+            & tailscale serve --bg --https=$tsPort http://127.0.0.1:$Port
+        }
     }
 
     Show-AccessInfo -Port $Port -Lan:$Lan -LanIP $lanIP -Tailscale $Tailscale -NoAuth:$NoAuth
