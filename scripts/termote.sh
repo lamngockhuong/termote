@@ -10,7 +10,14 @@
 set -e
 
 VERSION="0.0.7" # x-release-please-version
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Resolve symlinks (for `termote link` global command)
+_script_path="${BASH_SOURCE[0]}"
+while [ -L "$_script_path" ]; do
+    _link_dir="$(cd "$(dirname "$_script_path")" && pwd)"
+    _script_path="$(readlink "$_script_path")"
+    [[ "$_script_path" != /* ]] && _script_path="$_link_dir/$_script_path"
+done
+SCRIPT_DIR="$(cd "$(dirname "$_script_path")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
 # Override VERSION when running from installed location (not git repo)
