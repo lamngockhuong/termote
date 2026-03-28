@@ -27,7 +27,7 @@ param(
 
     [switch]$Lan,
     [switch]$NoAuth,
-    [int]$Port = 7680,
+    [int]$Port = 7690,
     [string]$Tailscale,
     [switch]$Fresh
 )
@@ -46,7 +46,8 @@ $isGitRepo = try { git -C $script:SCRIPT_DIR rev-parse --git-dir 2>$null; $LASTE
 if (-not $isGitRepo -and (Test-Path $versionFile)) {
     $script:VERSION = (Get-Content $versionFile -Raw).Trim()
 }
-$script:PORT_MAIN = 7680
+$script:PORT_MAIN = 7690
+$script:PORT_CONTAINER = 7680
 $script:PORT_TTYD = 7681
 $script:CONTAINER_NAME = "termote"
 $script:HOME_DIR = if ($env:USERPROFILE) { $env:USERPROFILE } else { $env:HOME }
@@ -450,7 +451,7 @@ function Start-ContainerMode {
 services:
   termote:
     ports:
-      - "${BindAddr}:${Port}:$($script:PORT_MAIN)"
+      - "${BindAddr}:${Port}:$($script:PORT_CONTAINER)"
 "@
     $override | Out-File -FilePath "docker-compose.override.yml" -Encoding utf8 -NoNewline
 
@@ -642,7 +643,7 @@ function Invoke-Install {
 
         [switch]$Lan,
         [switch]$NoAuth,
-        [int]$Port = 7680,
+        [int]$Port = 7690,
         [string]$Tailscale,
         [switch]$Fresh
     )
@@ -792,6 +793,48 @@ function Invoke-Uninstall {
     Write-Info "Uninstall complete!"
 }
 
+function Test-ContainerEndpoint {
+    param([string]$Runtime, [int]$Port, [string]$Path, [string]$Label)
+    try {
+        $response = & $Runtime exec $script:CONTAINER_NAME curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:${Port}${Path}" 2>$null
+        if ($response -eq "200") {
+            Write-Host "  [OK] $Label - running (container)" -ForegroundColor Green; return $true
+        } elseif ($response -eq "401") {
+            Write-Host "  [OK] $Label - running (auth, container)" -ForegroundColor Green; return $true
+        }
+        Write-Host "  [--] $Label - not running (container, HTTP $response)" -ForegroundColor Red; return $false
+    } catch {
+        Write-Host "  [--] $Label - not running (container)" -ForegroundColor Red; return $false
+    }
+}
+
+# Use raw TCP + HTTP/1.0 to avoid PS 5.1 auth negotiation hang with Invoke-WebRequest
+function Test-NativeTcpEndpoint {
+    param([int]$Port, [string]$Path, [string]$Label)
+    $tcp = $null
+    try {
+        $tcp = New-Object System.Net.Sockets.TcpClient
+        $tcp.Connect("127.0.0.1", $Port)
+        $stream = $tcp.GetStream()
+        $writer = New-Object System.IO.StreamWriter($stream)
+        $reader = New-Object System.IO.StreamReader($stream)
+        $writer.Write("GET $Path HTTP/1.0`r`nHost: localhost`r`n`r`n")
+        $writer.Flush()
+        $stream.ReadTimeout = 2000
+        $statusLine = $reader.ReadLine()
+        if ($statusLine -match "401") {
+            Write-Host "  [OK] $Label - running (auth)" -ForegroundColor Green; return $true
+        } elseif ($statusLine -match "200") {
+            Write-Host "  [OK] $Label - running" -ForegroundColor Green; return $true
+        }
+        Write-Host "  [--] $Label - unexpected status: $statusLine" -ForegroundColor Red; return $false
+    } catch {
+        Write-Host "  [--] $Label - not running" -ForegroundColor Red; return $false
+    } finally {
+        if ($tcp) { $tcp.Close() }
+    }
+}
+
 function Invoke-Health {
     Write-Host ""
     Write-Host "=== Termote Health Check ===" -ForegroundColor White
@@ -800,7 +843,7 @@ function Invoke-Health {
     $failed = 0
     $port = if ($Port -gt 0) { $Port } else { $script:PORT_MAIN }
 
-    # Check container mode
+    # Detect container mode
     $containerMode = $false
     $runtime = $null
     if (Get-Command docker -ErrorAction SilentlyContinue) {
@@ -814,77 +857,29 @@ function Invoke-Health {
 
     # Check ttyd
     if ($containerMode) {
-        try {
-            $response = & $runtime exec $script:CONTAINER_NAME curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:$script:PORT_TTYD/" 2>$null
-            if ($response -eq "200") {
-                Write-Host "  [OK] ttyd :$script:PORT_TTYD - running (container)" -ForegroundColor Green
-            } else {
-                Write-Host "  [--] ttyd :$script:PORT_TTYD - not running (container)" -ForegroundColor Red
-                $failed++
-            }
-        } catch {
-            Write-Host "  [--] ttyd :$script:PORT_TTYD - not running (container)" -ForegroundColor Red
-            $failed++
-        }
+        if (-not (Test-ContainerEndpoint -Runtime $runtime -Port $script:PORT_TTYD -Path "/" -Label "ttyd :$($script:PORT_TTYD)")) { $failed++ }
     } else {
         try {
-            $response = Invoke-WebRequest -Uri "http://127.0.0.1:$script:PORT_TTYD/" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
-            Write-Host "  [OK] ttyd :$script:PORT_TTYD - running" -ForegroundColor Green
+            Invoke-WebRequest -Uri "http://127.0.0.1:$script:PORT_TTYD/" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop | Out-Null
+            Write-Host "  [OK] ttyd :$($script:PORT_TTYD) - running" -ForegroundColor Green
         } catch {
-            Write-Host "  [--] ttyd :$script:PORT_TTYD - not running" -ForegroundColor Red
+            Write-Host "  [--] ttyd :$($script:PORT_TTYD) - not running" -ForegroundColor Red
             $failed++
         }
     }
 
-    # Check main server (use raw TCP + HTTP to avoid PS 5.1 auth negotiation hang)
-    $tcp = $null
-    try {
-        $tcp = New-Object System.Net.Sockets.TcpClient
-        $tcp.Connect("127.0.0.1", $port)
-        $stream = $tcp.GetStream()
-        $writer = New-Object System.IO.StreamWriter($stream)
-        $reader = New-Object System.IO.StreamReader($stream)
-        $writer.Write("GET / HTTP/1.0`r`nHost: localhost`r`n`r`n")
-        $writer.Flush()
-        $stream.ReadTimeout = 2000
-        $statusLine = $reader.ReadLine()
-        if ($statusLine -match "401") {
-            Write-Host "  [OK] tmux-api :$port - running (auth)" -ForegroundColor Green
-        } elseif ($statusLine -match "200") {
-            Write-Host "  [OK] tmux-api :$port - running" -ForegroundColor Green
+    # Check tmux-api and API endpoint (container uses internal port 7680)
+    $checkPort = if ($containerMode) { $script:PORT_CONTAINER } else { $port }
+    $checks = @(
+        @{ Path = "/"; Label = "tmux-api :$port" },
+        @{ Path = "/api/tmux/health"; Label = "API /api/tmux/health" }
+    )
+    foreach ($check in $checks) {
+        if ($containerMode) {
+            if (-not (Test-ContainerEndpoint -Runtime $runtime -Port $checkPort -Path $check.Path -Label $check.Label)) { $failed++ }
         } else {
-            Write-Host "  [??] tmux-api :$port - unexpected status: $statusLine" -ForegroundColor Yellow
+            if (-not (Test-NativeTcpEndpoint -Port $checkPort -Path $check.Path -Label $check.Label)) { $failed++ }
         }
-    } catch {
-        Write-Host "  [--] tmux-api :$port - not running" -ForegroundColor Red
-        $failed++
-    } finally {
-        if ($tcp) { $tcp.Close() }
-    }
-
-    # Check API endpoint
-    $tcp = $null
-    try {
-        $tcp = New-Object System.Net.Sockets.TcpClient
-        $tcp.Connect("127.0.0.1", $port)
-        $stream = $tcp.GetStream()
-        $writer = New-Object System.IO.StreamWriter($stream)
-        $reader = New-Object System.IO.StreamReader($stream)
-        $writer.Write("GET /api/tmux/health HTTP/1.0`r`nHost: localhost`r`n`r`n")
-        $writer.Flush()
-        $stream.ReadTimeout = 2000
-        $statusLine = $reader.ReadLine()
-        if ($statusLine -match "401") {
-            Write-Host "  [OK] API /api/tmux/health - running (auth)" -ForegroundColor Green
-        } elseif ($statusLine -match "200") {
-            Write-Host "  [OK] API /api/tmux/health - running" -ForegroundColor Green
-        } else {
-            Write-Host "  [--] API /api/tmux/health - not running" -ForegroundColor Yellow
-        }
-    } catch {
-        Write-Host "  [--] API /api/tmux/health - not running" -ForegroundColor Yellow
-    } finally {
-        if ($tcp) { $tcp.Close() }
     }
 
     Write-Host ""

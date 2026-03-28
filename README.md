@@ -230,7 +230,7 @@ flowchart LR
 | `--lan`                     | Expose to LAN (default: localhost only)         |
 | `--tailscale <host[:port]>` | Enable Tailscale HTTPS                          |
 | `--no-auth`                 | Disable basic authentication                    |
-| `--port <port>`             | Host port (default: 7680)                       |
+| `--port <port>`             | Host port (default: 7680, Windows: 7690)        |
 | `--fresh`                   | Force new password prompt (ignore saved config) |
 | `--update`                  | Auto-update with saved config                   |
 | `--version <ver>`           | Install specific version (with or without `v`)  |

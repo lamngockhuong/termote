@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Test suite for termote.ps1
 .DESCRIPTION
@@ -34,7 +34,7 @@ Write-Host ""
 # Determine script path
 $TestDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
 if (-not $TestDir) { $TestDir = Get-Location }
-$ScriptPath = Join-Path $TestDir ".." "scripts" "termote.ps1"
+$ScriptPath = Join-Path (Join-Path (Join-Path $TestDir "..") "scripts") "termote.ps1"
 $ScriptPath = [System.IO.Path]::GetFullPath($ScriptPath)
 if (-not (Test-Path $ScriptPath)) {
     Write-Host "[ERROR] Script not found: $ScriptPath" -ForegroundColor Red
@@ -169,6 +169,30 @@ try {
     Write-TestResult -Name "Fresh parameter defined" -Passed ($hasFreshParam -and $hasFreshUsage)
 } catch {
     Write-TestResult -Name "Fresh parameter defined" -Passed $false -Error $_.Exception.Message
+}
+
+# ─────────────────────────────────────────────────────────────
+# Test 11: Windows default port avoids DoSvc conflict (7690)
+# ─────────────────────────────────────────────────────────────
+try {
+    $content = Get-Content $ScriptPath -Raw
+    $hasPortMain = $content -match '\$script:PORT_MAIN\s*=\s*7690'
+    $hasPortContainer = $content -match '\$script:PORT_CONTAINER\s*=\s*7680'
+    Write-TestResult -Name "Windows default port 7690 (avoids DoSvc)" -Passed ($hasPortMain -and $hasPortContainer)
+} catch {
+    Write-TestResult -Name "Windows default port 7690 (avoids DoSvc)" -Passed $false -Error $_.Exception.Message
+}
+
+# ─────────────────────────────────────────────────────────────
+# Test 12: Health check helper functions exist
+# ─────────────────────────────────────────────────────────────
+try {
+    $content = Get-Content $ScriptPath -Raw
+    $hasContainerCheck = $content -match "function Test-ContainerEndpoint"
+    $hasNativeCheck = $content -match "function Test-NativeTcpEndpoint"
+    Write-TestResult -Name "Health check helpers exist" -Passed ($hasContainerCheck -and $hasNativeCheck)
+} catch {
+    Write-TestResult -Name "Health check helpers exist" -Passed $false -Error $_.Exception.Message
 }
 
 # ─────────────────────────────────────────────────────────────
