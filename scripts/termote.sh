@@ -330,8 +330,8 @@ start_docker_mode() {
     # Warn about sensitive directories in WORKSPACE
     warn_sensitive_dirs
 
-    # Cross-compile for Linux on macOS
-    if [[ "$OS" != "Linux" ]]; then
+    # Cross-compile for Linux on macOS (skip if pre-built binary exists from release mode)
+    if [[ "$OS" != "Linux" && ! -f "$PROJECT_DIR/tmux-api/tmux-api" ]]; then
         info "Cross-compiling tmux-api (linux/$ARCH)..."
         (cd "$PROJECT_DIR/tmux-api" && CGO_ENABLED=0 GOOS=linux GOARCH="$ARCH" go build -ldflags="-s -w" -o tmux-api .) || error "Build failed"
     fi
