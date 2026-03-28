@@ -1,0 +1,7 @@
+**/node_modules
+.git
+.claude
+website
+tests
+scripts/*.exe
+tmux-api/*.exe
