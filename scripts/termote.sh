@@ -505,14 +505,10 @@ cmd_install() {
     parse_cmd_opts "$@"
     [[ "$FRESH" != true ]] && load_config
 
-    # Check if release mode (pre-built artifacts)
+    # Detect release mode (no pwa/package.json means this is an installed release, not the dev repo)
     local RELEASE_MODE=false
-    local PWA_DIST="$PROJECT_DIR/pwa/dist"
-    if [[ -d "$PROJECT_DIR/pwa-dist" ]]; then
-        RELEASE_MODE=true
-        PWA_DIST="$PROJECT_DIR/pwa-dist"
-        info "Release mode (using pre-built artifacts)"
-    fi
+    [[ ! -f "$PROJECT_DIR/pwa/package.json" ]] && RELEASE_MODE=true
+    [[ "$RELEASE_MODE" == true ]] && info "Release mode (using pre-built artifacts)"
 
     # Stop running services to avoid port conflicts and "Text file busy" on binary overwrite
     stop_native_services
@@ -528,9 +524,14 @@ cmd_install() {
     # Setup PWA
     step "1/4" "Setting up PWA..."
     if [[ "$RELEASE_MODE" == true ]]; then
-        mkdir -p "$PROJECT_DIR/pwa/dist"
-        cp -r "$PWA_DIST/"* "$PROJECT_DIR/pwa/dist/"
-        rm -rf "$PROJECT_DIR/pwa-dist"
+        if [[ -d "$PROJECT_DIR/pwa-dist" ]]; then
+            mkdir -p "$PROJECT_DIR/pwa/dist"
+            cp -r "$PROJECT_DIR/pwa-dist/"* "$PROJECT_DIR/pwa/dist/"
+            rm -rf "$PROJECT_DIR/pwa-dist"
+        elif [[ ! -d "$PROJECT_DIR/pwa/dist" ]]; then
+            err "PWA dist not found. Please reinstall from a release."
+            return 1
+        fi
     else
         (cd "$PROJECT_DIR/pwa" && pnpm install --frozen-lockfile && pnpm build)
     fi
