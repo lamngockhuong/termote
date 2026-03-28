@@ -3,6 +3,9 @@
     Termote online installer for Windows
 .DESCRIPTION
     Downloads and installs Termote from GitHub releases.
+.NOTES
+    If script execution is disabled on your system, run this first:
+    Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
 .EXAMPLE
     # Download and run (PowerShell):
     irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
