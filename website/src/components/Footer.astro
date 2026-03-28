@@ -1,0 +1,43 @@
+---
+import Default from '@astrojs/starlight/components/Footer.astro';
+---
+
+<Default {...Astro.props}><slot /></Default>
+
+<style>
+  .custom-footer {
+    text-align: center;
+    padding: 1rem 0;
+    font-size: 0.85rem;
+    color: var(--sl-color-gray-3);
+    border-top: 1px solid var(--sl-color-gray-5);
+    margin-top: 1rem;
+  }
+
+  .custom-footer a {
+    color: var(--sl-color-text-accent);
+    text-decoration: none;
+  }
+
+  .custom-footer a:hover {
+    text-decoration: underline;
+  }
+
+  .heart {
+    display: inline-block;
+    color: #e25555;
+    animation: heartbeat 1.2s ease-in-out infinite;
+  }
+
+  @keyframes heartbeat {
+    0%, 100% { transform: scale(1); }
+    14% { transform: scale(1.3); }
+    28% { transform: scale(1); }
+    42% { transform: scale(1.3); }
+    70% { transform: scale(1); }
+  }
+</style>
+
+<footer class="custom-footer">
+  Made with <span class="heart">♥</span> by <a href="https://khuong.dev" target="_blank" rel="noopener">Khuong Dev</a>
+</footer>
