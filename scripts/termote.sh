@@ -530,6 +530,7 @@ cmd_install() {
     if [[ "$RELEASE_MODE" == true ]]; then
         mkdir -p "$PROJECT_DIR/pwa/dist"
         cp -r "$PWA_DIST/"* "$PROJECT_DIR/pwa/dist/"
+        rm -rf "$PROJECT_DIR/pwa-dist"
     else
         (cd "$PROJECT_DIR/pwa" && pnpm install --frozen-lockfile && pnpm build)
     fi
