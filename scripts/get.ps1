@@ -195,8 +195,9 @@ function Main {
         # Verify checksum
         Write-Info "Verifying checksum..."
         try {
-            $checksums = (Invoke-WebRequest -Uri $checksumsUrl -UseBasicParsing).Content
-            $expectedLine = $checksums -split "`n" | Where-Object { $_ -match $tarball }
+            $response = Invoke-WebRequest -Uri $checksumsUrl -UseBasicParsing
+            $checksums = if ($response.Content -is [byte[]]) { [System.Text.Encoding]::UTF8.GetString($response.Content) } else { $response.Content }
+            $expectedLine = $checksums -split '\r?\n' | Where-Object { $_ -like "* $tarball" }
             if ($expectedLine) {
                 $expected = ($expectedLine -split '\s+')[0]
                 Test-Checksum -File $tarball -Expected $expected

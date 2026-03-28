@@ -17,6 +17,10 @@
         {
           "type": "generic",
           "path": "scripts/termote.sh"
+        },
+        {
+          "type": "generic",
+          "path": "scripts/termote.ps1"
         }
       ]
     }
