@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.0.8](https://github.com/lamngockhuong/termote/compare/v0.0.7...v0.0.8) (2026-03-28)
+
+
+### Features
+
+* **cli:** add link/unlink commands for global termote command ([#79](https://github.com/lamngockhuong/termote/issues/79)) ([23f87f9](https://github.com/lamngockhuong/termote/commit/23f87f9a7fd278884423152b2eef6255fca407a1))
+* **pwa:** add settings panel with preferences ([#73](https://github.com/lamngockhuong/termote/issues/73)) ([1f3f63e](https://github.com/lamngockhuong/termote/commit/1f3f63e667bb726fe870c08d2008061e0596811c))
+* **windows:** add Windows support with psmux ([#53](https://github.com/lamngockhuong/termote/issues/53)) ([68179ee](https://github.com/lamngockhuong/termote/commit/68179eedfd039b968a04a92161a80cc80b4e419e))
+
+
+### Bug Fixes
+
+* clean up redundant pwa-dist folder after release install ([#86](https://github.com/lamngockhuong/termote/issues/86)) ([e1e720b](https://github.com/lamngockhuong/termote/commit/e1e720b9c071aa473fa5618aebaeadd390021a7a))
+* **cli:** resolve symlinks for global termote command ([#80](https://github.com/lamngockhuong/termote/issues/80)) ([cf06e0c](https://github.com/lamngockhuong/termote/commit/cf06e0cf5e2b63129cf804b168022cc7f45dd231))
+* **cli:** skip Tailscale reset when not configured ([#78](https://github.com/lamngockhuong/termote/issues/78)) ([d91b814](https://github.com/lamngockhuong/termote/commit/d91b81492b15194f51dd703092d405ab652aff45))
+* **deps:** update dependency astro to v6.1.0 ([#72](https://github.com/lamngockhuong/termote/issues/72)) ([9ac3a34](https://github.com/lamngockhuong/termote/commit/9ac3a340ced4c0e71d1f91e22789144788013897))
+* **deps:** update dependency astro to v6.1.1 ([#77](https://github.com/lamngockhuong/termote/issues/77)) ([3688b02](https://github.com/lamngockhuong/termote/commit/3688b028a655d4a4bc250b2825ba68e381852f90))
+* detect release mode by checking pwa/package.json absence ([#87](https://github.com/lamngockhuong/termote/issues/87)) ([702e38d](https://github.com/lamngockhuong/termote/commit/702e38d1aabbe8d3a1957bea4ac314f9449a6970))
+* **pwa:** retry button unresponsive on mobile ([#76](https://github.com/lamngockhuong/termote/issues/76)) ([acf09f5](https://github.com/lamngockhuong/termote/commit/acf09f5a15893b2ce86236f9105e8acc23fb08a6))
+* **pwa:** retry button unresponsive on mobile due to gesture overlay ([acf09f5](https://github.com/lamngockhuong/termote/commit/acf09f5a15893b2ce86236f9105e8acc23fb08a6))
+* **pwa:** toolbar Enter button now reconnects disconnected terminal ([#75](https://github.com/lamngockhuong/termote/issues/75)) ([1034663](https://github.com/lamngockhuong/termote/commit/103466376a2dbf515667c1bb6bf6c83be4175d05))
+* **windows:** change default port to 7690 to avoid DoSvc conflict ([#85](https://github.com/lamngockhuong/termote/issues/85)) ([24cae73](https://github.com/lamngockhuong/termote/commit/24cae73d25af6be84d364720c65d0dc1c6ccdab7))
+* **windows:** enable LAN access for container mode via netsh portproxy ([#90](https://github.com/lamngockhuong/termote/issues/90)) ([975d2d1](https://github.com/lamngockhuong/termote/commit/975d2d1cf1c104c1790a91dee966ad34c87aa50c))
+* **windows:** fix installer warnings and add auto-versioning ([#84](https://github.com/lamngockhuong/termote/issues/84)) ([bb6c355](https://github.com/lamngockhuong/termote/commit/bb6c3559d1ce9a375029ecd2edb5a29e10e2c994))
+* **windows:** fix version detection and update config forwarding in get.ps1 ([#88](https://github.com/lamngockhuong/termote/issues/88)) ([54a66c0](https://github.com/lamngockhuong/termote/commit/54a66c0d9efb7ca3cef8000b64e9d4375777bbf3))
+* **windows:** prevent get.ps1 from closing PowerShell tab on exit ([#89](https://github.com/lamngockhuong/termote/issues/89)) ([d90c1f3](https://github.com/lamngockhuong/termote/commit/d90c1f3415d0d508ff25a20ee2603a23fb3208f2))
+* **windows:** qualify tmux targets with session name for psmux ([#82](https://github.com/lamngockhuong/termote/issues/82)) ([cd4413a](https://github.com/lamngockhuong/termote/commit/cd4413abe22a7b07ff1d02044d5008e42e248ea3))
+* **windows:** resolve container build errors on Windows ([#81](https://github.com/lamngockhuong/termote/issues/81)) ([63126c6](https://github.com/lamngockhuong/termote/commit/63126c61c812e88d74d1fc9952e610a31a33781c))
+* **windows:** use pre-built binary for container mode on release installs ([#83](https://github.com/lamngockhuong/termote/issues/83)) ([70a90bf](https://github.com/lamngockhuong/termote/commit/70a90bf8818c58d19e0b992e11d3521c74a6258c))
+
 ## [0.0.7](https://github.com/lamngockhuong/termote/compare/v0.0.6...v0.0.7) (2026-03-26)
 
 
