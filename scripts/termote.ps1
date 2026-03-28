@@ -74,6 +74,8 @@ function Show-Header {
 # CONFIG PERSISTENCE (encrypted with DPAPI)
 # =============================================================================
 
+Add-Type -AssemblyName System.Security -ErrorAction SilentlyContinue
+
 function Save-Config {
     param(
         [string]$Mode,
@@ -406,6 +408,16 @@ function Start-ContainerMode {
     if (-not (Test-ValidIP $BindAddr)) { Write-Err "Invalid bind address: $BindAddr" }
     if (-not (Test-ValidPort $Port)) { Write-Err "Invalid port: $Port" }
 
+    # Cross-compile tmux-api for Linux (container is always Linux)
+    Write-Info "Cross-compiling tmux-api for Linux..."
+    $arch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq [System.Runtime.InteropServices.Architecture]::Arm64) { "arm64" } else { "amd64" }
+    Push-Location (Join-Path $script:PROJECT_DIR "tmux-api")
+    $env:CGO_ENABLED = "0"; $env:GOOS = "linux"; $env:GOARCH = $arch
+    & go build -ldflags="-s -w" -o tmux-api .
+    $env:CGO_ENABLED = $null; $env:GOOS = $null; $env:GOARCH = $null
+    Pop-Location
+    if ($LASTEXITCODE -ne 0) { Write-Err "Cross-compilation failed" }
+
     # Stop existing
     Push-Location $script:PROJECT_DIR
     try {
@@ -663,7 +675,19 @@ function Invoke-Install {
 
     # Step 2: Setup API (only for native mode on Windows)
     Write-Step "2/4" "Setting up tmux-api..."
-    if ($Mode -eq "native" -and -not $releaseMode) {
+    if ($Mode -eq "native" -and $releaseMode) {
+        # Copy pre-built binary to expected location
+        $prebuilt = Join-Path $script:PROJECT_DIR "tmux-api-windows-amd64.exe"
+        if (Test-Path $prebuilt) {
+            $apiDir = Join-Path $script:PROJECT_DIR "tmux-api"
+            if (-not (Test-Path $apiDir)) {
+                New-Item -ItemType Directory -Path $apiDir -Force | Out-Null
+            }
+            Copy-Item -Path $prebuilt -Destination (Join-Path $apiDir "tmux-api.exe") -Force
+        } else {
+            Write-Err "Pre-built binary not found: tmux-api-windows-amd64.exe"
+        }
+    } elseif ($Mode -eq "native" -and -not $releaseMode) {
         Push-Location (Join-Path $script:PROJECT_DIR "tmux-api")
         $env:CGO_ENABLED = "0"
         & go build -ldflags="-s -w" -o tmux-api.exe .
@@ -790,29 +814,51 @@ function Invoke-Health {
         }
     }
 
-    # Check main server
+    # Check main server (use raw TCP + HTTP to avoid PS 5.1 auth negotiation hang)
     try {
-        $response = Invoke-WebRequest -Uri "http://localhost:$port/" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
-        Write-Host "  [OK] tmux-api :$port - running" -ForegroundColor Green
-    } catch {
-        if ($_.Exception.Response.StatusCode -eq 401) {
+        $tcp = New-Object System.Net.Sockets.TcpClient
+        $tcp.Connect("127.0.0.1", $port)
+        $stream = $tcp.GetStream()
+        $writer = New-Object System.IO.StreamWriter($stream)
+        $reader = New-Object System.IO.StreamReader($stream)
+        $writer.Write("GET / HTTP/1.0`r`nHost: localhost`r`n`r`n")
+        $writer.Flush()
+        $stream.ReadTimeout = 2000
+        $statusLine = $reader.ReadLine()
+        $tcp.Close()
+        if ($statusLine -match "401") {
             Write-Host "  [OK] tmux-api :$port - running (auth)" -ForegroundColor Green
+        } elseif ($statusLine -match "200") {
+            Write-Host "  [OK] tmux-api :$port - running" -ForegroundColor Green
         } else {
-            Write-Host "  [--] tmux-api :$port - not running" -ForegroundColor Red
-            $failed++
+            Write-Host "  [OK] tmux-api :$port - running" -ForegroundColor Green
         }
+    } catch {
+        Write-Host "  [--] tmux-api :$port - not running" -ForegroundColor Red
+        $failed++
     }
 
     # Check API endpoint
     try {
-        $response = Invoke-WebRequest -Uri "http://127.0.0.1:$port/api/tmux/health" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
-        Write-Host "  [OK] API /api/tmux/health - running" -ForegroundColor Green
-    } catch {
-        if ($_.Exception.Response.StatusCode -eq 401) {
+        $tcp = New-Object System.Net.Sockets.TcpClient
+        $tcp.Connect("127.0.0.1", $port)
+        $stream = $tcp.GetStream()
+        $writer = New-Object System.IO.StreamWriter($stream)
+        $reader = New-Object System.IO.StreamReader($stream)
+        $writer.Write("GET /api/tmux/health HTTP/1.0`r`nHost: localhost`r`n`r`n")
+        $writer.Flush()
+        $stream.ReadTimeout = 2000
+        $statusLine = $reader.ReadLine()
+        $tcp.Close()
+        if ($statusLine -match "401") {
             Write-Host "  [OK] API /api/tmux/health - running (auth)" -ForegroundColor Green
+        } elseif ($statusLine -match "200") {
+            Write-Host "  [OK] API /api/tmux/health - running" -ForegroundColor Green
         } else {
             Write-Host "  [--] API /api/tmux/health - not running" -ForegroundColor Yellow
         }
+    } catch {
+        Write-Host "  [--] API /api/tmux/health - not running" -ForegroundColor Yellow
     }
 
     Write-Host ""
