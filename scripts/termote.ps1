@@ -36,9 +36,16 @@ param(
 # CONFIGURATION
 # =============================================================================
 
-$script:VERSION = "0.0.4"
+$script:VERSION = "0.0.7" # x-release-please-version
 $script:SCRIPT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
 $script:PROJECT_DIR = Split-Path -Parent $script:SCRIPT_DIR
+
+# Override VERSION when running from installed location (not git repo)
+$versionFile = Join-Path $script:PROJECT_DIR ".version"
+$isGitRepo = try { git -C $script:SCRIPT_DIR rev-parse --git-dir 2>$null; $LASTEXITCODE -eq 0 } catch { $false }
+if (-not $isGitRepo -and (Test-Path $versionFile)) {
+    $script:VERSION = (Get-Content $versionFile -Raw).Trim()
+}
 $script:PORT_MAIN = 7680
 $script:PORT_TTYD = 7681
 $script:CONTAINER_NAME = "termote"
@@ -428,6 +435,10 @@ function Start-ContainerMode {
         if ($buildExitCode -ne 0) { Write-Err "Cross-compilation failed" }
     }
 
+    # Ensure workspace directory exists (Docker on Windows doesn't auto-create bind mounts)
+    $workspace = Join-Path $script:PROJECT_DIR "workspace"
+    New-Item -ItemType Directory -Path $workspace -Force | Out-Null
+
     # Stop existing
     Push-Location $script:PROJECT_DIR
     try {
@@ -482,7 +493,8 @@ function Stop-ContainerMode {
 # =============================================================================
 
 function Test-Psmux {
-    if (-not (Get-Command tmux -ErrorAction SilentlyContinue)) {
+    $tmux = Get-Command tmux -ErrorAction SilentlyContinue
+    if (-not $tmux) {
         Write-Err @"
 psmux not found. Install it:
   winget install psmux
@@ -492,9 +504,8 @@ Or from: https://github.com/psmux/psmux
     }
 
     # Verify it's psmux (not WSL tmux)
-    $version = & tmux -V 2>&1
-    if ($version -notmatch "psmux") {
-        Write-Warn "tmux found but may not be psmux. Proceeding anyway."
+    if ($tmux.Source -notmatch "psmux") {
+        Write-Warn "tmux found at $($tmux.Source) but may not be psmux. Proceeding anyway."
     }
 }
 
