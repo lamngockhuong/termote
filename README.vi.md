@@ -206,7 +206,7 @@ flowchart LR
 | `--lan`                     | Mở truy cập LAN (mặc định: chỉ localhost)       |
 | `--tailscale <host[:port]>` | Bật Tailscale HTTPS                             |
 | `--no-auth`                 | Tắt xác thực cơ bản                             |
-| `--port <port>`             | Port host (mặc định: 7680)                      |
+| `--port <port>`             | Port host (mặc định: 7680, Windows: 7690)       |
 | `--fresh`                   | Buộc nhập mật khẩu mới (bỏ qua config đã lưu)   |
 | `--update`                  | Cập nhật tự động với config đã lưu              |
 | `--version <ver>`           | Cài đặt phiên bản cụ thể (có hoặc không có `v`) |

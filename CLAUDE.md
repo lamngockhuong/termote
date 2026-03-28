@@ -142,7 +142,7 @@ Both modes use tmux-api as the unified server (PWA + WebSocket proxy + API + aut
 
 ┌─────────────────────────────────────────────────────────┐
 │ Native mode (Windows with psmux)                        │
-│   tmux-api.exe:7680 (PWA + proxy + API + auth)          │
+│   tmux-api.exe:7690 (PWA + proxy + API + auth)          │
 │   ├→ static PWA files                                   │
 │   ├→ WebSocket proxy to ttyd:7681                       │
 │   └→ tmux API endpoints → psmux                         │
