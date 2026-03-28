@@ -3,7 +3,7 @@ title: Tailscale HTTPS
 description: Auto SSL via tailscale serve
 ---
 
-import { Aside, Steps } from "@astrojs/starlight/components";
+import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
 
 Automatic HTTPS using `tailscale serve`. No manual certificate management.
 
@@ -16,9 +16,19 @@ Automatic HTTPS using `tailscale serve`. No manual certificate management.
 
 <Steps>
 1. Deploy with Tailscale flag
-   ```bash
-   ./scripts/termote.sh install container --tailscale myhost.ts.net
-   ```
+
+   <Tabs>
+     <TabItem label="Unix (macOS/Linux)">
+       ```bash
+       ./scripts/termote.sh install container --tailscale myhost.ts.net
+       ```
+     </TabItem>
+     <TabItem label="Windows (PowerShell)">
+       ```powershell
+       .\scripts\termote.ps1 install container -Tailscale myhost.ts.net
+       ```
+     </TabItem>
+   </Tabs>
 
 2. Access at https://myhost.ts.net
 
@@ -26,13 +36,26 @@ Automatic HTTPS using `tailscale serve`. No manual certificate management.
 
 ## Options
 
-```bash
-# Custom port
-./scripts/termote.sh install native --tailscale myhost.ts.net:8765
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    # Custom port
+    ./scripts/termote.sh install native --tailscale myhost.ts.net:8765
 
-# Tailscale + LAN
-./scripts/termote.sh install container --tailscale myhost.ts.net --lan
-```
+    # Tailscale + LAN
+    ./scripts/termote.sh install container --tailscale myhost.ts.net --lan
+    ```
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    # Custom port
+    .\scripts\termote.ps1 install native -Tailscale myhost.ts.net:8765
+
+    # Tailscale + LAN
+    .\scripts\termote.ps1 install container -Tailscale myhost.ts.net -Lan
+    ```
+  </TabItem>
+</Tabs>
 
 <Aside type="tip">
   Tailscale is the recommended way to expose Termote securely over the internet.

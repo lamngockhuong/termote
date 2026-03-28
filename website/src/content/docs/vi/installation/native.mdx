@@ -49,9 +49,18 @@ Không cần Docker. Truy cập binary host như `claude`, `git`, `gh`, v.v.
 
 2. Chạy lệnh deploy
 
-   ```bash
-   ./scripts/termote.sh install native
-   ```
+   <Tabs>
+     <TabItem label="Unix (macOS/Linux)">
+       ```bash
+       ./scripts/termote.sh install native
+       ```
+     </TabItem>
+     <TabItem label="Windows (PowerShell)">
+       ```powershell
+       .\scripts\termote.ps1 install native
+       ```
+     </TabItem>
+   </Tabs>
 
 3. Truy cập tại http://localhost:7680
 
@@ -70,14 +79,27 @@ Không cần Docker. Truy cập binary host như `claude`, `git`, `gh`, v.v.
 
 ## Quản lý dịch vụ
 
-```bash
-# Kiểm tra processes
-ps aux | grep ttyd
-ps aux | grep tmux-api
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    # Kiểm tra processes
+    ps aux | grep ttyd
+    ps aux | grep tmux-api
 
-# Khởi động lại
-./scripts/termote.sh install native
-```
+    # Khởi động lại
+    ./scripts/termote.sh install native
+    ```
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    # Kiểm tra processes
+    Get-Process -Name ttyd, tmux-api -ErrorAction SilentlyContinue
+
+    # Khởi động lại
+    .\scripts\termote.ps1 install native
+    ```
+  </TabItem>
+</Tabs>
 
 ## Ngăn macOS Sleep
 
@@ -103,54 +125,106 @@ pkill caffeinate
 
 ### Chẩn đoán nhanh
 
-```bash
-./scripts/termote.sh health   # Kiểm tra sức khỏe
-ss -tlnp | grep -E "7680|7681"  # Kiểm tra cổng
-```
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    ./scripts/termote.sh health   # Kiểm tra sức khỏe
+    ss -tlnp | grep -E "7680|7681"  # Kiểm tra cổng
+    ```
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    .\scripts\termote.ps1 health   # Kiểm tra sức khỏe
+    netstat -ano | Select-String "7680|7681"  # Kiểm tra cổng
+    ```
+  </TabItem>
+</Tabs>
 
 ### Kiểm tra tiến trình
 
-```bash
-ps aux | grep ttyd         # Kiểm tra ttyd đang chạy
-ps aux | grep tmux-api     # Kiểm tra tmux-api đang chạy
-lsof -i :7680              # Xác minh cổng chính
-lsof -i :7681              # Xác minh cổng ttyd
-```
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    ps aux | grep ttyd         # Kiểm tra ttyd đang chạy
+    ps aux | grep tmux-api     # Kiểm tra tmux-api đang chạy
+    lsof -i :7680              # Xác minh cổng chính
+    lsof -i :7681              # Xác minh cổng ttyd
+    ```
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    Get-Process -Name ttyd, tmux-api -ErrorAction SilentlyContinue
+    netstat -ano | Select-String "7680"   # Xác minh cổng chính
+    netstat -ano | Select-String "7681"   # Xác minh cổng ttyd
+    ```
+  </TabItem>
+</Tabs>
 
 ### Debug với logs
 
-Chế độ native mặc định không ghi logs. Để xem logs:
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    Chế độ native mặc định không ghi logs. Để xem logs:
 
-```bash
-# Dừng dịch vụ
-./scripts/termote.sh uninstall native
+    ```bash
+    # Dừng dịch vụ
+    ./scripts/termote.sh uninstall native
 
-# Chạy ttyd với logs (terminal 1)
-ttyd -W -i lo -p 7681 tmux new-session -A -s main
+    # Chạy ttyd với logs (terminal 1)
+    ttyd -W -i lo -p 7681 tmux new-session -A -s main
 
-# Chạy tmux-api với logs (terminal 2)
-cd tmux-api
-TERMOTE_PORT=7680 TERMOTE_BIND=127.0.0.1 \
-TERMOTE_PWA_DIR=../pwa/dist ./tmux-api-native
-```
+    # Chạy tmux-api với logs (terminal 2)
+    cd tmux-api
+    TERMOTE_PORT=7680 TERMOTE_BIND=127.0.0.1 \
+    TERMOTE_PWA_DIR=../pwa/dist ./tmux-api-native
+    ```
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+    Chế độ native mặc định không ghi logs. Để xem logs:
+
+    ```powershell
+    # Dừng dịch vụ
+    .\scripts\termote.ps1 uninstall native
+
+    # Chạy ttyd với logs (terminal 1)
+    ttyd -W -i 127.0.0.1 -p 7681 psmux
+
+    # Chạy tmux-api với logs (terminal 2)
+    cd tmux-api
+    $env:TERMOTE_PORT=7680; $env:TERMOTE_BIND="127.0.0.1"
+    $env:TERMOTE_PWA_DIR="../pwa/dist"; .\tmux-api.exe
+    ```
+  </TabItem>
+</Tabs>
 
 ### Lỗi thường gặp
 
 | Lỗi            | Giải pháp                                           |
 | -------------- | --------------------------------------------------- |
-| Cổng đang dùng | `lsof -i :7680` rồi kill process                    |
-| Thiếu ttyd     | `brew install ttyd` (macOS) hoặc `apt install ttyd` |
+| Cổng đang dùng | `lsof -i :7680` (Unix) hoặc `netstat -ano \| Select-String 7680` (Win) rồi kill process |
+| Thiếu ttyd     | `brew install ttyd` (macOS) hoặc `apt install ttyd` (Linux) |
 | Thiếu binary   | `cd tmux-api && go build -o tmux-api-native .`      |
 | PWA chưa build | `cd pwa && pnpm build`                              |
 | PWA cache cũ   | Settings → "Clear Cache & Reload" để làm mới        |
 
-### tmux Session
+### tmux / psmux Session
 
-```bash
-tmux list-sessions         # Liệt kê sessions
-tmux attach -t main        # Kết nối vào session
-tmux kill-session -t main  # Reset session
-```
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    tmux list-sessions         # Liệt kê sessions
+    tmux attach -t main        # Kết nối vào session
+    tmux kill-session -t main  # Reset session
+    ```
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    psmux list-sessions         # Liệt kê sessions
+    psmux attach -t main        # Kết nối vào session
+    psmux kill-session -t main  # Reset session
+    ```
+  </TabItem>
+</Tabs>
 
 ### Test API
 
@@ -165,33 +239,61 @@ curl http://localhost:7680/api/tmux/sessions
 
 Chạy lại installer - sẽ so sánh version và hỏi trước khi cập nhật:
 
-```bash
-# Cập nhật tự động với config đã lưu
-curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash -s -- --update
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    # Cập nhật tự động với config đã lưu
+    curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash -s -- --update
 
-# Hoặc cập nhật chuẩn
-curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
-```
+    # Hoặc cập nhật chuẩn
+    curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
+    ```
 
-Tùy chọn:
+    Tùy chọn: `--update`, `--yes`, `--download-only`, `--fresh`, `--version <ver>`, `--strict`
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    # Cập nhật tự động với config đã lưu
+    $env:TERMOTE_UPDATE="true"; irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
 
-- `--update` - Cập nhật tự động dùng config đã lưu (mode, flags, password)
-- `--yes` - Tự động cập nhật không hỏi
-- `--download-only` - Chỉ tải về, không cài đặt
-- `--fresh` - Buộc nhập mật khẩu mới
-- `--version <ver>` - Cài đặt phiên bản cụ thể
-- `--strict` - Yêu cầu xác minh checksum (lỗi nếu không có)
+    # Hoặc cập nhật chuẩn
+    irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
+    ```
+
+    Tùy chọn: `$env:TERMOTE_UPDATE="true"`, `$env:TERMOTE_AUTO_YES="true"`
+  </TabItem>
+</Tabs>
 
 ### Cập nhật thủ công
 
-```bash
-./scripts/termote.sh uninstall native
-git pull origin main
-./scripts/termote.sh install native
-```
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    ./scripts/termote.sh uninstall native
+    git pull origin main
+    ./scripts/termote.sh install native
+    ```
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    .\scripts\termote.ps1 uninstall native
+    git pull origin main
+    .\scripts\termote.ps1 install native
+    ```
+  </TabItem>
+</Tabs>
 
 ## Gỡ cài đặt
 
-```bash
-./scripts/termote.sh uninstall native
-```
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    ./scripts/termote.sh uninstall native
+    ```
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    .\scripts\termote.ps1 uninstall native
+    ```
+  </TabItem>
+</Tabs>

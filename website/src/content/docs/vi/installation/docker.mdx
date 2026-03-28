@@ -3,7 +3,7 @@ title: Cài đặt Container
 description: Triển khai container tất-cả-trong-một
 ---
 
-import { Aside, Steps } from "@astrojs/starlight/components";
+import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
 
 Container đơn với tmux-api (PWA + proxy) + ttyd + tmux.
 
@@ -11,16 +11,36 @@ Container đơn với tmux-api (PWA + proxy) + ttyd + tmux.
 
 <Steps>
 1. Chạy lệnh deploy
-   ```bash
-   ./scripts/termote.sh install container
-   ```
+
+   <Tabs>
+     <TabItem label="Unix (macOS/Linux)">
+       ```bash
+       ./scripts/termote.sh install container
+       ```
+     </TabItem>
+     <TabItem label="Windows (PowerShell)">
+       ```powershell
+       .\scripts\termote.ps1 install container
+       ```
+     </TabItem>
+   </Tabs>
 
 2. Truy cập tại http://localhost:7680
 
 3. (Tùy chọn) Mở ra LAN
-   ```bash
-   ./scripts/termote.sh install container --lan
-   ```
+
+   <Tabs>
+     <TabItem label="Unix (macOS/Linux)">
+       ```bash
+       ./scripts/termote.sh install container --lan
+       ```
+     </TabItem>
+     <TabItem label="Windows (PowerShell)">
+       ```powershell
+       .\scripts\termote.ps1 install container -Lan
+       ```
+     </TabItem>
+   </Tabs>
 
 </Steps>
 
@@ -48,14 +68,28 @@ docker run -d --name termote -p 7680:7680 \
 
 ## Tùy chọn
 
-| Cờ                | Mô tả                                         |
-| ----------------- | --------------------------------------------- |
-| `--lan`           | Mở ra LAN (mặc định: localhost)               |
-| `--no-auth`       | Tắt xác thực cơ bản                           |
-| `--port <port>`   | Cổng tùy chỉnh (mặc định: 7680)               |
-| `--fresh`         | Buộc nhập mật khẩu mới (bỏ qua config đã lưu) |
-| `--update`        | Cập nhật tự động với config đã lưu            |
-| `--version <ver>` | Cài đặt phiên bản cụ thể                      |
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    | Cờ                | Mô tả                                         |
+    | ----------------- | --------------------------------------------- |
+    | `--lan`           | Mở ra LAN (mặc định: localhost)               |
+    | `--no-auth`       | Tắt xác thực cơ bản                           |
+    | `--port <port>`   | Cổng tùy chỉnh (mặc định: 7680)               |
+    | `--fresh`         | Buộc nhập mật khẩu mới (bỏ qua config đã lưu) |
+    | `--update`        | Cập nhật tự động với config đã lưu            |
+    | `--version <ver>` | Cài đặt phiên bản cụ thể                      |
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+    | Cờ                | Mô tả                                         |
+    | ----------------- | --------------------------------------------- |
+    | `-Lan`            | Mở ra LAN (mặc định: localhost)               |
+    | `-NoAuth`         | Tắt xác thực cơ bản                           |
+    | `-Port <port>`    | Cổng tùy chỉnh (mặc định: 7680)               |
+    | `-Fresh`          | Buộc nhập mật khẩu mới (bỏ qua config đã lưu) |
+
+    Cờ online installer: `$env:TERMOTE_UPDATE="true"` để cập nhật tự động.
+  </TabItem>
+</Tabs>
 
 <Aside type="tip">
   Script tự động phát hiện `podman` hoặc `docker` - cả hai hoạt động giống nhau.
@@ -90,10 +124,20 @@ pkill caffeinate
 
 ### Chẩn đoán nhanh
 
-```bash
-./scripts/termote.sh health   # Kiểm tra sức khỏe
-docker ps -a | grep termote   # Kiểm tra trạng thái container
-```
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    ./scripts/termote.sh health   # Kiểm tra sức khỏe
+    docker ps -a | grep termote   # Kiểm tra trạng thái container
+    ```
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    .\scripts\termote.ps1 health   # Kiểm tra sức khỏe
+    docker ps -a | Select-String termote   # Kiểm tra trạng thái container
+    ```
+  </TabItem>
+</Tabs>
 
 ### Xem logs
 
@@ -107,16 +151,32 @@ podman logs termote
 
 ### Container không khởi động
 
-```bash
-# Kiểm tra lỗi khởi động
-docker logs termote
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    # Kiểm tra lỗi khởi động
+    docker logs termote
 
-# Cổng đang dùng?
-lsof -i :7680
+    # Cổng đang dùng?
+    lsof -i :7680
 
-# Dùng cổng khác
-./scripts/termote.sh install container --port 7690
-```
+    # Dùng cổng khác
+    ./scripts/termote.sh install container --port 7690
+    ```
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    # Kiểm tra lỗi khởi động
+    docker logs termote
+
+    # Cổng đang dùng?
+    netstat -ano | Select-String 7680
+
+    # Dùng cổng khác
+    .\scripts\termote.ps1 install container -Port 7690
+    ```
+  </TabItem>
+</Tabs>
 
 ### Debug trong container
 
@@ -140,13 +200,26 @@ curl localhost:7680/api/tmux/health
 
 ### Khởi động lại / Reset
 
-```bash
-docker restart termote
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    docker restart termote
 
-# Reset hoàn toàn
-./scripts/termote.sh uninstall container
-./scripts/termote.sh install container
-```
+    # Reset hoàn toàn
+    ./scripts/termote.sh uninstall container
+    ./scripts/termote.sh install container
+    ```
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    docker restart termote
+
+    # Reset hoàn toàn
+    .\scripts\termote.ps1 uninstall container
+    .\scripts\termote.ps1 install container
+    ```
+  </TabItem>
+</Tabs>
 
 ### Test API
 
@@ -161,32 +234,61 @@ curl -u admin:password http://localhost:7680/api/tmux/sessions
 
 Chạy lại installer - sẽ so sánh version và hỏi trước khi cập nhật:
 
-```bash
-# Cập nhật tự động với config đã lưu
-curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash -s -- --update
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    # Cập nhật tự động với config đã lưu
+    curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash -s -- --update
 
-# Hoặc cập nhật chuẩn
-curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash -s -- --container
-```
+    # Hoặc cập nhật chuẩn
+    curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash -s -- --container
+    ```
 
-Tùy chọn:
+    Tùy chọn: `--update`, `--yes`, `--download-only`, `--fresh`, `--strict`
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    # Cập nhật tự động với config đã lưu
+    $env:TERMOTE_UPDATE="true"; irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
 
-- `--update` - Cập nhật tự động dùng config đã lưu (mode, flags, password)
-- `--yes` - Tự động cập nhật không hỏi
-- `--download-only` - Chỉ tải về, không cài đặt
-- `--fresh` - Buộc nhập mật khẩu mới
-- `--strict` - Yêu cầu xác minh checksum (lỗi nếu không có)
+    # Hoặc cập nhật chuẩn
+    $env:TERMOTE_MODE="container"; irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
+    ```
+
+    Tùy chọn: `$env:TERMOTE_UPDATE="true"`, `$env:TERMOTE_AUTO_YES="true"`, `$env:TERMOTE_MODE="container"`
+  </TabItem>
+</Tabs>
 
 ### Cập nhật thủ công
 
-```bash
-./scripts/termote.sh uninstall container
-git pull origin main
-./scripts/termote.sh install container
-```
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    ./scripts/termote.sh uninstall container
+    git pull origin main
+    ./scripts/termote.sh install container
+    ```
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    .\scripts\termote.ps1 uninstall container
+    git pull origin main
+    .\scripts\termote.ps1 install container
+    ```
+  </TabItem>
+</Tabs>
 
 ## Gỡ cài đặt
 
-```bash
-./scripts/termote.sh uninstall container
-```
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    ./scripts/termote.sh uninstall container
+    ```
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    .\scripts\termote.ps1 uninstall container
+    ```
+  </TabItem>
+</Tabs>

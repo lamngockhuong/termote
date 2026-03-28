@@ -3,7 +3,7 @@ title: Tailscale HTTPS
 description: Tự động SSL qua tailscale serve
 ---
 
-import { Aside, Steps } from "@astrojs/starlight/components";
+import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
 
 Tự động HTTPS sử dụng `tailscale serve`. Không cần quản lý chứng chỉ thủ công.
 
@@ -16,9 +16,19 @@ Tự động HTTPS sử dụng `tailscale serve`. Không cần quản lý chứn
 
 <Steps>
 1. Triển khai với cờ Tailscale
-   ```bash
-   ./scripts/termote.sh install container --tailscale myhost.ts.net
-   ```
+
+   <Tabs>
+     <TabItem label="Unix (macOS/Linux)">
+       ```bash
+       ./scripts/termote.sh install container --tailscale myhost.ts.net
+       ```
+     </TabItem>
+     <TabItem label="Windows (PowerShell)">
+       ```powershell
+       .\scripts\termote.ps1 install container -Tailscale myhost.ts.net
+       ```
+     </TabItem>
+   </Tabs>
 
 2. Truy cập tại https://myhost.ts.net
 
@@ -26,13 +36,26 @@ Tự động HTTPS sử dụng `tailscale serve`. Không cần quản lý chứn
 
 ## Tùy chọn
 
-```bash
-# Cổng tùy chỉnh
-./scripts/termote.sh install native --tailscale myhost.ts.net:8765
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    # Cổng tùy chỉnh
+    ./scripts/termote.sh install native --tailscale myhost.ts.net:8765
 
-# Tailscale + LAN
-./scripts/termote.sh install container --tailscale myhost.ts.net --lan
-```
+    # Tailscale + LAN
+    ./scripts/termote.sh install container --tailscale myhost.ts.net --lan
+    ```
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    # Cổng tùy chỉnh
+    .\scripts\termote.ps1 install native -Tailscale myhost.ts.net:8765
+
+    # Tailscale + LAN
+    .\scripts\termote.ps1 install container -Tailscale myhost.ts.net -Lan
+    ```
+  </TabItem>
+</Tabs>
 
 <Aside type="tip">
   Tailscale là cách được khuyến nghị để expose Termote an toàn qua internet.
