@@ -44,6 +44,38 @@ func TestValidateTmuxTarget(t *testing.T) {
 	}
 }
 
+func TestQualifyTarget(t *testing.T) {
+	// Save and restore original
+	orig := tmuxSession
+	defer func() { tmuxSession = orig }()
+
+	tmuxSession = "main"
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"0", "main:0"},
+		{"1", "main:1"},
+		{"my-window", "main:my-window"},
+		{"main:0", "main:0"},       // already qualified, unchanged
+		{"other:0", "other:0"},     // different session prefix, unchanged
+		{"sess:win:extra", "sess:win:extra"}, // multiple colons, unchanged
+	}
+
+	for _, tt := range tests {
+		got := qualifyTarget(tt.input)
+		if got != tt.want {
+			t.Errorf("qualifyTarget(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+
+	// Test with custom session name
+	tmuxSession = "custom"
+	if got := qualifyTarget("0"); got != "custom:0" {
+		t.Errorf("qualifyTarget with custom session: got %q, want %q", got, "custom:0")
+	}
+}
+
 func TestLastPathSegment(t *testing.T) {
 	tests := []struct {
 		path string

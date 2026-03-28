@@ -14,6 +14,12 @@ import (
 var tmuxSocket = os.Getenv("TMUX_SOCKET")
 var tmuxSession = envOr("TMUX_SESSION", "main")
 
+func init() {
+	if !validateTmuxTarget(tmuxSession) {
+		log.Fatalf("invalid TMUX_SESSION value: %q", tmuxSession)
+	}
+}
+
 // validTmuxID matches safe tmux target identifiers (alphanumeric, underscore, dash, colon, dot)
 var validTmuxID = regexp.MustCompile(`^[a-zA-Z0-9_\-:.]+$`)
 
