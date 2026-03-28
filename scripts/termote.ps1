@@ -408,16 +408,25 @@ function Start-ContainerMode {
     if (-not (Test-ValidIP $BindAddr)) { Write-Err "Invalid bind address: $BindAddr" }
     if (-not (Test-ValidPort $Port)) { Write-Err "Invalid port: $Port" }
 
-    # Cross-compile tmux-api for Linux (container is always Linux)
-    Write-Info "Cross-compiling tmux-api for Linux..."
+    # Build or copy tmux-api for Linux (container is always Linux)
     $arch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq [System.Runtime.InteropServices.Architecture]::Arm64) { "arm64" } else { "amd64" }
-    Push-Location (Join-Path $script:PROJECT_DIR "tmux-api")
-    $env:CGO_ENABLED = "0"; $env:GOOS = "linux"; $env:GOARCH = $arch
-    & go build -ldflags="-s -w" -o tmux-api .
-    $buildExitCode = $LASTEXITCODE
-    $env:CGO_ENABLED = $null; $env:GOOS = $null; $env:GOARCH = $null
-    Pop-Location
-    if ($buildExitCode -ne 0) { Write-Err "Cross-compilation failed" }
+    $prebuilt = Join-Path $script:PROJECT_DIR "tmux-api-linux-$arch"
+    $tmuxApiDir = Join-Path $script:PROJECT_DIR "tmux-api"
+    if (Test-Path $prebuilt) {
+        Write-Info "Using pre-built tmux-api for Linux/$arch"
+        New-Item -ItemType Directory -Path $tmuxApiDir -Force | Out-Null
+        Copy-Item -Path $prebuilt -Destination (Join-Path $tmuxApiDir "tmux-api") -Force
+        if (-not (Test-Path (Join-Path $tmuxApiDir "tmux-api"))) { Write-Err "Failed to copy pre-built tmux-api" }
+    } else {
+        Write-Info "Cross-compiling tmux-api for Linux..."
+        Push-Location $tmuxApiDir
+        $env:CGO_ENABLED = "0"; $env:GOOS = "linux"; $env:GOARCH = $arch
+        & go build -ldflags="-s -w" -o tmux-api .
+        $buildExitCode = $LASTEXITCODE
+        $env:CGO_ENABLED = $null; $env:GOOS = $null; $env:GOARCH = $null
+        Pop-Location
+        if ($buildExitCode -ne 0) { Write-Err "Cross-compilation failed" }
+    }
 
     # Stop existing
     Push-Location $script:PROJECT_DIR
