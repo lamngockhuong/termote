@@ -61,8 +61,13 @@ function Get-SavedConfig {
     }
 }
 
-# Get installed version
+# Get installed version from .version file (written at install time)
 function Get-InstalledVersion {
+    $versionFile = Join-Path $script:INSTALL_DIR ".version"
+    if (Test-Path $versionFile) {
+        return (Get-Content $versionFile -Raw).Trim()
+    }
+    # Fallback: read VERSION from termote.ps1 (for pre-.version installs)
     $script = Join-Path $script:INSTALL_DIR "scripts\termote.ps1"
     if (Test-Path $script) {
         $content = Get-Content $script -Raw
@@ -221,6 +226,9 @@ function Main {
             return
         }
 
+        # Save installed version (tag-based, works for RC and official releases)
+        $latestVersion | Set-Content (Join-Path $script:INSTALL_DIR ".version") -NoNewline
+
         # Run termote CLI
         Write-Info "Running installer..."
 
@@ -239,6 +247,10 @@ function Main {
         $installArgs = @("install", $Mode)
         if ($Lan) { $installArgs += "-Lan" }
         if ($NoAuth) { $installArgs += "-NoAuth" }
+        if ($Update -and $savedConfig) {
+            if ($savedConfig.Port -and $savedConfig.Port -ne "7690") { $installArgs += @("-Port", $savedConfig.Port) }
+            if ($savedConfig.Tailscale) { $installArgs += @("-Tailscale", $savedConfig.Tailscale) }
+        }
 
         & ".\scripts\termote.ps1" @installArgs
 
