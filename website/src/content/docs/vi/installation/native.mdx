@@ -7,6 +7,13 @@ import { Steps, Tabs, TabItem, Aside } from "@astrojs/starlight/components";
 
 Không cần Docker. Truy cập binary host như `claude`, `git`, `gh`, v.v.
 
+<Aside type="caution" title="Windows Native — Lỗi đã biết">
+  Trên Windows 11 (build 26200+), ttyd.exe bị crash khi WebSocket client kết nối
+  do lỗi named pipe của ConPTY. Bản sửa đang được lên kế hoạch (thay thế ttyd
+  bằng terminal handler viết bằng Go). Trong thời gian chờ, hãy sử dụng **chế độ
+  Container** trên Windows — hoạt động bình thường.
+</Aside>
+
 ## Yêu cầu
 
 <Tabs>
@@ -20,8 +27,19 @@ Không cần Docker. Truy cập binary host như `claude`, `git`, `gh`, v.v.
     ```bash
     brew install ttyd tmux go
     ```
+  </TabItem>
+  <TabItem label="Windows">
+    ```powershell
+    # Cài đặt psmux (tương thích tmux cho Windows)
+    winget install psmux
+    # ttyd được tự động tải bởi script cài đặt
+    ```
 
-</TabItem>
+    <Aside type="caution">
+      Chế độ Native trên Windows hiện đang bị lỗi trên Windows 11 build 26200+.
+      Hãy sử dụng [chế độ Container](/vi/installation/docker/) thay thế.
+    </Aside>
+  </TabItem>
 </Tabs>
 
 ## Cài đặt
