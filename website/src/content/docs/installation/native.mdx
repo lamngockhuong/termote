@@ -25,7 +25,7 @@ No Docker required. Access host binaries like `claude`, `git`, `gh`, etc.
   </TabItem>
   <TabItem label="macOS">
     ```bash
-      brew install ttyd tmux go
+    brew install ttyd tmux go
     ```
   </TabItem>
   <TabItem label="Windows">
@@ -49,9 +49,18 @@ No Docker required. Access host binaries like `claude`, `git`, `gh`, etc.
 
 2. Run deploy command
 
-   ```bash
-   ./scripts/termote.sh install native
-   ```
+   <Tabs>
+     <TabItem label="Unix (macOS/Linux)">
+       ```bash
+       ./scripts/termote.sh install native
+       ```
+     </TabItem>
+     <TabItem label="Windows (PowerShell)">
+       ```powershell
+       .\scripts\termote.ps1 install native
+       ```
+     </TabItem>
+   </Tabs>
 
 3. Access at http://localhost:7680
 
@@ -70,14 +79,27 @@ No Docker required. Access host binaries like `claude`, `git`, `gh`, etc.
 
 ## Service Management
 
-```bash
-# Check processes
-ps aux | grep ttyd
-ps aux | grep tmux-api
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    # Check processes
+    ps aux | grep ttyd
+    ps aux | grep tmux-api
 
-# Restart
-./scripts/termote.sh install native
-```
+    # Restart
+    ./scripts/termote.sh install native
+    ```
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    # Check processes
+    Get-Process -Name ttyd, tmux-api -ErrorAction SilentlyContinue
+
+    # Restart
+    .\scripts\termote.ps1 install native
+    ```
+  </TabItem>
+</Tabs>
 
 ## Prevent macOS Sleep
 
@@ -103,54 +125,106 @@ pkill caffeinate
 
 ### Quick Diagnostics
 
-```bash
-./scripts/termote.sh health   # Health check
-ss -tlnp | grep -E "7680|7681"  # Check ports
-```
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    ./scripts/termote.sh health   # Health check
+    ss -tlnp | grep -E "7680|7681"  # Check ports
+    ```
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    .\scripts\termote.ps1 health   # Health check
+    netstat -ano | Select-String "7680|7681"  # Check ports
+    ```
+  </TabItem>
+</Tabs>
 
 ### Check Processes
 
-```bash
-ps aux | grep ttyd         # Check if ttyd is running
-ps aux | grep tmux-api     # Check if tmux-api is running
-lsof -i :7680              # Verify main port
-lsof -i :7681              # Verify ttyd port
-```
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    ps aux | grep ttyd         # Check if ttyd is running
+    ps aux | grep tmux-api     # Check if tmux-api is running
+    lsof -i :7680              # Verify main port
+    lsof -i :7681              # Verify ttyd port
+    ```
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    Get-Process -Name ttyd, tmux-api -ErrorAction SilentlyContinue
+    netstat -ano | Select-String "7680"   # Verify main port
+    netstat -ano | Select-String "7681"   # Verify ttyd port
+    ```
+  </TabItem>
+</Tabs>
 
 ### Debug with Logs
 
-Native mode discards logs by default. To see logs:
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    Native mode discards logs by default. To see logs:
 
-```bash
-# Stop services
-./scripts/termote.sh uninstall native
+    ```bash
+    # Stop services
+    ./scripts/termote.sh uninstall native
 
-# Start ttyd with logs (terminal 1)
-ttyd -W -i lo -p 7681 tmux new-session -A -s main
+    # Start ttyd with logs (terminal 1)
+    ttyd -W -i lo -p 7681 tmux new-session -A -s main
 
-# Start tmux-api with logs (terminal 2)
-cd tmux-api
-TERMOTE_PORT=7680 TERMOTE_BIND=127.0.0.1 \
-TERMOTE_PWA_DIR=../pwa/dist ./tmux-api-native
-```
+    # Start tmux-api with logs (terminal 2)
+    cd tmux-api
+    TERMOTE_PORT=7680 TERMOTE_BIND=127.0.0.1 \
+    TERMOTE_PWA_DIR=../pwa/dist ./tmux-api-native
+    ```
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+    Native mode discards logs by default. To see logs:
+
+    ```powershell
+    # Stop services
+    .\scripts\termote.ps1 uninstall native
+
+    # Start ttyd with logs (terminal 1)
+    ttyd -W -i 127.0.0.1 -p 7681 psmux
+
+    # Start tmux-api with logs (terminal 2)
+    cd tmux-api
+    $env:TERMOTE_PORT=7680; $env:TERMOTE_BIND="127.0.0.1"
+    $env:TERMOTE_PWA_DIR="../pwa/dist"; .\tmux-api.exe
+    ```
+  </TabItem>
+</Tabs>
 
 ### Common Issues
 
 | Issue           | Solution                                          |
 | --------------- | ------------------------------------------------- |
-| Port in use     | `lsof -i :7680` then kill process                 |
-| ttyd missing    | `brew install ttyd` (macOS) or `apt install ttyd` |
+| Port in use     | `lsof -i :7680` (Unix) or `netstat -ano \| Select-String 7680` (Win) then kill process |
+| ttyd missing    | `brew install ttyd` (macOS) or `apt install ttyd` (Linux) |
 | Binary missing  | `cd tmux-api && go build -o tmux-api-native .`    |
 | PWA not built   | `cd pwa && pnpm build`                            |
 | Stale PWA cache | Settings → "Clear Cache & Reload" to refresh      |
 
-### tmux Session
+### tmux / psmux Session
 
-```bash
-tmux list-sessions         # List sessions
-tmux attach -t main        # Attach to session
-tmux kill-session -t main  # Reset session
-```
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    tmux list-sessions         # List sessions
+    tmux attach -t main        # Attach to session
+    tmux kill-session -t main  # Reset session
+    ```
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    psmux list-sessions         # List sessions
+    psmux attach -t main        # Attach to session
+    psmux kill-session -t main  # Reset session
+    ```
+  </TabItem>
+</Tabs>
 
 ### API Test
 
@@ -165,33 +239,61 @@ curl http://localhost:7680/api/tmux/sessions
 
 Re-run the installer - it compares versions and prompts before updating:
 
-```bash
-# Auto-update with saved config
-curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash -s -- --update
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    # Auto-update with saved config
+    curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash -s -- --update
 
-# Or standard update
-curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
-```
+    # Or standard update
+    curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
+    ```
 
-Options:
+    Options: `--update`, `--yes`, `--download-only`, `--fresh`, `--version <ver>`, `--strict`
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    # Auto-update with saved config
+    $env:TERMOTE_UPDATE="true"; irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
 
-- `--update` - Auto-update using saved config (mode, flags, password)
-- `--yes` - Auto-update without prompt
-- `--download-only` - Download only, no install
-- `--fresh` - Force new password prompt
-- `--version <ver>` - Install specific version
-- `--strict` - Require checksum verification (fail if unavailable)
+    # Or standard update
+    irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
+    ```
+
+    Options: `$env:TERMOTE_UPDATE="true"`, `$env:TERMOTE_AUTO_YES="true"`
+  </TabItem>
+</Tabs>
 
 ### Manual Update
 
-```bash
-./scripts/termote.sh uninstall native
-git pull origin main
-./scripts/termote.sh install native
-```
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    ./scripts/termote.sh uninstall native
+    git pull origin main
+    ./scripts/termote.sh install native
+    ```
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    .\scripts\termote.ps1 uninstall native
+    git pull origin main
+    .\scripts\termote.ps1 install native
+    ```
+  </TabItem>
+</Tabs>
 
 ## Uninstall
 
-```bash
-./scripts/termote.sh uninstall native
-```
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    ./scripts/termote.sh uninstall native
+    ```
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    .\scripts\termote.ps1 uninstall native
+    ```
+  </TabItem>
+</Tabs>

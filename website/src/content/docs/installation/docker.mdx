@@ -3,7 +3,7 @@ title: Container Installation
 description: All-in-one container deployment
 ---
 
-import { Aside, Steps } from "@astrojs/starlight/components";
+import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
 
 Single container with tmux-api (PWA + proxy) + ttyd + tmux.
 
@@ -11,16 +11,36 @@ Single container with tmux-api (PWA + proxy) + ttyd + tmux.
 
 <Steps>
 1. Run deploy command
-   ```bash
-   ./scripts/termote.sh install container
-   ```
+
+   <Tabs>
+     <TabItem label="Unix (macOS/Linux)">
+       ```bash
+       ./scripts/termote.sh install container
+       ```
+     </TabItem>
+     <TabItem label="Windows (PowerShell)">
+       ```powershell
+       .\scripts\termote.ps1 install container
+       ```
+     </TabItem>
+   </Tabs>
 
 2. Access at http://localhost:7680
 
 3. (Optional) Expose to LAN
-   ```bash
-   ./scripts/termote.sh install container --lan
-   ```
+
+   <Tabs>
+     <TabItem label="Unix (macOS/Linux)">
+       ```bash
+       ./scripts/termote.sh install container --lan
+       ```
+     </TabItem>
+     <TabItem label="Windows (PowerShell)">
+       ```powershell
+       .\scripts\termote.ps1 install container -Lan
+       ```
+     </TabItem>
+   </Tabs>
 
 </Steps>
 
@@ -48,14 +68,28 @@ docker run -d --name termote -p 7680:7680 \
 
 ## Options
 
-| Flag              | Description                              |
-| ----------------- | ---------------------------------------- |
-| `--lan`           | Expose to LAN (default: localhost)       |
-| `--no-auth`       | Disable basic auth                       |
-| `--port <port>`   | Custom port (default: 7680)              |
-| `--fresh`         | Force new password prompt (ignore saved) |
-| `--update`        | Auto-update with saved config            |
-| `--version <ver>` | Install specific version                 |
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    | Flag              | Description                              |
+    | ----------------- | ---------------------------------------- |
+    | `--lan`           | Expose to LAN (default: localhost)       |
+    | `--no-auth`       | Disable basic auth                       |
+    | `--port <port>`   | Custom port (default: 7680)              |
+    | `--fresh`         | Force new password prompt (ignore saved) |
+    | `--update`        | Auto-update with saved config            |
+    | `--version <ver>` | Install specific version                 |
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+    | Flag              | Description                              |
+    | ----------------- | ---------------------------------------- |
+    | `-Lan`            | Expose to LAN (default: localhost)       |
+    | `-NoAuth`         | Disable basic auth                       |
+    | `-Port <port>`    | Custom port (default: 7680)              |
+    | `-Fresh`          | Force new password prompt (ignore saved) |
+
+    Online installer flags: `$env:TERMOTE_UPDATE="true"` for auto-update.
+  </TabItem>
+</Tabs>
 
 <Aside type="tip">
   Scripts auto-detect `podman` or `docker` - both work identically.
@@ -90,10 +124,20 @@ pkill caffeinate
 
 ### Quick Diagnostics
 
-```bash
-./scripts/termote.sh health   # Health check
-docker ps -a | grep termote   # Check container status
-```
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    ./scripts/termote.sh health   # Health check
+    docker ps -a | grep termote   # Check container status
+    ```
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    .\scripts\termote.ps1 health   # Health check
+    docker ps -a | Select-String termote   # Check container status
+    ```
+  </TabItem>
+</Tabs>
 
 ### View Logs
 
@@ -107,16 +151,32 @@ podman logs termote
 
 ### Container won't start
 
-```bash
-# Check startup errors
-docker logs termote
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    # Check startup errors
+    docker logs termote
 
-# Port already in use?
-lsof -i :7680
+    # Port already in use?
+    lsof -i :7680
 
-# Use different port
-./scripts/termote.sh install container --port 7690
-```
+    # Use different port
+    ./scripts/termote.sh install container --port 7690
+    ```
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    # Check startup errors
+    docker logs termote
+
+    # Port already in use?
+    netstat -ano | Select-String 7680
+
+    # Use different port
+    .\scripts\termote.ps1 install container -Port 7690
+    ```
+  </TabItem>
+</Tabs>
 
 ### Debug inside container
 
@@ -140,13 +200,26 @@ curl localhost:7680/api/tmux/health
 
 ### Restart / Reset
 
-```bash
-docker restart termote
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    docker restart termote
 
-# Full reset
-./scripts/termote.sh uninstall container
-./scripts/termote.sh install container
-```
+    # Full reset
+    ./scripts/termote.sh uninstall container
+    ./scripts/termote.sh install container
+    ```
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    docker restart termote
+
+    # Full reset
+    .\scripts\termote.ps1 uninstall container
+    .\scripts\termote.ps1 install container
+    ```
+  </TabItem>
+</Tabs>
 
 ### API Test
 
@@ -161,32 +234,61 @@ curl -u admin:password http://localhost:7680/api/tmux/sessions
 
 Re-run the installer - it compares versions and prompts before updating:
 
-```bash
-# Auto-update with saved config
-curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash -s -- --update
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    # Auto-update with saved config
+    curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash -s -- --update
 
-# Or without saved config
-curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash -s -- --container
-```
+    # Or without saved config
+    curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash -s -- --container
+    ```
 
-Options:
+    Options: `--update`, `--yes`, `--download-only`, `--fresh`, `--strict`
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    # Auto-update with saved config
+    $env:TERMOTE_UPDATE="true"; irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
 
-- `--update` - Auto-update using saved config (mode, flags, password)
-- `--yes` - Auto-update without prompt
-- `--download-only` - Download only, no install
-- `--fresh` - Force new password prompt
-- `--strict` - Require checksum verification (fail if unavailable)
+    # Or without saved config
+    $env:TERMOTE_MODE="container"; irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
+    ```
+
+    Options: `$env:TERMOTE_UPDATE="true"`, `$env:TERMOTE_AUTO_YES="true"`, `$env:TERMOTE_MODE="container"`
+  </TabItem>
+</Tabs>
 
 ### Manual Update
 
-```bash
-./scripts/termote.sh uninstall container
-git pull origin main
-./scripts/termote.sh install container
-```
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    ./scripts/termote.sh uninstall container
+    git pull origin main
+    ./scripts/termote.sh install container
+    ```
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    .\scripts\termote.ps1 uninstall container
+    git pull origin main
+    .\scripts\termote.ps1 install container
+    ```
+  </TabItem>
+</Tabs>
 
 ## Uninstall
 
-```bash
-./scripts/termote.sh uninstall container
-```
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    ./scripts/termote.sh uninstall container
+    ```
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    .\scripts\termote.ps1 uninstall container
+    ```
+  </TabItem>
+</Tabs>
