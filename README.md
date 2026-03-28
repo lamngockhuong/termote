@@ -123,6 +123,12 @@ curl -fsSL .../get.sh | bash -s -- --yes --container --fresh
 
 **Windows (PowerShell):**
 
+> **Note:** If script execution is disabled on your system, run this first:
+>
+> ```powershell
+> Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+> ```
+
 ```powershell
 # Download and prompt before install (defaults to native mode)
 irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex

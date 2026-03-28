@@ -303,6 +303,12 @@ git pull origin main                    # Nếu cài từ source
 
 ### Chế Độ Native Windows
 
+> **Lưu ý:** Nếu hệ thống chặn chạy script, hãy chạy lệnh này trước:
+>
+> ```powershell
+> Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+> ```
+
 Chế độ native Windows sử dụng [psmux](https://github.com/psmux/psmux) (terminal multiplexer tương thích tmux cho Windows):
 
 ```powershell

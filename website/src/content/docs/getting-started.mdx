@@ -44,6 +44,9 @@ curl -fsSL .../get.sh | bash -s -- --version 0.0.4
 
 **Windows (PowerShell):**
 
+> **Note:** If script execution is disabled on your system, run this first:
+> `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned`
+
 ```powershell
 # Defaults to native mode (psmux)
 irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex

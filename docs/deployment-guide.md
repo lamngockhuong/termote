@@ -55,6 +55,9 @@ brew install ttyd tmux go
 
 **Windows (PowerShell):**
 
+> **Note:** If script execution is disabled, run first:
+> `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned`
+
 ```powershell
 # Install psmux (tmux-compatible for Windows)
 winget install psmux

@@ -45,6 +45,9 @@ curl -fsSL .../get.sh | bash -s -- --version 0.0.4
 
 **Windows (PowerShell):**
 
+> **Lưu ý:** Nếu hệ thống chặn chạy script, hãy chạy lệnh này trước:
+> `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned`
+
 ```powershell
 # Mặc định chế độ native (psmux)
 irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex

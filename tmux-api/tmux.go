@@ -12,6 +12,13 @@ import (
 )
 
 var tmuxSocket = os.Getenv("TMUX_SOCKET")
+var tmuxSession = envOr("TMUX_SESSION", "main")
+
+func init() {
+	if !validateTmuxTarget(tmuxSession) {
+		log.Fatalf("invalid TMUX_SESSION value: %q", tmuxSession)
+	}
+}
 
 // validTmuxID matches safe tmux target identifiers (alphanumeric, underscore, dash, colon, dot)
 var validTmuxID = regexp.MustCompile(`^[a-zA-Z0-9_\-:.]+$`)
@@ -37,6 +44,16 @@ func requireMethod(w http.ResponseWriter, r *http.Request, method string) bool {
 	return true
 }
 
+// qualifyTarget prefixes a bare window index/name with the session name
+// so that psmux (and tmux) can resolve it correctly.
+// e.g. "0" → "main:0", "main:0" → "main:0" (unchanged)
+func qualifyTarget(target string) string {
+	if !strings.Contains(target, ":") {
+		return tmuxSession + ":" + target
+	}
+	return target
+}
+
 // tmuxCmd creates a tmux command with optional socket flag
 func tmuxCmd(args ...string) *exec.Cmd {
 	if tmuxSocket != "" {
@@ -56,7 +73,7 @@ func handleWindows(w http.ResponseWriter, r *http.Request) {
 	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
-	out, err := tmuxCmd("list-windows", "-F",
+	out, err := tmuxCmd("list-windows", "-t", tmuxSession, "-F",
 		"#{window_index}:#{window_name}:#{window_active}").Output()
 	if err != nil {
 		tmuxError(w, "list-windows", err)
@@ -87,7 +104,7 @@ func handleSelect(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "invalid window id", http.StatusBadRequest)
 		return
 	}
-	err := tmuxCmd("select-window", "-t", id).Run()
+	err := tmuxCmd("select-window", "-t", qualifyTarget(id)).Run()
 	if err != nil {
 		tmuxError(w, "select-window", err)
 		return
@@ -100,7 +117,7 @@ func handleNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := r.URL.Query().Get("name")
-	args := []string{"new-window"}
+	args := []string{"new-window", "-t", tmuxSession}
 	if name != "" {
 		if !validateTmuxTarget(name) {
 			jsonError(w, "invalid window name", http.StatusBadRequest)
@@ -127,7 +144,7 @@ func handleKill(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "invalid window id", http.StatusBadRequest)
 		return
 	}
-	err := tmuxCmd("kill-window", "-t", id).Run()
+	err := tmuxCmd("kill-window", "-t", qualifyTarget(id)).Run()
 	if err != nil {
 		tmuxError(w, "kill-window", err)
 		return
@@ -153,7 +170,7 @@ func handleRename(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "invalid window name", http.StatusBadRequest)
 		return
 	}
-	err := tmuxCmd("rename-window", "-t", id, name).Run()
+	err := tmuxCmd("rename-window", "-t", qualifyTarget(id), name).Run()
 	if err != nil {
 		tmuxError(w, "rename-window", err)
 		return
@@ -185,7 +202,7 @@ func handleSendKeys(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "keys too long", http.StatusBadRequest)
 		return
 	}
-	err := tmuxCmd("send-keys", "-t", body.Target, body.Keys).Run()
+	err := tmuxCmd("send-keys", "-t", qualifyTarget(body.Target), body.Keys).Run()
 	if err != nil {
 		tmuxError(w, "send-keys", err)
 		return
