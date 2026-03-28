@@ -47,7 +47,7 @@ if ($Update) { $Yes = $true }
 # UI Helpers
 function Write-Info { param([string]$Message) Write-Host "[INFO] $Message" -ForegroundColor Green }
 function Write-Warn { param([string]$Message) Write-Host "[WARN] $Message" -ForegroundColor Yellow }
-function Write-Err { param([string]$Message) Write-Host "[ERROR] $Message" -ForegroundColor Red; exit 1 }
+function Write-Err { param([string]$Message) Write-Host "[ERROR] $Message" -ForegroundColor Red; $script:HandledError = $true; throw }
 
 # Load saved config for -Update mode
 function Get-SavedConfig {
@@ -164,7 +164,7 @@ function Main {
     if (-not $Yes -and -not $DownloadOnly) {
         if (-not (Confirm-Install -Current $currentVersion -Latest $latestVersion)) {
             Write-Info "Cancelled."
-            exit 0
+            return
         }
     }
 
@@ -259,4 +259,6 @@ function Main {
     }
 }
 
-Main
+try { Main } catch {
+    if (-not $script:HandledError) { throw $_ }
+}
