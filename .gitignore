@@ -24,7 +24,15 @@ Thumbs.db
 
 # Go binary
 tmux-api/tmux-api
+tmux-api/tmux-api.exe
 tmux-api/tmux-api-native
+tmux-api/tmux-api-native.exe
+
+# ttyd binary
+scripts/ttyd.exe
+
+# Claude Code
+.claude/settings.local.json
 
 # Test results and screenshots
 pwa/test-results/
