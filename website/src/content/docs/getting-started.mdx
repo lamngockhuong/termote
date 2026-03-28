@@ -15,12 +15,14 @@ import { Aside, Steps } from "@astrojs/starlight/components";
 
 **Windows:**
 
-- Docker Desktop or Podman Desktop (for Container mode)
+- Docker Desktop or Podman Desktop (for Container mode — recommended)
 - or [psmux](https://github.com/psmux/psmux) + ttyd (for Native mode): `winget install psmux`
 
 <Aside type="caution" title="Experimental">
-  Windows support is currently experimental and needs more testing. Please
-  report issues on [GitHub](https://github.com/lamngockhuong/termote/issues).
+  Windows support is currently experimental. Container mode is working. Native
+  mode has a known issue where ttyd crashes on Windows 11 (build 26200+) when a
+  WebSocket client connects — a fix is planned. Please report issues on
+  [GitHub](https://github.com/lamngockhuong/termote/issues).
 </Aside>
 
 ## One-Liner Install

@@ -15,13 +15,14 @@ import { Aside, Steps } from "@astrojs/starlight/components";
 
 **Windows:**
 
-- Docker Desktop hoặc Podman Desktop (cho chế độ Container)
+- Docker Desktop hoặc Podman Desktop (cho chế độ Container — khuyến nghị)
 - hoặc [psmux](https://github.com/psmux/psmux) + ttyd (cho chế độ Native): `winget install psmux`
 
 <Aside type="caution" title="Thử nghiệm">
-  Hỗ trợ Windows hiện đang trong giai đoạn thử nghiệm và cần kiểm tra thêm. Vui
-  lòng báo cáo lỗi tại
-  [GitHub](https://github.com/lamngockhuong/termote/issues).
+  Hỗ trợ Windows đang trong giai đoạn thử nghiệm. Chế độ Container đã hoạt động.
+  Chế độ Native có lỗi đã biết: ttyd bị crash trên Windows 11 (build 26200+) khi
+  WebSocket client kết nối — bản sửa đang được lên kế hoạch. Vui lòng báo cáo lỗi
+  tại [GitHub](https://github.com/lamngockhuong/termote/issues).
 </Aside>
 
 ## Cài đặt một dòng

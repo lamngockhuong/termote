@@ -7,6 +7,13 @@ import { Steps, Tabs, TabItem, Aside } from "@astrojs/starlight/components";
 
 No Docker required. Access host binaries like `claude`, `git`, `gh`, etc.
 
+<Aside type="caution" title="Windows Native Mode — Known Issue">
+  On Windows 11 (build 26200+), ttyd.exe crashes when a WebSocket client
+  connects due to a ConPTY named pipe issue. A fix is planned (replacing ttyd
+  with a Go-based terminal handler). In the meantime, use **Container mode** on
+  Windows — it works correctly.
+</Aside>
+
 ## Prerequisites
 
 <Tabs>
@@ -20,8 +27,19 @@ No Docker required. Access host binaries like `claude`, `git`, `gh`, etc.
     ```bash
       brew install ttyd tmux go
     ```
+  </TabItem>
+  <TabItem label="Windows">
+    ```powershell
+    # Install psmux (tmux-compatible for Windows)
+    winget install psmux
+    # ttyd is auto-downloaded by the install script
+    ```
 
-</TabItem>
+    <Aside type="caution">
+      Native mode on Windows is currently broken on Windows 11 build 26200+.
+      Use [Container mode](/installation/docker/) instead.
+    </Aside>
+  </TabItem>
 </Tabs>
 
 ## Installation
