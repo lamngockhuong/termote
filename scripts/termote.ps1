@@ -667,12 +667,10 @@ function Invoke-Install {
     $bindAddr = if ($Lan) { "0.0.0.0" } else { "127.0.0.1" }
     $lanIP = if ($Lan) { Get-LanIP } else { "" }
 
-    # Check release mode
-    $releaseMode = $false
-    $pwaDist = Join-Path $script:PROJECT_DIR "pwa\dist"
-    if (Test-Path (Join-Path $script:PROJECT_DIR "pwa-dist")) {
-        $releaseMode = $true
-        $pwaDist = Join-Path $script:PROJECT_DIR "pwa-dist"
+    # Detect release mode (no pwa/package.json means this is an installed release, not the dev repo)
+    $releaseMode = -not (Test-Path (Join-Path $script:PROJECT_DIR "pwa\package.json"))
+    $pwaDistDir = Join-Path $script:PROJECT_DIR "pwa-dist"
+    if ($releaseMode) {
         Write-Info "Release mode (using pre-built artifacts)"
     }
 
@@ -683,12 +681,17 @@ function Invoke-Install {
     # Step 1: Setup PWA
     Write-Step "1/4" "Setting up PWA..."
     if ($releaseMode) {
-        $destDir = Join-Path $script:PROJECT_DIR "pwa\dist"
-        if (-not (Test-Path $destDir)) {
-            New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+        if (Test-Path $pwaDistDir) {
+            $destDir = Join-Path $script:PROJECT_DIR "pwa\dist"
+            if (-not (Test-Path $destDir)) {
+                New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+            }
+            Copy-Item -Path "$pwaDistDir\*" -Destination $destDir -Recurse -Force
+            Remove-Item -Path $pwaDistDir -Recurse -Force
+        } elseif (-not (Test-Path (Join-Path $script:PROJECT_DIR "pwa\dist"))) {
+            Write-Err "PWA dist not found. Please reinstall from a release."
+            return
         }
-        Copy-Item -Path "$pwaDist\*" -Destination $destDir -Recurse -Force
-        Remove-Item -Path (Join-Path $script:PROJECT_DIR "pwa-dist") -Recurse -Force
     } else {
         Push-Location (Join-Path $script:PROJECT_DIR "pwa")
         & pnpm install --frozen-lockfile
