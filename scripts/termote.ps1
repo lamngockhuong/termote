@@ -406,7 +406,8 @@ function Show-InteractiveUninstall {
 function Start-ContainerMode {
     param(
         [string]$BindAddr,
-        [int]$Port
+        [int]$Port,
+        [switch]$Lan
     )
 
     $runtime = Get-ContainerRuntime
@@ -446,12 +447,12 @@ function Start-ContainerMode {
         & $runtime compose down 2>$null
     } catch {}
 
-    # Create override file
+    # Create override file (container always maps to localhost; LAN access via portproxy)
     $override = @"
 services:
   termote:
     ports:
-      - "${BindAddr}:${Port}:$($script:PORT_CONTAINER)"
+      - "127.0.0.1:${Port}:$($script:PORT_CONTAINER)"
 "@
     $override | Out-File -FilePath "docker-compose.override.yml" -Encoding utf8 -NoNewline
 
@@ -463,6 +464,22 @@ services:
     }
 
     Remove-Item "docker-compose.override.yml" -ErrorAction SilentlyContinue
+
+    # On Windows, container port forwarding via WSL2/Hyper-V only listens on localhost.
+    # Use netsh portproxy to expose the port to LAN (requires elevation).
+    if ($Lan) {
+        Write-Info "Setting up LAN port forwarding (netsh portproxy)..."
+        $cmds = "netsh interface portproxy delete v4tov4 listenport=$Port listenaddress=0.0.0.0 2>`$null; " +
+                "netsh interface portproxy add v4tov4 listenport=$Port listenaddress=0.0.0.0 connectport=$Port connectaddress=127.0.0.1"
+        try {
+            Start-Process powershell -Verb RunAs -ArgumentList "-NoProfile -Command `"$cmds`"" -Wait -WindowStyle Hidden
+            Write-Info "LAN port forwarding enabled on port $Port"
+        } catch {
+            Write-Warn "Failed to set up LAN port forwarding. Manually run as Administrator:"
+            Write-Warn "  netsh interface portproxy add v4tov4 listenport=$Port listenaddress=0.0.0.0 connectport=$Port connectaddress=127.0.0.1"
+        }
+    }
+
     Pop-Location
 }
 
@@ -486,6 +503,16 @@ function Stop-ContainerMode {
         }
         Remove-Item "docker-compose.override.yml" -ErrorAction SilentlyContinue
         Pop-Location
+    }
+
+    # Clean up LAN port forwarding if it was set up
+    $savedConfig = Get-SavedConfig
+    if ($savedConfig -and $savedConfig.Lan -and $savedConfig.Mode -eq "container") {
+        $port = if ($savedConfig.Port) { $savedConfig.Port } else { $script:PORT_MAIN }
+        $cmd = "netsh interface portproxy delete v4tov4 listenport=$port listenaddress=0.0.0.0 2>`$null"
+        try {
+            Start-Process powershell -Verb RunAs -ArgumentList "-NoProfile -Command `"$cmd`"" -Wait -WindowStyle Hidden
+        } catch {}
     }
 }
 
@@ -735,7 +762,7 @@ function Invoke-Install {
 
     switch ($Mode) {
         "container" {
-            Start-ContainerMode -BindAddr $bindAddr -Port $Port
+            Start-ContainerMode -BindAddr $bindAddr -Port $Port -Lan:$Lan
         }
         "native" {
             Start-NativeMode -BindAddr $bindAddr -Port $Port -NoAuth:$NoAuth
