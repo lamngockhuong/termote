@@ -688,6 +688,7 @@ function Invoke-Install {
             New-Item -ItemType Directory -Path $destDir -Force | Out-Null
         }
         Copy-Item -Path "$pwaDist\*" -Destination $destDir -Recurse -Force
+        Remove-Item -Path (Join-Path $script:PROJECT_DIR "pwa-dist") -Recurse -Force
     } else {
         Push-Location (Join-Path $script:PROJECT_DIR "pwa")
         & pnpm install --frozen-lockfile
