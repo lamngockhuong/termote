@@ -5,8 +5,7 @@
   "useTabs": false,
   "markdown": {
     "lineWidth": 120,
-    "textWrap": "maintain",
-    "associations": ["**/*.mdx"]
+    "textWrap": "maintain"
   },
   "includes": [
     "**/*.md",
@@ -16,7 +15,8 @@
     "**/node_modules",
     "**/dist",
     "**/.git",
-    "**/CHANGELOG.md"
+    "**/CHANGELOG.md",
+    "website/**/*.mdx"
   ],
   "plugins": [
     "https://plugins.dprint.dev/markdown-0.17.8.wasm"

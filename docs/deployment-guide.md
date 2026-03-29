@@ -99,6 +99,7 @@ Installation settings are automatically saved:
 - **Windows:** `~/.termote/config.json` (DPAPI encrypted)
 
 Saved settings include:
+
 - Mode (container/native)
 - Network flags (--lan, --tailscale)
 - Authentication setting (--no-auth)

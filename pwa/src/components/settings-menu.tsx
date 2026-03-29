@@ -18,6 +18,8 @@ async function clearCacheAndReload() {
       const cacheNames = await caches.keys()
       await Promise.all(cacheNames.map((name) => caches.delete(name)))
     }
+    // Clear session cookie to trigger basic auth on reload
+    document.cookie = 'termote_session=; Max-Age=0; path=/'
   } finally {
     window.location.reload()
   }

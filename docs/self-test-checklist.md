@@ -68,7 +68,7 @@ Manual testing checklist for Termote features before release.
 - [ ] Desktop: Icon list displays correctly (no layout issues)
 - [ ] About page looks good in dark mode
 - [ ] Settings button clickable on mobile
-- [ ] Clear Cache & Reload button works (unregisters SW, clears caches, reloads)
+- [ ] Clear Cache & Reload button works (unregisters SW, clears caches, clears session cookie, reloads)
 
 ### Install/Offline
 
@@ -297,10 +297,11 @@ _Add any issues or observations during testing:_
 
 -
 -
-- ***
 
-  **Tested by:** **\*\***\_\_\_**\*\***
+---
 
-  **Date:** **\*\***\_\_\_**\*\***
+**Tested by:** **\*\***\_\_\_**\*\***
 
-  **Version:** **\*\***\_\_\_**\*\***
+**Date:** **\*\***\_\_\_**\*\***
+
+**Version:** **\*\***\_\_\_**\*\***
