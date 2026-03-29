@@ -110,7 +110,9 @@ export const TerminalFrame = forwardRef<TerminalFrameHandle, Props>(
       loadTerminal()
     }, [loadTerminal])
 
-    // Apply theme/fontSize immediately if terminal is ready, otherwise poll on load
+    // Apply theme/fontSize immediately if terminal is ready, otherwise poll on load.
+    // terminalSrc triggers re-run when iframe appears after loading state clears.
+    // biome-ignore lint/correctness/useExhaustiveDependencies: terminalSrc ensures effect runs when iframe mounts
     useEffect(() => {
       const iframe = iframeRef.current
       if (!iframe) return
@@ -130,10 +132,7 @@ export const TerminalFrame = forwardRef<TerminalFrameHandle, Props>(
         if (themeApplied) {
           setTerminalFontSize(iframe, fontSize)
           // Clear DA response artifacts leaked by xterm.js on ttyd+tmux connect
-          setTimeout(
-            () => sendKeyToTerminal(iframe, 'u', { ctrl: true }),
-            300,
-          )
+          setTimeout(() => sendKeyToTerminal(iframe, 'u', { ctrl: true }), 300)
           if (intervalId) clearInterval(intervalId)
         } else if (++attempts >= 30) {
           if (intervalId) clearInterval(intervalId)
