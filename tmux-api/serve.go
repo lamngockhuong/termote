@@ -49,19 +49,25 @@ func envOr(key, fallback string) string {
 	return fallback
 }
 
-// terminalTokenStore manages single-use, time-limited tokens for terminal iframe access.
-type terminalTokenStore struct {
-	mu     sync.Mutex
-	tokens map[string]time.Time // token → expiry
+// tokenStore manages time-limited tokens with configurable behavior.
+type tokenStore struct {
+	mu        sync.RWMutex
+	tokens    map[string]time.Time // token → expiry
+	ttl       time.Duration
+	singleUse bool
 }
 
-func newTerminalTokenStore() *terminalTokenStore {
-	return &terminalTokenStore{tokens: make(map[string]time.Time)}
+func newTokenStore(ttl time.Duration, singleUse bool) *tokenStore {
+	return &tokenStore{
+		tokens:    make(map[string]time.Time),
+		ttl:       ttl,
+		singleUse: singleUse,
+	}
 }
 
-// generate creates a single-use token valid for 30 seconds.
-// Also sweeps expired tokens to prevent unbounded map growth.
-func (s *terminalTokenStore) generate() (string, error) {
+// generate creates a token valid for the configured TTL.
+// Sweeps expired tokens to prevent unbounded map growth.
+func (s *tokenStore) generate() (string, error) {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
 		return "", err
@@ -69,28 +75,45 @@ func (s *terminalTokenStore) generate() (string, error) {
 	token := hex.EncodeToString(b)
 	now := time.Now()
 	s.mu.Lock()
-	// Sweep expired tokens
 	for k, exp := range s.tokens {
 		if now.After(exp) {
 			delete(s.tokens, k)
 		}
 	}
-	s.tokens[token] = now.Add(30 * time.Second)
+	s.tokens[token] = now.Add(s.ttl)
 	s.mu.Unlock()
 	return token, nil
 }
 
-// validate checks and consumes a token (single-use).
-func (s *terminalTokenStore) validate(token string) bool {
+// validate checks a token. If singleUse is true, consumes the token.
+func (s *tokenStore) validate(token string) bool {
+	now := time.Now()
+	// Fast path: read-only check for reusable tokens
+	if !s.singleUse {
+		s.mu.RLock()
+		expiry, ok := s.tokens[token]
+		s.mu.RUnlock()
+		if !ok || now.After(expiry) {
+			return false
+		}
+		return true
+	}
+	// Single-use: need write lock to delete
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	expiry, ok := s.tokens[token]
-	if !ok || time.Now().After(expiry) {
-		delete(s.tokens, token)
+	if !ok || now.After(expiry) {
 		return false
 	}
-	delete(s.tokens, token) // single-use: consume immediately
+	delete(s.tokens, token)
 	return true
+}
+
+// Legacy aliases for terminal tokens (30s, single-use)
+type terminalTokenStore = tokenStore
+
+func newTerminalTokenStore() *terminalTokenStore {
+	return newTokenStore(30*time.Second, true)
 }
 
 // startServeMode starts the server (PWA static files + ttyd WebSocket proxy + tmux API + basic auth)
@@ -219,17 +242,35 @@ func isPWAPublicPath(path string) bool {
 	return false
 }
 
+const (
+	sessionCookieName = "termote_session"
+	sessionTTL        = 24 * time.Hour
+)
+
 // basicAuth wraps a handler with HTTP basic authentication.
+// After successful basic auth, sets a session cookie to avoid re-prompting
+// (fixes mobile browsers not persisting basic auth across iframe loads).
 // Note: uses r.RemoteAddr for rate limiting. Behind a reverse proxy, all clients
 // may share one IP — consider the proxy's own rate limiting in that setup.
 func basicAuth(user, pass string, next http.Handler) http.Handler {
 	limiter := newAuthRateLimiter()
+	sessions := newTokenStore(sessionTTL, false)
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Skip auth for PWA public paths (manifest, service worker)
 		if isPWAPublicPath(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
 		}
+
+		// Check session cookie first (fixes mobile iframe auth issue)
+		if cookie, err := r.Cookie(sessionCookieName); err == nil {
+			if sessions.validate(cookie.Value) {
+				next.ServeHTTP(w, r)
+				return
+			}
+		}
+
 		// Extract client IP (strip port)
 		ip, _, _ := net.SplitHostPort(r.RemoteAddr)
 		if ip == "" {
@@ -254,6 +295,23 @@ func basicAuth(user, pass string, next http.Handler) http.Handler {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
+
+		// Set session cookie to avoid re-prompting on mobile iframe loads
+		sessionToken, err := sessions.generate()
+		if err != nil {
+			log.Printf("session token generation failed: %v", err)
+		} else {
+			http.SetCookie(w, &http.Cookie{
+				Name:     sessionCookieName,
+				Value:    sessionToken,
+				Path:     "/",
+				MaxAge:   int(sessionTTL.Seconds()),
+				HttpOnly: true,
+				SameSite: http.SameSiteStrictMode,
+				Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
+			})
+		}
+
 		next.ServeHTTP(w, r)
 	})
 }
