@@ -430,24 +430,22 @@ test.describe('sidebar scroll', () => {
     await page.goto('/')
     await page.evaluate(() => localStorage.clear())
     await page.reload()
-    await page.waitForSelector('iframe[title="Terminal"]', { timeout: 10000 })
+    await page.waitForSelector('iframe[title="Terminal"]', { timeout: 15000 })
   })
 
   test('sidebar scrolls when many sessions added', async ({ page }) => {
+    const tag = Date.now()
     // Add multiple sessions to trigger scroll
     for (let i = 0; i < 8; i++) {
       await page.click('button[title="Add new session"]')
-      await page.waitForTimeout(100)
-      await page.fill('input[placeholder="Session name"]', `Session ${i}`)
-      await page.click('button:has-text("Add")')
-      await page.waitForTimeout(200)
+      await page.waitForSelector('input[placeholder="Session name"]', { timeout: 3000 })
+      await page.fill('input[placeholder="Session name"]', `s${tag}-${i}`)
+      await page.click('button.bg-blue-600:has-text("Add")')
+      await page.waitForTimeout(300)
     }
 
-    // Check if sidebar content exists
     const sidebar = page.locator('aside')
     await expect(sidebar).toBeVisible()
-
-    // Verify sessions were added
-    await expect(page.locator('aside')).toContainText('Session 0')
+    await expect(sidebar).toContainText(`s${tag}-0`)
   })
 })

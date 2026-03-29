@@ -74,18 +74,14 @@ test.describe('tmux API integration', () => {
   })
 
   test('API health check', async ({ request }) => {
-    const res = await request.get('/api/tmux/health', {
-      headers: { Authorization: 'Basic ' + Buffer.from('admin:admin').toString('base64') },
-    })
+    const res = await request.get('/api/tmux/health')
     expect(res.ok()).toBe(true)
     const data = await res.json()
     expect(data.status).toBe('ok')
   })
 
   test('list windows returns array', async ({ request }) => {
-    const res = await request.get('/api/tmux/windows', {
-      headers: { Authorization: 'Basic ' + Buffer.from('admin:admin').toString('base64') },
-    })
+    const res = await request.get('/api/tmux/windows')
     expect(res.ok()).toBe(true)
     const data = await res.json()
     expect(Array.isArray(data.windows)).toBe(true)
@@ -100,9 +96,7 @@ test.describe('tmux API integration', () => {
     await page.waitForTimeout(500)
 
     // Get initial windows
-    const before = await request.get('/api/tmux/windows', {
-      headers: { Authorization: 'Basic ' + Buffer.from('admin:admin').toString('base64') },
-    })
+    const before = await request.get('/api/tmux/windows')
     const windowsBefore = (await before.json()).windows
 
     // Click on first session button in sidebar
@@ -112,67 +106,53 @@ test.describe('tmux API integration', () => {
 
     // Verify tmux window changed (if multiple windows exist)
     if (windowsBefore.length > 1) {
-      const after = await request.get('/api/tmux/windows', {
-        headers: { Authorization: 'Basic ' + Buffer.from('admin:admin').toString('base64') },
-      })
+      const after = await request.get('/api/tmux/windows')
       const windowsAfter = (await after.json()).windows
-      const activeWindow = windowsAfter.find((w: { active: boolean }) => w.active)
+      const activeWindow = windowsAfter.find(
+        (w: { active: boolean }) => w.active,
+      )
       expect(activeWindow).toBeDefined()
     }
   })
 
   test('add session creates tmux window', async ({ page, request }) => {
-    // Count windows before
-    const before = await request.get('/api/tmux/windows', {
-      headers: { Authorization: 'Basic ' + Buffer.from('admin:admin').toString('base64') },
-    })
+    const before = await request.get('/api/tmux/windows')
     const countBefore = (await before.json()).windows.length
 
-    // Add new session
     await page.click('button[title="Add new session"]')
     await page.waitForSelector('input[placeholder="Session name"]', { timeout: 5000 })
     await page.fill('input[placeholder="Session name"]', 'test-api')
     await page.click('button.bg-blue-600:has-text("Add")')
     await page.waitForTimeout(500)
 
-    // Verify UI
     await expect(page.locator('aside')).toContainText('test-api')
 
-    // Verify tmux window created
-    const after = await request.get('/api/tmux/windows', {
-      headers: { Authorization: 'Basic ' + Buffer.from('admin:admin').toString('base64') },
-    })
+    const after = await request.get('/api/tmux/windows')
     const countAfter = (await after.json()).windows.length
     expect(countAfter).toBeGreaterThanOrEqual(countBefore)
   })
 
   test('remove session kills tmux window', async ({ page, request }) => {
-    // First add a session to remove
+    // Use unique name to avoid conflicts with leftover sessions
+    const name = `rm-${Date.now()}`
     await page.click('button[title="Add new session"]')
     await page.waitForSelector('input[placeholder="Session name"]', { timeout: 5000 })
-    await page.fill('input[placeholder="Session name"]', 'to-remove')
+    await page.fill('input[placeholder="Session name"]', name)
     await page.click('button.bg-blue-600:has-text("Add")')
     await page.waitForTimeout(500)
 
-    // Count windows before removal
-    const before = await request.get('/api/tmux/windows', {
-      headers: { Authorization: 'Basic ' + Buffer.from('admin:admin').toString('base64') },
-    })
+    const before = await request.get('/api/tmux/windows')
     const countBefore = (await before.json()).windows.length
 
-    // Remove the session
-    const sessionRow = page.locator('.group:has(button:has-text("to-remove"))')
+    // Use .first() to avoid strict mode violation if duplicates exist
+    const sessionRow = page.locator(`.group:has-text("${name}")`).first()
     await sessionRow.hover()
     await sessionRow.locator('button[title="Remove session"]').click()
     await page.waitForTimeout(500)
 
-    // Verify UI
-    await expect(page.locator('aside')).not.toContainText('to-remove')
+    await expect(page.locator('aside')).not.toContainText(name)
 
-    // Verify tmux window removed
-    const after = await request.get('/api/tmux/windows', {
-      headers: { Authorization: 'Basic ' + Buffer.from('admin:admin').toString('base64') },
-    })
+    const after = await request.get('/api/tmux/windows')
     const countAfter = (await after.json()).windows.length
     expect(countAfter).toBeLessThanOrEqual(countBefore)
   })
