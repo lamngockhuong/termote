@@ -65,10 +65,19 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 - [ ] Output hiển thị trong terminal
 - [ ] Màu terminal phù hợp dark mode
 - [ ] Màu terminal phù hợp light mode
+- [ ] Chuyển theme không reload terminal (không ngắt/kết nối lại)
+- [ ] Theme terminal đúng sau khi reload trang (F5)
 - [ ] Desktop: Danh sách icon hiển thị đúng (không lỗi layout)
 - [ ] Trang About đẹp trong dark mode
 - [ ] Nút Settings nhấn được trên mobile
 - [ ] Nút Clear Cache & Reload hoạt động (hủy SW, xóa cache, xóa session cookie, reload trang)
+
+### Tùy Chỉnh
+
+- [ ] Modal Preferences mở từ menu Settings
+- [ ] Chuyển đổi hành vi gửi IME hoạt động (Gửi text / Gửi + Enter)
+- [ ] Chuyển đổi toolbar mở rộng mặc định hoạt động
+- [ ] Tùy chỉnh giữ nguyên sau khi reload trang
 
 ### Cài Đặt/Offline
 
@@ -194,8 +203,9 @@ Test trên thiết bị di động thật:
 - [ ] Trình duyệt yêu cầu đăng nhập khi truy cập lần đầu
 - [ ] Thông tin đúng cho phép truy cập
 - [ ] Thông tin sai bị từ chối (401)
-- [ ] Auth giữ nguyên sau khi refresh
-- [ ] Logout xóa session
+- [ ] Auth giữ nguyên sau khi refresh (session cookie)
+- [ ] Session cookie ngăn hỏi auth lại trên mobile iframe
+- [ ] Clear Cache & Reload xóa session cookie (yêu cầu đăng nhập lại)
 
 ### Chế Độ Không Auth
 
@@ -274,10 +284,19 @@ make test
 - [ ] TypeScript compile: `cd pwa && pnpm tsc --noEmit`
 - [ ] Go build không lỗi: `cd tmux-api && go build`
 - [ ] Tất cả shell tests pass: `make test`
+- [ ] Tất cả Go tests pass: `cd tmux-api && go test ./...`
 - [ ] CI pipeline website chạy khi push
 - [ ] Website deploy thành công
 
 ---
+
+## Unit Tests
+
+```bash
+cd pwa && pnpm test
+```
+
+- [ ] Tất cả Vitest unit tests pass (hooks, utils, contexts)
 
 ## E2E Tests
 

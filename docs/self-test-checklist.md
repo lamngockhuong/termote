@@ -65,10 +65,19 @@ Manual testing checklist for Termote features before release.
 - [ ] Output displays in terminal
 - [ ] Terminal colors match dark mode theme
 - [ ] Terminal colors match light mode theme
+- [ ] Theme switching does not reload terminal (no disconnect/reconnect)
+- [ ] Correct terminal theme applied after page reload (F5)
 - [ ] Desktop: Icon list displays correctly (no layout issues)
 - [ ] About page looks good in dark mode
 - [ ] Settings button clickable on mobile
 - [ ] Clear Cache & Reload button works (unregisters SW, clears caches, clears session cookie, reloads)
+
+### Preferences
+
+- [ ] Preferences modal opens from Settings menu
+- [ ] IME send behavior toggle works (Send text only / Send + Enter)
+- [ ] Toolbar default expanded toggle works
+- [ ] Preferences persist after page reload
 
 ### Install/Offline
 
@@ -194,8 +203,9 @@ Test on real mobile device:
 - [ ] Browser prompts for credentials on first access
 - [ ] Valid credentials grant access
 - [ ] Invalid credentials denied (401)
-- [ ] Auth persists across page refreshes
-- [ ] Logout clears session
+- [ ] Auth persists across page refreshes (session cookie)
+- [ ] Session cookie prevents double auth prompt on mobile iframe loads
+- [ ] Clear Cache & Reload clears session cookie (re-prompts auth)
 
 ### No Auth Mode
 
@@ -274,10 +284,19 @@ make test
 - [ ] TypeScript compiles: `cd pwa && pnpm tsc --noEmit`
 - [ ] Go builds without errors: `cd tmux-api && go build`
 - [ ] All shell tests pass: `make test`
+- [ ] All Go tests pass: `cd tmux-api && go test ./...`
 - [ ] Website CI pipeline runs on push
 - [ ] Website deploys successfully
 
 ---
+
+## Unit Tests
+
+```bash
+cd pwa && pnpm test
+```
+
+- [ ] All Vitest unit tests pass (hooks, utils, contexts)
 
 ## E2E Tests
 
