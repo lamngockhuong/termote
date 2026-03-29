@@ -564,3 +564,131 @@ func TestNewWebSocketProxyDetection(t *testing.T) {
 		t.Error("proxy should return a response")
 	}
 }
+
+func TestTokenStoreReusable(t *testing.T) {
+	store := newTokenStore(time.Hour, false) // reusable tokens
+
+	t.Run("generate and validate", func(t *testing.T) {
+		token, err := store.generate()
+		if err != nil {
+			t.Fatalf("generate failed: %v", err)
+		}
+		if !store.validate(token) {
+			t.Error("valid token should pass validation")
+		}
+	})
+
+	t.Run("reusable token validates multiple times", func(t *testing.T) {
+		token, _ := store.generate()
+		for i := 0; i < 5; i++ {
+			if !store.validate(token) {
+				t.Errorf("reusable token should validate on attempt %d", i+1)
+			}
+		}
+	})
+
+	t.Run("invalid token rejected", func(t *testing.T) {
+		if store.validate("nonexistent") {
+			t.Error("invalid token should fail validation")
+		}
+	})
+
+	t.Run("expired token rejected", func(t *testing.T) {
+		shortStore := newTokenStore(time.Millisecond, false)
+		token, _ := shortStore.generate()
+		time.Sleep(5 * time.Millisecond)
+		if shortStore.validate(token) {
+			t.Error("expired token should fail validation")
+		}
+	})
+}
+
+func TestBasicAuthSessionCookie(t *testing.T) {
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := basicAuth("admin", "secret", inner)
+
+	t.Run("sets session cookie on successful auth", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/api/test", nil)
+		req.SetBasicAuth("admin", "secret")
+		rec := httptest.NewRecorder()
+
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", rec.Code)
+		}
+
+		cookies := rec.Result().Cookies()
+		var sessionCookie *http.Cookie
+		for _, c := range cookies {
+			if c.Name == sessionCookieName {
+				sessionCookie = c
+				break
+			}
+		}
+		if sessionCookie == nil {
+			t.Fatal("session cookie not set")
+		}
+		if !sessionCookie.HttpOnly {
+			t.Error("session cookie should be HttpOnly")
+		}
+		if sessionCookie.SameSite != http.SameSiteStrictMode {
+			t.Error("session cookie should have SameSite=Strict")
+		}
+	})
+
+	t.Run("session cookie allows access without basic auth", func(t *testing.T) {
+		// First request: authenticate and get cookie
+		req1 := httptest.NewRequest("GET", "/api/test", nil)
+		req1.SetBasicAuth("admin", "secret")
+		rec1 := httptest.NewRecorder()
+		handler.ServeHTTP(rec1, req1)
+
+		cookies := rec1.Result().Cookies()
+		var sessionCookie *http.Cookie
+		for _, c := range cookies {
+			if c.Name == sessionCookieName {
+				sessionCookie = c
+				break
+			}
+		}
+		if sessionCookie == nil {
+			t.Fatal("session cookie not set")
+		}
+
+		// Second request: use cookie, no basic auth
+		req2 := httptest.NewRequest("GET", "/api/test", nil)
+		req2.AddCookie(sessionCookie)
+		rec2 := httptest.NewRecorder()
+		handler.ServeHTTP(rec2, req2)
+
+		if rec2.Code != http.StatusOK {
+			t.Errorf("session cookie should grant access, got %d", rec2.Code)
+		}
+	})
+
+	t.Run("invalid session cookie falls back to basic auth", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/api/test", nil)
+		req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "invalid"})
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("invalid cookie without basic auth should return 401, got %d", rec.Code)
+		}
+	})
+
+	t.Run("invalid cookie with valid basic auth succeeds", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/api/test", nil)
+		req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "invalid"})
+		req.SetBasicAuth("admin", "secret")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Errorf("valid basic auth should succeed even with invalid cookie, got %d", rec.Code)
+		}
+	})
+}
