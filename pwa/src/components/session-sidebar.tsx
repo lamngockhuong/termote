@@ -227,7 +227,10 @@ export function SessionSidebar({
             isOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
         >
-          <div className="p-4 border-b border-zinc-200 dark:border-zinc-700 flex justify-between items-center shrink-0">
+          <div
+            className="p-4 border-b border-zinc-200 dark:border-zinc-700 flex justify-between items-center shrink-0"
+            style={{ paddingTop: 'calc(1rem + env(safe-area-inset-top))' }}
+          >
             <span className="font-semibold text-zinc-900 dark:text-zinc-50">
               Sessions
             </span>

@@ -213,7 +213,13 @@ export default function App() {
         )}
 
         <main className="flex-1 flex flex-col min-w-0">
-          <header className="relative z-10 h-12 px-4 flex items-center bg-white dark:bg-zinc-800 border-b border-zinc-200 dark:border-zinc-700 shrink-0">
+          <header
+            className="relative z-10 px-4 flex items-center bg-white dark:bg-zinc-800 border-b border-zinc-200 dark:border-zinc-700 shrink-0"
+            style={{
+              paddingTop: 'env(safe-area-inset-top)',
+              minHeight: 'calc(3rem + env(safe-area-inset-top))',
+            }}
+          >
             {/* Mobile hamburger */}
             {isMobile && (
               <button
