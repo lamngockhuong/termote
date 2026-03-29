@@ -81,7 +81,7 @@ export const TerminalFrame = forwardRef<TerminalFrameHandle, Props>(
     const [tokenError, setTokenError] = useState<string | null>(null)
     const [loading, setLoading] = useState(false)
 
-    // Fetch a new token each time the iframe needs to load (theme change triggers key change)
+    // Fetch a token and set the terminal iframe source
     const loadTerminal = useCallback(async () => {
       try {
         setTokenError(null)
@@ -108,13 +108,20 @@ export const TerminalFrame = forwardRef<TerminalFrameHandle, Props>(
 
     useEffect(() => {
       loadTerminal()
-    }, [loadTerminal, theme])
+    }, [loadTerminal])
 
-    // Apply theme after iframe loads
+    // Apply theme/fontSize immediately if terminal is ready, otherwise poll on load
     useEffect(() => {
       const iframe = iframeRef.current
       if (!iframe) return
 
+      const immediateApplied = setTerminalTheme(iframe, THEMES[theme])
+      if (immediateApplied) {
+        setTerminalFontSize(iframe, fontSize)
+        return
+      }
+
+      // Terminal not ready yet (initial load) — poll via load event
       let attempts = 0
       let intervalId: ReturnType<typeof setInterval> | null = null
 
@@ -122,10 +129,11 @@ export const TerminalFrame = forwardRef<TerminalFrameHandle, Props>(
         const themeApplied = setTerminalTheme(iframe, THEMES[theme])
         if (themeApplied) {
           setTerminalFontSize(iframe, fontSize)
-          // Clear DA response artifacts (e.g. "1;2c0;276;0c") leaked by xterm.js
-          // when ttyd+tmux connection is established. Ctrl+U clears the input line.
-          // Delay to ensure DA responses have arrived before clearing.
-          setTimeout(() => sendKeyToTerminal(iframe, 'u', { ctrl: true }), 300)
+          // Clear DA response artifacts leaked by xterm.js on ttyd+tmux connect
+          setTimeout(
+            () => sendKeyToTerminal(iframe, 'u', { ctrl: true }),
+            300,
+          )
           if (intervalId) clearInterval(intervalId)
         } else if (++attempts >= 30) {
           if (intervalId) clearInterval(intervalId)
@@ -142,16 +150,8 @@ export const TerminalFrame = forwardRef<TerminalFrameHandle, Props>(
         if (intervalId) clearInterval(intervalId)
         iframe.removeEventListener('load', handleLoad)
       }
-    }, [theme])
+    }, [theme, fontSize, terminalSrc])
 
-    // Apply font size changes immediately (without reloading iframe)
-    useEffect(() => {
-      const iframe = iframeRef.current
-      if (!iframe) return
-      setTerminalFontSize(iframe, fontSize)
-    }, [fontSize])
-
-    // key={terminalSrc} forces iframe reload when token or theme changes
     if (tokenError) {
       return (
         <div className="flex-1 flex flex-col items-center justify-center text-red-400 relative z-10">
