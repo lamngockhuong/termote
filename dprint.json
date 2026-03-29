@@ -5,8 +5,7 @@
   "useTabs": false,
   "markdown": {
     "lineWidth": 120,
-    "textWrap": "maintain",
-    "associations": ["**/*.mdx"]
+    "textWrap": "maintain"
   },
   "includes": [
     "**/*.md",
