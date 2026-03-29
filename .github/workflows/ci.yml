@@ -74,6 +74,10 @@ jobs:
         working-directory: pwa
         run: pnpm lint:ci
 
+      - name: Unit tests
+        working-directory: pwa
+        run: pnpm test
+
       - name: Build
         working-directory: pwa
         run: pnpm build
@@ -97,6 +101,10 @@ jobs:
         with:
           go-version: "1.26"
           cache-dependency-path: tmux-api/go.mod
+
+      - name: Test
+        working-directory: tmux-api
+        run: go test -short ./...
 
       - name: Build
         working-directory: tmux-api
