@@ -36,6 +36,25 @@ MAJOR.MINOR.PATCH[-PRERELEASE]
 | Minor  | `x.y+1.0`   | `feat:` commits                | `1.1.0`     |
 | Major  | `x+1.0.0`   | `feat!:` or `BREAKING CHANGE:` | `2.0.0`     |
 
+### Pre-1.0 Version Rules
+
+While version < 1.0.0, bump behavior is conservative:
+
+| Commit             | Normal (≥1.0) | Pre-1.0 (current) |
+| ------------------ | ------------- | ----------------- |
+| `fix:`             | Patch         | **Patch**         |
+| `feat:`            | Minor         | **Patch**         |
+| `feat!:`           | Major         | **Minor**         |
+| `BREAKING CHANGE:` | Major         | **Minor**         |
+
+**Example** (current 0.0.9):
+
+- `fix: bug` → 0.0.10
+- `feat: new feature` → 0.0.10 (not 0.1.0)
+- `feat!: breaking change` → 0.1.0 (not 1.0.0)
+
+This is configured via `bump-minor-pre-major` and `bump-patch-for-minor-pre-major` in `release-please-config.json`.
+
 ### RC Flow
 
 ```
