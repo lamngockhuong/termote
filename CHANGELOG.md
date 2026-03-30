@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.0.9](https://github.com/lamngockhuong/termote/compare/v0.0.8...v0.0.9) (2026-03-29)
+
+
+### Features
+
+* **pwa:** clear session cookie on Clear Cache & Reload ([#97](https://github.com/lamngockhuong/termote/issues/97)) ([0da8114](https://github.com/lamngockhuong/termote/commit/0da8114702a089775038a8e3144e518c5484f3d9))
+* **website:** add custom footer with author credit ([#95](https://github.com/lamngockhuong/termote/issues/95)) ([e99258d](https://github.com/lamngockhuong/termote/commit/e99258d4068868f7d7c8d528b5762b571adc228e))
+
+
+### Bug Fixes
+
+* **auth:** add session cookie to prevent double basic auth on mobile ([#96](https://github.com/lamngockhuong/termote/issues/96)) ([a79dda5](https://github.com/lamngockhuong/termote/commit/a79dda5d4afe2df9505f0f2cf1995f49b0d664e5))
+* **e2e:** auto-detect auth credentials and improve test isolation ([#99](https://github.com/lamngockhuong/termote/issues/99)) ([3de2d91](https://github.com/lamngockhuong/termote/commit/3de2d91dd896c21506ff6380b96f25b48d38e995))
+* **pwa:** add safe-area-inset-top to prevent iOS status bar overlap ([#100](https://github.com/lamngockhuong/termote/issues/100)) ([a4c7f95](https://github.com/lamngockhuong/termote/commit/a4c7f95207f2731541c69e39f6f54b7149a71372))
+* **pwa:** terminal theme in-place switching + unit test suite ([#98](https://github.com/lamngockhuong/termote/issues/98)) ([0f1e32f](https://github.com/lamngockhuong/termote/commit/0f1e32fb3ad92ac73c3e130c0d250b17d8ca5555))
+* skip cross-compile in release mode when pre-built binary exists ([#92](https://github.com/lamngockhuong/termote/issues/92)) ([0496008](https://github.com/lamngockhuong/termote/commit/0496008d554186b7bb990940e4b61ebf07065935))
+
 ## [0.0.8](https://github.com/lamngockhuong/termote/compare/v0.0.7...v0.0.8) (2026-03-28)
 
 
