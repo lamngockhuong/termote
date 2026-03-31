@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.0.10](https://github.com/lamngockhuong/termote/compare/v0.0.9...v0.0.10) (2026-03-31)
+
+
+### Features
+
+* commits only bump patch version while version &lt; 1.0.0. ([0223120](https://github.com/lamngockhuong/termote/commit/0223120fd3e59dc80f5493761241ee9ac178d7a0))
+* **pwa:** add context menu disable setting with toggle in preferences ([#105](https://github.com/lamngockhuong/termote/issues/105)) ([db8c34e](https://github.com/lamngockhuong/termote/commit/db8c34e94cae53196645a2ab14da61de1bdf1140))
+
+
+### Bug Fixes
+
+* **deps:** update dependency astro to v6.1.2 ([#104](https://github.com/lamngockhuong/termote/issues/104)) ([d8e363a](https://github.com/lamngockhuong/termote/commit/d8e363a00b4fbe8c5e3369eb71366cee4d308046))
+
 ## [0.0.9](https://github.com/lamngockhuong/termote/compare/v0.0.8...v0.0.9) (2026-03-29)
 
 
