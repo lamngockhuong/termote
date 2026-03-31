@@ -288,8 +288,8 @@ test.describe('preferences modal', () => {
     await page.click('text=Preferences')
     await page.waitForTimeout(200)
 
-    // Click toggle switch
-    const toggle = page.locator('button[role="switch"]')
+    // Click the first toggle switch (toolbar default expanded)
+    const toggle = page.locator('button[role="switch"]').first()
     await expect(toggle).toHaveAttribute('aria-checked', 'false')
     await toggle.click()
     await page.waitForTimeout(100)
@@ -298,6 +298,45 @@ test.describe('preferences modal', () => {
     // Verify persisted
     const stored = await page.evaluate(() => localStorage.getItem('termote-settings'))
     expect(JSON.parse(stored!).toolbarDefaultExpanded).toBe(true)
+  })
+
+  test('toggles disable context menu', async ({ page }) => {
+    await page.click('button[aria-label="Settings"]')
+    await page.click('text=Preferences')
+    await page.waitForTimeout(200)
+
+    // Second toggle is "Disable right-click menu" (default: true)
+    const toggle = page.locator('button[role="switch"]').nth(1)
+    await expect(toggle).toHaveAttribute('aria-checked', 'true')
+    await toggle.click()
+    await page.waitForTimeout(100)
+    await expect(toggle).toHaveAttribute('aria-checked', 'false')
+
+    // Verify persisted
+    const stored = await page.evaluate(() => localStorage.getItem('termote-settings'))
+    expect(JSON.parse(stored!).disableContextMenu).toBe(false)
+  })
+
+  test('disable context menu setting persists after reload', async ({ page }) => {
+    // Disable context menu blocking
+    await page.click('button[aria-label="Settings"]')
+    await page.click('text=Preferences')
+    await page.waitForTimeout(200)
+    const toggle = page.locator('button[role="switch"]').nth(1)
+    await toggle.click()
+    await page.waitForTimeout(100)
+
+    // Reload
+    await page.keyboard.press('Escape')
+    await page.reload()
+    await page.waitForSelector('iframe[title="Terminal"]', { timeout: 10000 })
+
+    // Reopen and verify
+    await page.click('button[aria-label="Settings"]')
+    await page.click('text=Preferences')
+    await page.waitForTimeout(200)
+    const toggleAfter = page.locator('button[role="switch"]').nth(1)
+    await expect(toggleAfter).toHaveAttribute('aria-checked', 'false')
   })
 
   test('preferences persist after page reload', async ({ page }) => {

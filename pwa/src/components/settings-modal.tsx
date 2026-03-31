@@ -11,6 +11,45 @@ interface Props {
   ) => void
 }
 
+function ToggleRow({
+  label,
+  description,
+  checked,
+  onChange,
+}: {
+  label: string
+  description: string
+  checked: boolean
+  onChange: () => void
+}) {
+  return (
+    <div className="flex items-center justify-between">
+      <div>
+        <p className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          {label}
+        </p>
+        <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+          {description}
+        </p>
+      </div>
+      <button
+        role="switch"
+        aria-checked={checked}
+        onClick={onChange}
+        className={`relative w-11 h-6 rounded-full transition-colors ${
+          checked ? 'bg-blue-500' : 'bg-zinc-300 dark:bg-zinc-600'
+        }`}
+      >
+        <span
+          className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+            checked ? 'translate-x-5' : ''
+          }`}
+        />
+      </button>
+    </div>
+  )
+}
+
 const IME_SEND_OPTIONS: {
   value: ImeSendBehavior
   label: string
@@ -112,39 +151,29 @@ export function SettingsModal({
             </div>
           </div>
 
-          <div>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  Toolbar default expanded
-                </p>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                  Show all keys when toolbar loads
-                </p>
-              </div>
-              <button
-                role="switch"
-                aria-checked={settings.toolbarDefaultExpanded}
-                onClick={() =>
-                  onUpdateSetting(
-                    'toolbarDefaultExpanded',
-                    !settings.toolbarDefaultExpanded,
-                  )
-                }
-                className={`relative w-11 h-6 rounded-full transition-colors ${
-                  settings.toolbarDefaultExpanded
-                    ? 'bg-blue-500'
-                    : 'bg-zinc-300 dark:bg-zinc-600'
-                }`}
-              >
-                <span
-                  className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
-                    settings.toolbarDefaultExpanded ? 'translate-x-5' : ''
-                  }`}
-                />
-              </button>
-            </div>
-          </div>
+          <ToggleRow
+            label="Toolbar default expanded"
+            description="Show all keys when toolbar loads"
+            checked={settings.toolbarDefaultExpanded}
+            onChange={() =>
+              onUpdateSetting(
+                'toolbarDefaultExpanded',
+                !settings.toolbarDefaultExpanded,
+              )
+            }
+          />
+
+          <ToggleRow
+            label="Disable right-click menu"
+            description="Block context menu on terminal area"
+            checked={settings.disableContextMenu}
+            onChange={() =>
+              onUpdateSetting(
+                'disableContextMenu',
+                !settings.disableContextMenu,
+              )
+            }
+          />
         </div>
       </div>
     </dialog>

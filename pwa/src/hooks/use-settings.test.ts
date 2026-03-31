@@ -11,6 +11,7 @@ describe('useSettings', () => {
     const { result } = renderHook(() => useSettings())
     expect(result.current.settings.imeSendBehavior).toBe('send-only')
     expect(result.current.settings.toolbarDefaultExpanded).toBe(false)
+    expect(result.current.settings.disableContextMenu).toBe(true)
   })
 
   it('restores saved settings from localStorage', () => {
@@ -34,6 +35,7 @@ describe('useSettings', () => {
     const { result } = renderHook(() => useSettings())
     expect(result.current.settings.imeSendBehavior).toBe('send-enter')
     expect(result.current.settings.toolbarDefaultExpanded).toBe(false)
+    expect(result.current.settings.disableContextMenu).toBe(true)
   })
 
   it('handles corrupt localStorage gracefully', () => {
@@ -61,5 +63,24 @@ describe('useSettings', () => {
     act(() => a.current.updateSetting('toolbarDefaultExpanded', true))
 
     expect(b.current.settings.toolbarDefaultExpanded).toBe(true)
+  })
+
+  it('updates disableContextMenu and persists', () => {
+    const { result } = renderHook(() => useSettings())
+    act(() => result.current.updateSetting('disableContextMenu', false))
+
+    expect(result.current.settings.disableContextMenu).toBe(false)
+
+    const stored = JSON.parse(localStorage.getItem('termote-settings')!)
+    expect(stored.disableContextMenu).toBe(false)
+  })
+
+  it('restores disableContextMenu from localStorage', () => {
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ disableContextMenu: false }),
+    )
+    const { result } = renderHook(() => useSettings())
+    expect(result.current.settings.disableContextMenu).toBe(false)
   })
 })
