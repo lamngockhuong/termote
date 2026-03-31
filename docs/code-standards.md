@@ -63,6 +63,18 @@ When storing user preferences:
 const STORAGE_KEY = "termote-settings";
 const listeners = new Set<() => void>();
 
+export interface Settings {
+  imeSendBehavior: "send-only" | "send-enter";
+  toolbarDefaultExpanded: boolean;
+  disableContextMenu: boolean;
+}
+
+const DEFAULTS: Settings = {
+  imeSendBehavior: "send-only",
+  toolbarDefaultExpanded: false,
+  disableContextMenu: true,
+};
+
 function getSnapshot() {
   const json = localStorage.getItem(STORAGE_KEY) ?? "";
   return json ? { ...DEFAULTS, ...JSON.parse(json) } : DEFAULTS;
@@ -87,7 +99,8 @@ export function useSettings() {
 
 **Key points:**
 
-- Provide sensible defaults for new users
+- Define explicit Settings interface with all properties
+- Provide sensible defaults for all settings
 - Cache values to avoid repeated JSON parsing
 - Use explicit listener subscription for SSR compatibility
 - Return DEFAULTS on server/SSR to avoid hydration mismatch
@@ -151,10 +164,20 @@ import type { Session } from "./types/session";
 
 ### Testing
 
+**Go:**
+
 ```bash
 go test                           # Unit tests only (59%)
 go test -tags=integration         # Unit + Integration (71%)
 go test -tags=integration -cover  # With coverage
+```
+
+**PWA:**
+
+```bash
+pnpm test                         # Run all Vitest unit tests
+pnpm test:e2e                     # Run Playwright e2e tests
+pnpm test:e2e:ui                  # Run e2e tests with UI debugger
 ```
 
 ### Error Handling
