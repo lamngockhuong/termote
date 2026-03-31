@@ -8,9 +8,11 @@ import {
 } from 'react'
 import { fetchTerminalToken } from '../hooks/use-tmux-api'
 import {
+  blockContextMenu,
   sendKeyToTerminal,
   setTerminalFontSize,
   setTerminalTheme,
+  unblockContextMenu,
 } from '../utils/terminal-bridge'
 
 export interface TerminalFrameHandle {
@@ -21,6 +23,7 @@ export interface TerminalFrameHandle {
 interface Props {
   fontSize?: number
   theme?: 'light' | 'dark'
+  disableContextMenu?: boolean
 }
 
 const THEMES = {
@@ -75,7 +78,7 @@ const THEMES = {
 }
 
 export const TerminalFrame = forwardRef<TerminalFrameHandle, Props>(
-  ({ fontSize = 14, theme = 'dark' }, ref) => {
+  ({ fontSize = 14, theme = 'dark', disableContextMenu = true }, ref) => {
     const iframeRef = useRef<HTMLIFrameElement>(null)
     const [terminalSrc, setTerminalSrc] = useState<string | null>(null)
     const [tokenError, setTokenError] = useState<string | null>(null)
@@ -117,9 +120,15 @@ export const TerminalFrame = forwardRef<TerminalFrameHandle, Props>(
       const iframe = iframeRef.current
       if (!iframe) return
 
+      const applyContextMenu = () =>
+        disableContextMenu
+          ? blockContextMenu(iframe)
+          : unblockContextMenu(iframe)
+
       const immediateApplied = setTerminalTheme(iframe, THEMES[theme])
       if (immediateApplied) {
         setTerminalFontSize(iframe, fontSize)
+        applyContextMenu()
         return
       }
 
@@ -131,6 +140,7 @@ export const TerminalFrame = forwardRef<TerminalFrameHandle, Props>(
         const themeApplied = setTerminalTheme(iframe, THEMES[theme])
         if (themeApplied) {
           setTerminalFontSize(iframe, fontSize)
+          applyContextMenu()
           // Clear DA response artifacts leaked by xterm.js on ttyd+tmux connect
           setTimeout(() => sendKeyToTerminal(iframe, 'u', { ctrl: true }), 300)
           if (intervalId) clearInterval(intervalId)
@@ -149,7 +159,7 @@ export const TerminalFrame = forwardRef<TerminalFrameHandle, Props>(
         if (intervalId) clearInterval(intervalId)
         iframe.removeEventListener('load', handleLoad)
       }
-    }, [theme, fontSize, terminalSrc])
+    }, [theme, fontSize, terminalSrc, disableContextMenu])
 
     if (tokenError) {
       return (

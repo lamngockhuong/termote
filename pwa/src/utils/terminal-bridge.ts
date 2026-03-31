@@ -388,3 +388,37 @@ export function isTerminalReady(iframe: HTMLIFrameElement | null): boolean {
   const term = getTerm(iframe)
   return term !== null && (!!term.options || !!term.setOption)
 }
+
+// WeakMap keyed on Document so handler ref survives remounts but is GC'd with the iframe
+const contextMenuHandlers = new WeakMap<Document, (e: Event) => void>()
+
+export function blockContextMenu(iframe: HTMLIFrameElement | null): boolean {
+  try {
+    const doc = iframe?.contentDocument
+    if (!doc) return false
+    if (contextMenuHandlers.has(doc)) return true
+
+    const handler = (e: Event) => e.preventDefault()
+    contextMenuHandlers.set(doc, handler)
+    doc.addEventListener('contextmenu', handler)
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function unblockContextMenu(iframe: HTMLIFrameElement | null): boolean {
+  try {
+    const doc = iframe?.contentDocument
+    if (!doc) return false
+
+    const handler = contextMenuHandlers.get(doc)
+    if (!handler) return true
+
+    doc.removeEventListener('contextmenu', handler)
+    contextMenuHandlers.delete(doc)
+    return true
+  } catch {
+    return false
+  }
+}

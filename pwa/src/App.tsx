@@ -313,6 +313,7 @@ export default function App() {
           <div
             ref={terminalContainerRef}
             className="flex-1 relative min-h-0 overflow-y-auto scroll-smooth"
+            onContextMenu={(e) => e.preventDefault()}
             style={{
               height:
                 keyboardHeight > 0
@@ -330,6 +331,7 @@ export default function App() {
                 ref={terminalRef}
                 fontSize={fontSize}
                 theme={resolvedTheme}
+                disableContextMenu={settings.disableContextMenu}
               />
             </div>
             {/* Gesture overlay - captures touch gestures (mobile only) */}

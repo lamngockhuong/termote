@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  blockContextMenu,
   isInCopyMode,
   isTerminalDisconnected,
   isTerminalReady,
@@ -9,6 +10,7 @@ import {
   setTerminalFontSize,
   setTerminalTheme,
   toggleTmuxCopyMode,
+  unblockContextMenu,
 } from './terminal-bridge'
 
 // Mock xterm terminal instance
@@ -248,6 +250,62 @@ describe('isTerminalReady', () => {
   it('returns false when term is not available', () => {
     const iframe = createMockIframe(null)
     expect(isTerminalReady(iframe)).toBe(false)
+  })
+})
+
+describe('blockContextMenu', () => {
+  it('blocks context menu on iframe document', () => {
+    const iframe = createMockIframe(createMockTerm())
+    const result = blockContextMenu(iframe)
+    expect(result).toBe(true)
+
+    const event = new Event('contextmenu', { cancelable: true })
+    iframe.contentDocument!.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(true)
+  })
+
+  it('is idempotent — second call returns true without re-adding', () => {
+    const iframe = createMockIframe(createMockTerm())
+    expect(blockContextMenu(iframe)).toBe(true)
+    expect(blockContextMenu(iframe)).toBe(true)
+  })
+
+  it('returns false when iframe is null', () => {
+    expect(blockContextMenu(null)).toBe(false)
+  })
+})
+
+describe('unblockContextMenu', () => {
+  it('removes context menu block', () => {
+    const iframe = createMockIframe(createMockTerm())
+    blockContextMenu(iframe)
+
+    const result = unblockContextMenu(iframe)
+    expect(result).toBe(true)
+
+    const event = new Event('contextmenu', { cancelable: true })
+    iframe.contentDocument!.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(false)
+  })
+
+  it('returns true when not blocked (no-op)', () => {
+    const iframe = createMockIframe(createMockTerm())
+    expect(unblockContextMenu(iframe)).toBe(true)
+  })
+
+  it('returns false when iframe is null', () => {
+    expect(unblockContextMenu(null)).toBe(false)
+  })
+
+  it('allows re-blocking after unblock', () => {
+    const iframe = createMockIframe(createMockTerm())
+    blockContextMenu(iframe)
+    unblockContextMenu(iframe)
+    blockContextMenu(iframe)
+
+    const event = new Event('contextmenu', { cancelable: true })
+    iframe.contentDocument!.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(true)
   })
 })
 

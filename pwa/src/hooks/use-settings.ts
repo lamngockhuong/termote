@@ -7,11 +7,13 @@ export type ImeSendBehavior = 'send-only' | 'send-enter'
 export interface Settings {
   imeSendBehavior: ImeSendBehavior
   toolbarDefaultExpanded: boolean
+  disableContextMenu: boolean
 }
 
 const DEFAULTS: Settings = {
   imeSendBehavior: 'send-only',
   toolbarDefaultExpanded: false,
+  disableContextMenu: true,
 }
 
 // Listeners for useSyncExternalStore
