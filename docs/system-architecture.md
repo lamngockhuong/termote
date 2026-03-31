@@ -49,12 +49,13 @@
 
 React SPA with:
 
-- **Terminal Frame**: ttyd iframe with xterm.js terminal
+- **Terminal Frame**: ttyd iframe with xterm.js terminal, in-place theme switching (no reload)
 - **Hammer.js**: Touch gesture recognition (mobile only)
 - **Session Sidebar**: Switch between tmux windows, add/edit/remove (collapsible on desktop)
 - **Keyboard Toolbar**: Virtual keys, Ctrl combos, scroll controls (respects default expanded setting)
 - **Settings Menu**: Theme toggle (light/dark/system), Clear Cache & Reload, Preferences
-- **Settings Modal**: IME send behavior (send text only vs. send + Enter), toolbar default expanded toggle
+- **Settings Modal**: IME behavior, toolbar default expanded, context menu control (disable right-click)
+- **Context Menu Control**: Block/unblock right-click on terminal via iframe postMessage
 - **Font Controls**: Adjustable font size (6-24px)
 - **Fullscreen Toggle**: Desktop-only fullscreen mode via Fullscreen API
 - **Responsive Layout**: Collapsible desktop sidebar, mobile slide-over panel
@@ -174,12 +175,13 @@ Auto-detects OS via `$(uname)`. Works on both macOS and Linux.
 
 1. **Network**: VPN/Tailscale or local network only
 2. **Auth**: Basic auth over HTTPS (use `--no-auth` for local dev only)
-3. **Terminal access** (`/terminal/`): Three-layer protection:
+3. **Session cookies**: Stored after initial basic auth to prevent double prompts on mobile
+4. **Terminal access** (`/terminal/`): Three-layer protection:
    - **Basic auth**: All requests require authentication
    - **Sec-Fetch-Dest**: Blocks direct URL navigation (`document`). Allows missing header for mobile browser compatibility (LAN/Tailscale access)
    - **Single-use token**: PWA fetches a 30s TTL token via `/api/tmux/terminal-token`, passes it as `?token=` query param. Server validates and consumes on iframe load (`Sec-Fetch-Dest: iframe`). Sub-resources (JS/CSS/WebSocket) don't need token
-4. **Session**: tmux isolates terminal processes
-5. **Origin**: Same-origin iframe (no cross-origin postMessage)
+5. **Session**: tmux isolates terminal processes
+6. **Origin**: Same-origin iframe (no cross-origin postMessage)
 
 ## Scalability Notes
 

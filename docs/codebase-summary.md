@@ -19,28 +19,36 @@ termote/
 │   │   │   ├── keyboard-toolbar.tsx         # Virtual keyboard buttons
 │   │   │   ├── session-sidebar.tsx          # Session switcher sidebar
 │   │   │   ├── settings-menu.tsx            # Settings dropdown
-│   │   │   ├── settings-modal.tsx           # Settings dialog (IME behavior, toolbar expand)
+│   │   │   ├── settings-modal.tsx           # Settings dialog (IME, toolbar, context menu)
 │   │   │   ├── swipeable-session-item.tsx   # Swipe-to-delete session
 │   │   │   ├── terminal-frame.tsx           # Terminal iframe wrapper (ttyd)
 │   │   │   └── theme-toggle.tsx             # Theme switcher buttons
 │   │   ├── contexts/
-│   │   │   └── theme-context.tsx      # Theme provider (light/dark/system)
+│   │   │   ├── theme-context.tsx            # Theme provider (light/dark/system)
+│   │   │   └── theme-context.test.tsx       # Theme context tests
 │   │   ├── hooks/
-│   │   │   ├── use-font-size.ts       # Font size state (6-24)
-│   │   │   ├── use-gestures.ts        # Hammer.js gesture handling
-│   │   │   ├── use-haptic.ts          # Haptic feedback
-│   │   │   ├── use-keyboard-visible.ts # Mobile keyboard detection
-│   │   │   ├── use-local-sessions.ts  # Session CRUD + tmux sync
-│   │   │   ├── use-media-query.ts     # Responsive hooks
-│   │   │   ├── use-settings.ts        # Settings state with localStorage
-│   │   │   ├── use-tmux-api.ts        # tmux HTTP API client
-│   │   │   └── use-viewport.ts        # Viewport height + keyboard detection
+│   │   │   ├── use-font-size.ts             # Font size state (6-24)
+│   │   │   ├── use-font-size.test.ts        # Font size hook tests
+│   │   │   ├── use-fullscreen.test.ts       # Fullscreen hook tests
+│   │   │   ├── use-gestures.ts              # Hammer.js gesture handling
+│   │   │   ├── use-haptic.ts                # Haptic feedback
+│   │   │   ├── use-keyboard-visible.ts      # Mobile keyboard detection
+│   │   │   ├── use-local-sessions.ts        # Session CRUD + tmux sync
+│   │   │   ├── use-media-query.ts           # Responsive hooks
+│   │   │   ├── use-settings.ts              # Settings state with localStorage
+│   │   │   ├── use-settings.test.ts         # Settings hook tests
+│   │   │   ├── use-sidebar-collapsed.test.ts # Sidebar collapse state tests
+│   │   │   ├── use-tmux-api.ts              # tmux HTTP API client
+│   │   │   ├── use-tmux-api.test.ts         # API client tests
+│   │   │   └── use-viewport.ts              # Viewport height + keyboard detection
 │   │   ├── types/
-│   │   │   └── session.ts             # Session interface
-│   │   └── utils/
-│   │       ├── app-info.ts            # App metadata
-│   │       ├── haptic.ts              # Vibration API wrapper
-│   │       └── terminal-bridge.ts     # Iframe keystroke injection
+│   │   │   └── session.ts                   # Session interface
+│   │   ├── utils/
+│   │   │   ├── app-info.ts                  # App metadata
+│   │   │   ├── haptic.ts                    # Vibration API wrapper
+│   │   │   ├── terminal-bridge.ts           # Iframe keystroke injection + theme/context menu
+│   │   │   └── terminal-bridge.test.ts      # Terminal bridge tests
+│   │   ├── test-setup.ts                    # Vitest configuration
 │   ├── e2e/                    # Playwright e2e tests
 │   └── package.json
 ├── tmux-api/                   # Go server
@@ -53,10 +61,14 @@ termote/
 │   └── go.mod
 ├── scripts/
 │   ├── termote.sh              # Unified CLI (install/uninstall/health/link)
-│   └── get.sh                  # Online curl|bash installer
+│   ├── termote.ps1             # Windows PowerShell CLI
+│   ├── get.sh                  # Online curl|bash installer
+│   └── get.ps1                 # Windows PowerShell online installer
 ├── tests/                      # Shell script tests
-│   ├── test-termote.sh         # CLI tests
+│   ├── test-termote.sh         # Unix CLI tests
+│   ├── test-termote.ps1        # Windows CLI tests
 │   ├── test-get.sh             # Online installer tests
+│   ├── test-get.ps1            # Windows installer tests
 │   └── test-entrypoints.sh     # Docker entrypoint tests
 ├── .github/workflows/
 │   ├── ci.yml                  # CI (build, lint, test)
@@ -79,14 +91,14 @@ Main orchestrator combining:
 - Fullscreen toggle (desktop only, Fullscreen API)
 - Gesture handlers → terminal commands (mobile only)
 
-### terminal-frame.tsx (~118 lines)
+### terminal-frame.tsx (~197 lines)
 
 Terminal iframe wrapper:
 
 - Embeds ttyd terminal via iframe (`/terminal/`)
-- Applies theme (light/dark) via postMessage
+- In-place theme switching (no iframe reload) via postMessage
 - Handles font size changes dynamically
-- Forces iframe reload on theme change
+- Controls right-click context menu (disable/enable) via terminal-bridge
 
 ### keyboard-toolbar.tsx (~301 lines)
 
@@ -99,16 +111,18 @@ Virtual keyboard for mobile:
 - Haptic feedback on key press
 - Respects `defaultExpanded` prop from settings
 
-### settings-modal.tsx (~153 lines)
+### settings-modal.tsx (~181 lines)
 
 Settings dialog with radio buttons and toggles:
 
 - **IME send behavior**: "Send text only" (default) or "Send + Enter" (auto-press Enter after text)
 - **Toolbar default expanded**: Toggle to show all keys on load (vs. collapsed by default)
+- **Disable right-click menu**: Toggle to disable context menu on terminal (default: enabled)
+- Uses `ToggleRow` helper component for consistent toggle styling
 - Accessible dialog with custom styling
 - Persists changes via `useSettings()` hook
 
-### use-settings.ts (~66 lines)
+### use-settings.ts (~68 lines)
 
 Settings state management using `useSyncExternalStore`:
 
@@ -116,8 +130,9 @@ Settings state management using `useSyncExternalStore`:
 - Provides `settings` object with type-safe config:
   - `imeSendBehavior`: 'send-only' | 'send-enter'
   - `toolbarDefaultExpanded`: boolean
+  - `disableContextMenu`: boolean (default: true)
 - `updateSetting()` callback to update individual settings
-- Defaults to send-only + collapsed toolbar
+- Defaults to send-only + collapsed toolbar + context menu disabled
 
 ### use-gestures.ts (~53 lines)
 
@@ -151,11 +166,13 @@ tmux HTTP API client:
 Go HTTP server:
 
 - **main.go** — Entry point, starts serve mode
-- **serve.go** — Server: PWA static files, ttyd WebSocket proxy, auth (basic + iframe-only + token)
+- **serve.go** — Server: PWA static files, ttyd WebSocket proxy, auth (basic + iframe-only + session cookie + token)
 - **tmux.go** — tmux handlers with input validation and method checks
-- **serve_test.go** — Server unit tests (auth, middleware, proxy)
+- **serve_test.go** — Server unit tests (auth, middleware, proxy, tokenStore)
 - **tmux_test.go** — Handler unit tests (validation, errors)
 - **integration_test.go** — Integration tests requiring real tmux
+
+**tokenStore:** Generic token manager with configurable TTL and single-use flag. Replaces dedicated terminalTokenStore. RWMutex for read-optimized access to reusable tokens.
 
 **Security:**
 

@@ -18,23 +18,28 @@ PWA that wraps ttyd terminals with:
 - Virtual keyboard toolbar for modifier keys
 - Session management via tmux integration
 - Responsive UI for phone/tablet/desktop
-- Customizable settings (IME send behavior, toolbar expand preference)
+- Customizable settings (IME send behavior, toolbar expand, context menu control)
 - Persistent storage for user preferences
+- Session cookies for seamless mobile authentication
+- Context menu control for terminal area (disable right-click)
 
 ## Features
 
-| Feature                | Description                                   |
-| ---------------------- | --------------------------------------------- |
-| Session Management     | Create, switch, delete tmux windows via UI    |
-| Virtual Keyboard       | Touch-friendly buttons for special keys       |
-| Keyboard Gestures      | Swipe, long-press, pinch for common shortcuts |
-| Theme Support          | Light/dark/system theme toggle                |
-| Font Scaling           | Adjustable terminal font size (6-24px)        |
-| Fullscreen Mode        | Desktop-only fullscreen terminal view         |
-| Settings / Preferences | IME send behavior, toolbar default state      |
-| Persistent Settings    | User preferences saved to localStorage        |
-| Basic Authentication   | HTTP basic auth + iframe-only terminal access |
-| Brute-force Protection | Rate limiter (5 failed attempts/min per IP)   |
+| Feature                | Description                                             |
+| ---------------------- | ------------------------------------------------------- |
+| Session Management     | Create, switch, delete tmux windows via UI              |
+| Virtual Keyboard       | Touch-friendly buttons for special keys                 |
+| Keyboard Gestures      | Swipe, long-press, pinch for common shortcuts           |
+| Theme Support          | Light/dark/system theme toggle (in-place switching)     |
+| Font Scaling           | Adjustable terminal font size (6-24px)                  |
+| Fullscreen Mode        | Desktop-only fullscreen terminal view                   |
+| Context Menu Control   | Disable right-click menu on terminal (default: enabled) |
+| Settings / Preferences | IME behavior, toolbar default, context menu             |
+| Persistent Settings    | User preferences saved to localStorage                  |
+| Session Cookie Auth    | Prevents double basic auth prompt on mobile             |
+| iOS Safe Area          | Respects status bar safe area inset                     |
+| Basic Authentication   | HTTP basic auth + iframe-only terminal access           |
+| Brute-force Protection | Rate limiter (5 failed attempts/min per IP)             |
 
 ## Target Users
 
