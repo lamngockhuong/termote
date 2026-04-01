@@ -79,6 +79,8 @@ flowchart TB
 
 ## Quick Start
 
+> 📖 **New to Termote?** Check out the [Getting Started Guide](docs/GETTING_STARTED.md) for a complete walkthrough with examples.
+
 ```bash
 ./scripts/termote.sh                   # Interactive menu
 ./scripts/termote.sh install container # Container mode (docker/podman)
