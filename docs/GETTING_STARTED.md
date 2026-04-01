@@ -12,48 +12,19 @@ Termote (Terminal + Remote) turns your browser into a mobile-friendly terminal. 
 - Pair program by sharing a terminal session
 - Run CLI tools on a remote server with a touch-friendly UI
 
-## Quick Start
+## Installation
 
-### Option 1: Container Mode (Recommended)
+> For detailed installation options (Container Mode, Native Mode, Windows), see the [Deployment Guide](deployment-guide.md).
 
-Container mode bundles everything — no manual dependency management.
+Quick start with Container Mode:
 
 ```bash
-# Download and run the installer
 curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/termote.sh -o termote.sh
 chmod +x termote.sh
-
-# Interactive setup (asks you questions)
-./termote.sh
-
-# Or one-liner for local use
 ./termote.sh install container
 ```
 
 This starts Termote on `http://localhost:7680`. Open it in your browser.
-
-### Option 2: Native Mode
-
-If you prefer running without containers:
-
-**Prerequisites:**
-- [Go 1.21+](https://golang.org/dl/)
-- [tmux](https://github.com/tmux/tmux) (Linux/macOS)
-- [ttyd](https://github.com/tsl0922/ttyd)
-
-```bash
-./termote.sh install native
-```
-
-### Create a Global Command
-
-After installation, create the `termote` command for convenience:
-
-```bash
-./termote.sh link
-```
-
-Now you can run `termote health`, `termote install native --lan`, etc. from anywhere.
 
 ## Accessing from Your Phone
 
@@ -105,64 +76,54 @@ The toolbar at the bottom provides modifier keys:
 - **Tab** — autocomplete
 - **Ctrl** — hold for Ctrl+key combinations
 - **Shift** — toggle for uppercase
-- **↑↓←→** — arrow keys for navigation
-- Tap the expand icon for more keys
+- **Esc** — escape key (useful for vim)
+- **↑ / ↓** — command history navigation
 
-### Common Workflows
+## Common Workflows
 
-**Start Claude Code from your phone:**
-```bash
-# In a Termote session
-claude
-```
-Then interact with Claude Code using the virtual keyboard and gestures.
+### Running Claude Code from Mobile
 
-**Monitor a build:**
-```bash
-# Start your build in one session
-npm run build
+1. Open a session in Termote
+2. Type `claude` to start Claude Code
+3. Use touch gestures: swipe up/down for history, swipe right for tab completion
+4. Use the virtual keyboard for special keys (Ctrl+C to interrupt)
 
-# Switch to another session for other work
-```
+### Monitoring Long-Running Processes
 
-## Authentication
+1. Start your process in a session (e.g., `npm run build`)
+2. Switch to another session while it runs
+3. Come back to check output — sessions persist
 
-By default, Termote uses basic auth to protect your terminal:
+### Multi-Session Workflow
 
-```bash
-# Set during installation, or configure manually
-./termote.sh install container  # Prompts for username/password
-```
-
-For local-only use without auth:
-```bash
-./termote.sh install container --no-auth
-```
-
-⚠️ **Never expose Termote to the internet without authentication.**
+1. **Session 1:** Run your dev server (`npm run dev`)
+2. **Session 2:** Run Claude Code for AI-assisted coding
+3. **Session 3:** Monitor logs (`tail -f logs/app.log`)
+4. Switch between sessions using the sidebar
 
 ## Troubleshooting
 
-### "Connection refused" on mobile
-- Make sure you used `--lan` flag during installation
-- Check that your phone is on the same WiFi network
-- Verify the IP address: `hostname -I` (Linux) or `ifconfig` (macOS)
+### Can't Access from Phone
 
-### Terminal not responding
-- Try refreshing the page
-- Check if tmux is running: `tmux ls`
-- Restart Termote: `termote install container` (re-runs the container)
+- Ensure you started with `--lan` flag
+- Check that both devices are on the same network
+- Verify the URL matches your server's local IP (`ip addr` or `ifconfig`)
+- Check firewall allows port 7680
 
-### Gestures not working
-- Make sure you're swiping on the terminal area, not the sidebar
-- Gestures can be customized — check Settings in the UI
+### Terminal Not Rendering Properly
 
-### PWA not installing
-- You need HTTPS for PWA on most browsers (except localhost)
-- For LAN access, some browsers allow HTTP PWA installation
+- Use a modern browser (Chrome, Safari, Firefox)
+- Try landscape mode for better terminal width
+- If text is too small, pinch to zoom then reload
 
-## Next Steps
+### Session Lost After Restart
 
-- Read the [Deployment Guide](deployment-guide.md) for production setups
-- Check the [System Architecture](system-architecture.md) to understand how it works
-- Join the conversation on [GitHub Issues](https://github.com/lamngockhuong/termote/issues)
+- Sessions persist across page reloads but not server restarts
+- To auto-start sessions, add startup commands to your shell profile
+- Use `termote health` to check service status
+
+### Connection Drops
+
+- Check your WiFi signal strength
+- If using over internet (not LAN), consider a reverse proxy with HTTPS
+- The PWA will automatically reconnect when connection is restored
