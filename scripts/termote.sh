@@ -243,11 +243,11 @@ EOF
 load_config() {
     if [[ -f "$CONFIG_FILE" ]]; then
         local saved_lan saved_noauth saved_port saved_tailscale saved_pass_enc
-        saved_lan=$(grep '^TERMOTE_LAN=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2- | tr -d '"')
-        saved_noauth=$(grep '^TERMOTE_NO_AUTH=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2- | tr -d '"')
-        saved_port=$(grep '^TERMOTE_PORT=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2- | tr -d '"')
-        saved_tailscale=$(grep '^TERMOTE_TAILSCALE=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2- | tr -d '"')
-        saved_pass_enc=$(grep '^TERMOTE_SAVED_PASS=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2- | tr -d '"')
+        saved_lan=$(get_config_value TERMOTE_LAN)
+        saved_noauth=$(get_config_value TERMOTE_NO_AUTH)
+        saved_port=$(get_config_value TERMOTE_PORT)
+        saved_tailscale=$(get_config_value TERMOTE_TAILSCALE)
+        saved_pass_enc=$(get_config_value TERMOTE_SAVED_PASS)
 
         # Apply saved values only if CLI didn't explicitly set them
         [[ "$CLI_LAN" != true && "$saved_lan" == "true" ]] && LAN=true
@@ -296,6 +296,36 @@ export_env() {
 validate_ip() {
     local ip="$1"
     [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]
+}
+
+# Read a single value from the config file
+get_config_value() {
+    grep "^$1=" "$CONFIG_FILE" 2>/dev/null | cut -d= -f2- | tr -d '"'
+}
+
+# Fetch latest version from GitHub API
+get_latest_version_api() {
+    local repo="lamngockhuong/termote"
+    curl -fsSL "https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null | \
+        grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/'
+}
+
+# Verify checksum for update (fatal on mismatch, skip if no tools available)
+verify_checksum_update() {
+    local file="$1" expected="$2"
+    local actual
+    if command -v sha256sum >/dev/null; then
+        actual=$(sha256sum "$file" | awk '{print $1}')
+    elif command -v shasum >/dev/null; then
+        actual=$(shasum -a 256 "$file" | awk '{print $1}')
+    else
+        warn "No sha256sum/shasum found, skipping checksum verification"
+        return 0
+    fi
+    if [ "$actual" != "$expected" ]; then
+        error "Checksum mismatch! Expected: $expected, Got: $actual"
+    fi
+    info "Checksum verified"
 }
 
 # Validate port number
@@ -442,6 +472,7 @@ interactive_menu() {
     local cmd
     cmd=$(interactive_select "Select action:" \
         "Install" \
+        "Update" \
         "Uninstall" \
         "Health check" \
         "View logs" \
@@ -450,6 +481,7 @@ interactive_menu() {
 
     case "$cmd" in
         "Install"*) interactive_install ;;
+        "Update"*) cmd_update ;;
         "Uninstall"*) interactive_uninstall ;;
         "Health"*) cmd_health ;;
         "View logs"*) cmd_logs follow ;;
@@ -788,6 +820,7 @@ cmd_help() {
     echo "Commands:"
     echo "  install <mode>    Install and start services"
     echo "  uninstall <mode>  Remove installation"
+    echo "  update            Update to latest version (or --version X.Y.Z)"
     echo "  health            Check service health"
     echo "  logs [service]    View logs (ttyd, tmux-api, all, follow, clean)"
     echo "  link              Create 'termote' symlink in /usr/local/bin"
@@ -805,6 +838,8 @@ cmd_help() {
     echo "  --tailscale <h>   Enable Tailscale HTTPS"
     echo "  --no-auth         Disable authentication"
     echo "  --fresh           Ignore saved password, prompt again"
+    echo "  --version <ver>   Pin to specific version (with update command)"
+    echo "  --force           Force reinstall same version (with update command)"
     echo ""
     echo "Examples:"
     echo "  termote.sh                           # Interactive menu"
@@ -813,6 +848,9 @@ cmd_help() {
     echo "  termote.sh install native --no-auth  # Without auth"
     echo "  termote.sh uninstall all             # Full cleanup"
     echo "  termote.sh link                      # Create 'termote' command"
+    echo "  termote.sh update                    # Update to latest"
+    echo "  termote.sh update --version 0.0.9    # Pin to specific version"
+    echo "  termote.sh update --force            # Force reinstall"
 }
 
 # =============================================================================
@@ -904,6 +942,162 @@ cmd_unlink() {
 }
 
 # =============================================================================
+# UPDATE COMMAND
+# =============================================================================
+
+cmd_update() {
+    local pin_version="" force=false
+
+    # Parse args
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --version) pin_version="${2#v}"; shift 2 ;;
+            --force) force=true; shift ;;
+            *) error "Unknown option: $1. Usage: termote update [--version X.Y.Z] [--force]" ;;
+        esac
+    done
+
+    # Validate version format if provided
+    if [[ -n "$pin_version" && ! "$pin_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        error "Invalid version format: $pin_version (expected: X.Y.Z)"
+    fi
+
+    # Guard: refuse if running from git repo (dev mode)
+    if git -C "$SCRIPT_DIR" rev-parse --git-dir &>/dev/null; then
+        error "Cannot update from a git repo. This command is for installed releases only (~/.termote)."
+    fi
+
+    # Determine target version
+    local target_version
+    if [[ -n "$pin_version" ]]; then
+        target_version="$pin_version"
+        info "Target version: v${target_version}"
+    else
+        info "Checking for updates..."
+        target_version=$(get_latest_version_api)
+        [[ -z "$target_version" ]] && error "Failed to fetch latest version from GitHub"
+        info "Latest version: v${target_version}"
+    fi
+
+    # Compare with current version
+    if [[ "$VERSION" == "$target_version" && "$force" != true ]]; then
+        info "Already on v${VERSION}. Use --force to reinstall."
+        return 0
+    fi
+
+    # Warn on downgrade
+    if [[ -n "$pin_version" ]]; then
+        local cur_major cur_minor cur_patch tgt_major tgt_minor tgt_patch
+        IFS='.' read -r cur_major cur_minor cur_patch <<< "$VERSION"
+        IFS='.' read -r tgt_major tgt_minor tgt_patch <<< "$target_version"
+        if (( tgt_major < cur_major || (tgt_major == cur_major && tgt_minor < cur_minor) || (tgt_major == cur_major && tgt_minor == cur_minor && tgt_patch < cur_patch) )); then
+            warn "Downgrading from v${VERSION} to v${target_version}"
+        fi
+    fi
+
+    if [[ "$VERSION" != "$target_version" ]]; then
+        info "Current version: v${VERSION}"
+        info "Updating to: v${target_version}"
+    else
+        info "Force reinstalling v${VERSION}"
+    fi
+
+    # Check saved config exists (needed for re-install)
+    [[ ! -f "$CONFIG_FILE" ]] && error "No saved config found at $CONFIG_FILE. Run 'termote install' first."
+
+    # Load saved config for re-install
+    local saved_mode saved_lan saved_noauth saved_port saved_tailscale
+    saved_mode=$(get_config_value TERMOTE_MODE)
+    saved_lan=$(get_config_value TERMOTE_LAN)
+    saved_noauth=$(get_config_value TERMOTE_NO_AUTH)
+    saved_port=$(get_config_value TERMOTE_PORT)
+    saved_tailscale=$(get_config_value TERMOTE_TAILSCALE)
+    [[ -z "$saved_mode" ]] && saved_mode="native"
+
+    # Remember if symlink exists (to re-link after update)
+    local had_symlink=false
+    for link_path in "/usr/local/bin/termote" "$HOME/.local/bin/termote"; do
+        if [[ -L "$link_path" ]]; then
+            had_symlink=true
+            break
+        fi
+    done
+
+    # Stop running services
+    info "Stopping services..."
+    stop_native_services
+    local crt=""
+    command -v podman &>/dev/null && crt="podman"
+    command -v docker &>/dev/null && crt="${crt:-docker}"
+    if [[ -n "$crt" ]]; then
+        "$crt" compose --profile docker down 2>/dev/null || true
+    fi
+
+    # Download to temp dir
+    local tmp_dir
+    tmp_dir=$(mktemp -d "${TMPDIR:-/tmp}/termote-update-XXXXX")
+    _update_cleanup() { rm -rf "$tmp_dir"; }
+    trap _update_cleanup EXIT
+
+    local repo="lamngockhuong/termote"
+    local tarball="termote-v${target_version}.tar.gz"
+    local tarball_url="https://github.com/${repo}/releases/download/v${target_version}/${tarball}"
+    local checksums_url="https://github.com/${repo}/releases/download/v${target_version}/checksums.txt"
+
+    info "Downloading v${target_version}..."
+    curl -fsSL -o "$tmp_dir/$tarball" "$tarball_url" || error "Download failed. Check version exists: v${target_version}"
+
+    # Verify checksum (fatal on mismatch, skip if unavailable)
+    info "Verifying checksum..."
+    local checksums expected
+    checksums=$(curl -fsSL "$checksums_url" 2>/dev/null || echo "")
+    if [[ -n "$checksums" ]]; then
+        expected=$(echo "$checksums" | grep "$tarball" | awk '{print $1}')
+        if [[ -n "$expected" ]]; then
+            verify_checksum_update "$tmp_dir/$tarball" "$expected"
+        else
+            warn "Checksum not found for ${tarball}, skipping verification"
+        fi
+    else
+        warn "Could not download checksums, skipping verification"
+    fi
+
+    # Extract to install dir (preserve config by extracting over existing)
+    info "Extracting..."
+    tar xzf "$tmp_dir/$tarball" --strip-components=1 -C "$PROJECT_DIR"
+
+    # Write version file
+    echo "$target_version" > "${PROJECT_DIR}/.version"
+
+    # Cleanup temp
+    rm -rf "$tmp_dir"
+    trap - EXIT
+
+    info "Updated to v${target_version}"
+
+    # Re-install with saved config using the NEW script (exec replaces this process
+    # to avoid issues with the old script being overwritten mid-execution)
+    info "Re-installing with saved config (mode=$saved_mode)..."
+    local install_args=()
+    [[ "$saved_lan" == "true" ]] && install_args+=("--lan")
+    [[ "$saved_noauth" == "true" ]] && install_args+=("--no-auth")
+    [[ -n "$saved_port" && "$saved_port" != "$PORT_MAIN" ]] && install_args+=("--port" "$saved_port")
+    [[ -n "$saved_tailscale" ]] && install_args+=("--tailscale" "$saved_tailscale")
+
+    # Re-link symlink if it existed (before exec, since exec replaces this process)
+    chmod +x "${PROJECT_DIR}/scripts/termote.sh"
+    if [[ "$had_symlink" == true ]]; then
+        "${PROJECT_DIR}/scripts/termote.sh" link
+    fi
+
+    info "Update complete! v${VERSION} -> v${target_version}"
+    echo ""
+
+    # exec into the NEW script to avoid running stale code
+    exec "${PROJECT_DIR}/scripts/termote.sh" install "$saved_mode" "${install_args[@]}"
+}
+
+# =============================================================================
 # MAIN
 # =============================================================================
 
@@ -932,6 +1126,7 @@ CMD="$1"; shift
 case "$CMD" in
     install)   cmd_install "$@" ;;
     uninstall) cmd_uninstall "$@" ;;
+    update)    cmd_update "$@" ;;
     health)    cmd_health ;;
     logs)      cmd_logs "$@" ;;
     link)      cmd_link ;;

@@ -70,6 +70,9 @@ termote/
 ./scripts/termote.sh install container --fresh         # Force new password (ignore saved)
 ./scripts/termote.sh link                              # Create 'termote' global command
 ./scripts/termote.sh unlink                            # Remove global command
+./scripts/termote.sh update                            # Update to latest release
+./scripts/termote.sh update --version 0.1.5            # Update to specific version
+./scripts/termote.sh update --force                    # Force reinstall current version
 curl -fsSL https://... | bash -s -- --update           # Auto-update with saved config
 ```
 
@@ -165,6 +168,30 @@ Both modes use tmux-api as the unified server (PWA + WebSocket proxy + API + aut
 - Use `ipconfig getifaddr en0` fallback for `hostname -I` on macOS
 - Use `$(uname)` to detect Darwin (macOS) vs Linux
 - Use `$(uname -m)` for architecture detection (x86_64, aarch64)
+
+### CLI Commands
+
+Available commands in `termote.sh`:
+
+- `termote install [container|native]` — deploy mode with optional flags
+- `termote health` — check service health
+- `termote link` — create `/usr/local/bin/termote` symlink
+- `termote unlink` — remove symlink
+- `termote update` — self-update to latest release
+- `termote update --version X.Y.Z` — pin to specific version
+- `termote update --force` — reinstall current version
+
+The `update` command:
+
+- Fetches latest release from GitHub (or uses `--version` to pin)
+- Downloads + verifies checksum
+- Extracts tarball, preserves config
+- Stops running services (native + container)
+- Re-installs with saved configuration (mode, LAN, auth, port, Tailscale)
+- Re-links symlink if it existed
+- Uses `exec` to replace process with new script (safe self-replacement)
+- Guards: refuses to run from git repo (dev mode only)
+- Warns on downgrade, skips reinstall if already on target version
 
 ## Key Files
 

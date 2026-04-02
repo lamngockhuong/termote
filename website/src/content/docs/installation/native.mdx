@@ -235,6 +235,18 @@ curl http://localhost:7680/api/tmux/sessions
 
 ## Updating
 
+### Via CLI (Recommended)
+
+If Termote is already installed, use the built-in update command:
+
+```bash
+termote update                    # Update to latest version
+termote update --version 0.0.9   # Pin to specific version
+termote update --force            # Force reinstall current version
+```
+
+This automatically preserves your config, stops services, downloads the new version, verifies checksums, and re-installs with your saved settings.
+
 ### Via One-liner
 
 Re-run the installer - it compares versions and prompts before updating:

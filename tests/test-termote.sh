@@ -561,6 +561,164 @@ test_link_unlink() {
     fi
 }
 
+# =============================================================================
+# UPDATE COMMAND TESTS
+# =============================================================================
+test_update_command() {
+    echo ""
+    echo "=== Update Command ==="
+
+    # Function existence
+    if grep -q 'cmd_update()' "$SCRIPT"; then
+        pass "cmd_update() function present"
+    else
+        fail "cmd_update" "function present" "not found"
+    fi
+
+    # Helper functions
+    if grep -q 'get_latest_version_api()' "$SCRIPT"; then
+        pass "get_latest_version_api() helper present"
+    else
+        fail "get_latest_version_api" "function present" "not found"
+    fi
+
+    if grep -q 'verify_checksum_update()' "$SCRIPT"; then
+        pass "verify_checksum_update() helper present"
+    else
+        fail "verify_checksum_update" "function present" "not found"
+    fi
+
+    if grep -q 'get_config_value()' "$SCRIPT"; then
+        pass "get_config_value() helper present"
+    else
+        fail "get_config_value" "function present" "not found"
+    fi
+
+    # CLI wiring
+    if grep -q 'update).*cmd_update' "$SCRIPT"; then
+        pass "update command wired in case statement"
+    else
+        fail "CLI wiring" "update) cmd_update" "not found"
+    fi
+
+    # Interactive menu
+    if grep -q '"Update"' "$SCRIPT"; then
+        pass "Update option in interactive menu"
+    else
+        fail "interactive menu" "Update option" "not found"
+    fi
+
+    # Help text
+    local help_output
+    help_output=$("$SCRIPT" help 2>&1)
+
+    if echo "$help_output" | grep -q "update"; then
+        pass "help shows update command"
+    else
+        fail "help" "update command" "not found"
+    fi
+
+    if echo "$help_output" | grep -q "\-\-version"; then
+        pass "help shows --version option"
+    else
+        fail "help" "--version option" "not found"
+    fi
+
+    if echo "$help_output" | grep -q "\-\-force"; then
+        pass "help shows --force option"
+    else
+        fail "help" "--force option" "not found"
+    fi
+
+    # Arg parsing: --version flag
+    if grep -q '\-\-version.*pin_version' "$SCRIPT"; then
+        pass "update parses --version flag"
+    else
+        fail "update --version" "pin_version parsing" "not found"
+    fi
+
+    # Arg parsing: --force flag
+    if grep -q '\-\-force.*force=true' "$SCRIPT"; then
+        pass "update parses --force flag"
+    else
+        fail "update --force" "force=true" "not found"
+    fi
+
+    # Version format validation
+    local output
+    output=$("$SCRIPT" update --version "abc" 2>&1 || true)
+    if echo "$output" | grep -qi "invalid version format"; then
+        pass "update rejects invalid version format"
+    else
+        fail "version validation" "Invalid version format" "$output"
+    fi
+
+    # Dev repo guard (running from git repo should fail)
+    output=$("$SCRIPT" update 2>&1 || true)
+    if echo "$output" | grep -qi "cannot update from a git repo"; then
+        pass "update refuses to run from git repo"
+    else
+        fail "git repo guard" "Cannot update from a git repo" "$output"
+    fi
+
+    # Unknown option handling
+    output=$("$SCRIPT" update --foo 2>&1 || true)
+    if echo "$output" | grep -qi "unknown option"; then
+        pass "update rejects unknown options"
+    else
+        fail "unknown option" "Unknown option" "$output"
+    fi
+
+    # Security: temp dir cleanup via trap
+    if grep -q '_update_cleanup' "$SCRIPT"; then
+        pass "update uses function-based trap cleanup"
+    else
+        fail "trap cleanup" "_update_cleanup function" "not found"
+    fi
+
+    # Security: checksum verification calls error on mismatch
+    if grep -A15 'verify_checksum_update()' "$SCRIPT" | grep -q 'error.*Checksum mismatch'; then
+        pass "checksum mismatch is fatal"
+    else
+        fail "checksum" "fatal on mismatch" "not found"
+    fi
+
+    # Safety: exec into new script (avoids stale code execution)
+    if grep -q 'exec.*scripts/termote.sh.*install' "$SCRIPT"; then
+        pass "update uses exec for re-install (safe self-replacement)"
+    else
+        fail "exec re-install" "exec into new script" "not found"
+    fi
+
+    # Config preservation: uses get_config_value helper in cmd_update
+    if sed -n '/^cmd_update()/,/^}/p' "$SCRIPT" | grep -q 'get_config_value'; then
+        pass "update reads config via get_config_value helper"
+    else
+        fail "config reading" "get_config_value" "not found"
+    fi
+
+    # Symlink re-link check
+    if grep -A80 'cmd_update' "$SCRIPT" | grep -q 'had_symlink'; then
+        pass "update checks and re-links symlink"
+    else
+        fail "symlink re-link" "had_symlink check" "not found"
+    fi
+
+    # Downgrade warning
+    if grep -A60 'cmd_update' "$SCRIPT" | grep -q 'Downgrading'; then
+        pass "update warns on version downgrade"
+    else
+        fail "downgrade warning" "Downgrading message" "not found"
+    fi
+
+    # Uses PORT_MAIN constant (not magic "7680")
+    if sed -n '/^cmd_update()/,/^}/p' "$SCRIPT" | grep -q 'PORT_MAIN'; then
+        pass "update uses PORT_MAIN constant"
+    else
+        fail "PORT_MAIN" "uses constant" "hardcoded 7680"
+    fi
+}
+
 echo "Running termote.sh tests..."
 echo ""
 
@@ -578,6 +736,7 @@ test_password_encryption
 test_health_check
 test_version_display
 test_link_unlink
+test_update_command
 
 # Summary
 echo ""

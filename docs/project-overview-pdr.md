@@ -40,6 +40,7 @@ PWA that wraps ttyd terminals with:
 | iOS Safe Area          | Respects status bar safe area inset                     |
 | Basic Authentication   | HTTP basic auth + iframe-only terminal access           |
 | Brute-force Protection | Rate limiter (5 failed attempts/min per IP)             |
+| Self-Update            | Fetch & install latest release, preserve config         |
 
 ## Target Users
 

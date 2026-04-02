@@ -235,6 +235,18 @@ curl http://localhost:7680/api/tmux/sessions
 
 ## Cập nhật
 
+### Qua CLI (Khuyến nghị)
+
+Nếu Termote đã được cài đặt, sử dụng lệnh cập nhật tích hợp:
+
+```bash
+termote update                    # Cập nhật lên phiên bản mới nhất
+termote update --version 0.0.9   # Cập nhật phiên bản cụ thể
+termote update --force            # Cài đặt lại phiên bản hiện tại
+```
+
+Lệnh này tự động giữ nguyên config, dừng dịch vụ, tải phiên bản mới, kiểm tra checksum, và cài đặt lại với cấu hình đã lưu.
+
 ### Qua One-liner
 
 Chạy lại installer - sẽ so sánh version và hỏi trước khi cập nhật:

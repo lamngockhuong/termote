@@ -171,6 +171,34 @@ Auto-detects OS via `$(uname)`. Works on both macOS and Linux.
 ./scripts/termote.sh uninstall all         # Everything
 ```
 
+### Self-Update
+
+```bash
+./scripts/termote.sh update                # Update to latest release
+./scripts/termote.sh update --version 0.1.5   # Pin to specific version
+./scripts/termote.sh update --force        # Force reinstall current version
+```
+
+**Update flow:**
+
+1. Fetch latest release tag from GitHub API (or use `--version` to pin)
+2. Download tarball and checksums from GitHub releases
+3. Verify SHA256 checksum (warn if unavailable, fail if mismatch)
+4. Stop all services: `systemctl stop termote` (native), `docker/podman down` (container)
+5. Extract tarball to `~/.termote` (preserves config file)
+6. Load saved config: mode, LAN, auth, port, Tailscale settings
+7. Re-link symlink if it existed (via `termote link`)
+8. Execute new script with `exec` (safe self-replacement, avoids stale code in memory)
+9. Re-install with saved config using new script binary
+
+**Safeguards:**
+
+- Refuses to run from git repo (dev-only via source installation)
+- Warns on downgrade (but allows with explicit `--version`)
+- Skips reinstall if already on target version (unless `--force`)
+- Requires saved config (`~/.termote/.config.sh`) — run `install` first
+- Preserves all user config and passwords during update
+
 ## Security Model
 
 1. **Network**: VPN/Tailscale or local network only
