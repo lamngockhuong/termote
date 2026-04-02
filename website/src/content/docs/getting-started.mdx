@@ -89,6 +89,8 @@ $env:TERMOTE_MODE = "container"; irm .../get.ps1 | iex
 ./scripts/termote.sh                   # Interactive menu
 ./scripts/termote.sh install container # Container mode
 ./scripts/termote.sh install native    # Native mode (host tools)
+./scripts/termote.sh update            # Update to latest version
+./scripts/termote.sh update --version 0.0.9  # Pin to specific version
 ./scripts/termote.sh uninstall all     # Uninstall everything
 ./scripts/termote.sh health            # Check service health
 ./scripts/termote.sh link              # Create 'termote' global command

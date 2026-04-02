@@ -200,6 +200,52 @@ ttyd WebSocket → tmux session
 Terminal output → ttyd (xterm.js) → display
 ```
 
+## CLI Scripts
+
+### termote.sh (~1130 lines)
+
+Unified Unix CLI for installation, management, and updates:
+
+**Commands:**
+
+- `install [container|native]` — deploy with optional flags (--lan, --no-auth, --port, --tailscale, --fresh)
+- `uninstall [container|native|all]` — cleanup
+- `health` — service status check
+- `link` — create `/usr/local/bin/termote` symlink (global command)
+- `unlink` — remove symlink
+- `update` — fetch + install latest release from GitHub
+- `update --version X.Y.Z` — pin to specific release
+- `update --force` — force reinstall current version
+
+**Key functions:**
+
+- `cmd_install()` — deploy: build PWA/binary, start services, set up auth
+- `cmd_update()` — self-update: fetch release, verify checksum, stop services, extract, re-install with saved config
+- `stop_native_services()` — stop systemd units (termote, ttyd)
+- `interactive_menu()` — terminal UI for users (install/update/health/link options)
+- `get_latest_version_api()` — fetch latest tag from GitHub API
+- `verify_checksum_update()` — validate SHA256 before extraction
+- `get_config_value()` — read saved config from `~/.termote/.config.sh`
+
+**Config persistence:** Saves settings to `~/.termote/.config.sh` (chmod 600, AES-256-CBC + PBKDF2 encrypted password). Updates preserve all settings.
+
+**Safe self-replacement:** Uses `exec` to replace process with new script binary (avoids stale code in memory during mid-update).
+
+**Test coverage:** 87 test cases in `test-termote.sh` (all passing)
+
+### termote.ps1
+
+Windows PowerShell equivalent of `termote.sh` with same commands (planned, matches Unix behavior).
+
+### get.sh / get.ps1
+
+Online installers (curl|bash / irm|iex):
+
+- Download from GitHub (latest or pinned version)
+- Verify checksum
+- Extract to `~/.termote`
+- Run `termote.sh install` with `--update` flag to preserve config on updates
+
 ## External Dependencies
 
 | Package          | Purpose              |

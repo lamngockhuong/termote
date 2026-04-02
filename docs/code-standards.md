@@ -185,3 +185,58 @@ pnpm test:e2e:ui                  # Run e2e tests with UI debugger
 - Return JSON errors with `jsonError(w, msg, code)`
 - Validate all user inputs before passing to exec.Command
 - Handle JSON decode errors explicitly
+
+## Shell Script Standards (termote.sh / termote.ps1)
+
+### Shell Function Naming
+
+- **verb_noun** format: `cmd_install()`, `cmd_update()`, `start_native_services()`
+- Helper functions: `get_latest_version_api()`, `verify_checksum_update()`, `get_config_value()`
+- Informational: `info()`, `warn()`, `error()` for logging
+
+### Shell Error Handling
+
+- Use `error()` function for fatal errors (includes usage hint, exits with code 1)
+- Use `warn()` for non-fatal issues
+- Use `[[ -z "$var" ]] && error "..."` to validate required vars
+- Validate config file exists before reading: `[[ ! -f "$CONFIG_FILE" ]] && error "..."`
+- Return explicit status codes on failure
+
+### Cross-Platform Patterns
+
+- **Regex:** Use `grep -oE` (extended) not `grep -oP` (Perl, Linux-only)
+- **IP detection:** Use `ipconfig getifaddr en0` fallback for `hostname -I` on macOS
+- **OS detection:** Use `$(uname)` for Darwin (macOS) vs Linux
+- **Architecture:** Use `$(uname -m)` for x86_64, aarch64, etc.
+- **Commands:** Check availability with `command -v {name}` before use
+
+### Config Persistence
+
+- Save settings to `~/.termote/.config.sh` (sourced, not JSON)
+- Use `get_config_value KEY` to read individual settings
+- Encrypt password with AES-256-CBC + PBKDF2 (machine-derived key)
+- Set config file permissions: `chmod 600 $CONFIG_FILE`
+- Preserve config during `update` command (full re-installation with saved settings)
+
+### Process Management
+
+- Use `exec` for safe self-replacement (avoids stale code in memory)
+- Stop services before update: systemd units + docker/podman compose
+- Remember if symlink existed, re-link after update
+- Clean up temp dirs with trap: `trap _cleanup EXIT`
+
+### Validation & Messaging
+
+- Validate version format: `^[0-9]+\.[0-9]+\.[0-9]+$`
+- Warn on downgrade but allow with explicit `--version` flag
+- Skip reinstall if already on target version (unless `--force`)
+- Guard: refuse to run `update` from git repo (dev-only for source installs)
+
+### Shell Testing
+
+```bash
+make test-cli         # Run test-termote.sh (all tests)
+bash tests/test-termote.sh cmd_update  # Run specific test function
+```
+
+Test patterns: Mock files, guard clauses, capture output with command substitution
