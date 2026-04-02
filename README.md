@@ -79,7 +79,7 @@ flowchart TB
 
 ## Quick Start
 
-> 📖 **New to Termote?** Check out the [Getting Started Guide](docs/GETTING_STARTED.md) for a complete walkthrough with examples.
+> 📖 **New to Termote?** Check out the [Getting Started Guide](docs/getting-started.md) for a complete walkthrough with examples.
 
 ```bash
 ./scripts/termote.sh                   # Interactive menu
