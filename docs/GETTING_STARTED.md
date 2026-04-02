@@ -7,6 +7,7 @@ Control Claude Code, GitHub Copilot, or any terminal tool from your phone — in
 Termote (Terminal + Remote) turns your browser into a mobile-friendly terminal. It wraps your existing CLI tools with touch gestures, a virtual keyboard, and session management — all through a PWA you can install on your homescreen.
 
 **Use cases:**
+
 - Control Claude Code from your phone while away from your desk
 - Monitor long-running processes from mobile
 - Pair program by sharing a terminal session
@@ -62,12 +63,12 @@ Each session is independent — run Claude Code in one, a build process in anoth
 
 ### Touch Gestures
 
-| Gesture | Action |
-|---------|--------|
-| Swipe left | Send `Ctrl+C` (interrupt) |
+| Gesture     | Action                    |
+| ----------- | ------------------------- |
+| Swipe left  | Send `Ctrl+C` (interrupt) |
 | Swipe right | Send `Tab` (autocomplete) |
-| Swipe up | Previous command (↑) |
-| Swipe down | Next command (↓) |
+| Swipe up    | Previous command (↑)      |
+| Swipe down  | Next command (↓)          |
 
 ### Virtual Keyboard
 
