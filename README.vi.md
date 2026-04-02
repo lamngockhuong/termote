@@ -79,6 +79,8 @@ flowchart TB
 
 ## Bắt Đầu Nhanh
 
+> 📖 **Mới dùng Termote?** Xem [Hướng dẫn Bắt đầu](docs/getting-started.vi.md) để có hướng dẫn chi tiết kèm ví dụ.
+
 ```bash
 ./scripts/termote.sh                   # Menu tương tác
 ./scripts/termote.sh install container # Chế độ container (docker/podman)
@@ -88,7 +90,7 @@ make test                              # Chạy tests
 ```
 
 > Sau khi `link`, dùng `termote` từ bất kỳ đâu: `termote health`, `termote install native --lan`
-
+>
 > **Mẹo**: Cài [gum](https://github.com/charmbracelet/gum) để có menu tương tác đẹp hơn (tùy chọn, có fallback bash)
 
 ## Cài Đặt
