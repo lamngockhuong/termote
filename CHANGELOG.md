@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.0.11](https://github.com/lamngockhuong/termote/compare/v0.0.10...v0.0.11) (2026-04-03)
+
+
+### Features
+
+* **cli:** add termote update self-update command ([#112](https://github.com/lamngockhuong/termote/issues/112)) ([ec1e856](https://github.com/lamngockhuong/termote/commit/ec1e856f7c736b7d06e354f523cfffc6e7803400))
+* **pwa:** add tmux paste button and vi mode config ([#119](https://github.com/lamngockhuong/termote/issues/119)) ([39fc559](https://github.com/lamngockhuong/termote/commit/39fc559c96932113eefcdee456b2e5b988758878))
+
+
+### Bug Fixes
+
+* **api:** allow Unicode and spaces in session/window names ([#118](https://github.com/lamngockhuong/termote/issues/118)) ([fec53ef](https://github.com/lamngockhuong/termote/commit/fec53ef3845a4c7a00190aa1b8e95144b2ae1d41))
+* **deps:** update dependency astro to v6.1.3 ([#110](https://github.com/lamngockhuong/termote/issues/110)) ([f762978](https://github.com/lamngockhuong/termote/commit/f7629787131589b17991cac5d79be557d75a0eea))
+* **pwa:** fix settings menu z-index overlap with terminal states ([#121](https://github.com/lamngockhuong/termote/issues/121)) ([e85b51a](https://github.com/lamngockhuong/termote/commit/e85b51ade2672e8750ecc6d327ac09605e9a070a))
+
 ## [0.0.10](https://github.com/lamngockhuong/termote/compare/v0.0.9...v0.0.10) (2026-03-31)
 
 
