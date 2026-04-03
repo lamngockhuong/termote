@@ -15,7 +15,7 @@ func TestValidateTmuxTarget(t *testing.T) {
 		input string
 		want  bool
 	}{
-		// Valid targets
+		// Valid targets - basic
 		{"main", true},
 		{"0", true},
 		{"session:window", true},
@@ -24,16 +24,32 @@ func TestValidateTmuxTarget(t *testing.T) {
 		{"session.pane", true},
 		{"Session123", true},
 
-		// Invalid targets
+		// Valid targets - spaces and Unicode (tmux supports these)
+		{"session name", true},           // space allowed
+		{"tên tiếng việt", true},         // Vietnamese
+		{"会话名称", true},                // Chinese
+		{"セッション", true},              // Japanese
+		{"my session", true},             // space in middle
+		{" leading", true},               // leading space
+		{"trailing ", true},              // trailing space
+
+		// Valid targets - special chars (safe with exec.Command, no shell injection)
+		{"$(whoami)", true},              // not executed - passed literally to tmux
+		{"; rm -rf /", true},             // not executed - passed literally to tmux
+		{"session`id`", true},            // backticks safe with exec.Command
+		{"session|cat", true},            // pipe safe with exec.Command
+		{"session&echo", true},           // ampersand safe with exec.Command
+
+		// Invalid targets - empty or too long
 		{"", false},
-		{"$(whoami)", false},
-		{"; rm -rf /", false},
-		{"session`id`", false},
-		{"session|cat", false},
-		{"session&echo", false},
-		{"session\nid", false},
-		{"session name", false}, // space not allowed
-		{string(make([]byte, 65)), false}, // too long
+		{string(make([]byte, 65)), false}, // too long (65 chars)
+
+		// Invalid targets - control characters
+		{"session\nid", false},           // newline
+		{"session\x00id", false},         // null byte
+		{"session\tid", false},           // tab (control char)
+		{"session\rid", false},           // carriage return
+		{"\x1b[31mred\x1b[0m", false},    // ANSI escape
 	}
 
 	for _, tt := range tests {
@@ -154,14 +170,14 @@ func TestHandleSelectMethodValidation(t *testing.T) {
 }
 
 func TestHandleSelectInvalidID(t *testing.T) {
-	// POST with injection attempt
-	req := httptest.NewRequest("POST", "/api/tmux/select/$(whoami)", nil)
+	// POST with control character (newline)
+	req := httptest.NewRequest("POST", "/api/tmux/select/test%0Aid", nil)
 	rec := httptest.NewRecorder()
 
 	handleSelect(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
-		t.Errorf("handleSelect(injection) status = %d, want %d", rec.Code, http.StatusBadRequest)
+		t.Errorf("handleSelect(control char) status = %d, want %d", rec.Code, http.StatusBadRequest)
 	}
 }
 
@@ -197,7 +213,7 @@ func TestHandleSendKeysValidation(t *testing.T) {
 	}{
 		{"wrong method", "GET", nil, http.StatusMethodNotAllowed},
 		{"invalid json", "POST", "not json", http.StatusBadRequest},
-		{"invalid target", "POST", map[string]string{"target": "$(id)", "keys": "test"}, http.StatusBadRequest},
+		{"invalid target", "POST", map[string]string{"target": "test\nid", "keys": "test"}, http.StatusBadRequest},
 		{"keys too long", "POST", map[string]string{"target": "main", "keys": string(make([]byte, 5000))}, http.StatusBadRequest},
 	}
 
@@ -245,8 +261,8 @@ func TestHandleRenameValidation(t *testing.T) {
 		t.Errorf("handleRename(GET) status = %d, want %d", rec.Code, http.StatusMethodNotAllowed)
 	}
 
-	// Invalid ID
-	req = httptest.NewRequest("POST", "/api/tmux/rename/$(id)?name=test", nil)
+	// Invalid ID (control character)
+	req = httptest.NewRequest("POST", "/api/tmux/rename/test%00id?name=test", nil)
 	rec = httptest.NewRecorder()
 	handleRename(rec, req)
 	if rec.Code != http.StatusBadRequest {
@@ -261,8 +277,8 @@ func TestHandleRenameValidation(t *testing.T) {
 		t.Errorf("handleRename(no name) status = %d, want %d", rec.Code, http.StatusBadRequest)
 	}
 
-	// Invalid name
-	req = httptest.NewRequest("POST", "/api/tmux/rename/0?name=$(id)", nil)
+	// Invalid name (control character)
+	req = httptest.NewRequest("POST", "/api/tmux/rename/0?name=test%0Aid", nil)
 	rec = httptest.NewRecorder()
 	handleRename(rec, req)
 	if rec.Code != http.StatusBadRequest {
@@ -282,7 +298,8 @@ func TestHandleWindowsMethodValidation(t *testing.T) {
 }
 
 func TestHandleNewInvalidName(t *testing.T) {
-	req := httptest.NewRequest("POST", "/api/tmux/new?name=$(whoami)", nil)
+	// Control character (tab) should be rejected
+	req := httptest.NewRequest("POST", "/api/tmux/new?name=test%09name", nil)
 	rec := httptest.NewRecorder()
 
 	handleNew(rec, req)
@@ -293,7 +310,8 @@ func TestHandleNewInvalidName(t *testing.T) {
 }
 
 func TestHandleKillInvalidID(t *testing.T) {
-	req := httptest.NewRequest("POST", "/api/tmux/kill/$(id)", nil)
+	// Null byte should be rejected
+	req := httptest.NewRequest("POST", "/api/tmux/kill/test%00id", nil)
 	rec := httptest.NewRecorder()
 
 	handleKill(rec, req)

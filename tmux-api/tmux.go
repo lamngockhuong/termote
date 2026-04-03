@@ -20,12 +20,14 @@ func init() {
 	}
 }
 
-// validTmuxID matches safe tmux target identifiers (alphanumeric, underscore, dash, colon, dot)
-var validTmuxID = regexp.MustCompile(`^[a-zA-Z0-9_\-:.]+$`)
+// invalidTmuxChars matches control characters and null bytes that should be blocked
+// tmux supports Unicode and spaces; Go's exec.Command is safe from shell injection
+var invalidTmuxChars = regexp.MustCompile(`[\x00-\x1f\x7f]`)
 
 // validateTmuxTarget checks if target is a safe tmux identifier
+// Allows Unicode, spaces, and printable chars; blocks control chars and empty/too-long strings
 func validateTmuxTarget(target string) bool {
-	return target != "" && len(target) <= 64 && validTmuxID.MatchString(target)
+	return target != "" && len(target) <= 64 && !invalidTmuxChars.MatchString(target)
 }
 
 // tmuxError logs a tmux command error and writes a generic JSON error response.
