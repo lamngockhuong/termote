@@ -43,7 +43,7 @@ function windowToSession(
   }
 }
 
-export function useLocalSessions() {
+export function useLocalSessions(pollInterval = 5) {
   const [sessions, setSessions] = useState<Session[]>([])
   const [activeSession, setActiveSession] = useState<Session | null>(null)
   const [isReady, setIsReady] = useState(false)
@@ -98,10 +98,10 @@ export function useLocalSessions() {
   // Initial fetch and periodic refresh
   useEffect(() => {
     refreshSessions()
-    // Refresh every 5 seconds to sync across browsers
-    const interval = setInterval(refreshSessions, 5000)
+    const ms = Math.max(pollInterval, 1) * 1000
+    const interval = setInterval(refreshSessions, ms)
     return () => clearInterval(interval)
-  }, [refreshSessions])
+  }, [refreshSessions, pollInterval])
 
   const switchSession = useCallback(
     async (sessionId: string) => {

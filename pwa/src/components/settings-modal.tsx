@@ -50,6 +50,10 @@ function ToggleRow({
   )
 }
 
+const formatSeconds = (s: number) => (s >= 60 ? `${s / 60}m` : `${s}s`)
+
+const POLL_INTERVAL_OPTIONS = [3, 5, 10, 15, 30, 60, 120, 300]
+
 const IME_SEND_OPTIONS: {
   value: ImeSendBehavior
   label: string
@@ -174,6 +178,30 @@ export function SettingsModal({
               )
             }
           />
+
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Session poll interval
+              </p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                How often to sync session list ({formatSeconds(settings.pollInterval)})
+              </p>
+            </div>
+            <select
+              value={settings.pollInterval}
+              onChange={(e) =>
+                onUpdateSetting('pollInterval', Number(e.target.value))
+              }
+              className="rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 text-sm text-zinc-900 dark:text-white px-2 py-1.5"
+            >
+              {POLL_INTERVAL_OPTIONS.map((v) => (
+                <option key={v} value={v}>
+                  {formatSeconds(v)}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
     </dialog>

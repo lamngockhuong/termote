@@ -67,12 +67,14 @@ export interface Settings {
   imeSendBehavior: "send-only" | "send-enter";
   toolbarDefaultExpanded: boolean;
   disableContextMenu: boolean;
+  pollInterval: number; // seconds
 }
 
 const DEFAULTS: Settings = {
   imeSendBehavior: "send-only",
   toolbarDefaultExpanded: false,
   disableContextMenu: true,
+  pollInterval: 5,
 };
 
 function getSnapshot() {

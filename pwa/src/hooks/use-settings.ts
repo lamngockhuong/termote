@@ -8,12 +8,14 @@ export interface Settings {
   imeSendBehavior: ImeSendBehavior
   toolbarDefaultExpanded: boolean
   disableContextMenu: boolean
+  pollInterval: number // seconds between session list refreshes
 }
 
 const DEFAULTS: Settings = {
   imeSendBehavior: 'send-only',
   toolbarDefaultExpanded: false,
   disableContextMenu: true,
+  pollInterval: 5,
 }
 
 // Listeners for useSyncExternalStore

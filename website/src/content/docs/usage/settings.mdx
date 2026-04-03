@@ -34,6 +34,14 @@ Blocks the browser context menu (right-click / long-press) on the terminal area 
 | On     | Context menu is blocked on terminal     | ✓       |
 | Off    | Browser default context menu is allowed |         |
 
+## Session Poll Interval
+
+Controls how often the app syncs the session list from the server. Lower values keep multi-device views in sync faster; higher values reduce server load when using a single device.
+
+| Option                            | Default |
+| --------------------------------- | ------- |
+| 3s, 5s, 10s, 15s, 30s, 1m, 2m, 5m | 5s ✓    |
+
 ## Persistence
 
 All settings are saved to your browser's local storage (`termote-settings` key) and persist across sessions. Clearing browser data or using "Clear Cache & Reload" will reset settings to defaults.

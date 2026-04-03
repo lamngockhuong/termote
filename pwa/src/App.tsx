@@ -58,7 +58,7 @@ export default function App() {
     addSession,
     removeSession,
     updateSession,
-  } = useLocalSessions()
+  } = useLocalSessions(settings.pollInterval)
   const { fontSize, increase, decrease } = useFontSize()
   const { resolvedTheme } = useTheme()
   const { isFullscreen, toggleFullscreen } = useFullscreen()

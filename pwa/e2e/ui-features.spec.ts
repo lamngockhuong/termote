@@ -339,6 +339,42 @@ test.describe('preferences modal', () => {
     await expect(toggleAfter).toHaveAttribute('aria-checked', 'false')
   })
 
+  test('changes poll interval', async ({ page }) => {
+    await page.click('button[aria-label="Settings"]')
+    await page.click('text=Preferences')
+    await page.waitForTimeout(200)
+
+    // Change poll interval to 30s
+    const select = page.locator('select')
+    await select.selectOption('30')
+    await page.waitForTimeout(100)
+
+    // Verify persisted to localStorage
+    const stored = await page.evaluate(() => localStorage.getItem('termote-settings'))
+    expect(JSON.parse(stored!).pollInterval).toBe(30)
+  })
+
+  test('poll interval persists after reload', async ({ page }) => {
+    await page.click('button[aria-label="Settings"]')
+    await page.click('text=Preferences')
+    await page.waitForTimeout(200)
+
+    // Set to 60 (1m)
+    await page.locator('select').selectOption('60')
+    await page.waitForTimeout(100)
+
+    // Reload
+    await page.keyboard.press('Escape')
+    await page.reload()
+    await page.waitForSelector('iframe[title="Terminal"]', { timeout: 10000 })
+
+    // Reopen and verify
+    await page.click('button[aria-label="Settings"]')
+    await page.click('text=Preferences')
+    await page.waitForTimeout(200)
+    await expect(page.locator('select')).toHaveValue('60')
+  })
+
   test('preferences persist after page reload', async ({ page }) => {
     // Open and change setting
     await page.click('button[aria-label="Settings"]')
