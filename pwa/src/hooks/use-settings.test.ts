@@ -12,6 +12,7 @@ describe('useSettings', () => {
     expect(result.current.settings.imeSendBehavior).toBe('send-only')
     expect(result.current.settings.toolbarDefaultExpanded).toBe(false)
     expect(result.current.settings.disableContextMenu).toBe(true)
+    expect(result.current.settings.pollInterval).toBe(5)
   })
 
   it('restores saved settings from localStorage', () => {
@@ -36,6 +37,7 @@ describe('useSettings', () => {
     expect(result.current.settings.imeSendBehavior).toBe('send-enter')
     expect(result.current.settings.toolbarDefaultExpanded).toBe(false)
     expect(result.current.settings.disableContextMenu).toBe(true)
+    expect(result.current.settings.pollInterval).toBe(5)
   })
 
   it('handles corrupt localStorage gracefully', () => {
@@ -82,5 +84,24 @@ describe('useSettings', () => {
     )
     const { result } = renderHook(() => useSettings())
     expect(result.current.settings.disableContextMenu).toBe(false)
+  })
+
+  it('updates pollInterval and persists', () => {
+    const { result } = renderHook(() => useSettings())
+    act(() => result.current.updateSetting('pollInterval', 30))
+
+    expect(result.current.settings.pollInterval).toBe(30)
+
+    const stored = JSON.parse(localStorage.getItem('termote-settings')!)
+    expect(stored.pollInterval).toBe(30)
+  })
+
+  it('restores pollInterval from localStorage', () => {
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ pollInterval: 120 }),
+    )
+    const { result } = renderHook(() => useSettings())
+    expect(result.current.settings.pollInterval).toBe(120)
   })
 })

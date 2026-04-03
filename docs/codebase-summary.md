@@ -111,18 +111,19 @@ Virtual keyboard for mobile:
 - Haptic feedback on key press
 - Respects `defaultExpanded` prop from settings
 
-### settings-modal.tsx (~181 lines)
+### settings-modal.tsx (~207 lines)
 
-Settings dialog with radio buttons and toggles:
+Settings dialog with radio buttons, toggles, and dropdown:
 
 - **IME send behavior**: "Send text only" (default) or "Send + Enter" (auto-press Enter after text)
 - **Toolbar default expanded**: Toggle to show all keys on load (vs. collapsed by default)
 - **Disable right-click menu**: Toggle to disable context menu on terminal (default: enabled)
+- **Session poll interval**: Dropdown to set sync frequency (3s, 5s, 10s, 15s, 30s, 1m, 2m, 5m; default: 5s)
 - Uses `ToggleRow` helper component for consistent toggle styling
 - Accessible dialog with custom styling
 - Persists changes via `useSettings()` hook
 
-### use-settings.ts (~68 lines)
+### use-settings.ts (~70 lines)
 
 Settings state management using `useSyncExternalStore`:
 
@@ -131,8 +132,9 @@ Settings state management using `useSyncExternalStore`:
   - `imeSendBehavior`: 'send-only' | 'send-enter'
   - `toolbarDefaultExpanded`: boolean
   - `disableContextMenu`: boolean (default: true)
+  - `pollInterval`: number in seconds (default: 5, range: 3-300 for 3s-5m)
 - `updateSetting()` callback to update individual settings
-- Defaults to send-only + collapsed toolbar + context menu disabled
+- Defaults to send-only + collapsed toolbar + context menu disabled + 5s poll interval
 
 ### use-gestures.ts (~53 lines)
 
@@ -149,7 +151,7 @@ Session management + tmux sync:
 - Sessions loaded from tmux windows via API
 - LocalStorage for metadata (icons, descriptions)
 - tmux window create/select/kill via API
-- Polling every 5s for external changes
+- Polling interval configurable via `pollInterval` parameter (seconds, default: 5)
 
 ### use-tmux-api.ts (~56 lines)
 

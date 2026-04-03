@@ -54,7 +54,8 @@ React SPA with:
 - **Session Sidebar**: Switch between tmux windows, add/edit/remove (collapsible on desktop)
 - **Keyboard Toolbar**: Virtual keys, Ctrl combos, scroll controls (respects default expanded setting)
 - **Settings Menu**: Theme toggle (light/dark/system), Clear Cache & Reload, Preferences
-- **Settings Modal**: IME behavior, toolbar default expanded, context menu control (disable right-click)
+- **Settings Modal**: IME behavior, toolbar default expanded, context menu control, session poll interval
+- **Session Poll Interval**: Configurable sync frequency (3s-5m, default 5s) to control API polling rate
 - **Context Menu Control**: Block/unblock right-click on terminal via iframe postMessage
 - **Font Controls**: Adjustable font size (6-24px)
 - **Fullscreen Toggle**: Desktop-only fullscreen mode via Fullscreen API
