@@ -163,7 +163,7 @@ export const TerminalFrame = forwardRef<TerminalFrameHandle, Props>(
 
     if (tokenError) {
       return (
-        <div className="flex-1 flex flex-col items-center justify-center text-red-400 relative z-10">
+        <div className="flex-1 flex flex-col items-center justify-center text-red-400">
           <p>{tokenError}</p>
           <button
             onClick={loadTerminal}
@@ -176,7 +176,7 @@ export const TerminalFrame = forwardRef<TerminalFrameHandle, Props>(
     }
     if (loading || !terminalSrc) {
       return (
-        <div className="flex-1 flex items-center justify-center text-zinc-400 relative z-10">
+        <div className="flex-1 flex items-center justify-center text-zinc-400">
           Connecting...
         </div>
       )
