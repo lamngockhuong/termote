@@ -9,7 +9,7 @@
 
 set -e
 
-VERSION="0.0.10" # x-release-please-version
+VERSION="0.0.11" # x-release-please-version
 # Resolve symlinks (for `termote link` global command)
 _script_path="${BASH_SOURCE[0]}"
 while [ -L "$_script_path" ]; do
