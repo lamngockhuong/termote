@@ -66,11 +66,29 @@ The keyboard toolbar provides touch-friendly buttons for common terminal keys. I
 
 ### Utility Keys
 
-| Button    | Action                |
-| --------- | --------------------- |
-| Copy icon | Toggle tmux copy mode |
-| PgUp      | Scroll up (tmux)      |
-| PgDn      | Scroll down (tmux)    |
+| Button     | Action                       |
+| ---------- | ---------------------------- |
+| Copy icon  | Toggle tmux copy mode        |
+| Paste icon | Paste from tmux buffer       |
+| PgUp       | Scroll up (tmux)             |
+| PgDn       | Scroll down (tmux)           |
+
+### tmux Copy/Paste Workflow
+
+1. Tap **Copy icon** to enter copy mode
+2. Use arrow keys to navigate
+3. Press **Space** to start selection
+4. Navigate to select text
+5. Press **Enter** to copy to tmux buffer
+6. Tap **Paste icon** to paste
+
+:::note[Native Mode Setup]
+For native mode, add this to your `~/.tmux.conf`:
+```bash
+set-option -g mode-keys vi
+```
+Container mode has this pre-configured.
+:::
 
 ## Expanded Mode (Additional Keys)
 

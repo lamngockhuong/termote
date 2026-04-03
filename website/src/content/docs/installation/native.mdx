@@ -42,6 +42,32 @@ No Docker required. Access host binaries like `claude`, `git`, `gh`, etc.
   </TabItem>
 </Tabs>
 
+### tmux Configuration (Recommended)
+
+For tmux copy/paste to work with the keyboard toolbar buttons, add this to your `~/.tmux.conf`:
+
+```bash
+# Vi mode for copy: Space=start selection, Enter=copy
+set-option -g mode-keys vi
+# Mouse support (scroll, select) - toggle with Ctrl+b m
+set-option -g mouse on
+bind m set -g mouse \; display "Mouse #{?mouse,on,off}"
+```
+
+Apply the config:
+
+```bash
+tmux source-file ~/.tmux.conf
+```
+
+This enables: **Copy icon** → navigate → **Space** → select → **Enter** → **Paste icon**
+
+:::tip[Copy to System Clipboard]
+With mouse ON, tmux captures mouse events. To copy to system clipboard:
+- **Hold Shift** while selecting text (bypasses tmux, uses terminal selection)
+- Or press **Ctrl+b m** to toggle mouse off temporarily
+:::
+
 ## Installation
 
 <Steps>

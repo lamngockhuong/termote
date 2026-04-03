@@ -42,6 +42,32 @@ Không cần Docker. Truy cập binary host như `claude`, `git`, `gh`, v.v.
   </TabItem>
 </Tabs>
 
+### Cấu hình tmux (Khuyến nghị)
+
+Để copy/paste tmux hoạt động với các nút trên thanh công cụ, thêm dòng này vào `~/.tmux.conf`:
+
+```bash
+# Vi mode cho copy: Space=bắt đầu chọn, Enter=copy
+set-option -g mode-keys vi
+# Hỗ trợ chuột (cuộn, chọn) - bật/tắt với Ctrl+b m
+set-option -g mouse on
+bind m set -g mouse \; display "Mouse #{?mouse,on,off}"
+```
+
+Áp dụng config:
+
+```bash
+tmux source-file ~/.tmux.conf
+```
+
+Cho phép: **Icon Copy** → di chuyển → **Space** → chọn → **Enter** → **Icon Paste**
+
+:::tip[Copy ra System Clipboard]
+Khi mouse BẬT, tmux bắt sự kiện chuột. Để copy ra system clipboard:
+- **Giữ Shift** khi chọn text (bypass tmux, dùng selection của terminal)
+- Hoặc nhấn **Ctrl+b m** để tạm tắt mouse
+:::
+
 ## Cài đặt
 
 <Steps>

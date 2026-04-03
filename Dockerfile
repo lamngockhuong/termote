@@ -16,9 +16,12 @@ RUN echo 'alias ll="ls -la"' >> /etc/bash.bashrc && \
     echo 'alias l="ls -CF"' >> /etc/bash.bashrc && \
     echo 'export PS1="\[\e[32m\]termote\[\e[0m\]:\[\e[34m\]\w\[\e[0m\]\$ "' >> /etc/bash.bashrc
 
-# tmux config
+# tmux config (vi mode for copy: Space=select, Enter=copy, Ctrl+b ]=paste)
 RUN echo "set-option -g default-shell /bin/bash" > /etc/tmux.conf && \
-    echo "set-option -g default-command /bin/bash" >> /etc/tmux.conf
+    echo "set-option -g default-command /bin/bash" >> /etc/tmux.conf && \
+    echo "set-option -g mode-keys vi" >> /etc/tmux.conf && \
+    echo "set-option -g mouse on" >> /etc/tmux.conf && \
+    echo "bind m set -g mouse \\; display 'Mouse #{?mouse,on,off}'" >> /etc/tmux.conf
 
 # Make passwd/group writable for entrypoint (locked to 644 after writes)
 RUN chmod 644 /etc/passwd /etc/group

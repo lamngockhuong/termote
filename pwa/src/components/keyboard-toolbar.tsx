@@ -7,6 +7,7 @@ import {
   ChevronLast,
   ChevronsDown,
   ChevronsUp,
+  Clipboard,
   CornerDownLeft,
   Delete,
   Expand,
@@ -34,6 +35,7 @@ interface Props {
   onCtrlShiftKey?: (key: string) => void
   onScroll?: (direction: 'up' | 'down', pages?: boolean) => void
   onTmuxCopy?: () => void
+  onTmuxPaste?: () => void
   onToggleKeyboard?: () => void
   onSendText?: (text: string) => void
   ctrlActive?: boolean
@@ -53,6 +55,7 @@ interface KeyConfig {
   isScroll?: boolean
   scrollDir?: 'up' | 'down'
   isTmuxCopy?: boolean
+  isTmuxPaste?: boolean
   isKeyboardToggle?: boolean
   isImeToggle?: boolean
   isExpandToggle?: boolean
@@ -97,6 +100,11 @@ const EXTRA_KEYS: KeyConfig[] = [
 // Utility keys (always at end)
 const UTILITY_KEYS: KeyConfig[] = [
   { label: <History size={ICON_SIZE} />, key: 'TmuxCopy', isTmuxCopy: true },
+  {
+    label: <Clipboard size={ICON_SIZE} />,
+    key: 'TmuxPaste',
+    isTmuxPaste: true,
+  },
   {
     label: <ChevronsUp size={ICON_SIZE} />,
     key: 'ScrollUp',
@@ -161,7 +169,8 @@ function getKeyButtonBg(
   if (key.isExpandToggle) return 'bg-indigo-200/70 dark:bg-indigo-700/50'
   if (key.isImeToggle) return 'bg-teal-200/70 dark:bg-teal-700/50'
   if (key.isKeyboardToggle) return 'bg-purple-200/70 dark:bg-purple-700/50'
-  if (key.isTmuxCopy) return 'bg-amber-200/70 dark:bg-amber-700/50'
+  if (key.isTmuxCopy || key.isTmuxPaste)
+    return 'bg-amber-200/70 dark:bg-amber-700/50'
   if (key.isScroll) return 'bg-green-200/70 dark:bg-green-800/50'
   return 'bg-zinc-200/70 dark:bg-zinc-700/70'
 }
@@ -173,6 +182,7 @@ export function KeyboardToolbar({
   onCtrlShiftKey,
   onScroll,
   onTmuxCopy,
+  onTmuxPaste,
   onToggleKeyboard,
   onSendText,
   ctrlActive: externalCtrlActive,
@@ -281,6 +291,7 @@ export function KeyboardToolbar({
         isExpandToggle?: boolean
         scrollDir?: 'up' | 'down'
         isTmuxCopy?: boolean
+        isTmuxPaste?: boolean
         isKeyboardToggle?: boolean
         isImeToggle?: boolean
       },
@@ -300,6 +311,10 @@ export function KeyboardToolbar({
       }
       if (opts?.isTmuxCopy && onTmuxCopy) {
         onTmuxCopy()
+        return
+      }
+      if (opts?.isTmuxPaste && onTmuxPaste) {
+        onTmuxPaste()
         return
       }
       if (opts?.scrollDir && onScroll) {
@@ -346,6 +361,7 @@ export function KeyboardToolbar({
       onCtrlShiftKey,
       onScroll,
       onTmuxCopy,
+      onTmuxPaste,
       onToggleKeyboard,
       toggleImeMode,
       toggleExpanded,
@@ -414,6 +430,7 @@ export function KeyboardToolbar({
               isExpandToggle: keyConfig.isExpandToggle,
               scrollDir: keyConfig.scrollDir,
               isTmuxCopy: keyConfig.isTmuxCopy,
+              isTmuxPaste: keyConfig.isTmuxPaste,
               isKeyboardToggle: keyConfig.isKeyboardToggle,
               isImeToggle: keyConfig.isImeToggle,
             })

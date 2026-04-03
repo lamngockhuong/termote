@@ -25,6 +25,7 @@ import {
   focusTerminal,
   isInCopyMode,
   isTerminalDisconnected,
+  pasteTmuxBuffer,
   pasteToTerminal,
   scrollTmux,
   sendKeyToTerminal,
@@ -157,6 +158,10 @@ export default function App() {
 
   const handleTmuxCopy = useCallback(() => {
     toggleTmuxCopyMode(getIframe())
+  }, [])
+
+  const handleTmuxPaste = useCallback(() => {
+    pasteTmuxBuffer(getIframe())
   }, [])
 
   const handleSendText = useCallback(
@@ -349,6 +354,7 @@ export default function App() {
         onCtrlShiftKey={handleCtrlShiftKey}
         onScroll={handleScroll}
         onTmuxCopy={handleTmuxCopy}
+        onTmuxPaste={handleTmuxPaste}
         onToggleKeyboard={toggleKeyboard}
         onSendText={handleSendText}
         ctrlActive={ctrlActive}
