@@ -298,6 +298,16 @@ export function exitTmuxCopyMode(iframe: HTMLIFrameElement | null) {
   inCopyMode = false
 }
 
+// Paste from tmux buffer (Ctrl+b ])
+export function pasteTmuxBuffer(iframe: HTMLIFrameElement | null) {
+  const term = getTerm(iframe)
+  if (!term) return
+  // Send Ctrl+b
+  sendData(term, '\x02')
+  // Then send ]
+  setTimeout(() => sendData(term, ']'), 50)
+}
+
 // Reset copy mode state (call when switching windows, etc.)
 export function resetCopyModeState() {
   inCopyMode = false

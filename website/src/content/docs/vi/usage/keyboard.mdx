@@ -66,11 +66,29 @@ Thanh công cụ bàn phím cung cấp các nút thân thiện cảm ứng cho c
 
 ### Phím tiện ích
 
-| Nút       | Hành động                    |
-| --------- | ---------------------------- |
-| Icon Copy | Bật/tắt chế độ sao chép tmux |
-| PgUp      | Cuộn lên (tmux)              |
-| PgDn      | Cuộn xuống (tmux)            |
+| Nút        | Hành động                    |
+| ---------- | ---------------------------- |
+| Icon Copy  | Bật/tắt chế độ sao chép tmux |
+| Icon Paste | Dán từ bộ nhớ tmux           |
+| PgUp       | Cuộn lên (tmux)              |
+| PgDn       | Cuộn xuống (tmux)            |
+
+### Quy trình Copy/Paste tmux
+
+1. Nhấn **Icon Copy** để vào chế độ sao chép
+2. Dùng phím mũi tên để di chuyển
+3. Nhấn **Space** để bắt đầu chọn
+4. Di chuyển để chọn text
+5. Nhấn **Enter** để copy vào bộ nhớ tmux
+6. Nhấn **Icon Paste** để dán
+
+:::note[Cài đặt Native Mode]
+Cho native mode, thêm dòng này vào `~/.tmux.conf`:
+```bash
+set-option -g mode-keys vi
+```
+Container mode đã được cấu hình sẵn.
+:::
 
 ## Chế độ mở rộng (Phím bổ sung)
 
