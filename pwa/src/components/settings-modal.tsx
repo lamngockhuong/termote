@@ -185,7 +185,8 @@ export function SettingsModal({
                 Session poll interval
               </p>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                How often to sync session list ({formatSeconds(settings.pollInterval)})
+                How often to sync session list (
+                {formatSeconds(settings.pollInterval)})
               </p>
             </div>
             <select
