@@ -825,6 +825,7 @@ cmd_help() {
     echo "  logs [service]    View logs (ttyd, tmux-api, all, follow, clean)"
     echo "  link              Create 'termote' symlink in /usr/local/bin"
     echo "  unlink            Remove 'termote' symlink"
+    echo "  version           Show version"
     echo "  help              Show this help"
     echo ""
     echo "Modes:"
@@ -1131,6 +1132,7 @@ case "$CMD" in
     logs)      cmd_logs "$@" ;;
     link)      cmd_link ;;
     unlink)    cmd_unlink ;;
+    version|-v|--version) echo "Termote v$VERSION" ;;
     help|-h|--help) cmd_help ;;
     *)
         error "Unknown command: $CMD"

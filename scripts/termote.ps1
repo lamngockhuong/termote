@@ -18,7 +18,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet("install", "uninstall", "health", "logs", "link", "unlink", "help", "")]
+    [ValidateSet("install", "uninstall", "health", "logs", "link", "unlink", "version", "help", "")]
     [string]$Command,
 
     [Parameter(Position = 1)]
@@ -1086,6 +1086,7 @@ function Show-Help {
     Write-Host "  logs [service]    View logs (ttyd, tmux-api, all, clean)"
     Write-Host "  link              Create 'termote' global command"
     Write-Host "  unlink            Remove global command"
+    Write-Host "  version           Show version"
     Write-Host "  help              Show this help"
     Write-Host ""
     Write-Host "Modes:"
@@ -1144,6 +1145,9 @@ switch ($Command) {
     }
     "unlink" {
         Invoke-Unlink
+    }
+    "version" {
+        Write-Host "Termote v$script:VERSION"
     }
     "help" {
         Show-Help

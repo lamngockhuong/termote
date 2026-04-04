@@ -177,6 +177,7 @@ Available commands in `termote.sh`:
 - `termote health` — check service health
 - `termote link` — create `/usr/local/bin/termote` symlink
 - `termote unlink` — remove symlink
+- `termote version` — show installed version
 - `termote update` — self-update to latest release
 - `termote update --version X.Y.Z` — pin to specific version
 - `termote update --force` — reinstall current version
