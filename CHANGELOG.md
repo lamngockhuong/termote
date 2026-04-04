@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.0.12](https://github.com/lamngockhuong/termote/compare/v0.0.11...v0.0.12) (2026-04-04)
+
+
+### Features
+
+* **cli:** add version command ([#126](https://github.com/lamngockhuong/termote/issues/126)) ([c264103](https://github.com/lamngockhuong/termote/commit/c2641030d72e2db49010ba03bd5b9464ce9ceb37))
+* **cli:** add version command to show installed version ([c264103](https://github.com/lamngockhuong/termote/commit/c2641030d72e2db49010ba03bd5b9464ce9ceb37))
+* **pwa:** add configurable session poll interval setting ([#123](https://github.com/lamngockhuong/termote/issues/123)) ([d3794b7](https://github.com/lamngockhuong/termote/commit/d3794b769d041fb3ffe3b0971c6cfbba2385f91c))
+* **pwa:** add gesture hints overlay and configurable paste source ([#125](https://github.com/lamngockhuong/termote/issues/125)) ([2ba1a97](https://github.com/lamngockhuong/termote/commit/2ba1a97d0c4b6cf2a7366f5bfedccc8aebfc47eb))
+
 ## [0.0.11](https://github.com/lamngockhuong/termote/compare/v0.0.10...v0.0.11) (2026-04-03)
 
 
