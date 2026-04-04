@@ -1,5 +1,9 @@
 import { useEffect, useRef } from 'react'
-import type { ImeSendBehavior, PasteSource, Settings } from '../hooks/use-settings'
+import type {
+  ImeSendBehavior,
+  PasteSource,
+  Settings,
+} from '../hooks/use-settings'
 
 interface Props {
   isOpen: boolean

@@ -8,11 +8,11 @@ import { KeyboardToolbar } from './components/keyboard-toolbar'
 import { SessionSidebar } from './components/session-sidebar'
 import { SettingsMenu } from './components/settings-menu'
 import { SettingsModal } from './components/settings-modal'
-import { Toast } from './components/toast'
 import {
   TerminalFrame,
   type TerminalFrameHandle,
 } from './components/terminal-frame'
+import { Toast } from './components/toast'
 import { useTheme } from './contexts/theme-context'
 import { useFontSize } from './hooks/use-font-size'
 import { useFullscreen } from './hooks/use-fullscreen'
@@ -27,22 +27,27 @@ import {
   focusTerminal,
   isInCopyMode,
   isTerminalDisconnected,
+  type PasteErrorReason,
+  type PasteResult,
   pasteTmuxBuffer,
   pasteToTerminal,
   scrollTmux,
   sendKeyToTerminal,
   sendTextToTerminal,
   toggleTmuxCopyMode,
-  type PasteErrorReason,
-  type PasteResult,
 } from './utils/terminal-bridge'
 
 // Check if paste result should show an error toast
-const shouldShowPasteError = (result: PasteResult): result is { ok: false; reason: PasteErrorReason } =>
+const shouldShowPasteError = (
+  result: PasteResult,
+): result is { ok: false; reason: PasteErrorReason } =>
   !result.ok && result.reason !== 'empty' && result.reason !== 'no-terminal'
 
 // Error-specific clipboard messages
-const getClipboardErrorMsg = (reason: PasteErrorReason, isLongPress = false): string => {
+const getClipboardErrorMsg = (
+  reason: PasteErrorReason,
+  isLongPress = false,
+): string => {
   switch (reason) {
     case 'not-allowed':
       return isLongPress
