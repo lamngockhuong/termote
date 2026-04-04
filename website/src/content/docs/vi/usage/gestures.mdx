@@ -7,6 +7,12 @@ import { Aside } from '@astrojs/starlight/components';
 
 Termote hỗ trợ cử chỉ cảm ứng cho các thao tác terminal phổ biến.
 
+## Hướng dẫn lần đầu
+
+Khi truy cập lần đầu trên di động, một **overlay hướng dẫn cử chỉ** sẽ hiện ra hiển thị tất cả cử chỉ có sẵn. Bạn có thể:
+- Nhấn **"Got it"** để đóng và không hiện lại
+- Mở lại bất cứ lúc nào qua **Settings → Show Gesture Hints**
+
 ## Tham chiếu cử chỉ
 
 | Cử chỉ     | Hành động      | Lệnh Terminal |
@@ -33,8 +39,18 @@ Cử chỉ bị tắt trên desktop nơi tương tác chuột được ưu tiên
 - Mặc định: 14px
 - Điều chỉnh bằng chụm hoặc nút toolbar
 
+## Dán từ Clipboard
+
+Nhấn giữ để dán có thể không hoạt động trên một số trình duyệt do hạn chế của Clipboard API:
+- **iOS Safari**: Không hỗ trợ nhấn giữ, dùng **nút Paste** thay thế
+- **Chrome di động**: Hoạt động với HTTPS
+- **Trình duyệt khác**: Có thể cần cấp quyền clipboard
+
+Nếu dán thất bại, thông báo toast sẽ hướng dẫn bạn dùng nút Paste hoặc nhập text.
+
 ## Mẹo
 
 1. **Hủy nhanh**: Vuốt trái để gửi Ctrl+C khi lệnh bị treo
 2. **Tab complete**: Vuốt phải để tự động hoàn thành tên file/lệnh
 3. **Lịch sử**: Vuốt lên/xuống để duyệt lịch sử lệnh
+4. **Lỗi dán**: Nếu nhấn giữ không hoạt động, dùng nút Paste trên toolbar

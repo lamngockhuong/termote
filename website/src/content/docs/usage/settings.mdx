@@ -16,6 +16,17 @@ Controls what happens when you tap **Send** in the text input mode (non-Latin in
 
 **Use case**: Set to "Send + Enter" if you want to type a command in Vietnamese/CJK and submit it in one tap.
 
+## Paste Button Source
+
+Controls where the **Paste** button in the toolbar gets content from.
+
+| Option           | Behavior                                        | Default |
+| ---------------- | ----------------------------------------------- | ------- |
+| System clipboard | Paste from device clipboard (Ctrl+Shift+V)      | ✓       |
+| tmux buffer      | Paste from tmux copy mode buffer (Ctrl+B, ])    |         |
+
+**Tip**: Use "System clipboard" for pasting from other apps. Use "tmux buffer" for pasting text copied within tmux.
+
 ## Toolbar Default Expanded
 
 Controls whether the keyboard toolbar starts in expanded or minimal mode when the page loads.
@@ -41,6 +52,12 @@ Controls how often the app syncs the session list from the server. Lower values 
 | Option                            | Default |
 | --------------------------------- | ------- |
 | 3s, 5s, 10s, 15s, 30s, 1m, 2m, 5m | 5s ✓    |
+
+## Show Gesture Hints (Mobile Only)
+
+Re-opens the gesture tutorial overlay that appeared on your first visit. Useful if you want to review available touch gestures.
+
+This button only appears on mobile devices.
 
 ## Persistence
 
