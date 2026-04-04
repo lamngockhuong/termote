@@ -38,7 +38,7 @@ const TOOLBAR_GUIDE: GuideSection[] = [
       { key: 'Shift', desc: 'Toggle Shift modifier (sticky)' },
       { key: '↑↓←→', desc: 'Arrow keys' },
       { key: '⏱ History', desc: 'Toggle tmux copy mode' },
-      { key: '📋 Paste', desc: 'Paste from tmux buffer' },
+      { key: '📋 Paste', desc: 'Paste (source configurable in Settings)' },
       { key: '⇈⇊ Scroll', desc: 'Page up/down in copy mode' },
     ],
   },

@@ -195,18 +195,21 @@ The `update` command:
 
 ## Key Files
 
-| File                                      | Purpose                                             |
-| ----------------------------------------- | --------------------------------------------------- |
-| `pwa/src/App.tsx`                         | Main app with gestures, toolbar, settings, sessions |
-| `pwa/src/components/keyboard-toolbar.tsx` | Virtual keyboard for mobile                         |
-| `pwa/src/components/settings-modal.tsx`   | Settings dialog (IME send behavior, toolbar expand) |
-| `pwa/src/hooks/use-settings.ts`           | Settings state with localStorage persistence        |
-| `pwa/src/hooks/use-gestures.ts`           | Hammer.js gesture handling                          |
-| `tmux-api/main.go`                        | Entry point                                         |
-| `tmux-api/serve.go`                       | Server (PWA, WebSocket proxy, auth)                 |
-| `tmux-api/tmux.go`                        | tmux API handlers                                   |
-| `Dockerfile`                              | Docker mode container                               |
-| `entrypoint.sh`                           | Container entrypoint                                |
+| File                                           | Purpose                                             |
+| ---------------------------------------------- | --------------------------------------------------- |
+| `pwa/src/App.tsx`                              | Main app with gestures, toolbar, settings, sessions |
+| `pwa/src/components/keyboard-toolbar.tsx`      | Virtual keyboard for mobile                         |
+| `pwa/src/components/settings-modal.tsx`        | Settings dialog (IME, paste source, toolbar, etc.)  |
+| `pwa/src/components/gesture-hints-overlay.tsx` | First-time gesture tutorial overlay (mobile)        |
+| `pwa/src/components/toast.tsx`                 | Toast notification component                        |
+| `pwa/src/hooks/use-settings.ts`                | Settings state with localStorage persistence        |
+| `pwa/src/hooks/use-gestures.ts`                | Hammer.js gesture handling                          |
+| `pwa/src/utils/terminal-bridge.ts`             | Terminal iframe communication + clipboard paste     |
+| `tmux-api/main.go`                             | Entry point                                         |
+| `tmux-api/serve.go`                            | Server (PWA, WebSocket proxy, auth)                 |
+| `tmux-api/tmux.go`                             | tmux API handlers                                   |
+| `Dockerfile`                                   | Docker mode container                               |
+| `entrypoint.sh`                                | Container entrypoint                                |
 
 ## Container Runtime Support
 

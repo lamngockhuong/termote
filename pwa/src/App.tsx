@@ -2,6 +2,7 @@ import { Maximize, Menu, Minimize } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AboutModal } from './components/about-modal'
 import { BottomNavigation } from './components/bottom-navigation'
+import { GestureHintsOverlay } from './components/gesture-hints-overlay'
 import { HelpModal } from './components/help-modal'
 import { KeyboardToolbar } from './components/keyboard-toolbar'
 import { SessionSidebar } from './components/session-sidebar'
@@ -11,6 +12,7 @@ import {
   TerminalFrame,
   type TerminalFrameHandle,
 } from './components/terminal-frame'
+import { Toast } from './components/toast'
 import { useTheme } from './contexts/theme-context'
 import { useFontSize } from './hooks/use-font-size'
 import { useFullscreen } from './hooks/use-fullscreen'
@@ -25,6 +27,8 @@ import {
   focusTerminal,
   isInCopyMode,
   isTerminalDisconnected,
+  type PasteErrorReason,
+  type PasteResult,
   pasteTmuxBuffer,
   pasteToTerminal,
   scrollTmux,
@@ -32,6 +36,31 @@ import {
   sendTextToTerminal,
   toggleTmuxCopyMode,
 } from './utils/terminal-bridge'
+
+// Check if paste result should show an error toast
+const shouldShowPasteError = (
+  result: PasteResult,
+): result is { ok: false; reason: PasteErrorReason } =>
+  !result.ok && result.reason !== 'empty' && result.reason !== 'no-terminal'
+
+// Error-specific clipboard messages
+const getClipboardErrorMsg = (
+  reason: PasteErrorReason,
+  isLongPress = false,
+): string => {
+  switch (reason) {
+    case 'not-allowed':
+      return isLongPress
+        ? 'Long press paste not supported. Use the Paste button.'
+        : 'Clipboard permission denied. Check browser settings.'
+    case 'not-secure':
+      return 'Clipboard requires HTTPS. Use text input to paste.'
+    case 'not-supported':
+      return 'Clipboard not supported. Use text input to paste.'
+    default:
+      return 'Clipboard access failed. Use text input to paste.'
+  }
+}
 
 export default function App() {
   const terminalRef = useRef<TerminalFrameHandle>(null)
@@ -45,6 +74,8 @@ export default function App() {
   const [aboutOpen, setAboutOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [gestureHintsOpen, setGestureHintsOpen] = useState(false)
+  const [toastMessage, setToastMessage] = useState<string | null>(null)
   const { settings, updateSetting } = useSettings()
   const [showTitleTooltip, setShowTitleTooltip] = useState(false)
   const [ctrlActive, setCtrlActive] = useState(false)
@@ -85,7 +116,12 @@ export default function App() {
           scrollTmux(getIframe(), 'up')
         }
       },
-      onLongPress: () => pasteToTerminal(getIframe()),
+      onLongPress: async () => {
+        const result = await pasteToTerminal(getIframe())
+        if (shouldShowPasteError(result)) {
+          setToastMessage(getClipboardErrorMsg(result.reason, true))
+        }
+      },
       onPinchIn: decrease,
       onPinchOut: increase,
     }),
@@ -124,6 +160,23 @@ export default function App() {
     }
   }, [ctrlActive])
 
+  // Show gesture hints on first mobile visit
+  useEffect(() => {
+    if (isMobile && !settings.hasSeenGestureHints) {
+      setGestureHintsOpen(true)
+    }
+  }, [isMobile, settings.hasSeenGestureHints])
+
+  const dismissGestureHints = useCallback(() => {
+    setGestureHintsOpen(false)
+    updateSetting('hasSeenGestureHints', true)
+  }, [updateSetting])
+
+  const showGestureHints = useCallback(() => {
+    setSettingsOpen(false)
+    setGestureHintsOpen(true)
+  }, [])
+
   useGestures(gestureRef, gestureHandlers)
 
   const handleKey = useCallback((key: string) => {
@@ -144,9 +197,12 @@ export default function App() {
     sendKeyToTerminal(getIframe(), key, { shift: true })
   }, [])
 
-  const handleCtrlShiftKey = useCallback((key: string) => {
+  const handleCtrlShiftKey = useCallback(async (key: string) => {
     if (key === 'v') {
-      pasteToTerminal(getIframe())
+      const result = await pasteToTerminal(getIframe())
+      if (shouldShowPasteError(result)) {
+        setToastMessage(getClipboardErrorMsg(result.reason))
+      }
       return
     }
     sendKeyToTerminal(getIframe(), key, { ctrl: true, shift: true })
@@ -160,9 +216,17 @@ export default function App() {
     toggleTmuxCopyMode(getIframe())
   }, [])
 
-  const handleTmuxPaste = useCallback(() => {
-    pasteTmuxBuffer(getIframe())
-  }, [])
+  // Unified paste handler based on pasteSource setting
+  const handlePaste = useCallback(async () => {
+    if (settings.pasteSource === 'tmux') {
+      pasteTmuxBuffer(getIframe())
+    } else {
+      const result = await pasteToTerminal(getIframe())
+      if (shouldShowPasteError(result)) {
+        setToastMessage(getClipboardErrorMsg(result.reason))
+      }
+    }
+  }, [settings.pasteSource])
 
   const handleSendText = useCallback(
     (text: string) => {
@@ -354,7 +418,7 @@ export default function App() {
         onCtrlShiftKey={handleCtrlShiftKey}
         onScroll={handleScroll}
         onTmuxCopy={handleTmuxCopy}
-        onTmuxPaste={handleTmuxPaste}
+        onPaste={handlePaste}
         onToggleKeyboard={toggleKeyboard}
         onSendText={handleSendText}
         ctrlActive={ctrlActive}
@@ -394,7 +458,17 @@ export default function App() {
         onClose={() => setSettingsOpen(false)}
         settings={settings}
         onUpdateSetting={updateSetting}
+        onShowGestureHints={isMobile ? showGestureHints : undefined}
       />
+      {isMobile && (
+        <GestureHintsOverlay
+          isOpen={gestureHintsOpen}
+          onDismiss={dismissGestureHints}
+        />
+      )}
+      {toastMessage && (
+        <Toast message={toastMessage} onClose={() => setToastMessage(null)} />
+      )}
     </div>
   )
 }

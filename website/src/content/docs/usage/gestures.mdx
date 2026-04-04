@@ -7,6 +7,12 @@ import { Aside } from '@astrojs/starlight/components';
 
 Termote supports touch gestures for common terminal operations.
 
+## First-Time Tutorial
+
+On your first mobile visit, a **gesture hints overlay** will appear showing all available gestures. You can:
+- Tap **"Got it"** to dismiss and never see it again
+- Re-open anytime via **Settings → Show Gesture Hints**
+
 ## Gesture Reference
 
 | Gesture     | Action           | Terminal Command |
@@ -33,8 +39,18 @@ Gestures are disabled on desktop where mouse interactions are preferred.
 - Default: 14px
 - Adjust with pinch or toolbar buttons
 
+## Clipboard Paste
+
+Long press paste may not work on all browsers due to clipboard API restrictions:
+- **iOS Safari**: Long press not supported, use the **Paste button** instead
+- **Chrome mobile**: Works with HTTPS
+- **Other browsers**: May require clipboard permission
+
+If paste fails, a toast notification will guide you to use the Paste button or text input.
+
 ## Tips
 
 1. **Quick cancel**: Swipe left to send Ctrl+C when a command hangs
 2. **Tab complete**: Swipe right to autocomplete file/command names
 3. **History**: Swipe up/down to navigate command history
+4. **Paste issues**: If long press doesn't work, use the Paste button in the toolbar
