@@ -30,11 +30,14 @@ PWA that wraps ttyd terminals with:
 | Session Management     | Create, switch, delete tmux windows via UI                 |
 | Virtual Keyboard       | Touch-friendly buttons for special keys                    |
 | Keyboard Gestures      | Swipe, long-press, pinch for common shortcuts              |
+| Gesture Hints          | First-time overlay teaching touch gestures (mobile)        |
 | Theme Support          | Light/dark/system theme toggle (in-place switching)        |
 | Font Scaling           | Adjustable terminal font size (6-24px)                     |
 | Fullscreen Mode        | Desktop-only fullscreen terminal view                      |
 | Context Menu Control   | Disable right-click menu on terminal (default: enabled)    |
 | Settings / Preferences | IME behavior, toolbar default, context menu, poll interval |
+| Paste Source Config    | Choose paste source: system clipboard or tmux buffer       |
+| Toast Notifications    | Error feedback for clipboard access issues                 |
 | Persistent Settings    | User preferences saved to localStorage                     |
 | Session Poll Interval  | Configurable sync frequency (3s-5m) to reduce server spam  |
 | Session Cookie Auth    | Prevents double basic auth prompt on mobile                |

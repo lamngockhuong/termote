@@ -3,12 +3,15 @@ import { useCallback, useSyncExternalStore } from 'react'
 const STORAGE_KEY = 'termote-settings'
 
 export type ImeSendBehavior = 'send-only' | 'send-enter'
+export type PasteSource = 'clipboard' | 'tmux'
 
 export interface Settings {
   imeSendBehavior: ImeSendBehavior
   toolbarDefaultExpanded: boolean
   disableContextMenu: boolean
   pollInterval: number // seconds between session list refreshes
+  hasSeenGestureHints: boolean // first-time gesture hints overlay
+  pasteSource: PasteSource // paste button source: system clipboard or tmux buffer
 }
 
 const DEFAULTS: Settings = {
@@ -16,6 +19,8 @@ const DEFAULTS: Settings = {
   toolbarDefaultExpanded: false,
   disableContextMenu: true,
   pollInterval: 5,
+  hasSeenGestureHints: false,
+  pasteSource: 'clipboard',
 }
 
 // Listeners for useSyncExternalStore

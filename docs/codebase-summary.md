@@ -14,14 +14,16 @@ termote/
 │   │   ├── components/
 │   │   │   ├── about-modal.tsx              # About dialog
 │   │   │   ├── bottom-navigation.tsx        # Mobile bottom nav
+│   │   │   ├── gesture-hints-overlay.tsx    # First-time gesture tutorial (mobile)
 │   │   │   ├── help-modal.tsx               # Help/gestures guide
 │   │   │   ├── icon-picker.tsx              # Emoji icon selector
 │   │   │   ├── keyboard-toolbar.tsx         # Virtual keyboard buttons
 │   │   │   ├── session-sidebar.tsx          # Session switcher sidebar
 │   │   │   ├── settings-menu.tsx            # Settings dropdown
-│   │   │   ├── settings-modal.tsx           # Settings dialog (IME, toolbar, context menu)
+│   │   │   ├── settings-modal.tsx           # Settings dialog (IME, toolbar, paste, etc.)
 │   │   │   ├── swipeable-session-item.tsx   # Swipe-to-delete session
 │   │   │   ├── terminal-frame.tsx           # Terminal iframe wrapper (ttyd)
+│   │   │   ├── toast.tsx                    # Toast notification component
 │   │   │   └── theme-toggle.tsx             # Theme switcher buttons
 │   │   ├── contexts/
 │   │   │   ├── theme-context.tsx            # Theme provider (light/dark/system)
@@ -79,7 +81,7 @@ termote/
 
 ## Key Components
 
-### App.tsx (~315 lines)
+### App.tsx (~400 lines)
 
 Main orchestrator combining:
 
@@ -90,6 +92,8 @@ Main orchestrator combining:
 - Font size controls (A-/A+)
 - Fullscreen toggle (desktop only, Fullscreen API)
 - Gesture handlers → terminal commands (mobile only)
+- Gesture hints overlay (first mobile visit)
+- Toast notifications for clipboard errors
 
 ### terminal-frame.tsx (~197 lines)
 
@@ -111,19 +115,21 @@ Virtual keyboard for mobile:
 - Haptic feedback on key press
 - Respects `defaultExpanded` prop from settings
 
-### settings-modal.tsx (~207 lines)
+### settings-modal.tsx (~270 lines)
 
 Settings dialog with radio buttons, toggles, and dropdown:
 
 - **IME send behavior**: "Send text only" (default) or "Send + Enter" (auto-press Enter after text)
+- **Paste button source**: System clipboard (default) or tmux buffer
 - **Toolbar default expanded**: Toggle to show all keys on load (vs. collapsed by default)
 - **Disable right-click menu**: Toggle to disable context menu on terminal (default: enabled)
 - **Session poll interval**: Dropdown to set sync frequency (3s, 5s, 10s, 15s, 30s, 1m, 2m, 5m; default: 5s)
+- **Show Gesture Hints**: Button to re-show gesture tutorial (mobile only)
 - Uses `ToggleRow` helper component for consistent toggle styling
 - Accessible dialog with custom styling
 - Persists changes via `useSettings()` hook
 
-### use-settings.ts (~70 lines)
+### use-settings.ts (~75 lines)
 
 Settings state management using `useSyncExternalStore`:
 
@@ -133,8 +139,10 @@ Settings state management using `useSyncExternalStore`:
   - `toolbarDefaultExpanded`: boolean
   - `disableContextMenu`: boolean (default: true)
   - `pollInterval`: number in seconds (default: 5, range: 3-300 for 3s-5m)
+  - `hasSeenGestureHints`: boolean (default: false)
+  - `pasteSource`: 'clipboard' | 'tmux' (default: 'clipboard')
 - `updateSetting()` callback to update individual settings
-- Defaults to send-only + collapsed toolbar + context menu disabled + 5s poll interval
+- Defaults to send-only + collapsed toolbar + context menu disabled + 5s poll + clipboard paste
 
 ### use-gestures.ts (~53 lines)
 

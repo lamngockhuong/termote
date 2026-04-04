@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import type { ImeSendBehavior, Settings } from '../hooks/use-settings'
+import type { ImeSendBehavior, PasteSource, Settings } from '../hooks/use-settings'
 
 interface Props {
   isOpen: boolean
@@ -9,6 +9,7 @@ interface Props {
     key: K,
     value: Settings[K],
   ) => void
+  onShowGestureHints?: () => void
 }
 
 function ToggleRow({
@@ -71,11 +72,29 @@ const IME_SEND_OPTIONS: {
   },
 ]
 
+const PASTE_SOURCE_OPTIONS: {
+  value: PasteSource
+  label: string
+  desc: string
+}[] = [
+  {
+    value: 'clipboard',
+    label: 'System clipboard',
+    desc: 'Paste from device clipboard (Ctrl+Shift+V)',
+  },
+  {
+    value: 'tmux',
+    label: 'tmux buffer',
+    desc: 'Paste from tmux copy mode buffer',
+  },
+]
+
 export function SettingsModal({
   isOpen,
   onClose,
   settings,
   onUpdateSetting,
+  onShowGestureHints,
 }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null)
 
@@ -155,6 +174,41 @@ export function SettingsModal({
             </div>
           </div>
 
+          <div>
+            <p className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+              Paste button source
+            </p>
+            <div className="space-y-2">
+              {PASTE_SOURCE_OPTIONS.map((opt) => (
+                <label
+                  key={opt.value}
+                  className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                    settings.pasteSource === opt.value
+                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                      : 'border-zinc-200 dark:border-zinc-600 hover:bg-zinc-50 dark:hover:bg-zinc-700/50'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="pasteSource"
+                    value={opt.value}
+                    checked={settings.pasteSource === opt.value}
+                    onChange={() => onUpdateSetting('pasteSource', opt.value)}
+                    className="mt-0.5 accent-blue-500"
+                  />
+                  <div>
+                    <div className="text-sm font-medium text-zinc-900 dark:text-white">
+                      {opt.label}
+                    </div>
+                    <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                      {opt.desc}
+                    </div>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+
           <ToggleRow
             label="Toolbar default expanded"
             description="Show all keys when toolbar loads"
@@ -203,6 +257,17 @@ export function SettingsModal({
               ))}
             </select>
           </div>
+
+          {onShowGestureHints && (
+            <div className="pt-2 border-t border-zinc-200 dark:border-zinc-700">
+              <button
+                onClick={onShowGestureHints}
+                className="w-full py-2.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+              >
+                Show Gesture Hints
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </dialog>

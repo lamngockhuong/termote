@@ -159,15 +159,50 @@ export function blurTerminal(iframe: HTMLIFrameElement | null) {
   }
 }
 
-// Paste text into terminal
-export async function pasteToTerminal(iframe: HTMLIFrameElement | null) {
+export type PasteErrorReason =
+  | 'no-terminal'
+  | 'empty'
+  | 'not-allowed' // User denied or not a valid user gesture
+  | 'not-secure' // Not HTTPS
+  | 'not-supported' // Browser doesn't support clipboard API
+  | 'unknown'
+
+export type PasteResult = { ok: true } | { ok: false; reason: PasteErrorReason }
+
+// Paste text into terminal - returns result with specific error reason
+export async function pasteToTerminal(
+  iframe: HTMLIFrameElement | null,
+): Promise<PasteResult> {
   const term = getTerm(iframe)
-  if (!term) return
+  if (!term) return { ok: false, reason: 'no-terminal' }
+
+  // Check if clipboard API is supported
+  if (!navigator.clipboard?.readText) {
+    return { ok: false, reason: 'not-supported' }
+  }
+
   try {
     const text = await navigator.clipboard.readText()
-    sendData(term, text)
+    if (text) {
+      sendData(term, text)
+      return { ok: true }
+    }
+    return { ok: false, reason: 'empty' }
   } catch (err) {
-    console.warn('Clipboard access denied:', err)
+    const error = err as Error
+    console.warn('Clipboard access failed:', error.name, error.message)
+
+    // Detect specific error types
+    if (error.name === 'NotAllowedError') {
+      return { ok: false, reason: 'not-allowed' }
+    }
+    if (error.name === 'SecurityError' || !window.isSecureContext) {
+      return { ok: false, reason: 'not-secure' }
+    }
+    if (error.name === 'TypeError') {
+      return { ok: false, reason: 'not-supported' }
+    }
+    return { ok: false, reason: 'unknown' }
   }
 }
 
