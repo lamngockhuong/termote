@@ -73,12 +73,18 @@ const TOOLBAR_GUIDE: GuideSection[] = [
       { key: <Languages size={ICON_SIZE} />, desc: 'Text input mode (IME)' },
       { key: 'Tab', desc: 'Tab key / autocomplete' },
       { key: 'Esc', desc: 'Escape key (clears modifiers if active)' },
-      { key: <CornerDownLeft size={ICON_SIZE} />, desc: 'Enter / Submit command' },
+      {
+        key: <CornerDownLeft size={ICON_SIZE} />,
+        desc: 'Enter / Submit command',
+      },
       { key: 'Ctrl', desc: 'Toggle Ctrl modifier (sticky)' },
       { key: 'Shift', desc: 'Toggle Shift modifier (sticky)' },
       { key: <ArrowKeysIcon />, desc: 'Arrow keys' },
       { key: <History size={ICON_SIZE} />, desc: 'Toggle tmux copy mode' },
-      { key: <Clipboard size={ICON_SIZE} />, desc: 'Paste (source configurable in Settings)' },
+      {
+        key: <Clipboard size={ICON_SIZE} />,
+        desc: 'Paste (source configurable in Settings)',
+      },
       { key: <ScrollIcon />, desc: 'Page up/down in copy mode' },
     ],
   },
@@ -248,7 +254,7 @@ export function HelpModal({ isOpen, onClose }: Props) {
                 <div className="bg-zinc-50 dark:bg-zinc-700/30 rounded-lg overflow-hidden">
                   {section.items.map((item, idx) => (
                     <div
-                      key={idx}
+                      key={item.desc}
                       className={`flex items-center gap-3 px-3 py-2 ${
                         idx > 0
                           ? 'border-t border-zinc-200/50 dark:border-zinc-600/50'
