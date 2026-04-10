@@ -1,4 +1,19 @@
-import { useEffect, useRef, useState } from 'react'
+import {
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  ChevronsDown,
+  ChevronsUp,
+  Clipboard,
+  CornerDownLeft,
+  Expand,
+  History,
+  Keyboard,
+  Languages,
+  Minimize2,
+} from 'lucide-react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 
 interface Props {
   isOpen: boolean
@@ -9,8 +24,10 @@ type TabId = 'gestures' | 'tmux' | 'toolbar'
 
 interface GuideSection {
   title: string
-  items: { key: string; desc: string }[]
+  items: { key: ReactNode; desc: string }[]
 }
+
+const ICON_SIZE = 14
 
 const GESTURES_GUIDE: GuideSection[] = [
   {
@@ -25,21 +42,44 @@ const GESTURES_GUIDE: GuideSection[] = [
   },
 ]
 
+const ExpandCollapseIcon = () => (
+  <span className="inline-flex items-center gap-0.5">
+    <Expand size={ICON_SIZE} />/<Minimize2 size={ICON_SIZE} />
+  </span>
+)
+
+const ArrowKeysIcon = () => (
+  <span className="inline-flex items-center gap-0.5">
+    <ArrowUp size={ICON_SIZE} />
+    <ArrowDown size={ICON_SIZE} />
+    <ArrowLeft size={ICON_SIZE} />
+    <ArrowRight size={ICON_SIZE} />
+  </span>
+)
+
+const ScrollIcon = () => (
+  <span className="inline-flex items-center gap-0.5">
+    <ChevronsUp size={ICON_SIZE} />
+    <ChevronsDown size={ICON_SIZE} />
+  </span>
+)
+
 const TOOLBAR_GUIDE: GuideSection[] = [
   {
     title: 'Toolbar Buttons',
     items: [
-      { key: '⛶/⊟', desc: 'Expand/collapse keyboard' },
-      { key: '⌨️ Keyboard', desc: 'Toggle virtual keyboard' },
+      { key: <ExpandCollapseIcon />, desc: 'Expand/collapse keyboard' },
+      { key: <Keyboard size={ICON_SIZE} />, desc: 'Toggle virtual keyboard' },
+      { key: <Languages size={ICON_SIZE} />, desc: 'Text input mode (IME)' },
       { key: 'Tab', desc: 'Tab key / autocomplete' },
       { key: 'Esc', desc: 'Escape key (clears modifiers if active)' },
-      { key: '↵ Enter', desc: 'Submit command' },
+      { key: <CornerDownLeft size={ICON_SIZE} />, desc: 'Enter / Submit command' },
       { key: 'Ctrl', desc: 'Toggle Ctrl modifier (sticky)' },
       { key: 'Shift', desc: 'Toggle Shift modifier (sticky)' },
-      { key: '↑↓←→', desc: 'Arrow keys' },
-      { key: '⏱ History', desc: 'Toggle tmux copy mode' },
-      { key: '📋 Paste', desc: 'Paste (source configurable in Settings)' },
-      { key: '⇈⇊ Scroll', desc: 'Page up/down in copy mode' },
+      { key: <ArrowKeysIcon />, desc: 'Arrow keys' },
+      { key: <History size={ICON_SIZE} />, desc: 'Toggle tmux copy mode' },
+      { key: <Clipboard size={ICON_SIZE} />, desc: 'Paste (source configurable in Settings)' },
+      { key: <ScrollIcon />, desc: 'Page up/down in copy mode' },
     ],
   },
   {
@@ -208,7 +248,7 @@ export function HelpModal({ isOpen, onClose }: Props) {
                 <div className="bg-zinc-50 dark:bg-zinc-700/30 rounded-lg overflow-hidden">
                   {section.items.map((item, idx) => (
                     <div
-                      key={item.key}
+                      key={idx}
                       className={`flex items-center gap-3 px-3 py-2 ${
                         idx > 0
                           ? 'border-t border-zinc-200/50 dark:border-zinc-600/50'
