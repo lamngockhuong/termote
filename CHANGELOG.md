@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.13](https://github.com/lamngockhuong/termote/compare/v0.0.12...v0.0.13) (2026-04-10)
+
+
+### Features
+
+* **pwa:** replace emoji with lucide icons in help modal ([#139](https://github.com/lamngockhuong/termote/issues/139)) ([cf6d35e](https://github.com/lamngockhuong/termote/commit/cf6d35ee02acdb541b24c9dd8dfd8e843fb3b10d))
+
 ## [0.0.12](https://github.com/lamngockhuong/termote/compare/v0.0.11...v0.0.12) (2026-04-04)
 
 
