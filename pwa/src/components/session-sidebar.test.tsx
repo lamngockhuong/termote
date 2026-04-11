@@ -1,10 +1,16 @@
-import { render, screen, fireEvent } from '@testing-library/react'
-import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { SessionSidebar } from './session-sidebar'
+import { fireEvent, render, screen } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Session } from '../types/session'
+import { SessionSidebar } from './session-sidebar'
 
 vi.mock('./icon-picker', () => ({
-  IconPicker: ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
+  IconPicker: ({
+    value,
+    onChange,
+  }: {
+    value: string
+    onChange: (v: string) => void
+  }) => (
     <button data-testid="icon-picker" onClick={() => onChange('🚀')}>
       {value}
     </button>
@@ -46,11 +52,15 @@ const SINGLE_SESSION: Session[] = [
 ]
 
 describe('SessionSidebar — desktop expanded (default)', () => {
-  let onSelect: ReturnType<typeof vi.fn>
-  let onAdd: ReturnType<typeof vi.fn>
-  let onRemove: ReturnType<typeof vi.fn>
-  let onUpdate: ReturnType<typeof vi.fn>
-  let onToggleCollapse: ReturnType<typeof vi.fn>
+  let onSelect: (...args: any[]) => any
+
+  let onAdd: (...args: any[]) => any
+
+  let onRemove: (...args: any[]) => any
+
+  let onUpdate: (...args: any[]) => any
+
+  let onToggleCollapse: (...args: any[]) => any
 
   beforeEach(() => {
     onSelect = vi.fn()
@@ -83,7 +93,9 @@ describe('SessionSidebar — desktop expanded (default)', () => {
 
   it('renders collapse button', () => {
     renderDesktop()
-    expect(screen.getByRole('button', { name: 'Collapse sidebar' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Collapse sidebar' }),
+    ).toBeInTheDocument()
   })
 
   it('calls onToggleCollapse when collapse button clicked', () => {
@@ -95,9 +107,11 @@ describe('SessionSidebar — desktop expanded (default)', () => {
   it('calls onSelect when session clicked', () => {
     renderDesktop()
     // find "Shell" button (session button, not icon)
-    const sessionBtn = screen.getAllByRole('button').find(
-      (b) => b.textContent?.includes('Shell') && !b.closest('[data-testid]'),
-    )!
+    const sessionBtn = screen
+      .getAllByRole('button')
+      .find(
+        (b) => b.textContent?.includes('Shell') && !b.closest('[data-testid]'),
+      )!
     fireEvent.click(sessionBtn)
     expect(onSelect).toHaveBeenCalledWith('1')
   })
@@ -158,7 +172,9 @@ describe('SessionSidebar — desktop expanded (default)', () => {
     renderDesktop()
     fireEvent.click(screen.getByTitle('Add new session'))
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-    expect(screen.queryByPlaceholderText('Session name')).not.toBeInTheDocument()
+    expect(
+      screen.queryByPlaceholderText('Session name'),
+    ).not.toBeInTheDocument()
   })
 
   it('add form: icon picker changes icon', () => {
@@ -182,7 +198,9 @@ describe('SessionSidebar — desktop expanded (default)', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: 'Add' }))
     // Form should be hidden
-    expect(screen.queryByPlaceholderText('Session name')).not.toBeInTheDocument()
+    expect(
+      screen.queryByPlaceholderText('Session name'),
+    ).not.toBeInTheDocument()
   })
 
   it('edit form: starts edit via edit button hover action', () => {
@@ -196,11 +214,11 @@ describe('SessionSidebar — desktop expanded (default)', () => {
 
   it('edit form: double-click on session starts edit', () => {
     renderDesktop()
-    const sessionBtns = screen.getAllByRole('button').filter(
-      (b) => b.textContent?.includes('Shell') && b.closest('aside'),
-    )
+    const sessionBtns = screen
+      .getAllByRole('button')
+      .filter((b) => b.textContent?.includes('Shell') && b.closest('aside'))
     // Double click the session button
-    const sessionBtn = sessionBtns.find(b => b.className.includes('flex-1'))
+    const sessionBtn = sessionBtns.find((b) => b.className.includes('flex-1'))
     if (sessionBtn) {
       fireEvent.doubleClick(sessionBtn)
       expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument()
@@ -248,7 +266,9 @@ describe('SessionSidebar — desktop expanded (default)', () => {
     const editBtns = document.querySelectorAll('button[title="Edit session"]')
     fireEvent.click(editBtns[0])
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-    expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Save' }),
+    ).not.toBeInTheDocument()
   })
 
   it('edit form: icon picker changes icon', () => {
@@ -263,28 +283,36 @@ describe('SessionSidebar — desktop expanded (default)', () => {
 
   it('remove button shown when sessions.length > 1', () => {
     renderDesktop()
-    const removeBtns = document.querySelectorAll('button[title="Remove session"]')
+    const removeBtns = document.querySelectorAll(
+      'button[title="Remove session"]',
+    )
     expect(removeBtns.length).toBeGreaterThan(0)
   })
 
   it('remove button hidden when only one session', () => {
     renderDesktop(SINGLE_SESSION)
-    const removeBtns = document.querySelectorAll('button[title="Remove session"]')
+    const removeBtns = document.querySelectorAll(
+      'button[title="Remove session"]',
+    )
     expect(removeBtns.length).toBe(0)
   })
 
   it('calls onRemove when remove button clicked', () => {
     renderDesktop()
-    const removeBtns = document.querySelectorAll('button[title="Remove session"]')
+    const removeBtns = document.querySelectorAll(
+      'button[title="Remove session"]',
+    )
     fireEvent.click(removeBtns[0])
     expect(onRemove).toHaveBeenCalledWith('1')
   })
 })
 
 describe('SessionSidebar — desktop collapsed', () => {
-  let onSelect: ReturnType<typeof vi.fn>
-  let onAdd: ReturnType<typeof vi.fn>
-  let onToggleCollapse: ReturnType<typeof vi.fn>
+  let onSelect: (...args: any[]) => any
+
+  let onAdd: (...args: any[]) => any
+
+  let onToggleCollapse: (...args: any[]) => any
 
   beforeEach(() => {
     onSelect = vi.fn()
@@ -308,7 +336,9 @@ describe('SessionSidebar — desktop collapsed', () => {
 
   it('renders expand button in collapsed mode', () => {
     renderCollapsed()
-    expect(screen.getByRole('button', { name: 'Expand sidebar' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Expand sidebar' }),
+    ).toBeInTheDocument()
   })
 
   it('calls onToggleCollapse when expand button clicked', () => {
@@ -362,11 +392,15 @@ describe('SessionSidebar — desktop collapsed', () => {
 })
 
 describe('SessionSidebar — mobile mode', () => {
-  let onSelect: ReturnType<typeof vi.fn>
-  let onAdd: ReturnType<typeof vi.fn>
-  let onRemove: ReturnType<typeof vi.fn>
-  let onUpdate: ReturnType<typeof vi.fn>
-  let onClose: ReturnType<typeof vi.fn>
+  let onSelect: (...args: any[]) => any
+
+  let onAdd: (...args: any[]) => any
+
+  let onRemove: (...args: any[]) => any
+
+  let onUpdate: (...args: any[]) => any
+
+  let onClose: (...args: any[]) => any
 
   beforeEach(() => {
     onSelect = vi.fn()
@@ -431,9 +465,11 @@ describe('SessionSidebar — mobile mode', () => {
   it('calls onClose when X button clicked', () => {
     renderMobile()
     // There's an X button in the mobile header
-    const xBtn = screen.getAllByRole('button').find(
-      (b) => b.className.includes('rounded-lg') && b.closest('.border-b'),
-    )!
+    const xBtn = screen
+      .getAllByRole('button')
+      .find(
+        (b) => b.className.includes('rounded-lg') && b.closest('.border-b'),
+      )!
     fireEvent.click(xBtn)
     expect(onClose).toHaveBeenCalled()
   })

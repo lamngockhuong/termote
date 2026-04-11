@@ -13,7 +13,9 @@ describe('APP_INFO', () => {
   })
 
   it('has description', () => {
-    expect(APP_INFO.description).toBe('Terminal + Remote - Control CLI tools from anywhere')
+    expect(APP_INFO.description).toBe(
+      'Terminal + Remote - Control CLI tools from anywhere',
+    )
   })
 
   it('has author with name and url', () => {
@@ -30,13 +32,21 @@ describe('APP_INFO', () => {
   })
 
   it('has links with changelog and issues', () => {
-    expect(APP_INFO.links.changelog).toBe('https://github.com/lamngockhuong/termote/releases')
-    expect(APP_INFO.links.issues).toBe('https://github.com/lamngockhuong/termote/issues')
+    expect(APP_INFO.links.changelog).toBe(
+      'https://github.com/lamngockhuong/termote/releases',
+    )
+    expect(APP_INFO.links.issues).toBe(
+      'https://github.com/lamngockhuong/termote/issues',
+    )
   })
 
   it('has sponsor links', () => {
     expect(APP_INFO.sponsor.momo).toBe('https://me.momo.vn/khuong')
-    expect(APP_INFO.sponsor.github).toBe('https://github.com/sponsors/lamngockhuong')
-    expect(APP_INFO.sponsor.buyMeACoffee).toBe('https://buymeacoffee.com/lamngockhuong')
+    expect(APP_INFO.sponsor.github).toBe(
+      'https://github.com/sponsors/lamngockhuong',
+    )
+    expect(APP_INFO.sponsor.buyMeACoffee).toBe(
+      'https://buymeacoffee.com/lamngockhuong',
+    )
   })
 })

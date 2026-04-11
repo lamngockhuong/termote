@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  blurTerminal,
   blockContextMenu,
+  blurTerminal,
   enterTmuxCopyMode,
   exitTmuxCopyMode,
   focusTerminal,
@@ -286,7 +286,9 @@ describe('setTerminalTheme', () => {
       configurable: true,
     })
     Object.defineProperty(iframe, 'contentDocument', {
-      get() { throw new Error('cross-origin') },
+      get() {
+        throw new Error('cross-origin')
+      },
       configurable: true,
     })
     // Should not throw; CSS injection is in a try/catch
@@ -299,7 +301,9 @@ describe('setTerminalTheme', () => {
     // Apply theme twice — second call should update existing style, not create new one
     setTerminalTheme(iframe, { background: '#111' })
     setTerminalTheme(iframe, { background: '#222' })
-    const styles = iframe.contentDocument!.querySelectorAll('#termote-theme-override')
+    const styles = iframe.contentDocument!.querySelectorAll(
+      '#termote-theme-override',
+    )
     expect(styles.length).toBe(1)
     expect(styles[0].textContent).toContain('#222')
   })
@@ -419,13 +423,19 @@ describe('scrollTerminal', () => {
   })
 
   it('falls back to viewport scrollTop when neither scrollLines nor scrollPages available', () => {
-    const term = createMockTerm({ scrollLines: undefined, scrollPages: undefined })
+    const term = createMockTerm({
+      scrollLines: undefined,
+      scrollPages: undefined,
+    })
     const iframe = createMockIframe(term)
     // contentDocument has an .xterm-viewport element
     const doc = iframe.contentDocument!
     const viewport = doc.createElement('div')
     viewport.className = 'xterm-viewport'
-    Object.defineProperty(viewport, 'clientHeight', { value: 300, configurable: true })
+    Object.defineProperty(viewport, 'clientHeight', {
+      value: 300,
+      configurable: true,
+    })
     viewport.scrollTop = 0
     doc.body.appendChild(viewport)
     scrollTerminal(iframe, 'down')
@@ -433,12 +443,18 @@ describe('scrollTerminal', () => {
   })
 
   it('falls back viewport scrollTop upward when pages=true and no scrollPages/scrollLines', () => {
-    const term = createMockTerm({ scrollLines: undefined, scrollPages: undefined })
+    const term = createMockTerm({
+      scrollLines: undefined,
+      scrollPages: undefined,
+    })
     const iframe = createMockIframe(term)
     const doc = iframe.contentDocument!
     const viewport = doc.createElement('div')
     viewport.className = 'xterm-viewport'
-    Object.defineProperty(viewport, 'clientHeight', { value: 300, configurable: true })
+    Object.defineProperty(viewport, 'clientHeight', {
+      value: 300,
+      configurable: true,
+    })
     viewport.scrollTop = 500
     doc.body.appendChild(viewport)
     scrollTerminal(iframe, 'up', true)
@@ -518,7 +534,9 @@ describe('scrollTerminalViewport', () => {
     const iframe = document.createElement('iframe')
     // contentDocument throws for cross-origin
     Object.defineProperty(iframe, 'contentDocument', {
-      get() { throw new Error('cross-origin') },
+      get() {
+        throw new Error('cross-origin')
+      },
       configurable: true,
     })
     expect(() => scrollTerminalViewport(iframe, 'down')).not.toThrow()
@@ -642,7 +660,9 @@ describe('blurTerminal', () => {
   it('silently catches cross-origin errors', () => {
     const iframe = document.createElement('iframe')
     Object.defineProperty(iframe, 'contentDocument', {
-      get() { throw new Error('cross-origin') },
+      get() {
+        throw new Error('cross-origin')
+      },
       configurable: true,
     })
     expect(() => blurTerminal(iframe)).not.toThrow()
@@ -695,7 +715,9 @@ describe('pasteToTerminal', () => {
   it('sends text and returns ok on success', async () => {
     const term = createMockTerm()
     const iframe = createMockIframe(term)
-    ;(navigator.clipboard.readText as ReturnType<typeof vi.fn>).mockResolvedValue('hello')
+    ;(
+      navigator.clipboard.readText as ReturnType<typeof vi.fn>
+    ).mockResolvedValue('hello')
     const result = await pasteToTerminal(iframe)
     expect(result).toEqual({ ok: true })
     expect(term._core._onData.fire).toHaveBeenCalledWith('hello')
@@ -703,7 +725,9 @@ describe('pasteToTerminal', () => {
 
   it('returns empty when clipboard text is empty', async () => {
     const iframe = createMockIframe(createMockTerm())
-    ;(navigator.clipboard.readText as ReturnType<typeof vi.fn>).mockResolvedValue('')
+    ;(
+      navigator.clipboard.readText as ReturnType<typeof vi.fn>
+    ).mockResolvedValue('')
     const result = await pasteToTerminal(iframe)
     expect(result).toEqual({ ok: false, reason: 'empty' })
   })
@@ -711,7 +735,9 @@ describe('pasteToTerminal', () => {
   it('returns not-allowed on NotAllowedError', async () => {
     const iframe = createMockIframe(createMockTerm())
     const err = Object.assign(new Error('denied'), { name: 'NotAllowedError' })
-    ;(navigator.clipboard.readText as ReturnType<typeof vi.fn>).mockRejectedValue(err)
+    ;(
+      navigator.clipboard.readText as ReturnType<typeof vi.fn>
+    ).mockRejectedValue(err)
     const result = await pasteToTerminal(iframe)
     expect(result).toEqual({ ok: false, reason: 'not-allowed' })
   })
@@ -719,7 +745,9 @@ describe('pasteToTerminal', () => {
   it('returns not-secure on SecurityError', async () => {
     const iframe = createMockIframe(createMockTerm())
     const err = Object.assign(new Error('security'), { name: 'SecurityError' })
-    ;(navigator.clipboard.readText as ReturnType<typeof vi.fn>).mockRejectedValue(err)
+    ;(
+      navigator.clipboard.readText as ReturnType<typeof vi.fn>
+    ).mockRejectedValue(err)
     const result = await pasteToTerminal(iframe)
     expect(result).toEqual({ ok: false, reason: 'not-secure' })
   })
@@ -727,21 +755,37 @@ describe('pasteToTerminal', () => {
   it('returns not-supported on TypeError (with isSecureContext=true)', async () => {
     const iframe = createMockIframe(createMockTerm())
     const err = Object.assign(new Error('type'), { name: 'TypeError' })
-    ;(navigator.clipboard.readText as ReturnType<typeof vi.fn>).mockRejectedValue(err)
+    ;(
+      navigator.clipboard.readText as ReturnType<typeof vi.fn>
+    ).mockRejectedValue(err)
     // jsdom defaults isSecureContext=false which triggers not-secure; override to true
-    Object.defineProperty(window, 'isSecureContext', { value: true, configurable: true })
+    Object.defineProperty(window, 'isSecureContext', {
+      value: true,
+      configurable: true,
+    })
     const result = await pasteToTerminal(iframe)
-    Object.defineProperty(window, 'isSecureContext', { value: false, configurable: true })
+    Object.defineProperty(window, 'isSecureContext', {
+      value: false,
+      configurable: true,
+    })
     expect(result).toEqual({ ok: false, reason: 'not-supported' })
   })
 
   it('returns unknown for unrecognised errors (with isSecureContext=true)', async () => {
     const iframe = createMockIframe(createMockTerm())
     const err = Object.assign(new Error('something'), { name: 'UnknownError' })
-    ;(navigator.clipboard.readText as ReturnType<typeof vi.fn>).mockRejectedValue(err)
-    Object.defineProperty(window, 'isSecureContext', { value: true, configurable: true })
+    ;(
+      navigator.clipboard.readText as ReturnType<typeof vi.fn>
+    ).mockRejectedValue(err)
+    Object.defineProperty(window, 'isSecureContext', {
+      value: true,
+      configurable: true,
+    })
     const result = await pasteToTerminal(iframe)
-    Object.defineProperty(window, 'isSecureContext', { value: false, configurable: true })
+    Object.defineProperty(window, 'isSecureContext', {
+      value: false,
+      configurable: true,
+    })
     expect(result).toEqual({ ok: false, reason: 'unknown' })
   })
 })
@@ -825,7 +869,9 @@ describe('setTerminalTheme — additional branches', () => {
     const term = createMockTerm()
     const iframe = createMockIframe(term)
     setTerminalTheme(iframe, { background: '#333' })
-    expect(term._core._renderService._renderer.clearTextureAtlas).toHaveBeenCalled()
+    expect(
+      term._core._renderService._renderer.clearTextureAtlas,
+    ).toHaveBeenCalled()
   })
 
   it('skips clearTextureAtlas when term does not have it', () => {
@@ -868,7 +914,10 @@ describe('setTerminalTheme — additional branches', () => {
 describe('scrollTerminal — catch block coverage', () => {
   it('silently catches cross-origin errors in viewport fallback', () => {
     // term with no scrollLines/scrollPages to force the viewport fallback
-    const term = createMockTerm({ scrollLines: undefined, scrollPages: undefined })
+    const term = createMockTerm({
+      scrollLines: undefined,
+      scrollPages: undefined,
+    })
     const iframe = document.createElement('iframe')
     Object.defineProperty(iframe, 'contentWindow', {
       value: { term },
@@ -876,7 +925,9 @@ describe('scrollTerminal — catch block coverage', () => {
     })
     // Make contentDocument throw to hit the catch block (line 264)
     Object.defineProperty(iframe, 'contentDocument', {
-      get() { throw new Error('cross-origin') },
+      get() {
+        throw new Error('cross-origin')
+      },
       configurable: true,
     })
     expect(() => scrollTerminal(iframe, 'down')).not.toThrow()
@@ -887,7 +938,9 @@ describe('blockContextMenu — catch block coverage', () => {
   it('returns false when contentDocument throws', () => {
     const iframe = document.createElement('iframe')
     Object.defineProperty(iframe, 'contentDocument', {
-      get() { throw new Error('cross-origin') },
+      get() {
+        throw new Error('cross-origin')
+      },
       configurable: true,
     })
     expect(blockContextMenu(iframe)).toBe(false)
@@ -898,7 +951,9 @@ describe('unblockContextMenu — catch block coverage', () => {
   it('returns false when contentDocument throws', () => {
     const iframe = document.createElement('iframe')
     Object.defineProperty(iframe, 'contentDocument', {
-      get() { throw new Error('cross-origin') },
+      get() {
+        throw new Error('cross-origin')
+      },
       configurable: true,
     })
     expect(unblockContextMenu(iframe)).toBe(false)

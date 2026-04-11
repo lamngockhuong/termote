@@ -35,7 +35,9 @@ describe('useFullscreen', () => {
     document.documentElement.requestFullscreen = requestFullscreen
 
     const { result } = renderHook(() => useFullscreen())
-    await act(async () => { result.current.toggleFullscreen() })
+    await act(async () => {
+      result.current.toggleFullscreen()
+    })
 
     expect(requestFullscreen).toHaveBeenCalledTimes(1)
   })
@@ -49,19 +51,28 @@ describe('useFullscreen', () => {
     document.exitFullscreen = exitFullscreen
 
     const { result } = renderHook(() => useFullscreen())
-    await act(async () => { result.current.toggleFullscreen() })
+    await act(async () => {
+      result.current.toggleFullscreen()
+    })
 
     expect(exitFullscreen).toHaveBeenCalledTimes(1)
   })
 
   it('handles requestFullscreen rejection gracefully', async () => {
     const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    document.documentElement.requestFullscreen = vi.fn().mockRejectedValue(new Error('denied'))
+    document.documentElement.requestFullscreen = vi
+      .fn()
+      .mockRejectedValue(new Error('denied'))
 
     const { result } = renderHook(() => useFullscreen())
-    await act(async () => { result.current.toggleFullscreen() })
+    await act(async () => {
+      result.current.toggleFullscreen()
+    })
 
-    expect(consoleWarn).toHaveBeenCalledWith('Fullscreen request denied:', expect.any(Error))
+    expect(consoleWarn).toHaveBeenCalledWith(
+      'Fullscreen request denied:',
+      expect.any(Error),
+    )
     consoleWarn.mockRestore()
   })
 
@@ -103,7 +114,10 @@ describe('useFullscreen', () => {
     const removeEventListener = vi.spyOn(document, 'removeEventListener')
     const { unmount } = renderHook(() => useFullscreen())
     unmount()
-    expect(removeEventListener).toHaveBeenCalledWith('fullscreenchange', expect.any(Function))
+    expect(removeEventListener).toHaveBeenCalledWith(
+      'fullscreenchange',
+      expect.any(Function),
+    )
     removeEventListener.mockRestore()
   })
 })

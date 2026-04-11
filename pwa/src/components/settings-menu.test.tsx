@@ -1,5 +1,5 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ThemeProvider } from '../contexts/theme-context'
 import { SettingsMenu } from './settings-menu'
 
@@ -14,7 +14,7 @@ function renderWithTheme(props = {}) {
     ...render(
       <ThemeProvider>
         <SettingsMenu {...defaultProps} />
-      </ThemeProvider>
+      </ThemeProvider>,
     ),
     props: defaultProps,
   }
@@ -27,9 +27,9 @@ describe('SettingsMenu', () => {
     // Mock serviceWorker
     Object.defineProperty(navigator, 'serviceWorker', {
       value: {
-        getRegistrations: vi.fn().mockResolvedValue([
-          { unregister: vi.fn().mockResolvedValue(true) },
-        ]),
+        getRegistrations: vi
+          .fn()
+          .mockResolvedValue([{ unregister: vi.fn().mockResolvedValue(true) }]),
       },
       configurable: true,
       writable: true,
@@ -121,7 +121,9 @@ describe('SettingsMenu', () => {
   it('does not close when clicking inside the menu', () => {
     renderWithTheme()
     fireEvent.click(screen.getByLabelText('Settings'))
-    const menu = screen.getByText('Preferences').closest('div[class*="absolute"]')!
+    const menu = screen
+      .getByText('Preferences')
+      .closest('div[class*="absolute"]')!
     fireEvent.mouseDown(menu)
     expect(screen.getByText('Preferences')).toBeInTheDocument()
   })
@@ -131,7 +133,10 @@ describe('SettingsMenu', () => {
     renderWithTheme()
     fireEvent.click(screen.getByLabelText('Settings'))
     fireEvent.click(screen.getByLabelText('Settings'))
-    expect(removeEventListenerSpy).toHaveBeenCalledWith('mousedown', expect.any(Function))
+    expect(removeEventListenerSpy).toHaveBeenCalledWith(
+      'mousedown',
+      expect.any(Function),
+    )
     removeEventListenerSpy.mockRestore()
   })
 
@@ -191,7 +196,10 @@ describe('SettingsMenu', () => {
 
   it('handles absence of serviceWorker API gracefully', async () => {
     // Remove serviceWorker from navigator to hit the false branch of `'serviceWorker' in navigator`
-    const descriptor = Object.getOwnPropertyDescriptor(navigator, 'serviceWorker')
+    const descriptor = Object.getOwnPropertyDescriptor(
+      navigator,
+      'serviceWorker',
+    )
     Reflect.deleteProperty(navigator, 'serviceWorker')
     renderWithTheme()
     fireEvent.click(screen.getByLabelText('Settings'))
@@ -208,7 +216,10 @@ describe('SettingsMenu', () => {
   it('handles absence of caches API gracefully (false branch of caches in window)', async () => {
     // Remove caches from window to hit the false branch of `'caches' in window`
     const descriptor = Object.getOwnPropertyDescriptor(window, 'caches')
-    Reflect.deleteProperty(window as typeof window & { caches?: unknown }, 'caches')
+    Reflect.deleteProperty(
+      window as typeof window & { caches?: unknown },
+      'caches',
+    )
     renderWithTheme()
     fireEvent.click(screen.getByLabelText('Settings'))
     fireEvent.click(screen.getByText('Clear Cache & Reload'))

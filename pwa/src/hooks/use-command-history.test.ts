@@ -38,7 +38,9 @@ describe('useCommandHistory', () => {
   it('addCommand adds a new command', async () => {
     const useCommandHistory = await importHook()
     const { result } = renderHook(() => useCommandHistory())
-    act(() => { result.current.addCommand('git status') })
+    act(() => {
+      result.current.addCommand('git status')
+    })
     expect(result.current.history).toHaveLength(1)
     expect(result.current.history[0].text).toBe('git status')
   })
@@ -46,24 +48,36 @@ describe('useCommandHistory', () => {
   it('addCommand ignores empty or whitespace-only strings', async () => {
     const useCommandHistory = await importHook()
     const { result } = renderHook(() => useCommandHistory())
-    act(() => { result.current.addCommand('') })
-    act(() => { result.current.addCommand('   ') })
+    act(() => {
+      result.current.addCommand('')
+    })
+    act(() => {
+      result.current.addCommand('   ')
+    })
     expect(result.current.history).toHaveLength(0)
   })
 
   it('addCommand trims whitespace from command', async () => {
     const useCommandHistory = await importHook()
     const { result } = renderHook(() => useCommandHistory())
-    act(() => { result.current.addCommand('  git log  ') })
+    act(() => {
+      result.current.addCommand('  git log  ')
+    })
     expect(result.current.history[0].text).toBe('git log')
   })
 
   it('addCommand deduplicates — moves existing command to top', async () => {
     const useCommandHistory = await importHook()
     const { result } = renderHook(() => useCommandHistory())
-    act(() => { result.current.addCommand('ls') })
-    act(() => { result.current.addCommand('pwd') })
-    act(() => { result.current.addCommand('ls') })
+    act(() => {
+      result.current.addCommand('ls')
+    })
+    act(() => {
+      result.current.addCommand('pwd')
+    })
+    act(() => {
+      result.current.addCommand('ls')
+    })
     expect(result.current.history).toHaveLength(2)
     expect(result.current.history[0].text).toBe('ls')
   })
@@ -71,7 +85,9 @@ describe('useCommandHistory', () => {
   it('addCommand persists to localStorage', async () => {
     const useCommandHistory = await importHook()
     const { result } = renderHook(() => useCommandHistory())
-    act(() => { result.current.addCommand('echo hello') })
+    act(() => {
+      result.current.addCommand('echo hello')
+    })
     const stored = JSON.parse(localStorage.getItem('termote-command-history')!)
     expect(stored[0].text).toBe('echo hello')
   })
@@ -79,8 +95,12 @@ describe('useCommandHistory', () => {
   it('addCommand assigns a unique id', async () => {
     const useCommandHistory = await importHook()
     const { result } = renderHook(() => useCommandHistory())
-    act(() => { result.current.addCommand('cmd1') })
-    act(() => { result.current.addCommand('cmd2') })
+    act(() => {
+      result.current.addCommand('cmd1')
+    })
+    act(() => {
+      result.current.addCommand('cmd2')
+    })
     const ids = result.current.history.map((c) => c.id)
     expect(new Set(ids).size).toBe(ids.length)
   })
@@ -89,25 +109,35 @@ describe('useCommandHistory', () => {
     const now = Date.now()
     const useCommandHistory = await importHook()
     const { result } = renderHook(() => useCommandHistory())
-    act(() => { result.current.addCommand('date') })
+    act(() => {
+      result.current.addCommand('date')
+    })
     expect(result.current.history[0].timestamp).toBeGreaterThanOrEqual(now)
   })
 
   it('removeCommand removes entry by id', async () => {
     const useCommandHistory = await importHook()
     const { result } = renderHook(() => useCommandHistory())
-    act(() => { result.current.addCommand('rm -rf /tmp/test') })
+    act(() => {
+      result.current.addCommand('rm -rf /tmp/test')
+    })
     const id = result.current.history[0].id
-    act(() => { result.current.removeCommand(id) })
+    act(() => {
+      result.current.removeCommand(id)
+    })
     expect(result.current.history).toHaveLength(0)
   })
 
   it('removeCommand persists removal to localStorage', async () => {
     const useCommandHistory = await importHook()
     const { result } = renderHook(() => useCommandHistory())
-    act(() => { result.current.addCommand('cat /etc/hosts') })
+    act(() => {
+      result.current.addCommand('cat /etc/hosts')
+    })
     const id = result.current.history[0].id
-    act(() => { result.current.removeCommand(id) })
+    act(() => {
+      result.current.removeCommand(id)
+    })
     const stored = JSON.parse(localStorage.getItem('termote-command-history')!)
     expect(stored).toHaveLength(0)
   })
@@ -115,17 +145,27 @@ describe('useCommandHistory', () => {
   it('clearHistory removes all entries', async () => {
     const useCommandHistory = await importHook()
     const { result } = renderHook(() => useCommandHistory())
-    act(() => { result.current.addCommand('cmd1') })
-    act(() => { result.current.addCommand('cmd2') })
-    act(() => { result.current.clearHistory() })
+    act(() => {
+      result.current.addCommand('cmd1')
+    })
+    act(() => {
+      result.current.addCommand('cmd2')
+    })
+    act(() => {
+      result.current.clearHistory()
+    })
     expect(result.current.history).toHaveLength(0)
   })
 
   it('clearHistory persists empty list to localStorage', async () => {
     const useCommandHistory = await importHook()
     const { result } = renderHook(() => useCommandHistory())
-    act(() => { result.current.addCommand('something') })
-    act(() => { result.current.clearHistory() })
+    act(() => {
+      result.current.addCommand('something')
+    })
+    act(() => {
+      result.current.clearHistory()
+    })
     const stored = JSON.parse(localStorage.getItem('termote-command-history')!)
     expect(stored).toHaveLength(0)
   })
@@ -134,7 +174,9 @@ describe('useCommandHistory', () => {
     const useCommandHistory = await importHook()
     const { result: a } = renderHook(() => useCommandHistory())
     const { result: b } = renderHook(() => useCommandHistory())
-    act(() => { a.current.addCommand('shared-cmd') })
+    act(() => {
+      a.current.addCommand('shared-cmd')
+    })
     expect(b.current.history[0].text).toBe('shared-cmd')
   })
 
@@ -156,7 +198,9 @@ describe('useCommandHistory', () => {
     try {
       const useCommandHistory = await importHook()
       const { result } = renderHook(() => useCommandHistory())
-      act(() => { result.current.addCommand('no-uuid') })
+      act(() => {
+        result.current.addCommand('no-uuid')
+      })
       expect(result.current.history[0].id).toMatch(/^\d+-[a-z0-9]+$/)
     } finally {
       crypto.randomUUID = original

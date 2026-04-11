@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { IconPicker } from './icon-picker'
 
@@ -58,7 +58,9 @@ describe('IconPicker', () => {
     fireEvent.click(screen.getByTitle('Change icon'))
     // The 🚀 button inside the grid should have ring-2 class (selected)
     const allButtons = screen.getAllByRole('button')
-    const rocketBtn = allButtons.find((b) => b.textContent === '🚀' && b.classList.contains('ring-2'))
+    const rocketBtn = allButtons.find(
+      (b) => b.textContent === '🚀' && b.classList.contains('ring-2'),
+    )
     expect(rocketBtn).toBeInTheDocument()
   })
 

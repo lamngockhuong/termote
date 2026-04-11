@@ -14,14 +14,20 @@ describe('useMediaQuery', () => {
     listeners = []
     mockMql = {
       matches: false,
-      addEventListener: vi.fn((_event: string, cb: (e: MediaQueryListEvent) => void) => {
-        listeners.push(cb)
-      }),
-      removeEventListener: vi.fn((_event: string, cb: (e: MediaQueryListEvent) => void) => {
-        listeners = listeners.filter((l) => l !== cb)
-      }),
+      addEventListener: vi.fn(
+        (_event: string, cb: (e: MediaQueryListEvent) => void) => {
+          listeners.push(cb)
+        },
+      ),
+      removeEventListener: vi.fn(
+        (_event: string, cb: (e: MediaQueryListEvent) => void) => {
+          listeners = listeners.filter((l) => l !== cb)
+        },
+      ),
     }
-    vi.spyOn(window, 'matchMedia').mockReturnValue(mockMql as unknown as MediaQueryList)
+    vi.spyOn(window, 'matchMedia').mockReturnValue(
+      mockMql as unknown as MediaQueryList,
+    )
   })
 
   it('returns initial matches value (false)', () => {
@@ -51,7 +57,10 @@ describe('useMediaQuery', () => {
   it('removes event listener on unmount', () => {
     const { unmount } = renderHook(() => useMediaQuery('(max-width: 767px)'))
     unmount()
-    expect(mockMql.removeEventListener).toHaveBeenCalledWith('change', expect.any(Function))
+    expect(mockMql.removeEventListener).toHaveBeenCalledWith(
+      'change',
+      expect.any(Function),
+    )
   })
 
   it('re-subscribes when query changes', () => {

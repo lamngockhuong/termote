@@ -1,7 +1,7 @@
-import { render, screen, fireEvent } from '@testing-library/react'
-import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { CommandHistoryDropdown } from './command-history-dropdown'
+import { fireEvent, render, screen } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { HistoryCommand } from '../hooks/use-command-history'
+import { CommandHistoryDropdown } from './command-history-dropdown'
 
 const HISTORY: HistoryCommand[] = [
   { id: '1', text: 'git status', timestamp: 1000 },
@@ -118,15 +118,25 @@ describe('CommandHistoryDropdown', () => {
   // Keyboard navigation
   it('ArrowDown moves selection down', () => {
     render(<CommandHistoryDropdown {...defaultProps} />)
-    const container = screen.getByLabelText('Search command history').closest('div[onKeyDown]') ?? document.querySelector('[role="listbox"]')!.parentElement!
+    const container =
+      screen
+        .getByLabelText('Search command history')
+        .closest('div[onKeyDown]') ??
+      document.querySelector('[role="listbox"]')!.parentElement!
     fireEvent.keyDown(container, { key: 'ArrowDown' })
     // First item (index 0) should be selected
-    expect(screen.getByRole('option', { name: /git status/i })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('option', { name: /git status/i })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
   })
 
   it('ArrowDown stops at last item', () => {
     render(<CommandHistoryDropdown {...defaultProps} />)
-    const wrapper = document.querySelector('[onkeydown]') ?? screen.getByLabelText('Search command history').closest('div')!.parentElement!
+    const wrapper =
+      document.querySelector('[onkeydown]') ??
+      screen.getByLabelText('Search command history').closest('div')!
+        .parentElement!
     // Press down 10 times - should stop at last (index 2)
     for (let i = 0; i < 10; i++) {
       fireEvent.keyDown(wrapper, { key: 'ArrowDown' })
@@ -138,17 +148,24 @@ describe('CommandHistoryDropdown', () => {
 
   it('ArrowUp moves selection up', () => {
     render(<CommandHistoryDropdown {...defaultProps} />)
-    const wrapper = screen.getByLabelText('Search command history').closest('div')!.parentElement!
+    const wrapper = screen
+      .getByLabelText('Search command history')
+      .closest('div')!.parentElement!
     fireEvent.keyDown(wrapper, { key: 'ArrowDown' })
     fireEvent.keyDown(wrapper, { key: 'ArrowDown' })
     fireEvent.keyDown(wrapper, { key: 'ArrowUp' })
     // Should be back at index 0
-    expect(screen.getAllByRole('option')[0]).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getAllByRole('option')[0]).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
   })
 
   it('ArrowUp does not go below -1 (no selection)', () => {
     render(<CommandHistoryDropdown {...defaultProps} />)
-    const wrapper = screen.getByLabelText('Search command history').closest('div')!.parentElement!
+    const wrapper = screen
+      .getByLabelText('Search command history')
+      .closest('div')!.parentElement!
     // No selection yet — pressing up should stay at -1
     fireEvent.keyDown(wrapper, { key: 'ArrowUp' })
     const options = screen.getAllByRole('option')
@@ -159,7 +176,9 @@ describe('CommandHistoryDropdown', () => {
 
   it('Enter selects highlighted item', () => {
     render(<CommandHistoryDropdown {...defaultProps} />)
-    const wrapper = screen.getByLabelText('Search command history').closest('div')!.parentElement!
+    const wrapper = screen
+      .getByLabelText('Search command history')
+      .closest('div')!.parentElement!
     fireEvent.keyDown(wrapper, { key: 'ArrowDown' })
     fireEvent.keyDown(wrapper, { key: 'Enter' })
     expect(defaultProps.onSelect).toHaveBeenCalledWith('git status')
@@ -167,28 +186,36 @@ describe('CommandHistoryDropdown', () => {
 
   it('Enter does nothing when no item selected', () => {
     render(<CommandHistoryDropdown {...defaultProps} />)
-    const wrapper = screen.getByLabelText('Search command history').closest('div')!.parentElement!
+    const wrapper = screen
+      .getByLabelText('Search command history')
+      .closest('div')!.parentElement!
     fireEvent.keyDown(wrapper, { key: 'Enter' })
     expect(defaultProps.onSelect).not.toHaveBeenCalled()
   })
 
   it('Escape calls onClose', () => {
     render(<CommandHistoryDropdown {...defaultProps} />)
-    const wrapper = screen.getByLabelText('Search command history').closest('div')!.parentElement!
+    const wrapper = screen
+      .getByLabelText('Search command history')
+      .closest('div')!.parentElement!
     fireEvent.keyDown(wrapper, { key: 'Escape' })
     expect(defaultProps.onClose).toHaveBeenCalledTimes(1)
   })
 
   it('scrolls selected item into view', () => {
     render(<CommandHistoryDropdown {...defaultProps} />)
-    const wrapper = screen.getByLabelText('Search command history').closest('div')!.parentElement!
+    const wrapper = screen
+      .getByLabelText('Search command history')
+      .closest('div')!.parentElement!
     fireEvent.keyDown(wrapper, { key: 'ArrowDown' })
     expect(Element.prototype.scrollIntoView).toHaveBeenCalled()
   })
 
   it('resets selectedIndex when filtered list shrinks below current index', () => {
     render(<CommandHistoryDropdown {...defaultProps} />)
-    const wrapper = screen.getByLabelText('Search command history').closest('div')!.parentElement!
+    const wrapper = screen
+      .getByLabelText('Search command history')
+      .closest('div')!.parentElement!
     // Navigate to index 2
     fireEvent.keyDown(wrapper, { key: 'ArrowDown' })
     fireEvent.keyDown(wrapper, { key: 'ArrowDown' })
@@ -203,7 +230,9 @@ describe('CommandHistoryDropdown', () => {
 
   it('updates aria-activedescendant when item selected', () => {
     render(<CommandHistoryDropdown {...defaultProps} />)
-    const wrapper = screen.getByLabelText('Search command history').closest('div')!.parentElement!
+    const wrapper = screen
+      .getByLabelText('Search command history')
+      .closest('div')!.parentElement!
     fireEvent.keyDown(wrapper, { key: 'ArrowDown' })
     const input = screen.getByLabelText('Search command history')
     expect(input).toHaveAttribute('aria-activedescendant', 'history-item-0')

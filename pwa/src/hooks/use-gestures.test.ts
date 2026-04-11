@@ -3,22 +3,24 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 type HammerHandler = () => void
 
-const { mockHammerInstance, mockSwipe, mockPinch, mockPress } = vi.hoisted(() => {
-  const mockSwipe = { set: vi.fn() }
-  const mockPinch = { set: vi.fn() }
-  const mockPress = { set: vi.fn() }
-  const mockHammerInstance = {
-    get: vi.fn((name: string) => {
-      if (name === 'swipe') return mockSwipe
-      if (name === 'pinch') return mockPinch
-      if (name === 'press') return mockPress
-      return { set: vi.fn() }
-    }),
-    on: vi.fn(),
-    destroy: vi.fn(),
-  }
-  return { mockHammerInstance, mockSwipe, mockPinch, mockPress }
-})
+const { mockHammerInstance, mockSwipe, mockPinch, mockPress } = vi.hoisted(
+  () => {
+    const mockSwipe = { set: vi.fn() }
+    const mockPinch = { set: vi.fn() }
+    const mockPress = { set: vi.fn() }
+    const mockHammerInstance = {
+      get: vi.fn((name: string) => {
+        if (name === 'swipe') return mockSwipe
+        if (name === 'pinch') return mockPinch
+        if (name === 'press') return mockPress
+        return { set: vi.fn() }
+      }),
+      on: vi.fn(),
+      destroy: vi.fn(),
+    }
+    return { mockHammerInstance, mockSwipe, mockPinch, mockPress }
+  },
+)
 
 vi.mock('hammerjs', () => {
   function MockHammer() {
@@ -51,14 +53,22 @@ describe('useGestures', () => {
   })
 
   function getHandler(eventName: string): HammerHandler {
-    const call = mockHammerInstance.on.mock.calls.find(([name]) => name === eventName)
+    const call = mockHammerInstance.on.mock.calls.find(
+      ([name]) => name === eventName,
+    )
     return call?.[1] as HammerHandler
   }
 
   it('creates Hammer instance and registers event handlers', () => {
     renderHook(() => useGestures(elementRef, {}))
-    expect(mockHammerInstance.on).toHaveBeenCalledWith('tap', expect.any(Function))
-    expect(mockHammerInstance.on).toHaveBeenCalledWith('swipeleft', expect.any(Function))
+    expect(mockHammerInstance.on).toHaveBeenCalledWith(
+      'tap',
+      expect.any(Function),
+    )
+    expect(mockHammerInstance.on).toHaveBeenCalledWith(
+      'swipeleft',
+      expect.any(Function),
+    )
   })
 
   it('configures swipe direction to DIRECTION_ALL', () => {

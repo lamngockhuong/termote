@@ -5,7 +5,11 @@ import { useViewport } from './use-viewport'
 describe('useViewport', () => {
   let viewportListeners: Array<() => void>
   let windowResizeListeners: Array<() => void>
-  let mockViewport: { height: number; addEventListener: ReturnType<typeof vi.fn>; removeEventListener: ReturnType<typeof vi.fn> }
+  let mockViewport: {
+    height: number
+    addEventListener: ReturnType<typeof vi.fn>
+    removeEventListener: ReturnType<typeof vi.fn>
+  }
 
   beforeEach(() => {
     viewportListeners = []
@@ -30,16 +34,24 @@ describe('useViewport', () => {
       value: 800,
     })
 
-    vi.spyOn(window, 'addEventListener').mockImplementation((event: string, cb: EventListenerOrEventListenerObject) => {
-      if (event === 'resize') windowResizeListeners.push(cb as () => void)
-    })
+    vi.spyOn(window, 'addEventListener').mockImplementation(
+      (event: string, cb: EventListenerOrEventListenerObject) => {
+        if (event === 'resize') windowResizeListeners.push(cb as () => void)
+      },
+    )
     vi.spyOn(window, 'removeEventListener').mockImplementation(() => {})
   })
 
   afterEach(() => {
     vi.restoreAllMocks()
-    Object.defineProperty(window, 'visualViewport', { configurable: true, value: undefined })
-    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 })
+    Object.defineProperty(window, 'visualViewport', {
+      configurable: true,
+      value: undefined,
+    })
+    Object.defineProperty(window, 'innerHeight', {
+      configurable: true,
+      value: 800,
+    })
   })
 
   it('initializes with current viewport height', () => {
@@ -61,7 +73,10 @@ describe('useViewport', () => {
   })
 
   it('sets keyboardVisible true when height diff > 150', () => {
-    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 })
+    Object.defineProperty(window, 'innerHeight', {
+      configurable: true,
+      value: 800,
+    })
     const { result } = renderHook(() => useViewport())
 
     act(() => {
@@ -73,7 +88,10 @@ describe('useViewport', () => {
   })
 
   it('sets keyboardVisible false when height diff <= 150', () => {
-    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 })
+    Object.defineProperty(window, 'innerHeight', {
+      configurable: true,
+      value: 800,
+    })
     const { result } = renderHook(() => useViewport())
 
     act(() => {
@@ -98,13 +116,25 @@ describe('useViewport', () => {
   it('removes event listeners on unmount', () => {
     const { unmount } = renderHook(() => useViewport())
     unmount()
-    expect(mockViewport.removeEventListener).toHaveBeenCalledWith('resize', expect.any(Function))
-    expect(window.removeEventListener).toHaveBeenCalledWith('resize', expect.any(Function))
+    expect(mockViewport.removeEventListener).toHaveBeenCalledWith(
+      'resize',
+      expect.any(Function),
+    )
+    expect(window.removeEventListener).toHaveBeenCalledWith(
+      'resize',
+      expect.any(Function),
+    )
   })
 
   it('falls back to window.innerHeight when visualViewport is undefined', () => {
-    Object.defineProperty(window, 'visualViewport', { configurable: true, value: undefined })
-    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 900 })
+    Object.defineProperty(window, 'visualViewport', {
+      configurable: true,
+      value: undefined,
+    })
+    Object.defineProperty(window, 'innerHeight', {
+      configurable: true,
+      value: 900,
+    })
     const { result } = renderHook(() => useViewport())
     expect(result.current.viewportHeight).toBe(900)
   })

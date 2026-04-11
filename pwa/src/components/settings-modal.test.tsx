@@ -1,7 +1,7 @@
-import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
-import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { SettingsModal } from './settings-modal'
+import { act, fireEvent, render } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Settings } from '../hooks/use-settings'
+import { SettingsModal } from './settings-modal'
 
 const DEFAULT_SETTINGS: Settings = {
   imeSendBehavior: 'send-only',
@@ -13,28 +13,24 @@ const DEFAULT_SETTINGS: Settings = {
   hasSeenGestureHints: false,
 }
 
-// jsdom does not show <dialog> as visible; force it open by removing hidden attribute
-function openDialog() {
-  const dialog = document.querySelector('dialog')
-  if (dialog) {
-    dialog.removeAttribute('hidden')
-    // Also remove display:none that jsdom may apply
-    ;(dialog as HTMLElement).style.display = 'block'
-  }
-}
-
 describe('SettingsModal', () => {
   beforeEach(() => {
-    HTMLDialogElement.prototype.showModal = vi.fn().mockImplementation(function (this: HTMLDialogElement) {
-      this.removeAttribute('hidden')
-      this.style.display = 'block'
-    })
-    HTMLDialogElement.prototype.close = vi.fn().mockImplementation(function (this: HTMLDialogElement) {
+    HTMLDialogElement.prototype.showModal = vi
+      .fn()
+      .mockImplementation(function (this: HTMLDialogElement) {
+        this.removeAttribute('hidden')
+        this.style.display = 'block'
+      })
+    HTMLDialogElement.prototype.close = vi.fn().mockImplementation(function (
+      this: HTMLDialogElement,
+    ) {
       this.style.display = 'none'
     })
   })
 
-  function renderModal(overrides: Partial<Parameters<typeof SettingsModal>[0]> = {}) {
+  function renderModal(
+    overrides: Partial<Parameters<typeof SettingsModal>[0]> = {},
+  ) {
     const onClose = vi.fn()
     const onUpdateSetting = vi.fn()
     const props = {
@@ -79,10 +75,11 @@ describe('SettingsModal', () => {
     expect(document.querySelector('dialog')).not.toBeInTheDocument()
   })
 
-
   it('calls onClose when close button clicked', () => {
     const { onClose } = renderModal()
-    const closeBtn = document.querySelector('button[aria-label="Close"]') as HTMLElement
+    const closeBtn = document.querySelector(
+      'button[aria-label="Close"]',
+    ) as HTMLElement
     expect(closeBtn).toBeTruthy()
     fireEvent.click(closeBtn)
     expect(onClose).toHaveBeenCalled()
@@ -92,7 +89,10 @@ describe('SettingsModal', () => {
     const { onClose } = renderModal()
     const dialog = document.querySelector('dialog')!
     // Simulate click where target IS the dialog itself
-    Object.defineProperty(dialog, 'currentTarget', { value: dialog, configurable: true })
+    Object.defineProperty(dialog, 'currentTarget', {
+      value: dialog,
+      configurable: true,
+    })
     fireEvent.click(dialog)
     expect(onClose).toHaveBeenCalled()
   })
@@ -141,24 +141,33 @@ describe('SettingsModal', () => {
 
   it('updates imeSendBehavior when send-enter radio selected', () => {
     const { onUpdateSetting, container } = renderModal()
-    const sendEnterRadio = container.querySelector('input[value="send-enter"]') as HTMLInputElement
+    const sendEnterRadio = container.querySelector(
+      'input[value="send-enter"]',
+    ) as HTMLInputElement
     expect(sendEnterRadio).toBeTruthy()
     fireEvent.click(sendEnterRadio)
-    expect(onUpdateSetting).toHaveBeenCalledWith('imeSendBehavior', 'send-enter')
+    expect(onUpdateSetting).toHaveBeenCalledWith(
+      'imeSendBehavior',
+      'send-enter',
+    )
   })
 
   it('updates imeSendBehavior when send-only radio selected', () => {
     const { onUpdateSetting, container } = renderModal({
       settings: { ...DEFAULT_SETTINGS, imeSendBehavior: 'send-enter' },
     })
-    const sendOnlyRadio = container.querySelector('input[value="send-only"]') as HTMLInputElement
+    const sendOnlyRadio = container.querySelector(
+      'input[value="send-only"]',
+    ) as HTMLInputElement
     fireEvent.click(sendOnlyRadio)
     expect(onUpdateSetting).toHaveBeenCalledWith('imeSendBehavior', 'send-only')
   })
 
   it('updates pasteSource when tmux radio selected', () => {
     const { onUpdateSetting, container } = renderModal()
-    const tmuxRadio = container.querySelector('input[value="tmux"]') as HTMLInputElement
+    const tmuxRadio = container.querySelector(
+      'input[value="tmux"]',
+    ) as HTMLInputElement
     fireEvent.click(tmuxRadio)
     expect(onUpdateSetting).toHaveBeenCalledWith('pasteSource', 'tmux')
   })
@@ -167,7 +176,9 @@ describe('SettingsModal', () => {
     const { onUpdateSetting, container } = renderModal({
       settings: { ...DEFAULT_SETTINGS, pasteSource: 'tmux' },
     })
-    const clipRadio = container.querySelector('input[value="clipboard"]') as HTMLInputElement
+    const clipRadio = container.querySelector(
+      'input[value="clipboard"]',
+    ) as HTMLInputElement
     fireEvent.click(clipRadio)
     expect(onUpdateSetting).toHaveBeenCalledWith('pasteSource', 'clipboard')
   })
@@ -225,7 +236,6 @@ describe('SettingsModal', () => {
   it('renders Show Gesture Hints button when handler provided', () => {
     const onShowGestureHints = vi.fn()
     renderModal({ onShowGestureHints })
-    const btn = document.querySelector('button.text-blue-600') as HTMLElement
     expect(document.body.textContent).toContain('Show Gesture Hints')
   })
 
@@ -233,7 +243,9 @@ describe('SettingsModal', () => {
     const onShowGestureHints = vi.fn()
     renderModal({ onShowGestureHints })
     const btns = document.querySelectorAll('button')
-    const gestureBtn = Array.from(btns).find(b => b.textContent?.includes('Show Gesture Hints'))!
+    const gestureBtn = Array.from(btns).find((b) =>
+      b.textContent?.includes('Show Gesture Hints'),
+    )!
     fireEvent.click(gestureBtn)
     expect(onShowGestureHints).toHaveBeenCalled()
   })
@@ -248,16 +260,23 @@ describe('SettingsModal', () => {
     const onCheckForUpdate = vi.fn().mockResolvedValue(null)
     renderModal({ onCheckForUpdate, updateChecking: true })
     const btns = document.querySelectorAll('button')
-    const checkBtn = Array.from(btns).find(b => b.textContent?.includes('Checking'))! as HTMLButtonElement
+    const checkBtn = Array.from(btns).find((b) =>
+      b.textContent?.includes('Checking'),
+    )! as HTMLButtonElement
     expect(checkBtn.disabled).toBe(true)
   })
 
   it('shows inline toast when onCheckForUpdate returns a message', async () => {
-    const onCheckForUpdate = vi.fn().mockResolvedValue('Update available: v1.2.3')
+    const onCheckForUpdate = vi
+      .fn()
+      .mockResolvedValue('Update available: v1.2.3')
     const { container } = renderModal({ onCheckForUpdate })
-    const checkBtn = Array.from(container.querySelectorAll('button'))
-      .find(b => b.textContent?.includes('Check for Updates'))!
-    await act(async () => { fireEvent.click(checkBtn) })
+    const checkBtn = Array.from(container.querySelectorAll('button')).find(
+      (b) => b.textContent?.includes('Check for Updates'),
+    )!
+    await act(async () => {
+      fireEvent.click(checkBtn)
+    })
     expect(document.body.textContent).toContain('Update available: v1.2.3')
   })
 
@@ -265,11 +284,16 @@ describe('SettingsModal', () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     const onCheckForUpdate = vi.fn().mockResolvedValue('Update available!')
     const { container } = renderModal({ onCheckForUpdate })
-    const checkBtn = Array.from(container.querySelectorAll('button'))
-      .find(b => b.textContent?.includes('Check for Updates'))!
-    await act(async () => { fireEvent.click(checkBtn) })
+    const checkBtn = Array.from(container.querySelectorAll('button')).find(
+      (b) => b.textContent?.includes('Check for Updates'),
+    )!
+    await act(async () => {
+      fireEvent.click(checkBtn)
+    })
     expect(document.body.textContent).toContain('Update available!')
-    act(() => { vi.advanceTimersByTime(4001) })
+    act(() => {
+      vi.advanceTimersByTime(4001)
+    })
     expect(document.body.textContent).not.toContain('Update available!')
     vi.useRealTimers()
   })
@@ -277,23 +301,32 @@ describe('SettingsModal', () => {
   it('does not show toast when onCheckForUpdate returns null', async () => {
     const onCheckForUpdate = vi.fn().mockResolvedValue(null)
     const { container } = renderModal({ onCheckForUpdate })
-    const checkBtn = Array.from(container.querySelectorAll('button'))
-      .find(b => b.textContent?.includes('Check for Updates'))!
-    await act(async () => { fireEvent.click(checkBtn) })
+    const checkBtn = Array.from(container.querySelectorAll('button')).find(
+      (b) => b.textContent?.includes('Check for Updates'),
+    )!
+    await act(async () => {
+      fireEvent.click(checkBtn)
+    })
     expect(document.body.textContent).not.toContain('Update available')
   })
 
   it('clears previous toast timer when update button clicked again', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
-    const onCheckForUpdate = vi.fn()
+    const onCheckForUpdate = vi
+      .fn()
       .mockResolvedValueOnce('First message')
       .mockResolvedValue('Second message')
     const { container } = renderModal({ onCheckForUpdate })
-    const checkBtn = Array.from(container.querySelectorAll('button'))
-      .find(b => b.textContent?.includes('Check for Updates'))!
-    await act(async () => { fireEvent.click(checkBtn) })
+    const checkBtn = Array.from(container.querySelectorAll('button')).find(
+      (b) => b.textContent?.includes('Check for Updates'),
+    )!
+    await act(async () => {
+      fireEvent.click(checkBtn)
+    })
     expect(document.body.textContent).toContain('First message')
-    await act(async () => { fireEvent.click(checkBtn) })
+    await act(async () => {
+      fireEvent.click(checkBtn)
+    })
     expect(document.body.textContent).toContain('Second message')
     vi.useRealTimers()
   })
@@ -311,7 +344,9 @@ describe('SettingsModal', () => {
       />,
     )
     unmount()
-    act(() => { vi.advanceTimersByTime(5000) })
+    act(() => {
+      vi.advanceTimersByTime(5000)
+    })
     vi.useRealTimers()
     // No error = pass
   })
@@ -326,7 +361,9 @@ describe('SettingsModal', () => {
     const onClearHistory = vi.fn()
     renderModal({ onClearHistory, historyCount: 0 })
     const btns = document.querySelectorAll('button')
-    const clearBtn = Array.from(btns).find(b => b.textContent?.includes('Clear Command History'))! as HTMLButtonElement
+    const clearBtn = Array.from(btns).find((b) =>
+      b.textContent?.includes('Clear Command History'),
+    )! as HTMLButtonElement
     expect(clearBtn.disabled).toBe(true)
   })
 
@@ -334,7 +371,9 @@ describe('SettingsModal', () => {
     const onClearHistory = vi.fn()
     renderModal({ onClearHistory, historyCount: 3 })
     const btns = document.querySelectorAll('button')
-    const clearBtn = Array.from(btns).find(b => b.textContent?.includes('Clear Command History'))!
+    const clearBtn = Array.from(btns).find((b) =>
+      b.textContent?.includes('Clear Command History'),
+    )!
     fireEvent.click(clearBtn)
     expect(onClearHistory).toHaveBeenCalled()
   })
@@ -349,20 +388,29 @@ describe('SettingsModal', () => {
     const onShowGestureHints = vi.fn()
     const onCheckForUpdate = vi.fn().mockResolvedValue(null)
     const onClearHistory = vi.fn()
-    renderModal({ onShowGestureHints, onCheckForUpdate, onClearHistory, historyCount: 1 })
+    renderModal({
+      onShowGestureHints,
+      onCheckForUpdate,
+      onClearHistory,
+      historyCount: 1,
+    })
     expect(document.body.textContent).toContain('Show Gesture Hints')
     expect(document.body.textContent).toContain('Check for Updates')
     expect(document.body.textContent).toContain('Clear Command History')
   })
 
   it('ToggleRow renders checked state visually (aria-checked=true)', () => {
-    renderModal({ settings: { ...DEFAULT_SETTINGS, toolbarDefaultExpanded: true } })
+    renderModal({
+      settings: { ...DEFAULT_SETTINGS, toolbarDefaultExpanded: true },
+    })
     const switches = document.querySelectorAll('button[role="switch"]')
     expect(switches[0].getAttribute('aria-checked')).toBe('true')
   })
 
   it('ToggleRow renders unchecked state visually (aria-checked=false)', () => {
-    renderModal({ settings: { ...DEFAULT_SETTINGS, toolbarDefaultExpanded: false } })
+    renderModal({
+      settings: { ...DEFAULT_SETTINGS, toolbarDefaultExpanded: false },
+    })
     const switches = document.querySelectorAll('button[role="switch"]')
     expect(switches[0].getAttribute('aria-checked')).toBe('false')
   })
@@ -375,7 +423,7 @@ describe('SettingsModal', () => {
   it('poll interval select has correct options', () => {
     renderModal()
     const select = document.querySelector('select') as HTMLSelectElement
-    const options = Array.from(select.options).map(o => o.value)
+    const options = Array.from(select.options).map((o) => o.value)
     expect(options).toContain('3')
     expect(options).toContain('60')
     expect(options).toContain('300')

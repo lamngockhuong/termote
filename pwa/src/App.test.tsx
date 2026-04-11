@@ -1,11 +1,16 @@
-import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 
 // ─── Mock all hooks ───────────────────────────────────────────────────────────
 
 const mockUseLocalSessions = vi.fn(() => ({
-  activeSession: { id: '1', name: 'Shell', icon: '💻', description: 'Terminal' },
+  activeSession: {
+    id: '1',
+    name: 'Shell',
+    icon: '💻',
+    description: 'Terminal',
+  },
   sessions: [{ id: '1', name: 'Shell', icon: '💻', description: 'Terminal' }],
   switchSession: vi.fn(),
   addSession: vi.fn(),
@@ -15,7 +20,10 @@ const mockUseLocalSessions = vi.fn(() => ({
   isServerReachable: true,
   refreshSessions: vi.fn(),
 }))
-vi.mock('./hooks/use-local-sessions', () => ({ useLocalSessions: (...args: unknown[]) => mockUseLocalSessions(...args) }))
+vi.mock('./hooks/use-local-sessions', () => ({
+  useLocalSessions: (...args: any[]) =>
+    (mockUseLocalSessions as (...a: any[]) => unknown)(...args),
+}))
 
 vi.mock('./hooks/use-command-history', () => ({
   useCommandHistory: () => ({
@@ -34,9 +42,12 @@ vi.mock('./hooks/use-update-check', () => ({
   }),
 }))
 
-let capturedGestureHandlers: Record<string, (...args: unknown[]) => unknown> = {}
+let capturedGestureHandlers: Record<string, (...args: unknown[]) => unknown> =
+  {}
 vi.mock('./hooks/use-gestures', () => ({
-  useGestures: vi.fn((_ref, handlers) => { capturedGestureHandlers = handlers }),
+  useGestures: vi.fn((_ref, handlers) => {
+    capturedGestureHandlers = handlers
+  }),
 }))
 
 const mockIsMobile = vi.fn(() => false)
@@ -45,29 +56,37 @@ vi.mock('./hooks/use-media-query', () => ({
   useMediaQuery: () => false,
 }))
 
-const mockUseKeyboardVisible = vi.fn(() => ({ isVisible: false, keyboardHeight: 0 }))
+const mockUseKeyboardVisible = vi.fn(() => ({
+  isVisible: false,
+  keyboardHeight: 0,
+}))
 vi.mock('./hooks/use-keyboard-visible', () => ({
   useKeyboardVisible: () => mockUseKeyboardVisible(),
 }))
 
 vi.mock('./contexts/theme-context', () => ({
   useTheme: () => ({ theme: 'dark', resolvedTheme: 'dark', setTheme: vi.fn() }),
-  ThemeProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  ThemeProvider: ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  ),
 }))
 
 vi.mock('./hooks/use-font-size', () => ({
   useFontSize: () => ({ fontSize: 14, increase: vi.fn(), decrease: vi.fn() }),
 }))
 
-const mockUseFullscreen = vi.fn(() => ({ isFullscreen: false, toggleFullscreen: vi.fn() }))
+const mockUseFullscreen = vi.fn(() => ({
+  isFullscreen: false,
+  toggleFullscreen: vi.fn(),
+}))
 vi.mock('./hooks/use-fullscreen', () => ({
   useFullscreen: () => mockUseFullscreen(),
 }))
 
 const mockUseSettings = vi.fn(() => ({
   settings: {
-    imeSendBehavior: 'send-only' as const,
-    pasteSource: 'clipboard' as const,
+    imeSendBehavior: 'send-only' as string,
+    pasteSource: 'clipboard' as string,
     toolbarDefaultExpanded: false,
     disableContextMenu: true,
     showSessionTabs: false,
@@ -76,7 +95,10 @@ const mockUseSettings = vi.fn(() => ({
   },
   updateSetting: vi.fn(),
 }))
-vi.mock('./hooks/use-settings', () => ({ useSettings: (...args: unknown[]) => mockUseSettings(...args) }))
+vi.mock('./hooks/use-settings', () => ({
+  useSettings: (...args: any[]) =>
+    (mockUseSettings as (...a: any[]) => unknown)(...args),
+}))
 
 vi.mock('./hooks/use-sidebar-collapsed', () => ({
   useSidebarCollapsed: () => ({ isCollapsed: false, toggle: vi.fn() }),
@@ -96,22 +118,31 @@ const mockFocusTerminal = vi.fn()
 const mockBlurTerminal = vi.fn()
 
 vi.mock('./utils/terminal-bridge', () => ({
-  sendKeyToTerminal: (...args: unknown[]) => mockSendKeyToTerminal(...args),
-  focusTerminal: (...args: unknown[]) => mockFocusTerminal(...args),
-  blurTerminal: (...args: unknown[]) => mockBlurTerminal(...args),
+  sendKeyToTerminal: (...args: any[]) => mockSendKeyToTerminal(...args),
+
+  focusTerminal: (...args: any[]) => mockFocusTerminal(...args),
+
+  blurTerminal: (...args: any[]) => mockBlurTerminal(...args),
   isInCopyMode: () => mockIsInCopyMode(),
-  isTerminalDisconnected: (...args: unknown[]) => mockIsTerminalDisconnected(...args),
-  pasteToTerminal: (...args: unknown[]) => mockPasteToTerminal(...args),
-  pasteTmuxBuffer: (...args: unknown[]) => mockPasteTmuxBuffer(...args),
-  scrollTmux: (...args: unknown[]) => mockScrollTmux(...args),
-  toggleTmuxCopyMode: (...args: unknown[]) => mockToggleTmuxCopyMode(...args),
-  sendTextToTerminal: (...args: unknown[]) => mockSendTextToTerminal(...args),
+
+  isTerminalDisconnected: (...args: any[]) =>
+    (mockIsTerminalDisconnected as (...a: any[]) => unknown)(...args),
+
+  pasteToTerminal: (...args: any[]) => mockPasteToTerminal(...args),
+
+  pasteTmuxBuffer: (...args: any[]) => mockPasteTmuxBuffer(...args),
+
+  scrollTmux: (...args: any[]) => mockScrollTmux(...args),
+
+  toggleTmuxCopyMode: (...args: any[]) => mockToggleTmuxCopyMode(...args),
+
+  sendTextToTerminal: (...args: any[]) => mockSendTextToTerminal(...args),
 }))
 
 // ─── Mock all components ──────────────────────────────────────────────────────
 
 vi.mock('./components/terminal-frame', () => ({
-  TerminalFrame: vi.fn(({ onConnectionStateChange }: { onConnectionStateChange?: (s: string) => void }) => {
+  TerminalFrame: vi.fn(() => {
     return <div data-testid="terminal-frame">Terminal</div>
   }),
 }))
@@ -119,26 +150,68 @@ vi.mock('./components/terminal-frame', () => ({
 vi.mock('./components/keyboard-toolbar', () => ({
   KeyboardToolbar: vi.fn((props: Record<string, unknown>) => (
     <div data-testid="keyboard-toolbar">
-      <button onClick={() => (props.onKey as (k: string) => void)?.('Tab')}>KeyTab</button>
-      <button onClick={() => (props.onKey as (k: string) => void)?.('Enter')}>KeyEnter</button>
-      <button onClick={() => (props.onCtrlKey as (k: string) => void)?.('c')}>CtrlC</button>
-      <button onClick={() => (props.onShiftKey as (k: string) => void)?.('Tab')}>ShiftTab</button>
-      <button onClick={() => (props.onCtrlShiftKey as (k: string) => void)?.('v')}>CtrlShiftV</button>
-      <button onClick={() => (props.onCtrlShiftKey as (k: string) => void)?.('c')}>CtrlShiftC</button>
-      <button onClick={() => (props.onScroll as (d: string) => void)?.('up')}>ScrollUp</button>
-      <button onClick={() => (props.onTmuxCopy as () => void)?.()}>TmuxCopy</button>
+      <button onClick={() => (props.onKey as (k: string) => void)?.('Tab')}>
+        KeyTab
+      </button>
+      <button onClick={() => (props.onKey as (k: string) => void)?.('Enter')}>
+        KeyEnter
+      </button>
+      <button onClick={() => (props.onCtrlKey as (k: string) => void)?.('c')}>
+        CtrlC
+      </button>
+      <button
+        onClick={() => (props.onShiftKey as (k: string) => void)?.('Tab')}
+      >
+        ShiftTab
+      </button>
+      <button
+        onClick={() => (props.onCtrlShiftKey as (k: string) => void)?.('v')}
+      >
+        CtrlShiftV
+      </button>
+      <button
+        onClick={() => (props.onCtrlShiftKey as (k: string) => void)?.('c')}
+      >
+        CtrlShiftC
+      </button>
+      <button onClick={() => (props.onScroll as (d: string) => void)?.('up')}>
+        ScrollUp
+      </button>
+      <button onClick={() => (props.onTmuxCopy as () => void)?.()}>
+        TmuxCopy
+      </button>
       <button onClick={() => (props.onPaste as () => void)?.()}>Paste</button>
-      <button onClick={() => (props.onToggleKeyboard as () => void)?.()}>ToggleKbd</button>
-      <button onClick={() => (props.onSendText as (t: string) => void)?.('hello')}>SendText</button>
-      <button onClick={() => (props.onHistoryToggle as () => void)?.()}>HistoryToggle</button>
-      <button onClick={() => (props.onCtrlChange as (v: boolean) => void)?.(false)}>BlurCtrl</button>
-      <button onClick={() => (props.onCtrlChange as (v: boolean) => void)?.(true)}>ActivateCtrl</button>
+      <button onClick={() => (props.onToggleKeyboard as () => void)?.()}>
+        ToggleKbd
+      </button>
+      <button
+        onClick={() => (props.onSendText as (t: string) => void)?.('hello')}
+      >
+        SendText
+      </button>
+      <button onClick={() => (props.onHistoryToggle as () => void)?.()}>
+        HistoryToggle
+      </button>
+      <button
+        onClick={() => (props.onCtrlChange as (v: boolean) => void)?.(false)}
+      >
+        BlurCtrl
+      </button>
+      <button
+        onClick={() => (props.onCtrlChange as (v: boolean) => void)?.(true)}
+      >
+        ActivateCtrl
+      </button>
     </div>
   )),
 }))
 
 vi.mock('./components/session-sidebar', () => ({
-  SessionSidebar: ({ onSelect, onClose, isMobile }: {
+  SessionSidebar: ({
+    onSelect,
+    onClose,
+    isMobile,
+  }: {
     onSelect?: (id: string) => void
     onClose?: () => void
     isMobile?: boolean
@@ -147,15 +220,16 @@ vi.mock('./components/session-sidebar', () => ({
       {isMobile && onSelect && (
         <button onClick={() => onSelect('2')}>MobileSelect</button>
       )}
-      {isMobile && onClose && (
-        <button onClick={onClose}>MobileClose</button>
-      )}
+      {isMobile && onClose && <button onClick={onClose}>MobileClose</button>}
     </div>
   ),
 }))
 
 vi.mock('./components/quick-actions-menu', () => ({
-  QuickActionsMenu: ({ onSendKey, onSendText }: {
+  QuickActionsMenu: ({
+    onSendKey,
+    onSendText,
+  }: {
     onSendKey: (key: string, opts?: { ctrl?: boolean }) => void
     onSendText: (text: string) => void
   }) => (
@@ -168,36 +242,60 @@ vi.mock('./components/quick-actions-menu', () => ({
 }))
 
 vi.mock('./components/settings-modal', () => ({
-  SettingsModal: ({ isOpen, onClose, onCheckForUpdate, onShowGestureHints }: {
+  SettingsModal: ({
+    isOpen,
+    onClose,
+    onCheckForUpdate,
+    onShowGestureHints,
+  }: {
     isOpen: boolean
     onClose: () => void
     onCheckForUpdate?: () => Promise<string | null>
     onShowGestureHints?: () => void
-  }) => isOpen ? (
-    <div data-testid="settings-modal">
-      <button onClick={onClose}>CloseSettings</button>
-      {onCheckForUpdate && (
-        <button onClick={() => onCheckForUpdate()}>CheckUpdate</button>
-      )}
-      {onShowGestureHints && (
-        <button onClick={onShowGestureHints}>GestureHints</button>
-      )}
-    </div>
-  ) : null,
+  }) =>
+    isOpen ? (
+      <div data-testid="settings-modal">
+        <button onClick={onClose}>CloseSettings</button>
+        {onCheckForUpdate && (
+          <button onClick={() => onCheckForUpdate()}>CheckUpdate</button>
+        )}
+        {onShowGestureHints && (
+          <button onClick={onShowGestureHints}>GestureHints</button>
+        )}
+      </div>
+    ) : null,
 }))
 
 vi.mock('./components/about-modal', () => ({
-  AboutModal: ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) =>
-    isOpen ? <div data-testid="about-modal"><button onClick={onClose}>CloseAbout</button></div> : null,
+  AboutModal: ({
+    isOpen,
+    onClose,
+  }: {
+    isOpen: boolean
+    onClose: () => void
+  }) =>
+    isOpen ? (
+      <div data-testid="about-modal">
+        <button onClick={onClose}>CloseAbout</button>
+      </div>
+    ) : null,
 }))
 
 vi.mock('./components/help-modal', () => ({
   HelpModal: ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) =>
-    isOpen ? <div data-testid="help-modal"><button onClick={onClose}>CloseHelp</button></div> : null,
+    isOpen ? (
+      <div data-testid="help-modal">
+        <button onClick={onClose}>CloseHelp</button>
+      </div>
+    ) : null,
 }))
 
 vi.mock('./components/settings-menu', () => ({
-  SettingsMenu: ({ onOpenAbout, onOpenHelp, onOpenSettings }: {
+  SettingsMenu: ({
+    onOpenAbout,
+    onOpenHelp,
+    onOpenSettings,
+  }: {
     onOpenAbout: () => void
     onOpenHelp: () => void
     onOpenSettings: () => void
@@ -211,7 +309,13 @@ vi.mock('./components/settings-menu', () => ({
 }))
 
 vi.mock('./components/connection-indicator', () => ({
-  ConnectionIndicator: ({ state, onRetry }: { state: string; onRetry: () => void }) => (
+  ConnectionIndicator: ({
+    state,
+    onRetry,
+  }: {
+    state: string
+    onRetry: () => void
+  }) => (
     <div data-testid="connection-indicator" data-state={state}>
       <button onClick={onRetry}>Retry</button>
     </div>
@@ -228,7 +332,13 @@ vi.mock('./components/toast', () => ({
 }))
 
 vi.mock('./components/gesture-hints-overlay', () => ({
-  GestureHintsOverlay: ({ isOpen, onDismiss }: { isOpen: boolean; onDismiss: () => void }) =>
+  GestureHintsOverlay: ({
+    isOpen,
+    onDismiss,
+  }: {
+    isOpen: boolean
+    onDismiss: () => void
+  }) =>
     isOpen ? (
       <div data-testid="gesture-hints">
         <button onClick={onDismiss}>DismissHints</button>
@@ -237,7 +347,13 @@ vi.mock('./components/gesture-hints-overlay', () => ({
 }))
 
 vi.mock('./components/bottom-navigation', () => ({
-  BottomNavigation: ({ onAdd, onToggleSidebar }: { onAdd: () => void; onToggleSidebar: () => void }) => (
+  BottomNavigation: ({
+    onAdd,
+    onToggleSidebar,
+  }: {
+    onAdd: () => void
+    onToggleSidebar: () => void
+  }) => (
     <div data-testid="bottom-nav">
       <button onClick={onAdd}>BNAdd</button>
       <button onClick={onToggleSidebar}>BNSidebar</button>
@@ -246,7 +362,13 @@ vi.mock('./components/bottom-navigation', () => ({
 }))
 
 vi.mock('./components/command-history-dropdown', () => ({
-  CommandHistoryDropdown: ({ onClose, onSelect }: { onClose: () => void; onSelect: (t: string) => void }) => (
+  CommandHistoryDropdown: ({
+    onClose,
+    onSelect,
+  }: {
+    onClose: () => void
+    onSelect: (t: string) => void
+  }) => (
     <div data-testid="history-dropdown">
       <button onClick={onClose}>CloseHistory</button>
       <button onClick={() => onSelect('git status')}>SelectHistory</button>
@@ -255,7 +377,13 @@ vi.mock('./components/command-history-dropdown', () => ({
 }))
 
 vi.mock('./components/session-tabs', () => ({
-  SessionTabs: ({ onAdd, onRemove }: { onAdd: () => void; onRemove: (id: string) => void }) => (
+  SessionTabs: ({
+    onAdd,
+    onRemove,
+  }: {
+    onAdd: () => void
+    onRemove: (id: string) => void
+  }) => (
     <div data-testid="session-tabs">
       <button onClick={onAdd}>STAdd</button>
       <button onClick={() => onRemove('1')}>STRemove</button>
@@ -268,11 +396,21 @@ vi.mock('./components/session-tabs', () => ({
 describe('App', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockCheckForUpdate.mockResolvedValue({ hasUpdate: false, latestVersion: null, releaseUrl: null })
+    mockCheckForUpdate.mockResolvedValue({
+      hasUpdate: false,
+      latestVersion: null,
+      releaseUrl: null,
+    })
     mockPasteToTerminal.mockResolvedValue({ ok: true })
     mockIsMobile.mockReturnValue(false)
-    mockUseKeyboardVisible.mockReturnValue({ isVisible: false, keyboardHeight: 0 })
-    mockUseFullscreen.mockReturnValue({ isFullscreen: false, toggleFullscreen: vi.fn() })
+    mockUseKeyboardVisible.mockReturnValue({
+      isVisible: false,
+      keyboardHeight: 0,
+    })
+    mockUseFullscreen.mockReturnValue({
+      isFullscreen: false,
+      toggleFullscreen: vi.fn(),
+    })
     mockUseSettings.mockReturnValue({
       settings: {
         imeSendBehavior: 'send-only' as const,
@@ -286,8 +424,15 @@ describe('App', () => {
       updateSetting: vi.fn(),
     })
     mockUseLocalSessions.mockReturnValue({
-      activeSession: { id: '1', name: 'Shell', icon: '💻', description: 'Terminal' },
-      sessions: [{ id: '1', name: 'Shell', icon: '💻', description: 'Terminal' }],
+      activeSession: {
+        id: '1',
+        name: 'Shell',
+        icon: '💻',
+        description: 'Terminal',
+      },
+      sessions: [
+        { id: '1', name: 'Shell', icon: '💻', description: 'Terminal' },
+      ],
       switchSession: vi.fn(),
       addSession: vi.fn(),
       removeSession: vi.fn(),
@@ -320,7 +465,11 @@ describe('App', () => {
   })
 
   it('shows toast when update is available on mount', async () => {
-    mockCheckForUpdate.mockResolvedValue({ hasUpdate: true, latestVersion: '2.0.0', releaseUrl: null })
+    mockCheckForUpdate.mockResolvedValue({
+      hasUpdate: true,
+      latestVersion: '2.0.0',
+      releaseUrl: null,
+    })
     render(<App />)
     await waitFor(() => {
       expect(screen.getByTestId('toast')).toBeInTheDocument()
@@ -329,7 +478,11 @@ describe('App', () => {
   })
 
   it('does not show toast when no update available', async () => {
-    mockCheckForUpdate.mockResolvedValue({ hasUpdate: false, latestVersion: null, releaseUrl: null })
+    mockCheckForUpdate.mockResolvedValue({
+      hasUpdate: false,
+      latestVersion: null,
+      releaseUrl: null,
+    })
     render(<App />)
     await waitFor(() => {
       expect(screen.queryByTestId('toast')).not.toBeInTheDocument()
@@ -337,7 +490,11 @@ describe('App', () => {
   })
 
   it('closes toast when onClose called', async () => {
-    mockCheckForUpdate.mockResolvedValue({ hasUpdate: true, latestVersion: '1.1.0', releaseUrl: null })
+    mockCheckForUpdate.mockResolvedValue({
+      hasUpdate: true,
+      latestVersion: '1.1.0',
+      releaseUrl: null,
+    })
     render(<App />)
     await waitFor(() => expect(screen.getByTestId('toast')).toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: 'CloseToast' }))
@@ -426,14 +583,18 @@ describe('App', () => {
     render(<App />)
     await waitFor(() => screen.getByRole('button', { name: 'CtrlC' }))
     fireEvent.click(screen.getByRole('button', { name: 'CtrlC' }))
-    expect(mockSendKeyToTerminal).toHaveBeenCalledWith(null, 'c', { ctrl: true })
+    expect(mockSendKeyToTerminal).toHaveBeenCalledWith(null, 'c', {
+      ctrl: true,
+    })
   })
 
   it('handleShiftKey sends shift key', async () => {
     render(<App />)
     await waitFor(() => screen.getByRole('button', { name: 'ShiftTab' }))
     fireEvent.click(screen.getByRole('button', { name: 'ShiftTab' }))
-    expect(mockSendKeyToTerminal).toHaveBeenCalledWith(null, 'Tab', { shift: true })
+    expect(mockSendKeyToTerminal).toHaveBeenCalledWith(null, 'Tab', {
+      shift: true,
+    })
   })
 
   it('handleCtrlShiftKey for v calls pasteToTerminal', async () => {
@@ -455,7 +616,9 @@ describe('App', () => {
     })
     await waitFor(() => {
       expect(screen.getByTestId('toast')).toBeInTheDocument()
-      expect(screen.getByText(/Clipboard permission denied/)).toBeInTheDocument()
+      expect(
+        screen.getByText(/Clipboard permission denied/),
+      ).toBeInTheDocument()
     })
   })
 
@@ -463,7 +626,10 @@ describe('App', () => {
     render(<App />)
     await waitFor(() => screen.getByRole('button', { name: 'CtrlShiftC' }))
     fireEvent.click(screen.getByRole('button', { name: 'CtrlShiftC' }))
-    expect(mockSendKeyToTerminal).toHaveBeenCalledWith(null, 'c', { ctrl: true, shift: true })
+    expect(mockSendKeyToTerminal).toHaveBeenCalledWith(null, 'c', {
+      ctrl: true,
+      shift: true,
+    })
   })
 
   it('handleScroll calls scrollTmux', async () => {
@@ -539,7 +705,9 @@ describe('App', () => {
     mockIsMobile.mockReturnValue(true)
     render(<App />)
     await waitFor(() => screen.getByText('Shell'))
-    const titleDiv = screen.getByText('Shell').closest('[class*="cursor-pointer"]')
+    const titleDiv = screen
+      .getByText('Shell')
+      .closest('[class*="cursor-pointer"]')
     if (titleDiv) {
       fireEvent.click(titleDiv)
       // The tooltip should appear (mobile only)
@@ -552,13 +720,17 @@ describe('App', () => {
     mockIsMobile.mockReturnValue(true)
     render(<App />)
     await waitFor(() => screen.getByText('Shell'))
-    const titleDiv = screen.getByText('Shell').closest('[class*="cursor-pointer"]')
+    const titleDiv = screen
+      .getByText('Shell')
+      .closest('[class*="cursor-pointer"]')
     if (titleDiv) {
       fireEvent.click(titleDiv)
       const backdrop = document.querySelector('.fixed.inset-0.z-40')
       if (backdrop) {
         fireEvent.click(backdrop)
-        expect(document.querySelector('.absolute.left-0.top-full')).not.toBeInTheDocument()
+        expect(
+          document.querySelector('.absolute.left-0.top-full'),
+        ).not.toBeInTheDocument()
       }
     }
   })
@@ -584,8 +756,15 @@ describe('App', () => {
     mockIsMobile.mockReturnValue(true)
     const mockSwitchSession = vi.fn()
     mockUseLocalSessions.mockReturnValue({
-      activeSession: { id: '1', name: 'Shell', icon: '💻', description: 'Terminal' },
-      sessions: [{ id: '1', name: 'Shell', icon: '💻', description: 'Terminal' }],
+      activeSession: {
+        id: '1',
+        name: 'Shell',
+        icon: '💻',
+        description: 'Terminal',
+      },
+      sessions: [
+        { id: '1', name: 'Shell', icon: '💻', description: 'Terminal' },
+      ],
       switchSession: mockSwitchSession,
       addSession: vi.fn(),
       removeSession: vi.fn(),
@@ -612,7 +791,9 @@ describe('App', () => {
   it('opens sidebar on hamburger click (mobile)', async () => {
     mockIsMobile.mockReturnValue(true)
     render(<App />)
-    await waitFor(() => screen.getByRole('button', { name: 'Open sessions menu' }))
+    await waitFor(() =>
+      screen.getByRole('button', { name: 'Open sessions menu' }),
+    )
     fireEvent.click(screen.getByRole('button', { name: 'Open sessions menu' }))
     // sidebar renders as mobile (data-testid="session-sidebar")
     expect(screen.getByTestId('session-sidebar')).toBeInTheDocument()
@@ -623,12 +804,16 @@ describe('App', () => {
     await waitFor(() => screen.getByTestId('connection-indicator'))
     // Retry triggers terminalRef.current?.reconnect()
     // Since TerminalFrame is mocked, ref is null, no crash expected
-    expect(() => fireEvent.click(screen.getByRole('button', { name: 'Retry' }))).not.toThrow()
+    expect(() =>
+      fireEvent.click(screen.getByRole('button', { name: 'Retry' })),
+    ).not.toThrow()
   })
 
   it('decrease/increase font size buttons work', async () => {
     render(<App />)
-    await waitFor(() => screen.getByRole('button', { name: 'Decrease font size' }))
+    await waitFor(() =>
+      screen.getByRole('button', { name: 'Decrease font size' }),
+    )
     fireEvent.click(screen.getByRole('button', { name: 'Decrease font size' }))
     fireEvent.click(screen.getByRole('button', { name: 'Increase font size' }))
     // No crash = pass; useFontSize is mocked so decrease/increase are vi.fn()
@@ -637,23 +822,34 @@ describe('App', () => {
   it('A- and A+ buttons rendered', async () => {
     render(<App />)
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Decrease font size' })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Increase font size' })).toBeInTheDocument()
+      expect(
+        screen.getByRole('button', { name: 'Decrease font size' }),
+      ).toBeInTheDocument()
+      expect(
+        screen.getByRole('button', { name: 'Increase font size' }),
+      ).toBeInTheDocument()
     })
   })
 
   it('fullscreen button visible on desktop', async () => {
     render(<App />)
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Enter fullscreen' })).toBeInTheDocument()
+      expect(
+        screen.getByRole('button', { name: 'Enter fullscreen' }),
+      ).toBeInTheDocument()
     })
   })
 
   it('fullscreen button shows Exit fullscreen when isFullscreen=true (branches 415-419)', async () => {
-    mockUseFullscreen.mockReturnValue({ isFullscreen: true, toggleFullscreen: vi.fn() })
+    mockUseFullscreen.mockReturnValue({
+      isFullscreen: true,
+      toggleFullscreen: vi.fn(),
+    })
     render(<App />)
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Exit fullscreen' })).toBeInTheDocument()
+      expect(
+        screen.getByRole('button', { name: 'Exit fullscreen' }),
+      ).toBeInTheDocument()
     })
   })
 
@@ -661,8 +857,13 @@ describe('App', () => {
     mockUseLocalSessions.mockReturnValue({
       activeSession: { id: '1', name: 'Shell', icon: '💻', description: '' },
       sessions: [{ id: '1', name: 'Shell', icon: '💻', description: '' }],
-      switchSession: vi.fn(), addSession: vi.fn(), removeSession: vi.fn(),
-      updateSession: vi.fn(), isReady: true, isServerReachable: true, refreshSessions: vi.fn(),
+      switchSession: vi.fn(),
+      addSession: vi.fn(),
+      removeSession: vi.fn(),
+      updateSession: vi.fn(),
+      isReady: true,
+      isServerReachable: true,
+      refreshSessions: vi.fn(),
     })
     render(<App />)
     await waitFor(() => screen.getByText('Shell'))
@@ -675,7 +876,9 @@ describe('App', () => {
     mockIsMobile.mockReturnValue(true)
     render(<App />)
     await waitFor(() => {
-      expect(screen.queryByRole('button', { name: 'Enter fullscreen' })).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: 'Enter fullscreen' }),
+      ).not.toBeInTheDocument()
     })
   })
 
@@ -684,7 +887,9 @@ describe('App', () => {
     render(<App />)
     await waitFor(() => screen.getByRole('button', { name: 'QACtrlKey' }))
     fireEvent.click(screen.getByRole('button', { name: 'QACtrlKey' }))
-    expect(mockSendKeyToTerminal).toHaveBeenCalledWith(null, 'c', { ctrl: true })
+    expect(mockSendKeyToTerminal).toHaveBeenCalledWith(null, 'c', {
+      ctrl: true,
+    })
   })
 
   it('QuickActionsMenu onSendKey without ctrl calls sendKeyToTerminal without opts', async () => {
@@ -707,8 +912,15 @@ describe('App', () => {
     mockIsMobile.mockReturnValue(true)
     const mockAddSession = vi.fn()
     mockUseLocalSessions.mockReturnValue({
-      activeSession: { id: '1', name: 'Shell', icon: '💻', description: 'Terminal' },
-      sessions: [{ id: '1', name: 'Shell', icon: '💻', description: 'Terminal' }],
+      activeSession: {
+        id: '1',
+        name: 'Shell',
+        icon: '💻',
+        description: 'Terminal',
+      },
+      sessions: [
+        { id: '1', name: 'Shell', icon: '💻', description: 'Terminal' },
+      ],
       switchSession: vi.fn(),
       addSession: mockAddSession,
       removeSession: vi.fn(),
@@ -747,8 +959,15 @@ describe('App', () => {
       updateSetting: vi.fn(),
     })
     mockUseLocalSessions.mockReturnValue({
-      activeSession: { id: '1', name: 'Shell', icon: '💻', description: 'Terminal' },
-      sessions: [{ id: '1', name: 'Shell', icon: '💻', description: 'Terminal' }],
+      activeSession: {
+        id: '1',
+        name: 'Shell',
+        icon: '💻',
+        description: 'Terminal',
+      },
+      sessions: [
+        { id: '1', name: 'Shell', icon: '💻', description: 'Terminal' },
+      ],
       switchSession: vi.fn(),
       addSession: mockAddSession,
       removeSession: vi.fn(),
@@ -770,7 +989,9 @@ describe('App', () => {
       const hiddenInput = document.querySelector('input.sr-only')
       expect(hiddenInput).toBeInTheDocument()
     })
-    const hiddenInput = document.querySelector('input.sr-only') as HTMLInputElement
+    const hiddenInput = document.querySelector(
+      'input.sr-only',
+    ) as HTMLInputElement
     fireEvent.blur(hiddenInput)
     // setCtrlActive(false) called — no crash
   })
@@ -781,15 +1002,21 @@ describe('App', () => {
       const hiddenInput = document.querySelector('input.sr-only')
       expect(hiddenInput).toBeInTheDocument()
     })
-    const hiddenInput = document.querySelector('input.sr-only') as HTMLInputElement
+    const hiddenInput = document.querySelector(
+      'input.sr-only',
+    ) as HTMLInputElement
     fireEvent.change(hiddenInput, { target: { value: 'a' } })
-    expect(mockSendKeyToTerminal).toHaveBeenCalledWith(null, 'a', { ctrl: true })
+    expect(mockSendKeyToTerminal).toHaveBeenCalledWith(null, 'a', {
+      ctrl: true,
+    })
   })
 
   it('handleCtrlInput ignores non-letter values', async () => {
     render(<App />)
     await waitFor(() => document.querySelector('input.sr-only'))
-    const hiddenInput = document.querySelector('input.sr-only') as HTMLInputElement
+    const hiddenInput = document.querySelector(
+      'input.sr-only',
+    ) as HTMLInputElement
     fireEvent.change(hiddenInput, { target: { value: '1' } })
     expect(mockSendKeyToTerminal).not.toHaveBeenCalled()
   })
@@ -797,7 +1024,9 @@ describe('App', () => {
   it('handleCtrlInput ignores values longer than 1 char', async () => {
     render(<App />)
     await waitFor(() => document.querySelector('input.sr-only'))
-    const hiddenInput = document.querySelector('input.sr-only') as HTMLInputElement
+    const hiddenInput = document.querySelector(
+      'input.sr-only',
+    ) as HTMLInputElement
     fireEvent.change(hiddenInput, { target: { value: 'ab' } })
     expect(mockSendKeyToTerminal).not.toHaveBeenCalled()
   })
@@ -805,14 +1034,20 @@ describe('App', () => {
   // Gesture handler branches
   it('gesture onSwipeLeft sends Ctrl+C', async () => {
     render(<App />)
-    await waitFor(() => expect(capturedGestureHandlers.onSwipeLeft).toBeDefined())
+    await waitFor(() =>
+      expect(capturedGestureHandlers.onSwipeLeft).toBeDefined(),
+    )
     capturedGestureHandlers.onSwipeLeft()
-    expect(mockSendKeyToTerminal).toHaveBeenCalledWith(null, 'c', { ctrl: true })
+    expect(mockSendKeyToTerminal).toHaveBeenCalledWith(null, 'c', {
+      ctrl: true,
+    })
   })
 
   it('gesture onSwipeRight sends Tab', async () => {
     render(<App />)
-    await waitFor(() => expect(capturedGestureHandlers.onSwipeRight).toBeDefined())
+    await waitFor(() =>
+      expect(capturedGestureHandlers.onSwipeRight).toBeDefined(),
+    )
     capturedGestureHandlers.onSwipeRight()
     expect(mockSendKeyToTerminal).toHaveBeenCalledWith(null, 'Tab')
   })
@@ -828,7 +1063,9 @@ describe('App', () => {
   it('gesture onSwipeDown in copy mode calls scrollTmux up', async () => {
     mockIsInCopyMode.mockReturnValue(true)
     render(<App />)
-    await waitFor(() => expect(capturedGestureHandlers.onSwipeDown).toBeDefined())
+    await waitFor(() =>
+      expect(capturedGestureHandlers.onSwipeDown).toBeDefined(),
+    )
     capturedGestureHandlers.onSwipeDown()
     expect(mockScrollTmux).toHaveBeenCalledWith(null, 'up')
   })
@@ -844,7 +1081,9 @@ describe('App', () => {
   it('gesture onSwipeDown when not in copy mode and no keyboard does nothing', async () => {
     mockIsInCopyMode.mockReturnValue(false)
     render(<App />)
-    await waitFor(() => expect(capturedGestureHandlers.onSwipeDown).toBeDefined())
+    await waitFor(() =>
+      expect(capturedGestureHandlers.onSwipeDown).toBeDefined(),
+    )
     capturedGestureHandlers.onSwipeDown()
     expect(mockScrollTmux).not.toHaveBeenCalled()
   })
@@ -852,25 +1091,37 @@ describe('App', () => {
   it('gesture onLongPress pastes and shows toast on error', async () => {
     mockPasteToTerminal.mockResolvedValue({ ok: false, reason: 'not-allowed' })
     render(<App />)
-    await waitFor(() => expect(capturedGestureHandlers.onLongPress).toBeDefined())
-    await act(async () => { await (capturedGestureHandlers.onLongPress as () => Promise<void>)() })
+    await waitFor(() =>
+      expect(capturedGestureHandlers.onLongPress).toBeDefined(),
+    )
+    await act(async () => {
+      await (capturedGestureHandlers.onLongPress as () => Promise<void>)()
+    })
     await waitFor(() => {
-      expect(screen.getByText(/Long press paste not supported/)).toBeInTheDocument()
+      expect(
+        screen.getByText(/Long press paste not supported/),
+      ).toBeInTheDocument()
     })
   })
 
   it('gesture onLongPress pastes without toast when ok', async () => {
     mockPasteToTerminal.mockResolvedValue({ ok: true })
     render(<App />)
-    await waitFor(() => expect(capturedGestureHandlers.onLongPress).toBeDefined())
-    await act(async () => { await (capturedGestureHandlers.onLongPress as () => Promise<void>)() })
+    await waitFor(() =>
+      expect(capturedGestureHandlers.onLongPress).toBeDefined(),
+    )
+    await act(async () => {
+      await (capturedGestureHandlers.onLongPress as () => Promise<void>)()
+    })
     expect(screen.queryByTestId('toast')).not.toBeInTheDocument()
   })
 
   it('context menu on terminal container is prevented', async () => {
     render(<App />)
     await waitFor(() => screen.getByTestId('terminal-frame'))
-    const container = document.querySelector('.overflow-y-auto.scroll-smooth') as HTMLElement
+    const container = document.querySelector(
+      '.overflow-y-auto.scroll-smooth',
+    ) as HTMLElement
     const prevented = fireEvent.contextMenu(container)
     expect(prevented).toBe(false)
   })
@@ -885,7 +1136,10 @@ describe('App', () => {
 
   it('toggleKeyboard calls blurTerminal when keyboard IS visible (line 173)', async () => {
     // keyboardVisible=true → toggleKeyboard → blurTerminal
-    mockUseKeyboardVisible.mockReturnValue({ isVisible: true, keyboardHeight: 0 })
+    mockUseKeyboardVisible.mockReturnValue({
+      isVisible: true,
+      keyboardHeight: 0,
+    })
     render(<App />)
     await waitFor(() => screen.getByRole('button', { name: 'ToggleKbd' }))
     fireEvent.click(screen.getByRole('button', { name: 'ToggleKbd' }))
@@ -894,9 +1148,14 @@ describe('App', () => {
 
   it('gesture onSwipeDown scrolls terminalContainer when keyboard is visible (line 153)', async () => {
     mockIsInCopyMode.mockReturnValue(false)
-    mockUseKeyboardVisible.mockReturnValue({ isVisible: true, keyboardHeight: 300 })
+    mockUseKeyboardVisible.mockReturnValue({
+      isVisible: true,
+      keyboardHeight: 300,
+    })
     render(<App />)
-    await waitFor(() => expect(capturedGestureHandlers.onSwipeDown).toBeDefined())
+    await waitFor(() =>
+      expect(capturedGestureHandlers.onSwipeDown).toBeDefined(),
+    )
     // terminalContainerRef.current.scrollTop -= 150
     // Since jsdom doesn't render layout, we just verify no crash
     expect(() => capturedGestureHandlers.onSwipeDown()).not.toThrow()
@@ -904,7 +1163,10 @@ describe('App', () => {
 
   it('gesture onSwipeUp scrolls terminalContainer when keyboard is visible (line 144)', async () => {
     mockIsInCopyMode.mockReturnValue(false)
-    mockUseKeyboardVisible.mockReturnValue({ isVisible: true, keyboardHeight: 300 })
+    mockUseKeyboardVisible.mockReturnValue({
+      isVisible: true,
+      keyboardHeight: 300,
+    })
     render(<App />)
     await waitFor(() => expect(capturedGestureHandlers.onSwipeUp).toBeDefined())
     // terminalContainerRef.current.scrollTop += 150
@@ -934,7 +1196,9 @@ describe('App', () => {
     // So when KeyboardToolbar mock calls props.onCtrlChange(false), ctrlActive becomes false
     // To make ctrlActive=true, we need the mock to call onCtrlChange(true)
     // Let's just verify the hidden input effect: fire a change with letter to trigger setCtrlActive(false) path
-    const hiddenInput = document.querySelector('input.sr-only') as HTMLInputElement
+    const hiddenInput = document.querySelector(
+      'input.sr-only',
+    ) as HTMLInputElement
     // First make ctrlActive true by dispatching a custom event — we can't easily do this
     // Instead, verify blurTerminal is called when ctrlActive changes via handleCtrlInput path
     fireEvent.change(hiddenInput, { target: { value: 'a' } })
@@ -954,7 +1218,7 @@ describe('App', () => {
         hasSeenGestureHints: true,
       },
       updateSetting: vi.fn(),
-    })
+    } as any)
     render(<App />)
     await waitFor(() => screen.getByRole('button', { name: 'SendText' }))
     fireEvent.click(screen.getByRole('button', { name: 'SendText' }))
@@ -970,7 +1234,11 @@ describe('App', () => {
   })
 
   it('settings modal onCheckForUpdate returns update message', async () => {
-    mockCheckForUpdate.mockResolvedValue({ hasUpdate: true, latestVersion: '3.0.0', releaseUrl: null })
+    mockCheckForUpdate.mockResolvedValue({
+      hasUpdate: true,
+      latestVersion: '3.0.0',
+      releaseUrl: null,
+    })
     render(<App />)
     await waitFor(() => screen.getByRole('button', { name: 'Settings' }))
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
@@ -982,7 +1250,11 @@ describe('App', () => {
   })
 
   it('settings modal onCheckForUpdate returns latest version message', async () => {
-    mockCheckForUpdate.mockResolvedValue({ hasUpdate: false, latestVersion: '3.0.0', releaseUrl: null })
+    mockCheckForUpdate.mockResolvedValue({
+      hasUpdate: false,
+      latestVersion: '3.0.0',
+      releaseUrl: null,
+    })
     render(<App />)
     await waitFor(() => screen.getByRole('button', { name: 'Settings' }))
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
@@ -994,7 +1266,11 @@ describe('App', () => {
   })
 
   it('settings modal onCheckForUpdate returns could not check when no latestVersion', async () => {
-    mockCheckForUpdate.mockResolvedValue({ hasUpdate: false, latestVersion: null, releaseUrl: null })
+    mockCheckForUpdate.mockResolvedValue({
+      hasUpdate: false,
+      latestVersion: null,
+      releaseUrl: null,
+    })
     render(<App />)
     await waitFor(() => screen.getByRole('button', { name: 'Settings' }))
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
@@ -1011,7 +1287,11 @@ describe('App', () => {
 describe('shouldShowPasteError (via handlePaste)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockCheckForUpdate.mockResolvedValue({ hasUpdate: false, latestVersion: null, releaseUrl: null })
+    mockCheckForUpdate.mockResolvedValue({
+      hasUpdate: false,
+      latestVersion: null,
+      releaseUrl: null,
+    })
     mockIsMobile.mockReturnValue(false)
     mockUseSettings.mockReturnValue({
       settings: {
@@ -1026,8 +1306,15 @@ describe('shouldShowPasteError (via handlePaste)', () => {
       updateSetting: vi.fn(),
     })
     mockUseLocalSessions.mockReturnValue({
-      activeSession: { id: '1', name: 'Shell', icon: '💻', description: 'Terminal' },
-      sessions: [{ id: '1', name: 'Shell', icon: '💻', description: 'Terminal' }],
+      activeSession: {
+        id: '1',
+        name: 'Shell',
+        icon: '💻',
+        description: 'Terminal',
+      },
+      sessions: [
+        { id: '1', name: 'Shell', icon: '💻', description: 'Terminal' },
+      ],
       switchSession: vi.fn(),
       addSession: vi.fn(),
       removeSession: vi.fn(),
@@ -1096,7 +1383,11 @@ describe('shouldShowPasteError (via handlePaste)', () => {
 describe('getClipboardErrorMsg long-press variant (via CtrlShiftV toast)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockCheckForUpdate.mockResolvedValue({ hasUpdate: false, latestVersion: null, releaseUrl: null })
+    mockCheckForUpdate.mockResolvedValue({
+      hasUpdate: false,
+      latestVersion: null,
+      releaseUrl: null,
+    })
     mockIsMobile.mockReturnValue(false)
     mockUseSettings.mockReturnValue({
       settings: {
@@ -1111,8 +1402,15 @@ describe('getClipboardErrorMsg long-press variant (via CtrlShiftV toast)', () =>
       updateSetting: vi.fn(),
     })
     mockUseLocalSessions.mockReturnValue({
-      activeSession: { id: '1', name: 'Shell', icon: '💻', description: 'Terminal' },
-      sessions: [{ id: '1', name: 'Shell', icon: '💻', description: 'Terminal' }],
+      activeSession: {
+        id: '1',
+        name: 'Shell',
+        icon: '💻',
+        description: 'Terminal',
+      },
+      sessions: [
+        { id: '1', name: 'Shell', icon: '💻', description: 'Terminal' },
+      ],
       switchSession: vi.fn(),
       addSession: vi.fn(),
       removeSession: vi.fn(),
@@ -1131,7 +1429,11 @@ describe('getClipboardErrorMsg long-press variant (via CtrlShiftV toast)', () =>
       fireEvent.click(screen.getByRole('button', { name: 'CtrlShiftV' }))
     })
     await waitFor(() => {
-      expect(screen.getByText('Clipboard permission denied. Check browser settings.')).toBeInTheDocument()
+      expect(
+        screen.getByText(
+          'Clipboard permission denied. Check browser settings.',
+        ),
+      ).toBeInTheDocument()
     })
   })
 })
@@ -1139,11 +1441,22 @@ describe('getClipboardErrorMsg long-press variant (via CtrlShiftV toast)', () =>
 describe('App with tmux paste source', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockCheckForUpdate.mockResolvedValue({ hasUpdate: false, latestVersion: null, releaseUrl: null })
+    mockCheckForUpdate.mockResolvedValue({
+      hasUpdate: false,
+      latestVersion: null,
+      releaseUrl: null,
+    })
     mockIsMobile.mockReturnValue(false)
     mockUseLocalSessions.mockReturnValue({
-      activeSession: { id: '1', name: 'Shell', icon: '💻', description: 'Terminal' },
-      sessions: [{ id: '1', name: 'Shell', icon: '💻', description: 'Terminal' }],
+      activeSession: {
+        id: '1',
+        name: 'Shell',
+        icon: '💻',
+        description: 'Terminal',
+      },
+      sessions: [
+        { id: '1', name: 'Shell', icon: '💻', description: 'Terminal' },
+      ],
       switchSession: vi.fn(),
       addSession: vi.fn(),
       removeSession: vi.fn(),
@@ -1166,7 +1479,7 @@ describe('App with tmux paste source', () => {
         hasSeenGestureHints: true,
       },
       updateSetting: vi.fn(),
-    })
+    } as any)
 
     render(<App />)
     await waitFor(() => screen.getByRole('button', { name: 'Paste' }))
@@ -1180,7 +1493,11 @@ describe('App with tmux paste source', () => {
 describe('App server reachability effect', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockCheckForUpdate.mockResolvedValue({ hasUpdate: false, latestVersion: null, releaseUrl: null })
+    mockCheckForUpdate.mockResolvedValue({
+      hasUpdate: false,
+      latestVersion: null,
+      releaseUrl: null,
+    })
     mockIsMobile.mockReturnValue(false)
     mockUseSettings.mockReturnValue({
       settings: {
@@ -1198,8 +1515,15 @@ describe('App server reachability effect', () => {
 
   it('sets connection state to disconnected when server not reachable', async () => {
     mockUseLocalSessions.mockReturnValueOnce({
-      activeSession: { id: '1', name: 'Shell', icon: '💻', description: 'Terminal' },
-      sessions: [{ id: '1', name: 'Shell', icon: '💻', description: 'Terminal' }],
+      activeSession: {
+        id: '1',
+        name: 'Shell',
+        icon: '💻',
+        description: 'Terminal',
+      },
+      sessions: [
+        { id: '1', name: 'Shell', icon: '💻', description: 'Terminal' },
+      ],
       switchSession: vi.fn(),
       addSession: vi.fn(),
       removeSession: vi.fn(),
@@ -1220,11 +1544,22 @@ describe('App server reachability effect', () => {
 describe('App gesture hints (mobile, first visit)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockCheckForUpdate.mockResolvedValue({ hasUpdate: false, latestVersion: null, releaseUrl: null })
+    mockCheckForUpdate.mockResolvedValue({
+      hasUpdate: false,
+      latestVersion: null,
+      releaseUrl: null,
+    })
     mockIsMobile.mockReturnValue(true)
     mockUseLocalSessions.mockReturnValue({
-      activeSession: { id: '1', name: 'Shell', icon: '💻', description: 'Terminal' },
-      sessions: [{ id: '1', name: 'Shell', icon: '💻', description: 'Terminal' }],
+      activeSession: {
+        id: '1',
+        name: 'Shell',
+        icon: '💻',
+        description: 'Terminal',
+      },
+      sessions: [
+        { id: '1', name: 'Shell', icon: '💻', description: 'Terminal' },
+      ],
       switchSession: vi.fn(),
       addSession: vi.fn(),
       removeSession: vi.fn(),

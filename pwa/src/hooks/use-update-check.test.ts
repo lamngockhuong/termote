@@ -25,14 +25,23 @@ describe('useUpdateCheck', () => {
 
   it('fetches from network when cache is empty (no force needed)', async () => {
     // Empty localStorage → getCachedResult returns null → fetches fresh
-    vi.mocked(fetch).mockReturnValue(makeFetchResponse({ tag_name: 'v1.0.0', html_url: 'https://github.com' }))
+    vi.mocked(fetch).mockReturnValue(
+      makeFetchResponse({ tag_name: 'v1.0.0', html_url: 'https://github.com' }),
+    )
     const { result } = renderHook(() => useUpdateCheck())
-    await act(async () => { await result.current.checkForUpdate() })
+    await act(async () => {
+      await result.current.checkForUpdate()
+    })
     expect(fetch).toHaveBeenCalledTimes(1)
   })
 
   it('sets checking true while fetching, false after', async () => {
-    vi.mocked(fetch).mockReturnValue(makeFetchResponse({ tag_name: 'v999.0.0', html_url: 'https://example.com' }))
+    vi.mocked(fetch).mockReturnValue(
+      makeFetchResponse({
+        tag_name: 'v999.0.0',
+        html_url: 'https://example.com',
+      }),
+    )
     const { result } = renderHook(() => useUpdateCheck())
     let promise: Promise<unknown>
     act(() => {
@@ -40,12 +49,19 @@ describe('useUpdateCheck', () => {
     })
     // checking becomes true during fetch
     expect(result.current.checking).toBe(true)
-    await act(async () => { await promise })
+    await act(async () => {
+      await promise
+    })
     expect(result.current.checking).toBe(false)
   })
 
   it('returns hasUpdate=true when latest version is newer', async () => {
-    vi.mocked(fetch).mockReturnValue(makeFetchResponse({ tag_name: 'v999.0.0', html_url: 'https://github.com/release' }))
+    vi.mocked(fetch).mockReturnValue(
+      makeFetchResponse({
+        tag_name: 'v999.0.0',
+        html_url: 'https://github.com/release',
+      }),
+    )
     const { result } = renderHook(() => useUpdateCheck())
     let updateResult: Awaited<ReturnType<typeof result.current.checkForUpdate>>
     await act(async () => {
@@ -57,7 +73,12 @@ describe('useUpdateCheck', () => {
   })
 
   it('returns hasUpdate=false when versions are equal', async () => {
-    vi.mocked(fetch).mockReturnValue(makeFetchResponse({ tag_name: 'v0.0.0', html_url: 'https://github.com/release' }))
+    vi.mocked(fetch).mockReturnValue(
+      makeFetchResponse({
+        tag_name: 'v0.0.0',
+        html_url: 'https://github.com/release',
+      }),
+    )
     const { result } = renderHook(() => useUpdateCheck())
     let updateResult: Awaited<ReturnType<typeof result.current.checkForUpdate>>
     await act(async () => {
@@ -67,7 +88,12 @@ describe('useUpdateCheck', () => {
   })
 
   it('returns hasUpdate=false when on newer version than latest', async () => {
-    vi.mocked(fetch).mockReturnValue(makeFetchResponse({ tag_name: 'v0.0.0', html_url: 'https://github.com/release' }))
+    vi.mocked(fetch).mockReturnValue(
+      makeFetchResponse({
+        tag_name: 'v0.0.0',
+        html_url: 'https://github.com/release',
+      }),
+    )
     const { result } = renderHook(() => useUpdateCheck())
     let updateResult: Awaited<ReturnType<typeof result.current.checkForUpdate>>
     await act(async () => {
@@ -77,19 +103,37 @@ describe('useUpdateCheck', () => {
   })
 
   it('caches result and uses cache on second call', async () => {
-    vi.mocked(fetch).mockReturnValue(makeFetchResponse({ tag_name: 'v999.0.0', html_url: 'https://github.com/release' }))
+    vi.mocked(fetch).mockReturnValue(
+      makeFetchResponse({
+        tag_name: 'v999.0.0',
+        html_url: 'https://github.com/release',
+      }),
+    )
     const { result } = renderHook(() => useUpdateCheck())
-    await act(async () => { await result.current.checkForUpdate(true) })
+    await act(async () => {
+      await result.current.checkForUpdate(true)
+    })
     // Second call — no force, should use cache
-    await act(async () => { await result.current.checkForUpdate() })
+    await act(async () => {
+      await result.current.checkForUpdate()
+    })
     expect(fetch).toHaveBeenCalledTimes(1)
   })
 
   it('bypasses cache when force=true', async () => {
-    vi.mocked(fetch).mockReturnValue(makeFetchResponse({ tag_name: 'v999.0.0', html_url: 'https://github.com/release' }))
+    vi.mocked(fetch).mockReturnValue(
+      makeFetchResponse({
+        tag_name: 'v999.0.0',
+        html_url: 'https://github.com/release',
+      }),
+    )
     const { result } = renderHook(() => useUpdateCheck())
-    await act(async () => { await result.current.checkForUpdate(true) })
-    await act(async () => { await result.current.checkForUpdate(true) })
+    await act(async () => {
+      await result.current.checkForUpdate(true)
+    })
+    await act(async () => {
+      await result.current.checkForUpdate(true)
+    })
     expect(fetch).toHaveBeenCalledTimes(2)
   })
 
@@ -119,15 +163,24 @@ describe('useUpdateCheck', () => {
       checkedAt: Date.now() - 2 * 60 * 60 * 1000, // 2 hours ago
     }
     localStorage.setItem(CACHE_KEY, JSON.stringify(expired))
-    vi.mocked(fetch).mockReturnValue(makeFetchResponse({ tag_name: 'v999.0.0', html_url: 'https://new.url' }))
+    vi.mocked(fetch).mockReturnValue(
+      makeFetchResponse({ tag_name: 'v999.0.0', html_url: 'https://new.url' }),
+    )
     const { result } = renderHook(() => useUpdateCheck())
-    await act(async () => { await result.current.checkForUpdate() })
+    await act(async () => {
+      await result.current.checkForUpdate()
+    })
     expect(fetch).toHaveBeenCalledTimes(1)
   })
 
   it('handles corrupt cache gracefully', async () => {
     localStorage.setItem(CACHE_KEY, 'not-json')
-    vi.mocked(fetch).mockReturnValue(makeFetchResponse({ tag_name: 'v999.0.0', html_url: 'https://github.com' }))
+    vi.mocked(fetch).mockReturnValue(
+      makeFetchResponse({
+        tag_name: 'v999.0.0',
+        html_url: 'https://github.com',
+      }),
+    )
     const { result } = renderHook(() => useUpdateCheck())
     let updateResult: Awaited<ReturnType<typeof result.current.checkForUpdate>>
     await act(async () => {
@@ -163,12 +216,16 @@ describe('useUpdateCheck', () => {
   it('checking returns to false even after error', async () => {
     vi.mocked(fetch).mockRejectedValue(new Error('fail'))
     const { result } = renderHook(() => useUpdateCheck())
-    await act(async () => { await result.current.checkForUpdate(true) })
+    await act(async () => {
+      await result.current.checkForUpdate(true)
+    })
     expect(result.current.checking).toBe(false)
   })
 
   it('strips leading v from latestVersion', async () => {
-    vi.mocked(fetch).mockReturnValue(makeFetchResponse({ tag_name: 'v2.3.4', html_url: 'https://github.com' }))
+    vi.mocked(fetch).mockReturnValue(
+      makeFetchResponse({ tag_name: 'v2.3.4', html_url: 'https://github.com' }),
+    )
     const { result } = renderHook(() => useUpdateCheck())
     let updateResult: Awaited<ReturnType<typeof result.current.checkForUpdate>>
     await act(async () => {

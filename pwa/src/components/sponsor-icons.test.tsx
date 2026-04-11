@@ -1,6 +1,6 @@
 import { render } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { MomoIcon, GithubSponsorsIcon, BuyMeACoffeeIcon } from './sponsor-icons'
+import { BuyMeACoffeeIcon, GithubSponsorsIcon, MomoIcon } from './sponsor-icons'
 
 describe('MomoIcon', () => {
   it('renders svg with default size', () => {
@@ -42,7 +42,9 @@ describe('GithubSponsorsIcon', () => {
   })
 
   it('applies className prop', () => {
-    const { container } = render(<GithubSponsorsIcon className="text-pink-500" />)
+    const { container } = render(
+      <GithubSponsorsIcon className="text-pink-500" />,
+    )
     const svg = container.querySelector('svg')
     expect(svg).toHaveClass('text-pink-500')
   })
@@ -65,7 +67,9 @@ describe('BuyMeACoffeeIcon', () => {
   })
 
   it('applies className prop', () => {
-    const { container } = render(<BuyMeACoffeeIcon className="text-yellow-400" />)
+    const { container } = render(
+      <BuyMeACoffeeIcon className="text-yellow-400" />,
+    )
     const svg = container.querySelector('svg')
     expect(svg).toHaveClass('text-yellow-400')
   })

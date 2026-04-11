@@ -1,7 +1,7 @@
-import { render, screen, fireEvent } from '@testing-library/react'
-import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { AboutModal } from './about-modal'
+import { fireEvent, render, screen } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { APP_INFO } from '../utils/app-info'
+import { AboutModal } from './about-modal'
 
 describe('AboutModal', () => {
   beforeEach(() => {
@@ -115,7 +115,10 @@ describe('AboutModal', () => {
     const removeEventListenerSpy = vi.spyOn(window, 'removeEventListener')
     const { unmount } = render(<AboutModal isOpen={true} onClose={onClose} />)
     unmount()
-    expect(removeEventListenerSpy).toHaveBeenCalledWith('keydown', expect.any(Function))
+    expect(removeEventListenerSpy).toHaveBeenCalledWith(
+      'keydown',
+      expect.any(Function),
+    )
     removeEventListenerSpy.mockRestore()
   })
 })

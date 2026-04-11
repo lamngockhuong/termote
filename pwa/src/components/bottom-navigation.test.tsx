@@ -1,7 +1,7 @@
-import { render, screen, fireEvent } from '@testing-library/react'
-import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { BottomNavigation } from './bottom-navigation'
+import { fireEvent, render, screen } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Session } from '../types/session'
+import { BottomNavigation } from './bottom-navigation'
 
 vi.mock('../hooks/use-haptic', () => ({
   useHaptic: () => ({ trigger: vi.fn(), isSupported: false }),
@@ -39,7 +39,10 @@ describe('BottomNavigation', () => {
 
   it('marks active session with aria-current', () => {
     render(<BottomNavigation {...defaultProps} />)
-    expect(screen.getByLabelText('Shell')).toHaveAttribute('aria-current', 'true')
+    expect(screen.getByLabelText('Shell')).toHaveAttribute(
+      'aria-current',
+      'true',
+    )
     expect(screen.getByLabelText('Code')).not.toHaveAttribute('aria-current')
   })
 
@@ -68,7 +71,13 @@ describe('BottomNavigation', () => {
       icon: '💻',
       description: '',
     }))
-    render(<BottomNavigation {...defaultProps} sessions={manySessions} activeId="s0" />)
+    render(
+      <BottomNavigation
+        {...defaultProps}
+        sessions={manySessions}
+        activeId="s0"
+      />,
+    )
     // Only 5 shown
     for (let i = 0; i < 5; i++) {
       expect(screen.getByLabelText(`Session ${i}`)).toBeInTheDocument()

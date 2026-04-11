@@ -1,24 +1,15 @@
-import { render, screen, fireEvent, act } from '@testing-library/react'
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
+import { fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { QuickActionsMenu } from './quick-actions-menu'
 
 vi.mock('../hooks/use-haptic', () => ({
   useHaptic: () => ({ trigger: vi.fn(), isSupported: false }),
 }))
 
-// Helper to create a touch event
-function createTouchEvent(type: string, x: number, y: number) {
-  return new TouchEvent(type, {
-    bubbles: true,
-    cancelable: true,
-    touches: [new Touch({ identifier: 1, target: document.body, clientX: x, clientY: y })],
-    changedTouches: [new Touch({ identifier: 1, target: document.body, clientX: x, clientY: y })],
-  })
-}
-
 describe('QuickActionsMenu', () => {
-  let onSendKey: ReturnType<typeof vi.fn>
-  let onSendText: ReturnType<typeof vi.fn>
+  let onSendKey: (...args: any[]) => any
+
+  let onSendText: (...args: any[]) => any
 
   beforeEach(() => {
     onSendKey = vi.fn()
@@ -36,7 +27,9 @@ describe('QuickActionsMenu', () => {
 
   it('renders FAB button with Quick actions label initially closed', () => {
     render(<QuickActionsMenu onSendKey={onSendKey} onSendText={onSendText} />)
-    expect(screen.getByRole('button', { name: 'Quick actions' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Quick actions' }),
+    ).toBeInTheDocument()
   })
 
   it('opens menu when FAB is clicked', () => {
@@ -44,7 +37,9 @@ describe('QuickActionsMenu', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Quick actions' }))
     expect(screen.getByRole('button', { name: 'Clear' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Clear line' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Clear line' }),
+    ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Exit' })).toBeInTheDocument()
   })
 
@@ -52,7 +47,9 @@ describe('QuickActionsMenu', () => {
     render(<QuickActionsMenu onSendKey={onSendKey} onSendText={onSendText} />)
     fireEvent.click(screen.getByRole('button', { name: 'Quick actions' }))
     fireEvent.click(screen.getByRole('button', { name: 'Close menu' }))
-    expect(screen.queryByRole('button', { name: 'Clear' })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Clear' }),
+    ).not.toBeInTheDocument()
   })
 
   it('closes menu on outside click', () => {
@@ -61,14 +58,18 @@ describe('QuickActionsMenu', () => {
     expect(screen.getByRole('button', { name: 'Clear' })).toBeInTheDocument()
     // Click outside
     fireEvent.mouseDown(document.body)
-    expect(screen.queryByRole('button', { name: 'Clear' })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Clear' }),
+    ).not.toBeInTheDocument()
   })
 
   it('does not close on outside click when menu is closed', () => {
     render(<QuickActionsMenu onSendKey={onSendKey} onSendText={onSendText} />)
     // menu is closed — mousedown outside should not throw
     fireEvent.mouseDown(document.body)
-    expect(screen.getByRole('button', { name: 'Quick actions' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Quick actions' }),
+    ).toBeInTheDocument()
   })
 
   it('does not close when mousedown is inside the menu container', () => {
@@ -78,7 +79,9 @@ describe('QuickActionsMenu', () => {
     const fab = screen.getByRole('button', { name: 'Close menu' })
     fireEvent.mouseDown(fab)
     // Menu should still be open (contains() returns true for inside click)
-    expect(screen.getByRole('button', { name: 'Close menu' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Close menu' }),
+    ).toBeInTheDocument()
   })
 
   it('Clear action sends text "clear" and Enter key, then closes menu', () => {
@@ -87,7 +90,9 @@ describe('QuickActionsMenu', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
     expect(onSendText).toHaveBeenCalledWith('clear')
     expect(onSendKey).toHaveBeenCalledWith('Enter')
-    expect(screen.queryByRole('button', { name: 'Clear' })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Clear' }),
+    ).not.toBeInTheDocument()
   })
 
   it('Cancel action sends Ctrl+C key', () => {
@@ -113,15 +118,22 @@ describe('QuickActionsMenu', () => {
   })
 
   it('loads saved position from localStorage', () => {
-    localStorage.setItem('termote-fab-position', JSON.stringify({ right: 50, bottom: 200 }))
-    const { container } = render(<QuickActionsMenu onSendKey={onSendKey} onSendText={onSendText} />)
+    localStorage.setItem(
+      'termote-fab-position',
+      JSON.stringify({ right: 50, bottom: 200 }),
+    )
+    const { container } = render(
+      <QuickActionsMenu onSendKey={onSendKey} onSendText={onSendText} />,
+    )
     const fab = container.querySelector('.fixed.z-30') as HTMLElement
     expect(fab.style.right).toBe('50px')
     expect(fab.style.bottom).toBe('200px')
   })
 
   it('uses default position when localStorage is empty', () => {
-    const { container } = render(<QuickActionsMenu onSendKey={onSendKey} onSendText={onSendText} />)
+    const { container } = render(
+      <QuickActionsMenu onSendKey={onSendKey} onSendText={onSendText} />,
+    )
     const fab = container.querySelector('.fixed.z-30') as HTMLElement
     expect(fab.style.right).toBe('16px')
     expect(fab.style.bottom).toBe('112px')
@@ -129,7 +141,9 @@ describe('QuickActionsMenu', () => {
 
   it('handles invalid JSON in localStorage gracefully', () => {
     localStorage.setItem('termote-fab-position', 'invalid-json')
-    const { container } = render(<QuickActionsMenu onSendKey={onSendKey} onSendText={onSendText} />)
+    const { container } = render(
+      <QuickActionsMenu onSendKey={onSendKey} onSendText={onSendText} />,
+    )
     const fab = container.querySelector('.fixed.z-30') as HTMLElement
     expect(fab.style.right).toBe('16px')
   })
@@ -157,7 +171,9 @@ describe('QuickActionsMenu', () => {
     })
 
     // Menu should NOT open because hasMoved = true
-    expect(screen.queryByRole('button', { name: 'Clear' })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Clear' }),
+    ).not.toBeInTheDocument()
     // Position saved to localStorage
     expect(localStorage.getItem('termote-fab-position')).toBeTruthy()
   })
@@ -170,7 +186,9 @@ describe('QuickActionsMenu', () => {
       changedTouches: [{ clientX: 0, clientY: 0 }],
     })
     // No crash, menu stays closed
-    expect(screen.queryByRole('button', { name: 'Clear' })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Clear' }),
+    ).not.toBeInTheDocument()
   })
 
   it('handleTouchMove does nothing if not dragging', () => {
@@ -190,18 +208,28 @@ describe('QuickActionsMenu', () => {
 
     fireEvent.touchStart(fab, { touches: [{ clientX: 100, clientY: 100 }] })
     fireEvent.touchMove(fab, { touches: [{ clientX: 104, clientY: 102 }] }) // < 8px in both
-    fireEvent.touchEnd(fab, { changedTouches: [{ clientX: 104, clientY: 102 }] })
+    fireEvent.touchEnd(fab, {
+      changedTouches: [{ clientX: 104, clientY: 102 }],
+    })
 
     // hasMoved stays false, so toggleMenu runs
     // But since isDragging was not set, tap branch runs
     fireEvent.click(fab)
-    expect(screen.getByRole('button', { name: 'Close menu' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Close menu' }),
+    ).toBeInTheDocument()
   })
 
   it('popup menu positions based on FAB right position (left-0 when right > half)', () => {
     // Mock window.innerWidth so right > innerWidth/2
-    Object.defineProperty(window, 'innerWidth', { value: 400, configurable: true })
-    localStorage.setItem('termote-fab-position', JSON.stringify({ right: 250, bottom: 50 }))
+    Object.defineProperty(window, 'innerWidth', {
+      value: 400,
+      configurable: true,
+    })
+    localStorage.setItem(
+      'termote-fab-position',
+      JSON.stringify({ right: 250, bottom: 50 }),
+    )
     render(<QuickActionsMenu onSendKey={onSendKey} onSendText={onSendText} />)
     fireEvent.click(screen.getByRole('button', { name: 'Quick actions' }))
     const popup = document.querySelector('.absolute.flex.flex-col')
@@ -209,8 +237,14 @@ describe('QuickActionsMenu', () => {
   })
 
   it('popup menu positions top-14 when bottom > half of screen', () => {
-    Object.defineProperty(window, 'innerHeight', { value: 400, configurable: true })
-    localStorage.setItem('termote-fab-position', JSON.stringify({ right: 16, bottom: 250 }))
+    Object.defineProperty(window, 'innerHeight', {
+      value: 400,
+      configurable: true,
+    })
+    localStorage.setItem(
+      'termote-fab-position',
+      JSON.stringify({ right: 16, bottom: 250 }),
+    )
     render(<QuickActionsMenu onSendKey={onSendKey} onSendText={onSendText} />)
     fireEvent.click(screen.getByRole('button', { name: 'Quick actions' }))
     const popup = document.querySelector('.absolute.flex.flex-col')
@@ -218,9 +252,18 @@ describe('QuickActionsMenu', () => {
   })
 
   it('popup menu positions right-0 and bottom-14 when position is small', () => {
-    Object.defineProperty(window, 'innerWidth', { value: 800, configurable: true })
-    Object.defineProperty(window, 'innerHeight', { value: 800, configurable: true })
-    localStorage.setItem('termote-fab-position', JSON.stringify({ right: 16, bottom: 112 }))
+    Object.defineProperty(window, 'innerWidth', {
+      value: 800,
+      configurable: true,
+    })
+    Object.defineProperty(window, 'innerHeight', {
+      value: 800,
+      configurable: true,
+    })
+    localStorage.setItem(
+      'termote-fab-position',
+      JSON.stringify({ right: 16, bottom: 112 }),
+    )
     render(<QuickActionsMenu onSendKey={onSendKey} onSendText={onSendText} />)
     fireEvent.click(screen.getByRole('button', { name: 'Quick actions' }))
     const popup = document.querySelector('.absolute.flex.flex-col')
@@ -251,7 +294,9 @@ describe('QuickActionsMenu', () => {
 
     fireEvent.touchStart(fab, { touches: [{ clientX: 100, clientY: 100 }] })
     fireEvent.touchMove(fab, { touches: [{ clientX: 200, clientY: 100 }] })
-    fireEvent.touchEnd(fab, { changedTouches: [{ clientX: 200, clientY: 100 }] })
+    fireEvent.touchEnd(fab, {
+      changedTouches: [{ clientX: 200, clientY: 100 }],
+    })
 
     // No crash = test passes
     expect(fab).toBeInTheDocument()
@@ -266,11 +311,15 @@ describe('QuickActionsMenu', () => {
     // Drag > 8px to set hasMoved=true
     fireEvent.touchStart(fab, { touches: [{ clientX: 100, clientY: 100 }] })
     fireEvent.touchMove(fab, { touches: [{ clientX: 200, clientY: 100 }] })
-    fireEvent.touchEnd(fab, { changedTouches: [{ clientX: 200, clientY: 100 }] })
+    fireEvent.touchEnd(fab, {
+      changedTouches: [{ clientX: 200, clientY: 100 }],
+    })
 
     // hasMoved.current is still true (rAF not called)
     // toggleMenu is triggered by click → returns early
     fireEvent.click(fab)
-    expect(screen.queryByRole('button', { name: 'Clear' })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Clear' }),
+    ).not.toBeInTheDocument()
   })
 })

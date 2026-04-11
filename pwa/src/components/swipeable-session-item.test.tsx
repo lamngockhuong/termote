@@ -1,7 +1,7 @@
-import { render, screen, fireEvent, act } from '@testing-library/react'
-import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { SwipeableSessionItem } from './swipeable-session-item'
+import { act, fireEvent, render, screen } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Session } from '../types/session'
+import { SwipeableSessionItem } from './swipeable-session-item'
 
 const SESSION: Session = {
   id: '1',
@@ -33,9 +33,11 @@ function touchEnd(el: Element, x: number, y: number) {
 }
 
 describe('SwipeableSessionItem', () => {
-  let onSelect: ReturnType<typeof vi.fn>
-  let onEdit: ReturnType<typeof vi.fn>
-  let onRemove: ReturnType<typeof vi.fn>
+  let onSelect: (...args: any[]) => any
+
+  let onEdit: (...args: any[]) => any
+
+  let onRemove: (...args: any[]) => any
 
   beforeEach(() => {
     onSelect = vi.fn()
@@ -44,7 +46,9 @@ describe('SwipeableSessionItem', () => {
     vi.useRealTimers()
   })
 
-  function renderItem(props: Partial<Parameters<typeof SwipeableSessionItem>[0]> = {}) {
+  function renderItem(
+    props: Partial<Parameters<typeof SwipeableSessionItem>[0]> = {},
+  ) {
     return render(
       <SwipeableSessionItem
         session={SESSION}
@@ -137,11 +141,13 @@ describe('SwipeableSessionItem', () => {
 
     // Use slow velocity: deltaTime=10000ms so velocity ≈ 0
     let callCount = 0
-    vi.spyOn(Date, 'now').mockImplementation(() => (callCount++ === 0 ? 1000 : 11000))
+    vi.spyOn(Date, 'now').mockImplementation(() =>
+      callCount++ === 0 ? 1000 : 11000,
+    )
 
     touchStart(content, 100, 100)
-    touchMove(content, 50, 100)   // deltaX = -50, offsetX = -50 → isDragging = true
-    touchEnd(content, 50, 100)    // velocity=-50/10000 ≈ 0, offsetX=-50 < -25 → snap to maxLeft
+    touchMove(content, 50, 100) // deltaX = -50, offsetX = -50 → isDragging = true
+    touchEnd(content, 50, 100) // velocity=-50/10000 ≈ 0, offsetX=-50 < -25 → snap to maxLeft
 
     expect(content.style.transform).toContain('translateX(-70px)')
     vi.restoreAllMocks()
@@ -154,11 +160,13 @@ describe('SwipeableSessionItem', () => {
     const content = getContent()
 
     let callCount = 0
-    vi.spyOn(Date, 'now').mockImplementation(() => (callCount++ === 0 ? 1000 : 11000))
+    vi.spyOn(Date, 'now').mockImplementation(() =>
+      callCount++ === 0 ? 1000 : 11000,
+    )
 
     touchStart(content, 100, 100)
-    touchMove(content, 150, 100)  // deltaX = +50
-    touchEnd(content, 150, 100)   // velocity≈0, offsetX=50 > 25 → snap to maxRight
+    touchMove(content, 150, 100) // deltaX = +50
+    touchEnd(content, 150, 100) // velocity≈0, offsetX=50 > 25 → snap to maxRight
 
     expect(content.style.transform).toContain('translateX(70px)')
     vi.restoreAllMocks()
@@ -173,11 +181,13 @@ describe('SwipeableSessionItem', () => {
     // Simulate fast swipe: small distance but high velocity
     // dateNow mock: start=1000, end=1010 → deltaTime=10ms, deltaX=-5px → velocity=-0.5
     let callCount = 0
-    vi.spyOn(Date, 'now').mockImplementation(() => (callCount++ === 0 ? 1000 : 1010))
+    vi.spyOn(Date, 'now').mockImplementation(() =>
+      callCount++ === 0 ? 1000 : 1010,
+    )
 
     touchStart(content, 100, 100)
-    touchMove(content, 89, 100)   // deltaX=-11 → isDragging
-    touchEnd(content, 95, 100)    // deltaX=-5, velocity=-0.5 < -0.3 → maxLeft
+    touchMove(content, 89, 100) // deltaX=-11 → isDragging
+    touchEnd(content, 95, 100) // deltaX=-5, velocity=-0.5 < -0.3 → maxLeft
 
     expect(content.style.transform).toContain('translateX(-70px)')
     vi.restoreAllMocks()
@@ -188,11 +198,13 @@ describe('SwipeableSessionItem', () => {
     const content = getContent()
 
     let callCount = 0
-    vi.spyOn(Date, 'now').mockImplementation(() => (callCount++ === 0 ? 1000 : 1010))
+    vi.spyOn(Date, 'now').mockImplementation(() =>
+      callCount++ === 0 ? 1000 : 1010,
+    )
 
     touchStart(content, 100, 100)
-    touchMove(content, 111, 100)  // deltaX=+11 → isDragging
-    touchEnd(content, 105, 100)   // deltaX=+5, velocity=0.5 > 0.3 → maxRight
+    touchMove(content, 111, 100) // deltaX=+11 → isDragging
+    touchEnd(content, 105, 100) // deltaX=+5, velocity=0.5 > 0.3 → maxRight
 
     expect(content.style.transform).toContain('translateX(70px)')
     vi.restoreAllMocks()
@@ -205,11 +217,13 @@ describe('SwipeableSessionItem', () => {
     const content = getContent()
 
     let callCount = 0
-    vi.spyOn(Date, 'now').mockImplementation(() => (callCount++ === 0 ? 1000 : 11000))
+    vi.spyOn(Date, 'now').mockImplementation(() =>
+      callCount++ === 0 ? 1000 : 11000,
+    )
 
     touchStart(content, 100, 100)
-    touchMove(content, 50, 100)   // offsetX=-50 clamped to 0 (maxLeft=0)
-    touchEnd(content, 50, 100)    // velocity≈0, offsetX not < -25 (clamped to 0) → stay 0
+    touchMove(content, 50, 100) // offsetX=-50 clamped to 0 (maxLeft=0)
+    touchEnd(content, 50, 100) // velocity≈0, offsetX not < -25 (clamped to 0) → stay 0
 
     expect(content.style.transform).toContain('translateX(0px)')
     vi.restoreAllMocks()
@@ -220,11 +234,13 @@ describe('SwipeableSessionItem', () => {
     const content = getContent()
 
     let callCount = 0
-    vi.spyOn(Date, 'now').mockImplementation(() => (callCount++ === 0 ? 1000 : 11000))
+    vi.spyOn(Date, 'now').mockImplementation(() =>
+      callCount++ === 0 ? 1000 : 11000,
+    )
 
     touchStart(content, 100, 100)
-    touchMove(content, 150, 100)  // offsetX=50 clamped to 0 (maxRight=0)
-    touchEnd(content, 150, 100)   // velocity≈0, offsetX not > 25 → stay 0
+    touchMove(content, 150, 100) // offsetX=50 clamped to 0 (maxRight=0)
+    touchEnd(content, 150, 100) // velocity≈0, offsetX not > 25 → stay 0
 
     expect(content.style.transform).toContain('translateX(0px)')
     vi.restoreAllMocks()
@@ -235,7 +251,9 @@ describe('SwipeableSessionItem', () => {
     const content = getContent()
 
     let callCount = 0
-    vi.spyOn(Date, 'now').mockImplementation(() => (callCount++ === 0 ? 1000 : 1010))
+    vi.spyOn(Date, 'now').mockImplementation(() =>
+      callCount++ === 0 ? 1000 : 1010,
+    )
 
     touchStart(content, 100, 100)
     touchMove(content, 89, 100)
@@ -250,7 +268,9 @@ describe('SwipeableSessionItem', () => {
     const content = getContent()
 
     let callCount = 0
-    vi.spyOn(Date, 'now').mockImplementation(() => (callCount++ === 0 ? 1000 : 1010))
+    vi.spyOn(Date, 'now').mockImplementation(() =>
+      callCount++ === 0 ? 1000 : 1010,
+    )
 
     touchStart(content, 100, 100)
     touchMove(content, 111, 100)
@@ -267,9 +287,9 @@ describe('SwipeableSessionItem', () => {
     const content = getContent()
 
     touchStart(content, 100, 100)
-    touchMove(content, 105, 200)   // deltaX=5 (abs<=10, not yet dragging)
-    touchMove(content, 106, 250)   // deltaX=6 < abs(deltaY=150) → vertical, not dragging
-    touchEnd(content, 106, 250)    // deltaX=6 < 10 → tap → onSelect
+    touchMove(content, 105, 200) // deltaX=5 (abs<=10, not yet dragging)
+    touchMove(content, 106, 250) // deltaX=6 < abs(deltaY=150) → vertical, not dragging
+    touchEnd(content, 106, 250) // deltaX=6 < 10 → tap → onSelect
 
     expect(onSelect).toHaveBeenCalled()
   })
@@ -280,7 +300,7 @@ describe('SwipeableSessionItem', () => {
 
     // deltaX=15 > 10 (enters outer if), but deltaX=15 < deltaY=30 (false branch at line 60)
     touchStart(content, 100, 100)
-    touchMove(content, 115, 130)  // deltaX=15 > 10, deltaY=30 → vertical wins, no drag
+    touchMove(content, 115, 130) // deltaX=15 > 10, deltaY=30 → vertical wins, no drag
     touchEnd(content, 115, 130)
 
     // isDraggingRef stays false → tap path runs → abs(deltaX)=15 > 10, so nothing happens
@@ -292,8 +312,8 @@ describe('SwipeableSessionItem', () => {
     const content = getContent()
 
     touchStart(content, 100, 100)
-    touchMove(content, 104, 100)   // deltaX=4 < 10, no drag
-    touchEnd(content, 104, 100)    // deltaX=4 < 10 → tap
+    touchMove(content, 104, 100) // deltaX=4 < 10, no drag
+    touchEnd(content, 104, 100) // deltaX=4 < 10 → tap
 
     expect(onSelect).toHaveBeenCalled()
   })
@@ -305,9 +325,11 @@ describe('SwipeableSessionItem', () => {
     const content = getContent()
 
     touchStart(content, 100, 100)
-    touchMove(content, -300, 100)  // huge left
+    touchMove(content, -300, 100) // huge left
 
-    const match = content.style.transform.match(/translateX\((-?\d+(?:\.\d+)?)px\)/)
+    const match = content.style.transform.match(
+      /translateX\((-?\d+(?:\.\d+)?)px\)/,
+    )
     if (match) {
       expect(Number.parseFloat(match[1])).toBeGreaterThanOrEqual(-84)
     }
@@ -318,9 +340,11 @@ describe('SwipeableSessionItem', () => {
     const content = getContent()
 
     touchStart(content, 100, 100)
-    touchMove(content, 500, 100)   // huge right
+    touchMove(content, 500, 100) // huge right
 
-    const match = content.style.transform.match(/translateX\((-?\d+(?:\.\d+)?)px\)/)
+    const match = content.style.transform.match(
+      /translateX\((-?\d+(?:\.\d+)?)px\)/,
+    )
     if (match) {
       expect(Number.parseFloat(match[1])).toBeLessThanOrEqual(84)
     }
@@ -333,7 +357,9 @@ describe('SwipeableSessionItem', () => {
     renderItem()
     const [editBtn] = document.querySelectorAll('button')
     fireEvent.click(editBtn)
-    act(() => { vi.advanceTimersByTime(100) })
+    act(() => {
+      vi.advanceTimersByTime(100)
+    })
     expect(onEdit).toHaveBeenCalled()
   })
 
@@ -341,8 +367,10 @@ describe('SwipeableSessionItem', () => {
     vi.useFakeTimers()
     renderItem()
     const btns = document.querySelectorAll('button')
-    fireEvent.click(btns[1])  // second = remove
-    act(() => { vi.advanceTimersByTime(100) })
+    fireEvent.click(btns[1]) // second = remove
+    act(() => {
+      vi.advanceTimersByTime(100)
+    })
     expect(onRemove).toHaveBeenCalled()
   })
 
@@ -359,7 +387,9 @@ describe('SwipeableSessionItem', () => {
 
     fireEvent.click(document.querySelectorAll('button')[0])
     expect(content.style.transform).toContain('translateX(0px)')
-    act(() => { vi.advanceTimersByTime(100) })
+    act(() => {
+      vi.advanceTimersByTime(100)
+    })
     expect(onEdit).toHaveBeenCalled()
   })
 
@@ -376,7 +406,9 @@ describe('SwipeableSessionItem', () => {
 
     fireEvent.click(document.querySelectorAll('button')[1])
     expect(content.style.transform).toContain('translateX(0px)')
-    act(() => { vi.advanceTimersByTime(100) })
+    act(() => {
+      vi.advanceTimersByTime(100)
+    })
     expect(onRemove).toHaveBeenCalled()
   })
 
@@ -411,9 +443,9 @@ describe('SwipeableSessionItem', () => {
     const content = getContent()
 
     touchStart(content, 100, 100)
-    touchMove(content, 89, 100)    // deltaX=-11 → isDragging=true
-    touchMove(content, 80, 100)    // deltaX=-20
-    touchEnd(content, 80, 100)     // maxLeft=0, no snap possible → finalOffset=0
+    touchMove(content, 89, 100) // deltaX=-11 → isDragging=true
+    touchMove(content, 80, 100) // deltaX=-20
+    touchEnd(content, 80, 100) // maxLeft=0, no snap possible → finalOffset=0
 
     expect(content.style.transform).toContain('translateX(0px)')
   })
@@ -425,8 +457,8 @@ describe('SwipeableSessionItem', () => {
     const content = getContent()
 
     touchStart(content, 100, 100)
-    touchMove(content, 85, 100)    // deltaX=-15, isDragging=true
-    touchEnd(content, 90, 100)     // deltaX=-10, isDragging branch, not tap
+    touchMove(content, 85, 100) // deltaX=-15, isDragging=true
+    touchEnd(content, 90, 100) // deltaX=-10, isDragging branch, not tap
 
     expect(onSelect).not.toHaveBeenCalled()
   })

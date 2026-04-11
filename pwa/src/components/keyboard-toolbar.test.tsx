@@ -1,5 +1,5 @@
-import { render, screen, fireEvent, act } from '@testing-library/react'
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
+import { act, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { KeyboardToolbar } from './keyboard-toolbar'
 
 vi.mock('../hooks/use-haptic', () => ({
@@ -7,19 +7,31 @@ vi.mock('../hooks/use-haptic', () => ({
 }))
 
 describe('KeyboardToolbar', () => {
-  let onKey: ReturnType<typeof vi.fn>
-  let onCtrlKey: ReturnType<typeof vi.fn>
-  let onShiftKey: ReturnType<typeof vi.fn>
-  let onCtrlShiftKey: ReturnType<typeof vi.fn>
-  let onScroll: ReturnType<typeof vi.fn>
-  let onTmuxCopy: ReturnType<typeof vi.fn>
-  let onPaste: ReturnType<typeof vi.fn>
-  let onToggleKeyboard: ReturnType<typeof vi.fn>
-  let onSendText: ReturnType<typeof vi.fn>
-  let onCtrlChange: ReturnType<typeof vi.fn>
-  let onShiftChange: ReturnType<typeof vi.fn>
-  let onImeModeChange: ReturnType<typeof vi.fn>
-  let onHistoryToggle: ReturnType<typeof vi.fn>
+  let onKey: (...args: any[]) => any
+
+  let onCtrlKey: (...args: any[]) => any
+
+  let onShiftKey: (...args: any[]) => any
+
+  let onCtrlShiftKey: (...args: any[]) => any
+
+  let onScroll: (...args: any[]) => any
+
+  let onTmuxCopy: (...args: any[]) => any
+
+  let onPaste: (...args: any[]) => any
+
+  let onToggleKeyboard: (...args: any[]) => any
+
+  let onSendText: (...args: any[]) => any
+
+  let onCtrlChange: (...args: any[]) => any
+
+  let onShiftChange: (...args: any[]) => any
+
+  let onImeModeChange: (...args: any[]) => any
+
+  let onHistoryToggle: (...args: any[]) => any
 
   beforeEach(() => {
     onKey = vi.fn()
@@ -41,7 +53,9 @@ describe('KeyboardToolbar', () => {
     vi.useRealTimers()
   })
 
-  function renderToolbar(props: Partial<Parameters<typeof KeyboardToolbar>[0]> = {}) {
+  function renderToolbar(
+    props: Partial<Parameters<typeof KeyboardToolbar>[0]> = {},
+  ) {
     return render(
       <KeyboardToolbar
         onKey={onKey}
@@ -208,13 +222,17 @@ describe('KeyboardToolbar', () => {
   // Expand/collapse
   it('shows expand toggle button', () => {
     renderToolbar()
-    expect(screen.getByRole('button', { name: 'Expand keyboard' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Expand keyboard' }),
+    ).toBeInTheDocument()
   })
 
   it('clicking expand toggle expands keyboard', () => {
     renderToolbar()
     fireEvent.click(screen.getByRole('button', { name: 'Expand keyboard' }))
-    expect(screen.getByRole('button', { name: 'Collapse keyboard' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Collapse keyboard' }),
+    ).toBeInTheDocument()
   })
 
   it('expanded mode shows extra keys: PgUp, PgDn, Home, End', () => {
@@ -235,7 +253,9 @@ describe('KeyboardToolbar', () => {
 
   it('defaultExpanded=true starts expanded', () => {
     renderToolbar({ defaultExpanded: true })
-    expect(screen.getByRole('button', { name: 'Collapse keyboard' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Collapse keyboard' }),
+    ).toBeInTheDocument()
     expect(screen.getByText('PgUp')).toBeInTheDocument()
   })
 
@@ -264,7 +284,11 @@ describe('KeyboardToolbar', () => {
     renderToolbar()
     // Find IME toggle button (Languages icon) — it's 2nd in MINIMAL_KEYS
     const allBtns = Array.from(document.querySelectorAll('button'))
-    const imeBtn = allBtns.find((b) => b.getAttribute('aria-label') === undefined && b.className.includes('teal'))
+    const imeBtn = allBtns.find(
+      (b) =>
+        b.getAttribute('aria-label') === undefined &&
+        b.className.includes('teal'),
+    )
     if (imeBtn) {
       fireEvent.click(imeBtn)
       expect(screen.getByPlaceholderText(/non-Latin/i)).toBeInTheDocument()
@@ -309,7 +333,10 @@ describe('KeyboardToolbar', () => {
     renderToolbar({ imeMode: true })
     const input = screen.getByPlaceholderText(/non-Latin/i)
     fireEvent.change(input, { target: { value: 'world' } })
-    fireEvent.keyDown(input, { key: 'Enter', nativeEvent: { isComposing: false } })
+    fireEvent.keyDown(input, {
+      key: 'Enter',
+      nativeEvent: { isComposing: false },
+    })
     expect(onSendText).toHaveBeenCalledWith('world')
   })
 
@@ -320,7 +347,11 @@ describe('KeyboardToolbar', () => {
     // jsdom: set isComposing on the event via compositionstart first
     fireEvent.compositionStart(input)
     // Now fire keyDown with isComposing=true (jsdom sets nativeEvent.isComposing after compositionstart)
-    const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+    const event = new KeyboardEvent('keydown', {
+      key: 'Enter',
+      bubbles: true,
+      cancelable: true,
+    })
     Object.defineProperty(event, 'isComposing', { value: true })
     input.dispatchEvent(event)
     expect(onSendText).not.toHaveBeenCalled()
@@ -379,7 +410,9 @@ describe('KeyboardToolbar', () => {
     if (imeBtn) {
       fireEvent.click(imeBtn)
       // IME mode is now true internally → input renders
-      act(() => { vi.advanceTimersByTime(50) })
+      act(() => {
+        vi.advanceTimersByTime(50)
+      })
       const imeInput = document.querySelector('input[placeholder]')
       expect(imeInput).toBeInTheDocument()
     }
@@ -395,7 +428,9 @@ describe('KeyboardToolbar', () => {
       fireEvent.click(imeBtn)
     }
     unmount()
-    act(() => { vi.advanceTimersByTime(100) })
+    act(() => {
+      vi.advanceTimersByTime(100)
+    })
     // No error = pass
   })
 
@@ -432,11 +467,10 @@ describe('KeyboardToolbar', () => {
   // Scroll
   it('calls onScroll with up direction', () => {
     renderToolbar()
-    const allBtns = Array.from(document.querySelectorAll('button'))
-    const scrollUpBtn = allBtns.find((b) => b.className.includes('green') &&
-      b.closest('.flex') === b.parentElement?.closest('.flex'))
     // Scroll buttons have green bg
-    const greenBtns = document.querySelectorAll('.bg-green-200\\/70, .bg-green-800\\/50')
+    const greenBtns = document.querySelectorAll(
+      '.bg-green-200\\/70, .bg-green-800\\/50',
+    )
     if (greenBtns[0]) {
       fireEvent.click(greenBtns[0])
       // First green btn is scroll up
@@ -504,15 +538,21 @@ describe('KeyboardToolbar', () => {
   it('keyboard-toggle button does NOT prevent touchstart default (allows keyboard to open)', () => {
     renderToolbar()
     // Keyboard-toggle button is styled with purple bg — its onTouchStart does NOT preventDefault
-    const purpleBtn = document.querySelector('.bg-purple-200\\/70') as HTMLElement
+    const purpleBtn = document.querySelector(
+      '.bg-purple-200\\/70',
+    ) as HTMLElement
     // The button has onTouchStart that skips preventDefault for isKeyboardToggle
     // We can verify by checking the handler doesn't block propagation
     // This tests the !keyConfig.isKeyboardToggle branch
     if (purpleBtn) {
       let defaultPrevented = false
-      purpleBtn.addEventListener('touchstart', (e) => {
-        defaultPrevented = e.defaultPrevented
-      }, { once: true, capture: true })
+      purpleBtn.addEventListener(
+        'touchstart',
+        (e) => {
+          defaultPrevented = e.defaultPrevented
+        },
+        { once: true, capture: true },
+      )
       fireEvent.touchStart(purpleBtn)
       // keyboard-toggle does NOT call preventDefault
       expect(defaultPrevented).toBe(false)
@@ -588,12 +628,7 @@ describe('KeyboardToolbar', () => {
 
   // Internal state for ctrl/shift without external control
   it('internal ctrl state works without onCtrlChange', () => {
-    render(
-      <KeyboardToolbar
-        onKey={onKey}
-        onCtrlKey={onCtrlKey}
-      />,
-    )
+    render(<KeyboardToolbar onKey={onKey} onCtrlKey={onCtrlKey} />)
     fireEvent.click(screen.getByText('Ctrl'))
     expect(screen.getByText('^C')).toBeInTheDocument()
   })
@@ -616,12 +651,7 @@ describe('KeyboardToolbar', () => {
   })
 
   it('ctrl+shift combo with no onCtrlShiftKey falls through gracefully', () => {
-    render(
-      <KeyboardToolbar
-        onKey={onKey}
-        onCtrlKey={onCtrlKey}
-      />,
-    )
+    render(<KeyboardToolbar onKey={onKey} onCtrlKey={onCtrlKey} />)
     fireEvent.click(screen.getByText('Ctrl'))
     fireEvent.click(screen.getByText('Shift'))
     fireEvent.click(screen.getByText('^⇧C'))
@@ -661,19 +691,18 @@ describe('KeyboardToolbar', () => {
   // Arrow keys
   it('sends ArrowUp key', () => {
     renderToolbar()
-    const arrowBtns = document.querySelectorAll('button svg')
     // Find arrow up button by aria or by checking button structure
     // ArrowUp is in MINIMAL_KEYS, use direct click
     const btns = Array.from(document.querySelectorAll('button'))
     // Tab/Esc/Enter/Ctrl/Shift are text; arrows are icon-only
-    // They have key=ArrowUp etc. — click them via containing div
-    const allBtns = btns.filter((b) => !b.textContent?.trim() || b.textContent?.trim() === '')
     // Just verify toolbar renders without crash
     expect(btns.length).toBeGreaterThan(10)
   })
 })
 
 describe('getKeyButtonBg helper (via rendering)', () => {
+  const noop = vi.fn() as unknown as (...args: any[]) => any
+
   beforeEach(() => {
     vi.clearAllMocks()
   })
@@ -681,9 +710,9 @@ describe('getKeyButtonBg helper (via rendering)', () => {
   it('history button shows cyan-500 when historyOpen=true', () => {
     render(
       <KeyboardToolbar
-        onKey={vi.fn()}
-        onCtrlKey={vi.fn()}
-        onHistoryToggle={vi.fn()}
+        onKey={noop}
+        onCtrlKey={noop}
+        onHistoryToggle={noop}
         historyOpen={true}
       />,
     )
@@ -693,9 +722,9 @@ describe('getKeyButtonBg helper (via rendering)', () => {
   it('history button shows cyan-200/70 when historyOpen=false', () => {
     render(
       <KeyboardToolbar
-        onKey={vi.fn()}
-        onCtrlKey={vi.fn()}
-        onHistoryToggle={vi.fn()}
+        onKey={noop}
+        onCtrlKey={noop}
+        onHistoryToggle={noop}
         historyOpen={false}
       />,
     )
@@ -705,10 +734,10 @@ describe('getKeyButtonBg helper (via rendering)', () => {
   it('isTmuxCopy and isPaste get amber bg', () => {
     render(
       <KeyboardToolbar
-        onKey={vi.fn()}
-        onCtrlKey={vi.fn()}
-        onTmuxCopy={vi.fn()}
-        onPaste={vi.fn()}
+        onKey={noop}
+        onCtrlKey={noop}
+        onTmuxCopy={noop}
+        onPaste={noop}
       />,
     )
     const amberBtns = document.querySelectorAll('.bg-amber-200\\/70')
@@ -716,23 +745,12 @@ describe('getKeyButtonBg helper (via rendering)', () => {
   })
 
   it('isScroll gets green bg', () => {
-    render(
-      <KeyboardToolbar
-        onKey={vi.fn()}
-        onCtrlKey={vi.fn()}
-        onScroll={vi.fn()}
-      />,
-    )
+    render(<KeyboardToolbar onKey={noop} onCtrlKey={noop} onScroll={noop} />)
     expect(document.querySelector('.bg-green-200\\/70')).toBeInTheDocument()
   })
 
   it('regular key gets zinc bg', () => {
-    render(
-      <KeyboardToolbar
-        onKey={vi.fn()}
-        onCtrlKey={vi.fn()}
-      />,
-    )
+    render(<KeyboardToolbar onKey={noop} onCtrlKey={noop} />)
     const tabBtn = screen.getByText('Tab').closest('button')!
     expect(tabBtn.className).toContain('bg-zinc-200/70')
   })

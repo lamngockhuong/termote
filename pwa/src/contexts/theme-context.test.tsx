@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react'
 import type { ReactNode } from 'react'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ThemeProvider, useTheme } from './theme-context'
 
 function wrapper({ children }: { children: ReactNode }) {
@@ -84,9 +84,11 @@ describe('ThemeContext', () => {
       return {
         matches: false,
         media: query,
-        addEventListener: vi.fn((_type: string, handler: (e: MediaQueryListEvent) => void) => {
-          capturedHandler = handler
-        }),
+        addEventListener: vi.fn(
+          (_type: string, handler: (e: MediaQueryListEvent) => void) => {
+            capturedHandler = handler
+          },
+        ),
         removeEventListener: vi.fn(),
         dispatchEvent: vi.fn(),
       }
@@ -111,9 +113,11 @@ describe('ThemeContext', () => {
     window.matchMedia = vi.fn().mockImplementation((query: string) => ({
       matches: true, // start as dark
       media: query,
-      addEventListener: vi.fn((_type: string, handler: (e: MediaQueryListEvent) => void) => {
-        capturedHandler = handler
-      }),
+      addEventListener: vi.fn(
+        (_type: string, handler: (e: MediaQueryListEvent) => void) => {
+          capturedHandler = handler
+        },
+      ),
       removeEventListener: vi.fn(),
       dispatchEvent: vi.fn(),
     }))

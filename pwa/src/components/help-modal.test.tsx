@@ -1,5 +1,5 @@
-import { render, screen, fireEvent } from '@testing-library/react'
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { fireEvent, render, screen } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { HelpModal } from './help-modal'
 
 describe('HelpModal', () => {
@@ -109,7 +109,10 @@ describe('HelpModal', () => {
     const removeEventListenerSpy = vi.spyOn(window, 'removeEventListener')
     const { unmount } = render(<HelpModal isOpen={true} onClose={vi.fn()} />)
     unmount()
-    expect(removeEventListenerSpy).toHaveBeenCalledWith('keydown', expect.any(Function))
+    expect(removeEventListenerSpy).toHaveBeenCalledWith(
+      'keydown',
+      expect.any(Function),
+    )
     removeEventListenerSpy.mockRestore()
   })
 })

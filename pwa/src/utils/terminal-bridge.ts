@@ -131,10 +131,10 @@ export function sendKeyToTerminal(
     const code = key.toLowerCase().charCodeAt(0) - 96
     if (code >= 1 && code <= 26) {
       data = String.fromCharCode(code)
-    /* v8 ignore start */
+      /* v8 ignore start */
     } else {
       return
-    /* v8 ignore stop */
+      /* v8 ignore stop */
     }
   }
   // Shift+letter: uppercase

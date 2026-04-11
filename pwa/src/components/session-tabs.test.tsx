@@ -1,7 +1,7 @@
-import { render, screen, fireEvent } from '@testing-library/react'
-import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { SessionTabs } from './session-tabs'
+import { fireEvent, render, screen } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Session } from '../types/session'
+import { SessionTabs } from './session-tabs'
 
 const SESSIONS: Session[] = [
   { id: 'shell', name: 'Shell', icon: '💻', description: 'Terminal' },
@@ -91,11 +91,27 @@ describe('SessionTabs', () => {
       // First call is for the active element rect, second for the container rect
       // Make element appear outside container (rect.left < containerRect.left)
       return callCount % 2 === 1
-        ? { left: 0, right: 50, top: 0, bottom: 40, width: 50, height: 40 } as DOMRect
-        : { left: 100, right: 300, top: 0, bottom: 40, width: 200, height: 40 } as DOMRect
+        ? ({
+            left: 0,
+            right: 50,
+            top: 0,
+            bottom: 40,
+            width: 50,
+            height: 40,
+          } as DOMRect)
+        : ({
+            left: 100,
+            right: 300,
+            top: 0,
+            bottom: 40,
+            width: 200,
+            height: 40,
+          } as DOMRect)
     })
 
-    const { rerender } = render(<SessionTabs {...defaultProps} activeId="shell" />)
+    const { rerender } = render(
+      <SessionTabs {...defaultProps} activeId="shell" />,
+    )
     rerender(<SessionTabs {...defaultProps} activeId="code" />)
     expect(Element.prototype.scrollIntoView).toHaveBeenCalled()
 

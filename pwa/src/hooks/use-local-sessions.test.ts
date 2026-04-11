@@ -102,7 +102,9 @@ describe('useLocalSessions', () => {
       .mockRejectedValue(new Error('API down'))
     const { result } = renderHook(() => useLocalSessions(1))
     await act(async () => {})
-    await act(async () => { await result.current.refreshSessions() })
+    await act(async () => {
+      await result.current.refreshSessions()
+    })
     expect(result.current.sessions).toHaveLength(1)
     expect(result.current.isServerReachable).toBe(false)
   })
@@ -117,7 +119,9 @@ describe('useLocalSessions', () => {
     mockFetchWindows.mockResolvedValue([WIN_SHELL, WIN_VIM])
     const { result } = renderHook(() => useLocalSessions(1))
     await act(async () => {})
-    await act(async () => { await result.current.switchSession('1') })
+    await act(async () => {
+      await result.current.switchSession('1')
+    })
     expect(mockSelectWindow).toHaveBeenCalledWith('1')
     expect(result.current.activeSession.name).toBe('vim')
   })
@@ -125,14 +129,18 @@ describe('useLocalSessions', () => {
   it('switchSession does nothing when session not found', async () => {
     const { result } = renderHook(() => useLocalSessions(1))
     await act(async () => {})
-    await act(async () => { await result.current.switchSession('999') })
+    await act(async () => {
+      await result.current.switchSession('999')
+    })
     expect(mockSelectWindow).not.toHaveBeenCalled()
   })
 
   it('switchSession does nothing when already active', async () => {
     const { result } = renderHook(() => useLocalSessions(1))
     await act(async () => {})
-    await act(async () => { await result.current.switchSession('0') })
+    await act(async () => {
+      await result.current.switchSession('0')
+    })
     expect(mockSelectWindow).not.toHaveBeenCalled()
   })
 
@@ -142,7 +150,9 @@ describe('useLocalSessions', () => {
       .mockResolvedValueOnce([WIN_SHELL, WIN_VIM])
     const { result } = renderHook(() => useLocalSessions(1))
     await act(async () => {})
-    await act(async () => { await result.current.addSession('vim', '🖥️', 'Editor') })
+    await act(async () => {
+      await result.current.addSession('vim', '🖥️', 'Editor')
+    })
     expect(mockCreateWindow).toHaveBeenCalledWith('vim')
     expect(result.current.sessions).toHaveLength(2)
   })
@@ -153,7 +163,9 @@ describe('useLocalSessions', () => {
       .mockResolvedValueOnce([WIN_SHELL, WIN_VIM])
     const { result } = renderHook(() => useLocalSessions(1))
     await act(async () => {})
-    await act(async () => { await result.current.addSession('vim', '🖥️', 'My editor') })
+    await act(async () => {
+      await result.current.addSession('vim', '🖥️', 'My editor')
+    })
     const meta = JSON.parse(localStorage.getItem('termote-sessions')!)
     expect(meta['vim'].icon).toBe('🖥️')
     expect(meta['vim'].description).toBe('My editor')
@@ -165,7 +177,9 @@ describe('useLocalSessions', () => {
       .mockResolvedValueOnce([WIN_SHELL, WIN_VIM])
     const { result } = renderHook(() => useLocalSessions(1))
     await act(async () => {})
-    await act(async () => { await result.current.addSession('vim') })
+    await act(async () => {
+      await result.current.addSession('vim')
+    })
     const meta = JSON.parse(localStorage.getItem('termote-sessions')!)
     expect(meta['vim'].icon).toBe('📺')
   })
@@ -176,7 +190,9 @@ describe('useLocalSessions', () => {
       .mockResolvedValueOnce([WIN_SHELL])
     const { result } = renderHook(() => useLocalSessions(1))
     await act(async () => {})
-    await act(async () => { await result.current.removeSession('1') })
+    await act(async () => {
+      await result.current.removeSession('1')
+    })
     expect(mockKillWindow).toHaveBeenCalledWith('1')
     expect(result.current.sessions).toHaveLength(1)
   })
@@ -184,7 +200,9 @@ describe('useLocalSessions', () => {
   it('removeSession does nothing when only one session', async () => {
     const { result } = renderHook(() => useLocalSessions(1))
     await act(async () => {})
-    await act(async () => { await result.current.removeSession('0') })
+    await act(async () => {
+      await result.current.removeSession('0')
+    })
     expect(mockKillWindow).not.toHaveBeenCalled()
   })
 
@@ -192,7 +210,9 @@ describe('useLocalSessions', () => {
     mockFetchWindows.mockResolvedValue([WIN_SHELL, WIN_VIM])
     const { result } = renderHook(() => useLocalSessions(1))
     await act(async () => {})
-    await act(async () => { await result.current.removeSession('999') })
+    await act(async () => {
+      await result.current.removeSession('999')
+    })
     expect(mockKillWindow).not.toHaveBeenCalled()
   })
 
@@ -212,7 +232,10 @@ describe('useLocalSessions', () => {
     const { result } = renderHook(() => useLocalSessions(1))
     await act(async () => {})
     await act(async () => {
-      await result.current.updateSession('0', { icon: '🔥', description: 'Hot session' })
+      await result.current.updateSession('0', {
+        icon: '🔥',
+        description: 'Hot session',
+      })
     })
     expect(mockRenameWindow).not.toHaveBeenCalled()
     expect(result.current.sessions[0].icon).toBe('🔥')
@@ -239,9 +262,12 @@ describe('useLocalSessions', () => {
   })
 
   it('loads metadata from localStorage for sessions', async () => {
-    localStorage.setItem('termote-sessions', JSON.stringify({
-      shell: { icon: '🐚', description: 'My shell' },
-    }))
+    localStorage.setItem(
+      'termote-sessions',
+      JSON.stringify({
+        shell: { icon: '🐚', description: 'My shell' },
+      }),
+    )
     mockFetchWindows.mockResolvedValue([WIN_SHELL])
     const { result } = renderHook(() => useLocalSessions(1))
     await act(async () => {})
@@ -267,9 +293,7 @@ describe('useLocalSessions', () => {
   it('activeSession falls back to null (Loading placeholder) when applyWindows receives empty array', async () => {
     // applyWindows with empty array: mapped=[], active=undefined, mapped[0]=undefined → ?? null → null
     // This hits the `?? null` branch in: active ? ... : (mapped[0] ?? null)
-    mockFetchWindows
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([]) // both fetches return empty
+    mockFetchWindows.mockResolvedValueOnce([]).mockResolvedValueOnce([]) // both fetches return empty
     mockCreateWindow.mockResolvedValue(true)
     const { result } = renderHook(() => useLocalSessions(1))
     await act(async () => {})

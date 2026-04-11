@@ -1,5 +1,5 @@
-import { render, screen, fireEvent } from '@testing-library/react'
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { fireEvent, render, screen } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { GestureHintsOverlay } from './gesture-hints-overlay'
 
 describe('GestureHintsOverlay', () => {
@@ -16,7 +16,9 @@ describe('GestureHintsOverlay', () => {
   it('renders overlay content when open', () => {
     render(<GestureHintsOverlay isOpen={true} onDismiss={vi.fn()} />)
     expect(screen.getByText('Touch Gestures')).toBeInTheDocument()
-    expect(screen.getByText('Control the terminal with gestures')).toBeInTheDocument()
+    expect(
+      screen.getByText('Control the terminal with gestures'),
+    ).toBeInTheDocument()
     expect(screen.getByText('Got it')).toBeInTheDocument()
   })
 
@@ -26,7 +28,9 @@ describe('GestureHintsOverlay', () => {
   })
 
   it('unmounts dialog content when isOpen becomes false', () => {
-    const { rerender } = render(<GestureHintsOverlay isOpen={true} onDismiss={vi.fn()} />)
+    const { rerender } = render(
+      <GestureHintsOverlay isOpen={true} onDismiss={vi.fn()} />,
+    )
     expect(screen.getByText('Touch Gestures')).toBeInTheDocument()
     rerender(<GestureHintsOverlay isOpen={false} onDismiss={vi.fn()} />)
     expect(screen.queryByText('Touch Gestures')).not.toBeInTheDocument()
@@ -69,7 +73,9 @@ describe('GestureHintsOverlay', () => {
 
   it('removes cancel event listener on close', () => {
     const onDismiss = vi.fn()
-    const { rerender } = render(<GestureHintsOverlay isOpen={true} onDismiss={onDismiss} />)
+    const { rerender } = render(
+      <GestureHintsOverlay isOpen={true} onDismiss={onDismiss} />,
+    )
     rerender(<GestureHintsOverlay isOpen={false} onDismiss={onDismiss} />)
     // After close, overlay is not rendered, so no dialog to dispatch to
     expect(screen.queryByText('Touch Gestures')).not.toBeInTheDocument()

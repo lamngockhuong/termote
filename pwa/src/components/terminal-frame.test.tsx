@@ -1,6 +1,6 @@
-import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { createRef } from 'react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { TerminalFrame, type TerminalFrameHandle } from './terminal-frame'
 
 vi.mock('../hooks/use-tmux-api', () => ({
@@ -17,11 +17,11 @@ vi.mock('../utils/terminal-bridge', () => ({
 
 import { fetchTerminalToken } from '../hooks/use-tmux-api'
 import {
-  setTerminalTheme,
-  setTerminalFontSize,
   blockContextMenu,
-  unblockContextMenu,
   sendKeyToTerminal,
+  setTerminalFontSize,
+  setTerminalTheme,
+  unblockContextMenu,
 } from '../utils/terminal-bridge'
 
 const mockFetchToken = vi.mocked(fetchTerminalToken)
@@ -123,7 +123,9 @@ describe('TerminalFrame', () => {
     mockFetchToken.mockResolvedValue('token')
     mockSetTheme.mockReturnValue(true)
     render(<TerminalFrame disableContextMenu={true} />)
-    await waitFor(() => expect(screen.getByTitle('Terminal')).toBeInTheDocument())
+    await waitFor(() =>
+      expect(screen.getByTitle('Terminal')).toBeInTheDocument(),
+    )
     expect(mockBlockCtx).toHaveBeenCalled()
   })
 
@@ -131,14 +133,18 @@ describe('TerminalFrame', () => {
     mockFetchToken.mockResolvedValue('token')
     mockSetTheme.mockReturnValue(true)
     render(<TerminalFrame disableContextMenu={false} />)
-    await waitFor(() => expect(screen.getByTitle('Terminal')).toBeInTheDocument())
+    await waitFor(() =>
+      expect(screen.getByTitle('Terminal')).toBeInTheDocument(),
+    )
     expect(mockUnblockCtx).toHaveBeenCalled()
   })
 
   it('applies light theme class to iframe', async () => {
     mockFetchToken.mockResolvedValue('token')
     render(<TerminalFrame theme="light" />)
-    await waitFor(() => expect(screen.getByTitle('Terminal')).toBeInTheDocument())
+    await waitFor(() =>
+      expect(screen.getByTitle('Terminal')).toBeInTheDocument(),
+    )
     const iframe = screen.getByTitle('Terminal')
     expect(iframe.className).toContain('bg-[#f6f8fa]')
   })
@@ -146,7 +152,9 @@ describe('TerminalFrame', () => {
   it('applies dark theme class to iframe', async () => {
     mockFetchToken.mockResolvedValue('token')
     render(<TerminalFrame theme="dark" />)
-    await waitFor(() => expect(screen.getByTitle('Terminal')).toBeInTheDocument())
+    await waitFor(() =>
+      expect(screen.getByTitle('Terminal')).toBeInTheDocument(),
+    )
     const iframe = screen.getByTitle('Terminal')
     expect(iframe.className).toContain('bg-[#2b2b2b]')
   })
@@ -168,7 +176,9 @@ describe('TerminalFrame', () => {
       mockSetTheme.mockReturnValue(true)
       fireEvent.load(iframe)
       // Run the polling interval
-      act(() => { vi.advanceTimersByTime(100) })
+      act(() => {
+        vi.advanceTimersByTime(100)
+      })
       expect(mockSetTheme).toHaveBeenCalled()
       expect(mockSetFontSize).toHaveBeenCalled()
     }
@@ -182,16 +192,22 @@ describe('TerminalFrame', () => {
     mockSetTheme.mockReturnValue(false)
 
     render(<TerminalFrame />)
-    await act(async () => { await Promise.resolve() })
+    await act(async () => {
+      await Promise.resolve()
+    })
 
     const iframe = screen.queryByTitle('Terminal')
     if (iframe) {
       fireEvent.load(iframe)
       // Advance 30 intervals
-      act(() => { vi.advanceTimersByTime(100 * 31) })
+      act(() => {
+        vi.advanceTimersByTime(100 * 31)
+      })
       const callCount = mockSetTheme.mock.calls.length
       // After 30 fails, no more calls
-      act(() => { vi.advanceTimersByTime(100 * 5) })
+      act(() => {
+        vi.advanceTimersByTime(100 * 5)
+      })
       expect(mockSetTheme.mock.calls.length).toBe(callCount)
     }
 
@@ -204,17 +220,23 @@ describe('TerminalFrame', () => {
     mockSetTheme
       .mockReturnValueOnce(false) // first call in effect
       .mockReturnValueOnce(false) // first poll call fails
-      .mockReturnValue(true)      // second poll call succeeds
+      .mockReturnValue(true) // second poll call succeeds
 
     render(<TerminalFrame />)
-    await act(async () => { await Promise.resolve() })
+    await act(async () => {
+      await Promise.resolve()
+    })
 
     const iframe = screen.queryByTitle('Terminal')
     if (iframe) {
       fireEvent.load(iframe)
-      act(() => { vi.advanceTimersByTime(200) })
+      act(() => {
+        vi.advanceTimersByTime(200)
+      })
       // sendKeyToTerminal called after 300ms
-      act(() => { vi.advanceTimersByTime(400) })
+      act(() => {
+        vi.advanceTimersByTime(400)
+      })
       expect(sendKeyToTerminal).toHaveBeenCalled()
     }
 

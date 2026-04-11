@@ -69,7 +69,9 @@ describe('vibrate', () => {
 
   it('silently catches errors thrown by navigator.vibrate', () => {
     Object.defineProperty(navigator, 'vibrate', {
-      value: () => { throw new Error('vibrate error') },
+      value: () => {
+        throw new Error('vibrate error')
+      },
       writable: true,
       configurable: true,
     })

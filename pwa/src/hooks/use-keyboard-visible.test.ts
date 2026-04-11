@@ -4,7 +4,11 @@ import { useKeyboardVisible } from './use-keyboard-visible'
 
 describe('useKeyboardVisible', () => {
   let visualViewportListeners: Record<string, Array<() => void>>
-  let mockViewport: { height: number; addEventListener: ReturnType<typeof vi.fn>; removeEventListener: ReturnType<typeof vi.fn> }
+  let mockViewport: {
+    height: number
+    addEventListener: ReturnType<typeof vi.fn>
+    removeEventListener: ReturnType<typeof vi.fn>
+  }
   const originalInnerHeight = window.innerHeight
 
   beforeEach(() => {
@@ -15,7 +19,9 @@ describe('useKeyboardVisible', () => {
         visualViewportListeners[event]?.push(cb)
       }),
       removeEventListener: vi.fn((event: string, cb: () => void) => {
-        visualViewportListeners[event] = (visualViewportListeners[event] ?? []).filter((l) => l !== cb)
+        visualViewportListeners[event] = (
+          visualViewportListeners[event] ?? []
+        ).filter((l) => l !== cb)
       }),
     }
     Object.defineProperty(window, 'visualViewport', {
@@ -50,7 +56,10 @@ describe('useKeyboardVisible', () => {
 
     act(() => {
       mockViewport.height = 400
-      Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 })
+      Object.defineProperty(window, 'innerHeight', {
+        configurable: true,
+        value: 800,
+      })
       for (const cb of visualViewportListeners.resize) cb()
     })
 
@@ -63,7 +72,10 @@ describe('useKeyboardVisible', () => {
 
     act(() => {
       mockViewport.height = 700
-      Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 })
+      Object.defineProperty(window, 'innerHeight', {
+        configurable: true,
+        value: 800,
+      })
       for (const cb of visualViewportListeners.resize) cb()
     })
 
@@ -86,12 +98,21 @@ describe('useKeyboardVisible', () => {
   it('removes event listeners on unmount', () => {
     const { unmount } = renderHook(() => useKeyboardVisible())
     unmount()
-    expect(mockViewport.removeEventListener).toHaveBeenCalledWith('resize', expect.any(Function))
-    expect(mockViewport.removeEventListener).toHaveBeenCalledWith('scroll', expect.any(Function))
+    expect(mockViewport.removeEventListener).toHaveBeenCalledWith(
+      'resize',
+      expect.any(Function),
+    )
+    expect(mockViewport.removeEventListener).toHaveBeenCalledWith(
+      'scroll',
+      expect.any(Function),
+    )
   })
 
   it('does nothing when visualViewport is undefined', () => {
-    Object.defineProperty(window, 'visualViewport', { configurable: true, value: undefined })
+    Object.defineProperty(window, 'visualViewport', {
+      configurable: true,
+      value: undefined,
+    })
     const { result } = renderHook(() => useKeyboardVisible())
     expect(result.current.isVisible).toBe(false)
     expect(result.current.keyboardHeight).toBe(0)
