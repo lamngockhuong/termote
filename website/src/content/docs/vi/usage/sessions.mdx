@@ -15,21 +15,13 @@ Cài đặt mới bắt đầu với một phiên **Shell** duy nhất. Tạo th
 
 ### Desktop
 
-- **Chuyển**: Click vào phiên trong sidebar bên trái hoặc click tab phiên
+- **Chuyển**: Click vào phiên trong sidebar bên trái hoặc trong **thanh tab phiên** ở trên cùng (nếu bật)
 - **Sửa**: Double-click tên phiên, hoặc hover và click icon bút chì
 - **Xóa**: Hover và click icon X (cần 2+ phiên)
-- **Thêm**: Click "+ Add session" ở dưới cùng hoặc click "+" trên thanh tab
+- **Thêm**: Click "+ Add session" ở dưới cùng
 - **Thu gọn sidebar**: Click icon thu gọn (góc trên phải sidebar) để chỉ hiện icon — tối đa hóa diện tích terminal
 - **Toàn màn hình**: Click nút fullscreen trên header để vào chế độ toàn màn hình
-
-### Thanh Tab Phiên (Desktop)
-
-Trên desktop, một **thanh tab ngang** giúp chuyển đổi nhanh giữa các phiên:
-- **Chuyển**: Click vào tab phiên
-- **Thêm**: Click nút "+" ở cuối thanh tab
-- **Xóa**: Hover trên tab, click icon X (cần 2+ phiên)
-- **Ẩn/Hiện**: Tắt "Show session tabs" trong Settings để ẩn thanh tab
-- **Auto-scroll**: Tab hiện tab phiên đang hoạt động tự động cuộn vào vùng nhìn thấy
+- **Thanh tab phiên**: Thanh tab ngang để chuyển phiên nhanh trên desktop. Bật/tắt qua Settings → "Show session tabs"
 
 ### Mobile
 
@@ -40,12 +32,26 @@ Trên desktop, một **thanh tab ngang** giúp chuyển đổi nhanh giữa các
 
 ## Tính năng phiên
 
-| Tính năng       | Mô tả                                         |
-| --------------- | --------------------------------------------- |
-| Icon tùy chỉnh  | Chọn emoji icon cho mỗi phiên                 |
-| Đổi tên         | Đổi tên phiên bất cứ lúc nào                  |
-| Tự động đồng bộ | Phiên đồng bộ giữa các trình duyệt mỗi 5 giây |
-| Lưu trữ         | Phiên được lưu bởi tmux windows               |
+| Tính năng         | Mô tả                                         |
+| ----------------- | --------------------------------------------- |
+| Icon tùy chỉnh    | Chọn emoji icon cho mỗi phiên                 |
+| Đổi tên           | Đổi tên phiên bất cứ lúc nào                  |
+| Tự động đồng bộ   | Phiên đồng bộ giữa các trình duyệt (tùy chỉnh được) |
+| Lưu trữ           | Phiên được lưu bởi tmux windows               |
+| Trạng thái kết nối | Chỉ báo thời gian thực trên header (xem bên dưới) |
+
+## Chỉ báo kết nối
+
+Header hiển thị chỉ báo trạng thái kết nối thời gian thực với server:
+
+| Trạng thái   | Chỉ báo    | Ý nghĩa                                    |
+| ------------ | ---------- | ------------------------------------------- |
+| Connected    | Chấm xanh  | Server hoạt động, terminal phản hồi         |
+| Connecting   | Chấm xanh dương | Đang kết nối đến server                  |
+| Disconnected | Chấm đỏ    | Mất kết nối (nhấn để thử lại)               |
+| Error        | X đỏ       | Lỗi kết nối                                 |
+
+Chỉ báo tự động phát hiện mất kết nối qua session polling. Nhấn vào khi mất kết nối để thử lại kết nối thủ công.
 
 <Aside type="tip">
   Phiên tồn tại qua ngắt kết nối mạng. Kết nối lại để tiếp tục từ chỗ đã dừng.
