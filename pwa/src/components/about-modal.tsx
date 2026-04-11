@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { APP_INFO } from '../utils/app-info'
+import { BuyMeACoffeeIcon, GithubSponsorsIcon, MomoIcon } from './sponsor-icons'
 
 interface Props {
   isOpen: boolean
@@ -105,6 +106,43 @@ export function AboutModal({ isOpen, onClose }: Props) {
             >
               Report Issue
             </a>
+          </div>
+
+          {/* Sponsor */}
+          <div className="pt-4 border-t border-zinc-200 dark:border-zinc-700">
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-3 flex items-center gap-1">
+              <GithubSponsorsIcon size={14} className="text-red-500" /> Support
+              this project
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <a
+                href={APP_INFO.sponsor.momo}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-2 text-sm rounded-lg bg-[#A50064]/10 text-[#A50064] dark:bg-[#A50064]/20 dark:text-[#d64b9a] hover:bg-[#A50064]/20 dark:hover:bg-[#A50064]/30 transition-colors flex items-center gap-1.5"
+                title="MoMo"
+              >
+                <MomoIcon size={16} /> MoMo
+              </a>
+              <a
+                href={APP_INFO.sponsor.github}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-2 text-sm rounded-lg bg-[#db61a2]/10 text-[#db61a2] dark:bg-[#db61a2]/20 dark:text-[#ea8fbe] hover:bg-[#db61a2]/20 dark:hover:bg-[#db61a2]/30 transition-colors flex items-center gap-1.5"
+                title="GitHub Sponsors"
+              >
+                <GithubSponsorsIcon size={16} /> Sponsor
+              </a>
+              <a
+                href={APP_INFO.sponsor.buyMeACoffee}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-2 text-sm rounded-lg bg-[#FFDD00]/20 text-[#a38600] dark:bg-[#FFDD00]/15 dark:text-[#FFDD00] hover:bg-[#FFDD00]/30 dark:hover:bg-[#FFDD00]/25 transition-colors flex items-center gap-1.5"
+                title="Buy Me a Coffee"
+              >
+                <BuyMeACoffeeIcon size={16} /> Coffee
+              </a>
+            </div>
           </div>
         </div>
       </div>

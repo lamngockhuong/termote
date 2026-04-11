@@ -237,6 +237,21 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
 - **Error sanitization**: internal errors logged server-side only, generic messages returned to clients
 - **Config persistence**: saved password encrypted with AES-256-CBC + PBKDF2 (machine-derived key), config file chmod 600, password hidden on subsequent runs
 
+## Pre-commit Checks
+
+**IMPORTANT:** Always run lint/format checks locally before committing to avoid CI failures.
+
+```bash
+# PWA (required before commit)
+cd pwa && pnpm biome check --write .
+
+# tmux-api
+cd tmux-api && go build .
+
+# Or use Makefile
+make lint
+```
+
 ## Testing
 
 ```bash
