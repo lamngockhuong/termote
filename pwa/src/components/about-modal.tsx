@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { APP_INFO } from '../utils/app-info'
-import { MomoIcon, GithubSponsorsIcon, BuyMeACoffeeIcon } from './sponsor-icons'
+import { BuyMeACoffeeIcon, GithubSponsorsIcon, MomoIcon } from './sponsor-icons'
 
 interface Props {
   isOpen: boolean
@@ -111,7 +111,8 @@ export function AboutModal({ isOpen, onClose }: Props) {
           {/* Sponsor */}
           <div className="pt-4 border-t border-zinc-200 dark:border-zinc-700">
             <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-3 flex items-center gap-1">
-              <GithubSponsorsIcon size={14} className="text-red-500" /> Support this project
+              <GithubSponsorsIcon size={14} className="text-red-500" /> Support
+              this project
             </p>
             <div className="flex flex-wrap gap-2">
               <a
