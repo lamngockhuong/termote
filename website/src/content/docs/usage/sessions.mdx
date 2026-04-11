@@ -15,12 +15,13 @@ Fresh installs start with a single **Shell** session. Create additional sessions
 
 ### Desktop
 
-- **Switch**: Click session in left sidebar
+- **Switch**: Click session in left sidebar or in the **session tabs** at the top (if enabled)
 - **Edit**: Double-click session name, or hover and click pencil icon
 - **Remove**: Hover and click X icon (requires 2+ sessions)
 - **Add**: Click "+ Add session" at bottom
 - **Collapse sidebar**: Click the collapse icon (top-right of sidebar) to show icons only — maximizes terminal width
 - **Fullscreen**: Click the fullscreen button in the header to enter fullscreen mode
+- **Session tabs**: Horizontal tab bar for quick session switching on desktop. Can be toggled via Settings → "Show session tabs"
 
 ### Mobile
 
@@ -31,12 +32,26 @@ Fresh installs start with a single **Shell** session. Create additional sessions
 
 ## Session Features
 
-| Feature      | Description                            |
-| ------------ | -------------------------------------- |
-| Custom icons | Choose emoji icon for each session     |
-| Rename       | Change session name anytime            |
-| Auto-sync    | Sessions sync across browsers every 5s |
-| Persistence  | Sessions backed by tmux windows        |
+| Feature             | Description                                      |
+| ------------------- | ------------------------------------------------ |
+| Custom icons        | Choose emoji icon for each session               |
+| Rename              | Change session name anytime                      |
+| Auto-sync           | Sessions sync across browsers (configurable)     |
+| Persistence         | Sessions backed by tmux windows                  |
+| Connection status   | Real-time indicator in header (see below)        |
+
+## Connection Indicator
+
+The header displays a real-time connection status indicator showing your link to the server:
+
+| Status        | Indicator | Meaning                                     |
+| ------------- | --------- | ------------------------------------------- |
+| Connected     | Green dot | Server online, terminal responsive           |
+| Connecting    | Blue dot  | Establishing connection to server            |
+| Disconnected  | Red dot   | No connection to server (clickable to retry) |
+| Error         | Red X     | Connection error occurred                   |
+
+The indicator auto-detects disconnects via session polling. Click it when disconnected to manually retry the connection.
 
 <Aside type="tip">
   Sessions survive network disconnects. Reconnect to pick up where you left off.

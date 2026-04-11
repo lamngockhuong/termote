@@ -53,8 +53,12 @@ export function useCommandHistory() {
     // Remove duplicate if exists
     const filtered = current.filter((c) => c.text !== trimmed)
     // Add new command at start
+    const id =
+      typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`
     const newHistory = [
-      { id: crypto.randomUUID(), text: trimmed, timestamp: Date.now() },
+      { id, text: trimmed, timestamp: Date.now() },
       ...filtered,
     ].slice(0, MAX_COMMANDS)
 

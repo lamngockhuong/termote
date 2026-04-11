@@ -12,6 +12,7 @@ export interface Settings {
   pollInterval: number // seconds between session list refreshes
   hasSeenGestureHints: boolean // first-time gesture hints overlay
   pasteSource: PasteSource // paste button source: system clipboard or tmux buffer
+  showSessionTabs: boolean // show session tabs bar on desktop
 }
 
 const DEFAULTS: Settings = {
@@ -21,6 +22,7 @@ const DEFAULTS: Settings = {
   pollInterval: 5,
   hasSeenGestureHints: false,
   pasteSource: 'clipboard',
+  showSessionTabs: true,
 }
 
 // Listeners for useSyncExternalStore

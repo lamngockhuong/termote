@@ -5,7 +5,16 @@ description: Điều khiển cảm ứng cho tương tác terminal
 
 import { Aside } from '@astrojs/starlight/components';
 
-Termote hỗ trợ cử chỉ cảm ứng cho các thao tác terminal phổ biến.
+Termote hỗ trợ cử chỉ cảm ứng cho các thao tác terminal phổ biến và menu thao tác nhanh (mobile).
+
+## Chỉ báo kết nối
+
+Trạng thái kết nối máy chủ hiển thị trên header bằng một **dấu chấm màu**:
+- **Xanh (Connected)**: Kết nối bình thường
+- **Vàng (Connecting...)**: Đang kết nối
+- **Đỏ (Disconnected/Error)**: Mất kết nối hoặc lỗi
+
+Ứng dụng tự động phát hiện mất kết nối qua **session polling**. Khi mất kết nối, click vào dấu chấm để **thử lại kết nối** ngay.
 
 ## Hướng dẫn lần đầu
 
@@ -48,9 +57,27 @@ Nhấn giữ để dán có thể không hoạt động trên một số trình 
 
 Nếu dán thất bại, thông báo toast sẽ hướng dẫn bạn dùng nút Paste hoặc nhập text.
 
+## Menu Thao tác nhanh (Chỉ di động)
+
+Một **nút nổi (FAB)** màu xanh ⚡ xuất hiện trên mobile để truy cập thao tác phổ biến:
+
+**Thao tác có sẵn:**
+| Nút        | Hành động         | Phím tương ứng |
+| ---------- | ---------------   | -------------- |
+| Clear      | Xóa màn hình      | `clear`        |
+| Cancel     | Hủy/ngắt lệnh     | Ctrl+C         |
+| Clear line | Xóa dòng hiện tại  | Ctrl+U         |
+| Exit       | Đóng phiên        | Ctrl+D         |
+
+**Kéo thả FAB:**
+- **Giữ và kéo** nút FAB để đổi vị trí bất cứ lúc nào
+- Vị trí được **lưu tự động** trong localStorage
+- Menu tự động **flip theo vị trí FAB** (nếu FAB ở góc dưới phải, menu hiện ở góc trên trái)
+
 ## Mẹo
 
 1. **Hủy nhanh**: Vuốt trái để gửi Ctrl+C khi lệnh bị treo
 2. **Tab complete**: Vuốt phải để tự động hoàn thành tên file/lệnh
 3. **Lịch sử**: Vuốt lên/xuống để duyệt lịch sử lệnh
 4. **Lỗi dán**: Nếu nhấn giữ không hoạt động, dùng nút Paste trên toolbar
+5. **FAB nhanh**: Trên mobile, dùng nút FAB xanh để truy cập thao tác phổ biến

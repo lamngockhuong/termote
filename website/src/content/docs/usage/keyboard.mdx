@@ -3,7 +3,18 @@ title: Keyboard Toolbar
 description: Virtual keyboard for mobile terminal control
 ---
 
-The keyboard toolbar provides touch-friendly buttons for common terminal keys. It has two modes: **minimal** (default) and **expanded** (full keyboard).
+import { Aside } from "@astrojs/starlight/components";
+
+The keyboard toolbar provides touch-friendly buttons for common terminal keys. It has two modes: **minimal** (default) and **expanded** (full keyboard). Additional tools include command history and quick actions menu.
+
+## Toolbar Features
+
+| Feature        | Icon  | Description                                    |
+| -------------- | ----- | ---------------------------------------------- |
+| Minimal mode   | —     | Default, shows essential keys                  |
+| Expanded mode  | ↑     | Tap to show all keys (Home, End, Delete, etc.) |
+| Command history| 🕐    | View and search recent commands (see below)    |
+| Text input     | 🌐    | Switch to IME mode for non-Latin scripts       |
 
 ## Modes
 
@@ -131,6 +142,57 @@ Tap the **Languages icon** to switch to text input mode. This is designed for ty
 - Spacing: 8px between buttons
 - Haptic feedback on tap (if device supports)
 
+## Command History
+
+Tap the **clock icon** (🕐) in the toolbar to open the command history dropdown. View, search, and reuse previously sent commands.
+
+### Features
+
+| Feature           | Behavior                                                     |
+| ----------------- | ------------------------------------------------------------ |
+| Search bar        | Filter commands by typing                                    |
+| Keyboard nav      | Use Up/Down arrows to navigate, Enter to select, Esc to exit |
+| Delete button     | Remove individual commands from history                      |
+| Clear all button  | Wipe entire history at once                                  |
+| Delete via settings | Clear history via Settings → "Clear Command History"        |
+
+### How It Works
+
+- **Automatic capture**: Commands are saved when you press Send in text input mode (IME)
+- **Persistence**: History saved to browser local storage
+- **Per-browser**: History is device/browser-specific, not synced across devices
+- **Search**: Filter by partial command name for quick access
+
+<Aside>
+Commands sent via keyboard toolbar buttons (Ctrl+C, etc.) are not added to history — only IME text submissions are captured.
+</Aside>
+
+## Quick Actions Menu (Mobile Only)
+
+A floating action button (FAB) appears on mobile devices in the bottom-right corner, providing quick access to common terminal actions.
+
+### Actions
+
+| Action       | Function              | Sends                |
+| ------------ | --------------------- | -------------------- |
+| Clear        | Clear terminal        | `clear` command      |
+| Cancel       | Interrupt process     | Ctrl+C               |
+| Clear line   | Delete current line   | Ctrl+U               |
+| Exit         | Logout/EOF            | Ctrl+D               |
+
+### Features
+
+| Feature     | Description                                        |
+| ----------- | -------------------------------------------------- |
+| Draggable   | Long-press and drag to reposition FAB              |
+| Position saved | New position persisted to browser storage         |
+| Auto-flip   | Menu flips based on FAB location to avoid cutoff   |
+| Haptic      | Tap feedback on action (if device supports)        |
+
+<Aside>
+The quick actions FAB appears on mobile devices only. On desktop, use the keyboard toolbar or toolbar buttons instead.
+</Aside>
+
 ## Tips
 
 1. **Modifiers are sticky**: Tap Ctrl or Shift once, then tap another key
@@ -138,3 +200,5 @@ Tap the **Languages icon** to switch to text input mode. This is designed for ty
 3. **Shift+Tab**: Navigate backwards in completion/menus
 4. **Copy mode**: Enable to select text, disable to resume typing
 5. **Expand for more**: Tap expand icon for full keyboard with Home, End, etc.
+6. **Command history**: Use 🕐 clock icon to quickly reuse previous commands
+7. **Reposition FAB**: Long-press the blue ⚡ button to move it out of your way

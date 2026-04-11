@@ -26,8 +26,13 @@ Remote control CLI tools (Claude Code, GitHub Copilot, any terminal) from mobile
 ## Features
 
 - **Session switching**: Multiple tmux sessions with create/edit/delete
+- **Session tabs**: Horizontal tab bar for quick window switching
 - **Mobile-friendly**: Virtual keyboard toolbar (Tab/Ctrl/Shift/arrows, expandable)
 - **Gesture support**: Swipe for Ctrl+C, Tab, history navigation
+- **Command history**: Recall previously sent commands with search
+- **Quick actions**: Floating menu for common operations (clear, cancel, exit)
+- **Connection indicator**: Real-time server status with auto-detect disconnect
+- **Update checker**: Automatic new version notification from GitHub releases
 - **PWA**: Installable to homescreen, offline-capable
 - **Persistent sessions**: tmux keeps sessions alive
 - **Collapsible sidebar**: Desktop UI with toggleable session sidebar
@@ -319,10 +324,10 @@ git pull origin main                    # If installed from source
 
 ## Platform Support
 
-| Platform | Container        | Native           | CLI Script  |
-| -------- | ---------------- | ---------------- | ----------- |
-| Linux    | ✓                | ✓                | termote.sh  |
-| macOS    | ✓                | ✓                | termote.sh  |
+| Platform | Container         | Native            | CLI Script  |
+| -------- | ----------------- | ----------------- | ----------- |
+| Linux    | ✓                 | ✓                 | termote.sh  |
+| macOS    | ✓                 | ✓                 | termote.sh  |
 | Windows  | ⚠️ (experimental) | ⚠️ (experimental) | termote.ps1 |
 
 > **⚠️ Windows Support (Experimental)**: Windows support is currently in early stages and needs more testing. Container mode requires Docker Desktop, native mode requires psmux. Please report issues on GitHub.

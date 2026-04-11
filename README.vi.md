@@ -26,8 +26,13 @@
 ## Tính Năng
 
 - **Chuyển đổi session**: Nhiều tmux sessions với tạo/sửa/xóa
+- **Tab sessions**: Thanh tab ngang để chuyển nhanh giữa các cửa sổ
 - **Thân thiện mobile**: Bàn phím ảo (Tab/Ctrl/Shift/mũi tên, mở rộng được)
 - **Hỗ trợ cử chỉ**: Vuốt cho Ctrl+C, Tab, điều hướng lịch sử
+- **Lịch sử lệnh**: Gợi nhớ các lệnh đã gửi trước đó với tìm kiếm
+- **Thao tác nhanh**: Menu nổi cho các thao tác phổ biến (clear, cancel, exit)
+- **Chỉ báo kết nối**: Trạng thái server real-time, tự phát hiện mất kết nối
+- **Kiểm tra cập nhật**: Tự động thông báo phiên bản mới từ GitHub releases
 - **PWA**: Cài được vào homescreen, hoạt động offline
 - **Sessions bền vững**: tmux giữ sessions sống
 - **Sidebar thu gọn**: Giao diện desktop với thanh sidebar bật/tắt
@@ -295,10 +300,10 @@ git pull origin main                    # Nếu cài từ source
 
 ## Hỗ Trợ Nền Tảng
 
-| Nền Tảng | Container      | Native         | CLI Script  |
-| -------- | -------------- | -------------- | ----------- |
-| Linux    | ✓              | ✓              | termote.sh  |
-| macOS    | ✓              | ✓              | termote.sh  |
+| Nền Tảng | Container       | Native          | CLI Script  |
+| -------- | --------------- | --------------- | ----------- |
+| Linux    | ✓               | ✓               | termote.sh  |
+| macOS    | ✓               | ✓               | termote.sh  |
 | Windows  | ⚠️ (thử nghiệm) | ⚠️ (thử nghiệm) | termote.ps1 |
 
 > **⚠️ Hỗ trợ Windows (Thử nghiệm)**: Hỗ trợ Windows hiện đang trong giai đoạn đầu và cần kiểm tra thêm. Chế độ container yêu cầu Docker Desktop, chế độ native yêu cầu psmux. Vui lòng báo cáo lỗi trên GitHub.

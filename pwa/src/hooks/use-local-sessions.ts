@@ -47,53 +47,50 @@ export function useLocalSessions(pollInterval = 5) {
   const [sessions, setSessions] = useState<Session[]>([])
   const [activeSession, setActiveSession] = useState<Session | null>(null)
   const [isReady, setIsReady] = useState(false)
+  const [isServerReachable, setIsServerReachable] = useState(true)
   const metaRef = useRef<Record<string, SessionMeta>>(loadMeta())
+  const isReadyRef = useRef(false)
+
+  // Apply tmux windows to session state
+  const applyWindows = useCallback((windows: TmuxWindow[]) => {
+    const mapped = windows.map((w) => windowToSession(w, metaRef.current))
+    setSessions(mapped)
+    const active = windows.find((w) => w.active)
+    setActiveSession(
+      active ? windowToSession(active, metaRef.current) : (mapped[0] ?? null),
+    )
+  }, [])
 
   // Fetch sessions from tmux API
   const refreshSessions = useCallback(async () => {
     try {
-      const windows = await fetchWindows()
+      let windows = await fetchWindows()
       if (windows.length === 0) {
-        // No windows, create default one
         await createWindow('shell')
-        const newWindows = await fetchWindows()
-        const newSessions = newWindows.map((w) =>
-          windowToSession(w, metaRef.current),
-        )
-        setSessions(newSessions)
-        const active = newWindows.find((w) => w.active)
-        if (active) {
-          setActiveSession(windowToSession(active, metaRef.current))
-        } else if (newSessions.length > 0) {
-          setActiveSession(newSessions[0])
-        }
-      } else {
-        const newSessions = windows.map((w) =>
-          windowToSession(w, metaRef.current),
-        )
-        setSessions(newSessions)
-        const active = windows.find((w) => w.active)
-        if (active) {
-          setActiveSession(windowToSession(active, metaRef.current))
-        } else if (newSessions.length > 0) {
-          setActiveSession(newSessions[0])
-        }
+        windows = await fetchWindows()
       }
+      applyWindows(windows)
       setIsReady(true)
+      isReadyRef.current = true
+      setIsServerReachable(true)
     } catch (err) {
       console.warn('[tmux] API not available:', err)
-      // Fallback: create a default session
-      const fallback: Session = {
-        id: '0',
-        name: 'shell',
-        icon: '💻',
-        description: 'Terminal',
+      setIsServerReachable(false)
+      // Fallback: create a default session only on first load
+      if (!isReadyRef.current) {
+        const fallback: Session = {
+          id: '0',
+          name: 'shell',
+          icon: '💻',
+          description: 'Terminal',
+        }
+        setSessions([fallback])
+        setActiveSession(fallback)
+        setIsReady(true)
+        isReadyRef.current = true
       }
-      setSessions([fallback])
-      setActiveSession(fallback)
-      setIsReady(true)
     }
-  }, [])
+  }, [applyWindows])
 
   // Initial fetch and periodic refresh
   useEffect(() => {
@@ -198,6 +195,7 @@ export function useLocalSessions(pollInterval = 5) {
     removeSession,
     updateSession,
     isReady,
+    isServerReachable,
     refreshSessions,
   }
 }

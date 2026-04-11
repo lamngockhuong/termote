@@ -1,5 +1,5 @@
 import { RefreshCw, Trash2 } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type {
   ImeSendBehavior,
   PasteSource,
@@ -15,7 +15,7 @@ interface Props {
     value: Settings[K],
   ) => void
   onShowGestureHints?: () => void
-  onCheckForUpdate?: () => void
+  onCheckForUpdate?: () => Promise<string | null>
   updateChecking?: boolean
   onClearHistory?: () => void
   historyCount?: number
@@ -110,6 +110,16 @@ export function SettingsModal({
   historyCount = 0,
 }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null)
+  const [inlineToast, setInlineToast] = useState<string | null>(null)
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout>>(null)
+
+  // Cleanup toast timer on unmount
+  useEffect(
+    () => () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+    },
+    [],
+  )
 
   useEffect(() => {
     const dialog = dialogRef.current
@@ -246,6 +256,15 @@ export function SettingsModal({
             }
           />
 
+          <ToggleRow
+            label="Show session tabs"
+            description="Display tab bar for quick session switching (desktop)"
+            checked={settings.showSessionTabs}
+            onChange={() =>
+              onUpdateSetting('showSessionTabs', !settings.showSessionTabs)
+            }
+          />
+
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
@@ -282,17 +301,35 @@ export function SettingsModal({
                 </button>
               )}
               {onCheckForUpdate && (
-                <button
-                  onClick={onCheckForUpdate}
-                  disabled={updateChecking}
-                  className="w-full py-2.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  <RefreshCw
-                    size={16}
-                    className={updateChecking ? 'animate-spin' : ''}
-                  />
-                  {updateChecking ? 'Checking...' : 'Check for Updates'}
-                </button>
+                <div>
+                  <button
+                    onClick={async () => {
+                      const msg = await onCheckForUpdate()
+                      if (msg) {
+                        setInlineToast(msg)
+                        if (toastTimerRef.current)
+                          clearTimeout(toastTimerRef.current)
+                        toastTimerRef.current = setTimeout(
+                          () => setInlineToast(null),
+                          4000,
+                        )
+                      }
+                    }}
+                    disabled={updateChecking}
+                    className="w-full py-2.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    <RefreshCw
+                      size={16}
+                      className={updateChecking ? 'animate-spin' : ''}
+                    />
+                    {updateChecking ? 'Checking...' : 'Check for Updates'}
+                  </button>
+                  {inlineToast && (
+                    <p className="text-xs text-center text-zinc-500 dark:text-zinc-400 mt-1 animate-in fade-in duration-200">
+                      {inlineToast}
+                    </p>
+                  )}
+                </div>
               )}
               {onClearHistory && (
                 <button

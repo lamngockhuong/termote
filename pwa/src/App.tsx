@@ -103,11 +103,23 @@ export default function App() {
     addSession,
     removeSession,
     updateSession,
+    isServerReachable,
   } = useLocalSessions(settings.pollInterval)
   const { fontSize, increase, decrease } = useFontSize()
   const { resolvedTheme } = useTheme()
   const { isFullscreen, toggleFullscreen } = useFullscreen()
   const { checkForUpdate, checking: updateChecking } = useUpdateCheck()
+
+  // Sync connection state with server reachability from session polling
+  useEffect(() => {
+    if (!isServerReachable) {
+      setConnectionState('disconnected')
+    } else {
+      setConnectionState((prev) =>
+        prev === 'disconnected' ? 'connected' : prev,
+      )
+    }
+  }, [isServerReachable])
 
   // Check for updates on mount
   useEffect(() => {
@@ -419,7 +431,7 @@ export default function App() {
             </div>
           </header>
           {/* Desktop session tabs */}
-          {!isMobile && (
+          {!isMobile && settings.showSessionTabs && (
             <SessionTabs
               sessions={sessions}
               activeId={activeSession.id}
@@ -539,12 +551,12 @@ export default function App() {
         onCheckForUpdate={async () => {
           const result = await checkForUpdate(true)
           if (result.hasUpdate && result.latestVersion) {
-            setToastMessage(`Update available: v${result.latestVersion}`)
-          } else if (result.latestVersion) {
-            setToastMessage('You are on the latest version')
-          } else {
-            setToastMessage('Could not check for updates')
+            return `Update available: v${result.latestVersion}`
           }
+          if (result.latestVersion) {
+            return 'You are on the latest version'
+          }
+          return 'Could not check for updates'
         }}
         updateChecking={updateChecking}
         onClearHistory={clearHistory}

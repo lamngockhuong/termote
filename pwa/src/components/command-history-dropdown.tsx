@@ -138,7 +138,7 @@ export function CommandHistoryDropdown({
                   e.stopPropagation()
                   onRemove(cmd.id)
                 }}
-                className="hidden group-hover:flex p-1 hover:bg-zinc-300 dark:hover:bg-zinc-600 rounded transition-colors"
+                className="sm:hidden sm:group-hover:flex p-1 hover:bg-zinc-300 dark:hover:bg-zinc-600 rounded transition-colors"
                 aria-label={`Remove command: ${cmd.text}`}
               >
                 <Trash2 size={14} className="text-red-500" />
