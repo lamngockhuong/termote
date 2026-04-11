@@ -175,9 +175,7 @@ export function QuickActionsMenu({ onSendKey, onSendText }: Props) {
           className={`absolute flex flex-col gap-2 animate-in fade-in duration-150 ${
             position.right > window.innerWidth / 2 ? 'left-0' : 'right-0'
           } ${
-            position.bottom > window.innerHeight / 2
-              ? 'top-14'
-              : 'bottom-14'
+            position.bottom > window.innerHeight / 2 ? 'top-14' : 'bottom-14'
           }`}
         >
           {ACTIONS.map((action) => (

@@ -300,10 +300,10 @@ git pull origin main                    # Nếu cài từ source
 
 ## Hỗ Trợ Nền Tảng
 
-| Nền Tảng | Container       | Native          | CLI Script  |
-| -------- | --------------- | --------------- | ----------- |
-| Linux    | ✓               | ✓               | termote.sh  |
-| macOS    | ✓               | ✓               | termote.sh  |
+| Nền Tảng | Container      | Native         | CLI Script  |
+| -------- | -------------- | -------------- | ----------- |
+| Linux    | ✓              | ✓              | termote.sh  |
+| macOS    | ✓              | ✓              | termote.sh  |
 | Windows  | ⚠️ (thử nghiệm) | ⚠️ (thử nghiệm) | termote.ps1 |
 
 > **⚠️ Hỗ trợ Windows (Thử nghiệm)**: Hỗ trợ Windows hiện đang trong giai đoạn đầu và cần kiểm tra thêm. Chế độ container yêu cầu Docker Desktop, chế độ native yêu cầu psmux. Vui lòng báo cáo lỗi trên GitHub.
