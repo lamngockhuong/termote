@@ -21,6 +21,7 @@ export function SessionTabs({
   const activeRef = useRef<HTMLButtonElement>(null)
 
   // Scroll active tab into view only if not visible
+  // biome-ignore lint/correctness/useExhaustiveDependencies: activeId triggers scroll when tab changes
   useEffect(() => {
     const el = activeRef.current
     const container = scrollRef.current
@@ -32,7 +33,11 @@ export function SessionTabs({
       rect.left >= containerRect.left && rect.right <= containerRect.right
 
     if (!isVisible) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+      el.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+        inline: 'center',
+      })
     }
   }, [activeId])
 

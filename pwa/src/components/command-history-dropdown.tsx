@@ -119,6 +119,7 @@ export function CommandHistoryDropdown({
               key={cmd.id}
               id={`history-item-${index}`}
               role="option"
+              tabIndex={0}
               aria-selected={selectedIndex === index}
               data-history-item
               className={`group flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors ${
