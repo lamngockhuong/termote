@@ -6,6 +6,7 @@ import {
   ChevronsDown,
   ChevronsUp,
   Clipboard,
+  Clock,
   CornerDownLeft,
   Expand,
   History,
@@ -68,9 +69,9 @@ const TOOLBAR_GUIDE: GuideSection[] = [
   {
     title: 'Toolbar Buttons',
     items: [
-      { key: <ExpandCollapseIcon />, desc: 'Expand/collapse keyboard' },
       { key: <Keyboard size={ICON_SIZE} />, desc: 'Toggle virtual keyboard' },
       { key: <Languages size={ICON_SIZE} />, desc: 'Text input mode (IME)' },
+      { key: <Clock size={ICON_SIZE} />, desc: 'Command history search' },
       { key: 'Tab', desc: 'Tab key / autocomplete' },
       { key: 'Esc', desc: 'Escape key (clears modifiers if active)' },
       {
@@ -80,6 +81,7 @@ const TOOLBAR_GUIDE: GuideSection[] = [
       { key: 'Ctrl', desc: 'Toggle Ctrl modifier (sticky)' },
       { key: 'Shift', desc: 'Toggle Shift modifier (sticky)' },
       { key: <ArrowKeysIcon />, desc: 'Arrow keys' },
+      { key: <ExpandCollapseIcon />, desc: 'Expand/collapse keyboard' },
       { key: <History size={ICON_SIZE} />, desc: 'Toggle tmux copy mode' },
       {
         key: <Clipboard size={ICON_SIZE} />,
@@ -103,9 +105,10 @@ const TOOLBAR_GUIDE: GuideSection[] = [
   {
     title: 'Ctrl+Shift Combos',
     items: [
-      { key: '^⇧V', desc: 'Paste from clipboard' },
       { key: '^⇧C', desc: 'Copy (terminal)' },
+      { key: '^⇧V', desc: 'Paste from clipboard' },
       { key: '^⇧Z', desc: 'Redo' },
+      { key: '^⇧X', desc: 'Cut' },
     ],
   },
   {
