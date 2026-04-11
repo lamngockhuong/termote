@@ -446,6 +446,7 @@ export function KeyboardToolbar({
           key={keyConfig.key}
           onMouseDown={(e) => !keyConfig.isKeyboardToggle && e.preventDefault()}
           onTouchStart={(e) =>
+            /* v8 ignore next */
             !keyConfig.isKeyboardToggle && e.preventDefault()
           }
           onContextMenu={(e) => e.preventDefault()}

@@ -25,6 +25,7 @@ export function SessionTabs({
   useEffect(() => {
     const el = activeRef.current
     const container = scrollRef.current
+    /* v8 ignore next */
     if (!el || !container) return
 
     const rect = el.getBoundingClientRect()

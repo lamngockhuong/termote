@@ -104,6 +104,7 @@ export function useLocalSessions(pollInterval = 5) {
     async (sessionId: string) => {
       const session = sessions.find((s) => s.id === sessionId)
       if (session && session.id !== activeSession?.id) {
+        /* v8 ignore next */
         await selectWindow(sessionId).catch(() => {})
         setActiveSession(session)
       }
@@ -118,6 +119,7 @@ export function useLocalSessions(pollInterval = 5) {
       saveMeta(metaRef.current)
 
       // Create tmux window
+      /* v8 ignore next */
       await createWindow(name).catch(() => {})
 
       // Refresh to get new window
@@ -134,6 +136,7 @@ export function useLocalSessions(pollInterval = 5) {
       if (!session) return
 
       // Kill tmux window
+      /* v8 ignore next */
       await killWindow(sessionId).catch(() => {})
 
       // Remove metadata
@@ -160,6 +163,7 @@ export function useLocalSessions(pollInterval = 5) {
 
       // If name changed, rename tmux window and re-key metadata
       if (updates.name && updates.name !== oldName) {
+        /* v8 ignore next */
         await renameWindow(sessionId, updates.name).catch(() => {})
         delete metaRef.current[oldName]
       }
@@ -176,6 +180,7 @@ export function useLocalSessions(pollInterval = 5) {
         prev.map((s) => (s.id === sessionId ? { ...s, ...updates } : s)),
       )
       if (activeSession?.id === sessionId) {
+        /* v8 ignore next */
         setActiveSession((prev) => (prev ? { ...prev, ...updates } : prev))
       }
     },

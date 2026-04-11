@@ -1,5 +1,6 @@
 import { RefreshCw, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { useDialogModal } from '../hooks/use-dialog-modal'
 import type {
   ImeSendBehavior,
   PasteSource,
@@ -121,21 +122,7 @@ export function SettingsModal({
     [],
   )
 
-  useEffect(() => {
-    const dialog = dialogRef.current
-    if (!dialog) return
-    if (isOpen) {
-      dialog.showModal()
-      const handleCancel = (e: Event) => {
-        e.preventDefault()
-        onClose()
-      }
-      dialog.addEventListener('cancel', handleCancel)
-      return () => dialog.removeEventListener('cancel', handleCancel)
-    } else {
-      dialog.close()
-    }
-  }, [isOpen, onClose])
+  useDialogModal(dialogRef, isOpen, onClose)
 
   if (!isOpen) return null
 

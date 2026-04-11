@@ -76,7 +76,7 @@ jobs:
 
       - name: Unit tests
         working-directory: pwa
-        run: pnpm test
+        run: pnpm test:coverage
 
       - name: Build
         working-directory: pwa

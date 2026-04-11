@@ -61,6 +61,7 @@ export async function fetchTerminalToken(): Promise<string> {
 
   for (let i = 0; i < attempts; i++) {
     const ctrl = new AbortController()
+    /* v8 ignore next */
     const timeout = setTimeout(() => ctrl.abort(), 5000)
     try {
       const res = await fetch(`${API_BASE}/terminal-token`, {

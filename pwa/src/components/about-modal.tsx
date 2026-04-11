@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { useDialogModal } from '../hooks/use-dialog-modal'
 import { APP_INFO } from '../utils/app-info'
 import { BuyMeACoffeeIcon, GithubSponsorsIcon, MomoIcon } from './sponsor-icons'
 
@@ -10,16 +11,7 @@ interface Props {
 export function AboutModal({ isOpen, onClose }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null)
 
-  useEffect(() => {
-    const dialog = dialogRef.current
-    if (!dialog) return
-
-    if (isOpen) {
-      dialog.showModal()
-    } else {
-      dialog.close()
-    }
-  }, [isOpen])
+  useDialogModal(dialogRef, isOpen)
 
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {

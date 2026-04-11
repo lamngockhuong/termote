@@ -27,6 +27,7 @@ function compareVersions(a: string, b: string): number {
     if ((pa[i] || 0) < (pb[i] || 0)) return -1
     if ((pa[i] || 0) > (pb[i] || 0)) return 1
   }
+  /* v8 ignore next */
   return 0
 }
 

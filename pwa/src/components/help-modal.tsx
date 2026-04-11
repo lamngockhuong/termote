@@ -15,6 +15,7 @@ import {
   Minimize2,
 } from 'lucide-react'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
+import { useDialogModal } from '../hooks/use-dialog-modal'
 
 interface Props {
   isOpen: boolean
@@ -176,16 +177,7 @@ export function HelpModal({ isOpen, onClose }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const [activeTab, setActiveTab] = useState<TabId>('gestures')
 
-  useEffect(() => {
-    const dialog = dialogRef.current
-    if (!dialog) return
-
-    if (isOpen) {
-      dialog.showModal()
-    } else {
-      dialog.close()
-    }
-  }, [isOpen])
+  useDialogModal(dialogRef, isOpen)
 
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
