@@ -495,10 +495,11 @@ cd pwa && pnpm test:e2e
 _Add any issues or observations during testing:_
 
 -
-- ***
 
-  **Tested by:** **\*\***\_\_\_**\*\***
+---
 
-  **Date:** **\*\***\_\_\_**\*\***
+**Tested by:** **\*\***\_\_\_**\*\***
 
-  **Version:** **\*\***\_\_\_**\*\***
+**Date:** **\*\***\_\_\_**\*\***
+
+**Version:** **\*\***\_\_\_**\*\***
