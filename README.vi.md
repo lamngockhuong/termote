@@ -84,7 +84,7 @@ flowchart TB
 
 ## Bắt Đầu Nhanh
 
-> 📖 **Mới dùng Termote?** Xem [Hướng dẫn Bắt đầu](docs/getting-started.vi.md) để có hướng dẫn chi tiết kèm ví dụ.
+> 📖 **Mới dùng Termote?** Xem [Hướng dẫn Bắt đầu](docs/vi/getting-started.md) để có hướng dẫn chi tiết kèm ví dụ.
 
 ```bash
 ./scripts/termote.sh                   # Menu tương tác
@@ -124,6 +124,28 @@ curl -fsSL .../get.sh | bash -s -- --yes --native --tailscale myhost
 
 # Buộc nhập mật khẩu mới (bỏ qua config đã lưu)
 curl -fsSL .../get.sh | bash -s -- --yes --container --fresh
+```
+
+**Windows (PowerShell):**
+
+> **Lưu ý:** Nếu hệ thống chặn chạy script, hãy chạy lệnh này trước:
+>
+> ```powershell
+> Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+> ```
+
+```powershell
+# Tải về và hỏi trước khi cài (mặc định native mode)
+irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
+
+# Tự động cài không hỏi
+$env:TERMOTE_AUTO_YES = "true"; irm .../get.ps1 | iex
+
+# Với mode cụ thể
+$env:TERMOTE_MODE = "container"; irm .../get.ps1 | iex
+
+# Cập nhật tự động với config đã lưu
+$env:TERMOTE_UPDATE = "true"; irm .../get.ps1 | iex
 ```
 
 ### Docker
@@ -310,12 +332,6 @@ git pull origin main                    # Nếu cài từ source
 
 ### Chế Độ Native Windows
 
-> **Lưu ý:** Nếu hệ thống chặn chạy script, hãy chạy lệnh này trước:
->
-> ```powershell
-> Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
-> ```
-
 Chế độ native Windows sử dụng [psmux](https://github.com/psmux/psmux) (terminal multiplexer tương thích tmux cho Windows):
 
 ```powershell
@@ -362,10 +378,13 @@ termote/
 │   ├── serve.go            # Server (PWA, proxy, auth)
 │   └── tmux.go             # tmux API handlers
 ├── scripts/
-│   ├── termote.sh          # CLI hợp nhất (install/uninstall/health)
-│   └── get.sh              # Online installer (curl | bash)
+│   ├── termote.sh          # Unix CLI (install/uninstall/health)
+│   ├── termote.ps1         # Windows PowerShell CLI
+│   ├── get.sh              # Unix online installer (curl | bash)
+│   └── get.ps1             # Windows online installer (irm | iex)
 ├── tests/                  # Bộ test
 │   ├── test-termote.sh
+│   ├── test-termote.ps1    # Windows tests
 │   ├── test-get.sh
 │   └── test-entrypoints.sh
 └── website/                # Trang docs Astro Starlight
@@ -386,7 +405,7 @@ cd pwa && pnpm test:e2e       # Chạy Playwright tests
 cd pwa && pnpm test:e2e:ui    # Chạy với UI debugger
 ```
 
-**Kiểm Tra Thủ Công:** Xem [Danh Sách Kiểm Tra](docs/self-test-checklist.vi.md)
+**Kiểm Tra Thủ Công:** Xem [Danh Sách Kiểm Tra](docs/vi/self-test-checklist.md)
 
 ## Xử Lý Sự Cố
 
