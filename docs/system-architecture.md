@@ -52,13 +52,18 @@ React SPA with:
 - **Terminal Frame**: ttyd iframe with xterm.js terminal, in-place theme switching (no reload)
 - **Hammer.js**: Touch gesture recognition (mobile only)
 - **Session Sidebar**: Switch between tmux windows, add/edit/remove (collapsible on desktop)
+- **Session Tabs**: Horizontal tab bar for window switching (hidden/shown via setting), add/remove via UI
 - **Keyboard Toolbar**: Virtual keys, Ctrl combos, scroll controls (respects default expanded setting)
 - **Settings Menu**: Theme toggle (light/dark/system), Clear Cache & Reload, Preferences
-- **Settings Modal**: IME behavior, toolbar default expanded, context menu control, session poll interval
+- **Settings Modal**: IME behavior, toolbar expanded, context menu control, session tabs visibility, poll interval, gesture hints, update check (inline toast), history clear
 - **Session Poll Interval**: Configurable sync frequency (3s-5m, default 5s) to control API polling rate
+- **Connection Indicator**: Real-time auto-detection of server status (connecting/connected/disconnected/error), clickable to retry
+- **Command History**: Search/recall previously sent commands (mobile-friendly delete buttons), persisted in localStorage
+- **Quick Actions Menu**: Draggable FAB with auto-flipping menu, preset commands (clear, cancel, exit), position persisted
 - **Context Menu Control**: Block/unblock right-click on terminal via iframe postMessage
 - **Font Controls**: Adjustable font size (6-24px)
 - **Fullscreen Toggle**: Desktop-only fullscreen mode via Fullscreen API
+- **Update Check**: Auto-detect new releases via GitHub API, inline result in settings dialog
 - **Responsive Layout**: Collapsible desktop sidebar, mobile slide-over panel
 
 ### tmux-api Server

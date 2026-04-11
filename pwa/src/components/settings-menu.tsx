@@ -19,6 +19,7 @@ async function clearCacheAndReload() {
       await Promise.all(cacheNames.map((name) => caches.delete(name)))
     }
     // Clear session cookie to trigger basic auth on reload
+    // biome-ignore lint/suspicious/noDocumentCookie: needed to clear auth session before reload
     document.cookie = 'termote_session=; Max-Age=0; path=/'
   } finally {
     window.location.reload()

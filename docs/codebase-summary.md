@@ -14,11 +14,15 @@ termote/
 │   │   ├── components/
 │   │   │   ├── about-modal.tsx              # About dialog
 │   │   │   ├── bottom-navigation.tsx        # Mobile bottom nav
+│   │   │   ├── command-history-dropdown.tsx # Command history search/select
+│   │   │   ├── connection-indicator.tsx     # Connection status indicator
 │   │   │   ├── gesture-hints-overlay.tsx    # First-time gesture tutorial (mobile)
 │   │   │   ├── help-modal.tsx               # Help/gestures guide
 │   │   │   ├── icon-picker.tsx              # Emoji icon selector
 │   │   │   ├── keyboard-toolbar.tsx         # Virtual keyboard buttons
+│   │   │   ├── quick-actions-menu.tsx       # Quick action buttons (clear, cancel, exit)
 │   │   │   ├── session-sidebar.tsx          # Session switcher sidebar
+│   │   │   ├── session-tabs.tsx             # Session tabs (switch, add, remove)
 │   │   │   ├── settings-menu.tsx            # Settings dropdown
 │   │   │   ├── settings-modal.tsx           # Settings dialog (IME, toolbar, paste, etc.)
 │   │   │   ├── swipeable-session-item.tsx   # Swipe-to-delete session
@@ -29,6 +33,7 @@ termote/
 │   │   │   ├── theme-context.tsx            # Theme provider (light/dark/system)
 │   │   │   └── theme-context.test.tsx       # Theme context tests
 │   │   ├── hooks/
+│   │   │   ├── use-command-history.ts       # Command history storage + retrieval (localStorage)
 │   │   │   ├── use-font-size.ts             # Font size state (6-24)
 │   │   │   ├── use-font-size.test.ts        # Font size hook tests
 │   │   │   ├── use-fullscreen.test.ts       # Fullscreen hook tests
@@ -42,6 +47,7 @@ termote/
 │   │   │   ├── use-sidebar-collapsed.test.ts # Sidebar collapse state tests
 │   │   │   ├── use-tmux-api.ts              # tmux HTTP API client
 │   │   │   ├── use-tmux-api.test.ts         # API client tests
+│   │   │   ├── use-update-check.ts          # Check GitHub for new releases
 │   │   │   └── use-viewport.ts              # Viewport height + keyboard detection
 │   │   ├── types/
 │   │   │   └── session.ts                   # Session interface
@@ -117,17 +123,70 @@ Virtual keyboard for mobile:
 
 ### settings-modal.tsx (~270 lines)
 
-Settings dialog with radio buttons, toggles, and dropdown:
+Settings dialog with radio buttons, toggles, dropdown, and buttons:
 
 - **IME send behavior**: "Send text only" (default) or "Send + Enter" (auto-press Enter after text)
 - **Paste button source**: System clipboard (default) or tmux buffer
 - **Toolbar default expanded**: Toggle to show all keys on load (vs. collapsed by default)
 - **Disable right-click menu**: Toggle to disable context menu on terminal (default: enabled)
+- **Show session tabs**: Toggle desktop tab bar visibility (default: enabled)
 - **Session poll interval**: Dropdown to set sync frequency (3s, 5s, 10s, 15s, 30s, 1m, 2m, 5m; default: 5s)
 - **Show Gesture Hints**: Button to re-show gesture tutorial (mobile only)
+- **Check for Updates**: Button with inline toast result (no global toast behind dialog)
+- **Clear Command History**: Button with history count disabled when empty
 - Uses `ToggleRow` helper component for consistent toggle styling
 - Accessible dialog with custom styling
+- Toast timer properly cleaned up on unmount and re-click
 - Persists changes via `useSettings()` hook
+
+### connection-indicator.tsx (~54 lines)
+
+Connection status indicator with network awareness:
+
+- Displays connection state: connecting (pulsing yellow), connected (green), disconnected/error (red)
+- Clickable on error/disconnected to retry connection
+- Shows Wifi/WifiOff icon (desktop only)
+- Syncs with `isServerReachable` state from `useLocalSessions()` polling
+- Auto-detects server disconnect and updates indicator in real-time
+- Minimal footprint, integrates with keyboard toolbar area
+
+### session-tabs.tsx (~94 lines)
+
+Horizontal session tabs for window switching:
+
+- Scrollable tab bar with add/remove buttons
+- Auto-scrolls active tab into view on selection
+- Icon + name display for each session (truncated to 100px)
+- Close button on hover (hidden if only 1 session)
+- Integrates with session management (onSelect, onAdd, onRemove handlers)
+- Mobile/desktop responsive bar layout
+- Visibility controlled by `showSessionTabs` setting (default: true)
+
+### command-history-dropdown.tsx (~150 lines)
+
+Command search/recall dropdown UI with mobile support:
+
+- Search input with filtering (case-insensitive)
+- Keyboard navigation (Arrow keys, Enter, Escape)
+- Recent commands listed chronologically (newest first)
+- Remove/clear buttons for individual commands and full history
+- Delete button always visible on mobile (was hidden on desktop, now visible at breakpoint)
+- Uses `crypto.randomUUID()` with HTTP LAN fallback (non-secure context support)
+- Auto-focuses input on open
+- Smooth scroll-into-view for selected items
+
+### quick-actions-menu.tsx (~110 lines)
+
+FAB (floating action button) with draggable positioning and auto-flipping menu:
+
+- Actions: Clear (clears terminal), Cancel (Ctrl+C), Clear line (Ctrl+U), Exit (Ctrl+D)
+- Blue FAB button → taps to open/close
+- Draggable via touch on mobile — position persisted to localStorage
+- Direct DOM manipulation for smooth 60fps drag (no React re-renders during drag)
+- Menu popup auto-flips in 4 directions based on FAB position (top/bottom + left/right)
+- Animated popover with icon + label for each action
+- Haptic feedback on button tap and action selection
+- Bounds clamping to keep FAB within viewport
 
 ### use-settings.ts (~75 lines)
 
@@ -141,8 +200,9 @@ Settings state management using `useSyncExternalStore`:
   - `pollInterval`: number in seconds (default: 5, range: 3-300 for 3s-5m)
   - `hasSeenGestureHints`: boolean (default: false)
   - `pasteSource`: 'clipboard' | 'tmux' (default: 'clipboard')
+  - `showSessionTabs`: boolean (default: true)
 - `updateSetting()` callback to update individual settings
-- Defaults to send-only + collapsed toolbar + context menu disabled + 5s poll + clipboard paste
+- Defaults to send-only + collapsed toolbar + context menu disabled + 5s poll + clipboard paste + tabs shown
 
 ### use-gestures.ts (~53 lines)
 
@@ -154,12 +214,38 @@ Hammer.js integration:
 
 ### use-local-sessions.ts (~203 lines)
 
-Session management + tmux sync:
+Session management + tmux sync with stale closure fix:
 
 - Sessions loaded from tmux windows via API
 - LocalStorage for metadata (icons, descriptions)
 - tmux window create/select/kill via API
 - Polling interval configurable via `pollInterval` parameter (seconds, default: 5)
+- Exposes `isServerReachable` state derived from polling success/failure
+- Auto-updates connection indicator when server becomes unreachable
+- Uses `isReadyRef` to avoid stale `isReady` state closure in refresh handler
+- Extracted `applyWindows` helper to deduplicate window-to-session mapping
+
+### use-command-history.ts (~75 lines)
+
+Command history management with localStorage persistence:
+
+- Stores up to 100 commands (max) in localStorage
+- `addCommand(text)` — adds to history, deduplicates, newest first
+- `removeCommand(id)` — delete single command
+- `clearHistory()` — wipe all commands
+- `useSyncExternalStore` for reactive updates across app
+- Auto-initialized on first use, cached for performance
+
+### use-update-check.ts (~114 lines)
+
+GitHub release checker with semver comparison:
+
+- Fetches latest release tag from GitHub API (lamngockhuong/termote)
+- Compares with APP_INFO.version using simple semver (X.Y.Z)
+- 1-hour cache in localStorage to avoid rate limits
+- Returns hasUpdate, latestVersion, releaseUrl
+- Silent failure (returns no update if API fails)
+- `checkForUpdate(force?: boolean)` with optional cache bypass
 
 ### use-tmux-api.ts (~56 lines)
 

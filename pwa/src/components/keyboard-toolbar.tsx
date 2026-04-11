@@ -8,6 +8,7 @@ import {
   ChevronsDown,
   ChevronsUp,
   Clipboard,
+  Clock,
   CornerDownLeft,
   Delete,
   Expand,
@@ -45,6 +46,8 @@ interface Props {
   imeMode?: boolean
   onImeModeChange?: (active: boolean) => void
   defaultExpanded?: boolean
+  onHistoryToggle?: () => void
+  historyOpen?: boolean
 }
 
 interface KeyConfig {
@@ -59,6 +62,7 @@ interface KeyConfig {
   isKeyboardToggle?: boolean
   isImeToggle?: boolean
   isExpandToggle?: boolean
+  isHistoryToggle?: boolean
 }
 
 const ICON_SIZE = 18
@@ -74,6 +78,11 @@ const MINIMAL_KEYS: KeyConfig[] = [
     label: <Languages size={ICON_SIZE} />,
     key: 'ImeToggle',
     isImeToggle: true,
+  },
+  {
+    label: <Clock size={ICON_SIZE} />,
+    key: 'HistoryToggle',
+    isHistoryToggle: true,
   },
   { label: 'Tab', key: 'Tab' },
   { label: 'Esc', key: 'Escape' },
@@ -163,9 +172,14 @@ function getKeyButtonBg(
   key: KeyConfig,
   ctrlActive: boolean,
   shiftActive: boolean,
+  historyOpen?: boolean,
 ): string {
   if (key.isCtrlModifier && ctrlActive) return 'bg-blue-600 text-white'
   if (key.isShiftModifier && shiftActive) return 'bg-orange-500 text-white'
+  if (key.isHistoryToggle)
+    return historyOpen
+      ? 'bg-cyan-500 text-white'
+      : 'bg-cyan-200/70 dark:bg-cyan-700/50'
   if (key.isExpandToggle) return 'bg-indigo-200/70 dark:bg-indigo-700/50'
   if (key.isImeToggle) return 'bg-teal-200/70 dark:bg-teal-700/50'
   if (key.isKeyboardToggle) return 'bg-purple-200/70 dark:bg-purple-700/50'
@@ -192,6 +206,8 @@ export function KeyboardToolbar({
   imeMode: externalImeMode,
   onImeModeChange,
   defaultExpanded = false,
+  onHistoryToggle,
+  historyOpen,
 }: Props) {
   const [internalCtrlActive, setInternalCtrlActive] = useState(false)
   const [internalShiftActive, setInternalShiftActive] = useState(false)
@@ -214,13 +230,17 @@ export function KeyboardToolbar({
 
   // Build visible keys based on mode (memoized to avoid re-creating arrays)
   const visibleKeys = useMemo(() => {
-    const baseKeys = onSendText
+    let baseKeys = onSendText
       ? MINIMAL_KEYS
       : MINIMAL_KEYS.filter((k) => !k.isImeToggle)
+    // Only show history toggle if handler provided
+    if (!onHistoryToggle) {
+      baseKeys = baseKeys.filter((k) => !k.isHistoryToggle)
+    }
     return expanded
       ? [...baseKeys, ...EXTRA_KEYS, EXPAND_TOGGLE_KEY, ...UTILITY_KEYS]
       : [...baseKeys, EXPAND_TOGGLE_KEY, ...UTILITY_KEYS]
-  }, [expanded, onSendText])
+  }, [expanded, onSendText, onHistoryToggle])
 
   // Ctrl combos based on mode
   const ctrlCombos = expanded ? CTRL_COMBOS_FULL : CTRL_COMBOS_MINIMAL
@@ -294,6 +314,7 @@ export function KeyboardToolbar({
         isPaste?: boolean
         isKeyboardToggle?: boolean
         isImeToggle?: boolean
+        isHistoryToggle?: boolean
       },
     ) => {
       haptic('light')
@@ -303,6 +324,10 @@ export function KeyboardToolbar({
       }
       if (opts?.isImeToggle) {
         toggleImeMode()
+        return
+      }
+      if (opts?.isHistoryToggle && onHistoryToggle) {
+        onHistoryToggle()
         return
       }
       if (opts?.isKeyboardToggle && onToggleKeyboard) {
@@ -363,6 +388,7 @@ export function KeyboardToolbar({
       onTmuxCopy,
       onPaste,
       onToggleKeyboard,
+      onHistoryToggle,
       toggleImeMode,
       toggleExpanded,
       haptic,
@@ -433,9 +459,10 @@ export function KeyboardToolbar({
               isPaste: keyConfig.isPaste,
               isKeyboardToggle: keyConfig.isKeyboardToggle,
               isImeToggle: keyConfig.isImeToggle,
+              isHistoryToggle: keyConfig.isHistoryToggle,
             })
           }
-          className={`min-w-11 h-11 px-3 flex items-center justify-center rounded-xl text-sm font-mono ${getKeyButtonBg(keyConfig, ctrlActive, shiftActive)} active:bg-zinc-300 dark:active:bg-zinc-600 touch-manipulation transition-colors`}
+          className={`min-w-11 h-11 px-3 flex items-center justify-center rounded-xl text-sm font-mono ${getKeyButtonBg(keyConfig, ctrlActive, shiftActive, historyOpen)} active:bg-zinc-300 dark:active:bg-zinc-600 touch-manipulation transition-colors`}
           aria-label={
             keyConfig.isExpandToggle
               ? expanded

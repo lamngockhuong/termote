@@ -28,6 +28,7 @@ PWA that wraps ttyd terminals with:
 | Feature                | Description                                                |
 | ---------------------- | ---------------------------------------------------------- |
 | Session Management     | Create, switch, delete tmux windows via UI                 |
+| Session Tabs           | Horizontal tab bar for quick window switching              |
 | Virtual Keyboard       | Touch-friendly buttons for special keys                    |
 | Keyboard Gestures      | Swipe, long-press, pinch for common shortcuts              |
 | Gesture Hints          | First-time overlay teaching touch gestures (mobile)        |
@@ -40,6 +41,10 @@ PWA that wraps ttyd terminals with:
 | Toast Notifications    | Error feedback for clipboard access issues                 |
 | Persistent Settings    | User preferences saved to localStorage                     |
 | Session Poll Interval  | Configurable sync frequency (3s-5m) to reduce server spam  |
+| Connection Indicator   | Real-time server status with auto-detection of disconnects |
+| Command History        | Search and recall previously sent commands                 |
+| Quick Actions Menu     | FAB with preset commands (clear, cancel, exit)             |
+| Update Checker         | Auto-detect new releases via GitHub, show notifications    |
 | Session Cookie Auth    | Prevents double basic auth prompt on mobile                |
 | iOS Safe Area          | Respects status bar safe area inset                        |
 | Basic Authentication   | HTTP basic auth + iframe-only terminal access              |

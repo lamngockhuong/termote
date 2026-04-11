@@ -45,6 +45,17 @@ Blocks the browser context menu (right-click / long-press) on the terminal area 
 | On     | Context menu is blocked on terminal     | ✓       |
 | Off    | Browser default context menu is allowed |         |
 
+## Show Session Tabs (Desktop Only)
+
+Displays a horizontal tab bar at the top for quick session switching on desktop. The sidebar remains available for more detailed session management.
+
+| Option | Behavior                              | Default |
+| ------ | ------------------------------------- | ------- |
+| On     | Show session tabs in header            |         |
+| Off    | Hide tabs, use sidebar only           | ✓       |
+
+This setting only appears on desktop devices.
+
 ## Session Poll Interval
 
 Controls how often the app syncs the session list from the server. Lower values keep multi-device views in sync faster; higher values reduce server load when using a single device.
@@ -52,6 +63,14 @@ Controls how often the app syncs the session list from the server. Lower values 
 | Option                            | Default |
 | --------------------------------- | ------- |
 | 3s, 5s, 10s, 15s, 30s, 1m, 2m, 5m | 5s ✓    |
+
+## Check for Updates
+
+Manually check GitHub for new Termote releases. Shows inline result (already up to date, new version available, or error message). The app also auto-checks on load.
+
+## Clear Command History
+
+Deletes all saved commands from the command history dropdown. Use when you want to free up stored history or start fresh.
 
 ## Show Gesture Hints (Mobile Only)
 

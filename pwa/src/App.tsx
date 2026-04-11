@@ -2,10 +2,17 @@ import { Maximize, Menu, Minimize } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AboutModal } from './components/about-modal'
 import { BottomNavigation } from './components/bottom-navigation'
+import { CommandHistoryDropdown } from './components/command-history-dropdown'
+import {
+  ConnectionIndicator,
+  type ConnectionState,
+} from './components/connection-indicator'
 import { GestureHintsOverlay } from './components/gesture-hints-overlay'
 import { HelpModal } from './components/help-modal'
 import { KeyboardToolbar } from './components/keyboard-toolbar'
+import { QuickActionsMenu } from './components/quick-actions-menu'
 import { SessionSidebar } from './components/session-sidebar'
+import { SessionTabs } from './components/session-tabs'
 import { SettingsMenu } from './components/settings-menu'
 import { SettingsModal } from './components/settings-modal'
 import {
@@ -14,6 +21,7 @@ import {
 } from './components/terminal-frame'
 import { Toast } from './components/toast'
 import { useTheme } from './contexts/theme-context'
+import { useCommandHistory } from './hooks/use-command-history'
 import { useFontSize } from './hooks/use-font-size'
 import { useFullscreen } from './hooks/use-fullscreen'
 import { useGestures } from './hooks/use-gestures'
@@ -22,6 +30,7 @@ import { useLocalSessions } from './hooks/use-local-sessions'
 import { useIsMobile } from './hooks/use-media-query'
 import { useSettings } from './hooks/use-settings'
 import { useSidebarCollapsed } from './hooks/use-sidebar-collapsed'
+import { useUpdateCheck } from './hooks/use-update-check'
 import {
   blurTerminal,
   focusTerminal,
@@ -76,10 +85,15 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [gestureHintsOpen, setGestureHintsOpen] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const [connectionState, setConnectionState] =
+    useState<ConnectionState>('connecting')
   const { settings, updateSetting } = useSettings()
   const [showTitleTooltip, setShowTitleTooltip] = useState(false)
   const [ctrlActive, setCtrlActive] = useState(false)
   const [imeMode, setImeMode] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const { history, addCommand, removeCommand, clearHistory } =
+    useCommandHistory()
   const isMobile = useIsMobile()
   const { isVisible: keyboardVisible, keyboardHeight } = useKeyboardVisible()
   const {
@@ -89,10 +103,36 @@ export default function App() {
     addSession,
     removeSession,
     updateSession,
+    isServerReachable,
   } = useLocalSessions(settings.pollInterval)
   const { fontSize, increase, decrease } = useFontSize()
   const { resolvedTheme } = useTheme()
   const { isFullscreen, toggleFullscreen } = useFullscreen()
+  const { checkForUpdate, checking: updateChecking } = useUpdateCheck()
+
+  // Sync connection state with server reachability from session polling
+  useEffect(() => {
+    if (!isServerReachable) {
+      setConnectionState('disconnected')
+    } else {
+      setConnectionState((prev) =>
+        prev === 'disconnected' ? 'connected' : prev,
+      )
+    }
+  }, [isServerReachable])
+
+  // Check for updates on mount
+  useEffect(() => {
+    checkForUpdate()
+      .then((result) => {
+        if (result.hasUpdate && result.latestVersion) {
+          setToastMessage(`Update available: v${result.latestVersion}`)
+        }
+      })
+      .catch(() => {
+        // Silently ignore - already handled internally
+      })
+  }, [checkForUpdate])
 
   const gestureHandlers = useMemo(
     () => ({
@@ -231,12 +271,19 @@ export default function App() {
   const handleSendText = useCallback(
     (text: string) => {
       sendTextToTerminal(getIframe(), text)
+      addCommand(text) // Save to history
       if (settings.imeSendBehavior === 'send-enter') {
         sendKeyToTerminal(getIframe(), 'Enter')
       }
     },
-    [settings.imeSendBehavior],
+    [settings.imeSendBehavior, addCommand],
   )
+
+  const handleHistorySelect = useCallback((text: string) => {
+    sendTextToTerminal(getIframe(), text)
+    sendKeyToTerminal(getIframe(), 'Enter')
+    setHistoryOpen(false)
+  }, [])
 
   const handleMobileSelect = (id: string) => {
     switchSession(id)
@@ -339,6 +386,10 @@ export default function App() {
               )}
             </div>
             <div className="flex items-center gap-2 shrink-0">
+              <ConnectionIndicator
+                state={connectionState}
+                onRetry={() => terminalRef.current?.reconnect()}
+              />
               <button
                 onClick={decrease}
                 className="px-2 py-1 text-xs bg-zinc-200/70 dark:bg-zinc-700/70 rounded-lg hover:bg-zinc-300/70 dark:hover:bg-zinc-600/70 touch-manipulation transition-colors"
@@ -379,6 +430,16 @@ export default function App() {
               />
             </div>
           </header>
+          {/* Desktop session tabs */}
+          {!isMobile && settings.showSessionTabs && (
+            <SessionTabs
+              sessions={sessions}
+              activeId={activeSession.id}
+              onSelect={switchSession}
+              onAdd={() => addSession('New')}
+              onRemove={removeSession}
+            />
+          )}
           <div
             ref={terminalContainerRef}
             className="flex-1 relative min-h-0 overflow-y-auto scroll-smooth"
@@ -401,6 +462,7 @@ export default function App() {
                 fontSize={fontSize}
                 theme={resolvedTheme}
                 disableContextMenu={settings.disableContextMenu}
+                onConnectionStateChange={setConnectionState}
               />
             </div>
             {/* Gesture overlay - captures touch gestures (mobile only) */}
@@ -411,22 +473,49 @@ export default function App() {
         </main>
       </div>
 
-      <KeyboardToolbar
-        onKey={handleKey}
-        onCtrlKey={handleCtrlKey}
-        onShiftKey={handleShiftKey}
-        onCtrlShiftKey={handleCtrlShiftKey}
-        onScroll={handleScroll}
-        onTmuxCopy={handleTmuxCopy}
-        onPaste={handlePaste}
-        onToggleKeyboard={toggleKeyboard}
-        onSendText={handleSendText}
-        ctrlActive={ctrlActive}
-        onCtrlChange={setCtrlActive}
-        imeMode={imeMode}
-        onImeModeChange={setImeMode}
-        defaultExpanded={settings.toolbarDefaultExpanded}
-      />
+      {/* Quick Actions FAB (mobile only) */}
+      {isMobile && (
+        <QuickActionsMenu
+          onSendKey={(key, opts) => {
+            if (opts?.ctrl) {
+              sendKeyToTerminal(getIframe(), key, { ctrl: true })
+            } else {
+              sendKeyToTerminal(getIframe(), key)
+            }
+          }}
+          onSendText={(text) => sendTextToTerminal(getIframe(), text)}
+        />
+      )}
+
+      <div className="relative">
+        {historyOpen && (
+          <CommandHistoryDropdown
+            history={history}
+            onSelect={handleHistorySelect}
+            onRemove={removeCommand}
+            onClear={clearHistory}
+            onClose={() => setHistoryOpen(false)}
+          />
+        )}
+        <KeyboardToolbar
+          onKey={handleKey}
+          onCtrlKey={handleCtrlKey}
+          onShiftKey={handleShiftKey}
+          onCtrlShiftKey={handleCtrlShiftKey}
+          onScroll={handleScroll}
+          onTmuxCopy={handleTmuxCopy}
+          onPaste={handlePaste}
+          onToggleKeyboard={toggleKeyboard}
+          onSendText={handleSendText}
+          ctrlActive={ctrlActive}
+          onCtrlChange={setCtrlActive}
+          imeMode={imeMode}
+          onImeModeChange={setImeMode}
+          defaultExpanded={settings.toolbarDefaultExpanded}
+          onHistoryToggle={() => setHistoryOpen((prev) => !prev)}
+          historyOpen={historyOpen}
+        />
+      </div>
 
       {/* Mobile bottom navigation */}
       {isMobile && (
@@ -459,6 +548,19 @@ export default function App() {
         settings={settings}
         onUpdateSetting={updateSetting}
         onShowGestureHints={isMobile ? showGestureHints : undefined}
+        onCheckForUpdate={async () => {
+          const result = await checkForUpdate(true)
+          if (result.hasUpdate && result.latestVersion) {
+            return `Update available: v${result.latestVersion}`
+          }
+          if (result.latestVersion) {
+            return 'You are on the latest version'
+          }
+          return 'Could not check for updates'
+        }}
+        updateChecking={updateChecking}
+        onClearHistory={clearHistory}
+        historyCount={history.length}
       />
       {isMobile && (
         <GestureHintsOverlay
