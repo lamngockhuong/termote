@@ -15,4 +15,9 @@ export const APP_INFO = {
     changelog: 'https://github.com/lamngockhuong/termote/releases',
     issues: 'https://github.com/lamngockhuong/termote/issues',
   },
+  sponsor: {
+    momo: 'https://me.momo.vn/khuong',
+    github: 'https://github.com/sponsors/lamngockhuong',
+    buyMeACoffee: 'https://buymeacoffee.com/lamngockhuong',
+  },
 }
