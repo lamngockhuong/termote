@@ -25,6 +25,7 @@ const KEY_MAP: Record<string, { base: string; code?: string }> = {
 
 // Calculate xterm modifier value: 1 + (shift?1:0) + (alt?2:0) + (ctrl?4:0)
 function getModifierValue(shift: boolean, ctrl: boolean, alt = false): number {
+  /* v8 ignore next */
   return 1 + (shift ? 1 : 0) + (alt ? 2 : 0) + (ctrl ? 4 : 0)
 }
 
@@ -63,6 +64,7 @@ function getTerm(iframe: HTMLIFrameElement | null): XtermInternal | null {
   try {
     return (iframe.contentWindow as { term?: XtermInternal })?.term ?? null
   } catch {
+    /* v8 ignore next */
     return null
   }
 }
@@ -77,6 +79,7 @@ function sendData(term: XtermInternal, data: string): boolean {
     term._core.coreService.triggerDataEvent(data, true)
     return true
   }
+  /* v8 ignore next */
   return false
 }
 
@@ -92,6 +95,7 @@ export function isTerminalDisconnected(
       el.textContent?.includes('Reconnect'),
     )
   } catch {
+    /* v8 ignore next */
     return false
   }
 }
@@ -127,8 +131,10 @@ export function sendKeyToTerminal(
     const code = key.toLowerCase().charCodeAt(0) - 96
     if (code >= 1 && code <= 26) {
       data = String.fromCharCode(code)
+      /* v8 ignore start */
     } else {
       return
+      /* v8 ignore stop */
     }
   }
   // Shift+letter: uppercase

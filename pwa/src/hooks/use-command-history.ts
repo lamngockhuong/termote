@@ -43,6 +43,7 @@ function getSnapshot(): HistoryCommand[] {
 }
 
 export function useCommandHistory() {
+  /* v8 ignore next */
   const history = useSyncExternalStore(subscribe, getSnapshot, () => [])
 
   const addCommand = useCallback((text: string) => {

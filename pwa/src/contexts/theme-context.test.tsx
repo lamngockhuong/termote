@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react'
 import type { ReactNode } from 'react'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ThemeProvider, useTheme } from './theme-context'
 
 function wrapper({ children }: { children: ReactNode }) {
@@ -60,5 +60,78 @@ describe('ThemeContext', () => {
     expect(() => {
       renderHook(() => useTheme())
     }).toThrow('useTheme must be used within ThemeProvider')
+  })
+
+  it('getSystemTheme returns dark when matchMedia matches dark preference', () => {
+    const originalMatchMedia = window.matchMedia
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: true,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }))
+    const { result } = renderHook(() => useTheme(), { wrapper })
+    window.matchMedia = originalMatchMedia
+    expect(result.current.resolvedTheme).toBe('dark')
+  })
+
+  it('updates resolvedTheme when system prefers dark (matchMedia change event)', () => {
+    // Capture the change handler from matchMedia addEventListener
+    let capturedHandler: ((e: MediaQueryListEvent) => void) | null = null
+    const originalMatchMedia = window.matchMedia
+    window.matchMedia = vi.fn().mockImplementation((query: string) => {
+      return {
+        matches: false,
+        media: query,
+        addEventListener: vi.fn(
+          (_type: string, handler: (e: MediaQueryListEvent) => void) => {
+            capturedHandler = handler
+          },
+        ),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      }
+    })
+
+    const { result } = renderHook(() => useTheme(), { wrapper })
+
+    // Simulate system theme change to dark (e.matches = true → 'dark')
+    if (capturedHandler) {
+      act(() => {
+        capturedHandler!({ matches: true } as MediaQueryListEvent)
+      })
+    }
+
+    window.matchMedia = originalMatchMedia
+    expect(result.current.resolvedTheme).toBe('dark')
+  })
+
+  it('setSystemTheme sets light when matchMedia change event has matches=false', () => {
+    let capturedHandler: ((e: MediaQueryListEvent) => void) | null = null
+    const originalMatchMedia = window.matchMedia
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: true, // start as dark
+      media: query,
+      addEventListener: vi.fn(
+        (_type: string, handler: (e: MediaQueryListEvent) => void) => {
+          capturedHandler = handler
+        },
+      ),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }))
+
+    const { result } = renderHook(() => useTheme(), { wrapper })
+
+    // Fire handler with matches=false → setSystemTheme('light')
+    if (capturedHandler) {
+      act(() => {
+        capturedHandler!({ matches: false } as MediaQueryListEvent)
+      })
+    }
+
+    window.matchMedia = originalMatchMedia
+    expect(result.current.resolvedTheme).toBe('light')
   })
 })

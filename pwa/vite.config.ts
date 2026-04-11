@@ -43,6 +43,24 @@ export default defineConfig({
     globals: true,
     setupFiles: './src/test-setup.ts',
     exclude: ['e2e/**', 'node_modules/**'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'lcov'],
+      include: ['src/**/*.{ts,tsx}'],
+      exclude: [
+        'src/test-setup.ts',
+        'src/**/*.test.{ts,tsx}',
+        'src/**/*.d.ts',
+        'src/vite-env.d.ts',
+        'src/main.tsx',
+      ],
+      thresholds: {
+        lines: 100,
+        functions: 100,
+        branches: 100,
+        statements: 100,
+      },
+    },
   },
   server: {
     proxy: {

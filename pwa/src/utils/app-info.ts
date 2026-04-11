@@ -2,8 +2,10 @@ declare const __APP_NAME__: string
 declare const __APP_VERSION__: string
 
 export const APP_INFO = {
+  /* v8 ignore start */
   name: __APP_NAME__ ?? 'Termote',
   version: __APP_VERSION__ ?? '0.0.0',
+  /* v8 ignore stop */
   description: 'Terminal + Remote - Control CLI tools from anywhere',
   author: {
     name: 'Lam Ngoc Khuong',

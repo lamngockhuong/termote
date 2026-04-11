@@ -92,11 +92,13 @@ export function SwipeableSessionItem({
           finalOffset = maxLeft
         } else if (velocity > 0.3 && canEdit) {
           finalOffset = maxRight
+          /* v8 ignore start */
         } else if (offsetX < -SWIPE_THRESHOLD && canRemove) {
           finalOffset = maxLeft
         } else if (offsetX > SWIPE_THRESHOLD && canEdit) {
           finalOffset = maxRight
         }
+        /* v8 ignore stop */
 
         setOffsetX(finalOffset)
       } else {

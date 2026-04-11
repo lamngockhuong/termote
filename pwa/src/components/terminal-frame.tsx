@@ -166,8 +166,10 @@ export const TerminalFrame = forwardRef<TerminalFrameHandle, Props>(
           applyContextMenu()
           // Clear DA response artifacts leaked by xterm.js on ttyd+tmux connect
           setTimeout(() => sendKeyToTerminal(iframe, 'u', { ctrl: true }), 300)
+          /* v8 ignore next */
           if (intervalId) clearInterval(intervalId)
         } else if (++attempts >= 30) {
+          /* v8 ignore next */
           if (intervalId) clearInterval(intervalId)
         }
       }

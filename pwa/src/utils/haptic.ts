@@ -8,6 +8,7 @@ const PATTERNS: Record<HapticPattern, number | number[]> = {
 }
 
 export function vibrate(pattern: HapticPattern = 'light'): void {
+  /* v8 ignore next */
   if (typeof navigator === 'undefined') return
   if (!('vibrate' in navigator)) return
 

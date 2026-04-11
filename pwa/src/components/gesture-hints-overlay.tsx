@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react'
+import { useRef } from 'react'
+import { useDialogModal } from '../hooks/use-dialog-modal'
 
 interface Props {
   isOpen: boolean
@@ -16,22 +17,7 @@ const GESTURE_HINTS = [
 export function GestureHintsOverlay({ isOpen, onDismiss }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null)
 
-  useEffect(() => {
-    const dialog = dialogRef.current
-    if (!dialog) return
-
-    if (isOpen) {
-      dialog.showModal()
-      const handleCancel = (e: Event) => {
-        e.preventDefault()
-        onDismiss()
-      }
-      dialog.addEventListener('cancel', handleCancel)
-      return () => dialog.removeEventListener('cancel', handleCancel)
-    } else {
-      dialog.close()
-    }
-  }, [isOpen, onDismiss])
+  useDialogModal(dialogRef, isOpen, onDismiss)
 
   if (!isOpen) return null
 

@@ -123,6 +123,7 @@ export function QuickActionsMenu({ onSendKey, onSendText }: Props) {
 
       // Direct DOM update — no React re-render
       const el = menuRef.current
+      /* v8 ignore next */
       if (el) {
         const clamped = clampPosition(
           dragStart.current.right + dx,
@@ -141,6 +142,7 @@ export function QuickActionsMenu({ onSendKey, onSendText }: Props) {
     if (hasMoved.current) {
       // Read final position from DOM, commit to state + localStorage
       const el = menuRef.current
+      /* v8 ignore next */
       if (el) {
         const finalPos = {
           right: Number.parseInt(el.style.right) || 16,

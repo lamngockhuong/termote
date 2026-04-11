@@ -34,8 +34,9 @@ scripts/ttyd.exe
 # Claude Code
 .claude/settings.local.json
 
-# Test results and screenshots
+# Test results, coverage and screenshots
 pwa/test-results/
+pwa/coverage/
 pwa/e2e/*.png
 
 # Plans and reports (generated)

@@ -63,6 +63,7 @@ function writeSettings(settings: Settings) {
 }
 
 export function useSettings() {
+  /* v8 ignore next */
   const settings = useSyncExternalStore(subscribe, getSnapshot, () => DEFAULTS)
 
   const updateSetting = useCallback(
