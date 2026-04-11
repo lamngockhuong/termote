@@ -1,3 +1,4 @@
+import { RefreshCw, Trash2 } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import type {
   ImeSendBehavior,
@@ -14,6 +15,10 @@ interface Props {
     value: Settings[K],
   ) => void
   onShowGestureHints?: () => void
+  onCheckForUpdate?: () => void
+  updateChecking?: boolean
+  onClearHistory?: () => void
+  historyCount?: number
 }
 
 function ToggleRow({
@@ -99,6 +104,10 @@ export function SettingsModal({
   settings,
   onUpdateSetting,
   onShowGestureHints,
+  onCheckForUpdate,
+  updateChecking,
+  onClearHistory,
+  historyCount = 0,
 }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null)
 
@@ -262,14 +271,39 @@ export function SettingsModal({
             </select>
           </div>
 
-          {onShowGestureHints && (
-            <div className="pt-2 border-t border-zinc-200 dark:border-zinc-700">
-              <button
-                onClick={onShowGestureHints}
-                className="w-full py-2.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-              >
-                Show Gesture Hints
-              </button>
+          {(onShowGestureHints || onCheckForUpdate || onClearHistory) && (
+            <div className="pt-2 border-t border-zinc-200 dark:border-zinc-700 space-y-2">
+              {onShowGestureHints && (
+                <button
+                  onClick={onShowGestureHints}
+                  className="w-full py-2.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                >
+                  Show Gesture Hints
+                </button>
+              )}
+              {onCheckForUpdate && (
+                <button
+                  onClick={onCheckForUpdate}
+                  disabled={updateChecking}
+                  className="w-full py-2.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  <RefreshCw
+                    size={16}
+                    className={updateChecking ? 'animate-spin' : ''}
+                  />
+                  {updateChecking ? 'Checking...' : 'Check for Updates'}
+                </button>
+              )}
+              {onClearHistory && (
+                <button
+                  onClick={onClearHistory}
+                  disabled={historyCount === 0}
+                  className="w-full py-2.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  <Trash2 size={16} />
+                  Clear Command History ({historyCount})
+                </button>
+              )}
             </div>
           )}
         </div>

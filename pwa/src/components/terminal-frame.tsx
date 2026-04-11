@@ -15,15 +15,19 @@ import {
   unblockContextMenu,
 } from '../utils/terminal-bridge'
 
+import type { ConnectionState } from './connection-indicator'
+
 export interface TerminalFrameHandle {
   iframe: HTMLIFrameElement | null
   reconnect: () => void
+  connectionState: ConnectionState
 }
 
 interface Props {
   fontSize?: number
   theme?: 'light' | 'dark'
   disableContextMenu?: boolean
+  onConnectionStateChange?: (state: ConnectionState) => void
 }
 
 const THEMES = {
@@ -78,21 +82,39 @@ const THEMES = {
 }
 
 export const TerminalFrame = forwardRef<TerminalFrameHandle, Props>(
-  ({ fontSize = 14, theme = 'dark', disableContextMenu = true }, ref) => {
+  (
+    {
+      fontSize = 14,
+      theme = 'dark',
+      disableContextMenu = true,
+      onConnectionStateChange,
+    },
+    ref,
+  ) => {
     const iframeRef = useRef<HTMLIFrameElement>(null)
     const [terminalSrc, setTerminalSrc] = useState<string | null>(null)
     const [tokenError, setTokenError] = useState<string | null>(null)
     const [loading, setLoading] = useState(false)
+    const [connectionState, setConnectionState] =
+      useState<ConnectionState>('connecting')
+
+    // Notify parent of connection state changes
+    useEffect(() => {
+      onConnectionStateChange?.(connectionState)
+    }, [connectionState, onConnectionStateChange])
 
     // Fetch a token and set the terminal iframe source
     const loadTerminal = useCallback(async () => {
       try {
         setTokenError(null)
         setLoading(true)
+        setConnectionState('connecting')
         const token = await fetchTerminalToken()
         setTerminalSrc(`/terminal/?token=${token}`)
+        setConnectionState('connected')
       } catch {
         setTokenError('Failed to load terminal')
+        setConnectionState('error')
       } finally {
         setLoading(false)
       }
@@ -105,8 +127,9 @@ export const TerminalFrame = forwardRef<TerminalFrameHandle, Props>(
           return iframeRef.current
         },
         reconnect: loadTerminal,
+        connectionState,
       }),
-      [loadTerminal],
+      [loadTerminal, connectionState],
     )
 
     useEffect(() => {

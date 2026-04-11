@@ -78,3 +78,13 @@ body {
 .animate-fade-in {
   animation: fade-in 150ms ease-out;
 }
+
+/* Hide scrollbar but allow scrolling */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
