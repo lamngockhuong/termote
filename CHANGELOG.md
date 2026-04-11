@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.0.14](https://github.com/lamngockhuong/termote/compare/v0.0.13...v0.0.14) (2026-04-11)
+
+
+### Features
+
+* add sponsor buttons (MoMo, GitHub Sponsors, Buy Me a Coffee) ([#142](https://github.com/lamngockhuong/termote/issues/142)) ([209fa6f](https://github.com/lamngockhuong/termote/commit/209fa6ffbba49ee226d12ca31e1ec9a306c994f5))
+
+
+### Bug Fixes
+
+* **website:** approve pnpm v10 build scripts via pnpm-workspace.yaml ([#144](https://github.com/lamngockhuong/termote/issues/144)) ([5ad4b4a](https://github.com/lamngockhuong/termote/commit/5ad4b4aca898bc64e3bb19cdac8d5b8f4e93d13b))
+
 ## [0.0.13](https://github.com/lamngockhuong/termote/compare/v0.0.12...v0.0.13) (2026-04-10)
 
 
