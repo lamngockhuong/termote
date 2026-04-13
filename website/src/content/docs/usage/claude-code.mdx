@@ -1,0 +1,117 @@
+---
+title: Claude Code Setup
+description: Control Claude Code from your phone with Termote
+---
+
+import { Aside, Steps } from "@astrojs/starlight/components";
+
+## Overview
+
+Termote was built with Claude Code in mind. This guide walks you through setting up Termote to control Claude Code sessions from your phone or tablet — perfect for reviewing code, running commands, or pair programming on the go.
+
+## Prerequisites
+
+- Claude Code installed (`npm install -g @anthropic-ai/claude-code`)
+- Termote installed in [Native mode](/installation/native/) (recommended for Claude Code access)
+
+<Aside type="caution">
+  Container mode runs in an isolated environment and won't have access to your host's Claude Code installation. Use **Native mode** to control Claude Code.
+</Aside>
+
+## Setup
+
+<Steps>
+
+1. **Install Termote in native mode**
+
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash -s -- --native --lan
+   ```
+
+   The `--lan` flag makes Termote accessible from your phone on the same network.
+
+2. **Open Termote on your phone**
+
+   Navigate to the URL shown after installation (e.g., `http://192.168.1.100:7680`).
+
+   <Aside type="tip">
+     Install Termote as a PWA for the best mobile experience — tap the browser's "Add to Home Screen" option.
+   </Aside>
+
+3. **Create a Claude Code session**
+
+   In the Termote terminal, start Claude Code:
+
+   ```bash
+   claude
+   ```
+
+   Or start with a specific project:
+
+   ```bash
+   cd ~/my-project && claude
+   ```
+
+4. **Start coding from your phone!**
+
+   Use the virtual keyboard toolbar for special keys (Tab, Ctrl, Esc, arrows) and gestures for quick actions.
+
+</Steps>
+
+## Tips for Mobile Usage
+
+### Use Gestures
+
+- **Swipe left** → `Ctrl+C` (cancel current operation)
+- **Swipe right** → `Tab` (accept suggestions)
+- **Swipe up/down** → Browse command history
+
+### Multiple Sessions
+
+Create separate Termote sessions for different tasks:
+
+- **Session 1**: Claude Code for your main project
+- **Session 2**: A regular shell for running tests or checking logs
+- **Session 3**: Claude Code for a different repo
+
+Switch between sessions using the sidebar.
+
+### Voice to Code Workflow
+
+1. Use your phone's voice-to-text to dictate prompts
+2. Termote sends the text to Claude Code
+3. Review Claude's output on your phone
+4. Swipe right to accept, swipe left to cancel
+
+### Remote Access via Tailscale
+
+For secure access outside your local network:
+
+```bash
+curl -fsSL .../get.sh | bash -s -- --native --tailscale my-machine
+```
+
+See the [Tailscale guide](/installation/tailscale/) for full setup.
+
+## Troubleshooting
+
+### Claude Code not found
+
+If you see `command not found: claude`, ensure Claude Code is installed globally:
+
+```bash
+npm install -g @anthropic-ai/claude-code
+```
+
+In **native mode**, Termote inherits your shell's PATH, so globally installed tools are available automatically.
+
+### Session disconnects
+
+If your Termote session disconnects while Claude Code is running, don't worry — tmux keeps the session alive. Reconnect to Termote and your Claude Code session will be exactly where you left it.
+
+### Slow on mobile
+
+- Enable **Fullscreen mode** to reduce browser UI overhead
+- Close other browser tabs
+- Use a stable Wi-Fi connection (cellular can add latency)
+

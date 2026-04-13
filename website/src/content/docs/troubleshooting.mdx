@@ -1,0 +1,146 @@
+---
+title: Troubleshooting
+description: Common issues and solutions for Termote
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+## Installation Issues
+
+### Docker not found
+
+```
+Error: Docker is not installed
+```
+
+Install Docker Desktop from [docker.com](https://www.docker.com/products/docker-desktop/) or use a package manager:
+
+```bash
+# macOS
+brew install --cask docker
+
+# Ubuntu/Debian
+sudo apt-get install docker.io
+```
+
+### Port 7680 already in use
+
+```
+Error: Port 7680 is already in use
+```
+
+Another service is using the default port. Either stop the conflicting service or change Termote's port:
+
+```bash
+# Check what's using port 7680
+lsof -i :7680
+
+# Use a different port
+TERMOTE_PORT=8080 ./scripts/termote.sh install native
+```
+
+### Permission denied on Docker socket
+
+```
+Error: permission denied while trying to connect to the Docker daemon socket
+```
+
+Add your user to the docker group:
+
+```bash
+sudo usermod -aG docker $USER
+# Log out and back in for the change to take effect
+```
+
+## Connection Issues
+
+### Cannot access from phone
+
+1. **Check your IP**: Run `ifconfig` or `ip addr` and use your LAN IP (e.g., `192.168.1.x`)
+2. **Check firewall**: Ensure port 7680 is open
+3. **Use `--lan` flag**: This binds to `0.0.0.0` instead of `127.0.0.1`
+
+```bash
+./scripts/termote.sh install native --lan
+```
+
+### WebSocket connection failed
+
+If the terminal connects but shows no output:
+
+1. Check if tmux is running: `tmux ls`
+2. Check if ttyd is running: `ps aux | grep ttyd`
+3. Restart Termote: `./scripts/termote.sh install native`
+
+### PWA not updating
+
+If Termote's PWA shows an old version:
+
+1. Open browser DevTools → Application → Service Workers
+2. Click "Unregister" on the Termote service worker
+3. Hard refresh (Cmd+Shift+R / Ctrl+Shift+R)
+4. Re-install the PWA
+
+## Session Issues
+
+### Sessions lost after reboot
+
+Termote uses tmux sessions, which don't persist across reboots by default. To auto-start Termote on boot:
+
+**macOS (launchd):**
+
+```bash
+./scripts/termote.sh link  # Creates global command
+# Then add to Login Items in System Preferences
+```
+
+**Linux (systemd):**
+
+```bash
+# Create a user service
+mkdir -p ~/.config/systemd/user/
+cat > ~/.config/systemd/user/termote.service << EOF
+[Unit]
+Description=Termote
+After=network.target
+
+[Service]
+ExecStart=%h/.local/bin/termote install native --lan
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+EOF
+
+systemctl --user enable termote
+systemctl --user start termote
+```
+
+### Terminal appears frozen
+
+- **Try Ctrl+C** (or swipe left on mobile) to interrupt any running command
+- **Check tmux**: The session might be in copy mode — press `q` to exit
+- **Reconnect**: Close and reopen the Termote tab
+
+## Performance
+
+### High CPU usage
+
+If ttyd uses high CPU:
+
+1. Reduce terminal scrollback: Set `TERMOTE_SCROLLBACK=1000` in your environment
+2. Close unused sessions
+3. Avoid commands that produce excessive output (pipe through `less` or `tail`)
+
+### Slow on cellular connection
+
+Termote works best on Wi-Fi. For cellular:
+
+- Use [Tailscale](/installation/tailscale/) for a more stable connection
+- Enable compression in your reverse proxy if using one
+- Keep terminal output concise
+
+<Aside type="tip">
+  Still having issues? [Open a GitHub issue](https://github.com/lamngockhuong/termote/issues) with your OS, Termote version (`termote --version`), and the full error message.
+</Aside>
+
