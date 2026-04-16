@@ -1,0 +1,27 @@
+name: Close stale issues
+
+on:
+  schedule:
+    - cron: "0 0 * * *"
+
+permissions:
+  issues: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v10
+        with:
+          days-before-stale: 7
+          days-before-close: 3
+          stale-issue-message: >
+            This issue has been inactive for 7 days.
+            It will be closed in 3 days if there's no further activity.
+            Feel free to comment if this is still relevant.
+          close-issue-message: >
+            Closed due to inactivity. Feel free to reopen if the issue persists.
+          stale-issue-label: stale
+          exempt-issue-labels: pinned,enhancement,documentation,security,good first issue,help wanted
+          days-before-stale-pr: -1
+          days-before-close-pr: -1
