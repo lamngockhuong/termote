@@ -11,13 +11,15 @@ A clear and concise description of what the bug is.
 
 **Deployment Mode**
 
-- [ ] Container (all-in-one container)
-- [ ] Native (no container)
+- [ ] Container (Docker/Podman)
+- [ ] Native (macOS/Linux)
+- [ ] Native (Windows with psmux)
 
 **Environment**
 
-- Host OS: [e.g., Ubuntu 22.04, macOS 14]
-- Docker version (if applicable): [e.g., 24.0.7]
+- Termote version: [e.g., 0.1.5]
+- Host OS: [e.g., Ubuntu 22.04, macOS 14, Windows 11]
+- Container runtime (if applicable): [e.g., podman 5.x, docker 24.x]
 - ttyd version (if native): [e.g., 1.7.4]
 
 **Client Information**
@@ -45,8 +47,8 @@ If applicable, add screenshots or relevant logs.
 
 ```
 # Paste logs here if available
-# docker logs termote
-# journalctl -u termote-ttyd
+# docker logs termote / podman logs termote
+# termote health
 ```
 
 **Component affected**
@@ -59,7 +61,13 @@ If applicable, add screenshots or relevant logs.
 - [ ] tmux-api
 - [ ] WebSocket proxy
 - [ ] Authentication
-- [ ] Deployment scripts
+- [ ] Connection/Reconnect
+- [ ] Command history
+- [ ] Quick actions
+- [ ] Settings
+- [ ] Update checker
+- [ ] Deployment scripts (termote.sh/termote.ps1)
+- [ ] Online installer (get.sh/get.ps1)
 - [ ] Other: \_\_\_
 
 **Additional context**
