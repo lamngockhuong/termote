@@ -448,6 +448,12 @@ lsof -i :7680              # Confirmar que a porta esta em uso
 - Use HTTPS (Tailscale) para producao
 - Restrinja a redes confiaveis/VPN
 
+## Outros Projetos
+
+| Projeto | Descricao |
+|---------|-----------|
+| [GitHub Flex](https://github.com/lamngockhuong/github-flex) | Extensao multi-navegador (Chrome e Firefox) que aprimora a interface do GitHub com recursos de produtividade |
+
 ## Licenca
 
 MIT

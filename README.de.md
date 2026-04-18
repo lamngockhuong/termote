@@ -448,6 +448,12 @@ lsof -i :7680              # Sicherstellen, dass der Port belegt ist
 - HTTPS (Tailscale) für Produktion verwenden
 - Auf vertrauenswürdige Netzwerke/VPN beschränken
 
+## Andere Projekte
+
+| Projekt | Beschreibung |
+|---------|--------------|
+| [GitHub Flex](https://github.com/lamngockhuong/github-flex) | Cross-Browser-Erweiterung (Chrome & Firefox), die die GitHub-Oberfläche mit Produktivitätsfunktionen erweitert |
+
 ## Lizenz
 
 MIT
