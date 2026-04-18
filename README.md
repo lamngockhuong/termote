@@ -448,6 +448,12 @@ lsof -i :7680              # Verify port is in use
 - Use HTTPS (Tailscale) for production
 - Restrict to trusted networks/VPN
 
+## Other Projects
+
+| Project                                                     | Description                                                                                              |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| [GitHub Flex](https://github.com/lamngockhuong/github-flex) | A cross-browser extension (Chrome & Firefox) that enhances GitHub's interface with productivity features |
+
 ## License
 
 MIT

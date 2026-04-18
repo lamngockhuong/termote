@@ -448,6 +448,12 @@ lsof -i :7680              # 포트 사용 중인지 확인
 - 프로덕션에는 HTTPS(Tailscale) 사용
 - 신뢰할 수 있는 네트워크/VPN으로 제한
 
+## 다른 프로젝트
+
+| 프로젝트 | 설명 |
+|---------|------|
+| [GitHub Flex](https://github.com/lamngockhuong/github-flex) | GitHub 인터페이스를 생산성 기능으로 향상시키는 크로스 브라우저 확장 프로그램 (Chrome & Firefox) |
+
 ## 라이선스
 
 MIT

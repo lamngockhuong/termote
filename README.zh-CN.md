@@ -448,6 +448,12 @@ lsof -i :7680              # 确认端口是否在使用
 - 生产环境请使用 HTTPS（Tailscale）
 - 限制在受信任的网络/VPN 中使用
 
+## 其他项目
+
+| 项目 | 描述 |
+|------|------|
+| [GitHub Flex](https://github.com/lamngockhuong/github-flex) | 跨浏览器扩展（Chrome 和 Firefox），为 GitHub 界面增加生产力功能 |
+
 ## 许可证
 
 MIT

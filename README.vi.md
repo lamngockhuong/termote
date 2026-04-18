@@ -446,6 +446,12 @@ lsof -i :7680              # Xác minh port đang dùng
 - Dùng HTTPS (Tailscale) cho production
 - Giới hạn trong mạng tin cậy/VPN
 
+## Dự Án Khác
+
+| Dự án | Mô tả |
+|-------|-------|
+| [GitHub Flex](https://github.com/lamngockhuong/github-flex) | Extension đa trình duyệt (Chrome & Firefox) nâng cao giao diện GitHub với các tính năng tăng năng suất |
+
 ## Giấy Phép
 
 MIT
