@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.16](https://github.com/lamngockhuong/termote/compare/v0.0.15...v0.0.16) (2026-04-28)
+
+
+### Bug Fixes
+
+* **deps:** update dependency astro to v6.1.7 ([#129](https://github.com/lamngockhuong/termote/issues/129)) ([170046d](https://github.com/lamngockhuong/termote/commit/170046d4006d5fa05f27658cea019bb04a05222e))
+
 ## [0.0.15](https://github.com/lamngockhuong/termote/compare/v0.0.14...v0.0.15) (2026-04-11)
 
 
