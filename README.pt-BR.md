@@ -453,6 +453,7 @@ lsof -i :7680              # Confirmar que a porta esta em uso
 | Projeto | Descricao |
 |---------|-----------|
 | [GitHub Flex](https://github.com/lamngockhuong/github-flex) | Extensao multi-navegador (Chrome e Firefox) que aprimora a interface do GitHub com recursos de produtividade |
+| [TabRest](https://github.com/lamngockhuong/tabrest) | Extensao do Chrome que descarrega automaticamente abas inativas para liberar memoria |
 
 ## Licenca
 

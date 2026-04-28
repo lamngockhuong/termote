@@ -453,6 +453,7 @@ lsof -i :7680              # ポートが使用中か確認
 | プロジェクト | 説明 |
 |------------|------|
 | [GitHub Flex](https://github.com/lamngockhuong/github-flex) | GitHubのインターフェースを生産性向上機能で強化するクロスブラウザ拡張機能（Chrome & Firefox） |
+| [TabRest](https://github.com/lamngockhuong/tabrest) | 非アクティブなタブを自動的にアンロードしてメモリを解放するChrome拡張機能 |
 
 ## ライセンス
 
