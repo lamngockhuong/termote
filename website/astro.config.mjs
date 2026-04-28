@@ -2,7 +2,7 @@ import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 
 export default defineConfig({
-  site: "https://termote.khuong.dev",
+  site: "https://termote.ohnice.app",
   integrations: [
     starlight({
       components: {
