@@ -453,6 +453,7 @@ lsof -i :7680              # Verify port is in use
 | Project                                                     | Description                                                                                              |
 | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | [GitHub Flex](https://github.com/lamngockhuong/github-flex) | A cross-browser extension (Chrome & Firefox) that enhances GitHub's interface with productivity features |
+| [TabRest](https://github.com/lamngockhuong/tabrest)         | Chrome extension that automatically unloads inactive tabs to free memory                                 |
 
 ## License
 

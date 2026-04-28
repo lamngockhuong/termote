@@ -453,6 +453,7 @@ lsof -i :7680              # Vérifier que le port est utilisé
 | Projet | Description |
 |--------|-------------|
 | [GitHub Flex](https://github.com/lamngockhuong/github-flex) | Extension multi-navigateur (Chrome et Firefox) qui améliore l'interface GitHub avec des fonctionnalités de productivité |
+| [TabRest](https://github.com/lamngockhuong/tabrest) | Extension Chrome qui décharge automatiquement les onglets inactifs pour libérer la mémoire |
 
 ## Licence
 

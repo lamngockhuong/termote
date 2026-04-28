@@ -453,6 +453,7 @@ lsof -i :7680              # Verifikasi port sedang digunakan
 | Proyek | Deskripsi |
 |--------|-----------|
 | [GitHub Flex](https://github.com/lamngockhuong/github-flex) | Ekstensi lintas browser (Chrome & Firefox) yang meningkatkan antarmuka GitHub dengan fitur produktivitas |
+| [TabRest](https://github.com/lamngockhuong/tabrest) | Ekstensi Chrome yang secara otomatis melepaskan tab tidak aktif untuk membebaskan memori |
 
 ## Lisensi
 
