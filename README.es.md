@@ -231,29 +231,29 @@ flowchart LR
     User["Usuario"] --> Container & Native
 ```
 
-| Modo          | Descripcion      | Caso de Uso                           | Plataforma   |
-| ------------- | ---------------- | ------------------------------------- | ------------ |
-| `--container` | Modo container   | Despliegue simple, entorno aislado    | macOS, Linux |
-| `--native`    | Todo nativo      | Acceso a herramientas host (claude, gh) | macOS, Linux |
+| Modo          | Descripcion    | Caso de Uso                             | Plataforma   |
+| ------------- | -------------- | --------------------------------------- | ------------ |
+| `--container` | Modo container | Despliegue simple, entorno aislado      | macOS, Linux |
+| `--native`    | Todo nativo    | Acceso a herramientas host (claude, gh) | macOS, Linux |
 
 ### Opciones
 
-| Flag                        | Descripcion                                          |
-| --------------------------- | ---------------------------------------------------- |
-| `--lan`                     | Exponer a LAN (por defecto: solo localhost)          |
-| `--tailscale <host[:port]>` | Habilitar Tailscale HTTPS                            |
-| `--no-auth`                 | Deshabilitar autenticacion basica                    |
-| `--port <port>`             | Puerto del host (por defecto: 7680, Windows: 7690)   |
-| `--fresh`                   | Forzar nueva contrasena (ignorar config guardada)    |
-| `--update`                  | Actualizar automaticamente con config guardada       |
-| `--version <ver>`           | Instalar version especifica (con o sin `v`)          |
+| Flag                        | Descripcion                                        |
+| --------------------------- | -------------------------------------------------- |
+| `--lan`                     | Exponer a LAN (por defecto: solo localhost)        |
+| `--tailscale <host[:port]>` | Habilitar Tailscale HTTPS                          |
+| `--no-auth`                 | Deshabilitar autenticacion basica                  |
+| `--port <port>`             | Puerto del host (por defecto: 7680, Windows: 7690) |
+| `--fresh`                   | Forzar nueva contrasena (ignorar config guardada)  |
+| `--update`                  | Actualizar automaticamente con config guardada     |
+| `--version <ver>`           | Instalar version especifica (con o sin `v`)        |
 
-| Variable de Entorno | Descripcion                                            |
-| -------------------- | ------------------------------------------------------ |
-| `WORKSPACE`          | Directorio del host para montar (por defecto: `./workspace`) |
-| `TERMOTE_USER`       | Usuario de autenticacion (por defecto: auto-generado)  |
-| `TERMOTE_PASS`       | Contrasena de autenticacion (por defecto: auto-generada) |
-| `NO_AUTH`            | Establecer `true` para deshabilitar autenticacion      |
+| Variable de Entorno | Descripcion                                                  |
+| ------------------- | ------------------------------------------------------------ |
+| `WORKSPACE`         | Directorio del host para montar (por defecto: `./workspace`) |
+| `TERMOTE_USER`      | Usuario de autenticacion (por defecto: auto-generado)        |
+| `TERMOTE_PASS`      | Contrasena de autenticacion (por defecto: auto-generada)     |
+| `NO_AUTH`           | Establecer `true` para deshabilitar autenticacion            |
 
 ### Modo Container (recomendado por simplicidad)
 
@@ -355,14 +355,14 @@ winget install psmux
 
 ## Uso en Movil
 
-| Accion             | Gesto               |
-| ------------------ | -------------------- |
+| Accion               | Gesto                       |
+| -------------------- | --------------------------- |
 | Cancelar/interrumpir | Deslizar izquierda (Ctrl+C) |
-| Tab completion     | Deslizar derecha     |
-| Historial arriba   | Deslizar arriba      |
-| Historial abajo    | Deslizar abajo       |
-| Pegar              | Mantener presionado  |
-| Tamano de fuente   | Pellizcar            |
+| Tab completion       | Deslizar derecha            |
+| Historial arriba     | Deslizar arriba             |
+| Historial abajo      | Deslizar abajo              |
+| Pegar                | Mantener presionado         |
+| Tamano de fuente     | Pellizcar                   |
 
 La barra de herramientas virtual proporciona: Tab, Esc, Ctrl, Shift, teclas de flechas y combinaciones de teclas comunes. Soporta combinaciones Ctrl+Shift (pegar, copiar). Alterna entre modo minimal y expandido para teclas adicionales (Home, End, Delete, etc.).
 
@@ -452,10 +452,10 @@ lsof -i :7680              # Verificar que el puerto esta en uso
 
 ## Otros Proyectos
 
-| Proyecto | Descripcion |
-|----------|-------------|
+| Proyecto                                                    | Descripcion                                                                                                  |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | [GitHub Flex](https://github.com/lamngockhuong/github-flex) | Extension multi-navegador (Chrome y Firefox) que mejora la interfaz de GitHub con funciones de productividad |
-| [TabRest](https://github.com/lamngockhuong/tabrest) | Extension de Chrome que descarga automaticamente las pestañas inactivas para liberar memoria |
+| [TabRest](https://github.com/lamngockhuong/tabrest)         | Extension de Chrome que descarga automaticamente las pestañas inactivas para liberar memoria                 |
 
 ## Licencia
 

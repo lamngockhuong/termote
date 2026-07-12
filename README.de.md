@@ -231,29 +231,29 @@ flowchart LR
     User["Benutzer"] --> Container & Native
 ```
 
-| Modus         | Beschreibung    | Anwendungsfall                           | Plattform    |
-| ------------- | --------------- | ---------------------------------------- | ------------ |
+| Modus         | Beschreibung    | Anwendungsfall                              | Plattform    |
+| ------------- | --------------- | ------------------------------------------- | ------------ |
 | `--container` | Container-Modus | Einfache Bereitstellung, isolierte Umgebung | macOS, Linux |
-| `--native`    | Alles nativ     | Zugriff auf Host-Tools (claude, gh)      | macOS, Linux |
+| `--native`    | Alles nativ     | Zugriff auf Host-Tools (claude, gh)         | macOS, Linux |
 
 ### Optionen
 
-| Flag                        | Beschreibung                                              |
-| --------------------------- | --------------------------------------------------------- |
-| `--lan`                     | Im LAN freigeben (Standard: nur localhost)                |
-| `--tailscale <host[:port]>` | Tailscale HTTPS aktivieren                                |
-| `--no-auth`                 | Basis-Authentifizierung deaktivieren                      |
-| `--port <port>`             | Host-Port (Standard: 7680, Windows: 7690)                 |
+| Flag                        | Beschreibung                                               |
+| --------------------------- | ---------------------------------------------------------- |
+| `--lan`                     | Im LAN freigeben (Standard: nur localhost)                 |
+| `--tailscale <host[:port]>` | Tailscale HTTPS aktivieren                                 |
+| `--no-auth`                 | Basis-Authentifizierung deaktivieren                       |
+| `--port <port>`             | Host-Port (Standard: 7680, Windows: 7690)                  |
 | `--fresh`                   | Neues Passwort erzwingen (gespeicherte Konfig. ignorieren) |
-| `--update`                  | Automatisch mit gespeicherter Konfig. aktualisieren       |
-| `--version <ver>`           | Bestimmte Version installieren (mit oder ohne `v`)        |
+| `--update`                  | Automatisch mit gespeicherter Konfig. aktualisieren        |
+| `--version <ver>`           | Bestimmte Version installieren (mit oder ohne `v`)         |
 
-| Umgebungsvariable | Beschreibung                                             |
-| ----------------- | -------------------------------------------------------- |
-| `WORKSPACE`       | Host-Verzeichnis zum Einbinden (Standard: `./workspace`) |
+| Umgebungsvariable | Beschreibung                                                         |
+| ----------------- | -------------------------------------------------------------------- |
+| `WORKSPACE`       | Host-Verzeichnis zum Einbinden (Standard: `./workspace`)             |
 | `TERMOTE_USER`    | Benutzername für Authentifizierung (Standard: automatisch generiert) |
-| `TERMOTE_PASS`    | Passwort für Authentifizierung (Standard: automatisch generiert) |
-| `NO_AUTH`         | Auf `true` setzen, um Authentifizierung zu deaktivieren  |
+| `TERMOTE_PASS`    | Passwort für Authentifizierung (Standard: automatisch generiert)     |
+| `NO_AUTH`         | Auf `true` setzen, um Authentifizierung zu deaktivieren              |
 
 ### Container-Modus (empfohlen für Einfachheit)
 
@@ -330,11 +330,11 @@ git pull origin main                    # Falls vom Quellcode installiert
 
 ## Plattformunterstützung
 
-| Plattform | Container          | Native             | CLI-Skript  |
-| --------- | ------------------ | ------------------ | ----------- |
-| Linux     | ✓                  | ✓                  | termote.sh  |
-| macOS     | ✓                  | ✓                  | termote.sh  |
-| Windows   | ⚠️ (experimentell)  | ⚠️ (experimentell)  | termote.ps1 |
+| Plattform | Container         | Native            | CLI-Skript  |
+| --------- | ----------------- | ----------------- | ----------- |
+| Linux     | ✓                 | ✓                 | termote.sh  |
+| macOS     | ✓                 | ✓                 | termote.sh  |
+| Windows   | ⚠️ (experimentell) | ⚠️ (experimentell) | termote.ps1 |
 
 > **⚠️ Windows-Unterstützung (Experimentell)**: Die Windows-Unterstützung befindet sich derzeit in einem frühen Stadium und erfordert weitere Tests. Der Container-Modus erfordert Docker Desktop, der Native-Modus erfordert psmux. Bitte melden Sie Probleme auf GitHub.
 
@@ -355,14 +355,14 @@ winget install psmux
 
 ## Mobile Nutzung
 
-| Aktion            | Geste               |
-| ----------------- | -------------------- |
+| Aktion                 | Geste                       |
+| ---------------------- | --------------------------- |
 | Abbrechen/Unterbrechen | Nach links wischen (Ctrl+C) |
-| Tab-Vervollständigung | Nach rechts wischen  |
-| Verlauf hoch      | Nach oben wischen    |
-| Verlauf runter    | Nach unten wischen   |
-| Einfügen          | Lange drücken        |
-| Schriftgröße      | Zusammen-/Auseinanderziehen |
+| Tab-Vervollständigung  | Nach rechts wischen         |
+| Verlauf hoch           | Nach oben wischen           |
+| Verlauf runter         | Nach unten wischen          |
+| Einfügen               | Lange drücken               |
+| Schriftgröße           | Zusammen-/Auseinanderziehen |
 
 Die virtuelle Toolbar bietet: Tab, Esc, Ctrl, Shift, Pfeiltasten und gängige Tastenkombinationen. Unterstützt Ctrl+Shift-Kombinationen (Einfügen, Kopieren). Wechsel zwischen minimal und erweitert für zusätzliche Tasten (Home, End, Delete, usw.).
 
@@ -452,10 +452,10 @@ lsof -i :7680              # Sicherstellen, dass der Port belegt ist
 
 ## Andere Projekte
 
-| Projekt | Beschreibung |
-|---------|--------------|
+| Projekt                                                     | Beschreibung                                                                                                   |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | [GitHub Flex](https://github.com/lamngockhuong/github-flex) | Cross-Browser-Erweiterung (Chrome & Firefox), die die GitHub-Oberfläche mit Produktivitätsfunktionen erweitert |
-| [TabRest](https://github.com/lamngockhuong/tabrest) | Chrome-Erweiterung, die inaktive Tabs automatisch entlädt, um Speicher freizugeben |
+| [TabRest](https://github.com/lamngockhuong/tabrest)         | Chrome-Erweiterung, die inaktive Tabs automatisch entlädt, um Speicher freizugeben                             |
 
 ## Lizenz
 

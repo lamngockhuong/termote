@@ -231,29 +231,29 @@ flowchart LR
     User["Pengguna"] --> Container & Native
 ```
 
-| Mode          | Deskripsi      | Kasus Penggunaan                         | Platform     |
-| ------------- | -------------- | ---------------------------------------- | ------------ |
+| Mode          | Deskripsi      | Kasus Penggunaan                            | Platform     |
+| ------------- | -------------- | ------------------------------------------- | ------------ |
 | `--container` | Mode container | Deployment sederhana, lingkungan terisolasi | macOS, Linux |
-| `--native`    | Semua native   | Akses alat host (claude, gh)             | macOS, Linux |
+| `--native`    | Semua native   | Akses alat host (claude, gh)                | macOS, Linux |
 
 ### Opsi
 
-| Flag                        | Deskripsi                                            |
-| --------------------------- | ---------------------------------------------------- |
-| `--lan`                     | Buka akses LAN (default: hanya localhost)            |
-| `--tailscale <host[:port]>` | Aktifkan Tailscale HTTPS                             |
-| `--no-auth`                 | Nonaktifkan autentikasi dasar                        |
-| `--port <port>`             | Port host (default: 7680, Windows: 7690)             |
+| Flag                        | Deskripsi                                             |
+| --------------------------- | ----------------------------------------------------- |
+| `--lan`                     | Buka akses LAN (default: hanya localhost)             |
+| `--tailscale <host[:port]>` | Aktifkan Tailscale HTTPS                              |
+| `--no-auth`                 | Nonaktifkan autentikasi dasar                         |
+| `--port <port>`             | Port host (default: 7680, Windows: 7690)              |
 | `--fresh`                   | Paksa prompt password baru (abaikan config tersimpan) |
 | `--update`                  | Pembaruan otomatis dengan config tersimpan            |
-| `--version <ver>`           | Instal versi tertentu (dengan atau tanpa `v`)        |
+| `--version <ver>`           | Instal versi tertentu (dengan atau tanpa `v`)         |
 
-| Variabel Lingkungan | Deskripsi                                             |
-| -------------------- | ----------------------------------------------------- |
-| `WORKSPACE`          | Direktori host untuk mount (default: `./workspace`)   |
-| `TERMOTE_USER`       | Username autentikasi (default: otomatis dibuat)       |
-| `TERMOTE_PASS`       | Password autentikasi (default: otomatis dibuat)       |
-| `NO_AUTH`            | Atur ke `true` untuk menonaktifkan autentikasi        |
+| Variabel Lingkungan | Deskripsi                                           |
+| ------------------- | --------------------------------------------------- |
+| `WORKSPACE`         | Direktori host untuk mount (default: `./workspace`) |
+| `TERMOTE_USER`      | Username autentikasi (default: otomatis dibuat)     |
+| `TERMOTE_PASS`      | Password autentikasi (default: otomatis dibuat)     |
+| `NO_AUTH`           | Atur ke `true` untuk menonaktifkan autentikasi      |
 
 ### Mode Container (direkomendasikan untuk kemudahan)
 
@@ -330,10 +330,10 @@ git pull origin main                    # Jika diinstal dari source
 
 ## Dukungan Platform
 
-| Platform | Container          | Native             | CLI Script  |
-| -------- | ------------------ | ------------------ | ----------- |
-| Linux    | ✓                  | ✓                  | termote.sh  |
-| macOS    | ✓                  | ✓                  | termote.sh  |
+| Platform | Container         | Native            | CLI Script  |
+| -------- | ----------------- | ----------------- | ----------- |
+| Linux    | ✓                 | ✓                 | termote.sh  |
+| macOS    | ✓                 | ✓                 | termote.sh  |
 | Windows  | ⚠️ (eksperimental) | ⚠️ (eksperimental) | termote.ps1 |
 
 > **⚠️ Dukungan Windows (Eksperimental)**: Dukungan Windows saat ini masih dalam tahap awal dan memerlukan pengujian lebih lanjut. Mode container memerlukan Docker Desktop, mode native memerlukan psmux. Silakan laporkan masalah di GitHub.
@@ -353,14 +353,14 @@ winget install psmux
 
 ## Penggunaan Mobile
 
-| Aksi                | Gestur              |
-| ------------------- | ------------------- |
-| Batal/interupsi     | Geser kiri (Ctrl+C) |
-| Tab completion      | Geser kanan         |
-| Riwayat ke atas     | Geser ke atas       |
-| Riwayat ke bawah    | Geser ke bawah      |
-| Tempel              | Tekan lama          |
-| Ukuran font         | Cubit masuk/keluar  |
+| Aksi             | Gestur              |
+| ---------------- | ------------------- |
+| Batal/interupsi  | Geser kiri (Ctrl+C) |
+| Tab completion   | Geser kanan         |
+| Riwayat ke atas  | Geser ke atas       |
+| Riwayat ke bawah | Geser ke bawah      |
+| Tempel           | Tekan lama          |
+| Ukuran font      | Cubit masuk/keluar  |
 
 Toolbar virtual menyediakan: Tab, Esc, Ctrl, Shift, tombol panah, dan kombinasi tombol umum. Mendukung kombinasi Ctrl+Shift (tempel, salin). Beralih antara mode minimal dan diperluas untuk tombol tambahan (Home, End, Delete, dll.).
 
@@ -450,10 +450,10 @@ lsof -i :7680              # Verifikasi port sedang digunakan
 
 ## Proyek Lainnya
 
-| Proyek | Deskripsi |
-|--------|-----------|
+| Proyek                                                      | Deskripsi                                                                                                |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | [GitHub Flex](https://github.com/lamngockhuong/github-flex) | Ekstensi lintas browser (Chrome & Firefox) yang meningkatkan antarmuka GitHub dengan fitur produktivitas |
-| [TabRest](https://github.com/lamngockhuong/tabrest) | Ekstensi Chrome yang secara otomatis melepaskan tab tidak aktif untuk membebaskan memori |
+| [TabRest](https://github.com/lamngockhuong/tabrest)         | Ekstensi Chrome yang secara otomatis melepaskan tab tidak aktif untuk membebaskan memori                 |
 
 ## Lisensi
 
