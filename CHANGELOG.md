@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.0.16](https://github.com/lamngockhuong/termote/compare/v0.0.15...v0.0.16) (2026-07-12)
+
+
+### Features
+
+* **windows:** ttyd source selection (official vs fork) for native installer ([#178](https://github.com/lamngockhuong/termote/issues/178)) ([3a794fa](https://github.com/lamngockhuong/termote/commit/3a794fa56959fdba2fb2e9bd627ed0855cbad781))
+
+
+### Bug Fixes
+
+* **deps:** update astro monorepo to v6.4.8 ([ed29ec7](https://github.com/lamngockhuong/termote/commit/ed29ec76e387329f994b4928c3f89e68e39965ce))
+* **deps:** update dependency astro to v6.1.7 ([#129](https://github.com/lamngockhuong/termote/issues/129)) ([170046d](https://github.com/lamngockhuong/termote/commit/170046d4006d5fa05f27658cea019bb04a05222e))
+* **deps:** update dependency astro to v6.4.8 ([#161](https://github.com/lamngockhuong/termote/issues/161)) ([ed29ec7](https://github.com/lamngockhuong/termote/commit/ed29ec76e387329f994b4928c3f89e68e39965ce))
+* **deps:** update dependency lucide-react to v1.24.0 ([#168](https://github.com/lamngockhuong/termote/issues/168)) ([15de057](https://github.com/lamngockhuong/termote/commit/15de057149681fe41b2e7eb1ca1e29d7857f235d))
+* **deps:** update dependency sharp to v0.35.3 ([#177](https://github.com/lamngockhuong/termote/issues/177)) ([45c29b3](https://github.com/lamngockhuong/termote/commit/45c29b3c41b8e43ee03b12049ab535ef69513ec0))
+* **deps:** update react monorepo ([#175](https://github.com/lamngockhuong/termote/issues/175)) ([081c267](https://github.com/lamngockhuong/termote/commit/081c267e2246c12f5174f718883bdf29a10a48e3))
+
 ## [0.0.15](https://github.com/lamngockhuong/termote/compare/v0.0.14...v0.0.15) (2026-04-11)
 
 
