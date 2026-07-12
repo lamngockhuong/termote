@@ -65,6 +65,7 @@ winget install psmux
 # ttyd is auto-downloaded on first run
 .\scripts\termote.ps1 install native
 .\scripts\termote.ps1 install native -Lan
+.\scripts\termote.ps1 install native -Ttyd official  # Use upstream tsl0922/ttyd build instead of the default fork/MSVC build
 ```
 
 **When to use:** Need host tool access (claude, git, node), no container overhead.

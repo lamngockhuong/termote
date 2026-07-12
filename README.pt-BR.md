@@ -231,29 +231,29 @@ flowchart LR
     User["Usuario"] --> Container & Native
 ```
 
-| Modo          | Descricao        | Caso de Uso                               | Plataforma   |
-| ------------- | ---------------- | ----------------------------------------- | ------------ |
-| `--container` | Modo container   | Implantacao simples, ambiente isolado      | macOS, Linux |
+| Modo          | Descricao         | Caso de Uso                               | Plataforma   |
+| ------------- | ----------------- | ----------------------------------------- | ------------ |
+| `--container` | Modo container    | Implantacao simples, ambiente isolado     | macOS, Linux |
 | `--native`    | Totalmente nativo | Acesso a ferramentas do host (claude, gh) | macOS, Linux |
 
 ### Opcoes
 
-| Flag                        | Descricao                                            |
-| --------------------------- | ---------------------------------------------------- |
-| `--lan`                     | Expor na LAN (padrao: apenas localhost)              |
-| `--tailscale <host[:port]>` | Habilitar Tailscale HTTPS                            |
-| `--no-auth`                 | Desabilitar autenticacao basica                      |
-| `--port <port>`             | Porta do host (padrao: 7680, Windows: 7690)          |
-| `--fresh`                   | Forcar nova senha (ignorar config salva)             |
-| `--update`                  | Atualizar automaticamente com config salva           |
-| `--version <ver>`           | Instalar versao especifica (com ou sem `v`)          |
+| Flag                        | Descricao                                   |
+| --------------------------- | ------------------------------------------- |
+| `--lan`                     | Expor na LAN (padrao: apenas localhost)     |
+| `--tailscale <host[:port]>` | Habilitar Tailscale HTTPS                   |
+| `--no-auth`                 | Desabilitar autenticacao basica             |
+| `--port <port>`             | Porta do host (padrao: 7680, Windows: 7690) |
+| `--fresh`                   | Forcar nova senha (ignorar config salva)    |
+| `--update`                  | Atualizar automaticamente com config salva  |
+| `--version <ver>`           | Instalar versao especifica (com ou sem `v`) |
 
-| Variavel de Ambiente | Descricao                                            |
-| -------------------- | ---------------------------------------------------- |
-| `WORKSPACE`          | Diretorio do host para montar (padrao: `./workspace`) |
+| Variavel de Ambiente | Descricao                                                |
+| -------------------- | -------------------------------------------------------- |
+| `WORKSPACE`          | Diretorio do host para montar (padrao: `./workspace`)    |
 | `TERMOTE_USER`       | Usuario de autenticacao (padrao: gerado automaticamente) |
 | `TERMOTE_PASS`       | Senha de autenticacao (padrao: gerada automaticamente)   |
-| `NO_AUTH`            | Defina como `true` para desabilitar autenticacao     |
+| `NO_AUTH`            | Defina como `true` para desabilitar autenticacao         |
 
 ### Modo Container (recomendado pela simplicidade)
 
@@ -351,16 +351,18 @@ winget install psmux
 .\scripts\termote.ps1 install container  # Ou modo container com Docker Desktop
 ```
 
+> Por padrao, `install native` baixa o [build fork/MSVC do ttyd](https://github.com/lamngockhuong/ttyd/releases) (funciona no Windows mais recente); use `-Ttyd official` para usar o build upstream do tsl0922/ttyd.
+
 ## Uso no Mobile
 
-| Acao               | Gesto               |
-| ------------------ | -------------------- |
+| Acao                 | Gesto                           |
+| -------------------- | ------------------------------- |
 | Cancelar/interromper | Deslizar para esquerda (Ctrl+C) |
-| Tab completion     | Deslizar para direita |
-| Historico acima    | Deslizar para cima    |
-| Historico abaixo   | Deslizar para baixo   |
-| Colar              | Pressionar longo      |
-| Tamanho da fonte   | Pincar para dentro/fora |
+| Tab completion       | Deslizar para direita           |
+| Historico acima      | Deslizar para cima              |
+| Historico abaixo     | Deslizar para baixo             |
+| Colar                | Pressionar longo                |
+| Tamanho da fonte     | Pincar para dentro/fora         |
 
 A barra de ferramentas virtual oferece: Tab, Esc, Ctrl, Shift, teclas de seta e combinacoes de teclas comuns. Suporta combinacoes Ctrl+Shift (colar, copiar). Alterne entre modo minimo e expandido para teclas adicionais (Home, End, Delete, etc.).
 
@@ -450,10 +452,10 @@ lsof -i :7680              # Confirmar que a porta esta em uso
 
 ## Outros Projetos
 
-| Projeto | Descricao |
-|---------|-----------|
+| Projeto                                                     | Descricao                                                                                                    |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | [GitHub Flex](https://github.com/lamngockhuong/github-flex) | Extensao multi-navegador (Chrome e Firefox) que aprimora a interface do GitHub com recursos de produtividade |
-| [TabRest](https://github.com/lamngockhuong/tabrest) | Extensao do Chrome que descarrega automaticamente abas inativas para liberar memoria |
+| [TabRest](https://github.com/lamngockhuong/tabrest)         | Extensao do Chrome que descarrega automaticamente abas inativas para liberar memoria                         |
 
 ## Licenca
 

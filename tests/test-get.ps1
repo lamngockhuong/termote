@@ -81,7 +81,8 @@ try {
     $hasDownloadOnlyEnv = $content -match 'TERMOTE_DOWNLOAD_ONLY'
     $hasUpdateEnv = $content -match 'TERMOTE_UPDATE'
     $hasModeEnv = $content -match 'TERMOTE_MODE'
-    $allExist = $hasAutoYes -and $hasDownloadOnlyEnv -and $hasUpdateEnv -and $hasModeEnv
+    $hasTtydEnv = $content -match 'TERMOTE_TTYD'
+    $allExist = $hasAutoYes -and $hasDownloadOnlyEnv -and $hasUpdateEnv -and $hasModeEnv -and $hasTtydEnv
     Write-TestResult -Name "Environment variable support" -Passed $allExist
 } catch {
     Write-TestResult -Name "Environment variable support" -Passed $false -Error $_.Exception.Message

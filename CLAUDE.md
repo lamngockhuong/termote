@@ -85,6 +85,7 @@ curl -fsSL https://... | bash -s -- --update           # Auto-update with saved 
 .\scripts\termote.ps1 install native -NoAuth           # Without auth
 .\scripts\termote.ps1 install native -Tailscale host   # Tailscale HTTPS
 .\scripts\termote.ps1 install native -Fresh            # Force new password (ignore saved)
+.\scripts\termote.ps1 install native -Ttyd official    # Use upstream tsl0922/ttyd (default: fork/MSVC build)
 .\scripts\termote.ps1 link                             # Create 'termote' global command
 .\scripts\termote.ps1 unlink                           # Remove global command
 irm https://... | iex                                  # Online installer

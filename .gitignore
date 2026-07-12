@@ -30,6 +30,7 @@ tmux-api/tmux-api-native.exe
 
 # ttyd binary
 scripts/ttyd.exe
+scripts/ttyd.source
 
 # Claude Code
 .claude/settings.local.json
@@ -43,3 +44,6 @@ pwa/e2e/*.png
 pwa/plans/
 plans/
 .certs
+
+# Journals (generated, local only)
+docs/journals/

@@ -349,6 +349,8 @@ winget install psmux
 .\scripts\termote.ps1 install container  # Hoặc container mode với Docker Desktop
 ```
 
+> Mặc định, `install native` tải bản build [fork/MSVC ttyd](https://github.com/lamngockhuong/ttyd/releases) (hoạt động trên Windows mới nhất); dùng `-Ttyd official` để chuyển sang bản build gốc tsl0922/ttyd.
+
 ## Sử Dụng Mobile
 
 | Hành Động      | Cử Chỉ             |
@@ -448,10 +450,10 @@ lsof -i :7680              # Xác minh port đang dùng
 
 ## Dự Án Khác
 
-| Dự án | Mô tả |
-|-------|-------|
+| Dự án                                                       | Mô tả                                                                                                  |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | [GitHub Flex](https://github.com/lamngockhuong/github-flex) | Extension đa trình duyệt (Chrome & Firefox) nâng cao giao diện GitHub với các tính năng tăng năng suất |
-| [TabRest](https://github.com/lamngockhuong/tabrest) | Extension Chrome tự động unload các tab không hoạt động để giải phóng bộ nhớ |
+| [TabRest](https://github.com/lamngockhuong/tabrest)         | Extension Chrome tự động unload các tab không hoạt động để giải phóng bộ nhớ                           |
 
 ## Giấy Phép
 

@@ -84,7 +84,14 @@ With mouse ON, tmux captures mouse events. To copy to system clipboard:
      <TabItem label="Windows (PowerShell)">
        ```powershell
        .\scripts\termote.ps1 install native
+       .\scripts\termote.ps1 install native -Ttyd official
        ```
+
+       By default (`-Ttyd fork`), the installer downloads the
+       [fork/MSVC ttyd build](https://github.com/lamngockhuong/ttyd/releases)
+       (`ttyd.msvc.exe`), since the upstream `tsl0922/ttyd` Windows build
+       (`ttyd.win32.exe`) is currently broken on the latest Windows. Pass
+       `-Ttyd official` to use the upstream build instead.
      </TabItem>
    </Tabs>
 

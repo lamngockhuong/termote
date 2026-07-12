@@ -231,29 +231,29 @@ flowchart LR
     User["Utilisateur"] --> Container & Native
 ```
 
-| Mode          | Description      | Cas d'utilisation                            | Plateforme   |
-| ------------- | ---------------- | -------------------------------------------- | ------------ |
-| `--container` | Mode conteneur   | Déploiement simple, environnement isolé      | macOS, Linux |
-| `--native`    | Tout en natif    | Accès aux outils de l'hôte (claude, gh)      | macOS, Linux |
+| Mode          | Description    | Cas d'utilisation                       | Plateforme   |
+| ------------- | -------------- | --------------------------------------- | ------------ |
+| `--container` | Mode conteneur | Déploiement simple, environnement isolé | macOS, Linux |
+| `--native`    | Tout en natif  | Accès aux outils de l'hôte (claude, gh) | macOS, Linux |
 
 ### Options
 
-| Flag                        | Description                                                  |
-| --------------------------- | ------------------------------------------------------------ |
-| `--lan`                     | Exposer sur le LAN (par défaut : localhost uniquement)       |
-| `--tailscale <host[:port]>` | Activer Tailscale HTTPS                                     |
-| `--no-auth`                 | Désactiver l'authentification basique                        |
-| `--port <port>`             | Port hôte (par défaut : 7680, Windows : 7690)               |
+| Flag                        | Description                                                    |
+| --------------------------- | -------------------------------------------------------------- |
+| `--lan`                     | Exposer sur le LAN (par défaut : localhost uniquement)         |
+| `--tailscale <host[:port]>` | Activer Tailscale HTTPS                                        |
+| `--no-auth`                 | Désactiver l'authentification basique                          |
+| `--port <port>`             | Port hôte (par défaut : 7680, Windows : 7690)                  |
 | `--fresh`                   | Forcer un nouveau mot de passe (ignorer la config sauvegardée) |
-| `--update`                  | Mise à jour automatique avec la config sauvegardée           |
-| `--version <ver>`           | Installer une version spécifique (avec ou sans `v`)          |
+| `--update`                  | Mise à jour automatique avec la config sauvegardée             |
+| `--version <ver>`           | Installer une version spécifique (avec ou sans `v`)            |
 
-| Variable d'environnement | Description                                                |
-| ------------------------ | ---------------------------------------------------------- |
-| `WORKSPACE`              | Répertoire hôte à monter (par défaut : `./workspace`)      |
+| Variable d'environnement | Description                                                  |
+| ------------------------ | ------------------------------------------------------------ |
+| `WORKSPACE`              | Répertoire hôte à monter (par défaut : `./workspace`)        |
 | `TERMOTE_USER`           | Nom d'utilisateur auth (par défaut : généré automatiquement) |
-| `TERMOTE_PASS`           | Mot de passe auth (par défaut : généré automatiquement)    |
-| `NO_AUTH`                | Définir à `true` pour désactiver l'authentification        |
+| `TERMOTE_PASS`           | Mot de passe auth (par défaut : généré automatiquement)      |
+| `NO_AUTH`                | Définir à `true` pour désactiver l'authentification          |
 
 ### Mode Conteneur (recommandé pour la simplicité)
 
@@ -330,11 +330,11 @@ git pull origin main                    # Si installé depuis les sources
 
 ## Support des Plateformes
 
-| Plateforme | Conteneur          | Natif              | Script CLI  |
-| ---------- | ------------------ | ------------------ | ----------- |
-| Linux      | ✓                  | ✓                  | termote.sh  |
-| macOS      | ✓                  | ✓                  | termote.sh  |
-| Windows    | ⚠️ (expérimental)   | ⚠️ (expérimental)   | termote.ps1 |
+| Plateforme | Conteneur        | Natif            | Script CLI  |
+| ---------- | ---------------- | ---------------- | ----------- |
+| Linux      | ✓                | ✓                | termote.sh  |
+| macOS      | ✓                | ✓                | termote.sh  |
+| Windows    | ⚠️ (expérimental) | ⚠️ (expérimental) | termote.ps1 |
 
 > **⚠️ Support Windows (Expérimental)** : Le support Windows est actuellement en phase initiale et nécessite davantage de tests. Le mode conteneur nécessite Docker Desktop, le mode natif nécessite psmux. Veuillez signaler les problèmes sur GitHub.
 
@@ -351,16 +351,18 @@ winget install psmux
 .\scripts\termote.ps1 install container  # Ou mode conteneur avec Docker Desktop
 ```
 
+> Par défaut, `install native` télécharge le [build fork/MSVC de ttyd](https://github.com/lamngockhuong/ttyd/releases) (fonctionne sur la dernière version de Windows) ; utilisez `-Ttyd official` pour passer au build upstream tsl0922/ttyd.
+
 ## Utilisation Mobile
 
-| Action              | Geste                |
-| ------------------- | -------------------- |
+| Action              | Geste                    |
+| ------------------- | ------------------------ |
 | Annuler/interrompre | Balayage gauche (Ctrl+C) |
-| Complétion Tab      | Balayage droit       |
-| Historique haut     | Balayage haut        |
-| Historique bas      | Balayage bas         |
-| Coller              | Appui long           |
-| Taille de police    | Pincement entrée/sortie |
+| Complétion Tab      | Balayage droit           |
+| Historique haut     | Balayage haut            |
+| Historique bas      | Balayage bas             |
+| Coller              | Appui long               |
+| Taille de police    | Pincement entrée/sortie  |
 
 La barre d'outils virtuelle fournit : Tab, Esc, Ctrl, Shift, touches fléchées et combinaisons de touches courantes. Supporte les combinaisons Ctrl+Shift (coller, copier). Basculez entre le mode minimal et le mode étendu pour des touches supplémentaires (Home, End, Delete, etc.).
 
@@ -450,10 +452,10 @@ lsof -i :7680              # Vérifier que le port est utilisé
 
 ## Autres Projets
 
-| Projet | Description |
-|--------|-------------|
+| Projet                                                      | Description                                                                                                             |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | [GitHub Flex](https://github.com/lamngockhuong/github-flex) | Extension multi-navigateur (Chrome et Firefox) qui améliore l'interface GitHub avec des fonctionnalités de productivité |
-| [TabRest](https://github.com/lamngockhuong/tabrest) | Extension Chrome qui décharge automatiquement les onglets inactifs pour libérer la mémoire |
+| [TabRest](https://github.com/lamngockhuong/tabrest)         | Extension Chrome qui décharge automatiquement les onglets inactifs pour libérer la mémoire                              |
 
 ## Licence
 

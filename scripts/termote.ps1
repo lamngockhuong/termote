@@ -29,6 +29,8 @@ param(
     [switch]$NoAuth,
     [int]$Port = 7690,
     [string]$Tailscale,
+    [ValidateSet("official", "fork", "")]
+    [string]$Ttyd = "",
     [switch]$Fresh
 )
 
@@ -50,6 +52,14 @@ $script:PORT_MAIN = 7690
 $script:PORT_CONTAINER = 7680
 $script:PORT_TTYD = 7681
 $script:CONTAINER_NAME = "termote"
+
+# ttyd source selection (native mode, Windows).
+# Default = fork MSVC build: the official tsl0922 ttyd.win32.exe is broken on the latest Windows.
+$script:TTYD_DEFAULT_SOURCE = "fork"
+$script:TTYD_SOURCES = @{
+    official = @{ Repo = "tsl0922/ttyd";       Asset = "ttyd.win32.exe" }
+    fork     = @{ Repo = "lamngockhuong/ttyd";  Asset = "ttyd.msvc.exe"  }
+}
 $script:HOME_DIR = if ($env:USERPROFILE) { $env:USERPROFILE } else { $env:HOME }
 $script:LOG_DIR = Join-Path $script:HOME_DIR ".termote/logs"
 $script:CONFIG_FILE = Join-Path $script:HOME_DIR ".termote/config.json"
@@ -91,6 +101,7 @@ function Save-Config {
         [switch]$NoAuth,
         [int]$Port,
         [string]$Tailscale,
+        [string]$Ttyd,
         [string]$Password
     )
 
@@ -119,6 +130,7 @@ function Save-Config {
         NoAuth = $NoAuth.IsPresent -or $NoAuth
         Port = $Port
         Tailscale = $Tailscale
+        Ttyd = $Ttyd
         EncryptedPass = $encryptedPass
         SavedAt = (Get-Date).ToString("o")
     }
@@ -380,6 +392,13 @@ function Show-InteractiveInstall {
     $mode = ($mode -split " ")[0]
 
     $opts = @{}
+    if ($mode -eq "native") {
+        $src = Select-Option -Header "Select ttyd build:" -Options @(
+            "fork - MSVC build (recommended, works on latest Windows)",
+            "official - tsl0922 win32 (may fail on latest Windows)"
+        )
+        $opts.Ttyd = ($src -split " ")[0]
+    }
     if (Confirm-Action "Expose to LAN?") { $opts.Lan = $true }
     if (Confirm-Action "Disable authentication?") { $opts.NoAuth = $true }
     if (Confirm-Action "Enable Tailscale HTTPS?") {
@@ -549,23 +568,43 @@ Or from: https://github.com/psmux/psmux
 }
 
 function Get-TtydBinary {
-    param([string]$DestDir)
+    param(
+        [string]$DestDir,
+        [ValidateSet("official", "fork")]
+        [string]$Source = $script:TTYD_DEFAULT_SOURCE
+    )
 
-    $ttydPath = Join-Path $DestDir "ttyd.exe"
-    if (Test-Path $ttydPath) {
+    # Binary filename stays "ttyd.exe" regardless of source so the process name
+    # (Get-Process ttyd) is stable. A sidecar "ttyd.source" marker records which
+    # source the cached binary came from, so switching sources re-downloads.
+    $ttydPath   = Join-Path $DestDir "ttyd.exe"
+    $markerPath = Join-Path $DestDir "ttyd.source"
+    $current    = if (Test-Path $markerPath) { (Get-Content $markerPath -Raw).Trim() } else { "" }
+
+    # Reuse only if the existing binary matches the requested source
+    if ((Test-Path $ttydPath) -and ($current -eq $Source)) {
         return $ttydPath
     }
 
-    Write-Info "Downloading ttyd.win32.exe..."
-    try {
-        $release = Invoke-RestMethod "https://api.github.com/repos/tsl0922/ttyd/releases/latest"
-        $asset = $release.assets | Where-Object { $_.name -eq "ttyd.win32.exe" }
-        if (-not $asset) { Write-Err "ttyd.win32.exe not found in release" }
+    $repo  = $script:TTYD_SOURCES[$Source].Repo
+    $asset = $script:TTYD_SOURCES[$Source].Asset
+    Write-Info "Downloading ttyd (${Source}: $asset from $repo)..."
 
-        Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $ttydPath
+    # Invalidate the marker before downloading. Invoke-WebRequest streams to disk,
+    # so an interrupted download leaves a truncated ttyd.exe; clearing the marker
+    # first guarantees the cache reads as "no valid binary" rather than a false hit.
+    Remove-Item $markerPath -ErrorAction SilentlyContinue
+
+    try {
+        $release   = Invoke-RestMethod "https://api.github.com/repos/$repo/releases/latest"
+        $assetInfo = $release.assets | Where-Object { $_.name -eq $asset }
+        if (-not $assetInfo) { Write-Err "$asset not found in $repo latest release" }
+
+        Invoke-WebRequest -Uri $assetInfo.browser_download_url -OutFile $ttydPath
+        Set-Content -Path $markerPath -Value $Source -Encoding ASCII -NoNewline
         return $ttydPath
     } catch {
-        Write-Err "Failed to download ttyd: $_"
+        Write-Err "Failed to download ttyd ($Source): $_"
     }
 }
 
@@ -628,7 +667,8 @@ function Start-NativeMode {
     param(
         [string]$BindAddr,
         [int]$Port,
-        [switch]$NoAuth
+        [switch]$NoAuth,
+        [string]$Ttyd = $script:TTYD_DEFAULT_SOURCE
     )
 
     # Verify psmux
@@ -638,7 +678,7 @@ function Start-NativeMode {
     Stop-NativeMode
 
     # Get/download ttyd
-    $ttydPath = Get-TtydBinary -DestDir $script:SCRIPT_DIR
+    $ttydPath = Get-TtydBinary -DestDir $script:SCRIPT_DIR -Source $Ttyd
 
     # Find tmux-api binary
     $apiPath = Join-Path $script:PROJECT_DIR "tmux-api\tmux-api.exe"
@@ -683,6 +723,8 @@ function Invoke-Install {
         [switch]$NoAuth,
         [int]$Port = 7690,
         [string]$Tailscale,
+        [ValidateSet("official", "fork", "")]
+        [string]$Ttyd = "",
         [switch]$Fresh
     )
 
@@ -699,8 +741,17 @@ function Invoke-Install {
             if (-not $PSBoundParameters.ContainsKey('Tailscale') -and $savedConfig.Tailscale) {
                 $Tailscale = $savedConfig.Tailscale
             }
+            # Value-based check (not ContainsKey): the CLI dispatch site always binds
+            # -Ttyd explicitly, so $PSBoundParameters would always report it present.
+            # "" is the "unset" sentinel, so an empty value means saved config may win.
+            if (-not $Ttyd -and $savedConfig.Ttyd) {
+                $Ttyd = $savedConfig.Ttyd
+            }
         }
     }
+
+    # Apply default so a concrete source always reaches native mode / config
+    if (-not $Ttyd) { $Ttyd = $script:TTYD_DEFAULT_SOURCE }
 
     $bindAddr = if ($Lan) { "0.0.0.0" } else { "127.0.0.1" }
     $lanIP = if ($Lan) { Get-LanIP } else { "" }
@@ -776,7 +827,7 @@ function Invoke-Install {
             Start-ContainerMode -Port $Port -Lan:$Lan
         }
         "native" {
-            Start-NativeMode -BindAddr $bindAddr -Port $Port -NoAuth:$NoAuth
+            Start-NativeMode -BindAddr $bindAddr -Port $Port -NoAuth:$NoAuth -Ttyd $Ttyd
         }
     }
 
@@ -793,7 +844,7 @@ function Invoke-Install {
     }
 
     # Save config for future restarts/updates
-    Save-Config -Mode $Mode -Lan:$Lan -NoAuth:$NoAuth -Port $Port -Tailscale $Tailscale -Password $env:TERMOTE_PASS
+    Save-Config -Mode $Mode -Lan:$Lan -NoAuth:$NoAuth -Port $Port -Tailscale $Tailscale -Ttyd $Ttyd -Password $env:TERMOTE_PASS
 
     Show-AccessInfo -Port $Port -Lan:$Lan -LanIP $lanIP -Tailscale $Tailscale -NoAuth:$NoAuth
 }
@@ -1099,6 +1150,7 @@ function Show-Help {
     Write-Host "  -Lan              Expose to LAN"
     Write-Host "  -Tailscale <h>    Enable Tailscale HTTPS"
     Write-Host "  -NoAuth           Disable authentication"
+    Write-Host "  -Ttyd <official|fork>  ttyd build for native mode (default: fork / MSVC)"
     Write-Host "  -Fresh            Ignore saved config, prompt for new password"
     Write-Host ""
     Write-Host "Examples:"
@@ -1106,6 +1158,7 @@ function Show-Help {
     Write-Host "  .\termote.ps1 install container         # Container mode"
     Write-Host "  .\termote.ps1 install native -Lan       # Native + LAN"
     Write-Host "  .\termote.ps1 install native -NoAuth    # Without auth"
+    Write-Host "  .\termote.ps1 install native -Ttyd official  # Use upstream tsl0922 ttyd"
     Write-Host "  .\termote.ps1 install native -Fresh     # Reset password"
     Write-Host "  .\termote.ps1 uninstall all             # Full cleanup"
 }
@@ -1126,7 +1179,7 @@ switch ($Command) {
         if (-not $Mode) {
             Write-Err "Usage: termote.ps1 install <container|native> [options]"
         }
-        Invoke-Install -Mode $Mode -Lan:$Lan -NoAuth:$NoAuth -Port $Port -Tailscale $Tailscale -Fresh:$Fresh
+        Invoke-Install -Mode $Mode -Lan:$Lan -NoAuth:$NoAuth -Port $Port -Tailscale $Tailscale -Ttyd $Ttyd -Fresh:$Fresh
     }
     "uninstall" {
         if (-not $Mode) {

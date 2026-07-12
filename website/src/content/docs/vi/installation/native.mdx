@@ -84,7 +84,14 @@ Khi mouse BẬT, tmux bắt sự kiện chuột. Để copy ra system clipboard:
      <TabItem label="Windows (PowerShell)">
        ```powershell
        .\scripts\termote.ps1 install native
+       .\scripts\termote.ps1 install native -Ttyd official
        ```
+
+       Mặc định (`-Ttyd fork`), trình cài đặt tải bản build
+       [fork/MSVC ttyd](https://github.com/lamngockhuong/ttyd/releases)
+       (`ttyd.msvc.exe`), vì bản build gốc `tsl0922/ttyd` cho Windows
+       (`ttyd.win32.exe`) hiện đang bị lỗi trên Windows mới nhất. Dùng
+       `-Ttyd official` để chuyển sang bản build gốc.
      </TabItem>
    </Tabs>
 
