@@ -42,7 +42,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       dry_run: ${{ steps.version.outputs.dry_run }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Extract version
         id: version
@@ -69,7 +69,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [prepare]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@v6
         with:
@@ -101,7 +101,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [prepare]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v6
         with:
@@ -126,7 +126,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     needs: [prepare]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v6
         with:
@@ -154,7 +154,7 @@ jobs:
       matrix:
         goarch: [amd64, arm64]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v6
         with:
@@ -179,7 +179,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [prepare]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v6
         with:
@@ -211,7 +211,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Download all artifacts
         uses: actions/download-artifact@v8
@@ -288,7 +288,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Download all artifacts
         uses: actions/download-artifact@v8
@@ -368,7 +368,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: main
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -395,7 +395,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [docker]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Update Docker Hub description
         uses: peter-evans/dockerhub-description@v5
