@@ -351,6 +351,8 @@ winget install psmux
 .\scripts\termote.ps1 install container  # Ou mode conteneur avec Docker Desktop
 ```
 
+> Par défaut, `install native` télécharge le [build fork/MSVC de ttyd](https://github.com/lamngockhuong/ttyd/releases) (fonctionne sur la dernière version de Windows) ; utilisez `-Ttyd official` pour passer au build upstream tsl0922/ttyd.
+
 ## Utilisation Mobile
 
 | Action              | Geste                |

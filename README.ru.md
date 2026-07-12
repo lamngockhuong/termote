@@ -351,6 +351,8 @@ winget install psmux
 .\scripts\termote.ps1 install container  # Или контейнерный режим с Docker Desktop
 ```
 
+> По умолчанию `install native` загружает [fork/MSVC сборку ttyd](https://github.com/lamngockhuong/ttyd/releases) (работает на последней версии Windows); используйте `-Ttyd official`, чтобы переключиться на upstream-сборку tsl0922/ttyd.
+
 ## Мобильное использование
 
 | Действие              | Жест                |

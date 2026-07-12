@@ -124,7 +124,8 @@ try {
     $hasLan = $content -match '\[switch\]\$Lan'
     $hasNoAuth = $content -match '\[switch\]\$NoAuth'
     $hasPort = $content -match '\[int\]\$Port'
-    $allExist = $hasCommand -and $hasMode -and $hasLan -and $hasNoAuth -and $hasPort
+    $hasTtyd = $content -match '\[string\]\$Ttyd'
+    $allExist = $hasCommand -and $hasMode -and $hasLan -and $hasNoAuth -and $hasPort -and $hasTtyd
     Write-TestResult -Name "Required parameters defined" -Passed $allExist
 } catch {
     Write-TestResult -Name "Required parameters defined" -Passed $false -Error $_.Exception.Message
@@ -193,6 +194,22 @@ try {
     Write-TestResult -Name "Health check helpers exist" -Passed ($hasContainerCheck -and $hasNativeCheck)
 } catch {
     Write-TestResult -Name "Health check helpers exist" -Passed $false -Error $_.Exception.Message
+}
+
+# ─────────────────────────────────────────────────────────────
+# Test 13: ttyd source selection wired (official vs fork)
+# ─────────────────────────────────────────────────────────────
+try {
+    $content = Get-Content $ScriptPath -Raw
+    $hasSources     = $content -match '\$script:TTYD_SOURCES'
+    $hasForkAsset   = $content -match 'ttyd\.msvc\.exe'
+    $hasOffAsset    = $content -match 'ttyd\.win32\.exe'
+    $hasDefault     = $content -match '\$script:TTYD_DEFAULT_SOURCE\s*=\s*"fork"'
+    $hasSourceParam = $content -match 'Get-TtydBinary[\s\S]{0,200}\$Source'
+    $allExist = $hasSources -and $hasForkAsset -and $hasOffAsset -and $hasDefault -and $hasSourceParam
+    Write-TestResult -Name "ttyd source selection wired" -Passed $allExist
+} catch {
+    Write-TestResult -Name "ttyd source selection wired" -Passed $false -Error $_.Exception.Message
 }
 
 # ─────────────────────────────────────────────────────────────

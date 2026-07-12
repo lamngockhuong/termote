@@ -351,6 +351,8 @@ winget install psmux
 .\scripts\termote.ps1 install container  # 또는 Docker Desktop으로 컨테이너 모드
 ```
 
+> 기본적으로 `install native`는 [fork/MSVC ttyd 빌드](https://github.com/lamngockhuong/ttyd/releases)를 다운로드합니다 (최신 Windows에서 작동). `-Ttyd official`을 사용하면 업스트림 tsl0922/ttyd 빌드로 전환합니다.
+
 ## 모바일 사용법
 
 | 동작           | 제스처              |

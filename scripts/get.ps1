@@ -13,6 +13,7 @@
     # With options:
     $env:TERMOTE_MODE = "container"; irm .../get.ps1 | iex
     $env:TERMOTE_AUTO_YES = "true"; irm .../get.ps1 | iex
+    $env:TERMOTE_TTYD = "official"; irm .../get.ps1 | iex
 #>
 
 [CmdletBinding()]
@@ -23,7 +24,9 @@ param(
     [ValidateSet("container", "native", "")]
     [string]$Mode = "",
     [switch]$Lan,
-    [switch]$NoAuth
+    [switch]$NoAuth,
+    [ValidateSet("official", "fork", "")]
+    [string]$Ttyd = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -40,6 +43,7 @@ if ($env:TERMOTE_UPDATE -eq "true") { $Update = $true }
 if ($env:TERMOTE_MODE) { $Mode = $env:TERMOTE_MODE }
 if ($env:TERMOTE_LAN -eq "true") { $Lan = $true }
 if ($env:TERMOTE_NO_AUTH -eq "true") { $NoAuth = $true }
+if ($env:TERMOTE_TTYD) { $Ttyd = $env:TERMOTE_TTYD }
 
 # Update mode implies auto-yes
 if ($Update) { $Yes = $true }
@@ -247,6 +251,9 @@ function Main {
         $installArgs = @("install", $Mode)
         if ($Lan) { $installArgs += "-Lan" }
         if ($NoAuth) { $installArgs += "-NoAuth" }
+        # Only pass -Ttyd when explicitly set; empty lets termote.ps1 resolve
+        # saved-config/default (preserves update-keeps-choice behavior).
+        if ($Ttyd) { $installArgs += @("-Ttyd", $Ttyd) }
         if ($Update -and $savedConfig) {
             if ($savedConfig.Port -and $savedConfig.Port -ne "7690") { $installArgs += @("-Port", $savedConfig.Port) }
             if ($savedConfig.Tailscale) { $installArgs += @("-Tailscale", $savedConfig.Tailscale) }

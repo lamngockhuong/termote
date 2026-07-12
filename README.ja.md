@@ -351,6 +351,8 @@ winget install psmux
 .\scripts\termote.ps1 install container  # またはDocker Desktopでコンテナモード
 ```
 
+> デフォルトでは、`install native`は[fork/MSVC ttydビルド](https://github.com/lamngockhuong/ttyd/releases)をダウンロードします（最新のWindowsで動作）。`-Ttyd official`を指定すると、アップストリームのtsl0922/ttydビルドに切り替わります。
+
 ## モバイルでの使い方
 
 | 操作             | ジェスチャー        |

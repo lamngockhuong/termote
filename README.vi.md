@@ -349,6 +349,8 @@ winget install psmux
 .\scripts\termote.ps1 install container  # Hoặc container mode với Docker Desktop
 ```
 
+> Mặc định, `install native` tải bản build [fork/MSVC ttyd](https://github.com/lamngockhuong/ttyd/releases) (hoạt động trên Windows mới nhất); dùng `-Ttyd official` để chuyển sang bản build gốc tsl0922/ttyd.
+
 ## Sử Dụng Mobile
 
 | Hành Động      | Cử Chỉ             |

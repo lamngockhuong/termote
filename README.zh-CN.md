@@ -351,6 +351,8 @@ winget install psmux
 .\scripts\termote.ps1 install container  # 或使用 Docker Desktop 的容器模式
 ```
 
+> 默认情况下，`install native` 会下载 [fork/MSVC ttyd 构建版本](https://github.com/lamngockhuong/ttyd/releases)（可在最新 Windows 上运行）；使用 `-Ttyd official` 可切换为上游 tsl0922/ttyd 构建版本。
+
 ## 移动端使用
 
 | 操作         | 手势                |
