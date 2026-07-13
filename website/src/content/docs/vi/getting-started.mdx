@@ -18,11 +18,12 @@ import { Aside, Steps } from "@astrojs/starlight/components";
 - Docker Desktop hoặc Podman Desktop (cho chế độ Container — khuyến nghị)
 - hoặc [psmux](https://github.com/psmux/psmux) + ttyd (cho chế độ Native): `winget install psmux`
 
-<Aside type="caution" title="Thử nghiệm">
-  Hỗ trợ Windows đang trong giai đoạn thử nghiệm. Chế độ Container đã hoạt động.
-  Chế độ Native có lỗi đã biết: ttyd bị crash trên Windows 11 (build 26200+) khi
-  WebSocket client kết nối — bản sửa đang được lên kế hoạch. Vui lòng báo cáo lỗi
-  tại [GitHub](https://github.com/lamngockhuong/termote/issues).
+<Aside type="tip" title="Windows">
+  Cả chế độ Container và Native đều được hỗ trợ đầy đủ trên Windows. Chế độ
+  Native mặc định dùng bản ttyd fork build bằng MSVC, khắc phục lỗi crash trước
+  đây trên Windows 11 (build 26200+); dùng `-Ttyd official` để chuyển sang bản
+  upstream. Vui lòng báo cáo lỗi tại
+  [GitHub](https://github.com/lamngockhuong/termote/issues).
 </Aside>
 
 ## Cài đặt một dòng

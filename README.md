@@ -330,13 +330,13 @@ git pull origin main                    # If installed from source
 
 ## Platform Support
 
-| Platform | Container        | Native           | CLI Script  |
-| -------- | ---------------- | ---------------- | ----------- |
-| Linux    | ✓                | ✓                | termote.sh  |
-| macOS    | ✓                | ✓                | termote.sh  |
-| Windows  | ⚠️ (experimental) | ⚠️ (experimental) | termote.ps1 |
+| Platform | Container | Native | CLI Script  |
+| -------- | --------- | ------ | ----------- |
+| Linux    | ✓         | ✓      | termote.sh  |
+| macOS    | ✓         | ✓      | termote.sh  |
+| Windows  | ✓         | ✓      | termote.ps1 |
 
-> **⚠️ Windows Support (Experimental)**: Windows support is currently in early stages and needs more testing. Container mode requires Docker Desktop, native mode requires psmux. Please report issues on GitHub.
+> **Windows Support**: Container mode requires Docker Desktop or Podman Desktop; native mode requires psmux. Report any issues on GitHub.
 
 ### Windows Native Mode
 

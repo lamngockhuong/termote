@@ -7,11 +7,11 @@ import { Steps, Tabs, TabItem, Aside } from "@astrojs/starlight/components";
 
 No Docker required. Access host binaries like `claude`, `git`, `gh`, etc.
 
-<Aside type="caution" title="Windows Native Mode — Known Issue">
-  On Windows 11 (build 26200+), ttyd.exe crashes when a WebSocket client
-  connects due to a ConPTY named pipe issue. A fix is planned (replacing ttyd
-  with a Go-based terminal handler). In the meantime, use **Container mode** on
-  Windows — it works correctly.
+<Aside type="tip" title="Windows Native Mode">
+  Native mode is fully supported on Windows. The install script auto-downloads
+  an MSVC-built ttyd fork by default, which resolves the earlier ConPTY crash on
+  Windows 11 (build 26200+). Pass `-Ttyd official` to use the upstream
+  `tsl0922/ttyd` build instead.
 </Aside>
 
 ## Prerequisites
@@ -35,9 +35,9 @@ No Docker required. Access host binaries like `claude`, `git`, `gh`, etc.
     # ttyd is auto-downloaded by the install script
     ```
 
-    <Aside type="caution">
-      Native mode on Windows is currently broken on Windows 11 build 26200+.
-      Use [Container mode](/installation/docker/) instead.
+    <Aside type="note">
+      ttyd is auto-downloaded by the install script (MSVC-built fork by
+      default). Use `-Ttyd official` for the upstream build.
     </Aside>
   </TabItem>
 </Tabs>
