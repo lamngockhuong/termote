@@ -40,7 +40,8 @@ build: build-pwa build-api
 
 build-pwa:
 	@echo "Building PWA..."
-	cd pwa && pnpm install --frozen-lockfile && pnpm build
+	pnpm install --frozen-lockfile --filter termote...
+	pnpm --filter termote build
 
 build-api:
 	@echo "Building tmux-api..."

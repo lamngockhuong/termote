@@ -94,6 +94,10 @@ $env:TERMOTE_UPDATE="true"; irm ... | iex              # Auto-update with saved 
 
 ## Development Commands
 
+This is a **pnpm workspace** (`pnpm-workspace.yaml` at repo root). `pwa` (`termote`) and
+`website` (`@termote/website`) share a single root `pnpm-lock.yaml`. Install once from the
+root — no need to `cd` into each package.
+
 ```bash
 # Using Makefile (recommended)
 make build          # Build PWA + tmux-api
@@ -101,8 +105,17 @@ make test           # Run all tests
 make deploy-container  # Deploy container (docker/podman)
 make health         # Check services
 
+# Workspace commands (run from repo root)
+pnpm install                          # Install ALL packages (single lockfile)
+pnpm --filter termote dev             # PWA dev server
+pnpm --filter @termote/website dev    # Website dev server
+pnpm --filter termote build           # Build PWA only
+pnpm -r build                         # Build every package
+# Scope an install to one package + its deps (used by CI):
+pnpm install --frozen-lockfile --filter termote...
+
 # Manual commands
-cd pwa && pnpm install && pnpm dev     # Dev server
+cd pwa && pnpm dev                     # Dev server (still works — pnpm is workspace-aware)
 cd pwa && pnpm tsc --noEmit            # Type check
 cd tmux-api && go build -o tmux-api .  # Build server
 ```
@@ -250,7 +263,7 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
 
 ```bash
 # PWA (required before commit)
-cd pwa && pnpm biome check --write .
+pnpm --filter termote lint
 
 # tmux-api
 cd tmux-api && go build .
@@ -268,11 +281,11 @@ make test-get         # Test online installer
 make test-entrypoints # Test Docker entrypoints
 
 # Manual checks
-cd pwa && pnpm tsc --noEmit          # Type check
+pnpm --filter termote exec tsc --noEmit     # Type check
 curl http://localhost:7680/api/tmux/health  # Test API
 
 # E2E tests (requires running server)
 ./scripts/termote.sh install container  # Start server first
-cd pwa && pnpm test:e2e              # Run Playwright tests
-cd pwa && pnpm test:e2e:ui           # Run with UI debugger
+pnpm --filter termote test:e2e              # Run Playwright tests
+pnpm --filter termote test:e2e:ui           # Run with UI debugger
 ```

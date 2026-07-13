@@ -409,8 +409,8 @@ make clean          # Dừng containers
 
 # E2E tests (yêu cầu server đang chạy)
 ./scripts/termote.sh install container  # Khởi động server trước
-cd pwa && pnpm test:e2e       # Chạy Playwright tests
-cd pwa && pnpm test:e2e:ui    # Chạy với UI debugger
+pnpm --filter termote test:e2e       # Chạy Playwright tests
+pnpm --filter termote test:e2e:ui    # Chạy với UI debugger
 ```
 
 **Kiểm Tra Thủ Công:** Xem [Danh Sách Kiểm Tra](docs/vi/self-test-checklist.md)

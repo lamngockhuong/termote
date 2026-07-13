@@ -411,8 +411,8 @@ make clean          # コンテナを停止
 
 # E2Eテスト（実行中のサーバーが必要）
 ./scripts/termote.sh install container  # 先にサーバーを起動
-cd pwa && pnpm test:e2e       # Playwrightテストを実行
-cd pwa && pnpm test:e2e:ui    # UIデバッガーで実行
+pnpm --filter termote test:e2e       # Playwrightテストを実行
+pnpm --filter termote test:e2e:ui    # UIデバッガーで実行
 ```
 
 **手動テスト:** [セルフテストチェックリスト](docs/self-test-checklist.md)を参照

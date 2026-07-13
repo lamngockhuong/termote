@@ -79,11 +79,10 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-          cache-dependency-path: pwa/pnpm-lock.yaml
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        working-directory: pwa
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --filter termote...
 
       - name: Build
         working-directory: pwa

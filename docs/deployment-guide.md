@@ -323,7 +323,7 @@ cd tmux-api && go build -o tmux-api-native .
 ls -la pwa/dist/
 
 # Rebuild PWA if missing
-cd pwa && pnpm build
+pnpm --filter termote build
 ```
 
 #### tmux session issues
@@ -388,7 +388,7 @@ tmux list-sessions
 ls -la pwa/dist/
 
 # Rebuild PWA
-cd pwa && pnpm install && pnpm build
+pnpm install --filter termote... && pnpm --filter termote build
 
 # Container mode: rebuild image
 docker build -t termote .

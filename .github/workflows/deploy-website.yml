@@ -34,11 +34,10 @@ jobs:
         with:
           node-version: "24"
           cache: "pnpm"
-          cache-dependency-path: website/pnpm-lock.yaml
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-        working-directory: website
+        run: pnpm install --frozen-lockfile --filter @termote/website...
 
       - name: Build
         run: pnpm build

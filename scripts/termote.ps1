@@ -730,7 +730,7 @@ function Start-NativeMode {
     # PWA directory
     $pwaDir = Join-Path $script:PROJECT_DIR "pwa\dist"
     if (-not (Test-Path $pwaDir)) {
-        Write-Err "PWA not built. Run: cd pwa && pnpm build"
+        Write-Err "PWA not built. Run: pnpm --filter termote build"
     }
 
     # Start services
@@ -819,9 +819,9 @@ function Invoke-Install {
             return
         }
     } else {
-        Push-Location (Join-Path $script:PROJECT_DIR "pwa")
-        & pnpm install --frozen-lockfile
-        & pnpm build
+        Push-Location $script:PROJECT_DIR
+        & pnpm install --frozen-lockfile --filter termote...
+        & pnpm --filter termote build
         Pop-Location
     }
 

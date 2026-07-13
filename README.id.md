@@ -409,8 +409,8 @@ make clean          # Hentikan containers
 
 # Tes E2E (memerlukan server yang berjalan)
 ./scripts/termote.sh install container  # Mulai server terlebih dahulu
-cd pwa && pnpm test:e2e       # Jalankan tes Playwright
-cd pwa && pnpm test:e2e:ui    # Jalankan dengan UI debugger
+pnpm --filter termote test:e2e       # Jalankan tes Playwright
+pnpm --filter termote test:e2e:ui    # Jalankan dengan UI debugger
 ```
 
 **Pengujian Manual:** Lihat [Daftar Periksa Self-Test](docs/self-test-checklist.md)
