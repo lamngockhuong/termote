@@ -319,6 +319,22 @@ try {
 }
 
 # ─────────────────────────────────────────────────────────────
+# Test 20b: log viewer includes *-error.log (stderr) files (regression)
+# ─────────────────────────────────────────────────────────────
+# On Windows services log to *-error.log via -RedirectStandardError; a viewer
+# reading only "<svc>.log" (stdout) shows nothing. Assert Write-LogTail exists
+# and ttyd/all glob so the error logs are included.
+try {
+    $content = Get-Content $ScriptPath -Raw
+    $hasHelper = $content -match 'function Write-LogTail'
+    $ttydGlob  = $content -match 'Write-LogTail -Pattern "ttyd\*\.log"'
+    $allGlob   = $content -match 'Write-LogTail -Pattern "\*\.log"'
+    Write-TestResult -Name "log viewer includes *-error.log" -Passed ($hasHelper -and $ttydGlob -and $allGlob)
+} catch {
+    Write-TestResult -Name "log viewer includes *-error.log" -Passed $false -Error $_.Exception.Message
+}
+
+# ─────────────────────────────────────────────────────────────
 # Test 20: interactive install answers are authoritative (regression)
 # ─────────────────────────────────────────────────────────────
 # Guards against the saved-config-override bug: an explicit "No" to LAN/Auth/

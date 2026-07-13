@@ -1037,6 +1037,27 @@ function Invoke-Health {
     }
 }
 
+# Tail every log file matching a glob, each under its own header. On Windows the
+# services split output across stdout AND stderr files (e.g. ttyd.log +
+# ttyd-error.log via -RedirectStandardOutput/-RedirectStandardError), and the real
+# output usually lands in *-error.log — so a viewer that reads only "<svc>.log"
+# shows nothing. Globbing catches both. Pattern is relative to $script:LOG_DIR.
+function Write-LogTail {
+    param([string]$Pattern, [int]$Lines, [string]$EmptyWarn)
+
+    $files = Get-ChildItem (Join-Path $script:LOG_DIR $Pattern) -ErrorAction SilentlyContinue | Sort-Object Name
+    if (-not $files) {
+        if ($EmptyWarn) { Write-Warn $EmptyWarn } else { Write-Host "(no logs)" }
+        return
+    }
+    foreach ($f in $files) {
+        Write-Host "=== $($f.BaseName) ===" -ForegroundColor White
+        $content = Get-Content $f.FullName -Tail $Lines
+        if ($content) { $content } else { Write-Host "(empty)" }
+        Write-Host ""
+    }
+}
+
 function Invoke-Logs {
     param(
         [string]$Service = "all",
@@ -1052,22 +1073,8 @@ function Invoke-Logs {
     if (-not $Service) { $Service = "all" }
 
     switch ($Service) {
-        "ttyd" {
-            $logFile = Join-Path $script:LOG_DIR "ttyd.log"
-            if (Test-Path $logFile) {
-                Get-Content $logFile -Tail $Lines
-            } else {
-                Write-Warn "No ttyd logs"
-            }
-        }
-        "tmux-api" {
-            $logFile = Join-Path $script:LOG_DIR "tmux-api.log"
-            if (Test-Path $logFile) {
-                Get-Content $logFile -Tail $Lines
-            } else {
-                Write-Warn "No tmux-api logs"
-            }
-        }
+        "ttyd" { Write-LogTail -Pattern "ttyd*.log" -Lines $Lines -EmptyWarn "No ttyd logs" }
+        "tmux-api" { Write-LogTail -Pattern "tmux-api*.log" -Lines $Lines -EmptyWarn "No tmux-api logs" }
         "api" { Invoke-Logs -Service "tmux-api" -Lines $Lines }
         { $_ -in @("follow", "tail") } {
             # Real-time tail of ALL log files (parity with termote.sh `tail -f *.log`).
@@ -1102,15 +1109,7 @@ function Invoke-Logs {
             Remove-Item "$script:LOG_DIR\*.log" -ErrorAction SilentlyContinue
             Write-Info "Logs cleaned (was: $([math]::Round($sizeBefore, 2)) KB)"
         }
-        "all" {
-            Write-Host "=== ttyd logs ===" -ForegroundColor White
-            $logFile = Join-Path $script:LOG_DIR "ttyd.log"
-            if (Test-Path $logFile) { Get-Content $logFile -Tail $Lines } else { Write-Host "(empty)" }
-            Write-Host ""
-            Write-Host "=== tmux-api logs ===" -ForegroundColor White
-            $logFile = Join-Path $script:LOG_DIR "tmux-api.log"
-            if (Test-Path $logFile) { Get-Content $logFile -Tail $Lines } else { Write-Host "(empty)" }
-        }
+        "all" { Write-LogTail -Pattern "*.log" -Lines $Lines }
         default {
             Write-Err "Unknown log service: $Service. Use one of: ttyd, tmux-api, all, follow, clean"
         }
