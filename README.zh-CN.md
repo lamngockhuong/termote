@@ -456,6 +456,7 @@ lsof -i :7680              # 确认端口是否在使用
 | ----------------------------------------------------------- | --------------------------------------------------------------- |
 | [GitHub Flex](https://github.com/lamngockhuong/github-flex) | 跨浏览器扩展（Chrome 和 Firefox），为 GitHub 界面增加生产力功能 |
 | [TabRest](https://github.com/lamngockhuong/tabrest)         | Chrome 扩展，自动卸载不活动的标签页以释放内存                   |
+| [Specpin](https://github.com/lamngockhuong/specpin)         | 将实时的、Git 版本化的业务规格固定到运行中的 Web UI 元素上（浏览器扩展 + Go sidecar） |
 
 ## 许可证
 
