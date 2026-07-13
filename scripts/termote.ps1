@@ -448,8 +448,12 @@ function Show-InteractiveInstall {
         )
         $opts.Ttyd = ($src -split " ")[0]
     }
-    if (Confirm-Action "Expose to LAN?") { $opts.Lan = $true }
-    if (Confirm-Action "Disable authentication?") { $opts.NoAuth = $true }
+    # Interactive answers are authoritative: ALWAYS set the key (even on "No") so
+    # Invoke-Install's saved-config merge sees them as PSBoundParameters and does
+    # NOT re-apply a stale saved Lan/NoAuth/Tailscale over an explicit "No".
+    $opts.Lan = [bool](Confirm-Action "Expose to LAN?")
+    $opts.NoAuth = [bool](Confirm-Action "Disable authentication?")
+    $opts.Tailscale = ""
     if (Confirm-Action "Enable Tailscale HTTPS?") {
         if ($script:HAS_GUM) {
             $tsHost = Invoke-GumPrompt input --placeholder "Tailscale hostname (e.g. myhost.ts.net)"

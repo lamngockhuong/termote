@@ -319,6 +319,24 @@ try {
 }
 
 # ─────────────────────────────────────────────────────────────
+# Test 20: interactive install answers are authoritative (regression)
+# ─────────────────────────────────────────────────────────────
+# Guards against the saved-config-override bug: an explicit "No" to LAN/Auth/
+# Tailscale must set the $opts key so Invoke-Install's merge doesn't re-apply a
+# stale saved value. Assert Show-InteractiveInstall assigns the keys directly
+# (not the old `if (Confirm-Action ...) { $opts.Lan = $true }` conditional form).
+try {
+    $content = Get-Content $ScriptPath -Raw
+    $lanAuthoritative = $content -match '\$opts\.Lan\s*=\s*\[bool\]\(Confirm-Action'
+    $noAuthAuthoritative = $content -match '\$opts\.NoAuth\s*=\s*\[bool\]\(Confirm-Action'
+    $tsInitialized = $content -match '\$opts\.Tailscale\s*=\s*""'
+    $allExist = $lanAuthoritative -and $noAuthAuthoritative -and $tsInitialized
+    Write-TestResult -Name "interactive install answers authoritative" -Passed $allExist
+} catch {
+    Write-TestResult -Name "interactive install answers authoritative" -Passed $false -Error $_.Exception.Message
+}
+
+# ─────────────────────────────────────────────────────────────
 # Summary
 # ─────────────────────────────────────────────────────────────
 Write-Host ""
