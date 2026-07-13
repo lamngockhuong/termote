@@ -115,8 +115,11 @@ describe('TerminalFrame', () => {
     await waitFor(() => {
       expect(screen.getByTitle('Terminal')).toBeInTheDocument()
     })
-    // After iframe renders, the effect runs
-    expect(mockSetTheme).toHaveBeenCalled()
+    // After iframe renders, the theme-applying effect runs post-commit,
+    // so poll until it fires instead of asserting synchronously.
+    await waitFor(() => {
+      expect(mockSetTheme).toHaveBeenCalled()
+    })
   })
 
   it('calls blockContextMenu when disableContextMenu is true and theme applied immediately', async () => {
