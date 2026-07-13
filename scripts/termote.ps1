@@ -46,7 +46,7 @@ param(
 # CONFIGURATION
 # =============================================================================
 
-$script:VERSION = "0.0.16" # x-release-please-version
+$script:VERSION = "0.1.0" # x-release-please-version
 $script:SCRIPT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
 $script:PROJECT_DIR = Split-Path -Parent $script:SCRIPT_DIR
 
