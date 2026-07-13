@@ -103,6 +103,9 @@ $env:TERMOTE_MODE = "container"; irm .../get.ps1 | iex
 .\scripts\termote.ps1                    # Menu tương tác
 .\scripts\termote.ps1 install container  # Chế độ Container (Docker Desktop)
 .\scripts\termote.ps1 install native     # Chế độ Native (psmux)
+.\scripts\termote.ps1 update             # Cập nhật lên phiên bản mới nhất
+.\scripts\termote.ps1 update -Version 0.0.9  # Cập nhật phiên bản cụ thể
+.\scripts\termote.ps1 logs follow        # Tail toàn bộ logs realtime
 .\scripts\termote.ps1 uninstall all      # Gỡ cài đặt tất cả
 .\scripts\termote.ps1 health             # Kiểm tra sức khỏe dịch vụ
 .\scripts\termote.ps1 link               # Tạo lệnh 'termote' toàn cục

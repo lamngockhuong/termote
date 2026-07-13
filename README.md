@@ -349,6 +349,10 @@ winget install psmux
 # Run Termote
 .\scripts\termote.ps1 install native
 .\scripts\termote.ps1 install container  # Or container mode with Docker Desktop
+
+# Update & logs
+.\scripts\termote.ps1 update             # Self-update to latest release
+.\scripts\termote.ps1 logs follow        # Tail all logs live
 ```
 
 > By default, `install native` downloads the [fork/MSVC ttyd build](https://github.com/lamngockhuong/ttyd/releases) (works on the latest Windows); pass `-Ttyd official` to use the upstream tsl0922/ttyd build instead.

@@ -213,19 +213,14 @@ pkill caffeinate
     ```
   </TabItem>
   <TabItem label="Windows (PowerShell)">
-    Native mode discards logs by default. To see logs:
+    Native mode writes service logs to `~/.termote/logs`. View them with the CLI:
 
     ```powershell
-    # Stop services
-    .\scripts\termote.ps1 uninstall native
-
-    # Start ttyd with logs (terminal 1)
-    ttyd -W -i 127.0.0.1 -p 7681 psmux
-
-    # Start tmux-api with logs (terminal 2)
-    cd tmux-api
-    $env:TERMOTE_PORT=7680; $env:TERMOTE_BIND="127.0.0.1"
-    $env:TERMOTE_PWA_DIR="../pwa/dist"; .\tmux-api.exe
+    .\scripts\termote.ps1 logs            # Show recent ttyd + tmux-api logs
+    .\scripts\termote.ps1 logs ttyd       # Only ttyd logs
+    .\scripts\termote.ps1 logs tmux-api   # Only tmux-api logs
+    .\scripts\termote.ps1 logs follow     # Tail all logs live (Ctrl+C to stop)
+    .\scripts\termote.ps1 logs clean      # Delete log files
     ```
   </TabItem>
 </Tabs>
@@ -272,13 +267,24 @@ curl http://localhost:7680/api/tmux/sessions
 
 If Termote is already installed, use the built-in update command:
 
-```bash
-termote update                    # Update to latest version
-termote update --version 0.0.9   # Pin to specific version
-termote update --force            # Force reinstall current version
-```
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    termote update                   # Update to latest version
+    termote update --version 0.0.9   # Pin to specific version
+    termote update --force           # Force reinstall current version
+    ```
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    .\scripts\termote.ps1 update                 # Update to latest version
+    .\scripts\termote.ps1 update -Version 0.0.9  # Pin to specific version
+    .\scripts\termote.ps1 update -Force          # Force reinstall current version
+    ```
+  </TabItem>
+</Tabs>
 
-This automatically preserves your config, stops services, downloads the new version, verifies checksums, and re-installs with your saved settings.
+This automatically preserves your config (including your chosen `ttyd` build on Windows), stops services, downloads the new version, verifies checksums, and re-installs with your saved settings.
 
 ### Via One-liner
 
