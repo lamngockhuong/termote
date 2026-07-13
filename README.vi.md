@@ -454,6 +454,7 @@ lsof -i :7680              # Xác minh port đang dùng
 | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | [GitHub Flex](https://github.com/lamngockhuong/github-flex) | Extension đa trình duyệt (Chrome & Firefox) nâng cao giao diện GitHub với các tính năng tăng năng suất |
 | [TabRest](https://github.com/lamngockhuong/tabrest)         | Extension Chrome tự động unload các tab không hoạt động để giải phóng bộ nhớ                           |
+| [Specpin](https://github.com/lamngockhuong/specpin)         | Ghim các đặc tả nghiệp vụ sống, phiên bản hóa bằng Git lên các phần tử của giao diện web đang chạy (extension trình duyệt + Go sidecar) |
 
 ## Giấy Phép
 

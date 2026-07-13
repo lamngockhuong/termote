@@ -456,6 +456,7 @@ lsof -i :7680              # Vérifier que le port est utilisé
 | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | [GitHub Flex](https://github.com/lamngockhuong/github-flex) | Extension multi-navigateur (Chrome et Firefox) qui améliore l'interface GitHub avec des fonctionnalités de productivité |
 | [TabRest](https://github.com/lamngockhuong/tabrest)         | Extension Chrome qui décharge automatiquement les onglets inactifs pour libérer la mémoire                              |
+| [Specpin](https://github.com/lamngockhuong/specpin)         | Épingle des spécifications métier vivantes et versionnées avec Git sur les éléments de votre interface web en cours d'exécution (extension de navigateur + sidecar Go) |
 
 ## Licence
 
