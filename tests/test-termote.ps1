@@ -213,6 +213,146 @@ try {
 }
 
 # ─────────────────────────────────────────────────────────────
+# Test 14: update command wired (function, helper, params, dispatch)
+# ─────────────────────────────────────────────────────────────
+try {
+    $content = Get-Content $ScriptPath -Raw
+    $hasUpdateFn   = $content -match "function Invoke-Update"
+    $hasVersionApi = $content -match "function Get-LatestVersionApi"
+    $hasVersionP   = $content -match '\[string\]\$Version'
+    $hasForceP     = $content -match '\[switch\]\$Force'
+    $inValidateSet = $content -match '"version",\s*"update"' -or $content -match '"update"[\s\S]{0,40}\$Command'
+    $hasDispatch   = $content -match '"update"\s*\{[\s\S]{0,80}Invoke-Update'
+    $allExist = $hasUpdateFn -and $hasVersionApi -and $hasVersionP -and $hasForceP -and $inValidateSet -and $hasDispatch
+    Write-TestResult -Name "update command wired" -Passed $allExist
+} catch {
+    Write-TestResult -Name "update command wired" -Passed $false -Error $_.Exception.Message
+}
+
+# ─────────────────────────────────────────────────────────────
+# Test 15: update git-guard + SHA256 verify present (no network in source)
+# ─────────────────────────────────────────────────────────────
+try {
+    $content = Get-Content $ScriptPath -Raw
+    $hasGitGuard = $content -match 'Cannot update from a git repo'
+    $hasChecksum = $content -match 'Get-FileHash[\s\S]{0,80}SHA256' -or $content -match "-Algorithm SHA256"
+    $preservesTtyd = $content -match '\$savedConfig\.Ttyd'
+    Write-TestResult -Name "update git-guard + SHA256 + Ttyd preserved" -Passed ($hasGitGuard -and $hasChecksum -and $preservesTtyd)
+} catch {
+    Write-TestResult -Name "update git-guard + SHA256 + Ttyd preserved" -Passed $false -Error $_.Exception.Message
+}
+
+# ─────────────────────────────────────────────────────────────
+# Test 16: logs follow/clean branch + service guard present
+# ─────────────────────────────────────────────────────────────
+try {
+    $content = Get-Content $ScriptPath -Raw
+    $hasFollow  = $content -match '@\("follow",\s*"tail"\)'
+    $hasGuard   = $content -match 'Unknown log service'
+    $hasClean   = $content -match '"clean"\s*\{'
+    Write-TestResult -Name "logs follow/clean + service guard" -Passed ($hasFollow -and $hasGuard -and $hasClean)
+} catch {
+    Write-TestResult -Name "logs follow/clean + service guard" -Passed $false -Error $_.Exception.Message
+}
+
+# ─────────────────────────────────────────────────────────────
+# Test 17: interactive menu lists Update + Clean logs
+# ─────────────────────────────────────────────────────────────
+try {
+    $content = Get-Content $ScriptPath -Raw
+    $hasUpdateOpt = $content -match 'Select-Option[\s\S]{0,300}"Update"'
+    $hasCleanOpt  = $content -match '"Clean logs"'
+    $hasUpdateCase = $content -match '"Update\*"\s*\{[\s\S]{0,60}Invoke-Update'
+    $hasCleanCase  = $content -match '"Clean logs\*"\s*\{[\s\S]{0,80}clean'
+    $allExist = $hasUpdateOpt -and $hasCleanOpt -and $hasUpdateCase -and $hasCleanCase
+    Write-TestResult -Name "menu lists Update + Clean logs" -Passed $allExist
+} catch {
+    Write-TestResult -Name "menu lists Update + Clean logs" -Passed $false -Error $_.Exception.Message
+}
+
+# ─────────────────────────────────────────────────────────────
+# Test 18: behavioral — help output + update validation (no network)
+# ─────────────────────────────────────────────────────────────
+# Guards fire before any download, so these child-process runs are safe:
+#   - `help`             prints usage and exits 0
+#   - `update -Version bad` fails format validation (exit 1) before network
+#   - `update` from this git checkout hits the git-repo guard before network
+try {
+    $psExe = if (Get-Command pwsh -ErrorAction SilentlyContinue) { "pwsh" } else { "powershell" }
+
+    $helpOut = (& $psExe -NoProfile -ExecutionPolicy Bypass -File $ScriptPath help 2>&1 | Out-String)
+    $helpOk = ($helpOut -match '\bupdate\b') -and ($helpOut -match 'logs follow') -and ($helpOut -match 'logs clean')
+    Write-TestResult -Name "help output lists update + logs follow/clean" -Passed $helpOk -Error "help output missing new commands"
+
+    $badOut = (& $psExe -NoProfile -ExecutionPolicy Bypass -File $ScriptPath update -Version "bad" 2>&1 | Out-String)
+    $badCode = $LASTEXITCODE
+    $badOk = ($badOut -match 'Invalid version format') -and ($badCode -ne 0) -and ($badOut -notmatch 'Downloading')
+    Write-TestResult -Name "update rejects malformed -Version (no network)" -Passed $badOk -Error "expected format error, got: $badOut"
+
+    $guardOut = (& $psExe -NoProfile -ExecutionPolicy Bypass -File $ScriptPath update 2>&1 | Out-String)
+    $guardCode = $LASTEXITCODE
+    $guardOk = ($guardOut -match 'Cannot update from a git repo') -and ($guardCode -ne 0) -and ($guardOut -notmatch 'Downloading')
+    Write-TestResult -Name "update refuses git repo before download" -Passed $guardOk -Error "expected git-guard error, got: $guardOut"
+} catch {
+    Write-TestResult -Name "update behavioral checks" -Passed $false -Error $_.Exception.Message
+}
+
+# ─────────────────────────────────────────────────────────────
+# Test 19: behavioral — logs subcommands validate (ValidateSet removed)
+# ─────────────────────────────────────────────────────────────
+# `logs ttyd` must NOT throw a parameter-binding error (the old $Mode ValidateSet
+# blocked it); `logs badservice` must hit the contextual service guard.
+try {
+    $psExe = if (Get-Command pwsh -ErrorAction SilentlyContinue) { "pwsh" } else { "powershell" }
+
+    $ttydOut = (& $psExe -NoProfile -ExecutionPolicy Bypass -File $ScriptPath logs ttyd 2>&1 | Out-String)
+    # No "ParameterBindingValidationException" / "does not belong to the set" → binding OK
+    $ttydOk = ($ttydOut -notmatch 'does not belong to the set') -and ($ttydOut -notmatch 'ParameterBindingValidation')
+    Write-TestResult -Name "logs ttyd validates (no binding error)" -Passed $ttydOk -Error "got: $ttydOut"
+
+    $badOut = (& $psExe -NoProfile -ExecutionPolicy Bypass -File $ScriptPath logs badservice 2>&1 | Out-String)
+    $badCode = $LASTEXITCODE
+    $badOk = ($badOut -match 'Unknown log service') -and ($badCode -ne 0)
+    Write-TestResult -Name "logs rejects unknown service" -Passed $badOk -Error "expected guard error, got: $badOut"
+} catch {
+    Write-TestResult -Name "logs behavioral checks" -Passed $false -Error $_.Exception.Message
+}
+
+# ─────────────────────────────────────────────────────────────
+# Test 20b: log viewer includes *-error.log (stderr) files (regression)
+# ─────────────────────────────────────────────────────────────
+# On Windows services log to *-error.log via -RedirectStandardError; a viewer
+# reading only "<svc>.log" (stdout) shows nothing. Assert Write-LogTail exists
+# and ttyd/all glob so the error logs are included.
+try {
+    $content = Get-Content $ScriptPath -Raw
+    $hasHelper = $content -match 'function Write-LogTail'
+    $ttydGlob  = $content -match 'Write-LogTail -Pattern "ttyd\*\.log"'
+    $allGlob   = $content -match 'Write-LogTail -Pattern "\*\.log"'
+    Write-TestResult -Name "log viewer includes *-error.log" -Passed ($hasHelper -and $ttydGlob -and $allGlob)
+} catch {
+    Write-TestResult -Name "log viewer includes *-error.log" -Passed $false -Error $_.Exception.Message
+}
+
+# ─────────────────────────────────────────────────────────────
+# Test 20: interactive install answers are authoritative (regression)
+# ─────────────────────────────────────────────────────────────
+# Guards against the saved-config-override bug: an explicit "No" to LAN/Auth/
+# Tailscale must set the $opts key so Invoke-Install's merge doesn't re-apply a
+# stale saved value. Assert Show-InteractiveInstall assigns the keys directly
+# (not the old `if (Confirm-Action ...) { $opts.Lan = $true }` conditional form).
+try {
+    $content = Get-Content $ScriptPath -Raw
+    $lanAuthoritative = $content -match '\$opts\.Lan\s*=\s*\[bool\]\(Confirm-Action'
+    $noAuthAuthoritative = $content -match '\$opts\.NoAuth\s*=\s*\[bool\]\(Confirm-Action'
+    $tsInitialized = $content -match '\$opts\.Tailscale\s*=\s*""'
+    $allExist = $lanAuthoritative -and $noAuthAuthoritative -and $tsInitialized
+    Write-TestResult -Name "interactive install answers authoritative" -Passed $allExist
+} catch {
+    Write-TestResult -Name "interactive install answers authoritative" -Passed $false -Error $_.Exception.Message
+}
+
+# ─────────────────────────────────────────────────────────────
 # Summary
 # ─────────────────────────────────────────────────────────────
 Write-Host ""

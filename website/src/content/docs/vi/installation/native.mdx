@@ -213,19 +213,14 @@ pkill caffeinate
     ```
   </TabItem>
   <TabItem label="Windows (PowerShell)">
-    Chế độ native mặc định không ghi logs. Để xem logs:
+    Chế độ native trên Windows ghi logs vào `~/.termote/logs`. Xem logs bằng CLI:
 
     ```powershell
-    # Dừng dịch vụ
-    .\scripts\termote.ps1 uninstall native
-
-    # Chạy ttyd với logs (terminal 1)
-    ttyd -W -i 127.0.0.1 -p 7681 psmux
-
-    # Chạy tmux-api với logs (terminal 2)
-    cd tmux-api
-    $env:TERMOTE_PORT=7680; $env:TERMOTE_BIND="127.0.0.1"
-    $env:TERMOTE_PWA_DIR="../pwa/dist"; .\tmux-api.exe
+    .\scripts\termote.ps1 logs            # Xem logs ttyd + tmux-api gần đây
+    .\scripts\termote.ps1 logs ttyd       # Chỉ logs ttyd
+    .\scripts\termote.ps1 logs tmux-api   # Chỉ logs tmux-api
+    .\scripts\termote.ps1 logs follow     # Tail toàn bộ logs realtime (Ctrl+C để dừng)
+    .\scripts\termote.ps1 logs clean      # Xóa các file log
     ```
   </TabItem>
 </Tabs>
@@ -272,13 +267,24 @@ curl http://localhost:7680/api/tmux/sessions
 
 Nếu Termote đã được cài đặt, sử dụng lệnh cập nhật tích hợp:
 
-```bash
-termote update                    # Cập nhật lên phiên bản mới nhất
-termote update --version 0.0.9   # Cập nhật phiên bản cụ thể
-termote update --force            # Cài đặt lại phiên bản hiện tại
-```
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    termote update                   # Cập nhật lên phiên bản mới nhất
+    termote update --version 0.0.9   # Cập nhật phiên bản cụ thể
+    termote update --force           # Cài đặt lại phiên bản hiện tại
+    ```
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    .\scripts\termote.ps1 update                 # Cập nhật lên phiên bản mới nhất
+    .\scripts\termote.ps1 update -Version 0.0.9  # Cập nhật phiên bản cụ thể
+    .\scripts\termote.ps1 update -Force          # Cài đặt lại phiên bản hiện tại
+    ```
+  </TabItem>
+</Tabs>
 
-Lệnh này tự động giữ nguyên config, dừng dịch vụ, tải phiên bản mới, kiểm tra checksum, và cài đặt lại với cấu hình đã lưu.
+Lệnh này tự động giữ nguyên config (bao gồm lựa chọn bản `ttyd` trên Windows), dừng dịch vụ, tải phiên bản mới, kiểm tra checksum, và cài đặt lại với cấu hình đã lưu.
 
 ### Qua One-liner
 

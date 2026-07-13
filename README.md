@@ -349,6 +349,10 @@ winget install psmux
 # Run Termote
 .\scripts\termote.ps1 install native
 .\scripts\termote.ps1 install container  # Or container mode with Docker Desktop
+
+# Update & logs
+.\scripts\termote.ps1 update             # Self-update to latest release
+.\scripts\termote.ps1 logs follow        # Tail all logs live
 ```
 
 > By default, `install native` downloads the [fork/MSVC ttyd build](https://github.com/lamngockhuong/ttyd/releases) (works on the latest Windows); pass `-Ttyd official` to use the upstream tsl0922/ttyd build instead.
@@ -452,10 +456,10 @@ lsof -i :7680              # Verify port is in use
 
 ## Other Projects
 
-| Project                                                     | Description                                                                                              |
-| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| [GitHub Flex](https://github.com/lamngockhuong/github-flex) | A cross-browser extension (Chrome & Firefox) that enhances GitHub's interface with productivity features |
-| [TabRest](https://github.com/lamngockhuong/tabrest)         | Chrome extension that automatically unloads inactive tabs to free memory                                 |
+| Project                                                     | Description                                                                                                        |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| [GitHub Flex](https://github.com/lamngockhuong/github-flex) | A cross-browser extension (Chrome & Firefox) that enhances GitHub's interface with productivity features           |
+| [TabRest](https://github.com/lamngockhuong/tabrest)         | Chrome extension that automatically unloads inactive tabs to free memory                                           |
 | [Specpin](https://github.com/lamngockhuong/specpin)         | Pin living, Git-versioned business specs onto the elements of your running web UI (browser extension + Go sidecar) |
 
 ## License

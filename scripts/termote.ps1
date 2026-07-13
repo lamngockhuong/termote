@@ -18,11 +18,13 @@
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet("install", "uninstall", "health", "logs", "link", "unlink", "version", "help", "")]
+    [ValidateSet("install", "uninstall", "health", "logs", "link", "unlink", "version", "update", "help", "")]
     [string]$Command,
 
+    # Position 1 doubles as install mode (container|native|all) and logs service
+    # (ttyd|tmux-api|all|clean|follow|...). No ValidateSet here — each command
+    # validates its own accepted values contextually (see Invoke-Install/Invoke-Logs).
     [Parameter(Position = 1)]
-    [ValidateSet("container", "native", "all", "")]
     [string]$Mode,
 
     [switch]$Lan,
@@ -31,7 +33,13 @@ param(
     [string]$Tailscale,
     [ValidateSet("official", "fork", "")]
     [string]$Ttyd = "",
-    [switch]$Fresh
+    [switch]$Fresh,
+    # Exposed as -Version; the backing variable is $TargetVersion to avoid a
+    # case-insensitive name clash with $script:VERSION (which would otherwise
+    # clobber the user's -Version argument at script load).
+    [Alias('Version')]
+    [string]$TargetVersion,
+    [switch]$Force
 )
 
 # =============================================================================
@@ -408,7 +416,9 @@ function Show-InteractiveMenu {
         "Install",
         "Uninstall",
         "Health check",
+        "Update",
         "View logs",
+        "Clean logs",
         "Exit"
     )
 
@@ -416,7 +426,9 @@ function Show-InteractiveMenu {
         "Install*" { Show-InteractiveInstall }
         "Uninstall*" { Show-InteractiveUninstall }
         "Health*" { Invoke-Health }
+        "Update*" { Invoke-Update }
         "View logs*" { Invoke-Logs -Service "all" }
+        "Clean logs*" { Invoke-Logs -Service "clean" }
         default { exit 0 }
     }
 }
@@ -436,8 +448,12 @@ function Show-InteractiveInstall {
         )
         $opts.Ttyd = ($src -split " ")[0]
     }
-    if (Confirm-Action "Expose to LAN?") { $opts.Lan = $true }
-    if (Confirm-Action "Disable authentication?") { $opts.NoAuth = $true }
+    # Interactive answers are authoritative: ALWAYS set the key (even on "No") so
+    # Invoke-Install's saved-config merge sees them as PSBoundParameters and does
+    # NOT re-apply a stale saved Lan/NoAuth/Tailscale over an explicit "No".
+    $opts.Lan = [bool](Confirm-Action "Expose to LAN?")
+    $opts.NoAuth = [bool](Confirm-Action "Disable authentication?")
+    $opts.Tailscale = ""
     if (Confirm-Action "Enable Tailscale HTTPS?") {
         if ($script:HAS_GUM) {
             $tsHost = Invoke-GumPrompt input --placeholder "Tailscale hostname (e.g. myhost.ts.net)"
@@ -1021,50 +1037,269 @@ function Invoke-Health {
     }
 }
 
+# Tail every log file matching a glob, each under its own header. On Windows the
+# services split output across stdout AND stderr files (e.g. ttyd.log +
+# ttyd-error.log via -RedirectStandardOutput/-RedirectStandardError), and the real
+# output usually lands in *-error.log — so a viewer that reads only "<svc>.log"
+# shows nothing. Globbing catches both. Pattern is relative to $script:LOG_DIR.
+function Write-LogTail {
+    param([string]$Pattern, [int]$Lines, [string]$EmptyWarn)
+
+    $files = Get-ChildItem (Join-Path $script:LOG_DIR $Pattern) -ErrorAction SilentlyContinue | Sort-Object Name
+    if (-not $files) {
+        if ($EmptyWarn) { Write-Warn $EmptyWarn } else { Write-Host "(no logs)" }
+        return
+    }
+    foreach ($f in $files) {
+        Write-Host "=== $($f.BaseName) ===" -ForegroundColor White
+        $content = Get-Content $f.FullName -Tail $Lines
+        if ($content) { $content } else { Write-Host "(empty)" }
+        Write-Host ""
+    }
+}
+
 function Invoke-Logs {
     param(
         [string]$Service = "all",
         [int]$Lines = 50
     )
 
-    if (-not (Test-Path $script:LOG_DIR)) {
-        Write-Warn "No logs found (log dir: $script:LOG_DIR)"
-        return
-    }
+    # Default empty service (e.g. bare `logs`) to "all". The switch below is the
+    # single source of truth for valid services: known services dispatch, anything
+    # else falls to `default` and errors — no separate allow-list to keep in sync.
+    # Note: no "-f" alias. PowerShell's parameter binder resolves a bare `-f` token
+    # as an ambiguous prefix of -Force/-Fresh before it can bind positionally, so
+    # `logs -f` errors at the CLI regardless. `follow` and `tail` cover the use case.
+    if (-not $Service) { $Service = "all" }
 
     switch ($Service) {
-        "ttyd" {
-            $logFile = Join-Path $script:LOG_DIR "ttyd.log"
-            if (Test-Path $logFile) {
-                Get-Content $logFile -Tail $Lines
-            } else {
-                Write-Warn "No ttyd logs"
-            }
-        }
-        "tmux-api" {
-            $logFile = Join-Path $script:LOG_DIR "tmux-api.log"
-            if (Test-Path $logFile) {
-                Get-Content $logFile -Tail $Lines
-            } else {
-                Write-Warn "No tmux-api logs"
-            }
-        }
+        "ttyd" { Write-LogTail -Pattern "ttyd*.log" -Lines $Lines -EmptyWarn "No ttyd logs" }
+        "tmux-api" { Write-LogTail -Pattern "tmux-api*.log" -Lines $Lines -EmptyWarn "No tmux-api logs" }
         "api" { Invoke-Logs -Service "tmux-api" -Lines $Lines }
+        { $_ -in @("follow", "tail") } {
+            # Real-time tail of ALL log files (parity with termote.sh `tail -f *.log`).
+            # Get-Content -Wait follows a single file only, so run one background
+            # job per log file and pump their output, prefixed with the source name.
+            $logFiles = Get-ChildItem "$script:LOG_DIR\*.log" -ErrorAction SilentlyContinue
+            if (-not $logFiles) {
+                Write-Warn "No logs to follow"
+                return
+            }
+            Write-Info "Following logs (Ctrl+C to stop)..."
+            $jobs = @()
+            foreach ($f in $logFiles) {
+                $jobs += Start-Job -ArgumentList $f.FullName, $f.BaseName, $Lines -ScriptBlock {
+                    param($path, $name, $tail)
+                    Get-Content -Path $path -Wait -Tail $tail | ForEach-Object { "[$name] $_" }
+                }
+            }
+            try {
+                while ($true) {
+                    $jobs | Receive-Job
+                    Start-Sleep -Milliseconds 300
+                }
+            } finally {
+                $jobs | Stop-Job -ErrorAction SilentlyContinue
+                $jobs | Remove-Job -Force -ErrorAction SilentlyContinue
+            }
+        }
         "clean" {
+            if (-not (Test-Path $script:LOG_DIR)) { Write-Warn "No logs found (log dir: $script:LOG_DIR)"; return }
             $sizeBefore = (Get-ChildItem $script:LOG_DIR -File | Measure-Object -Property Length -Sum).Sum / 1KB
             Remove-Item "$script:LOG_DIR\*.log" -ErrorAction SilentlyContinue
             Write-Info "Logs cleaned (was: $([math]::Round($sizeBefore, 2)) KB)"
         }
+        "all" { Write-LogTail -Pattern "*.log" -Lines $Lines }
         default {
-            Write-Host "=== ttyd logs ===" -ForegroundColor White
-            $logFile = Join-Path $script:LOG_DIR "ttyd.log"
-            if (Test-Path $logFile) { Get-Content $logFile -Tail $Lines } else { Write-Host "(empty)" }
-            Write-Host ""
-            Write-Host "=== tmux-api logs ===" -ForegroundColor White
-            $logFile = Join-Path $script:LOG_DIR "tmux-api.log"
-            if (Test-Path $logFile) { Get-Content $logFile -Tail $Lines } else { Write-Host "(empty)" }
+            Write-Err "Unknown log service: $Service. Use one of: ttyd, tmux-api, all, follow, clean"
         }
     }
+}
+
+# =============================================================================
+# UPDATE - Self-update to a GitHub release
+# =============================================================================
+
+$script:UPDATE_REPO = "lamngockhuong/termote"
+
+# Fetch the latest release version from the GitHub API (tag_name, 'v' stripped).
+function Get-LatestVersionApi {
+    try {
+        $release = Invoke-RestMethod "https://api.github.com/repos/$script:UPDATE_REPO/releases/latest"
+        return $release.tag_name -replace '^v', ''
+    } catch {
+        return $null
+    }
+}
+
+function Invoke-Update {
+    param(
+        [string]$Version,
+        [switch]$Force
+    )
+
+    # 1. Validate the pinned version format (strip a leading 'v')
+    $pinVersion = ""
+    if ($Version) {
+        $pinVersion = $Version -replace '^v', ''
+        if ($pinVersion -notmatch '^\d+\.\d+\.\d+$') {
+            Write-Err "Invalid version format: $pinVersion (expected: X.Y.Z)"
+            return
+        }
+    }
+
+    # 2. Guard: refuse to run from a git checkout (dev mode only)
+    if ($isGitRepo) {
+        Write-Err "Cannot update from a git repo. This command is for installed releases only (~/.termote)."
+        return
+    }
+
+    # 3. Resolve the target version
+    if ($pinVersion) {
+        $target = $pinVersion
+        Write-Info "Target version: v$target"
+    } else {
+        Write-Info "Checking for updates..."
+        $target = Get-LatestVersionApi
+        if (-not $target) {
+            Write-Err "Failed to fetch latest version from GitHub"
+            return
+        }
+        Write-Info "Latest version: v$target"
+    }
+
+    # 4. Already on target (and not forcing) → nothing to do
+    if ($target -eq $script:VERSION -and -not $Force) {
+        Write-Info "Already on v$script:VERSION. Use -Force to reinstall."
+        return
+    }
+
+    # 5. Downgrade warning (only meaningful when a version was pinned)
+    if ($pinVersion) {
+        try {
+            if ([version]$target -lt [version]$script:VERSION) {
+                Write-Warn "Downgrading from v$script:VERSION to v$target"
+            }
+        } catch {}
+    }
+
+    if ($target -ne $script:VERSION) {
+        Write-Info "Current version: v$script:VERSION"
+        Write-Info "Updating to: v$target"
+    } else {
+        Write-Info "Force reinstalling v$script:VERSION"
+    }
+
+    # 6. Require saved config to reinstall with the same setup
+    $savedConfig = Get-SavedConfig
+    if (-not $savedConfig) {
+        Write-Err "No saved config found at $script:CONFIG_FILE. Run 'termote.ps1 install' first."
+        return
+    }
+    $savedMode = if ($savedConfig.Mode) { $savedConfig.Mode } else { "native" }
+
+    # 7. Remember whether a global command was linked (to re-link after update)
+    $cmdLink = Join-Path (Join-Path $script:HOME_DIR ".local\bin") "termote.cmd"
+    $hadLink = Test-Path $cmdLink
+
+    # 8. Stop running services (best-effort; both modes) — same canonical teardown
+    #    pair Invoke-Uninstall uses, so a future fix to either reaches this path too.
+    Write-Info "Stopping services..."
+    try { Stop-NativeMode } catch {}
+    try { Stop-ContainerMode } catch {}
+
+    # 9-12. Download, verify, extract into a temp dir, then over the install tree
+    $tmpDir = Join-Path $env:TEMP ("termote-update-" + [System.IO.Path]::GetRandomFileName())
+    New-Item -ItemType Directory -Path $tmpDir -Force | Out-Null
+    try {
+        $tarball = "termote-v$target.tar.gz"
+        $tarballUrl = "https://github.com/$script:UPDATE_REPO/releases/download/v$target/$tarball"
+        $checksumsUrl = "https://github.com/$script:UPDATE_REPO/releases/download/v$target/checksums.txt"
+        $tarballPath = Join-Path $tmpDir $tarball
+
+        Write-Info "Downloading v$target..."
+        try {
+            Invoke-WebRequest -Uri $tarballUrl -OutFile $tarballPath -UseBasicParsing
+        } catch {
+            Write-Err "Download failed. Check the version exists: v$target"
+            return
+        }
+
+        # Verify SHA256 (fatal on mismatch, warn+skip if checksums unavailable)
+        Write-Info "Verifying checksum..."
+        try {
+            $response = Invoke-WebRequest -Uri $checksumsUrl -UseBasicParsing
+            $checksums = if ($response.Content -is [byte[]]) {
+                [System.Text.Encoding]::UTF8.GetString($response.Content)
+            } else { $response.Content }
+            $expectedLine = $checksums -split '\r?\n' | Where-Object { $_ -like "* $tarball" }
+            if ($expectedLine) {
+                $expected = (($expectedLine -split '\s+')[0]).ToLower()
+                $actual = (Get-FileHash $tarballPath -Algorithm SHA256).Hash.ToLower()
+                if ($actual -ne $expected) {
+                    Write-Err "Checksum mismatch! Expected: $expected, Got: $actual"
+                    return
+                }
+                Write-Info "Checksum verified"
+            } else {
+                Write-Warn "Checksum not found for $tarball, skipping verification"
+            }
+        } catch {
+            Write-Warn "Could not download checksums, skipping verification"
+        }
+
+        # Extract over the install tree (preserves config outside the tree)
+        Write-Info "Extracting..."
+        tar -xzf $tarballPath --strip-components=1 -C $script:PROJECT_DIR
+        if ($LASTEXITCODE -ne 0) {
+            Write-Err "Extraction failed (tar exit $LASTEXITCODE)"
+            return
+        }
+
+        # Record the installed version
+        Set-Content -Path (Join-Path $script:PROJECT_DIR ".version") -Value $target -NoNewline
+        Write-Info "Updated to v$target"
+    } finally {
+        Remove-Item $tmpDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    # 13. Re-link with the NEW script if a link existed before
+    $newScript = Join-Path $script:PROJECT_DIR "scripts\termote.ps1"
+    if ($hadLink) {
+        try { & $newScript link } catch { Write-Warn "Re-link failed: $_" }
+    }
+
+    # 14. Relaunch into `install <saved-mode>` with the NEW script, then exit.
+    #     PowerShell has no exec(); Start-Process a fresh process (parity with
+    #     termote.sh's `exec`), so no stale code from the old file keeps running.
+    # Quote the script path: Start-Process -ArgumentList joins array elements with
+    # a plain space and does NOT quote elements that contain spaces, so an install
+    # path like "C:\Users\John Doe\.termote\..." would be split and the relaunch
+    # would fail silently. Quote it explicitly. (Tailscale host / mode / port carry
+    # no spaces.)
+    $quotedScript = '"' + $newScript + '"'
+    $installArgs = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $quotedScript, "install", $savedMode)
+    if ($savedConfig.Lan) { $installArgs += "-Lan" }
+    if ($savedConfig.NoAuth) { $installArgs += "-NoAuth" }
+    if ($savedConfig.Port -and $savedConfig.Port -ne $script:PORT_MAIN) {
+        $installArgs += @("-Port", $savedConfig.Port)
+    }
+    if ($savedConfig.Tailscale) { $installArgs += @("-Tailscale", $savedConfig.Tailscale) }
+    if ($savedConfig.Ttyd) { $installArgs += @("-Ttyd", $savedConfig.Ttyd) }
+
+    $launcher = if (Get-Command pwsh -ErrorAction SilentlyContinue) { "pwsh" } else { "powershell" }
+    Write-Info "Re-installing with the new version (mode=$savedMode)..."
+    Write-Host ""
+    # -NoNewWindow keeps the reinstall's output in this console (closest to the Unix
+    # `exec` behavior); -Wait runs it to completion before the old process exits, so
+    # the user sees the result and a failed relaunch cannot masquerade as success.
+    $proc = Start-Process -FilePath $launcher -ArgumentList $installArgs -NoNewWindow -Wait -PassThru
+    if ($proc.ExitCode -eq 0) {
+        Write-Info "Update complete! v$script:VERSION -> v$target"
+    } else {
+        Write-Err "Reinstall failed (exit $($proc.ExitCode)). Files updated to v$target; re-run: termote.ps1 install $savedMode"
+    }
+    exit $proc.ExitCode
 }
 
 # =============================================================================
@@ -1171,7 +1406,8 @@ function Show-Help {
     Write-Host "  install <mode>    Install and start services"
     Write-Host "  uninstall <mode>  Remove installation"
     Write-Host "  health            Check service health"
-    Write-Host "  logs [service]    View logs (ttyd, tmux-api, all, clean)"
+    Write-Host "  update            Update to the latest release"
+    Write-Host "  logs [service]    View logs (ttyd, tmux-api, all, follow, clean)"
     Write-Host "  link              Create 'termote' global command"
     Write-Host "  unlink            Remove global command"
     Write-Host "  version           Show version"
@@ -1189,6 +1425,8 @@ function Show-Help {
     Write-Host "  -NoAuth           Disable authentication"
     Write-Host "  -Ttyd <official|fork>  ttyd build for native mode (default: fork / MSVC)"
     Write-Host "  -Fresh            Ignore saved config, prompt for new password"
+    Write-Host "  -Version <X.Y.Z>  Pin update to a specific version"
+    Write-Host "  -Force            Reinstall the current version (with update)"
     Write-Host ""
     Write-Host "Examples:"
     Write-Host "  .\termote.ps1                           # Interactive menu"
@@ -1198,6 +1436,11 @@ function Show-Help {
     Write-Host "  .\termote.ps1 install native -Ttyd official  # Use upstream tsl0922 ttyd"
     Write-Host "  .\termote.ps1 install native -Fresh     # Reset password"
     Write-Host "  .\termote.ps1 uninstall all             # Full cleanup"
+    Write-Host "  .\termote.ps1 update                    # Update to latest release"
+    Write-Host "  .\termote.ps1 update -Version 0.1.5     # Update to a specific version"
+    Write-Host "  .\termote.ps1 update -Force             # Reinstall current version"
+    Write-Host "  .\termote.ps1 logs follow               # Tail all logs live"
+    Write-Host "  .\termote.ps1 logs clean                # Delete log files"
 }
 
 # =============================================================================
@@ -1238,6 +1481,9 @@ switch ($Command) {
     }
     "version" {
         Write-Host "Termote v$script:VERSION"
+    }
+    "update" {
+        Invoke-Update -Version $TargetVersion -Force:$Force
     }
     "help" {
         Show-Help
