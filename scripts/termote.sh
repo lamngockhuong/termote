@@ -565,7 +565,7 @@ cmd_install() {
             return 1
         fi
     else
-        (cd "$PROJECT_DIR/pwa" && pnpm install --frozen-lockfile && pnpm build)
+        (cd "$PROJECT_DIR" && pnpm install --frozen-lockfile --filter termote... && pnpm --filter termote build)
     fi
 
     # Setup API

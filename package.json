@@ -1,0 +1,19 @@
+{
+  "name": "termote-monorepo",
+  "private": true,
+  "type": "module",
+  "description": "Termote monorepo root (pwa + website)",
+  "license": "MIT",
+  "scripts": {
+    "dev": "pnpm --filter termote dev",
+    "dev:web": "pnpm --filter @termote/website dev",
+    "build": "pnpm -r build",
+    "build:pwa": "pnpm --filter termote build",
+    "build:web": "pnpm --filter @termote/website build",
+    "lint": "pnpm --filter termote lint",
+    "lint:ci": "pnpm --filter termote lint:ci",
+    "test": "pnpm --filter termote test",
+    "test:coverage": "pnpm --filter termote test:coverage",
+    "test:e2e": "pnpm --filter termote test:e2e"
+  }
+}

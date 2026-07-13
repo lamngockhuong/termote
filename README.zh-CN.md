@@ -411,8 +411,8 @@ make clean          # 停止容器
 
 # E2E 测试（需要运行中的服务器）
 ./scripts/termote.sh install container  # 先启动服务器
-cd pwa && pnpm test:e2e       # 运行 Playwright 测试
-cd pwa && pnpm test:e2e:ui    # 使用 UI 调试器运行
+pnpm --filter termote test:e2e       # 运行 Playwright 测试
+pnpm --filter termote test:e2e:ui    # 使用 UI 调试器运行
 ```
 
 **手动测试：** 参见[自测清单](docs/self-test-checklist.md)

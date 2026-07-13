@@ -411,8 +411,8 @@ make clean          # Stop containers
 
 # E2E tests (requires running server)
 ./scripts/termote.sh install container  # Start server first
-cd pwa && pnpm test:e2e       # Run Playwright tests
-cd pwa && pnpm test:e2e:ui    # Run with UI debugger
+pnpm --filter termote test:e2e       # Run Playwright tests
+pnpm --filter termote test:e2e:ui    # Run with UI debugger
 ```
 
 **Manual Testing:** See [Self-Test Checklist](docs/self-test-checklist.md)

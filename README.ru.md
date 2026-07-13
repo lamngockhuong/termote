@@ -411,8 +411,8 @@ make clean          # Остановка контейнеров
 
 # E2E тесты (требуется запущенный сервер)
 ./scripts/termote.sh install container  # Сначала запустите сервер
-cd pwa && pnpm test:e2e       # Запуск Playwright тестов
-cd pwa && pnpm test:e2e:ui    # Запуск с UI отладчиком
+pnpm --filter termote test:e2e       # Запуск Playwright тестов
+pnpm --filter termote test:e2e:ui    # Запуск с UI отладчиком
 ```
 
 **Ручное тестирование:** См. [Чек-лист для самопроверки](docs/self-test-checklist.md)

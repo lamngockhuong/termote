@@ -459,9 +459,9 @@ make build
 make test
 ```
 
-- [ ] PWA build không lỗi: `cd pwa && pnpm build`
-- [ ] TypeScript compile: `cd pwa && pnpm tsc --noEmit`
-- [ ] Lint pass: `cd pwa && pnpm biome check .`
+- [ ] PWA build không lỗi: `pnpm --filter termote build`
+- [ ] TypeScript compile: `pnpm --filter termote exec tsc --noEmit`
+- [ ] Lint pass: `pnpm --filter termote lint:ci`
 - [ ] Go build không lỗi: `cd tmux-api && go build`
 - [ ] Tất cả shell tests pass: `make test`
 - [ ] Tất cả Go tests pass: `cd tmux-api && go test ./...`
@@ -473,7 +473,7 @@ make test
 ## Unit Tests
 
 ```bash
-cd pwa && pnpm test
+pnpm --filter termote test
 ```
 
 - [ ] Tất cả Vitest unit tests pass (hooks, utils, contexts)
@@ -481,7 +481,7 @@ cd pwa && pnpm test
 ## E2E Tests
 
 ```bash
-cd pwa && pnpm test:e2e
+pnpm --filter termote test:e2e
 ```
 
 - [ ] Tất cả Playwright tests pass

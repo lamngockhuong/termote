@@ -28,7 +28,12 @@ jobs:
         id: filter
         with:
           filters: |
+            workspace: &workspace
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'package.json'
             pwa:
+              - *workspace
               - 'pwa/**'
             api:
               - 'tmux-api/**'
@@ -39,6 +44,7 @@ jobs:
             docker:
               - 'Dockerfile'
             website:
+              - *workspace
               - 'website/**'
             docs:
               - 'docs/**'
@@ -60,11 +66,10 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-          cache-dependency-path: pwa/pnpm-lock.yaml
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        working-directory: pwa
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --filter termote...
 
       - name: Type check
         working-directory: pwa
@@ -231,11 +236,10 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-          cache-dependency-path: website/pnpm-lock.yaml
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        working-directory: website
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --filter @termote/website...
 
       - name: Build
         working-directory: website

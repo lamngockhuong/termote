@@ -8,6 +8,7 @@ pwa/node_modules/
 
 # Build output
 pwa/dist/
+website/dist/
 
 # OS
 .DS_Store

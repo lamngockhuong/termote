@@ -459,9 +459,9 @@ make build
 make test
 ```
 
-- [ ] PWA builds without errors: `cd pwa && pnpm build`
-- [ ] TypeScript compiles: `cd pwa && pnpm tsc --noEmit`
-- [ ] Lint passes: `cd pwa && pnpm biome check .`
+- [ ] PWA builds without errors: `pnpm --filter termote build`
+- [ ] TypeScript compiles: `pnpm --filter termote exec tsc --noEmit`
+- [ ] Lint passes: `pnpm --filter termote lint:ci`
 - [ ] Go builds without errors: `cd tmux-api && go build`
 - [ ] All shell tests pass: `make test`
 - [ ] All Go tests pass: `cd tmux-api && go test ./...`
@@ -473,7 +473,7 @@ make test
 ## Unit Tests
 
 ```bash
-cd pwa && pnpm test
+pnpm --filter termote test
 ```
 
 - [ ] All Vitest unit tests pass (hooks, utils, contexts)
@@ -481,7 +481,7 @@ cd pwa && pnpm test
 ## E2E Tests
 
 ```bash
-cd pwa && pnpm test:e2e
+pnpm --filter termote test:e2e
 ```
 
 - [ ] All Playwright tests pass

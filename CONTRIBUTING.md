@@ -18,14 +18,34 @@ make deploy-container
 - Go 1.21+
 - Docker (optional)
 
+### Workspace Setup
+
+This repo is a **pnpm workspace** (`pwa` + `website`) with a single root `pnpm-lock.yaml`.
+Install everything once from the repo root:
+
+```bash
+pnpm install      # Installs all workspace packages
+```
+
 ### PWA Development
 
 ```bash
+# From repo root (workspace-aware):
+pnpm --filter termote dev   # Dev server at http://localhost:5173
+pnpm --filter termote build
+
+# Or from the package directory:
 cd pwa
-pnpm install
 pnpm dev          # Dev server at http://localhost:5173
 pnpm tsc --noEmit # Type check
 pnpm lint         # Biome
+```
+
+### Website Development
+
+```bash
+pnpm --filter @termote/website dev    # Docs site
+pnpm --filter @termote/website build
 ```
 
 ### tmux-api Development
@@ -72,7 +92,7 @@ make test-deploy       # Deploy script tests
 make test-uninstall    # Uninstall script tests
 
 # E2E (requires running server)
-cd pwa && pnpm test:e2e
+pnpm --filter termote test:e2e
 ```
 
 ## Commit Messages

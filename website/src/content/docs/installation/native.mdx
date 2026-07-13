@@ -237,7 +237,7 @@ pkill caffeinate
 | Port in use     | `lsof -i :7680` (Unix) or `netstat -ano \| Select-String 7680` (Win) then kill process |
 | ttyd missing    | `brew install ttyd` (macOS) or `apt install ttyd` (Linux) |
 | Binary missing  | `cd tmux-api && go build -o tmux-api-native .`    |
-| PWA not built   | `cd pwa && pnpm build`                            |
+| PWA not built   | `pnpm --filter termote build`                            |
 | Stale PWA cache | Settings → "Clear Cache & Reload" to refresh      |
 
 ### tmux / psmux Session

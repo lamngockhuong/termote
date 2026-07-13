@@ -1,0 +1,8 @@
+packages:
+  - pwa
+  - website
+
+# Package builds that are allowed to run install scripts (pnpm 10+ security default)
+allowBuilds:
+  esbuild: true
+  sharp: true
