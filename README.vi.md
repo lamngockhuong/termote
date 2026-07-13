@@ -328,11 +328,11 @@ git pull origin main                    # Nếu cài từ source
 
 ## Hỗ Trợ Nền Tảng
 
-| Nền Tảng | Container      | Native         | CLI Script  |
-| -------- | -------------- | -------------- | ----------- |
-| Linux    | ✓              | ✓              | termote.sh  |
-| macOS    | ✓              | ✓              | termote.sh  |
-| Windows  | ✓              | ✓              | termote.ps1 |
+| Nền Tảng | Container | Native | CLI Script  |
+| -------- | --------- | ------ | ----------- |
+| Linux    | ✓         | ✓      | termote.sh  |
+| macOS    | ✓         | ✓      | termote.sh  |
+| Windows  | ✓         | ✓      | termote.ps1 |
 
 > **Hỗ trợ Windows**: Chế độ container yêu cầu Docker Desktop hoặc Podman Desktop; chế độ native yêu cầu psmux. Vui lòng báo cáo lỗi trên GitHub nếu gặp sự cố.
 

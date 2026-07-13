@@ -330,11 +330,11 @@ git pull origin main                    # If installed from source
 
 ## Platform Support
 
-| Platform | Container        | Native           | CLI Script  |
-| -------- | ---------------- | ---------------- | ----------- |
-| Linux    | ✓                | ✓                | termote.sh  |
-| macOS    | ✓                | ✓                | termote.sh  |
-| Windows  | ✓                | ✓                | termote.ps1 |
+| Platform | Container | Native | CLI Script  |
+| -------- | --------- | ------ | ----------- |
+| Linux    | ✓         | ✓      | termote.sh  |
+| macOS    | ✓         | ✓      | termote.sh  |
+| Windows  | ✓         | ✓      | termote.ps1 |
 
 > **Windows Support**: Container mode requires Docker Desktop or Podman Desktop; native mode requires psmux. Report any issues on GitHub.
 
