@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.1.0](https://github.com/lamngockhuong/termote/compare/v0.0.16...v0.1.0) (2026-07-13)
+
+
+### Features
+
+* **windows:** CLI parity — update, logs follow, menu, help/docs ([#114](https://github.com/lamngockhuong/termote/issues/114)–[#117](https://github.com/lamngockhuong/termote/issues/117)) ([#194](https://github.com/lamngockhuong/termote/issues/194)) ([df909ae](https://github.com/lamngockhuong/termote/commit/df909ae7bf2181b94a3c87a2530fea170f8dbdb7))
+
+
+### Bug Fixes
+
+* **deps:** update dependency @astrojs/starlight to v0.41.3 ([#188](https://github.com/lamngockhuong/termote/issues/188)) ([3426096](https://github.com/lamngockhuong/termote/commit/3426096041577fc5ffaf688991a1aa829eb66016))
+* **windows:** fix interactive menu rendering and Ctrl+C handling ([#184](https://github.com/lamngockhuong/termote/issues/184)) ([13d6855](https://github.com/lamngockhuong/termote/commit/13d6855c56670683e368088322549c89657d47f8))
+
+
+### Miscellaneous Chores
+
+* release 0.1.0 ([#196](https://github.com/lamngockhuong/termote/issues/196)) ([1a8b7af](https://github.com/lamngockhuong/termote/commit/1a8b7af5bb3ed36c0633b4bdee03aacbac023928))
+
 ## [0.0.16](https://github.com/lamngockhuong/termote/compare/v0.0.15...v0.0.16) (2026-07-12)
 
 
