@@ -81,6 +81,37 @@ function Write-Warn { param([string]$Message) Write-Host "[WARN] $Message" -Fore
 function Write-Err { param([string]$Message) Write-Host "[ERROR] $Message" -ForegroundColor Red; exit 1 }
 function Write-Step { param([string]$Step, [string]$Message) Write-Host "[$Step] $Message" -ForegroundColor Cyan }
 
+# Drain type-ahead keystrokes buffered before an interactive prompt is shown.
+# Consecutive gum prompts otherwise inherit a leftover Enter from the previous
+# prompt and auto-submit (e.g. gum input returns empty before you can type).
+# No-op when input is redirected (non-interactive / CI).
+function Clear-InputBuffer {
+    try { while ([Console]::KeyAvailable) { $null = [Console]::ReadKey($true) } } catch {}
+}
+
+# gum exits 130 when the user aborts a prompt with Ctrl+C or Esc, and consumes
+# the interrupt itself — PowerShell does NOT stop the script, so without this the
+# menu just falls through to the next prompt. Detect the abort and exit cleanly.
+function Exit-IfGumCancelled {
+    param([int]$Code)
+    if ($Code -eq 130) {
+        Write-Host ""
+        Write-Host "Cancelled" -ForegroundColor Yellow
+        exit 130
+    }
+}
+
+# Run a gum prompt that returns its result on stdout (choose/input): drain any
+# type-ahead first so a leftover Enter can't auto-submit, run gum, abort the
+# script on Ctrl+C/Esc (gum exit 130), then return the selected/entered value.
+# Centralizes the gum invariant so no call site can forget a step.
+function Invoke-GumPrompt {
+    Clear-InputBuffer
+    $result = & gum @args
+    Exit-IfGumCancelled $LASTEXITCODE
+    return $result
+}
+
 function Show-Header {
     Write-Host ""
     Write-Host "  TERMOTE - Terminal + Remote" -ForegroundColor Blue
@@ -259,7 +290,7 @@ function Setup-Auth {
     if ([Environment]::UserInteractive) {
         $prompt = "Enter password for admin (Enter = auto-generate): "
         if ($script:HAS_GUM) {
-            $pass = & gum input --password --placeholder "Leave empty to auto-generate" --header "Admin Password"
+            $pass = Invoke-GumPrompt input --password --placeholder "Leave empty to auto-generate" --header "Admin Password"
         } else {
             Write-Host $prompt -NoNewline
             $securePass = Read-Host -AsSecureString
@@ -337,7 +368,7 @@ function Select-Option {
     )
 
     if ($script:HAS_GUM) {
-        return & gum choose --header $Header @Options
+        return Invoke-GumPrompt choose --header $Header @Options
     } else {
         Write-Host $Header -ForegroundColor Cyan
         Write-Host ""
@@ -356,7 +387,13 @@ function Confirm-Action {
     param([string]$Message)
 
     if ($script:HAS_GUM) {
-        $null = & gum confirm $Message 2>&1
+        # gum confirm renders its Yes/No UI on stderr and signals via exit code
+        # (no stdout). Do NOT redirect stderr (2>&1) — that swallows the UI and the
+        # user answers blindly. No stdout means it can't share Invoke-GumPrompt, so
+        # the drain + cancel-check are applied here directly.
+        Clear-InputBuffer
+        & gum confirm $Message
+        Exit-IfGumCancelled $LASTEXITCODE
         return $LASTEXITCODE -eq 0
     } else {
         $yn = Read-Host "$Message [y/N]"
@@ -403,7 +440,7 @@ function Show-InteractiveInstall {
     if (Confirm-Action "Disable authentication?") { $opts.NoAuth = $true }
     if (Confirm-Action "Enable Tailscale HTTPS?") {
         if ($script:HAS_GUM) {
-            $tsHost = & gum input --placeholder "Tailscale hostname (e.g. myhost.ts.net)"
+            $tsHost = Invoke-GumPrompt input --placeholder "Tailscale hostname (e.g. myhost.ts.net)"
         } else {
             $tsHost = Read-Host "Tailscale hostname (e.g. myhost.ts.net)"
         }
