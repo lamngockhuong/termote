@@ -7,11 +7,11 @@ import { Steps, Tabs, TabItem, Aside } from "@astrojs/starlight/components";
 
 Không cần Docker. Truy cập binary host như `claude`, `git`, `gh`, v.v.
 
-<Aside type="caution" title="Windows Native — Lỗi đã biết">
-  Trên Windows 11 (build 26200+), ttyd.exe bị crash khi WebSocket client kết nối
-  do lỗi named pipe của ConPTY. Bản sửa đang được lên kế hoạch (thay thế ttyd
-  bằng terminal handler viết bằng Go). Trong thời gian chờ, hãy sử dụng **chế độ
-  Container** trên Windows — hoạt động bình thường.
+<Aside type="tip" title="Chế độ Native trên Windows">
+  Chế độ Native được hỗ trợ đầy đủ trên Windows. Script cài đặt mặc định tự động
+  tải bản ttyd fork build bằng MSVC, khắc phục lỗi crash ConPTY trước đây trên
+  Windows 11 (build 26200+). Dùng `-Ttyd official` để chuyển sang bản upstream
+  `tsl0922/ttyd`.
 </Aside>
 
 ## Yêu cầu
@@ -35,9 +35,9 @@ Không cần Docker. Truy cập binary host như `claude`, `git`, `gh`, v.v.
     # ttyd được tự động tải bởi script cài đặt
     ```
 
-    <Aside type="caution">
-      Chế độ Native trên Windows hiện đang bị lỗi trên Windows 11 build 26200+.
-      Hãy sử dụng [chế độ Container](/vi/installation/docker/) thay thế.
+    <Aside type="note">
+      ttyd được script cài đặt tự động tải (mặc định bản fork build bằng MSVC).
+      Dùng `-Ttyd official` để lấy bản upstream.
     </Aside>
   </TabItem>
 </Tabs>

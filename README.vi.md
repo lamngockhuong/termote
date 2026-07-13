@@ -332,9 +332,9 @@ git pull origin main                    # Nếu cài từ source
 | -------- | -------------- | -------------- | ----------- |
 | Linux    | ✓              | ✓              | termote.sh  |
 | macOS    | ✓              | ✓              | termote.sh  |
-| Windows  | ⚠️ (thử nghiệm) | ⚠️ (thử nghiệm) | termote.ps1 |
+| Windows  | ✓              | ✓              | termote.ps1 |
 
-> **⚠️ Hỗ trợ Windows (Thử nghiệm)**: Hỗ trợ Windows hiện đang trong giai đoạn đầu và cần kiểm tra thêm. Chế độ container yêu cầu Docker Desktop, chế độ native yêu cầu psmux. Vui lòng báo cáo lỗi trên GitHub.
+> **Hỗ trợ Windows**: Chế độ container yêu cầu Docker Desktop hoặc Podman Desktop; chế độ native yêu cầu psmux. Vui lòng báo cáo lỗi trên GitHub nếu gặp sự cố.
 
 ### Chế Độ Native Windows
 

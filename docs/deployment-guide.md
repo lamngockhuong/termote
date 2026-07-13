@@ -10,7 +10,7 @@
 | psmux         | -              | -                  | Required (`winget install psmux`) |
 | Go 1.21+      | -              | Required (build)   | Required (build)                  |
 
-> **⚠️ Windows Support (Experimental)**: Windows support is currently in early stages and needs more testing. Please report issues on GitHub.
+> **Windows Support**: Container mode requires Docker Desktop or Podman Desktop; native mode requires psmux + ttyd. Report any issues on GitHub.
 
 ## Deployment Modes
 

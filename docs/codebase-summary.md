@@ -331,7 +331,7 @@ Unified Unix CLI for installation, management, and updates:
 
 ### termote.ps1
 
-Windows PowerShell equivalent of `termote.sh` with same commands (planned, matches Unix behavior).
+Windows PowerShell equivalent of `termote.sh` with the same commands, at parity with Unix behavior (install, update, health, logs, link/unlink, menu).
 
 ### get.sh / get.ps1
 
