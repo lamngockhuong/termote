@@ -84,15 +84,15 @@ winget install psmux
 
 **Windows (termote.ps1):**
 
-| Flag             | Description                                     |
-| ---------------- | ----------------------------------------------- |
-| `-Lan`           | Expose to LAN (default: localhost only)         |
-| `-Tailscale <h>` | Enable Tailscale HTTPS                          |
-| `-NoAuth`        | Disable basic authentication                    |
-| `-Port <port>`   | Host port (default: 7680)                       |
-| `-Fresh`         | Force new password prompt (ignore saved config) |
-| `-Version <X.Y.Z>` | Pin `update` to a specific version            |
-| `-Force`         | Reinstall current version (with `update`)       |
+| Flag               | Description                                     |
+| ------------------ | ----------------------------------------------- |
+| `-Lan`             | Expose to LAN (default: localhost only)         |
+| `-Tailscale <h>`   | Enable Tailscale HTTPS                          |
+| `-NoAuth`          | Disable basic authentication                    |
+| `-Port <port>`     | Host port (default: 7680)                       |
+| `-Fresh`           | Force new password prompt (ignore saved config) |
+| `-Version <X.Y.Z>` | Pin `update` to a specific version              |
+| `-Force`           | Reinstall current version (with `update`)       |
 
 ## Config Persistence
 

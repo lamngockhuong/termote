@@ -450,10 +450,10 @@ lsof -i :7680              # Verifikasi port sedang digunakan
 
 ## Proyek Lainnya
 
-| Proyek                                                      | Deskripsi                                                                                                |
-| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| [GitHub Flex](https://github.com/lamngockhuong/github-flex) | Ekstensi lintas browser (Chrome & Firefox) yang meningkatkan antarmuka GitHub dengan fitur produktivitas |
-| [TabRest](https://github.com/lamngockhuong/tabrest)         | Ekstensi Chrome yang secara otomatis melepaskan tab tidak aktif untuk membebaskan memori                 |
+| Proyek                                                      | Deskripsi                                                                                                                                    |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| [GitHub Flex](https://github.com/lamngockhuong/github-flex) | Ekstensi lintas browser (Chrome & Firefox) yang meningkatkan antarmuka GitHub dengan fitur produktivitas                                     |
+| [TabRest](https://github.com/lamngockhuong/tabrest)         | Ekstensi Chrome yang secara otomatis melepaskan tab tidak aktif untuk membebaskan memori                                                     |
 | [Specpin](https://github.com/lamngockhuong/specpin)         | Menyematkan spesifikasi bisnis hidup yang diversikan dengan Git ke elemen antarmuka web yang sedang berjalan (ekstensi browser + Go sidecar) |
 
 ## Lisensi

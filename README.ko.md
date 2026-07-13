@@ -452,10 +452,10 @@ lsof -i :7680              # 포트 사용 중인지 확인
 
 ## 다른 프로젝트
 
-| 프로젝트                                                    | 설명                                                                                            |
-| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| [GitHub Flex](https://github.com/lamngockhuong/github-flex) | GitHub 인터페이스를 생산성 기능으로 향상시키는 크로스 브라우저 확장 프로그램 (Chrome & Firefox) |
-| [TabRest](https://github.com/lamngockhuong/tabrest)         | 비활성 탭을 자동으로 언로드하여 메모리를 확보하는 Chrome 확장 프로그램                          |
+| 프로젝트                                                    | 설명                                                                                                             |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| [GitHub Flex](https://github.com/lamngockhuong/github-flex) | GitHub 인터페이스를 생산성 기능으로 향상시키는 크로스 브라우저 확장 프로그램 (Chrome & Firefox)                  |
+| [TabRest](https://github.com/lamngockhuong/tabrest)         | 비활성 탭을 자동으로 언로드하여 메모리를 확보하는 Chrome 확장 프로그램                                           |
 | [Specpin](https://github.com/lamngockhuong/specpin)         | 실행 중인 웹 UI 요소에 Git으로 버전 관리되는 살아있는 비즈니스 명세를 고정 (브라우저 확장 프로그램 + Go sidecar) |
 
 ## 라이선스
