@@ -27,7 +27,7 @@
     "@xterm/xterm": "6.0.0",
     "hammerjs": "2.0.8",
     "lucide-react": "1.24.0",
-    "react": "19.2.7",
+    "react": "19.2.8",
     "react-dom": "19.2.7"
   },
   "devDependencies": {
