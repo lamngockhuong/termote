@@ -30,6 +30,7 @@ export default defineConfig({
             { label: "Container", link: "/installation/docker/" },
             { label: "Native", link: "/installation/native/" },
             { label: "Tailscale", link: "/installation/tailscale/" },
+            { label: "Build Remote Agent", link: "/installation/gbr/" },
           ],
         },
         {
