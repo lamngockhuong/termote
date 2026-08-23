@@ -1,0 +1,81 @@
+---
+title: Build Remote Agent
+description: Phone spectator via gbr-agent — no inbound ports, no Tailscale
+---
+
+import { Aside, Steps } from "@astrojs/starlight/components";
+
+**Build Remote Agent** is a companion pairing device, not a replacement for
+Termote. Keep Termote (PWA + ttyd + tmux) bound to localhost. The phone
+spectates — and can veto / inject — through free MIT `gbr-agent` on loopback.
+Phone and PC never open ports to each other.
+
+Use this when you want a phone on the session **without** `tailscale serve`,
+LAN `:7680`, or publishing ttyd.
+
+Website: [grokbuildremote.com](https://grokbuildremote.com/) ·
+Agent: [GrokBuildRemote-Agents](https://github.com/LinespottingOrg/GrokBuildRemote-Agents) (MIT) ·
+Protocol `gbr/1` · need agent **v0.6.0+**
+
+Not affiliated with xAI or SpaceX.
+
+<Aside type="note">
+  Termote stays the interactive PWA. GBR does not replace ttyd, tmux, or the
+  Termote UI — it is the no-inbound spectator path.
+</Aside>
+
+## Install + pair
+
+<Steps>
+1. Install `gbr-agent` on the same machine that runs Termote.
+
+   ```bash
+   # macOS / Linux
+   curl -fsSL https://grokbuildremote.com/install.sh | bash
+   gbr-agent version          # must print v0.6.0 or newer
+   ```
+
+   ```powershell
+   # Windows
+   irm https://grokbuildremote.com/install.ps1 | iex
+   gbr-agent version
+   ```
+
+2. Pair the phone.
+
+   ```bash
+   gbr-agent pair             # QR in browser + printed 8-char code
+   gbr-agent run              # leave running
+   ```
+
+3. On the phone, open Build Remote Agent → **Scan QR from computer** (or type
+   the 8-char code). Sessions appear in the app.
+
+</Steps>
+
+Unpair in Settings before changing PCs. Force-close is not enough.
+
+## Attach
+
+After `gbr-agent run`:
+
+- HTTP Bot API: `http://127.0.0.1:8788`
+- MCP stdio: clone the agent repo and run `node mcp/gbr-mcp/bin/gbr-mcp.js`
+
+```bash
+curl -sS http://127.0.0.1:8788/health
+curl -sS http://127.0.0.1:8788/v1/sessions
+```
+
+Phone is spectator. Orchestration stays on this desktop (Termote / Claude Code
+in tmux, or a bot talking to the same Bot API).
+
+Do not commit mailbox keys. Phone **Settings → Bot API** is the only place the
+relay key is copied.
+
+## Versus Tailscale
+
+| Goal | Path |
+|------|------|
+| Full Termote PWA from the phone | [Tailscale HTTPS](/installation/tailscale/) (`tailscale serve` → `:7680`) |
+| Spectator / veto only, no inbound, no tailnet | This page (`gbr-agent pair` + `:8788`) |
