@@ -109,32 +109,32 @@ test.describe('mux API integration', () => {
     expect(res.status()).toBe(415)
   })
 
-  test('switch session calls select API', async ({ page, request }) => {
-    // Create a second session
+  test('tmux shows the flat 0.x list: no group header, no pane strip', async ({ page }) => {
+    await expect(page.locator('aside section')).toHaveCount(0)
+    await expect(page.getByRole('group', { name: 'Panes' })).toHaveCount(0)
+  })
+
+  test('switch session selects the tmux window on the server', async ({ page, request }) => {
+    // Create a second session; tmux makes the new window current
     await page.click('button[title="Add new session"]')
     await page.waitForSelector('input[placeholder="Session name"]', { timeout: 5000 })
     await page.fill('input[placeholder="Session name"]', 'api-test')
     await page.click('button.bg-blue-600:has-text("Add")')
     await page.waitForTimeout(500)
 
-    // Get initial windows
     const before = await request.get('/api/mux/snapshot')
-    const windowsBefore = (await before.json()).groups[0].tabs
+    const first = (await before.json()).groups[0].tabs[0]
 
-    // Click on first session button in sidebar
-    const firstSession = page.locator('aside .group button').first()
-    await firstSession.click()
-    await page.waitForTimeout(500)
-
-    // Verify tmux window changed (if multiple windows exist)
-    if (windowsBefore.length > 1) {
-      const after = await request.get('/api/mux/snapshot')
-      const windowsAfter = (await after.json()).groups[0].tabs
-      const activeWindow = windowsAfter.find(
-        (w: { active: boolean }) => w.active,
-      )
-      expect(activeWindow).toBeDefined()
-    }
+    // tmux shares the current window between clients, so picking a tab here
+    // moves the server's active window (herdr would not)
+    await page.locator(`aside .group:has-text("${first.name}") button`).first().click()
+    await expect
+      .poll(async () => {
+        const after = await request.get('/api/mux/snapshot')
+        const tabs = (await after.json()).groups[0].tabs
+        return tabs.find((t: { active: boolean }) => t.active)?.id
+      })
+      .toBe(first.id)
   })
 
   test('add session creates tmux window', async ({ page, request }) => {

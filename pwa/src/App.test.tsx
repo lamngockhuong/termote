@@ -381,13 +381,18 @@ vi.mock('./components/gesture-hints-overlay', () => ({
 
 vi.mock('./components/bottom-navigation', () => ({
   BottomNavigation: ({
+    sessions,
     onAdd,
     onToggleSidebar,
   }: {
+    sessions: { id: string }[]
     onAdd: () => void
     onToggleSidebar: () => void
   }) => (
-    <div data-testid="bottom-nav">
+    <div
+      data-testid="bottom-nav"
+      data-ids={sessions.map((s) => s.id).join(',')}
+    >
       <button onClick={onAdd}>BNAdd</button>
       <button onClick={onToggleSidebar}>BNSidebar</button>
     </div>
@@ -411,13 +416,18 @@ vi.mock('./components/command-history-dropdown', () => ({
 
 vi.mock('./components/session-tabs', () => ({
   SessionTabs: ({
+    sessions,
     onAdd,
     onRemove,
   }: {
+    sessions: { id: string }[]
     onAdd: () => void
     onRemove: (id: string) => void
   }) => (
-    <div data-testid="session-tabs">
+    <div
+      data-testid="session-tabs"
+      data-ids={sessions.map((s) => s.id).join(',')}
+    >
       <button onClick={onAdd}>STAdd</button>
       <button onClick={() => onRemove('1')}>STRemove</button>
     </div>
@@ -1898,5 +1908,109 @@ describe('App gesture hints (mobile, first visit)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'GestureHints' }))
     expect(screen.queryByTestId('settings-modal')).not.toBeInTheDocument()
     expect(screen.getByTestId('gesture-hints')).toBeInTheDocument()
+  })
+})
+
+describe('App groups and panes', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockCheckForUpdate.mockResolvedValue({
+      hasUpdate: false,
+      latestVersion: null,
+      releaseUrl: null,
+    })
+    mockIsMobile.mockReturnValue(false)
+  })
+
+  const tab = (id: string, groupId: string, panes?: object[]) => ({
+    id,
+    name: id,
+    icon: '📺',
+    description: '',
+    groupId,
+    paneId: `${id}:p1`,
+    hasAgent: false,
+    panes,
+  })
+  const PANES = [
+    { id: 'w1:t1:p1', label: 'claude', hasAgent: true, agentStatus: 'working' },
+    { id: 'w1:t1:p2', label: 'logs', hasAgent: false },
+  ]
+  const selectPane = vi.fn()
+
+  function mockMux(backend: 'tmux' | 'herdr') {
+    const tabs = [
+      tab('w1:t1', 'w1', PANES),
+      tab('w1:t2', 'w1'),
+      tab('w2:t1', 'w2'),
+    ]
+    mockUseLocalSessions.mockReturnValue({
+      activeSession: tabs[0],
+      sessions: tabs,
+      groups: [
+        { id: 'w1', name: 'api' },
+        { id: 'w2', name: 'web' },
+      ],
+      switchSession: vi.fn(),
+      selectPane,
+      addSession: vi.fn(),
+      removeSession: vi.fn(),
+      updateSession: vi.fn(),
+      isReady: true,
+      isServerReachable: true,
+      refreshSessions: vi.fn(),
+      mux: {
+        backend,
+        caps: {
+          clientSideSelect: backend === 'herdr',
+          copyMode: backend === 'tmux',
+        },
+      },
+    } as any)
+  }
+
+  it('desktop tab bar shows only tabs of the current group', async () => {
+    mockMux('herdr')
+    mockUseSettings.mockReturnValue({
+      settings: {
+        imeSendBehavior: 'send-only',
+        pasteSource: 'clipboard',
+        toolbarDefaultExpanded: false,
+        disableContextMenu: true,
+        showSessionTabs: true,
+        pollInterval: 5,
+        hasSeenGestureHints: true,
+      },
+      updateSetting: vi.fn(),
+    })
+    render(<App />)
+    expect(await screen.findByTestId('session-tabs')).toHaveAttribute(
+      'data-ids',
+      'w1:t1,w1:t2',
+    )
+  })
+
+  it('mobile bottom navigation shows only tabs of the current group', async () => {
+    mockMux('herdr')
+    mockIsMobile.mockReturnValue(true)
+    render(<App />)
+    expect(await screen.findByTestId('bottom-nav')).toHaveAttribute(
+      'data-ids',
+      'w1:t1,w1:t2',
+    )
+  })
+
+  it('herdr: the pane strip picks the pane to stream', async () => {
+    mockMux('herdr')
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'logs' }))
+    expect(selectPane).toHaveBeenCalledWith('w1:t1:p2')
+  })
+
+  it('tmux: no pane strip', async () => {
+    mockMux('tmux')
+    render(<App />)
+    await screen.findByTestId('terminal-view')
+    expect(screen.queryByRole('group', { name: 'Panes' })).toBeNull()
   })
 })

@@ -1,6 +1,7 @@
 import { Pencil, Trash2 } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 import type { Session } from '../types/session'
+import { AgentStatusBadge } from './agent-status-badge'
 
 interface Props {
   session: Session
@@ -169,7 +170,8 @@ export function SwipeableSessionItem({
       >
         <div className="p-3 text-left text-zinc-900 dark:text-zinc-50 select-none flex items-center min-w-0">
           <span className="text-xl shrink-0">{session.icon}</span>
-          <span className="ml-2 text-sm truncate">{session.name}</span>
+          <span className="ml-2 text-sm truncate flex-1">{session.name}</span>
+          <AgentStatusBadge status={session.agentStatus} />
         </div>
       </div>
     </div>

@@ -75,7 +75,7 @@ describe('mux API client', () => {
 
   it('createTab posts name and group in the JSON body', async () => {
     const { calls } = mockFetch({ body: { ok: true, id: '3' } })
-    expect(await createTab('my session', 'main')).toBe(true)
+    expect(await createTab('my session', 'main')).toBe('3')
     expect(calls[0].url).toBe('/api/mux/tabs')
     expect(calls[0].init?.method).toBe('POST')
     expect(JSON.parse(calls[0].init?.body as string)).toEqual({
@@ -86,8 +86,13 @@ describe('mux API client', () => {
 
   it('createTab without name sends an empty object', async () => {
     const { calls } = mockFetch({ body: { ok: true } })
-    await createTab()
+    expect(await createTab()).toBe('')
     expect(calls[0].init?.body).toBe('{}')
+  })
+
+  it('createTab resolves to null when the server refuses', async () => {
+    mockFetch({ body: { error: 'invalid tab name' } })
+    expect(await createTab('bad name')).toBeNull()
   })
 
   it('closeTab sends JSON DELETE', async () => {

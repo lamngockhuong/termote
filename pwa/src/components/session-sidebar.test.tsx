@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Session } from '../types/session'
+import type { Session, SessionGroup } from '../types/session'
 import { SessionSidebar } from './session-sidebar'
 
 vi.mock('./icon-picker', () => ({
@@ -539,5 +539,98 @@ describe('SessionSidebar — mobile mode', () => {
     fireEvent.change(input, { target: { value: 'Updated' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     expect(onUpdate).toHaveBeenCalledWith('1', { name: 'Updated', icon: '💻' })
+  })
+})
+
+describe('SessionSidebar — groups', () => {
+  const GROUPS: SessionGroup[] = [
+    { id: 'w1', name: 'api', agentStatus: 'blocked' },
+    { id: 'w2', name: '' },
+  ]
+  const TABS: Session[] = [
+    {
+      id: 'w1:t1',
+      name: 'agents',
+      icon: '📺',
+      description: '',
+      groupId: 'w1',
+      agentStatus: 'blocked',
+    },
+    { id: 'w1:t2', name: 'shell', icon: '📺', description: '', groupId: 'w1' },
+    { id: 'w2:t1', name: 'dev', icon: '📺', description: '', groupId: 'w2' },
+  ]
+
+  beforeEach(() => localStorage.clear())
+
+  function renderGroups(overrides = {}) {
+    return render(
+      <SessionSidebar
+        sessions={TABS}
+        groups={GROUPS}
+        activeId="w1:t1"
+        onSelect={vi.fn()}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+        onUpdate={vi.fn()}
+        {...overrides}
+      />,
+    )
+  }
+
+  it('hides the header for a single group', () => {
+    render(
+      <SessionSidebar
+        sessions={SESSIONS}
+        groups={[{ id: 'main', name: 'main' }]}
+        activeId="1"
+        onSelect={vi.fn()}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+      />,
+    )
+    expect(screen.queryByRole('region')).toBeNull()
+    expect(screen.queryByText('main')).toBeNull()
+    expect(screen.getByText('Shell')).toBeInTheDocument()
+  })
+
+  it('lists tabs under a header per group, with counts and badges', () => {
+    renderGroups()
+    const api = screen.getByRole('region', { name: 'api' })
+    expect(api).toHaveTextContent('agents')
+    expect(api).toHaveTextContent('shell')
+    expect(api).not.toHaveTextContent('dev')
+    expect(
+      screen.getByRole('button', { name: /api.*2/, expanded: true }),
+    ).toBeInTheDocument()
+    // Group badge and tab badge
+    expect(screen.getAllByRole('img', { name: 'Agent blocked' })).toHaveLength(
+      2,
+    )
+    // A group without a name falls back to its id
+    expect(screen.getByRole('region', { name: 'w2' })).toHaveTextContent('dev')
+  })
+
+  it('collapses one group and remembers it', () => {
+    renderGroups()
+    fireEvent.click(screen.getByRole('button', { name: /api/ }))
+    expect(screen.queryByText('agents')).toBeNull()
+    expect(screen.getByText('dev')).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /api/, expanded: false }),
+    ).toBeInTheDocument()
+    expect(
+      JSON.parse(localStorage.getItem('termote-group-collapsed')!),
+    ).toEqual({ w1: true })
+  })
+
+  it('groups swipeable items on mobile', () => {
+    renderGroups({ isMobile: true })
+    const web = screen.getByRole('region', { name: 'w2' })
+    expect(web).toContainElement(screen.getByTestId('swipeable-w2:t1'))
+  })
+
+  it('shows tab badges in the icon-only sidebar', () => {
+    renderGroups({ isCollapsed: true })
+    expect(screen.getByRole('img', { name: 'Agent blocked' })).toBeVisible()
   })
 })

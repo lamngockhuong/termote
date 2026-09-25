@@ -462,4 +462,9 @@ describe('SwipeableSessionItem', () => {
 
     expect(onSelect).not.toHaveBeenCalled()
   })
+
+  it('shows the agent badge of the tab', () => {
+    renderItem({ session: { ...SESSION, agentStatus: 'done' } })
+    expect(screen.getByRole('img', { name: 'Agent done' })).toBeVisible()
+  })
 })

@@ -68,12 +68,13 @@ export async function selectTab(id: string): Promise<boolean> {
   return data.ok === true
 }
 
+// Resolves to the new tab's id, or null when the server refused.
 export async function createTab(
   name?: string,
   groupId?: string,
-): Promise<boolean> {
+): Promise<string | null> {
   const data = await write('POST', '/tabs', { groupId, name })
-  return data.ok === true
+  return data.ok === true ? (data.id ?? '') : null
 }
 
 export async function closeTab(id: string): Promise<boolean> {

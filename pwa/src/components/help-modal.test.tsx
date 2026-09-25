@@ -92,6 +92,15 @@ describe('HelpModal', () => {
     expect(screen.getByText('Toolbar Buttons')).toBeInTheDocument()
   })
 
+  it('explains the agent status badges on the Toolbar tab', () => {
+    render(<HelpModal isOpen={true} onClose={vi.fn()} />)
+    fireEvent.click(screen.getByText('Toolbar'))
+    expect(screen.getByText('Agent Status (Herdr)')).toBeInTheDocument()
+    for (const status of ['blocked', 'working', 'done', 'idle']) {
+      expect(screen.getByLabelText(`Agent ${status}`)).toBeInTheDocument()
+    }
+  })
+
   it('switches to tmux tab on click', () => {
     render(<HelpModal isOpen={true} onClose={vi.fn()} />)
     fireEvent.click(screen.getByText('tmux'))

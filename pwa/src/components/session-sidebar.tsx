@@ -1,6 +1,16 @@
-import { PanelLeftClose, PanelLeftOpen, Pencil, Plus, X } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronRight,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Pencil,
+  Plus,
+  X,
+} from 'lucide-react'
 import { useState } from 'react'
-import type { Session } from '../types/session'
+import { useGroupCollapsed } from '../hooks/use-group-collapsed'
+import type { Session, SessionGroup } from '../types/session'
+import { AgentStatusBadge } from './agent-status-badge'
 import { IconPicker } from './icon-picker'
 import { SwipeableSessionItem } from './swipeable-session-item'
 
@@ -14,6 +24,8 @@ const HOVER_CLASSES =
 
 interface Props {
   sessions: Session[]
+  // Groups the sessions belong to; headers show only when there are several.
+  groups?: SessionGroup[]
   activeId: string
   onSelect: (id: string) => void
   onAdd: (name: string, icon?: string, description?: string) => void
@@ -28,6 +40,7 @@ interface Props {
 
 export function SessionSidebar({
   sessions,
+  groups = [],
   activeId,
   onSelect,
   onAdd,
@@ -45,6 +58,8 @@ export function SessionSidebar({
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [editIcon, setEditIcon] = useState('')
+  const { isCollapsed: isGroupCollapsed, toggle: toggleGroup } =
+    useGroupCollapsed()
 
   const handleAdd = () => {
     if (newName.trim()) {
@@ -117,7 +132,8 @@ export function SessionSidebar({
         className="flex-1 p-3 text-left text-zinc-900 dark:text-zinc-50 flex items-center min-w-0"
       >
         <span className="text-xl shrink-0">{session.icon}</span>
-        <span className="ml-2 text-sm truncate">{session.name}</span>
+        <span className="ml-2 text-sm truncate flex-1">{session.name}</span>
+        <AgentStatusBadge status={session.agentStatus} />
       </button>
       <div className="hidden group-hover:flex absolute right-1 top-1/2 -translate-y-1/2 gap-1">
         {onUpdate && (
@@ -142,28 +158,53 @@ export function SessionSidebar({
     </div>
   )
 
+  const renderItem = (session: Session) => (
+    <div key={session.id}>
+      {editingId === session.id ? (
+        renderEditForm()
+      ) : isMobile ? (
+        <SwipeableSessionItem
+          session={session}
+          isActive={activeId === session.id}
+          onSelect={() => onSelect(session.id)}
+          onEdit={() => startEdit(session)}
+          onRemove={() => onRemove(session.id)}
+          canRemove={sessions.length > 1}
+          canEdit={!!onUpdate}
+        />
+      ) : (
+        renderDesktopItem(session)
+      )}
+    </div>
+  )
+
+  // A single group (tmux) keeps the flat 0.x list without a header.
+  const renderGroup = (group: SessionGroup) => {
+    const tabs = sessions.filter((s) => s.groupId === group.id)
+    const collapsed = isGroupCollapsed(group.id)
+    const name = group.name || group.id
+    return (
+      <section key={group.id} aria-label={name}>
+        <button
+          type="button"
+          onClick={() => toggleGroup(group.id)}
+          aria-expanded={!collapsed}
+          className={`w-full px-3 py-2 flex items-center gap-1 text-xs font-semibold text-zinc-500 dark:text-zinc-400 ${HOVER_CLASSES}`}
+        >
+          {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+          <span className="flex-1 min-w-0 text-left truncate">{name}</span>
+          <AgentStatusBadge status={group.agentStatus} size={12} />
+          <span className="ml-1 tabular-nums">{tabs.length}</span>
+        </button>
+        {!collapsed && tabs.map(renderItem)}
+      </section>
+    )
+  }
+
   // Session list content (shared between mobile and desktop)
   const sessionList = (
     <>
-      {sessions.map((session) => (
-        <div key={session.id}>
-          {editingId === session.id ? (
-            renderEditForm()
-          ) : isMobile ? (
-            <SwipeableSessionItem
-              session={session}
-              isActive={activeId === session.id}
-              onSelect={() => onSelect(session.id)}
-              onEdit={() => startEdit(session)}
-              onRemove={() => onRemove(session.id)}
-              canRemove={sessions.length > 1}
-              canEdit={!!onUpdate}
-            />
-          ) : (
-            renderDesktopItem(session)
-          )}
-        </div>
-      ))}
+      {groups.length > 1 ? groups.map(renderGroup) : sessions.map(renderItem)}
 
       {/* Add session button/form */}
       {showAddForm ? (
@@ -274,7 +315,14 @@ export function SessionSidebar({
               }`}
               title={session.name}
             >
-              <span className="text-lg">{session.icon}</span>
+              <span className="relative text-lg">
+                {session.icon}
+                {session.agentStatus && (
+                  <span className="absolute -top-1 -right-2 rounded-full bg-zinc-50 dark:bg-zinc-800">
+                    <AgentStatusBadge status={session.agentStatus} size={10} />
+                  </span>
+                )}
+              </span>
             </button>
           ))}
           <button

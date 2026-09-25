@@ -1,6 +1,7 @@
 import { Plus, X } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import type { Session } from '../types/session'
+import { AgentStatusBadge } from './agent-status-badge'
 
 interface Props {
   sessions: Session[]
@@ -8,6 +9,8 @@ interface Props {
   onSelect: (id: string) => void
   onAdd: () => void
   onRemove: (id: string) => void
+  // Whether a tab may be closed; defaults to "more than one tab here".
+  canRemove?: boolean
 }
 
 export function SessionTabs({
@@ -16,6 +19,7 @@ export function SessionTabs({
   onSelect,
   onAdd,
   onRemove,
+  canRemove = sessions.length > 1,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const activeRef = useRef<HTMLButtonElement>(null)
@@ -62,8 +66,9 @@ export function SessionTabs({
           >
             <span className="text-base">{session.icon}</span>
             <span className="max-w-[100px] truncate">{session.name}</span>
+            <AgentStatusBadge status={session.agentStatus} size={12} />
             {/* Close button */}
-            {sessions.length > 1 && (
+            {canRemove && (
               <button
                 type="button"
                 onClick={(e) => {

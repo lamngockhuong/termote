@@ -10,6 +10,7 @@ import {
 import { GestureHintsOverlay } from './components/gesture-hints-overlay'
 import { HelpModal } from './components/help-modal'
 import { KeyboardToolbar } from './components/keyboard-toolbar'
+import { PaneStrip } from './components/pane-strip'
 import { QuickActionsMenu } from './components/quick-actions-menu'
 import { SessionSidebar } from './components/session-sidebar'
 import { SessionTabs } from './components/session-tabs'
@@ -99,7 +100,9 @@ export default function App() {
   const {
     activeSession,
     sessions,
+    groups,
     switchSession,
+    selectPane,
     addSession,
     removeSession,
     updateSession,
@@ -108,6 +111,14 @@ export default function App() {
   } = useLocalSessions(settings.pollInterval)
   const copyModeSupported = mux.caps.copyMode
   const isHerdr = mux.backend === 'herdr'
+  // Tab bars show the current group only; the sidebar shows every group.
+  const groupSessions = useMemo(
+    () =>
+      activeSession.groupId
+        ? sessions.filter((s) => s.groupId === activeSession.groupId)
+        : sessions,
+    [sessions, activeSession.groupId],
+  )
   const { fontSize, increase, decrease } = useFontSize()
   const { resolvedTheme } = useTheme()
   const { isFullscreen, toggleFullscreen } = useFullscreen()
@@ -345,6 +356,7 @@ export default function App() {
         {!isMobile && (
           <SessionSidebar
             sessions={sessions}
+            groups={groups}
             activeId={activeSession.id}
             onSelect={switchSession}
             onAdd={addSession}
@@ -359,6 +371,7 @@ export default function App() {
         {isMobile && (
           <SessionSidebar
             sessions={sessions}
+            groups={groups}
             activeId={activeSession.id}
             onSelect={handleMobileSelect}
             onAdd={addSession}
@@ -475,11 +488,20 @@ export default function App() {
           {/* Desktop session tabs */}
           {!isMobile && settings.showSessionTabs && (
             <SessionTabs
-              sessions={sessions}
+              sessions={groupSessions}
               activeId={activeSession.id}
               onSelect={switchSession}
               onAdd={() => addSession('New')}
               onRemove={removeSession}
+              canRemove={sessions.length > 1}
+            />
+          )}
+          {/* Split tab: pick the pane to stream (herdr) */}
+          {mux.caps.clientSideSelect && activeSession.panes && (
+            <PaneStrip
+              panes={activeSession.panes}
+              activePaneId={activeSession.paneId}
+              onSelect={selectPane}
             />
           )}
           <div
@@ -570,7 +592,7 @@ export default function App() {
       {/* Mobile bottom navigation */}
       {isMobile && (
         <BottomNavigation
-          sessions={sessions}
+          sessions={groupSessions}
           activeId={activeSession.id}
           onSelect={switchSession}
           onAdd={() => addSession('New')}

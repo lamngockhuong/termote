@@ -123,4 +123,24 @@ describe('SessionTabs', () => {
     expect(screen.getByText('💻')).toBeInTheDocument()
     expect(screen.getByText('🤖')).toBeInTheDocument()
   })
+
+  it('shows the agent badge of a tab', () => {
+    render(
+      <SessionTabs
+        {...defaultProps}
+        sessions={[{ ...SESSIONS[0], agentStatus: 'working' }, SESSIONS[1]]}
+      />,
+    )
+    expect(screen.getAllByRole('img')).toHaveLength(1)
+    expect(screen.getByRole('img', { name: 'Agent working' })).toBeVisible()
+  })
+
+  it('canRemove overrides the per-bar tab count', () => {
+    const { rerender } = render(
+      <SessionTabs {...defaultProps} sessions={ONE_SESSION} canRemove />,
+    )
+    expect(screen.getByLabelText('Close Shell')).toBeInTheDocument()
+    rerender(<SessionTabs {...defaultProps} canRemove={false} />)
+    expect(screen.queryByLabelText('Close Shell')).toBeNull()
+  })
 })
