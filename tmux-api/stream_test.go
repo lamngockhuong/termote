@@ -84,7 +84,7 @@ func helperServe() {
 		os.Exit(1)
 	}
 	fmt.Printf("ADDR=%s\n", ln.Addr())
-	cfg := serveConfig{PWADir: os.TempDir(), TTYDUrl: "http://127.0.0.1:1", NoAuth: true}
+	cfg := serveConfig{PWADir: os.TempDir(), NoAuth: true}
 	ctx, stop := signalContext()
 	defer stop()
 	if err := runServer(ctx, cfg, helperMux(), ln); err != nil {
@@ -364,7 +364,7 @@ func TestStreamTokenSingleUse(t *testing.T) {
 
 func TestStreamTokenExpired(t *testing.T) {
 	// Mount the route alone so the test owns the token store.
-	tokens := newTerminalTokenStore()
+	tokens := newStreamTokenStore()
 	hub := newStreamHub(maxStreams)
 	mux := http.NewServeMux()
 	registerStreamRoutes(mux, &fakeMux{snap: oneTabSnapshot()}, tokens, parseAllowedHosts(""), hub)
@@ -378,13 +378,13 @@ func TestStreamTokenExpired(t *testing.T) {
 }
 
 func TestTerminalTokenStoreCap(t *testing.T) {
-	st := newTerminalTokenStore()
+	st := newStreamTokenStore()
 	first, _ := st.generate()
-	for i := 0; i < maxTerminalTokens; i++ {
+	for i := 0; i < maxStreamTokens; i++ {
 		st.generate()
 	}
-	if n := len(st.tokens); n != maxTerminalTokens {
-		t.Errorf("live tokens = %d, want %d", n, maxTerminalTokens)
+	if n := len(st.tokens); n != maxStreamTokens {
+		t.Errorf("live tokens = %d, want %d", n, maxStreamTokens)
 	}
 	if st.validate(first) {
 		t.Error("oldest token must be dropped once the cap is reached")

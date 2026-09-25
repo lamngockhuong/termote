@@ -22,7 +22,7 @@ func helperServeHerdr() {
 	defer stop()
 	m, _ := newHerdrMux(ctx, os.Getenv(herdrSocketEnv))
 	fmt.Printf("ADDR=%s\n", ln.Addr())
-	cfg := serveConfig{PWADir: os.TempDir(), TTYDUrl: "http://127.0.0.1:1", NoAuth: true, MuxBackend: "herdr", HerdrAllowNoAuth: true}
+	cfg := serveConfig{PWADir: os.TempDir(), NoAuth: true, MuxBackend: "herdr", HerdrAllowNoAuth: true}
 	if err := runServer(ctx, cfg, m, ln); err != nil {
 		fmt.Println("ERR", err)
 		os.Exit(1)

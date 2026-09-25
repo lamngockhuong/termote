@@ -60,7 +60,7 @@ func (s *ptyStream) Resize(sz Size) error        { return pty.Setsize(s.f, winsi
 func (s *ptyStream) Done() <-chan struct{}       { return s.done }
 func (s *ptyStream) ExitCode() int               { return s.code }
 
-// Close hangs up the terminal like a closed ttyd tab would, then kills the
+// Close hangs up the terminal (SIGHUP, as when a terminal window closes), then kills the
 // process group if it has not exited within processKillWait.
 func (s *ptyStream) Close() error {
 	s.closeOnce.Do(func() {

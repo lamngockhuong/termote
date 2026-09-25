@@ -56,10 +56,9 @@ func (f *fakeMux) Health(context.Context) error { return f.err }
 func testConfig(t *testing.T) serveConfig {
 	t.Helper()
 	return serveConfig{
-		PWADir:  t.TempDir(),
-		TTYDUrl: "http://127.0.0.1:1",
-		User:    "admin",
-		Pass:    "secret",
+		PWADir: t.TempDir(),
+		User:   "admin",
+		Pass:   "secret",
 	}
 }
 
