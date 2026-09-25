@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/hex"
@@ -13,9 +14,11 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -61,6 +64,8 @@ type tokenStore struct {
 	tokens    map[string]time.Time // token → expiry
 	ttl       time.Duration
 	singleUse bool
+	max       int      // live tokens kept; 0 = unlimited
+	order     []string // issue order, used only when max > 0
 }
 
 func newTokenStore(ttl time.Duration, singleUse bool) *tokenStore {
@@ -85,6 +90,21 @@ func (s *tokenStore) generate() (string, error) {
 		if now.After(exp) {
 			delete(s.tokens, k)
 		}
+	}
+	if s.max > 0 {
+		// Forget used and expired tokens, then drop the oldest over the cap.
+		// Issue order, not expiry: timestamps can tie on coarse clocks.
+		live := s.order[:0]
+		for _, k := range s.order {
+			if _, ok := s.tokens[k]; ok {
+				live = append(live, k)
+			}
+		}
+		for len(live) >= s.max {
+			delete(s.tokens, live[0])
+			live = live[1:]
+		}
+		s.order = append(live, token)
 	}
 	s.tokens[token] = now.Add(s.ttl)
 	s.mu.Unlock()
@@ -118,8 +138,14 @@ func (s *tokenStore) validate(token string) bool {
 // Legacy aliases for terminal tokens (30s, single-use)
 type terminalTokenStore = tokenStore
 
+// maxTerminalTokens caps unused terminal tokens an authenticated client can
+// pile up.
+const maxTerminalTokens = 32
+
 func newTerminalTokenStore() *terminalTokenStore {
-	return newTokenStore(30*time.Second, true)
+	s := newTokenStore(30*time.Second, true)
+	s.max = maxTerminalTokens
+	return s
 }
 
 // newMux returns the backend selected by TERMOTE_MUX.
@@ -134,20 +160,31 @@ func newMux(backend string) (Mux, error) {
 // newServeHandler builds the full handler chain: PWA static files, ttyd proxy,
 // /api/mux/*, auth, Host allowlist and cross-site write protection.
 func newServeHandler(cfg serveConfig, m Mux) (http.Handler, error) {
+	h, _, err := buildServer(cfg, m)
+	return h, err
+}
+
+// buildServer is newServeHandler plus the hub that owns open terminal streams,
+// which the caller must shut down.
+func buildServer(cfg serveConfig, m Mux) (http.Handler, *streamHub, error) {
 	if err := validateConfig(cfg); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	mux := http.NewServeMux()
+	// Shared by the ttyd iframe and /api/mux/stream until the iframe is gone.
 	tokenStore := newTerminalTokenStore()
+	allowed := parseAllowedHosts(cfg.AllowedHosts)
+	hub := newStreamHub(maxStreams)
 
 	registerMuxRoutes(mux, m, tokenStore)
+	registerStreamRoutes(mux, m, tokenStore, allowed, hub)
 	// Unknown /api/ paths get JSON 404 instead of the SPA fallback.
 	mux.HandleFunc("/api/", apiNotFound)
 
 	// ttyd reverse proxy (WebSocket support) - only accessible via iframe with valid token
 	ttydURL, err := url.Parse(cfg.TTYDUrl)
 	if err != nil {
-		return nil, fmt.Errorf("invalid ttyd URL: %w", err)
+		return nil, nil, fmt.Errorf("invalid ttyd URL: %w", err)
 	}
 	ttydProxy := newWebSocketProxy(ttydURL)
 	mux.Handle("/terminal/", iframeOnly(tokenStore, http.StripPrefix("/terminal", ttydProxy)))
@@ -160,11 +197,15 @@ func newServeHandler(cfg serveConfig, m Mux) (http.Handler, error) {
 	if !cfg.NoAuth {
 		handler = basicAuth(cfg.User, cfg.Pass, handler)
 	}
-	allowed := parseAllowedHosts(cfg.AllowedHosts)
 	handler = writeGuard(allowed, handler)
 	handler = hostGuard(allowed, handler)
-	return noCacheMiddleware(handler), nil
+	return noCacheMiddleware(handler), hub, nil
 }
+
+// shutdownTimeout bounds how long SIGTERM/SIGINT waits for requests and
+// terminal processes before the server exits anyway; it leaves room for a
+// stream to escalate to a kill after processKillWait.
+const shutdownTimeout = processKillWait + 2*time.Second
 
 // startServeMode starts the server (PWA static files + ttyd WebSocket proxy + mux API + basic auth)
 func startServeMode(cfg serveConfig) {
@@ -172,21 +213,55 @@ func startServeMode(cfg serveConfig) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	handler, err := newServeHandler(cfg, m)
+	if m.Name() == "tmux" {
+		reapOrphanTerminals(tmuxAttachArgv())
+	}
+	ln, err := net.Listen("tcp", net.JoinHostPort(cfg.Bind, cfg.Port))
 	if err != nil {
 		log.Fatal(err)
 	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	// After the first signal, a second one kills the process as usual.
+	go func() { <-ctx.Done(); stop() }()
+	if err := runServer(ctx, cfg, m, ln); err != nil {
+		log.Fatal(err)
+	}
+}
 
+// runServer serves on ln until ctx is cancelled, then stops accepting
+// requests, closes every terminal stream and waits for their processes.
+func runServer(ctx context.Context, cfg serveConfig, m Mux, ln net.Listener) error {
+	handler, hub, err := buildServer(cfg, m)
+	if err != nil {
+		ln.Close()
+		return err
+	}
 	absDir, _ := filepath.Abs(cfg.PWADir)
-	addr := cfg.Bind + ":" + cfg.Port
-	log.Printf("Termote server listening on %s (PWA: %s, backend: %s)", addr, absDir, m.Name())
+	log.Printf("Termote server listening on %s (PWA: %s, backend: %s)", ln.Addr(), absDir, m.Name())
 	srv := &http.Server{
-		Addr:              addr,
 		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
-	log.Fatal(srv.ListenAndServe())
+	errCh := make(chan error, 1)
+	go func() { errCh <- srv.Serve(ln) }()
+	select {
+	case err := <-errCh:
+		return err
+	case <-ctx.Done():
+	}
+	log.Printf("shutting down")
+	sctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+	// Shutdown ignores hijacked connections, so streams are closed by the hub.
+	if err := srv.Shutdown(sctx); err != nil {
+		log.Printf("http shutdown: %v", err)
+	}
+	if err := hub.shutdown(sctx); err != nil {
+		log.Printf("terminal streams still open at exit: %v", err)
+	}
+	return nil
 }
 
 // authRateLimiter tracks failed auth attempts per IP to prevent brute force attacks.

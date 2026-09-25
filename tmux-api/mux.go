@@ -33,6 +33,9 @@ type Mux interface {
 	CloseTab(ctx context.Context, tabID string) error
 	RenameTab(ctx context.Context, tabID, name string) error
 	SendKeys(ctx context.Context, paneID, keys string) error
+	// Attach opens a terminal on paneID. ctx bounds only the setup; the
+	// stream lives until it is closed.
+	Attach(ctx context.Context, paneID string, size Size) (TermStream, error)
 	Health(ctx context.Context) error
 }
 

@@ -50,12 +50,25 @@ func qualifyTarget(id string) string {
 	return tmuxSession + ":" + id
 }
 
+// tmuxArgv returns the full tmux command line, with the socket flag if set.
+func tmuxArgv(args ...string) []string {
+	argv := []string{"tmux"}
+	if tmuxSocket != "" {
+		argv = append(argv, "-S", tmuxSocket)
+	}
+	return append(argv, args...)
+}
+
 // tmuxCmd creates a tmux command with optional socket flag
 func tmuxCmd(ctx context.Context, args ...string) *exec.Cmd {
-	if tmuxSocket != "" {
-		args = append([]string{"-S", tmuxSocket}, args...)
-	}
-	return exec.CommandContext(ctx, "tmux", args...)
+	argv := tmuxArgv(args...)
+	return exec.CommandContext(ctx, argv[0], argv[1:]...)
+}
+
+// tmuxAttachArgv is the command every terminal stream runs. It is also the
+// exact command line reapOrphanTerminals looks for.
+func tmuxAttachArgv() []string {
+	return tmuxArgv("attach", "-t", tmuxSession)
 }
 
 // tmuxMux drives one tmux (or psmux on Windows) session. The session is the
@@ -174,6 +187,16 @@ func (tmuxMux) SendKeys(ctx context.Context, paneID, keys string) error {
 		return inputError("keys must not start with '-'")
 	}
 	return tmuxCmd(ctx, "send-keys", "-t", qualifyTarget(paneID), keys).Run()
+}
+
+// Attach makes paneID the session's current window, then attaches a new tmux
+// client to the session. Like 0.x, every client shares the current window and
+// the window follows the most recently active client's size.
+func (m tmuxMux) Attach(ctx context.Context, paneID string, size Size) (TermStream, error) {
+	if err := m.SelectTab(ctx, paneID); err != nil {
+		return nil, err
+	}
+	return startTerminal(tmuxAttachArgv(), size)
 }
 
 // Health reports ok without touching tmux, as in 0.x: the PWA creates the

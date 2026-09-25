@@ -1,0 +1,402 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"log"
+	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/coder/websocket"
+)
+
+// Limits for /api/mux/stream. They bound what one authenticated client can make
+// the server hold open.
+const (
+	maxStreamMessage   = 64 * 1024        // largest client → server message
+	maxStreams         = 8                // concurrent streams, server-wide
+	streamWriteTimeout = 10 * time.Second // a client that cannot take a frame this long is dropped
+	streamPingEvery    = 15 * time.Second
+	streamPongTimeout  = 15 * time.Second // with streamPingEvery: no pong within 30s closes the stream
+	streamDrainWait    = 500 * time.Millisecond
+	// closeEvicted is sent to a stream pushed out by a newer one. It is an
+	// application code, not 1013 "try again later", so clients know not to
+	// reconnect automatically and evict the other device in turn.
+	closeEvicted    websocket.StatusCode = 4001
+	maxTermDim                           = 500
+	defaultTermCols                      = 80
+	defaultTermRows                      = 24
+	// processKillWait is how long a closed stream's process gets to exit on its
+	// own before it is killed.
+	processKillWait = 5 * time.Second
+)
+
+// Size is a terminal size in character cells.
+type Size struct {
+	Cols int `json:"cols"`
+	Rows int `json:"rows"`
+}
+
+// clampDim keeps a requested dimension inside [1, maxTermDim].
+func clampDim(v int) int {
+	return min(max(v, 1), maxTermDim)
+}
+
+// TermStream is a running terminal attached to one pane.
+type TermStream interface {
+	// Read returns terminal output; it fails once the terminal is gone.
+	Read(p []byte) (int, error)
+	// Write sends raw input bytes to the terminal.
+	Write(p []byte) (int, error)
+	Resize(Size) error
+	// Done is closed when the terminal process has exited.
+	Done() <-chan struct{}
+	// ExitCode is valid after Done is closed.
+	ExitCode() int
+	// Close ends the terminal and waits until its whole process tree is gone.
+	Close() error
+}
+
+// streamControl is a text frame. Client → server: resize. Server → client:
+// exit, error, size.
+type streamControl struct {
+	Type    string `json:"type"`
+	Cols    int    `json:"cols,omitempty"`
+	Rows    int    `json:"rows,omitempty"`
+	Code    *int   `json:"code,omitempty"`
+	Message string `json:"message,omitempty"`
+}
+
+// errStreamEvicted and errServerShutdown end a stream from outside.
+var (
+	errStreamEvicted  = errors.New("closed: too many open streams")
+	errServerShutdown = errors.New("server shutting down")
+)
+
+// streamHub tracks open streams so the oldest can be evicted when the limit is
+// hit and every stream can be closed on shutdown.
+type streamHub struct {
+	mu      sync.Mutex
+	max     int
+	streams []*hubEntry // oldest first
+	closing bool
+	wg      sync.WaitGroup
+}
+
+type hubEntry struct {
+	cancel context.CancelCauseFunc
+}
+
+func newStreamHub(max int) *streamHub {
+	return &streamHub{max: max}
+}
+
+// add registers a stream, evicting the oldest ones beyond the limit. It returns
+// false once shutdown has started.
+func (h *streamHub) add(cancel context.CancelCauseFunc) (*hubEntry, bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.closing {
+		return nil, false
+	}
+	for len(h.streams) >= h.max {
+		h.streams[0].cancel(errStreamEvicted)
+		h.streams = h.streams[1:]
+	}
+	e := &hubEntry{cancel: cancel}
+	h.streams = append(h.streams, e)
+	h.wg.Add(1)
+	return e, true
+}
+
+// remove unregisters a stream after its cleanup has finished.
+func (h *streamHub) remove(e *hubEntry) {
+	h.mu.Lock()
+	for i, s := range h.streams {
+		if s == e {
+			h.streams = append(h.streams[:i], h.streams[i+1:]...)
+			break
+		}
+	}
+	h.mu.Unlock()
+	h.wg.Done()
+}
+
+// shutdown closes every stream and waits for their processes to exit, or for
+// ctx to expire.
+func (h *streamHub) shutdown(ctx context.Context) error {
+	h.mu.Lock()
+	h.closing = true
+	for _, s := range h.streams {
+		s.cancel(errServerShutdown)
+	}
+	h.mu.Unlock()
+	done := make(chan struct{})
+	go func() { h.wg.Wait(); close(done) }()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// registerStreamRoutes mounts the terminal WebSocket.
+func registerStreamRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, allowed hostAllowlist, hub *streamHub) {
+	mux.HandleFunc("/api/mux/stream", func(w http.ResponseWriter, r *http.Request) {
+		handleStream(w, r, m, tokens, allowed, hub)
+	})
+}
+
+// handleStream upgrades to a WebSocket and pipes it to a terminal on the
+// requested pane. Auth and the Host allowlist are enforced by the middleware.
+// The token travels in the query; nothing here logs the URL.
+func handleStream(w http.ResponseWriter, r *http.Request, m Mux, tokens *tokenStore, allowed hostAllowlist, hub *streamHub) {
+	if !requireMethod(w, r, http.MethodGet) {
+		return
+	}
+	if !isWebSocket(r) {
+		jsonError(w, "websocket upgrade required", http.StatusBadRequest)
+		return
+	}
+	// Browsers always send Origin on a WebSocket handshake. Clients that are
+	// not browsers (websocat) may omit it and still need auth and a token.
+	if site := r.Header.Get("Sec-Fetch-Site"); site != "" && site != "same-origin" {
+		jsonError(w, "cross-site request rejected", http.StatusForbidden)
+		return
+	}
+	if origin := r.Header.Get("Origin"); origin != "" {
+		u, err := url.Parse(origin)
+		if err != nil || u.Host == "" || !allowed.allows(u.Host) {
+			jsonError(w, "origin not allowed", http.StatusForbidden)
+			return
+		}
+	}
+	q := r.URL.Query()
+	if !tokens.validate(q.Get("token")) {
+		jsonError(w, "invalid or expired stream token", http.StatusUnauthorized)
+		return
+	}
+	pane := q.Get("pane")
+	if pane == "" {
+		jsonError(w, "pane is required", http.StatusBadRequest)
+		return
+	}
+	size := Size{Cols: queryDim(q, "cols", defaultTermCols), Rows: queryDim(q, "rows", defaultTermRows)}
+
+	ctx, cancel := context.WithTimeout(r.Context(), muxTimeout)
+	snap, err := m.Snapshot(ctx)
+	cancel()
+	if err != nil {
+		muxError(w, m, "stream snapshot", err)
+		return
+	}
+	if !snapshotHasPane(snap, pane) {
+		jsonError(w, "unknown pane", http.StatusBadRequest)
+		return
+	}
+
+	// Origin was checked above against the allowlist, which is stricter than
+	// the library's own same-host comparison.
+	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
+	if err != nil {
+		log.Printf("stream accept: %v", err)
+		return
+	}
+	conn.SetReadLimit(maxStreamMessage)
+
+	sctx, scancel := context.WithCancelCause(context.Background())
+	entry, ok := hub.add(scancel)
+	if !ok {
+		scancel(errServerShutdown)
+		go conn.Close(websocket.StatusGoingAway, "server shutting down")
+		return
+	}
+	defer hub.remove(entry)
+	defer scancel(nil)
+
+	actx, acancel := context.WithTimeout(sctx, muxTimeout)
+	ts, err := m.Attach(actx, pane, size)
+	acancel()
+	if err != nil {
+		log.Printf("%s attach %q: %v", m.Name(), pane, err)
+		sendControl(conn, streamControl{Type: "error", Message: "failed to open terminal"})
+		go conn.Close(websocket.StatusInternalError, "attach failed")
+		return
+	}
+	runStream(sctx, scancel, conn, ts)
+}
+
+// runStream pumps bytes both ways until the terminal exits, the client goes
+// away, or the stream is cancelled; then it tears everything down.
+//
+// ctx only signals the end. Reads and writes on conn use their own contexts:
+// the library closes the connection when an operation's context is cancelled,
+// which would drop the final exit or error frame.
+//
+// The closing handshake waits for the client's reply for up to 5s, so it runs
+// in the background: the hub only tracks terminal processes, and those are
+// gone by then.
+func runStream(ctx context.Context, cancel context.CancelCauseFunc, conn *websocket.Conn, ts TermStream) {
+	outDone := make(chan struct{})
+	go func() {
+		defer close(outDone)
+		buf := make([]byte, 32*1024)
+		for {
+			n, err := ts.Read(buf)
+			if n > 0 {
+				if werr := writeFrame(conn, websocket.MessageBinary, buf[:n]); werr != nil {
+					cancel(werr)
+					return
+				}
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+
+	// Ends when the connection closes.
+	go func() {
+		for {
+			typ, data, err := conn.Read(context.Background())
+			if err != nil {
+				cancel(err)
+				return
+			}
+			if typ == websocket.MessageBinary {
+				if _, err := ts.Write(data); err != nil {
+					cancel(err)
+					return
+				}
+				continue
+			}
+			var msg streamControl
+			// A resize without a size is ignored rather than clamped to 1x1.
+			if json.Unmarshal(data, &msg) == nil && msg.Type == "resize" && msg.Cols > 0 && msg.Rows > 0 {
+				if err := ts.Resize(Size{Cols: clampDim(msg.Cols), Rows: clampDim(msg.Rows)}); err != nil {
+					log.Printf("stream resize: %v", err)
+				}
+			}
+		}
+	}()
+
+	go func() {
+		t := time.NewTicker(streamPingEvery)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				pctx, pcancel := context.WithTimeout(context.Background(), streamPongTimeout)
+				err := conn.Ping(pctx)
+				pcancel()
+				if err != nil {
+					cancel(err)
+					return
+				}
+			}
+		}
+	}()
+
+	select {
+	case <-ts.Done():
+		// Let the reader flush what the process printed before it exited. A
+		// ConPTY keeps its output pipe open until it is closed, so wait briefly
+		// and then close to release the rest.
+		select {
+		case <-outDone:
+		case <-time.After(streamDrainWait):
+		}
+		closeTerm(ts)
+		<-outDone
+		code := ts.ExitCode()
+		sendControl(conn, streamControl{Type: "exit", Code: &code})
+		go conn.Close(websocket.StatusNormalClosure, "")
+	case <-ctx.Done():
+		closeTerm(ts)
+		// The output goroutine may be stuck writing to a client that stopped
+		// reading; do not hold the hub slot for the whole write timeout.
+		select {
+		case <-outDone:
+		case <-time.After(streamDrainWait):
+			conn.CloseNow()
+			<-outDone
+		}
+		switch cause := context.Cause(ctx); {
+		case errors.Is(cause, errStreamEvicted):
+			sendControl(conn, streamControl{Type: "error", Message: errStreamEvicted.Error()})
+			go conn.Close(closeEvicted, "too many streams")
+		case errors.Is(cause, errServerShutdown):
+			go conn.Close(websocket.StatusGoingAway, "server shutting down")
+		default:
+			// The client left, stopped answering, or broke a limit; the
+			// connection is already unusable.
+			if !isClientGone(cause) {
+				log.Printf("stream ended: %v", cause)
+			}
+			conn.CloseNow()
+		}
+	}
+}
+
+func closeTerm(ts TermStream) {
+	if err := ts.Close(); err != nil {
+		log.Printf("stream close: %v", err)
+	}
+}
+
+// writeFrame writes one message; a client that cannot take it within the
+// write timeout is disconnected by the library.
+func writeFrame(conn *websocket.Conn, typ websocket.MessageType, p []byte) error {
+	ctx, cancel := context.WithTimeout(context.Background(), streamWriteTimeout)
+	defer cancel()
+	return conn.Write(ctx, typ, p)
+}
+
+func sendControl(conn *websocket.Conn, msg streamControl) {
+	b, _ := json.Marshal(msg)
+	writeFrame(conn, websocket.MessageText, b)
+}
+
+// isClientGone reports the usual ways a client ends a stream, which are not
+// worth logging.
+func isClientGone(err error) bool {
+	if err == nil || errors.Is(err, io.EOF) || errors.Is(err, context.Canceled) {
+		return true
+	}
+	switch websocket.CloseStatus(err) {
+	case websocket.StatusNormalClosure, websocket.StatusGoingAway, websocket.StatusNoStatusRcvd:
+		return true
+	}
+	return false
+}
+
+// queryDim parses a size parameter, falling back to def and clamping.
+func queryDim(q url.Values, key string, def int) int {
+	v, err := strconv.Atoi(strings.TrimSpace(q.Get(key)))
+	if err != nil {
+		return def
+	}
+	return clampDim(v)
+}
+
+func snapshotHasPane(s Snapshot, pane string) bool {
+	for _, g := range s.Groups {
+		for _, t := range g.Tabs {
+			for _, p := range t.Panes {
+				if p.ID == pane {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}

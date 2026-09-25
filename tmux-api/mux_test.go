@@ -13,9 +13,10 @@ import (
 // fakeMux records calls and returns canned results, so handler and guard
 // tests run through the real ServeMux without tmux.
 type fakeMux struct {
-	snap  Snapshot
-	err   error
-	calls []string
+	snap   Snapshot
+	err    error
+	calls  []string
+	attach func(pane string, size Size) (TermStream, error)
 }
 
 func (f *fakeMux) Name() string { return "fake" }
@@ -43,6 +44,12 @@ func (f *fakeMux) RenameTab(_ context.Context, id, name string) error {
 func (f *fakeMux) SendKeys(_ context.Context, id, keys string) error {
 	f.calls = append(f.calls, "keys "+id+"="+keys)
 	return f.err
+}
+func (f *fakeMux) Attach(_ context.Context, pane string, size Size) (TermStream, error) {
+	if f.attach == nil {
+		return nil, errUnsupported
+	}
+	return f.attach(pane, size)
 }
 func (f *fakeMux) Health(context.Context) error { return f.err }
 

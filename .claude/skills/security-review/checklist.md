@@ -53,7 +53,7 @@ Project-specific checklist based on past vulnerabilities and architecture.
 
 ### Method Enforcement
 
-- [ ] GET-only: `/api/mux/snapshot`, `/api/mux/health`, `/api/mux/stream-token`
+- [ ] GET-only: `/api/mux/snapshot`, `/api/mux/health`, `/api/mux/stream-token`, `/api/mux/stream` (WebSocket upgrade required, 400 otherwise)
 - [ ] POST-only: `/api/mux/tabs`, `/api/mux/tabs/{id}/select`, `/api/mux/panes/{id}/keys`
 - [ ] PATCH or DELETE: `/api/mux/tabs/{id}`
 - [ ] Wrong method → JSON 405 (patterns carry no method, handlers check)
@@ -78,6 +78,29 @@ Project-specific checklist based on past vulnerabilities and architecture.
 - [ ] Timeout <= 2 seconds for localhost connections
 - [ ] Bidirectional copy waits for both goroutines (no goroutine leak)
 - [ ] Hijack errors don't leak to client
+
+### Terminal Stream (`/api/mux/stream`, `stream.go`)
+
+- [ ] Behind basic auth and `hostGuard` like every route
+- [ ] `Sec-Fetch-Site`, if present, must be `same-origin`; `Origin`, if present, must be in the Host allowlist (not `r.Host`); library origin check is skipped only after this
+- [ ] Missing `Origin` (websocat, curl) still needs auth + a valid single-use token
+- [ ] Token from `/api/mux/stream-token`: 30s, single-use, store capped at 32 live tokens (oldest dropped first)
+- [ ] Token travels in the query: no code path logs `r.URL`
+- [ ] `pane` must exist in the backend's current snapshot and pass the backend's ID validation
+- [ ] `cols`/`rows` (query and `resize` frames) clamped to [1, 500]
+- [ ] Client message limit 64 KiB (`SetReadLimit`), exceeding closes the stream
+- [ ] At most 8 streams server-wide; the oldest is evicted, never an unbounded pool
+- [ ] Write timeout 10s per frame; ping every 15s, no pong within 30s closes
+- [ ] Terminal env drops `TMUX`/`TMUX_PANE` (no nested-session surprises), sets `TERM=xterm-256color`
+- [ ] Errors to the client are generic (`failed to open terminal`); details only in server logs
+
+### Terminal Process Lifecycle (`pty_*.go`)
+
+- [ ] Closing a stream ends the whole process tree, within 5s + kill
+- [ ] Linux: `Pdeathsig: SIGKILL` on the child; the group (`Setsid`) is killed via `-pid`
+- [ ] macOS: startup reaps `tmux attach` clients re-parented to PID 1 whose command line matches exactly
+- [ ] Windows: child (never tmux-api itself) in a `KILL_ON_JOB_CLOSE` Job Object; job terminated before `ClosePseudoConsole`
+- [ ] SIGTERM/SIGINT: `srv.Shutdown`, then the stream hub closes every stream and waits
 
 ### HTTP Server
 
