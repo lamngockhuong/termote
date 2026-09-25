@@ -123,6 +123,9 @@ func validateConfig(cfg serveConfig) error {
 	if !cfg.NoAuth && cfg.Pass == "" {
 		return errors.New("TERMOTE_PASS is empty: set a password, or set TERMOTE_NO_AUTH=true to disable auth explicitly")
 	}
+	if cfg.NoAuth && cfg.MuxBackend == "herdr" && !cfg.HerdrAllowNoAuth {
+		return errors.New("TERMOTE_NO_AUTH=true with TERMOTE_MUX=herdr would expose every herdr workspace without a password; set TERMOTE_HERDR_ALLOW_NO_AUTH=true to accept that")
+	}
 	return nil
 }
 

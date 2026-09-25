@@ -211,6 +211,13 @@ func TestNewServeConfigFromEnv(t *testing.T) {
 	if cfg.AllowedHosts != "" {
 		t.Errorf("cfg.AllowedHosts = %q, want empty default", cfg.AllowedHosts)
 	}
+	if cfg.HerdrAllowNoAuth {
+		t.Error("cfg.HerdrAllowNoAuth = true, want false by default")
+	}
+	t.Setenv("TERMOTE_HERDR_ALLOW_NO_AUTH", "true")
+	if !newServeConfigFromEnv().HerdrAllowNoAuth {
+		t.Error("TERMOTE_HERDR_ALLOW_NO_AUTH=true not read")
+	}
 }
 
 func TestTerminalTokenStore(t *testing.T) {

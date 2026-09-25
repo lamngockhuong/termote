@@ -184,4 +184,4 @@ func terminalEnv() []string {
 
 // reapOrphanTerminals is a no-op on Windows: the Job Object already ends
 // terminals whose server died.
-func reapOrphanTerminals([]string) {}
+func reapOrphanTerminals(func(cmdline string) bool) {}

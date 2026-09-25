@@ -65,10 +65,15 @@ func tmuxCmd(ctx context.Context, args ...string) *exec.Cmd {
 	return exec.CommandContext(ctx, argv[0], argv[1:]...)
 }
 
-// tmuxAttachArgv is the command every terminal stream runs. It is also the
-// exact command line reapOrphanTerminals looks for.
+// tmuxAttachArgv is the command every terminal stream runs.
 func tmuxAttachArgv() []string {
 	return tmuxArgv("attach", "-t", tmuxSession)
+}
+
+// isTmuxAttachCmdline matches exactly the command line of tmuxAttachArgv, for
+// reapOrphanTerminals.
+func isTmuxAttachCmdline(cmdline string) bool {
+	return cmdline == strings.Join(tmuxAttachArgv(), " ")
 }
 
 // tmuxMux drives one tmux (or psmux on Windows) session. The session is the

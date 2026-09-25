@@ -63,6 +63,20 @@ type TermStream interface {
 	Close() error
 }
 
+// sizeReporter is implemented by streams whose size the backend fixes (herdr
+// observes a pane at its desktop size). Client resizes are ignored; instead
+// every size is sent to the client as a size frame. The stream waits for sent
+// to be closed before producing output at that size, so the frame always
+// arrives first.
+type sizeReporter interface {
+	Sizes() <-chan sizeChange
+}
+
+type sizeChange struct {
+	Size Size
+	sent chan<- struct{}
+}
+
 // streamControl is a text frame. Client → server: resize. Server → client:
 // exit, error, size.
 type streamControl struct {
@@ -286,6 +300,23 @@ func runStream(ctx context.Context, cancel context.CancelCauseFunc, conn *websoc
 			}
 		}
 	}()
+
+	if sr, ok := ts.(sizeReporter); ok {
+		go func() {
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case c, ok := <-sr.Sizes():
+					if !ok {
+						return
+					}
+					sendControl(conn, streamControl{Type: "size", Cols: c.Size.Cols, Rows: c.Size.Rows})
+					close(c.sent)
+				}
+			}
+		}()
+	}
 
 	go func() {
 		t := time.NewTicker(streamPingEvery)

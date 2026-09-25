@@ -33,6 +33,9 @@ type serveConfig struct {
 	Bind         string
 	AllowedHosts string
 	MuxBackend   string
+	// HerdrAllowNoAuth lets herdr run with auth disabled. herdr exposes every
+	// workspace of the user, so NoAuth alone is refused.
+	HerdrAllowNoAuth bool
 }
 
 // newServeConfigFromEnv creates config from environment variables with defaults
@@ -48,6 +51,8 @@ func newServeConfigFromEnv() serveConfig {
 		// Comma-separated extra hostnames; loopback is always allowed.
 		AllowedHosts: os.Getenv("TERMOTE_ALLOWED_HOSTS"),
 		MuxBackend:   envOr("TERMOTE_MUX", "tmux"),
+
+		HerdrAllowNoAuth: os.Getenv("TERMOTE_HERDR_ALLOW_NO_AUTH") == "true",
 	}
 }
 
@@ -148,13 +153,16 @@ func newTerminalTokenStore() *terminalTokenStore {
 	return s
 }
 
-// newMux returns the backend selected by TERMOTE_MUX.
-func newMux(backend string) (Mux, error) {
+// newMux returns the backend selected by TERMOTE_MUX. Background work of the
+// backend (herdr's event subscription) runs until ctx ends.
+func newMux(ctx context.Context, backend string) (Mux, error) {
 	switch backend {
 	case "tmux":
 		return tmuxMux{}, nil
+	case "herdr":
+		return newHerdrMux(ctx, herdrSocketPath())
 	}
-	return nil, fmt.Errorf("unsupported TERMOTE_MUX %q (supported: tmux)", backend)
+	return nil, fmt.Errorf("unsupported TERMOTE_MUX %q (supported: tmux, herdr)", backend)
 }
 
 // newServeHandler builds the full handler chain: PWA static files, ttyd proxy,
@@ -209,19 +217,25 @@ const shutdownTimeout = processKillWait + 2*time.Second
 
 // startServeMode starts the server (PWA static files + ttyd WebSocket proxy + mux API + basic auth)
 func startServeMode(cfg serveConfig) {
-	m, err := newMux(cfg.MuxBackend)
+	if err := validateConfig(cfg); err != nil {
+		log.Fatal(err)
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	m, err := newMux(ctx, cfg.MuxBackend)
 	if err != nil {
 		log.Fatal(err)
 	}
-	if m.Name() == "tmux" {
-		reapOrphanTerminals(tmuxAttachArgv())
+	switch m.Name() {
+	case "tmux":
+		reapOrphanTerminals(isTmuxAttachCmdline)
+	case "herdr":
+		reapOrphanTerminals(isHerdrObserveCmdline)
 	}
 	ln, err := net.Listen("tcp", net.JoinHostPort(cfg.Bind, cfg.Port))
 	if err != nil {
 		log.Fatal(err)
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 	// After the first signal, a second one kills the process as usual.
 	go func() { <-ctx.Done(); stop() }()
 	if err := runServer(ctx, cfg, m, ln); err != nil {

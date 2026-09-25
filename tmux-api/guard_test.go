@@ -137,6 +137,16 @@ func TestValidateConfig(t *testing.T) {
 	if err := validateConfig(serveConfig{Pass: "x"}); err != nil {
 		t.Errorf("with password: %v", err)
 	}
+	// herdr exposes every workspace: NoAuth alone is not enough.
+	if err := validateConfig(serveConfig{NoAuth: true, MuxBackend: "herdr"}); err == nil || !strings.Contains(err.Error(), "TERMOTE_HERDR_ALLOW_NO_AUTH") {
+		t.Errorf("herdr + NoAuth = %v, want refusal naming the opt-out", err)
+	}
+	if err := validateConfig(serveConfig{NoAuth: true, MuxBackend: "herdr", HerdrAllowNoAuth: true}); err != nil {
+		t.Errorf("herdr + NoAuth + opt-out: %v", err)
+	}
+	if err := validateConfig(serveConfig{Pass: "x", MuxBackend: "herdr"}); err != nil {
+		t.Errorf("herdr with password: %v", err)
+	}
 
 	cfg := testConfig(t)
 	cfg.Pass = ""

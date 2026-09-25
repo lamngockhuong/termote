@@ -37,6 +37,10 @@ func TestMain(m *testing.M) {
 		time.Sleep(5 * time.Minute)
 	case "serve":
 		helperServe()
+	case "herdr-observe":
+		helperHerdrObserve()
+	case "serve-herdr":
+		helperServeHerdr()
 	}
 	os.Exit(0)
 }

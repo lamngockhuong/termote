@@ -231,10 +231,10 @@ func TestStreamTokenRoute(t *testing.T) {
 }
 
 func TestNewMux(t *testing.T) {
-	if m, err := newMux("tmux"); err != nil || m.Name() != "tmux" {
+	if m, err := newMux(context.Background(), "tmux"); err != nil || m.Name() != "tmux" {
 		t.Errorf("newMux(tmux) = %v, %v", m, err)
 	}
-	if _, err := newMux("zellij"); err == nil {
+	if _, err := newMux(context.Background(), "zellij"); err == nil {
 		t.Error("newMux(zellij) should fail")
 	}
 }
