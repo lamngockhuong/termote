@@ -166,3 +166,28 @@ func TestIntegrationServeMuxSnapshotIsJSON(t *testing.T) {
 		t.Errorf("names = %q", names)
 	}
 }
+
+// Nothing but the server attaches to the session, so the first snapshot creates it.
+func TestIntegrationSnapshotCreatesSession(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not available")
+	}
+	origSocket, origSession := tmuxSocket, tmuxSession
+	tmuxSocket = filepath.Join(t.TempDir(), "tmux.sock")
+	tmuxSession = testSession
+	t.Cleanup(func() {
+		tmuxCmd(context.Background(), "kill-server").Run()
+		tmuxSocket, tmuxSession = origSocket, origSession
+	})
+
+	snap, err := tmuxMux{}.Snapshot(context.Background())
+	if err != nil {
+		t.Fatalf("Snapshot without a session: %v", err)
+	}
+	if len(snap.Groups) != 1 || len(snap.Groups[0].Tabs) != 1 {
+		t.Fatalf("snapshot = %+v, want one group with one tab", snap)
+	}
+	if err := tmuxCmd(context.Background(), "has-session", "-t", testSession).Run(); err != nil {
+		t.Fatalf("session %q was not created: %v", testSession, err)
+	}
+}

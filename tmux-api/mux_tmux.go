@@ -113,8 +113,27 @@ func listWindows(ctx context.Context) (string, error) {
 	return "", errors.New("list-windows returned no windows")
 }
 
+// ensureSession starts TMUX_SESSION detached when it does not exist. The
+// server is the only thing that attaches to it, so the first snapshot creates
+// it. A concurrent
+// creation makes new-session fail, which is fine: the session then exists.
+func ensureSession(ctx context.Context) bool {
+	if tmuxCmd(ctx, "has-session", "-t", tmuxSession).Run() == nil {
+		return false
+	}
+	cmd := tmuxCmd(ctx, "new-session", "-d", "-s", tmuxSession)
+	cmd.Env = terminalEnv()
+	if err := cmd.Run(); err != nil {
+		log.Printf("tmux new-session %q: %v", tmuxSession, err)
+	}
+	return true
+}
+
 func (tmuxMux) Snapshot(ctx context.Context) (Snapshot, error) {
 	out, err := listWindows(ctx)
+	if err != nil && ensureSession(ctx) {
+		out, err = listWindows(ctx)
+	}
 	if err != nil {
 		return Snapshot{}, err
 	}
