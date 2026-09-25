@@ -32,22 +32,24 @@ If --focus specified:
 
 Launch parallel review agents for each relevant area. Pass the diff or file contents to each agent.
 
-### Area: Auth & Access Control (`tmux-api/serve.go`)
+### Area: Auth & Access Control (`tmux-api/serve.go`, `tmux-api/guard.go`)
 
 Check against [checklist.md](checklist.md#auth--access-control):
 
-- Basic auth on ALL endpoints (no bypass paths)
+- Basic auth on ALL endpoints (no bypass paths); empty password without `TERMOTE_NO_AUTH=true` refuses to start
+- Host allowlist on every request (DNS rebinding); no wildcard
+- Cross-site writes rejected: `Sec-Fetch-Site`, `Origin` allowlist, JSON-only `Content-Type`
 - Rate limiting on auth failures
 - Constant-time password comparison
 - `/terminal/` 3-layer protection: auth + Sec-Fetch-Dest (blocks direct navigation) + single-use token
 - Token entropy (>= 128 bits), TTL (<= 30s), single-use enforcement
 - No auth credentials in logs or error responses
 
-### Area: API & Command Injection (`tmux-api/tmux.go`)
+### Area: API & Command Injection (`tmux-api/mux.go`, `tmux-api/mux_tmux.go`)
 
 Check against [checklist.md](checklist.md#api--command-injection):
 
-- All tmux targets validated against `validTmuxID` regex
+- All tmux targets validated with `validTmuxID` (no ':' → no other session, no leading '-' → no flag injection)
 - No user input passed to shell commands without validation
 - Request body size limits on POST endpoints
 - Method enforcement on all handlers (GET/POST/DELETE)

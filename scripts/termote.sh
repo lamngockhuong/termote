@@ -750,11 +750,11 @@ cmd_health() {
     fi
 
     # Check API endpoint
-    status=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:$port/api/tmux/health" 2>/dev/null || true)
+    status=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:$port/api/mux/health" 2>/dev/null || true)
     if [[ "$status" == "200" || "$status" == "401" ]]; then
-        echo -e "  ${GREEN}[OK]${NC} API /api/tmux/health - $(format_status $status)"
+        echo -e "  ${GREEN}[OK]${NC} API /api/mux/health - $(format_status $status)"
     else
-        echo -e "  ${YELLOW}[--]${NC} API /api/tmux/health - $(format_status $status)"
+        echo -e "  ${YELLOW}[--]${NC} API /api/mux/health - $(format_status $status)"
     fi
 
     echo ""

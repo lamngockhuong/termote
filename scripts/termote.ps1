@@ -1018,7 +1018,7 @@ function Invoke-Health {
     $checkPort = if ($containerMode) { $script:PORT_CONTAINER } else { $port }
     $checks = @(
         @{ Path = "/"; Label = "tmux-api :$port" },
-        @{ Path = "/api/tmux/health"; Label = "API /api/tmux/health" }
+        @{ Path = "/api/mux/health"; Label = "API /api/mux/health" }
     )
     foreach ($check in $checks) {
         if ($containerMode) {

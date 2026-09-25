@@ -205,6 +205,12 @@ func TestNewServeConfigFromEnv(t *testing.T) {
 	if !cfg.NoAuth {
 		t.Error("cfg.NoAuth = false, want true")
 	}
+	if cfg.MuxBackend != "tmux" {
+		t.Errorf("cfg.MuxBackend = %q, want default tmux", cfg.MuxBackend)
+	}
+	if cfg.AllowedHosts != "" {
+		t.Errorf("cfg.AllowedHosts = %q, want empty default", cfg.AllowedHosts)
+	}
 }
 
 func TestTerminalTokenStore(t *testing.T) {
@@ -318,7 +324,7 @@ func TestIframeOnly(t *testing.T) {
 func TestTerminalTokenEndpoint(t *testing.T) {
 	store := newTerminalTokenStore()
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/tmux/terminal-token", handleTerminalToken(store))
+	mux.HandleFunc("/api/mux/stream-token", handleTerminalToken(store))
 
 	tests := []struct {
 		name     string
@@ -334,7 +340,7 @@ func TestTerminalTokenEndpoint(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(tt.method, "/api/tmux/terminal-token", nil)
+			req := httptest.NewRequest(tt.method, "/api/mux/stream-token", nil)
 			if tt.dest != "" {
 				req.Header.Set("Sec-Fetch-Dest", tt.dest)
 			}

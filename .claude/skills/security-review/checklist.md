@@ -7,6 +7,7 @@ Project-specific checklist based on past vulnerabilities and architecture.
 ### Basic Auth
 
 - [ ] `basicAuth()` wraps ALL routes (no path exclusions)
+- [ ] Empty `TERMOTE_PASS` without `TERMOTE_NO_AUTH=true` is fatal (`validateConfig`), never silently disables auth
 - [ ] Constant-time comparison via `subtle.ConstantTimeCompare`
 - [ ] Rate limiter blocks after 5 failures/min per IP
 - [ ] Rate limiter cleans up expired entries (no memory leak)
@@ -22,6 +23,16 @@ Project-specific checklist based on past vulnerabilities and architecture.
 - [ ] Expired tokens swept on generate (prevent unbounded map growth)
 - [ ] Token endpoint requires `Sec-Fetch-Dest` != document (missing header allowed for mobile compatibility)
 
+### Request Guards (`guard.go`)
+
+- [ ] `hostGuard` checks `Host` on every request against loopback + `TERMOTE_ALLOWED_HOSTS`; no `*`/off switch
+- [ ] Rejection message names the fix (`--allow-host` / `-AllowHost`) but leaks nothing else
+- [ ] `writeGuard` on every non-GET `/api/` request: `Sec-Fetch-Site` must be `same-origin` if present
+- [ ] `Origin`, if present, must be in the Host allowlist (not compared to `r.Host`)
+- [ ] `Content-Type: application/json` required on all writes, including body-less DELETE/select (415 otherwise)
+- [ ] `X-Forwarded-Proto` trusted only from a loopback `RemoteAddr` (`requestIsHTTPS`)
+- [ ] Unknown `/api/*` → JSON 404 (never the SPA `index.html`)
+
 ### iframe Protection
 
 - [ ] `iframeOnly()` blocks `Sec-Fetch-Dest: document` (direct navigation)
@@ -33,23 +44,24 @@ Project-specific checklist based on past vulnerabilities and architecture.
 
 ### Input Validation
 
-- [ ] All tmux targets validated: `^[a-zA-Z0-9_\-:.]+$`, max 64 chars
-- [ ] Window names validated same as targets
+- [ ] Tab/pane IDs: `validTmuxID` — no control chars, max 64, no ':' (other session), no leading '-' (flag)
+- [ ] Names and keys: no leading '-' (psmux ignores `--`, so it cannot be used as the guard)
+- [ ] Targets always built server-side as `TMUX_SESSION:<id>` (`qualifyTarget`)
 - [ ] Send-keys body limited (MaxBytesReader, 8KB)
 - [ ] Send-keys key length limited (4096 chars)
 - [ ] No user input reaches `exec.Command` without validation
 
 ### Method Enforcement
 
-- [ ] GET-only: `/api/tmux/windows`, `/api/tmux/health`
-- [ ] POST-only: `/api/tmux/select/`, `/api/tmux/new`, `/api/tmux/rename/`, `/api/tmux/send-keys`
-- [ ] POST or DELETE: `/api/tmux/kill/`
-- [ ] GET-only: `/api/tmux/terminal-token`
+- [ ] GET-only: `/api/mux/snapshot`, `/api/mux/health`, `/api/mux/stream-token`
+- [ ] POST-only: `/api/mux/tabs`, `/api/mux/tabs/{id}/select`, `/api/mux/panes/{id}/keys`
+- [ ] PATCH or DELETE: `/api/mux/tabs/{id}`
+- [ ] Wrong method → JSON 405 (patterns carry no method, handlers check)
 
 ### Error Handling
 
 - [ ] Internal errors logged server-side via `log.Printf`
-- [ ] Client receives generic "tmux command failed" (not `err.Error()`)
+- [ ] Client receives generic "mux command failed" (not `err.Error()`); only `inputError` text is echoed
 - [ ] WebSocket errors don't leak internal details
 
 ## Terminal & WebSocket Proxy

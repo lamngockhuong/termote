@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -20,13 +21,15 @@ import (
 
 // serveConfig holds configuration for the server
 type serveConfig struct {
-	Port    string
-	PWADir  string
-	TTYDUrl string
-	User    string
-	Pass    string
-	NoAuth  bool
-	Bind    string
+	Port         string
+	PWADir       string
+	TTYDUrl      string
+	User         string
+	Pass         string
+	NoAuth       bool
+	Bind         string
+	AllowedHosts string
+	MuxBackend   string
 }
 
 // newServeConfigFromEnv creates config from environment variables with defaults
@@ -39,6 +42,9 @@ func newServeConfigFromEnv() serveConfig {
 		Pass:    os.Getenv("TERMOTE_PASS"),
 		NoAuth:  os.Getenv("TERMOTE_NO_AUTH") == "true",
 		Bind:    envOr("TERMOTE_BIND", "0.0.0.0"),
+		// Comma-separated extra hostnames; loopback is always allowed.
+		AllowedHosts: os.Getenv("TERMOTE_ALLOWED_HOSTS"),
+		MuxBackend:   envOr("TERMOTE_MUX", "tmux"),
 	}
 }
 
@@ -116,27 +122,32 @@ func newTerminalTokenStore() *terminalTokenStore {
 	return newTokenStore(30*time.Second, true)
 }
 
-// startServeMode starts the server (PWA static files + ttyd WebSocket proxy + tmux API + basic auth)
-func startServeMode(cfg serveConfig) {
+// newMux returns the backend selected by TERMOTE_MUX.
+func newMux(backend string) (Mux, error) {
+	switch backend {
+	case "tmux":
+		return tmuxMux{}, nil
+	}
+	return nil, fmt.Errorf("unsupported TERMOTE_MUX %q (supported: tmux)", backend)
+}
+
+// newServeHandler builds the full handler chain: PWA static files, ttyd proxy,
+// /api/mux/*, auth, Host allowlist and cross-site write protection.
+func newServeHandler(cfg serveConfig, m Mux) (http.Handler, error) {
+	if err := validateConfig(cfg); err != nil {
+		return nil, err
+	}
 	mux := http.NewServeMux()
 	tokenStore := newTerminalTokenStore()
 
-	// tmux API endpoints under /api/tmux/
-	mux.HandleFunc("/api/tmux/windows", handleWindows)
-	mux.HandleFunc("/api/tmux/select/", handleSelect)
-	mux.HandleFunc("/api/tmux/new", handleNew)
-	mux.HandleFunc("/api/tmux/kill/", handleKill)
-	mux.HandleFunc("/api/tmux/rename/", handleRename)
-	mux.HandleFunc("/api/tmux/send-keys", handleSendKeys)
-	mux.HandleFunc("/api/tmux/health", handleHealth)
-
-	// Terminal token endpoint — only accessible via fetch/XHR from PWA, not direct browser navigation
-	mux.HandleFunc("/api/tmux/terminal-token", handleTerminalToken(tokenStore))
+	registerMuxRoutes(mux, m, tokenStore)
+	// Unknown /api/ paths get JSON 404 instead of the SPA fallback.
+	mux.HandleFunc("/api/", apiNotFound)
 
 	// ttyd reverse proxy (WebSocket support) - only accessible via iframe with valid token
 	ttydURL, err := url.Parse(cfg.TTYDUrl)
 	if err != nil {
-		log.Fatalf("Invalid ttyd URL: %v", err)
+		return nil, fmt.Errorf("invalid ttyd URL: %w", err)
 	}
 	ttydProxy := newWebSocketProxy(ttydURL)
 	mux.Handle("/terminal/", iframeOnly(tokenStore, http.StripPrefix("/terminal", ttydProxy)))
@@ -145,17 +156,30 @@ func startServeMode(cfg serveConfig) {
 	absDir, _ := filepath.Abs(cfg.PWADir)
 	mux.Handle("/", spaHandler(absDir))
 
-	// Wrap with auth if enabled
 	var handler http.Handler = mux
-	if !cfg.NoAuth && cfg.Pass != "" {
+	if !cfg.NoAuth {
 		handler = basicAuth(cfg.User, cfg.Pass, handler)
 	}
+	allowed := parseAllowedHosts(cfg.AllowedHosts)
+	handler = writeGuard(allowed, handler)
+	handler = hostGuard(allowed, handler)
+	return noCacheMiddleware(handler), nil
+}
 
-	// Add no-cache headers
-	handler = noCacheMiddleware(handler)
+// startServeMode starts the server (PWA static files + ttyd WebSocket proxy + mux API + basic auth)
+func startServeMode(cfg serveConfig) {
+	m, err := newMux(cfg.MuxBackend)
+	if err != nil {
+		log.Fatal(err)
+	}
+	handler, err := newServeHandler(cfg, m)
+	if err != nil {
+		log.Fatal(err)
+	}
 
+	absDir, _ := filepath.Abs(cfg.PWADir)
 	addr := cfg.Bind + ":" + cfg.Port
-	log.Printf("Termote server listening on %s (PWA: %s)", addr, absDir)
+	log.Printf("Termote server listening on %s (PWA: %s, backend: %s)", addr, absDir, m.Name())
 	srv := &http.Server{
 		Addr:              addr,
 		Handler:           handler,
@@ -308,7 +332,7 @@ func basicAuth(user, pass string, next http.Handler) http.Handler {
 				MaxAge:   int(sessionTTL.Seconds()),
 				HttpOnly: true,
 				SameSite: http.SameSiteStrictMode,
-				Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
+				Secure:   requestIsHTTPS(r),
 			})
 		}
 
@@ -435,8 +459,7 @@ func iframeOnly(tokens *terminalTokenStore, next http.Handler) http.Handler {
 // Only accessible via fetch/XHR (Sec-Fetch-Dest != document and != empty).
 func handleTerminalToken(tokens *terminalTokenStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		if !requireMethod(w, r, http.MethodGet) {
 			return
 		}
 		if !allowNonNavigationOnly(w, r) {
@@ -444,7 +467,8 @@ func handleTerminalToken(tokens *terminalTokenStore) http.HandlerFunc {
 		}
 		token, err := tokens.generate()
 		if err != nil {
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			log.Printf("stream token generation failed: %v", err)
+			jsonError(w, "internal error", http.StatusInternalServerError)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
