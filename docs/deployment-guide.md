@@ -8,7 +8,7 @@
 | ttyd          | -              | Required           | Auto-downloaded                   |
 | tmux          | -              | Required           | -                                 |
 | psmux         | -              | -                  | Required (`winget install psmux`) |
-| Go 1.21+      | -              | Required (build)   | Required (build)                  |
+| Go 1.24+      | -              | Required (build)   | Required (build)                  |
 
 > **Windows Support**: Container mode requires Docker Desktop or Podman Desktop; native mode requires psmux + ttyd. Report any issues on GitHub.
 

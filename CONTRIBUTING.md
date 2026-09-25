@@ -15,7 +15,7 @@ make deploy-container
 
 - Node.js 18+
 - pnpm
-- Go 1.21+
+- Go 1.24+
 - Docker (optional)
 
 ### Workspace Setup

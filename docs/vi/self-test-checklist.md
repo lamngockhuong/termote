@@ -7,7 +7,7 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 - [ ] Đã cài tmux (macOS/Linux)
 - [ ] Đã cài psmux (Windows)
 - [ ] Đã cài ttyd
-- [ ] Go 1.21+ (để build native)
+- [ ] Go 1.24+ (để build native)
 - [ ] Node.js 18+ & pnpm (để build PWA)
 - [ ] Docker hoặc Podman (cho container mode)
 - [ ] Thiết bị di động thật (để test gesture)
