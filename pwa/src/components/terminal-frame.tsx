@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from 'react'
-import { fetchTerminalToken } from '../hooks/use-tmux-api'
+import { fetchTerminalToken } from '../hooks/use-mux-api'
 import {
   blockContextMenu,
   sendKeyToTerminal,

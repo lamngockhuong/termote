@@ -34,7 +34,7 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
-        navigateFallbackDenylist: [/^\/terminal/],
+        navigateFallbackDenylist: [/^\/terminal/, /^\/api\//],
       },
     }),
   ],
@@ -69,9 +69,10 @@ export default defineConfig({
         ws: true,
         rewrite: (path) => path.replace(/^\/terminal/, ''),
       },
-      // Dev: proxy to tmux-api serve mode (no rewrite, routes are /api/tmux/*)
-      '/api/tmux': {
+      // Dev: proxy to tmux-api serve mode (no rewrite, routes are /api/mux/*)
+      '/api/mux': {
         target: 'http://localhost:7680',
+        ws: true,
       },
     },
   },

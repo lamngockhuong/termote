@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { SESSIONS_STORAGE_KEY, type Session } from '../types/session'
 import {
-  createWindow,
-  fetchWindows,
-  killWindow,
-  renameWindow,
-  selectWindow,
-  type TmuxWindow,
-} from './use-tmux-api'
+  closeTab,
+  createTab,
+  fetchTabs,
+  type MuxTab,
+  renameTab,
+  selectTab,
+} from './use-mux-api'
 
-// Store metadata (icon, description) in localStorage since tmux only stores window names
+// Store metadata (icon, description) in localStorage since the mux only stores tab names
 interface SessionMeta {
   icon: string
   description: string
@@ -29,15 +29,12 @@ function saveMeta(meta: Record<string, SessionMeta>) {
   localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(meta))
 }
 
-// Convert tmux window to Session
-function windowToSession(
-  win: TmuxWindow,
-  meta: Record<string, SessionMeta>,
-): Session {
-  const m = meta[win.name] || { icon: '📺', description: '' }
+// Convert mux tab to Session
+function tabToSession(tab: MuxTab, meta: Record<string, SessionMeta>): Session {
+  const m = meta[tab.name] || { icon: '📺', description: '' }
   return {
-    id: String(win.id),
-    name: win.name,
+    id: tab.id,
+    name: tab.name,
     icon: m.icon,
     description: m.description,
   }
@@ -51,30 +48,30 @@ export function useLocalSessions(pollInterval = 5) {
   const metaRef = useRef<Record<string, SessionMeta>>(loadMeta())
   const isReadyRef = useRef(false)
 
-  // Apply tmux windows to session state
-  const applyWindows = useCallback((windows: TmuxWindow[]) => {
-    const mapped = windows.map((w) => windowToSession(w, metaRef.current))
+  // Apply mux tabs to session state
+  const applyTabs = useCallback((tabs: MuxTab[]) => {
+    const mapped = tabs.map((t) => tabToSession(t, metaRef.current))
     setSessions(mapped)
-    const active = windows.find((w) => w.active)
+    const active = tabs.find((t) => t.active)
     setActiveSession(
-      active ? windowToSession(active, metaRef.current) : (mapped[0] ?? null),
+      active ? tabToSession(active, metaRef.current) : (mapped[0] ?? null),
     )
   }, [])
 
-  // Fetch sessions from tmux API
+  // Fetch sessions from mux API
   const refreshSessions = useCallback(async () => {
     try {
-      let windows = await fetchWindows()
-      if (windows.length === 0) {
-        await createWindow('shell')
-        windows = await fetchWindows()
+      let tabs = await fetchTabs()
+      if (tabs.length === 0) {
+        await createTab('shell')
+        tabs = await fetchTabs()
       }
-      applyWindows(windows)
+      applyTabs(tabs)
       setIsReady(true)
       isReadyRef.current = true
       setIsServerReachable(true)
     } catch (err) {
-      console.warn('[tmux] API not available:', err)
+      console.warn('[mux] API not available:', err)
       setIsServerReachable(false)
       // Fallback: create a default session only on first load
       if (!isReadyRef.current) {
@@ -90,7 +87,7 @@ export function useLocalSessions(pollInterval = 5) {
         isReadyRef.current = true
       }
     }
-  }, [applyWindows])
+  }, [applyTabs])
 
   // Initial fetch and periodic refresh
   useEffect(() => {
@@ -105,7 +102,7 @@ export function useLocalSessions(pollInterval = 5) {
       const session = sessions.find((s) => s.id === sessionId)
       if (session && session.id !== activeSession?.id) {
         /* v8 ignore next */
-        await selectWindow(sessionId).catch(() => {})
+        await selectTab(sessionId).catch(() => {})
         setActiveSession(session)
       }
     },
@@ -118,11 +115,11 @@ export function useLocalSessions(pollInterval = 5) {
       metaRef.current[name] = { icon, description }
       saveMeta(metaRef.current)
 
-      // Create tmux window
+      // Create mux tab
       /* v8 ignore next */
-      await createWindow(name).catch(() => {})
+      await createTab(name).catch(() => {})
 
-      // Refresh to get new window
+      // Refresh to get new tab
       await refreshSessions()
     },
     [refreshSessions],
@@ -135,9 +132,9 @@ export function useLocalSessions(pollInterval = 5) {
       const session = sessions.find((s) => s.id === sessionId)
       if (!session) return
 
-      // Kill tmux window
+      // Close mux tab
       /* v8 ignore next */
-      await killWindow(sessionId).catch(() => {})
+      await closeTab(sessionId).catch(() => {})
 
       // Remove metadata
       delete metaRef.current[session.name]
@@ -161,10 +158,13 @@ export function useLocalSessions(pollInterval = 5) {
         description: '',
       }
 
-      // If name changed, rename tmux window and re-key metadata
+      // If name changed, rename mux tab and re-key metadata. A rejected
+      // rename (e.g. invalid name) leaves the session and its metadata as is.
       if (updates.name && updates.name !== oldName) {
-        /* v8 ignore next */
-        await renameWindow(sessionId, updates.name).catch(() => {})
+        const renamed = await renameTab(sessionId, updates.name).catch(
+          () => false,
+        )
+        if (!renamed) return
         delete metaRef.current[oldName]
       }
 

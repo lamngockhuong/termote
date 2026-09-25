@@ -3,7 +3,7 @@ import { createRef } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { TerminalFrame, type TerminalFrameHandle } from './terminal-frame'
 
-vi.mock('../hooks/use-tmux-api', () => ({
+vi.mock('../hooks/use-mux-api', () => ({
   fetchTerminalToken: vi.fn(),
 }))
 
@@ -15,7 +15,7 @@ vi.mock('../utils/terminal-bridge', () => ({
   sendKeyToTerminal: vi.fn(),
 }))
 
-import { fetchTerminalToken } from '../hooks/use-tmux-api'
+import { fetchTerminalToken } from '../hooks/use-mux-api'
 import {
   blockContextMenu,
   sendKeyToTerminal,
