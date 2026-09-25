@@ -1,5 +1,9 @@
 const API_BASE = '/api/mux'
 
+// /api/mux/* version this bundle speaks; must match apiVersion in
+// tmux-api/mux.go. A server reporting another version gets a reload.
+export const MUX_API_VERSION = 1
+
 export interface MuxAgent {
   name: string
   status: string
@@ -54,10 +58,9 @@ export async function fetchSnapshot(): Promise<MuxSnapshot> {
   return res.json()
 }
 
-// Tabs of every group, flattened (tmux has exactly one group).
-export async function fetchTabs(): Promise<MuxTab[]> {
-  const snap = await fetchSnapshot()
-  return (snap.groups || []).flatMap((g) => g.tabs)
+export async function fetchHealth(): Promise<{ apiVersion?: number }> {
+  const res = await fetch(`${API_BASE}/health`)
+  return res.json()
 }
 
 export async function selectTab(id: string): Promise<boolean> {

@@ -3,6 +3,10 @@ export interface Session {
   name: string
   icon: string
   description: string
+  // Pane the terminal streams for this tab (its active pane).
+  paneId?: string
+  // That pane runs a coding agent (herdr).
+  hasAgent?: boolean
 }
 
 // Default sessions (single session on fresh install)

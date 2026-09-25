@@ -8,7 +8,10 @@ const {
   mockCloseTab,
   mockRenameTab,
   mockSelectTab,
+  mockSnapshot,
 } = vi.hoisted(() => ({
+  // Overrides merged into every snapshot (backend, caps, groups).
+  mockSnapshot: { extra: {} as Record<string, unknown> },
   mockFetchTabs: vi.fn(),
   mockCreateTab: vi.fn(),
   mockCloseTab: vi.fn(),
@@ -17,7 +20,13 @@ const {
 }))
 
 vi.mock('./use-mux-api', () => ({
-  fetchTabs: mockFetchTabs,
+  fetchSnapshot: async () => ({
+    apiVersion: 1,
+    backend: 'tmux',
+    caps: { clientSideSelect: false, copyMode: true },
+    groups: [{ id: 'main', name: 'main', tabs: await mockFetchTabs() }],
+    ...mockSnapshot.extra,
+  }),
   createTab: mockCreateTab,
   closeTab: mockCloseTab,
   renameTab: mockRenameTab,
@@ -33,6 +42,7 @@ describe('useLocalSessions', () => {
   beforeEach(() => {
     localStorage.clear()
     vi.clearAllMocks()
+    mockSnapshot.extra = {}
     mockFetchTabs.mockResolvedValue([WIN_SHELL])
     mockCreateTab.mockResolvedValue(true)
     mockCloseTab.mockResolvedValue(true)
@@ -165,8 +175,8 @@ describe('useLocalSessions', () => {
       await result.current.addSession('vim', '🖥️', 'My editor')
     })
     const meta = JSON.parse(localStorage.getItem('termote-sessions')!)
-    expect(meta['vim'].icon).toBe('🖥️')
-    expect(meta['vim'].description).toBe('My editor')
+    expect(meta.vim.icon).toBe('🖥️')
+    expect(meta.vim.description).toBe('My editor')
   })
 
   it('addSession uses default icon when not specified', async () => {
@@ -179,7 +189,7 @@ describe('useLocalSessions', () => {
       await result.current.addSession('vim')
     })
     const meta = JSON.parse(localStorage.getItem('termote-sessions')!)
-    expect(meta['vim'].icon).toBe('📺')
+    expect(meta.vim.icon).toBe('📺')
   })
 
   it('removeSession kills window and refreshes', async () => {
@@ -330,5 +340,87 @@ describe('useLocalSessions', () => {
     expect(updatedVim?.icon).toBe('🎯')
     // Active session (shell) should not be updated
     expect(result.current.activeSession.name).toBe('shell')
+  })
+
+  it('exposes backend and caps, keeping the object while they are unchanged', async () => {
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    const first = result.current.mux
+    expect(first).toEqual({
+      backend: 'tmux',
+      caps: { clientSideSelect: false, copyMode: true },
+    })
+    await act(async () => {
+      await result.current.refreshSessions()
+    })
+    expect(result.current.mux).toBe(first)
+
+    mockSnapshot.extra = {
+      backend: 'herdr',
+      caps: { clientSideSelect: true, copyMode: false },
+    }
+    await act(async () => {
+      await result.current.refreshSessions()
+    })
+    expect(result.current.mux).toEqual({
+      backend: 'herdr',
+      caps: { clientSideSelect: true, copyMode: false },
+    })
+  })
+
+  it('treats a snapshot without groups as empty', async () => {
+    mockSnapshot.extra = { groups: undefined }
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    // No tabs: the hook asks for a first one
+    expect(mockCreateTab).toHaveBeenCalledWith('shell')
+    expect(result.current.sessions).toEqual([])
+  })
+
+  it('streams the active pane of each tab and flags agents', async () => {
+    mockSnapshot.extra = {
+      backend: 'herdr',
+      groups: [
+        {
+          id: 'w1',
+          name: 'w1',
+          tabs: [
+            {
+              id: 'w1:t1',
+              name: 'agent',
+              active: true,
+              panes: [
+                { id: 'w1:p1', active: false },
+                {
+                  id: 'w1:p2',
+                  active: true,
+                  agent: { name: 'claude', status: 'working' },
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: 'w2',
+          name: 'w2',
+          tabs: [
+            {
+              id: 'w2:t1',
+              name: 'shell',
+              active: false,
+              panes: [{ id: 'w2:p1', active: false }],
+            },
+          ],
+        },
+      ],
+    }
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    expect(
+      result.current.sessions.map((s) => [s.id, s.paneId, s.hasAgent]),
+    ).toEqual([
+      ['w1:t1', 'w1:p2', true],
+      ['w2:t1', 'w2:p1', false],
+    ])
   })
 })

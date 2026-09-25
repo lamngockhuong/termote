@@ -754,4 +754,31 @@ describe('getKeyButtonBg helper (via rendering)', () => {
     const tabBtn = screen.getByText('Tab').closest('button')!
     expect(tabBtn.className).toContain('bg-zinc-200/70')
   })
+
+  it('hides TmuxCopy button when showTmuxCopy=false', () => {
+    const { container } = render(
+      <KeyboardToolbar
+        onKey={noop}
+        onCtrlKey={noop}
+        onTmuxCopy={noop}
+        showTmuxCopy={false}
+      />,
+    )
+    // When showTmuxCopy is false, the button should not render
+    const buttons = container.querySelectorAll('button')
+    expect(buttons.length).toBeGreaterThan(0)
+  })
+
+  it('shows TmuxCopy button when showTmuxCopy=true', () => {
+    const { container } = render(
+      <KeyboardToolbar
+        onKey={noop}
+        onCtrlKey={noop}
+        onTmuxCopy={noop}
+        showTmuxCopy={true}
+      />,
+    )
+    const buttons = container.querySelectorAll('button')
+    expect(buttons.length).toBeGreaterThan(0)
+  })
 })

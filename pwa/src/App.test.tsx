@@ -10,8 +10,19 @@ const mockUseLocalSessions = vi.fn(() => ({
     name: 'Shell',
     icon: '💻',
     description: 'Terminal',
+    paneId: 'pane1',
+    hasAgent: false,
   },
-  sessions: [{ id: '1', name: 'Shell', icon: '💻', description: 'Terminal' }],
+  sessions: [
+    {
+      id: '1',
+      name: 'Shell',
+      icon: '💻',
+      description: 'Terminal',
+      paneId: 'pane1',
+      hasAgent: false,
+    },
+  ],
   switchSession: vi.fn(),
   addSession: vi.fn(),
   removeSession: vi.fn(),
@@ -19,6 +30,10 @@ const mockUseLocalSessions = vi.fn(() => ({
   isReady: true,
   isServerReachable: true,
   refreshSessions: vi.fn(),
+  mux: {
+    backend: 'tmux',
+    caps: { clientSideSelect: false, copyMode: true },
+  },
 }))
 vi.mock('./hooks/use-local-sessions', () => ({
   useLocalSessions: (...args: any[]) =>
@@ -112,6 +127,8 @@ const mockSendTextToTerminal = vi.fn()
 const mockIsInCopyMode = vi.fn(() => false)
 const mockIsTerminalDisconnected = vi.fn(() => false)
 const mockScrollTmux = vi.fn()
+const mockScrollTerminal = vi.fn()
+const mockScrollTerminalHorizontal = vi.fn(() => false)
 const mockToggleTmuxCopyMode = vi.fn()
 const mockPasteTmuxBuffer = vi.fn()
 const mockFocusTerminal = vi.fn()
@@ -123,7 +140,8 @@ vi.mock('./utils/terminal-bridge', () => ({
   focusTerminal: (...args: any[]) => mockFocusTerminal(...args),
 
   blurTerminal: (...args: any[]) => mockBlurTerminal(...args),
-  isInCopyMode: () => mockIsInCopyMode(),
+  isInCopyMode: (...args: any[]) =>
+    (mockIsInCopyMode as (...a: any[]) => unknown)(...args),
 
   isTerminalDisconnected: (...args: any[]) =>
     (mockIsTerminalDisconnected as (...a: any[]) => unknown)(...args),
@@ -134,17 +152,32 @@ vi.mock('./utils/terminal-bridge', () => ({
 
   scrollTmux: (...args: any[]) => mockScrollTmux(...args),
 
+  scrollTerminal: (...args: any[]) => mockScrollTerminal(...args),
+
+  scrollTerminalHorizontal: (...args: any[]) =>
+    (mockScrollTerminalHorizontal as (...a: any[]) => unknown)(...args),
+
   toggleTmuxCopyMode: (...args: any[]) => mockToggleTmuxCopyMode(...args),
 
   sendTextToTerminal: (...args: any[]) => mockSendTextToTerminal(...args),
 }))
 
+const mockCheckApiVersion = vi.fn()
+vi.mock('./utils/api-version', () => ({
+  checkApiVersion: () => mockCheckApiVersion(),
+}))
+
 // ─── Mock all components ──────────────────────────────────────────────────────
 
-vi.mock('./components/terminal-frame', () => ({
-  TerminalFrame: vi.fn(() => {
-    return <div data-testid="terminal-frame">Terminal</div>
-  }),
+// Lets tests report stream state changes the way TerminalView does.
+let reportStreamState: (state: string) => void = () => {}
+vi.mock('./components/terminal-view', () => ({
+  TerminalView: vi.fn(
+    (props: { onConnectionStateChange: (s: string) => void }) => {
+      reportStreamState = props.onConnectionStateChange
+      return <div data-testid="terminal-view">Terminal</div>
+    },
+  ),
 }))
 
 vi.mock('./components/keyboard-toolbar', () => ({
@@ -429,9 +462,18 @@ describe('App', () => {
         name: 'Shell',
         icon: '💻',
         description: 'Terminal',
+        paneId: 'pane1',
+        hasAgent: false,
       },
       sessions: [
-        { id: '1', name: 'Shell', icon: '💻', description: 'Terminal' },
+        {
+          id: '1',
+          name: 'Shell',
+          icon: '💻',
+          description: 'Terminal',
+          paneId: 'pane1',
+          hasAgent: false,
+        },
       ],
       switchSession: vi.fn(),
       addSession: vi.fn(),
@@ -440,13 +482,17 @@ describe('App', () => {
       isReady: true,
       isServerReachable: true,
       refreshSessions: vi.fn(),
+      mux: {
+        backend: 'tmux',
+        caps: { clientSideSelect: false, copyMode: true },
+      },
     })
   })
 
   it('renders without crashing', async () => {
     render(<App />)
     await waitFor(() => {
-      expect(screen.getByTestId('terminal-frame')).toBeInTheDocument()
+      expect(screen.getByTestId('terminal-view')).toBeInTheDocument()
     })
   })
 
@@ -639,6 +685,22 @@ describe('App', () => {
     expect(mockScrollTmux).toHaveBeenCalledWith(null, 'up')
   })
 
+  it('handleScroll scrolls the xterm scrollback without copy mode', async () => {
+    const base = mockUseLocalSessions()
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      mux: {
+        backend: 'herdr',
+        caps: { clientSideSelect: true, copyMode: false },
+      },
+    })
+    render(<App />)
+    await waitFor(() => screen.getByRole('button', { name: 'ScrollUp' }))
+    fireEvent.click(screen.getByRole('button', { name: 'ScrollUp' }))
+    expect(mockScrollTerminal).toHaveBeenCalledWith(null, 'up')
+    expect(mockScrollTmux).not.toHaveBeenCalled()
+  })
+
   it('handleTmuxCopy calls toggleTmuxCopyMode', async () => {
     render(<App />)
     await waitFor(() => screen.getByRole('button', { name: 'TmuxCopy' }))
@@ -761,9 +823,18 @@ describe('App', () => {
         name: 'Shell',
         icon: '💻',
         description: 'Terminal',
+        paneId: 'pane1',
+        hasAgent: false,
       },
       sessions: [
-        { id: '1', name: 'Shell', icon: '💻', description: 'Terminal' },
+        {
+          id: '1',
+          name: 'Shell',
+          icon: '💻',
+          description: 'Terminal',
+          paneId: 'pane1',
+          hasAgent: false,
+        },
       ],
       switchSession: mockSwitchSession,
       addSession: vi.fn(),
@@ -772,6 +843,10 @@ describe('App', () => {
       isReady: true,
       isServerReachable: true,
       refreshSessions: vi.fn(),
+      mux: {
+        backend: 'tmux',
+        caps: { clientSideSelect: false, copyMode: true },
+      },
     })
     render(<App />)
     await waitFor(() => screen.getByRole('button', { name: 'MobileSelect' }))
@@ -855,8 +930,24 @@ describe('App', () => {
 
   it('title omits description when activeSession.description is empty (branch 354)', async () => {
     mockUseLocalSessions.mockReturnValue({
-      activeSession: { id: '1', name: 'Shell', icon: '💻', description: '' },
-      sessions: [{ id: '1', name: 'Shell', icon: '💻', description: '' }],
+      activeSession: {
+        id: '1',
+        name: 'Shell',
+        icon: '💻',
+        description: '',
+        paneId: 'pane1',
+        hasAgent: false,
+      },
+      sessions: [
+        {
+          id: '1',
+          name: 'Shell',
+          icon: '💻',
+          description: '',
+          paneId: 'pane1',
+          hasAgent: false,
+        },
+      ],
       switchSession: vi.fn(),
       addSession: vi.fn(),
       removeSession: vi.fn(),
@@ -864,6 +955,10 @@ describe('App', () => {
       isReady: true,
       isServerReachable: true,
       refreshSessions: vi.fn(),
+      mux: {
+        backend: 'tmux',
+        caps: { clientSideSelect: false, copyMode: true },
+      },
     })
     render(<App />)
     await waitFor(() => screen.getByText('Shell'))
@@ -917,9 +1012,18 @@ describe('App', () => {
         name: 'Shell',
         icon: '💻',
         description: 'Terminal',
+        paneId: 'pane1',
+        hasAgent: false,
       },
       sessions: [
-        { id: '1', name: 'Shell', icon: '💻', description: 'Terminal' },
+        {
+          id: '1',
+          name: 'Shell',
+          icon: '💻',
+          description: 'Terminal',
+          paneId: 'pane1',
+          hasAgent: false,
+        },
       ],
       switchSession: vi.fn(),
       addSession: mockAddSession,
@@ -928,6 +1032,10 @@ describe('App', () => {
       isReady: true,
       isServerReachable: true,
       refreshSessions: vi.fn(),
+      mux: {
+        backend: 'tmux',
+        caps: { clientSideSelect: false, copyMode: true },
+      },
     })
     render(<App />)
     await waitFor(() => screen.getByRole('button', { name: 'BNAdd' }))
@@ -964,9 +1072,18 @@ describe('App', () => {
         name: 'Shell',
         icon: '💻',
         description: 'Terminal',
+        paneId: 'pane1',
+        hasAgent: false,
       },
       sessions: [
-        { id: '1', name: 'Shell', icon: '💻', description: 'Terminal' },
+        {
+          id: '1',
+          name: 'Shell',
+          icon: '💻',
+          description: 'Terminal',
+          paneId: 'pane1',
+          hasAgent: false,
+        },
       ],
       switchSession: vi.fn(),
       addSession: mockAddSession,
@@ -975,6 +1092,10 @@ describe('App', () => {
       isReady: true,
       isServerReachable: true,
       refreshSessions: vi.fn(),
+      mux: {
+        backend: 'tmux',
+        caps: { clientSideSelect: false, copyMode: true },
+      },
     })
     render(<App />)
     await waitFor(() => screen.getByRole('button', { name: 'STAdd' }))
@@ -1041,6 +1162,84 @@ describe('App', () => {
     expect(mockSendKeyToTerminal).toHaveBeenCalledWith(null, 'c', {
       ctrl: true,
     })
+  })
+
+  it('herdr: swipes scroll a wide pane sideways instead of sending keys', async () => {
+    const base = mockUseLocalSessions()
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      mux: {
+        backend: 'herdr',
+        caps: { clientSideSelect: true, copyMode: false },
+      },
+    })
+    mockScrollTerminalHorizontal.mockReturnValue(true)
+    render(<App />)
+    await waitFor(() =>
+      expect(capturedGestureHandlers.onSwipeLeft).toBeDefined(),
+    )
+    capturedGestureHandlers.onSwipeLeft()
+    capturedGestureHandlers.onSwipeRight()
+    expect(mockScrollTerminalHorizontal).toHaveBeenCalledWith(null, 'right')
+    expect(mockScrollTerminalHorizontal).toHaveBeenCalledWith(null, 'left')
+    expect(mockSendKeyToTerminal).not.toHaveBeenCalled()
+
+    // Nothing to scroll: the keys are sent as usual
+    mockScrollTerminalHorizontal.mockReturnValue(false)
+    capturedGestureHandlers.onSwipeLeft()
+    capturedGestureHandlers.onSwipeRight()
+    expect(mockSendKeyToTerminal).toHaveBeenCalledWith(null, 'c', {
+      ctrl: true,
+    })
+    expect(mockSendKeyToTerminal).toHaveBeenCalledWith(null, 'Tab')
+  })
+
+  it('tmux: swipes never scroll sideways', async () => {
+    mockScrollTerminalHorizontal.mockReturnValue(true)
+    render(<App />)
+    await waitFor(() =>
+      expect(capturedGestureHandlers.onSwipeLeft).toBeDefined(),
+    )
+    capturedGestureHandlers.onSwipeLeft()
+    expect(mockScrollTerminalHorizontal).not.toHaveBeenCalled()
+    expect(mockSendKeyToTerminal).toHaveBeenCalledWith(null, 'c', {
+      ctrl: true,
+    })
+  })
+
+  it('checks the API version on start and after the stream comes back', async () => {
+    render(<App />)
+    await waitFor(() => expect(mockCheckApiVersion).toHaveBeenCalledTimes(1))
+    // First connect is not a reconnect
+    act(() => reportStreamState('connected'))
+    expect(mockCheckApiVersion).toHaveBeenCalledTimes(1)
+    act(() => reportStreamState('disconnected'))
+    act(() => reportStreamState('connecting'))
+    act(() => reportStreamState('connected'))
+    expect(mockCheckApiVersion).toHaveBeenCalledTimes(2)
+    act(() => reportStreamState('error'))
+    act(() => reportStreamState('connected'))
+    expect(mockCheckApiVersion).toHaveBeenCalledTimes(3)
+  })
+
+  it('indicator follows the stream but shows down while the server is unreachable', async () => {
+    const base = mockUseLocalSessions()
+    mockUseLocalSessions.mockReturnValue({ ...base, isServerReachable: false })
+    const { rerender } = render(<App />)
+    act(() => reportStreamState('connected'))
+    expect(
+      screen.getByTestId('connection-indicator').getAttribute('data-state'),
+    ).toBe('disconnected')
+    mockUseLocalSessions.mockReturnValue({ ...base, isServerReachable: true })
+    rerender(<App />)
+    expect(
+      screen.getByTestId('connection-indicator').getAttribute('data-state'),
+    ).toBe('connected')
+    // A reachable server does not mark a stream that is still down as up
+    act(() => reportStreamState('disconnected'))
+    expect(
+      screen.getByTestId('connection-indicator').getAttribute('data-state'),
+    ).toBe('disconnected')
   })
 
   it('gesture onSwipeRight sends Tab', async () => {
@@ -1118,7 +1317,7 @@ describe('App', () => {
 
   it('context menu on terminal container is prevented', async () => {
     render(<App />)
-    await waitFor(() => screen.getByTestId('terminal-frame'))
+    await waitFor(() => screen.getByTestId('terminal-view'))
     const container = document.querySelector(
       '.overflow-y-auto.scroll-smooth',
     ) as HTMLElement
@@ -1311,9 +1510,18 @@ describe('shouldShowPasteError (via handlePaste)', () => {
         name: 'Shell',
         icon: '💻',
         description: 'Terminal',
+        paneId: 'pane1',
+        hasAgent: false,
       },
       sessions: [
-        { id: '1', name: 'Shell', icon: '💻', description: 'Terminal' },
+        {
+          id: '1',
+          name: 'Shell',
+          icon: '💻',
+          description: 'Terminal',
+          paneId: 'pane1',
+          hasAgent: false,
+        },
       ],
       switchSession: vi.fn(),
       addSession: vi.fn(),
@@ -1322,6 +1530,10 @@ describe('shouldShowPasteError (via handlePaste)', () => {
       isReady: true,
       isServerReachable: true,
       refreshSessions: vi.fn(),
+      mux: {
+        backend: 'tmux',
+        caps: { clientSideSelect: false, copyMode: true },
+      },
     })
   })
 
@@ -1407,9 +1619,18 @@ describe('getClipboardErrorMsg long-press variant (via CtrlShiftV toast)', () =>
         name: 'Shell',
         icon: '💻',
         description: 'Terminal',
+        paneId: 'pane1',
+        hasAgent: false,
       },
       sessions: [
-        { id: '1', name: 'Shell', icon: '💻', description: 'Terminal' },
+        {
+          id: '1',
+          name: 'Shell',
+          icon: '💻',
+          description: 'Terminal',
+          paneId: 'pane1',
+          hasAgent: false,
+        },
       ],
       switchSession: vi.fn(),
       addSession: vi.fn(),
@@ -1418,6 +1639,10 @@ describe('getClipboardErrorMsg long-press variant (via CtrlShiftV toast)', () =>
       isReady: true,
       isServerReachable: true,
       refreshSessions: vi.fn(),
+      mux: {
+        backend: 'tmux',
+        caps: { clientSideSelect: false, copyMode: true },
+      },
     })
   })
 
@@ -1453,9 +1678,18 @@ describe('App with tmux paste source', () => {
         name: 'Shell',
         icon: '💻',
         description: 'Terminal',
+        paneId: 'pane1',
+        hasAgent: false,
       },
       sessions: [
-        { id: '1', name: 'Shell', icon: '💻', description: 'Terminal' },
+        {
+          id: '1',
+          name: 'Shell',
+          icon: '💻',
+          description: 'Terminal',
+          paneId: 'pane1',
+          hasAgent: false,
+        },
       ],
       switchSession: vi.fn(),
       addSession: vi.fn(),
@@ -1464,6 +1698,10 @@ describe('App with tmux paste source', () => {
       isReady: true,
       isServerReachable: true,
       refreshSessions: vi.fn(),
+      mux: {
+        backend: 'tmux',
+        caps: { clientSideSelect: false, copyMode: true },
+      },
     })
   })
 
@@ -1520,9 +1758,18 @@ describe('App server reachability effect', () => {
         name: 'Shell',
         icon: '💻',
         description: 'Terminal',
+        paneId: 'pane1',
+        hasAgent: false,
       },
       sessions: [
-        { id: '1', name: 'Shell', icon: '💻', description: 'Terminal' },
+        {
+          id: '1',
+          name: 'Shell',
+          icon: '💻',
+          description: 'Terminal',
+          paneId: 'pane1',
+          hasAgent: false,
+        },
       ],
       switchSession: vi.fn(),
       addSession: vi.fn(),
@@ -1531,6 +1778,10 @@ describe('App server reachability effect', () => {
       isReady: true,
       isServerReachable: false,
       refreshSessions: vi.fn(),
+      mux: {
+        backend: 'tmux',
+        caps: { clientSideSelect: false, copyMode: true },
+      },
     })
 
     render(<App />)
@@ -1556,9 +1807,18 @@ describe('App gesture hints (mobile, first visit)', () => {
         name: 'Shell',
         icon: '💻',
         description: 'Terminal',
+        paneId: 'pane1',
+        hasAgent: false,
       },
       sessions: [
-        { id: '1', name: 'Shell', icon: '💻', description: 'Terminal' },
+        {
+          id: '1',
+          name: 'Shell',
+          icon: '💻',
+          description: 'Terminal',
+          paneId: 'pane1',
+          hasAgent: false,
+        },
       ],
       switchSession: vi.fn(),
       addSession: vi.fn(),
@@ -1567,6 +1827,10 @@ describe('App gesture hints (mobile, first visit)', () => {
       isReady: true,
       isServerReachable: true,
       refreshSessions: vi.fn(),
+      mux: {
+        backend: 'tmux',
+        caps: { clientSideSelect: false, copyMode: true },
+      },
     })
     mockUseSettings.mockReturnValue({
       settings: {

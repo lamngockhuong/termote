@@ -13,7 +13,7 @@ const mobileViewport = {
 }
 
 async function waitForTerminal(page: import('@playwright/test').Page) {
-  await page.waitForSelector('iframe[title="Terminal"]', { timeout: 10000 })
+  await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
 }
 
 test.describe('Capture screenshots for README', () => {

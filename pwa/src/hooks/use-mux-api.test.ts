@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   closeTab,
   createTab,
+  fetchHealth,
   fetchSnapshot,
-  fetchTabs,
   fetchTerminalToken,
   renameTab,
   selectTab,
@@ -52,22 +52,10 @@ describe('mux API client', () => {
     expect(calls[0].url).toBe('/api/mux/snapshot')
   })
 
-  it('fetchTabs flattens tabs of all groups', async () => {
-    mockFetch({
-      body: {
-        groups: [
-          { id: 'a', name: 'a', tabs: [tab('0', 'shell', true)] },
-          { id: 'b', name: 'b', tabs: [tab('w1:t1', 'agent')] },
-        ],
-      },
-    })
-    const tabs = await fetchTabs()
-    expect(tabs.map((t) => t.id)).toEqual(['0', 'w1:t1'])
-  })
-
-  it('fetchTabs returns empty array when no groups key', async () => {
-    mockFetch({ body: {} })
-    expect(await fetchTabs()).toEqual([])
+  it('fetchHealth reads the health route', async () => {
+    const { calls } = mockFetch({ body: { status: 'ok', apiVersion: 1 } })
+    expect(await fetchHealth()).toEqual({ status: 'ok', apiVersion: 1 })
+    expect(calls[0].url).toBe('/api/mux/health')
   })
 
   it('selectTab sends JSON POST to the tab select route', async () => {

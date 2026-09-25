@@ -3,11 +3,28 @@ import { SESSIONS_STORAGE_KEY, type Session } from '../types/session'
 import {
   closeTab,
   createTab,
-  fetchTabs,
+  fetchSnapshot,
+  type MuxSnapshot,
   type MuxTab,
   renameTab,
   selectTab,
 } from './use-mux-api'
+
+export type MuxInfo = Pick<MuxSnapshot, 'backend' | 'caps'>
+
+const DEFAULT_MUX: MuxInfo = {
+  backend: 'tmux',
+  caps: { clientSideSelect: false, copyMode: true },
+}
+
+// Tabs of every group, flattened (tmux has exactly one group).
+async function fetchMux(): Promise<{ tabs: MuxTab[]; mux: MuxInfo }> {
+  const snap = await fetchSnapshot()
+  return {
+    tabs: (snap.groups || []).flatMap((g) => g.tabs),
+    mux: { backend: snap.backend, caps: snap.caps },
+  }
+}
 
 // Store metadata (icon, description) in localStorage since the mux only stores tab names
 interface SessionMeta {
@@ -32,11 +49,14 @@ function saveMeta(meta: Record<string, SessionMeta>) {
 // Convert mux tab to Session
 function tabToSession(tab: MuxTab, meta: Record<string, SessionMeta>): Session {
   const m = meta[tab.name] || { icon: '📺', description: '' }
+  const pane = tab.panes.find((p) => p.active) ?? tab.panes[0]
   return {
     id: tab.id,
     name: tab.name,
     icon: m.icon,
     description: m.description,
+    paneId: pane?.id,
+    hasAgent: !!pane?.agent,
   }
 }
 
@@ -45,6 +65,7 @@ export function useLocalSessions(pollInterval = 5) {
   const [activeSession, setActiveSession] = useState<Session | null>(null)
   const [isReady, setIsReady] = useState(false)
   const [isServerReachable, setIsServerReachable] = useState(true)
+  const [mux, setMux] = useState<MuxInfo>(DEFAULT_MUX)
   const metaRef = useRef<Record<string, SessionMeta>>(loadMeta())
   const isReadyRef = useRef(false)
 
@@ -61,12 +82,19 @@ export function useLocalSessions(pollInterval = 5) {
   // Fetch sessions from mux API
   const refreshSessions = useCallback(async () => {
     try {
-      let tabs = await fetchTabs()
-      if (tabs.length === 0) {
+      let snap = await fetchMux()
+      if (snap.tabs.length === 0) {
         await createTab('shell')
-        tabs = await fetchTabs()
+        snap = await fetchMux()
       }
-      applyTabs(tabs)
+      applyTabs(snap.tabs)
+      setMux((prev) =>
+        prev.backend === snap.mux.backend &&
+        prev.caps.clientSideSelect === snap.mux.caps.clientSideSelect &&
+        prev.caps.copyMode === snap.mux.caps.copyMode
+          ? prev
+          : snap.mux,
+      )
       setIsReady(true)
       isReadyRef.current = true
       setIsServerReachable(true)
@@ -202,5 +230,6 @@ export function useLocalSessions(pollInterval = 5) {
     isReady,
     isServerReachable,
     refreshSessions,
+    mux,
   }
 }

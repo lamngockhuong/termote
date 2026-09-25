@@ -1,8 +1,8 @@
 /**
- * Utilities for sending keystrokes to ttyd iframe terminal
- * ttyd exposes window.term globally which we can access from same-origin iframe
- * Uses xterm.js internal _core API to bypass isTrusted check
+ * Utilities that drive the in-page xterm.js terminal (TerminalView) through
+ * its public API. Input goes straight to the terminal stream.
  */
+import type { TerminalHandle } from '../components/terminal-view'
 
 // Key mappings for special keys (xterm escape sequences)
 // Format: { base: unmodified sequence, code: CSI code for modifiers }
@@ -29,86 +29,21 @@ function getModifierValue(shift: boolean, ctrl: boolean, alt = false): number {
   return 1 + (shift ? 1 : 0) + (alt ? 2 : 0) + (ctrl ? 4 : 0)
 }
 
-// xterm.js Terminal with internal API
-interface XtermInternal {
-  _core?: {
-    // onData event emitter inside _core
-    _onData?: { fire(data: string): void }
-    coreService?: {
-      triggerDataEvent(data: string, wasUserInput?: boolean): void
-    }
-    _renderService?: {
-      _renderer?: { clearTextureAtlas?: () => void }
-      refreshRows?: (start: number, end: number) => void
-    }
-  }
-  focus(): void
-  // Newer xterm.js API
-  options?: { theme?: unknown; fontSize?: number }
-  // Older xterm.js API
-  setOption?: (key: string, value: unknown) => void
-  getOption?: (key: string) => unknown
-  scrollLines(amount: number): void
-  scrollPages(amount: number): void
-  // Refresh/redraw methods
-  refresh?: (start: number, end: number) => void
-  rows?: number
-  cols?: number
-  // Force re-render
-  clearTextureAtlas?: () => void
-}
-
-// Get xterm terminal instance from iframe
-function getTerm(iframe: HTMLIFrameElement | null): XtermInternal | null {
-  if (!iframe) return null
-  try {
-    return (iframe.contentWindow as { term?: XtermInternal })?.term ?? null
-  } catch {
-    /* v8 ignore next */
-    return null
-  }
-}
-
-// Send data directly to terminal using internal xterm.js API
-function sendData(term: XtermInternal, data: string): boolean {
-  if (term._core?._onData?.fire) {
-    term._core._onData.fire(data)
-    return true
-  }
-  if (term._core?.coreService?.triggerDataEvent) {
-    term._core.coreService.triggerDataEvent(data, true)
-    return true
-  }
-  /* v8 ignore next */
-  return false
-}
-
-// Check if ttyd terminal is disconnected by looking for the reconnect overlay.
-// ttyd appends an overlay div with "Reconnect" text to .xterm when disconnected.
-export function isTerminalDisconnected(
-  iframe: HTMLIFrameElement | null,
-): boolean {
-  try {
-    const xtermEl = iframe?.contentDocument?.querySelector('.xterm')
-    if (!xtermEl) return false
-    return Array.from(xtermEl.children).some((el) =>
-      el.textContent?.includes('Reconnect'),
-    )
-  } catch {
-    /* v8 ignore next */
-    return false
-  }
+// True while the stream is down (dropped, backing off, or stopped); Enter
+// then asks for a reconnect instead of being sent.
+export function isTerminalDisconnected(handle: TerminalHandle | null): boolean {
+  const state = handle?.connectionState
+  return state === 'disconnected' || state === 'error'
 }
 
 // Send a key to the terminal with modifier support
 // Uses xterm CSI encoding: ESC[1;{mod}{code} for special keys with modifiers
 export function sendKeyToTerminal(
-  iframe: HTMLIFrameElement | null,
+  handle: TerminalHandle | null,
   key: string,
   modifiers: { ctrl?: boolean; shift?: boolean } = {},
 ) {
-  const term = getTerm(iframe)
-  if (!term) return
+  if (!handle?.term) return
 
   const { ctrl = false, shift = false } = modifiers
   const hasModifier = ctrl || shift
@@ -146,23 +81,17 @@ export function sendKeyToTerminal(
     data = mapped?.base ?? key
   }
 
-  sendData(term, data)
+  handle.send(data)
 }
 
 // Focus the terminal
-export function focusTerminal(iframe: HTMLIFrameElement | null) {
-  const term = getTerm(iframe)
-  term?.focus()
+export function focusTerminal(handle: TerminalHandle | null) {
+  handle?.term?.focus()
 }
 
 // Blur the terminal (hide keyboard)
-export function blurTerminal(iframe: HTMLIFrameElement | null) {
-  try {
-    const activeEl = iframe?.contentDocument?.activeElement as HTMLElement
-    activeEl?.blur()
-  } catch {
-    // Cross-origin or not available
-  }
+export function blurTerminal(handle: TerminalHandle | null) {
+  handle?.term?.blur()
 }
 
 export type PasteErrorReason =
@@ -177,10 +106,9 @@ export type PasteResult = { ok: true } | { ok: false; reason: PasteErrorReason }
 
 // Paste text into terminal - returns result with specific error reason
 export async function pasteToTerminal(
-  iframe: HTMLIFrameElement | null,
+  handle: TerminalHandle | null,
 ): Promise<PasteResult> {
-  const term = getTerm(iframe)
-  if (!term) return { ok: false, reason: 'no-terminal' }
+  if (!handle?.term) return { ok: false, reason: 'no-terminal' }
 
   // Check if clipboard API is supported
   if (!navigator.clipboard?.readText) {
@@ -190,7 +118,7 @@ export async function pasteToTerminal(
   try {
     const text = await navigator.clipboard.readText()
     if (text) {
-      sendData(term, text)
+      handle.paste(text)
       return { ok: true }
     }
     return { ok: false, reason: 'empty' }
@@ -214,262 +142,159 @@ export async function pasteToTerminal(
 
 // Send a command string to terminal
 export function sendCommandToTerminal(
-  iframe: HTMLIFrameElement | null,
+  handle: TerminalHandle | null,
   command: string,
 ) {
-  const term = getTerm(iframe)
-  if (!term) return
-  sendData(term, command + '\r')
+  if (!handle?.term) return
+  handle.send(command + '\r')
 }
 
 // Send text to terminal (without Enter/newline) - for IME input
 export function sendTextToTerminal(
-  iframe: HTMLIFrameElement | null,
+  handle: TerminalHandle | null,
   text: string,
 ) {
-  const term = getTerm(iframe)
-  if (!term || !text) return
-  sendData(term, text)
+  if (!handle?.term || !text) return
+  handle.send(text)
 }
 
-// Scroll terminal viewport (for non-tmux terminals)
+// Scroll the xterm.js scrollback (for non-tmux terminals)
 export function scrollTerminal(
-  iframe: HTMLIFrameElement | null,
+  handle: TerminalHandle | null,
   direction: 'up' | 'down',
   pages = false,
 ) {
-  const term = getTerm(iframe)
+  const term = handle?.term
   if (!term) {
     console.warn('[terminal-bridge] scrollTerminal: term not found')
     return
   }
-
   const amount = direction === 'up' ? -1 : 1
-
-  // Try xterm.js public API first
-  if (typeof term.scrollPages === 'function' && pages) {
-    term.scrollPages(amount)
-    return
-  }
-  if (typeof term.scrollLines === 'function') {
-    term.scrollLines(amount * (pages ? 10 : 5))
-    return
-  }
-
-  // Fallback: scroll viewport element directly
-  try {
-    const doc = iframe?.contentDocument
-    const viewport = doc?.querySelector('.xterm-viewport') as HTMLElement
-    if (viewport) {
-      const scrollAmount = pages
-        ? viewport.clientHeight
-        : viewport.clientHeight / 3
-      viewport.scrollTop += direction === 'up' ? -scrollAmount : scrollAmount
-    }
-  } catch (e) {
-    console.warn('[terminal-bridge] scrollTerminal fallback failed:', e)
-  }
+  if (pages) term.scrollPages(amount)
+  else term.scrollLines(amount * 5)
 }
 
-// Track if we're in copy mode
-let inCopyMode = false
-
-// Get copy mode state
-export function isInCopyMode(): boolean {
-  return inCopyMode
+// Scroll a pane wider than the screen sideways by most of a screen width.
+// Returns false when nothing overflows, so the caller can use the gesture
+// for something else.
+export function scrollTerminalHorizontal(
+  handle: TerminalHandle | null,
+  direction: 'left' | 'right',
+): boolean {
+  const el = handle?.scroller
+  if (!el || el.scrollWidth <= el.clientWidth) return false
+  const step = el.clientWidth * 0.8
+  el.scrollBy({ left: direction === 'left' ? -step : step, behavior: 'smooth' })
+  return true
 }
 
-// Toggle tmux copy mode
-export function toggleTmuxCopyMode(iframe: HTMLIFrameElement | null): boolean {
-  if (inCopyMode) {
-    exitTmuxCopyMode(iframe)
+// Get copy mode state of this terminal
+export function isInCopyMode(handle: TerminalHandle | null): boolean {
+  return handle?.copyMode ?? false
+}
+
+// Toggle tmux copy mode; returns the new state
+export function toggleTmuxCopyMode(handle: TerminalHandle | null): boolean {
+  if (handle?.copyMode) {
+    exitTmuxCopyMode(handle)
     return false
-  } else {
-    enterTmuxCopyMode(iframe)
-    return true
   }
+  enterTmuxCopyMode(handle)
+  return handle?.copyMode ?? false
 }
 
-// Enter tmux copy mode (Ctrl+b [)
-export function enterTmuxCopyMode(iframe: HTMLIFrameElement | null) {
-  const term = getTerm(iframe)
-  if (!term) return
-  // Send Ctrl+b
-  sendData(term, '\x02')
-  // Then send [
-  setTimeout(() => sendData(term, '['), 50)
-  inCopyMode = true
+// Enter tmux copy mode (Ctrl+b [); no-op on backends without copy mode
+export function enterTmuxCopyMode(handle: TerminalHandle | null) {
+  if (!handle?.term || !handle.copyModeSupported) return
+  handle.send('\x02')
+  setTimeout(() => handle.send('['), 50)
+  handle.copyMode = true
 }
 
-// Scroll terminal viewport (xterm.js viewport, not tmux history)
+// Scroll the xterm.js viewport (not tmux history)
 export function scrollTerminalViewport(
-  iframe: HTMLIFrameElement | null,
+  handle: TerminalHandle | null,
   direction: 'up' | 'down',
 ) {
-  try {
-    const doc = iframe?.contentDocument
-    const viewport = doc?.querySelector('.xterm-viewport') as HTMLElement
-    if (viewport) {
-      const amount = direction === 'up' ? -100 : 100
-      viewport.scrollBy({ top: amount, behavior: 'smooth' })
-    }
-  } catch {
-    // Cross-origin or not available
-  }
+  handle?.term?.scrollLines(direction === 'up' ? -5 : 5)
 }
 
 // Scroll in tmux copy mode (PageUp/PageDown)
 // Sends PageUp/PageDown - only effective when in tmux copy mode
 export function scrollTmux(
-  iframe: HTMLIFrameElement | null,
+  handle: TerminalHandle | null,
   direction: 'up' | 'down',
 ) {
-  const term = getTerm(iframe)
-  if (!term) return
-
-  const seq = direction === 'up' ? '\x1b[5~' : '\x1b[6~'
-  sendData(term, seq)
+  if (!handle?.term) return
+  handle.send(direction === 'up' ? '\x1b[5~' : '\x1b[6~')
 }
 
 // Exit tmux copy mode
-export function exitTmuxCopyMode(iframe: HTMLIFrameElement | null) {
-  const term = getTerm(iframe)
-  if (!term) return
-  sendData(term, 'q')
-  inCopyMode = false
+export function exitTmuxCopyMode(handle: TerminalHandle | null) {
+  if (!handle?.term) return
+  handle.send('q')
+  handle.copyMode = false
 }
 
-// Paste from tmux buffer (Ctrl+b ])
-export function pasteTmuxBuffer(iframe: HTMLIFrameElement | null) {
-  const term = getTerm(iframe)
-  if (!term) return
-  // Send Ctrl+b
-  sendData(term, '\x02')
-  // Then send ]
-  setTimeout(() => sendData(term, ']'), 50)
+// Paste from tmux buffer (Ctrl+b ]); no-op on backends without tmux buffers
+export function pasteTmuxBuffer(handle: TerminalHandle | null) {
+  if (!handle?.term || !handle.copyModeSupported) return
+  handle.send('\x02')
+  setTimeout(() => handle.send(']'), 50)
 }
 
 // Reset copy mode state (call when switching windows, etc.)
-export function resetCopyModeState() {
-  inCopyMode = false
+export function resetCopyModeState(handle: TerminalHandle | null) {
+  if (handle) handle.copyMode = false
 }
 
 // Set terminal font size
 export function setTerminalFontSize(
-  iframe: HTMLIFrameElement | null,
+  handle: TerminalHandle | null,
   size: number,
 ) {
-  const term = getTerm(iframe)
-  if (!term) return
-
-  // Try newer API first, then older API
-  if (term.options) {
-    term.options.fontSize = size
-  } else if (term.setOption) {
-    term.setOption('fontSize', size)
-  }
+  const term = handle?.term
+  if (term) term.options.fontSize = size
 }
 
-// Set terminal theme and apply background to all elements
+// Set terminal theme; returns whether a terminal was there to apply it to
 export function setTerminalTheme(
-  iframe: HTMLIFrameElement | null,
+  handle: TerminalHandle | null,
   theme: Record<string, unknown>,
 ): boolean {
-  const term = getTerm(iframe)
+  const term = handle?.term
   if (!term) return false
-
-  // Apply theme to xterm.js - try newer API first, then older API
-  let themeApplied = false
-  if (term.options) {
-    term.options.theme = theme
-    themeApplied = true
-  } else if (term.setOption) {
-    term.setOption('theme', theme)
-    themeApplied = true
-  }
-
-  // Force redraw to apply theme immediately
-  if (themeApplied) {
-    // Clear texture atlas to force re-render with new colors
-    if (term.clearTextureAtlas) {
-      term.clearTextureAtlas()
-    }
-    if (term._core?._renderService?._renderer?.clearTextureAtlas) {
-      term._core._renderService._renderer.clearTextureAtlas()
-    }
-    // Refresh all rows
-    if (term.refresh && term.rows) {
-      term.refresh(0, term.rows - 1)
-    }
-    // Also try internal refresh
-    if (term._core?._renderService?.refreshRows && term.rows) {
-      term._core._renderService.refreshRows(0, term.rows - 1)
-    }
-  }
-
-  // Apply background via CSS (fallback for elements not covered by xterm API)
-  try {
-    const doc = iframe?.contentDocument
-    if (!doc) return themeApplied
-
-    const bg = theme.background as string
-
-    // Inject/update CSS for background
-    const styleId = 'termote-theme-override'
-    let style = doc.getElementById(styleId) as HTMLStyleElement
-    if (!style) {
-      style = doc.createElement('style')
-      style.id = styleId
-      doc.head.appendChild(style)
-    }
-    style.textContent = `
-      body, .xterm, .xterm-viewport, .xterm-screen {
-        background-color: ${bg} !important;
-      }
-    `
-  } catch {
-    // Cross-origin or not available
-  }
-
-  return themeApplied
+  term.options.theme = theme
+  return true
 }
 
-// Check if terminal is ready (has options or setOption API)
-export function isTerminalReady(iframe: HTMLIFrameElement | null): boolean {
-  const term = getTerm(iframe)
-  return term !== null && (!!term.options || !!term.setOption)
+// Check if terminal is ready
+export function isTerminalReady(handle: TerminalHandle | null): boolean {
+  return !!handle?.term
 }
 
-// WeakMap keyed on Document so handler ref survives remounts but is GC'd with the iframe
-const contextMenuHandlers = new WeakMap<Document, (e: Event) => void>()
+// WeakMap keyed on the terminal element so the handler is GC'd with it
+const contextMenuHandlers = new WeakMap<HTMLElement, (e: Event) => void>()
 
-export function blockContextMenu(iframe: HTMLIFrameElement | null): boolean {
-  try {
-    const doc = iframe?.contentDocument
-    if (!doc) return false
-    if (contextMenuHandlers.has(doc)) return true
+export function blockContextMenu(handle: TerminalHandle | null): boolean {
+  const el = handle?.element
+  if (!el) return false
+  if (contextMenuHandlers.has(el)) return true
 
-    const handler = (e: Event) => e.preventDefault()
-    contextMenuHandlers.set(doc, handler)
-    doc.addEventListener('contextmenu', handler)
-    return true
-  } catch {
-    return false
-  }
+  const handler = (e: Event) => e.preventDefault()
+  contextMenuHandlers.set(el, handler)
+  el.addEventListener('contextmenu', handler)
+  return true
 }
 
-export function unblockContextMenu(iframe: HTMLIFrameElement | null): boolean {
-  try {
-    const doc = iframe?.contentDocument
-    if (!doc) return false
+export function unblockContextMenu(handle: TerminalHandle | null): boolean {
+  const el = handle?.element
+  if (!el) return false
 
-    const handler = contextMenuHandlers.get(doc)
-    if (!handler) return true
+  const handler = contextMenuHandlers.get(el)
+  if (!handler) return true
 
-    doc.removeEventListener('contextmenu', handler)
-    contextMenuHandlers.delete(doc)
-    return true
-  } catch {
-    return false
-  }
+  el.removeEventListener('contextmenu', handler)
+  contextMenuHandlers.delete(el)
+  return true
 }

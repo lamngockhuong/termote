@@ -9,7 +9,7 @@ test.describe('session management', () => {
 
   test('switch session updates UI', async ({ page }) => {
     await page.goto('/')
-    await page.waitForSelector('iframe[title="Terminal"]', { timeout: 10000 })
+    await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
 
     // Create a second session first
     await page.click('button[title="Add new session"]')
@@ -24,7 +24,7 @@ test.describe('session management', () => {
 
   test('add session creates new entry', async ({ page }) => {
     await page.goto('/')
-    await page.waitForSelector('iframe[title="Terminal"]', { timeout: 10000 })
+    await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
 
     // Click add session button and wait for form
     await page.click('button[title="Add new session"]')
@@ -41,7 +41,7 @@ test.describe('session management', () => {
 
   test('remove session removes entry', async ({ page }) => {
     await page.goto('/')
-    await page.waitForSelector('iframe[title="Terminal"]', { timeout: 10000 })
+    await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
 
     // First create a session to remove
     await page.click('button[title="Add new session"]')
@@ -73,7 +73,7 @@ test.describe('mux API integration', () => {
     await page.goto('/')
     await page.evaluate(() => localStorage.clear())
     await page.reload()
-    await page.waitForSelector('iframe[title="Terminal"]', { timeout: 10000 })
+    await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
     await page.waitForTimeout(1000)
   })
 
