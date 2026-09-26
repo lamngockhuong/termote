@@ -122,7 +122,7 @@ func TestLinkAndUnlinkUnix(t *testing.T) {
 	}
 	tc.stdout.Reset()
 	tc.main([]string{"link"})
-	if !strings.Contains(tc.stdout.String(), "Already linked") {
+	if out := tc.stdout.String(); !strings.Contains(out, "Already linked") || strings.Contains(out, "Created symlink") {
 		t.Fatalf("relink output %q", tc.stdout.String())
 	}
 

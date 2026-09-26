@@ -104,6 +104,37 @@ func TestComputeAllowedHosts(t *testing.T) {
 	}
 }
 
+// A Windows install reached through another spelling of the same directory
+// (an 8.3 short name on NTFS; a symlink stands in for it here) still matches.
+func TestWindowsMatchersFollowTheFileNotTheSpelling(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlinks need privileges on Windows; cli_windows_test.go covers 8.3 names")
+	}
+	win := newTestCLI(t, "windows")
+	for _, f := range []string{win.serverBinary("native"), filepath.Join(win.projectDir, "scripts", "ttyd.exe")} {
+		if err := os.MkdirAll(filepath.Dir(f), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(f, nil, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	alias := filepath.Join(t.TempDir(), "INSTAL~1")
+	if err := os.Symlink(win.projectDir, alias); err != nil {
+		t.Fatal(err)
+	}
+	if !win.isServerProcess(procInfo{Exe: filepath.Join(alias, "tmux-api", "tmux-api.exe")}) {
+		t.Error("server under an alias of the install dir not matched")
+	}
+	if !win.isLegacyTtyd(procInfo{Exe: filepath.Join(alias, "scripts", "ttyd.exe")}) {
+		t.Error("ttyd under an alias of the install dir not matched")
+	}
+	// Same directory, different file: never a match.
+	if win.isServerProcess(procInfo{Exe: filepath.Join(alias, "scripts", "ttyd.exe")}) {
+		t.Error("ttyd matched as server")
+	}
+}
+
 func TestServerAndLegacyTtydMatchers(t *testing.T) {
 	tc := newTestCLI(t, "linux")
 	server := filepath.Join(tc.projectDir, "tmux-api", "tmux-api")
@@ -207,6 +238,16 @@ func TestSetupAuth(t *testing.T) {
 	}
 	if pass, _, _ := tc.setupAuth(installOptions{noAuth: true}, &savedConfig{Password: "x"}); pass != "" {
 		t.Fatalf("--no-auth returned password %q", pass)
+	}
+	if strings.Contains(tc.stdout.String(), "Auth is off") {
+		t.Fatal("local --no-auth warned about network exposure")
+	}
+	for _, o := range []installOptions{{noAuth: true, lan: true}, {noAuth: true, tailscale: "box"}} {
+		tc.stdout.Reset()
+		tc.setupAuth(o, nil)
+		if !strings.Contains(tc.stdout.String(), "Auth is off") {
+			t.Errorf("no warning for --no-auth with %+v", o)
+		}
 	}
 	tc.interactive = true
 	tc.readPassword = func() (string, error) { return "typed-in", nil }

@@ -230,6 +230,10 @@ func (c *cli) cmdInstall(args []string) error {
 func (c *cli) setupAuth(o installOptions, saved *savedConfig) (pass string, reused bool, err error) {
 	if o.noAuth {
 		c.infof("Basic auth disabled")
+		// Kept for 0.x parity, but anyone who reaches the port gets a shell.
+		if o.lan || o.tailscale != "" {
+			c.warnf("Auth is off while other machines can reach this server (--lan/--tailscale): anyone on that network gets a shell. Drop --no-auth unless the network is trusted.")
+		}
 		return "", false, nil
 	}
 	if !o.fresh && saved != nil {
@@ -775,7 +779,7 @@ func (c *cli) stopNative() {
 // install root or, in a checkout, from tmux-api\tmux-api-native.exe.
 func (c *cli) isServerProcess(p procInfo) bool {
 	if c.goos == "windows" {
-		return strings.EqualFold(p.Exe, c.serverBinary("native"))
+		return sameWindowsPath(p.Exe, c.serverBinary("native"))
 	}
 	paths := []string{c.serverBinary("native"), filepath.Join(c.projectDir, "tmux-api", "tmux-api-native")}
 	if slices.Contains(paths, p.Cmdline) {
@@ -791,6 +795,26 @@ func (c *cli) isServerProcess(p procInfo) bool {
 		}
 	}
 	return false
+}
+
+// sameWindowsPath compares paths the way NTFS does: case-insensitively, and
+// across the 8.3 short and long forms of a directory (C:\Users\LAMNGO~1.KHU is
+// what %TEMP% or a shim started from it can report, while the process image
+// path is always the long form). Only same-named files reach the file-system
+// check, and both names used here are valid 8.3 names with no short alias.
+func sameWindowsPath(a, b string) bool {
+	if strings.EqualFold(a, b) {
+		return true
+	}
+	if a == "" || b == "" || !strings.EqualFold(filepath.Base(a), filepath.Base(b)) {
+		return false
+	}
+	sa, err := os.Stat(a)
+	if err != nil {
+		return false
+	}
+	sb, err := os.Stat(b)
+	return err == nil && os.SameFile(sa, sb)
 }
 
 // looksLikeServer guards the PID file against a reused PID.
@@ -816,7 +840,7 @@ var legacyTtydArgs = func() []string {
 
 func (c *cli) isLegacyTtyd(p procInfo) bool {
 	if c.goos == "windows" {
-		return strings.EqualFold(p.Exe, filepath.Join(c.projectDir, "scripts", "ttyd.exe"))
+		return sameWindowsPath(p.Exe, filepath.Join(c.projectDir, "scripts", "ttyd.exe"))
 	}
 	bin, args, _ := strings.Cut(p.Cmdline, " ")
 	return filepath.Base(bin) == "ttyd" && slices.Contains(legacyTtydArgs, args)

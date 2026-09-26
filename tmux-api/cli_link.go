@@ -23,14 +23,17 @@ func (c *cli) cmdLink() error {
 		c.infof("Linking the git checkout (development mode)")
 	}
 	for _, target := range []string{systemLinkPath, filepath.Join(c.userBinDir(), "termote")} {
-		switch done, err := c.symlink(source, target); {
-		case done:
-			c.infof("Created symlink: %s -> %s", target, source)
-			c.checkPath(filepath.Dir(target))
-			return nil
-		case err != nil:
+		created, err := c.symlink(source, target)
+		if err != nil {
 			continue
 		}
+		if created {
+			c.infof("Created symlink: %s -> %s", target, source)
+		} else {
+			c.infof("Already linked: %s -> %s", target, source)
+		}
+		c.checkPath(filepath.Dir(target))
+		return nil
 	}
 	c.warnf("Cannot create symlink (no write permission). Run:")
 	fmt.Fprintf(c.out, "  sudo ln -sf %q %s\n", source, systemLinkPath)
@@ -38,15 +41,15 @@ func (c *cli) cmdLink() error {
 }
 
 // symlink points target at source, replacing an older termote symlink but
-// never a regular file. It reports done when target now points at source.
+// never a regular file. It reports created=false with no error when target
+// already pointed at source.
 func (c *cli) symlink(source, target string) (bool, error) {
 	if st, err := os.Lstat(target); err == nil {
 		if st.Mode()&os.ModeSymlink == 0 {
 			return false, fmt.Errorf("%s exists and is not a symlink", target)
 		}
 		if cur, _ := os.Readlink(target); cur == source {
-			c.infof("Already linked: %s -> %s", target, source)
-			return true, nil
+			return false, nil
 		}
 		if err := os.Remove(target); err != nil {
 			return false, err
