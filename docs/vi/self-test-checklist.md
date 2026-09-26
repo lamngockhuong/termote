@@ -5,8 +5,8 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 ## Yêu Cầu
 
 - [ ] Đã cài tmux (macOS/Linux)
-- [ ] Đã cài psmux (Windows)
-- [ ] Đã cài ttyd
+- [ ] Đã cài `psmux` (Windows)
+- [ ] Đã cài herdr (chỉ cần khi test backend Herdr, chế độ native)
 - [ ] Go 1.24+ (để build native)
 - [ ] Node.js 18+ & pnpm (để build PWA)
 - [ ] Docker hoặc Podman (cho container mode)
@@ -22,29 +22,42 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 - [ ] Container đang chạy: `docker ps | grep termote`
 - [ ] PWA truy cập được tại <http://localhost:7680>
 - [ ] Thông tin đăng nhập tự sinh hiển thị trong logs
+- [ ] `--mux herdr` bị từ chối ở container mode
 
 ### Chế Độ Native (macOS/Linux)
 
 - [ ] `./scripts/termote.sh install native` hoàn thành không lỗi
-- [ ] Các process đang chạy: `ps aux | grep -E 'ttyd|tmux-api'`
+- [ ] Tiến trình đang chạy: `ps aux | grep tmux-api`
 - [ ] PWA truy cập được tại <http://localhost:7680>
 
 ### Chế Độ Native (Windows)
 
 - [ ] `.\scripts\termote.ps1 install native` hoàn thành không lỗi
-- [ ] psmux + ttyd + tmux-api đang chạy
+- [ ] `psmux` + tmux-api đang chạy
 - [ ] PWA truy cập được tại <http://localhost:7690>
+
+### Chế Độ Native + Herdr (Linux)
+
+- [ ] `./scripts/termote.sh install native --mux herdr` hoàn thành không lỗi (có herdr trong `PATH`)
+- [ ] `curl localhost:7680/api/mux/health` trả về `"backend":"herdr"`
+- [ ] `--mux herdr --no-auth` bị từ chối nếu không kèm `--allow-herdr-no-auth`
+- [ ] PWA liệt kê đúng các workspace/tab/pane như `herdr pane list`
+- [ ] Chọn tab/pane trên PWA không làm đổi tab đang focus trong giao diện Herdr trên máy host
+- [ ] Huy hiệu trạng thái agent đổi trong vòng một `pollInterval` sau khi `herdr` báo trạng thái mới
+- [ ] Gõ từ PWA vào pane của Herdr giữ đúng thứ tự (không bị xen lẫn)
 
 ### Tùy Chọn
 
-- [ ] Flag `--lan` mở truy cập LAN (test từ thiết bị khác)
+- [ ] Cờ `--lan` mở truy cập LAN (test từ thiết bị khác)
 - [ ] `--no-auth` tắt xác thực
-- [ ] `/terminal/` bị chặn khi truy cập trực tiếp URL trên trình duyệt (403)
-- [ ] `/terminal/` truy cập được từ trình duyệt mobile qua LAN/Tailscale (không có header Sec-Fetch-Dest)
-- [ ] `/terminal/` load được trong iframe PWA với token hợp lệ
 - [ ] `--port <port>` đổi port đúng
-- [ ] `--tailscale <host>` cấu hình Tailscale HTTPS
+- [ ] `--tailscale <host>` cấu hình Tailscale HTTPS và thêm tên đó vào danh sách Host được phép
 - [ ] `--fresh` buộc tạo mật khẩu mới (bỏ qua config đã lưu)
+- [ ] `--allow-host <name>` thêm tên vào danh sách Host được phép (có lưu lại); request có header
+      `Host` không nằm trong danh sách nhận 403 kèm gợi ý đúng cờ đó
+- [ ] Request từ hostname/IP LAN lạ bị từ chối (403) cho tới khi được thêm bằng
+      `--allow-host`
+- [ ] `--ttyd`/`-Ttyd` vẫn được chấp nhận nhưng bị bỏ qua, kèm cảnh báo
 - [ ] Biến môi trường `TERMOTE_USER`/`TERMOTE_PASS` hoạt động
 - [ ] Biến `WORKSPACE` mount đúng thư mục
 
@@ -52,8 +65,9 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 
 - [ ] Mật khẩu mã hóa AES-256-CBC + PBKDF2 (macOS/Linux)
 - [ ] Mật khẩu mã hóa DPAPI (Windows)
-- [ ] File config chmod 600
-- [ ] Config đã lưu được tái sử dụng khi cài lại (mode, LAN, auth, port, Tailscale)
+- [ ] File config có quyền 600 (`chmod 600`)
+- [ ] Config đã lưu được tái sử dụng khi cài lại (mode, LAN, auth, port, mux, danh sách Host được phép, Tailscale)
+- [ ] `show-password` in mật khẩu đã lưu; từ chối khi dùng `--no-auth` hoặc không giải mã được
 
 ### Gỡ Cài Đặt
 
@@ -61,19 +75,22 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 
 ### Link/Unlink
 
-- [ ] `./scripts/termote.sh link` tạo symlink (thử /usr/local/bin, fallback ~/.local/bin)
+- [ ] `./scripts/termote.sh link` tạo liên kết tượng trưng (thử /usr/local/bin, nếu không được thì ~/.local/bin)
 - [ ] `termote help` hoạt động sau khi link
-- [ ] `./scripts/termote.sh unlink` xóa symlink và hiện hướng dẫn khôi phục
+- [ ] `./scripts/termote.sh unlink` xóa liên kết tượng trưng và hiện hướng dẫn khôi phục
 
 ### Cập Nhật
 
 - [ ] `./scripts/termote.sh update` cập nhật lên bản mới nhất
 - [ ] `./scripts/termote.sh update --version X.Y.Z` cố định phiên bản
 - [ ] `./scripts/termote.sh update --force` cài lại phiên bản hiện tại
-- [ ] Cập nhật giữ nguyên cấu hình đã lưu
-- [ ] Cập nhật tái tạo symlink nếu đã có
-- [ ] Từ chối chạy từ git repo (chặn dev mode)
+- [ ] Cập nhật giữ nguyên cấu hình đã lưu (mode, LAN, auth, port, mux, danh sách Host được phép, Tailscale)
+- [ ] Cập nhật tạo lại liên kết tượng trưng nếu trước đó đã có
+- [ ] Từ chối chạy từ git repo (chặn chế độ phát triển)
 - [ ] Cảnh báo khi hạ phiên bản, bỏ qua nếu đã đúng version
+- [ ] Một bản cài 0.1.0 thật khi cập nhật lên 1.0.0 vẫn giữ cài đặt, dừng mọi tiến trình ttyd do
+      Termote khởi động (trên Windows còn xóa `scripts/ttyd.exe`), và mật khẩu đã lưu nếu rỗng
+      sẽ được thay bằng mật khẩu mới tự sinh (xem [`upgrade-1.0.md`](../upgrade-1.0.md))
 
 ### Lệnh CLI Khác
 
@@ -87,30 +104,34 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 
 ### Cơ Bản
 
-- [ ] PWA load không có lỗi console
-- [ ] Terminal iframe kết nối WebSocket thành công
+- [ ] PWA tải lên không có lỗi trong bảng điều khiển của DevTools
+- [ ] Terminal kết nối qua WebSocket `/api/mux/stream`
 - [ ] Terminal hiển thị đúng
-- [ ] Gõ phím gửi input vào terminal
+- [ ] Gõ phím thì ký tự được gửi vào terminal
 - [ ] Output hiển thị trong terminal
-- [ ] Màu terminal phù hợp dark mode
-- [ ] Màu terminal phù hợp light mode
-- [ ] Chuyển theme không reload terminal (không ngắt/kết nối lại)
-- [ ] Theme terminal đúng sau khi reload trang (F5)
-- [ ] Desktop: Danh sách icon hiển thị đúng (không lỗi layout)
-- [ ] Trang About đẹp trong dark mode
+- [ ] Màu terminal phù hợp giao diện tối
+- [ ] Màu terminal phù hợp giao diện sáng
+- [ ] Chuyển theme không làm terminal kết nối lại
+- [ ] Theme terminal đúng sau khi tải lại trang (F5)
+- [ ] Đổi kích thước cửa sổ/khung thì PTY đổi theo (`stty size` trong terminal khớp)
+- [ ] Kết thúc tiến trình dòng lệnh đang chạy trong terminal thì hiện khung báo đã thoát và cách kết nối lại
+- [ ] Kết nối lại sau khi rớt mạng thì quay về đúng pane cũ, không mất phần lịch sử cuộn mà
+      backend còn giữ trong bộ đệm
+- [ ] Máy tính: Danh sách icon hiển thị đúng (không vỡ bố cục)
+- [ ] Trang About hiển thị đẹp ở giao diện tối
 - [ ] Nút Settings nhấn được trên mobile
-- [ ] Nút Clear Cache & Reload hoạt động (hủy SW, xóa cache, xóa session cookie, reload trang)
+- [ ] Nút Clear Cache & Reload hoạt động (hủy SW, xóa cache, xóa session cookie, tải lại trang)
 
 ### Chỉ Báo Kết Nối
 
-- [ ] Hiện trạng thái "đang kết nối" (chấm vàng nhấp nháy) khi vừa load
+- [ ] Hiện trạng thái "đang kết nối" (chấm vàng nhấp nháy) khi vừa tải trang
 - [ ] Hiện trạng thái "đã kết nối" (chấm xanh, icon Wifi) khi hoạt động
 - [ ] Hiện trạng thái "mất kết nối" (chấm đỏ, icon WifiOff) khi server không phản hồi
-- [ ] Nhấn được khi mất kết nối — kích hoạt reconnect iframe
+- [ ] Nhấn được khi mất kết nối — kích hoạt kết nối lại
 
 ### Thông Báo Toast
 
-- [ ] Toast hiện khi lỗi clipboard, lỗi dán, có bản cập nhật
+- [ ] Toast hiện khi lỗi bảng nhớ tạm, lỗi dán, có bản cập nhật
 - [ ] Tự tắt sau ~4 giây
 - [ ] Vị trí dưới giữa, phía trên toolbar
 
@@ -118,15 +139,15 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 
 - [ ] Modal Preferences mở từ menu Settings
 - [ ] Chuyển đổi hành vi gửi IME hoạt động (Gửi text / Gửi + Enter)
-- [ ] Chuyển đổi nguồn dán hoạt động (Clipboard hệ thống / tmux buffer)
+- [ ] Chuyển đổi nguồn dán hoạt động (bảng nhớ tạm hệ thống / tmux buffer)
 - [ ] Chuyển đổi toolbar mở rộng mặc định hoạt động
 - [ ] Chuyển đổi tắt context menu hoạt động
-- [ ] Chuyển đổi hiện session tabs hoạt động (desktop)
-- [ ] Chọn khoảng thời gian polling hoạt động (3 giây đến 5 phút)
+- [ ] Chuyển đổi hiện session tabs hoạt động (máy tính)
+- [ ] Chọn chu kỳ làm mới hoạt động (3 giây đến 5 phút)
 - [ ] Nút kiểm tra cập nhật hoạt động
 - [ ] Xem hướng dẫn cử chỉ có sẵn (mobile)
 - [ ] Nút xóa lịch sử hoạt động
-- [ ] Tùy chỉnh giữ nguyên sau khi reload trang
+- [ ] Tùy chỉnh giữ nguyên sau khi tải lại trang
 
 ### Giao Diện
 
@@ -134,13 +155,13 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 - [ ] Giao diện tối (bảng màu Monokai)
 - [ ] Chế độ Hệ thống (theo OS)
 - [ ] Nút chuyển theme trong menu settings
-- [ ] Theme giữ nguyên sau reload
+- [ ] Theme giữ nguyên sau khi tải lại
 
 ### Cài Đặt/Offline
 
-- [ ] PWA cài được vào homescreen (mobile/desktop)
+- [ ] PWA cài được ra màn hình chính (điện thoại/máy tính)
 - [ ] Service worker đã đăng ký
-- [ ] Chế độ offline hiển thị shell đã cache
+- [ ] Chế độ offline hiển thị khung ứng dụng đã cache
 
 ### Hướng Dẫn & Tài Liệu
 
@@ -152,45 +173,51 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 ### Giới Thiệu
 
 - [ ] Hiện phiên bản, tác giả, giấy phép
-- [ ] Link GitHub, changelog, issues hoạt động
+- [ ] Link GitHub, changelog, trang issue hoạt động
 - [ ] Link tài trợ (MoMo, GitHub Sponsors, Buy Me a Coffee)
 
 ---
 
-## Quản Lý Session
+## Quản Lý Session (3 cấp: group → tab → pane)
 
-### Sidebar Session
+### Sidebar Session (group)
 
-- [ ] Sidebar mở (vuốt từ cạnh trái hoặc nhấn icon hamburger)
-- [ ] Sidebar scroll được khi có nhiều session
-- [ ] Sidebar thu gọn/mở rộng hoạt động (desktop)
-- [ ] Sidebar thu gọn chỉ hiện icon với tooltip (desktop)
-- [ ] Tạo session mới hoạt động
+- [ ] Sidebar mở (vuốt từ cạnh trái hoặc nhấn icon menu ba gạch)
+- [ ] Sidebar scroll được khi có nhiều group
+- [ ] Sidebar thu gọn/mở rộng hoạt động (máy tính)
+- [ ] Sidebar thu gọn chỉ hiện icon, rê chuột thấy chú thích (máy tính)
+- [ ] Tạo session (tab) mới hoạt động
 - [ ] Sửa tên session hoạt động
-- [ ] Sửa icon session qua icon picker (emoji)
+- [ ] Sửa icon session qua bộ chọn icon (biểu tượng cảm xúc)
 - [ ] Sửa mô tả session hoạt động
 - [ ] Xóa session hoạt động
 - [ ] Nhấn session chuyển terminal
-- [ ] Session đang active được highlight trong sidebar
-- [ ] Sessions giữ nguyên sau khi refresh trang
-- [ ] Double-click để sửa session (desktop)
+- [ ] Session đang chọn được tô sáng trong sidebar
+- [ ] Session giữ nguyên sau khi tải lại trang
+- [ ] Nhấp đúp để sửa session (máy tính)
 
 ### Session Tabs (Desktop)
 
 - [ ] Thanh tab hiện khi cài đặt bật
 - [ ] Tab scroll vào view khi chuyển
 - [ ] Nhấn tab chuyển session
-- [ ] Tab đang active được highlight
+- [ ] Tab đang chọn được tô sáng
+
+### Dải Pane (tab nhiều pane, chỉ Herdr)
+
+- [ ] Dải pane bị ẩn với tab chỉ có một pane
+- [ ] Dải pane hiện với tab có nhiều hơn một pane, mỗi pane có một huy hiệu trạng thái agent
+- [ ] Chọn một pane thì đổi luồng terminal mà không đổi focus trong giao diện Herdr trên máy host
 
 ### Thanh Điều Hướng Dưới (Mobile)
 
-- [ ] Thanh nav dưới chỉ hiện trên mobile
+- [ ] Thanh điều hướng dưới chỉ hiện trên mobile
 - [ ] Hiện nút toggle sidebar, nút thêm, và 5 icon session đầu tiên
 - [ ] Nhấn icon session chuyển session
 
 ### Fullscreen (Desktop)
 
-- [ ] Nút fullscreen hiện trên header (chỉ desktop)
+- [ ] Nút fullscreen hiện trên header (chỉ trên máy tính)
 - [ ] Nhấn bật/tắt chế độ toàn màn hình
 - [ ] Icon đổi giữa Maximize/Minimize
 - [ ] Esc/F11 thoát fullscreen và đồng bộ trạng thái nút
@@ -200,11 +227,11 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 - [ ] Nút Sửa/Xóa ẩn mặc định
 - [ ] Vuốt trái/phải trên session item hiện nút Sửa/Xóa
 
-### tmux Sessions
+### Session Qua API
 
-- [ ] Sessions tạo qua API: `curl localhost:7680/api/tmux/windows`
+- [ ] Liệt kê session qua API: `curl localhost:7680/api/mux/snapshot`
 - [ ] Chuyển session qua API hoạt động
-- [ ] Trạng thái session giữ nguyên sau khi terminal reconnect
+- [ ] Trạng thái session giữ nguyên sau khi terminal kết nối lại
 
 ---
 
@@ -228,14 +255,14 @@ Test trên thiết bị di động thật:
 - [ ] Scroll lên/xuống = Page Up/Down khi bật copy mode
 - [ ] Terminal scroll được khi bàn phím mobile mở
 - [ ] Terminal scroll được trong chế độ gõ tiếng Việt (IME)
-- [ ] Scroll vẫn hoạt động (không bị chặn bởi swipe)
+- [ ] Scroll vẫn hoạt động (không bị cử chỉ vuốt chặn mất)
 
 ### Hướng Dẫn Cử Chỉ
 
 - [ ] Người dùng mobile lần đầu thấy overlay hướng dẫn cử chỉ
 - [ ] Overlay tắt được
 - [ ] Không hiện lại sau khi tắt (lưu qua settings)
-- [ ] Có thể xem lại từ Settings (Gesture hints viewer)
+- [ ] Có thể xem lại từ Settings (`Show Gesture Hints`)
 
 ### Trường Hợp Đặc Biệt
 
@@ -255,11 +282,11 @@ Test trên thiết bị di động thật:
 - [ ] Phím Tab gửi Tab
 - [ ] Phím Esc gửi Escape
 - [ ] Phím Enter gửi Enter
-- [ ] Modifier Ctrl bật/tắt (chỉ báo màu xanh khi active)
-- [ ] Modifier Shift bật/tắt (chỉ báo màu cam khi active)
+- [ ] Phím bổ trợ Ctrl bật/tắt (chỉ báo màu xanh khi đang bật)
+- [ ] Phím bổ trợ Shift bật/tắt (chỉ báo màu cam khi đang bật)
 - [ ] Phím mũi tên (←↑↓→) hoạt động
 - [ ] Nút mở rộng hiển thị
-- [ ] Các nút dùng icon (kích thước đọc được, không dùng symbol)
+- [ ] Các nút dùng icon (kích thước đọc được, không dùng ký hiệu chữ)
 - [ ] Nhấn giữ nút KHÔNG hiện context menu
 
 ### Chế Độ Mở Rộng
@@ -271,7 +298,7 @@ Test trên thiết bị di động thật:
 - [ ] Phím Backspace hoạt động
 - [ ] Phím Page Up/Down hoạt động
 - [ ] Phím Insert hoạt động
-- [ ] Nút thu gọn quay về chế độ minimal
+- [ ] Nút thu gọn quay về chế độ tối giản
 
 ### Tổ Hợp Ctrl (Thu Gọn)
 
@@ -297,7 +324,7 @@ Test trên thiết bị di động thật:
 
 - [ ] Ctrl+Shift+C (sao chép) hoạt động
 - [ ] Ctrl+Shift+V (dán) hoạt động
-- [ ] Ctrl+Shift+Z (redo) hoạt động
+- [ ] Ctrl+Shift+Z (làm lại) hoạt động
 - [ ] Ctrl+Shift+X (cắt) hoạt động
 
 ### Phím Tiện Ích
@@ -310,7 +337,7 @@ Test trên thiết bị di động thật:
 
 - [ ] Cỡ chữ điều chỉnh được (phạm vi 6–24px)
 - [ ] Cỡ chữ mặc định 14px
-- [ ] Cỡ chữ giữ nguyên sau reload
+- [ ] Cỡ chữ giữ nguyên sau khi tải lại
 
 ### Hỗ Trợ IME
 
@@ -325,10 +352,10 @@ Test trên thiết bị di động thật:
 - [ ] Nhấn FAB mở menu thao tác
 - [ ] Thao tác Clear (gửi 'clear' + Enter)
 - [ ] Thao tác Cancel (gửi Ctrl+C)
-- [ ] Thao tác Clear line (gửi Ctrl+U)
+- [ ] Thao tác `Clear line` (gửi Ctrl+U)
 - [ ] Thao tác Exit (gửi Ctrl+D)
 - [ ] FAB kéo thả được (kéo để đổi vị trí)
-- [ ] Vị trí FAB giữ nguyên sau reload
+- [ ] Vị trí FAB giữ nguyên sau khi tải lại
 - [ ] FAB giới hạn trong viewport
 - [ ] Phản hồi rung khi thao tác
 
@@ -339,40 +366,59 @@ Test trên thiết bị di động thật:
 - [ ] Dropdown lịch sử mở từ nút toolbar
 - [ ] Tìm kiếm được (không phân biệt hoa thường)
 - [ ] Điều hướng bàn phím (mũi tên lên/xuống, Enter chọn, Esc đóng)
-- [ ] Highlight mục đang chọn với auto-scroll
+- [ ] Mục đang chọn được tô sáng và tự cuộn vào tầm nhìn
 - [ ] Xóa từng lệnh (icon thùng rác)
 - [ ] Nút xóa tất cả
 - [ ] Tối đa 100 lệnh
-- [ ] Lịch sử giữ nguyên sau reload
+- [ ] Lịch sử giữ nguyên sau khi tải lại
 
 ---
 
-## Xác Thực
+## Xác Thực & Chặn Request
 
 ### Basic Auth
 
 - [ ] Trình duyệt yêu cầu đăng nhập khi truy cập lần đầu
 - [ ] Thông tin đúng cho phép truy cập
 - [ ] Thông tin sai bị từ chối (401)
-- [ ] Auth giữ nguyên sau khi refresh (session cookie)
-- [ ] Session cookie ngăn hỏi auth lại trên mobile iframe
+- [ ] Auth giữ nguyên sau khi tải lại trang (session cookie)
+- [ ] Session cookie ngăn hỏi auth lại trên mobile
 - [ ] Clear Cache & Reload xóa session cookie (yêu cầu đăng nhập lại)
+- [ ] Mật khẩu đã lưu rỗng không còn tắt auth — chạy `install` trên config như vậy sẽ sinh và
+      lưu mật khẩu mới
+
+### Danh Sách Host Được Phép
+
+- [ ] Request có header `Host` lạ nhận 403 (không phụ thuộc Sec-Fetch)
+- [ ] Loopback (`localhost`, `127.0.0.1`, `::1`) luôn được phép
+- [ ] IP LAN tự động được phép khi cài với `--lan`
+- [ ] Tên Tailscale tự động được phép khi cài với `--tailscale`
+- [ ] Tên thêm bằng `--allow-host` được phép và vẫn giữ sau khi cài lại
+- [ ] Không có giá trị `*`/wildcard nào tắt được lớp kiểm tra này
+
+### Chặn Ghi / CSRF
+
+- [ ] POST cross-site (`Sec-Fetch-Site: cross-site`) tới `/api/mux/*` bị từ chối
+- [ ] POST `text/plain` tới `/api/mux/panes/{id}/keys` bị từ chối (415)
+- [ ] `/api/mux/stream` từ chối Origin cross-site
+- [ ] `/api/mux/stream` từ chối stream token bị thiếu, hết hạn hoặc đã dùng
 
 ### Chống Brute-Force
 
-- [ ] Rate limiter chặn sau 5 lần thất bại/phút mỗi IP (429)
-- [ ] So sánh mật khẩu constant-time
+- [ ] Bộ giới hạn tần suất chặn sau 5 lần thất bại/phút mỗi IP (429)
+- [ ] So sánh mật khẩu trong thời gian không đổi
 
 ### Bảo Mật Server
 
 - [ ] ReadHeaderTimeout đã set (chống Slowloris)
-- [ ] Giới hạn body request (8KB cho send-keys)
-- [ ] Lỗi nội bộ chỉ log server-side, trả message chung cho client
+- [ ] Giới hạn kích thước thân request (8KB cho các request ghi tới `/api/mux/*`)
+- [ ] Lỗi nội bộ chỉ ghi log phía server, client chỉ nhận thông báo chung
 
 ### Chế Độ Không Auth
 
-- [ ] Flag `--no-auth` bỏ qua yêu cầu đăng nhập
+- [ ] Cờ `--no-auth` bỏ qua yêu cầu đăng nhập
 - [ ] Truy cập trực tiếp không cần thông tin
+- [ ] `--mux herdr --no-auth` bị từ chối nếu không kèm `--allow-herdr-no-auth`
 
 ---
 
@@ -380,50 +426,49 @@ Test trên thiết bị di động thật:
 
 ```bash
 # Kiểm tra health
-curl http://localhost:7680/api/tmux/health
+curl http://localhost:7680/api/mux/health
 
-# Liệt kê windows
-curl http://localhost:7680/api/tmux/windows
+# Snapshot (group → tab → pane)
+curl http://localhost:7680/api/mux/snapshot
 
-# Tạo window
-curl -X POST 'http://localhost:7680/api/tmux/new?name=test'
-
-# Chọn window
-curl -X POST http://localhost:7680/api/tmux/select/1
-
-# Đổi tên window
-curl -X POST 'http://localhost:7680/api/tmux/rename/1?name=newname'
-
-# Xóa window
-curl -X DELETE http://localhost:7680/api/tmux/kill/1
-
-# Gửi phím
-curl -X POST http://localhost:7680/api/tmux/send-keys \
+# Tạo tab
+curl -X POST http://localhost:7680/api/mux/tabs \
   -H 'Content-Type: application/json' \
-  -d '{"target":"1","keys":"ls"}'
+  -d '{"groupId":"main","name":"test"}'
 
-# Lấy terminal token
-curl http://localhost:7680/api/tmux/terminal-token
+# Chọn tab
+# Mọi request ghi đều cần Content-Type JSON, kể cả khi không có body (nếu không sẽ nhận 415)
+curl -X POST http://localhost:7680/api/mux/tabs/<id>/select \
+  -H 'Content-Type: application/json'
+
+# Đổi tên tab
+curl -X PATCH http://localhost:7680/api/mux/tabs/<id> \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"newname"}'
+
+# Đóng tab
+curl -X DELETE http://localhost:7680/api/mux/tabs/<id> \
+  -H 'Content-Type: application/json'
+
+# Gửi phím tới một pane
+curl -X POST http://localhost:7680/api/mux/panes/<id>/keys \
+  -H 'Content-Type: application/json' \
+  -d '{"keys":"ls\n"}'
+
+# Lấy token cho luồng terminal
+curl http://localhost:7680/api/mux/stream-token
 ```
 
-- [ ] Endpoint health trả về 200
-- [ ] Endpoint windows liệt kê tmux windows
-- [ ] Tạo window hoạt động
-- [ ] Chọn window hoạt động
-- [ ] Đổi tên window hoạt động
-- [ ] Xóa window hoạt động
+- [ ] Endpoint health trả về 200 kèm `apiVersion` và `backend`
+- [ ] Endpoint snapshot liệt kê group/tab/pane
+- [ ] Tạo tab hoạt động
+- [ ] Chọn tab hoạt động (tmux; Herdr trả về 501 vì PWA tự chọn ở phía client)
+- [ ] Đổi tên tab hoạt động
+- [ ] Đóng tab hoạt động
 - [ ] Gửi phím hoạt động
-- [ ] Endpoint terminal token trả token dùng 1 lần (TTL 30 giây)
-- [ ] Request không hợp lệ trả về lỗi đúng
-
----
-
-## WebSocket Proxy
-
-- [ ] WebSocket kết nối qua tmux-api (không trực tiếp đến ttyd)
-- [ ] Proxy xử lý reconnect tốt
-- [ ] Không có lỗi CORS trong console
-- [ ] Kết nối ổn định khi sử dụng lâu
+- [ ] Endpoint stream token trả token hợp lệ dùng 1 lần (TTL 30 giây)
+- [ ] Request không hợp lệ trả về lỗi đúng (400/404/405/415)
+- [ ] `/api/tmux/*` và `/terminal/` trả về 404/410, không bao giờ trả phản hồi hoạt động được
 
 ---
 
@@ -432,23 +477,24 @@ curl http://localhost:7680/api/tmux/terminal-token
 ### Linux
 
 - [ ] Chế độ container hoạt động
-- [ ] Chế độ native hoạt động
-- [ ] Script nhận diện đúng kiến trúc (x86_64/aarch64)
+- [ ] Chế độ native hoạt động (backend tmux và Herdr)
+- [ ] CLI nhận diện đúng kiến trúc (x86_64/aarch64)
 
 ### macOS
 
 - [ ] Chế độ container hoạt động (Docker Desktop hoặc Podman)
 - [ ] Chế độ native hoạt động
 - [ ] Cross-compile cho Linux container hoạt động
-- [ ] Fallback `ipconfig getifaddr en0` hoạt động cho LAN IP
+- [ ] Nhận diện IP LAN hoạt động
 
 ### Windows
 
 - [ ] Chế độ container hoạt động (Docker Desktop)
-- [ ] Chế độ native hoạt động (psmux + ttyd + tmux-api)
+- [ ] Chế độ native hoạt động (`psmux` + tmux-api)
 - [ ] PowerShell script xử lý mã hóa DPAPI
-- [ ] Link/Unlink tạo global command
-- [ ] `termote.ps1` flags: `-Lan`, `-NoAuth`, `-Port`, `-Tailscale`, `-Fresh`
+- [ ] Link/Unlink tạo lệnh `termote` dùng được ở mọi nơi
+- [ ] Các cờ của `termote.ps1`: `-Lan`, `-NoAuth`, `-Port`, `-Tailscale`, `-Fresh`, `-Mux`,
+      `-AllowHost`, `-AllowHerdrNoAuth`
 
 ---
 
@@ -460,12 +506,12 @@ make test
 ```
 
 - [ ] PWA build không lỗi: `pnpm --filter termote build`
-- [ ] TypeScript compile: `pnpm --filter termote exec tsc --noEmit`
+- [ ] TypeScript biên dịch không lỗi: `pnpm --filter termote exec tsc --noEmit`
 - [ ] Lint pass: `pnpm --filter termote lint:ci`
-- [ ] Go build không lỗi: `cd tmux-api && go build`
-- [ ] Tất cả shell tests pass: `make test`
-- [ ] Tất cả Go tests pass: `cd tmux-api && go test ./...`
-- [ ] CI pipeline website chạy khi push
+- [ ] Go build không lỗi: `cd tmux-api && go build .`
+- [ ] Go tests pass trên Linux, macOS và Windows: `cd tmux-api && go test ./...`
+- [ ] Tất cả test viết bằng Bash đều qua: `make test`
+- [ ] CI pipeline của website chạy khi đẩy code lên
 - [ ] Website deploy thành công
 
 ---
@@ -485,8 +531,8 @@ pnpm --filter termote test:e2e
 ```
 
 - [ ] Tất cả Playwright tests pass
-- [ ] Tests chạy headless
-- [ ] Tests chạy với flag `--ui`
+- [ ] Test chạy được ở chế độ không giao diện
+- [ ] Test chạy được với cờ `--ui`
 
 ---
 

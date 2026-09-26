@@ -10,19 +10,17 @@ import { Aside, Steps } from "@astrojs/starlight/components";
 **macOS/Linux:**
 
 - Docker hoặc Podman (cho chế độ Container)
-- hoặc ttyd + tmux + Go (cho chế độ Native)
-- Tùy chọn: [gum](https://github.com/charmbracelet/gum) để có menu tương tác đẹp hơn
+- hoặc tmux + Go (cho chế độ Native); tmux-api tự truyền luồng terminal, không cần `ttyd`
+- Tùy chọn: dùng [Herdr](/vi/usage/sessions/) thay cho tmux (chỉ ở chế độ native)
 
 **Windows:**
 
 - Docker Desktop hoặc Podman Desktop (cho chế độ Container — khuyến nghị)
-- hoặc [psmux](https://github.com/psmux/psmux) + ttyd (cho chế độ Native): `winget install psmux`
+- hoặc [psmux](https://github.com/psmux/psmux) (cho chế độ Native): `winget install psmux`
 
 <Aside type="tip" title="Windows">
-  Cả chế độ Container và Native đều được hỗ trợ đầy đủ trên Windows. Chế độ
-  Native mặc định dùng bản ttyd fork build bằng MSVC, khắc phục lỗi crash trước
-  đây trên Windows 11 (build 26200+); dùng `-Ttyd official` để chuyển sang bản
-  upstream. Vui lòng báo cáo lỗi tại
+  Cả chế độ Container và Native đều được hỗ trợ đầy đủ trên Windows. Vui lòng
+  báo cáo lỗi tại
   [GitHub](https://github.com/lamngockhuong/termote/issues).
 </Aside>
 
@@ -94,6 +92,7 @@ $env:TERMOTE_MODE = "container"; irm .../get.ps1 | iex
 ./scripts/termote.sh update --version 0.0.9  # Cập nhật phiên bản cụ thể
 ./scripts/termote.sh uninstall all      # Gỡ cài đặt tất cả
 ./scripts/termote.sh health             # Kiểm tra sức khỏe dịch vụ
+./scripts/termote.sh show-password      # In mật khẩu admin đã lưu
 ./scripts/termote.sh link               # Tạo lệnh 'termote' toàn cục
 ./scripts/termote.sh unlink             # Xóa lệnh toàn cục
 ```
@@ -109,6 +108,7 @@ $env:TERMOTE_MODE = "container"; irm .../get.ps1 | iex
 .\scripts\termote.ps1 logs follow        # Tail toàn bộ logs realtime
 .\scripts\termote.ps1 uninstall all      # Gỡ cài đặt tất cả
 .\scripts\termote.ps1 health             # Kiểm tra sức khỏe dịch vụ
+.\scripts\termote.ps1 show-password      # In mật khẩu admin đã lưu
 .\scripts\termote.ps1 link               # Tạo lệnh 'termote' toàn cục
 .\scripts\termote.ps1 unlink             # Xóa lệnh toàn cục
 ```

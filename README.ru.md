@@ -33,6 +33,7 @@
 
 - **Переключение сессий**: Множество tmux-сессий с созданием/редактированием/удалением
 - **Вкладки сессий**: Горизонтальная панель вкладок для быстрого переключения окон
+- **Бэкенд Herdr** (только нативный режим): управление рабочими пространствами Herdr вместо tmux, со значками состояния ИИ-агента в каждой панели — см. [Нативная установка](https://termote.ohnice.app/installation/native/)
 - **Мобильная адаптация**: Виртуальная клавиатура (Tab/Ctrl/Shift/стрелки, расширяемая)
 - **Поддержка жестов**: Свайп для Ctrl+C, Tab, навигации по истории
 - **История команд**: Вызов ранее отправленных команд с поиском
@@ -58,21 +59,23 @@
 ```mermaid
 flowchart TB
     subgraph Client["Клиент (Мобильный/Десктоп)"]
-        PWA["PWA - React + TypeScript"]
+        PWA["PWA - React + xterm.js"]
         Gestures["Управление жестами"]
         Keyboard["Виртуальная клавиатура"]
     end
 
     subgraph Server["tmux-api Server :7680"]
         Static["Static Files"]
-        Proxy["WebSocket Proxy"]
-        API["REST API /api/tmux/*"]
+        Stream["Терминальный WebSocket /api/mux/stream"]
+        API["REST API /api/mux/*"]
+        Guard["Список разрешённых Host + защита Origin/CSRF"]
         Auth["Basic Auth"]
     end
 
-    subgraph Backend["Backend Services"]
-        ttyd["ttyd :7681"]
-        tmux["tmux"]
+    subgraph Backend["Mux-бэкенд (tmux/psmux или Herdr)"]
+        Mux["Интерфейс Mux"]
+        tmux["tmux/psmux (PTY)"]
+        herdr["Herdr (только нативный)"]
         Shell["Shell"]
         Tools["CLI Tools"]
     end
@@ -80,13 +83,17 @@ flowchart TB
     Gestures --> PWA
     Keyboard --> PWA
     PWA --> Static
-    PWA <--> Proxy
+    PWA <--> Stream
     PWA --> API
-    Auth -.-> Static & Proxy & API
-    Proxy <--> ttyd
-    API --> tmux
-    ttyd --> tmux --> Shell --> Tools
+    Guard -.-> Static & Stream & API
+    Auth -.-> Static & Stream & API
+    Stream --> Mux
+    API --> Mux
+    Mux --> tmux & herdr
+    tmux --> Shell --> Tools
 ```
+
+tmux-api сам передаёт поток терминала (PTY в Unix, ConPTY в Windows) в xterm.js внутри PWA, поэтому отдельного терминального процесса, к которому нужно проксировать, больше нет. Полная модель защиты запросов описана в [`docs/system-architecture.md`](docs/system-architecture.md).
 
 ## Быстрый старт
 
@@ -101,8 +108,6 @@ make test                              # Запустить тесты
 ```
 
 > После `link` используйте `termote` из любого места: `termote health`, `termote install native --lan`
->
-> **Совет**: Установите [gum](https://github.com/charmbracelet/gum) для улучшенных интерактивных меню (опционально, есть fallback на bash)
 
 ## Установка
 
@@ -220,33 +225,38 @@ cd termote
 flowchart LR
     subgraph Container["Контейнерный режим"]
         direction TB
-        C1["Docker/Podman"] --> C2["tmux-api :7680"] --> C3["ttyd :7681"] --> C4["tmux"]
+        C1["Docker/Podman"] --> C2["tmux-api :7680 (сам передаёт терминал)"] --> C3["tmux"]
     end
 
     subgraph Native["Нативный режим"]
         direction TB
-        N1["Хост-система"] --> N2["tmux-api :7680"] --> N3["ttyd :7681"] --> N4["tmux + Инструменты хоста"]
+        N1["Хост-система"] --> N2["tmux-api :7680 (сам передаёт терминал)"] --> N3["tmux/psmux или Herdr + Инструменты хоста"]
     end
 
     User["Пользователь"] --> Container & Native
 ```
 
-| Режим         | Описание           | Сценарий использования                     | Платформа    |
-| ------------- | ------------------ | ------------------------------------------ | ------------ |
-| `--container` | Контейнерный режим | Простое развёртывание, изолированная среда | macOS, Linux |
-| `--native`    | Полностью нативный | Доступ к инструментам хоста (claude, gh)   | macOS, Linux |
+| Режим         | Описание           | Сценарий использования                                                 | Платформа             |
+| ------------- | ------------------ | ---------------------------------------------------------------------- | --------------------- |
+| `--container` | Контейнерный режим | Простое развёртывание, изолированная среда                             | macOS, Linux, Windows |
+| `--native`    | Полностью нативный | Доступ к инструментам хоста (claude, gh); обязателен для бэкенда Herdr | macOS, Linux, Windows |
 
 ### Параметры
 
-| Флаг                        | Описание                                                                  |
-| --------------------------- | ------------------------------------------------------------------------- |
-| `--lan`                     | Открыть доступ по LAN (по умолчанию: только localhost)                    |
-| `--tailscale <host[:port]>` | Включить Tailscale HTTPS                                                  |
-| `--no-auth`                 | Отключить базовую аутентификацию                                          |
-| `--port <port>`             | Порт хоста (по умолчанию: 7680, Windows: 7690)                            |
-| `--fresh`                   | Принудительный ввод нового пароля (игнорировать сохранённую конфигурацию) |
-| `--update`                  | Автообновление с сохранённой конфигурацией                                |
-| `--version <ver>`           | Установить конкретную версию (с `v` или без)                              |
+| Флаг                        | Описание                                                                                                                      |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `--lan`                     | Открыть доступ по LAN (по умолчанию: только localhost)                                                                        |
+| `--tailscale <host[:port]>` | Включить Tailscale HTTPS                                                                                                      |
+| `--no-auth`                 | Отключить базовую аутентификацию                                                                                              |
+| `--port <port>`             | Порт хоста (по умолчанию: 7680, Windows: 7690)                                                                                |
+| `--mux <tmux\|herdr>`       | Терминальный бэкенд, только нативный режим (по умолчанию: `tmux`)                                                             |
+| `--allow-host <name>`       | Разрешить дополнительное значение заголовка Host (можно повторять; без подстановочных знаков, см. примечания по безопасности) |
+| `--allow-herdr-no-auth`     | Обязателен вместе с `--mux herdr --no-auth`                                                                                   |
+| `--fresh`                   | Принудительный ввод нового пароля (игнорировать сохранённую конфигурацию)                                                     |
+| `--update`                  | Автообновление с сохранённой конфигурацией                                                                                    |
+| `--version <ver>`           | Установить конкретную версию (с `v` или без)                                                                                  |
+
+`--ttyd`/`-Ttyd` по-прежнему принимается (0.x передаёт его, когда перезапускает установщик во время обновления), но игнорируется с предупреждением: ttyd удалён в 1.0.0. Все несовместимые изменения перечислены в [`docs/upgrade-1.0.md`](docs/upgrade-1.0.md).
 
 | Переменная окружения | Описание                                                          |
 | -------------------- | ----------------------------------------------------------------- |
@@ -278,15 +288,16 @@ WORKSPACE=/path/to/code make install-container
 
 ```bash
 # Linux
-sudo apt install ttyd tmux
-# Или: sudo snap install ttyd
+sudo apt install tmux
 ./scripts/termote.sh install native
 
 # macOS
-brew install ttyd tmux go
+brew install tmux go
 ./scripts/termote.sh install native
 # Доступ: http://localhost:7680
 ```
+
+Чтобы работать с рабочими пространствами [Herdr](https://termote.ohnice.app/installation/native/) вместо tmux, добавьте `--mux herdr` (только нативный режим; `herdr` уже должен быть в `PATH`).
 
 ### С Tailscale HTTPS (все режимы)
 
@@ -349,9 +360,11 @@ winget install psmux
 # Запустить Termote
 .\scripts\termote.ps1 install native
 .\scripts\termote.ps1 install container  # Или контейнерный режим с Docker Desktop
-```
 
-> По умолчанию `install native` загружает [fork/MSVC сборку ttyd](https://github.com/lamngockhuong/ttyd/releases) (работает на последней версии Windows); используйте `-Ttyd official`, чтобы переключиться на upstream-сборку tsl0922/ttyd.
+# Обновление и логи
+.\scripts\termote.ps1 update             # Самообновление до последнего релиза
+.\scripts\termote.ps1 logs follow        # Следить за всеми логами в реальном времени
+```
 
 ## Мобильное использование
 
@@ -371,7 +384,7 @@ winget install psmux
 ```
 termote/
 ├── Makefile                # Команды build/test/deploy
-├── Dockerfile              # Docker mode (tmux-api + ttyd)
+├── Dockerfile              # Docker mode (tmux-api + tmux, без ttyd)
 ├── docker-compose.yml
 ├── entrypoint.sh           # Docker entrypoint
 ├── docs/                   # Документация
@@ -383,13 +396,17 @@ termote/
 │       ├── hooks/
 │       ├── types/
 │       └── utils/
-├── tmux-api/               # Go server
-│   ├── main.go             # Точка входа
-│   ├── serve.go            # Сервер (PWA, proxy, auth)
-│   └── tmux.go             # Обработчики tmux API
+├── tmux-api/               # Go-сервер + CLI (один бинарник)
+│   ├── main.go             # Точка входа (без аргументов/`serve` = сервер, иначе CLI)
+│   ├── serve.go            # Сервер (PWA, auth, защита запросов)
+│   ├── mux.go              # Интерфейс Mux + маршруты /api/mux/*
+│   ├── mux_tmux.go         # Бэкенд tmux/psmux
+│   ├── mux_herdr.go        # Бэкенд Herdr (только нативный)
+│   ├── stream.go           # Терминальный WebSocket (поток xterm.js)
+│   └── cli*.go             # Подкоманды install/update/health/logs/link/menu
 ├── scripts/
-│   ├── termote.sh          # Unix CLI (install/uninstall/health)
-│   ├── termote.ps1         # Windows PowerShell CLI
+│   ├── termote.sh          # Тонкая Unix-обёртка -> tmux-api CLI
+│   ├── termote.ps1         # Тонкая обёртка Windows PowerShell -> tmux-api CLI
 │   ├── get.sh              # Unix онлайн-установщик (curl | bash)
 │   └── get.ps1             # Windows онлайн-установщик (irm | iex)
 ├── tests/                  # Набор тестов
@@ -422,33 +439,38 @@ pnpm --filter termote test:e2e:ui    # Запуск с UI отладчиком
 ### Сессия не сохраняется
 
 - Проверьте tmux: `tmux ls`
-- Убедитесь, что ttyd использует флаг `-A` (attach-or-create)
+- tmux-api подключается через `tmux new-session -A` (attach-or-create)
 
 ### Ошибки WebSocket
 
-- Проверьте логи tmux-api: `docker logs termote`
-- Убедитесь, что ttyd работает на порту 7681
+- Проверьте логи tmux-api: `docker logs termote` (контейнер) или `termote logs tmux-api` (нативный режим)
+- Терминальный WebSocket — это `/api/mux/stream`, его обслуживает сам tmux-api; отдельного терминального процесса для проверки нет
 
 ### Проблемы с мобильной клавиатурой
 
 - Убедитесь в наличии viewport meta tag
 - Тестируйте на реальном устройстве, а не в эмуляторе
 
-### Нативный режим: процессы не запускаются
+### Нативный режим: процесс не запускается
 
 ```bash
-ps aux | grep ttyd         # Проверить, работает ли ttyd
 ps aux | grep tmux-api     # Проверить, работает ли tmux-api
 lsof -i :7680              # Убедиться, что порт используется
+termote logs tmux-api      # Или: termote logs follow
 ```
 
 ## Примечания по безопасности
 
 - **По умолчанию: только localhost** — не открывается в LAN без флага `--lan`
-- **Basic auth включён по умолчанию** — используйте `--no-auth` для отключения при локальной разработке
+- **Basic auth включён по умолчанию** — используйте `--no-auth` для отключения при локальной разработке; пустой сохранённый пароль больше не отключает аутентификацию (1.0.0 вместо этого генерирует новый)
+- **Список разрешённых Host** — запросы с неизвестным заголовком `Host` отклоняются (защита от DNS rebinding); доверенные имена добавляются через `--allow-host`/`-AllowHost`, подстановочного знака для отключения проверки нет
+- **Защита Origin/CSRF** — запросы к `/api/mux/*`, изменяющие состояние, и WebSocket `/api/mux/stream` отклоняют межсайтовые `Sec-Fetch-Site`/`Origin` и требуют одноразовый токен потока из того же источника
 - **Встроенная защита от брутфорса** — ограничение запросов (5 попыток/мин на IP)
+- **Бэкенд Herdr** — открывает доступ ко всем рабочим пространствам Herdr на хосте, поэтому `--mux herdr --no-auth` отклоняется, если не указан ещё и `--allow-herdr-no-auth`
 - Используйте HTTPS (Tailscale) для production
 - Ограничьте доступ доверенными сетями/VPN
+
+Если вы обновляетесь с версии 0.x, см. [`docs/upgrade-1.0.md`](docs/upgrade-1.0.md).
 
 ## Другие проекты
 

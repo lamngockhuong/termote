@@ -33,6 +33,7 @@
 
 - **세션 전환**: 생성/편집/삭제가 가능한 여러 tmux 세션
 - **세션 탭**: 빠른 창 전환을 위한 가로 탭 바
+- **Herdr 백엔드** (네이티브 전용): tmux 대신 Herdr 워크스페이스를 제어하고, 패널마다 코딩 에이전트 상태 배지를 표시 — [네이티브 설치](https://termote.ohnice.app/installation/native/) 참고
 - **모바일 친화적**: 가상 키보드 툴바 (Tab/Ctrl/Shift/방향키, 확장 가능)
 - **제스처 지원**: 스와이프로 Ctrl+C, Tab, 히스토리 탐색
 - **명령 히스토리**: 검색 기능으로 이전에 전송한 명령 재호출
@@ -58,21 +59,23 @@
 ```mermaid
 flowchart TB
     subgraph Client["클라이언트 (모바일/데스크톱)"]
-        PWA["PWA - React + TypeScript"]
+        PWA["PWA - React + xterm.js"]
         Gestures["제스처 컨트롤"]
         Keyboard["가상 키보드"]
     end
 
     subgraph Server["tmux-api 서버 :7680"]
         Static["정적 파일"]
-        Proxy["WebSocket 프록시"]
-        API["REST API /api/tmux/*"]
+        Stream["터미널 WebSocket /api/mux/stream"]
+        API["REST API /api/mux/*"]
+        Guard["Host 허용 목록 + Origin/CSRF 가드"]
         Auth["Basic Auth"]
     end
 
-    subgraph Backend["백엔드 서비스"]
-        ttyd["ttyd :7681"]
-        tmux["tmux"]
+    subgraph Backend["Mux 백엔드 (tmux/psmux 또는 Herdr)"]
+        Mux["Mux 인터페이스"]
+        tmux["tmux/psmux (PTY)"]
+        herdr["Herdr (네이티브 전용)"]
         Shell["Shell"]
         Tools["CLI 도구"]
     end
@@ -80,13 +83,17 @@ flowchart TB
     Gestures --> PWA
     Keyboard --> PWA
     PWA --> Static
-    PWA <--> Proxy
+    PWA <--> Stream
     PWA --> API
-    Auth -.-> Static & Proxy & API
-    Proxy <--> ttyd
-    API --> tmux
-    ttyd --> tmux --> Shell --> Tools
+    Guard -.-> Static & Stream & API
+    Auth -.-> Static & Stream & API
+    Stream --> Mux
+    API --> Mux
+    Mux --> tmux & herdr
+    tmux --> Shell --> Tools
 ```
+
+tmux-api가 터미널을 직접(Unix에서는 PTY, Windows에서는 ConPTY) PWA의 xterm.js로 스트리밍하므로, 프록시할 별도의 터미널 프로세스가 없습니다. 요청 가드 모델 전체는 [`docs/system-architecture.md`](docs/system-architecture.md)를 참고하세요.
 
 ## 빠른 시작
 
@@ -101,8 +108,6 @@ make test                              # 테스트 실행
 ```
 
 > `link` 이후 어디서든 `termote` 사용 가능: `termote health`, `termote install native --lan`
->
-> **팁**: 향상된 대화형 메뉴를 위해 [gum](https://github.com/charmbracelet/gum) 설치 (선택 사항, bash 폴백 가능)
 
 ## 설치
 
@@ -220,33 +225,38 @@ cd termote
 flowchart LR
     subgraph Container["컨테이너 모드"]
         direction TB
-        C1["Docker/Podman"] --> C2["tmux-api :7680"] --> C3["ttyd :7681"] --> C4["tmux"]
+        C1["Docker/Podman"] --> C2["tmux-api :7680 (터미널 직접 스트리밍)"] --> C3["tmux"]
     end
 
     subgraph Native["네이티브 모드"]
         direction TB
-        N1["호스트 시스템"] --> N2["tmux-api :7680"] --> N3["ttyd :7681"] --> N4["tmux + 호스트 도구"]
+        N1["호스트 시스템"] --> N2["tmux-api :7680 (터미널 직접 스트리밍)"] --> N3["tmux/psmux 또는 Herdr + 호스트 도구"]
     end
 
     User["사용자"] --> Container & Native
 ```
 
-| 모드          | 설명          | 사용 사례                     | 플랫폼       |
-| ------------- | ------------- | ----------------------------- | ------------ |
-| `--container` | 컨테이너 모드 | 간단한 배포, 격리된 환경      | macOS, Linux |
-| `--native`    | 전체 네이티브 | 호스트 도구 접근 (claude, gh) | macOS, Linux |
+| 모드          | 설명          | 사용 사례                                          | 플랫폼                |
+| ------------- | ------------- | -------------------------------------------------- | --------------------- |
+| `--container` | 컨테이너 모드 | 간단한 배포, 격리된 환경                           | macOS, Linux, Windows |
+| `--native`    | 전체 네이티브 | 호스트 도구 접근 (claude, gh), Herdr 백엔드에 필수 | macOS, Linux, Windows |
 
 ### 옵션
 
-| 플래그                      | 설명                                       |
-| --------------------------- | ------------------------------------------ |
-| `--lan`                     | LAN에 노출 (기본값: localhost만)           |
-| `--tailscale <host[:port]>` | Tailscale HTTPS 활성화                     |
-| `--no-auth`                 | 기본 인증 비활성화                         |
-| `--port <port>`             | 호스트 포트 (기본값: 7680, Windows: 7690)  |
-| `--fresh`                   | 새 비밀번호 강제 입력 (저장된 설정 무시)   |
-| `--update`                  | 저장된 설정으로 자동 업데이트              |
-| `--version <ver>`           | 특정 버전 설치 (`v` 포함/미포함 모두 가능) |
+| 플래그                      | 설명                                                                         |
+| --------------------------- | ---------------------------------------------------------------------------- |
+| `--lan`                     | LAN에 노출 (기본값: localhost만)                                             |
+| `--tailscale <host[:port]>` | Tailscale HTTPS 활성화                                                       |
+| `--no-auth`                 | 기본 인증 비활성화                                                           |
+| `--port <port>`             | 호스트 포트 (기본값: 7680, Windows: 7690)                                    |
+| `--mux <tmux\|herdr>`       | 터미널 백엔드, 네이티브 전용 (기본값: `tmux`)                                |
+| `--allow-host <name>`       | 추가로 허용할 Host 헤더 값 (반복 지정 가능, 와일드카드 없음, 보안 참고 확인) |
+| `--allow-herdr-no-auth`     | `--mux herdr --no-auth`와 함께 사용할 때 필수                                |
+| `--fresh`                   | 새 비밀번호 강제 입력 (저장된 설정 무시)                                     |
+| `--update`                  | 저장된 설정으로 자동 업데이트                                                |
+| `--version <ver>`           | 특정 버전 설치 (`v` 포함/미포함 모두 가능)                                   |
+
+`--ttyd`/`-Ttyd`는 여전히 받아들이지만(0.x가 업데이트 중 설치 프로그램을 다시 실행할 때 이 옵션을 넘깁니다) 경고와 함께 무시됩니다. ttyd는 1.0.0에서 제거되었습니다. 호환되지 않는 변경 사항 전체는 [`docs/upgrade-1.0.md`](docs/upgrade-1.0.md)를 참고하세요.
 
 | 환경 변수      | 설명                                             |
 | -------------- | ------------------------------------------------ |
@@ -278,15 +288,16 @@ WORKSPACE=/path/to/code make install-container
 
 ```bash
 # Linux
-sudo apt install ttyd tmux
-# 또는: sudo snap install ttyd
+sudo apt install tmux
 ./scripts/termote.sh install native
 
 # macOS
-brew install ttyd tmux go
+brew install tmux go
 ./scripts/termote.sh install native
 # 접속: http://localhost:7680
 ```
+
+tmux 대신 [Herdr](https://termote.ohnice.app/installation/native/) 워크스페이스를 사용하려면 `--mux herdr`를 추가하세요 (네이티브 모드 전용, `herdr`가 이미 `PATH`에 있어야 함).
 
 ### Tailscale HTTPS 사용 (모든 모드)
 
@@ -349,9 +360,11 @@ winget install psmux
 # Termote 실행
 .\scripts\termote.ps1 install native
 .\scripts\termote.ps1 install container  # 또는 Docker Desktop으로 컨테이너 모드
-```
 
-> 기본적으로 `install native`는 [fork/MSVC ttyd 빌드](https://github.com/lamngockhuong/ttyd/releases)를 다운로드합니다 (최신 Windows에서 작동). `-Ttyd official`을 사용하면 업스트림 tsl0922/ttyd 빌드로 전환합니다.
+# 업데이트 및 로그
+.\scripts\termote.ps1 update             # 최신 릴리스로 자체 업데이트
+.\scripts\termote.ps1 logs follow        # 모든 로그를 실시간으로 확인
+```
 
 ## 모바일 사용법
 
@@ -371,7 +384,7 @@ winget install psmux
 ```
 termote/
 ├── Makefile                # 빌드/테스트/배포 명령
-├── Dockerfile              # Docker 모드 (tmux-api + ttyd)
+├── Dockerfile              # Docker 모드 (tmux-api + tmux, ttyd 없음)
 ├── docker-compose.yml
 ├── entrypoint.sh           # Docker 엔트리포인트
 ├── docs/                   # 문서
@@ -383,13 +396,17 @@ termote/
 │       ├── hooks/
 │       ├── types/
 │       └── utils/
-├── tmux-api/               # Go 서버
-│   ├── main.go             # 엔트리 포인트
-│   ├── serve.go            # 서버 (PWA, 프록시, 인증)
-│   └── tmux.go             # tmux API 핸들러
+├── tmux-api/               # Go 서버 + CLI (단일 바이너리)
+│   ├── main.go             # 엔트리 포인트 (인자 없음/`serve` = 서버, 그 외 = CLI)
+│   ├── serve.go            # 서버 (PWA, 인증, 가드)
+│   ├── mux.go              # Mux 인터페이스 + /api/mux/* 라우트
+│   ├── mux_tmux.go         # tmux/psmux 백엔드
+│   ├── mux_herdr.go        # Herdr 백엔드 (네이티브 전용)
+│   ├── stream.go           # 터미널 WebSocket (xterm.js 스트림)
+│   └── cli*.go             # install/update/health/logs/link/menu 하위 명령
 ├── scripts/
-│   ├── termote.sh          # Unix CLI (install/uninstall/health)
-│   ├── termote.ps1         # Windows PowerShell CLI
+│   ├── termote.sh          # 얇은 Unix 래퍼 -> tmux-api CLI
+│   ├── termote.ps1         # 얇은 Windows PowerShell 래퍼 -> tmux-api CLI
 │   ├── get.sh              # Unix 온라인 설치기 (curl | bash)
 │   └── get.ps1             # Windows 온라인 설치기 (irm | iex)
 ├── tests/                  # 테스트 모음
@@ -422,12 +439,12 @@ pnpm --filter termote test:e2e:ui    # UI 디버거로 실행
 ### 세션이 유지되지 않음
 
 - tmux 확인: `tmux ls`
-- ttyd가 `-A` 플래그(attach-or-create)를 사용하는지 확인
+- tmux-api는 `tmux new-session -A`(attach-or-create)로 연결
 
 ### WebSocket 오류
 
-- tmux-api 로그 확인: `docker logs termote`
-- ttyd가 포트 7681에서 실행 중인지 확인
+- tmux-api 로그 확인: `docker logs termote` (컨테이너) 또는 `termote logs tmux-api` (네이티브)
+- 터미널 WebSocket은 tmux-api가 직접 제공하는 `/api/mux/stream`이므로 따로 확인할 터미널 프로세스가 없음
 
 ### 모바일 키보드 문제
 
@@ -437,18 +454,23 @@ pnpm --filter termote test:e2e:ui    # UI 디버거로 실행
 ### 네이티브 모드: 프로세스가 시작되지 않음
 
 ```bash
-ps aux | grep ttyd         # ttyd 실행 중인지 확인
 ps aux | grep tmux-api     # tmux-api 실행 중인지 확인
 lsof -i :7680              # 포트 사용 중인지 확인
+termote logs tmux-api      # 또는: termote logs follow
 ```
 
 ## 보안 참고
 
 - **기본값: localhost만** - `--lan` 플래그를 사용하지 않으면 LAN에 노출되지 않음
-- **기본 인증 기본 활성화** - 로컬 개발 시 `--no-auth`로 비활성화
+- **기본 인증 기본 활성화** - 로컬 개발 시 `--no-auth`로 비활성화. 저장된 비밀번호가 비어 있어도 더 이상 인증이 꺼지지 않음 (1.0.0은 대신 새 비밀번호를 생성)
+- **Host 허용 목록** - 알 수 없는 `Host` 헤더를 가진 요청은 거부 (DNS 리바인딩 방지). 신뢰할 이름은 `--allow-host`/`-AllowHost`로 추가하며, 검사를 끄는 와일드카드는 없음
+- **Origin/CSRF 가드** - 상태를 바꾸는 `/api/mux/*` 요청과 `/api/mux/stream` WebSocket은 교차 사이트 `Sec-Fetch-Site`/`Origin`을 거부하고, 동일 출처의 일회용 스트림 토큰을 요구
 - **내장 무차별 대입 방지** - 속도 제한 (IP당 5회 시도/분)
+- **Herdr 백엔드** - 호스트의 모든 Herdr 워크스페이스를 노출하므로, `--allow-herdr-no-auth`를 함께 지정하지 않으면 `--mux herdr --no-auth`는 거부됨
 - 프로덕션에는 HTTPS(Tailscale) 사용
 - 신뢰할 수 있는 네트워크/VPN으로 제한
+
+0.x 설치에서 업그레이드한다면 [`docs/upgrade-1.0.md`](docs/upgrade-1.0.md)를 참고하세요.
 
 ## 다른 프로젝트
 

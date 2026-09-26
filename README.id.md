@@ -33,6 +33,7 @@ Kendalikan alat CLI (Claude Code, GitHub Copilot, terminal apa pun) dari jarak j
 
 - **Pergantian session**: Banyak tmux sessions dengan buat/edit/hapus
 - **Tab session**: Bilah tab horizontal untuk berpindah jendela dengan cepat
+- **Backend Herdr** (khusus native): kendalikan workspace Herdr sebagai pengganti tmux, dengan lencana status coding agent di setiap pane — lihat [Instalasi Native](https://termote.ohnice.app/installation/native/)
 - **Ramah mobile**: Toolbar keyboard virtual (Tab/Ctrl/Shift/panah, dapat diperluas)
 - **Dukungan gestur**: Geser untuk Ctrl+C, Tab, navigasi riwayat
 - **Riwayat perintah**: Panggil ulang perintah yang pernah dikirim dengan pencarian
@@ -58,21 +59,23 @@ Kendalikan alat CLI (Claude Code, GitHub Copilot, terminal apa pun) dari jarak j
 ```mermaid
 flowchart TB
     subgraph Client["Client (Mobile/Desktop)"]
-        PWA["PWA - React + TypeScript"]
+        PWA["PWA - React + xterm.js"]
         Gestures["Kontrol Gestur"]
         Keyboard["Keyboard Virtual"]
     end
 
     subgraph Server["tmux-api Server :7680"]
         Static["Static Files"]
-        Proxy["WebSocket Proxy"]
-        API["REST API /api/tmux/*"]
+        Stream["WebSocket terminal /api/mux/stream"]
+        API["REST API /api/mux/*"]
+        Guard["Daftar host yang diizinkan + penjaga Origin/CSRF"]
         Auth["Basic Auth"]
     end
 
-    subgraph Backend["Layanan Backend"]
-        ttyd["ttyd :7681"]
-        tmux["tmux"]
+    subgraph Backend["Backend Mux (tmux/psmux atau Herdr)"]
+        Mux["Antarmuka Mux"]
+        tmux["tmux/psmux (PTY)"]
+        herdr["Herdr (khusus native)"]
         Shell["Shell"]
         Tools["CLI Tools"]
     end
@@ -80,13 +83,17 @@ flowchart TB
     Gestures --> PWA
     Keyboard --> PWA
     PWA --> Static
-    PWA <--> Proxy
+    PWA <--> Stream
     PWA --> API
-    Auth -.-> Static & Proxy & API
-    Proxy <--> ttyd
-    API --> tmux
-    ttyd --> tmux --> Shell --> Tools
+    Guard -.-> Static & Stream & API
+    Auth -.-> Static & Stream & API
+    Stream --> Mux
+    API --> Mux
+    Mux --> tmux & herdr
+    tmux --> Shell --> Tools
 ```
+
+tmux-api mengalirkan terminal sendiri (PTY di Unix, ConPTY di Windows) ke xterm.js di PWA; tidak ada lagi proses terminal terpisah yang perlu di-proxy. Model lengkap penjagaan request ada di [`docs/system-architecture.md`](docs/system-architecture.md).
 
 ## Mulai Cepat
 
@@ -101,8 +108,6 @@ make test                              # Jalankan tes
 ```
 
 > Setelah `link`, gunakan `termote` dari mana saja: `termote health`, `termote install native --lan`
->
-> **Tips**: Instal [gum](https://github.com/charmbracelet/gum) untuk menu interaktif yang lebih baik (opsional, tersedia fallback bash)
 
 ## Instalasi
 
@@ -220,33 +225,38 @@ cd termote
 flowchart LR
     subgraph Container["Mode Container"]
         direction TB
-        C1["Docker/Podman"] --> C2["tmux-api :7680"] --> C3["ttyd :7681"] --> C4["tmux"]
+        C1["Docker/Podman"] --> C2["tmux-api :7680 (mengalirkan terminal sendiri)"] --> C3["tmux"]
     end
 
     subgraph Native["Mode Native"]
         direction TB
-        N1["Sistem Host"] --> N2["tmux-api :7680"] --> N3["ttyd :7681"] --> N4["tmux + Alat Host"]
+        N1["Sistem Host"] --> N2["tmux-api :7680 (mengalirkan terminal sendiri)"] --> N3["tmux/psmux atau Herdr + Alat Host"]
     end
 
     User["Pengguna"] --> Container & Native
 ```
 
-| Mode          | Deskripsi      | Kasus Penggunaan                            | Platform     |
-| ------------- | -------------- | ------------------------------------------- | ------------ |
-| `--container` | Mode container | Deployment sederhana, lingkungan terisolasi | macOS, Linux |
-| `--native`    | Semua native   | Akses alat host (claude, gh)                | macOS, Linux |
+| Mode          | Deskripsi      | Kasus Penggunaan                                        | Platform              |
+| ------------- | -------------- | ------------------------------------------------------- | --------------------- |
+| `--container` | Mode container | Deployment sederhana, lingkungan terisolasi             | macOS, Linux, Windows |
+| `--native`    | Semua native   | Akses alat host (claude, gh); wajib untuk backend Herdr | macOS, Linux, Windows |
 
 ### Opsi
 
-| Flag                        | Deskripsi                                             |
-| --------------------------- | ----------------------------------------------------- |
-| `--lan`                     | Buka akses LAN (default: hanya localhost)             |
-| `--tailscale <host[:port]>` | Aktifkan Tailscale HTTPS                              |
-| `--no-auth`                 | Nonaktifkan autentikasi dasar                         |
-| `--port <port>`             | Port host (default: 7680, Windows: 7690)              |
-| `--fresh`                   | Paksa prompt password baru (abaikan config tersimpan) |
-| `--update`                  | Pembaruan otomatis dengan config tersimpan            |
-| `--version <ver>`           | Instal versi tertentu (dengan atau tanpa `v`)         |
+| Flag                        | Deskripsi                                                                                 |
+| --------------------------- | ----------------------------------------------------------------------------------------- |
+| `--lan`                     | Buka akses LAN (default: hanya localhost)                                                 |
+| `--tailscale <host[:port]>` | Aktifkan Tailscale HTTPS                                                                  |
+| `--no-auth`                 | Nonaktifkan autentikasi dasar                                                             |
+| `--port <port>`             | Port host (default: 7680, Windows: 7690)                                                  |
+| `--mux <tmux\|herdr>`       | Backend terminal, khusus native (default: `tmux`)                                         |
+| `--allow-host <name>`       | Izinkan nilai header Host tambahan (bisa diulang; tanpa wildcard, lihat catatan keamanan) |
+| `--allow-herdr-no-auth`     | Wajib bersama `--mux herdr --no-auth`                                                     |
+| `--fresh`                   | Paksa prompt password baru (abaikan config tersimpan)                                     |
+| `--update`                  | Pembaruan otomatis dengan config tersimpan                                                |
+| `--version <ver>`           | Instal versi tertentu (dengan atau tanpa `v`)                                             |
+
+`--ttyd`/`-Ttyd` masih diterima (0.x meneruskannya saat menjalankan ulang installer ketika update), tetapi diabaikan dengan peringatan: ttyd sudah dihapus di 1.0.0. Semua perubahan yang tidak kompatibel ada di [`docs/upgrade-1.0.md`](docs/upgrade-1.0.md).
 
 | Variabel Lingkungan | Deskripsi                                           |
 | ------------------- | --------------------------------------------------- |
@@ -278,15 +288,16 @@ Gunakan ketika Anda memerlukan akses ke binary host (claude, git, dll.):
 
 ```bash
 # Linux
-sudo apt install ttyd tmux
-# Atau: sudo snap install ttyd
+sudo apt install tmux
 ./scripts/termote.sh install native
 
 # macOS
-brew install ttyd tmux go
+brew install tmux go
 ./scripts/termote.sh install native
 # Akses: http://localhost:7680
 ```
+
+Untuk mengendalikan workspace [Herdr](https://termote.ohnice.app/installation/native/) sebagai pengganti tmux, tambahkan `--mux herdr` (khusus mode native; `herdr` harus sudah ada di `PATH`).
 
 ### Dengan Tailscale HTTPS (semua mode)
 
@@ -349,6 +360,10 @@ winget install psmux
 # Jalankan Termote
 .\scripts\termote.ps1 install native
 .\scripts\termote.ps1 install container  # Atau mode container dengan Docker Desktop
+
+# Update & log
+.\scripts\termote.ps1 update             # Update mandiri ke rilis terbaru
+.\scripts\termote.ps1 logs follow        # Pantau semua log secara langsung
 ```
 
 ## Penggunaan Mobile
@@ -369,7 +384,7 @@ Toolbar virtual menyediakan: Tab, Esc, Ctrl, Shift, tombol panah, dan kombinasi 
 ```
 termote/
 ├── Makefile                # Perintah build/test/deploy
-├── Dockerfile              # Docker mode (tmux-api + ttyd)
+├── Dockerfile              # Docker mode (tmux-api + tmux, tanpa ttyd)
 ├── docker-compose.yml
 ├── entrypoint.sh           # Docker entrypoint
 ├── docs/                   # Dokumentasi
@@ -381,13 +396,17 @@ termote/
 │       ├── hooks/
 │       ├── types/
 │       └── utils/
-├── tmux-api/               # Go server
-│   ├── main.go             # Entry point
-│   ├── serve.go            # Server (PWA, proxy, auth)
-│   └── tmux.go             # tmux API handlers
+├── tmux-api/               # Server Go + CLI (satu binary)
+│   ├── main.go             # Entry point (tanpa argumen/`serve` = server, selain itu CLI)
+│   ├── serve.go            # Server (PWA, auth, penjaga)
+│   ├── mux.go              # Antarmuka Mux + rute /api/mux/*
+│   ├── mux_tmux.go         # Backend tmux/psmux
+│   ├── mux_herdr.go        # Backend Herdr (khusus native)
+│   ├── stream.go           # WebSocket terminal (stream xterm.js)
+│   └── cli*.go             # Subperintah install/update/health/logs/link/menu
 ├── scripts/
-│   ├── termote.sh          # Unix CLI (install/uninstall/health)
-│   ├── termote.ps1         # Windows PowerShell CLI
+│   ├── termote.sh          # Pembungkus tipis Unix -> tmux-api CLI
+│   ├── termote.ps1         # Pembungkus tipis Windows PowerShell -> tmux-api CLI
 │   ├── get.sh              # Unix online installer (curl | bash)
 │   └── get.ps1             # Windows online installer (irm | iex)
 ├── tests/                  # Suite tes
@@ -420,12 +439,12 @@ pnpm --filter termote test:e2e:ui    # Jalankan dengan UI debugger
 ### Session tidak tersimpan
 
 - Periksa tmux: `tmux ls`
-- Verifikasi ttyd menggunakan flag `-A` (attach-or-create)
+- tmux-api menyambung dengan `tmux new-session -A` (attach-or-create)
 
 ### Error WebSocket
 
-- Periksa log tmux-api: `docker logs termote`
-- Verifikasi ttyd berjalan di port 7681
+- Periksa log tmux-api: `docker logs termote` (container) atau `termote logs tmux-api` (native)
+- WebSocket terminal adalah `/api/mux/stream`, dilayani langsung oleh tmux-api; tidak ada proses terminal terpisah yang perlu diperiksa
 
 ### Masalah keyboard mobile
 
@@ -435,18 +454,23 @@ pnpm --filter termote test:e2e:ui    # Jalankan dengan UI debugger
 ### Mode native: proses tidak berjalan
 
 ```bash
-ps aux | grep ttyd         # Periksa apakah ttyd berjalan
 ps aux | grep tmux-api     # Periksa apakah tmux-api berjalan
 lsof -i :7680              # Verifikasi port sedang digunakan
+termote logs tmux-api      # Atau: termote logs follow
 ```
 
 ## Catatan Keamanan
 
 - **Default: hanya localhost** - tidak terbuka ke LAN kecuali menggunakan flag `--lan`
-- **Basic auth aktif secara default** - gunakan `--no-auth` untuk menonaktifkan di dev lokal
+- **Basic auth aktif secara default** - gunakan `--no-auth` untuk menonaktifkan di dev lokal; password tersimpan yang kosong tidak lagi menonaktifkan auth (1.0.0 membuat password baru sebagai gantinya)
+- **Daftar host yang diizinkan** - request dengan header `Host` yang tidak dikenal ditolak (perlindungan DNS rebinding); tambahkan nama tepercaya dengan `--allow-host`/`-AllowHost`, tidak ada wildcard untuk mematikan pemeriksaan ini
+- **Penjaga Origin/CSRF** - request `/api/mux/*` yang mengubah state dan WebSocket `/api/mux/stream` menolak `Sec-Fetch-Site`/`Origin` lintas situs serta mewajibkan token stream sekali pakai dari origin yang sama
 - **Proteksi brute-force bawaan** - rate limiting (5 percobaan/menit per IP)
+- **Backend Herdr** - membuka semua workspace Herdr di host, sehingga `--mux herdr --no-auth` ditolak kecuali `--allow-herdr-no-auth` juga diberikan
 - Gunakan HTTPS (Tailscale) untuk production
 - Batasi ke jaringan tepercaya/VPN
+
+Lihat [`docs/upgrade-1.0.md`](docs/upgrade-1.0.md) jika Anda meng-upgrade dari instalasi 0.x.
 
 ## Proyek Lainnya
 

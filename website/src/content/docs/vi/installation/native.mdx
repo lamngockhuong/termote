@@ -5,40 +5,28 @@ description: Tất cả dịch vụ chạy native trên host
 
 import { Steps, Tabs, TabItem, Aside } from "@astrojs/starlight/components";
 
-Không cần Docker. Truy cập binary host như `claude`, `git`, `gh`, v.v.
-
-<Aside type="tip" title="Chế độ Native trên Windows">
-  Chế độ Native được hỗ trợ đầy đủ trên Windows. Script cài đặt mặc định tự động
-  tải bản ttyd fork build bằng MSVC, khắc phục lỗi crash ConPTY trước đây trên
-  Windows 11 (build 26200+). Dùng `-Ttyd official` để chuyển sang bản upstream
-  `tsl0922/ttyd`.
-</Aside>
+Không cần Docker. Truy cập binary host như `claude`, `git`, `gh`, v.v. Chính tmux-api truyền
+luồng terminal (PTY trên Unix, ConPTY trên Windows) tới xterm.js trong PWA, nên không phải cài
+thêm tiến trình terminal nào khác.
 
 ## Yêu cầu
 
 <Tabs>
   <TabItem label="Linux">
     ```bash
-    sudo apt install ttyd tmux
-    # Hoặc: sudo snap install ttyd
+    sudo apt install tmux
     ```
   </TabItem>
   <TabItem label="macOS">
     ```bash
-    brew install ttyd tmux go
+    brew install tmux go
     ```
   </TabItem>
   <TabItem label="Windows">
     ```powershell
     # Cài đặt psmux (tương thích tmux cho Windows)
     winget install psmux
-    # ttyd được tự động tải bởi script cài đặt
     ```
-
-    <Aside type="note">
-      ttyd được script cài đặt tự động tải (mặc định bản fork build bằng MSVC).
-      Dùng `-Ttyd official` để lấy bản upstream.
-    </Aside>
   </TabItem>
 </Tabs>
 
@@ -63,15 +51,15 @@ tmux source-file ~/.tmux.conf
 Cho phép: **Icon Copy** → di chuyển → **Space** → chọn → **Enter** → **Icon Paste**
 
 :::tip[Copy ra System Clipboard]
-Khi mouse BẬT, tmux bắt sự kiện chuột. Để copy ra system clipboard:
-- **Giữ Shift** khi chọn text (bypass tmux, dùng selection của terminal)
+Khi mouse BẬT, tmux bắt sự kiện chuột. Để copy ra bảng nhớ tạm của hệ thống:
+- **Giữ Shift** khi chọn text (vượt qua tmux, dùng vùng chọn của terminal)
 - Hoặc nhấn **Ctrl+b m** để tạm tắt mouse
 :::
 
 ## Cài đặt
 
 <Steps>
-1. Cài đặt dependencies (xem ở trên)
+1. Cài đặt các phụ thuộc (xem ở trên)
 
 2. Chạy lệnh deploy
 
@@ -84,14 +72,7 @@ Khi mouse BẬT, tmux bắt sự kiện chuột. Để copy ra system clipboard:
      <TabItem label="Windows (PowerShell)">
        ```powershell
        .\scripts\termote.ps1 install native
-       .\scripts\termote.ps1 install native -Ttyd official
        ```
-
-       Mặc định (`-Ttyd fork`), trình cài đặt tải bản build
-       [fork/MSVC ttyd](https://github.com/lamngockhuong/ttyd/releases)
-       (`ttyd.msvc.exe`), vì bản build gốc `tsl0922/ttyd` cho Windows
-       (`ttyd.win32.exe`) hiện đang bị lỗi trên Windows mới nhất. Dùng
-       `-Ttyd official` để chuyển sang bản build gốc.
      </TabItem>
    </Tabs>
 
@@ -104,10 +85,40 @@ Khi mouse BẬT, tmux bắt sự kiện chuột. Để copy ra system clipboard:
 - Cần truy cập binary host (claude, git, gh, v.v.)
 - Không có Docker/Podman
 - Kiểm soát đầy đủ dịch vụ
+- Muốn dùng Herdr thay cho tmux (chỉ có ở native, xem bên dưới)
 
 <Aside type="tip">
   Chế độ Native được khuyến nghị khi bạn cần sử dụng Claude Code hoặc các công
   cụ CLI host khác.
+</Aside>
+
+## Backend Herdr
+
+Chế độ native có thể điều khiển workspace của Herdr thay cho tmux. Herdr phải đang chạy sẵn và
+truy cập được trên máy này; Termote chỉ giao tiếp với socket của nó.
+
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    ./scripts/termote.sh install native --mux herdr
+    ```
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    .\scripts\termote.ps1 install native -Mux herdr
+    ```
+  </TabItem>
+</Tabs>
+
+<Aside type="caution" title="Herdr hoạt động khác tmux">
+  - Chọn tab hoặc pane trên PWA **không** thay đổi nội dung đang hiện trên desktop của Herdr,
+  mà chỉ đổi pane mà client đang nhận luồng. Không có nút "hiện trên desktop".
+  - Mỗi pane có một huy hiệu trạng thái agent (`idle`/`working`/`blocked`/`done`), được làm mới
+  tối đa một lần trong mỗi khoảng làm mới đã cấu hình; trạng thái không được đẩy về ngay lập tức.
+  - Backend Herdr **chỉ có ở native**: chế độ container từ chối `--mux herdr`/`-Mux herdr`.
+  - `--mux herdr --no-auth` bị từ chối nếu không kèm `--allow-herdr-no-auth`. Herdr để lộ mọi
+  workspace trên máy chứ không riêng pane mà PWA đang hiện, nên muốn chạy không mật khẩu thì
+  phải chủ động bật tùy chọn này.
 </Aside>
 
 ## Quản lý dịch vụ
@@ -115,8 +126,7 @@ Khi mouse BẬT, tmux bắt sự kiện chuột. Để copy ra system clipboard:
 <Tabs>
   <TabItem label="Unix (macOS/Linux)">
     ```bash
-    # Kiểm tra processes
-    ps aux | grep ttyd
+    # Kiểm tra tiến trình
     ps aux | grep tmux-api
 
     # Khởi động lại
@@ -125,8 +135,8 @@ Khi mouse BẬT, tmux bắt sự kiện chuột. Để copy ra system clipboard:
   </TabItem>
   <TabItem label="Windows (PowerShell)">
     ```powershell
-    # Kiểm tra processes
-    Get-Process -Name ttyd, tmux-api -ErrorAction SilentlyContinue
+    # Kiểm tra tiến trình
+    Get-Process -Name tmux-api -ErrorAction SilentlyContinue
 
     # Khởi động lại
     .\scripts\termote.ps1 install native
@@ -162,13 +172,13 @@ pkill caffeinate
   <TabItem label="Unix (macOS/Linux)">
     ```bash
     ./scripts/termote.sh health   # Kiểm tra sức khỏe
-    ss -tlnp | grep -E "7680|7681"  # Kiểm tra cổng
+    ss -tlnp | grep 7680          # Kiểm tra cổng
     ```
   </TabItem>
   <TabItem label="Windows (PowerShell)">
     ```powershell
     .\scripts\termote.ps1 health   # Kiểm tra sức khỏe
-    netstat -ano | Select-String "7680|7681"  # Kiểm tra cổng
+    netstat -ano | Select-String "7680"  # Kiểm tra cổng
     ```
   </TabItem>
 </Tabs>
@@ -178,17 +188,14 @@ pkill caffeinate
 <Tabs>
   <TabItem label="Unix (macOS/Linux)">
     ```bash
-    ps aux | grep ttyd         # Kiểm tra ttyd đang chạy
     ps aux | grep tmux-api     # Kiểm tra tmux-api đang chạy
-    lsof -i :7680              # Xác minh cổng chính
-    lsof -i :7681              # Xác minh cổng ttyd
+    lsof -i :7680              # Xác minh cổng
     ```
   </TabItem>
   <TabItem label="Windows (PowerShell)">
     ```powershell
-    Get-Process -Name ttyd, tmux-api -ErrorAction SilentlyContinue
-    netstat -ano | Select-String "7680"   # Xác minh cổng chính
-    netstat -ano | Select-String "7681"   # Xác minh cổng ttyd
+    Get-Process -Name tmux-api -ErrorAction SilentlyContinue
+    netstat -ano | Select-String "7680"   # Xác minh cổng
     ```
   </TabItem>
 </Tabs>
@@ -197,28 +204,18 @@ pkill caffeinate
 
 <Tabs>
   <TabItem label="Unix (macOS/Linux)">
-    Chế độ native mặc định không ghi logs. Để xem logs:
-
     ```bash
-    # Dừng dịch vụ
-    ./scripts/termote.sh uninstall native
-
-    # Chạy ttyd với logs (terminal 1)
-    ttyd -W -i lo -p 7681 tmux new-session -A -s main
-
-    # Chạy tmux-api với logs (terminal 2)
-    cd tmux-api
-    TERMOTE_PORT=7680 TERMOTE_BIND=127.0.0.1 \
-    TERMOTE_PWA_DIR=../pwa/dist ./tmux-api-native
+    termote logs tmux-api   # Các dòng log gần đây
+    termote logs follow     # Theo dõi log trực tiếp (Ctrl+C để dừng)
+    termote logs clean      # Xóa các file log
     ```
   </TabItem>
   <TabItem label="Windows (PowerShell)">
     Chế độ native trên Windows ghi logs vào `~/.termote/logs`. Xem logs bằng CLI:
 
     ```powershell
-    .\scripts\termote.ps1 logs            # Xem logs ttyd + tmux-api gần đây
-    .\scripts\termote.ps1 logs ttyd       # Chỉ logs ttyd
-    .\scripts\termote.ps1 logs tmux-api   # Chỉ logs tmux-api
+    .\scripts\termote.ps1 logs            # Xem logs tmux-api gần đây
+    .\scripts\termote.ps1 logs tmux-api   # Tương tự, chỉ định rõ
     .\scripts\termote.ps1 logs follow     # Tail toàn bộ logs realtime (Ctrl+C để dừng)
     .\scripts\termote.ps1 logs clean      # Xóa các file log
     ```
@@ -229,11 +226,12 @@ pkill caffeinate
 
 | Lỗi            | Giải pháp                                           |
 | -------------- | --------------------------------------------------- |
-| Cổng đang dùng | `lsof -i :7680` (Unix) hoặc `netstat -ano \| Select-String 7680` (Win) rồi kill process |
-| Thiếu ttyd     | `brew install ttyd` (macOS) hoặc `apt install ttyd` (Linux) |
+| Cổng đang dùng | `lsof -i :7680` (Unix) hoặc `netstat -ano \| Select-String 7680` (Win) rồi dừng tiến trình đó |
+| Không tìm thấy Herdr | Cài/khởi động `herdr` trước, hoặc bỏ `--mux herdr` để dùng tmux |
 | Thiếu binary   | `cd tmux-api && go build -o tmux-api-native .`      |
 | PWA chưa build | `pnpm --filter termote build`                              |
 | PWA cache cũ   | Settings → "Clear Cache & Reload" để làm mới        |
+| Host bị từ chối (403) | Làm theo gợi ý `--allow-host <name>` trong thông báo lỗi, rồi cài lại |
 
 ### tmux / psmux Session
 
@@ -257,8 +255,8 @@ pkill caffeinate
 ### Test API
 
 ```bash
-curl http://localhost:7680/api/tmux/health
-curl http://localhost:7680/api/tmux/sessions
+curl http://localhost:7680/api/mux/health
+curl http://localhost:7680/api/mux/snapshot
 ```
 
 ## Cập nhật
@@ -271,20 +269,23 @@ Nếu Termote đã được cài đặt, sử dụng lệnh cập nhật tích h
   <TabItem label="Unix (macOS/Linux)">
     ```bash
     termote update                   # Cập nhật lên phiên bản mới nhất
-    termote update --version 0.0.9   # Cập nhật phiên bản cụ thể
+    termote update --version 1.0.0   # Cập nhật phiên bản cụ thể
     termote update --force           # Cài đặt lại phiên bản hiện tại
     ```
   </TabItem>
   <TabItem label="Windows (PowerShell)">
     ```powershell
     .\scripts\termote.ps1 update                 # Cập nhật lên phiên bản mới nhất
-    .\scripts\termote.ps1 update -Version 0.0.9  # Cập nhật phiên bản cụ thể
+    .\scripts\termote.ps1 update -Version 1.0.0  # Cập nhật phiên bản cụ thể
     .\scripts\termote.ps1 update -Force          # Cài đặt lại phiên bản hiện tại
     ```
   </TabItem>
 </Tabs>
 
-Lệnh này tự động giữ nguyên config (bao gồm lựa chọn bản `ttyd` trên Windows), dừng dịch vụ, tải phiên bản mới, kiểm tra checksum, và cài đặt lại với cấu hình đã lưu.
+Lệnh này tự động giữ nguyên config, dừng dịch vụ, tải phiên bản mới, đối chiếu mã băm, và cài
+đặt lại với cấu hình đã lưu. Khi nâng một bản cài 0.x lên 1.0.0, lệnh này còn gỡ bỏ `ttyd` và
+chuyển đổi mật khẩu đã lưu nếu nó rỗng. Danh sách đầy đủ các thay đổi không tương thích nằm ở
+`docs/upgrade-1.0.md` trong repository.
 
 ### Qua One-liner
 

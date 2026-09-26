@@ -5,7 +5,9 @@ description: Triển khai container tất-cả-trong-một
 
 import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
 
-Container đơn với tmux-api (PWA + proxy) + ttyd + tmux.
+Một container duy nhất gồm tmux-api (PWA + luồng terminal + API) và tmux. Không có tiến
+trình terminal riêng: chính tmux-api truyền luồng terminal tới xterm.js trong PWA. Ở chế độ
+container không thể dùng Herdr thay cho tmux.
 
 ## Bắt đầu nhanh
 
@@ -75,6 +77,7 @@ docker run -d --name termote -p 7680:7680 \
     | `--lan`           | Mở ra LAN (mặc định: localhost)               |
     | `--no-auth`       | Tắt xác thực cơ bản                           |
     | `--port <port>`   | Cổng tùy chỉnh (mặc định: 7680)               |
+    | `--allow-host <name>` | Cho phép thêm một giá trị header Host (lặp lại được) |
     | `--fresh`         | Buộc nhập mật khẩu mới (bỏ qua config đã lưu) |
     | `--update`        | Cập nhật tự động với config đã lưu            |
     | `--version <ver>` | Cài đặt phiên bản cụ thể                      |
@@ -85,11 +88,16 @@ docker run -d --name termote -p 7680:7680 \
     | `-Lan`            | Mở ra LAN (mặc định: localhost)               |
     | `-NoAuth`         | Tắt xác thực cơ bản                           |
     | `-Port <port>`    | Cổng tùy chỉnh (mặc định: 7680)               |
+    | `-AllowHost <name>` | Cho phép thêm một giá trị header Host (lặp lại được) |
     | `-Fresh`          | Buộc nhập mật khẩu mới (bỏ qua config đã lưu) |
 
     Cờ online installer: `$env:TERMOTE_UPDATE="true"` để cập nhật tự động.
   </TabItem>
 </Tabs>
+
+<Aside type="note">
+  Chế độ container không hỗ trợ `--mux herdr`/`-Mux herdr`, vì Herdr chỉ chạy ở chế độ native.
+</Aside>
 
 <Aside type="tip">
   Script tự động phát hiện `podman` hoặc `docker` - cả hai hoạt động giống nhau.
@@ -183,9 +191,8 @@ podman logs termote
 ```bash
 docker exec -it termote /bin/sh
 # Trong container:
-ps aux                        # Kiểm tra tiến trình
-curl localhost:7681           # Test ttyd
-curl localhost:7680/api/tmux/health
+ps aux                        # Kiểm tra tiến trình (tmux-api, tmux)
+curl localhost:7680/api/mux/health
 ```
 
 ### Lỗi thường gặp
@@ -193,9 +200,10 @@ curl localhost:7680/api/tmux/health
 | Lỗi                  | Giải pháp                                        |
 | -------------------- | ------------------------------------------------ |
 | Cổng đang dùng       | `lsof -i :7680` rồi kill hoặc dùng `--port`      |
-| Container crash      | `docker logs termote` để xem lỗi                 |
+| Container bị sập     | `docker logs termote` để xem lỗi                 |
 | Auth không hoạt động | Restart container, kiểm tra logs để lấy password |
-| Lỗi WebSocket        | Kiểm tra ttyd đang chạy trong container          |
+| Host bị từ chối (403) | Thêm tên mà thông báo lỗi gợi ý bằng `--allow-host` |
+| Lỗi WebSocket        | Xem logs của tmux-api (`docker logs termote`); WebSocket của terminal là `/api/mux/stream`, do chính tmux-api phục vụ |
 | PWA cache cũ         | Settings → "Clear Cache & Reload" để làm mới     |
 
 ### Khởi động lại / Reset
@@ -224,8 +232,8 @@ curl localhost:7680/api/tmux/health
 ### Test API
 
 ```bash
-curl http://localhost:7680/api/tmux/health
-curl -u admin:password http://localhost:7680/api/tmux/sessions
+curl http://localhost:7680/api/mux/health
+curl -u admin:password http://localhost:7680/api/mux/snapshot
 ```
 
 ## Cập nhật
@@ -240,7 +248,7 @@ termote update --version 0.0.9   # Cập nhật phiên bản cụ thể
 termote update --force            # Cài đặt lại phiên bản hiện tại
 ```
 
-Lệnh này tự động giữ nguyên config, dừng dịch vụ, tải phiên bản mới, kiểm tra checksum, và cài đặt lại với cấu hình đã lưu.
+Lệnh này tự động giữ nguyên config, dừng dịch vụ, tải phiên bản mới, đối chiếu mã băm, và cài đặt lại với cấu hình đã lưu.
 
 ### Qua One-liner
 
