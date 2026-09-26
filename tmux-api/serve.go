@@ -51,6 +51,31 @@ func newServeConfigFromEnv() serveConfig {
 	}
 }
 
+// secretEnvKeys must never reach a terminal: any tmux command may start the
+// tmux server, which hands the environment it started with to every shell, so
+// `env` in a pane would print the password.
+var secretEnvKeys = []string{"TERMOTE_PASS"}
+
+// scrubSecretEnv removes the secrets from the process environment once the
+// config has read them.
+func scrubSecretEnv() {
+	for _, k := range secretEnvKeys {
+		os.Unsetenv(k)
+	}
+}
+
+// isSecretEnv reports whether a KEY=value entry holds a secret. Windows keys
+// are case-insensitive, so the match is too.
+func isSecretEnv(kv string) bool {
+	k, _, _ := strings.Cut(kv, "=")
+	for _, s := range secretEnvKeys {
+		if strings.EqualFold(k, s) {
+			return true
+		}
+	}
+	return false
+}
+
 func envOr(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
@@ -220,6 +245,7 @@ func startServeMode(cfg serveConfig) {
 	switch m.Name() {
 	case "tmux":
 		reapOrphanTerminals(isTmuxAttachCmdline)
+		scrubTmuxSecrets(ctx)
 	case "herdr":
 		reapOrphanTerminals(isHerdrObserveCmdline)
 	}
@@ -460,6 +486,12 @@ func handleTerminalToken(tokens *tokenStore) http.HandlerFunc {
 			return
 		}
 		if !allowNonNavigationOnly(w, r) {
+			return
+		}
+		// A foreign page cannot read the token, but could keep minting them to
+		// push the PWA's own out of the bounded store.
+		if site := r.Header.Get("Sec-Fetch-Site"); site != "" && site != "same-origin" {
+			jsonError(w, "cross-site request rejected", http.StatusForbidden)
 			return
 		}
 		token, err := tokens.generate()

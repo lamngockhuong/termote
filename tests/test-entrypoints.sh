@@ -103,6 +103,13 @@ test_services() {
         fail "tmux session" "main" "not found"
     fi
 
+    # Shells inherit the tmux server's environment; the password must not be in it
+    if grep -q "env -u TERMOTE_PASS tmux new-session" "$PROJECT_DIR/entrypoint.sh"; then
+        pass "tmux session starts without TERMOTE_PASS"
+    else
+        fail "tmux env" "env -u TERMOTE_PASS" "password reaches the shells"
+    fi
+
     # exec: tmux-api gets SIGTERM from tini directly, no shell in between
     if grep -qE '^exec /usr/local/bin/tmux-api$' "$PROJECT_DIR/entrypoint.sh"; then
         pass "execs tmux-api as the last step"

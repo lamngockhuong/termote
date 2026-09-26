@@ -47,8 +47,10 @@ export TERMOTE_USER="${TERMOTE_USER:-admin}"
 [[ "$NO_AUTH" == "true" ]] && export TERMOTE_NO_AUTH="true"
 
 # Create the shared session every client attaches to (tmux-api would create
-# it on first use too; doing it here keeps it alive from container start)
-tmux has-session -t main 2>/dev/null || tmux new-session -d -s main
+# it on first use too; doing it here keeps it alive from container start).
+# The tmux server keeps this environment for every shell, so the password
+# stays out of it; tmux-api reads it and removes it from its own env.
+tmux has-session -t main 2>/dev/null || env -u TERMOTE_PASS tmux new-session -d -s main
 
 # tmux-api replaces this shell, so SIGTERM from tini reaches it directly
 exec /usr/local/bin/tmux-api

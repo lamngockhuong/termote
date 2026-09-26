@@ -3,6 +3,12 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -171,5 +177,56 @@ func TestTmuxMuxRejectsInvalidInput(t *testing.T) {
 				t.Errorf("got %v, want inputError", err)
 			}
 		})
+	}
+}
+
+func TestNewTabCreatesMissingSession(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil || runtime.GOOS == "windows" {
+		t.Skip("needs tmux with a private socket")
+	}
+	origSocket, origSession := tmuxSocket, tmuxSession
+	tmuxSocket = filepath.Join(t.TempDir(), "tmux.sock")
+	tmuxSession = fmt.Sprintf("termote-newtab-%d", os.Getpid())
+	t.Cleanup(func() {
+		tmuxCmd(context.Background(), "kill-server").Run()
+		tmuxSocket, tmuxSession = origSocket, origSession
+	})
+
+	id, err := tmuxMux{}.NewTab(context.Background(), "", "first")
+	if err != nil || id == "" {
+		t.Fatalf("NewTab with no session = %q, %v", id, err)
+	}
+	if err := tmuxCmd(context.Background(), "has-session", "-t", tmuxSession).Run(); err != nil {
+		t.Fatalf("session not created: %v", err)
+	}
+}
+
+func TestScrubTmuxSecretsClearsAServerStartedWithThePassword(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil || runtime.GOOS == "windows" {
+		t.Skip("needs tmux with a private socket")
+	}
+	origSocket, origSession := tmuxSocket, tmuxSession
+	tmuxSocket = filepath.Join(t.TempDir(), "tmux.sock")
+	tmuxSession = fmt.Sprintf("termote-scrub-%d", os.Getpid())
+	t.Cleanup(func() {
+		tmuxCmd(context.Background(), "kill-server").Run()
+		tmuxSocket, tmuxSession = origSocket, origSession
+	})
+	// What 0.x did: start tmux with TERMOTE_PASS exported
+	cmd := tmuxCmd(context.Background(), "-f", "/dev/null", "new-session", "-d", "-s", tmuxSession)
+	cmd.Env = append(os.Environ(), "TERMOTE_PASS=old-secret")
+	if err := cmd.Run(); err != nil {
+		t.Fatal(err)
+	}
+	global := func() string {
+		out, _ := tmuxCmd(context.Background(), "show-environment", "-g").Output()
+		return string(out)
+	}
+	if !strings.Contains(global(), "TERMOTE_PASS=old-secret") {
+		t.Fatal("setup: tmux did not capture TERMOTE_PASS")
+	}
+	scrubTmuxSecrets(context.Background())
+	if strings.Contains(global(), "old-secret") {
+		t.Fatal("TERMOTE_PASS still in the tmux global environment")
 	}
 }

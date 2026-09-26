@@ -227,6 +227,19 @@ func TestStreamTokenRoute(t *testing.T) {
 	if rec := serve(newTestHandler(t, &fakeMux{}), req); rec.Code != http.StatusForbidden {
 		t.Errorf("direct navigation status = %d, want 403", rec.Code)
 	}
+
+	for _, site := range []string{"cross-site", "same-site"} {
+		req = apiRequest("GET", "/api/mux/stream-token", "")
+		req.Header.Set("Sec-Fetch-Site", site)
+		if rec := serve(newTestHandler(t, &fakeMux{}), req); rec.Code != http.StatusForbidden {
+			t.Errorf("Sec-Fetch-Site %s status = %d, want 403", site, rec.Code)
+		}
+	}
+	req = apiRequest("GET", "/api/mux/stream-token", "")
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
+	if rec := serve(newTestHandler(t, &fakeMux{}), req); rec.Code != http.StatusOK {
+		t.Errorf("same-origin status = %d, want 200", rec.Code)
+	}
 }
 
 func TestNewMux(t *testing.T) {

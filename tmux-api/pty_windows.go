@@ -169,12 +169,12 @@ func (s *conptyStream) Close() error {
 }
 
 // terminalEnv is the server environment without TMUX, so `psmux attach` works
-// when tmux-api itself runs inside psmux.
+// when tmux-api itself runs inside psmux, and without secrets.
 func terminalEnv() []string {
 	var env []string
 	for _, kv := range os.Environ() {
 		k, _, _ := strings.Cut(kv, "=")
-		if strings.EqualFold(k, "TMUX") || strings.EqualFold(k, "TMUX_PANE") {
+		if strings.EqualFold(k, "TMUX") || strings.EqualFold(k, "TMUX_PANE") || isSecretEnv(kv) {
 			continue
 		}
 		env = append(env, kv)

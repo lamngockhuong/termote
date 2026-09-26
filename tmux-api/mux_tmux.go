@@ -113,6 +113,19 @@ func listWindows(ctx context.Context) (string, error) {
 	return "", errors.New("list-windows returned no windows")
 }
 
+// scrubTmuxSecrets removes secrets from a tmux server that is already
+// running. 0.x exported TERMOTE_PASS before starting tmux, and `update` keeps
+// that server, so without this every new tab would still inherit the password.
+// Shells already open keep theirs. Errors (no server yet, psmux without
+// set-environment -u) are fine: a server started now gets terminalEnv.
+func scrubTmuxSecrets(ctx context.Context) {
+	ctx, cancel := context.WithTimeout(ctx, muxTimeout)
+	defer cancel()
+	for _, k := range secretEnvKeys {
+		tmuxCmd(ctx, "set-environment", "-g", "-u", k).Run()
+	}
+}
+
 // ensureSession starts TMUX_SESSION detached when it does not exist. The
 // server is the only thing that attaches to it, so the first snapshot creates
 // it. A concurrent
@@ -175,6 +188,12 @@ func (tmuxMux) NewTab(ctx context.Context, groupID, name string) (string, error)
 		args = append(args, "-n", name)
 	}
 	out, err := tmuxCmd(ctx, args...).Output()
+	// A client may create a tab before anything asked for a snapshot (a
+	// script right after install): create the session and retry, as Snapshot
+	// does. Only on failure, since every psmux call costs ~100ms.
+	if err != nil && ensureSession(ctx) {
+		out, err = tmuxCmd(ctx, args...).Output()
+	}
 	if err != nil {
 		return "", err
 	}
