@@ -107,10 +107,6 @@ jobs:
           go-version: "1.26"
           cache-dependency-path: tmux-api/go.mod
 
-      - name: Test
-        working-directory: tmux-api
-        run: go test -short ./...
-
       - name: Build
         working-directory: tmux-api
         run: CGO_ENABLED=0 go build -ldflags="-s -w" -o tmux-api .
@@ -121,6 +117,31 @@ jobs:
           name: tmux-api
           path: tmux-api/tmux-api
           retention-days: 7
+
+  go-test:
+    name: Go Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: changes
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.scripts == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.26"
+          cache-dependency-path: tmux-api/go.mod
+
+      - name: Vet
+        working-directory: tmux-api
+        run: go vet ./...
+
+      - name: Test
+        working-directory: tmux-api
+        run: go test ./...
 
   test-scripts:
     name: Test Scripts
@@ -162,10 +183,6 @@ jobs:
         with:
           go-version: "1.26"
           cache-dependency-path: tmux-api/go.mod
-
-      - name: Test tmux-api
-        working-directory: tmux-api
-        run: go test -short ./...
 
       - name: Build tmux-api.exe
         working-directory: tmux-api
