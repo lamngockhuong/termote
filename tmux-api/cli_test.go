@@ -1,0 +1,200 @@
+package main
+
+import (
+	"bufio"
+	"bytes"
+	"errors"
+	"flag"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+)
+
+// fakeRunner stands in for external commands. Commands are keyed by their
+// joined argv; unknown commands fail.
+type fakeRunner struct {
+	mu      sync.Mutex
+	paths   map[string]bool   // LookPath succeeds for these
+	outputs map[string]string // Output results
+	fail    map[string]bool   // Run/Output fail for these
+	calls   []string
+}
+
+func newFakeRunner(available ...string) *fakeRunner {
+	f := &fakeRunner{paths: map[string]bool{}, outputs: map[string]string{}, fail: map[string]bool{}}
+	for _, p := range available {
+		f.paths[p] = true
+	}
+	return f
+}
+
+func (f *fakeRunner) LookPath(name string) (string, error) {
+	if f.paths[name] {
+		return "/usr/bin/" + name, nil
+	}
+	return "", errors.New("not found")
+}
+
+func (f *fakeRunner) record(name string, args []string) string {
+	key := strings.TrimSpace(name + " " + strings.Join(args, " "))
+	f.mu.Lock()
+	f.calls = append(f.calls, key)
+	f.mu.Unlock()
+	return key
+}
+
+func (f *fakeRunner) Output(dir string, env []string, name string, args ...string) ([]byte, error) {
+	key := f.record(name, args)
+	if out, ok := f.outputs[key]; ok {
+		return []byte(out), nil
+	}
+	return nil, errors.New("fake: no output for " + key)
+}
+
+func (f *fakeRunner) Run(dir string, env []string, name string, args ...string) error {
+	key := f.record(name, args)
+	if f.fail[key] {
+		return errors.New("fake: " + key + " failed")
+	}
+	return nil
+}
+
+func (f *fakeRunner) called(prefix string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, c := range f.calls {
+		if strings.HasPrefix(c, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// testCLI builds a cli rooted in temp dirs: a home with ~/.termote and a
+// project dir laid out like an installed release.
+type testCLI struct {
+	*cli
+	stdout, stderr *bytes.Buffer
+	runner         *fakeRunner
+	killed         []int
+}
+
+func newTestCLI(t *testing.T, goos string) *testCLI {
+	t.Helper()
+	root := t.TempDir()
+	tc := &testCLI{stdout: &bytes.Buffer{}, stderr: &bytes.Buffer{}, runner: newFakeRunner()}
+	tc.runner.outputs["hostname"] = "termote-box\n"
+	tc.runner.outputs["whoami"] = "tester\n"
+	tc.cli = &cli{
+		out:        tc.stdout,
+		errOut:     tc.stderr,
+		in:         bufio.NewReader(strings.NewReader("")),
+		home:       filepath.Join(root, "home"),
+		projectDir: filepath.Join(root, "install"),
+		exe:        filepath.Join(root, "install", "tmux-api-"+goos+"-amd64"),
+		goos:       goos,
+		goarch:     "amd64",
+		version:    "1.0.0",
+		run:        tc.runner,
+		execShim:   func(string, []string) error { return errors.New("execShim not expected") },
+		readPassword: func() (string, error) {
+			return "", errors.New("no terminal")
+		},
+		procs:      func() ([]procInfo, error) { return nil, nil },
+		localIPv4s: func() []string { return []string{"192.168.1.20", "10.0.0.5"} },
+		pid:        os.Getpid(),
+	}
+	tc.cli.terminate = func(pid int, _ time.Duration) error {
+		tc.killed = append(tc.killed, pid)
+		return nil
+	}
+	for _, d := range []string{tc.home, filepath.Join(tc.projectDir, "scripts")} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return tc
+}
+
+func writeFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDispatchVersionHelpUnknown(t *testing.T) {
+	tc := newTestCLI(t, runtime.GOOS)
+	if code := tc.main([]string{"version"}); code != 0 || tc.stdout.String() != "Termote v1.0.0\n" {
+		t.Fatalf("version: code %d, out %q", code, tc.stdout.String())
+	}
+	tc.stdout.Reset()
+	if code := tc.main([]string{"help"}); code != 0 || !strings.Contains(tc.stdout.String(), "show-password") {
+		t.Fatalf("help: code %d, out %q", code, tc.stdout.String())
+	}
+	if code := tc.main([]string{"bogus"}); code != 2 || !strings.Contains(tc.stderr.String(), "unknown command: bogus") {
+		t.Fatalf("unknown: code %d, err %q", code, tc.stderr.String())
+	}
+}
+
+func TestHelpUsesPowerShellFlagsOnWindows(t *testing.T) {
+	tc := newTestCLI(t, "windows")
+	tc.printHelp()
+	out := tc.stdout.String()
+	for _, want := range []string{"termote.ps1", "-AllowHost", "-Tailscale", "(default: 7690)"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("windows help misses %q", want)
+		}
+	}
+}
+
+func TestParseArgsInterleaved(t *testing.T) {
+	var lan bool
+	var port int
+	fs := flag.NewFlagSet("t", flag.ContinueOnError)
+	fs.BoolVar(&lan, "lan", false, "")
+	fs.IntVar(&port, "port", 0, "")
+	pos, err := parseArgs(fs, []string{"--lan", "native", "--port", "9000", "extra"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !lan || port != 9000 || strings.Join(pos, ",") != "native,extra" {
+		t.Fatalf("lan=%v port=%d pos=%v", lan, port, pos)
+	}
+}
+
+func TestFindProjectDir(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, "scripts"), 0o755)
+	os.MkdirAll(filepath.Join(root, "tmux-api"), 0o755)
+	other := t.TempDir()
+	cases := []struct{ exe, env, want string }{
+		{filepath.Join(root, "tmux-api-linux-amd64"), "", root},        // release: binary in the root
+		{filepath.Join(root, "tmux-api", "tmux-api-native"), "", root}, // checkout build
+		{filepath.Join(root, "tmux-api-linux-amd64"), other, other},    // shim override
+	}
+	for _, c := range cases {
+		if got := findProjectDir(c.exe, c.env); got != c.want {
+			t.Errorf("findProjectDir(%q, %q) = %q, want %q", c.exe, c.env, got, c.want)
+		}
+	}
+}
+
+func TestLoadVersionPrefersVersionFileInRelease(t *testing.T) {
+	tc := newTestCLI(t, runtime.GOOS)
+	writeFile(t, filepath.Join(tc.projectDir, ".version"), "1.2.3\n")
+	if got := tc.loadVersion(); got != "1.2.3" {
+		t.Fatalf("release version = %q, want 1.2.3", got)
+	}
+	writeFile(t, filepath.Join(tc.projectDir, "pwa", "package.json"), "{}")
+	if got := tc.loadVersion(); got != cliVersion {
+		t.Fatalf("checkout version = %q, want %q", got, cliVersion)
+	}
+}

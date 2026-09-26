@@ -1,0 +1,7 @@
+# Termote config (auto-generated)
+TERMOTE_MODE="container"
+TERMOTE_LAN="false"
+TERMOTE_NO_AUTH="false"
+TERMOTE_PORT="7680"
+TERMOTE_TAILSCALE=""
+TERMOTE_SAVED_PASS="U2FsdGVkX1/0DRfMJ3EFtHguLwXkrOTk3UXR79+q1DA="
