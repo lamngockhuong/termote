@@ -1,11 +1,10 @@
-# All-in-one: ttyd + tmux + tmux-api (serve mode)
-FROM tsl0922/ttyd:latest
+# All-in-one: tmux + tmux-api (serve mode, streams the terminal itself)
+# Debian, not Alpine: entrypoint.sh needs bash and locales. Pinned by digest.
+FROM debian:stable-slim@sha256:5bc3287b25407c965a30f38e32603dc253a3869e1b12a21ac09bfc27fd8b13ce
 
-USER root
-
-# Install tools + locale support
+# Install tools + locale support; tini reaps the tmux processes that daemonize
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    tmux nano vim curl git htop openssl locales \
+    tini tmux nano vim curl ca-certificates git htop openssl locales \
     && sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen \
     && locale-gen \
     && rm -rf /var/lib/apt/lists/*
@@ -53,4 +52,5 @@ ENV LANG=en_US.UTF-8
 ENV LC_ALL=en_US.UTF-8
 EXPOSE 7680
 
-ENTRYPOINT ["/entrypoint.sh"]
+# -s: also works as a subreaper when the runtime adds its own init (--init)
+ENTRYPOINT ["/usr/bin/tini", "-s", "--", "/entrypoint.sh"]

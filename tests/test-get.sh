@@ -1,13 +1,14 @@
 #!/bin/bash
-# Test cases for get.sh (online installer)
+# Tests for scripts/get.sh, run end to end against a fake curl that serves a
+# local release (tarball + checksums.txt) and a fake shim that logs its calls.
 # Usage: make test-get
 
 TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$TEST_DIR")"
+GET_SCRIPT="$PROJECT_DIR/scripts/get.sh"
 PASSED=0
 FAILED=0
 
-# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 NC='\033[0m'
@@ -22,371 +23,193 @@ fail() {
     FAILED=$((FAILED + 1))
 }
 
-test_script_syntax() {
-    echo "=== Testing script syntax ==="
-
-    if bash -n "$PROJECT_DIR/scripts/get.sh" 2>/dev/null; then
-        pass "get.sh syntax valid"
-    else
-        fail "syntax" "valid bash" "syntax error"
-    fi
+check() {
+    if [[ "$2" == "$3" ]]; then pass "$1"; else fail "$1" "$2" "$3"; fi
 }
 
-test_repo_config() {
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
+RELEASES="$TMP/releases" # releases/<version>/{tarball,checksums.txt}
+FAKE_PATH="$TMP/bin"
+mkdir -p "$RELEASES" "$FAKE_PATH"
+
+sha256() { if command -v sha256sum >/dev/null; then sha256sum "$1"; else shasum -a 256 "$1"; fi | awk '{print $1}'; }
+
+# Fake curl: GitHub API "latest" returns $FAKE_LATEST; release downloads come
+# from $RELEASES; everything else fails like a 404 does with -f.
+cat >"$FAKE_PATH/curl" <<'EOF'
+#!/bin/bash
+out="" url=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -o) out="$2"; shift ;;
+        -*) ;;
+        *) url="$1" ;;
+    esac
+    shift
+done
+echo "$url" >>"$CURL_LOG"
+case "$url" in
+    */releases/latest) body=$(printf '{\n  "tag_name": "v%s",\n}\n' "$FAKE_LATEST") ;;
+    */releases/download/v*)
+        rest="${url#*/releases/download/v}"
+        file="$RELEASES/${rest%%/*}/${rest#*/}"
+        [[ -f "$file" ]] || exit 22
+        if [[ -n "$out" ]]; then cp "$file" "$out"; exit 0; fi
+        body=$(cat "$file") ;;
+    *) exit 22 ;;
+esac
+if [[ -n "$out" ]]; then echo "$body" >"$out"; else echo "$body"; fi
+EOF
+chmod +x "$FAKE_PATH/curl"
+
+# make_release <version> [checksums: good|bad|none]
+make_release() {
+    local v="$1" dir="$RELEASES/$1" stage="$TMP/stage/termote-v$1"
+    mkdir -p "$dir" "$stage/scripts"
+    # The shim logs each call; `help` lists `link` like the real CLI does.
+    cat >"$stage/scripts/termote.sh" <<'EOF'
+#!/bin/bash
+echo "$*" >>"$SHIM_LOG"
+[[ "$1" == "help" ]] && echo "  link              Create 'termote' global command"
+exit 0
+EOF
+    chmod +x "$stage/scripts/termote.sh"
+    echo "payload $v" >"$stage/README.md"
+    tar czf "$dir/termote-v$v.tar.gz" -C "$TMP/stage" "termote-v$v"
+    case "${2:-good}" in
+        good) echo "$(sha256 "$dir/termote-v$v.tar.gz")  termote-v$v.tar.gz" >"$dir/checksums.txt" ;;
+        bad) echo "0000000000000000000000000000000000000000000000000000000000000000  termote-v$v.tar.gz" >"$dir/checksums.txt" ;;
+    esac
+}
+
+# run_get <case> [args...]: fresh HOME and install dir per case; sets
+# INSTALL, SHIM_CALLS and STATUS.
+run_get() {
+    local name="$1"
+    shift
+    export HOME="$TMP/home-$name" TERMOTE_INSTALL_DIR="$TMP/home-$name/.termote"
+    export SHIM_LOG="$TMP/shim-$name.log" CURL_LOG="$TMP/curl-$name.log" RELEASES FAKE_LATEST
+    mkdir -p "$HOME"
+    [[ -n "$SAVED_CONFIG" ]] && mkdir -p "$HOME/.termote" && printf '%s\n' "$SAVED_CONFIG" >"$HOME/.termote/config"
+    : >"$SHIM_LOG"
+    OUTPUT=$(PATH="$FAKE_PATH:$PATH" ${GET_WRAP:-} bash "$GET_SCRIPT" "$@" </dev/null 2>&1)
+    STATUS=$?
+    INSTALL="$TERMOTE_INSTALL_DIR"
+    SHIM_CALLS=$(paste -sd';' - <"$SHIM_LOG")
+}
+
+FAKE_LATEST="1.0.0"
+SAVED_CONFIG=""
+make_release 1.0.0
+make_release 1.0.0-rc.1
+make_release 0.9.0 bad
+make_release 0.8.0 none
+
+test_syntax() {
+    echo "=== Syntax ==="
+    if bash -n "$GET_SCRIPT"; then pass "get.sh syntax valid"; else fail "syntax" "valid" "error"; fi
+    if grep -qi ttyd "$GET_SCRIPT"; then fail "no ttyd" "none" "$(grep -i ttyd "$GET_SCRIPT" | head -1)"; else pass "no ttyd step"; fi
+}
+
+test_default_install() {
     echo ""
-    echo "=== Testing repository configuration ==="
-
-    # Verify REPO variable
-    if grep -q 'REPO="lamngockhuong/termote"' "$PROJECT_DIR/scripts/get.sh"; then
-        pass "REPO set to lamngockhuong/termote"
-    else
-        fail "REPO" "lamngockhuong/termote" "incorrect"
-    fi
-
-    # Verify INSTALL_DIR default
-    if grep -q 'INSTALL_DIR=.*\.termote' "$PROJECT_DIR/scripts/get.sh"; then
-        pass "default INSTALL_DIR is ~/.termote"
-    else
-        fail "INSTALL_DIR" "~/.termote" "not found"
-    fi
-
-    # Verify TERMOTE_INSTALL_DIR override
-    if grep -q 'TERMOTE_INSTALL_DIR' "$PROJECT_DIR/scripts/get.sh"; then
-        pass "TERMOTE_INSTALL_DIR override supported"
-    else
-        fail "env override" "TERMOTE_INSTALL_DIR" "not found"
-    fi
+    echo "=== Install latest (--yes) ==="
+    run_get default --yes
+    check "exit status" "0" "$STATUS"
+    check "extracts into the install dir" "payload 1.0.0" "$(cat "$INSTALL/README.md" 2>/dev/null)"
+    check "writes .version" "1.0.0" "$(cat "$INSTALL/.version" 2>/dev/null)"
+    check "installs native, then links" "install native;help;link" "$SHIM_CALLS"
+    if echo "$OUTPUT" | grep -q "Checksum verified"; then pass "verifies the checksum"; else fail "checksum" "verified" "$OUTPUT"; fi
+    if ls "$INSTALL"/*.tar.gz >/dev/null 2>&1; then fail "tarball cleanup" "none left" "tarball in install dir"; else pass "leaves no tarball behind"; fi
 }
 
-test_arch_detection() {
+test_install_flags() {
     echo ""
-    echo "=== Testing architecture detection ==="
-
-    # Verify get_arch function
-    if grep -q "get_arch()" "$PROJECT_DIR/scripts/get.sh"; then
-        pass "get_arch function present"
-    else
-        fail "get_arch" "function present" "not found"
-    fi
-
-    # Verify supported architectures
-    if grep -q "x86_64\|amd64" "$PROJECT_DIR/scripts/get.sh" && \
-       grep -q "aarch64\|arm64" "$PROJECT_DIR/scripts/get.sh"; then
-        pass "supports amd64 and arm64"
-    else
-        fail "arch support" "amd64+arm64" "missing some"
-    fi
+    echo "=== Mode and pass-through flags ==="
+    run_get flags --yes --container --lan --allow-host box.local
+    check "container mode with flags" "install container --lan --allow-host box.local;help;link" "$SHIM_CALLS"
+    run_get positional -y native --mux herdr
+    check "positional mode" "install native --mux herdr;help;link" "$SHIM_CALLS"
 }
 
-test_version_detection() {
+test_download_only() {
     echo ""
-    echo "=== Testing version detection ==="
-
-    # Verify get_latest_version function
-    if grep -q "get_latest_version()" "$PROJECT_DIR/scripts/get.sh"; then
-        pass "get_latest_version function present"
-    else
-        fail "get_latest_version" "function present" "not found"
-    fi
-
-    # Verify GitHub API usage
-    if grep -q "api.github.com.*releases/latest" "$PROJECT_DIR/scripts/get.sh"; then
-        pass "uses GitHub API for version"
-    else
-        fail "GitHub API" "releases/latest" "not found"
-    fi
+    echo "=== --download-only ==="
+    run_get download --download-only
+    check "exit status" "0" "$STATUS"
+    check "extracts" "payload 1.0.0" "$(cat "$INSTALL/README.md" 2>/dev/null)"
+    check "does not run the CLI" "" "$SHIM_CALLS"
 }
 
-test_checksum_verification() {
+test_version_pin() {
     echo ""
-    echo "=== Testing checksum verification ==="
-
-    # Verify verify_checksum function
-    if grep -q "verify_checksum()" "$PROJECT_DIR/scripts/get.sh"; then
-        pass "verify_checksum function present"
-    else
-        fail "verify_checksum" "function present" "not found"
-    fi
-
-    # Verify sha256sum support
-    if grep -q "sha256sum" "$PROJECT_DIR/scripts/get.sh"; then
-        pass "sha256sum command used"
-    else
-        fail "sha256sum" "command present" "not found"
-    fi
-
-    # Verify shasum fallback (macOS)
-    if grep -q "shasum -a 256" "$PROJECT_DIR/scripts/get.sh"; then
-        pass "shasum fallback for macOS"
-    else
-        fail "shasum fallback" "shasum -a 256" "not found"
-    fi
-
-    # Verify checksums.txt download
-    if grep -q "checksums.txt" "$PROJECT_DIR/scripts/get.sh"; then
-        pass "checksums.txt download present"
-    else
-        fail "checksums.txt" "download present" "not found"
-    fi
+    echo "=== --version ==="
+    run_get pin --yes --version v1.0.0-rc.1
+    check "installs a pre-release" "1.0.0-rc.1" "$(cat "$INSTALL/.version" 2>/dev/null)"
+    if grep -q "releases/latest" "$CURL_LOG"; then fail "pinned version" "no latest lookup" "looked up latest"; else pass "skips the latest lookup"; fi
+    run_get badpin --yes --version 1.0
+    if [[ $STATUS -ne 0 ]] && echo "$OUTPUT" | grep -q "Invalid version format"; then pass "rejects an invalid version"; else fail "invalid version" "error" "$OUTPUT"; fi
+    run_get missing --yes --version 2.0.0
+    if [[ $STATUS -ne 0 && -z "$SHIM_CALLS" ]]; then pass "missing release fails before install"; else fail "missing release" "error" "status $STATUS"; fi
 }
 
-test_dependency_checks() {
+test_checksums() {
     echo ""
-    echo "=== Testing dependency checks ==="
+    echo "=== Checksums ==="
+    run_get mismatch --yes --version 0.9.0
+    if [[ $STATUS -ne 0 ]] && echo "$OUTPUT" | grep -q "Checksum mismatch"; then pass "mismatch fails"; else fail "mismatch" "error" "$OUTPUT"; fi
+    check "mismatch extracts nothing" "false" "$([[ -e "$INSTALL/README.md" ]] && echo true || echo false)"
+    check "mismatch runs nothing" "" "$SHIM_CALLS"
 
-    # Verify curl check
-    if grep -q 'command -v curl' "$PROJECT_DIR/scripts/get.sh"; then
-        pass "curl dependency check present"
-    else
-        fail "curl check" "command -v curl" "not found"
-    fi
-
-    # Verify tar check
-    if grep -q 'command -v tar' "$PROJECT_DIR/scripts/get.sh"; then
-        pass "tar dependency check present"
-    else
-        fail "tar check" "command -v tar" "not found"
-    fi
+    run_get nosums --yes --version 0.8.0
+    check "missing checksums only warn" "0" "$STATUS"
+    if echo "$OUTPUT" | grep -q "skipping verification"; then pass "warns about skipped verification"; else fail "warning" "skipping verification" "$OUTPUT"; fi
+    run_get strict --yes --strict --version 0.8.0
+    if [[ $STATUS -ne 0 && -z "$SHIM_CALLS" ]]; then pass "--strict requires checksums"; else fail "--strict" "error" "status $STATUS"; fi
 }
 
-test_error_handling() {
+test_update() {
     echo ""
-    echo "=== Testing error handling ==="
-
-    # Verify set -e
-    if grep -q "set -e" "$PROJECT_DIR/scripts/get.sh"; then
-        pass "set -e (exit on error) present"
-    else
-        fail "set -e" "present" "not found"
-    fi
-
-    # Verify error function
-    if grep -q 'error()' "$PROJECT_DIR/scripts/get.sh" && \
-       grep -q 'exit 1' "$PROJECT_DIR/scripts/get.sh"; then
-        pass "error function with exit 1"
-    else
-        fail "error function" "with exit 1" "incomplete"
-    fi
+    echo "=== --update ==="
+    SAVED_CONFIG='TERMOTE_MODE="container"
+TERMOTE_LAN="true"'
+    run_get update --update
+    check "uses the saved mode; install merges the rest" "install container;help;link" "$SHIM_CALLS"
+    run_get update-mode --update --native
+    check "explicit mode wins" "install native;help;link" "$SHIM_CALLS"
+    SAVED_CONFIG=""
+    run_get update-noconfig --update
+    if [[ $STATUS -ne 0 ]] && echo "$OUTPUT" | grep -q "No saved config"; then pass "--update without config fails"; else fail "--update without config" "error" "$OUTPUT"; fi
+    check "--update without config runs nothing" "" "$SHIM_CALLS"
 }
 
-test_tarball_extraction() {
+test_prompt() {
     echo ""
-    echo "=== Testing tarball extraction ==="
-
-    # Verify tar extraction with strip-components
-    if grep -q "tar xzf.*--strip-components=1" "$PROJECT_DIR/scripts/get.sh"; then
-        pass "tar extracts with --strip-components=1"
+    echo "=== Prompt ==="
+    # Without a controlling tty the confirmation read fails, so nothing is
+    # installed; setsid detaches it (skipped where setsid is missing).
+    if command -v setsid >/dev/null 2>&1; then
+        GET_WRAP="setsid" run_get prompt
+        check "no confirmation, no install" "" "$SHIM_CALLS"
     else
-        fail "tar extract" "--strip-components=1" "not found"
+        echo "SKIP: setsid not available; prompt test"
     fi
-
-    # Verify tarball cleanup
-    if grep -q 'rm -f.*TARBALL' "$PROJECT_DIR/scripts/get.sh" || \
-       grep -q 'rm -f "\$TARBALL"' "$PROJECT_DIR/scripts/get.sh"; then
-        pass "tarball cleanup after extraction"
-    else
-        fail "cleanup" "rm tarball" "not found"
-    fi
+    run_get help --help
+    if echo "$OUTPUT" | grep -q -- "--download-only" && [[ ! -e "$INSTALL" ]]; then pass "--help prints usage only"; else fail "--help" "usage" "$OUTPUT"; fi
 }
 
-test_install_script_call() {
-    echo ""
-    echo "=== Testing install script invocation ==="
+test_syntax
+test_default_install
+test_install_flags
+test_download_only
+test_version_pin
+test_checksums
+test_update
+test_prompt
 
-    # Verify termote.sh install is called
-    if grep -q "termote.sh install" "$PROJECT_DIR/scripts/get.sh"; then
-        pass "calls termote.sh install"
-    else
-        fail "termote.sh install" "present" "not found"
-    fi
-
-    # Verify default mode is native
-    if grep -q 'mode="native"' "$PROJECT_DIR/scripts/get.sh"; then
-        pass "default mode is native"
-    else
-        fail "default mode" "native" "not found"
-    fi
-
-    # Verify mode extraction from args (supports --container/--native flags)
-    if grep -q '\-\-container|container)' "$PROJECT_DIR/scripts/get.sh"; then
-        pass "mode extraction from args (--container/container)"
-    else
-        fail "mode extraction" "--container pattern" "not found"
-    fi
-}
-
-test_update_mode() {
-    echo ""
-    echo "=== Testing --update mode ==="
-
-    # Verify UPDATE_MODE variable
-    if grep -q 'UPDATE_MODE=true' "$PROJECT_DIR/scripts/get.sh"; then
-        pass "--update flag sets UPDATE_MODE"
-    else
-        fail "--update" "UPDATE_MODE=true" "not found"
-    fi
-
-    # Verify --update implies --yes
-    if grep -q 'UPDATE_MODE=true.*AUTO_YES=true' "$PROJECT_DIR/scripts/get.sh" || \
-       grep -A1 'UPDATE_MODE=true' "$PROJECT_DIR/scripts/get.sh" | grep -q 'AUTO_YES=true'; then
-        pass "--update implies auto-yes"
-    else
-        fail "--update auto-yes" "AUTO_YES=true" "not found"
-    fi
-
-    # Verify config loading uses grep/cut (not sourcing)
-    if grep -q "grep.*TERMOTE_MODE.*cut" "$PROJECT_DIR/scripts/get.sh"; then
-        pass "config parsed safely (grep/cut, no sourcing)"
-    else
-        fail "safe parsing" "grep/cut" "not found"
-    fi
-
-    # Verify quote stripping on read
-    if grep -q 'tr -d.*"' "$PROJECT_DIR/scripts/get.sh"; then
-        pass "quotes stripped on config read"
-    else
-        fail "strip quotes" "tr -d" "not found"
-    fi
-
-    # Verify stop_services preserves config (no 'uninstall all')
-    if grep -A5 'stop_services()' "$PROJECT_DIR/scripts/get.sh" | grep -q 'uninstall all'; then
-        fail "stop_services" "no uninstall all" "found uninstall all"
-    else
-        pass "stop_services preserves config (no uninstall all)"
-    fi
-
-    # Verify sudo credentials pre-cache before stop_services
-    if grep -B15 'stop_services' "$PROJECT_DIR/scripts/get.sh" | grep -q 'sudo -v'; then
-        pass "sudo credentials pre-cached before stop_services"
-    else
-        fail "sudo pre-cache" "sudo -v before stop_services" "not found"
-    fi
-}
-
-test_version_pinning() {
-    echo ""
-    echo "=== Testing --version pinning ==="
-
-    # Verify PIN_VERSION variable
-    if grep -q 'PIN_VERSION=' "$PROJECT_DIR/scripts/get.sh"; then
-        pass "PIN_VERSION variable present"
-    else
-        fail "PIN_VERSION" "variable" "not found"
-    fi
-
-    # Verify version format validation
-    if grep -q '\^\\[0-9\\]' "$PROJECT_DIR/scripts/get.sh" || \
-       grep -q 'Invalid version format' "$PROJECT_DIR/scripts/get.sh"; then
-        pass "version format validation"
-    else
-        fail "version validation" "regex check" "not found"
-    fi
-
-    # Verify v-prefix stripping
-    if grep -q '{2#v}' "$PROJECT_DIR/scripts/get.sh"; then
-        pass "strips v prefix from version"
-    else
-        fail "v-prefix" "strip" "not found"
-    fi
-}
-
-test_help_output() {
-    echo ""
-    echo "=== Testing --help ==="
-
-    # Verify show_help function
-    if grep -q 'show_help()' "$PROJECT_DIR/scripts/get.sh"; then
-        pass "show_help() function present"
-    else
-        fail "show_help" "function" "not found"
-    fi
-
-    # Verify --help exits early
-    if grep -q '\-\-help|-h) show_help; exit 0' "$PROJECT_DIR/scripts/get.sh"; then
-        pass "--help exits before download"
-    else
-        fail "--help exit" "early exit" "not found"
-    fi
-}
-
-test_helper_functions() {
-    echo ""
-    echo "=== Testing helper functions ==="
-
-    # Verify info function
-    if grep -q 'info()' "$PROJECT_DIR/scripts/get.sh"; then
-        pass "info() helper present"
-    else
-        fail "info()" "present" "not found"
-    fi
-
-    # Verify warn function
-    if grep -q 'warn()' "$PROJECT_DIR/scripts/get.sh"; then
-        pass "warn() helper present"
-    else
-        fail "warn()" "present" "not found"
-    fi
-
-    # Verify error function
-    if grep -q 'error()' "$PROJECT_DIR/scripts/get.sh"; then
-        pass "error() helper present"
-    else
-        fail "error()" "present" "not found"
-    fi
-}
-
-test_version_file() {
-    echo ""
-    echo "=== Testing .version file support ==="
-
-    # Verify .version file is written after extraction
-    if grep -q 'echo.*VERSION.*>.*\.version' "$PROJECT_DIR/scripts/get.sh"; then
-        pass ".version file written at install time"
-    else
-        fail ".version write" "echo to .version" "not found"
-    fi
-
-    # Verify get_installed_version reads .version first
-    if grep -q '\.version' "$PROJECT_DIR/scripts/get.sh" &&
-       grep -A2 'get_installed_version' "$PROJECT_DIR/scripts/get.sh" | grep -q '\.version'; then
-        pass "get_installed_version reads .version file"
-    else
-        fail "get_installed_version" ".version read" "not found"
-    fi
-
-    # Verify fallback to termote.sh VERSION for pre-.version installs
-    if grep -A10 'get_installed_version' "$PROJECT_DIR/scripts/get.sh" | grep -q 'elif.*TERMOTE_SCRIPT'; then
-        pass "fallback to termote.sh VERSION for old installs"
-    else
-        fail "version fallback" "elif TERMOTE_SCRIPT" "not found"
-    fi
-}
-
-# Run all tests
-echo "Running get.sh tests..."
 echo ""
-
-test_script_syntax
-test_repo_config
-test_arch_detection
-test_version_detection
-test_checksum_verification
-test_dependency_checks
-test_error_handling
-test_tarball_extraction
-test_install_script_call
-test_update_mode
-test_version_pinning
-test_version_file
-test_help_output
-test_helper_functions
-
-# Summary
-echo ""
-echo "=== Summary ==="
+echo "=== Results ==="
 echo -e "Passed: ${GREEN}$PASSED${NC}"
 echo -e "Failed: ${RED}$FAILED${NC}"
-
-if [[ $FAILED -gt 0 ]]; then
-    exit 1
-fi
+[[ $FAILED -eq 0 ]]

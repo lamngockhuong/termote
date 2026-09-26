@@ -1,5 +1,5 @@
 # Termote Docker Compose
-# --docker: all-in-one container (tmux-api + ttyd)
+# --docker: all-in-one container (tmux + tmux-api); tini is PID 1 in the image
 
 services:
   termote:

@@ -105,6 +105,7 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version: "1.26"
+          check-latest: true
           cache-dependency-path: tmux-api/go.mod
 
       - name: Build
@@ -130,6 +131,7 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version: "1.26"
+          check-latest: true
           cache-dependency-path: tmux-api/go.mod
 
       - name: Build
@@ -158,6 +160,7 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version: "1.26"
+          check-latest: true
           cache-dependency-path: tmux-api/go.mod
 
       - name: Build
@@ -183,6 +186,7 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version: "1.26"
+          check-latest: true
           cache-dependency-path: tmux-api/go.mod
 
       - name: Build
@@ -341,6 +345,10 @@ jobs:
           tag_name: v${{ needs.prepare.outputs.version }}
           name: v${{ needs.prepare.outputs.version }}
           generate_release_notes: true
+          # A version with "-" (1.0.0-rc.1) is a pre-release and must not become
+          # releases/latest, which `termote update` and get.sh/get.ps1 install.
+          prerelease: ${{ contains(needs.prepare.outputs.version, '-') }}
+          make_latest: ${{ !contains(needs.prepare.outputs.version, '-') }}
           files: |
             release/termote-v${{ needs.prepare.outputs.version }}.tar.gz
             release/pwa-dist-v${{ needs.prepare.outputs.version }}.zip
@@ -362,8 +370,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: [prepare, release]
     # Skip when called by release-please (it handles version sync via extra-files)
-    # Use inputs.version to detect workflow_call since event_name check is unreliable
-    if: inputs.version == ''
+    # Use inputs.version to detect workflow_call since event_name check is unreliable.
+    # Skip pre-releases too: they are tagged from feat/1.0 and must not bump main.
+    if: inputs.version == '' && !contains(needs.prepare.outputs.version, '-')
     permissions:
       contents: write
     steps:

@@ -1,28 +1,31 @@
 #!/bin/bash
-# Termote online installer
+# Termote online installer: downloads a release, verifies its checksum,
+# extracts it and hands over to the termote CLI, which does the install.
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
 #     -> Downloads latest, prompts before install (defaults to native mode)
 #   curl ... | bash -s -- --yes
 #     -> Auto-install without prompt
 #   curl ... | bash -s -- --container --lan
-#     -> Container mode with LAN access
+#     -> Container mode with LAN access (other flags go to `termote install`)
 #   curl ... | bash -s -- --download-only
 #     -> Download only, no install
 #   curl ... | bash -s -- --update
-#     -> Auto-update using saved config from previous install
-#   curl ... | bash -s -- --version 0.0.4
+#     -> Re-install with the saved config from the previous install
+#   curl ... | bash -s -- --version 1.0.0
 #     -> Install/downgrade to a specific version
 
-set -e
+set -eo pipefail
 
 REPO="lamngockhuong/termote"
 INSTALL_DIR="${TERMOTE_INSTALL_DIR:-$HOME/.termote}"
+CONFIG_FILE="$HOME/.termote/config"
+SHIM="${INSTALL_DIR}/scripts/termote.sh"
 AUTO_YES=false
 DOWNLOAD_ONLY=false
 UPDATE_MODE=false
-PIN_VERSION=""
 STRICT_CHECKSUM=false
+PIN_VERSION=""
 
 # Colors
 RED='\033[0;31m'
@@ -32,286 +35,183 @@ NC='\033[0m'
 
 info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
-error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
+error() { echo -e "${RED}[ERROR]${NC} $1" >&2; exit 1; }
 
-# Path to termote CLI (reused in multiple functions)
-TERMOTE_SCRIPT="${INSTALL_DIR}/scripts/termote.sh"
-
-# Get installed version from .version file (written at install time)
+# Installed version, from the .version file an install writes
 get_installed_version() {
-    local version_file="${INSTALL_DIR}/.version"
-    if [ -f "$version_file" ]; then
-        cat "$version_file"
-    elif [ -f "$TERMOTE_SCRIPT" ]; then
-        # Fallback: read VERSION from termote.sh (for pre-.version installs)
-        grep 'VERSION=' "$TERMOTE_SCRIPT" 2>/dev/null | head -1 | cut -d'"' -f2
-    fi
+    [[ -f "${INSTALL_DIR}/.version" ]] && cat "${INSTALL_DIR}/.version"
+    return 0
 }
 
-# Load saved config for --update mode (parse key=value, never source)
-load_config() {
-    local config="$HOME/.termote/config"
-    if [[ ! -f "$config" ]]; then
-        error "No saved config found. Run 'termote.sh install' first."
-    fi
-    TERMOTE_MODE=$(grep '^TERMOTE_MODE=' "$config" 2>/dev/null | cut -d= -f2- | tr -d '"')
-    TERMOTE_LAN=$(grep '^TERMOTE_LAN=' "$config" 2>/dev/null | cut -d= -f2- | tr -d '"')
-    TERMOTE_NO_AUTH=$(grep '^TERMOTE_NO_AUTH=' "$config" 2>/dev/null | cut -d= -f2- | tr -d '"')
-    TERMOTE_PORT=$(grep '^TERMOTE_PORT=' "$config" 2>/dev/null | cut -d= -f2- | tr -d '"')
-    TERMOTE_TAILSCALE=$(grep '^TERMOTE_TAILSCALE=' "$config" 2>/dev/null | cut -d= -f2- | tr -d '"')
-}
-
-# Check if services are running
-services_running() {
-    pgrep -f "tmux-api" >/dev/null 2>&1 || pgrep -f "ttyd" >/dev/null 2>&1
-}
-
-# Stop running services (without removing config)
-stop_services() {
-    info "Stopping running services..."
-    if [ -f "$TERMOTE_SCRIPT" ]; then
-        "$TERMOTE_SCRIPT" uninstall container 2>/dev/null || true
-        "$TERMOTE_SCRIPT" uninstall native 2>/dev/null || true
-    else
-        pkill -f "tmux-api" 2>/dev/null || true
-        pkill -f "ttyd" 2>/dev/null || true
-    fi
-}
-
-# Prompt user for confirmation
-confirm_install() {
-    local current="$1"
-    local latest="$2"
-
-    echo ""
-    if [ -n "$current" ]; then
-        if [ "$current" = "$latest" ]; then
-            info "Current version: v${current} (same as target)"
-            echo -e "Re-install? [y/N] \c"
-        else
-            info "Current version: v${current}"
-            info "Target version:  v${latest}"
-            echo -e "Switch to v${latest}? [y/N] \c"
-        fi
-    else
-        info "Latest version: v${latest}"
-        echo -e "Install Termote? [y/N] \c"
-    fi
-
-    read -r response </dev/tty
-    case "$response" in
-        [yY]|[yY][eE][sS]) return 0 ;;
-        *) return 1 ;;
-    esac
-}
-
-# Detect latest version
 get_latest_version() {
-    curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" | \
+    curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" |
         grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/'
 }
 
-# Detect architecture
-get_arch() {
-    case "$(uname -m)" in
-        x86_64|amd64) echo "amd64" ;;
-        aarch64|arm64) echo "arm64" ;;
-        *) error "Unsupported architecture: $(uname -m)" ;;
-    esac
+# Saved install mode, for --update (parse KEY="value", never source the file)
+get_saved_mode() {
+    grep '^TERMOTE_MODE=' "$CONFIG_FILE" | cut -d= -f2- | tr -d '"' || true
 }
 
-# Verify checksum
-verify_checksum() {
-    local file="$1"
-    local expected="$2"
-    local actual
-
+sha256_of() {
     if command -v sha256sum >/dev/null; then
-        actual=$(sha256sum "$file" | awk '{print $1}')
+        sha256sum "$1" | awk '{print $1}'
     elif command -v shasum >/dev/null; then
-        actual=$(shasum -a 256 "$file" | awk '{print $1}')
-    else
+        shasum -a 256 "$1" | awk '{print $1}'
+    fi
+}
+
+# verify_checksum <file> <name> <checksums-url>
+verify_checksum() {
+    local expected actual checksums
+    checksums=$(curl -fsSL "$3" 2>/dev/null || true)
+    expected=$(echo "$checksums" | awk -v f="$2" '$2 == f || $2 == "*"f {print $1}')
+    if [[ -z "$expected" ]]; then
+        [[ "$STRICT_CHECKSUM" == true ]] && error "Checksum not available for $2 (--strict mode)"
+        warn "Checksum not available for $2, skipping verification"
+        return 0
+    fi
+    actual=$(sha256_of "$1")
+    if [[ -z "$actual" ]]; then
+        [[ "$STRICT_CHECKSUM" == true ]] && error "No sha256sum/shasum found (--strict mode)"
         warn "No sha256sum/shasum found, skipping checksum verification"
         return 0
     fi
-
-    if [ "$actual" != "$expected" ]; then
-        error "Checksum mismatch! Expected: $expected, Got: $actual"
-    fi
+    [[ "$actual" == "$expected" ]] || error "Checksum mismatch! Expected: $expected, Got: $actual"
     info "Checksum verified"
 }
 
-show_help() {
-    echo "Termote Installer"
+confirm_install() {
+    local current="$1" target="$2" question
     echo ""
-    echo "Usage: curl -fsSL <url>/get.sh | bash -s -- [options]"
-    echo ""
-    echo "Modes:"
-    echo "  --native              Native mode (default)"
-    echo "  --container           Container mode (docker/podman)"
-    echo ""
-    echo "Options:"
-    echo "  --yes, -y             Auto-install without prompt"
-    echo "  --version <ver>       Install specific version (e.g. 0.0.4)"
-    echo "  --update              Re-install with saved config"
-    echo "  --download-only       Download without installing"
-    echo "  --strict              Require checksum verification (fail if unavailable)"
-    echo "  --lan                 Expose to LAN"
-    echo "  --no-auth             Disable authentication"
-    echo "  --tailscale <host>    Enable Tailscale HTTPS"
-    echo "  --help, -h            Show this help"
-    echo ""
-    echo "Examples:"
-    echo "  bash -s --                          # Interactive install (native)"
-    echo "  bash -s -- --container --lan        # Container + LAN"
-    echo "  bash -s -- --update                 # Update with saved config"
-    echo "  bash -s -- --version 0.0.4          # Install specific version"
-    echo "  bash -s -- --update --version 0.0.3 # Downgrade with saved config"
+    if [[ -z "$current" ]]; then
+        info "Target version: v${target}"
+        question="Install Termote?"
+    elif [[ "$current" == "$target" ]]; then
+        info "Current version: v${current} (same as target)"
+        question="Re-install?"
+    else
+        info "Current version: v${current}"
+        info "Target version:  v${target}"
+        question="Switch to v${target}?"
+    fi
+    echo -e "${question} [y/N] \c"
+    local response
+    read -r response </dev/tty
+    [[ "$response" =~ ^[yY]([eE][sS])?$ ]]
 }
 
-# Main
+show_help() {
+    cat <<'EOF'
+Termote Installer
+
+Usage: curl -fsSL <url>/get.sh | bash -s -- [options]
+
+Modes:
+  --native              Native mode (default)
+  --container           Container mode (docker/podman)
+
+Options:
+  --yes, -y             Auto-install without prompt
+  --version <ver>       Install a specific version (e.g. 1.0.0, 1.0.0-rc.1)
+  --update              Re-install with the saved config
+  --download-only       Download without installing
+  --strict              Require checksum verification (fail if unavailable)
+  --help, -h            Show this help
+
+Any other option goes to `termote install` (e.g. --lan, --no-auth,
+--tailscale <host>, --mux herdr, --allow-host <name>).
+
+Examples:
+  bash -s --                          # Interactive install (native)
+  bash -s -- --container --lan        # Container + LAN
+  bash -s -- --update                 # Update with saved config
+  bash -s -- --update --version 0.1.0 # Downgrade with saved config
+EOF
+}
+
 main() {
-    # Check for --help before printing header
-    for arg in "$@"; do
-        case "$arg" in --help|-h) show_help; exit 0 ;; esac
+    local mode="" args=()
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --help | -h) show_help; exit 0 ;;
+            --yes | -y) AUTO_YES=true ;;
+            --download-only) DOWNLOAD_ONLY=true ;;
+            --update) UPDATE_MODE=true; AUTO_YES=true ;;
+            --strict) STRICT_CHECKSUM=true ;;
+            --version)
+                PIN_VERSION="${2#v}"
+                [[ "$PIN_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] ||
+                    error "Invalid version format: ${2:-} (expected: X.Y.Z)"
+                shift ;;
+            --container | container) mode="container" ;;
+            --native | native) mode="native" ;;
+            *) args+=("$1") ;;
+        esac
+        shift
     done
 
     info "Termote Installer"
     info "Install path: $INSTALL_DIR"
-
-    local mode=""
-    local args=()
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            --yes|-y) AUTO_YES=true; shift ;;
-            --download-only) DOWNLOAD_ONLY=true; shift ;;
-            --update) UPDATE_MODE=true; AUTO_YES=true; shift ;;
-            --strict) STRICT_CHECKSUM=true; shift ;;
-            --version)
-                PIN_VERSION="${2#v}"
-                if [[ ! "$PIN_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-                    error "Invalid version format: $2 (expected: X.Y.Z)"
-                fi
-                shift 2 ;;
-            --container|container) mode="container"; shift ;;
-            --native|native) mode="native"; shift ;;
-            *) args+=("$1"); shift ;;
-        esac
-    done
-
-    # Check dependencies
     command -v curl >/dev/null || error "curl is required"
     command -v tar >/dev/null || error "tar is required"
 
-    # Get versions
-    CURRENT_VERSION=$(get_installed_version)
-    if [ -n "$PIN_VERSION" ]; then
-        VERSION="$PIN_VERSION"
-        info "Target version: v${VERSION}"
-    else
-        VERSION=$(get_latest_version)
-        [ -z "$VERSION" ] && error "Failed to get latest version"
+    local version="$PIN_VERSION"
+    if [[ -z "$version" ]]; then
+        version=$(get_latest_version)
+        [[ -n "$version" ]] || error "Failed to get latest version"
     fi
 
-    # Prompt BEFORE download (unless --yes or --download-only)
-    if [ "$AUTO_YES" = false ] && [ "$DOWNLOAD_ONLY" = false ]; then
-        if ! confirm_install "$CURRENT_VERSION" "$VERSION"; then
+    if [[ "$AUTO_YES" == false && "$DOWNLOAD_ONLY" == false ]]; then
+        if ! confirm_install "$(get_installed_version)" "$version"; then
             info "Cancelled."
             exit 0
         fi
     fi
 
-    # Stop services if running (to avoid "Text file busy" error)
-    if services_running; then
-        # Pre-cache sudo for tailscale commands so the flow runs uninterrupted
-        command -v tailscale >/dev/null 2>&1 && sudo -v 2>/dev/null || true
-        warn "Services are running"
-        if [ "$AUTO_YES" = true ]; then
-            stop_services
-        else
-            echo -e "Stop services before update? [Y/n] \c"
-            read -r response </dev/tty
-            case "$response" in
-                [nN]|[nN][oO])
-                    error "Cannot update while services are running. Stop manually: ./scripts/termote.sh uninstall [native|container]"
-                    ;;
-                *)
-                    stop_services
-                    ;;
-            esac
-        fi
-    fi
+    local tarball="termote-v${version}.tar.gz"
+    local base="https://github.com/${REPO}/releases/download/v${version}"
+    # Global so the EXIT trap still sees it after main returns
+    tmp=$(mktemp -d)
+    trap 'rm -rf "$tmp"' EXIT
 
-    # Create install directory
-    mkdir -p "$INSTALL_DIR"
-    cd "$INSTALL_DIR"
-
-    # Download tarball and checksums
-    TARBALL="termote-v${VERSION}.tar.gz"
-    TARBALL_URL="https://github.com/${REPO}/releases/download/v${VERSION}/${TARBALL}"
-    CHECKSUMS_URL="https://github.com/${REPO}/releases/download/v${VERSION}/checksums.txt"
-
-    info "Downloading ${TARBALL}..."
-    curl -fsSL -o "$TARBALL" "$TARBALL_URL"
-
-    # Verify checksum
+    info "Downloading ${tarball}..."
+    curl -fsSL -o "$tmp/$tarball" "$base/$tarball" || error "Download failed: $base/$tarball"
     info "Verifying checksum..."
-    CHECKSUMS=$(curl -fsSL "$CHECKSUMS_URL" 2>/dev/null || echo "")
-    if [ -n "$CHECKSUMS" ]; then
-        EXPECTED=$(echo "$CHECKSUMS" | grep "$TARBALL" | awk '{print $1}')
-        if [ -n "$EXPECTED" ]; then
-            verify_checksum "$TARBALL" "$EXPECTED"
-        else
-            if [ "$STRICT_CHECKSUM" = true ]; then
-                error "Checksum not found for ${TARBALL} (--strict mode)"
-            fi
-            warn "Checksum not found for ${TARBALL}, skipping verification"
-        fi
-    else
-        if [ "$STRICT_CHECKSUM" = true ]; then
-            error "Could not download checksums (--strict mode requires verification)"
-        fi
-        warn "Could not download checksums, skipping verification"
-    fi
+    verify_checksum "$tmp/$tarball" "$tarball" "$base/checksums.txt"
 
-    # Extract
+    # Extract over the install dir: the saved config lives outside the tarball.
+    # Running services are stopped by `termote install`; the tarball holds no
+    # binary a running server executes.
     info "Extracting..."
-    tar xzf "$TARBALL" --strip-components=1
-    rm -f "$TARBALL"
+    mkdir -p "$INSTALL_DIR"
+    tar xzf "$tmp/$tarball" --strip-components=1 -C "$INSTALL_DIR"
+    echo "$version" >"${INSTALL_DIR}/.version"
+    chmod +x "$SHIM"
 
-    # Save installed version (tag-based, works for RC and official releases)
-    echo "$VERSION" > "${INSTALL_DIR}/.version"
-
-    # Download only mode - stop here
-    if [ "$DOWNLOAD_ONLY" = true ]; then
+    if [[ "$DOWNLOAD_ONLY" == true ]]; then
         info "Download complete. Files extracted to: $INSTALL_DIR"
-        info "To install manually: cd $INSTALL_DIR && ./scripts/termote.sh install [native|container]"
+        info "To install: $SHIM install [native|container]"
         exit 0
     fi
 
-    # Run termote CLI
-    info "Running installer..."
-    chmod +x scripts/termote.sh
-
-    # --update mode: load saved config
-    if [[ "$UPDATE_MODE" == true ]]; then
-        load_config
-        mode="${TERMOTE_MODE:-native}"
-        [[ "$TERMOTE_LAN" == true ]] && args+=("--lan")
-        [[ "$TERMOTE_NO_AUTH" == true ]] && args+=("--no-auth")
-        [[ -n "$TERMOTE_PORT" && "$TERMOTE_PORT" != "7680" ]] && args+=("--port" "$TERMOTE_PORT")
-        [[ -n "$TERMOTE_TAILSCALE" ]] && args+=("--tailscale" "$TERMOTE_TAILSCALE")
-        info "Using saved config: mode=$mode ${args[*]}"
+    # `install` merges the saved config for every flag not given here.
+    if [[ "$UPDATE_MODE" == true && -z "$mode" ]]; then
+        [[ -f "$CONFIG_FILE" ]] || error "No saved config found. Run 'termote install' first."
+        mode=$(get_saved_mode)
+        info "Using saved config (mode: ${mode:-native})"
     fi
-
-    # Default to native if no mode specified
     [[ -z "$mode" ]] && mode="native"
 
-    ./scripts/termote.sh install "$mode" "${args[@]}"
+    info "Running installer..."
+    "$SHIM" install "$mode" "${args[@]}"
 
-    # Create 'termote' command symlink (skip if old version without link command)
-    if grep -q 'cmd_link()' ./scripts/termote.sh 2>/dev/null; then
-        ./scripts/termote.sh link
+    # Create the global 'termote' command (old releases may lack `link`)
+    # Capture first: with pipefail, grep -q closing the pipe early could fail it
+    local help
+    help=$("$SHIM" help 2>/dev/null || true)
+    if grep -qE '^ +link ' <<<"$help"; then
+        "$SHIM" link
     fi
 }
 
