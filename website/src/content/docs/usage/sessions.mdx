@@ -1,15 +1,18 @@
 ---
 title: Session Management
-description: Managing terminal sessions with tmux
+description: Managing terminal sessions with tmux or Herdr
 ---
 
 import { Aside, Steps } from "@astrojs/starlight/components";
 
-Termote uses tmux windows for persistent sessions that survive disconnects.
+Termote models terminals as three levels — **group → tab → pane** — regardless of backend.
+With the default tmux backend a group is a tmux session and a tab is a tmux window; panes are
+only used by the Herdr backend.
 
 ## Default Session
 
-Fresh installs start with a single **Shell** session. Create additional sessions as needed for different workflows (e.g., Claude Code, Copilot, builds).
+Fresh installs start with a single **Shell** session (group). Create additional groups as
+needed for different workflows (e.g., Claude Code, Copilot, builds).
 
 ## Managing Sessions
 
@@ -21,7 +24,7 @@ Fresh installs start with a single **Shell** session. Create additional sessions
 - **Add**: Click "+ Add session" at bottom
 - **Collapse sidebar**: Click the collapse icon (top-right of sidebar) to show icons only — maximizes terminal width
 - **Fullscreen**: Click the fullscreen button in the header to enter fullscreen mode
-- **Session tabs**: Horizontal tab bar for quick session switching on desktop. Can be toggled via Settings → "Show session tabs"
+- **Session tabs**: Horizontal tab bar for quick tab switching on desktop. Can be toggled via Settings → "Show session tabs"
 
 ### Mobile
 
@@ -33,12 +36,30 @@ Fresh installs start with a single **Shell** session. Create additional sessions
 ## Session Features
 
 | Feature             | Description                                      |
-| ------------------- | ------------------------------------------------ |
+| -------------------- | -------------------------------------------------- |
 | Custom icons        | Choose emoji icon for each session               |
 | Rename              | Change session name anytime                      |
-| Auto-sync           | Sessions sync across browsers (configurable)     |
-| Persistence         | Sessions backed by tmux windows                  |
+| Auto-sync           | Groups/tabs/panes sync from the server (configurable interval) |
+| Persistence         | Sessions backed by tmux windows, or Herdr tabs   |
 | Connection status   | Real-time indicator in header (see below)        |
+
+## Herdr Backend (Native Only)
+
+Native installs can use [Herdr](/installation/native/#herdr-backend) instead of tmux
+(`--mux herdr`/`-Mux herdr`). It changes the session model in two ways:
+
+- **Panes**: a Herdr tab can have more than one pane. When it does, a **pane strip** appears
+  below the tab bar to switch between them; a tmux tab never shows this strip (it never has
+  more than one pane).
+- **Agent status badges**: each pane can show a small icon — idle, working, blocked, or done —
+  reflecting the coding agent Herdr detected in that pane. Badges refresh at most once per the
+  configured **Session poll interval** (Settings → Preferences), not instantly.
+
+<Aside type="caution">
+  Selecting a tab or pane in the PWA never changes what is shown on the Herdr desktop — it only
+  changes which pane this client streams. There is no "show on desktop" action, and the Herdr
+  backend is native only (not available in container mode).
+</Aside>
 
 ## Connection Indicator
 
@@ -51,7 +72,8 @@ The header displays a real-time connection status indicator showing your link to
 | Disconnected  | Red dot   | No connection to server (clickable to retry) |
 | Error         | Red X     | Connection error occurred                   |
 
-The indicator auto-detects disconnects via session polling. Click it when disconnected to manually retry the connection.
+The indicator auto-detects disconnects on both the snapshot polling and the terminal
+WebSocket. Click it when disconnected to manually retry.
 
 <Aside type="tip">
   Sessions survive network disconnects. Reconnect to pick up where you left off.
@@ -75,26 +97,25 @@ tmux kill-window -t 0
 
 ## API Endpoints
 
-Sessions are managed via tmux-api:
+Sessions are managed via tmux-api's `/api/mux/*` endpoints:
 
 | Endpoint                       | Method      | Description       |
-| ------------------------------ | ----------- | ----------------- |
-| `/api/tmux/windows`            | GET         | List all sessions |
-| `/api/tmux/new?name=X`         | POST        | Create session    |
-| `/api/tmux/select/{id}`        | POST        | Switch session    |
-| `/api/tmux/rename/{id}?name=X` | POST        | Rename session    |
-| `/api/tmux/kill/{id}`          | POST/DELETE | Remove session    |
+| ------------------------------- | ----------- | ------------------- |
+| `/api/mux/snapshot`             | GET         | List all groups/tabs/panes |
+| `/api/mux/tabs`                 | POST        | Create tab (body: `{groupId, name}`) |
+| `/api/mux/tabs/{id}/select`     | POST        | Switch tab (or, for Herdr, the streamed pane) |
+| `/api/mux/tabs/{id}`            | PATCH       | Rename tab (body: `{name}`) |
+| `/api/mux/tabs/{id}`            | DELETE      | Remove tab       |
 
 ## Troubleshooting
 
 ### Session not persisting
 
 1. Check tmux is running: `tmux list-windows`
-2. Verify ttyd uses `-A` flag (attach-or-create)
-3. Check container logs: `docker logs termote` or `podman logs termote`
+2. Check tmux-api logs: `docker logs termote` (container) or `termote logs tmux-api` (native)
 
-### WebSocket errors
+### WebSocket / terminal errors
 
-1. Check container logs: `docker logs termote` or `podman logs termote`
-2. Verify ttyd is running on port 7681
-3. Check API health: `curl http://localhost:7680/api/tmux/health`
+1. Check tmux-api logs: `docker logs termote` or `termote logs tmux-api`
+2. The terminal WebSocket is `/api/mux/stream`, served by tmux-api itself
+3. Check API health: `curl http://localhost:7680/api/mux/health`

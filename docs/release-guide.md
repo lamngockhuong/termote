@@ -166,9 +166,25 @@ Each release produces:
 
 ### Image
 
-| Image     | Description                  |
-| --------- | ---------------------------- |
-| `termote` | All-in-one (tmux-api + ttyd) |
+| Image     | Description                           |
+| --------- | ------------------------------------- |
+| `termote` | All-in-one (tmux-api + tmux, no ttyd) |
+
+## 1.0.0 Release Procedure
+
+1.0.0 is a breaking release developed on the long-lived `feat/1.0` branch,
+kept separate from `main` so `main` could keep shipping 0.1.x patches. To
+release it:
+
+1. Merge `feat/1.0` into `main` once (a merge commit with a `feat!:` subject
+   and a `BREAKING CHANGE:` footer), with the breaking changes documented in
+   [`upgrade-1.0.md`](upgrade-1.0.md).
+2. Before running Release Please, set `release-as: 1.0.0` for the package in
+   `release-please-config.json`. Without it, `bump-minor-pre-major: true`
+   would turn the `feat!:` merge into `0.2.0` instead of `1.0.0`.
+3. Run the release as usual (see Workflows above).
+4. Remove `release-as` from `release-please-config.json` right after the
+   release goes out, or every later release stays pinned to 1.0.0.
 
 ## Troubleshooting
 

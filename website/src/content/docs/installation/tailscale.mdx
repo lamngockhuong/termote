@@ -64,8 +64,11 @@ Automatic HTTPS using `tailscale serve`. No manual certificate management.
 ## How It Works
 
 ```
-Internet → Tailscale (HTTPS) → localhost:7680 → tmux-api → ttyd
+Internet → Tailscale (HTTPS) → localhost:7680 → tmux-api (terminal stream + API)
 ```
+
+The Tailscale hostname is also added to the server's Host allowlist automatically, so
+requests through `tailscale serve` are not rejected by the DNS-rebinding guard.
 
 Tailscale handles:
 

@@ -5,7 +5,9 @@ description: All-in-one container deployment
 
 import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
 
-Single container with tmux-api (PWA + proxy) + ttyd + tmux.
+Single container with tmux-api (PWA + terminal stream + API) + tmux. There is no separate
+terminal process: tmux-api streams the terminal itself into xterm.js in the PWA. The Herdr
+backend is not available in container mode.
 
 ## Quick Start
 
@@ -75,6 +77,7 @@ docker run -d --name termote -p 7680:7680 \
     | `--lan`           | Expose to LAN (default: localhost)       |
     | `--no-auth`       | Disable basic auth                       |
     | `--port <port>`   | Custom port (default: 7680)              |
+    | `--allow-host <name>` | Allow an extra Host header value (repeatable) |
     | `--fresh`         | Force new password prompt (ignore saved) |
     | `--update`        | Auto-update with saved config            |
     | `--version <ver>` | Install specific version                 |
@@ -85,11 +88,16 @@ docker run -d --name termote -p 7680:7680 \
     | `-Lan`            | Expose to LAN (default: localhost)       |
     | `-NoAuth`         | Disable basic auth                       |
     | `-Port <port>`    | Custom port (default: 7680)              |
+    | `-AllowHost <name>` | Allow an extra Host header value (repeatable) |
     | `-Fresh`          | Force new password prompt (ignore saved) |
 
     Online installer flags: `$env:TERMOTE_UPDATE="true"` for auto-update.
   </TabItem>
 </Tabs>
+
+<Aside type="note">
+  `--mux herdr`/`-Mux herdr` is not available in container mode — Herdr requires native mode.
+</Aside>
 
 <Aside type="tip">
   Scripts auto-detect `podman` or `docker` - both work identically.
@@ -183,9 +191,8 @@ podman logs termote
 ```bash
 docker exec -it termote /bin/sh
 # Inside container:
-ps aux                        # Check processes
-curl localhost:7681           # Test ttyd
-curl localhost:7680/api/tmux/health
+ps aux                        # Check processes (tmux-api, tmux)
+curl localhost:7680/api/mux/health
 ```
 
 ### Common Issues
@@ -195,7 +202,8 @@ curl localhost:7680/api/tmux/health
 | Port in use      | `lsof -i :7680` then kill or use `--port`    |
 | Container crash  | `docker logs termote` to see error           |
 | Auth not working | Restart container, check logs for password   |
-| WebSocket error  | Check ttyd running inside container          |
+| Host rejected (403) | Add the name suggested in the error with `--allow-host` |
+| WebSocket error  | Check tmux-api logs (`docker logs termote`); the terminal WebSocket is `/api/mux/stream`, served by tmux-api itself |
 | Stale PWA cache  | Settings → "Clear Cache & Reload" to refresh |
 
 ### Restart / Reset
@@ -224,8 +232,8 @@ curl localhost:7680/api/tmux/health
 ### API Test
 
 ```bash
-curl http://localhost:7680/api/tmux/health
-curl -u admin:password http://localhost:7680/api/tmux/sessions
+curl http://localhost:7680/api/mux/health
+curl -u admin:password http://localhost:7680/api/mux/snapshot
 ```
 
 ## Updating

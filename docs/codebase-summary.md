@@ -4,15 +4,16 @@
 
 ```bash
 termote/
-├── Dockerfile                  # Docker mode (tmux-api + ttyd)
+├── Dockerfile                  # Docker mode (tmux-api + tmux, no ttyd)
 ├── docker-compose.yml          # Docker deployment
-├── entrypoint.sh      # Docker entrypoint
+├── entrypoint.sh                # Docker entrypoint
 ├── pwa/                        # React PWA frontend
 │   ├── src/
 │   │   ├── App.tsx             # Main app component
 │   │   ├── main.tsx            # Entry point
 │   │   ├── components/
 │   │   │   ├── about-modal.tsx              # About dialog
+│   │   │   ├── agent-status-badge.tsx       # Herdr agent status icon (idle/working/blocked/done)
 │   │   │   ├── bottom-navigation.tsx        # Mobile bottom nav
 │   │   │   ├── command-history-dropdown.tsx # Command history search/select
 │   │   │   ├── connection-indicator.tsx     # Connection status indicator
@@ -20,66 +21,70 @@ termote/
 │   │   │   ├── help-modal.tsx               # Help/gestures guide
 │   │   │   ├── icon-picker.tsx              # Emoji icon selector
 │   │   │   ├── keyboard-toolbar.tsx         # Virtual keyboard buttons
+│   │   │   ├── pane-strip.tsx               # Pane switcher, shown only for multi-pane tabs
 │   │   │   ├── quick-actions-menu.tsx       # Quick action buttons (clear, cancel, exit)
-│   │   │   ├── session-sidebar.tsx          # Session switcher sidebar
-│   │   │   ├── session-tabs.tsx             # Session tabs (switch, add, remove)
+│   │   │   ├── session-sidebar.tsx          # Group switcher sidebar
+│   │   │   ├── session-tabs.tsx             # Tab bar (switch, add, remove)
 │   │   │   ├── settings-menu.tsx            # Settings dropdown
 │   │   │   ├── settings-modal.tsx           # Settings dialog (IME, toolbar, paste, etc.)
 │   │   │   ├── swipeable-session-item.tsx   # Swipe-to-delete session
-│   │   │   ├── terminal-frame.tsx           # Terminal iframe wrapper (ttyd)
+│   │   │   ├── terminal-view.tsx            # xterm.js terminal component
 │   │   │   ├── toast.tsx                    # Toast notification component
 │   │   │   └── theme-toggle.tsx             # Theme switcher buttons
-│   │   ├── contexts/
-│   │   │   ├── theme-context.tsx            # Theme provider (light/dark/system)
-│   │   │   └── theme-context.test.tsx       # Theme context tests
 │   │   ├── hooks/
 │   │   │   ├── use-command-history.ts       # Command history storage + retrieval (localStorage)
 │   │   │   ├── use-font-size.ts             # Font size state (6-24)
-│   │   │   ├── use-font-size.test.ts        # Font size hook tests
-│   │   │   ├── use-fullscreen.test.ts       # Fullscreen hook tests
 │   │   │   ├── use-gestures.ts              # Hammer.js gesture handling
+│   │   │   ├── use-group-collapsed.ts       # Collapsed-group state (sidebar)
 │   │   │   ├── use-haptic.ts                # Haptic feedback
 │   │   │   ├── use-keyboard-visible.ts      # Mobile keyboard detection
-│   │   │   ├── use-local-sessions.ts        # Session CRUD + tmux sync
+│   │   │   ├── use-local-sessions.ts        # Group/tab/pane CRUD + mux snapshot sync
 │   │   │   ├── use-media-query.ts           # Responsive hooks
+│   │   │   ├── use-mux-api.ts               # /api/mux/* HTTP client + types
 │   │   │   ├── use-settings.ts              # Settings state with localStorage
-│   │   │   ├── use-settings.test.ts         # Settings hook tests
-│   │   │   ├── use-sidebar-collapsed.test.ts # Sidebar collapse state tests
-│   │   │   ├── use-tmux-api.ts              # tmux HTTP API client
-│   │   │   ├── use-tmux-api.test.ts         # API client tests
+│   │   │   ├── use-sidebar-collapsed.ts     # Sidebar collapse state
+│   │   │   ├── use-term-socket.ts           # /api/mux/stream WebSocket (xterm.js feed)
 │   │   │   ├── use-update-check.ts          # Check GitHub for new releases
 │   │   │   └── use-viewport.ts              # Viewport height + keyboard detection
 │   │   ├── types/
-│   │   │   └── session.ts                   # Session interface
+│   │   │   └── session.ts                   # Group/Tab/Pane/AgentStatus types
 │   │   ├── utils/
 │   │   │   ├── app-info.ts                  # App metadata
 │   │   │   ├── haptic.ts                    # Vibration API wrapper
-│   │   │   ├── terminal-bridge.ts           # Iframe keystroke injection + theme/context menu
-│   │   │   └── terminal-bridge.test.ts      # Terminal bridge tests
+│   │   │   └── terminal-bridge.ts           # Drives the xterm.js terminal (key mapping, clipboard paste)
 │   │   ├── test-setup.ts                    # Vitest configuration
 │   ├── e2e/                    # Playwright e2e tests
 │   └── package.json
-├── tmux-api/                   # Go server
-│   ├── main.go                 # Entry point
-│   ├── serve.go                # Server (PWA, proxy, auth)
-│   ├── tmux.go                 # tmux API handlers
-│   ├── serve_test.go           # Server unit tests
-│   ├── tmux_test.go            # tmux handler unit tests
-│   ├── integration_test.go     # Integration tests (requires tmux)
+├── tmux-api/                   # Go server + CLI (single binary, flat `package main`)
+│   ├── main.go                  # Entry point (no args/`serve` = server, else CLI)
+│   ├── serve.go                 # Server: PWA static files, auth, guard chain wiring
+│   ├── guard.go                  # Host allowlist + Origin/Content-Type write guard
+│   ├── mux.go                    # `Mux` interface + `/api/mux/*` routes
+│   ├── mux_tmux.go               # tmux/psmux backend
+│   ├── mux_herdr.go              # Herdr backend (native only)
+│   ├── herdr_rpc.go, herdr_stream.go # Herdr JSON-RPC client + pane streaming
+│   ├── stream.go                 # `/api/mux/stream` WebSocket (xterm.js feed)
+│   ├── pty_*.go                  # PTY (Unix) / ConPTY (Windows) terminal backing
+│   ├── cli.go                    # Subcommand dispatch, flag parsing, output helpers
+│   ├── cli_install.go            # install/uninstall: native, container, allowlist, migrate
+│   ├── cli_update.go              # Self-update: release fetch, checksum, extract, re-exec
+│   ├── cli_config.go              # Saved config read/write (0.x-compatible encryption)
+│   ├── cli_health.go, cli_logs.go, cli_link.go, cli_menu.go # health/logs/link/menu subcommands
+│   ├── cli_unix.go, cli_windows.go # OS-specific process/service management
 │   └── go.mod
 ├── scripts/
-│   ├── termote.sh              # Unified CLI (install/uninstall/health/link)
-│   ├── termote.ps1             # Windows PowerShell CLI
-│   ├── get.sh                  # Online curl|bash installer
-│   └── get.ps1                 # Windows PowerShell online installer
+│   ├── termote.sh              # Thin Unix shim: resolve/build the binary, exec it
+│   ├── termote.ps1             # Thin Windows shim: map -Flag to --flag, exec the binary
+│   ├── get.sh                  # Online curl|bash installer (download, checksum, call shim)
+│   └── get.ps1                 # Windows online installer (irm|iex)
 ├── tests/                      # Shell script tests
-│   ├── test-termote.sh         # Unix CLI tests
-│   ├── test-termote.ps1        # Windows CLI tests
+│   ├── test-termote.sh         # Unix shim tests
+│   ├── test-termote.ps1        # Windows shim tests
 │   ├── test-get.sh             # Online installer tests
 │   ├── test-get.ps1            # Windows installer tests
 │   └── test-entrypoints.sh     # Docker entrypoint tests
 ├── .github/workflows/
-│   ├── ci.yml                  # CI (build, lint, test)
+│   ├── ci.yml                  # CI (PWA build/lint/test, `go test` on Ubuntu/macOS/Windows)
 │   ├── release.yml             # Release (Docker push, GitHub Release)
 │   └── release-please.yml      # Auto versioning from commits
 └── docs/                       # Documentation
@@ -87,12 +92,12 @@ termote/
 
 ## Key Components
 
-### App.tsx (~400 lines)
+### App.tsx
 
 Main orchestrator combining:
 
 - Session sidebar with collapse toggle (desktop) / slide-over panel (mobile)
-- Terminal frame with ttyd iframe
+- Terminal view (xterm.js) fed by the `/api/mux/stream` WebSocket
 - Keyboard toolbar with special keys
 - Settings menu with theme toggle and cache clearing
 - Font size controls (A-/A+)
@@ -101,16 +106,25 @@ Main orchestrator combining:
 - Gesture hints overlay (first mobile visit)
 - Toast notifications for clipboard errors
 
-### terminal-frame.tsx (~197 lines)
+### terminal-view.tsx
 
-Terminal iframe wrapper:
+xterm.js terminal component:
 
-- Embeds ttyd terminal via iframe (`/terminal/`)
-- In-place theme switching (no iframe reload) via postMessage
-- Handles font size changes dynamically
+- Owns the `Terminal` instance and the `use-term-socket` WebSocket connection
+- Renders binary stream frames as terminal output; sends a resize control frame on layout change
+- In-place theme switching (no reconnect) via xterm theme API
 - Controls right-click context menu (disable/enable) via terminal-bridge
 
-### keyboard-toolbar.tsx (~301 lines)
+### pane-strip.tsx / agent-status-badge.tsx
+
+Second-level pane switcher and per-pane agent status:
+
+- `PaneStrip` renders only when a tab has more than one pane (Herdr split panes); tmux tabs
+  never have more than one pane
+- `AgentStatusBadge` renders an icon for `idle`/`working`/`blocked`/`done`, set only by the
+  Herdr backend's `agent` field on a pane
+
+### keyboard-toolbar.tsx
 
 Virtual keyboard for mobile:
 
@@ -121,7 +135,7 @@ Virtual keyboard for mobile:
 - Haptic feedback on key press
 - Respects `defaultExpanded` prop from settings
 
-### settings-modal.tsx (~270 lines)
+### settings-modal.tsx
 
 Settings dialog with radio buttons, toggles, dropdown, and buttons:
 
@@ -130,157 +144,96 @@ Settings dialog with radio buttons, toggles, dropdown, and buttons:
 - **Toolbar default expanded**: Toggle to show all keys on load (vs. collapsed by default)
 - **Disable right-click menu**: Toggle to disable context menu on terminal (default: enabled)
 - **Show session tabs**: Toggle desktop tab bar visibility (default: enabled)
-- **Session poll interval**: Dropdown to set sync frequency (3s, 5s, 10s, 15s, 30s, 1m, 2m, 5m; default: 5s)
+- **Session poll interval**: Dropdown to set snapshot sync frequency (3s, 5s, 10s, 15s, 30s, 1m, 2m, 5m; default: 5s)
 - **Show Gesture Hints**: Button to re-show gesture tutorial (mobile only)
 - **Check for Updates**: Button with inline toast result (no global toast behind dialog)
 - **Clear Command History**: Button with history count disabled when empty
-- Uses `ToggleRow` helper component for consistent toggle styling
-- Accessible dialog with custom styling
-- Toast timer properly cleaned up on unmount and re-click
 - Persists changes via `useSettings()` hook
 
-### connection-indicator.tsx (~54 lines)
+### connection-indicator.tsx
 
 Connection status indicator with network awareness:
 
 - Displays connection state: connecting (pulsing yellow), connected (green), disconnected/error (red)
 - Clickable on error/disconnected to retry connection
-- Shows Wifi/WifiOff icon (desktop only)
-- Syncs with `isServerReachable` state from `useLocalSessions()` polling
-- Auto-detects server disconnect and updates indicator in real-time
-- Minimal footprint, integrates with keyboard toolbar area
+- Syncs with `isServerReachable` state from `useLocalSessions()` polling and the term socket state
 
-### session-tabs.tsx (~94 lines)
+### session-tabs.tsx
 
-Horizontal session tabs for window switching:
+Horizontal tab bar for tab switching:
 
-- Scrollable tab bar with add/remove buttons
-- Auto-scrolls active tab into view on selection
-- Icon + name display for each session (truncated to 100px)
-- Close button on hover (hidden if only 1 session)
-- Integrates with session management (onSelect, onAdd, onRemove handlers)
-- Mobile/desktop responsive bar layout
-- Visibility controlled by `showSessionTabs` setting (default: true)
+- Scrollable, add/remove buttons, auto-scrolls active tab into view
+- Selecting a tab is client-side-only for Herdr (`caps.clientSideSelect`): it changes which
+  pane the client streams without touching the Herdr desktop
 
-### command-history-dropdown.tsx (~150 lines)
+### command-history-dropdown.tsx
 
-Command search/recall dropdown UI with mobile support:
+Command search/recall dropdown UI with mobile support (search, keyboard nav, delete).
 
-- Search input with filtering (case-insensitive)
-- Keyboard navigation (Arrow keys, Enter, Escape)
-- Recent commands listed chronologically (newest first)
-- Remove/clear buttons for individual commands and full history
-- Delete button always visible on mobile (was hidden on desktop, now visible at breakpoint)
-- Uses `crypto.randomUUID()` with HTTP LAN fallback (non-secure context support)
-- Auto-focuses input on open
-- Smooth scroll-into-view for selected items
+### quick-actions-menu.tsx
 
-### quick-actions-menu.tsx (~110 lines)
+FAB (floating action button) with draggable positioning and auto-flipping menu (clear, cancel, clear line, exit).
 
-FAB (floating action button) with draggable positioning and auto-flipping menu:
+### use-settings.ts
 
-- Actions: Clear (clears terminal), Cancel (Ctrl+C), Clear line (Ctrl+U), Exit (Ctrl+D)
-- Blue FAB button → taps to open/close
-- Draggable via touch on mobile — position persisted to localStorage
-- Direct DOM manipulation for smooth 60fps drag (no React re-renders during drag)
-- Menu popup auto-flips in 4 directions based on FAB position (top/bottom + left/right)
-- Animated popover with icon + label for each action
-- Haptic feedback on button tap and action selection
-- Bounds clamping to keep FAB within viewport
+Settings state via `useSyncExternalStore`, persisted to `localStorage` (`termote-settings`
+key): IME behavior, toolbar default, context menu, poll interval, gesture hints seen, paste
+source, session tabs visibility.
 
-### use-settings.ts (~75 lines)
+### use-gestures.ts
 
-Settings state management using `useSyncExternalStore`:
+Hammer.js integration: swipe left/right/up/down, long press (paste), pinch in/out (font size).
 
-- Stores settings in localStorage (`termote-settings` key) as JSON
-- Provides `settings` object with type-safe config:
-  - `imeSendBehavior`: 'send-only' | 'send-enter'
-  - `toolbarDefaultExpanded`: boolean
-  - `disableContextMenu`: boolean (default: true)
-  - `pollInterval`: number in seconds (default: 5, range: 3-300 for 3s-5m)
-  - `hasSeenGestureHints`: boolean (default: false)
-  - `pasteSource`: 'clipboard' | 'tmux' (default: 'clipboard')
-  - `showSessionTabs`: boolean (default: true)
-- `updateSetting()` callback to update individual settings
-- Defaults to send-only + collapsed toolbar + context menu disabled + 5s poll + clipboard paste + tabs shown
+### use-local-sessions.ts
 
-### use-gestures.ts (~53 lines)
+Group/tab/pane state synced from `/api/mux/snapshot`, polled at `pollInterval`:
 
-Hammer.js integration:
+- Maps the mux snapshot (groups → tabs → panes) to the UI's session model
+- LocalStorage for metadata (icons, descriptions) keyed by group/tab
+- Tab create/select/kill via `use-mux-api`
+- Exposes `isServerReachable` derived from polling success/failure
 
-- Swipe left/right/up/down
-- Long press (paste)
-- Pinch in/out (font size)
+### use-mux-api.ts
 
-### use-local-sessions.ts (~203 lines)
+`/api/mux/*` HTTP client and shared types (`MuxSnapshot`, `MuxGroup`, `MuxTab`, `MuxPane`,
+`MuxAgent`); state-changing calls always send `Content-Type: application/json` since the
+server rejects any other content type on writes.
 
-Session management + tmux sync with stale closure fix:
+### use-term-socket.ts
 
-- Sessions loaded from tmux windows via API
-- LocalStorage for metadata (icons, descriptions)
-- tmux window create/select/kill via API
-- Polling interval configurable via `pollInterval` parameter (seconds, default: 5)
-- Exposes `isServerReachable` state derived from polling success/failure
-- Auto-updates connection indicator when server becomes unreachable
-- Uses `isReadyRef` to avoid stale `isReady` state closure in refresh handler
-- Extracted `applyWindows` helper to deduplicate window-to-session mapping
+Opens and maintains the `/api/mux/stream` WebSocket for one pane: fetches a single-use
+stream token first, reconnects on drop, and exposes `ConnectionState` plus parsed
+`StreamControl` frames (`size`/`exit`/`error`) to the terminal view.
 
-### use-command-history.ts (~75 lines)
+### use-command-history.ts
 
-Command history management with localStorage persistence:
+Command history with localStorage persistence: up to 100 commands, add/remove/clear,
+`useSyncExternalStore` for reactive updates.
 
-- Stores up to 100 commands (max) in localStorage
-- `addCommand(text)` — adds to history, deduplicates, newest first
-- `removeCommand(id)` — delete single command
-- `clearHistory()` — wipe all commands
-- `useSyncExternalStore` for reactive updates across app
-- Auto-initialized on first use, cached for performance
+### use-update-check.ts
 
-### use-update-check.ts (~114 lines)
+GitHub release checker with semver comparison, 1-hour cache in localStorage, silent failure.
 
-GitHub release checker with semver comparison:
+### tmux-api/ (Go server + CLI)
 
-- Fetches latest release tag from GitHub API (lamngockhuong/termote)
-- Compares with APP_INFO.version using simple semver (X.Y.Z)
-- 1-hour cache in localStorage to avoid rate limits
-- Returns hasUpdate, latestVersion, releaseUrl
-- Silent failure (returns no update if API fails)
-- `checkForUpdate(force?: boolean)` with optional cache bypass
+Single Go binary, `package main`, flat file layout:
 
-### use-tmux-api.ts (~56 lines)
+- **main.go** — dispatch: no arguments (or `serve`) starts the server, anything else runs a CLI subcommand
+- **serve.go** — builds the handler chain: PWA static files, `/api/mux/*`, `/api/mux/stream`, basic auth, Host allowlist, write guard
+- **guard.go** — `hostGuard` (Host allowlist) and `writeGuard` (Origin/`Sec-Fetch-Site`/Content-Type on write methods)
+- **mux.go** — the `Mux` interface and the `/api/mux/*` HTTP routes shared by both backends
+- **mux_tmux.go** / **mux_herdr.go** — the two backends (see [`system-architecture.md`](system-architecture.md))
+- **stream.go** — `/api/mux/stream`: WebSocket upgrade, stream token validation, the hub that caps concurrent streams and closes them on shutdown
+- **cli\*.go** — CLI subcommands (see below)
 
-tmux HTTP API client:
+**Security** (server):
 
-- `fetchWindows()` - list windows
-- `selectWindow(id)` - switch window
-- `createWindow(name)` - new window
-- `killWindow(id)` - close window
-- `sendKeys(target, keys)` - send keystrokes
+- Input validation on pane/tab/group IDs and request bodies (size-limited JSON, 4096-byte key payloads)
+- HTTP method enforcement per route, with a JSON 405 for a wrong method
+- Constant-time password comparison; rate-limited auth failures (5/min/IP → 429)
+- Host allowlist and Origin/CSRF write guard in front of every `/api/` route (see [`system-architecture.md`](system-architecture.md#security-model))
 
-### tmux-api/ (6 files)
-
-Go HTTP server:
-
-- **main.go** — Entry point, starts serve mode
-- **serve.go** — Server: PWA static files, ttyd WebSocket proxy, auth (basic + iframe-only + session cookie + token)
-- **tmux.go** — tmux handlers with input validation and method checks
-- **serve_test.go** — Server unit tests (auth, middleware, proxy, tokenStore)
-- **tmux_test.go** — Handler unit tests (validation, errors)
-- **integration_test.go** — Integration tests requiring real tmux
-
-**tokenStore:** Generic token manager with configurable TTL and single-use flag. Replaces dedicated terminalTokenStore. RWMutex for read-optimized access to reusable tokens.
-
-**Security:**
-
-- Input validation: regex `^[a-zA-Z0-9_\-:.]+$` for tmux targets
-- HTTP method enforcement: POST for mutations, GET for reads
-- Length limits: 4096 bytes for keys, 64 chars for targets
-- Constant-time password comparison
-- `/terminal/` protected: basic auth + Sec-Fetch-Dest check (blocks direct navigation) + single-use token (30s TTL)
-
-**Test coverage:** ~59% (unit), ~71% with integration tests
-
-Configuration via env vars: TERMOTE_PORT, TERMOTE_BIND, TERMOTE_PWA_DIR, TERMOTE_USER, TERMOTE_PASS, TERMOTE_NO_AUTH
+Configuration via env vars: see the table in [`system-architecture.md`](system-architecture.md).
 
 ## Data Flow
 
@@ -289,58 +242,37 @@ User Input
     ↓
 Gesture/Toolbar → sendKeyToTerminal()
     ↓
-postMessage → iframe (ttyd)
+WebSocket binary frame → /api/mux/stream
     ↓
-ttyd WebSocket → tmux session
+tmux-api → PTY/ConPTY → tmux/psmux or Herdr pane
     ↓
-Terminal output → ttyd (xterm.js) → display
+Terminal output → WebSocket binary frame → xterm.js → display
 ```
 
-## CLI Scripts
+## CLI (Go, `tmux-api/cli*.go`)
 
-### termote.sh (~1130 lines)
+The CLI is a set of subcommands compiled into the `tmux-api` binary; `scripts/termote.sh` and
+`scripts/termote.ps1` are thin shims that resolve/build the binary and `exec` it with the same
+arguments (mapping `-Flag` to `--flag` on Windows). Run `tmux-api help` (or
+`./scripts/termote.sh help`) for the current command and flag list — it is generated from the
+same code that parses them, so it never drifts from behavior.
 
-Unified Unix CLI for installation, management, and updates:
+**Commands:** `install [container|native]`, `uninstall [container|native|all]`, `update`,
+`health`, `logs [tmux-api|all|follow|clean]`, `link`, `unlink`, `show-password`, `version`,
+`menu` (no arguments).
 
-**Commands:**
+**Config persistence:** Unix `~/.termote/config` (`KEY="value"`, chmod 600, password
+AES-256-CBC + PBKDF2 encrypted, compatible with the 0.x `openssl enc` format); Windows
+`~/.termote/config.json` (password DPAPI-encrypted). See `cli_config.go`.
 
-- `install [container|native]` — deploy with optional flags (--lan, --no-auth, --port, --tailscale, --fresh)
-- `uninstall [container|native|all]` — cleanup
-- `health` — service status check
-- `link` — create `/usr/local/bin/termote` symlink (global command)
-- `unlink` — remove symlink
-- `update` — fetch + install latest release from GitHub
-- `update --version X.Y.Z` — pin to specific release
-- `update --force` — force reinstall current version
-
-**Key functions:**
-
-- `cmd_install()` — deploy: build PWA/binary, start services, set up auth
-- `cmd_update()` — self-update: fetch release, verify checksum, stop services, extract, re-install with saved config
-- `stop_native_services()` — stop systemd units (termote, ttyd)
-- `interactive_menu()` — terminal UI for users (install/update/health/link options)
-- `get_latest_version_api()` — fetch latest tag from GitHub API
-- `verify_checksum_update()` — validate SHA256 before extraction
-- `get_config_value()` — read saved config from `~/.termote/.config.sh`
-
-**Config persistence:** Saves settings to `~/.termote/.config.sh` (chmod 600, AES-256-CBC + PBKDF2 encrypted password). Updates preserve all settings.
-
-**Safe self-replacement:** Uses `exec` to replace process with new script binary (avoids stale code in memory during mid-update).
-
-**Test coverage:** 87 test cases in `test-termote.sh` (all passing)
-
-### termote.ps1
-
-Windows PowerShell equivalent of `termote.sh` with the same commands, at parity with Unix behavior (install, update, health, logs, link/unlink, menu).
+**Safe self-replacement:** `update` hands off to the newly extracted binary via `exec`
+(Unix) or a relaunch (Windows), so no stale code stays in memory mid-update.
 
 ### get.sh / get.ps1
 
-Online installers (curl|bash / irm|iex):
-
-- Download from GitHub (latest or pinned version)
-- Verify checksum
-- Extract to `~/.termote`
-- Run `termote.sh install` with `--update` flag to preserve config on updates
+Online installers (curl|bash / irm|iex): download from GitHub (latest or pinned version),
+verify checksum, extract, then call the shim's `install` (or `update` when
+`--update`/`TERMOTE_UPDATE` is set) to preserve config on updates.
 
 ## External Dependencies
 
@@ -356,27 +288,17 @@ Online installers (curl|bash / irm|iex):
 
 ## API Endpoints
 
-| Endpoint                   | Method      | Purpose                                      |
-| -------------------------- | ----------- | -------------------------------------------- |
-| `/terminal/?token=`        | WS          | ttyd WebSocket (iframe-only, token required) |
-| `/api/tmux/terminal-token` | GET         | Generate single-use terminal token           |
-| `/api/tmux/windows`        | GET         | List tmux windows                            |
-| `/api/tmux/select/:id`     | POST        | Switch window                                |
-| `/api/tmux/new`            | POST        | Create window                                |
-| `/api/tmux/kill/:id`       | POST/DELETE | Kill window                                  |
-| `/api/tmux/rename/:id`     | POST        | Rename window                                |
-| `/api/tmux/send-keys`      | POST        | Send keystrokes                              |
-| `/api/tmux/health`         | GET         | Health check                                 |
-
-All endpoints validate inputs and enforce HTTP methods. Invalid requests return 400/405 JSON errors.
+See [`system-architecture.md`](system-architecture.md#communication-protocols) for the full
+`/api/mux/*` shape and the terminal WebSocket protocol. All endpoints validate inputs and
+enforce HTTP methods; invalid requests return 400/404/405/413 JSON errors.
 
 ## CI/CD Workflows
 
-| Workflow             | Trigger                            | Purpose                                           |
-| -------------------- | ---------------------------------- | ------------------------------------------------- |
-| `ci.yml`             | Push/PR to main                    | Build, lint, type check, test                     |
-| `release-please.yml` | Manual (workflow_dispatch)         | Create release PR with version bump from commits  |
-| `release.yml`        | Tag push / Manual / Release Please | Build + push Docker images, create GitHub Release |
+| Workflow             | Trigger                            | Purpose                                                                            |
+| -------------------- | ---------------------------------- | ---------------------------------------------------------------------------------- |
+| `ci.yml`             | Push/PR                            | Build, lint, type check, PWA test, `go test` (Ubuntu/macOS/Windows), website build |
+| `release-please.yml` | Manual (workflow_dispatch)         | Create release PR with version bump from commits                                   |
+| `release.yml`        | Tag push / Manual / Release Please | Build + push Docker images, create GitHub Release                                  |
 
 ### Release Flow
 
@@ -397,4 +319,5 @@ make release VERSION=1.0.0      # Local: create + push tag
 # Or: GitHub Actions UI → Run workflow → enter version
 ```
 
-See [release-guide.md](release-guide.md) for full details.
+See [release-guide.md](release-guide.md) for full details, and
+[upgrade-1.0.md](upgrade-1.0.md) for the 1.0.0 breaking-change and migration notes.

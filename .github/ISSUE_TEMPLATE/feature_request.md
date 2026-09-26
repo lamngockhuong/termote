@@ -19,7 +19,7 @@ A clear description of what you want to happen.
 - [ ] Gestures/Touch
 - [ ] Keyboard/Input
 - [ ] Session management
-- [ ] Terminal (ttyd/tmux)
+- [ ] Terminal (xterm.js stream, tmux/psmux/Herdr backend)
 - [ ] tmux-api
 - [ ] Deployment/Infrastructure
 - [ ] Security/Authentication

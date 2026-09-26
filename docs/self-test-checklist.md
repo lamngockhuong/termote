@@ -6,7 +6,7 @@ Manual testing checklist for Termote features before release.
 
 - [ ] tmux installed (macOS/Linux)
 - [ ] psmux installed (Windows)
-- [ ] ttyd installed
+- [ ] herdr installed (only for Herdr backend testing, native)
 - [ ] Go 1.24+ (for native build)
 - [ ] Node.js 18+ & pnpm (for PWA build)
 - [ ] Docker or Podman (for container mode)
@@ -22,29 +22,42 @@ Manual testing checklist for Termote features before release.
 - [ ] Container running: `docker ps | grep termote`
 - [ ] PWA accessible at <http://localhost:7680>
 - [ ] Auto-generated credentials shown in logs
+- [ ] `--mux herdr` is refused in container mode
 
 ### Native Mode (macOS/Linux)
 
 - [ ] `./scripts/termote.sh install native` completes without error
-- [ ] Processes running: `ps aux | grep -E 'ttyd|tmux-api'`
+- [ ] Process running: `ps aux | grep tmux-api`
 - [ ] PWA accessible at <http://localhost:7680>
 
 ### Native Mode (Windows)
 
 - [ ] `.\scripts\termote.ps1 install native` completes without error
-- [ ] psmux + ttyd + tmux-api running
+- [ ] psmux + tmux-api running
 - [ ] PWA accessible at <http://localhost:7690>
+
+### Native Mode + Herdr (Linux)
+
+- [ ] `./scripts/termote.sh install native --mux herdr` completes without error (herdr on `PATH`)
+- [ ] `curl localhost:7680/api/mux/health` reports `"backend":"herdr"`
+- [ ] `--mux herdr --no-auth` is refused unless `--allow-herdr-no-auth` is also given
+- [ ] PWA lists the same workspaces/tabs/panes as `herdr pane list`
+- [ ] Selecting a tab/pane on the PWA does not change the Herdr desktop's focused tab
+- [ ] Agent status badge changes within one `pollInterval` after `herdr` reports a status change
+- [ ] Typing from the PWA lands in the correct order in the Herdr pane (no interleaving)
 
 ### Options
 
 - [ ] `--lan` flag exposes to LAN (test from another device)
 - [ ] `--no-auth` disables basic auth
-- [ ] `/terminal/` blocked via direct browser URL (403 Forbidden)
-- [ ] `/terminal/` accessible from mobile browser via LAN/Tailscale (no Sec-Fetch-Dest header)
-- [ ] `/terminal/` loads in PWA iframe with valid token
 - [ ] `--port <port>` changes port correctly
-- [ ] `--tailscale <host>` configures Tailscale HTTPS
+- [ ] `--tailscale <host>` configures Tailscale HTTPS and adds the name to the Host allowlist
 - [ ] `--fresh` forces new password (ignores saved config)
+- [ ] `--allow-host <name>` adds a name to the Host allowlist (persisted); a request with an
+      unlisted `Host` header gets 403 with that exact flag suggested
+- [ ] A request from an unrecognised LAN hostname/IP is rejected (403) until added with
+      `--allow-host`
+- [ ] `--ttyd`/`-Ttyd` is accepted and ignored, with a warning
 - [ ] Custom `TERMOTE_USER`/`TERMOTE_PASS` env vars work
 - [ ] `WORKSPACE` env var mounts correct directory
 
@@ -53,7 +66,8 @@ Manual testing checklist for Termote features before release.
 - [ ] Password encrypted with AES-256-CBC + PBKDF2 (macOS/Linux)
 - [ ] Password encrypted with DPAPI (Windows)
 - [ ] Config file chmod 600
-- [ ] Saved config reused on reinstall (mode, LAN, auth, port, Tailscale)
+- [ ] Saved config reused on reinstall (mode, LAN, auth, port, mux, allowlist, Tailscale)
+- [ ] `show-password` prints the saved password; refuses when `--no-auth` or undecryptable
 
 ### Uninstall
 
@@ -70,10 +84,13 @@ Manual testing checklist for Termote features before release.
 - [ ] `./scripts/termote.sh update` updates to latest release
 - [ ] `./scripts/termote.sh update --version X.Y.Z` pins to specific version
 - [ ] `./scripts/termote.sh update --force` reinstalls current version
-- [ ] Update preserves saved configuration
+- [ ] Update preserves saved configuration (mode, LAN, auth, port, mux, allowlist, Tailscale)
 - [ ] Update re-links symlink if it existed
 - [ ] Refuses to run from git repo (dev guard)
 - [ ] Warns on downgrade, skips if already on target version
+- [ ] A real 0.1.0 install updated to 1.0.0 keeps its settings, drops any Termote-started ttyd
+      process (and, on Windows, `scripts/ttyd.exe`), and an empty saved password is replaced
+      with a new generated one (see [`upgrade-1.0.md`](upgrade-1.0.md))
 
 ### Other CLI Commands
 
@@ -88,14 +105,18 @@ Manual testing checklist for Termote features before release.
 ### Basic
 
 - [ ] PWA loads without console errors
-- [ ] Terminal iframe connects via WebSocket
+- [ ] Terminal connects via the `/api/mux/stream` WebSocket
 - [ ] Terminal renders correctly
 - [ ] Typing sends input to terminal
 - [ ] Output displays in terminal
 - [ ] Terminal colors match dark mode theme
 - [ ] Terminal colors match light mode theme
-- [ ] Theme switching does not reload terminal (no disconnect/reconnect)
+- [ ] Theme switching does not reconnect the terminal
 - [ ] Correct terminal theme applied after page reload (F5)
+- [ ] Resizing the window/panel resizes the PTY (`stty size` inside the terminal matches)
+- [ ] Killing the shell inside the terminal shows an exit frame and a way to reconnect
+- [ ] Reconnect after a network drop resumes the same pane without losing scrollback that the
+      backend still has buffered
 - [ ] Desktop: Icon list displays correctly (no layout issues)
 - [ ] About page looks good in dark mode
 - [ ] Settings button clickable on mobile
@@ -106,7 +127,7 @@ Manual testing checklist for Termote features before release.
 - [ ] Shows "connecting" state (yellow pulsing dot) on initial load
 - [ ] Shows "connected" state (green dot, Wifi icon) when active
 - [ ] Shows "disconnected" state (red dot, WifiOff icon) when server unreachable
-- [ ] Clickable when disconnected — triggers iframe reconnect
+- [ ] Clickable when disconnected — triggers a reconnect
 
 ### Toast Notifications
 
@@ -157,15 +178,15 @@ Manual testing checklist for Termote features before release.
 
 ---
 
-## Session Management
+## Session Management (3 levels: group → tab → pane)
 
-### Session Sidebar
+### Session Sidebar (groups)
 
 - [ ] Sidebar opens (swipe from left edge or hamburger icon)
-- [ ] Sidebar scrollable when many sessions exist
+- [ ] Sidebar scrollable when many groups exist
 - [ ] Sidebar collapse/expand toggle works (desktop)
 - [ ] Collapsed sidebar shows icons only with tooltips (desktop)
-- [ ] Create new session works
+- [ ] Create new session (tab) works
 - [ ] Edit session name works
 - [ ] Edit session icon via icon picker (emoji)
 - [ ] Edit session description works
@@ -181,6 +202,12 @@ Manual testing checklist for Termote features before release.
 - [ ] Tabs scroll into view when switching
 - [ ] Clicking tab switches session
 - [ ] Active tab highlighted
+
+### Pane Strip (multi-pane tabs, Herdr only)
+
+- [ ] Pane strip is hidden for a tab with a single pane
+- [ ] Pane strip appears for a tab with more than one pane, with an agent-status badge per pane
+- [ ] Selecting a pane switches the stream without changing the Herdr desktop's focus
 
 ### Bottom Navigation (Mobile)
 
@@ -200,9 +227,9 @@ Manual testing checklist for Termote features before release.
 - [ ] Edit/Delete buttons hidden by default
 - [ ] Swipe left/right on session item reveals Edit/Delete buttons
 
-### tmux Sessions
+### Sessions via API
 
-- [ ] Sessions created via API: `curl localhost:7680/api/tmux/windows`
+- [ ] Sessions listed via API: `curl localhost:7680/api/mux/snapshot`
 - [ ] Switch session via API works
 - [ ] Session state persists across terminal reconnects
 
@@ -347,7 +374,7 @@ Test on real mobile device:
 
 ---
 
-## Authentication
+## Authentication & Request Guards
 
 ### Basic Auth
 
@@ -355,8 +382,26 @@ Test on real mobile device:
 - [ ] Valid credentials grant access
 - [ ] Invalid credentials denied (401)
 - [ ] Auth persists across page refreshes (session cookie)
-- [ ] Session cookie prevents double auth prompt on mobile iframe loads
+- [ ] Session cookie prevents double auth prompt on mobile
 - [ ] Clear Cache & Reload clears session cookie (re-prompts auth)
+- [ ] An empty saved password no longer disables auth — `install` on such a config generates
+      and saves a new password instead
+
+### Host Allowlist
+
+- [ ] Request with an unrecognised `Host` header gets 403 (Sec-Fetch aside)
+- [ ] Loopback (`localhost`, `127.0.0.1`, `::1`) is always allowed
+- [ ] LAN IP is allowed automatically when installed with `--lan`
+- [ ] Tailscale name is allowed automatically when installed with `--tailscale`
+- [ ] A name added with `--allow-host` is allowed and persisted across reinstall
+- [ ] No `*`/wildcard value disables the check
+
+### Write / CSRF Guard
+
+- [ ] A cross-site POST (`Sec-Fetch-Site: cross-site`) to `/api/mux/*` is rejected
+- [ ] A `text/plain` POST to `/api/mux/panes/{id}/keys` is rejected (415)
+- [ ] `/api/mux/stream` rejects a cross-site Origin
+- [ ] `/api/mux/stream` rejects a missing/expired/reused stream token
 
 ### Brute-Force Protection
 
@@ -366,13 +411,14 @@ Test on real mobile device:
 ### Server Hardening
 
 - [ ] ReadHeaderTimeout set (Slowloris protection)
-- [ ] Request body size limited (8KB on send-keys)
+- [ ] Request body size limited (8KB on `/api/mux/*` writes)
 - [ ] Internal errors logged server-side only, generic messages to clients
 
 ### No Auth Mode
 
 - [ ] `--no-auth` flag bypasses auth prompt
 - [ ] Direct access without credentials
+- [ ] `--mux herdr --no-auth` is refused unless `--allow-herdr-no-auth` is also given
 
 ---
 
@@ -380,50 +426,49 @@ Test on real mobile device:
 
 ```bash
 # Health check
-curl http://localhost:7680/api/tmux/health
+curl http://localhost:7680/api/mux/health
 
-# List windows
-curl http://localhost:7680/api/tmux/windows
+# Snapshot (groups → tabs → panes)
+curl http://localhost:7680/api/mux/snapshot
 
-# Create window
-curl -X POST 'http://localhost:7680/api/tmux/new?name=test'
-
-# Select window
-curl -X POST http://localhost:7680/api/tmux/select/1
-
-# Rename window
-curl -X POST 'http://localhost:7680/api/tmux/rename/1?name=newname'
-
-# Kill window
-curl -X DELETE http://localhost:7680/api/tmux/kill/1
-
-# Send keys
-curl -X POST http://localhost:7680/api/tmux/send-keys \
+# Create a tab
+curl -X POST http://localhost:7680/api/mux/tabs \
   -H 'Content-Type: application/json' \
-  -d '{"target":"1","keys":"ls"}'
+  -d '{"groupId":"main","name":"test"}'
 
-# Get terminal token
-curl http://localhost:7680/api/tmux/terminal-token
+# Select a tab
+# Every write needs the JSON Content-Type, even without a body (else 415)
+curl -X POST http://localhost:7680/api/mux/tabs/<id>/select \
+  -H 'Content-Type: application/json'
+
+# Rename a tab
+curl -X PATCH http://localhost:7680/api/mux/tabs/<id> \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"newname"}'
+
+# Close a tab
+curl -X DELETE http://localhost:7680/api/mux/tabs/<id> \
+  -H 'Content-Type: application/json'
+
+# Send keys to a pane
+curl -X POST http://localhost:7680/api/mux/panes/<id>/keys \
+  -H 'Content-Type: application/json' \
+  -d '{"keys":"ls\n"}'
+
+# Get a terminal stream token
+curl http://localhost:7680/api/mux/stream-token
 ```
 
-- [ ] Health endpoint returns 200
-- [ ] Windows endpoint lists tmux windows
-- [ ] Create window works
-- [ ] Select window works
-- [ ] Rename window works
-- [ ] Kill window works
+- [ ] Health endpoint returns 200 with `apiVersion` and `backend`
+- [ ] Snapshot endpoint lists groups/tabs/panes
+- [ ] Create tab works
+- [ ] Select tab works (tmux; Herdr answers 501 because the PWA selects client-side)
+- [ ] Rename tab works
+- [ ] Close tab works
 - [ ] Send keys works
-- [ ] Terminal token endpoint returns valid single-use token (30s TTL)
-- [ ] Invalid requests return proper errors
-
----
-
-## WebSocket Proxy
-
-- [ ] WebSocket connects through tmux-api (not direct to ttyd)
-- [ ] Proxy handles reconnection gracefully
-- [ ] No CORS errors in console
-- [ ] Connection stable over extended use
+- [ ] Stream token endpoint returns a valid single-use token (30s TTL)
+- [ ] Invalid requests return proper errors (400/404/405/415)
+- [ ] `/api/tmux/*` and `/terminal/` return 404/410, never a working response
 
 ---
 
@@ -432,23 +477,24 @@ curl http://localhost:7680/api/tmux/terminal-token
 ### Linux
 
 - [ ] Container mode works
-- [ ] Native mode works
-- [ ] Scripts detect correct architecture (x86_64/aarch64)
+- [ ] Native mode works (tmux and Herdr backends)
+- [ ] CLI detects correct architecture (x86_64/aarch64)
 
 ### macOS
 
 - [ ] Container mode works (Docker Desktop or Podman)
 - [ ] Native mode works
 - [ ] Cross-compilation for Linux container works
-- [ ] `ipconfig getifaddr en0` fallback works for LAN IP
+- [ ] LAN IP detection works
 
 ### Windows
 
 - [ ] Container mode works (Docker Desktop)
-- [ ] Native mode works (psmux + ttyd + tmux-api)
+- [ ] Native mode works (psmux + tmux-api)
 - [ ] PowerShell script handles DPAPI password encryption
 - [ ] Link/Unlink creates global command
-- [ ] `termote.ps1` flags: `-Lan`, `-NoAuth`, `-Port`, `-Tailscale`, `-Fresh`
+- [ ] `termote.ps1` flags: `-Lan`, `-NoAuth`, `-Port`, `-Tailscale`, `-Fresh`, `-Mux`,
+      `-AllowHost`, `-AllowHerdrNoAuth`
 
 ---
 
@@ -462,9 +508,9 @@ make test
 - [ ] PWA builds without errors: `pnpm --filter termote build`
 - [ ] TypeScript compiles: `pnpm --filter termote exec tsc --noEmit`
 - [ ] Lint passes: `pnpm --filter termote lint:ci`
-- [ ] Go builds without errors: `cd tmux-api && go build`
+- [ ] Go builds without errors: `cd tmux-api && go build .`
+- [ ] Go tests pass on Linux, macOS and Windows: `cd tmux-api && go test ./...`
 - [ ] All shell tests pass: `make test`
-- [ ] All Go tests pass: `cd tmux-api && go test ./...`
 - [ ] Website CI pipeline runs on push
 - [ ] Website deploys successfully
 
