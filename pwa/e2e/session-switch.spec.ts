@@ -60,8 +60,8 @@ test.describe('session management', () => {
     await sessionRow.locator('button[title="Remove session"]').click()
     await page.waitForTimeout(500)
 
-    // Verify session is removed
-    await expect(page.locator('aside')).not.toContainText('to-delete')
+    // Verify session is removed (psmux on Windows answers slower than tmux)
+    await expect(page.locator('aside')).not.toContainText('to-delete', { timeout: 15000 })
   })
 })
 
@@ -133,7 +133,7 @@ test.describe('mux API integration', () => {
         const after = await request.get('/api/mux/snapshot')
         const tabs = (await after.json()).groups[0].tabs
         return tabs.find((t: { active: boolean }) => t.active)?.id
-      })
+      }, { timeout: 15000 })
       .toBe(first.id)
   })
 

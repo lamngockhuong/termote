@@ -115,6 +115,8 @@ test.describe('terminal stream', () => {
     await page.waitForSelector('[data-testid="terminal-view"] .xterm', {
       timeout: 10000,
     })
+    // Keys typed before the stream opens are dropped; ConPTY attaches slower
+    await page.waitForSelector('[aria-label="Connected"]', { timeout: 15000 })
   })
 
   const rows = (page: import('@playwright/test').Page) =>
@@ -140,6 +142,35 @@ test.describe('terminal stream', () => {
     await page.keyboard.type('echo back-$((1+1))')
     await page.keyboard.press('Enter')
     await expect(rows(page)).toContainText('back-2', { timeout: 10000 })
+  })
+
+  test('resizing the window sends the new size to the server', async ({ page }) => {
+    // Other workers attach to the same shared tmux window and its size follows
+    // the latest client, so the check reads what this client sends; the Go
+    // stream tests cover the server applying it to the PTY.
+    const sizes: number[] = []
+    page.on('websocket', (ws) => {
+      // The opening size travels in the URL, later ones as resize messages
+      const cols = new URL(ws.url()).searchParams.get('cols')
+      if (cols) sizes.push(Number(cols))
+      ws.on('framesent', ({ payload }) => {
+        if (typeof payload !== 'string') return
+        try {
+          const msg = JSON.parse(payload)
+          if (msg.type === 'resize') sizes.push(msg.cols)
+        } catch {
+          // terminal input, not a control message
+        }
+      })
+    })
+    await page.setViewportSize({ width: 1280, height: 720 })
+    await page.reload()
+    await page.waitForSelector('[aria-label="Connected"]', { timeout: 15000 })
+    await expect.poll(() => sizes.length, { timeout: 10000 }).toBeGreaterThan(0)
+    const wide = sizes[sizes.length - 1]
+
+    await page.setViewportSize({ width: 700, height: 720 })
+    await expect.poll(() => sizes[sizes.length - 1], { timeout: 10000 }).toBeLessThan(wide)
   })
 
   test('prompt has no leaked terminal query replies', async ({ page }) => {
