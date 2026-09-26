@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
+	"time"
 )
 
 // loopbackHosts are always allowed; a DNS-rebinding page still sends its own
@@ -55,13 +57,43 @@ func (a hostAllowlist) allows(hostport string) bool {
 	return ok
 }
 
+// rejectLogEvery bounds "rejected host" log lines, so a scanner hitting a
+// LAN-bound server cannot flood the log.
+const rejectLogEvery = 10 * time.Second
+
+// rateLimitedLog prints at most one line per interval and reports how many
+// lines it dropped in between.
+type rateLimitedLog struct {
+	mu         sync.Mutex
+	every      time.Duration
+	last       time.Time
+	suppressed int
+}
+
+func (l *rateLimitedLog) printf(format string, a ...any) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	now := time.Now()
+	if !l.last.IsZero() && now.Sub(l.last) < l.every {
+		l.suppressed++
+		return
+	}
+	if l.suppressed > 0 {
+		format += " (%d similar lines suppressed)"
+		a = append(a, l.suppressed)
+	}
+	l.last, l.suppressed = now, 0
+	log.Printf(format, a...)
+}
+
 // hostGuard rejects requests whose Host header is not in the allowlist, which
 // blocks DNS rebinding from a malicious page.
 func hostGuard(allowed hostAllowlist, next http.Handler) http.Handler {
+	rejects := &rateLimitedLog{every: rejectLogEvery}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !allowed.allows(r.Host) {
 			host := normalizeHost(r.Host)
-			log.Printf("rejected request for host %q from %s", host, r.RemoteAddr)
+			rejects.printf("rejected request for host %q from %s", host, r.RemoteAddr)
 			msg := "Host \"" + host + "\" is not allowed. Add it with: " +
 				"termote install <mode> --allow-host " + host +
 				" (Windows: termote.ps1 install <mode> -AllowHost " + host + ")"
@@ -129,19 +161,11 @@ func validateConfig(cfg serveConfig) error {
 	return nil
 }
 
-// requestIsHTTPS trusts X-Forwarded-Proto only from a loopback proxy such as
-// `tailscale serve`; a remote client could otherwise set it freely.
+// requestIsHTTPS reports whether the client reached us over HTTPS, directly or
+// through a proxy such as `tailscale serve`. X-Forwarded-Proto is trusted from
+// any source: in container mode the proxy arrives from the bridge gateway, not
+// loopback, and a client that forges the header only marks its own session
+// cookie Secure, which its browser then withholds over plain HTTP.
 func requestIsHTTPS(r *http.Request) bool {
-	if r.TLS != nil {
-		return true
-	}
-	if r.Header.Get("X-Forwarded-Proto") != "https" {
-		return false
-	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		host = r.RemoteAddr
-	}
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
+	return r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
 }

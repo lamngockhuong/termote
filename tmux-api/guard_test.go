@@ -1,11 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"crypto/tls"
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestParseAllowedHosts(t *testing.T) {
@@ -189,7 +193,8 @@ func TestRequestIsHTTPS(t *testing.T) {
 		{"tls", "192.168.1.9:5000", "", true, true},
 		{"xfp from loopback proxy", "127.0.0.1:5000", "https", false, true},
 		{"xfp from ipv6 loopback", "[::1]:5000", "https", false, true},
-		{"xfp from remote client", "192.168.1.9:5000", "https", false, false},
+		{"xfp from bridge gateway", "172.17.0.1:5000", "https", false, true},
+		{"xfp from remote client", "192.168.1.9:5000", "https", false, true},
 		{"xfp http from loopback", "127.0.0.1:5000", "http", false, false},
 	}
 	for _, tt := range tests {
@@ -206,5 +211,23 @@ func TestRequestIsHTTPS(t *testing.T) {
 				t.Errorf("requestIsHTTPS = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestRateLimitedLog(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(os.Stderr)
+	l := &rateLimitedLog{every: time.Hour}
+	for i := 0; i < 5; i++ {
+		l.printf("rejected %d", i)
+	}
+	if got := strings.Count(buf.String(), "rejected"); got != 1 {
+		t.Fatalf("logged %d lines within the interval, want 1:\n%s", got, buf.String())
+	}
+	l.last = time.Now().Add(-2 * time.Hour)
+	l.printf("rejected again")
+	if !strings.Contains(buf.String(), "(4 similar lines suppressed)") {
+		t.Fatalf("missing suppressed count:\n%s", buf.String())
 	}
 }
