@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -105,7 +106,10 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore) {
 			log.Printf("%s health: %v", m.Name(), err)
 			status = "degraded"
 		}
-		jsonOK(w, map[string]any{"status": status, "apiVersion": apiVersion, "backend": m.Name()})
+		// version and pid let the CLI tell this server from an older one
+		// still holding the port (start, restart, update).
+		jsonOK(w, map[string]any{"status": status, "apiVersion": apiVersion, "backend": m.Name(),
+			"version": cliVersion, "pid": os.Getpid()})
 	})
 
 	mux.HandleFunc("/api/mux/snapshot", func(w http.ResponseWriter, r *http.Request) {

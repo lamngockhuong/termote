@@ -114,15 +114,15 @@ func listWindows(ctx context.Context) (string, error) {
 }
 
 // scrubTmuxSecrets removes secrets from a tmux server that is already
-// running. A tmux server started from a shell that had TERMOTE_PASS exported
-// keeps it, and restarting Termote keeps that server, so without this every
+// running. A tmux server started from a shell that had TERMOTE_* exported
+// keeps them, and restarting Termote keeps that server, so without this every
 // new tab would inherit the password.
 // Shells already open keep theirs. Errors (no server yet, psmux without
 // set-environment -u) are fine: a server started now gets terminalEnv.
 func scrubTmuxSecrets(ctx context.Context) {
 	ctx, cancel := context.WithTimeout(ctx, muxTimeout)
 	defer cancel()
-	for _, k := range secretEnvKeys {
+	for _, k := range termoteEnvKeys {
 		tmuxCmd(ctx, "set-environment", "-g", "-u", k).Run()
 	}
 }

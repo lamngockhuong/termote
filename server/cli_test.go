@@ -81,6 +81,8 @@ type testCLI struct {
 	stdout, stderr *bytes.Buffer
 	runner         *fakeRunner
 	killed         []int
+	// env is what c.getenv sees.
+	env map[string]string
 }
 
 func newTestCLI(t *testing.T, goos string) *testCLI {
@@ -103,10 +105,13 @@ func newTestCLI(t *testing.T, goos string) *testCLI {
 		readPassword: func() (string, error) {
 			return "", errors.New("no terminal")
 		},
-		procs:      func() ([]procInfo, error) { return nil, nil },
-		localIPv4s: func() []string { return []string{"192.168.1.20", "10.0.0.5"} },
-		pid:        os.Getpid(),
+		procs:        func() ([]procInfo, error) { return nil, nil },
+		localIPv4s:   func() []string { return []string{"192.168.1.20", "10.0.0.5"} },
+		herdrRunning: func() bool { return false },
+		pid:          os.Getpid(),
 	}
+	tc.env = map[string]string{"PATH": "/usr/bin:/bin"}
+	tc.cli.getenv = func(k string) string { return tc.env[k] }
 	tc.cli.terminate = func(pid int, _ time.Duration) error {
 		tc.killed = append(tc.killed, pid)
 		return nil

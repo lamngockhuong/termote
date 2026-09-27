@@ -673,19 +673,22 @@ func TestBasicAuthSessionCookie(t *testing.T) {
 	})
 }
 
-func TestTerminalsNeverSeeThePassword(t *testing.T) {
+func TestTerminalsNeverSeeTermoteVariables(t *testing.T) {
 	t.Setenv("TERMOTE_PASS", "s3cret-pass")
+	t.Setenv("TERMOTE_BIND", "0.0.0.0")
 	for _, kv := range terminalEnv() {
-		if strings.Contains(kv, "s3cret-pass") {
-			t.Fatalf("terminal env carries the password: %q", kv)
+		if strings.HasPrefix(strings.ToUpper(kv), "TERMOTE_") {
+			t.Fatalf("terminal env carries %q", kv)
 		}
 	}
 	cfg := newServeConfigFromEnv()
-	scrubSecretEnv()
+	scrubTermoteEnv()
 	if cfg.Pass != "s3cret-pass" {
 		t.Fatalf("config lost the password: %q", cfg.Pass)
 	}
-	if _, ok := os.LookupEnv("TERMOTE_PASS"); ok {
-		t.Fatal("TERMOTE_PASS still in the process environment, so tmux would inherit it")
+	for _, k := range []string{"TERMOTE_PASS", "TERMOTE_BIND"} {
+		if _, ok := os.LookupEnv(k); ok {
+			t.Fatalf("%s still in the process environment, so tmux would inherit it", k)
+		}
 	}
 }

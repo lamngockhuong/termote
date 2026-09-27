@@ -24,45 +24,23 @@ func readFixture(t *testing.T, name string) []byte {
 	return b
 }
 
-func TestDeriveKeyMatchesOpenSSLDigest(t *testing.T) {
-	// echo -n "termote-box-tester-termote" | openssl dgst -sha256 -r
-	const want = "80ce0cef6a04814998f604d765718f771574fe79a17747d84f980331e820d0fb"
-	if got := deriveKey("termote-box", "tester"); got != want {
-		t.Fatalf("deriveKey = %s, want %s", got, want)
-	}
-}
-
-func TestMachineKeyUsesHostnameAndWhoamiCommands(t *testing.T) {
-	tc := newTestCLI(t, "linux")
-	if got, want := tc.machineKey(), deriveKey("termote-box", "tester"); got != want {
-		t.Fatalf("machineKey = %s, want %s", got, want)
-	}
-}
+// fixtureKey is the passphrase testdata/config/config-linux was encrypted
+// with (openssl enc -aes-256-cbc -a -A -salt -pbkdf2 -pass pass:<key>).
+const fixtureKey = "80ce0cef6a04814998f604d765718f771574fe79a17747d84f980331e820d0fb"
 
 func TestParseLinuxConfig(t *testing.T) {
-	cfg, err := parseUnixConfig(readFixture(t, "config-linux"), func() string { return deriveKey("termote-box", "tester") })
+	cfg, err := parseUnixConfig(readFixture(t, "config-linux"), func() string { return fixtureKey })
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := savedConfig{Mode: "native", LAN: true, Port: 7700, Tailscale: "box.tail1234.ts.net:8443", Password: "Linux-Pass-01"}
-	if cfg.Mode != want.Mode || cfg.LAN != want.LAN || cfg.NoAuth || cfg.Port != want.Port ||
-		cfg.Tailscale != want.Tailscale || cfg.Password != want.Password || cfg.Mux != "" || cfg.PasswordUnreadable {
-		t.Fatalf("got %+v, want %+v", *cfg, want)
-	}
-}
-
-func TestParseMacConfig(t *testing.T) {
-	cfg, err := parseUnixConfig(readFixture(t, "config-macos"), func() string { return deriveKey("Testers-Mac-mini.local", "tester") })
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cfg.Mode != "container" || cfg.Port != 7680 || cfg.Password != "Mac-Pass-02" {
+	if !cfg.LAN || cfg.NoAuth || cfg.Port != 7700 || cfg.Tailscale != "box.tail1234.ts.net:8443" ||
+		cfg.Password != "Linux-Pass-01" || cfg.Mux != "" || cfg.PasswordUnreadable || cfg.Container != nil {
 		t.Fatalf("got %+v", *cfg)
 	}
 }
 
-func TestParseConfigOtherMachineMarksPasswordUnreadable(t *testing.T) {
-	cfg, err := parseUnixConfig(readFixture(t, "config-linux"), func() string { return deriveKey("other-box", "tester") })
+func TestParseConfigWrongSecretMarksPasswordUnreadable(t *testing.T) {
+	cfg, err := parseUnixConfig(readFixture(t, "config-linux"), func() string { return "" })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,9 +64,10 @@ func TestParsePlainBase64AndEmptyPassword(t *testing.T) {
 }
 
 func TestUnixConfigRoundTrip(t *testing.T) {
-	key := deriveKey("h", "u")
-	in := savedConfig{Mode: "native", LAN: true, Port: 7700, Tailscale: "a.ts.net", Mux: "herdr",
-		AllowHosts: []string{"mybox.local", "proxy.lan"}, HerdrAllowNoAuth: true, Password: `p@ss w0rd$!`}
+	key := strings.Repeat("ab", 32)
+	in := savedConfig{LAN: true, Port: 7700, Tailscale: "a.ts.net", Mux: "herdr",
+		AllowHosts: []string{"mybox.local", "proxy.lan"}, HerdrAllowNoAuth: true, Password: `p@ss w0rd$!`,
+		Container: &containerConfig{LAN: true, Port: 7681, Tailscale: "c.ts.net:8443", AllowHosts: []string{"c.lan"}, Workspace: "/work"}}
 	data, err := formatUnixConfig(in, key)
 	if err != nil {
 		t.Fatal(err)
@@ -97,14 +76,20 @@ func TestUnixConfigRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out.Mode != in.Mode || out.LAN != in.LAN || out.Port != in.Port || out.Tailscale != in.Tailscale ||
+	if out.LAN != in.LAN || out.Port != in.Port || out.Tailscale != in.Tailscale ||
 		out.Mux != in.Mux || strings.Join(out.AllowHosts, ",") != "mybox.local,proxy.lan" ||
 		!out.HerdrAllowNoAuth || out.Password != in.Password {
 		t.Fatalf("round trip: got %+v, want %+v", *out, in)
 	}
-	// The layout is stable: comment line, then the keys in a fixed order.
-	if !strings.HasPrefix(string(data), "# Termote config (auto-generated)\nTERMOTE_MODE=\"native\"\nTERMOTE_LAN=\"true\"\n") {
+	if cc := out.Container; cc == nil || !cc.LAN || cc.NoAuth || cc.Port != 7681 || cc.Tailscale != "c.ts.net:8443" ||
+		strings.Join(cc.AllowHosts, ",") != "c.lan" || cc.Workspace != "/work" {
+		t.Fatalf("container round trip: %+v", out.Container)
+	}
+	if !strings.HasPrefix(string(data), "# Termote config (written by termote start)\nTERMOTE_LAN=\"true\"\n") {
 		t.Fatalf("unexpected layout:\n%s", data)
+	}
+	if strings.Contains(string(data), "p@ss") {
+		t.Fatal("password written in plain text")
 	}
 }
 
@@ -114,7 +99,7 @@ func TestGoEncryptedPasswordDecryptsWithOpenSSL(t *testing.T) {
 	if _, err := exec.LookPath("openssl"); err != nil {
 		t.Skip("openssl not installed")
 	}
-	key := deriveKey("termote-box", "tester")
+	key := fixtureKey
 	enc, err := encryptOpenSSL("Round-Trip-99", key)
 	if err != nil {
 		t.Fatal(err)
@@ -168,14 +153,14 @@ func TestParseWindowsConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Mode != "native" || !cfg.LAN || cfg.Port != 7690 || cfg.Tailscale != "win.tail1234.ts.net" || cfg.Password != "Win-Pass-04" {
+	if !cfg.LAN || cfg.Port != 7690 || cfg.Tailscale != "win.tail1234.ts.net" || cfg.Password != "Win-Pass-04" {
 		t.Fatalf("got %+v", *cfg)
 	}
 }
 
 func TestWindowsConfigRoundTrip(t *testing.T) {
 	fakeDPAPI(t)
-	in := savedConfig{Mode: "container", Port: 7690, Mux: "tmux", AllowHosts: []string{"pc.lan"}, Password: "pw"}
+	in := savedConfig{Port: 7690, Mux: "tmux", AllowHosts: []string{"pc.lan"}, Password: "pw", Container: &containerConfig{Port: 7680, NoAuth: true}}
 	data, err := formatWindowsConfig(in, time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC))
 	if err != nil {
 		t.Fatal(err)
@@ -184,7 +169,7 @@ func TestWindowsConfigRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out.Mode != "container" || out.Password != "pw" || out.Mux != "tmux" || strings.Join(out.AllowHosts, ",") != "pc.lan" {
+	if out.Container == nil || out.Container.Port != 7680 || !out.Container.NoAuth || out.Password != "pw" || out.Mux != "tmux" || strings.Join(out.AllowHosts, ",") != "pc.lan" {
 		t.Fatalf("round trip got %+v", *out)
 	}
 }
@@ -205,7 +190,7 @@ func TestSaveAndLoadConfigFile(t *testing.T) {
 	if cfg, err := tc.loadConfig(); cfg != nil || err != nil {
 		t.Fatalf("missing config: %v %v", cfg, err)
 	}
-	if err := tc.saveConfig(savedConfig{Mode: "native", Port: 7680, Mux: "tmux", Password: "pw1"}); err != nil {
+	if err := tc.saveConfig(savedConfig{Port: 7680, Mux: "tmux", Password: "pw1"}); err != nil {
 		t.Fatal(err)
 	}
 	st, err := os.Stat(tc.configFile())
@@ -218,6 +203,23 @@ func TestSaveAndLoadConfigFile(t *testing.T) {
 	cfg, err := tc.loadConfig()
 	if err != nil || cfg.Password != "pw1" {
 		t.Fatalf("load: %+v %v", cfg, err)
+	}
+	// The key lives in its own owner-only file; without it the password is
+	// unreadable, and the next save creates a new key.
+	st, err = os.Stat(tc.secretFile())
+	if err != nil || (runtime.GOOS != "windows" && st.Mode().Perm() != 0o600) || len(tc.readSecret()) != 64 {
+		t.Fatalf("secret file: %v %v", st, err)
+	}
+	os.Remove(tc.secretFile())
+	cfg, _ = tc.loadConfig()
+	if cfg.Password != "" || !cfg.PasswordUnreadable {
+		t.Fatalf("password readable without the secret: %+v", cfg)
+	}
+	if err := tc.saveConfig(savedConfig{Password: "pw2"}); err != nil {
+		t.Fatal(err)
+	}
+	if cfg, _ = tc.loadConfig(); cfg.Password != "pw2" {
+		t.Fatalf("after a new secret: %+v", cfg)
 	}
 }
 
@@ -246,12 +248,12 @@ func TestShowPassword(t *testing.T) {
 	if code := tc.main([]string{"show-password"}); code != 1 {
 		t.Fatalf("no config: code %d", code)
 	}
-	tc.saveConfig(savedConfig{Mode: "native", Password: "Shown-01"})
+	tc.saveConfig(savedConfig{Password: "Shown-01"})
 	tc.stdout.Reset()
 	if code := tc.main([]string{"show-password"}); code != 0 || !strings.Contains(tc.stdout.String(), "Password: Shown-01") {
 		t.Fatalf("code %d out %q", code, tc.stdout.String())
 	}
-	tc.saveConfig(savedConfig{Mode: "native", NoAuth: true})
+	tc.saveConfig(savedConfig{NoAuth: true})
 	tc.stdout.Reset()
 	if code := tc.main([]string{"show-password"}); code != 0 || !strings.Contains(tc.stdout.String(), "disabled") {
 		t.Fatalf("no-auth: code %d out %q", code, tc.stdout.String())

@@ -174,7 +174,7 @@ func terminalEnv() []string {
 	var env []string
 	for _, kv := range os.Environ() {
 		k, _, _ := strings.Cut(kv, "=")
-		if strings.EqualFold(k, "TMUX") || strings.EqualFold(k, "TMUX_PANE") || isSecretEnv(kv) {
+		if strings.EqualFold(k, "TMUX") || strings.EqualFold(k, "TMUX_PANE") || isTermoteEnv(kv) {
 			continue
 		}
 		env = append(env, kv)

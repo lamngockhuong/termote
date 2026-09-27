@@ -17,19 +17,27 @@ import (
 var loopbackHosts = []string{"localhost", "127.0.0.1", "::1"}
 
 // hostAllowlist holds normalised hostnames (no port, no brackets, lowercase).
-type hostAllowlist map[string]struct{}
+// With localAddr it also accepts the IP address the request arrived on: a
+// LAN client types the server's address, which is exactly that. The check
+// then follows the machine's addresses as they are now (late network at
+// boot, a new DHCP lease) and still blocks DNS rebinding, since an
+// attacker's hostname is never one of this machine's IPs.
+type hostAllowlist struct {
+	names     map[string]struct{}
+	localAddr bool
+}
 
 // parseAllowedHosts builds the allowlist from TERMOTE_ALLOWED_HOSTS (comma
 // separated) plus loopback. There is deliberately no wildcard: users can only
-// add names (install --allow-host), never switch the check off.
-func parseAllowedHosts(env string) hostAllowlist {
-	a := hostAllowlist{}
+// add names (start --allow-host), never switch the check off.
+func parseAllowedHosts(env string, localAddr bool) hostAllowlist {
+	a := hostAllowlist{names: map[string]struct{}{}, localAddr: localAddr}
 	for _, h := range loopbackHosts {
-		a[h] = struct{}{}
+		a.names[h] = struct{}{}
 	}
 	for _, h := range strings.Split(env, ",") {
 		if h = normalizeHost(h); h != "" {
-			a[h] = struct{}{}
+			a.names[h] = struct{}{}
 		}
 	}
 	return a
@@ -48,13 +56,22 @@ func normalizeHost(hostport string) string {
 	return strings.TrimSuffix(strings.ToLower(h), ".")
 }
 
-func (a hostAllowlist) allows(hostport string) bool {
+// allows reports whether hostport (a Host header or an Origin's host) may
+// reach the server over request r.
+func (a hostAllowlist) allows(r *http.Request, hostport string) bool {
 	h := normalizeHost(hostport)
 	if h == "" {
 		return false
 	}
-	_, ok := a[h]
-	return ok
+	if _, ok := a.names[h]; ok {
+		return true
+	}
+	if !a.localAddr {
+		return false
+	}
+	local, ok := r.Context().Value(http.LocalAddrContextKey).(*net.TCPAddr)
+	ip := net.ParseIP(h)
+	return ok && ip != nil && ip.Equal(local.IP)
 }
 
 // rejectLogEvery bounds "rejected host" log lines, so a scanner hitting a
@@ -91,11 +108,11 @@ func (l *rateLimitedLog) printf(format string, a ...any) {
 func hostGuard(allowed hostAllowlist, next http.Handler) http.Handler {
 	rejects := &rateLimitedLog{every: rejectLogEvery}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !allowed.allows(r.Host) {
+		if !allowed.allows(r, r.Host) {
 			host := normalizeHost(r.Host)
 			rejects.printf("rejected request for host %q from %s", host, r.RemoteAddr)
 			msg := "Host \"" + host + "\" is not allowed. Add it with: " +
-				"termote install <mode> --allow-host " + host
+				"termote start --allow-host " + host
 			if strings.HasPrefix(r.URL.Path, "/api/") {
 				jsonError(w, msg, http.StatusForbidden)
 			} else {
@@ -130,7 +147,7 @@ func writeGuard(allowed hostAllowlist, next http.Handler) http.Handler {
 		}
 		if origin := r.Header.Get("Origin"); origin != "" {
 			u, err := url.Parse(origin)
-			if err != nil || u.Host == "" || !allowed.allows(u.Host) {
+			if err != nil || u.Host == "" || !allowed.allows(r, u.Host) {
 				jsonError(w, "origin not allowed", http.StatusForbidden)
 				return
 			}

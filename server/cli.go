@@ -22,7 +22,6 @@ const (
 	adminUser       = "admin"
 	updateRepo      = "lamngockhuong/termote"
 	defaultLogLines = 50
-	serverStartWait = 8 * time.Second
 )
 
 // commandRunner runs external programs; tests replace it with a fake.
@@ -82,6 +81,10 @@ type cli struct {
 	terminate func(pid int, wait time.Duration) error
 	// localIPv4s lists this machine's LAN addresses.
 	localIPv4s func() []string
+	// herdrRunning reports whether herdr's server answers on its socket.
+	herdrRunning func() bool
+	// detachedExited closes when a server this CLI started detached exits.
+	detachedExited <-chan struct{}
 	// pid of this process, never stopped.
 	pid int
 	// getenv reads the environment (XDG and Windows profile dirs).
@@ -147,6 +150,7 @@ func newCLI() (*cli, error) {
 		procs:        listProcesses,
 		terminate:    terminateProcess,
 		localIPv4s:   localIPv4s,
+		herdrRunning: herdrReachable,
 		pid:          os.Getpid(),
 		getenv:       os.Getenv,
 	}
@@ -195,14 +199,20 @@ func (c *cli) main(args []string) int {
 
 func (c *cli) dispatch(cmd string, args []string) error {
 	switch cmd {
-	case "install":
-		return c.cmdInstall(args)
+	case "start":
+		return c.cmdStart(args)
+	case "stop":
+		return c.cmdStop(args)
+	case "restart":
+		return c.cmdRestart(args)
+	case "status", "health":
+		return c.cmdStatus(args)
+	case "container":
+		return c.cmdContainer(args)
 	case "uninstall":
 		return c.cmdUninstall(args)
 	case "update":
 		return c.cmdUpdate(args)
-	case "health":
-		return c.cmdHealth(args)
 	case "logs":
 		return c.cmdLogs(args)
 	case "link":
@@ -219,6 +229,9 @@ func (c *cli) dispatch(cmd string, args []string) error {
 	case "help", "-h", "--help":
 		c.printHelp()
 		return nil
+	case "install":
+		c.printHelp()
+		return usageError("install was replaced by: termote start [options] (native) and termote container up (container)")
 	}
 	c.printHelp()
 	return usageError("unknown command: %s", cmd)
@@ -428,28 +441,34 @@ func (c *cli) printHelp() {
 Usage: termote [command] [options]
 
 Commands:
-  install <mode>    Install and start services (mode: native, container)
-  uninstall <mode>  Remove installation (mode: native, container, all)
-  update            Update to the latest release
-  health            Check service health
-  logs [service]    View logs (server, all, follow, clean)
-  link              Create 'termote' global command
-  unlink            Remove global command
-  show-password     Show the saved admin password
-  version           Show version
-  help              Show this help
-  menu              Interactive menu
+  start [options]      Save the options, register the service and start it
+  stop                 Stop the server (it starts again at the next login)
+  restart              Stop and start with the saved options
+  status               Show what the running server reports (alias: health)
+  container up|down    Run the server in a container (podman or docker)
+  update               Update to the latest release
+  uninstall            Remove the service; the config stays
+  logs [service]       View logs (server, all, follow, clean)
+  link / unlink        Create or remove the 'termote' command in ~/.local/bin
+  show-password        Show the saved admin password
+  version              Show version
+  serve                Run the server in the foreground (what the service runs)
+  (no command)         Interactive menu
 
-Options:
-  --port <port>             Host port (default: %d)
-  --lan                     Expose to LAN
-  --tailscale <host[:port]> Enable Tailscale HTTPS
-  --no-auth                 Disable authentication
-  --mux <tmux|herdr>        Terminal backend, native only (default: tmux)
-  --allow-host <name>       Allow another Host name (repeatable)
-  --allow-herdr-no-auth     Allow herdr without auth
-  --fresh                   Ignore saved config, set a new password
-  --version <X.Y.Z>         Update to a specific version
-  --force                   Reinstall the current version (with update)
+Options of start (saved; a flag not given keeps its saved value):
+  --port <port>              Port (default: %d)
+  --lan[=false]              Listen on every interface, not only this machine
+  --tailscale <host[:port]>  Publish over Tailscale HTTPS (default port 443)
+  --no-tailscale             Stop publishing over Tailscale
+  --no-auth[=false]          Disable authentication
+  --mux <tmux|herdr>         Terminal backend (default: herdr when it runs, else tmux)
+  --allow-host <name>        Allow another Host name (repeatable)
+  --remove-host <name>       Remove an allowed Host name (repeatable)
+  --allow-herdr-no-auth      Allow herdr without auth
+  --fresh                    Set a new password
+
+Options of update:
+  --version <X.Y.Z>          Update to a specific version
+  --force                    Reinstall the current version
 `, c.version, c.defaultPort())
 }

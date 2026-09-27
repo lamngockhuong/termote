@@ -50,6 +50,4 @@ if [[ ! -x "$bin" || -n "$(find "$api" "$api/webui" -maxdepth 1 \( -name '*.go' 
     fi
 fi
 
-# No arguments opens the interactive menu.
-[[ $# -eq 0 ]] && set -- menu
 exec "$bin" "$@"

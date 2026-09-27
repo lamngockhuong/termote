@@ -39,6 +39,12 @@ type serveConfig struct {
 	// HerdrAllowNoAuth lets herdr run with auth disabled. herdr exposes every
 	// workspace of the user, so NoAuth alone is refused.
 	HerdrAllowNoAuth bool
+	// AllowLocalAddr also accepts the address a request arrived on as its
+	// Host (LAN access; see hostAllowlist).
+	AllowLocalAddr bool
+	// Tailscale is "host[:port]" to publish over Tailscale HTTPS once
+	// listening; empty publishes nothing.
+	Tailscale string
 }
 
 // newServeConfigFromEnv creates config from environment variables with defaults
@@ -58,29 +64,32 @@ func newServeConfigFromEnv() serveConfig {
 	}
 }
 
-// secretEnvKeys must never reach a terminal: any tmux command may start the
+// No TERMOTE_* variable may reach a terminal: any tmux command may start the
 // tmux server, which hands the environment it started with to every shell, so
-// `env` in a pane would print the password.
-var secretEnvKeys = []string{"TERMOTE_PASS"}
+// `env` in a pane would print the password (TERMOTE_PASS) or settings that
+// would then configure a server started from that pane.
+var termoteEnvKeys = []string{
+	"TERMOTE_PASS", "TERMOTE_USER", "TERMOTE_PORT", "TERMOTE_BIND", "TERMOTE_NO_AUTH",
+	"TERMOTE_PWA_DIR", "TERMOTE_ALLOWED_HOSTS", "TERMOTE_MUX", "TERMOTE_HERDR_ALLOW_NO_AUTH",
+	"TERMOTE_PROJECT_DIR",
+}
 
-// scrubSecretEnv removes the secrets from the process environment once the
-// config has read them.
-func scrubSecretEnv() {
-	for _, k := range secretEnvKeys {
-		os.Unsetenv(k)
+// scrubTermoteEnv removes every TERMOTE_* variable from the process
+// environment once the config is read.
+func scrubTermoteEnv() {
+	for _, kv := range os.Environ() {
+		if isTermoteEnv(kv) {
+			k, _, _ := strings.Cut(kv, "=")
+			os.Unsetenv(k)
+		}
 	}
 }
 
-// isSecretEnv reports whether a KEY=value entry holds a secret. Windows keys
-// are case-insensitive, so the match is too.
-func isSecretEnv(kv string) bool {
+// isTermoteEnv reports whether a KEY=value entry is a TERMOTE_* variable.
+// Windows keys are case-insensitive, so the match is too.
+func isTermoteEnv(kv string) bool {
 	k, _, _ := strings.Cut(kv, "=")
-	for _, s := range secretEnvKeys {
-		if strings.EqualFold(k, s) {
-			return true
-		}
-	}
-	return false
+	return len(k) > len("TERMOTE_") && strings.EqualFold(k[:len("TERMOTE_")], "TERMOTE_")
 }
 
 func envOr(key, fallback string) string {
@@ -206,7 +215,7 @@ func buildServer(cfg serveConfig, m Mux) (http.Handler, *streamHub, error) {
 	}
 	mux := http.NewServeMux()
 	tokenStore := newStreamTokenStore()
-	allowed := parseAllowedHosts(cfg.AllowedHosts)
+	allowed := parseAllowedHosts(cfg.AllowedHosts, cfg.AllowLocalAddr)
 	hub := newStreamHub(maxStreams)
 
 	registerMuxRoutes(mux, m, tokenStore)
@@ -261,6 +270,10 @@ func startServeMode(cfg serveConfig) {
 	}
 	// After the first signal, a second one kills the process as usual.
 	go func() { <-ctx.Done(); stop() }()
+	// Publish over Tailscale only once the port answers.
+	if cfg.Tailscale != "" {
+		go applyTailscale(ctx, cfg.Tailscale, ln.Addr().(*net.TCPAddr).Port)
+	}
 	if err := runServer(ctx, cfg, m, ln); err != nil {
 		log.Fatal(err)
 	}

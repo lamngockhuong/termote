@@ -92,7 +92,7 @@ func (s *ptyStream) Close() error {
 func terminalEnv() []string {
 	env := []string{"TERM=xterm-256color"}
 	for _, kv := range os.Environ() {
-		if hasEnvKey(kv, "TERM") || hasEnvKey(kv, "TMUX") || hasEnvKey(kv, "TMUX_PANE") || isSecretEnv(kv) {
+		if hasEnvKey(kv, "TERM") || hasEnvKey(kv, "TMUX") || hasEnvKey(kv, "TMUX_PANE") || isTermoteEnv(kv) {
 			continue
 		}
 		env = append(env, kv)

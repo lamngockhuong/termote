@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -158,10 +159,14 @@ func TestLinkWindowsWritesCmd(t *testing.T) {
 	}
 }
 
-func TestHealth(t *testing.T) {
+func TestStatus(t *testing.T) {
 	tc := newTestCLI(t, "linux")
 	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusUnauthorized)
+		if u, p, ok := r.BasicAuth(); !ok || u != adminUser || p != "p" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		fmt.Fprint(w, `{"status":"ok","version":"1.0.0","backend":"herdr","pid":4242}`)
 	}))
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -171,18 +176,26 @@ func TestHealth(t *testing.T) {
 	srv.Start()
 	defer srv.Close()
 	port := ln.Addr().(*net.TCPAddr).Port
-	tc.saveConfig(savedConfig{Mode: "native", Port: port, Mux: "herdr", Password: "p"})
+	tc.saveConfig(savedConfig{Port: port, Mux: "herdr", LAN: true, Tailscale: "box.ts.net", Password: "p"})
 
-	if code := tc.main([]string{"health"}); code != 0 {
+	if code := tc.main([]string{"status"}); code != 0 {
 		t.Fatalf("code %d\n%s", code, tc.stdout.String())
 	}
 	out := tc.stdout.String()
-	if !strings.Contains(out, "running (auth)") || !strings.Contains(out, "Backend: herdr") {
-		t.Fatalf("health output:\n%s", out)
+	for _, want := range []string{"Version: v1.0.0", "Backend: herdr", "PID: 4242", "Bind: 0.0.0.0 (LAN)", "Auth: on", "Tailscale: https://box.ts.net:443", "Supervisor: none"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("status misses %q:\n%s", want, out)
+		}
+	}
+	// A wrong saved password still shows the server as running.
+	tc.saveConfig(savedConfig{Port: port, Password: "other"})
+	tc.stdout.Reset()
+	if code := tc.main([]string{"health"}); code != 0 || !strings.Contains(tc.stdout.String(), "not accepted") {
+		t.Fatalf("wrong password: code %d\n%s", code, tc.stdout.String())
 	}
 	srv.Close()
 	tc.stdout.Reset()
-	if code := tc.main([]string{"health"}); code != 1 || !strings.Contains(tc.stdout.String(), "not running") {
+	if code := tc.main([]string{"status"}); code != 1 || !strings.Contains(tc.stdout.String(), "not running") {
 		t.Fatalf("stopped server: code %d\n%s", code, tc.stdout.String())
 	}
 }
@@ -193,22 +206,22 @@ func TestMenu(t *testing.T) {
 		t.Fatalf("non-interactive menu code %d", code)
 	}
 	tc.interactive = true
-	tc.saveConfig(savedConfig{Mode: "native", Password: "From-Menu"})
-	tc.in = bufio.NewReader(strings.NewReader("x\n9\n7\n"))
+	tc.saveConfig(savedConfig{Password: "From-Menu"})
+	tc.in = bufio.NewReader(strings.NewReader("x\n99\n8\n"))
 	tc.stdout.Reset()
 	if code := tc.main([]string{"menu"}); code != 0 || !strings.Contains(tc.stdout.String(), "Password: From-Menu") {
 		t.Fatalf("code %d\n%s", code, tc.stdout.String())
 	}
 }
 
-func TestMenuInstallBuildsFreshInstall(t *testing.T) {
+func TestMenuStartPassesEveryAnswer(t *testing.T) {
 	tc := newTestCLI(t, "linux")
 	tc.interactive = true
-	// native, herdr, LAN yes, no-auth yes, confirm herdr no-auth, Tailscale no
-	tc.in = bufio.NewReader(strings.NewReader("1\n1\n2\ny\ny\ny\nn\n"))
+	// start, herdr, LAN yes, no-auth yes, confirm herdr no-auth, Tailscale no
+	tc.in = bufio.NewReader(strings.NewReader("1\n3\ny\ny\ny\nn\n"))
 	tc.procs = func() ([]procInfo, error) { t.Fatal("services stopped before preflight"); return nil, nil }
 	tc.main([]string{"menu"})
-	// herdr is missing from PATH, so install stops in preflight, which runs
+	// herdr is missing from PATH, so start stops in preflight, which runs
 	// only once the herdr + no-auth combination passed validation.
 	if !strings.Contains(tc.stderr.String(), "herdr not found") {
 		t.Fatalf("stderr %q\nstdout %s", tc.stderr.String(), tc.stdout.String())

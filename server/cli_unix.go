@@ -123,13 +123,13 @@ func terminateProcess(pid int, wait time.Duration) error {
 // startDetached starts bin in its own session, so it outlives the CLI and
 // the terminal that ran it, with stdout and stderr appended to logPath.
 // The returned channel closes if the process exits while the CLI still runs.
-func startDetached(bin, dir string, env []string, logPath string) (int, <-chan struct{}, error) {
+func startDetached(bin string, args []string, dir string, env []string, logPath string) (int, <-chan struct{}, error) {
 	logf, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
 		return 0, nil, err
 	}
 	defer logf.Close()
-	cmd := exec.Command(bin)
+	cmd := exec.Command(bin, args...)
 	cmd.Dir = dir
 	cmd.Env = env
 	cmd.Stdout, cmd.Stderr = logf, logf
@@ -152,8 +152,8 @@ func unprotectCurrentUser([]byte) ([]byte, error) {
 
 func restrictToOwner(string) error { return nil }
 
-// isElevated reports root, for which sudo is skipped.
-func isElevated() bool { return os.Geteuid() == 0 }
+// hideConsole is for the Windows Scheduled Task; Unix has no window.
+func hideConsole() {}
 
 // replaceRunningFile moves an existing file out of the way before update
 // writes a new one; on Unix a running binary can be replaced in place.

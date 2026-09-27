@@ -71,8 +71,7 @@ if ($stale) {
     }
 }
 
-# No command opens the interactive menu.
-$goArgs = if ($args.Count -gt 0) { $args } else { @('menu') }
+$goArgs = @($args)
 # A blocked binary (Defender, AppLocker) raises no exit code; never report success.
 $global:LASTEXITCODE = $null
 try { & $bin @goArgs } catch { Stop-WithError "Cannot run ${bin}: $_" }

@@ -187,7 +187,7 @@ func handleStream(w http.ResponseWriter, r *http.Request, m Mux, tokens *tokenSt
 	}
 	if origin := r.Header.Get("Origin"); origin != "" {
 		u, err := url.Parse(origin)
-		if err != nil || u.Host == "" || !allowed.allows(u.Host) {
+		if err != nil || u.Host == "" || !allowed.allows(r, u.Host) {
 			jsonError(w, "origin not allowed", http.StatusForbidden)
 			return
 		}

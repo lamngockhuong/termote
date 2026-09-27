@@ -1,7 +1,7 @@
 # Termote Makefile
 # Usage: make <target>
 
-.PHONY: help build test test-go test-cli test-get test-entrypoints install-container install-native clean release release-dry fmt fmt-check
+.PHONY: help build build-pwa build-api test test-go test-cli test-get test-entrypoints start container-up container-down uninstall health clean release release-dry fmt fmt-check
 
 # Default target
 help:
@@ -12,9 +12,9 @@ help:
 	@echo "  make build-pwa      Build PWA only"
 	@echo "  make build-api      Build server (embeds the PWA)"
 	@echo ""
-	@echo "Install:"
-	@echo "  make install-container  Install container mode (docker/podman)"
-	@echo "  make install-native     Install native mode (host tools)"
+	@echo "Run:"
+	@echo "  make start          Start the server as a service (native)"
+	@echo "  make container-up   Run the server in a container (docker/podman)"
 	@echo ""
 	@echo "Test:"
 	@echo "  make test              Run all tests"
@@ -52,18 +52,15 @@ build-api: build-pwa
 	cp -R pwa/dist/. server/webui/dist/
 	cd server && CGO_ENABLED=0 go build -ldflags="-s -w" -o termote .
 
-# Install targets (uses unified CLI)
-install-container:
-	./scripts/termote.sh install container
+# Run targets (through the checkout shim)
+start:
+	./scripts/termote.sh start
 
-install-container-lan:
-	./scripts/termote.sh install container --lan
+container-up:
+	./scripts/termote.sh container up
 
-install-native:
-	./scripts/termote.sh install native
-
-install-native-lan:
-	./scripts/termote.sh install native --lan
+container-down:
+	./scripts/termote.sh container down
 
 # Test targets
 test: test-go test-cli test-get test-entrypoints
@@ -107,7 +104,7 @@ clean:
 	rm -f docker-compose.override.yml
 
 uninstall:
-	./scripts/termote.sh uninstall all
+	./scripts/termote.sh uninstall
 
 # Release targets
 release-dry:

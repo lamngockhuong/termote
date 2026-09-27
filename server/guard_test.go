@@ -2,8 +2,10 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"log"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -13,36 +15,65 @@ import (
 )
 
 func TestParseAllowedHosts(t *testing.T) {
-	a := parseAllowedHosts(" MyBox.local , 192.168.1.5:7680, [fe80::1], ,host.ts.net., https://web.box.lan:8443")
+	a := parseAllowedHosts(" MyBox.local , 192.168.1.5:7680, [fe80::1], ,host.ts.net., https://web.box.lan:8443", false)
 	for _, h := range []string{
 		"localhost", "localhost:7680", "127.0.0.1:7680", "[::1]:7680", "[::1]",
 		"mybox.local", "MYBOX.LOCAL:7680", "192.168.1.5", "[fe80::1]:7680", "host.ts.net", "web.box.lan",
 	} {
-		if !a.allows(h) {
+		if !a.allows(noAddr, h) {
 			t.Errorf("allows(%q) = false, want true", h)
 		}
 	}
 	for _, h := range []string{"evil.com", "evil.com:7680", "192.168.1.6", "", "*", "https"} {
-		if a.allows(h) {
+		if a.allows(noAddr, h) {
 			t.Errorf("allows(%q) = true, want false", h)
 		}
 	}
 }
 
 func TestParseAllowedHostsEmptyIsLoopbackOnly(t *testing.T) {
-	a := parseAllowedHosts("")
-	if len(a) != len(loopbackHosts) {
+	a := parseAllowedHosts("", false)
+	if len(a.names) != len(loopbackHosts) {
 		t.Errorf("empty env allowlist = %v, want loopback only", a)
 	}
-	if a.allows("192.168.1.5") {
+	if a.allows(noAddr, "192.168.1.5") {
 		t.Error("LAN IP must not be allowed without TERMOTE_ALLOWED_HOSTS")
 	}
 }
 
 // A wildcard would switch the check off; it must be treated as a literal name.
 func TestParseAllowedHostsNoWildcard(t *testing.T) {
-	if parseAllowedHosts("*").allows("evil.com") {
+	if parseAllowedHosts("*", true).allows(requestOn("192.168.1.5"), "evil.com") {
 		t.Error("'*' must not allow arbitrary hosts")
+	}
+}
+
+// noAddr is a request without a local address (not from a listener).
+var noAddr = httptest.NewRequest("GET", "/", nil)
+
+// requestOn is a request that arrived on local address ip.
+func requestOn(ip string) *http.Request {
+	r := httptest.NewRequest("GET", "/", nil)
+	ctx := context.WithValue(r.Context(), http.LocalAddrContextKey, &net.TCPAddr{IP: net.ParseIP(ip), Port: 7680})
+	return r.WithContext(ctx)
+}
+
+// With LAN access the address a request arrived on is its own allowed
+// Host, whatever the machine's addresses were at boot; another host name
+// (DNS rebinding) or another IP still fails.
+func TestAllowlistAcceptsLocalAddress(t *testing.T) {
+	lan := parseAllowedHosts("", true)
+	r := requestOn("192.168.1.20")
+	for h, want := range map[string]bool{"192.168.1.20": true, "192.168.1.20:7680": true, "192.168.1.21": false, "evil.com": false, "localhost": true} {
+		if got := lan.allows(r, h); got != want {
+			t.Errorf("LAN allows(%q) = %v, want %v", h, got, want)
+		}
+	}
+	if parseAllowedHosts("", false).allows(r, "192.168.1.20") {
+		t.Error("local address allowed without LAN")
+	}
+	if !lan.allows(requestOn("::ffff:192.168.1.20"), "192.168.1.20") {
+		t.Error("IPv4-mapped local address not matched")
 	}
 }
 
@@ -116,7 +147,7 @@ func TestWriteGuard(t *testing.T) {
 
 // Reads stay usable without Content-Type or Origin headers.
 func TestWriteGuardIgnoresReadsAndNonAPI(t *testing.T) {
-	h := writeGuard(parseAllowedHosts(""), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := writeGuard(parseAllowedHosts("", false), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	for _, req := range []*http.Request{

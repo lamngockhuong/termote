@@ -175,6 +175,23 @@ func writeExtracted(r io.Reader, dst string, perm os.FileMode) error {
 	return renameOver(tmp, dst)
 }
 
+// renameOver moves tmp onto dst. Windows refuses to overwrite a running
+// executable, so dst is then renamed aside first and the move retried.
+func renameOver(tmp, dst string) error {
+	if err := os.Rename(tmp, dst); err == nil {
+		return nil
+	}
+	if err := replaceRunningFile(dst); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	if err := os.Rename(tmp, dst); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return nil
+}
+
 // cleanupReplacedBinaries deletes executables Windows could only rename
 // aside during an update; ones still running stay until the next run.
 func (c *cli) cleanupReplacedBinaries() {

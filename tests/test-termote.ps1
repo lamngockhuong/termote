@@ -123,8 +123,9 @@ try {
 
     foreach ($launcher in $Launchers) {
         $tag = Split-Path -Leaf $launcher
+        # The binary opens the menu itself; the shim passes no argument.
         $out = Invoke-Shim $launcher $cshim @()
-        Test-Equal "[$tag] no command opens the menu" "menu" (Get-PassedArgs $out)
+        Test-Equal "[$tag] no command passes none" "" (Get-PassedArgs $out)
         # Compare by content, not string: the temp path may be an 8.3 short name.
         $dir = ($out | Where-Object { $_.StartsWith("DIR=") } | Select-Object -First 1) -replace '^DIR=', ''
         Write-TestResult "[$tag] exports TERMOTE_PROJECT_DIR" ($dir -and (Test-Path (Join-Path $dir "server/go.mod"))) "got: '$dir'"

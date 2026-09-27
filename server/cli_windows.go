@@ -102,13 +102,13 @@ func terminateProcess(pid int, wait time.Duration) error {
 // startDetached starts bin without a console window, detached from the CLI's
 // console, with stdout and stderr appended to logPath.
 // The returned channel closes if the process exits while the CLI still runs.
-func startDetached(bin, dir string, env []string, logPath string) (int, <-chan struct{}, error) {
+func startDetached(bin string, args []string, dir string, env []string, logPath string) (int, <-chan struct{}, error) {
 	logf, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
 		return 0, nil, err
 	}
 	defer logf.Close()
-	cmd := exec.Command(bin)
+	cmd := exec.Command(bin, args...)
 	cmd.Dir = dir
 	cmd.Env = env
 	cmd.Stdout, cmd.Stderr = logf, logf
@@ -170,8 +170,20 @@ func restrictToOwner(path string) error {
 		windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, dacl, nil)
 }
 
-// isElevated is unused on Windows: no sudo there.
-func isElevated() bool { return false }
+var (
+	procGetConsoleWindow = windows.NewLazySystemDLL("kernel32.dll").NewProc("GetConsoleWindow")
+	procShowWindow       = windows.NewLazySystemDLL("user32.dll").NewProc("ShowWindow")
+)
+
+// hideConsole hides the console window a Scheduled Task or the Startup
+// launcher opens for `serve --service` (termote.cmd shares it). The window
+// may flash once at logon.
+func hideConsole() {
+	if hwnd, _, _ := procGetConsoleWindow.Call(); hwnd != 0 {
+		const swHide = 0
+		procShowWindow.Call(hwnd, swHide)
+	}
+}
 
 // replaceRunningFile renames an existing file aside, because Windows refuses
 // to overwrite a running executable but allows renaming it. The leftover is

@@ -130,8 +130,9 @@ test_checkout() {
     fi
     check "exports TERMOTE_PROJECT_DIR" "DIR=$dir" "$(echo "$out" | head -1)"
 
+    # The binary opens the menu itself; the shim passes no argument.
     out=$("$dir/scripts/termote.sh" 2>/dev/null)
-    check "no args opens the menu" "menu" "$(args_of "$out")"
+    check "no args passes none" "" "$(args_of "$out")"
 
     out=$("$dir/scripts/termote.sh" start --allow-host "my host" 2>/dev/null)
     check "keeps arguments with spaces" "my host" "$(echo "$out" | tail -1)"
