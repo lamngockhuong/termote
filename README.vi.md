@@ -25,6 +25,11 @@
 
 Điều khiển từ xa các công cụ CLI (Claude Code, GitHub Copilot, terminal bất kỳ) từ mobile/desktop qua PWA.
 
+> [!NOTE]
+> Nhánh `main` đang phát triển bản 1.0 và đi trước bản phát hành mới nhất
+> (0.1.x). Hướng dẫn cho phiên bản cài được hiện nay nằm ở
+> [README của nhánh `release/0.x`](https://github.com/lamngockhuong/termote/blob/release/0.x/README.vi.md).
+
 > **Termote** = Terminal + Remote
 >
 > 🇬🇧 [English](README.md) | 🇨🇳 [简体中文](README.zh-CN.md) | 🇯🇵 [日本語](README.ja.md) | 🇰🇷 [한국어](README.ko.md) | 🇪🇸 [Español](README.es.md) | 🇧🇷 [Português (BR)](README.pt-BR.md) | 🇫🇷 [Français](README.fr.md) | 🇩🇪 [Deutsch](README.de.md) | 🇷🇺 [Русский](README.ru.md) | 🇮🇩 [Bahasa Indonesia](README.id.md)

@@ -35,3 +35,15 @@ jobs:
     with:
       version: ${{ needs.release-please.outputs.version }}
     secrets: inherit
+
+  # Publish the website with each stable release, after its assets are out.
+  # A release created with GITHUB_TOKEN does not trigger `on: release`, so
+  # the deploy is called here instead.
+  call-deploy-website:
+    needs: [release-please, call-release]
+    if: needs.release-please.outputs.release_created == 'true' && !contains(needs.release-please.outputs.version, '-')
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/deploy-website.yml

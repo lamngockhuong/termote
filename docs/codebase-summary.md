@@ -299,6 +299,7 @@ enforce HTTP methods; invalid requests return 400/404/405/413 JSON errors.
 | `ci.yml`             | Push/PR                            | Build, lint, type check, PWA test, `go test` (Ubuntu/macOS/Windows), website build |
 | `release-please.yml` | Manual (workflow_dispatch)         | Create release PR with version bump from commits                                   |
 | `release.yml`        | Tag push / Manual / Release Please | Build + push Docker images, create GitHub Release                                  |
+| `deploy-website.yml` | Stable release / Manual            | Build + deploy the docs site to GitHub Pages (not on every push to `main`)         |
 
 ### Release Flow
 

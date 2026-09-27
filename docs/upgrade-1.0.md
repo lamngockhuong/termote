@@ -94,9 +94,9 @@ run on `macos-latest` in CI).
 
 ## Release procedure note (maintainers)
 
-1.0.0 is released by merging the long-lived `feat/1.0` branch into `main`
-once, with `release-as: 1.0.0` set for the package in
-`release-please-config.json` (`bump-minor-pre-major: true` would otherwise
-turn the `feat!:` merge commit into `0.2.0`). Remove `release-as` again right
+1.0.0 is released after the long-lived `feat/1.0` branch is merged into
+`main` once (merging alone releases nothing), with `release-as: 1.0.0` set
+for the package in `release-please-config.json` (`bump-minor-pre-major: true`
+would otherwise turn the `feat!:` merge commit into `0.2.0`). Remove `release-as` again right
 after the release goes out, or every later release stays pinned to 1.0.0. See
 [`release-guide.md`](release-guide.md) for the full release workflow.

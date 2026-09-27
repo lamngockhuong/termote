@@ -1,11 +1,10 @@
 name: Deploy Website
 
+# Deploys only with a stable release (called from release-please.yml) or by
+# hand, not on every push to main: main runs ahead of the latest release, and
+# the site's root docs must describe the version people can install.
 on:
-  push:
-    branches: [main]
-    paths:
-      - "website/**"
-      - ".github/workflows/deploy-website.yml"
+  workflow_call:
   workflow_dispatch:
 
 permissions:

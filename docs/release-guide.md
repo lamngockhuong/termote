@@ -172,22 +172,35 @@ Each release produces:
 
 ## 1.0.0 Release Procedure
 
-1.0.0 is a breaking release developed on the long-lived `feat/1.0` branch,
-kept separate from `main` so `main` could keep shipping 0.1.x patches. To
-release it:
+1.0.0 is a breaking release developed on the long-lived `feat/1.0` branch.
+`feat/1.0` is merged into `main` before 1.0.0 ships, so development continues
+on `main`; merging does not release anything by itself.
 
 1. Make sure the `release/0.x` maintenance branch exists (cut from `v0.1.0`,
    see [Maintaining 0.x](#maintaining-0x)) so 0.x patches have somewhere to
    ship once `main` becomes 1.x.
-2. Merge `feat/1.0` into `main` once (a merge commit with a `feat!:` subject
+2. `release-please-config.json` sets `release-as: 1.0.0` for the package
+   before the merge. Without it, `bump-minor-pre-major: true` would turn the
+   `feat!:` merge into `0.2.0` instead of `1.0.0`.
+3. Merge `feat/1.0` into `main` once (a merge commit with a `feat!:` subject
    and a `BREAKING CHANGE:` footer), with the breaking changes documented in
    [`upgrade-1.0.md`](upgrade-1.0.md).
-3. Before running Release Please, set `release-as: 1.0.0` for the package in
-   `release-please-config.json`. Without it, `bump-minor-pre-major: true`
-   would turn the `feat!:` merge into `0.2.0` instead of `1.0.0`.
-4. Run the release as usual (see Workflows above).
-5. Remove `release-as` from `release-please-config.json` right after the
+4. Release Please opens a `release 1.0.0` PR. Leave it open while work goes on
+   on `main`; every push updates it. Nothing is tagged or published until it
+   is merged, and the website is only deployed with a release (see below).
+5. When 1.0.0 is ready, remove the "`main` is ahead of the latest release"
+   note at the top of `README.md` and `README.vi.md`, then merge the release
+   PR.
+6. Remove `release-as` from `release-please-config.json` right after the
    release goes out, or every later release stays pinned to 1.0.0.
+
+## Website Deploys
+
+`deploy-website.yml` does not run on pushes to `main`. `release-please.yml`
+calls it after a stable release (not a pre-release) has been published, and it
+can be run by hand from GitHub Actions for a docs-only fix. This keeps the
+site's root docs on the version `releases/latest` installs while `main` runs
+ahead of it.
 
 ## Maintaining 0.x
 

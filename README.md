@@ -25,6 +25,11 @@
 
 Remote control CLI tools (Claude Code, GitHub Copilot, any terminal) from mobile/desktop via PWA.
 
+> [!NOTE]
+> `main` is where 1.0 is being developed and is ahead of the latest release
+> (0.1.x). For the version you can install today, see the
+> [`release/0.x` README](https://github.com/lamngockhuong/termote/tree/release/0.x#readme).
+
 > **Termote** = Terminal + Remote
 >
 > 🇻🇳 [Tiếng Việt](README.vi.md) | 🇨🇳 [简体中文](README.zh-CN.md) | 🇯🇵 [日本語](README.ja.md) | 🇰🇷 [한국어](README.ko.md) | 🇪🇸 [Español](README.es.md) | 🇧🇷 [Português (BR)](README.pt-BR.md) | 🇫🇷 [Français](README.fr.md) | 🇩🇪 [Deutsch](README.de.md) | 🇷🇺 [Русский](README.ru.md) | 🇮🇩 [Bahasa Indonesia](README.id.md)
