@@ -22,6 +22,9 @@ type fakeRunner struct {
 	outputs map[string]string // Output results
 	fail    map[string]bool   // Run/Output fail for these
 	calls   []string
+	// onOutput, when set, answers Output calls not in outputs (commands
+	// with generated arguments such as temp file names).
+	onOutput func(argv []string) (string, bool)
 }
 
 func newFakeRunner(available ...string) *fakeRunner {
@@ -51,6 +54,11 @@ func (f *fakeRunner) Output(dir string, env []string, name string, args ...strin
 	key := f.record(name, args)
 	if out, ok := f.outputs[key]; ok {
 		return []byte(out), nil
+	}
+	if f.onOutput != nil {
+		if out, ok := f.onOutput(append([]string{name}, args...)); ok {
+			return []byte(out), nil
+		}
 	}
 	return nil, errors.New("fake: no output for " + key)
 }

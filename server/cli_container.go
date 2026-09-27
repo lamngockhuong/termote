@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/base64"
 	"errors"
+	"flag"
 	"fmt"
 	"net"
 	"os"
@@ -22,52 +23,118 @@ type procInfo struct {
 	Exe     string
 }
 
-// containerOptions are the flags of container up.
+// containerImage is the published image `container up` runs; its tag is the
+// version of this binary, so the CLI and the server inside always match.
+const containerImage = "ghcr.io/lamngockhuong/termote"
+
+// localImage is the tag `container up --build` gives an image built from a
+// checkout.
+const localImage = "termote:local"
+
+// containerStartWait bounds the wait for a freshly started container (an
+// image pull happens before it, so this is only the server's start).
+var containerStartWait = 30 * time.Second
+
+// containerOptions are the flags of container up after merging the saved
+// container settings.
 type containerOptions struct {
-	lan        bool
-	noAuth     bool
-	fresh      bool
-	port       int
-	tailscale  string
-	allowHosts []string
+	lan         bool
+	noAuth      bool
+	fresh       bool
+	build       bool
+	port        int
+	tailscale   string
+	noTailscale bool
+	workspace   string
+	allowHosts  []string
+	removeHosts []string
 }
 
 func (c *cli) cmdContainer(args []string) error {
 	if len(args) == 0 {
-		return usageError("usage: termote container <up|down> [options]")
+		return usageError("usage: termote container <up|down|logs|status> [options]")
 	}
 	switch args[0] {
 	case "up":
 		return c.containerUp(args[1:])
 	case "down":
 		return c.containerDown(args[1:])
+	case "logs":
+		return c.containerLogs(args[1:])
+	case "status":
+		return c.containerStatus(args[1:])
 	}
-	return usageError("unknown container command %q (use: up, down)", args[0])
+	return usageError("unknown container command %q (use: up, down, logs, status)", args[0])
 }
 
-// containerUp builds and runs the image with compose from a checkout.
-func (c *cli) containerUp(args []string) error {
+func (c *cli) parseContainerArgs(args []string) (containerOptions, map[string]bool, error) {
 	var o containerOptions
-	var hosts stringList
+	var hosts, remove stringList
 	fs := c.newFlagSet("container up")
 	fs.BoolVar(&o.lan, "lan", false, "")
 	fs.BoolVar(&o.noAuth, "no-auth", false, "")
 	fs.BoolVar(&o.fresh, "fresh", false, "")
-	fs.IntVar(&o.port, "port", containerPort, "")
+	fs.BoolVar(&o.build, "build", false, "")
+	fs.IntVar(&o.port, "port", 0, "")
 	fs.StringVar(&o.tailscale, "tailscale", "", "")
+	fs.BoolVar(&o.noTailscale, "no-tailscale", false, "")
+	fs.StringVar(&o.workspace, "workspace", "", "")
 	fs.Var(&hosts, "allow-host", "")
+	fs.Var(&remove, "remove-host", "")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
-		return flagErr(err)
+		return o, nil, flagErr(err)
 	}
 	if len(pos) > 0 {
-		return usageError("container up takes no arguments, only options")
+		return o, nil, usageError("container up takes no arguments, only options (see: termote help)")
 	}
-	o.allowHosts = hosts
+	set := map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { set[f.Name] = true })
+	if set["tailscale"] && o.noTailscale {
+		return o, nil, usageError("--tailscale and --no-tailscale cannot be combined")
+	}
+	o.allowHosts, o.removeHosts = hosts, remove
+	return o, set, nil
+}
+
+// mergeContainer applies the saved container settings to every flag not
+// given, like mergeSaved does for the native server.
+func (c *cli) mergeContainer(o *containerOptions, set map[string]bool, s *containerConfig) error {
+	if s == nil {
+		s = &containerConfig{}
+	}
+	if !set["lan"] {
+		o.lan = s.LAN
+	}
+	if !set["no-auth"] {
+		o.noAuth = s.NoAuth
+	}
+	if !set["port"] {
+		o.port = s.Port
+	}
+	if !set["tailscale"] && !o.noTailscale {
+		o.tailscale = s.Tailscale
+	}
+	if !set["workspace"] {
+		o.workspace = s.Workspace
+	}
+	for _, h := range s.AllowHosts {
+		if !slices.Contains(o.allowHosts, h) {
+			o.allowHosts = append(o.allowHosts, h)
+		}
+	}
+	o.allowHosts = slices.DeleteFunc(o.allowHosts, func(h string) bool {
+		return slices.ContainsFunc(o.removeHosts, func(r string) bool { return strings.EqualFold(r, h) })
+	})
+	slices.Sort(o.allowHosts)
+
+	if o.port == 0 {
+		o.port = containerPort
+	}
 	if o.port < 1 || o.port > 65535 {
 		return usageError("invalid port: %d", o.port)
 	}
-	for _, h := range o.allowHosts {
+	for _, h := range append(slices.Clone(o.allowHosts), o.removeHosts...) {
 		if err := validateHostName(h); err != nil {
 			return usageError("%v", err)
 		}
@@ -77,62 +144,167 @@ func (c *cli) containerUp(args []string) error {
 			return usageError("%v", err)
 		}
 	}
-	if c.containerRuntime() == "" {
-		return errors.New("neither podman nor docker found; install one")
+	if o.workspace == "" {
+		o.workspace = filepath.Join(c.home, "termote-workspace")
 	}
-	if !c.isCheckout() || !fileExists(filepath.Join(c.projectDir, "docker-compose.yml")) {
-		return errors.New("container up needs a git checkout for now (it builds the image from the Dockerfile)")
+	if !filepath.IsAbs(o.workspace) {
+		abs, err := filepath.Abs(o.workspace)
+		if err != nil {
+			return err
+		}
+		o.workspace = abs
 	}
-	saved, err := c.loadConfig()
+	if strings.ContainsAny(o.workspace, "\"\n\r,") {
+		return usageError("invalid --workspace %q", o.workspace)
+	}
+	return nil
+}
+
+// containerUp runs the image for this version (or, from a checkout, one
+// built from its Dockerfile) with the saved container settings.
+func (c *cli) containerUp(args []string) error {
+	o, set, err := c.parseContainerArgs(args)
 	if err != nil {
 		return err
 	}
-	pass := ""
-	if !o.noAuth {
-		if saved != nil && saved.Password != "" && !o.fresh {
-			pass = saved.Password
-		} else if pass, err = generatePassword(); err != nil {
+	saved, err := c.loadConfig()
+	if err != nil {
+		return fmt.Errorf("cannot read %s (%v); fix or delete it, then run again", c.configFile(), err)
+	}
+	var prev *containerConfig
+	if saved != nil {
+		prev = saved.Container
+	}
+	if err := c.mergeContainer(&o, set, prev); err != nil {
+		return err
+	}
+	rt := c.containerRuntime()
+	if rt == "" {
+		return errors.New("neither podman nor docker found; install one")
+	}
+	build := o.build || c.isCheckout()
+	if build && !fileExists(filepath.Join(c.projectDir, "Dockerfile")) {
+		return errors.New("--build needs a git checkout (it builds the image from its Dockerfile)")
+	}
+	pass, reused, err := c.setupAuth(startOptions{noAuth: o.noAuth, fresh: o.fresh}, saved)
+	if err != nil {
+		return err
+	}
+
+	c.heading("Termote Container")
+	image := containerImage + ":" + c.version
+	if build {
+		image = localImage
+		if err := c.buildImage(rt); err != nil {
 			return err
 		}
+	} else {
+		c.infof("Pulling %s...", image)
+		if err := c.run.Run("", nil, rt, "pull", image); err != nil {
+			return fmt.Errorf("cannot pull %s (%v); a pre-release has no image until it is published", image, err)
+		}
 	}
-	c.heading("Termote Container")
-	c.stopContainers(false)
+
+	// Replace the old container, then check the port is free for the new.
+	c.run.Output("", nil, rt, "rm", "-f", containerName)
+	bind := "127.0.0.1"
+	if o.lan && c.goos != "windows" {
+		bind = "0.0.0.0" // Windows maps to localhost; LAN goes through portproxy
+	}
+	if err := portFree(bind, o.port); err != nil {
+		return fmt.Errorf("port %d is in use (%v); is the native server running? Choose another with --port", o.port, err)
+	}
+	c.warnSensitiveDirs(o.workspace)
+	// Docker Desktop does not create a missing bind-mount source, and Docker
+	// on Linux would create it owned by root.
+	if err := ensureDir(o.workspace); err != nil {
+		return err
+	}
+	if prev != nil && prev.Tailscale != "" && prev.Tailscale != o.tailscale {
+		c.removeTailscale(prev.Tailscale)
+	}
+	hosts := computeAllowedHosts(o.lan, o.tailscale, o.allowHosts, c.localIPv4s())
+	if err := c.runContainer(rt, image, bind, o, pass, hosts); err != nil {
+		return err
+	}
+
+	cfg := savedConfig{}
+	if saved != nil {
+		cfg = *saved
+	}
+	cfg.Password = pass
+	cfg.Container = &containerConfig{LAN: o.lan, NoAuth: o.noAuth, Port: o.port, Tailscale: o.tailscale, AllowHosts: o.allowHosts, Workspace: o.workspace}
+	if err := c.saveConfig(cfg); err != nil {
+		c.warnf("Could not save the container settings: %v", err)
+	}
+	if o.lan && c.goos == "windows" {
+		c.setupPortProxy(o.port)
+	}
+	if o.tailscale != "" {
+		// The server runs in the container, so no serve re-applies this at
+		// boot; tailscaled keeps a --bg mapping across reboots itself.
+		if err := c.setupTailscale(o.tailscale, o.port); err != nil {
+			c.warnf("%v", err)
+		}
+	}
+	version := c.version
+	if build {
+		version = cliVersion
+	}
+	if err := c.waitForServer(o.port, pass, version, containerStartWait, nil); err != nil {
+		return fmt.Errorf("the container started but the server does not answer (%v); see: termote container logs", err)
+	}
+	if rt == "podman" && c.goos == "linux" {
+		c.infof("Podman has no daemon to restart the container after a reboot; to keep it, run it as a Quadlet unit (see: https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html)")
+	}
+	c.infof("Container running (%s, image %s)", rt, image)
+	c.showAccessInfo(startOptions{lan: o.lan, noAuth: o.noAuth, port: o.port, tailscale: o.tailscale, mux: "tmux", allowHosts: o.allowHosts}, pass, reused)
+	// One password for both: a new one also changes the native server's.
+	if !reused && pass != "" && saved != nil && saved.Password != "" {
+		c.infof("The native server shares this new password; it takes it at its next restart (termote restart)")
+	}
+	return nil
+}
+
+// runContainer starts the container. The password and settings go in an
+// env file readable by this user only and removed right after, so they are
+// never on a command line (ps shows those to every user).
+func (c *cli) runContainer(rt, image, bind string, o containerOptions, pass string, hosts []string) error {
+	// CreateTemp makes the file 0600.
+	env, err := os.CreateTemp("", "termote-env-")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(env.Name())
+	fmt.Fprintf(env, "NO_AUTH=%t\nTERMOTE_PASS=%s\nTERMOTE_ALLOWED_HOSTS=%s\n", o.noAuth, pass, strings.Join(hosts, ","))
+	if err := env.Close(); err != nil {
+		return err
+	}
+	args := []string{"run", "-d", "--name", containerName, "--restart", "unless-stopped",
+		"-p", fmt.Sprintf("%s:%d:%d", bind, o.port, containerPort),
+		"-v", o.workspace + ":/workspace", "-w", "/workspace", "--env-file", env.Name()}
+	if uid, gid := os.Getuid(), os.Getgid(); uid >= 0 && gid >= 0 {
+		args = append(args, "--user", strconv.Itoa(uid)+":"+strconv.Itoa(gid))
+	}
+	if _, err := c.run.Output("", nil, rt, append(args, image)...); err != nil {
+		return fmt.Errorf("%s run %s: %w", rt, image, err)
+	}
+	return nil
+}
+
+// buildImage builds the image from the checkout: the PWA, then the Linux
+// binary that embeds it, then the Dockerfile.
+func (c *cli) buildImage(rt string) error {
 	if err := c.setupPWA(false); err != nil {
 		return err
 	}
 	if err := c.buildImageBinary(); err != nil {
 		return err
 	}
-	hosts = computeAllowedHosts(o.lan, o.tailscale, o.allowHosts, c.localIPv4s())
-	if err := c.startContainer(o, pass, hosts); err != nil {
-		return err
+	c.infof("Building the image %s...", localImage)
+	if err := c.run.Run(c.projectDir, nil, rt, "build", "-t", localImage, "."); err != nil {
+		return fmt.Errorf("%s build: %w", rt, err)
 	}
-	if o.tailscale != "" {
-		if err := c.setupTailscale(o.tailscale, o.port); err != nil {
-			c.warnf("%v", err)
-		}
-	}
-	if pass != "" && (saved == nil || saved.Password != pass) {
-		cfg := savedConfig{}
-		if saved != nil {
-			cfg = *saved
-		}
-		cfg.Password = pass
-		if err := c.saveConfig(cfg); err != nil {
-			c.warnf("Could not save the password: %v", err)
-		}
-		c.showCredentials(pass)
-	}
-	c.infof("Container running: http://localhost:%d", o.port)
-	return nil
-}
-
-func (c *cli) containerDown(args []string) error {
-	if _, err := parseArgs(c.newFlagSet("container down"), args); err != nil {
-		return flagErr(err)
-	}
-	c.infof("Stopping the container...")
-	c.stopContainers(true)
 	return nil
 }
 
@@ -146,6 +318,97 @@ func (c *cli) buildImageBinary() error {
 		return fmt.Errorf("build server: %w", err)
 	}
 	return nil
+}
+
+func (c *cli) containerDown(args []string) error {
+	if _, err := parseArgs(c.newFlagSet("container down"), args); err != nil {
+		return flagErr(err)
+	}
+	rt := c.containerRuntime()
+	if rt == "" {
+		return errors.New("neither podman nor docker found")
+	}
+	if _, err := c.run.Output("", nil, rt, "rm", "-f", containerName); err != nil {
+		c.infof("No container named %s", containerName)
+	} else {
+		c.infof("Container removed")
+	}
+	saved, _ := c.loadConfig()
+	if saved != nil && saved.Container != nil {
+		c.removeTailscale(saved.Container.Tailscale)
+		if saved.Container.LAN && c.goos == "windows" {
+			if err := c.runElevated(portProxyScript(saved.Container.Port, false)); err != nil {
+				c.warnf("Could not remove LAN port forwarding: %v", err)
+			}
+		}
+	}
+	return nil
+}
+
+func (c *cli) containerLogs(args []string) error {
+	var follow bool
+	fs := c.newFlagSet("container logs")
+	fs.BoolVar(&follow, "f", false, "")
+	fs.BoolVar(&follow, "follow", false, "")
+	if _, err := parseArgs(fs, args); err != nil {
+		return flagErr(err)
+	}
+	rt := c.containerRuntime()
+	if rt == "" {
+		return errors.New("neither podman nor docker found")
+	}
+	a := []string{"logs", "--tail", strconv.Itoa(defaultLogLines)}
+	if follow {
+		a = append(a, "-f")
+	}
+	return c.run.Run("", nil, rt, append(a, containerName)...)
+}
+
+func (c *cli) containerStatus(args []string) error {
+	if _, err := parseArgs(c.newFlagSet("container status"), args); err != nil {
+		return flagErr(err)
+	}
+	rt := c.containerRuntime()
+	if rt == "" {
+		return errors.New("neither podman nor docker found")
+	}
+	c.heading("Termote Container")
+	out, err := c.run.Output("", nil, rt, "ps", "-a", "--filter", "name=^"+containerName+"$", "--format", "{{.Status}}\t{{.Image}}")
+	state := strings.TrimSpace(string(out))
+	if err != nil || state == "" {
+		fmt.Fprintf(c.out, "  %s no container (run: termote container up)\n\n", c.paint(ansiRed, "[--]"))
+		return &exitError{code: 1}
+	}
+	status, image, _ := strings.Cut(state, "\t")
+	fmt.Fprintf(c.out, "  Runtime: %s\n  Image: %s\n  State: %s\n", rt, image, status)
+	saved, _ := c.loadConfig()
+	if saved == nil || saved.Container == nil {
+		fmt.Fprintln(c.out)
+		return nil
+	}
+	port := saved.Container.Port
+	pass := ""
+	if !saved.Container.NoAuth {
+		pass = saved.Password
+	}
+	h, code := fetchHealth(port, pass)
+	if code == 200 {
+		fmt.Fprintf(c.out, "  %s server :%d - %s (v%s)\n\n", c.paint(ansiGreen, "[OK]"), port, h.Status, h.Version)
+		return nil
+	}
+	fmt.Fprintf(c.out, "  %s server :%d - %s\n\n", c.paint(ansiRed, "[--]"), port, describeCode(code))
+	return &exitError{code: 1}
+}
+
+// describeCode names an HTTP status from fetchHealth.
+func describeCode(code int) string {
+	switch code {
+	case 0:
+		return "not answering"
+	case 401:
+		return "running (the saved password was not accepted)"
+	}
+	return "HTTP " + strconv.Itoa(code)
 }
 
 // webuiDist is where the PWA build is copied before `go build` embeds it.
@@ -244,9 +507,6 @@ func localIPv4s() []string {
 	return ips
 }
 
-// containerStartWait bounds the wait for a freshly started container.
-var containerStartWait = 30 * time.Second
-
 // containerRuntime prefers podman, the lighter of the two.
 func (c *cli) containerRuntime() string {
 	for _, rt := range []string{"podman", "docker"} {
@@ -255,51 +515,6 @@ func (c *cli) containerRuntime() string {
 		}
 	}
 	return ""
-}
-
-func (c *cli) startContainer(o containerOptions, pass string, hosts []string) error {
-	rt := c.containerRuntime()
-	c.infof("Using %s", rt)
-	workspace := os.Getenv("WORKSPACE")
-	if workspace == "" {
-		workspace = filepath.Join(c.projectDir, "workspace")
-	}
-	c.warnSensitiveDirs(workspace)
-	// Docker Desktop does not create missing bind-mount sources, and Docker
-	// on Linux would create it owned by root.
-	if err := ensureDir(workspace); err != nil {
-		return err
-	}
-	// Windows maps to localhost only; LAN goes through netsh portproxy.
-	bind := "127.0.0.1"
-	if o.lan && c.goos != "windows" {
-		bind = "0.0.0.0"
-	}
-	override := filepath.Join(c.projectDir, "docker-compose.override.yml")
-	yml := fmt.Sprintf("services:\n  termote:\n    ports:\n      - \"%s:%d:%d\"\n", bind, o.port, containerPort)
-	if err := os.WriteFile(override, []byte(yml), 0o644); err != nil {
-		return err
-	}
-	defer os.Remove(override)
-
-	vars := map[string]string{
-		"NO_AUTH":               strconv.FormatBool(o.noAuth),
-		"TERMOTE_PASS":          pass,
-		"TERMOTE_ALLOWED_HOSTS": strings.Join(hosts, ","),
-	}
-	if uid, gid := os.Getuid(), os.Getgid(); uid >= 0 && gid >= 0 {
-		vars["USER_ID"], vars["GROUP_ID"] = strconv.Itoa(uid), strconv.Itoa(gid)
-	}
-	if err := c.run.Run(c.projectDir, environ(vars), rt, "compose", "--profile", "docker", "up", "-d", "--build"); err != nil {
-		return fmt.Errorf("failed to start container: %w", err)
-	}
-	if o.lan && c.goos == "windows" {
-		c.setupPortProxy(o.port)
-	}
-	if err := c.waitForServer(o.port, pass, "", containerStartWait, nil); err != nil {
-		c.warnf("Container started but the server does not answer yet; check: %s logs %s", rt, containerName)
-	}
-	return nil
 }
 
 func (c *cli) warnSensitiveDirs(workspace string) {
@@ -345,24 +560,5 @@ func (c *cli) setupPortProxy(port int) {
 		c.warnf("LAN port forwarding failed (%v). Run as Administrator:", err)
 		c.warnf("  netsh interface portproxy add v4tov4 listenport=%d listenaddress=0.0.0.0 connectport=%d connectaddress=127.0.0.1", port, port)
 		c.warnf("  netsh advfirewall firewall add rule name=\"Termote LAN\" dir=in action=allow protocol=tcp localport=%d", port)
-	}
-}
-
-// stopContainers runs compose down in the checkout; purge also removes
-// volumes and a leftover container.
-func (c *cli) stopContainers(purge bool) {
-	rt := c.containerRuntime()
-	if rt == "" || !fileExists(filepath.Join(c.projectDir, "docker-compose.yml")) {
-		return
-	}
-	args := []string{"compose", "--profile", "docker", "down"}
-	if purge {
-		args = append(args, "-v")
-	}
-	c.run.Output(c.projectDir, nil, rt, args...)
-	if purge {
-		c.run.Output(c.projectDir, nil, rt, "stop", containerName)
-		c.run.Output(c.projectDir, nil, rt, "rm", containerName)
-		removeFile(filepath.Join(c.projectDir, "docker-compose.override.yml"))
 	}
 }
