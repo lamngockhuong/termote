@@ -1,13 +1,13 @@
 ---
 name: security-review
-description: Comprehensive security review for Termote. Use when reviewing PRs, auditing code, or before releases. Covers auth bypass, request guards (Host/Origin/Content-Type), terminal WebSocket stream, child-process lifetime, command/argument injection (tmux, psmux, herdr), the Go CLI (config, update, process kill) and container setup.
+description: Comprehensive security review for Termote. Use when reviewing PRs, auditing code, or before releases. Covers auth bypass, request guards (Host/Origin/Content-Type), terminal WebSocket stream, child-process lifetime, command/argument injection (tmux, psmux, herdr), the Go CLI (install layout, saved config, update, service registration, process kill) and container setup.
 allowed-tools: Read, Grep, Glob, Bash(git diff*, git log*, git show*), Agent
 argument-hint: "[--full | --diff-only] [--focus auth|api|stream|herdr|cli|docker|shell]"
 ---
 
 # Termote Security Review
 
-Review Termote for security vulnerabilities, tailored to its 1.0 architecture: one Go binary (`termote`) that is both the server (PWA + `/api/mux/*` + terminal WebSocket stream + auth) and the CLI (`termote install/update/...`), a React PWA, thin shell/PowerShell shims, and a Docker image. There is no ttyd and no `/terminal/` iframe any more: the server runs the terminal itself on a PTY (Unix) or ConPTY (Windows) and streams it over `/api/mux/stream`. Backends: tmux (psmux on Windows) and herdr (Unix only, via its socket and CLI).
+Review Termote for security vulnerabilities, tailored to its 1.0 architecture: one Go binary (`termote`) that is both the server (PWA + `/api/mux/*` + terminal WebSocket stream + auth) and the CLI (`termote start`/`container up`/`update`/...), a React PWA, an online installer (`scripts/install.sh`/`install.ps1`) plus a checkout-only dev shim (`scripts/termote.sh`/`termote.ps1`), and a Docker image. There is no `install` command, no ttyd and no `/terminal/` iframe any more: the server runs the terminal itself on a PTY (Unix) or ConPTY (Windows) and streams it over `/api/mux/stream`. Backends: tmux (psmux on Windows) and herdr (Unix only, via its socket and CLI).
 
 ## Arguments
 
@@ -40,7 +40,10 @@ Launch parallel review agents for each relevant area. Pass the diff or file cont
 Check against [checklist.md](checklist.md#auth--access-control):
 
 - Basic auth on ALL routes except the PWA public paths (manifest, `sw.js`, `workbox-*.js`)
-- Empty password without `TERMOTE_NO_AUTH=true` refuses to start (`validateConfig`)
+- When a saved config exists (`server/serve_config.go`), `termote serve` reads it and ignores
+  every `TERMOTE_*` variable; only without one (container, manual run) does
+  `validateConfig`/the environment apply — empty password without `TERMOTE_NO_AUTH=true`
+  refuses to start either way
 - herdr with auth off needs `TERMOTE_HERDR_ALLOW_NO_AUTH=true` (`--allow-herdr-no-auth`)
 - Host allowlist (`hostGuard`, `TERMOTE_ALLOWED_HOSTS`) on every request (DNS rebinding); no wildcard
 - Cross-site writes rejected (`writeGuard`): `Sec-Fetch-Site`, `Origin` in the allowlist, JSON-only `Content-Type` on every non-GET `/api/` method
@@ -77,13 +80,19 @@ Check against [checklist.md](checklist.md#herdr-backend):
 - NDJSON frames decoded defensively (bad lines skipped, never executed or echoed)
 - Input queue bounded per pane; writes ordered
 
-### Area: Go CLI (`server/cli*.go`)
+### Area: Go CLI (`server/cli*.go`, `server/install_layout.go`, `server/tailscale.go`)
 
 Check against [checklist.md](checklist.md#go-cli):
 
-- Config file 0600 (Unix) / owner-only ACL (Windows), atomic write; password AES-256-CBC + PBKDF2 (openssl-compatible) on Unix, DPAPI on Windows
-- `update`: version regex, HTTPS download, sha256 check, tar extraction refuses escaping paths, symlinks and backslashes
-- External commands (`sudo tailscale`, `podman`/`docker compose`, `powershell -EncodedCommand`, `netsh`) get only validated values as separate argv entries
+- Config file 0600 (Unix) / owner-only ACL (Windows), atomic write; password AES-256-CBC with an
+  HMAC keyed by a random per-install `secret` file (0600) on Unix, DPAPI on Windows
+- The password never ends up in the systemd unit, launchd plist, Scheduled Task or any process
+  command line (container: passed as `-e NAME` from the CLI's own environment, not a file)
+- `update`: version regex, HTTPS download, sha256 check (mandatory), tar extraction refuses
+  escaping paths, symlinks and backslashes; the versioned install layout (`install_layout.go`)
+  switches `current` atomically and never partially removes a version
+- External commands (`tailscale serve` — never with `sudo`, `off` never `reset` — `podman`/`docker run`,
+  `powershell -EncodedCommand`, `netsh`) get only validated values as separate argv entries
 - Process matching before kill: exact command line / image path, PID file cross-checked; never kill unrelated processes
 
 ### Area: Docker & Container (`Dockerfile`, `entrypoint.sh`, `docker-compose.yml`)
@@ -93,16 +102,21 @@ Check against [checklist.md](checklist.md#docker--container):
 - Base image pinned by digest; `tini` as PID 1
 - No world-writable sensitive files (/etc/passwd, /etc/group)
 - No secrets in image layers; minimal installed packages
-- Port published on 127.0.0.1 unless `--lan`; allowed hosts passed in
+- Port published on 127.0.0.1 unless `--lan`; password and allowed hosts passed as `-e NAME`
+  values from the CLI's own environment, never an env file or a command-line argument
+- Runs as `--user <uid>:<gid>` (rootless podman: `--userns=keep-id`; rootless Docker: no
+  `--user`); the workspace is mounted with `--mount`, not `-v`
 - Sensitive host dirs excluded from mounts (.ssh, .gnupg, .aws)
 
-### Area: Shell Scripts (`scripts/termote.sh`, `scripts/termote.ps1`, `scripts/get.sh`, `scripts/get.ps1`)
+### Area: Shell Scripts (`scripts/install.sh`, `scripts/install.ps1`, `scripts/termote.sh`, `scripts/termote.ps1`)
 
 Check against [checklist.md](checklist.md#shell-scripts):
 
-- Shims only resolve the install dir and `exec` the binary; no logic that handles secrets
-- Variables quoted; no `eval` or sourcing of the config file
-- Online installers: version validated, HTTPS download, checksum verification, confirmation unless `--yes`
+- `install.sh`/`install.ps1` (release installers): version validated, HTTPS download, `.sha256`
+  checksum verification mandatory (no way to skip it), never start the server themselves
+- `termote.sh`/`termote.ps1` (checkout-only dev shims): only resolve/build the `termote-dev`
+  binary and `exec` it; no logic that handles secrets
+- Variables quoted; no `eval` or sourcing of the saved config file
 
 ## Step 3: Report
 
@@ -132,8 +146,9 @@ Output a structured report:
 Known, accepted decisions (do not re-raise as findings):
 
 - `requestIsHTTPS` trusts `X-Forwarded-Proto` from any source (only affects that client's own cookie)
-- A missing `checksums.txt` only warns (0.x parity; `get.sh --strict` makes it fatal)
-- Container running as root is out of scope (rejected hardening scope)
+- Container running as root is out of scope (rejected hardening scope) — note `container up`
+  otherwise runs as `--user <uid>:<gid>` (rootless podman: `--userns=keep-id`; rootless Docker:
+  no `--user`)
 
 ## Step 4: Fix (if requested)
 

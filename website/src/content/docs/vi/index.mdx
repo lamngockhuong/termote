@@ -42,12 +42,18 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
 ## Cài đặt nhanh
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
+curl -fsSL https://termote.ohnice.app/install.sh | sh      # Linux, macOS
+termote start
+```
+
+```powershell
+irm https://termote.ohnice.app/install.ps1 | iex           # Windows
+termote start
 ```
 
 ## Chế độ triển khai
 
-| Chế độ        | Mô tả                       | Trường hợp sử dụng                     | Nền tảng              |
-| ------------- | --------------------------- | -------------------------------------- | --------------------- |
-| `--container` | Chế độ container            | Triển khai đơn giản, môi trường cô lập | macOS, Linux, Windows |
-| `--native`    | Native (không dùng container) | Truy cập công cụ host (Claude Code)    | macOS, Linux, Windows |
+| Chế độ    | Lệnh                   | Trường hợp sử dụng                       | Nền tảng              |
+| --------- | ---------------------- | ---------------------------------------- | --------------------- |
+| Native    | `termote start`        | Truy cập công cụ trên máy (Claude Code)  | macOS, Linux, Windows |
+| Container | `termote container up` | Môi trường tách biệt (Podman/Docker)     | macOS, Linux, Windows |

@@ -9,8 +9,8 @@ Termote (Terminal + Remote) turns your browser into a mobile-friendly terminal. 
 Since 1.0.0 a single binary, `termote`, does everything: it serves the PWA and the API, handles
 auth, and streams the terminal itself (a PTY on Unix, ConPTY on Windows) over the
 `/api/mux/stream` WebSocket to xterm.js in the browser. Termote no longer uses `ttyd`. The CLI
-lives in the same binary; `scripts/termote.sh` and `scripts/termote.ps1` are thin shims that pass
-commands to it.
+lives in the same binary — the installer puts `termote` on your `PATH` directly, so there is no
+separate shim to call.
 
 **Use cases:**
 
@@ -21,28 +21,36 @@ commands to it.
 
 ## Installation
 
-> For detailed installation options (Container Mode, Native Mode, Windows), see the [Deployment Guide](deployment-guide.md).
+> For detailed options (native flags, container mode, Windows, Tailscale), see the
+> [Deployment Guide](deployment-guide.md).
 
-Quick start with Container Mode:
+Two commands, on Linux or macOS:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash -s -- --container
+curl -fsSL https://termote.ohnice.app/install.sh | sh
+termote start
 ```
 
-This starts Termote on `http://localhost:7680`. Open it in your browser.
+On Windows (PowerShell):
 
-The installer also creates a global `termote` command. The admin password is generated and saved
-encrypted; print it again with:
+```powershell
+irm https://termote.ohnice.app/install.ps1 | iex
+termote start
+```
+
+The installer only downloads the release for your OS/arch, verifies its checksum, and lays it
+out — it never starts anything itself. `termote start` creates a password the first time and
+prints it once, registers the server with your OS (systemd/launchd/Scheduled Task) so it
+survives logins, and prints the URL once the server answers — open it in your browser. Print
+the password again any time with:
 
 ```bash
 termote show-password
 ```
 
-On Windows, use `irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex`
-and `.\scripts\termote.ps1 show-password`.
-
-> `scripts/termote.sh` on its own is only a shim over the `termote` binary shipped in the release
-> tarball, so downloading that single file no longer works in 1.0.
+Want a container instead of a native install? Run `termote container up` (needs podman or
+docker) instead of `termote start`; see the [Deployment Guide](deployment-guide.md) for its
+flags.
 
 ## Accessing from Your Phone
 
@@ -51,18 +59,19 @@ and `.\scripts\termote.ps1 show-password`.
 To access Termote from other devices on your network:
 
 ```bash
-termote install container --lan
+termote start --lan
 ```
 
-This binds to your local IP (e.g., `http://192.168.1.100:7680`). Open that URL on your phone.
+This binds to `0.0.0.0` instead of `127.0.0.1` (e.g., reachable at `http://192.168.1.100:7680`).
+Open that URL on your phone.
 
-The server only accepts requests whose `Host` header is on its allowlist: the machine itself
-(`localhost`, `127.0.0.1`, `::1`), the LAN IP with `--lan`, and the Tailscale name with
-`--tailscale`. If you reach it by another hostname (for example the machine's name on your
-network), add it with `--allow-host <name>` (repeatable):
+The server only accepts requests whose `Host` header is on its allowlist: loopback always, and
+with `--lan` the address the request actually arrived on (so it keeps working as your LAN IP
+changes), plus the Tailscale name with `--tailscale`. If you reach it by another hostname (for
+example the machine's name on your network), add it with `--allow-host <name>` (repeatable):
 
 ```bash
-termote install container --lan --allow-host mypc.local
+termote start --lan --allow-host mypc.local
 ```
 
 ### Install as PWA
@@ -88,8 +97,8 @@ a group is the tmux session and each tab is a tmux window:
 
 Each session is independent — run Claude Code in one, a build process in another.
 
-In native mode you can use Herdr instead of tmux with `termote install native --mux herdr`. A tab
-can then hold several panes, and each pane shows a badge with the status of the coding agent
+In native mode you can use Herdr instead of tmux with `termote start --mux herdr`. A tab can
+then hold several panes, and each pane shows a badge with the status of the coding agent
 running in it. Herdr is not available in container mode.
 
 ### Touch Gestures
@@ -141,13 +150,12 @@ The toolbar at the bottom provides modifier keys:
 - Check that both devices are on the same network
 - Verify the URL matches your server's local IP (`ip addr` or `ifconfig`)
 - Check firewall allows port 7680
-- If you get a 403 because the Host was rejected, rerun the install with the `--allow-host <name>`
+- If you get a 403 because the Host was rejected, run the `termote start --allow-host <name>`
   the error message suggests
 
 ### Forgot the Password
 
-- Run `termote show-password` (Windows: `.\scripts\termote.ps1 show-password`) to print the saved
-  password
+- Run `termote show-password` to print the saved password
 
 ### Terminal Not Rendering Properly
 
@@ -167,8 +175,9 @@ The toolbar at the bottom provides modifier keys:
 - If using over internet (not LAN), consider a reverse proxy with HTTPS
 - The PWA will automatically reconnect when connection is restored
 
-## Upgrading from 0.x
+## Coming from a 0.x install
 
-1.0.0 has breaking changes: `ttyd` is gone, the API moved from `/api/tmux/*` to `/api/mux/*`, a
-Host allowlist was added, and an empty saved password no longer turns auth off. Run
-`termote update` to upgrade; the full list is in [Upgrading to 1.0](upgrade-1.0.md).
+There is no in-place upgrade from 0.x to 1.0: the install layout, config format and CLI all
+changed. Uninstall the 0.x version first (see the archived
+[0.x documentation](https://termote.ohnice.app/0.x/) for its own uninstall steps), then install
+1.0 fresh with the two commands above.

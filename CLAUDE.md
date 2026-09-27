@@ -24,7 +24,7 @@ A PWA for remotely controlling CLI tools (Claude Code, GitHub Copilot, any termi
 ```
 termote/
 ├── Dockerfile              # Docker mode (termote + tmux, no ttyd)
-├── docker-compose.yml
+├── docker-compose.yml      # Development-only container run (a checkout, not the release image)
 ├── pwa/                    # React PWA frontend
 │   ├── src/
 │   │   ├── components/     # React components
@@ -34,22 +34,31 @@ termote/
 │   ├── package.json
 │   └── vite.config.ts
 ├── server/                 # Go server + CLI, single binary (PWA + API + auth)
-│   ├── main.go             # Entry point: no args/`serve` = server, else CLI
+│   ├── main.go             # Entry point: `serve` runs the server, no args opens the menu
 │   ├── serve.go            # Server (static files, auth, guards)
+│   ├── serve_config.go     # Builds the server's config from the saved config or the environment
 │   ├── mux.go              # Mux interface + /api/mux/* routes
 │   ├── mux_tmux.go         # tmux/psmux backend
 │   ├── mux_herdr.go        # Herdr backend (native only)
 │   ├── stream.go           # Terminal WebSocket (xterm.js stream)
-│   └── cli*.go             # CLI subcommands (install, update, health, ...)
-├── scripts/                # Thin CLI shims over the termote binary
-│   ├── termote.sh          # Unix shim (resolves/builds the binary, execs it)
-│   ├── termote.ps1         # Windows PowerShell shim (same, maps -Flag to --flag)
-│   ├── get.sh              # Unix online installer (curl | bash)
-│   └── get.ps1             # Windows online installer (irm | iex)
+│   ├── webui/              # Embeds the built PWA into the binary (build output, .gitkeep only in git)
+│   ├── install_layout.go   # Versioned install layout (versions/<v>, current pointer, prune)
+│   ├── release_tags.go     # Picks the newest stable 1.x GitHub tag
+│   ├── tailscale.go        # `tailscale serve` mapping (apply/remove, never sudo)
+│   ├── cli_start.go        # `start`/`stop`/`restart`: saves options, registers and runs the service
+│   ├── cli_service*.go     # OS supervisor registration (systemd/launchd/Scheduled Task)
+│   ├── cli_container.go    # `container up|down|logs|status` (podman/docker)
+│   └── cli*.go             # Remaining CLI subcommands (update, logs, link, show-password, ...)
+├── scripts/
+│   ├── install.sh          # Unix release installer (curl | sh): downloads, verifies, lays out
+│   ├── install.ps1         # Windows release installer (irm | iex), same job
+│   ├── termote.sh          # Checkout-only dev shim: builds/runs server/termote-dev
+│   └── termote.ps1         # Checkout-only dev shim (Windows), same job
 ├── tests/                  # Test suite
-│   ├── test-termote.sh     # Unix shim tests
-│   ├── test-termote.ps1    # Windows shim tests
-│   ├── test-get.sh         # Online installer tests
+│   ├── test-termote.sh     # Unix dev shim tests
+│   ├── test-termote.ps1    # Windows dev shim tests
+│   ├── test-install.sh     # install.sh tests (fake curl)
+│   ├── test-install.ps1    # install.ps1 tests
 │   └── test-entrypoints.sh # Docker entrypoint tests
 ├── website/                # Documentation site (Astro Starlight)
 │   └── src/content/docs/   # MDX docs (EN + VI)
@@ -58,53 +67,43 @@ termote/
 
 ## Deployment Modes
 
-| Mode          | Description               | Use Case                        | Platform              |
-| ------------- | ------------------------- | ------------------------------- | --------------------- |
-| `--container` | Container mode            | Simple deployment, isolated env | macOS, Linux, Windows |
-| `--native`    | All native (no container) | Host tool access (Claude Code)  | macOS, Linux, Windows |
+Termote 1.0 has a single install path: two commands, then `termote start` (native) or
+`termote container up` (container, podman/docker). See
+[`docs/getting-started.md`](docs/getting-started.md) and
+[`docs/deployment-guide.md`](docs/deployment-guide.md) for the full flag/config reference.
 
 ```bash
-# Unix (macOS/Linux)
-./scripts/termote.sh                                   # Interactive menu
-./scripts/termote.sh install container                 # Container mode (saves config)
-./scripts/termote.sh install container --lan           # LAN accessible
-./scripts/termote.sh install native                    # Native mode (host tools)
-./scripts/termote.sh install container --no-auth       # Without auth
-./scripts/termote.sh install container --tailscale host  # Tailscale HTTPS
-./scripts/termote.sh install container --fresh         # Force new password (ignore saved)
-./scripts/termote.sh install native --mux herdr        # Herdr backend (native only)
-./scripts/termote.sh install container --allow-host box.local  # Add a Host allowlist entry
-./scripts/termote.sh show-password                     # Print the saved admin password
-./scripts/termote.sh link                              # Create 'termote' global command
-./scripts/termote.sh unlink                            # Remove global command
-./scripts/termote.sh update                            # Update to latest release
-./scripts/termote.sh update --version 0.1.5            # Update to specific version
-./scripts/termote.sh update --force                    # Force reinstall current version
-curl -fsSL https://... | bash -s -- --update           # Auto-update with saved config
+# Linux, macOS
+curl -fsSL https://termote.ohnice.app/install.sh | sh
+termote start                              # native: host tools (Claude Code, git, ...)
+termote start --lan                        # native, LAN accessible
+termote start --no-auth                    # native, without auth (local dev only)
+termote start --tailscale host             # native, Tailscale HTTPS
+termote start --fresh                      # native, force a new password
+termote start --mux herdr                  # native, Herdr backend instead of tmux
+termote start --allow-host box.local       # native, add a Host allowlist entry
+termote container up                       # container mode (podman/docker)
+termote container up --lan --port 7681     # container, LAN + custom port
+termote show-password                      # print the saved admin password
+termote link / unlink                      # create/remove the 'termote' global command
+termote update                             # update to the latest release
+termote update --version 1.0.0 --force     # pin/reinstall a specific version
 ```
 
 ```powershell
-# Windows (PowerShell)
-.\scripts\termote.ps1                                  # Interactive menu
-.\scripts\termote.ps1 install container                # Container mode (saves config)
-.\scripts\termote.ps1 install native                   # Native mode (psmux, no ttyd)
-.\scripts\termote.ps1 install container -Lan           # LAN accessible
-.\scripts\termote.ps1 install native -NoAuth           # Without auth
-.\scripts\termote.ps1 install native -Tailscale host   # Tailscale HTTPS
-.\scripts\termote.ps1 install native -Fresh            # Force new password (ignore saved)
-.\scripts\termote.ps1 install native -Mux herdr        # Herdr backend (native only)
-.\scripts\termote.ps1 install native -AllowHost box.local  # Add a Host allowlist entry
-.\scripts\termote.ps1 show-password                    # Print the saved admin password
-.\scripts\termote.ps1 update                           # Self-update to latest release
-.\scripts\termote.ps1 update -Version 0.1.5            # Update to specific version
-.\scripts\termote.ps1 update -Force                    # Force reinstall current version
-.\scripts\termote.ps1 logs follow                      # Tail all logs live (Ctrl+C to stop)
-.\scripts\termote.ps1 logs clean                       # Delete log files
-.\scripts\termote.ps1 link                             # Create 'termote' global command
-.\scripts\termote.ps1 unlink                           # Remove global command
-irm https://... | iex                                  # Online installer
-$env:TERMOTE_UPDATE="true"; irm ... | iex              # Auto-update with saved config
+# Windows (PowerShell) — same commands, same flag syntax (no `-Flag` mapping in 1.0)
+irm https://termote.ohnice.app/install.ps1 | iex
+termote start
+termote start --lan
+termote start --mux herdr
+termote logs follow                        # Tail all logs live (Ctrl+C to stop)
+termote logs clean                         # Delete log files
+termote update --version 1.0.0
 ```
+
+There is no `install` command in 1.0 (it prints the replacement above), and the online
+installer scripts (`scripts/install.sh`/`install.ps1`) only download, verify and lay out the
+binary, then print `termote start` — they never start anything themselves.
 
 ## Development Commands
 
@@ -116,8 +115,9 @@ root — no need to `cd` into each package.
 # Using Makefile (recommended)
 make build          # Build PWA + termote
 make test           # Run all tests
-make deploy-container  # Deploy container (docker/podman)
-make health         # Check services
+make start          # Start the server as a native service (through the dev shim)
+make container-up   # Run the server in a container (podman/docker, through the dev shim)
+make health         # Check service health
 
 # Workspace commands (run from repo root)
 pnpm install                          # Install ALL packages (single lockfile)
@@ -131,19 +131,19 @@ pnpm install --frozen-lockfile --filter termote...
 # Manual commands
 cd pwa && pnpm dev                     # Dev server (still works — pnpm is workspace-aware)
 cd pwa && pnpm tsc --noEmit            # Type check
-cd server && go build -o termote-server . # Build server
+cd server && go build -o termote-dev . # Build server (checkout binary name)
 ```
 
 ### Cross-Compilation (macOS for Linux Container)
 
-When building Docker images on macOS, termote is cross-compiled to Linux:
+`termote container up --build` (from a checkout) cross-compiles `server/termote-linux-<arch>`
+itself before building the image — the `Dockerfile` only copies a pre-built Linux binary in, it
+never runs `go build`:
 
 ```bash
-# Automatic (termote.sh handles this)
-cd server && GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o termote-server .
-
-# For ARM64 (Apple Silicon):
-cd server && GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o termote-server .
+# What --build runs, equivalent to:
+cd server && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o termote-linux-amd64 .
+cd server && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o termote-linux-arm64 .
 ```
 
 ## Architecture
@@ -175,7 +175,7 @@ PWA over `/api/mux/stream` — there is no separate terminal process or proxy:
 
 ┌─────────────────────────────────────────────────────────┐
 │ Native mode (Windows with psmux)                        │
-│   termote-server.exe:7690 (PWA + stream + API + auth)   │
+│   termote.exe:7690 (PWA + stream + API + auth)          │
 │   ├→ static PWA files                                   │
 │   ├→ terminal WebSocket (/api/mux/stream, ConPTY)       │
 │   └→ mux API endpoints → psmux                          │
@@ -196,84 +196,98 @@ stream WebSocket, an Origin/`Sec-Fetch-Site` and single-use-token check — see
 - **State**: React hooks (useState, useCallback, useMemo)
 - **Styling**: TailwindCSS utility classes
 
-### Shell Scripts (shims only)
+### Shell Scripts
 
-`scripts/termote.sh` and `scripts/termote.ps1` only resolve/build the `termote` binary and
-`exec` it with the same arguments (mapping `-Flag` to `--flag` on Windows); they hold no
-install/update logic. What cross-platform behavior remains there:
+`scripts/install.sh`/`install.ps1` are the release installers: they download the archive for
+the current OS/arch, verify its `.sha256` (mandatory), lay it out under the versioned install
+root and print `termote start` — they never start anything and hold no CLI logic themselves.
+`scripts/termote.sh`/`termote.ps1` are a separate, checkout-only dev shim: they build the PWA
+if missing, rebuild `server/termote-dev` when a Go source or the PWA build is newer, then run
+it with the same arguments; they never run an installed release. Flags use the same Go syntax
+on every OS in 1.0 (`--lan`, not `-Lan`), so neither script needs to map flag names.
 
-- Use `$(uname)` to detect Darwin (macOS) vs Linux, `$(uname -m)` for architecture
-- Use `CDPATH= cd` to resolve symlinks without depending on `readlink -f`
-- Windows: map every 0.x parameter to a Go flag so a 0.x `update` can still relaunch this script
-
-All install/update/health/logs/allowlist logic is Go in `server/cli*.go` — see
+All `start`/`stop`/`update`/`container`/`logs`/allowlist logic is Go in `server/cli*.go` — see
 [`docs/code-standards.md`](docs/code-standards.md) for Go CLI conventions.
 
 ### CLI Commands
 
-Subcommands of the `termote` binary (run via the shims above, or `termote` after `link`):
+Subcommands of the `termote` binary (run directly after `link`, or via `./scripts/termote.sh`
+from a checkout):
 
-- `install [container|native] [flags]` — deploy mode with optional flags
-- `uninstall [container|native|all]` — remove an installation
-- `update [--version X.Y.Z] [--force]` — self-update to latest (or a pinned) release
-- `health` — check service health
-- `logs [server|all|follow|clean]` — service logs
-- `link` / `unlink` — create/remove the `termote` global command
-- `show-password` — print the saved admin password
-- `version` — show installed version
-- `menu` (no arguments) — interactive numbered menu, no `gum` dependency
+```
+start [options]      Save the options, register the service and start it
+stop                 Stop the server (it starts again at the next login)
+restart              Stop and start with the saved options
+status               Show what the running server reports (alias: health)
+container <cmd>      Run the server in a container: up, down, logs [-f], status
+update               Update to the latest release
+uninstall            Remove the service, the command and the install (config and logs stay)
+logs [service]       View logs (server, all, follow, clean)
+link / unlink        Create or remove the 'termote' command in ~/.local/bin
+show-password        Show the saved admin password
+version              Show version
+serve                Run the server in the foreground (what the service runs)
+(no command)         Interactive menu
+```
 
-Flags: `--port`, `--lan`, `--tailscale <host[:port]>`, `--no-auth`, `--mux <tmux|herdr>`
-(`-Mux` on Windows, native only), `--allow-host <name>` (`-AllowHost`, repeatable, no
-wildcard), `--allow-herdr-no-auth` (`-AllowHerdrNoAuth`), `--fresh`, `--version <X.Y.Z>`,
-`--force`. `--ttyd`/`-Ttyd` is still accepted (0.x's own `update` passes it) but is ignored
-with a warning.
+There is no `install` command in 1.0 (it prints the replacement above).
+
+`start` options (saved in the config; a flag not given keeps its saved value; a boolean is
+turned off with `=false`): `--port <port>` (default 7680, Windows 7690), `--lan[=false]`,
+`--tailscale <host[:port]>`, `--no-tailscale`, `--no-auth[=false]`, `--mux <tmux|herdr>`,
+`--allow-host <name>` (repeatable), `--remove-host <name>` (repeatable),
+`--allow-herdr-no-auth`, `--fresh`. `update` takes `--version <X.Y.Z>` and `--force`.
+`container up` additionally takes `--workspace <dir>` and `--build`. There is no `--ttyd` flag
+and no PowerShell `-Flag` variants in 1.0.
 
 The `update` command:
 
-- Fetches latest release from GitHub (or uses `--version` to pin)
-- Downloads + verifies checksum
-- Extracts tarball, preserves config
-- Stops running services (native + container)
-- Re-installs with saved configuration (mode, LAN, auth, port, mux, allowlist, Tailscale)
-- Re-links symlink if it existed
-- Uses `exec`/self-replace to hand off to the new binary (safe self-replacement)
-- Guards: refuses to run from git repo (dev mode only)
-- Warns on downgrade, skips reinstall if already on target version
+- Fetches the newest stable 1.x release tag from GitHub (or uses `--version` to pin)
+- Downloads the archive + `.sha256` (mandatory) into `versions/<v>`, switches `current` atomically
+- Restarts the service, waits until health reports the new version and keeps answering
+- Otherwise switches `current` back to the previous version and restarts it (both kept)
+- Preserves config and service registration; refuses in a git checkout or for a binary not
+  installed by the installer; warns on downgrade, skips reinstall if already on target version
 
 ## Key Files
 
-| File                                              | Purpose                                                      |
-| ------------------------------------------------- | ------------------------------------------------------------ |
-| `pwa/src/App.tsx`                                 | Main app with gestures, toolbar, settings, sessions          |
-| `pwa/src/components/keyboard-toolbar.tsx`         | Virtual keyboard for mobile                                  |
-| `pwa/src/components/settings-modal.tsx`           | Settings dialog (IME, paste source, toolbar, etc.)           |
-| `pwa/src/components/gesture-hints-overlay.tsx`    | First-time gesture tutorial overlay (mobile)                 |
-| `pwa/src/components/session-tabs.tsx`             | Session tab bar for window switching                         |
-| `pwa/src/components/connection-indicator.tsx`     | Connection status indicator with retry                       |
-| `pwa/src/components/command-history-dropdown.tsx` | Command search/recall UI                                     |
-| `pwa/src/components/quick-actions-menu.tsx`       | Quick action FAB menu                                        |
-| `pwa/src/components/toast.tsx`                    | Toast notification component                                 |
-| `pwa/src/hooks/use-settings.ts`                   | Settings state with localStorage persistence                 |
-| `pwa/src/hooks/use-command-history.ts`            | Command history storage and management                       |
-| `pwa/src/hooks/use-update-check.ts`               | GitHub release checker with caching                          |
-| `pwa/src/hooks/use-gestures.ts`                   | Hammer.js gesture handling                                   |
-| `pwa/src/components/terminal-view.tsx`            | xterm.js terminal component (stream, resize, reconnect)      |
-| `pwa/src/utils/terminal-bridge.ts`                | Drives the xterm.js terminal (key mapping, clipboard paste)  |
-| `server/main.go`                                  | Entry point (no args/`serve` = server, else CLI)             |
-| `server/serve.go`                                 | Server (PWA static files, auth, guards)                      |
-| `server/mux.go`                                   | `Mux` interface + `/api/mux/*` routes                        |
-| `server/mux_tmux.go`                              | tmux/psmux backend                                           |
-| `server/mux_herdr.go`                             | Herdr backend (native only)                                  |
-| `server/stream.go`                                | Terminal WebSocket (`/api/mux/stream`)                       |
-| `server/guard.go`                                 | Host allowlist + Origin/Content-Type write guard             |
-| `server/cli_install.go`                           | `install`/`uninstall`: native, container, allowlist, migrate |
-| `Dockerfile`                                      | Docker mode container                                        |
-| `entrypoint.sh`                                   | Container entrypoint                                         |
+| File                                              | Purpose                                                       |
+| ------------------------------------------------- | ------------------------------------------------------------- |
+| `pwa/src/App.tsx`                                 | Main app with gestures, toolbar, settings, sessions           |
+| `pwa/src/components/keyboard-toolbar.tsx`         | Virtual keyboard for mobile                                   |
+| `pwa/src/components/settings-modal.tsx`           | Settings dialog (IME, paste source, toolbar, etc.)            |
+| `pwa/src/components/gesture-hints-overlay.tsx`    | First-time gesture tutorial overlay (mobile)                  |
+| `pwa/src/components/session-tabs.tsx`             | Session tab bar for window switching                          |
+| `pwa/src/components/connection-indicator.tsx`     | Connection status indicator with retry                        |
+| `pwa/src/components/command-history-dropdown.tsx` | Command search/recall UI                                      |
+| `pwa/src/components/quick-actions-menu.tsx`       | Quick action FAB menu                                         |
+| `pwa/src/components/toast.tsx`                    | Toast notification component                                  |
+| `pwa/src/hooks/use-settings.ts`                   | Settings state with localStorage persistence                  |
+| `pwa/src/hooks/use-command-history.ts`            | Command history storage and management                        |
+| `pwa/src/hooks/use-update-check.ts`               | GitHub release checker with caching                           |
+| `pwa/src/hooks/use-gestures.ts`                   | Hammer.js gesture handling                                    |
+| `pwa/src/components/terminal-view.tsx`            | xterm.js terminal component (stream, resize, reconnect)       |
+| `pwa/src/utils/terminal-bridge.ts`                | Drives the xterm.js terminal (key mapping, clipboard paste)   |
+| `server/main.go`                                  | Entry point (`serve` runs the server, no args opens the menu) |
+| `server/serve.go`                                 | Server (PWA static files, auth, guards)                       |
+| `server/mux.go`                                   | `Mux` interface + `/api/mux/*` routes                         |
+| `server/mux_tmux.go`                              | tmux/psmux backend                                            |
+| `server/mux_herdr.go`                             | Herdr backend (native only)                                   |
+| `server/stream.go`                                | Terminal WebSocket (`/api/mux/stream`)                        |
+| `server/guard.go`                                 | Host allowlist + Origin/Content-Type write guard              |
+| `server/serve_config.go`                          | Server config from the saved config, else the environment     |
+| `server/install_layout.go`                        | Versioned install layout (`versions/<v>`, `current`, prune)   |
+| `server/tailscale.go`                             | `tailscale serve` mapping (apply/remove, never sudo)          |
+| `server/release_tags.go`                          | Picks the newest stable 1.x GitHub tag                        |
+| `server/cli_start.go`                             | `start`/`stop`/`restart`: options, service registration       |
+| `server/cli_service*.go`                          | OS supervisor registration (systemd/launchd/Scheduled Task)   |
+| `server/cli_container.go`                         | `container up/down/logs/status`                               |
+| `Dockerfile`                                      | Docker mode container                                         |
+| `entrypoint.sh`                                   | Container entrypoint                                          |
 
 ## Container Runtime Support
 
-Scripts auto-detect container runtime in this priority:
+`termote container up` auto-detects the container runtime in this priority:
 
 1. **podman** (preferred, lighter-weight)
 2. **docker** (fallback)
@@ -282,25 +296,35 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
 
 ## Security Notes
 
+- **Service reads the saved config, ignoring the environment**: when `~/.config/termote/config`
+  exists, `termote serve` reads it and ignores every `TERMOTE_*` variable; only without a saved
+  config (the container, a manual `go run`/`termote-dev serve`) do `TERMOTE_*` variables
+  configure it. `serve` also strips every `TERMOTE_*` variable from its own environment, so no
+  terminal it opens inherits one.
 - Basic auth enabled by default (use `--no-auth` to disable for local dev); an empty saved
-  password no longer disables auth — `install` generates and saves a new one instead
+  password no longer disables auth — `start` generates and saves a new one instead
 - Basic auth over HTTPS required for production
-- **Host allowlist** (`hostGuard`): requests with an unrecognised `Host` header get a 403;
-  the allowed set is loopback + LAN IP (`--lan`) + Tailscale name + `--allow-host`/`-AllowHost`
-  entries, with no wildcard to disable the check
+- termote binds to `127.0.0.1` by default; only `--lan` makes it listen on `0.0.0.0`
+- **Host allowlist** (`hostGuard`): requests with an unrecognised `Host` header get a 403; the
+  allowed set is loopback + (with `--lan`) the address the request arrived on, so it keeps
+  working as the LAN IP changes + the Tailscale name + `--allow-host` entries, with no
+  wildcard to disable the check
 - **Write/CSRF guard** (`writeGuard`): state-changing `/api/mux/*` requests must be
   same-site (`Sec-Fetch-Site`/`Origin` on the allowlist) with `Content-Type: application/json`
 - **Terminal stream** (`/api/mux/stream`): same Origin check plus a single-use, 30s-TTL token
   fetched via `/api/mux/stream-token`, consumed on WebSocket upgrade
 - **Herdr guard**: `--mux herdr --no-auth` is refused unless `--allow-herdr-no-auth` is also
   given, since Herdr exposes every workspace on the host
-- termote binds to localhost by default, use `--lan` to expose to network
-- Exclude sensitive dirs (.ssh, .gnupg, .aws, .config/gcloud) from volume mounts (warned at install)
+- Exclude sensitive dirs (.ssh, .gnupg, .aws, .config/gcloud) from container volume mounts
+  (warned at `container up`)
 - Serve mode uses constant-time comparison for password verification
 - **Brute-force protection**: built-in rate limiter (5 failed attempts/min per IP → 429)
 - **Server hardening**: ReadHeaderTimeout (Slowloris protection), request body size limits (8KB on `/api/mux/*`)
 - **Error sanitization**: internal errors logged server-side only, generic messages returned to clients
-- **Config persistence**: saved password encrypted with AES-256-CBC + PBKDF2 (machine-derived key) on Unix, DPAPI on Windows; config file chmod 600, password hidden on subsequent runs (`show-password` to view again)
+- **Config persistence**: the saved password is AES-256-CBC with an HMAC, keyed by a random
+  per-install `secret` file (0600) on Unix, DPAPI on Windows; the config file is also chmod
+  600. The password is never written to the systemd unit, launchd plist, Scheduled Task or any
+  process command line; print it again with `termote show-password`.
 
 ## Pre-commit Checks
 
@@ -320,9 +344,10 @@ make fmt-check
 ## Testing
 
 ```bash
-make test             # Run all tests (Go + shim + installer + entrypoints)
-make test-cli         # Test the termote.sh shim
-make test-get         # Test online installer
+make test             # Run all tests (Go + dev shim + install.sh + entrypoints)
+make test-go          # go test ./... in server/
+make test-cli         # Test the termote.sh dev shim
+make test-install     # Test install.sh (fake curl)
 make test-entrypoints # Test Docker entrypoints
 
 # Manual checks
@@ -330,7 +355,9 @@ pnpm --filter termote exec tsc --noEmit     # Type check
 curl http://localhost:7680/api/mux/health   # Test API
 
 # E2E tests (requires running server)
-./scripts/termote.sh install container  # Start server first
+make start                      # or: ./scripts/termote.sh start
 pnpm --filter termote test:e2e              # Run Playwright tests
 pnpm --filter termote test:e2e:ui           # Run with UI debugger
 ```
+
+Windows equivalents: `tests/test-termote.ps1`, `tests/test-install.ps1`.

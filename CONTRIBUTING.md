@@ -6,7 +6,7 @@
 git clone https://github.com/lamngockhuong/termote.git
 cd termote
 make build
-make deploy-container
+make container-up   # or: make start (native, through the dev shim)
 ```
 
 ## Development Setup
@@ -52,8 +52,8 @@ pnpm --filter @termote/website build
 
 ```bash
 cd server
-go build -o termote-server .
-./termote-server  # Runs on :7680
+go build -o termote-dev .
+./termote-dev serve  # Runs on :7680 (no saved config: reads TERMOTE_* env vars)
 ```
 
 ## Code Standards
@@ -87,11 +87,13 @@ Indented closing tags break the build.
 ## Testing
 
 ```bash
-make test              # All tests
-make test-deploy       # Deploy script tests
-make test-uninstall    # Uninstall script tests
+make test              # All tests: go test, dev shim, install.sh, entrypoints
+make test-go           # go test ./... in server/
+make test-cli          # tests/test-termote.sh (dev shim behavior)
+make test-install      # tests/test-install.sh (install.sh, fake curl)
+make test-entrypoints  # Docker entrypoint tests
 
-# E2E (requires running server)
+# E2E (requires running server, e.g. `make start`)
 pnpm --filter termote test:e2e
 ```
 
@@ -128,7 +130,7 @@ chore: update dependencies
 ```
 termote/
 ├── pwa/           # React PWA frontend
-├── server/        # Go server (PWA + proxy + API + auth)
+├── server/        # Go server + CLI (PWA + terminal stream + API + auth)
 ├── scripts/       # Shell scripts
 ├── tests/         # Test suite
 └── docs/          # Documentation

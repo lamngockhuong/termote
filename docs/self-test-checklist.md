@@ -16,29 +16,36 @@ Manual testing checklist for Termote features before release.
 
 ## Installation
 
-### Container Mode
+### Installer
 
-- [ ] `./scripts/termote.sh install container` completes without error
-- [ ] Container running: `docker ps | grep termote`
-- [ ] PWA accessible at <http://localhost:7680>
-- [ ] Auto-generated credentials shown in logs
-- [ ] `--mux herdr` is refused in container mode
+- [ ] `curl -fsSL https://termote.ohnice.app/install.sh | sh` completes without error (Linux/macOS)
+- [ ] `irm https://termote.ohnice.app/install.ps1 | iex` completes without error (Windows)
+- [ ] Needs only curl/tar/sha256sum (or PowerShell on Windows); no sudo/admin prompt
+- [ ] Verifies the archive's `.sha256`; a corrupted download is refused, not installed
+- [ ] Picks the newest stable 1.x tag (never a 0.x or pre-release tag)
+- [ ] `TERMOTE_VERSION=X.Y.Z` (or `-rc.N`) pins/rescues a specific version
+- [ ] Re-running the installer on an existing install prints `termote update` and changes nothing
+- [ ] Installer never starts the server itself; it only prints `termote start`
 
 ### Native Mode (macOS/Linux)
 
-- [ ] `./scripts/termote.sh install native` completes without error
-- [ ] Process running: `ps aux | grep termote-server`
+- [ ] `termote start` completes without error
+- [ ] Service registered (systemd user unit on Linux with a user systemd, detached
+      process + PID file on WSL2 without one, launchd agent on macOS)
+- [ ] Process running: `pgrep -f "termote serve"`
 - [ ] PWA accessible at <http://localhost:7680>
+- [ ] `termote stop` then a login (or `loginctl enable-linger`/reboot) starts it again
 
 ### Native Mode (Windows)
 
-- [ ] `.\scripts\termote.ps1 install native` completes without error
+- [ ] `termote start` completes without error
+- [ ] Scheduled Task `Termote` registered, running hidden through wscript (no admin prompt)
 - [ ] psmux + termote running
 - [ ] PWA accessible at <http://localhost:7690>
 
 ### Native Mode + Herdr (Linux)
 
-- [ ] `./scripts/termote.sh install native --mux herdr` completes without error (herdr on `PATH`)
+- [ ] `termote start --mux herdr` completes without error (herdr on `PATH`)
 - [ ] `curl localhost:7680/api/mux/health` reports `"backend":"herdr"`
 - [ ] `--mux herdr --no-auth` is refused unless `--allow-herdr-no-auth` is also given
 - [ ] PWA lists the same workspaces/tabs/panes as `herdr pane list`
@@ -46,57 +53,76 @@ Manual testing checklist for Termote features before release.
 - [ ] Agent status badge changes within one `pollInterval` after `herdr` reports a status change
 - [ ] Typing from the PWA lands in the correct order in the Herdr pane (no interleaving)
 
-### Options
+### Container Mode
 
-- [ ] `--lan` flag exposes to LAN (test from another device)
+- [ ] `termote container up` completes without error
+- [ ] Container running: `docker ps | grep termote` (or `podman ps`)
+- [ ] PWA accessible at <http://localhost:7680>
+- [ ] `--mux herdr` is refused for `container up`
+- [ ] Password and Host allowlist reach the container as `-e` values from the CLI's own
+      environment (`docker inspect termote` shows no `--env-file`/mounted secret file)
+- [ ] Rootless podman runs with `--userns=keep-id`; rootless Docker runs without `--user`
+- [ ] `--workspace <dir>` mounts the given directory at `/workspace` with `--mount`
+- [ ] `container up --build` (from a checkout) builds `termote:local` instead of pulling
+- [ ] A native server already on the port makes `container up` refuse with a hint
+- [ ] `container down` / `container logs [-f]` / `container status` work
+- [ ] Setting a new password with `--fresh` on either side updates the other's saved password too
+- [ ] `--no-auth` keeps the previously saved shared password (does not clear it)
+
+### Options (`start` and `container up`)
+
+- [ ] `--lan` flag exposes to LAN (test from another device); the address the request arrived
+      on is accepted even as the LAN IP changes
 - [ ] `--no-auth` disables basic auth
 - [ ] `--port <port>` changes port correctly
-- [ ] `--tailscale <host>` configures Tailscale HTTPS and adds the name to the Host allowlist
-- [ ] `--fresh` forces new password (ignores saved config)
+- [ ] `--tailscale <host[:port]>` configures Tailscale HTTPS and adds the name to the Host
+      allowlist, applied without `sudo`
+- [ ] An HTTPS port already serving something else (e.g. the other mode) is refused
+- [ ] `--fresh` forces a new password (ignores the saved one)
 - [ ] `--allow-host <name>` adds a name to the Host allowlist (persisted); a request with an
       unlisted `Host` header gets 403 with that exact flag suggested
+- [ ] `--remove-host <name>` removes a previously allowed name
 - [ ] A request from an unrecognised LAN hostname/IP is rejected (403) until added with
       `--allow-host`
-- [ ] `--ttyd`/`-Ttyd` is accepted and ignored, with a warning
-- [ ] Custom `TERMOTE_USER`/`TERMOTE_PASS` env vars work
-- [ ] `WORKSPACE` env var mounts correct directory
+- [ ] There is no `--ttyd` flag and no PowerShell `-Flag` parameter names in 1.0
 
 ### Config Persistence
 
-- [ ] Password encrypted with AES-256-CBC + PBKDF2 (macOS/Linux)
+- [ ] Password: AES-256-CBC with an HMAC keyed by the random per-install `secret` file, 0600 (Unix)
 - [ ] Password encrypted with DPAPI (Windows)
-- [ ] Config file chmod 600
-- [ ] Saved config reused on reinstall (mode, LAN, auth, port, mux, allowlist, Tailscale)
-- [ ] `show-password` prints the saved password; refuses when `--no-auth` or undecryptable
+- [ ] Config file chmod 600 (Unix)
+- [ ] Saved config reused on restart (port, LAN, auth, mux, allowlist, Tailscale, workspace)
+- [ ] `show-password` prints the saved password
 
 ### Uninstall
 
-- [ ] `./scripts/termote.sh uninstall all` cleans everything (stops services, removes config)
+- [ ] `termote uninstall` stops the service, removes the registration, the `termote` command
+      and the install root, but keeps the saved config and logs (prints both paths)
 
 ### Link/Unlink
 
-- [ ] `./scripts/termote.sh link` creates symlink (tries /usr/local/bin, falls back to ~/.local/bin)
+- [ ] `termote link` creates the command in `~/.local/bin` (added to PATH by the installer)
 - [ ] `termote help` works after linking
-- [ ] `./scripts/termote.sh unlink` removes symlink and shows restore hint
+- [ ] `termote unlink` removes the command
 
 ### Update
 
-- [ ] `./scripts/termote.sh update` updates to latest release
-- [ ] `./scripts/termote.sh update --version X.Y.Z` pins to specific version
-- [ ] `./scripts/termote.sh update --force` reinstalls current version
-- [ ] Update preserves saved configuration (mode, LAN, auth, port, mux, allowlist, Tailscale)
-- [ ] Update re-links symlink if it existed
-- [ ] Refuses to run from git repo (dev guard)
-- [ ] Warns on downgrade, skips if already on target version
-- [ ] A real 0.1.0 install updated to 1.0.0 keeps its settings, drops any Termote-started ttyd
-      process (and, on Windows, `scripts/ttyd.exe`), and an empty saved password is replaced
-      with a new generated one (see [`upgrade-1.0.md`](upgrade-1.0.md))
+- [ ] `termote update` updates to the latest stable 1.x release
+- [ ] `termote update --version X.Y.Z` pins to a specific version
+- [ ] `termote update --force` reinstalls the current version
+- [ ] Update preserves saved configuration (port, LAN, auth, mux, allowlist, Tailscale)
+- [ ] A health check on the new version passing keeps it; a failing one switches `current` back
+      to the previous version and restarts it
+- [ ] Refuses to run from a git checkout, and for a binary not installed by the installer
+- [ ] Warns on downgrade, skips reinstall if already on target version
+- [ ] Only the current and previous version are kept under `versions/`
+- [ ] `termote update` typed inside a Termote pane still completes (it does not kill its own pane)
 
 ### Other CLI Commands
 
-- [ ] `./scripts/termote.sh health` checks service health
-- [ ] `./scripts/termote.sh logs` shows service logs
-- [ ] `./scripts/termote.sh version` shows installed version
+- [ ] `termote status` (alias `health`) reports what the running server answers
+- [ ] `termote logs` shows service logs
+- [ ] `termote version` shows the installed version
 
 ---
 
@@ -384,16 +410,16 @@ Test on real mobile device:
 - [ ] Auth persists across page refreshes (session cookie)
 - [ ] Session cookie prevents double auth prompt on mobile
 - [ ] Clear Cache & Reload clears session cookie (re-prompts auth)
-- [ ] An empty saved password no longer disables auth — `install` on such a config generates
+- [ ] An empty saved password no longer disables auth — `start` on such a config generates
       and saves a new password instead
 
 ### Host Allowlist
 
 - [ ] Request with an unrecognised `Host` header gets 403 (Sec-Fetch aside)
 - [ ] Loopback (`localhost`, `127.0.0.1`, `::1`) is always allowed
-- [ ] LAN IP is allowed automatically when installed with `--lan`
-- [ ] Tailscale name is allowed automatically when installed with `--tailscale`
-- [ ] A name added with `--allow-host` is allowed and persisted across reinstall
+- [ ] The address a request arrived on is allowed automatically when started with `--lan`
+- [ ] Tailscale name is allowed automatically when started with `--tailscale`
+- [ ] A name added with `--allow-host` is allowed and persisted across a restart
 - [ ] No `*`/wildcard value disables the check
 
 ### Write / CSRF Guard
@@ -491,10 +517,10 @@ curl http://localhost:7680/api/mux/stream-token
 
 - [ ] Container mode works (Docker Desktop)
 - [ ] Native mode works (psmux + termote)
-- [ ] PowerShell script handles DPAPI password encryption
-- [ ] Link/Unlink creates global command
-- [ ] `termote.ps1` flags: `-Lan`, `-NoAuth`, `-Port`, `-Tailscale`, `-Fresh`, `-Mux`,
-      `-AllowHost`, `-AllowHerdrNoAuth`
+- [ ] DPAPI password encryption works
+- [ ] Link/Unlink creates the global `termote` command
+- [ ] `termote` flags use the same Go syntax as Unix (`--lan`, `--no-auth`, `--port`,
+      `--tailscale`, `--fresh`, `--mux`, `--allow-host`, `--allow-herdr-no-auth`)
 
 ---
 

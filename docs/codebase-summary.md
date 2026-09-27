@@ -56,8 +56,9 @@ termote/
 │   ├── e2e/                    # Playwright e2e tests
 │   └── package.json
 ├── server/                     # Go server + CLI (single binary, flat `package main`)
-│   ├── main.go                  # Entry point (no args/`serve` = server, else CLI)
+│   ├── main.go                  # Entry point (`serve` runs the server, no args opens the menu)
 │   ├── serve.go                 # Server: PWA static files, auth, guard chain wiring
+│   ├── serve_config.go           # Server config from the saved config, else the environment
 │   ├── guard.go                  # Host allowlist + Origin/Content-Type write guard
 │   ├── mux.go                    # `Mux` interface + `/api/mux/*` routes
 │   ├── mux_tmux.go               # tmux/psmux backend
@@ -65,28 +66,35 @@ termote/
 │   ├── herdr_rpc.go, herdr_stream.go # Herdr JSON-RPC client + pane streaming
 │   ├── stream.go                 # `/api/mux/stream` WebSocket (xterm.js feed)
 │   ├── pty_*.go                  # PTY (Unix) / ConPTY (Windows) terminal backing
+│   ├── webui/                    # Embeds the built PWA into the binary
 │   ├── cli.go                    # Subcommand dispatch, flag parsing, output helpers
-│   ├── cli_install.go            # install/uninstall: native, container, allowlist, migrate
+│   ├── cli_start.go              # `start`/`stop`/`restart`: options, service registration
+│   ├── cli_service*.go            # OS supervisor registration (systemd/launchd/Scheduled Task)
+│   ├── cli_container.go          # `container up/down/logs/status`
 │   ├── cli_update.go              # Self-update: release fetch, checksum, extract, re-exec
-│   ├── cli_config.go              # Saved config read/write (0.x-compatible encryption)
-│   ├── cli_health.go, cli_logs.go, cli_link.go, cli_menu.go # health/logs/link/menu subcommands
-│   ├── cli_unix.go, cli_windows.go # OS-specific process/service management
+│   ├── cli_config.go              # Saved config read/write (AES-256-CBC + HMAC, or DPAPI)
+│   ├── install_layout.go         # Versioned install layout (versions/<v>, current, prune)
+│   ├── release_tags.go           # Picks the newest stable 1.x GitHub tag
+│   ├── tailscale.go              # `tailscale serve` mapping (apply/remove, never sudo)
+│   ├── cli_logs.go, cli_link.go, cli_menu.go # logs/link/menu subcommands
+│   ├── cli_unix.go, cli_windows.go # OS-specific process management
 │   └── go.mod
 ├── scripts/
-│   ├── termote.sh              # Thin Unix shim: resolve/build the binary, exec it
-│   ├── termote.ps1             # Thin Windows shim: map -Flag to --flag, exec the binary
-│   ├── get.sh                  # Online curl|bash installer (download, checksum, call shim)
-│   └── get.ps1                 # Windows online installer (irm|iex)
+│   ├── install.sh               # Release installer (curl|sh): download, verify, lay out
+│   ├── install.ps1              # Windows release installer (irm|iex), same job
+│   ├── termote.sh               # Checkout-only dev shim: builds/runs server/termote-dev
+│   └── termote.ps1              # Checkout-only dev shim (Windows), same job
 ├── tests/                      # Shell script tests
-│   ├── test-termote.sh         # Unix shim tests
-│   ├── test-termote.ps1        # Windows shim tests
-│   ├── test-get.sh             # Online installer tests
-│   ├── test-get.ps1            # Windows installer tests
+│   ├── test-termote.sh         # Dev shim tests (Unix)
+│   ├── test-termote.ps1        # Dev shim tests (Windows)
+│   ├── test-install.sh         # install.sh tests (fake curl)
+│   ├── test-install.ps1        # install.ps1 tests
 │   └── test-entrypoints.sh     # Docker entrypoint tests
 ├── .github/workflows/
 │   ├── ci.yml                  # CI (PWA build/lint/test, `go test` on Ubuntu/macOS/Windows)
-│   ├── release.yml             # Release (Docker push, GitHub Release)
-│   └── release-please.yml      # Auto versioning from commits
+│   ├── release.yml             # Release: build, draft, upload assets, publish, Docker push
+│   ├── release-please.yml      # Auto versioning from commits
+│   └── deploy-website.yml      # Docs site deploy, only after a stable release
 └── docs/                       # Documentation
 ```
 
@@ -218,7 +226,7 @@ GitHub release checker with semver comparison, 1-hour cache in localStorage, sil
 
 Single Go binary, `package main`, flat file layout:
 
-- **main.go** — dispatch: no arguments (or `serve`) starts the server, anything else runs a CLI subcommand
+- **main.go** — dispatch: `termote serve` runs the server; no arguments opens the interactive menu; anything else runs a CLI subcommand
 - **serve.go** — builds the handler chain: PWA static files, `/api/mux/*`, `/api/mux/stream`, basic auth, Host allowlist, write guard
 - **guard.go** — `hostGuard` (Host allowlist) and `writeGuard` (Origin/`Sec-Fetch-Site`/Content-Type on write methods)
 - **mux.go** — the `Mux` interface and the `/api/mux/*` HTTP routes shared by both backends
@@ -251,28 +259,31 @@ Terminal output → WebSocket binary frame → xterm.js → display
 
 ## CLI (Go, `server/cli*.go`)
 
-The CLI is a set of subcommands compiled into the `termote` binary; `scripts/termote.sh` and
-`scripts/termote.ps1` are thin shims that resolve/build the binary and `exec` it with the same
-arguments (mapping `-Flag` to `--flag` on Windows). Run `termote help` (or
-`./scripts/termote.sh help`) for the current command and flag list — it is generated from the
-same code that parses them, so it never drifts from behavior.
+The CLI is a set of subcommands compiled into the `termote` binary. Run `termote help` for the
+current command and flag list — it is generated from the same code that parses them, so it
+never drifts from behavior.
 
-**Commands:** `install [container|native]`, `uninstall [container|native|all]`, `update`,
-`health`, `logs [server|all|follow|clean]`, `link`, `unlink`, `show-password`, `version`,
-`menu` (no arguments).
+**Commands:** `start [options]`, `stop`, `restart`, `status`/`health`, `container <cmd>`
+(`up`/`down`/`logs`/`status`), `update [--version X.Y.Z] [--force]`, `uninstall`,
+`logs [server|all|follow|clean]`, `link`, `unlink`, `show-password`, `version`, `serve`,
+`menu` (no arguments). There is no `install` command in 1.0 (it prints the replacement above).
 
-**Config persistence:** Unix `~/.termote/config` (`KEY="value"`, chmod 600, password
-AES-256-CBC + PBKDF2 encrypted, compatible with the 0.x `openssl enc` format); Windows
-`~/.termote/config.json` (password DPAPI-encrypted). See `cli_config.go`.
+**Config persistence:** Unix `~/.config/termote/config` (`KEY="value"`, chmod 600, password
+AES-256-CBC with an HMAC keyed by a random per-install `secret` file, 0600); Windows
+`%APPDATA%\termote\config.json` (password DPAPI-encrypted). See `cli_config.go`.
 
-**Safe self-replacement:** `update` hands off to the newly extracted binary via `exec`
-(Unix) or a relaunch (Windows), so no stale code stays in memory mid-update.
+**Versioned install layout:** `versions/<v>/bin/termote`, a `current` pointer switched
+atomically by `update`, and only the current and previous version kept on disk (see
+`install_layout.go`).
 
-### get.sh / get.ps1
+**Safe self-replacement:** `update` restarts the service to run the new `current` version;
+nothing re-execs the running process.
 
-Online installers (curl|bash / irm|iex): download from GitHub (latest or pinned version),
-verify checksum, extract, then call the shim's `install` (or `update` when
-`--update`/`TERMOTE_UPDATE` is set) to preserve config on updates.
+### Release installers (`scripts/install.sh` / `install.ps1`)
+
+Downloads the newest stable 1.x release (or `TERMOTE_VERSION`) for the OS/arch, verifies its
+`.sha256` (mandatory), lays it out under the versioned install root, and prints `termote
+start` — they never start the server or touch any saved config.
 
 ## External Dependencies
 
@@ -294,23 +305,24 @@ enforce HTTP methods; invalid requests return 400/404/405/413 JSON errors.
 
 ## CI/CD Workflows
 
-| Workflow             | Trigger                            | Purpose                                                                            |
-| -------------------- | ---------------------------------- | ---------------------------------------------------------------------------------- |
-| `ci.yml`             | Push/PR                            | Build, lint, type check, PWA test, `go test` (Ubuntu/macOS/Windows), website build |
-| `release-please.yml` | Manual (workflow_dispatch)         | Create release PR with version bump from commits                                   |
-| `release.yml`        | Tag push / Manual / Release Please | Build + push Docker images, create GitHub Release                                  |
-| `deploy-website.yml` | Stable release / Manual            | Build + deploy the docs site to GitHub Pages (not on every push to `main`)         |
+| Workflow             | Trigger                                 | Purpose                                                                                                   |
+| -------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `ci.yml`             | Push/PR                                 | Build, lint, type check, PWA test, `go test` (Ubuntu/macOS/Windows), website build                        |
+| `release-please.yml` | Push to `main` / Manual                 | Create/update the release PR (draft release), then call `deploy-website.yml` after a stable one publishes |
+| `release.yml`        | Tag push / Manual / Release Please      | Build assets, create a draft GitHub Release, upload assets, publish, push Docker images                   |
+| `deploy-website.yml` | Called by `release-please.yml` / Manual | Build + deploy the docs site to GitHub Pages (only after a stable release, not on every push to `main`)   |
 
 ### Release Flow
 
 ```bash
-Multiple commits → main
+Commits pushed to main
        ↓
-Manual trigger: Release Please workflow
+release-please.yml opens/updates the "chore: release x.y.z" PR (CHANGELOG)
        ↓
-Creates PR "chore: release x.y.z" (with CHANGELOG)
+Merge PR → tag created → release.yml builds assets, drafts the release,
+           uploads assets, then publishes it (never public before assets land)
        ↓
-Merge PR → creates tag → triggers release.yml
+Stable release published → release-please.yml calls deploy-website.yml
 ```
 
 ### Manual Release
@@ -320,5 +332,4 @@ make release VERSION=1.0.0      # Local: create + push tag
 # Or: GitHub Actions UI → Run workflow → enter version
 ```
 
-See [release-guide.md](release-guide.md) for full details, and
-[upgrade-1.0.md](upgrade-1.0.md) for the 1.0.0 breaking-change and migration notes.
+See [release-guide.md](release-guide.md) for full details.

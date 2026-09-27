@@ -1,135 +1,130 @@
 ---
 title: Getting Started
-description: Quick start guide for Termote
+description: Install Termote with two commands on Linux, macOS or Windows
 ---
 
-import { Aside, Steps } from "@astrojs/starlight/components";
+import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
+
+Termote is one binary: the PWA, the terminal stream, the API and the login all live in it. You install it
+with one command, then `termote start` registers it as a service of your user and starts it.
 
 ## Prerequisites
 
-**macOS/Linux:**
+- **Linux / macOS:** [tmux](https://github.com/tmux/tmux) (`sudo apt install tmux`, `brew install tmux`), or a
+  running [Herdr](/usage/sessions/) server. Plus `curl`, `tar` and `sha256sum` (or `shasum`), which most systems
+  already have.
+- **Windows:** [psmux](https://github.com/psmux/psmux) (`winget install psmux`) and PowerShell.
+- **Container mode only:** Podman or Docker. See [Container](/installation/docker/).
 
-- Docker or Podman (for Container mode)
-- or tmux + Go (for Native mode); termote streams the terminal itself, no ttyd involved
-- Optional: [Herdr](/usage/sessions/) as an alternative to tmux (native mode only)
+No sudo or administrator rights are needed: everything goes into your home directory.
 
-**Windows:**
+## Install
 
-- Docker Desktop or Podman Desktop (for Container mode — recommended)
-- or [psmux](https://github.com/psmux/psmux) (for Native mode): `winget install psmux`
+<Tabs>
+  <TabItem label="Linux / macOS">
 
-<Aside type="tip" title="Windows">
-  Both Container and Native modes are fully supported on Windows. Report any issues on
-  [GitHub](https://github.com/lamngockhuong/termote/issues).
-</Aside>
+    ```bash
+    curl -fsSL https://termote.ohnice.app/install.sh | sh
+    termote start
+    ```
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
 
-## One-Liner Install
-
-**macOS/Linux:**
-
-```bash
-# Defaults to native mode (access host binaries like claude, gh, etc.)
-curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
-
-# With explicit mode
-curl -fsSL .../get.sh | bash -s -- --container --lan
-curl -fsSL .../get.sh | bash -s -- --native --tailscale myhost
-
-# Auto-update with saved config
-curl -fsSL .../get.sh | bash -s -- --update
-
-# Install specific version
-curl -fsSL .../get.sh | bash -s -- --version 0.0.4
-```
-
-**Windows (PowerShell):**
-
-> **Note:** If script execution is disabled on your system, run this first:
-> `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned`
-
-```powershell
-# Defaults to native mode (psmux)
-irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
-
-# With explicit mode
-$env:TERMOTE_MODE = "container"; irm .../get.ps1 | iex
-```
-
-<Aside type="tip">
-  The install script auto-detects your environment and chooses the best
-  deployment mode.
-</Aside>
-
-## Quick Start
+    ```powershell
+    irm https://termote.ohnice.app/install.ps1 | iex
+    termote start
+    ```
+  </TabItem>
+</Tabs>
 
 <Steps>
-1. Clone the repository
-   ```bash
-   git clone https://github.com/lamngockhuong/termote.git
-   cd termote
-   ```
+1. The installer picks the newest stable 1.x release, downloads the archive for your platform, checks its
+   `.sha256` (always; there is no way to skip it) and puts the `termote` command on your PATH. It never starts
+   anything.
 
-2. Install with container (simplest)
+2. `termote start` detects the terminal backend, creates the admin password and prints it once, registers the
+   server with your OS's service manager and starts it. See
+   [what `termote start` does](/installation/native/#what-termote-start-does).
 
-   ```bash
-   ./scripts/termote.sh install container
-   ```
-
-3. Access at http://localhost:7680
+3. Open the URL it prints, by default http://localhost:7680 (Windows: http://localhost:7690), and log in as
+   `admin` with that password. Forgot it? `termote show-password`.
 
 </Steps>
 
-## CLI Commands
-
-**macOS/Linux:**
-
-```bash
-./scripts/termote.sh                   # Interactive menu
-./scripts/termote.sh install container # Container mode
-./scripts/termote.sh install native    # Native mode (host tools)
-./scripts/termote.sh update            # Update to latest version
-./scripts/termote.sh update --version 0.0.9  # Pin to specific version
-./scripts/termote.sh uninstall all     # Uninstall everything
-./scripts/termote.sh health            # Check service health
-./scripts/termote.sh show-password     # Print the saved admin password
-./scripts/termote.sh link              # Create 'termote' global command
-./scripts/termote.sh unlink            # Remove global command
-```
-
-**Windows (PowerShell):**
-
-```powershell
-.\scripts\termote.ps1                   # Interactive menu
-.\scripts\termote.ps1 install container # Container mode (Docker Desktop)
-.\scripts\termote.ps1 install native    # Native mode (psmux)
-.\scripts\termote.ps1 update            # Update to latest version
-.\scripts\termote.ps1 update -Version 0.0.9  # Pin to specific version
-.\scripts\termote.ps1 logs follow       # Tail all logs live
-.\scripts\termote.ps1 uninstall all     # Uninstall everything
-.\scripts\termote.ps1 health            # Check service health
-.\scripts\termote.ps1 show-password     # Print the saved admin password
-.\scripts\termote.ps1 link              # Create 'termote' global command
-.\scripts\termote.ps1 unlink            # Remove global command
-```
-
 <Aside type="tip">
-  After running `link`, you can use `termote` from anywhere:
-  ```bash
-  # macOS/Linux
-  termote health
-  termote install native --lan
-  ```
-  ```powershell
-  # Windows
-  termote health
-  termote install native -Lan
-  ```
-
+  If `termote` is not found right after the install, open a new terminal. On Linux/macOS the installer prints the
+  `export PATH=...` line to add when `~/.local/bin` is not on your PATH yet.
 </Aside>
+
+### Pin a version, or repair an install
+
+Set `TERMOTE_VERSION` to install one exact release (`X.Y.Z`, or `X.Y.Z-rc.N` for a pre-release):
+
+<Tabs>
+  <TabItem label="Linux / macOS">
+
+    ```bash
+    curl -fsSL https://termote.ohnice.app/install.sh | TERMOTE_VERSION=1.0.0 sh
+    ```
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+
+    ```powershell
+    $env:TERMOTE_VERSION='1.0.0'; irm https://termote.ohnice.app/install.ps1 | iex
+    ```
+  </TabItem>
+</Tabs>
+
+Without `TERMOTE_VERSION`, the installer leaves an existing install alone and tells you to run `termote update`.
+With it, the installer puts that version beside the existing one and switches to it, which is also how you
+rescue an install that no longer runs. Your config is kept either way.
+
+`GH_TOKEN` or `GITHUB_TOKEN`, when set, only raise the GitHub API rate limit the installer uses to find the
+newest release.
+
+<Aside type="caution" title="Coming from Termote 0.x">
+  There is no upgrade from 0.x: 1.0 does not read the config or anything else 0.x left behind. Uninstall 0.x
+  first, following the archived [0.x native](/0.x/installation/native/#uninstall) or
+  [0.x container](/0.x/installation/docker/#uninstall) page, then install 1.0 as above.
+</Aside>
+
+## Commands
+
+Flags use the same syntax on every OS, PowerShell included (`termote start --lan`).
+
+| Command                   | What it does                                                                  |
+| ------------------------- | ----------------------------------------------------------------------------- |
+| `termote start [options]` | Save the options, register the service and start it                          |
+| `termote stop`            | Stop the server (it starts again at the next login)                           |
+| `termote restart`         | Stop and start with the saved options                                         |
+| `termote status`          | Show what the running server reports (alias: `health`)                        |
+| `termote logs [service]`  | View logs: `server`, `all` (default), `follow`, `clean`                       |
+| `termote show-password`   | Show the saved admin password                                                 |
+| `termote update`          | Update to the latest release, rolling back if the new one does not come up    |
+| `termote uninstall`       | Remove the service, the command and the install (config and logs stay)        |
+| `termote container <cmd>` | Run the server in a container: `up`, `down`, `logs [-f]`, `status`           |
+| `termote link` / `unlink` | Create or remove the `termote` command in `~/.local/bin`                      |
+| `termote version`         | Show the version                                                              |
+| `termote serve`           | Run the server in the foreground (what the service runs)                      |
+| `termote`                 | Interactive menu                                                              |
+
+`termote help` prints the same list with every option. The old `install` command is gone: typing it only
+points you to `termote start` and `termote container up`.
+
+## File Locations
+
+| What            | Linux / macOS                                                  | Windows                                                    |
+| --------------- | -------------------------------------------------------------- | ---------------------------------------------------------- |
+| Install root    | `~/.local/share/termote` (`$XDG_DATA_HOME/termote`)            | `%LOCALAPPDATA%\termote`                                   |
+| Versions        | `versions/<v>/bin/termote`                                     | `versions\<v>\bin\termote.exe`                             |
+| Current version | `current` symlink to `versions/<v>`                            | `current.txt` plus the `bin\termote.cmd` launcher          |
+| Command         | `~/.local/bin/termote`                                         | `%LOCALAPPDATA%\termote\bin`, added to your user PATH      |
+| Config          | `~/.config/termote/config` and `secret` (`$XDG_CONFIG_HOME`)   | `%APPDATA%\termote\config.json` (password DPAPI-encrypted) |
+| Logs, PID file  | `~/.local/state/termote/` (`$XDG_STATE_HOME`)                  | `%LOCALAPPDATA%\termote\state`                             |
 
 ## What's Next
 
-- [Container Installation](/installation/docker/) - Full container setup
-- [Native Installation](/installation/native/) - Access host binaries
+- [Native](/installation/native/) - Start options, the service, update and uninstall
+- [Container](/installation/docker/) - Run the server in Podman or Docker
 - [Tailscale HTTPS](/installation/tailscale/) - Secure remote access
 - [Mobile Gestures](/usage/gestures/) - Touch controls

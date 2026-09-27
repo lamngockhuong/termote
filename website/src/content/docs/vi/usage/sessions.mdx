@@ -113,10 +113,10 @@ Phiên được quản lý qua các endpoint `/api/mux/*` của termote:
 ### Phiên không lưu trữ
 
 1. Kiểm tra tmux đang chạy: `tmux list-windows`
-2. Xem log của termote: `docker logs termote` (container) hoặc `termote logs server` (native)
+2. Xem log của termote: `termote container logs` (container) hoặc `termote logs server` (native)
 
 ### Lỗi WebSocket / terminal
 
-1. Xem log của termote: `docker logs termote` hoặc `termote logs server`
+1. Xem log của termote: `termote container logs` hoặc `termote logs server`
 2. WebSocket của terminal là `/api/mux/stream`, do chính termote phục vụ
-3. Kiểm tra API health: `curl http://localhost:7680/api/mux/health`
+3. Kiểm tra tình trạng server: `termote status` (container: `termote container status`)

@@ -26,9 +26,9 @@
 Điều khiển từ xa các công cụ CLI (Claude Code, GitHub Copilot, terminal bất kỳ) từ mobile/desktop qua PWA.
 
 > [!NOTE]
-> Nhánh `main` đang phát triển bản 1.0 và đi trước bản phát hành mới nhất
-> (0.1.x). Hướng dẫn cho phiên bản cài được hiện nay nằm ở
-> [README của nhánh `release/0.x`](https://github.com/lamngockhuong/termote/blob/release/0.x/README.vi.md).
+> Termote 1.0 không nâng cấp được bản cài 0.x. Hãy gỡ 0.x theo
+> [tài liệu 0.x đã lưu trữ](https://termote.ohnice.app/vi/0.x/), rồi cài 1.0 bằng các lệnh ở
+> [Bắt Đầu Nhanh](#bắt-đầu-nhanh).
 
 > **Termote** = Terminal + Remote
 >
@@ -49,7 +49,8 @@
 - **Sessions bền vững**: tmux giữ sessions sống
 - **Sidebar thu gọn**: Giao diện desktop với thanh sidebar bật/tắt
 - **Chế độ toàn màn hình**: Trải nghiệm terminal toàn màn hình
-- **Lưu cấu hình**: Tự động lưu cài đặt với mật khẩu mã hóa AES-256
+- **Chạy như một service**: `termote start` đăng ký một service của người dùng (systemd, launchd, Scheduled Task) tự khởi động khi đăng nhập
+- **Lưu cấu hình**: `termote start` lưu các tùy chọn của nó, mật khẩu được lưu ở dạng mã hóa
 
 ## Ảnh Chụp Màn Hình
 
@@ -104,123 +105,112 @@ Chính termote truyền luồng terminal (PTY trên Unix, ConPTY trên Windows) 
 
 > 📖 **Mới dùng Termote?** Xem [Hướng dẫn Bắt đầu](docs/vi/getting-started.md) để có hướng dẫn chi tiết kèm ví dụ.
 
-```bash
-./scripts/termote.sh                   # Menu tương tác
-./scripts/termote.sh install container # Chế độ container (docker/podman)
-./scripts/termote.sh install native    # Chế độ native (công cụ host)
-./scripts/termote.sh link              # Tạo lệnh 'termote' toàn cục
-make test                              # Chạy tests
-```
-
-> Sau khi `link`, dùng `termote` từ bất kỳ đâu: `termote health`, `termote install native --lan`
-
-## Cài Đặt
-
-### Một dòng lệnh (khuyến nghị)
+**Linux / macOS:**
 
 ```bash
-# Tải về và hỏi trước khi cài (mặc định native mode)
-curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
-
-# Tự động cài không hỏi
-curl -fsSL .../get.sh | bash -s -- --yes
-
-# Chỉ tải về (không cài)
-curl -fsSL .../get.sh | bash -s -- --download-only
-
-# Cập nhật tự động với config đã lưu
-curl -fsSL .../get.sh | bash -s -- --update
-
-# Cài đặt phiên bản cụ thể
-curl -fsSL .../get.sh | bash -s -- --version 0.0.4
-
-# Với mode và tùy chọn cụ thể
-curl -fsSL .../get.sh | bash -s -- --yes --container --lan
-curl -fsSL .../get.sh | bash -s -- --yes --native --tailscale myhost
-
-# Buộc nhập mật khẩu mới (bỏ qua config đã lưu)
-curl -fsSL .../get.sh | bash -s -- --yes --container --fresh
+curl -fsSL https://termote.ohnice.app/install.sh | sh
+termote start
 ```
 
 **Windows (PowerShell):**
 
-> **Lưu ý:** Nếu hệ thống chặn chạy script, hãy chạy lệnh này trước:
->
-> ```powershell
-> Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
-> ```
-
 ```powershell
-# Tải về và hỏi trước khi cài (mặc định native mode)
-irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
-
-# Tự động cài không hỏi
-$env:TERMOTE_AUTO_YES = "true"; irm .../get.ps1 | iex
-
-# Với mode cụ thể
-$env:TERMOTE_MODE = "container"; irm .../get.ps1 | iex
-
-# Cập nhật tự động với config đã lưu
-$env:TERMOTE_UPDATE = "true"; irm .../get.ps1 | iex
+irm https://termote.ohnice.app/install.ps1 | iex
+termote start
 ```
 
-### Docker
+Trình cài đặt chỉ cần `curl`, `tar` và `sha256sum`/`shasum` (trên Windows là PowerShell), không cần sudo hay quyền admin. Nó kiểm tra mã băm SHA-256 của gói tải về, cài lệnh `termote` và không khởi động gì cả. `termote start` lưu các tùy chọn, tạo mật khẩu ở lần chạy đầu (chỉ in ra một lần; xem lại bằng `termote show-password`), đăng ký service rồi khởi động nó. Mở `http://localhost:7680` (Windows: `http://localhost:7690`).
+
+Cần cài sẵn một backend terminal: tmux (`sudo apt install tmux`, `brew install tmux`), psmux trên Windows (`winget install psmux`), hoặc [Herdr](https://termote.ohnice.app/vi/installation/native/). Lần `start` đầu tiên sẽ tự nhận ra nên dùng backend nào.
+
+### Tùy chọn thường dùng
 
 ```bash
-# Tất cả trong một (tự sinh credentials, xem logs: docker logs termote)
-docker run -d --name termote -p 7680:7680 ghcr.io/lamngockhuong/termote:latest
+termote start --lan                  # Listen on the LAN, not only this machine
+termote start --tailscale myhost.ts.net  # Publish over Tailscale HTTPS
+termote start --mux herdr            # Drive Herdr workspaces instead of tmux
+termote start --no-auth              # Disable basic auth (local use only)
+```
 
-# Với credentials tùy chỉnh
-docker run -d --name termote -p 7680:7680 \
-  -e TERMOTE_USER=admin -e TERMOTE_PASS=secret \
-  ghcr.io/lamngockhuong/termote:latest
+Các tùy chọn được lưu lại: tham số nào không truyền thì giữ giá trị đã lưu, còn tham số kiểu bật/tắt thì tắt bằng `=false` (`termote start --lan=false`). Các tham số giống nhau trên mọi hệ điều hành, kể cả PowerShell.
 
-# Không xác thực (chỉ dev local)
-docker run -d --name termote -p 7680:7680 \
-  -e NO_AUTH=true \
-  ghcr.io/lamngockhuong/termote:latest
+### Lệnh hằng ngày
 
-# Với volume để lưu trữ
-docker run -d --name termote -p 7680:7680 \
-  -v termote-data:/home/termote \
-  ghcr.io/lamngockhuong/termote:latest
+```bash
+termote status                       # What the running server reports
+termote stop                         # Stop (it starts again at the next login)
+termote restart                      # Restart with the saved options
+termote logs follow                  # Tail the logs
+termote show-password                # Print the saved admin password
+termote update                       # Update to the latest release
+termote uninstall                    # Remove the service, the command and the install
+```
 
-# Mount thư mục workspace tùy chỉnh
+`update` chuyển sang phiên bản mới, khởi động lại service và quay về phiên bản cũ nếu bản mới không chạy lên được. `uninstall` giữ lại cấu hình (`~/.config/termote`) và logs (`~/.local/state/termote`), đồng thời in ra cả hai đường dẫn.
+
+## Cài Đặt
+
+### Cài một phiên bản cố định
+
+```bash
+curl -fsSL https://termote.ohnice.app/install.sh | TERMOTE_VERSION=1.0.0 sh
+termote update --version 1.0.0
+```
+
+```powershell
+$env:TERMOTE_VERSION='1.0.0'; irm https://termote.ohnice.app/install.ps1 | iex
+```
+
+Không có `TERMOTE_VERSION`, trình cài đặt lấy bản phát hành 1.x ổn định mới nhất và để nguyên bản đã cài. Có biến này, phiên bản đó được cài bên cạnh bản hiện tại và trở thành phiên bản đang dùng; cách này cũng sửa được một bản cài bị hỏng.
+
+### Chế độ container
+
+```bash
+termote container up                          # Run the published image (podman or docker)
+termote container up --workspace ~/projects   # Mount a directory at /workspace
+termote container status
+termote container logs -f
+termote container down
+```
+
+`container up` chạy image `ghcr.io/lamngockhuong/termote` đúng với phiên bản của `termote` đã cài, bằng podman (ưu tiên) hoặc docker, trên port 7680, gắn thư mục `~/termote-workspace` vào `/workspace`. Lệnh nhận `--port`, `--lan`, `--tailscale`, `--no-auth`, `--allow-host` và `--fresh`; các giá trị này được lưu riêng với tùy chọn của `start`, còn mật khẩu thì dùng chung với server native. Docker tự khởi động lại container sau khi máy khởi động lại; Podman chạy không cần quyền root thì không có tiến trình nền nào khởi động lại container, nên hãy chạy nó dưới dạng Quadlet unit.
+
+> **Lưu ý bảo mật**: Tránh mount trực tiếp `$HOME` — các thư mục nhạy cảm như `.ssh`, `.gnupg` sẽ truy cập được từ trong container. Hãy mount các thư mục dự án cụ thể.
+
+### Docker không qua CLI
+
+```bash
+# Generates a password, printed in: docker logs termote
 docker run -d --name termote -p 7680:7680 \
   -v ~/projects:/workspace \
   ghcr.io/lamngockhuong/termote:latest
 
-# Với Tailscale HTTPS (yêu cầu Tailscale trên host)
+# With your own credentials
 docker run -d --name termote -p 7680:7680 \
   -e TERMOTE_USER=admin -e TERMOTE_PASS=secret \
   ghcr.io/lamngockhuong/termote:latest
-sudo tailscale serve --bg --https=443 http://127.0.0.1:7680
-# Truy cập tại: https://your-hostname.tailnet-name.ts.net
 ```
 
-### Từ Release
+| Biến Môi Trường | Mô Tả                                        |
+| --------------- | -------------------------------------------- |
+| `TERMOTE_USER`  | Tên đăng nhập basic auth (mặc định: `admin`) |
+| `TERMOTE_PASS`  | Mật khẩu basic auth (mặc định: tự sinh)      |
+| `NO_AUTH`       | Đặt `true` để tắt xác thực                   |
 
-```bash
-# Tải release mới nhất
-VERSION=$(curl -s https://api.github.com/repos/lamngockhuong/termote/releases/latest | grep tag_name | cut -d '"' -f4)
-wget https://github.com/lamngockhuong/termote/releases/download/${VERSION}/termote-${VERSION}.tar.gz
-tar xzf termote-${VERSION}.tar.gz
-cd termote-${VERSION#v}
-
-# Cài đặt (menu tương tác hoặc với mode)
-./scripts/termote.sh install
-./scripts/termote.sh install container
-```
-
-### Từ Source
+### Biên dịch từ mã nguồn
 
 ```bash
 git clone https://github.com/lamngockhuong/termote.git
 cd termote
-./scripts/termote.sh install container
+make build
+./scripts/termote.sh start
 ```
 
-> **Ghi chú**: `termote.sh` là CLI hợp nhất hỗ trợ `install` (build từ source, dùng artifacts có sẵn khi có), `uninstall`, và `health`.
+`make build` tạo bản build của PWA rồi nhúng vào `server/termote`; cần có Go, Node.js và pnpm. `scripts/termote.sh` (Windows: `scripts\termote.ps1`) chỉ dùng để chạy từ bản checkout: nó biên dịch lại binary dành cho phát triển khi mã nguồn mới hơn, rồi chạy binary đó với cùng các tham số. `termote update` từ chối chạy trong bản checkout; hãy dùng `git pull && make build`.
+
+### Nâng cấp từ 0.x
+
+Không có đường nâng cấp từ 0.x: bản 1.0 cài vào chỗ khác và không đọc cấu hình của 0.x. Hãy gỡ 0.x theo [tài liệu 0.x đã lưu trữ](https://termote.ohnice.app/vi/0.x/), sau đó cài 1.0 bằng các lệnh ở trên.
 
 ## Chế Độ Triển Khai
 
@@ -239,131 +229,50 @@ flowchart LR
     User["Người Dùng"] --> Container & Native
 ```
 
-| Chế Độ        | Mô Tả            | Trường Hợp Sử Dụng                                                  | Nền Tảng              |
-| ------------- | ---------------- | ------------------------------------------------------------------- | --------------------- |
-| `--container` | Chế độ container | Triển khai đơn giản, môi trường cách ly                             | macOS, Linux, Windows |
-| `--native`    | Tất cả native    | Truy cập công cụ host (claude, gh); bắt buộc khi dùng backend Herdr | macOS, Linux, Windows |
+| Chế Độ    | Lệnh                   | Trường Hợp Sử Dụng                                                  | Nền Tảng              |
+| --------- | ---------------------- | ------------------------------------------------------------------- | --------------------- |
+| Native    | `termote start`        | Truy cập công cụ trên host (claude, gh); bắt buộc với backend Herdr | macOS, Linux, Windows |
+| Container | `termote container up` | Môi trường tách biệt                                                | macOS, Linux, Windows |
 
-### Tùy Chọn
+Server native chạy dưới dạng service của người dùng: systemd user unit trên Linux (một tiến trình chạy tách riêng ở nơi không có systemd cho người dùng, chẳng hạn WSL2 không bật systemd), launchd agent trên macOS, Scheduled Task chạy khi đăng nhập trên Windows.
+
+### Tùy chọn của `start`
 
 | Flag                        | Mô Tả                                                                                              |
 | --------------------------- | -------------------------------------------------------------------------------------------------- |
-| `--lan`                     | Mở truy cập LAN (mặc định: chỉ localhost)                                                          |
-| `--tailscale <host[:port]>` | Bật Tailscale HTTPS                                                                                |
-| `--no-auth`                 | Tắt xác thực cơ bản                                                                                |
-| `--port <port>`             | Port host (mặc định: 7680, Windows: 7690)                                                          |
-| `--mux <tmux\|herdr>`       | Backend terminal, chỉ native (mặc định: `tmux`)                                                    |
+| `--port <port>`             | Port (mặc định: 7680, Windows: 7690)                                                               |
+| `--lan[=false]`             | Lắng nghe trên mọi interface (mặc định: chỉ localhost)                                             |
+| `--tailscale <host[:port]>` | Công bố qua Tailscale HTTPS (port mặc định 443)                                                    |
+| `--no-tailscale`            | Ngừng công bố qua Tailscale                                                                        |
+| `--no-auth[=false]`         | Tắt xác thực (basic auth)                                                                          |
+| `--mux <tmux\|herdr>`       | Backend terminal (mặc định: herdr nếu đang chạy, nếu không thì tmux)                               |
 | `--allow-host <name>`       | Cho phép thêm một giá trị header Host (lặp lại được; không có ký tự đại diện, xem ghi chú bảo mật) |
-| `--allow-herdr-no-auth`     | Bắt buộc phải có khi dùng `--mux herdr --no-auth`                                                  |
-| `--fresh`                   | Buộc nhập mật khẩu mới (bỏ qua config đã lưu)                                                      |
-| `--update`                  | Cập nhật tự động với config đã lưu                                                                 |
-| `--version <ver>`           | Cài đặt phiên bản cụ thể (có hoặc không có `v`)                                                    |
+| `--remove-host <name>`      | Bỏ một tên Host đã cho phép (lặp lại được)                                                         |
+| `--allow-herdr-no-auth`     | Bắt buộc khi dùng cùng `--mux herdr --no-auth`                                                     |
+| `--fresh`                   | Đặt mật khẩu mới                                                                                   |
 
-`--ttyd`/`-Ttyd` vẫn được chấp nhận (bản 0.x cần cờ này khi chạy lại trình cài đặt trong lúc cập nhật) nhưng bị bỏ qua kèm cảnh báo, vì ttyd đã bị gỡ bỏ từ 1.0.0. Mọi thay đổi không tương thích được liệt kê ở [`docs/upgrade-1.0.md`](docs/upgrade-1.0.md).
+### Với Tailscale HTTPS
 
-| Biến Môi Trường | Mô Tả                                           |
-| --------------- | ----------------------------------------------- |
-| `WORKSPACE`     | Thư mục host để mount (mặc định: `./workspace`) |
-| `TERMOTE_USER`  | Username xác thực (mặc định: tự sinh)           |
-| `TERMOTE_PASS`  | Password xác thực (mặc định: tự sinh)           |
-| `NO_AUTH`       | Đặt `true` để tắt xác thực                      |
-
-### Chế Độ Container (khuyến nghị cho đơn giản)
-
-Scripts tự động phát hiện `podman` hoặc `docker` — cả hai hoạt động giống nhau.
+Dùng `tailscale serve` để có HTTPS tự động (không cần tự quản lý chứng chỉ):
 
 ```bash
-./scripts/termote.sh install container             # localhost với basic auth
-./scripts/termote.sh install container --no-auth   # localhost không auth
-./scripts/termote.sh install container --lan       # Truy cập LAN
-# Truy cập: http://localhost:7680
-
-# Thư mục workspace tùy chỉnh (mount vào /workspace trong container)
-WORKSPACE=~/projects ./scripts/termote.sh install container
-WORKSPACE=/path/to/code make install-container
+termote start --tailscale myhost.ts.net                # Default port 443
+termote start --tailscale myhost.ts.net:8765           # Custom port
+termote container up --tailscale myhost.ts.net         # Container mode
+sudo tailscale set --operator=$USER                    # Linux, once: let termote run tailscale serve
 ```
 
-> **Lưu ý bảo mật**: Tránh mount trực tiếp `$HOME` — các thư mục nhạy cảm như `.ssh`, `.gnupg` sẽ truy cập được trong container. Mount các thư mục project cụ thể thay thế.
-
-### Native (khuyến nghị để truy cập binary host)
-
-Dùng khi cần truy cập binary host (claude, git, v.v.):
-
-```bash
-# Linux
-sudo apt install tmux
-./scripts/termote.sh install native
-
-# macOS
-brew install tmux go
-./scripts/termote.sh install native
-# Truy cập: http://localhost:7680
-```
-
-Để điều khiển workspace của [Herdr](https://termote.ohnice.app/vi/installation/native/) thay cho tmux, thêm `--mux herdr` (chỉ ở chế độ native; `herdr` phải có sẵn trong `PATH`).
-
-### Với Tailscale HTTPS (tất cả chế độ)
-
-Dùng `tailscale serve` cho HTTPS tự động (không cần quản lý cert thủ công):
-
-```bash
-# Chỉ Tailscale (port mặc định 443)
-./scripts/termote.sh install container --tailscale myhost.ts.net
-
-# Port tùy chỉnh
-./scripts/termote.sh install native --tailscale myhost.ts.net:8765
-
-# Tailscale + truy cập LAN
-./scripts/termote.sh install container --tailscale myhost.ts.net --lan
-
-# Truy cập: https://myhost.ts.net (hoặc :8765 cho port tùy chỉnh)
-```
-
-### Gỡ Cài Đặt
-
-```bash
-./scripts/termote.sh uninstall container   # Chế độ container
-./scripts/termote.sh uninstall native      # Chế độ native
-./scripts/termote.sh uninstall all         # Tất cả
-```
-
-### Cập Nhật
-
-```bash
-# Cách 1: Cập nhật tự động với config đã lưu
-curl -fsSL .../get.sh | bash -s -- --update
-
-# Cách 2: Chạy lại one-liner (so sánh version, hỏi trước khi cài)
-curl -fsSL .../get.sh | bash
-
-# Cách 3: Cập nhật thủ công
-./scripts/termote.sh uninstall [container|native]
-git pull origin main                    # Nếu cài từ source
-./scripts/termote.sh install [container|native] [--lan] [--tailscale ...]
-```
+Ánh xạ được áp dụng lại mỗi lần server khởi động. `stop`, `start --no-tailscale` và `uninstall` chỉ gỡ ánh xạ của riêng Termote.
 
 ## Hỗ Trợ Nền Tảng
 
-| Nền Tảng | Container | Native | CLI Script  |
-| -------- | --------- | ------ | ----------- |
-| Linux    | ✓         | ✓      | termote.sh  |
-| macOS    | ✓         | ✓      | termote.sh  |
-| Windows  | ✓         | ✓      | termote.ps1 |
+| Nền Tảng | Container | Native | Trình Cài Đặt |
+| -------- | --------- | ------ | ------------- |
+| Linux    | ✓         | ✓      | `install.sh`  |
+| macOS    | ✓         | ✓      | `install.sh`  |
+| Windows  | ✓         | ✓      | `install.ps1` |
 
-> **Hỗ trợ Windows**: Chế độ container yêu cầu Docker Desktop hoặc Podman Desktop; chế độ native yêu cầu psmux. Vui lòng báo cáo lỗi trên GitHub nếu gặp sự cố.
-
-### Chế Độ Native Windows
-
-Chế độ native Windows sử dụng [psmux](https://github.com/psmux/psmux) (terminal multiplexer tương thích tmux cho Windows):
-
-```powershell
-# Cài đặt psmux
-winget install psmux
-
-# Chạy Termote
-.\scripts\termote.ps1 install native
-.\scripts\termote.ps1 install container  # Hoặc container mode với Docker Desktop
-```
+> **Hỗ trợ Windows**: Chế độ container yêu cầu Docker Desktop hoặc Podman Desktop; chế độ native yêu cầu [psmux](https://github.com/psmux/psmux) (bộ ghép kênh terminal tương thích tmux cho Windows), cài bằng `winget install psmux`. Service trên Windows chưa được kiểm chứng trên máy thật; vui lòng báo lỗi trên GitHub nếu gặp sự cố.
 
 ## Sử Dụng Mobile
 
@@ -382,12 +291,12 @@ Thanh công cụ ảo cung cấp: Tab, Esc, Ctrl, Shift, phím mũi tên, và c�
 
 ```
 termote/
-├── Makefile                # Lệnh build/test/deploy
-├── Dockerfile              # Docker mode (termote + tmux, không có ttyd)
-├── docker-compose.yml
-├── entrypoint.sh           # Docker entrypoint
-├── docs/                   # Tài liệu
-│   └── images/screenshots/ # Ảnh chụp app
+├── Makefile                # Build/test/run commands
+├── Dockerfile              # Container image (termote + tmux)
+├── docker-compose.yml      # Development from a checkout only
+├── entrypoint.sh           # Container entrypoint
+├── docs/                   # Documentation
+│   └── images/screenshots/ # App screenshots
 ├── pwa/                    # React PWA
 │   └── src/
 │       ├── components/
@@ -395,40 +304,42 @@ termote/
 │       ├── hooks/
 │       ├── types/
 │       └── utils/
-├── server/                 # Go server + CLI (một binary duy nhất)
-│   ├── main.go             # Entry point (không tham số/`serve` = server, còn lại là CLI)
-│   ├── serve.go            # Server (PWA, auth, lớp chặn request)
-│   ├── mux.go              # Mux interface + route /api/mux/*
-│   ├── mux_tmux.go         # Backend tmux/psmux
-│   ├── mux_herdr.go        # Backend Herdr (chỉ native)
-│   ├── stream.go           # Terminal WebSocket (luồng cho xterm.js)
-│   └── cli*.go             # Các lệnh con install/update/health/logs/link/menu
+├── server/                 # Go server + CLI (single binary)
+│   ├── main.go             # Entry point (no args = menu, `serve` = server, else CLI)
+│   ├── serve.go            # Server (PWA, auth, guards)
+│   ├── mux.go              # Mux interface + /api/mux/* routes
+│   ├── mux_tmux.go         # tmux/psmux backend
+│   ├── mux_herdr.go        # Herdr backend (native only)
+│   ├── stream.go           # Terminal WebSocket (xterm.js stream)
+│   ├── cli*.go             # start/stop/update/container/logs/menu subcommands
+│   └── webui/              # PWA embedded in the binary (filled by make build)
 ├── scripts/
-│   ├── termote.sh          # Shim Unix mỏng -> termote CLI
-│   ├── termote.ps1         # Shim Windows PowerShell mỏng -> termote CLI
-│   ├── get.sh              # Unix online installer (curl | bash)
-│   └── get.ps1             # Windows online installer (irm | iex)
-├── tests/                  # Bộ test
-│   ├── test-termote.sh
-│   ├── test-termote.ps1    # Windows tests
-│   ├── test-get.sh
-│   └── test-entrypoints.sh
-└── website/                # Trang docs Astro Starlight
-    └── src/content/docs/   # Tài liệu MDX
+│   ├── install.sh          # Unix online installer (curl | sh)
+│   ├── install.ps1         # Windows online installer (irm | iex)
+│   ├── termote.sh          # Unix shim: builds and runs a checkout
+│   └── termote.ps1         # Windows PowerShell shim: builds and runs a checkout
+├── tests/                  # Test suite
+│   ├── test-termote.sh     # Unix shim tests
+│   ├── test-termote.ps1    # Windows shim tests
+│   ├── test-install.sh     # Unix installer tests
+│   ├── test-install.ps1    # Windows installer tests
+│   └── test-entrypoints.sh # Container entrypoint tests
+└── website/                # Astro Starlight docs site
+    └── src/content/docs/   # MDX documentation
 ```
 
 ## Phát Triển
 
 ```bash
-make build          # Build PWA và termote
-make test           # Chạy tất cả tests
-make health         # Kiểm tra health service
-make clean          # Dừng containers
+make build          # Build the PWA and embed it in server/termote
+make test           # Run all tests
+make health         # Check service health
+make clean          # Stop containers
 
-# E2E tests (yêu cầu server đang chạy)
-./scripts/termote.sh install container  # Khởi động server trước
-pnpm --filter termote test:e2e       # Chạy Playwright tests
-pnpm --filter termote test:e2e:ui    # Chạy với UI debugger
+# E2E tests (requires running server)
+./scripts/termote.sh start           # Start server first
+pnpm --filter termote test:e2e       # Run Playwright tests
+pnpm --filter termote test:e2e:ui    # Run with UI debugger
 ```
 
 **Kiểm Tra Thủ Công:** Xem [Danh Sách Kiểm Tra](docs/vi/self-test-checklist.md)
@@ -442,7 +353,7 @@ pnpm --filter termote test:e2e:ui    # Chạy với UI debugger
 
 ### Lỗi WebSocket
 
-- Kiểm tra logs server: `docker logs termote` (container) hoặc `termote logs server` (native)
+- Kiểm tra logs server: `termote container logs` (container) hoặc `termote logs server` (native)
 - WebSocket của terminal là `/api/mux/stream`, do chính termote phục vụ — không có tiến trình terminal riêng nào cần kiểm tra
 
 ### Vấn đề bàn phím mobile
@@ -450,26 +361,26 @@ pnpm --filter termote test:e2e:ui    # Chạy với UI debugger
 - Đảm bảo có viewport meta tag
 - Test trên thiết bị thật, không dùng emulator
 
-### Chế độ native: tiến trình không khởi động
+### Chế độ native: server không khởi động
 
 ```bash
-ps aux | grep termote-server # Kiểm tra termote đang chạy
-lsof -i :7680              # Xác minh port đang dùng
-termote logs server        # Hoặc: termote logs follow
+termote status             # What the running server reports
+termote logs server        # Or: termote logs follow
+lsof -i :7680              # Check what holds the port
+termote start --fresh      # If the saved password can no longer be read
 ```
 
 ## Ghi Chú Bảo Mật
 
 - **Mặc định: chỉ localhost** - không mở LAN trừ khi dùng flag `--lan`
-- **Basic auth bật mặc định** - dùng `--no-auth` để tắt cho dev local; mật khẩu đã lưu nếu rỗng không còn làm tắt auth nữa (bản 1.0.0 sẽ sinh mật khẩu mới thay vào)
-- **Danh sách Host được phép**: request có header `Host` lạ bị từ chối (chống tấn công đổi địa chỉ DNS); thêm các tên tin cậy bằng `--allow-host`/`-AllowHost`, không có ký tự đại diện nào tắt được lớp kiểm tra này
+- **Basic auth bật mặc định** - dùng `--no-auth` để tắt khi phát triển trên máy; mật khẩu được tạo ở lần `termote start` đầu tiên và lưu ở dạng mã hóa
+- **Danh sách Host được phép**: request có header `Host` lạ bị từ chối (chống tấn công đổi địa chỉ DNS); thêm các tên tin cậy bằng `--allow-host`, không có ký tự đại diện nào tắt được lớp kiểm tra này
 - **Chặn Origin/CSRF**: các request thay đổi trạng thái tới `/api/mux/*` và WebSocket `/api/mux/stream` từ chối request có `Sec-Fetch-Site`/`Origin` đến từ site khác, đồng thời yêu cầu stream token cùng origin và chỉ dùng một lần
 - **Chống brute-force tích hợp** - rate limiting (5 lần thử/phút mỗi IP)
 - **Backend Herdr**: để lộ mọi workspace Herdr trên máy host, nên `--mux herdr --no-auth` bị từ chối nếu không kèm `--allow-herdr-no-auth`
+- **File service không chứa bí mật**: systemd unit, launchd agent và Scheduled Task không bao giờ chứa mật khẩu
 - Dùng HTTPS (Tailscale) cho production
 - Giới hạn trong mạng tin cậy/VPN
-
-Nếu bạn nâng cấp từ một bản cài 0.x, hãy xem [`docs/upgrade-1.0.md`](docs/upgrade-1.0.md).
 
 ## Dự Án Khác
 

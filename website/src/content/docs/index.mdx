@@ -42,12 +42,18 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
 ## Quick Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
+curl -fsSL https://termote.ohnice.app/install.sh | sh      # Linux, macOS
+termote start
+```
+
+```powershell
+irm https://termote.ohnice.app/install.ps1 | iex           # Windows
+termote start
 ```
 
 ## Deployment Modes
 
-| Mode          | Description               | Use Case                        | Platform              |
-| ------------- | ------------------------- | ------------------------------- | --------------------- |
-| `--container` | Container mode            | Simple deployment, isolated env | macOS, Linux, Windows |
-| `--native`    | All native (no container) | Host tool access (Claude Code)  | macOS, Linux, Windows |
+| Mode      | Command                | Use Case                          | Platform              |
+| --------- | ---------------------- | --------------------------------- | --------------------- |
+| Native    | `termote start`        | Host tool access (Claude Code)    | macOS, Linux, Windows |
+| Container | `termote container up` | Isolated environment (Podman/Docker) | macOS, Linux, Windows |

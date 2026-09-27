@@ -25,6 +25,9 @@
 
 모바일/데스크톱에서 PWA를 통해 CLI 도구(Claude Code, GitHub Copilot, 모든 터미널)를 원격 제어.
 
+> [!NOTE]
+> Termote 1.0은 0.x 설치를 업그레이드하지 않습니다. [보관된 0.x 문서](https://termote.ohnice.app/0.x/)에 따라 0.x를 제거한 다음, [빠른 시작](#빠른-시작)의 명령으로 1.0을 설치하세요.
+
 > **Termote** = Terminal + Remote
 >
 > 🇬🇧 [English](README.md) | 🇻🇳 [Tiếng Việt](README.vi.md) | 🇨🇳 [简体中文](README.zh-CN.md) | 🇯🇵 [日本語](README.ja.md) | 🇪🇸 [Español](README.es.md) | 🇧🇷 [Português (BR)](README.pt-BR.md) | 🇫🇷 [Français](README.fr.md) | 🇩🇪 [Deutsch](README.de.md) | 🇷🇺 [Русский](README.ru.md) | 🇮🇩 [Bahasa Indonesia](README.id.md)
@@ -44,7 +47,8 @@
 - **영구 세션**: tmux가 세션을 유지
 - **접을 수 있는 사이드바**: 토글 가능한 세션 사이드바가 있는 데스크톱 UI
 - **전체 화면 모드**: 몰입형 터미널 경험
-- **설정 저장**: AES-256 암호화 비밀번호로 설치 설정 자동 저장
+- **서비스로 실행**: `termote start`가 로그인 시 시작되는 사용자 서비스(systemd, launchd, 예약된 작업)를 등록
+- **설정 저장**: `termote start`가 옵션을 저장하고, 비밀번호는 암호화해 저장
 
 ## 스크린샷
 
@@ -99,125 +103,112 @@ termote가 터미널을 직접(Unix에서는 PTY, Windows에서는 ConPTY) PWA�
 
 > 📖 **Termote가 처음이신가요?** 예제와 함께하는 완전한 안내는 [시작 가이드](docs/getting-started.md)를 확인하세요.
 
-```bash
-./scripts/termote.sh                   # 대화형 메뉴
-./scripts/termote.sh install container # 컨테이너 모드 (docker/podman)
-./scripts/termote.sh install native    # 네이티브 모드 (호스트 도구)
-./scripts/termote.sh link              # 'termote' 글로벌 명령 생성
-make test                              # 테스트 실행
-```
-
-> `link` 이후 어디서든 `termote` 사용 가능: `termote health`, `termote install native --lan`
-
-## 설치
-
-### 한 줄 명령 (권장)
-
-**macOS/Linux:**
+**Linux / macOS:**
 
 ```bash
-# 다운로드 후 설치 전 확인 (기본값: native 모드)
-curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
-
-# 확인 없이 자동 설치
-curl -fsSL .../get.sh | bash -s -- --yes
-
-# 다운로드만 (설치 안 함)
-curl -fsSL .../get.sh | bash -s -- --download-only
-
-# 저장된 설정으로 자동 업데이트
-curl -fsSL .../get.sh | bash -s -- --update
-
-# 특정 버전 설치
-curl -fsSL .../get.sh | bash -s -- --version 0.0.4
-
-# 모드와 옵션을 명시적으로 지정
-curl -fsSL .../get.sh | bash -s -- --yes --container --lan
-curl -fsSL .../get.sh | bash -s -- --yes --native --tailscale myhost
-
-# 새 비밀번호 강제 입력 (저장된 설정 무시)
-curl -fsSL .../get.sh | bash -s -- --yes --container --fresh
+curl -fsSL https://termote.ohnice.app/install.sh | sh
+termote start
 ```
 
 **Windows (PowerShell):**
 
-> **참고:** 시스템에서 스크립트 실행이 비활성화된 경우, 먼저 이 명령을 실행하세요:
->
-> ```powershell
-> Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
-> ```
-
 ```powershell
-# 다운로드 후 설치 전 확인 (기본값: native 모드)
-irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
-
-# 확인 없이 자동 설치
-$env:TERMOTE_AUTO_YES = "true"; irm .../get.ps1 | iex
-
-# 모드를 명시적으로 지정
-$env:TERMOTE_MODE = "container"; irm .../get.ps1 | iex
-
-# 저장된 설정으로 자동 업데이트
-$env:TERMOTE_UPDATE = "true"; irm .../get.ps1 | iex
+irm https://termote.ohnice.app/install.ps1 | iex
+termote start
 ```
 
-### Docker
+설치 프로그램에는 `curl`, `tar`, `sha256sum`/`shasum`(Windows에서는 PowerShell)만 필요하며 sudo나 관리자 권한은 필요 없습니다. 아카이브의 체크섬을 검증한 뒤 `termote` 명령을 설치하고, 아무것도 실행하지 않습니다. `termote start`는 옵션을 저장하고, 처음 실행할 때 비밀번호를 만들고(한 번만 표시되며 나중에 `termote show-password`로 다시 볼 수 있음), 서비스를 등록해 시작합니다. `http://localhost:7680`(Windows: `http://localhost:7690`)을 여세요.
+
+터미널 백엔드를 먼저 설치해야 합니다: tmux(`sudo apt install tmux`, `brew install tmux`), Windows에서는 psmux(`winget install psmux`), 또는 [Herdr](https://termote.ohnice.app/installation/native/). 어떤 것을 쓸지는 첫 `start`가 감지합니다.
+
+### 자주 쓰는 옵션
 
 ```bash
-# 올인원 (자격 증명 자동 생성, 로그 확인: docker logs termote)
-docker run -d --name termote -p 7680:7680 ghcr.io/lamngockhuong/termote:latest
+termote start --lan                  # Listen on the LAN, not only this machine
+termote start --tailscale myhost.ts.net  # Publish over Tailscale HTTPS
+termote start --mux herdr            # Drive Herdr workspaces instead of tmux
+termote start --no-auth              # Disable basic auth (local use only)
+```
 
-# 사용자 지정 자격 증명
-docker run -d --name termote -p 7680:7680 \
-  -e TERMOTE_USER=admin -e TERMOTE_PASS=secret \
-  ghcr.io/lamngockhuong/termote:latest
+옵션은 저장됩니다. 지정하지 않은 플래그는 저장된 값을 유지하고, 불리언 옵션은 `=false`로 끕니다(`termote start --lan=false`). 플래그는 PowerShell을 포함한 모든 OS에서 같습니다.
 
-# 인증 없음 (로컬 개발 전용)
-docker run -d --name termote -p 7680:7680 \
-  -e NO_AUTH=true \
-  ghcr.io/lamngockhuong/termote:latest
+### 일상적인 명령
 
-# 영구 저장을 위한 볼륨 사용
-docker run -d --name termote -p 7680:7680 \
-  -v termote-data:/home/termote \
-  ghcr.io/lamngockhuong/termote:latest
+```bash
+termote status                       # What the running server reports
+termote stop                         # Stop (it starts again at the next login)
+termote restart                      # Restart with the saved options
+termote logs follow                  # Tail the logs
+termote show-password                # Print the saved admin password
+termote update                       # Update to the latest release
+termote uninstall                    # Remove the service, the command and the install
+```
 
-# 사용자 지정 workspace 디렉토리 마운트
+`update`는 새 버전으로 전환하고 서비스를 재시작하며, 새 버전이 올라오지 않으면 이전 버전으로 되돌립니다. `uninstall`은 설정(`~/.config/termote`)과 로그(`~/.local/state/termote`)를 남기고 두 경로를 출력합니다.
+
+## 설치
+
+### 버전 고정
+
+```bash
+curl -fsSL https://termote.ohnice.app/install.sh | TERMOTE_VERSION=1.0.0 sh
+termote update --version 1.0.0
+```
+
+```powershell
+$env:TERMOTE_VERSION='1.0.0'; irm https://termote.ohnice.app/install.ps1 | iex
+```
+
+`TERMOTE_VERSION`이 없으면 설치 프로그램은 최신 안정 1.x 릴리스를 가져오며 기존 설치는 건드리지 않습니다. 지정하면 해당 버전을 현재 버전 옆에 설치하고 활성 버전으로 전환하므로, 망가진 설치를 복구할 때도 쓸 수 있습니다.
+
+### 컨테이너 모드
+
+```bash
+termote container up                          # Run the published image (podman or docker)
+termote container up --workspace ~/projects   # Mount a directory at /workspace
+termote container status
+termote container logs -f
+termote container down
+```
+
+`container up`은 설치된 `termote`와 같은 버전의 `ghcr.io/lamngockhuong/termote`를 podman(우선) 또는 docker로 실행하며, 포트 7680을 쓰고 `~/termote-workspace`를 `/workspace`에 마운트합니다. `--port`, `--lan`, `--tailscale`, `--no-auth`, `--allow-host`, `--fresh`를 받으며, 이 값들은 `start`의 옵션과 따로 저장됩니다. 비밀번호는 네이티브 서버와 공유합니다. Docker는 재부팅 후 컨테이너를 다시 시작하지만, rootless Podman에는 이를 담당할 데몬이 없으므로 Quadlet 유닛으로 실행하세요.
+
+> **보안 참고**: `$HOME`을 직접 마운트하지 마세요 — `.ssh`, `.gnupg` 같은 민감한 디렉토리가 컨테이너에서 접근 가능해집니다. 대신 특정 프로젝트 디렉토리를 마운트하세요.
+
+### CLI 없이 Docker로 실행
+
+```bash
+# Generates a password, printed in: docker logs termote
 docker run -d --name termote -p 7680:7680 \
   -v ~/projects:/workspace \
   ghcr.io/lamngockhuong/termote:latest
 
-# Tailscale HTTPS 사용 (호스트에 Tailscale 필요)
+# With your own credentials
 docker run -d --name termote -p 7680:7680 \
   -e TERMOTE_USER=admin -e TERMOTE_PASS=secret \
   ghcr.io/lamngockhuong/termote:latest
-sudo tailscale serve --bg --https=443 http://127.0.0.1:7680
-# 접속: https://your-hostname.tailnet-name.ts.net
 ```
 
-### Release에서 설치
+| 환경 변수      | 설명                                    |
+| -------------- | --------------------------------------- |
+| `TERMOTE_USER` | 기본 인증 사용자 이름 (기본값: `admin`) |
+| `TERMOTE_PASS` | 기본 인증 비밀번호 (기본값: 자동 생성)  |
+| `NO_AUTH`      | `true`로 설정하면 인증 비활성화         |
 
-```bash
-# 최신 릴리스 다운로드
-VERSION=$(curl -s https://api.github.com/repos/lamngockhuong/termote/releases/latest | grep tag_name | cut -d '"' -f4)
-wget https://github.com/lamngockhuong/termote/releases/download/${VERSION}/termote-${VERSION}.tar.gz
-tar xzf termote-${VERSION}.tar.gz
-cd termote-${VERSION#v}
-
-# 설치 (대화형 메뉴 또는 모드 지정)
-./scripts/termote.sh install
-./scripts/termote.sh install container
-```
-
-### 소스에서 설치
+### 소스에서 빌드
 
 ```bash
 git clone https://github.com/lamngockhuong/termote.git
 cd termote
-./scripts/termote.sh install container
+make build
+./scripts/termote.sh start
 ```
 
-> **참고**: `termote.sh`는 `install` (소스에서 빌드, 가능한 경우 사전 빌드된 아티팩트 사용), `uninstall`, `health` 명령을 지원하는 통합 CLI입니다.
+`make build`는 PWA를 빌드해 `server/termote`에 포함시키며, Go, Node.js, pnpm이 필요합니다. `scripts/termote.sh`(Windows: `scripts\termote.ps1`)는 체크아웃을 실행하는 용도로만 쓰이며, 소스가 더 새로우면 개발용 바이너리를 다시 빌드한 뒤 같은 인자로 실행합니다. `termote update`는 체크아웃 안에서는 실행을 거부하므로 `git pull && make build`를 사용하세요.
+
+### 0.x에서 업그레이드
+
+0.x에서 업그레이드하는 경로는 없습니다. 1.0은 다른 위치에 설치되며 0.x 설정을 읽지 않습니다. [보관된 0.x 문서](https://termote.ohnice.app/0.x/)에 따라 0.x를 제거한 다음, 위 명령으로 1.0을 설치하세요.
 
 ## 배포 모드
 
@@ -236,135 +227,50 @@ flowchart LR
     User["사용자"] --> Container & Native
 ```
 
-| 모드          | 설명          | 사용 사례                                          | 플랫폼                |
-| ------------- | ------------- | -------------------------------------------------- | --------------------- |
-| `--container` | 컨테이너 모드 | 간단한 배포, 격리된 환경                           | macOS, Linux, Windows |
-| `--native`    | 전체 네이티브 | 호스트 도구 접근 (claude, gh), Herdr 백엔드에 필수 | macOS, Linux, Windows |
+| 모드     | 명령                   | 사용 사례                                         | 플랫폼                |
+| -------- | ---------------------- | ------------------------------------------------- | --------------------- |
+| 네이티브 | `termote start`        | 호스트 도구(claude, gh) 접근. Herdr 백엔드에 필수 | macOS, Linux, Windows |
+| 컨테이너 | `termote container up` | 격리된 환경                                       | macOS, Linux, Windows |
 
-### 옵션
+네이티브 서버는 사용자 서비스로 실행됩니다: Linux에서는 systemd 사용자 유닛(WSL2에서 systemd가 없는 경우처럼 사용자 systemd가 없으면 분리된 프로세스), macOS에서는 launchd 에이전트, Windows에서는 로그온 시 실행되는 예약된 작업입니다.
 
-| 플래그                      | 설명                                                                         |
-| --------------------------- | ---------------------------------------------------------------------------- |
-| `--lan`                     | LAN에 노출 (기본값: localhost만)                                             |
-| `--tailscale <host[:port]>` | Tailscale HTTPS 활성화                                                       |
-| `--no-auth`                 | 기본 인증 비활성화                                                           |
-| `--port <port>`             | 호스트 포트 (기본값: 7680, Windows: 7690)                                    |
-| `--mux <tmux\|herdr>`       | 터미널 백엔드, 네이티브 전용 (기본값: `tmux`)                                |
-| `--allow-host <name>`       | 추가로 허용할 Host 헤더 값 (반복 지정 가능, 와일드카드 없음, 보안 참고 확인) |
-| `--allow-herdr-no-auth`     | `--mux herdr --no-auth`와 함께 사용할 때 필수                                |
-| `--fresh`                   | 새 비밀번호 강제 입력 (저장된 설정 무시)                                     |
-| `--update`                  | 저장된 설정으로 자동 업데이트                                                |
-| `--version <ver>`           | 특정 버전 설치 (`v` 포함/미포함 모두 가능)                                   |
+### `start` 옵션
 
-`--ttyd`/`-Ttyd`는 여전히 받아들이지만(0.x가 업데이트 중 설치 프로그램을 다시 실행할 때 이 옵션을 넘깁니다) 경고와 함께 무시됩니다. ttyd는 1.0.0에서 제거되었습니다. 호환되지 않는 변경 사항 전체는 [`docs/upgrade-1.0.md`](docs/upgrade-1.0.md)를 참고하세요.
+| 플래그                      | 설명                                                                |
+| --------------------------- | ------------------------------------------------------------------- |
+| `--port <port>`             | 포트 (기본값: 7680, Windows: 7690)                                  |
+| `--lan[=false]`             | 모든 인터페이스에서 수신 (기본값: localhost만)                      |
+| `--tailscale <host[:port]>` | Tailscale HTTPS로 공개 (기본 포트 443)                              |
+| `--no-tailscale`            | Tailscale 공개 중지                                                 |
+| `--no-auth[=false]`         | 기본 인증 비활성화                                                  |
+| `--mux <tmux\|herdr>`       | 터미널 백엔드 (기본값: herdr가 실행 중이면 herdr, 아니면 tmux)      |
+| `--allow-host <name>`       | 추가 Host 헤더 값 허용 (반복 가능, 와일드카드 없음, 보안 참고 참조) |
+| `--remove-host <name>`      | 허용된 Host 이름 제거 (반복 가능)                                   |
+| `--allow-herdr-no-auth`     | `--mux herdr --no-auth`와 함께 쓸 때 필수                           |
+| `--fresh`                   | 새 비밀번호 설정                                                    |
 
-| 환경 변수      | 설명                                             |
-| -------------- | ------------------------------------------------ |
-| `WORKSPACE`    | 마운트할 호스트 디렉토리 (기본값: `./workspace`) |
-| `TERMOTE_USER` | Basic auth 사용자 이름 (기본값: 자동 생성)       |
-| `TERMOTE_PASS` | Basic auth 비밀번호 (기본값: 자동 생성)          |
-| `NO_AUTH`      | `true`로 설정하여 인증 비활성화                  |
+### Tailscale HTTPS 사용
 
-### 컨테이너 모드 (간편한 사용을 위해 권장)
-
-스크립트가 `podman` 또는 `docker`를 자동 감지합니다 -- 둘 다 동일하게 작동합니다.
+자동 HTTPS를 위해 `tailscale serve` 사용 (수동 인증서 관리 불필요):
 
 ```bash
-./scripts/termote.sh install container             # localhost + basic auth
-./scripts/termote.sh install container --no-auth   # localhost + 인증 없음
-./scripts/termote.sh install container --lan       # LAN 접근 가능
-# 접속: http://localhost:7680
-
-# 사용자 지정 workspace 디렉토리 (컨테이너 내 /workspace에 마운트)
-WORKSPACE=~/projects ./scripts/termote.sh install container
-WORKSPACE=/path/to/code make install-container
+termote start --tailscale myhost.ts.net                # Default port 443
+termote start --tailscale myhost.ts.net:8765           # Custom port
+termote container up --tailscale myhost.ts.net         # Container mode
+sudo tailscale set --operator=$USER                    # Linux, once: let termote run tailscale serve
 ```
 
-> **보안 참고**: `$HOME`을 직접 마운트하지 마세요 -- `.ssh`, `.gnupg` 같은 민감한 디렉토리가 컨테이너에서 접근 가능해집니다. 대신 특정 프로젝트 디렉토리를 마운트하세요.
-
-### 네이티브 (호스트 바이너리 접근을 위해 권장)
-
-호스트 바이너리(claude, git 등)에 접근이 필요할 때 사용:
-
-```bash
-# Linux
-sudo apt install tmux
-./scripts/termote.sh install native
-
-# macOS
-brew install tmux go
-./scripts/termote.sh install native
-# 접속: http://localhost:7680
-```
-
-tmux 대신 [Herdr](https://termote.ohnice.app/installation/native/) 워크스페이스를 사용하려면 `--mux herdr`를 추가하세요 (네이티브 모드 전용, `herdr`가 이미 `PATH`에 있어야 함).
-
-### Tailscale HTTPS 사용 (모든 모드)
-
-자동 HTTPS를 위해 `tailscale serve`를 사용합니다 (수동 인증서 관리 불필요):
-
-```bash
-# Tailscale만 (기본 포트 443)
-./scripts/termote.sh install container --tailscale myhost.ts.net
-
-# 사용자 지정 포트
-./scripts/termote.sh install native --tailscale myhost.ts.net:8765
-
-# Tailscale + LAN 접근 가능
-./scripts/termote.sh install container --tailscale myhost.ts.net --lan
-
-# 접속: https://myhost.ts.net (또는 사용자 지정 포트의 경우 :8765)
-```
-
-### 제거
-
-```bash
-./scripts/termote.sh uninstall container   # 컨테이너 모드
-./scripts/termote.sh uninstall native      # 네이티브 모드
-./scripts/termote.sh uninstall all         # 전체
-```
-
-### 업데이트
-
-```bash
-# 방법 1: 저장된 설정으로 자동 업데이트
-curl -fsSL .../get.sh | bash -s -- --update
-
-# 방법 2: 한 줄 명령 재실행 (버전 비교, 설치 전 확인)
-curl -fsSL .../get.sh | bash
-
-# 방법 3: 수동 업데이트
-./scripts/termote.sh uninstall [container|native]
-git pull origin main                    # 소스에서 설치한 경우
-./scripts/termote.sh install [container|native] [--lan] [--tailscale ...]
-```
+매핑은 서버가 시작될 때마다 적용됩니다. `stop`, `start --no-tailscale`, `uninstall`은 Termote 자신의 매핑만 제거합니다.
 
 ## 플랫폼 지원
 
-| 플랫폼  | 컨테이너   | 네이티브   | CLI 스크립트 |
-| ------- | ---------- | ---------- | ------------ |
-| Linux   | ✓          | ✓          | termote.sh   |
-| macOS   | ✓          | ✓          | termote.sh   |
-| Windows | ⚠️ (실험적) | ⚠️ (실험적) | termote.ps1  |
+| 플랫폼  | 컨테이너 | 네이티브 | 설치 프로그램 |
+| ------- | -------- | -------- | ------------- |
+| Linux   | ✓        | ✓        | `install.sh`  |
+| macOS   | ✓        | ✓        | `install.sh`  |
+| Windows | ✓        | ✓        | `install.ps1` |
 
-> **⚠️ Windows 지원 (실험적)**: Windows 지원은 현재 초기 단계이며 추가 테스트가 필요합니다. 컨테이너 모드는 Docker Desktop이 필요하고, 네이티브 모드는 psmux가 필요합니다. GitHub에서 이슈를 보고해 주세요.
-
-### Windows 네이티브 모드
-
-Windows 네이티브 모드는 [psmux](https://github.com/psmux/psmux) (Windows용 tmux 호환 터미널 멀티플렉서)를 사용합니다:
-
-```powershell
-# psmux 설치
-winget install psmux
-
-# Termote 실행
-.\scripts\termote.ps1 install native
-.\scripts\termote.ps1 install container  # 또는 Docker Desktop으로 컨테이너 모드
-
-# 업데이트 및 로그
-.\scripts\termote.ps1 update             # 최신 릴리스로 자체 업데이트
-.\scripts\termote.ps1 logs follow        # 모든 로그를 실시간으로 확인
-```
+> **Windows 지원**: 컨테이너 모드에는 Docker Desktop 또는 Podman Desktop이 필요하고, 네이티브 모드에는 [psmux](https://github.com/psmux/psmux)(Windows용 tmux 호환 터미널 멀티플렉서)가 필요하며 `winget install psmux`로 설치합니다. Windows 서비스는 아직 실제 기기에서 검증되지 않았습니다. 문제가 있으면 GitHub에 보고해 주세요.
 
 ## 모바일 사용법
 
@@ -383,12 +289,12 @@ winget install psmux
 
 ```
 termote/
-├── Makefile                # 빌드/테스트/배포 명령
-├── Dockerfile              # Docker 모드 (termote + tmux, ttyd 없음)
-├── docker-compose.yml
-├── entrypoint.sh           # Docker 엔트리포인트
-├── docs/                   # 문서
-│   └── images/screenshots/ # 앱 스크린샷
+├── Makefile                # Build/test/run commands
+├── Dockerfile              # Container image (termote + tmux)
+├── docker-compose.yml      # Development from a checkout only
+├── entrypoint.sh           # Container entrypoint
+├── docs/                   # Documentation
+│   └── images/screenshots/ # App screenshots
 ├── pwa/                    # React PWA
 │   └── src/
 │       ├── components/
@@ -396,43 +302,45 @@ termote/
 │       ├── hooks/
 │       ├── types/
 │       └── utils/
-├── server/                 # Go 서버 + CLI (단일 바이너리)
-│   ├── main.go             # 엔트리 포인트 (인자 없음/`serve` = 서버, 그 외 = CLI)
-│   ├── serve.go            # 서버 (PWA, 인증, 가드)
-│   ├── mux.go              # Mux 인터페이스 + /api/mux/* 라우트
-│   ├── mux_tmux.go         # tmux/psmux 백엔드
-│   ├── mux_herdr.go        # Herdr 백엔드 (네이티브 전용)
-│   ├── stream.go           # 터미널 WebSocket (xterm.js 스트림)
-│   └── cli*.go             # install/update/health/logs/link/menu 하위 명령
+├── server/                 # Go server + CLI (single binary)
+│   ├── main.go             # Entry point (no args = menu, `serve` = server, else CLI)
+│   ├── serve.go            # Server (PWA, auth, guards)
+│   ├── mux.go              # Mux interface + /api/mux/* routes
+│   ├── mux_tmux.go         # tmux/psmux backend
+│   ├── mux_herdr.go        # Herdr backend (native only)
+│   ├── stream.go           # Terminal WebSocket (xterm.js stream)
+│   ├── cli*.go             # start/stop/update/container/logs/menu subcommands
+│   └── webui/              # PWA embedded in the binary (filled by make build)
 ├── scripts/
-│   ├── termote.sh          # 얇은 Unix 래퍼 -> termote CLI
-│   ├── termote.ps1         # 얇은 Windows PowerShell 래퍼 -> termote CLI
-│   ├── get.sh              # Unix 온라인 설치기 (curl | bash)
-│   └── get.ps1             # Windows 온라인 설치기 (irm | iex)
-├── tests/                  # 테스트 모음
-│   ├── test-termote.sh
-│   ├── test-termote.ps1    # Windows 테스트
-│   ├── test-get.sh
-│   └── test-entrypoints.sh
-└── website/                # Astro Starlight 문서 사이트
-    └── src/content/docs/   # MDX 문서
+│   ├── install.sh          # Unix online installer (curl | sh)
+│   ├── install.ps1         # Windows online installer (irm | iex)
+│   ├── termote.sh          # Unix shim: builds and runs a checkout
+│   └── termote.ps1         # Windows PowerShell shim: builds and runs a checkout
+├── tests/                  # Test suite
+│   ├── test-termote.sh     # Unix shim tests
+│   ├── test-termote.ps1    # Windows shim tests
+│   ├── test-install.sh     # Unix installer tests
+│   ├── test-install.ps1    # Windows installer tests
+│   └── test-entrypoints.sh # Container entrypoint tests
+└── website/                # Astro Starlight docs site
+    └── src/content/docs/   # MDX documentation
 ```
 
 ## 개발
 
 ```bash
-make build          # PWA와 termote 빌드
-make test           # 모든 테스트 실행
-make health         # 서비스 상태 확인
-make clean          # 컨테이너 중지
+make build          # Build the PWA and embed it in server/termote
+make test           # Run all tests
+make health         # Check service health
+make clean          # Stop containers
 
-# E2E 테스트 (실행 중인 서버 필요)
-./scripts/termote.sh install container  # 먼저 서버 시작
-pnpm --filter termote test:e2e       # Playwright 테스트 실행
-pnpm --filter termote test:e2e:ui    # UI 디버거로 실행
+# E2E tests (requires running server)
+./scripts/termote.sh start           # Start server first
+pnpm --filter termote test:e2e       # Run Playwright tests
+pnpm --filter termote test:e2e:ui    # Run with UI debugger
 ```
 
-**수동 테스트:** [자체 테스트 체크리스트](docs/self-test-checklist.md) 참조
+**수동 테스트:** [셀프 테스트 체크리스트](docs/self-test-checklist.md) 참조
 
 ## 문제 해결
 
@@ -443,7 +351,7 @@ pnpm --filter termote test:e2e:ui    # UI 디버거로 실행
 
 ### WebSocket 오류
 
-- termote 로그 확인: `docker logs termote` (컨테이너) 또는 `termote logs server` (네이티브)
+- termote 로그 확인: `termote container logs` (컨테이너) 또는 `termote logs server` (네이티브)
 - 터미널 WebSocket은 termote가 직접 제공하는 `/api/mux/stream`이므로 따로 확인할 터미널 프로세스가 없음
 
 ### 모바일 키보드 문제
@@ -451,26 +359,26 @@ pnpm --filter termote test:e2e:ui    # UI 디버거로 실행
 - viewport meta 태그가 있는지 확인
 - 에뮬레이터가 아닌 실제 기기에서 테스트
 
-### 네이티브 모드: 프로세스가 시작되지 않음
+### 네이티브 모드: 서버가 시작되지 않음
 
 ```bash
-ps aux | grep termote-server # termote 실행 중인지 확인
-lsof -i :7680              # 포트 사용 중인지 확인
-termote logs server        # 또는: termote logs follow
+termote status             # What the running server reports
+termote logs server        # Or: termote logs follow
+lsof -i :7680              # Check what holds the port
+termote start --fresh      # If the saved password can no longer be read
 ```
 
 ## 보안 참고
 
 - **기본값: localhost만** - `--lan` 플래그를 사용하지 않으면 LAN에 노출되지 않음
-- **기본 인증 기본 활성화** - 로컬 개발 시 `--no-auth`로 비활성화. 저장된 비밀번호가 비어 있어도 더 이상 인증이 꺼지지 않음 (1.0.0은 대신 새 비밀번호를 생성)
-- **Host 허용 목록** - 알 수 없는 `Host` 헤더를 가진 요청은 거부 (DNS 리바인딩 방지). 신뢰할 이름은 `--allow-host`/`-AllowHost`로 추가하며, 검사를 끄는 와일드카드는 없음
+- **기본 인증 기본 활성화** - 로컬 개발 시 `--no-auth`로 비활성화. 비밀번호는 첫 `termote start`에서 생성되어 암호화된 상태로 저장됨
+- **Host 허용 목록** - 알 수 없는 `Host` 헤더를 가진 요청은 거부 (DNS 리바인딩 방지). 신뢰할 이름은 `--allow-host`로 추가하며, 검사를 끄는 와일드카드는 없음
 - **Origin/CSRF 가드** - 상태를 바꾸는 `/api/mux/*` 요청과 `/api/mux/stream` WebSocket은 교차 사이트 `Sec-Fetch-Site`/`Origin`을 거부하고, 동일 출처의 일회용 스트림 토큰을 요구
 - **내장 무차별 대입 방지** - 속도 제한 (IP당 5회 시도/분)
 - **Herdr 백엔드** - 호스트의 모든 Herdr 워크스페이스를 노출하므로, `--allow-herdr-no-auth`를 함께 지정하지 않으면 `--mux herdr --no-auth`는 거부됨
+- **서비스 파일에 비밀 정보 없음** - systemd 유닛, launchd 에이전트, 예약된 작업에는 비밀번호가 들어가지 않음
 - 프로덕션에는 HTTPS(Tailscale) 사용
 - 신뢰할 수 있는 네트워크/VPN으로 제한
-
-0.x 설치에서 업그레이드한다면 [`docs/upgrade-1.0.md`](docs/upgrade-1.0.md)를 참고하세요.
 
 ## 다른 프로젝트
 
