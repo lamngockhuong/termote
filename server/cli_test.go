@@ -24,7 +24,7 @@ type fakeRunner struct {
 	calls   []string
 	// onOutput, when set, answers Output calls not in outputs (commands
 	// with generated arguments such as temp file names).
-	onOutput func(argv []string) (string, bool)
+	onOutput func(argv, env []string) (string, bool)
 }
 
 func newFakeRunner(available ...string) *fakeRunner {
@@ -56,7 +56,7 @@ func (f *fakeRunner) Output(dir string, env []string, name string, args ...strin
 		return []byte(out), nil
 	}
 	if f.onOutput != nil {
-		if out, ok := f.onOutput(append([]string{name}, args...)); ok {
+		if out, ok := f.onOutput(append([]string{name}, args...), env); ok {
 			return []byte(out), nil
 		}
 	}

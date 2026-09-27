@@ -507,12 +507,28 @@ func TestTailscaleMapping(t *testing.T) {
 	tc := newTestCLI(t, "linux")
 	tc.runner.paths["tailscale"] = true
 	tc.runner.outputs["tailscale serve --https=8443 off"] = ""
-	tc.removeTailscale("box.ts.net:8443")
-	tc.removeTailscale("")
-	if strings.Join(tc.runner.calls, "|") != "tailscale serve --https=8443 off" {
+	tc.runner.outputs["tailscale serve status --json"] = string(status) // https:8443 -> :7680
+	// Only a mapping that still points at this server goes.
+	tc.removeTailscale("box.ts.net:8443", 7681)
+	tc.removeTailscale("", 7680)
+	if tc.runner.called("tailscale serve --https=8443 off") {
+		t.Fatal("removed a mapping that serves another port")
+	}
+	tc.removeTailscale("box.ts.net:8443", 7680)
+	if !tc.runner.called("tailscale serve --https=8443 off") {
 		t.Fatalf("remove calls %v", tc.runner.calls)
 	}
-	err := tc.setupTailscale("box.ts.net", 7680) // fake refuses: no output configured
+	// An HTTPS port serving something else is not taken over; the same
+	// server moving ports (prevPort) is.
+	if err := tc.setupTailscale("box.ts.net:8443", 7681, 0); err == nil || !strings.Contains(err.Error(), "already serves") {
+		t.Fatalf("takeover allowed: %v", err)
+	}
+	tc.runner.outputs["tailscale serve --bg --https=8443 http://127.0.0.1:7681"] = ""
+	if err := tc.setupTailscale("box.ts.net:8443", 7681, 7680); err != nil {
+		t.Fatalf("port change refused: %v", err)
+	}
+	delete(tc.runner.outputs, "tailscale serve status --json")
+	err := tc.setupTailscale("box.ts.net", 7680, 0) // fake refuses: no output configured
 	if err == nil || !strings.Contains(err.Error(), "tailscale set --operator") {
 		t.Fatalf("setup error %v", err)
 	}
@@ -528,6 +544,7 @@ func TestUninstallKeepsConfig(t *testing.T) {
 	tc.registerService()
 	tc.runner.paths["tailscale"] = true
 	tc.runner.outputs["tailscale serve --https=443 off"] = ""
+	tc.runner.outputs["tailscale serve status --json"] = `{"Web":{"box.ts.net:443":{"Handlers":{"/":{"Proxy":"http://127.0.0.1:7680"}}}}}`
 	tc.saveConfig(savedConfig{Password: "p", Tailscale: "box.ts.net"})
 	if code := tc.main([]string{"uninstall"}); code != 0 {
 		t.Fatalf("code %d %s", code, tc.stderr.String())

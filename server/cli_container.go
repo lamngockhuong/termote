@@ -154,6 +154,7 @@ func (c *cli) mergeContainer(o *containerOptions, set map[string]bool, s *contai
 		}
 		o.workspace = abs
 	}
+	// The path goes in --mount's comma-separated value.
 	if strings.ContainsAny(o.workspace, "\"\n\r,") {
 		return usageError("invalid --workspace %q", o.workspace)
 	}
@@ -182,13 +183,39 @@ func (c *cli) containerUp(args []string) error {
 	if rt == "" {
 		return errors.New("neither podman nor docker found; install one")
 	}
-	build := o.build || c.isCheckout()
+	// A checkout builds unless --build=false asks for the published image.
+	build := o.build || (!set["build"] && c.isCheckout())
 	if build && !fileExists(filepath.Join(c.projectDir, "Dockerfile")) {
 		return errors.New("--build needs a git checkout (it builds the image from its Dockerfile)")
 	}
 	pass, reused, err := c.setupAuth(startOptions{noAuth: o.noAuth, fresh: o.fresh}, saved)
 	if err != nil {
 		return err
+	}
+	bind := "127.0.0.1"
+	if o.lan && c.goos != "windows" {
+		bind = "0.0.0.0" // Windows maps to localhost; LAN goes through portproxy
+	}
+	portErr := func(err error) error {
+		return fmt.Errorf("port %d is in use (%v); is the native server running? Choose another with --port", o.port, err)
+	}
+	// What can fail is checked before the running container is replaced: a
+	// port other than its own now, its own port once it is removed.
+	prevPort := 0
+	if prev != nil {
+		prevPort = prev.Port
+	}
+	if o.port != prevPort {
+		if err := portFree(bind, o.port); err != nil {
+			return portErr(err)
+		}
+	}
+	if o.tailscale != "" {
+		// The server runs in the container, so no serve re-applies this at
+		// boot; tailscaled keeps a --bg mapping across reboots itself.
+		if err := c.setupTailscale(o.tailscale, o.port, prevPort); err != nil {
+			return err
+		}
 	}
 
 	c.heading("Termote Container")
@@ -207,12 +234,8 @@ func (c *cli) containerUp(args []string) error {
 
 	// Replace the old container, then check the port is free for the new.
 	c.run.Output("", nil, rt, "rm", "-f", containerName)
-	bind := "127.0.0.1"
-	if o.lan && c.goos != "windows" {
-		bind = "0.0.0.0" // Windows maps to localhost; LAN goes through portproxy
-	}
 	if err := portFree(bind, o.port); err != nil {
-		return fmt.Errorf("port %d is in use (%v); is the native server running? Choose another with --port", o.port, err)
+		return portErr(err)
 	}
 	c.warnSensitiveDirs(o.workspace)
 	// Docker Desktop does not create a missing bind-mount source, and Docker
@@ -221,7 +244,7 @@ func (c *cli) containerUp(args []string) error {
 		return err
 	}
 	if prev != nil && prev.Tailscale != "" && prev.Tailscale != o.tailscale {
-		c.removeTailscale(prev.Tailscale)
+		c.removeTailscale(prev.Tailscale, prev.Port)
 	}
 	hosts := computeAllowedHosts(o.lan, o.tailscale, o.allowHosts, c.localIPv4s())
 	if err := c.runContainer(rt, image, bind, o, pass, hosts); err != nil {
@@ -232,20 +255,17 @@ func (c *cli) containerUp(args []string) error {
 	if saved != nil {
 		cfg = *saved
 	}
-	cfg.Password = pass
+	// --no-auth runs the container without a password but keeps the one
+	// the native server shares.
+	if pass != "" {
+		cfg.Password = pass
+	}
 	cfg.Container = &containerConfig{LAN: o.lan, NoAuth: o.noAuth, Port: o.port, Tailscale: o.tailscale, AllowHosts: o.allowHosts, Workspace: o.workspace}
 	if err := c.saveConfig(cfg); err != nil {
 		c.warnf("Could not save the container settings: %v", err)
 	}
 	if o.lan && c.goos == "windows" {
 		c.setupPortProxy(o.port)
-	}
-	if o.tailscale != "" {
-		// The server runs in the container, so no serve re-applies this at
-		// boot; tailscaled keeps a --bg mapping across reboots itself.
-		if err := c.setupTailscale(o.tailscale, o.port); err != nil {
-			c.warnf("%v", err)
-		}
 	}
 	version := c.version
 	if build {
@@ -266,30 +286,48 @@ func (c *cli) containerUp(args []string) error {
 	return nil
 }
 
-// runContainer starts the container. The password and settings go in an
-// env file readable by this user only and removed right after, so they are
-// never on a command line (ps shows those to every user).
+// runContainer starts the container. The password and settings are named
+// with -e but their values come from the environment of the docker/podman
+// process: never on a command line (ps shows those to every user) and never
+// in a file.
 func (c *cli) runContainer(rt, image, bind string, o containerOptions, pass string, hosts []string) error {
-	// CreateTemp makes the file 0600.
-	env, err := os.CreateTemp("", "termote-env-")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(env.Name())
-	fmt.Fprintf(env, "NO_AUTH=%t\nTERMOTE_PASS=%s\nTERMOTE_ALLOWED_HOSTS=%s\n", o.noAuth, pass, strings.Join(hosts, ","))
-	if err := env.Close(); err != nil {
-		return err
-	}
+	env := environ(map[string]string{
+		"NO_AUTH":               strconv.FormatBool(o.noAuth),
+		"TERMOTE_PASS":          pass,
+		"TERMOTE_ALLOWED_HOSTS": strings.Join(hosts, ","),
+	})
 	args := []string{"run", "-d", "--name", containerName, "--restart", "unless-stopped",
 		"-p", fmt.Sprintf("%s:%d:%d", bind, o.port, containerPort),
-		"-v", o.workspace + ":/workspace", "-w", "/workspace", "--env-file", env.Name()}
-	if uid, gid := os.Getuid(), os.Getgid(); uid >= 0 && gid >= 0 {
-		args = append(args, "--user", strconv.Itoa(uid)+":"+strconv.Itoa(gid))
-	}
-	if _, err := c.run.Output("", nil, rt, append(args, image)...); err != nil {
+		"--mount", "type=bind,src=" + o.workspace + ",dst=/workspace", "-w", "/workspace",
+		"-e", "NO_AUTH", "-e", "TERMOTE_PASS", "-e", "TERMOTE_ALLOWED_HOSTS"}
+	args = append(args, c.containerUserArgs(rt)...)
+	if _, err := c.run.Output("", env, rt, append(args, image)...); err != nil {
 		return fmt.Errorf("%s run %s: %w", rt, image, err)
 	}
 	return nil
+}
+
+// containerUserArgs makes the workspace writable from the container. A
+// rootful runtime runs as the user's uid:gid. Rootless, the user's uid is
+// root inside the container, so --user would map to a sub-uid that cannot
+// write the workspace: podman keeps the uid with keep-id, and rootless
+// Docker runs as the container's root, which is the user on the host.
+func (c *cli) containerUserArgs(rt string) []string {
+	uid, gid := os.Getuid(), os.Getgid()
+	if uid < 0 || gid < 0 { // Windows
+		return nil
+	}
+	switch rt {
+	case "podman":
+		if out, err := c.run.Output("", nil, rt, "info", "--format", "{{.Host.Security.Rootless}}"); err == nil && strings.TrimSpace(string(out)) == "true" {
+			return []string{"--userns=keep-id"}
+		}
+	case "docker":
+		if out, err := c.run.Output("", nil, rt, "info", "--format", "{{.SecurityOptions}}"); err == nil && strings.Contains(string(out), "rootless") {
+			return nil
+		}
+	}
+	return []string{"--user", strconv.Itoa(uid) + ":" + strconv.Itoa(gid)}
 }
 
 // buildImage builds the image from the checkout: the PWA, then the Linux
@@ -335,7 +373,7 @@ func (c *cli) containerDown(args []string) error {
 	}
 	saved, _ := c.loadConfig()
 	if saved != nil && saved.Container != nil {
-		c.removeTailscale(saved.Container.Tailscale)
+		c.removeTailscale(saved.Container.Tailscale, saved.Container.Port)
 		if saved.Container.LAN && c.goos == "windows" {
 			if err := c.runElevated(portProxyScript(saved.Container.Port, false)); err != nil {
 				c.warnf("Could not remove LAN port forwarding: %v", err)

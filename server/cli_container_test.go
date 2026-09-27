@@ -13,14 +13,12 @@ import (
 )
 
 // containerCLI is an installed release (not a checkout) with a fake docker.
-// Its `docker run` checks the env file and starts a health endpoint on the
-// published port, like the real container would.
+// Its `docker run` records the arguments and environment and starts a
+// health endpoint on the published port, like the real container would.
 type containerCLI struct {
 	*testCLI
 	runArgs []string
-	envFile string
-	envBody string
-	envMode os.FileMode
+	runEnv  map[string]string
 	srv     *http.Server
 }
 
@@ -29,18 +27,15 @@ func newContainerCLI(t *testing.T) *containerCLI {
 	cc.exe = filepath.Join(cc.versionsDir(), "1.0.0", "bin", "termote")
 	cc.runner.paths["docker"] = true
 	cc.runner.outputs["docker rm -f termote"] = ""
-	cc.runner.onOutput = func(argv []string) (string, bool) {
+	cc.runner.onOutput = func(argv, env []string) (string, bool) {
 		if len(argv) < 2 || argv[0] != "docker" || argv[1] != "run" {
 			return "", false
 		}
 		cc.runArgs = argv
-		if i := slices.Index(argv, "--env-file"); i > 0 {
-			cc.envFile = argv[i+1]
-			b, _ := os.ReadFile(cc.envFile)
-			cc.envBody = string(b)
-			if st, err := os.Stat(cc.envFile); err == nil {
-				cc.envMode = st.Mode().Perm()
-			}
+		cc.runEnv = map[string]string{}
+		for _, kv := range env {
+			k, v, _ := strings.Cut(kv, "=")
+			cc.runEnv[k] = v
 		}
 		port := strings.Split(argv[slices.Index(argv, "-p")+1], ":")[1]
 		ln, err := net.Listen("tcp", "127.0.0.1:"+port)
@@ -74,20 +69,17 @@ func TestContainerUpRunsTheReleaseImage(t *testing.T) {
 	}
 	args := strings.Join(cc.runArgs, " ")
 	for _, want := range []string{"--name termote", "--restart unless-stopped", fmt.Sprintf("-p 0.0.0.0:%d:7680", port),
-		"-v " + ws + ":/workspace", "--user " + strconv.Itoa(os.Getuid()) + ":", "ghcr.io/lamngockhuong/termote:1.0.0"} {
+		"--mount type=bind,src=" + ws + ",dst=/workspace", "-e TERMOTE_PASS", "--user " + strconv.Itoa(os.Getuid()) + ":", "ghcr.io/lamngockhuong/termote:1.0.0"} {
 		if !strings.Contains(args, want) {
 			t.Errorf("run args miss %q: %s", want, args)
 		}
 	}
-	if strings.Contains(args, "shared-pass") || strings.Contains(args, "TERMOTE_PASS") {
+	if strings.Contains(args, "shared-pass") || strings.Contains(args, "TERMOTE_PASS=") {
 		t.Fatalf("password on the command line: %s", args)
 	}
-	if cc.envMode != 0o600 || !strings.Contains(cc.envBody, "TERMOTE_PASS=shared-pass\n") ||
-		!strings.Contains(cc.envBody, "NO_AUTH=false\n") || !strings.Contains(cc.envBody, "c.lan") || !strings.Contains(cc.envBody, "192.168.1.20") {
-		t.Fatalf("env file %v:\n%s", cc.envMode, cc.envBody)
-	}
-	if fileExists(cc.envFile) {
-		t.Fatal("env file left behind")
+	if cc.runEnv["TERMOTE_PASS"] != "shared-pass" || cc.runEnv["NO_AUTH"] != "false" ||
+		!strings.Contains(cc.runEnv["TERMOTE_ALLOWED_HOSTS"], "c.lan") || !strings.Contains(cc.runEnv["TERMOTE_ALLOWED_HOSTS"], "192.168.1.20") {
+		t.Fatalf("run env %v", cc.runEnv)
 	}
 	if !isDir(ws) {
 		t.Fatal("workspace not created")
@@ -148,8 +140,8 @@ func TestContainerUpBuildsFromCheckout(t *testing.T) {
 	if cc.runner.called("docker pull") || cc.runArgs[len(cc.runArgs)-1] != "termote:local" {
 		t.Fatalf("checkout ran %v", cc.runArgs)
 	}
-	if !strings.Contains(cc.envBody, "NO_AUTH=true") || !strings.Contains(cc.envBody, "TERMOTE_PASS=\n") {
-		t.Fatalf("no-auth env %q", cc.envBody)
+	if cc.runEnv["NO_AUTH"] != "true" || cc.runEnv["TERMOTE_PASS"] != "" {
+		t.Fatalf("no-auth env %v", cc.runEnv)
 	}
 
 	release := newContainerCLI(t)
@@ -162,6 +154,7 @@ func TestContainerDownLogsStatus(t *testing.T) {
 	cc := newContainerCLI(t)
 	cc.runner.paths["tailscale"] = true
 	cc.runner.outputs["tailscale serve --https=8443 off"] = ""
+	cc.runner.outputs["tailscale serve status --json"] = `{"Web":{"box.ts.net:8443":{"Handlers":{"/":{"Proxy":"http://127.0.0.1:7681"}}}}}`
 	cc.saveConfig(savedConfig{Password: "p", Tailscale: "native.ts.net", Container: &containerConfig{Port: 7681, Tailscale: "box.ts.net:8443"}})
 	if code := cc.main([]string{"container", "down"}); code != 0 || !cc.runner.called("docker rm -f termote") {
 		t.Fatalf("down: %d %v", code, cc.runner.calls)
@@ -179,5 +172,61 @@ func TestContainerDownLogsStatus(t *testing.T) {
 	}
 	if code := cc.main([]string{"container", "bogus"}); code != 2 {
 		t.Fatalf("unknown subcommand code %d", code)
+	}
+}
+
+// --no-auth on either side keeps the password the other one uses.
+func TestNoAuthKeepsTheSharedPassword(t *testing.T) {
+	cc := newContainerCLI(t)
+	cc.saveConfig(savedConfig{Port: 7690, Password: "shared-pass"})
+	if code := cc.main([]string{"container", "up", "--port", strconv.Itoa(freePort(t)), "--no-auth"}); code != 0 {
+		t.Fatalf("up: %s", cc.stderr.String())
+	}
+	if cfg, _ := cc.loadConfig(); cfg.Password != "shared-pass" || !cfg.Container.NoAuth {
+		t.Fatalf("container --no-auth dropped the password: %+v", cfg)
+	}
+	if got := cc.keptPassword("", &savedConfig{Password: "shared-pass"}); got != "shared-pass" {
+		t.Fatalf("native --no-auth keeps %q", got)
+	}
+}
+
+func TestContainerUserArgs(t *testing.T) {
+	if os.Getuid() < 0 {
+		t.Skip("no uid on Windows")
+	}
+	cc := newContainerCLI(t)
+	cc.runner.outputs["podman info --format {{.Host.Security.Rootless}}"] = "true\n"
+	if got := strings.Join(cc.containerUserArgs("podman"), " "); got != "--userns=keep-id" {
+		t.Errorf("rootless podman: %q", got)
+	}
+	cc.runner.outputs["docker info --format {{.SecurityOptions}}"] = "[name=seccomp,profile=builtin name=rootless]\n"
+	if got := cc.containerUserArgs("docker"); len(got) != 0 {
+		t.Errorf("rootless docker: %v", got)
+	}
+	cc.runner.outputs["docker info --format {{.SecurityOptions}}"] = "[name=seccomp,profile=builtin]\n"
+	if got := strings.Join(cc.containerUserArgs("docker"), " "); !strings.HasPrefix(got, "--user ") {
+		t.Errorf("rootful docker: %q", got)
+	}
+}
+
+// A container up that fails on the port or Tailscale leaves the running
+// container alone.
+func TestContainerUpChecksBeforeReplacing(t *testing.T) {
+	cc := newContainerCLI(t)
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	busy := ln.Addr().(*net.TCPAddr).Port
+	cc.saveConfig(savedConfig{Password: "p", Container: &containerConfig{Port: freePort(t)}})
+	cc.main([]string{"container", "up", "--port", strconv.Itoa(busy)})
+	cc.runner.paths["tailscale"] = true
+	cc.runner.outputs["tailscale serve status --json"] = `{"Web":{"box.ts.net:443":{"Handlers":{"/":{"Proxy":"http://127.0.0.1:7690"}}}}}`
+	if code := cc.main([]string{"container", "up", "--tailscale", "box.ts.net"}); code != 1 || !strings.Contains(cc.stderr.String(), "already serves") {
+		t.Fatalf("tailscale takeover: %d %s", code, cc.stderr.String())
+	}
+	if cc.runner.called("docker rm -f termote") {
+		t.Fatal("the running container was removed by an up that failed")
 	}
 }

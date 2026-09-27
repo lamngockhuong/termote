@@ -61,6 +61,15 @@ func (c *cli) savedContainer(saved *savedConfig) *containerConfig {
 	return saved.Container
 }
 
+// keptPassword is the password to save: the new one, or with auth off (an
+// empty one) the saved one, which the other of native and container shares.
+func (c *cli) keptPassword(pass string, saved *savedConfig) string {
+	if pass == "" && saved != nil {
+		return saved.Password
+	}
+	return pass
+}
+
 // loadConfig returns nil when no config was saved yet.
 func (c *cli) loadConfig() (*savedConfig, error) {
 	data, err := os.ReadFile(c.configFile())

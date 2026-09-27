@@ -58,25 +58,34 @@ type tailscaleServeStatus struct {
 	} `json:"Web"`
 }
 
-// tailscaleMapped reports whether https:<tsPort>/ already proxies to target.
-func tailscaleMapped(statusJSON []byte, tsPort, target string) bool {
+// tailscaleTarget returns where https:<tsPort>/ proxies to, or "".
+func tailscaleTarget(statusJSON []byte, tsPort string) string {
 	var st tailscaleServeStatus
 	if json.Unmarshal(statusJSON, &st) != nil {
-		return false
+		return ""
 	}
 	for hostport, web := range st.Web {
 		if !strings.HasSuffix(hostport, ":"+tsPort) {
 			continue
 		}
-		if h, ok := web.Handlers["/"]; ok && strings.TrimSuffix(h.Proxy, "/") == target {
-			return true
+		if h, ok := web.Handlers["/"]; ok {
+			return strings.TrimSuffix(h.Proxy, "/")
 		}
 	}
-	return false
+	return ""
 }
 
+// tailscaleMapped reports whether https:<tsPort>/ already proxies to target.
+func tailscaleMapped(statusJSON []byte, tsPort, target string) bool {
+	return tailscaleTarget(statusJSON, tsPort) == target
+}
+
+func localTarget(port int) string { return fmt.Sprintf("http://127.0.0.1:%d", port) }
+
 // applyTailscale is what serve runs once it listens: add the mapping when it
-// is missing. Failures are only logged; the server runs without it.
+// is missing. An HTTPS port that serves something else (the container, a
+// service of the user) is left alone. Failures are only logged; the server
+// runs without it.
 func applyTailscale(ctx context.Context, ts string, port int) {
 	if ts == "" {
 		return
@@ -85,8 +94,15 @@ func applyTailscale(ctx context.Context, ts string, port int) {
 	defer cancel()
 	_, tsPort := splitTailscale(ts)
 	target := fmt.Sprintf("http://127.0.0.1:%d", port)
-	if out, err := tailscaleRun(ctx, "serve", "status", "--json"); err == nil && tailscaleMapped(out, tsPort, target) {
-		return
+	if out, err := tailscaleRun(ctx, "serve", "status", "--json"); err == nil {
+		switch other := tailscaleTarget(out, tsPort); other {
+		case target:
+			return
+		case "":
+		default:
+			log.Printf("tailscale serve not applied: https:%s already serves %s", tsPort, other)
+			return
+		}
 	}
 	if _, err := tailscaleRun(ctx, tailscaleServeArgs(tsPort, port)...); err != nil {
 		log.Printf("tailscale serve not applied: %v", err)
@@ -103,21 +119,39 @@ func (c *cli) tailscaleOperatorHint() string {
 	return "; allow your user to change Tailscale serve once with: sudo tailscale set --operator=$USER"
 }
 
-// setupTailscale is start's check that serve will be allowed to publish the
-// port: it applies the mapping itself and reports a refusal.
-func (c *cli) setupTailscale(ts string, port int) error {
+// tailscaleServeStatus reads `tailscale serve status --json`, nil when it
+// cannot.
+func (c *cli) tailscaleStatus() []byte {
+	out, err := c.run.Output("", nil, "tailscale", "serve", "status", "--json")
+	if err != nil {
+		return nil
+	}
+	return out
+}
+
+// setupTailscale is start's (and container up's) check that the port can be
+// published: it applies the mapping itself and reports a refusal. An HTTPS
+// port already serving something other than this server (at port, or at
+// prevPort before a port change) is refused rather than taken over.
+func (c *cli) setupTailscale(ts string, port, prevPort int) error {
 	if _, err := c.run.LookPath("tailscale"); err != nil {
 		return errors.New("tailscale not found in PATH (https://tailscale.com/download), or drop --tailscale")
 	}
-	_, tsPort := splitTailscale(ts)
+	host, tsPort := splitTailscale(ts)
+	if other := tailscaleTarget(c.tailscaleStatus(), tsPort); other != "" && other != localTarget(port) &&
+		(prevPort == 0 || other != localTarget(prevPort)) {
+		return fmt.Errorf("https:%s on Tailscale already serves %s; publish on another HTTPS port, e.g. --tailscale %s:8443", tsPort, other, host)
+	}
 	if _, err := c.run.Output("", nil, "tailscale", tailscaleServeArgs(tsPort, port)...); err != nil {
 		return fmt.Errorf("tailscale serve failed (%v)%s", err, c.tailscaleOperatorHint())
 	}
 	return nil
 }
 
-// removeTailscale removes Termote's mapping for ts; others stay.
-func (c *cli) removeTailscale(ts string) {
+// removeTailscale removes the mapping of ts when it still proxies to this
+// server's port; a mapping to anything else (the other of native and
+// container, a service of the user) stays.
+func (c *cli) removeTailscale(ts string, port int) {
 	if ts == "" {
 		return
 	}
@@ -125,6 +159,12 @@ func (c *cli) removeTailscale(ts string) {
 		return
 	}
 	_, tsPort := splitTailscale(ts)
+	if target := tailscaleTarget(c.tailscaleStatus(), tsPort); target != localTarget(port) {
+		if target != "" {
+			c.infof("Left the Tailscale mapping https:%s alone: it serves %s now", tsPort, target)
+		}
+		return
+	}
 	if _, err := c.run.Output("", nil, "tailscale", tailscaleOffArgs(tsPort)...); err != nil {
 		c.warnf("Could not remove the Tailscale serve mapping for https:%s: %v", tsPort, err)
 		return

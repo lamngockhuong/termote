@@ -253,7 +253,11 @@ func (c *cli) cmdStart(args []string) error {
 		}
 	}
 	if o.tailscale != "" {
-		if err := c.setupTailscale(o.tailscale, o.port); err != nil {
+		ownPort := 0
+		if len(running) > 0 {
+			ownPort = prevPort
+		}
+		if err := c.setupTailscale(o.tailscale, o.port, ownPort); err != nil {
 			return err
 		}
 	}
@@ -277,7 +281,7 @@ func (c *cli) cmdStart(args []string) error {
 		}
 	}
 	if prevTS != "" && prevTS != o.tailscale {
-		c.removeTailscale(prevTS)
+		c.removeTailscale(prevTS, prevPort)
 	}
 	if err := c.saveConfig(savedConfig{
 		LAN:              o.lan,
@@ -287,7 +291,7 @@ func (c *cli) cmdStart(args []string) error {
 		Mux:              o.mux,
 		AllowHosts:       o.allowHosts,
 		HerdrAllowNoAuth: o.herdrNoAuth,
-		Password:         pass,
+		Password:         c.keptPassword(pass, saved),
 		Container:        c.savedContainer(saved),
 	}); err != nil {
 		return fmt.Errorf("save config: %w", err)
@@ -441,7 +445,7 @@ func (c *cli) cmdStop(args []string) error {
 		return err
 	}
 	if saved != nil {
-		c.removeTailscale(saved.Tailscale)
+		c.removeTailscale(saved.Tailscale, c.savedPort(saved))
 	}
 	if sup.AutoStart() {
 		c.infof("Termote stopped (%s). It starts again at the next login; 'termote uninstall' removes it.", sup.Name())
@@ -569,7 +573,7 @@ func (c *cli) cmdUninstall(args []string) error {
 		}
 	}
 	if saved != nil {
-		c.removeTailscale(saved.Tailscale)
+		c.removeTailscale(saved.Tailscale, c.savedPort(saved))
 	}
 	c.cmdUnlink()
 	if c.isInstalledRelease() {
