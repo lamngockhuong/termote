@@ -57,19 +57,21 @@ func main() {
 	f.Close()
 }
 '@
-$script:FakeTags = @()
-$script:Downloads = @()
+$global:TermoteFakeTags = @()
+$global:TermoteDownloads = @()
 
-# Replace the web cmdlets for the installer run in this session.
+# Replace the web cmdlets for the installer run in this session. Their data is
+# global: called from install.ps1, `script:` would name the installer's scope.
+$global:TermoteReleases = $Releases
 function global:Invoke-RestMethod {
     param([hashtable]$Headers, [string]$Uri)
-    return $script:FakeTags | ForEach-Object { [pscustomobject]@{ name = $_ } }
+    return $global:TermoteFakeTags | ForEach-Object { [pscustomobject]@{ name = $_ } }
 }
 function global:Invoke-WebRequest {
     param([switch]$UseBasicParsing, [string]$Uri, [string]$OutFile)
-    $script:Downloads += $Uri
+    $global:TermoteDownloads += $Uri
     $rel = $Uri -replace '^.*/releases/download/', ''
-    $src = Join-Path $Releases $rel
+    $src = Join-Path $global:TermoteReleases $rel
     if (-not (Test-Path $src)) { throw "404 $Uri" }
     Copy-Item $src $OutFile
 }
@@ -93,13 +95,29 @@ function New-Release([string]$Version, [string]$Sum = 'good') {
     if ($Sum -ne 'none') { Set-Content (Join-Path $dir "$name.zip.sha256") "$hash  $name.zip" }
 }
 
+# The version current.txt names, or '' (a failed install must not abort the test).
+function Get-Current {
+    $f = Join-Path $Dir 'current.txt'
+    if (Test-Path $f) { return (Get-Content $f -Raw).Trim() }
+    return ''
+}
+
 # Runs the installer with a fresh LOCALAPPDATA; returns whether it succeeded.
 function Invoke-Installer([string]$Pin = '') {
     $env:TERMOTE_VERSION = $Pin
-    $script:Downloads = @()
-    try { & $InstallPath *>&1 | Out-String | Set-Variable -Scope Script -Name Out; return $true }
-    catch { $script:Out = "$_"; return $false }
-    finally { Remove-Item Env:TERMOTE_VERSION -ErrorAction SilentlyContinue }
+    $global:TermoteDownloads = @()
+    # A transcript keeps what the installer printed even when it throws.
+    $log = Join-Path $Tmp ("run-" + [guid]::NewGuid().ToString("N") + ".log")
+    $ok = $true
+    Start-Transcript -Path $log | Out-Null
+    try { & $InstallPath | Out-Host }
+    catch { $ok = $false; Write-Host "threw: $_ ($($_.InvocationInfo.PositionMessage))" }
+    finally {
+        Stop-Transcript | Out-Null
+        Remove-Item Env:TERMOTE_VERSION -ErrorAction SilentlyContinue
+    }
+    $script:Out = Get-Content $log -Raw
+    return $ok
 }
 
 $savedLocal = $env:LOCALAPPDATA
@@ -111,19 +129,19 @@ try {
     New-Release '1.0.1'
     New-Release '1.0.10'
 
-    $script:FakeTags = @('v0.1.0', 'v1.0.1', 'v1.0.10', 'v1.1.0-rc.1', 'latest')
+    $global:TermoteFakeTags = @('v0.1.0', 'v1.0.1', 'v1.0.10', 'v1.1.0-rc.1', 'latest')
     $ok = Invoke-Installer
     Write-TestResult "Fresh install succeeds" $ok $script:Out
-    Write-TestResult "current.txt names the newest stable 1.x" ((Get-Content (Join-Path $Dir 'current.txt') -Raw).Trim() -eq '1.0.10')
+    Write-TestResult "current.txt names the newest stable 1.x" ((Get-Current) -eq '1.0.10')
     Write-TestResult "Archive laid down as versions\<v>" (Test-Path (Join-Path $Dir 'versions\1.0.10\bin\termote.exe'))
     Write-TestResult "Runs termote link" ((Get-Content $BinLog -Raw) -match 'link')
     Write-TestResult "Prints the next step" ($script:Out -match 'termote start')
 
     $ok = Invoke-Installer
-    Write-TestResult "Existing install left alone" ($ok -and $script:Out -match 'termote update' -and $script:Downloads.Count -eq 0) $script:Out
+    Write-TestResult "Existing install left alone" ($ok -and $script:Out -match 'termote update' -and $global:TermoteDownloads.Count -eq 0) $script:Out
 
     $ok = Invoke-Installer '1.0.1'
-    Write-TestResult "Pin rescues an install" ($ok -and (Get-Content (Join-Path $Dir 'current.txt') -Raw).Trim() -eq '1.0.1')
+    Write-TestResult "Pin rescues an install" ($ok -and (Get-Current) -eq '1.0.1')
 
     $env:LOCALAPPDATA = Join-Path $Tmp 'local2'
     $Dir = Join-Path $env:LOCALAPPDATA 'termote'
@@ -137,6 +155,7 @@ try {
     $env:LOCALAPPDATA = $savedLocal
     Remove-Item Env:BIN_LOG -ErrorAction SilentlyContinue
     Remove-Item function:global:Invoke-RestMethod, function:global:Invoke-WebRequest -ErrorAction SilentlyContinue
+    Remove-Variable -Scope Global -Name TermoteFakeTags, TermoteDownloads, TermoteReleases -ErrorAction SilentlyContinue
     Remove-Item $Tmp -Recurse -Force -ErrorAction SilentlyContinue
 }
 
