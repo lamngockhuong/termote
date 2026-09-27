@@ -1,8 +1,8 @@
 #!/bin/bash
 # Termote online installer
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
-#     -> Downloads latest, prompts before install (defaults to native mode)
+#   curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/release/0.x/scripts/get.sh | bash
+#     -> Downloads the newest 0.x release, prompts before install (defaults to native mode)
 #   curl ... | bash -s -- --yes
 #     -> Auto-install without prompt
 #   curl ... | bash -s -- --container --lan
@@ -105,10 +105,13 @@ confirm_install() {
     esac
 }
 
-# Detect latest version
+# Detect the newest 0.x release. This is the 0.x installer, so it must not
+# follow the GitHub "latest release", which is 1.x. The API lists releases newest
+# first; pre-releases carry a "-" suffix and are skipped by the pattern.
 get_latest_version() {
-    curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" | \
-        grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/'
+    curl -fsSL "https://api.github.com/repos/${REPO}/releases?per_page=100" | \
+        grep -oE '"tag_name": *"v0\.[0-9]+\.[0-9]+"' | head -1 | \
+        sed -E 's/.*"v([^"]+)".*/\1/'
 }
 
 # Detect architecture

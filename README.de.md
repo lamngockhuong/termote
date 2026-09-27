@@ -112,7 +112,7 @@ make test                              # Tests ausführen
 
 ```bash
 # Herunterladen und vor der Installation fragen (Standard: Native-Modus)
-curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
+curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/release/0.x/scripts/get.sh | bash
 
 # Automatisch ohne Nachfrage installieren
 curl -fsSL .../get.sh | bash -s -- --yes
@@ -144,7 +144,7 @@ curl -fsSL .../get.sh | bash -s -- --yes --container --fresh
 
 ```powershell
 # Herunterladen und vor der Installation fragen (Standard: Native-Modus)
-irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
+irm https://raw.githubusercontent.com/lamngockhuong/termote/release/0.x/scripts/get.ps1 | iex
 
 # Automatisch ohne Nachfrage installieren
 $env:TERMOTE_AUTO_YES = "true"; irm .../get.ps1 | iex
@@ -160,32 +160,32 @@ $env:TERMOTE_UPDATE = "true"; irm .../get.ps1 | iex
 
 ```bash
 # Alles-in-einem (Zugangsdaten werden automatisch generiert, Logs prüfen: docker logs termote)
-docker run -d --name termote -p 7680:7680 ghcr.io/lamngockhuong/termote:latest
+docker run -d --name termote -p 7680:7680 ghcr.io/lamngockhuong/termote:0.1
 
 # Mit benutzerdefinierten Zugangsdaten
 docker run -d --name termote -p 7680:7680 \
   -e TERMOTE_USER=admin -e TERMOTE_PASS=secret \
-  ghcr.io/lamngockhuong/termote:latest
+  ghcr.io/lamngockhuong/termote:0.1
 
 # Ohne Authentifizierung (nur für lokale Entwicklung)
 docker run -d --name termote -p 7680:7680 \
   -e NO_AUTH=true \
-  ghcr.io/lamngockhuong/termote:latest
+  ghcr.io/lamngockhuong/termote:0.1
 
 # Mit Volume für Persistenz
 docker run -d --name termote -p 7680:7680 \
   -v termote-data:/home/termote \
-  ghcr.io/lamngockhuong/termote:latest
+  ghcr.io/lamngockhuong/termote:0.1
 
 # Benutzerdefiniertes Workspace-Verzeichnis einbinden
 docker run -d --name termote -p 7680:7680 \
   -v ~/projects:/workspace \
-  ghcr.io/lamngockhuong/termote:latest
+  ghcr.io/lamngockhuong/termote:0.1
 
 # Mit Tailscale HTTPS (erfordert Tailscale auf dem Host)
 docker run -d --name termote -p 7680:7680 \
   -e TERMOTE_USER=admin -e TERMOTE_PASS=secret \
-  ghcr.io/lamngockhuong/termote:latest
+  ghcr.io/lamngockhuong/termote:0.1
 sudo tailscale serve --bg --https=443 http://127.0.0.1:7680
 # Zugriff unter: https://your-hostname.tailnet-name.ts.net
 ```
@@ -207,7 +207,7 @@ cd termote-${VERSION#v}
 ### Vom Quellcode
 
 ```bash
-git clone https://github.com/lamngockhuong/termote.git
+git clone -b release/0.x https://github.com/lamngockhuong/termote.git
 cd termote
 ./scripts/termote.sh install container
 ```

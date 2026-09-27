@@ -8,12 +8,13 @@
     Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
 .EXAMPLE
     # Download and run (PowerShell):
-    irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
+    irm https://raw.githubusercontent.com/lamngockhuong/termote/release/0.x/scripts/get.ps1 | iex
 
     # With options:
     $env:TERMOTE_MODE = "container"; irm .../get.ps1 | iex
     $env:TERMOTE_AUTO_YES = "true"; irm .../get.ps1 | iex
     $env:TERMOTE_TTYD = "official"; irm .../get.ps1 | iex
+    $env:TERMOTE_VERSION = "0.1.0"; irm .../get.ps1 | iex
 #>
 
 [CmdletBinding()]
@@ -26,7 +27,8 @@ param(
     [switch]$Lan,
     [switch]$NoAuth,
     [ValidateSet("official", "fork", "")]
-    [string]$Ttyd = ""
+    [string]$Ttyd = "",
+    [string]$Version = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -44,6 +46,11 @@ if ($env:TERMOTE_MODE) { $Mode = $env:TERMOTE_MODE }
 if ($env:TERMOTE_LAN -eq "true") { $Lan = $true }
 if ($env:TERMOTE_NO_AUTH -eq "true") { $NoAuth = $true }
 if ($env:TERMOTE_TTYD) { $Ttyd = $env:TERMOTE_TTYD }
+if ($env:TERMOTE_VERSION) { $Version = $env:TERMOTE_VERSION }
+$Version = $Version -replace '^v', ''
+if ($Version -and $Version -notmatch '^\d+\.\d+\.\d+$') {
+    throw "Invalid version format: $Version (expected: X.Y.Z)"
+}
 
 # Update mode implies auto-yes
 if ($Update) { $Yes = $true }
@@ -82,10 +89,14 @@ function Get-InstalledVersion {
     return $null
 }
 
-# Get latest version from GitHub
+# Get the newest 0.x release from GitHub. This is the 0.x installer, so it must
+# not follow releases/latest, which points at 1.x. The API lists releases newest
+# first; pre-releases carry a "-" suffix and are skipped by the pattern.
 function Get-LatestVersion {
     try {
-        $release = Invoke-RestMethod "https://api.github.com/repos/$script:REPO/releases/latest"
+        $releases = Invoke-RestMethod "https://api.github.com/repos/$script:REPO/releases?per_page=100"
+        $release = $releases | Where-Object { $_.tag_name -match '^v0\.\d+\.\d+$' } | Select-Object -First 1
+        if (-not $release) { return $null }
         return $release.tag_name -replace '^v', ''
     } catch {
         Write-Err "Failed to get latest version: $_"
@@ -159,7 +170,12 @@ function Main {
 
     # Get versions
     $currentVersion = Get-InstalledVersion
-    $latestVersion = Get-LatestVersion
+    if ($Version) {
+        $latestVersion = $Version
+        Write-Info "Target version: v$latestVersion"
+    } else {
+        $latestVersion = Get-LatestVersion
+    }
     if (-not $latestVersion) {
         Write-Err "Failed to get latest version"
     }
