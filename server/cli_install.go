@@ -188,7 +188,7 @@ func (c *cli) cmdInstall(args []string) error {
 	if err := c.setupPWA(release); err != nil {
 		return err
 	}
-	c.stepf("2/4", "Setting up tmux-api...")
+	c.stepf("2/4", "Setting up the server...")
 	if err := c.setupServerBinary(o.mode, release); err != nil {
 		return err
 	}
@@ -295,13 +295,13 @@ func (c *cli) setupPWA(release bool) error {
 }
 
 // serverBinary is what native mode runs and what the container image copies
-// (as tmux-api/tmux-api, a Linux binary, for container mode).
+// (as server/termote-server, a Linux binary, for container mode).
 func (c *cli) serverBinary(mode string) string {
-	name := "tmux-api"
+	name := "termote-server"
 	if mode == "native" {
 		name += c.exeSuffix()
 	}
-	return filepath.Join(c.projectDir, "tmux-api", name)
+	return filepath.Join(c.projectDir, "server", name)
 }
 
 func (c *cli) setupServerBinary(mode string, release bool) error {
@@ -311,12 +311,12 @@ func (c *cli) setupServerBinary(mode string, release bool) error {
 	}
 	if mode == "container" {
 		if release {
-			return copyExecutable(filepath.Join(c.projectDir, "tmux-api-linux-"+c.goarch), dst)
+			return copyExecutable(filepath.Join(c.projectDir, "termote-linux-"+c.goarch), dst)
 		}
-		c.infof("Building tmux-api (linux/%s)...", c.goarch)
+		c.infof("Building the server (linux/%s)...", c.goarch)
 		env := environ(map[string]string{"CGO_ENABLED": "0", "GOOS": "linux", "GOARCH": c.goarch})
-		if err := c.run.Run(filepath.Join(c.projectDir, "tmux-api"), env, "go", "build", "-ldflags=-s -w", "-o", "tmux-api", "."); err != nil {
-			return fmt.Errorf("build tmux-api: %w", err)
+		if err := c.run.Run(filepath.Join(c.projectDir, "server"), env, "go", "build", "-ldflags=-s -w", "-o", "termote-server", "."); err != nil {
+			return fmt.Errorf("build server: %w", err)
 		}
 		return nil
 	}
@@ -337,7 +337,7 @@ func (c *cli) releaseBinary(goos string) string {
 	if goos == "windows" {
 		arch = "amd64"
 	}
-	name := "tmux-api-" + goos + "-" + arch
+	name := "termote-" + goos + "-" + arch
 	if goos == "windows" {
 		name += ".exe"
 	}
@@ -504,17 +504,17 @@ func (c *cli) startNative(o installOptions, pass string, hosts []string) error {
 	}
 	bin := c.serverBinary("native")
 	env := environ(serverEnv(o, bind, filepath.Join(c.projectDir, "pwa", "dist"), pass, hosts))
-	logPath := filepath.Join(c.logDir(), "tmux-api.log")
+	logPath := filepath.Join(c.logDir(), "termote.log")
 	pid, exited, err := startDetached(bin, c.projectDir, env, logPath)
 	if err != nil {
-		return fmt.Errorf("start tmux-api: %w", err)
+		return fmt.Errorf("start server: %w", err)
 	}
 	if err := os.WriteFile(c.pidFile(), []byte(strconv.Itoa(pid)+"\n"), 0o600); err != nil {
 		c.warnf("Could not write %s: %v", c.pidFile(), err)
 	}
 	if !c.waitForServer(o.port, serverStartWait, exited) {
 		removeFile(c.pidFile())
-		return fmt.Errorf("tmux-api did not start; last log lines:\n%s", tailFile(logPath, 15))
+		return fmt.Errorf("server did not start; last log lines:\n%s", tailFile(logPath, 15))
 	}
 	c.infof("Native mode started (backend: %s, pid %d)", o.mux, pid)
 	return nil
@@ -612,7 +612,7 @@ func (c *cli) startContainer(o installOptions, pass string, hosts []string) erro
 		c.setupPortProxy(o.port)
 	}
 	if !c.waitForServer(o.port, containerStartWait, nil) {
-		c.warnf("Container started but tmux-api does not answer yet; check: %s logs %s", rt, containerName)
+		c.warnf("Container started but the server does not answer yet; check: %s logs %s", rt, containerName)
 	}
 	return nil
 }
@@ -742,7 +742,7 @@ func (c *cli) showCredentials(pass string) {
 
 // stopNative stops the server this install started (PID file) and any 0.x
 // server or ttyd whose command line is exactly what Termote ran; nothing
-// broader, so the user's own tmux-api or ttyd keep running.
+// broader, so servers and ttyd the user started themselves keep running.
 func (c *cli) stopNative() {
 	procs, err := c.procs()
 	if err != nil {
@@ -774,14 +774,14 @@ func (c *cli) stopNative() {
 // subcommand), or, when the install dir is reached through a symlink, the
 // resolved image path with an argument-free command line.
 //
-// Windows: only the image path is visible, so tmux-api\tmux-api.exe is
+// Windows: only the image path is visible, so server\termote-server.exe is
 // reserved for the server; the CLI runs from the release binary in the
-// install root or, in a checkout, from tmux-api\tmux-api-native.exe.
+// install root or, in a checkout, from server\termote-dev.exe.
 func (c *cli) isServerProcess(p procInfo) bool {
 	if c.goos == "windows" {
 		return sameWindowsPath(p.Exe, c.serverBinary("native"))
 	}
-	paths := []string{c.serverBinary("native"), filepath.Join(c.projectDir, "tmux-api", "tmux-api-native")}
+	paths := []string{c.serverBinary("native"), filepath.Join(c.projectDir, "server", "termote-dev")}
 	if slices.Contains(paths, p.Cmdline) {
 		return true
 	}
@@ -801,7 +801,8 @@ func (c *cli) isServerProcess(p procInfo) bool {
 // across the 8.3 short and long forms of a directory (C:\Users\LAMNGO~1.KHU is
 // what %TEMP% or a shim started from it can report, while the process image
 // path is always the long form). Only same-named files reach the file-system
-// check, and both names used here are valid 8.3 names with no short alias.
+// check. Both sides carry the long file name: the process image path is
+// always long, and the names compared against it are built here.
 func sameWindowsPath(a, b string) bool {
 	if strings.EqualFold(a, b) {
 		return true
@@ -824,7 +825,7 @@ func (c *cli) looksLikeServer(p procInfo) bool {
 		name, _, _ = strings.Cut(p.Cmdline, " ")
 	}
 	base := strings.TrimSuffix(strings.ToLower(filepath.Base(name)), ".exe")
-	return strings.HasPrefix(base, "tmux-api")
+	return strings.HasPrefix(base, "termote")
 }
 
 // legacyTtydArgs are the argument lists 0.x termote.sh gave ttyd.
@@ -938,7 +939,7 @@ func (c *cli) cmdUninstall(args []string) error {
 		}
 	}
 	if mode == "all" {
-		removeFile(filepath.Join(c.projectDir, "tmux-api", "tmux-api-native"+c.exeSuffix()))
+		removeFile(filepath.Join(c.projectDir, "server", "termote-dev"+c.exeSuffix()))
 		if fileExists(c.configFile()) {
 			c.infof("Removing saved config...")
 			removeFile(c.configFile())

@@ -48,12 +48,12 @@ pnpm --filter @termote/website dev    # Docs site
 pnpm --filter @termote/website build
 ```
 
-### tmux-api Development
+### Server Development
 
 ```bash
-cd tmux-api
-go build -o tmux-api .
-./tmux-api        # Runs on :7682
+cd server
+go build -o termote-server .
+./termote-server  # Runs on :7680
 ```
 
 ## Code Standards
@@ -128,7 +128,7 @@ chore: update dependencies
 ```
 termote/
 ├── pwa/           # React PWA frontend
-├── tmux-api/      # Go server (PWA + proxy + API + auth)
+├── server/        # Go server (PWA + proxy + API + auth)
 ├── scripts/       # Shell scripts
 ├── tests/         # Test suite
 └── docs/          # Documentation

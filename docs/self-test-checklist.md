@@ -27,13 +27,13 @@ Manual testing checklist for Termote features before release.
 ### Native Mode (macOS/Linux)
 
 - [ ] `./scripts/termote.sh install native` completes without error
-- [ ] Process running: `ps aux | grep tmux-api`
+- [ ] Process running: `ps aux | grep termote-server`
 - [ ] PWA accessible at <http://localhost:7680>
 
 ### Native Mode (Windows)
 
 - [ ] `.\scripts\termote.ps1 install native` completes without error
-- [ ] psmux + tmux-api running
+- [ ] psmux + termote running
 - [ ] PWA accessible at <http://localhost:7690>
 
 ### Native Mode + Herdr (Linux)
@@ -490,7 +490,7 @@ curl http://localhost:7680/api/mux/stream-token
 ### Windows
 
 - [ ] Container mode works (Docker Desktop)
-- [ ] Native mode works (psmux + tmux-api)
+- [ ] Native mode works (psmux + termote)
 - [ ] PowerShell script handles DPAPI password encryption
 - [ ] Link/Unlink creates global command
 - [ ] `termote.ps1` flags: `-Lan`, `-NoAuth`, `-Port`, `-Tailscale`, `-Fresh`, `-Mux`,
@@ -508,8 +508,8 @@ make test
 - [ ] PWA builds without errors: `pnpm --filter termote build`
 - [ ] TypeScript compiles: `pnpm --filter termote exec tsc --noEmit`
 - [ ] Lint passes: `pnpm --filter termote lint:ci`
-- [ ] Go builds without errors: `cd tmux-api && go build .`
-- [ ] Go tests pass on Linux, macOS and Windows: `cd tmux-api && go test ./...`
+- [ ] Go builds without errors: `cd server && go build .`
+- [ ] Go tests pass on Linux, macOS and Windows: `cd server && go test ./...`
 - [ ] All shell tests pass: `make test`
 - [ ] Website CI pipeline runs on push
 - [ ] Website deploys successfully

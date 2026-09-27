@@ -13,7 +13,7 @@
 > **Windows Support**: Container mode requires Docker Desktop or Podman Desktop; native mode
 > requires psmux (or herdr for the Herdr backend). Report any issues on GitHub.
 
-ttyd is not used anywhere in 1.0.0: tmux-api streams the terminal itself (PTY on Unix,
+ttyd is not used anywhere in 1.0.0: termote streams the terminal itself (PTY on Unix,
 ConPTY on Windows) into xterm.js in the PWA. See
 [`system-architecture.md`](system-architecture.md) for the request/stream design and
 [`upgrade-1.0.md`](upgrade-1.0.md) if you are upgrading a 0.x install.
@@ -22,7 +22,7 @@ ConPTY on Windows) into xterm.js in the PWA. See
 
 ### Container Mode (All-in-one)
 
-Single container with tmux-api + tmux (no ttyd).
+Single container with termote + tmux (no ttyd).
 
 ```bash
 ./scripts/termote.sh                           # Interactive menu
@@ -39,7 +39,7 @@ container mode (`--mux herdr` requires `native`).
 
 ### Native
 
-All services run natively (no container). tmux-api opens the terminal itself; there is
+All services run natively (no container). termote opens the terminal itself; there is
 nothing else to install for the terminal transport.
 
 **Linux:**
@@ -163,7 +163,7 @@ to the Host allowlist automatically:
 
 ## Environment Variables
 
-### tmux-api Server
+### Termote Server
 
 | Variable                      | Default      | Description                                                          |
 | ----------------------------- | ------------ | -------------------------------------------------------------------- |
@@ -183,7 +183,7 @@ to the Host allowlist automatically:
 ## Port Mapping
 
 ```text
-tmux-api:7680 → /api/mux/stream (terminal WebSocket, xterm.js)
+termote:7680 → /api/mux/stream (terminal WebSocket, xterm.js)
              → /api/mux/* (REST API)
              → /* (PWA static files)
 ```
@@ -285,7 +285,7 @@ lsof -i :7680
 ```bash
 docker exec -it termote /bin/sh
 # Inside container:
-ps aux                      # Check processes (tmux-api, tmux)
+ps aux                      # Check processes (termote, tmux)
 curl localhost:7680/api/mux/health  # Test API
 ```
 
@@ -305,14 +305,14 @@ docker restart termote
 #### Check running processes
 
 ```bash
-ps aux | grep tmux-api
-pgrep -f tmux-api
+ps aux | grep termote-server
+pgrep -f termote-server
 ```
 
 #### View logs
 
 ```bash
-termote logs tmux-api   # Recent log lines
+termote logs server     # Recent log lines
 termote logs follow     # Tail live (Ctrl+C to stop)
 termote logs clean      # Delete log files
 ```
@@ -322,21 +322,21 @@ background; running the server binary directly in the foreground prints to stdou
 instead:
 
 ```bash
-cd tmux-api
+cd server
 TERMOTE_PORT=7680 \
 TERMOTE_BIND=127.0.0.1 \
 TERMOTE_PWA_DIR=../pwa/dist \
-./tmux-api-native serve
+./termote-dev serve
 ```
 
-#### tmux-api not starting
+#### Server not starting
 
 ```bash
 # Check if binary exists
-ls -la tmux-api/tmux-api-native
+ls -la server/termote-dev
 
 # Rebuild if missing
-cd tmux-api && go build -o tmux-api-native .
+cd server && go build -o termote-dev .
 
 # Check PWA dist exists
 ls -la pwa/dist/

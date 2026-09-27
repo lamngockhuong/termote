@@ -20,7 +20,7 @@ A clear description of what you want to happen.
 - [ ] Keyboard/Input
 - [ ] Session management
 - [ ] Terminal (xterm.js stream, tmux/psmux/Herdr backend)
-- [ ] tmux-api
+- [ ] Server / CLI (Go)
 - [ ] Deployment/Infrastructure
 - [ ] Security/Authentication
 - [ ] Documentation

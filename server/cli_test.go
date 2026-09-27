@@ -95,7 +95,7 @@ func newTestCLI(t *testing.T, goos string) *testCLI {
 		in:         bufio.NewReader(strings.NewReader("")),
 		home:       filepath.Join(root, "home"),
 		projectDir: filepath.Join(root, "install"),
-		exe:        filepath.Join(root, "install", "tmux-api-"+goos+"-amd64"),
+		exe:        filepath.Join(root, "install", "termote-"+goos+"-amd64"),
 		goos:       goos,
 		goarch:     "amd64",
 		version:    "1.0.0",
@@ -173,12 +173,12 @@ func TestParseArgsInterleaved(t *testing.T) {
 func TestFindProjectDir(t *testing.T) {
 	root := t.TempDir()
 	os.MkdirAll(filepath.Join(root, "scripts"), 0o755)
-	os.MkdirAll(filepath.Join(root, "tmux-api"), 0o755)
+	os.MkdirAll(filepath.Join(root, "server"), 0o755)
 	other := t.TempDir()
 	cases := []struct{ exe, env, want string }{
-		{filepath.Join(root, "tmux-api-linux-amd64"), "", root},        // release: binary in the root
-		{filepath.Join(root, "tmux-api", "tmux-api-native"), "", root}, // checkout build
-		{filepath.Join(root, "tmux-api-linux-amd64"), other, other},    // shim override
+		{filepath.Join(root, "termote-linux-amd64"), "", root},     // release: binary in the root
+		{filepath.Join(root, "server", "termote-dev"), "", root},   // checkout build
+		{filepath.Join(root, "termote-linux-amd64"), other, other}, // shim override
 	}
 	for _, c := range cases {
 		if got := findProjectDir(c.exe, c.env); got != c.want {

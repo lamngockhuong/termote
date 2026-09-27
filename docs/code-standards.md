@@ -151,7 +151,7 @@ import type { Session } from "./types/session";
 
 ## Go Standards
 
-File layout is flat `package main` in `tmux-api/`: server code (`serve.go`, `guard.go`,
+File layout is flat `package main` in `server/`: server code (`serve.go`, `guard.go`,
 `mux*.go`, `stream.go`, `pty_*.go`) and CLI code (`cli*.go`) share the package and its build
 tags (`cli_unix.go`/`cli_windows.go`, `pty_linux.go`/`pty_bsd.go`/`pty_windows.go`).
 
@@ -166,7 +166,7 @@ tags (`cli_unix.go`/`cli_windows.go`, `pty_linux.go`/`pty_bsd.go`/`pty_windows.g
 ### CLI Conventions
 
 The CLI carries every external dependency (process runner, HTTP client, clock-like state) in
-a `*cli` struct (see `tmux-api/cli.go`) so tests can substitute fakes instead of touching the
+a `*cli` struct (see `server/cli.go`) so tests can substitute fakes instead of touching the
 real filesystem, network or OS processes:
 
 - A subcommand is a `c.cmd*(args []string) error` method; `runCLI` maps a returned
@@ -218,13 +218,13 @@ pnpm test:e2e:ui                  # Run e2e tests with UI debugger
 ## Shell Script Standards (termote.sh / termote.ps1)
 
 `scripts/termote.sh` and `scripts/termote.ps1` are shims only: they resolve or build the
-`tmux-api` binary and `exec` it with the same arguments (Windows maps `-Flag` to `--flag`
-first). They carry no install/update/health logic — that all lives in Go (`tmux-api/cli*.go`,
+`termote` binary and `exec` it with the same arguments (Windows maps `-Flag` to `--flag`
+first). They carry no install/update/health logic — that all lives in Go (`server/cli*.go`,
 see above). What remains in the shims:
 
 - **OS/arch detection:** `$(uname)` for Darwin vs Linux, `$(uname -m)` for x86_64/aarch64,
-  since the installed release ships one binary per platform (`tmux-api-<os>-<arch>`)
-- **Checkout vs install:** a git checkout rebuilds `tmux-api/tmux-api-native[.exe]` when any
+  since the installed release ships one binary per platform (`termote-<os>-<arch>`)
+- **Checkout vs install:** a git checkout rebuilds `server/termote-dev[.exe]` when any
   Go source is newer than the binary; an installed release runs the pre-built binary next to
   the script
 - **Symlink resolution (Unix):** `CDPATH= cd -P` plus a manual `readlink` loop, so the shim
@@ -239,5 +239,5 @@ see above). What remains in the shims:
 make test-cli   # Run tests/test-termote.sh (shim behavior only)
 ```
 
-Test patterns: fake `tmux-api` binaries, capture output with command substitution, assert on
+Test patterns: fake `termote` binaries, capture output with command substitution, assert on
 the argument list the shim passed through.

@@ -110,11 +110,11 @@ test_services() {
         fail "tmux env" "env -u TERMOTE_PASS" "password reaches the shells"
     fi
 
-    # exec: tmux-api gets SIGTERM from tini directly, no shell in between
-    if grep -qE '^exec /usr/local/bin/tmux-api$' "$PROJECT_DIR/entrypoint.sh"; then
-        pass "execs tmux-api as the last step"
+    # exec: the server gets SIGTERM from tini directly, no shell in between
+    if grep -qE '^exec /usr/local/bin/termote$' "$PROJECT_DIR/entrypoint.sh"; then
+        pass "execs termote as the last step"
     else
-        fail "exec tmux-api" "exec /usr/local/bin/tmux-api" "not found"
+        fail "exec termote" "exec /usr/local/bin/termote" "not found"
     fi
 }
 
@@ -173,7 +173,7 @@ test_container_runtime() {
         fail "container start" "running" "run failed"
         return
     fi
-    # Wait for tmux-api to answer inside the container
+    # Wait for the server to answer inside the container
     local i up=false
     for i in $(seq 1 20); do
         if "$rt" exec "$name" curl -fs -o /dev/null -u admin:test-pass http://127.0.0.1:7680/api/mux/health; then
@@ -182,7 +182,7 @@ test_container_runtime() {
         fi
         sleep 0.5
     done
-    if [[ "$up" == true ]]; then pass "tmux-api answers /api/mux/health"; else fail "health" "200" "no answer"; fi
+    if [[ "$up" == true ]]; then pass "server answers /api/mux/health"; else fail "health" "200" "no answer"; fi
 
     local pid1
     pid1=$("$rt" exec "$name" cat /proc/1/comm)

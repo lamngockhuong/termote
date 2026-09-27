@@ -97,7 +97,7 @@ tmux kill-window -t 0
 
 ## API Endpoints
 
-Sessions are managed via tmux-api's `/api/mux/*` endpoints:
+Sessions are managed via termote's `/api/mux/*` endpoints:
 
 | Endpoint                       | Method      | Description       |
 | ------------------------------- | ----------- | ------------------- |
@@ -112,10 +112,10 @@ Sessions are managed via tmux-api's `/api/mux/*` endpoints:
 ### Session not persisting
 
 1. Check tmux is running: `tmux list-windows`
-2. Check tmux-api logs: `docker logs termote` (container) or `termote logs tmux-api` (native)
+2. Check termote logs: `docker logs termote` (container) or `termote logs server` (native)
 
 ### WebSocket / terminal errors
 
-1. Check tmux-api logs: `docker logs termote` or `termote logs tmux-api`
-2. The terminal WebSocket is `/api/mux/stream`, served by tmux-api itself
+1. Check termote logs: `docker logs termote` or `termote logs server`
+2. The terminal WebSocket is `/api/mux/stream`, served by termote itself
 3. Check API health: `curl http://localhost:7680/api/mux/health`

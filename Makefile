@@ -8,9 +8,9 @@ help:
 	@echo "Termote - Terminal Remote Control"
 	@echo ""
 	@echo "Build:"
-	@echo "  make build          Build PWA and tmux-api"
+	@echo "  make build          Build PWA and server"
 	@echo "  make build-pwa      Build PWA only"
-	@echo "  make build-api      Build tmux-api only"
+	@echo "  make build-api      Build server only"
 	@echo ""
 	@echo "Install:"
 	@echo "  make install-container  Install container mode (docker/podman)"
@@ -18,7 +18,7 @@ help:
 	@echo ""
 	@echo "Test:"
 	@echo "  make test              Run all tests"
-	@echo "  make test-go           Test tmux-api (server + CLI) with go test"
+	@echo "  make test-go           Test server/ (server + CLI) with go test"
 	@echo "  make test-cli          Test the termote.sh shim"
 	@echo "  make test-get          Test get.sh online installer"
 	@echo "  make test-entrypoints  Test entrypoint scripts"
@@ -45,8 +45,8 @@ build-pwa:
 	pnpm --filter termote build
 
 build-api:
-	@echo "Building tmux-api..."
-	cd tmux-api && CGO_ENABLED=0 go build -ldflags="-s -w" -o tmux-api .
+	@echo "Building server..."
+	cd server && CGO_ENABLED=0 go build -ldflags="-s -w" -o termote-server .
 
 # Install targets (uses unified CLI)
 install-container:
@@ -67,7 +67,7 @@ test: test-go test-cli test-get test-entrypoints
 	@echo "All tests completed!"
 
 test-go:
-	cd tmux-api && go test ./...
+	cd server && go test ./...
 
 test-cli:
 	@chmod +x tests/test-termote.sh

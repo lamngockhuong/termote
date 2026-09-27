@@ -55,9 +55,9 @@ Project-specific checklist based on past vulnerabilities and the 1.0 architectur
 
 ### Network Binding
 
-- [ ] tmux-api binds to `127.0.0.1` unless `--lan` (CLI sets `TERMOTE_BIND`; the binary's own default is `0.0.0.0`)
+- [ ] termote binds to `127.0.0.1` unless `--lan` (CLI sets `TERMOTE_BIND`; the binary's own default is `0.0.0.0`)
 - [ ] Container: port published as `127.0.0.1:<port>:7680` unless `--lan`; Windows LAN only via netsh portproxy
-- [ ] No second listener: the terminal runs inside tmux-api, nothing else binds a port
+- [ ] No second listener: the terminal runs inside termote, nothing else binds a port
 
 ### `/api/mux/stream` (`stream.go`)
 
@@ -79,7 +79,7 @@ Project-specific checklist based on past vulnerabilities and the 1.0 architectur
 - [ ] Closing a stream ends the whole process tree, within 5s + kill
 - [ ] Linux: `Pdeathsig: SIGKILL` on the child; the group (`Setsid` / `Setpgid`) is killed via `-pid`, only while the pid is not yet reaped
 - [ ] macOS: startup reaps only clients re-parented to PID 1 whose command line matches (`isTmuxAttachCmdline` exact, `isHerdrObserveCmdline` prefix)
-- [ ] Windows: child (never tmux-api itself) in a `KILL_ON_JOB_CLOSE` Job Object; job terminated before `ClosePseudoConsole`
+- [ ] Windows: child (never termote itself) in a `KILL_ON_JOB_CLOSE` Job Object; job terminated before `ClosePseudoConsole`
 - [ ] SIGTERM/SIGINT: `srv.Shutdown`, then the stream hub closes every stream and waits
 
 ### HTTP Server
@@ -133,8 +133,8 @@ Project-specific checklist based on past vulnerabilities and the 1.0 architectur
 
 ### Process Matching (`stopNative`)
 
-- [ ] Unix: kill only when the command line is exactly the server binary path (no arguments), or the PID file names a process whose image starts with `tmux-api`
-- [ ] Windows: image path equals `tmux-api\tmux-api.exe` (`sameWindowsPath`: case-insensitive, 8.3 short names via `os.SameFile`)
+- [ ] Unix: kill only when the command line is exactly the server binary path (no arguments), or the PID file names a process whose image starts with `termote`
+- [ ] Windows: image path equals `server\termote-server.exe` (`sameWindowsPath`: case-insensitive, 8.3 short names via `os.SameFile`)
 - [ ] Legacy ttyd killed only on the exact 0.x argument list / 0.x `scripts\ttyd.exe`
 - [ ] The CLI's own PID is skipped
 
@@ -157,7 +157,7 @@ Project-specific checklist based on past vulnerabilities and the 1.0 architectur
 - [ ] `TERMOTE_PASS` not exported into the tmux session started by `entrypoint.sh`
 - [ ] No terminal can read `TERMOTE_PASS` via `env`: `scrubSecretEnv` after config load, `terminalEnv`
       filters `secretEnvKeys`, `scrubTmuxSecrets` clears a tmux server that 0.x started with it.
-      Known limit: `/proc/<pid>/environ` of `tmux-api` (and tini in the container) still holds the
+      Known limit: `/proc/<pid>/environ` of `termote` (and tini in the container) still holds the
       startup value; only the same uid/root can read it, and they can decrypt the config anyway
 
 ## Shell Scripts

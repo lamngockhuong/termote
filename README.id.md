@@ -64,7 +64,7 @@ flowchart TB
         Keyboard["Keyboard Virtual"]
     end
 
-    subgraph Server["tmux-api Server :7680"]
+    subgraph Server["termote Server :7680"]
         Static["Static Files"]
         Stream["WebSocket terminal /api/mux/stream"]
         API["REST API /api/mux/*"]
@@ -93,7 +93,7 @@ flowchart TB
     tmux --> Shell --> Tools
 ```
 
-tmux-api mengalirkan terminal sendiri (PTY di Unix, ConPTY di Windows) ke xterm.js di PWA; tidak ada lagi proses terminal terpisah yang perlu di-proxy. Model lengkap penjagaan request ada di [`docs/system-architecture.md`](docs/system-architecture.md).
+termote mengalirkan terminal sendiri (PTY di Unix, ConPTY di Windows) ke xterm.js di PWA; tidak ada lagi proses terminal terpisah yang perlu di-proxy. Model lengkap penjagaan request ada di [`docs/system-architecture.md`](docs/system-architecture.md).
 
 ## Mulai Cepat
 
@@ -225,12 +225,12 @@ cd termote
 flowchart LR
     subgraph Container["Mode Container"]
         direction TB
-        C1["Docker/Podman"] --> C2["tmux-api :7680 (mengalirkan terminal sendiri)"] --> C3["tmux"]
+        C1["Docker/Podman"] --> C2["termote :7680 (mengalirkan terminal sendiri)"] --> C3["tmux"]
     end
 
     subgraph Native["Mode Native"]
         direction TB
-        N1["Sistem Host"] --> N2["tmux-api :7680 (mengalirkan terminal sendiri)"] --> N3["tmux/psmux atau Herdr + Alat Host"]
+        N1["Sistem Host"] --> N2["termote :7680 (mengalirkan terminal sendiri)"] --> N3["tmux/psmux atau Herdr + Alat Host"]
     end
 
     User["Pengguna"] --> Container & Native
@@ -384,7 +384,7 @@ Toolbar virtual menyediakan: Tab, Esc, Ctrl, Shift, tombol panah, dan kombinasi 
 ```
 termote/
 ├── Makefile                # Perintah build/test/deploy
-├── Dockerfile              # Docker mode (tmux-api + tmux, tanpa ttyd)
+├── Dockerfile              # Docker mode (termote + tmux, tanpa ttyd)
 ├── docker-compose.yml
 ├── entrypoint.sh           # Docker entrypoint
 ├── docs/                   # Dokumentasi
@@ -396,7 +396,7 @@ termote/
 │       ├── hooks/
 │       ├── types/
 │       └── utils/
-├── tmux-api/               # Server Go + CLI (satu binary)
+├── server/                 # Server Go + CLI (satu binary)
 │   ├── main.go             # Entry point (tanpa argumen/`serve` = server, selain itu CLI)
 │   ├── serve.go            # Server (PWA, auth, penjaga)
 │   ├── mux.go              # Antarmuka Mux + rute /api/mux/*
@@ -405,8 +405,8 @@ termote/
 │   ├── stream.go           # WebSocket terminal (stream xterm.js)
 │   └── cli*.go             # Subperintah install/update/health/logs/link/menu
 ├── scripts/
-│   ├── termote.sh          # Pembungkus tipis Unix -> tmux-api CLI
-│   ├── termote.ps1         # Pembungkus tipis Windows PowerShell -> tmux-api CLI
+│   ├── termote.sh          # Pembungkus tipis Unix -> termote CLI
+│   ├── termote.ps1         # Pembungkus tipis Windows PowerShell -> termote CLI
 │   ├── get.sh              # Unix online installer (curl | bash)
 │   └── get.ps1             # Windows online installer (irm | iex)
 ├── tests/                  # Suite tes
@@ -421,7 +421,7 @@ termote/
 ## Pengembangan
 
 ```bash
-make build          # Build PWA dan tmux-api
+make build          # Build PWA dan termote
 make test           # Jalankan semua tes
 make health         # Periksa health service
 make clean          # Hentikan containers
@@ -439,12 +439,12 @@ pnpm --filter termote test:e2e:ui    # Jalankan dengan UI debugger
 ### Session tidak tersimpan
 
 - Periksa tmux: `tmux ls`
-- tmux-api menyambung dengan `tmux new-session -A` (attach-or-create)
+- termote menyambung dengan `tmux new-session -A` (attach-or-create)
 
 ### Error WebSocket
 
-- Periksa log tmux-api: `docker logs termote` (container) atau `termote logs tmux-api` (native)
-- WebSocket terminal adalah `/api/mux/stream`, dilayani langsung oleh tmux-api; tidak ada proses terminal terpisah yang perlu diperiksa
+- Periksa log termote: `docker logs termote` (container) atau `termote logs server` (native)
+- WebSocket terminal adalah `/api/mux/stream`, dilayani langsung oleh termote; tidak ada proses terminal terpisah yang perlu diperiksa
 
 ### Masalah keyboard mobile
 
@@ -454,9 +454,9 @@ pnpm --filter termote test:e2e:ui    # Jalankan dengan UI debugger
 ### Mode native: proses tidak berjalan
 
 ```bash
-ps aux | grep tmux-api     # Periksa apakah tmux-api berjalan
+ps aux | grep termote-server # Periksa apakah termote berjalan
 lsof -i :7680              # Verifikasi port sedang digunakan
-termote logs tmux-api      # Atau: termote logs follow
+termote logs server        # Atau: termote logs follow
 ```
 
 ## Catatan Keamanan

@@ -22,10 +22,10 @@ func TestLogsTailCleanAndRemovedTtyd(t *testing.T) {
 	for i := 1; i <= 60; i++ {
 		lines = append(lines, "line "+strconv.Itoa(i))
 	}
-	writeFile(t, filepath.Join(tc.logDir(), "tmux-api.log"), strings.Join(lines, "\n")+"\n")
+	writeFile(t, filepath.Join(tc.logDir(), "termote.log"), strings.Join(lines, "\n")+"\n")
 	writeFile(t, filepath.Join(tc.logDir(), "ttyd.log"), "old ttyd\n")
 
-	if code := tc.main([]string{"logs", "tmux-api", "3"}); code != 0 {
+	if code := tc.main([]string{"logs", "server", "3"}); code != 0 {
 		t.Fatal(tc.stderr.String())
 	}
 	out := tc.stdout.String()
@@ -69,24 +69,24 @@ func TestFollowLogsPrintsAppendedLines(t *testing.T) {
 	tc := newTestCLI(t, "linux")
 	out := &syncBuffer{}
 	tc.out = out
-	log := filepath.Join(tc.logDir(), "tmux-api.log")
+	log := filepath.Join(tc.logDir(), "termote.log")
 	writeFile(t, log, "first\n")
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() { tc.followLogs(ctx, 10, 10*time.Millisecond); close(done) }()
 
-	waitFor(t, func() bool { return strings.Contains(out.String(), "[tmux-api] first") })
+	waitFor(t, func() bool { return strings.Contains(out.String(), "[termote] first") })
 	f, _ := os.OpenFile(log, os.O_APPEND|os.O_WRONLY, 0o644)
 	f.WriteString("second\nthi")
 	f.Close()
-	waitFor(t, func() bool { return strings.Contains(out.String(), "[tmux-api] second") })
+	waitFor(t, func() bool { return strings.Contains(out.String(), "[termote] second") })
 	if strings.Contains(out.String(), "thi") {
 		t.Fatal("partial line printed before its newline")
 	}
 	f, _ = os.OpenFile(log, os.O_APPEND|os.O_WRONLY, 0o644)
 	f.WriteString("rd\n")
 	f.Close()
-	waitFor(t, func() bool { return strings.Contains(out.String(), "[tmux-api] third") })
+	waitFor(t, func() bool { return strings.Contains(out.String(), "[termote] third") })
 	// A new log file is picked up too.
 	writeFile(t, filepath.Join(tc.logDir(), "other.log"), "hello\n")
 	waitFor(t, func() bool { return strings.Contains(out.String(), "[other] hello") })

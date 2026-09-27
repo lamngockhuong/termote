@@ -5,8 +5,8 @@ description: Triển khai container tất-cả-trong-một
 
 import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
 
-Một container duy nhất gồm tmux-api (PWA + luồng terminal + API) và tmux. Không có tiến
-trình terminal riêng: chính tmux-api truyền luồng terminal tới xterm.js trong PWA. Ở chế độ
+Một container duy nhất gồm termote (PWA + luồng terminal + API) và tmux. Không có tiến
+trình terminal riêng: chính termote truyền luồng terminal tới xterm.js trong PWA. Ở chế độ
 container không thể dùng Herdr thay cho tmux.
 
 ## Bắt đầu nhanh
@@ -191,7 +191,7 @@ podman logs termote
 ```bash
 docker exec -it termote /bin/sh
 # Trong container:
-ps aux                        # Kiểm tra tiến trình (tmux-api, tmux)
+ps aux                        # Kiểm tra tiến trình (termote, tmux)
 curl localhost:7680/api/mux/health
 ```
 
@@ -203,7 +203,7 @@ curl localhost:7680/api/mux/health
 | Container bị sập     | `docker logs termote` để xem lỗi                 |
 | Auth không hoạt động | Restart container, kiểm tra logs để lấy password |
 | Host bị từ chối (403) | Thêm tên mà thông báo lỗi gợi ý bằng `--allow-host` |
-| Lỗi WebSocket        | Xem logs của tmux-api (`docker logs termote`); WebSocket của terminal là `/api/mux/stream`, do chính tmux-api phục vụ |
+| Lỗi WebSocket        | Xem logs của termote (`docker logs termote`); WebSocket của terminal là `/api/mux/stream`, do chính termote phục vụ |
 | PWA cache cũ         | Settings → "Clear Cache & Reload" để làm mới     |
 
 ### Khởi động lại / Reset

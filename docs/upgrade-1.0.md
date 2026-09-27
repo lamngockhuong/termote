@@ -1,9 +1,9 @@
 # Upgrading to 1.0.0
 
 Termote 1.0.0 is a breaking release: ttyd is removed everywhere (container and
-every native OS), tmux-api streams the terminal itself into xterm.js over
+every native OS), termote streams the terminal itself into xterm.js over
 WebSocket, and the CLI moved from `scripts/termote.sh`/`scripts/termote.ps1`
-into Go subcommands of the `tmux-api` binary. This page lists what changes for
+into Go subcommands of the `termote` binary. This page lists what changes for
 an existing 0.x install and how to move to 1.0.0. For everyday command usage
 see the root [`README.md`](../README.md); for the request-guard design see
 [`system-architecture.md`](system-architecture.md).
@@ -24,7 +24,7 @@ termote update --version 1.0.0    # pin a version
 "Config migration" below for what changes in the saved file itself).
 `scripts/termote.sh` and `scripts/termote.ps1` still exist and are still the
 entry point a 0.x install calls during its own `update`; in 1.0.0 they are
-thin shims that dispatch to the `tmux-api` binary.
+thin shims that dispatch to the `termote` binary.
 
 ### Staying on 0.x
 
@@ -35,7 +35,7 @@ and critical fixes, released as `0.1.x` patches.
 
 ## Breaking changes
 
-- **Terminal transport**: ttyd and its WebSocket proxy are gone. tmux-api opens
+- **Terminal transport**: ttyd and its WebSocket proxy are gone. termote opens
   the terminal itself (PTY on Unix, ConPTY on Windows) and streams it over
   `/api/mux/stream`; the PWA renders it with xterm.js instead of an iframe.
   The old `/terminal/` route now answers `410 Gone`.
@@ -57,7 +57,7 @@ and critical fixes, released as `0.1.x` patches.
   `--allow-host <name>` to run.
 - **CLI implementation**: `install`, `uninstall`, `update`, `health`, `logs`,
   `link`, `unlink`, `version`, and the interactive menu are now Go code in
-  `tmux-api/cli*.go`, compiled into the `tmux-api` binary. The menu no longer
+  `server/cli*.go`, compiled into the `termote` binary. The menu no longer
   uses `gum` (plain numbered prompts). Config file path and format (Unix
   `~/.termote/config`, Windows `~/.termote/config.json`, same encryption) are
   unchanged.

@@ -106,19 +106,19 @@ jobs:
         with:
           go-version: "1.26"
           check-latest: true
-          cache-dependency-path: tmux-api/go.mod
+          cache-dependency-path: server/go.mod
 
       - name: Build
-        working-directory: tmux-api
+        working-directory: server
         run: |
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-            go build -ldflags="-s -w" -o tmux-api-linux-amd64 .
+            go build -ldflags="-s -w" -o termote-linux-amd64 .
 
       - name: Upload binary
         uses: actions/upload-artifact@v7
         with:
-          name: tmux-api-linux-amd64
-          path: tmux-api/tmux-api-linux-amd64
+          name: termote-linux-amd64
+          path: server/termote-linux-amd64
           retention-days: 1
 
   build-api-arm64:
@@ -132,19 +132,19 @@ jobs:
         with:
           go-version: "1.26"
           check-latest: true
-          cache-dependency-path: tmux-api/go.mod
+          cache-dependency-path: server/go.mod
 
       - name: Build
-        working-directory: tmux-api
+        working-directory: server
         run: |
           CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
-            go build -ldflags="-s -w" -o tmux-api-linux-arm64 .
+            go build -ldflags="-s -w" -o termote-linux-arm64 .
 
       - name: Upload binary
         uses: actions/upload-artifact@v7
         with:
-          name: tmux-api-linux-arm64
-          path: tmux-api/tmux-api-linux-arm64
+          name: termote-linux-arm64
+          path: server/termote-linux-arm64
           retention-days: 1
 
   build-api-darwin:
@@ -161,19 +161,19 @@ jobs:
         with:
           go-version: "1.26"
           check-latest: true
-          cache-dependency-path: tmux-api/go.mod
+          cache-dependency-path: server/go.mod
 
       - name: Build
-        working-directory: tmux-api
+        working-directory: server
         run: |
           CGO_ENABLED=0 GOOS=darwin GOARCH=${{ matrix.goarch }} \
-            go build -ldflags="-s -w" -o tmux-api-darwin-${{ matrix.goarch }} .
+            go build -ldflags="-s -w" -o termote-darwin-${{ matrix.goarch }} .
 
       - name: Upload binary
         uses: actions/upload-artifact@v7
         with:
-          name: tmux-api-darwin-${{ matrix.goarch }}
-          path: tmux-api/tmux-api-darwin-${{ matrix.goarch }}
+          name: termote-darwin-${{ matrix.goarch }}
+          path: server/termote-darwin-${{ matrix.goarch }}
           retention-days: 1
 
   build-api-windows:
@@ -187,19 +187,19 @@ jobs:
         with:
           go-version: "1.26"
           check-latest: true
-          cache-dependency-path: tmux-api/go.mod
+          cache-dependency-path: server/go.mod
 
       - name: Build
-        working-directory: tmux-api
+        working-directory: server
         run: |
           CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
-            go build -ldflags="-s -w" -o tmux-api-windows-amd64.exe .
+            go build -ldflags="-s -w" -o termote-windows-amd64.exe .
 
       - name: Upload binary
         uses: actions/upload-artifact@v7
         with:
-          name: tmux-api-windows-amd64
-          path: tmux-api/tmux-api-windows-amd64.exe
+          name: termote-windows-amd64
+          path: server/termote-windows-amd64.exe
           retention-days: 1
 
   # ─────────────────────────────────────────────────────────────
@@ -227,10 +227,10 @@ jobs:
           mkdir -p pwa/dist
           cp -r artifacts/pwa-dist/* pwa/dist/
 
-          # tmux-api binaries (both architectures for multi-arch build)
-          cp artifacts/tmux-api-linux-amd64/tmux-api-linux-amd64 tmux-api/tmux-api-linux-amd64
-          cp artifacts/tmux-api-linux-arm64/tmux-api-linux-arm64 tmux-api/tmux-api-linux-arm64
-          chmod +x tmux-api/tmux-api-*
+          # termote binaries (both architectures for multi-arch build)
+          cp artifacts/termote-linux-amd64/termote-linux-amd64 server/termote-linux-amd64
+          cp artifacts/termote-linux-arm64/termote-linux-arm64 server/termote-linux-arm64
+          chmod +x server/termote-*
 
           # Create dummy .htpasswd
           echo 'termote:$apr1$placeholder$hash' > .htpasswd
@@ -311,12 +311,12 @@ jobs:
           cd ../..
 
           # Copy binaries
-          cp artifacts/tmux-api-linux-amd64/tmux-api-linux-amd64 release/
-          cp artifacts/tmux-api-linux-arm64/tmux-api-linux-arm64 release/
-          cp artifacts/tmux-api-darwin-amd64/tmux-api-darwin-amd64 release/
-          cp artifacts/tmux-api-darwin-arm64/tmux-api-darwin-arm64 release/
-          cp artifacts/tmux-api-windows-amd64/tmux-api-windows-amd64.exe release/
-          chmod +x release/tmux-api-*
+          cp artifacts/termote-linux-amd64/termote-linux-amd64 release/
+          cp artifacts/termote-linux-arm64/termote-linux-arm64 release/
+          cp artifacts/termote-darwin-amd64/termote-darwin-amd64 release/
+          cp artifacts/termote-darwin-arm64/termote-darwin-arm64 release/
+          cp artifacts/termote-windows-amd64/termote-windows-amd64.exe release/
+          chmod +x release/termote-*
 
           # Create tarball (all files needed for termote.sh)
           mkdir -p termote-v${VERSION}
@@ -324,11 +324,11 @@ jobs:
           cp docker-compose.yml Dockerfile entrypoint.sh termote-v${VERSION}/
           cp -r artifacts/pwa-dist termote-v${VERSION}/pwa-dist
           # Include pre-built binaries (Linux for container, Darwin for native on macOS, Windows for native)
-          cp artifacts/tmux-api-linux-amd64/tmux-api-linux-amd64 termote-v${VERSION}/
-          cp artifacts/tmux-api-linux-arm64/tmux-api-linux-arm64 termote-v${VERSION}/
-          cp artifacts/tmux-api-darwin-amd64/tmux-api-darwin-amd64 termote-v${VERSION}/
-          cp artifacts/tmux-api-darwin-arm64/tmux-api-darwin-arm64 termote-v${VERSION}/
-          cp artifacts/tmux-api-windows-amd64/tmux-api-windows-amd64.exe termote-v${VERSION}/
+          cp artifacts/termote-linux-amd64/termote-linux-amd64 termote-v${VERSION}/
+          cp artifacts/termote-linux-arm64/termote-linux-arm64 termote-v${VERSION}/
+          cp artifacts/termote-darwin-amd64/termote-darwin-amd64 termote-v${VERSION}/
+          cp artifacts/termote-darwin-arm64/termote-darwin-arm64 termote-v${VERSION}/
+          cp artifacts/termote-windows-amd64/termote-windows-amd64.exe termote-v${VERSION}/
           tar czf release/termote-v${VERSION}.tar.gz termote-v${VERSION}
 
           # Copy CLI scripts standalone
@@ -352,11 +352,11 @@ jobs:
           files: |
             release/termote-v${{ needs.prepare.outputs.version }}.tar.gz
             release/pwa-dist-v${{ needs.prepare.outputs.version }}.zip
-            release/tmux-api-linux-amd64
-            release/tmux-api-linux-arm64
-            release/tmux-api-darwin-amd64
-            release/tmux-api-darwin-arm64
-            release/tmux-api-windows-amd64.exe
+            release/termote-linux-amd64
+            release/termote-linux-arm64
+            release/termote-darwin-amd64
+            release/termote-darwin-arm64
+            release/termote-windows-amd64.exe
             release/termote.sh
             release/termote.ps1
             release/checksums.txt

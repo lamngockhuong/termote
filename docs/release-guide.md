@@ -140,8 +140,8 @@ Each release produces:
 | ----------------------- | -------------------- |
 | `termote-vX.Y.Z.tar.gz` | Full release tarball |
 | `pwa-dist-vX.Y.Z.zip`   | PWA static files     |
-| `tmux-api-linux-amd64`  | API binary (x86_64)  |
-| `tmux-api-linux-arm64`  | API binary (ARM64)   |
+| `termote-linux-amd64`   | API binary (x86_64)  |
+| `termote-linux-arm64`   | API binary (ARM64)   |
 | `termote.sh`            | Unified CLI          |
 | `checksums.txt`         | SHA256 checksums     |
 
@@ -166,9 +166,9 @@ Each release produces:
 
 ### Image
 
-| Image     | Description                           |
-| --------- | ------------------------------------- |
-| `termote` | All-in-one (tmux-api + tmux, no ttyd) |
+| Image     | Description                          |
+| --------- | ------------------------------------ |
+| `termote` | All-in-one (termote + tmux, no ttyd) |
 
 ## 1.0.0 Release Procedure
 

@@ -55,7 +55,7 @@ func makeTarball(t *testing.T, version string, files map[string]string) []byte {
 	tw.WriteHeader(&tar.Header{Name: top, Typeflag: tar.TypeDir, Mode: 0o755})
 	for name, body := range files {
 		mode := int64(0o644)
-		if strings.HasSuffix(name, ".sh") || strings.HasPrefix(name, "tmux-api-") {
+		if strings.HasSuffix(name, ".sh") || strings.HasPrefix(name, "termote-") {
 			mode = 0o755
 		}
 		full := top + name
@@ -88,9 +88,9 @@ func setupUpdate(t *testing.T) (*testCLI, *fakeGitHub, *[][]string) {
 	tc.saveConfig(savedConfig{Mode: "container", Port: 7700, Password: "keep-me"})
 
 	tarball := makeTarball(t, "1.0.0", map[string]string{
-		"scripts/termote.sh":   "#!/bin/bash\n# 1.0 shim\n",
-		"tmux-api-linux-amd64": "ELF-1.0",
-		"pwa-dist/index.html":  "<html>1.0</html>",
+		"scripts/termote.sh":  "#!/bin/bash\n# 1.0 shim\n",
+		"termote-linux-amd64": "ELF-1.0",
+		"pwa-dist/index.html": "<html>1.0</html>",
 	})
 	gh := &fakeGitHub{
 		latest:    "1.0.0",
@@ -269,8 +269,8 @@ func TestCompareVersions(t *testing.T) {
 
 func TestCleanupReplacedBinaries(t *testing.T) {
 	tc := newTestCLI(t, "windows")
-	old := filepath.Join(tc.projectDir, "tmux-api-windows-amd64.exe.old-123")
-	keep := filepath.Join(tc.projectDir, "tmux-api-windows-amd64.exe")
+	old := filepath.Join(tc.projectDir, "termote-windows-amd64.exe.old-123")
+	keep := filepath.Join(tc.projectDir, "termote-windows-amd64.exe")
 	writeFile(t, old, "x")
 	writeFile(t, keep, "x")
 	tc.cleanupReplacedBinaries()

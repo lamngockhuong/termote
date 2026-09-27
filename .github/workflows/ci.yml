@@ -36,7 +36,7 @@ jobs:
               - *workspace
               - 'pwa/**'
             api:
-              - 'tmux-api/**'
+              - 'server/**'
             scripts:
               - 'scripts/**'
               - 'tests/**'
@@ -102,7 +102,7 @@ jobs:
           retention-days: 7
 
   build-api:
-    name: Build tmux-api
+    name: Build server
     runs-on: ubuntu-latest
     needs: changes
     if: needs.changes.outputs.api == 'true' || needs.changes.outputs.docker == 'true'
@@ -113,17 +113,17 @@ jobs:
         with:
           go-version: "1.26"
           check-latest: true
-          cache-dependency-path: tmux-api/go.mod
+          cache-dependency-path: server/go.mod
 
       - name: Build
-        working-directory: tmux-api
-        run: CGO_ENABLED=0 go build -ldflags="-s -w" -o tmux-api .
+        working-directory: server
+        run: CGO_ENABLED=0 go build -ldflags="-s -w" -o termote-server .
 
       - name: Upload binary
         uses: actions/upload-artifact@v7
         with:
-          name: tmux-api
-          path: tmux-api/tmux-api
+          name: termote-server
+          path: server/termote-server
           retention-days: 7
 
   go-test:
@@ -142,19 +142,19 @@ jobs:
         with:
           go-version: "1.26"
           check-latest: true
-          cache-dependency-path: tmux-api/go.mod
+          cache-dependency-path: server/go.mod
 
       - name: Vet
-        working-directory: tmux-api
+        working-directory: server
         run: go vet ./...
 
       - name: Test
-        working-directory: tmux-api
+        working-directory: server
         run: go test ./...
 
       - name: Vulnerability check
         if: matrix.os == 'ubuntu-latest'
-        working-directory: tmux-api
+        working-directory: server
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
 
   test-scripts:
@@ -171,7 +171,7 @@ jobs:
         with:
           go-version: "1.26"
           check-latest: true
-          cache-dependency-path: tmux-api/go.mod
+          cache-dependency-path: server/go.mod
 
       - name: Run CLI shim tests
         run: ./tests/test-termote.sh
@@ -194,17 +194,17 @@ jobs:
         with:
           go-version: "1.26"
           check-latest: true
-          cache-dependency-path: tmux-api/go.mod
+          cache-dependency-path: server/go.mod
 
-      - name: Build tmux-api.exe
-        working-directory: tmux-api
-        run: go build -ldflags="-s -w" -o tmux-api.exe .
+      - name: Build termote.exe
+        working-directory: server
+        run: go build -ldflags="-s -w" -o termote.exe .
 
       - name: Verify binary
         shell: pwsh
         run: |
-          if (Test-Path tmux-api/tmux-api.exe) {
-            Write-Host "tmux-api.exe built successfully" -ForegroundColor Green
+          if (Test-Path server/termote.exe) {
+            Write-Host "termote.exe built successfully" -ForegroundColor Green
           } else {
             throw "Build failed"
           }
@@ -236,12 +236,12 @@ jobs:
           name: pwa-dist
           path: pwa/dist
 
-      - name: Download tmux-api binary
+      - name: Download server binary
         if: needs.build-api.result == 'success'
         uses: actions/download-artifact@v8
         with:
-          name: tmux-api
-          path: tmux-api
+          name: termote-server
+          path: server
 
       - name: Create .htpasswd
         run: echo 'termote:$apr1$dummy$hash' > .htpasswd

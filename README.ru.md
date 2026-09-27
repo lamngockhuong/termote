@@ -64,7 +64,7 @@ flowchart TB
         Keyboard["Виртуальная клавиатура"]
     end
 
-    subgraph Server["tmux-api Server :7680"]
+    subgraph Server["termote Server :7680"]
         Static["Static Files"]
         Stream["Терминальный WebSocket /api/mux/stream"]
         API["REST API /api/mux/*"]
@@ -93,7 +93,7 @@ flowchart TB
     tmux --> Shell --> Tools
 ```
 
-tmux-api сам передаёт поток терминала (PTY в Unix, ConPTY в Windows) в xterm.js внутри PWA, поэтому отдельного терминального процесса, к которому нужно проксировать, больше нет. Полная модель защиты запросов описана в [`docs/system-architecture.md`](docs/system-architecture.md).
+termote сам передаёт поток терминала (PTY в Unix, ConPTY в Windows) в xterm.js внутри PWA, поэтому отдельного терминального процесса, к которому нужно проксировать, больше нет. Полная модель защиты запросов описана в [`docs/system-architecture.md`](docs/system-architecture.md).
 
 ## Быстрый старт
 
@@ -225,12 +225,12 @@ cd termote
 flowchart LR
     subgraph Container["Контейнерный режим"]
         direction TB
-        C1["Docker/Podman"] --> C2["tmux-api :7680 (сам передаёт терминал)"] --> C3["tmux"]
+        C1["Docker/Podman"] --> C2["termote :7680 (сам передаёт терминал)"] --> C3["tmux"]
     end
 
     subgraph Native["Нативный режим"]
         direction TB
-        N1["Хост-система"] --> N2["tmux-api :7680 (сам передаёт терминал)"] --> N3["tmux/psmux или Herdr + Инструменты хоста"]
+        N1["Хост-система"] --> N2["termote :7680 (сам передаёт терминал)"] --> N3["tmux/psmux или Herdr + Инструменты хоста"]
     end
 
     User["Пользователь"] --> Container & Native
@@ -384,7 +384,7 @@ winget install psmux
 ```
 termote/
 ├── Makefile                # Команды build/test/deploy
-├── Dockerfile              # Docker mode (tmux-api + tmux, без ttyd)
+├── Dockerfile              # Docker mode (termote + tmux, без ttyd)
 ├── docker-compose.yml
 ├── entrypoint.sh           # Docker entrypoint
 ├── docs/                   # Документация
@@ -396,7 +396,7 @@ termote/
 │       ├── hooks/
 │       ├── types/
 │       └── utils/
-├── tmux-api/               # Go-сервер + CLI (один бинарник)
+├── server/                 # Go-сервер + CLI (один бинарник)
 │   ├── main.go             # Точка входа (без аргументов/`serve` = сервер, иначе CLI)
 │   ├── serve.go            # Сервер (PWA, auth, защита запросов)
 │   ├── mux.go              # Интерфейс Mux + маршруты /api/mux/*
@@ -405,8 +405,8 @@ termote/
 │   ├── stream.go           # Терминальный WebSocket (поток xterm.js)
 │   └── cli*.go             # Подкоманды install/update/health/logs/link/menu
 ├── scripts/
-│   ├── termote.sh          # Тонкая Unix-обёртка -> tmux-api CLI
-│   ├── termote.ps1         # Тонкая обёртка Windows PowerShell -> tmux-api CLI
+│   ├── termote.sh          # Тонкая Unix-обёртка -> termote CLI
+│   ├── termote.ps1         # Тонкая обёртка Windows PowerShell -> termote CLI
 │   ├── get.sh              # Unix онлайн-установщик (curl | bash)
 │   └── get.ps1             # Windows онлайн-установщик (irm | iex)
 ├── tests/                  # Набор тестов
@@ -421,7 +421,7 @@ termote/
 ## Разработка
 
 ```bash
-make build          # Сборка PWA и tmux-api
+make build          # Сборка PWA и termote
 make test           # Запуск всех тестов
 make health         # Проверка состояния сервисов
 make clean          # Остановка контейнеров
@@ -439,12 +439,12 @@ pnpm --filter termote test:e2e:ui    # Запуск с UI отладчиком
 ### Сессия не сохраняется
 
 - Проверьте tmux: `tmux ls`
-- tmux-api подключается через `tmux new-session -A` (attach-or-create)
+- termote подключается через `tmux new-session -A` (attach-or-create)
 
 ### Ошибки WebSocket
 
-- Проверьте логи tmux-api: `docker logs termote` (контейнер) или `termote logs tmux-api` (нативный режим)
-- Терминальный WebSocket — это `/api/mux/stream`, его обслуживает сам tmux-api; отдельного терминального процесса для проверки нет
+- Проверьте логи termote: `docker logs termote` (контейнер) или `termote logs server` (нативный режим)
+- Терминальный WebSocket — это `/api/mux/stream`, его обслуживает сам termote; отдельного терминального процесса для проверки нет
 
 ### Проблемы с мобильной клавиатурой
 
@@ -454,9 +454,9 @@ pnpm --filter termote test:e2e:ui    # Запуск с UI отладчиком
 ### Нативный режим: процесс не запускается
 
 ```bash
-ps aux | grep tmux-api     # Проверить, работает ли tmux-api
+ps aux | grep termote-server # Проверить, работает ли termote
 lsof -i :7680              # Убедиться, что порт используется
-termote logs tmux-api      # Или: termote logs follow
+termote logs server        # Или: termote logs follow
 ```
 
 ## Примечания по безопасности

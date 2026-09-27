@@ -23,11 +23,14 @@ Thumbs.db
 # Logs
 *.log
 
-# Go binary
-tmux-api/tmux-api
-tmux-api/tmux-api.exe
-tmux-api/tmux-api-native
-tmux-api/tmux-api-native.exe
+# Go binary (server/server is what a bare `go build .` writes)
+server/server
+server/server.exe
+server/termote-server
+server/termote-server.exe
+server/termote-dev
+server/termote-dev.exe
+server/termote.exe
 
 # Claude Code
 .claude/settings.local.json

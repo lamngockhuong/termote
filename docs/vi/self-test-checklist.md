@@ -27,13 +27,13 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 ### Chế Độ Native (macOS/Linux)
 
 - [ ] `./scripts/termote.sh install native` hoàn thành không lỗi
-- [ ] Tiến trình đang chạy: `ps aux | grep tmux-api`
+- [ ] Tiến trình đang chạy: `ps aux | grep termote-server`
 - [ ] PWA truy cập được tại <http://localhost:7680>
 
 ### Chế Độ Native (Windows)
 
 - [ ] `.\scripts\termote.ps1 install native` hoàn thành không lỗi
-- [ ] `psmux` + tmux-api đang chạy
+- [ ] `psmux` + termote đang chạy
 - [ ] PWA truy cập được tại <http://localhost:7690>
 
 ### Chế Độ Native + Herdr (Linux)
@@ -490,7 +490,7 @@ curl http://localhost:7680/api/mux/stream-token
 ### Windows
 
 - [ ] Chế độ container hoạt động (Docker Desktop)
-- [ ] Chế độ native hoạt động (`psmux` + tmux-api)
+- [ ] Chế độ native hoạt động (`psmux` + termote)
 - [ ] PowerShell script xử lý mã hóa DPAPI
 - [ ] Link/Unlink tạo lệnh `termote` dùng được ở mọi nơi
 - [ ] Các cờ của `termote.ps1`: `-Lan`, `-NoAuth`, `-Port`, `-Tailscale`, `-Fresh`, `-Mux`,
@@ -508,8 +508,8 @@ make test
 - [ ] PWA build không lỗi: `pnpm --filter termote build`
 - [ ] TypeScript biên dịch không lỗi: `pnpm --filter termote exec tsc --noEmit`
 - [ ] Lint pass: `pnpm --filter termote lint:ci`
-- [ ] Go build không lỗi: `cd tmux-api && go build .`
-- [ ] Go tests pass trên Linux, macOS và Windows: `cd tmux-api && go test ./...`
+- [ ] Go build không lỗi: `cd server && go build .`
+- [ ] Go tests pass trên Linux, macOS và Windows: `cd server && go test ./...`
 - [ ] Tất cả test viết bằng Bash đều qua: `make test`
 - [ ] CI pipeline của website chạy khi đẩy code lên
 - [ ] Website deploy thành công

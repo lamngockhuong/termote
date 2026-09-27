@@ -64,7 +64,7 @@ flowchart TB
         Keyboard["Teclado Virtual"]
     end
 
-    subgraph Server["tmux-api Server :7680"]
+    subgraph Server["termote Server :7680"]
         Static["Static Files"]
         Stream["WebSocket do terminal /api/mux/stream"]
         API["REST API /api/mux/*"]
@@ -93,7 +93,7 @@ flowchart TB
     tmux --> Shell --> Tools
 ```
 
-O tmux-api transmite o proprio terminal (PTY no Unix, ConPTY no Windows) para o xterm.js na PWA; nao existe mais um processo de terminal separado para fazer proxy. O modelo completo de protecao de requisicoes esta em [`docs/system-architecture.md`](docs/system-architecture.md).
+O termote transmite o proprio terminal (PTY no Unix, ConPTY no Windows) para o xterm.js na PWA; nao existe mais um processo de terminal separado para fazer proxy. O modelo completo de protecao de requisicoes esta em [`docs/system-architecture.md`](docs/system-architecture.md).
 
 ## Inicio Rapido
 
@@ -225,12 +225,12 @@ cd termote
 flowchart LR
     subgraph Container["Modo Container"]
         direction TB
-        C1["Docker/Podman"] --> C2["tmux-api :7680 (transmite o terminal por conta propria)"] --> C3["tmux"]
+        C1["Docker/Podman"] --> C2["termote :7680 (transmite o terminal por conta propria)"] --> C3["tmux"]
     end
 
     subgraph Native["Modo Nativo"]
         direction TB
-        N1["Sistema Host"] --> N2["tmux-api :7680 (transmite o terminal por conta propria)"] --> N3["tmux/psmux ou Herdr + Ferramentas do Host"]
+        N1["Sistema Host"] --> N2["termote :7680 (transmite o terminal por conta propria)"] --> N3["tmux/psmux ou Herdr + Ferramentas do Host"]
     end
 
     User["Usuario"] --> Container & Native
@@ -384,7 +384,7 @@ A barra de ferramentas virtual oferece: Tab, Esc, Ctrl, Shift, teclas de seta e 
 ```
 termote/
 ├── Makefile                # Comandos de build/test/deploy
-├── Dockerfile              # Modo Docker (tmux-api + tmux, sem ttyd)
+├── Dockerfile              # Modo Docker (termote + tmux, sem ttyd)
 ├── docker-compose.yml
 ├── entrypoint.sh           # Entrypoint do Docker
 ├── docs/                   # Documentacao
@@ -396,7 +396,7 @@ termote/
 │       ├── hooks/
 │       ├── types/
 │       └── utils/
-├── tmux-api/               # Servidor Go + CLI (binario unico)
+├── server/                 # Servidor Go + CLI (binario unico)
 │   ├── main.go             # Ponto de entrada (sem argumentos/`serve` = servidor, senao CLI)
 │   ├── serve.go            # Servidor (PWA, auth, protecoes)
 │   ├── mux.go              # Interface Mux + rotas /api/mux/*
@@ -405,8 +405,8 @@ termote/
 │   ├── stream.go           # WebSocket do terminal (stream do xterm.js)
 │   └── cli*.go             # Subcomandos install/update/health/logs/link/menu
 ├── scripts/
-│   ├── termote.sh          # Wrapper leve para Unix -> tmux-api CLI
-│   ├── termote.ps1         # Wrapper leve para Windows PowerShell -> tmux-api CLI
+│   ├── termote.sh          # Wrapper leve para Unix -> termote CLI
+│   ├── termote.ps1         # Wrapper leve para Windows PowerShell -> termote CLI
 │   ├── get.sh              # Instalador online Unix (curl | bash)
 │   └── get.ps1             # Instalador online Windows (irm | iex)
 ├── tests/                  # Suite de testes
@@ -421,7 +421,7 @@ termote/
 ## Desenvolvimento
 
 ```bash
-make build          # Compilar PWA e tmux-api
+make build          # Compilar PWA e termote
 make test           # Executar todos os testes
 make health         # Verificar saude do servico
 make clean          # Parar containers
@@ -439,12 +439,12 @@ pnpm --filter termote test:e2e:ui    # Executar com UI debugger
 ### Session nao persiste
 
 - Verifique o tmux: `tmux ls`
-- O tmux-api se conecta com `tmux new-session -A` (attach-or-create)
+- O termote se conecta com `tmux new-session -A` (attach-or-create)
 
 ### Erros de WebSocket
 
-- Verifique os logs do tmux-api: `docker logs termote` (container) ou `termote logs tmux-api` (nativo)
-- O WebSocket do terminal e `/api/mux/stream`, servido pelo proprio tmux-api; nao ha um processo de terminal separado para verificar
+- Verifique os logs do termote: `docker logs termote` (container) ou `termote logs server` (nativo)
+- O WebSocket do terminal e `/api/mux/stream`, servido pelo proprio termote; nao ha um processo de terminal separado para verificar
 
 ### Problemas com teclado no mobile
 
@@ -454,9 +454,9 @@ pnpm --filter termote test:e2e:ui    # Executar com UI debugger
 ### Modo nativo: processo nao inicia
 
 ```bash
-ps aux | grep tmux-api     # Verificar se o tmux-api esta rodando
+ps aux | grep termote-server # Verificar se o termote esta rodando
 lsof -i :7680              # Confirmar que a porta esta em uso
-termote logs tmux-api      # Ou: termote logs follow
+termote logs server        # Ou: termote logs follow
 ```
 
 ## Notas de Seguranca

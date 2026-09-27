@@ -51,7 +51,7 @@ func (c *cli) cmdHealth(args []string) error {
 		fmt.Fprintf(c.out, "  %s %s - %s\n", c.paint(ansiRed, "[--]"), label, desc)
 		failed++
 	}
-	check(fmt.Sprintf("tmux-api :%d", port), "/")
+	check(fmt.Sprintf("server :%d", port), "/")
 	check("API /api/mux/health", "/api/mux/health")
 	fmt.Fprintf(c.out, "  Backend: %s\n\n", mux)
 

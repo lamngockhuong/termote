@@ -16,7 +16,7 @@
         },
         {
           "type": "generic",
-          "path": "tmux-api/cli_version.go"
+          "path": "server/cli_version.go"
         }
       ]
     }

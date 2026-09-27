@@ -67,7 +67,7 @@ func TestReplaceRunningFileRenamesAside(t *testing.T) {
 func TestServerMatcherAcrossShortAndLongPaths(t *testing.T) {
 	tc := newTestCLI(t, "windows")
 	long := filepath.Join(t.TempDir(), "long directory name")
-	server := filepath.Join(long, "tmux-api", "tmux-api.exe")
+	server := filepath.Join(long, "server", "termote-server.exe")
 	if err := os.MkdirAll(filepath.Dir(server), 0o755); err != nil {
 		t.Fatal(err)
 	}

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Termote CLI shim: every command lives in the tmux-api binary.
+# Termote CLI shim: every command lives in the termote binary.
 # 0.x `update` runs this exact path (link, then install <mode> [flags]), so the
 # path and the flags it passes must keep working.
 set -eo pipefail
@@ -16,18 +16,18 @@ export TERMOTE_PROJECT_DIR="$PROJECT_DIR"
 
 die() { echo -e "\033[0;31m[ERROR]\033[0m $1" >&2; exit 1; }
 
-if [[ -f "$PROJECT_DIR/tmux-api/go.mod" ]]; then
+if [[ -f "$PROJECT_DIR/server/go.mod" ]]; then
     # Checkout: rebuild when any Go source is newer than the binary.
-    api="$PROJECT_DIR/tmux-api"
-    bin="$api/tmux-api-native"
+    api="$PROJECT_DIR/server"
+    bin="$api/termote-dev"
     if [[ ! -x "$bin" || -n "$(find "$api" -maxdepth 1 \( -name '*.go' -o -name 'go.mod' -o -name 'go.sum' \) -newer "$bin" | head -n 1)" ]]; then
         if command -v go >/dev/null 2>&1; then
-            echo -e "\033[0;32m[INFO]\033[0m Building tmux-api..." >&2
-            (cd "$api" && CGO_ENABLED=0 go build -ldflags="-s -w" -o tmux-api-native .) || die "Build failed"
+            echo -e "\033[0;32m[INFO]\033[0m Building termote..." >&2
+            (cd "$api" && CGO_ENABLED=0 go build -ldflags="-s -w" -o termote-dev .) || die "Build failed"
         elif [[ -x "$bin" ]]; then
-            echo -e "\033[1;33m[WARN]\033[0m Go not found; running the existing (older) tmux-api build" >&2
+            echo -e "\033[1;33m[WARN]\033[0m Go not found; running the existing (older) termote build" >&2
         else
-            die "Go is required to build tmux-api in a checkout: https://go.dev/dl/"
+            die "Go is required to build termote in a checkout: https://go.dev/dl/"
         fi
     fi
 else
@@ -42,7 +42,7 @@ else
         aarch64 | arm64) arch=arm64 ;;
         *) die "Unsupported architecture: $(uname -m)" ;;
     esac
-    bin="$PROJECT_DIR/tmux-api-$os-$arch"
+    bin="$PROJECT_DIR/termote-$os-$arch"
     [[ -f "$bin" ]] || die "$bin not found; reinstall Termote"
     [[ -x "$bin" ]] || chmod +x "$bin"
 fi
