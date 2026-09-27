@@ -281,16 +281,16 @@ Nếu Termote đã được cài đặt, sử dụng lệnh cập nhật tích h
 <Tabs>
   <TabItem label="Unix (macOS/Linux)">
     ```bash
-    termote update                   # Cập nhật lên phiên bản mới nhất
-    termote update --version 0.0.9   # Cập nhật phiên bản cụ thể
+    termote update                   # Cập nhật lên bản mới nhất (1.x)
+    termote update --version 0.1.0   # Ở lại 0.x (ghim phiên bản)
     termote update --force           # Cài đặt lại phiên bản hiện tại
     ```
   </TabItem>
 
   <TabItem label="Windows (PowerShell)">
     ```powershell
-    .\scripts\termote.ps1 update                 # Cập nhật lên phiên bản mới nhất
-    .\scripts\termote.ps1 update -Version 0.0.9  # Cập nhật phiên bản cụ thể
+    .\scripts\termote.ps1 update                 # Cập nhật lên bản mới nhất (1.x)
+    .\scripts\termote.ps1 update -Version 0.1.0  # Ở lại 0.x (ghim phiên bản)
     .\scripts\termote.ps1 update -Force          # Cài đặt lại phiên bản hiện tại
     ```
   </TabItem>
@@ -306,10 +306,10 @@ Chạy lại installer - sẽ so sánh version và hỏi trước khi cập nh�
   <TabItem label="Unix (macOS/Linux)">
     ```bash
     # Cập nhật tự động với config đã lưu
-    curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash -s -- --update
+    curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/release/0.x/scripts/get.sh | bash -s -- --update
 
     # Hoặc cập nhật chuẩn
-    curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
+    curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/release/0.x/scripts/get.sh | bash
     ```
 
     Tùy chọn: `--update`, `--yes`, `--download-only`, `--fresh`, `--version <ver>`, `--strict`
@@ -318,13 +318,13 @@ Chạy lại installer - sẽ so sánh version và hỏi trước khi cập nh�
   <TabItem label="Windows (PowerShell)">
     ```powershell
     # Cập nhật tự động với config đã lưu
-    $env:TERMOTE_UPDATE="true"; irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
+    $env:TERMOTE_UPDATE="true"; irm https://raw.githubusercontent.com/lamngockhuong/termote/release/0.x/scripts/get.ps1 | iex
 
     # Hoặc cập nhật chuẩn
-    irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
+    irm https://raw.githubusercontent.com/lamngockhuong/termote/release/0.x/scripts/get.ps1 | iex
     ```
 
-    Tùy chọn: `$env:TERMOTE_UPDATE="true"`, `$env:TERMOTE_AUTO_YES="true"`
+    Tùy chọn: `$env:TERMOTE_UPDATE="true"`, `$env:TERMOTE_AUTO_YES="true"`, `$env:TERMOTE_VERSION="0.1.0"`
   </TabItem>
 </Tabs>
 

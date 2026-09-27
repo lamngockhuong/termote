@@ -82,7 +82,7 @@ Tailscale xử lý:
 ```bash
 docker run -d --name termote -p 7680:7680 \
   -e TERMOTE_USER=admin -e TERMOTE_PASS=secret \
-  ghcr.io/lamngockhuong/termote:latest
+  ghcr.io/lamngockhuong/termote:0.1
 
 sudo tailscale serve --bg --https=443 http://127.0.0.1:7680
 # Truy cập tại: https://your-hostname.tailnet-name.ts.net

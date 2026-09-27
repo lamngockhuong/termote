@@ -281,16 +281,16 @@ If Termote is already installed, use the built-in update command:
 <Tabs>
   <TabItem label="Unix (macOS/Linux)">
     ```bash
-    termote update                   # Update to latest version
-    termote update --version 0.0.9   # Pin to specific version
+    termote update                   # Update to the latest release (1.x)
+    termote update --version 0.1.0   # Stay on 0.x (pin a version)
     termote update --force           # Force reinstall current version
     ```
   </TabItem>
 
   <TabItem label="Windows (PowerShell)">
     ```powershell
-    .\scripts\termote.ps1 update                 # Update to latest version
-    .\scripts\termote.ps1 update -Version 0.0.9  # Pin to specific version
+    .\scripts\termote.ps1 update                 # Update to the latest release (1.x)
+    .\scripts\termote.ps1 update -Version 0.1.0  # Stay on 0.x (pin a version)
     .\scripts\termote.ps1 update -Force          # Force reinstall current version
     ```
   </TabItem>
@@ -306,10 +306,10 @@ Re-run the installer - it compares versions and prompts before updating:
   <TabItem label="Unix (macOS/Linux)">
     ```bash
     # Auto-update with saved config
-    curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash -s -- --update
+    curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/release/0.x/scripts/get.sh | bash -s -- --update
 
     # Or standard update
-    curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
+    curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/release/0.x/scripts/get.sh | bash
     ```
 
     Options: `--update`, `--yes`, `--download-only`, `--fresh`, `--version <ver>`, `--strict`
@@ -318,13 +318,13 @@ Re-run the installer - it compares versions and prompts before updating:
   <TabItem label="Windows (PowerShell)">
     ```powershell
     # Auto-update with saved config
-    $env:TERMOTE_UPDATE="true"; irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
+    $env:TERMOTE_UPDATE="true"; irm https://raw.githubusercontent.com/lamngockhuong/termote/release/0.x/scripts/get.ps1 | iex
 
     # Or standard update
-    irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
+    irm https://raw.githubusercontent.com/lamngockhuong/termote/release/0.x/scripts/get.ps1 | iex
     ```
 
-    Options: `$env:TERMOTE_UPDATE="true"`, `$env:TERMOTE_AUTO_YES="true"`
+    Options: `$env:TERMOTE_UPDATE="true"`, `$env:TERMOTE_AUTO_YES="true"`, `$env:TERMOTE_VERSION="0.1.0"`
   </TabItem>
 </Tabs>
 

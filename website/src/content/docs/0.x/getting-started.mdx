@@ -35,7 +35,7 @@ import { Aside, Steps } from "@astrojs/starlight/components";
 
 ```bash
 # Defaults to native mode (access host binaries like claude, gh, etc.)
-curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
+curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/release/0.x/scripts/get.sh | bash
 
 # With explicit mode
 curl -fsSL .../get.sh | bash -s -- --container --lan
@@ -55,7 +55,7 @@ curl -fsSL .../get.sh | bash -s -- --version 0.0.4
 
 ```powershell
 # Defaults to native mode (psmux)
-irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
+irm https://raw.githubusercontent.com/lamngockhuong/termote/release/0.x/scripts/get.ps1 | iex
 
 # With explicit mode
 $env:TERMOTE_MODE = "container"; irm .../get.ps1 | iex
@@ -71,7 +71,7 @@ $env:TERMOTE_MODE = "container"; irm .../get.ps1 | iex
 <Steps>
   1. Clone the repository
      ```bash
-     git clone https://github.com/lamngockhuong/termote.git
+     git clone -b release/0.x https://github.com/lamngockhuong/termote.git
      cd termote
      ```
 
@@ -92,8 +92,8 @@ $env:TERMOTE_MODE = "container"; irm .../get.ps1 | iex
 ./scripts/termote.sh                   # Interactive menu
 ./scripts/termote.sh install container # Container mode
 ./scripts/termote.sh install native    # Native mode (host tools)
-./scripts/termote.sh update            # Update to latest version
-./scripts/termote.sh update --version 0.0.9  # Pin to specific version
+./scripts/termote.sh update            # Update to the latest release (1.x)
+./scripts/termote.sh update --version 0.1.0  # Stay on 0.x (pin a version)
 ./scripts/termote.sh uninstall all     # Uninstall everything
 ./scripts/termote.sh health            # Check service health
 ./scripts/termote.sh link              # Create 'termote' global command
@@ -106,8 +106,8 @@ $env:TERMOTE_MODE = "container"; irm .../get.ps1 | iex
 .\scripts\termote.ps1                   # Interactive menu
 .\scripts\termote.ps1 install container # Container mode (Docker Desktop)
 .\scripts\termote.ps1 install native    # Native mode (psmux)
-.\scripts\termote.ps1 update            # Update to latest version
-.\scripts\termote.ps1 update -Version 0.0.9  # Pin to specific version
+.\scripts\termote.ps1 update            # Update to the latest release (1.x)
+.\scripts\termote.ps1 update -Version 0.1.0  # Stay on 0.x (pin a version)
 .\scripts\termote.ps1 logs follow       # Tail all logs live
 .\scripts\termote.ps1 uninstall all     # Uninstall everything
 .\scripts\termote.ps1 health            # Check service health
