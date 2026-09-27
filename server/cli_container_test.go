@@ -68,8 +68,12 @@ func TestContainerUpRunsTheReleaseImage(t *testing.T) {
 		t.Fatalf("image not pulled: %v", cc.runner.calls)
 	}
 	args := strings.Join(cc.runArgs, " ")
-	for _, want := range []string{"--name termote", "--restart unless-stopped", fmt.Sprintf("-p 0.0.0.0:%d:7680", port),
-		"--mount type=bind,src=" + ws + ",dst=/workspace", "-e TERMOTE_PASS", "--user " + strconv.Itoa(os.Getuid()) + ":", "ghcr.io/lamngockhuong/termote:1.0.0"} {
+	wants := []string{"--name termote", "--restart unless-stopped", fmt.Sprintf("-p 0.0.0.0:%d:7680", port),
+		"--mount type=bind,src=" + ws + ",dst=/workspace", "-e TERMOTE_PASS", "ghcr.io/lamngockhuong/termote:1.0.0"}
+	if os.Getuid() >= 0 { // no uid on Windows, so no --user
+		wants = append(wants, "--user "+strconv.Itoa(os.Getuid())+":")
+	}
+	for _, want := range wants {
 		if !strings.Contains(args, want) {
 			t.Errorf("run args miss %q: %s", want, args)
 		}

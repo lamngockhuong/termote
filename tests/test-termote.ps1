@@ -171,4 +171,7 @@ Write-Host ""
 Write-Host "=== Results ===" -ForegroundColor Cyan
 Write-Host "Passed: $script:TestsPassed" -ForegroundColor Green
 Write-Host "Failed: $script:TestsFailed" -ForegroundColor $(if ($script:TestsFailed -gt 0) { "Red" } else { "Green" })
+# Explicit: the CI shell exits with $LASTEXITCODE of the last native command
+# otherwise, and one test runs a binary that is meant to fail.
 if ($script:TestsFailed -gt 0) { exit 1 }
+exit 0

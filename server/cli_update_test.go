@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -42,6 +43,22 @@ func makeTarball(t *testing.T, version string, files map[string]string) []byte {
 	}
 	tw.Close()
 	gz.Close()
+	return buf.Bytes()
+}
+
+// makeZip is a release zip whose entries sit under top/.
+func makeZip(t *testing.T, top string, files map[string]string) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	for name, body := range files {
+		w, err := zw.Create(top + "/" + name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		w.Write([]byte(body))
+	}
+	zw.Close()
 	return buf.Bytes()
 }
 
@@ -117,6 +134,20 @@ func TestStripTopDirRejectsBackslashAndEscapes(t *testing.T) {
 type fakeReleases struct {
 	tags   []string
 	assets map[string][]byte // "v1.0.1/termote-1.0.1-linux-amd64.tar.gz" -> body
+	goos   string            // platform whose archives publish makes
+}
+
+// updateGOOS is the install layout the update tests use: the host's own
+// (symlinks on Unix, current.txt and zips on Windows). TEST_UPDATE_GOOS
+// forces one, to run the Windows layout on another OS too.
+func updateGOOS() string {
+	if v := os.Getenv("TEST_UPDATE_GOOS"); v != "" {
+		return v
+	}
+	if runtime.GOOS == "windows" {
+		return "windows"
+	}
+	return "linux"
 }
 
 func (g *fakeReleases) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -142,6 +173,10 @@ func (g *fakeReleases) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (g *fakeReleases) publish(t *testing.T, version, sum string) {
 	name := "termote-" + version + "-linux-amd64.tar.gz"
 	body := makeTarball(t, version, map[string]string{"bin/termote": "ELF " + version, "LICENSE": "MIT"})
+	if g.goos == "windows" {
+		name = "termote-" + version + "-windows-amd64.zip"
+		body = makeZip(t, "termote-"+version+"-windows-amd64", map[string]string{"bin/termote.exe": "ELF " + version, "LICENSE": "MIT"})
+	}
 	g.assets["v"+version+"/"+name] = body
 	switch sum {
 	case "none":
@@ -208,7 +243,7 @@ func setupUpdate(t *testing.T) (*testCLI, *fakeReleases, *fakeService) {
 	serverStartWait, updateStable = 1500*time.Millisecond, 10*time.Millisecond
 	t.Cleanup(func() { serverStartWait, updateStable = oldWait, oldStable })
 
-	tc := newTestCLI(t, "linux")
+	tc := newTestCLI(t, updateGOOS())
 	tc.version = "1.0.0"
 	writeFile(t, tc.versionBinary("1.0.0"), "ELF 1.0.0")
 	if err := tc.setPointer("current", "1.0.0"); err != nil {
@@ -218,7 +253,7 @@ func setupUpdate(t *testing.T) (*testCLI, *fakeReleases, *fakeService) {
 	port := freePort(t)
 	tc.saveConfig(savedConfig{Port: port, NoAuth: true, Mux: "tmux", AllowHosts: []string{"box.lan"}})
 
-	gh := &fakeReleases{tags: []string{"v0.1.0", "v1.0.0-rc.1", "v1.0.0", "v1.0.1", "latest"}, assets: map[string][]byte{}}
+	gh := &fakeReleases{tags: []string{"v0.1.0", "v1.0.0-rc.1", "v1.0.0", "v1.0.1", "latest"}, assets: map[string][]byte{}, goos: tc.goos}
 	gh.publish(t, "1.0.1", "good")
 	srv := httptest.NewServer(gh)
 	t.Cleanup(srv.Close)

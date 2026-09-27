@@ -312,6 +312,8 @@ func TestRegisterServicePrefersSystemd(t *testing.T) {
 	tc := newSystemdCLI(t)
 	tc.env["USER"] = "u"
 	tc.runner.outputs["loginctl show-user u -p Linger --value"] = "no\n"
+	// A Unix path whatever OS runs the test: the unit escapes backslashes.
+	tc.exe = "/opt/termote/bin/termote"
 	sup, err := tc.registerService()
 	if err != nil || sup.Name() != "systemd --user" || !sup.AutoStart() {
 		t.Fatalf("supervisor %v, %v", sup, err)
