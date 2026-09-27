@@ -270,22 +270,27 @@ jobs:
           done
           (cd release && cat *.sha256 > checksums.txt)
 
-      # A dry run stops here, after the asset checks above.
-      - name: Create Release
+      # The release is public only once every asset is on it and the image
+      # is pushed (this job runs after docker): release-please creates it as
+      # a draft; a tag push or a manual run creates the draft here. Then the
+      # assets are uploaded and the draft is published, in that order.
+      # A dry run stops before this step, after the asset checks above.
+      - name: Upload the assets, then publish the release
         if: needs.prepare.outputs.dry_run != 'true'
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: v${{ needs.prepare.outputs.version }}
-          name: v${{ needs.prepare.outputs.version }}
-          generate_release_notes: true
-          # A version with "-" (1.0.0-rc.1) is a pre-release.
-          prerelease: ${{ contains(needs.prepare.outputs.version, '-') }}
-          make_latest: ${{ !contains(needs.prepare.outputs.version, '-') }}
-          files: |
-            release/termote-*.tar.gz
-            release/termote-*.zip
-            release/*.sha256
-            release/checksums.txt
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          tag="v$VERSION"
+          pre=false; latest=true
+          case "$VERSION" in *-*) pre=true; latest=false ;; esac
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --draft --title "$tag" --generate-notes --target "$GITHUB_SHA" --prerelease="$pre"
+          fi
+          gh release upload "$tag" release/termote-*.tar.gz release/termote-*.zip release/*.sha256 release/checksums.txt --clobber
+          count=$(gh release view "$tag" --json assets --jq '.assets | length')
+          [ "$count" -ge 11 ] || { echo "::error::release $tag has $count assets, expected 11"; exit 1; }
+          gh release edit "$tag" --draft=false --prerelease="$pre" --latest="$latest"
 
   # ─────────────────────────────────────────────────────────────
   # Sync Version to package.json (skip if release-please handles it)
