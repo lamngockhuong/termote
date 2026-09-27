@@ -1,6 +1,5 @@
 ﻿{
     "Tailscale":  "win.tail1234.ts.net",
-    "Ttyd":  "fork",
     "NoAuth":  false,
     "Port":  7690,
     "Mode":  "native",

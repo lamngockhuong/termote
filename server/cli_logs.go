@@ -25,7 +25,7 @@ func (c *cli) cmdLogs(args []string) error {
 	if len(pos) > 0 {
 		service = pos[0]
 	}
-	// 0.x accepted the line count as a second argument.
+	// The line count may also come as a second argument (logs server 100).
 	if len(pos) > 1 {
 		if n, err := strconv.Atoi(pos[1]); err == nil && n > 0 {
 			lines = n
@@ -42,9 +42,6 @@ func (c *cli) cmdLogs(args []string) error {
 		return c.followLogs(ctx, lines, 300*time.Millisecond)
 	case "clean":
 		return c.cleanLogs()
-	case "ttyd":
-		c.infof("ttyd was removed in 1.0.0; the terminal now runs inside the server (see: termote logs server)")
-		return nil
 	}
 	return usageError("unknown log service: %s (use: server, all, follow, clean)", service)
 }

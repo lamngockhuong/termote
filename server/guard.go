@@ -95,8 +95,7 @@ func hostGuard(allowed hostAllowlist, next http.Handler) http.Handler {
 			host := normalizeHost(r.Host)
 			rejects.printf("rejected request for host %q from %s", host, r.RemoteAddr)
 			msg := "Host \"" + host + "\" is not allowed. Add it with: " +
-				"termote install <mode> --allow-host " + host +
-				" (Windows: termote.ps1 install <mode> -AllowHost " + host + ")"
+				"termote install <mode> --allow-host " + host
 			if strings.HasPrefix(r.URL.Path, "/api/") {
 				jsonError(w, msg, http.StatusForbidden)
 			} else {

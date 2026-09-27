@@ -36,13 +36,11 @@ type installOptions struct {
 	tailscale   string
 	mux         string
 	allowHosts  []string // user-added names, persisted
-	ttydGiven   bool
 }
 
 func (c *cli) parseInstallArgs(args []string) (installOptions, map[string]bool, error) {
 	var o installOptions
 	var hosts stringList
-	var ttyd string
 	fs := c.newFlagSet("install")
 	fs.BoolVar(&o.lan, "lan", false, "")
 	fs.BoolVar(&o.noAuth, "no-auth", false, "")
@@ -52,8 +50,6 @@ func (c *cli) parseInstallArgs(args []string) (installOptions, map[string]bool, 
 	fs.StringVar(&o.tailscale, "tailscale", "", "")
 	fs.StringVar(&o.mux, "mux", "", "")
 	fs.Var(&hosts, "allow-host", "")
-	// 0.x Windows passes -Ttyd on update; accepted and ignored.
-	fs.StringVar(&ttyd, "ttyd", "", "")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return o, nil, flagErr(err)
@@ -68,7 +64,6 @@ func (c *cli) parseInstallArgs(args []string) (installOptions, map[string]bool, 
 		o.mode = "container"
 	}
 	o.allowHosts = hosts
-	o.ttydGiven = set["ttyd"]
 	return o, set, nil
 }
 
@@ -166,9 +161,6 @@ func (c *cli) cmdInstall(args []string) error {
 	if err := c.validateInstall(&o); err != nil {
 		return err
 	}
-	if o.ttydGiven {
-		c.warnf("--ttyd is ignored: ttyd was removed in 1.0.0")
-	}
 	if err := c.preflight(o); err != nil {
 		return err
 	}
@@ -182,7 +174,6 @@ func (c *cli) cmdInstall(args []string) error {
 	// Stop everything first: no port conflicts, no busy binary on copy.
 	c.stopNative()
 	c.stopContainers(false)
-	c.migrateLegacy()
 
 	c.stepf("1/4", "Setting up PWA...")
 	if err := c.setupPWA(release); err != nil {
@@ -230,7 +221,7 @@ func (c *cli) cmdInstall(args []string) error {
 func (c *cli) setupAuth(o installOptions, saved *savedConfig) (pass string, reused bool, err error) {
 	if o.noAuth {
 		c.infof("Basic auth disabled")
-		// Kept for 0.x parity, but anyone who reaches the port gets a shell.
+		// Allowed, but anyone who reaches the port gets a shell.
 		if o.lan || o.tailscale != "" {
 			c.warnf("Auth is off while other machines can reach this server (--lan/--tailscale): anyone on that network gets a shell. Drop --no-auth unless the network is trusted.")
 		}
@@ -244,8 +235,7 @@ func (c *cli) setupAuth(o installOptions, saved *savedConfig) (pass string, reus
 		case saved.PasswordUnreadable:
 			c.warnf("Saved password cannot be decrypted on this machine/user; setting a new one")
 		default:
-			// A 0.x config with auth on but no password ran without auth;
-			// 1.0 never does.
+			// Auth on with no saved password never runs without auth.
 			c.warnf("Saved config has no password; setting a new one")
 		}
 	}
@@ -265,43 +255,54 @@ func (c *cli) setupAuth(o installOptions, saved *savedConfig) (pass string, reus
 	return p, false, nil
 }
 
-func (c *cli) setupPWA(release bool) error {
-	dist := filepath.Join(c.projectDir, "pwa", "dist")
-	if !release {
-		if err := c.run.Run(c.projectDir, nil, "pnpm", "install", "--frozen-lockfile", "--filter", "termote..."); err != nil {
-			return fmt.Errorf("pnpm install: %w", err)
-		}
-		if err := c.run.Run(c.projectDir, nil, "pnpm", "--filter", "termote", "build"); err != nil {
-			return fmt.Errorf("PWA build: %w", err)
-		}
-		return nil
-	}
-	// A release tarball ships pwa-dist/; move it into place, replacing the
-	// old build so stale hashed assets do not pile up.
-	src := filepath.Join(c.projectDir, "pwa-dist")
-	if isDir(src) {
-		if err := ensureDir(filepath.Dir(dist)); err != nil {
-			return err
-		}
-		if err := os.RemoveAll(dist); err != nil {
-			return err
-		}
-		return os.Rename(src, dist)
-	}
-	if !isDir(dist) {
-		return errors.New("PWA dist not found; reinstall from a release")
-	}
-	return nil
+// webuiDist is where the PWA build is copied before `go build` embeds it.
+func (c *cli) webuiDist() string {
+	return filepath.Join(c.projectDir, "server", "webui", "dist")
 }
 
-// serverBinary is what native mode runs and what the container image copies
-// (as server/termote-server, a Linux binary, for container mode).
-func (c *cli) serverBinary(mode string) string {
-	name := "termote-server"
-	if mode == "native" {
-		name += c.exeSuffix()
+// setupPWA builds the PWA in a checkout and copies it where the server build
+// embeds it. A release binary already carries it.
+func (c *cli) setupPWA(release bool) error {
+	if release {
+		return nil
 	}
-	return filepath.Join(c.projectDir, "server", name)
+	if err := c.run.Run(c.projectDir, nil, "pnpm", "install", "--frozen-lockfile", "--filter", "termote..."); err != nil {
+		return fmt.Errorf("pnpm install: %w", err)
+	}
+	if err := c.run.Run(c.projectDir, nil, "pnpm", "--filter", "termote", "build"); err != nil {
+		return fmt.Errorf("PWA build: %w", err)
+	}
+	return syncPWABuild(filepath.Join(c.projectDir, "pwa", "dist"), c.webuiDist())
+}
+
+// syncPWABuild replaces everything in dst but .gitkeep with a copy of src, so
+// stale hashed assets are never embedded again.
+func syncPWABuild(src, dst string) error {
+	if !fileExists(filepath.Join(src, "index.html")) {
+		return fmt.Errorf("PWA build not found in %s", src)
+	}
+	entries, err := os.ReadDir(dst)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	for _, e := range entries {
+		if e.Name() == ".gitkeep" {
+			continue
+		}
+		if err := os.RemoveAll(filepath.Join(dst, e.Name())); err != nil {
+			return err
+		}
+	}
+	return os.CopyFS(dst, os.DirFS(src))
+}
+
+// serverBinary is what native mode runs: a copy of the CLI binary (or a fresh
+// build in a checkout) under a name reserved for the server.
+func (c *cli) serverBinary(mode string) string {
+	if mode == "container" {
+		return filepath.Join(c.projectDir, "server", "termote-linux-"+c.goarch)
+	}
+	return filepath.Join(c.projectDir, "server", "termote-server"+c.exeSuffix())
 }
 
 func (c *cli) setupServerBinary(mode string, release bool) error {
@@ -309,39 +310,25 @@ func (c *cli) setupServerBinary(mode string, release bool) error {
 	if err := ensureDir(filepath.Dir(dst)); err != nil {
 		return err
 	}
-	if mode == "container" {
-		if release {
-			return copyExecutable(filepath.Join(c.projectDir, "termote-linux-"+c.goarch), dst)
+	if !release {
+		goos := c.goos
+		if mode == "container" {
+			goos = "linux"
 		}
-		c.infof("Building the server (linux/%s)...", c.goarch)
-		env := environ(map[string]string{"CGO_ENABLED": "0", "GOOS": "linux", "GOARCH": c.goarch})
-		if err := c.run.Run(filepath.Join(c.projectDir, "server"), env, "go", "build", "-ldflags=-s -w", "-o", "termote-server", "."); err != nil {
+		c.infof("Building the server (%s/%s)...", goos, c.goarch)
+		env := environ(map[string]string{"CGO_ENABLED": "0", "GOOS": goos, "GOARCH": c.goarch})
+		if err := c.run.Run(filepath.Join(c.projectDir, "server"), env, "go", "build", "-ldflags=-s -w", "-o", filepath.Base(dst), "."); err != nil {
 			return fmt.Errorf("build server: %w", err)
 		}
 		return nil
 	}
-	src := c.exe
-	if release {
-		src = c.releaseBinary(c.goos)
+	if mode == "container" {
+		return errors.New("container mode needs a git checkout (the image is built from its Dockerfile)")
 	}
-	if sameFile(src, dst) {
+	if sameFile(c.exe, dst) {
 		return nil
 	}
-	return copyExecutable(src, dst)
-}
-
-// releaseBinary is the pre-built binary for goos in a release tarball.
-// Windows on ARM runs the amd64 build.
-func (c *cli) releaseBinary(goos string) string {
-	arch := c.goarch
-	if goos == "windows" {
-		arch = "amd64"
-	}
-	name := "termote-" + goos + "-" + arch
-	if goos == "windows" {
-		name += ".exe"
-	}
-	return filepath.Join(c.projectDir, name)
+	return copyExecutable(c.exe, dst)
 }
 
 func sameFile(a, b string) bool {
@@ -446,7 +433,8 @@ func localIPv4s() []string {
 }
 
 // serverEnv is the environment the server reads (see newServeConfigFromEnv).
-func serverEnv(o installOptions, bind, pwaDir, pass string, hosts []string) map[string]string {
+// TERMOTE_PWA_DIR is cleared so the server serves its embedded PWA.
+func serverEnv(o installOptions, bind, pass string, hosts []string) map[string]string {
 	noAuth, herdrNoAuth := "", ""
 	if o.noAuth {
 		noAuth = "true"
@@ -457,7 +445,7 @@ func serverEnv(o installOptions, bind, pwaDir, pass string, hosts []string) map[
 	return map[string]string{
 		"TERMOTE_PORT":                strconv.Itoa(o.port),
 		"TERMOTE_BIND":                bind,
-		"TERMOTE_PWA_DIR":             pwaDir,
+		"TERMOTE_PWA_DIR":             "",
 		"TERMOTE_USER":                adminUser,
 		"TERMOTE_PASS":                pass,
 		"TERMOTE_NO_AUTH":             noAuth,
@@ -472,6 +460,9 @@ func (c *cli) preflight(o installOptions) error {
 	if o.mode == "container" {
 		if c.containerRuntime() == "" {
 			return errors.New("neither podman nor docker found; install one")
+		}
+		if !c.isCheckout() {
+			return errors.New("container mode needs a git checkout (the image is built from its Dockerfile)")
 		}
 		return nil
 	}
@@ -503,7 +494,7 @@ func (c *cli) startNative(o installOptions, pass string, hosts []string) error {
 		return fmt.Errorf("port %d is in use by another program (%v); stop it or choose --port", o.port, err)
 	}
 	bin := c.serverBinary("native")
-	env := environ(serverEnv(o, bind, filepath.Join(c.projectDir, "pwa", "dist"), pass, hosts))
+	env := environ(serverEnv(o, bind, pass, hosts))
 	logPath := filepath.Join(c.logDir(), "termote.log")
 	pid, exited, err := startDetached(bin, c.projectDir, env, logPath)
 	if err != nil {
@@ -562,7 +553,7 @@ func (c *cli) waitForServer(port int, timeout time.Duration, exited <-chan struc
 // containerStartWait bounds the wait for a freshly started container.
 var containerStartWait = 30 * time.Second
 
-// containerRuntime prefers podman, like 0.x.
+// containerRuntime prefers podman, the lighter of the two.
 func (c *cli) containerRuntime() string {
 	for _, rt := range []string{"podman", "docker"} {
 		if _, err := c.run.LookPath(rt); err == nil {
@@ -713,7 +704,7 @@ func (c *cli) showAccessInfo(o installOptions, hosts []string, pass string, reus
 	}
 	fmt.Fprintf(c.out, "Backend: %s\n", o.mux)
 	fmt.Fprintf(c.out, "Allowed hosts: %s\n", strings.Join(append(slices.Clone(loopbackHosts), hosts...), ", "))
-	fmt.Fprintf(c.out, "%s\n", c.paint(ansiDim, "  (another name? add it with "+c.flagName("--allow-host", "-AllowHost")+" <name>)"))
+	fmt.Fprintf(c.out, "%s\n", c.paint(ansiDim, "  (another name? add it with --allow-host <name>)"))
 	if pass == "" {
 		return
 	}
@@ -724,14 +715,6 @@ func (c *cli) showAccessInfo(o installOptions, hosts []string, pass string, reus
 	c.showCredentials(pass)
 }
 
-// flagName picks the Unix or PowerShell spelling of a flag for messages.
-func (c *cli) flagName(unix, win string) string {
-	if c.goos == "windows" {
-		return win
-	}
-	return unix
-}
-
 func (c *cli) showCredentials(pass string) {
 	line := c.paint(ansiBold, "============================================")
 	fmt.Fprintf(c.out, "\n%s\n  %s\n  Username: %s\n  Password: %s\n%s\n%s\n", line,
@@ -740,9 +723,9 @@ func (c *cli) showCredentials(pass string) {
 		c.paint(ansiDim, "  (view it again with: termote show-password)"), line)
 }
 
-// stopNative stops the server this install started (PID file) and any 0.x
-// server or ttyd whose command line is exactly what Termote ran; nothing
-// broader, so servers and ttyd the user started themselves keep running.
+// stopNative stops the server this install started (PID file) and any server
+// whose command line is exactly what Termote runs; nothing broader, so
+// servers the user started themselves keep running.
 func (c *cli) stopNative() {
 	procs, err := c.procs()
 	if err != nil {
@@ -758,7 +741,7 @@ func (c *cli) stopNative() {
 			continue
 		}
 		isServer := c.isServerProcess(p) || (p.PID == pidFromFile && c.looksLikeServer(p))
-		if !isServer && !c.isLegacyTtyd(p) {
+		if !isServer {
 			continue
 		}
 		if err := c.terminate(p.PID, processKillWait); err != nil {
@@ -826,41 +809,6 @@ func (c *cli) looksLikeServer(p procInfo) bool {
 	}
 	base := strings.TrimSuffix(strings.ToLower(filepath.Base(name)), ".exe")
 	return strings.HasPrefix(base, "termote")
-}
-
-// legacyTtydArgs are the argument lists 0.x termote.sh gave ttyd.
-var legacyTtydArgs = func() []string {
-	var out []string
-	for _, w := range []string{"-W ", ""} {
-		for _, lo := range []string{"lo", "lo0"} {
-			out = append(out, w+"-i "+lo+" -p "+legacyTtydPort+" tmux new-session -A -s "+legacyTmuxSession)
-		}
-	}
-	return out
-}()
-
-func (c *cli) isLegacyTtyd(p procInfo) bool {
-	if c.goos == "windows" {
-		return sameWindowsPath(p.Exe, filepath.Join(c.projectDir, "scripts", "ttyd.exe"))
-	}
-	bin, args, _ := strings.Cut(p.Cmdline, " ")
-	return filepath.Base(bin) == "ttyd" && slices.Contains(legacyTtydArgs, args)
-}
-
-// migrateLegacy removes what 0.x left behind that 1.0 no longer uses.
-func (c *cli) migrateLegacy() {
-	if c.goos == "windows" {
-		for _, f := range []string{"ttyd.exe", "ttyd.source"} {
-			path := filepath.Join(c.projectDir, "scripts", f)
-			if fileExists(path) {
-				if err := removeFile(path); err != nil {
-					c.warnf("Could not remove %s: %v", path, err)
-				} else {
-					c.infof("Removed %s (ttyd is no longer used)", path)
-				}
-			}
-		}
-	}
 }
 
 // stopContainers runs compose down in the install dir; purge also removes

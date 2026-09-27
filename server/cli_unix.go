@@ -46,11 +46,6 @@ func readPasswordNoEcho(f *os.File, r *bufio.Reader) (string, error) {
 	return strings.TrimRight(line, "\r\n"), nil
 }
 
-// execReplace replaces this process with the shim, like `exec` in 0.x.
-func execReplace(path string, args []string) error {
-	return syscall.Exec(path, append([]string{path}, args...), os.Environ())
-}
-
 // listProcesses reads /proc where it exists (Linux) and `ps` elsewhere.
 func listProcesses() ([]procInfo, error) {
 	if isDir("/proc/self") {

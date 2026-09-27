@@ -22,8 +22,7 @@ import (
 	"time"
 )
 
-// savedConfig is what install persists and update re-applies. The file keeps
-// the 0.x path and format so an upgrade reads it in place.
+// savedConfig is what install persists and update re-applies.
 type savedConfig struct {
 	Mode             string
 	LAN              bool
@@ -88,7 +87,7 @@ func (c *cli) saveConfig(cfg savedConfig) error {
 	return nil
 }
 
-// Unix format: KEY="value" lines, parsed without sourcing, as 0.x did.
+// Unix format: KEY="value" lines, parsed without sourcing.
 const (
 	keyMode             = "TERMOTE_MODE"
 	keyLAN              = "TERMOTE_LAN"
@@ -113,7 +112,7 @@ func parseUnixConfig(data []byte, key func() string) (*savedConfig, error) {
 		if !ok {
 			continue
 		}
-		// 0.x read values with `tr -d '"'`.
+		// Quotes are dropped, never interpreted.
 		kv[k] = strings.ReplaceAll(v, `"`, "")
 	}
 	if err := sc.Err(); err != nil {
@@ -170,8 +169,8 @@ func formatUnixConfig(cfg savedConfig, key string) ([]byte, error) {
 	return []byte(b.String()), nil
 }
 
-// windowsConfigFile mirrors the ConvertTo-Json output of 0.x termote.ps1. The
-// 0.x Ttyd key is read and dropped.
+// windowsConfigFile is the JSON config on Windows; the password is DPAPI
+// encrypted for the current user.
 type windowsConfigFile struct {
 	Mode             string   `json:"Mode"`
 	Lan              bool     `json:"Lan"`
@@ -246,7 +245,7 @@ func formatWindowsConfig(cfg savedConfig, now time.Time) ([]byte, error) {
 	return json.MarshalIndent(f, "", "    ")
 }
 
-// machineKey is the 0.x passphrase: sha256 hex of "<hostname>-<username>-termote",
+// machineKey is the passphrase: sha256 hex of "<hostname>-<username>-termote",
 // where hostname and username come from the `hostname` and `whoami` commands
 // (their output can differ from the Go APIs, e.g. on macOS).
 func (c *cli) machineKey() string {
@@ -337,20 +336,16 @@ func decryptOpenSSL(data []byte, pass string) (string, error) {
 	return string(buf[:len(buf)-pad]), nil
 }
 
-// decryptSavedPassword reads TERMOTE_SAVED_PASS: the openssl format, or the
-// plain base64 an early 0.0.x wrote.
+// decryptSavedPassword reads TERMOTE_SAVED_PASS, in the openssl format.
 func decryptSavedPassword(enc, key string) (string, error) {
 	data, err := base64.StdEncoding.DecodeString(enc)
 	if err != nil {
 		return "", errBadCiphertext
 	}
-	if !bytes.HasPrefix(data, []byte(opensslMagic)) {
-		return string(data), nil
-	}
 	return decryptOpenSSL(data, key)
 }
 
-// generatePassword returns 12 random alphanumerics, like 0.x.
+// generatePassword returns 12 random alphanumerics.
 func generatePassword() (string, error) {
 	const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 	b := make([]byte, 12)

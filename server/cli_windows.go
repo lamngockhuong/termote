@@ -50,24 +50,6 @@ func readPasswordNoEcho(f *os.File, r *bufio.Reader) (string, error) {
 	return strings.TrimRight(line, "\r\n"), nil
 }
 
-// execReplace runs the shim in this console and waits: Windows has no exec().
-func execReplace(path string, args []string) error {
-	shell := "powershell"
-	if _, err := exec.LookPath("pwsh"); err == nil {
-		shell = "pwsh"
-	}
-	cmd := exec.Command(shell, append([]string{"-NoProfile", "-ExecutionPolicy", "Bypass", "-File", path}, args...)...)
-	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
-	if err := cmd.Run(); err != nil {
-		var ee *exec.ExitError
-		if errors.As(err, &ee) {
-			return &exitError{code: ee.ExitCode(), msg: fmt.Sprintf("%s exited with status %d", path, ee.ExitCode())}
-		}
-		return err
-	}
-	return nil
-}
-
 func listProcesses() ([]procInfo, error) {
 	snap, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
 	if err != nil {
@@ -142,8 +124,8 @@ func startDetached(bin, dir string, env []string, logPath string) (int, <-chan s
 	return cmd.Process.Pid, exited, nil
 }
 
-// protectCurrentUser matches ProtectedData.Protect(bytes, $null, CurrentUser)
-// in 0.x termote.ps1.
+// protectCurrentUser is ProtectedData.Protect(bytes, $null, CurrentUser):
+// DPAPI bound to the current Windows user.
 func protectCurrentUser(plain []byte) ([]byte, error) {
 	if len(plain) == 0 {
 		return nil, errors.New("empty data")
@@ -170,8 +152,7 @@ func unprotectCurrentUser(blob []byte) ([]byte, error) {
 	return append([]byte(nil), unsafe.Slice(out.Data, out.Size)...), nil
 }
 
-// restrictToOwner gives only the current user access, like the Set-Acl call
-// of 0.x (Windows' chmod 600).
+// restrictToOwner gives only the current user access (Windows' chmod 600).
 func restrictToOwner(path string) error {
 	tu, err := windows.GetCurrentProcessToken().GetTokenUser()
 	if err != nil {

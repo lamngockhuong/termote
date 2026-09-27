@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const fixtureDir = "testdata/config-0.1.0"
+const fixtureDir = "testdata/config"
 
 func readFixture(t *testing.T, name string) []byte {
 	t.Helper()
@@ -24,7 +24,7 @@ func readFixture(t *testing.T, name string) []byte {
 	return b
 }
 
-func TestDeriveKeyMatchesZeroX(t *testing.T) {
+func TestDeriveKeyMatchesOpenSSLDigest(t *testing.T) {
 	// echo -n "termote-box-tester-termote" | openssl dgst -sha256 -r
 	const want = "80ce0cef6a04814998f604d765718f771574fe79a17747d84f980331e820d0fb"
 	if got := deriveKey("termote-box", "tester"); got != want {
@@ -39,7 +39,7 @@ func TestMachineKeyUsesHostnameAndWhoamiCommands(t *testing.T) {
 	}
 }
 
-func TestParseZeroXLinuxConfig(t *testing.T) {
+func TestParseLinuxConfig(t *testing.T) {
 	cfg, err := parseUnixConfig(readFixture(t, "config-linux"), func() string { return deriveKey("termote-box", "tester") })
 	if err != nil {
 		t.Fatal(err)
@@ -51,7 +51,7 @@ func TestParseZeroXLinuxConfig(t *testing.T) {
 	}
 }
 
-func TestParseZeroXMacConfig(t *testing.T) {
+func TestParseMacConfig(t *testing.T) {
 	cfg, err := parseUnixConfig(readFixture(t, "config-macos"), func() string { return deriveKey("Testers-Mac-mini.local", "tester") })
 	if err != nil {
 		t.Fatal(err)
@@ -71,11 +71,13 @@ func TestParseConfigOtherMachineMarksPasswordUnreadable(t *testing.T) {
 	}
 }
 
-func TestParseLegacyBase64AndEmptyPassword(t *testing.T) {
+// A password stored as plain base64 is not accepted as-is: it is marked
+// unreadable, so start sets a new one.
+func TestParsePlainBase64AndEmptyPassword(t *testing.T) {
 	key := func() string { return "unused" }
-	cfg, _ := parseUnixConfig(readFixture(t, "config-legacy-base64"), key)
-	if cfg.Password != "Old-Pass-03" {
-		t.Fatalf("legacy password = %q", cfg.Password)
+	cfg, _ := parseUnixConfig(readFixture(t, "config-plain-base64"), key)
+	if cfg.Password != "" || !cfg.PasswordUnreadable {
+		t.Fatalf("plain base64 password = %q unreadable=%v, want empty and unreadable", cfg.Password, cfg.PasswordUnreadable)
 	}
 	cfg, _ = parseUnixConfig(readFixture(t, "config-empty-pass"), key)
 	if cfg.Password != "" || cfg.PasswordUnreadable || cfg.NoAuth {
@@ -100,15 +102,15 @@ func TestUnixConfigRoundTrip(t *testing.T) {
 		!out.HerdrAllowNoAuth || out.Password != in.Password {
 		t.Fatalf("round trip: got %+v, want %+v", *out, in)
 	}
-	// The 0.x keys stay first and keep their meaning.
+	// The layout is stable: comment line, then the keys in a fixed order.
 	if !strings.HasPrefix(string(data), "# Termote config (auto-generated)\nTERMOTE_MODE=\"native\"\nTERMOTE_LAN=\"true\"\n") {
 		t.Fatalf("unexpected layout:\n%s", data)
 	}
 }
 
-// A config written by 1.0 must still open with the exact commands of 0.x, so
-// a downgrade or 0.x get.sh keeps the saved password.
-func TestGoEncryptedPasswordDecryptsWithZeroXOpenSSL(t *testing.T) {
+// The saved password is the `openssl enc -aes-256-cbc -pbkdf2` format, so the
+// openssl command line can decrypt it.
+func TestGoEncryptedPasswordDecryptsWithOpenSSL(t *testing.T) {
 	if _, err := exec.LookPath("openssl"); err != nil {
 		t.Skip("openssl not installed")
 	}
@@ -118,7 +120,7 @@ func TestGoEncryptedPasswordDecryptsWithZeroXOpenSSL(t *testing.T) {
 		t.Fatal(err)
 	}
 	cmd := exec.Command("openssl", "enc", "-aes-256-cbc", "-a", "-A", "-d", "-salt", "-pbkdf2", "-pass", "pass:"+key)
-	cmd.Stdin = strings.NewReader(enc + "\n") // 0.x pipes it through echo
+	cmd.Stdin = strings.NewReader(enc + "\n")
 	out, err := cmd.Output()
 	if err != nil {
 		t.Fatalf("openssl could not decrypt %q: %v", enc, err)
@@ -160,7 +162,7 @@ func fakeDPAPI(t *testing.T) {
 	t.Cleanup(func() { dpapiProtect, dpapiUnprotect = oldP, oldU })
 }
 
-func TestParseZeroXWindowsConfig(t *testing.T) {
+func TestParseWindowsConfig(t *testing.T) {
 	fakeDPAPI(t)
 	cfg, err := parseWindowsConfig(readFixture(t, "config.json"))
 	if err != nil {
@@ -171,15 +173,12 @@ func TestParseZeroXWindowsConfig(t *testing.T) {
 	}
 }
 
-func TestWindowsConfigRoundTripDropsTtyd(t *testing.T) {
+func TestWindowsConfigRoundTrip(t *testing.T) {
 	fakeDPAPI(t)
 	in := savedConfig{Mode: "container", Port: 7690, Mux: "tmux", AllowHosts: []string{"pc.lan"}, Password: "pw"}
 	data, err := formatWindowsConfig(in, time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC))
 	if err != nil {
 		t.Fatal(err)
-	}
-	if strings.Contains(string(data), "Ttyd") {
-		t.Fatalf("Ttyd written:\n%s", data)
 	}
 	out, err := parseWindowsConfig(data)
 	if err != nil {

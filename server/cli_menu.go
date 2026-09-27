@@ -8,7 +8,7 @@ import (
 )
 
 // cmdMenu is the interactive menu the shims open without arguments. It uses
-// numbered prompts; 0.x used gum when installed.
+// numbered prompts, so it needs no extra tool.
 func (c *cli) cmdMenu() error {
 	if !c.interactive {
 		c.printHelp()
@@ -57,8 +57,8 @@ func (c *cli) choose(header string, options []string) string {
 	}
 }
 
-// menuInstall asks every option; the answers replace the saved config, like
-// the 0.x menu (--fresh).
+// menuInstall asks every option; the answers replace the saved config
+// (--fresh).
 func (c *cli) menuInstall() error {
 	mode := c.choose("Select mode:", []string{
 		"native - Host tool access (claude, gh)",

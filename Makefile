@@ -10,7 +10,7 @@ help:
 	@echo "Build:"
 	@echo "  make build          Build PWA and server"
 	@echo "  make build-pwa      Build PWA only"
-	@echo "  make build-api      Build server only"
+	@echo "  make build-api      Build server (embeds the PWA)"
 	@echo ""
 	@echo "Install:"
 	@echo "  make install-container  Install container mode (docker/podman)"
@@ -44,9 +44,13 @@ build-pwa:
 	pnpm install --frozen-lockfile --filter termote...
 	pnpm --filter termote build
 
-build-api:
+# The PWA is embedded in the binary (server/webui); the copy replaces the old
+# build so stale hashed assets are not embedded again.
+build-api: build-pwa
 	@echo "Building server..."
-	cd server && CGO_ENABLED=0 go build -ldflags="-s -w" -o termote-server .
+	find server/webui/dist -mindepth 1 ! -name .gitkeep -delete
+	cp -R pwa/dist/. server/webui/dist/
+	cd server && CGO_ENABLED=0 go build -ldflags="-s -w" -o termote .
 
 # Install targets (uses unified CLI)
 install-container:

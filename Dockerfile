@@ -27,22 +27,17 @@ RUN chmod 644 /etc/passwd /etc/group
 
 # Create directories
 RUN mkdir -p /home/termote/.local/share/nano && chmod -R 755 /home/termote
-RUN mkdir -p /var/www/termote
 
-# Copy PWA files
-COPY pwa/dist /var/www/termote
-
-# Copy the termote binary (single-arch server/termote-server, or the
-# per-arch release builds server/termote-linux-<arch>)
+# The termote binary, built with the PWA embedded, for the image's arch:
+# server/termote-linux-<arch> (`install container` in a checkout, CI, release)
+# A builder without BuildKit leaves TARGETARCH empty; the image's own arch
+# picks the binary then.
 ARG TARGETARCH
-COPY server/termote-* /tmp/
-RUN if [ -f "/tmp/termote-linux-${TARGETARCH}" ]; then \
-      cp "/tmp/termote-linux-${TARGETARCH}" /usr/local/bin/termote; \
-    else \
-      cp /tmp/termote-server /usr/local/bin/termote; \
-    fi && \
-    chmod +x /usr/local/bin/termote && \
-    rm -f /tmp/termote-*
+COPY server/termote-linux-* /tmp/
+RUN arch="${TARGETARCH:-$(dpkg --print-architecture)}" && \
+    test -f "/tmp/termote-linux-$arch" || { echo "server/termote-linux-$arch missing" >&2; exit 1; } && \
+    install -m 755 "/tmp/termote-linux-$arch" /usr/local/bin/termote && \
+    rm -f /tmp/termote-linux-*
 
 # Copy entrypoint
 COPY entrypoint.sh /entrypoint.sh

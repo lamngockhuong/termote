@@ -55,8 +55,7 @@ func TestHostGuardThroughServer(t *testing.T) {
 	if rec.Code != http.StatusForbidden || rec.Header().Get("Content-Type") != "application/json" {
 		t.Fatalf("foreign Host on /api = %d %q, want JSON 403", rec.Code, rec.Header().Get("Content-Type"))
 	}
-	if !strings.Contains(rec.Body.String(), "--allow-host evil.com") ||
-		!strings.Contains(rec.Body.String(), "-AllowHost evil.com") {
+	if !strings.Contains(rec.Body.String(), "--allow-host evil.com") {
 		t.Errorf("rejection must name the fix, got %q", rec.Body.String())
 	}
 

@@ -6,7 +6,6 @@ import (
 	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -24,10 +23,9 @@ var versionRe = regexp.MustCompile(`^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$`)
 
 func (c *cli) cmdUpdate(args []string) error {
 	var pin string
-	var force bool
 	fs := c.newFlagSet("update")
 	fs.StringVar(&pin, "version", "", "")
-	fs.BoolVar(&force, "force", false, "")
+	fs.Bool("force", false, "")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return flagErr(err)
@@ -40,77 +38,11 @@ func (c *cli) cmdUpdate(args []string) error {
 		return usageError("invalid version format: %s (expected: X.Y.Z)", pin)
 	}
 	if c.isCheckout() {
-		return errors.New("cannot update from a git checkout; this command is for installed releases (~/.termote)")
+		return errors.New("cannot update from a git checkout; this command is for installed releases")
 	}
-
-	target := pin
-	if pin != "" {
-		c.infof("Target version: v%s", target)
-	} else {
-		c.infof("Checking for updates...")
-		if target, err = c.latestVersion(); err != nil {
-			return fmt.Errorf("failed to fetch latest version from GitHub: %w", err)
-		}
-		c.infof("Latest version: v%s", target)
-	}
-	if target == c.version && !force {
-		c.infof("Already on v%s. Use --force to reinstall.", c.version)
-		return nil
-	}
-	if compareVersions(target, c.version) < 0 {
-		c.warnf("Downgrading from v%s to v%s", c.version, target)
-	}
-	if target != c.version {
-		c.infof("Current version: v%s", c.version)
-		c.infof("Updating to: v%s", target)
-	} else {
-		c.infof("Force reinstalling v%s", c.version)
-	}
-
-	saved, err := c.loadConfig()
-	if err != nil {
-		return err
-	}
-	if saved == nil {
-		return fmt.Errorf("no saved config found at %s; run 'termote install' first", c.configFile())
-	}
-	mode := saved.Mode
-	if mode == "" {
-		mode = "native"
-	}
-
-	// Download and verify before stopping anything: a typo in --version or a
-	// network error must not leave a remote user without their server.
-	tmp, err := os.MkdirTemp("", "termote-update-")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(tmp)
-	file, err := c.downloadVerified(target, tmp)
-	if err != nil {
-		return err
-	}
-
-	c.infof("Stopping services...")
-	c.stopNative()
-	c.stopContainers(false)
-
-	c.infof("Extracting...")
-	if err := extractTarball(file, c.projectDir); err != nil {
-		return err
-	}
-	if err := os.WriteFile(filepath.Join(c.projectDir, ".version"), []byte(target), 0o644); err != nil {
-		return err
-	}
-	c.infof("Updated to v%s", target)
-	c.infof("Re-installing with saved config (mode=%s)...", mode)
-	fmt.Fprintln(c.out)
-	// Hand over to the new shim so no code of this binary keeps running.
-	shim := c.shimPath()
-	if c.goos != "windows" {
-		os.Chmod(shim, 0o755)
-	}
-	return c.execShim(shim, []string{"install", mode})
+	// The release layout changed to one archive per platform; update comes
+	// back once it installs that layout.
+	return errors.New("update is not available in this build: it is being rebuilt for the new release layout")
 }
 
 func (c *cli) get(url string) (*http.Response, error) {
@@ -128,53 +60,6 @@ func (c *cli) get(url string) (*http.Response, error) {
 		return nil, fmt.Errorf("GET %s: %s", url, resp.Status)
 	}
 	return resp, nil
-}
-
-// latestVersion reads releases/latest, which skips pre-releases.
-func (c *cli) latestVersion() (string, error) {
-	resp, err := c.get(c.apiBase + "/repos/" + updateRepo + "/releases/latest")
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	var rel struct {
-		TagName string `json:"tag_name"`
-	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&rel); err != nil {
-		return "", err
-	}
-	v := strings.TrimPrefix(rel.TagName, "v")
-	if !versionRe.MatchString(v) {
-		return "", fmt.Errorf("unexpected tag %q", rel.TagName)
-	}
-	return v, nil
-}
-
-// downloadVerified saves the release tarball into tmp and checks it against
-// checksums.txt.
-func (c *cli) downloadVerified(version, tmp string) (string, error) {
-	tarball := "termote-v" + version + ".tar.gz"
-	base := c.downloadBase + "/" + updateRepo + "/releases/download/v" + version + "/"
-	c.infof("Downloading v%s...", version)
-	file := filepath.Join(tmp, tarball)
-	sum, err := c.download(base+tarball, file)
-	if err != nil {
-		return "", fmt.Errorf("download failed (does v%s exist?): %w", version, err)
-	}
-
-	c.infof("Verifying checksum...")
-	expected, err := c.expectedChecksum(base+"checksums.txt", tarball)
-	switch {
-	case err != nil:
-		c.warnf("Could not download checksums, skipping verification")
-	case expected == "":
-		c.warnf("Checksum not found for %s, skipping verification", tarball)
-	case !strings.EqualFold(expected, sum):
-		return "", fmt.Errorf("checksum mismatch! Expected: %s, Got: %s", expected, sum)
-	default:
-		c.infof("Checksum verified")
-	}
-	return file, nil
 }
 
 // download saves url to dst and returns its sha256.

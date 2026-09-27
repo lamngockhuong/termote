@@ -16,26 +16,21 @@ import (
 	"time"
 )
 
-func TestLogsTailCleanAndRemovedTtyd(t *testing.T) {
+func TestLogsTailAndClean(t *testing.T) {
 	tc := newTestCLI(t, "linux")
 	var lines []string
 	for i := 1; i <= 60; i++ {
 		lines = append(lines, "line "+strconv.Itoa(i))
 	}
 	writeFile(t, filepath.Join(tc.logDir(), "termote.log"), strings.Join(lines, "\n")+"\n")
-	writeFile(t, filepath.Join(tc.logDir(), "ttyd.log"), "old ttyd\n")
+	writeFile(t, filepath.Join(tc.logDir(), "other.log"), "other service\n")
 
 	if code := tc.main([]string{"logs", "server", "3"}); code != 0 {
 		t.Fatal(tc.stderr.String())
 	}
 	out := tc.stdout.String()
-	if !strings.Contains(out, "line 58\nline 59\nline 60") || strings.Contains(out, "line 57") || strings.Contains(out, "old ttyd") {
+	if !strings.Contains(out, "line 58\nline 59\nline 60") || strings.Contains(out, "line 57") || strings.Contains(out, "other service") {
 		t.Fatalf("tail output:\n%s", out)
-	}
-	tc.stdout.Reset()
-	tc.main([]string{"logs", "ttyd"})
-	if !strings.Contains(tc.stdout.String(), "removed in 1.0.0") {
-		t.Fatalf("ttyd message: %q", tc.stdout.String())
 	}
 	tc.stdout.Reset()
 	tc.main([]string{"logs", "clean"})
@@ -147,19 +142,15 @@ func TestLinkAndUnlinkUnix(t *testing.T) {
 	}
 }
 
-func TestLinkWindowsWritesCmdAndDropsOldCopy(t *testing.T) {
+func TestLinkWindowsWritesCmd(t *testing.T) {
 	tc := newTestCLI(t, "windows")
-	cmdFile, legacy := tc.windowsLinkFiles()
-	writeFile(t, legacy, "<#\n.SYNOPSIS\n    Termote CLI - unified management tool for Windows\n#>")
+	cmdFile := tc.windowsLinkFile()
 	if code := tc.main([]string{"link"}); code != 0 {
 		t.Fatal(tc.stderr.String())
 	}
 	b, err := os.ReadFile(cmdFile)
 	if err != nil || !strings.Contains(string(b), `-File "`+tc.shimPath()+`" %*`) {
 		t.Fatalf("cmd wrapper %q %v", b, err)
-	}
-	if fileExists(legacy) {
-		t.Fatal("0.x termote.ps1 copy kept")
 	}
 	tc.main([]string{"unlink"})
 	if fileExists(cmdFile) {
@@ -186,7 +177,7 @@ func TestHealth(t *testing.T) {
 		t.Fatalf("code %d\n%s", code, tc.stdout.String())
 	}
 	out := tc.stdout.String()
-	if !strings.Contains(out, "running (auth)") || !strings.Contains(out, "Backend: herdr") || strings.Contains(out, "ttyd") {
+	if !strings.Contains(out, "running (auth)") || !strings.Contains(out, "Backend: herdr") {
 		t.Fatalf("health output:\n%s", out)
 	}
 	srv.Close()

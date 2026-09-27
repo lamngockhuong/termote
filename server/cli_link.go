@@ -89,23 +89,14 @@ func (c *cli) checkPath(dir string) {
 	fmt.Fprintf(c.out, "Add to ~/.bashrc or ~/.zshrc:\n  export PATH=\"%s:$PATH\"\n", dir)
 }
 
-func (c *cli) windowsLinkFiles() (cmdFile, legacyPS1 string) {
-	return filepath.Join(c.userBinDir(), "termote.cmd"), filepath.Join(c.userBinDir(), "termote.ps1")
-}
+func (c *cli) windowsLinkFile() string { return filepath.Join(c.userBinDir(), "termote.cmd") }
 
-// linkWindows writes ~/.local/bin/termote.cmd calling the shim. 0.x also
-// copied termote.ps1 there; that copy would now look for the binary next to
-// itself, so it is removed.
+// linkWindows writes ~/.local/bin/termote.cmd calling the shim.
 func (c *cli) linkWindows() error {
-	cmdFile, legacy := c.windowsLinkFiles()
+	cmdFile := c.windowsLinkFile()
 	source := c.shimPath()
 	if err := os.MkdirAll(c.userBinDir(), 0o755); err != nil {
 		return err
-	}
-	if isLegacyScriptCopy(legacy) {
-		if err := os.Remove(legacy); err == nil {
-			c.infof("Removed old copy: %s", legacy)
-		}
 	}
 	content := "@echo off\r\npowershell.exe -NoProfile -ExecutionPolicy Bypass -File \"" + source + "\" %*\r\n"
 	if b, err := os.ReadFile(cmdFile); err == nil && string(b) == content {
@@ -120,17 +111,10 @@ func (c *cli) linkWindows() error {
 	return nil
 }
 
-// isLegacyScriptCopy recognises the termote.ps1 copy 0.x `link` made.
-func isLegacyScriptCopy(path string) bool {
-	b, err := os.ReadFile(path)
-	return err == nil && strings.Contains(string(b), "Termote CLI")
-}
-
 func (c *cli) cmdUnlink() error {
 	var targets []string
 	if c.goos == "windows" {
-		cmdFile, legacy := c.windowsLinkFiles()
-		targets = []string{cmdFile, legacy}
+		targets = []string{c.windowsLinkFile()}
 	} else {
 		targets = []string{systemLinkPath, filepath.Join(c.userBinDir(), "termote")}
 	}

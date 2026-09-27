@@ -57,7 +57,9 @@ jobs:
     name: Build PWA
     runs-on: ubuntu-latest
     needs: changes
-    if: needs.changes.outputs.pwa == 'true' || needs.changes.outputs.docker == 'true'
+    # The binary embeds the PWA, so Go changes need a PWA build too (the
+    # image test checks that GET / serves it)
+    if: needs.changes.outputs.pwa == 'true' || needs.changes.outputs.docker == 'true' || needs.changes.outputs.api == 'true'
     steps:
       - uses: actions/checkout@v7
 
@@ -101,11 +103,15 @@ jobs:
           path: pwa/dist
           retention-days: 7
 
+  # The binary embeds the PWA; without a PWA build (only Go changed) it embeds
+  # the placeholder page, which is enough for everything but the image test.
   build-api:
     name: Build server
     runs-on: ubuntu-latest
-    needs: changes
-    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.docker == 'true'
+    needs: [changes, build-pwa]
+    if: |
+      always() && needs.build-pwa.result != 'failure' &&
+      (needs.changes.outputs.api == 'true' || needs.changes.outputs.docker == 'true')
     steps:
       - uses: actions/checkout@v7
 
@@ -115,15 +121,22 @@ jobs:
           check-latest: true
           cache-dependency-path: server/go.mod
 
+      - name: Download PWA build
+        if: needs.build-pwa.result == 'success'
+        uses: actions/download-artifact@v8
+        with:
+          name: pwa-dist
+          path: server/webui/dist
+
       - name: Build
         working-directory: server
-        run: CGO_ENABLED=0 go build -ldflags="-s -w" -o termote-server .
+        run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o termote-linux-amd64 .
 
       - name: Upload binary
         uses: actions/upload-artifact@v7
         with:
-          name: termote-server
-          path: server/termote-server
+          name: termote-linux-amd64
+          path: server/termote-linux-amd64
           retention-days: 7
 
   go-test:
@@ -229,18 +242,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Download PWA artifacts
-        if: needs.build-pwa.result == 'success'
-        uses: actions/download-artifact@v8
-        with:
-          name: pwa-dist
-          path: pwa/dist
-
       - name: Download server binary
         if: needs.build-api.result == 'success'
         uses: actions/download-artifact@v8
         with:
-          name: termote-server
+          name: termote-linux-amd64
           path: server
 
       - name: Create .htpasswd

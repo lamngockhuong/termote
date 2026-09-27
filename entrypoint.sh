@@ -42,7 +42,6 @@ fi
 # Set environment for termote serve mode
 export TERMOTE_PORT="${TERMOTE_PORT:-7680}"
 export TERMOTE_BIND="${TERMOTE_BIND:-0.0.0.0}"
-export TERMOTE_PWA_DIR="/var/www/termote"
 export TERMOTE_USER="${TERMOTE_USER:-admin}"
 [[ "$NO_AUTH" == "true" ]] && export TERMOTE_NO_AUTH="true"
 
@@ -52,5 +51,6 @@ export TERMOTE_USER="${TERMOTE_USER:-admin}"
 # stays out of it; the server reads it and removes it from its own env.
 tmux has-session -t main 2>/dev/null || env -u TERMOTE_PASS tmux new-session -d -s main
 
-# The server replaces this shell, so SIGTERM from tini reaches it directly
-exec /usr/local/bin/termote
+# The server replaces this shell, so SIGTERM from tini reaches it directly.
+# It serves the PWA embedded in the binary.
+exec /usr/local/bin/termote serve

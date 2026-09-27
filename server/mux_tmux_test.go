@@ -212,7 +212,7 @@ func TestScrubTmuxSecretsClearsAServerStartedWithThePassword(t *testing.T) {
 		tmuxCmd(context.Background(), "kill-server").Run()
 		tmuxSocket, tmuxSession = origSocket, origSession
 	})
-	// What 0.x did: start tmux with TERMOTE_PASS exported
+	// A tmux server started from a shell with TERMOTE_PASS exported
 	cmd := tmuxCmd(context.Background(), "-f", "/dev/null", "new-session", "-d", "-s", tmuxSession)
 	cmd.Env = append(os.Environ(), "TERMOTE_PASS=old-secret")
 	if err := cmd.Run(); err != nil {

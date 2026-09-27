@@ -16,11 +16,11 @@ import (
 
 func TestParseInstallArgs(t *testing.T) {
 	tc := newTestCLI(t, "linux")
-	o, set, err := tc.parseInstallArgs([]string{"--lan", "docker", "--allow-host", "a.lan", "--allow-host", "b.lan", "--ttyd", "fork"})
+	o, set, err := tc.parseInstallArgs([]string{"--lan", "docker", "--allow-host", "a.lan", "--allow-host", "b.lan"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if o.mode != "container" || !o.lan || !set["lan"] || set["port"] || !o.ttydGiven ||
+	if o.mode != "container" || !o.lan || !set["lan"] || set["port"] ||
 		strings.Join(o.allowHosts, ",") != "a.lan,b.lan" {
 		t.Fatalf("got %+v set %v", o, set)
 	}
@@ -111,7 +111,7 @@ func TestWindowsMatchersFollowTheFileNotTheSpelling(t *testing.T) {
 		t.Skip("symlinks need privileges on Windows; cli_windows_test.go covers 8.3 names")
 	}
 	win := newTestCLI(t, "windows")
-	for _, f := range []string{win.serverBinary("native"), filepath.Join(win.projectDir, "scripts", "ttyd.exe")} {
+	for _, f := range []string{win.serverBinary("native"), filepath.Join(win.projectDir, "scripts", "other.exe")} {
 		if err := os.MkdirAll(filepath.Dir(f), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -126,16 +126,13 @@ func TestWindowsMatchersFollowTheFileNotTheSpelling(t *testing.T) {
 	if !win.isServerProcess(procInfo{Exe: filepath.Join(alias, "server", "termote-server.exe")}) {
 		t.Error("server under an alias of the install dir not matched")
 	}
-	if !win.isLegacyTtyd(procInfo{Exe: filepath.Join(alias, "scripts", "ttyd.exe")}) {
-		t.Error("ttyd under an alias of the install dir not matched")
-	}
 	// Same directory, different file: never a match.
-	if win.isServerProcess(procInfo{Exe: filepath.Join(alias, "scripts", "ttyd.exe")}) {
-		t.Error("ttyd matched as server")
+	if win.isServerProcess(procInfo{Exe: filepath.Join(alias, "scripts", "other.exe")}) {
+		t.Error("another program matched as server")
 	}
 }
 
-func TestServerAndLegacyTtydMatchers(t *testing.T) {
+func TestServerMatchers(t *testing.T) {
 	tc := newTestCLI(t, "linux")
 	server := filepath.Join(tc.projectDir, "server", "termote-server")
 	yes := []procInfo{
@@ -157,24 +154,6 @@ func TestServerAndLegacyTtydMatchers(t *testing.T) {
 			t.Errorf("%q matched as server", p.Cmdline)
 		}
 	}
-	for _, cmd := range []string{
-		"ttyd -W -i lo -p 7681 tmux new-session -A -s main",
-		"ttyd -i lo0 -p 7681 tmux new-session -A -s main",
-		"/usr/bin/ttyd -W -i lo0 -p 7681 tmux new-session -A -s main",
-	} {
-		if !tc.isLegacyTtyd(procInfo{Cmdline: cmd}) {
-			t.Errorf("0.x ttyd %q not matched", cmd)
-		}
-	}
-	for _, cmd := range []string{
-		"ttyd -p 7681 bash",
-		"ttyd -W -i lo -p 7681 tmux new-session -A -s work",
-		"ttyd -W -p 7681 -t fontSize=14 tmux new-session -A -s main",
-	} {
-		if tc.isLegacyTtyd(procInfo{Cmdline: cmd}) {
-			t.Errorf("user ttyd %q matched", cmd)
-		}
-	}
 
 	win := newTestCLI(t, "windows")
 	if !win.isServerProcess(procInfo{Exe: strings.ToUpper(filepath.Join(win.projectDir, "server", "termote-server.exe"))}) {
@@ -182,10 +161,6 @@ func TestServerAndLegacyTtydMatchers(t *testing.T) {
 	}
 	if win.isServerProcess(procInfo{Exe: filepath.Join(win.projectDir, "termote-windows-amd64.exe")}) {
 		t.Error("windows CLI binary matched as server")
-	}
-	if !win.isLegacyTtyd(procInfo{Exe: filepath.Join(win.projectDir, "scripts", "ttyd.exe")}) ||
-		win.isLegacyTtyd(procInfo{Exe: `C:\tools\ttyd.exe`}) {
-		t.Error("windows ttyd matcher wrong")
 	}
 }
 
@@ -196,17 +171,16 @@ func TestStopNativeStopsOnlyTermoteProcesses(t *testing.T) {
 	tc.procs = func() ([]procInfo, error) {
 		return []procInfo{
 			{PID: 10, Cmdline: server},
-			{PID: 11, Cmdline: "ttyd -W -i lo -p 7681 tmux new-session -A -s main"},
-			{PID: 12, Cmdline: "ttyd -p 9000 bash"},
+			{PID: 12, Cmdline: "python3 -m http.server 9000"},
 			{PID: 13, Cmdline: "/opt/other/termote-server"},
-			{PID: 40, Cmdline: "/somewhere/else/termote-server"}, // started by 1.0, found via PID file
+			{PID: 40, Cmdline: "/somewhere/else/termote-server"}, // found via PID file
 			{PID: 41, Cmdline: "vim notes.txt"},
 			{PID: tc.pid, Cmdline: server},
 		}, nil
 	}
 	tc.stopNative()
 	slices.Sort(tc.killed)
-	if want := []int{10, 11, 40}; !slices.Equal(tc.killed, want) {
+	if want := []int{10, 40}; !slices.Equal(tc.killed, want) {
 		t.Fatalf("stopped %v, want %v", tc.killed, want)
 	}
 	if fileExists(tc.pidFile()) {
@@ -224,8 +198,7 @@ func TestSetupAuth(t *testing.T) {
 	if pass == "kept" || reused || len(pass) != 12 {
 		t.Fatalf("--fresh reused password: %q", pass)
 	}
-	// 0.x config with auth on and no password: 1.0 sets one instead of
-	// running without auth.
+	// Auth on and no saved password: a new one is set, never no auth.
 	tc.stdout.Reset()
 	pass, _, _ = tc.setupAuth(installOptions{}, &savedConfig{})
 	if len(pass) != 12 || !strings.Contains(tc.stdout.String(), "no password") {
@@ -256,17 +229,6 @@ func TestSetupAuth(t *testing.T) {
 	}
 }
 
-func TestMigrateLegacyRemovesWindowsTtyd(t *testing.T) {
-	tc := newTestCLI(t, "windows")
-	for _, f := range []string{"ttyd.exe", "ttyd.source"} {
-		writeFile(t, filepath.Join(tc.projectDir, "scripts", f), "x")
-	}
-	tc.migrateLegacy()
-	if fileExists(filepath.Join(tc.projectDir, "scripts", "ttyd.exe")) || fileExists(filepath.Join(tc.projectDir, "scripts", "ttyd.source")) {
-		t.Fatal("ttyd files left")
-	}
-}
-
 func TestInstallRejectsBeforeTouchingServices(t *testing.T) {
 	tc := newTestCLI(t, "linux")
 	tc.procs = func() ([]procInfo, error) { t.Fatal("services touched"); return nil, nil }
@@ -284,8 +246,11 @@ func TestInstallContainerRunsCompose(t *testing.T) {
 	containerStartWait = 0
 	t.Cleanup(func() { containerStartWait = old })
 	tc.runner.paths["docker"] = true
-	writeFile(t, filepath.Join(tc.projectDir, "pwa-dist", "index.html"), "<html>")
-	writeFile(t, filepath.Join(tc.projectDir, "termote-linux-amd64"), "ELF")
+	// A checkout: the PWA is built and the image's binary compiled.
+	writeFile(t, filepath.Join(tc.projectDir, "pwa", "package.json"), "{}")
+	writeFile(t, filepath.Join(tc.projectDir, "pwa", "dist", "index.html"), "<html>")
+	writeFile(t, filepath.Join(tc.webuiDist(), "stale.js"), "old")
+	writeFile(t, filepath.Join(tc.webuiDist(), ".gitkeep"), "")
 	writeFile(t, filepath.Join(tc.projectDir, "docker-compose.yml"), "services: {}")
 	if code := tc.main([]string{"install", "container", "--lan", "--port", "1"}); code != 0 {
 		t.Fatalf("code %d, stderr %s", code, tc.stderr.String())
@@ -293,11 +258,12 @@ func TestInstallContainerRunsCompose(t *testing.T) {
 	if !tc.runner.called("docker compose --profile docker up -d --build") {
 		t.Fatalf("compose not run: %v", tc.runner.calls)
 	}
-	if b, _ := os.ReadFile(filepath.Join(tc.projectDir, "server", "termote-server")); string(b) != "ELF" {
-		t.Fatal("linux binary not copied for the image")
+	if !tc.runner.called("go build -ldflags=-s -w -o termote-linux-amd64 .") {
+		t.Fatalf("image binary not built: %v", tc.runner.calls)
 	}
-	if !fileExists(filepath.Join(tc.projectDir, "pwa", "dist", "index.html")) || fileExists(filepath.Join(tc.projectDir, "pwa-dist")) {
-		t.Fatal("pwa-dist not moved into pwa/dist")
+	if !fileExists(filepath.Join(tc.webuiDist(), "index.html")) || !fileExists(filepath.Join(tc.webuiDist(), ".gitkeep")) ||
+		fileExists(filepath.Join(tc.webuiDist(), "stale.js")) {
+		t.Fatal("PWA build not synced into server/webui/dist")
 	}
 	if fileExists(filepath.Join(tc.projectDir, "docker-compose.override.yml")) {
 		t.Fatal("override file left behind")
@@ -313,8 +279,6 @@ func TestInstallContainerRunsCompose(t *testing.T) {
 
 func TestInstallNativeRequiresTmux(t *testing.T) {
 	tc := newTestCLI(t, "linux")
-	writeFile(t, filepath.Join(tc.projectDir, "pwa-dist", "index.html"), "<html>")
-	writeFile(t, filepath.Join(tc.projectDir, "termote-linux-amd64"), "ELF")
 	if code := tc.main([]string{"install", "native"}); code != 1 || !strings.Contains(tc.stderr.String(), "tmux not found") {
 		t.Fatalf("code %d stderr %q", code, tc.stderr.String())
 	}
@@ -378,8 +342,8 @@ func freePort(t *testing.T) int {
 	return ln.Addr().(*net.TCPAddr).Port
 }
 
-// TestInstallNativeEndToEnd installs a real server binary from a release
-// layout, checks it serves with auth, then uninstalls and checks it is gone.
+// TestInstallNativeEndToEnd installs a real release binary, checks it serves
+// with auth, then uninstalls and checks it is gone.
 func TestInstallNativeEndToEnd(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("covered on Unix; Windows process handling has its own tests")
@@ -393,7 +357,6 @@ func TestInstallNativeEndToEnd(t *testing.T) {
 		t.Fatalf("build: %v\n%s", err, out)
 	}
 	tc.exe = prebuilt
-	writeFile(t, filepath.Join(tc.projectDir, "pwa-dist", "index.html"), "<html>termote</html>")
 	tc.runner.paths["tmux"] = true
 	tc.procs = listProcesses
 	tc.terminate = terminateProcess
@@ -495,8 +458,7 @@ func pidRunning(pid int) bool {
 
 func TestInstallNativeRefusesBusyPort(t *testing.T) {
 	tc := newTestCLI(t, "linux")
-	writeFile(t, filepath.Join(tc.projectDir, "pwa-dist", "index.html"), "<html>")
-	writeFile(t, filepath.Join(tc.projectDir, "termote-linux-amd64"), "ELF")
+	writeFile(t, tc.exe, "ELF")
 	tc.runner.paths["tmux"] = true
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
