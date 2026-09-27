@@ -1,0 +1,139 @@
+---
+title: Bắt đầu
+description: Hướng dẫn bắt đầu nhanh với Termote
+slug: vi/0.x/getting-started
+banner:
+  content: 'Bạn đang đọc tài liệu Termote 0.x, phiên bản chỉ còn nhận bản vá bảo mật và lỗi nghiêm trọng. Xem <a href="/vi/getting-started/">tài liệu 1.x</a> hoặc <a href="https://github.com/lamngockhuong/termote/blob/main/docs/upgrade-1.0.md">hướng dẫn nâng cấp</a>.'
+---
+
+import { Aside, Steps } from "@astrojs/starlight/components";
+
+## Yêu cầu
+
+**macOS/Linux:**
+
+* Docker hoặc Podman (cho chế độ Container)
+* hoặc ttyd + tmux + Go (cho chế độ Native)
+* Tùy chọn: [gum](https://github.com/charmbracelet/gum) để có menu tương tác đẹp hơn
+
+**Windows:**
+
+* Docker Desktop hoặc Podman Desktop (cho chế độ Container — khuyến nghị)
+* hoặc [psmux](https://github.com/psmux/psmux) + ttyd (cho chế độ Native): `winget install psmux`
+
+<Aside type="tip" title="Windows">
+  Cả chế độ Container và Native đều được hỗ trợ đầy đủ trên Windows. Chế độ
+  Native mặc định dùng bản ttyd fork build bằng MSVC, khắc phục lỗi crash trước
+  đây trên Windows 11 (build 26200+); dùng `-Ttyd official` để chuyển sang bản
+  upstream. Vui lòng báo cáo lỗi tại
+  [GitHub](https://github.com/lamngockhuong/termote/issues).
+</Aside>
+
+## Cài đặt một dòng
+
+**macOS/Linux:**
+
+```bash
+# Mặc định chế độ native (truy cập binary host như claude, gh, v.v.)
+curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
+
+# Với chế độ rõ ràng
+curl -fsSL .../get.sh | bash -s -- --container --lan
+curl -fsSL .../get.sh | bash -s -- --native --tailscale myhost
+
+# Cập nhật tự động với config đã lưu
+curl -fsSL .../get.sh | bash -s -- --update
+
+# Cài đặt phiên bản cụ thể
+curl -fsSL .../get.sh | bash -s -- --version 0.0.4
+```
+
+**Windows (PowerShell):**
+
+> **Lưu ý:** Nếu hệ thống chặn chạy script, hãy chạy lệnh này trước:
+> `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned`
+
+```powershell
+# Mặc định chế độ native (psmux)
+irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
+
+# Với chế độ rõ ràng
+$env:TERMOTE_MODE = "container"; irm .../get.ps1 | iex
+```
+
+<Aside type="tip">
+  Script cài đặt tự động phát hiện môi trường và chọn chế độ triển khai phù hợp
+  nhất.
+</Aside>
+
+## Bắt đầu nhanh
+
+<Steps>
+  1. Clone repository
+     ```bash
+     git clone https://github.com/lamngockhuong/termote.git
+     cd termote
+     ```
+
+  2. Triển khai với Container (đơn giản nhất)
+
+     ```bash
+     ./scripts/termote.sh install container
+     ```
+
+  3. Truy cập tại http://localhost:7680
+</Steps>
+
+## Các lệnh CLI
+
+**macOS/Linux:**
+
+```bash
+./scripts/termote.sh                    # Menu tương tác
+./scripts/termote.sh install container  # Chế độ Container
+./scripts/termote.sh install native     # Chế độ Native
+./scripts/termote.sh update             # Cập nhật lên phiên bản mới nhất
+./scripts/termote.sh update --version 0.0.9  # Cập nhật phiên bản cụ thể
+./scripts/termote.sh uninstall all      # Gỡ cài đặt tất cả
+./scripts/termote.sh health             # Kiểm tra sức khỏe dịch vụ
+./scripts/termote.sh link               # Tạo lệnh 'termote' toàn cục
+./scripts/termote.sh unlink             # Xóa lệnh toàn cục
+```
+
+**Windows (PowerShell):**
+
+```powershell
+.\scripts\termote.ps1                    # Menu tương tác
+.\scripts\termote.ps1 install container  # Chế độ Container (Docker Desktop)
+.\scripts\termote.ps1 install native     # Chế độ Native (psmux)
+.\scripts\termote.ps1 update             # Cập nhật lên phiên bản mới nhất
+.\scripts\termote.ps1 update -Version 0.0.9  # Cập nhật phiên bản cụ thể
+.\scripts\termote.ps1 logs follow        # Tail toàn bộ logs realtime
+.\scripts\termote.ps1 uninstall all      # Gỡ cài đặt tất cả
+.\scripts\termote.ps1 health             # Kiểm tra sức khỏe dịch vụ
+.\scripts\termote.ps1 link               # Tạo lệnh 'termote' toàn cục
+.\scripts\termote.ps1 unlink             # Xóa lệnh toàn cục
+```
+
+<Aside type="tip">
+  Sau khi chạy `link`, bạn có thể dùng `termote` từ bất kỳ đâu:
+
+  ```bash
+  # macOS/Linux
+  termote health
+  termote install native --lan
+  ```
+
+  ```powershell
+  # Windows
+  termote health
+  termote install native -Lan
+  ```
+</Aside>
+
+## Tiếp theo
+
+* [Cài đặt Container](/vi/0.x/installation/docker/) - Thiết lập container đầy đủ
+* [Cài đặt Native](/vi/0.x/installation/native/) - Truy cập binary host
+* [Tailscale HTTPS](/vi/0.x/installation/tailscale/) - Truy cập từ xa an toàn
+* [Cử chỉ di động](/vi/0.x/usage/gestures/) - Điều khiển cảm ứng

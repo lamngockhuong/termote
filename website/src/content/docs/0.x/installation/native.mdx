@@ -1,0 +1,365 @@
+---
+title: Native Installation
+description: All services run natively on host
+slug: 0.x/installation/native
+banner:
+  content: 'You are reading the docs for Termote 0.x, which only receives security and critical fixes. See the <a href="/getting-started/">1.x docs</a> or the <a href="https://github.com/lamngockhuong/termote/blob/main/docs/upgrade-1.0.md">upgrade guide</a>.'
+---
+
+import { Steps, Tabs, TabItem, Aside } from "@astrojs/starlight/components";
+
+No Docker required. Access host binaries like `claude`, `git`, `gh`, etc.
+
+<Aside type="tip" title="Windows Native Mode">
+  Native mode is fully supported on Windows. The install script auto-downloads
+  an MSVC-built ttyd fork by default, which resolves the earlier ConPTY crash on
+  Windows 11 (build 26200+). Pass `-Ttyd official` to use the upstream
+  `tsl0922/ttyd` build instead.
+</Aside>
+
+## Prerequisites
+
+<Tabs>
+  <TabItem label="Linux">
+    ```bash
+    sudo apt install ttyd tmux
+    # Or: sudo snap install ttyd
+    ```
+  </TabItem>
+
+  <TabItem label="macOS">
+    ```bash
+    brew install ttyd tmux go
+    ```
+  </TabItem>
+
+  <TabItem label="Windows">
+    ```powershell
+    # Install psmux (tmux-compatible for Windows)
+    winget install psmux
+    # ttyd is auto-downloaded by the install script
+    ```
+
+    <Aside type="note">
+      ttyd is auto-downloaded by the install script (MSVC-built fork by
+      default). Use `-Ttyd official` for the upstream build.
+    </Aside>
+  </TabItem>
+</Tabs>
+
+### tmux Configuration (Recommended)
+
+For tmux copy/paste to work with the keyboard toolbar buttons, add this to your `~/.tmux.conf`:
+
+```bash
+# Vi mode for copy: Space=start selection, Enter=copy
+set-option -g mode-keys vi
+# Mouse support (scroll, select) - toggle with Ctrl+b m
+set-option -g mouse on
+bind m set -g mouse \; display "Mouse #{?mouse,on,off}"
+```
+
+Apply the config:
+
+```bash
+tmux source-file ~/.tmux.conf
+```
+
+This enables: **Copy icon** → navigate → **Space** → select → **Enter** → **Paste icon**
+
+:::tip[Copy to System Clipboard]
+With mouse ON, tmux captures mouse events. To copy to system clipboard:
+
+* **Hold Shift** while selecting text (bypasses tmux, uses terminal selection)
+* Or press **Ctrl+b m** to toggle mouse off temporarily
+:::
+
+## Installation
+
+<Steps>
+  1. Install dependencies (see above)
+
+  2. Run deploy command
+
+     <Tabs>
+       <TabItem label="Unix (macOS/Linux)">
+         ```bash
+         ./scripts/termote.sh install native
+         ```
+       </TabItem>
+
+       <TabItem label="Windows (PowerShell)">
+         ```powershell
+         .\scripts\termote.ps1 install native
+         .\scripts\termote.ps1 install native -Ttyd official
+         ```
+
+         By default (`-Ttyd fork`), the installer downloads the
+         [fork/MSVC ttyd build](https://github.com/lamngockhuong/ttyd/releases)
+         (`ttyd.msvc.exe`), since the upstream `tsl0922/ttyd` Windows build
+         (`ttyd.win32.exe`) is currently broken on the latest Windows. Pass
+         `-Ttyd official` to use the upstream build instead.
+       </TabItem>
+     </Tabs>
+
+  3. Access at http://localhost:7680
+</Steps>
+
+## When to Use
+
+* Need access to host binaries (claude, git, gh, etc.)
+* No Docker/Podman available
+* Full control over services
+
+<Aside type="tip">
+  Native mode is recommended when you need to use Claude Code or other host CLI
+  tools.
+</Aside>
+
+## Service Management
+
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    # Check processes
+    ps aux | grep ttyd
+    ps aux | grep tmux-api
+
+    # Restart
+    ./scripts/termote.sh install native
+    ```
+  </TabItem>
+
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    # Check processes
+    Get-Process -Name ttyd, tmux-api -ErrorAction SilentlyContinue
+
+    # Restart
+    .\scripts\termote.ps1 install native
+    ```
+  </TabItem>
+</Tabs>
+
+## Prevent macOS Sleep
+
+macOS automatically sleeps after inactivity, disconnecting remote terminal sessions. Use `caffeinate` to keep the machine awake while Termote is running:
+
+```bash
+# Prevent system sleep (runs until you press Ctrl+C)
+caffeinate -s
+
+# Or run in background
+caffeinate -s &
+
+# Stop background caffeinate
+pkill caffeinate
+```
+
+<Aside type="tip">
+  Use `caffeinate -s` (system sleep only) instead of `-d` (display sleep) — you
+  don't need the display on for remote access.
+</Aside>
+
+## Troubleshooting
+
+### Quick Diagnostics
+
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    ./scripts/termote.sh health   # Health check
+    ss -tlnp | grep -E "7680|7681"  # Check ports
+    ```
+  </TabItem>
+
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    .\scripts\termote.ps1 health   # Health check
+    netstat -ano | Select-String "7680|7681"  # Check ports
+    ```
+  </TabItem>
+</Tabs>
+
+### Check Processes
+
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    ps aux | grep ttyd         # Check if ttyd is running
+    ps aux | grep tmux-api     # Check if tmux-api is running
+    lsof -i :7680              # Verify main port
+    lsof -i :7681              # Verify ttyd port
+    ```
+  </TabItem>
+
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    Get-Process -Name ttyd, tmux-api -ErrorAction SilentlyContinue
+    netstat -ano | Select-String "7680"   # Verify main port
+    netstat -ano | Select-String "7681"   # Verify ttyd port
+    ```
+  </TabItem>
+</Tabs>
+
+### Debug with Logs
+
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    Native mode discards logs by default. To see logs:
+
+    ```bash
+    # Stop services
+    ./scripts/termote.sh uninstall native
+
+    # Start ttyd with logs (terminal 1)
+    ttyd -W -i lo -p 7681 tmux new-session -A -s main
+
+    # Start tmux-api with logs (terminal 2)
+    cd tmux-api
+    TERMOTE_PORT=7680 TERMOTE_BIND=127.0.0.1 \
+    TERMOTE_PWA_DIR=../pwa/dist ./tmux-api-native
+    ```
+  </TabItem>
+
+  <TabItem label="Windows (PowerShell)">
+    Native mode writes service logs to `~/.termote/logs`. View them with the CLI:
+
+    ```powershell
+    .\scripts\termote.ps1 logs            # Show recent ttyd + tmux-api logs
+    .\scripts\termote.ps1 logs ttyd       # Only ttyd logs
+    .\scripts\termote.ps1 logs tmux-api   # Only tmux-api logs
+    .\scripts\termote.ps1 logs follow     # Tail all logs live (Ctrl+C to stop)
+    .\scripts\termote.ps1 logs clean      # Delete log files
+    ```
+  </TabItem>
+</Tabs>
+
+### Common Issues
+
+| Issue           | Solution                                          |
+| --------------- | ------------------------------------------------- |
+| Port in use     | `lsof -i :7680` (Unix) or `netstat -ano \| Select-String 7680` (Win) then kill process |
+| ttyd missing    | `brew install ttyd` (macOS) or `apt install ttyd` (Linux) |
+| Binary missing  | `cd tmux-api && go build -o tmux-api-native .`    |
+| PWA not built   | `pnpm --filter termote build`                            |
+| Stale PWA cache | Settings → "Clear Cache & Reload" to refresh      |
+
+### tmux / psmux Session
+
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    tmux list-sessions         # List sessions
+    tmux attach -t main        # Attach to session
+    tmux kill-session -t main  # Reset session
+    ```
+  </TabItem>
+
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    psmux list-sessions         # List sessions
+    psmux attach -t main        # Attach to session
+    psmux kill-session -t main  # Reset session
+    ```
+  </TabItem>
+</Tabs>
+
+### API Test
+
+```bash
+curl http://localhost:7680/api/tmux/health
+curl http://localhost:7680/api/tmux/sessions
+```
+
+## Updating
+
+### Via CLI (Recommended)
+
+If Termote is already installed, use the built-in update command:
+
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    termote update                   # Update to latest version
+    termote update --version 0.0.9   # Pin to specific version
+    termote update --force           # Force reinstall current version
+    ```
+  </TabItem>
+
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    .\scripts\termote.ps1 update                 # Update to latest version
+    .\scripts\termote.ps1 update -Version 0.0.9  # Pin to specific version
+    .\scripts\termote.ps1 update -Force          # Force reinstall current version
+    ```
+  </TabItem>
+</Tabs>
+
+This automatically preserves your config (including your chosen `ttyd` build on Windows), stops services, downloads the new version, verifies checksums, and re-installs with your saved settings.
+
+### Via One-liner
+
+Re-run the installer - it compares versions and prompts before updating:
+
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    # Auto-update with saved config
+    curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash -s -- --update
+
+    # Or standard update
+    curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
+    ```
+
+    Options: `--update`, `--yes`, `--download-only`, `--fresh`, `--version <ver>`, `--strict`
+  </TabItem>
+
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    # Auto-update with saved config
+    $env:TERMOTE_UPDATE="true"; irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
+
+    # Or standard update
+    irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
+    ```
+
+    Options: `$env:TERMOTE_UPDATE="true"`, `$env:TERMOTE_AUTO_YES="true"`
+  </TabItem>
+</Tabs>
+
+### Manual Update
+
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    ./scripts/termote.sh uninstall native
+    git pull origin main
+    ./scripts/termote.sh install native
+    ```
+  </TabItem>
+
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    .\scripts\termote.ps1 uninstall native
+    git pull origin main
+    .\scripts\termote.ps1 install native
+    ```
+  </TabItem>
+</Tabs>
+
+## Uninstall
+
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    ./scripts/termote.sh uninstall native
+    ```
+  </TabItem>
+
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    .\scripts\termote.ps1 uninstall native
+    ```
+  </TabItem>
+</Tabs>

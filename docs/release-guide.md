@@ -203,6 +203,9 @@ refactors or non-security dependency bumps.
   published with `make_latest: false`.
 - The release workflow on `release/0.x` tags Docker images `0.1` and `0.1.x`
   only, never `latest`, and does not sync the Docker Hub README.
+- The website is built from `main` only. Its 0.x docs are archived with
+  `starlight-versions` under `website/src/content/docs/0.x/` (and `vi/0.x/`),
+  served at `/0.x/`; fix 0.x docs there on `main`, not on `release/0.x`.
 
 `releases/latest` must always be a 1.x release: `termote update`, `get.sh`,
 `get.ps1` and the PWA update check all install or compare against it, so a 0.x

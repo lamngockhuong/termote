@@ -1,0 +1,103 @@
+---
+title: Session Management
+description: Managing terminal sessions with tmux
+slug: 0.x/usage/sessions
+banner:
+  content: 'You are reading the docs for Termote 0.x, which only receives security and critical fixes. See the <a href="/getting-started/">1.x docs</a> or the <a href="https://github.com/lamngockhuong/termote/blob/main/docs/upgrade-1.0.md">upgrade guide</a>.'
+---
+
+import { Aside, Steps } from "@astrojs/starlight/components";
+
+Termote uses tmux windows for persistent sessions that survive disconnects.
+
+## Default Session
+
+Fresh installs start with a single **Shell** session. Create additional sessions as needed for different workflows (e.g., Claude Code, Copilot, builds).
+
+## Managing Sessions
+
+### Desktop
+
+* **Switch**: Click session in left sidebar or in the **session tabs** at the top (if enabled)
+* **Edit**: Double-click session name, or hover and click pencil icon
+* **Remove**: Hover and click X icon (requires 2+ sessions)
+* **Add**: Click "+ Add session" at bottom
+* **Collapse sidebar**: Click the collapse icon (top-right of sidebar) to show icons only — maximizes terminal width
+* **Fullscreen**: Click the fullscreen button in the header to enter fullscreen mode
+* **Session tabs**: Horizontal tab bar for quick session switching on desktop. Can be toggled via Settings → "Show session tabs"
+
+### Mobile
+
+* **Switch**: Swipe right to open sidebar, tap session
+* **Edit**: Swipe left on session, tap Edit
+* **Remove**: Swipe left on session, tap Remove
+* **Add**: Tap "+ Add session" in sidebar
+
+## Session Features
+
+| Feature             | Description                                      |
+| ------------------- | ------------------------------------------------ |
+| Custom icons        | Choose emoji icon for each session               |
+| Rename              | Change session name anytime                      |
+| Auto-sync           | Sessions sync across browsers (configurable)     |
+| Persistence         | Sessions backed by tmux windows                  |
+| Connection status   | Real-time indicator in header (see below)        |
+
+## Connection Indicator
+
+The header displays a real-time connection status indicator showing your link to the server:
+
+| Status        | Indicator | Meaning                                     |
+| ------------- | --------- | ------------------------------------------- |
+| Connected     | Green dot | Server online, terminal responsive           |
+| Connecting    | Blue dot  | Establishing connection to server            |
+| Disconnected  | Red dot   | No connection to server (clickable to retry) |
+| Error         | Red X     | Connection error occurred                   |
+
+The indicator auto-detects disconnects via session polling. Click it when disconnected to manually retry the connection.
+
+<Aside type="tip">
+  Sessions survive network disconnects. Reconnect to pick up where you left off.
+</Aside>
+
+## tmux Commands
+
+```bash
+# List windows (sessions)
+tmux list-windows
+
+# Create new window
+tmux new-window -n myproject
+
+# Switch to window
+tmux select-window -t 0
+
+# Kill window
+tmux kill-window -t 0
+```
+
+## API Endpoints
+
+Sessions are managed via tmux-api:
+
+| Endpoint                       | Method      | Description       |
+| ------------------------------ | ----------- | ----------------- |
+| `/api/tmux/windows`            | GET         | List all sessions |
+| `/api/tmux/new?name=X`         | POST        | Create session    |
+| `/api/tmux/select/{id}`        | POST        | Switch session    |
+| `/api/tmux/rename/{id}?name=X` | POST        | Rename session    |
+| `/api/tmux/kill/{id}`          | POST/DELETE | Remove session    |
+
+## Troubleshooting
+
+### Session not persisting
+
+1. Check tmux is running: `tmux list-windows`
+2. Verify ttyd uses `-A` flag (attach-or-create)
+3. Check container logs: `docker logs termote` or `podman logs termote`
+
+### WebSocket errors
+
+1. Check container logs: `docker logs termote` or `podman logs termote`
+2. Verify ttyd is running on port 7681
+3. Check API health: `curl http://localhost:7680/api/tmux/health`
