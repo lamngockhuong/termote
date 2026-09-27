@@ -434,9 +434,9 @@ Commands:
   stop                 Stop the server (it starts again at the next login)
   restart              Stop and start with the saved options
   status               Show what the running server reports (alias: health)
-  container up|down    Run the server in a container (podman or docker)
+  container <cmd>      Run the server in a container: up, down, logs [-f], status
   update               Update to the latest release
-  uninstall            Remove the service; the config stays
+  uninstall            Remove the service, the command and the install (config and logs stay)
   logs [service]       View logs (server, all, follow, clean)
   link / unlink        Create or remove the 'termote' command in ~/.local/bin
   show-password        Show the saved admin password
@@ -455,6 +455,11 @@ Options of start (saved; a flag not given keeps its saved value):
   --remove-host <name>       Remove an allowed Host name (repeatable)
   --allow-herdr-no-auth      Allow herdr without auth
   --fresh                    Set a new password
+
+Options of container up (saved apart from start's; the password is shared):
+  --port --lan --tailscale --no-tailscale --no-auth --allow-host --remove-host --fresh
+  --workspace <dir>          Directory mounted at /workspace (default: ~/termote-workspace)
+  --build                    Build the image from a checkout instead of pulling it
 
 Options of update:
   --version <X.Y.Z>          Update to a specific version
