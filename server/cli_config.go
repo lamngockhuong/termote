@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/pbkdf2"
 	"crypto/rand"
 	"crypto/sha256"
@@ -161,6 +162,7 @@ const (
 	keyPort             = "TERMOTE_PORT"
 	keyTailscale        = "TERMOTE_TAILSCALE"
 	keySavedPass        = "TERMOTE_SAVED_PASS"
+	keySavedPassMAC     = "TERMOTE_SAVED_PASS_MAC"
 	keyMux              = "TERMOTE_MUX"
 	keyAllowedHosts     = "TERMOTE_ALLOWED_HOSTS"
 	keyHerdrAllowNoAuth = "TERMOTE_HERDR_ALLOW_NO_AUTH"
@@ -213,7 +215,7 @@ func parseUnixConfig(data []byte, key func() string) (*savedConfig, error) {
 		cfg.Container = cc
 	}
 	if enc := kv[keySavedPass]; enc != "" {
-		pass, err := decryptSavedPassword(enc, key())
+		pass, err := decryptSavedPassword(enc, kv[keySavedPassMAC], key())
 		if err != nil {
 			cfg.PasswordUnreadable = true
 		} else {
@@ -224,12 +226,13 @@ func parseUnixConfig(data []byte, key func() string) (*savedConfig, error) {
 }
 
 func formatUnixConfig(cfg savedConfig, key string) ([]byte, error) {
-	enc := ""
+	enc, mac := "", ""
 	if cfg.Password != "" {
 		var err error
 		if enc, err = encryptOpenSSL(cfg.Password, key); err != nil {
 			return nil, err
 		}
+		mac = passwordMAC(enc, key)
 	}
 	values := []string{cfg.Tailscale, cfg.Mux, strings.Join(cfg.AllowHosts, ",")}
 	if cc := cfg.Container; cc != nil {
@@ -248,6 +251,7 @@ func formatUnixConfig(cfg savedConfig, key string) ([]byte, error) {
 	w(keyPort, strconv.Itoa(cfg.Port))
 	w(keyTailscale, cfg.Tailscale)
 	w(keySavedPass, enc)
+	w(keySavedPassMAC, mac)
 	w(keyMux, cfg.Mux)
 	w(keyAllowedHosts, strings.Join(cfg.AllowHosts, ","))
 	w(keyHerdrAllowNoAuth, strconv.FormatBool(cfg.HerdrAllowNoAuth))
@@ -420,8 +424,25 @@ func decryptOpenSSL(data []byte, pass string) (string, error) {
 	return string(buf[:len(buf)-pad]), nil
 }
 
-// decryptSavedPassword reads TERMOTE_SAVED_PASS, in the openssl format.
-func decryptSavedPassword(enc, key string) (string, error) {
+// passwordMAC authenticates the encrypted password with the key: CBC alone
+// only checks padding, so a wrong or missing key would "decrypt" to garbage
+// about once in 200 tries instead of failing.
+func passwordMAC(enc, key string) string {
+	m := hmac.New(sha256.New, []byte(key))
+	m.Write([]byte("termote-saved-pass\x00" + enc))
+	return hex.EncodeToString(m.Sum(nil))
+}
+
+// decryptSavedPassword reads TERMOTE_SAVED_PASS (the openssl format) after
+// checking its MAC. Without a key, or with a MAC that does not match, the
+// password is unreadable.
+func decryptSavedPassword(enc, mac, key string) (string, error) {
+	if key == "" {
+		return "", errBadCiphertext
+	}
+	if !hmac.Equal([]byte(strings.ToLower(mac)), []byte(passwordMAC(enc, key))) {
+		return "", errBadCiphertext
+	}
 	data, err := base64.StdEncoding.DecodeString(enc)
 	if err != nil {
 		return "", errBadCiphertext

@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -115,15 +116,32 @@ func TestGoEncryptedPasswordDecryptsWithOpenSSL(t *testing.T) {
 	}
 }
 
-func TestDecryptRejectsTamperedCiphertext(t *testing.T) {
+func TestDecryptRejectsTamperedCiphertextAndWrongKeys(t *testing.T) {
 	enc, _ := encryptOpenSSL("secret", "k")
+	if p, err := decryptSavedPassword(enc, passwordMAC(enc, "k"), "k"); err != nil || p != "secret" {
+		t.Fatalf("good password: %q %v", p, err)
+	}
 	raw, _ := base64.StdEncoding.DecodeString(enc)
 	raw[len(raw)-1] ^= 0xff
-	if _, err := decryptSavedPassword(base64.StdEncoding.EncodeToString(raw), "k"); err == nil {
-		t.Fatal("tampered ciphertext decrypted")
+	tampered := base64.StdEncoding.EncodeToString(raw)
+	for name, args := range map[string][3]string{
+		"tampered ciphertext": {tampered, passwordMAC(enc, "k"), "k"},
+		"garbage":             {"not base64!", passwordMAC("not base64!", "k"), "k"},
+		"wrong key":           {enc, passwordMAC(enc, "k"), "other"},
+		"no key":              {enc, passwordMAC(enc, ""), ""},
+		"no MAC":              {enc, "", "k"},
+	} {
+		if _, err := decryptSavedPassword(args[0], args[1], args[2]); err == nil {
+			t.Errorf("%s decrypted", name)
+		}
 	}
-	if _, err := decryptSavedPassword("not base64!", "k"); err == nil {
-		t.Fatal("garbage decrypted")
+	// Without the MAC a wrong key decrypted about 1 time in 200; with it,
+	// never.
+	for i := range 1000 {
+		key := strconv.Itoa(i)
+		if _, err := decryptSavedPassword(enc, passwordMAC(enc, "k"), key); err == nil && key != "k" {
+			t.Fatalf("key %q accepted", key)
+		}
 	}
 }
 

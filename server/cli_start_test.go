@@ -400,11 +400,11 @@ func TestLaunchdStartBootstrapsOrKickstarts(t *testing.T) {
 }
 
 func TestWindowsTaskAndStartupFallback(t *testing.T) {
-	xml := windowsTaskXML(`BOX\u`, `C:\Users\u\AppData\Local\termote\bin\termote.cmd`)
+	xml := windowsTaskXML(`BOX\u`, `C:\Users\u\AppData\Local\termote\state\termote-task.vbs`)
 	for _, want := range []string{"<LogonTrigger>", `<UserId>BOX\u</UserId>`, "<LogonType>InteractiveToken</LogonType>",
 		"<RunLevel>LeastPrivilege</RunLevel>", "<MultipleInstancesPolicy>StopExisting</MultipleInstancesPolicy>",
 		"<Count>3</Count>", "<ExecutionTimeLimit>PT0S</ExecutionTimeLimit>",
-		`<Command>C:\Users\u\AppData\Local\termote\bin\termote.cmd</Command>`, "<Arguments>serve --service</Arguments>"} {
+		"<Command>wscript.exe</Command>", `<Arguments>&#34;C:\Users\u\AppData\Local\termote\state\termote-task.vbs&#34;</Arguments>`} {
 		if !strings.Contains(xml, want) {
 			t.Errorf("task XML misses %q", want)
 		}
@@ -422,7 +422,7 @@ func TestWindowsTaskAndStartupFallback(t *testing.T) {
 		t.Fatalf("fallback: %v %v", sup, err)
 	}
 	launcher := string(mustRead(t, (&startupSupervisor{c: tc.cli}).launcherPath()))
-	if !strings.Contains(launcher, `""`+tc.exe+`"" serve --service", 0, False`) {
+	if !strings.Contains(launcher, `"""`+tc.exe+`"" serve --service", 0, False`) {
 		t.Fatalf("launcher %q", launcher)
 	}
 	if !strings.Contains(tc.stdout.String(), "Startup folder") {
@@ -667,4 +667,43 @@ func pidRunning(pid int) bool {
 		}
 	}
 	return false
+}
+
+// A start that fails on Tailscale or a busy new port leaves the running
+// server alone: the user may be connected through it.
+func TestStartChecksBeforeStoppingTheServer(t *testing.T) {
+	tc := newTestCLI(t, "linux")
+	tc.runner.paths["tmux"] = true
+	port := freePort(t)
+	tc.saveConfig(savedConfig{Port: port, Password: "p", Mux: "tmux"})
+	svc := &fakeService{c: tc.cli, port: port, broken: map[string]string{}}
+	tc.testSupervisors = []supervisor{svc}
+
+	if code := tc.main([]string{"start", "--tailscale", "box.ts.net"}); code != 1 || !strings.Contains(tc.stderr.String(), "tailscale") {
+		t.Fatalf("code %d stderr %q", code, tc.stderr.String())
+	}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	busy := ln.Addr().(*net.TCPAddr).Port
+	tc.stderr.Reset()
+	if code := tc.main([]string{"start", "--port", strconv.Itoa(busy)}); code != 1 || !strings.Contains(tc.stderr.String(), "in use") {
+		t.Fatalf("busy port: code %d stderr %q", code, tc.stderr.String())
+	}
+	if slices.Contains(svc.calls, "stop") {
+		t.Fatalf("server stopped by a start that failed: %v", svc.calls)
+	}
+	if cfg, _ := tc.loadConfig(); cfg.Tailscale != "" || cfg.Port != port {
+		t.Fatalf("config changed by a failed start: %+v", cfg)
+	}
+}
+
+func TestHiddenLauncherQuoting(t *testing.T) {
+	got := hiddenLauncher(`C:\Program Files\a"b\termote.cmd`, true)
+	want := `WScript.Quit CreateObject("WScript.Shell").Run("""C:\Program Files\a""b\termote.cmd"" serve --service", 0, True)`
+	if !strings.Contains(got, want) {
+		t.Fatalf("launcher:\n%s\nwant:\n%s", got, want)
+	}
 }

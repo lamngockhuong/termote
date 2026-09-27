@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"maps"
+	"net"
 	"os"
 	"path/filepath"
 	"slices"
@@ -132,12 +133,15 @@ func (c *cli) isServeProcess(p procInfo) bool {
 		base := strings.ToLower(p.Exe[strings.LastIndexAny(p.Exe, `\/`)+1:])
 		return base == "termote.exe" || base == "termote-dev.exe"
 	}
-	f := strings.Fields(p.Cmdline)
-	if len(f) < 2 || f[1] != "serve" {
-		return false
+	// The argv is joined by spaces, so the binary path may contain some:
+	// match the argument at the end, then the binary's name before it.
+	for _, suffix := range []string{" serve", " serve --service"} {
+		if bin, ok := strings.CutSuffix(p.Cmdline, suffix); ok {
+			base := filepath.Base(bin)
+			return base == "termote" || base == "termote-dev"
+		}
 	}
-	base := filepath.Base(f[0])
-	return base == "termote" || base == "termote-dev"
+	return false
 }
 
 // detachedSupervisor starts serve in its own session and stops it through the
@@ -210,13 +214,17 @@ func withoutTermoteEnv(env []string) []string {
 func (c *cli) serverLog() string { return filepath.Join(c.stateDir(), "termote.log") }
 
 // waitStopped waits until nothing answers on the port, so a new server can
-// bind it and an old one cannot answer a health check meant for the new.
+// bind it and an old one cannot answer a health check meant for the new. It
+// connects rather than binds: macOS lets 127.0.0.1 bind while an old server
+// still holds 0.0.0.0.
 func (c *cli) waitStopped(port int, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	for {
-		if portFree("127.0.0.1", port) == nil {
+		conn, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)), 200*time.Millisecond)
+		if err != nil {
 			return nil
 		}
+		conn.Close()
 		if time.Now().After(deadline) {
 			return errors.New("port " + strconv.Itoa(port) + " is still in use after stopping the server")
 		}

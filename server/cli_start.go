@@ -231,39 +231,53 @@ func (c *cli) cmdStart(args []string) error {
 			prevPort = saved.Port
 		}
 	}
-	// Stop what runs now, under any supervisor, so the port is free and a
-	// registration left from another one (detached before systemd was
-	// enabled) does not linger.
-	stopped := false
-	for _, s := range c.supervisors() {
-		if s.Installed() {
-			if err := s.Stop(); err != nil {
-				c.warnf("Could not stop the server (%s): %v", s.Name(), err)
-			}
-			stopped = true
-		}
-	}
-	// Wait for the old server to let go of its port; with nothing stopped,
-	// whatever holds a port is not Termote's.
-	if stopped {
-		if err := c.waitStopped(prevPort, processKillWait+2*time.Second); err != nil {
-			return err
-		}
-	}
 	bind := "127.0.0.1"
 	if o.lan {
 		bind = "0.0.0.0"
 	}
-	if err := portFree(bind, o.port); err != nil {
+	portErr := func(err error) error {
 		return fmt.Errorf("port %d is in use by another program (%v); stop it or choose --port", o.port, err)
 	}
-	if prevTS != "" && prevTS != o.tailscale {
-		c.removeTailscale(prevTS)
+	var running []supervisor
+	for _, s := range c.supervisors() {
+		if s.Installed() {
+			running = append(running, s)
+		}
+	}
+	// Everything that can fail is checked before the running server stops:
+	// the user may be connected through it. A port other than the running
+	// server's is checked now; the same port only once that server is gone.
+	if len(running) == 0 || o.port != prevPort {
+		if err := portFree(bind, o.port); err != nil {
+			return portErr(err)
+		}
 	}
 	if o.tailscale != "" {
 		if err := c.setupTailscale(o.tailscale, o.port); err != nil {
 			return err
 		}
+	}
+
+	// Stop what runs now, under any supervisor, so the port is free and a
+	// registration left from another one (detached before systemd was
+	// enabled) does not linger.
+	for _, s := range running {
+		if err := s.Stop(); err != nil {
+			c.warnf("Could not stop the server (%s): %v", s.Name(), err)
+		}
+	}
+	if len(running) > 0 {
+		if err := c.waitStopped(prevPort, processKillWait+2*time.Second); err != nil {
+			return err
+		}
+		if o.port == prevPort {
+			if err := portFree(bind, o.port); err != nil {
+				return portErr(err)
+			}
+		}
+	}
+	if prevTS != "" && prevTS != o.tailscale {
+		c.removeTailscale(prevTS)
 	}
 	if err := c.saveConfig(savedConfig{
 		LAN:              o.lan,
@@ -409,8 +423,10 @@ func (c *cli) waitForServer(port int, pass, version string, timeout time.Duratio
 }
 
 func (c *cli) cmdStop(args []string) error {
-	if _, err := parseArgs(c.newFlagSet("stop"), args); err != nil {
+	if pos, err := parseArgs(c.newFlagSet("stop"), args); err != nil {
 		return flagErr(err)
+	} else if len(pos) > 0 {
+		return usageError("stop takes no arguments (the container has its own: termote container down)")
 	}
 	saved, _ := c.loadConfig()
 	sup := c.installedSupervisor()
@@ -437,8 +453,10 @@ func (c *cli) cmdStop(args []string) error {
 
 // cmdRestart stops and starts the server with the saved config unchanged.
 func (c *cli) cmdRestart(args []string) error {
-	if _, err := parseArgs(c.newFlagSet("restart"), args); err != nil {
+	if pos, err := parseArgs(c.newFlagSet("restart"), args); err != nil {
 		return flagErr(err)
+	} else if len(pos) > 0 {
+		return usageError("restart takes no arguments (the container has its own: termote container down)")
 	}
 	saved, err := c.loadConfig()
 	if err != nil {
@@ -534,8 +552,10 @@ func (c *cli) cmdStatus(args []string) error {
 // `termote` command and the installed versions. The config (and its saved
 // password) and the logs stay; the message names both dirs.
 func (c *cli) cmdUninstall(args []string) error {
-	if _, err := parseArgs(c.newFlagSet("uninstall"), args); err != nil {
+	if pos, err := parseArgs(c.newFlagSet("uninstall"), args); err != nil {
 		return flagErr(err)
+	} else if len(pos) > 0 {
+		return usageError("uninstall takes no arguments (the container has its own: termote container down)")
 	}
 	saved, _ := c.loadConfig()
 	c.heading("Termote Uninstall")

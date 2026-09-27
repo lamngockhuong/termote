@@ -47,13 +47,20 @@ func runServe(args []string) int {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
 		if errors.Is(err, errConfigUnusable) {
+			// launchd's KeepAlive restarts any failed exit every few
+			// seconds; exit 0 so only `termote start --fresh` runs it again.
+			if os.Getenv("XPC_SERVICE_NAME") == launchdLabel {
+				return 0
+			}
 			return exitConfigUnusable
 		}
 		return 1
 	}
 	scrubTermoteEnv()
-	if err := c.writePIDFile(); err != nil {
-		fmt.Fprintf(os.Stderr, "[WARN] cannot write %s: %v\n", c.pidFile(), err)
+	cfg.OnListen = func() {
+		if err := c.writePIDFile(); err != nil {
+			fmt.Fprintf(os.Stderr, "[WARN] cannot write %s: %v\n", c.pidFile(), err)
+		}
 	}
 	defer c.removePIDFile()
 	startServeMode(cfg)

@@ -44,7 +44,9 @@ type serveConfig struct {
 	AllowLocalAddr bool
 	// Tailscale is "host[:port]" to publish over Tailscale HTTPS once
 	// listening; empty publishes nothing.
-	Tailscale string
+	Tailscale string // OnListen runs once the port is bound (serve records its PID then, so
+	// a server that cannot bind never replaces the running one's PID file).
+	OnListen func()
 }
 
 // newServeConfigFromEnv creates config from environment variables with defaults
@@ -267,6 +269,9 @@ func startServeMode(cfg serveConfig) {
 	ln, err := net.Listen("tcp", net.JoinHostPort(cfg.Bind, cfg.Port))
 	if err != nil {
 		log.Fatal(err)
+	}
+	if cfg.OnListen != nil {
+		cfg.OnListen()
 	}
 	// After the first signal, a second one kills the process as usual.
 	go func() { <-ctx.Done(); stop() }()

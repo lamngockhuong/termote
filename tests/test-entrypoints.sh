@@ -104,10 +104,11 @@ test_services() {
     fi
 
     # Shells inherit the tmux server's environment; the password must not be in it
-    if grep -q "env -u TERMOTE_PASS tmux new-session" "$PROJECT_DIR/entrypoint.sh"; then
-        pass "tmux session starts without TERMOTE_PASS"
+    if grep -q 'env "${unset_termote\[@\]}" tmux new-session' "$PROJECT_DIR/entrypoint.sh" &&
+        grep -q '== TERMOTE_\*' "$PROJECT_DIR/entrypoint.sh"; then
+        pass "tmux session starts without any TERMOTE_* variable"
     else
-        fail "tmux env" "env -u TERMOTE_PASS" "password reaches the shells"
+        fail "tmux env" "every TERMOTE_* unset" "a TERMOTE_* variable reaches the shells"
     fi
 
     # exec: the server gets SIGTERM from tini directly, no shell in between
@@ -198,6 +199,11 @@ test_container_runtime() {
     else
         fail "GET /" "HTML referencing /assets/" "$(echo "$index" | head -c 200)"
     fi
+
+    # The shells of the session see no TERMOTE_* variable.
+    local leaked
+    leaked=$("$rt" exec "$name" sh -c 'tmux show-environment -g | grep -c "^TERMOTE_"' || true)
+    if [[ "${leaked:-0}" == "0" ]]; then pass "tmux server has no TERMOTE_* variable"; else fail "tmux env" "0" "$leaked"; fi
 
     local pid1
     pid1=$("$rt" exec "$name" cat /proc/1/comm)

@@ -37,9 +37,10 @@ func (t *taskSupervisor) schtasks(args ...string) ([]byte, error) {
 }
 
 // windowsTaskXML is the task definition. The logon trigger and interactive
-// token need no administrator rights; `serve --service` hides the console
-// window the task opens.
-func windowsTaskXML(user, exe string) string {
+// token need no administrator rights. The action is wscript running a
+// hidden launcher (a console program started by the task would open a
+// window), which waits for serve and passes its exit status on.
+func windowsTaskXML(user, launcher string) string {
 	esc := func(s string) string {
 		var b strings.Builder
 		xml.EscapeText(&b, []byte(s))
@@ -76,8 +77,8 @@ func windowsTaskXML(user, exe string) string {
   </Settings>
   <Actions Context="Author">
     <Exec>
-      <Command>` + esc(exe) + `</Command>
-      <Arguments>serve --service</Arguments>
+      <Command>wscript.exe</Command>
+      <Arguments>` + esc(`"`+launcher+`"`) + `</Arguments>
     </Exec>
   </Actions>
 </Task>
@@ -105,8 +106,12 @@ func (t *taskSupervisor) Install(exe string, _ map[string]string) error {
 	if err := ensureDir(t.c.stateDir()); err != nil {
 		return err
 	}
+	launcher := t.launcherPath()
+	if err := os.WriteFile(launcher, []byte(hiddenLauncher(exe, true)), 0o644); err != nil {
+		return err
+	}
 	path := filepath.Join(t.c.stateDir(), "termote-task.xml")
-	if err := os.WriteFile(path, utf16File(windowsTaskXML(user, exe)), 0o600); err != nil {
+	if err := os.WriteFile(path, utf16File(windowsTaskXML(user, launcher)), 0o600); err != nil {
 		return err
 	}
 	defer os.Remove(path)
@@ -136,8 +141,14 @@ func (t *taskSupervisor) Status() (bool, int, error) {
 	return ok, p.PID, nil
 }
 
+// launcherPath is the hidden launcher the task runs.
+func (t *taskSupervisor) launcherPath() string {
+	return filepath.Join(t.c.stateDir(), "termote-task.vbs")
+}
+
 func (t *taskSupervisor) Uninstall() error {
 	t.Stop()
+	removeFile(t.launcherPath())
 	if t.Installed() {
 		if _, err := t.schtasks("/Delete", "/TN", windowsTaskName, "/F"); err != nil {
 			return fmt.Errorf("schtasks /Delete: %w", err)
@@ -164,18 +175,22 @@ func (s *startupSupervisor) launcherPath() string {
 
 func (s *startupSupervisor) Installed() bool { return fileExists(s.launcherPath()) }
 
-// startupLauncher runs `<exe> serve --service` without a window.
-func startupLauncher(exe string) string {
-	quoted := `""` + strings.ReplaceAll(exe, `"`, `""`) + `""`
-	return "' Written by termote start; termote uninstall removes it.\r\n" +
-		`CreateObject("WScript.Shell").Run "` + quoted + ` serve --service", 0, False` + "\r\n"
+// hiddenLauncher is a VBScript that runs `<exe> serve --service` without a
+// window; with wait it waits and exits with serve's status (for the task).
+func hiddenLauncher(exe string, wait bool) string {
+	cmd := `"""` + strings.ReplaceAll(exe, `"`, `""`) + `"" serve --service"`
+	head := "' Written by termote start; termote uninstall removes it.\r\n"
+	if wait {
+		return head + `WScript.Quit CreateObject("WScript.Shell").Run(` + cmd + `, 0, True)` + "\r\n"
+	}
+	return head + `CreateObject("WScript.Shell").Run ` + cmd + `, 0, False` + "\r\n"
 }
 
 func (s *startupSupervisor) Install(exe string, _ map[string]string) error {
 	if err := ensureDir(filepath.Dir(s.launcherPath())); err != nil {
 		return err
 	}
-	return os.WriteFile(s.launcherPath(), []byte(startupLauncher(exe)), 0o644)
+	return os.WriteFile(s.launcherPath(), []byte(hiddenLauncher(exe, false)), 0o644)
 }
 
 func (s *startupSupervisor) Start() error {
