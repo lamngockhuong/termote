@@ -81,11 +81,12 @@ func (c *cli) preferredSupervisor() supervisor {
 // serviceEnv is the environment the service runs with: the PATH of the shell
 // running `start` (so tmux, Homebrew, nvm and ~/.local/bin are found and
 // every pane inherits them), the herdr socket, the XDG dirs that locate the
-// config, and the locale tmux needs for UTF-8. Never a TERMOTE_* variable:
+// config and the install (update run from a pane must find it), and the
+// locale tmux needs for UTF-8. Never a TERMOTE_* variable:
 // serve reads its settings from the config file.
 func (c *cli) serviceEnv() map[string]string {
 	env := map[string]string{}
-	for _, k := range []string{"PATH", "HERDR_SOCKET_PATH", "XDG_CONFIG_HOME", "XDG_STATE_HOME", "LANG", "LC_ALL"} {
+	for _, k := range []string{"PATH", "HERDR_SOCKET_PATH", "XDG_CONFIG_HOME", "XDG_STATE_HOME", "XDG_DATA_HOME", "LANG", "LC_ALL"} {
 		if v := c.getenv(k); v != "" {
 			env[k] = v
 		}

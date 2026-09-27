@@ -18,6 +18,8 @@
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
+# Windows PowerShell 5.1 may default to TLS 1.0, which GitHub refuses.
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 $Repo = 'lamngockhuong/termote'
 $Dir = Join-Path $env:LOCALAPPDATA 'termote'
 
@@ -29,14 +31,17 @@ function Stop-Install([string]$Message) {
 }
 
 $Pin = "$env:TERMOTE_VERSION".TrimStart('v')
-if ($Pin -and $Pin -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$') {
+# \z, not $: .NET's $ also matches before a trailing newline.
+if ($Pin -and $Pin -notmatch '\A[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?\z') {
     Stop-Install "TERMOTE_VERSION='$Pin' is not a version. It has to look like 1.0.0, or 1.0.0-rc.1 for a pre-release."
 }
 
 # Windows on ARM runs the amd64 build.
 $Name = $null
 $Rescue = $false
-if (Test-Path (Join-Path $Dir 'versions')) {
+# An install is a current pointer; without one (cut short, or uninstalled
+# with its logs kept) the dir may hold only what an install leaves behind.
+if (Test-Path (Join-Path $Dir 'current.txt')) {
     if (-not $Pin) {
         Write-Host "Termote is already installed at $Dir; leaving it alone."
         Write-Host "To move it forward, run:  termote update"
@@ -45,8 +50,9 @@ if (Test-Path (Join-Path $Dir 'versions')) {
     }
     Write-Host "Termote is already installed at $Dir; laying $Pin down beside it and pointing current at it."
     $Rescue = $true
-} elseif ((Test-Path $Dir) -and (Get-ChildItem $Dir -Force | Select-Object -First 1)) {
-    Stop-Install "$Dir exists and is not a Termote install. Move it aside, then run this again."
+} elseif (Test-Path $Dir) {
+    $foreign = Get-ChildItem $Dir -Force | Where-Object { $_.Name -notin @('versions', 'state', 'bin', 'previous.txt') -and $_.Name -notlike '.unpack-*' }
+    if ($foreign) { Stop-Install "$Dir exists and is not a Termote install. Move it aside, then run this again." }
 }
 
 if ($Pin) {
@@ -113,7 +119,11 @@ try {
     try { Invoke-WebRequest -UseBasicParsing -Uri "$Base/$Name.zip.sha256" -OutFile (Join-Path $Tmp "$Name.zip.sha256") }
     catch { Stop-Install "could not download $Name.zip.sha256; refusing to install an unverified binary." }
 
-    $expected = ((Get-Content (Join-Path $Tmp "$Name.zip.sha256") -Raw) -split '\s+')[0]
+    $fields = (Get-Content (Join-Path $Tmp "$Name.zip.sha256") -Raw).Trim() -split '\s+'
+    if ($fields.Count -lt 2 -or $fields[1].TrimStart('*') -ne "$Name.zip") {
+        Stop-Install "$Name.zip.sha256 does not list $Name.zip; refusing to install an unverified binary."
+    }
+    $expected = $fields[0]
     $actual = (Get-FileHash -Algorithm SHA256 (Join-Path $Tmp "$Name.zip")).Hash
     if (-not $expected -or $expected -ne $actual) {
         Stop-Install "CHECKSUM MISMATCH for $Name.zip: the download was discarded and nothing was installed. Try again; if it repeats, report it."

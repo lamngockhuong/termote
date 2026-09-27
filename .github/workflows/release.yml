@@ -137,7 +137,12 @@ jobs:
           exe=termote
           [ "$GOOS" = windows ] && exe=termote.exe
           mkdir -p "pkg/$name/bin" out
-          (cd server && go build -ldflags="-s -w" -o "../pkg/$name/bin/$exe" .)
+          # The version comes from the tag, whatever server/cli_version.go says.
+          (cd server && go build -ldflags="-s -w -X main.cliVersion=${VERSION}" -o "../pkg/$name/bin/$exe" .)
+          if [ "$GOOS" = linux ] && [ "$GOARCH" = amd64 ]; then
+            got=$("pkg/$name/bin/$exe" version)
+            [ "$got" = "Termote v${VERSION}" ] || { echo "::error::binary reports '$got', expected v${VERSION}"; exit 1; }
+          fi
           cp LICENSE "pkg/$name/"
           if [ "$GOOS" = windows ]; then
             archive="$name.zip"

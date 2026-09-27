@@ -408,3 +408,49 @@ func TestInstallVersionFromZip(t *testing.T) {
 		t.Fatal("launcher not written")
 	}
 }
+
+func TestRollbackKeepsPreviousAndForceReinstalls(t *testing.T) {
+	tc, gh, svc := setupUpdate(t)
+	writeFile(t, tc.versionBinary("0.9.9"), "ELF 0.9.9")
+	tc.setPointer("previous", "0.9.9")
+	svc.broken["1.0.1"] = "dead"
+	tc.main([]string{"update"})
+	if tc.currentVersion() != "1.0.0" || tc.previousVersion() != "0.9.9" {
+		t.Fatalf("after rollback current %q previous %q", tc.currentVersion(), tc.previousVersion())
+	}
+
+	// --force on the running version lays it down again (a damaged copy).
+	gh.publish(t, "1.0.0", "good")
+	writeFile(t, tc.versionBinary("1.0.0"), "damaged")
+	tc.stderr.Reset()
+	if code := tc.main([]string{"update", "--version", "1.0.0", "--force"}); code != 0 {
+		t.Fatalf("force: %s", tc.stderr.String())
+	}
+	if b := mustRead(t, tc.versionBinary("1.0.0")); string(b) != "ELF 1.0.0" {
+		t.Fatalf("not reinstalled: %q", b)
+	}
+}
+
+func TestUninstallKeepsStateAndOthersInstalls(t *testing.T) {
+	win := newTestCLI(t, "windows")
+	win.exe = win.versionBinary("1.0.0")
+	writeFile(t, win.exe, "MZ")
+	win.setPointer("current", "1.0.0")
+	win.ensureWindowsLauncher()
+	writeFile(t, filepath.Join(win.stateDir(), "termote.log"), "log")
+	if code := win.main([]string{"uninstall"}); code != 0 {
+		t.Fatal(win.stderr.String())
+	}
+	if !fileExists(filepath.Join(win.stateDir(), "termote.log")) || fileExists(win.pointerPath("current")) || isDir(win.versionsDir()) {
+		t.Fatal("uninstall removed the logs or kept the install")
+	}
+
+	// From a checkout, an install elsewhere is left alone.
+	tc := newTestCLI(t, "linux")
+	writeFile(t, tc.versionBinary("1.0.0"), "ELF")
+	tc.exe = "/src/termote/server/termote-dev"
+	tc.main([]string{"uninstall"})
+	if !fileExists(tc.versionBinary("1.0.0")) || !strings.Contains(tc.stdout.String(), "left alone") {
+		t.Fatalf("checkout uninstall touched the install:\n%s", tc.stdout.String())
+	}
+}

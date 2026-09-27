@@ -138,9 +138,16 @@ func (c *cli) switchCurrent(version string) error {
 
 // windowsLauncher is bin\termote.cmd: it runs the current version, so the
 // command on PATH and the Scheduled Task never change on update.
+//
+// setlocal keeps its variable out of the caller's session (and so out of
+// the server's environment); a missing current.txt fails instead of running
+// a value left from before.
 const windowsLauncher = "@echo off\r\n" +
 	"rem Written by the Termote installer: runs the version named in current.txt.\r\n" +
+	"setlocal\r\n" +
+	"set \"_termote_version=\"\r\n" +
 	"set /p _termote_version=<\"%~dp0..\\current.txt\"\r\n" +
+	"if not defined _termote_version (echo termote: %~dp0..\\current.txt names no version; reinstall Termote 1>&2 & exit /b 1)\r\n" +
 	"\"%~dp0..\\versions\\%_termote_version%\\bin\\termote.exe\" %*\r\n"
 
 func (c *cli) ensureWindowsLauncher() error {
@@ -191,6 +198,31 @@ func (c *cli) installVersion(archive, version string) error {
 		return err
 	}
 	return os.Rename(stage, dst)
+}
+
+// removeInstall deletes the install but its state dir (Windows keeps the
+// logs inside the install root), the current pointer first so a half-removed
+// install never looks installed. Windows cannot delete the binary running
+// this command; what is left goes once it exits.
+func (c *cli) removeInstall() {
+	os.Remove(c.pointerPath("current"))
+	entries, _ := os.ReadDir(c.dataDir())
+	var left []string
+	for _, e := range entries {
+		path := filepath.Join(c.dataDir(), e.Name())
+		if path == c.stateDir() {
+			continue
+		}
+		if err := os.RemoveAll(path); err != nil {
+			left = append(left, e.Name())
+		}
+	}
+	if len(left) > 0 {
+		c.warnf("Could not remove %s from %s yet (in use); delete it once this command has exited", strings.Join(left, ", "), c.dataDir())
+		return
+	}
+	os.Remove(c.dataDir()) // only when empty (no state dir inside)
+	c.infof("Removed the install in %s", c.dataDir())
 }
 
 // pruneVersions keeps current and previous and removes every other version.

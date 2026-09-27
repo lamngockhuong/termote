@@ -192,6 +192,24 @@ test_refusals() {
     FAKE_TAGS="v0.1.0 v1.0.0-rc.1" run_install
     [[ $CODE -ne 0 ]] && echo "$OUT" | grep -q "no 1.x release" && pass "no stable 1.x release" || fail "no release" "refused" "$OUT"
 
+    run_install "TERMOTE_VERSION=1.0.1
+../evil"
+    [[ $CODE -ne 0 ]] && pass "multi-line TERMOTE_VERSION refused" || fail "multi-line" "refused" "$OUT"
+
+    # A .sha256 that lists another file does not vouch for this archive.
+    make_release 2.0.2
+    local n="termote-2.0.2-$OS-$ARCH"
+    (cd "$RELEASES/v2.0.2" && sha256 "$n.tar.gz" | sed "s/$n.tar.gz/other.tar.gz/" >"$n.tar.gz.sha256")
+    run_install TERMOTE_VERSION=2.0.2
+    [[ $CODE -ne 0 ]] && echo "$OUT" | grep -q "does not list" && pass "checksum for another file refused" || fail "sha256 name" "refused" "$OUT"
+
+    # Leftovers without a current pointer (an install cut short): installs.
+    mkdir -p "$DATA/versions/0.9.0" "$DATA/.unpack-1"
+    make_release 1.0.1
+    run_install TERMOTE_VERSION=1.0.1
+    check "installs over leftovers without current" "versions/1.0.1" "$(readlink "$DATA/current")"
+    rm -rf "$DATA"
+
     mkdir -p "$DATA" && echo x >"$DATA/other"
     run_install TERMOTE_VERSION=1.0.1
     [[ $CODE -ne 0 ]] && echo "$OUT" | grep -q "not a Termote install" && pass "foreign dir refused" || fail "foreign dir" "refused" "$OUT"

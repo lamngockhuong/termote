@@ -572,13 +572,10 @@ func (c *cli) cmdUninstall(args []string) error {
 		c.removeTailscale(saved.Tailscale)
 	}
 	c.cmdUnlink()
-	if isDir(c.versionsDir()) {
-		if err := os.RemoveAll(c.dataDir()); err != nil {
-			// Windows cannot delete the binary running this command.
-			c.warnf("Could not remove all of %s (%v); delete it once this command has exited", c.dataDir(), err)
-		} else {
-			c.infof("Removed %s", c.dataDir())
-		}
+	if c.isInstalledRelease() {
+		c.removeInstall()
+	} else if isDir(c.versionsDir()) {
+		c.infof("An install in %s was left alone (this command runs from %s); remove it with: %s uninstall", c.dataDir(), c.exe, c.currentExe())
 	}
 	c.infof("Kept the config in %s and the logs in %s; delete them to forget everything", c.configDir(), c.stateDir())
 	return nil

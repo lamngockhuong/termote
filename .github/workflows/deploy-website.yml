@@ -33,6 +33,7 @@ jobs:
           TAG: ${{ inputs.tag || github.ref }}
         run: |
           case "${TAG#refs/tags/}" in
+            *-*) echo "::error::'$TAG' is a pre-release; the site follows stable releases only"; exit 1 ;;
             v[0-9]*.[0-9]*.[0-9]*) echo "Deploying ${TAG#refs/tags/}" ;;
             *) echo "::error::deploy only from a release tag (vX.Y.Z), not '$TAG'"; exit 1 ;;
           esac
@@ -91,9 +92,11 @@ jobs:
         run: |
           for f in install.sh install.ps1; do
             url="https://termote.ohnice.app/$f"
-            for i in 1 2 3 4 5 6; do
-              curl -fsSL -D headers.txt -o served "$url" && cmp -s served "scripts/$f" && break
-              echo "waiting for $url to serve the new file..."; sleep 20
+            # The Pages CDN may keep the old file for up to 10 minutes.
+            for i in $(seq 1 24); do
+              curl -fsSL -H 'Cache-Control: no-cache' -D headers.txt -o served "$url?deploy=${GITHUB_RUN_ID}" &&
+                cmp -s served "scripts/$f" && break
+              echo "waiting for $url to serve the new file..."; sleep 30
             done
             cmp served "scripts/$f" || { echo "::error::$url differs from scripts/$f"; exit 1; }
             grep -qi '^content-type: *\(text/\|application/octet-stream\|application/x-sh\)' headers.txt ||

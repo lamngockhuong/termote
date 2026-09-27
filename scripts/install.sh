@@ -26,6 +26,9 @@ die() { echo "termote install: $1" >&2; exit 1; }
 PIN="${TERMOTE_VERSION:-}"
 PIN="${PIN#v}"
 if [ -n "$PIN" ]; then
+  # One line only: grep checks each line on its own.
+  case "$PIN" in *"
+"*) die "TERMOTE_VERSION must be a single line." ;; esac
   printf '%s\n' "$PIN" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$' ||
     die "TERMOTE_VERSION='$PIN' is not a version. It has to look like 1.0.0, or 1.0.0-rc.1 for a pre-release."
 fi
@@ -48,9 +51,11 @@ case "$(uname -m)" in
   *) die "Termote publishes no binary for $(uname -m). Build from source instead: https://github.com/${REPO}#build-from-source" ;;
 esac
 
-# Leave an existing install alone, unless a version was pinned.
+# Leave an existing install alone, unless a version was pinned. An install
+# is a current pointer; without one (an install cut short, or removed with
+# its logs kept) the dir may hold only what an install leaves behind.
 RESCUE=0
-if [ -d "$DIR/versions" ]; then
+if [ -L "$DIR/current" ]; then
   if [ -z "$PIN" ]; then
     echo "Termote is already installed at $DIR; leaving it alone."
     echo "To move it forward, run:  termote update"
@@ -59,14 +64,22 @@ if [ -d "$DIR/versions" ]; then
   fi
   echo "Termote is already installed at $DIR; laying $PIN down beside it and pointing current at it."
   RESCUE=1
-elif [ -e "$DIR" ] && [ -n "$(ls -A "$DIR" 2>/dev/null)" ]; then
-  die "$DIR exists and is not a Termote install. Move it aside, then run this again."
+elif [ -e "$DIR" ]; then
+  for entry in "$DIR"/* "$DIR"/.[!.]*; do
+    [ -e "$entry" ] || [ -L "$entry" ] || continue
+    case "${entry##*/}" in
+      versions | previous | .unpack-*) ;;
+      *) die "$DIR exists and is not a Termote install. Move it aside, then run this again." ;;
+    esac
+  done
 fi
 
 # Downloads go to a scratch dir outside the install, so a failed or
 # unverified download leaves nothing in it.
 TMP=$(mktemp -d "${TMPDIR:-/tmp}/termote-install.XXXXXX") || die "could not create a temporary directory."
-trap 'rm -rf "$TMP"' EXIT INT HUP TERM
+STAGE=""
+trap 'rm -rf "$TMP" ${STAGE:+"$STAGE"}' EXIT
+trap 'exit 130' INT HUP TERM
 
 # The newest release: the tag list sorted by version, stable 1.x and later
 # only. releases/latest is not used, as it can name a 0.x release.
@@ -77,7 +90,9 @@ else
   if [ -n "$TOKEN" ]; then
     # The token goes in a curl config file (mode 600), never on the command
     # line, where ps would show it.
-    (umask 077 && printf 'header = "Authorization: Bearer %s"\n' "$TOKEN" >"$TMP/auth.curlrc") || die "could not write $TMP/auth.curlrc."
+    # Backslashes and quotes are escaped for the curl config syntax.
+    ESCAPED=$(printf '%s' "$TOKEN" | sed 's/[\\"]/\\&/g')
+    (umask 077 && printf 'header = "Authorization: Bearer %s"\n' "$ESCAPED" >"$TMP/auth.curlrc") || die "could not write $TMP/auth.curlrc."
     set -- -K "$TMP/auth.curlrc"
   else
     set --
@@ -139,14 +154,21 @@ curl -fsSL -o "$TMP/$NAME.tar.gz" "$BASE/$NAME.tar.gz" ||
   die "release ${VERSION} has no ${OS}-${ARCH} archive: the version does not exist, or it was released a few minutes ago and is still publishing (retry then). See https://github.com/${REPO}/releases"
 curl -fsSL -o "$TMP/$NAME.tar.gz.sha256" "$BASE/$NAME.tar.gz.sha256" ||
   die "could not download $NAME.tar.gz.sha256; refusing to install an unverified binary."
+# The .sha256 file must name this archive, then match it.
+grep -q "[[:space:]]\*\{0,1\}$NAME.tar.gz\$" "$TMP/$NAME.tar.gz.sha256" ||
+  die "$NAME.tar.gz.sha256 does not list $NAME.tar.gz; refusing to install an unverified binary."
 (cd "$TMP" && $SHA -c "$NAME.tar.gz.sha256" >/dev/null 2>&1) ||
   die "CHECKSUM MISMATCH for $NAME.tar.gz: the download was discarded and nothing was installed. Try again; if it repeats, report it."
 
-tar -xzf "$TMP/$NAME.tar.gz" -C "$TMP" || die "could not unpack $NAME.tar.gz."
-[ -x "$TMP/$NAME/bin/termote" ] || die "$NAME.tar.gz does not contain bin/termote; refusing to install it."
+# Unpack beside versions/ (same file system), so the move into place is a
+# rename: a version dir is never half written.
 mkdir -p "$DIR/versions" || die "could not create $DIR/versions."
+STAGE="$DIR/.unpack-$$"
+mkdir -p "$STAGE" || die "could not create $STAGE."
+tar -xzf "$TMP/$NAME.tar.gz" -C "$STAGE" || die "could not unpack $NAME.tar.gz."
+[ -x "$STAGE/$NAME/bin/termote" ] || die "$NAME.tar.gz does not contain bin/termote; refusing to install it."
 rm -rf "$DIR/versions/$VERSION"
-mv "$TMP/$NAME" "$DIR/versions/$VERSION" || die "could not move the payload into $DIR/versions/$VERSION."
+mv "$STAGE/$NAME" "$DIR/versions/$VERSION" || die "could not move the payload into $DIR/versions/$VERSION."
 ln -sfn "versions/$VERSION" "$DIR/current" || die "could not point $DIR/current at versions/$VERSION."
 
 publish_name

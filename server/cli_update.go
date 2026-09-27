@@ -66,6 +66,7 @@ func (c *cli) cmdUpdate(args []string) error {
 	if current == "" {
 		current = c.version
 	}
+	before := c.previousVersion()
 	if target == current && !force {
 		c.infof("Already on v%s. Use --force to reinstall.", current)
 		return nil
@@ -89,11 +90,13 @@ func (c *cli) cmdUpdate(args []string) error {
 	if err != nil {
 		return err
 	}
-	if target == current {
-		// --force on the running version: never rewrite the binary serving
-		// now; the check above already proved the download matches it.
-		c.infof("v%s is already installed; restarting it", target)
-	} else if err := c.installVersion(archive, target); err != nil {
+	// --force on the running version lays it down again (a damaged copy is
+	// replaced). Unix renames over the running binary; Windows refuses while
+	// it runs and says so.
+	if err := c.installVersion(archive, target); err != nil {
+		if target == current {
+			return fmt.Errorf("cannot reinstall the running v%s (%w); stop it first: termote stop", target, err)
+		}
 		return err
 	}
 	if err := c.switchCurrent(target); err != nil {
@@ -119,15 +122,25 @@ func (c *cli) cmdUpdate(args []string) error {
 		c.errorf("v%s did not come up: %v", target, err)
 	}
 
-	// Roll back: current points at the version that ran before.
-	if current == target || !fileExists(c.versionBinary(current)) {
+	// Roll back to the version that ran before (when a forced reinstall of
+	// it failed, to the one before that), and restore previous as it was.
+	back := current
+	if back == target {
+		back = before
+	}
+	if back == "" || back == target || !fileExists(c.versionBinary(back)) {
 		return fmt.Errorf("no previous version to roll back to; last log lines:\n%s", tailFile(c.serverLog(), 15))
 	}
-	c.warnf("Rolling back to v%s...", current)
-	if err := c.setPointer("current", current); err != nil {
-		return fmt.Errorf("roll back to v%s: %w", current, err)
+	c.warnf("Rolling back to v%s...", back)
+	if err := c.setPointer("current", back); err != nil {
+		return fmt.Errorf("roll back to v%s: %w", back, err)
 	}
-	c.setPointer("previous", target)
+	if before != "" && before != back {
+		c.setPointer("previous", before)
+	} else {
+		os.Remove(c.pointerPath("previous"))
+	}
+	current = back
 	if err := c.restartAndCheck(sup, port, pass, current); err != nil {
 		return fmt.Errorf("the rollback to v%s did not come up either (%v). Both versions are kept in %s.\n"+
 			"Last log lines:\n%s\nRecover by hand: termote start, or reinstall one version with:\n"+
