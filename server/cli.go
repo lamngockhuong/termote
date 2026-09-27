@@ -85,6 +85,8 @@ type cli struct {
 	herdrRunning func() bool
 	// detachedExited closes when a server this CLI started detached exits.
 	detachedExited <-chan struct{}
+	// testSupervisors replaces the OS supervisors in tests.
+	testSupervisors []supervisor
 	// pid of this process, never stopped.
 	pid int
 	// getenv reads the environment (XDG and Windows profile dirs).
@@ -156,7 +158,7 @@ func newCLI() (*cli, error) {
 	}
 	c.readPassword = func() (string, error) { return readPasswordNoEcho(os.Stdin, c.in) }
 	c.projectDir = findProjectDir(exe, os.Getenv("TERMOTE_PROJECT_DIR"))
-	c.version = c.loadVersion()
+	c.version = cliVersion
 	return c, nil
 }
 
@@ -178,7 +180,6 @@ func findProjectDir(exe, env string) string {
 }
 
 func (c *cli) main(args []string) int {
-	c.cleanupReplacedBinaries()
 	if len(args) == 0 {
 		args = []string{"help"}
 	}
@@ -374,18 +375,6 @@ func (c *cli) exeSuffix() string {
 func (c *cli) isCheckout() bool {
 	return fileExists(filepath.Join(c.projectDir, "pwa", "package.json")) ||
 		fileExists(filepath.Join(c.projectDir, ".git"))
-}
-
-// loadVersion prefers the .version file an install or update writes.
-func (c *cli) loadVersion() string {
-	if !c.isCheckout() {
-		if b, err := os.ReadFile(filepath.Join(c.projectDir, ".version")); err == nil {
-			if v := strings.TrimSpace(string(b)); v != "" {
-				return v
-			}
-		}
-	}
-	return cliVersion
 }
 
 // shimPath is the checkout shim `link` points the global command at.

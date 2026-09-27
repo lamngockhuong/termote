@@ -184,13 +184,3 @@ func hideConsole() {
 		procShowWindow.Call(hwnd, swHide)
 	}
 }
-
-// replaceRunningFile renames an existing file aside, because Windows refuses
-// to overwrite a running executable but allows renaming it. The leftover is
-// removed by cleanupReplacedBinaries on a later run.
-func replaceRunningFile(path string) error {
-	if !fileExists(path) {
-		return nil
-	}
-	return os.Rename(path, fmt.Sprintf("%s.old-%d", path, time.Now().UnixNano()))
-}

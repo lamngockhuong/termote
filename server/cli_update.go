@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bufio"
 	"compress/gzip"
 	"crypto/sha256"
@@ -16,16 +17,26 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // versionRe accepts X.Y.Z with an optional pre-release (1.0.0-rc.1).
 var versionRe = regexp.MustCompile(`^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$`)
 
+// updateStable is how long the new version must keep answering after its
+// first healthy reply before update keeps it.
+var updateStable = 1500 * time.Millisecond
+
+// cmdUpdate installs a release beside the running one, points current at
+// it and restarts the service; when the new version does not come up healthy
+// it points current back and restarts the old one. It runs from a pane of
+// the server it replaces: the service stops only the server process.
 func (c *cli) cmdUpdate(args []string) error {
 	var pin string
+	var force bool
 	fs := c.newFlagSet("update")
 	fs.StringVar(&pin, "version", "", "")
-	fs.Bool("force", false, "")
+	fs.BoolVar(&force, "force", false, "")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return flagErr(err)
@@ -38,17 +49,176 @@ func (c *cli) cmdUpdate(args []string) error {
 		return usageError("invalid version format: %s (expected: X.Y.Z)", pin)
 	}
 	if c.isCheckout() {
-		return errors.New("cannot update from a git checkout; this command is for installed releases")
+		return errors.New("cannot update a git checkout; pull and rebuild instead (git pull && make build)")
 	}
-	// The release layout changed to one archive per platform; update comes
-	// back once it installs that layout.
-	return errors.New("update is not available in this build: it is being rebuilt for the new release layout")
+	if !c.isInstalledRelease() {
+		return fmt.Errorf("update works on an install made by install.sh (%s); this binary runs from %s", c.versionsDir(), c.exe)
+	}
+
+	target := pin
+	if target == "" {
+		c.infof("Checking for updates...")
+		if target, err = c.latestRelease(); err != nil {
+			return err
+		}
+	}
+	current := c.currentVersion()
+	if current == "" {
+		current = c.version
+	}
+	if target == current && !force {
+		c.infof("Already on v%s. Use --force to reinstall.", current)
+		return nil
+	}
+	if compareVersions(target, current) < 0 {
+		c.warnf("Downgrading from v%s to v%s", current, target)
+	}
+	c.infof("Updating v%s -> v%s", current, target)
+
+	// Download and verify before anything changes: a typo in --version or a
+	// bad download must not touch the running server.
+	if err := ensureDir(c.dataDir()); err != nil {
+		return err
+	}
+	tmp, err := os.MkdirTemp(c.dataDir(), ".download-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmp)
+	archive, err := c.downloadVerified(target, tmp)
+	if err != nil {
+		return err
+	}
+	if target == current {
+		// --force on the running version: never rewrite the binary serving
+		// now; the check above already proved the download matches it.
+		c.infof("v%s is already installed; restarting it", target)
+	} else if err := c.installVersion(archive, target); err != nil {
+		return err
+	}
+	if err := c.switchCurrent(target); err != nil {
+		return err
+	}
+
+	sup := c.installedSupervisor()
+	if sup == nil {
+		c.pruneVersions()
+		c.infof("Updated to v%s. Start it with: termote start", target)
+		return nil
+	}
+	saved, _ := c.loadConfig()
+	port, pass := c.savedPort(saved), ""
+	if saved != nil {
+		pass = saved.Password
+	}
+	if err := c.restartAndCheck(sup, port, pass, target); err == nil {
+		c.pruneVersions()
+		c.infof("Updated to v%s (%s); config unchanged", target, sup.Name())
+		return nil
+	} else {
+		c.errorf("v%s did not come up: %v", target, err)
+	}
+
+	// Roll back: current points at the version that ran before.
+	if current == target || !fileExists(c.versionBinary(current)) {
+		return fmt.Errorf("no previous version to roll back to; last log lines:\n%s", tailFile(c.serverLog(), 15))
+	}
+	c.warnf("Rolling back to v%s...", current)
+	if err := c.setPointer("current", current); err != nil {
+		return fmt.Errorf("roll back to v%s: %w", current, err)
+	}
+	c.setPointer("previous", target)
+	if err := c.restartAndCheck(sup, port, pass, current); err != nil {
+		return fmt.Errorf("the rollback to v%s did not come up either (%v). Both versions are kept in %s.\n"+
+			"Last log lines:\n%s\nRecover by hand: termote start, or reinstall one version with:\n"+
+			"  curl -fsSL https://termote.ohnice.app/install.sh | TERMOTE_VERSION=%s sh",
+			current, err, c.versionsDir(), tailFile(c.serverLog(), 15), current)
+	}
+	return fmt.Errorf("update to v%s failed; rolled back to v%s, which is running (the log is in %s)", target, current, c.serverLog())
 }
 
-func (c *cli) get(url string) (*http.Response, error) {
+// restartAndCheck restarts the server and waits until version answers
+// healthy, then keeps answering: two more checks, updateStable apart, so a
+// server that crashes right after its first reply is not kept.
+func (c *cli) restartAndCheck(sup supervisor, port int, pass, version string) error {
+	if err := sup.Stop(); err != nil {
+		return err
+	}
+	if err := c.waitStopped(port, processKillWait+2*time.Second); err != nil {
+		return err
+	}
+	if err := sup.Start(); err != nil {
+		return err
+	}
+	if err := c.waitForServer(port, pass, version, serverStartWait, c.detachedExited); err != nil {
+		return err
+	}
+	for range 2 {
+		time.Sleep(updateStable)
+		if err := c.waitForServer(port, pass, version, time.Second, c.detachedExited); err != nil {
+			return fmt.Errorf("stopped answering after it started: %w", err)
+		}
+	}
+	return nil
+}
+
+// releaseAsset is the archive name for version on this platform. Windows on
+// ARM runs the amd64 build.
+func (c *cli) releaseAsset(version string) string {
+	arch := c.goarch
+	if c.goos == "windows" {
+		arch = "amd64"
+	}
+	name := "termote-" + version + "-" + c.goos + "-" + arch
+	if c.goos == "windows" {
+		return name + ".zip"
+	}
+	return name + ".tar.gz"
+}
+
+// downloadVerified saves the release archive into tmp and checks it against
+// its .sha256 file. A missing or wrong checksum always fails.
+func (c *cli) downloadVerified(version, tmp string) (string, error) {
+	name := c.releaseAsset(version)
+	base := c.downloadBase + "/" + updateRepo + "/releases/download/v" + version + "/"
+	c.infof("Downloading %s...", name)
+	file := filepath.Join(tmp, name)
+	sum, err := c.download(base+name, file)
+	var he *httpError
+	switch {
+	case errors.As(err, &he) && he.code == http.StatusNotFound:
+		return "", fmt.Errorf("release v%s has no %s: the version does not exist, or it was released a few minutes ago and is still publishing (retry then)", version, name)
+	case err != nil:
+		return "", fmt.Errorf("download %s: %w", name, err)
+	}
+	expected, err := c.expectedChecksum(base+name+".sha256", name)
+	switch {
+	case err != nil:
+		return "", fmt.Errorf("cannot download %s.sha256 (%v); refusing to install an unverified binary", name, err)
+	case expected == "":
+		return "", fmt.Errorf("%s.sha256 does not list %s; refusing to install an unverified binary", name, name)
+	case !strings.EqualFold(expected, sum):
+		return "", fmt.Errorf("checksum mismatch for %s (expected %s, got %s); nothing was installed", name, expected, sum)
+	}
+	c.infof("Checksum verified")
+	return file, nil
+}
+
+// httpError is a non-200 answer.
+type httpError struct {
+	url  string
+	code int
+}
+
+func (e *httpError) Error() string { return fmt.Sprintf("GET %s: HTTP %d", e.url, e.code) }
+
+func (c *cli) get(url string, header http.Header) (*http.Response, error) {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
+	}
+	for k, v := range header {
+		req.Header[k] = v
 	}
 	req.Header.Set("User-Agent", "termote/"+c.version)
 	resp, err := c.http.Do(req)
@@ -57,14 +227,14 @@ func (c *cli) get(url string) (*http.Response, error) {
 	}
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
-		return nil, fmt.Errorf("GET %s: %s", url, resp.Status)
+		return nil, &httpError{url: url, code: resp.StatusCode}
 	}
 	return resp, nil
 }
 
 // download saves url to dst and returns its sha256.
 func (c *cli) download(url, dst string) (string, error) {
-	resp, err := c.get(url)
+	resp, err := c.get(url, nil)
 	if err != nil {
 		return "", err
 	}
@@ -83,7 +253,7 @@ func (c *cli) download(url, dst string) (string, error) {
 
 // expectedChecksum finds name in a sha256sum listing; "" if not listed.
 func (c *cli) expectedChecksum(url, name string) (string, error) {
-	resp, err := c.get(url)
+	resp, err := c.get(url, nil)
 	if err != nil {
 		return "", err
 	}
@@ -98,9 +268,8 @@ func (c *cli) expectedChecksum(url, name string) (string, error) {
 	return "", sc.Err()
 }
 
-// extractTarball unpacks a release tarball over dir, dropping the top-level
-// termote-vX.Y.Z/ directory. Files outside the tarball (the config, logs)
-// are kept.
+// extractTarball unpacks a release tarball into dir, dropping the top-level
+// termote-<v>-<os>-<arch>/ directory.
 func extractTarball(file, dir string) error {
 	f, err := os.Open(file)
 	if err != nil {
@@ -172,19 +341,6 @@ func writeExtracted(r io.Reader, dst string, perm os.FileMode) error {
 		os.Remove(tmp)
 		return err
 	}
-	return renameOver(tmp, dst)
-}
-
-// renameOver moves tmp onto dst. Windows refuses to overwrite a running
-// executable, so dst is then renamed aside first and the move retried.
-func renameOver(tmp, dst string) error {
-	if err := os.Rename(tmp, dst); err == nil {
-		return nil
-	}
-	if err := replaceRunningFile(dst); err != nil {
-		os.Remove(tmp)
-		return err
-	}
 	if err := os.Rename(tmp, dst); err != nil {
 		os.Remove(tmp)
 		return err
@@ -192,15 +348,40 @@ func renameOver(tmp, dst string) error {
 	return nil
 }
 
-// cleanupReplacedBinaries deletes executables Windows could only rename
-// aside during an update; ones still running stay until the next run.
-func (c *cli) cleanupReplacedBinaries() {
-	for _, dir := range []string{c.projectDir, filepath.Join(c.projectDir, "server")} {
-		matches, _ := filepath.Glob(filepath.Join(dir, "*.old-*"))
-		for _, m := range matches {
-			os.Remove(m)
+// extractZip unpacks a release zip into dir, dropping the top-level
+// directory, with the same path checks as extractTarball.
+func extractZip(file, dir string) error {
+	zr, err := zip.OpenReader(file)
+	if err != nil {
+		return err
+	}
+	defer zr.Close()
+	for _, f := range zr.File {
+		rel, ok := stripTopDir(f.Name)
+		if !ok {
+			continue
+		}
+		dst := filepath.Join(dir, filepath.FromSlash(rel))
+		if f.FileInfo().IsDir() {
+			if err := os.MkdirAll(dst, 0o755); err != nil {
+				return err
+			}
+			continue
+		}
+		if !f.Mode().IsRegular() {
+			continue
+		}
+		rc, err := f.Open()
+		if err != nil {
+			return err
+		}
+		err = writeExtracted(rc, dst, f.Mode().Perm()|0o644)
+		rc.Close()
+		if err != nil {
+			return err
 		}
 	}
+	return nil
 }
 
 // compareVersions orders X.Y.Z[-pre]; a pre-release sorts before its release.

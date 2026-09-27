@@ -191,18 +191,6 @@ func TestFindProjectDir(t *testing.T) {
 	}
 }
 
-func TestLoadVersionPrefersVersionFileInRelease(t *testing.T) {
-	tc := newTestCLI(t, runtime.GOOS)
-	writeFile(t, filepath.Join(tc.projectDir, ".version"), "1.2.3\n")
-	if got := tc.loadVersion(); got != "1.2.3" {
-		t.Fatalf("release version = %q, want 1.2.3", got)
-	}
-	writeFile(t, filepath.Join(tc.projectDir, "pwa", "package.json"), "{}")
-	if got := tc.loadVersion(); got != cliVersion {
-		t.Fatalf("checkout version = %q, want %q", got, cliVersion)
-	}
-}
-
 func TestConfigAndStateDirs(t *testing.T) {
 	tc := newTestCLI(t, "linux")
 	if got, want := tc.configFile(), filepath.Join(tc.home, ".config", "termote", "config"); got != want {

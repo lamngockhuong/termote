@@ -1,10 +1,16 @@
 name: Deploy Website
 
 # Deploys only with a stable release (called from release-please.yml) or by
-# hand, not on every push to main: main runs ahead of the latest release, and
-# the site's root docs must describe the version people can install.
+# hand from a release tag, not on every push to main: main runs ahead of the
+# latest release, and the site's docs and its install.sh/install.ps1 must be
+# the ones of the version people install.
 on:
   workflow_call:
+    inputs:
+      tag:
+        description: "Release tag to build the site from (vX.Y.Z)"
+        required: true
+        type: string
   workflow_dispatch:
 
 permissions:
@@ -20,8 +26,21 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      # By hand, the run must be started on a release tag (Use workflow
+      # from: tags/vX.Y.Z), never a branch.
+      - name: Check the ref is a release tag
+        env:
+          TAG: ${{ inputs.tag || github.ref }}
+        run: |
+          case "${TAG#refs/tags/}" in
+            v[0-9]*.[0-9]*.[0-9]*) echo "Deploying ${TAG#refs/tags/}" ;;
+            *) echo "::error::deploy only from a release tag (vX.Y.Z), not '$TAG'"; exit 1 ;;
+          esac
+
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -57,3 +76,26 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
+
+  # The installers people pipe into a shell must be byte for byte the ones in
+  # the tag, served as text (not an HTML error page).
+  verify:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Check the served installers
+        run: |
+          for f in install.sh install.ps1; do
+            url="https://termote.ohnice.app/$f"
+            for i in 1 2 3 4 5 6; do
+              curl -fsSL -D headers.txt -o served "$url" && cmp -s served "scripts/$f" && break
+              echo "waiting for $url to serve the new file..."; sleep 20
+            done
+            cmp served "scripts/$f" || { echo "::error::$url differs from scripts/$f"; exit 1; }
+            grep -qi '^content-type: *\(text/\|application/octet-stream\|application/x-sh\)' headers.txt ||
+              { echo "::error::$url is not served as text: $(grep -i '^content-type' headers.txt)"; exit 1; }
+          done

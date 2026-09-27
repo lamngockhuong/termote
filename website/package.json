@@ -4,7 +4,7 @@
   "version": "0.0.1",
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build",
+    "build": "node -e \"for (const f of ['install.sh', 'install.ps1']) require('fs').copyFileSync('../scripts/' + f, 'public/' + f)\" && astro build",
     "preview": "astro preview",
     "astro": "astro"
   },

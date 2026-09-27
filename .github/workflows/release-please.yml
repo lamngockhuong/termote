@@ -47,3 +47,5 @@ jobs:
       pages: write
       id-token: write
     uses: ./.github/workflows/deploy-website.yml
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}

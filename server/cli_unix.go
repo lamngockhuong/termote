@@ -154,7 +154,3 @@ func restrictToOwner(string) error { return nil }
 
 // hideConsole is for the Windows Scheduled Task; Unix has no window.
 func hideConsole() {}
-
-// replaceRunningFile moves an existing file out of the way before update
-// writes a new one; on Unix a running binary can be replaced in place.
-func replaceRunningFile(string) error { return nil }

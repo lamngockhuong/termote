@@ -40,6 +40,9 @@ const exitConfigUnusable = 78
 
 // supervisors lists what can run the server here, preferred first.
 func (c *cli) supervisors() []supervisor {
+	if c.testSupervisors != nil {
+		return c.testSupervisors
+	}
 	var out []supervisor
 	switch c.goos {
 	case "linux":

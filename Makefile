@@ -1,7 +1,7 @@
 # Termote Makefile
 # Usage: make <target>
 
-.PHONY: help build build-pwa build-api test test-go test-cli test-get test-entrypoints start container-up container-down uninstall health clean release release-dry fmt fmt-check
+.PHONY: help build build-pwa build-api test test-go test-cli test-install test-entrypoints start container-up container-down uninstall health clean release release-dry fmt fmt-check
 
 # Default target
 help:
@@ -20,7 +20,7 @@ help:
 	@echo "  make test              Run all tests"
 	@echo "  make test-go           Test server/ (server + CLI) with go test"
 	@echo "  make test-cli          Test the termote.sh shim"
-	@echo "  make test-get          Test get.sh online installer"
+	@echo "  make test-install      Test the install.sh online installer"
 	@echo "  make test-entrypoints  Test entrypoint scripts"
 	@echo ""
 	@echo "Release:"
@@ -63,7 +63,7 @@ container-down:
 	./scripts/termote.sh container down
 
 # Test targets
-test: test-go test-cli test-get test-entrypoints
+test: test-go test-cli test-install test-entrypoints
 	@echo ""
 	@echo "All tests completed!"
 
@@ -74,9 +74,9 @@ test-cli:
 	@chmod +x tests/test-termote.sh
 	@./tests/test-termote.sh
 
-test-get:
-	@chmod +x tests/test-get.sh
-	@./tests/test-get.sh
+test-install:
+	@chmod +x tests/test-install.sh
+	@./tests/test-install.sh
 
 test-entrypoints:
 	@chmod +x tests/test-entrypoints.sh

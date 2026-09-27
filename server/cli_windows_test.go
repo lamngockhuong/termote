@@ -44,18 +44,3 @@ func TestListProcessesFindsSelf(t *testing.T) {
 	}
 	t.Fatal("own process not listed")
 }
-
-func TestReplaceRunningFileRenamesAside(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "a.exe")
-	os.WriteFile(path, []byte("x"), 0o644)
-	if err := replaceRunningFile(path); err != nil {
-		t.Fatal(err)
-	}
-	if fileExists(path) {
-		t.Fatal("file still in place")
-	}
-	if m, _ := filepath.Glob(path + ".old-*"); len(m) != 1 {
-		t.Fatalf("renamed copies: %v", m)
-	}
-}

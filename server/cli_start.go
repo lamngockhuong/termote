@@ -234,15 +234,21 @@ func (c *cli) cmdStart(args []string) error {
 	// Stop what runs now, under any supervisor, so the port is free and a
 	// registration left from another one (detached before systemd was
 	// enabled) does not linger.
+	stopped := false
 	for _, s := range c.supervisors() {
 		if s.Installed() {
 			if err := s.Stop(); err != nil {
 				c.warnf("Could not stop the server (%s): %v", s.Name(), err)
 			}
+			stopped = true
 		}
 	}
-	if err := c.waitStopped(prevPort, processKillWait+2*time.Second); err != nil {
-		return err
+	// Wait for the old server to let go of its port; with nothing stopped,
+	// whatever holds a port is not Termote's.
+	if stopped {
+		if err := c.waitStopped(prevPort, processKillWait+2*time.Second); err != nil {
+			return err
+		}
 	}
 	bind := "127.0.0.1"
 	if o.lan {
@@ -524,8 +530,9 @@ func (c *cli) cmdStatus(args []string) error {
 	return nil
 }
 
-// cmdUninstall removes the service and Termote's Tailscale mapping; the
-// config (and its saved password) stays.
+// cmdUninstall removes the service, Termote's Tailscale mapping, the
+// `termote` command and the installed versions. The config (and its saved
+// password) and the logs stay; the message names both dirs.
 func (c *cli) cmdUninstall(args []string) error {
 	if _, err := parseArgs(c.newFlagSet("uninstall"), args); err != nil {
 		return flagErr(err)
@@ -544,7 +551,16 @@ func (c *cli) cmdUninstall(args []string) error {
 	if saved != nil {
 		c.removeTailscale(saved.Tailscale)
 	}
-	c.infof("Config kept in %s (delete it to forget the password)", c.configDir())
+	c.cmdUnlink()
+	if isDir(c.versionsDir()) {
+		if err := os.RemoveAll(c.dataDir()); err != nil {
+			// Windows cannot delete the binary running this command.
+			c.warnf("Could not remove all of %s (%v); delete it once this command has exited", c.dataDir(), err)
+		} else {
+			c.infof("Removed %s", c.dataDir())
+		}
+	}
+	c.infof("Kept the config in %s and the logs in %s; delete them to forget everything", c.configDir(), c.stateDir())
 	return nil
 }
 

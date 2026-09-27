@@ -106,40 +106,55 @@ func TestLinkAndUnlinkUnix(t *testing.T) {
 		t.Skip("symlinks need privileges on Windows")
 	}
 	tc := newTestCLI(t, "linux")
-	old := systemLinkPath
-	systemLinkPath = filepath.Join(t.TempDir(), "bin", "termote")
-	t.Cleanup(func() { systemLinkPath = old })
-
+	link := filepath.Join(tc.userBinDir(), "termote")
 	if code := tc.main([]string{"link"}); code != 0 {
 		t.Fatal(tc.stderr.String())
 	}
-	if target, err := os.Readlink(systemLinkPath); err != nil || target != tc.shimPath() {
+	if target, err := os.Readlink(link); err != nil || target != tc.shimPath() {
 		t.Fatalf("link -> %q, %v", target, err)
 	}
 	tc.stdout.Reset()
 	tc.main([]string{"link"})
-	if out := tc.stdout.String(); !strings.Contains(out, "Already linked") || strings.Contains(out, "Created symlink") {
-		t.Fatalf("relink output %q", tc.stdout.String())
+	if out := tc.stdout.String(); !strings.Contains(out, "Already linked") || !strings.Contains(out, "is not in PATH") {
+		t.Fatalf("relink output %q", out)
 	}
 
-	// A regular file in the way is never replaced; ~/.local/bin is used.
-	os.Remove(systemLinkPath)
-	writeFile(t, systemLinkPath, "user file")
+	// An install links its current version, and relinking moves the link.
+	tc.exe = filepath.Join(tc.versionsDir(), "1.0.0", "bin", "termote")
 	tc.main([]string{"link"})
-	if b, _ := os.ReadFile(systemLinkPath); string(b) != "user file" {
-		t.Fatal("regular file overwritten")
+	if target, _ := os.Readlink(link); target != tc.currentExe() {
+		t.Fatalf("install link -> %q", target)
 	}
-	userLink := filepath.Join(tc.userBinDir(), "termote")
-	if target, _ := os.Readlink(userLink); target != tc.shimPath() {
-		t.Fatalf("fallback link -> %q", target)
-	}
-
 	tc.main([]string{"unlink"})
-	if _, err := os.Lstat(userLink); err == nil {
+	if _, err := os.Lstat(link); err == nil {
 		t.Fatal("symlink not removed")
 	}
-	if b, _ := os.ReadFile(systemLinkPath); string(b) != "user file" {
+
+	// A regular file in the way is never replaced nor removed.
+	writeFile(t, link, "user file")
+	if code := tc.main([]string{"link"}); code == 0 {
+		t.Fatal("link replaced a regular file")
+	}
+	tc.main([]string{"unlink"})
+	if b, _ := os.ReadFile(link); string(b) != "user file" {
 		t.Fatal("unlink removed a file that is not ours")
+	}
+}
+
+func TestLinkWindowsInstallAddsBinToPath(t *testing.T) {
+	tc := newTestCLI(t, "windows")
+	tc.exe = filepath.Join(tc.versionsDir(), "1.0.0", "bin", "termote.exe")
+	if code := tc.main([]string{"link"}); code != 0 {
+		t.Fatal(tc.stderr.String())
+	}
+	if b, _ := os.ReadFile(tc.currentExe()); string(b) != windowsLauncher {
+		t.Fatal("termote.cmd launcher not written")
+	}
+	if !tc.runner.called("powershell -NoProfile -Command $d='" + filepath.Dir(tc.currentExe())) {
+		t.Fatalf("PATH not updated: %v", tc.runner.calls)
+	}
+	if s := userPathScript(`C:\a'b`, false); strings.Contains(s, "$parts += $d") || !strings.Contains(s, "C:\\a''b") {
+		t.Fatalf("remove script %q", s)
 	}
 }
 
