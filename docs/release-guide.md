@@ -176,15 +176,39 @@ Each release produces:
 kept separate from `main` so `main` could keep shipping 0.1.x patches. To
 release it:
 
-1. Merge `feat/1.0` into `main` once (a merge commit with a `feat!:` subject
+1. Make sure the `release/0.x` maintenance branch exists (cut from `v0.1.0`,
+   see [Maintaining 0.x](#maintaining-0x)) so 0.x patches have somewhere to
+   ship once `main` becomes 1.x.
+2. Merge `feat/1.0` into `main` once (a merge commit with a `feat!:` subject
    and a `BREAKING CHANGE:` footer), with the breaking changes documented in
    [`upgrade-1.0.md`](upgrade-1.0.md).
-2. Before running Release Please, set `release-as: 1.0.0` for the package in
+3. Before running Release Please, set `release-as: 1.0.0` for the package in
    `release-please-config.json`. Without it, `bump-minor-pre-major: true`
    would turn the `feat!:` merge into `0.2.0` instead of `1.0.0`.
-3. Run the release as usual (see Workflows above).
-4. Remove `release-as` from `release-please-config.json` right after the
+4. Run the release as usual (see Workflows above).
+5. Remove `release-as` from `release-please-config.json` right after the
    release goes out, or every later release stays pinned to 1.0.0.
+
+## Maintaining 0.x
+
+After 1.0.0, `main` is the 1.x line. 0.x lives on the `release/0.x` branch
+(cut from `v0.1.0`) and only takes security and critical fixes; no features,
+refactors or non-security dependency bumps.
+
+- Fix on `main` first, then `git cherry-pick -x <sha>` onto `release/0.x`
+  (open the PR against `release/0.x`). Fix on `release/0.x` directly only when
+  the 1.x code no longer has the bug.
+- Release Please runs on `release/0.x` with its own config there: every release
+  is a patch bump (`0.1.x`), and the GitHub release is created as a draft and
+  published with `make_latest: false`.
+- The release workflow on `release/0.x` tags Docker images `0.1` and `0.1.x`
+  only, never `latest`, and does not sync the Docker Hub README.
+
+`releases/latest` must always be a 1.x release: `termote update`, `get.sh`,
+`get.ps1` and the PWA update check all install or compare against it, so a 0.x
+patch marked latest would downgrade every 1.x install that runs `update`. If a
+0.x release is ever marked latest by mistake, re-mark the newest 1.x release
+(`gh release edit v1.x.y --latest`).
 
 ## Troubleshooting
 

@@ -26,6 +26,13 @@ termote update --version 1.0.0    # pin a version
 entry point a 0.x install calls during its own `update`; in 1.0.0 they are
 thin shims that dispatch to the `tmux-api` binary.
 
+### Staying on 0.x
+
+`update` with no `--version` installs the latest release, which is 1.x. To stay
+on 0.x, pin the version instead: `update --version 0.1.x` (`-Version 0.1.x` on
+Windows), or use the `termote:0.1` container image. 0.x only receives security
+and critical fixes, released as `0.1.x` patches.
+
 ## Breaking changes
 
 - **Terminal transport**: ttyd and its WebSocket proxy are gone. tmux-api opens
