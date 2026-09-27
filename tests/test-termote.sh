@@ -135,7 +135,9 @@ EOF
 
     # Without Go and without a binary there is nothing to run
     if out=$(PATH="/usr/bin:/bin" "$dir/scripts/termote.sh" version 2>&1); then
-        if command -v go 2>/dev/null | grep -qE '^/(usr/)?bin/'; then
+        # Check the same restricted PATH: a runner image can ship a system Go
+        # in /usr/bin even when setup-go puts another one first on PATH
+        if PATH="/usr/bin:/bin" command -v go >/dev/null 2>&1; then
             skip "go lives in /usr/bin or /bin; cannot hide it"
         else
             fail "no go, no binary" "non-zero exit" "exit 0"
@@ -150,6 +152,8 @@ EOF
         skip "go not installed; checkout build tests"
         return
     fi
+    # Start from no binary: the check above builds one when a system Go exists
+    rm -f "$dir/tmux-api/tmux-api-native"
     out=$("$dir/scripts/termote.sh" install native --mux herdr 2>"$TMP/build.err")
     check "builds tmux-api-native on first run" "install native --mux herdr" "$(args_of "$out")"
     if grep -q "Building tmux-api" "$TMP/build.err" && [[ -x "$dir/tmux-api/tmux-api-native" ]]; then
