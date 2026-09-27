@@ -419,10 +419,10 @@ Re-run the installer - it compares versions and prompts before updating:
 
 ```bash
 # Auto-update using saved config
-curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash -s -- --update
+curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/release/0.x/scripts/get.sh | bash -s -- --update
 
 # Or standard update
-curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
+curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/release/0.x/scripts/get.sh | bash
 ```
 
 Options:

@@ -20,7 +20,7 @@ Termote (Terminal + Remote) turns your browser into a mobile-friendly terminal. 
 Quick start with Container Mode:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/termote.sh -o termote.sh
+curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/release/0.x/scripts/termote.sh -o termote.sh
 chmod +x termote.sh
 ./termote.sh install container
 ```

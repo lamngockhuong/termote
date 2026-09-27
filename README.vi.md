@@ -110,7 +110,7 @@ make test                              # Chạy tests
 
 ```bash
 # Tải về và hỏi trước khi cài (mặc định native mode)
-curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
+curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/release/0.x/scripts/get.sh | bash
 
 # Tự động cài không hỏi
 curl -fsSL .../get.sh | bash -s -- --yes
@@ -142,7 +142,7 @@ curl -fsSL .../get.sh | bash -s -- --yes --container --fresh
 
 ```powershell
 # Tải về và hỏi trước khi cài (mặc định native mode)
-irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
+irm https://raw.githubusercontent.com/lamngockhuong/termote/release/0.x/scripts/get.ps1 | iex
 
 # Tự động cài không hỏi
 $env:TERMOTE_AUTO_YES = "true"; irm .../get.ps1 | iex
@@ -158,32 +158,32 @@ $env:TERMOTE_UPDATE = "true"; irm .../get.ps1 | iex
 
 ```bash
 # Tất cả trong một (tự sinh credentials, xem logs: docker logs termote)
-docker run -d --name termote -p 7680:7680 ghcr.io/lamngockhuong/termote:latest
+docker run -d --name termote -p 7680:7680 ghcr.io/lamngockhuong/termote:0.1
 
 # Với credentials tùy chỉnh
 docker run -d --name termote -p 7680:7680 \
   -e TERMOTE_USER=admin -e TERMOTE_PASS=secret \
-  ghcr.io/lamngockhuong/termote:latest
+  ghcr.io/lamngockhuong/termote:0.1
 
 # Không xác thực (chỉ dev local)
 docker run -d --name termote -p 7680:7680 \
   -e NO_AUTH=true \
-  ghcr.io/lamngockhuong/termote:latest
+  ghcr.io/lamngockhuong/termote:0.1
 
 # Với volume để lưu trữ
 docker run -d --name termote -p 7680:7680 \
   -v termote-data:/home/termote \
-  ghcr.io/lamngockhuong/termote:latest
+  ghcr.io/lamngockhuong/termote:0.1
 
 # Mount thư mục workspace tùy chỉnh
 docker run -d --name termote -p 7680:7680 \
   -v ~/projects:/workspace \
-  ghcr.io/lamngockhuong/termote:latest
+  ghcr.io/lamngockhuong/termote:0.1
 
 # Với Tailscale HTTPS (yêu cầu Tailscale trên host)
 docker run -d --name termote -p 7680:7680 \
   -e TERMOTE_USER=admin -e TERMOTE_PASS=secret \
-  ghcr.io/lamngockhuong/termote:latest
+  ghcr.io/lamngockhuong/termote:0.1
 sudo tailscale serve --bg --https=443 http://127.0.0.1:7680
 # Truy cập tại: https://your-hostname.tailnet-name.ts.net
 ```
@@ -205,7 +205,7 @@ cd termote-${VERSION#v}
 ### Từ Source
 
 ```bash
-git clone https://github.com/lamngockhuong/termote.git
+git clone -b release/0.x https://github.com/lamngockhuong/termote.git
 cd termote
 ./scripts/termote.sh install container
 ```

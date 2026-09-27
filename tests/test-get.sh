@@ -89,11 +89,18 @@ test_version_detection() {
         fail "get_latest_version" "function present" "not found"
     fi
 
-    # Verify GitHub API usage
-    if grep -q "api.github.com.*releases/latest" "$PROJECT_DIR/scripts/get.sh"; then
-        pass "uses GitHub API for version"
+    # Verify GitHub API usage: the 0.x installer lists releases and picks the
+    # newest v0.x tag instead of releases/latest, which points at 1.x
+    if grep -q "api.github.com.*/releases?per_page" "$PROJECT_DIR/scripts/get.sh" &&
+        grep -q 'v0\\\.' "$PROJECT_DIR/scripts/get.sh"; then
+        pass "uses GitHub API for newest 0.x version"
     else
-        fail "GitHub API" "releases/latest" "not found"
+        fail "GitHub API" "releases list filtered to v0.x" "not found"
+    fi
+    if ! grep -q "releases/latest" "$PROJECT_DIR/scripts/get.sh"; then
+        pass "does not follow releases/latest"
+    else
+        fail "releases/latest" "not used" "found"
     fi
 }
 

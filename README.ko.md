@@ -112,7 +112,7 @@ make test                              # 테스트 실행
 
 ```bash
 # 다운로드 후 설치 전 확인 (기본값: native 모드)
-curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
+curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/release/0.x/scripts/get.sh | bash
 
 # 확인 없이 자동 설치
 curl -fsSL .../get.sh | bash -s -- --yes
@@ -144,7 +144,7 @@ curl -fsSL .../get.sh | bash -s -- --yes --container --fresh
 
 ```powershell
 # 다운로드 후 설치 전 확인 (기본값: native 모드)
-irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
+irm https://raw.githubusercontent.com/lamngockhuong/termote/release/0.x/scripts/get.ps1 | iex
 
 # 확인 없이 자동 설치
 $env:TERMOTE_AUTO_YES = "true"; irm .../get.ps1 | iex
@@ -160,32 +160,32 @@ $env:TERMOTE_UPDATE = "true"; irm .../get.ps1 | iex
 
 ```bash
 # 올인원 (자격 증명 자동 생성, 로그 확인: docker logs termote)
-docker run -d --name termote -p 7680:7680 ghcr.io/lamngockhuong/termote:latest
+docker run -d --name termote -p 7680:7680 ghcr.io/lamngockhuong/termote:0.1
 
 # 사용자 지정 자격 증명
 docker run -d --name termote -p 7680:7680 \
   -e TERMOTE_USER=admin -e TERMOTE_PASS=secret \
-  ghcr.io/lamngockhuong/termote:latest
+  ghcr.io/lamngockhuong/termote:0.1
 
 # 인증 없음 (로컬 개발 전용)
 docker run -d --name termote -p 7680:7680 \
   -e NO_AUTH=true \
-  ghcr.io/lamngockhuong/termote:latest
+  ghcr.io/lamngockhuong/termote:0.1
 
 # 영구 저장을 위한 볼륨 사용
 docker run -d --name termote -p 7680:7680 \
   -v termote-data:/home/termote \
-  ghcr.io/lamngockhuong/termote:latest
+  ghcr.io/lamngockhuong/termote:0.1
 
 # 사용자 지정 workspace 디렉토리 마운트
 docker run -d --name termote -p 7680:7680 \
   -v ~/projects:/workspace \
-  ghcr.io/lamngockhuong/termote:latest
+  ghcr.io/lamngockhuong/termote:0.1
 
 # Tailscale HTTPS 사용 (호스트에 Tailscale 필요)
 docker run -d --name termote -p 7680:7680 \
   -e TERMOTE_USER=admin -e TERMOTE_PASS=secret \
-  ghcr.io/lamngockhuong/termote:latest
+  ghcr.io/lamngockhuong/termote:0.1
 sudo tailscale serve --bg --https=443 http://127.0.0.1:7680
 # 접속: https://your-hostname.tailnet-name.ts.net
 ```
@@ -207,7 +207,7 @@ cd termote-${VERSION#v}
 ### 소스에서 설치
 
 ```bash
-git clone https://github.com/lamngockhuong/termote.git
+git clone -b release/0.x https://github.com/lamngockhuong/termote.git
 cd termote
 ./scripts/termote.sh install container
 ```
