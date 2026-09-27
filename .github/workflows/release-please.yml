@@ -2,7 +2,7 @@ name: Release Please
 
 on:
   push:
-    branches: [main]
+    branches: [release/0.x]
   workflow_dispatch:
 
 env:
@@ -26,6 +26,7 @@ jobs:
         with:
           manifest-file: .release-please-manifest.json
           config-file: release-please-config.json
+          target-branch: release/0.x
 
   # Trigger release workflow when release is created
   call-release:

@@ -4,6 +4,20 @@
 
 Termote uses automated release workflows with multiple triggers and multi-arch Docker builds.
 
+> **This is the `release/0.x` maintenance branch.** It only takes security and
+> critical fixes, cherry-picked from `main` (`git cherry-pick -x`); new work
+> goes to `main` (1.x). Its workflows differ from `main` so a 0.x patch never
+> replaces a 1.x release:
+>
+> - Release Please runs on pushes to `release/0.x` and opens its release PR
+>   against it; every release is a patch bump (`versioning: always-bump-patch`).
+> - The GitHub release is created as a draft with its tag, then published with
+>   `make_latest: false`, so `releases/latest` (used by `update`, `get.sh`,
+>   `get.ps1` and the PWA update check) keeps pointing at 1.x.
+> - Docker images get `0.1` and `0.1.x` tags only, never `latest`, and the
+>   Docker Hub README is not synced from this branch.
+> - Users stay on 0.x with `update --version 0.1.x` or the `termote:0.1` image.
+
 ## Triggers
 
 | Method          | Command/Action                          | Use Case                   |

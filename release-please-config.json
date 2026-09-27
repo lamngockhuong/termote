@@ -7,6 +7,9 @@
       "include-component-in-tag": false,
       "changelog-path": "CHANGELOG.md",
       "bump-minor-pre-major": true,
+      "versioning": "always-bump-patch",
+      "draft": true,
+      "force-tag-creation": true,
       "extra-files": [
         {
           "type": "json",
