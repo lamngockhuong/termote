@@ -371,7 +371,7 @@ jobs:
     needs: [prepare, release]
     # Skip when called by release-please (it handles version sync via extra-files)
     # Use inputs.version to detect workflow_call since event_name check is unreliable.
-    # Skip pre-releases too: they are tagged from feat/1.0 and must not bump main.
+    # Skip pre-releases too: they must not bump the version on main.
     if: inputs.version == '' && !contains(needs.prepare.outputs.version, '-')
     permissions:
       contents: write
