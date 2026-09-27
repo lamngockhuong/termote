@@ -32,8 +32,8 @@ func (c *cli) cmdLogs(args []string) error {
 		}
 	}
 	switch service {
-	case "tmux-api", "api":
-		return c.printLogs("tmux-api*.log", lines, "No tmux-api logs")
+	case "server", "api":
+		return c.printLogs("termote*.log", lines, "No server logs")
 	case "all", "":
 		return c.printLogs("*.log", lines, "")
 	case "follow", "tail", "-f":
@@ -43,10 +43,10 @@ func (c *cli) cmdLogs(args []string) error {
 	case "clean":
 		return c.cleanLogs()
 	case "ttyd":
-		c.infof("ttyd was removed in 1.0.0; the terminal now runs inside tmux-api (see: termote logs tmux-api)")
+		c.infof("ttyd was removed in 1.0.0; the terminal now runs inside the server (see: termote logs server)")
 		return nil
 	}
-	return usageError("unknown log service: %s (use: tmux-api, all, follow, clean)", service)
+	return usageError("unknown log service: %s (use: server, all, follow, clean)", service)
 }
 
 func (c *cli) logFiles(pattern string) []string {

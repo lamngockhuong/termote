@@ -6,7 +6,7 @@ Control Claude Code, GitHub Copilot, or any terminal tool from your phone — in
 
 Termote (Terminal + Remote) turns your browser into a mobile-friendly terminal. It wraps your existing CLI tools with touch gestures, a virtual keyboard, and session management — all through a PWA you can install on your homescreen.
 
-Since 1.0.0 a single binary, `tmux-api`, does everything: it serves the PWA and the API, handles
+Since 1.0.0 a single binary, `termote`, does everything: it serves the PWA and the API, handles
 auth, and streams the terminal itself (a PTY on Unix, ConPTY on Windows) over the
 `/api/mux/stream` WebSocket to xterm.js in the browser. Termote no longer uses `ttyd`. The CLI
 lives in the same binary; `scripts/termote.sh` and `scripts/termote.ps1` are thin shims that pass
@@ -41,7 +41,7 @@ termote show-password
 On Windows, use `irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex`
 and `.\scripts\termote.ps1 show-password`.
 
-> `scripts/termote.sh` on its own is only a shim over the `tmux-api` binary shipped in the release
+> `scripts/termote.sh` on its own is only a shim over the `termote` binary shipped in the release
 > tarball, so downloading that single file no longer works in 1.0.
 
 ## Accessing from Your Phone

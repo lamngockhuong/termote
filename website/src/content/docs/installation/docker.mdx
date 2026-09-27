@@ -5,8 +5,8 @@ description: All-in-one container deployment
 
 import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
 
-Single container with tmux-api (PWA + terminal stream + API) + tmux. There is no separate
-terminal process: tmux-api streams the terminal itself into xterm.js in the PWA. The Herdr
+Single container with termote (PWA + terminal stream + API) + tmux. There is no separate
+terminal process: termote streams the terminal itself into xterm.js in the PWA. The Herdr
 backend is not available in container mode.
 
 ## Quick Start
@@ -191,7 +191,7 @@ podman logs termote
 ```bash
 docker exec -it termote /bin/sh
 # Inside container:
-ps aux                        # Check processes (tmux-api, tmux)
+ps aux                        # Check processes (termote, tmux)
 curl localhost:7680/api/mux/health
 ```
 
@@ -203,7 +203,7 @@ curl localhost:7680/api/mux/health
 | Container crash  | `docker logs termote` to see error           |
 | Auth not working | Restart container, check logs for password   |
 | Host rejected (403) | Add the name suggested in the error with `--allow-host` |
-| WebSocket error  | Check tmux-api logs (`docker logs termote`); the terminal WebSocket is `/api/mux/stream`, served by tmux-api itself |
+| WebSocket error  | Check termote logs (`docker logs termote`); the terminal WebSocket is `/api/mux/stream`, served by termote itself |
 | Stale PWA cache  | Settings → "Clear Cache & Reload" to refresh |
 
 ### Restart / Reset

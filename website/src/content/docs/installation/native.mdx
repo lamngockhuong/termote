@@ -5,7 +5,7 @@ description: All services run natively on host
 
 import { Steps, Tabs, TabItem, Aside } from "@astrojs/starlight/components";
 
-No Docker required. Access host binaries like `claude`, `git`, `gh`, etc. tmux-api streams
+No Docker required. Access host binaries like `claude`, `git`, `gh`, etc. termote streams
 the terminal itself (PTY on Unix, ConPTY on Windows) into xterm.js in the PWA — there is no
 separate terminal process to install.
 
@@ -128,7 +128,7 @@ reachable on this host; Termote only talks to its socket.
   <TabItem label="Unix (macOS/Linux)">
     ```bash
     # Check process
-    ps aux | grep tmux-api
+    ps aux | grep termote-server
 
     # Restart
     ./scripts/termote.sh install native
@@ -137,7 +137,7 @@ reachable on this host; Termote only talks to its socket.
   <TabItem label="Windows (PowerShell)">
     ```powershell
     # Check process
-    Get-Process -Name tmux-api -ErrorAction SilentlyContinue
+    Get-Process -Name termote-server -ErrorAction SilentlyContinue
 
     # Restart
     .\scripts\termote.ps1 install native
@@ -189,13 +189,13 @@ pkill caffeinate
 <Tabs>
   <TabItem label="Unix (macOS/Linux)">
     ```bash
-    ps aux | grep tmux-api     # Check if tmux-api is running
+    ps aux | grep termote-server # Check if termote is running
     lsof -i :7680              # Verify port
     ```
   </TabItem>
   <TabItem label="Windows (PowerShell)">
     ```powershell
-    Get-Process -Name tmux-api -ErrorAction SilentlyContinue
+    Get-Process -Name termote-server -ErrorAction SilentlyContinue
     netstat -ano | Select-String "7680"   # Verify port
     ```
   </TabItem>
@@ -206,7 +206,7 @@ pkill caffeinate
 <Tabs>
   <TabItem label="Unix (macOS/Linux)">
     ```bash
-    termote logs tmux-api   # Recent log lines
+    termote logs server     # Recent log lines
     termote logs follow     # Tail live (Ctrl+C to stop)
     termote logs clean      # Delete log files
     ```
@@ -215,8 +215,8 @@ pkill caffeinate
     Native mode writes service logs to `~/.termote/logs`. View them with the CLI:
 
     ```powershell
-    .\scripts\termote.ps1 logs            # Show recent tmux-api logs
-    .\scripts\termote.ps1 logs tmux-api   # Same, explicit
+    .\scripts\termote.ps1 logs            # Show recent termote logs
+    .\scripts\termote.ps1 logs server     # Same, explicit
     .\scripts\termote.ps1 logs follow     # Tail all logs live (Ctrl+C to stop)
     .\scripts\termote.ps1 logs clean      # Delete log files
     ```
@@ -229,7 +229,7 @@ pkill caffeinate
 | --------------- | -------------------------------------------------- |
 | Port in use     | `lsof -i :7680` (Unix) or `netstat -ano \| Select-String 7680` (Win) then kill process |
 | Herdr not found | Install/start `herdr` first, or drop `--mux herdr` to use tmux |
-| Binary missing  | `cd tmux-api && go build -o tmux-api-native .`    |
+| Binary missing  | `cd server && go build -o termote-dev .`    |
 | PWA not built   | `pnpm --filter termote build`                            |
 | Stale PWA cache | Settings → "Clear Cache & Reload" to refresh      |
 | Host rejected (403) | Follow the `--allow-host <name>` suggested in the error, then reinstall |

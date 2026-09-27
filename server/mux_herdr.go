@@ -85,7 +85,7 @@ type herdrView struct {
 
 // newHerdrMux returns a backend for the herdr server at socket. The event
 // subscription runs until ctx ends, reconnecting with backoff, so herdr can be
-// started after tmux-api.
+// started after the server.
 func newHerdrMux(ctx context.Context, socket string) (*herdrMux, error) {
 	m := &herdrMux{
 		rpc:      &herdrRPC{socket: socket},

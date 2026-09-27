@@ -18,7 +18,7 @@ import (
 // Defaults shared by every subcommand.
 const (
 	containerName     = "termote"
-	containerPort     = 7680 // tmux-api port inside the container
+	containerPort     = 7680 // server port inside the container
 	adminUser         = "admin"
 	updateRepo        = "lamngockhuong/termote"
 	defaultLogLines   = 50
@@ -160,7 +160,7 @@ func newCLI() (*cli, error) {
 
 // findProjectDir locates the install (or checkout) root: the shim exports
 // TERMOTE_PROJECT_DIR; otherwise a release binary sits in the root and a
-// checkout build sits in tmux-api/.
+// checkout build sits in server/.
 func findProjectDir(exe, env string) string {
 	if env != "" {
 		if abs, err := filepath.Abs(env); err == nil {
@@ -169,7 +169,7 @@ func findProjectDir(exe, env string) string {
 		return env
 	}
 	dir := filepath.Dir(exe)
-	if filepath.Base(dir) == "tmux-api" && isDir(filepath.Join(filepath.Dir(dir), "scripts")) {
+	if filepath.Base(dir) == "server" && isDir(filepath.Join(filepath.Dir(dir), "scripts")) {
 		return filepath.Dir(dir)
 	}
 	return dir
@@ -307,7 +307,7 @@ func (c *cli) heading(s string) {
 // Paths under ~/.termote. The config file and its format are the 0.x ones.
 func (c *cli) configDir() string { return filepath.Join(c.home, ".termote") }
 func (c *cli) logDir() string    { return filepath.Join(c.configDir(), "logs") }
-func (c *cli) pidFile() string   { return filepath.Join(c.configDir(), "tmux-api.pid") }
+func (c *cli) pidFile() string   { return filepath.Join(c.configDir(), "termote.pid") }
 
 func (c *cli) configFile() string {
 	if c.goos == "windows" {
@@ -418,7 +418,7 @@ Commands:
   uninstall <mode>  Remove installation (mode: native, container, all)
   update            Update to the latest release
   health            Check service health
-  logs [service]    View logs (tmux-api, all, follow, clean)
+  logs [service]    View logs (server, all, follow, clean)
   link              Create 'termote' global command
   unlink            Remove global command
   show-password     Show the saved admin password

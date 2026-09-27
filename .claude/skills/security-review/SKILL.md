@@ -7,7 +7,7 @@ argument-hint: "[--full | --diff-only] [--focus auth|api|stream|herdr|cli|docker
 
 # Termote Security Review
 
-Review Termote for security vulnerabilities, tailored to its 1.0 architecture: one Go binary (`tmux-api`) that is both the server (PWA + `/api/mux/*` + terminal WebSocket stream + auth) and the CLI (`termote install/update/...`), a React PWA, thin shell/PowerShell shims, and a Docker image. There is no ttyd and no `/terminal/` iframe any more: the server runs the terminal itself on a PTY (Unix) or ConPTY (Windows) and streams it over `/api/mux/stream`. Backends: tmux (psmux on Windows) and herdr (Unix only, via its socket and CLI).
+Review Termote for security vulnerabilities, tailored to its 1.0 architecture: one Go binary (`termote`) that is both the server (PWA + `/api/mux/*` + terminal WebSocket stream + auth) and the CLI (`termote install/update/...`), a React PWA, thin shell/PowerShell shims, and a Docker image. There is no ttyd and no `/terminal/` iframe any more: the server runs the terminal itself on a PTY (Unix) or ConPTY (Windows) and streams it over `/api/mux/stream`. Backends: tmux (psmux on Windows) and herdr (Unix only, via its socket and CLI).
 
 ## Arguments
 
@@ -29,13 +29,13 @@ If --focus specified:
 ```
 
 For a release review, diff against the previous tag:
-`git diff <prev-tag>..HEAD -- tmux-api pwa/src scripts Dockerfile entrypoint.sh docker-compose.yml`.
+`git diff <prev-tag>..HEAD -- server pwa/src scripts Dockerfile entrypoint.sh docker-compose.yml`.
 
 ## Step 2: Review by Area
 
 Launch parallel review agents for each relevant area. Pass the diff or file contents to each agent.
 
-### Area: Auth & Request Guards (`tmux-api/serve.go`, `tmux-api/guard.go`)
+### Area: Auth & Request Guards (`server/serve.go`, `server/guard.go`)
 
 Check against [checklist.md](checklist.md#auth--access-control):
 
@@ -48,7 +48,7 @@ Check against [checklist.md](checklist.md#auth--access-control):
 - Session cookie: `HttpOnly`, `SameSite=Strict`, `Secure` when HTTPS; bounded store
 - No credentials in logs, error responses or child-process environments
 
-### Area: API & Command Injection (`tmux-api/mux.go`, `tmux-api/mux_tmux.go`, `tmux-api/mux_herdr.go`)
+### Area: API & Command Injection (`server/mux.go`, `server/mux_tmux.go`, `server/mux_herdr.go`)
 
 Check against [checklist.md](checklist.md#api--command-injection):
 
@@ -59,7 +59,7 @@ Check against [checklist.md](checklist.md#api--command-injection):
 - Method enforcement on every handler; wrong method → JSON 405
 - Error responses generic (`mux command failed`); only `inputError` text is echoed
 
-### Area: Terminal Stream (`tmux-api/stream.go`, `tmux-api/pty_*.go`, `tmux-api/herdr_stream.go`)
+### Area: Terminal Stream (`server/stream.go`, `server/pty_*.go`, `server/herdr_stream.go`)
 
 Check against [checklist.md](checklist.md#terminal-stream):
 
@@ -68,7 +68,7 @@ Check against [checklist.md](checklist.md#terminal-stream):
 - Keepalive and write timeouts; no URL (token) logging
 - Closing a stream, SIGTERM and a hard kill of the server all end the whole child process tree (process group / `Pdeathsig` / Job Object); orphan reaping never matches unrelated processes
 
-### Area: Herdr Backend (`tmux-api/herdr_rpc.go`, `tmux-api/mux_herdr.go`, `tmux-api/herdr_stream.go`)
+### Area: Herdr Backend (`server/herdr_rpc.go`, `server/mux_herdr.go`, `server/herdr_stream.go`)
 
 Check against [checklist.md](checklist.md#herdr-backend):
 
@@ -77,7 +77,7 @@ Check against [checklist.md](checklist.md#herdr-backend):
 - NDJSON frames decoded defensively (bad lines skipped, never executed or echoed)
 - Input queue bounded per pane; writes ordered
 
-### Area: Go CLI (`tmux-api/cli*.go`)
+### Area: Go CLI (`server/cli*.go`)
 
 Check against [checklist.md](checklist.md#go-cli):
 

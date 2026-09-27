@@ -1,4 +1,4 @@
-# All-in-one: tmux + tmux-api (serve mode, streams the terminal itself)
+# All-in-one: tmux + termote (serve mode, streams the terminal itself)
 # Debian, not Alpine: entrypoint.sh needs bash and locales. Pinned by digest.
 FROM debian:stable-slim@sha256:5bc3287b25407c965a30f38e32603dc253a3869e1b12a21ac09bfc27fd8b13ce
 
@@ -32,16 +32,17 @@ RUN mkdir -p /var/www/termote
 # Copy PWA files
 COPY pwa/dist /var/www/termote
 
-# Copy tmux-api binary (supports both single binary and multi-arch builds)
+# Copy the termote binary (single-arch server/termote-server, or the
+# per-arch release builds server/termote-linux-<arch>)
 ARG TARGETARCH
-COPY tmux-api/tmux-api* /tmp/
-RUN if [ -f "/tmp/tmux-api-linux-${TARGETARCH}" ]; then \
-      cp "/tmp/tmux-api-linux-${TARGETARCH}" /usr/local/bin/tmux-api; \
+COPY server/termote-* /tmp/
+RUN if [ -f "/tmp/termote-linux-${TARGETARCH}" ]; then \
+      cp "/tmp/termote-linux-${TARGETARCH}" /usr/local/bin/termote; \
     else \
-      cp /tmp/tmux-api /usr/local/bin/tmux-api; \
+      cp /tmp/termote-server /usr/local/bin/termote; \
     fi && \
-    chmod +x /usr/local/bin/tmux-api && \
-    rm -f /tmp/tmux-api*
+    chmod +x /usr/local/bin/termote && \
+    rm -f /tmp/termote-*
 
 # Copy entrypoint
 COPY entrypoint.sh /entrypoint.sh

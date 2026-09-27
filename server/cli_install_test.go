@@ -123,7 +123,7 @@ func TestWindowsMatchersFollowTheFileNotTheSpelling(t *testing.T) {
 	if err := os.Symlink(win.projectDir, alias); err != nil {
 		t.Fatal(err)
 	}
-	if !win.isServerProcess(procInfo{Exe: filepath.Join(alias, "tmux-api", "tmux-api.exe")}) {
+	if !win.isServerProcess(procInfo{Exe: filepath.Join(alias, "server", "termote-server.exe")}) {
 		t.Error("server under an alias of the install dir not matched")
 	}
 	if !win.isLegacyTtyd(procInfo{Exe: filepath.Join(alias, "scripts", "ttyd.exe")}) {
@@ -137,15 +137,15 @@ func TestWindowsMatchersFollowTheFileNotTheSpelling(t *testing.T) {
 
 func TestServerAndLegacyTtydMatchers(t *testing.T) {
 	tc := newTestCLI(t, "linux")
-	server := filepath.Join(tc.projectDir, "tmux-api", "tmux-api")
+	server := filepath.Join(tc.projectDir, "server", "termote-server")
 	yes := []procInfo{
 		{Cmdline: server},
-		{Cmdline: filepath.Join(tc.projectDir, "tmux-api", "tmux-api-native")},
+		{Cmdline: filepath.Join(tc.projectDir, "server", "termote-dev")},
 	}
 	no := []procInfo{
 		{Cmdline: server + " install native"},
-		{Cmdline: "/usr/local/bin/tmux-api"},
-		{Cmdline: "tmux-api"},
+		{Cmdline: "/usr/local/bin/termote-server"},
+		{Cmdline: "termote-server"},
 	}
 	for _, p := range yes {
 		if !tc.isServerProcess(p) {
@@ -177,10 +177,10 @@ func TestServerAndLegacyTtydMatchers(t *testing.T) {
 	}
 
 	win := newTestCLI(t, "windows")
-	if !win.isServerProcess(procInfo{Exe: strings.ToUpper(filepath.Join(win.projectDir, "tmux-api", "tmux-api.exe"))}) {
+	if !win.isServerProcess(procInfo{Exe: strings.ToUpper(filepath.Join(win.projectDir, "server", "termote-server.exe"))}) {
 		t.Error("windows server not matched case-insensitively")
 	}
-	if win.isServerProcess(procInfo{Exe: filepath.Join(win.projectDir, "tmux-api-windows-amd64.exe")}) {
+	if win.isServerProcess(procInfo{Exe: filepath.Join(win.projectDir, "termote-windows-amd64.exe")}) {
 		t.Error("windows CLI binary matched as server")
 	}
 	if !win.isLegacyTtyd(procInfo{Exe: filepath.Join(win.projectDir, "scripts", "ttyd.exe")}) ||
@@ -191,15 +191,15 @@ func TestServerAndLegacyTtydMatchers(t *testing.T) {
 
 func TestStopNativeStopsOnlyTermoteProcesses(t *testing.T) {
 	tc := newTestCLI(t, "linux")
-	server := filepath.Join(tc.projectDir, "tmux-api", "tmux-api")
+	server := filepath.Join(tc.projectDir, "server", "termote-server")
 	writeFile(t, tc.pidFile(), "40\n")
 	tc.procs = func() ([]procInfo, error) {
 		return []procInfo{
 			{PID: 10, Cmdline: server},
 			{PID: 11, Cmdline: "ttyd -W -i lo -p 7681 tmux new-session -A -s main"},
 			{PID: 12, Cmdline: "ttyd -p 9000 bash"},
-			{PID: 13, Cmdline: "/opt/other/tmux-api"},
-			{PID: 40, Cmdline: "/somewhere/else/tmux-api"}, // started by 1.0, found via PID file
+			{PID: 13, Cmdline: "/opt/other/termote-server"},
+			{PID: 40, Cmdline: "/somewhere/else/termote-server"}, // started by 1.0, found via PID file
 			{PID: 41, Cmdline: "vim notes.txt"},
 			{PID: tc.pid, Cmdline: server},
 		}, nil
@@ -285,7 +285,7 @@ func TestInstallContainerRunsCompose(t *testing.T) {
 	t.Cleanup(func() { containerStartWait = old })
 	tc.runner.paths["docker"] = true
 	writeFile(t, filepath.Join(tc.projectDir, "pwa-dist", "index.html"), "<html>")
-	writeFile(t, filepath.Join(tc.projectDir, "tmux-api-linux-amd64"), "ELF")
+	writeFile(t, filepath.Join(tc.projectDir, "termote-linux-amd64"), "ELF")
 	writeFile(t, filepath.Join(tc.projectDir, "docker-compose.yml"), "services: {}")
 	if code := tc.main([]string{"install", "container", "--lan", "--port", "1"}); code != 0 {
 		t.Fatalf("code %d, stderr %s", code, tc.stderr.String())
@@ -293,7 +293,7 @@ func TestInstallContainerRunsCompose(t *testing.T) {
 	if !tc.runner.called("docker compose --profile docker up -d --build") {
 		t.Fatalf("compose not run: %v", tc.runner.calls)
 	}
-	if b, _ := os.ReadFile(filepath.Join(tc.projectDir, "tmux-api", "tmux-api")); string(b) != "ELF" {
+	if b, _ := os.ReadFile(filepath.Join(tc.projectDir, "server", "termote-server")); string(b) != "ELF" {
 		t.Fatal("linux binary not copied for the image")
 	}
 	if !fileExists(filepath.Join(tc.projectDir, "pwa", "dist", "index.html")) || fileExists(filepath.Join(tc.projectDir, "pwa-dist")) {
@@ -314,7 +314,7 @@ func TestInstallContainerRunsCompose(t *testing.T) {
 func TestInstallNativeRequiresTmux(t *testing.T) {
 	tc := newTestCLI(t, "linux")
 	writeFile(t, filepath.Join(tc.projectDir, "pwa-dist", "index.html"), "<html>")
-	writeFile(t, filepath.Join(tc.projectDir, "tmux-api-linux-amd64"), "ELF")
+	writeFile(t, filepath.Join(tc.projectDir, "termote-linux-amd64"), "ELF")
 	if code := tc.main([]string{"install", "native"}); code != 1 || !strings.Contains(tc.stderr.String(), "tmux not found") {
 		t.Fatalf("code %d stderr %q", code, tc.stderr.String())
 	}
@@ -386,7 +386,7 @@ func TestInstallNativeEndToEnd(t *testing.T) {
 	}
 	tc := newTestCLI(t, runtime.GOOS)
 	tc.goarch = runtime.GOARCH
-	prebuilt := filepath.Join(tc.projectDir, "tmux-api-"+runtime.GOOS+"-"+runtime.GOARCH)
+	prebuilt := filepath.Join(tc.projectDir, "termote-"+runtime.GOOS+"-"+runtime.GOARCH)
 	build := exec.Command("go", "build", "-o", prebuilt, ".")
 	build.Env = append(os.Environ(), "CGO_ENABLED=0")
 	if out, err := build.CombinedOutput(); err != nil {
@@ -496,7 +496,7 @@ func pidRunning(pid int) bool {
 func TestInstallNativeRefusesBusyPort(t *testing.T) {
 	tc := newTestCLI(t, "linux")
 	writeFile(t, filepath.Join(tc.projectDir, "pwa-dist", "index.html"), "<html>")
-	writeFile(t, filepath.Join(tc.projectDir, "tmux-api-linux-amd64"), "ELF")
+	writeFile(t, filepath.Join(tc.projectDir, "termote-linux-amd64"), "ELF")
 	tc.runner.paths["tmux"] = true
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -528,14 +528,14 @@ func TestServerMatcherFollowsSymlinkedInstallDir(t *testing.T) {
 		t.Skip("symlinks")
 	}
 	tc := newTestCLI(t, "linux")
-	real := filepath.Join(tc.projectDir, "tmux-api", "tmux-api")
+	real := filepath.Join(tc.projectDir, "server", "termote-server")
 	writeFile(t, real, "ELF")
 	link := filepath.Join(t.TempDir(), "link")
 	os.Symlink(tc.projectDir, link)
 	resolved, _ := filepath.EvalSymlinks(real)
-	logical := filepath.Join(link, "tmux-api", "tmux-api")
+	logical := filepath.Join(link, "server", "termote-server")
 	if !tc.isServerProcess(procInfo{Cmdline: logical, Exe: resolved}) {
-		t.Fatal("0.x server started through a symlinked path not matched")
+		t.Fatal("server started through a symlinked path not matched")
 	}
 	if tc.isServerProcess(procInfo{Cmdline: logical + " install native", Exe: resolved}) {
 		t.Fatal("CLI invocation matched as server")

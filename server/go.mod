@@ -1,4 +1,4 @@
-module tmux-api
+module github.com/lamngockhuong/termote/server
 
 go 1.24.0
 

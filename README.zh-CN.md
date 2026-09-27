@@ -64,7 +64,7 @@ flowchart TB
         Keyboard["虚拟键盘"]
     end
 
-    subgraph Server["tmux-api Server :7680"]
+    subgraph Server["termote Server :7680"]
         Static["静态文件"]
         Stream["终端 WebSocket /api/mux/stream"]
         API["REST API /api/mux/*"]
@@ -93,7 +93,7 @@ flowchart TB
     tmux --> Shell --> Tools
 ```
 
-tmux-api 自己负责终端流（Unix 上用 PTY，Windows 上用 ConPTY），直接传给 PWA 中的 xterm.js，不再有需要代理的独立终端进程。完整的请求防护模型见 [`docs/system-architecture.md`](docs/system-architecture.md)。
+termote 自己负责终端流（Unix 上用 PTY，Windows 上用 ConPTY），直接传给 PWA 中的 xterm.js，不再有需要代理的独立终端进程。完整的请求防护模型见 [`docs/system-architecture.md`](docs/system-architecture.md)。
 
 ## 快速开始
 
@@ -225,12 +225,12 @@ cd termote
 flowchart LR
     subgraph Container["容器模式"]
         direction TB
-        C1["Docker/Podman"] --> C2["tmux-api :7680 (自行传输终端流)"] --> C3["tmux"]
+        C1["Docker/Podman"] --> C2["termote :7680 (自行传输终端流)"] --> C3["tmux"]
     end
 
     subgraph Native["原生模式"]
         direction TB
-        N1["主机系统"] --> N2["tmux-api :7680 (自行传输终端流)"] --> N3["tmux/psmux 或 Herdr + 主机工具"]
+        N1["主机系统"] --> N2["termote :7680 (自行传输终端流)"] --> N3["tmux/psmux 或 Herdr + 主机工具"]
     end
 
     User["用户"] --> Container & Native
@@ -384,7 +384,7 @@ winget install psmux
 ```
 termote/
 ├── Makefile                # 构建/测试/部署命令
-├── Dockerfile              # Docker 模式（tmux-api + tmux，无 ttyd）
+├── Dockerfile              # Docker 模式（termote + tmux，无 ttyd）
 ├── docker-compose.yml
 ├── entrypoint.sh           # Docker 入口点
 ├── docs/                   # 文档
@@ -396,7 +396,7 @@ termote/
 │       ├── hooks/
 │       ├── types/
 │       └── utils/
-├── tmux-api/               # Go 服务端 + CLI（单一二进制文件）
+├── server/                 # Go 服务端 + CLI（单一二进制文件）
 │   ├── main.go             # 入口点（无参数或 `serve` 为服务器，否则为 CLI）
 │   ├── serve.go            # 服务器（PWA、认证、防护）
 │   ├── mux.go              # Mux 接口 + /api/mux/* 路由
@@ -405,8 +405,8 @@ termote/
 │   ├── stream.go           # 终端 WebSocket（xterm.js 流）
 │   └── cli*.go             # install/update/health/logs/link/menu 子命令
 ├── scripts/
-│   ├── termote.sh          # 精简的 Unix 包装脚本 -> tmux-api CLI
-│   ├── termote.ps1         # 精简的 Windows PowerShell 包装脚本 -> tmux-api CLI
+│   ├── termote.sh          # 精简的 Unix 包装脚本 -> termote CLI
+│   ├── termote.ps1         # 精简的 Windows PowerShell 包装脚本 -> termote CLI
 │   ├── get.sh              # Unix 在线安装器（curl | bash）
 │   └── get.ps1             # Windows 在线安装器（irm | iex）
 ├── tests/                  # 测试套件
@@ -421,7 +421,7 @@ termote/
 ## 开发
 
 ```bash
-make build          # 构建 PWA 和 tmux-api
+make build          # 构建 PWA 和 termote
 make test           # 运行所有测试
 make health         # 检查服务健康状态
 make clean          # 停止容器
@@ -439,12 +439,12 @@ pnpm --filter termote test:e2e:ui    # 使用 UI 调试器运行
 ### 会话未持久化
 
 - 检查 tmux：`tmux ls`
-- tmux-api 通过 `tmux new-session -A` 连接会话（attach-or-create）
+- termote 通过 `tmux new-session -A` 连接会话（attach-or-create）
 
 ### WebSocket 错误
 
-- 检查 tmux-api 日志：`docker logs termote`（容器模式）或 `termote logs tmux-api`（原生模式）
-- 终端 WebSocket 是 `/api/mux/stream`，由 tmux-api 自己提供，没有需要另外检查的终端进程
+- 检查 termote 日志：`docker logs termote`（容器模式）或 `termote logs server`（原生模式）
+- 终端 WebSocket 是 `/api/mux/stream`，由 termote 自己提供，没有需要另外检查的终端进程
 
 ### 移动端键盘问题
 
@@ -454,9 +454,9 @@ pnpm --filter termote test:e2e:ui    # 使用 UI 调试器运行
 ### 原生模式：进程未启动
 
 ```bash
-ps aux | grep tmux-api     # 检查 tmux-api 是否在运行
+ps aux | grep termote-server # 检查 termote 是否在运行
 lsof -i :7680              # 确认端口是否在使用
-termote logs tmux-api      # 或者： termote logs follow
+termote logs server        # 或者： termote logs follow
 ```
 
 ## 安全说明

@@ -4,8 +4,8 @@
 .DESCRIPTION
     Checks the 0.x parameter to Go flag mapping, binary selection (installed
     release and checkout build) and the command line 0.x `update` relaunches.
-    A small Go program stands in for tmux-api and prints its arguments; the
-    commands themselves are tested in Go (tmux-api/cli*_test.go).
+    A small Go program stands in for termote and prints its arguments; the
+    commands themselves are tested in Go (server/cli*_test.go).
     Run from repo root: ./tests/test-termote.ps1
 #>
 
@@ -51,7 +51,7 @@ $shimText = Get-Content $ShimPath -Raw
 Write-TestResult "No install logic in shim" (-not ($shimText -match 'docker|podman|tailscale serve|DPAPI|Start-Process'))
 
 # ─────────────────────────────────────────────────────────────
-# Fake tmux-api: prints DIR=<TERMOTE_PROJECT_DIR>, then one argument per line
+# Fake termote: prints DIR=<TERMOTE_PROJECT_DIR>, then one argument per line
 # ─────────────────────────────────────────────────────────────
 if (-not (Get-Command go -ErrorAction SilentlyContinue)) {
     Write-Host "[SKIP] go not installed; shim behaviour tests" -ForegroundColor Yellow
@@ -115,8 +115,8 @@ try {
     $echoDir = Join-Path $Tmp "echo"
     New-EchoModule $echoDir
     Push-Location $echoDir
-    try { & go build -o (Join-Path $install "tmux-api-windows-amd64.exe") . } finally { Pop-Location }
-    Write-TestResult "Built fake tmux-api" ($LASTEXITCODE -eq 0)
+    try { & go build -o (Join-Path $install "termote-windows-amd64.exe") . } finally { Pop-Location }
+    Write-TestResult "Built fake termote" ($LASTEXITCODE -eq 0)
     $shim = Join-Path $install "scripts/termote.ps1"
 
     foreach ($launcher in $Launchers) {
@@ -128,7 +128,7 @@ try {
         Test-Equal "[$tag] no command opens the menu" "menu" (Get-PassedArgs $out)
         # Compare by content, not string: the temp path may be an 8.3 short name.
         $dir = ($out | Where-Object { $_.StartsWith("DIR=") } | Select-Object -First 1) -replace '^DIR=', ''
-        Write-TestResult "[$tag] exports TERMOTE_PROJECT_DIR" ($dir -and (Test-Path (Join-Path $dir "tmux-api-windows-amd64.exe"))) "got: '$dir'"
+        Write-TestResult "[$tag] exports TERMOTE_PROJECT_DIR" ($dir -and (Test-Path (Join-Path $dir "termote-windows-amd64.exe"))) "got: '$dir'"
 
         # The exact command line 0.1.0 `update` relaunches (termote.ps1:1288)
         $out = Invoke-Shim $launcher $shim @("install", "native", "-Lan", "-NoAuth", "-Port", "7700", "-Tailscale", "myhost:8443", "-Ttyd", "fork")
@@ -162,31 +162,31 @@ try {
     Test-Equal "In-process -Lan:`$false" "install native --lan=false --no-auth" (Get-PassedArgs @($out))
 
     # A binary that cannot start (blocked, corrupt) must not look like success
-    Set-Content -Path (Join-Path $install "tmux-api-windows-amd64.exe") -Value "not a program"
+    Set-Content -Path (Join-Path $install "termote-windows-amd64.exe") -Value "not a program"
     $out = Invoke-Shim $Launchers[0] $shim @("health")
     Write-TestResult "Unrunnable binary fails" (($script:ShimExit -ne 0) -and (($out -join " ") -match "Cannot run")) "exit $script:ShimExit | $($out -join ' | ')"
 
-    Remove-Item (Join-Path $install "tmux-api-windows-amd64.exe")
+    Remove-Item (Join-Path $install "termote-windows-amd64.exe")
     $out = Invoke-Shim $Launchers[0] $shim @("health")
     Write-TestResult "Missing binary fails with a reinstall hint" (($script:ShimExit -ne 0) -and (($out -join " ") -match "reinstall Termote")) ($out -join " | ")
 
     # ─────────────────────────────────────────────────────────
-    # Checkout layout: builds tmux-api\tmux-api-native.exe
+    # Checkout layout: builds server\termote-dev.exe
     # ─────────────────────────────────────────────────────────
     Write-Host ""
     Write-Host "--- Checkout ---" -ForegroundColor Cyan
     $checkout = Join-Path $Tmp "checkout"
     New-Item -ItemType Directory -Path (Join-Path $checkout "scripts") -Force | Out-Null
     Copy-Item $ShimPath (Join-Path $checkout "scripts/termote.ps1")
-    New-EchoModule (Join-Path $checkout "tmux-api")
+    New-EchoModule (Join-Path $checkout "server")
     $cshim = Join-Path $checkout "scripts/termote.ps1"
 
     $out = Invoke-Shim $Launchers[0] $cshim @("install", "native", "-Lan")
     Test-Equal "Builds on first run and runs it" "install native --lan" (Get-PassedArgs $out)
-    Write-TestResult "Binary is tmux-api\tmux-api-native.exe" (Test-Path (Join-Path $checkout "tmux-api/tmux-api-native.exe"))
+    Write-TestResult "Binary is server\termote-dev.exe" (Test-Path (Join-Path $checkout "server/termote-dev.exe"))
     $out = Invoke-Shim $Launchers[0] $cshim @("version")
     Write-TestResult "Does not rebuild an up-to-date binary" (-not (($out -join " ") -match "Building"))
-    (Get-Item (Join-Path $checkout "tmux-api/main.go")).LastWriteTime = (Get-Date).AddMinutes(1)
+    (Get-Item (Join-Path $checkout "server/main.go")).LastWriteTime = (Get-Date).AddMinutes(1)
     $out = Invoke-Shim $Launchers[0] $cshim @("version")
     Write-TestResult "Rebuilds when a source is newer" (($out -join " ") -match "Building")
 } finally {

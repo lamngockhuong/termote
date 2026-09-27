@@ -87,7 +87,7 @@ func (s *ptyStream) Close() error {
 }
 
 // terminalEnv is the server environment with TERM set for xterm.js, TMUX
-// removed so `tmux attach` works when tmux-api itself runs inside tmux, and
+// removed so `tmux attach` works when the server itself runs inside tmux, and
 // no secrets.
 func terminalEnv() []string {
 	env := []string{"TERM=xterm-256color"}

@@ -69,7 +69,7 @@ flowchart TB
         Keyboard["Bàn Phím Ảo"]
     end
 
-    subgraph Server["tmux-api Server :7680"]
+    subgraph Server["termote Server :7680"]
         Static["Static Files"]
         Stream["Terminal WebSocket /api/mux/stream"]
         API["REST API /api/mux/*"]
@@ -98,7 +98,7 @@ flowchart TB
     tmux --> Shell --> Tools
 ```
 
-Chính tmux-api truyền luồng terminal (PTY trên Unix, ConPTY trên Windows) tới xterm.js trong PWA; không có tiến trình terminal riêng nào đứng sau để proxy tới. Mô hình chặn request đầy đủ nằm ở [`docs/system-architecture.md`](docs/system-architecture.md).
+Chính termote truyền luồng terminal (PTY trên Unix, ConPTY trên Windows) tới xterm.js trong PWA; không có tiến trình terminal riêng nào đứng sau để proxy tới. Mô hình chặn request đầy đủ nằm ở [`docs/system-architecture.md`](docs/system-architecture.md).
 
 ## Bắt Đầu Nhanh
 
@@ -228,12 +228,12 @@ cd termote
 flowchart LR
     subgraph Container["Chế Độ Container"]
         direction TB
-        C1["Docker/Podman"] --> C2["tmux-api :7680 (tự truyền luồng terminal)"] --> C3["tmux"]
+        C1["Docker/Podman"] --> C2["termote :7680 (tự truyền luồng terminal)"] --> C3["tmux"]
     end
 
     subgraph Native["Chế Độ Native"]
         direction TB
-        N1["Hệ Thống Host"] --> N2["tmux-api :7680 (tự truyền luồng terminal)"] --> N3["tmux/psmux hoặc Herdr + Công Cụ Host"]
+        N1["Hệ Thống Host"] --> N2["termote :7680 (tự truyền luồng terminal)"] --> N3["tmux/psmux hoặc Herdr + Công Cụ Host"]
     end
 
     User["Người Dùng"] --> Container & Native
@@ -383,7 +383,7 @@ Thanh công cụ ảo cung cấp: Tab, Esc, Ctrl, Shift, phím mũi tên, và c�
 ```
 termote/
 ├── Makefile                # Lệnh build/test/deploy
-├── Dockerfile              # Docker mode (tmux-api + tmux, không có ttyd)
+├── Dockerfile              # Docker mode (termote + tmux, không có ttyd)
 ├── docker-compose.yml
 ├── entrypoint.sh           # Docker entrypoint
 ├── docs/                   # Tài liệu
@@ -395,7 +395,7 @@ termote/
 │       ├── hooks/
 │       ├── types/
 │       └── utils/
-├── tmux-api/               # Go server + CLI (một binary duy nhất)
+├── server/                 # Go server + CLI (một binary duy nhất)
 │   ├── main.go             # Entry point (không tham số/`serve` = server, còn lại là CLI)
 │   ├── serve.go            # Server (PWA, auth, lớp chặn request)
 │   ├── mux.go              # Mux interface + route /api/mux/*
@@ -404,8 +404,8 @@ termote/
 │   ├── stream.go           # Terminal WebSocket (luồng cho xterm.js)
 │   └── cli*.go             # Các lệnh con install/update/health/logs/link/menu
 ├── scripts/
-│   ├── termote.sh          # Shim Unix mỏng -> tmux-api CLI
-│   ├── termote.ps1         # Shim Windows PowerShell mỏng -> tmux-api CLI
+│   ├── termote.sh          # Shim Unix mỏng -> termote CLI
+│   ├── termote.ps1         # Shim Windows PowerShell mỏng -> termote CLI
 │   ├── get.sh              # Unix online installer (curl | bash)
 │   └── get.ps1             # Windows online installer (irm | iex)
 ├── tests/                  # Bộ test
@@ -420,7 +420,7 @@ termote/
 ## Phát Triển
 
 ```bash
-make build          # Build PWA và tmux-api
+make build          # Build PWA và termote
 make test           # Chạy tất cả tests
 make health         # Kiểm tra health service
 make clean          # Dừng containers
@@ -438,12 +438,12 @@ pnpm --filter termote test:e2e:ui    # Chạy với UI debugger
 ### Session không lưu được
 
 - Kiểm tra tmux: `tmux ls`
-- tmux-api gắn vào session bằng `tmux new-session -A` (có session thì gắn vào, chưa có thì tạo mới)
+- termote gắn vào session bằng `tmux new-session -A` (có session thì gắn vào, chưa có thì tạo mới)
 
 ### Lỗi WebSocket
 
-- Kiểm tra logs tmux-api: `docker logs termote` (container) hoặc `termote logs tmux-api` (native)
-- WebSocket của terminal là `/api/mux/stream`, do chính tmux-api phục vụ — không có tiến trình terminal riêng nào cần kiểm tra
+- Kiểm tra logs server: `docker logs termote` (container) hoặc `termote logs server` (native)
+- WebSocket của terminal là `/api/mux/stream`, do chính termote phục vụ — không có tiến trình terminal riêng nào cần kiểm tra
 
 ### Vấn đề bàn phím mobile
 
@@ -453,9 +453,9 @@ pnpm --filter termote test:e2e:ui    # Chạy với UI debugger
 ### Chế độ native: tiến trình không khởi động
 
 ```bash
-ps aux | grep tmux-api     # Kiểm tra tmux-api đang chạy
+ps aux | grep termote-server # Kiểm tra termote đang chạy
 lsof -i :7680              # Xác minh port đang dùng
-termote logs tmux-api      # Hoặc: termote logs follow
+termote logs server        # Hoặc: termote logs follow
 ```
 
 ## Ghi Chú Bảo Mật

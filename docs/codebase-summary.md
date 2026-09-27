@@ -4,7 +4,7 @@
 
 ```bash
 termote/
-├── Dockerfile                  # Docker mode (tmux-api + tmux, no ttyd)
+├── Dockerfile                  # Docker mode (termote + tmux, no ttyd)
 ├── docker-compose.yml          # Docker deployment
 ├── entrypoint.sh                # Docker entrypoint
 ├── pwa/                        # React PWA frontend
@@ -55,7 +55,7 @@ termote/
 │   │   ├── test-setup.ts                    # Vitest configuration
 │   ├── e2e/                    # Playwright e2e tests
 │   └── package.json
-├── tmux-api/                   # Go server + CLI (single binary, flat `package main`)
+├── server/                     # Go server + CLI (single binary, flat `package main`)
 │   ├── main.go                  # Entry point (no args/`serve` = server, else CLI)
 │   ├── serve.go                 # Server: PWA static files, auth, guard chain wiring
 │   ├── guard.go                  # Host allowlist + Origin/Content-Type write guard
@@ -214,7 +214,7 @@ Command history with localStorage persistence: up to 100 commands, add/remove/cl
 
 GitHub release checker with semver comparison, 1-hour cache in localStorage, silent failure.
 
-### tmux-api/ (Go server + CLI)
+### server/ (Go server + CLI)
 
 Single Go binary, `package main`, flat file layout:
 
@@ -244,21 +244,21 @@ Gesture/Toolbar → sendKeyToTerminal()
     ↓
 WebSocket binary frame → /api/mux/stream
     ↓
-tmux-api → PTY/ConPTY → tmux/psmux or Herdr pane
+termote → PTY/ConPTY → tmux/psmux or Herdr pane
     ↓
 Terminal output → WebSocket binary frame → xterm.js → display
 ```
 
-## CLI (Go, `tmux-api/cli*.go`)
+## CLI (Go, `server/cli*.go`)
 
-The CLI is a set of subcommands compiled into the `tmux-api` binary; `scripts/termote.sh` and
+The CLI is a set of subcommands compiled into the `termote` binary; `scripts/termote.sh` and
 `scripts/termote.ps1` are thin shims that resolve/build the binary and `exec` it with the same
-arguments (mapping `-Flag` to `--flag` on Windows). Run `tmux-api help` (or
+arguments (mapping `-Flag` to `--flag` on Windows). Run `termote help` (or
 `./scripts/termote.sh help`) for the current command and flag list — it is generated from the
 same code that parses them, so it never drifts from behavior.
 
 **Commands:** `install [container|native]`, `uninstall [container|native|all]`, `update`,
-`health`, `logs [tmux-api|all|follow|clean]`, `link`, `unlink`, `show-password`, `version`,
+`health`, `logs [server|all|follow|clean]`, `link`, `unlink`, `show-password`, `version`,
 `menu` (no arguments).
 
 **Config persistence:** Unix `~/.termote/config` (`KEY="value"`, chmod 600, password

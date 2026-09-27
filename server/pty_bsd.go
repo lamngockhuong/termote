@@ -23,7 +23,7 @@ func observerSysProcAttr() *syscall.SysProcAttr {
 }
 
 // reapOrphanTerminals kills terminal clients left behind by a previous
-// tmux-api that was killed hard. Only processes re-parented to launchd (PID 1)
+// server that was killed hard. Only processes re-parented to launchd (PID 1)
 // whose command line matches are touched, so a user's own `tmux attach`
 // running under a shell is never matched.
 func reapOrphanTerminals(match func(cmdline string) bool) {

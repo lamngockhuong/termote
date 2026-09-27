@@ -6,7 +6,7 @@
 
 Termote (Terminal + Remote) biến trình duyệt thành terminal thân thiện với thiết bị di động. Nó bọc các công cụ CLI hiện có với cử chỉ cảm ứng, bàn phím ảo và quản lý phiên — tất cả qua PWA có thể cài đặt lên màn hình chính.
 
-Từ bản 1.0.0, một tệp thực thi duy nhất là `tmux-api` đảm nhận mọi việc: phục vụ PWA, cung cấp API, xác thực, và tự truyền luồng terminal (PTY trên Unix, ConPTY trên Windows) qua WebSocket `/api/mux/stream` tới xterm.js trong trình duyệt. Termote không còn dùng `ttyd`. CLI cũng nằm trong chính tệp đó; `scripts/termote.sh` và `scripts/termote.ps1` chỉ còn là lớp vỏ mỏng chuyển lệnh sang nó.
+Từ bản 1.0.0, một tệp thực thi duy nhất là `termote` đảm nhận mọi việc: phục vụ PWA, cung cấp API, xác thực, và tự truyền luồng terminal (PTY trên Unix, ConPTY trên Windows) qua WebSocket `/api/mux/stream` tới xterm.js trong trình duyệt. Termote không còn dùng `ttyd`. CLI cũng nằm trong chính tệp đó; `scripts/termote.sh` và `scripts/termote.ps1` chỉ còn là lớp vỏ mỏng chuyển lệnh sang nó.
 
 **Các trường hợp sử dụng:**
 

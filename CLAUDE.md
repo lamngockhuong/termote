@@ -10,20 +10,20 @@ A PWA for remotely controlling CLI tools (Claude Code, GitHub Copilot, any termi
 
 ## Tech Stack
 
-| Layer           | Technology                                                                |
-| --------------- | ------------------------------------------------------------------------- |
-| Frontend        | React 19 + TypeScript + Vite + TailwindCSS                                |
-| PWA             | vite-plugin-pwa + Workbox                                                 |
-| Terminal        | xterm.js over WebSocket (tmux-api streams the PTY/ConPTY itself, no ttyd) |
-| Server          | Go (tmux-api serve mode)                                                  |
-| Sessions        | tmux/psmux, or Herdr workspaces (native only)                             |
-| Package Manager | pnpm                                                                      |
+| Layer           | Technology                                                               |
+| --------------- | ------------------------------------------------------------------------ |
+| Frontend        | React 19 + TypeScript + Vite + TailwindCSS                               |
+| PWA             | vite-plugin-pwa + Workbox                                                |
+| Terminal        | xterm.js over WebSocket (termote streams the PTY/ConPTY itself, no ttyd) |
+| Server          | Go (termote serve mode)                                                  |
+| Sessions        | tmux/psmux, or Herdr workspaces (native only)                            |
+| Package Manager | pnpm                                                                     |
 
 ## Project Structure
 
 ```
 termote/
-├── Dockerfile              # Docker mode (tmux-api + tmux, no ttyd)
+├── Dockerfile              # Docker mode (termote + tmux, no ttyd)
 ├── docker-compose.yml
 ├── pwa/                    # React PWA frontend
 │   ├── src/
@@ -33,7 +33,7 @@ termote/
 │   │   └── utils/          # Utility functions
 │   ├── package.json
 │   └── vite.config.ts
-├── tmux-api/               # Go server + CLI, single binary (PWA + API + auth)
+├── server/                 # Go server + CLI, single binary (PWA + API + auth)
 │   ├── main.go             # Entry point: no args/`serve` = server, else CLI
 │   ├── serve.go            # Server (static files, auth, guards)
 │   ├── mux.go              # Mux interface + /api/mux/* routes
@@ -41,7 +41,7 @@ termote/
 │   ├── mux_herdr.go        # Herdr backend (native only)
 │   ├── stream.go           # Terminal WebSocket (xterm.js stream)
 │   └── cli*.go             # CLI subcommands (install, update, health, ...)
-├── scripts/                # Thin CLI shims over the tmux-api binary
+├── scripts/                # Thin CLI shims over the termote binary
 │   ├── termote.sh          # Unix shim (resolves/builds the binary, execs it)
 │   ├── termote.ps1         # Windows PowerShell shim (same, maps -Flag to --flag)
 │   ├── get.sh              # Unix online installer (curl | bash)
@@ -114,7 +114,7 @@ root — no need to `cd` into each package.
 
 ```bash
 # Using Makefile (recommended)
-make build          # Build PWA + tmux-api
+make build          # Build PWA + termote
 make test           # Run all tests
 make deploy-container  # Deploy container (docker/podman)
 make health         # Check services
@@ -131,31 +131,31 @@ pnpm install --frozen-lockfile --filter termote...
 # Manual commands
 cd pwa && pnpm dev                     # Dev server (still works — pnpm is workspace-aware)
 cd pwa && pnpm tsc --noEmit            # Type check
-cd tmux-api && go build -o tmux-api .  # Build server
+cd server && go build -o termote-server . # Build server
 ```
 
 ### Cross-Compilation (macOS for Linux Container)
 
-When building Docker images on macOS, tmux-api is cross-compiled to Linux:
+When building Docker images on macOS, termote is cross-compiled to Linux:
 
 ```bash
 # Automatic (termote.sh handles this)
-cd tmux-api && GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o tmux-api .
+cd server && GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o termote-server .
 
 # For ARM64 (Apple Silicon):
-cd tmux-api && GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o tmux-api .
+cd server && GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o termote-server .
 ```
 
 ## Architecture
 
-Both modes use tmux-api as the unified server (PWA + terminal stream + API + auth). tmux-api
+Both modes use termote as the unified server (PWA + terminal stream + API + auth). termote
 opens the terminal itself (PTY on Unix, ConPTY on Windows) and streams it to xterm.js in the
 PWA over `/api/mux/stream` — there is no separate terminal process or proxy:
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │ Container mode (all-in-one container)                   │
-│   tmux-api:7680 (PWA + terminal stream + API + auth)     │
+│   termote:7680 (PWA + terminal stream + API + auth)      │
 │   ├→ static PWA files                                   │
 │   ├→ terminal WebSocket (/api/mux/stream)               │
 │   └→ mux API endpoints (/api/mux/*)                     │
@@ -165,7 +165,7 @@ PWA over `/api/mux/stream` — there is no separate terminal process or proxy:
 
 ┌─────────────────────────────────────────────────────────┐
 │ Native mode (macOS & Linux)                             │
-│   tmux-api:7680 (PWA + terminal stream + API + auth)     │
+│   termote:7680 (PWA + terminal stream + API + auth)      │
 │   ├→ static PWA files                                   │
 │   ├→ terminal WebSocket (/api/mux/stream)               │
 │   └→ mux API endpoints                                  │
@@ -175,7 +175,7 @@ PWA over `/api/mux/stream` — there is no separate terminal process or proxy:
 
 ┌─────────────────────────────────────────────────────────┐
 │ Native mode (Windows with psmux)                        │
-│   tmux-api.exe:7690 (PWA + terminal stream + API + auth) │
+│   termote-server.exe:7690 (PWA + stream + API + auth)   │
 │   ├→ static PWA files                                   │
 │   ├→ terminal WebSocket (/api/mux/stream, ConPTY)       │
 │   └→ mux API endpoints → psmux                          │
@@ -198,7 +198,7 @@ stream WebSocket, an Origin/`Sec-Fetch-Site` and single-use-token check — see
 
 ### Shell Scripts (shims only)
 
-`scripts/termote.sh` and `scripts/termote.ps1` only resolve/build the `tmux-api` binary and
+`scripts/termote.sh` and `scripts/termote.ps1` only resolve/build the `termote` binary and
 `exec` it with the same arguments (mapping `-Flag` to `--flag` on Windows); they hold no
 install/update logic. What cross-platform behavior remains there:
 
@@ -206,18 +206,18 @@ install/update logic. What cross-platform behavior remains there:
 - Use `CDPATH= cd` to resolve symlinks without depending on `readlink -f`
 - Windows: map every 0.x parameter to a Go flag so a 0.x `update` can still relaunch this script
 
-All install/update/health/logs/allowlist logic is Go in `tmux-api/cli*.go` — see
+All install/update/health/logs/allowlist logic is Go in `server/cli*.go` — see
 [`docs/code-standards.md`](docs/code-standards.md) for Go CLI conventions.
 
 ### CLI Commands
 
-Subcommands of the `tmux-api` binary (run via the shims above, or `termote` after `link`):
+Subcommands of the `termote` binary (run via the shims above, or `termote` after `link`):
 
 - `install [container|native] [flags]` — deploy mode with optional flags
 - `uninstall [container|native|all]` — remove an installation
 - `update [--version X.Y.Z] [--force]` — self-update to latest (or a pinned) release
 - `health` — check service health
-- `logs [tmux-api|all|follow|clean]` — service logs
+- `logs [server|all|follow|clean]` — service logs
 - `link` / `unlink` — create/remove the `termote` global command
 - `show-password` — print the saved admin password
 - `version` — show installed version
@@ -260,14 +260,14 @@ The `update` command:
 | `pwa/src/hooks/use-gestures.ts`                   | Hammer.js gesture handling                                   |
 | `pwa/src/components/terminal-view.tsx`            | xterm.js terminal component (stream, resize, reconnect)      |
 | `pwa/src/utils/terminal-bridge.ts`                | Drives the xterm.js terminal (key mapping, clipboard paste)  |
-| `tmux-api/main.go`                                | Entry point (no args/`serve` = server, else CLI)             |
-| `tmux-api/serve.go`                               | Server (PWA static files, auth, guards)                      |
-| `tmux-api/mux.go`                                 | `Mux` interface + `/api/mux/*` routes                        |
-| `tmux-api/mux_tmux.go`                            | tmux/psmux backend                                           |
-| `tmux-api/mux_herdr.go`                           | Herdr backend (native only)                                  |
-| `tmux-api/stream.go`                              | Terminal WebSocket (`/api/mux/stream`)                       |
-| `tmux-api/guard.go`                               | Host allowlist + Origin/Content-Type write guard             |
-| `tmux-api/cli_install.go`                         | `install`/`uninstall`: native, container, allowlist, migrate |
+| `server/main.go`                                  | Entry point (no args/`serve` = server, else CLI)             |
+| `server/serve.go`                                 | Server (PWA static files, auth, guards)                      |
+| `server/mux.go`                                   | `Mux` interface + `/api/mux/*` routes                        |
+| `server/mux_tmux.go`                              | tmux/psmux backend                                           |
+| `server/mux_herdr.go`                             | Herdr backend (native only)                                  |
+| `server/stream.go`                                | Terminal WebSocket (`/api/mux/stream`)                       |
+| `server/guard.go`                                 | Host allowlist + Origin/Content-Type write guard             |
+| `server/cli_install.go`                           | `install`/`uninstall`: native, container, allowlist, migrate |
 | `Dockerfile`                                      | Docker mode container                                        |
 | `entrypoint.sh`                                   | Container entrypoint                                         |
 
@@ -294,7 +294,7 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   fetched via `/api/mux/stream-token`, consumed on WebSocket upgrade
 - **Herdr guard**: `--mux herdr --no-auth` is refused unless `--allow-herdr-no-auth` is also
   given, since Herdr exposes every workspace on the host
-- tmux-api binds to localhost by default, use `--lan` to expose to network
+- termote binds to localhost by default, use `--lan` to expose to network
 - Exclude sensitive dirs (.ssh, .gnupg, .aws, .config/gcloud) from volume mounts (warned at install)
 - Serve mode uses constant-time comparison for password verification
 - **Brute-force protection**: built-in rate limiter (5 failed attempts/min per IP → 429)
@@ -310,8 +310,8 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
 # PWA (required before commit)
 pnpm --filter termote lint
 
-# tmux-api
-cd tmux-api && go build . && go vet ./...
+# server (Go)
+cd server && go build . && go vet ./...
 
 # Formatting (markdown, JSON, YAML via dprint)
 make fmt-check

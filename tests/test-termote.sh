@@ -1,7 +1,7 @@
 #!/bin/bash
 # Tests for the scripts/termote.sh shim: binary selection (installed release
 # and checkout build), argument pass-through, and the 0.x update contract.
-# The commands themselves are tested in Go (tmux-api/cli*_test.go).
+# The commands themselves are tested in Go (server/cli*_test.go).
 # Usage: make test-cli
 
 TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -47,8 +47,8 @@ printf "%s\n" "$@"'
 new_install() {
     mkdir -p "$1/scripts"
     cp "$SHIM" "$1/scripts/termote.sh"
-    printf '%s\n' "$FAKE_BIN" >"$1/tmux-api-$OS-$ARCH"
-    chmod +x "$1/tmux-api-$OS-$ARCH"
+    printf '%s\n' "$FAKE_BIN" >"$1/termote-$OS-$ARCH"
+    chmod +x "$1/termote-$OS-$ARCH"
 }
 
 # args_of <output>: the argument lines after DIR=
@@ -91,11 +91,11 @@ test_installed_release() {
     out=$("$TMP/termote-link" version)
     check "resolves the global symlink" "DIR=$dir" "$(echo "$out" | head -1)"
 
-    chmod -x "$dir/tmux-api-$OS-$ARCH"
+    chmod -x "$dir/termote-$OS-$ARCH"
     out=$("$dir/scripts/termote.sh" health)
     check "restores the exec bit" "health" "$(args_of "$out")"
 
-    rm "$dir/tmux-api-$OS-$ARCH"
+    rm "$dir/termote-$OS-$ARCH"
     if out=$("$dir/scripts/termote.sh" health 2>&1); then
         fail "missing binary" "non-zero exit" "exit 0"
     elif echo "$out" | grep -q "reinstall Termote"; then
@@ -104,8 +104,8 @@ test_installed_release() {
         fail "missing binary message" "reinstall hint" "$out"
     fi
 
-    printf '%s\n' '#!/bin/bash' 'exit 7' >"$dir/tmux-api-$OS-$ARCH"
-    chmod +x "$dir/tmux-api-$OS-$ARCH"
+    printf '%s\n' '#!/bin/bash' 'exit 7' >"$dir/termote-$OS-$ARCH"
+    chmod +x "$dir/termote-$OS-$ARCH"
     "$dir/scripts/termote.sh" health
     check "passes the exit status through" "7" "$?"
 }
@@ -114,10 +114,10 @@ test_checkout() {
     echo ""
     echo "=== Checkout (dev build) ==="
     local dir="$TMP/checkout" out
-    mkdir -p "$dir/scripts" "$dir/tmux-api"
+    mkdir -p "$dir/scripts" "$dir/server"
     cp "$SHIM" "$dir/scripts/termote.sh"
-    printf 'module echoargs\n\ngo 1.24\n' >"$dir/tmux-api/go.mod"
-    cat >"$dir/tmux-api/main.go" <<'EOF'
+    printf 'module echoargs\n\ngo 1.24\n' >"$dir/server/go.mod"
+    cat >"$dir/server/main.go" <<'EOF'
 package main
 
 import (
@@ -153,13 +153,13 @@ EOF
         return
     fi
     # Start from no binary: the check above builds one when a system Go exists
-    rm -f "$dir/tmux-api/tmux-api-native"
+    rm -f "$dir/server/termote-dev"
     out=$("$dir/scripts/termote.sh" install native --mux herdr 2>"$TMP/build.err")
-    check "builds tmux-api-native on first run" "install native --mux herdr" "$(args_of "$out")"
-    if grep -q "Building tmux-api" "$TMP/build.err" && [[ -x "$dir/tmux-api/tmux-api-native" ]]; then
-        pass "build message on stderr, binary in tmux-api/"
+    check "builds termote-dev on first run" "install native --mux herdr" "$(args_of "$out")"
+    if grep -q "Building termote" "$TMP/build.err" && [[ -x "$dir/server/termote-dev" ]]; then
+        pass "build message on stderr, binary in server/"
     else
-        fail "first build" "tmux-api/tmux-api-native" "$(cat "$TMP/build.err")"
+        fail "first build" "server/termote-dev" "$(cat "$TMP/build.err")"
     fi
 
     "$dir/scripts/termote.sh" version >/dev/null 2>"$TMP/build.err"
@@ -170,7 +170,7 @@ EOF
     fi
 
     sleep 1
-    touch "$dir/tmux-api/main.go"
+    touch "$dir/server/main.go"
     "$dir/scripts/termote.sh" version >/dev/null 2>"$TMP/build.err"
     if grep -q "Building" "$TMP/build.err"; then pass "rebuilds when a source is newer"; else fail "stale binary" "rebuild" "no rebuild"; fi
 }
@@ -178,7 +178,7 @@ EOF
 test_real_binary() {
     echo ""
     echo "=== Real CLI through the shim ==="
-    if ! command -v go >/dev/null 2>&1 && [[ ! -x "$PROJECT_DIR/tmux-api/tmux-api-native" ]]; then
+    if ! command -v go >/dev/null 2>&1 && [[ ! -x "$PROJECT_DIR/server/termote-dev" ]]; then
         skip "go not installed"
         return
     fi

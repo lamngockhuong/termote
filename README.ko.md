@@ -64,7 +64,7 @@ flowchart TB
         Keyboard["가상 키보드"]
     end
 
-    subgraph Server["tmux-api 서버 :7680"]
+    subgraph Server["termote 서버 :7680"]
         Static["정적 파일"]
         Stream["터미널 WebSocket /api/mux/stream"]
         API["REST API /api/mux/*"]
@@ -93,7 +93,7 @@ flowchart TB
     tmux --> Shell --> Tools
 ```
 
-tmux-api가 터미널을 직접(Unix에서는 PTY, Windows에서는 ConPTY) PWA의 xterm.js로 스트리밍하므로, 프록시할 별도의 터미널 프로세스가 없습니다. 요청 가드 모델 전체는 [`docs/system-architecture.md`](docs/system-architecture.md)를 참고하세요.
+termote가 터미널을 직접(Unix에서는 PTY, Windows에서는 ConPTY) PWA의 xterm.js로 스트리밍하므로, 프록시할 별도의 터미널 프로세스가 없습니다. 요청 가드 모델 전체는 [`docs/system-architecture.md`](docs/system-architecture.md)를 참고하세요.
 
 ## 빠른 시작
 
@@ -225,12 +225,12 @@ cd termote
 flowchart LR
     subgraph Container["컨테이너 모드"]
         direction TB
-        C1["Docker/Podman"] --> C2["tmux-api :7680 (터미널 직접 스트리밍)"] --> C3["tmux"]
+        C1["Docker/Podman"] --> C2["termote :7680 (터미널 직접 스트리밍)"] --> C3["tmux"]
     end
 
     subgraph Native["네이티브 모드"]
         direction TB
-        N1["호스트 시스템"] --> N2["tmux-api :7680 (터미널 직접 스트리밍)"] --> N3["tmux/psmux 또는 Herdr + 호스트 도구"]
+        N1["호스트 시스템"] --> N2["termote :7680 (터미널 직접 스트리밍)"] --> N3["tmux/psmux 또는 Herdr + 호스트 도구"]
     end
 
     User["사용자"] --> Container & Native
@@ -384,7 +384,7 @@ winget install psmux
 ```
 termote/
 ├── Makefile                # 빌드/테스트/배포 명령
-├── Dockerfile              # Docker 모드 (tmux-api + tmux, ttyd 없음)
+├── Dockerfile              # Docker 모드 (termote + tmux, ttyd 없음)
 ├── docker-compose.yml
 ├── entrypoint.sh           # Docker 엔트리포인트
 ├── docs/                   # 문서
@@ -396,7 +396,7 @@ termote/
 │       ├── hooks/
 │       ├── types/
 │       └── utils/
-├── tmux-api/               # Go 서버 + CLI (단일 바이너리)
+├── server/                 # Go 서버 + CLI (단일 바이너리)
 │   ├── main.go             # 엔트리 포인트 (인자 없음/`serve` = 서버, 그 외 = CLI)
 │   ├── serve.go            # 서버 (PWA, 인증, 가드)
 │   ├── mux.go              # Mux 인터페이스 + /api/mux/* 라우트
@@ -405,8 +405,8 @@ termote/
 │   ├── stream.go           # 터미널 WebSocket (xterm.js 스트림)
 │   └── cli*.go             # install/update/health/logs/link/menu 하위 명령
 ├── scripts/
-│   ├── termote.sh          # 얇은 Unix 래퍼 -> tmux-api CLI
-│   ├── termote.ps1         # 얇은 Windows PowerShell 래퍼 -> tmux-api CLI
+│   ├── termote.sh          # 얇은 Unix 래퍼 -> termote CLI
+│   ├── termote.ps1         # 얇은 Windows PowerShell 래퍼 -> termote CLI
 │   ├── get.sh              # Unix 온라인 설치기 (curl | bash)
 │   └── get.ps1             # Windows 온라인 설치기 (irm | iex)
 ├── tests/                  # 테스트 모음
@@ -421,7 +421,7 @@ termote/
 ## 개발
 
 ```bash
-make build          # PWA와 tmux-api 빌드
+make build          # PWA와 termote 빌드
 make test           # 모든 테스트 실행
 make health         # 서비스 상태 확인
 make clean          # 컨테이너 중지
@@ -439,12 +439,12 @@ pnpm --filter termote test:e2e:ui    # UI 디버거로 실행
 ### 세션이 유지되지 않음
 
 - tmux 확인: `tmux ls`
-- tmux-api는 `tmux new-session -A`(attach-or-create)로 연결
+- termote는 `tmux new-session -A`(attach-or-create)로 연결
 
 ### WebSocket 오류
 
-- tmux-api 로그 확인: `docker logs termote` (컨테이너) 또는 `termote logs tmux-api` (네이티브)
-- 터미널 WebSocket은 tmux-api가 직접 제공하는 `/api/mux/stream`이므로 따로 확인할 터미널 프로세스가 없음
+- termote 로그 확인: `docker logs termote` (컨테이너) 또는 `termote logs server` (네이티브)
+- 터미널 WebSocket은 termote가 직접 제공하는 `/api/mux/stream`이므로 따로 확인할 터미널 프로세스가 없음
 
 ### 모바일 키보드 문제
 
@@ -454,9 +454,9 @@ pnpm --filter termote test:e2e:ui    # UI 디버거로 실행
 ### 네이티브 모드: 프로세스가 시작되지 않음
 
 ```bash
-ps aux | grep tmux-api     # tmux-api 실행 중인지 확인
+ps aux | grep termote-server # termote 실행 중인지 확인
 lsof -i :7680              # 포트 사용 중인지 확인
-termote logs tmux-api      # 또는: termote logs follow
+termote logs server        # 또는: termote logs follow
 ```
 
 ## 보안 참고

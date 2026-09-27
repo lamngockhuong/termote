@@ -5,7 +5,7 @@ description: Tất cả dịch vụ chạy native trên host
 
 import { Steps, Tabs, TabItem, Aside } from "@astrojs/starlight/components";
 
-Không cần Docker. Truy cập binary host như `claude`, `git`, `gh`, v.v. Chính tmux-api truyền
+Không cần Docker. Truy cập binary host như `claude`, `git`, `gh`, v.v. Chính termote truyền
 luồng terminal (PTY trên Unix, ConPTY trên Windows) tới xterm.js trong PWA, nên không phải cài
 thêm tiến trình terminal nào khác.
 
@@ -127,7 +127,7 @@ truy cập được trên máy này; Termote chỉ giao tiếp với socket củ
   <TabItem label="Unix (macOS/Linux)">
     ```bash
     # Kiểm tra tiến trình
-    ps aux | grep tmux-api
+    ps aux | grep termote-server
 
     # Khởi động lại
     ./scripts/termote.sh install native
@@ -136,7 +136,7 @@ truy cập được trên máy này; Termote chỉ giao tiếp với socket củ
   <TabItem label="Windows (PowerShell)">
     ```powershell
     # Kiểm tra tiến trình
-    Get-Process -Name tmux-api -ErrorAction SilentlyContinue
+    Get-Process -Name termote-server -ErrorAction SilentlyContinue
 
     # Khởi động lại
     .\scripts\termote.ps1 install native
@@ -188,13 +188,13 @@ pkill caffeinate
 <Tabs>
   <TabItem label="Unix (macOS/Linux)">
     ```bash
-    ps aux | grep tmux-api     # Kiểm tra tmux-api đang chạy
+    ps aux | grep termote-server # Kiểm tra termote đang chạy
     lsof -i :7680              # Xác minh cổng
     ```
   </TabItem>
   <TabItem label="Windows (PowerShell)">
     ```powershell
-    Get-Process -Name tmux-api -ErrorAction SilentlyContinue
+    Get-Process -Name termote-server -ErrorAction SilentlyContinue
     netstat -ano | Select-String "7680"   # Xác minh cổng
     ```
   </TabItem>
@@ -205,7 +205,7 @@ pkill caffeinate
 <Tabs>
   <TabItem label="Unix (macOS/Linux)">
     ```bash
-    termote logs tmux-api   # Các dòng log gần đây
+    termote logs server     # Các dòng log gần đây
     termote logs follow     # Theo dõi log trực tiếp (Ctrl+C để dừng)
     termote logs clean      # Xóa các file log
     ```
@@ -214,8 +214,8 @@ pkill caffeinate
     Chế độ native trên Windows ghi logs vào `~/.termote/logs`. Xem logs bằng CLI:
 
     ```powershell
-    .\scripts\termote.ps1 logs            # Xem logs tmux-api gần đây
-    .\scripts\termote.ps1 logs tmux-api   # Tương tự, chỉ định rõ
+    .\scripts\termote.ps1 logs            # Xem logs server gần đây
+    .\scripts\termote.ps1 logs server     # Tương tự, chỉ định rõ
     .\scripts\termote.ps1 logs follow     # Tail toàn bộ logs realtime (Ctrl+C để dừng)
     .\scripts\termote.ps1 logs clean      # Xóa các file log
     ```
@@ -228,7 +228,7 @@ pkill caffeinate
 | -------------- | --------------------------------------------------- |
 | Cổng đang dùng | `lsof -i :7680` (Unix) hoặc `netstat -ano \| Select-String 7680` (Win) rồi dừng tiến trình đó |
 | Không tìm thấy Herdr | Cài/khởi động `herdr` trước, hoặc bỏ `--mux herdr` để dùng tmux |
-| Thiếu binary   | `cd tmux-api && go build -o tmux-api-native .`      |
+| Thiếu binary   | `cd server && go build -o termote-dev .`      |
 | PWA chưa build | `pnpm --filter termote build`                              |
 | PWA cache cũ   | Settings → "Clear Cache & Reload" để làm mới        |
 | Host bị từ chối (403) | Làm theo gợi ý `--allow-host <name>` trong thông báo lỗi, rồi cài lại |

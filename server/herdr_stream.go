@@ -201,7 +201,7 @@ type observer struct {
 func startObserver(pane string, size Size, out io.Writer) (*observer, error) {
 	argv := herdrObserveArgv(pane, size)
 	// The environment is inherited: the CLI finds the server from
-	// HERDR_SOCKET_PATH, as tmux-api itself does.
+	// HERDR_SOCKET_PATH, as the server itself does.
 	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.SysProcAttr = observerSysProcAttr()
 	stdout, err := cmd.StdoutPipe()

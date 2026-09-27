@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Termote CLI shim for Windows: every command lives in the tmux-api binary.
+    Termote CLI shim for Windows: every command lives in the termote binary.
 .DESCRIPTION
     Keeps the 0.x parameters and maps them to the Go flags. 0.x `update`
     relaunches this exact path with `install <mode> -Lan -NoAuth -Port -Tailscale
@@ -66,30 +66,30 @@ foreach ($name in $values.Keys) {
 }
 foreach ($h in $AllowHost) { if ($h) { $goArgs += @('--allow-host', $h) } }
 
-$api = Join-Path $ProjectDir 'tmux-api'
+$api = Join-Path $ProjectDir 'server'
 if (Test-Path (Join-Path $api 'go.mod')) {
     # Checkout: rebuild when any Go source is newer than the binary. The CLI
-    # recognises a checkout server by this name, so keep tmux-api-native.exe.
-    $bin = Join-Path $api 'tmux-api-native.exe'
+    # recognises a checkout server by this name, so keep termote-dev.exe.
+    $bin = Join-Path $api 'termote-dev.exe'
     $newest = Get-ChildItem $api -File |
         Where-Object { $_.Extension -eq '.go' -or $_.Name -in @('go.mod', 'go.sum') } |
         Sort-Object LastWriteTime -Descending | Select-Object -First 1
     if (-not (Test-Path $bin) -or $newest.LastWriteTime -gt (Get-Item $bin).LastWriteTime) {
         if (Get-Command go -ErrorAction SilentlyContinue) {
-            Write-Host "[INFO] Building tmux-api..." -ForegroundColor Green
+            Write-Host "[INFO] Building termote..." -ForegroundColor Green
             Push-Location $api
             $env:CGO_ENABLED = '0'
-            try { & go build -ldflags="-s -w" -o tmux-api-native.exe . } finally { Pop-Location }
+            try { & go build -ldflags="-s -w" -o termote-dev.exe . } finally { Pop-Location }
             if ($LASTEXITCODE -ne 0) { Stop-WithError "Build failed" }
         } elseif (Test-Path $bin) {
-            Write-Host "[WARN] Go not found; running the existing (older) tmux-api build" -ForegroundColor Yellow
+            Write-Host "[WARN] Go not found; running the existing (older) termote build" -ForegroundColor Yellow
         } else {
-            Stop-WithError "Go is required to build tmux-api in a checkout: https://go.dev/dl/"
+            Stop-WithError "Go is required to build termote in a checkout: https://go.dev/dl/"
         }
     }
 } else {
     # Installed release; Windows on ARM runs the amd64 build.
-    $bin = Join-Path $ProjectDir 'tmux-api-windows-amd64.exe'
+    $bin = Join-Path $ProjectDir 'termote-windows-amd64.exe'
     if (-not (Test-Path $bin)) { Stop-WithError "$bin not found; reinstall Termote" }
 }
 

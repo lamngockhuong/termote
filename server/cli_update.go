@@ -293,7 +293,7 @@ func writeExtracted(r io.Reader, dst string, perm os.FileMode) error {
 // cleanupReplacedBinaries deletes executables Windows could only rename
 // aside during an update; ones still running stay until the next run.
 func (c *cli) cleanupReplacedBinaries() {
-	for _, dir := range []string{c.projectDir, filepath.Join(c.projectDir, "tmux-api")} {
+	for _, dir := range []string{c.projectDir, filepath.Join(c.projectDir, "server")} {
 		matches, _ := filepath.Glob(filepath.Join(dir, "*.old-*"))
 		for _, m := range matches {
 			os.Remove(m)

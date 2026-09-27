@@ -66,7 +66,7 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      // Dev: proxy to tmux-api serve mode (no rewrite, routes are /api/mux/*)
+      // Dev: proxy to termote serve mode (no rewrite, routes are /api/mux/*)
       '/api/mux': {
         target: 'http://localhost:7680',
         ws: true,

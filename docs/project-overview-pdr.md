@@ -12,7 +12,7 @@
 
 ## Solution
 
-PWA whose Go server (tmux-api) streams a real terminal (PTY on Unix, ConPTY on Windows)
+PWA whose Go server (termote) streams a real terminal (PTY on Unix, ConPTY on Windows)
 straight into an xterm.js terminal in the page, with:
 
 - Touch gestures mapped to common shortcuts (swipe → Ctrl+C, Tab, arrows)
@@ -64,13 +64,13 @@ straight into an xterm.js terminal in the page, with:
 
 ## Tech Decisions
 
-| Decision      | Rationale                                                                                                                        |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| React + Vite  | Fast dev, good PWA support                                                                                                       |
-| xterm.js      | Standard terminal emulator; tmux-api streams to it directly, no ttyd                                                             |
-| Mux backend   | Interface over tmux/psmux and Herdr: persistent sessions, tab/pane management, one backend to add later without changing the API |
-| Go (tmux-api) | Unified server: PWA, auth, terminal WebSocket, API, CLI                                                                          |
-| TailwindCSS   | Rapid styling, responsive utilities                                                                                              |
+| Decision     | Rationale                                                                                                                        |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| React + Vite | Fast dev, good PWA support                                                                                                       |
+| xterm.js     | Standard terminal emulator; termote streams to it directly, no ttyd                                                              |
+| Mux backend  | Interface over tmux/psmux and Herdr: persistent sessions, tab/pane management, one backend to add later without changing the API |
+| Go (termote) | Unified server: PWA, auth, terminal WebSocket, API, CLI                                                                          |
+| TailwindCSS  | Rapid styling, responsive utilities                                                                                              |
 
 ## Success Metrics
 

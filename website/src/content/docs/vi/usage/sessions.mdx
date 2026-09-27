@@ -98,7 +98,7 @@ tmux kill-window -t 0
 
 ## API Endpoints
 
-Phiên được quản lý qua các endpoint `/api/mux/*` của tmux-api:
+Phiên được quản lý qua các endpoint `/api/mux/*` của termote:
 
 | Endpoint                    | Method | Mô tả                                            |
 | --------------------------- | ------ | ------------------------------------------------ |
@@ -113,10 +113,10 @@ Phiên được quản lý qua các endpoint `/api/mux/*` của tmux-api:
 ### Phiên không lưu trữ
 
 1. Kiểm tra tmux đang chạy: `tmux list-windows`
-2. Xem log của tmux-api: `docker logs termote` (container) hoặc `termote logs tmux-api` (native)
+2. Xem log của termote: `docker logs termote` (container) hoặc `termote logs server` (native)
 
 ### Lỗi WebSocket / terminal
 
-1. Xem log của tmux-api: `docker logs termote` hoặc `termote logs tmux-api`
-2. WebSocket của terminal là `/api/mux/stream`, do chính tmux-api phục vụ
+1. Xem log của termote: `docker logs termote` hoặc `termote logs server`
+2. WebSocket của terminal là `/api/mux/stream`, do chính termote phục vụ
 3. Kiểm tra API health: `curl http://localhost:7680/api/mux/health`

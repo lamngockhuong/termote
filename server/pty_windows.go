@@ -18,9 +18,9 @@ import (
 
 // conptyStream runs a process on a Windows pseudo console.
 //
-// The child, not tmux-api, is put in a Job Object with KILL_ON_JOB_CLOSE: when
-// tmux-api exits for any reason (including Stop-Process -Force) the job handle
-// closes and the child tree dies. tmux-api itself must stay outside the job,
+// The child, not the server, is put in a Job Object with KILL_ON_JOB_CLOSE: when
+// the server exits for any reason (including Stop-Process -Force) the job handle
+// closes and the child tree dies. The server itself must stay outside the job,
 // otherwise a psmux server it starts would be killed with it.
 //
 // conpty.Spawn closes the thread handle, so the child cannot be created
@@ -169,7 +169,7 @@ func (s *conptyStream) Close() error {
 }
 
 // terminalEnv is the server environment without TMUX, so `psmux attach` works
-// when tmux-api itself runs inside psmux, and without secrets.
+// when the server itself runs inside psmux, and without secrets.
 func terminalEnv() []string {
 	var env []string
 	for _, kv := range os.Environ() {

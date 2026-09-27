@@ -64,7 +64,7 @@ flowchart TB
         Keyboard["仮想キーボード"]
     end
 
-    subgraph Server["tmux-api サーバー :7680"]
+    subgraph Server["termote サーバー :7680"]
         Static["静的ファイル"]
         Stream["ターミナル WebSocket /api/mux/stream"]
         API["REST API /api/mux/*"]
@@ -93,7 +93,7 @@ flowchart TB
     tmux --> Shell --> Tools
 ```
 
-tmux-apiはターミナル自体を（UnixではPTY、WindowsではConPTYで）PWA内のxterm.jsへストリーミングします。プロキシ先となる別のターミナルプロセスはありません。リクエストガードの全体像は[`docs/system-architecture.md`](docs/system-architecture.md)を参照してください。
+termoteはターミナル自体を（UnixではPTY、WindowsではConPTYで）PWA内のxterm.jsへストリーミングします。プロキシ先となる別のターミナルプロセスはありません。リクエストガードの全体像は[`docs/system-architecture.md`](docs/system-architecture.md)を参照してください。
 
 ## クイックスタート
 
@@ -225,12 +225,12 @@ cd termote
 flowchart LR
     subgraph Container["コンテナモード"]
         direction TB
-        C1["Docker/Podman"] --> C2["tmux-api :7680 (ターミナルを直接ストリーミング)"] --> C3["tmux"]
+        C1["Docker/Podman"] --> C2["termote :7680 (ターミナルを直接ストリーミング)"] --> C3["tmux"]
     end
 
     subgraph Native["ネイティブモード"]
         direction TB
-        N1["ホストシステム"] --> N2["tmux-api :7680 (ターミナルを直接ストリーミング)"] --> N3["tmux/psmux または Herdr + ホストツール"]
+        N1["ホストシステム"] --> N2["termote :7680 (ターミナルを直接ストリーミング)"] --> N3["tmux/psmux または Herdr + ホストツール"]
     end
 
     User["ユーザー"] --> Container & Native
@@ -384,7 +384,7 @@ winget install psmux
 ```
 termote/
 ├── Makefile                # ビルド/テスト/デプロイコマンド
-├── Dockerfile              # Dockerモード (tmux-api + tmux, ttydなし)
+├── Dockerfile              # Dockerモード (termote + tmux, ttydなし)
 ├── docker-compose.yml
 ├── entrypoint.sh           # Dockerエントリーポイント
 ├── docs/                   # ドキュメント
@@ -396,7 +396,7 @@ termote/
 │       ├── hooks/
 │       ├── types/
 │       └── utils/
-├── tmux-api/               # Goサーバー + CLI (単一バイナリ)
+├── server/                 # Goサーバー + CLI (単一バイナリ)
 │   ├── main.go             # エントリーポイント (引数なし/`serve` = サーバー, それ以外 = CLI)
 │   ├── serve.go            # サーバー (PWA, 認証, ガード)
 │   ├── mux.go              # Muxインターフェース + /api/mux/* ルート
@@ -405,8 +405,8 @@ termote/
 │   ├── stream.go           # ターミナルWebSocket (xterm.jsストリーム)
 │   └── cli*.go             # install/update/health/logs/link/menuサブコマンド
 ├── scripts/
-│   ├── termote.sh          # 薄いUnixラッパー -> tmux-api CLI
-│   ├── termote.ps1         # 薄いWindows PowerShellラッパー -> tmux-api CLI
+│   ├── termote.sh          # 薄いUnixラッパー -> termote CLI
+│   ├── termote.ps1         # 薄いWindows PowerShellラッパー -> termote CLI
 │   ├── get.sh              # Unixオンラインインストーラー (curl | bash)
 │   └── get.ps1             # Windowsオンラインインストーラー (irm | iex)
 ├── tests/                  # テストスイート
@@ -421,7 +421,7 @@ termote/
 ## 開発
 
 ```bash
-make build          # PWAとtmux-apiをビルド
+make build          # PWAとtermoteをビルド
 make test           # 全テストを実行
 make health         # サービスのヘルスチェック
 make clean          # コンテナを停止
@@ -439,12 +439,12 @@ pnpm --filter termote test:e2e:ui    # UIデバッガーで実行
 ### セッションが永続化されない
 
 - tmuxを確認: `tmux ls`
-- tmux-apiは`tmux new-session -A`（attach-or-create）でアタッチします
+- termoteは`tmux new-session -A`（attach-or-create）でアタッチします
 
 ### WebSocketエラー
 
-- tmux-apiのログを確認: `docker logs termote`（コンテナ）または`termote logs tmux-api`（ネイティブ）
-- ターミナルのWebSocketは`/api/mux/stream`で、tmux-api自身が提供します。別途確認すべきターミナルプロセスはありません
+- termoteのログを確認: `docker logs termote`（コンテナ）または`termote logs server`（ネイティブ）
+- ターミナルのWebSocketは`/api/mux/stream`で、termote自身が提供します。別途確認すべきターミナルプロセスはありません
 
 ### モバイルキーボードの問題
 
@@ -454,9 +454,9 @@ pnpm --filter termote test:e2e:ui    # UIデバッガーで実行
 ### ネイティブモード: プロセスが起動しない
 
 ```bash
-ps aux | grep tmux-api     # tmux-apiが実行中か確認
+ps aux | grep termote-server # termoteが実行中か確認
 lsof -i :7680              # ポートが使用中か確認
-termote logs tmux-api      # または: termote logs follow
+termote logs server        # または: termote logs follow
 ```
 
 ## セキュリティに関する注意

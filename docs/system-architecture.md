@@ -2,7 +2,7 @@
 
 ## High-Level Overview
 
-**Unified Architecture (tmux-api serve mode):**
+**Unified Architecture (termote serve mode):**
 
 ```bash
 ┌─────────────────────────────────────────────────────────────────┐
@@ -18,7 +18,7 @@
                     │                    │
                     ▼                    ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│              tmux-api (Built-in Server) :7680                   │
+│              termote (Built-in Server) :7680                    │
 │  - Basic Auth + Host allowlist + Origin/CSRF guard              │
 │  - Terminal WebSocket (/api/mux/stream, xterm.js stream)        │
 │  - Static file serving (PWA)                                    │
@@ -28,7 +28,7 @@
                          ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │              Mux backend (tmux/psmux, or Herdr)                 │
-│  tmux-api opens the terminal itself: a PTY on Unix, ConPTY on    │
+│  termote opens the terminal itself: a PTY on Unix, ConPTY on     │
 │  Windows, attached to `tmux attach` (or, with Herdr, an          │
 │  `observe`/`pane.send_text` session over Herdr's socket)         │
 └────────────────────────┬────────────────────────────────────────┘
@@ -42,7 +42,7 @@
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-There is no separate terminal server or WebSocket proxy: tmux-api owns the PTY/ConPTY and
+There is no separate terminal server or WebSocket proxy: termote owns the PTY/ConPTY and
 streams its bytes straight to xterm.js. ttyd was removed in 1.0.0.
 
 ## Components
@@ -70,7 +70,7 @@ React SPA with:
 - **Update Check**: Auto-detect new releases via GitHub API, inline result in settings dialog
 - **Responsive Layout**: Collapsible desktop sidebar, mobile slide-over panel
 
-### tmux-api Server
+### Termote Server
 
 Go HTTP server providing:
 
@@ -94,11 +94,11 @@ Configuration via environment variables:
 | `TERMOTE_HERDR_ALLOW_NO_AUTH` | `false`      | Required together with `TERMOTE_MUX=herdr` and `TERMOTE_NO_AUTH=true`           |
 
 `termote install` computes `TERMOTE_ALLOWED_HOSTS` from `--lan`/`--tailscale`/`--allow-host`
-and passes it through; see `tmux-api/cli_install.go` (`computeAllowedHosts`).
+and passes it through; see `server/cli_install.go` (`computeAllowedHosts`).
 
 ### Mux Backend
 
-`tmux-api/mux.go` defines a `Mux` interface (snapshot, select/new/rename/close tab, send-keys,
+`server/mux.go` defines a `Mux` interface (snapshot, select/new/rename/close tab, send-keys,
 attach a terminal, health) with two implementations:
 
 - **`mux_tmux.go`** (tmux on Unix, psmux on Windows): a tmux/psmux session is a group, a window
@@ -157,7 +157,7 @@ error instead of a broken page.
 ./scripts/termote.sh install container
 ```
 
-Single container with tmux-api + tmux (no ttyd).
+Single container with termote + tmux (no ttyd).
 Uses `Dockerfile` (`debian:stable-slim`, pinned by digest, `tini -s` as PID 1) and `entrypoint.sh`.
 
 **Container Runtime:** Auto-detects podman or docker (podman preferred).
@@ -171,7 +171,7 @@ The Herdr backend is not available in container mode (`--mux herdr` requires `na
 ./scripts/termote.sh install native --mux herdr   # Herdr backend instead of tmux
 ```
 
-All services run natively (no container): tmux-api on port 7680 (PWA + terminal stream + API + auth).
+All services run natively (no container): termote on port 7680 (PWA + terminal stream + API + auth).
 
 Auto-detects OS via `runtime.GOOS`. Works on macOS, Linux and Windows (with psmux instead of tmux).
 
@@ -202,7 +202,7 @@ Auto-detects OS via `runtime.GOOS`. Works on macOS, Linux and Windows (with psmu
 ./scripts/termote.sh update --force        # Force reinstall current version
 ```
 
-**Update flow** (implemented in `tmux-api/cli_update.go`, invoked through the `scripts/termote.sh`/`termote.ps1` shim):
+**Update flow** (implemented in `server/cli_update.go`, invoked through the `scripts/termote.sh`/`termote.ps1` shim):
 
 1. Fetch latest release tag from GitHub API (or use `--version` to pin)
 2. Download tarball and checksums from GitHub releases, verify SHA256

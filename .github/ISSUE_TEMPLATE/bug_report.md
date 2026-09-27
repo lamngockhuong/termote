@@ -58,7 +58,7 @@ If applicable, add screenshots or relevant logs.
 - [ ] Gestures/Touch
 - [ ] Keyboard toolbar
 - [ ] Session management
-- [ ] tmux-api
+- [ ] Server / CLI (Go)
 - [ ] WebSocket proxy
 - [ ] Authentication
 - [ ] Connection/Reconnect

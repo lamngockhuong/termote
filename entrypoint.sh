@@ -1,5 +1,5 @@
 #!/bin/bash
-# All-in-one entrypoint: tmux session + tmux-api (serve mode).
+# All-in-one entrypoint: tmux session + termote (serve mode).
 # tini runs as PID 1 (see Dockerfile) and reaps the daemonized tmux server.
 
 # Add current user/group to passwd/group if not exists
@@ -39,18 +39,18 @@ if [[ "$NO_AUTH" != "true" ]]; then
     fi
 fi
 
-# Set environment for tmux-api serve mode
+# Set environment for termote serve mode
 export TERMOTE_PORT="${TERMOTE_PORT:-7680}"
 export TERMOTE_BIND="${TERMOTE_BIND:-0.0.0.0}"
 export TERMOTE_PWA_DIR="/var/www/termote"
 export TERMOTE_USER="${TERMOTE_USER:-admin}"
 [[ "$NO_AUTH" == "true" ]] && export TERMOTE_NO_AUTH="true"
 
-# Create the shared session every client attaches to (tmux-api would create
+# Create the shared session every client attaches to (the server would create
 # it on first use too; doing it here keeps it alive from container start).
 # The tmux server keeps this environment for every shell, so the password
-# stays out of it; tmux-api reads it and removes it from its own env.
+# stays out of it; the server reads it and removes it from its own env.
 tmux has-session -t main 2>/dev/null || env -u TERMOTE_PASS tmux new-session -d -s main
 
-# tmux-api replaces this shell, so SIGTERM from tini reaches it directly
-exec /usr/local/bin/tmux-api
+# The server replaces this shell, so SIGTERM from tini reaches it directly
+exec /usr/local/bin/termote
