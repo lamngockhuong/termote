@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/lamngockhuong/termote/compare/v0.1.0...v0.1.1) (2026-09-27)
+
+
+### Bug Fixes
+
+* **installer:** install the newest 0.x release from the 0.x installer ([#208](https://github.com/lamngockhuong/termote/issues/208)) ([ddd86f4](https://github.com/lamngockhuong/termote/commit/ddd86f4db79844f75e3b5c82230090cd3773b455))
+
 ## [0.1.0](https://github.com/lamngockhuong/termote/compare/v0.0.16...v0.1.0) (2026-07-13)
 
 
