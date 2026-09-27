@@ -1,10 +1,18 @@
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
+import starlightVersions from "starlight-versions";
 
 export default defineConfig({
   site: "https://termote.ohnice.app",
   integrations: [
     starlight({
+      plugins: [
+        // The root docs are the current (1.x) release; 0.x is archived under /0.x/.
+        starlightVersions({
+          current: { label: "1.x" },
+          versions: [{ slug: "0.x" }],
+        }),
+      ],
       components: {
         Footer: "./src/components/Footer.astro",
       },

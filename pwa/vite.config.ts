@@ -15,6 +15,8 @@ export default defineConfig({
       // Disable SW in development
       selfDestroying: process.env.NODE_ENV !== 'production',
       registerType: 'autoUpdate',
+      // main.tsx registers through virtual:pwa-register.
+      injectRegister: false,
       includeAssets: ['favicon.ico', 'favicon.svg', 'robots.txt', 'apple-touch-icon.png'],
       manifest: {
         name: 'Termote',
@@ -34,7 +36,7 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
-        navigateFallbackDenylist: [/^\/terminal/],
+        navigateFallbackDenylist: [/^\/api\//],
       },
     }),
   ],
@@ -64,14 +66,10 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/terminal': {
-        target: 'http://localhost:7681',
-        ws: true,
-        rewrite: (path) => path.replace(/^\/terminal/, ''),
-      },
-      // Dev: proxy to tmux-api serve mode (no rewrite, routes are /api/tmux/*)
-      '/api/tmux': {
+      // Dev: proxy to tmux-api serve mode (no rewrite, routes are /api/mux/*)
+      '/api/mux': {
         target: 'http://localhost:7680',
+        ws: true,
       },
     },
   },

@@ -130,7 +130,7 @@ export function useSettings() {
 
 ```tsx
 import { useState, useCallback } from "react";
-import { Terminal } from "xterm";
+import { Terminal } from "@xterm/xterm";
 import { KeyboardToolbar } from "./components/keyboard-toolbar";
 import { useGestures } from "./hooks/use-gestures";
 import { sendKeyToTerminal } from "./utils/terminal-bridge";
@@ -151,28 +151,55 @@ import type { Session } from "./types/session";
 
 ## Go Standards
 
+File layout is flat `package main` in `tmux-api/`: server code (`serve.go`, `guard.go`,
+`mux*.go`, `stream.go`, `pty_*.go`) and CLI code (`cli*.go`) share the package and its build
+tags (`cli_unix.go`/`cli_windows.go`, `pty_linux.go`/`pty_bsd.go`/`pty_windows.go`).
+
 ### File Naming
 
 - **snake_case** for Go files: `serve_test.go`, `integration_test.go`
 - Test files: `*_test.go`
-- Integration tests: use `//go:build integration` tag
+- Server files group by concern (`mux_tmux.go`, `mux_herdr.go`); CLI files by subcommand
+  (`cli_install.go`, `cli_update.go`, `cli_logs.go`, ...)
+- Build tags split OS-specific code: `//go:build !windows` / `//go:build windows`
 
-### Security
+### CLI Conventions
 
-- **Input validation**: All tmux targets validated with regex `^[a-zA-Z0-9_\-:.]+$`
-- **HTTP methods**: Mutations require POST/DELETE, reads require GET
-- **Length limits**: Keys limited to 4096 bytes, targets to 64 chars
-- **Constant-time comparison**: Password verification uses `subtle.ConstantTimeCompare`
+The CLI carries every external dependency (process runner, HTTP client, clock-like state) in
+a `*cli` struct (see `tmux-api/cli.go`) so tests can substitute fakes instead of touching the
+real filesystem, network or OS processes:
+
+- A subcommand is a `c.cmd*(args []string) error` method; `runCLI` maps a returned
+  `*exitError` to a process exit code, anything else to exit 1
+- Flags use the standard library `flag` package only (no third-party CLI/TUI library); a
+  repeatable flag like `--allow-host` implements `flag.Value` (see `stringList`)
+- User-facing output goes through `c.infof`/`c.warnf`/`c.errorf`, matching the `[INFO]`/`[WARN]`/`[ERROR]`
+  lines 0.x printed, with ANSI color only when stdout is a terminal
+- A CLI change that touches the shim contract (paths, flag names, exit behavior a 0.x install
+  depends on when it relaunches the new installer during `update`) needs a fixture test
+  against `testdata/config-0.1.0/` or the shim's own test suite; see
+  [`upgrade-1.0.md`](upgrade-1.0.md) for what that contract covers
+
+### Server Security
+
+- **Input validation**: pane/tab/group IDs and request bodies are size-limited (see
+  `maxJSONBody`, `maxKeysLen` in `mux.go`)
+- **HTTP methods**: enforced per route (`requireMethod`), wrong method gets a JSON 405
+- **Constant-time comparison**: password verification uses `subtle.ConstantTimeCompare`
+- **Request guards**: every `/api/` route passes through the Host allowlist and, for write
+  methods, the Origin/`Sec-Fetch-Site`/Content-Type guard — see `guard.go` and
+  [`system-architecture.md`](system-architecture.md#security-model)
 
 ### Testing
 
 **Go:**
 
 ```bash
-go test                           # Unit tests only (59%)
-go test -tags=integration         # Unit + Integration (71%)
-go test -tags=integration -cover  # With coverage
+go test ./...              # Unit + integration tests
+go test ./... -cover       # With coverage
 ```
+
+CI runs `go test ./...` on Ubuntu, macOS and Windows (see `.github/workflows/ci.yml`).
 
 **PWA:**
 
@@ -185,60 +212,32 @@ pnpm test:e2e:ui                  # Run e2e tests with UI debugger
 ### Error Handling
 
 - Return JSON errors with `jsonError(w, msg, code)`
-- Validate all user inputs before passing to exec.Command
-- Handle JSON decode errors explicitly
+- Validate all user inputs before passing to `exec.Command`
+- Handle JSON decode errors explicitly (`decodeJSON` in `mux.go`)
 
 ## Shell Script Standards (termote.sh / termote.ps1)
 
-### Shell Function Naming
+`scripts/termote.sh` and `scripts/termote.ps1` are shims only: they resolve or build the
+`tmux-api` binary and `exec` it with the same arguments (Windows maps `-Flag` to `--flag`
+first). They carry no install/update/health logic — that all lives in Go (`tmux-api/cli*.go`,
+see above). What remains in the shims:
 
-- **verb_noun** format: `cmd_install()`, `cmd_update()`, `start_native_services()`
-- Helper functions: `get_latest_version_api()`, `verify_checksum_update()`, `get_config_value()`
-- Informational: `info()`, `warn()`, `error()` for logging
-
-### Shell Error Handling
-
-- Use `error()` function for fatal errors (includes usage hint, exits with code 1)
-- Use `warn()` for non-fatal issues
-- Use `[[ -z "$var" ]] && error "..."` to validate required vars
-- Validate config file exists before reading: `[[ ! -f "$CONFIG_FILE" ]] && error "..."`
-- Return explicit status codes on failure
-
-### Cross-Platform Patterns
-
-- **Regex:** Use `grep -oE` (extended) not `grep -oP` (Perl, Linux-only)
-- **IP detection:** Use `ipconfig getifaddr en0` fallback for `hostname -I` on macOS
-- **OS detection:** Use `$(uname)` for Darwin (macOS) vs Linux
-- **Architecture:** Use `$(uname -m)` for x86_64, aarch64, etc.
-- **Commands:** Check availability with `command -v {name}` before use
-
-### Config Persistence
-
-- Save settings to `~/.termote/.config.sh` (sourced, not JSON)
-- Use `get_config_value KEY` to read individual settings
-- Encrypt password with AES-256-CBC + PBKDF2 (machine-derived key)
-- Set config file permissions: `chmod 600 $CONFIG_FILE`
-- Preserve config during `update` command (full re-installation with saved settings)
-
-### Process Management
-
-- Use `exec` for safe self-replacement (avoids stale code in memory)
-- Stop services before update: systemd units + docker/podman compose
-- Remember if symlink existed, re-link after update
-- Clean up temp dirs with trap: `trap _cleanup EXIT`
-
-### Validation & Messaging
-
-- Validate version format: `^[0-9]+\.[0-9]+\.[0-9]+$`
-- Warn on downgrade but allow with explicit `--version` flag
-- Skip reinstall if already on target version (unless `--force`)
-- Guard: refuse to run `update` from git repo (dev-only for source installs)
+- **OS/arch detection:** `$(uname)` for Darwin vs Linux, `$(uname -m)` for x86_64/aarch64,
+  since the installed release ships one binary per platform (`tmux-api-<os>-<arch>`)
+- **Checkout vs install:** a git checkout rebuilds `tmux-api/tmux-api-native[.exe]` when any
+  Go source is newer than the binary; an installed release runs the pre-built binary next to
+  the script
+- **Symlink resolution (Unix):** `CDPATH= cd -P` plus a manual `readlink` loop, so the shim
+  finds its own directory even when invoked through the `termote` symlink
+- **0.x compatibility (contract, not convention):** the shim's path and every flag name/shape
+  0.x's own `update` relies on (including `-Ttyd`) must keep working — see
+  [`upgrade-1.0.md`](upgrade-1.0.md)
 
 ### Shell Testing
 
 ```bash
-make test-cli         # Run test-termote.sh (all tests)
-bash tests/test-termote.sh cmd_update  # Run specific test function
+make test-cli   # Run tests/test-termote.sh (shim behavior only)
 ```
 
-Test patterns: Mock files, guard clauses, capture output with command substitution
+Test patterns: fake `tmux-api` binaries, capture output with command substitution, assert on
+the argument list the shim passed through.

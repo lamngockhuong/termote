@@ -90,45 +90,31 @@ test_services() {
     echo ""
     echo "=== Testing services ==="
 
-    # Verify tmux-api start
-    if grep -q "tmux-api" "$PROJECT_DIR/entrypoint.sh"; then
-        pass "tmux-api service present"
+    if grep -qi "ttyd" "$PROJECT_DIR/entrypoint.sh"; then
+        fail "no ttyd" "none" "$(grep -i ttyd "$PROJECT_DIR/entrypoint.sh" | head -1)"
     else
-        fail "tmux-api" "present" "not found"
+        pass "ttyd removed"
     fi
 
-    # Verify ttyd start
-    if grep -q "ttyd" "$PROJECT_DIR/entrypoint.sh"; then
-        pass "ttyd service present"
-    else
-        fail "ttyd" "present" "not found"
-    fi
-
-}
-
-test_ttyd_config() {
-    echo ""
-    echo "=== Testing ttyd configuration ==="
-
-    # Verify ttyd port
-    if grep -q "\-p 7681" "$PROJECT_DIR/entrypoint.sh"; then
-        pass "ttyd uses port 7681"
-    else
-        fail "ttyd port" "7681" "not found"
-    fi
-
-    # Verify ttyd writable mode
-    if grep -q "ttyd -W" "$PROJECT_DIR/entrypoint.sh"; then
-        pass "ttyd has writable mode (-W)"
-    else
-        fail "ttyd -W" "writable mode" "not found"
-    fi
-
-    # Verify tmux session
-    if grep -q "tmux new-session -A -s main" "$PROJECT_DIR/entrypoint.sh"; then
-        pass "attaches to tmux session 'main'"
+    if grep -q "tmux has-session -t main" "$PROJECT_DIR/entrypoint.sh" &&
+        grep -q "tmux new-session -d -s main" "$PROJECT_DIR/entrypoint.sh"; then
+        pass "creates tmux session 'main' when missing"
     else
         fail "tmux session" "main" "not found"
+    fi
+
+    # Shells inherit the tmux server's environment; the password must not be in it
+    if grep -q "env -u TERMOTE_PASS tmux new-session" "$PROJECT_DIR/entrypoint.sh"; then
+        pass "tmux session starts without TERMOTE_PASS"
+    else
+        fail "tmux env" "env -u TERMOTE_PASS" "password reaches the shells"
+    fi
+
+    # exec: tmux-api gets SIGTERM from tini directly, no shell in between
+    if grep -qE '^exec /usr/local/bin/tmux-api$' "$PROJECT_DIR/entrypoint.sh"; then
+        pass "execs tmux-api as the last step"
+    else
+        fail "exec tmux-api" "exec /usr/local/bin/tmux-api" "not found"
     fi
 }
 
@@ -136,64 +122,91 @@ test_serve_config() {
     echo ""
     echo "=== Testing serve configuration ==="
 
-    # Verify TERMOTE_PORT
-    if grep -q "TERMOTE_PORT" "$PROJECT_DIR/entrypoint.sh"; then
-        pass "TERMOTE_PORT configured"
-    else
-        fail "TERMOTE_PORT" "present" "not found"
-    fi
+    for var in TERMOTE_PORT TERMOTE_BIND TERMOTE_PWA_DIR TERMOTE_USER; do
+        if grep -q "export $var=" "$PROJECT_DIR/entrypoint.sh"; then
+            pass "$var configured"
+        else
+            fail "$var" "exported" "not found"
+        fi
+    done
+}
 
-    # Verify TERMOTE_PWA_DIR
-    if grep -q "TERMOTE_PWA_DIR" "$PROJECT_DIR/entrypoint.sh"; then
-        pass "TERMOTE_PWA_DIR configured"
-    else
-        fail "TERMOTE_PWA_DIR" "present" "not found"
-    fi
+test_dockerfile() {
+    echo ""
+    echo "=== Testing Dockerfile ==="
+    local df="$PROJECT_DIR/Dockerfile"
 
-    # Verify TERMOTE_TTYD_URL
-    if grep -q "TERMOTE_TTYD_URL" "$PROJECT_DIR/entrypoint.sh"; then
-        pass "TERMOTE_TTYD_URL configured"
+    if grep -qE '^FROM debian:stable-slim@sha256:[0-9a-f]{64}$' "$df"; then
+        pass "base image is debian:stable-slim pinned by digest"
     else
-        fail "TERMOTE_TTYD_URL" "present" "not found"
+        fail "base image" "debian:stable-slim@sha256:..." "$(grep '^FROM' "$df")"
+    fi
+    if grep -q 'ENTRYPOINT \["/usr/bin/tini", "-s", "--", "/entrypoint.sh"\]' "$df"; then
+        pass "tini is the entrypoint"
+    else
+        fail "entrypoint" "tini -s -- /entrypoint.sh" "$(grep ENTRYPOINT "$df")"
+    fi
+    if grep -qi ttyd "$df"; then
+        fail "no ttyd" "none" "$(grep -i ttyd "$df" | head -1)"
+    else
+        pass "no ttyd in Dockerfile"
     fi
 }
 
-test_signal_handling() {
+# Runs the built image; set TERMOTE_TEST_IMAGE (CI builds termote:test).
+test_container_runtime() {
     echo ""
-    echo "=== Testing signal handling ==="
-
-    # Verify trap
-    if grep -q "trap cleanup" "$PROJECT_DIR/entrypoint.sh"; then
-        pass "trap cleanup present"
-    else
-        fail "trap" "cleanup" "not found"
+    echo "=== Testing container runtime ==="
+    local image="${TERMOTE_TEST_IMAGE:-}" rt name="termote-entrypoint-test-$$"
+    if [[ -z "$image" ]]; then
+        echo "SKIP: TERMOTE_TEST_IMAGE not set"
+        return
+    fi
+    rt=$(command -v docker || command -v podman)
+    if [[ -z "$rt" ]]; then
+        echo "SKIP: no docker or podman"
+        return
     fi
 
-    # Verify SIGTERM handling
-    if grep -q "SIGTERM" "$PROJECT_DIR/entrypoint.sh"; then
-        pass "SIGTERM handling present"
+    "$rt" rm -f "$name" >/dev/null 2>&1
+    if ! "$rt" run -d --name "$name" --user 1000:1000 -e TERMOTE_PASS=test-pass "$image" >/dev/null; then
+        fail "container start" "running" "run failed"
+        return
+    fi
+    # Wait for tmux-api to answer inside the container
+    local i up=false
+    for i in $(seq 1 20); do
+        if "$rt" exec "$name" curl -fs -o /dev/null -u admin:test-pass http://127.0.0.1:7680/api/mux/health; then
+            up=true
+            break
+        fi
+        sleep 0.5
+    done
+    if [[ "$up" == true ]]; then pass "tmux-api answers /api/mux/health"; else fail "health" "200" "no answer"; fi
+
+    local pid1
+    pid1=$("$rt" exec "$name" cat /proc/1/comm)
+    if [[ "$pid1" == "tini" ]]; then pass "PID 1 is tini"; else fail "PID 1" "tini" "$pid1"; fi
+
+    if "$rt" exec "$name" tmux has-session -t main 2>/dev/null; then
+        pass "session 'main' exists at start"
     else
-        fail "SIGTERM" "handling" "not found"
+        fail "session main" "exists" "missing"
     fi
 
-    # Verify SIGINT handling
-    if grep -q "SIGINT" "$PROJECT_DIR/entrypoint.sh"; then
-        pass "SIGINT handling present"
-    else
-        fail "SIGINT" "handling" "not found"
-    fi
-}
+    # Killing the tmux server orphans its shells; tini must reap them.
+    "$rt" exec "$name" tmux kill-server >/dev/null 2>&1
+    sleep 1
+    local zombies
+    zombies=$("$rt" exec "$name" sh -c 'grep -l "^State:.*Z" /proc/[0-9]*/status 2>/dev/null | wc -l' | tr -d ' ')
+    if [[ "$zombies" == "0" ]]; then pass "no zombies after tmux kill-server"; else fail "zombies" "0" "$zombies"; fi
 
-test_pid_tracking() {
-    echo ""
-    echo "=== Testing PID tracking ==="
-
-    # Tracks TMUX_API_PID
-    if grep -q "TMUX_API_PID" "$PROJECT_DIR/entrypoint.sh"; then
-        pass "tracks TMUX_API_PID"
-    else
-        fail "TMUX_API_PID" "present" "not found"
-    fi
+    local start elapsed
+    start=$(date +%s)
+    "$rt" stop "$name" >/dev/null
+    elapsed=$(($(date +%s) - start))
+    if [[ $elapsed -lt 10 ]]; then pass "stops in ${elapsed}s (< 10s)"; else fail "stop time" "< 10s" "${elapsed}s"; fi
+    "$rt" rm -f "$name" >/dev/null 2>&1
 }
 
 # Run all tests
@@ -204,10 +217,9 @@ test_syntax
 test_user_setup
 test_auth_setup
 test_services
-test_ttyd_config
 test_serve_config
-test_signal_handling
-test_pid_tracking
+test_dockerfile
+test_container_runtime
 
 # Summary
 echo ""

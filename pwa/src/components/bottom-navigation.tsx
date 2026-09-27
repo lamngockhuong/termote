@@ -1,6 +1,7 @@
 import { Monitor, Plus } from 'lucide-react'
 import { useHaptic } from '../hooks/use-haptic'
 import type { Session } from '../types/session'
+import { AgentStatusBadge } from './agent-status-badge'
 
 interface Props {
   sessions: Session[]
@@ -60,15 +61,24 @@ export function BottomNavigation({
           <button
             key={session.id}
             onClick={() => handleSelect(session.id)}
-            className={`min-w-11 h-11 px-3 flex items-center justify-center rounded-lg touch-manipulation transition-colors ${
+            className={`relative min-w-11 h-11 px-3 flex items-center justify-center rounded-lg touch-manipulation transition-colors ${
               activeId === session.id
                 ? 'bg-blue-600 text-white'
                 : 'bg-zinc-200/50 dark:bg-zinc-700/50 active:bg-zinc-300/50 dark:active:bg-zinc-600/50'
             }`}
-            aria-label={session.name}
+            aria-label={
+              session.agentStatus
+                ? `${session.name}, agent ${session.agentStatus}`
+                : session.name
+            }
             aria-current={activeId === session.id ? 'true' : undefined}
           >
             <span className="text-lg">{session.icon}</span>
+            {session.agentStatus && (
+              <span className="absolute top-0.5 right-0.5 rounded-full bg-white dark:bg-zinc-800">
+                <AgentStatusBadge status={session.agentStatus} size={12} />
+              </span>
+            )}
           </button>
         ))}
       </div>

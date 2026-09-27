@@ -25,6 +25,11 @@
 
 Điều khiển từ xa các công cụ CLI (Claude Code, GitHub Copilot, terminal bất kỳ) từ mobile/desktop qua PWA.
 
+> [!NOTE]
+> Nhánh `main` đang phát triển bản 1.0 và đi trước bản phát hành mới nhất
+> (0.1.x). Hướng dẫn cho phiên bản cài được hiện nay nằm ở
+> [README của nhánh `release/0.x`](https://github.com/lamngockhuong/termote/blob/release/0.x/README.vi.md).
+
 > **Termote** = Terminal + Remote
 >
 > 🇬🇧 [English](README.md) | 🇨🇳 [简体中文](README.zh-CN.md) | 🇯🇵 [日本語](README.ja.md) | 🇰🇷 [한국어](README.ko.md) | 🇪🇸 [Español](README.es.md) | 🇧🇷 [Português (BR)](README.pt-BR.md) | 🇫🇷 [Français](README.fr.md) | 🇩🇪 [Deutsch](README.de.md) | 🇷🇺 [Русский](README.ru.md) | 🇮🇩 [Bahasa Indonesia](README.id.md)
@@ -33,6 +38,7 @@
 
 - **Chuyển đổi session**: Nhiều tmux sessions với tạo/sửa/xóa
 - **Tab sessions**: Thanh tab ngang để chuyển nhanh giữa các cửa sổ
+- **Backend Herdr** (chỉ native): điều khiển workspace của Herdr thay cho tmux, kèm huy hiệu trạng thái của agent lập trình trên từng pane — xem [Cài đặt Native](https://termote.ohnice.app/vi/installation/native/)
 - **Thân thiện mobile**: Bàn phím ảo (Tab/Ctrl/Shift/mũi tên, mở rộng được)
 - **Hỗ trợ cử chỉ**: Vuốt cho Ctrl+C, Tab, điều hướng lịch sử
 - **Lịch sử lệnh**: Gợi nhớ các lệnh đã gửi trước đó với tìm kiếm
@@ -58,21 +64,23 @@
 ```mermaid
 flowchart TB
     subgraph Client["Client (Mobile/Desktop)"]
-        PWA["PWA - React + TypeScript"]
+        PWA["PWA - React + xterm.js"]
         Gestures["Điều Khiển Cử Chỉ"]
         Keyboard["Bàn Phím Ảo"]
     end
 
     subgraph Server["tmux-api Server :7680"]
         Static["Static Files"]
-        Proxy["WebSocket Proxy"]
-        API["REST API /api/tmux/*"]
+        Stream["Terminal WebSocket /api/mux/stream"]
+        API["REST API /api/mux/*"]
+        Guard["Danh sách Host được phép + chặn Origin/CSRF"]
         Auth["Basic Auth"]
     end
 
-    subgraph Backend["Backend Services"]
-        ttyd["ttyd :7681"]
-        tmux["tmux"]
+    subgraph Backend["Mux Backend (tmux/psmux hoặc Herdr)"]
+        Mux["Mux interface"]
+        tmux["tmux/psmux (PTY)"]
+        herdr["Herdr (chỉ native)"]
         Shell["Shell"]
         Tools["CLI Tools"]
     end
@@ -80,13 +88,17 @@ flowchart TB
     Gestures --> PWA
     Keyboard --> PWA
     PWA --> Static
-    PWA <--> Proxy
+    PWA <--> Stream
     PWA --> API
-    Auth -.-> Static & Proxy & API
-    Proxy <--> ttyd
-    API --> tmux
-    ttyd --> tmux --> Shell --> Tools
+    Guard -.-> Static & Stream & API
+    Auth -.-> Static & Stream & API
+    Stream --> Mux
+    API --> Mux
+    Mux --> tmux & herdr
+    tmux --> Shell --> Tools
 ```
+
+Chính tmux-api truyền luồng terminal (PTY trên Unix, ConPTY trên Windows) tới xterm.js trong PWA; không có tiến trình terminal riêng nào đứng sau để proxy tới. Mô hình chặn request đầy đủ nằm ở [`docs/system-architecture.md`](docs/system-architecture.md).
 
 ## Bắt Đầu Nhanh
 
@@ -101,8 +113,6 @@ make test                              # Chạy tests
 ```
 
 > Sau khi `link`, dùng `termote` từ bất kỳ đâu: `termote health`, `termote install native --lan`
->
-> **Mẹo**: Cài [gum](https://github.com/charmbracelet/gum) để có menu tương tác đẹp hơn (tùy chọn, có fallback bash)
 
 ## Cài Đặt
 
@@ -218,33 +228,38 @@ cd termote
 flowchart LR
     subgraph Container["Chế Độ Container"]
         direction TB
-        C1["Docker/Podman"] --> C2["tmux-api :7680"] --> C3["ttyd :7681"] --> C4["tmux"]
+        C1["Docker/Podman"] --> C2["tmux-api :7680 (tự truyền luồng terminal)"] --> C3["tmux"]
     end
 
     subgraph Native["Chế Độ Native"]
         direction TB
-        N1["Hệ Thống Host"] --> N2["tmux-api :7680"] --> N3["ttyd :7681"] --> N4["tmux + Công Cụ Host"]
+        N1["Hệ Thống Host"] --> N2["tmux-api :7680 (tự truyền luồng terminal)"] --> N3["tmux/psmux hoặc Herdr + Công Cụ Host"]
     end
 
     User["Người Dùng"] --> Container & Native
 ```
 
-| Chế Độ        | Mô Tả            | Trường Hợp Sử Dụng                      | Nền Tảng     |
-| ------------- | ---------------- | --------------------------------------- | ------------ |
-| `--container` | Chế độ container | Triển khai đơn giản, môi trường cách ly | macOS, Linux |
-| `--native`    | Tất cả native    | Truy cập công cụ host (claude, gh)      | macOS, Linux |
+| Chế Độ        | Mô Tả            | Trường Hợp Sử Dụng                                                  | Nền Tảng              |
+| ------------- | ---------------- | ------------------------------------------------------------------- | --------------------- |
+| `--container` | Chế độ container | Triển khai đơn giản, môi trường cách ly                             | macOS, Linux, Windows |
+| `--native`    | Tất cả native    | Truy cập công cụ host (claude, gh); bắt buộc khi dùng backend Herdr | macOS, Linux, Windows |
 
 ### Tùy Chọn
 
-| Flag                        | Mô Tả                                           |
-| --------------------------- | ----------------------------------------------- |
-| `--lan`                     | Mở truy cập LAN (mặc định: chỉ localhost)       |
-| `--tailscale <host[:port]>` | Bật Tailscale HTTPS                             |
-| `--no-auth`                 | Tắt xác thực cơ bản                             |
-| `--port <port>`             | Port host (mặc định: 7680, Windows: 7690)       |
-| `--fresh`                   | Buộc nhập mật khẩu mới (bỏ qua config đã lưu)   |
-| `--update`                  | Cập nhật tự động với config đã lưu              |
-| `--version <ver>`           | Cài đặt phiên bản cụ thể (có hoặc không có `v`) |
+| Flag                        | Mô Tả                                                                                              |
+| --------------------------- | -------------------------------------------------------------------------------------------------- |
+| `--lan`                     | Mở truy cập LAN (mặc định: chỉ localhost)                                                          |
+| `--tailscale <host[:port]>` | Bật Tailscale HTTPS                                                                                |
+| `--no-auth`                 | Tắt xác thực cơ bản                                                                                |
+| `--port <port>`             | Port host (mặc định: 7680, Windows: 7690)                                                          |
+| `--mux <tmux\|herdr>`       | Backend terminal, chỉ native (mặc định: `tmux`)                                                    |
+| `--allow-host <name>`       | Cho phép thêm một giá trị header Host (lặp lại được; không có ký tự đại diện, xem ghi chú bảo mật) |
+| `--allow-herdr-no-auth`     | Bắt buộc phải có khi dùng `--mux herdr --no-auth`                                                  |
+| `--fresh`                   | Buộc nhập mật khẩu mới (bỏ qua config đã lưu)                                                      |
+| `--update`                  | Cập nhật tự động với config đã lưu                                                                 |
+| `--version <ver>`           | Cài đặt phiên bản cụ thể (có hoặc không có `v`)                                                    |
+
+`--ttyd`/`-Ttyd` vẫn được chấp nhận (bản 0.x cần cờ này khi chạy lại trình cài đặt trong lúc cập nhật) nhưng bị bỏ qua kèm cảnh báo, vì ttyd đã bị gỡ bỏ từ 1.0.0. Mọi thay đổi không tương thích được liệt kê ở [`docs/upgrade-1.0.md`](docs/upgrade-1.0.md).
 
 | Biến Môi Trường | Mô Tả                                           |
 | --------------- | ----------------------------------------------- |
@@ -276,15 +291,16 @@ Dùng khi cần truy cập binary host (claude, git, v.v.):
 
 ```bash
 # Linux
-sudo apt install ttyd tmux
-# Hoặc: sudo snap install ttyd
+sudo apt install tmux
 ./scripts/termote.sh install native
 
 # macOS
-brew install ttyd tmux go
+brew install tmux go
 ./scripts/termote.sh install native
 # Truy cập: http://localhost:7680
 ```
+
+Để điều khiển workspace của [Herdr](https://termote.ohnice.app/vi/installation/native/) thay cho tmux, thêm `--mux herdr` (chỉ ở chế độ native; `herdr` phải có sẵn trong `PATH`).
 
 ### Với Tailscale HTTPS (tất cả chế độ)
 
@@ -349,8 +365,6 @@ winget install psmux
 .\scripts\termote.ps1 install container  # Hoặc container mode với Docker Desktop
 ```
 
-> Mặc định, `install native` tải bản build [fork/MSVC ttyd](https://github.com/lamngockhuong/ttyd/releases) (hoạt động trên Windows mới nhất); dùng `-Ttyd official` để chuyển sang bản build gốc tsl0922/ttyd.
-
 ## Sử Dụng Mobile
 
 | Hành Động      | Cử Chỉ             |
@@ -369,7 +383,7 @@ Thanh công cụ ảo cung cấp: Tab, Esc, Ctrl, Shift, phím mũi tên, và c�
 ```
 termote/
 ├── Makefile                # Lệnh build/test/deploy
-├── Dockerfile              # Docker mode (tmux-api + ttyd)
+├── Dockerfile              # Docker mode (tmux-api + tmux, không có ttyd)
 ├── docker-compose.yml
 ├── entrypoint.sh           # Docker entrypoint
 ├── docs/                   # Tài liệu
@@ -381,13 +395,17 @@ termote/
 │       ├── hooks/
 │       ├── types/
 │       └── utils/
-├── tmux-api/               # Go server
-│   ├── main.go             # Entry point
-│   ├── serve.go            # Server (PWA, proxy, auth)
-│   └── tmux.go             # tmux API handlers
+├── tmux-api/               # Go server + CLI (một binary duy nhất)
+│   ├── main.go             # Entry point (không tham số/`serve` = server, còn lại là CLI)
+│   ├── serve.go            # Server (PWA, auth, lớp chặn request)
+│   ├── mux.go              # Mux interface + route /api/mux/*
+│   ├── mux_tmux.go         # Backend tmux/psmux
+│   ├── mux_herdr.go        # Backend Herdr (chỉ native)
+│   ├── stream.go           # Terminal WebSocket (luồng cho xterm.js)
+│   └── cli*.go             # Các lệnh con install/update/health/logs/link/menu
 ├── scripts/
-│   ├── termote.sh          # Unix CLI (install/uninstall/health)
-│   ├── termote.ps1         # Windows PowerShell CLI
+│   ├── termote.sh          # Shim Unix mỏng -> tmux-api CLI
+│   ├── termote.ps1         # Shim Windows PowerShell mỏng -> tmux-api CLI
 │   ├── get.sh              # Unix online installer (curl | bash)
 │   └── get.ps1             # Windows online installer (irm | iex)
 ├── tests/                  # Bộ test
@@ -420,33 +438,38 @@ pnpm --filter termote test:e2e:ui    # Chạy với UI debugger
 ### Session không lưu được
 
 - Kiểm tra tmux: `tmux ls`
-- Xác minh ttyd dùng flag `-A` (attach-or-create)
+- tmux-api gắn vào session bằng `tmux new-session -A` (có session thì gắn vào, chưa có thì tạo mới)
 
 ### Lỗi WebSocket
 
-- Kiểm tra logs tmux-api: `docker logs termote`
-- Xác minh ttyd đang chạy trên port 7681
+- Kiểm tra logs tmux-api: `docker logs termote` (container) hoặc `termote logs tmux-api` (native)
+- WebSocket của terminal là `/api/mux/stream`, do chính tmux-api phục vụ — không có tiến trình terminal riêng nào cần kiểm tra
 
 ### Vấn đề bàn phím mobile
 
 - Đảm bảo có viewport meta tag
 - Test trên thiết bị thật, không dùng emulator
 
-### Chế độ native: processes không khởi động
+### Chế độ native: tiến trình không khởi động
 
 ```bash
-ps aux | grep ttyd         # Kiểm tra ttyd đang chạy
 ps aux | grep tmux-api     # Kiểm tra tmux-api đang chạy
 lsof -i :7680              # Xác minh port đang dùng
+termote logs tmux-api      # Hoặc: termote logs follow
 ```
 
 ## Ghi Chú Bảo Mật
 
 - **Mặc định: chỉ localhost** - không mở LAN trừ khi dùng flag `--lan`
-- **Basic auth bật mặc định** - dùng `--no-auth` để tắt cho dev local
+- **Basic auth bật mặc định** - dùng `--no-auth` để tắt cho dev local; mật khẩu đã lưu nếu rỗng không còn làm tắt auth nữa (bản 1.0.0 sẽ sinh mật khẩu mới thay vào)
+- **Danh sách Host được phép**: request có header `Host` lạ bị từ chối (chống tấn công đổi địa chỉ DNS); thêm các tên tin cậy bằng `--allow-host`/`-AllowHost`, không có ký tự đại diện nào tắt được lớp kiểm tra này
+- **Chặn Origin/CSRF**: các request thay đổi trạng thái tới `/api/mux/*` và WebSocket `/api/mux/stream` từ chối request có `Sec-Fetch-Site`/`Origin` đến từ site khác, đồng thời yêu cầu stream token cùng origin và chỉ dùng một lần
 - **Chống brute-force tích hợp** - rate limiting (5 lần thử/phút mỗi IP)
+- **Backend Herdr**: để lộ mọi workspace Herdr trên máy host, nên `--mux herdr --no-auth` bị từ chối nếu không kèm `--allow-herdr-no-auth`
 - Dùng HTTPS (Tailscale) cho production
 - Giới hạn trong mạng tin cậy/VPN
+
+Nếu bạn nâng cấp từ một bản cài 0.x, hãy xem [`docs/upgrade-1.0.md`](docs/upgrade-1.0.md).
 
 ## Dự Án Khác
 

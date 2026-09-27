@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { useDialogModal } from '../hooks/use-dialog-modal'
+import { AgentStatusBadge } from './agent-status-badge'
 
 interface Props {
   isOpen: boolean
@@ -118,6 +119,18 @@ const TOOLBAR_GUIDE: GuideSection[] = [
       { key: 'Home/End', desc: 'Jump to line start/end' },
       { key: 'Del/Bksp', desc: 'Delete forward/backward' },
       { key: 'PgUp/PgDn', desc: 'Page up/down' },
+    ],
+  },
+  {
+    title: 'Agent Status (Herdr)',
+    items: [
+      {
+        key: <AgentStatusBadge status="blocked" />,
+        desc: 'Blocked: the agent is waiting for you',
+      },
+      { key: <AgentStatusBadge status="working" />, desc: 'Working' },
+      { key: <AgentStatusBadge status="done" />, desc: 'Done' },
+      { key: <AgentStatusBadge status="idle" />, desc: 'Idle' },
     ],
   },
 ]

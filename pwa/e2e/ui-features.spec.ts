@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test'
 test.describe('settings menu', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/')
-    await page.waitForSelector('iframe[title="Terminal"]', { timeout: 10000 })
+    await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
   })
 
   test('opens settings menu on click', async ({ page }) => {
@@ -27,7 +27,7 @@ test.describe('theme toggle', () => {
     await page.goto('/')
     await page.evaluate(() => localStorage.clear())
     await page.reload()
-    await page.waitForSelector('iframe[title="Terminal"]', { timeout: 10000 })
+    await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
   })
 
   test('toggles between light and dark theme', async ({ page }) => {
@@ -52,47 +52,24 @@ test.describe('theme toggle', () => {
     expect(htmlClassDark).toContain('dark')
   })
 
-  test('does not reload terminal iframe on theme switch', async ({ page }) => {
-    // Capture the iframe src before theme change
-    const srcBefore = await page
-      .locator('iframe[title="Terminal"]')
-      .getAttribute('src')
-
-    // Track network requests for new terminal tokens
-    const tokenRequests: string[] = []
+  test('does not reconnect the terminal on theme switch', async ({ page }) => {
+    await page.waitForSelector('[aria-label="Connected"]', { timeout: 10000 })
+    // Any new stream token or WebSocket means the terminal was reopened
+    const reopened: string[] = []
     page.on('request', (req) => {
-      if (req.url().includes('/api/terminal/token')) {
-        tokenRequests.push(req.url())
-      }
+      if (req.url().includes('/api/mux/stream-token')) reopened.push(req.url())
     })
+    page.on('websocket', (ws) => reopened.push(ws.url()))
 
-    // Switch to light theme
     await page.click('button[aria-label="Settings"]')
     await page.waitForTimeout(200)
     await page.click('button[aria-label="Light theme"]')
     await page.waitForTimeout(500)
+    await expect(page.locator('[data-testid="terminal-view"] .xterm')).toBeVisible()
 
-    // Iframe should still be present (not replaced by "Connecting...")
-    await expect(page.locator('iframe[title="Terminal"]')).toBeVisible()
-
-    // Iframe src should remain the same (no new token fetched)
-    const srcAfter = await page
-      .locator('iframe[title="Terminal"]')
-      .getAttribute('src')
-    expect(srcAfter).toBe(srcBefore)
-
-    // No token requests should have been made during theme switch
-    expect(tokenRequests).toHaveLength(0)
-
-    // Switch back to dark — same assertions
     await page.click('button[aria-label="Dark theme"]')
     await page.waitForTimeout(500)
-
-    const srcAfterDark = await page
-      .locator('iframe[title="Terminal"]')
-      .getAttribute('src')
-    expect(srcAfterDark).toBe(srcBefore)
-    expect(tokenRequests).toHaveLength(0)
+    expect(reopened).toHaveLength(0)
   })
 
   test('persists theme preference', async ({ page }) => {
@@ -103,7 +80,7 @@ test.describe('theme toggle', () => {
 
     // Reload page
     await page.reload()
-    await page.waitForSelector('iframe[title="Terminal"]', { timeout: 10000 })
+    await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
 
     // Verify theme persisted
     const htmlClass = await page.locator('html').getAttribute('class')
@@ -119,21 +96,88 @@ test.describe('theme toggle', () => {
 
     // Reload page
     await page.reload()
-    await page.waitForSelector('iframe[title="Terminal"]', { timeout: 10000 })
+    await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
 
-    // Wait for theme to be applied inside iframe
-    const iframe = page.frameLocator('iframe[title="Terminal"]')
+    // xterm.js paints its scroll area with the theme background
     await expect(async () => {
-      const bg = await iframe.locator('body').evaluate(
-        (el) => getComputedStyle(el).backgroundColor,
-      )
+      const bg = await page
+        .locator('[data-testid="terminal-view"] .xterm-scrollable-element')
+        .evaluate((el) => getComputedStyle(el).backgroundColor)
       // Light theme background #f6f8fa = rgb(246, 248, 250)
       expect(bg).toBe('rgb(246, 248, 250)')
     }).toPass({ timeout: 5000 })
+  })
+})
 
-    // Verify CSS override style was injected
-    const hasOverride = await iframe.locator('#termote-theme-override').count()
-    expect(hasOverride).toBe(1)
+test.describe('terminal stream', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/')
+    await page.waitForSelector('[data-testid="terminal-view"] .xterm', {
+      timeout: 10000,
+    })
+    // Keys typed before the stream opens are dropped; ConPTY attaches slower
+    await page.waitForSelector('[aria-label="Connected"]', { timeout: 15000 })
+  })
+
+  const rows = (page: import('@playwright/test').Page) =>
+    page.locator('[data-testid="terminal-view"] .xterm-rows')
+
+  test('runs a typed command and shows its output', async ({ page }) => {
+    await page.locator('[data-testid="terminal-view"] .xterm').click()
+    await page.keyboard.type('echo termote-$((40+2))')
+    await page.keyboard.press('Enter')
+    await expect(rows(page)).toContainText('termote-42', { timeout: 10000 })
+  })
+
+  test('reconnects after the network comes back', async ({ page, context }) => {
+    await page.waitForSelector('[aria-label="Connected"]', { timeout: 10000 })
+    await context.setOffline(true)
+    await expect(page.locator('[aria-label="Connected"]')).toHaveCount(0, {
+      timeout: 10000,
+    })
+    await context.setOffline(false)
+    await page.waitForSelector('[aria-label="Connected"]', { timeout: 15000 })
+
+    await page.locator('[data-testid="terminal-view"] .xterm').click()
+    await page.keyboard.type('echo back-$((1+1))')
+    await page.keyboard.press('Enter')
+    await expect(rows(page)).toContainText('back-2', { timeout: 10000 })
+  })
+
+  test('resizing the window sends the new size to the server', async ({ page }) => {
+    // Other workers attach to the same shared tmux window and its size follows
+    // the latest client, so the check reads what this client sends; the Go
+    // stream tests cover the server applying it to the PTY.
+    const sizes: number[] = []
+    page.on('websocket', (ws) => {
+      // The opening size travels in the URL, later ones as resize messages
+      const cols = new URL(ws.url()).searchParams.get('cols')
+      if (cols) sizes.push(Number(cols))
+      ws.on('framesent', ({ payload }) => {
+        if (typeof payload !== 'string') return
+        try {
+          const msg = JSON.parse(payload)
+          if (msg.type === 'resize') sizes.push(msg.cols)
+        } catch {
+          // terminal input, not a control message
+        }
+      })
+    })
+    await page.setViewportSize({ width: 1280, height: 720 })
+    await page.reload()
+    await page.waitForSelector('[aria-label="Connected"]', { timeout: 15000 })
+    await expect.poll(() => sizes.length, { timeout: 10000 }).toBeGreaterThan(0)
+    const wide = sizes[sizes.length - 1]
+
+    await page.setViewportSize({ width: 700, height: 720 })
+    await expect.poll(() => sizes[sizes.length - 1], { timeout: 10000 }).toBeLessThan(wide)
+  })
+
+  test('prompt has no leaked terminal query replies', async ({ page }) => {
+    // Give tmux time to query the terminal and draw the prompt
+    await page.waitForTimeout(1500)
+    const text = await rows(page).innerText()
+    expect(text).not.toMatch(/\d+;\d+(;\d+)*c|\[\?\d/)
   })
 })
 
@@ -142,7 +186,7 @@ test.describe('font size controls', () => {
     await page.goto('/')
     await page.evaluate(() => localStorage.clear())
     await page.reload()
-    await page.waitForSelector('iframe[title="Terminal"]', { timeout: 10000 })
+    await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
   })
 
   test('displays current font size', async ({ page }) => {
@@ -200,7 +244,7 @@ test.describe('font size controls', () => {
 test.describe('about modal', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/')
-    await page.waitForSelector('iframe[title="Terminal"]', { timeout: 10000 })
+    await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
   })
 
   test('opens about modal from settings', async ({ page }) => {
@@ -252,7 +296,7 @@ test.describe('preferences modal', () => {
     await page.goto('/')
     await page.evaluate(() => localStorage.clear())
     await page.reload()
-    await page.waitForSelector('iframe[title="Terminal"]', { timeout: 10000 })
+    await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
   })
 
   test('opens preferences from settings menu', async ({ page }) => {
@@ -329,7 +373,7 @@ test.describe('preferences modal', () => {
     // Reload
     await page.keyboard.press('Escape')
     await page.reload()
-    await page.waitForSelector('iframe[title="Terminal"]', { timeout: 10000 })
+    await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
 
     // Reopen and verify
     await page.click('button[aria-label="Settings"]')
@@ -366,7 +410,7 @@ test.describe('preferences modal', () => {
     // Reload
     await page.keyboard.press('Escape')
     await page.reload()
-    await page.waitForSelector('iframe[title="Terminal"]', { timeout: 10000 })
+    await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
 
     // Reopen and verify
     await page.click('button[aria-label="Settings"]')
@@ -386,7 +430,7 @@ test.describe('preferences modal', () => {
     // Close and reload
     await page.keyboard.press('Escape')
     await page.reload()
-    await page.waitForSelector('iframe[title="Terminal"]', { timeout: 10000 })
+    await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
 
     // Reopen and verify
     await page.click('button[aria-label="Settings"]')
@@ -400,7 +444,7 @@ test.describe('preferences modal', () => {
 test.describe('clear cache button', () => {
   test('shows clear cache option in settings menu', async ({ page }) => {
     await page.goto('/')
-    await page.waitForSelector('iframe[title="Terminal"]', { timeout: 10000 })
+    await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
 
     await page.click('button[aria-label="Settings"]')
     await expect(page.locator('text=Clear Cache & Reload')).toBeVisible()
@@ -410,7 +454,7 @@ test.describe('clear cache button', () => {
 test.describe('help modal', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/')
-    await page.waitForSelector('iframe[title="Terminal"]', { timeout: 10000 })
+    await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
   })
 
   test('opens usage guide from settings', async ({ page }) => {
@@ -449,7 +493,7 @@ test.describe('sidebar collapse', () => {
     await page.goto('/')
     await page.evaluate(() => localStorage.clear())
     await page.reload()
-    await page.waitForSelector('iframe[title="Terminal"]', { timeout: 10000 })
+    await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
   })
 
   test('sidebar collapse and expand toggle works', async ({ page }) => {
@@ -479,7 +523,7 @@ test.describe('sidebar collapse', () => {
 
       // Reload
       await page.reload()
-      await page.waitForSelector('iframe[title="Terminal"]', { timeout: 10000 })
+      await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
 
       // Should still be collapsed
       await expect(
@@ -492,7 +536,7 @@ test.describe('sidebar collapse', () => {
 test.describe('fullscreen toggle', () => {
   test('fullscreen button visible on desktop', async ({ page }) => {
     await page.goto('/')
-    await page.waitForSelector('iframe[title="Terminal"]', { timeout: 10000 })
+    await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
 
     // Desktop viewport should show fullscreen button
     const btn = page.locator('button[aria-label="Enter fullscreen"]')
@@ -505,7 +549,7 @@ test.describe('sidebar scroll', () => {
     await page.goto('/')
     await page.evaluate(() => localStorage.clear())
     await page.reload()
-    await page.waitForSelector('iframe[title="Terminal"]', { timeout: 15000 })
+    await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 15000 })
   })
 
   test('sidebar scrolls when many sessions added', async ({ page }) => {

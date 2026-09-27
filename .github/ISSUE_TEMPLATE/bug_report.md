@@ -17,10 +17,10 @@ A clear and concise description of what the bug is.
 
 **Environment**
 
-- Termote version: [e.g., 0.1.5]
+- Termote version: [e.g., 1.0.0]
 - Host OS: [e.g., Ubuntu 22.04, macOS 14, Windows 11]
 - Container runtime (if applicable): [e.g., podman 5.x, docker 24.x]
-- ttyd version (if native): [e.g., 1.7.4]
+- Mux backend (native only): [tmux/psmux or herdr]
 
 **Client Information**
 
@@ -54,7 +54,7 @@ If applicable, add screenshots or relevant logs.
 **Component affected**
 
 - [ ] PWA/Frontend
-- [ ] Terminal (ttyd/tmux)
+- [ ] Terminal (xterm.js stream, tmux/psmux/Herdr backend)
 - [ ] Gestures/Touch
 - [ ] Keyboard toolbar
 - [ ] Session management

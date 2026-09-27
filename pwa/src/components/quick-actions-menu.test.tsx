@@ -281,8 +281,8 @@ describe('QuickActionsMenu', () => {
     fireEvent.touchMove(fab, { touches: [{ clientX: -1000, clientY: -1000 }] })
 
     // The DOM style should be clamped
-    const right = Number.parseInt(container.style.right || '16')
-    const bottom = Number.parseInt(container.style.bottom || '112')
+    const right = Number.parseInt(container.style.right || '16', 10)
+    const bottom = Number.parseInt(container.style.bottom || '112', 10)
     expect(right).toBeGreaterThanOrEqual(4)
     expect(bottom).toBeGreaterThanOrEqual(4)
   })

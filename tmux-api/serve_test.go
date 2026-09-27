@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -76,7 +76,7 @@ func TestSpaHandler(t *testing.T) {
 	}{
 		{"/", http.StatusOK},
 		{"/app.js", http.StatusOK},
-		{"/nonexistent", http.StatusOK}, // SPA fallback
+		{"/nonexistent", http.StatusOK},   // SPA fallback
 		{"/any/deep/path", http.StatusOK}, // SPA fallback
 	}
 
@@ -99,8 +99,8 @@ func TestNoCacheMiddleware(t *testing.T) {
 	handler := noCacheMiddleware(inner)
 
 	tests := []struct {
-		path         string
-		wantNoCache  bool
+		path        string
+		wantNoCache bool
 	}{
 		{"/", true},
 		{"/api/test", true},
@@ -135,7 +135,7 @@ func TestIsPWAPublicPath(t *testing.T) {
 		{"/api/test", false},
 		{"/terminal/", false},
 		{"/index.html", false},
-		{"/workbox-.js", true},     // edge case: minimal workbox name
+		{"/workbox-.js", true},      // edge case: minimal workbox name
 		{"/workbox-test.ts", false}, // not .js extension
 	}
 
@@ -165,8 +165,8 @@ func TestBasicAuth(t *testing.T) {
 		{"wrong user", "/api/test", "wrong", "secret", http.StatusUnauthorized},
 		{"wrong pass", "/api/test", "admin", "wrong", http.StatusUnauthorized},
 		{"correct auth", "/api/test", "admin", "secret", http.StatusOK},
-		{"terminal requires auth", "/terminal/", "", "", http.StatusUnauthorized},
-		{"terminal with auth", "/terminal/", "admin", "secret", http.StatusOK},
+		{"stream requires auth", "/api/mux/stream", "", "", http.StatusUnauthorized},
+		{"stream with auth", "/api/mux/stream", "admin", "secret", http.StatusOK},
 		// PWA public paths bypass auth
 		{"manifest no auth", "/manifest.webmanifest", "", "", http.StatusOK},
 		{"sw.js no auth", "/sw.js", "", "", http.StatusOK},
@@ -205,10 +205,23 @@ func TestNewServeConfigFromEnv(t *testing.T) {
 	if !cfg.NoAuth {
 		t.Error("cfg.NoAuth = false, want true")
 	}
+	if cfg.MuxBackend != "tmux" {
+		t.Errorf("cfg.MuxBackend = %q, want default tmux", cfg.MuxBackend)
+	}
+	if cfg.AllowedHosts != "" {
+		t.Errorf("cfg.AllowedHosts = %q, want empty default", cfg.AllowedHosts)
+	}
+	if cfg.HerdrAllowNoAuth {
+		t.Error("cfg.HerdrAllowNoAuth = true, want false by default")
+	}
+	t.Setenv("TERMOTE_HERDR_ALLOW_NO_AUTH", "true")
+	if !newServeConfigFromEnv().HerdrAllowNoAuth {
+		t.Error("TERMOTE_HERDR_ALLOW_NO_AUTH=true not read")
+	}
 }
 
 func TestTerminalTokenStore(t *testing.T) {
-	store := newTerminalTokenStore()
+	store := newStreamTokenStore()
 
 	t.Run("generate and validate", func(t *testing.T) {
 		token, err := store.generate()
@@ -265,60 +278,26 @@ func TestTerminalTokenStore(t *testing.T) {
 	})
 }
 
-func TestIframeOnly(t *testing.T) {
-	store := newTerminalTokenStore()
-	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-	handler := iframeOnly(store, inner)
-
-	tests := []struct {
-		name     string
-		dest     string // Sec-Fetch-Dest header value ("" = not set)
-		token    string // query param ("" = not set, "valid" = generate one, else literal)
-		wantCode int
-	}{
-		{"direct navigation", "document", "", http.StatusForbidden},
-		{"no header (mobile/curl)", "", "", http.StatusOK},
-		{"iframe without token", "iframe", "", http.StatusForbidden},
-		{"iframe with invalid token", "iframe", "bad", http.StatusForbidden},
-		{"iframe with valid token", "iframe", "valid", http.StatusOK},
-		{"websocket", "websocket", "", http.StatusOK},
-		{"script sub-resource", "script", "", http.StatusOK},
-		{"style sub-resource", "style", "", http.StatusOK},
-		{"fetch/XHR", "empty", "", http.StatusOK},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tokenParam := tt.token
-			if tokenParam == "valid" {
-				tokenParam, _ = store.generate()
-			}
-
-			path := "/terminal/"
-			if tokenParam != "" {
-				path += "?token=" + tokenParam
-			}
-			req := httptest.NewRequest("GET", path, nil)
-			if tt.dest != "" {
-				req.Header.Set("Sec-Fetch-Dest", tt.dest)
-			}
-			rec := httptest.NewRecorder()
-
-			handler.ServeHTTP(rec, req)
-
-			if rec.Code != tt.wantCode {
-				t.Errorf("iframeOnly(%s) status = %d, want %d", tt.name, rec.Code, tt.wantCode)
-			}
-		})
+// A 0.x bundle cached by a service worker still loads /terminal/; it must get
+// a JSON 410, not the SPA's index.html.
+func TestRemovedTerminalRoute(t *testing.T) {
+	h := newTestHandler(t, &fakeMux{})
+	for _, path := range []string{"/terminal/", "/terminal/ws", "/terminal/?token=x"} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, apiRequest(http.MethodGet, path, ""))
+		if rec.Code != http.StatusGone {
+			t.Errorf("GET %s = %d, want 410", path, rec.Code)
+		}
+		if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+			t.Errorf("GET %s Content-Type = %q, want JSON", path, ct)
+		}
 	}
 }
 
 func TestTerminalTokenEndpoint(t *testing.T) {
-	store := newTerminalTokenStore()
+	store := newStreamTokenStore()
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/tmux/terminal-token", handleTerminalToken(store))
+	mux.HandleFunc("/api/mux/stream-token", handleTerminalToken(store))
 
 	tests := []struct {
 		name     string
@@ -334,7 +313,7 @@ func TestTerminalTokenEndpoint(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(tt.method, "/api/tmux/terminal-token", nil)
+			req := httptest.NewRequest(tt.method, "/api/mux/stream-token", nil)
 			if tt.dest != "" {
 				req.Header.Set("Sec-Fetch-Dest", tt.dest)
 			}
@@ -486,14 +465,14 @@ func TestBasicAuthRateLimiting(t *testing.T) {
 
 func TestAllowNonNavigationOnly(t *testing.T) {
 	tests := []struct {
-		name     string
-		dest     string
+		name      string
+		dest      string
 		setHeader bool
-		wantOK   bool
+		wantOK    bool
 	}{
 		{"document blocked", "document", true, false},
 		{"no header allowed (mobile)", "", false, true},
-		{"iframe allowed", "iframe", true, true},
+		{"image allowed", "image", true, true},
 		{"empty (fetch) allowed", "empty", true, true},
 		{"script allowed", "script", true, true},
 		{"websocket allowed", "websocket", true, true},
@@ -515,53 +494,6 @@ func TestAllowNonNavigationOnly(t *testing.T) {
 				t.Errorf("status = %d, want 403", rec.Code)
 			}
 		})
-	}
-}
-
-func TestNewWebSocketProxyHTTP(t *testing.T) {
-	// Create a test backend server
-	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("backend response"))
-	}))
-	defer backend.Close()
-
-	targetURL, _ := url.Parse(backend.URL)
-	proxy := newWebSocketProxy(targetURL)
-
-	// Test regular HTTP request (not WebSocket)
-	req := httptest.NewRequest("GET", "/", nil)
-	rec := httptest.NewRecorder()
-
-	proxy.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Errorf("proxy HTTP status = %d, want %d", rec.Code, http.StatusOK)
-	}
-}
-
-func TestNewWebSocketProxyDetection(t *testing.T) {
-	// Create a test backend
-	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer backend.Close()
-
-	targetURL, _ := url.Parse(backend.URL)
-	proxy := newWebSocketProxy(targetURL)
-
-	// WebSocket request - will fail to connect but tests the detection path
-	req := httptest.NewRequest("GET", "/", nil)
-	req.Header.Set("Upgrade", "websocket")
-	req.Header.Set("Connection", "Upgrade")
-	rec := httptest.NewRecorder()
-
-	proxy.ServeHTTP(rec, req)
-
-	// Should attempt WebSocket proxy (will fail, but path is covered)
-	// We just verify it doesn't crash and returns some response
-	if rec.Code == 0 {
-		t.Error("proxy should return a response")
 	}
 }
 
@@ -691,4 +623,21 @@ func TestBasicAuthSessionCookie(t *testing.T) {
 			t.Errorf("valid basic auth should succeed even with invalid cookie, got %d", rec.Code)
 		}
 	})
+}
+
+func TestTerminalsNeverSeeThePassword(t *testing.T) {
+	t.Setenv("TERMOTE_PASS", "s3cret-pass")
+	for _, kv := range terminalEnv() {
+		if strings.Contains(kv, "s3cret-pass") {
+			t.Fatalf("terminal env carries the password: %q", kv)
+		}
+	}
+	cfg := newServeConfigFromEnv()
+	scrubSecretEnv()
+	if cfg.Pass != "s3cret-pass" {
+		t.Fatalf("config lost the password: %q", cfg.Pass)
+	}
+	if _, ok := os.LookupEnv("TERMOTE_PASS"); ok {
+		t.Fatal("TERMOTE_PASS still in the process environment, so tmux would inherit it")
+	}
 }

@@ -1,0 +1,365 @@
+---
+title: Cài đặt Native
+description: Tất cả dịch vụ chạy native trên host
+slug: vi/0.x/installation/native
+banner:
+  content: 'Bạn đang đọc tài liệu Termote 0.x, phiên bản chỉ còn nhận bản vá bảo mật và lỗi nghiêm trọng. Xem <a href="/vi/getting-started/">tài liệu 1.x</a> hoặc <a href="https://github.com/lamngockhuong/termote/blob/main/docs/upgrade-1.0.md">hướng dẫn nâng cấp</a>.'
+---
+
+import { Steps, Tabs, TabItem, Aside } from "@astrojs/starlight/components";
+
+Không cần Docker. Truy cập binary host như `claude`, `git`, `gh`, v.v.
+
+<Aside type="tip" title="Chế độ Native trên Windows">
+  Chế độ Native được hỗ trợ đầy đủ trên Windows. Script cài đặt mặc định tự động
+  tải bản ttyd fork build bằng MSVC, khắc phục lỗi crash ConPTY trước đây trên
+  Windows 11 (build 26200+). Dùng `-Ttyd official` để chuyển sang bản upstream
+  `tsl0922/ttyd`.
+</Aside>
+
+## Yêu cầu
+
+<Tabs>
+  <TabItem label="Linux">
+    ```bash
+    sudo apt install ttyd tmux
+    # Hoặc: sudo snap install ttyd
+    ```
+  </TabItem>
+
+  <TabItem label="macOS">
+    ```bash
+    brew install ttyd tmux go
+    ```
+  </TabItem>
+
+  <TabItem label="Windows">
+    ```powershell
+    # Cài đặt psmux (tương thích tmux cho Windows)
+    winget install psmux
+    # ttyd được tự động tải bởi script cài đặt
+    ```
+
+    <Aside type="note">
+      ttyd được script cài đặt tự động tải (mặc định bản fork build bằng MSVC).
+      Dùng `-Ttyd official` để lấy bản upstream.
+    </Aside>
+  </TabItem>
+</Tabs>
+
+### Cấu hình tmux (Khuyến nghị)
+
+Để copy/paste tmux hoạt động với các nút trên thanh công cụ, thêm dòng này vào `~/.tmux.conf`:
+
+```bash
+# Vi mode cho copy: Space=bắt đầu chọn, Enter=copy
+set-option -g mode-keys vi
+# Hỗ trợ chuột (cuộn, chọn) - bật/tắt với Ctrl+b m
+set-option -g mouse on
+bind m set -g mouse \; display "Mouse #{?mouse,on,off}"
+```
+
+Áp dụng config:
+
+```bash
+tmux source-file ~/.tmux.conf
+```
+
+Cho phép: **Icon Copy** → di chuyển → **Space** → chọn → **Enter** → **Icon Paste**
+
+:::tip[Copy ra System Clipboard]
+Khi mouse BẬT, tmux bắt sự kiện chuột. Để copy ra system clipboard:
+
+* **Giữ Shift** khi chọn text (bypass tmux, dùng selection của terminal)
+* Hoặc nhấn **Ctrl+b m** để tạm tắt mouse
+:::
+
+## Cài đặt
+
+<Steps>
+  1. Cài đặt dependencies (xem ở trên)
+
+  2. Chạy lệnh deploy
+
+     <Tabs>
+       <TabItem label="Unix (macOS/Linux)">
+         ```bash
+         ./scripts/termote.sh install native
+         ```
+       </TabItem>
+
+       <TabItem label="Windows (PowerShell)">
+         ```powershell
+         .\scripts\termote.ps1 install native
+         .\scripts\termote.ps1 install native -Ttyd official
+         ```
+
+         Mặc định (`-Ttyd fork`), trình cài đặt tải bản build
+         [fork/MSVC ttyd](https://github.com/lamngockhuong/ttyd/releases)
+         (`ttyd.msvc.exe`), vì bản build gốc `tsl0922/ttyd` cho Windows
+         (`ttyd.win32.exe`) hiện đang bị lỗi trên Windows mới nhất. Dùng
+         `-Ttyd official` để chuyển sang bản build gốc.
+       </TabItem>
+     </Tabs>
+
+  3. Truy cập tại http://localhost:7680
+</Steps>
+
+## Khi nào sử dụng
+
+* Cần truy cập binary host (claude, git, gh, v.v.)
+* Không có Docker/Podman
+* Kiểm soát đầy đủ dịch vụ
+
+<Aside type="tip">
+  Chế độ Native được khuyến nghị khi bạn cần sử dụng Claude Code hoặc các công
+  cụ CLI host khác.
+</Aside>
+
+## Quản lý dịch vụ
+
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    # Kiểm tra processes
+    ps aux | grep ttyd
+    ps aux | grep tmux-api
+
+    # Khởi động lại
+    ./scripts/termote.sh install native
+    ```
+  </TabItem>
+
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    # Kiểm tra processes
+    Get-Process -Name ttyd, tmux-api -ErrorAction SilentlyContinue
+
+    # Khởi động lại
+    .\scripts\termote.ps1 install native
+    ```
+  </TabItem>
+</Tabs>
+
+## Ngăn macOS Sleep
+
+macOS tự động sleep sau một khoảng thời gian không hoạt động, làm mất kết nối terminal từ xa. Dùng `caffeinate` để giữ máy luôn thức khi Termote đang chạy:
+
+```bash
+# Ngăn system sleep (chạy cho đến khi bạn nhấn Ctrl+C)
+caffeinate -s
+
+# Hoặc chạy nền
+caffeinate -s &
+
+# Dừng caffeinate nền
+pkill caffeinate
+```
+
+<Aside type="tip">
+  Dùng `caffeinate -s` (chỉ ngăn system sleep) thay vì `-d` (ngăn tắt màn hình)
+  — bạn không cần màn hình sáng cho truy cập từ xa.
+</Aside>
+
+## Khắc phục sự cố
+
+### Chẩn đoán nhanh
+
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    ./scripts/termote.sh health   # Kiểm tra sức khỏe
+    ss -tlnp | grep -E "7680|7681"  # Kiểm tra cổng
+    ```
+  </TabItem>
+
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    .\scripts\termote.ps1 health   # Kiểm tra sức khỏe
+    netstat -ano | Select-String "7680|7681"  # Kiểm tra cổng
+    ```
+  </TabItem>
+</Tabs>
+
+### Kiểm tra tiến trình
+
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    ps aux | grep ttyd         # Kiểm tra ttyd đang chạy
+    ps aux | grep tmux-api     # Kiểm tra tmux-api đang chạy
+    lsof -i :7680              # Xác minh cổng chính
+    lsof -i :7681              # Xác minh cổng ttyd
+    ```
+  </TabItem>
+
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    Get-Process -Name ttyd, tmux-api -ErrorAction SilentlyContinue
+    netstat -ano | Select-String "7680"   # Xác minh cổng chính
+    netstat -ano | Select-String "7681"   # Xác minh cổng ttyd
+    ```
+  </TabItem>
+</Tabs>
+
+### Debug với logs
+
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    Chế độ native mặc định không ghi logs. Để xem logs:
+
+    ```bash
+    # Dừng dịch vụ
+    ./scripts/termote.sh uninstall native
+
+    # Chạy ttyd với logs (terminal 1)
+    ttyd -W -i lo -p 7681 tmux new-session -A -s main
+
+    # Chạy tmux-api với logs (terminal 2)
+    cd tmux-api
+    TERMOTE_PORT=7680 TERMOTE_BIND=127.0.0.1 \
+    TERMOTE_PWA_DIR=../pwa/dist ./tmux-api-native
+    ```
+  </TabItem>
+
+  <TabItem label="Windows (PowerShell)">
+    Chế độ native trên Windows ghi logs vào `~/.termote/logs`. Xem logs bằng CLI:
+
+    ```powershell
+    .\scripts\termote.ps1 logs            # Xem logs ttyd + tmux-api gần đây
+    .\scripts\termote.ps1 logs ttyd       # Chỉ logs ttyd
+    .\scripts\termote.ps1 logs tmux-api   # Chỉ logs tmux-api
+    .\scripts\termote.ps1 logs follow     # Tail toàn bộ logs realtime (Ctrl+C để dừng)
+    .\scripts\termote.ps1 logs clean      # Xóa các file log
+    ```
+  </TabItem>
+</Tabs>
+
+### Lỗi thường gặp
+
+| Lỗi            | Giải pháp                                           |
+| -------------- | --------------------------------------------------- |
+| Cổng đang dùng | `lsof -i :7680` (Unix) hoặc `netstat -ano \| Select-String 7680` (Win) rồi kill process |
+| Thiếu ttyd     | `brew install ttyd` (macOS) hoặc `apt install ttyd` (Linux) |
+| Thiếu binary   | `cd tmux-api && go build -o tmux-api-native .`      |
+| PWA chưa build | `pnpm --filter termote build`                              |
+| PWA cache cũ   | Settings → "Clear Cache & Reload" để làm mới        |
+
+### tmux / psmux Session
+
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    tmux list-sessions         # Liệt kê sessions
+    tmux attach -t main        # Kết nối vào session
+    tmux kill-session -t main  # Reset session
+    ```
+  </TabItem>
+
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    psmux list-sessions         # Liệt kê sessions
+    psmux attach -t main        # Kết nối vào session
+    psmux kill-session -t main  # Reset session
+    ```
+  </TabItem>
+</Tabs>
+
+### Test API
+
+```bash
+curl http://localhost:7680/api/tmux/health
+curl http://localhost:7680/api/tmux/sessions
+```
+
+## Cập nhật
+
+### Qua CLI (Khuyến nghị)
+
+Nếu Termote đã được cài đặt, sử dụng lệnh cập nhật tích hợp:
+
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    termote update                   # Cập nhật lên bản mới nhất (1.x)
+    termote update --version 0.1.0   # Ở lại 0.x (ghim phiên bản)
+    termote update --force           # Cài đặt lại phiên bản hiện tại
+    ```
+  </TabItem>
+
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    .\scripts\termote.ps1 update                 # Cập nhật lên bản mới nhất (1.x)
+    .\scripts\termote.ps1 update -Version 0.1.0  # Ở lại 0.x (ghim phiên bản)
+    .\scripts\termote.ps1 update -Force          # Cài đặt lại phiên bản hiện tại
+    ```
+  </TabItem>
+</Tabs>
+
+Lệnh này tự động giữ nguyên config (bao gồm lựa chọn bản `ttyd` trên Windows), dừng dịch vụ, tải phiên bản mới, kiểm tra checksum, và cài đặt lại với cấu hình đã lưu.
+
+### Qua One-liner
+
+Chạy lại installer - sẽ so sánh version và hỏi trước khi cập nhật:
+
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    # Cập nhật tự động với config đã lưu
+    curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/release/0.x/scripts/get.sh | bash -s -- --update
+
+    # Hoặc cập nhật chuẩn
+    curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/release/0.x/scripts/get.sh | bash
+    ```
+
+    Tùy chọn: `--update`, `--yes`, `--download-only`, `--fresh`, `--version <ver>`, `--strict`
+  </TabItem>
+
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    # Cập nhật tự động với config đã lưu
+    $env:TERMOTE_UPDATE="true"; irm https://raw.githubusercontent.com/lamngockhuong/termote/release/0.x/scripts/get.ps1 | iex
+
+    # Hoặc cập nhật chuẩn
+    irm https://raw.githubusercontent.com/lamngockhuong/termote/release/0.x/scripts/get.ps1 | iex
+    ```
+
+    Tùy chọn: `$env:TERMOTE_UPDATE="true"`, `$env:TERMOTE_AUTO_YES="true"`, `$env:TERMOTE_VERSION="0.1.0"`
+  </TabItem>
+</Tabs>
+
+### Cập nhật thủ công
+
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    ./scripts/termote.sh uninstall native
+    git pull origin main
+    ./scripts/termote.sh install native
+    ```
+  </TabItem>
+
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    .\scripts\termote.ps1 uninstall native
+    git pull origin main
+    .\scripts\termote.ps1 install native
+    ```
+  </TabItem>
+</Tabs>
+
+## Gỡ cài đặt
+
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    ./scripts/termote.sh uninstall native
+    ```
+  </TabItem>
+
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    .\scripts\termote.ps1 uninstall native
+    ```
+  </TabItem>
+</Tabs>

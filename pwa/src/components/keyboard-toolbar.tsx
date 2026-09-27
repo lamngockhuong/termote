@@ -36,6 +36,8 @@ interface Props {
   onCtrlShiftKey?: (key: string) => void
   onScroll?: (direction: 'up' | 'down', pages?: boolean) => void
   onTmuxCopy?: () => void
+  // Hide the tmux copy-mode key (backend without copy mode)
+  showTmuxCopy?: boolean
   onPaste?: () => void
   onToggleKeyboard?: () => void
   onSendText?: (text: string) => void
@@ -196,6 +198,7 @@ export function KeyboardToolbar({
   onCtrlShiftKey,
   onScroll,
   onTmuxCopy,
+  showTmuxCopy = true,
   onPaste,
   onToggleKeyboard,
   onSendText,
@@ -237,25 +240,34 @@ export function KeyboardToolbar({
     if (!onHistoryToggle) {
       baseKeys = baseKeys.filter((k) => !k.isHistoryToggle)
     }
+    const utilityKeys = showTmuxCopy
+      ? UTILITY_KEYS
+      : UTILITY_KEYS.filter((k) => !k.isTmuxCopy)
     return expanded
-      ? [...baseKeys, ...EXTRA_KEYS, EXPAND_TOGGLE_KEY, ...UTILITY_KEYS]
-      : [...baseKeys, EXPAND_TOGGLE_KEY, ...UTILITY_KEYS]
-  }, [expanded, onSendText, onHistoryToggle])
+      ? [...baseKeys, ...EXTRA_KEYS, EXPAND_TOGGLE_KEY, ...utilityKeys]
+      : [...baseKeys, EXPAND_TOGGLE_KEY, ...utilityKeys]
+  }, [expanded, onSendText, onHistoryToggle, showTmuxCopy])
 
   // Ctrl combos based on mode
   const ctrlCombos = expanded ? CTRL_COMBOS_FULL : CTRL_COMBOS_MINIMAL
 
-  const setCtrlActive = (value: boolean | ((prev: boolean) => boolean)) => {
-    const newValue = typeof value === 'function' ? value(ctrlActive) : value
-    setInternalCtrlActive(newValue)
-    onCtrlChange?.(newValue)
-  }
+  const setCtrlActive = useCallback(
+    (value: boolean | ((prev: boolean) => boolean)) => {
+      const newValue = typeof value === 'function' ? value(ctrlActive) : value
+      setInternalCtrlActive(newValue)
+      onCtrlChange?.(newValue)
+    },
+    [ctrlActive, onCtrlChange],
+  )
 
-  const setShiftActive = (value: boolean | ((prev: boolean) => boolean)) => {
-    const newValue = typeof value === 'function' ? value(shiftActive) : value
-    setInternalShiftActive(newValue)
-    onShiftChange?.(newValue)
-  }
+  const setShiftActive = useCallback(
+    (value: boolean | ((prev: boolean) => boolean)) => {
+      const newValue = typeof value === 'function' ? value(shiftActive) : value
+      setInternalShiftActive(newValue)
+      onShiftChange?.(newValue)
+    },
+    [shiftActive, onShiftChange],
+  )
 
   const setImeMode = useCallback(
     (value: boolean) => {
@@ -392,6 +404,8 @@ export function KeyboardToolbar({
       toggleImeMode,
       toggleExpanded,
       haptic,
+      setShiftActive,
+      setCtrlActive,
     ],
   )
 

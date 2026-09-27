@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, feat/1.0]
   pull_request:
-    branches: [main]
+    branches: [main, feat/1.0]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -41,8 +41,11 @@ jobs:
               - 'scripts/**'
               - 'tests/**'
               - 'Makefile'
+              - 'entrypoint.sh'
             docker:
               - 'Dockerfile'
+              - 'entrypoint.sh'
+              - 'docker-compose.yml'
             website:
               - *workspace
               - 'website/**'
@@ -70,6 +73,10 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --filter termote...
+
+      # Audits the whole workspace lockfile (pnpm audit has no --filter)
+      - name: Audit production dependencies
+        run: pnpm audit --prod --audit-level high
 
       - name: Type check
         working-directory: pwa
@@ -105,11 +112,8 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version: "1.26"
+          check-latest: true
           cache-dependency-path: tmux-api/go.mod
-
-      - name: Test
-        working-directory: tmux-api
-        run: go test -short ./...
 
       - name: Build
         working-directory: tmux-api
@@ -122,16 +126,58 @@ jobs:
           path: tmux-api/tmux-api
           retention-days: 7
 
+  go-test:
+    name: Go Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: changes
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.scripts == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.26"
+          check-latest: true
+          cache-dependency-path: tmux-api/go.mod
+
+      - name: Vet
+        working-directory: tmux-api
+        run: go vet ./...
+
+      - name: Test
+        working-directory: tmux-api
+        run: go test ./...
+
+      - name: Vulnerability check
+        if: matrix.os == 'ubuntu-latest'
+        working-directory: tmux-api
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+
   test-scripts:
     name: Test Scripts
     runs-on: ubuntu-latest
     needs: changes
-    if: needs.changes.outputs.scripts == 'true'
+    # The shim tests also run the real CLI, so Go changes count too
+    if: needs.changes.outputs.scripts == 'true' || needs.changes.outputs.api == 'true'
     steps:
       - uses: actions/checkout@v7
 
-      - name: Run CLI tests
+      # The shim tests build a stand-in binary and the real CLI with Go
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.26"
+          check-latest: true
+          cache-dependency-path: tmux-api/go.mod
+
+      - name: Run CLI shim tests
         run: ./tests/test-termote.sh
+
+      - name: Run online installer tests
+        run: ./tests/test-get.sh
 
       - name: Run entrypoint tests
         run: ./tests/test-entrypoints.sh
@@ -140,27 +186,14 @@ jobs:
     name: Test Windows
     runs-on: windows-latest
     needs: changes
-    if: needs.changes.outputs.scripts == 'true'
+    if: needs.changes.outputs.scripts == 'true' || needs.changes.outputs.api == 'true'
     steps:
       - uses: actions/checkout@v7
-
-      - name: Test PowerShell syntax
-        shell: pwsh
-        run: |
-          $errors = $null
-          $null = [System.Management.Automation.PSParser]::Tokenize(
-            (Get-Content scripts/termote.ps1 -Raw),
-            [ref]$errors
-          )
-          if ($errors) {
-            $errors | ForEach-Object { Write-Error $_.Message }
-            exit 1
-          }
-          Write-Host "PowerShell syntax OK" -ForegroundColor Green
 
       - uses: actions/setup-go@v6
         with:
           go-version: "1.26"
+          check-latest: true
           cache-dependency-path: tmux-api/go.mod
 
       - name: Build tmux-api.exe
@@ -176,9 +209,14 @@ jobs:
             throw "Build failed"
           }
 
-      - name: Run PowerShell tests
+      # Syntax is checked inside both test scripts
+      - name: Run shim tests
         shell: pwsh
         run: ./tests/test-termote.ps1
+
+      - name: Run online installer tests
+        shell: pwsh
+        run: ./tests/test-get.ps1
 
   docker-build:
     name: Docker Build
@@ -216,9 +254,13 @@ jobs:
         with:
           context: .
           push: false
+          load: true
           tags: termote:test
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Test container runtime (tini, zombies, stop time)
+        run: TERMOTE_TEST_IMAGE=termote:test ./tests/test-entrypoints.sh
 
   build-website:
     name: Build Website

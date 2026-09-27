@@ -1,5 +1,5 @@
 # Termote Docker Compose
-# --docker: all-in-one container (tmux-api + ttyd)
+# --docker: all-in-one container (tmux + tmux-api); tini is PID 1 in the image
 
 services:
   termote:
@@ -14,4 +14,5 @@ services:
     environment:
       - NO_AUTH=${NO_AUTH:-false}
       - TERMOTE_PASS=${TERMOTE_PASS:-}
+      - TERMOTE_ALLOWED_HOSTS=${TERMOTE_ALLOWED_HOSTS:-}
     restart: unless-stopped

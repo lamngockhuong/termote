@@ -90,4 +90,16 @@ describe('BottomNavigation', () => {
     expect(screen.getByLabelText('Toggle sessions panel')).toBeInTheDocument()
     expect(screen.getByLabelText('Add session')).toBeInTheDocument()
   })
+
+  it('shows the agent badge and names its status', () => {
+    render(
+      <BottomNavigation
+        {...defaultProps}
+        sessions={[{ ...SESSIONS[0], agentStatus: 'blocked' }, SESSIONS[1]]}
+      />,
+    )
+    expect(screen.getByLabelText('Shell, agent blocked')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Agent blocked' })).toBeVisible()
+    expect(screen.getByLabelText('Code')).toBeInTheDocument()
+  })
 })

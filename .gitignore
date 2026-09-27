@@ -29,10 +29,6 @@ tmux-api/tmux-api.exe
 tmux-api/tmux-api-native
 tmux-api/tmux-api-native.exe
 
-# ttyd binary
-scripts/ttyd.exe
-scripts/ttyd.source
-
 # Claude Code
 .claude/settings.local.json
 

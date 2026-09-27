@@ -1,27 +1,30 @@
 ---
 title: Quản lý phiên
-description: Quản lý phiên terminal với tmux
+description: Quản lý phiên terminal với tmux hoặc Herdr
 ---
 
 import { Aside, Steps } from "@astrojs/starlight/components";
 
-Termote sử dụng tmux windows cho các phiên liên tục tồn tại qua ngắt kết nối.
+Dù chạy trên tmux hay Herdr, Termote cũng tổ chức terminal theo ba cấp: **group → tab → pane**.
+Với tmux (mặc định), mỗi group là một tmux session và mỗi tab là một tmux window; chỉ Herdr mới
+dùng đến pane.
 
 ## Phiên mặc định
 
-Cài đặt mới bắt đầu với một phiên **Shell** duy nhất. Tạo thêm phiên khi cần cho các workflow khác nhau (ví dụ: Claude Code, Copilot, builds).
+Cài đặt mới bắt đầu với một phiên **Shell** (group) duy nhất. Tạo thêm group khi cần cho các
+workflow khác nhau (ví dụ: Claude Code, Copilot, build).
 
 ## Quản lý phiên
 
 ### Desktop
 
-- **Chuyển**: Click vào phiên trong sidebar bên trái hoặc trong **thanh tab phiên** ở trên cùng (nếu bật)
-- **Sửa**: Double-click tên phiên, hoặc hover và click icon bút chì
-- **Xóa**: Hover và click icon X (cần 2+ phiên)
-- **Thêm**: Click "+ Add session" ở dưới cùng
-- **Thu gọn sidebar**: Click icon thu gọn (góc trên phải sidebar) để chỉ hiện icon — tối đa hóa diện tích terminal
-- **Toàn màn hình**: Click nút fullscreen trên header để vào chế độ toàn màn hình
-- **Thanh tab phiên**: Thanh tab ngang để chuyển phiên nhanh trên desktop. Bật/tắt qua Settings → "Show session tabs"
+- **Chuyển**: Nhấp vào phiên trong sidebar bên trái hoặc trong **thanh tab phiên** ở trên cùng (nếu bật)
+- **Sửa**: Nhấp đúp vào tên phiên, hoặc rê chuột lên phiên rồi nhấp icon bút chì
+- **Xóa**: Rê chuột lên phiên rồi nhấp icon X (cần 2+ phiên)
+- **Thêm**: Nhấp "+ Add session" ở dưới cùng
+- **Thu gọn sidebar**: Nhấp icon thu gọn (góc trên phải sidebar) để chỉ hiện icon — tối đa hóa diện tích terminal
+- **Toàn màn hình**: Nhấp nút fullscreen trên header để vào chế độ toàn màn hình
+- **Thanh tab phiên**: Thanh tab ngang để chuyển tab nhanh trên desktop. Bật/tắt qua Settings → "Show session tabs"
 
 ### Mobile
 
@@ -34,11 +37,30 @@ Cài đặt mới bắt đầu với một phiên **Shell** duy nhất. Tạo th
 
 | Tính năng         | Mô tả                                         |
 | ----------------- | --------------------------------------------- |
-| Icon tùy chỉnh    | Chọn emoji icon cho mỗi phiên                 |
+| Icon tùy chỉnh    | Chọn biểu tượng cảm xúc làm icon cho mỗi phiên |
 | Đổi tên           | Đổi tên phiên bất cứ lúc nào                  |
-| Tự động đồng bộ   | Phiên đồng bộ giữa các trình duyệt (tùy chỉnh được) |
-| Lưu trữ           | Phiên được lưu bởi tmux windows               |
+| Tự động đồng bộ   | Group/tab/pane được đồng bộ từ server (chu kỳ tùy chỉnh được) |
+| Lưu trữ           | Phiên được lưu bởi tmux windows hoặc tab của Herdr |
 | Trạng thái kết nối | Chỉ báo thời gian thực trên header (xem bên dưới) |
+
+## Backend Herdr (chỉ native)
+
+Bản cài native có thể dùng [Herdr](/vi/installation/native/#backend-herdr) thay cho tmux
+(`--mux herdr`/`-Mux herdr`). Mô hình phiên khi đó khác ở hai điểm:
+
+- **Pane**: một tab của Herdr có thể có nhiều pane. Khi đó, một **dải pane** xuất hiện bên dưới
+  thanh tab để chuyển qua lại giữa các pane; tab tmux không bao giờ hiện dải này (vì chỉ có một
+  pane).
+- **Huy hiệu trạng thái agent**: mỗi pane có thể hiện một icon nhỏ (`idle`, `working`, `blocked`
+  hoặc `done`) cho biết trạng thái của agent lập trình mà Herdr phát hiện trong pane đó. Huy hiệu
+  được làm mới tối đa một lần trong mỗi khoảng `Session poll interval` đã cấu hình (Settings →
+  Preferences), không cập nhật ngay lập tức.
+
+<Aside type="caution">
+  Chọn tab hoặc pane trong PWA không bao giờ thay đổi nội dung đang hiện trên desktop của Herdr,
+  mà chỉ đổi pane mà client này đang nhận luồng. Không có thao tác "hiện trên desktop", và Herdr
+  chỉ có ở native (chế độ container không dùng được).
+</Aside>
 
 ## Chỉ báo kết nối
 
@@ -51,7 +73,8 @@ Header hiển thị chỉ báo trạng thái kết nối thời gian thực vớ
 | Disconnected | Chấm đỏ    | Mất kết nối (nhấn để thử lại)               |
 | Error        | X đỏ       | Lỗi kết nối                                 |
 
-Chỉ báo tự động phát hiện mất kết nối qua session polling. Nhấn vào khi mất kết nối để thử lại kết nối thủ công.
+Chỉ báo tự động phát hiện mất kết nối ở cả hai kênh: các lần hỏi snapshot định kỳ và WebSocket của
+terminal. Nhấn vào khi mất kết nối để thử lại thủ công.
 
 <Aside type="tip">
   Phiên tồn tại qua ngắt kết nối mạng. Kết nối lại để tiếp tục từ chỗ đã dừng.
@@ -75,26 +98,25 @@ tmux kill-window -t 0
 
 ## API Endpoints
 
-Phiên được quản lý qua tmux-api:
+Phiên được quản lý qua các endpoint `/api/mux/*` của tmux-api:
 
-| Endpoint                       | Method      | Mô tả                |
-| ------------------------------ | ----------- | -------------------- |
-| `/api/tmux/windows`            | GET         | Liệt kê tất cả phiên |
-| `/api/tmux/new?name=X`         | POST        | Tạo phiên            |
-| `/api/tmux/select/{id}`        | POST        | Chuyển phiên         |
-| `/api/tmux/rename/{id}?name=X` | POST        | Đổi tên phiên        |
-| `/api/tmux/kill/{id}`          | POST/DELETE | Xóa phiên            |
+| Endpoint                    | Method | Mô tả                                            |
+| --------------------------- | ------ | ------------------------------------------------ |
+| `/api/mux/snapshot`         | GET    | Liệt kê tất cả group/tab/pane                    |
+| `/api/mux/tabs`             | POST   | Tạo tab (nội dung gửi: `{groupId, name}`)                |
+| `/api/mux/tabs/{id}/select` | POST   | Chuyển tab (với Herdr là chuyển pane đang nhận luồng) |
+| `/api/mux/tabs/{id}`        | PATCH  | Đổi tên tab (nội dung gửi: `{name}`)                     |
+| `/api/mux/tabs/{id}`        | DELETE | Xóa tab                                          |
 
 ## Xử lý sự cố
 
 ### Phiên không lưu trữ
 
 1. Kiểm tra tmux đang chạy: `tmux list-windows`
-2. Xác minh ttyd sử dụng cờ `-A` (attach-or-create)
-3. Kiểm tra log container: `docker logs termote` hoặc `podman logs termote`
+2. Xem log của tmux-api: `docker logs termote` (container) hoặc `termote logs tmux-api` (native)
 
-### Lỗi WebSocket
+### Lỗi WebSocket / terminal
 
-1. Kiểm tra log container: `docker logs termote` hoặc `podman logs termote`
-2. Xác minh ttyd đang chạy trên cổng 7681
-3. Kiểm tra API health: `curl http://localhost:7680/api/tmux/health`
+1. Xem log của tmux-api: `docker logs termote` hoặc `termote logs tmux-api`
+2. WebSocket của terminal là `/api/mux/stream`, do chính tmux-api phục vụ
+3. Kiểm tra API health: `curl http://localhost:7680/api/mux/health`

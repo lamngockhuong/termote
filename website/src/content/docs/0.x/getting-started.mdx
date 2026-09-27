@@ -1,0 +1,139 @@
+---
+title: Getting Started
+description: Quick start guide for Termote
+slug: 0.x/getting-started
+banner:
+  content: 'You are reading the docs for Termote 0.x, which only receives security and critical fixes. See the <a href="/getting-started/">1.x docs</a> or the <a href="https://github.com/lamngockhuong/termote/blob/main/docs/upgrade-1.0.md">upgrade guide</a>.'
+---
+
+import { Aside, Steps } from "@astrojs/starlight/components";
+
+## Prerequisites
+
+**macOS/Linux:**
+
+* Docker or Podman (for Container mode)
+* or ttyd + tmux + Go (for Native mode)
+* Optional: [gum](https://github.com/charmbracelet/gum) for enhanced interactive menus
+
+**Windows:**
+
+* Docker Desktop or Podman Desktop (for Container mode — recommended)
+* or [psmux](https://github.com/psmux/psmux) + ttyd (for Native mode): `winget install psmux`
+
+<Aside type="tip" title="Windows">
+  Both Container and Native modes are fully supported on Windows. Native mode
+  ships an MSVC-built ttyd fork by default, which resolves the earlier crash on
+  Windows 11 (build 26200+); use `-Ttyd official` to opt into the upstream
+  build. Report any issues on
+  [GitHub](https://github.com/lamngockhuong/termote/issues).
+</Aside>
+
+## One-Liner Install
+
+**macOS/Linux:**
+
+```bash
+# Defaults to native mode (access host binaries like claude, gh, etc.)
+curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/release/0.x/scripts/get.sh | bash
+
+# With explicit mode
+curl -fsSL .../get.sh | bash -s -- --container --lan
+curl -fsSL .../get.sh | bash -s -- --native --tailscale myhost
+
+# Auto-update with saved config
+curl -fsSL .../get.sh | bash -s -- --update
+
+# Install specific version
+curl -fsSL .../get.sh | bash -s -- --version 0.0.4
+```
+
+**Windows (PowerShell):**
+
+> **Note:** If script execution is disabled on your system, run this first:
+> `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned`
+
+```powershell
+# Defaults to native mode (psmux)
+irm https://raw.githubusercontent.com/lamngockhuong/termote/release/0.x/scripts/get.ps1 | iex
+
+# With explicit mode
+$env:TERMOTE_MODE = "container"; irm .../get.ps1 | iex
+```
+
+<Aside type="tip">
+  The install script auto-detects your environment and chooses the best
+  deployment mode.
+</Aside>
+
+## Quick Start
+
+<Steps>
+  1. Clone the repository
+     ```bash
+     git clone -b release/0.x https://github.com/lamngockhuong/termote.git
+     cd termote
+     ```
+
+  2. Install with container (simplest)
+
+     ```bash
+     ./scripts/termote.sh install container
+     ```
+
+  3. Access at http://localhost:7680
+</Steps>
+
+## CLI Commands
+
+**macOS/Linux:**
+
+```bash
+./scripts/termote.sh                   # Interactive menu
+./scripts/termote.sh install container # Container mode
+./scripts/termote.sh install native    # Native mode (host tools)
+./scripts/termote.sh update            # Update to the latest release (1.x)
+./scripts/termote.sh update --version 0.1.0  # Stay on 0.x (pin a version)
+./scripts/termote.sh uninstall all     # Uninstall everything
+./scripts/termote.sh health            # Check service health
+./scripts/termote.sh link              # Create 'termote' global command
+./scripts/termote.sh unlink            # Remove global command
+```
+
+**Windows (PowerShell):**
+
+```powershell
+.\scripts\termote.ps1                   # Interactive menu
+.\scripts\termote.ps1 install container # Container mode (Docker Desktop)
+.\scripts\termote.ps1 install native    # Native mode (psmux)
+.\scripts\termote.ps1 update            # Update to the latest release (1.x)
+.\scripts\termote.ps1 update -Version 0.1.0  # Stay on 0.x (pin a version)
+.\scripts\termote.ps1 logs follow       # Tail all logs live
+.\scripts\termote.ps1 uninstall all     # Uninstall everything
+.\scripts\termote.ps1 health            # Check service health
+.\scripts\termote.ps1 link              # Create 'termote' global command
+.\scripts\termote.ps1 unlink            # Remove global command
+```
+
+<Aside type="tip">
+  After running `link`, you can use `termote` from anywhere:
+
+  ```bash
+  # macOS/Linux
+  termote health
+  termote install native --lan
+  ```
+
+  ```powershell
+  # Windows
+  termote health
+  termote install native -Lan
+  ```
+</Aside>
+
+## What's Next
+
+* [Container Installation](/0.x/installation/docker/) - Full container setup
+* [Native Installation](/0.x/installation/native/) - Access host binaries
+* [Tailscale HTTPS](/0.x/installation/tailscale/) - Secure remote access
+* [Mobile Gestures](/0.x/usage/gestures/) - Touch controls

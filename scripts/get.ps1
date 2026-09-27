@@ -2,7 +2,8 @@
 .SYNOPSIS
     Termote online installer for Windows
 .DESCRIPTION
-    Downloads and installs Termote from GitHub releases.
+    Downloads a release from GitHub, verifies its checksum, extracts it and
+    hands over to the termote CLI, which does the install.
 .NOTES
     If script execution is disabled on your system, run this first:
     Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
@@ -13,7 +14,7 @@
     # With options:
     $env:TERMOTE_MODE = "container"; irm .../get.ps1 | iex
     $env:TERMOTE_AUTO_YES = "true"; irm .../get.ps1 | iex
-    $env:TERMOTE_TTYD = "official"; irm .../get.ps1 | iex
+    $env:TERMOTE_UPDATE = "true"; irm .../get.ps1 | iex
 #>
 
 [CmdletBinding()]
@@ -25,7 +26,7 @@ param(
     [string]$Mode = "",
     [switch]$Lan,
     [switch]$NoAuth,
-    [ValidateSet("official", "fork", "")]
+    # Removed in 1.0.0; accepted and ignored.
     [string]$Ttyd = ""
 )
 
@@ -34,9 +35,9 @@ $ErrorActionPreference = "Stop"
 # Configuration
 $script:REPO = "lamngockhuong/termote"
 $script:INSTALL_DIR = if ($env:TERMOTE_INSTALL_DIR) { $env:TERMOTE_INSTALL_DIR } else { Join-Path $env:USERPROFILE ".termote" }
-$script:CONFIG_FILE = Join-Path $env:USERPROFILE ".termote\config.json"
+$script:CONFIG_FILE = Join-Path (Join-Path $env:USERPROFILE ".termote") "config.json"
 
-# Check environment variables for options (for piped execution)
+# Environment variables carry the options for piped execution
 if ($env:TERMOTE_AUTO_YES -eq "true") { $Yes = $true }
 if ($env:TERMOTE_DOWNLOAD_ONLY -eq "true") { $DownloadOnly = $true }
 if ($env:TERMOTE_UPDATE -eq "true") { $Update = $true }
@@ -53,36 +54,15 @@ function Write-Info { param([string]$Message) Write-Host "[INFO] $Message" -Fore
 function Write-Warn { param([string]$Message) Write-Host "[WARN] $Message" -ForegroundColor Yellow }
 function Write-Err { param([string]$Message) Write-Host "[ERROR] $Message" -ForegroundColor Red; $script:HandledError = $true; throw }
 
-# Load saved config for -Update mode
-function Get-SavedConfig {
-    if (-not (Test-Path $script:CONFIG_FILE)) {
-        Write-Err "No saved config found. Run 'termote.ps1 install' first."
-    }
-    try {
-        return Get-Content $script:CONFIG_FILE -Raw | ConvertFrom-Json
-    } catch {
-        Write-Err "Could not load config: $_"
-    }
-}
-
-# Get installed version from .version file (written at install time)
+# Installed version, from the .version file an install writes
 function Get-InstalledVersion {
     $versionFile = Join-Path $script:INSTALL_DIR ".version"
     if (Test-Path $versionFile) {
         return (Get-Content $versionFile -Raw).Trim()
     }
-    # Fallback: read VERSION from termote.ps1 (for pre-.version installs)
-    $script = Join-Path $script:INSTALL_DIR "scripts\termote.ps1"
-    if (Test-Path $script) {
-        $content = Get-Content $script -Raw
-        if ($content -match '\$script:VERSION\s*=\s*"([^"]+)"') {
-            return $matches[1]
-        }
-    }
     return $null
 }
 
-# Get latest version from GitHub
 function Get-LatestVersion {
     try {
         $release = Invoke-RestMethod "https://api.github.com/repos/$script:REPO/releases/latest"
@@ -92,79 +72,71 @@ function Get-LatestVersion {
     }
 }
 
-# Check if services are running
-function Test-ServicesRunning {
-    $ttyd = Get-Process ttyd -ErrorAction SilentlyContinue
-    $api = Get-Process tmux-api -ErrorAction SilentlyContinue
-    return ($null -ne $ttyd) -or ($null -ne $api)
-}
-
-# Stop services
-function Stop-Services {
-    $script = Join-Path $script:INSTALL_DIR "scripts\termote.ps1"
-    if (Test-Path $script) {
-        Write-Info "Stopping running services..."
-        try {
-            & $script uninstall all 2>&1 | Out-Null
-        } catch {}
+# Saved install mode, for -Update
+function Get-SavedMode {
+    if (-not (Test-Path $script:CONFIG_FILE)) {
+        Write-Err "No saved config found. Run 'termote.ps1 install' first."
+    }
+    try {
+        return (Get-Content $script:CONFIG_FILE -Raw | ConvertFrom-Json).Mode
+    } catch {
+        Write-Err "Could not load config: $_"
     }
 }
 
-# Prompt for confirmation
 function Confirm-Install {
-    param(
-        [string]$Current,
-        [string]$Latest
-    )
-
+    param([string]$Current, [string]$Latest)
     Write-Host ""
-    if ($Current) {
-        if ($Current -eq $Latest) {
-            Write-Info "Current version: v$Current (same as latest)"
-            $prompt = "Re-install? [y/N]"
-        } else {
-            Write-Info "Current version: v$Current"
-            Write-Info "Latest version:  v$Latest"
-            $prompt = "Update to v${Latest}? [y/N]"
-        }
-    } else {
+    if (-not $Current) {
         Write-Info "Latest version: v$Latest"
         $prompt = "Install Termote? [y/N]"
+    } elseif ($Current -eq $Latest) {
+        Write-Info "Current version: v$Current (same as latest)"
+        $prompt = "Re-install? [y/N]"
+    } else {
+        Write-Info "Current version: v$Current"
+        Write-Info "Latest version:  v$Latest"
+        $prompt = "Update to v${Latest}? [y/N]"
     }
-
-    $response = Read-Host $prompt
-    return $response -match '^[Yy]'
+    return (Read-Host $prompt) -match '^[Yy]'
 }
 
-# Verify checksum
+# Verify the tarball against checksums.txt; a missing list only warns, as in 0.x.
 function Test-Checksum {
-    param(
-        [string]$File,
-        [string]$Expected
-    )
-
+    param([string]$File, [string]$Name, [string]$Url)
+    try {
+        $response = Invoke-WebRequest -Uri $Url -UseBasicParsing
+    } catch {
+        Write-Warn "Could not download checksums, skipping verification"
+        return
+    }
+    $checksums = if ($response.Content -is [byte[]]) { [System.Text.Encoding]::UTF8.GetString($response.Content) } else { $response.Content }
+    $line = $checksums -split '\r?\n' | Where-Object { ($_ -split '\s+')[1] -in @($Name, "*$Name") } | Select-Object -First 1
+    if (-not $line) {
+        Write-Warn "Checksum not found for $Name, skipping verification"
+        return
+    }
+    $expected = ($line -split '\s+')[0]
     $actual = (Get-FileHash $File -Algorithm SHA256).Hash.ToLower()
-    if ($actual -ne $Expected.ToLower()) {
-        Write-Err "Checksum mismatch! Expected: $Expected, Got: $actual"
+    if ($actual -ne $expected.ToLower()) {
+        Write-Err "Checksum mismatch! Expected: $expected, Got: $actual"
     }
     Write-Info "Checksum verified"
 }
 
-# Main
 function Main {
     Write-Host ""
     Write-Host "  TERMOTE Installer (Windows)" -ForegroundColor Blue
     Write-Host ""
     Write-Info "Install path: $script:INSTALL_DIR"
+    if ($Ttyd) { Write-Warn "TERMOTE_TTYD/-Ttyd is ignored: ttyd was removed in 1.0.0" }
 
-    # Get versions
     $currentVersion = Get-InstalledVersion
     $latestVersion = Get-LatestVersion
     if (-not $latestVersion) {
         Write-Err "Failed to get latest version"
     }
 
-    # Prompt before download (unless -Yes or -DownloadOnly)
     if (-not $Yes -and -not $DownloadOnly) {
         if (-not (Confirm-Install -Current $currentVersion -Latest $latestVersion)) {
             Write-Info "Cancelled."
@@ -172,98 +144,52 @@ function Main {
         }
     }
 
-    # Stop services if running
-    if (Test-ServicesRunning) {
-        Write-Warn "Services are running"
-        if ($Yes) {
-            Stop-Services
-        } else {
-            $response = Read-Host "Stop services before update? [Y/n]"
-            if ($response -match '^[Nn]') {
-                Write-Err "Cannot update while services are running. Stop manually: .\scripts\termote.ps1 uninstall all"
-            }
-            Stop-Services
-        }
-    }
-
-    # Create install directory
-    if (-not (Test-Path $script:INSTALL_DIR)) {
-        New-Item -ItemType Directory -Path $script:INSTALL_DIR -Force | Out-Null
-    }
-    Push-Location $script:INSTALL_DIR
-
+    $tarball = "termote-v${latestVersion}.tar.gz"
+    $base = "https://github.com/$script:REPO/releases/download/v${latestVersion}"
+    $tmpDir = Join-Path ([System.IO.Path]::GetTempPath()) ("termote-" + [guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Path $tmpDir -Force | Out-Null
     try {
-        # Download tarball
-        $tarball = "termote-v${latestVersion}.tar.gz"
-        $tarballUrl = "https://github.com/$script:REPO/releases/download/v${latestVersion}/$tarball"
-        $checksumsUrl = "https://github.com/$script:REPO/releases/download/v${latestVersion}/checksums.txt"
-
+        $file = Join-Path $tmpDir $tarball
         Write-Info "Downloading $tarball..."
-        Invoke-WebRequest -Uri $tarballUrl -OutFile $tarball -UseBasicParsing
-
-        # Verify checksum
+        Invoke-WebRequest -Uri "$base/$tarball" -OutFile $file -UseBasicParsing
         Write-Info "Verifying checksum..."
-        try {
-            $response = Invoke-WebRequest -Uri $checksumsUrl -UseBasicParsing
-            $checksums = if ($response.Content -is [byte[]]) { [System.Text.Encoding]::UTF8.GetString($response.Content) } else { $response.Content }
-            $expectedLine = $checksums -split '\r?\n' | Where-Object { $_ -like "* $tarball" }
-            if ($expectedLine) {
-                $expected = ($expectedLine -split '\s+')[0]
-                Test-Checksum -File $tarball -Expected $expected
-            } else {
-                Write-Warn "Checksum not found for $tarball, skipping verification"
-            }
-        } catch {
-            Write-Warn "Could not download checksums, skipping verification"
-        }
+        Test-Checksum -File $file -Name $tarball -Url "$base/checksums.txt"
 
-        # Extract
+        # Extract over the install dir (tar ships with Windows 10+). The saved
+        # config lives outside the tarball, and `termote.ps1 install` stops
+        # running services itself.
         Write-Info "Extracting..."
-        # Use tar (available in Windows 10+)
-        tar -xzf $tarball --strip-components=1
-        Remove-Item $tarball -ErrorAction SilentlyContinue
-
-        # Download only mode - stop here
-        if ($DownloadOnly) {
-            Write-Info "Download complete. Files extracted to: $script:INSTALL_DIR"
-            Write-Info "To install manually: cd $script:INSTALL_DIR; .\scripts\termote.ps1 install [native|container]"
-            return
+        if (-not (Test-Path $script:INSTALL_DIR)) {
+            New-Item -ItemType Directory -Path $script:INSTALL_DIR -Force | Out-Null
         }
-
-        # Save installed version (tag-based, works for RC and official releases)
+        tar -xzf $file --strip-components=1 -C $script:INSTALL_DIR
+        if ($LASTEXITCODE -ne 0) { Write-Err "Extraction failed (tar exit $LASTEXITCODE)" }
         $latestVersion | Set-Content (Join-Path $script:INSTALL_DIR ".version") -NoNewline
-
-        # Run termote CLI
-        Write-Info "Running installer..."
-
-        # -Update mode: load saved config
-        if ($Update) {
-            $savedConfig = Get-SavedConfig
-            if (-not $Mode) { $Mode = $savedConfig.Mode }
-            if ($savedConfig.Lan) { $Lan = $true }
-            if ($savedConfig.NoAuth) { $NoAuth = $true }
-            Write-Info "Using saved config (mode: $Mode)"
-        }
-
-        # Default to native if no mode specified
-        if (-not $Mode) { $Mode = "native" }
-
-        $installArgs = @("install", $Mode)
-        if ($Lan) { $installArgs += "-Lan" }
-        if ($NoAuth) { $installArgs += "-NoAuth" }
-        # Only pass -Ttyd when explicitly set; empty lets termote.ps1 resolve
-        # saved-config/default (preserves update-keeps-choice behavior).
-        if ($Ttyd) { $installArgs += @("-Ttyd", $Ttyd) }
-        if ($Update -and $savedConfig) {
-            if ($savedConfig.Port -and $savedConfig.Port -ne "7690") { $installArgs += @("-Port", $savedConfig.Port) }
-            if ($savedConfig.Tailscale) { $installArgs += @("-Tailscale", $savedConfig.Tailscale) }
-        }
-
-        & ".\scripts\termote.ps1" @installArgs
-
     } finally {
-        Pop-Location
+        Remove-Item $tmpDir -Recurse -Force -ErrorAction SilentlyContinue
     }
+
+    $shim = Join-Path (Join-Path $script:INSTALL_DIR "scripts") "termote.ps1"
+    if ($DownloadOnly) {
+        Write-Info "Download complete. Files extracted to: $script:INSTALL_DIR"
+        Write-Info "To install: & '$shim' install [native|container]"
+        return
+    }
+
+    # `install` merges the saved config for every option not given here.
+    if ($Update -and -not $Mode) {
+        $Mode = Get-SavedMode
+        Write-Info "Using saved config (mode: $Mode)"
+    }
+    if (-not $Mode) { $Mode = "native" }
+
+    $installArgs = @{ Command = "install"; Mode = $Mode }
+    if ($Lan) { $installArgs.Lan = $true }
+    if ($NoAuth) { $installArgs.NoAuth = $true }
+
+    Write-Info "Running installer..."
+    & $shim @installArgs
+    if ($LASTEXITCODE -ne 0) { Write-Err "Install failed (exit $LASTEXITCODE)" }
 }
 
 try { Main } catch {

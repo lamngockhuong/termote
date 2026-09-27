@@ -5,40 +5,28 @@ description: All services run natively on host
 
 import { Steps, Tabs, TabItem, Aside } from "@astrojs/starlight/components";
 
-No Docker required. Access host binaries like `claude`, `git`, `gh`, etc.
-
-<Aside type="tip" title="Windows Native Mode">
-  Native mode is fully supported on Windows. The install script auto-downloads
-  an MSVC-built ttyd fork by default, which resolves the earlier ConPTY crash on
-  Windows 11 (build 26200+). Pass `-Ttyd official` to use the upstream
-  `tsl0922/ttyd` build instead.
-</Aside>
+No Docker required. Access host binaries like `claude`, `git`, `gh`, etc. tmux-api streams
+the terminal itself (PTY on Unix, ConPTY on Windows) into xterm.js in the PWA — there is no
+separate terminal process to install.
 
 ## Prerequisites
 
 <Tabs>
   <TabItem label="Linux">
     ```bash
-    sudo apt install ttyd tmux
-    # Or: sudo snap install ttyd
+    sudo apt install tmux
     ```
   </TabItem>
   <TabItem label="macOS">
     ```bash
-    brew install ttyd tmux go
+    brew install tmux go
     ```
   </TabItem>
   <TabItem label="Windows">
     ```powershell
     # Install psmux (tmux-compatible for Windows)
     winget install psmux
-    # ttyd is auto-downloaded by the install script
     ```
-
-    <Aside type="note">
-      ttyd is auto-downloaded by the install script (MSVC-built fork by
-      default). Use `-Ttyd official` for the upstream build.
-    </Aside>
   </TabItem>
 </Tabs>
 
@@ -84,14 +72,7 @@ With mouse ON, tmux captures mouse events. To copy to system clipboard:
      <TabItem label="Windows (PowerShell)">
        ```powershell
        .\scripts\termote.ps1 install native
-       .\scripts\termote.ps1 install native -Ttyd official
        ```
-
-       By default (`-Ttyd fork`), the installer downloads the
-       [fork/MSVC ttyd build](https://github.com/lamngockhuong/ttyd/releases)
-       (`ttyd.msvc.exe`), since the upstream `tsl0922/ttyd` Windows build
-       (`ttyd.win32.exe`) is currently broken on the latest Windows. Pass
-       `-Ttyd official` to use the upstream build instead.
      </TabItem>
    </Tabs>
 
@@ -104,10 +85,41 @@ With mouse ON, tmux captures mouse events. To copy to system clipboard:
 - Need access to host binaries (claude, git, gh, etc.)
 - No Docker/Podman available
 - Full control over services
+- Want the Herdr backend (native only, see below)
 
 <Aside type="tip">
   Native mode is recommended when you need to use Claude Code or other host CLI
   tools.
+</Aside>
+
+## Herdr Backend
+
+Native mode can drive Herdr workspaces instead of tmux. Herdr must already be running and
+reachable on this host; Termote only talks to its socket.
+
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    ./scripts/termote.sh install native --mux herdr
+    ```
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    .\scripts\termote.ps1 install native -Mux herdr
+    ```
+  </TabItem>
+</Tabs>
+
+<Aside type="caution" title="Herdr behavior differs from tmux">
+  - Selecting a tab or pane on the PWA does **not** change what is shown on the Herdr desktop
+  — it only changes which pane the client streams. There is no "show on desktop" button.
+  - Each pane gets an agent-status badge (idle/working/blocked/done) refreshed at most once
+  per the configured poll interval; it is not pushed instantly.
+  - The Herdr backend is **native only** — `--mux herdr`/`-Mux herdr` is refused in container
+  mode.
+  - `--mux herdr --no-auth` is refused unless `--allow-herdr-no-auth` is also given: Herdr
+  exposes every workspace on the host, not just the pane the PWA is showing, so running it
+  without a password needs an explicit opt-in.
 </Aside>
 
 ## Service Management
@@ -115,8 +127,7 @@ With mouse ON, tmux captures mouse events. To copy to system clipboard:
 <Tabs>
   <TabItem label="Unix (macOS/Linux)">
     ```bash
-    # Check processes
-    ps aux | grep ttyd
+    # Check process
     ps aux | grep tmux-api
 
     # Restart
@@ -125,8 +136,8 @@ With mouse ON, tmux captures mouse events. To copy to system clipboard:
   </TabItem>
   <TabItem label="Windows (PowerShell)">
     ```powershell
-    # Check processes
-    Get-Process -Name ttyd, tmux-api -ErrorAction SilentlyContinue
+    # Check process
+    Get-Process -Name tmux-api -ErrorAction SilentlyContinue
 
     # Restart
     .\scripts\termote.ps1 install native
@@ -162,33 +173,30 @@ pkill caffeinate
   <TabItem label="Unix (macOS/Linux)">
     ```bash
     ./scripts/termote.sh health   # Health check
-    ss -tlnp | grep -E "7680|7681"  # Check ports
+    ss -tlnp | grep 7680          # Check port
     ```
   </TabItem>
   <TabItem label="Windows (PowerShell)">
     ```powershell
     .\scripts\termote.ps1 health   # Health check
-    netstat -ano | Select-String "7680|7681"  # Check ports
+    netstat -ano | Select-String "7680"  # Check port
     ```
   </TabItem>
 </Tabs>
 
-### Check Processes
+### Check Process
 
 <Tabs>
   <TabItem label="Unix (macOS/Linux)">
     ```bash
-    ps aux | grep ttyd         # Check if ttyd is running
     ps aux | grep tmux-api     # Check if tmux-api is running
-    lsof -i :7680              # Verify main port
-    lsof -i :7681              # Verify ttyd port
+    lsof -i :7680              # Verify port
     ```
   </TabItem>
   <TabItem label="Windows (PowerShell)">
     ```powershell
-    Get-Process -Name ttyd, tmux-api -ErrorAction SilentlyContinue
-    netstat -ano | Select-String "7680"   # Verify main port
-    netstat -ano | Select-String "7681"   # Verify ttyd port
+    Get-Process -Name tmux-api -ErrorAction SilentlyContinue
+    netstat -ano | Select-String "7680"   # Verify port
     ```
   </TabItem>
 </Tabs>
@@ -197,28 +205,18 @@ pkill caffeinate
 
 <Tabs>
   <TabItem label="Unix (macOS/Linux)">
-    Native mode discards logs by default. To see logs:
-
     ```bash
-    # Stop services
-    ./scripts/termote.sh uninstall native
-
-    # Start ttyd with logs (terminal 1)
-    ttyd -W -i lo -p 7681 tmux new-session -A -s main
-
-    # Start tmux-api with logs (terminal 2)
-    cd tmux-api
-    TERMOTE_PORT=7680 TERMOTE_BIND=127.0.0.1 \
-    TERMOTE_PWA_DIR=../pwa/dist ./tmux-api-native
+    termote logs tmux-api   # Recent log lines
+    termote logs follow     # Tail live (Ctrl+C to stop)
+    termote logs clean      # Delete log files
     ```
   </TabItem>
   <TabItem label="Windows (PowerShell)">
     Native mode writes service logs to `~/.termote/logs`. View them with the CLI:
 
     ```powershell
-    .\scripts\termote.ps1 logs            # Show recent ttyd + tmux-api logs
-    .\scripts\termote.ps1 logs ttyd       # Only ttyd logs
-    .\scripts\termote.ps1 logs tmux-api   # Only tmux-api logs
+    .\scripts\termote.ps1 logs            # Show recent tmux-api logs
+    .\scripts\termote.ps1 logs tmux-api   # Same, explicit
     .\scripts\termote.ps1 logs follow     # Tail all logs live (Ctrl+C to stop)
     .\scripts\termote.ps1 logs clean      # Delete log files
     ```
@@ -228,12 +226,13 @@ pkill caffeinate
 ### Common Issues
 
 | Issue           | Solution                                          |
-| --------------- | ------------------------------------------------- |
+| --------------- | -------------------------------------------------- |
 | Port in use     | `lsof -i :7680` (Unix) or `netstat -ano \| Select-String 7680` (Win) then kill process |
-| ttyd missing    | `brew install ttyd` (macOS) or `apt install ttyd` (Linux) |
+| Herdr not found | Install/start `herdr` first, or drop `--mux herdr` to use tmux |
 | Binary missing  | `cd tmux-api && go build -o tmux-api-native .`    |
 | PWA not built   | `pnpm --filter termote build`                            |
 | Stale PWA cache | Settings → "Clear Cache & Reload" to refresh      |
+| Host rejected (403) | Follow the `--allow-host <name>` suggested in the error, then reinstall |
 
 ### tmux / psmux Session
 
@@ -257,8 +256,8 @@ pkill caffeinate
 ### API Test
 
 ```bash
-curl http://localhost:7680/api/tmux/health
-curl http://localhost:7680/api/tmux/sessions
+curl http://localhost:7680/api/mux/health
+curl http://localhost:7680/api/mux/snapshot
 ```
 
 ## Updating
@@ -271,20 +270,23 @@ If Termote is already installed, use the built-in update command:
   <TabItem label="Unix (macOS/Linux)">
     ```bash
     termote update                   # Update to latest version
-    termote update --version 0.0.9   # Pin to specific version
+    termote update --version 1.0.0   # Pin to specific version
     termote update --force           # Force reinstall current version
     ```
   </TabItem>
   <TabItem label="Windows (PowerShell)">
     ```powershell
     .\scripts\termote.ps1 update                 # Update to latest version
-    .\scripts\termote.ps1 update -Version 0.0.9  # Pin to specific version
+    .\scripts\termote.ps1 update -Version 1.0.0  # Pin to specific version
     .\scripts\termote.ps1 update -Force          # Force reinstall current version
     ```
   </TabItem>
 </Tabs>
 
-This automatically preserves your config (including your chosen `ttyd` build on Windows), stops services, downloads the new version, verifies checksums, and re-installs with your saved settings.
+This automatically preserves your config, stops services, downloads the new version, verifies
+checksums, and re-installs with your saved settings. Upgrading a 0.x install to 1.0.0 also
+drops ttyd and migrates an empty saved password — see `docs/upgrade-1.0.md` in the repository
+for the full breaking-change list.
 
 ### Via One-liner
 

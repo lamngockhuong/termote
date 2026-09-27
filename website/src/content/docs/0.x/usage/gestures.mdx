@@ -1,0 +1,61 @@
+---
+title: Mobile Gestures
+description: Touch controls for terminal interaction
+slug: 0.x/usage/gestures
+banner:
+  content: 'You are reading the docs for Termote 0.x, which only receives security and critical fixes. See the <a href="/getting-started/">1.x docs</a> or the <a href="https://github.com/lamngockhuong/termote/blob/main/docs/upgrade-1.0.md">upgrade guide</a>.'
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Termote supports touch gestures for common terminal operations.
+
+## First-Time Tutorial
+
+On your first mobile visit, a **gesture hints overlay** will appear showing all available gestures. You can:
+
+* Tap **"Got it"** to dismiss and never see it again
+* Re-open anytime via **Settings → Show Gesture Hints**
+
+## Gesture Reference
+
+| Gesture     | Action           | Terminal Command |
+| ----------- | ---------------- | ---------------- |
+| Swipe left  | Cancel/interrupt | Ctrl+C           |
+| Swipe right | Tab completion   | Tab              |
+| Swipe up    | History up       | Up Arrow         |
+| Swipe down  | History down     | Down Arrow       |
+| Long press  | Paste clipboard  | Paste            |
+| Pinch in    | Decrease font    | -                |
+| Pinch out   | Increase font    | -                |
+
+## Gesture Zone
+
+Gestures work in the terminal area only. The keyboard toolbar, quick actions menu (FAB), and navigation are excluded.
+
+<Aside>
+  Gestures are disabled on desktop where mouse interactions are preferred. On mobile, use gestures for quick actions or tap the **Quick Actions FAB** (blue ⚡ button) for immediate access to Clear, Cancel, Clear line, and Exit commands.
+</Aside>
+
+## Font Size
+
+* Range: 6px - 24px
+* Default: 14px
+* Adjust with pinch or toolbar buttons
+
+## Clipboard Paste
+
+Long press paste may not work on all browsers due to clipboard API restrictions:
+
+* **iOS Safari**: Long press not supported, use the **Paste button** instead
+* **Chrome mobile**: Works with HTTPS
+* **Other browsers**: May require clipboard permission
+
+If paste fails, a toast notification will guide you to use the Paste button or text input.
+
+## Tips
+
+1. **Quick cancel**: Swipe left to send Ctrl+C when a command hangs
+2. **Tab complete**: Swipe right to autocomplete file/command names
+3. **History**: Swipe up/down to navigate command history
+4. **Paste issues**: If long press doesn't work, use the Paste button in the toolbar

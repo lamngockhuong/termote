@@ -1,7 +1,7 @@
 # Termote Makefile
 # Usage: make <target>
 
-.PHONY: help build test test-cli test-get test-entrypoints install-container install-native clean release release-dry fmt fmt-check
+.PHONY: help build test test-go test-cli test-get test-entrypoints install-container install-native clean release release-dry fmt fmt-check
 
 # Default target
 help:
@@ -18,7 +18,8 @@ help:
 	@echo ""
 	@echo "Test:"
 	@echo "  make test              Run all tests"
-	@echo "  make test-cli          Test termote.sh CLI"
+	@echo "  make test-go           Test tmux-api (server + CLI) with go test"
+	@echo "  make test-cli          Test the termote.sh shim"
 	@echo "  make test-get          Test get.sh online installer"
 	@echo "  make test-entrypoints  Test entrypoint scripts"
 	@echo ""
@@ -61,9 +62,12 @@ install-native-lan:
 	./scripts/termote.sh install native --lan
 
 # Test targets
-test: test-cli test-get test-entrypoints
+test: test-go test-cli test-get test-entrypoints
 	@echo ""
 	@echo "All tests completed!"
+
+test-go:
+	cd tmux-api && go test ./...
 
 test-cli:
 	@chmod +x tests/test-termote.sh

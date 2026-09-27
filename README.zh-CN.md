@@ -33,6 +33,7 @@
 
 - **会话切换**：多个 tmux 会话，支持创建/编辑/删除
 - **会话标签**：水平标签栏，快速切换窗口
+- **Herdr 后端**（仅原生模式）：用 Herdr 工作区代替 tmux，每个窗格都显示编码代理的状态徽标——参见[原生安装](https://termote.ohnice.app/installation/native/)
 - **移动端友好**：虚拟键盘工具栏（Tab/Ctrl/Shift/方向键，可展开）
 - **手势支持**：滑动执行 Ctrl+C、Tab、历史导航
 - **命令历史**：搜索并调用之前发送的命令
@@ -58,21 +59,23 @@
 ```mermaid
 flowchart TB
     subgraph Client["客户端（移动端/桌面端）"]
-        PWA["PWA - React + TypeScript"]
+        PWA["PWA - React + xterm.js"]
         Gestures["手势控制"]
         Keyboard["虚拟键盘"]
     end
 
     subgraph Server["tmux-api Server :7680"]
         Static["静态文件"]
-        Proxy["WebSocket 代理"]
-        API["REST API /api/tmux/*"]
+        Stream["终端 WebSocket /api/mux/stream"]
+        API["REST API /api/mux/*"]
+        Guard["Host 白名单 + Origin/CSRF 防护"]
         Auth["Basic Auth"]
     end
 
-    subgraph Backend["后端服务"]
-        ttyd["ttyd :7681"]
-        tmux["tmux"]
+    subgraph Backend["Mux 后端（tmux/psmux 或 Herdr）"]
+        Mux["Mux 接口"]
+        tmux["tmux/psmux (PTY)"]
+        herdr["Herdr（仅原生）"]
         Shell["Shell"]
         Tools["CLI 工具"]
     end
@@ -80,13 +83,17 @@ flowchart TB
     Gestures --> PWA
     Keyboard --> PWA
     PWA --> Static
-    PWA <--> Proxy
+    PWA <--> Stream
     PWA --> API
-    Auth -.-> Static & Proxy & API
-    Proxy <--> ttyd
-    API --> tmux
-    ttyd --> tmux --> Shell --> Tools
+    Guard -.-> Static & Stream & API
+    Auth -.-> Static & Stream & API
+    Stream --> Mux
+    API --> Mux
+    Mux --> tmux & herdr
+    tmux --> Shell --> Tools
 ```
+
+tmux-api 自己负责终端流（Unix 上用 PTY，Windows 上用 ConPTY），直接传给 PWA 中的 xterm.js，不再有需要代理的独立终端进程。完整的请求防护模型见 [`docs/system-architecture.md`](docs/system-architecture.md)。
 
 ## 快速开始
 
@@ -101,8 +108,6 @@ make test                              # 运行测试
 ```
 
 > `link` 之后，可在任何位置使用 `termote`：`termote health`、`termote install native --lan`
-
-> **提示**：安装 [gum](https://github.com/charmbracelet/gum) 可获得更美观的交互式菜单（可选，有 bash 回退方案）
 
 ## 安装
 
@@ -220,33 +225,38 @@ cd termote
 flowchart LR
     subgraph Container["容器模式"]
         direction TB
-        C1["Docker/Podman"] --> C2["tmux-api :7680"] --> C3["ttyd :7681"] --> C4["tmux"]
+        C1["Docker/Podman"] --> C2["tmux-api :7680 (自行传输终端流)"] --> C3["tmux"]
     end
 
     subgraph Native["原生模式"]
         direction TB
-        N1["主机系统"] --> N2["tmux-api :7680"] --> N3["ttyd :7681"] --> N4["tmux + 主机工具"]
+        N1["主机系统"] --> N2["tmux-api :7680 (自行传输终端流)"] --> N3["tmux/psmux 或 Herdr + 主机工具"]
     end
 
     User["用户"] --> Container & Native
 ```
 
-| 模式          | 描述     | 使用场景                   | 平台         |
-| ------------- | -------- | -------------------------- | ------------ |
-| `--container` | 容器模式 | 简单部署，隔离环境         | macOS, Linux |
-| `--native`    | 全部原生 | 访问主机工具（claude、gh） | macOS, Linux |
+| 模式          | 描述     | 使用场景                                             | 平台                  |
+| ------------- | -------- | ---------------------------------------------------- | --------------------- |
+| `--container` | 容器模式 | 简单部署，隔离环境                                   | macOS, Linux, Windows |
+| `--native`    | 全部原生 | 访问主机工具（claude、gh）；Herdr 后端必须使用此模式 | macOS, Linux, Windows |
 
 ### 选项
 
-| Flag                        | 描述                                  |
-| --------------------------- | ------------------------------------- |
-| `--lan`                     | 开放 LAN 访问（默认：仅 localhost）   |
-| `--tailscale <host[:port]>` | 启用 Tailscale HTTPS                  |
-| `--no-auth`                 | 禁用基本认证                          |
-| `--port <port>`             | 主机端口（默认：7680，Windows：7690） |
-| `--fresh`                   | 强制输入新密码（忽略已保存的配置）    |
-| `--update`                  | 使用已保存的配置自动更新              |
-| `--version <ver>`           | 安装指定版本（带或不带 `v`）          |
+| Flag                        | 描述                                                       |
+| --------------------------- | ---------------------------------------------------------- |
+| `--lan`                     | 开放 LAN 访问（默认：仅 localhost）                        |
+| `--tailscale <host[:port]>` | 启用 Tailscale HTTPS                                       |
+| `--no-auth`                 | 禁用基本认证                                               |
+| `--port <port>`             | 主机端口（默认：7680，Windows：7690）                      |
+| `--mux <tmux\|herdr>`       | 终端后端，仅原生模式（默认：`tmux`）                       |
+| `--allow-host <name>`       | 额外允许的 Host 头取值（可重复；不支持通配符，见安全说明） |
+| `--allow-herdr-no-auth`     | 与 `--mux herdr --no-auth` 一起使用时必需                  |
+| `--fresh`                   | 强制输入新密码（忽略已保存的配置）                         |
+| `--update`                  | 使用已保存的配置自动更新                                   |
+| `--version <ver>`           | 安装指定版本（带或不带 `v`）                               |
+
+`--ttyd`/`-Ttyd` 仍然可以传入（0.x 在更新过程中重新启动安装程序时会用到它），但会被忽略并给出警告：ttyd 已在 1.0.0 中移除。所有破坏性变更见 [`docs/upgrade-1.0.md`](docs/upgrade-1.0.md)。
 
 | 环境变量       | 描述                                    |
 | -------------- | --------------------------------------- |
@@ -278,15 +288,16 @@ WORKSPACE=/path/to/code make install-container
 
 ```bash
 # Linux
-sudo apt install ttyd tmux
-# 或：sudo snap install ttyd
+sudo apt install tmux
 ./scripts/termote.sh install native
 
 # macOS
-brew install ttyd tmux go
+brew install tmux go
 ./scripts/termote.sh install native
 # 访问地址：http://localhost:7680
 ```
+
+如需用 [Herdr](https://termote.ohnice.app/installation/native/) 工作区代替 tmux，请加上 `--mux herdr`（仅限原生模式；`herdr` 必须已在 `PATH` 中）。
 
 ### 使用 Tailscale HTTPS（所有模式）
 
@@ -349,9 +360,11 @@ winget install psmux
 # 运行 Termote
 .\scripts\termote.ps1 install native
 .\scripts\termote.ps1 install container  # 或使用 Docker Desktop 的容器模式
-```
 
-> 默认情况下，`install native` 会下载 [fork/MSVC ttyd 构建版本](https://github.com/lamngockhuong/ttyd/releases)（可在最新 Windows 上运行）；使用 `-Ttyd official` 可切换为上游 tsl0922/ttyd 构建版本。
+# 更新与日志
+.\scripts\termote.ps1 update             # 自动更新到最新版本
+.\scripts\termote.ps1 logs follow        # 实时查看所有日志
+```
 
 ## 移动端使用
 
@@ -371,7 +384,7 @@ winget install psmux
 ```
 termote/
 ├── Makefile                # 构建/测试/部署命令
-├── Dockerfile              # Docker 模式（tmux-api + ttyd）
+├── Dockerfile              # Docker 模式（tmux-api + tmux，无 ttyd）
 ├── docker-compose.yml
 ├── entrypoint.sh           # Docker 入口点
 ├── docs/                   # 文档
@@ -383,13 +396,17 @@ termote/
 │       ├── hooks/
 │       ├── types/
 │       └── utils/
-├── tmux-api/               # Go 服务端
-│   ├── main.go             # 入口点
-│   ├── serve.go            # 服务器（PWA、代理、认证）
-│   └── tmux.go             # tmux API 处理器
+├── tmux-api/               # Go 服务端 + CLI（单一二进制文件）
+│   ├── main.go             # 入口点（无参数或 `serve` 为服务器，否则为 CLI）
+│   ├── serve.go            # 服务器（PWA、认证、防护）
+│   ├── mux.go              # Mux 接口 + /api/mux/* 路由
+│   ├── mux_tmux.go         # tmux/psmux 后端
+│   ├── mux_herdr.go        # Herdr 后端（仅原生）
+│   ├── stream.go           # 终端 WebSocket（xterm.js 流）
+│   └── cli*.go             # install/update/health/logs/link/menu 子命令
 ├── scripts/
-│   ├── termote.sh          # Unix CLI（安装/卸载/健康检查）
-│   ├── termote.ps1         # Windows PowerShell CLI
+│   ├── termote.sh          # 精简的 Unix 包装脚本 -> tmux-api CLI
+│   ├── termote.ps1         # 精简的 Windows PowerShell 包装脚本 -> tmux-api CLI
 │   ├── get.sh              # Unix 在线安装器（curl | bash）
 │   └── get.ps1             # Windows 在线安装器（irm | iex）
 ├── tests/                  # 测试套件
@@ -422,12 +439,12 @@ pnpm --filter termote test:e2e:ui    # 使用 UI 调试器运行
 ### 会话未持久化
 
 - 检查 tmux：`tmux ls`
-- 确认 ttyd 使用了 `-A` 参数（attach-or-create）
+- tmux-api 通过 `tmux new-session -A` 连接会话（attach-or-create）
 
 ### WebSocket 错误
 
-- 检查 tmux-api 日志：`docker logs termote`
-- 确认 ttyd 在端口 7681 上运行
+- 检查 tmux-api 日志：`docker logs termote`（容器模式）或 `termote logs tmux-api`（原生模式）
+- 终端 WebSocket 是 `/api/mux/stream`，由 tmux-api 自己提供，没有需要另外检查的终端进程
 
 ### 移动端键盘问题
 
@@ -437,18 +454,23 @@ pnpm --filter termote test:e2e:ui    # 使用 UI 调试器运行
 ### 原生模式：进程未启动
 
 ```bash
-ps aux | grep ttyd         # 检查 ttyd 是否在运行
 ps aux | grep tmux-api     # 检查 tmux-api 是否在运行
 lsof -i :7680              # 确认端口是否在使用
+termote logs tmux-api      # 或者： termote logs follow
 ```
 
 ## 安全说明
 
 - **默认：仅 localhost** -- 除非使用 `--lan` 参数，否则不暴露到局域网
-- **默认启用基本认证** -- 使用 `--no-auth` 可为本地开发禁用
+- **默认启用基本认证** -- 使用 `--no-auth` 可为本地开发禁用；保存的密码为空时不再禁用认证（1.0.0 会改为生成新密码）
+- **Host 白名单** -- 拒绝 `Host` 头无法识别的请求（防御 DNS 重绑定）；可用 `--allow-host`/`-AllowHost` 添加受信任的名称，没有能关闭此检查的通配符
+- **Origin/CSRF 防护** -- 会改变状态的 `/api/mux/*` 请求和 `/api/mux/stream` WebSocket 会拒绝跨站的 `Sec-Fetch-Site`/`Origin`，并要求同源的一次性流令牌
 - **内置暴力破解防护** -- 速率限制（每 IP 每分钟 5 次尝试）
+- **Herdr 后端** -- 会暴露主机上的所有 Herdr 工作区，因此除非同时指定 `--allow-herdr-no-auth`，否则拒绝 `--mux herdr --no-auth`
 - 生产环境请使用 HTTPS（Tailscale）
 - 限制在受信任的网络/VPN 中使用
+
+如果从 0.x 版本升级，请参阅 [`docs/upgrade-1.0.md`](docs/upgrade-1.0.md)。
 
 ## 其他项目
 

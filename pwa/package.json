@@ -28,7 +28,8 @@
     "hammerjs": "2.0.8",
     "lucide-react": "1.24.0",
     "react": "19.2.7",
-    "react-dom": "19.2.7"
+    "react-dom": "19.2.7",
+    "workbox-window": "7.4.1"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.3",
@@ -42,7 +43,7 @@
     "@vitejs/plugin-react": "6.0.3",
     "@vitest/coverage-v8": "4.1.10",
     "jsdom": "29.1.1",
-    "postcss": "8.5.17",
+    "postcss": "8.5.28",
     "tailwindcss": "4.3.2",
     "typescript": "7.0.2",
     "vite": "8.1.4",

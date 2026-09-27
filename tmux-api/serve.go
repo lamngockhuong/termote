@@ -1,45 +1,79 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
-	"io"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
-	"net/http/httputil"
-	"net/url"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
 // serveConfig holds configuration for the server
 type serveConfig struct {
-	Port    string
-	PWADir  string
-	TTYDUrl string
-	User    string
-	Pass    string
-	NoAuth  bool
-	Bind    string
+	Port         string
+	PWADir       string
+	User         string
+	Pass         string
+	NoAuth       bool
+	Bind         string
+	AllowedHosts string
+	MuxBackend   string
+	// HerdrAllowNoAuth lets herdr run with auth disabled. herdr exposes every
+	// workspace of the user, so NoAuth alone is refused.
+	HerdrAllowNoAuth bool
 }
 
 // newServeConfigFromEnv creates config from environment variables with defaults
 func newServeConfigFromEnv() serveConfig {
 	return serveConfig{
-		Port:    envOr("TERMOTE_PORT", "7680"),
-		PWADir:  envOr("TERMOTE_PWA_DIR", "./pwa/dist"),
-		TTYDUrl: envOr("TERMOTE_TTYD_URL", "http://127.0.0.1:7681"),
-		User:    envOr("TERMOTE_USER", "admin"),
-		Pass:    os.Getenv("TERMOTE_PASS"),
-		NoAuth:  os.Getenv("TERMOTE_NO_AUTH") == "true",
-		Bind:    envOr("TERMOTE_BIND", "0.0.0.0"),
+		Port:   envOr("TERMOTE_PORT", "7680"),
+		PWADir: envOr("TERMOTE_PWA_DIR", "./pwa/dist"),
+		User:   envOr("TERMOTE_USER", "admin"),
+		Pass:   os.Getenv("TERMOTE_PASS"),
+		NoAuth: os.Getenv("TERMOTE_NO_AUTH") == "true",
+		Bind:   envOr("TERMOTE_BIND", "0.0.0.0"),
+		// Comma-separated extra hostnames; loopback is always allowed.
+		AllowedHosts: os.Getenv("TERMOTE_ALLOWED_HOSTS"),
+		MuxBackend:   envOr("TERMOTE_MUX", "tmux"),
+
+		HerdrAllowNoAuth: os.Getenv("TERMOTE_HERDR_ALLOW_NO_AUTH") == "true",
 	}
+}
+
+// secretEnvKeys must never reach a terminal: any tmux command may start the
+// tmux server, which hands the environment it started with to every shell, so
+// `env` in a pane would print the password.
+var secretEnvKeys = []string{"TERMOTE_PASS"}
+
+// scrubSecretEnv removes the secrets from the process environment once the
+// config has read them.
+func scrubSecretEnv() {
+	for _, k := range secretEnvKeys {
+		os.Unsetenv(k)
+	}
+}
+
+// isSecretEnv reports whether a KEY=value entry holds a secret. Windows keys
+// are case-insensitive, so the match is too.
+func isSecretEnv(kv string) bool {
+	k, _, _ := strings.Cut(kv, "=")
+	for _, s := range secretEnvKeys {
+		if strings.EqualFold(k, s) {
+			return true
+		}
+	}
+	return false
 }
 
 func envOr(key, fallback string) string {
@@ -55,6 +89,8 @@ type tokenStore struct {
 	tokens    map[string]time.Time // token → expiry
 	ttl       time.Duration
 	singleUse bool
+	max       int      // live tokens kept; 0 = unlimited
+	order     []string // issue order, used only when max > 0
 }
 
 func newTokenStore(ttl time.Duration, singleUse bool) *tokenStore {
@@ -79,6 +115,21 @@ func (s *tokenStore) generate() (string, error) {
 		if now.After(exp) {
 			delete(s.tokens, k)
 		}
+	}
+	if s.max > 0 {
+		// Forget used and expired tokens, then drop the oldest over the cap.
+		// Issue order, not expiry: timestamps can tie on coarse clocks.
+		live := s.order[:0]
+		for _, k := range s.order {
+			if _, ok := s.tokens[k]; ok {
+				live = append(live, k)
+			}
+		}
+		for len(live) >= s.max {
+			delete(s.tokens, live[0])
+			live = live[1:]
+		}
+		s.order = append(live, token)
 	}
 	s.tokens[token] = now.Add(s.ttl)
 	s.mu.Unlock()
@@ -109,60 +160,139 @@ func (s *tokenStore) validate(token string) bool {
 	return true
 }
 
-// Legacy aliases for terminal tokens (30s, single-use)
-type terminalTokenStore = tokenStore
+// maxStreamTokens caps unused stream tokens an authenticated client can pile
+// up.
+const maxStreamTokens = 32
 
-func newTerminalTokenStore() *terminalTokenStore {
-	return newTokenStore(30*time.Second, true)
+// newStreamTokenStore holds the single-use, 30s tokens that open
+// /api/mux/stream.
+func newStreamTokenStore() *tokenStore {
+	s := newTokenStore(30*time.Second, true)
+	s.max = maxStreamTokens
+	return s
 }
 
-// startServeMode starts the server (PWA static files + ttyd WebSocket proxy + tmux API + basic auth)
-func startServeMode(cfg serveConfig) {
-	mux := http.NewServeMux()
-	tokenStore := newTerminalTokenStore()
-
-	// tmux API endpoints under /api/tmux/
-	mux.HandleFunc("/api/tmux/windows", handleWindows)
-	mux.HandleFunc("/api/tmux/select/", handleSelect)
-	mux.HandleFunc("/api/tmux/new", handleNew)
-	mux.HandleFunc("/api/tmux/kill/", handleKill)
-	mux.HandleFunc("/api/tmux/rename/", handleRename)
-	mux.HandleFunc("/api/tmux/send-keys", handleSendKeys)
-	mux.HandleFunc("/api/tmux/health", handleHealth)
-
-	// Terminal token endpoint — only accessible via fetch/XHR from PWA, not direct browser navigation
-	mux.HandleFunc("/api/tmux/terminal-token", handleTerminalToken(tokenStore))
-
-	// ttyd reverse proxy (WebSocket support) - only accessible via iframe with valid token
-	ttydURL, err := url.Parse(cfg.TTYDUrl)
-	if err != nil {
-		log.Fatalf("Invalid ttyd URL: %v", err)
+// newMux returns the backend selected by TERMOTE_MUX. Background work of the
+// backend (herdr's event subscription) runs until ctx ends.
+func newMux(ctx context.Context, backend string) (Mux, error) {
+	switch backend {
+	case "tmux":
+		return tmuxMux{}, nil
+	case "herdr":
+		return newHerdrMux(ctx, herdrSocketPath())
 	}
-	ttydProxy := newWebSocketProxy(ttydURL)
-	mux.Handle("/terminal/", iframeOnly(tokenStore, http.StripPrefix("/terminal", ttydProxy)))
+	return nil, fmt.Errorf("unsupported TERMOTE_MUX %q (supported: tmux, herdr)", backend)
+}
+
+// newServeHandler builds the full handler chain: PWA static files,
+// /api/mux/*, auth, Host allowlist and cross-site write protection.
+func newServeHandler(cfg serveConfig, m Mux) (http.Handler, error) {
+	h, _, err := buildServer(cfg, m)
+	return h, err
+}
+
+// buildServer is newServeHandler plus the hub that owns open terminal streams,
+// which the caller must shut down.
+func buildServer(cfg serveConfig, m Mux) (http.Handler, *streamHub, error) {
+	if err := validateConfig(cfg); err != nil {
+		return nil, nil, err
+	}
+	mux := http.NewServeMux()
+	tokenStore := newStreamTokenStore()
+	allowed := parseAllowedHosts(cfg.AllowedHosts)
+	hub := newStreamHub(maxStreams)
+
+	registerMuxRoutes(mux, m, tokenStore)
+	registerStreamRoutes(mux, m, tokenStore, allowed, hub)
+	// Unknown /api/ paths get JSON 404 instead of the SPA fallback.
+	mux.HandleFunc("/api/", apiNotFound)
+
+	// The 0.x terminal route. A 0.x bundle still cached by a service worker
+	// gets a clear JSON error instead of the SPA's HTML.
+	mux.HandleFunc("/terminal/", func(w http.ResponseWriter, r *http.Request) {
+		jsonError(w, "the /terminal/ endpoint was removed in 1.0; reload the app", http.StatusGone)
+	})
 
 	// PWA static files (fallback to index.html for SPA routing)
 	absDir, _ := filepath.Abs(cfg.PWADir)
 	mux.Handle("/", spaHandler(absDir))
 
-	// Wrap with auth if enabled
 	var handler http.Handler = mux
-	if !cfg.NoAuth && cfg.Pass != "" {
+	if !cfg.NoAuth {
 		handler = basicAuth(cfg.User, cfg.Pass, handler)
 	}
+	handler = writeGuard(allowed, handler)
+	handler = hostGuard(allowed, handler)
+	return noCacheMiddleware(handler), hub, nil
+}
 
-	// Add no-cache headers
-	handler = noCacheMiddleware(handler)
+// shutdownTimeout bounds how long SIGTERM/SIGINT waits for requests and
+// terminal processes before the server exits anyway; it leaves room for a
+// stream to escalate to a kill after processKillWait.
+const shutdownTimeout = processKillWait + 2*time.Second
 
-	addr := cfg.Bind + ":" + cfg.Port
-	log.Printf("Termote server listening on %s (PWA: %s)", addr, absDir)
+// startServeMode starts the server (PWA static files + terminal stream + mux API + basic auth)
+func startServeMode(cfg serveConfig) {
+	if err := validateConfig(cfg); err != nil {
+		log.Fatal(err)
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	m, err := newMux(ctx, cfg.MuxBackend)
+	if err != nil {
+		log.Fatal(err)
+	}
+	switch m.Name() {
+	case "tmux":
+		reapOrphanTerminals(isTmuxAttachCmdline)
+		scrubTmuxSecrets(ctx)
+	case "herdr":
+		reapOrphanTerminals(isHerdrObserveCmdline)
+	}
+	ln, err := net.Listen("tcp", net.JoinHostPort(cfg.Bind, cfg.Port))
+	if err != nil {
+		log.Fatal(err)
+	}
+	// After the first signal, a second one kills the process as usual.
+	go func() { <-ctx.Done(); stop() }()
+	if err := runServer(ctx, cfg, m, ln); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// runServer serves on ln until ctx is cancelled, then stops accepting
+// requests, closes every terminal stream and waits for their processes.
+func runServer(ctx context.Context, cfg serveConfig, m Mux, ln net.Listener) error {
+	handler, hub, err := buildServer(cfg, m)
+	if err != nil {
+		ln.Close()
+		return err
+	}
+	absDir, _ := filepath.Abs(cfg.PWADir)
+	log.Printf("Termote server listening on %s (PWA: %s, backend: %s)", ln.Addr(), absDir, m.Name())
 	srv := &http.Server{
-		Addr:              addr,
 		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
-	log.Fatal(srv.ListenAndServe())
+	errCh := make(chan error, 1)
+	go func() { errCh <- srv.Serve(ln) }()
+	select {
+	case err := <-errCh:
+		return err
+	case <-ctx.Done():
+	}
+	log.Printf("shutting down")
+	sctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+	// Shutdown ignores hijacked connections, so streams are closed by the hub.
+	if err := srv.Shutdown(sctx); err != nil {
+		log.Printf("http shutdown: %v", err)
+	}
+	if err := hub.shutdown(sctx); err != nil {
+		log.Printf("terminal streams still open at exit: %v", err)
+	}
+	return nil
 }
 
 // authRateLimiter tracks failed auth attempts per IP to prevent brute force attacks.
@@ -249,7 +379,7 @@ const (
 
 // basicAuth wraps a handler with HTTP basic authentication.
 // After successful basic auth, sets a session cookie to avoid re-prompting
-// (fixes mobile browsers not persisting basic auth across iframe loads).
+// (fixes mobile browsers not persisting basic auth across page loads).
 // Note: uses r.RemoteAddr for rate limiting. Behind a reverse proxy, all clients
 // may share one IP — consider the proxy's own rate limiting in that setup.
 func basicAuth(user, pass string, next http.Handler) http.Handler {
@@ -263,7 +393,7 @@ func basicAuth(user, pass string, next http.Handler) http.Handler {
 			return
 		}
 
-		// Check session cookie first (fixes mobile iframe auth issue)
+		// Check session cookie first (mobile browsers drop basic auth)
 		if cookie, err := r.Cookie(sessionCookieName); err == nil {
 			if sessions.validate(cookie.Value) {
 				next.ServeHTTP(w, r)
@@ -296,7 +426,7 @@ func basicAuth(user, pass string, next http.Handler) http.Handler {
 			return
 		}
 
-		// Set session cookie to avoid re-prompting on mobile iframe loads
+		// Set session cookie to avoid re-prompting on mobile reloads
 		sessionToken, err := sessions.generate()
 		if err != nil {
 			log.Printf("session token generation failed: %v", err)
@@ -308,7 +438,7 @@ func basicAuth(user, pass string, next http.Handler) http.Handler {
 				MaxAge:   int(sessionTTL.Seconds()),
 				HttpOnly: true,
 				SameSite: http.SameSiteStrictMode,
-				Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
+				Secure:   requestIsHTTPS(r),
 			})
 		}
 
@@ -333,70 +463,8 @@ func spaHandler(dir string) http.Handler {
 	})
 }
 
-// newWebSocketProxy creates a reverse proxy that supports WebSocket upgrades
-func newWebSocketProxy(target *url.URL) http.Handler {
-	// Create HTTP proxy once and reuse
-	httpProxy := httputil.NewSingleHostReverseProxy(target)
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// WebSocket upgrade
-		if isWebSocket(r) {
-			proxyWebSocket(w, r, target)
-			return
-		}
-		// Regular HTTP reverse proxy (reused)
-		httpProxy.ServeHTTP(w, r)
-	})
-}
-
 func isWebSocket(r *http.Request) bool {
 	return strings.EqualFold(r.Header.Get("Upgrade"), "websocket")
-}
-
-// proxyWebSocket handles WebSocket connections by creating a TCP tunnel
-func proxyWebSocket(w http.ResponseWriter, r *http.Request, target *url.URL) {
-	// Connect to upstream
-	targetAddr := target.Host
-	if !strings.Contains(targetAddr, ":") {
-		if target.Scheme == "https" || target.Scheme == "wss" {
-			targetAddr += ":443"
-		} else {
-			targetAddr += ":80"
-		}
-	}
-
-	upstream, err := net.DialTimeout("tcp", targetAddr, 2*time.Second)
-	if err != nil {
-		http.Error(w, "Bad Gateway", http.StatusBadGateway)
-		return
-	}
-	defer upstream.Close()
-
-	// Hijack the client connection
-	hijacker, ok := w.(http.Hijacker)
-	if !ok {
-		http.Error(w, "WebSocket not supported", http.StatusInternalServerError)
-		return
-	}
-	client, _, err := hijacker.Hijack()
-	if err != nil {
-		log.Printf("WebSocket hijack error: %v", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-	defer client.Close()
-
-	// Forward the original request to upstream
-	r.URL.Scheme = target.Scheme
-	r.URL.Host = target.Host
-	r.Host = target.Host
-	r.Write(upstream)
-
-	// Bidirectional copy - wait for both directions to complete
-	done := make(chan struct{}, 2)
-	go func() { io.Copy(upstream, client); done <- struct{}{} }()
-	go func() { io.Copy(client, upstream); done <- struct{}{} }()
-	<-done
-	<-done // Wait for both goroutines to prevent leak
 }
 
 // allowNonNavigationOnly blocks direct browser navigation (Sec-Fetch-Dest: document).
@@ -410,41 +478,26 @@ func allowNonNavigationOnly(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
-// iframeOnly enforces that /terminal/ is only accessible via the PWA iframe.
-// Layer 1: Sec-Fetch-Dest — blocks direct navigation (document) and non-browser clients (empty).
-// Layer 2: Token — the initial iframe load (Sec-Fetch-Dest: iframe) must carry a valid single-use token.
-// Sub-resources (script, style, websocket) loaded by the iframe page are allowed without token.
-func iframeOnly(tokens *terminalTokenStore, next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !allowNonNavigationOnly(w, r) {
-			return
-		}
-		// Initial iframe load must carry a valid token
-		if r.Header.Get("Sec-Fetch-Dest") == "iframe" {
-			token := r.URL.Query().Get("token")
-			if !tokens.validate(token) {
-				http.Error(w, "Forbidden", http.StatusForbidden)
-				return
-			}
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
-// handleTerminalToken returns a handler that generates single-use tokens for terminal iframe access.
-// Only accessible via fetch/XHR (Sec-Fetch-Dest != document and != empty).
-func handleTerminalToken(tokens *terminalTokenStore) http.HandlerFunc {
+// handleTerminalToken returns a handler that generates single-use tokens for
+// /api/mux/stream. Direct browser navigation is refused.
+func handleTerminalToken(tokens *tokenStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		if !requireMethod(w, r, http.MethodGet) {
 			return
 		}
 		if !allowNonNavigationOnly(w, r) {
+			return
+		}
+		// A foreign page cannot read the token, but could keep minting them to
+		// push the PWA's own out of the bounded store.
+		if site := r.Header.Get("Sec-Fetch-Site"); site != "" && site != "same-origin" {
+			jsonError(w, "cross-site request rejected", http.StatusForbidden)
 			return
 		}
 		token, err := tokens.generate()
 		if err != nil {
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			log.Printf("stream token generation failed: %v", err)
+			jsonError(w, "internal error", http.StatusInternalServerError)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")

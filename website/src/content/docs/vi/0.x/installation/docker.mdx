@@ -1,0 +1,317 @@
+---
+title: Cài đặt Container
+description: Triển khai container tất-cả-trong-một
+slug: vi/0.x/installation/docker
+banner:
+  content: 'Bạn đang đọc tài liệu Termote 0.x, phiên bản chỉ còn nhận bản vá bảo mật và lỗi nghiêm trọng. Xem <a href="/vi/getting-started/">tài liệu 1.x</a> hoặc <a href="https://github.com/lamngockhuong/termote/blob/main/docs/upgrade-1.0.md">hướng dẫn nâng cấp</a>.'
+---
+
+import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
+
+Container đơn với tmux-api (PWA + proxy) + ttyd + tmux.
+
+## Bắt đầu nhanh
+
+<Steps>
+  1. Chạy lệnh deploy
+
+     <Tabs>
+       <TabItem label="Unix (macOS/Linux)">
+         ```bash
+         ./scripts/termote.sh install container
+         ```
+       </TabItem>
+
+       <TabItem label="Windows (PowerShell)">
+         ```powershell
+         .\scripts\termote.ps1 install container
+         ```
+       </TabItem>
+     </Tabs>
+
+  2. Truy cập tại http://localhost:7680
+
+  3. (Tùy chọn) Mở ra LAN
+
+     <Tabs>
+       <TabItem label="Unix (macOS/Linux)">
+         ```bash
+         ./scripts/termote.sh install container --lan
+         ```
+       </TabItem>
+
+       <TabItem label="Windows (PowerShell)">
+         ```powershell
+         .\scripts\termote.ps1 install container -Lan
+         ```
+       </TabItem>
+     </Tabs>
+</Steps>
+
+## Docker Run
+
+```bash
+# Cơ bản (tự động tạo credentials, kiểm tra logs: docker logs termote)
+docker run -d --name termote -p 7680:7680 ghcr.io/lamngockhuong/termote:0.1
+
+# Với credentials tùy chỉnh
+docker run -d --name termote -p 7680:7680 \
+  -e TERMOTE_USER=admin -e TERMOTE_PASS=secret \
+  ghcr.io/lamngockhuong/termote:0.1
+
+# Không xác thực (chỉ dev local)
+docker run -d --name termote -p 7680:7680 \
+  -e NO_AUTH=true \
+  ghcr.io/lamngockhuong/termote:0.1
+
+# Với lưu trữ
+docker run -d --name termote -p 7680:7680 \
+  -v termote-data:/home/termote \
+  ghcr.io/lamngockhuong/termote:0.1
+```
+
+## Tùy chọn
+
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    | Cờ                | Mô tả                                         |
+    | ----------------- | --------------------------------------------- |
+    | `--lan`           | Mở ra LAN (mặc định: localhost)               |
+    | `--no-auth`       | Tắt xác thực cơ bản                           |
+    | `--port <port>`   | Cổng tùy chỉnh (mặc định: 7680)               |
+    | `--fresh`         | Buộc nhập mật khẩu mới (bỏ qua config đã lưu) |
+    | `--update`        | Cập nhật tự động với config đã lưu            |
+    | `--version <ver>` | Cài đặt phiên bản cụ thể                      |
+  </TabItem>
+
+  <TabItem label="Windows (PowerShell)">
+    | Cờ                | Mô tả                                         |
+    | ----------------- | --------------------------------------------- |
+    | `-Lan`            | Mở ra LAN (mặc định: localhost)               |
+    | `-NoAuth`         | Tắt xác thực cơ bản                           |
+    | `-Port <port>`    | Cổng tùy chỉnh (mặc định: 7680)               |
+    | `-Fresh`          | Buộc nhập mật khẩu mới (bỏ qua config đã lưu) |
+
+    Cờ online installer: `$env:TERMOTE_UPDATE="true"` để cập nhật tự động.
+  </TabItem>
+</Tabs>
+
+<Aside type="tip">
+  Script tự động phát hiện `podman` hoặc `docker` - cả hai hoạt động giống nhau.
+</Aside>
+
+<Aside type="note">
+  Sử dụng chế độ Container khi bạn không cần truy cập binary host (như `claude`
+  hoặc `git`).
+</Aside>
+
+## Ngăn macOS Sleep
+
+macOS tự động sleep sau một khoảng thời gian không hoạt động, làm mất kết nối terminal từ xa — ngay cả khi container đang chạy. Dùng `caffeinate` để giữ máy luôn thức:
+
+```bash
+# Ngăn system sleep (chạy cho đến khi bạn nhấn Ctrl+C)
+caffeinate -s
+
+# Hoặc chạy nền
+caffeinate -s &
+
+# Dừng caffeinate nền
+pkill caffeinate
+```
+
+<Aside type="tip">
+  Dùng `caffeinate -s` (chỉ ngăn system sleep) thay vì `-d` (ngăn tắt màn hình)
+  — bạn không cần màn hình sáng cho truy cập từ xa.
+</Aside>
+
+## Khắc phục sự cố
+
+### Chẩn đoán nhanh
+
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    ./scripts/termote.sh health   # Kiểm tra sức khỏe
+    docker ps -a | grep termote   # Kiểm tra trạng thái container
+    ```
+  </TabItem>
+
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    .\scripts\termote.ps1 health   # Kiểm tra sức khỏe
+    docker ps -a | Select-String termote   # Kiểm tra trạng thái container
+    ```
+  </TabItem>
+</Tabs>
+
+### Xem logs
+
+```bash
+docker logs termote           # Xem logs
+docker logs -f termote        # Theo dõi logs (live)
+
+# Hoặc với podman:
+podman logs termote
+```
+
+### Container không khởi động
+
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    # Kiểm tra lỗi khởi động
+    docker logs termote
+
+    # Cổng đang dùng?
+    lsof -i :7680
+
+    # Dùng cổng khác
+    ./scripts/termote.sh install container --port 7690
+    ```
+  </TabItem>
+
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    # Kiểm tra lỗi khởi động
+    docker logs termote
+
+    # Cổng đang dùng?
+    netstat -ano | Select-String 7680
+
+    # Dùng cổng khác
+    .\scripts\termote.ps1 install container -Port 7690
+    ```
+  </TabItem>
+</Tabs>
+
+### Debug trong container
+
+```bash
+docker exec -it termote /bin/sh
+# Trong container:
+ps aux                        # Kiểm tra tiến trình
+curl localhost:7681           # Test ttyd
+curl localhost:7680/api/tmux/health
+```
+
+### Lỗi thường gặp
+
+| Lỗi                  | Giải pháp                                        |
+| -------------------- | ------------------------------------------------ |
+| Cổng đang dùng       | `lsof -i :7680` rồi kill hoặc dùng `--port`      |
+| Container crash      | `docker logs termote` để xem lỗi                 |
+| Auth không hoạt động | Restart container, kiểm tra logs để lấy password |
+| Lỗi WebSocket        | Kiểm tra ttyd đang chạy trong container          |
+| PWA cache cũ         | Settings → "Clear Cache & Reload" để làm mới     |
+
+### Khởi động lại / Reset
+
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    docker restart termote
+
+    # Reset hoàn toàn
+    ./scripts/termote.sh uninstall container
+    ./scripts/termote.sh install container
+    ```
+  </TabItem>
+
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    docker restart termote
+
+    # Reset hoàn toàn
+    .\scripts\termote.ps1 uninstall container
+    .\scripts\termote.ps1 install container
+    ```
+  </TabItem>
+</Tabs>
+
+### Test API
+
+```bash
+curl http://localhost:7680/api/tmux/health
+curl -u admin:password http://localhost:7680/api/tmux/sessions
+```
+
+## Cập nhật
+
+### Qua CLI (Khuyến nghị)
+
+Nếu Termote đã được cài đặt, sử dụng lệnh cập nhật tích hợp:
+
+```bash
+termote update                    # Cập nhật lên bản mới nhất (1.x)
+termote update --version 0.1.0   # Ở lại 0.x (ghim phiên bản)
+termote update --force            # Cài đặt lại phiên bản hiện tại
+```
+
+Lệnh này tự động giữ nguyên config, dừng dịch vụ, tải phiên bản mới, kiểm tra checksum, và cài đặt lại với cấu hình đã lưu.
+
+### Qua One-liner
+
+Chạy lại installer - sẽ so sánh version và hỏi trước khi cập nhật:
+
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    # Cập nhật tự động với config đã lưu
+    curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/release/0.x/scripts/get.sh | bash -s -- --update
+
+    # Hoặc cập nhật chuẩn
+    curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/release/0.x/scripts/get.sh | bash -s -- --container
+    ```
+
+    Tùy chọn: `--update`, `--yes`, `--download-only`, `--fresh`, `--strict`
+  </TabItem>
+
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    # Cập nhật tự động với config đã lưu
+    $env:TERMOTE_UPDATE="true"; irm https://raw.githubusercontent.com/lamngockhuong/termote/release/0.x/scripts/get.ps1 | iex
+
+    # Hoặc cập nhật chuẩn
+    $env:TERMOTE_MODE="container"; irm https://raw.githubusercontent.com/lamngockhuong/termote/release/0.x/scripts/get.ps1 | iex
+    ```
+
+    Tùy chọn: `$env:TERMOTE_UPDATE="true"`, `$env:TERMOTE_AUTO_YES="true"`, `$env:TERMOTE_VERSION="0.1.0"`, `$env:TERMOTE_MODE="container"`
+  </TabItem>
+</Tabs>
+
+### Cập nhật thủ công
+
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    ./scripts/termote.sh uninstall container
+    git pull origin main
+    ./scripts/termote.sh install container
+    ```
+  </TabItem>
+
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    .\scripts\termote.ps1 uninstall container
+    git pull origin main
+    .\scripts\termote.ps1 install container
+    ```
+  </TabItem>
+</Tabs>
+
+## Gỡ cài đặt
+
+<Tabs>
+  <TabItem label="Unix (macOS/Linux)">
+    ```bash
+    ./scripts/termote.sh uninstall container
+    ```
+  </TabItem>
+
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    .\scripts\termote.ps1 uninstall container
+    ```
+  </TabItem>
+</Tabs>

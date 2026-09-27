@@ -10,15 +10,13 @@ import {
 import { GestureHintsOverlay } from './components/gesture-hints-overlay'
 import { HelpModal } from './components/help-modal'
 import { KeyboardToolbar } from './components/keyboard-toolbar'
+import { PaneStrip } from './components/pane-strip'
 import { QuickActionsMenu } from './components/quick-actions-menu'
 import { SessionSidebar } from './components/session-sidebar'
 import { SessionTabs } from './components/session-tabs'
 import { SettingsMenu } from './components/settings-menu'
 import { SettingsModal } from './components/settings-modal'
-import {
-  TerminalFrame,
-  type TerminalFrameHandle,
-} from './components/terminal-frame'
+import { type TerminalHandle, TerminalView } from './components/terminal-view'
 import { Toast } from './components/toast'
 import { useTheme } from './contexts/theme-context'
 import { useCommandHistory } from './hooks/use-command-history'
@@ -31,6 +29,7 @@ import { useIsMobile } from './hooks/use-media-query'
 import { useSettings } from './hooks/use-settings'
 import { useSidebarCollapsed } from './hooks/use-sidebar-collapsed'
 import { useUpdateCheck } from './hooks/use-update-check'
+import { checkApiVersion } from './utils/api-version'
 import {
   blurTerminal,
   focusTerminal,
@@ -40,6 +39,8 @@ import {
   type PasteResult,
   pasteTmuxBuffer,
   pasteToTerminal,
+  scrollTerminal,
+  scrollTerminalHorizontal,
   scrollTmux,
   sendKeyToTerminal,
   sendTextToTerminal,
@@ -72,8 +73,8 @@ const getClipboardErrorMsg = (
 }
 
 export default function App() {
-  const terminalRef = useRef<TerminalFrameHandle>(null)
-  const getIframe = () => terminalRef.current?.iframe ?? null
+  const terminalRef = useRef<TerminalHandle>(null)
+  const getTerminal = () => terminalRef.current
   const gestureRef = useRef<HTMLDivElement>(null)
   const terminalContainerRef = useRef<HTMLDivElement>(null)
   const ctrlInputRef = useRef<HTMLInputElement>(null)
@@ -85,8 +86,8 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [gestureHintsOpen, setGestureHintsOpen] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
-  const [connectionState, setConnectionState] =
-    useState<ConnectionState>('connecting')
+  // State of the terminal stream, reported by TerminalView.
+  const [streamState, setStreamState] = useState<ConnectionState>('connecting')
   const { settings, updateSetting } = useSettings()
   const [showTitleTooltip, setShowTitleTooltip] = useState(false)
   const [ctrlActive, setCtrlActive] = useState(false)
@@ -99,27 +100,51 @@ export default function App() {
   const {
     activeSession,
     sessions,
+    groups,
     switchSession,
+    selectPane,
     addSession,
     removeSession,
     updateSession,
     isServerReachable,
+    mux,
   } = useLocalSessions(settings.pollInterval)
+  const copyModeSupported = mux.caps.copyMode
+  const isHerdr = mux.backend === 'herdr'
+  // Tab bars show the current group only; the sidebar shows every group.
+  const groupSessions = useMemo(
+    () =>
+      activeSession.groupId
+        ? sessions.filter((s) => s.groupId === activeSession.groupId)
+        : sessions,
+    [sessions, activeSession.groupId],
+  )
   const { fontSize, increase, decrease } = useFontSize()
   const { resolvedTheme } = useTheme()
   const { isFullscreen, toggleFullscreen } = useFullscreen()
   const { checkForUpdate, checking: updateChecking } = useUpdateCheck()
 
-  // Sync connection state with server reachability from session polling
+  // The indicator follows the stream; a failing session poll can only mark
+  // it down, never up, so it does not show "connected" while the stream is
+  // still backing off.
+  const connectionState: ConnectionState = isServerReachable
+    ? streamState
+    : 'disconnected'
+
+  // A server running another /api/mux version gets this bundle replaced:
+  // checked on start and whenever the terminal stream comes back.
+  const droppedRef = useRef(false)
   useEffect(() => {
-    if (!isServerReachable) {
-      setConnectionState('disconnected')
-    } else {
-      setConnectionState((prev) =>
-        prev === 'disconnected' ? 'connected' : prev,
-      )
+    if (streamState === 'disconnected' || streamState === 'error') {
+      droppedRef.current = true
+    } else if (streamState === 'connected' && droppedRef.current) {
+      droppedRef.current = false
+      checkApiVersion()
     }
-  }, [isServerReachable])
+  }, [streamState])
+  useEffect(() => {
+    checkApiVersion()
+  }, [])
 
   // Check for updates on mount
   useEffect(() => {
@@ -136,28 +161,36 @@ export default function App() {
 
   const gestureHandlers = useMemo(
     () => ({
-      onSwipeLeft: () => sendKeyToTerminal(getIframe(), 'c', { ctrl: true }),
-      onSwipeRight: () => sendKeyToTerminal(getIframe(), 'Tab'),
+      // A herdr pane wider than the screen scrolls sideways instead; it also
+      // keeps a stray swipe from interrupting an agent with Ctrl+C.
+      onSwipeLeft: () => {
+        if (isHerdr && scrollTerminalHorizontal(getTerminal(), 'right')) return
+        sendKeyToTerminal(getTerminal(), 'c', { ctrl: true })
+      },
+      onSwipeRight: () => {
+        if (isHerdr && scrollTerminalHorizontal(getTerminal(), 'left')) return
+        sendKeyToTerminal(getTerminal(), 'Tab')
+      },
       onSwipeUp: () => {
         if ((keyboardVisible || imeMode) && terminalContainerRef.current) {
           // Keyboard or IME mode - scroll container to see hidden content
           terminalContainerRef.current.scrollTop += 150
-        } else if (isInCopyMode()) {
+        } else if (isInCopyMode(getTerminal())) {
           // In copy mode - send PageDown
-          scrollTmux(getIframe(), 'down')
+          scrollTmux(getTerminal(), 'down')
         }
       },
       onSwipeDown: () => {
         if ((keyboardVisible || imeMode) && terminalContainerRef.current) {
           // Keyboard or IME mode - scroll container to see hidden content
           terminalContainerRef.current.scrollTop -= 150
-        } else if (isInCopyMode()) {
+        } else if (isInCopyMode(getTerminal())) {
           // In copy mode - send PageUp
-          scrollTmux(getIframe(), 'up')
+          scrollTmux(getTerminal(), 'up')
         }
       },
       onLongPress: async () => {
-        const result = await pasteToTerminal(getIframe())
+        const result = await pasteToTerminal(getTerminal())
         if (shouldShowPasteError(result)) {
           setToastMessage(getClipboardErrorMsg(result.reason, true))
         }
@@ -165,14 +198,14 @@ export default function App() {
       onPinchIn: decrease,
       onPinchOut: increase,
     }),
-    [decrease, increase, keyboardVisible, imeMode],
+    [decrease, increase, keyboardVisible, imeMode, isHerdr, getTerminal],
   )
 
   const toggleKeyboard = () => {
     if (keyboardVisible) {
-      blurTerminal(getIframe())
+      blurTerminal(getTerminal())
     } else {
-      focusTerminal(getIframe())
+      focusTerminal(getTerminal())
     }
   }
 
@@ -181,24 +214,24 @@ export default function App() {
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const value = e.target.value
       if (value.length === 1 && /^[a-zA-Z]$/.test(value)) {
-        sendKeyToTerminal(getIframe(), value.toLowerCase(), {
+        sendKeyToTerminal(getTerminal(), value.toLowerCase(), {
           ctrl: true,
         })
         setCtrlActive(false)
-        focusTerminal(getIframe())
+        focusTerminal(getTerminal())
       }
       e.target.value = ''
     },
-    [],
+    [getTerminal],
   )
 
   // Focus hidden input when Ctrl is active
   useEffect(() => {
     if (ctrlActive && ctrlInputRef.current) {
-      blurTerminal(getIframe())
+      blurTerminal(getTerminal())
       ctrlInputRef.current.focus()
     }
-  }, [ctrlActive])
+  }, [ctrlActive, getTerminal])
 
   // Show gesture hints on first mobile visit
   useEffect(() => {
@@ -219,71 +252,91 @@ export default function App() {
 
   useGestures(gestureRef, gestureHandlers)
 
-  const handleKey = useCallback((key: string) => {
-    // When terminal is disconnected (ttyd shows "Press ⏎ to Reconnect"),
-    // reload iframe with new token since we can't simulate trusted keyboard events.
-    if (key === 'Enter' && isTerminalDisconnected(getIframe())) {
-      terminalRef.current?.reconnect()
-      return
-    }
-    sendKeyToTerminal(getIframe(), key)
-  }, [])
-
-  const handleCtrlKey = useCallback((key: string) => {
-    sendKeyToTerminal(getIframe(), key, { ctrl: true })
-  }, [])
-
-  const handleShiftKey = useCallback((key: string) => {
-    sendKeyToTerminal(getIframe(), key, { shift: true })
-  }, [])
-
-  const handleCtrlShiftKey = useCallback(async (key: string) => {
-    if (key === 'v') {
-      const result = await pasteToTerminal(getIframe())
-      if (shouldShowPasteError(result)) {
-        setToastMessage(getClipboardErrorMsg(result.reason))
+  const handleKey = useCallback(
+    (key: string) => {
+      // A dropped stream that is not retrying on its own reconnects on Enter.
+      if (key === 'Enter' && isTerminalDisconnected(getTerminal())) {
+        terminalRef.current?.reconnect()
+        return
       }
-      return
-    }
-    sendKeyToTerminal(getIframe(), key, { ctrl: true, shift: true })
-  }, [])
+      sendKeyToTerminal(getTerminal(), key)
+    },
+    [getTerminal],
+  )
 
-  const handleScroll = useCallback((direction: 'up' | 'down') => {
-    scrollTmux(getIframe(), direction)
-  }, [])
+  const handleCtrlKey = useCallback(
+    (key: string) => {
+      sendKeyToTerminal(getTerminal(), key, { ctrl: true })
+    },
+    [getTerminal],
+  )
+
+  const handleShiftKey = useCallback(
+    (key: string) => {
+      sendKeyToTerminal(getTerminal(), key, { shift: true })
+    },
+    [getTerminal],
+  )
+
+  const handleCtrlShiftKey = useCallback(
+    async (key: string) => {
+      if (key === 'v') {
+        const result = await pasteToTerminal(getTerminal())
+        if (shouldShowPasteError(result)) {
+          setToastMessage(getClipboardErrorMsg(result.reason))
+        }
+        return
+      }
+      sendKeyToTerminal(getTerminal(), key, { ctrl: true, shift: true })
+    },
+    [getTerminal],
+  )
+
+  // tmux scrolls its own history (copy mode); other backends scroll the
+  // xterm.js scrollback.
+  const handleScroll = useCallback(
+    (direction: 'up' | 'down') => {
+      if (copyModeSupported) scrollTmux(getTerminal(), direction)
+      else scrollTerminal(getTerminal(), direction)
+    },
+    [copyModeSupported, getTerminal],
+  )
 
   const handleTmuxCopy = useCallback(() => {
-    toggleTmuxCopyMode(getIframe())
-  }, [])
+    toggleTmuxCopyMode(getTerminal())
+  }, [getTerminal])
 
   // Unified paste handler based on pasteSource setting
   const handlePaste = useCallback(async () => {
-    if (settings.pasteSource === 'tmux') {
-      pasteTmuxBuffer(getIframe())
+    if (settings.pasteSource === 'tmux' && copyModeSupported) {
+      pasteTmuxBuffer(getTerminal())
     } else {
-      const result = await pasteToTerminal(getIframe())
+      const result = await pasteToTerminal(getTerminal())
       if (shouldShowPasteError(result)) {
         setToastMessage(getClipboardErrorMsg(result.reason))
       }
     }
-  }, [settings.pasteSource])
+  }, [settings.pasteSource, copyModeSupported, getTerminal])
 
   const handleSendText = useCallback(
     (text: string) => {
-      sendTextToTerminal(getIframe(), text)
+      sendTextToTerminal(getTerminal(), text)
       addCommand(text) // Save to history
       if (settings.imeSendBehavior === 'send-enter') {
-        sendKeyToTerminal(getIframe(), 'Enter')
+        sendKeyToTerminal(getTerminal(), 'Enter')
       }
     },
-    [settings.imeSendBehavior, addCommand],
+    [settings.imeSendBehavior, addCommand, getTerminal],
   )
 
-  const handleHistorySelect = useCallback((text: string) => {
-    sendTextToTerminal(getIframe(), text)
-    sendKeyToTerminal(getIframe(), 'Enter')
-    setHistoryOpen(false)
-  }, [])
+  const handleHistorySelect = useCallback(
+    (text: string) => {
+      sendTextToTerminal(getTerminal(), text)
+      sendKeyToTerminal(getTerminal(), 'Enter')
+      setHistoryOpen(false)
+    },
+    [getTerminal],
+  )
 
   const handleMobileSelect = (id: string) => {
     switchSession(id)
@@ -303,6 +356,7 @@ export default function App() {
         {!isMobile && (
           <SessionSidebar
             sessions={sessions}
+            groups={groups}
             activeId={activeSession.id}
             onSelect={switchSession}
             onAdd={addSession}
@@ -317,6 +371,7 @@ export default function App() {
         {isMobile && (
           <SessionSidebar
             sessions={sessions}
+            groups={groups}
             activeId={activeSession.id}
             onSelect={handleMobileSelect}
             onAdd={addSession}
@@ -433,11 +488,20 @@ export default function App() {
           {/* Desktop session tabs */}
           {!isMobile && settings.showSessionTabs && (
             <SessionTabs
-              sessions={sessions}
+              sessions={groupSessions}
               activeId={activeSession.id}
               onSelect={switchSession}
               onAdd={() => addSession('New')}
               onRemove={removeSession}
+              canRemove={sessions.length > 1}
+            />
+          )}
+          {/* Split tab: pick the pane to stream (herdr) */}
+          {mux.caps.clientSideSelect && activeSession.panes && (
+            <PaneStrip
+              panes={activeSession.panes}
+              activePaneId={activeSession.paneId}
+              onSelect={selectPane}
             />
           )}
           <div
@@ -457,12 +521,19 @@ export default function App() {
                 minHeight: '100%',
               }}
             >
-              <TerminalFrame
+              <TerminalView
                 ref={terminalRef}
+                paneId={activeSession.paneId}
+                backend={mux.backend}
+                followPane={mux.caps.clientSideSelect}
+                copyModeSupported={copyModeSupported}
+                bracketedPaste={
+                  mux.backend === 'herdr' && !!activeSession.hasAgent
+                }
                 fontSize={fontSize}
                 theme={resolvedTheme}
                 disableContextMenu={settings.disableContextMenu}
-                onConnectionStateChange={setConnectionState}
+                onConnectionStateChange={setStreamState}
               />
             </div>
             {/* Gesture overlay - captures touch gestures (mobile only) */}
@@ -478,12 +549,12 @@ export default function App() {
         <QuickActionsMenu
           onSendKey={(key, opts) => {
             if (opts?.ctrl) {
-              sendKeyToTerminal(getIframe(), key, { ctrl: true })
+              sendKeyToTerminal(getTerminal(), key, { ctrl: true })
             } else {
-              sendKeyToTerminal(getIframe(), key)
+              sendKeyToTerminal(getTerminal(), key)
             }
           }}
-          onSendText={(text) => sendTextToTerminal(getIframe(), text)}
+          onSendText={(text) => sendTextToTerminal(getTerminal(), text)}
         />
       )}
 
@@ -504,6 +575,7 @@ export default function App() {
           onCtrlShiftKey={handleCtrlShiftKey}
           onScroll={handleScroll}
           onTmuxCopy={handleTmuxCopy}
+          showTmuxCopy={copyModeSupported}
           onPaste={handlePaste}
           onToggleKeyboard={toggleKeyboard}
           onSendText={handleSendText}
@@ -520,7 +592,7 @@ export default function App() {
       {/* Mobile bottom navigation */}
       {isMobile && (
         <BottomNavigation
-          sessions={sessions}
+          sessions={groupSessions}
           activeId={activeSession.id}
           onSelect={switchSession}
           onAdd={() => addSession('New')}

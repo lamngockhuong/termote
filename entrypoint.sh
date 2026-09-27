@@ -1,5 +1,6 @@
 #!/bin/bash
-# All-in-one entrypoint: tmux-api (serve mode) + ttyd
+# All-in-one entrypoint: tmux session + tmux-api (serve mode).
+# tini runs as PID 1 (see Dockerfile) and reaps the daemonized tmux server.
 
 # Add current user/group to passwd/group if not exists
 if ! getent group $(id -g) >/dev/null 2>&1; then
@@ -42,21 +43,14 @@ fi
 export TERMOTE_PORT="${TERMOTE_PORT:-7680}"
 export TERMOTE_BIND="${TERMOTE_BIND:-0.0.0.0}"
 export TERMOTE_PWA_DIR="/var/www/termote"
-export TERMOTE_TTYD_URL="http://127.0.0.1:7681"
 export TERMOTE_USER="${TERMOTE_USER:-admin}"
 [[ "$NO_AUTH" == "true" ]] && export TERMOTE_NO_AUTH="true"
 
-# Start tmux-api in background
-/usr/local/bin/tmux-api &
-TMUX_API_PID=$!
+# Create the shared session every client attaches to (tmux-api would create
+# it on first use too; doing it here keeps it alive from container start).
+# The tmux server keeps this environment for every shell, so the password
+# stays out of it; tmux-api reads it and removes it from its own env.
+tmux has-session -t main 2>/dev/null || env -u TERMOTE_PASS tmux new-session -d -s main
 
-# Trap to cleanup on exit
-cleanup() {
-    kill $TMUX_API_PID 2>/dev/null
-    exit 0
-}
-trap cleanup SIGTERM SIGINT
-
-# Start ttyd with tmux (foreground)
-exec ttyd -W -p 7681 -t fontSize=14 \
-    tmux new-session -A -s main
+# tmux-api replaces this shell, so SIGTERM from tini reaches it directly
+exec /usr/local/bin/tmux-api

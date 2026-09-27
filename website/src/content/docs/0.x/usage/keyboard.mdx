@@ -1,0 +1,210 @@
+---
+title: Keyboard Toolbar
+description: Virtual keyboard for mobile terminal control
+slug: 0.x/usage/keyboard
+banner:
+  content: 'You are reading the docs for Termote 0.x, which only receives security and critical fixes. See the <a href="/getting-started/">1.x docs</a> or the <a href="https://github.com/lamngockhuong/termote/blob/main/docs/upgrade-1.0.md">upgrade guide</a>.'
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+The keyboard toolbar provides touch-friendly buttons for common terminal keys. It has two modes: **minimal** (default) and **expanded** (full keyboard). Additional tools include command history and quick actions menu.
+
+## Toolbar Features
+
+| Feature         | Icon    | Description                                    |
+| --------------- | ------- | ---------------------------------------------- |
+| Minimal mode    | —       | Default, shows essential keys                  |
+| Expanded mode   | Expand  | Tap to show all keys (Home, End, Delete, etc.) |
+| Keyboard toggle | ⌨️      | Show/hide the virtual keyboard                 |
+| Command history | 🕐      | View and search recent commands (see below)    |
+| Text input      | 🌐      | Switch to IME mode for non-Latin scripts       |
+
+## Modes
+
+| Mode     | Toggle          | Keys Available                             |
+| -------- | --------------- | ------------------------------------------ |
+| Minimal  | Default         | Essential keys for terminal use            |
+| Expanded | Tap expand icon | All keys including Home, End, Delete, etc. |
+
+## Modifiers
+
+| Button | Key     | Behavior                                |
+| ------ | ------- | --------------------------------------- |
+| Ctrl   | Control | Sticky - tap once, then tap another key |
+| Shift  | Shift   | Sticky - tap once, then tap another key |
+
+### Modifier Combinations
+
+* **Ctrl only**: Shows Ctrl combos (^C, ^D, etc.)
+* **Shift only**: Modifies next key (Shift+Tab = backtab)
+* **Ctrl+Shift**: Shows Ctrl+Shift combos (^⇧C, ^⇧V, etc.)
+
+## Minimal Mode Keys
+
+### Basic Keys
+
+| Button | Key    | Use Case           |
+| ------ | ------ | ------------------ |
+| Tab    | Tab    | Autocomplete       |
+| Esc    | Escape | Exit modes, cancel |
+| Enter  | Enter  | Submit command     |
+
+### Arrow Keys
+
+| Button | Key         |
+| ------ | ----------- |
+| ↑      | Up Arrow    |
+| ↓      | Down Arrow  |
+| ←      | Left Arrow  |
+| →      | Right Arrow |
+
+### Ctrl Combos (Minimal)
+
+| Button | Combo  | Use Case         |
+| ------ | ------ | ---------------- |
+| C      | Ctrl+C | Cancel/interrupt |
+| D      | Ctrl+D | EOF/logout       |
+| Z      | Ctrl+Z | Suspend          |
+| L      | Ctrl+L | Clear screen     |
+| A      | Ctrl+A | Line start       |
+| E      | Ctrl+E | Line end         |
+
+### Ctrl+Shift Combos
+
+| Button | Combo        | Use Case        |
+| ------ | ------------ | --------------- |
+| C      | Ctrl+Shift+C | Copy (terminal) |
+| V      | Ctrl+Shift+V | Paste           |
+| Z      | Ctrl+Shift+Z | Redo            |
+| X      | Ctrl+Shift+X | Cut             |
+
+### Utility Keys
+
+| Button     | Action                       |
+| ---------- | ---------------------------- |
+| Copy icon  | Toggle tmux copy mode        |
+| Paste icon | Paste from tmux buffer       |
+| ⇈          | Scroll up (tmux)             |
+| ⇊          | Scroll down (tmux)           |
+
+### tmux Copy/Paste Workflow
+
+1. Tap **Copy icon** to enter copy mode
+2. Use arrow keys to navigate
+3. Press **Space** to start selection
+4. Navigate to select text
+5. Press **Enter** to copy to tmux buffer
+6. Tap **Paste icon** to paste
+
+:::note[Native Mode Setup]
+For native mode, add this to your `~/.tmux.conf`:
+
+```bash
+set-option -g mode-keys vi
+```
+
+Container mode has this pre-configured.
+:::
+
+## Expanded Mode (Additional Keys)
+
+| Button | Key       | Use Case           |
+| ------ | --------- | ------------------ |
+| Home   | Home      | Jump to line start |
+| End    | End       | Jump to line end   |
+| Del    | Delete    | Delete forward     |
+| Bksp   | Backspace | Delete backward    |
+| PgUp   | Page Up   | Scroll up          |
+| PgDn   | Page Down | Scroll down        |
+| Ins    | Insert    | Toggle insert mode |
+
+### Extra Ctrl Combos
+
+| Button | Combo  | Use Case         |
+| ------ | ------ | ---------------- |
+| B      | Ctrl+B | tmux prefix      |
+| X      | Ctrl+X | Cut/prefix       |
+| K      | Ctrl+K | Delete to end    |
+| U      | Ctrl+U | Delete to start  |
+| W      | Ctrl+W | Delete word      |
+| R      | Ctrl+R | Reverse search   |
+| P      | Ctrl+P | Previous command |
+| N      | Ctrl+N | Next command     |
+
+## Text Input Mode (Non-Latin)
+
+Tap the **Languages icon** to switch to text input mode. This is designed for typing non-Latin scripts (Vietnamese, Chinese, Japanese, Korean, Thai, etc.) that require IME composition.
+
+| Action    | Result                                                                        |
+| --------- | ----------------------------------------------------------------------------- |
+| Type text | Compose using your device's IME                                               |
+| Tap Send  | Send text to terminal (behavior configurable in [Settings](/0.x/usage/settings/)) |
+| Tap ✕     | Close text input, return to key toolbar                                       |
+
+## Touch Targets
+
+* Minimum size: 44x44px
+* Spacing: 8px between buttons
+* Haptic feedback on tap (if device supports)
+
+## Command History
+
+Tap the **clock icon** (🕐) in the toolbar to open the command history dropdown. View, search, and reuse previously sent commands.
+
+### Features
+
+| Feature           | Behavior                                                     |
+| ----------------- | ------------------------------------------------------------ |
+| Search bar        | Filter commands by typing                                    |
+| Keyboard nav      | Use Up/Down arrows to navigate, Enter to select, Esc to exit |
+| Delete button     | Remove individual commands from history                      |
+| Clear all button  | Wipe entire history at once                                  |
+| Delete via settings | Clear history via Settings → "Clear Command History"        |
+
+### How It Works
+
+* **Automatic capture**: Commands are saved when you press Send in text input mode (IME)
+* **Persistence**: History saved to browser local storage
+* **Per-browser**: History is device/browser-specific, not synced across devices
+* **Search**: Filter by partial command name for quick access
+
+<Aside>
+  Commands sent via keyboard toolbar buttons (Ctrl+C, etc.) are not added to history — only IME text submissions are captured.
+</Aside>
+
+## Quick Actions Menu (Mobile Only)
+
+A floating action button (FAB) appears on mobile devices in the bottom-right corner, providing quick access to common terminal actions.
+
+### Actions
+
+| Action       | Function              | Sends                |
+| ------------ | --------------------- | -------------------- |
+| Clear        | Clear terminal        | `clear` command      |
+| Cancel       | Interrupt process     | Ctrl+C               |
+| Clear line   | Delete current line   | Ctrl+U               |
+| Exit         | Logout/EOF            | Ctrl+D               |
+
+### Features
+
+| Feature     | Description                                        |
+| ----------- | -------------------------------------------------- |
+| Draggable   | Long-press and drag to reposition FAB              |
+| Position saved | New position persisted to browser storage         |
+| Auto-flip   | Menu flips based on FAB location to avoid cutoff   |
+| Haptic      | Tap feedback on action (if device supports)        |
+
+<Aside>
+  The quick actions FAB appears on mobile devices only. On desktop, use the keyboard toolbar or toolbar buttons instead.
+</Aside>
+
+## Tips
+
+1. **Modifiers are sticky**: Tap Ctrl or Shift once, then tap another key
+2. **Combine modifiers**: Tap both Ctrl and Shift for Ctrl+Shift combos
+3. **Shift+Tab**: Navigate backwards in completion/menus
+4. **Copy mode**: Enable to select text, disable to resume typing
+5. **Expand for more**: Tap expand icon for full keyboard with Home, End, etc.
+6. **Command history**: Use 🕐 clock icon to quickly reuse previous commands
+7. **Reposition FAB**: Long-press the blue ⚡ button to move it out of your way

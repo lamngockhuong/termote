@@ -58,20 +58,24 @@ Tự động HTTPS sử dụng `tailscale serve`. Không cần quản lý chứn
 </Tabs>
 
 <Aside type="tip">
-  Tailscale là cách được khuyến nghị để expose Termote an toàn qua internet.
+  Tailscale là cách được khuyến nghị để đưa Termote ra internet an toàn.
 </Aside>
 
 ## Cách hoạt động
 
 ```
-Internet → Tailscale (HTTPS) → localhost:7680 → tmux-api → ttyd
+Internet → Tailscale (HTTPS) → localhost:7680 → tmux-api (luồng terminal + API)
 ```
+
+Hostname Tailscale cũng được tự động thêm vào danh sách Host được phép của server, nên
+request đi qua `tailscale serve` không bị lớp kiểm tra header Host (chống tấn công đổi địa chỉ
+DNS) từ chối.
 
 Tailscale xử lý:
 
 - Chứng chỉ TLS (tự động gia hạn)
 - Xác thực (Tailscale ACLs)
-- NAT traversal
+- Vượt NAT
 
 ## Với Docker
 

@@ -1,8 +1,11 @@
-﻿<#
+<#
 .SYNOPSIS
-    Test suite for termote.ps1
+    Tests for the scripts/termote.ps1 shim
 .DESCRIPTION
-    Validates PowerShell script syntax and basic functionality.
+    Checks the 0.x parameter to Go flag mapping, binary selection (installed
+    release and checkout build) and the command line 0.x `update` relaunches.
+    A small Go program stands in for tmux-api and prints its arguments; the
+    commands themselves are tested in Go (tmux-api/cli*_test.go).
     Run from repo root: ./tests/test-termote.ps1
 #>
 
@@ -11,360 +14,190 @@ $script:TestsPassed = 0
 $script:TestsFailed = 0
 
 function Write-TestResult {
-    param(
-        [string]$Name,
-        [bool]$Passed,
-        [string]$Error = ""
-    )
-
+    param([string]$Name, [bool]$Passed, [string]$Detail = "")
     if ($Passed) {
         Write-Host "[PASS] $Name" -ForegroundColor Green
         $script:TestsPassed++
     } else {
         Write-Host "[FAIL] $Name" -ForegroundColor Red
-        if ($Error) { Write-Host "       $Error" -ForegroundColor DarkRed }
+        if ($Detail) { Write-Host "       $Detail" -ForegroundColor DarkRed }
         $script:TestsFailed++
     }
 }
 
+function Test-Equal([string]$Name, [string]$Expected, [string]$Actual) {
+    Write-TestResult $Name ($Expected -ceq $Actual) "expected: '$Expected', got: '$Actual'"
+}
+
 Write-Host ""
-Write-Host "=== Termote PowerShell Tests ===" -ForegroundColor Cyan
+Write-Host "=== Termote PowerShell Shim Tests ===" -ForegroundColor Cyan
 Write-Host ""
 
-# Determine script path
 $TestDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
-if (-not $TestDir) { $TestDir = Get-Location }
-$ScriptPath = Join-Path (Join-Path (Join-Path $TestDir "..") "scripts") "termote.ps1"
-$ScriptPath = [System.IO.Path]::GetFullPath($ScriptPath)
-if (-not (Test-Path $ScriptPath)) {
-    Write-Host "[ERROR] Script not found: $ScriptPath" -ForegroundColor Red
-    exit 1
-}
+$ShimPath = [System.IO.Path]::GetFullPath((Join-Path $TestDir "../scripts/termote.ps1"))
+$GetPath = [System.IO.Path]::GetFullPath((Join-Path $TestDir "../scripts/get.ps1"))
 
 # ─────────────────────────────────────────────────────────────
-# Test 1: Script syntax is valid
+# Syntax and size
 # ─────────────────────────────────────────────────────────────
-try {
+foreach ($file in @($ShimPath, $GetPath)) {
     $errors = $null
-    $null = [System.Management.Automation.PSParser]::Tokenize(
-        (Get-Content $ScriptPath -Raw),
-        [ref]$errors
-    )
-    Write-TestResult -Name "Script syntax valid" -Passed ($errors.Count -eq 0) -Error ($errors | Select-Object -First 1).Message
-} catch {
-    Write-TestResult -Name "Script syntax valid" -Passed $false -Error $_.Exception.Message
+    $null = [System.Management.Automation.PSParser]::Tokenize((Get-Content $file -Raw), [ref]$errors)
+    Write-TestResult "Syntax valid: $(Split-Path -Leaf $file)" ($errors.Count -eq 0) ($errors | Select-Object -First 1)
+}
+$lines = (Get-Content $ShimPath).Count
+Write-TestResult "termote.ps1 is $lines lines (<= 100)" ($lines -le 100)
+$shimText = Get-Content $ShimPath -Raw
+Write-TestResult "No install logic in shim" (-not ($shimText -match 'docker|podman|tailscale serve|DPAPI|Start-Process'))
+
+# ─────────────────────────────────────────────────────────────
+# Fake tmux-api: prints DIR=<TERMOTE_PROJECT_DIR>, then one argument per line
+# ─────────────────────────────────────────────────────────────
+if (-not (Get-Command go -ErrorAction SilentlyContinue)) {
+    Write-Host "[SKIP] go not installed; shim behaviour tests" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "Passed: $script:TestsPassed, Failed: $script:TestsFailed"
+    exit ([int]($script:TestsFailed -gt 0))
 }
 
-# ─────────────────────────────────────────────────────────────
-# Test 2: Help command works (check script contains Show-Help function)
-# ─────────────────────────────────────────────────────────────
-try {
-    $content = Get-Content $ScriptPath -Raw
-    $hasShowHelp = $content -match "function Show-Help"
-    $hasUsageText = $content -match 'Usage: termote\.ps1'
-    Write-TestResult -Name "Help command works" -Passed ($hasShowHelp -and $hasUsageText)
-} catch {
-    Write-TestResult -Name "Help command works" -Passed $false -Error $_.Exception.Message
+$Tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("termote-test-" + [guid]::NewGuid().ToString("N"))
+$EchoSrc = @'
+package main
+
+import (
+	"fmt"
+	"os"
+	"strconv"
+)
+
+func main() {
+	fmt.Println("DIR=" + os.Getenv("TERMOTE_PROJECT_DIR"))
+	for _, a := range os.Args[1:] {
+		fmt.Println(a)
+	}
+	code, _ := strconv.Atoi(os.Getenv("ECHO_EXIT"))
+	os.Exit(code)
+}
+'@
+
+function New-EchoModule([string]$Dir) {
+    New-Item -ItemType Directory -Path $Dir -Force | Out-Null
+    Set-Content -Path (Join-Path $Dir "go.mod") -Value "module echoargs`n`ngo 1.24`n"
+    Set-Content -Path (Join-Path $Dir "main.go") -Value $EchoSrc
 }
 
-# ─────────────────────────────────────────────────────────────
-# Test 3: Version is defined
-# ─────────────────────────────────────────────────────────────
-try {
-    $content = Get-Content $ScriptPath -Raw
-    $hasVersion = $content -match '\$script:VERSION\s*=\s*"[0-9]+\.[0-9]+\.[0-9]+"'
-    Write-TestResult -Name "Version is defined" -Passed $hasVersion
-} catch {
-    Write-TestResult -Name "Version is defined" -Passed $false -Error $_.Exception.Message
+# Launchers 0.x relaunches with: pwsh when present, else Windows PowerShell.
+$Launchers = @((Get-Process -Id $PID).Path)
+$winPS = Get-Command powershell.exe -ErrorAction SilentlyContinue
+if ($winPS -and $winPS.Source -ne $Launchers[0]) { $Launchers += $winPS.Source }
+
+# Runs the shim in a new process with -File, like 0.x update and termote.cmd.
+function Invoke-Shim([string]$Launcher, [string]$Shim, [string[]]$ShimArgs) {
+    $out = & $Launcher -NoProfile -ExecutionPolicy Bypass -File $Shim @ShimArgs 2>&1 | ForEach-Object { "$_" }
+    $script:ShimExit = $LASTEXITCODE
+    return , @($out)
 }
 
-# ─────────────────────────────────────────────────────────────
-# Test 4: Container runtime detection function exists
-# ─────────────────────────────────────────────────────────────
-try {
-    $content = Get-Content $ScriptPath -Raw
-    $hasFunction = $content -match "function Get-ContainerRuntime"
-    Write-TestResult -Name "Get-ContainerRuntime function exists" -Passed $hasFunction
-} catch {
-    Write-TestResult -Name "Get-ContainerRuntime function exists" -Passed $false -Error $_.Exception.Message
+# Arguments the fake binary received, joined by spaces.
+function Get-PassedArgs($Out) {
+    $i = [array]::FindIndex([string[]]$Out, [Predicate[string]] { param($l) $l.StartsWith("DIR=") })
+    if ($i -lt 0) { return "<no DIR line: $($Out -join ' | ')>" }
+    return ($Out | Select-Object -Skip ($i + 1)) -join " "
 }
 
-# ─────────────────────────────────────────────────────────────
-# Test 5: Health function exists
-# ─────────────────────────────────────────────────────────────
 try {
-    $content = Get-Content $ScriptPath -Raw
-    $hasFunction = $content -match "function Invoke-Health"
-    Write-TestResult -Name "Invoke-Health function exists" -Passed $hasFunction
-} catch {
-    Write-TestResult -Name "Invoke-Health function exists" -Passed $false -Error $_.Exception.Message
-}
+    # ─────────────────────────────────────────────────────────
+    # Installed release layout
+    # ─────────────────────────────────────────────────────────
+    $install = Join-Path $Tmp "install"
+    New-Item -ItemType Directory -Path (Join-Path $install "scripts") -Force | Out-Null
+    Copy-Item $ShimPath (Join-Path $install "scripts/termote.ps1")
+    $echoDir = Join-Path $Tmp "echo"
+    New-EchoModule $echoDir
+    Push-Location $echoDir
+    try { & go build -o (Join-Path $install "tmux-api-windows-amd64.exe") . } finally { Pop-Location }
+    Write-TestResult "Built fake tmux-api" ($LASTEXITCODE -eq 0)
+    $shim = Join-Path $install "scripts/termote.ps1"
 
-# ─────────────────────────────────────────────────────────────
-# Test 6: Native mode functions exist
-# ─────────────────────────────────────────────────────────────
-try {
-    $content = Get-Content $ScriptPath -Raw
-    $hasPsmux = $content -match "function Test-Psmux"
-    $hasTtyd = $content -match "function Get-TtydBinary"
-    $hasNative = $content -match "function Start-NativeMode"
-    $allExist = $hasPsmux -and $hasTtyd -and $hasNative
-    Write-TestResult -Name "Native mode functions exist" -Passed $allExist
-} catch {
-    Write-TestResult -Name "Native mode functions exist" -Passed $false -Error $_.Exception.Message
-}
+    foreach ($launcher in $Launchers) {
+        $tag = Split-Path -Leaf $launcher
+        Write-Host ""
+        Write-Host "--- Installed release via $tag ---" -ForegroundColor Cyan
 
-# ─────────────────────────────────────────────────────────────
-# Test 7: Required parameters are defined
-# ─────────────────────────────────────────────────────────────
-try {
-    $content = Get-Content $ScriptPath -Raw
-    $hasCommand = $content -match '\[string\]\$Command'
-    $hasMode = $content -match '\[string\]\$Mode'
-    $hasLan = $content -match '\[switch\]\$Lan'
-    $hasNoAuth = $content -match '\[switch\]\$NoAuth'
-    $hasPort = $content -match '\[int\]\$Port'
-    $hasTtyd = $content -match '\[string\]\$Ttyd'
-    $allExist = $hasCommand -and $hasMode -and $hasLan -and $hasNoAuth -and $hasPort -and $hasTtyd
-    Write-TestResult -Name "Required parameters defined" -Passed $allExist
-} catch {
-    Write-TestResult -Name "Required parameters defined" -Passed $false -Error $_.Exception.Message
-}
+        $out = Invoke-Shim $launcher $shim @()
+        Test-Equal "[$tag] no command opens the menu" "menu" (Get-PassedArgs $out)
+        # Compare by content, not string: the temp path may be an 8.3 short name.
+        $dir = ($out | Where-Object { $_.StartsWith("DIR=") } | Select-Object -First 1) -replace '^DIR=', ''
+        Write-TestResult "[$tag] exports TERMOTE_PROJECT_DIR" ($dir -and (Test-Path (Join-Path $dir "tmux-api-windows-amd64.exe"))) "got: '$dir'"
 
-# ─────────────────────────────────────────────────────────────
-# Test 8: Link/Unlink functions exist
-# ─────────────────────────────────────────────────────────────
-try {
-    $content = Get-Content $ScriptPath -Raw
-    $hasLink = $content -match "function Invoke-Link"
-    $hasUnlink = $content -match "function Invoke-Unlink"
-    $hasLinkCmd = $content -match '"link"'
-    $hasUnlinkCmd = $content -match '"unlink"'
-    $allExist = $hasLink -and $hasUnlink -and $hasLinkCmd -and $hasUnlinkCmd
-    Write-TestResult -Name "Link/Unlink functions exist" -Passed $allExist
-} catch {
-    Write-TestResult -Name "Link/Unlink functions exist" -Passed $false -Error $_.Exception.Message
-}
+        # The exact command line 0.1.0 `update` relaunches (termote.ps1:1288)
+        $out = Invoke-Shim $launcher $shim @("install", "native", "-Lan", "-NoAuth", "-Port", "7700", "-Tailscale", "myhost:8443", "-Ttyd", "fork")
+        Test-Equal "[$tag] 0.x update relaunch maps every flag" "install native --lan --no-auth --port 7700 --tailscale myhost:8443 --ttyd fork" (Get-PassedArgs $out)
+        Test-Equal "[$tag] 0.x relaunch exits 0" "0" "$script:ShimExit"
 
-# ─────────────────────────────────────────────────────────────
-# Test 9: Config persistence functions exist
-# ─────────────────────────────────────────────────────────────
-try {
-    $content = Get-Content $ScriptPath -Raw
-    $hasSaveConfig = $content -match "function Save-Config"
-    $hasGetConfig = $content -match "function Get-SavedConfig"
-    $hasConfigFile = $content -match '\$script:CONFIG_FILE'
-    $allExist = $hasSaveConfig -and $hasGetConfig -and $hasConfigFile
-    Write-TestResult -Name "Config persistence functions exist" -Passed $allExist
-} catch {
-    Write-TestResult -Name "Config persistence functions exist" -Passed $false -Error $_.Exception.Message
-}
+        $out = Invoke-Shim $launcher $shim @("install", "native")
+        Test-Equal "[$tag] unset -Port is not passed" "install native" (Get-PassedArgs $out)
 
-# ─────────────────────────────────────────────────────────────
-# Test 10: Fresh parameter defined
-# ─────────────────────────────────────────────────────────────
-try {
-    $content = Get-Content $ScriptPath -Raw
-    $hasFreshParam = $content -match '\[switch\]\$Fresh'
-    $hasFreshUsage = $content -match '-Fresh'
-    Write-TestResult -Name "Fresh parameter defined" -Passed ($hasFreshParam -and $hasFreshUsage)
-} catch {
-    Write-TestResult -Name "Fresh parameter defined" -Passed $false -Error $_.Exception.Message
-}
+        $out = Invoke-Shim $launcher $shim @("install", "native", "-Mux", "herdr", "-AllowHerdrNoAuth", "-NoAuth", "-Fresh", "-AllowHost", "box.local")
+        Test-Equal "[$tag] 1.0 flags" "install native --no-auth --fresh --allow-herdr-no-auth --mux herdr --allow-host box.local" (Get-PassedArgs $out)
 
-# ─────────────────────────────────────────────────────────────
-# Test 11: Windows default port avoids DoSvc conflict (7690)
-# ─────────────────────────────────────────────────────────────
-try {
-    $content = Get-Content $ScriptPath -Raw
-    $hasPortMain = $content -match '\$script:PORT_MAIN\s*=\s*7690'
-    $hasPortContainer = $content -match '\$script:PORT_CONTAINER\s*=\s*7680'
-    Write-TestResult -Name "Windows default port 7690 (avoids DoSvc)" -Passed ($hasPortMain -and $hasPortContainer)
-} catch {
-    Write-TestResult -Name "Windows default port 7690 (avoids DoSvc)" -Passed $false -Error $_.Exception.Message
-}
+        $out = Invoke-Shim $launcher $shim @("update", "-Version", "1.0.0-rc.1", "-Force")
+        Test-Equal "[$tag] update -Version -Force" "update --force --version 1.0.0-rc.1" (Get-PassedArgs $out)
 
-# ─────────────────────────────────────────────────────────────
-# Test 12: Health check helper functions exist
-# ─────────────────────────────────────────────────────────────
-try {
-    $content = Get-Content $ScriptPath -Raw
-    $hasContainerCheck = $content -match "function Test-ContainerEndpoint"
-    $hasNativeCheck = $content -match "function Test-NativeTcpEndpoint"
-    Write-TestResult -Name "Health check helpers exist" -Passed ($hasContainerCheck -and $hasNativeCheck)
-} catch {
-    Write-TestResult -Name "Health check helpers exist" -Passed $false -Error $_.Exception.Message
-}
+        $out = Invoke-Shim $launcher $shim @("logs", "follow")
+        Test-Equal "[$tag] positional service" "logs follow" (Get-PassedArgs $out)
 
-# ─────────────────────────────────────────────────────────────
-# Test 13: ttyd source selection wired (official vs fork)
-# ─────────────────────────────────────────────────────────────
-try {
-    $content = Get-Content $ScriptPath -Raw
-    $hasSources     = $content -match '\$script:TTYD_SOURCES'
-    $hasForkAsset   = $content -match 'ttyd\.msvc\.exe'
-    $hasOffAsset    = $content -match 'ttyd\.win32\.exe'
-    $hasDefault     = $content -match '\$script:TTYD_DEFAULT_SOURCE\s*=\s*"fork"'
-    $hasSourceParam = $content -match 'Get-TtydBinary[\s\S]{0,200}\$Source'
-    $allExist = $hasSources -and $hasForkAsset -and $hasOffAsset -and $hasDefault -and $hasSourceParam
-    Write-TestResult -Name "ttyd source selection wired" -Passed $allExist
-} catch {
-    Write-TestResult -Name "ttyd source selection wired" -Passed $false -Error $_.Exception.Message
-}
+        $env:ECHO_EXIT = "7"
+        $null = Invoke-Shim $launcher $shim @("health")
+        Remove-Item Env:ECHO_EXIT
+        Test-Equal "[$tag] exit status passes through" "7" "$script:ShimExit"
+    }
 
-# ─────────────────────────────────────────────────────────────
-# Test 14: update command wired (function, helper, params, dispatch)
-# ─────────────────────────────────────────────────────────────
-try {
-    $content = Get-Content $ScriptPath -Raw
-    $hasUpdateFn   = $content -match "function Invoke-Update"
-    $hasVersionApi = $content -match "function Get-LatestVersionApi"
-    $hasVersionP   = $content -match '\[string\]\$Version'
-    $hasForceP     = $content -match '\[switch\]\$Force'
-    $inValidateSet = $content -match '"version",\s*"update"' -or $content -match '"update"[\s\S]{0,40}\$Command'
-    $hasDispatch   = $content -match '"update"\s*\{[\s\S]{0,80}Invoke-Update'
-    $allExist = $hasUpdateFn -and $hasVersionApi -and $hasVersionP -and $hasForceP -and $inValidateSet -and $hasDispatch
-    Write-TestResult -Name "update command wired" -Passed $allExist
-} catch {
-    Write-TestResult -Name "update command wired" -Passed $false -Error $_.Exception.Message
-}
+    # In-process call: -AllowHost takes a list
+    $out = & $shim install native -AllowHost a.local, b.local | ForEach-Object { "$_" }
+    Test-Equal "In-process -AllowHost list" "install native --allow-host a.local --allow-host b.local" (Get-PassedArgs @($out))
 
-# ─────────────────────────────────────────────────────────────
-# Test 15: update git-guard + SHA256 verify present (no network in source)
-# ─────────────────────────────────────────────────────────────
-try {
-    $content = Get-Content $ScriptPath -Raw
-    $hasGitGuard = $content -match 'Cannot update from a git repo'
-    $hasChecksum = $content -match 'Get-FileHash[\s\S]{0,80}SHA256' -or $content -match "-Algorithm SHA256"
-    $preservesTtyd = $content -match '\$savedConfig\.Ttyd'
-    Write-TestResult -Name "update git-guard + SHA256 + Ttyd preserved" -Passed ($hasGitGuard -and $hasChecksum -and $preservesTtyd)
-} catch {
-    Write-TestResult -Name "update git-guard + SHA256 + Ttyd preserved" -Passed $false -Error $_.Exception.Message
-}
+    # -Lan:$false is the only way to turn off a saved value
+    $out = & $shim install native -Lan:$false -NoAuth | ForEach-Object { "$_" }
+    Test-Equal "In-process -Lan:`$false" "install native --lan=false --no-auth" (Get-PassedArgs @($out))
 
-# ─────────────────────────────────────────────────────────────
-# Test 16: logs follow/clean branch + service guard present
-# ─────────────────────────────────────────────────────────────
-try {
-    $content = Get-Content $ScriptPath -Raw
-    $hasFollow  = $content -match '@\("follow",\s*"tail"\)'
-    $hasGuard   = $content -match 'Unknown log service'
-    $hasClean   = $content -match '"clean"\s*\{'
-    Write-TestResult -Name "logs follow/clean + service guard" -Passed ($hasFollow -and $hasGuard -and $hasClean)
-} catch {
-    Write-TestResult -Name "logs follow/clean + service guard" -Passed $false -Error $_.Exception.Message
-}
+    # A binary that cannot start (blocked, corrupt) must not look like success
+    Set-Content -Path (Join-Path $install "tmux-api-windows-amd64.exe") -Value "not a program"
+    $out = Invoke-Shim $Launchers[0] $shim @("health")
+    Write-TestResult "Unrunnable binary fails" (($script:ShimExit -ne 0) -and (($out -join " ") -match "Cannot run")) "exit $script:ShimExit | $($out -join ' | ')"
 
-# ─────────────────────────────────────────────────────────────
-# Test 17: interactive menu lists Update + Clean logs
-# ─────────────────────────────────────────────────────────────
-try {
-    $content = Get-Content $ScriptPath -Raw
-    $hasUpdateOpt = $content -match 'Select-Option[\s\S]{0,300}"Update"'
-    $hasCleanOpt  = $content -match '"Clean logs"'
-    $hasUpdateCase = $content -match '"Update\*"\s*\{[\s\S]{0,60}Invoke-Update'
-    $hasCleanCase  = $content -match '"Clean logs\*"\s*\{[\s\S]{0,80}clean'
-    $allExist = $hasUpdateOpt -and $hasCleanOpt -and $hasUpdateCase -and $hasCleanCase
-    Write-TestResult -Name "menu lists Update + Clean logs" -Passed $allExist
-} catch {
-    Write-TestResult -Name "menu lists Update + Clean logs" -Passed $false -Error $_.Exception.Message
-}
+    Remove-Item (Join-Path $install "tmux-api-windows-amd64.exe")
+    $out = Invoke-Shim $Launchers[0] $shim @("health")
+    Write-TestResult "Missing binary fails with a reinstall hint" (($script:ShimExit -ne 0) -and (($out -join " ") -match "reinstall Termote")) ($out -join " | ")
 
-# ─────────────────────────────────────────────────────────────
-# Test 18: behavioral — help output + update validation (no network)
-# ─────────────────────────────────────────────────────────────
-# Guards fire before any download, so these child-process runs are safe:
-#   - `help`             prints usage and exits 0
-#   - `update -Version bad` fails format validation (exit 1) before network
-#   - `update` from this git checkout hits the git-repo guard before network
-try {
-    $psExe = if (Get-Command pwsh -ErrorAction SilentlyContinue) { "pwsh" } else { "powershell" }
+    # ─────────────────────────────────────────────────────────
+    # Checkout layout: builds tmux-api\tmux-api-native.exe
+    # ─────────────────────────────────────────────────────────
+    Write-Host ""
+    Write-Host "--- Checkout ---" -ForegroundColor Cyan
+    $checkout = Join-Path $Tmp "checkout"
+    New-Item -ItemType Directory -Path (Join-Path $checkout "scripts") -Force | Out-Null
+    Copy-Item $ShimPath (Join-Path $checkout "scripts/termote.ps1")
+    New-EchoModule (Join-Path $checkout "tmux-api")
+    $cshim = Join-Path $checkout "scripts/termote.ps1"
 
-    $helpOut = (& $psExe -NoProfile -ExecutionPolicy Bypass -File $ScriptPath help 2>&1 | Out-String)
-    $helpOk = ($helpOut -match '\bupdate\b') -and ($helpOut -match 'logs follow') -and ($helpOut -match 'logs clean')
-    Write-TestResult -Name "help output lists update + logs follow/clean" -Passed $helpOk -Error "help output missing new commands"
-
-    $badOut = (& $psExe -NoProfile -ExecutionPolicy Bypass -File $ScriptPath update -Version "bad" 2>&1 | Out-String)
-    $badCode = $LASTEXITCODE
-    $badOk = ($badOut -match 'Invalid version format') -and ($badCode -ne 0) -and ($badOut -notmatch 'Downloading')
-    Write-TestResult -Name "update rejects malformed -Version (no network)" -Passed $badOk -Error "expected format error, got: $badOut"
-
-    $guardOut = (& $psExe -NoProfile -ExecutionPolicy Bypass -File $ScriptPath update 2>&1 | Out-String)
-    $guardCode = $LASTEXITCODE
-    $guardOk = ($guardOut -match 'Cannot update from a git repo') -and ($guardCode -ne 0) -and ($guardOut -notmatch 'Downloading')
-    Write-TestResult -Name "update refuses git repo before download" -Passed $guardOk -Error "expected git-guard error, got: $guardOut"
-} catch {
-    Write-TestResult -Name "update behavioral checks" -Passed $false -Error $_.Exception.Message
-}
-
-# ─────────────────────────────────────────────────────────────
-# Test 19: behavioral — logs subcommands validate (ValidateSet removed)
-# ─────────────────────────────────────────────────────────────
-# `logs ttyd` must NOT throw a parameter-binding error (the old $Mode ValidateSet
-# blocked it); `logs badservice` must hit the contextual service guard.
-try {
-    $psExe = if (Get-Command pwsh -ErrorAction SilentlyContinue) { "pwsh" } else { "powershell" }
-
-    $ttydOut = (& $psExe -NoProfile -ExecutionPolicy Bypass -File $ScriptPath logs ttyd 2>&1 | Out-String)
-    # No "ParameterBindingValidationException" / "does not belong to the set" → binding OK
-    $ttydOk = ($ttydOut -notmatch 'does not belong to the set') -and ($ttydOut -notmatch 'ParameterBindingValidation')
-    Write-TestResult -Name "logs ttyd validates (no binding error)" -Passed $ttydOk -Error "got: $ttydOut"
-
-    $badOut = (& $psExe -NoProfile -ExecutionPolicy Bypass -File $ScriptPath logs badservice 2>&1 | Out-String)
-    $badCode = $LASTEXITCODE
-    $badOk = ($badOut -match 'Unknown log service') -and ($badCode -ne 0)
-    Write-TestResult -Name "logs rejects unknown service" -Passed $badOk -Error "expected guard error, got: $badOut"
-} catch {
-    Write-TestResult -Name "logs behavioral checks" -Passed $false -Error $_.Exception.Message
-}
-
-# ─────────────────────────────────────────────────────────────
-# Test 20b: log viewer includes *-error.log (stderr) files (regression)
-# ─────────────────────────────────────────────────────────────
-# On Windows services log to *-error.log via -RedirectStandardError; a viewer
-# reading only "<svc>.log" (stdout) shows nothing. Assert Write-LogTail exists
-# and ttyd/all glob so the error logs are included.
-try {
-    $content = Get-Content $ScriptPath -Raw
-    $hasHelper = $content -match 'function Write-LogTail'
-    $ttydGlob  = $content -match 'Write-LogTail -Pattern "ttyd\*\.log"'
-    $allGlob   = $content -match 'Write-LogTail -Pattern "\*\.log"'
-    Write-TestResult -Name "log viewer includes *-error.log" -Passed ($hasHelper -and $ttydGlob -and $allGlob)
-} catch {
-    Write-TestResult -Name "log viewer includes *-error.log" -Passed $false -Error $_.Exception.Message
-}
-
-# ─────────────────────────────────────────────────────────────
-# Test 20: interactive install answers are authoritative (regression)
-# ─────────────────────────────────────────────────────────────
-# Guards against the saved-config-override bug: an explicit "No" to LAN/Auth/
-# Tailscale must set the $opts key so Invoke-Install's merge doesn't re-apply a
-# stale saved value. Assert Show-InteractiveInstall assigns the keys directly
-# (not the old `if (Confirm-Action ...) { $opts.Lan = $true }` conditional form).
-try {
-    $content = Get-Content $ScriptPath -Raw
-    $lanAuthoritative = $content -match '\$opts\.Lan\s*=\s*\[bool\]\(Confirm-Action'
-    $noAuthAuthoritative = $content -match '\$opts\.NoAuth\s*=\s*\[bool\]\(Confirm-Action'
-    $tsInitialized = $content -match '\$opts\.Tailscale\s*=\s*""'
-    $allExist = $lanAuthoritative -and $noAuthAuthoritative -and $tsInitialized
-    Write-TestResult -Name "interactive install answers authoritative" -Passed $allExist
-} catch {
-    Write-TestResult -Name "interactive install answers authoritative" -Passed $false -Error $_.Exception.Message
+    $out = Invoke-Shim $Launchers[0] $cshim @("install", "native", "-Lan")
+    Test-Equal "Builds on first run and runs it" "install native --lan" (Get-PassedArgs $out)
+    Write-TestResult "Binary is tmux-api\tmux-api-native.exe" (Test-Path (Join-Path $checkout "tmux-api/tmux-api-native.exe"))
+    $out = Invoke-Shim $Launchers[0] $cshim @("version")
+    Write-TestResult "Does not rebuild an up-to-date binary" (-not (($out -join " ") -match "Building"))
+    (Get-Item (Join-Path $checkout "tmux-api/main.go")).LastWriteTime = (Get-Date).AddMinutes(1)
+    $out = Invoke-Shim $Launchers[0] $cshim @("version")
+    Write-TestResult "Rebuilds when a source is newer" (($out -join " ") -match "Building")
+} finally {
+    Remove-Item $Tmp -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 # ─────────────────────────────────────────────────────────────
 # Summary
 # ─────────────────────────────────────────────────────────────
 Write-Host ""
-Write-Host "─────────────────────────────────────────" -ForegroundColor DarkGray
+Write-Host "=== Results ===" -ForegroundColor Cyan
 Write-Host "Passed: $script:TestsPassed" -ForegroundColor Green
 Write-Host "Failed: $script:TestsFailed" -ForegroundColor $(if ($script:TestsFailed -gt 0) { "Red" } else { "Green" })
-Write-Host ""
-
-if ($script:TestsFailed -gt 0) {
-    Write-Host "Some tests failed!" -ForegroundColor Red
-    exit 1
-} else {
-    Write-Host "All tests passed!" -ForegroundColor Green
-    exit 0
-}
+if ($script:TestsFailed -gt 0) { exit 1 }

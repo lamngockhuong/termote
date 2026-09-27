@@ -145,8 +145,8 @@ export function QuickActionsMenu({ onSendKey, onSendText }: Props) {
       /* v8 ignore next */
       if (el) {
         const finalPos = {
-          right: Number.parseInt(el.style.right) || 16,
-          bottom: Number.parseInt(el.style.bottom) || 112,
+          right: Number.parseInt(el.style.right, 10) || 16,
+          bottom: Number.parseInt(el.style.bottom, 10) || 112,
         }
         setPosition(finalPos)
         savePosition(finalPos)

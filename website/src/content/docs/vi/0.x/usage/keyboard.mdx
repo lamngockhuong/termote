@@ -1,0 +1,210 @@
+---
+title: Thanh công cụ bàn phím
+description: Bàn phím ảo cho điều khiển terminal di động
+slug: vi/0.x/usage/keyboard
+banner:
+  content: 'Bạn đang đọc tài liệu Termote 0.x, phiên bản chỉ còn nhận bản vá bảo mật và lỗi nghiêm trọng. Xem <a href="/vi/getting-started/">tài liệu 1.x</a> hoặc <a href="https://github.com/lamngockhuong/termote/blob/main/docs/upgrade-1.0.md">hướng dẫn nâng cấp</a>.'
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+Thanh công cụ bàn phím cung cấp các nút thân thiện cảm ứng cho các phím terminal phổ biến. Có hai chế độ: **tối giản** (mặc định) và **mở rộng** (đầy đủ). Ngoài ra còn có lịch sử lệnh và menu thao tác nhanh.
+
+## Tính năng Toolbar
+
+| Tính năng     | Icon    | Mô tả                                          |
+| ------------- | ------- | ----------------------------------------------- |
+| Chế độ tối giản | —       | Mặc định, hiện phím cần thiết                  |
+| Chế độ mở rộng  | Expand  | Nhấn để hiện tất cả phím (Home, End, Delete, v.v.) |
+| Bật/tắt bàn phím | ⌨️      | Hiện/ẩn bàn phím ảo                            |
+| Lịch sử lệnh    | 🕐      | Xem và tìm lệnh đã dùng (xem bên dưới)        |
+| Nhập text        | 🌐      | Chuyển sang chế độ IME cho ngôn ngữ ngoài Latin |
+
+## Chế độ
+
+| Chế độ   | Chuyển đổi        | Phím có sẵn                                 |
+| -------- | ----------------- | ------------------------------------------- |
+| Tối giản | Mặc định          | Phím cần thiết cho terminal                 |
+| Mở rộng  | Chạm icon mở rộng | Tất cả phím bao gồm Home, End, Delete, v.v. |
+
+## Bộ điều chỉnh
+
+| Nút   | Phím    | Hành vi                                 |
+| ----- | ------- | --------------------------------------- |
+| Ctrl  | Control | Dính - chạm một lần, rồi chạm phím khác |
+| Shift | Shift   | Dính - chạm một lần, rồi chạm phím khác |
+
+### Kết hợp bộ điều chỉnh
+
+* **Chỉ Ctrl**: Hiện combo Ctrl (^C, ^D, v.v.)
+* **Chỉ Shift**: Điều chỉnh phím tiếp theo (Shift+Tab = backtab)
+* **Ctrl+Shift**: Hiện combo Ctrl+Shift (^⇧C, ^⇧V, v.v.)
+
+## Phím chế độ tối giản
+
+### Phím cơ bản
+
+| Nút   | Phím   | Trường hợp         |
+| ----- | ------ | ------------------ |
+| Tab   | Tab    | Tự động hoàn thành |
+| Esc   | Escape | Thoát chế độ, hủy  |
+| Enter | Enter  | Gửi lệnh           |
+
+### Phím mũi tên
+
+| Nút | Phím       |
+| --- | ---------- |
+| ↑   | Phím lên   |
+| ↓   | Phím xuống |
+| ←   | Phím trái  |
+| →   | Phím phải  |
+
+### Combo Ctrl (Tối giản)
+
+| Nút | Combo  | Trường hợp   |
+| --- | ------ | ------------ |
+| C   | Ctrl+C | Hủy/ngắt     |
+| D   | Ctrl+D | EOF/logout   |
+| Z   | Ctrl+Z | Tạm dừng     |
+| L   | Ctrl+L | Xóa màn hình |
+| A   | Ctrl+A | Đầu dòng     |
+| E   | Ctrl+E | Cuối dòng    |
+
+### Combo Ctrl+Shift
+
+| Nút | Combo        | Trường hợp          |
+| --- | ------------ | ------------------- |
+| C   | Ctrl+Shift+C | Sao chép (terminal) |
+| V   | Ctrl+Shift+V | Dán                 |
+| Z   | Ctrl+Shift+Z | Làm lại             |
+| X   | Ctrl+Shift+X | Cắt                 |
+
+### Phím tiện ích
+
+| Nút        | Hành động                    |
+| ---------- | ---------------------------- |
+| Icon Copy  | Bật/tắt chế độ sao chép tmux |
+| Icon Paste | Dán từ bộ nhớ tmux           |
+| ⇈          | Cuộn lên (tmux)              |
+| ⇊          | Cuộn xuống (tmux)            |
+
+### Quy trình Copy/Paste tmux
+
+1. Nhấn **Icon Copy** để vào chế độ sao chép
+2. Dùng phím mũi tên để di chuyển
+3. Nhấn **Space** để bắt đầu chọn
+4. Di chuyển để chọn text
+5. Nhấn **Enter** để copy vào bộ nhớ tmux
+6. Nhấn **Icon Paste** để dán
+
+:::note[Cài đặt Native Mode]
+Cho native mode, thêm dòng này vào `~/.tmux.conf`:
+
+```bash
+set-option -g mode-keys vi
+```
+
+Container mode đã được cấu hình sẵn.
+:::
+
+## Chế độ mở rộng (Phím bổ sung)
+
+| Nút  | Phím      | Trường hợp          |
+| ---- | --------- | ------------------- |
+| Home | Home      | Nhảy đến đầu dòng   |
+| End  | End       | Nhảy đến cuối dòng  |
+| Del  | Delete    | Xóa tiến            |
+| Bksp | Backspace | Xóa lùi             |
+| PgUp | Page Up   | Cuộn lên            |
+| PgDn | Page Down | Cuộn xuống          |
+| Ins  | Insert    | Bật/tắt chế độ chèn |
+
+### Combo Ctrl bổ sung
+
+| Nút | Combo  | Trường hợp     |
+| --- | ------ | -------------- |
+| B   | Ctrl+B | Tiền tố tmux   |
+| X   | Ctrl+X | Cắt/tiền tố    |
+| K   | Ctrl+K | Xóa đến cuối   |
+| U   | Ctrl+U | Xóa đến đầu    |
+| W   | Ctrl+W | Xóa từ         |
+| R   | Ctrl+R | Tìm kiếm ngược |
+| P   | Ctrl+P | Lệnh trước     |
+| N   | Ctrl+N | Lệnh sau       |
+
+## Chế độ nhập text (ngoài Latin)
+
+Nhấn **Languages icon** để chuyển sang chế độ nhập text. Chế độ này dành cho gõ các ngôn ngữ ngoài Latin (tiếng Việt, Trung, Nhật, Hàn, Thái, v.v.) cần IME.
+
+| Hành động | Kết quả                                                                       |
+| --------- | ----------------------------------------------------------------------------- |
+| Gõ text   | Soạn thảo bằng IME của thiết bị                                               |
+| Nhấn Send | Gửi text đến terminal (có thể tùy chỉnh trong [Cài đặt](/vi/0.x/usage/settings/)) |
+| Nhấn ✕    | Đóng nhập text, quay lại toolbar phím                                         |
+
+## Mục tiêu cảm ứng
+
+* Kích thước tối thiểu: 44x44px
+* Khoảng cách: 8px giữa các nút
+* Phản hồi rung khi chạm (nếu thiết bị hỗ trợ)
+
+## Lịch sử lệnh
+
+Nhấn **icon đồng hồ** (🕐) trên toolbar để mở dropdown lịch sử lệnh. Xem, tìm kiếm và tái sử dụng các lệnh đã gửi trước đó.
+
+### Tính năng
+
+| Tính năng          | Hành vi                                                      |
+| ------------------ | ------------------------------------------------------------ |
+| Thanh tìm kiếm     | Lọc lệnh bằng cách gõ                                       |
+| Điều hướng bàn phím | Dùng mũi tên lên/xuống, Enter để chọn, Esc để thoát         |
+| Nút xóa           | Xóa từng lệnh khỏi lịch sử                                  |
+| Xóa tất cả        | Xóa toàn bộ lịch sử một lần                                 |
+| Xóa qua settings  | Xóa lịch sử qua Settings → "Clear Command History"          |
+
+### Cách hoạt động
+
+* **Tự động lưu**: Lệnh được lưu khi bạn nhấn Send trong chế độ nhập text (IME)
+* **Lưu trữ**: Lịch sử lưu trong local storage của trình duyệt
+* **Theo trình duyệt**: Lịch sử riêng biệt theo thiết bị/trình duyệt, không đồng bộ
+* **Tìm kiếm**: Lọc theo tên lệnh một phần để truy cập nhanh
+
+<Aside>
+  Lệnh gửi qua nút toolbar bàn phím (Ctrl+C, v.v.) không được thêm vào lịch sử — chỉ text gửi qua IME mới được lưu.
+</Aside>
+
+## Menu thao tác nhanh (Chỉ di động)
+
+Một nút nổi (FAB) xuất hiện trên thiết bị di động ở góc dưới phải, cung cấp truy cập nhanh đến các thao tác terminal phổ biến.
+
+### Thao tác
+
+| Thao tác   | Chức năng            | Gửi            |
+| ---------- | -------------------- | -------------- |
+| Clear      | Xóa terminal         | Lệnh `clear`  |
+| Cancel     | Ngắt tiến trình      | Ctrl+C         |
+| Clear line | Xóa dòng hiện tại    | Ctrl+U         |
+| Exit       | Logout/EOF           | Ctrl+D         |
+
+### Tính năng
+
+| Tính năng     | Mô tả                                          |
+| ------------- | ----------------------------------------------- |
+| Kéo thả       | Giữ và kéo để đổi vị trí FAB                   |
+| Lưu vị trí    | Vị trí mới lưu trong local storage              |
+| Tự động lật   | Menu lật theo vị trí FAB để không bị cắt        |
+| Phản hồi rung | Rung khi nhấn thao tác (nếu thiết bị hỗ trợ)  |
+
+<Aside>
+  Menu thao tác nhanh FAB chỉ hiện trên thiết bị di động. Trên desktop, dùng thanh công cụ bàn phím hoặc các nút toolbar.
+</Aside>
+
+## Mẹo
+
+1. **Bộ điều chỉnh dính**: Chạm Ctrl hoặc Shift một lần, rồi chạm phím khác
+2. **Kết hợp bộ điều chỉnh**: Chạm cả Ctrl và Shift cho combo Ctrl+Shift
+3. **Shift+Tab**: Điều hướng lùi trong hoàn thành/menu
+4. **Chế độ sao chép**: Bật để chọn văn bản, tắt để tiếp tục gõ
+5. **Mở rộng thêm**: Chạm icon mở rộng để có đầy đủ bàn phím với Home, End, v.v.
+6. **Lịch sử lệnh**: Dùng icon 🕐 đồng hồ để tái sử dụng lệnh đã dùng
+7. **Đổi vị trí FAB**: Giữ và kéo nút xanh ⚡ để di chuyển ra chỗ không cản

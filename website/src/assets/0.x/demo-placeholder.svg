@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
+  <rect width="400" height="300" rx="8" fill="#1e1e2e"/>
+  <rect x="10" y="10" width="380" height="30" rx="4" fill="#313244"/>
+  <circle cx="25" cy="25" r="6" fill="#f38ba8"/>
+  <circle cx="45" cy="25" r="6" fill="#a6e3a1"/>
+  <circle cx="65" cy="25" r="6" fill="#f9e2af"/>
+  <text x="200" y="28" text-anchor="middle" fill="#cdd6f4" font-size="12" font-family="monospace">termote</text>
+  <text x="20" y="70" fill="#89b4fa" font-size="14" font-family="monospace">$</text>
+  <text x="35" y="70" fill="#cdd6f4" font-size="14" font-family="monospace">claude --help</text>
+  <rect x="20" y="85" width="120" height="16" rx="2" fill="#313244"/>
+  <rect x="20" y="105" width="200" height="16" rx="2" fill="#313244"/>
+  <rect x="20" y="125" width="160" height="16" rx="2" fill="#313244"/>
+  <rect x="10" y="250" width="380" height="40" rx="4" fill="#313244"/>
+  <text x="30" y="275" fill="#cdd6f4" font-size="12" font-family="monospace">Tab</text>
+  <text x="70" y="275" fill="#cdd6f4" font-size="12" font-family="monospace">Esc</text>
+  <text x="110" y="275" fill="#cdd6f4" font-size="12" font-family="monospace">Ctrl</text>
+  <text x="340" y="275" fill="#89b4fa" font-size="12" font-family="monospace">Claude</text>
+</svg>

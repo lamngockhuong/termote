@@ -1,0 +1,59 @@
+---
+title: Termote
+description: Điều khiển công cụ CLI từ xa từ điện thoại/máy tính qua PWA
+template: splash
+hero:
+  title: |
+    Termote
+    <span class="text-accent">Terminal + Từ xa</span>
+  tagline: Điều khiển Claude Code, GitHub Copilot và bất kỳ CLI nào từ điện thoại
+  image:
+    file: ../../../../assets/0.x/demo-placeholder.svg
+    alt: Termote demo
+  actions:
+    - text: Bắt đầu
+      link: /vi/0.x/getting-started/
+      icon: right-arrow
+      variant: primary
+    - text: Xem trên GitHub
+      link: https://github.com/lamngockhuong/termote
+      icon: external
+slug: vi/0.x
+banner:
+  content: 'Bạn đang đọc tài liệu Termote 0.x, phiên bản chỉ còn nhận bản vá bảo mật và lỗi nghiêm trọng. Xem <a href="/vi/getting-started/">tài liệu 1.x</a> hoặc <a href="https://github.com/lamngockhuong/termote/blob/main/docs/upgrade-1.0.md">hướng dẫn nâng cấp</a>.'
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## Tính năng
+
+<CardGrid stagger>
+  <Card title="Chuyển đổi phiên" icon="rocket">
+    Chuyển nhanh giữa Claude, Copilot và Shell
+  </Card>
+
+  <Card title="Tối ưu cho di động" icon="setting">
+    Thanh công cụ bàn phím với Tab, Esc, Ctrl, phím mũi tên
+  </Card>
+
+  <Card title="Hỗ trợ cử chỉ" icon="pencil">
+    Vuốt trái Ctrl+C, phải Tab, lên/xuống lịch sử lệnh
+  </Card>
+
+  <Card title="PWA" icon="puzzle">
+    Cài đặt về màn hình chính, hoạt động offline
+  </Card>
+</CardGrid>
+
+## Cài đặt nhanh
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/release/0.x/scripts/get.sh | bash
+```
+
+## Chế độ triển khai
+
+| Chế độ        | Mô tả                       | Trường hợp sử dụng                     | Nền tảng              |
+| ------------- | --------------------------- | -------------------------------------- | --------------------- |
+| `--container` | Chế độ container            | Triển khai đơn giản, môi trường cô lập | macOS, Linux, Windows |
+| `--native`    | Native (không dùng container) | Truy cập công cụ host (Claude Code)    | macOS, Linux, Windows |

@@ -10,19 +10,16 @@ import { Aside, Steps } from "@astrojs/starlight/components";
 **macOS/Linux:**
 
 - Docker or Podman (for Container mode)
-- or ttyd + tmux + Go (for Native mode)
-- Optional: [gum](https://github.com/charmbracelet/gum) for enhanced interactive menus
+- or tmux + Go (for Native mode); tmux-api streams the terminal itself, no ttyd involved
+- Optional: [Herdr](/usage/sessions/) as an alternative to tmux (native mode only)
 
 **Windows:**
 
 - Docker Desktop or Podman Desktop (for Container mode — recommended)
-- or [psmux](https://github.com/psmux/psmux) + ttyd (for Native mode): `winget install psmux`
+- or [psmux](https://github.com/psmux/psmux) (for Native mode): `winget install psmux`
 
 <Aside type="tip" title="Windows">
-  Both Container and Native modes are fully supported on Windows. Native mode
-  ships an MSVC-built ttyd fork by default, which resolves the earlier crash on
-  Windows 11 (build 26200+); use `-Ttyd official` to opt into the upstream
-  build. Report any issues on
+  Both Container and Native modes are fully supported on Windows. Report any issues on
   [GitHub](https://github.com/lamngockhuong/termote/issues).
 </Aside>
 
@@ -94,6 +91,7 @@ $env:TERMOTE_MODE = "container"; irm .../get.ps1 | iex
 ./scripts/termote.sh update --version 0.0.9  # Pin to specific version
 ./scripts/termote.sh uninstall all     # Uninstall everything
 ./scripts/termote.sh health            # Check service health
+./scripts/termote.sh show-password     # Print the saved admin password
 ./scripts/termote.sh link              # Create 'termote' global command
 ./scripts/termote.sh unlink            # Remove global command
 ```
@@ -109,6 +107,7 @@ $env:TERMOTE_MODE = "container"; irm .../get.ps1 | iex
 .\scripts\termote.ps1 logs follow       # Tail all logs live
 .\scripts\termote.ps1 uninstall all     # Uninstall everything
 .\scripts\termote.ps1 health            # Check service health
+.\scripts\termote.ps1 show-password     # Print the saved admin password
 .\scripts\termote.ps1 link              # Create 'termote' global command
 .\scripts\termote.ps1 unlink            # Remove global command
 ```
