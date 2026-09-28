@@ -8,6 +8,7 @@ import {
   useImperativeHandle,
   useRef,
 } from 'react'
+import { MAX_SCROLL_LINES, scrollPane } from '../hooks/use-mux-api'
 import { type StreamControl, useTermSocket } from '../hooks/use-term-socket'
 import {
   blockContextMenu,
@@ -30,6 +31,9 @@ export interface TerminalHandle {
   readonly copyModeSupported: boolean
   // Whether this terminal is in tmux copy mode.
   copyMode: boolean
+  // Scrolls the pane's history through the backend, lines rows back
+  // (negative: toward the live screen); false when the backend does not.
+  scrollHistory: (lines: number) => boolean
   // Sends raw input; false when the stream is not open.
   send: (data: string) => boolean
   paste: (text: string) => void
@@ -42,6 +46,9 @@ interface Props {
   // Reconnect when paneId changes (Caps.clientSideSelect).
   followPane?: boolean
   copyModeSupported?: boolean
+  // The backend scrolls the pane's history (Caps.scroll): the stream only
+  // carries screen renders, so the xterm.js scrollback stays empty.
+  serverScroll?: boolean
   // Wrap pastes in bracketed-paste markers (herdr pane running an agent).
   bracketedPaste?: boolean
   fontSize?: number
@@ -122,6 +129,18 @@ export function bracketPaste(text: string): string {
   return `\x1b[200~${text.replace(PASTE_END, '')}\x1b[201~`
 }
 
+// Rows a wheel event scrolls into the history (negative: toward the live
+// screen). Pixel deltas are counted in rows of rowHeight pixels.
+export function wheelRows(
+  ev: Pick<WheelEvent, 'deltaY' | 'deltaMode'>,
+  rowHeight: number,
+  pageRows: number,
+): number {
+  if (ev.deltaMode === 1) return -ev.deltaY
+  if (ev.deltaMode === 2) return -ev.deltaY * pageRows
+  return -ev.deltaY / rowHeight
+}
+
 // Font size at which a cols×rows grid fits the space available at fontSize.
 export function fitFontSize(
   fontSize: number,
@@ -144,6 +163,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       backend = 'tmux',
       followPane = false,
       copyModeSupported = true,
+      serverScroll = false,
       bracketedPaste = false,
       fontSize = 14,
       theme = 'dark',
@@ -169,6 +189,65 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
     copyModeRef.current = copyModeSupported
     const bracketedRef = useRef(bracketedPaste)
     bracketedRef.current = bracketedPaste
+    const serverScrollRef = useRef(serverScroll)
+    serverScrollRef.current = serverScroll
+    const paneIdRef = useRef(paneId)
+    paneIdRef.current = paneId
+    // Rows scrolled but not sent yet, and the pane they are for; one request
+    // is in flight at a time, so a fast wheel does not queue one per event.
+    const scrollPendingRef = useRef(0)
+    const scrollPaneRef = useRef<string | undefined>(undefined)
+    const scrollBusyRef = useRef(false)
+    // The view may be above the live screen; the next input returns it.
+    // The view is the backend's and outlives a stream, so a new stream starts
+    // out assuming it is scrolled (returning costs nothing when it is not).
+    const scrolledRef = useRef(true)
+    // Fraction of a row left over from pixel wheel deltas.
+    const wheelRestRef = useRef(0)
+
+    const flushScroll = useCallback(async () => {
+      if (scrollBusyRef.current) return
+      scrollBusyRef.current = true
+      try {
+        while (scrollPendingRef.current !== 0) {
+          const lines = Math.max(
+            -MAX_SCROLL_LINES,
+            Math.min(MAX_SCROLL_LINES, scrollPendingRef.current),
+          )
+          scrollPendingRef.current = 0
+          const pane = scrollPaneRef.current
+          if (pane) await scrollPane(pane, lines).catch(() => false)
+        }
+      } finally {
+        scrollBusyRef.current = false
+      }
+    }, [])
+
+    const scrollHistory = useCallback(
+      (lines: number) => {
+        if (!serverScrollRef.current) return false
+        if (lines > 0) scrolledRef.current = true
+        if (lines !== 0) {
+          // Rows still pending for another pane are dropped, not moved.
+          if (scrollPaneRef.current !== paneIdRef.current) {
+            scrollPaneRef.current = paneIdRef.current
+            scrollPendingRef.current = 0
+          }
+          scrollPendingRef.current += lines
+          void flushScroll()
+        }
+        return true
+      },
+      [flushScroll],
+    )
+
+    // Input goes to the live screen, so show it again before sending any.
+    const toLiveScreen = useCallback(() => {
+      if (scrolledRef.current && serverScrollRef.current) {
+        scrolledRef.current = false
+        scrollHistory(-MAX_SCROLL_LINES)
+      }
+    }, [scrollHistory])
 
     const layout = useCallback(() => {
       const term = termRef.current
@@ -221,6 +300,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
         if (!term) return
         // Every stream starts with a full redraw from the backend.
         term.reset()
+        scrolledRef.current = true
         serverSizeRef.current = null
         layout()
         if (!isHerdrRef.current) {
@@ -255,8 +335,13 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
           return copyModeRef.current
         },
         copyMode: false,
-        send: (data) => socketRef.current.send(data),
+        scrollHistory: (lines) => scrollHistory(lines),
+        send: (data) => {
+          toLiveScreen()
+          return socketRef.current.send(data)
+        },
         paste: (text) => {
+          toLiveScreen()
           if (bracketedRef.current) {
             socketRef.current.send(bracketPaste(text))
           } else {
@@ -287,10 +372,25 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       fitRef.current = fit
       layout()
 
+      // With serverScroll the wheel scrolls the backend's history, unless the
+      // program in the pane asked for mouse reports.
+      term.attachCustomWheelEventHandler((ev) => {
+        if (!serverScrollRef.current || term.modes.mouseTrackingMode !== 'none')
+          return true
+        const rowHeight = (term.options.fontSize ?? 14) * 1.2
+        const rows = wheelRestRef.current + wheelRows(ev, rowHeight, term.rows)
+        const whole = Math.trunc(rows)
+        wheelRestRef.current = rows - whole
+        scrollHistory(whole)
+        return false
+      })
+
       const subs = [
         term.onData((data) => {
           const out = isHerdrRef.current ? stripTerminalReplies(data) : data
-          if (out) socketRef.current.send(out)
+          if (!out) return
+          toLiveScreen()
+          socketRef.current.send(out)
         }),
         // Non-UTF-8 input (legacy mouse reports) arrives as a binary string,
         // one char per byte.

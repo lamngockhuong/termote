@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -43,6 +44,10 @@ func (f *fakeMux) RenameTab(_ context.Context, id, name string) error {
 }
 func (f *fakeMux) SendKeys(_ context.Context, id, keys string) error {
 	f.calls = append(f.calls, "keys "+id+"="+keys)
+	return f.err
+}
+func (f *fakeMux) Scroll(_ context.Context, id string, lines int) error {
+	f.calls = append(f.calls, fmt.Sprintf("scroll %s=%d", id, lines))
 	return f.err
 }
 func (f *fakeMux) Attach(_ context.Context, pane string, size Size) (TermStream, error) {
@@ -154,6 +159,7 @@ func TestWriteRoutesCallBackend(t *testing.T) {
 		{"POST", "/api/mux/tabs/3/select", "", "select 3"},
 		{"POST", "/api/mux/panes/3/keys", `{"keys":"ls -la"}`, "keys 3=ls -la"},
 		{"POST", "/api/mux/panes/w1M%3Ap4/keys", `{"keys":"x"}`, "keys w1M:p4=x"},
+		{"POST", "/api/mux/panes/w1M%3Ap4/scroll", `{"lines":-5}`, "scroll w1M:p4=-5"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.method+" "+tt.path, func(t *testing.T) {
@@ -192,6 +198,8 @@ func TestMuxRouteErrors(t *testing.T) {
 		{"internal", errors.New("secret internal detail"), apiRequest("GET", "/api/mux/snapshot", ""), 500, "mux command failed"},
 		{"invalid json", nil, apiRequest("POST", "/api/mux/tabs", "not json"), 400, "invalid JSON body"},
 		{"body over 8KB", nil, apiRequest("POST", "/api/mux/panes/0/keys", `{"keys":"`+strings.Repeat("x", 9000)+`"}`), 400, "invalid JSON body"},
+		{"scroll too far", nil, apiRequest("POST", "/api/mux/panes/0/scroll", `{"lines":10001}`), 400, "lines out of range"},
+		{"wrong method on scroll", nil, apiRequest("GET", "/api/mux/panes/0/scroll", ""), 405, "method not allowed"},
 		{"keys too long", nil, apiRequest("POST", "/api/mux/panes/0/keys", `{"keys":"`+strings.Repeat("x", 5000)+`"}`), 400, "keys too long"},
 		{"wrong method", nil, apiRequest("GET", "/api/mux/tabs", ""), 405, "method not allowed"},
 		{"wrong method on tab", nil, apiRequest("POST", "/api/mux/tabs/3", "{}"), 405, "method not allowed"},

@@ -221,6 +221,9 @@ func (tmuxMux) RenameTab(ctx context.Context, tabID, name string) error {
 	return tmuxCmd(ctx, "rename-window", "-t", qualifyTarget(tabID), name).Run()
 }
 
+// Scroll is not offered: tmux history is scrolled in copy mode.
+func (tmuxMux) Scroll(context.Context, string, int) error { return errUnsupported }
+
 // SendKeys passes keys as one tmux send-keys argument, so key names such as
 // "Enter" or "C-c" are interpreted by tmux.
 func (tmuxMux) SendKeys(ctx context.Context, paneID, keys string) error {

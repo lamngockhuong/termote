@@ -41,6 +41,7 @@ function createMockTerminal() {
     reset: vi.fn(),
     dispose: vi.fn(),
     resize: vi.fn(),
+    rows: 24,
     options: { fontSize: 14, theme: {} },
     onData: vi.fn(() => ({ dispose: vi.fn() })),
     onBinary: vi.fn(() => ({ dispose: vi.fn() })),
@@ -58,6 +59,7 @@ function createMockHandle(
     connectionState: 'connected',
     copyModeSupported: true,
     copyMode: false,
+    scrollHistory: vi.fn(() => false),
     send: vi.fn(() => true),
     paste: vi.fn(),
     reconnect: vi.fn(),
@@ -294,6 +296,17 @@ describe('scrollTerminal', () => {
     const handle = createMockHandle()
     scrollTerminal(handle, 'up', true)
     expect(handle.term?.scrollPages).toHaveBeenCalledWith(-1)
+  })
+
+  it('scrolls the backend history instead when it offers it', () => {
+    const scrollHistory = vi.fn(() => true)
+    const handle = createMockHandle({ scrollHistory })
+    scrollTerminal(handle, 'up')
+    expect(scrollHistory).toHaveBeenLastCalledWith(5)
+    scrollTerminal(handle, 'down', true)
+    expect(scrollHistory).toHaveBeenLastCalledWith(-24)
+    expect(handle.term?.scrollLines).not.toHaveBeenCalled()
+    expect(handle.term?.scrollPages).not.toHaveBeenCalled()
   })
 
   it('handles null handle gracefully with warning', () => {

@@ -527,6 +527,7 @@ export default function App() {
                 backend={mux.backend}
                 followPane={mux.caps.clientSideSelect}
                 copyModeSupported={copyModeSupported}
+                serverScroll={!!mux.caps.scroll}
                 bracketedPaste={
                   mux.backend === 'herdr' && !!activeSession.hasAgent
                 }
