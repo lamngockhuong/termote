@@ -81,24 +81,24 @@ Termote tổ chức terminal theo ba cấp: **group → tab → pane**. Với tm
 
 Mỗi phiên độc lập — chạy Claude Code trong phiên này, tiến trình build trong phiên khác.
 
-Ở chế độ native, bạn có thể dùng Herdr thay cho tmux bằng `termote start --mux herdr`. Khi đó một tab có thể có nhiều pane, và mỗi pane hiện huy hiệu trạng thái của agent lập trình đang chạy trong đó. Herdr không dùng được ở chế độ container.
+Ở chế độ native, bạn có thể dùng [Herdr](https://herdr.dev/#install) thay cho tmux bằng `termote start --mux herdr`. Khi đó một tab có thể có nhiều pane, và mỗi pane hiện huy hiệu trạng thái của agent lập trình đang chạy trong đó. Herdr không dùng được ở chế độ container.
 
 ### Cử chỉ cảm ứng
 
-| Cử chỉ     | Hành động                      |
-| ---------- | ------------------------------ |
-| Vuốt trái  | Gửi `Ctrl+C` (ngắt lệnh)       |
-| Vuốt phải  | Gửi `Tab` (tự động hoàn thành) |
-| Vuốt lên   | Lệnh trước đó (↑)              |
-| Vuốt xuống | Lệnh tiếp theo (↓)             |
+| Cử chỉ     | Hành động                               |
+| ---------- | --------------------------------------- |
+| Vuốt trái  | Gửi `Ctrl+C` (ngắt lệnh)                |
+| Vuốt phải  | Gửi `Tab` (tự động hoàn thành)          |
+| Vuốt lên   | Cuộn xuống (quay lại phần output mới)   |
+| Vuốt xuống | Cuộn lên (xem lại phần output trước đó) |
 
 ### Bàn phím ảo
 
 Thanh công cụ ở dưới cùng cung cấp các phím bổ trợ:
 
 - **Tab** — tự động hoàn thành
-- **Ctrl** — giữ để dùng tổ hợp Ctrl+phím
-- **Shift** — bật/tắt chữ hoa
+- **Ctrl** — chạm một lần rồi chạm phím khác để gửi Ctrl+phím
+- **Shift** — chạm một lần để áp Shift cho phím kế tiếp (Shift+Tab = lùi tab)
 - **Esc** — thoát chế độ hiện tại (hữu ích cho `vim`)
 - **↑ / ↓** — duyệt lịch sử lệnh
 
@@ -108,7 +108,7 @@ Thanh công cụ ở dưới cùng cung cấp các phím bổ trợ:
 
 1. Mở một phiên trong Termote
 2. Gõ `claude` để khởi động Claude Code
-3. Dùng cử chỉ cảm ứng: vuốt lên/xuống cho lịch sử, vuốt phải để tự động hoàn thành bằng Tab
+3. Dùng cử chỉ cảm ứng: vuốt xuống/lên để cuộn output, vuốt phải để tự động hoàn thành bằng Tab
 4. Dùng bàn phím ảo cho các phím đặc biệt (Ctrl+C để ngắt)
 
 ### Giám sát tiến trình chạy lâu

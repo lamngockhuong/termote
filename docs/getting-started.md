@@ -97,26 +97,26 @@ a group is the tmux session and each tab is a tmux window:
 
 Each session is independent — run Claude Code in one, a build process in another.
 
-In native mode you can use Herdr instead of tmux with `termote start --mux herdr`. A tab can
+In native mode you can use [Herdr](https://herdr.dev/#install) instead of tmux with `termote start --mux herdr`. A tab can
 then hold several panes, and each pane shows a badge with the status of the coding agent
 running in it. Herdr is not available in container mode.
 
 ### Touch Gestures
 
-| Gesture     | Action                    |
-| ----------- | ------------------------- |
-| Swipe left  | Send `Ctrl+C` (interrupt) |
-| Swipe right | Send `Tab` (autocomplete) |
-| Swipe up    | Previous command (↑)      |
-| Swipe down  | Next command (↓)          |
+| Gesture     | Action                             |
+| ----------- | ---------------------------------- |
+| Swipe left  | Send `Ctrl+C` (interrupt)          |
+| Swipe right | Send `Tab` (autocomplete)          |
+| Swipe up    | Scroll down (back to newer output) |
+| Swipe down  | Scroll up (read earlier output)    |
 
 ### Virtual Keyboard
 
 The toolbar at the bottom provides modifier keys:
 
 - **Tab** — autocomplete
-- **Ctrl** — hold for Ctrl+key combinations
-- **Shift** — toggle for uppercase
+- **Ctrl** — tap once, then tap another key for Ctrl+key
+- **Shift** — tap once to apply Shift to the next key (Shift+Tab = backtab)
 - **Esc** — escape key (useful for vim)
 - **↑ / ↓** — command history navigation
 
@@ -126,7 +126,7 @@ The toolbar at the bottom provides modifier keys:
 
 1. Open a session in Termote
 2. Type `claude` to start Claude Code
-3. Use touch gestures: swipe up/down for history, swipe right for tab completion
+3. Use touch gestures: swipe down/up to scroll the output, swipe right for tab completion
 4. Use the virtual keyboard for special keys (Ctrl+C to interrupt)
 
 ### Monitoring Long-Running Processes

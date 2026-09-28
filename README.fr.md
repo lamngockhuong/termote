@@ -40,7 +40,7 @@ Contrôlez à distance des outils CLI (Claude Code, GitHub Copilot, n'importe qu
 - **Onglets de session** : Barre d'onglets horizontale pour basculer rapidement entre les fenêtres
 - **Backend Herdr** (natif uniquement) : pilotez les workspaces Herdr à la place de tmux, avec un badge d'état de l'agent de code sur chaque volet — voir [Installation native](https://termote.ohnice.app/installation/native/)
 - **Adapté au mobile** : Barre d'outils clavier virtuel (Tab/Ctrl/Shift/flèches, extensible)
-- **Support des gestes** : Balayage pour Ctrl+C, Tab, navigation dans l'historique
+- **Support des gestes** : Balayage pour Ctrl+C, Tab, défilement
 - **Historique des commandes** : Rappel des commandes envoyées avec recherche
 - **Actions rapides** : Menu flottant pour les opérations courantes (clear, cancel, exit)
 - **Indicateur de connexion** : Statut du serveur en temps réel avec détection automatique de déconnexion
@@ -276,14 +276,14 @@ Le mappage est appliqué à chaque démarrage du serveur. `stop`, `start --no-ta
 
 ## Utilisation Mobile
 
-| Action              | Geste                    |
-| ------------------- | ------------------------ |
-| Annuler/interrompre | Balayage gauche (Ctrl+C) |
-| Complétion Tab      | Balayage droit           |
-| Historique haut     | Balayage haut            |
-| Historique bas      | Balayage bas             |
-| Coller              | Appui long               |
-| Taille de police    | Pincement entrée/sortie  |
+| Action               | Geste                    |
+| -------------------- | ------------------------ |
+| Annuler/interrompre  | Balayage gauche (Ctrl+C) |
+| Complétion Tab       | Balayage droit           |
+| Défiler vers le bas  | Balayage haut            |
+| Défiler vers le haut | Balayage bas             |
+| Coller               | Appui long               |
+| Taille de police     | Pincement entrée/sortie  |
 
 La barre d'outils virtuelle fournit : Tab, Esc, Ctrl, Shift, touches fléchées et combinaisons de touches courantes. Supporte les combinaisons Ctrl+Shift (coller, copier). Basculez entre le mode minimal et le mode étendu pour des touches supplémentaires (Home, End, Delete, etc.).
 

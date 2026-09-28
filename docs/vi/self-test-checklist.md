@@ -279,8 +279,8 @@ Test trên thiết bị di động thật:
 ### Scroll & Copy Mode
 
 - [ ] Scroll lên/xuống = Page Up/Down khi bật copy mode
-- [ ] Terminal scroll được khi bàn phím mobile mở
-- [ ] Terminal scroll được trong chế độ gõ tiếng Việt (IME)
+- [ ] Terminal thu lại vừa khoảng phía trên thanh công cụ khi bàn phím mobile mở (các dòng cuối vẫn hiện)
+- [ ] Terminal vừa khoảng phía trên thanh công cụ trong chế độ gõ tiếng Việt (IME)
 - [ ] Scroll vẫn hoạt động (không bị cử chỉ vuốt chặn mất)
 
 ### Hướng Dẫn Cử Chỉ

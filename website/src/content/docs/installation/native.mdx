@@ -11,17 +11,25 @@ terminal process to install.
 
 ## Prerequisites
 
+termote needs one terminal backend. On Linux and macOS that is either **tmux** or a running
+**[Herdr](https://herdr.dev/#install)** server (see [Herdr Backend](#herdr-backend)); you do not need both. On
+Windows it is **psmux**.
+
 <Tabs>
   <TabItem label="Linux">
 
     ```bash
+    # tmux
     sudo apt install tmux
+    # or Herdr instead: see https://herdr.dev/#install
     ```
   </TabItem>
   <TabItem label="macOS">
 
     ```bash
+    # tmux
     brew install tmux
+    # or Herdr instead: see https://herdr.dev/#install
     ```
   </TabItem>
   <TabItem label="Windows">
@@ -33,11 +41,9 @@ terminal process to install.
   </TabItem>
 </Tabs>
 
-Instead of tmux, Linux and macOS can use a running [Herdr](#herdr-backend) server.
-
 ### tmux Configuration (Recommended)
 
-For tmux copy/paste to work with the keyboard toolbar buttons, add this to your `~/.tmux.conf`:
+With the tmux backend, for copy/paste to work with the keyboard toolbar buttons, add this to your `~/.tmux.conf`:
 
 ```bash
 # Vi mode for copy: Space=start selection, Enter=copy
@@ -150,8 +156,8 @@ address a request arrived on (so it keeps working when the LAN IP changes). A re
 
 ## Herdr Backend
 
-Linux and macOS can drive Herdr workspaces instead of tmux. Herdr must already be running on this host; Termote
-only talks to its socket. When Herdr is running at the first `start` it is picked for you; otherwise:
+Linux and macOS can drive Herdr workspaces instead of tmux. Herdr must already be running on this host
+([install Herdr](https://herdr.dev/#install)); Termote only talks to its socket. When Herdr is running at the first `start` it is picked for you; otherwise:
 
 ```bash
 termote start --mux herdr

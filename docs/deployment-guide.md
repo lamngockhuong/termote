@@ -2,14 +2,17 @@
 
 ## Prerequisites
 
-| Dependency    | Native (Unix)                   | Native (Windows)                  | Container Mode |
-| ------------- | ------------------------------- | --------------------------------- | -------------- |
-| tmux          | Required (default `--mux tmux`) | -                                 | -              |
-| psmux         | -                               | Required (`winget install psmux`) | -              |
-| herdr         | Required only for `--mux herdr` | Required only for `--mux herdr`   | -              |
-| Docker/Podman | -                               | -                                 | Required       |
+| Dependency    | Native (Unix)                        | Native (Windows)                  | Container Mode |
+| ------------- | ------------------------------------ | --------------------------------- | -------------- |
+| tmux          | One of tmux or herdr (`--mux tmux`)  | -                                 | -              |
+| herdr         | One of tmux or herdr (`--mux herdr`) | Not supported                     | -              |
+| psmux         | -                                    | Required (`winget install psmux`) | -              |
+| Docker/Podman | -                                    | -                                 | Required       |
 
-> **Windows Support**: native mode requires psmux (or herdr for the Herdr backend); container
+Native mode on Linux and macOS needs one terminal backend, not both: tmux, or a running
+[Herdr](https://herdr.dev/#install) server. The first `termote start` detects which one is there, and asks when it finds both.
+
+> **Windows Support**: native mode requires psmux (Herdr is not supported on Windows); container
 > mode requires Docker Desktop or Podman Desktop. Report any issues on GitHub.
 
 ttyd is not used anywhere in 1.0: termote streams the terminal itself (PTY on Unix, ConPTY on

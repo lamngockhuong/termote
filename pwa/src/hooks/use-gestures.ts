@@ -5,8 +5,8 @@ export interface GestureHandlers {
   onTap?: () => void // Focus terminal
   onSwipeLeft?: () => void // Ctrl+C
   onSwipeRight?: () => void // Tab
-  onSwipeUp?: () => void // Scroll up
-  onSwipeDown?: () => void // Scroll down
+  onSwipeUp?: () => void // Scroll down
+  onSwipeDown?: () => void // Scroll up
   onLongPress?: () => void // Paste
   onPinchIn?: () => void // Font smaller
   onPinchOut?: () => void // Font larger
