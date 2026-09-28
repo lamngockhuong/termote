@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -27,9 +28,10 @@ import (
 // Windows, see listenHerdrTest). Replies follow the
 // shapes recorded from herdr 0.9.1 (protocol 22).
 type fakeHerdr struct {
-	t    *testing.T
-	path string
-	ln   net.Listener
+	t       *testing.T
+	path    string
+	ln      net.Listener
+	stopped atomic.Bool // close was called; the accept loop ends
 
 	mu        sync.Mutex
 	snapshot  map[string]any // session.snapshot result.snapshot
@@ -93,7 +95,13 @@ func (f *fakeHerdr) listen(path string) {
 		for {
 			c, err := ln.Accept()
 			if err != nil {
-				return
+				// A named pipe can fail one accept (a client that left while
+				// connecting) without the listener being closed.
+				if f.stopped.Load() {
+					return
+				}
+				time.Sleep(10 * time.Millisecond)
+				continue
 			}
 			go f.handle(c)
 		}
@@ -101,6 +109,7 @@ func (f *fakeHerdr) listen(path string) {
 }
 
 func (f *fakeHerdr) close() {
+	f.stopped.Store(true)
 	f.ln.Close()
 	f.mu.Lock()
 	for _, c := range f.subs {
