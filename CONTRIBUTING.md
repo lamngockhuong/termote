@@ -13,9 +13,9 @@ make container-up   # or: make start (native, through the dev shim)
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 22.22+ or 24.15+
 - pnpm
-- Go 1.24+
+- Go 1.26+
 - Docker (optional)
 
 ### Workspace Setup
