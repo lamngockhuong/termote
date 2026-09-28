@@ -11,6 +11,7 @@ const DEFAULT_SETTINGS: Settings = {
   showSessionTabs: false,
   pollInterval: 5,
   hasSeenGestureHints: false,
+  terminalFont: '',
 }
 
 describe('SettingsModal', () => {
@@ -202,6 +203,30 @@ describe('SettingsModal', () => {
     const switches = document.querySelectorAll('button[role="switch"]')
     fireEvent.click(switches[2])
     expect(onUpdateSetting).toHaveBeenCalledWith('showSessionTabs', true)
+  })
+
+  it('saves the terminal font on blur, trimmed', () => {
+    const { onUpdateSetting, getByLabelText } = renderModal()
+    const input = getByLabelText('Terminal font') as HTMLInputElement
+    fireEvent.change(input, { target: { value: '  Fira Code  ' } })
+    expect(onUpdateSetting).not.toHaveBeenCalled()
+    fireEvent.blur(input)
+    expect(onUpdateSetting).toHaveBeenCalledWith('terminalFont', 'Fira Code')
+  })
+
+  it('saves the terminal font on Enter, only when it changed', () => {
+    const { onUpdateSetting, getByLabelText } = renderModal({
+      settings: { ...DEFAULT_SETTINGS, terminalFont: 'Hack' },
+    })
+    const input = getByLabelText('Terminal font') as HTMLInputElement
+    expect(input.value).toBe('Hack')
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(onUpdateSetting).not.toHaveBeenCalled()
+    fireEvent.change(input, { target: { value: '' } })
+    fireEvent.keyDown(input, { key: 'a' })
+    expect(onUpdateSetting).not.toHaveBeenCalled()
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(onUpdateSetting).toHaveBeenCalledWith('terminalFont', '')
   })
 
   it('updates pollInterval via select', () => {

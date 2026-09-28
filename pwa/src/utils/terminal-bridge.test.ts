@@ -24,6 +24,7 @@ import {
   sendCommandToTerminal,
   sendKeyToTerminal,
   sendTextToTerminal,
+  setTerminalFontFamily,
   setTerminalFontSize,
   setTerminalTheme,
   toggleTmuxCopyMode,
@@ -665,6 +666,18 @@ describe('setTerminalFontSize', () => {
   it('handles null term gracefully', () => {
     const handle = createMockHandle({ term: null })
     expect(() => setTerminalFontSize(handle, 16)).not.toThrow()
+  })
+})
+
+describe('setTerminalFontFamily', () => {
+  it('sets font family on terminal', () => {
+    const handle = createMockHandle()
+    setTerminalFontFamily(handle, 'Hack, monospace')
+    expect(handle.term?.options.fontFamily).toBe('Hack, monospace')
+  })
+
+  it('handles null handle gracefully', () => {
+    expect(() => setTerminalFontFamily(null, 'Hack')).not.toThrow()
   })
 })
 

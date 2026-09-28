@@ -152,6 +152,8 @@ Settings dialog with radio buttons, toggles, dropdown, and buttons:
 - **Toolbar default expanded**: Toggle to show all keys on load (vs. collapsed by default)
 - **Disable right-click menu**: Toggle to disable context menu on terminal (default: enabled)
 - **Show session tabs**: Toggle desktop tab bar visibility (default: enabled)
+- **Terminal font**: Text field for a font installed on the device, saved on blur/Enter; Nerd Font
+  icons fall back to the bundled Symbols Nerd Font either way (`utils/terminal-font.ts`)
 - **Session poll interval**: Dropdown to set snapshot sync frequency (3s, 5s, 10s, 15s, 30s, 1m, 2m, 5m; default: 5s)
 - **Show Gesture Hints**: Button to re-show gesture tutorial (mobile only)
 - **Check for Updates**: Button with inline toast result (no global toast behind dialog)
@@ -186,7 +188,7 @@ FAB (floating action button) with draggable positioning and auto-flipping menu (
 
 Settings state via `useSyncExternalStore`, persisted to `localStorage` (`termote-settings`
 key): IME behavior, toolbar default, context menu, poll interval, gesture hints seen, paste
-source, session tabs visibility.
+source, session tabs visibility, terminal font.
 
 ### use-gestures.ts
 

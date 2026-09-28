@@ -39,6 +39,7 @@ straight into an xterm.js terminal in the page, with:
 | Gesture Hints          | First-time overlay teaching touch gestures (mobile)               |
 | Theme Support          | Light/dark/system theme toggle (in-place switching)               |
 | Font Scaling           | Adjustable terminal font size (6-24px)                            |
+| Nerd Font Icons        | Bundled Symbols Nerd Font; optional custom terminal font          |
 | Fullscreen Mode        | Desktop-only fullscreen terminal view                             |
 | Context Menu Control   | Disable right-click menu on terminal (default: enabled)           |
 | Settings / Preferences | IME behavior, toolbar default, context menu, poll interval        |

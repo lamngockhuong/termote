@@ -12,10 +12,12 @@ import { MAX_SCROLL_LINES, scrollPane } from '../hooks/use-mux-api'
 import { type StreamControl, useTermSocket } from '../hooks/use-term-socket'
 import {
   blockContextMenu,
+  setTerminalFontFamily,
   setTerminalFontSize,
   setTerminalTheme,
   unblockContextMenu,
 } from '../utils/terminal-bridge'
+import { terminalFontFamily } from '../utils/terminal-font'
 import type { ConnectionState } from './connection-indicator'
 
 // What terminal-bridge drives. The object is stable for the component's
@@ -52,6 +54,8 @@ interface Props {
   // Wrap pastes in bracketed-paste markers (herdr pane running an agent).
   bracketedPaste?: boolean
   fontSize?: number
+  // Font installed on this device, tried before the default monospace fonts.
+  fontFamily?: string
   theme?: 'light' | 'dark'
   disableContextMenu?: boolean
   onConnectionStateChange?: (state: ConnectionState) => void
@@ -166,6 +170,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       serverScroll = false,
       bracketedPaste = false,
       fontSize = 14,
+      fontFamily = '',
       theme = 'dark',
       disableContextMenu = true,
       onConnectionStateChange,
@@ -181,6 +186,8 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
     const serverSizeRef = useRef<{ cols: number; rows: number } | null>(null)
     const fontSizeRef = useRef(fontSize)
     fontSizeRef.current = fontSize
+    const fontFamilyRef = useRef(fontFamily)
+    fontFamilyRef.current = fontFamily
     // herdr fixes the pane size and answers terminal queries itself.
     const isHerdr = backend === 'herdr'
     const isHerdrRef = useRef(isHerdr)
@@ -361,6 +368,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       if (!container) return
       const term = new Terminal({
         fontSize: fontSizeRef.current,
+        fontFamily: terminalFontFamily(fontFamilyRef.current),
         theme: THEMES[theme],
         cursorBlink: true,
         scrollback: 5000,
@@ -422,6 +430,12 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       setTerminalFontSize(handleRef.current, fontSize)
       layout()
     }, [fontSize, layout])
+
+    // Another font changes the cell size, so the grid is fitted again.
+    useEffect(() => {
+      setTerminalFontFamily(handleRef.current, terminalFontFamily(fontFamily))
+      layout()
+    }, [fontFamily, layout])
 
     useEffect(() => {
       if (disableContextMenu) blockContextMenu(handleRef.current)
