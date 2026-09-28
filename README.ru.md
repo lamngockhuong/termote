@@ -272,7 +272,7 @@ sudo tailscale set --operator=$USER                    # Linux, once: let termot
 | macOS     | ✓         | ✓        | `install.sh`  |
 | Windows   | ✓         | ✓        | `install.ps1` |
 
-> **Поддержка Windows**: Контейнерному режиму нужен Docker Desktop или Podman Desktop; нативному режиму — [psmux](https://github.com/psmux/psmux) (tmux-совместимый терминальный мультиплексор для Windows), который устанавливается командой `winget install psmux`. Работа службы в Windows ещё не проверена на реальной машине; сообщайте о любых проблемах на GitHub.
+> **Поддержка Windows**: Контейнерному режиму нужен Docker Desktop или Podman Desktop; нативному режиму — [psmux](https://github.com/psmux/psmux) (tmux-совместимый терминальный мультиплексор для Windows), который устанавливается командой `winget install psmux`, либо запущенный сервер [Herdr](https://herdr.dev/#install). Работа службы в Windows ещё не проверена на реальной машине; сообщайте о любых проблемах на GitHub.
 
 ## Мобильное использование
 

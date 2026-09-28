@@ -2,18 +2,18 @@
 
 ## Prerequisites
 
-| Dependency    | Native (Unix)                        | Native (Windows)                  | Container Mode |
-| ------------- | ------------------------------------ | --------------------------------- | -------------- |
-| tmux          | One of tmux or herdr (`--mux tmux`)  | -                                 | -              |
-| herdr         | One of tmux or herdr (`--mux herdr`) | Not supported                     | -              |
-| psmux         | -                                    | Required (`winget install psmux`) | -              |
-| Docker/Podman | -                                    | -                                 | Required       |
+| Dependency    | Native (Unix)                        | Native (Windows)      | Container Mode |
+| ------------- | ------------------------------------ | --------------------- | -------------- |
+| tmux          | One of tmux or herdr (`--mux tmux`)  | -                     | -              |
+| herdr         | One of tmux or herdr (`--mux herdr`) | One of psmux or herdr | -              |
+| psmux         | -                                    | One of psmux or herdr | -              |
+| Docker/Podman | -                                    | -                     | Required       |
 
-Native mode on Linux and macOS needs one terminal backend, not both: tmux, or a running
+Native mode needs one terminal backend, not both: tmux (psmux on Windows), or a running
 [Herdr](https://herdr.dev/#install) server. The first `termote start` detects which one is there, and asks when it finds both.
 
-> **Windows Support**: native mode requires psmux (Herdr is not supported on Windows); container
-> mode requires Docker Desktop or Podman Desktop. Report any issues on GitHub.
+> **Windows Support**: native mode requires psmux or a running Herdr server; container mode
+> requires Docker Desktop or Podman Desktop. Report any issues on GitHub.
 
 ttyd is not used anywhere in 1.0: termote streams the terminal itself (PTY on Unix, ConPTY on
 Windows) into xterm.js in the PWA. See [`system-architecture.md`](system-architecture.md) for
@@ -81,7 +81,7 @@ termote start --lan
 **Windows (PowerShell):**
 
 ```powershell
-winget install psmux   # tmux-compatible backend for Windows
+winget install psmux   # tmux-compatible backend for Windows (or run Herdr instead)
 
 termote start
 termote start --lan

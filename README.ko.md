@@ -270,7 +270,7 @@ sudo tailscale set --operator=$USER                    # Linux, once: let termot
 | macOS   | ✓        | ✓        | `install.sh`  |
 | Windows | ✓        | ✓        | `install.ps1` |
 
-> **Windows 지원**: 컨테이너 모드에는 Docker Desktop 또는 Podman Desktop이 필요하고, 네이티브 모드에는 [psmux](https://github.com/psmux/psmux)(Windows용 tmux 호환 터미널 멀티플렉서)가 필요하며 `winget install psmux`로 설치합니다. Windows 서비스는 아직 실제 기기에서 검증되지 않았습니다. 문제가 있으면 GitHub에 보고해 주세요.
+> **Windows 지원**: 컨테이너 모드에는 Docker Desktop 또는 Podman Desktop이 필요하고, 네이티브 모드에는 [psmux](https://github.com/psmux/psmux)(Windows용 tmux 호환 터미널 멀티플렉서)가 필요하며 `winget install psmux`로 설치합니다. 대신 실행 중인 [Herdr](https://herdr.dev/#install) 서버를 사용할 수도 있습니다. Windows 서비스는 아직 실제 기기에서 검증되지 않았습니다. 문제가 있으면 GitHub에 보고해 주세요.
 
 ## 모바일 사용법
 

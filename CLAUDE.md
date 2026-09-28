@@ -40,6 +40,8 @@ termote/
 │   ├── mux.go              # Mux interface + /api/mux/* routes
 │   ├── mux_tmux.go         # tmux/psmux backend
 │   ├── mux_herdr.go        # Herdr backend (native only)
+│   ├── herdr_socket_*.go   # Herdr socket path + dial (Unix socket / Windows named pipe)
+│   ├── herdr_observer_*.go # Stops `observe` (process group / Windows Job Object)
 │   ├── stream.go           # Terminal WebSocket (xterm.js stream)
 │   ├── webui/              # Embeds the built PWA into the binary (build output, .gitkeep only in git)
 │   ├── install_layout.go   # Versioned install layout (versions/<v>, current pointer, prune)
@@ -174,13 +176,13 @@ PWA over `/api/mux/stream` — there is no separate terminal process or proxy:
 └─────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────┐
-│ Native mode (Windows with psmux)                        │
+│ Native mode (Windows with psmux or Herdr)               │
 │   termote.exe:7690 (PWA + stream + API + auth)          │
 │   ├→ static PWA files                                   │
 │   ├→ terminal WebSocket (/api/mux/stream, ConPTY)       │
-│   └→ mux API endpoints → psmux                          │
-│   Mux backend: tmux (psmux)                              │
-│   Requires: winget install psmux                        │
+│   └→ mux API endpoints → psmux, or Herdr (named pipe)   │
+│   Mux backend: tmux (psmux), or Herdr (--mux herdr)     │
+│   Requires: winget install psmux, or a running Herdr    │
 └─────────────────────────────────────────────────────────┘
 ```
 

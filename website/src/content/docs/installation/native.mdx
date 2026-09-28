@@ -11,9 +11,8 @@ terminal process to install.
 
 ## Prerequisites
 
-termote needs one terminal backend. On Linux and macOS that is either **tmux** or a running
-**[Herdr](https://herdr.dev/#install)** server (see [Herdr Backend](#herdr-backend)); you do not need both. On
-Windows it is **psmux**.
+termote needs one terminal backend: **tmux** (on Windows, **psmux**) or a running
+**[Herdr](https://herdr.dev/#install)** server (see [Herdr Backend](#herdr-backend)); you do not need both.
 
 <Tabs>
   <TabItem label="Linux">
@@ -92,10 +91,11 @@ covered in [Getting Started](/getting-started/).
 ## What `termote start` Does
 
 <Steps>
-1. **Picks the backend** the first time: Herdr when its server answers on its socket (`$HERDR_SOCKET_PATH`, or
-   `~/.config/herdr/herdr.sock`), tmux when it is installed. When both are there it asks, or, without a
+1. **Picks the backend** the first time: Herdr when its server answers on its socket (`$HERDR_SOCKET_PATH`, else
+   `herdr.sock` in Herdr's config directory: `$XDG_CONFIG_HOME/herdr`, or `~/.config/herdr`; on Windows
+   `%APPDATA%\herdr`, reached as a named pipe), tmux (psmux on Windows) when it is installed. When both are there it asks, or, without a
    terminal to ask in, picks tmux and prints how to switch. When neither is there it stops with install hints.
-   The choice is saved and not detected again unless you pass `--mux`. Windows always uses psmux.
+   The choice is saved and not detected again unless you pass `--mux`.
 
 2. **Creates the admin password** the first time (or with `--fresh`): type one, or press Enter to generate
    one. It is printed once; `termote show-password` shows it again later.
@@ -156,7 +156,7 @@ address a request arrived on (so it keeps working when the LAN IP changes). A re
 
 ## Herdr Backend
 
-Linux and macOS can drive Herdr workspaces instead of tmux. Herdr must already be running on this host
+Linux, macOS and Windows can drive Herdr workspaces instead of tmux (psmux on Windows). Herdr must already be running on this host
 ([install Herdr](https://herdr.dev/#install)); Termote only talks to its socket. When Herdr is running at the first `start` it is picked for you; otherwise:
 
 ```bash
@@ -168,7 +168,7 @@ termote start --mux herdr
   — it only changes which pane the client streams. There is no "show on desktop" button.
   - Each pane gets an agent-status badge (idle/working/blocked/done) refreshed at most once
   per the configured poll interval; it is not pushed instantly.
-  - The Herdr backend is **native only**: the container and Windows use tmux (psmux).
+  - The Herdr backend is **native only**: the container uses tmux.
   - `--mux herdr --no-auth` is refused unless `--allow-herdr-no-auth` is also given: Herdr
   exposes every workspace on the host, not just the pane the PWA is showing, so running it
   without a password needs an explicit opt-in.

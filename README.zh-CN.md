@@ -270,7 +270,7 @@ sudo tailscale set --operator=$USER                    # Linux, once: let termot
 | macOS   | ✓        | ✓        | `install.sh`  |
 | Windows | ✓        | ✓        | `install.ps1` |
 
-> **Windows 支持**：容器模式需要 Docker Desktop 或 Podman Desktop；原生模式需要 [psmux](https://github.com/psmux/psmux)（Windows 上兼容 tmux 的终端复用器），可通过 `winget install psmux` 安装。Windows 服务尚未在真机上验证，如遇问题请在 GitHub 上反馈。
+> **Windows 支持**：容器模式需要 Docker Desktop 或 Podman Desktop；原生模式需要 [psmux](https://github.com/psmux/psmux)（Windows 上兼容 tmux 的终端复用器），可通过 `winget install psmux` 安装，也可以改用正在运行的 [Herdr](https://herdr.dev/#install) 服务器。Windows 服务尚未在真机上验证，如遇问题请在 GitHub 上反馈。
 
 ## 移动端使用
 

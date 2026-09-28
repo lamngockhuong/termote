@@ -64,6 +64,8 @@ termote/
 │   ├── mux_tmux.go               # tmux/psmux backend
 │   ├── mux_herdr.go              # Herdr backend (native only)
 │   ├── herdr_rpc.go, herdr_stream.go # Herdr JSON-RPC client + pane streaming
+│   ├── herdr_socket_*.go          # Herdr socket path + dial (Unix socket / Windows named pipe)
+│   ├── herdr_observer_*.go        # Stops `observe` (process group / Windows Job Object)
 │   ├── stream.go                 # `/api/mux/stream` WebSocket (xterm.js feed)
 │   ├── pty_*.go                  # PTY (Unix) / ConPTY (Windows) terminal backing
 │   ├── webui/                    # Embeds the built PWA into the binary

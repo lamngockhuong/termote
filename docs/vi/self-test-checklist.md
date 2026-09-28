@@ -53,6 +53,17 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 - [ ] Huy hiệu trạng thái agent đổi trong vòng một `pollInterval` sau khi `herdr` báo trạng thái mới
 - [ ] Gõ từ PWA vào pane của Herdr giữ đúng thứ tự (không bị xen lẫn)
 
+### Chế Độ Native + Herdr (Windows)
+
+- [ ] `termote start --mux herdr` hoàn thành không lỗi (có `herdr.exe` trong `PATH`)
+- [ ] `curl localhost:7690/api/mux/health` trả về `"backend":"herdr"` (kết nối tới `\\.\pipe\` cộng đường dẫn `%APPDATA%\herdr\herdr.sock`)
+- [ ] Khi có cả psmux và Herdr, lần `termote start` đầu tiên nhận ra Herdr và hỏi chọn (không có terminal để hỏi thì chọn psmux)
+- [ ] Stream, gõ phím, dán, cuộn và huy hiệu trạng thái agent chạy như trên Linux
+- [ ] Đổi kích thước pane trong Herdr (chia đôi hoặc phóng to pane) thì `observe` chạy lại theo kích thước mới
+- [ ] `observe` khởi động từ Scheduled Task không mở cửa sổ dòng lệnh nào
+- [ ] Sau `termote stop`, và sau `Stop-Process -Force` với server,
+      `Get-CimInstance Win32_Process -Filter "Name='herdr.exe'"` không còn tiến trình `terminal session observe`
+
 ### Chế Độ Container
 
 - [ ] `termote container up` hoàn thành không lỗi

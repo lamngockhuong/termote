@@ -272,7 +272,7 @@ La asignacion se aplica cada vez que arranca el servidor. `stop`, `start --no-ta
 | macOS      | ✓         | ✓      | `install.sh`  |
 | Windows    | ✓         | ✓      | `install.ps1` |
 
-> **Soporte de Windows**: El modo container requiere Docker Desktop o Podman Desktop; el modo nativo requiere [psmux](https://github.com/psmux/psmux) (multiplexor de terminal compatible con tmux para Windows), que se instala con `winget install psmux`. El servicio de Windows aun no se ha verificado en una maquina real; por favor reporta cualquier problema en GitHub.
+> **Soporte de Windows**: El modo container requiere Docker Desktop o Podman Desktop; el modo nativo requiere [psmux](https://github.com/psmux/psmux) (multiplexor de terminal compatible con tmux para Windows), que se instala con `winget install psmux`, o un servidor [Herdr](https://herdr.dev/#install) en ejecucion. El servicio de Windows aun no se ha verificado en una maquina real; por favor reporta cualquier problema en GitHub.
 
 ## Uso en Movil
 

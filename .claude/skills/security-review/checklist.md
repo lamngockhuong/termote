@@ -102,7 +102,9 @@ ttyd, no `/terminal/` iframe).
 
 ## Herdr Backend
 
-- [ ] Socket path from `HERDR_SOCKET_PATH` or `~/.config/herdr/herdr.sock`; Unix only (Windows build refuses)
+- [ ] Socket path from `HERDR_SOCKET_PATH`, else `herdr.sock` in Herdr's config dir (`XDG_CONFIG_HOME/herdr` → `~/.config/herdr`; Windows: `XDG_CONFIG_HOME` → `%APPDATA%` → `%USERPROFILE%\AppData\Roaming` → `HOME\.config`)
+- [ ] Windows: connects to the named pipe `\\.\pipe\<socket path>` and keeps it only if the pipe's server process runs as the same user (`checkPipeServerUser`; pipe names are machine-wide, so another user could create it first)
+- [ ] Windows: `herdr terminal session observe` runs in a `KILL_ON_JOB_CLOSE` Job Object, so it dies with the server (`Stop-Process -Force` included)
 - [ ] Requests built with `json.Marshal`, < 1 MiB (`herdrMaxRequest`); replies bounded (`herdrMaxReply`, 16 MiB)
 - [ ] Every call has a deadline (`muxTimeout`); cancel closes the connection
 - [ ] `herdr terminal session observe <pane> --cols N --rows N`: pane validated by regex (never starts with '-'), sizes are integers

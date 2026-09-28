@@ -53,6 +53,17 @@ Manual testing checklist for Termote features before release.
 - [ ] Agent status badge changes within one `pollInterval` after `herdr` reports a status change
 - [ ] Typing from the PWA lands in the correct order in the Herdr pane (no interleaving)
 
+### Native Mode + Herdr (Windows)
+
+- [ ] `termote start --mux herdr` completes without error (`herdr.exe` on `PATH`)
+- [ ] `curl localhost:7690/api/mux/health` reports `"backend":"herdr"` (named pipe of `%APPDATA%\herdr\herdr.sock`)
+- [ ] With psmux and Herdr both present, the first `termote start` detects Herdr and asks (or picks psmux without a terminal)
+- [ ] Stream, typing, paste, scroll and agent status badge work as on Linux
+- [ ] Resizing the pane in Herdr (split, zoom) restarts `observe` at the new size
+- [ ] No console window opens when `observe` starts from the Scheduled Task
+- [ ] After `termote stop`, and after `Stop-Process -Force` on the server,
+      `Get-CimInstance Win32_Process -Filter "Name='herdr.exe'"` lists no `terminal session observe`
+
 ### Container Mode
 
 - [ ] `termote container up` completes without error

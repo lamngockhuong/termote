@@ -11,9 +11,8 @@ nên không phải cài thêm tiến trình terminal nào khác.
 
 ## Yêu cầu
 
-termote cần một backend terminal. Trên Linux và macOS, đó là **tmux** hoặc một server
+termote cần một backend terminal: **tmux** (trên Windows là **psmux**) hoặc một server
 **[Herdr](https://herdr.dev/#install)** đang chạy (xem [Backend Herdr](#backend-herdr)); chỉ cần một trong hai.
-Trên Windows, đó là **psmux**.
 
 <Tabs>
   <TabItem label="Linux">
@@ -92,10 +91,11 @@ trang [Bắt đầu](/vi/getting-started/).
 ## `termote start` làm những gì
 
 <Steps>
-1. **Chọn backend** ở lần đầu: Herdr nếu server của nó trả lời trên socket (`$HERDR_SOCKET_PATH`, hoặc
-   `~/.config/herdr/herdr.sock`), tmux nếu tmux đã được cài. Khi có cả hai, nó hỏi bạn; nếu không có terminal để
+1. **Chọn backend** ở lần đầu: Herdr nếu server của nó trả lời trên socket (`$HERDR_SOCKET_PATH`, nếu không có
+   thì `herdr.sock` trong thư mục config của Herdr: `$XDG_CONFIG_HOME/herdr` hoặc `~/.config/herdr`; trên Windows
+   là `%APPDATA%\herdr`, kết nối tới `\\.\pipe\` cộng đường dẫn đó), tmux (trên Windows là psmux) nếu đã được cài. Khi có cả hai, nó hỏi bạn; nếu không có terminal để
    hỏi, nó chọn tmux và in ra cách đổi. Khi không có cái nào, nó dừng lại và gợi ý cách cài. Lựa chọn được lưu
-   lại và không dò lại nữa, trừ khi bạn truyền `--mux`. Windows luôn dùng psmux.
+   lại và không dò lại nữa, trừ khi bạn truyền `--mux`.
 
 2. **Tạo mật khẩu admin** ở lần đầu (hoặc khi có `--fresh`): gõ một mật khẩu, hoặc nhấn Enter để tự sinh. Mật
    khẩu chỉ được in ra một lần; về sau `termote show-password` sẽ hiện lại.
@@ -156,7 +156,7 @@ lệnh `termote start --allow-host <name>` cần chạy.
 
 ## Backend Herdr
 
-Linux và macOS có thể điều khiển workspace của Herdr thay cho tmux. Herdr phải đang chạy sẵn trên máy này
+Linux, macOS và Windows đều có thể điều khiển workspace của Herdr thay cho tmux (trên Windows là psmux). Herdr phải đang chạy sẵn trên máy này
 ([cài Herdr](https://herdr.dev/#install)); Termote chỉ giao tiếp với socket của nó. Nếu Herdr đang chạy ở lần
 `start` đầu tiên, nó được chọn tự động; nếu không thì chạy:
 
@@ -169,7 +169,7 @@ termote start --mux herdr
   mà chỉ đổi pane mà client đang nhận luồng. Không có nút "hiện trên desktop".
   - Mỗi pane có một huy hiệu trạng thái agent (`idle`/`working`/`blocked`/`done`), được làm mới
   tối đa một lần trong mỗi khoảng làm mới đã cấu hình; trạng thái không được đẩy về ngay lập tức.
-  - Backend Herdr **chỉ có ở native**: container và Windows dùng tmux (psmux).
+  - Backend Herdr **chỉ có ở native**: container dùng tmux.
   - `--mux herdr --no-auth` bị từ chối nếu không kèm `--allow-herdr-no-auth`. Herdr để lộ mọi
   workspace trên máy chứ không riêng pane mà PWA đang hiện, nên muốn chạy không mật khẩu thì
   phải chủ động bật tùy chọn này.
