@@ -38,7 +38,7 @@
 
 - **Переключение сессий**: Множество tmux-сессий с созданием/редактированием/удалением
 - **Вкладки сессий**: Горизонтальная панель вкладок для быстрого переключения окон
-- **Бэкенд Herdr** (только нативный режим): управление рабочими пространствами Herdr вместо tmux, со значками состояния ИИ-агента в каждой панели — см. [Нативная установка](https://termote.ohnice.app/installation/native/)
+- **Бэкенд Herdr** (нативно или в контейнере): управление рабочими пространствами Herdr вместо tmux, со значками состояния ИИ-агента в каждой панели — см. [Нативная установка](https://termote.ohnice.app/installation/native/)
 - **Мобильная адаптация**: Виртуальная клавиатура (Tab/Ctrl/Shift/стрелки, расширяемая)
 - **Поддержка жестов**: Свайп для Ctrl+C, Tab, прокрутки
 - **История команд**: Вызов ранее отправленных команд с поиском
@@ -81,7 +81,7 @@ flowchart TB
     subgraph Backend["Mux-бэкенд (tmux/psmux или Herdr)"]
         Mux["Интерфейс Mux"]
         tmux["tmux/psmux (PTY)"]
-        herdr["Herdr (только нативный)"]
+        herdr["Herdr"]
         Shell["Shell"]
         Tools["CLI Tools"]
     end
@@ -218,7 +218,7 @@ make build
 flowchart LR
     subgraph Container["Контейнерный режим"]
         direction TB
-        C1["Docker/Podman"] --> C2["termote :7680 (сам передаёт терминал)"] --> C3["tmux"]
+        C1["Docker/Podman"] --> C2["termote :7680 (сам передаёт терминал)"] --> C3["tmux / Herdr"]
     end
 
     subgraph Native["Нативный режим"]
@@ -229,10 +229,10 @@ flowchart LR
     User["Пользователь"] --> Container & Native
 ```
 
-| Режим        | Команда                | Сценарий использования                                                 | Платформа             |
-| ------------ | ---------------------- | ---------------------------------------------------------------------- | --------------------- |
-| Нативный     | `termote start`        | Доступ к инструментам хоста (claude, gh); обязателен для бэкенда Herdr | macOS, Linux, Windows |
-| Контейнерный | `termote container up` | Изолированная среда                                                    | macOS, Linux, Windows |
+| Режим        | Команда                | Сценарий использования                   | Платформа             |
+| ------------ | ---------------------- | ---------------------------------------- | --------------------- |
+| Нативный     | `termote start`        | Доступ к инструментам хоста (claude, gh) | macOS, Linux, Windows |
+| Контейнерный | `termote container up` | Изолированная среда                      | macOS, Linux, Windows |
 
 Нативный сервер работает как пользовательская служба: пользовательский юнит systemd в Linux (отсоединённый процесс, если пользовательского systemd нет, например в WSL2 без systemd), агент launchd в macOS и задача планировщика (Scheduled Task) при входе в систему в Windows.
 
@@ -292,7 +292,7 @@ sudo tailscale set --operator=$USER                    # Linux, once: let termot
 ```
 termote/
 ├── Makefile                # Build/test/run commands
-├── Dockerfile              # Container image (termote + tmux)
+├── Dockerfile              # Container image (termote + tmux + herdr)
 ├── docker-compose.yml      # Development from a checkout only
 ├── entrypoint.sh           # Container entrypoint
 ├── docs/                   # Documentation
@@ -309,7 +309,7 @@ termote/
 │   ├── serve.go            # Server (PWA, auth, guards)
 │   ├── mux.go              # Mux interface + /api/mux/* routes
 │   ├── mux_tmux.go         # tmux/psmux backend
-│   ├── mux_herdr.go        # Herdr backend (native only)
+│   ├── mux_herdr.go        # Herdr backend
 │   ├── stream.go           # Terminal WebSocket (xterm.js stream)
 │   ├── cli*.go             # start/stop/update/container/logs/menu subcommands
 │   └── webui/              # PWA embedded in the binary (filled by make build)

@@ -218,7 +218,7 @@ There is no upgrade from 0.x: 1.0 installs in a new place and does not read the 
 flowchart LR
     subgraph Container["Container Mode"]
         direction TB
-        C1["Docker/Podman"] --> C2["termote :7680 (streams terminal itself)"] --> C3["tmux"]
+        C1["Docker/Podman"] --> C2["termote :7680 (streams terminal itself)"] --> C3["tmux / Herdr"]
     end
 
     subgraph Native["Native Mode"]
@@ -229,10 +229,10 @@ flowchart LR
     User["User"] --> Container & Native
 ```
 
-| Mode      | Command                | Use Case                                                      | Platform              |
-| --------- | ---------------------- | ------------------------------------------------------------- | --------------------- |
-| Native    | `termote start`        | Host tool access (claude, gh); required for the Herdr backend | macOS, Linux, Windows |
-| Container | `termote container up` | Isolated environment                                          | macOS, Linux, Windows |
+| Mode      | Command                | Use Case                      | Platform              |
+| --------- | ---------------------- | ----------------------------- | --------------------- |
+| Native    | `termote start`        | Host tool access (claude, gh) | macOS, Linux, Windows |
+| Container | `termote container up` | Isolated environment          | macOS, Linux, Windows |
 
 The native server runs as a user service: a systemd user unit on Linux (a detached process where there is no user systemd, such as WSL2 without systemd), a launchd agent on macOS, a Scheduled Task at logon on Windows.
 

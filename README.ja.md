@@ -36,7 +36,7 @@
 
 - **セッション切り替え**: 作成/編集/削除が可能な複数のtmuxセッション
 - **セッションタブ**: ウィンドウをすばやく切り替えるための水平タブバー
-- **Herdrバックエンド**（ネイティブのみ）: tmuxの代わりにHerdrのワークスペースを操作し、ペインごとにコーディングエージェントの状態バッジを表示 — [ネイティブインストール](https://termote.ohnice.app/installation/native/)を参照
+- **Herdrバックエンド**（ネイティブまたはコンテナ内）: tmuxの代わりにHerdrのワークスペースを操作し、ペインごとにコーディングエージェントの状態バッジを表示 — [ネイティブインストール](https://termote.ohnice.app/installation/native/)を参照
 - **モバイル対応**: 仮想キーボードツールバー（Tab/Ctrl/Shift/矢印キー、展開可能）
 - **ジェスチャー操作**: スワイプでCtrl+C、Tab、スクロール
 - **コマンド履歴**: 検索機能付きの送信済みコマンド呼び出し
@@ -79,7 +79,7 @@ flowchart TB
     subgraph Backend["Muxバックエンド（tmux/psmux または Herdr）"]
         Mux["Muxインターフェース"]
         tmux["tmux/psmux (PTY)"]
-        herdr["Herdr（ネイティブのみ）"]
+        herdr["Herdr"]
         Shell["Shell"]
         Tools["CLIツール"]
     end
@@ -216,7 +216,7 @@ make build
 flowchart LR
     subgraph Container["コンテナモード"]
         direction TB
-        C1["Docker/Podman"] --> C2["termote :7680 (ターミナルを直接ストリーミング)"] --> C3["tmux"]
+        C1["Docker/Podman"] --> C2["termote :7680 (ターミナルを直接ストリーミング)"] --> C3["tmux / Herdr"]
     end
 
     subgraph Native["ネイティブモード"]
@@ -227,10 +227,10 @@ flowchart LR
     User["ユーザー"] --> Container & Native
 ```
 
-| モード     | コマンド               | ユースケース                                                    | プラットフォーム      |
-| ---------- | ---------------------- | --------------------------------------------------------------- | --------------------- |
-| ネイティブ | `termote start`        | ホストツール（claude、gh）へのアクセス。Herdrバックエンドに必須 | macOS, Linux, Windows |
-| コンテナ   | `termote container up` | 隔離された環境                                                  | macOS, Linux, Windows |
+| モード     | コマンド               | ユースケース                           | プラットフォーム      |
+| ---------- | ---------------------- | -------------------------------------- | --------------------- |
+| ネイティブ | `termote start`        | ホストツール（claude、gh）へのアクセス | macOS, Linux, Windows |
+| コンテナ   | `termote container up` | 隔離された環境                         | macOS, Linux, Windows |
 
 ネイティブサーバーはユーザーサービスとして動作します: Linuxではsystemdのユーザーユニット（WSL2でsystemdがない場合など、ユーザーsystemdがなければ切り離されたプロセス）、macOSではlaunchdエージェント、Windowsではログオン時のスケジュールタスクです。
 
@@ -290,7 +290,7 @@ sudo tailscale set --operator=$USER                    # Linux, once: let termot
 ```
 termote/
 ├── Makefile                # Build/test/run commands
-├── Dockerfile              # Container image (termote + tmux)
+├── Dockerfile              # Container image (termote + tmux + herdr)
 ├── docker-compose.yml      # Development from a checkout only
 ├── entrypoint.sh           # Container entrypoint
 ├── docs/                   # Documentation
@@ -307,7 +307,7 @@ termote/
 │   ├── serve.go            # Server (PWA, auth, guards)
 │   ├── mux.go              # Mux interface + /api/mux/* routes
 │   ├── mux_tmux.go         # tmux/psmux backend
-│   ├── mux_herdr.go        # Herdr backend (native only)
+│   ├── mux_herdr.go        # Herdr backend
 │   ├── stream.go           # Terminal WebSocket (xterm.js stream)
 │   ├── cli*.go             # start/stop/update/container/logs/menu subcommands
 │   └── webui/              # PWA embedded in the binary (filled by make build)

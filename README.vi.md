@@ -38,7 +38,7 @@
 
 - **Chuyển đổi session**: Nhiều tmux sessions với tạo/sửa/xóa
 - **Tab sessions**: Thanh tab ngang để chuyển nhanh giữa các cửa sổ
-- **Backend Herdr** (chỉ native): điều khiển workspace của Herdr thay cho tmux, kèm huy hiệu trạng thái của agent lập trình trên từng pane — xem [Cài đặt Native](https://termote.ohnice.app/vi/installation/native/)
+- **Backend Herdr** (native hoặc trong container): điều khiển workspace của Herdr thay cho tmux, kèm huy hiệu trạng thái của agent lập trình trên từng pane — xem [Cài đặt Native](https://termote.ohnice.app/vi/installation/native/)
 - **Thân thiện mobile**: Bàn phím ảo (Tab/Ctrl/Shift/mũi tên, mở rộng được)
 - **Hỗ trợ cử chỉ**: Vuốt cho Ctrl+C, Tab, cuộn màn hình
 - **Lịch sử lệnh**: Gợi nhớ các lệnh đã gửi trước đó với tìm kiếm
@@ -81,7 +81,7 @@ flowchart TB
     subgraph Backend["Mux Backend (tmux/psmux hoặc Herdr)"]
         Mux["Mux interface"]
         tmux["tmux/psmux (PTY)"]
-        herdr["Herdr (chỉ native)"]
+        herdr["Herdr"]
         Shell["Shell"]
         Tools["CLI Tools"]
     end
@@ -218,7 +218,7 @@ Không có đường nâng cấp từ 0.x: bản 1.0 cài vào chỗ khác và k
 flowchart LR
     subgraph Container["Chế Độ Container"]
         direction TB
-        C1["Docker/Podman"] --> C2["termote :7680 (tự truyền luồng terminal)"] --> C3["tmux"]
+        C1["Docker/Podman"] --> C2["termote :7680 (tự truyền luồng terminal)"] --> C3["tmux / Herdr"]
     end
 
     subgraph Native["Chế Độ Native"]
@@ -229,10 +229,10 @@ flowchart LR
     User["Người Dùng"] --> Container & Native
 ```
 
-| Chế Độ    | Lệnh                   | Trường Hợp Sử Dụng                                                  | Nền Tảng              |
-| --------- | ---------------------- | ------------------------------------------------------------------- | --------------------- |
-| Native    | `termote start`        | Truy cập công cụ trên host (claude, gh); bắt buộc với backend Herdr | macOS, Linux, Windows |
-| Container | `termote container up` | Môi trường tách biệt                                                | macOS, Linux, Windows |
+| Chế Độ    | Lệnh                   | Trường Hợp Sử Dụng                      | Nền Tảng              |
+| --------- | ---------------------- | --------------------------------------- | --------------------- |
+| Native    | `termote start`        | Truy cập công cụ trên host (claude, gh) | macOS, Linux, Windows |
+| Container | `termote container up` | Môi trường tách biệt                    | macOS, Linux, Windows |
 
 Server native chạy dưới dạng service của người dùng: systemd user unit trên Linux (một tiến trình chạy tách riêng ở nơi không có systemd cho người dùng, chẳng hạn WSL2 không bật systemd), launchd agent trên macOS, Scheduled Task chạy khi đăng nhập trên Windows.
 
@@ -292,7 +292,7 @@ Thanh công cụ ảo cung cấp: Tab, Esc, Ctrl, Shift, phím mũi tên, và c�
 ```
 termote/
 ├── Makefile                # Build/test/run commands
-├── Dockerfile              # Container image (termote + tmux)
+├── Dockerfile              # Container image (termote + tmux + herdr)
 ├── docker-compose.yml      # Development from a checkout only
 ├── entrypoint.sh           # Container entrypoint
 ├── docs/                   # Documentation
@@ -309,7 +309,7 @@ termote/
 │   ├── serve.go            # Server (PWA, auth, guards)
 │   ├── mux.go              # Mux interface + /api/mux/* routes
 │   ├── mux_tmux.go         # tmux/psmux backend
-│   ├── mux_herdr.go        # Herdr backend (native only)
+│   ├── mux_herdr.go        # Herdr backend
 │   ├── stream.go           # Terminal WebSocket (xterm.js stream)
 │   ├── cli*.go             # start/stop/update/container/logs/menu subcommands
 │   └── webui/              # PWA embedded in the binary (filled by make build)
