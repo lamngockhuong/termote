@@ -160,7 +160,7 @@ tags (`cli_unix.go`/`cli_windows.go`, `pty_linux.go`/`pty_bsd.go`/`pty_windows.g
 - **snake_case** for Go files: `serve_test.go`, `integration_test.go`
 - Test files: `*_test.go`
 - Server files group by concern (`mux_tmux.go`, `mux_herdr.go`); CLI files by subcommand
-  (`cli_install.go`, `cli_update.go`, `cli_logs.go`, ...)
+  (`cli_start.go`, `cli_container.go`, `cli_update.go`, `cli_logs.go`, ...)
 - Build tags split OS-specific code: `//go:build !windows` / `//go:build windows`
 
 ### CLI Conventions
@@ -173,12 +173,11 @@ real filesystem, network or OS processes:
   `*exitError` to a process exit code, anything else to exit 1
 - Flags use the standard library `flag` package only (no third-party CLI/TUI library); a
   repeatable flag like `--allow-host` implements `flag.Value` (see `stringList`)
-- User-facing output goes through `c.infof`/`c.warnf`/`c.errorf`, matching the `[INFO]`/`[WARN]`/`[ERROR]`
-  lines 0.x printed, with ANSI color only when stdout is a terminal
-- A CLI change that touches the shim contract (paths, flag names, exit behavior a 0.x install
-  depends on when it relaunches the new installer during `update`) needs a fixture test
-  against `testdata/config-0.1.0/` or the shim's own test suite; see
-  [`upgrade-1.0.md`](upgrade-1.0.md) for what that contract covers
+- User-facing output goes through `c.infof`/`c.warnf`/`c.errorf` (`[INFO]`/`[WARN]`/`[ERROR]`
+  lines), with ANSI color only when stdout is a terminal
+- A change to the install layout (`server/install_layout.go`) or the saved config format
+  (`server/cli_config.go`) needs a test that a real saved install and config still `update`
+  and `start` correctly — see the installer's own test suite (`tests/test-install.sh`/`.ps1`)
 
 ### Server Security
 
@@ -215,29 +214,29 @@ pnpm test:e2e:ui                  # Run e2e tests with UI debugger
 - Validate all user inputs before passing to `exec.Command`
 - Handle JSON decode errors explicitly (`decodeJSON` in `mux.go`)
 
-## Shell Script Standards (termote.sh / termote.ps1)
+## Shell Script Standards
 
-`scripts/termote.sh` and `scripts/termote.ps1` are shims only: they resolve or build the
-`termote` binary and `exec` it with the same arguments (Windows maps `-Flag` to `--flag`
-first). They carry no install/update/health logic — that all lives in Go (`server/cli*.go`,
-see above). What remains in the shims:
+Two separate pairs of scripts, not one:
 
-- **OS/arch detection:** `$(uname)` for Darwin vs Linux, `$(uname -m)` for x86_64/aarch64,
-  since the installed release ships one binary per platform (`termote-<os>-<arch>`)
-- **Checkout vs install:** a git checkout rebuilds `server/termote-dev[.exe]` when any
-  Go source is newer than the binary; an installed release runs the pre-built binary next to
-  the script
-- **Symlink resolution (Unix):** `CDPATH= cd -P` plus a manual `readlink` loop, so the shim
-  finds its own directory even when invoked through the `termote` symlink
-- **0.x compatibility (contract, not convention):** the shim's path and every flag name/shape
-  0.x's own `update` relies on (including `-Ttyd`) must keep working — see
-  [`upgrade-1.0.md`](upgrade-1.0.md)
+- **`scripts/install.sh`/`install.ps1`** are the release installers (curl|sh / irm|iex): they
+  detect OS/arch, download the versioned archive for it, verify its `.sha256` (mandatory, no
+  way to skip), lay it out under the versioned install root and print `termote start`. They
+  never start the server and hold no `start`/`update`/service logic — that all lives in Go
+  (`server/cli*.go`, see above).
+- **`scripts/termote.sh`/`termote.ps1`** are checkout-only dev shims: they build the PWA if
+  missing, rebuild `server/termote-dev[.exe]` when a Go source or the PWA build is newer, then
+  `exec` it with the same arguments. They never run an installed release, and flags use the
+  same Go syntax on every OS (no `-Flag`-to-`--flag` mapping needed in 1.0).
+
+Both use `$(uname)`/`$(uname -m)` for OS/arch detection on Unix, and `CDPATH= cd -P` plus a
+manual `readlink` loop to resolve their own directory through a symlink.
 
 ### Shell Testing
 
 ```bash
-make test-cli   # Run tests/test-termote.sh (shim behavior only)
+make test-cli      # tests/test-termote.sh (dev shim behavior)
+make test-install   # tests/test-install.sh (install.sh, fake curl)
 ```
 
-Test patterns: fake `termote` binaries, capture output with command substitution, assert on
-the argument list the shim passed through.
+Test patterns: fake `termote`/`curl` executables, capture output with command substitution,
+assert on the archive/checksum requested and the argument list passed through.

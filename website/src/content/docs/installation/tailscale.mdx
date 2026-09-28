@@ -5,57 +5,60 @@ description: Auto SSL via tailscale serve
 
 import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
 
-Automatic HTTPS using `tailscale serve`. No manual certificate management.
+Automatic HTTPS using `tailscale serve`. No manual certificate management, and Termote never runs `sudo` for it.
 
 ## Prerequisites
 
 - [Tailscale](https://tailscale.com) installed and authenticated
-- MagicDNS enabled
+- MagicDNS and HTTPS certificates enabled for your tailnet
+- **Linux only, once:** let your user change `tailscale serve` without sudo
 
-## Installation
+  ```bash
+  sudo tailscale set --operator=$USER
+  ```
+
+  If you skip this, `termote start --tailscale` stops before touching the running server and prints this line.
+
+## Setup
 
 <Steps>
-1. Deploy with Tailscale flag
+1. Start with the Tailscale name of this machine
 
    <Tabs>
-     <TabItem label="Unix (macOS/Linux)">
+     <TabItem label="Native">
+
        ```bash
-       ./scripts/termote.sh install container --tailscale myhost.ts.net
+       termote start --tailscale myhost.tailnet-name.ts.net
        ```
      </TabItem>
-     <TabItem label="Windows (PowerShell)">
-       ```powershell
-       .\scripts\termote.ps1 install container -Tailscale myhost.ts.net
+     <TabItem label="Container">
+
+       ```bash
+       termote container up --tailscale myhost.tailnet-name.ts.net
        ```
      </TabItem>
    </Tabs>
 
-2. Access at https://myhost.ts.net
+2. Open https://myhost.tailnet-name.ts.net from any device on your tailnet
 
 </Steps>
 
+The option is saved, so a later `termote start` (or `termote container up`) keeps publishing it.
+
 ## Options
 
-<Tabs>
-  <TabItem label="Unix (macOS/Linux)">
-    ```bash
-    # Custom port
-    ./scripts/termote.sh install native --tailscale myhost.ts.net:8765
+```bash
+# Another HTTPS port (default 443)
+termote start --tailscale myhost.tailnet-name.ts.net:8443
 
-    # Tailscale + LAN
-    ./scripts/termote.sh install container --tailscale myhost.ts.net --lan
-    ```
-  </TabItem>
-  <TabItem label="Windows (PowerShell)">
-    ```powershell
-    # Custom port
-    .\scripts\termote.ps1 install native -Tailscale myhost.ts.net:8765
+# Tailscale + LAN
+termote start --tailscale myhost.tailnet-name.ts.net --lan
 
-    # Tailscale + LAN
-    .\scripts\termote.ps1 install container -Tailscale myhost.ts.net -Lan
-    ```
-  </TabItem>
-</Tabs>
+# Stop publishing over Tailscale
+termote start --no-tailscale
+```
+
+The same `--tailscale` and `--no-tailscale` options work with `termote container up`.
 
 <Aside type="tip">
   Tailscale is the recommended way to expose Termote securely over the internet.
@@ -64,25 +67,22 @@ Automatic HTTPS using `tailscale serve`. No manual certificate management.
 ## How It Works
 
 ```
-Internet → Tailscale (HTTPS) → localhost:7680 → termote (terminal stream + API)
+Tailnet device → Tailscale (HTTPS) → 127.0.0.1:7680 → termote (terminal stream + API)
 ```
 
-The Tailscale hostname is also added to the server's Host allowlist automatically, so
-requests through `tailscale serve` are not rejected by the DNS-rebinding guard.
+- **Native:** the service's `termote serve` applies
+  `tailscale serve --bg --https=<port> http://127.0.0.1:<port>` every time it starts, at boot, on restart and
+  after an update, so the mapping always follows the saved config.
+- If that HTTPS port on Tailscale already serves something else, `start` refuses and suggests another port
+  (`--tailscale myhost.tailnet-name.ts.net:8443`); the server never replaces a mapping that is not its own.
+- **Container:** `container up` applies the same mapping on the host; `tailscaled` keeps it across reboots.
+- The Tailscale name is added to the Host allowlist automatically, so requests through `tailscale serve` are not
+  rejected by the DNS-rebinding guard.
+- `termote stop`, `termote start --no-tailscale`, `termote uninstall` and `termote container down` remove only
+  Termote's own mapping (`tailscale serve --https=<port> off`), never your other `tailscale serve` entries.
 
 Tailscale handles:
 
 - TLS certificates (auto-renewed)
 - Authentication (Tailscale ACLs)
 - NAT traversal
-
-## With Docker
-
-```bash
-docker run -d --name termote -p 7680:7680 \
-  -e TERMOTE_USER=admin -e TERMOTE_PASS=secret \
-  ghcr.io/lamngockhuong/termote:latest
-
-sudo tailscale serve --bg --https=443 http://127.0.0.1:7680
-# Access at: https://your-hostname.tailnet-name.ts.net
-```

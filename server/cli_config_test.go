@@ -8,12 +8,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 )
 
-const fixtureDir = "testdata/config-0.1.0"
+const fixtureDir = "testdata/config"
 
 func readFixture(t *testing.T, name string) []byte {
 	t.Helper()
@@ -24,45 +25,23 @@ func readFixture(t *testing.T, name string) []byte {
 	return b
 }
 
-func TestDeriveKeyMatchesZeroX(t *testing.T) {
-	// echo -n "termote-box-tester-termote" | openssl dgst -sha256 -r
-	const want = "80ce0cef6a04814998f604d765718f771574fe79a17747d84f980331e820d0fb"
-	if got := deriveKey("termote-box", "tester"); got != want {
-		t.Fatalf("deriveKey = %s, want %s", got, want)
-	}
-}
+// fixtureKey is the passphrase testdata/config/config-linux was encrypted
+// with (openssl enc -aes-256-cbc -a -A -salt -pbkdf2 -pass pass:<key>).
+const fixtureKey = "80ce0cef6a04814998f604d765718f771574fe79a17747d84f980331e820d0fb"
 
-func TestMachineKeyUsesHostnameAndWhoamiCommands(t *testing.T) {
-	tc := newTestCLI(t, "linux")
-	if got, want := tc.machineKey(), deriveKey("termote-box", "tester"); got != want {
-		t.Fatalf("machineKey = %s, want %s", got, want)
-	}
-}
-
-func TestParseZeroXLinuxConfig(t *testing.T) {
-	cfg, err := parseUnixConfig(readFixture(t, "config-linux"), func() string { return deriveKey("termote-box", "tester") })
+func TestParseLinuxConfig(t *testing.T) {
+	cfg, err := parseUnixConfig(readFixture(t, "config-linux"), func() string { return fixtureKey })
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := savedConfig{Mode: "native", LAN: true, Port: 7700, Tailscale: "box.tail1234.ts.net:8443", Password: "Linux-Pass-01"}
-	if cfg.Mode != want.Mode || cfg.LAN != want.LAN || cfg.NoAuth || cfg.Port != want.Port ||
-		cfg.Tailscale != want.Tailscale || cfg.Password != want.Password || cfg.Mux != "" || cfg.PasswordUnreadable {
-		t.Fatalf("got %+v, want %+v", *cfg, want)
-	}
-}
-
-func TestParseZeroXMacConfig(t *testing.T) {
-	cfg, err := parseUnixConfig(readFixture(t, "config-macos"), func() string { return deriveKey("Testers-Mac-mini.local", "tester") })
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cfg.Mode != "container" || cfg.Port != 7680 || cfg.Password != "Mac-Pass-02" {
+	if !cfg.LAN || cfg.NoAuth || cfg.Port != 7700 || cfg.Tailscale != "box.tail1234.ts.net:8443" ||
+		cfg.Password != "Linux-Pass-01" || cfg.Mux != "" || cfg.PasswordUnreadable || cfg.Container != nil {
 		t.Fatalf("got %+v", *cfg)
 	}
 }
 
-func TestParseConfigOtherMachineMarksPasswordUnreadable(t *testing.T) {
-	cfg, err := parseUnixConfig(readFixture(t, "config-linux"), func() string { return deriveKey("other-box", "tester") })
+func TestParseConfigWrongSecretMarksPasswordUnreadable(t *testing.T) {
+	cfg, err := parseUnixConfig(readFixture(t, "config-linux"), func() string { return "" })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,11 +50,13 @@ func TestParseConfigOtherMachineMarksPasswordUnreadable(t *testing.T) {
 	}
 }
 
-func TestParseLegacyBase64AndEmptyPassword(t *testing.T) {
+// A password stored as plain base64 is not accepted as-is: it is marked
+// unreadable, so start sets a new one.
+func TestParsePlainBase64AndEmptyPassword(t *testing.T) {
 	key := func() string { return "unused" }
-	cfg, _ := parseUnixConfig(readFixture(t, "config-legacy-base64"), key)
-	if cfg.Password != "Old-Pass-03" {
-		t.Fatalf("legacy password = %q", cfg.Password)
+	cfg, _ := parseUnixConfig(readFixture(t, "config-plain-base64"), key)
+	if cfg.Password != "" || !cfg.PasswordUnreadable {
+		t.Fatalf("plain base64 password = %q unreadable=%v, want empty and unreadable", cfg.Password, cfg.PasswordUnreadable)
 	}
 	cfg, _ = parseUnixConfig(readFixture(t, "config-empty-pass"), key)
 	if cfg.Password != "" || cfg.PasswordUnreadable || cfg.NoAuth {
@@ -84,9 +65,10 @@ func TestParseLegacyBase64AndEmptyPassword(t *testing.T) {
 }
 
 func TestUnixConfigRoundTrip(t *testing.T) {
-	key := deriveKey("h", "u")
-	in := savedConfig{Mode: "native", LAN: true, Port: 7700, Tailscale: "a.ts.net", Mux: "herdr",
-		AllowHosts: []string{"mybox.local", "proxy.lan"}, HerdrAllowNoAuth: true, Password: `p@ss w0rd$!`}
+	key := strings.Repeat("ab", 32)
+	in := savedConfig{LAN: true, Port: 7700, Tailscale: "a.ts.net", Mux: "herdr",
+		AllowHosts: []string{"mybox.local", "proxy.lan"}, HerdrAllowNoAuth: true, Password: `p@ss w0rd$!`,
+		Container: &containerConfig{LAN: true, Port: 7681, Tailscale: "c.ts.net:8443", AllowHosts: []string{"c.lan"}, Workspace: "/work"}}
 	data, err := formatUnixConfig(in, key)
 	if err != nil {
 		t.Fatal(err)
@@ -95,30 +77,36 @@ func TestUnixConfigRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out.Mode != in.Mode || out.LAN != in.LAN || out.Port != in.Port || out.Tailscale != in.Tailscale ||
+	if out.LAN != in.LAN || out.Port != in.Port || out.Tailscale != in.Tailscale ||
 		out.Mux != in.Mux || strings.Join(out.AllowHosts, ",") != "mybox.local,proxy.lan" ||
 		!out.HerdrAllowNoAuth || out.Password != in.Password {
 		t.Fatalf("round trip: got %+v, want %+v", *out, in)
 	}
-	// The 0.x keys stay first and keep their meaning.
-	if !strings.HasPrefix(string(data), "# Termote config (auto-generated)\nTERMOTE_MODE=\"native\"\nTERMOTE_LAN=\"true\"\n") {
+	if cc := out.Container; cc == nil || !cc.LAN || cc.NoAuth || cc.Port != 7681 || cc.Tailscale != "c.ts.net:8443" ||
+		strings.Join(cc.AllowHosts, ",") != "c.lan" || cc.Workspace != "/work" {
+		t.Fatalf("container round trip: %+v", out.Container)
+	}
+	if !strings.HasPrefix(string(data), "# Termote config (written by termote start)\nTERMOTE_LAN=\"true\"\n") {
 		t.Fatalf("unexpected layout:\n%s", data)
+	}
+	if strings.Contains(string(data), "p@ss") {
+		t.Fatal("password written in plain text")
 	}
 }
 
-// A config written by 1.0 must still open with the exact commands of 0.x, so
-// a downgrade or 0.x get.sh keeps the saved password.
-func TestGoEncryptedPasswordDecryptsWithZeroXOpenSSL(t *testing.T) {
+// The saved password is the `openssl enc -aes-256-cbc -pbkdf2` format, so the
+// openssl command line can decrypt it.
+func TestGoEncryptedPasswordDecryptsWithOpenSSL(t *testing.T) {
 	if _, err := exec.LookPath("openssl"); err != nil {
 		t.Skip("openssl not installed")
 	}
-	key := deriveKey("termote-box", "tester")
+	key := fixtureKey
 	enc, err := encryptOpenSSL("Round-Trip-99", key)
 	if err != nil {
 		t.Fatal(err)
 	}
 	cmd := exec.Command("openssl", "enc", "-aes-256-cbc", "-a", "-A", "-d", "-salt", "-pbkdf2", "-pass", "pass:"+key)
-	cmd.Stdin = strings.NewReader(enc + "\n") // 0.x pipes it through echo
+	cmd.Stdin = strings.NewReader(enc + "\n")
 	out, err := cmd.Output()
 	if err != nil {
 		t.Fatalf("openssl could not decrypt %q: %v", enc, err)
@@ -128,15 +116,32 @@ func TestGoEncryptedPasswordDecryptsWithZeroXOpenSSL(t *testing.T) {
 	}
 }
 
-func TestDecryptRejectsTamperedCiphertext(t *testing.T) {
+func TestDecryptRejectsTamperedCiphertextAndWrongKeys(t *testing.T) {
 	enc, _ := encryptOpenSSL("secret", "k")
+	if p, err := decryptSavedPassword(enc, passwordMAC(enc, "k"), "k"); err != nil || p != "secret" {
+		t.Fatalf("good password: %q %v", p, err)
+	}
 	raw, _ := base64.StdEncoding.DecodeString(enc)
 	raw[len(raw)-1] ^= 0xff
-	if _, err := decryptSavedPassword(base64.StdEncoding.EncodeToString(raw), "k"); err == nil {
-		t.Fatal("tampered ciphertext decrypted")
+	tampered := base64.StdEncoding.EncodeToString(raw)
+	for name, args := range map[string][3]string{
+		"tampered ciphertext": {tampered, passwordMAC(enc, "k"), "k"},
+		"garbage":             {"not base64!", passwordMAC("not base64!", "k"), "k"},
+		"wrong key":           {enc, passwordMAC(enc, "k"), "other"},
+		"no key":              {enc, passwordMAC(enc, ""), ""},
+		"no MAC":              {enc, "", "k"},
+	} {
+		if _, err := decryptSavedPassword(args[0], args[1], args[2]); err == nil {
+			t.Errorf("%s decrypted", name)
+		}
 	}
-	if _, err := decryptSavedPassword("not base64!", "k"); err == nil {
-		t.Fatal("garbage decrypted")
+	// Without the MAC a wrong key decrypted about 1 time in 200; with it,
+	// never.
+	for i := range 1000 {
+		key := strconv.Itoa(i)
+		if _, err := decryptSavedPassword(enc, passwordMAC(enc, "k"), key); err == nil && key != "k" {
+			t.Fatalf("key %q accepted", key)
+		}
 	}
 }
 
@@ -160,32 +165,29 @@ func fakeDPAPI(t *testing.T) {
 	t.Cleanup(func() { dpapiProtect, dpapiUnprotect = oldP, oldU })
 }
 
-func TestParseZeroXWindowsConfig(t *testing.T) {
+func TestParseWindowsConfig(t *testing.T) {
 	fakeDPAPI(t)
 	cfg, err := parseWindowsConfig(readFixture(t, "config.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Mode != "native" || !cfg.LAN || cfg.Port != 7690 || cfg.Tailscale != "win.tail1234.ts.net" || cfg.Password != "Win-Pass-04" {
+	if !cfg.LAN || cfg.Port != 7690 || cfg.Tailscale != "win.tail1234.ts.net" || cfg.Password != "Win-Pass-04" {
 		t.Fatalf("got %+v", *cfg)
 	}
 }
 
-func TestWindowsConfigRoundTripDropsTtyd(t *testing.T) {
+func TestWindowsConfigRoundTrip(t *testing.T) {
 	fakeDPAPI(t)
-	in := savedConfig{Mode: "container", Port: 7690, Mux: "tmux", AllowHosts: []string{"pc.lan"}, Password: "pw"}
+	in := savedConfig{Port: 7690, Mux: "tmux", AllowHosts: []string{"pc.lan"}, Password: "pw", Container: &containerConfig{Port: 7680, NoAuth: true}}
 	data, err := formatWindowsConfig(in, time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC))
 	if err != nil {
 		t.Fatal(err)
-	}
-	if strings.Contains(string(data), "Ttyd") {
-		t.Fatalf("Ttyd written:\n%s", data)
 	}
 	out, err := parseWindowsConfig(data)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out.Mode != "container" || out.Password != "pw" || out.Mux != "tmux" || strings.Join(out.AllowHosts, ",") != "pc.lan" {
+	if out.Container == nil || out.Container.Port != 7680 || !out.Container.NoAuth || out.Password != "pw" || out.Mux != "tmux" || strings.Join(out.AllowHosts, ",") != "pc.lan" {
 		t.Fatalf("round trip got %+v", *out)
 	}
 }
@@ -206,7 +208,7 @@ func TestSaveAndLoadConfigFile(t *testing.T) {
 	if cfg, err := tc.loadConfig(); cfg != nil || err != nil {
 		t.Fatalf("missing config: %v %v", cfg, err)
 	}
-	if err := tc.saveConfig(savedConfig{Mode: "native", Port: 7680, Mux: "tmux", Password: "pw1"}); err != nil {
+	if err := tc.saveConfig(savedConfig{Port: 7680, Mux: "tmux", Password: "pw1"}); err != nil {
 		t.Fatal(err)
 	}
 	st, err := os.Stat(tc.configFile())
@@ -219,6 +221,23 @@ func TestSaveAndLoadConfigFile(t *testing.T) {
 	cfg, err := tc.loadConfig()
 	if err != nil || cfg.Password != "pw1" {
 		t.Fatalf("load: %+v %v", cfg, err)
+	}
+	// The key lives in its own owner-only file; without it the password is
+	// unreadable, and the next save creates a new key.
+	st, err = os.Stat(tc.secretFile())
+	if err != nil || (runtime.GOOS != "windows" && st.Mode().Perm() != 0o600) || len(tc.readSecret()) != 64 {
+		t.Fatalf("secret file: %v %v", st, err)
+	}
+	os.Remove(tc.secretFile())
+	cfg, _ = tc.loadConfig()
+	if cfg.Password != "" || !cfg.PasswordUnreadable {
+		t.Fatalf("password readable without the secret: %+v", cfg)
+	}
+	if err := tc.saveConfig(savedConfig{Password: "pw2"}); err != nil {
+		t.Fatal(err)
+	}
+	if cfg, _ = tc.loadConfig(); cfg.Password != "pw2" {
+		t.Fatalf("after a new secret: %+v", cfg)
 	}
 }
 
@@ -247,12 +266,12 @@ func TestShowPassword(t *testing.T) {
 	if code := tc.main([]string{"show-password"}); code != 1 {
 		t.Fatalf("no config: code %d", code)
 	}
-	tc.saveConfig(savedConfig{Mode: "native", Password: "Shown-01"})
+	tc.saveConfig(savedConfig{Password: "Shown-01"})
 	tc.stdout.Reset()
 	if code := tc.main([]string{"show-password"}); code != 0 || !strings.Contains(tc.stdout.String(), "Password: Shown-01") {
 		t.Fatalf("code %d out %q", code, tc.stdout.String())
 	}
-	tc.saveConfig(savedConfig{Mode: "native", NoAuth: true})
+	tc.saveConfig(savedConfig{NoAuth: true})
 	tc.stdout.Reset()
 	if code := tc.main([]string{"show-password"}); code != 0 || !strings.Contains(tc.stdout.String(), "disabled") {
 		t.Fatalf("no-auth: code %d out %q", code, tc.stdout.String())

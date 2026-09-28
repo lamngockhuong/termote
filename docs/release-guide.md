@@ -3,15 +3,18 @@
 ## Overview
 
 Termote uses automated release workflows with multiple triggers and multi-arch Docker builds.
+A release is never public until every asset is on it: `release.yml` creates (or reuses) the
+GitHub Release as a draft, uploads every archive/checksum, pushes the Docker images, and only
+then publishes the release.
 
 ## Triggers
 
-| Method          | Command/Action                          | Use Case                   |
-| --------------- | --------------------------------------- | -------------------------- |
-| Release Please  | GitHub Actions UI → Run workflow        | Batch commits into release |
-| Manual (local)  | `make release VERSION=x.y.z`            | Quick release              |
-| Manual (remote) | GitHub Actions → Release → Run workflow | Remote trigger             |
-| Tag push        | `git tag -a vx.y.z && git push --tags`  | Direct tag                 |
+| Method          | Command/Action                          | Use Case                        |
+| --------------- | --------------------------------------- | ------------------------------- |
+| Release Please  | Push to `main` (or run manually)        | Batch commits into a release PR |
+| Manual (local)  | `make release VERSION=x.y.z`            | Quick release                   |
+| Manual (remote) | GitHub Actions → Release → Run workflow | Remote trigger                  |
+| Tag push        | `git tag -a vx.y.z && git push --tags`  | Direct tag                      |
 
 ## Version Strategy
 
@@ -20,7 +23,7 @@ Termote uses automated release workflows with multiple triggers and multi-arch D
 ```
 MAJOR.MINOR.PATCH[-PRERELEASE]
   │     │     │       │
-  │     │     │       └── rc1, rc2, beta1, etc.
+  │     │     │       └── rc.1, rc.2, etc.
   │     │     └── Bug fixes (backwards compatible)
   │     └── New features (backwards compatible)
   └── Breaking changes
@@ -28,44 +31,29 @@ MAJOR.MINOR.PATCH[-PRERELEASE]
 
 ### Version Types
 
-| Type   | Format      | Trigger                        | Example     |
-| ------ | ----------- | ------------------------------ | ----------- |
-| RC     | `x.y.z-rc1` | Test before stable             | `1.0.0-rc1` |
-| Stable | `x.y.z`     | Production ready               | `1.0.0`     |
-| Patch  | `x.y.z+1`   | `fix:` commits                 | `1.0.1`     |
-| Minor  | `x.y+1.0`   | `feat:` commits                | `1.1.0`     |
-| Major  | `x+1.0.0`   | `feat!:` or `BREAKING CHANGE:` | `2.0.0`     |
-
-### Pre-1.0 Version Rules
-
-While version < 1.0.0, bump behavior is conservative:
-
-| Commit             | Normal (≥1.0) | Pre-1.0 (current) |
-| ------------------ | ------------- | ----------------- |
-| `fix:`             | Patch         | **Patch**         |
-| `feat:`            | Minor         | **Patch**         |
-| `feat!:`           | Major         | **Minor**         |
-| `BREAKING CHANGE:` | Major         | **Minor**         |
-
-**Example** (current 0.0.9):
-
-- `fix: bug` → 0.0.10
-- `feat: new feature` → 0.0.10 (not 0.1.0)
-- `feat!: breaking change` → 0.1.0 (not 1.0.0)
-
-This is configured via `bump-minor-pre-major` and `bump-patch-for-minor-pre-major` in `release-please-config.json`.
+| Type   | Format       | Trigger                        | Example      |
+| ------ | ------------ | ------------------------------ | ------------ |
+| RC     | `x.y.z-rc.N` | Test before stable             | `1.0.0-rc.1` |
+| Stable | `x.y.z`      | Production ready               | `1.0.0`      |
+| Patch  | `x.y.z+1`    | `fix:` commits                 | `1.0.1`      |
+| Minor  | `x.y+1.0`    | `feat:` commits                | `1.1.0`      |
+| Major  | `x+1.0.0`    | `feat!:` or `BREAKING CHANGE:` | `2.0.0`      |
 
 ### RC Flow
 
 ```
-1.0.0-rc1 → find bugs → fix → 1.0.0-rc2 → stable → 1.0.0
+1.0.0-rc.1 → find bugs → fix → 1.0.0-rc.2 → stable → 1.0.0
 ```
 
 **Rules:**
 
 - Only bug fixes between RCs, no new features
-- When RC has no bugs → release stable
-- RC tags don't update `latest` Docker tag
+- Set `release-as` and `prerelease: true` in `release-please-config.json` for an RC, bumping
+  the RC number for each new one, then set `release-as` back to the plain version (and
+  `prerelease: false`) for the stable release
+- RC tags don't update the `latest` Docker tag or the website (the website only deploys stable
+  releases; test an RC installer from the raw GitHub tag URL instead — see
+  [`getting-started.md`](getting-started.md))
 
 ## Commit Conventions
 
@@ -83,10 +71,9 @@ chore: update deps             # No bump
 
 ### Release Please (Recommended)
 
-1. Push commits to `main` with conventional format
-2. Go to **Actions** → **Release Please** → **Run workflow**
-3. Creates PR with CHANGELOG and version bump
-4. Merge PR → automatically triggers release
+1. Push conventional commits to `main`
+2. `release-please.yml` opens or updates the `chore: release x.y.z` PR (CHANGELOG, version bump)
+3. Merging the PR creates the tag, which triggers `release.yml`
 
 ### Manual Release
 
@@ -107,12 +94,11 @@ Tag created
 │ prepare: extract version                │
 ├─────────────────────────────────────────┤
 │ build-pwa ──────┐                       │
-│ build-api-amd64 ├──→ docker ──→ release │
-│ build-api-arm64 ┘                       │
+│ build (5 OS/arch) ──→ docker ──→ release │
 └─────────────────────────────────────────┘
     ↓
 Docker images pushed (GHCR + Docker Hub)
-GitHub Release created with artifacts
+Release drafted, assets uploaded, then published
 ```
 
 ## Setup
@@ -134,16 +120,17 @@ GitHub Release created with artifacts
 
 ## Artifacts
 
-Each release produces:
+Each release produces, per platform (`linux`/`darwin` × `amd64`/`arm64`, plus
+`windows`/`amd64`):
 
-| Artifact                | Description          |
-| ----------------------- | -------------------- |
-| `termote-vX.Y.Z.tar.gz` | Full release tarball |
-| `pwa-dist-vX.Y.Z.zip`   | PWA static files     |
-| `termote-linux-amd64`   | API binary (x86_64)  |
-| `termote-linux-arm64`   | API binary (ARM64)   |
-| `termote.sh`            | Unified CLI          |
-| `checksums.txt`         | SHA256 checksums     |
+| Artifact                                | Description                                       |
+| --------------------------------------- | ------------------------------------------------- |
+| `termote-<v>-<os>-<arch>.tar.gz`/`.zip` | Archive holding `bin/termote[.exe]` and `LICENSE` |
+| `termote-<v>-<os>-<arch>.tar.gz.sha256` | Checksum of that archive                          |
+| `checksums.txt`                         | All checksums concatenated                        |
+
+`scripts/install.sh`/`install.ps1` verify the per-archive `.sha256`; there is no separate
+"full tarball" or PWA-only zip artifact in 1.0.
 
 ## Docker Images
 
@@ -162,7 +149,7 @@ Each release produces:
 | `x.y.z`  | Specific version                           |
 | `x.y`    | Latest patch of minor                      |
 
-**Note:** Pre-release versions (`-rc1`, `-beta`) don't update `latest` tag.
+**Note:** Pre-release versions (`-rc.N`) don't update the `latest` tag.
 
 ### Image
 
@@ -170,43 +157,21 @@ Each release produces:
 | --------- | ------------------------------------ |
 | `termote` | All-in-one (termote + tmux, no ttyd) |
 
-## 1.0.0 Release Procedure
-
-1.0.0 is a breaking release developed on the long-lived `feat/1.0` branch.
-`feat/1.0` is merged into `main` before 1.0.0 ships, so development continues
-on `main`; merging does not release anything by itself.
-
-1. Make sure the `release/0.x` maintenance branch exists (cut from `v0.1.0`,
-   see [Maintaining 0.x](#maintaining-0x)) so 0.x patches have somewhere to
-   ship once `main` becomes 1.x.
-2. `release-please-config.json` sets `release-as: 1.0.0` for the package
-   before the merge. Without it, `bump-minor-pre-major: true` would turn the
-   `feat!:` merge into `0.2.0` instead of `1.0.0`.
-3. Merge `feat/1.0` into `main` once (a merge commit with a `feat!:` subject
-   and a `BREAKING CHANGE:` footer), with the breaking changes documented in
-   [`upgrade-1.0.md`](upgrade-1.0.md).
-4. Release Please opens a `release 1.0.0` PR. Leave it open while work goes on
-   on `main`; every push updates it. Nothing is tagged or published until it
-   is merged, and the website is only deployed with a release (see below).
-5. When 1.0.0 is ready, remove the "`main` is ahead of the latest release"
-   note at the top of `README.md` and `README.vi.md`, then merge the release
-   PR.
-6. Remove `release-as` from `release-please-config.json` right after the
-   release goes out, or every later release stays pinned to 1.0.0.
-
 ## Website Deploys
 
-`deploy-website.yml` does not run on pushes to `main`. `release-please.yml`
-calls it after a stable release (not a pre-release) has been published, and it
-can be run by hand from GitHub Actions for a docs-only fix. This keeps the
-site's root docs on the version `releases/latest` installs while `main` runs
-ahead of it.
+`deploy-website.yml` does not run on pushes to `main`. `release-please.yml` calls it after a
+stable release (not a pre-release) has been published, and it can be run by hand from GitHub
+Actions for a docs-only fix. This keeps the site's root docs — and the installer scripts it
+serves at `https://termote.ohnice.app/install.sh`/`install.ps1` — on the version
+`releases/latest` installs, while `main` runs ahead of it. Test a pre-release installer from
+the raw GitHub tag URL instead (see [`getting-started.md`](getting-started.md)).
 
 ## Maintaining 0.x
 
-After 1.0.0, `main` is the 1.x line. 0.x lives on the `release/0.x` branch
-(cut from `v0.1.0`) and only takes security and critical fixes; no features,
-refactors or non-security dependency bumps.
+0.x lives on the `release/0.x` branch (cut from `v0.1.0`) and only takes security and critical
+fixes; no features, refactors or non-security dependency bumps. There is no upgrade path from
+0.x to 1.x — a 0.x user uninstalls following the archived
+[0.x documentation](https://termote.ohnice.app/0.x/), then installs 1.x fresh.
 
 - Fix on `main` first, then `git cherry-pick -x <sha>` onto `release/0.x`
   (open the PR against `release/0.x`). Fix on `release/0.x` directly only when
@@ -220,10 +185,9 @@ refactors or non-security dependency bumps.
   `starlight-versions` under `website/src/content/docs/0.x/` (and `vi/0.x/`),
   served at `/0.x/`; fix 0.x docs there on `main`, not on `release/0.x`.
 
-`releases/latest` must always be a 1.x release: `termote update`, `get.sh`,
-`get.ps1` and the PWA update check all install or compare against it, so a 0.x
-patch marked latest would downgrade every 1.x install that runs `update`. If a
-0.x release is ever marked latest by mistake, re-mark the newest 1.x release
+`releases/latest` must always be a 1.x release: `termote update` and the installer scripts
+compare against it, so a 0.x patch marked latest would downgrade every 1.x install that runs
+`update`. If a 0.x release is ever marked latest by mistake, re-mark the newest 1.x release
 (`gh release edit v1.x.y --latest`).
 
 ## Troubleshooting
@@ -233,10 +197,10 @@ patch marked latest would downgrade every 1.x install that runs `update`. If a
 - Check `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` secrets
 - Verify Docker Hub token has Read & Write permissions
 
-### Release Please doesn't create PR
+### Release Please doesn't create a PR
 
 - Ensure commits follow conventional format
-- Check workflow was triggered manually
+- Check the workflow ran (push to `main`, or trigger it manually)
 
 ### ARM64 build slow
 
@@ -245,5 +209,6 @@ patch marked latest would downgrade every 1.x install that runs `update`. If a
 
 ### Version mismatch
 
-- `package.json` synced by release workflow (tag push) or Release Please (workflow_call)
-- `.release-please-manifest.json` tracks Release Please version
+- `pwa/package.json` and `server/cli_version.go` are synced by `release-please-config.json`'s
+  `extra-files`, or by the release workflow's `sync-version` job on a tag push
+- `.release-please-manifest.json` tracks the Release Please version

@@ -50,24 +50,6 @@ func readPasswordNoEcho(f *os.File, r *bufio.Reader) (string, error) {
 	return strings.TrimRight(line, "\r\n"), nil
 }
 
-// execReplace runs the shim in this console and waits: Windows has no exec().
-func execReplace(path string, args []string) error {
-	shell := "powershell"
-	if _, err := exec.LookPath("pwsh"); err == nil {
-		shell = "pwsh"
-	}
-	cmd := exec.Command(shell, append([]string{"-NoProfile", "-ExecutionPolicy", "Bypass", "-File", path}, args...)...)
-	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
-	if err := cmd.Run(); err != nil {
-		var ee *exec.ExitError
-		if errors.As(err, &ee) {
-			return &exitError{code: ee.ExitCode(), msg: fmt.Sprintf("%s exited with status %d", path, ee.ExitCode())}
-		}
-		return err
-	}
-	return nil
-}
-
 func listProcesses() ([]procInfo, error) {
 	snap, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
 	if err != nil {
@@ -120,13 +102,13 @@ func terminateProcess(pid int, wait time.Duration) error {
 // startDetached starts bin without a console window, detached from the CLI's
 // console, with stdout and stderr appended to logPath.
 // The returned channel closes if the process exits while the CLI still runs.
-func startDetached(bin, dir string, env []string, logPath string) (int, <-chan struct{}, error) {
+func startDetached(bin string, args []string, dir string, env []string, logPath string) (int, <-chan struct{}, error) {
 	logf, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
 		return 0, nil, err
 	}
 	defer logf.Close()
-	cmd := exec.Command(bin)
+	cmd := exec.Command(bin, args...)
 	cmd.Dir = dir
 	cmd.Env = env
 	cmd.Stdout, cmd.Stderr = logf, logf
@@ -142,8 +124,8 @@ func startDetached(bin, dir string, env []string, logPath string) (int, <-chan s
 	return cmd.Process.Pid, exited, nil
 }
 
-// protectCurrentUser matches ProtectedData.Protect(bytes, $null, CurrentUser)
-// in 0.x termote.ps1.
+// protectCurrentUser is ProtectedData.Protect(bytes, $null, CurrentUser):
+// DPAPI bound to the current Windows user.
 func protectCurrentUser(plain []byte) ([]byte, error) {
 	if len(plain) == 0 {
 		return nil, errors.New("empty data")
@@ -170,8 +152,7 @@ func unprotectCurrentUser(blob []byte) ([]byte, error) {
 	return append([]byte(nil), unsafe.Slice(out.Data, out.Size)...), nil
 }
 
-// restrictToOwner gives only the current user access, like the Set-Acl call
-// of 0.x (Windows' chmod 600).
+// restrictToOwner gives only the current user access (Windows' chmod 600).
 func restrictToOwner(path string) error {
 	tu, err := windows.GetCurrentProcessToken().GetTokenUser()
 	if err != nil {
@@ -189,15 +170,17 @@ func restrictToOwner(path string) error {
 		windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, dacl, nil)
 }
 
-// isElevated is unused on Windows: no sudo there.
-func isElevated() bool { return false }
+var (
+	procGetConsoleWindow = windows.NewLazySystemDLL("kernel32.dll").NewProc("GetConsoleWindow")
+	procShowWindow       = windows.NewLazySystemDLL("user32.dll").NewProc("ShowWindow")
+)
 
-// replaceRunningFile renames an existing file aside, because Windows refuses
-// to overwrite a running executable but allows renaming it. The leftover is
-// removed by cleanupReplacedBinaries on a later run.
-func replaceRunningFile(path string) error {
-	if !fileExists(path) {
-		return nil
+// hideConsole hides the console window a Scheduled Task or the Startup
+// launcher opens for `serve --service` (termote.cmd shares it). The window
+// may flash once at logon.
+func hideConsole() {
+	if hwnd, _, _ := procGetConsoleWindow.Call(); hwnd != 0 {
+		const swHide = 0
+		procShowWindow.Call(hwnd, swHide)
 	}
-	return os.Rename(path, fmt.Sprintf("%s.old-%d", path, time.Now().UnixNano()))
 }

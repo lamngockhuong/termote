@@ -25,7 +25,8 @@ import (
 
 // helperEnv selects a helper mode when the test binary re-executes itself as
 // a terminal process or as a server.
-const helperEnv = "TERMOTE_TEST_HELPER"
+// Not a TERMOTE_* name: terminals never inherit those.
+const helperEnv = "TEST_TERMOTE_HELPER"
 
 func TestMain(m *testing.M) {
 	switch os.Getenv(helperEnv) {
@@ -367,7 +368,7 @@ func TestStreamTokenExpired(t *testing.T) {
 	tokens := newStreamTokenStore()
 	hub := newStreamHub(maxStreams)
 	mux := http.NewServeMux()
-	registerStreamRoutes(mux, &fakeMux{snap: oneTabSnapshot()}, tokens, parseAllowedHosts(""), hub)
+	registerStreamRoutes(mux, &fakeMux{snap: oneTabSnapshot()}, tokens, parseAllowedHosts("", false), hub)
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 	tok, _ := tokens.generate()

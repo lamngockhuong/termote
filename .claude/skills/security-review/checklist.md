@@ -1,13 +1,18 @@
 # Termote Security Checklist
 
-Project-specific checklist based on past vulnerabilities and the 1.0 architecture (one Go binary: server + CLI; no ttyd, no `/terminal/` iframe).
+Project-specific checklist based on past vulnerabilities and the 1.0 architecture (one Go
+binary: server + CLI, `termote start`/`container up`/`update`/...; no `install` command, no
+ttyd, no `/terminal/` iframe).
 
 ## Auth & Access Control
 
 ### Basic Auth (`serve.go`)
 
 - [ ] `basicAuth()` wraps ALL routes; only `isPWAPublicPath` (manifest, `sw.js`, `workbox-*.js`) skips it
-- [ ] Empty `TERMOTE_PASS` without `TERMOTE_NO_AUTH=true` is fatal (`validateConfig`), never silently disables auth
+- [ ] `termote serve` reads the saved config when one exists and ignores every `TERMOTE_*`
+      variable then; only without a saved config (container, manual run) does `validateConfig`
+      read the environment — either way, an empty password without `--no-auth`/`TERMOTE_NO_AUTH=true`
+      is fatal, never a silent no-auth start
 - [ ] `TERMOTE_NO_AUTH=true` with `TERMOTE_MUX=herdr` is fatal unless `TERMOTE_HERDR_ALLOW_NO_AUTH=true` (CLI: `--allow-herdr-no-auth`)
 - [ ] Constant-time comparison via `subtle.ConstantTimeCompare` (user and password)
 - [ ] Rate limiter blocks after 5 failures/min per IP; a valid session cookie is checked before the limiter
@@ -107,35 +112,47 @@ Project-specific checklist based on past vulnerabilities and the 1.0 architectur
 
 ## Go CLI
 
-### Config & Secrets (`cli_config.go`)
+### Config & Secrets (`cli_config.go`, `install_layout.go`)
 
 - [ ] Config dir created 0700, file written via temp + rename with 0600 (Unix) / `restrictToOwner` ACL (Windows)
 - [ ] Unix config parsed as `KEY="value"` lines, never sourced; values containing `"` or newlines refused on write
-- [ ] Password: openssl-compatible `aes-256-cbc -pbkdf2` (10000 iters, random salt) with the machine-derived key (obfuscation, not a secret); Windows: DPAPI CurrentUser
-- [ ] Undecryptable password → new password, never auth off
+- [ ] Password: openssl-compatible `aes-256-cbc -pbkdf2` (10000 iters, random salt) keyed by a
+      random per-install `secret` file (0600) — file permissions protect it, not the
+      derivation — plus a separate HMAC over the ciphertext so a missing/replaced `secret` file
+      is detected instead of "decrypting" to garbage; Windows: DPAPI CurrentUser
+- [ ] Undecryptable password → `start` warns and sets a new one, never auth off; `serve` alone
+      (no `start`) exits 78 instead of looping with a stale key
 - [ ] Generated password from `crypto/rand` (12 alphanumerics)
-- [ ] Password printed only on first set; `show-password` is explicit
+- [ ] Password printed only on first set; `show-password` is explicit; never written to the
+      systemd unit, launchd plist, Scheduled Task or any process command line
+- [ ] Versioned install layout (`versions/<v>`, `current` pointer): `update` switches `current`
+      atomically (temp + rename); a half-written version is never made current
 
 ### Update (`cli_update.go`)
 
-- [ ] `--version` and the GitHub `tag_name` match `versionRe`
-- [ ] Download over HTTPS, sha256 compared with `checksums.txt`; mismatch aborts before anything is stopped
+- [ ] `--version` and the GitHub tag match `versionRe`; only stable 1.x tags are picked
+      automatically (never `releases/latest`, never a 0.x or pre-release tag)
+- [ ] Download over HTTPS, sha256 compared against the archive's own `.sha256` (mandatory, no
+      way to skip); mismatch aborts before anything is stopped
 - [ ] Extraction: `stripTopDir` rejects backslashes and non-local paths; only dirs and regular files are written (no symlinks, no setuid bits)
-- [ ] Hands over to the new shim with `exec` (Unix) or a child PowerShell (Windows)
+- [ ] Restarts the service to run the new `current` version; refuses in a git checkout and for
+      a binary not installed by the installer
 
-### External Commands (`cli_install.go`, `cli_link.go`)
+### External Commands (`cli_container.go`, `tailscale.go`, `cli_link.go`)
 
-- [ ] `sudo tailscale serve --bg --https=<int> http://127.0.0.1:<int>`: host validated by `validateHostName`, ports numeric
-- [ ] `tailscale serve reset` only when Termote configured Tailscale before (it resets the whole serve config)
-- [ ] `podman`/`docker compose`: secrets passed via environment, not argv; override file contains only bind/port integers
+- [ ] `tailscale serve --bg --https=<int> http://127.0.0.1:<int>`: host validated by `validateHostName`, ports numeric, **never run with `sudo`**
+- [ ] `tailscale serve --https=<port> off` only for Termote's own port, never `tailscale serve reset` (which would drop mappings that are not Termote's)
+- [ ] `podman`/`docker run`: the password and Host allowlist are passed as `-e NAME` values read
+      from the CLI's own process environment — never an argv value, never an env file on disk
+- [ ] Container runs `--user <uid>:<gid>` (rootless podman: `--userns=keep-id`; rootless Docker:
+      no `--user`); the workspace is mounted with `--mount`, not a shell-interpolated `-v` string
 - [ ] PowerShell: elevated scripts via `-EncodedCommand`; interpolated values are integers or `'`-escaped
 - [ ] `--allow-host` / `--tailscale` names match `hostNameRe`; `*` refused
 
 ### Process Matching (`stopNative`)
 
 - [ ] Unix: kill only when the command line is exactly the server binary path (no arguments), or the PID file names a process whose image starts with `termote`
-- [ ] Windows: image path equals `server\termote-server.exe` (`sameWindowsPath`: case-insensitive, 8.3 short names via `os.SameFile`)
-- [ ] Legacy ttyd killed only on the exact 0.x argument list / 0.x `scripts\ttyd.exe`
+- [ ] Windows: image path equals the installed `termote.exe` (`sameWindowsPath`: case-insensitive, 8.3 short names via `os.SameFile`)
 - [ ] The CLI's own PID is skipped
 
 ## Docker & Container
@@ -150,30 +167,36 @@ Project-specific checklist based on past vulnerabilities and the 1.0 architectur
 
 ### Runtime
 
-- [ ] Compose `user:` maps to the host UID/GID
+- [ ] `container up` runs the image as `--user <uid>:<gid>` (rootless podman: `--userns=keep-id`;
+      rootless Docker: no `--user`)
 - [ ] `HOME` directory writable but not world-writable for sensitive files
-- [ ] Sensitive host dirs excluded from mounts (.ssh, .gnupg, .aws); CLI warns when `WORKSPACE` contains them
+- [ ] Sensitive host dirs excluded from `--workspace` mounts (.ssh, .gnupg, .aws); CLI warns when it contains them
 - [ ] Password auto-generated if not provided (12 chars, alphanumeric); shown once, not logged to a file
-- [ ] `TERMOTE_PASS` not exported into the tmux session started by `entrypoint.sh`
-- [ ] No terminal can read `TERMOTE_PASS` via `env`: `scrubSecretEnv` after config load, `terminalEnv`
-      filters `secretEnvKeys`, `scrubTmuxSecrets` clears a tmux server that 0.x started with it.
+- [ ] The password and Host allowlist reach the container only as `-e NAME` values from the
+      CLI's own process environment (never an env file on disk, never an argv value); `docker
+      inspect`/`podman inspect` still show a running container's env, like any container
+- [ ] No terminal can read `TERMOTE_PASS` via `env`: `serve` calls `scrubTermoteEnv` on its own
+      process after loading the config, `terminalEnv()` filters every `TERMOTE_*` variable (and
+      `TMUX`/`TMUX_PANE`) from a spawned pane's environment, and `scrubTmuxSecrets` clears a
+      tmux server that was already running with one.
       Known limit: `/proc/<pid>/environ` of `termote` (and tini in the container) still holds the
       startup value; only the same uid/root can read it, and they can decrypt the config anyway
 
 ## Shell Scripts
 
-### Shims (`termote.sh`, `termote.ps1`)
+### Dev Shims (`termote.sh`, `termote.ps1`, checkout-only)
 
-- [ ] Only resolve the install dir and run the binary; no secret handling
+- [ ] Only resolve/build `termote-dev` and run it; no secret handling, never run against an
+      installed release
 - [ ] All variables double-quoted: `"$VAR"`; `set -eo pipefail`
 
-### Online Installers (`get.sh`, `get.ps1`)
+### Online Installers (`install.sh`, `install.ps1`)
 
-- [ ] Downloads from GitHub releases (HTTPS)
-- [ ] `--version` validated with the semver regex
-- [ ] SHA256 checksum verification; `--strict` fails when unavailable
-- [ ] Config read with `grep`/`cut`, never sourced
-- [ ] User confirmation before install (unless `--yes` / `--update`)
+- [ ] Downloads from GitHub releases (HTTPS), newest stable 1.x tag or `TERMOTE_VERSION`
+- [ ] `TERMOTE_VERSION` validated with the semver (+ `-rc.N`) regex
+- [ ] SHA256 checksum verification against the archive's own `.sha256`; mandatory, no flag skips it
+- [ ] Never starts the server or touches the saved config; only lays out the versioned install
+      and prints `termote start`
 
 ## Known Past Vulnerabilities
 

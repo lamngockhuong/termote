@@ -6,7 +6,7 @@
 
 Termote (Terminal + Remote) biến trình duyệt thành terminal thân thiện với thiết bị di động. Nó bọc các công cụ CLI hiện có với cử chỉ cảm ứng, bàn phím ảo và quản lý phiên — tất cả qua PWA có thể cài đặt lên màn hình chính.
 
-Từ bản 1.0.0, một tệp thực thi duy nhất là `termote` đảm nhận mọi việc: phục vụ PWA, cung cấp API, xác thực, và tự truyền luồng terminal (PTY trên Unix, ConPTY trên Windows) qua WebSocket `/api/mux/stream` tới xterm.js trong trình duyệt. Termote không còn dùng `ttyd`. CLI cũng nằm trong chính tệp đó; `scripts/termote.sh` và `scripts/termote.ps1` chỉ còn là lớp vỏ mỏng chuyển lệnh sang nó.
+Từ bản 1.0.0, một tệp thực thi duy nhất là `termote` đảm nhận mọi việc: phục vụ PWA, cung cấp API, xác thực, và tự truyền luồng terminal (PTY trên Unix, ConPTY trên Windows) qua WebSocket `/api/mux/stream` tới xterm.js trong trình duyệt. Termote không còn dùng `ttyd`. CLI cũng nằm trong chính tệp đó — trình cài đặt đưa thẳng `termote` vào `PATH`, nên không còn lớp vỏ trung gian nào để gọi.
 
 **Các trường hợp sử dụng:**
 
@@ -17,23 +17,29 @@ Từ bản 1.0.0, một tệp thực thi duy nhất là `termote` đảm nhận 
 
 ## Cài đặt
 
-> Để xem chi tiết các tùy chọn cài đặt (Container Mode, Native Mode, Windows), xem [Hướng dẫn triển khai](deployment-guide.md).
+> Để xem các tùy chọn chi tiết (cờ cho chế độ native, chế độ container, Windows, Tailscale), xem [Hướng dẫn triển khai](deployment-guide.md).
 
-Bắt đầu nhanh với Container Mode:
+Chỉ hai lệnh, trên Linux hoặc macOS:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash -s -- --container
+curl -fsSL https://termote.ohnice.app/install.sh | sh
+termote start
 ```
 
-Termote sẽ chạy tại `http://localhost:7680`. Mở trong trình duyệt.
+Trên Windows (PowerShell):
 
-Trình cài đặt tạo sẵn lệnh `termote` dùng được ở mọi nơi. Mật khẩu của tài khoản `admin` được tự sinh và lưu lại ở dạng mã hóa; khi cần xem lại, chạy:
+```powershell
+irm https://termote.ohnice.app/install.ps1 | iex
+termote start
+```
+
+Trình cài đặt chỉ tải bản phát hành đúng hệ điều hành/kiến trúc, kiểm tra checksum rồi đặt vào đúng vị trí — nó không tự khởi động bất cứ thứ gì. `termote start` tạo mật khẩu lần đầu và in ra một lần duy nhất, đăng ký server với hệ điều hành (systemd/launchd/Scheduled Task) để nó tồn tại qua các lần đăng nhập, rồi in URL ngay khi server phản hồi — mở URL đó trong trình duyệt. Xem lại mật khẩu bất cứ lúc nào bằng:
 
 ```bash
 termote show-password
 ```
 
-Trên Windows, dùng `irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex` và `.\scripts\termote.ps1 show-password`.
+Muốn chạy container thay vì cài native? Chạy `termote container up` (cần podman hoặc docker) thay cho `termote start`; xem [Hướng dẫn triển khai](deployment-guide.md) để biết các cờ của lệnh này.
 
 ## Truy cập từ điện thoại
 
@@ -42,15 +48,15 @@ Trên Windows, dùng `irm https://raw.githubusercontent.com/lamngockhuong/termot
 Để truy cập Termote từ các thiết bị khác trong cùng mạng:
 
 ```bash
-termote install container --lan
+termote start --lan
 ```
 
-Lệnh này gắn server vào IP nội bộ (ví dụ: `http://192.168.1.100:7680`). Mở URL đó trên điện thoại.
+Lệnh này gắn server vào `0.0.0.0` thay vì `127.0.0.1` (ví dụ: truy cập được qua `http://192.168.1.100:7680`). Mở URL đó trên điện thoại.
 
-Server chỉ chấp nhận request có header `Host` nằm trong danh sách được phép: địa chỉ của chính máy (`localhost`, `127.0.0.1`, `::1`), IP LAN khi dùng `--lan`, tên Tailscale khi dùng `--tailscale`. Nếu bạn truy cập bằng một hostname khác (ví dụ tên máy trong mạng nội bộ), hãy thêm nó bằng `--allow-host <name>` (lặp lại được):
+Server chỉ chấp nhận request có header `Host` nằm trong danh sách được phép: luôn cho phép chính máy này (`localhost`, `127.0.0.1`, `::1`), và khi dùng `--lan` thì cho phép đúng địa chỉ mà request thực sự gửi tới (nên vẫn hoạt động khi IP LAN đổi), cộng với tên Tailscale khi dùng `--tailscale`. Nếu bạn truy cập bằng một hostname khác (ví dụ tên máy trong mạng nội bộ), hãy thêm nó bằng `--allow-host <name>` (lặp lại được):
 
 ```bash
-termote install container --lan --allow-host mypc.local
+termote start --lan --allow-host mypc.local
 ```
 
 ### Cài đặt dạng PWA
@@ -75,7 +81,7 @@ Termote tổ chức terminal theo ba cấp: **group → tab → pane**. Với tm
 
 Mỗi phiên độc lập — chạy Claude Code trong phiên này, tiến trình build trong phiên khác.
 
-Ở chế độ native, bạn có thể dùng Herdr thay cho tmux bằng `termote install native --mux herdr`. Khi đó một tab có thể có nhiều pane, và mỗi pane hiện huy hiệu trạng thái của agent lập trình đang chạy trong đó. Herdr không dùng được ở chế độ container.
+Ở chế độ native, bạn có thể dùng Herdr thay cho tmux bằng `termote start --mux herdr`. Khi đó một tab có thể có nhiều pane, và mỗi pane hiện huy hiệu trạng thái của agent lập trình đang chạy trong đó. Herdr không dùng được ở chế độ container.
 
 ### Cử chỉ cảm ứng
 
@@ -126,11 +132,11 @@ Thanh công cụ ở dưới cùng cung cấp các phím bổ trợ:
 - Kiểm tra cả hai thiết bị cùng mạng
 - Xác nhận URL khớp với IP nội bộ của máy chủ (`ip addr` hoặc `ifconfig`)
 - Kiểm tra tường lửa cho phép cổng 7680
-- Nếu nhận lỗi 403 do Host bị từ chối, chạy lại lệnh cài với `--allow-host <name>` mà thông báo lỗi gợi ý
+- Nếu nhận lỗi 403 do Host bị từ chối, chạy lệnh `termote start --allow-host <name>` mà thông báo lỗi gợi ý
 
 ### Quên mật khẩu
 
-- Chạy `termote show-password` (Windows: `.\scripts\termote.ps1 show-password`) để in lại mật khẩu đã lưu
+- Chạy `termote show-password` để in lại mật khẩu đã lưu
 
 ### Terminal hiển thị không đúng
 
@@ -142,7 +148,7 @@ Thanh công cụ ở dưới cùng cung cấp các phím bổ trợ:
 
 - Phiên được giữ khi tải lại trang nhưng không qua khởi động lại server
 - Để tự động khởi tạo phiên, thêm lệnh vào tệp cấu hình của shell (`~/.bashrc`, `~/.zshrc`)
-- Dùng `termote health` để kiểm tra trạng thái dịch vụ
+- Dùng `termote status` để kiểm tra trạng thái dịch vụ
 
 ### Mất kết nối
 
@@ -150,6 +156,6 @@ Thanh công cụ ở dưới cùng cung cấp các phím bổ trợ:
 - Nếu truy cập từ mạng ngoài (không phải LAN), cân nhắc đặt một proxy ngược có HTTPS phía trước
 - PWA sẽ tự động kết nối lại khi có mạng trở lại
 
-## Nâng cấp từ 0.x
+## Nếu bạn đang dùng bản 0.x
 
-Bản 1.0.0 có thay đổi không tương thích: gỡ bỏ `ttyd`, đổi API từ `/api/tmux/*` sang `/api/mux/*`, thêm danh sách Host được phép, và mật khẩu đã lưu nếu rỗng không còn làm tắt xác thực. Chạy `termote update` để nâng cấp; danh sách đầy đủ nằm ở [Nâng cấp lên 1.0](../upgrade-1.0.md).
+Không có đường nâng cấp tại chỗ từ 0.x lên 1.0: cấu trúc cài đặt, định dạng cấu hình và CLI đều đã đổi khác. Hãy gỡ bản 0.x trước (xem [tài liệu 0.x đã lưu trữ](https://termote.ohnice.app/0.x/) để biết các bước gỡ riêng của bản đó), rồi cài bản 1.0 từ đầu bằng hai lệnh phía trên.

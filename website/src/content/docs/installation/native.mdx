@@ -1,34 +1,39 @@
 ---
 title: Native Installation
-description: All services run natively on host
+description: Run Termote as a service of your user, with access to host tools
 ---
 
 import { Steps, Tabs, TabItem, Aside } from "@astrojs/starlight/components";
 
-No Docker required. Access host binaries like `claude`, `git`, `gh`, etc. termote streams
-the terminal itself (PTY on Unix, ConPTY on Windows) into xterm.js in the PWA — there is no
-separate terminal process to install.
+The native server runs on the host, so its terminals see your tools: `claude`, `git`, `gh` and the rest. termote
+streams the terminal itself (PTY on Unix, ConPTY on Windows) into xterm.js in the PWA; there is no separate
+terminal process to install.
 
 ## Prerequisites
 
 <Tabs>
   <TabItem label="Linux">
+
     ```bash
     sudo apt install tmux
     ```
   </TabItem>
   <TabItem label="macOS">
+
     ```bash
-    brew install tmux go
+    brew install tmux
     ```
   </TabItem>
   <TabItem label="Windows">
+
     ```powershell
-    # Install psmux (tmux-compatible for Windows)
+    # psmux: tmux-compatible multiplexer for Windows
     winget install psmux
     ```
   </TabItem>
 </Tabs>
+
+Instead of tmux, Linux and macOS can use a running [Herdr](#herdr-backend) server.
 
 ### tmux Configuration (Recommended)
 
@@ -50,100 +55,160 @@ tmux source-file ~/.tmux.conf
 
 This enables: **Copy icon** → navigate → **Space** → select → **Enter** → **Paste icon**
 
-:::tip[Copy to System Clipboard]
-With mouse ON, tmux captures mouse events. To copy to system clipboard:
-- **Hold Shift** while selecting text (bypasses tmux, uses terminal selection)
-- Or press **Ctrl+b m** to toggle mouse off temporarily
-:::
+<Aside type="tip" title="Copy to System Clipboard">
+  With mouse ON, tmux captures mouse events. To copy to system clipboard:
+  - **Hold Shift** while selecting text (bypasses tmux, uses terminal selection)
+  - Or press **Ctrl+b m** to toggle mouse off temporarily
+</Aside>
 
 ## Installation
 
-<Steps>
-1. Install dependencies (see above)
-
-2. Run deploy command
-
-   <Tabs>
-     <TabItem label="Unix (macOS/Linux)">
-       ```bash
-       ./scripts/termote.sh install native
-       ```
-     </TabItem>
-     <TabItem label="Windows (PowerShell)">
-       ```powershell
-       .\scripts\termote.ps1 install native
-       ```
-     </TabItem>
-   </Tabs>
-
-3. Access at http://localhost:7680
-
-</Steps>
-
-## When to Use
-
-- Need access to host binaries (claude, git, gh, etc.)
-- No Docker/Podman available
-- Full control over services
-- Want the Herdr backend (native only, see below)
-
-<Aside type="tip">
-  Native mode is recommended when you need to use Claude Code or other host CLI
-  tools.
-</Aside>
-
-## Herdr Backend
-
-Native mode can drive Herdr workspaces instead of tmux. Herdr must already be running and
-reachable on this host; Termote only talks to its socket.
-
 <Tabs>
-  <TabItem label="Unix (macOS/Linux)">
+  <TabItem label="Linux / macOS">
+
     ```bash
-    ./scripts/termote.sh install native --mux herdr
+    curl -fsSL https://termote.ohnice.app/install.sh | sh
+    termote start
     ```
   </TabItem>
   <TabItem label="Windows (PowerShell)">
+
     ```powershell
-    .\scripts\termote.ps1 install native -Mux herdr
+    irm https://termote.ohnice.app/install.ps1 | iex
+    termote start
     ```
   </TabItem>
 </Tabs>
+
+Then open http://localhost:7680 (Windows: http://localhost:7690). Pinning a version and the file locations are
+covered in [Getting Started](/getting-started/).
+
+## What `termote start` Does
+
+<Steps>
+1. **Picks the backend** the first time: Herdr when its server answers on its socket (`$HERDR_SOCKET_PATH`, or
+   `~/.config/herdr/herdr.sock`), tmux when it is installed. When both are there it asks, or, without a
+   terminal to ask in, picks tmux and prints how to switch. When neither is there it stops with install hints.
+   The choice is saved and not detected again unless you pass `--mux`. Windows always uses psmux.
+
+2. **Creates the admin password** the first time (or with `--fresh`): type one, or press Enter to generate
+   one. It is printed once; `termote show-password` shows it again later.
+
+3. **Checks the port and Tailscale first.** If anything fails, a server that is already running is left
+   running, so a mistake does not cut the connection you may be using.
+
+4. **Registers `termote serve` with your service manager** and starts it (see the table below), waits until
+   the server reports this version, then prints the URLs, the allowed host names and the credentials. It
+   always warns when auth is off or LAN access is on.
+
+</Steps>
+
+| OS                                   | Service manager                                                          | Behaviour                                                                                                                                                              |
+| ------------------------------------ | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Linux                                | systemd user unit `~/.config/systemd/user/termote.service`               | Restarted after a crash; tmux and its shells survive stop, restart and crash. Runs while you are logged in: `loginctl enable-linger $USER` keeps it running after logout and starts it at boot (`start` prints this hint) |
+| Linux without user systemd (WSL2)    | Detached process with a PID file                                         | Not restarted after a crash or reboot; `start` says so. Run `termote start` again, or enable systemd in WSL (`[boot]` `systemd=true` in `/etc/wsl.conf`)                  |
+| macOS                                | launchd agent `~/Library/LaunchAgents/app.ohnice.termote.plist`          | Restarted after a crash, started at login; tmux survives                                                                                                               |
+| Windows                              | Scheduled Task `Termote` at logon, run hidden                            | No administrator rights needed. If policy refuses the task, a hidden launcher in the Startup folder is used instead (no restart after a crash then)                    |
+
+The unit, plist or task never contains the password or any `TERMOTE_*` variable.
+
+<Aside type="note" title="Windows">
+  The Windows service setup is new in 1.0. Please report anything that does not work on
+  [GitHub](https://github.com/lamngockhuong/termote/issues).
+</Aside>
+
+## Start Options
+
+Every option is saved. A flag you leave out keeps its saved value, so `termote start` with no flags starts the
+server exactly as last time. A boolean option is turned off with `=false`.
+
+| Option                      | Description                                                            |
+| --------------------------- | ---------------------------------------------------------------------- |
+| `--port <port>`             | Port (default 7680; Windows 7690)                                      |
+| `--lan[=false]`             | Listen on every interface instead of `127.0.0.1` only                  |
+| `--tailscale <host[:port]>` | Publish over [Tailscale HTTPS](/installation/tailscale/) (default 443) |
+| `--no-tailscale`            | Stop publishing over Tailscale                                         |
+| `--no-auth[=false]`         | Disable the login                                                      |
+| `--mux <tmux\|herdr>`       | Terminal backend (default: detected the first time)                    |
+| `--allow-host <name>`       | Allow another `Host` header name (repeatable, no wildcard)             |
+| `--remove-host <name>`      | Remove an allowed name (repeatable)                                    |
+| `--allow-herdr-no-auth`     | Required together with `--mux herdr --no-auth`                         |
+| `--fresh`                   | Set a new password                                                     |
+
+```bash
+termote start --lan                  # also reachable from the LAN (saved)
+termote start                        # same options as last time
+termote start --lan=false            # back to this machine only
+termote start --allow-host box.local # accept another host name
+termote start --remove-host box.local
+termote start --fresh                # new password
+```
+
+The allowed host names are always loopback, the Tailscale name, the `--allow-host` names, and with `--lan` the
+address a request arrived on (so it keeps working when the LAN IP changes). A request for any other name gets a
+403 that names the `termote start --allow-host <name>` to run.
+
+## Herdr Backend
+
+Linux and macOS can drive Herdr workspaces instead of tmux. Herdr must already be running on this host; Termote
+only talks to its socket. When Herdr is running at the first `start` it is picked for you; otherwise:
+
+```bash
+termote start --mux herdr
+```
 
 <Aside type="caution" title="Herdr behavior differs from tmux">
   - Selecting a tab or pane on the PWA does **not** change what is shown on the Herdr desktop
   — it only changes which pane the client streams. There is no "show on desktop" button.
   - Each pane gets an agent-status badge (idle/working/blocked/done) refreshed at most once
   per the configured poll interval; it is not pushed instantly.
-  - The Herdr backend is **native only** — `--mux herdr`/`-Mux herdr` is refused in container
-  mode.
+  - The Herdr backend is **native only**: the container and Windows use tmux (psmux).
   - `--mux herdr --no-auth` is refused unless `--allow-herdr-no-auth` is also given: Herdr
   exposes every workspace on the host, not just the pane the PWA is showing, so running it
   without a password needs an explicit opt-in.
 </Aside>
 
-## Service Management
+## Managing the Server
 
-<Tabs>
-  <TabItem label="Unix (macOS/Linux)">
-    ```bash
-    # Check process
-    ps aux | grep termote-server
+```bash
+termote status          # what the running server reports (version, backend, pid)
+termote stop            # stop it; it starts again at the next login
+termote restart         # stop and start with the saved options
+termote logs            # recent lines of every log
+termote logs server     # server log only
+termote logs follow     # tail live (Ctrl+C to stop)
+termote logs clean      # delete the log files
+termote show-password   # print the saved admin password
+```
 
-    # Restart
-    ./scripts/termote.sh install native
-    ```
-  </TabItem>
-  <TabItem label="Windows (PowerShell)">
-    ```powershell
-    # Check process
-    Get-Process -Name termote-server -ErrorAction SilentlyContinue
+The service runs `termote serve`, which reads the saved config. Once a config file exists, `TERMOTE_*`
+environment variables are ignored, and `serve` removes them from its environment so no terminal inherits one.
 
-    # Restart
-    .\scripts\termote.ps1 install native
-    ```
-  </TabItem>
-</Tabs>
+## Updating
+
+```bash
+termote update                   # newest stable 1.x release
+termote update --version 1.0.1   # a specific version
+termote update --force           # reinstall the current version
+```
+
+`update` downloads the release and checks its `.sha256`, installs it beside the current version, switches to it,
+restarts the service and waits until the server reports the new version and keeps answering. If it does not, it
+switches back to the previous version and restarts that one. The current and the previous version are kept; your
+config and the service registration do not change. It works when typed inside a Termote pane.
+
+`update` refuses to run from a git checkout (use `git pull && make build` there) and for a binary that the
+installer did not put in place.
+
+## Uninstall
+
+```bash
+termote uninstall
+```
+
+This removes the service registration, Termote's Tailscale mapping, the `termote` command and the install root.
+Your config (`~/.config/termote`) and logs (`~/.local/state/termote`) stay, and `uninstall` prints both paths so
+you can delete them by hand. On Windows, `%APPDATA%\termote` and `%LOCALAPPDATA%\termote\state` stay.
 
 ## Prevent macOS Sleep
 
@@ -169,75 +234,29 @@ pkill caffeinate
 
 ### Quick Diagnostics
 
-<Tabs>
-  <TabItem label="Unix (macOS/Linux)">
-    ```bash
-    ./scripts/termote.sh health   # Health check
-    ss -tlnp | grep 7680          # Check port
-    ```
-  </TabItem>
-  <TabItem label="Windows (PowerShell)">
-    ```powershell
-    .\scripts\termote.ps1 health   # Health check
-    netstat -ano | Select-String "7680"  # Check port
-    ```
-  </TabItem>
-</Tabs>
-
-### Check Process
-
-<Tabs>
-  <TabItem label="Unix (macOS/Linux)">
-    ```bash
-    ps aux | grep termote-server # Check if termote is running
-    lsof -i :7680              # Verify port
-    ```
-  </TabItem>
-  <TabItem label="Windows (PowerShell)">
-    ```powershell
-    Get-Process -Name termote-server -ErrorAction SilentlyContinue
-    netstat -ano | Select-String "7680"   # Verify port
-    ```
-  </TabItem>
-</Tabs>
-
-### Debug with Logs
-
-<Tabs>
-  <TabItem label="Unix (macOS/Linux)">
-    ```bash
-    termote logs server     # Recent log lines
-    termote logs follow     # Tail live (Ctrl+C to stop)
-    termote logs clean      # Delete log files
-    ```
-  </TabItem>
-  <TabItem label="Windows (PowerShell)">
-    Native mode writes service logs to `~/.termote/logs`. View them with the CLI:
-
-    ```powershell
-    .\scripts\termote.ps1 logs            # Show recent termote logs
-    .\scripts\termote.ps1 logs server     # Same, explicit
-    .\scripts\termote.ps1 logs follow     # Tail all logs live (Ctrl+C to stop)
-    .\scripts\termote.ps1 logs clean      # Delete log files
-    ```
-  </TabItem>
-</Tabs>
+```bash
+termote status          # is it running, which version and backend
+termote logs server     # last server log lines
+```
 
 ### Common Issues
 
-| Issue           | Solution                                          |
-| --------------- | -------------------------------------------------- |
-| Port in use     | `lsof -i :7680` (Unix) or `netstat -ano \| Select-String 7680` (Win) then kill process |
-| Herdr not found | Install/start `herdr` first, or drop `--mux herdr` to use tmux |
-| Binary missing  | `cd server && go build -o termote-dev .`    |
-| PWA not built   | `pnpm --filter termote build`                            |
-| Stale PWA cache | Settings → "Clear Cache & Reload" to refresh      |
-| Host rejected (403) | Follow the `--allow-host <name>` suggested in the error, then reinstall |
+| Issue                                    | Solution                                                                                    |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `termote: command not found`             | Open a new terminal, or add `~/.local/bin` to your PATH as the installer printed             |
+| No terminal backend found                | Install tmux (Windows: `winget install psmux`) or start Herdr, then `termote start`          |
+| Port in use                              | `start` names the port; stop the other program or choose `termote start --port <port>`      |
+| Host rejected (403)                      | Run the `termote start --allow-host <name>` the error names                                  |
+| Saved password cannot be decrypted       | The `secret` file was removed or replaced: `termote start --fresh`                           |
+| Stops when you log out (Linux)           | `loginctl enable-linger $USER`                                                               |
+| Not running after a reboot (WSL2)        | No user systemd there: `termote start` again, or enable systemd in WSL                       |
+| Stale PWA cache                          | Settings → "Clear Cache & Reload" to refresh                                                |
 
 ### tmux / psmux Session
 
 <Tabs>
   <TabItem label="Unix (macOS/Linux)">
+
     ```bash
     tmux list-sessions         # List sessions
     tmux attach -t main        # Attach to session
@@ -245,6 +264,7 @@ pkill caffeinate
     ```
   </TabItem>
   <TabItem label="Windows (PowerShell)">
+
     ```powershell
     psmux list-sessions         # List sessions
     psmux attach -t main        # Attach to session
@@ -255,98 +275,8 @@ pkill caffeinate
 
 ### API Test
 
+The API is behind the login (`termote show-password` prints the password):
+
 ```bash
-curl http://localhost:7680/api/mux/health
-curl http://localhost:7680/api/mux/snapshot
+curl -u admin:<password> http://localhost:7680/api/mux/health
 ```
-
-## Updating
-
-### Via CLI (Recommended)
-
-If Termote is already installed, use the built-in update command:
-
-<Tabs>
-  <TabItem label="Unix (macOS/Linux)">
-    ```bash
-    termote update                   # Update to latest version
-    termote update --version 1.0.0   # Pin to specific version
-    termote update --force           # Force reinstall current version
-    ```
-  </TabItem>
-  <TabItem label="Windows (PowerShell)">
-    ```powershell
-    .\scripts\termote.ps1 update                 # Update to latest version
-    .\scripts\termote.ps1 update -Version 1.0.0  # Pin to specific version
-    .\scripts\termote.ps1 update -Force          # Force reinstall current version
-    ```
-  </TabItem>
-</Tabs>
-
-This automatically preserves your config, stops services, downloads the new version, verifies
-checksums, and re-installs with your saved settings. Upgrading a 0.x install to 1.0.0 also
-drops ttyd and migrates an empty saved password — see `docs/upgrade-1.0.md` in the repository
-for the full breaking-change list.
-
-### Via One-liner
-
-Re-run the installer - it compares versions and prompts before updating:
-
-<Tabs>
-  <TabItem label="Unix (macOS/Linux)">
-    ```bash
-    # Auto-update with saved config
-    curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash -s -- --update
-
-    # Or standard update
-    curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
-    ```
-
-    Options: `--update`, `--yes`, `--download-only`, `--fresh`, `--version <ver>`, `--strict`
-  </TabItem>
-  <TabItem label="Windows (PowerShell)">
-    ```powershell
-    # Auto-update with saved config
-    $env:TERMOTE_UPDATE="true"; irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
-
-    # Or standard update
-    irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
-    ```
-
-    Options: `$env:TERMOTE_UPDATE="true"`, `$env:TERMOTE_AUTO_YES="true"`
-  </TabItem>
-</Tabs>
-
-### Manual Update
-
-<Tabs>
-  <TabItem label="Unix (macOS/Linux)">
-    ```bash
-    ./scripts/termote.sh uninstall native
-    git pull origin main
-    ./scripts/termote.sh install native
-    ```
-  </TabItem>
-  <TabItem label="Windows (PowerShell)">
-    ```powershell
-    .\scripts\termote.ps1 uninstall native
-    git pull origin main
-    .\scripts\termote.ps1 install native
-    ```
-  </TabItem>
-</Tabs>
-
-## Uninstall
-
-<Tabs>
-  <TabItem label="Unix (macOS/Linux)">
-    ```bash
-    ./scripts/termote.sh uninstall native
-    ```
-  </TabItem>
-  <TabItem label="Windows (PowerShell)">
-    ```powershell
-    .\scripts\termote.ps1 uninstall native
-    ```
-  </TabItem>
-</Tabs>

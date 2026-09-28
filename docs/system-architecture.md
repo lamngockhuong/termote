@@ -79,7 +79,10 @@ Go HTTP server providing:
 - **Authentication**: Basic auth with a session cookie, rate-limited, plus a Host allowlist and an Origin/CSRF write guard in front of everything
 - **Mux API endpoints**: `/api/mux/*` — snapshot (groups→tabs→panes), tab create/rename/close/select, send-keys, health
 
-Configuration via environment variables:
+Configuration: when `termote serve` finds a saved config (`~/.config/termote/config`), it reads
+that and ignores every `TERMOTE_*` variable, then strips them from its own environment so
+nothing it opens inherits one. Only without a saved config (the container image, a manual
+`go run`/`termote-dev serve` from a checkout) does the environment configure it:
 
 | Variable                      | Default      | Description                                                                     |
 | ----------------------------- | ------------ | ------------------------------------------------------------------------------- |
@@ -93,8 +96,9 @@ Configuration via environment variables:
 | `TERMOTE_ALLOWED_HOSTS`       | (empty)      | Extra `Host` header values allowed, comma-separated; loopback is always allowed |
 | `TERMOTE_HERDR_ALLOW_NO_AUTH` | `false`      | Required together with `TERMOTE_MUX=herdr` and `TERMOTE_NO_AUTH=true`           |
 
-`termote install` computes `TERMOTE_ALLOWED_HOSTS` from `--lan`/`--tailscale`/`--allow-host`
-and passes it through; see `server/cli_install.go` (`computeAllowedHosts`).
+For a native install, `termote start` computes the equivalent of `TERMOTE_ALLOWED_HOSTS` from
+`--lan`/`--tailscale`/`--allow-host` and saves it in the config; see `serveConfigFromSaved` in
+`server/serve_config.go`.
 
 ### Mux Backend
 
@@ -154,82 +158,90 @@ error instead of a broken page.
 ### Container Mode (All-in-one)
 
 ```bash
-./scripts/termote.sh install container
+termote container up
 ```
 
 Single container with termote + tmux (no ttyd).
 Uses `Dockerfile` (`debian:stable-slim`, pinned by digest, `tini -s` as PID 1) and `entrypoint.sh`.
+Runs `ghcr.io/lamngockhuong/termote:<version>` with podman (preferred) or docker; from a git
+checkout (or `--build`) it builds `termote:local` from the Dockerfile instead of pulling.
 
 **Container Runtime:** Auto-detects podman or docker (podman preferred).
 
-The Herdr backend is not available in container mode (`--mux herdr` requires `native`).
+The Herdr backend is not available in container mode (`--mux herdr` requires native).
 
 ### Native
 
 ```bash
-./scripts/termote.sh install native
-./scripts/termote.sh install native --mux herdr   # Herdr backend instead of tmux
+termote start
+termote start --mux herdr   # Herdr backend instead of tmux
 ```
 
-All services run natively (no container): termote on port 7680 (PWA + terminal stream + API + auth).
+All services run natively (no container): termote on port 7680 (7690 on Windows) serving the
+PWA, the terminal stream and the API. `start` detects the backend the first time (herdr if its
+socket answers, else tmux), registers the server with the OS supervisor (systemd user unit,
+launchd agent, or a Windows Scheduled Task) and starts it.
 
 Auto-detects OS via `runtime.GOOS`. Works on macOS, Linux and Windows (with psmux instead of tmux).
 
 ### With Tailscale
 
 ```bash
-./scripts/termote.sh install container --tailscale myhost.ts.net
-./scripts/termote.sh install native --tailscale myhost.ts.net
+termote start --tailscale myhost.ts.net
+termote container up --tailscale myhost.ts.net
 ```
 
-- Auto SSL via `tailscale serve` (no manual cert management)
+- Auto SSL via `tailscale serve --bg` (no manual cert management, never run with sudo)
 - Access via Tailscale network (default port 443); the Tailscale name is also added to the
   Host allowlist automatically
+- `serve` re-applies the mapping at every start (boot, restart, update); `stop`,
+  `start --no-tailscale` and `uninstall` remove only Termote's own mapping
+  (`tailscale serve --https=<port> off`, never `serve reset`)
 
 ### Uninstall
 
 ```bash
-./scripts/termote.sh uninstall container   # Container mode
-./scripts/termote.sh uninstall native      # Native processes
-./scripts/termote.sh uninstall all         # Everything
+termote uninstall
 ```
+
+Removes the service registration, Termote's Tailscale mapping, the `termote` command and the
+install root; the saved config and logs stay (the command prints both paths to delete by hand).
 
 ### Self-Update
 
 ```bash
-./scripts/termote.sh update                # Update to latest release
-./scripts/termote.sh update --version 0.1.5   # Pin to specific version
-./scripts/termote.sh update --force        # Force reinstall current version
+termote update                  # Update to the latest stable 1.x release
+termote update --version 1.0.1  # Pin to a specific version
+termote update --force           # Force reinstall current version
 ```
 
-**Update flow** (implemented in `server/cli_update.go`, invoked through the `scripts/termote.sh`/`termote.ps1` shim):
+**Update flow** (`server/cli_update.go`):
 
-1. Fetch latest release tag from GitHub API (or use `--version` to pin)
-2. Download tarball and checksums from GitHub releases, verify SHA256
-3. Stop running services (native + container)
-4. Extract tarball into the install directory, preserving the saved config
-5. Re-install with the saved configuration (mode, LAN, auth, port, mux, allowlist, Tailscale)
-6. Re-link the global command if it existed
-7. Hand off to the new binary via self-replace (`exec`/relaunch)
+1. Fetch the newest stable 1.x release tag from GitHub (or use `--version` to pin)
+2. Download the archive and its `.sha256` (mandatory), verify it
+3. Unpack into `versions/<v>`, switch the `current` pointer atomically
+4. Restart the service, wait until health reports the new version and keeps answering
+5. Otherwise switch `current` back to the previous version and restart it (both kept)
 
 **Safeguards:**
 
-- Refuses to run from a git checkout (dev-only)
+- Refuses to run from a git checkout, or for a binary not installed by the installer
 - Warns on downgrade (but allows it with an explicit `--version`)
 - Skips reinstall if already on target version (unless `--force`)
-- Requires saved config for a plain `update` — run `install` first
-- Preserves all user config and passwords during update; see [`upgrade-1.0.md`](upgrade-1.0.md) for what a 0.x → 1.0.0 update migrates
+- Preserves the saved config and service registration; keeps only the current and previous
+  version on disk
 
 ## Security Model
 
 1. **Network**: VPN/Tailscale or local network only
 2. **Auth**: Basic auth over HTTPS (use `--no-auth` for local dev only); an empty saved
-   password no longer disables auth — `install` generates a new one and prints it once
+   password no longer disables auth — `start` generates a new one and prints it once
    (`termote show-password` to see it again)
 3. **Session cookies**: Stored after initial basic auth to prevent double prompts on mobile
-4. **Host allowlist**: every request's `Host` header must match loopback, the LAN IP
-   (`--lan`), the Tailscale name (`--tailscale`), or a name added with `--allow-host`; there is
-   no wildcard, so DNS rebinding from an attacker-controlled page cannot reach the server
+4. **Host allowlist**: every request's `Host` header must match loopback, the address the
+   request arrived on when `--lan` is set, the Tailscale name (`--tailscale`), or a name added
+   with `--allow-host`; there is no wildcard, so DNS rebinding from an attacker-controlled page
+   cannot reach the server
 5. **Write/CSRF guard**: state-changing `/api/mux/*` requests must be same-site
    (`Sec-Fetch-Site`/`Origin` on the allowlist) and `Content-Type: application/json`
 6. **Terminal access** (`/api/mux/stream`): same Origin check, plus a single-use 30s-TTL token

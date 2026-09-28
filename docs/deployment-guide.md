@@ -2,168 +2,201 @@
 
 ## Prerequisites
 
-| Dependency    | Container Mode | Native Mode (Unix)                | Native Mode (Windows)             |
-| ------------- | -------------- | --------------------------------- | --------------------------------- |
-| Docker/Podman | Required       | -                                 | -                                 |
-| tmux          | -              | Required (default `--mux tmux`)   | -                                 |
-| psmux         | -              | -                                 | Required (`winget install psmux`) |
-| herdr         | -              | Required only for `--mux herdr`   | Required only for `--mux herdr`   |
-| Go 1.24+      | -              | Required (build from source only) | Required (build from source only) |
+| Dependency    | Native (Unix)                   | Native (Windows)                  | Container Mode |
+| ------------- | ------------------------------- | --------------------------------- | -------------- |
+| tmux          | Required (default `--mux tmux`) | -                                 | -              |
+| psmux         | -                               | Required (`winget install psmux`) | -              |
+| herdr         | Required only for `--mux herdr` | Required only for `--mux herdr`   | -              |
+| Docker/Podman | -                               | -                                 | Required       |
 
-> **Windows Support**: Container mode requires Docker Desktop or Podman Desktop; native mode
-> requires psmux (or herdr for the Herdr backend). Report any issues on GitHub.
+> **Windows Support**: native mode requires psmux (or herdr for the Herdr backend); container
+> mode requires Docker Desktop or Podman Desktop. Report any issues on GitHub.
 
-ttyd is not used anywhere in 1.0.0: termote streams the terminal itself (PTY on Unix,
-ConPTY on Windows) into xterm.js in the PWA. See
-[`system-architecture.md`](system-architecture.md) for the request/stream design and
-[`upgrade-1.0.md`](upgrade-1.0.md) if you are upgrading a 0.x install.
+ttyd is not used anywhere in 1.0: termote streams the terminal itself (PTY on Unix, ConPTY on
+Windows) into xterm.js in the PWA. See [`system-architecture.md`](system-architecture.md) for
+the request/stream design.
+
+## Installing
+
+```bash
+curl -fsSL https://termote.ohnice.app/install.sh | sh      # Linux, macOS
+```
+
+```powershell
+irm https://termote.ohnice.app/install.ps1 | iex           # Windows
+```
+
+The installer needs only `curl`, `tar` and `sha256sum`/`shasum` (Windows: PowerShell) — no
+sudo/admin. It downloads the newest stable 1.x release for your OS/arch, verifies its
+`.sha256` (mandatory), lays it out under a versioned install root and prints `termote start` —
+it never starts anything itself. Pin a version, or rescue a broken install, with
+`TERMOTE_VERSION`:
+
+```bash
+curl -fsSL https://termote.ohnice.app/install.sh | TERMOTE_VERSION=1.0.0 sh
+```
+
+```powershell
+$env:TERMOTE_VERSION = '1.0.0'; irm https://termote.ohnice.app/install.ps1 | iex
+```
+
+An existing install is left alone (the installer prints `termote update` instead) unless
+`TERMOTE_VERSION` names a different version, in which case that version is laid down beside it
+and made current.
+
+**Coming from 0.x:** there is no in-place upgrade. Uninstall the 0.x version first (see the
+archived [0.x documentation](https://termote.ohnice.app/0.x/) for its own uninstall steps),
+then install 1.0 fresh with the command above.
 
 ## Deployment Modes
 
-### Container Mode (All-in-one)
-
-Single container with termote + tmux (no ttyd).
-
-```bash
-./scripts/termote.sh                           # Interactive menu
-./scripts/termote.sh install container          # localhost with basic auth
-./scripts/termote.sh install container --no-auth  # localhost without auth
-./scripts/termote.sh install container --lan    # LAN accessible
-./scripts/termote.sh link                       # Create 'termote' global command
-```
-
-**Container Runtime:** Auto-detects podman (preferred) or docker.
-
-**When to use:** Simple setup, isolated environment. The Herdr backend is not available in
-container mode (`--mux herdr` requires `native`).
-
 ### Native
 
-All services run natively (no container). termote opens the terminal itself; there is
-nothing else to install for the terminal transport.
+All services run natively (no container): termote on port 7680 (7690 on Windows) serving the
+PWA, the terminal stream and the API. There is nothing else to install for the terminal
+transport — termote opens it itself.
 
 **Linux:**
 
 ```bash
 sudo apt install tmux
 
-./scripts/termote.sh install native
-./scripts/termote.sh install native --lan
-./scripts/termote.sh install native --mux herdr   # Herdr backend instead of tmux
+termote start
+termote start --lan
+termote start --mux herdr   # Herdr backend instead of tmux
 ```
 
 **macOS:**
 
 ```bash
-brew install tmux go
+brew install tmux
 
-./scripts/termote.sh install native
-./scripts/termote.sh install native --lan
+termote start
+termote start --lan
 ```
 
 **Windows (PowerShell):**
 
-> **Note:** If script execution is disabled, run first:
-> `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned`
-
 ```powershell
-# Install psmux (tmux-compatible for Windows)
-winget install psmux
+winget install psmux   # tmux-compatible backend for Windows
 
-.\scripts\termote.ps1 install native
-.\scripts\termote.ps1 install native -Lan
-.\scripts\termote.ps1 install native -Mux herdr   # Herdr backend instead of psmux
+termote start
+termote start --lan
+termote start --mux herdr   # Herdr backend instead of psmux
 ```
 
-**When to use:** Need host tool access (claude, git, node), no container overhead, or the
+`start` registers the server with the OS supervisor so it survives logins: a systemd user unit
+on Linux (falls back to a detached process + PID file where there is no user systemd, e.g.
+WSL2), a launchd agent on macOS, a Scheduled Task on Windows (no admin needed). `stop` keeps
+the registration — it starts again at the next login; `uninstall` removes it.
+
+**When to use:** need host tool access (claude, git, node), no container overhead, or the
 Herdr backend.
+
+### Container Mode (All-in-one)
+
+```bash
+termote container up
+termote container up --no-auth      # localhost without auth
+termote container up --lan          # LAN accessible
+```
+
+Single container with termote + tmux (no ttyd), published at `-p <bind>:<port>:7680`. Runs
+`ghcr.io/lamngockhuong/termote:<version of the installed binary>` with podman (preferred) or
+docker; from a git checkout (or `--build`) it builds `termote:local` from the `Dockerfile`
+instead of pulling. Default workspace `~/termote-workspace`, mounted with `--mount` at
+`/workspace`; change it with `--workspace <dir>`. The container runs as `--user <uid>:<gid>`
+(rootless podman: `--userns=keep-id` instead; rootless Docker: no `--user` at all). The
+password and Host allowlist are passed as `-e NAME` values taken from the CLI's own process
+environment — never written to a file or a command-line argument (`docker inspect` still shows
+them, as with any container env var). The container's password is shared with the native
+server (setting a new one with `--fresh` applies to both; `--no-auth` on either side keeps the
+shared password saved rather than clearing it).
+
+**Container Runtime:** Auto-detects podman (preferred) or docker.
+
+**When to use:** Simple setup, isolated environment. The Herdr backend is not available in
+container mode (`--mux herdr` requires native).
 
 ## Command Options
 
-**Unix (termote.sh):**
+`start` and `container up` share the same flag syntax on every OS in 1.0 (`--lan`, not
+`-Lan`); a flag not given keeps its saved value, and a boolean is turned off with `=false`.
 
-| Flag                        | Description                                                |
-| --------------------------- | ---------------------------------------------------------- |
-| `--lan`                     | Expose to LAN (default: localhost only)                    |
-| `--tailscale <host[:port]>` | Enable Tailscale HTTPS                                     |
-| `--no-auth`                 | Disable basic authentication                               |
-| `--port <port>`             | Host port (default: 7680)                                  |
-| `--mux <tmux\|herdr>`       | Terminal backend, native only (default: `tmux`)            |
-| `--allow-host <name>`       | Allow an extra Host header value (repeatable, no wildcard) |
-| `--allow-herdr-no-auth`     | Required together with `--mux herdr --no-auth`             |
-| `--fresh`                   | Force new password prompt (ignore saved config)            |
+| Flag                        | Description                                                | `start` | `container up` |
+| --------------------------- | ---------------------------------------------------------- | ------- | -------------- |
+| `--lan[=false]`             | Listen on `0.0.0.0` instead of `127.0.0.1`                 | ✓       | ✓              |
+| `--tailscale <host[:port]>` | Publish over Tailscale HTTPS (default port 443)            | ✓       | ✓              |
+| `--no-tailscale`            | Stop publishing over Tailscale                             | ✓       | ✓              |
+| `--no-auth[=false]`         | Disable basic authentication                               | ✓       | ✓              |
+| `--port <port>`             | Listen port (default 7680, Windows 7690 for `start`)       | ✓       | ✓              |
+| `--mux <tmux\|herdr>`       | Terminal backend, native only (default: detected)          | ✓       | -              |
+| `--allow-host <name>`       | Allow an extra Host header value (repeatable, no wildcard) | ✓       | ✓              |
+| `--remove-host <name>`      | Remove a previously allowed name (repeatable)              | ✓       | ✓              |
+| `--allow-herdr-no-auth`     | Required together with `--mux herdr --no-auth`             | ✓       | -              |
+| `--fresh`                   | Set a new password (ignore the saved one)                  | ✓       | ✓              |
+| `--workspace <dir>`         | Mounted directory (default `~/termote-workspace`)          | -       | ✓              |
+| `--build`                   | Build `termote:local` from a checkout instead of pulling   | -       | ✓              |
 
-**Windows (termote.ps1):**
-
-| Flag                 | Description                                                |
-| -------------------- | ---------------------------------------------------------- |
-| `-Lan`               | Expose to LAN (default: localhost only)                    |
-| `-Tailscale <h>`     | Enable Tailscale HTTPS                                     |
-| `-NoAuth`            | Disable basic authentication                               |
-| `-Port <port>`       | Host port (default: 7680, or 7690 if installed standalone) |
-| `-Mux <tmux\|herdr>` | Terminal backend, native only (default: `tmux`)            |
-| `-AllowHost <name>`  | Allow an extra Host header value (repeatable, no wildcard) |
-| `-AllowHerdrNoAuth`  | Required together with `-Mux herdr -NoAuth`                |
-| `-Fresh`             | Force new password prompt (ignore saved config)            |
-| `-Version <X.Y.Z>`   | Pin `update` to a specific version                         |
-| `-Force`             | Reinstall current version (with `update`)                  |
-
-`--ttyd`/`-Ttyd` is still accepted (a 0.x install passes it when it relaunches the new
-installer during `update`) but is ignored with a warning.
+`update` takes `--version <X.Y.Z>` and `--force` instead. There is no `--ttyd` flag and no
+PowerShell `-Flag` parameter names in 1.0.
 
 ## Config Persistence
 
-Installation settings are automatically saved:
+`start` and `container up` save their settings automatically, separately from each other (a
+`container` config and a native config can coexist, but share the same password):
 
-- **Unix:** `~/.termote/config` (AES-256 encrypted password, chmod 600)
-- **Windows:** `~/.termote/config.json` (DPAPI encrypted password)
+- **Unix:** `~/.config/termote/config` (`$XDG_CONFIG_HOME`), plus a `secret` file (0600) that
+  keys the password's encryption
+- **Windows:** `%APPDATA%\termote\config.json` (password DPAPI-encrypted)
 
-Saved settings include mode, network flags (`--lan`, `--tailscale`), auth setting
-(`--no-auth`), mux backend, the Host allowlist, and the encrypted password.
+Saved settings include the port, network flags (`--lan`, `--tailscale`), auth setting
+(`--no-auth`), mux backend, the Host allowlist, the workspace (container only) and the
+encrypted password.
 
 **Reusing saved config:**
 
-- On restart, existing config is loaded automatically
-- Password is reused unless `--fresh`/`-Fresh` flag is provided (view it again with
-  `termote show-password`)
-- Useful for quick restarts without re-entering settings
+- On restart, the existing config is loaded automatically; a flag not given on the command
+  line keeps its saved value
+- The password is reused unless `--fresh` is given (view it again with `termote show-password`)
 
 ```bash
-# Unix: First install (saves config)
-./scripts/termote.sh install container --lan
+# First start (saves config)
+termote start --lan
 
-# Restart later (reuses saved mode, flags, password)
-./scripts/termote.sh install container --lan
+# Restart later (reuses saved flags, password)
+termote start
 
-# Force new password
-./scripts/termote.sh install container --lan --fresh
-```
-
-```powershell
-# Windows: First install (saves config)
-.\scripts\termote.ps1 install container -Lan
-
-# Restart later (reuses saved config)
-.\scripts\termote.ps1 install container -Lan
-
-# Force new password
-.\scripts\termote.ps1 install container -Lan -Fresh
+# Force a new password
+termote start --fresh
 ```
 
 ## Tailscale HTTPS
 
-Auto SSL via `tailscale serve` (no manual cert management); the Tailscale name is also added
-to the Host allowlist automatically:
+Auto SSL via `tailscale serve --bg` (no manual cert management); the Tailscale name is also
+added to the Host allowlist automatically. It is applied at every start (boot, restart,
+update), and never runs with `sudo`:
 
 ```bash
-./scripts/termote.sh install container --tailscale myhost.ts.net
-./scripts/termote.sh install native --tailscale myhost.ts.net:8765
-./scripts/termote.sh install container --tailscale myhost.ts.net --lan
+termote start --tailscale myhost.ts.net
+termote container up --tailscale myhost.ts.net:8765
+termote start --tailscale myhost.ts.net --lan
 ```
 
-## Environment Variables
+On Linux, run `sudo tailscale set --operator=$USER` once — `start` prints this hint if the
+`tailscale serve` call is refused. An HTTPS port already serving something else (for example
+the native server, from `container up`) is refused too; pick another port
+(`--tailscale host:8443`). `stop`, `start --no-tailscale`, `container down` and `uninstall`
+remove only Termote's own mapping, and only while it still points at their own port
+(`tailscale serve --https=<port> off`), never `tailscale serve reset`, which would drop
+mappings that are not Termote's.
 
-### Termote Server
+## Environment Variables (no saved config only)
+
+`termote serve` reads the saved config and ignores every `TERMOTE_*` variable whenever one
+exists; these variables only configure the server when there is no saved config — the
+container image (the CLI passes them as `-e NAME` from its own environment, never on the command line), or a
+manual `go run`/`termote-dev serve` from a checkout:
 
 | Variable                      | Default      | Description                                                          |
 | ----------------------------- | ------------ | -------------------------------------------------------------------- |
@@ -177,8 +210,8 @@ to the Host allowlist automatically:
 | `TERMOTE_ALLOWED_HOSTS`       | (empty)      | Extra `Host` header values, comma-separated; loopback always allowed |
 | `TERMOTE_HERDR_ALLOW_NO_AUTH` | `false`      | Required with `TERMOTE_MUX=herdr` and `TERMOTE_NO_AUTH=true`         |
 
-`termote install` computes and sets `TERMOTE_ALLOWED_HOSTS` from `--lan`/`--tailscale`/
-`--allow-host`; you only need to set it by hand when running the server outside the CLI.
+You do not set these by hand for a normal install: `termote start`/`container up` compute and
+save the equivalent settings from their flags.
 
 ## Port Mapping
 
@@ -194,14 +227,14 @@ termote:7680 → /api/mux/stream (terminal WebSocket, xterm.js)
 
 - Enabled by default for all modes
 - Credentials auto-generated on first run; an empty saved password no longer disables auth —
-  `install` generates and saves a new one instead
+  `start`/`container up` generate and save a new one instead
 - Use `--no-auth` only for local development
 
 ### Host allowlist and write guard
 
 - Requests with an unrecognised `Host` header are rejected (DNS-rebinding protection); the
-  allowed set is loopback + `--lan` LAN IP + `--tailscale` name + `--allow-host` entries, with
-  no wildcard to disable the check
+  allowed set is loopback + (with `--lan`) the address the request arrived on + the Tailscale
+  name + `--allow-host` entries, with no wildcard to disable the check
 - State-changing `/api/mux/*` requests and the terminal WebSocket require a same-site
   Origin and (for the WebSocket) a single-use token
 
@@ -211,13 +244,13 @@ See [`system-architecture.md`](system-architecture.md#security-model) for the fu
 
 ```bash
 # Localhost only (default)
-./scripts/termote.sh install container
+termote start
 
 # LAN (trusted network)
-./scripts/termote.sh install container --lan
+termote start --lan
 
 # Tailscale (recommended for remote)
-./scripts/termote.sh install container --tailscale myhost.ts.net
+termote start --tailscale myhost.ts.net
 ```
 
 ### Recommendations
@@ -233,7 +266,7 @@ See [`system-architecture.md`](system-architecture.md#security-model) for the fu
 ```bash
 make health
 # Or manually:
-./scripts/termote.sh health
+termote status
 curl http://localhost:7680/api/mux/health
 ```
 
@@ -243,7 +276,7 @@ curl http://localhost:7680/api/mux/health
 
 ```bash
 # Health check (works for both modes)
-./scripts/termote.sh health
+termote status
 
 # Check the port
 ss -tlnp | grep 7680
@@ -257,27 +290,21 @@ lsof -i :7680
 #### View Logs
 
 ```bash
-docker logs termote
-docker logs -f termote      # Follow logs
-
-# Or with podman:
-podman logs termote
-podman logs -f termote
+termote container logs
+termote container logs -f    # Follow logs
 ```
 
 #### Container won't start
 
 ```bash
 # Check container status
-docker ps -a | grep termote
-
-# View startup errors
-docker logs termote
+termote container status
+docker ps -a | grep termote   # or: podman ps -a | grep termote
 
 # Common: port already in use
 lsof -i :7680
 # Kill conflicting process or change port
-./scripts/termote.sh install container --port 7690
+termote container up --port 7690
 ```
 
 #### Enter container for debugging
@@ -294,8 +321,8 @@ curl localhost:7680/api/mux/health  # Test API
 ```bash
 docker restart termote
 # Or full reinstall:
-./scripts/termote.sh uninstall container
-./scripts/termote.sh install container
+termote container down
+termote container up
 ```
 
 ---
@@ -305,8 +332,8 @@ docker restart termote
 #### Check running processes
 
 ```bash
-ps aux | grep termote-server
-pgrep -f termote-server
+ps aux | grep termote
+pgrep -f "termote serve"
 ```
 
 #### View logs
@@ -317,12 +344,13 @@ termote logs follow     # Tail live (Ctrl+C to stop)
 termote logs clean      # Delete log files
 ```
 
-Logs are written to `~/.termote/logs/` by the CLI when it starts the server in the
-background; running the server binary directly in the foreground prints to stdout/stderr
-instead:
+Logs and the PID file live in `~/.local/state/termote/` (`$XDG_STATE_HOME`) on Unix,
+`%LOCALAPPDATA%\termote\state` on Windows. Running the server binary directly in the
+foreground prints to stdout/stderr instead:
 
 ```bash
 cd server
+go build -o termote-dev .
 TERMOTE_PORT=7680 \
 TERMOTE_BIND=127.0.0.1 \
 TERMOTE_PWA_DIR=../pwa/dist \
@@ -332,16 +360,16 @@ TERMOTE_PWA_DIR=../pwa/dist \
 #### Server not starting
 
 ```bash
-# Check if binary exists
+# Check if the dev binary exists
 ls -la server/termote-dev
 
 # Rebuild if missing
 cd server && go build -o termote-dev .
 
-# Check PWA dist exists
+# Check the PWA build exists
 ls -la pwa/dist/
 
-# Rebuild PWA if missing
+# Rebuild the PWA if missing
 pnpm --filter termote build
 ```
 
@@ -362,7 +390,7 @@ tmux new-session -d -s main
 #### Herdr backend issues
 
 ```bash
-# herdr must be on PATH before `install native --mux herdr`
+# herdr must be on PATH before `termote start --mux herdr`
 which herdr
 
 # Check the server picked the right backend
@@ -397,9 +425,9 @@ curl -v http://localhost:7680/
 # View the saved password again
 termote show-password
 
-# Reset credentials (container mode)
-docker rm -f termote
-./scripts/termote.sh install container --fresh  # New password generated
+# Reset credentials
+termote start --fresh          # native
+termote container up --fresh   # container
 ```
 
 #### Session not persisting
@@ -418,14 +446,14 @@ tmux list-sessions
 #### PWA not loading / blank page
 
 ```bash
-# Check PWA files exist
+# Check the PWA build exists (checkout only)
 ls -la pwa/dist/
 
-# Rebuild PWA
+# Rebuild the PWA
 pnpm install --filter termote... && pnpm --filter termote build
 
 # Container mode: rebuild image
-docker build -t termote .
+termote container up --build
 ```
 
 ---
@@ -445,50 +473,24 @@ curl -u admin:password http://localhost:7680/api/mux/health
 
 ## Updating
 
-### Via One-liner (Recommended)
-
-Re-run the installer - it compares versions and prompts before updating:
-
 ```bash
-# Auto-update using saved config
-curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash -s -- --update
-
-# Or standard update
-curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
+termote update                   # Update to the latest stable 1.x release
+termote update --version 1.0.1   # Pin to a specific version
+termote update --force           # Force reinstall current version
 ```
 
-Options:
-
-- `--update` - Auto-update using saved config (mode, flags, password)
-- `--yes` - Auto-update without prompt
-- `--download-only` - Download only, no install
-- `--fresh` - Force new password prompt
-- `--version <ver>` - Install specific version
-- `--strict` - Require checksum verification (fail if unavailable)
-
-### Manual Update
-
-```bash
-# 1. Stop services
-./scripts/termote.sh uninstall [container|native]
-
-# 2. Pull latest
-git pull origin main  # If installed from source
-
-# 3. Reinstall with same options
-./scripts/termote.sh install [container|native] [--lan] [--tailscale ...]
-```
-
-If you are updating a 0.1.x install to 1.0.0, see [`upgrade-1.0.md`](upgrade-1.0.md) for what
-changes and what the migration preserves.
+`update` downloads the archive and its `.sha256` (mandatory), unpacks it into a new
+`versions/<v>`, switches the `current` pointer atomically, restarts the service and waits for
+health to report the new version. It refuses in a git checkout, and for a binary not installed
+by the installer; the saved config and service registration are untouched, and only the
+current and previous version are kept on disk.
 
 ## Uninstall
 
 ```bash
-./scripts/termote.sh uninstall container   # Container mode
-./scripts/termote.sh uninstall native      # Native processes
-./scripts/termote.sh uninstall all         # Everything (including saved config)
+termote uninstall
 ```
 
-**Note:** `uninstall all` removes the saved config file at `~/.termote/config`. Use this when
-fully removing Termote or wanting to reset installation settings.
+Removes the service registration, Termote's Tailscale mapping, the `termote` command and the
+install root. The saved config (`~/.config/termote/`) and logs (`~/.local/state/termote/`)
+stay; the command prints both paths to delete by hand.

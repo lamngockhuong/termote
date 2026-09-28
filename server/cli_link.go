@@ -1,42 +1,45 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
-// systemLinkPath is where `link` puts the global command first on Unix;
-// ~/.local/bin is the fallback that needs no root.
-var systemLinkPath = "/usr/local/bin/termote"
-
 func (c *cli) userBinDir() string { return filepath.Join(c.home, ".local", "bin") }
 
+// linkSource is what the `termote` command runs: the current version of an
+// install, or the checkout shim (which builds on demand).
+func (c *cli) linkSource() string {
+	if c.isInstalledRelease() {
+		return c.currentExe()
+	}
+	return c.shimPath()
+}
+
+// cmdLink publishes the `termote` command: a symlink in ~/.local/bin on
+// Unix. On Windows an install puts its own bin dir on the user PATH, and a
+// checkout gets a termote.cmd in ~/.local/bin calling the shim.
 func (c *cli) cmdLink() error {
 	if c.goos == "windows" {
 		return c.linkWindows()
 	}
-	source := c.shimPath()
+	source := c.linkSource()
 	if c.isCheckout() {
 		c.infof("Linking the git checkout (development mode)")
 	}
-	for _, target := range []string{systemLinkPath, filepath.Join(c.userBinDir(), "termote")} {
-		created, err := c.symlink(source, target)
-		if err != nil {
-			continue
-		}
-		if created {
-			c.infof("Created symlink: %s -> %s", target, source)
-		} else {
-			c.infof("Already linked: %s -> %s", target, source)
-		}
-		c.checkPath(filepath.Dir(target))
-		return nil
+	target := filepath.Join(c.userBinDir(), "termote")
+	created, err := c.symlink(source, target)
+	if err != nil {
+		return err
 	}
-	c.warnf("Cannot create symlink (no write permission). Run:")
-	fmt.Fprintf(c.out, "  sudo ln -sf %q %s\n", source, systemLinkPath)
+	if created {
+		c.infof("Created symlink: %s -> %s", target, source)
+	} else {
+		c.infof("Already linked: %s -> %s", target, source)
+	}
+	c.checkPath(c.userBinDir())
 	return nil
 }
 
@@ -46,7 +49,7 @@ func (c *cli) cmdLink() error {
 func (c *cli) symlink(source, target string) (bool, error) {
 	if st, err := os.Lstat(target); err == nil {
 		if st.Mode()&os.ModeSymlink == 0 {
-			return false, fmt.Errorf("%s exists and is not a symlink", target)
+			return false, fmt.Errorf("%s exists and is not a symlink; move it aside and run: termote link", target)
 		}
 		if cur, _ := os.Readlink(target); cur == source {
 			return false, nil
@@ -64,48 +67,66 @@ func (c *cli) symlink(source, target string) (bool, error) {
 	return true, nil
 }
 
+// onPath reports whether dir is on PATH.
+func (c *cli) onPath(dir string) bool {
+	for _, p := range filepath.SplitList(c.getenv("PATH")) {
+		if strings.EqualFold(filepath.Clean(p), filepath.Clean(dir)) {
+			return true
+		}
+	}
+	return false
+}
+
 // checkPath warns when dir is not on PATH.
 func (c *cli) checkPath(dir string) {
-	for _, p := range filepath.SplitList(os.Getenv("PATH")) {
-		if strings.EqualFold(filepath.Clean(p), filepath.Clean(dir)) {
-			c.infof("You can now run 'termote' from anywhere")
-			return
-		}
+	if c.onPath(dir) {
+		c.infof("You can now run 'termote' from anywhere")
+		return
 	}
 	c.warnf("%s is not in PATH", dir)
 	if c.goos == "windows" {
 		fmt.Fprintf(c.out, "Add it permanently:\n  [Environment]::SetEnvironmentVariable('Path', [Environment]::GetEnvironmentVariable('Path','User') + ';%s', 'User')\n", dir)
-		if c.interactive && !strings.HasPrefix(strings.ToLower(c.prompt("Add to PATH now? [Y/n]: ")), "n") {
-			script := "[Environment]::SetEnvironmentVariable('Path', [Environment]::GetEnvironmentVariable('Path','User') + ';" +
-				strings.ReplaceAll(dir, "'", "''") + "', 'User')"
-			if err := c.run.Run("", nil, "powershell", "-NoProfile", "-Command", script); err != nil {
-				c.warnf("Could not update PATH: %v", err)
-			} else {
-				c.infof("Added to PATH. Open a new terminal to use 'termote'.")
-			}
-		}
 		return
 	}
 	fmt.Fprintf(c.out, "Add to ~/.bashrc or ~/.zshrc:\n  export PATH=\"%s:$PATH\"\n", dir)
 }
 
-func (c *cli) windowsLinkFiles() (cmdFile, legacyPS1 string) {
-	return filepath.Join(c.userBinDir(), "termote.cmd"), filepath.Join(c.userBinDir(), "termote.ps1")
+func (c *cli) windowsLinkFile() string { return filepath.Join(c.userBinDir(), "termote.cmd") }
+
+// userPathScript adds (or removes) dir on the user's PATH, the registry
+// value new terminals read.
+func userPathScript(dir string, add bool) string {
+	q := strings.ReplaceAll(dir, "'", "''")
+	s := "$d='" + q + "'; $p=[Environment]::GetEnvironmentVariable('Path','User'); " +
+		"$parts=@($p -split ';' | Where-Object { $_ -and ($_.TrimEnd('\\') -ine $d.TrimEnd('\\')) }); "
+	if add {
+		s += "$parts += $d; "
+	}
+	return s + "[Environment]::SetEnvironmentVariable('Path', ($parts -join ';'), 'User')"
 }
 
-// linkWindows writes ~/.local/bin/termote.cmd calling the shim. 0.x also
-// copied termote.ps1 there; that copy would now look for the binary next to
-// itself, so it is removed.
 func (c *cli) linkWindows() error {
-	cmdFile, legacy := c.windowsLinkFiles()
+	if c.isInstalledRelease() {
+		if err := c.ensureWindowsLauncher(); err != nil {
+			return err
+		}
+		dir := filepath.Dir(c.currentExe())
+		if c.onPath(dir) {
+			c.infof("Already on PATH: %s", dir)
+			return nil
+		}
+		if err := c.run.Run("", nil, "powershell", "-NoProfile", "-Command", userPathScript(dir, true)); err != nil {
+			c.warnf("Could not add %s to PATH: %v", dir, err)
+			c.checkPath(dir)
+			return nil
+		}
+		c.infof("Added %s to your PATH. Open a new terminal to use 'termote'.", dir)
+		return nil
+	}
+	cmdFile := c.windowsLinkFile()
 	source := c.shimPath()
 	if err := os.MkdirAll(c.userBinDir(), 0o755); err != nil {
 		return err
-	}
-	if isLegacyScriptCopy(legacy) {
-		if err := os.Remove(legacy); err == nil {
-			c.infof("Removed old copy: %s", legacy)
-		}
 	}
 	content := "@echo off\r\npowershell.exe -NoProfile -ExecutionPolicy Bypass -File \"" + source + "\" %*\r\n"
 	if b, err := os.ReadFile(cmdFile); err == nil && string(b) == content {
@@ -120,48 +141,44 @@ func (c *cli) linkWindows() error {
 	return nil
 }
 
-// isLegacyScriptCopy recognises the termote.ps1 copy 0.x `link` made.
-func isLegacyScriptCopy(path string) bool {
-	b, err := os.ReadFile(path)
-	return err == nil && strings.Contains(string(b), "Termote CLI")
+// ownLink reports whether target is a link this command published: a
+// symlink to a termote.sh shim or to an install's current/bin/termote.
+func (c *cli) ownLink(target string) bool {
+	st, err := os.Lstat(target)
+	if err != nil || st.Mode()&os.ModeSymlink == 0 {
+		return false
+	}
+	cur, _ := os.Readlink(target)
+	return filepath.Base(cur) == "termote.sh" ||
+		strings.HasSuffix(filepath.ToSlash(cur), "/current/bin/termote")
 }
 
 func (c *cli) cmdUnlink() error {
-	var targets []string
-	if c.goos == "windows" {
-		cmdFile, legacy := c.windowsLinkFiles()
-		targets = []string{cmdFile, legacy}
-	} else {
-		targets = []string{systemLinkPath, filepath.Join(c.userBinDir(), "termote")}
-	}
 	removed := false
-	for _, t := range targets {
-		st, err := os.Lstat(t)
-		if err != nil {
-			continue
-		}
-		// On Unix only a symlink to a termote.sh is ours to remove.
-		if c.goos != "windows" {
-			cur, _ := os.Readlink(t)
-			if st.Mode()&os.ModeSymlink == 0 || filepath.Base(cur) != "termote.sh" {
-				continue
+	if c.goos == "windows" {
+		dir := filepath.Dir(c.currentExe())
+		if c.isInstalledRelease() || c.onPath(dir) {
+			if err := c.run.Run("", nil, "powershell", "-NoProfile", "-Command", userPathScript(dir, false)); err == nil {
+				c.infof("Removed %s from your PATH", dir)
+				removed = true
 			}
 		}
+		if fileExists(c.windowsLinkFile()) {
+			if err := os.Remove(c.windowsLinkFile()); err == nil {
+				c.infof("Removed: %s", c.windowsLinkFile())
+				removed = true
+			}
+		}
+	} else if t := filepath.Join(c.userBinDir(), "termote"); c.ownLink(t) {
 		if err := os.Remove(t); err != nil {
-			if errors.Is(err, os.ErrPermission) {
-				c.warnf("Cannot remove %s (no write permission). Run: sudo rm %s", t, t)
-			} else {
-				c.warnf("Cannot remove %s: %v", t, err)
-			}
-			continue
+			c.warnf("Cannot remove %s: %v", t, err)
+		} else {
+			c.infof("Removed: %s", t)
+			removed = true
 		}
-		c.infof("Removed: %s", t)
-		removed = true
 	}
 	if !removed {
 		c.infof("No link found")
-		return nil
 	}
-	c.infof("To restore: %s link", c.shimPath())
 	return nil
 }

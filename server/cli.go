@@ -17,14 +17,11 @@ import (
 
 // Defaults shared by every subcommand.
 const (
-	containerName     = "termote"
-	containerPort     = 7680 // server port inside the container
-	adminUser         = "admin"
-	updateRepo        = "lamngockhuong/termote"
-	defaultLogLines   = 50
-	serverStartWait   = 8 * time.Second
-	legacyTtydPort    = "7681"
-	legacyTmuxSession = "main"
+	containerName   = "termote"
+	containerPort   = 7680 // server port inside the container
+	adminUser       = "admin"
+	updateRepo      = "lamngockhuong/termote"
+	defaultLogLines = 50
 )
 
 // commandRunner runs external programs; tests replace it with a fake.
@@ -76,8 +73,6 @@ type cli struct {
 	// apiBase and downloadBase point at api.github.com and github.com.
 	apiBase      string
 	downloadBase string
-	// execShim replaces this process with the shim (update's last step).
-	execShim func(path string, args []string) error
 	// readPassword reads a line without echo from the terminal.
 	readPassword func() (string, error)
 	// procs lists running processes and terminate stops one, for stopping
@@ -86,8 +81,16 @@ type cli struct {
 	terminate func(pid int, wait time.Duration) error
 	// localIPv4s lists this machine's LAN addresses.
 	localIPv4s func() []string
+	// herdrRunning reports whether herdr's server answers on its socket.
+	herdrRunning func() bool
+	// detachedExited closes when a server this CLI started detached exits.
+	detachedExited <-chan struct{}
+	// testSupervisors replaces the OS supervisors in tests.
+	testSupervisors []supervisor
 	// pid of this process, never stopped.
 	pid int
+	// getenv reads the environment (XDG and Windows profile dirs).
+	getenv func(string) string
 }
 
 // exitError ends the CLI with a status code; msg may be empty when the
@@ -146,15 +149,16 @@ func newCLI() (*cli, error) {
 		}},
 		apiBase:      "https://api.github.com",
 		downloadBase: "https://github.com",
-		execShim:     execReplace,
 		procs:        listProcesses,
 		terminate:    terminateProcess,
 		localIPv4s:   localIPv4s,
+		herdrRunning: herdrReachable,
 		pid:          os.Getpid(),
+		getenv:       os.Getenv,
 	}
 	c.readPassword = func() (string, error) { return readPasswordNoEcho(os.Stdin, c.in) }
 	c.projectDir = findProjectDir(exe, os.Getenv("TERMOTE_PROJECT_DIR"))
-	c.version = c.loadVersion()
+	c.version = cliVersion
 	return c, nil
 }
 
@@ -176,7 +180,6 @@ func findProjectDir(exe, env string) string {
 }
 
 func (c *cli) main(args []string) int {
-	c.cleanupReplacedBinaries()
 	if len(args) == 0 {
 		args = []string{"help"}
 	}
@@ -197,14 +200,20 @@ func (c *cli) main(args []string) int {
 
 func (c *cli) dispatch(cmd string, args []string) error {
 	switch cmd {
-	case "install":
-		return c.cmdInstall(args)
+	case "start":
+		return c.cmdStart(args)
+	case "stop":
+		return c.cmdStop(args)
+	case "restart":
+		return c.cmdRestart(args)
+	case "status", "health":
+		return c.cmdStatus(args)
+	case "container":
+		return c.cmdContainer(args)
 	case "uninstall":
 		return c.cmdUninstall(args)
 	case "update":
 		return c.cmdUpdate(args)
-	case "health":
-		return c.cmdHealth(args)
 	case "logs":
 		return c.cmdLogs(args)
 	case "link":
@@ -221,6 +230,9 @@ func (c *cli) dispatch(cmd string, args []string) error {
 	case "help", "-h", "--help":
 		c.printHelp()
 		return nil
+	case "install":
+		c.printHelp()
+		return usageError("install was replaced by: termote start [options] (native) and termote container up (container)")
 	}
 	c.printHelp()
 	return usageError("unknown command: %s", cmd)
@@ -266,7 +278,7 @@ type stringList []string
 func (s *stringList) String() string     { return strings.Join(*s, ",") }
 func (s *stringList) Set(v string) error { *s = append(*s, v); return nil }
 
-// Output helpers, matching the [INFO]/[WARN]/[ERROR] lines of 0.x.
+// Output helpers: [INFO]/[WARN]/[ERROR] lines.
 const (
 	ansiRed    = "\033[0;31m"
 	ansiGreen  = "\033[0;32m"
@@ -304,10 +316,37 @@ func (c *cli) heading(s string) {
 	fmt.Fprintf(c.out, "\n%s\n\n", c.paint(ansiBold, "=== "+s+" ==="))
 }
 
-// Paths under ~/.termote. The config file and its format are the 0.x ones.
-func (c *cli) configDir() string { return filepath.Join(c.home, ".termote") }
-func (c *cli) logDir() string    { return filepath.Join(c.configDir(), "logs") }
-func (c *cli) pidFile() string   { return filepath.Join(c.configDir(), "termote.pid") }
+// configDir holds the config file: $XDG_CONFIG_HOME/termote (default
+// ~/.config/termote), or %APPDATA%\termote on Windows.
+func (c *cli) configDir() string {
+	if c.goos == "windows" {
+		return filepath.Join(c.envDir("APPDATA", filepath.Join(c.home, "AppData", "Roaming")), "termote")
+	}
+	return filepath.Join(c.envDir("XDG_CONFIG_HOME", filepath.Join(c.home, ".config")), "termote")
+}
+
+// stateDir holds logs and the PID file: $XDG_STATE_HOME/termote (default
+// ~/.local/state/termote), or %LOCALAPPDATA%\termote\state on Windows.
+func (c *cli) stateDir() string {
+	if c.goos == "windows" {
+		return filepath.Join(c.envDir("LOCALAPPDATA", filepath.Join(c.home, "AppData", "Local")), "termote", "state")
+	}
+	return filepath.Join(c.envDir("XDG_STATE_HOME", filepath.Join(c.home, ".local", "state")), "termote")
+}
+
+func (c *cli) logDir() string  { return c.stateDir() }
+func (c *cli) pidFile() string { return filepath.Join(c.stateDir(), "termote.pid") }
+
+// envDir returns the directory in env var key, or fallback when it is unset
+// or relative (the XDG spec says to ignore a relative path).
+func (c *cli) envDir(key, fallback string) string {
+	if c.getenv != nil {
+		if v := c.getenv(key); v != "" && filepath.IsAbs(v) {
+			return v
+		}
+	}
+	return fallback
+}
 
 func (c *cli) configFile() string {
 	if c.goos == "windows" {
@@ -316,8 +355,8 @@ func (c *cli) configFile() string {
 	return filepath.Join(c.configDir(), "config")
 }
 
-// defaultPort is 7690 on Windows (0.x kept 7680 free for the container) and
-// 7680 elsewhere.
+// defaultPort is 7690 on Windows, which keeps 7680 free for the container,
+// and 7680 elsewhere.
 func (c *cli) defaultPort() int {
 	if c.goos == "windows" {
 		return 7690
@@ -338,19 +377,7 @@ func (c *cli) isCheckout() bool {
 		fileExists(filepath.Join(c.projectDir, ".git"))
 }
 
-// loadVersion prefers the .version file an install or update writes.
-func (c *cli) loadVersion() string {
-	if !c.isCheckout() {
-		if b, err := os.ReadFile(filepath.Join(c.projectDir, ".version")); err == nil {
-			if v := strings.TrimSpace(string(b)); v != "" {
-				return v
-			}
-		}
-	}
-	return cliVersion
-}
-
-// shimPath is the script 0.x and `link` call; its path is a contract with 0.x.
+// shimPath is the checkout shim `link` points the global command at.
 func (c *cli) shimPath() string {
 	if c.goos == "windows" {
 		return filepath.Join(c.projectDir, "scripts", "termote.ps1")
@@ -398,54 +425,44 @@ func isDir(path string) bool {
 }
 
 func (c *cli) printHelp() {
-	ps := c.goos == "windows"
-	name := "termote.sh"
-	if ps {
-		name = "termote.ps1"
-	}
-	opt := func(unix, win string) string {
-		if ps {
-			return win
-		}
-		return unix
-	}
 	fmt.Fprintf(c.out, `Termote v%s - Terminal + Remote
 
-Usage: %s [command] [options]
+Usage: termote [command] [options]
 
 Commands:
-  install <mode>    Install and start services (mode: native, container)
-  uninstall <mode>  Remove installation (mode: native, container, all)
-  update            Update to the latest release
-  health            Check service health
-  logs [service]    View logs (server, all, follow, clean)
-  link              Create 'termote' global command
-  unlink            Remove global command
-  show-password     Show the saved admin password
-  version           Show version
-  help              Show this help
-  (no command)      Interactive menu
+  start [options]      Save the options, register the service and start it
+  stop                 Stop the server (it starts again at the next login)
+  restart              Stop and start with the saved options
+  status               Show what the running server reports (alias: health)
+  container <cmd>      Run the server in a container: up, down, logs [-f], status
+  update               Update to the latest release
+  uninstall            Remove the service, the command and the install (config and logs stay)
+  logs [service]       View logs (server, all, follow, clean)
+  link / unlink        Create or remove the 'termote' command in ~/.local/bin
+  show-password        Show the saved admin password
+  version              Show version
+  serve                Run the server in the foreground (what the service runs)
+  (no command)         Interactive menu
 
-Options:
-  %-24s Host port (default: %d)
-  %-24s Expose to LAN
-  %-24s Enable Tailscale HTTPS
-  %-24s Disable authentication
-  %-24s Terminal backend, native only (default: tmux)
-  %-24s Allow another Host name (repeatable)
-  %-24s Allow herdr without auth
-  %-24s Ignore saved config, set a new password
-  %-24s Update to a specific version
-  %-24s Reinstall the current version (with update)
-`, c.version, name,
-		opt("--port <port>", "-Port <port>"), c.defaultPort(),
-		opt("--lan", "-Lan"),
-		opt("--tailscale <host[:port]>", "-Tailscale <host[:port]>"),
-		opt("--no-auth", "-NoAuth"),
-		opt("--mux <tmux|herdr>", "-Mux <tmux|herdr>"),
-		opt("--allow-host <name>", "-AllowHost <name>"),
-		opt("--allow-herdr-no-auth", "-AllowHerdrNoAuth"),
-		opt("--fresh", "-Fresh"),
-		opt("--version <X.Y.Z>", "-Version <X.Y.Z>"),
-		opt("--force", "-Force"))
+Options of start (saved; a flag not given keeps its saved value):
+  --port <port>              Port (default: %d)
+  --lan[=false]              Listen on every interface, not only this machine
+  --tailscale <host[:port]>  Publish over Tailscale HTTPS (default port 443)
+  --no-tailscale             Stop publishing over Tailscale
+  --no-auth[=false]          Disable authentication
+  --mux <tmux|herdr>         Terminal backend (default: herdr when it runs, else tmux)
+  --allow-host <name>        Allow another Host name (repeatable)
+  --remove-host <name>       Remove an allowed Host name (repeatable)
+  --allow-herdr-no-auth      Allow herdr without auth
+  --fresh                    Set a new password
+
+Options of container up (saved apart from start's; the password is shared):
+  --port --lan --tailscale --no-tailscale --no-auth --allow-host --remove-host --fresh
+  --workspace <dir>          Directory mounted at /workspace (default: ~/termote-workspace)
+  --build                    Build the image from a checkout instead of pulling it
+
+Options of update:
+  --version <X.Y.Z>          Update to a specific version
+  --force                    Reinstall the current version
+`, c.version, c.defaultPort())
 }

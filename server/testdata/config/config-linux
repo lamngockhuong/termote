@@ -1,7 +1,7 @@
-# Termote config (auto-generated)
-TERMOTE_MODE="native"
+# Termote config (written by termote start)
 TERMOTE_LAN="true"
 TERMOTE_NO_AUTH="false"
 TERMOTE_PORT="7700"
 TERMOTE_TAILSCALE="box.tail1234.ts.net:8443"
 TERMOTE_SAVED_PASS="U2FsdGVkX18qR52M4U4Q68mGKt7eCLFJJDiOwD+mHkY="
+TERMOTE_SAVED_PASS_MAC="a2daa7699e501cd87e36fb54ab2a590bbdbda4f48d465446169d4a8b73a10265"

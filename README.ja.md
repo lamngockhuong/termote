@@ -25,6 +25,9 @@
 
 モバイル/デスクトップからPWA経由でCLIツール（Claude Code、GitHub Copilot、あらゆるターミナル）をリモート操作。
 
+> [!NOTE]
+> Termote 1.0は0.xのインストールをアップグレードしません。[アーカイブされた0.xドキュメント](https://termote.ohnice.app/0.x/)の手順で0.xをアンインストールしてから、[クイックスタート](#クイックスタート)のコマンドで1.0をインストールしてください。
+
 > **Termote** = Terminal + Remote
 >
 > 🇬🇧 [English](README.md) | 🇻🇳 [Tiếng Việt](README.vi.md) | 🇨🇳 [简体中文](README.zh-CN.md) | 🇰🇷 [한국어](README.ko.md) | 🇪🇸 [Español](README.es.md) | 🇧🇷 [Português (BR)](README.pt-BR.md) | 🇫🇷 [Français](README.fr.md) | 🇩🇪 [Deutsch](README.de.md) | 🇷🇺 [Русский](README.ru.md) | 🇮🇩 [Bahasa Indonesia](README.id.md)
@@ -44,7 +47,8 @@
 - **永続セッション**: tmuxがセッションを維持
 - **折りたたみ可能なサイドバー**: トグル式セッションサイドバー付きデスクトップUI
 - **フルスクリーンモード**: 没入型ターミナル体験
-- **設定の永続化**: AES-256暗号化パスワードによるインストール設定の自動保存
+- **サービスとして動作**: `termote start`がログイン時に起動するユーザーサービス（systemd、launchd、スケジュールタスク）を登録
+- **設定の永続化**: `termote start`がオプションを保存し、パスワードは暗号化して保存
 
 ## スクリーンショット
 
@@ -99,125 +103,112 @@ termoteはターミナル自体を（UnixではPTY、WindowsではConPTYで）PW
 
 > 📖 **Termote初めてですか？** 詳しい手順と例については[はじめにガイド](docs/getting-started.md)をご覧ください。
 
-```bash
-./scripts/termote.sh                   # インタラクティブメニュー
-./scripts/termote.sh install container # コンテナモード (docker/podman)
-./scripts/termote.sh install native    # ネイティブモード (ホストツール)
-./scripts/termote.sh link              # 'termote' グローバルコマンドを作成
-make test                              # テストを実行
-```
-
-> `link`後は、どこからでも`termote`を使用可能: `termote health`, `termote install native --lan`
-
-## インストール
-
-### ワンライナー（推奨）
-
-**macOS/Linux:**
+**Linux / macOS:**
 
 ```bash
-# ダウンロードしてインストール前に確認（デフォルトはnativeモード）
-curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
-
-# 確認なしで自動インストール
-curl -fsSL .../get.sh | bash -s -- --yes
-
-# ダウンロードのみ（インストールなし）
-curl -fsSL .../get.sh | bash -s -- --download-only
-
-# 保存済み設定で自動アップデート
-curl -fsSL .../get.sh | bash -s -- --update
-
-# 特定バージョンをインストール
-curl -fsSL .../get.sh | bash -s -- --version 0.0.4
-
-# モードとオプションを明示的に指定
-curl -fsSL .../get.sh | bash -s -- --yes --container --lan
-curl -fsSL .../get.sh | bash -s -- --yes --native --tailscale myhost
-
-# 新しいパスワードを強制（保存済み設定を無視）
-curl -fsSL .../get.sh | bash -s -- --yes --container --fresh
+curl -fsSL https://termote.ohnice.app/install.sh | sh
+termote start
 ```
 
 **Windows (PowerShell):**
 
-> **注意:** システムでスクリプト実行が無効な場合、先に以下を実行してください:
->
-> ```powershell
-> Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
-> ```
-
 ```powershell
-# ダウンロードしてインストール前に確認（デフォルトはnativeモード）
-irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
-
-# 確認なしで自動インストール
-$env:TERMOTE_AUTO_YES = "true"; irm .../get.ps1 | iex
-
-# モードを明示的に指定
-$env:TERMOTE_MODE = "container"; irm .../get.ps1 | iex
-
-# 保存済み設定で自動アップデート
-$env:TERMOTE_UPDATE = "true"; irm .../get.ps1 | iex
+irm https://termote.ohnice.app/install.ps1 | iex
+termote start
 ```
 
-### Docker
+インストーラーに必要なのは`curl`、`tar`、`sha256sum`/`shasum`（WindowsではPowerShell）だけで、sudoや管理者権限は不要です。アーカイブのチェックサムを検証して`termote`コマンドをインストールしますが、何も起動しません。`termote start`はオプションを保存し、初回はパスワードを作成して（一度だけ表示され、あとで`termote show-password`で再表示できます）、サービスを登録して起動します。`http://localhost:7680`（Windowsでは`http://localhost:7690`）を開いてください。
+
+先にターミナルバックエンドをインストールしておく必要があります: tmux（`sudo apt install tmux`、`brew install tmux`）、Windowsではpsmux（`winget install psmux`）、または[Herdr](https://termote.ohnice.app/installation/native/)。どれを使うかは最初の`start`が検出します。
+
+### よく使うオプション
 
 ```bash
-# オールインワン（認証情報自動生成、ログ確認: docker logs termote）
-docker run -d --name termote -p 7680:7680 ghcr.io/lamngockhuong/termote:latest
+termote start --lan                  # Listen on the LAN, not only this machine
+termote start --tailscale myhost.ts.net  # Publish over Tailscale HTTPS
+termote start --mux herdr            # Drive Herdr workspaces instead of tmux
+termote start --no-auth              # Disable basic auth (local use only)
+```
 
-# カスタム認証情報
-docker run -d --name termote -p 7680:7680 \
-  -e TERMOTE_USER=admin -e TERMOTE_PASS=secret \
-  ghcr.io/lamngockhuong/termote:latest
+オプションは保存されます。指定しなかったフラグは保存済みの値を保ち、真偽値のオプションは`=false`でオフにします（`termote start --lan=false`）。フラグはPowerShellを含むすべてのOSで共通です。
 
-# 認証なし（ローカル開発のみ）
-docker run -d --name termote -p 7680:7680 \
-  -e NO_AUTH=true \
-  ghcr.io/lamngockhuong/termote:latest
+### 日常のコマンド
 
-# 永続化用ボリューム付き
-docker run -d --name termote -p 7680:7680 \
-  -v termote-data:/home/termote \
-  ghcr.io/lamngockhuong/termote:latest
+```bash
+termote status                       # What the running server reports
+termote stop                         # Stop (it starts again at the next login)
+termote restart                      # Restart with the saved options
+termote logs follow                  # Tail the logs
+termote show-password                # Print the saved admin password
+termote update                       # Update to the latest release
+termote uninstall                    # Remove the service, the command and the install
+```
 
-# カスタムワークスペースディレクトリをマウント
+`update`は新しいバージョンに切り替えてサービスを再起動し、新しいバージョンが起動しなければ元に戻します。`uninstall`は設定（`~/.config/termote`）とログ（`~/.local/state/termote`）を残し、両方のパスを表示します。
+
+## インストール
+
+### バージョンを固定する
+
+```bash
+curl -fsSL https://termote.ohnice.app/install.sh | TERMOTE_VERSION=1.0.0 sh
+termote update --version 1.0.0
+```
+
+```powershell
+$env:TERMOTE_VERSION='1.0.0'; irm https://termote.ohnice.app/install.ps1 | iex
+```
+
+`TERMOTE_VERSION`を指定しない場合、インストーラーは最新の安定版1.xリリースを取得し、既存のインストールには手を触れません。指定した場合はそのバージョンを現在のバージョンと並べてインストールし、有効なバージョンに切り替えます。壊れたインストールの修復にも使えます。
+
+### コンテナモード
+
+```bash
+termote container up                          # Run the published image (podman or docker)
+termote container up --workspace ~/projects   # Mount a directory at /workspace
+termote container status
+termote container logs -f
+termote container down
+```
+
+`container up`はインストール済みの`termote`と同じバージョンの`ghcr.io/lamngockhuong/termote`をpodman（優先）またはdockerで実行し、ポート7680を使い、`~/termote-workspace`を`/workspace`にマウントします。`--port`、`--lan`、`--tailscale`、`--no-auth`、`--allow-host`、`--fresh`を受け付け、これらは`start`のオプションとは別に保存されます。パスワードはネイティブサーバーと共有されます。Dockerは再起動後にコンテナを再開しますが、rootlessのPodmanにはそれを行うデーモンがないため、Quadletユニットとして実行してください。
+
+> **セキュリティ注意**: `$HOME`を直接マウントしないでください — `.ssh`、`.gnupg`などの機密ディレクトリがコンテナからアクセス可能になります。代わりに特定のプロジェクトディレクトリをマウントしてください。
+
+### CLIを使わずにDockerで実行
+
+```bash
+# Generates a password, printed in: docker logs termote
 docker run -d --name termote -p 7680:7680 \
   -v ~/projects:/workspace \
   ghcr.io/lamngockhuong/termote:latest
 
-# Tailscale HTTPS付き（ホストにTailscaleが必要）
+# With your own credentials
 docker run -d --name termote -p 7680:7680 \
   -e TERMOTE_USER=admin -e TERMOTE_PASS=secret \
   ghcr.io/lamngockhuong/termote:latest
-sudo tailscale serve --bg --https=443 http://127.0.0.1:7680
-# アクセス: https://your-hostname.tailnet-name.ts.net
 ```
 
-### リリースから
+| 環境変数       | 説明                                          |
+| -------------- | --------------------------------------------- |
+| `TERMOTE_USER` | Basic認証のユーザー名（デフォルト: `admin`）  |
+| `TERMOTE_PASS` | Basic認証のパスワード（デフォルト: 自動生成） |
+| `NO_AUTH`      | `true`で認証を無効化                          |
 
-```bash
-# 最新リリースをダウンロード
-VERSION=$(curl -s https://api.github.com/repos/lamngockhuong/termote/releases/latest | grep tag_name | cut -d '"' -f4)
-wget https://github.com/lamngockhuong/termote/releases/download/${VERSION}/termote-${VERSION}.tar.gz
-tar xzf termote-${VERSION}.tar.gz
-cd termote-${VERSION#v}
-
-# インストール（インタラクティブメニューまたはモード指定）
-./scripts/termote.sh install
-./scripts/termote.sh install container
-```
-
-### ソースから
+### ソースからビルド
 
 ```bash
 git clone https://github.com/lamngockhuong/termote.git
 cd termote
-./scripts/termote.sh install container
+make build
+./scripts/termote.sh start
 ```
 
-> **注**: `termote.sh`は`install`（ソースからビルド、利用可能な場合はビルド済みアーティファクトを使用）、`uninstall`、`health`コマンドをサポートする統合CLIです。
+`make build`はPWAをビルドして`server/termote`に埋め込みます。Go、Node.js、pnpmが必要です。`scripts/termote.sh`（Windowsでは`scripts\termote.ps1`）はチェックアウトを実行するためだけのもので、ソースのほうが新しければ開発用バイナリを再ビルドし、同じ引数で実行します。`termote update`はチェックアウト内では実行を拒否するので、`git pull && make build`を使ってください。
+
+### 0.xからのアップグレード
+
+0.xからのアップグレードはありません。1.0は別の場所にインストールされ、0.xの設定を読み込みません。[アーカイブされた0.xドキュメント](https://termote.ohnice.app/0.x/)の手順で0.xをアンインストールしてから、上記のコマンドで1.0をインストールしてください。
 
 ## デプロイモード
 
@@ -236,135 +227,50 @@ flowchart LR
     User["ユーザー"] --> Container & Native
 ```
 
-| モード        | 説明           | ユースケース                                                     | プラットフォーム      |
-| ------------- | -------------- | ---------------------------------------------------------------- | --------------------- |
-| `--container` | コンテナモード | シンプルなデプロイ、隔離環境                                     | macOS, Linux, Windows |
-| `--native`    | 全てネイティブ | ホストツールへのアクセス (claude, gh)。Herdrバックエンドには必須 | macOS, Linux, Windows |
+| モード     | コマンド               | ユースケース                                                    | プラットフォーム      |
+| ---------- | ---------------------- | --------------------------------------------------------------- | --------------------- |
+| ネイティブ | `termote start`        | ホストツール（claude、gh）へのアクセス。Herdrバックエンドに必須 | macOS, Linux, Windows |
+| コンテナ   | `termote container up` | 隔離された環境                                                  | macOS, Linux, Windows |
 
-### オプション
+ネイティブサーバーはユーザーサービスとして動作します: Linuxではsystemdのユーザーユニット（WSL2でsystemdがない場合など、ユーザーsystemdがなければ切り離されたプロセス）、macOSではlaunchdエージェント、Windowsではログオン時のスケジュールタスクです。
 
-| フラグ                      | 説明                                                                                           |
-| --------------------------- | ---------------------------------------------------------------------------------------------- |
-| `--lan`                     | LANに公開（デフォルト: localhostのみ）                                                         |
-| `--tailscale <host[:port]>` | Tailscale HTTPSを有効化                                                                        |
-| `--no-auth`                 | Basic認証を無効化                                                                              |
-| `--port <port>`             | ホストポート（デフォルト: 7680、Windows: 7690）                                                |
-| `--mux <tmux\|herdr>`       | ターミナルバックエンド、ネイティブのみ（デフォルト: `tmux`）                                   |
-| `--allow-host <name>`       | 追加で許可するHostヘッダー値（複数指定可。ワイルドカード不可、セキュリティに関する注意を参照） |
-| `--allow-herdr-no-auth`     | `--mux herdr --no-auth`と併用する場合に必須                                                    |
-| `--fresh`                   | 新しいパスワードを強制（保存済み設定を無視）                                                   |
-| `--update`                  | 保存済み設定で自動アップデート                                                                 |
-| `--version <ver>`           | 特定バージョンをインストール（`v`有無どちらも可）                                              |
+### `start`のオプション
 
-`--ttyd`/`-Ttyd`は引き続き受け付けますが（0.xはアップデート中にインストーラーを再起動する際にこれを渡します）、警告を出して無視します。ttydは1.0.0で削除されました。互換性のない変更の一覧は[`docs/upgrade-1.0.md`](docs/upgrade-1.0.md)を参照してください。
+| フラグ                      | 説明                                                                                 |
+| --------------------------- | ------------------------------------------------------------------------------------ |
+| `--port <port>`             | ポート（デフォルト: 7680、Windows: 7690）                                            |
+| `--lan[=false]`             | すべてのインターフェースで待ち受け（デフォルト: localhostのみ）                      |
+| `--tailscale <host[:port]>` | Tailscale HTTPSで公開（デフォルトポート443）                                         |
+| `--no-tailscale`            | Tailscaleでの公開を停止                                                              |
+| `--no-auth[=false]`         | Basic認証を無効化                                                                    |
+| `--mux <tmux\|herdr>`       | ターミナルバックエンド（デフォルト: herdrが動作中ならherdr、なければtmux）           |
+| `--allow-host <name>`       | 追加のHostヘッダー値を許可（複数指定可。ワイルドカードなし、セキュリティ注意を参照） |
+| `--remove-host <name>`      | 許可済みのHost名を削除（複数指定可）                                                 |
+| `--allow-herdr-no-auth`     | `--mux herdr --no-auth`と併用する場合に必須                                          |
+| `--fresh`                   | 新しいパスワードを設定                                                               |
 
-| 環境変数       | 説明                                                        |
-| -------------- | ----------------------------------------------------------- |
-| `WORKSPACE`    | マウントするホストディレクトリ（デフォルト: `./workspace`） |
-| `TERMOTE_USER` | Basic認証ユーザー名（デフォルト: 自動生成）                 |
-| `TERMOTE_PASS` | Basic認証パスワード（デフォルト: 自動生成）                 |
-| `NO_AUTH`      | `true`に設定して認証を無効化                                |
+### Tailscale HTTPS付き
 
-### コンテナモード（シンプルさ重視の推奨）
-
-スクリプトは`podman`または`docker`を自動検出 — どちらも同じように動作します。
+自動HTTPSのために`tailscale serve`を使用します（手動の証明書管理は不要）:
 
 ```bash
-./scripts/termote.sh install container             # localhostでbasic auth付き
-./scripts/termote.sh install container --no-auth   # localhostで認証なし
-./scripts/termote.sh install container --lan       # LANアクセス可能
-# アクセス: http://localhost:7680
-
-# カスタムワークスペースディレクトリ（コンテナ内の/workspaceにマウント）
-WORKSPACE=~/projects ./scripts/termote.sh install container
-WORKSPACE=/path/to/code make install-container
+termote start --tailscale myhost.ts.net                # Default port 443
+termote start --tailscale myhost.ts.net:8765           # Custom port
+termote container up --tailscale myhost.ts.net         # Container mode
+sudo tailscale set --operator=$USER                    # Linux, once: let termote run tailscale serve
 ```
 
-> **セキュリティ注意**: `$HOME`を直接マウントしないでください — `.ssh`、`.gnupg`などの機密ディレクトリがコンテナ内からアクセス可能になります。代わりに特定のプロジェクトディレクトリをマウントしてください。
-
-### ネイティブ（ホストバイナリアクセスの推奨）
-
-ホストバイナリ（claude、gitなど）へのアクセスが必要な場合に使用:
-
-```bash
-# Linux
-sudo apt install tmux
-./scripts/termote.sh install native
-
-# macOS
-brew install tmux go
-./scripts/termote.sh install native
-# アクセス: http://localhost:7680
-```
-
-tmuxの代わりに[Herdr](https://termote.ohnice.app/installation/native/)のワークスペースを操作するには、`--mux herdr`を追加します（ネイティブモードのみ。`herdr`が`PATH`上にあることが前提です）。
-
-### Tailscale HTTPS付き（全モード）
-
-`tailscale serve`で自動HTTPS（手動の証明書管理不要）:
-
-```bash
-# Tailscaleのみ（デフォルトポート443）
-./scripts/termote.sh install container --tailscale myhost.ts.net
-
-# カスタムポート
-./scripts/termote.sh install native --tailscale myhost.ts.net:8765
-
-# Tailscale + LANアクセス可能
-./scripts/termote.sh install container --tailscale myhost.ts.net --lan
-
-# アクセス: https://myhost.ts.net（カスタムポートの場合は :8765）
-```
-
-### アンインストール
-
-```bash
-./scripts/termote.sh uninstall container   # コンテナモード
-./scripts/termote.sh uninstall native      # ネイティブモード
-./scripts/termote.sh uninstall all         # 全て
-```
-
-### アップデート
-
-```bash
-# 方法1: 保存済み設定で自動アップデート
-curl -fsSL .../get.sh | bash -s -- --update
-
-# 方法2: ワンライナーを再実行（バージョン比較、インストール前に確認）
-curl -fsSL .../get.sh | bash
-
-# 方法3: 手動アップデート
-./scripts/termote.sh uninstall [container|native]
-git pull origin main                    # ソースからインストールした場合
-./scripts/termote.sh install [container|native] [--lan] [--tailscale ...]
-```
+マッピングはサーバーが起動するたびに適用されます。`stop`、`start --no-tailscale`、`uninstall`はTermote自身のマッピングだけを削除します。
 
 ## プラットフォームサポート
 
-| プラットフォーム | コンテナ   | ネイティブ | CLIスクリプト |
-| ---------------- | ---------- | ---------- | ------------- |
-| Linux            | ✓          | ✓          | termote.sh    |
-| macOS            | ✓          | ✓          | termote.sh    |
-| Windows          | ⚠️ (実験的) | ⚠️ (実験的) | termote.ps1   |
+| プラットフォーム | コンテナ | ネイティブ | インストーラー |
+| ---------------- | -------- | ---------- | -------------- |
+| Linux            | ✓        | ✓          | `install.sh`   |
+| macOS            | ✓        | ✓          | `install.sh`   |
+| Windows          | ✓        | ✓          | `install.ps1`  |
 
-> **⚠️ Windowsサポート（実験的）**: Windowsサポートは現在初期段階であり、さらなるテストが必要です。コンテナモードにはDocker Desktopが、ネイティブモードにはpsmuxが必要です。問題はGitHubで報告してください。
-
-### Windows ネイティブモード
-
-Windowsネイティブモードは[psmux](https://github.com/psmux/psmux)（Windows用tmux互換ターミナルマルチプレクサ）を使用します:
-
-```powershell
-# psmuxをインストール
-winget install psmux
-
-# Termoteを実行
-.\scripts\termote.ps1 install native
-.\scripts\termote.ps1 install container  # またはDocker Desktopでコンテナモード
-
-# アップデートとログ
-.\scripts\termote.ps1 update             # 最新リリースへセルフアップデート
-.\scripts\termote.ps1 logs follow        # すべてのログをリアルタイム表示
-```
+> **Windowsサポート**: コンテナモードにはDocker DesktopまたはPodman Desktopが必要です。ネイティブモードには[psmux](https://github.com/psmux/psmux)（Windows用のtmux互換ターミナルマルチプレクサー）が必要で、`winget install psmux`でインストールします。Windowsのサービスはまだ実機で検証されていません。問題があればGitHubで報告してください。
 
 ## モバイルでの使い方
 
@@ -383,12 +289,12 @@ winget install psmux
 
 ```
 termote/
-├── Makefile                # ビルド/テスト/デプロイコマンド
-├── Dockerfile              # Dockerモード (termote + tmux, ttydなし)
-├── docker-compose.yml
-├── entrypoint.sh           # Dockerエントリーポイント
-├── docs/                   # ドキュメント
-│   └── images/screenshots/ # アプリのスクリーンショット
+├── Makefile                # Build/test/run commands
+├── Dockerfile              # Container image (termote + tmux)
+├── docker-compose.yml      # Development from a checkout only
+├── entrypoint.sh           # Container entrypoint
+├── docs/                   # Documentation
+│   └── images/screenshots/ # App screenshots
 ├── pwa/                    # React PWA
 │   └── src/
 │       ├── components/
@@ -396,40 +302,42 @@ termote/
 │       ├── hooks/
 │       ├── types/
 │       └── utils/
-├── server/                 # Goサーバー + CLI (単一バイナリ)
-│   ├── main.go             # エントリーポイント (引数なし/`serve` = サーバー, それ以外 = CLI)
-│   ├── serve.go            # サーバー (PWA, 認証, ガード)
-│   ├── mux.go              # Muxインターフェース + /api/mux/* ルート
-│   ├── mux_tmux.go         # tmux/psmuxバックエンド
-│   ├── mux_herdr.go        # Herdrバックエンド (ネイティブのみ)
-│   ├── stream.go           # ターミナルWebSocket (xterm.jsストリーム)
-│   └── cli*.go             # install/update/health/logs/link/menuサブコマンド
+├── server/                 # Go server + CLI (single binary)
+│   ├── main.go             # Entry point (no args = menu, `serve` = server, else CLI)
+│   ├── serve.go            # Server (PWA, auth, guards)
+│   ├── mux.go              # Mux interface + /api/mux/* routes
+│   ├── mux_tmux.go         # tmux/psmux backend
+│   ├── mux_herdr.go        # Herdr backend (native only)
+│   ├── stream.go           # Terminal WebSocket (xterm.js stream)
+│   ├── cli*.go             # start/stop/update/container/logs/menu subcommands
+│   └── webui/              # PWA embedded in the binary (filled by make build)
 ├── scripts/
-│   ├── termote.sh          # 薄いUnixラッパー -> termote CLI
-│   ├── termote.ps1         # 薄いWindows PowerShellラッパー -> termote CLI
-│   ├── get.sh              # Unixオンラインインストーラー (curl | bash)
-│   └── get.ps1             # Windowsオンラインインストーラー (irm | iex)
-├── tests/                  # テストスイート
-│   ├── test-termote.sh
-│   ├── test-termote.ps1    # Windowsテスト
-│   ├── test-get.sh
-│   └── test-entrypoints.sh
-└── website/                # Astro Starlightドキュメントサイト
-    └── src/content/docs/   # MDXドキュメント
+│   ├── install.sh          # Unix online installer (curl | sh)
+│   ├── install.ps1         # Windows online installer (irm | iex)
+│   ├── termote.sh          # Unix shim: builds and runs a checkout
+│   └── termote.ps1         # Windows PowerShell shim: builds and runs a checkout
+├── tests/                  # Test suite
+│   ├── test-termote.sh     # Unix shim tests
+│   ├── test-termote.ps1    # Windows shim tests
+│   ├── test-install.sh     # Unix installer tests
+│   ├── test-install.ps1    # Windows installer tests
+│   └── test-entrypoints.sh # Container entrypoint tests
+└── website/                # Astro Starlight docs site
+    └── src/content/docs/   # MDX documentation
 ```
 
 ## 開発
 
 ```bash
-make build          # PWAとtermoteをビルド
-make test           # 全テストを実行
-make health         # サービスのヘルスチェック
-make clean          # コンテナを停止
+make build          # Build the PWA and embed it in server/termote
+make test           # Run all tests
+make health         # Check service health
+make clean          # Stop containers
 
-# E2Eテスト（実行中のサーバーが必要）
-./scripts/termote.sh install container  # 先にサーバーを起動
-pnpm --filter termote test:e2e       # Playwrightテストを実行
-pnpm --filter termote test:e2e:ui    # UIデバッガーで実行
+# E2E tests (requires running server)
+./scripts/termote.sh start           # Start server first
+pnpm --filter termote test:e2e       # Run Playwright tests
+pnpm --filter termote test:e2e:ui    # Run with UI debugger
 ```
 
 **手動テスト:** [セルフテストチェックリスト](docs/self-test-checklist.md)を参照
@@ -443,7 +351,7 @@ pnpm --filter termote test:e2e:ui    # UIデバッガーで実行
 
 ### WebSocketエラー
 
-- termoteのログを確認: `docker logs termote`（コンテナ）または`termote logs server`（ネイティブ）
+- termoteのログを確認: `termote container logs`（コンテナ）または`termote logs server`（ネイティブ）
 - ターミナルのWebSocketは`/api/mux/stream`で、termote自身が提供します。別途確認すべきターミナルプロセスはありません
 
 ### モバイルキーボードの問題
@@ -451,26 +359,26 @@ pnpm --filter termote test:e2e:ui    # UIデバッガーで実行
 - viewportメタタグが存在するか確認
 - エミュレーターではなく実機でテスト
 
-### ネイティブモード: プロセスが起動しない
+### ネイティブモード: サーバーが起動しない
 
 ```bash
-ps aux | grep termote-server # termoteが実行中か確認
-lsof -i :7680              # ポートが使用中か確認
-termote logs server        # または: termote logs follow
+termote status             # What the running server reports
+termote logs server        # Or: termote logs follow
+lsof -i :7680              # Check what holds the port
+termote start --fresh      # If the saved password can no longer be read
 ```
 
 ## セキュリティに関する注意
 
 - **デフォルト: localhostのみ** - `--lan`フラグを使用しない限りLANに公開されません
-- **Basic認証はデフォルトで有効** - ローカル開発では`--no-auth`で無効化。保存済みのパスワードが空でも認証は無効になりません（1.0.0では代わりに新しいパスワードを生成します）
-- **Host許可リスト** - 認識できない`Host`ヘッダーのリクエストを拒否します（DNSリバインディング対策）。信頼する名前は`--allow-host`/`-AllowHost`で追加でき、チェックを無効にするワイルドカードはありません
+- **Basic認証はデフォルトで有効** - ローカル開発では`--no-auth`で無効化。パスワードは最初の`termote start`で作成され、暗号化して保存されます
+- **Host許可リスト** - 認識できない`Host`ヘッダーのリクエストを拒否します（DNSリバインディング対策）。信頼する名前は`--allow-host`で追加でき、チェックを無効にするワイルドカードはありません
 - **Origin/CSRFガード** - 状態を変更する`/api/mux/*`リクエストと`/api/mux/stream`のWebSocketは、クロスサイトの`Sec-Fetch-Site`/`Origin`を拒否し、同一オリジンで一度だけ使えるストリームトークンを要求します
 - **ブルートフォース攻撃防止機能内蔵** - レート制限（IPあたり5回/分）
 - **Herdrバックエンド** - ホスト上のすべてのHerdrワークスペースを公開するため、`--allow-herdr-no-auth`も指定しない限り`--mux herdr --no-auth`は拒否されます
+- **サービスファイルに秘密情報なし** - systemdユニット、launchdエージェント、スケジュールタスクにパスワードは含まれません
 - 本番環境ではHTTPS（Tailscale）を使用
 - 信頼できるネットワーク/VPNに制限
-
-0.xからアップグレードする場合は[`docs/upgrade-1.0.md`](docs/upgrade-1.0.md)を参照してください。
 
 ## その他のプロジェクト
 

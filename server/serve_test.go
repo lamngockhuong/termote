@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 )
 
@@ -62,22 +62,24 @@ func TestIsWebSocket(t *testing.T) {
 }
 
 func TestSpaHandler(t *testing.T) {
-	// Create temp dir with test files
-	tmpDir := t.TempDir()
-	indexContent := []byte("<html>index</html>")
-	os.WriteFile(filepath.Join(tmpDir, "index.html"), indexContent, 0644)
-	os.WriteFile(filepath.Join(tmpDir, "app.js"), []byte("console.log('app')"), 0644)
-
-	handler := spaHandler(tmpDir)
+	files := fstest.MapFS{
+		"index.html":   {Data: []byte("<html>index</html>")},
+		"app.js":       {Data: []byte("console.log('app')")},
+		"assets/x.css": {Data: []byte("body{}")},
+	}
+	handler := spaHandler(files)
 
 	tests := []struct {
 		path     string
-		wantCode int
+		wantBody string
 	}{
-		{"/", http.StatusOK},
-		{"/app.js", http.StatusOK},
-		{"/nonexistent", http.StatusOK},   // SPA fallback
-		{"/any/deep/path", http.StatusOK}, // SPA fallback
+		{"/", "<html>index</html>"},
+		{"/app.js", "console.log('app')"},
+		{"/assets/x.css", "body{}"},
+		{"/nonexistent", "<html>index</html>"},   // SPA fallback
+		{"/any/deep/path", "<html>index</html>"}, // SPA fallback
+		{"/../../etc/passwd", "<html>index</html>"},
+		{"/any/dir/", "<html>index</html>"},
 	}
 
 	for _, tt := range tests {
@@ -86,9 +88,53 @@ func TestSpaHandler(t *testing.T) {
 
 		handler.ServeHTTP(rec, req)
 
-		if rec.Code != tt.wantCode {
-			t.Errorf("spaHandler(%s) status = %d, want %d", tt.path, rec.Code, tt.wantCode)
+		if rec.Code != http.StatusOK || rec.Body.String() != tt.wantBody {
+			t.Errorf("spaHandler(%s) = %d %q, want 200 %q", tt.path, rec.Code, rec.Body.String(), tt.wantBody)
 		}
+	}
+}
+
+func TestSpaHandlerAssetsAndManifest(t *testing.T) {
+	handler := spaHandler(fstest.MapFS{
+		"index.html":           {Data: []byte("<html>index</html>")},
+		"assets/x.js":          {Data: []byte("js")},
+		"manifest.webmanifest": {Data: []byte("{}")},
+	})
+	for path, want := range map[string]int{"/assets/missing.js": 404, "/assets/": 404, "/assets": 404, "/assets/x.js": 200} {
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, httptest.NewRequest("GET", path, nil))
+		if rec.Code != want {
+			t.Errorf("GET %s = %d, want %d", path, rec.Code, want)
+		}
+	}
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest("GET", "/manifest.webmanifest", nil))
+	if ct := rec.Header().Get("Content-Type"); ct != "application/manifest+json" {
+		t.Errorf("manifest Content-Type = %q", ct)
+	}
+	rec = httptest.NewRecorder()
+	noCacheMiddleware(handler).ServeHTTP(rec, httptest.NewRequest("GET", "/assets/x.js", nil))
+	if cc := rec.Header().Get("Cache-Control"); !strings.Contains(cc, "immutable") {
+		t.Errorf("asset Cache-Control = %q, want immutable", cc)
+	}
+}
+
+// Without TERMOTE_PWA_DIR the server serves the embedded build, which in a
+// test build is the placeholder page (webui/dist only holds .gitkeep).
+func TestServeEmbeddedPWA(t *testing.T) {
+	h, err := newServeHandler(serveConfig{NoAuth: true}, &fakeMux{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Host = "localhost"
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "Termote") {
+		t.Fatalf("GET / = %d %q", rec.Code, rec.Body.String())
+	}
+	if cc := rec.Header().Get("Cache-Control"); !strings.Contains(cc, "no-cache") {
+		t.Fatalf("index.html Cache-Control = %q, want no-cache (embed.FS has no mtime)", cc)
 	}
 }
 
@@ -104,6 +150,8 @@ func TestNoCacheMiddleware(t *testing.T) {
 	}{
 		{"/", true},
 		{"/api/test", true},
+		{"/sw.js", true},
+		{"/manifest.webmanifest", true},
 		{"/assets/app.js", false}, // assets should be cached
 	}
 
@@ -114,7 +162,7 @@ func TestNoCacheMiddleware(t *testing.T) {
 		handler.ServeHTTP(rec, req)
 
 		cacheControl := rec.Header().Get("Cache-Control")
-		hasNoCache := cacheControl != ""
+		hasNoCache := strings.Contains(cacheControl, "no-cache")
 
 		if hasNoCache != tt.wantNoCache {
 			t.Errorf("noCacheMiddleware(%s) Cache-Control = %q, wantNoCache = %v", tt.path, cacheControl, tt.wantNoCache)
@@ -625,19 +673,22 @@ func TestBasicAuthSessionCookie(t *testing.T) {
 	})
 }
 
-func TestTerminalsNeverSeeThePassword(t *testing.T) {
+func TestTerminalsNeverSeeTermoteVariables(t *testing.T) {
 	t.Setenv("TERMOTE_PASS", "s3cret-pass")
+	t.Setenv("TERMOTE_BIND", "0.0.0.0")
 	for _, kv := range terminalEnv() {
-		if strings.Contains(kv, "s3cret-pass") {
-			t.Fatalf("terminal env carries the password: %q", kv)
+		if strings.HasPrefix(strings.ToUpper(kv), "TERMOTE_") {
+			t.Fatalf("terminal env carries %q", kv)
 		}
 	}
 	cfg := newServeConfigFromEnv()
-	scrubSecretEnv()
+	scrubTermoteEnv()
 	if cfg.Pass != "s3cret-pass" {
 		t.Fatalf("config lost the password: %q", cfg.Pass)
 	}
-	if _, ok := os.LookupEnv("TERMOTE_PASS"); ok {
-		t.Fatal("TERMOTE_PASS still in the process environment, so tmux would inherit it")
+	for _, k := range []string{"TERMOTE_PASS", "TERMOTE_BIND"} {
+		if _, ok := os.LookupEnv(k); ok {
+			t.Fatalf("%s still in the process environment, so tmux would inherit it", k)
+		}
 	}
 }

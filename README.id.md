@@ -25,6 +25,11 @@
 
 Kendalikan alat CLI (Claude Code, GitHub Copilot, terminal apa pun) dari jarak jauh melalui mobile/desktop via PWA.
 
+> [!NOTE]
+> Termote 1.0 tidak meng-upgrade instalasi 0.x. Hapus instalasi 0.x sesuai
+> [dokumentasi 0.x yang diarsipkan](https://termote.ohnice.app/0.x/), lalu pasang 1.0 dengan
+> perintah di [Mulai Cepat](#mulai-cepat).
+
 > **Termote** = Terminal + Remote
 >
 > 🇬🇧 [English](README.md) | 🇻🇳 [Tiếng Việt](README.vi.md) | 🇨🇳 [简体中文](README.zh-CN.md) | 🇯🇵 [日本語](README.ja.md) | 🇰🇷 [한국어](README.ko.md) | 🇪🇸 [Español](README.es.md) | 🇧🇷 [Português (BR)](README.pt-BR.md) | 🇫🇷 [Français](README.fr.md) | 🇩🇪 [Deutsch](README.de.md) | 🇷🇺 [Русский](README.ru.md)
@@ -44,7 +49,8 @@ Kendalikan alat CLI (Claude Code, GitHub Copilot, terminal apa pun) dari jarak j
 - **Session persisten**: tmux menjaga session tetap hidup
 - **Sidebar dapat dilipat**: UI desktop dengan sidebar session yang bisa ditampilkan/disembunyikan
 - **Mode layar penuh**: Pengalaman terminal secara layar penuh
-- **Penyimpanan konfigurasi**: Otomatis menyimpan pengaturan instalasi dengan password terenkripsi AES-256
+- **Berjalan sebagai service**: `termote start` mendaftarkan service pengguna (systemd, launchd, Scheduled Task) yang berjalan saat login
+- **Penyimpanan konfigurasi**: `termote start` menyimpan opsinya, dengan password tersimpan terenkripsi
 
 ## Tangkapan Layar
 
@@ -97,127 +103,114 @@ termote mengalirkan terminal sendiri (PTY di Unix, ConPTY di Windows) ke xterm.j
 
 ## Mulai Cepat
 
-> 📖 **Baru mengenal Termote?** Lihat [Panduan Memulai](docs/getting-started.md) untuk panduan lengkap dengan contoh.
+> 📖 **Baru mengenal Termote?** Lihat [Panduan Memulai](docs/getting-started.md) untuk panduan lengkap beserta contoh.
+
+**Linux / macOS:**
 
 ```bash
-./scripts/termote.sh                   # Menu interaktif
-./scripts/termote.sh install container # Mode container (docker/podman)
-./scripts/termote.sh install native    # Mode native (alat host)
-./scripts/termote.sh link              # Buat perintah 'termote' global
-make test                              # Jalankan tes
-```
-
-> Setelah `link`, gunakan `termote` dari mana saja: `termote health`, `termote install native --lan`
-
-## Instalasi
-
-### Satu baris perintah (direkomendasikan)
-
-**macOS/Linux:**
-
-```bash
-# Unduh dan tanya sebelum instal (default mode native)
-curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
-
-# Instal otomatis tanpa bertanya
-curl -fsSL .../get.sh | bash -s -- --yes
-
-# Hanya unduh (tanpa instal)
-curl -fsSL .../get.sh | bash -s -- --download-only
-
-# Pembaruan otomatis dengan config tersimpan
-curl -fsSL .../get.sh | bash -s -- --update
-
-# Instal versi tertentu
-curl -fsSL .../get.sh | bash -s -- --version 0.0.4
-
-# Dengan mode dan opsi tertentu
-curl -fsSL .../get.sh | bash -s -- --yes --container --lan
-curl -fsSL .../get.sh | bash -s -- --yes --native --tailscale myhost
-
-# Paksa password baru (abaikan config tersimpan)
-curl -fsSL .../get.sh | bash -s -- --yes --container --fresh
+curl -fsSL https://termote.ohnice.app/install.sh | sh
+termote start
 ```
 
 **Windows (PowerShell):**
 
-> **Catatan:** Jika eksekusi skrip dinonaktifkan di sistem Anda, jalankan perintah ini terlebih dahulu:
->
-> ```powershell
-> Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
-> ```
-
 ```powershell
-# Unduh dan tanya sebelum instal (default mode native)
-irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
-
-# Instal otomatis tanpa bertanya
-$env:TERMOTE_AUTO_YES = "true"; irm .../get.ps1 | iex
-
-# Dengan mode tertentu
-$env:TERMOTE_MODE = "container"; irm .../get.ps1 | iex
-
-# Pembaruan otomatis dengan config tersimpan
-$env:TERMOTE_UPDATE = "true"; irm .../get.ps1 | iex
+irm https://termote.ohnice.app/install.ps1 | iex
+termote start
 ```
 
-### Docker
+Installer hanya membutuhkan `curl`, `tar` dan `sha256sum`/`shasum` (PowerShell di Windows), tanpa sudo atau hak admin. Installer memverifikasi checksum arsip, memasang perintah `termote`, dan tidak menjalankan apa pun. `termote start` menyimpan opsi, membuat password saat pertama kali (ditampilkan sekali; `termote show-password` menampilkannya lagi), mendaftarkan service lalu menjalankannya. Buka `http://localhost:7680` (Windows: `http://localhost:7690`).
+
+Backend terminal harus sudah terpasang lebih dulu: tmux (`sudo apt install tmux`, `brew install tmux`), psmux di Windows (`winget install psmux`), atau [Herdr](https://termote.ohnice.app/installation/native/). `start` yang pertama mendeteksi backend mana yang dipakai.
+
+### Opsi umum
 
 ```bash
-# Semua dalam satu (credentials otomatis, lihat logs: docker logs termote)
-docker run -d --name termote -p 7680:7680 ghcr.io/lamngockhuong/termote:latest
+termote start --lan                  # Listen on the LAN, not only this machine
+termote start --tailscale myhost.ts.net  # Publish over Tailscale HTTPS
+termote start --mux herdr            # Drive Herdr workspaces instead of tmux
+termote start --no-auth              # Disable basic auth (local use only)
+```
 
-# Dengan credentials khusus
-docker run -d --name termote -p 7680:7680 \
-  -e TERMOTE_USER=admin -e TERMOTE_PASS=secret \
-  ghcr.io/lamngockhuong/termote:latest
+Opsi disimpan: flag yang tidak diberikan tetap memakai nilai tersimpannya, dan opsi boolean dimatikan dengan `=false` (`termote start --lan=false`). Flag-nya sama di semua OS, termasuk PowerShell.
 
-# Tanpa autentikasi (hanya dev lokal)
-docker run -d --name termote -p 7680:7680 \
-  -e NO_AUTH=true \
-  ghcr.io/lamngockhuong/termote:latest
+### Perintah sehari-hari
 
-# Dengan volume untuk penyimpanan
-docker run -d --name termote -p 7680:7680 \
-  -v termote-data:/home/termote \
-  ghcr.io/lamngockhuong/termote:latest
+```bash
+termote status                       # What the running server reports
+termote stop                         # Stop (it starts again at the next login)
+termote restart                      # Restart with the saved options
+termote logs follow                  # Tail the logs
+termote show-password                # Print the saved admin password
+termote update                       # Update to the latest release
+termote uninstall                    # Remove the service, the command and the install
+```
 
-# Mount direktori workspace khusus
+`update` beralih ke versi baru, me-restart service, dan kembali ke versi sebelumnya jika versi baru tidak berjalan. `uninstall` tetap menyimpan konfigurasi (`~/.config/termote`) dan log (`~/.local/state/termote`) serta menampilkan kedua path tersebut.
+
+## Instalasi
+
+### Menetapkan versi
+
+```bash
+curl -fsSL https://termote.ohnice.app/install.sh | TERMOTE_VERSION=1.0.0 sh
+termote update --version 1.0.0
+```
+
+```powershell
+$env:TERMOTE_VERSION='1.0.0'; irm https://termote.ohnice.app/install.ps1 | iex
+```
+
+Tanpa `TERMOTE_VERSION`, installer mengambil rilis stabil 1.x terbaru dan tidak mengubah instalasi yang sudah ada. Dengan variabel itu, versi tersebut dipasang di samping versi saat ini dan menjadi versi aktif, sekaligus cara untuk memperbaiki instalasi yang rusak.
+
+### Mode Container
+
+```bash
+termote container up                          # Run the published image (podman or docker)
+termote container up --workspace ~/projects   # Mount a directory at /workspace
+termote container status
+termote container logs -f
+termote container down
+```
+
+`container up` menjalankan `ghcr.io/lamngockhuong/termote` pada versi `termote` yang terpasang, dengan podman (diutamakan) atau docker, di port 7680 dengan `~/termote-workspace` di-mount ke `/workspace`. Perintah ini menerima `--port`, `--lan`, `--tailscale`, `--no-auth`, `--allow-host` dan `--fresh`, yang disimpan terpisah dari opsi `start`; password-nya sama dengan server native. Docker menjalankan ulang container setelah reboot; Podman rootless tidak punya daemon untuk itu, jadi jalankan sebagai unit Quadlet.
+
+> **Catatan keamanan**: Hindari mount `$HOME` secara langsung — direktori sensitif seperti `.ssh`, `.gnupg` akan dapat diakses di dalam container. Mount direktori proyek tertentu saja.
+
+### Docker tanpa CLI
+
+```bash
+# Generates a password, printed in: docker logs termote
 docker run -d --name termote -p 7680:7680 \
   -v ~/projects:/workspace \
   ghcr.io/lamngockhuong/termote:latest
 
-# Dengan Tailscale HTTPS (memerlukan Tailscale di host)
+# With your own credentials
 docker run -d --name termote -p 7680:7680 \
   -e TERMOTE_USER=admin -e TERMOTE_PASS=secret \
   ghcr.io/lamngockhuong/termote:latest
-sudo tailscale serve --bg --https=443 http://127.0.0.1:7680
-# Akses di: https://your-hostname.tailnet-name.ts.net
 ```
 
-### Dari Release
+| Variabel Lingkungan | Deskripsi                                         |
+| ------------------- | ------------------------------------------------- |
+| `TERMOTE_USER`      | Username basic auth (default: `admin`)            |
+| `TERMOTE_PASS`      | Password basic auth (default: dibuat otomatis)    |
+| `NO_AUTH`           | Isi dengan `true` untuk menonaktifkan autentikasi |
 
-```bash
-# Unduh release terbaru
-VERSION=$(curl -s https://api.github.com/repos/lamngockhuong/termote/releases/latest | grep tag_name | cut -d '"' -f4)
-wget https://github.com/lamngockhuong/termote/releases/download/${VERSION}/termote-${VERSION}.tar.gz
-tar xzf termote-${VERSION}.tar.gz
-cd termote-${VERSION#v}
-
-# Instal (menu interaktif atau dengan mode)
-./scripts/termote.sh install
-./scripts/termote.sh install container
-```
-
-### Dari Source
+### Build dari source
 
 ```bash
 git clone https://github.com/lamngockhuong/termote.git
 cd termote
-./scripts/termote.sh install container
+make build
+./scripts/termote.sh start
 ```
 
-> **Catatan**: `termote.sh` adalah CLI terpadu yang mendukung `install` (build dari source, menggunakan artifacts yang tersedia jika ada), `uninstall`, dan `health`.
+`make build` mem-build PWA dan menyematkannya ke `server/termote`; dibutuhkan Go, Node.js dan pnpm. `scripts/termote.sh` (Windows: `scripts\termote.ps1`) hanya menjalankan checkout: skrip ini mem-build ulang binary pengembangan jika ada source yang lebih baru, lalu menjalankannya dengan argumen yang sama. `termote update` menolak berjalan di dalam checkout; gunakan `git pull && make build`.
+
+### Upgrade dari 0.x
+
+Tidak ada upgrade dari 0.x: 1.0 terpasang di lokasi baru dan tidak membaca konfigurasi 0.x. Hapus instalasi 0.x sesuai [dokumentasi 0.x yang diarsipkan](https://termote.ohnice.app/0.x/), lalu pasang 1.0 dengan perintah di atas.
 
 ## Mode Deployment
 
@@ -236,135 +229,50 @@ flowchart LR
     User["Pengguna"] --> Container & Native
 ```
 
-| Mode          | Deskripsi      | Kasus Penggunaan                                        | Platform              |
-| ------------- | -------------- | ------------------------------------------------------- | --------------------- |
-| `--container` | Mode container | Deployment sederhana, lingkungan terisolasi             | macOS, Linux, Windows |
-| `--native`    | Semua native   | Akses alat host (claude, gh); wajib untuk backend Herdr | macOS, Linux, Windows |
+| Mode      | Perintah               | Kasus Penggunaan                                        | Platform              |
+| --------- | ---------------------- | ------------------------------------------------------- | --------------------- |
+| Native    | `termote start`        | Akses alat host (claude, gh); wajib untuk backend Herdr | macOS, Linux, Windows |
+| Container | `termote container up` | Lingkungan terisolasi                                   | macOS, Linux, Windows |
 
-### Opsi
+Server native berjalan sebagai service pengguna: unit systemd user di Linux (proses terpisah jika tidak ada systemd user, misalnya WSL2 tanpa systemd), agent launchd di macOS, dan Scheduled Task saat logon di Windows.
 
-| Flag                        | Deskripsi                                                                                 |
-| --------------------------- | ----------------------------------------------------------------------------------------- |
-| `--lan`                     | Buka akses LAN (default: hanya localhost)                                                 |
-| `--tailscale <host[:port]>` | Aktifkan Tailscale HTTPS                                                                  |
-| `--no-auth`                 | Nonaktifkan autentikasi dasar                                                             |
-| `--port <port>`             | Port host (default: 7680, Windows: 7690)                                                  |
-| `--mux <tmux\|herdr>`       | Backend terminal, khusus native (default: `tmux`)                                         |
-| `--allow-host <name>`       | Izinkan nilai header Host tambahan (bisa diulang; tanpa wildcard, lihat catatan keamanan) |
-| `--allow-herdr-no-auth`     | Wajib bersama `--mux herdr --no-auth`                                                     |
-| `--fresh`                   | Paksa prompt password baru (abaikan config tersimpan)                                     |
-| `--update`                  | Pembaruan otomatis dengan config tersimpan                                                |
-| `--version <ver>`           | Instal versi tertentu (dengan atau tanpa `v`)                                             |
+### Opsi `start`
 
-`--ttyd`/`-Ttyd` masih diterima (0.x meneruskannya saat menjalankan ulang installer ketika update), tetapi diabaikan dengan peringatan: ttyd sudah dihapus di 1.0.0. Semua perubahan yang tidak kompatibel ada di [`docs/upgrade-1.0.md`](docs/upgrade-1.0.md).
+| Flag                        | Deskripsi                                                                                  |
+| --------------------------- | ------------------------------------------------------------------------------------------ |
+| `--port <port>`             | Port (default: 7680, Windows: 7690)                                                        |
+| `--lan[=false]`             | Mendengarkan di semua interface (default: hanya localhost)                                 |
+| `--tailscale <host[:port]>` | Publikasikan melalui Tailscale HTTPS (port default 443)                                    |
+| `--no-tailscale`            | Berhenti memublikasikan melalui Tailscale                                                  |
+| `--no-auth[=false]`         | Nonaktifkan basic authentication                                                           |
+| `--mux <tmux\|herdr>`       | Backend terminal (default: herdr jika sedang berjalan, selain itu tmux)                    |
+| `--allow-host <name>`       | Izinkan nilai header Host tambahan (dapat diulang; tanpa wildcard, lihat catatan keamanan) |
+| `--remove-host <name>`      | Hapus nama Host yang diizinkan (dapat diulang)                                             |
+| `--allow-herdr-no-auth`     | Wajib bersama `--mux herdr --no-auth`                                                      |
+| `--fresh`                   | Buat password baru                                                                         |
 
-| Variabel Lingkungan | Deskripsi                                           |
-| ------------------- | --------------------------------------------------- |
-| `WORKSPACE`         | Direktori host untuk mount (default: `./workspace`) |
-| `TERMOTE_USER`      | Username autentikasi (default: otomatis dibuat)     |
-| `TERMOTE_PASS`      | Password autentikasi (default: otomatis dibuat)     |
-| `NO_AUTH`           | Atur ke `true` untuk menonaktifkan autentikasi      |
+### Dengan Tailscale HTTPS
 
-### Mode Container (direkomendasikan untuk kemudahan)
-
-Skrip otomatis mendeteksi `podman` atau `docker` -- keduanya bekerja sama.
+Menggunakan `tailscale serve` untuk HTTPS otomatis (tanpa mengelola sertifikat secara manual):
 
 ```bash
-./scripts/termote.sh install container             # localhost dengan basic auth
-./scripts/termote.sh install container --no-auth   # localhost tanpa auth
-./scripts/termote.sh install container --lan       # Dapat diakses via LAN
-# Akses: http://localhost:7680
-
-# Direktori workspace khusus (dimount ke /workspace di container)
-WORKSPACE=~/projects ./scripts/termote.sh install container
-WORKSPACE=/path/to/code make install-container
+termote start --tailscale myhost.ts.net                # Default port 443
+termote start --tailscale myhost.ts.net:8765           # Custom port
+termote container up --tailscale myhost.ts.net         # Container mode
+sudo tailscale set --operator=$USER                    # Linux, once: let termote run tailscale serve
 ```
 
-> **Catatan keamanan**: Hindari mount langsung `$HOME` -- direktori sensitif seperti `.ssh`, `.gnupg` akan dapat diakses di container. Mount direktori proyek tertentu saja.
-
-### Native (direkomendasikan untuk akses binary host)
-
-Gunakan ketika Anda memerlukan akses ke binary host (claude, git, dll.):
-
-```bash
-# Linux
-sudo apt install tmux
-./scripts/termote.sh install native
-
-# macOS
-brew install tmux go
-./scripts/termote.sh install native
-# Akses: http://localhost:7680
-```
-
-Untuk mengendalikan workspace [Herdr](https://termote.ohnice.app/installation/native/) sebagai pengganti tmux, tambahkan `--mux herdr` (khusus mode native; `herdr` harus sudah ada di `PATH`).
-
-### Dengan Tailscale HTTPS (semua mode)
-
-Menggunakan `tailscale serve` untuk HTTPS otomatis (tanpa manajemen sertifikat manual):
-
-```bash
-# Hanya Tailscale (port default 443)
-./scripts/termote.sh install container --tailscale myhost.ts.net
-
-# Port khusus
-./scripts/termote.sh install native --tailscale myhost.ts.net:8765
-
-# Tailscale + akses LAN
-./scripts/termote.sh install container --tailscale myhost.ts.net --lan
-
-# Akses: https://myhost.ts.net (atau :8765 untuk port khusus)
-```
-
-### Hapus Instalasi
-
-```bash
-./scripts/termote.sh uninstall container   # Mode container
-./scripts/termote.sh uninstall native      # Mode native
-./scripts/termote.sh uninstall all         # Semuanya
-```
-
-### Pembaruan
-
-```bash
-# Opsi 1: Pembaruan otomatis dengan config tersimpan
-curl -fsSL .../get.sh | bash -s -- --update
-
-# Opsi 2: Jalankan ulang one-liner (bandingkan versi, tanya sebelum instal)
-curl -fsSL .../get.sh | bash
-
-# Opsi 3: Pembaruan manual
-./scripts/termote.sh uninstall [container|native]
-git pull origin main                    # Jika diinstal dari source
-./scripts/termote.sh install [container|native] [--lan] [--tailscale ...]
-```
+Pemetaan diterapkan setiap kali server dijalankan. `stop`, `start --no-tailscale` dan `uninstall` hanya menghapus pemetaan milik Termote sendiri.
 
 ## Dukungan Platform
 
-| Platform | Container         | Native            | CLI Script  |
-| -------- | ----------------- | ----------------- | ----------- |
-| Linux    | ✓                 | ✓                 | termote.sh  |
-| macOS    | ✓                 | ✓                 | termote.sh  |
-| Windows  | ⚠️ (eksperimental) | ⚠️ (eksperimental) | termote.ps1 |
+| Platform | Container | Native | Installer     |
+| -------- | --------- | ------ | ------------- |
+| Linux    | ✓         | ✓      | `install.sh`  |
+| macOS    | ✓         | ✓      | `install.sh`  |
+| Windows  | ✓         | ✓      | `install.ps1` |
 
-> **⚠️ Dukungan Windows (Eksperimental)**: Dukungan Windows saat ini masih dalam tahap awal dan memerlukan pengujian lebih lanjut. Mode container memerlukan Docker Desktop, mode native memerlukan psmux. Silakan laporkan masalah di GitHub.
-
-### Mode Native Windows
-
-Mode native Windows menggunakan [psmux](https://github.com/psmux/psmux) (terminal multiplexer yang kompatibel dengan tmux untuk Windows):
-
-```powershell
-# Instal psmux
-winget install psmux
-
-# Jalankan Termote
-.\scripts\termote.ps1 install native
-.\scripts\termote.ps1 install container  # Atau mode container dengan Docker Desktop
-
-# Update & log
-.\scripts\termote.ps1 update             # Update mandiri ke rilis terbaru
-.\scripts\termote.ps1 logs follow        # Pantau semua log secara langsung
-```
+> **Dukungan Windows**: Mode container membutuhkan Docker Desktop atau Podman Desktop; mode native membutuhkan [psmux](https://github.com/psmux/psmux) (terminal multiplexer yang kompatibel dengan tmux untuk Windows), dipasang dengan `winget install psmux`. Service di Windows belum diverifikasi di mesin sungguhan; laporkan masalah apa pun di GitHub.
 
 ## Penggunaan Mobile
 
@@ -383,12 +291,12 @@ Toolbar virtual menyediakan: Tab, Esc, Ctrl, Shift, tombol panah, dan kombinasi 
 
 ```
 termote/
-├── Makefile                # Perintah build/test/deploy
-├── Dockerfile              # Docker mode (termote + tmux, tanpa ttyd)
-├── docker-compose.yml
-├── entrypoint.sh           # Docker entrypoint
-├── docs/                   # Dokumentasi
-│   └── images/screenshots/ # Tangkapan layar aplikasi
+├── Makefile                # Build/test/run commands
+├── Dockerfile              # Container image (termote + tmux)
+├── docker-compose.yml      # Development from a checkout only
+├── entrypoint.sh           # Container entrypoint
+├── docs/                   # Documentation
+│   └── images/screenshots/ # App screenshots
 ├── pwa/                    # React PWA
 │   └── src/
 │       ├── components/
@@ -396,81 +304,83 @@ termote/
 │       ├── hooks/
 │       ├── types/
 │       └── utils/
-├── server/                 # Server Go + CLI (satu binary)
-│   ├── main.go             # Entry point (tanpa argumen/`serve` = server, selain itu CLI)
-│   ├── serve.go            # Server (PWA, auth, penjaga)
-│   ├── mux.go              # Antarmuka Mux + rute /api/mux/*
-│   ├── mux_tmux.go         # Backend tmux/psmux
-│   ├── mux_herdr.go        # Backend Herdr (khusus native)
-│   ├── stream.go           # WebSocket terminal (stream xterm.js)
-│   └── cli*.go             # Subperintah install/update/health/logs/link/menu
+├── server/                 # Go server + CLI (single binary)
+│   ├── main.go             # Entry point (no args = menu, `serve` = server, else CLI)
+│   ├── serve.go            # Server (PWA, auth, guards)
+│   ├── mux.go              # Mux interface + /api/mux/* routes
+│   ├── mux_tmux.go         # tmux/psmux backend
+│   ├── mux_herdr.go        # Herdr backend (native only)
+│   ├── stream.go           # Terminal WebSocket (xterm.js stream)
+│   ├── cli*.go             # start/stop/update/container/logs/menu subcommands
+│   └── webui/              # PWA embedded in the binary (filled by make build)
 ├── scripts/
-│   ├── termote.sh          # Pembungkus tipis Unix -> termote CLI
-│   ├── termote.ps1         # Pembungkus tipis Windows PowerShell -> termote CLI
-│   ├── get.sh              # Unix online installer (curl | bash)
-│   └── get.ps1             # Windows online installer (irm | iex)
-├── tests/                  # Suite tes
-│   ├── test-termote.sh
-│   ├── test-termote.ps1    # Tes Windows
-│   ├── test-get.sh
-│   └── test-entrypoints.sh
-└── website/                # Situs docs Astro Starlight
-    └── src/content/docs/   # Dokumentasi MDX
+│   ├── install.sh          # Unix online installer (curl | sh)
+│   ├── install.ps1         # Windows online installer (irm | iex)
+│   ├── termote.sh          # Unix shim: builds and runs a checkout
+│   └── termote.ps1         # Windows PowerShell shim: builds and runs a checkout
+├── tests/                  # Test suite
+│   ├── test-termote.sh     # Unix shim tests
+│   ├── test-termote.ps1    # Windows shim tests
+│   ├── test-install.sh     # Unix installer tests
+│   ├── test-install.ps1    # Windows installer tests
+│   └── test-entrypoints.sh # Container entrypoint tests
+└── website/                # Astro Starlight docs site
+    └── src/content/docs/   # MDX documentation
 ```
 
 ## Pengembangan
 
 ```bash
-make build          # Build PWA dan termote
-make test           # Jalankan semua tes
-make health         # Periksa health service
-make clean          # Hentikan containers
+make build          # Build the PWA and embed it in server/termote
+make test           # Run all tests
+make health         # Check service health
+make clean          # Stop containers
 
-# Tes E2E (memerlukan server yang berjalan)
-./scripts/termote.sh install container  # Mulai server terlebih dahulu
-pnpm --filter termote test:e2e       # Jalankan tes Playwright
-pnpm --filter termote test:e2e:ui    # Jalankan dengan UI debugger
+# E2E tests (requires running server)
+./scripts/termote.sh start           # Start server first
+pnpm --filter termote test:e2e       # Run Playwright tests
+pnpm --filter termote test:e2e:ui    # Run with UI debugger
 ```
 
-**Pengujian Manual:** Lihat [Daftar Periksa Self-Test](docs/self-test-checklist.md)
+**Pengujian Manual:** Lihat [Self-Test Checklist](docs/self-test-checklist.md)
 
 ## Pemecahan Masalah
 
 ### Session tidak tersimpan
 
 - Periksa tmux: `tmux ls`
-- termote menyambung dengan `tmux new-session -A` (attach-or-create)
+- termote melakukan attach dengan `tmux new-session -A` (attach-or-create)
 
 ### Error WebSocket
 
-- Periksa log termote: `docker logs termote` (container) atau `termote logs server` (native)
-- WebSocket terminal adalah `/api/mux/stream`, dilayani langsung oleh termote; tidak ada proses terminal terpisah yang perlu diperiksa
+- Periksa log termote: `termote container logs` (container) atau `termote logs server` (native)
+- WebSocket terminal adalah `/api/mux/stream`, dilayani langsung oleh termote — tidak ada proses terminal terpisah yang perlu diperiksa
 
 ### Masalah keyboard mobile
 
-- Pastikan viewport meta tag tersedia
+- Pastikan meta tag viewport tersedia
 - Uji di perangkat nyata, bukan emulator
 
-### Mode native: proses tidak berjalan
+### Mode native: server tidak berjalan
 
 ```bash
-ps aux | grep termote-server # Periksa apakah termote berjalan
-lsof -i :7680              # Verifikasi port sedang digunakan
-termote logs server        # Atau: termote logs follow
+termote status             # What the running server reports
+termote logs server        # Or: termote logs follow
+lsof -i :7680              # Check what holds the port
+termote start --fresh      # If the saved password can no longer be read
 ```
 
 ## Catatan Keamanan
 
-- **Default: hanya localhost** - tidak terbuka ke LAN kecuali menggunakan flag `--lan`
-- **Basic auth aktif secara default** - gunakan `--no-auth` untuk menonaktifkan di dev lokal; password tersimpan yang kosong tidak lagi menonaktifkan auth (1.0.0 membuat password baru sebagai gantinya)
-- **Daftar host yang diizinkan** - request dengan header `Host` yang tidak dikenal ditolak (perlindungan DNS rebinding); tambahkan nama tepercaya dengan `--allow-host`/`-AllowHost`, tidak ada wildcard untuk mematikan pemeriksaan ini
-- **Penjaga Origin/CSRF** - request `/api/mux/*` yang mengubah state dan WebSocket `/api/mux/stream` menolak `Sec-Fetch-Site`/`Origin` lintas situs serta mewajibkan token stream sekali pakai dari origin yang sama
-- **Proteksi brute-force bawaan** - rate limiting (5 percobaan/menit per IP)
-- **Backend Herdr** - membuka semua workspace Herdr di host, sehingga `--mux herdr --no-auth` ditolak kecuali `--allow-herdr-no-auth` juga diberikan
-- Gunakan HTTPS (Tailscale) untuk production
+- **Default: hanya localhost** - tidak diekspos ke LAN kecuali flag `--lan` digunakan
+- **Basic auth aktif secara default** - gunakan `--no-auth` untuk menonaktifkannya saat pengembangan lokal; password dibuat oleh `termote start` yang pertama dan disimpan terenkripsi
+- **Allowlist Host**: request dengan header `Host` yang tidak dikenal ditolak (perlindungan DNS rebinding); tambahkan nama tepercaya dengan `--allow-host`, tidak ada wildcard untuk mematikan pemeriksaan ini
+- **Guard Origin/CSRF**: request `/api/mux/*` yang mengubah state dan WebSocket `/api/mux/stream` menolak `Sec-Fetch-Site`/`Origin` lintas situs dan mewajibkan stream token sekali pakai dari origin yang sama
+- **Perlindungan brute-force bawaan** - pembatasan laju (5 percobaan/menit per IP)
+- **Backend Herdr**: mengekspos setiap workspace Herdr di host, sehingga `--mux herdr --no-auth` ditolak kecuali `--allow-herdr-no-auth` juga diberikan
+- **File service tidak menyimpan rahasia**: unit systemd, agent launchd, dan Scheduled Task tidak pernah berisi password
+- Gunakan HTTPS (Tailscale) untuk produksi
 - Batasi ke jaringan tepercaya/VPN
-
-Lihat [`docs/upgrade-1.0.md`](docs/upgrade-1.0.md) jika Anda meng-upgrade dari instalasi 0.x.
 
 ## Proyek Lainnya
 

@@ -7,21 +7,28 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"log"
+	"mime"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/lamngockhuong/termote/server/webui"
 )
 
 // serveConfig holds configuration for the server
 type serveConfig struct {
-	Port         string
+	Port string
+	// PWADir serves the PWA from disk instead of the embedded build (PWA
+	// development); empty uses the embedded build.
 	PWADir       string
 	User         string
 	Pass         string
@@ -32,13 +39,21 @@ type serveConfig struct {
 	// HerdrAllowNoAuth lets herdr run with auth disabled. herdr exposes every
 	// workspace of the user, so NoAuth alone is refused.
 	HerdrAllowNoAuth bool
+	// AllowLocalAddr also accepts the address a request arrived on as its
+	// Host (LAN access; see hostAllowlist).
+	AllowLocalAddr bool
+	// Tailscale is "host[:port]" to publish over Tailscale HTTPS once
+	// listening; empty publishes nothing.
+	Tailscale string // OnListen runs once the port is bound (serve records its PID then, so
+	// a server that cannot bind never replaces the running one's PID file).
+	OnListen func()
 }
 
 // newServeConfigFromEnv creates config from environment variables with defaults
 func newServeConfigFromEnv() serveConfig {
 	return serveConfig{
 		Port:   envOr("TERMOTE_PORT", "7680"),
-		PWADir: envOr("TERMOTE_PWA_DIR", "./pwa/dist"),
+		PWADir: os.Getenv("TERMOTE_PWA_DIR"),
 		User:   envOr("TERMOTE_USER", "admin"),
 		Pass:   os.Getenv("TERMOTE_PASS"),
 		NoAuth: os.Getenv("TERMOTE_NO_AUTH") == "true",
@@ -51,29 +66,32 @@ func newServeConfigFromEnv() serveConfig {
 	}
 }
 
-// secretEnvKeys must never reach a terminal: any tmux command may start the
+// No TERMOTE_* variable may reach a terminal: any tmux command may start the
 // tmux server, which hands the environment it started with to every shell, so
-// `env` in a pane would print the password.
-var secretEnvKeys = []string{"TERMOTE_PASS"}
+// `env` in a pane would print the password (TERMOTE_PASS) or settings that
+// would then configure a server started from that pane.
+var termoteEnvKeys = []string{
+	"TERMOTE_PASS", "TERMOTE_USER", "TERMOTE_PORT", "TERMOTE_BIND", "TERMOTE_NO_AUTH",
+	"TERMOTE_PWA_DIR", "TERMOTE_ALLOWED_HOSTS", "TERMOTE_MUX", "TERMOTE_HERDR_ALLOW_NO_AUTH",
+	"TERMOTE_PROJECT_DIR",
+}
 
-// scrubSecretEnv removes the secrets from the process environment once the
-// config has read them.
-func scrubSecretEnv() {
-	for _, k := range secretEnvKeys {
-		os.Unsetenv(k)
+// scrubTermoteEnv removes every TERMOTE_* variable from the process
+// environment once the config is read.
+func scrubTermoteEnv() {
+	for _, kv := range os.Environ() {
+		if isTermoteEnv(kv) {
+			k, _, _ := strings.Cut(kv, "=")
+			os.Unsetenv(k)
+		}
 	}
 }
 
-// isSecretEnv reports whether a KEY=value entry holds a secret. Windows keys
-// are case-insensitive, so the match is too.
-func isSecretEnv(kv string) bool {
+// isTermoteEnv reports whether a KEY=value entry is a TERMOTE_* variable.
+// Windows keys are case-insensitive, so the match is too.
+func isTermoteEnv(kv string) bool {
 	k, _, _ := strings.Cut(kv, "=")
-	for _, s := range secretEnvKeys {
-		if strings.EqualFold(k, s) {
-			return true
-		}
-	}
-	return false
+	return len(k) > len("TERMOTE_") && strings.EqualFold(k[:len("TERMOTE_")], "TERMOTE_")
 }
 
 func envOr(key, fallback string) string {
@@ -199,7 +217,7 @@ func buildServer(cfg serveConfig, m Mux) (http.Handler, *streamHub, error) {
 	}
 	mux := http.NewServeMux()
 	tokenStore := newStreamTokenStore()
-	allowed := parseAllowedHosts(cfg.AllowedHosts)
+	allowed := parseAllowedHosts(cfg.AllowedHosts, cfg.AllowLocalAddr)
 	hub := newStreamHub(maxStreams)
 
 	registerMuxRoutes(mux, m, tokenStore)
@@ -214,8 +232,7 @@ func buildServer(cfg serveConfig, m Mux) (http.Handler, *streamHub, error) {
 	})
 
 	// PWA static files (fallback to index.html for SPA routing)
-	absDir, _ := filepath.Abs(cfg.PWADir)
-	mux.Handle("/", spaHandler(absDir))
+	mux.Handle("/", spaHandler(webui.FS(cfg.PWADir)))
 
 	var handler http.Handler = mux
 	if !cfg.NoAuth {
@@ -253,8 +270,15 @@ func startServeMode(cfg serveConfig) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	if cfg.OnListen != nil {
+		cfg.OnListen()
+	}
 	// After the first signal, a second one kills the process as usual.
 	go func() { <-ctx.Done(); stop() }()
+	// Publish over Tailscale only once the port answers.
+	if cfg.Tailscale != "" {
+		go applyTailscale(ctx, cfg.Tailscale, ln.Addr().(*net.TCPAddr).Port)
+	}
 	if err := runServer(ctx, cfg, m, ln); err != nil {
 		log.Fatal(err)
 	}
@@ -268,8 +292,13 @@ func runServer(ctx context.Context, cfg serveConfig, m Mux, ln net.Listener) err
 		ln.Close()
 		return err
 	}
-	absDir, _ := filepath.Abs(cfg.PWADir)
-	log.Printf("Termote server listening on %s (PWA: %s, backend: %s)", ln.Addr(), absDir, m.Name())
+	pwa := "embedded"
+	if cfg.PWADir != "" {
+		pwa, _ = filepath.Abs(cfg.PWADir)
+	} else if !webui.Built() {
+		pwa = "not built (placeholder page)"
+	}
+	log.Printf("Termote server listening on %s (PWA: %s, backend: %s)", ln.Addr(), pwa, m.Name())
 	srv := &http.Server{
 		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
@@ -446,18 +475,31 @@ func basicAuth(user, pass string, next http.Handler) http.Handler {
 	})
 }
 
+// The PWA manifest; Go's table does not know the extension.
+func init() { mime.AddExtensionType(".webmanifest", "application/manifest+json") }
+
 // spaHandler serves static files with SPA fallback to index.html
-func spaHandler(dir string) http.Handler {
-	fs := http.Dir(dir)
-	fileServer := http.FileServer(fs)
+func spaHandler(files fs.FS) http.Handler {
+	fileServer := http.FileServerFS(files)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Try serving the file directly
-		path := filepath.Join(dir, filepath.Clean(r.URL.Path))
-		if _, err := os.Stat(path); err == nil {
+		name := strings.TrimPrefix(path.Clean("/"+r.URL.Path), "/")
+		if name == "" {
+			name = "."
+		}
+		st, err := fs.Stat(files, name)
+		if err == nil && (!st.IsDir() || name == ".") {
 			fileServer.ServeHTTP(w, r)
 			return
 		}
-		// SPA fallback: serve index.html for unmatched routes
+		// A missing asset is a 404, not the app: a stale bundle must fail
+		// loudly instead of parsing HTML as JavaScript.
+		if name == "assets" || strings.HasPrefix(name, "assets/") {
+			http.NotFound(w, r)
+			return
+		}
+		// SPA fallback: serve index.html for unmatched routes (and
+		// directories, which are never listed)
 		r.URL.Path = "/"
 		fileServer.ServeHTTP(w, r)
 	})
@@ -505,11 +547,14 @@ func handleTerminalToken(tokens *tokenStore) http.HandlerFunc {
 	}
 }
 
-// noCacheMiddleware adds no-cache headers to all responses
+// noCacheMiddleware adds no-cache headers to all responses but the hashed
+// Vite assets, which never change under the same name. The embedded files
+// have no mtime (no Last-Modified, no 304), so assets are marked immutable.
 func noCacheMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Skip cache headers for assets (they have content hashes)
-		if !strings.HasPrefix(r.URL.Path, "/assets/") {
+		if strings.HasPrefix(r.URL.Path, "/assets/") {
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		} else {
 			w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
 			w.Header().Set("Pragma", "no-cache")
 		}

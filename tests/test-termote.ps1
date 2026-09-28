@@ -1,11 +1,11 @@
 <#
 .SYNOPSIS
-    Tests for the scripts/termote.ps1 shim
+    Tests for the scripts/termote.ps1 checkout shim
 .DESCRIPTION
-    Checks the 0.x parameter to Go flag mapping, binary selection (installed
-    release and checkout build) and the command line 0.x `update` relaunches.
-    A small Go program stands in for termote and prints its arguments; the
-    commands themselves are tested in Go (server/cli*_test.go).
+    Checks the build on demand (Go sources and the PWA build), argument
+    pass-through and exit status. A small Go program stands in for termote
+    and prints its arguments; the commands themselves are tested in Go
+    (server/cli*_test.go).
     Run from repo root: ./tests/test-termote.ps1
 #>
 
@@ -35,24 +35,18 @@ Write-Host ""
 
 $TestDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
 $ShimPath = [System.IO.Path]::GetFullPath((Join-Path $TestDir "../scripts/termote.ps1"))
-$GetPath = [System.IO.Path]::GetFullPath((Join-Path $TestDir "../scripts/get.ps1"))
 
 # ─────────────────────────────────────────────────────────────
 # Syntax and size
 # ─────────────────────────────────────────────────────────────
-foreach ($file in @($ShimPath, $GetPath)) {
-    $errors = $null
-    $null = [System.Management.Automation.PSParser]::Tokenize((Get-Content $file -Raw), [ref]$errors)
-    Write-TestResult "Syntax valid: $(Split-Path -Leaf $file)" ($errors.Count -eq 0) ($errors | Select-Object -First 1)
-}
+$errors = $null
+$null = [System.Management.Automation.PSParser]::Tokenize((Get-Content $ShimPath -Raw), [ref]$errors)
+Write-TestResult "Syntax valid: termote.ps1" ($errors.Count -eq 0) ($errors | Select-Object -First 1)
 $lines = (Get-Content $ShimPath).Count
 Write-TestResult "termote.ps1 is $lines lines (<= 100)" ($lines -le 100)
 $shimText = Get-Content $ShimPath -Raw
 Write-TestResult "No install logic in shim" (-not ($shimText -match 'docker|podman|tailscale serve|DPAPI|Start-Process'))
 
-# ─────────────────────────────────────────────────────────────
-# Fake termote: prints DIR=<TERMOTE_PROJECT_DIR>, then one argument per line
-# ─────────────────────────────────────────────────────────────
 if (-not (Get-Command go -ErrorAction SilentlyContinue)) {
     Write-Host "[SKIP] go not installed; shim behaviour tests" -ForegroundColor Yellow
     Write-Host ""
@@ -61,6 +55,7 @@ if (-not (Get-Command go -ErrorAction SilentlyContinue)) {
 }
 
 $Tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("termote-test-" + [guid]::NewGuid().ToString("N"))
+# Fake termote: prints DIR=<TERMOTE_PROJECT_DIR>, then one argument per line
 $EchoSrc = @'
 package main
 
@@ -80,18 +75,12 @@ func main() {
 }
 '@
 
-function New-EchoModule([string]$Dir) {
-    New-Item -ItemType Directory -Path $Dir -Force | Out-Null
-    Set-Content -Path (Join-Path $Dir "go.mod") -Value "module echoargs`n`ngo 1.24`n"
-    Set-Content -Path (Join-Path $Dir "main.go") -Value $EchoSrc
-}
-
-# Launchers 0.x relaunches with: pwsh when present, else Windows PowerShell.
+# Launchers: pwsh when present, else Windows PowerShell (termote.cmd uses it).
 $Launchers = @((Get-Process -Id $PID).Path)
 $winPS = Get-Command powershell.exe -ErrorAction SilentlyContinue
 if ($winPS -and $winPS.Source -ne $Launchers[0]) { $Launchers += $winPS.Source }
 
-# Runs the shim in a new process with -File, like 0.x update and termote.cmd.
+# Runs the shim in a new process with -File, like termote.cmd.
 function Invoke-Shim([string]$Launcher, [string]$Shim, [string[]]$ShimArgs) {
     $out = & $Launcher -NoProfile -ExecutionPolicy Bypass -File $Shim @ShimArgs 2>&1 | ForEach-Object { "$_" }
     $script:ShimExit = $LASTEXITCODE
@@ -107,88 +96,70 @@ function Get-PassedArgs($Out) {
 
 try {
     # ─────────────────────────────────────────────────────────
-    # Installed release layout
+    # Outside a checkout
     # ─────────────────────────────────────────────────────────
-    $install = Join-Path $Tmp "install"
-    New-Item -ItemType Directory -Path (Join-Path $install "scripts") -Force | Out-Null
-    Copy-Item $ShimPath (Join-Path $install "scripts/termote.ps1")
-    $echoDir = Join-Path $Tmp "echo"
-    New-EchoModule $echoDir
-    Push-Location $echoDir
-    try { & go build -o (Join-Path $install "termote-windows-amd64.exe") . } finally { Pop-Location }
-    Write-TestResult "Built fake termote" ($LASTEXITCODE -eq 0)
-    $shim = Join-Path $install "scripts/termote.ps1"
-
-    foreach ($launcher in $Launchers) {
-        $tag = Split-Path -Leaf $launcher
-        Write-Host ""
-        Write-Host "--- Installed release via $tag ---" -ForegroundColor Cyan
-
-        $out = Invoke-Shim $launcher $shim @()
-        Test-Equal "[$tag] no command opens the menu" "menu" (Get-PassedArgs $out)
-        # Compare by content, not string: the temp path may be an 8.3 short name.
-        $dir = ($out | Where-Object { $_.StartsWith("DIR=") } | Select-Object -First 1) -replace '^DIR=', ''
-        Write-TestResult "[$tag] exports TERMOTE_PROJECT_DIR" ($dir -and (Test-Path (Join-Path $dir "termote-windows-amd64.exe"))) "got: '$dir'"
-
-        # The exact command line 0.1.0 `update` relaunches (termote.ps1:1288)
-        $out = Invoke-Shim $launcher $shim @("install", "native", "-Lan", "-NoAuth", "-Port", "7700", "-Tailscale", "myhost:8443", "-Ttyd", "fork")
-        Test-Equal "[$tag] 0.x update relaunch maps every flag" "install native --lan --no-auth --port 7700 --tailscale myhost:8443 --ttyd fork" (Get-PassedArgs $out)
-        Test-Equal "[$tag] 0.x relaunch exits 0" "0" "$script:ShimExit"
-
-        $out = Invoke-Shim $launcher $shim @("install", "native")
-        Test-Equal "[$tag] unset -Port is not passed" "install native" (Get-PassedArgs $out)
-
-        $out = Invoke-Shim $launcher $shim @("install", "native", "-Mux", "herdr", "-AllowHerdrNoAuth", "-NoAuth", "-Fresh", "-AllowHost", "box.local")
-        Test-Equal "[$tag] 1.0 flags" "install native --no-auth --fresh --allow-herdr-no-auth --mux herdr --allow-host box.local" (Get-PassedArgs $out)
-
-        $out = Invoke-Shim $launcher $shim @("update", "-Version", "1.0.0-rc.1", "-Force")
-        Test-Equal "[$tag] update -Version -Force" "update --force --version 1.0.0-rc.1" (Get-PassedArgs $out)
-
-        $out = Invoke-Shim $launcher $shim @("logs", "follow")
-        Test-Equal "[$tag] positional service" "logs follow" (Get-PassedArgs $out)
-
-        $env:ECHO_EXIT = "7"
-        $null = Invoke-Shim $launcher $shim @("health")
-        Remove-Item Env:ECHO_EXIT
-        Test-Equal "[$tag] exit status passes through" "7" "$script:ShimExit"
-    }
-
-    # In-process call: -AllowHost takes a list
-    $out = & $shim install native -AllowHost a.local, b.local | ForEach-Object { "$_" }
-    Test-Equal "In-process -AllowHost list" "install native --allow-host a.local --allow-host b.local" (Get-PassedArgs @($out))
-
-    # -Lan:$false is the only way to turn off a saved value
-    $out = & $shim install native -Lan:$false -NoAuth | ForEach-Object { "$_" }
-    Test-Equal "In-process -Lan:`$false" "install native --lan=false --no-auth" (Get-PassedArgs @($out))
-
-    # A binary that cannot start (blocked, corrupt) must not look like success
-    Set-Content -Path (Join-Path $install "termote-windows-amd64.exe") -Value "not a program"
-    $out = Invoke-Shim $Launchers[0] $shim @("health")
-    Write-TestResult "Unrunnable binary fails" (($script:ShimExit -ne 0) -and (($out -join " ") -match "Cannot run")) "exit $script:ShimExit | $($out -join ' | ')"
-
-    Remove-Item (Join-Path $install "termote-windows-amd64.exe")
-    $out = Invoke-Shim $Launchers[0] $shim @("health")
-    Write-TestResult "Missing binary fails with a reinstall hint" (($script:ShimExit -ne 0) -and (($out -join " ") -match "reinstall Termote")) ($out -join " | ")
+    $copy = Join-Path $Tmp "copy"
+    New-Item -ItemType Directory -Path (Join-Path $copy "scripts") -Force | Out-Null
+    Copy-Item $ShimPath (Join-Path $copy "scripts/termote.ps1")
+    $out = Invoke-Shim $Launchers[0] (Join-Path $copy "scripts/termote.ps1") @("version")
+    Write-TestResult "Refuses to run outside a checkout" (($script:ShimExit -ne 0) -and (($out -join " ") -match "not a Termote checkout")) ($out -join " | ")
 
     # ─────────────────────────────────────────────────────────
     # Checkout layout: builds server\termote-dev.exe
     # ─────────────────────────────────────────────────────────
-    Write-Host ""
-    Write-Host "--- Checkout ---" -ForegroundColor Cyan
     $checkout = Join-Path $Tmp "checkout"
-    New-Item -ItemType Directory -Path (Join-Path $checkout "scripts") -Force | Out-Null
+    $server = Join-Path $checkout "server"
+    $embed = Join-Path $server "webui/dist"
+    New-Item -ItemType Directory -Path (Join-Path $checkout "scripts"), $embed -Force | Out-Null
     Copy-Item $ShimPath (Join-Path $checkout "scripts/termote.ps1")
-    New-EchoModule (Join-Path $checkout "server")
+    Set-Content -Path (Join-Path $server "go.mod") -Value "module echoargs`n`ngo 1.24`n"
+    Set-Content -Path (Join-Path $server "main.go") -Value $EchoSrc
+    New-Item -ItemType File -Path (Join-Path $embed ".gitkeep") -Force | Out-Null
     $cshim = Join-Path $checkout "scripts/termote.ps1"
 
-    $out = Invoke-Shim $Launchers[0] $cshim @("install", "native", "-Lan")
-    Test-Equal "Builds on first run and runs it" "install native --lan" (Get-PassedArgs $out)
-    Write-TestResult "Binary is server\termote-dev.exe" (Test-Path (Join-Path $checkout "server/termote-dev.exe"))
+    $out = Invoke-Shim $Launchers[0] $cshim @("start", "--lan")
+    Test-Equal "Builds on first run and runs it" "start --lan" (Get-PassedArgs $out)
+    Write-TestResult "Binary is server\termote-dev.exe" (Test-Path (Join-Path $server "termote-dev.exe"))
+
+    foreach ($launcher in $Launchers) {
+        $tag = Split-Path -Leaf $launcher
+        # The binary opens the menu itself; the shim passes no argument.
+        $out = Invoke-Shim $launcher $cshim @()
+        Test-Equal "[$tag] no command passes none" "" (Get-PassedArgs $out)
+        # Compare by content, not string: the temp path may be an 8.3 short name.
+        $dir = ($out | Where-Object { $_.StartsWith("DIR=") } | Select-Object -First 1) -replace '^DIR=', ''
+        Write-TestResult "[$tag] exports TERMOTE_PROJECT_DIR" ($dir -and (Test-Path (Join-Path $dir "server/go.mod"))) "got: '$dir'"
+        $out = Invoke-Shim $launcher $cshim @("start", "--mux", "herdr", "--allow-host", "box.local", "--lan=false")
+        Test-Equal "[$tag] passes Go flags through" "start --mux herdr --allow-host box.local --lan=false" (Get-PassedArgs $out)
+        $env:ECHO_EXIT = "7"
+        $null = Invoke-Shim $launcher $cshim @("health")
+        Remove-Item Env:ECHO_EXIT
+        Test-Equal "[$tag] exit status passes through" "7" "$script:ShimExit"
+    }
+
     $out = Invoke-Shim $Launchers[0] $cshim @("version")
     Write-TestResult "Does not rebuild an up-to-date binary" (-not (($out -join " ") -match "Building"))
-    (Get-Item (Join-Path $checkout "server/main.go")).LastWriteTime = (Get-Date).AddMinutes(1)
+    (Get-Item (Join-Path $server "main.go")).LastWriteTime = (Get-Date).AddMinutes(1)
     $out = Invoke-Shim $Launchers[0] $cshim @("version")
     Write-TestResult "Rebuilds when a source is newer" (($out -join " ") -match "Building")
+
+    # A newer PWA build is copied into webui\dist; stale files go, .gitkeep stays.
+    New-Item -ItemType File -Path (Join-Path $embed "old-asset.js") -Force | Out-Null
+    $pwaBuild = Join-Path $checkout "pwa/dist"
+    New-Item -ItemType Directory -Path (Join-Path $pwaBuild "assets") -Force | Out-Null
+    Set-Content -Path (Join-Path $checkout "pwa/package.json") -Value "{}"
+    Set-Content -Path (Join-Path $pwaBuild "assets/app.js") -Value "js"
+    Set-Content -Path (Join-Path $pwaBuild "index.html") -Value "<html>app</html>"
+    (Get-Item (Join-Path $pwaBuild "index.html")).LastWriteTime = (Get-Date).AddMinutes(2)
+    $out = Invoke-Shim $Launchers[0] $cshim @("version")
+    $synced = (Test-Path (Join-Path $embed "assets/app.js")) -and (Test-Path (Join-Path $embed ".gitkeep")) -and -not (Test-Path (Join-Path $embed "old-asset.js"))
+    Write-TestResult "Rebuilds with a newer PWA build copied into webui\dist" ((($out -join " ") -match "Building") -and $synced) ($out -join " | ")
+
+    # A binary that cannot start (blocked, corrupt) must not look like success
+    Set-Content -Path (Join-Path $server "termote-dev.exe") -Value "not a program"
+    (Get-Item (Join-Path $server "termote-dev.exe")).LastWriteTime = (Get-Date).AddMinutes(5)
+    $out = Invoke-Shim $Launchers[0] $cshim @("health")
+    Write-TestResult "Unrunnable binary fails" (($script:ShimExit -ne 0) -and (($out -join " ") -match "Cannot run")) "exit $script:ShimExit | $($out -join ' | ')"
 } finally {
     Remove-Item $Tmp -Recurse -Force -ErrorAction SilentlyContinue
 }
@@ -200,4 +171,7 @@ Write-Host ""
 Write-Host "=== Results ===" -ForegroundColor Cyan
 Write-Host "Passed: $script:TestsPassed" -ForegroundColor Green
 Write-Host "Failed: $script:TestsFailed" -ForegroundColor $(if ($script:TestsFailed -gt 0) { "Red" } else { "Green" })
+# Explicit: the CI shell exits with $LASTEXITCODE of the last native command
+# otherwise, and one test runs a binary that is meant to fail.
 if ($script:TestsFailed -gt 0) { exit 1 }
+exit 0

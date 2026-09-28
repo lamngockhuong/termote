@@ -4,6 +4,10 @@ node_modules/
 # Build output
 dist/
 
+# Copied from ../scripts at build time (one source of truth)
+public/install.sh
+public/install.ps1
+
 # Astro cache
 .astro/
 

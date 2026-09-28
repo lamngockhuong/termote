@@ -1,7 +1,7 @@
 #!/bin/bash
-# Tests for the scripts/termote.sh shim: binary selection (installed release
-# and checkout build), argument pass-through, and the 0.x update contract.
-# The commands themselves are tested in Go (server/cli*_test.go).
+# Tests for the scripts/termote.sh checkout shim: build on demand (Go sources
+# and the PWA build), argument pass-through and exit status. The commands
+# themselves are tested in Go (server/cli*_test.go).
 # Usage: make test-cli
 
 TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -35,24 +35,35 @@ check() {
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-case "$(uname -s)" in Darwin) OS=darwin ;; *) OS=linux ;; esac
-case "$(uname -m)" in aarch64 | arm64) ARCH=arm64 ;; *) ARCH=amd64 ;; esac
-
-# Fake binary: prints the project dir, then one argument per line.
-FAKE_BIN='#!/bin/bash
-echo "DIR=$TERMOTE_PROJECT_DIR"
-printf "%s\n" "$@"'
-
-# new_install <dir>: installed-release layout with a fake platform binary
-new_install() {
-    mkdir -p "$1/scripts"
-    cp "$SHIM" "$1/scripts/termote.sh"
-    printf '%s\n' "$FAKE_BIN" >"$1/termote-$OS-$ARCH"
-    chmod +x "$1/termote-$OS-$ARCH"
-}
-
 # args_of <output>: the argument lines after DIR=
 args_of() { echo "$1" | sed '1d' | paste -sd' ' -; }
+
+# new_checkout <dir>: a checkout whose server/ is a Go program printing the
+# project dir, then one argument per line, exiting with $ECHO_EXIT.
+new_checkout() {
+    mkdir -p "$1/scripts" "$1/server/webui/dist"
+    cp "$SHIM" "$1/scripts/termote.sh"
+    touch "$1/server/webui/dist/.gitkeep"
+    printf 'module echoargs\n\ngo 1.24\n' >"$1/server/go.mod"
+    cat >"$1/server/main.go" <<'EOF'
+package main
+
+import (
+	"fmt"
+	"os"
+	"strconv"
+)
+
+func main() {
+	fmt.Println("DIR=" + os.Getenv("TERMOTE_PROJECT_DIR"))
+	for _, a := range os.Args[1:] {
+		fmt.Println(a)
+	}
+	code, _ := strconv.Atoi(os.Getenv("ECHO_EXIT"))
+	os.Exit(code)
+}
+EOF
+}
 
 test_syntax() {
     echo "=== Shim syntax and size ==="
@@ -67,71 +78,27 @@ test_syntax() {
     fi
 }
 
-test_installed_release() {
+test_not_a_checkout() {
     echo ""
-    echo "=== Installed release ==="
-    local dir="$TMP/install" out
-    new_install "$dir"
-
-    out=$("$dir/scripts/termote.sh")
-    check "no args opens the menu" "menu" "$(args_of "$out")"
-    check "exports TERMOTE_PROJECT_DIR" "DIR=$dir" "$(echo "$out" | head -1)"
-
-    # The exact command lines 0.1.0 `update` runs after extracting 1.0.0
-    out=$("$dir/scripts/termote.sh" link)
-    check "0.x update: link" "link" "$(args_of "$out")"
-    out=$("$dir/scripts/termote.sh" install native --lan --no-auth --port 7700 --tailscale myhost:8443)
-    check "0.x update: install with saved flags" "install native --lan --no-auth --port 7700 --tailscale myhost:8443" "$(args_of "$out")"
-
-    out=$("$dir/scripts/termote.sh" install native --allow-host "my host")
-    check "keeps arguments with spaces" "my host" "$(echo "$out" | tail -1)"
-
-    # The global command is a symlink; the shim must find the install dir
-    ln -s "$dir/scripts/termote.sh" "$TMP/termote-link"
-    out=$("$TMP/termote-link" version)
-    check "resolves the global symlink" "DIR=$dir" "$(echo "$out" | head -1)"
-
-    chmod -x "$dir/termote-$OS-$ARCH"
-    out=$("$dir/scripts/termote.sh" health)
-    check "restores the exec bit" "health" "$(args_of "$out")"
-
-    rm "$dir/termote-$OS-$ARCH"
-    if out=$("$dir/scripts/termote.sh" health 2>&1); then
-        fail "missing binary" "non-zero exit" "exit 0"
-    elif echo "$out" | grep -q "reinstall Termote"; then
-        pass "missing binary fails with a reinstall hint"
+    echo "=== Outside a checkout ==="
+    local dir="$TMP/copy" out
+    mkdir -p "$dir/scripts"
+    cp "$SHIM" "$dir/scripts/termote.sh"
+    if out=$("$dir/scripts/termote.sh" version 2>&1); then
+        fail "no server/go.mod" "non-zero exit" "exit 0"
+    elif echo "$out" | grep -q "not a Termote checkout"; then
+        pass "refuses to run outside a checkout"
     else
-        fail "missing binary message" "reinstall hint" "$out"
+        fail "outside a checkout message" "not a Termote checkout" "$out"
     fi
-
-    printf '%s\n' '#!/bin/bash' 'exit 7' >"$dir/termote-$OS-$ARCH"
-    chmod +x "$dir/termote-$OS-$ARCH"
-    "$dir/scripts/termote.sh" health
-    check "passes the exit status through" "7" "$?"
 }
 
 test_checkout() {
     echo ""
     echo "=== Checkout (dev build) ==="
-    local dir="$TMP/checkout" out
-    mkdir -p "$dir/scripts" "$dir/server"
-    cp "$SHIM" "$dir/scripts/termote.sh"
-    printf 'module echoargs\n\ngo 1.24\n' >"$dir/server/go.mod"
-    cat >"$dir/server/main.go" <<'EOF'
-package main
-
-import (
-	"fmt"
-	"os"
-)
-
-func main() {
-	fmt.Println("DIR=" + os.Getenv("TERMOTE_PROJECT_DIR"))
-	for _, a := range os.Args[1:] {
-		fmt.Println(a)
-	}
-}
-EOF
+    local dir="$TMP/checkout" out embed
+    new_checkout "$dir"
+    embed="$dir/server/webui/dist"
 
     # Without Go and without a binary there is nothing to run
     if out=$(PATH="/usr/bin:/bin" "$dir/scripts/termote.sh" version 2>&1); then
@@ -154,13 +121,29 @@ EOF
     fi
     # Start from no binary: the check above builds one when a system Go exists
     rm -f "$dir/server/termote-dev"
-    out=$("$dir/scripts/termote.sh" install native --mux herdr 2>"$TMP/build.err")
-    check "builds termote-dev on first run" "install native --mux herdr" "$(args_of "$out")"
+    out=$("$dir/scripts/termote.sh" start --mux herdr 2>"$TMP/build.err")
+    check "builds termote-dev on first run" "start --mux herdr" "$(args_of "$out")"
     if grep -q "Building termote" "$TMP/build.err" && [[ -x "$dir/server/termote-dev" ]]; then
         pass "build message on stderr, binary in server/"
     else
         fail "first build" "server/termote-dev" "$(cat "$TMP/build.err")"
     fi
+    check "exports TERMOTE_PROJECT_DIR" "DIR=$dir" "$(echo "$out" | head -1)"
+
+    # The binary opens the menu itself; the shim passes no argument.
+    out=$("$dir/scripts/termote.sh" 2>/dev/null)
+    check "no args passes none" "" "$(args_of "$out")"
+
+    out=$("$dir/scripts/termote.sh" start --allow-host "my host" 2>/dev/null)
+    check "keeps arguments with spaces" "my host" "$(echo "$out" | tail -1)"
+
+    # The global command is a symlink; the shim must find the checkout
+    ln -s "$dir/scripts/termote.sh" "$TMP/termote-link"
+    out=$("$TMP/termote-link" version 2>/dev/null)
+    check "resolves the global symlink" "DIR=$dir" "$(echo "$out" | head -1)"
+
+    ECHO_EXIT=7 "$dir/scripts/termote.sh" health >/dev/null 2>&1
+    check "passes the exit status through" "7" "$?"
 
     "$dir/scripts/termote.sh" version >/dev/null 2>"$TMP/build.err"
     if grep -q "Building" "$TMP/build.err"; then
@@ -173,6 +156,22 @@ EOF
     touch "$dir/server/main.go"
     "$dir/scripts/termote.sh" version >/dev/null 2>"$TMP/build.err"
     if grep -q "Building" "$TMP/build.err"; then pass "rebuilds when a source is newer"; else fail "stale binary" "rebuild" "no rebuild"; fi
+
+    # A newer PWA build is copied into server/webui/dist and embedded; the
+    # previous copy (stale hashed assets) is removed, .gitkeep kept.
+    touch "$embed/old-asset.js"
+    mkdir -p "$dir/pwa/dist/assets"
+    echo '{}' >"$dir/pwa/package.json"
+    echo '<html>app</html>' >"$dir/pwa/dist/index.html"
+    echo 'js' >"$dir/pwa/dist/assets/app.js"
+    sleep 1
+    touch "$dir/pwa/dist/index.html"
+    "$dir/scripts/termote.sh" version >/dev/null 2>"$TMP/build.err"
+    if grep -q "Building termote" "$TMP/build.err" && [[ -f "$embed/assets/app.js" && -f "$embed/.gitkeep" && ! -e "$embed/old-asset.js" ]]; then
+        pass "rebuilds with a newer PWA build copied into webui/dist"
+    else
+        fail "PWA copy" "webui/dist synced" "$(ls -A "$embed" | paste -sd' ' -)"
+    fi
 }
 
 test_real_binary() {
@@ -190,7 +189,7 @@ test_real_binary() {
 }
 
 test_syntax
-test_installed_release
+test_not_a_checkout
 test_checkout
 test_real_binary
 

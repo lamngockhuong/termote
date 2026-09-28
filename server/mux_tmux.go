@@ -114,14 +114,15 @@ func listWindows(ctx context.Context) (string, error) {
 }
 
 // scrubTmuxSecrets removes secrets from a tmux server that is already
-// running. 0.x exported TERMOTE_PASS before starting tmux, and `update` keeps
-// that server, so without this every new tab would still inherit the password.
+// running. A tmux server started from a shell that had TERMOTE_* exported
+// keeps them, and restarting Termote keeps that server, so without this every
+// new tab would inherit the password.
 // Shells already open keep theirs. Errors (no server yet, psmux without
 // set-environment -u) are fine: a server started now gets terminalEnv.
 func scrubTmuxSecrets(ctx context.Context) {
 	ctx, cancel := context.WithTimeout(ctx, muxTimeout)
 	defer cancel()
-	for _, k := range secretEnvKeys {
+	for _, k := range termoteEnvKeys {
 		tmuxCmd(ctx, "set-environment", "-g", "-u", k).Run()
 	}
 }
@@ -168,7 +169,7 @@ func (tmuxMux) Snapshot(ctx context.Context) (Snapshot, error) {
 }
 
 // SelectTab switches the shared session's current window, so every attached
-// client follows (same as 0.x).
+// client follows.
 func (tmuxMux) SelectTab(ctx context.Context, tabID string) error {
 	if !validTmuxID(tabID) {
 		return inputError("invalid tab id")
@@ -233,8 +234,8 @@ func (tmuxMux) SendKeys(ctx context.Context, paneID, keys string) error {
 }
 
 // Attach makes paneID the session's current window, then attaches a new tmux
-// client to the session. Like 0.x, every client shares the current window and
-// the window follows the most recently active client's size.
+// client to the session. Every client shares the current window and the
+// window follows the most recently active client's size.
 func (m tmuxMux) Attach(ctx context.Context, paneID string, size Size) (TermStream, error) {
 	if err := m.SelectTab(ctx, paneID); err != nil {
 		return nil, err
@@ -242,6 +243,6 @@ func (m tmuxMux) Attach(ctx context.Context, paneID string, size Size) (TermStre
 	return startTerminal(tmuxAttachArgv(), size)
 }
 
-// Health reports ok without touching tmux, as in 0.x: the PWA creates the
+// Health reports ok without touching tmux: the PWA creates the
 // first window itself when the session is empty.
 func (tmuxMux) Health(context.Context) error { return nil }

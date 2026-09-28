@@ -25,6 +25,9 @@
 
 通过 PWA 从移动端/桌面端远程控制 CLI 工具（Claude Code、GitHub Copilot 及任何终端）。
 
+> [!NOTE]
+> Termote 1.0 不会升级 0.x 的安装。请按照[归档的 0.x 文档](https://termote.ohnice.app/0.x/)卸载 0.x，然后使用[快速开始](#快速开始)中的命令安装 1.0。
+
 > **Termote** = Terminal + Remote
 >
 > 🇬🇧 [English](README.md) | 🇻🇳 [Tiếng Việt](README.vi.md) | 🇯🇵 [日本語](README.ja.md) | 🇰🇷 [한국어](README.ko.md) | 🇪🇸 [Español](README.es.md) | 🇧🇷 [Português (BR)](README.pt-BR.md) | 🇫🇷 [Français](README.fr.md) | 🇩🇪 [Deutsch](README.de.md) | 🇷🇺 [Русский](README.ru.md) | 🇮🇩 [Bahasa Indonesia](README.id.md)
@@ -44,7 +47,8 @@
 - **持久会话**：tmux 保持会话存活
 - **可折叠侧边栏**：桌面端 UI 带可切换的会话侧边栏
 - **全屏模式**：沉浸式终端体验
-- **配置持久化**：自动保存安装设置，密码使用 AES-256 加密
+- **作为服务运行**：`termote start` 会注册一个在登录时启动的用户服务（systemd、launchd、计划任务）
+- **配置持久化**：`termote start` 会保存其选项，密码加密存储
 
 ## 截图
 
@@ -99,125 +103,112 @@ termote 自己负责终端流（Unix 上用 PTY，Windows 上用 ConPTY），直
 
 > 📖 **初次使用 Termote？** 请查看[入门指南](docs/getting-started.md)获取完整的操作步骤和示例。
 
-```bash
-./scripts/termote.sh                   # 交互式菜单
-./scripts/termote.sh install container # 容器模式（docker/podman）
-./scripts/termote.sh install native    # 原生模式（主机工具）
-./scripts/termote.sh link              # 创建 'termote' 全局命令
-make test                              # 运行测试
-```
-
-> `link` 之后，可在任何位置使用 `termote`：`termote health`、`termote install native --lan`
-
-## 安装
-
-### 一行命令安装（推荐）
-
-**macOS/Linux：**
+**Linux / macOS：**
 
 ```bash
-# 下载并在安装前询问确认（默认 native 模式）
-curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
-
-# 自动安装，无需确认
-curl -fsSL .../get.sh | bash -s -- --yes
-
-# 仅下载（不安装）
-curl -fsSL .../get.sh | bash -s -- --download-only
-
-# 使用已保存的配置自动更新
-curl -fsSL .../get.sh | bash -s -- --update
-
-# 安装指定版本
-curl -fsSL .../get.sh | bash -s -- --version 0.0.4
-
-# 指定模式和选项
-curl -fsSL .../get.sh | bash -s -- --yes --container --lan
-curl -fsSL .../get.sh | bash -s -- --yes --native --tailscale myhost
-
-# 强制输入新密码（忽略已保存的配置）
-curl -fsSL .../get.sh | bash -s -- --yes --container --fresh
+curl -fsSL https://termote.ohnice.app/install.sh | sh
+termote start
 ```
 
 **Windows（PowerShell）：**
 
-> **注意：** 如果系统禁止运行脚本，请先执行以下命令：
->
-> ```powershell
-> Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
-> ```
-
 ```powershell
-# 下载并在安装前询问确认（默认 native 模式）
-irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
-
-# 自动安装，无需确认
-$env:TERMOTE_AUTO_YES = "true"; irm .../get.ps1 | iex
-
-# 指定模式
-$env:TERMOTE_MODE = "container"; irm .../get.ps1 | iex
-
-# 使用已保存的配置自动更新
-$env:TERMOTE_UPDATE = "true"; irm .../get.ps1 | iex
+irm https://termote.ohnice.app/install.ps1 | iex
+termote start
 ```
 
-### Docker
+安装程序只需要 `curl`、`tar` 和 `sha256sum`/`shasum`（Windows 上为 PowerShell），不需要 sudo 或管理员权限。它会校验压缩包的校验和，安装 `termote` 命令，但不会启动任何东西。`termote start` 会保存选项，首次运行时创建密码（只显示一次，之后可用 `termote show-password` 再次查看），然后注册服务并启动。打开 `http://localhost:7680`（Windows：`http://localhost:7690`）。
+
+需要先安装终端后端：tmux（`sudo apt install tmux`、`brew install tmux`），Windows 上为 psmux（`winget install psmux`），或者 [Herdr](https://termote.ohnice.app/installation/native/)。首次 `start` 会检测使用哪一个。
+
+### 常用选项
 
 ```bash
-# 一体化部署（自动生成凭据，查看日志：docker logs termote）
-docker run -d --name termote -p 7680:7680 ghcr.io/lamngockhuong/termote:latest
+termote start --lan                  # Listen on the LAN, not only this machine
+termote start --tailscale myhost.ts.net  # Publish over Tailscale HTTPS
+termote start --mux herdr            # Drive Herdr workspaces instead of tmux
+termote start --no-auth              # Disable basic auth (local use only)
+```
 
-# 使用自定义凭据
-docker run -d --name termote -p 7680:7680 \
-  -e TERMOTE_USER=admin -e TERMOTE_PASS=secret \
-  ghcr.io/lamngockhuong/termote:latest
+选项会被保存：未指定的参数保留已保存的值，布尔选项用 `=false` 关闭（`termote start --lan=false`）。所有操作系统（包括 PowerShell）上的参数都相同。
 
-# 无认证（仅限本地开发）
-docker run -d --name termote -p 7680:7680 \
-  -e NO_AUTH=true \
-  ghcr.io/lamngockhuong/termote:latest
+### 日常命令
 
-# 使用 volume 持久化数据
-docker run -d --name termote -p 7680:7680 \
-  -v termote-data:/home/termote \
-  ghcr.io/lamngockhuong/termote:latest
+```bash
+termote status                       # What the running server reports
+termote stop                         # Stop (it starts again at the next login)
+termote restart                      # Restart with the saved options
+termote logs follow                  # Tail the logs
+termote show-password                # Print the saved admin password
+termote update                       # Update to the latest release
+termote uninstall                    # Remove the service, the command and the install
+```
 
-# 挂载自定义 workspace 目录
+`update` 会切换到新版本并重启服务，如果新版本没有正常运行，则切换回原版本。`uninstall` 会保留配置（`~/.config/termote`）和日志（`~/.local/state/termote`），并打印这两个路径。
+
+## 安装
+
+### 固定版本
+
+```bash
+curl -fsSL https://termote.ohnice.app/install.sh | TERMOTE_VERSION=1.0.0 sh
+termote update --version 1.0.0
+```
+
+```powershell
+$env:TERMOTE_VERSION='1.0.0'; irm https://termote.ohnice.app/install.ps1 | iex
+```
+
+不设置 `TERMOTE_VERSION` 时，安装程序会获取最新的 1.x 稳定版，且不会改动已有的安装。设置后，会将该版本安装在当前版本旁边并设为当前使用的版本，这也可以用来修复损坏的安装。
+
+### 容器模式
+
+```bash
+termote container up                          # Run the published image (podman or docker)
+termote container up --workspace ~/projects   # Mount a directory at /workspace
+termote container status
+termote container logs -f
+termote container down
+```
+
+`container up` 使用 podman（优先）或 docker 运行与已安装 `termote` 同版本的 `ghcr.io/lamngockhuong/termote`，端口为 7680，并将 `~/termote-workspace` 挂载到 `/workspace`。它接受 `--port`、`--lan`、`--tailscale`、`--no-auth`、`--allow-host` 和 `--fresh`，这些设置与 `start` 的选项分开保存；密码与原生服务器共用。Docker 会在重启后重新启动容器；rootless Podman 没有守护进程来做这件事，因此请将其作为 Quadlet 单元运行。
+
+> **安全提示**：避免直接挂载 `$HOME` —— 容器将能访问 `.ssh`、`.gnupg` 等敏感目录。请改为挂载特定的项目目录。
+
+### 不使用 CLI 直接运行 Docker
+
+```bash
+# Generates a password, printed in: docker logs termote
 docker run -d --name termote -p 7680:7680 \
   -v ~/projects:/workspace \
   ghcr.io/lamngockhuong/termote:latest
 
-# 使用 Tailscale HTTPS（需要主机上安装 Tailscale）
+# With your own credentials
 docker run -d --name termote -p 7680:7680 \
   -e TERMOTE_USER=admin -e TERMOTE_PASS=secret \
   ghcr.io/lamngockhuong/termote:latest
-sudo tailscale serve --bg --https=443 http://127.0.0.1:7680
-# 访问地址：https://your-hostname.tailnet-name.ts.net
 ```
 
-### 从 Release 安装
+| 环境变量       | 说明                            |
+| -------------- | ------------------------------- |
+| `TERMOTE_USER` | 基本认证用户名（默认：`admin`） |
+| `TERMOTE_PASS` | 基本认证密码（默认：自动生成）  |
+| `NO_AUTH`      | 设为 `true` 以禁用认证          |
 
-```bash
-# 下载最新 release
-VERSION=$(curl -s https://api.github.com/repos/lamngockhuong/termote/releases/latest | grep tag_name | cut -d '"' -f4)
-wget https://github.com/lamngockhuong/termote/releases/download/${VERSION}/termote-${VERSION}.tar.gz
-tar xzf termote-${VERSION}.tar.gz
-cd termote-${VERSION#v}
-
-# 安装（交互式菜单或指定模式）
-./scripts/termote.sh install
-./scripts/termote.sh install container
-```
-
-### 从源码安装
+### 从源码构建
 
 ```bash
 git clone https://github.com/lamngockhuong/termote.git
 cd termote
-./scripts/termote.sh install container
+make build
+./scripts/termote.sh start
 ```
 
-> **说明**：`termote.sh` 是统一的 CLI，支持 `install`（从源码构建，有预构建产物时使用预构建产物）、`uninstall` 和 `health` 命令。
+`make build` 会构建 PWA 并将其嵌入 `server/termote`，需要 Go、Node.js 和 pnpm。`scripts/termote.sh`（Windows：`scripts\termote.ps1`）只用于运行源码检出：源码较新时会重新构建开发用二进制文件，然后以相同参数运行。`termote update` 在源码检出中会拒绝运行，请使用 `git pull && make build`。
+
+### 从 0.x 升级
+
+无法从 0.x 升级：1.0 安装在新的位置，也不会读取 0.x 的配置。请按照[归档的 0.x 文档](https://termote.ohnice.app/0.x/)卸载 0.x，然后用上面的命令安装 1.0。
 
 ## 部署模式
 
@@ -236,135 +227,50 @@ flowchart LR
     User["用户"] --> Container & Native
 ```
 
-| 模式          | 描述     | 使用场景                                             | 平台                  |
-| ------------- | -------- | ---------------------------------------------------- | --------------------- |
-| `--container` | 容器模式 | 简单部署，隔离环境                                   | macOS, Linux, Windows |
-| `--native`    | 全部原生 | 访问主机工具（claude、gh）；Herdr 后端必须使用此模式 | macOS, Linux, Windows |
+| 模式 | 命令                   | 使用场景                                             | 平台                  |
+| ---- | ---------------------- | ---------------------------------------------------- | --------------------- |
+| 原生 | `termote start`        | 访问主机工具（claude、gh）；Herdr 后端必须使用此模式 | macOS, Linux, Windows |
+| 容器 | `termote container up` | 隔离的环境                                           | macOS, Linux, Windows |
 
-### 选项
+原生服务器以用户服务的形式运行：Linux 上为 systemd 用户单元（没有用户级 systemd 时，例如未启用 systemd 的 WSL2，则为分离的进程），macOS 上为 launchd 代理，Windows 上为登录时运行的计划任务。
 
-| Flag                        | 描述                                                       |
-| --------------------------- | ---------------------------------------------------------- |
-| `--lan`                     | 开放 LAN 访问（默认：仅 localhost）                        |
-| `--tailscale <host[:port]>` | 启用 Tailscale HTTPS                                       |
-| `--no-auth`                 | 禁用基本认证                                               |
-| `--port <port>`             | 主机端口（默认：7680，Windows：7690）                      |
-| `--mux <tmux\|herdr>`       | 终端后端，仅原生模式（默认：`tmux`）                       |
-| `--allow-host <name>`       | 额外允许的 Host 头取值（可重复；不支持通配符，见安全说明） |
-| `--allow-herdr-no-auth`     | 与 `--mux herdr --no-auth` 一起使用时必需                  |
-| `--fresh`                   | 强制输入新密码（忽略已保存的配置）                         |
-| `--update`                  | 使用已保存的配置自动更新                                   |
-| `--version <ver>`           | 安装指定版本（带或不带 `v`）                               |
+### `start` 的选项
 
-`--ttyd`/`-Ttyd` 仍然可以传入（0.x 在更新过程中重新启动安装程序时会用到它），但会被忽略并给出警告：ttyd 已在 1.0.0 中移除。所有破坏性变更见 [`docs/upgrade-1.0.md`](docs/upgrade-1.0.md)。
+| 参数                        | 说明                                                    |
+| --------------------------- | ------------------------------------------------------- |
+| `--port <port>`             | 端口（默认：7680，Windows：7690）                       |
+| `--lan[=false]`             | 在所有网络接口上监听（默认：仅 localhost）              |
+| `--tailscale <host[:port]>` | 通过 Tailscale HTTPS 发布（默认端口 443）               |
+| `--no-tailscale`            | 停止通过 Tailscale 发布                                 |
+| `--no-auth[=false]`         | 禁用基本认证                                            |
+| `--mux <tmux\|herdr>`       | 终端后端（默认：herdr 正在运行时用 herdr，否则用 tmux） |
+| `--allow-host <name>`       | 允许额外的 Host 头值（可重复；无通配符，参见安全说明）  |
+| `--remove-host <name>`      | 移除已允许的 Host 名称（可重复）                        |
+| `--allow-herdr-no-auth`     | 与 `--mux herdr --no-auth` 一起使用时必需               |
+| `--fresh`                   | 设置新密码                                              |
 
-| 环境变量       | 描述                                    |
-| -------------- | --------------------------------------- |
-| `WORKSPACE`    | 要挂载的主机目录（默认：`./workspace`） |
-| `TERMOTE_USER` | 基本认证用户名（默认：自动生成）        |
-| `TERMOTE_PASS` | 基本认证密码（默认：自动生成）          |
-| `NO_AUTH`      | 设为 `true` 以禁用认证                  |
+### 使用 Tailscale HTTPS
 
-### 容器模式（推荐用于简单部署）
-
-脚本自动检测 `podman` 或 `docker` -- 两者使用方式完全相同。
+使用 `tailscale serve` 实现自动 HTTPS（无需手动管理证书）：
 
 ```bash
-./scripts/termote.sh install container             # localhost 带基本认证
-./scripts/termote.sh install container --no-auth   # localhost 无认证
-./scripts/termote.sh install container --lan       # LAN 可访问
-# 访问地址：http://localhost:7680
-
-# 自定义 workspace 目录（挂载到容器内的 /workspace）
-WORKSPACE=~/projects ./scripts/termote.sh install container
-WORKSPACE=/path/to/code make install-container
+termote start --tailscale myhost.ts.net                # Default port 443
+termote start --tailscale myhost.ts.net:8765           # Custom port
+termote container up --tailscale myhost.ts.net         # Container mode
+sudo tailscale set --operator=$USER                    # Linux, once: let termote run tailscale serve
 ```
 
-> **安全提示**：避免直接挂载 `$HOME` -- `.ssh`、`.gnupg` 等敏感目录将在容器中可访问。请挂载具体的项目目录。
-
-### 原生模式（推荐用于访问主机二进制文件）
-
-当需要访问主机二进制文件（claude、git 等）时使用：
-
-```bash
-# Linux
-sudo apt install tmux
-./scripts/termote.sh install native
-
-# macOS
-brew install tmux go
-./scripts/termote.sh install native
-# 访问地址：http://localhost:7680
-```
-
-如需用 [Herdr](https://termote.ohnice.app/installation/native/) 工作区代替 tmux，请加上 `--mux herdr`（仅限原生模式；`herdr` 必须已在 `PATH` 中）。
-
-### 使用 Tailscale HTTPS（所有模式）
-
-使用 `tailscale serve` 自动获取 HTTPS（无需手动管理证书）：
-
-```bash
-# 仅 Tailscale（默认端口 443）
-./scripts/termote.sh install container --tailscale myhost.ts.net
-
-# 自定义端口
-./scripts/termote.sh install native --tailscale myhost.ts.net:8765
-
-# Tailscale + LAN 可访问
-./scripts/termote.sh install container --tailscale myhost.ts.net --lan
-
-# 访问地址：https://myhost.ts.net（自定义端口则为 :8765）
-```
-
-### 卸载
-
-```bash
-./scripts/termote.sh uninstall container   # 容器模式
-./scripts/termote.sh uninstall native      # 原生模式
-./scripts/termote.sh uninstall all         # 全部
-```
-
-### 更新
-
-```bash
-# 方式一：使用已保存的配置自动更新
-curl -fsSL .../get.sh | bash -s -- --update
-
-# 方式二：重新运行一行命令（比较版本，安装前询问确认）
-curl -fsSL .../get.sh | bash
-
-# 方式三：手动更新
-./scripts/termote.sh uninstall [container|native]
-git pull origin main                    # 如果从源码安装
-./scripts/termote.sh install [container|native] [--lan] [--tailscale ...]
-```
+每次服务器启动时都会应用该映射。`stop`、`start --no-tailscale` 和 `uninstall` 只移除 Termote 自己的映射。
 
 ## 平台支持
 
-| 平台    | 容器模式   | 原生模式   | CLI 脚本    |
-| ------- | ---------- | ---------- | ----------- |
-| Linux   | ✓          | ✓          | termote.sh  |
-| macOS   | ✓          | ✓          | termote.sh  |
-| Windows | ⚠️ (实验性) | ⚠️ (实验性) | termote.ps1 |
+| 平台    | 容器模式 | 原生模式 | 安装程序      |
+| ------- | -------- | -------- | ------------- |
+| Linux   | ✓        | ✓        | `install.sh`  |
+| macOS   | ✓        | ✓        | `install.sh`  |
+| Windows | ✓        | ✓        | `install.ps1` |
 
-> **⚠️ Windows 支持（实验性）**：Windows 支持目前处于早期阶段，需要更多测试。容器模式需要 Docker Desktop，原生模式需要 psmux。如遇问题请在 GitHub 上反馈。
-
-### Windows 原生模式
-
-Windows 原生模式使用 [psmux](https://github.com/psmux/psmux)（兼容 tmux 的 Windows 终端复用器）：
-
-```powershell
-# 安装 psmux
-winget install psmux
-
-# 运行 Termote
-.\scripts\termote.ps1 install native
-.\scripts\termote.ps1 install container  # 或使用 Docker Desktop 的容器模式
-
-# 更新与日志
-.\scripts\termote.ps1 update             # 自动更新到最新版本
-.\scripts\termote.ps1 logs follow        # 实时查看所有日志
-```
+> **Windows 支持**：容器模式需要 Docker Desktop 或 Podman Desktop；原生模式需要 [psmux](https://github.com/psmux/psmux)（Windows 上兼容 tmux 的终端复用器），可通过 `winget install psmux` 安装。Windows 服务尚未在真机上验证，如遇问题请在 GitHub 上反馈。
 
 ## 移动端使用
 
@@ -383,12 +289,12 @@ winget install psmux
 
 ```
 termote/
-├── Makefile                # 构建/测试/部署命令
-├── Dockerfile              # Docker 模式（termote + tmux，无 ttyd）
-├── docker-compose.yml
-├── entrypoint.sh           # Docker 入口点
-├── docs/                   # 文档
-│   └── images/screenshots/ # 应用截图
+├── Makefile                # Build/test/run commands
+├── Dockerfile              # Container image (termote + tmux)
+├── docker-compose.yml      # Development from a checkout only
+├── entrypoint.sh           # Container entrypoint
+├── docs/                   # Documentation
+│   └── images/screenshots/ # App screenshots
 ├── pwa/                    # React PWA
 │   └── src/
 │       ├── components/
@@ -396,40 +302,42 @@ termote/
 │       ├── hooks/
 │       ├── types/
 │       └── utils/
-├── server/                 # Go 服务端 + CLI（单一二进制文件）
-│   ├── main.go             # 入口点（无参数或 `serve` 为服务器，否则为 CLI）
-│   ├── serve.go            # 服务器（PWA、认证、防护）
-│   ├── mux.go              # Mux 接口 + /api/mux/* 路由
-│   ├── mux_tmux.go         # tmux/psmux 后端
-│   ├── mux_herdr.go        # Herdr 后端（仅原生）
-│   ├── stream.go           # 终端 WebSocket（xterm.js 流）
-│   └── cli*.go             # install/update/health/logs/link/menu 子命令
+├── server/                 # Go server + CLI (single binary)
+│   ├── main.go             # Entry point (no args = menu, `serve` = server, else CLI)
+│   ├── serve.go            # Server (PWA, auth, guards)
+│   ├── mux.go              # Mux interface + /api/mux/* routes
+│   ├── mux_tmux.go         # tmux/psmux backend
+│   ├── mux_herdr.go        # Herdr backend (native only)
+│   ├── stream.go           # Terminal WebSocket (xterm.js stream)
+│   ├── cli*.go             # start/stop/update/container/logs/menu subcommands
+│   └── webui/              # PWA embedded in the binary (filled by make build)
 ├── scripts/
-│   ├── termote.sh          # 精简的 Unix 包装脚本 -> termote CLI
-│   ├── termote.ps1         # 精简的 Windows PowerShell 包装脚本 -> termote CLI
-│   ├── get.sh              # Unix 在线安装器（curl | bash）
-│   └── get.ps1             # Windows 在线安装器（irm | iex）
-├── tests/                  # 测试套件
-│   ├── test-termote.sh
-│   ├── test-termote.ps1    # Windows 测试
-│   ├── test-get.sh
-│   └── test-entrypoints.sh
-└── website/                # Astro Starlight 文档站
-    └── src/content/docs/   # MDX 文档
+│   ├── install.sh          # Unix online installer (curl | sh)
+│   ├── install.ps1         # Windows online installer (irm | iex)
+│   ├── termote.sh          # Unix shim: builds and runs a checkout
+│   └── termote.ps1         # Windows PowerShell shim: builds and runs a checkout
+├── tests/                  # Test suite
+│   ├── test-termote.sh     # Unix shim tests
+│   ├── test-termote.ps1    # Windows shim tests
+│   ├── test-install.sh     # Unix installer tests
+│   ├── test-install.ps1    # Windows installer tests
+│   └── test-entrypoints.sh # Container entrypoint tests
+└── website/                # Astro Starlight docs site
+    └── src/content/docs/   # MDX documentation
 ```
 
 ## 开发
 
 ```bash
-make build          # 构建 PWA 和 termote
-make test           # 运行所有测试
-make health         # 检查服务健康状态
-make clean          # 停止容器
+make build          # Build the PWA and embed it in server/termote
+make test           # Run all tests
+make health         # Check service health
+make clean          # Stop containers
 
-# E2E 测试（需要运行中的服务器）
-./scripts/termote.sh install container  # 先启动服务器
-pnpm --filter termote test:e2e       # 运行 Playwright 测试
-pnpm --filter termote test:e2e:ui    # 使用 UI 调试器运行
+# E2E tests (requires running server)
+./scripts/termote.sh start           # Start server first
+pnpm --filter termote test:e2e       # Run Playwright tests
+pnpm --filter termote test:e2e:ui    # Run with UI debugger
 ```
 
 **手动测试：** 参见[自测清单](docs/self-test-checklist.md)
@@ -443,7 +351,7 @@ pnpm --filter termote test:e2e:ui    # 使用 UI 调试器运行
 
 ### WebSocket 错误
 
-- 检查 termote 日志：`docker logs termote`（容器模式）或 `termote logs server`（原生模式）
+- 检查 termote 日志：`termote container logs`（容器模式）或 `termote logs server`（原生模式）
 - 终端 WebSocket 是 `/api/mux/stream`，由 termote 自己提供，没有需要另外检查的终端进程
 
 ### 移动端键盘问题
@@ -451,26 +359,26 @@ pnpm --filter termote test:e2e:ui    # 使用 UI 调试器运行
 - 确保存在 viewport meta 标签
 - 在真机上测试，不要使用模拟器
 
-### 原生模式：进程未启动
+### 原生模式：服务器未启动
 
 ```bash
-ps aux | grep termote-server # 检查 termote 是否在运行
-lsof -i :7680              # 确认端口是否在使用
-termote logs server        # 或者： termote logs follow
+termote status             # What the running server reports
+termote logs server        # Or: termote logs follow
+lsof -i :7680              # Check what holds the port
+termote start --fresh      # If the saved password can no longer be read
 ```
 
 ## 安全说明
 
 - **默认：仅 localhost** -- 除非使用 `--lan` 参数，否则不暴露到局域网
-- **默认启用基本认证** -- 使用 `--no-auth` 可为本地开发禁用；保存的密码为空时不再禁用认证（1.0.0 会改为生成新密码）
-- **Host 白名单** -- 拒绝 `Host` 头无法识别的请求（防御 DNS 重绑定）；可用 `--allow-host`/`-AllowHost` 添加受信任的名称，没有能关闭此检查的通配符
+- **默认启用基本认证** -- 使用 `--no-auth` 可为本地开发禁用；密码由首次 `termote start` 创建并加密保存
+- **Host 白名单** -- 拒绝 `Host` 头无法识别的请求（防御 DNS 重绑定）；可用 `--allow-host` 添加受信任的名称，没有能关闭此检查的通配符
 - **Origin/CSRF 防护** -- 会改变状态的 `/api/mux/*` 请求和 `/api/mux/stream` WebSocket 会拒绝跨站的 `Sec-Fetch-Site`/`Origin`，并要求同源的一次性流令牌
 - **内置暴力破解防护** -- 速率限制（每 IP 每分钟 5 次尝试）
 - **Herdr 后端** -- 会暴露主机上的所有 Herdr 工作区，因此除非同时指定 `--allow-herdr-no-auth`，否则拒绝 `--mux herdr --no-auth`
+- **服务文件不含机密** -- systemd 单元、launchd 代理和计划任务中都不包含密码
 - 生产环境请使用 HTTPS（Tailscale）
 - 限制在受信任的网络/VPN 中使用
-
-如果从 0.x 版本升级，请参阅 [`docs/upgrade-1.0.md`](docs/upgrade-1.0.md)。
 
 ## 其他项目
 

@@ -104,17 +104,18 @@ test_services() {
     fi
 
     # Shells inherit the tmux server's environment; the password must not be in it
-    if grep -q "env -u TERMOTE_PASS tmux new-session" "$PROJECT_DIR/entrypoint.sh"; then
-        pass "tmux session starts without TERMOTE_PASS"
+    if grep -q 'env "${unset_termote\[@\]}" tmux new-session' "$PROJECT_DIR/entrypoint.sh" &&
+        grep -q '== TERMOTE_\*' "$PROJECT_DIR/entrypoint.sh"; then
+        pass "tmux session starts without any TERMOTE_* variable"
     else
-        fail "tmux env" "env -u TERMOTE_PASS" "password reaches the shells"
+        fail "tmux env" "every TERMOTE_* unset" "a TERMOTE_* variable reaches the shells"
     fi
 
     # exec: the server gets SIGTERM from tini directly, no shell in between
-    if grep -qE '^exec /usr/local/bin/termote$' "$PROJECT_DIR/entrypoint.sh"; then
-        pass "execs termote as the last step"
+    if grep -qE '^exec /usr/local/bin/termote serve$' "$PROJECT_DIR/entrypoint.sh"; then
+        pass "execs termote serve as the last step"
     else
-        fail "exec termote" "exec /usr/local/bin/termote" "not found"
+        fail "exec termote" "exec /usr/local/bin/termote serve" "not found"
     fi
 }
 
@@ -122,13 +123,19 @@ test_serve_config() {
     echo ""
     echo "=== Testing serve configuration ==="
 
-    for var in TERMOTE_PORT TERMOTE_BIND TERMOTE_PWA_DIR TERMOTE_USER; do
+    for var in TERMOTE_PORT TERMOTE_BIND TERMOTE_USER; do
         if grep -q "export $var=" "$PROJECT_DIR/entrypoint.sh"; then
             pass "$var configured"
         else
             fail "$var" "exported" "not found"
         fi
     done
+    # The PWA is embedded in the binary; a PWA dir would override it
+    if grep -q "TERMOTE_PWA_DIR" "$PROJECT_DIR/entrypoint.sh"; then
+        fail "no TERMOTE_PWA_DIR" "unset" "$(grep TERMOTE_PWA_DIR "$PROJECT_DIR/entrypoint.sh")"
+    else
+        pass "serves the embedded PWA (no TERMOTE_PWA_DIR)"
+    fi
 }
 
 test_dockerfile() {
@@ -183,6 +190,20 @@ test_container_runtime() {
         sleep 0.5
     done
     if [[ "$up" == true ]]; then pass "server answers /api/mux/health"; else fail "health" "200" "no answer"; fi
+
+    # The real PWA, not the placeholder a binary built without it serves
+    local index
+    index=$("$rt" exec "$name" curl -fs -u admin:test-pass http://127.0.0.1:7680/ || true)
+    if [[ "$index" == *"/assets/"* ]]; then
+        pass "GET / serves the embedded PWA"
+    else
+        fail "GET /" "HTML referencing /assets/" "$(echo "$index" | head -c 200)"
+    fi
+
+    # The shells of the session see no TERMOTE_* variable.
+    local leaked
+    leaked=$("$rt" exec "$name" sh -c 'tmux show-environment -g | grep -c "^TERMOTE_"' || true)
+    if [[ "${leaked:-0}" == "0" ]]; then pass "tmux server has no TERMOTE_* variable"; else fail "tmux env" "0" "$leaked"; fi
 
     local pid1
     pid1=$("$rt" exec "$name" cat /proc/1/comm)

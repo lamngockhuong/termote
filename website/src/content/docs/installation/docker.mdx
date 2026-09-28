@@ -1,112 +1,107 @@
 ---
 title: Container Installation
-description: All-in-one container deployment
+description: Run the Termote server in Podman or Docker with termote container up
 ---
 
-import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
+import { Aside, Steps } from "@astrojs/starlight/components";
 
-Single container with termote (PWA + terminal stream + API) + tmux. There is no separate
-terminal process: termote streams the terminal itself into xterm.js in the PWA. The Herdr
-backend is not available in container mode.
+`termote container up` runs the server in a container instead of on the host: termote (PWA + terminal stream +
+API) and tmux in one image, with a workspace directory mounted from the host. Use it when the terminals do not
+need your host tools (like `claude` or `git` as installed on the host). The Herdr backend is not available in a
+container.
+
+## Prerequisites
+
+- Podman (preferred when both are installed) or Docker, including Docker Desktop or Podman Desktop on macOS and
+  Windows.
+- The `termote` command, installed as in [Getting Started](/getting-started/). You do not need to run
+  `termote start`.
 
 ## Quick Start
 
 <Steps>
-1. Run deploy command
+1. Start the container
 
-   <Tabs>
-     <TabItem label="Unix (macOS/Linux)">
-       ```bash
-       ./scripts/termote.sh install container
-       ```
-     </TabItem>
-     <TabItem label="Windows (PowerShell)">
-       ```powershell
-       .\scripts\termote.ps1 install container
-       ```
-     </TabItem>
-   </Tabs>
+   ```bash
+   termote container up
+   ```
 
-2. Access at http://localhost:7680
+2. Open http://localhost:7680 and log in as `admin` with the password it prints.
 
-3. (Optional) Expose to LAN
+3. (Optional) Expose it to the LAN; the option is saved like any other
 
-   <Tabs>
-     <TabItem label="Unix (macOS/Linux)">
-       ```bash
-       ./scripts/termote.sh install container --lan
-       ```
-     </TabItem>
-     <TabItem label="Windows (PowerShell)">
-       ```powershell
-       .\scripts\termote.ps1 install container -Lan
-       ```
-     </TabItem>
-   </Tabs>
+   ```bash
+   termote container up --lan
+   ```
 
 </Steps>
 
-## Docker Run
+## How It Runs
 
-```bash
-# Basic (auto-generates credentials, check logs: docker logs termote)
-docker run -d --name termote -p 7680:7680 ghcr.io/lamngockhuong/termote:latest
+- The image is `ghcr.io/lamngockhuong/termote:<version>`, where `<version>` is the version of your `termote`
+  binary, so the container always matches the command that started it. `container up` pulls it, replaces any
+  existing `termote` container and waits until the server answers.
+- It runs as your user and group, with `--restart unless-stopped`, and mounts the workspace directory
+  (default `~/termote-workspace`, created if missing) at `/workspace`. It warns when the workspace contains
+  sensitive directories such as `.ssh` or `.aws`.
+- The password and settings reach the container through the environment of the `docker`/`podman` process
+  (`-e NAME`, no value), so they never appear on a command line or in a file on disk (`docker inspect` still shows
+  them, as with any environment variable).
+- The container settings are saved apart from the native `termote start` options, but the admin password is
+  shared: a new one (`--fresh`) applies to both, and the native server takes it at its next `termote restart`.
+- The container's default port is 7680. If the native server already uses that port, `container up` refuses and
+  suggests `--port`.
+- From a git checkout, or with `--build`, it builds `termote:local` from the Dockerfile instead of pulling.
 
-# With custom credentials
-docker run -d --name termote -p 7680:7680 \
-  -e TERMOTE_USER=admin -e TERMOTE_PASS=secret \
-  ghcr.io/lamngockhuong/termote:latest
-
-# Without auth (local dev only)
-docker run -d --name termote -p 7680:7680 \
-  -e NO_AUTH=true \
-  ghcr.io/lamngockhuong/termote:latest
-
-# With persistence
-docker run -d --name termote -p 7680:7680 \
-  -v termote-data:/home/termote \
-  ghcr.io/lamngockhuong/termote:latest
-```
+<Aside type="note" title="After a reboot">
+  Docker's daemon restarts the container after a reboot. Rootless Podman has no daemon, so the container stays
+  stopped; to keep it running across reboots, run it as a
+  [Quadlet](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html) systemd unit.
+</Aside>
 
 ## Options
 
-<Tabs>
-  <TabItem label="Unix (macOS/Linux)">
-    | Flag              | Description                              |
-    | ----------------- | ---------------------------------------- |
-    | `--lan`           | Expose to LAN (default: localhost)       |
-    | `--no-auth`       | Disable basic auth                       |
-    | `--port <port>`   | Custom port (default: 7680)              |
-    | `--allow-host <name>` | Allow an extra Host header value (repeatable) |
-    | `--fresh`         | Force new password prompt (ignore saved) |
-    | `--update`        | Auto-update with saved config            |
-    | `--version <ver>` | Install specific version                 |
-  </TabItem>
-  <TabItem label="Windows (PowerShell)">
-    | Flag              | Description                              |
-    | ----------------- | ---------------------------------------- |
-    | `-Lan`            | Expose to LAN (default: localhost)       |
-    | `-NoAuth`         | Disable basic auth                       |
-    | `-Port <port>`    | Custom port (default: 7680)              |
-    | `-AllowHost <name>` | Allow an extra Host header value (repeatable) |
-    | `-Fresh`          | Force new password prompt (ignore saved) |
+Like `termote start`, every option is saved, a flag you leave out keeps its saved value, and a boolean is turned
+off with `=false`.
 
-    Online installer flags: `$env:TERMOTE_UPDATE="true"` for auto-update.
-  </TabItem>
-</Tabs>
+| Option                      | Description                                                            |
+| --------------------------- | ---------------------------------------------------------------------- |
+| `--port <port>`             | Port on the host (default 7680)                                        |
+| `--lan[=false]`             | Expose to the LAN (default: this machine only)                         |
+| `--tailscale <host[:port]>` | Publish over [Tailscale HTTPS](/installation/tailscale/) (default 443) |
+| `--no-tailscale`            | Stop publishing over Tailscale                                         |
+| `--no-auth[=false]`         | Disable the login                                                      |
+| `--allow-host <name>`       | Allow another `Host` header name (repeatable, no wildcard)             |
+| `--remove-host <name>`      | Remove an allowed name (repeatable)                                    |
+| `--workspace <dir>`         | Directory mounted at `/workspace` (default `~/termote-workspace`)      |
+| `--fresh`                   | Set a new password (shared with the native server)                     |
+| `--build`                   | Build the image from a checkout instead of pulling it                  |
 
-<Aside type="note">
-  `--mux herdr`/`-Mux herdr` is not available in container mode — Herdr requires native mode.
+<Aside type="note" title="Windows and --lan">
+  On Windows the container port is published on localhost only, and `--lan` adds a `netsh` port forwarding rule
+  and a firewall rule, which asks for administrator rights. `container down` removes them again.
 </Aside>
 
-<Aside type="tip">
-  Scripts auto-detect `podman` or `docker` - both work identically.
-</Aside>
+## Managing the Container
 
-<Aside type="note">
-  Use Container mode when you don't need access to host binaries (like `claude`
-  or `git`).
-</Aside>
+```bash
+termote container status    # is it running, and what the server reports
+termote container logs      # recent log lines
+termote container logs -f   # follow the logs (Ctrl+C to stop)
+termote container down      # remove the container (and its Tailscale mapping)
+```
+
+`termote stop`, `restart` and `uninstall` only act on the native server; the container has its own commands.
+
+## Updating
+
+`termote update` updates the command, and the image tag follows it. Run `container up` again to move the
+container to the image of the new version, with the saved settings:
+
+```bash
+termote update
+termote container up
+```
 
 ## Prevent macOS Sleep
 
@@ -130,185 +125,44 @@ pkill caffeinate
 
 ## Troubleshooting
 
-### Quick Diagnostics
-
-<Tabs>
-  <TabItem label="Unix (macOS/Linux)">
-    ```bash
-    ./scripts/termote.sh health   # Health check
-    docker ps -a | grep termote   # Check container status
-    ```
-  </TabItem>
-  <TabItem label="Windows (PowerShell)">
-    ```powershell
-    .\scripts\termote.ps1 health   # Health check
-    docker ps -a | Select-String termote   # Check container status
-    ```
-  </TabItem>
-</Tabs>
-
-### View Logs
-
-```bash
-docker logs termote           # View logs
-docker logs -f termote        # Follow logs (live)
-
-# Or with podman:
-podman logs termote
-```
-
-### Container won't start
-
-<Tabs>
-  <TabItem label="Unix (macOS/Linux)">
-    ```bash
-    # Check startup errors
-    docker logs termote
-
-    # Port already in use?
-    lsof -i :7680
-
-    # Use different port
-    ./scripts/termote.sh install container --port 7690
-    ```
-  </TabItem>
-  <TabItem label="Windows (PowerShell)">
-    ```powershell
-    # Check startup errors
-    docker logs termote
-
-    # Port already in use?
-    netstat -ano | Select-String 7680
-
-    # Use different port
-    .\scripts\termote.ps1 install container -Port 7690
-    ```
-  </TabItem>
-</Tabs>
-
 ### Debug inside container
 
 ```bash
 docker exec -it termote /bin/sh
 # Inside container:
 ps aux                        # Check processes (termote, tmux)
-curl localhost:7680/api/mux/health
 ```
+
+Replace `docker` with `podman` if that is your runtime.
 
 ### Common Issues
 
-| Issue            | Solution                                     |
-| ---------------- | -------------------------------------------- |
-| Port in use      | `lsof -i :7680` then kill or use `--port`    |
-| Container crash  | `docker logs termote` to see error           |
-| Auth not working | Restart container, check logs for password   |
-| Host rejected (403) | Add the name suggested in the error with `--allow-host` |
-| WebSocket error  | Check termote logs (`docker logs termote`); the terminal WebSocket is `/api/mux/stream`, served by termote itself |
-| Stale PWA cache  | Settings → "Clear Cache & Reload" to refresh |
-
-### Restart / Reset
-
-<Tabs>
-  <TabItem label="Unix (macOS/Linux)">
-    ```bash
-    docker restart termote
-
-    # Full reset
-    ./scripts/termote.sh uninstall container
-    ./scripts/termote.sh install container
-    ```
-  </TabItem>
-  <TabItem label="Windows (PowerShell)">
-    ```powershell
-    docker restart termote
-
-    # Full reset
-    .\scripts\termote.ps1 uninstall container
-    .\scripts\termote.ps1 install container
-    ```
-  </TabItem>
-</Tabs>
+| Issue                        | Solution                                                                                 |
+| ---------------------------- | ---------------------------------------------------------------------------------------- |
+| Neither podman nor docker    | Install one of them, then `termote container up` again                                   |
+| Port in use                  | Often the native server: `termote container up --port <port>`, or `termote stop` first   |
+| Image cannot be pulled       | A pre-release has no image until it is published; install a stable release              |
+| Server does not answer       | `termote container logs` shows why                                                        |
+| Gone after a reboot (Podman) | Rootless Podman does not restart it: `termote container up` again, or use a Quadlet unit |
+| Host rejected (403)          | Add the name the error suggests: `termote container up --allow-host <name>`              |
+| Stale PWA cache              | Settings → "Clear Cache & Reload" to refresh                                             |
 
 ### API Test
 
 ```bash
-curl http://localhost:7680/api/mux/health
-curl -u admin:password http://localhost:7680/api/mux/snapshot
+curl -u admin:<password> http://localhost:7680/api/mux/health
 ```
-
-## Updating
-
-### Via CLI (Recommended)
-
-If Termote is already installed, use the built-in update command:
-
-```bash
-termote update                    # Update to latest version
-termote update --version 0.0.9   # Pin to specific version
-termote update --force            # Force reinstall current version
-```
-
-This automatically preserves your config, stops services, downloads the new version, verifies checksums, and re-installs with your saved settings.
-
-### Via One-liner
-
-Re-run the installer - it compares versions and prompts before updating:
-
-<Tabs>
-  <TabItem label="Unix (macOS/Linux)">
-    ```bash
-    # Auto-update with saved config
-    curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash -s -- --update
-
-    # Or without saved config
-    curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash -s -- --container
-    ```
-
-    Options: `--update`, `--yes`, `--download-only`, `--fresh`, `--strict`
-  </TabItem>
-  <TabItem label="Windows (PowerShell)">
-    ```powershell
-    # Auto-update with saved config
-    $env:TERMOTE_UPDATE="true"; irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
-
-    # Or without saved config
-    $env:TERMOTE_MODE="container"; irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
-    ```
-
-    Options: `$env:TERMOTE_UPDATE="true"`, `$env:TERMOTE_AUTO_YES="true"`, `$env:TERMOTE_MODE="container"`
-  </TabItem>
-</Tabs>
-
-### Manual Update
-
-<Tabs>
-  <TabItem label="Unix (macOS/Linux)">
-    ```bash
-    ./scripts/termote.sh uninstall container
-    git pull origin main
-    ./scripts/termote.sh install container
-    ```
-  </TabItem>
-  <TabItem label="Windows (PowerShell)">
-    ```powershell
-    .\scripts\termote.ps1 uninstall container
-    git pull origin main
-    .\scripts\termote.ps1 install container
-    ```
-  </TabItem>
-</Tabs>
 
 ## Uninstall
 
-<Tabs>
-  <TabItem label="Unix (macOS/Linux)">
-    ```bash
-    ./scripts/termote.sh uninstall container
-    ```
-  </TabItem>
-  <TabItem label="Windows (PowerShell)">
-    ```powershell
-    .\scripts\termote.ps1 uninstall container
-    ```
-  </TabItem>
-</Tabs>
+```bash
+termote container down
+```
+
+This removes the container; the workspace directory and the saved settings stay. To remove the command too, run
+`termote uninstall` (see [Native](/installation/native/#uninstall)).
+
+## Development
+
+`docker-compose.yml` in the repository is for development from a checkout only. Everyone else uses
+`termote container up`.

@@ -42,15 +42,20 @@ fi
 # Set environment for termote serve mode
 export TERMOTE_PORT="${TERMOTE_PORT:-7680}"
 export TERMOTE_BIND="${TERMOTE_BIND:-0.0.0.0}"
-export TERMOTE_PWA_DIR="/var/www/termote"
 export TERMOTE_USER="${TERMOTE_USER:-admin}"
 [[ "$NO_AUTH" == "true" ]] && export TERMOTE_NO_AUTH="true"
 
 # Create the shared session every client attaches to (the server would create
 # it on first use too; doing it here keeps it alive from container start).
-# The tmux server keeps this environment for every shell, so the password
-# stays out of it; the server reads it and removes it from its own env.
-tmux has-session -t main 2>/dev/null || env -u TERMOTE_PASS tmux new-session -d -s main
+# The tmux server keeps this environment for every shell, so no TERMOTE_*
+# variable (the password above all) goes in; the server reads them and
+# removes them from its own env.
+unset_termote=()
+for v in $(compgen -e); do
+    [[ "$v" == TERMOTE_* ]] && unset_termote+=(-u "$v")
+done
+tmux has-session -t main 2>/dev/null || env "${unset_termote[@]}" tmux new-session -d -s main
 
-# The server replaces this shell, so SIGTERM from tini reaches it directly
-exec /usr/local/bin/termote
+# The server replaces this shell, so SIGTERM from tini reaches it directly.
+# It serves the PWA embedded in the binary.
+exec /usr/local/bin/termote serve

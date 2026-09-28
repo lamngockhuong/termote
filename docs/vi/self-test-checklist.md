@@ -16,29 +16,36 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 
 ## Cài Đặt
 
-### Chế Độ Container
+### Trình cài đặt
 
-- [ ] `./scripts/termote.sh install container` hoàn thành không lỗi
-- [ ] Container đang chạy: `docker ps | grep termote`
-- [ ] PWA truy cập được tại <http://localhost:7680>
-- [ ] Thông tin đăng nhập tự sinh hiển thị trong logs
-- [ ] `--mux herdr` bị từ chối ở container mode
+- [ ] `curl -fsSL https://termote.ohnice.app/install.sh | sh` hoàn thành không lỗi (Linux/macOS)
+- [ ] `irm https://termote.ohnice.app/install.ps1 | iex` hoàn thành không lỗi (Windows)
+- [ ] Chỉ cần curl/tar/sha256sum (hoặc PowerShell trên Windows); không hỏi sudo/quyền quản trị
+- [ ] Kiểm tra `.sha256` của gói tải về; một bản tải hỏng bị từ chối, không được cài
+- [ ] Chọn đúng tag ổn định 1.x mới nhất (không bao giờ chọn tag 0.x hay bản thử nghiệm)
+- [ ] `TERMOTE_VERSION=X.Y.Z` (hoặc `-rc.N`) cố định/khôi phục đúng phiên bản đó
+- [ ] Chạy lại trình cài đặt trên một bản đã cài in ra `termote update` và không đổi gì cả
+- [ ] Trình cài đặt không bao giờ tự khởi động server; nó chỉ in ra `termote start`
 
 ### Chế Độ Native (macOS/Linux)
 
-- [ ] `./scripts/termote.sh install native` hoàn thành không lỗi
-- [ ] Tiến trình đang chạy: `ps aux | grep termote-server`
+- [ ] `termote start` hoàn thành không lỗi
+- [ ] Dịch vụ được đăng ký (systemd user unit trên Linux có systemd người dùng, tiến trình tách
+      rời + file PID trên WSL2 không có systemd, launchd agent trên macOS)
+- [ ] Tiến trình đang chạy: `pgrep -f "termote serve"`
 - [ ] PWA truy cập được tại <http://localhost:7680>
+- [ ] `termote stop` rồi đăng nhập lại (hoặc `loginctl enable-linger`/khởi động lại máy) làm nó chạy lại
 
 ### Chế Độ Native (Windows)
 
-- [ ] `.\scripts\termote.ps1 install native` hoàn thành không lỗi
+- [ ] `termote start` hoàn thành không lỗi
+- [ ] Scheduled Task `Termote` được đăng ký, chạy ẩn qua `wscript` (không hỏi quyền quản trị)
 - [ ] `psmux` + termote đang chạy
 - [ ] PWA truy cập được tại <http://localhost:7690>
 
 ### Chế Độ Native + Herdr (Linux)
 
-- [ ] `./scripts/termote.sh install native --mux herdr` hoàn thành không lỗi (có herdr trong `PATH`)
+- [ ] `termote start --mux herdr` hoàn thành không lỗi (có herdr trong `PATH`)
 - [ ] `curl localhost:7680/api/mux/health` trả về `"backend":"herdr"`
 - [ ] `--mux herdr --no-auth` bị từ chối nếu không kèm `--allow-herdr-no-auth`
 - [ ] PWA liệt kê đúng các workspace/tab/pane như `herdr pane list`
@@ -46,57 +53,76 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 - [ ] Huy hiệu trạng thái agent đổi trong vòng một `pollInterval` sau khi `herdr` báo trạng thái mới
 - [ ] Gõ từ PWA vào pane của Herdr giữ đúng thứ tự (không bị xen lẫn)
 
-### Tùy Chọn
+### Chế Độ Container
 
-- [ ] Cờ `--lan` mở truy cập LAN (test từ thiết bị khác)
+- [ ] `termote container up` hoàn thành không lỗi
+- [ ] Container đang chạy: `docker ps | grep termote` (hoặc `podman ps`)
+- [ ] PWA truy cập được tại <http://localhost:7680>
+- [ ] `--mux herdr` bị từ chối với `container up`
+- [ ] Mật khẩu và danh sách Host được phép tới container qua giá trị `-e` lấy từ môi trường của
+      chính CLI (`docker inspect termote` không cho thấy `--env-file`/tệp bí mật được mount)
+- [ ] Podman ở chế độ không cần quyền `root` chạy với `--userns=keep-id`; Docker ở chế độ đó chạy không kèm `--user`
+- [ ] `--workspace <dir>` mount đúng thư mục vào `/workspace` bằng `--mount`
+- [ ] `container up --build` (từ một checkout) build `termote:local` thay vì kéo image có sẵn
+- [ ] Khi một server native đã chiếm cổng, `container up` từ chối kèm gợi ý
+- [ ] `container down` / `container logs [-f]` / `container status` hoạt động
+- [ ] Đặt mật khẩu mới bằng `--fresh` ở một phía cũng cập nhật mật khẩu đã lưu ở phía kia
+- [ ] `--no-auth` vẫn giữ nguyên mật khẩu chung đã lưu (không xóa nó)
+
+### Tùy Chọn (`start` và `container up`)
+
+- [ ] Cờ `--lan` mở truy cập LAN (test từ thiết bị khác); địa chỉ mà request thực sự gửi tới
+      vẫn được chấp nhận kể cả khi IP LAN đổi
 - [ ] `--no-auth` tắt xác thực
 - [ ] `--port <port>` đổi port đúng
-- [ ] `--tailscale <host>` cấu hình Tailscale HTTPS và thêm tên đó vào danh sách Host được phép
+- [ ] `--tailscale <host[:port]>` cấu hình Tailscale HTTPS và thêm tên đó vào danh sách Host
+      được phép, áp dụng mà không cần `sudo`
+- [ ] Một cổng HTTPS đã phục vụ thứ khác (ví dụ chế độ còn lại) bị từ chối
 - [ ] `--fresh` buộc tạo mật khẩu mới (bỏ qua config đã lưu)
 - [ ] `--allow-host <name>` thêm tên vào danh sách Host được phép (có lưu lại); request có header
       `Host` không nằm trong danh sách nhận 403 kèm gợi ý đúng cờ đó
+- [ ] `--remove-host <name>` xóa một tên đã cho phép trước đó
 - [ ] Request từ hostname/IP LAN lạ bị từ chối (403) cho tới khi được thêm bằng
       `--allow-host`
-- [ ] `--ttyd`/`-Ttyd` vẫn được chấp nhận nhưng bị bỏ qua, kèm cảnh báo
-- [ ] Biến môi trường `TERMOTE_USER`/`TERMOTE_PASS` hoạt động
-- [ ] Biến `WORKSPACE` mount đúng thư mục
+- [ ] Không có cờ `--ttyd` và không có tham số PowerShell dạng `-Flag` nào trong bản 1.0
 
 ### Lưu Trữ Cấu Hình
 
-- [ ] Mật khẩu mã hóa AES-256-CBC + PBKDF2 (macOS/Linux)
+- [ ] Mật khẩu: AES-256-CBC kèm HMAC, khóa lấy từ tệp `secret` ngẫu nhiên theo từng bản cài, quyền 0600 (Unix)
 - [ ] Mật khẩu mã hóa DPAPI (Windows)
-- [ ] File config có quyền 600 (`chmod 600`)
-- [ ] Config đã lưu được tái sử dụng khi cài lại (mode, LAN, auth, port, mux, danh sách Host được phép, Tailscale)
-- [ ] `show-password` in mật khẩu đã lưu; từ chối khi dùng `--no-auth` hoặc không giải mã được
+- [ ] File config có quyền 600 (`chmod 600`, Unix)
+- [ ] Cấu hình đã lưu được tái sử dụng khi khởi động lại (port, LAN, auth, mux, danh sách Host được phép, Tailscale, workspace)
+- [ ] `show-password` in ra mật khẩu đã lưu
 
 ### Gỡ Cài Đặt
 
-- [ ] `./scripts/termote.sh uninstall all` dọn sạch tất cả (dừng dịch vụ, xóa config)
+- [ ] `termote uninstall` dừng dịch vụ, gỡ đăng ký, lệnh `termote` và thư mục cài đặt, nhưng
+      giữ nguyên cấu hình và log đã lưu (in ra cả hai đường dẫn)
 
 ### Link/Unlink
 
-- [ ] `./scripts/termote.sh link` tạo liên kết tượng trưng (thử /usr/local/bin, nếu không được thì ~/.local/bin)
+- [ ] `termote link` tạo lệnh trong `~/.local/bin` (đã được trình cài đặt thêm vào PATH)
 - [ ] `termote help` hoạt động sau khi link
-- [ ] `./scripts/termote.sh unlink` xóa liên kết tượng trưng và hiện hướng dẫn khôi phục
+- [ ] `termote unlink` xóa lệnh đó
 
 ### Cập Nhật
 
-- [ ] `./scripts/termote.sh update` cập nhật lên bản mới nhất
-- [ ] `./scripts/termote.sh update --version X.Y.Z` cố định phiên bản
-- [ ] `./scripts/termote.sh update --force` cài lại phiên bản hiện tại
-- [ ] Cập nhật giữ nguyên cấu hình đã lưu (mode, LAN, auth, port, mux, danh sách Host được phép, Tailscale)
-- [ ] Cập nhật tạo lại liên kết tượng trưng nếu trước đó đã có
-- [ ] Từ chối chạy từ git repo (chặn chế độ phát triển)
-- [ ] Cảnh báo khi hạ phiên bản, bỏ qua nếu đã đúng version
-- [ ] Một bản cài 0.1.0 thật khi cập nhật lên 1.0.0 vẫn giữ cài đặt, dừng mọi tiến trình ttyd do
-      Termote khởi động (trên Windows còn xóa `scripts/ttyd.exe`), và mật khẩu đã lưu nếu rỗng
-      sẽ được thay bằng mật khẩu mới tự sinh (xem [`upgrade-1.0.md`](../upgrade-1.0.md))
+- [ ] `termote update` cập nhật lên bản ổn định 1.x mới nhất
+- [ ] `termote update --version X.Y.Z` cố định phiên bản
+- [ ] `termote update --force` cài lại phiên bản hiện tại
+- [ ] Cập nhật giữ nguyên cấu hình đã lưu (port, LAN, auth, mux, danh sách Host được phép, Tailscale)
+- [ ] Kiểm tra sức khỏe trên phiên bản mới thành công thì giữ nguyên; thất bại thì chuyển
+      `current` về phiên bản trước đó và khởi động lại nó
+- [ ] Từ chối chạy từ git checkout, và với một tệp thực thi không do trình cài đặt tạo ra
+- [ ] Cảnh báo khi hạ phiên bản, bỏ qua nếu đã đúng phiên bản đích
+- [ ] Chỉ giữ lại phiên bản hiện tại và phiên bản trước đó trong `versions/`
+- [ ] Gõ `termote update` ngay trong một pane của Termote vẫn hoàn tất được (không tự kết thúc pane của chính nó)
 
 ### Lệnh CLI Khác
 
-- [ ] `./scripts/termote.sh health` kiểm tra trạng thái dịch vụ
-- [ ] `./scripts/termote.sh logs` xem log dịch vụ
-- [ ] `./scripts/termote.sh version` hiển thị phiên bản
+- [ ] `termote status` (bí danh `health`) báo đúng những gì server đang chạy trả về
+- [ ] `termote logs` xem log dịch vụ
+- [ ] `termote version` hiển thị phiên bản đã cài
 
 ---
 
@@ -384,16 +410,16 @@ Test trên thiết bị di động thật:
 - [ ] Auth giữ nguyên sau khi tải lại trang (session cookie)
 - [ ] Session cookie ngăn hỏi auth lại trên mobile
 - [ ] Clear Cache & Reload xóa session cookie (yêu cầu đăng nhập lại)
-- [ ] Mật khẩu đã lưu rỗng không còn tắt auth — chạy `install` trên config như vậy sẽ sinh và
+- [ ] Mật khẩu đã lưu rỗng không còn tắt auth — chạy `start` trên cấu hình như vậy sẽ sinh và
       lưu mật khẩu mới
 
 ### Danh Sách Host Được Phép
 
 - [ ] Request có header `Host` lạ nhận 403 (không phụ thuộc Sec-Fetch)
 - [ ] Loopback (`localhost`, `127.0.0.1`, `::1`) luôn được phép
-- [ ] IP LAN tự động được phép khi cài với `--lan`
-- [ ] Tên Tailscale tự động được phép khi cài với `--tailscale`
-- [ ] Tên thêm bằng `--allow-host` được phép và vẫn giữ sau khi cài lại
+- [ ] Địa chỉ mà request thực sự gửi tới tự động được phép khi khởi động với `--lan`
+- [ ] Tên Tailscale tự động được phép khi khởi động với `--tailscale`
+- [ ] Tên thêm bằng `--allow-host` được phép và vẫn giữ sau khi khởi động lại
 - [ ] Không có giá trị `*`/wildcard nào tắt được lớp kiểm tra này
 
 ### Chặn Ghi / CSRF
@@ -491,10 +517,10 @@ curl http://localhost:7680/api/mux/stream-token
 
 - [ ] Chế độ container hoạt động (Docker Desktop)
 - [ ] Chế độ native hoạt động (`psmux` + termote)
-- [ ] PowerShell script xử lý mã hóa DPAPI
+- [ ] Mã hóa DPAPI cho mật khẩu hoạt động
 - [ ] Link/Unlink tạo lệnh `termote` dùng được ở mọi nơi
-- [ ] Các cờ của `termote.ps1`: `-Lan`, `-NoAuth`, `-Port`, `-Tailscale`, `-Fresh`, `-Mux`,
-      `-AllowHost`, `-AllowHerdrNoAuth`
+- [ ] Các cờ của `termote` dùng chung cú pháp Go như trên Unix (`--lan`, `--no-auth`,
+      `--port`, `--tailscale`, `--fresh`, `--mux`, `--allow-host`, `--allow-herdr-no-auth`)
 
 ---
 

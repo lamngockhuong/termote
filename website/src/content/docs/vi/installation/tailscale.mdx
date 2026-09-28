@@ -5,85 +5,86 @@ description: Tự động SSL qua tailscale serve
 
 import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
 
-Tự động HTTPS sử dụng `tailscale serve`. Không cần quản lý chứng chỉ thủ công.
+HTTPS tự động nhờ `tailscale serve`. Không phải tự quản lý chứng chỉ, và Termote không bao giờ chạy `sudo` cho
+phần này.
 
 ## Yêu cầu
 
 - [Tailscale](https://tailscale.com) đã cài đặt và xác thực
-- MagicDNS đã bật
+- Tailnet đã bật MagicDNS và chứng chỉ HTTPS
+- **Chỉ trên Linux, một lần duy nhất:** cho phép user của bạn đổi `tailscale serve` mà không cần sudo
 
-## Cài đặt
+  ```bash
+  sudo tailscale set --operator=$USER
+  ```
+
+  Nếu bỏ qua bước này, `termote start --tailscale` dừng lại trước khi đụng tới server đang chạy và in ra dòng trên.
+
+## Thiết lập
 
 <Steps>
-1. Triển khai với cờ Tailscale
+1. Khởi động với tên Tailscale của máy này
 
    <Tabs>
-     <TabItem label="Unix (macOS/Linux)">
+     <TabItem label="Native">
+
        ```bash
-       ./scripts/termote.sh install container --tailscale myhost.ts.net
+       termote start --tailscale myhost.tailnet-name.ts.net
        ```
      </TabItem>
-     <TabItem label="Windows (PowerShell)">
-       ```powershell
-       .\scripts\termote.ps1 install container -Tailscale myhost.ts.net
+     <TabItem label="Container">
+
+       ```bash
+       termote container up --tailscale myhost.tailnet-name.ts.net
        ```
      </TabItem>
    </Tabs>
 
-2. Truy cập tại https://myhost.ts.net
+2. Mở https://myhost.tailnet-name.ts.net từ bất kỳ thiết bị nào trong tailnet
 
 </Steps>
 
+Tùy chọn này được lưu, nên các lần `termote start` (hoặc `termote container up`) sau vẫn tiếp tục công khai nó.
+
 ## Tùy chọn
 
-<Tabs>
-  <TabItem label="Unix (macOS/Linux)">
-    ```bash
-    # Cổng tùy chỉnh
-    ./scripts/termote.sh install native --tailscale myhost.ts.net:8765
+```bash
+# Another HTTPS port (default 443)
+termote start --tailscale myhost.tailnet-name.ts.net:8443
 
-    # Tailscale + LAN
-    ./scripts/termote.sh install container --tailscale myhost.ts.net --lan
-    ```
-  </TabItem>
-  <TabItem label="Windows (PowerShell)">
-    ```powershell
-    # Cổng tùy chỉnh
-    .\scripts\termote.ps1 install native -Tailscale myhost.ts.net:8765
+# Tailscale + LAN
+termote start --tailscale myhost.tailnet-name.ts.net --lan
 
-    # Tailscale + LAN
-    .\scripts\termote.ps1 install container -Tailscale myhost.ts.net -Lan
-    ```
-  </TabItem>
-</Tabs>
+# Stop publishing over Tailscale
+termote start --no-tailscale
+```
+
+Hai tùy chọn `--tailscale` và `--no-tailscale` cũng dùng được với `termote container up`.
 
 <Aside type="tip">
-  Tailscale là cách được khuyến nghị để đưa Termote ra internet an toàn.
+  Tailscale là cách được khuyến nghị để công khai Termote an toàn qua internet.
 </Aside>
 
 ## Cách hoạt động
 
 ```
-Internet → Tailscale (HTTPS) → localhost:7680 → termote (luồng terminal + API)
+Tailnet device → Tailscale (HTTPS) → 127.0.0.1:7680 → termote (terminal stream + API)
 ```
 
-Hostname Tailscale cũng được tự động thêm vào danh sách Host được phép của server, nên
-request đi qua `tailscale serve` không bị lớp kiểm tra header Host (chống tấn công đổi địa chỉ
-DNS) từ chối.
+- **Native:** `termote serve` của dịch vụ áp dụng
+  `tailscale serve --bg --https=<port> http://127.0.0.1:<port>` mỗi khi nó khởi động, lúc bật máy, khi restart
+  và sau khi cập nhật, nên ánh xạ luôn khớp với cấu hình đã lưu.
+- Nếu cổng HTTPS đó trên Tailscale đang phục vụ thứ khác, `start` từ chối và gợi ý một cổng khác
+  (`--tailscale myhost.tailnet-name.ts.net:8443`); server không bao giờ thay một ánh xạ không phải của nó.
+- **Container:** `container up` áp dụng cùng ánh xạ đó trên máy; `tailscaled` tự giữ nó qua các lần khởi động lại.
+- Tên Tailscale được tự động thêm vào danh sách Host được phép, nên các request đi qua `tailscale serve` không bị
+  lớp kiểm tra Host (chống giả mạo tên miền qua DNS) từ chối.
+- `termote stop`, `termote start --no-tailscale`, `termote uninstall` và `termote container down` chỉ gỡ ánh xạ
+  của chính Termote (`tailscale serve --https=<port> off`), không bao giờ đụng tới các mục `tailscale serve` khác
+  của bạn.
 
-Tailscale xử lý:
+Tailscale lo phần:
 
 - Chứng chỉ TLS (tự động gia hạn)
-- Xác thực (Tailscale ACLs)
+- Xác thực (Tailscale ACL)
 - Vượt NAT
-
-## Với Docker
-
-```bash
-docker run -d --name termote -p 7680:7680 \
-  -e TERMOTE_USER=admin -e TERMOTE_PASS=secret \
-  ghcr.io/lamngockhuong/termote:latest
-
-sudo tailscale serve --bg --https=443 http://127.0.0.1:7680
-# Truy cập tại: https://your-hostname.tailnet-name.ts.net
-```

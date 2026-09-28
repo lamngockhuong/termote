@@ -22,6 +22,9 @@ type fakeRunner struct {
 	outputs map[string]string // Output results
 	fail    map[string]bool   // Run/Output fail for these
 	calls   []string
+	// onOutput, when set, answers Output calls not in outputs (commands
+	// with generated arguments such as temp file names).
+	onOutput func(argv, env []string) (string, bool)
 }
 
 func newFakeRunner(available ...string) *fakeRunner {
@@ -52,6 +55,11 @@ func (f *fakeRunner) Output(dir string, env []string, name string, args ...strin
 	if out, ok := f.outputs[key]; ok {
 		return []byte(out), nil
 	}
+	if f.onOutput != nil {
+		if out, ok := f.onOutput(append([]string{name}, args...), env); ok {
+			return []byte(out), nil
+		}
+	}
 	return nil, errors.New("fake: no output for " + key)
 }
 
@@ -74,13 +82,15 @@ func (f *fakeRunner) called(prefix string) bool {
 	return false
 }
 
-// testCLI builds a cli rooted in temp dirs: a home with ~/.termote and a
+// testCLI builds a cli rooted in temp dirs: a home for the config and state dirs and a
 // project dir laid out like an installed release.
 type testCLI struct {
 	*cli
 	stdout, stderr *bytes.Buffer
 	runner         *fakeRunner
 	killed         []int
+	// env is what c.getenv sees.
+	env map[string]string
 }
 
 func newTestCLI(t *testing.T, goos string) *testCLI {
@@ -100,14 +110,16 @@ func newTestCLI(t *testing.T, goos string) *testCLI {
 		goarch:     "amd64",
 		version:    "1.0.0",
 		run:        tc.runner,
-		execShim:   func(string, []string) error { return errors.New("execShim not expected") },
 		readPassword: func() (string, error) {
 			return "", errors.New("no terminal")
 		},
-		procs:      func() ([]procInfo, error) { return nil, nil },
-		localIPv4s: func() []string { return []string{"192.168.1.20", "10.0.0.5"} },
-		pid:        os.Getpid(),
+		procs:        func() ([]procInfo, error) { return nil, nil },
+		localIPv4s:   func() []string { return []string{"192.168.1.20", "10.0.0.5"} },
+		herdrRunning: func() bool { return false },
+		pid:          os.Getpid(),
 	}
+	tc.env = map[string]string{"PATH": "/usr/bin:/bin"}
+	tc.cli.getenv = func(k string) string { return tc.env[k] }
 	tc.cli.terminate = func(pid int, _ time.Duration) error {
 		tc.killed = append(tc.killed, pid)
 		return nil
@@ -144,11 +156,11 @@ func TestDispatchVersionHelpUnknown(t *testing.T) {
 	}
 }
 
-func TestHelpUsesPowerShellFlagsOnWindows(t *testing.T) {
+func TestHelpShowsWindowsDefaultPort(t *testing.T) {
 	tc := newTestCLI(t, "windows")
 	tc.printHelp()
 	out := tc.stdout.String()
-	for _, want := range []string{"termote.ps1", "-AllowHost", "-Tailscale", "(default: 7690)"} {
+	for _, want := range []string{"Usage: termote", "--allow-host", "(default: 7690)"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("windows help misses %q", want)
 		}
@@ -187,14 +199,44 @@ func TestFindProjectDir(t *testing.T) {
 	}
 }
 
-func TestLoadVersionPrefersVersionFileInRelease(t *testing.T) {
-	tc := newTestCLI(t, runtime.GOOS)
-	writeFile(t, filepath.Join(tc.projectDir, ".version"), "1.2.3\n")
-	if got := tc.loadVersion(); got != "1.2.3" {
-		t.Fatalf("release version = %q, want 1.2.3", got)
+func TestConfigAndStateDirs(t *testing.T) {
+	tc := newTestCLI(t, "linux")
+	if got, want := tc.configFile(), filepath.Join(tc.home, ".config", "termote", "config"); got != want {
+		t.Errorf("configFile = %q, want %q", got, want)
 	}
-	writeFile(t, filepath.Join(tc.projectDir, "pwa", "package.json"), "{}")
-	if got := tc.loadVersion(); got != cliVersion {
-		t.Fatalf("checkout version = %q, want %q", got, cliVersion)
+	if got, want := tc.pidFile(), filepath.Join(tc.home, ".local", "state", "termote", "termote.pid"); got != want {
+		t.Errorf("pidFile = %q, want %q", got, want)
+	}
+	cfg, state := filepath.Join(tc.home, "cfg"), filepath.Join(tc.home, "st")
+	env := map[string]string{"XDG_CONFIG_HOME": cfg, "XDG_STATE_HOME": state}
+	tc.getenv = func(k string) string { return env[k] }
+	if got := tc.configDir(); got != filepath.Join(cfg, "termote") {
+		t.Errorf("configDir with XDG_CONFIG_HOME = %q", got)
+	}
+	if got := tc.logDir(); got != filepath.Join(state, "termote") {
+		t.Errorf("logDir with XDG_STATE_HOME = %q", got)
+	}
+	// A relative XDG path is ignored, as the spec requires.
+	env["XDG_CONFIG_HOME"] = "relative"
+	if got := tc.configDir(); got != filepath.Join(tc.home, ".config", "termote") {
+		t.Errorf("configDir with relative XDG_CONFIG_HOME = %q", got)
+	}
+
+	win := newTestCLI(t, "windows")
+	if got, want := win.configFile(), filepath.Join(win.home, "AppData", "Roaming", "termote", "config.json"); got != want {
+		t.Errorf("windows configFile = %q, want %q", got, want)
+	}
+	if got, want := win.stateDir(), filepath.Join(win.home, "AppData", "Local", "termote", "state"); got != want {
+		t.Errorf("windows stateDir = %q, want %q", got, want)
+	}
+	appData := filepath.Join(win.home, "roaming")
+	win.getenv = func(k string) string {
+		if k == "APPDATA" {
+			return appData
+		}
+		return ""
+	}
+	if got := win.configDir(); got != filepath.Join(appData, "termote") {
+		t.Errorf("windows configDir with APPDATA = %q", got)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/pbkdf2"
 	"crypto/rand"
 	"crypto/sha256"
@@ -14,7 +15,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/user"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -22,10 +22,10 @@ import (
 	"time"
 )
 
-// savedConfig is what install persists and update re-applies. The file keeps
-// the 0.x path and format so an upgrade reads it in place.
+// savedConfig is what start saves and serve, restart and update read. The
+// native server's settings come first; the container keeps its own, and the
+// password is shared by both.
 type savedConfig struct {
-	Mode             string
 	LAN              bool
 	NoAuth           bool
 	Port             int
@@ -35,8 +35,39 @@ type savedConfig struct {
 	HerdrAllowNoAuth bool
 	Password         string // decrypted
 	// PasswordUnreadable is set when a saved password exists but cannot be
-	// decrypted (other machine or user); install then sets a new one.
+	// decrypted (the secret file is gone, or another user); start then sets
+	// a new one.
 	PasswordUnreadable bool
+	// Container holds `termote container up`'s settings; nil until used.
+	Container *containerConfig
+}
+
+// containerConfig is the container's part of the config.
+type containerConfig struct {
+	LAN        bool
+	NoAuth     bool
+	Port       int
+	Tailscale  string
+	AllowHosts []string
+	Workspace  string
+}
+
+// savedContainer keeps the container's settings when the native ones are
+// saved.
+func (c *cli) savedContainer(saved *savedConfig) *containerConfig {
+	if saved == nil {
+		return nil
+	}
+	return saved.Container
+}
+
+// keptPassword is the password to save: the new one, or with auth off (an
+// empty one) the saved one, which the other of native and container shares.
+func (c *cli) keptPassword(pass string, saved *savedConfig) string {
+	if pass == "" && saved != nil {
+		return saved.Password
+	}
+	return pass
 }
 
 // loadConfig returns nil when no config was saved yet.
@@ -51,7 +82,7 @@ func (c *cli) loadConfig() (*savedConfig, error) {
 	if c.goos == "windows" {
 		return parseWindowsConfig(data)
 	}
-	return parseUnixConfig(data, c.machineKey)
+	return parseUnixConfig(data, c.readSecret)
 }
 
 func (c *cli) saveConfig(cfg savedConfig) error {
@@ -63,7 +94,11 @@ func (c *cli) saveConfig(cfg savedConfig) error {
 	if c.goos == "windows" {
 		data, err = formatWindowsConfig(cfg, time.Now())
 	} else {
-		data, err = formatUnixConfig(cfg, c.machineKey())
+		var key string
+		if key, err = c.ensureSecret(); err != nil {
+			return err
+		}
+		data, err = formatUnixConfig(cfg, key)
 	}
 	if err != nil {
 		return err
@@ -88,17 +123,66 @@ func (c *cli) saveConfig(cfg savedConfig) error {
 	return nil
 }
 
-// Unix format: KEY="value" lines, parsed without sourcing, as 0.x did.
+// secretFile holds the key the saved password is encrypted with on Unix: 32
+// random bytes, hex, readable by the owner only. The password is therefore
+// protected by file permissions; the secret only keeps it out of plain text
+// in the config (and out of backups that copy the config alone).
+func (c *cli) secretFile() string { return filepath.Join(c.configDir(), "secret") }
+
+// readSecret returns the key, or "" when there is none (decryption then
+// fails and the password counts as unreadable).
+func (c *cli) readSecret() string {
+	b, err := os.ReadFile(c.secretFile())
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
+}
+
+// ensureSecret returns the key, creating it on first use.
+func (c *cli) ensureSecret() (string, error) {
+	if k := c.readSecret(); len(k) == 64 {
+		return k, nil
+	}
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	k := hex.EncodeToString(b)
+	if err := os.MkdirAll(c.configDir(), 0o700); err != nil {
+		return "", err
+	}
+	tmp := c.secretFile() + ".tmp"
+	os.Remove(tmp)
+	if err := os.WriteFile(tmp, []byte(k+"\n"), 0o600); err != nil {
+		return "", err
+	}
+	if err := os.Rename(tmp, c.secretFile()); err != nil {
+		os.Remove(tmp)
+		return "", err
+	}
+	return k, nil
+}
+
+// Unix format: KEY="value" lines, parsed without sourcing.
 const (
-	keyMode             = "TERMOTE_MODE"
 	keyLAN              = "TERMOTE_LAN"
 	keyNoAuth           = "TERMOTE_NO_AUTH"
 	keyPort             = "TERMOTE_PORT"
 	keyTailscale        = "TERMOTE_TAILSCALE"
 	keySavedPass        = "TERMOTE_SAVED_PASS"
+	keySavedPassMAC     = "TERMOTE_SAVED_PASS_MAC"
 	keyMux              = "TERMOTE_MUX"
 	keyAllowedHosts     = "TERMOTE_ALLOWED_HOSTS"
 	keyHerdrAllowNoAuth = "TERMOTE_HERDR_ALLOW_NO_AUTH"
+
+	// The container's keys; present once `container up` ran.
+	keyContainerLAN       = "TERMOTE_CONTAINER_LAN"
+	keyContainerNoAuth    = "TERMOTE_CONTAINER_NO_AUTH"
+	keyContainerPort      = "TERMOTE_CONTAINER_PORT"
+	keyContainerTailscale = "TERMOTE_CONTAINER_TAILSCALE"
+	keyContainerHosts     = "TERMOTE_CONTAINER_ALLOWED_HOSTS"
+	keyContainerWorkspace = "TERMOTE_CONTAINER_WORKSPACE"
 )
 
 func parseUnixConfig(data []byte, key func() string) (*savedConfig, error) {
@@ -113,14 +197,13 @@ func parseUnixConfig(data []byte, key func() string) (*savedConfig, error) {
 		if !ok {
 			continue
 		}
-		// 0.x read values with `tr -d '"'`.
+		// Quotes are dropped, never interpreted.
 		kv[k] = strings.ReplaceAll(v, `"`, "")
 	}
 	if err := sc.Err(); err != nil {
 		return nil, err
 	}
 	cfg := &savedConfig{
-		Mode:             kv[keyMode],
 		LAN:              kv[keyLAN] == "true",
 		NoAuth:           kv[keyNoAuth] == "true",
 		Tailscale:        kv[keyTailscale],
@@ -128,11 +211,20 @@ func parseUnixConfig(data []byte, key func() string) (*savedConfig, error) {
 		AllowHosts:       splitHosts(kv[keyAllowedHosts]),
 		HerdrAllowNoAuth: kv[keyHerdrAllowNoAuth] == "true",
 	}
-	if p, err := strconv.Atoi(kv[keyPort]); err == nil {
-		cfg.Port = p
+	cfg.Port, _ = strconv.Atoi(kv[keyPort])
+	if _, ok := kv[keyContainerPort]; ok {
+		cc := &containerConfig{
+			LAN:        kv[keyContainerLAN] == "true",
+			NoAuth:     kv[keyContainerNoAuth] == "true",
+			Tailscale:  kv[keyContainerTailscale],
+			AllowHosts: splitHosts(kv[keyContainerHosts]),
+			Workspace:  kv[keyContainerWorkspace],
+		}
+		cc.Port, _ = strconv.Atoi(kv[keyContainerPort])
+		cfg.Container = cc
 	}
 	if enc := kv[keySavedPass]; enc != "" {
-		pass, err := decryptSavedPassword(enc, key())
+		pass, err := decryptSavedPassword(enc, kv[keySavedPassMAC], key())
 		if err != nil {
 			cfg.PasswordUnreadable = true
 		} else {
@@ -143,46 +235,68 @@ func parseUnixConfig(data []byte, key func() string) (*savedConfig, error) {
 }
 
 func formatUnixConfig(cfg savedConfig, key string) ([]byte, error) {
-	enc := ""
+	enc, mac := "", ""
 	if cfg.Password != "" {
 		var err error
 		if enc, err = encryptOpenSSL(cfg.Password, key); err != nil {
 			return nil, err
 		}
+		mac = passwordMAC(enc, key)
 	}
-	for _, v := range []string{cfg.Mode, cfg.Tailscale, cfg.Mux, strings.Join(cfg.AllowHosts, ",")} {
+	values := []string{cfg.Tailscale, cfg.Mux, strings.Join(cfg.AllowHosts, ",")}
+	if cc := cfg.Container; cc != nil {
+		values = append(values, cc.Tailscale, strings.Join(cc.AllowHosts, ","), cc.Workspace)
+	}
+	for _, v := range values {
 		if strings.ContainsAny(v, "\"\n\r") {
 			return nil, fmt.Errorf("invalid config value %q", v)
 		}
 	}
 	var b strings.Builder
 	w := func(k, v string) { fmt.Fprintf(&b, "%s=\"%s\"\n", k, v) }
-	b.WriteString("# Termote config (auto-generated)\n")
-	w(keyMode, cfg.Mode)
+	b.WriteString("# Termote config (written by termote start)\n")
 	w(keyLAN, strconv.FormatBool(cfg.LAN))
 	w(keyNoAuth, strconv.FormatBool(cfg.NoAuth))
 	w(keyPort, strconv.Itoa(cfg.Port))
 	w(keyTailscale, cfg.Tailscale)
 	w(keySavedPass, enc)
+	w(keySavedPassMAC, mac)
 	w(keyMux, cfg.Mux)
 	w(keyAllowedHosts, strings.Join(cfg.AllowHosts, ","))
 	w(keyHerdrAllowNoAuth, strconv.FormatBool(cfg.HerdrAllowNoAuth))
+	if cc := cfg.Container; cc != nil {
+		w(keyContainerLAN, strconv.FormatBool(cc.LAN))
+		w(keyContainerNoAuth, strconv.FormatBool(cc.NoAuth))
+		w(keyContainerPort, strconv.Itoa(cc.Port))
+		w(keyContainerTailscale, cc.Tailscale)
+		w(keyContainerHosts, strings.Join(cc.AllowHosts, ","))
+		w(keyContainerWorkspace, cc.Workspace)
+	}
 	return []byte(b.String()), nil
 }
 
-// windowsConfigFile mirrors the ConvertTo-Json output of 0.x termote.ps1. The
-// 0.x Ttyd key is read and dropped.
+// windowsConfigFile is the JSON config on Windows; the password is DPAPI
+// encrypted for the current user.
 type windowsConfigFile struct {
-	Mode             string   `json:"Mode"`
-	Lan              bool     `json:"Lan"`
-	NoAuth           bool     `json:"NoAuth"`
-	Port             int      `json:"Port"`
-	Tailscale        string   `json:"Tailscale"`
-	EncryptedPass    string   `json:"EncryptedPass"`
-	Mux              string   `json:"Mux,omitempty"`
-	AllowHost        []string `json:"AllowHost,omitempty"`
-	HerdrAllowNoAuth bool     `json:"HerdrAllowNoAuth,omitempty"`
-	SavedAt          string   `json:"SavedAt"`
+	Lan              bool                 `json:"Lan"`
+	NoAuth           bool                 `json:"NoAuth"`
+	Port             int                  `json:"Port"`
+	Tailscale        string               `json:"Tailscale"`
+	EncryptedPass    string               `json:"EncryptedPass"`
+	Mux              string               `json:"Mux,omitempty"`
+	AllowHost        []string             `json:"AllowHost,omitempty"`
+	HerdrAllowNoAuth bool                 `json:"HerdrAllowNoAuth,omitempty"`
+	Container        *windowsContainerCfg `json:"Container,omitempty"`
+	SavedAt          string               `json:"SavedAt"`
+}
+
+type windowsContainerCfg struct {
+	Lan       bool     `json:"Lan"`
+	NoAuth    bool     `json:"NoAuth"`
+	Port      int      `json:"Port"`
+	Tailscale string   `json:"Tailscale,omitempty"`
+	AllowHost []string `json:"AllowHost,omitempty"`
+	Workspace string   `json:"Workspace,omitempty"`
 }
 
 // dpapiProtect and dpapiUnprotect encrypt for the current Windows user; they
@@ -200,7 +314,6 @@ func parseWindowsConfig(data []byte) (*savedConfig, error) {
 		return nil, fmt.Errorf("read config: %w", err)
 	}
 	cfg := &savedConfig{
-		Mode:             f.Mode,
 		LAN:              f.Lan,
 		NoAuth:           f.NoAuth,
 		Port:             f.Port,
@@ -208,6 +321,9 @@ func parseWindowsConfig(data []byte) (*savedConfig, error) {
 		Mux:              f.Mux,
 		AllowHosts:       f.AllowHost,
 		HerdrAllowNoAuth: f.HerdrAllowNoAuth,
+	}
+	if cc := f.Container; cc != nil {
+		cfg.Container = &containerConfig{LAN: cc.Lan, NoAuth: cc.NoAuth, Port: cc.Port, Tailscale: cc.Tailscale, AllowHosts: cc.AllowHost, Workspace: cc.Workspace}
 	}
 	if f.EncryptedPass != "" {
 		blob, err := base64.StdEncoding.DecodeString(f.EncryptedPass)
@@ -226,7 +342,6 @@ func parseWindowsConfig(data []byte) (*savedConfig, error) {
 
 func formatWindowsConfig(cfg savedConfig, now time.Time) ([]byte, error) {
 	f := windowsConfigFile{
-		Mode:             cfg.Mode,
 		Lan:              cfg.LAN,
 		NoAuth:           cfg.NoAuth,
 		Port:             cfg.Port,
@@ -236,6 +351,9 @@ func formatWindowsConfig(cfg savedConfig, now time.Time) ([]byte, error) {
 		HerdrAllowNoAuth: cfg.HerdrAllowNoAuth,
 		SavedAt:          now.Format(time.RFC3339),
 	}
+	if cc := cfg.Container; cc != nil {
+		f.Container = &windowsContainerCfg{Lan: cc.LAN, NoAuth: cc.NoAuth, Port: cc.Port, Tailscale: cc.Tailscale, AllowHost: cc.AllowHosts, Workspace: cc.Workspace}
+	}
 	if cfg.Password != "" {
 		blob, err := dpapiProtect([]byte(cfg.Password))
 		if err != nil {
@@ -244,28 +362,6 @@ func formatWindowsConfig(cfg savedConfig, now time.Time) ([]byte, error) {
 		f.EncryptedPass = base64.StdEncoding.EncodeToString(blob)
 	}
 	return json.MarshalIndent(f, "", "    ")
-}
-
-// machineKey is the 0.x passphrase: sha256 hex of "<hostname>-<username>-termote",
-// where hostname and username come from the `hostname` and `whoami` commands
-// (their output can differ from the Go APIs, e.g. on macOS).
-func (c *cli) machineKey() string {
-	host := c.commandLine("hostname")
-	if host == "" {
-		host, _ = os.Hostname()
-	}
-	name := c.commandLine("whoami")
-	if name == "" {
-		if u, err := user.Current(); err == nil {
-			name = u.Username
-		}
-	}
-	return deriveKey(host, name)
-}
-
-func deriveKey(host, name string) string {
-	sum := sha256.Sum256([]byte(host + "-" + name + "-termote"))
-	return hex.EncodeToString(sum[:])
 }
 
 // commandLine returns the first output line of a command, or "".
@@ -337,20 +433,33 @@ func decryptOpenSSL(data []byte, pass string) (string, error) {
 	return string(buf[:len(buf)-pad]), nil
 }
 
-// decryptSavedPassword reads TERMOTE_SAVED_PASS: the openssl format, or the
-// plain base64 an early 0.0.x wrote.
-func decryptSavedPassword(enc, key string) (string, error) {
+// passwordMAC authenticates the encrypted password with the key: CBC alone
+// only checks padding, so a wrong or missing key would "decrypt" to garbage
+// about once in 200 tries instead of failing.
+func passwordMAC(enc, key string) string {
+	m := hmac.New(sha256.New, []byte(key))
+	m.Write([]byte("termote-saved-pass\x00" + enc))
+	return hex.EncodeToString(m.Sum(nil))
+}
+
+// decryptSavedPassword reads TERMOTE_SAVED_PASS (the openssl format) after
+// checking its MAC. Without a key, or with a MAC that does not match, the
+// password is unreadable.
+func decryptSavedPassword(enc, mac, key string) (string, error) {
+	if key == "" {
+		return "", errBadCiphertext
+	}
+	if !hmac.Equal([]byte(strings.ToLower(mac)), []byte(passwordMAC(enc, key))) {
+		return "", errBadCiphertext
+	}
 	data, err := base64.StdEncoding.DecodeString(enc)
 	if err != nil {
 		return "", errBadCiphertext
 	}
-	if !bytes.HasPrefix(data, []byte(opensslMagic)) {
-		return string(data), nil
-	}
 	return decryptOpenSSL(data, key)
 }
 
-// generatePassword returns 12 random alphanumerics, like 0.x.
+// generatePassword returns 12 random alphanumerics.
 func generatePassword() (string, error) {
 	const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 	b := make([]byte, 12)

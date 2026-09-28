@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -16,26 +17,21 @@ import (
 	"time"
 )
 
-func TestLogsTailCleanAndRemovedTtyd(t *testing.T) {
+func TestLogsTailAndClean(t *testing.T) {
 	tc := newTestCLI(t, "linux")
 	var lines []string
 	for i := 1; i <= 60; i++ {
 		lines = append(lines, "line "+strconv.Itoa(i))
 	}
 	writeFile(t, filepath.Join(tc.logDir(), "termote.log"), strings.Join(lines, "\n")+"\n")
-	writeFile(t, filepath.Join(tc.logDir(), "ttyd.log"), "old ttyd\n")
+	writeFile(t, filepath.Join(tc.logDir(), "other.log"), "other service\n")
 
 	if code := tc.main([]string{"logs", "server", "3"}); code != 0 {
 		t.Fatal(tc.stderr.String())
 	}
 	out := tc.stdout.String()
-	if !strings.Contains(out, "line 58\nline 59\nline 60") || strings.Contains(out, "line 57") || strings.Contains(out, "old ttyd") {
+	if !strings.Contains(out, "line 58\nline 59\nline 60") || strings.Contains(out, "line 57") || strings.Contains(out, "other service") {
 		t.Fatalf("tail output:\n%s", out)
-	}
-	tc.stdout.Reset()
-	tc.main([]string{"logs", "ttyd"})
-	if !strings.Contains(tc.stdout.String(), "removed in 1.0.0") {
-		t.Fatalf("ttyd message: %q", tc.stdout.String())
 	}
 	tc.stdout.Reset()
 	tc.main([]string{"logs", "clean"})
@@ -110,47 +106,61 @@ func TestLinkAndUnlinkUnix(t *testing.T) {
 		t.Skip("symlinks need privileges on Windows")
 	}
 	tc := newTestCLI(t, "linux")
-	old := systemLinkPath
-	systemLinkPath = filepath.Join(t.TempDir(), "bin", "termote")
-	t.Cleanup(func() { systemLinkPath = old })
-
+	link := filepath.Join(tc.userBinDir(), "termote")
 	if code := tc.main([]string{"link"}); code != 0 {
 		t.Fatal(tc.stderr.String())
 	}
-	if target, err := os.Readlink(systemLinkPath); err != nil || target != tc.shimPath() {
+	if target, err := os.Readlink(link); err != nil || target != tc.shimPath() {
 		t.Fatalf("link -> %q, %v", target, err)
 	}
 	tc.stdout.Reset()
 	tc.main([]string{"link"})
-	if out := tc.stdout.String(); !strings.Contains(out, "Already linked") || strings.Contains(out, "Created symlink") {
-		t.Fatalf("relink output %q", tc.stdout.String())
+	if out := tc.stdout.String(); !strings.Contains(out, "Already linked") || !strings.Contains(out, "is not in PATH") {
+		t.Fatalf("relink output %q", out)
 	}
 
-	// A regular file in the way is never replaced; ~/.local/bin is used.
-	os.Remove(systemLinkPath)
-	writeFile(t, systemLinkPath, "user file")
+	// An install links its current version, and relinking moves the link.
+	tc.exe = filepath.Join(tc.versionsDir(), "1.0.0", "bin", "termote")
 	tc.main([]string{"link"})
-	if b, _ := os.ReadFile(systemLinkPath); string(b) != "user file" {
-		t.Fatal("regular file overwritten")
+	if target, _ := os.Readlink(link); target != tc.currentExe() {
+		t.Fatalf("install link -> %q", target)
 	}
-	userLink := filepath.Join(tc.userBinDir(), "termote")
-	if target, _ := os.Readlink(userLink); target != tc.shimPath() {
-		t.Fatalf("fallback link -> %q", target)
-	}
-
 	tc.main([]string{"unlink"})
-	if _, err := os.Lstat(userLink); err == nil {
+	if _, err := os.Lstat(link); err == nil {
 		t.Fatal("symlink not removed")
 	}
-	if b, _ := os.ReadFile(systemLinkPath); string(b) != "user file" {
+
+	// A regular file in the way is never replaced nor removed.
+	writeFile(t, link, "user file")
+	if code := tc.main([]string{"link"}); code == 0 {
+		t.Fatal("link replaced a regular file")
+	}
+	tc.main([]string{"unlink"})
+	if b, _ := os.ReadFile(link); string(b) != "user file" {
 		t.Fatal("unlink removed a file that is not ours")
 	}
 }
 
-func TestLinkWindowsWritesCmdAndDropsOldCopy(t *testing.T) {
+func TestLinkWindowsInstallAddsBinToPath(t *testing.T) {
 	tc := newTestCLI(t, "windows")
-	cmdFile, legacy := tc.windowsLinkFiles()
-	writeFile(t, legacy, "<#\n.SYNOPSIS\n    Termote CLI - unified management tool for Windows\n#>")
+	tc.exe = filepath.Join(tc.versionsDir(), "1.0.0", "bin", "termote.exe")
+	if code := tc.main([]string{"link"}); code != 0 {
+		t.Fatal(tc.stderr.String())
+	}
+	if b, _ := os.ReadFile(tc.currentExe()); string(b) != windowsLauncher {
+		t.Fatal("termote.cmd launcher not written")
+	}
+	if !tc.runner.called("powershell -NoProfile -Command $d='" + filepath.Dir(tc.currentExe())) {
+		t.Fatalf("PATH not updated: %v", tc.runner.calls)
+	}
+	if s := userPathScript(`C:\a'b`, false); strings.Contains(s, "$parts += $d") || !strings.Contains(s, "C:\\a''b") {
+		t.Fatalf("remove script %q", s)
+	}
+}
+
+func TestLinkWindowsWritesCmd(t *testing.T) {
+	tc := newTestCLI(t, "windows")
+	cmdFile := tc.windowsLinkFile()
 	if code := tc.main([]string{"link"}); code != 0 {
 		t.Fatal(tc.stderr.String())
 	}
@@ -158,19 +168,20 @@ func TestLinkWindowsWritesCmdAndDropsOldCopy(t *testing.T) {
 	if err != nil || !strings.Contains(string(b), `-File "`+tc.shimPath()+`" %*`) {
 		t.Fatalf("cmd wrapper %q %v", b, err)
 	}
-	if fileExists(legacy) {
-		t.Fatal("0.x termote.ps1 copy kept")
-	}
 	tc.main([]string{"unlink"})
 	if fileExists(cmdFile) {
 		t.Fatal("termote.cmd not removed")
 	}
 }
 
-func TestHealth(t *testing.T) {
+func TestStatus(t *testing.T) {
 	tc := newTestCLI(t, "linux")
 	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusUnauthorized)
+		if u, p, ok := r.BasicAuth(); !ok || u != adminUser || p != "p" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		fmt.Fprint(w, `{"status":"ok","version":"1.0.0","backend":"herdr","pid":4242}`)
 	}))
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -180,18 +191,26 @@ func TestHealth(t *testing.T) {
 	srv.Start()
 	defer srv.Close()
 	port := ln.Addr().(*net.TCPAddr).Port
-	tc.saveConfig(savedConfig{Mode: "native", Port: port, Mux: "herdr", Password: "p"})
+	tc.saveConfig(savedConfig{Port: port, Mux: "herdr", LAN: true, Tailscale: "box.ts.net", Password: "p"})
 
-	if code := tc.main([]string{"health"}); code != 0 {
+	if code := tc.main([]string{"status"}); code != 0 {
 		t.Fatalf("code %d\n%s", code, tc.stdout.String())
 	}
 	out := tc.stdout.String()
-	if !strings.Contains(out, "running (auth)") || !strings.Contains(out, "Backend: herdr") || strings.Contains(out, "ttyd") {
-		t.Fatalf("health output:\n%s", out)
+	for _, want := range []string{"Version: v1.0.0", "Backend: herdr", "PID: 4242", "Bind: 0.0.0.0 (LAN)", "Auth: on", "Tailscale: https://box.ts.net:443", "Supervisor: none"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("status misses %q:\n%s", want, out)
+		}
+	}
+	// A wrong saved password still shows the server as running.
+	tc.saveConfig(savedConfig{Port: port, Password: "other"})
+	tc.stdout.Reset()
+	if code := tc.main([]string{"health"}); code != 0 || !strings.Contains(tc.stdout.String(), "not accepted") {
+		t.Fatalf("wrong password: code %d\n%s", code, tc.stdout.String())
 	}
 	srv.Close()
 	tc.stdout.Reset()
-	if code := tc.main([]string{"health"}); code != 1 || !strings.Contains(tc.stdout.String(), "not running") {
+	if code := tc.main([]string{"status"}); code != 1 || !strings.Contains(tc.stdout.String(), "not running") {
 		t.Fatalf("stopped server: code %d\n%s", code, tc.stdout.String())
 	}
 }
@@ -202,22 +221,22 @@ func TestMenu(t *testing.T) {
 		t.Fatalf("non-interactive menu code %d", code)
 	}
 	tc.interactive = true
-	tc.saveConfig(savedConfig{Mode: "native", Password: "From-Menu"})
-	tc.in = bufio.NewReader(strings.NewReader("x\n9\n7\n"))
+	tc.saveConfig(savedConfig{Password: "From-Menu"})
+	tc.in = bufio.NewReader(strings.NewReader("x\n99\n8\n"))
 	tc.stdout.Reset()
 	if code := tc.main([]string{"menu"}); code != 0 || !strings.Contains(tc.stdout.String(), "Password: From-Menu") {
 		t.Fatalf("code %d\n%s", code, tc.stdout.String())
 	}
 }
 
-func TestMenuInstallBuildsFreshInstall(t *testing.T) {
+func TestMenuStartPassesEveryAnswer(t *testing.T) {
 	tc := newTestCLI(t, "linux")
 	tc.interactive = true
-	// native, herdr, LAN yes, no-auth yes, confirm herdr no-auth, Tailscale no
-	tc.in = bufio.NewReader(strings.NewReader("1\n1\n2\ny\ny\ny\nn\n"))
+	// start, herdr, LAN yes, no-auth yes, confirm herdr no-auth, Tailscale no
+	tc.in = bufio.NewReader(strings.NewReader("1\n3\ny\ny\ny\nn\n"))
 	tc.procs = func() ([]procInfo, error) { t.Fatal("services stopped before preflight"); return nil, nil }
 	tc.main([]string{"menu"})
-	// herdr is missing from PATH, so install stops in preflight, which runs
+	// herdr is missing from PATH, so start stops in preflight, which runs
 	// only once the herdr + no-auth combination passed validation.
 	if !strings.Contains(tc.stderr.String(), "herdr not found") {
 		t.Fatalf("stderr %q\nstdout %s", tc.stderr.String(), tc.stdout.String())

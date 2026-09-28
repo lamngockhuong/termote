@@ -1,136 +1,129 @@
 ---
 title: Bắt đầu
-description: Hướng dẫn bắt đầu nhanh với Termote
+description: Cài Termote bằng hai lệnh trên Linux, macOS hoặc Windows
 ---
 
-import { Aside, Steps } from "@astrojs/starlight/components";
+import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
+
+Termote chỉ là một file binary, trong đó có sẵn PWA, luồng terminal, API và phần đăng nhập. Bạn cài nó bằng một
+lệnh, sau đó `termote start` đăng ký nó thành dịch vụ của người dùng hiện tại rồi khởi động.
 
 ## Yêu cầu
 
-**macOS/Linux:**
+- **Linux / macOS:** [tmux](https://github.com/tmux/tmux) (`sudo apt install tmux`, `brew install tmux`), hoặc
+  một server [Herdr](/vi/usage/sessions/) đang chạy. Cần thêm `curl`, `tar` và `sha256sum` (hoặc `shasum`); phần
+  lớn hệ thống đã có sẵn các lệnh này.
+- **Windows:** [psmux](https://github.com/psmux/psmux) (`winget install psmux`) và PowerShell.
+- **Chỉ cho chế độ container:** Podman hoặc Docker. Xem trang [Container](/vi/installation/docker/).
 
-- Docker hoặc Podman (cho chế độ Container)
-- hoặc tmux + Go (cho chế độ Native); termote tự truyền luồng terminal, không cần `ttyd`
-- Tùy chọn: dùng [Herdr](/vi/usage/sessions/) thay cho tmux (chỉ ở chế độ native)
+Không cần sudo hay quyền quản trị: mọi thứ đều nằm trong thư mục home của bạn.
 
-**Windows:**
+## Cài đặt
 
-- Docker Desktop hoặc Podman Desktop (cho chế độ Container — khuyến nghị)
-- hoặc [psmux](https://github.com/psmux/psmux) (cho chế độ Native): `winget install psmux`
+<Tabs>
+  <TabItem label="Linux / macOS">
 
-<Aside type="tip" title="Windows">
-  Cả chế độ Container và Native đều được hỗ trợ đầy đủ trên Windows. Vui lòng
-  báo cáo lỗi tại
-  [GitHub](https://github.com/lamngockhuong/termote/issues).
-</Aside>
+    ```bash
+    curl -fsSL https://termote.ohnice.app/install.sh | sh
+    termote start
+    ```
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
 
-## Cài đặt một dòng
-
-**macOS/Linux:**
-
-```bash
-# Mặc định chế độ native (truy cập binary host như claude, gh, v.v.)
-curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
-
-# Với chế độ rõ ràng
-curl -fsSL .../get.sh | bash -s -- --container --lan
-curl -fsSL .../get.sh | bash -s -- --native --tailscale myhost
-
-# Cập nhật tự động với config đã lưu
-curl -fsSL .../get.sh | bash -s -- --update
-
-# Cài đặt phiên bản cụ thể
-curl -fsSL .../get.sh | bash -s -- --version 0.0.4
-```
-
-**Windows (PowerShell):**
-
-> **Lưu ý:** Nếu hệ thống chặn chạy script, hãy chạy lệnh này trước:
-> `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned`
-
-```powershell
-# Mặc định chế độ native (psmux)
-irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
-
-# Với chế độ rõ ràng
-$env:TERMOTE_MODE = "container"; irm .../get.ps1 | iex
-```
-
-<Aside type="tip">
-  Script cài đặt tự động phát hiện môi trường và chọn chế độ triển khai phù hợp
-  nhất.
-</Aside>
-
-## Bắt đầu nhanh
+    ```powershell
+    irm https://termote.ohnice.app/install.ps1 | iex
+    termote start
+    ```
+  </TabItem>
+</Tabs>
 
 <Steps>
-1. Clone repository
-   ```bash
-   git clone https://github.com/lamngockhuong/termote.git
-   cd termote
-   ```
+1. Trình cài đặt chọn bản 1.x ổn định mới nhất, tải file nén cho nền tảng của bạn, kiểm tra `.sha256` của nó
+   (luôn kiểm tra, không có cách bỏ qua) rồi đưa lệnh `termote` vào PATH. Nó không khởi động gì cả.
 
-2. Triển khai với Container (đơn giản nhất)
+2. `termote start` dò tìm backend terminal, tạo mật khẩu admin và in ra một lần, đăng ký server với trình quản
+   lý dịch vụ của hệ điều hành rồi khởi động nó. Xem
+   [`termote start` làm những gì](/vi/installation/native/#termote-start-làm-những-gì).
 
-   ```bash
-   ./scripts/termote.sh install container
-   ```
-
-3. Truy cập tại http://localhost:7680
+3. Mở URL được in ra, mặc định là http://localhost:7680 (Windows: http://localhost:7690), rồi đăng nhập bằng
+   `admin` với mật khẩu đó. Quên mật khẩu thì chạy `termote show-password`.
 
 </Steps>
 
-## Các lệnh CLI
-
-**macOS/Linux:**
-
-```bash
-./scripts/termote.sh                    # Menu tương tác
-./scripts/termote.sh install container  # Chế độ Container
-./scripts/termote.sh install native     # Chế độ Native
-./scripts/termote.sh update             # Cập nhật lên phiên bản mới nhất
-./scripts/termote.sh update --version 0.0.9  # Cập nhật phiên bản cụ thể
-./scripts/termote.sh uninstall all      # Gỡ cài đặt tất cả
-./scripts/termote.sh health             # Kiểm tra sức khỏe dịch vụ
-./scripts/termote.sh show-password      # In mật khẩu admin đã lưu
-./scripts/termote.sh link               # Tạo lệnh 'termote' toàn cục
-./scripts/termote.sh unlink             # Xóa lệnh toàn cục
-```
-
-**Windows (PowerShell):**
-
-```powershell
-.\scripts\termote.ps1                    # Menu tương tác
-.\scripts\termote.ps1 install container  # Chế độ Container (Docker Desktop)
-.\scripts\termote.ps1 install native     # Chế độ Native (psmux)
-.\scripts\termote.ps1 update             # Cập nhật lên phiên bản mới nhất
-.\scripts\termote.ps1 update -Version 0.0.9  # Cập nhật phiên bản cụ thể
-.\scripts\termote.ps1 logs follow        # Tail toàn bộ logs realtime
-.\scripts\termote.ps1 uninstall all      # Gỡ cài đặt tất cả
-.\scripts\termote.ps1 health             # Kiểm tra sức khỏe dịch vụ
-.\scripts\termote.ps1 show-password      # In mật khẩu admin đã lưu
-.\scripts\termote.ps1 link               # Tạo lệnh 'termote' toàn cục
-.\scripts\termote.ps1 unlink             # Xóa lệnh toàn cục
-```
-
 <Aside type="tip">
-  Sau khi chạy `link`, bạn có thể dùng `termote` từ bất kỳ đâu:
-  ```bash
-  # macOS/Linux
-  termote health
-  termote install native --lan
-  ```
-  ```powershell
-  # Windows
-  termote health
-  termote install native -Lan
-  ```
-
+  Nếu vừa cài xong mà chưa gọi được `termote`, hãy mở terminal mới. Trên Linux/macOS, khi `~/.local/bin` chưa có
+  trong PATH, trình cài đặt in ra dòng `export PATH=...` để bạn thêm vào.
 </Aside>
+
+### Cố định phiên bản hoặc sửa bản cài
+
+Đặt `TERMOTE_VERSION` để cài đúng một bản phát hành (`X.Y.Z`, hoặc `X.Y.Z-rc.N` cho bản thử nghiệm):
+
+<Tabs>
+  <TabItem label="Linux / macOS">
+
+    ```bash
+    curl -fsSL https://termote.ohnice.app/install.sh | TERMOTE_VERSION=1.0.0 sh
+    ```
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+
+    ```powershell
+    $env:TERMOTE_VERSION='1.0.0'; irm https://termote.ohnice.app/install.ps1 | iex
+    ```
+  </TabItem>
+</Tabs>
+
+Khi không có `TERMOTE_VERSION`, trình cài đặt để nguyên bản cài hiện có và nhắc bạn chạy `termote update`. Khi
+có biến này, nó đặt phiên bản đó cạnh bản hiện có rồi chuyển sang dùng nó. Đây cũng là cách cứu một bản cài
+không còn chạy được. Cấu hình của bạn được giữ nguyên trong cả hai trường hợp.
+
+`GH_TOKEN` hoặc `GITHUB_TOKEN`, nếu được đặt, chỉ nâng giới hạn gọi GitHub API mà trình cài đặt dùng để tìm bản
+mới nhất.
+
+<Aside type="caution" title="Chuyển từ Termote 0.x">
+  Không có đường nâng cấp từ 0.x: bản 1.0 không đọc cấu hình hay bất cứ thứ gì 0.x để lại. Hãy gỡ 0.x trước
+  theo trang lưu trữ [0.x native](/vi/0.x/installation/native/#gỡ-cài-đặt) hoặc
+  [0.x container](/vi/0.x/installation/docker/#gỡ-cài-đặt), rồi cài 1.0 như trên.
+</Aside>
+
+## Các lệnh
+
+Cờ có cùng cú pháp trên mọi hệ điều hành, kể cả PowerShell (`termote start --lan`).
+
+| Lệnh                      | Chức năng                                                                     |
+| ------------------------- | ----------------------------------------------------------------------------- |
+| `termote start [options]` | Lưu các tùy chọn, đăng ký dịch vụ và khởi động nó                             |
+| `termote stop`            | Dừng server (nó tự chạy lại ở lần đăng nhập sau)                              |
+| `termote restart`         | Dừng rồi khởi động lại với các tùy chọn đã lưu                                |
+| `termote status`          | Hiện thông tin server đang chạy báo về (tên khác: `health`)                   |
+| `termote logs [service]`  | Xem log: `server`, `all` (mặc định), `follow`, `clean`                        |
+| `termote show-password`   | Hiện mật khẩu admin đã lưu                                                    |
+| `termote update`          | Cập nhật lên bản mới nhất, quay về bản cũ nếu bản mới không chạy được         |
+| `termote uninstall`       | Gỡ dịch vụ, lệnh và bản cài (cấu hình và log vẫn còn)                         |
+| `termote container <cmd>` | Chạy server trong container: `up`, `down`, `logs [-f]`, `status`             |
+| `termote link` / `unlink` | Tạo hoặc xóa lệnh `termote` trong `~/.local/bin`                              |
+| `termote version`         | Hiện phiên bản                                                                |
+| `termote serve`           | Chạy server ngay trong terminal hiện tại (dịch vụ cũng chạy lệnh này)         |
+| `termote`                 | Menu tương tác                                                                |
+
+`termote help` in ra danh sách này kèm mọi tùy chọn. Lệnh cũ `install` đã bị bỏ: gõ nó thì chỉ nhận
+lời nhắc dùng `termote start` và `termote container up`.
+
+## Vị trí các file
+
+| Nội dung        | Linux / macOS                                                  | Windows                                                    |
+| --------------- | -------------------------------------------------------------- | ---------------------------------------------------------- |
+| Thư mục cài     | `~/.local/share/termote` (`$XDG_DATA_HOME/termote`)            | `%LOCALAPPDATA%\termote`                                   |
+| Các phiên bản   | `versions/<v>/bin/termote`                                     | `versions\<v>\bin\termote.exe`                             |
+| Bản đang dùng   | liên kết `current` trỏ tới `versions/<v>`                      | `current.txt` cùng trình khởi chạy `bin\termote.cmd`       |
+| Lệnh            | `~/.local/bin/termote`                                         | `%LOCALAPPDATA%\termote\bin`, được thêm vào PATH người dùng |
+| Cấu hình        | `~/.config/termote/config` và `secret` (`$XDG_CONFIG_HOME`)    | `%APPDATA%\termote\config.json` (mật khẩu mã hóa bằng DPAPI) |
+| Log, file PID   | `~/.local/state/termote/` (`$XDG_STATE_HOME`)                  | `%LOCALAPPDATA%\termote\state`                             |
 
 ## Tiếp theo
 
-- [Cài đặt Container](/vi/installation/docker/) - Thiết lập container đầy đủ
-- [Cài đặt Native](/vi/installation/native/) - Truy cập binary host
+- [Native](/vi/installation/native/) - Tùy chọn khởi động, dịch vụ, cập nhật và gỡ cài đặt
+- [Container](/vi/installation/docker/) - Chạy server trong Podman hoặc Docker
 - [Tailscale HTTPS](/vi/installation/tailscale/) - Truy cập từ xa an toàn
 - [Cử chỉ di động](/vi/usage/gestures/) - Điều khiển cảm ứng

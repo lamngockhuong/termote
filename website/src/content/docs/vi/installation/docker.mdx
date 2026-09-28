@@ -1,314 +1,167 @@
 ---
 title: Cài đặt Container
-description: Triển khai container tất-cả-trong-một
+description: Chạy server Termote trong Podman hoặc Docker bằng termote container up
 ---
 
-import { Aside, Steps, Tabs, TabItem } from "@astrojs/starlight/components";
+import { Aside, Steps } from "@astrojs/starlight/components";
 
-Một container duy nhất gồm termote (PWA + luồng terminal + API) và tmux. Không có tiến
-trình terminal riêng: chính termote truyền luồng terminal tới xterm.js trong PWA. Ở chế độ
-container không thể dùng Herdr thay cho tmux.
+`termote container up` chạy server trong container thay vì trên máy: termote (PWA + luồng terminal + API) và tmux
+được đóng gói chung, kèm một thư mục workspace được mount từ máy. Hãy dùng cách này khi các terminal không cần
+công cụ trên máy (như `claude` hay `git` đã cài trên máy). Trong container không dùng được backend Herdr.
+
+## Yêu cầu
+
+- Podman (được ưu tiên khi có cả hai) hoặc Docker, kể cả Docker Desktop hay Podman Desktop trên macOS và
+  Windows.
+- Lệnh `termote`, cài như ở trang [Bắt đầu](/vi/getting-started/). Không cần chạy `termote start`.
 
 ## Bắt đầu nhanh
 
 <Steps>
-1. Chạy lệnh deploy
+1. Khởi động container
 
-   <Tabs>
-     <TabItem label="Unix (macOS/Linux)">
-       ```bash
-       ./scripts/termote.sh install container
-       ```
-     </TabItem>
-     <TabItem label="Windows (PowerShell)">
-       ```powershell
-       .\scripts\termote.ps1 install container
-       ```
-     </TabItem>
-   </Tabs>
+   ```bash
+   termote container up
+   ```
 
-2. Truy cập tại http://localhost:7680
+2. Mở http://localhost:7680 và đăng nhập bằng `admin` với mật khẩu được in ra.
 
-3. (Tùy chọn) Mở ra LAN
+3. (Tùy chọn) Mở cho mạng LAN; tùy chọn này được lưu như mọi tùy chọn khác
 
-   <Tabs>
-     <TabItem label="Unix (macOS/Linux)">
-       ```bash
-       ./scripts/termote.sh install container --lan
-       ```
-     </TabItem>
-     <TabItem label="Windows (PowerShell)">
-       ```powershell
-       .\scripts\termote.ps1 install container -Lan
-       ```
-     </TabItem>
-   </Tabs>
+   ```bash
+   termote container up --lan
+   ```
 
 </Steps>
 
-## Docker Run
+## Cách container chạy
 
-```bash
-# Cơ bản (tự động tạo credentials, kiểm tra logs: docker logs termote)
-docker run -d --name termote -p 7680:7680 ghcr.io/lamngockhuong/termote:latest
+- Container dùng `ghcr.io/lamngockhuong/termote:<version>`, trong đó `<version>` là phiên bản của binary
+  `termote`, nên container luôn khớp với lệnh đã khởi động nó. `container up` tải bản đó về, thay container
+  `termote` cũ nếu có rồi chờ tới khi server trả lời.
+- Container chạy dưới user và group của bạn, với `--restart unless-stopped`, và mount thư mục workspace (mặc định
+  `~/termote-workspace`, tự tạo nếu chưa có) vào `/workspace`. Nó cảnh báo khi workspace chứa thư mục nhạy cảm
+  như `.ssh` hay `.aws`.
+- Mật khẩu và cấu hình đi qua biến môi trường của tiến trình `docker`/`podman` (`-e TÊN`, không kèm giá trị), nên
+  chúng không bao giờ xuất hiện trên dòng lệnh hay nằm trong file nào trên đĩa (`docker inspect` vẫn thấy, như với
+  mọi biến môi trường).
+- Cấu hình container được lưu riêng với các tùy chọn `termote start` của bản native, nhưng hai bên dùng chung mật
+  khẩu admin: mật khẩu mới (`--fresh`) áp dụng cho cả hai, và server native nhận nó ở lần `termote restart` tới.
+- Cổng mặc định của container là 7680. Nếu server native đang giữ cổng đó, `container up` từ chối và gợi ý dùng
+  `--port`.
+- Khi chạy từ thư mục mã nguồn clone bằng git, hoặc với `--build`, nó tự dựng `termote:local` từ Dockerfile
+  thay vì tải về.
 
-# Với credentials tùy chỉnh
-docker run -d --name termote -p 7680:7680 \
-  -e TERMOTE_USER=admin -e TERMOTE_PASS=secret \
-  ghcr.io/lamngockhuong/termote:latest
-
-# Không xác thực (chỉ dev local)
-docker run -d --name termote -p 7680:7680 \
-  -e NO_AUTH=true \
-  ghcr.io/lamngockhuong/termote:latest
-
-# Với lưu trữ
-docker run -d --name termote -p 7680:7680 \
-  -v termote-data:/home/termote \
-  ghcr.io/lamngockhuong/termote:latest
-```
+<Aside type="note" title="Sau khi khởi động lại máy">
+  Docker có tiến trình nền tự chạy lại container sau khi khởi động lại máy. Podman chạy dưới user thường thì không
+  có tiến trình nền đó, nên container vẫn dừng; muốn nó chạy lại sau mỗi lần khởi động, hãy chạy nó dưới dạng systemd unit
+  [Quadlet](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html).
+</Aside>
 
 ## Tùy chọn
 
-<Tabs>
-  <TabItem label="Unix (macOS/Linux)">
-    | Cờ                | Mô tả                                         |
-    | ----------------- | --------------------------------------------- |
-    | `--lan`           | Mở ra LAN (mặc định: localhost)               |
-    | `--no-auth`       | Tắt xác thực cơ bản                           |
-    | `--port <port>`   | Cổng tùy chỉnh (mặc định: 7680)               |
-    | `--allow-host <name>` | Cho phép thêm một giá trị header Host (lặp lại được) |
-    | `--fresh`         | Buộc nhập mật khẩu mới (bỏ qua config đã lưu) |
-    | `--update`        | Cập nhật tự động với config đã lưu            |
-    | `--version <ver>` | Cài đặt phiên bản cụ thể                      |
-  </TabItem>
-  <TabItem label="Windows (PowerShell)">
-    | Cờ                | Mô tả                                         |
-    | ----------------- | --------------------------------------------- |
-    | `-Lan`            | Mở ra LAN (mặc định: localhost)               |
-    | `-NoAuth`         | Tắt xác thực cơ bản                           |
-    | `-Port <port>`    | Cổng tùy chỉnh (mặc định: 7680)               |
-    | `-AllowHost <name>` | Cho phép thêm một giá trị header Host (lặp lại được) |
-    | `-Fresh`          | Buộc nhập mật khẩu mới (bỏ qua config đã lưu) |
+Giống `termote start`, mọi tùy chọn đều được lưu, cờ nào bạn không truyền thì giữ giá trị đã lưu, và tùy chọn kiểu
+bật/tắt được tắt bằng `=false`.
 
-    Cờ online installer: `$env:TERMOTE_UPDATE="true"` để cập nhật tự động.
-  </TabItem>
-</Tabs>
+| Tùy chọn                    | Mô tả                                                                  |
+| --------------------------- | ---------------------------------------------------------------------- |
+| `--port <port>`             | Cổng trên máy (mặc định 7680)                                          |
+| `--lan[=false]`             | Mở cho mạng LAN (mặc định: chỉ máy này)                                |
+| `--tailscale <host[:port]>` | Công khai qua [Tailscale HTTPS](/vi/installation/tailscale/) (mặc định 443) |
+| `--no-tailscale`            | Ngừng công khai qua Tailscale                                          |
+| `--no-auth[=false]`         | Tắt đăng nhập                                                          |
+| `--allow-host <name>`       | Cho phép thêm một tên trong header `Host` (lặp được, không có ký tự đại diện) |
+| `--remove-host <name>`      | Bỏ một tên đã cho phép (lặp được)                                      |
+| `--workspace <dir>`         | Thư mục được mount vào `/workspace` (mặc định `~/termote-workspace`)   |
+| `--fresh`                   | Đặt mật khẩu mới (dùng chung với server native)                        |
+| `--build`                   | Tự dựng từ mã nguồn clone bằng git thay vì tải về                      |
 
-<Aside type="note">
-  Chế độ container không hỗ trợ `--mux herdr`/`-Mux herdr`, vì Herdr chỉ chạy ở chế độ native.
+<Aside type="note" title="Windows và --lan">
+  Trên Windows, cổng của container chỉ mở trên localhost; `--lan` thêm một quy tắc chuyển tiếp cổng `netsh` và
+  một quy tắc tường lửa, nên Windows sẽ hỏi quyền quản trị. `container down` gỡ chúng đi.
 </Aside>
 
-<Aside type="tip">
-  Script tự động phát hiện `podman` hoặc `docker` - cả hai hoạt động giống nhau.
-</Aside>
-
-<Aside type="note">
-  Sử dụng chế độ Container khi bạn không cần truy cập binary host (như `claude`
-  hoặc `git`).
-</Aside>
-
-## Ngăn macOS Sleep
-
-macOS tự động sleep sau một khoảng thời gian không hoạt động, làm mất kết nối terminal từ xa — ngay cả khi container đang chạy. Dùng `caffeinate` để giữ máy luôn thức:
+## Quản lý container
 
 ```bash
-# Ngăn system sleep (chạy cho đến khi bạn nhấn Ctrl+C)
+termote container status    # is it running, and what the server reports
+termote container logs      # recent log lines
+termote container logs -f   # follow the logs (Ctrl+C to stop)
+termote container down      # remove the container (and its Tailscale mapping)
+```
+
+`termote stop`, `restart` và `uninstall` chỉ tác động lên server native; container có lệnh riêng.
+
+## Cập nhật
+
+`termote update` cập nhật lệnh, và phiên bản container đi theo lệnh. Chạy lại `container up` để container dùng
+bản mới, với cấu hình đã lưu:
+
+```bash
+termote update
+termote container up
+```
+
+## Ngăn macOS ngủ
+
+macOS tự động ngủ sau một thời gian không hoạt động, làm ngắt các phiên terminal từ xa, kể cả khi container đang chạy. Dùng `caffeinate` để giữ máy thức:
+
+```bash
+# Prevent system sleep (runs until you press Ctrl+C)
 caffeinate -s
 
-# Hoặc chạy nền
+# Or run in background
 caffeinate -s &
 
-# Dừng caffeinate nền
+# Stop background caffeinate
 pkill caffeinate
 ```
 
 <Aside type="tip">
-  Dùng `caffeinate -s` (chỉ ngăn system sleep) thay vì `-d` (ngăn tắt màn hình)
-  — bạn không cần màn hình sáng cho truy cập từ xa.
+  Dùng `caffeinate -s` (chỉ chặn hệ thống ngủ) thay vì `-d` (chặn màn hình tắt); truy cập từ xa không cần màn
+  hình bật.
 </Aside>
 
 ## Khắc phục sự cố
 
-### Chẩn đoán nhanh
-
-<Tabs>
-  <TabItem label="Unix (macOS/Linux)">
-    ```bash
-    ./scripts/termote.sh health   # Kiểm tra sức khỏe
-    docker ps -a | grep termote   # Kiểm tra trạng thái container
-    ```
-  </TabItem>
-  <TabItem label="Windows (PowerShell)">
-    ```powershell
-    .\scripts\termote.ps1 health   # Kiểm tra sức khỏe
-    docker ps -a | Select-String termote   # Kiểm tra trạng thái container
-    ```
-  </TabItem>
-</Tabs>
-
-### Xem logs
-
-```bash
-docker logs termote           # Xem logs
-docker logs -f termote        # Theo dõi logs (live)
-
-# Hoặc với podman:
-podman logs termote
-```
-
-### Container không khởi động
-
-<Tabs>
-  <TabItem label="Unix (macOS/Linux)">
-    ```bash
-    # Kiểm tra lỗi khởi động
-    docker logs termote
-
-    # Cổng đang dùng?
-    lsof -i :7680
-
-    # Dùng cổng khác
-    ./scripts/termote.sh install container --port 7690
-    ```
-  </TabItem>
-  <TabItem label="Windows (PowerShell)">
-    ```powershell
-    # Kiểm tra lỗi khởi động
-    docker logs termote
-
-    # Cổng đang dùng?
-    netstat -ano | Select-String 7680
-
-    # Dùng cổng khác
-    .\scripts\termote.ps1 install container -Port 7690
-    ```
-  </TabItem>
-</Tabs>
-
-### Debug trong container
+### Gỡ lỗi bên trong container
 
 ```bash
 docker exec -it termote /bin/sh
-# Trong container:
-ps aux                        # Kiểm tra tiến trình (termote, tmux)
-curl localhost:7680/api/mux/health
+# Inside container:
+ps aux                        # Check processes (termote, tmux)
 ```
 
-### Lỗi thường gặp
+Nếu bạn dùng Podman, thay `docker` bằng `podman`.
 
-| Lỗi                  | Giải pháp                                        |
-| -------------------- | ------------------------------------------------ |
-| Cổng đang dùng       | `lsof -i :7680` rồi kill hoặc dùng `--port`      |
-| Container bị sập     | `docker logs termote` để xem lỗi                 |
-| Auth không hoạt động | Restart container, kiểm tra logs để lấy password |
-| Host bị từ chối (403) | Thêm tên mà thông báo lỗi gợi ý bằng `--allow-host` |
-| Lỗi WebSocket        | Xem logs của termote (`docker logs termote`); WebSocket của terminal là `/api/mux/stream`, do chính termote phục vụ |
-| PWA cache cũ         | Settings → "Clear Cache & Reload" để làm mới     |
+### Sự cố thường gặp
 
-### Khởi động lại / Reset
+| Sự cố                             | Cách xử lý                                                                                  |
+| --------------------------------- | ------------------------------------------------------------------------------------------- |
+| Không có podman lẫn docker        | Cài một trong hai, rồi chạy lại `termote container up`                                      |
+| Cổng đang bị dùng                 | Thường là server native: `termote container up --port <port>`, hoặc chạy `termote stop` trước |
+| Không tải được bản container      | Bản thử nghiệm chỉ có bản container sau khi được phát hành; hãy cài một bản ổn định         |
+| Server không trả lời              | `termote container logs` cho biết lý do                                                     |
+| Mất sau khi khởi động lại (Podman)| Podman chạy dưới user thường thì không tự chạy lại: chạy lại `termote container up`, hoặc dùng unit Quadlet |
+| Host bị từ chối (403)             | Thêm tên mà thông báo lỗi gợi ý: `termote container up --allow-host <name>`                 |
+| PWA cache cũ                      | Settings → "Clear Cache & Reload" để làm mới                                                |
 
-<Tabs>
-  <TabItem label="Unix (macOS/Linux)">
-    ```bash
-    docker restart termote
-
-    # Reset hoàn toàn
-    ./scripts/termote.sh uninstall container
-    ./scripts/termote.sh install container
-    ```
-  </TabItem>
-  <TabItem label="Windows (PowerShell)">
-    ```powershell
-    docker restart termote
-
-    # Reset hoàn toàn
-    .\scripts\termote.ps1 uninstall container
-    .\scripts\termote.ps1 install container
-    ```
-  </TabItem>
-</Tabs>
-
-### Test API
+### Kiểm tra API
 
 ```bash
-curl http://localhost:7680/api/mux/health
-curl -u admin:password http://localhost:7680/api/mux/snapshot
+curl -u admin:<password> http://localhost:7680/api/mux/health
 ```
-
-## Cập nhật
-
-### Qua CLI (Khuyến nghị)
-
-Nếu Termote đã được cài đặt, sử dụng lệnh cập nhật tích hợp:
-
-```bash
-termote update                    # Cập nhật lên phiên bản mới nhất
-termote update --version 0.0.9   # Cập nhật phiên bản cụ thể
-termote update --force            # Cài đặt lại phiên bản hiện tại
-```
-
-Lệnh này tự động giữ nguyên config, dừng dịch vụ, tải phiên bản mới, đối chiếu mã băm, và cài đặt lại với cấu hình đã lưu.
-
-### Qua One-liner
-
-Chạy lại installer - sẽ so sánh version và hỏi trước khi cập nhật:
-
-<Tabs>
-  <TabItem label="Unix (macOS/Linux)">
-    ```bash
-    # Cập nhật tự động với config đã lưu
-    curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash -s -- --update
-
-    # Hoặc cập nhật chuẩn
-    curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash -s -- --container
-    ```
-
-    Tùy chọn: `--update`, `--yes`, `--download-only`, `--fresh`, `--strict`
-  </TabItem>
-  <TabItem label="Windows (PowerShell)">
-    ```powershell
-    # Cập nhật tự động với config đã lưu
-    $env:TERMOTE_UPDATE="true"; irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
-
-    # Hoặc cập nhật chuẩn
-    $env:TERMOTE_MODE="container"; irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
-    ```
-
-    Tùy chọn: `$env:TERMOTE_UPDATE="true"`, `$env:TERMOTE_AUTO_YES="true"`, `$env:TERMOTE_MODE="container"`
-  </TabItem>
-</Tabs>
-
-### Cập nhật thủ công
-
-<Tabs>
-  <TabItem label="Unix (macOS/Linux)">
-    ```bash
-    ./scripts/termote.sh uninstall container
-    git pull origin main
-    ./scripts/termote.sh install container
-    ```
-  </TabItem>
-  <TabItem label="Windows (PowerShell)">
-    ```powershell
-    .\scripts\termote.ps1 uninstall container
-    git pull origin main
-    .\scripts\termote.ps1 install container
-    ```
-  </TabItem>
-</Tabs>
 
 ## Gỡ cài đặt
 
-<Tabs>
-  <TabItem label="Unix (macOS/Linux)">
-    ```bash
-    ./scripts/termote.sh uninstall container
-    ```
-  </TabItem>
-  <TabItem label="Windows (PowerShell)">
-    ```powershell
-    .\scripts\termote.ps1 uninstall container
-    ```
-  </TabItem>
-</Tabs>
+```bash
+termote container down
+```
+
+Lệnh này xóa container; thư mục workspace và cấu hình đã lưu vẫn còn. Muốn gỡ cả lệnh, hãy chạy
+`termote uninstall` (xem trang [Native](/vi/installation/native/#gỡ-cài-đặt)).
+
+## Phát triển
+
+`docker-compose.yml` trong repository chỉ dành cho phát triển từ một checkout. Mọi người khác dùng
+`termote container up`.

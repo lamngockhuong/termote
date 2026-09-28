@@ -26,11 +26,19 @@ Thumbs.db
 # Go binary (server/server is what a bare `go build .` writes)
 server/server
 server/server.exe
+server/termote
+server/termote.exe
 server/termote-server
 server/termote-server.exe
 server/termote-dev
 server/termote-dev.exe
-server/termote.exe
+server/termote-linux-*
+server/termote-darwin-*
+server/termote-windows-*
+
+# PWA build copied in before `go build` (server/webui embeds it)
+server/webui/dist/*
+!server/webui/dist/.gitkeep
 
 # Claude Code
 .claude/settings.local.json

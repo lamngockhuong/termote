@@ -1,48 +1,53 @@
 ---
 title: Cài đặt Native
-description: Tất cả dịch vụ chạy native trên host
+description: Chạy Termote thành dịch vụ của người dùng, dùng được các công cụ trên máy
 ---
 
 import { Steps, Tabs, TabItem, Aside } from "@astrojs/starlight/components";
 
-Không cần Docker. Truy cập binary host như `claude`, `git`, `gh`, v.v. Chính termote truyền
-luồng terminal (PTY trên Unix, ConPTY trên Windows) tới xterm.js trong PWA, nên không phải cài
-thêm tiến trình terminal nào khác.
+Server native chạy thẳng trên máy, nên các terminal của nó thấy được công cụ của bạn: `claude`, `git`, `gh` và
+những lệnh khác. Chính termote truyền luồng terminal (PTY trên Unix, ConPTY trên Windows) tới xterm.js trong PWA,
+nên không phải cài thêm tiến trình terminal nào khác.
 
 ## Yêu cầu
 
 <Tabs>
   <TabItem label="Linux">
+
     ```bash
     sudo apt install tmux
     ```
   </TabItem>
   <TabItem label="macOS">
+
     ```bash
-    brew install tmux go
+    brew install tmux
     ```
   </TabItem>
   <TabItem label="Windows">
+
     ```powershell
-    # Cài đặt psmux (tương thích tmux cho Windows)
+    # psmux: tmux-compatible multiplexer for Windows
     winget install psmux
     ```
   </TabItem>
 </Tabs>
+
+Trên Linux và macOS, bạn có thể dùng một server [Herdr](#backend-herdr) đang chạy thay cho tmux.
 
 ### Cấu hình tmux (Khuyến nghị)
 
 Để copy/paste tmux hoạt động với các nút trên thanh công cụ, thêm dòng này vào `~/.tmux.conf`:
 
 ```bash
-# Vi mode cho copy: Space=bắt đầu chọn, Enter=copy
+# Vi mode for copy: Space=start selection, Enter=copy
 set-option -g mode-keys vi
-# Hỗ trợ chuột (cuộn, chọn) - bật/tắt với Ctrl+b m
+# Mouse support (scroll, select) - toggle with Ctrl+b m
 set-option -g mouse on
 bind m set -g mouse \; display "Mouse #{?mouse,on,off}"
 ```
 
-Áp dụng config:
+Áp dụng cấu hình:
 
 ```bash
 tmux source-file ~/.tmux.conf
@@ -50,302 +55,229 @@ tmux source-file ~/.tmux.conf
 
 Cho phép: **Icon Copy** → di chuyển → **Space** → chọn → **Enter** → **Icon Paste**
 
-:::tip[Copy ra System Clipboard]
-Khi mouse BẬT, tmux bắt sự kiện chuột. Để copy ra bảng nhớ tạm của hệ thống:
-- **Giữ Shift** khi chọn text (vượt qua tmux, dùng vùng chọn của terminal)
-- Hoặc nhấn **Ctrl+b m** để tạm tắt mouse
-:::
+<Aside type="tip" title="Copy ra bảng nhớ tạm của hệ thống">
+  Khi bật chuột, tmux bắt sự kiện chuột. Để copy ra bảng nhớ tạm của hệ thống:
+  - **Giữ Shift** khi chọn chữ (vượt qua tmux, dùng vùng chọn của terminal)
+  - Hoặc nhấn **Ctrl+b m** để tạm tắt chuột
+</Aside>
 
 ## Cài đặt
 
-<Steps>
-1. Cài đặt các phụ thuộc (xem ở trên)
-
-2. Chạy lệnh deploy
-
-   <Tabs>
-     <TabItem label="Unix (macOS/Linux)">
-       ```bash
-       ./scripts/termote.sh install native
-       ```
-     </TabItem>
-     <TabItem label="Windows (PowerShell)">
-       ```powershell
-       .\scripts\termote.ps1 install native
-       ```
-     </TabItem>
-   </Tabs>
-
-3. Truy cập tại http://localhost:7680
-
-</Steps>
-
-## Khi nào sử dụng
-
-- Cần truy cập binary host (claude, git, gh, v.v.)
-- Không có Docker/Podman
-- Kiểm soát đầy đủ dịch vụ
-- Muốn dùng Herdr thay cho tmux (chỉ có ở native, xem bên dưới)
-
-<Aside type="tip">
-  Chế độ Native được khuyến nghị khi bạn cần sử dụng Claude Code hoặc các công
-  cụ CLI host khác.
-</Aside>
-
-## Backend Herdr
-
-Chế độ native có thể điều khiển workspace của Herdr thay cho tmux. Herdr phải đang chạy sẵn và
-truy cập được trên máy này; Termote chỉ giao tiếp với socket của nó.
-
 <Tabs>
-  <TabItem label="Unix (macOS/Linux)">
+  <TabItem label="Linux / macOS">
+
     ```bash
-    ./scripts/termote.sh install native --mux herdr
+    curl -fsSL https://termote.ohnice.app/install.sh | sh
+    termote start
     ```
   </TabItem>
   <TabItem label="Windows (PowerShell)">
+
     ```powershell
-    .\scripts\termote.ps1 install native -Mux herdr
+    irm https://termote.ohnice.app/install.ps1 | iex
+    termote start
     ```
   </TabItem>
 </Tabs>
+
+Sau đó mở http://localhost:7680 (Windows: http://localhost:7690). Cách cố định phiên bản và vị trí các file nằm ở
+trang [Bắt đầu](/vi/getting-started/).
+
+## `termote start` làm những gì
+
+<Steps>
+1. **Chọn backend** ở lần đầu: Herdr nếu server của nó trả lời trên socket (`$HERDR_SOCKET_PATH`, hoặc
+   `~/.config/herdr/herdr.sock`), tmux nếu tmux đã được cài. Khi có cả hai, nó hỏi bạn; nếu không có terminal để
+   hỏi, nó chọn tmux và in ra cách đổi. Khi không có cái nào, nó dừng lại và gợi ý cách cài. Lựa chọn được lưu
+   lại và không dò lại nữa, trừ khi bạn truyền `--mux`. Windows luôn dùng psmux.
+
+2. **Tạo mật khẩu admin** ở lần đầu (hoặc khi có `--fresh`): gõ một mật khẩu, hoặc nhấn Enter để tự sinh. Mật
+   khẩu chỉ được in ra một lần; về sau `termote show-password` sẽ hiện lại.
+
+3. **Kiểm tra cổng và Tailscale trước.** Nếu có gì hỏng, server đang chạy vẫn được giữ nguyên, nên một lần gõ
+   sai không cắt kết nối mà bạn có thể đang dùng.
+
+4. **Đăng ký `termote serve` với trình quản lý dịch vụ** rồi khởi động nó (xem bảng dưới), chờ tới khi server
+   báo đúng phiên bản này, sau đó in ra các URL, các tên host được phép và thông tin đăng nhập. Nó luôn cảnh báo
+   khi tắt xác thực hoặc bật truy cập LAN.
+
+</Steps>
+
+| Hệ điều hành                         | Trình quản lý dịch vụ                                                    | Cách hoạt động                                                                                                                                                         |
+| ------------------------------------ | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Linux                                | systemd user unit `~/.config/systemd/user/termote.service`               | Tự chạy lại sau khi sập; tmux cùng các phiên dòng lệnh bên trong vẫn sống qua stop, restart và sập. Chỉ chạy khi bạn đang đăng nhập: `loginctl enable-linger $USER` giữ nó chạy sau khi đăng xuất và khởi động nó lúc bật máy (`start` có in gợi ý này) |
+| Linux không có user systemd (WSL2)   | Tiến trình chạy tách rời kèm file PID                                    | Không tự chạy lại sau khi sập hay khởi động lại máy; `start` có báo điều này. Hãy chạy lại `termote start`, hoặc bật systemd trong WSL (`[boot]` `systemd=true` trong `/etc/wsl.conf`) |
+| macOS                                | launchd agent `~/Library/LaunchAgents/app.ohnice.termote.plist`          | Tự chạy lại sau khi sập, khởi động khi đăng nhập; tmux vẫn sống                                                                                                        |
+| Windows                              | Scheduled Task `Termote` khi đăng nhập, chạy ẩn                          | Không cần quyền quản trị. Nếu chính sách hệ thống không cho tạo Scheduled Task, một trình khởi chạy ẩn trong thư mục Startup được dùng thay (khi đó không tự chạy lại sau khi sập)      |
+
+Unit, plist hay tác vụ đã lập lịch đều không chứa mật khẩu hay bất kỳ biến `TERMOTE_*` nào.
+
+<Aside type="note" title="Windows">
+  Phần cài dịch vụ trên Windows mới có từ bản 1.0. Nếu có gì không chạy, hãy báo trên
+  [GitHub](https://github.com/lamngockhuong/termote/issues).
+</Aside>
+
+## Tùy chọn khởi động
+
+Mọi tùy chọn đều được lưu. Cờ nào bạn không truyền thì giữ giá trị đã lưu, nên `termote start` không kèm cờ nào
+sẽ khởi động server y như lần trước. Tùy chọn kiểu bật/tắt được tắt bằng `=false`.
+
+| Tùy chọn                    | Mô tả                                                                  |
+| --------------------------- | ---------------------------------------------------------------------- |
+| `--port <port>`             | Cổng (mặc định 7680; Windows 7690)                                     |
+| `--lan[=false]`             | Lắng nghe trên mọi giao diện mạng thay vì chỉ `127.0.0.1`              |
+| `--tailscale <host[:port]>` | Công khai qua [Tailscale HTTPS](/vi/installation/tailscale/) (mặc định 443) |
+| `--no-tailscale`            | Ngừng công khai qua Tailscale                                          |
+| `--no-auth[=false]`         | Tắt đăng nhập                                                          |
+| `--mux <tmux\|herdr>`       | Backend terminal (mặc định: dò tìm ở lần đầu)                          |
+| `--allow-host <name>`       | Cho phép thêm một tên trong header `Host` (lặp được, không có ký tự đại diện) |
+| `--remove-host <name>`      | Bỏ một tên đã cho phép (lặp được)                                      |
+| `--allow-herdr-no-auth`     | Bắt buộc khi dùng `--mux herdr --no-auth`                              |
+| `--fresh`                   | Đặt mật khẩu mới                                                       |
+
+```bash
+termote start --lan                  # also reachable from the LAN (saved)
+termote start                        # same options as last time
+termote start --lan=false            # back to this machine only
+termote start --allow-host box.local # accept another host name
+termote start --remove-host box.local
+termote start --fresh                # new password
+```
+
+Các tên host luôn được phép gồm địa chỉ nội bộ của máy (`localhost`, `127.0.0.1`), tên Tailscale, các tên trong `--allow-host`, và khi có `--lan` thì cả
+địa chỉ mà request đi tới (nhờ vậy vẫn chạy khi IP LAN đổi). Request tới tên khác nhận lỗi 403, trong đó ghi sẵn
+lệnh `termote start --allow-host <name>` cần chạy.
+
+## Backend Herdr
+
+Linux và macOS có thể điều khiển workspace của Herdr thay cho tmux. Herdr phải đang chạy sẵn trên máy này;
+Termote chỉ giao tiếp với socket của nó. Nếu Herdr đang chạy ở lần `start` đầu tiên, nó được chọn tự động; nếu
+không thì chạy:
+
+```bash
+termote start --mux herdr
+```
 
 <Aside type="caution" title="Herdr hoạt động khác tmux">
   - Chọn tab hoặc pane trên PWA **không** thay đổi nội dung đang hiện trên desktop của Herdr,
   mà chỉ đổi pane mà client đang nhận luồng. Không có nút "hiện trên desktop".
   - Mỗi pane có một huy hiệu trạng thái agent (`idle`/`working`/`blocked`/`done`), được làm mới
   tối đa một lần trong mỗi khoảng làm mới đã cấu hình; trạng thái không được đẩy về ngay lập tức.
-  - Backend Herdr **chỉ có ở native**: chế độ container từ chối `--mux herdr`/`-Mux herdr`.
+  - Backend Herdr **chỉ có ở native**: container và Windows dùng tmux (psmux).
   - `--mux herdr --no-auth` bị từ chối nếu không kèm `--allow-herdr-no-auth`. Herdr để lộ mọi
   workspace trên máy chứ không riêng pane mà PWA đang hiện, nên muốn chạy không mật khẩu thì
   phải chủ động bật tùy chọn này.
 </Aside>
 
-## Quản lý dịch vụ
-
-<Tabs>
-  <TabItem label="Unix (macOS/Linux)">
-    ```bash
-    # Kiểm tra tiến trình
-    ps aux | grep termote-server
-
-    # Khởi động lại
-    ./scripts/termote.sh install native
-    ```
-  </TabItem>
-  <TabItem label="Windows (PowerShell)">
-    ```powershell
-    # Kiểm tra tiến trình
-    Get-Process -Name termote-server -ErrorAction SilentlyContinue
-
-    # Khởi động lại
-    .\scripts\termote.ps1 install native
-    ```
-  </TabItem>
-</Tabs>
-
-## Ngăn macOS Sleep
-
-macOS tự động sleep sau một khoảng thời gian không hoạt động, làm mất kết nối terminal từ xa. Dùng `caffeinate` để giữ máy luôn thức khi Termote đang chạy:
+## Quản lý server
 
 ```bash
-# Ngăn system sleep (chạy cho đến khi bạn nhấn Ctrl+C)
+termote status          # what the running server reports (version, backend, pid)
+termote stop            # stop it; it starts again at the next login
+termote restart         # stop and start with the saved options
+termote logs            # recent lines of every log
+termote logs server     # server log only
+termote logs follow     # tail live (Ctrl+C to stop)
+termote logs clean      # delete the log files
+termote show-password   # print the saved admin password
+```
+
+Dịch vụ chạy `termote serve`, lệnh này đọc cấu hình đã lưu. Khi đã có file cấu hình, các biến môi trường
+`TERMOTE_*` bị bỏ qua, và `serve` xóa chúng khỏi môi trường của mình để không terminal nào thừa hưởng chúng.
+
+## Cập nhật
+
+```bash
+termote update                   # newest stable 1.x release
+termote update --version 1.0.1   # a specific version
+termote update --force           # reinstall the current version
+```
+
+`update` tải bản phát hành về và kiểm tra `.sha256`, cài nó cạnh bản hiện tại, chuyển sang bản mới, khởi động lại
+dịch vụ rồi chờ tới khi server báo phiên bản mới và tiếp tục trả lời. Nếu không được như vậy, nó chuyển về bản
+trước và khởi động lại bản đó. Bản hiện tại và bản trước đều được giữ lại; cấu hình và phần đăng ký dịch vụ không
+đổi. Lệnh này chạy được ngay cả khi gõ trong một pane của Termote.
+
+`update` từ chối chạy trong thư mục mã nguồn clone bằng git (ở đó hãy dùng `git pull && make build`) và với binary không do
+trình cài đặt đặt vào.
+
+## Gỡ cài đặt
+
+```bash
+termote uninstall
+```
+
+Lệnh này gỡ phần đăng ký dịch vụ, ánh xạ Tailscale của Termote, lệnh `termote` và thư mục cài. Cấu hình
+(`~/.config/termote`) và log (`~/.local/state/termote`) vẫn còn; `uninstall` in ra cả hai đường dẫn để bạn tự xóa.
+Trên Windows, `%APPDATA%\termote` và `%LOCALAPPDATA%\termote\state` được giữ lại.
+
+## Ngăn macOS ngủ
+
+macOS tự động ngủ sau một thời gian không hoạt động, làm ngắt các phiên terminal từ xa. Dùng `caffeinate` để giữ máy thức trong khi Termote đang chạy:
+
+```bash
+# Prevent system sleep (runs until you press Ctrl+C)
 caffeinate -s
 
-# Hoặc chạy nền
+# Or run in background
 caffeinate -s &
 
-# Dừng caffeinate nền
+# Stop background caffeinate
 pkill caffeinate
 ```
 
 <Aside type="tip">
-  Dùng `caffeinate -s` (chỉ ngăn system sleep) thay vì `-d` (ngăn tắt màn hình)
-  — bạn không cần màn hình sáng cho truy cập từ xa.
+  Dùng `caffeinate -s` (chỉ chặn hệ thống ngủ) thay vì `-d` (chặn màn hình tắt); truy cập từ xa không cần màn
+  hình bật.
 </Aside>
 
 ## Khắc phục sự cố
 
 ### Chẩn đoán nhanh
 
-<Tabs>
-  <TabItem label="Unix (macOS/Linux)">
-    ```bash
-    ./scripts/termote.sh health   # Kiểm tra sức khỏe
-    ss -tlnp | grep 7680          # Kiểm tra cổng
-    ```
-  </TabItem>
-  <TabItem label="Windows (PowerShell)">
-    ```powershell
-    .\scripts\termote.ps1 health   # Kiểm tra sức khỏe
-    netstat -ano | Select-String "7680"  # Kiểm tra cổng
-    ```
-  </TabItem>
-</Tabs>
+```bash
+termote status          # is it running, which version and backend
+termote logs server     # last server log lines
+```
 
-### Kiểm tra tiến trình
+### Sự cố thường gặp
 
-<Tabs>
-  <TabItem label="Unix (macOS/Linux)">
-    ```bash
-    ps aux | grep termote-server # Kiểm tra termote đang chạy
-    lsof -i :7680              # Xác minh cổng
-    ```
-  </TabItem>
-  <TabItem label="Windows (PowerShell)">
-    ```powershell
-    Get-Process -Name termote-server -ErrorAction SilentlyContinue
-    netstat -ano | Select-String "7680"   # Xác minh cổng
-    ```
-  </TabItem>
-</Tabs>
+| Sự cố                                    | Cách xử lý                                                                                  |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `termote: command not found`             | Mở terminal mới, hoặc thêm `~/.local/bin` vào PATH như trình cài đặt đã in ra                |
+| Không tìm thấy backend terminal          | Cài tmux (Windows: `winget install psmux`) hoặc khởi động Herdr, rồi chạy `termote start`    |
+| Cổng đang bị dùng                        | `start` báo tên cổng; dừng chương trình kia hoặc chọn `termote start --port <port>`         |
+| Host bị từ chối (403)                    | Chạy lệnh `termote start --allow-host <name>` mà thông báo lỗi ghi                           |
+| Không giải mã được mật khẩu đã lưu       | File `secret` đã bị xóa hoặc thay: `termote start --fresh`                                   |
+| Dừng khi bạn đăng xuất (Linux)           | `loginctl enable-linger $USER`                                                               |
+| Không chạy sau khi khởi động lại (WSL2)  | Ở đó không có user systemd: chạy lại `termote start`, hoặc bật systemd trong WSL             |
+| PWA cache cũ                             | Settings → "Clear Cache & Reload" để làm mới                                                |
 
-### Debug với logs
+### Phiên tmux / psmux
 
 <Tabs>
   <TabItem label="Unix (macOS/Linux)">
+
     ```bash
-    termote logs server     # Các dòng log gần đây
-    termote logs follow     # Theo dõi log trực tiếp (Ctrl+C để dừng)
-    termote logs clean      # Xóa các file log
-    ```
-  </TabItem>
-  <TabItem label="Windows (PowerShell)">
-    Chế độ native trên Windows ghi logs vào `~/.termote/logs`. Xem logs bằng CLI:
-
-    ```powershell
-    .\scripts\termote.ps1 logs            # Xem logs server gần đây
-    .\scripts\termote.ps1 logs server     # Tương tự, chỉ định rõ
-    .\scripts\termote.ps1 logs follow     # Tail toàn bộ logs realtime (Ctrl+C để dừng)
-    .\scripts\termote.ps1 logs clean      # Xóa các file log
-    ```
-  </TabItem>
-</Tabs>
-
-### Lỗi thường gặp
-
-| Lỗi            | Giải pháp                                           |
-| -------------- | --------------------------------------------------- |
-| Cổng đang dùng | `lsof -i :7680` (Unix) hoặc `netstat -ano \| Select-String 7680` (Win) rồi dừng tiến trình đó |
-| Không tìm thấy Herdr | Cài/khởi động `herdr` trước, hoặc bỏ `--mux herdr` để dùng tmux |
-| Thiếu binary   | `cd server && go build -o termote-dev .`      |
-| PWA chưa build | `pnpm --filter termote build`                              |
-| PWA cache cũ   | Settings → "Clear Cache & Reload" để làm mới        |
-| Host bị từ chối (403) | Làm theo gợi ý `--allow-host <name>` trong thông báo lỗi, rồi cài lại |
-
-### tmux / psmux Session
-
-<Tabs>
-  <TabItem label="Unix (macOS/Linux)">
-    ```bash
-    tmux list-sessions         # Liệt kê sessions
-    tmux attach -t main        # Kết nối vào session
+    tmux list-sessions         # List sessions
+    tmux attach -t main        # Attach to session
     tmux kill-session -t main  # Reset session
     ```
   </TabItem>
   <TabItem label="Windows (PowerShell)">
+
     ```powershell
-    psmux list-sessions         # Liệt kê sessions
-    psmux attach -t main        # Kết nối vào session
+    psmux list-sessions         # List sessions
+    psmux attach -t main        # Attach to session
     psmux kill-session -t main  # Reset session
     ```
   </TabItem>
 </Tabs>
 
-### Test API
+### Kiểm tra API
+
+API nằm sau phần đăng nhập (`termote show-password` in ra mật khẩu):
 
 ```bash
-curl http://localhost:7680/api/mux/health
-curl http://localhost:7680/api/mux/snapshot
+curl -u admin:<password> http://localhost:7680/api/mux/health
 ```
-
-## Cập nhật
-
-### Qua CLI (Khuyến nghị)
-
-Nếu Termote đã được cài đặt, sử dụng lệnh cập nhật tích hợp:
-
-<Tabs>
-  <TabItem label="Unix (macOS/Linux)">
-    ```bash
-    termote update                   # Cập nhật lên phiên bản mới nhất
-    termote update --version 1.0.0   # Cập nhật phiên bản cụ thể
-    termote update --force           # Cài đặt lại phiên bản hiện tại
-    ```
-  </TabItem>
-  <TabItem label="Windows (PowerShell)">
-    ```powershell
-    .\scripts\termote.ps1 update                 # Cập nhật lên phiên bản mới nhất
-    .\scripts\termote.ps1 update -Version 1.0.0  # Cập nhật phiên bản cụ thể
-    .\scripts\termote.ps1 update -Force          # Cài đặt lại phiên bản hiện tại
-    ```
-  </TabItem>
-</Tabs>
-
-Lệnh này tự động giữ nguyên config, dừng dịch vụ, tải phiên bản mới, đối chiếu mã băm, và cài
-đặt lại với cấu hình đã lưu. Khi nâng một bản cài 0.x lên 1.0.0, lệnh này còn gỡ bỏ `ttyd` và
-chuyển đổi mật khẩu đã lưu nếu nó rỗng. Danh sách đầy đủ các thay đổi không tương thích nằm ở
-`docs/upgrade-1.0.md` trong repository.
-
-### Qua One-liner
-
-Chạy lại installer - sẽ so sánh version và hỏi trước khi cập nhật:
-
-<Tabs>
-  <TabItem label="Unix (macOS/Linux)">
-    ```bash
-    # Cập nhật tự động với config đã lưu
-    curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash -s -- --update
-
-    # Hoặc cập nhật chuẩn
-    curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.sh | bash
-    ```
-
-    Tùy chọn: `--update`, `--yes`, `--download-only`, `--fresh`, `--version <ver>`, `--strict`
-  </TabItem>
-  <TabItem label="Windows (PowerShell)">
-    ```powershell
-    # Cập nhật tự động với config đã lưu
-    $env:TERMOTE_UPDATE="true"; irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
-
-    # Hoặc cập nhật chuẩn
-    irm https://raw.githubusercontent.com/lamngockhuong/termote/main/scripts/get.ps1 | iex
-    ```
-
-    Tùy chọn: `$env:TERMOTE_UPDATE="true"`, `$env:TERMOTE_AUTO_YES="true"`
-  </TabItem>
-</Tabs>
-
-### Cập nhật thủ công
-
-<Tabs>
-  <TabItem label="Unix (macOS/Linux)">
-    ```bash
-    ./scripts/termote.sh uninstall native
-    git pull origin main
-    ./scripts/termote.sh install native
-    ```
-  </TabItem>
-  <TabItem label="Windows (PowerShell)">
-    ```powershell
-    .\scripts\termote.ps1 uninstall native
-    git pull origin main
-    .\scripts\termote.ps1 install native
-    ```
-  </TabItem>
-</Tabs>
-
-## Gỡ cài đặt
-
-<Tabs>
-  <TabItem label="Unix (macOS/Linux)">
-    ```bash
-    ./scripts/termote.sh uninstall native
-    ```
-  </TabItem>
-  <TabItem label="Windows (PowerShell)">
-    ```powershell
-    .\scripts\termote.ps1 uninstall native
-    ```
-  </TabItem>
-</Tabs>
