@@ -73,12 +73,15 @@ export function BottomNavigation({
             }
             aria-current={activeId === session.id ? 'true' : undefined}
           >
-            <span className="text-lg">{session.icon}</span>
-            {session.agentStatus && (
-              <span className="absolute top-0.5 right-0.5 rounded-full bg-white dark:bg-zinc-800">
-                <AgentStatusBadge status={session.agentStatus} size={12} />
-              </span>
-            )}
+            <span className="relative text-lg leading-none">
+              {session.icon}
+              {/* Fixed-size circle anchored to the icon, so the button's line-height cannot stretch it */}
+              {session.agentStatus && (
+                <span className="absolute -top-1.5 -right-2.5 flex size-4 items-center justify-center rounded-full bg-white shadow-sm dark:bg-zinc-800">
+                  <AgentStatusBadge status={session.agentStatus} size={12} />
+                </span>
+              )}
+            </span>
           </button>
         ))}
       </div>

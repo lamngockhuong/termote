@@ -102,4 +102,21 @@ describe('BottomNavigation', () => {
     expect(screen.getByRole('img', { name: 'Agent blocked' })).toBeVisible()
     expect(screen.getByLabelText('Code')).toBeInTheDocument()
   })
+
+  it('anchors the agent badge to the session icon in a fixed-size circle', () => {
+    render(
+      <BottomNavigation
+        {...defaultProps}
+        sessions={[{ ...SESSIONS[0], agentStatus: 'done' }]}
+      />,
+    )
+    const circle = screen.getByRole('img', { name: 'Agent done' })
+      .parentElement!
+    expect(circle.className).toContain('size-4')
+    expect(circle.className).toContain('absolute')
+    const icon = circle.parentElement!
+    expect(icon.className).toContain('relative')
+    expect(icon.className).toContain('leading-none')
+    expect(icon).toHaveTextContent(SESSIONS[0].icon)
+  })
 })
