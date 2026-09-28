@@ -389,6 +389,18 @@ describe('SessionSidebar — desktop collapsed', () => {
     // Should not throw
     fireEvent.click(screen.getByRole('button', { name: 'Expand sidebar' }))
   })
+
+  it('anchors the agent badge to the session icon in a fixed-size circle', () => {
+    renderCollapsed([{ ...SESSIONS[0], agentStatus: 'working' }])
+    const circle = screen.getByRole('img', {
+      name: 'Agent working',
+    }).parentElement!
+    expect(circle.className).toContain('size-3.5')
+    expect(circle.className).toContain('absolute')
+    const icon = circle.parentElement!
+    expect(icon.className).toContain('leading-none')
+    expect(icon).toHaveTextContent('💻')
+  })
 })
 
 describe('SessionSidebar — mobile mode', () => {

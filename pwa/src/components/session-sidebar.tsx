@@ -315,10 +315,10 @@ export function SessionSidebar({
               }`}
               title={session.name}
             >
-              <span className="relative text-lg">
+              <span className="relative text-lg leading-none">
                 {session.icon}
                 {session.agentStatus && (
-                  <span className="absolute -top-1 -right-2 rounded-full bg-zinc-50 dark:bg-zinc-800">
+                  <span className="absolute -top-1.5 -right-2 flex size-3.5 items-center justify-center rounded-full bg-zinc-50 dark:bg-zinc-800">
                     <AgentStatusBadge status={session.agentStatus} size={10} />
                   </span>
                 )}
