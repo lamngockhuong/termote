@@ -40,7 +40,7 @@ Remote control CLI tools (Claude Code, GitHub Copilot, any terminal) from mobile
 - **Session tabs**: Horizontal tab bar for quick window switching
 - **Herdr backend** (native only): drive Herdr workspaces instead of tmux, with per-pane coding-agent status badges — see [Native Installation](https://termote.ohnice.app/installation/native/)
 - **Mobile-friendly**: Virtual keyboard toolbar (Tab/Ctrl/Shift/arrows, expandable)
-- **Gesture support**: Swipe for Ctrl+C, Tab, history navigation
+- **Gesture support**: Swipe for Ctrl+C, Tab, scrolling
 - **Command history**: Recall previously sent commands with search
 - **Quick actions**: Floating menu for common operations (clear, cancel, exit)
 - **Connection indicator**: Real-time server status with auto-detect disconnect
@@ -280,8 +280,8 @@ The mapping is applied each time the server starts. `stop`, `start --no-tailscal
 | ---------------- | ------------------- |
 | Cancel/interrupt | Swipe left (Ctrl+C) |
 | Tab completion   | Swipe right         |
-| History up       | Swipe up            |
-| History down     | Swipe down          |
+| Scroll down      | Swipe up            |
+| Scroll up        | Swipe down          |
 | Paste            | Long press          |
 | Font size        | Pinch in/out        |
 

@@ -40,7 +40,7 @@ Controla remotamente herramientas CLI (Claude Code, GitHub Copilot, cualquier te
 - **Pestanas de sesiones**: Barra de pestanas horizontal para cambiar rapidamente entre ventanas
 - **Backend Herdr** (solo nativo): controla workspaces de Herdr en lugar de tmux, con insignias de estado del agente de codigo en cada panel — ver [Instalacion nativa](https://termote.ohnice.app/installation/native/)
 - **Optimizado para movil**: Teclado virtual (Tab/Ctrl/Shift/flechas, expandible)
-- **Soporte de gestos**: Deslizar para Ctrl+C, Tab, navegacion de historial
+- **Soporte de gestos**: Deslizar para Ctrl+C, Tab, desplazamiento
 - **Historial de comandos**: Recuperar comandos enviados previamente con busqueda
 - **Acciones rapidas**: Menu flotante para operaciones comunes (clear, cancel, exit)
 - **Indicador de conexion**: Estado del servidor en tiempo real con deteccion automatica de desconexion
@@ -280,8 +280,8 @@ La asignacion se aplica cada vez que arranca el servidor. `stop`, `start --no-ta
 | -------------------- | --------------------------- |
 | Cancelar/interrumpir | Deslizar izquierda (Ctrl+C) |
 | Tab completion       | Deslizar derecha            |
-| Historial arriba     | Deslizar arriba             |
-| Historial abajo      | Deslizar abajo              |
+| Desplazar abajo      | Deslizar arriba             |
+| Desplazar arriba     | Deslizar abajo              |
 | Pegar                | Mantener presionado         |
 | Tamano de fuente     | Pellizcar                   |
 

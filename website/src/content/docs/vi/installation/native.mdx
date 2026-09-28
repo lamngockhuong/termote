@@ -11,17 +11,25 @@ nên không phải cài thêm tiến trình terminal nào khác.
 
 ## Yêu cầu
 
+termote cần một backend terminal. Trên Linux và macOS, đó là **tmux** hoặc một server
+**[Herdr](https://herdr.dev/#install)** đang chạy (xem [Backend Herdr](#backend-herdr)); chỉ cần một trong hai.
+Trên Windows, đó là **psmux**.
+
 <Tabs>
   <TabItem label="Linux">
 
     ```bash
+    # tmux
     sudo apt install tmux
+    # hoặc dùng Herdr: xem https://herdr.dev/#install
     ```
   </TabItem>
   <TabItem label="macOS">
 
     ```bash
+    # tmux
     brew install tmux
+    # hoặc dùng Herdr: xem https://herdr.dev/#install
     ```
   </TabItem>
   <TabItem label="Windows">
@@ -33,11 +41,9 @@ nên không phải cài thêm tiến trình terminal nào khác.
   </TabItem>
 </Tabs>
 
-Trên Linux và macOS, bạn có thể dùng một server [Herdr](#backend-herdr) đang chạy thay cho tmux.
-
 ### Cấu hình tmux (Khuyến nghị)
 
-Để copy/paste tmux hoạt động với các nút trên thanh công cụ, thêm dòng này vào `~/.tmux.conf`:
+Khi dùng backend tmux, để copy/paste hoạt động với các nút trên thanh công cụ, thêm dòng này vào `~/.tmux.conf`:
 
 ```bash
 # Vi mode for copy: Space=start selection, Enter=copy
@@ -150,9 +156,9 @@ lệnh `termote start --allow-host <name>` cần chạy.
 
 ## Backend Herdr
 
-Linux và macOS có thể điều khiển workspace của Herdr thay cho tmux. Herdr phải đang chạy sẵn trên máy này;
-Termote chỉ giao tiếp với socket của nó. Nếu Herdr đang chạy ở lần `start` đầu tiên, nó được chọn tự động; nếu
-không thì chạy:
+Linux và macOS có thể điều khiển workspace của Herdr thay cho tmux. Herdr phải đang chạy sẵn trên máy này
+([cài Herdr](https://herdr.dev/#install)); Termote chỉ giao tiếp với socket của nó. Nếu Herdr đang chạy ở lần
+`start` đầu tiên, nó được chọn tự động; nếu không thì chạy:
 
 ```bash
 termote start --mux herdr

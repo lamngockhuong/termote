@@ -40,7 +40,7 @@ Kendalikan alat CLI (Claude Code, GitHub Copilot, terminal apa pun) dari jarak j
 - **Tab session**: Bilah tab horizontal untuk berpindah jendela dengan cepat
 - **Backend Herdr** (khusus native): kendalikan workspace Herdr sebagai pengganti tmux, dengan lencana status coding agent di setiap pane — lihat [Instalasi Native](https://termote.ohnice.app/installation/native/)
 - **Ramah mobile**: Toolbar keyboard virtual (Tab/Ctrl/Shift/panah, dapat diperluas)
-- **Dukungan gestur**: Geser untuk Ctrl+C, Tab, navigasi riwayat
+- **Dukungan gestur**: Geser untuk Ctrl+C, Tab, menggulir
 - **Riwayat perintah**: Panggil ulang perintah yang pernah dikirim dengan pencarian
 - **Aksi cepat**: Menu mengambang untuk operasi umum (clear, cancel, exit)
 - **Indikator koneksi**: Status server real-time, deteksi otomatis koneksi terputus
@@ -276,14 +276,14 @@ Pemetaan diterapkan setiap kali server dijalankan. `stop`, `start --no-tailscale
 
 ## Penggunaan Mobile
 
-| Aksi             | Gestur              |
-| ---------------- | ------------------- |
-| Batal/interupsi  | Geser kiri (Ctrl+C) |
-| Tab completion   | Geser kanan         |
-| Riwayat ke atas  | Geser ke atas       |
-| Riwayat ke bawah | Geser ke bawah      |
-| Tempel           | Tekan lama          |
-| Ukuran font      | Cubit masuk/keluar  |
+| Aksi            | Gestur              |
+| --------------- | ------------------- |
+| Batal/interupsi | Geser kiri (Ctrl+C) |
+| Tab completion  | Geser kanan         |
+| Gulir ke bawah  | Geser ke atas       |
+| Gulir ke atas   | Geser ke bawah      |
+| Tempel          | Tekan lama          |
+| Ukuran font     | Cubit masuk/keluar  |
 
 Toolbar virtual menyediakan: Tab, Esc, Ctrl, Shift, tombol panah, dan kombinasi tombol umum. Mendukung kombinasi Ctrl+Shift (tempel, salin). Beralih antara mode minimal dan diperluas untuk tombol tambahan (Home, End, Delete, dll.).
 

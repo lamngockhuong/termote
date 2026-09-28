@@ -40,7 +40,7 @@ CLI-Tools (Claude Code, GitHub Copilot, jedes Terminal) per PWA von Mobilgeräte
 - **Session-Tabs**: Horizontale Tab-Leiste zum schnellen Fensterwechsel
 - **Herdr-Backend** (nur nativ): Herdr-Workspaces statt tmux steuern, mit Statusabzeichen des Coding-Agents in jedem Pane — siehe [Native Installation](https://termote.ohnice.app/installation/native/)
 - **Mobilfreundlich**: Virtuelle Tastatur-Toolbar (Tab/Ctrl/Shift/Pfeiltasten, erweiterbar)
-- **Gestenunterstützung**: Wischen für Ctrl+C, Tab, Verlaufsnavigation
+- **Gestenunterstützung**: Wischen für Ctrl+C, Tab, Scrollen
 - **Befehlsverlauf**: Zuvor gesendete Befehle mit Suche abrufen
 - **Schnellaktionen**: Schwebendes Menü für häufige Operationen (clear, cancel, exit)
 - **Verbindungsanzeige**: Echtzeit-Serverstatus mit automatischer Trennungserkennung
@@ -280,8 +280,8 @@ Die Zuordnung wird bei jedem Start des Servers angewendet. `stop`, `start --no-t
 | ---------------------- | --------------------------- |
 | Abbrechen/Unterbrechen | Nach links wischen (Ctrl+C) |
 | Tab-Vervollständigung  | Nach rechts wischen         |
-| Verlauf hoch           | Nach oben wischen           |
-| Verlauf runter         | Nach unten wischen          |
+| Nach unten scrollen    | Nach oben wischen           |
+| Nach oben scrollen     | Nach unten wischen          |
 | Einfügen               | Lange drücken               |
 | Schriftgröße           | Zusammen-/Auseinanderziehen |
 

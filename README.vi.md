@@ -40,7 +40,7 @@
 - **Tab sessions**: Thanh tab ngang để chuyển nhanh giữa các cửa sổ
 - **Backend Herdr** (chỉ native): điều khiển workspace của Herdr thay cho tmux, kèm huy hiệu trạng thái của agent lập trình trên từng pane — xem [Cài đặt Native](https://termote.ohnice.app/vi/installation/native/)
 - **Thân thiện mobile**: Bàn phím ảo (Tab/Ctrl/Shift/mũi tên, mở rộng được)
-- **Hỗ trợ cử chỉ**: Vuốt cho Ctrl+C, Tab, điều hướng lịch sử
+- **Hỗ trợ cử chỉ**: Vuốt cho Ctrl+C, Tab, cuộn màn hình
 - **Lịch sử lệnh**: Gợi nhớ các lệnh đã gửi trước đó với tìm kiếm
 - **Thao tác nhanh**: Menu nổi cho các thao tác phổ biến (clear, cancel, exit)
 - **Chỉ báo kết nối**: Trạng thái server real-time, tự phát hiện mất kết nối
@@ -280,8 +280,8 @@ sudo tailscale set --operator=$USER                    # Linux, once: let termot
 | -------------- | ------------------ |
 | Hủy/ngắt       | Vuốt trái (Ctrl+C) |
 | Tab completion | Vuốt phải          |
-| Lịch sử lên    | Vuốt lên           |
-| Lịch sử xuống  | Vuốt xuống         |
+| Cuộn xuống     | Vuốt lên           |
+| Cuộn lên       | Vuốt xuống         |
 | Dán            | Nhấn giữ           |
 | Cỡ chữ         | Chụm vào/ra        |
 

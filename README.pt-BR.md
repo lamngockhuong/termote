@@ -40,7 +40,7 @@ Controle remotamente ferramentas CLI (Claude Code, GitHub Copilot, qualquer term
 - **Abas de sessions**: Barra de abas horizontal para troca rapida entre janelas
 - **Backend Herdr** (somente nativo): controle workspaces do Herdr em vez do tmux, com selos de status do agente de codigo em cada painel — veja [Instalacao nativa](https://termote.ohnice.app/installation/native/)
 - **Otimizado para mobile**: Barra de teclado virtual (Tab/Ctrl/Shift/setas, expansivel)
-- **Suporte a gestos**: Deslizar para Ctrl+C, Tab, navegacao no historico
+- **Suporte a gestos**: Deslizar para Ctrl+C, Tab, rolagem
 - **Historico de comandos**: Recuperar comandos enviados anteriormente com busca
 - **Acoes rapidas**: Menu flutuante para operacoes comuns (clear, cancel, exit)
 - **Indicador de conexao**: Status do servidor em tempo real com deteccao automatica de desconexao
@@ -280,8 +280,8 @@ O mapeamento e aplicado toda vez que o servidor inicia. `stop`, `start --no-tail
 | -------------------- | ------------------------------- |
 | Cancelar/interromper | Deslizar para esquerda (Ctrl+C) |
 | Tab completion       | Deslizar para direita           |
-| Historico acima      | Deslizar para cima              |
-| Historico abaixo     | Deslizar para baixo             |
+| Rolar para baixo     | Deslizar para cima              |
+| Rolar para cima      | Deslizar para baixo             |
 | Colar                | Pressionar longo                |
 | Tamanho da fonte     | Pincar para dentro/fora         |
 

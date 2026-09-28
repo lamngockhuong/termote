@@ -26,10 +26,10 @@ The keyboard toolbar provides touch-friendly buttons for common terminal keys. I
 
 ## Modifiers
 
-| Button | Key     | Behavior                                |
-| ------ | ------- | --------------------------------------- |
-| Ctrl   | Control | Sticky - tap once, then tap another key |
-| Shift  | Shift   | Sticky - tap once, then tap another key |
+| Button | Key     |
+| ------ | ------- |
+| Ctrl   | Control |
+| Shift  | Shift   |
 
 ### Modifier Combinations
 
@@ -78,21 +78,26 @@ The keyboard toolbar provides touch-friendly buttons for common terminal keys. I
 
 ### Utility Keys
 
-| Button     | Action                       |
-| ---------- | ---------------------------- |
-| Copy icon  | Toggle tmux copy mode        |
-| Paste icon | Paste from tmux buffer       |
-| ⇈          | Scroll up (tmux)             |
-| ⇊          | Scroll down (tmux)           |
+| Button                   | Action                                                                           |
+| ------------------------ | -------------------------------------------------------------------------------- |
+| Copy mode icon (history) | Toggle tmux copy mode (hidden with the Herdr backend)                            |
+| Paste icon (clipboard)   | Paste from the source chosen in [Settings](/usage/settings/) (default: clipboard) |
+| ⇈                        | Scroll up: a page of tmux history, or the terminal scrollback with Herdr         |
+| ⇊                        | Scroll down: a page of tmux history, or the terminal scrollback with Herdr       |
 
 ### tmux Copy/Paste Workflow
 
-1. Tap **Copy icon** to enter copy mode
+1. Tap the **copy mode icon** to enter copy mode
 2. Use arrow keys to navigate
 3. Press **Space** to start selection
 4. Navigate to select text
 5. Press **Enter** to copy to tmux buffer
-6. Tap **Paste icon** to paste
+6. Tap the **Paste icon** to paste (with the paste source set to tmux buffer in [Settings](/usage/settings/))
+
+:::note[Herdr backend]
+Herdr has no tmux copy mode or paste buffer, so the copy mode key is hidden and the Paste icon always
+uses the system clipboard.
+:::
 
 :::note[Native Mode Setup]
 For native mode, add this to your `~/.tmux.conf`:
@@ -199,7 +204,7 @@ The quick actions FAB appears on mobile devices only. On desktop, use the keyboa
 1. **Modifiers are sticky**: Tap Ctrl or Shift once, then tap another key
 2. **Combine modifiers**: Tap both Ctrl and Shift for Ctrl+Shift combos
 3. **Shift+Tab**: Navigate backwards in completion/menus
-4. **Copy mode**: Enable to select text, disable to resume typing
+4. **Copy mode** (tmux): Enable to select text, disable to resume typing
 5. **Expand for more**: Tap expand icon for full keyboard with Home, End, etc.
 6. **Command history**: Use 🕐 clock icon to quickly reuse previous commands
 7. **Reposition FAB**: Long-press the blue ⚡ button to move it out of your way
