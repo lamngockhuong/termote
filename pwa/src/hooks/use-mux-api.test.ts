@@ -6,6 +6,7 @@ import {
   fetchSnapshot,
   fetchTerminalToken,
   renameTab,
+  scrollPane,
   selectTab,
   sendKeys,
 } from './use-mux-api'
@@ -127,6 +128,15 @@ describe('mux API client', () => {
     expect(JSON.parse(calls[0].init?.body as string)).toEqual({
       keys: 'ls -la',
     })
+  })
+
+  it('scrollPane posts the rows to the pane route', async () => {
+    const { calls } = mockFetch({ body: { ok: true } })
+    expect(await scrollPane('w1:p2', -5)).toBe(true)
+    expect(calls[0].url).toBe('/api/mux/panes/w1%3Ap2/scroll')
+    expect(calls[0].init?.method).toBe('POST')
+    expect(calls[0].init?.headers).toEqual(JSON_HEADERS)
+    expect(JSON.parse(calls[0].init?.body as string)).toEqual({ lines: -5 })
   })
 
   it('fetchTerminalToken uses the stream-token route', async () => {

@@ -330,6 +330,31 @@ describe('TerminalView', () => {
     expect(muxApi.scrollPane).toHaveBeenLastCalledWith('w1:p2', 2)
   })
 
+  it('serverScroll: skips partial rows, a failed request and a pane-less view', async () => {
+    const { term, ref, rerender } = renderView({
+      paneId: 'w1:p2',
+      serverScroll: true,
+    })
+    // Less than a row (default 14px font when none is set): nothing to send.
+    term.options.fontSize = undefined as unknown as number
+    expect(term.wheelCb({ deltaY: -5, deltaMode: 0 })).toBe(false)
+    expect(muxApi.scrollPane).not.toHaveBeenCalled()
+
+    // A failed request does not stop the next one.
+    muxApi.scrollPane.mockRejectedValueOnce(new Error('down'))
+    ref.current!.scrollHistory(3)
+    await act(async () => {})
+    ref.current!.scrollHistory(2)
+    await act(async () => {})
+    expect(muxApi.scrollPane).toHaveBeenLastCalledWith('w1:p2', 2)
+
+    muxApi.scrollPane.mockClear()
+    rerender(<TerminalView ref={ref} serverScroll />)
+    expect(ref.current!.scrollHistory(3)).toBe(true)
+    await act(async () => {})
+    expect(muxApi.scrollPane).not.toHaveBeenCalled()
+  })
+
   it('without serverScroll leaves the wheel and scrolling to xterm.js', () => {
     const { term, ref } = renderView({ backend: 'herdr' })
     expect(term.wheelCb({ deltaY: -30, deltaMode: 0 })).toBe(true)
