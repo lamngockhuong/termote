@@ -46,6 +46,8 @@ type containerOptions struct {
 	tailscale   string
 	noTailscale bool
 	workspace   string
+	mux         string
+	herdrNoAuth bool
 	allowHosts  []string
 	removeHosts []string
 }
@@ -79,6 +81,8 @@ func (c *cli) parseContainerArgs(args []string) (containerOptions, map[string]bo
 	fs.StringVar(&o.tailscale, "tailscale", "", "")
 	fs.BoolVar(&o.noTailscale, "no-tailscale", false, "")
 	fs.StringVar(&o.workspace, "workspace", "", "")
+	fs.StringVar(&o.mux, "mux", "", "")
+	fs.BoolVar(&o.herdrNoAuth, "allow-herdr-no-auth", false, "")
 	fs.Var(&hosts, "allow-host", "")
 	fs.Var(&remove, "remove-host", "")
 	pos, err := parseArgs(fs, args)
@@ -118,6 +122,12 @@ func (c *cli) mergeContainer(o *containerOptions, set map[string]bool, s *contai
 	if !set["workspace"] {
 		o.workspace = s.Workspace
 	}
+	if !set["mux"] {
+		o.mux = s.Mux
+	}
+	if !set["allow-herdr-no-auth"] {
+		o.herdrNoAuth = s.HerdrAllowNoAuth
+	}
 	for _, h := range s.AllowHosts {
 		if !slices.Contains(o.allowHosts, h) {
 			o.allowHosts = append(o.allowHosts, h)
@@ -133,6 +143,9 @@ func (c *cli) mergeContainer(o *containerOptions, set map[string]bool, s *contai
 	}
 	if o.port < 1 || o.port > 65535 {
 		return usageError("invalid port: %d", o.port)
+	}
+	if err := validateMux(o.mux, o.noAuth, o.herdrNoAuth); err != nil {
+		return err
 	}
 	for _, h := range append(slices.Clone(o.allowHosts), o.removeHosts...) {
 		if err := validateHostName(h); err != nil {
@@ -158,7 +171,29 @@ func (c *cli) mergeContainer(o *containerOptions, set map[string]bool, s *contai
 	if strings.ContainsAny(o.workspace, "\"\n\r,") {
 		return usageError("invalid --workspace %q", o.workspace)
 	}
+	if o.mux == "" {
+		o.mux = c.chooseContainerMux()
+		return validateMux(o.mux, o.noAuth, o.herdrNoAuth)
+	}
 	return nil
+}
+
+// chooseContainerMux picks the container's backend the first time. The image
+// has both, so there is nothing to detect: a terminal is asked (tmux first),
+// otherwise it is tmux. The choice is saved; later ups keep it unless --mux
+// is given.
+func (c *cli) chooseContainerMux() string {
+	if !c.interactive {
+		c.infof("Backend: tmux (switch with: termote container up --mux herdr)")
+		return "tmux"
+	}
+	if strings.HasPrefix(c.choose("Terminal backend of the container:", []string{
+		"tmux - one tmux session",
+		"herdr - Herdr workspaces, with agent status",
+	}), "herdr") {
+		return "herdr"
+	}
+	return "tmux"
 }
 
 // containerUp runs the image for this version (or, from a checkout, one
@@ -260,7 +295,8 @@ func (c *cli) containerUp(args []string) error {
 	if pass != "" {
 		cfg.Password = pass
 	}
-	cfg.Container = &containerConfig{LAN: o.lan, NoAuth: o.noAuth, Port: o.port, Tailscale: o.tailscale, AllowHosts: o.allowHosts, Workspace: o.workspace}
+	cfg.Container = &containerConfig{LAN: o.lan, NoAuth: o.noAuth, Port: o.port, Tailscale: o.tailscale, AllowHosts: o.allowHosts, Workspace: o.workspace,
+		Mux: o.mux, HerdrAllowNoAuth: o.herdrNoAuth}
 	if err := c.saveConfig(cfg); err != nil {
 		c.warnf("Could not save the container settings: %v", err)
 	}
@@ -278,7 +314,7 @@ func (c *cli) containerUp(args []string) error {
 		c.infof("Podman has no daemon to restart the container after a reboot; to keep it, run it as a Quadlet unit (see: https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html)")
 	}
 	c.infof("Container running (%s, image %s)", rt, image)
-	c.showAccessInfo(startOptions{lan: o.lan, noAuth: o.noAuth, port: o.port, tailscale: o.tailscale, mux: "tmux", allowHosts: o.allowHosts}, pass, reused)
+	c.showAccessInfo(startOptions{lan: o.lan, noAuth: o.noAuth, port: o.port, tailscale: o.tailscale, mux: o.mux, allowHosts: o.allowHosts}, pass, reused)
 	// One password for both: a new one also changes the native server's.
 	if !reused && pass != "" && saved != nil && saved.Password != "" {
 		c.infof("The native server shares this new password; it takes it at its next restart (termote restart)")
@@ -292,14 +328,17 @@ func (c *cli) containerUp(args []string) error {
 // in a file.
 func (c *cli) runContainer(rt, image, bind string, o containerOptions, pass string, hosts []string) error {
 	env := environ(map[string]string{
-		"NO_AUTH":               strconv.FormatBool(o.noAuth),
-		"TERMOTE_PASS":          pass,
-		"TERMOTE_ALLOWED_HOSTS": strings.Join(hosts, ","),
+		"NO_AUTH":                     strconv.FormatBool(o.noAuth),
+		"TERMOTE_PASS":                pass,
+		"TERMOTE_ALLOWED_HOSTS":       strings.Join(hosts, ","),
+		"TERMOTE_MUX":                 o.mux,
+		"TERMOTE_HERDR_ALLOW_NO_AUTH": strconv.FormatBool(o.herdrNoAuth),
 	})
 	args := []string{"run", "-d", "--name", containerName, "--restart", "unless-stopped",
 		"-p", fmt.Sprintf("%s:%d:%d", bind, o.port, containerPort),
 		"--mount", "type=bind,src=" + o.workspace + ",dst=/workspace", "-w", "/workspace",
-		"-e", "NO_AUTH", "-e", "TERMOTE_PASS", "-e", "TERMOTE_ALLOWED_HOSTS"}
+		"-e", "NO_AUTH", "-e", "TERMOTE_PASS", "-e", "TERMOTE_ALLOWED_HOSTS",
+		"-e", "TERMOTE_MUX", "-e", "TERMOTE_HERDR_ALLOW_NO_AUTH"}
 	args = append(args, c.containerUserArgs(rt)...)
 	if _, err := c.run.Output("", env, rt, append(args, image)...); err != nil {
 		return fmt.Errorf("%s run %s: %w", rt, image, err)

@@ -459,6 +459,8 @@ Options of start (saved; a flag not given keeps its saved value):
 Options of container up (saved apart from start's; the password is shared):
   --port --lan --tailscale --no-tailscale --no-auth --allow-host --remove-host --fresh
   --workspace <dir>          Directory mounted at /workspace (default: ~/termote-workspace)
+  --mux <tmux|herdr>         Backend inside the container (asked the first time, else tmux)
+  --allow-herdr-no-auth      Allow herdr without auth
   --build                    Build the image from a checkout instead of pulling it
 
 Options of update:

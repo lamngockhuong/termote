@@ -50,6 +50,10 @@ type containerConfig struct {
 	Tailscale  string
 	AllowHosts []string
 	Workspace  string
+	// Mux is the backend inside the container, apart from the native one;
+	// "" until the first up picks one.
+	Mux              string
+	HerdrAllowNoAuth bool
 }
 
 // savedContainer keeps the container's settings when the native ones are
@@ -177,12 +181,14 @@ const (
 	keyHerdrAllowNoAuth = "TERMOTE_HERDR_ALLOW_NO_AUTH"
 
 	// The container's keys; present once `container up` ran.
-	keyContainerLAN       = "TERMOTE_CONTAINER_LAN"
-	keyContainerNoAuth    = "TERMOTE_CONTAINER_NO_AUTH"
-	keyContainerPort      = "TERMOTE_CONTAINER_PORT"
-	keyContainerTailscale = "TERMOTE_CONTAINER_TAILSCALE"
-	keyContainerHosts     = "TERMOTE_CONTAINER_ALLOWED_HOSTS"
-	keyContainerWorkspace = "TERMOTE_CONTAINER_WORKSPACE"
+	keyContainerLAN         = "TERMOTE_CONTAINER_LAN"
+	keyContainerNoAuth      = "TERMOTE_CONTAINER_NO_AUTH"
+	keyContainerPort        = "TERMOTE_CONTAINER_PORT"
+	keyContainerTailscale   = "TERMOTE_CONTAINER_TAILSCALE"
+	keyContainerHosts       = "TERMOTE_CONTAINER_ALLOWED_HOSTS"
+	keyContainerWorkspace   = "TERMOTE_CONTAINER_WORKSPACE"
+	keyContainerMux         = "TERMOTE_CONTAINER_MUX"
+	keyContainerHerdrNoAuth = "TERMOTE_CONTAINER_HERDR_ALLOW_NO_AUTH"
 )
 
 func parseUnixConfig(data []byte, key func() string) (*savedConfig, error) {
@@ -214,11 +220,13 @@ func parseUnixConfig(data []byte, key func() string) (*savedConfig, error) {
 	cfg.Port, _ = strconv.Atoi(kv[keyPort])
 	if _, ok := kv[keyContainerPort]; ok {
 		cc := &containerConfig{
-			LAN:        kv[keyContainerLAN] == "true",
-			NoAuth:     kv[keyContainerNoAuth] == "true",
-			Tailscale:  kv[keyContainerTailscale],
-			AllowHosts: splitHosts(kv[keyContainerHosts]),
-			Workspace:  kv[keyContainerWorkspace],
+			LAN:              kv[keyContainerLAN] == "true",
+			NoAuth:           kv[keyContainerNoAuth] == "true",
+			Tailscale:        kv[keyContainerTailscale],
+			AllowHosts:       splitHosts(kv[keyContainerHosts]),
+			Workspace:        kv[keyContainerWorkspace],
+			Mux:              kv[keyContainerMux],
+			HerdrAllowNoAuth: kv[keyContainerHerdrNoAuth] == "true",
 		}
 		cc.Port, _ = strconv.Atoi(kv[keyContainerPort])
 		cfg.Container = cc
@@ -245,7 +253,7 @@ func formatUnixConfig(cfg savedConfig, key string) ([]byte, error) {
 	}
 	values := []string{cfg.Tailscale, cfg.Mux, strings.Join(cfg.AllowHosts, ",")}
 	if cc := cfg.Container; cc != nil {
-		values = append(values, cc.Tailscale, strings.Join(cc.AllowHosts, ","), cc.Workspace)
+		values = append(values, cc.Tailscale, strings.Join(cc.AllowHosts, ","), cc.Workspace, cc.Mux)
 	}
 	for _, v := range values {
 		if strings.ContainsAny(v, "\"\n\r") {
@@ -271,6 +279,8 @@ func formatUnixConfig(cfg savedConfig, key string) ([]byte, error) {
 		w(keyContainerTailscale, cc.Tailscale)
 		w(keyContainerHosts, strings.Join(cc.AllowHosts, ","))
 		w(keyContainerWorkspace, cc.Workspace)
+		w(keyContainerMux, cc.Mux)
+		w(keyContainerHerdrNoAuth, strconv.FormatBool(cc.HerdrAllowNoAuth))
 	}
 	return []byte(b.String()), nil
 }
@@ -291,12 +301,14 @@ type windowsConfigFile struct {
 }
 
 type windowsContainerCfg struct {
-	Lan       bool     `json:"Lan"`
-	NoAuth    bool     `json:"NoAuth"`
-	Port      int      `json:"Port"`
-	Tailscale string   `json:"Tailscale,omitempty"`
-	AllowHost []string `json:"AllowHost,omitempty"`
-	Workspace string   `json:"Workspace,omitempty"`
+	Lan              bool     `json:"Lan"`
+	NoAuth           bool     `json:"NoAuth"`
+	Port             int      `json:"Port"`
+	Tailscale        string   `json:"Tailscale,omitempty"`
+	AllowHost        []string `json:"AllowHost,omitempty"`
+	Workspace        string   `json:"Workspace,omitempty"`
+	Mux              string   `json:"Mux,omitempty"`
+	HerdrAllowNoAuth bool     `json:"HerdrAllowNoAuth,omitempty"`
 }
 
 // dpapiProtect and dpapiUnprotect encrypt for the current Windows user; they
@@ -323,7 +335,8 @@ func parseWindowsConfig(data []byte) (*savedConfig, error) {
 		HerdrAllowNoAuth: f.HerdrAllowNoAuth,
 	}
 	if cc := f.Container; cc != nil {
-		cfg.Container = &containerConfig{LAN: cc.Lan, NoAuth: cc.NoAuth, Port: cc.Port, Tailscale: cc.Tailscale, AllowHosts: cc.AllowHost, Workspace: cc.Workspace}
+		cfg.Container = &containerConfig{LAN: cc.Lan, NoAuth: cc.NoAuth, Port: cc.Port, Tailscale: cc.Tailscale, AllowHosts: cc.AllowHost, Workspace: cc.Workspace,
+			Mux: cc.Mux, HerdrAllowNoAuth: cc.HerdrAllowNoAuth}
 	}
 	if f.EncryptedPass != "" {
 		blob, err := base64.StdEncoding.DecodeString(f.EncryptedPass)
@@ -352,7 +365,8 @@ func formatWindowsConfig(cfg savedConfig, now time.Time) ([]byte, error) {
 		SavedAt:          now.Format(time.RFC3339),
 	}
 	if cc := cfg.Container; cc != nil {
-		f.Container = &windowsContainerCfg{Lan: cc.LAN, NoAuth: cc.NoAuth, Port: cc.Port, Tailscale: cc.Tailscale, AllowHost: cc.AllowHosts, Workspace: cc.Workspace}
+		f.Container = &windowsContainerCfg{Lan: cc.LAN, NoAuth: cc.NoAuth, Port: cc.Port, Tailscale: cc.Tailscale, AllowHost: cc.AllowHosts, Workspace: cc.Workspace,
+			Mux: cc.Mux, HerdrAllowNoAuth: cc.HerdrAllowNoAuth}
 	}
 	if cfg.Password != "" {
 		blob, err := dpapiProtect([]byte(cfg.Password))
