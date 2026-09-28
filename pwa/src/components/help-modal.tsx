@@ -38,7 +38,7 @@ const GESTURES_GUIDE: GuideSection[] = [
     items: [
       { key: 'Swipe Left', desc: 'Cancel (Ctrl+C)' },
       { key: 'Swipe Right', desc: 'Tab completion' },
-      { key: 'Swipe Up/Down', desc: 'Scroll in copy mode' },
+      { key: 'Swipe Up/Down', desc: 'Scroll history' },
       { key: 'Long Press', desc: 'Paste from clipboard' },
       { key: 'Pinch In/Out', desc: 'Decrease/Increase font size' },
     ],

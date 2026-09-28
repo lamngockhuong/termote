@@ -65,6 +65,7 @@ describe('useKeyboardVisible', () => {
 
     expect(result.current.isVisible).toBe(true)
     expect(result.current.keyboardHeight).toBe(400)
+    expect(result.current.viewportHeight).toBe(400)
   })
 
   it('detects keyboard closed when height diff <= 150', () => {

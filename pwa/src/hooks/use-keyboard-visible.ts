@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react'
 export function useKeyboardVisible() {
   const [isVisible, setIsVisible] = useState(false)
   const [keyboardHeight, setKeyboardHeight] = useState(0)
+  // Height of the part of the page the keyboard leaves visible
+  const [viewportHeight, setViewportHeight] = useState(0)
 
   useEffect(() => {
     const viewport = window.visualViewport
@@ -14,6 +16,7 @@ export function useKeyboardVisible() {
       const isKeyboardOpen = heightDiff > 150 // threshold to avoid false positives
       setIsVisible(isKeyboardOpen)
       setKeyboardHeight(isKeyboardOpen ? heightDiff : 0)
+      setViewportHeight(viewport.height)
     }
 
     viewport.addEventListener('resize', handleResize)
@@ -25,5 +28,5 @@ export function useKeyboardVisible() {
     }
   }, [])
 
-  return { isVisible, keyboardHeight }
+  return { isVisible, keyboardHeight, viewportHeight }
 }

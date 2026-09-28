@@ -74,6 +74,7 @@ vi.mock('./hooks/use-media-query', () => ({
 const mockUseKeyboardVisible = vi.fn(() => ({
   isVisible: false,
   keyboardHeight: 0,
+  viewportHeight: 0,
 }))
 vi.mock('./hooks/use-keyboard-visible', () => ({
   useKeyboardVisible: () => mockUseKeyboardVisible(),
@@ -449,6 +450,7 @@ describe('App', () => {
     mockUseKeyboardVisible.mockReturnValue({
       isVisible: false,
       keyboardHeight: 0,
+      viewportHeight: 0,
     })
     mockUseFullscreen.mockReturnValue({
       isFullscreen: false,
@@ -1279,21 +1281,41 @@ describe('App', () => {
     expect(mockScrollTmux).toHaveBeenCalledWith(null, 'up')
   })
 
-  it('gesture onSwipeUp when not in copy mode and no keyboard does nothing', async () => {
+  it('gesture onSwipeUp outside copy mode scrolls the history down', async () => {
     mockIsInCopyMode.mockReturnValue(false)
     render(<App />)
     await waitFor(() => expect(capturedGestureHandlers.onSwipeUp).toBeDefined())
     capturedGestureHandlers.onSwipeUp()
-    expect(mockScrollTmux).not.toHaveBeenCalled()
+    expect(mockScrollTmux).toHaveBeenCalledWith(null, 'down')
   })
 
-  it('gesture onSwipeDown when not in copy mode and no keyboard does nothing', async () => {
+  it('gesture onSwipeDown outside copy mode scrolls the history up', async () => {
     mockIsInCopyMode.mockReturnValue(false)
     render(<App />)
     await waitFor(() =>
       expect(capturedGestureHandlers.onSwipeDown).toBeDefined(),
     )
     capturedGestureHandlers.onSwipeDown()
+    expect(mockScrollTmux).toHaveBeenCalledWith(null, 'up')
+  })
+
+  it('gesture swipes scroll the xterm scrollback without copy mode', async () => {
+    const base = mockUseLocalSessions()
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      mux: {
+        backend: 'herdr',
+        caps: { clientSideSelect: true, copyMode: false },
+      },
+    })
+    render(<App />)
+    await waitFor(() =>
+      expect(capturedGestureHandlers.onSwipeDown).toBeDefined(),
+    )
+    capturedGestureHandlers.onSwipeDown()
+    expect(mockScrollTerminal).toHaveBeenCalledWith(null, 'up')
+    capturedGestureHandlers.onSwipeUp()
+    expect(mockScrollTerminal).toHaveBeenCalledWith(null, 'down')
     expect(mockScrollTmux).not.toHaveBeenCalled()
   })
 
@@ -1328,9 +1350,9 @@ describe('App', () => {
   it('context menu on terminal container is prevented', async () => {
     render(<App />)
     await waitFor(() => screen.getByTestId('terminal-view'))
-    const container = document.querySelector(
-      '.overflow-y-auto.scroll-smooth',
-    ) as HTMLElement
+    // mocked terminal-view → sizing wrapper → container
+    const container = screen.getByTestId('terminal-view').parentElement!
+      .parentElement as HTMLElement
     const prevented = fireEvent.contextMenu(container)
     expect(prevented).toBe(false)
   })
@@ -1348,6 +1370,7 @@ describe('App', () => {
     mockUseKeyboardVisible.mockReturnValue({
       isVisible: true,
       keyboardHeight: 0,
+      viewportHeight: 400,
     })
     render(<App />)
     await waitFor(() => screen.getByRole('button', { name: 'ToggleKbd' }))
@@ -1355,31 +1378,32 @@ describe('App', () => {
     expect(mockBlurTerminal).toHaveBeenCalled()
   })
 
-  it('gesture onSwipeDown scrolls terminalContainer when keyboard is visible (line 153)', async () => {
+  it('sizes the app to the visible height while the keyboard is open', async () => {
+    mockUseKeyboardVisible.mockReturnValue({
+      isVisible: true,
+      keyboardHeight: 300,
+      viewportHeight: 412,
+    })
+    const { container } = render(<App />)
+    await waitFor(() => screen.getByTestId('terminal-view'))
+    expect((container.firstChild as HTMLElement).style.height).toBe('412px')
+  })
+
+  it('gesture swipes scroll the history while the keyboard is open', async () => {
     mockIsInCopyMode.mockReturnValue(false)
     mockUseKeyboardVisible.mockReturnValue({
       isVisible: true,
       keyboardHeight: 300,
+      viewportHeight: 400,
     })
     render(<App />)
     await waitFor(() =>
       expect(capturedGestureHandlers.onSwipeDown).toBeDefined(),
     )
-    // terminalContainerRef.current.scrollTop -= 150
-    // Since jsdom doesn't render layout, we just verify no crash
-    expect(() => capturedGestureHandlers.onSwipeDown()).not.toThrow()
-  })
-
-  it('gesture onSwipeUp scrolls terminalContainer when keyboard is visible (line 144)', async () => {
-    mockIsInCopyMode.mockReturnValue(false)
-    mockUseKeyboardVisible.mockReturnValue({
-      isVisible: true,
-      keyboardHeight: 300,
-    })
-    render(<App />)
-    await waitFor(() => expect(capturedGestureHandlers.onSwipeUp).toBeDefined())
-    // terminalContainerRef.current.scrollTop += 150
-    expect(() => capturedGestureHandlers.onSwipeUp()).not.toThrow()
+    capturedGestureHandlers.onSwipeDown()
+    expect(mockScrollTmux).toHaveBeenCalledWith(null, 'up')
+    capturedGestureHandlers.onSwipeUp()
+    expect(mockScrollTmux).toHaveBeenCalledWith(null, 'down')
   })
 
   it('ctrlActive effect calls blurTerminal and focuses ctrl input (lines 198-199)', async () => {

@@ -69,15 +69,15 @@ colors: {
 
 ## Gestures (Mobile)
 
-| Gesture     | Action                  | Terminal Command |
-| ----------- | ----------------------- | ---------------- |
-| Swipe left  | Cancel/interrupt        | Ctrl+C           |
-| Swipe right | Tab completion          | Tab              |
-| Swipe up    | Scroll up (copy mode)   | PageUp           |
-| Swipe down  | Scroll down (copy mode) | PageDown         |
-| Long press  | Paste clipboard         | Paste            |
-| Pinch in    | Decrease font           | -                |
-| Pinch out   | Increase font           | -                |
+| Gesture     | Action           | Terminal Command |
+| ----------- | ---------------- | ---------------- |
+| Swipe left  | Cancel/interrupt | Ctrl+C           |
+| Swipe right | Tab completion   | Tab              |
+| Swipe up    | Scroll down      | PageDown         |
+| Swipe down  | Scroll up        | PageUp           |
+| Long press  | Paste clipboard  | Paste            |
+| Pinch in    | Decrease font    | -                |
+| Pinch out   | Increase font    | -                |
 
 ### Gesture Zone
 

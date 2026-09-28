@@ -279,8 +279,8 @@ Test on real mobile device:
 ### Scrolling & Copy Mode
 
 - [ ] Scroll up/down acts as Page Up/Down when copy mode enabled
-- [ ] Terminal scrollable when mobile keyboard is open
-- [ ] Terminal scrollable in Vietnamese IME input mode
+- [ ] Terminal shrinks to fit above the toolbar when the mobile keyboard is open (bottom rows stay visible)
+- [ ] Terminal fits above the toolbar in Vietnamese IME input mode
 - [ ] Scrolling still works (not blocked by swipe gestures)
 
 ### Gesture Hints Overlay
