@@ -594,12 +594,17 @@ export default function App() {
 
       {/* Modals */}
       <AboutModal isOpen={aboutOpen} onClose={() => setAboutOpen(false)} />
-      <HelpModal isOpen={helpOpen} onClose={() => setHelpOpen(false)} />
+      <HelpModal
+        isOpen={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        copyModeSupported={copyModeSupported}
+      />
       <SettingsModal
         isOpen={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         settings={settings}
         onUpdateSetting={updateSetting}
+        tmuxBufferSupported={copyModeSupported}
         onShowGestureHints={isMobile ? showGestureHints : undefined}
         onCheckForUpdate={async () => {
           const result = await checkForUpdate(true)

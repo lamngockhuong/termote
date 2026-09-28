@@ -20,6 +20,8 @@ interface Props {
   updateChecking?: boolean
   onClearHistory?: () => void
   historyCount?: number
+  // Backend has a tmux paste buffer; false hides the paste source choice
+  tmuxBufferSupported?: boolean
 }
 
 function ToggleRow({
@@ -153,6 +155,7 @@ export function SettingsModal({
   updateChecking,
   onClearHistory,
   historyCount = 0,
+  tmuxBufferSupported = true,
 }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const [inlineToast, setInlineToast] = useState<string | null>(null)
@@ -228,40 +231,42 @@ export function SettingsModal({
             </div>
           </div>
 
-          <div>
-            <p className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
-              Paste button source
-            </p>
-            <div className="space-y-2">
-              {PASTE_SOURCE_OPTIONS.map((opt) => (
-                <label
-                  key={opt.value}
-                  className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                    settings.pasteSource === opt.value
-                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                      : 'border-zinc-200 dark:border-zinc-600 hover:bg-zinc-50 dark:hover:bg-zinc-700/50'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="pasteSource"
-                    value={opt.value}
-                    checked={settings.pasteSource === opt.value}
-                    onChange={() => onUpdateSetting('pasteSource', opt.value)}
-                    className="mt-0.5 accent-blue-500"
-                  />
-                  <div>
-                    <div className="text-sm font-medium text-zinc-900 dark:text-white">
-                      {opt.label}
+          {tmuxBufferSupported && (
+            <div>
+              <p className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+                Paste button source
+              </p>
+              <div className="space-y-2">
+                {PASTE_SOURCE_OPTIONS.map((opt) => (
+                  <label
+                    key={opt.value}
+                    className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                      settings.pasteSource === opt.value
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                        : 'border-zinc-200 dark:border-zinc-600 hover:bg-zinc-50 dark:hover:bg-zinc-700/50'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="pasteSource"
+                      value={opt.value}
+                      checked={settings.pasteSource === opt.value}
+                      onChange={() => onUpdateSetting('pasteSource', opt.value)}
+                      className="mt-0.5 accent-blue-500"
+                    />
+                    <div>
+                      <div className="text-sm font-medium text-zinc-900 dark:text-white">
+                        {opt.label}
+                      </div>
+                      <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                        {opt.desc}
+                      </div>
                     </div>
-                    <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                      {opt.desc}
-                    </div>
-                  </div>
-                </label>
-              ))}
+                  </label>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           <ToggleRow
             label="Toolbar default expanded"

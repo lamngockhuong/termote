@@ -107,6 +107,38 @@ describe('HelpModal', () => {
     expect(screen.getByText('Windows (Ctrl+B, then...)')).toBeInTheDocument()
   })
 
+  it('hides the tmux tab and tmux-only toolbar rows without copy mode', () => {
+    render(
+      <HelpModal isOpen={true} onClose={vi.fn()} copyModeSupported={false} />,
+    )
+    expect(screen.queryByText('tmux')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByText('Toolbar'))
+    expect(screen.queryByText('Toggle tmux copy mode')).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('tmux prefix (expanded mode)'),
+    ).not.toBeInTheDocument()
+    expect(screen.getByText('Scroll history')).toBeInTheDocument()
+    expect(
+      screen.getByText('Paste from the system clipboard'),
+    ).toBeInTheDocument()
+  })
+
+  it('falls back to Gestures when the open tmux tab goes away', () => {
+    const { rerender } = render(<HelpModal isOpen={true} onClose={vi.fn()} />)
+    fireEvent.click(screen.getByText('tmux'))
+    rerender(
+      <HelpModal isOpen={true} onClose={vi.fn()} copyModeSupported={false} />,
+    )
+    expect(screen.getByText('Touch Gestures')).toBeInTheDocument()
+  })
+
+  it('shows the tmux-only toolbar rows with copy mode', () => {
+    render(<HelpModal isOpen={true} onClose={vi.fn()} />)
+    fireEvent.click(screen.getByText('Toolbar'))
+    expect(screen.getByText('Toggle tmux copy mode')).toBeInTheDocument()
+    expect(screen.queryByText('Scroll history')).not.toBeInTheDocument()
+  })
+
   it('switches back to Gestures tab', () => {
     render(<HelpModal isOpen={true} onClose={vi.fn()} />)
     fireEvent.click(screen.getByText('Toolbar'))
