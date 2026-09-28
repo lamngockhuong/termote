@@ -570,16 +570,7 @@ func (m *herdrMux) SendKeys(ctx context.Context, paneID, keys string) error {
 	if keys == "" {
 		return nil
 	}
-	done, err := m.writer(paneID).enqueue([]byte(keys))
-	if err != nil {
-		return err
-	}
-	select {
-	case err := <-done:
-		return herdrInputError(err)
-	case <-ctx.Done():
-		return ctx.Err()
-	}
+	return m.typeInput(ctx, paneID, keys)
 }
 
 // herdrScroll is a pane's scroll position in rows above the live screen.
@@ -588,12 +579,30 @@ type herdrScroll struct {
 	Max    uint64 `json:"max_offset_from_bottom"`
 }
 
+// maxWheelEvents caps the wheel reports one Scroll sends to a program.
+const maxWheelEvents = 50
+
+// herdrJumpToBottom is the key that returns an agent's own view to its live
+// screen, where wheel reports would need an unknown number of rows (Claude
+// Code accelerates the wheel).
+var herdrJumpToBottom = map[string]string{
+	"claude": "\x1b[1;5F", // Ctrl+End
+}
+
 // Scroll moves the pane's shared view, the one every herdr client and observer
 // renders: observe only sends screen frames, so its history never reaches the
 // client's own scrollback. herdr sets an absolute offset, so the current one
 // is read first; scrollMu keeps two requests from reading the same offset.
+//
+// An agent with no history in herdr (Claude Code's fullscreen mode) draws on
+// the alternate screen and keeps its history itself; it gets one wheel report
+// per row instead, the way a terminal passes the wheel on, and scrolling down
+// by the whole limit (back to the live screen) sends the agent's jump key when
+// it has one. A plain shell never gets them, since it would echo them at its
+// prompt.
 func (m *herdrMux) Scroll(ctx context.Context, paneID string, lines int) error {
-	if _, err := m.requirePane(ctx, paneID); err != nil {
+	size, err := m.requirePane(ctx, paneID)
+	if err != nil {
 		return err
 	}
 	if lines == 0 {
@@ -603,6 +612,7 @@ func (m *herdrMux) Scroll(ctx context.Context, paneID string, lines int) error {
 	defer m.scrollMu.Unlock()
 	var res struct {
 		Pane struct {
+			Agent  string      `json:"agent"`
 			Scroll herdrScroll `json:"scroll"`
 		} `json:"pane"`
 	}
@@ -610,13 +620,45 @@ func (m *herdrMux) Scroll(ctx context.Context, paneID string, lines int) error {
 		return herdrInputError(err)
 	}
 	cur := res.Pane.Scroll
+	if cur.Max == 0 && res.Pane.Agent != "" {
+		if key, ok := herdrJumpToBottom[res.Pane.Agent]; ok && lines <= -maxScrollLines {
+			return m.typeInput(ctx, paneID, key)
+		}
+		return m.sendWheel(ctx, paneID, size, lines)
+	}
 	next := int64(cur.Offset) + int64(lines)
 	next = max(0, min(next, int64(cur.Max)))
 	if uint64(next) == cur.Offset {
 		return nil
 	}
-	err := m.rpc.call(ctx, "pane.scroll", map[string]any{"pane_id": paneID, "offset_from_bottom": next}, nil)
+	err = m.rpc.call(ctx, "pane.scroll", map[string]any{"pane_id": paneID, "offset_from_bottom": next}, nil)
 	return herdrInputError(err)
+}
+
+// sendWheel types SGR wheel reports (button 64 up, 65 down) at the middle of
+// the pane, through the pane's input queue so they keep their place among
+// keystrokes.
+func (m *herdrMux) sendWheel(ctx context.Context, paneID string, size Size, lines int) error {
+	button := 64
+	if lines < 0 {
+		button, lines = 65, -lines
+	}
+	report := fmt.Sprintf("\x1b[<%d;%d;%dM", button, max(1, size.Cols/2), max(1, size.Rows/2))
+	return m.typeInput(ctx, paneID, strings.Repeat(report, min(lines, maxWheelEvents)))
+}
+
+// typeInput queues input for the pane and waits until herdr has accepted it.
+func (m *herdrMux) typeInput(ctx context.Context, paneID, input string) error {
+	done, err := m.writer(paneID).enqueue([]byte(input))
+	if err != nil {
+		return err
+	}
+	select {
+	case err := <-done:
+		return herdrInputError(err)
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (m *herdrMux) requireGroup(ctx context.Context, id string) error {

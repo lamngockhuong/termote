@@ -46,6 +46,7 @@ type fakeHerdr struct {
 	subs      []net.Conn
 	scroll    int // pane.get offset_from_bottom; pane.scroll sets it, clamped to scrollMax
 	scrollMax int
+	agent     string // pane.get agent
 }
 
 func fakeSocketPath(t *testing.T) string {
@@ -189,8 +190,13 @@ func (f *fakeHerdr) handle(c net.Conn) {
 			f.scroll = max(0, min(int(p["offset_from_bottom"].(float64)), f.scrollMax))
 		}
 		scroll := map[string]int{"offset_from_bottom": f.scroll, "max_offset_from_bottom": f.scrollMax, "viewport_rows": 41}
+		agent := f.agent
 		f.mu.Unlock()
-		reply(map[string]any{"type": "pane_info", "pane": map[string]any{"pane_id": p["pane_id"], "scroll": scroll}})
+		pane := map[string]any{"pane_id": p["pane_id"], "scroll": scroll}
+		if agent != "" {
+			pane["agent"] = agent
+		}
+		reply(map[string]any{"type": "pane_info", "pane": pane})
 	case "pane.send_text":
 		f.mu.Lock()
 		f.inFlight++
@@ -653,6 +659,68 @@ func TestHerdrScroll(t *testing.T) {
 	}
 	if err := m.Scroll(ctx, "wR:nope", 1); !errors.As(err, &ie) {
 		t.Errorf("Scroll(unknown pane) = %v, want inputError", err)
+	}
+}
+
+func TestHerdrScrollAgentGetsWheelReports(t *testing.T) {
+	f := newFakeHerdr(t)
+	f.agent = "claude" // fullscreen: no history in herdr
+	m := newTestHerdrMux(t, f)
+	size, err := m.requirePane(context.Background(), "wR:p3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := fmt.Sprintf(";%d;%dM", size.Cols/2, size.Rows/2)
+	if err := m.Scroll(context.Background(), "wR:p3", 2); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Scroll(context.Background(), "wR:p3", -1000); err != nil {
+		t.Fatal(err)
+	}
+	// Back to the live screen: Claude's own jump key.
+	if err := m.Scroll(context.Background(), "wR:p3", -maxScrollLines); err != nil {
+		t.Fatal(err)
+	}
+	f.mu.Lock()
+	f.agent = "codex" // no known jump key: wheel reports, capped
+	f.mu.Unlock()
+	if err := m.Scroll(context.Background(), "wR:p3", -maxScrollLines); err != nil {
+		t.Fatal(err)
+	}
+	f.mu.Lock()
+	got := strings.Join(f.texts, "")
+	f.agent = "claude"
+	f.mu.Unlock()
+	down := strings.Repeat("\x1b[<65"+at, maxWheelEvents)
+	want := strings.Repeat("\x1b[<64"+at, 2) + down + "\x1b[1;5F" + down
+	if got != want {
+		t.Errorf("sent %q, want %q", got, want)
+	}
+	if n := f.count("pane.scroll"); n != 0 {
+		t.Errorf("%d pane.scroll calls for a pane without history", n)
+	}
+
+	// An agent that does leave history in herdr is scrolled there; a shell
+	// without history yet gets nothing typed at its prompt.
+	f.mu.Lock()
+	f.scrollMax, f.texts = 30, nil
+	f.mu.Unlock()
+	if err := m.Scroll(context.Background(), "wR:p3", 4); err != nil {
+		t.Fatal(err)
+	}
+	f.mu.Lock()
+	if f.scroll != 4 {
+		t.Errorf("agent with history: offset %d, want 4", f.scroll)
+	}
+	f.agent, f.scroll, f.scrollMax = "", 0, 0
+	f.mu.Unlock()
+	if err := m.Scroll(context.Background(), "wR:p3", 4); err != nil {
+		t.Fatal(err)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.texts) != 0 {
+		t.Errorf("typed %q into a pane without an agent", f.texts)
 	}
 }
 

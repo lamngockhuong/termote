@@ -154,6 +154,9 @@ xterm.js scrollback. The PWA turns the mouse wheel and the scroll buttons into
 `/scroll` calls instead: `lines` rows back into the pane's history (negative: toward the live
 screen, at most 10000 either way), clamped by Herdr. This moves the pane's shared view, so the
 Herdr desktop scrolls with it; typing in the PWA returns it to the live screen first.
+An agent that leaves no history in Herdr (Claude Code in fullscreen mode draws on the alternate
+screen) gets SGR wheel reports instead, one per row and at most 50 per call; returning to the
+live screen sends Claude Code's Ctrl+End. A pane without an agent is never sent wheel reports.
 
 `apiVersion` is bumped on every breaking change to this API; the PWA compares it with its own
 build and reloads on mismatch. The old `/api/tmux/*` paths and the `/terminal/` iframe route
