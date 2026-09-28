@@ -9,8 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"os"
-	"path/filepath"
 	"strconv"
 	"sync/atomic"
 	"time"
@@ -38,17 +36,9 @@ type herdrError struct {
 
 func (e *herdrError) Error() string { return "herdr " + e.Code + ": " + e.Message }
 
-// herdrSocketPath returns $HERDR_SOCKET_PATH, else ~/.config/herdr/herdr.sock.
-func herdrSocketPath() string {
-	if p := os.Getenv("HERDR_SOCKET_PATH"); p != "" {
-		return p
-	}
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".config", "herdr", "herdr.sock")
-}
-
-// herdrRPC talks to the herdr server socket. The server answers one request per
-// connection, except events.subscribe which keeps it open.
+// herdrRPC talks to the herdr server socket (a named pipe on Windows). The
+// server answers one request per connection, except events.subscribe which
+// keeps it open.
 type herdrRPC struct {
 	socket string
 	seq    atomic.Uint64
@@ -78,8 +68,7 @@ func (c *herdrRPC) dial(ctx context.Context, method string, params any) (net.Con
 	if len(line) >= herdrMaxRequest {
 		return nil, fmt.Errorf("herdr %s request too large (%d bytes)", method, len(line))
 	}
-	var d net.Dialer
-	conn, err := d.DialContext(ctx, "unix", c.socket)
+	conn, err := dialHerdr(ctx, c.socket)
 	if err != nil {
 		return nil, err
 	}
@@ -110,14 +99,7 @@ func (c *herdrRPC) call(ctx context.Context, method string, params, out any) err
 	defer stop()
 	reply, err := readHerdrReply(bufio.NewReaderSize(conn, 64*1024))
 	if err != nil {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		// The socket deadline equals ctx's and can fire first.
-		if errors.Is(err, os.ErrDeadlineExceeded) {
-			return fmt.Errorf("herdr %s: %w", method, context.DeadlineExceeded)
-		}
-		return fmt.Errorf("herdr %s: %w", method, err)
+		return herdrReadError(ctx, method, err)
 	}
 	if reply.Error != nil {
 		return reply.Error
@@ -128,6 +110,20 @@ func (c *herdrRPC) call(ctx context.Context, method string, params, out any) err
 		}
 	}
 	return nil
+}
+
+// herdrReadError is the error of call when reading the reply failed.
+func herdrReadError(ctx context.Context, method string, err error) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	// The socket deadline equals ctx's and can fire first. A named pipe
+	// reports it as its own timeout error, not os.ErrDeadlineExceeded.
+	var ne net.Error
+	if errors.As(err, &ne) && ne.Timeout() {
+		return fmt.Errorf("herdr %s: %w", method, context.DeadlineExceeded)
+	}
+	return fmt.Errorf("herdr %s: %w", method, err)
 }
 
 // readHerdrReply reads one NDJSON line, bounded by herdrMaxReply.

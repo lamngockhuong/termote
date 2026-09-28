@@ -13,6 +13,4 @@ func newHerdrMux(context.Context, string) (Mux, error) {
 	return nil, errors.New("TERMOTE_MUX=herdr is not supported on Windows")
 }
 
-func herdrSocketPath() string { return "" }
-
 func isHerdrObserveCmdline(string) bool { return false }

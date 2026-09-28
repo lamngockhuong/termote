@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -161,13 +162,12 @@ func (c *cli) detectMux() (string, error) {
 	return "", errors.New("no terminal backend found. Install tmux (brew install tmux, or sudo apt install tmux) or run herdr (https://herdr.dev)")
 }
 
-// herdrReachable reports whether herdr's socket accepts a connection.
+// herdrReachable reports whether herdr's socket (named pipe on Windows)
+// accepts a connection.
 func herdrReachable() bool {
-	path := herdrSocketPath()
-	if path == "" {
-		return false
-	}
-	conn, err := net.DialTimeout("unix", path, time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	conn, err := dialHerdr(ctx, herdrSocketPath())
 	if err != nil {
 		return false
 	}
