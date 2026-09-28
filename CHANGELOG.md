@@ -5,9 +5,9 @@
 
 ### ⚠ BREAKING CHANGES
 
-* config and logs move to XDG paths, release assets are renamed, the shims no longer run installed releases, and update is unavailable in this build.
+* config and logs move to XDG paths, release assets are renamed, the shims no longer run installed releases, and 1.0 does not upgrade a 0.x install in place.
 * release assets, the log service name and the pid/log file names change, and install no longer stops a 0.x server started from tmux-api/tmux-api.
-* tmux-api streams the terminal itself over /api/mux/stream (no ttyd), install/update logic moves into the Go CLI with thin termote.sh/termote.ps1 shims, and requests pass a Host allowlist plus Origin/Content-Type and stream-token guards. See docs/upgrade-1.0.md for migration.
+* termote streams the terminal itself over /api/mux/stream (no ttyd), install/update logic moves into the Go CLI with thin termote.sh/termote.ps1 shims, and requests pass a Host allowlist plus Origin/Content-Type and stream-token guards. Uninstall 0.x, then install 1.0 (see "Upgrading from 0.x" in the README).
 * the container image no longer contains ttyd, and the interactive menu no longer uses gum.
 * **api:** /terminal/ is gone; terminals stream over /api/mux/stream.
 * **api:** All /api/tmux routes removed; use /api/mux instead

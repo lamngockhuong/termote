@@ -48,6 +48,9 @@ pwa/test-results/
 pwa/coverage/
 pwa/e2e/*.png
 
+# TypeScript incremental build info
+*.tsbuildinfo
+
 # Plans and reports (generated)
 pwa/plans/
 plans/
