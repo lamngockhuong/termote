@@ -185,6 +185,13 @@ func TestIsPWAPublicPath(t *testing.T) {
 		{"/index.html", false},
 		{"/workbox-.js", true},      // edge case: minimal workbox name
 		{"/workbox-test.ts", false}, // not .js extension
+		// Unclean or nested paths resolve to another file once cleaned
+		{"/workbox-/../assets/index.js", false},
+		{"/workbox-/../api/mux/sessions.js", false},
+		{"/workbox-x/app.js", false},
+		{"/workbox-a.js/", false},
+		{"//workbox-a.js", false},
+		{"/./workbox-a.js", false},
 	}
 
 	for _, tt := range tests {
@@ -193,6 +200,37 @@ func TestIsPWAPublicPath(t *testing.T) {
 				t.Errorf("isPWAPublicPath(%q) = %v, want %v", tt.path, got, tt.want)
 			}
 		})
+	}
+}
+
+// An encoded path that only looks like a workbox script must not serve
+// another file without auth once the static handler cleans it.
+func TestPublicPathBypassNeedsAuth(t *testing.T) {
+	cfg := testConfig(t)
+	if err := os.MkdirAll(cfg.PWADir+"/assets", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"index.html", "assets/app.js", "workbox-abc.js"} {
+		if err := os.WriteFile(cfg.PWADir+"/"+name, []byte(name), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	h, err := newServeHandler(cfg, &fakeMux{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for path, want := range map[string]int{
+		"/workbox-abc.js":                          http.StatusOK,
+		"/workbox-%2f..%2fassets%2fapp.js":         http.StatusUnauthorized,
+		"/workbox-/..%2fassets/app.js":             http.StatusUnauthorized,
+		"/workbox-%2f..%2findex.html%2fx.js":       http.StatusUnauthorized,
+		"/workbox-%2f..%2fapi%2fmux%2fsessions.js": http.StatusUnauthorized,
+	} {
+		req := httptest.NewRequest("GET", "http://localhost:7680"+path, nil)
+		req.Host = "localhost:7680"
+		if rec := serve(h, req); rec.Code != want {
+			t.Errorf("GET %s = %d %q, want %d", path, rec.Code, rec.Body.String(), want)
+		}
 	}
 }
 
