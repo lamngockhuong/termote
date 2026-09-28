@@ -270,7 +270,7 @@ sudo tailscale set --operator=$USER                    # Linux, once: let termot
 | macOS            | ✓        | ✓          | `install.sh`   |
 | Windows          | ✓        | ✓          | `install.ps1`  |
 
-> **Windowsサポート**: コンテナモードにはDocker DesktopまたはPodman Desktopが必要です。ネイティブモードには[psmux](https://github.com/psmux/psmux)（Windows用のtmux互換ターミナルマルチプレクサー）が必要で、`winget install psmux`でインストールします。Windowsのサービスはまだ実機で検証されていません。問題があればGitHubで報告してください。
+> **Windowsサポート**: コンテナモードにはDocker DesktopまたはPodman Desktopが必要です。ネイティブモードには[psmux](https://github.com/psmux/psmux)（Windows用のtmux互換ターミナルマルチプレクサー）が必要で、`winget install psmux`でインストールします。代わりに[Herdr](https://herdr.dev/#install)のサーバーを起動しておいても使えます。Windowsのサービスはまだ実機で検証されていません。問題があればGitHubで報告してください。
 
 ## モバイルでの使い方
 

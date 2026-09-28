@@ -272,7 +272,7 @@ The mapping is applied each time the server starts. `stop`, `start --no-tailscal
 | macOS    | ✓         | ✓      | `install.sh`  |
 | Windows  | ✓         | ✓      | `install.ps1` |
 
-> **Windows Support**: Container mode requires Docker Desktop or Podman Desktop; native mode requires [psmux](https://github.com/psmux/psmux) (tmux-compatible terminal multiplexer for Windows), installed with `winget install psmux`. The Windows service has not yet been verified on a real machine; report any issues on GitHub.
+> **Windows Support**: Container mode requires Docker Desktop or Podman Desktop; native mode requires [psmux](https://github.com/psmux/psmux) (tmux-compatible terminal multiplexer for Windows), installed with `winget install psmux`, or a running [Herdr](https://herdr.dev/#install) server. The Windows service has not yet been verified on a real machine; report any issues on GitHub.
 
 ## Mobile Usage
 

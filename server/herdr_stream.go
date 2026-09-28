@@ -1,5 +1,3 @@
-//go:build !windows
-
 package main
 
 import (
@@ -14,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -100,9 +97,10 @@ func (s *herdrStream) Sizes() <-chan sizeChange { return s.sizes }
 func (s *herdrStream) Done() <-chan struct{}    { return s.done }
 func (s *herdrStream) ExitCode() int            { return s.code }
 
-// Close stops the observer and waits until its process group is gone. It
-// also closes the pipe: the reader may have stopped, and an observer being
-// replaced for a resize would otherwise wait forever to hand over its output.
+// Close stops the observer and waits until its process group (its job on
+// Windows) is gone. It also closes the pipe: the reader may have stopped, and
+// an observer being replaced for a resize would otherwise wait forever to
+// hand over its output.
 // stop is closed first so that run, seeing decoding end, knows why.
 func (s *herdrStream) Close() error {
 	s.stopOnce.Do(func() {
@@ -187,8 +185,10 @@ func (s *herdrStream) announce(size Size) bool {
 	}
 }
 
-// observer is one running observe process.
+// observer is one running observe process. How it is stopped depends on the
+// OS: a process group on Unix, a Job Object on Windows (observerProc).
 type observer struct {
+	observerProc
 	cmd     *exec.Cmd
 	stderr  *bytes.Buffer
 	decoded chan struct{} // stdout ended
@@ -211,6 +211,11 @@ func startObserver(pane string, size Size, out io.Writer) (*observer, error) {
 	p := &observer{cmd: cmd, stderr: &bytes.Buffer{}, decoded: make(chan struct{}), waited: make(chan struct{})}
 	cmd.Stderr = p.stderr
 	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+	if err := p.attach(); err != nil {
+		cmd.Process.Kill()
+		cmd.Wait()
 		return nil, err
 	}
 	go func() {
@@ -274,27 +279,4 @@ func (p *observer) wait() int {
 		return -1
 	}
 	return p.code
-}
-
-// kill ends the observer: SIGTERM, then SIGKILL after processKillWait.
-func (p *observer) kill() {
-	pid := p.cmd.Process.Pid
-	select {
-	case <-p.waited:
-	default:
-		syscall.Kill(-pid, syscall.SIGTERM)
-	}
-	select {
-	case <-p.waited:
-	case <-time.After(processKillWait):
-		syscall.Kill(-pid, syscall.SIGKILL)
-		<-p.waited
-	}
-	p.killGroup()
-}
-
-// killGroup removes anything left in the observer's process group. The kernel
-// does not reuse a pid while it still names a live group.
-func (p *observer) killGroup() {
-	syscall.Kill(-p.cmd.Process.Pid, syscall.SIGKILL)
 }

@@ -272,7 +272,7 @@ Die Zuordnung wird bei jedem Start des Servers angewendet. `stop`, `start --no-t
 | macOS     | ✓         | ✓      | `install.sh`  |
 | Windows   | ✓         | ✓      | `install.ps1` |
 
-> **Windows-Unterstützung**: Der Container-Modus erfordert Docker Desktop oder Podman Desktop, der Native-Modus erfordert [psmux](https://github.com/psmux/psmux) (tmux-kompatibler Terminal-Multiplexer für Windows), installiert mit `winget install psmux`. Der Windows-Dienst wurde noch nicht auf einem echten Rechner geprüft; bitte melden Sie Probleme auf GitHub.
+> **Windows-Unterstützung**: Der Container-Modus erfordert Docker Desktop oder Podman Desktop, der Native-Modus erfordert [psmux](https://github.com/psmux/psmux) (tmux-kompatibler Terminal-Multiplexer für Windows), installiert mit `winget install psmux`, oder einen laufenden [Herdr](https://herdr.dev/#install)-Server. Der Windows-Dienst wurde noch nicht auf einem echten Rechner geprüft; bitte melden Sie Probleme auf GitHub.
 
 ## Mobile Nutzung
 

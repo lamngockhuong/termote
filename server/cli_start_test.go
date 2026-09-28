@@ -85,8 +85,11 @@ func TestValidateStart(t *testing.T) {
 		t.Errorf("herdr no-auth with --allow-herdr-no-auth refused: %v", err)
 	}
 	win := newTestCLI(t, "windows")
-	if err := win.validateStart(&startOptions{mux: "herdr"}); err == nil {
-		t.Error("herdr accepted on Windows")
+	if err := win.validateStart(&startOptions{mux: "herdr"}); err != nil {
+		t.Errorf("herdr refused on Windows: %v", err)
+	}
+	if err := win.validateStart(&startOptions{mux: "herdr", noAuth: true}); err == nil {
+		t.Error("herdr --no-auth without --allow-herdr-no-auth accepted on Windows")
 	}
 }
 
@@ -104,8 +107,12 @@ func TestDetectMux(t *testing.T) {
 		{"both, no terminal", "linux", true, true, false, "", "tmux"},
 		{"both, asked, herdr first", "linux", true, true, true, "1\n", "herdr"},
 		{"both, asked, tmux", "linux", true, true, true, "2\n", "tmux"},
-		{"windows ignores herdr", "windows", true, true, false, "", "tmux"},
+		{"windows herdr only", "windows", true, false, false, "", "herdr"},
+		{"windows both, no terminal", "windows", true, true, false, "", "tmux"},
+		{"windows both, asked, herdr first", "windows", true, true, true, "1\n", "herdr"},
+		{"windows both, asked, psmux", "windows", true, true, true, "2\n", "tmux"},
 		{"none", "linux", false, false, false, "", ""},
+		{"windows none", "windows", false, false, false, "", ""},
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
@@ -117,6 +124,9 @@ func TestDetectMux(t *testing.T) {
 			got, err := tc.detectMux()
 			if got != tt.want || (tt.want == "") != (err != nil) {
 				t.Fatalf("detectMux = %q, %v; want %q", got, err, tt.want)
+			}
+			if err != nil && !strings.Contains(err.Error(), "herdr") {
+				t.Errorf("error does not mention herdr: %v", err)
 			}
 		})
 	}

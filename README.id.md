@@ -272,7 +272,7 @@ Pemetaan diterapkan setiap kali server dijalankan. `stop`, `start --no-tailscale
 | macOS    | ✓         | ✓      | `install.sh`  |
 | Windows  | ✓         | ✓      | `install.ps1` |
 
-> **Dukungan Windows**: Mode container membutuhkan Docker Desktop atau Podman Desktop; mode native membutuhkan [psmux](https://github.com/psmux/psmux) (terminal multiplexer yang kompatibel dengan tmux untuk Windows), dipasang dengan `winget install psmux`. Service di Windows belum diverifikasi di mesin sungguhan; laporkan masalah apa pun di GitHub.
+> **Dukungan Windows**: Mode container membutuhkan Docker Desktop atau Podman Desktop; mode native membutuhkan [psmux](https://github.com/psmux/psmux) (terminal multiplexer yang kompatibel dengan tmux untuk Windows), dipasang dengan `winget install psmux`, atau server [Herdr](https://herdr.dev/#install) yang sedang berjalan. Service di Windows belum diverifikasi di mesin sungguhan; laporkan masalah apa pun di GitHub.
 
 ## Penggunaan Mobile
 

@@ -114,7 +114,11 @@ attach a terminal, health) with two implementations:
   (`session.observe`) and sends keys with `pane.send_text` through a single serialising writer;
   it does not use Herdr's `control`, which would resize the shared desktop PTY. Per-pane agent
   status comes from Herdr's `pane.agent_status_changed` event and is surfaced as the PWA's
-  agent-status badge, refreshed at most once per `pollInterval`.
+  agent-status badge, refreshed at most once per `pollInterval`. The OS-specific parts are split
+  by build tag: `herdr_socket_*.go` finds and dials the socket (a Unix socket, or on Windows the
+  named pipe `\\.\pipe\<socket path>`, kept only when its server runs as the same user), and
+  `herdr_observer_*.go` stops `observe` (a process group on Unix, a `KILL_ON_JOB_CLOSE` Job
+  Object on Windows, so it dies with the server as a ConPTY terminal does).
 
 ## Communication Protocols
 
@@ -192,7 +196,8 @@ PWA, the terminal stream and the API. `start` detects the backend the first time
 socket answers, else tmux), registers the server with the OS supervisor (systemd user unit,
 launchd agent, or a Windows Scheduled Task) and starts it.
 
-Auto-detects OS via `runtime.GOOS`. Works on macOS, Linux and Windows (with psmux instead of tmux).
+Auto-detects OS via `runtime.GOOS`. Works on macOS, Linux and Windows (with psmux instead of tmux,
+or Herdr on every OS).
 
 ### With Tailscale
 

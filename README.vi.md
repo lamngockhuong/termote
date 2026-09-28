@@ -272,7 +272,7 @@ sudo tailscale set --operator=$USER                    # Linux, once: let termot
 | macOS    | ✓         | ✓      | `install.sh`  |
 | Windows  | ✓         | ✓      | `install.ps1` |
 
-> **Hỗ trợ Windows**: Chế độ container yêu cầu Docker Desktop hoặc Podman Desktop; chế độ native yêu cầu [psmux](https://github.com/psmux/psmux) (bộ ghép kênh terminal tương thích tmux cho Windows), cài bằng `winget install psmux`. Service trên Windows chưa được kiểm chứng trên máy thật; vui lòng báo lỗi trên GitHub nếu gặp sự cố.
+> **Hỗ trợ Windows**: Chế độ container yêu cầu Docker Desktop hoặc Podman Desktop; chế độ native yêu cầu [psmux](https://github.com/psmux/psmux) (bộ ghép kênh terminal tương thích tmux cho Windows), cài bằng `winget install psmux`, hoặc một server [Herdr](https://herdr.dev/#install) đang chạy. Service trên Windows chưa được kiểm chứng trên máy thật; vui lòng báo lỗi trên GitHub nếu gặp sự cố.
 
 ## Sử Dụng Mobile
 

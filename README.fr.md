@@ -272,7 +272,7 @@ Le mappage est appliqué à chaque démarrage du serveur. `stop`, `start --no-ta
 | macOS      | ✓         | ✓     | `install.sh`  |
 | Windows    | ✓         | ✓     | `install.ps1` |
 
-> **Support Windows** : Le mode conteneur nécessite Docker Desktop ou Podman Desktop ; le mode natif nécessite [psmux](https://github.com/psmux/psmux) (multiplexeur de terminal compatible tmux pour Windows), installé avec `winget install psmux`. Le service Windows n'a pas encore été vérifié sur une vraie machine ; veuillez signaler les problèmes sur GitHub.
+> **Support Windows** : Le mode conteneur nécessite Docker Desktop ou Podman Desktop ; le mode natif nécessite [psmux](https://github.com/psmux/psmux) (multiplexeur de terminal compatible tmux pour Windows), installé avec `winget install psmux`, ou un serveur [Herdr](https://herdr.dev/#install) en cours d'exécution. Le service Windows n'a pas encore été vérifié sur une vraie machine ; veuillez signaler les problèmes sur GitHub.
 
 ## Utilisation Mobile
 

@@ -272,7 +272,7 @@ O mapeamento e aplicado toda vez que o servidor inicia. `stop`, `start --no-tail
 | macOS      | ✓         | ✓      | `install.sh`  |
 | Windows    | ✓         | ✓      | `install.ps1` |
 
-> **Suporte ao Windows**: O modo container requer Docker Desktop ou Podman Desktop; o modo nativo requer o [psmux](https://github.com/psmux/psmux) (multiplexador de terminal compativel com tmux para Windows), instalado com `winget install psmux`. O servico no Windows ainda nao foi verificado em uma maquina real; reporte qualquer problema no GitHub.
+> **Suporte ao Windows**: O modo container requer Docker Desktop ou Podman Desktop; o modo nativo requer o [psmux](https://github.com/psmux/psmux) (multiplexador de terminal compativel com tmux para Windows), instalado com `winget install psmux`, ou um servidor [Herdr](https://herdr.dev/#install) em execucao. O servico no Windows ainda nao foi verificado em uma maquina real; reporte qualquer problema no GitHub.
 
 ## Uso no Mobile
 

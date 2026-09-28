@@ -1,5 +1,3 @@
-//go:build !windows
-
 package main
 
 import (
@@ -8,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math/rand"
 	"net"
 	"net/http/httptest"
@@ -18,18 +17,21 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/coder/websocket"
 )
 
-// fakeHerdr is a herdr server on a temporary Unix socket. Replies follow the
+// fakeHerdr is a herdr server on a temporary Unix socket (a named pipe on
+// Windows, see listenHerdrTest). Replies follow the
 // shapes recorded from herdr 0.9.1 (protocol 22).
 type fakeHerdr struct {
-	t    *testing.T
-	path string
-	ln   net.Listener
+	t       *testing.T
+	path    string
+	ln      net.Listener
+	stopped atomic.Bool // close was called; the accept loop ends
 
 	mu        sync.Mutex
 	snapshot  map[string]any // session.snapshot result.snapshot
@@ -86,17 +88,20 @@ func loadHerdrFixture(t *testing.T) map[string]any {
 }
 
 func (f *fakeHerdr) listen(path string) {
-	ln, err := net.Listen("unix", path)
-	if err != nil {
-		f.t.Fatal(err)
-	}
+	ln := listenHerdrTest(f.t, path)
 	f.path, f.ln = path, ln
 	f.t.Cleanup(f.close)
 	go func() {
 		for {
 			c, err := ln.Accept()
 			if err != nil {
-				return
+				// A named pipe can fail one accept (a client that left while
+				// connecting) without the listener being closed.
+				if f.stopped.Load() {
+					return
+				}
+				time.Sleep(10 * time.Millisecond)
+				continue
 			}
 			go f.handle(c)
 		}
@@ -104,6 +109,7 @@ func (f *fakeHerdr) listen(path string) {
 }
 
 func (f *fakeHerdr) close() {
+	f.stopped.Store(true)
 	f.ln.Close()
 	f.mu.Lock()
 	for _, c := range f.subs {
@@ -319,6 +325,21 @@ func TestHerdrRPC(t *testing.T) {
 	}
 }
 
+func TestHerdrReadError(t *testing.T) {
+	ctx := context.Background()
+	if err := herdrReadError(ctx, "ping", os.ErrDeadlineExceeded); !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("socket deadline: %v, want context.DeadlineExceeded", err)
+	}
+	if err := herdrReadError(ctx, "ping", io.EOF); !errors.Is(err, io.EOF) || errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("EOF: %v", err)
+	}
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+	if err := herdrReadError(canceled, "ping", io.EOF); !errors.Is(err, context.Canceled) {
+		t.Errorf("canceled: %v, want context.Canceled", err)
+	}
+}
+
 func TestReadHerdrReplyRejectsBadLines(t *testing.T) {
 	for _, line := range []string{"not json\n", `{"id":"1"}` + "\n", ""} {
 		if _, err := readHerdrReply(bufio.NewReader(strings.NewReader(line))); err == nil {
@@ -485,6 +506,18 @@ func TestHerdrReconnectsWhenSocketAppears(t *testing.T) {
 	})
 	if err := m.Health(ctx); err != nil {
 		t.Errorf("health after herdr started: %v", err)
+	}
+}
+
+func TestHerdrReachable(t *testing.T) {
+	f := newFakeHerdr(t)
+	t.Setenv("HERDR_SOCKET_PATH", f.path)
+	if !herdrReachable() {
+		t.Error("herdr not reachable while listening")
+	}
+	f.close()
+	if herdrReachable() {
+		t.Error("herdr reachable after it stopped listening")
 	}
 }
 
@@ -1058,7 +1091,8 @@ func TestHerdrResubscribeDoesNotLeak(t *testing.T) {
 
 // TestHerdrServerStopKillsObservers stops a real server on the herdr backend
 // while a stream is open; no observer may survive it. A hard kill is covered
-// where Pdeathsig exists (Linux); macOS relies on the startup reaper.
+// where Pdeathsig (Linux) or the Job Object (Windows) ends the observer; macOS
+// relies on the startup reaper.
 func TestHerdrServerStopKillsObservers(t *testing.T) {
 	for _, hard := range stopModes() {
 		name := "graceful"
