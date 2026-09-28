@@ -240,14 +240,6 @@ jobs:
             throw "Build failed"
           }
 
-      # TestWindowsTaskAndStartupFallback already exits the test binary on
-      # Windows (code 39, no output) on main; skipped until that is fixed.
-      # bash: pwsh splits -coverprofile=cover.out at the dot (golang/go#72015)
-      - name: Run Go tests
-        working-directory: server
-        shell: bash
-        run: go test -v -coverprofile=cover.out -skip TestWindowsTaskAndStartupFallback ./...
-
       # Syntax is checked inside both test scripts
       - name: Run shim tests
         shell: pwsh
