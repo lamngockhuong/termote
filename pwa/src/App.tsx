@@ -532,6 +532,7 @@ export default function App() {
                   mux.backend === 'herdr' && !!activeSession.hasAgent
                 }
                 fontSize={fontSize}
+                fontFamily={settings.terminalFont}
                 theme={resolvedTheme}
                 disableContextMenu={settings.disableContextMenu}
                 onConnectionStateChange={setStreamState}

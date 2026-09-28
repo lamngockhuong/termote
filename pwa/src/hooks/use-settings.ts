@@ -13,6 +13,7 @@ export interface Settings {
   hasSeenGestureHints: boolean // first-time gesture hints overlay
   pasteSource: PasteSource // paste button source: system clipboard or tmux buffer
   showSessionTabs: boolean // show session tabs bar on desktop
+  terminalFont: string // font installed on this device, tried before the defaults
 }
 
 const DEFAULTS: Settings = {
@@ -23,6 +24,7 @@ const DEFAULTS: Settings = {
   hasSeenGestureHints: false,
   pasteSource: 'clipboard',
   showSessionTabs: true,
+  terminalFont: '',
 }
 
 // Listeners for useSyncExternalStore

@@ -259,6 +259,15 @@ export function setTerminalFontSize(
   if (term) term.options.fontSize = size
 }
 
+// Set the terminal font family (a full CSS font-family list)
+export function setTerminalFontFamily(
+  handle: TerminalHandle | null,
+  family: string,
+) {
+  const term = handle?.term
+  if (term) term.options.fontFamily = family
+}
+
 // Set terminal theme; returns whether a terminal was there to apply it to
 export function setTerminalTheme(
   handle: TerminalHandle | null,

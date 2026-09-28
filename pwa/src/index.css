@@ -3,6 +3,15 @@
 /* Enable class-based dark mode for Tailwind v4 */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Nerd Font icons for the terminal (prompt themes, file icons). Only the
+   icon code points use it; every other character keeps the monospace font. */
+@font-face {
+  font-family: "Symbols Nerd Font Mono";
+  src: url("./assets/fonts/SymbolsNerdFontMono-Regular.woff2") format("woff2");
+  font-display: block;
+  unicode-range: U+23FB-23FE, U+2665, U+26A1, U+2B58, U+E000-F8FF, U+F0000-FFFFD;
+}
+
 /* Theme CSS Variables */
 :root {
   --bg-primary: #ffffff;

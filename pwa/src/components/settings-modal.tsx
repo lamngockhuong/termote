@@ -61,6 +61,50 @@ function ToggleRow({
   )
 }
 
+// Terminal font name; saved on blur or Enter, so the terminal is not
+// re-measured (and the pane resized) on every keystroke.
+function TerminalFontRow({
+  value,
+  onSave,
+}: {
+  value: string
+  onSave: (value: string) => void
+}) {
+  const [draft, setDraft] = useState(value)
+  useEffect(() => setDraft(value), [value])
+  const save = () => {
+    const next = draft.trim()
+    if (next !== value) onSave(next)
+  }
+  return (
+    <div>
+      <label
+        htmlFor="terminal-font"
+        className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+      >
+        Terminal font
+      </label>
+      <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 mb-2">
+        A font installed on this device (e.g. a Nerd Font). Nerd Font icons work
+        without one.
+      </p>
+      <input
+        id="terminal-font"
+        type="text"
+        value={draft}
+        placeholder="JetBrainsMono Nerd Font"
+        spellCheck={false}
+        autoCapitalize="off"
+        autoCorrect="off"
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => e.key === 'Enter' && save()}
+        className="w-full rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 text-sm text-zinc-900 dark:text-white px-3 py-1.5"
+      />
+    </div>
+  )
+}
+
 const formatSeconds = (s: number) => (s >= 60 ? `${s / 60}m` : `${s}s`)
 
 const POLL_INTERVAL_OPTIONS = [3, 5, 10, 15, 30, 60, 120, 300]
@@ -250,6 +294,11 @@ export function SettingsModal({
             onChange={() =>
               onUpdateSetting('showSessionTabs', !settings.showSessionTabs)
             }
+          />
+
+          <TerminalFontRow
+            value={settings.terminalFont}
+            onSave={(v) => onUpdateSetting('terminalFont', v)}
           />
 
           <div className="flex items-center justify-between">

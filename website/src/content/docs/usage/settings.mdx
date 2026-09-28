@@ -56,6 +56,17 @@ Displays a horizontal tab bar at the top for quick session switching on desktop.
 
 This setting only appears on desktop devices.
 
+## Terminal Font
+
+The font the terminal uses, typed by name (e.g. `JetBrainsMono Nerd Font`). It must be installed on the device the browser runs on; if it is not, the terminal falls back to the system monospace font. Several names can be given, separated by commas. The value is saved when the field loses focus or you press Enter.
+
+Nerd Font icons (prompt themes such as Starship or Powerlevel10k, file icons in `eza` or `lsd`) display without setting anything: Termote ships the Symbols Nerd Font and uses it for any icon the chosen font lacks, including on phones where no Nerd Font can be installed.
+
+| Option      | Behavior                                                | Default |
+| ----------- | ------------------------------------------------------- | ------- |
+| Empty       | System monospace font, icons from the bundled font      | ✓       |
+| A font name | That font first, then the system font and bundled icons |         |
+
 ## Session Poll Interval
 
 Controls how often the app syncs the session list from the server. Lower values keep multi-device views in sync faster; higher values reduce server load when using a single device.

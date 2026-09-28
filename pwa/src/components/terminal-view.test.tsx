@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import { createRef } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StreamControl, TermSize } from '../hooks/use-term-socket'
+import { terminalFontFamily } from '../utils/terminal-font'
 import {
   bracketPaste,
   fitFontSize,
@@ -20,7 +21,7 @@ const { FakeTerminal, FakeFit } = vi.hoisted(() => {
   // Fake xterm.js Terminal; the latest instance is kept for assertions.
   class FakeTerminal {
     static last: FakeTerminal
-    options: { fontSize: number; theme: unknown }
+    options: { fontSize: number; fontFamily?: string; theme: unknown }
     cols = 80
     rows = 24
     dataCb: Listener<string> = () => {}
@@ -42,8 +43,16 @@ const { FakeTerminal, FakeFit } = vi.hoisted(() => {
     dispose = vi.fn()
     open = vi.fn()
     loadAddon = vi.fn()
-    constructor(opts: { fontSize: number; theme: unknown }) {
-      this.options = { fontSize: opts.fontSize, theme: opts.theme }
+    constructor(opts: {
+      fontSize: number
+      fontFamily?: string
+      theme: unknown
+    }) {
+      this.options = {
+        fontSize: opts.fontSize,
+        fontFamily: opts.fontFamily,
+        theme: opts.theme,
+      }
       FakeTerminal.last = this
     }
     private sub<T>(set: (cb: Listener<T>) => void) {
@@ -109,6 +118,7 @@ vi.mock('../hooks/use-term-socket', () => ({
 const bridge = vi.hoisted(() => ({
   blockContextMenu: vi.fn(),
   unblockContextMenu: vi.fn(),
+  setTerminalFontFamily: vi.fn(),
   setTerminalFontSize: vi.fn(),
   setTerminalTheme: vi.fn(),
 }))
@@ -468,6 +478,19 @@ describe('TerminalView', () => {
     expect(bridge.setTerminalFontSize).toHaveBeenLastCalledWith(ref.current, 18)
     expect(fit.fit).toHaveBeenCalled()
     expect(bridge.unblockContextMenu).toHaveBeenCalledWith(ref.current)
+  })
+
+  it('creates the terminal with the font stack and refits on a new font', () => {
+    const { ref, rerender, term, fit } = renderView({ fontFamily: 'Hack' })
+    expect(term.options.fontFamily).toBe(terminalFontFamily('Hack'))
+
+    fit.fit.mockClear()
+    rerender(<TerminalView ref={ref} paneId="0" fontFamily="Fira Code" />)
+    expect(bridge.setTerminalFontFamily).toHaveBeenLastCalledWith(
+      ref.current,
+      terminalFontFamily('Fira Code'),
+    )
+    expect(fit.fit).toHaveBeenCalled()
   })
 
   it('lets the context menu bubble only when blocked', () => {
