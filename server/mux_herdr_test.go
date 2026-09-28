@@ -44,6 +44,8 @@ type fakeHerdr struct {
 	snapDelay time.Duration // session.snapshot replies this late, with the state from before
 	failCode  string        // next tab.* call fails with this error code
 	subs      []net.Conn
+	scroll    int // pane.get offset_from_bottom; pane.scroll sets it, clamped to scrollMax
+	scrollMax int
 }
 
 func fakeSocketPath(t *testing.T) string {
@@ -181,6 +183,14 @@ func (f *fakeHerdr) handle(c net.Conn) {
 			return
 		}
 		reply(map[string]any{"type": "tab_created", "tab": map[string]any{"tab_id": "wR:tNEW", "workspace_id": "wR"}})
+	case "pane.get", "pane.scroll":
+		f.mu.Lock()
+		if req.Method == "pane.scroll" {
+			f.scroll = max(0, min(int(p["offset_from_bottom"].(float64)), f.scrollMax))
+		}
+		scroll := map[string]int{"offset_from_bottom": f.scroll, "max_offset_from_bottom": f.scrollMax, "viewport_rows": 41}
+		f.mu.Unlock()
+		reply(map[string]any{"type": "pane_info", "pane": map[string]any{"pane_id": p["pane_id"], "scroll": scroll}})
 	case "pane.send_text":
 		f.mu.Lock()
 		f.inFlight++
@@ -599,6 +609,72 @@ func TestHerdrSendKeysInOrder(t *testing.T) {
 	}
 	if len(f.texts) >= 200 {
 		t.Errorf("%d send_text calls for 201 inputs: queued input was not merged", len(f.texts))
+	}
+}
+
+func TestHerdrScroll(t *testing.T) {
+	f := newFakeHerdr(t)
+	f.scrollMax = 30
+	m := newTestHerdrMux(t, f)
+	ctx := context.Background()
+
+	for _, step := range []struct{ lines, want int }{
+		{5, 5},
+		{10, 15},
+		{100, 30}, // clamped to the history the pane holds
+		{-12, 18},
+		{-100, 0}, // back at the live screen
+	} {
+		if err := m.Scroll(ctx, "wR:p3", step.lines); err != nil {
+			t.Fatalf("Scroll(%d): %v", step.lines, err)
+		}
+		f.mu.Lock()
+		got := f.scroll
+		f.mu.Unlock()
+		if got != step.want {
+			t.Errorf("Scroll(%d): offset = %d, want %d", step.lines, got, step.want)
+		}
+	}
+	// Already at the bottom, and a zero delta: nothing to set.
+	calls := f.count("pane.scroll")
+	if err := m.Scroll(ctx, "wR:p3", -5); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Scroll(ctx, "wR:p3", 0); err != nil {
+		t.Fatal(err)
+	}
+	if n := f.count("pane.scroll"); n != calls {
+		t.Errorf("%d pane.scroll calls for no movement", n-calls)
+	}
+
+	var ie inputError
+	if err := m.Scroll(ctx, "-bad", 1); !errors.As(err, &ie) {
+		t.Errorf("Scroll(invalid id) = %v, want inputError", err)
+	}
+	if err := m.Scroll(ctx, "wR:nope", 1); !errors.As(err, &ie) {
+		t.Errorf("Scroll(unknown pane) = %v, want inputError", err)
+	}
+}
+
+func TestHerdrScrollConcurrent(t *testing.T) {
+	f := newFakeHerdr(t)
+	f.scrollMax = 1000
+	m := newTestHerdrMux(t, f)
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := m.Scroll(context.Background(), "wR:p3", 3); err != nil {
+				t.Error(err)
+			}
+		}()
+	}
+	wg.Wait()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.scroll != 60 {
+		t.Errorf("offset = %d after 20 concurrent scrolls of 3, want 60 (an update was lost)", f.scroll)
 	}
 }
 

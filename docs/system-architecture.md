@@ -145,8 +145,15 @@ PATCH  /api/mux/tabs/{id}          body: {name}                → {ok}
 DELETE /api/mux/tabs/{id}                                       → {ok}
 POST   /api/mux/tabs/{id}/select                                 → {ok}
 POST   /api/mux/panes/{id}/keys    body: {keys}                 → {ok}
+POST   /api/mux/panes/{id}/scroll  body: {lines}                → {ok}   (caps.scroll only, else 501)
 GET    /api/mux/health             → {status, apiVersion, backend}
 ```
+
+`caps.scroll` (Herdr): the stream only carries screen renders, so no history reaches the
+xterm.js scrollback. The PWA turns the mouse wheel and the scroll buttons into
+`/scroll` calls instead: `lines` rows back into the pane's history (negative: toward the live
+screen, at most 10000 either way), clamped by Herdr. This moves the pane's shared view, so the
+Herdr desktop scrolls with it; typing in the PWA returns it to the live screen first.
 
 `apiVersion` is bumped on every breaking change to this API; the PWA compares it with its own
 build and reloads on mismatch. The old `/api/tmux/*` paths and the `/terminal/` iframe route

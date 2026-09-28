@@ -23,6 +23,9 @@ const maxJSONBody = 8 * 1024
 // maxKeysLen caps a single send-keys payload.
 const maxKeysLen = 4096
 
+// maxScrollLines caps a single scroll request, in either direction.
+const maxScrollLines = 10000
+
 // Mux is a terminal multiplexer backend (tmux/psmux, herdr) exposed through
 // the three-level model group → tab → pane.
 type Mux interface {
@@ -34,6 +37,9 @@ type Mux interface {
 	CloseTab(ctx context.Context, tabID string) error
 	RenameTab(ctx context.Context, tabID, name string) error
 	SendKeys(ctx context.Context, paneID, keys string) error
+	// Scroll moves paneID's view lines rows back into its history (negative:
+	// toward the live screen), clamped to what the pane holds.
+	Scroll(ctx context.Context, paneID string, lines int) error
 	// Attach opens a terminal on paneID. ctx bounds only the setup; the
 	// stream lives until it is closed.
 	Attach(ctx context.Context, paneID string, size Size) (TermStream, error)
@@ -47,6 +53,9 @@ type Caps struct {
 	ClientSideSelect bool `json:"clientSideSelect"`
 	// CopyMode: the backend has tmux copy mode.
 	CopyMode bool `json:"copyMode"`
+	// Scroll: the stream only carries screen renders, so history is scrolled
+	// by the backend through /api/mux/panes/{id}/scroll (herdr).
+	Scroll bool `json:"scroll"`
 }
 
 type Snapshot struct {
@@ -213,6 +222,29 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore) {
 		defer cancel()
 		if err := m.SendKeys(ctx, r.PathValue("id"), body.Keys); err != nil {
 			muxError(w, m, "send keys", err)
+			return
+		}
+		jsonOK(w, map[string]any{"ok": true})
+	})
+
+	mux.HandleFunc("/api/mux/panes/{id}/scroll", func(w http.ResponseWriter, r *http.Request) {
+		if !requireMethod(w, r, http.MethodPost) {
+			return
+		}
+		var body struct {
+			Lines int `json:"lines"`
+		}
+		if !decodeJSON(w, r, &body) {
+			return
+		}
+		if body.Lines < -maxScrollLines || body.Lines > maxScrollLines {
+			jsonError(w, "lines out of range", http.StatusBadRequest)
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), muxTimeout)
+		defer cancel()
+		if err := m.Scroll(ctx, r.PathValue("id"), body.Lines); err != nil {
+			muxError(w, m, "scroll", err)
 			return
 		}
 		jsonOK(w, map[string]any{"ok": true})

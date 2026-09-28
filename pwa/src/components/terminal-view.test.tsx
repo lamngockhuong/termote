@@ -10,6 +10,7 @@ import {
   type TerminalHandle,
   TerminalView,
   THEMES,
+  wheelRows,
 } from './terminal-view'
 
 type Listener<T> = (v: T) => void
@@ -24,6 +25,14 @@ const { FakeTerminal, FakeFit } = vi.hoisted(() => {
     rows = 24
     dataCb: Listener<string> = () => {}
     binaryCb: Listener<string> = () => {}
+    wheelCb: (ev: Pick<WheelEvent, 'deltaY' | 'deltaMode'>) => boolean = () =>
+      true
+    modes = { mouseTrackingMode: 'none' }
+    attachCustomWheelEventHandler = vi.fn(
+      (cb: (ev: Pick<WheelEvent, 'deltaY' | 'deltaMode'>) => boolean) => {
+        this.wheelCb = cb
+      },
+    )
     resizeCb: Listener<TermSize> = () => {}
     disposables: Array<{ dispose: ReturnType<typeof vi.fn> }> = []
     write = vi.fn()
@@ -68,6 +77,12 @@ const { FakeTerminal, FakeFit } = vi.hoisted(() => {
 vi.mock('@xterm/xterm', () => ({ Terminal: FakeTerminal }))
 vi.mock('@xterm/addon-fit', () => ({ FitAddon: FakeFit }))
 vi.mock('@xterm/xterm/css/xterm.css', () => ({}))
+
+const muxApi = vi.hoisted(() => ({
+  MAX_SCROLL_LINES: 10000,
+  scrollPane: vi.fn(async () => true),
+}))
+vi.mock('../hooks/use-mux-api', () => muxApi)
 
 interface SocketOpts {
   paneId?: string
@@ -131,6 +146,14 @@ describe('stripTerminalReplies', () => {
 describe('bracketPaste', () => {
   it('wraps text and drops an embedded end marker', () => {
     expect(bracketPaste('a\x1b[201~b\n')).toBe('\x1b[200~ab\n\x1b[201~')
+  })
+})
+
+describe('wheelRows', () => {
+  it('counts rows back into the history from each delta mode', () => {
+    expect(wheelRows({ deltaY: -100, deltaMode: 0 }, 20, 40)).toBe(5)
+    expect(wheelRows({ deltaY: 3, deltaMode: 1 }, 20, 40)).toBe(-3)
+    expect(wheelRows({ deltaY: -1, deltaMode: 2 }, 20, 40)).toBe(40)
   })
 })
 
@@ -218,6 +241,101 @@ describe('TerminalView', () => {
     socket.send.mockClear()
     term.dataCb('\x1b[12;40R')
     expect(socket.send).not.toHaveBeenCalled()
+  })
+
+  it('serverScroll: the wheel scrolls the pane history through the backend', async () => {
+    const { term, ref } = renderView({
+      backend: 'herdr',
+      paneId: 'w1:p2',
+      serverScroll: true,
+      fontSize: 10, // 12px rows
+    })
+    // Wheel up two rows and a half, then the half left over.
+    expect(term.wheelCb({ deltaY: -30, deltaMode: 0 })).toBe(false)
+    await act(async () => {})
+    expect(muxApi.scrollPane).toHaveBeenLastCalledWith('w1:p2', 2)
+    term.wheelCb({ deltaY: -6, deltaMode: 0 })
+    await act(async () => {})
+    expect(muxApi.scrollPane).toHaveBeenLastCalledWith('w1:p2', 1)
+
+    // Typing returns to the live screen before the input is sent, once.
+    muxApi.scrollPane.mockClear()
+    term.dataCb('x')
+    await act(async () => {})
+    expect(muxApi.scrollPane).toHaveBeenCalledWith('w1:p2', -10000)
+    expect(socket.send).toHaveBeenCalledWith('x')
+    term.dataCb('y')
+    await act(async () => {})
+    expect(muxApi.scrollPane).toHaveBeenCalledTimes(1)
+
+    // So do toolbar keys and pastes, which go through the handle.
+    for (const input of [
+      () => ref.current!.send('\r'),
+      () => ref.current!.paste('ls'),
+    ]) {
+      ref.current!.scrollHistory(3)
+      await act(async () => {})
+      muxApi.scrollPane.mockClear()
+      input()
+      await act(async () => {})
+      expect(muxApi.scrollPane).toHaveBeenCalledWith('w1:p2', -10000)
+    }
+
+    // A program that asked for mouse reports gets the wheel itself.
+    term.modes.mouseTrackingMode = 'vt200'
+    expect(term.wheelCb({ deltaY: -30, deltaMode: 0 })).toBe(true)
+    expect(ref.current!.scrollHistory(5)).toBe(true)
+  })
+
+  it('serverScroll: a new stream may show a view scrolled earlier, so input returns it', async () => {
+    const { term } = renderView({ paneId: 'w1:p2', serverScroll: true })
+    act(() => socketOpts.onOpen())
+    term.dataCb('x')
+    await act(async () => {})
+    expect(muxApi.scrollPane).toHaveBeenCalledWith('w1:p2', -10000)
+  })
+
+  it('serverScroll: rows pending for a pane are not sent to the next one', async () => {
+    let finish: () => void = () => {}
+    muxApi.scrollPane.mockImplementationOnce(
+      () => new Promise<boolean>((r) => (finish = () => r(true))),
+    )
+    const { ref, rerender } = renderView({
+      paneId: 'w1:p2',
+      serverScroll: true,
+    })
+    ref.current!.scrollHistory(5)
+    ref.current!.scrollHistory(4) // pending for w1:p2
+    rerender(<TerminalView ref={ref} paneId="w1:p3" serverScroll />)
+    ref.current!.scrollHistory(2)
+    await act(async () => finish())
+    expect(muxApi.scrollPane.mock.calls).toEqual([
+      ['w1:p2', 5],
+      ['w1:p3', 2],
+    ])
+  })
+
+  it('serverScroll: merges rows scrolled while a request is in flight', async () => {
+    let finish: () => void = () => {}
+    muxApi.scrollPane.mockImplementationOnce(
+      () => new Promise<boolean>((r) => (finish = () => r(true))),
+    )
+    const { ref } = renderView({ paneId: 'w1:p2', serverScroll: true })
+    ref.current!.scrollHistory(5)
+    ref.current!.scrollHistory(5)
+    ref.current!.scrollHistory(-3)
+    expect(muxApi.scrollPane).toHaveBeenCalledTimes(1)
+    await act(async () => finish())
+    expect(muxApi.scrollPane).toHaveBeenCalledTimes(2)
+    expect(muxApi.scrollPane).toHaveBeenLastCalledWith('w1:p2', 2)
+  })
+
+  it('without serverScroll leaves the wheel and scrolling to xterm.js', () => {
+    const { term, ref } = renderView({ backend: 'herdr' })
+    expect(term.wheelCb({ deltaY: -30, deltaMode: 0 })).toBe(true)
+    expect(ref.current!.scrollHistory(5)).toBe(false)
+    term.dataCb('x')
+    expect(muxApi.scrollPane).not.toHaveBeenCalled()
   })
 
   it('sends binary input byte for byte', () => {

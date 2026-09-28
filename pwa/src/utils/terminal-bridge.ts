@@ -158,18 +158,20 @@ export function sendTextToTerminal(
   handle.send(text)
 }
 
-// Scroll the xterm.js scrollback (for non-tmux terminals)
+// Scroll the pane's history (for non-tmux terminals): through the backend
+// when it scrolls the pane itself, else the xterm.js scrollback.
 export function scrollTerminal(
   handle: TerminalHandle | null,
   direction: 'up' | 'down',
   pages = false,
 ) {
   const term = handle?.term
-  if (!term) {
+  if (!handle || !term) {
     console.warn('[terminal-bridge] scrollTerminal: term not found')
     return
   }
   const amount = direction === 'up' ? -1 : 1
+  if (handle.scrollHistory(-amount * (pages ? term.rows : 5))) return
   if (pages) term.scrollPages(amount)
   else term.scrollLines(amount * 5)
 }

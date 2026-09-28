@@ -75,6 +75,8 @@ type herdrMux struct {
 
 	writersMu sync.Mutex
 	writers   map[string]*paneWriter
+
+	scrollMu sync.Mutex // one read-then-set of a scroll offset at a time
 }
 
 // herdrView is a mapped snapshot plus the pane sizes streams need.
@@ -99,7 +101,7 @@ func newHerdrMux(ctx context.Context, socket string) (*herdrMux, error) {
 
 func (*herdrMux) Name() string { return "herdr" }
 
-func (*herdrMux) Caps() Caps { return Caps{ClientSideSelect: true} }
+func (*herdrMux) Caps() Caps { return Caps{ClientSideSelect: true, Scroll: true} }
 
 // Health pings the server now; a missing socket or an unknown protocol version
 // reports degraded.
@@ -578,6 +580,43 @@ func (m *herdrMux) SendKeys(ctx context.Context, paneID, keys string) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+// herdrScroll is a pane's scroll position in rows above the live screen.
+type herdrScroll struct {
+	Offset uint64 `json:"offset_from_bottom"`
+	Max    uint64 `json:"max_offset_from_bottom"`
+}
+
+// Scroll moves the pane's shared view, the one every herdr client and observer
+// renders: observe only sends screen frames, so its history never reaches the
+// client's own scrollback. herdr sets an absolute offset, so the current one
+// is read first; scrollMu keeps two requests from reading the same offset.
+func (m *herdrMux) Scroll(ctx context.Context, paneID string, lines int) error {
+	if _, err := m.requirePane(ctx, paneID); err != nil {
+		return err
+	}
+	if lines == 0 {
+		return nil
+	}
+	m.scrollMu.Lock()
+	defer m.scrollMu.Unlock()
+	var res struct {
+		Pane struct {
+			Scroll herdrScroll `json:"scroll"`
+		} `json:"pane"`
+	}
+	if err := m.rpc.call(ctx, "pane.get", map[string]string{"pane_id": paneID}, &res); err != nil {
+		return herdrInputError(err)
+	}
+	cur := res.Pane.Scroll
+	next := int64(cur.Offset) + int64(lines)
+	next = max(0, min(next, int64(cur.Max)))
+	if uint64(next) == cur.Offset {
+		return nil
+	}
+	err := m.rpc.call(ctx, "pane.scroll", map[string]any{"pane_id": paneID, "offset_from_bottom": next}, nil)
+	return herdrInputError(err)
 }
 
 func (m *herdrMux) requireGroup(ctx context.Context, id string) error {

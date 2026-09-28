@@ -32,7 +32,9 @@ export interface MuxGroup {
 export interface MuxSnapshot {
   apiVersion: number
   backend: string
-  caps: { clientSideSelect: boolean; copyMode: boolean }
+  // scroll: history is scrolled by the backend (scrollPane), not by the
+  // xterm.js scrollback, which only ever holds screen renders (herdr).
+  caps: { clientSideSelect: boolean; copyMode: boolean; scroll?: boolean }
   groups: MuxGroup[]
 }
 
@@ -92,6 +94,23 @@ export async function sendKeys(paneId: string, keys: string): Promise<boolean> {
     'POST',
     `/panes/${encodeURIComponent(paneId)}/keys`,
     { keys },
+  )
+  return data.ok === true
+}
+
+// Most rows one scrollPane call may move; the server rejects more.
+export const MAX_SCROLL_LINES = 10000
+
+// Moves the pane's view lines rows back into its history (negative: toward
+// the live screen).
+export async function scrollPane(
+  paneId: string,
+  lines: number,
+): Promise<boolean> {
+  const data = await write(
+    'POST',
+    `/panes/${encodeURIComponent(paneId)}/scroll`,
+    { lines },
   )
   return data.ok === true
 }
