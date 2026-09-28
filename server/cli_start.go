@@ -108,9 +108,6 @@ func (c *cli) validateStart(o *startOptions) error {
 	switch o.mux {
 	case "tmux", "":
 	case "herdr":
-		if c.goos == "windows" {
-			return usageError("--mux herdr is not supported on Windows")
-		}
 		if o.noAuth && !o.herdrNoAuth {
 			return usageError("--mux herdr --no-auth would expose every herdr workspace without a password; add --allow-herdr-no-auth to accept that")
 		}
@@ -134,7 +131,7 @@ func (c *cli) validateStart(o *startOptions) error {
 // on the socket, tmux (psmux on Windows) when installed, and asks when both
 // are there. The choice is saved; later starts keep it unless --mux is given.
 func (c *cli) detectMux() (string, error) {
-	herdr := c.goos != "windows" && c.herdrRunning()
+	herdr := c.herdrRunning()
 	_, tmuxErr := c.run.LookPath("tmux")
 	tmux := tmuxErr == nil
 	switch {
@@ -157,7 +154,7 @@ func (c *cli) detectMux() (string, error) {
 		return "tmux", nil
 	}
 	if c.goos == "windows" {
-		return "", errors.New("psmux not found. Install it: winget install psmux (https://github.com/psmux/psmux)")
+		return "", errors.New("no terminal backend found. Install psmux (winget install psmux, https://github.com/psmux/psmux) or run herdr (https://herdr.dev)")
 	}
 	return "", errors.New("no terminal backend found. Install tmux (brew install tmux, or sudo apt install tmux) or run herdr (https://herdr.dev)")
 }
