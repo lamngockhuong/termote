@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.1](https://github.com/lamngockhuong/termote/compare/v1.0.0...v1.0.1) (2026-09-28)
+
+
+### Bug Fixes
+
+* **pwa:** hide tmux-only settings and help on the herdr backend ([#224](https://github.com/lamngockhuong/termote/issues/224)) ([a3daf39](https://github.com/lamngockhuong/termote/commit/a3daf393443e2bdcf81f922f71a1f08e664001bf))
+* **pwa:** keep the agent status badge a round circle on the session icon ([#226](https://github.com/lamngockhuong/termote/issues/226)) ([6c1455a](https://github.com/lamngockhuong/termote/commit/6c1455a9b6500cc77ca33e8cf2da4f0eb20ec18b))
+* **server:** require auth for encoded paths that only look like workbox scripts ([#228](https://github.com/lamngockhuong/termote/issues/228)) ([5045668](https://github.com/lamngockhuong/termote/commit/5045668d6a2462f2da5a2ecfce9b3a3e1e60e63c))
+
 ## [1.0.0](https://github.com/lamngockhuong/termote/compare/v0.1.0...v1.0.0) (2026-09-28)
 
 
