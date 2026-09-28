@@ -123,6 +123,15 @@ describe('HelpModal', () => {
     ).toBeInTheDocument()
   })
 
+  it('falls back to Gestures when the open tmux tab goes away', () => {
+    const { rerender } = render(<HelpModal isOpen={true} onClose={vi.fn()} />)
+    fireEvent.click(screen.getByText('tmux'))
+    rerender(
+      <HelpModal isOpen={true} onClose={vi.fn()} copyModeSupported={false} />,
+    )
+    expect(screen.getByText('Touch Gestures')).toBeInTheDocument()
+  })
+
   it('shows the tmux-only toolbar rows with copy mode', () => {
     render(<HelpModal isOpen={true} onClose={vi.fn()} />)
     fireEvent.click(screen.getByText('Toolbar'))
