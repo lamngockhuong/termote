@@ -469,4 +469,12 @@ describe('SettingsModal', () => {
     expect(clipboardRadio).toBeInTheDocument()
     expect(tmuxRadio).toBeInTheDocument()
   })
+
+  it('hides the paste source choice on a backend without a tmux buffer', () => {
+    const { container } = renderModal({ tmuxBufferSupported: false })
+    expect(container.ownerDocument.body).not.toHaveTextContent(
+      'Paste button source',
+    )
+    expect(document.querySelector('input[name="pasteSource"]')).toBeNull()
+  })
 })

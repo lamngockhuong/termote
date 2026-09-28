@@ -21,13 +21,22 @@ import { AgentStatusBadge } from './agent-status-badge'
 interface Props {
   isOpen: boolean
   onClose: () => void
+  // Backend has tmux copy mode and prefix keys; false hides the tmux help.
+  copyModeSupported?: boolean
 }
 
 type TabId = 'gestures' | 'tmux' | 'toolbar'
 
+interface GuideItem {
+  key: ReactNode
+  desc: string
+  // Shown only when the backend has tmux copy mode (true) or lacks it (false)
+  tmux?: boolean
+}
+
 interface GuideSection {
   title: string
-  items: { key: ReactNode; desc: string }[]
+  items: GuideItem[]
 }
 
 const ICON_SIZE = 14
@@ -84,12 +93,23 @@ const TOOLBAR_GUIDE: GuideSection[] = [
       { key: 'Shift', desc: 'Toggle Shift modifier (sticky)' },
       { key: <ArrowKeysIcon />, desc: 'Arrow keys' },
       { key: <ExpandCollapseIcon />, desc: 'Expand/collapse keyboard' },
-      { key: <History size={ICON_SIZE} />, desc: 'Toggle tmux copy mode' },
+      {
+        key: <History size={ICON_SIZE} />,
+        desc: 'Toggle tmux copy mode',
+        tmux: true,
+      },
       {
         key: <Clipboard size={ICON_SIZE} />,
         desc: 'Paste (source configurable in Settings)',
+        tmux: true,
       },
-      { key: <ScrollIcon />, desc: 'Page up/down in copy mode' },
+      {
+        key: <Clipboard size={ICON_SIZE} />,
+        desc: 'Paste from the system clipboard',
+        tmux: false,
+      },
+      { key: <ScrollIcon />, desc: 'Page up/down in copy mode', tmux: true },
+      { key: <ScrollIcon />, desc: 'Scroll history', tmux: false },
     ],
   },
   {
@@ -101,7 +121,8 @@ const TOOLBAR_GUIDE: GuideSection[] = [
       { key: '^L', desc: 'Clear screen' },
       { key: '^A', desc: 'Move to line start' },
       { key: '^E', desc: 'Move to line end' },
-      { key: '^B', desc: 'tmux prefix (expanded mode)' },
+      { key: '^B', desc: 'tmux prefix (expanded mode)', tmux: true },
+      { key: '^B', desc: 'Move cursor back (expanded mode)', tmux: false },
     ],
   },
   {
@@ -186,9 +207,19 @@ const TABS: { id: TabId; label: string }[] = [
   { id: 'tmux', label: 'tmux' },
 ]
 
-export function HelpModal({ isOpen, onClose }: Props) {
+export function HelpModal({
+  isOpen,
+  onClose,
+  copyModeSupported = true,
+}: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const [activeTab, setActiveTab] = useState<TabId>('gestures')
+  const tabs = copyModeSupported
+    ? TABS
+    : TABS.filter((tab) => tab.id !== 'tmux')
+  // The tmux tab disappears when the backend has no copy mode
+  const shownTab =
+    !copyModeSupported && activeTab === 'tmux' ? 'gestures' : activeTab
 
   useDialogModal(dialogRef, isOpen)
 
@@ -203,11 +234,17 @@ export function HelpModal({ isOpen, onClose }: Props) {
   if (!isOpen) return null
 
   const getGuide = (): GuideSection[] => {
-    switch (activeTab) {
+    switch (shownTab) {
       case 'gestures':
         return GESTURES_GUIDE
       case 'toolbar':
-        return TOOLBAR_GUIDE
+        return TOOLBAR_GUIDE.map((section) => ({
+          ...section,
+          items: section.items.filter(
+            (item) =>
+              item.tmux === undefined || item.tmux === copyModeSupported,
+          ),
+        }))
       case 'tmux':
         return TMUX_GUIDE
     }
@@ -236,12 +273,12 @@ export function HelpModal({ isOpen, onClose }: Props) {
 
         {/* Tabs */}
         <div className="flex gap-1 mb-4 bg-zinc-100 dark:bg-zinc-700/50 p-1 rounded-lg">
-          {TABS.map((tab) => (
+          {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                activeTab === tab.id
+                shownTab === tab.id
                   ? 'bg-white dark:bg-zinc-600 text-zinc-900 dark:text-white shadow-sm'
                   : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
               }`}
