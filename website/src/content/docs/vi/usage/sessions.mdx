@@ -43,10 +43,11 @@ workflow khác nhau (ví dụ: Claude Code, Copilot, build).
 | Lưu trữ           | Phiên được lưu bởi tmux windows hoặc tab của Herdr |
 | Trạng thái kết nối | Chỉ báo thời gian thực trên header (xem bên dưới) |
 
-## Backend Herdr (chỉ native)
+## Backend Herdr
 
-Bản cài native có thể dùng [Herdr](/vi/installation/native/#backend-herdr) thay cho tmux
-(`--mux herdr`/`-Mux herdr`). Mô hình phiên khi đó khác ở hai điểm:
+Cả bản cài native ([`termote start --mux herdr`](/vi/installation/native/#backend-herdr)) lẫn container
+([`termote container up --mux herdr`](/vi/installation/docker/#backend-terminal)) đều có thể dùng Herdr thay cho
+tmux. Mô hình phiên khi đó khác ở hai điểm:
 
 - **Pane**: một tab của Herdr có thể có nhiều pane. Khi đó, một **dải pane** xuất hiện bên dưới
   thanh tab để chuyển qua lại giữa các pane; tab tmux không bao giờ hiện dải này (vì chỉ có một
@@ -58,8 +59,8 @@ Bản cài native có thể dùng [Herdr](/vi/installation/native/#backend-herdr
 
 <Aside type="caution">
   Chọn tab hoặc pane trong PWA không bao giờ thay đổi nội dung đang hiện trên desktop của Herdr,
-  mà chỉ đổi pane mà client này đang nhận luồng. Không có thao tác "hiện trên desktop", và Herdr
-  chỉ có ở native (chế độ container không dùng được).
+  mà chỉ đổi pane mà client này đang nhận luồng. Không có thao tác "hiện trên desktop". Trong
+  container, Herdr chạy ngay bên trong nên chỉ thấy các terminal của container.
 </Aside>
 
 ## Chỉ báo kết nối

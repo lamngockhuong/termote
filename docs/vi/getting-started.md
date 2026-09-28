@@ -81,7 +81,7 @@ Termote tổ chức terminal theo ba cấp: **group → tab → pane**. Với tm
 
 Mỗi phiên độc lập — chạy Claude Code trong phiên này, tiến trình build trong phiên khác.
 
-Ở chế độ native, bạn có thể dùng [Herdr](https://herdr.dev/#install) thay cho tmux bằng `termote start --mux herdr`. Khi đó một tab có thể có nhiều pane, và mỗi pane hiện huy hiệu trạng thái của agent lập trình đang chạy trong đó. Herdr không dùng được ở chế độ container.
+Bạn có thể dùng [Herdr](https://herdr.dev/#install) thay cho tmux bằng `termote start --mux herdr` (native) hoặc `termote container up --mux herdr` (container). Khi đó một tab có thể có nhiều pane, và mỗi pane hiện huy hiệu trạng thái của agent lập trình đang chạy trong đó. Trong container, Herdr chạy ngay bên trong nên chỉ thấy các terminal của container.
 
 ### Cử chỉ cảm ứng
 

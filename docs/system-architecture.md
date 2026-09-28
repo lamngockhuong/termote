@@ -92,7 +92,7 @@ nothing it opens inherits one. Only without a saved config (the container image,
 | `TERMOTE_USER`                | `admin`      | HTTP basic auth username                                                        |
 | `TERMOTE_PASS`                | (empty)      | HTTP basic auth password                                                        |
 | `TERMOTE_NO_AUTH`             | `false`      | Disable basic auth                                                              |
-| `TERMOTE_MUX`                 | `tmux`       | Backend: `tmux` or `herdr` (native only)                                        |
+| `TERMOTE_MUX`                 | `tmux`       | Backend: `tmux` or `herdr`; in the image, also picks what starts                |
 | `TERMOTE_ALLOWED_HOSTS`       | (empty)      | Extra `Host` header values allowed, comma-separated; loopback is always allowed |
 | `TERMOTE_HERDR_ALLOW_NO_AUTH` | `false`      | Required together with `TERMOTE_MUX=herdr` and `TERMOTE_NO_AUTH=true`           |
 
@@ -175,14 +175,20 @@ error instead of a broken page.
 termote container up
 ```
 
-Single container with termote + tmux (no ttyd).
+Single container with termote + tmux or Herdr (no ttyd).
 Uses `Dockerfile` (`debian:stable-slim`, pinned by digest, `tini -s` as PID 1) and `entrypoint.sh`.
 Runs `ghcr.io/lamngockhuong/termote:<version>` with podman (preferred) or docker; from a git
 checkout (or `--build`) it builds `termote:local` from the Dockerfile instead of pulling.
 
 **Container Runtime:** Auto-detects podman or docker (podman preferred).
 
-The Herdr backend is not available in container mode (`--mux herdr` requires native).
+`container up --mux herdr` sets `TERMOTE_MUX=herdr`: `entrypoint.sh` then starts `herdr server`
+(a child of tini, without any `TERMOTE_*` variable) with `XDG_CONFIG_HOME=/tmp` and
+`HERDR_SOCKET_PATH=/tmp/herdr/herdr.sock`, creates the workspace `main`, and exports only
+`HERDR_SOCKET_PATH` so `termote serve` uses the same socket (its config directory stays out of
+the world-writable `/tmp`). A server that does not answer within 10s
+stops the container. The Herdr binary is pinned by version and sha256 per arch in the
+`Dockerfile`. This Herdr sees only the container's terminals.
 
 ### Native
 

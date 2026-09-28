@@ -38,7 +38,7 @@ Remote control CLI tools (Claude Code, GitHub Copilot, any terminal) from mobile
 
 - **Session switching**: Multiple tmux sessions with create/edit/delete
 - **Session tabs**: Horizontal tab bar for quick window switching
-- **Herdr backend** (native only): drive Herdr workspaces instead of tmux, with per-pane coding-agent status badges — see [Native Installation](https://termote.ohnice.app/installation/native/)
+- **Herdr backend** (native or in the container): drive Herdr workspaces instead of tmux, with per-pane coding-agent status badges — see [Native Installation](https://termote.ohnice.app/installation/native/)
 - **Mobile-friendly**: Virtual keyboard toolbar (Tab/Ctrl/Shift/arrows, expandable)
 - **Gesture support**: Swipe for Ctrl+C, Tab, scrolling
 - **Command history**: Recall previously sent commands with search
@@ -81,7 +81,7 @@ flowchart TB
     subgraph Backend["Mux Backend (tmux/psmux or Herdr)"]
         Mux["Mux interface"]
         tmux["tmux/psmux (PTY)"]
-        herdr["Herdr (native only)"]
+        herdr["Herdr"]
         Shell["Shell"]
         Tools["CLI Tools"]
     end
@@ -292,7 +292,7 @@ Virtual toolbar provides: Tab, Esc, Ctrl, Shift, Arrow keys, and common key comb
 ```
 termote/
 ├── Makefile                # Build/test/run commands
-├── Dockerfile              # Container image (termote + tmux)
+├── Dockerfile              # Container image (termote + tmux + herdr)
 ├── docker-compose.yml      # Development from a checkout only
 ├── entrypoint.sh           # Container entrypoint
 ├── docs/                   # Documentation
@@ -309,7 +309,7 @@ termote/
 │   ├── serve.go            # Server (PWA, auth, guards)
 │   ├── mux.go              # Mux interface + /api/mux/* routes
 │   ├── mux_tmux.go         # tmux/psmux backend
-│   ├── mux_herdr.go        # Herdr backend (native only)
+│   ├── mux_herdr.go        # Herdr backend
 │   ├── stream.go           # Terminal WebSocket (xterm.js stream)
 │   ├── cli*.go             # start/stop/update/container/logs/menu subcommands
 │   └── webui/              # PWA embedded in the binary (filled by make build)

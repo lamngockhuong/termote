@@ -6,9 +6,8 @@ description: Run the Termote server in Podman or Docker with termote container u
 import { Aside, Steps } from "@astrojs/starlight/components";
 
 `termote container up` runs the server in a container instead of on the host: termote (PWA + terminal stream +
-API) and tmux in one image, with a workspace directory mounted from the host. Use it when the terminals do not
-need your host tools (like `claude` or `git` as installed on the host). The Herdr backend is not available in a
-container.
+API) and a terminal backend (tmux, or Herdr) in one image, with a workspace directory mounted from the host. Use
+it when the terminals do not need your host tools (like `claude` or `git` as installed on the host).
 
 ## Prerequisites
 
@@ -53,6 +52,26 @@ container.
   suggests `--port`.
 - From a git checkout, or with `--build`, it builds `termote:local` from the Dockerfile instead of pulling.
 
+## Terminal Backend
+
+The image carries both tmux and [Herdr](https://herdr.dev), so there is nothing to install or detect. The first
+`container up` without `--mux` asks which one to use; without a terminal to ask in, it uses tmux and prints how
+to switch. The choice is saved with the container settings, apart from the native `--mux`:
+
+```bash
+termote container up --mux herdr   # Herdr workspaces and agent status badges
+termote container up               # keeps the saved backend
+termote container up --mux tmux    # back to tmux
+```
+
+<Aside type="caution" title="Herdr in the container">
+  - Herdr runs inside the container, so it sees only the container's terminals, never the Herdr server or the
+  agents running on your host.
+  - No Herdr client is attached in the container, so panes keep Herdr's own size; the PWA fits the terminal to
+  it instead of resizing the pane.
+  - `--mux herdr --no-auth` is refused unless `--allow-herdr-no-auth` is also given, as with `termote start`.
+</Aside>
+
 <Aside type="note" title="After a reboot">
   Docker's daemon restarts the container after a reboot. Rootless Podman has no daemon, so the container stays
   stopped; to keep it running across reboots, run it as a
@@ -71,6 +90,8 @@ off with `=false`.
 | `--tailscale <host[:port]>` | Publish over [Tailscale HTTPS](/installation/tailscale/) (default 443) |
 | `--no-tailscale`            | Stop publishing over Tailscale                                         |
 | `--no-auth[=false]`         | Disable the login                                                      |
+| `--mux <tmux\|herdr>`       | Terminal backend (asked the first time, tmux without a terminal)       |
+| `--allow-herdr-no-auth`     | Required together with `--mux herdr --no-auth`                         |
 | `--allow-host <name>`       | Allow another `Host` header name (repeatable, no wildcard)             |
 | `--remove-host <name>`      | Remove an allowed name (repeatable)                                    |
 | `--workspace <dir>`         | Directory mounted at `/workspace` (default `~/termote-workspace`)      |

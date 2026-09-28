@@ -6,7 +6,7 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 
 - [ ] Đã cài tmux (macOS/Linux)
 - [ ] Đã cài `psmux` (Windows)
-- [ ] Đã cài herdr (chỉ cần khi test backend Herdr, chế độ native)
+- [ ] Đã cài herdr (chỉ cần khi test backend Herdr, chế độ native; container đã có sẵn herdr)
 - [ ] Go 1.26+ (để build native)
 - [ ] Node.js 22.22+ hoặc 24.15+ & pnpm (để build PWA)
 - [ ] Docker hoặc Podman (cho container mode)
@@ -69,7 +69,11 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 - [ ] `termote container up` hoàn thành không lỗi
 - [ ] Container đang chạy: `docker ps | grep termote` (hoặc `podman ps`)
 - [ ] PWA truy cập được tại <http://localhost:7680>
-- [ ] `--mux herdr` bị từ chối với `container up`
+- [ ] Lần `container up` đầu tiên không có `--mux`: có terminal thì hỏi tmux/herdr, không có thì dùng tmux
+- [ ] `container up --mux herdr`: PWA hiện workspace `main`; gõ phím, đổi kích thước, tạo/đổi tên/đóng tab đều chạy
+- [ ] `container up` không kèm flag giữ backend đã lưu; `--mux tmux` chuyển lại tmux
+- [ ] `container up --mux herdr --no-auth` bị từ chối nếu không kèm `--allow-herdr-no-auth`
+- [ ] Khi Claude Code chạy trong một pane của container, huy hiệu trạng thái agent đổi theo
 - [ ] Mật khẩu và danh sách Host được phép tới container qua giá trị `-e` lấy từ môi trường của
       chính CLI (`docker inspect termote` không cho thấy `--env-file`/tệp bí mật được mount)
 - [ ] Podman ở chế độ không cần quyền `root` chạy với `--userns=keep-id`; Docker ở chế độ đó chạy không kèm `--user`

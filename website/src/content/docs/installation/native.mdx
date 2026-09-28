@@ -168,7 +168,8 @@ termote start --mux herdr
   — it only changes which pane the client streams. There is no "show on desktop" button.
   - Each pane gets an agent-status badge (idle/working/blocked/done) refreshed at most once
   per the configured poll interval; it is not pushed instantly.
-  - The Herdr backend is **native only**: the container uses tmux.
+  - This is the Herdr on your host. The container runs its own Herdr instead, see
+  [Container Installation](/installation/docker/#terminal-backend).
   - `--mux herdr --no-auth` is refused unless `--allow-herdr-no-auth` is also given: Herdr
   exposes every workspace on the host, not just the pane the PWA is showing, so running it
   without a password needs an explicit opt-in.

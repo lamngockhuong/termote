@@ -97,9 +97,10 @@ a group is the tmux session and each tab is a tmux window:
 
 Each session is independent — run Claude Code in one, a build process in another.
 
-In native mode you can use [Herdr](https://herdr.dev/#install) instead of tmux with `termote start --mux herdr`. A tab can
-then hold several panes, and each pane shows a badge with the status of the coding agent
-running in it. Herdr is not available in container mode.
+You can use [Herdr](https://herdr.dev/#install) instead of tmux with `termote start --mux herdr`
+(native) or `termote container up --mux herdr` (container). A tab can then hold several panes,
+and each pane shows a badge with the status of the coding agent running in it. In the
+container, Herdr runs inside it and sees only the container's terminals.
 
 ### Touch Gestures
 

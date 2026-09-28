@@ -43,10 +43,11 @@ needed for different workflows (e.g., Claude Code, Copilot, builds).
 | Persistence         | Sessions backed by tmux windows, or Herdr tabs   |
 | Connection status   | Real-time indicator in header (see below)        |
 
-## Herdr Backend (Native Only)
+## Herdr Backend
 
-Native installs can use [Herdr](/installation/native/#herdr-backend) instead of tmux
-(`--mux herdr`/`-Mux herdr`). It changes the session model in two ways:
+Native installs ([`termote start --mux herdr`](/installation/native/#herdr-backend)) and the container
+([`termote container up --mux herdr`](/installation/docker/#terminal-backend)) can use Herdr instead of tmux.
+It changes the session model in two ways:
 
 - **Panes**: a Herdr tab can have more than one pane. When it does, a **pane strip** appears
   below the tab bar to switch between them; a tmux tab never shows this strip (it never has
@@ -57,8 +58,8 @@ Native installs can use [Herdr](/installation/native/#herdr-backend) instead of 
 
 <Aside type="caution">
   Selecting a tab or pane in the PWA never changes what is shown on the Herdr desktop — it only
-  changes which pane this client streams. There is no "show on desktop" action, and the Herdr
-  backend is native only (not available in container mode).
+  changes which pane this client streams. There is no "show on desktop" action. In the container,
+  Herdr runs inside it and sees only the container's terminals.
 </Aside>
 
 ## Connection Indicator
