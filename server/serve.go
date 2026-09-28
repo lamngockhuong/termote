@@ -16,6 +16,7 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -387,18 +388,20 @@ var pwaPublicPaths = []string{
 	"/sw.js",
 }
 
-// isPWAPublicPath checks if a path should bypass authentication.
-func isPWAPublicPath(path string) bool {
-	for _, p := range pwaPublicPaths {
-		if path == p {
-			return true
-		}
+// isPWAPublicPath checks if a path should bypass authentication. The path is
+// the decoded r.URL.Path, which the static handler cleans before serving: a
+// path that is not already clean (e.g. /workbox-%2f..%2fassets%2fx.js) would
+// resolve to a different file, so it is never public.
+func isPWAPublicPath(p string) bool {
+	if p != path.Clean(p) {
+		return false
 	}
-	// Workbox scripts (e.g., /workbox-*.js)
-	if strings.HasPrefix(path, "/workbox-") && strings.HasSuffix(path, ".js") {
+	if slices.Contains(pwaPublicPaths, p) {
 		return true
 	}
-	return false
+	// Workbox scripts at the root (e.g., /workbox-*.js), never in a subdirectory
+	name, ok := strings.CutPrefix(p, "/workbox-")
+	return ok && strings.HasSuffix(name, ".js") && !strings.Contains(name, "/")
 }
 
 const (
