@@ -1,5 +1,48 @@
 # Changelog
 
+## [1.0.0](https://github.com/lamngockhuong/termote/compare/v0.1.0...v1.0.0) (2026-09-28)
+
+
+### ⚠ BREAKING CHANGES
+
+* config and logs move to XDG paths, release assets are renamed, the shims no longer run installed releases, and update is unavailable in this build.
+* release assets, the log service name and the pid/log file names change, and install no longer stops a 0.x server started from tmux-api/tmux-api.
+* tmux-api streams the terminal itself over /api/mux/stream (no ttyd), install/update logic moves into the Go CLI with thin termote.sh/termote.ps1 shims, and requests pass a Host allowlist plus Origin/Content-Type and stream-token guards. See docs/upgrade-1.0.md for migration.
+* the container image no longer contains ttyd, and the interactive menu no longer uses gum.
+* **api:** /terminal/ is gone; terminals stream over /api/mux/stream.
+* **api:** All /api/tmux routes removed; use /api/mux instead
+
+### Features
+
+* **api:** add herdr backend behind the Mux interface ([6d7c8f5](https://github.com/lamngockhuong/termote/commit/6d7c8f5a48c4ba7f4928285e880cf82525d955de))
+* **api:** drop the ttyd proxy; /terminal/ returns 410 ([5567adc](https://github.com/lamngockhuong/termote/commit/5567adc59eda0922b48137b5f3711345cccb143c))
+* **api:** replace /api/tmux with /api/mux behind a Mux interface ([6a5fe94](https://github.com/lamngockhuong/termote/commit/6a5fe94c7580f3b174eada65f7a4a47b483a190e))
+* **api:** stream terminals over /api/mux/stream WebSocket ([5e39bb9](https://github.com/lamngockhuong/termote/commit/5e39bb9db4d1534ecd0448a1d09d62b69749cac2))
+* **cli:** add termote subcommands to the tmux-api binary ([83c074b](https://github.com/lamngockhuong/termote/commit/83c074b21dfc665502352e30b07e68106d876404))
+* install with two commands and run the server as an OS service ([#216](https://github.com/lamngockhuong/termote/issues/216)) ([45a3126](https://github.com/lamngockhuong/termote/commit/45a3126623b54e8bcf14d8d157c677981ea52c8c))
+* **pwa:** group tabs by workspace and show herdr agent status ([dfa8878](https://github.com/lamngockhuong/termote/commit/dfa88788ac1c0d110d0ad1ba8ac2c01c97952681))
+* **pwa:** render Nerd Font icons in the terminal ([#221](https://github.com/lamngockhuong/termote/issues/221)) ([e28f29a](https://github.com/lamngockhuong/termote/commit/e28f29abea583e0ad4b1e9fe46105e87c58436d7))
+* **pwa:** render the terminal with xterm.js over /api/mux/stream ([6ab9d10](https://github.com/lamngockhuong/termote/commit/6ab9d10bb9cef99a04075da62b0907160d13233f))
+* **pwa:** use /api/mux client and update session handling ([278b467](https://github.com/lamngockhuong/termote/commit/278b467463055f84dfa4c29fe5aa44832bb1115f))
+* Termote 1.0 ([#210](https://github.com/lamngockhuong/termote/issues/210)) ([bf72c10](https://github.com/lamngockhuong/termote/commit/bf72c100f548b2ab4471a0ec48806f1e215d7742))
+* turn termote.sh and termote.ps1 into shims over the Go CLI and drop ttyd from the container ([05307a7](https://github.com/lamngockhuong/termote/commit/05307a782a64434a9bd85b10d961419ea4c1261d))
+
+
+### Bug Fixes
+
+* **api:** create the tmux session when it is missing ([3c17d6e](https://github.com/lamngockhuong/termote/commit/3c17d6e95bbf5d94842394dad0dff711164514e9))
+* **api:** keep the password out of terminal environments ([4e55abd](https://github.com/lamngockhuong/termote/commit/4e55abdec2b4cb4d50e61be59a6eb8cef7c204ac))
+* **api:** keep the Secure cookie behind a container proxy and rate-limit host rejection logs ([72abcc1](https://github.com/lamngockhuong/termote/commit/72abcc1fe0a3abef16ca2588ca81fdbd3639e80e))
+* **api:** remove legacy /api/tmux handlers left after the mux migration ([7a828a2](https://github.com/lamngockhuong/termote/commit/7a828a2725d6cda5aea4aa70d694d2a6c44a9ad1))
+* **cli:** print one line when relinking and match Windows 8.3 install paths ([83578c9](https://github.com/lamngockhuong/termote/commit/83578c9374904164c34cb0478436cfc680ce1d7f))
+* **herdr:** scroll the pane's history with the mouse wheel ([#220](https://github.com/lamngockhuong/termote/issues/220)) ([2430aff](https://github.com/lamngockhuong/termote/commit/2430affd9f4e848b84f6e5ad0d3e0869feae24c7))
+* **pwa:** scroll with swipes and keep the terminal visible with the keyboard open ([#222](https://github.com/lamngockhuong/termote/issues/222)) ([30e8180](https://github.com/lamngockhuong/termote/commit/30e8180950b64ead2dba9e18206f3f04e45e45b2))
+
+
+### Code Refactoring
+
+* rename tmux-api to server and its binary to termote ([#215](https://github.com/lamngockhuong/termote/issues/215)) ([1ed0fc9](https://github.com/lamngockhuong/termote/commit/1ed0fc94c244298afe4a363f59150c83524e7efe))
+
 ## [0.1.0](https://github.com/lamngockhuong/termote/compare/v0.0.16...v0.1.0) (2026-07-13)
 
 
