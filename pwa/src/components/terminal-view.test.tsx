@@ -272,6 +272,9 @@ describe('TerminalView', () => {
     const handle = ref.current!
     expect(handle.term).toBe(term)
     expect(handle.element).toBe(screen.getByTestId('terminal-view'))
+    expect(handle.scroller).toBe(
+      screen.getByTestId('terminal-view').parentElement,
+    )
     expect(handle.connectionState).toBe('connected')
     expect(handle.copyModeSupported).toBe(false)
     expect(handle.copyMode).toBe(false)

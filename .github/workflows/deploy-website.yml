@@ -44,12 +44,12 @@ jobs:
           ref: ${{ inputs.tag || github.ref }}
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@v6.1.0
         with:
-          version: 11.10.0
+          version: 12.6.0
 
       - name: Setup Node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: "24"
           cache: "pnpm"
