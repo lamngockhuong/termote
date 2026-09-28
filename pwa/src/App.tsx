@@ -33,7 +33,6 @@ import { checkApiVersion } from './utils/api-version'
 import {
   blurTerminal,
   focusTerminal,
-  isInCopyMode,
   isTerminalDisconnected,
   type PasteErrorReason,
   type PasteResult,
@@ -76,7 +75,6 @@ export default function App() {
   const terminalRef = useRef<TerminalHandle>(null)
   const getTerminal = () => terminalRef.current
   const gestureRef = useRef<HTMLDivElement>(null)
-  const terminalContainerRef = useRef<HTMLDivElement>(null)
   const ctrlInputRef = useRef<HTMLInputElement>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { isCollapsed: sidebarCollapsed, toggle: toggleSidebarCollapsed } =
@@ -96,7 +94,11 @@ export default function App() {
   const { history, addCommand, removeCommand, clearHistory } =
     useCommandHistory()
   const isMobile = useIsMobile()
-  const { isVisible: keyboardVisible, keyboardHeight } = useKeyboardVisible()
+  const {
+    isVisible: keyboardVisible,
+    keyboardHeight,
+    viewportHeight,
+  } = useKeyboardVisible()
   const {
     activeSession,
     sessions,
@@ -159,6 +161,16 @@ export default function App() {
       })
   }, [checkForUpdate])
 
+  // tmux scrolls its own history (copy mode); other backends scroll the
+  // xterm.js scrollback.
+  const handleScroll = useCallback(
+    (direction: 'up' | 'down') => {
+      if (copyModeSupported) scrollTmux(getTerminal(), direction)
+      else scrollTerminal(getTerminal(), direction)
+    },
+    [copyModeSupported, getTerminal],
+  )
+
   const gestureHandlers = useMemo(
     () => ({
       // A herdr pane wider than the screen scrolls sideways instead; it also
@@ -171,24 +183,9 @@ export default function App() {
         if (isHerdr && scrollTerminalHorizontal(getTerminal(), 'left')) return
         sendKeyToTerminal(getTerminal(), 'Tab')
       },
-      onSwipeUp: () => {
-        if ((keyboardVisible || imeMode) && terminalContainerRef.current) {
-          // Keyboard or IME mode - scroll container to see hidden content
-          terminalContainerRef.current.scrollTop += 150
-        } else if (isInCopyMode(getTerminal())) {
-          // In copy mode - send PageDown
-          scrollTmux(getTerminal(), 'down')
-        }
-      },
-      onSwipeDown: () => {
-        if ((keyboardVisible || imeMode) && terminalContainerRef.current) {
-          // Keyboard or IME mode - scroll container to see hidden content
-          terminalContainerRef.current.scrollTop -= 150
-        } else if (isInCopyMode(getTerminal())) {
-          // In copy mode - send PageUp
-          scrollTmux(getTerminal(), 'up')
-        }
-      },
+      // Vertical swipes scroll the history, as the toolbar's scroll keys do.
+      onSwipeUp: () => handleScroll('down'),
+      onSwipeDown: () => handleScroll('up'),
       onLongPress: async () => {
         const result = await pasteToTerminal(getTerminal())
         if (shouldShowPasteError(result)) {
@@ -198,7 +195,7 @@ export default function App() {
       onPinchIn: decrease,
       onPinchOut: increase,
     }),
-    [decrease, increase, keyboardVisible, imeMode, isHerdr, getTerminal],
+    [decrease, increase, isHerdr, getTerminal, handleScroll],
   )
 
   const toggleKeyboard = () => {
@@ -292,16 +289,6 @@ export default function App() {
     [getTerminal],
   )
 
-  // tmux scrolls its own history (copy mode); other backends scroll the
-  // xterm.js scrollback.
-  const handleScroll = useCallback(
-    (direction: 'up' | 'down') => {
-      if (copyModeSupported) scrollTmux(getTerminal(), direction)
-      else scrollTerminal(getTerminal(), direction)
-    },
-    [copyModeSupported, getTerminal],
-  )
-
   const handleTmuxCopy = useCallback(() => {
     toggleTmuxCopyMode(getTerminal())
   }, [getTerminal])
@@ -346,9 +333,11 @@ export default function App() {
   return (
     <div
       className="flex flex-col bg-zinc-100 dark:bg-zinc-900 text-zinc-900 dark:text-white overflow-hidden"
+      // With the keyboard open the app takes the visible height itself:
+      // iOS can shrink 100dvh before innerHeight, and subtracting the
+      // keyboard from an already shrunk 100dvh left the app near 0px tall.
       style={{
-        height:
-          keyboardHeight > 0 ? `calc(100dvh - ${keyboardHeight}px)` : '100dvh',
+        height: keyboardHeight > 0 ? `${viewportHeight}px` : '100dvh',
       }}
     >
       <div className="flex flex-1 min-h-0">
@@ -504,23 +493,13 @@ export default function App() {
               onSelect={selectPane}
             />
           )}
+          {/* The terminal fits the space left above the toolbar, so an open
+              keyboard shrinks it rather than hiding its bottom rows. */}
           <div
-            ref={terminalContainerRef}
-            className="flex-1 relative min-h-0 overflow-y-auto scroll-smooth"
+            className="flex-1 relative min-h-0"
             onContextMenu={(e) => e.preventDefault()}
-            style={{
-              height:
-                keyboardHeight > 0
-                  ? `calc(100dvh - ${keyboardHeight}px - 48px - 56px)`
-                  : undefined,
-            }}
           >
-            <div
-              style={{
-                height: keyboardHeight > 0 ? '100dvh' : '100%',
-                minHeight: '100%',
-              }}
-            >
+            <div className="h-full">
               <TerminalView
                 ref={terminalRef}
                 paneId={activeSession.paneId}

@@ -273,6 +273,13 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
         fixed,
       )
       term.resize(fixed.cols, fixed.rows)
+      // A grid still taller than the view (the font is at its minimum, e.g.
+      // with the keyboard open) keeps its bottom rows, where the prompt is,
+      // in view; the scroll clamps to 0 when the grid fits.
+      requestAnimationFrame(() => {
+        const el = scrollerRef.current
+        if (el) el.scrollTop = el.scrollHeight
+      })
     }, [])
 
     const onControl = useCallback(

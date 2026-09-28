@@ -408,6 +408,18 @@ describe('TerminalView', () => {
     expect(fit.fit).toHaveBeenCalled()
   })
 
+  it('herdr: a grid taller than the view keeps its bottom rows in view', () => {
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+      cb(0)
+      return 0
+    })
+    renderView({ backend: 'herdr', fontSize: 6 })
+    const scroller = screen.getByTestId('terminal-view').parentElement!
+    Object.defineProperty(scroller, 'scrollHeight', { value: 900 })
+    act(() => socketOpts.onControl({ type: 'size', cols: 152, rows: 41 }))
+    expect(scroller.scrollTop).toBe(900)
+  })
+
   it('reports exit and errors in the terminal', () => {
     const { term } = renderView()
     socketOpts.onControl({ type: 'exit', code: 0 })
