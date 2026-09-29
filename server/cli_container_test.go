@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"net"
 	"net/http"
@@ -232,5 +233,105 @@ func TestContainerUpChecksBeforeReplacing(t *testing.T) {
 	}
 	if cc.runner.called("docker rm -f termote") {
 		t.Fatal("the running container was removed by an up that failed")
+	}
+}
+
+// The container's backend is its own: --mux is saved with the container
+// settings and reaches the server through TERMOTE_MUX, never argv.
+func TestContainerUpMux(t *testing.T) {
+	cc := newContainerCLI(t)
+	// The native server's herdr does not decide the container's backend.
+	cc.saveConfig(savedConfig{Port: 7690, Mux: "herdr", Password: "p"})
+	port := strconv.Itoa(freePort(t))
+	up := func(args ...string) int {
+		t.Helper()
+		if cc.srv != nil {
+			cc.srv.Close()
+			cc.srv = nil
+		}
+		cc.runArgs, cc.runEnv = nil, nil
+		cc.stdout.Reset()
+		cc.stderr.Reset()
+		return cc.main(append([]string{"container", "up"}, args...))
+	}
+	containerMux := func() string {
+		t.Helper()
+		cfg, _ := cc.loadConfig()
+		if cfg.Mux != "herdr" {
+			t.Fatalf("native backend changed: %q", cfg.Mux)
+		}
+		return cfg.Container.Mux
+	}
+
+	// First up, no terminal: tmux, with a hint.
+	if code := up("--port", port); code != 0 {
+		t.Fatalf("first up: %s", cc.stderr.String())
+	}
+	if cc.runEnv["TERMOTE_MUX"] != "tmux" || containerMux() != "tmux" || !strings.Contains(cc.stdout.String(), "--mux herdr") {
+		t.Fatalf("default backend: env %v saved %q\n%s", cc.runEnv, containerMux(), cc.stdout.String())
+	}
+	if code := up("--mux", "herdr"); code != 0 {
+		t.Fatalf("--mux herdr: %s", cc.stderr.String())
+	}
+	args := strings.Join(cc.runArgs, " ")
+	if !strings.Contains(args, "-e TERMOTE_MUX") || strings.Contains(args, "TERMOTE_MUX=") || cc.runEnv["TERMOTE_MUX"] != "herdr" ||
+		cc.runEnv["TERMOTE_HERDR_ALLOW_NO_AUTH"] != "false" || containerMux() != "herdr" {
+		t.Fatalf("--mux herdr: args %s env %v", args, cc.runEnv)
+	}
+	if !strings.Contains(cc.stdout.String(), "Backend: herdr") {
+		t.Fatalf("access info names another backend:\n%s", cc.stdout.String())
+	}
+	// The saved backend is kept; --mux tmux switches back.
+	if code := up(); code != 0 || cc.runEnv["TERMOTE_MUX"] != "herdr" {
+		t.Fatalf("saved herdr not kept: %d %v", code, cc.runEnv)
+	}
+	if code := up("--mux", "tmux"); code != 0 || cc.runEnv["TERMOTE_MUX"] != "tmux" || containerMux() != "tmux" {
+		t.Fatalf("--mux tmux: %d %v", code, cc.runEnv)
+	}
+
+	if code := up("--mux", "zellij"); code != 2 || !strings.Contains(cc.stderr.String(), `unknown --mux "zellij" (use: tmux, herdr)`) {
+		t.Fatalf("--mux zellij: %d %s", code, cc.stderr.String())
+	}
+	// herdr without auth needs --allow-herdr-no-auth, also when no-auth is saved.
+	if code := up("--mux", "herdr", "--no-auth"); code != 2 || !strings.Contains(cc.stderr.String(), "--allow-herdr-no-auth") || cc.runArgs != nil {
+		t.Fatalf("--mux herdr --no-auth: %d %s", code, cc.stderr.String())
+	}
+	if code := up("--no-auth"); code != 0 {
+		t.Fatalf("tmux --no-auth: %s", cc.stderr.String())
+	}
+	if code := up("--mux", "herdr"); code != 2 || cc.runArgs != nil {
+		t.Fatalf("saved no-auth + --mux herdr: %d %s", code, cc.stderr.String())
+	}
+	if code := up("--mux", "herdr", "--allow-herdr-no-auth"); code != 0 || cc.runEnv["TERMOTE_HERDR_ALLOW_NO_AUTH"] != "true" || cc.runEnv["NO_AUTH"] != "true" {
+		t.Fatalf("--allow-herdr-no-auth: %d %v %s", code, cc.runEnv, cc.stderr.String())
+	}
+	if cfg, _ := cc.loadConfig(); !cfg.Container.HerdrAllowNoAuth {
+		t.Fatalf("--allow-herdr-no-auth not saved: %+v", cfg.Container)
+	}
+}
+
+// The first up in a terminal asks for the backend, tmux first.
+func TestContainerUpAsksForMux(t *testing.T) {
+	for _, tt := range []struct {
+		answer, want string
+	}{{"2\n", "herdr"}, {"1\n", "tmux"}, {"", "tmux"}} {
+		cc := newContainerCLI(t)
+		cc.interactive = true
+		cc.readPassword = func() (string, error) { return "typed-in", nil }
+		cc.in = bufio.NewReader(strings.NewReader(tt.answer))
+		if code := cc.main([]string{"container", "up", "--port", strconv.Itoa(freePort(t))}); code != 0 {
+			t.Fatalf("answer %q: %s", tt.answer, cc.stderr.String())
+		}
+		cfg, _ := cc.loadConfig()
+		if cc.runEnv["TERMOTE_MUX"] != tt.want || cfg.Container.Mux != tt.want {
+			t.Fatalf("answer %q: env %v saved %q", tt.answer, cc.runEnv, cfg.Container.Mux)
+		}
+	}
+	// Once saved, it is not asked again.
+	cc := newContainerCLI(t)
+	cc.interactive = true
+	cc.saveConfig(savedConfig{Password: "p", Container: &containerConfig{Port: freePort(t), Mux: "herdr"}})
+	if code := cc.main([]string{"container", "up"}); code != 0 || strings.Contains(cc.stdout.String(), "Select") || cc.runEnv["TERMOTE_MUX"] != "herdr" {
+		t.Fatalf("saved backend asked again: %d %v\n%s", code, cc.runEnv, cc.stdout.String())
 	}
 }

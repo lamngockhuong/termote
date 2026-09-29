@@ -36,7 +36,7 @@
 
 - **会话切换**：多个 tmux 会话，支持创建/编辑/删除
 - **会话标签**：水平标签栏，快速切换窗口
-- **Herdr 后端**（仅原生模式）：用 Herdr 工作区代替 tmux，每个窗格都显示编码代理的状态徽标——参见[原生安装](https://termote.ohnice.app/installation/native/)
+- **Herdr 后端**（原生或容器内）：用 Herdr 工作区代替 tmux，每个窗格都显示编码代理的状态徽标——参见[原生安装](https://termote.ohnice.app/installation/native/)
 - **移动端友好**：虚拟键盘工具栏（Tab/Ctrl/Shift/方向键，可展开）
 - **手势支持**：滑动执行 Ctrl+C、Tab、滚动
 - **命令历史**：搜索并调用之前发送的命令
@@ -79,7 +79,7 @@ flowchart TB
     subgraph Backend["Mux 后端（tmux/psmux 或 Herdr）"]
         Mux["Mux 接口"]
         tmux["tmux/psmux (PTY)"]
-        herdr["Herdr（仅原生）"]
+        herdr["Herdr"]
         Shell["Shell"]
         Tools["CLI 工具"]
     end
@@ -216,7 +216,7 @@ make build
 flowchart LR
     subgraph Container["容器模式"]
         direction TB
-        C1["Docker/Podman"] --> C2["termote :7680 (自行传输终端流)"] --> C3["tmux"]
+        C1["Docker/Podman"] --> C2["termote :7680 (自行传输终端流)"] --> C3["tmux / Herdr"]
     end
 
     subgraph Native["原生模式"]
@@ -227,10 +227,10 @@ flowchart LR
     User["用户"] --> Container & Native
 ```
 
-| 模式 | 命令                   | 使用场景                                             | 平台                  |
-| ---- | ---------------------- | ---------------------------------------------------- | --------------------- |
-| 原生 | `termote start`        | 访问主机工具（claude、gh）；Herdr 后端必须使用此模式 | macOS, Linux, Windows |
-| 容器 | `termote container up` | 隔离的环境                                           | macOS, Linux, Windows |
+| 模式 | 命令                   | 使用场景                   | 平台                  |
+| ---- | ---------------------- | -------------------------- | --------------------- |
+| 原生 | `termote start`        | 访问主机工具（claude、gh） | macOS, Linux, Windows |
+| 容器 | `termote container up` | 隔离的环境                 | macOS, Linux, Windows |
 
 原生服务器以用户服务的形式运行：Linux 上为 systemd 用户单元（没有用户级 systemd 时，例如未启用 systemd 的 WSL2，则为分离的进程），macOS 上为 launchd 代理，Windows 上为登录时运行的计划任务。
 
@@ -290,7 +290,7 @@ sudo tailscale set --operator=$USER                    # Linux, once: let termot
 ```
 termote/
 ├── Makefile                # Build/test/run commands
-├── Dockerfile              # Container image (termote + tmux)
+├── Dockerfile              # Container image (termote + tmux + herdr)
 ├── docker-compose.yml      # Development from a checkout only
 ├── entrypoint.sh           # Container entrypoint
 ├── docs/                   # Documentation
@@ -307,7 +307,7 @@ termote/
 │   ├── serve.go            # Server (PWA, auth, guards)
 │   ├── mux.go              # Mux interface + /api/mux/* routes
 │   ├── mux_tmux.go         # tmux/psmux backend
-│   ├── mux_herdr.go        # Herdr backend (native only)
+│   ├── mux_herdr.go        # Herdr backend
 │   ├── stream.go           # Terminal WebSocket (xterm.js stream)
 │   ├── cli*.go             # start/stop/update/container/logs/menu subcommands
 │   └── webui/              # PWA embedded in the binary (filled by make build)

@@ -38,7 +38,7 @@ Kendalikan alat CLI (Claude Code, GitHub Copilot, terminal apa pun) dari jarak j
 
 - **Pergantian session**: Banyak tmux sessions dengan buat/edit/hapus
 - **Tab session**: Bilah tab horizontal untuk berpindah jendela dengan cepat
-- **Backend Herdr** (khusus native): kendalikan workspace Herdr sebagai pengganti tmux, dengan lencana status coding agent di setiap pane — lihat [Instalasi Native](https://termote.ohnice.app/installation/native/)
+- **Backend Herdr** (native atau di dalam container): kendalikan workspace Herdr sebagai pengganti tmux, dengan lencana status coding agent di setiap pane — lihat [Instalasi Native](https://termote.ohnice.app/installation/native/)
 - **Ramah mobile**: Toolbar keyboard virtual (Tab/Ctrl/Shift/panah, dapat diperluas)
 - **Dukungan gestur**: Geser untuk Ctrl+C, Tab, menggulir
 - **Riwayat perintah**: Panggil ulang perintah yang pernah dikirim dengan pencarian
@@ -81,7 +81,7 @@ flowchart TB
     subgraph Backend["Backend Mux (tmux/psmux atau Herdr)"]
         Mux["Antarmuka Mux"]
         tmux["tmux/psmux (PTY)"]
-        herdr["Herdr (khusus native)"]
+        herdr["Herdr"]
         Shell["Shell"]
         Tools["CLI Tools"]
     end
@@ -218,7 +218,7 @@ Tidak ada upgrade dari 0.x: 1.0 terpasang di lokasi baru dan tidak membaca konfi
 flowchart LR
     subgraph Container["Mode Container"]
         direction TB
-        C1["Docker/Podman"] --> C2["termote :7680 (mengalirkan terminal sendiri)"] --> C3["tmux"]
+        C1["Docker/Podman"] --> C2["termote :7680 (mengalirkan terminal sendiri)"] --> C3["tmux / Herdr"]
     end
 
     subgraph Native["Mode Native"]
@@ -229,10 +229,10 @@ flowchart LR
     User["Pengguna"] --> Container & Native
 ```
 
-| Mode      | Perintah               | Kasus Penggunaan                                        | Platform              |
-| --------- | ---------------------- | ------------------------------------------------------- | --------------------- |
-| Native    | `termote start`        | Akses alat host (claude, gh); wajib untuk backend Herdr | macOS, Linux, Windows |
-| Container | `termote container up` | Lingkungan terisolasi                                   | macOS, Linux, Windows |
+| Mode      | Perintah               | Kasus Penggunaan             | Platform              |
+| --------- | ---------------------- | ---------------------------- | --------------------- |
+| Native    | `termote start`        | Akses alat host (claude, gh) | macOS, Linux, Windows |
+| Container | `termote container up` | Lingkungan terisolasi        | macOS, Linux, Windows |
 
 Server native berjalan sebagai service pengguna: unit systemd user di Linux (proses terpisah jika tidak ada systemd user, misalnya WSL2 tanpa systemd), agent launchd di macOS, dan Scheduled Task saat logon di Windows.
 
@@ -292,7 +292,7 @@ Toolbar virtual menyediakan: Tab, Esc, Ctrl, Shift, tombol panah, dan kombinasi 
 ```
 termote/
 ├── Makefile                # Build/test/run commands
-├── Dockerfile              # Container image (termote + tmux)
+├── Dockerfile              # Container image (termote + tmux + herdr)
 ├── docker-compose.yml      # Development from a checkout only
 ├── entrypoint.sh           # Container entrypoint
 ├── docs/                   # Documentation
@@ -309,7 +309,7 @@ termote/
 │   ├── serve.go            # Server (PWA, auth, guards)
 │   ├── mux.go              # Mux interface + /api/mux/* routes
 │   ├── mux_tmux.go         # tmux/psmux backend
-│   ├── mux_herdr.go        # Herdr backend (native only)
+│   ├── mux_herdr.go        # Herdr backend
 │   ├── stream.go           # Terminal WebSocket (xterm.js stream)
 │   ├── cli*.go             # start/stop/update/container/logs/menu subcommands
 │   └── webui/              # PWA embedded in the binary (filled by make build)

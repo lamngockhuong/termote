@@ -104,7 +104,7 @@ termote container up --no-auth      # localhost without auth
 termote container up --lan          # LAN accessible
 ```
 
-Single container with termote + tmux (no ttyd), published at `-p <bind>:<port>:7680`. Runs
+Single container with termote + tmux or Herdr (no ttyd), published at `-p <bind>:<port>:7680`. Runs
 `ghcr.io/lamngockhuong/termote:<version of the installed binary>` with podman (preferred) or
 docker; from a git checkout (or `--build`) it builds `termote:local` from the `Dockerfile`
 instead of pulling. Default workspace `~/termote-workspace`, mounted with `--mount` at
@@ -118,8 +118,15 @@ shared password saved rather than clearing it).
 
 **Container Runtime:** Auto-detects podman (preferred) or docker.
 
-**When to use:** Simple setup, isolated environment. The Herdr backend is not available in
-container mode (`--mux herdr` requires native).
+**Backend:** the image carries both tmux and a pinned [Herdr](https://herdr.dev) release;
+`--mux <tmux|herdr>` picks one. The first `container up` without `--mux` asks in a terminal and
+uses tmux otherwise; the choice is saved with the container settings (apart from the native
+`--mux`), and `--mux tmux` switches back. With `--mux herdr` the Herdr server runs inside the
+container, so it sees only the container's terminals, never the host's Herdr or agents. No
+Herdr client is attached there, so panes keep Herdr's own size and the PWA fits the terminal to
+it rather than resizing the pane.
+
+**When to use:** Simple setup, isolated environment.
 
 ## Command Options
 
@@ -133,10 +140,10 @@ container mode (`--mux herdr` requires native).
 | `--no-tailscale`            | Stop publishing over Tailscale                             | ✓       | ✓              |
 | `--no-auth[=false]`         | Disable basic authentication                               | ✓       | ✓              |
 | `--port <port>`             | Listen port (default 7680, Windows 7690 for `start`)       | ✓       | ✓              |
-| `--mux <tmux\|herdr>`       | Terminal backend, native only (default: detected)          | ✓       | -              |
+| `--mux <tmux\|herdr>`       | Terminal backend (`start`: detected; container: asked)     | ✓       | ✓              |
 | `--allow-host <name>`       | Allow an extra Host header value (repeatable, no wildcard) | ✓       | ✓              |
 | `--remove-host <name>`      | Remove a previously allowed name (repeatable)              | ✓       | ✓              |
-| `--allow-herdr-no-auth`     | Required together with `--mux herdr --no-auth`             | ✓       | -              |
+| `--allow-herdr-no-auth`     | Required together with `--mux herdr --no-auth`             | ✓       | ✓              |
 | `--fresh`                   | Set a new password (ignore the saved one)                  | ✓       | ✓              |
 | `--workspace <dir>`         | Mounted directory (default `~/termote-workspace`)          | -       | ✓              |
 | `--build`                   | Build `termote:local` from a checkout instead of pulling   | -       | ✓              |
@@ -209,7 +216,7 @@ manual `go run`/`termote-dev serve` from a checkout:
 | `TERMOTE_USER`                | `admin`      | HTTP basic auth username                                             |
 | `TERMOTE_PASS`                | (empty)      | HTTP basic auth password                                             |
 | `TERMOTE_NO_AUTH`             | `false`      | Disable basic auth                                                   |
-| `TERMOTE_MUX`                 | `tmux`       | Backend: `tmux` or `herdr` (native only)                             |
+| `TERMOTE_MUX`                 | `tmux`       | Backend: `tmux` or `herdr`; in the image, also picks what starts     |
 | `TERMOTE_ALLOWED_HOSTS`       | (empty)      | Extra `Host` header values, comma-separated; loopback always allowed |
 | `TERMOTE_HERDR_ALLOW_NO_AUTH` | `false`      | Required with `TERMOTE_MUX=herdr` and `TERMOTE_NO_AUTH=true`         |
 

@@ -169,7 +169,8 @@ termote start --mux herdr
   mà chỉ đổi pane mà client đang nhận luồng. Không có nút "hiện trên desktop".
   - Mỗi pane có một huy hiệu trạng thái agent (`idle`/`working`/`blocked`/`done`), được làm mới
   tối đa một lần trong mỗi khoảng làm mới đã cấu hình; trạng thái không được đẩy về ngay lập tức.
-  - Backend Herdr **chỉ có ở native**: container dùng tmux.
+  - Đây là Herdr trên máy của bạn. Container chạy Herdr riêng của nó, xem
+  [Cài đặt Container](/vi/installation/docker/#backend-terminal).
   - `--mux herdr --no-auth` bị từ chối nếu không kèm `--allow-herdr-no-auth`. Herdr để lộ mọi
   workspace trên máy chứ không riêng pane mà PWA đang hiện, nên muốn chạy không mật khẩu thì
   phải chủ động bật tùy chọn này.

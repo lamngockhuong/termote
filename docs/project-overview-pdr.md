@@ -18,7 +18,7 @@ straight into an xterm.js terminal in the page, with:
 - Touch gestures mapped to common shortcuts (swipe → Ctrl+C, Tab, arrows)
 - Virtual keyboard toolbar for modifier keys
 - Session management via a `Mux` backend abstraction: tmux/psmux, or Herdr workspaces
-  (native only) with per-pane coding-agent status
+  (native or inside the container) with per-pane coding-agent status
 - Responsive UI for phone/tablet/desktop
 - Customizable settings (IME send behavior, toolbar expand, context menu control)
 - Persistent storage for user preferences
@@ -29,33 +29,33 @@ straight into an xterm.js terminal in the page, with:
 
 ## Features
 
-| Feature                | Description                                                       |
-| ---------------------- | ----------------------------------------------------------------- |
-| Session Management     | Create, switch, delete tabs via UI (tmux windows, or Herdr tabs)  |
-| Session Tabs           | Horizontal tab bar for quick tab switching                        |
-| Herdr Backend          | Native-only alternative to tmux with per-pane agent-status badges |
-| Virtual Keyboard       | Touch-friendly buttons for special keys                           |
-| Keyboard Gestures      | Swipe, long-press, pinch for common shortcuts                     |
-| Gesture Hints          | First-time overlay teaching touch gestures (mobile)               |
-| Theme Support          | Light/dark/system theme toggle (in-place switching)               |
-| Font Scaling           | Adjustable terminal font size (6-24px)                            |
-| Nerd Font Icons        | Bundled Symbols Nerd Font; optional custom terminal font          |
-| Fullscreen Mode        | Desktop-only fullscreen terminal view                             |
-| Context Menu Control   | Disable right-click menu on terminal (default: enabled)           |
-| Settings / Preferences | IME behavior, toolbar default, context menu, poll interval        |
-| Paste Source Config    | Choose paste source: system clipboard or tmux buffer              |
-| Toast Notifications    | Error feedback for clipboard access issues                        |
-| Persistent Settings    | User preferences saved to localStorage                            |
-| Session Poll Interval  | Configurable sync frequency (3s-5m) to reduce server spam         |
-| Connection Indicator   | Real-time server status with auto-detection of disconnects        |
-| Command History        | Search and recall previously sent commands                        |
-| Quick Actions Menu     | FAB with preset commands (clear, cancel, exit)                    |
-| Update Checker         | Auto-detect new releases via GitHub, show notifications           |
-| Session Cookie Auth    | Prevents double basic auth prompt on mobile                       |
-| iOS Safe Area          | Respects status bar safe area inset                               |
-| Basic Authentication   | HTTP basic auth + Host allowlist + Origin/CSRF guards             |
-| Brute-force Protection | Rate limiter (5 failed attempts/min per IP)                       |
-| Self-Update            | Fetch & install latest release, preserve config                   |
+| Feature                | Description                                                      |
+| ---------------------- | ---------------------------------------------------------------- |
+| Session Management     | Create, switch, delete tabs via UI (tmux windows, or Herdr tabs) |
+| Session Tabs           | Horizontal tab bar for quick tab switching                       |
+| Herdr Backend          | Alternative to tmux with per-pane agent-status badges            |
+| Virtual Keyboard       | Touch-friendly buttons for special keys                          |
+| Keyboard Gestures      | Swipe, long-press, pinch for common shortcuts                    |
+| Gesture Hints          | First-time overlay teaching touch gestures (mobile)              |
+| Theme Support          | Light/dark/system theme toggle (in-place switching)              |
+| Font Scaling           | Adjustable terminal font size (6-24px)                           |
+| Nerd Font Icons        | Bundled Symbols Nerd Font; optional custom terminal font         |
+| Fullscreen Mode        | Desktop-only fullscreen terminal view                            |
+| Context Menu Control   | Disable right-click menu on terminal (default: enabled)          |
+| Settings / Preferences | IME behavior, toolbar default, context menu, poll interval       |
+| Paste Source Config    | Choose paste source: system clipboard or tmux buffer             |
+| Toast Notifications    | Error feedback for clipboard access issues                       |
+| Persistent Settings    | User preferences saved to localStorage                           |
+| Session Poll Interval  | Configurable sync frequency (3s-5m) to reduce server spam        |
+| Connection Indicator   | Real-time server status with auto-detection of disconnects       |
+| Command History        | Search and recall previously sent commands                       |
+| Quick Actions Menu     | FAB with preset commands (clear, cancel, exit)                   |
+| Update Checker         | Auto-detect new releases via GitHub, show notifications          |
+| Session Cookie Auth    | Prevents double basic auth prompt on mobile                      |
+| iOS Safe Area          | Respects status bar safe area inset                              |
+| Basic Authentication   | HTTP basic auth + Host allowlist + Origin/CSRF guards            |
+| Brute-force Protection | Rate limiter (5 failed attempts/min per IP)                      |
+| Self-Update            | Fetch & install latest release, preserve config                  |
 
 ## Target Users
 

@@ -38,7 +38,7 @@ Controle remotamente ferramentas CLI (Claude Code, GitHub Copilot, qualquer term
 
 - **Alternancia de sessions**: Multiplas tmux sessions com criar/editar/excluir
 - **Abas de sessions**: Barra de abas horizontal para troca rapida entre janelas
-- **Backend Herdr** (somente nativo): controle workspaces do Herdr em vez do tmux, com selos de status do agente de codigo em cada painel — veja [Instalacao nativa](https://termote.ohnice.app/installation/native/)
+- **Backend Herdr** (nativo ou no contêiner): controle workspaces do Herdr em vez do tmux, com selos de status do agente de codigo em cada painel — veja [Instalacao nativa](https://termote.ohnice.app/installation/native/)
 - **Otimizado para mobile**: Barra de teclado virtual (Tab/Ctrl/Shift/setas, expansivel)
 - **Suporte a gestos**: Deslizar para Ctrl+C, Tab, rolagem
 - **Historico de comandos**: Recuperar comandos enviados anteriormente com busca
@@ -81,7 +81,7 @@ flowchart TB
     subgraph Backend["Backend Mux (tmux/psmux ou Herdr)"]
         Mux["Interface Mux"]
         tmux["tmux/psmux (PTY)"]
-        herdr["Herdr (somente nativo)"]
+        herdr["Herdr"]
         Shell["Shell"]
         Tools["CLI Tools"]
     end
@@ -218,7 +218,7 @@ Nao ha atualizacao a partir do 0.x: o 1.0 e instalado em outro local e nao le a 
 flowchart LR
     subgraph Container["Modo Container"]
         direction TB
-        C1["Docker/Podman"] --> C2["termote :7680 (transmite o terminal por conta propria)"] --> C3["tmux"]
+        C1["Docker/Podman"] --> C2["termote :7680 (transmite o terminal por conta propria)"] --> C3["tmux / Herdr"]
     end
 
     subgraph Native["Modo Nativo"]
@@ -229,10 +229,10 @@ flowchart LR
     User["Usuario"] --> Container & Native
 ```
 
-| Modo      | Comando                | Caso de Uso                                                                 | Plataforma            |
-| --------- | ---------------------- | --------------------------------------------------------------------------- | --------------------- |
-| Nativo    | `termote start`        | Acesso a ferramentas do host (claude, gh); obrigatorio para o backend Herdr | macOS, Linux, Windows |
-| Container | `termote container up` | Ambiente isolado                                                            | macOS, Linux, Windows |
+| Modo      | Comando                | Caso de Uso                               | Plataforma            |
+| --------- | ---------------------- | ----------------------------------------- | --------------------- |
+| Nativo    | `termote start`        | Acesso a ferramentas do host (claude, gh) | macOS, Linux, Windows |
+| Container | `termote container up` | Ambiente isolado                          | macOS, Linux, Windows |
 
 O servidor nativo roda como servico do usuario: uma unidade systemd de usuario no Linux (um processo desanexado quando nao ha systemd de usuario, como no WSL2 sem systemd), um agente launchd no macOS e uma Tarefa Agendada no logon no Windows.
 
@@ -292,7 +292,7 @@ A barra de ferramentas virtual oferece: Tab, Esc, Ctrl, Shift, teclas de seta e 
 ```
 termote/
 ├── Makefile                # Build/test/run commands
-├── Dockerfile              # Container image (termote + tmux)
+├── Dockerfile              # Container image (termote + tmux + herdr)
 ├── docker-compose.yml      # Development from a checkout only
 ├── entrypoint.sh           # Container entrypoint
 ├── docs/                   # Documentation
@@ -309,7 +309,7 @@ termote/
 │   ├── serve.go            # Server (PWA, auth, guards)
 │   ├── mux.go              # Mux interface + /api/mux/* routes
 │   ├── mux_tmux.go         # tmux/psmux backend
-│   ├── mux_herdr.go        # Herdr backend (native only)
+│   ├── mux_herdr.go        # Herdr backend
 │   ├── stream.go           # Terminal WebSocket (xterm.js stream)
 │   ├── cli*.go             # start/stop/update/container/logs/menu subcommands
 │   └── webui/              # PWA embedded in the binary (filled by make build)

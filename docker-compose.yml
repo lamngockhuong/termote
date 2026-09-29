@@ -2,7 +2,8 @@
 #   make build-api && cp server/termote server/termote-linux-$(go env GOARCH)
 #   docker compose --profile docker up --build
 # Installed releases run the published image with: termote container up
-# All-in-one container (tmux + termote); tini is PID 1 in the image.
+# All-in-one container (tmux or herdr + termote); tini is PID 1 in the image.
+# TERMOTE_MUX=herdr docker compose --profile docker up picks the herdr backend.
 
 services:
   termote:
@@ -19,4 +20,6 @@ services:
       - NO_AUTH=${NO_AUTH:-false}
       - TERMOTE_PASS=${TERMOTE_PASS:-}
       - TERMOTE_ALLOWED_HOSTS=${TERMOTE_ALLOWED_HOSTS:-}
+      - TERMOTE_MUX=${TERMOTE_MUX:-tmux}
+      - TERMOTE_HERDR_ALLOW_NO_AUTH=${TERMOTE_HERDR_ALLOW_NO_AUTH:-false}
     restart: unless-stopped

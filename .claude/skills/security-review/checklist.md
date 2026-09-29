@@ -166,6 +166,7 @@ ttyd, no `/terminal/` iframe).
 - [ ] No secrets in Dockerfile or image layers
 - [ ] `rm -rf /var/lib/apt/lists/*` after apt-get install; `--no-install-recommends`
 - [ ] Binary copied with explicit `chmod +x`, temp files cleaned
+- [ ] The herdr binary is pinned by `HERDR_VERSION` and a sha256 per arch, checked before install
 
 ### Runtime
 
@@ -183,6 +184,9 @@ ttyd, no `/terminal/` iframe).
       tmux server that was already running with one.
       Known limit: `/proc/<pid>/environ` of `termote` (and tini in the container) still holds the
       startup value; only the same uid/root can read it, and they can decrypt the config anyway
+- [ ] `TERMOTE_MUX=herdr`: `herdr server` starts through `env -u TERMOTE_*` (panes inherit its
+      env) as a child of tini; only `HERDR_SOCKET_PATH` is exported to `termote serve`, never
+      `XDG_CONFIG_HOME=/tmp`, or serve would read its config from a world-writable directory
 
 ## Shell Scripts
 

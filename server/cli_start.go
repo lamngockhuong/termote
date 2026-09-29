@@ -105,14 +105,8 @@ func (c *cli) validateStart(o *startOptions) error {
 	if o.port < 1 || o.port > 65535 {
 		return usageError("invalid port: %d", o.port)
 	}
-	switch o.mux {
-	case "tmux", "":
-	case "herdr":
-		if o.noAuth && !o.herdrNoAuth {
-			return usageError("--mux herdr --no-auth would expose every herdr workspace without a password; add --allow-herdr-no-auth to accept that")
-		}
-	default:
-		return usageError("unknown --mux %q (use: tmux, herdr)", o.mux)
+	if err := validateMux(o.mux, o.noAuth, o.herdrNoAuth); err != nil {
+		return err
 	}
 	for _, h := range append(slices.Clone(o.allowHosts), o.removeHosts...) {
 		if err := validateHostName(h); err != nil {
@@ -123,6 +117,21 @@ func (c *cli) validateStart(o *startOptions) error {
 		if err := validTailscale(o.tailscale); err != nil {
 			return usageError("%v", err)
 		}
+	}
+	return nil
+}
+
+// validateMux checks a --mux value ("" is not chosen yet) and refuses herdr
+// without auth unless allowNoAuth accepts it; start and container up share it.
+func validateMux(mux string, noAuth, allowNoAuth bool) error {
+	switch mux {
+	case "tmux", "":
+	case "herdr":
+		if noAuth && !allowNoAuth {
+			return usageError("--mux herdr --no-auth would expose every herdr workspace without a password; add --allow-herdr-no-auth to accept that")
+		}
+	default:
+		return usageError("unknown --mux %q (use: tmux, herdr)", mux)
 	}
 	return nil
 }

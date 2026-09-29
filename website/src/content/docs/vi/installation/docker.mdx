@@ -5,9 +5,9 @@ description: Chạy server Termote trong Podman hoặc Docker bằng termote con
 
 import { Aside, Steps } from "@astrojs/starlight/components";
 
-`termote container up` chạy server trong container thay vì trên máy: termote (PWA + luồng terminal + API) và tmux
-được đóng gói chung, kèm một thư mục workspace được mount từ máy. Hãy dùng cách này khi các terminal không cần
-công cụ trên máy (như `claude` hay `git` đã cài trên máy). Trong container không dùng được backend Herdr.
+`termote container up` chạy server trong container thay vì trên máy: termote (PWA + luồng terminal + API) và một
+backend terminal (tmux hoặc Herdr) được đóng gói chung, kèm một thư mục workspace được mount từ máy. Hãy dùng cách
+này khi các terminal không cần công cụ trên máy (như `claude` hay `git` đã cài trên máy).
 
 ## Yêu cầu
 
@@ -52,6 +52,26 @@ công cụ trên máy (như `claude` hay `git` đã cài trên máy). Trong cont
 - Khi chạy từ thư mục mã nguồn clone bằng git, hoặc với `--build`, nó tự dựng `termote:local` từ Dockerfile
   thay vì tải về.
 
+## Backend terminal
+
+Image có sẵn cả tmux lẫn [Herdr](https://herdr.dev), nên không phải cài hay dò gì thêm. Lần `container up` đầu tiên
+không có `--mux` sẽ hỏi bạn muốn dùng backend nào; nếu không có terminal để hỏi, nó dùng tmux và in cách chuyển
+sang Herdr. Lựa chọn được lưu cùng cấu hình container, tách khỏi `--mux` của bản native:
+
+```bash
+termote container up --mux herdr   # workspace Herdr và huy hiệu trạng thái agent
+termote container up               # giữ backend đã lưu
+termote container up --mux tmux    # quay lại tmux
+```
+
+<Aside type="caution" title="Herdr trong container">
+  - Herdr chạy ngay bên trong container, nên chỉ thấy các terminal của container, không thấy server Herdr hay
+  các agent đang chạy trên máy của bạn.
+  - Trong container không có client Herdr nào gắn vào, nên pane giữ nguyên kích thước do Herdr đặt; PWA co giãn
+  terminal cho vừa kích thước đó chứ không đổi kích thước pane.
+  - `--mux herdr --no-auth` bị từ chối nếu không kèm `--allow-herdr-no-auth`, giống `termote start`.
+</Aside>
+
 <Aside type="note" title="Sau khi khởi động lại máy">
   Docker có tiến trình nền tự chạy lại container sau khi khởi động lại máy. Podman chạy dưới user thường thì không
   có tiến trình nền đó, nên container vẫn dừng; muốn nó chạy lại sau mỗi lần khởi động, hãy chạy nó dưới dạng systemd unit
@@ -70,6 +90,8 @@ bật/tắt được tắt bằng `=false`.
 | `--tailscale <host[:port]>` | Công khai qua [Tailscale HTTPS](/vi/installation/tailscale/) (mặc định 443) |
 | `--no-tailscale`            | Ngừng công khai qua Tailscale                                          |
 | `--no-auth[=false]`         | Tắt đăng nhập                                                          |
+| `--mux <tmux\|herdr>`       | Backend terminal (hỏi ở lần đầu; không có terminal thì dùng tmux)      |
+| `--allow-herdr-no-auth`     | Bắt buộc khi dùng `--mux herdr --no-auth`                              |
 | `--allow-host <name>`       | Cho phép thêm một tên trong header `Host` (lặp được, không có ký tự đại diện) |
 | `--remove-host <name>`      | Bỏ một tên đã cho phép (lặp được)                                      |
 | `--workspace <dir>`         | Thư mục được mount vào `/workspace` (mặc định `~/termote-workspace`)   |

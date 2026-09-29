@@ -68,7 +68,7 @@ func TestUnixConfigRoundTrip(t *testing.T) {
 	key := strings.Repeat("ab", 32)
 	in := savedConfig{LAN: true, Port: 7700, Tailscale: "a.ts.net", Mux: "herdr",
 		AllowHosts: []string{"mybox.local", "proxy.lan"}, HerdrAllowNoAuth: true, Password: `p@ss w0rd$!`,
-		Container: &containerConfig{LAN: true, Port: 7681, Tailscale: "c.ts.net:8443", AllowHosts: []string{"c.lan"}, Workspace: "/work"}}
+		Container: &containerConfig{LAN: true, Port: 7681, Tailscale: "c.ts.net:8443", AllowHosts: []string{"c.lan"}, Workspace: "/work", Mux: "herdr", HerdrAllowNoAuth: true}}
 	data, err := formatUnixConfig(in, key)
 	if err != nil {
 		t.Fatal(err)
@@ -83,8 +83,17 @@ func TestUnixConfigRoundTrip(t *testing.T) {
 		t.Fatalf("round trip: got %+v, want %+v", *out, in)
 	}
 	if cc := out.Container; cc == nil || !cc.LAN || cc.NoAuth || cc.Port != 7681 || cc.Tailscale != "c.ts.net:8443" ||
-		strings.Join(cc.AllowHosts, ",") != "c.lan" || cc.Workspace != "/work" {
+		strings.Join(cc.AllowHosts, ",") != "c.lan" || cc.Workspace != "/work" || cc.Mux != "herdr" || !cc.HerdrAllowNoAuth {
 		t.Fatalf("container round trip: %+v", out.Container)
+	}
+	// A config saved before the container had a backend reads as none chosen.
+	old := strings.NewReplacer("TERMOTE_CONTAINER_MUX=\"herdr\"\n", "", "TERMOTE_CONTAINER_HERDR_ALLOW_NO_AUTH=\"true\"\n", "").Replace(string(data))
+	if old == string(data) {
+		t.Fatalf("container backend keys not written:\n%s", data)
+	}
+	if prev, err := parseUnixConfig([]byte(old), func() string { return key }); err != nil || prev.Container == nil ||
+		prev.Container.Mux != "" || prev.Container.HerdrAllowNoAuth || prev.Mux != "herdr" {
+		t.Fatalf("config without the container backend: %+v, %v", prev, err)
 	}
 	if !strings.HasPrefix(string(data), "# Termote config (written by termote start)\nTERMOTE_LAN=\"true\"\n") {
 		t.Fatalf("unexpected layout:\n%s", data)
@@ -178,7 +187,7 @@ func TestParseWindowsConfig(t *testing.T) {
 
 func TestWindowsConfigRoundTrip(t *testing.T) {
 	fakeDPAPI(t)
-	in := savedConfig{Port: 7690, Mux: "tmux", AllowHosts: []string{"pc.lan"}, Password: "pw", Container: &containerConfig{Port: 7680, NoAuth: true}}
+	in := savedConfig{Port: 7690, Mux: "tmux", AllowHosts: []string{"pc.lan"}, Password: "pw", Container: &containerConfig{Port: 7680, NoAuth: true, Mux: "herdr", HerdrAllowNoAuth: true}}
 	data, err := formatWindowsConfig(in, time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC))
 	if err != nil {
 		t.Fatal(err)
@@ -187,8 +196,14 @@ func TestWindowsConfigRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out.Container == nil || out.Container.Port != 7680 || !out.Container.NoAuth || out.Password != "pw" || out.Mux != "tmux" || strings.Join(out.AllowHosts, ",") != "pc.lan" {
+	if out.Container == nil || out.Container.Port != 7680 || !out.Container.NoAuth || out.Password != "pw" || out.Mux != "tmux" || strings.Join(out.AllowHosts, ",") != "pc.lan" ||
+		out.Container.Mux != "herdr" || !out.Container.HerdrAllowNoAuth {
 		t.Fatalf("round trip got %+v", *out)
+	}
+	// A config saved before the container had a backend reads as none chosen.
+	prev, err := parseWindowsConfig([]byte(`{"Port":7690,"Mux":"herdr","Container":{"Lan":false,"NoAuth":false,"Port":7680}}`))
+	if err != nil || prev.Container == nil || prev.Container.Mux != "" || prev.Container.HerdrAllowNoAuth {
+		t.Fatalf("config without the container backend: %+v, %v", prev, err)
 	}
 }
 

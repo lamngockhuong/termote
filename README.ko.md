@@ -36,7 +36,7 @@
 
 - **세션 전환**: 생성/편집/삭제가 가능한 여러 tmux 세션
 - **세션 탭**: 빠른 창 전환을 위한 가로 탭 바
-- **Herdr 백엔드** (네이티브 전용): tmux 대신 Herdr 워크스페이스를 제어하고, 패널마다 코딩 에이전트 상태 배지를 표시 — [네이티브 설치](https://termote.ohnice.app/installation/native/) 참고
+- **Herdr 백엔드** (네이티브 또는 컨테이너 안): tmux 대신 Herdr 워크스페이스를 제어하고, 패널마다 코딩 에이전트 상태 배지를 표시 — [네이티브 설치](https://termote.ohnice.app/installation/native/) 참고
 - **모바일 친화적**: 가상 키보드 툴바 (Tab/Ctrl/Shift/방향키, 확장 가능)
 - **제스처 지원**: 스와이프로 Ctrl+C, Tab, 스크롤
 - **명령 히스토리**: 검색 기능으로 이전에 전송한 명령 재호출
@@ -79,7 +79,7 @@ flowchart TB
     subgraph Backend["Mux 백엔드 (tmux/psmux 또는 Herdr)"]
         Mux["Mux 인터페이스"]
         tmux["tmux/psmux (PTY)"]
-        herdr["Herdr (네이티브 전용)"]
+        herdr["Herdr"]
         Shell["Shell"]
         Tools["CLI 도구"]
     end
@@ -216,7 +216,7 @@ make build
 flowchart LR
     subgraph Container["컨테이너 모드"]
         direction TB
-        C1["Docker/Podman"] --> C2["termote :7680 (터미널 직접 스트리밍)"] --> C3["tmux"]
+        C1["Docker/Podman"] --> C2["termote :7680 (터미널 직접 스트리밍)"] --> C3["tmux / Herdr"]
     end
 
     subgraph Native["네이티브 모드"]
@@ -227,10 +227,10 @@ flowchart LR
     User["사용자"] --> Container & Native
 ```
 
-| 모드     | 명령                   | 사용 사례                                         | 플랫폼                |
-| -------- | ---------------------- | ------------------------------------------------- | --------------------- |
-| 네이티브 | `termote start`        | 호스트 도구(claude, gh) 접근. Herdr 백엔드에 필수 | macOS, Linux, Windows |
-| 컨테이너 | `termote container up` | 격리된 환경                                       | macOS, Linux, Windows |
+| 모드     | 명령                   | 사용 사례                    | 플랫폼                |
+| -------- | ---------------------- | ---------------------------- | --------------------- |
+| 네이티브 | `termote start`        | 호스트 도구(claude, gh) 접근 | macOS, Linux, Windows |
+| 컨테이너 | `termote container up` | 격리된 환경                  | macOS, Linux, Windows |
 
 네이티브 서버는 사용자 서비스로 실행됩니다: Linux에서는 systemd 사용자 유닛(WSL2에서 systemd가 없는 경우처럼 사용자 systemd가 없으면 분리된 프로세스), macOS에서는 launchd 에이전트, Windows에서는 로그온 시 실행되는 예약된 작업입니다.
 
@@ -290,7 +290,7 @@ sudo tailscale set --operator=$USER                    # Linux, once: let termot
 ```
 termote/
 ├── Makefile                # Build/test/run commands
-├── Dockerfile              # Container image (termote + tmux)
+├── Dockerfile              # Container image (termote + tmux + herdr)
 ├── docker-compose.yml      # Development from a checkout only
 ├── entrypoint.sh           # Container entrypoint
 ├── docs/                   # Documentation
@@ -307,7 +307,7 @@ termote/
 │   ├── serve.go            # Server (PWA, auth, guards)
 │   ├── mux.go              # Mux interface + /api/mux/* routes
 │   ├── mux_tmux.go         # tmux/psmux backend
-│   ├── mux_herdr.go        # Herdr backend (native only)
+│   ├── mux_herdr.go        # Herdr backend
 │   ├── stream.go           # Terminal WebSocket (xterm.js stream)
 │   ├── cli*.go             # start/stop/update/container/logs/menu subcommands
 │   └── webui/              # PWA embedded in the binary (filled by make build)

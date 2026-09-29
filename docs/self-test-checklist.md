@@ -6,7 +6,7 @@ Manual testing checklist for Termote features before release.
 
 - [ ] tmux installed (macOS/Linux)
 - [ ] psmux installed (Windows)
-- [ ] herdr installed (only for Herdr backend testing, native)
+- [ ] herdr installed (only for Herdr backend testing, native; the container image has its own)
 - [ ] Go 1.26+ (for native build)
 - [ ] Node.js 22.22+ or 24.15+ & pnpm (for PWA build)
 - [ ] Docker or Podman (for container mode)
@@ -69,7 +69,11 @@ Manual testing checklist for Termote features before release.
 - [ ] `termote container up` completes without error
 - [ ] Container running: `docker ps | grep termote` (or `podman ps`)
 - [ ] PWA accessible at <http://localhost:7680>
-- [ ] `--mux herdr` is refused for `container up`
+- [ ] First `container up` without `--mux`: asks tmux/herdr in a terminal, uses tmux without one
+- [ ] `container up --mux herdr`: PWA shows workspace `main`; typing, resize, create/rename/close tab work
+- [ ] `container up` without a flag keeps the saved backend; `--mux tmux` switches back
+- [ ] `container up --mux herdr --no-auth` is refused unless `--allow-herdr-no-auth` is also given
+- [ ] Claude Code running in a container pane changes its agent status badge
 - [ ] Password and Host allowlist reach the container as `-e` values from the CLI's own
       environment (`docker inspect termote` shows no `--env-file`/mounted secret file)
 - [ ] Rootless podman runs with `--userns=keep-id`; rootless Docker runs without `--user`

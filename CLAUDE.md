@@ -16,14 +16,14 @@ A PWA for remotely controlling CLI tools (Claude Code, GitHub Copilot, any termi
 | PWA             | vite-plugin-pwa + Workbox                                                |
 | Terminal        | xterm.js over WebSocket (termote streams the PTY/ConPTY itself, no ttyd) |
 | Server          | Go (termote serve mode)                                                  |
-| Sessions        | tmux/psmux, or Herdr workspaces (native only)                            |
+| Sessions        | tmux/psmux, or Herdr workspaces (native or in the container)             |
 | Package Manager | pnpm                                                                     |
 
 ## Project Structure
 
 ```
 termote/
-├── Dockerfile              # Docker mode (termote + tmux, no ttyd)
+├── Dockerfile              # Docker mode (termote + tmux + herdr, no ttyd)
 ├── docker-compose.yml      # Development-only container run (a checkout, not the release image)
 ├── pwa/                    # React PWA frontend
 │   ├── src/
@@ -39,7 +39,7 @@ termote/
 │   ├── serve_config.go     # Builds the server's config from the saved config or the environment
 │   ├── mux.go              # Mux interface + /api/mux/* routes
 │   ├── mux_tmux.go         # tmux/psmux backend
-│   ├── mux_herdr.go        # Herdr backend (native only)
+│   ├── mux_herdr.go        # Herdr backend
 │   ├── herdr_socket_*.go   # Herdr socket path + dial (Unix socket / Windows named pipe)
 │   ├── herdr_observer_*.go # Stops `observe` (process group / Windows Job Object)
 │   ├── stream.go           # Terminal WebSocket (xterm.js stream)
@@ -86,6 +86,7 @@ termote start --mux herdr                  # native, Herdr backend instead of tm
 termote start --allow-host box.local       # native, add a Host allowlist entry
 termote container up                       # container mode (podman/docker)
 termote container up --lan --port 7681     # container, LAN + custom port
+termote container up --mux herdr           # container, Herdr inside it instead of tmux
 termote show-password                      # print the saved admin password
 termote link / unlink                      # create/remove the 'termote' global command
 termote update                             # update to the latest release
@@ -161,7 +162,7 @@ PWA over `/api/mux/stream` — there is no separate terminal process or proxy:
 │   ├→ static PWA files                                   │
 │   ├→ terminal WebSocket (/api/mux/stream)               │
 │   └→ mux API endpoints (/api/mux/*)                     │
-│   Mux backend: tmux → tmux session                      │
+│   Mux backend: tmux, or Herdr inside (--mux herdr)      │
 │   Container Runtime: auto-detect podman or docker       │
 └─────────────────────────────────────────────────────────┘
 
@@ -274,7 +275,7 @@ The `update` command:
 | `server/serve.go`                                 | Server (PWA static files, auth, guards)                       |
 | `server/mux.go`                                   | `Mux` interface + `/api/mux/*` routes                         |
 | `server/mux_tmux.go`                              | tmux/psmux backend                                            |
-| `server/mux_herdr.go`                             | Herdr backend (native only)                                   |
+| `server/mux_herdr.go`                             | Herdr backend                                                 |
 | `server/stream.go`                                | Terminal WebSocket (`/api/mux/stream`)                        |
 | `server/guard.go`                                 | Host allowlist + Origin/Content-Type write guard              |
 | `server/serve_config.go`                          | Server config from the saved config, else the environment     |
