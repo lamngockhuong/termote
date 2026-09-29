@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.0](https://github.com/lamngockhuong/termote/compare/v1.0.1...v1.1.0) (2026-09-29)
+
+
+### Features
+
+* run the herdr backend inside the container ([#231](https://github.com/lamngockhuong/termote/issues/231)) ([9bd1250](https://github.com/lamngockhuong/termote/commit/9bd12505494db1b8e9d998c90cb3817dc7fc932c))
+* **server:** support the herdr backend on native Windows ([#229](https://github.com/lamngockhuong/termote/issues/229)) ([d464343](https://github.com/lamngockhuong/termote/commit/d464343af0610afac370c2c0dac77660ef9f5875))
+
 ## [1.0.1](https://github.com/lamngockhuong/termote/compare/v1.0.0...v1.0.1) (2026-09-28)
 
 
