@@ -295,9 +295,10 @@ describe('SwipeableSessionItem', () => {
     touchStart(content, 100, 100)
     touchMove(content, 105, 200) // deltaX=5 (abs<=10, not yet dragging)
     touchMove(content, 106, 250) // deltaX=6 < abs(deltaY=150) → vertical, not dragging
-    touchEnd(content, 106, 250) // deltaX=6 < 10 → tap → onSelect
+    touchEnd(content, 106, 250) // deltaY=150: a scroll, not a tap
 
-    expect(onSelect).toHaveBeenCalled()
+    expect(onSelect).not.toHaveBeenCalled()
+    expect(content.style.transform).toContain('translateX(0px)')
   })
 
   it('diagonal move with more vertical than horizontal does not start drag (line 60 false branch)', () => {
@@ -467,6 +468,67 @@ describe('SwipeableSessionItem', () => {
     touchEnd(content, 90, 100) // deltaX=-10, isDragging branch, not tap
 
     expect(onSelect).not.toHaveBeenCalled()
+  })
+
+  // ── Action buttons hidden while closed ─────────────────────────────────────
+
+  it('hides the action buttons while the row is closed', () => {
+    renderItem()
+    const content = getContent()
+    const actions = content.previousElementSibling as HTMLElement
+    expect(actions).toHaveClass('opacity-0')
+
+    touchStart(content, 100, 100)
+    touchMove(content, 60, 100) // horizontal drag reveals them
+    expect(actions).not.toHaveClass('opacity-0')
+    touchEnd(content, 60, 100)
+
+    // Tap closes the row; the buttons hide once the slide back ends
+    touchStart(content, 100, 100)
+    touchEnd(content, 100, 100)
+    expect(actions).not.toHaveClass('opacity-0')
+    fireEvent.transitionEnd(content)
+    expect(actions).toHaveClass('opacity-0')
+  })
+
+  it('hides the buttons when a drag comes back to where it started', () => {
+    renderItem()
+    const content = getContent()
+    const actions = content.previousElementSibling as HTMLElement
+    vi.spyOn(Date, 'now').mockReturnValueOnce(0).mockReturnValue(1000)
+    touchStart(content, 100, 100)
+    touchMove(content, 60, 100)
+    touchMove(content, 100, 100) // back to offset 0, so no transition runs
+    touchEnd(content, 100, 100)
+    expect(actions).toHaveClass('opacity-0')
+    vi.restoreAllMocks()
+  })
+
+  it('hides the buttons when a touch cuts the slide back short', () => {
+    renderItem()
+    const content = getContent()
+    const actions = content.previousElementSibling as HTMLElement
+    touchStart(content, 100, 100)
+    touchMove(content, 60, 100)
+    touchEnd(content, 60, 100) // row open
+    touchStart(content, 100, 100)
+    touchEnd(content, 100, 100) // tap: slides back to 0
+    expect(actions).not.toHaveClass('opacity-0')
+    touchStart(content, 100, 100) // cuts the slide; no transitionend comes
+    expect(actions).toHaveClass('opacity-0')
+    // The buttons stay reachable by a screen reader
+    expect(screen.getByRole('button', { name: /Remove/ })).toBeInTheDocument()
+  })
+
+  it('keeps the buttons shown when a transition ends with the row open', () => {
+    renderItem()
+    const content = getContent()
+    const actions = content.previousElementSibling as HTMLElement
+    touchStart(content, 100, 100)
+    touchMove(content, 60, 100)
+    touchEnd(content, 60, 100)
+    fireEvent.transitionEnd(content)
+    expect(actions).not.toHaveClass('opacity-0')
   })
 
   it('shows the agent badge of the tab', () => {

@@ -47,12 +47,14 @@ export function SegmentedControl<T extends string>({
   }
 
   return (
+    // Light native: the iOS grey fill, since the selected segment and the card
+    // behind the track are both white.
     <div
       ref={groupRef}
       role="radiogroup"
       aria-label={label}
       onKeyDown={onKeyDown}
-      className={`inline-flex gap-0.5 border border-border bg-bg p-0.5 rounded-control ui-native:border-0 ui-native:bg-surface dark:ui-native:bg-bg ${className}`}
+      className={`inline-flex gap-0.5 border border-border bg-bg p-0.5 rounded-control ui-native:border-0 ui-native:bg-[rgb(118_118_128/0.12)] dark:ui-native:bg-bg ${className}`}
     >
       {options.map((o, i) => {
         const selected = i === current

@@ -29,7 +29,9 @@ function renderMenu(props: Partial<Parameters<typeof Menu>[0]> = {}) {
 }
 
 const trigger = () => screen.getByRole('button', { name: 'More' })
-const open = () => fireEvent.click(trigger())
+// detail 0: a click from Enter/Space, as the keyboard sends it
+const open = () => fireEvent.click(trigger(), { detail: 0 })
+const tapOpen = () => fireEvent.click(trigger(), { detail: 1 })
 const item = (name: string) => screen.getByRole('menuitem', { name })
 
 describe('Menu', () => {
@@ -83,9 +85,21 @@ describe('Menu', () => {
     expect(document.activeElement).toBe(item('Clear cache'))
     key('a')
     expect(document.activeElement).toBe(item('Clear cache'))
-    // A key pressed on the menu box itself, not on an item, is ignored
-    fireEvent.keyDown(screen.getByRole('menu'), { key: 'ArrowDown' })
-    expect(document.activeElement).toBe(item('Clear cache'))
+  })
+
+  it('focuses the menu box, not an item, when opened by a tap', () => {
+    renderMenu()
+    tapOpen()
+    const menu = screen.getByRole('menu')
+    expect(menu).toHaveFocus()
+    fireEvent.keyDown(menu, { key: 'ArrowDown' })
+    expect(item('Settings')).toHaveFocus()
+    menu.focus()
+    fireEvent.keyDown(menu, { key: 'ArrowUp' })
+    expect(item('Clear cache')).toHaveFocus()
+    menu.focus()
+    fireEvent.keyDown(menu, { key: 'a' })
+    expect(menu).toHaveFocus()
   })
 
   it('closes on Escape and gives focus back to the trigger', () => {

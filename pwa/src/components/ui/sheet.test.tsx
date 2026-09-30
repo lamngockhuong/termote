@@ -123,6 +123,11 @@ describe('Sheet', () => {
     ).toEqual(['New', 'Close'])
   })
 
+  it('focuses the dialog itself on open, not its first button', () => {
+    renderSheet()
+    expect(screen.getByRole('dialog')).toHaveFocus()
+  })
+
   it('returns focus to the opener when it closes', () => {
     const opener = document.createElement('button')
     document.body.append(opener)

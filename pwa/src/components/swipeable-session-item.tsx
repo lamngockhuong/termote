@@ -30,6 +30,11 @@ export function SwipeableSessionItem({
   const touchStartRef = useRef({ x: 0, y: 0, time: 0 })
   const startOffsetRef = useRef(0)
   const isDraggingRef = useRef(false)
+  // The action buttons are transparent while the row is closed: WebKit clips
+  // the row's rounded corners per layer, so their colours would show round
+  // it. Transparent, not invisible: a screen reader, which cannot swipe,
+  // still reaches them.
+  const [actionsShown, setActionsShown] = useState(false)
 
   const maxLeft = canRemove ? -ACTION_WIDTH : 0
   const maxRight = canEdit ? ACTION_WIDTH : 0
@@ -45,6 +50,9 @@ export function SwipeableSessionItem({
       startOffsetRef.current = offsetX
       isDraggingRef.current = false
       setIsAnimating(false)
+      // A touch cuts a slide back short, and a cut transition sends no
+      // transitionend: hide the buttons here if the row is already at 0.
+      if (offsetX === 0) setActionsShown(false)
     },
     [offsetX],
   )
@@ -60,6 +68,7 @@ export function SwipeableSessionItem({
         // If more horizontal than vertical, start dragging
         if (Math.abs(deltaX) > Math.abs(deltaY)) {
           isDraggingRef.current = true
+          setActionsShown(true)
         }
       }
 
@@ -80,6 +89,7 @@ export function SwipeableSessionItem({
     (e: React.TouchEvent) => {
       const touch = e.changedTouches[0]
       const deltaX = touch.clientX - touchStartRef.current.x
+      const deltaY = touch.clientY - touchStartRef.current.y
       const deltaTime = Date.now() - touchStartRef.current.time
       const velocity = deltaX / deltaTime // px/ms
 
@@ -101,10 +111,13 @@ export function SwipeableSessionItem({
         }
         /* v8 ignore stop */
 
+        // Already at 0, no transition runs to hide the buttons afterwards.
+        if (finalOffset === 0 && offsetX === 0) setActionsShown(false)
         setOffsetX(finalOffset)
       } else {
-        // It was a tap
-        if (Math.abs(deltaX) < 10) {
+        // It was a tap only if the finger barely moved either way: a vertical
+        // drag scrolls the list and must not select (and close the sheet).
+        if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
           if (offsetX !== 0) {
             setOffsetX(0)
           } else {
@@ -133,7 +146,9 @@ export function SwipeableSessionItem({
   return (
     <div className="relative isolate overflow-hidden rounded-control ui-native:rounded-none">
       {/* Action buttons layer */}
-      <div className="absolute inset-0 z-0 flex justify-between">
+      <div
+        className={`absolute inset-0 z-0 flex justify-between ${actionsShown || offsetX !== 0 ? '' : 'opacity-0'}`}
+      >
         {canEdit && (
           <button
             type="button"
@@ -168,6 +183,9 @@ export function SwipeableSessionItem({
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
+        onTransitionEnd={() => {
+          if (offsetX === 0) setActionsShown(false)
+        }}
       >
         {/* The accent tint is translucent: it sits on the opaque layer above,
             which hides the action buttons. */}

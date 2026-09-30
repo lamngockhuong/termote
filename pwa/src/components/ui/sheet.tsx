@@ -50,6 +50,12 @@ function OpenSheet({
   onCloseRef.current = onClose
   const close = useCallback(() => onCloseRef.current(), [])
   useDialogModal(dialogRef, true, close)
+  // showModal focuses the first control, and on a phone that draws a focus
+  // ring round the header's first button the moment the sheet opens. Focus
+  // the dialog itself instead; a screen reader still announces its title.
+  useEffect(() => {
+    dialogRef.current?.focus()
+  }, [])
   // Only a press that starts and ends on the scrim closes the sheet; a text
   // selection dragged out of the content ends with a click on the dialog too.
   const pressedScrim = useRef(false)
@@ -62,8 +68,9 @@ function OpenSheet({
     <dialog
       ref={dialogRef}
       aria-labelledby={titleId}
+      tabIndex={-1}
       data-layout={isMobile ? 'sheet' : 'dialog'}
-      className={`fixed inset-0 z-50 flex-col overflow-hidden bg-bg p-0 text-fg shadow-xl backdrop:bg-overlay open:flex transition-[opacity,translate,scale] duration-(--duration-base) ease-emphasized starting:opacity-0 ui-native:border-0 ui-native:bg-surface ${layout} ${className}`}
+      className={`fixed inset-0 z-50 flex-col outline-none overflow-hidden bg-bg p-0 text-fg shadow-xl backdrop:bg-overlay open:flex transition-[opacity,translate,scale] duration-(--duration-base) ease-emphasized starting:opacity-0 ui-native:border-0 ui-native:bg-surface ${layout} ${className}`}
       onPointerDown={(e) => {
         pressedScrim.current = e.target === e.currentTarget
       }}
@@ -87,14 +94,20 @@ function OpenSheet({
         >
           {title}
         </h2>
-        <div className="flex items-center gap-1">
+        {/* The ring is drawn inside the buttons: a 44px touch button leaves
+            no room for an outer ring in the 48px header. */}
+        <div className="flex items-center gap-1 [&_button:focus-visible]:-outline-offset-2">
           {actions}
           <IconButton aria-label={closeLabel} onClick={close}>
             <X size={18} aria-hidden="true" />
           </IconButton>
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+      {/* flex-auto, not flex-1: the dialog's height is fit-content, and WebKit
+          (every iOS browser) sizes a 0% flex-basis item to nothing there,
+          leaving only the header. min-h-0 still lets it shrink and scroll
+          once max-h caps the sheet. */}
+      <div className="min-h-0 flex-auto overflow-y-auto">{children}</div>
     </dialog>
   )
 }
