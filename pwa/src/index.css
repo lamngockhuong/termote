@@ -1,8 +1,5 @@
 @import "tailwindcss";
 
-/* The redesign mockups (pwa/mockups) are dev-only; keep their classes out of the app CSS. */
-@source not "../mockups";
-
 /* Enable class-based dark mode for Tailwind v4 */
 @custom-variant dark (&:where(.dark, .dark *));
 
