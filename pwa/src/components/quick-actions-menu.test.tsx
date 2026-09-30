@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { QuickActionsMenu } from './quick-actions-menu'
+import { QuickActionsMenu, QuickActionsSheet } from './quick-actions-menu'
 
 vi.mock('../hooks/use-haptic', () => ({
   useHaptic: () => ({ trigger: vi.fn(), isSupported: false }),
@@ -321,5 +321,84 @@ describe('QuickActionsMenu', () => {
     expect(
       screen.queryByRole('button', { name: 'Clear' }),
     ).not.toBeInTheDocument()
+  })
+})
+
+describe('QuickActionsMenu readOnly', () => {
+  it('renders nothing when readOnly', () => {
+    const { container } = render(
+      <QuickActionsMenu onSendKey={vi.fn()} onSendText={vi.fn()} readOnly />,
+    )
+    expect(container).toBeEmptyDOMElement()
+  })
+})
+
+describe('QuickActionsSheet', () => {
+  beforeEach(() => {
+    // jsdom has no <dialog> modal support
+    HTMLDialogElement.prototype.showModal = vi.fn(function (
+      this: HTMLDialogElement,
+    ) {
+      this.setAttribute('open', '')
+    })
+    HTMLDialogElement.prototype.close = vi.fn()
+  })
+
+  it('renders nothing while closed', () => {
+    render(
+      <QuickActionsSheet
+        isOpen={false}
+        onClose={vi.fn()}
+        onSendKey={vi.fn()}
+        onSendText={vi.fn()}
+      />,
+    )
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('lists the same actions as the floating menu', () => {
+    render(
+      <QuickActionsSheet
+        isOpen
+        onClose={vi.fn()}
+        onSendKey={vi.fn()}
+        onSendText={vi.fn()}
+      />,
+    )
+    for (const name of ['Clear', 'Cancel', 'Clear line', 'Exit']) {
+      expect(screen.getByRole('button', { name })).toBeInTheDocument()
+    }
+  })
+
+  it('a ctrl action sends the key with ctrl and closes the sheet', () => {
+    const onSendKey = vi.fn()
+    const onClose = vi.fn()
+    render(
+      <QuickActionsSheet
+        isOpen
+        onClose={onClose}
+        onSendKey={onSendKey}
+        onSendText={vi.fn()}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Exit' }))
+    expect(onSendKey).toHaveBeenCalledWith('d', { ctrl: true })
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it('the text action sends the text then Enter', () => {
+    const onSendKey = vi.fn()
+    const onSendText = vi.fn()
+    render(
+      <QuickActionsSheet
+        isOpen
+        onClose={vi.fn()}
+        onSendKey={onSendKey}
+        onSendText={onSendText}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
+    expect(onSendText).toHaveBeenCalledWith('clear')
+    expect(onSendKey).toHaveBeenCalledWith('Enter')
   })
 })

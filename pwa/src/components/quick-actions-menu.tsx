@@ -1,6 +1,8 @@
 import { Ban, Eraser, LogOut, Sparkles, X, Zap } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useHaptic } from '../hooks/use-haptic'
+import { FOCUS_RING } from './ui/button'
+import { Sheet } from './ui/sheet'
 
 interface Action {
   icon: React.ReactNode
@@ -44,12 +46,63 @@ function savePosition(pos: { right: number; bottom: number }) {
   localStorage.setItem(FAB_STORAGE_KEY, JSON.stringify(pos))
 }
 
-interface Props {
+export interface QuickActionHandlers {
   onSendKey: (key: string, opts?: { ctrl?: boolean }) => void
   onSendText: (text: string) => void
 }
 
-export function QuickActionsMenu({ onSendKey, onSendText }: Props) {
+interface Props extends QuickActionHandlers {
+  // View-only session: render nothing, there is nothing to send
+  readOnly?: boolean
+}
+
+function runAction(
+  action: Action,
+  { onSendKey, onSendText }: QuickActionHandlers,
+) {
+  if (action.text) {
+    onSendText(action.text)
+    onSendKey('Enter')
+  } else {
+    onSendKey(action.key, { ctrl: action.ctrl })
+  }
+}
+
+// The same action list as the floating button, in a sheet. The toolbar's
+// Quick actions key opens it.
+export function QuickActionsSheet({
+  isOpen,
+  onClose,
+  onSendKey,
+  onSendText,
+}: QuickActionHandlers & { isOpen: boolean; onClose: () => void }) {
+  const { trigger: haptic } = useHaptic()
+  return (
+    <Sheet isOpen={isOpen} onClose={onClose} title="Quick actions">
+      <div className="py-1">
+        {ACTIONS.map((action) => (
+          <button
+            key={action.label}
+            type="button"
+            onClick={() => {
+              haptic('medium')
+              runAction(action, { onSendKey, onSendText })
+              onClose()
+            }}
+            className={`flex h-12 w-full items-center gap-3 px-4 text-left text-[15px] text-fg hover:bg-surface ui-terminal:font-label ui-terminal:text-[13px] ${FOCUS_RING} focus-visible:-outline-offset-2`}
+          >
+            <span aria-hidden="true" className="text-fg-muted">
+              {action.icon}
+            </span>
+            {action.label}
+          </button>
+        ))}
+      </div>
+    </Sheet>
+  )
+}
+
+export function QuickActionsMenu({ onSendKey, onSendText, readOnly }: Props) {
   const [isOpen, setIsOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const { trigger: haptic } = useHaptic()
@@ -75,12 +128,7 @@ export function QuickActionsMenu({ onSendKey, onSendText }: Props) {
   const handleAction = useCallback(
     (action: Action) => {
       haptic('medium')
-      if (action.text) {
-        onSendText(action.text)
-        onSendKey('Enter')
-      } else {
-        onSendKey(action.key, { ctrl: action.ctrl })
-      }
+      runAction(action, { onSendKey, onSendText })
       setIsOpen(false)
     },
     [haptic, onSendKey, onSendText],
@@ -165,6 +213,8 @@ export function QuickActionsMenu({ onSendKey, onSendText }: Props) {
     setIsOpen((prev) => !prev)
   }, [haptic])
 
+  if (readOnly) return null
+
   return (
     <div
       ref={menuRef}
@@ -174,7 +224,7 @@ export function QuickActionsMenu({ onSendKey, onSendText }: Props) {
       {/* Popup menu — flip horizontal/vertical based on FAB position */}
       {isOpen && (
         <div
-          className={`absolute flex flex-col gap-2 animate-in fade-in duration-150 ${
+          className={`absolute flex flex-col gap-2 transition-opacity duration-(--duration-fast) ease-standard starting:opacity-0 ${
             position.right > window.innerWidth / 2 ? 'left-0' : 'right-0'
           } ${
             position.bottom > window.innerHeight / 2 ? 'top-14' : 'bottom-14'
@@ -184,7 +234,7 @@ export function QuickActionsMenu({ onSendKey, onSendText }: Props) {
             <button
               key={action.label}
               onClick={() => handleAction(action)}
-              className="flex items-center gap-2 px-3 py-2 bg-zinc-800 dark:bg-zinc-700 text-white rounded-lg shadow-lg whitespace-nowrap hover:bg-zinc-700 dark:hover:bg-zinc-600 transition-colors"
+              className={`flex h-11 items-center gap-2 rounded-control border border-border bg-surface-raised px-3 text-fg shadow-lg whitespace-nowrap hover:border-border-strong transition-colors duration-(--duration-fast) ease-standard ui-native:border-0 ${FOCUS_RING}`}
             >
               {action.icon}
               <span className="text-sm">{action.label}</span>
@@ -199,18 +249,12 @@ export function QuickActionsMenu({ onSendKey, onSendText }: Props) {
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         onClick={toggleMenu}
-        className={`w-12 h-12 flex items-center justify-center rounded-full shadow-lg transition-colors touch-none ${
-          isOpen
-            ? 'bg-red-500 rotate-45 hover:bg-red-400'
-            : 'bg-blue-600 hover:bg-blue-500'
+        className={`flex h-12 w-12 touch-none items-center justify-center rounded-full shadow-lg transition-colors duration-(--duration-fast) ease-standard hover:opacity-90 ${FOCUS_RING} ${
+          isOpen ? 'rotate-45 bg-danger text-white' : 'bg-accent text-accent-fg'
         }`}
         aria-label={isOpen ? 'Close menu' : 'Quick actions'}
       >
-        {isOpen ? (
-          <X size={24} className="text-white" />
-        ) : (
-          <Zap size={24} className="text-white" />
-        )}
+        {isOpen ? <X size={24} /> : <Zap size={24} />}
       </button>
     </div>
   )
