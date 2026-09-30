@@ -1,5 +1,12 @@
 import { Maximize, Menu, Minimize } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { AboutModal } from './components/about-modal'
 import { BottomNavigation } from './components/bottom-navigation'
 import { CommandHistoryDropdown } from './components/command-history-dropdown'
@@ -29,6 +36,7 @@ import { useIsMobile } from './hooks/use-media-query'
 import { useSettings } from './hooks/use-settings'
 import { useSidebarCollapsed } from './hooks/use-sidebar-collapsed'
 import { useUpdateCheck } from './hooks/use-update-check'
+import { applyUiStyle, syncThemeColor } from './ui-style'
 import { checkApiVersion } from './utils/api-version'
 import {
   blurTerminal,
@@ -123,6 +131,10 @@ export default function App() {
   )
   const { fontSize, increase, decrease } = useFontSize()
   const { resolvedTheme } = useTheme()
+  // Before paint and before the terminal's effects read the tokens.
+  useLayoutEffect(() => applyUiStyle(settings.uiStyle), [settings.uiStyle])
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the tokens it reads change with both
+  useEffect(() => syncThemeColor(), [settings.uiStyle, resolvedTheme])
   const { isFullscreen, toggleFullscreen } = useFullscreen()
   const { checkForUpdate, checking: updateChecking } = useUpdateCheck()
 
@@ -513,6 +525,7 @@ export default function App() {
                 fontSize={fontSize}
                 fontFamily={settings.terminalFont}
                 theme={resolvedTheme}
+                uiStyle={settings.uiStyle}
                 disableContextMenu={settings.disableContextMenu}
                 onConnectionStateChange={setStreamState}
               />

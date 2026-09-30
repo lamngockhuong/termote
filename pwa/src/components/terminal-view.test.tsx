@@ -549,9 +549,37 @@ describe('TerminalView', () => {
     expect(screen.getByRole('button', { name: /Connection lost/ })).toBeTruthy()
   })
 
-  it('uses the light background class for the light theme', () => {
+  it('paints its box with the terminal background token', () => {
     const { container } = renderView({ theme: 'light' })
-    expect(container.firstElementChild?.className).toContain('bg-[#f6f8fa]')
+    expect(container.firstElementChild?.className).toContain('bg-term')
+  })
+
+  it('takes the background from the style token and re-reads it on a new style', () => {
+    const root = document.documentElement
+    root.style.setProperty('--tm-term-bg', '#111111')
+    try {
+      const { ref, rerender, term } = renderView({
+        theme: 'dark',
+        uiStyle: 'neutral',
+      })
+      expect(term.options.theme).toEqual({
+        ...THEMES.dark,
+        background: '#111111',
+        cursorAccent: '#111111',
+      })
+
+      root.style.setProperty('--tm-term-bg', '#222222')
+      rerender(
+        <TerminalView ref={ref} paneId="0" theme="dark" uiStyle="terminal" />,
+      )
+      expect(bridge.setTerminalTheme).toHaveBeenLastCalledWith(ref.current, {
+        ...THEMES.dark,
+        background: '#222222',
+        cursorAccent: '#222222',
+      })
+    } finally {
+      root.style.removeProperty('--tm-term-bg')
+    }
   })
 
   it('disposes the terminal and its listeners on unmount', () => {

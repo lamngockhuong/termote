@@ -22,8 +22,10 @@ export default defineConfig({
         name: 'Termote',
         short_name: 'Termote',
         description: 'Remote control CLI tools from mobile',
-        theme_color: '#1e1e1e',
-        background_color: '#1e1e1e',
+        // --tm-bg of the default (neutral) style in dark; a static manifest
+        // cannot follow the chosen style.
+        theme_color: '#09090b',
+        background_color: '#09090b',
         display: 'standalone',
         orientation: 'any',
         start_url: '/',
@@ -44,6 +46,8 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: './src/test-setup.ts',
+    // Vitest blanks CSS imports; theme-tokens.test.ts reads index.css as text.
+    css: { include: [/src\/index\.css/] },
     exclude: ['e2e/**', 'node_modules/**'],
     coverage: {
       provider: 'v8',

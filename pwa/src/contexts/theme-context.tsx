@@ -3,6 +3,7 @@ import {
   type ReactNode,
   useContext,
   useEffect,
+  useLayoutEffect,
   useState,
 } from 'react'
 
@@ -34,8 +35,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [systemTheme, setSystemTheme] = useState<ResolvedTheme>(getSystemTheme)
   const resolvedTheme: ResolvedTheme = theme === 'system' ? systemTheme : theme
 
-  // Apply theme class to <html>
-  useEffect(() => {
+  // Apply theme class to <html>. A layout effect, so it is in place before any
+  // passive effect (the terminal, the theme-color sync) reads the tokens.
+  useLayoutEffect(() => {
     const root = document.documentElement
     root.classList.remove('light', 'dark')
     root.classList.add(resolvedTheme)

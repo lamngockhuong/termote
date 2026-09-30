@@ -5,7 +5,8 @@
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
-    <meta name="theme-color" content="#18181b" media="(prefers-color-scheme: dark)" />
+    <!-- --tm-bg of the default (neutral) style; the app updates it for the chosen style and theme -->
+    <meta name="theme-color" content="#09090b" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -18,6 +19,13 @@
           : stored === 'light' ? 'light'
           : window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
         document.documentElement.classList.add(theme);
+        // Same rule as resolveUiStyle in src/ui-style.ts.
+        var style = 'neutral';
+        try {
+          var saved = JSON.parse(localStorage.getItem('termote-settings') || '{}').uiStyle;
+          if (saved === 'terminal' || saved === 'native' || saved === 'neutral') style = saved;
+        } catch (e) {}
+        document.documentElement.setAttribute('data-ui-style', style);
       })();
     </script>
   </head>

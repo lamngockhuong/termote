@@ -12,6 +12,7 @@ const DEFAULT_SETTINGS: Settings = {
   pollInterval: 5,
   hasSeenGestureHints: false,
   terminalFont: '',
+  uiStyle: 'neutral',
 }
 
 describe('SettingsModal', () => {

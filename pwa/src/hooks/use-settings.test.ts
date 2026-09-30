@@ -15,6 +15,36 @@ describe('useSettings', () => {
     expect(result.current.settings.pollInterval).toBe(5)
   })
 
+  it('opens a config saved before uiStyle existed in the neutral style', () => {
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ imeSendBehavior: 'send-enter', pollInterval: 10 }),
+    )
+    const { result } = renderHook(() => useSettings())
+    expect(result.current.settings.uiStyle).toBe('neutral')
+    expect(result.current.settings.imeSendBehavior).toBe('send-enter')
+    expect(result.current.settings.pollInterval).toBe(10)
+  })
+
+  it('replaces an unknown saved uiStyle with neutral', () => {
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ uiStyle: 'fancy', pollInterval: 10 }),
+    )
+    const { result } = renderHook(() => useSettings())
+    expect(result.current.settings.uiStyle).toBe('neutral')
+    expect(result.current.settings.pollInterval).toBe(10)
+  })
+
+  it('updates uiStyle and persists', () => {
+    const { result } = renderHook(() => useSettings())
+    act(() => result.current.updateSetting('uiStyle', 'terminal'))
+    expect(result.current.settings.uiStyle).toBe('terminal')
+    expect(JSON.parse(localStorage.getItem('termote-settings')!).uiStyle).toBe(
+      'terminal',
+    )
+  })
+
   it('restores saved settings from localStorage', () => {
     localStorage.setItem(
       'termote-settings',

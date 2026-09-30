@@ -103,9 +103,61 @@ test.describe('theme toggle', () => {
       const bg = await page
         .locator('[data-testid="terminal-view"] .xterm-scrollable-element')
         .evaluate((el) => getComputedStyle(el).backgroundColor)
-      // Light theme background #f6f8fa = rgb(246, 248, 250)
-      expect(bg).toBe('rgb(246, 248, 250)')
+      // --tm-term-bg of the default (neutral) style in light: #fcfcfd
+      expect(bg).toBe('rgb(252, 252, 253)')
     }).toPass({ timeout: 5000 })
+  })
+})
+
+test.describe('ui style', () => {
+  // [style, --tm-bg in dark, --tm-term-bg in dark]
+  const styles = [
+    ['terminal', 'rgb(12, 14, 13)', 'rgb(12, 14, 13)'],
+    ['native', 'rgb(0, 0, 0)', 'rgb(11, 11, 12)'],
+    ['neutral', 'rgb(9, 9, 11)', 'rgb(12, 12, 14)'],
+  ] as const
+
+  for (const [style, bg, termBg] of styles) {
+    test(`applies the saved ${style} style before the app runs`, async ({ page }) => {
+      await page.addInitScript((s) => {
+        localStorage.setItem('termote-theme', 'dark')
+        localStorage.setItem('termote-settings', JSON.stringify({ uiStyle: s }))
+      }, style)
+      // With every app script blocked, only the inline script in index.html can set the style.
+      await page.route('**/*', (route) =>
+        route.request().resourceType() === 'script' ? route.abort() : route.continue(),
+      )
+      await page.goto('/')
+      await expect(page.locator('html')).toHaveAttribute('data-ui-style', style)
+    })
+
+    test(`paints the chrome, terminal and theme-color in the ${style} style`, async ({ page }) => {
+      await page.addInitScript((s) => {
+        localStorage.setItem('termote-theme', 'dark')
+        localStorage.setItem('termote-settings', JSON.stringify({ uiStyle: s }))
+      }, style)
+      await page.goto('/')
+      await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
+      expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe(bg)
+      await expect(async () => {
+        const term = await page
+          .locator('[data-testid="terminal-view"] .xterm-scrollable-element')
+          .evaluate((el) => getComputedStyle(el).backgroundColor)
+        expect(term).toBe(termBg)
+      }).toPass({ timeout: 5000 })
+      const themeColor = await page.locator('meta[name="theme-color"]').first().getAttribute('content')
+      expect(themeColor).toBe(
+        await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--tm-bg').trim()),
+      )
+    })
+  }
+
+  test('opens a config without uiStyle in the neutral style', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('termote-settings', JSON.stringify({ pollInterval: 5 }))
+    })
+    await page.goto('/')
+    await expect(page.locator('html')).toHaveAttribute('data-ui-style', 'neutral')
   })
 })
 
