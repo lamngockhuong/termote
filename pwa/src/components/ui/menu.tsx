@@ -48,15 +48,22 @@ export function Menu({
   const listRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const menuId = useId()
+  // Opened by Enter/Space (a click with detail 0) rather than a pointer.
+  const openedByKeyRef = useRef(false)
 
   const close = () => {
     setIsOpen(false)
     triggerRef.current?.focus()
   }
 
-  // Focus the first item on open, so the arrow keys work at once.
+  // Opened from the keyboard, focus the first item so the arrow keys work at
+  // once. Opened by a tap or click, focus the menu box instead: focusing an
+  // item there makes iOS draw a focus ring round it. The arrow keys still
+  // work from the box.
   useEffect(() => {
-    if (isOpen) items(listRef.current!)[0]?.focus()
+    if (!isOpen) return
+    if (openedByKeyRef.current) items(listRef.current!)[0]?.focus()
+    else listRef.current!.focus()
   }, [isOpen])
 
   // pointerdown, not mousedown: a touch that scrolls elsewhere sends no mouse events.
@@ -76,13 +83,15 @@ export function Menu({
       return
     }
     // Arrow keys belong to the item list, not to a control inside the menu.
-    if (!(e.target as HTMLElement).matches(ITEM_ROLES)) return
+    const onBox = e.target === listRef.current
+    if (!onBox && !(e.target as HTMLElement).matches(ITEM_ROLES)) return
     const list = items(listRef.current!)
     if (list.length === 0) return
+    // -1 on the box: ArrowDown goes to the first item, ArrowUp to the last.
     const at = list.indexOf(document.activeElement as HTMLElement)
     const next = {
       ArrowDown: (at + 1) % list.length,
-      ArrowUp: (at - 1 + list.length) % list.length,
+      ArrowUp: ((at < 0 ? list.length : at) - 1 + list.length) % list.length,
       Home: 0,
       End: list.length - 1,
     }[e.key]
@@ -107,7 +116,10 @@ export function Menu({
         aria-haspopup="menu"
         aria-expanded={isOpen}
         aria-controls={isOpen ? menuId : undefined}
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={(e) => {
+          openedByKeyRef.current = e.detail === 0
+          setIsOpen(!isOpen)
+        }}
       >
         {trigger}
       </IconButton>
@@ -119,7 +131,7 @@ export function Menu({
           aria-label={label}
           tabIndex={-1}
           onKeyDown={onKeyDown}
-          className={`absolute top-full z-50 mt-2 w-64 border border-border bg-surface-raised py-1 text-fg shadow-xl rounded-panel ui-native:border-0 transition-[opacity,translate] duration-(--duration-fast) ease-standard starting:-translate-y-1 starting:opacity-0 ${align === 'end' ? 'right-0' : 'left-0'} ${className}`}
+          className={`absolute top-full z-50 mt-2 outline-none w-64 border border-border bg-surface-raised py-1 text-fg shadow-xl rounded-panel ui-native:border-0 transition-[opacity,translate] duration-(--duration-fast) ease-standard starting:-translate-y-1 starting:opacity-0 ${align === 'end' ? 'right-0' : 'left-0'} ${className}`}
         >
           <MenuContext.Provider value={close}>{children}</MenuContext.Provider>
         </div>
