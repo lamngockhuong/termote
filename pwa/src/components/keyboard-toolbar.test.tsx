@@ -830,6 +830,21 @@ describe('KeyboardToolbar layout', () => {
     ).not.toBeInTheDocument()
   })
 
+  it('the scroll row drops "copy mode" from its label without copy mode', () => {
+    render(
+      <KeyboardToolbar
+        onKey={noop}
+        onCtrlKey={noop}
+        defaultExpanded
+        showTmuxCopy={false}
+      />,
+    )
+    expect(screen.getByRole('group', { name: 'Scroll' })).toBeInTheDocument()
+    expect(
+      screen.queryByRole('group', { name: 'Scroll · copy mode' }),
+    ).not.toBeInTheDocument()
+  })
+
   it('expanded + Ctrl shows the full combos in a floating Ctrl + row', () => {
     render(
       <KeyboardToolbar

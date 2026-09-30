@@ -3,6 +3,8 @@ import { MessageSquare } from 'lucide-react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { APP_VIEWS, type AppView, type ViewProps } from './app-views'
+import { KeyboardToolbar } from './components/keyboard-toolbar'
+import type { QuickActionHandlers } from './components/quick-actions-menu'
 import { TerminalView } from './components/terminal-view'
 
 // ─── Mock all hooks ───────────────────────────────────────────────────────────
@@ -184,6 +186,17 @@ vi.mock('./components/terminal-view', () => ({
   ),
 }))
 
+// Stands in for the toolbar's Quick actions sheet
+function QuickActionsMock({ onSendKey, onSendText }: QuickActionHandlers) {
+  return (
+    <div data-testid="quick-actions">
+      <button onClick={() => onSendKey('c', { ctrl: true })}>QACtrlKey</button>
+      <button onClick={() => onSendKey('Tab')}>QAKey</button>
+      <button onClick={() => onSendText('hello')}>QAText</button>
+    </div>
+  )
+}
+
 vi.mock('./components/keyboard-toolbar', () => ({
   KeyboardToolbar: vi.fn((props: Record<string, unknown>) => (
     <div data-testid="keyboard-toolbar">
@@ -239,6 +252,9 @@ vi.mock('./components/keyboard-toolbar', () => ({
       >
         ActivateCtrl
       </button>
+      {props.quickActions ? (
+        <QuickActionsMock {...(props.quickActions as QuickActionHandlers)} />
+      ) : null}
     </div>
   )),
 }))
@@ -264,36 +280,22 @@ vi.mock('./components/session-sidebar', () => ({
   ),
 }))
 
-vi.mock('./components/quick-actions-menu', () => ({
-  QuickActionsMenu: ({
-    onSendKey,
-    onSendText,
-  }: {
-    onSendKey: (key: string, opts?: { ctrl?: boolean }) => void
-    onSendText: (text: string) => void
-  }) => (
-    <div data-testid="quick-actions">
-      <button onClick={() => onSendKey('c', { ctrl: true })}>QACtrlKey</button>
-      <button onClick={() => onSendKey('Tab')}>QAKey</button>
-      <button onClick={() => onSendText('hello')}>QAText</button>
-    </div>
-  ),
-}))
-
 vi.mock('./components/settings-modal', () => ({
   SettingsModal: ({
     isOpen,
     onClose,
     onCheckForUpdate,
     onShowGestureHints,
+    pasteBufferLabel,
   }: {
     isOpen: boolean
+    pasteBufferLabel?: string
     onClose: () => void
     onCheckForUpdate?: () => Promise<string | null>
     onShowGestureHints?: () => void
   }) =>
     isOpen ? (
-      <div data-testid="settings-modal">
+      <div data-testid="settings-modal" data-paste-label={pasteBufferLabel}>
         <button onClick={onClose}>CloseSettings</button>
         {onCheckForUpdate && (
           <button onClick={() => onCheckForUpdate()}>CheckUpdate</button>
@@ -378,8 +380,16 @@ vi.mock('./components/connection-indicator', () => ({
 }))
 
 vi.mock('./components/toast', () => ({
-  Toast: ({ message, onClose }: { message: string; onClose: () => void }) => (
-    <div data-testid="toast" role="alert">
+  Toast: ({
+    message,
+    variant = 'info',
+    onClose,
+  }: {
+    message: string
+    variant?: string
+    onClose: () => void
+  }) => (
+    <div data-testid="toast" data-variant={variant} role="alert">
       {message}
       <button onClick={onClose}>CloseToast</button>
     </div>
@@ -540,6 +550,7 @@ describe('App', () => {
       expect(screen.getByTestId('toast')).toBeInTheDocument()
       expect(screen.getByText('Update available: v2.0.0')).toBeInTheDocument()
     })
+    expect(screen.getByTestId('toast')).toHaveAttribute('data-variant', 'info')
   })
 
   it('does not show toast when no update available', async () => {
@@ -609,6 +620,32 @@ describe('App', () => {
     await waitFor(() => screen.getByRole('button', { name: 'Settings' }))
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
     expect(screen.getByTestId('settings-modal')).toBeInTheDocument()
+  })
+
+  it('names the paste buffer after the tmux backend', async () => {
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Settings' }))
+    expect(screen.getByTestId('settings-modal')).toHaveAttribute(
+      'data-paste-label',
+      'tmux buffer',
+    )
+  })
+
+  it('names the paste buffer generically for another backend', async () => {
+    const base = mockUseLocalSessions()
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      mux: {
+        backend: 'herdr',
+        caps: { clientSideSelect: true, copyMode: false },
+      },
+    })
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Settings' }))
+    expect(screen.getByTestId('settings-modal')).toHaveAttribute(
+      'data-paste-label',
+      'Session buffer',
+    )
   })
 
   it('closes settings modal', async () => {
@@ -824,6 +861,22 @@ describe('App', () => {
     })
   })
 
+  it('gives the toolbar Quick actions on mobile only', async () => {
+    const { unmount } = render(<App />)
+    await screen.findByTestId('keyboard-toolbar')
+    expect(
+      vi.mocked(KeyboardToolbar).mock.lastCall![0].quickActions,
+    ).toBeUndefined()
+    unmount()
+    mockIsMobile.mockReturnValue(true)
+    render(<App />)
+    await screen.findByTestId('keyboard-toolbar')
+    expect(vi.mocked(KeyboardToolbar).mock.lastCall![0].quickActions).toEqual({
+      onSendKey: expect.any(Function),
+      onSendText: expect.any(Function),
+    })
+  })
+
   it('does not render mobile components when isMobile=false', async () => {
     render(<App />)
     await waitFor(() => {
@@ -996,7 +1049,7 @@ describe('App', () => {
     })
   })
 
-  it('QuickActionsMenu onSendKey with ctrl:true calls sendKeyToTerminal with ctrl', async () => {
+  it('Quick actions onSendKey with ctrl:true calls sendKeyToTerminal with ctrl', async () => {
     mockIsMobile.mockReturnValue(true)
     render(<App />)
     await waitFor(() => screen.getByRole('button', { name: 'QACtrlKey' }))
@@ -1006,7 +1059,7 @@ describe('App', () => {
     })
   })
 
-  it('QuickActionsMenu onSendKey without ctrl calls sendKeyToTerminal without opts', async () => {
+  it('Quick actions onSendKey without ctrl calls sendKeyToTerminal without opts', async () => {
     mockIsMobile.mockReturnValue(true)
     render(<App />)
     await waitFor(() => screen.getByRole('button', { name: 'QAKey' }))
@@ -1014,7 +1067,7 @@ describe('App', () => {
     expect(mockSendKeyToTerminal).toHaveBeenCalledWith(null, 'Tab')
   })
 
-  it('QuickActionsMenu onSendText calls sendTextToTerminal', async () => {
+  it('Quick actions onSendText calls sendTextToTerminal', async () => {
     mockIsMobile.mockReturnValue(true)
     render(<App />)
     await waitFor(() => screen.getByRole('button', { name: 'QAText' }))
@@ -1548,6 +1601,10 @@ describe('shouldShowPasteError (via handlePaste)', () => {
         expect(screen.getByTestId('toast')).toBeInTheDocument()
         expect(screen.getByText(new RegExp(expectedMsg))).toBeInTheDocument()
       })
+      expect(screen.getByTestId('toast')).toHaveAttribute(
+        'data-variant',
+        'danger',
+      )
     })
   }
 
@@ -2225,9 +2282,9 @@ describe('App views, view-only and deep links', () => {
     it('a pane that is gone opens its tab and says so', async () => {
       window.history.replaceState(null, '', '/#/s/w1/w1%3At1/gone')
       render(<App />)
-      expect(await screen.findByTestId('toast')).toHaveTextContent(
-        'Pane in link not found',
-      )
+      const toast = await screen.findByTestId('toast')
+      expect(toast).toHaveTextContent('Pane in link not found')
+      expect(toast).toHaveAttribute('data-variant', 'warning')
       expect(switchSession).toHaveBeenCalledWith('w1:t1', 'gone')
     })
 
@@ -2251,9 +2308,9 @@ describe('App views, view-only and deep links', () => {
     it('an unknown session only shows a toast', async () => {
       window.history.replaceState(null, '', '/#/s/w9/nope')
       render(<App />)
-      expect(await screen.findByTestId('toast')).toHaveTextContent(
-        'Session in link not found',
-      )
+      const toast = await screen.findByTestId('toast')
+      expect(toast).toHaveTextContent('Session in link not found')
+      expect(toast).toHaveAttribute('data-variant', 'warning')
       expect(switchSession).not.toHaveBeenCalled()
       noWrites()
     })
@@ -2346,9 +2403,9 @@ describe('App views, view-only and deep links', () => {
       })
       render(<App />)
       fireEvent.click(await screen.findByRole('button', { name: 'CopyLink' }))
-      expect(await screen.findByTestId('toast')).toHaveTextContent(
-        'Link copied',
-      )
+      const toast = await screen.findByTestId('toast')
+      expect(toast).toHaveTextContent('Link copied')
+      expect(toast).toHaveAttribute('data-variant', 'success')
       expect(writeText).toHaveBeenCalledWith(
         `${window.location.origin}/#/s/w1/w1%3At1/w1%3At1%3Ap1`,
       )
@@ -2361,9 +2418,9 @@ describe('App views, view-only and deep links', () => {
       })
       render(<App />)
       fireEvent.click(await screen.findByRole('button', { name: 'CopyLink' }))
-      expect(await screen.findByTestId('toast')).toHaveTextContent(
-        'Could not copy the link',
-      )
+      const toast = await screen.findByTestId('toast')
+      expect(toast).toHaveTextContent('Could not copy the link')
+      expect(toast).toHaveAttribute('data-variant', 'danger')
     })
   })
 })

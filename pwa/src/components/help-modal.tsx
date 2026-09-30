@@ -13,6 +13,7 @@ import {
   Keyboard,
   Languages,
   Minimize2,
+  Zap,
 } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
 import { AgentStatusBadge } from './agent-status-badge'
@@ -95,6 +96,10 @@ const TOOLBAR_GUIDE: GuideSection[] = [
       { key: <ArrowKeysIcon />, desc: 'Arrow keys' },
       { key: <ExpandCollapseIcon />, desc: 'Expand/collapse keyboard' },
       {
+        key: <Zap size={ICON_SIZE} />,
+        desc: 'Quick actions: Clear, Cancel, Clear line, Exit (mobile)',
+      },
+      {
         key: <History size={ICON_SIZE} />,
         desc: 'Toggle tmux copy mode',
         tmux: true,
@@ -136,11 +141,19 @@ const TOOLBAR_GUIDE: GuideSection[] = [
     ],
   },
   {
-    title: 'Expanded Mode Keys',
+    title: 'Expanded Toolbar Rows',
     items: [
-      { key: 'Home/End', desc: 'Jump to line start/end' },
-      { key: 'Del/Bksp', desc: 'Delete forward/backward' },
-      { key: 'PgUp/PgDn', desc: 'Page up/down' },
+      { key: 'Navigate', desc: 'Home/End, Del/Bksp, PgUp/PgDn, Insert' },
+      {
+        key: 'Scroll',
+        desc: 'Copy mode, paste and page up/down',
+        tmux: true,
+      },
+      { key: 'Scroll', desc: 'Paste and scroll history', tmux: false },
+      {
+        key: 'Ctrl +',
+        desc: 'Every Ctrl combo, above the toolbar while Ctrl is on',
+      },
     ],
   },
   {

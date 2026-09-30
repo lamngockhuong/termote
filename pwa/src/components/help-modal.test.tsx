@@ -115,6 +115,7 @@ describe('HelpModal', () => {
     expect(
       screen.getByText('Paste from the system clipboard'),
     ).toBeInTheDocument()
+    expect(screen.getByText('Paste and scroll history')).toBeInTheDocument()
   })
 
   it('falls back to Gestures when the open tmux tab goes away', () => {
@@ -124,6 +125,23 @@ describe('HelpModal', () => {
       <HelpModal isOpen={true} onClose={vi.fn()} copyModeSupported={false} />,
     )
     expect(screen.getByText('Touch Gestures')).toBeInTheDocument()
+  })
+
+  it('describes the Quick actions key and the expanded rows', () => {
+    render(<HelpModal isOpen={true} onClose={vi.fn()} />)
+    fireEvent.click(screen.getByText('Toolbar'))
+    expect(
+      screen.getByText(
+        'Quick actions: Clear, Cancel, Clear line, Exit (mobile)',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Expanded Toolbar Rows')).toBeInTheDocument()
+    expect(
+      screen.getByText('Copy mode, paste and page up/down'),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText('Paste and scroll history'),
+    ).not.toBeInTheDocument()
   })
 
   it('shows the tmux-only toolbar rows with copy mode', () => {

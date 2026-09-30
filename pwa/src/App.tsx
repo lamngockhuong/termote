@@ -23,11 +23,10 @@ import { GestureHintsOverlay } from './components/gesture-hints-overlay'
 import { HelpModal } from './components/help-modal'
 import { KeyboardToolbar } from './components/keyboard-toolbar'
 import { PaneStrip } from './components/pane-strip'
-import { QuickActionsMenu } from './components/quick-actions-menu'
 import { SessionSidebar } from './components/session-sidebar'
 import { SettingsModal } from './components/settings-modal'
 import { type TerminalHandle, TerminalView } from './components/terminal-view'
-import { Toast } from './components/toast'
+import { Toast, type ToastVariant } from './components/toast'
 import { Banner } from './components/ui/banner'
 import { useTheme } from './contexts/theme-context'
 import { useCommandHistory } from './hooks/use-command-history'
@@ -107,7 +106,18 @@ export default function App({
   const [helpOpen, setHelpOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [gestureHintsOpen, setGestureHintsOpen] = useState(false)
-  const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const [toast, setToast] = useState<{
+    id: number
+    message: string
+    variant: ToastVariant
+  } | null>(null)
+  // Each toast gets its own id, so the same message again starts afresh
+  const toastIdRef = useRef(0)
+  const showToast = useCallback(
+    (message: string, variant: ToastVariant = 'info') =>
+      setToast({ id: ++toastIdRef.current, message, variant }),
+    [],
+  )
   // State of the terminal stream, reported by TerminalView.
   const [streamState, setStreamState] = useState<ConnectionState>('connecting')
   const { settings, updateSetting } = useSettings()
@@ -205,13 +215,13 @@ export default function App({
     checkForUpdate()
       .then((result) => {
         if (result.hasUpdate && result.latestVersion) {
-          setToastMessage(`Update available: v${result.latestVersion}`)
+          showToast(`Update available: v${result.latestVersion}`)
         }
       })
       .catch(() => {
         // Silently ignore - already handled internally
       })
-  }, [checkForUpdate])
+  }, [checkForUpdate, showToast])
 
   // tmux scrolls its own history (copy mode); other backends scroll the
   // xterm.js scrollback.
@@ -246,13 +256,21 @@ export default function App({
         if (readOnly) return
         const result = await pasteToTerminal(getTerminal())
         if (shouldShowPasteError(result)) {
-          setToastMessage(getClipboardErrorMsg(result.reason, true))
+          showToast(getClipboardErrorMsg(result.reason, true), 'danger')
         }
       },
       onPinchIn: decrease,
       onPinchOut: increase,
     }),
-    [decrease, increase, isHerdr, getTerminal, handleScroll, readOnly],
+    [
+      decrease,
+      increase,
+      isHerdr,
+      getTerminal,
+      handleScroll,
+      readOnly,
+      showToast,
+    ],
   )
 
   const toggleKeyboard = () => {
@@ -337,13 +355,13 @@ export default function App({
       if (key === 'v') {
         const result = await pasteToTerminal(getTerminal())
         if (shouldShowPasteError(result)) {
-          setToastMessage(getClipboardErrorMsg(result.reason))
+          showToast(getClipboardErrorMsg(result.reason), 'danger')
         }
         return
       }
       sendKeyToTerminal(getTerminal(), key, { ctrl: true, shift: true })
     },
-    [getTerminal],
+    [getTerminal, showToast],
   )
 
   const handleTmuxCopy = useCallback(() => {
@@ -357,10 +375,10 @@ export default function App({
     } else {
       const result = await pasteToTerminal(getTerminal())
       if (shouldShowPasteError(result)) {
-        setToastMessage(getClipboardErrorMsg(result.reason))
+        showToast(getClipboardErrorMsg(result.reason), 'danger')
       }
     }
-  }, [settings.pasteSource, copyModeSupported, getTerminal])
+  }, [settings.pasteSource, copyModeSupported, getTerminal, showToast])
 
   const handleSendText = useCallback(
     (text: string) => {
@@ -371,6 +389,21 @@ export default function App({
       }
     },
     [settings.imeSendBehavior, addCommand, getTerminal],
+  )
+
+  // The toolbar's Quick actions key (mobile only) opens a sheet of these.
+  // Reads the ref directly so the object stays the same across renders.
+  const quickActions = useMemo(
+    () => ({
+      onSendKey: (key: string, opts?: { ctrl?: boolean }) => {
+        if (opts?.ctrl) {
+          sendKeyToTerminal(terminalRef.current, key, { ctrl: true })
+        } else sendKeyToTerminal(terminalRef.current, key)
+      },
+      onSendText: (text: string) =>
+        sendTextToTerminal(terminalRef.current, text),
+    }),
+    [],
   )
 
   const handleHistorySelect = useCallback(
@@ -409,16 +442,16 @@ export default function App({
       (s) => s.id === link.tab && s.groupId === link.group,
     )
     if (!target) {
-      setToastMessage('Session in link not found')
+      showToast('Session in link not found', 'warning')
       return
     }
     // A pane that is gone still opens its tab, with the tab's own pane.
     if (link.pane && !target.panes?.some((p) => p.id === link.pane)) {
-      setToastMessage('Pane in link not found')
+      showToast('Pane in link not found', 'warning')
     }
     switchSession(target.id, link.pane)
     if (link.view) setViewId(link.view)
-  }, [linkRequest, sessionsLoaded, sessions, switchSession])
+  }, [linkRequest, sessionsLoaded, sessions, switchSession, showToast])
 
   // The address bar follows what is on screen, without adding history
   // entries, so copying it gives a link to this very pane.
@@ -445,11 +478,11 @@ export default function App({
       await navigator.clipboard.writeText(
         `${origin}${pathname}${search}${currentLink}`,
       )
-      setToastMessage('Link copied')
+      showToast('Link copied', 'success')
     } catch {
-      setToastMessage('Could not copy the link')
+      showToast('Could not copy the link', 'danger')
     }
-  }, [currentLink])
+  }, [currentLink, showToast])
 
   return (
     <div
@@ -610,52 +643,37 @@ export default function App({
           </span>
         </div>
       ) : isTerminalView ? (
-        <>
-          {/* Quick Actions FAB (mobile only) */}
-          {isMobile && (
-            <QuickActionsMenu
-              onSendKey={(key, opts) => {
-                if (opts?.ctrl) {
-                  sendKeyToTerminal(getTerminal(), key, { ctrl: true })
-                } else {
-                  sendKeyToTerminal(getTerminal(), key)
-                }
-              }}
-              onSendText={(text) => sendTextToTerminal(getTerminal(), text)}
+        <div className="relative">
+          {historyOpen && (
+            <CommandHistoryDropdown
+              history={history}
+              onSelect={handleHistorySelect}
+              onRemove={removeCommand}
+              onClear={clearHistory}
+              onClose={() => setHistoryOpen(false)}
             />
           )}
-
-          <div className="relative">
-            {historyOpen && (
-              <CommandHistoryDropdown
-                history={history}
-                onSelect={handleHistorySelect}
-                onRemove={removeCommand}
-                onClear={clearHistory}
-                onClose={() => setHistoryOpen(false)}
-              />
-            )}
-            <KeyboardToolbar
-              onKey={handleKey}
-              onCtrlKey={handleCtrlKey}
-              onShiftKey={handleShiftKey}
-              onCtrlShiftKey={handleCtrlShiftKey}
-              onScroll={handleScroll}
-              onTmuxCopy={handleTmuxCopy}
-              showTmuxCopy={copyModeSupported}
-              onPaste={handlePaste}
-              onToggleKeyboard={toggleKeyboard}
-              onSendText={handleSendText}
-              ctrlActive={ctrlActive}
-              onCtrlChange={setCtrlActive}
-              imeMode={imeMode}
-              onImeModeChange={setImeMode}
-              defaultExpanded={settings.toolbarDefaultExpanded}
-              onHistoryToggle={() => setHistoryOpen((prev) => !prev)}
-              historyOpen={historyOpen}
-            />
-          </div>
-        </>
+          <KeyboardToolbar
+            onKey={handleKey}
+            onCtrlKey={handleCtrlKey}
+            onShiftKey={handleShiftKey}
+            onCtrlShiftKey={handleCtrlShiftKey}
+            onScroll={handleScroll}
+            onTmuxCopy={handleTmuxCopy}
+            showTmuxCopy={copyModeSupported}
+            onPaste={handlePaste}
+            onToggleKeyboard={toggleKeyboard}
+            onSendText={handleSendText}
+            ctrlActive={ctrlActive}
+            onCtrlChange={setCtrlActive}
+            imeMode={imeMode}
+            onImeModeChange={setImeMode}
+            defaultExpanded={settings.toolbarDefaultExpanded}
+            onHistoryToggle={() => setHistoryOpen((prev) => !prev)}
+            historyOpen={historyOpen}
+            quickActions={isMobile ? quickActions : undefined}
+          />
+        </div>
       ) : (
         currentView.Input && <currentView.Input {...viewProps} />
       )}
@@ -686,6 +704,9 @@ export default function App({
         settings={settings}
         onUpdateSetting={updateSetting}
         tmuxBufferSupported={copyModeSupported}
+        pasteBufferLabel={
+          mux.backend === 'tmux' ? 'tmux buffer' : 'Session buffer'
+        }
         onShowGestureHints={isMobile ? showGestureHints : undefined}
         onCheckForUpdate={async () => {
           const result = await checkForUpdate(true)
@@ -707,8 +728,13 @@ export default function App({
           onDismiss={dismissGestureHints}
         />
       )}
-      {toastMessage && (
-        <Toast message={toastMessage} onClose={() => setToastMessage(null)} />
+      {toast && (
+        <Toast
+          key={toast.id}
+          message={toast.message}
+          variant={toast.variant}
+          onClose={() => setToast(null)}
+        />
       )}
     </div>
   )

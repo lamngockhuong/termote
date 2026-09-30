@@ -577,7 +577,7 @@ export function KeyboardToolbar({
       {expanded && (
         <>
           <KeyGroup label="Navigate">{EXTRA_KEYS.map(renderKey)}</KeyGroup>
-          <KeyGroup label="Scroll · copy mode">
+          <KeyGroup label={showTmuxCopy ? 'Scroll · copy mode' : 'Scroll'}>
             {utilityKeys.map(renderKey)}
           </KeyGroup>
           {/* Only while Ctrl is on; Ctrl+Shift shows its own combos inline.
