@@ -160,8 +160,8 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
       backend còn giữ trong bộ đệm
 - [ ] Máy tính: Danh sách icon hiển thị đúng (không vỡ bố cục)
 - [ ] Trang About hiển thị đẹp ở giao diện tối
-- [ ] Nút Settings nhấn được trên mobile
-- [ ] Nút Clear Cache & Reload hoạt động (hủy SW, xóa cache, xóa session cookie, tải lại trang)
+- [ ] Menu "More" (⋯) mở được từ header trên mobile và máy tính
+- [ ] Mục `Clear cache & reload` trong menu More hoạt động (hủy SW, xóa cache, xóa session cookie, tải lại trang)
 
 ### Chỉ Báo Kết Nối
 
@@ -174,13 +174,16 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 
 - [ ] Toast hiện khi lỗi bảng nhớ tạm, lỗi dán, có bản cập nhật
 - [ ] Tự tắt sau ~4 giây
-- [ ] Vị trí dưới giữa, phía trên toolbar
+- [ ] Hiện gần mép trên (không che toolbar), màu theo trạng thái (info, success, warning, danger)
 
-### Tùy Chỉnh (Settings Modal)
+### Cài Đặt
 
-- [ ] Modal Preferences mở từ menu Settings
+- [ ] Settings mở từ menu More (⋯): bảng toàn màn hình trên điện thoại, hộp thoại hai cột có danh sách nhóm trên máy tính
+- [ ] Có đủ các nhóm: Appearance, Keyboard, Terminal, Sessions, Data & help
+- [ ] Kiểu giao diện (Neutral, Terminal, Native) áp dụng ngay và giữ nguyên sau khi tải lại
+- [ ] Escape đóng Settings, Help & gestures và About
 - [ ] Chuyển đổi hành vi gửi IME hoạt động (Gửi text / Gửi + Enter)
-- [ ] Chuyển đổi nguồn dán hoạt động (bảng nhớ tạm hệ thống / tmux buffer)
+- [ ] Chuyển đổi nguồn dán hoạt động (bảng nhớ tạm hệ thống / "tmux buffer" trên tmux, "Session buffer" ở backend khác)
 - [ ] Chuyển đổi toolbar mở rộng mặc định hoạt động
 - [ ] Chuyển đổi tắt context menu hoạt động
 - [ ] Chuyển đổi hiện session tabs hoạt động (máy tính)
@@ -195,7 +198,9 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 - [ ] Giao diện sáng (bảng màu GitHub)
 - [ ] Giao diện tối (bảng màu Monokai)
 - [ ] Chế độ Hệ thống (theo OS)
-- [ ] Nút chuyển theme trong menu settings
+- [ ] Theme (Light / Dark / System) chọn được trong menu More
+- [ ] Theme nào cũng chạy đúng với mọi kiểu giao diện
+- [ ] Khi hệ điều hành bật giảm chuyển động, các hiệu ứng động tắt
 - [ ] Theme giữ nguyên sau khi tải lại
 
 ### Cài Đặt/Offline
@@ -223,7 +228,7 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 
 ### Sidebar Session (group)
 
-- [ ] Sidebar mở (vuốt từ cạnh trái hoặc nhấn icon menu ba gạch)
+- [ ] Máy tính: sidebar hiện sẵn; mobile: chip phiên trên header ("Open sessions menu") mở danh sách phiên dưới dạng bảng trượt từ đáy màn hình, có nút "New session"
 - [ ] Sidebar scroll được khi có nhiều group
 - [ ] Sidebar thu gọn/mở rộng hoạt động (máy tính)
 - [ ] Sidebar thu gọn chỉ hiện icon, rê chuột thấy chú thích (máy tính)
@@ -250,11 +255,13 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 - [ ] Dải pane hiện với tab có nhiều hơn một pane, mỗi pane có một huy hiệu trạng thái agent
 - [ ] Chọn một pane thì đổi luồng terminal mà không đổi focus trong giao diện Herdr trên máy host
 
-### Thanh Điều Hướng Dưới (Mobile)
+### Liên Kết Trực Tiếp
 
-- [ ] Thanh điều hướng dưới chỉ hiện trên mobile
-- [ ] Hiện nút toggle sidebar, nút thêm, và 5 icon session đầu tiên
-- [ ] Nhấn icon session chuyển session
+- [ ] `<base>/#/s/<group>/<tab>` mở đúng phiên đó sau khi tải xong
+- [ ] ID không tồn tại thì giữ phiên hiện tại và hiện toast
+- [ ] Mở liên kết không bao giờ gửi phím, tạo hay đóng phiên
+- [ ] Chuyển session/tab/pane thì thanh địa chỉ cập nhật, không thêm mục lịch sử
+- [ ] "Copy link" trong menu More sao chép liên kết hiện tại
 
 ### Fullscreen (Desktop)
 
@@ -387,17 +394,14 @@ Test trên thiết bị di động thật:
 
 ---
 
-## Menu Thao Tác Nhanh (Mobile)
+## Thao Tác Nhanh (Mobile)
 
-- [ ] Nút FAB hiện trên mobile
-- [ ] Nhấn FAB mở menu thao tác
+- [ ] Phím Quick actions (⚡) hiện trên thanh công cụ bàn phím ở mobile, không còn nút nổi
+- [ ] Nhấn phím này mở bảng Quick actions
 - [ ] Thao tác Clear (gửi 'clear' + Enter)
 - [ ] Thao tác Cancel (gửi Ctrl+C)
 - [ ] Thao tác `Clear line` (gửi Ctrl+U)
 - [ ] Thao tác Exit (gửi Ctrl+D)
-- [ ] FAB kéo thả được (kéo để đổi vị trí)
-- [ ] Vị trí FAB giữ nguyên sau khi tải lại
-- [ ] FAB giới hạn trong viewport
 - [ ] Phản hồi rung khi thao tác
 
 ---

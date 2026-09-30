@@ -3,7 +3,25 @@ title: Settings
 description: Configure Termote preferences
 ---
 
-Access settings via the **gear icon** (⚙) in the header → **Preferences**.
+Open settings from the **More** (⋯) menu in the header → **Settings**. Settings are grouped:
+**Appearance**, **Keyboard**, **Terminal**, **Sessions** and **Data & help**. On a phone the
+dialog is a full-screen sheet; on desktop it is a two-column dialog with a group list on the left.
+Help & gestures and About open in the same kind of sheet from the **More** menu.
+
+## Interface Style
+
+Settings → Appearance → **Interface style** changes how the whole app looks. The change applies
+at once and is saved in this browser.
+
+| Style    | Look                                                   | Default |
+| -------- | ------------------------------------------------------ | ------- |
+| Neutral  | Balanced defaults, indigo accent                       | ✓       |
+| Terminal | Monospace labels, small corner radius, green accent    |         |
+| Native   | Large corner radius, system-app feel, blue accent      |         |
+
+The style is independent of the **theme** (Light, Dark, System), which you pick in the **More**
+(⋯) menu. Any style works with any theme. If you have turned on reduced motion in your operating
+system, Termote skips its animations.
 
 ## Text Input Send Behavior
 
@@ -27,7 +45,7 @@ Controls where the **Paste** button in the toolbar gets content from.
 
 **Tip**: Use "System clipboard" for pasting from other apps. Use "tmux buffer" for pasting text copied within tmux.
 
-With the Herdr backend there is no tmux buffer, so this setting is hidden and the Paste button always uses the system clipboard.
+With the tmux backend the second option is labelled **tmux buffer**; with any other backend it is labelled **Session buffer**. With the Herdr backend there is no tmux buffer, so this setting is hidden and the Paste button always uses the system clipboard.
 
 ## Toolbar Default Expanded
 
@@ -49,7 +67,7 @@ Blocks the browser context menu (right-click / long-press) on the terminal area 
 
 ## Show Session Tabs (Desktop Only)
 
-Displays a horizontal tab bar at the top for quick session switching on desktop. The sidebar remains available for more detailed session management.
+Displays browser-like session tabs in the header row for quick session switching on desktop. The sidebar remains available for more detailed session management.
 
 | Option | Behavior                              | Default |
 | ------ | ------------------------------------- | ------- |
@@ -87,10 +105,10 @@ Deletes all saved commands from the command history dropdown. Use when you want 
 
 ## Show Gesture Hints (Mobile Only)
 
-Re-opens the gesture tutorial overlay that appeared on your first visit. Useful if you want to review available touch gestures.
+Re-opens the gesture tutorial overlay that appeared on your first visit. Useful if you want to review available touch gestures. It is in the **Data & help** group.
 
 This button only appears on mobile devices.
 
 ## Persistence
 
-All settings are saved to your browser's local storage (`termote-settings` key) and persist across sessions. Clearing browser data or using "Clear Cache & Reload" will reset settings to defaults.
+All settings are saved to your browser's local storage (`termote-settings` key) and persist across sessions. Clearing browser data or using "Clear cache & reload" (in the **More** menu) will reset settings to defaults.

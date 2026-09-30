@@ -18,20 +18,20 @@ needed for different workflows (e.g., Claude Code, Copilot, builds).
 
 ### Desktop
 
-- **Switch**: Click session in left sidebar or in the **session tabs** at the top (if enabled)
+- **Switch**: Click session in left sidebar or in the **session tabs** in the header row (if enabled)
 - **Edit**: Double-click session name, or hover and click pencil icon
 - **Remove**: Hover and click X icon (requires 2+ sessions)
-- **Add**: Click "+ Add session" at bottom
+- **Add**: Click "New session" in the sidebar, or the "+" after the session tabs
 - **Collapse sidebar**: Click the collapse icon (top-right of sidebar) to show icons only — maximizes terminal width
 - **Fullscreen**: Click the fullscreen button in the header to enter fullscreen mode
-- **Session tabs**: Horizontal tab bar for quick tab switching on desktop. Can be toggled via Settings → "Show session tabs"
+- **Session tabs**: Browser-like tabs that share the header row, for quick tab switching on desktop. Can be toggled via Settings → Sessions → "Show session tabs"
 
 ### Mobile
 
-- **Switch**: Swipe right to open sidebar, tap session
+- **Switch**: Tap the session chip in the header ("Open sessions menu") to open the sessions list as a bottom sheet, then tap a session
 - **Edit**: Swipe left on session, tap Edit
 - **Remove**: Swipe left on session, tap Remove
-- **Add**: Tap "+ Add session" in sidebar
+- **Add**: Tap "New session" in the header of the sessions sheet
 
 ## Session Features
 
@@ -42,6 +42,26 @@ needed for different workflows (e.g., Claude Code, Copilot, builds).
 | Auto-sync           | Groups/tabs/panes sync from the server (configurable interval) |
 | Persistence         | Sessions backed by tmux windows, or Herdr tabs   |
 | Connection status   | Real-time indicator in header (see below)        |
+
+## Deep Links
+
+Every screen has an address you can copy and open later or on another device:
+
+```text
+<base>/#/s/<group>/<tab>[/<pane>][?view=terminal|chat|files]
+```
+
+- `group`, `tab` and `pane` are the IDs from `/api/mux/snapshot`. With tmux, `group` is the
+  session name, `tab` is the window index and there is no `pane`. With Herdr they are the IDs
+  Herdr assigns to the workspace, tab and pane.
+- Opening a link selects that group, tab and pane once the session list has loaded. An unknown ID
+  keeps the current session and shows a toast.
+- `view` is used only when that view is available; otherwise the terminal opens.
+- A link only selects. It never sends keys and never creates or closes a session. With tmux,
+  selecting changes the current window, which every client of that tmux session shares.
+- Switching session, tab or pane updates the address bar without adding history entries, so
+  copying the address is enough. **Copy link** in the **More** (⋯) menu copies it to the
+  clipboard.
 
 ## Herdr Backend
 
@@ -54,7 +74,7 @@ It changes the session model in two ways:
   more than one pane).
 - **Agent status badges**: each pane can show a small icon — idle, working, blocked, or done —
   reflecting the coding agent Herdr detected in that pane. Badges refresh at most once per the
-  configured **Session poll interval** (Settings → Preferences), not instantly.
+  configured **Session poll interval** (Settings → Sessions), not instantly.
 
 <Aside type="caution">
   Selecting a tab or pane in the PWA never changes what is shown on the Herdr desktop — it only

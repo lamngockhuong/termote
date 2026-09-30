@@ -42,7 +42,8 @@ Contrôlez à distance des outils CLI (Claude Code, GitHub Copilot, n'importe qu
 - **Adapté au mobile** : Barre d'outils clavier virtuel (Tab/Ctrl/Shift/flèches, extensible)
 - **Support des gestes** : Balayage pour Ctrl+C, Tab, défilement
 - **Historique des commandes** : Rappel des commandes envoyées avec recherche
-- **Actions rapides** : Menu flottant pour les opérations courantes (clear, cancel, exit)
+- **Actions rapides** : Une touche ⚡ dans la barre mobile ouvre une feuille d'opérations courantes (clear, cancel, exit)
+- **Styles d'interface** : Neutral, Terminal ou Native, choisis dans les Réglages, indépendants du thème clair/sombre
 - **Indicateur de connexion** : Statut du serveur en temps réel avec détection automatique de déconnexion
 - **Vérification des mises à jour** : Notification automatique de nouvelle version depuis les releases GitHub
 - **PWA** : Installable sur l'écran d'accueil, utilisable hors ligne
@@ -58,6 +59,14 @@ Contrôlez à distance des outils CLI (Claude Code, GitHub Copilot, n'importe qu
   <img src="docs/images/screenshots/mobile-terminal.png" alt="Terminal Mobile" width="280" />
   &nbsp;&nbsp;
   <img src="docs/images/screenshots/mobile-sidebar.png" alt="Barre Latérale de Session" width="280" />
+</p>
+
+<p align="center">
+  <img src="docs/images/screenshots/desktop-terminal.png" alt="Desktop Terminal" width="600" />
+</p>
+
+<p align="center">
+  <img src="docs/images/screenshots/ui-styles.png" alt="Interface Styles" width="600" />
 </p>
 
 ## Architecture

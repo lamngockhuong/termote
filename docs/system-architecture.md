@@ -54,16 +54,19 @@ React SPA with:
 - **Terminal View**: xterm.js terminal fed directly by the `/api/mux/stream` WebSocket, in-place theme switching (no reload)
 - **Hammer.js**: Touch gesture recognition (mobile only)
 - **Session Sidebar**: Switch between groups (tmux sessions, or Herdr workspaces), add/edit/remove (collapsible on desktop)
-- **Session Tabs**: Horizontal tab bar for tab switching (hidden/shown via setting), add/remove via UI
+- **Session Tabs**: Browser-like tabs in the header row for tab switching (hidden/shown via setting), add/remove via UI
+- **Session Chip** (mobile): Header chip that opens the sessions list as a bottom sheet; there is no bottom navigation
 - **Pane Strip**: Second-level switcher shown only when a tab has more than one pane (Herdr split panes)
 - **Agent Status Badge**: Per-pane coding-agent status (idle/working/blocked/done) shown next to the pane, only ever set by the Herdr backend
 - **Keyboard Toolbar**: Virtual keys, Ctrl combos, scroll controls (respects default expanded setting)
-- **Settings Menu**: Theme toggle (light/dark/system), Clear Cache & Reload, Preferences
-- **Settings Modal**: IME behavior, toolbar expanded, context menu control, session tabs visibility, poll interval, gesture hints, update check (inline toast), history clear
+- **More Menu**: Font size (mobile), theme (light/dark/system), Settings, Help & gestures, About, Copy link, Clear cache & reload
+- **Interface Styles**: Neutral, Terminal, Native; semantic tokens in `pwa/src/index.css`, selected by `data-ui-style` on `<html>` (see [design-guidelines.md](design-guidelines.md))
+- **Settings**: grouped sheet/dialog; IME behavior, interface style, toolbar expanded, context menu control, session tabs visibility, poll interval, gesture hints, update check (inline toast), history clear
 - **Session Poll Interval**: Configurable sync frequency (3s-5m, default 5s) to control snapshot polling rate
 - **Connection Indicator**: Real-time auto-detection of server status (connecting/connected/disconnected/error), clickable to retry
 - **Command History**: Search/recall previously sent commands (mobile-friendly delete buttons), persisted in localStorage
-- **Quick Actions Menu**: Draggable FAB with auto-flipping menu, preset commands (clear, cancel, exit), position persisted
+- **Quick Actions**: A key in the mobile keyboard toolbar opens a sheet of preset commands (clear, cancel, clear line, exit)
+- **Deep Links**: `#/s/<group>/<tab>[/<pane>][?view=]` selects a session (never sends input); the address bar follows the current session via `replaceState`
 - **Context Menu Control**: Block/unblock right-click on the terminal
 - **Font Controls**: Adjustable font size (6-24px)
 - **Fullscreen Toggle**: Desktop-only fullscreen mode via Fullscreen API

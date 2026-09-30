@@ -40,7 +40,8 @@
 - **モバイル対応**: 仮想キーボードツールバー（Tab/Ctrl/Shift/矢印キー、展開可能）
 - **ジェスチャー操作**: スワイプでCtrl+C、Tab、スクロール
 - **コマンド履歴**: 検索機能付きの送信済みコマンド呼び出し
-- **クイックアクション**: よく使う操作（clear、cancel、exit）のフローティングメニュー
+- **クイックアクション**: モバイルのツールバーの ⚡ キーで、よく使う操作（clear、cancel、exit）のシートを開く
+- **インターフェーススタイル**: Neutral、Terminal、Native から設定で選択。ライト/ダークのテーマとは独立
 - **接続インジケーター**: リアルタイムのサーバー状態表示と切断自動検出
 - **アップデートチェック**: GitHub releasesからの新バージョン自動通知
 - **PWA**: ホーム画面にインストール可能、オフライン対応
@@ -56,6 +57,14 @@
   <img src="docs/images/screenshots/mobile-terminal.png" alt="モバイルターミナル" width="280" />
   &nbsp;&nbsp;
   <img src="docs/images/screenshots/mobile-sidebar.png" alt="セッションサイドバー" width="280" />
+</p>
+
+<p align="center">
+  <img src="docs/images/screenshots/desktop-terminal.png" alt="Desktop Terminal" width="600" />
+</p>
+
+<p align="center">
+  <img src="docs/images/screenshots/ui-styles.png" alt="Interface Styles" width="600" />
 </p>
 
 ## アーキテクチャ

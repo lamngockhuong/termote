@@ -42,7 +42,8 @@ Kendalikan alat CLI (Claude Code, GitHub Copilot, terminal apa pun) dari jarak j
 - **Ramah mobile**: Toolbar keyboard virtual (Tab/Ctrl/Shift/panah, dapat diperluas)
 - **Dukungan gestur**: Geser untuk Ctrl+C, Tab, menggulir
 - **Riwayat perintah**: Panggil ulang perintah yang pernah dikirim dengan pencarian
-- **Aksi cepat**: Menu mengambang untuk operasi umum (clear, cancel, exit)
+- **Aksi cepat**: Tombol ⚡ di toolbar mobile membuka lembar berisi operasi umum (clear, cancel, exit)
+- **Gaya antarmuka**: Neutral, Terminal, atau Native, dipilih di Pengaturan, terpisah dari tema terang/gelap
 - **Indikator koneksi**: Status server real-time, deteksi otomatis koneksi terputus
 - **Pemeriksa pembaruan**: Notifikasi otomatis versi baru dari GitHub releases
 - **PWA**: Dapat dipasang di homescreen, tersedia offline
@@ -58,6 +59,14 @@ Kendalikan alat CLI (Claude Code, GitHub Copilot, terminal apa pun) dari jarak j
   <img src="docs/images/screenshots/mobile-terminal.png" alt="Mobile Terminal" width="280" />
   &nbsp;&nbsp;
   <img src="docs/images/screenshots/mobile-sidebar.png" alt="Session Sidebar" width="280" />
+</p>
+
+<p align="center">
+  <img src="docs/images/screenshots/desktop-terminal.png" alt="Desktop Terminal" width="600" />
+</p>
+
+<p align="center">
+  <img src="docs/images/screenshots/ui-styles.png" alt="Interface Styles" width="600" />
 </p>
 
 ## Arsitektur

@@ -40,7 +40,8 @@
 - **모바일 친화적**: 가상 키보드 툴바 (Tab/Ctrl/Shift/방향키, 확장 가능)
 - **제스처 지원**: 스와이프로 Ctrl+C, Tab, 스크롤
 - **명령 히스토리**: 검색 기능으로 이전에 전송한 명령 재호출
-- **빠른 작업**: 자주 쓰는 작업(clear, cancel, exit)을 위한 플로팅 메뉴
+- **빠른 작업**: 모바일 툴바의 ⚡ 키가 자주 쓰는 작업(clear, cancel, exit) 시트를 엽니다
+- **인터페이스 스타일**: Neutral, Terminal, Native 중 설정에서 선택하며 라이트/다크 테마와 별개입니다
 - **연결 표시기**: 실시간 서버 상태 및 연결 끊김 자동 감지
 - **업데이트 확인**: GitHub releases에서 새 버전 자동 알림
 - **PWA**: 홈 화면에 설치 가능, 오프라인 지원
@@ -56,6 +57,14 @@
   <img src="docs/images/screenshots/mobile-terminal.png" alt="모바일 터미널" width="280" />
   &nbsp;&nbsp;
   <img src="docs/images/screenshots/mobile-sidebar.png" alt="세션 사이드바" width="280" />
+</p>
+
+<p align="center">
+  <img src="docs/images/screenshots/desktop-terminal.png" alt="Desktop Terminal" width="600" />
+</p>
+
+<p align="center">
+  <img src="docs/images/screenshots/ui-styles.png" alt="Interface Styles" width="600" />
 </p>
 
 ## 아키텍처
