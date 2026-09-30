@@ -263,7 +263,12 @@ The `update` command:
 | `pwa/src/components/session-tabs.tsx`             | Session tab bar for window switching                          |
 | `pwa/src/components/connection-indicator.tsx`     | Connection status indicator with retry                        |
 | `pwa/src/components/command-history-dropdown.tsx` | Command search/recall UI                                      |
-| `pwa/src/components/quick-actions-menu.tsx`       | Quick action FAB menu                                         |
+| `pwa/src/components/quick-actions-menu.tsx`       | Quick actions sheet (opened from a toolbar key on mobile)     |
+| `pwa/src/components/app-header.tsx`               | Header: session chip / tabs, More menu                        |
+| `pwa/src/components/session-switcher-chip.tsx`    | Mobile header chip that opens the sessions sheet              |
+| `pwa/src/components/ui/`                          | Shared UI primitives (Button, Sheet, Menu, Switch, ...)       |
+| `pwa/src/app-views.ts`                            | Views of a pane (only the terminal is registered)             |
+| `pwa/src/ui-style.ts`                             | Interface styles (neutral, terminal, native)                  |
 | `pwa/src/components/toast.tsx`                    | Toast notification component                                  |
 | `pwa/src/hooks/use-settings.ts`                   | Settings state with localStorage persistence                  |
 | `pwa/src/hooks/use-command-history.ts`            | Command history storage and management                        |

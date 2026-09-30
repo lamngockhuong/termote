@@ -40,7 +40,8 @@
 - **移动端友好**：虚拟键盘工具栏（Tab/Ctrl/Shift/方向键，可展开）
 - **手势支持**：滑动执行 Ctrl+C、Tab、滚动
 - **命令历史**：搜索并调用之前发送的命令
-- **快捷操作**：浮动菜单执行常用操作（clear、cancel、exit）
+- **快捷操作**：移动端工具栏的 ⚡ 键打开常用操作面板（clear、cancel、exit）
+- **界面风格**：Neutral、Terminal 或 Native，在设置中选择，与浅色/深色主题无关
 - **连接指示器**：实时服务器状态，自动检测断开连接
 - **更新检查**：自动从 GitHub releases 通知新版本
 - **PWA**：可安装到主屏幕，支持离线使用
@@ -56,6 +57,14 @@
   <img src="docs/images/screenshots/mobile-terminal.png" alt="Mobile Terminal" width="280" />
   &nbsp;&nbsp;
   <img src="docs/images/screenshots/mobile-sidebar.png" alt="Session Sidebar" width="280" />
+</p>
+
+<p align="center">
+  <img src="docs/images/screenshots/desktop-terminal.png" alt="Desktop Terminal" width="600" />
+</p>
+
+<p align="center">
+  <img src="docs/images/screenshots/ui-styles.png" alt="Interface Styles" width="600" />
 </p>
 
 ## 架构

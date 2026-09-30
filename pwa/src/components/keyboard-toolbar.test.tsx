@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { KeyboardToolbar } from './keyboard-toolbar'
 
@@ -283,16 +283,10 @@ describe('KeyboardToolbar', () => {
   it('entering IME mode shows text input', () => {
     renderToolbar()
     // Find IME toggle button (Languages icon) — it's 2nd in MINIMAL_KEYS
-    const allBtns = Array.from(document.querySelectorAll('button'))
-    const imeBtn = allBtns.find(
-      (b) =>
-        b.getAttribute('aria-label') === undefined &&
-        b.className.includes('teal'),
+    fireEvent.click(
+      document.querySelector('[data-key="ImeToggle"]') as HTMLElement,
     )
-    if (imeBtn) {
-      fireEvent.click(imeBtn)
-      expect(screen.getByPlaceholderText(/non-Latin/i)).toBeInTheDocument()
-    }
+    expect(screen.getByPlaceholderText(/non-Latin/i)).toBeInTheDocument()
   })
 
   it('uses external imeMode prop to show IME input', () => {
@@ -385,13 +379,11 @@ describe('KeyboardToolbar', () => {
 
   it('IME mode: toggleImeMode calls onImeModeChange with true when entering', () => {
     renderToolbar({ imeMode: false, onImeModeChange })
-    // Click IME toggle (teal-styled button)
-    const allBtns = Array.from(document.querySelectorAll('button'))
-    const imeBtn = allBtns.find((b) => b.className.includes('teal'))
-    if (imeBtn) {
-      fireEvent.click(imeBtn)
-      expect(onImeModeChange).toHaveBeenCalledWith(true)
-    }
+    // Click IME toggle
+    fireEvent.click(
+      document.querySelector('[data-key="ImeToggle"]') as HTMLElement,
+    )
+    expect(onImeModeChange).toHaveBeenCalledWith(true)
   })
 
   it('IME mode focus timeout fires and focuses input after 50ms', () => {
@@ -405,28 +397,24 @@ describe('KeyboardToolbar', () => {
         onImeModeChange={onImeModeChange}
       />,
     )
-    const allBtns = Array.from(document.querySelectorAll('button'))
-    const imeBtn = allBtns.find((b) => b.className.includes('teal'))
-    if (imeBtn) {
-      fireEvent.click(imeBtn)
-      // IME mode is now true internally → input renders
-      act(() => {
-        vi.advanceTimersByTime(50)
-      })
-      const imeInput = document.querySelector('input[placeholder]')
-      expect(imeInput).toBeInTheDocument()
-    }
+    fireEvent.click(
+      document.querySelector('[data-key="ImeToggle"]') as HTMLElement,
+    )
+    // IME mode is now true internally → input renders
+    act(() => {
+      vi.advanceTimersByTime(50)
+    })
+    const imeInput = document.querySelector('input[placeholder]')
+    expect(imeInput).toBeInTheDocument()
     vi.useRealTimers()
   })
 
   it('IME mode focus timeout is cleaned up on unmount', () => {
     vi.useFakeTimers()
     const { unmount } = renderToolbar({ imeMode: false, onImeModeChange })
-    const allBtns = Array.from(document.querySelectorAll('button'))
-    const imeBtn = allBtns.find((b) => b.className.includes('teal'))
-    if (imeBtn) {
-      fireEvent.click(imeBtn)
-    }
+    fireEvent.click(
+      document.querySelector('[data-key="ImeToggle"]') as HTMLElement,
+    )
     unmount()
     act(() => {
       vi.advanceTimersByTime(100)
@@ -437,84 +425,73 @@ describe('KeyboardToolbar', () => {
   // History toggle
   it('calls onHistoryToggle when history button clicked', () => {
     renderToolbar()
-    const allBtns = Array.from(document.querySelectorAll('button'))
-    const historyBtn = allBtns.find((b) => b.className.includes('cyan'))
-    if (historyBtn) {
-      fireEvent.click(historyBtn)
-      expect(onHistoryToggle).toHaveBeenCalled()
-    }
+    fireEvent.click(
+      document.querySelector('[data-key="HistoryToggle"]') as HTMLElement,
+    )
+    expect(onHistoryToggle).toHaveBeenCalled()
   })
 
   it('historyOpen=true shows active style on history button', () => {
     renderToolbar({ historyOpen: true })
-    const historyBtn = document.querySelector('.bg-cyan-500')
-    expect(historyBtn).toBeInTheDocument()
+    const historyBtn = document.querySelector('[data-key="HistoryToggle"]')
+    expect(historyBtn).toHaveAttribute('aria-pressed', 'true')
   })
 
   it('historyOpen=false shows inactive style on history button', () => {
     renderToolbar({ historyOpen: false })
-    const historyBtn = document.querySelector('.bg-cyan-200\\/70')
-    expect(historyBtn).toBeInTheDocument()
+    const historyBtn = document.querySelector('[data-key="HistoryToggle"]')
+    expect(historyBtn).toHaveAttribute('aria-pressed', 'false')
   })
 
   it('does not show history toggle when onHistoryToggle not provided', () => {
     renderToolbar({ onHistoryToggle: undefined })
-    // cyan-styled history button should not be there
-    const historyBtn = document.querySelector('.bg-cyan-200\\/70')
-    expect(historyBtn).not.toBeInTheDocument()
+    expect(
+      document.querySelector('[data-key="HistoryToggle"]'),
+    ).not.toBeInTheDocument()
   })
 
   // Scroll
   it('calls onScroll with up direction', () => {
     renderToolbar()
-    // Scroll buttons have green bg
-    const greenBtns = document.querySelectorAll(
-      '.bg-green-200\\/70, .bg-green-800\\/50',
+    fireEvent.click(
+      document.querySelector('[data-key="ScrollUp"]') as HTMLElement,
     )
-    if (greenBtns[0]) {
-      fireEvent.click(greenBtns[0])
-      // First green btn is scroll up
-      expect(onScroll).toHaveBeenCalledWith('up')
-    }
+    expect(onScroll).toHaveBeenCalledWith('up')
   })
 
   it('calls onScroll with down direction', () => {
     renderToolbar()
-    const greenBtns = document.querySelectorAll('.bg-green-200\\/70')
-    if (greenBtns[1]) {
-      fireEvent.click(greenBtns[1])
-      expect(onScroll).toHaveBeenCalledWith('down')
-    }
+    fireEvent.click(
+      document.querySelector('[data-key="ScrollDown"]') as HTMLElement,
+    )
+    expect(onScroll).toHaveBeenCalledWith('down')
   })
 
   // TmuxCopy
   it('calls onTmuxCopy when tmux copy button clicked', () => {
     renderToolbar()
-    const amberBtns = document.querySelectorAll('.bg-amber-200\\/70')
-    if (amberBtns[0]) {
-      fireEvent.click(amberBtns[0])
-      expect(onTmuxCopy).toHaveBeenCalled()
-    }
+    fireEvent.click(
+      document.querySelector('[data-key="TmuxCopy"]') as HTMLElement,
+    )
+    expect(onTmuxCopy).toHaveBeenCalled()
   })
 
   // Paste
   it('calls onPaste when paste button clicked', () => {
     renderToolbar()
-    const amberBtns = document.querySelectorAll('.bg-amber-200\\/70')
-    if (amberBtns[1]) {
-      fireEvent.click(amberBtns[1])
-      expect(onPaste).toHaveBeenCalled()
-    }
+    fireEvent.click(
+      document.querySelector('[data-key="TmuxPaste"]') as HTMLElement,
+    )
+    expect(onPaste).toHaveBeenCalled()
   })
 
   // Keyboard toggle
   it('calls onToggleKeyboard when keyboard button clicked', () => {
     renderToolbar()
-    const purpleBtns = document.querySelectorAll('.bg-purple-200\\/70')
-    if (purpleBtns[0]) {
-      fireEvent.click(purpleBtns[0])
-      expect(onToggleKeyboard).toHaveBeenCalled()
-    }
+    fireEvent.click(
+      document.querySelector('[data-key="Keyboard"]') as HTMLElement,
+    )
+    expect(onToggleKeyboard).toHaveBeenCalled()
   })
 
   // onContextMenu prevention
@@ -537,9 +514,8 @@ describe('KeyboardToolbar', () => {
   // onTouchStart: keyboard-toggle buttons do NOT prevent default (allows focus); others do
   it('keyboard-toggle button does NOT prevent touchstart default (allows keyboard to open)', () => {
     renderToolbar()
-    // Keyboard-toggle button is styled with purple bg — its onTouchStart does NOT preventDefault
     const purpleBtn = document.querySelector(
-      '.bg-purple-200\\/70',
+      '[data-key="Keyboard"]',
     ) as HTMLElement
     // The button has onTouchStart that skips preventDefault for isKeyboardToggle
     // We can verify by checking the handler doesn't block propagation
@@ -567,63 +543,69 @@ describe('KeyboardToolbar', () => {
   })
 
   // getKeyButtonBg branches
-  it('Ctrl button has blue bg when ctrlActive', () => {
+  it('Ctrl button is pressed when ctrlActive', () => {
     renderToolbar({ ctrlActive: true })
     const ctrlBtn = screen.getByText('Ctrl').closest('button')!
-    expect(ctrlBtn.className).toContain('bg-blue-600')
+    expect(ctrlBtn).toHaveAttribute('aria-pressed', 'true')
   })
 
-  it('Shift button has orange bg when shiftActive', () => {
+  it('Shift button is pressed when shiftActive', () => {
     renderToolbar({ shiftActive: true })
     const shiftBtn = screen.getByText('Shift').closest('button')!
-    expect(shiftBtn.className).toContain('bg-orange-500')
+    expect(shiftBtn).toHaveAttribute('aria-pressed', 'true')
   })
 
-  it('expand toggle has indigo bg', () => {
+  it('expand toggle is not a pressed-state key', () => {
     renderToolbar()
     const expandBtn = screen.getByRole('button', { name: 'Expand keyboard' })
-    expect(expandBtn.className).toContain('bg-indigo-200/70')
+    expect(expandBtn).not.toHaveAttribute('aria-pressed')
   })
 
   // No-op when handlers not provided
   it('does not throw when onTmuxCopy not provided and tmux button clicked', () => {
     renderToolbar({ onTmuxCopy: undefined })
     // Should not crash
-    const amberBtns = document.querySelectorAll('.bg-amber-200\\/70')
-    if (amberBtns[0]) {
-      expect(() => fireEvent.click(amberBtns[0])).not.toThrow()
-    }
+    expect(() =>
+      fireEvent.click(
+        document.querySelector('[data-key="TmuxCopy"]') as HTMLElement,
+      ),
+    ).not.toThrow()
   })
 
   it('does not throw when onPaste not provided and paste button clicked', () => {
     renderToolbar({ onPaste: undefined })
-    const amberBtns = document.querySelectorAll('.bg-amber-200\\/70')
-    if (amberBtns[1]) {
-      expect(() => fireEvent.click(amberBtns[1])).not.toThrow()
-    }
+    expect(() =>
+      fireEvent.click(
+        document.querySelector('[data-key="TmuxPaste"]') as HTMLElement,
+      ),
+    ).not.toThrow()
   })
 
   it('does not throw when onScroll not provided and scroll clicked', () => {
     renderToolbar({ onScroll: undefined })
-    const greenBtns = document.querySelectorAll('.bg-green-200\\/70')
-    if (greenBtns[0]) {
-      expect(() => fireEvent.click(greenBtns[0])).not.toThrow()
-    }
+    expect(() =>
+      fireEvent.click(
+        document.querySelector('[data-key="ScrollUp"]') as HTMLElement,
+      ),
+    ).not.toThrow()
   })
 
   it('does not throw when onToggleKeyboard not provided and keyboard button clicked', () => {
     renderToolbar({ onToggleKeyboard: undefined })
-    const purpleBtns = document.querySelectorAll('.bg-purple-200\\/70')
-    if (purpleBtns[0]) {
-      expect(() => fireEvent.click(purpleBtns[0])).not.toThrow()
-    }
+    expect(() =>
+      fireEvent.click(
+        document.querySelector('[data-key="Keyboard"]') as HTMLElement,
+      ),
+    ).not.toThrow()
   })
 
   it('does not call onHistoryToggle when not provided', () => {
     // Should not throw even if historyToggle key is pressed without handler
     renderToolbar({ onHistoryToggle: undefined })
     // History button absent, so no click needed
-    expect(document.querySelector('.bg-cyan-200\\/70')).not.toBeInTheDocument()
+    expect(
+      document.querySelector('[data-key="HistoryToggle"]'),
+    ).not.toBeInTheDocument()
   })
 
   // Internal state for ctrl/shift without external control
@@ -700,14 +682,14 @@ describe('KeyboardToolbar', () => {
   })
 })
 
-describe('getKeyButtonBg helper (via rendering)', () => {
+describe('key states (via rendering)', () => {
   const noop = vi.fn() as unknown as (...args: any[]) => any
 
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  it('history button shows cyan-500 when historyOpen=true', () => {
+  it('history button is pressed when historyOpen=true', () => {
     render(
       <KeyboardToolbar
         onKey={noop}
@@ -716,10 +698,12 @@ describe('getKeyButtonBg helper (via rendering)', () => {
         historyOpen={true}
       />,
     )
-    expect(document.querySelector('.bg-cyan-500')).toBeInTheDocument()
+    expect(
+      document.querySelector('[data-key="HistoryToggle"]'),
+    ).toHaveAttribute('aria-pressed', 'true')
   })
 
-  it('history button shows cyan-200/70 when historyOpen=false', () => {
+  it('history button is not pressed when historyOpen=false', () => {
     render(
       <KeyboardToolbar
         onKey={noop}
@@ -728,10 +712,12 @@ describe('getKeyButtonBg helper (via rendering)', () => {
         historyOpen={false}
       />,
     )
-    expect(document.querySelector('.bg-cyan-200\\/70')).toBeInTheDocument()
+    expect(
+      document.querySelector('[data-key="HistoryToggle"]'),
+    ).toHaveAttribute('aria-pressed', 'false')
   })
 
-  it('isTmuxCopy and isPaste get amber bg', () => {
+  it('renders the copy-mode and paste keys', () => {
     render(
       <KeyboardToolbar
         onKey={noop}
@@ -740,19 +726,19 @@ describe('getKeyButtonBg helper (via rendering)', () => {
         onPaste={noop}
       />,
     )
-    const amberBtns = document.querySelectorAll('.bg-amber-200\\/70')
-    expect(amberBtns.length).toBe(2) // TmuxCopy + Paste
+    expect(document.querySelector('[data-key="TmuxCopy"]')).toBeInTheDocument()
+    expect(document.querySelector('[data-key="TmuxPaste"]')).toBeInTheDocument()
   })
 
-  it('isScroll gets green bg', () => {
+  it('renders the scroll keys', () => {
     render(<KeyboardToolbar onKey={noop} onCtrlKey={noop} onScroll={noop} />)
-    expect(document.querySelector('.bg-green-200\\/70')).toBeInTheDocument()
+    expect(document.querySelector('[data-key="ScrollUp"]')).toBeInTheDocument()
   })
 
-  it('regular key gets zinc bg', () => {
+  it('regular key has no pressed state', () => {
     render(<KeyboardToolbar onKey={noop} onCtrlKey={noop} />)
     const tabBtn = screen.getByText('Tab').closest('button')!
-    expect(tabBtn.className).toContain('bg-zinc-200/70')
+    expect(tabBtn).not.toHaveAttribute('aria-pressed')
   })
 
   it('hides TmuxCopy button when showTmuxCopy=false', () => {
@@ -780,5 +766,191 @@ describe('getKeyButtonBg helper (via rendering)', () => {
     )
     const buttons = container.querySelectorAll('button')
     expect(buttons.length).toBeGreaterThan(0)
+  })
+})
+
+describe('KeyboardToolbar layout', () => {
+  const noop = vi.fn() as unknown as (...args: any[]) => any
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    // jsdom has no <dialog> modal support
+    HTMLDialogElement.prototype.showModal = vi.fn(function (
+      this: HTMLDialogElement,
+    ) {
+      this.setAttribute('open', '')
+    })
+    HTMLDialogElement.prototype.close = vi.fn()
+  })
+
+  it('collapsed row keeps the key order, utility keys after expand', () => {
+    render(
+      <KeyboardToolbar
+        onKey={noop}
+        onCtrlKey={noop}
+        onSendText={noop}
+        onHistoryToggle={noop}
+      />,
+    )
+    const order = Array.from(document.querySelectorAll('[data-key]')).map(
+      (el) => el.getAttribute('data-key'),
+    )
+    expect(order).toEqual([
+      'Keyboard',
+      'ImeToggle',
+      'HistoryToggle',
+      'Tab',
+      'Escape',
+      'Enter',
+      'Control',
+      'Shift',
+      'ArrowUp',
+      'ArrowDown',
+      'ArrowLeft',
+      'ArrowRight',
+      'Expand',
+      'TmuxCopy',
+      'TmuxPaste',
+      'ScrollUp',
+      'ScrollDown',
+    ])
+    expect(screen.queryByRole('group')).not.toBeInTheDocument()
+  })
+
+  it('expanded toolbar splits keys into labelled rows', () => {
+    render(<KeyboardToolbar onKey={noop} onCtrlKey={noop} defaultExpanded />)
+    const nav = screen.getByRole('group', { name: 'Navigate' })
+    expect(nav).toContainElement(screen.getByText('PgUp'))
+    const scroll = screen.getByRole('group', { name: 'Scroll · copy mode' })
+    expect(scroll).toContainElement(
+      document.querySelector('[data-key="ScrollUp"]') as HTMLElement,
+    )
+    expect(
+      screen.queryByRole('group', { name: 'Ctrl +' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('the scroll row drops "copy mode" from its label without copy mode', () => {
+    render(
+      <KeyboardToolbar
+        onKey={noop}
+        onCtrlKey={noop}
+        defaultExpanded
+        showTmuxCopy={false}
+      />,
+    )
+    expect(screen.getByRole('group', { name: 'Scroll' })).toBeInTheDocument()
+    expect(
+      screen.queryByRole('group', { name: 'Scroll · copy mode' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('expanded + Ctrl shows the full combos in a floating Ctrl + row', () => {
+    render(
+      <KeyboardToolbar
+        onKey={noop}
+        onCtrlKey={noop}
+        defaultExpanded
+        ctrlActive
+      />,
+    )
+    const row = screen.getByRole('group', { name: 'Ctrl +' })
+    expect(row).toContainElement(screen.getByText('^N'))
+    expect(row).toContainElement(screen.getByText('^C'))
+    // Floats above the toolbar, so pressing Ctrl does not resize the terminal
+    const overlay = screen.getByTestId('ctrl-combos-overlay')
+    expect(overlay).toContainElement(row)
+    expect(overlay).toHaveClass('absolute', 'bottom-full')
+  })
+
+  it('expanded + Ctrl + Shift keeps the combos inline, no Ctrl + row', () => {
+    render(
+      <KeyboardToolbar
+        onKey={noop}
+        onCtrlKey={noop}
+        defaultExpanded
+        ctrlActive
+        shiftActive
+      />,
+    )
+    expect(
+      screen.queryByRole('group', { name: 'Ctrl +' }),
+    ).not.toBeInTheDocument()
+    expect(screen.getByText('^⇧C')).toBeInTheDocument()
+  })
+
+  it('collapsed + Ctrl shows only the common combos inline', () => {
+    render(<KeyboardToolbar onKey={noop} onCtrlKey={noop} ctrlActive />)
+    expect(screen.getByText('^E')).toBeInTheDocument()
+    expect(screen.queryByText('^N')).not.toBeInTheDocument()
+  })
+
+  it('a Ctrl combo sends the control key', () => {
+    const onCtrlKey = vi.fn()
+    render(
+      <KeyboardToolbar
+        onKey={noop}
+        onCtrlKey={onCtrlKey}
+        defaultExpanded
+        ctrlActive
+      />,
+    )
+    fireEvent.click(screen.getByText('^N'))
+    expect(onCtrlKey).toHaveBeenCalledWith('n')
+  })
+
+  it('does not render the Quick actions key without quickActions', () => {
+    render(<KeyboardToolbar onKey={noop} onCtrlKey={noop} />)
+    expect(
+      screen.queryByRole('button', { name: 'Quick actions' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('Quick actions key sits right before expand and opens the sheet', () => {
+    const onSendKey = vi.fn()
+    const onSendText = vi.fn()
+    render(
+      <KeyboardToolbar
+        onKey={noop}
+        onCtrlKey={noop}
+        quickActions={{ onSendKey, onSendText }}
+      />,
+    )
+    const keys = Array.from(document.querySelectorAll('[data-key]')).map((el) =>
+      el.getAttribute('data-key'),
+    )
+    expect(keys.indexOf('QuickActions')).toBe(keys.indexOf('Expand') - 1)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Quick actions' }))
+    const dialog = screen.getByRole('dialog', { name: 'Quick actions' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    expect(onSendKey).toHaveBeenCalledWith('c', { ctrl: true })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('Quick actions key keeps focus in the terminal (mousedown prevented)', () => {
+    render(
+      <KeyboardToolbar
+        onKey={noop}
+        onCtrlKey={noop}
+        quickActions={{ onSendKey: noop, onSendText: noop }}
+      />,
+    )
+    const btn = screen.getByRole('button', { name: 'Quick actions' })
+    expect(fireEvent.mouseDown(btn)).toBe(false)
+  })
+
+  it('readOnly renders no input controls', () => {
+    const { container } = render(
+      <KeyboardToolbar
+        onKey={noop}
+        onCtrlKey={noop}
+        onSendText={noop}
+        quickActions={{ onSendKey: noop, onSendText: noop }}
+        readOnly
+      />,
+    )
+    expect(container).toBeEmptyDOMElement()
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 })

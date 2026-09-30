@@ -3,6 +3,11 @@
 /* Enable class-based dark mode for Tailwind v4 */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Style variants (ui-terminal:, ui-native:, ui-neutral:) for the few structural differences */
+@custom-variant ui-terminal (&:where([data-ui-style="terminal"] *));
+@custom-variant ui-native (&:where([data-ui-style="native"] *));
+@custom-variant ui-neutral (&:where([data-ui-style="neutral"] *));
+
 /* Nerd Font icons for the terminal (prompt themes, file icons). Only the
    icon code points use it; every other character keeps the monospace font. */
 @font-face {
@@ -12,23 +17,191 @@
   unicode-range: U+23FB-23FE, U+2665, U+26A1, U+2B58, U+E000-F8FF, U+F0000-FFFFD;
 }
 
-/* Theme CSS Variables */
-:root {
-  --bg-primary: #ffffff;
-  --bg-secondary: #f4f4f5;
-  --bg-tertiary: #e4e4e7;
-  --text-primary: #18181b;
-  --text-secondary: #52525b;
-  --border-color: #d4d4d8;
+/*
+ * Design tokens. Three UI styles (data-ui-style on <html>: terminal, native,
+ * neutral), each with a light and a dark set; neutral is the fallback when the
+ * attribute is missing or unknown. Components use the Tailwind names below
+ * (bg-surface, text-fg-muted, rounded-control...), never the raw --tm-* values.
+ */
+@theme inline {
+  --color-bg: var(--tm-bg);
+  --color-surface: var(--tm-surface);
+  --color-surface-raised: var(--tm-surface-raised);
+  --color-overlay: var(--tm-overlay);
+  --color-term: var(--tm-term-bg);
+  --color-fg: var(--tm-fg);
+  --color-fg-muted: var(--tm-fg-muted);
+  --color-fg-subtle: var(--tm-fg-subtle);
+  --color-border: var(--tm-border);
+  --color-border-strong: var(--tm-border-strong);
+  --color-accent: var(--tm-accent);
+  --color-accent-fg: var(--tm-accent-fg);
+  --color-accent-soft: var(--tm-accent-soft);
+  --color-success: var(--tm-success);
+  --color-warning: var(--tm-warning);
+  --color-danger: var(--tm-danger);
+  --color-info: var(--tm-info);
+  --radius-control: var(--tm-radius-control);
+  --radius-panel: var(--tm-radius-panel);
+  --radius-sheet: var(--tm-radius-sheet);
+  --font-ui: var(--tm-font-ui);
+  --font-label: var(--tm-font-label);
+  --spacing-touch: 44px;
+  --ease-standard: var(--tm-ease-standard);
+  --ease-emphasized: var(--tm-ease-emphasized);
+  --duration-fast: var(--tm-duration-fast);
+  --duration-base: var(--tm-duration-base);
+  --font-term: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
 }
 
-.dark {
-  --bg-primary: #18181b;
-  --bg-secondary: #27272a;
-  --bg-tertiary: #3f3f46;
-  --text-primary: #fafafa;
-  --text-secondary: #a1a1aa;
-  --border-color: #3f3f46;
+/* Shared by every style; each style block below may override the motion tokens. */
+:root {
+  --tm-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --tm-font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  --tm-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --tm-ease-emphasized: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --tm-duration-fast: 150ms;
+  --tm-duration-base: 200ms;
+}
+
+/* ── Neutral (default): zinc, hairlines, restrained indigo ── */
+:root,
+:root[data-ui-style="neutral"] {
+  --tm-bg: #ffffff;
+  --tm-surface: #fafafa;
+  --tm-surface-raised: #ffffff;
+  --tm-overlay: rgb(9 9 11 / 0.35);
+  --tm-term-bg: #fcfcfd;
+  --tm-fg: #09090b;
+  --tm-fg-muted: #52525b;
+  --tm-fg-subtle: #63636b;
+  --tm-border: #e4e4e7;
+  --tm-border-strong: #d4d4d8;
+  --tm-accent: #4f46e5;
+  --tm-accent-fg: #ffffff;
+  --tm-accent-soft: rgb(79 70 229 / 0.08);
+  --tm-success: #15803d;
+  --tm-warning: #a16207;
+  --tm-danger: #dc2626;
+  --tm-info: #2563eb;
+  --tm-radius-control: 7px;
+  --tm-radius-panel: 10px;
+  --tm-radius-sheet: 14px;
+  --tm-font-ui: var(--tm-font-sans);
+  --tm-font-label: var(--tm-font-sans);
+}
+:root.dark,
+:root[data-ui-style="neutral"].dark {
+  --tm-bg: #09090b;
+  --tm-surface: #111113;
+  --tm-surface-raised: #18181b;
+  --tm-overlay: rgb(0 0 0 / 0.6);
+  --tm-term-bg: #0c0c0e;
+  --tm-fg: #fafafa;
+  --tm-fg-muted: #a1a1aa;
+  --tm-fg-subtle: #8a8a93;
+  --tm-border: #27272a;
+  --tm-border-strong: #3f3f46;
+  --tm-accent: #818cf8;
+  --tm-accent-fg: #0b0b1a;
+  --tm-accent-soft: rgb(129 140 248 / 0.14);
+  --tm-success: #4ade80;
+  --tm-warning: #fbbf24;
+  --tm-danger: #f87171;
+  --tm-info: #60a5fa;
+}
+
+/* ── Terminal: chrome is the terminal, one accent, mono labels ── */
+:root[data-ui-style="terminal"] {
+  --tm-bg: #f7f8f6;
+  --tm-surface: #eef1ed;
+  --tm-surface-raised: #ffffff;
+  --tm-overlay: rgb(10 14 12 / 0.4);
+  --tm-term-bg: #f7f8f6;
+  --tm-fg: #141816;
+  --tm-fg-muted: #4b5650;
+  --tm-fg-subtle: #5f6a64;
+  --tm-border: #d9ded8;
+  --tm-border-strong: #b9c1b8;
+  --tm-accent: #0d7a41;
+  --tm-accent-fg: #ffffff;
+  --tm-accent-soft: rgb(13 122 65 / 0.1);
+  --tm-success: #0d7a41;
+  --tm-warning: #8a5a00;
+  --tm-danger: #c42b2b;
+  --tm-info: #0b5cb8;
+  --tm-radius-control: 4px;
+  --tm-radius-panel: 6px;
+  --tm-radius-sheet: 8px;
+  --tm-font-ui: var(--tm-font-sans);
+  --tm-font-label: var(--tm-font-mono);
+  --tm-duration-fast: 100ms;
+  --tm-duration-base: 120ms;
+}
+:root[data-ui-style="terminal"].dark {
+  --tm-bg: #0c0e0d;
+  --tm-surface: #131615;
+  --tm-surface-raised: #1a1e1c;
+  --tm-overlay: rgb(0 0 0 / 0.6);
+  --tm-term-bg: #0c0e0d;
+  --tm-fg: #e4ebe7;
+  --tm-fg-muted: #a0aca6;
+  --tm-fg-subtle: #7f8a84;
+  --tm-border: #242a27;
+  --tm-border-strong: #353d39;
+  --tm-accent: #3ddc84;
+  --tm-accent-fg: #04140b;
+  --tm-accent-soft: rgb(61 220 132 / 0.12);
+  --tm-success: #3ddc84;
+  --tm-warning: #e5b454;
+  --tm-danger: #ff7a7a;
+  --tm-info: #74b9ff;
+}
+
+/* ── Native: raised surfaces, large radii, sheets, system blue ── */
+:root[data-ui-style="native"] {
+  --tm-bg: #f2f2f7;
+  --tm-surface: #ffffff;
+  --tm-surface-raised: #ffffff;
+  --tm-overlay: rgb(0 0 0 / 0.3);
+  --tm-term-bg: #ffffff;
+  --tm-fg: #000000;
+  --tm-fg-muted: #4a4a50;
+  --tm-fg-subtle: #6c6c72;
+  --tm-border: #d8d8dd;
+  --tm-border-strong: #c2c2c8;
+  --tm-accent: #0062cc;
+  --tm-accent-fg: #ffffff;
+  --tm-accent-soft: rgb(0 122 255 / 0.12);
+  --tm-success: #1f7a36;
+  --tm-warning: #a34a00;
+  --tm-danger: #c8001a;
+  --tm-info: #00699a;
+  --tm-radius-control: 12px;
+  --tm-radius-panel: 16px;
+  --tm-radius-sheet: 22px;
+  --tm-font-ui: var(--tm-font-sans);
+  --tm-font-label: var(--tm-font-sans);
+  --tm-duration-base: 240ms;
+}
+:root[data-ui-style="native"].dark {
+  --tm-bg: #000000;
+  --tm-surface: #1c1c1e;
+  --tm-surface-raised: #2c2c2e;
+  --tm-overlay: rgb(0 0 0 / 0.55);
+  --tm-term-bg: #0b0b0c;
+  --tm-fg: #ffffff;
+  --tm-fg-muted: #b4b4ba;
+  --tm-fg-subtle: #98989e;
+  --tm-border: #38383a;
+  --tm-border-strong: #4a4a4d;
+  --tm-accent: #0074e8;
+  --tm-accent-fg: #ffffff;
+  --tm-accent-soft: rgb(0 116 232 / 0.22);
+  --tm-success: #30d158;
+  --tm-warning: #ffd60a;
+  --tm-danger: #ff6961;
+  --tm-info: #64d2ff;
 }
 
 html, body, #root {
@@ -40,6 +213,8 @@ html, body, #root {
 
 /* Prevent iOS bounce/overscroll */
 body {
+  background-color: var(--tm-bg);
+  color: var(--tm-fg);
   position: fixed;
   width: 100%;
   overscroll-behavior: none;
@@ -62,32 +237,6 @@ body {
 }
 
 /* Theme-aware glass surface */
-.glass-surface {
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-}
-
-:root .glass-surface,
-.light .glass-surface {
-  background: rgba(255, 255, 255, 0.7);
-  border-color: rgba(255, 255, 255, 0.3);
-}
-
-.dark .glass-surface {
-  background: #27272a; /* zinc-800 solid */
-  border-color: #3f3f46; /* zinc-700 */
-}
-
-/* Animation utilities */
-@keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.animate-fade-in {
-  animation: fade-in 150ms ease-out;
-}
-
 /* Hide scrollbar but allow scrolling */
 .scrollbar-hide {
   -ms-overflow-style: none;
@@ -96,4 +245,14 @@ body {
 
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
+}
+
+/* Users who ask for less motion get none: transitions and animations finish at once. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

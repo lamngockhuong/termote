@@ -1,11 +1,15 @@
 import { RefreshCw, Trash2 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
-import { useDialogModal } from '../hooks/use-dialog-modal'
+import { type ReactNode, useEffect, useId, useRef, useState } from 'react'
 import type {
   ImeSendBehavior,
   PasteSource,
   Settings,
 } from '../hooks/use-settings'
+import { UI_STYLES, type UiStyle } from '../ui-style'
+import { Button, FOCUS_RING } from './ui/button'
+import { SegmentedControl } from './ui/segmented-control'
+import { Sheet } from './ui/sheet'
+import { Switch } from './ui/switch'
 
 interface Props {
   isOpen: boolean
@@ -20,46 +24,78 @@ interface Props {
   updateChecking?: boolean
   onClearHistory?: () => void
   historyCount?: number
-  // Backend has a tmux paste buffer; false hides the paste source choice
+  // Backend has a paste buffer (caps.copyMode); false hides the paste source choice
   tmuxBufferSupported?: boolean
+  // Name of the backend's paste buffer in the option label (e.g. "tmux buffer");
+  // the backend name is not known here, so the default stays generic.
+  pasteBufferLabel?: string
 }
 
-function ToggleRow({
-  label,
-  description,
-  checked,
-  onChange,
+const CONTROL =
+  'h-9 rounded-control border border-border bg-bg text-[13px] text-fg pointer-coarse:h-touch'
+
+// One line of a settings group: the title (and hint) on the left, the control
+// on the right. `htmlFor` makes the title the label of a text field.
+function SettingsRow({
+  title,
+  desc,
+  htmlFor,
+  children,
 }: {
-  label: string
-  description: string
-  checked: boolean
-  onChange: () => void
+  title: string
+  desc?: string
+  htmlFor?: string
+  children: ReactNode
 }) {
+  const titleClass =
+    'block text-[15px] text-fg ui-terminal:font-label ui-terminal:text-[13px]'
   return (
-    <div className="flex items-center justify-between">
-      <div>
-        <p className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-          {label}
-        </p>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-          {description}
-        </p>
+    <div className="flex min-h-14 flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5 ui-native:bg-surface-raised">
+      <div className="min-w-0 flex-1 basis-40">
+        {htmlFor ? (
+          <label htmlFor={htmlFor} className={titleClass}>
+            {title}
+          </label>
+        ) : (
+          <p className={`m-0 ${titleClass}`}>{title}</p>
+        )}
+        {desc && <p className="m-0 text-[12px] text-fg-muted">{desc}</p>}
       </div>
-      <button
-        role="switch"
-        aria-checked={checked}
-        onClick={onChange}
-        className={`relative w-11 h-6 rounded-full transition-colors ${
-          checked ? 'bg-blue-500' : 'bg-zinc-300 dark:bg-zinc-600'
-        }`}
-      >
-        <span
-          className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
-            checked ? 'translate-x-5' : ''
-          }`}
-        />
-      </button>
+      {children}
     </div>
+  )
+}
+
+// A titled block of rows. On desktop only the group picked in the left rail
+// shows; on a phone every group stacks in one scrolling sheet.
+function SettingsGroup({
+  id,
+  title,
+  active,
+  children,
+}: {
+  id: string
+  title: string
+  active: boolean
+  children: ReactNode
+}) {
+  const headingId = useId()
+  return (
+    <section
+      data-group={id}
+      aria-labelledby={headingId}
+      className={`pb-3 ${active ? '' : 'md:hidden'}`}
+    >
+      <h3
+        id={headingId}
+        className="m-0 px-4 pb-1.5 pt-3 font-label text-[11px] font-semibold uppercase tracking-wider text-fg-subtle"
+      >
+        {title}
+      </h3>
+      <div className="divide-y divide-border border-y border-border ui-native:mx-4 ui-native:overflow-hidden ui-native:rounded-panel ui-native:border-0 ui-neutral:mx-4 ui-neutral:rounded-panel ui-neutral:border">
+        {children}
+      </div>
+    </section>
   )
 }
 
@@ -79,17 +115,11 @@ function TerminalFontRow({
     if (next !== value) onSave(next)
   }
   return (
-    <div>
-      <label
-        htmlFor="terminal-font"
-        className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-      >
-        Terminal font
-      </label>
-      <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 mb-2">
-        A font installed on this device (e.g. a Nerd Font). Nerd Font icons work
-        without one.
-      </p>
+    <SettingsRow
+      title="Terminal font"
+      desc="A font installed on this device (e.g. a Nerd Font). Nerd Font icons work without one."
+      htmlFor="terminal-font"
+    >
       <input
         id="terminal-font"
         type="text"
@@ -101,9 +131,9 @@ function TerminalFontRow({
         onChange={(e) => setDraft(e.target.value)}
         onBlur={save}
         onKeyDown={(e) => e.key === 'Enter' && save()}
-        className="w-full rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 text-sm text-zinc-900 dark:text-white px-3 py-1.5"
+        className={`w-36 px-2 ui-terminal:font-label ${CONTROL} ${FOCUS_RING}`}
       />
-    </div>
+    </SettingsRow>
   )
 }
 
@@ -128,22 +158,62 @@ const IME_SEND_OPTIONS: {
   },
 ]
 
-const PASTE_SOURCE_OPTIONS: {
+function pasteSourceOptions(bufferLabel: string): {
   value: PasteSource
   label: string
   desc: string
-}[] = [
-  {
-    value: 'clipboard',
-    label: 'System clipboard',
-    desc: 'Paste from device clipboard (Ctrl+Shift+V)',
-  },
-  {
-    value: 'tmux',
-    label: 'tmux buffer',
-    desc: 'Paste from tmux copy mode buffer',
-  },
-]
+}[] {
+  return [
+    {
+      value: 'clipboard',
+      label: 'System clipboard',
+      desc: 'Paste from device clipboard (Ctrl+Shift+V)',
+    },
+    {
+      // The stored value stays 'tmux' (the localStorage schema is unchanged)
+      value: 'tmux',
+      label: bufferLabel,
+      desc: 'Paste from the copy mode buffer',
+    },
+  ]
+}
+
+// A tiny drawing of each style's shape: corner radius, hairline or raised.
+const STYLE_PREVIEW: Record<UiStyle, string> = {
+  terminal: 'rounded-[2px] border border-border-strong bg-bg',
+  native: 'rounded-[6px] bg-surface-raised shadow-sm ring-1 ring-border',
+  neutral: 'rounded-[4px] border border-border-strong bg-surface',
+}
+
+function StylePreview({ style }: { style: UiStyle }) {
+  return (
+    <span
+      aria-hidden="true"
+      data-preview={style}
+      className={`mr-1.5 flex h-4 w-6 flex-col justify-center gap-0.5 px-1 ${STYLE_PREVIEW[style]}`}
+    >
+      <span className="h-0.5 w-full rounded-full bg-accent" />
+      <span className="h-0.5 w-2/3 rounded-full bg-fg-subtle" />
+    </span>
+  )
+}
+
+const STYLE_OPTIONS = UI_STYLES.map((s) => ({
+  value: s.id,
+  label: s.label,
+  content: (
+    <>
+      <StylePreview style={s.id} />
+      {s.label}
+    </>
+  ),
+}))
+
+interface GroupDef {
+  id: string
+  title: string
+  rows: ReactNode
+}
 
 export function SettingsModal({
   isOpen,
@@ -156,9 +226,10 @@ export function SettingsModal({
   onClearHistory,
   historyCount = 0,
   tmuxBufferSupported = true,
+  pasteBufferLabel = 'Session buffer',
 }: Props) {
-  const dialogRef = useRef<HTMLDialogElement>(null)
   const [inlineToast, setInlineToast] = useState<string | null>(null)
+  const [activeGroup, setActiveGroup] = useState('appearance')
   const toastTimerRef = useRef<ReturnType<typeof setTimeout>>(null)
 
   // Cleanup toast timer on unmount
@@ -169,159 +240,130 @@ export function SettingsModal({
     [],
   )
 
-  useDialogModal(dialogRef, isOpen, onClose)
+  const imeOption = IME_SEND_OPTIONS.find(
+    (o) => o.value === settings.imeSendBehavior,
+  )
+  const pasteOptions = pasteSourceOptions(pasteBufferLabel)
+  const pasteOption = pasteOptions.find((o) => o.value === settings.pasteSource)
+  const hasActions = onShowGestureHints || onCheckForUpdate || onClearHistory
 
-  if (!isOpen) return null
-
-  return (
-    <dialog
-      ref={dialogRef}
-      className="fixed inset-0 z-50 m-auto w-[90vw] max-w-md rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 p-0 backdrop:bg-black/50 shadow-xl"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div className="p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold text-zinc-900 dark:text-white">
-            Settings
-          </h2>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
-            aria-label="Close"
-          >
-            ✕
-          </button>
-        </div>
-
-        <div className="space-y-5">
+  // Adding a group (e.g. Devices) is one more entry here.
+  const groups: GroupDef[] = [
+    {
+      id: 'appearance',
+      title: 'Appearance',
+      rows: (
+        <div className="flex flex-col gap-2 px-4 py-2.5 ui-native:bg-surface-raised">
           <div>
-            <p className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
-              Text input send behavior
+            <p className="m-0 text-[15px] text-fg ui-terminal:font-label ui-terminal:text-[13px]">
+              Interface style
             </p>
-            <div className="space-y-2">
-              {IME_SEND_OPTIONS.map((opt) => (
-                <label
-                  key={opt.value}
-                  className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                    settings.imeSendBehavior === opt.value
-                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                      : 'border-zinc-200 dark:border-zinc-600 hover:bg-zinc-50 dark:hover:bg-zinc-700/50'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="imeSendBehavior"
-                    value={opt.value}
-                    checked={settings.imeSendBehavior === opt.value}
-                    onChange={() =>
-                      onUpdateSetting('imeSendBehavior', opt.value)
-                    }
-                    className="mt-0.5 accent-blue-500"
-                  />
-                  <div>
-                    <div className="text-sm font-medium text-zinc-900 dark:text-white">
-                      {opt.label}
-                    </div>
-                    <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                      {opt.desc}
-                    </div>
-                  </div>
-                </label>
-              ))}
-            </div>
+            <p className="m-0 text-[12px] text-fg-muted">
+              Applies at once. Theme stays in the ⋯ menu.
+            </p>
           </div>
-
+          <SegmentedControl
+            label="Interface style"
+            options={STYLE_OPTIONS}
+            value={settings.uiStyle}
+            onChange={(v) => onUpdateSetting('uiStyle', v)}
+            className="self-start"
+          />
+        </div>
+      ),
+    },
+    {
+      id: 'keyboard',
+      title: 'Keyboard',
+      rows: (
+        <>
+          <SettingsRow title="Text input send behavior" desc={imeOption?.desc}>
+            <SegmentedControl
+              label="Text input send behavior"
+              options={IME_SEND_OPTIONS.map((o) => ({
+                value: o.value,
+                label: o.label,
+                content: o.label,
+              }))}
+              value={settings.imeSendBehavior}
+              onChange={(v) => onUpdateSetting('imeSendBehavior', v)}
+            />
+          </SettingsRow>
           {tmuxBufferSupported && (
-            <div>
-              <p className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
-                Paste button source
-              </p>
-              <div className="space-y-2">
-                {PASTE_SOURCE_OPTIONS.map((opt) => (
-                  <label
-                    key={opt.value}
-                    className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                      settings.pasteSource === opt.value
-                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                        : 'border-zinc-200 dark:border-zinc-600 hover:bg-zinc-50 dark:hover:bg-zinc-700/50'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="pasteSource"
-                      value={opt.value}
-                      checked={settings.pasteSource === opt.value}
-                      onChange={() => onUpdateSetting('pasteSource', opt.value)}
-                      className="mt-0.5 accent-blue-500"
-                    />
-                    <div>
-                      <div className="text-sm font-medium text-zinc-900 dark:text-white">
-                        {opt.label}
-                      </div>
-                      <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                        {opt.desc}
-                      </div>
-                    </div>
-                  </label>
-                ))}
-              </div>
-            </div>
+            <SettingsRow title="Paste button source" desc={pasteOption?.desc}>
+              <SegmentedControl
+                label="Paste button source"
+                options={pasteOptions.map((o) => ({
+                  value: o.value,
+                  label: o.label,
+                  content: o.label,
+                }))}
+                value={settings.pasteSource}
+                onChange={(v) => onUpdateSetting('pasteSource', v)}
+              />
+            </SettingsRow>
           )}
-
-          <ToggleRow
-            label="Toolbar default expanded"
-            description="Show all keys when toolbar loads"
-            checked={settings.toolbarDefaultExpanded}
-            onChange={() =>
-              onUpdateSetting(
-                'toolbarDefaultExpanded',
-                !settings.toolbarDefaultExpanded,
-              )
-            }
-          />
-
-          <ToggleRow
-            label="Disable right-click menu"
-            description="Block context menu on terminal area"
-            checked={settings.disableContextMenu}
-            onChange={() =>
-              onUpdateSetting(
-                'disableContextMenu',
-                !settings.disableContextMenu,
-              )
-            }
-          />
-
-          <ToggleRow
-            label="Show session tabs"
-            description="Display tab bar for quick session switching (desktop)"
-            checked={settings.showSessionTabs}
-            onChange={() =>
-              onUpdateSetting('showSessionTabs', !settings.showSessionTabs)
-            }
-          />
-
+          <SettingsRow
+            title="Toolbar default expanded"
+            desc="Show all keys when toolbar loads"
+          >
+            <Switch
+              label="Toolbar default expanded"
+              checked={settings.toolbarDefaultExpanded}
+              onChange={(v) => onUpdateSetting('toolbarDefaultExpanded', v)}
+            />
+          </SettingsRow>
+        </>
+      ),
+    },
+    {
+      id: 'terminal',
+      title: 'Terminal',
+      rows: (
+        <>
           <TerminalFontRow
             value={settings.terminalFont}
             onSave={(v) => onUpdateSetting('terminalFont', v)}
           />
-
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                Session poll interval
-              </p>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                How often to sync session list (
-                {formatSeconds(settings.pollInterval)})
-              </p>
-            </div>
+          <SettingsRow
+            title="Disable right-click menu"
+            desc="Block context menu on terminal area"
+          >
+            <Switch
+              label="Disable right-click menu"
+              checked={settings.disableContextMenu}
+              onChange={(v) => onUpdateSetting('disableContextMenu', v)}
+            />
+          </SettingsRow>
+        </>
+      ),
+    },
+    {
+      id: 'sessions',
+      title: 'Sessions',
+      rows: (
+        <>
+          <SettingsRow
+            title="Show session tabs"
+            desc="Display tab bar for quick session switching (desktop)"
+          >
+            <Switch
+              label="Show session tabs"
+              checked={settings.showSessionTabs}
+              onChange={(v) => onUpdateSetting('showSessionTabs', v)}
+            />
+          </SettingsRow>
+          <SettingsRow
+            title="Session poll interval"
+            desc={`How often to sync session list (${formatSeconds(settings.pollInterval)})`}
+          >
             <select
+              aria-label="Session poll interval"
               value={settings.pollInterval}
               onChange={(e) =>
                 onUpdateSetting('pollInterval', Number(e.target.value))
               }
-              className="rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 text-sm text-zinc-900 dark:text-white px-2 py-1.5"
+              className={`px-2 ${CONTROL} ${FOCUS_RING}`}
             >
               {POLL_INTERVAL_OPTIONS.map((v) => (
                 <option key={v} value={v}>
@@ -329,63 +371,119 @@ export function SettingsModal({
                 </option>
               ))}
             </select>
-          </div>
+          </SettingsRow>
+        </>
+      ),
+    },
+  ]
 
-          {(onShowGestureHints || onCheckForUpdate || onClearHistory) && (
-            <div className="pt-2 border-t border-zinc-200 dark:border-zinc-700 space-y-2">
-              {onShowGestureHints && (
-                <button
-                  onClick={onShowGestureHints}
-                  className="w-full py-2.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-                >
-                  Show Gesture Hints
-                </button>
-              )}
-              {onCheckForUpdate && (
-                <div>
-                  <button
-                    onClick={async () => {
-                      const msg = await onCheckForUpdate()
-                      if (msg) {
-                        setInlineToast(msg)
-                        if (toastTimerRef.current)
-                          clearTimeout(toastTimerRef.current)
-                        toastTimerRef.current = setTimeout(
-                          () => setInlineToast(null),
-                          4000,
-                        )
-                      }
-                    }}
-                    disabled={updateChecking}
-                    className="w-full py-2.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  >
-                    <RefreshCw
-                      size={16}
-                      className={updateChecking ? 'animate-spin' : ''}
-                    />
-                    {updateChecking ? 'Checking...' : 'Check for Updates'}
-                  </button>
-                  {inlineToast && (
-                    <p className="text-xs text-center text-zinc-500 dark:text-zinc-400 mt-1 animate-in fade-in duration-200">
-                      {inlineToast}
-                    </p>
-                  )}
-                </div>
-              )}
-              {onClearHistory && (
-                <button
-                  onClick={onClearHistory}
-                  disabled={historyCount === 0}
-                  className="w-full py-2.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  <Trash2 size={16} />
-                  Clear Command History ({historyCount})
-                </button>
-              )}
-            </div>
+  if (hasActions) {
+    groups.push({
+      id: 'data',
+      title: 'Data & help',
+      rows: (
+        <div className="flex flex-col gap-1 px-4 py-2.5 ui-native:bg-surface-raised">
+          {onShowGestureHints && (
+            <Button variant="ghost" onClick={onShowGestureHints}>
+              Show Gesture Hints
+            </Button>
+          )}
+          {onCheckForUpdate && (
+            <>
+              <Button
+                variant="ghost"
+                disabled={updateChecking}
+                onClick={async () => {
+                  const msg = await onCheckForUpdate()
+                  if (msg) {
+                    setInlineToast(msg)
+                    if (toastTimerRef.current)
+                      clearTimeout(toastTimerRef.current)
+                    toastTimerRef.current = setTimeout(
+                      () => setInlineToast(null),
+                      4000,
+                    )
+                  }
+                }}
+              >
+                <RefreshCw
+                  size={16}
+                  aria-hidden="true"
+                  className={updateChecking ? 'motion-safe:animate-spin' : ''}
+                />
+                {updateChecking ? 'Checking...' : 'Check for Updates'}
+              </Button>
+              {/* Stays mounted so a screen reader announces the message */}
+              <p
+                role="status"
+                className="m-0 text-center text-[12px] text-fg-muted empty:hidden"
+              >
+                {inlineToast}
+              </p>
+            </>
+          )}
+          {onClearHistory && (
+            <Button
+              variant="danger"
+              disabled={historyCount === 0}
+              onClick={onClearHistory}
+            >
+              <Trash2 size={16} aria-hidden="true" />
+              Clear Command History ({historyCount})
+            </Button>
           )}
         </div>
+      ),
+    })
+  }
+
+  // A group can vanish (Data & help without handlers) while it is selected
+  const shownGroup = groups.some((g) => g.id === activeGroup)
+    ? activeGroup
+    : groups[0].id
+
+  return (
+    <Sheet
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Settings"
+      // Full screen on a phone, a two-column dialog on desktop
+      className="max-md:h-dvh max-md:max-h-dvh md:h-[34rem] md:max-w-3xl"
+    >
+      <div className="md:flex md:min-h-full">
+        <nav
+          aria-label="Settings groups"
+          className="hidden md:sticky md:top-0 md:flex md:w-44 md:shrink-0 md:flex-col md:gap-0.5 md:self-start md:border-r md:border-border md:p-2"
+        >
+          {groups.map((g) => (
+            <button
+              key={g.id}
+              type="button"
+              aria-current={g.id === shownGroup ? 'true' : undefined}
+              onClick={() => setActiveGroup(g.id)}
+              className={`h-9 rounded-control px-3 text-left pointer-coarse:h-touch text-[14px] ui-terminal:font-label ui-terminal:text-[13px] ${FOCUS_RING} ${
+                g.id === shownGroup
+                  ? 'bg-accent-soft font-medium text-fg'
+                  : 'text-fg-muted hover:bg-surface hover:text-fg'
+              }`}
+            >
+              {g.title}
+            </button>
+          ))}
+        </nav>
+        <div className="min-w-0 flex-1">
+          {groups.map((g) => (
+            <SettingsGroup
+              key={g.id}
+              id={g.id}
+              title={g.title}
+              active={g.id === shownGroup}
+            >
+              {g.rows}
+            </SettingsGroup>
+          ))}
+        </div>
       </div>
-    </dialog>
+    </Sheet>
   )
 }

@@ -5,7 +5,7 @@ description: Virtual keyboard for mobile terminal control
 
 import { Aside } from "@astrojs/starlight/components";
 
-The keyboard toolbar provides touch-friendly buttons for common terminal keys. It has two modes: **minimal** (default) and **expanded** (full keyboard). Additional tools include command history and quick actions menu.
+The keyboard toolbar provides touch-friendly buttons for common terminal keys. It has two modes: **minimal** (default) and **expanded** (full keyboard). Additional tools include command history and a Quick actions key (mobile).
 
 ## Toolbar Features
 
@@ -15,6 +15,7 @@ The keyboard toolbar provides touch-friendly buttons for common terminal keys. I
 | Expanded mode   | Expand  | Tap to show all keys (Home, End, Delete, etc.) |
 | Keyboard toggle | ⌨️      | Show/hide the virtual keyboard                 |
 | Command history | 🕐      | View and search recent commands (see below)    |
+| Quick actions   | ⚡      | Mobile only: opens the Quick actions sheet (see below) |
 | Text input      | 🌐      | Switch to IME mode for non-Latin scripts       |
 
 ## Modes
@@ -23,6 +24,11 @@ The keyboard toolbar provides touch-friendly buttons for common terminal keys. I
 | -------- | --------------- | ------------------------------------------ |
 | Minimal  | Default         | Essential keys for terminal use            |
 | Expanded | Tap expand icon | All keys including Home, End, Delete, etc. |
+
+In expanded mode the extra keys sit in labelled rows: **Navigate** (Home, End, Delete, and so on)
+and **Scroll · copy mode** (just **Scroll** without tmux copy mode). While Ctrl is on, its combos
+float above the toolbar instead of adding a row, so the terminal keeps its size and a running
+full-screen program does not redraw.
 
 ## Modifiers
 
@@ -173,11 +179,10 @@ Tap the **clock icon** (🕐) in the toolbar to open the command history dropdow
 Commands sent via keyboard toolbar buttons (Ctrl+C, etc.) are not added to history — only IME text submissions are captured.
 </Aside>
 
-## Quick Actions Menu (Mobile Only)
+## Quick Actions (Mobile Only)
 
-A floating action button (FAB) appears on mobile devices in the bottom-right corner, providing quick access to common terminal actions.
-
-### Actions
+The **Quick actions** key (⚡) in the keyboard toolbar opens a sheet with common terminal actions.
+There is no floating button over the terminal.
 
 | Action       | Function              | Sends                |
 | ------------ | --------------------- | -------------------- |
@@ -186,17 +191,8 @@ A floating action button (FAB) appears on mobile devices in the bottom-right cor
 | Clear line   | Delete current line   | Ctrl+U               |
 | Exit         | Logout/EOF            | Ctrl+D               |
 
-### Features
-
-| Feature     | Description                                        |
-| ----------- | -------------------------------------------------- |
-| Draggable   | Long-press and drag to reposition FAB              |
-| Position saved | New position persisted to browser storage         |
-| Auto-flip   | Menu flips based on FAB location to avoid cutoff   |
-| Haptic      | Tap feedback on action (if device supports)        |
-
 <Aside>
-The quick actions FAB appears on mobile devices only. On desktop, use the keyboard toolbar or toolbar buttons instead.
+The Quick actions key appears on mobile devices only. On desktop, use the keyboard toolbar keys instead.
 </Aside>
 
 ## Tips
@@ -207,4 +203,4 @@ The quick actions FAB appears on mobile devices only. On desktop, use the keyboa
 4. **Copy mode** (tmux): Enable to select text, disable to resume typing
 5. **Expand for more**: Tap expand icon for full keyboard with Home, End, etc.
 6. **Command history**: Use 🕐 clock icon to quickly reuse previous commands
-7. **Reposition FAB**: Long-press the blue ⚡ button to move it out of your way
+7. **Quick actions**: Tap ⚡ for Clear, Cancel, Clear line and Exit in one sheet

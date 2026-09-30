@@ -1,71 +1,122 @@
 # Design Guidelines
 
-## Color Palette
+## Interface Styles and Tokens
 
-### Theme Modes
+Three interface styles (Neutral, the default; Terminal; Native) are chosen in Settings →
+Appearance and applied at once. The style is independent of the theme (light, dark, system),
+which is set in the "More" overflow menu.
 
-| Mode  | Background | Text      | Surface   |
-| ----- | ---------- | --------- | --------- |
-| Light | `#ffffff`  | `#18181b` | `#f4f4f5` |
-| Dark  | `#18181b`  | `#fafafa` | `#27272a` |
+Why tokens: every component takes its colours, radii, fonts and motion from one semantic set, so
+a new style or theme is a new token block, not a component change.
 
-### Tailwind Custom Colors
+- Owner: `pwa/src/index.css`. One `--tm-*` block per style, each with a light and a dark set;
+  `@theme inline` maps them to the Tailwind names (`bg-surface`, `text-fg-muted`,
+  `rounded-control`, ...). Components use those names, never raw `--tm-*` values or hard-coded
+  colours.
+- Selection: `data-ui-style` on `<html>` plus the `dark` class. Neutral applies when the
+  attribute is missing or unknown. The style list and the fallback live in `pwa/src/ui-style.ts`.
+- No flash: an inline script in `pwa/index.html` sets `data-ui-style` before the app runs. It
+  duplicates `resolveUiStyle`; `pwa/src/theme-tokens.test.ts` keeps the two in step.
+- Where the styles differ structurally, use the `ui-terminal:`, `ui-native:` and `ui-neutral:`
+  variants, and keep them to a few classes per component.
+- The terminal background (`bg-term`), `<body>`, the `theme-color` meta tag and the manifest
+  follow the tokens (`syncThemeColor` in `ui-style.ts`).
 
-```js
-colors: {
-  surface: {
-    light: '#ffffff',
-    dark: '#18181b',
-  },
-}
-```
+### Token groups
 
-### Theme Implementation
+| Group    | Tokens                                                               |
+| -------- | -------------------------------------------------------------------- |
+| Surfaces | `bg`, `surface`, `surface-raised`, `overlay`, `term-bg`              |
+| Text     | `fg`, `fg-muted`, `fg-subtle`                                        |
+| Lines    | `border`, `border-strong`                                            |
+| Accent   | `accent`, `accent-fg`, `accent-soft`                                 |
+| Status   | `success`, `warning`, `danger`, `info`                               |
+| Shape    | `radius-control`, `radius-panel`, `radius-sheet` (differ per style)  |
+| Type     | `font-ui`, `font-label` (Terminal labels are monospace)              |
+| Motion   | `ease-standard`, `ease-emphasized`, `duration-fast`, `duration-base` |
 
-- `darkMode: 'class'` in Tailwind config
-- Theme context provides: `theme`, `setTheme`, `resolvedTheme`
-- Options: `light`, `dark`, `system`
+Values per style and theme are in `pwa/src/index.css`; do not copy them here.
+
+### Contrast
+
+- Text tokens and the ANSI colours are chosen for WCAG AA (4.5:1) on each style's terminal
+  background. In light themes the bright ANSI colours are darker than the normal ones so they
+  stay distinct.
+- Interactive elements have visible focus states.
+
+### Theme
+
+- Theme context provides `theme`, `setTheme`, `resolvedTheme`; options `light`, `dark`, `system`.
+- Tailwind v4 reads its configuration from `index.css`; there is no `tailwind.config.js`.
 
 ## Typography
 
-### Font Stack
+- UI: system font stack (`--tm-font-sans`). Terminal: monospace (`--tm-font-mono`), with a
+  bundled Symbols Nerd Font for icon glyphs.
+- Terminal font size: 6px to 24px, default 14px. Pinch gesture, or the font buttons in the header
+  (desktop) or the "More" menu (mobile).
 
-- Primary: System fonts (native feel)
-- Terminal: Monospace (xterm.js default)
+## UI Primitives
 
-### Terminal Font Size
+Shared building blocks live in `pwa/src/components/ui/`; screens compose them instead of
+restyling raw elements. Each is written against the tokens, so it is correct in every style.
 
-- Range: 6px - 24px
-- Default: 14px
-- Controls: Pinch gesture or toolbar buttons
+| Primitive                    | Note                                                                                                                             |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `Button` / `IconButton`      | `IconButton` requires `aria-label`                                                                                               |
+| `Sheet`                      | Bottom sheet on phones, centred dialog on desktop; Escape, close button or scrim press closes it and focus returns to the opener |
+| `Menu`                       | Arrow keys, Home and End move over items; closes on Escape, focus leaving, outside press                                         |
+| `Switch`, `SegmentedControl` | `SegmentedControl` uses a roving tabindex                                                                                        |
+| `ViewSwitcher`               | Renders nothing while only one view exists                                                                                       |
+| `Banner`                     | Inline status message                                                                                                            |
 
 ## Layout
 
 ### Breakpoints
 
-| Breakpoint | Width   | Layout                                             |
-| ---------- | ------- | -------------------------------------------------- |
-| Mobile     | < 768px | Bottom nav, slide sidebar                          |
-| Desktop    | ≥ 768px | Collapsible sidebar, top header, fullscreen toggle |
+| Breakpoint | Width   | Layout                                                                 |
+| ---------- | ------- | ---------------------------------------------------------------------- |
+| Mobile     | < 768px | Header with session chip, sessions bottom sheet, keyboard toolbar      |
+| Desktop    | ≥ 768px | Session tabs in the header row, collapsible sidebar, fullscreen toggle |
 
-### Component Structure
+There is no bottom navigation: the terminal takes that height.
 
-```bash
+### Mobile
+
+```text
 ┌──────────────────────────────────────────┐
-│ Header (desktop) / Hidden (mobile)       │
+│ Header: session chip · More (⋯)          │
 ├──────────────────────────────────────────┤
-│ ┌──────────┐ ┌─────────────────────────┐ │
-│ │ Sidebar  │ │ Terminal Frame          │ │
-│ │(collapse)│ │                         │ │
-│ │          │ │                         │ │
-│ │          │ │                         │ │
-│ └──────────┘ └─────────────────────────┘ │
+│ Terminal                                 │
 ├──────────────────────────────────────────┤
-│ Keyboard Toolbar (mobile only)           │
-├──────────────────────────────────────────┤
-│ Bottom Navigation (mobile only)          │
+│ Keyboard Toolbar                         │
 └──────────────────────────────────────────┘
 ```
+
+- The session chip (name, agent badge, connection dot; "Open sessions menu") opens the sessions
+  list as a bottom sheet with "New session".
+- The "More" menu holds font size, theme, Settings, Help & gestures, About, Copy link and Clear
+  cache & reload.
+
+### Desktop
+
+```text
+┌──────────────────────────────────────────┐
+│ Session tabs · font · fullscreen · More  │
+├──────────┬───────────────────────────────┤
+│ Sidebar  │ Terminal                      │
+│(collapse)│                               │
+└──────────┴───────────────────────────────┘
+```
+
+- A tab is a `role="tab"` button with a sibling close button; Delete closes the focused tab.
+- Settings uses a two-column dialog with a group rail; on a phone it is a full-screen sheet.
+
+### Views
+
+Views of a pane are listed in `pwa/src/app-views.ts`. Only the terminal is registered, so the
+switcher stays hidden. Another view covers the terminal (invisible, inert) instead of unmounting
+it, so the stream and the multiplexer window size are kept.
 
 ## Gestures (Mobile)
 
@@ -89,62 +140,51 @@ colors: {
 
 ### Button Groups
 
-1. **Modifiers**: Tab, Esc, Ctrl
-2. **Arrows**: ↑, ↓, ←, →
-3. **Ctrl Combos**: C, D, Z, L, A, E, U, K
-4. **Scroll**: PageUp, PageDown, Copy Mode toggle
+1. **Main row**: Tab, Esc, Enter, Ctrl, Shift, arrows, plus the keyboard, text input, command
+   history, Quick actions (⚡, mobile) and expand keys
+2. **Expanded rows**, labelled: **Navigate**; **Scroll · copy mode** ("Scroll" without tmux copy
+   mode)
+3. **Ctrl combos**: float above the toolbar while Ctrl is on, so pressing Ctrl does not resize the
+   terminal and make a running TUI redraw
+
+The Quick actions key opens a sheet (Clear, Cancel, Clear line, Exit). There is no floating
+button.
 
 ### Button Style
 
-- Touch-friendly: min 44px tap target
-- Visual feedback: active state
+- Every key is one Keycap; pressed state is exposed through `aria-pressed`
+- Touch-friendly: 44px tap target on touch screens
 - Haptic feedback on tap (if supported)
 
 ## Accessibility
 
 ### Touch Targets
 
-- Minimum: 44x44px (Apple HIG)
+- Minimum 44x44px on touch screens (`pointer-coarse:` variants, `--spacing-touch`); smaller
+  with a mouse
 - Spacing: 8px between interactive elements
 
-### Contrast
+### Names and focus
 
-- Text: WCAG AA compliant (4.5:1 minimum)
-- Interactive: Clear focus states
+- Icon-only controls carry an `aria-label`; radios, switches and selects have accessible names
+- Sheets and menus close on Escape and return focus to the control that opened them
 
 ### Motion
 
-- Respect `prefers-reduced-motion`
+- A global `prefers-reduced-motion: reduce` rule in `index.css` finishes animations and
+  transitions at once
 - Haptic feedback opt-in
 
 ## Icons
 
-### Source
-
-- Lucide React icons
-- Emoji for session icons (user-selectable)
-
-### Sizing
-
-- Toolbar: 20px
-- Navigation: 24px
-- Header: 20px
+- Lucide React icons; emoji for session icons (user-selectable)
+- Sizes are set per component (toolbar keys 18px, header 20px)
 
 ## Animation
 
-### Transitions
-
-- Duration: 150-200ms
-- Easing: `ease-in-out`
-- Properties: opacity, transform, colors
-
-### Sidebar
-
-- Slide animation on mobile
-- Collapsible on desktop (icon-only when collapsed, PanelLeftClose/PanelLeftOpen toggle)
-
-### Fullscreen
-
-- Desktop only (uses Fullscreen API)
-- Toggle button in header (Maximize/Minimize icons)
-- Syncs with browser fullscreen state (F11/Esc)
+- Durations and easing come from the motion tokens (`duration-fast`, `duration-base`,
+  `ease-standard`, `ease-emphasized`); Terminal is the fastest style and Native the slowest
+- Animate opacity, transform and colours
+- Toasts appear near the top, with status colours, so they never cover the toolbar
+- Sidebar: collapsible on desktop (icon-only when collapsed)
+- Fullscreen: desktop only (Fullscreen API), toggle in the header, syncs with F11/Esc

@@ -18,20 +18,20 @@ workflow khác nhau (ví dụ: Claude Code, Copilot, build).
 
 ### Desktop
 
-- **Chuyển**: Nhấp vào phiên trong sidebar bên trái hoặc trong **thanh tab phiên** ở trên cùng (nếu bật)
+- **Chuyển**: Nhấp vào phiên trong sidebar bên trái hoặc trong **thanh tab phiên** nằm chung hàng với header (nếu bật)
 - **Sửa**: Nhấp đúp vào tên phiên, hoặc rê chuột lên phiên rồi nhấp icon bút chì
 - **Xóa**: Rê chuột lên phiên rồi nhấp icon X (cần 2+ phiên)
-- **Thêm**: Nhấp "+ Add session" ở dưới cùng
+- **Thêm**: Nhấp "New session" trong sidebar, hoặc dấu "+" sau các tab phiên
 - **Thu gọn sidebar**: Nhấp icon thu gọn (góc trên phải sidebar) để chỉ hiện icon — tối đa hóa diện tích terminal
 - **Toàn màn hình**: Nhấp nút fullscreen trên header để vào chế độ toàn màn hình
-- **Thanh tab phiên**: Thanh tab ngang để chuyển tab nhanh trên desktop. Bật/tắt qua Settings → "Show session tabs"
+- **Thanh tab phiên**: các tab kiểu trình duyệt nằm chung hàng với header, để chuyển tab nhanh trên desktop. Bật/tắt qua Settings → Sessions → "Show session tabs"
 
 ### Mobile
 
-- **Chuyển**: Vuốt phải để mở sidebar, chạm vào phiên
+- **Chuyển**: Chạm vào chip phiên trên header ("Open sessions menu") để mở danh sách phiên dưới dạng bảng trượt từ đáy màn hình, rồi chạm vào phiên
 - **Sửa**: Vuốt trái trên phiên, chạm Edit
 - **Xóa**: Vuốt trái trên phiên, chạm Remove
-- **Thêm**: Chạm "+ Add session" trong sidebar
+- **Thêm**: Chạm "New session" ở đầu bảng danh sách phiên
 
 ## Tính năng phiên
 
@@ -42,6 +42,26 @@ workflow khác nhau (ví dụ: Claude Code, Copilot, build).
 | Tự động đồng bộ   | Group/tab/pane được đồng bộ từ server (chu kỳ tùy chỉnh được) |
 | Lưu trữ           | Phiên được lưu bởi tmux windows hoặc tab của Herdr |
 | Trạng thái kết nối | Chỉ báo thời gian thực trên header (xem bên dưới) |
+
+## Liên kết trực tiếp
+
+Mỗi màn hình có một địa chỉ để bạn sao chép, rồi mở lại sau hoặc trên thiết bị khác:
+
+```text
+<base>/#/s/<group>/<tab>[/<pane>][?view=terminal|chat|files]
+```
+
+- `group`, `tab` và `pane` là các ID lấy từ `/api/mux/snapshot`. Với tmux, `group` là tên session,
+  `tab` là chỉ số window và không có `pane`. Với Herdr, đó là các ID mà Herdr cấp cho workspace,
+  tab và pane.
+- Mở liên kết sẽ chọn đúng group, tab và pane sau khi danh sách phiên tải xong. Nếu ID không tồn
+  tại, phiên hiện tại được giữ nguyên và một toast báo lại.
+- `view` chỉ được dùng khi view đó có sẵn; nếu không thì terminal được mở.
+- Liên kết chỉ chọn. Nó không bao giờ gửi phím, tạo hay đóng phiên. Với tmux, việc chọn đổi
+  window hiện tại, và mọi client của session tmux đó dùng chung window này.
+- Khi bạn chuyển phiên, tab hoặc pane, thanh địa chỉ tự cập nhật mà không thêm mục vào lịch sử,
+  nên chỉ cần sao chép địa chỉ là đủ. Mục **Copy link** trong menu **More** (⋯) sao chép liên kết
+  vào clipboard.
 
 ## Backend Herdr
 
@@ -55,7 +75,7 @@ tmux. Mô hình phiên khi đó khác ở hai điểm:
 - **Huy hiệu trạng thái agent**: mỗi pane có thể hiện một icon nhỏ (`idle`, `working`, `blocked`
   hoặc `done`) cho biết trạng thái của agent lập trình mà Herdr phát hiện trong pane đó. Huy hiệu
   được làm mới tối đa một lần trong mỗi khoảng `Session poll interval` đã cấu hình (Settings →
-  Preferences), không cập nhật ngay lập tức.
+  Sessions), không cập nhật ngay lập tức.
 
 <Aside type="caution">
   Chọn tab hoặc pane trong PWA không bao giờ thay đổi nội dung đang hiện trên desktop của Herdr,

@@ -67,4 +67,79 @@ describe('Toast', () => {
     })
     expect(onClose).toHaveBeenCalledTimes(1)
   })
+
+  it('is a status region', () => {
+    render(<Toast message="Saved" onClose={vi.fn()} />)
+    expect(screen.getByRole('status')).toHaveTextContent('Saved')
+  })
+
+  it('uses the info variant by default and takes another', () => {
+    const { rerender } = render(<Toast message="Hi" onClose={vi.fn()} />)
+    expect(screen.getByRole('status')).toHaveAttribute('data-variant', 'info')
+    rerender(<Toast message="Hi" onClose={vi.fn()} variant="warning" />)
+    expect(screen.getByRole('status')).toHaveAttribute(
+      'data-variant',
+      'warning',
+    )
+  })
+
+  it('announces an error as an alert', () => {
+    render(<Toast message="Failed" onClose={vi.fn()} variant="danger" />)
+    expect(screen.getByRole('alert')).toHaveAttribute('data-variant', 'danger')
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+
+  it('does not sit over the bottom toolbar', () => {
+    const { container } = render(<Toast message="Hi" onClose={vi.fn()} />)
+    expect(container.firstElementChild?.className).toMatch(/\btop-/)
+    expect(container.firstElementChild?.className).not.toMatch(/\bbottom-/)
+  })
+
+  it('fades out shortly before it closes', () => {
+    render(<Toast message="Hi" onClose={vi.fn()} duration={1000} />)
+    const status = screen.getByRole('status')
+    expect(status).not.toHaveClass('opacity-0')
+    act(() => {
+      vi.advanceTimersByTime(900)
+    })
+    expect(status).toHaveClass('opacity-0')
+  })
+
+  it('keeps its timer when the parent re-renders with a new onClose', () => {
+    const first = vi.fn()
+    const second = vi.fn()
+    const { rerender } = render(
+      <Toast message="Hi" onClose={first} duration={1000} />,
+    )
+    act(() => {
+      vi.advanceTimersByTime(900)
+    })
+    rerender(<Toast message="Hi" onClose={second} duration={1000} />)
+    expect(screen.getByRole('status')).toHaveClass('opacity-0')
+    act(() => {
+      vi.advanceTimersByTime(100)
+    })
+    expect(first).not.toHaveBeenCalled()
+    expect(second).toHaveBeenCalledTimes(1)
+  })
+
+  it('restarts its timer for a new message', () => {
+    const onClose = vi.fn()
+    const { rerender } = render(
+      <Toast message="One" onClose={onClose} duration={1000} />,
+    )
+    act(() => {
+      vi.advanceTimersByTime(900)
+    })
+    rerender(<Toast message="Two" onClose={onClose} duration={1000} />)
+    expect(screen.getByRole('status')).not.toHaveClass('opacity-0')
+    act(() => {
+      vi.advanceTimersByTime(500)
+    })
+    expect(onClose).not.toHaveBeenCalled()
+    act(() => {
+      vi.advanceTimersByTime(500)
+    })
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
 })

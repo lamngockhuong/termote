@@ -18,8 +18,10 @@ import {
   Minimize2,
   Send,
   X,
+  Zap,
 } from 'lucide-react'
 import {
+  type ComponentProps,
   type ReactNode,
   useCallback,
   useEffect,
@@ -28,6 +30,11 @@ import {
   useState,
 } from 'react'
 import { useHaptic } from '../hooks/use-haptic'
+import {
+  type QuickActionHandlers,
+  QuickActionsSheet,
+} from './quick-actions-menu'
+import { FOCUS_RING } from './ui/button'
 
 interface Props {
   onKey: (key: string) => void
@@ -50,6 +57,10 @@ interface Props {
   defaultExpanded?: boolean
   onHistoryToggle?: () => void
   historyOpen?: boolean
+  // Adds a Quick actions key that opens a sheet of common actions
+  quickActions?: QuickActionHandlers
+  // View-only session: no input controls at all
+  readOnly?: boolean
 }
 
 interface KeyConfig {
@@ -169,27 +180,69 @@ const CTRL_SHIFT_COMBOS = [
   { label: 'X', combo: 'x' },
 ]
 
-// Button background color based on key type
-function getKeyButtonBg(
-  key: KeyConfig,
-  ctrlActive: boolean,
-  shiftActive: boolean,
-  historyOpen?: boolean,
-): string {
-  if (key.isCtrlModifier && ctrlActive) return 'bg-blue-600 text-white'
-  if (key.isShiftModifier && shiftActive) return 'bg-orange-500 text-white'
-  if (key.isHistoryToggle)
-    return historyOpen
-      ? 'bg-cyan-500 text-white'
-      : 'bg-cyan-200/70 dark:bg-cyan-700/50'
-  if (key.isExpandToggle) return 'bg-indigo-200/70 dark:bg-indigo-700/50'
-  if (key.isImeToggle) return 'bg-teal-200/70 dark:bg-teal-700/50'
-  if (key.isKeyboardToggle) return 'bg-purple-200/70 dark:bg-purple-700/50'
-  if (key.isTmuxCopy || key.isPaste)
-    return 'bg-amber-200/70 dark:bg-amber-700/50'
-  if (key.isScroll) return 'bg-green-200/70 dark:bg-green-800/50'
-  return 'bg-zinc-200/70 dark:bg-zinc-700/70'
+// Keycap: the one look every toolbar key shares. Neutral is the base; the
+// terminal and native styles override a few properties.
+const KEYCAP =
+  'flex h-11 min-w-11 shrink-0 items-center justify-center rounded-control border border-border bg-surface-raised px-3 text-[13px] font-medium text-fg touch-manipulation select-none transition duration-(--duration-fast) ease-standard hover:border-border-strong active:bg-surface disabled:opacity-50 ' +
+  'ui-terminal:bg-bg ui-terminal:font-label ui-terminal:text-[12px] ' +
+  'ui-native:border-0 ui-native:text-[15px] ui-native:shadow-[0_1px_0_rgb(0_0_0/0.18)] dark:ui-native:shadow-[0_1px_0_rgb(0_0_0/0.8)] active:ui-native:scale-95 ' +
+  FOCUS_RING
+// Pressed state (Ctrl/Shift/History on)
+const KEYCAP_ON = 'bg-accent! text-accent-fg! border-accent!'
+// Ctrl+ combos while Ctrl is on
+const KEYCAP_COMBO =
+  'bg-accent-soft! text-accent! border-transparent! px-2 font-label'
+
+interface KeycapProps extends ComponentProps<'button'> {
+  // Set for keys that toggle (exposed as aria-pressed)
+  pressed?: boolean
+  // The keyboard toggle must let the touch through so the OS keyboard opens
+  allowFocus?: boolean
 }
+
+// Every key stops the default of mousedown/touchstart so a tap does not move
+// focus away from the terminal.
+function Keycap({
+  pressed,
+  allowFocus = false,
+  className = '',
+  ...props
+}: KeycapProps) {
+  return (
+    <button
+      type="button"
+      aria-pressed={pressed}
+      onMouseDown={(e) => !allowFocus && e.preventDefault()}
+      onTouchStart={(e) =>
+        /* v8 ignore next */
+        !allowFocus && e.preventDefault()
+      }
+      onContextMenu={(e) => e.preventDefault()}
+      className={`${KEYCAP} ${pressed ? KEYCAP_ON : ''} ${className}`}
+      {...props}
+    />
+  )
+}
+
+// A labelled group of keys in the expanded toolbar
+function KeyGroup({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <fieldset aria-label={label} className="m-0 min-w-0 border-0 p-0">
+      <div
+        aria-hidden="true"
+        className="px-1 pb-1 pt-2 text-[10px] uppercase tracking-wider text-fg-subtle font-label"
+      >
+        {label}
+      </div>
+      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+        {children}
+      </div>
+    </fieldset>
+  )
+}
+
+const ROOT_CLASS =
+  'border-t border-border bg-surface pb-safe ui-terminal:bg-bg ui-native:border-t-0'
 
 export function KeyboardToolbar({
   onKey,
@@ -211,7 +264,10 @@ export function KeyboardToolbar({
   defaultExpanded = false,
   onHistoryToggle,
   historyOpen,
+  quickActions,
+  readOnly = false,
 }: Props) {
+  const [quickOpen, setQuickOpen] = useState(false)
   const [internalCtrlActive, setInternalCtrlActive] = useState(false)
   const [internalShiftActive, setInternalShiftActive] = useState(false)
   const [expanded, setExpanded] = useState(defaultExpanded)
@@ -231,25 +287,23 @@ export function KeyboardToolbar({
     }
   }, [])
 
-  // Build visible keys based on mode (memoized to avoid re-creating arrays)
-  const visibleKeys = useMemo(() => {
-    let baseKeys = onSendText
+  // Keys of the main row (before the Quick actions / expand keys) and the
+  // utility keys, filtered by the handlers and capabilities available
+  const baseKeys = useMemo(() => {
+    let keys = onSendText
       ? MINIMAL_KEYS
       : MINIMAL_KEYS.filter((k) => !k.isImeToggle)
     // Only show history toggle if handler provided
     if (!onHistoryToggle) {
-      baseKeys = baseKeys.filter((k) => !k.isHistoryToggle)
+      keys = keys.filter((k) => !k.isHistoryToggle)
     }
-    const utilityKeys = showTmuxCopy
-      ? UTILITY_KEYS
-      : UTILITY_KEYS.filter((k) => !k.isTmuxCopy)
-    return expanded
-      ? [...baseKeys, ...EXTRA_KEYS, EXPAND_TOGGLE_KEY, ...utilityKeys]
-      : [...baseKeys, EXPAND_TOGGLE_KEY, ...utilityKeys]
-  }, [expanded, onSendText, onHistoryToggle, showTmuxCopy])
-
-  // Ctrl combos based on mode
-  const ctrlCombos = expanded ? CTRL_COMBOS_FULL : CTRL_COMBOS_MINIMAL
+    return keys
+  }, [onSendText, onHistoryToggle])
+  const utilityKeys = useMemo(
+    () =>
+      showTmuxCopy ? UTILITY_KEYS : UTILITY_KEYS.filter((k) => !k.isTmuxCopy),
+    [showTmuxCopy],
+  )
 
   const setCtrlActive = useCallback(
     (value: boolean | ((prev: boolean) => boolean)) => {
@@ -409,18 +463,21 @@ export function KeyboardToolbar({
     ],
   )
 
+  if (readOnly) return null
+
   // IME input mode - full width text input for Vietnamese/CJK
   if (imeMode) {
     return (
       <div
-        className="flex items-center gap-2 px-3 py-2 pb-safe glass-surface border-t border-zinc-300/30 dark:border-zinc-700/30"
+        className={`flex items-center gap-2 px-3 py-2 ${ROOT_CLASS}`}
         style={{
           paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.5rem)',
         }}
       >
         <button
           onClick={toggleImeMode}
-          className="min-w-11 h-11 px-3 flex items-center justify-center rounded-xl text-sm font-mono bg-red-200/70 dark:bg-red-700/50 active:bg-red-300 dark:active:bg-red-600 touch-manipulation transition-colors"
+          // `!`: the colour must beat KEYCAP's text-fg, whatever the CSS order
+          className={`${KEYCAP} text-danger!`}
           aria-label="Close IME input"
         >
           <X size={ICON_SIZE} />
@@ -432,7 +489,7 @@ export function KeyboardToolbar({
           onChange={(e) => setImeText(e.target.value)}
           onKeyDown={handleImeKeyDown}
           placeholder="Type non-Latin text here... (Vietnamese, CJK, ...)"
-          className="flex-1 h-11 px-4 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-600 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+          className={`h-11 flex-1 rounded-control border border-border bg-surface-raised px-4 text-fg placeholder:text-fg-subtle ui-native:border-0 ${FOCUS_RING}`}
           autoComplete="off"
           autoCorrect="off"
           autoCapitalize="off"
@@ -441,7 +498,7 @@ export function KeyboardToolbar({
         <button
           onClick={handleImeSend}
           disabled={!imeText.trim()}
-          className="min-w-11 h-11 px-3 flex items-center justify-center rounded-xl text-sm font-mono bg-blue-500 dark:bg-blue-600 text-white disabled:opacity-50 disabled:cursor-not-allowed active:bg-blue-600 dark:active:bg-blue-700 touch-manipulation transition-colors"
+          className={`${KEYCAP} ${KEYCAP_ON}`}
           aria-label="Send text"
         >
           <Send size={ICON_SIZE} />
@@ -450,88 +507,135 @@ export function KeyboardToolbar({
     )
   }
 
+  const renderKey = (keyConfig: KeyConfig) => (
+    <Keycap
+      key={keyConfig.key}
+      data-key={keyConfig.key}
+      allowFocus={keyConfig.isKeyboardToggle}
+      pressed={
+        keyConfig.isCtrlModifier
+          ? ctrlActive
+          : keyConfig.isShiftModifier
+            ? shiftActive
+            : keyConfig.isHistoryToggle
+              ? !!historyOpen
+              : undefined
+      }
+      onClick={() =>
+        handleKey(keyConfig.key, {
+          isCtrlModifier: keyConfig.isCtrlModifier,
+          isShiftModifier: keyConfig.isShiftModifier,
+          isExpandToggle: keyConfig.isExpandToggle,
+          scrollDir: keyConfig.scrollDir,
+          isTmuxCopy: keyConfig.isTmuxCopy,
+          isPaste: keyConfig.isPaste,
+          isKeyboardToggle: keyConfig.isKeyboardToggle,
+          isImeToggle: keyConfig.isImeToggle,
+          isHistoryToggle: keyConfig.isHistoryToggle,
+        })
+      }
+      aria-label={
+        keyConfig.isExpandToggle
+          ? expanded
+            ? 'Collapse keyboard'
+            : 'Expand keyboard'
+          : undefined
+      }
+    >
+      {keyConfig.isExpandToggle ? (
+        expanded ? (
+          <Minimize2 size={ICON_SIZE} />
+        ) : (
+          <Expand size={ICON_SIZE} />
+        )
+      ) : (
+        keyConfig.label
+      )}
+    </Keycap>
+  )
+
+  const renderCombos = (
+    combos: { label: string; combo: string }[],
+    prefix: string,
+  ) =>
+    combos.map(({ label, combo }) => (
+      <Keycap
+        key={combo}
+        onClick={() => handleKey(combo)}
+        className={KEYCAP_COMBO}
+      >
+        {prefix}
+        {label}
+      </Keycap>
+    ))
+
   return (
     <div
-      className="flex items-center gap-2 px-3 py-2 pb-safe glass-surface border-t border-zinc-300/30 dark:border-zinc-700/30 overflow-x-auto"
+      className={`relative flex flex-col px-3 py-2 ${ROOT_CLASS}`}
       style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.5rem)' }}
     >
-      {visibleKeys.map((keyConfig) => (
-        <button
-          key={keyConfig.key}
-          onMouseDown={(e) => !keyConfig.isKeyboardToggle && e.preventDefault()}
-          onTouchStart={(e) =>
-            /* v8 ignore next */
-            !keyConfig.isKeyboardToggle && e.preventDefault()
-          }
-          onContextMenu={(e) => e.preventDefault()}
-          onClick={() =>
-            handleKey(keyConfig.key, {
-              isCtrlModifier: keyConfig.isCtrlModifier,
-              isShiftModifier: keyConfig.isShiftModifier,
-              isExpandToggle: keyConfig.isExpandToggle,
-              scrollDir: keyConfig.scrollDir,
-              isTmuxCopy: keyConfig.isTmuxCopy,
-              isPaste: keyConfig.isPaste,
-              isKeyboardToggle: keyConfig.isKeyboardToggle,
-              isImeToggle: keyConfig.isImeToggle,
-              isHistoryToggle: keyConfig.isHistoryToggle,
-            })
-          }
-          className={`min-w-11 h-11 px-3 flex items-center justify-center rounded-xl text-sm font-mono ${getKeyButtonBg(keyConfig, ctrlActive, shiftActive, historyOpen)} active:bg-zinc-300 dark:active:bg-zinc-600 touch-manipulation transition-colors`}
-          aria-label={
-            keyConfig.isExpandToggle
-              ? expanded
-                ? 'Collapse keyboard'
-                : 'Expand keyboard'
-              : undefined
-          }
-        >
-          {keyConfig.isExpandToggle ? (
-            expanded ? (
-              <Minimize2 size={ICON_SIZE} />
-            ) : (
-              <Expand size={ICON_SIZE} />
-            )
-          ) : (
-            keyConfig.label
-          )}
-        </button>
-      ))}
-
-      {/* Ctrl+Shift combos */}
-      {ctrlActive && shiftActive && (
-        <div className="flex gap-1 ml-1 pl-2 border-l border-zinc-300 dark:border-zinc-600">
-          {CTRL_SHIFT_COMBOS.map(({ label, combo }) => (
-            <button
-              key={combo}
-              onMouseDown={(e) => e.preventDefault()}
-              onTouchStart={(e) => e.preventDefault()}
-              onContextMenu={(e) => e.preventDefault()}
-              onClick={() => handleKey(combo)}
-              className="min-w-11 h-11 px-2 flex items-center justify-center rounded-xl text-sm font-mono bg-gradient-to-r from-blue-500/30 to-orange-500/30 dark:from-blue-600/40 dark:to-orange-600/40 text-purple-700 dark:text-purple-300 active:from-blue-500/50 active:to-orange-500/50 touch-manipulation transition-colors"
+      {expanded && (
+        <>
+          <KeyGroup label="Navigate">{EXTRA_KEYS.map(renderKey)}</KeyGroup>
+          <KeyGroup label={showTmuxCopy ? 'Scroll · copy mode' : 'Scroll'}>
+            {utilityKeys.map(renderKey)}
+          </KeyGroup>
+          {/* Only while Ctrl is on; Ctrl+Shift shows its own combos inline.
+              It floats above the toolbar instead of taking a row: a row that
+              comes and goes with Ctrl would resize the terminal (and make the
+              running TUI redraw) on every Ctrl press. */}
+          {ctrlActive && !shiftActive && (
+            <div
+              data-testid="ctrl-combos-overlay"
+              className="absolute inset-x-0 bottom-full z-10 border-t border-border bg-surface px-3 shadow-lg ui-terminal:bg-bg"
             >
-              ^⇧{label}
-            </button>
-          ))}
-        </div>
+              <KeyGroup label="Ctrl +">
+                {renderCombos(CTRL_COMBOS_FULL, '^')}
+              </KeyGroup>
+            </div>
+          )}
+        </>
       )}
 
-      {/* Ctrl only combos */}
-      {ctrlActive && !shiftActive && (
-        <div className="flex gap-1 ml-1 pl-2 border-l border-zinc-300 dark:border-zinc-600">
-          {ctrlCombos.map(({ label, combo }) => (
-            <button
-              key={combo}
-              onMouseDown={(e) => e.preventDefault()}
-              onTouchStart={(e) => e.preventDefault()}
-              onContextMenu={(e) => e.preventDefault()}
-              onClick={() => handleKey(combo)}
-              className="min-w-11 h-11 px-2 flex items-center justify-center rounded-xl text-sm font-mono bg-blue-500/20 dark:bg-blue-600/30 text-blue-700 dark:text-blue-300 active:bg-blue-500/40 dark:active:bg-blue-600/50 touch-manipulation transition-colors"
-            >
-              ^{label}
-            </button>
-          ))}
-        </div>
+      <div className="flex items-center gap-2 overflow-x-auto">
+        {baseKeys.map(renderKey)}
+        {quickActions && (
+          <Keycap
+            data-key="QuickActions"
+            aria-label="Quick actions"
+            aria-haspopup="dialog"
+            onClick={() => {
+              haptic('light')
+              setQuickOpen(true)
+            }}
+          >
+            <Zap size={ICON_SIZE} />
+          </Keycap>
+        )}
+        {renderKey(EXPAND_TOGGLE_KEY)}
+        {!expanded && utilityKeys.map(renderKey)}
+
+        {/* Ctrl+Shift combos */}
+        {ctrlActive && shiftActive && (
+          <div className="flex shrink-0 gap-1 border-l border-border pl-2 ml-1">
+            {renderCombos(CTRL_SHIFT_COMBOS, '^⇧')}
+          </div>
+        )}
+
+        {/* Ctrl only combos: inline when collapsed, own row when expanded */}
+        {ctrlActive && !shiftActive && !expanded && (
+          <div className="flex shrink-0 gap-1 border-l border-border pl-2 ml-1">
+            {renderCombos(CTRL_COMBOS_MINIMAL, '^')}
+          </div>
+        )}
+      </div>
+
+      {quickActions && (
+        <QuickActionsSheet
+          isOpen={quickOpen}
+          onClose={() => setQuickOpen(false)}
+          {...quickActions}
+        />
       )}
     </div>
   )

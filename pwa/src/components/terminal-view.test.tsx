@@ -21,7 +21,12 @@ const { FakeTerminal, FakeFit } = vi.hoisted(() => {
   // Fake xterm.js Terminal; the latest instance is kept for assertions.
   class FakeTerminal {
     static last: FakeTerminal
-    options: { fontSize: number; fontFamily?: string; theme: unknown }
+    options: {
+      fontSize: number
+      fontFamily?: string
+      theme: unknown
+      disableStdin?: boolean
+    }
     cols = 80
     rows = 24
     dataCb: Listener<string> = () => {}
@@ -381,6 +386,23 @@ describe('TerminalView', () => {
     )
   })
 
+  it('readOnly sends nothing typed and disables stdin', () => {
+    const { term, rerender, ref } = renderView({ readOnly: true })
+    expect(term.options.disableStdin).toBe(true)
+    term.dataCb('x')
+    term.binaryCb('\x1b[M\xff!')
+    expect(socket.send).not.toHaveBeenCalled()
+    // Toolbar keys, tmux copy-mode scrolling and paste go through the handle
+    expect(ref.current!.send('\x1b[5~')).toBe(false)
+    ref.current!.paste('rm -rf')
+    expect(socket.send).not.toHaveBeenCalled()
+    expect(term.paste).not.toHaveBeenCalled()
+    rerender(<TerminalView ref={ref} paneId="0" />)
+    expect(term.options.disableStdin).toBe(false)
+    term.dataCb('y')
+    expect(socket.send).toHaveBeenCalledWith('y')
+  })
+
   it('herdr: never sends a resize and follows the server size', () => {
     const { term, fit } = renderView({ backend: 'herdr', fontSize: 14 })
     socketOpts.onOpen()
@@ -549,9 +571,37 @@ describe('TerminalView', () => {
     expect(screen.getByRole('button', { name: /Connection lost/ })).toBeTruthy()
   })
 
-  it('uses the light background class for the light theme', () => {
+  it('paints its box with the terminal background token', () => {
     const { container } = renderView({ theme: 'light' })
-    expect(container.firstElementChild?.className).toContain('bg-[#f6f8fa]')
+    expect(container.firstElementChild?.className).toContain('bg-term')
+  })
+
+  it('takes the background from the style token and re-reads it on a new style', () => {
+    const root = document.documentElement
+    root.style.setProperty('--tm-term-bg', '#111111')
+    try {
+      const { ref, rerender, term } = renderView({
+        theme: 'dark',
+        uiStyle: 'neutral',
+      })
+      expect(term.options.theme).toEqual({
+        ...THEMES.dark,
+        background: '#111111',
+        cursorAccent: '#111111',
+      })
+
+      root.style.setProperty('--tm-term-bg', '#222222')
+      rerender(
+        <TerminalView ref={ref} paneId="0" theme="dark" uiStyle="terminal" />,
+      )
+      expect(bridge.setTerminalTheme).toHaveBeenLastCalledWith(ref.current, {
+        ...THEMES.dark,
+        background: '#222222',
+        cursorAccent: '#222222',
+      })
+    } finally {
+      root.style.removeProperty('--tm-term-bg')
+    }
   })
 
   it('disposes the terminal and its listeners on unmount', () => {

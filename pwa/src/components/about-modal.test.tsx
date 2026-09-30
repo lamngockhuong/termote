@@ -38,25 +38,13 @@ describe('AboutModal', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
-  it('calls onClose on Escape key when open', () => {
+  it('calls onClose on Escape (the dialog cancel event)', () => {
     const onClose = vi.fn()
     render(<AboutModal isOpen={true} onClose={onClose} />)
-    fireEvent.keyDown(window, { key: 'Escape' })
+    const cancel = new Event('cancel', { cancelable: true })
+    document.querySelector('dialog')!.dispatchEvent(cancel)
     expect(onClose).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not call onClose on Escape key when closed', () => {
-    const onClose = vi.fn()
-    render(<AboutModal isOpen={false} onClose={onClose} />)
-    fireEvent.keyDown(window, { key: 'Escape' })
-    expect(onClose).not.toHaveBeenCalled()
-  })
-
-  it('does not call onClose on other keys', () => {
-    const onClose = vi.fn()
-    render(<AboutModal isOpen={true} onClose={onClose} />)
-    fireEvent.keyDown(window, { key: 'Enter' })
-    expect(onClose).not.toHaveBeenCalled()
+    expect(cancel.defaultPrevented).toBe(true)
   })
 
   it('calls onClose when clicking backdrop (dialog element itself)', () => {
@@ -64,7 +52,8 @@ describe('AboutModal', () => {
     render(<AboutModal isOpen={true} onClose={onClose} />)
     const dialog = document.querySelector('dialog')!
     // Simulate click where target === currentTarget (backdrop click)
-    fireEvent.click(dialog, { target: dialog })
+    fireEvent.pointerDown(dialog)
+    fireEvent.click(dialog)
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
@@ -108,17 +97,5 @@ describe('AboutModal', () => {
   it('shows app description', () => {
     render(<AboutModal isOpen={true} onClose={vi.fn()} />)
     expect(screen.getByText(APP_INFO.description)).toBeInTheDocument()
-  })
-
-  it('removes keydown listener on unmount', () => {
-    const onClose = vi.fn()
-    const removeEventListenerSpy = vi.spyOn(window, 'removeEventListener')
-    const { unmount } = render(<AboutModal isOpen={true} onClose={onClose} />)
-    unmount()
-    expect(removeEventListenerSpy).toHaveBeenCalledWith(
-      'keydown',
-      expect.any(Function),
-    )
-    removeEventListenerSpy.mockRestore()
   })
 })

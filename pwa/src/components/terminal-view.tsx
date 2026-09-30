@@ -10,6 +10,7 @@ import {
 } from 'react'
 import { MAX_SCROLL_LINES, scrollPane } from '../hooks/use-mux-api'
 import { type StreamControl, useTermSocket } from '../hooks/use-term-socket'
+import { readToken, type UiStyle } from '../ui-style'
 import {
   blockContextMenu,
   setTerminalFontFamily,
@@ -19,6 +20,7 @@ import {
 } from '../utils/terminal-bridge'
 import { terminalFontFamily } from '../utils/terminal-font'
 import type { ConnectionState } from './connection-indicator'
+import { FOCUS_RING } from './ui/button'
 
 // What terminal-bridge drives. The object is stable for the component's
 // lifetime; its fields always reflect the current terminal.
@@ -57,51 +59,60 @@ interface Props {
   // Font installed on this device, tried before the default monospace fonts.
   fontFamily?: string
   theme?: 'light' | 'dark'
+  // Current UI style: a change re-reads the background token.
+  uiStyle?: UiStyle
   disableContextMenu?: boolean
+  // View-only role: the terminal shows the pane but sends nothing typed.
+  readOnly?: boolean
   onConnectionStateChange?: (state: ConnectionState) => void
 }
 
+// Foreground colours reach WCAG AA (4.5:1) on the terminal background of every
+// UI style (ANSI black stays black: programs use it as a background). On the
+// light background the bright colours are darker than the normal ones, so they
+// stay AA and still tell apart. The backgrounds here are the neutral style's,
+// used when no token is readable.
 export const THEMES = {
   light: {
-    background: '#f6f8fa',
+    background: '#fcfcfd',
     foreground: '#24292e',
     cursor: '#24292e',
-    cursorAccent: '#f6f8fa',
+    cursorAccent: '#fcfcfd',
     selectionBackground: 'rgba(3, 102, 214, 0.3)',
     selectionForeground: '#24292e',
     black: '#24292e',
-    red: '#d73a49',
-    green: '#22863a',
-    yellow: '#b08800',
+    red: '#d42d3d',
+    green: '#208037',
+    yellow: '#8c6c00',
     blue: '#0366d6',
     magenta: '#6f42c1',
     cyan: '#1b7c83',
-    white: '#6a737d',
+    white: '#68707a',
     brightBlack: '#586069',
-    brightRed: '#cb2431',
-    brightGreen: '#28a745',
-    brightYellow: '#dbab09',
-    brightBlue: '#2188ff',
-    brightMagenta: '#8a63d2',
-    brightCyan: '#3192aa',
-    brightWhite: '#959da5',
+    brightRed: '#b11f2b',
+    brightGreen: '#19682b',
+    brightYellow: '#705805',
+    brightBlue: '#0052b0',
+    brightMagenta: '#582fa3',
+    brightCyan: '#226475',
+    brightWhite: '#545b63',
   },
   dark: {
-    background: '#2b2b2b',
+    background: '#0c0c0e',
     foreground: '#d2d2d2',
     cursor: '#adadad',
-    cursorAccent: '#2b2b2b',
+    cursorAccent: '#0c0c0e',
     selectionBackground: 'rgba(255, 255, 255, 0.2)',
     selectionForeground: '#ffffff',
     black: '#000000',
-    red: '#d81e00',
+    red: '#f22200',
     green: '#5ea702',
     yellow: '#cfae00',
-    blue: '#427ab3',
-    magenta: '#89658e',
+    blue: '#457fba',
+    magenta: '#95709a',
     cyan: '#00a7aa',
     white: '#dbded8',
-    brightBlack: '#686a66',
+    brightBlack: '#7b7d79',
     brightRed: '#f54235',
     brightGreen: '#99e343',
     brightYellow: '#fdeb61',
@@ -110,6 +121,15 @@ export const THEMES = {
     brightCyan: '#37e6e8',
     brightWhite: '#f1f1f0',
   },
+}
+
+// xterm.js needs a concrete colour, not var(): the background comes from the
+// --tm-term-bg token of the current style and theme, the palette from THEMES.
+// Without the stylesheet (tests) THEMES keeps its own background.
+export function terminalTheme(theme: 'light' | 'dark') {
+  const background = readToken('--tm-term-bg')
+  if (!background) return THEMES[theme]
+  return { ...THEMES[theme], background, cursorAccent: background }
 }
 
 // Smallest font a server-sized pane is shrunk to; beyond that it scrolls.
@@ -172,7 +192,9 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       fontSize = 14,
       fontFamily = '',
       theme = 'dark',
+      uiStyle,
       disableContextMenu = true,
+      readOnly = false,
       onConnectionStateChange,
     },
     ref,
@@ -200,6 +222,8 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
     serverScrollRef.current = serverScroll
     const paneIdRef = useRef(paneId)
     paneIdRef.current = paneId
+    const readOnlyRef = useRef(readOnly)
+    readOnlyRef.current = readOnly
     // Rows scrolled but not sent yet, and the pane they are for; one request
     // is in flight at a time, so a fast wheel does not queue one per event.
     const scrollPendingRef = useRef(0)
@@ -350,11 +374,15 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
         },
         copyMode: false,
         scrollHistory: (lines) => scrollHistory(lines),
+        // View-only: every path that sends input (toolbar keys, tmux copy
+        // mode scrolling, paste) stops here, not only xterm's own onData.
         send: (data) => {
+          if (readOnlyRef.current) return false
           toLiveScreen()
           return socketRef.current.send(data)
         },
         paste: (text) => {
+          if (readOnlyRef.current) return
           toLiveScreen()
           if (bracketedRef.current) {
             socketRef.current.send(bracketPaste(text))
@@ -376,7 +404,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       const term = new Terminal({
         fontSize: fontSizeRef.current,
         fontFamily: terminalFontFamily(fontFamilyRef.current),
-        theme: THEMES[theme],
+        theme: terminalTheme(theme),
         cursorBlink: true,
         scrollback: 5000,
       })
@@ -402,6 +430,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
 
       const subs = [
         term.onData((data) => {
+          if (readOnlyRef.current) return
           const out = isHerdrRef.current ? stripTerminalReplies(data) : data
           if (!out) return
           toLiveScreen()
@@ -410,6 +439,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
         // Non-UTF-8 input (legacy mouse reports) arrives as a binary string,
         // one char per byte.
         term.onBinary((data) => {
+          if (readOnlyRef.current) return
           socketRef.current.send(
             Uint8Array.from(data, (c) => c.charCodeAt(0) & 0xff),
           )
@@ -429,9 +459,10 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       }
     }, [])
 
+    // biome-ignore lint/correctness/useExhaustiveDependencies: a new style changes the background token
     useEffect(() => {
-      setTerminalTheme(handleRef.current, THEMES[theme])
-    }, [theme])
+      setTerminalTheme(handleRef.current, terminalTheme(theme))
+    }, [theme, uiStyle])
 
     useEffect(() => {
       setTerminalFontSize(handleRef.current, fontSize)
@@ -444,6 +475,14 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       layout()
     }, [fontFamily, layout])
 
+    // No cursor or keyboard focus for input that would go nowhere.
+    useEffect(() => {
+      const term = termRef.current
+      /* v8 ignore next */
+      if (!term) return
+      term.options.disableStdin = readOnly
+    }, [readOnly])
+
     useEffect(() => {
       if (disableContextMenu) blockContextMenu(handleRef.current)
       else unblockContextMenu(handleRef.current)
@@ -454,7 +493,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
     return (
       <div
         ref={scrollerRef}
-        className={`relative flex-1 w-full h-full overflow-x-auto ${theme === 'light' ? 'bg-[#f6f8fa]' : 'bg-[#2b2b2b]'}`}
+        className="relative flex-1 w-full h-full overflow-x-auto bg-term"
         // App blocks the context menu everywhere; let it through here when
         // the setting allows it.
         onContextMenu={
@@ -470,7 +509,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
           <div className="absolute inset-x-0 bottom-4 flex justify-center pointer-events-none">
             <button
               onClick={socket.reconnect}
-              className="pointer-events-auto px-3 py-1 text-sm text-white bg-zinc-700/90 rounded hover:bg-zinc-600"
+              className={`pointer-events-auto h-9 rounded-control border border-border bg-surface-raised px-3 text-sm text-fg shadow-lg hover:border-border-strong pointer-coarse:h-touch ${FOCUS_RING}`}
             >
               {state === 'error' ? 'Connection lost' : 'Disconnected'} —
               Reconnect

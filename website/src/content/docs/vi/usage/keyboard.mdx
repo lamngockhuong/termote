@@ -5,7 +5,7 @@ description: Bàn phím ảo cho điều khiển terminal di động
 
 import { Aside } from "@astrojs/starlight/components";
 
-Thanh công cụ bàn phím cung cấp các nút thân thiện cảm ứng cho các phím terminal phổ biến. Có hai chế độ: **tối giản** (mặc định) và **mở rộng** (đầy đủ). Ngoài ra còn có lịch sử lệnh và menu thao tác nhanh.
+Thanh công cụ bàn phím cung cấp các nút thân thiện cảm ứng cho các phím terminal phổ biến. Có hai chế độ: **tối giản** (mặc định) và **mở rộng** (đầy đủ). Ngoài ra còn có lịch sử lệnh và phím Quick actions (trên di động).
 
 ## Tính năng Toolbar
 
@@ -15,6 +15,7 @@ Thanh công cụ bàn phím cung cấp các nút thân thiện cảm ứng cho c
 | Chế độ mở rộng  | Expand  | Nhấn để hiện tất cả phím (Home, End, Delete, v.v.) |
 | Bật/tắt bàn phím | ⌨️      | Hiện/ẩn bàn phím ảo                            |
 | Lịch sử lệnh    | 🕐      | Xem và tìm lệnh đã dùng (xem bên dưới)        |
+| Quick actions   | ⚡      | Chỉ trên di động: mở bảng Quick actions (xem bên dưới) |
 | Nhập text        | 🌐      | Chuyển sang chế độ IME cho ngôn ngữ ngoài Latin |
 
 ## Chế độ
@@ -23,6 +24,11 @@ Thanh công cụ bàn phím cung cấp các nút thân thiện cảm ứng cho c
 | -------- | ----------------- | ------------------------------------------- |
 | Tối giản | Mặc định          | Phím cần thiết cho terminal                 |
 | Mở rộng  | Chạm icon mở rộng | Tất cả phím bao gồm Home, End, Delete, v.v. |
+
+Ở chế độ mở rộng, các phím thêm được xếp theo hàng có nhãn: **Navigate** (Home, End, Delete, v.v.)
+và **Scroll · copy mode** (chỉ còn **Scroll** khi không có copy mode của tmux). Khi Ctrl đang bật,
+các combo của nó nổi phía trên toolbar thay vì thêm một hàng, nên terminal giữ nguyên kích thước
+và chương trình toàn màn hình đang chạy không phải vẽ lại.
 
 ## Bộ điều chỉnh
 
@@ -173,11 +179,10 @@ Nhấn **icon đồng hồ** (🕐) trên toolbar để mở dropdown lịch s�
 Lệnh gửi qua nút toolbar bàn phím (Ctrl+C, v.v.) không được thêm vào lịch sử — chỉ text gửi qua IME mới được lưu.
 </Aside>
 
-## Menu thao tác nhanh (Chỉ di động)
+## Quick actions (Chỉ di động)
 
-Một nút nổi (FAB) xuất hiện trên thiết bị di động ở góc dưới phải, cung cấp truy cập nhanh đến các thao tác terminal phổ biến.
-
-### Thao tác
+Phím **Quick actions** (⚡) trên thanh công cụ bàn phím mở một bảng chứa các thao tác terminal
+phổ biến. Không có nút nổi nào nằm đè lên terminal.
 
 | Thao tác   | Chức năng            | Gửi            |
 | ---------- | -------------------- | -------------- |
@@ -186,17 +191,8 @@ Một nút nổi (FAB) xuất hiện trên thiết bị di động ở góc dư�
 | Clear line | Xóa dòng hiện tại    | Ctrl+U         |
 | Exit       | Logout/EOF           | Ctrl+D         |
 
-### Tính năng
-
-| Tính năng     | Mô tả                                          |
-| ------------- | ----------------------------------------------- |
-| Kéo thả       | Giữ và kéo để đổi vị trí FAB                   |
-| Lưu vị trí    | Vị trí mới lưu trong local storage              |
-| Tự động lật   | Menu lật theo vị trí FAB để không bị cắt        |
-| Phản hồi rung | Rung khi nhấn thao tác (nếu thiết bị hỗ trợ)  |
-
 <Aside>
-Menu thao tác nhanh FAB chỉ hiện trên thiết bị di động. Trên desktop, dùng thanh công cụ bàn phím hoặc các nút toolbar.
+Phím Quick actions chỉ hiện trên thiết bị di động. Trên desktop, dùng các phím trên thanh công cụ bàn phím.
 </Aside>
 
 ## Mẹo
@@ -207,4 +203,4 @@ Menu thao tác nhanh FAB chỉ hiện trên thiết bị di động. Trên deskt
 4. **Chế độ sao chép** (tmux): Bật để chọn văn bản, tắt để tiếp tục gõ
 5. **Mở rộng thêm**: Chạm icon mở rộng để có đầy đủ bàn phím với Home, End, v.v.
 6. **Lịch sử lệnh**: Dùng icon 🕐 đồng hồ để tái sử dụng lệnh đã dùng
-7. **Đổi vị trí FAB**: Giữ và kéo nút xanh ⚡ để di chuyển ra chỗ không cản
+7. **Quick actions**: Chạm ⚡ để có Clear, Cancel, Clear line và Exit trong một bảng

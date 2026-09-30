@@ -131,35 +131,36 @@ export function SwipeableSessionItem({
   }
 
   return (
-    <div className="relative overflow-hidden isolate">
+    <div className="relative isolate overflow-hidden rounded-control ui-native:rounded-none">
       {/* Action buttons layer */}
-      <div className="absolute inset-0 flex justify-between z-0">
+      <div className="absolute inset-0 z-0 flex justify-between">
         {canEdit && (
           <button
+            type="button"
             onClick={handleEdit}
-            className="w-[70px] h-full bg-blue-500 flex items-center justify-center text-white active:bg-blue-600"
+            aria-label={`Edit ${session.name}`}
+            className="flex h-full w-[70px] items-center justify-center bg-accent text-accent-fg active:opacity-90"
           >
-            <Pencil size={20} />
+            <Pencil size={20} aria-hidden="true" />
           </button>
         )}
         <div className="flex-1" />
         {canRemove && (
           <button
+            type="button"
             onClick={handleRemove}
-            className="w-[70px] h-full bg-red-500 flex items-center justify-center text-white active:bg-red-600"
+            aria-label={`Remove ${session.name}`}
+            className="flex h-full w-[70px] items-center justify-center bg-danger text-white active:opacity-90 dark:text-bg"
           >
-            <Trash2 size={20} />
+            <Trash2 size={20} aria-hidden="true" />
           </button>
         )}
       </div>
 
       {/* Main content */}
       <div
-        className={`relative z-10 bg-zinc-50 dark:bg-zinc-800 ${
-          isActive
-            ? 'bg-zinc-200 dark:bg-zinc-700 border-l-2 border-blue-500'
-            : ''
-        }`}
+        data-active={isActive}
+        className="relative z-10 bg-bg ui-native:bg-surface-raised"
         style={{
           transform: `translateX(${offsetX}px)`,
           transition: isAnimating ? 'transform 200ms ease-out' : 'none',
@@ -168,10 +169,32 @@ export function SwipeableSessionItem({
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        <div className="p-3 text-left text-zinc-900 dark:text-zinc-50 select-none flex items-center min-w-0">
-          <span className="text-xl shrink-0">{session.icon}</span>
-          <span className="ml-2 text-sm truncate flex-1">{session.name}</span>
-          <AgentStatusBadge status={session.agentStatus} />
+        {/* The accent tint is translucent: it sits on the opaque layer above,
+            which hides the action buttons. */}
+        <div
+          aria-current={isActive ? 'true' : undefined}
+          className={`flex h-14 min-w-0 select-none items-center gap-3 px-3 text-left text-fg ${
+            isActive
+              ? 'bg-accent-soft ui-terminal:bg-surface-raised ui-terminal:shadow-[inset_2px_0_0_var(--color-accent)]'
+              : ''
+          }`}
+        >
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-control bg-surface text-[18px] ui-native:bg-bg">
+            {session.icon}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span
+              className={`block truncate text-[15px] ui-terminal:font-label ui-terminal:text-[14px] ${isActive ? 'font-semibold' : ''}`}
+            >
+              {session.name}
+            </span>
+            {session.description && (
+              <span className="block truncate text-[12px] text-fg-muted">
+                {session.description}
+              </span>
+            )}
+          </span>
+          <AgentStatusBadge status={session.agentStatus} size={16} />
         </div>
       </div>
     </div>

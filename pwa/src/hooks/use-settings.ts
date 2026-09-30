@@ -1,4 +1,5 @@
 import { useCallback, useSyncExternalStore } from 'react'
+import { DEFAULT_UI_STYLE, resolveUiStyle, type UiStyle } from '../ui-style'
 
 const STORAGE_KEY = 'termote-settings'
 
@@ -14,6 +15,7 @@ export interface Settings {
   pasteSource: PasteSource // paste button source: system clipboard or tmux buffer
   showSessionTabs: boolean // show session tabs bar on desktop
   terminalFont: string // font installed on this device, tried before the defaults
+  uiStyle: UiStyle // visual style of the app chrome (tokens in index.css)
 }
 
 const DEFAULTS: Settings = {
@@ -25,6 +27,7 @@ const DEFAULTS: Settings = {
   pasteSource: 'clipboard',
   showSessionTabs: true,
   terminalFont: '',
+  uiStyle: DEFAULT_UI_STYLE,
 }
 
 // Listeners for useSyncExternalStore
@@ -48,7 +51,11 @@ function getSnapshot(): Settings {
   if (json !== cachedJson) {
     cachedJson = json
     try {
-      cachedSettings = json ? { ...DEFAULTS, ...JSON.parse(json) } : DEFAULTS
+      const merged: Settings = json
+        ? { ...DEFAULTS, ...JSON.parse(json) }
+        : DEFAULTS
+      // An edited or future config may hold a style this version does not know.
+      cachedSettings = { ...merged, uiStyle: resolveUiStyle(merged.uiStyle) }
     } catch {
       cachedSettings = DEFAULTS
     }

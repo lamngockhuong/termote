@@ -42,7 +42,8 @@
 - **Thân thiện mobile**: Bàn phím ảo (Tab/Ctrl/Shift/mũi tên, mở rộng được)
 - **Hỗ trợ cử chỉ**: Vuốt cho Ctrl+C, Tab, cuộn màn hình
 - **Lịch sử lệnh**: Gợi nhớ các lệnh đã gửi trước đó với tìm kiếm
-- **Thao tác nhanh**: Menu nổi cho các thao tác phổ biến (clear, cancel, exit)
+- **Thao tác nhanh**: Phím ⚡ trên thanh công cụ mobile mở một bảng thao tác phổ biến (clear, cancel, exit)
+- **Kiểu giao diện**: Neutral, Terminal hoặc Native, chọn trong Settings, độc lập với theme sáng/tối
 - **Chỉ báo kết nối**: Trạng thái server real-time, tự phát hiện mất kết nối
 - **Kiểm tra cập nhật**: Tự động thông báo phiên bản mới từ GitHub releases
 - **PWA**: Cài được vào homescreen, hoạt động offline
@@ -58,6 +59,14 @@
   <img src="docs/images/screenshots/mobile-terminal.png" alt="Mobile Terminal" width="280" />
   &nbsp;&nbsp;
   <img src="docs/images/screenshots/mobile-sidebar.png" alt="Session Sidebar" width="280" />
+</p>
+
+<p align="center">
+  <img src="docs/images/screenshots/desktop-terminal.png" alt="Terminal trên desktop" width="600" />
+</p>
+
+<p align="center">
+  <img src="docs/images/screenshots/ui-styles.png" alt="Ba kiểu giao diện" width="600" />
 </p>
 
 ## Kiến Trúc

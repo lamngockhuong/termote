@@ -11,10 +11,13 @@ termote/
 │   ├── src/
 │   │   ├── App.tsx             # Main app component
 │   │   ├── main.tsx            # Entry point
+│   │   ├── app-views.ts        # Views of a pane (only the terminal is registered)
+│   │   ├── ui-style.ts         # Interface styles (neutral, terminal, native) + token helpers
+│   │   ├── index.css           # Design tokens (--tm-*) per style and theme
 │   │   ├── components/
 │   │   │   ├── about-modal.tsx              # About dialog
 │   │   │   ├── agent-status-badge.tsx       # Herdr agent status icon (idle/working/blocked/done)
-│   │   │   ├── bottom-navigation.tsx        # Mobile bottom nav
+│   │   │   ├── app-header.tsx               # Header: session chip (mobile) / tabs (desktop), More menu
 │   │   │   ├── command-history-dropdown.tsx # Command history search/select
 │   │   │   ├── connection-indicator.tsx     # Connection status indicator
 │   │   │   ├── gesture-hints-overlay.tsx    # First-time gesture tutorial (mobile)
@@ -22,15 +25,16 @@ termote/
 │   │   │   ├── icon-picker.tsx              # Emoji icon selector
 │   │   │   ├── keyboard-toolbar.tsx         # Virtual keyboard buttons
 │   │   │   ├── pane-strip.tsx               # Pane switcher, shown only for multi-pane tabs
-│   │   │   ├── quick-actions-menu.tsx       # Quick action buttons (clear, cancel, exit)
+│   │   │   ├── quick-actions-menu.tsx       # Quick actions sheet (clear, cancel, clear line, exit)
 │   │   │   ├── session-sidebar.tsx          # Group switcher sidebar
+│   │   │   ├── session-switcher-chip.tsx    # Mobile header chip that opens the sessions sheet
 │   │   │   ├── session-tabs.tsx             # Tab bar (switch, add, remove)
-│   │   │   ├── settings-menu.tsx            # Settings dropdown
+│   │   │   ├── settings-menu.tsx            # "More" overflow menu (font size, theme, Settings, Help, About, Copy link)
 │   │   │   ├── settings-modal.tsx           # Settings dialog (IME, toolbar, paste, etc.)
 │   │   │   ├── swipeable-session-item.tsx   # Swipe-to-delete session
 │   │   │   ├── terminal-view.tsx            # xterm.js terminal component
 │   │   │   ├── toast.tsx                    # Toast notification component
-│   │   │   └── theme-toggle.tsx             # Theme switcher buttons
+│   │   │   └── ui/                          # Shared primitives (Button, Sheet, Menu, Switch, ...)
 │   │   ├── hooks/
 │   │   │   ├── use-command-history.ts       # Command history storage + retrieval (localStorage)
 │   │   │   ├── use-font-size.ts             # Font size state (6-24)
@@ -106,10 +110,11 @@ termote/
 
 Main orchestrator combining:
 
-- Session sidebar with collapse toggle (desktop) / slide-over panel (mobile)
+- Session sidebar with collapse toggle (desktop) / sessions bottom sheet opened from the header chip (mobile)
 - Terminal view (xterm.js) fed by the `/api/mux/stream` WebSocket
 - Keyboard toolbar with special keys
-- Settings menu with theme toggle and cache clearing
+- "More" overflow menu with theme, font size, Settings, Help, About, Copy link and cache clearing
+- Deep links (`#/s/<group>/<tab>[/<pane>]`) that select a session, and address-bar sync
 - Font size controls (A-/A+)
 - Fullscreen toggle (desktop only, Fullscreen API)
 - Gesture handlers → terminal commands (mobile only)
@@ -147,13 +152,14 @@ Virtual keyboard for mobile:
 
 ### settings-modal.tsx
 
-Settings dialog with radio buttons, toggles, dropdown, and buttons:
+Settings sheet (full screen on phone, two-column dialog on desktop) grouped as Appearance, Keyboard, Terminal, Sessions, Data & help:
 
 - **IME send behavior**: "Send text only" (default) or "Send + Enter" (auto-press Enter after text)
-- **Paste button source**: System clipboard (default) or tmux buffer
+- **Interface style**: Neutral (default), Terminal or Native (`uiStyle`)
+- **Paste button source**: System clipboard (default) or tmux buffer ("Session buffer" on other backends)
 - **Toolbar default expanded**: Toggle to show all keys on load (vs. collapsed by default)
 - **Disable right-click menu**: Toggle to disable context menu on terminal (default: enabled)
-- **Show session tabs**: Toggle desktop tab bar visibility (default: enabled)
+- **Show session tabs**: Toggle desktop session tabs visibility (default: enabled)
 - **Terminal font**: Text field for a font installed on the device, saved on blur/Enter; Nerd Font
   icons fall back to the bundled Symbols Nerd Font either way (`utils/terminal-font.ts`)
 - **Session poll interval**: Dropdown to set snapshot sync frequency (3s, 5s, 10s, 15s, 30s, 1m, 2m, 5m; default: 5s)
@@ -184,7 +190,7 @@ Command search/recall dropdown UI with mobile support (search, keyboard nav, del
 
 ### quick-actions-menu.tsx
 
-FAB (floating action button) with draggable positioning and auto-flipping menu (clear, cancel, clear line, exit).
+Quick actions sheet (clear, cancel, clear line, exit), opened from the Quick actions key of the keyboard toolbar on mobile.
 
 ### use-settings.ts
 

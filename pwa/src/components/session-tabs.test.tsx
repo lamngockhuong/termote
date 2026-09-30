@@ -50,19 +50,100 @@ describe('SessionTabs', () => {
     expect(defaultProps.onSelect).toHaveBeenCalledWith('code')
   })
 
-  it('active tab has different styling', () => {
+  it('marks the active tab selected and styles it', () => {
     render(<SessionTabs {...defaultProps} />)
-    // Shell is active — its button has shadow-sm class
-    const shellBtn = screen.getByText('Shell').closest('button')
-    expect(shellBtn).toHaveClass('shadow-sm')
-    const codeBtn = screen.getByText('Code').closest('button')
-    expect(codeBtn).not.toHaveClass('shadow-sm')
+    const shell = screen.getByRole('tab', { name: /Shell/ })
+    const code = screen.getByRole('tab', { name: /Code/ })
+    expect(shell).toHaveAttribute('aria-selected', 'true')
+    expect(shell).toHaveAttribute('tabindex', '0')
+    expect(code).toHaveAttribute('aria-selected', 'false')
+    expect(code).toHaveAttribute('tabindex', '-1')
+    expect(shell.parentElement).toHaveClass('shadow-sm')
+    expect(code.parentElement).not.toHaveClass('shadow-sm')
+  })
+
+  it('never nests the close button in the tab', () => {
+    render(<SessionTabs {...defaultProps} />)
+    expect(
+      screen.getByRole('tablist', { name: 'Sessions' }),
+    ).toBeInTheDocument()
+    for (const tab of screen.getAllByRole('tab')) {
+      expect(tab.querySelector('button')).toBeNull()
+    }
+    expect(
+      screen
+        .getByRole('tablist')
+        .contains(screen.getByLabelText('Add session')),
+    ).toBe(false)
+  })
+
+  it('arrow keys, Home and End move focus between tabs without switching', () => {
+    render(<SessionTabs {...defaultProps} />)
+    const [shell, code] = screen.getAllByRole('tab')
+    shell.focus()
+    fireEvent.keyDown(shell, { key: 'ArrowRight' })
+    expect(code).toHaveFocus()
+    fireEvent.keyDown(code, { key: 'ArrowRight' })
+    expect(shell).toHaveFocus()
+    fireEvent.keyDown(shell, { key: 'ArrowLeft' })
+    expect(code).toHaveFocus()
+    fireEvent.keyDown(code, { key: 'ArrowLeft' })
+    expect(shell).toHaveFocus()
+    fireEvent.keyDown(shell, { key: 'End' })
+    expect(code).toHaveFocus()
+    fireEvent.keyDown(code, { key: 'Home' })
+    expect(shell).toHaveFocus()
+    fireEvent.keyDown(shell, { key: 'a' })
+    expect(shell).toHaveFocus()
+    expect(defaultProps.onSelect).not.toHaveBeenCalled()
+  })
+
+  it('ignores keys when no tab has focus', () => {
+    render(<SessionTabs {...defaultProps} />)
+    fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowRight' })
+    expect(document.body).toHaveFocus()
+  })
+
+  it('Delete closes the focused tab when tabs may be closed', () => {
+    const { rerender } = render(<SessionTabs {...defaultProps} />)
+    const code = screen.getByRole('tab', { name: /Code/ })
+    code.focus()
+    fireEvent.keyDown(code, { key: 'Delete' })
+    expect(defaultProps.onRemove).toHaveBeenCalledWith('code')
+    rerender(<SessionTabs {...defaultProps} canRemove={false} />)
+    fireEvent.keyDown(screen.getByRole('tab', { name: /Code/ }), {
+      key: 'Delete',
+    })
+    expect(defaultProps.onRemove).toHaveBeenCalledOnce()
+  })
+
+  it('shows the description in the tab title', () => {
+    render(
+      <SessionTabs
+        {...defaultProps}
+        sessions={[SESSIONS[0], { ...SESSIONS[1], description: '' }]}
+      />,
+    )
+    expect(screen.getByRole('tab', { name: /Shell/ })).toHaveAttribute(
+      'title',
+      'Shell - Terminal',
+    )
+    expect(screen.getByRole('tab', { name: /Code/ })).toHaveAttribute(
+      'title',
+      'Code',
+    )
   })
 
   it('shows close button when more than one session', () => {
     render(<SessionTabs {...defaultProps} />)
     expect(screen.getByLabelText('Close Shell')).toBeInTheDocument()
     expect(screen.getByLabelText('Close Code')).toBeInTheDocument()
+  })
+
+  it('hides the close button of other tabs until hover, so it cannot be hit unseen', () => {
+    render(<SessionTabs {...defaultProps} />)
+    expect(screen.getByLabelText('Close Code')).toHaveClass('invisible')
+    expect(screen.getByLabelText('Close Shell')).not.toHaveClass('invisible')
   })
 
   it('does not show close button with single session', () => {

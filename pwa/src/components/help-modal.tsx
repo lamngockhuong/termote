@@ -13,10 +13,12 @@ import {
   Keyboard,
   Languages,
   Minimize2,
+  Zap,
 } from 'lucide-react'
-import { type ReactNode, useEffect, useRef, useState } from 'react'
-import { useDialogModal } from '../hooks/use-dialog-modal'
+import { type ReactNode, useState } from 'react'
 import { AgentStatusBadge } from './agent-status-badge'
+import { SegmentedControl } from './ui/segmented-control'
+import { Sheet } from './ui/sheet'
 
 interface Props {
   isOpen: boolean
@@ -94,6 +96,10 @@ const TOOLBAR_GUIDE: GuideSection[] = [
       { key: <ArrowKeysIcon />, desc: 'Arrow keys' },
       { key: <ExpandCollapseIcon />, desc: 'Expand/collapse keyboard' },
       {
+        key: <Zap size={ICON_SIZE} />,
+        desc: 'Quick actions: Clear, Cancel, Clear line, Exit (mobile)',
+      },
+      {
         key: <History size={ICON_SIZE} />,
         desc: 'Toggle tmux copy mode',
         tmux: true,
@@ -135,11 +141,19 @@ const TOOLBAR_GUIDE: GuideSection[] = [
     ],
   },
   {
-    title: 'Expanded Mode Keys',
+    title: 'Expanded Toolbar Rows',
     items: [
-      { key: 'Home/End', desc: 'Jump to line start/end' },
-      { key: 'Del/Bksp', desc: 'Delete forward/backward' },
-      { key: 'PgUp/PgDn', desc: 'Page up/down' },
+      { key: 'Navigate', desc: 'Home/End, Del/Bksp, PgUp/PgDn, Insert' },
+      {
+        key: 'Scroll',
+        desc: 'Copy mode, paste and page up/down',
+        tmux: true,
+      },
+      { key: 'Scroll', desc: 'Paste and scroll history', tmux: false },
+      {
+        key: 'Ctrl +',
+        desc: 'Every Ctrl combo, above the toolbar while Ctrl is on',
+      },
     ],
   },
   {
@@ -212,7 +226,6 @@ export function HelpModal({
   onClose,
   copyModeSupported = true,
 }: Props) {
-  const dialogRef = useRef<HTMLDialogElement>(null)
   const [activeTab, setActiveTab] = useState<TabId>('gestures')
   const tabs = copyModeSupported
     ? TABS
@@ -220,18 +233,6 @@ export function HelpModal({
   // The tmux tab disappears when the backend has no copy mode
   const shownTab =
     !copyModeSupported && activeTab === 'tmux' ? 'gestures' : activeTab
-
-  useDialogModal(dialogRef, isOpen)
-
-  useEffect(() => {
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) onClose()
-    }
-    window.addEventListener('keydown', handleEsc)
-    return () => window.removeEventListener('keydown', handleEsc)
-  }, [onClose, isOpen])
-
-  if (!isOpen) return null
 
   const getGuide = (): GuideSection[] => {
     switch (shownTab) {
@@ -251,75 +252,38 @@ export function HelpModal({
   }
 
   return (
-    <dialog
-      ref={dialogRef}
-      className="fixed inset-0 z-50 m-auto w-[90vw] max-w-lg rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 p-0 backdrop:bg-black/50 shadow-xl"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div className="p-4 sm:p-6 max-h-[80vh] overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold text-zinc-900 dark:text-white">
-            Usage Guide
-          </h2>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
-            aria-label="Close"
-          >
-            ✕
-          </button>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex gap-1 mb-4 bg-zinc-100 dark:bg-zinc-700/50 p-1 rounded-lg">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                shownTab === tab.id
-                  ? 'bg-white dark:bg-zinc-600 text-zinc-900 dark:text-white shadow-sm'
-                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Content */}
-        <div className="overflow-y-auto flex-1 -mx-4 sm:-mx-6 px-4 sm:px-6">
-          <div className="space-y-4">
-            {getGuide().map((section) => (
-              <div key={section.title}>
-                <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-2">
-                  {section.title}
-                </h3>
-                <div className="bg-zinc-50 dark:bg-zinc-700/30 rounded-lg overflow-hidden">
-                  {section.items.map((item, idx) => (
-                    <div
-                      key={item.desc}
-                      className={`flex items-center gap-3 px-3 py-2 ${
-                        idx > 0
-                          ? 'border-t border-zinc-200/50 dark:border-zinc-600/50'
-                          : ''
-                      }`}
-                    >
-                      <code className="min-w-[5rem] text-xs font-mono bg-zinc-200/70 dark:bg-zinc-600/70 px-2 py-1 rounded text-zinc-800 dark:text-zinc-200">
-                        {item.key}
-                      </code>
-                      <span className="text-sm text-zinc-600 dark:text-zinc-400">
-                        {item.desc}
-                      </span>
-                    </div>
-                  ))}
+    <Sheet isOpen={isOpen} onClose={onClose} title="Usage Guide">
+      <div className="space-y-4 p-4">
+        <SegmentedControl
+          label="Guide topic"
+          options={tabs.map((tab) => ({
+            value: tab.id,
+            content: tab.label,
+          }))}
+          value={shownTab}
+          onChange={setActiveTab}
+        />
+        {getGuide().map((section) => (
+          <section key={section.title}>
+            <h3 className="m-0 mb-2 font-label text-[11px] font-semibold uppercase tracking-wider text-fg-subtle">
+              {section.title}
+            </h3>
+            <div className="divide-y divide-border overflow-hidden rounded-panel border border-border ui-native:border-0 ui-native:bg-surface-raised">
+              {section.items.map((item) => (
+                <div
+                  key={item.desc}
+                  className="flex items-center gap-3 px-3 py-2"
+                >
+                  <code className="min-w-[5rem] rounded-control bg-surface px-2 py-1 font-label text-xs text-fg ui-native:bg-bg">
+                    {item.key}
+                  </code>
+                  <span className="text-sm text-fg-muted">{item.desc}</span>
                 </div>
-              </div>
-            ))}
-          </div>
-        </div>
+              ))}
+            </div>
+          </section>
+        ))}
       </div>
-    </dialog>
+    </Sheet>
   )
 }

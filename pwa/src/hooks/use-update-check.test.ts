@@ -2,6 +2,13 @@ import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useUpdateCheck } from './use-update-check'
 
+// A fixed app version, so the comparisons do not change with each release
+vi.mock('../utils/app-info', async (importOriginal) => {
+  const { APP_INFO } =
+    await importOriginal<typeof import('../utils/app-info')>()
+  return { APP_INFO: { ...APP_INFO, version: '1.0.0' } }
+})
+
 const CACHE_KEY = 'termote-update-check'
 
 function makeFetchResponse(data: unknown, ok = true, status = 200) {
@@ -75,7 +82,7 @@ describe('useUpdateCheck', () => {
   it('returns hasUpdate=false when versions are equal', async () => {
     vi.mocked(fetch).mockReturnValue(
       makeFetchResponse({
-        tag_name: 'v0.0.0',
+        tag_name: 'v1.0.0',
         html_url: 'https://github.com/release',
       }),
     )
@@ -90,7 +97,7 @@ describe('useUpdateCheck', () => {
   it('returns hasUpdate=false when on newer version than latest', async () => {
     vi.mocked(fetch).mockReturnValue(
       makeFetchResponse({
-        tag_name: 'v0.0.0',
+        tag_name: 'v0.9.0',
         html_url: 'https://github.com/release',
       }),
     )

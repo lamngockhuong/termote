@@ -42,7 +42,8 @@
 - **Мобильная адаптация**: Виртуальная клавиатура (Tab/Ctrl/Shift/стрелки, расширяемая)
 - **Поддержка жестов**: Свайп для Ctrl+C, Tab, прокрутки
 - **История команд**: Вызов ранее отправленных команд с поиском
-- **Быстрые действия**: Плавающее меню для частых операций (clear, cancel, exit)
+- **Быстрые действия**: Клавиша ⚡ на мобильной панели открывает лист с частыми операциями (clear, cancel, exit)
+- **Стили интерфейса**: Neutral, Terminal или Native, выбираются в настройках независимо от светлой/тёмной темы
 - **Индикатор соединения**: Статус сервера в реальном времени с автоопределением разрыва
 - **Проверка обновлений**: Автоматическое уведомление о новой версии из GitHub releases
 - **PWA**: Устанавливается на домашний экран, работает офлайн
@@ -58,6 +59,14 @@
   <img src="docs/images/screenshots/mobile-terminal.png" alt="Mobile Terminal" width="280" />
   &nbsp;&nbsp;
   <img src="docs/images/screenshots/mobile-sidebar.png" alt="Session Sidebar" width="280" />
+</p>
+
+<p align="center">
+  <img src="docs/images/screenshots/desktop-terminal.png" alt="Desktop Terminal" width="600" />
+</p>
+
+<p align="center">
+  <img src="docs/images/screenshots/ui-styles.png" alt="Interface Styles" width="600" />
 </p>
 
 ## Архитектура

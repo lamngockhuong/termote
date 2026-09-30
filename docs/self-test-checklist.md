@@ -160,8 +160,8 @@ Manual testing checklist for Termote features before release.
       backend still has buffered
 - [ ] Desktop: Icon list displays correctly (no layout issues)
 - [ ] About page looks good in dark mode
-- [ ] Settings button clickable on mobile
-- [ ] Clear Cache & Reload button works (unregisters SW, clears caches, clears session cookie, reloads)
+- [ ] "More" (⋯) menu opens from the header on mobile and desktop
+- [ ] "Clear cache & reload" in the More menu works (unregisters SW, clears caches, clears session cookie, reloads)
 
 ### Connection Indicator
 
@@ -174,13 +174,16 @@ Manual testing checklist for Termote features before release.
 
 - [ ] Toast appears for clipboard errors, paste failures, update availability
 - [ ] Auto-dismisses after ~4 seconds
-- [ ] Positioned bottom-center above toolbar
+- [ ] Appears near the top (never covers the toolbar), coloured by status (info, success, warning, danger)
 
-### Preferences (Settings Modal)
+### Settings
 
-- [ ] Preferences modal opens from Settings menu
+- [ ] Settings opens from the More (⋯) menu: full-screen sheet on phone, two-column dialog with a group rail on desktop
+- [ ] Groups present: Appearance, Keyboard, Terminal, Sessions, Data & help
+- [ ] Interface style (Neutral, Terminal, Native) applies at once and persists after reload
+- [ ] Escape closes Settings, Help & gestures and About
 - [ ] IME send behavior toggle works (Send text only / Send + Enter)
-- [ ] Paste source toggle works (System clipboard / tmux buffer)
+- [ ] Paste source toggle works (System clipboard / "tmux buffer" on tmux, "Session buffer" otherwise)
 - [ ] Toolbar default expanded toggle works
 - [ ] Context menu disable toggle works
 - [ ] Session tabs visibility toggle works (desktop)
@@ -195,7 +198,9 @@ Manual testing checklist for Termote features before release.
 - [ ] Light mode theme (GitHub-style light palette)
 - [ ] Dark mode theme (Monokai-style dark palette)
 - [ ] System mode (follows OS preference)
-- [ ] Theme toggle accessible in settings menu
+- [ ] Theme (Light / Dark / System) accessible in the More menu
+- [ ] Each theme works with each interface style
+- [ ] With reduced motion enabled in the OS, animations are off
 - [ ] Theme persists after reload
 
 ### Install/Offline
@@ -223,7 +228,7 @@ Manual testing checklist for Termote features before release.
 
 ### Session Sidebar (groups)
 
-- [ ] Sidebar opens (swipe from left edge or hamburger icon)
+- [ ] Desktop: sidebar shown; mobile: the header session chip ("Open sessions menu") opens the sessions list as a bottom sheet with "New session"
 - [ ] Sidebar scrollable when many groups exist
 - [ ] Sidebar collapse/expand toggle works (desktop)
 - [ ] Collapsed sidebar shows icons only with tooltips (desktop)
@@ -239,7 +244,7 @@ Manual testing checklist for Termote features before release.
 
 ### Session Tabs (Desktop)
 
-- [ ] Tab bar visible when setting enabled
+- [ ] Tabs share the header row when the setting is enabled
 - [ ] Tabs scroll into view when switching
 - [ ] Clicking tab switches session
 - [ ] Active tab highlighted
@@ -250,11 +255,13 @@ Manual testing checklist for Termote features before release.
 - [ ] Pane strip appears for a tab with more than one pane, with an agent-status badge per pane
 - [ ] Selecting a pane switches the stream without changing the Herdr desktop's focus
 
-### Bottom Navigation (Mobile)
+### Deep Links
 
-- [ ] Bottom nav visible on mobile only
-- [ ] Shows sidebar toggle, add button, and first 5 session icons
-- [ ] Tapping session icon switches session
+- [ ] `<base>/#/s/<group>/<tab>` opens that session after load
+- [ ] Unknown ID keeps the current session and shows a toast
+- [ ] Opening a link never sends keys or creates/closes a session
+- [ ] Switching session/tab/pane updates the address without new history entries
+- [ ] "Copy link" in the More menu copies the current link
 
 ### Fullscreen (Desktop)
 
@@ -387,17 +394,14 @@ Test on real mobile device:
 
 ---
 
-## Quick Actions Menu (Mobile)
+## Quick Actions (Mobile)
 
-- [ ] FAB button visible on mobile
-- [ ] Tap FAB opens action menu
+- [ ] Quick actions key (⚡) visible in the keyboard toolbar on mobile, no floating button
+- [ ] Tap the key opens the Quick actions sheet
 - [ ] Clear action (sends 'clear' + Enter)
 - [ ] Cancel action (sends Ctrl+C)
 - [ ] Clear line action (sends Ctrl+U)
 - [ ] Exit action (sends Ctrl+D)
-- [ ] FAB draggable (touch drag to reposition)
-- [ ] FAB position persists after reload
-- [ ] FAB clamps within viewport bounds
 - [ ] Haptic feedback on actions
 
 ---

@@ -1,6 +1,11 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MessageSquare } from 'lucide-react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
+import { APP_VIEWS, type AppView, type ViewProps } from './app-views'
+import { KeyboardToolbar } from './components/keyboard-toolbar'
+import type { QuickActionHandlers } from './components/quick-actions-menu'
+import { TerminalView } from './components/terminal-view'
 
 // ─── Mock all hooks ───────────────────────────────────────────────────────────
 
@@ -181,6 +186,17 @@ vi.mock('./components/terminal-view', () => ({
   ),
 }))
 
+// Stands in for the toolbar's Quick actions sheet
+function QuickActionsMock({ onSendKey, onSendText }: QuickActionHandlers) {
+  return (
+    <div data-testid="quick-actions">
+      <button onClick={() => onSendKey('c', { ctrl: true })}>QACtrlKey</button>
+      <button onClick={() => onSendKey('Tab')}>QAKey</button>
+      <button onClick={() => onSendText('hello')}>QAText</button>
+    </div>
+  )
+}
+
 vi.mock('./components/keyboard-toolbar', () => ({
   KeyboardToolbar: vi.fn((props: Record<string, unknown>) => (
     <div data-testid="keyboard-toolbar">
@@ -236,6 +252,9 @@ vi.mock('./components/keyboard-toolbar', () => ({
       >
         ActivateCtrl
       </button>
+      {props.quickActions ? (
+        <QuickActionsMock {...(props.quickActions as QuickActionHandlers)} />
+      ) : null}
     </div>
   )),
 }))
@@ -245,32 +264,18 @@ vi.mock('./components/session-sidebar', () => ({
     onSelect,
     onClose,
     isMobile,
+    isOpen,
   }: {
     onSelect?: (id: string) => void
     onClose?: () => void
     isMobile?: boolean
+    isOpen?: boolean
   }) => (
-    <div data-testid="session-sidebar">
+    <div data-testid="session-sidebar" data-open={String(!!isOpen)}>
       {isMobile && onSelect && (
         <button onClick={() => onSelect('2')}>MobileSelect</button>
       )}
       {isMobile && onClose && <button onClick={onClose}>MobileClose</button>}
-    </div>
-  ),
-}))
-
-vi.mock('./components/quick-actions-menu', () => ({
-  QuickActionsMenu: ({
-    onSendKey,
-    onSendText,
-  }: {
-    onSendKey: (key: string, opts?: { ctrl?: boolean }) => void
-    onSendText: (text: string) => void
-  }) => (
-    <div data-testid="quick-actions">
-      <button onClick={() => onSendKey('c', { ctrl: true })}>QACtrlKey</button>
-      <button onClick={() => onSendKey('Tab')}>QAKey</button>
-      <button onClick={() => onSendText('hello')}>QAText</button>
     </div>
   ),
 }))
@@ -281,14 +286,16 @@ vi.mock('./components/settings-modal', () => ({
     onClose,
     onCheckForUpdate,
     onShowGestureHints,
+    pasteBufferLabel,
   }: {
     isOpen: boolean
+    pasteBufferLabel?: string
     onClose: () => void
     onCheckForUpdate?: () => Promise<string | null>
     onShowGestureHints?: () => void
   }) =>
     isOpen ? (
-      <div data-testid="settings-modal">
+      <div data-testid="settings-modal" data-paste-label={pasteBufferLabel}>
         <button onClick={onClose}>CloseSettings</button>
         {onCheckForUpdate && (
           <button onClick={() => onCheckForUpdate()}>CheckUpdate</button>
@@ -329,20 +336,36 @@ vi.mock('./components/settings-menu', () => ({
     onOpenAbout,
     onOpenHelp,
     onOpenSettings,
+    fontSize,
+    onCopyLink,
   }: {
     onOpenAbout: () => void
     onOpenHelp: () => void
     onOpenSettings: () => void
+    fontSize?: { value: number; onDecrease: () => void; onIncrease: () => void }
+    onCopyLink?: () => void
   }) => (
     <div>
       <button onClick={onOpenAbout}>About</button>
       <button onClick={onOpenHelp}>Help</button>
       <button onClick={onOpenSettings}>Settings</button>
+      {fontSize && (
+        <>
+          <button onClick={fontSize.onDecrease}>
+            MenuFontDecrease {fontSize.value}
+          </button>
+          <button onClick={fontSize.onIncrease}>MenuFontIncrease</button>
+        </>
+      )}
+      {onCopyLink && <button onClick={onCopyLink}>CopyLink</button>}
     </div>
   ),
 }))
 
 vi.mock('./components/connection-indicator', () => ({
+  ConnectionDot: ({ state }: { state: string }) => (
+    <span data-testid="connection-dot" data-state={state} />
+  ),
   ConnectionIndicator: ({
     state,
     onRetry,
@@ -357,8 +380,16 @@ vi.mock('./components/connection-indicator', () => ({
 }))
 
 vi.mock('./components/toast', () => ({
-  Toast: ({ message, onClose }: { message: string; onClose: () => void }) => (
-    <div data-testid="toast" role="alert">
+  Toast: ({
+    message,
+    variant = 'info',
+    onClose,
+  }: {
+    message: string
+    variant?: string
+    onClose: () => void
+  }) => (
+    <div data-testid="toast" data-variant={variant} role="alert">
       {message}
       <button onClick={onClose}>CloseToast</button>
     </div>
@@ -378,26 +409,6 @@ vi.mock('./components/gesture-hints-overlay', () => ({
         <button onClick={onDismiss}>DismissHints</button>
       </div>
     ) : null,
-}))
-
-vi.mock('./components/bottom-navigation', () => ({
-  BottomNavigation: ({
-    sessions,
-    onAdd,
-    onToggleSidebar,
-  }: {
-    sessions: { id: string }[]
-    onAdd: () => void
-    onToggleSidebar: () => void
-  }) => (
-    <div
-      data-testid="bottom-nav"
-      data-ids={sessions.map((s) => s.id).join(',')}
-    >
-      <button onClick={onAdd}>BNAdd</button>
-      <button onClick={onToggleSidebar}>BNSidebar</button>
-    </div>
-  ),
 }))
 
 vi.mock('./components/command-history-dropdown', () => ({
@@ -436,6 +447,12 @@ vi.mock('./components/session-tabs', () => ({
 }))
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
+
+// A test that shows a session with a group writes its link into the URL;
+// the next one must not open it.
+beforeEach(() => {
+  window.history.replaceState(null, '', '/')
+})
 
 describe('App', () => {
   beforeEach(() => {
@@ -533,6 +550,7 @@ describe('App', () => {
       expect(screen.getByTestId('toast')).toBeInTheDocument()
       expect(screen.getByText('Update available: v2.0.0')).toBeInTheDocument()
     })
+    expect(screen.getByTestId('toast')).toHaveAttribute('data-variant', 'info')
   })
 
   it('does not show toast when no update available', async () => {
@@ -602,6 +620,32 @@ describe('App', () => {
     await waitFor(() => screen.getByRole('button', { name: 'Settings' }))
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
     expect(screen.getByTestId('settings-modal')).toBeInTheDocument()
+  })
+
+  it('names the paste buffer after the tmux backend', async () => {
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Settings' }))
+    expect(screen.getByTestId('settings-modal')).toHaveAttribute(
+      'data-paste-label',
+      'tmux buffer',
+    )
+  })
+
+  it('names the paste buffer generically for another backend', async () => {
+    const base = mockUseLocalSessions()
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      mux: {
+        backend: 'herdr',
+        caps: { clientSideSelect: true, copyMode: false },
+      },
+    })
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Settings' }))
+    expect(screen.getByTestId('settings-modal')).toHaveAttribute(
+      'data-paste-label',
+      'Session buffer',
+    )
   })
 
   it('closes settings modal', async () => {
@@ -775,38 +819,35 @@ describe('App', () => {
     expect(screen.queryByTestId('history-dropdown')).not.toBeInTheDocument()
   })
 
-  it('shows title tooltip on click (mobile)', async () => {
+  it('mobile: the session chip opens the sessions sheet', async () => {
     mockIsMobile.mockReturnValue(true)
     render(<App />)
-    await waitFor(() => screen.getByText('Shell'))
-    const titleDiv = screen
-      .getByText('Shell')
-      .closest('[class*="cursor-pointer"]')
-    if (titleDiv) {
-      fireEvent.click(titleDiv)
-      // The tooltip should appear (mobile only)
-      const tooltip = document.querySelector('.absolute.left-0.top-full')
-      expect(tooltip).toBeInTheDocument()
-    }
+    const chip = await screen.findByRole('button', {
+      name: 'Open sessions menu',
+    })
+    expect(chip).toHaveTextContent('Shell')
+    expect(chip).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.getByTestId('session-sidebar')).toHaveAttribute(
+      'data-open',
+      'false',
+    )
+    fireEvent.click(chip)
+    expect(chip).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByTestId('session-sidebar')).toHaveAttribute(
+      'data-open',
+      'true',
+    )
   })
 
-  it('closes tooltip on backdrop click', async () => {
+  it('mobile: font size lives in the overflow menu', async () => {
     mockIsMobile.mockReturnValue(true)
     render(<App />)
-    await waitFor(() => screen.getByText('Shell'))
-    const titleDiv = screen
-      .getByText('Shell')
-      .closest('[class*="cursor-pointer"]')
-    if (titleDiv) {
-      fireEvent.click(titleDiv)
-      const backdrop = document.querySelector('.fixed.inset-0.z-40')
-      if (backdrop) {
-        fireEvent.click(backdrop)
-        expect(
-          document.querySelector('.absolute.left-0.top-full'),
-        ).not.toBeInTheDocument()
-      }
-    }
+    expect(
+      await screen.findByRole('button', { name: 'MenuFontDecrease 14' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Decrease font size' }),
+    ).not.toBeInTheDocument()
   })
 
   it('renders mobile components when isMobile=true', async () => {
@@ -814,7 +855,25 @@ describe('App', () => {
     render(<App />)
     await waitFor(() => {
       expect(screen.getByTestId('quick-actions')).toBeInTheDocument()
-      expect(screen.getByTestId('bottom-nav')).toBeInTheDocument()
+      expect(
+        screen.getByRole('button', { name: 'Open sessions menu' }),
+      ).toBeInTheDocument()
+    })
+  })
+
+  it('gives the toolbar Quick actions on mobile only', async () => {
+    const { unmount } = render(<App />)
+    await screen.findByTestId('keyboard-toolbar')
+    expect(
+      vi.mocked(KeyboardToolbar).mock.lastCall![0].quickActions,
+    ).toBeUndefined()
+    unmount()
+    mockIsMobile.mockReturnValue(true)
+    render(<App />)
+    await screen.findByTestId('keyboard-toolbar')
+    expect(vi.mocked(KeyboardToolbar).mock.lastCall![0].quickActions).toEqual({
+      onSendKey: expect.any(Function),
+      onSendText: expect.any(Function),
     })
   })
 
@@ -822,7 +881,9 @@ describe('App', () => {
     render(<App />)
     await waitFor(() => {
       expect(screen.queryByTestId('quick-actions')).not.toBeInTheDocument()
-      expect(screen.queryByTestId('bottom-nav')).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: 'Open sessions menu' }),
+      ).not.toBeInTheDocument()
     })
   })
 
@@ -861,29 +922,28 @@ describe('App', () => {
       },
     })
     render(<App />)
-    await waitFor(() => screen.getByRole('button', { name: 'MobileSelect' }))
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Open sessions menu' }),
+    )
     fireEvent.click(screen.getByRole('button', { name: 'MobileSelect' }))
     expect(mockSwitchSession).toHaveBeenCalledWith('2')
+    expect(screen.getByTestId('session-sidebar')).toHaveAttribute(
+      'data-open',
+      'false',
+    )
   })
 
   it('mobile sidebar onClose closes the sidebar', async () => {
     mockIsMobile.mockReturnValue(true)
     render(<App />)
-    await waitFor(() => screen.getByRole('button', { name: 'MobileClose' }))
-    fireEvent.click(screen.getByRole('button', { name: 'MobileClose' }))
-    // No crash = sidebar state set to false
-    expect(screen.getByTestId('session-sidebar')).toBeInTheDocument()
-  })
-
-  it('opens sidebar on hamburger click (mobile)', async () => {
-    mockIsMobile.mockReturnValue(true)
-    render(<App />)
-    await waitFor(() =>
-      screen.getByRole('button', { name: 'Open sessions menu' }),
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Open sessions menu' }),
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Open sessions menu' }))
-    // sidebar renders as mobile (data-testid="session-sidebar")
-    expect(screen.getByTestId('session-sidebar')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'MobileClose' }))
+    expect(screen.getByTestId('session-sidebar')).toHaveAttribute(
+      'data-open',
+      'false',
+    )
   })
 
   it('retry button calls terminal reconnect', async () => {
@@ -989,7 +1049,7 @@ describe('App', () => {
     })
   })
 
-  it('QuickActionsMenu onSendKey with ctrl:true calls sendKeyToTerminal with ctrl', async () => {
+  it('Quick actions onSendKey with ctrl:true calls sendKeyToTerminal with ctrl', async () => {
     mockIsMobile.mockReturnValue(true)
     render(<App />)
     await waitFor(() => screen.getByRole('button', { name: 'QACtrlKey' }))
@@ -999,7 +1059,7 @@ describe('App', () => {
     })
   })
 
-  it('QuickActionsMenu onSendKey without ctrl calls sendKeyToTerminal without opts', async () => {
+  it('Quick actions onSendKey without ctrl calls sendKeyToTerminal without opts', async () => {
     mockIsMobile.mockReturnValue(true)
     render(<App />)
     await waitFor(() => screen.getByRole('button', { name: 'QAKey' }))
@@ -1007,61 +1067,12 @@ describe('App', () => {
     expect(mockSendKeyToTerminal).toHaveBeenCalledWith(null, 'Tab')
   })
 
-  it('QuickActionsMenu onSendText calls sendTextToTerminal', async () => {
+  it('Quick actions onSendText calls sendTextToTerminal', async () => {
     mockIsMobile.mockReturnValue(true)
     render(<App />)
     await waitFor(() => screen.getByRole('button', { name: 'QAText' }))
     fireEvent.click(screen.getByRole('button', { name: 'QAText' }))
     expect(mockSendTextToTerminal).toHaveBeenCalledWith(null, 'hello')
-  })
-
-  it('BottomNavigation onAdd calls addSession', async () => {
-    mockIsMobile.mockReturnValue(true)
-    const mockAddSession = vi.fn()
-    mockUseLocalSessions.mockReturnValue({
-      activeSession: {
-        id: '1',
-        name: 'Shell',
-        icon: '💻',
-        description: 'Terminal',
-        paneId: 'pane1',
-        hasAgent: false,
-      },
-      sessions: [
-        {
-          id: '1',
-          name: 'Shell',
-          icon: '💻',
-          description: 'Terminal',
-          paneId: 'pane1',
-          hasAgent: false,
-        },
-      ],
-      switchSession: vi.fn(),
-      addSession: mockAddSession,
-      removeSession: vi.fn(),
-      updateSession: vi.fn(),
-      isReady: true,
-      isServerReachable: true,
-      refreshSessions: vi.fn(),
-      mux: {
-        backend: 'tmux',
-        caps: { clientSideSelect: false, copyMode: true },
-      },
-    })
-    render(<App />)
-    await waitFor(() => screen.getByRole('button', { name: 'BNAdd' }))
-    fireEvent.click(screen.getByRole('button', { name: 'BNAdd' }))
-    expect(mockAddSession).toHaveBeenCalledWith('New')
-  })
-
-  it('BottomNavigation onToggleSidebar opens sidebar', async () => {
-    mockIsMobile.mockReturnValue(true)
-    render(<App />)
-    await waitFor(() => screen.getByRole('button', { name: 'BNSidebar' }))
-    fireEvent.click(screen.getByRole('button', { name: 'BNSidebar' }))
-    // sidebar should be open — no crash
-    expect(screen.getByTestId('session-sidebar')).toBeInTheDocument()
   })
 
   it('SessionTabs onAdd calls addSession("New") on desktop with showSessionTabs=true', async () => {
@@ -1590,6 +1601,10 @@ describe('shouldShowPasteError (via handlePaste)', () => {
         expect(screen.getByTestId('toast')).toBeInTheDocument()
         expect(screen.getByText(new RegExp(expectedMsg))).toBeInTheDocument()
       })
+      expect(screen.getByTestId('toast')).toHaveAttribute(
+        'data-variant',
+        'danger',
+      )
     })
   }
 
@@ -2014,14 +2029,13 @@ describe('App groups and panes', () => {
     )
   })
 
-  it('mobile bottom navigation shows only tabs of the current group', async () => {
+  it('mobile chip names the group and counts only its tabs', async () => {
     mockMux('herdr')
     mockIsMobile.mockReturnValue(true)
     render(<App />)
-    expect(await screen.findByTestId('bottom-nav')).toHaveAttribute(
-      'data-ids',
-      'w1:t1,w1:t2',
-    )
+    expect(
+      await screen.findByRole('button', { name: 'Open sessions menu' }),
+    ).toHaveTextContent('api · 2 sessions')
   })
 
   it('herdr: the pane strip picks the pane to stream', async () => {
@@ -2036,5 +2050,377 @@ describe('App groups and panes', () => {
     render(<App />)
     await screen.findByTestId('terminal-view')
     expect(screen.queryByRole('group', { name: 'Panes' })).toBeNull()
+  })
+})
+
+describe('App views, view-only and deep links', () => {
+  const switchSession = vi.fn()
+  const addSession = vi.fn()
+  const removeSession = vi.fn()
+
+  const tab = (id: string, groupId: string | undefined, panes?: object[]) => ({
+    id,
+    name: id,
+    icon: '📺',
+    description: '',
+    groupId,
+    paneId: `${id}:p1`,
+    hasAgent: false,
+    panes,
+  })
+
+  function mockSessions({
+    backend = 'herdr',
+    grouped = true,
+    isReady = true,
+    isServerReachable = true,
+  } = {}) {
+    const group = (g: string) => (grouped ? g : undefined)
+    const tabs = [
+      tab('w1:t1', group('w1'), [
+        { id: 'w1:t1:p1', label: 'claude', hasAgent: true },
+        { id: 'w1:t1:p2', label: 'logs', hasAgent: false },
+      ]),
+      tab('w2:t1', group('w2')),
+    ]
+    mockUseLocalSessions.mockReturnValue({
+      activeSession: tabs[0],
+      sessions: tabs,
+      groups: grouped
+        ? [
+            { id: 'w1', name: 'api' },
+            { id: 'w2', name: 'web' },
+          ]
+        : [],
+      switchSession,
+      selectPane: vi.fn(),
+      addSession,
+      removeSession,
+      updateSession: vi.fn(),
+      isReady,
+      isServerReachable,
+      refreshSessions: vi.fn(),
+      mux: {
+        backend,
+        caps: {
+          clientSideSelect: backend === 'herdr',
+          copyMode: backend === 'tmux',
+        },
+      },
+    } as any)
+  }
+
+  // A second view, as #233 (chat) or #237 (files) will register one.
+  const setSidePanelFrom: { current?: ViewProps['setSidePanel'] } = {}
+  const CHAT: AppView = {
+    id: 'chat',
+    label: 'Chat',
+    Icon: MessageSquare,
+    available: () => true,
+    Main: (p) => {
+      setSidePanelFrom.current = p.setSidePanel
+      return <div data-testid="chat-main">{p.readOnly ? 'ro' : 'rw'}</div>
+    },
+    Input: () => <div data-testid="chat-input" />,
+    Panel: () => <div data-testid="chat-panel" />,
+  }
+  const VIEWS = [...APP_VIEWS, CHAT]
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockCheckForUpdate.mockResolvedValue({
+      hasUpdate: false,
+      latestVersion: null,
+      releaseUrl: null,
+    })
+    mockIsMobile.mockReturnValue(false)
+    mockSessions()
+  })
+
+  const terminalPanel = () =>
+    screen.getByTestId('terminal-view').closest('[id="view-panel-terminal"]')!
+
+  it('shows no view switcher while the terminal is the only view', async () => {
+    render(<App />)
+    await screen.findByTestId('terminal-view')
+    expect(screen.queryByRole('tablist', { name: 'View' })).toBeNull()
+    expect(terminalPanel()).not.toHaveAttribute('role')
+  })
+
+  it('a registered view shows the switcher and swaps main and input areas', async () => {
+    render(<App views={VIEWS} />)
+    const switcher = await screen.findByRole('tablist', { name: 'View' })
+    expect(switcher).toBeInTheDocument()
+    expect(terminalPanel()).toHaveAttribute('role', 'tabpanel')
+    fireEvent.click(screen.getByRole('tab', { name: 'Chat' }))
+    expect(screen.getByTestId('chat-main')).toHaveTextContent('rw')
+    expect(screen.getByTestId('chat-input')).toBeInTheDocument()
+    expect(screen.queryByTestId('keyboard-toolbar')).toBeNull()
+    // The terminal stays mounted (and laid out) under the other view
+    expect(terminalPanel()).toHaveClass('invisible')
+    expect(terminalPanel()).toHaveAttribute('inert')
+    fireEvent.click(screen.getByRole('tab', { name: 'Terminal' }))
+    expect(terminalPanel()).not.toHaveAttribute('inert')
+    expect(screen.queryByTestId('chat-main')).toBeNull()
+    expect(screen.getByTestId('keyboard-toolbar')).toBeInTheDocument()
+    expect(terminalPanel()).not.toHaveClass('invisible')
+  })
+
+  it('a view that stops being offered gives way to the terminal', async () => {
+    const { rerender } = render(<App views={VIEWS} />)
+    fireEvent.click(await screen.findByRole('tab', { name: 'Chat' }))
+    rerender(
+      <App views={[...APP_VIEWS, { ...CHAT, available: () => false }]} />,
+    )
+    expect(screen.queryByTestId('chat-main')).toBeNull()
+    expect(screen.getByTestId('keyboard-toolbar')).toBeInTheDocument()
+  })
+
+  it('a view without its own input leaves the bottom area empty', async () => {
+    render(<App views={[...APP_VIEWS, { ...CHAT, Input: undefined }]} />)
+    fireEvent.click(await screen.findByRole('tab', { name: 'Chat' }))
+    expect(screen.queryByTestId('keyboard-toolbar')).toBeNull()
+    expect(screen.queryByTestId('chat-input')).toBeNull()
+  })
+
+  it('the desktop side panel is closed until a view opens it', async () => {
+    render(<App views={VIEWS} />)
+    fireEvent.click(await screen.findByRole('tab', { name: 'Chat' }))
+    expect(screen.queryByTestId('chat-panel')).toBeNull()
+    act(() => setSidePanelFrom.current!('chat'))
+    expect(
+      screen.getByRole('complementary', { name: 'Chat' }),
+    ).toContainElement(screen.getByTestId('chat-panel'))
+    act(() => setSidePanelFrom.current!(null))
+    expect(screen.queryByTestId('chat-panel')).toBeNull()
+  })
+
+  it('mobile has no side panel', async () => {
+    mockIsMobile.mockReturnValue(true)
+    render(<App views={VIEWS} />)
+    fireEvent.click(await screen.findByRole('tab', { name: 'Chat' }))
+    act(() => setSidePanelFrom.current!('chat'))
+    expect(screen.queryByTestId('chat-panel')).toBeNull()
+  })
+
+  describe('view-only', () => {
+    it('hides every way to send input and says so', async () => {
+      mockIsMobile.mockReturnValue(true)
+      render(<App readOnly />)
+      await screen.findByTestId('terminal-view')
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'View only: you can watch this terminal but not type',
+      )
+      expect(screen.getByText('View only')).toBeInTheDocument()
+      expect(screen.queryByTestId('keyboard-toolbar')).toBeNull()
+      expect(screen.queryByTestId('quick-actions')).toBeNull()
+      expect(screen.queryByTestId('history-dropdown')).toBeNull()
+      expect(document.querySelector('input')).toBeNull()
+      expect(vi.mocked(TerminalView).mock.lastCall![0]).toMatchObject({
+        readOnly: true,
+      })
+    })
+
+    it('gestures still scroll and zoom but never send keys or paste', async () => {
+      mockIsMobile.mockReturnValue(true)
+      mockSessions({ backend: 'tmux' })
+      render(<App readOnly />)
+      await screen.findByTestId('terminal-view')
+      capturedGestureHandlers.onSwipeLeft()
+      capturedGestureHandlers.onSwipeRight()
+      await capturedGestureHandlers.onLongPress()
+      expect(mockSendKeyToTerminal).not.toHaveBeenCalled()
+      expect(mockPasteToTerminal).not.toHaveBeenCalled()
+      // tmux copy mode would scroll by sending PageUp/PageDown
+      capturedGestureHandlers.onSwipeUp()
+      expect(mockScrollTmux).not.toHaveBeenCalled()
+      expect(mockScrollTerminal).toHaveBeenCalledWith(null, 'down')
+    })
+
+    it('views get the flag too', async () => {
+      render(<App views={VIEWS} readOnly />)
+      fireEvent.click(await screen.findByRole('tab', { name: 'Chat' }))
+      expect(screen.getByTestId('chat-main')).toHaveTextContent('ro')
+      expect(screen.queryByTestId('chat-input')).toBeNull()
+    })
+
+    it('is off by default', async () => {
+      render(<App />)
+      await screen.findByTestId('keyboard-toolbar')
+      expect(screen.queryByText('View only')).toBeNull()
+      expect(vi.mocked(TerminalView).mock.lastCall![0]).toMatchObject({
+        readOnly: false,
+      })
+    })
+  })
+
+  describe('deep links', () => {
+    const noWrites = () => {
+      expect(addSession).not.toHaveBeenCalled()
+      expect(removeSession).not.toHaveBeenCalled()
+      expect(mockSendKeyToTerminal).not.toHaveBeenCalled()
+      expect(mockSendTextToTerminal).not.toHaveBeenCalled()
+    }
+
+    it('opens the tab in the link once sessions are in', async () => {
+      window.history.replaceState(null, '', '/#/s/w2/w2%3At1')
+      render(<App />)
+      await waitFor(() =>
+        expect(switchSession).toHaveBeenCalledWith('w2:t1', undefined),
+      )
+      noWrites()
+    })
+
+    it('opens the pane in the link', async () => {
+      window.history.replaceState(null, '', '/#/s/w1/w1%3At1/w1%3At1%3Ap2')
+      render(<App />)
+      await waitFor(() =>
+        expect(switchSession).toHaveBeenCalledWith('w1:t1', 'w1:t1:p2'),
+      )
+    })
+
+    it('a pane that is gone opens its tab and says so', async () => {
+      window.history.replaceState(null, '', '/#/s/w1/w1%3At1/gone')
+      render(<App />)
+      const toast = await screen.findByTestId('toast')
+      expect(toast).toHaveTextContent('Pane in link not found')
+      expect(toast).toHaveAttribute('data-variant', 'warning')
+      expect(switchSession).toHaveBeenCalledWith('w1:t1', 'gone')
+    })
+
+    it('waits for a reachable, loaded session list', async () => {
+      window.history.replaceState(null, '', '/#/s/w2/w2%3At1')
+      mockSessions({ isReady: false })
+      const { rerender } = render(<App />)
+      mockSessions({ isServerReachable: false })
+      rerender(<App />)
+      await screen.findByTestId('terminal-view')
+      expect(switchSession).not.toHaveBeenCalled()
+      // The link is kept in the address bar meanwhile
+      expect(window.location.hash).toBe('#/s/w2/w2%3At1')
+      mockSessions()
+      rerender(<App />)
+      await waitFor(() =>
+        expect(switchSession).toHaveBeenCalledWith('w2:t1', undefined),
+      )
+    })
+
+    it('an unknown session only shows a toast', async () => {
+      window.history.replaceState(null, '', '/#/s/w9/nope')
+      render(<App />)
+      const toast = await screen.findByTestId('toast')
+      expect(toast).toHaveTextContent('Session in link not found')
+      expect(toast).toHaveAttribute('data-variant', 'warning')
+      expect(switchSession).not.toHaveBeenCalled()
+      noWrites()
+    })
+
+    it('a tab id from another group does not match', async () => {
+      window.history.replaceState(null, '', '/#/s/w1/w2%3At1')
+      render(<App />)
+      expect(await screen.findByTestId('toast')).toHaveTextContent(
+        'Session in link not found',
+      )
+    })
+
+    it('a malformed hash is left alone', async () => {
+      window.history.replaceState(null, '', '/#/s/only-group')
+      render(<App />)
+      await screen.findByTestId('terminal-view')
+      expect(switchSession).not.toHaveBeenCalled()
+      expect(screen.queryByTestId('toast')).toBeNull()
+    })
+
+    it('follows a link pasted while the app is open', async () => {
+      render(<App />)
+      await screen.findByTestId('terminal-view')
+      act(() => {
+        window.history.replaceState(null, '', '/#/s/w2/w2%3At1')
+        window.dispatchEvent(new HashChangeEvent('hashchange'))
+      })
+      await waitFor(() =>
+        expect(switchSession).toHaveBeenCalledWith('w2:t1', undefined),
+      )
+    })
+
+    it('opens the view in the link when it is offered', async () => {
+      window.history.replaceState(null, '', '/#/s/w1/w1%3At1?view=chat')
+      render(<App views={VIEWS} />)
+      expect(await screen.findByTestId('chat-main')).toBeInTheDocument()
+    })
+
+    it('falls back to the terminal for a view that is not offered', async () => {
+      window.history.replaceState(null, '', '/#/s/w1/w1%3At1?view=files')
+      render(<App views={VIEWS} />)
+      await waitFor(() => expect(switchSession).toHaveBeenCalled())
+      expect(screen.queryByTestId('chat-main')).toBeNull()
+      expect(screen.getByTestId('keyboard-toolbar')).toBeInTheDocument()
+    })
+
+    it('writes the pane on screen into the URL without a history entry', async () => {
+      const length = window.history.length
+      render(<App views={VIEWS} />)
+      await waitFor(() =>
+        expect(window.location.hash).toBe('#/s/w1/w1%3At1/w1%3At1%3Ap1'),
+      )
+      fireEvent.click(screen.getByRole('tab', { name: 'Chat' }))
+      expect(window.location.hash).toBe('#/s/w1/w1%3At1/w1%3At1%3Ap1?view=chat')
+      expect(window.history.length).toBe(length)
+    })
+
+    it('a link to the pane on screen leaves the address as it is', async () => {
+      window.history.replaceState(null, '', '/#/s/w1/w1%3At1/w1%3At1%3Ap1')
+      const replace = vi.spyOn(window.history, 'replaceState')
+      render(<App />)
+      await waitFor(() =>
+        expect(switchSession).toHaveBeenCalledWith('w1:t1', 'w1:t1:p1'),
+      )
+      expect(replace).not.toHaveBeenCalled()
+      replace.mockRestore()
+    })
+
+    it('tmux links name the window only', async () => {
+      mockSessions({ backend: 'tmux' })
+      render(<App />)
+      await waitFor(() => expect(window.location.hash).toBe('#/s/w1/w1%3At1'))
+    })
+
+    it('without a group there is no link to write or copy', async () => {
+      mockSessions({ grouped: false })
+      render(<App />)
+      await screen.findByTestId('terminal-view')
+      expect(window.location.hash).toBe('')
+      expect(
+        screen.queryAllByRole('button', { name: 'CopyLink' }),
+      ).toHaveLength(0)
+    })
+
+    it('Copy link copies the address and says so', async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined)
+      Object.defineProperty(navigator, 'clipboard', {
+        value: { writeText },
+        configurable: true,
+      })
+      render(<App />)
+      fireEvent.click(await screen.findByRole('button', { name: 'CopyLink' }))
+      const toast = await screen.findByTestId('toast')
+      expect(toast).toHaveTextContent('Link copied')
+      expect(toast).toHaveAttribute('data-variant', 'success')
+      expect(writeText).toHaveBeenCalledWith(
+        `${window.location.origin}/#/s/w1/w1%3At1/w1%3At1%3Ap1`,
+      )
+    })
+
+    it('Copy link reports a clipboard that refuses', async () => {
+      Object.defineProperty(navigator, 'clipboard', {
+        value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) },
+        configurable: true,
+      })
+      render(<App />)
+      fireEvent.click(await screen.findByRole('button', { name: 'CopyLink' }))
+      const toast = await screen.findByTestId('toast')
+      expect(toast).toHaveTextContent('Could not copy the link')
+      expect(toast).toHaveAttribute('data-variant', 'danger')
+    })
   })
 })

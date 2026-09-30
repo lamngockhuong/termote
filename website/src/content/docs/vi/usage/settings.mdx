@@ -3,7 +3,25 @@ title: Cài đặt
 description: Tùy chỉnh cấu hình Termote
 ---
 
-Truy cập cài đặt qua **biểu tượng bánh răng** (⚙) ở header → **Preferences**.
+Mở cài đặt từ menu **More** (⋯) trên header → **Settings**. Cài đặt chia thành các nhóm:
+**Appearance**, **Keyboard**, **Terminal**, **Sessions** và **Data & help**. Trên điện thoại,
+hộp thoại là một bảng toàn màn hình; trên desktop là hộp thoại hai cột với danh sách nhóm bên
+trái. Help & gestures và About mở trong cùng kiểu bảng này, từ menu **More**.
+
+## Kiểu giao diện
+
+Settings → Appearance → **Interface style** đổi diện mạo của cả ứng dụng. Thay đổi có hiệu lực
+ngay và được lưu trong trình duyệt này.
+
+| Kiểu     | Diện mạo                                             | Mặc định |
+| -------- | ---------------------------------------------------- | -------- |
+| Neutral  | Cân bằng, màu nhấn chàm                              | ✓        |
+| Terminal | Nhãn monospace, góc bo nhỏ, màu nhấn xanh lá         |          |
+| Native   | Góc bo lớn, cảm giác như ứng dụng hệ thống, màu nhấn xanh dương |   |
+
+Kiểu giao diện không phụ thuộc vào **theme** (Light, Dark, System), vốn được chọn trong menu
+**More** (⋯). Kiểu nào cũng dùng được với theme nào. Nếu hệ điều hành của bạn đã bật giảm chuyển
+động, Termote bỏ qua các hiệu ứng động.
 
 ## Hành vi gửi text
 
@@ -27,7 +45,7 @@ Truy cập cài đặt qua **biểu tượng bánh răng** (⚙) ở header → 
 
 **Mẹo**: Dùng "System clipboard" để dán từ các ứng dụng khác. Dùng "tmux buffer" để dán text đã copy trong tmux.
 
-Herdr không có tmux buffer, nên khi chạy backend Herdr thì mục này bị ẩn và nút Paste luôn dán từ clipboard hệ thống.
+Với backend tmux, lựa chọn thứ hai có nhãn **tmux buffer**; với backend khác, nhãn là **Session buffer**. Herdr không có tmux buffer, nên khi chạy backend Herdr thì mục này bị ẩn và nút Paste luôn dán từ clipboard hệ thống.
 
 ## Toolbar mặc định mở rộng
 
@@ -49,7 +67,7 @@ Chặn menu ngữ cảnh trình duyệt (nhấn chuột phải / nhấn giữ) t
 
 ## Hiện thanh tab phiên (Chỉ desktop)
 
-Bật/tắt hiển thị thanh tab ngang trên desktop để chuyển đổi phiên nhanh chóng. Khi tắt, dùng sidebar để quản lý phiên.
+Bật/tắt hiển thị các tab phiên kiểu trình duyệt trên header ở desktop để chuyển đổi phiên nhanh chóng. Khi tắt, dùng sidebar để quản lý phiên.
 
 | Tùy chọn | Hành vi                                   | Mặc định |
 | -------- | ----------------------------------------- | -------- |
@@ -93,4 +111,4 @@ Nút này chỉ hiện trên thiết bị di động.
 
 ## Lưu trữ
 
-Tất cả cài đặt được lưu trong local storage của trình duyệt (key `termote-settings`) và được giữ lại qua các phiên làm việc. Xóa dữ liệu trình duyệt hoặc dùng "Clear Cache & Reload" sẽ đặt lại cài đặt về mặc định.
+Tất cả cài đặt được lưu trong local storage của trình duyệt (key `termote-settings`) và được giữ lại qua các phiên làm việc. Xóa dữ liệu trình duyệt hoặc dùng `Clear cache & reload` (trong menu **More**) sẽ đặt lại cài đặt về mặc định.

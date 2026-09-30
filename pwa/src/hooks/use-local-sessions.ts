@@ -280,19 +280,26 @@ export function useLocalSessions(pollInterval = 5) {
     return () => clearInterval(interval)
   }, [refreshSessions, pollInterval])
 
+  // paneId (client-side select only) picks a pane of that tab; an unknown one
+  // falls back to the tab's own.
   const switchSession = useCallback(
-    async (sessionId: string) => {
+    async (sessionId: string, paneId?: string) => {
       const session = sessions.find((s) => s.id === sessionId)
-      if (!session || session.id === activeSession?.id) return
+      if (!session) return
+      const isActive = session.id === activeSession?.id
       if (muxRef.current.caps.clientSideSelect) {
-        select(session, session.paneId)
+        const known = session.panes?.some((p) => p.id === paneId)
+        // Picking the tab on screen again keeps the pane it shows.
+        if (isActive && (!known || paneId === activeSession.paneId)) return
+        select(session, known ? paneId : session.paneId)
         return
       }
+      if (isActive) return
       /* v8 ignore next */
       await selectTab(sessionId).catch(() => {})
       setActiveSession(session)
     },
-    [sessions, activeSession?.id, select],
+    [sessions, activeSession?.id, activeSession?.paneId, select],
   )
 
   // Stream another pane of the current tab (client-side select only).

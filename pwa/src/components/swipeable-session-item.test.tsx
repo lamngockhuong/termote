@@ -95,12 +95,18 @@ describe('SwipeableSessionItem', () => {
 
   it('applies active styling when isActive is true', () => {
     renderItem({ isActive: true })
-    expect(getContent().className).toContain('border-blue-500')
+    expect(getContent()).toHaveAttribute('data-active', 'true')
+    expect(getContent().firstElementChild).toHaveAttribute(
+      'aria-current',
+      'true',
+    )
+    expect(getContent().firstElementChild).toHaveClass('bg-accent-soft')
   })
 
   it('does not apply active styling when isActive is false', () => {
     renderItem({ isActive: false })
-    expect(getContent().className).not.toContain('border-blue-500')
+    expect(getContent().firstElementChild).not.toHaveAttribute('aria-current')
+    expect(getContent().firstElementChild).not.toHaveClass('bg-accent-soft')
   })
 
   // ── Tap = select ───────────────────────────────────────────────────────────

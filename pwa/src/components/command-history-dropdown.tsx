@@ -1,6 +1,7 @@
 import { Clock, Search, Trash2, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { HistoryCommand } from '../hooks/use-command-history'
+import { FOCUS_RING } from './ui/button'
 
 interface Props {
   history: HistoryCommand[]
@@ -74,19 +75,19 @@ export function CommandHistoryDropdown({
 
   return (
     <div
-      className="absolute bottom-full left-0 right-0 mb-2 mx-2 bg-white dark:bg-zinc-800 rounded-xl shadow-xl border border-zinc-200 dark:border-zinc-700 max-h-[60vh] flex flex-col animate-in fade-in slide-in-from-bottom-2 duration-150"
+      className="absolute bottom-full left-0 right-0 z-40 mb-2 mx-2 flex max-h-[60vh] flex-col rounded-panel border border-border bg-surface-raised text-fg shadow-xl transition-[opacity,translate] duration-(--duration-fast) ease-standard starting:translate-y-1 starting:opacity-0 ui-native:border-0"
       onKeyDown={handleKeyDown}
     >
       {/* Header */}
-      <div className="flex items-center gap-2 p-3 border-b border-zinc-200 dark:border-zinc-700">
-        <Search size={16} className="text-zinc-400 shrink-0" />
+      <div className="flex items-center gap-2 border-b border-border p-3">
+        <Search size={16} className="text-fg-subtle shrink-0" />
         <input
           ref={inputRef}
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search history... (↑↓ to navigate, Enter to select)"
-          className="flex-1 bg-transparent text-sm outline-none text-zinc-900 dark:text-white placeholder-zinc-400"
+          className="flex-1 bg-transparent text-sm text-fg outline-none placeholder:text-fg-subtle ui-terminal:font-label"
           aria-label="Search command history"
           aria-controls="history-list"
           aria-activedescendant={
@@ -95,10 +96,10 @@ export function CommandHistoryDropdown({
         />
         <button
           onClick={onClose}
-          className="p-1 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded transition-colors"
+          className={`flex size-8 items-center justify-center rounded-control text-fg-muted transition-colors hover:bg-surface hover:text-fg pointer-coarse:size-touch ${FOCUS_RING}`}
           aria-label="Close history"
         >
-          <X size={16} className="text-zinc-500" />
+          <X size={16} />
         </button>
       </div>
 
@@ -110,7 +111,7 @@ export function CommandHistoryDropdown({
         className="flex-1 overflow-y-auto"
       >
         {filtered.length === 0 ? (
-          <div className="p-4 text-center text-zinc-400 text-sm">
+          <div className="p-4 text-center text-sm text-fg-subtle">
             {search ? 'No matching commands' : 'No command history'}
           </div>
         ) : (
@@ -122,15 +123,13 @@ export function CommandHistoryDropdown({
               tabIndex={0}
               aria-selected={selectedIndex === index}
               data-history-item
-              className={`group flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors ${
-                selectedIndex === index
-                  ? 'bg-blue-100 dark:bg-blue-900/30'
-                  : 'hover:bg-zinc-100 dark:hover:bg-zinc-700/50'
+              className={`group flex cursor-pointer items-center gap-2 px-3 py-2 transition-colors pointer-coarse:min-h-touch ${
+                selectedIndex === index ? 'bg-accent-soft' : 'hover:bg-surface'
               }`}
               onClick={() => onSelect(cmd.text)}
             >
-              <Clock size={14} className="text-zinc-400 shrink-0" />
-              <span className="flex-1 text-sm font-mono truncate text-zinc-900 dark:text-white">
+              <Clock size={14} className="text-fg-subtle shrink-0" />
+              <span className="flex-1 truncate font-term text-sm text-fg">
                 {cmd.text}
               </span>
               <button
@@ -138,10 +137,10 @@ export function CommandHistoryDropdown({
                   e.stopPropagation()
                   onRemove(cmd.id)
                 }}
-                className="sm:hidden sm:group-hover:flex p-1 hover:bg-zinc-300 dark:hover:bg-zinc-600 rounded transition-colors"
+                className={`flex size-8 items-center justify-center rounded-control transition-colors hover:bg-surface pointer-coarse:size-touch sm:hidden sm:group-hover:flex ${FOCUS_RING}`}
                 aria-label={`Remove command: ${cmd.text}`}
               >
-                <Trash2 size={14} className="text-red-500" />
+                <Trash2 size={14} className="text-danger" />
               </button>
             </div>
           ))
@@ -150,10 +149,10 @@ export function CommandHistoryDropdown({
 
       {/* Footer */}
       {history.length > 0 && (
-        <div className="p-2 border-t border-zinc-200 dark:border-zinc-700">
+        <div className="border-t border-border p-2">
           <button
             onClick={onClear}
-            className="w-full px-3 py-1.5 text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+            className={`w-full rounded-control px-3 py-1.5 text-xs text-danger transition-colors hover:bg-danger/10 pointer-coarse:h-touch ${FOCUS_RING}`}
           >
             Clear all history
           </button>

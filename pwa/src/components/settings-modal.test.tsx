@@ -1,4 +1,4 @@
-import { act, fireEvent, render } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Settings } from '../hooks/use-settings'
 import { SettingsModal } from './settings-modal'
@@ -12,6 +12,7 @@ const DEFAULT_SETTINGS: Settings = {
   pollInterval: 5,
   hasSeenGestureHints: false,
   terminalFont: '',
+  uiStyle: 'neutral',
 }
 
 describe('SettingsModal', () => {
@@ -89,11 +90,8 @@ describe('SettingsModal', () => {
   it('calls onClose when dialog backdrop clicked (target === currentTarget)', () => {
     const { onClose } = renderModal()
     const dialog = document.querySelector('dialog')!
-    // Simulate click where target IS the dialog itself
-    Object.defineProperty(dialog, 'currentTarget', {
-      value: dialog,
-      configurable: true,
-    })
+    // A press that starts and ends on the scrim closes the sheet
+    fireEvent.pointerDown(dialog)
     fireEvent.click(dialog)
     expect(onClose).toHaveBeenCalled()
   })
@@ -141,12 +139,8 @@ describe('SettingsModal', () => {
   })
 
   it('updates imeSendBehavior when send-enter radio selected', () => {
-    const { onUpdateSetting, container } = renderModal()
-    const sendEnterRadio = container.querySelector(
-      'input[value="send-enter"]',
-    ) as HTMLInputElement
-    expect(sendEnterRadio).toBeTruthy()
-    fireEvent.click(sendEnterRadio)
+    const { onUpdateSetting } = renderModal()
+    fireEvent.click(screen.getByRole('radio', { name: 'Send + Enter' }))
     expect(onUpdateSetting).toHaveBeenCalledWith(
       'imeSendBehavior',
       'send-enter',
@@ -154,55 +148,138 @@ describe('SettingsModal', () => {
   })
 
   it('updates imeSendBehavior when send-only radio selected', () => {
-    const { onUpdateSetting, container } = renderModal({
+    const { onUpdateSetting } = renderModal({
       settings: { ...DEFAULT_SETTINGS, imeSendBehavior: 'send-enter' },
     })
-    const sendOnlyRadio = container.querySelector(
-      'input[value="send-only"]',
-    ) as HTMLInputElement
-    fireEvent.click(sendOnlyRadio)
+    fireEvent.click(screen.getByRole('radio', { name: 'Send text only' }))
     expect(onUpdateSetting).toHaveBeenCalledWith('imeSendBehavior', 'send-only')
   })
 
-  it('updates pasteSource when tmux radio selected', () => {
-    const { onUpdateSetting, container } = renderModal()
-    const tmuxRadio = container.querySelector(
-      'input[value="tmux"]',
-    ) as HTMLInputElement
-    fireEvent.click(tmuxRadio)
+  it('shows the hint of the selected send behavior', () => {
+    renderModal({
+      settings: { ...DEFAULT_SETTINGS, imeSendBehavior: 'send-enter' },
+    })
+    expect(
+      screen.getByText('Send text then press Enter automatically'),
+    ).toBeInTheDocument()
+  })
+
+  it('updates pasteSource when the buffer radio selected', () => {
+    const { onUpdateSetting } = renderModal()
+    fireEvent.click(screen.getByRole('radio', { name: 'Session buffer' }))
     expect(onUpdateSetting).toHaveBeenCalledWith('pasteSource', 'tmux')
   })
 
   it('updates pasteSource when clipboard radio selected', () => {
-    const { onUpdateSetting, container } = renderModal({
+    const { onUpdateSetting } = renderModal({
       settings: { ...DEFAULT_SETTINGS, pasteSource: 'tmux' },
     })
-    const clipRadio = container.querySelector(
-      'input[value="clipboard"]',
-    ) as HTMLInputElement
-    fireEvent.click(clipRadio)
+    fireEvent.click(screen.getByRole('radio', { name: 'System clipboard' }))
     expect(onUpdateSetting).toHaveBeenCalledWith('pasteSource', 'clipboard')
+  })
+
+  it('names the paste buffer after the pasteBufferLabel prop, not a backend', () => {
+    renderModal({ pasteBufferLabel: 'zellij buffer' })
+    expect(
+      screen.getByRole('radio', { name: 'zellij buffer' }),
+    ).toBeInTheDocument()
+    expect(document.body).not.toHaveTextContent(/tmux/i)
   })
 
   it('toggles toolbarDefaultExpanded', () => {
     const { onUpdateSetting } = renderModal()
-    const switches = document.querySelectorAll('button[role="switch"]')
-    fireEvent.click(switches[0])
+    fireEvent.click(
+      screen.getByRole('switch', { name: 'Toolbar default expanded' }),
+    )
     expect(onUpdateSetting).toHaveBeenCalledWith('toolbarDefaultExpanded', true)
   })
 
   it('toggles disableContextMenu', () => {
     const { onUpdateSetting } = renderModal()
-    const switches = document.querySelectorAll('button[role="switch"]')
-    fireEvent.click(switches[1])
+    fireEvent.click(
+      screen.getByRole('switch', { name: 'Disable right-click menu' }),
+    )
     expect(onUpdateSetting).toHaveBeenCalledWith('disableContextMenu', false)
   })
 
   it('toggles showSessionTabs', () => {
     const { onUpdateSetting } = renderModal()
-    const switches = document.querySelectorAll('button[role="switch"]')
-    fireEvent.click(switches[2])
+    fireEvent.click(screen.getByRole('switch', { name: 'Show session tabs' }))
     expect(onUpdateSetting).toHaveBeenCalledWith('showSessionTabs', true)
+  })
+
+  it('starts with the Appearance group and lists the three styles', () => {
+    renderModal()
+    const groups = document.querySelectorAll('[data-group]')
+    expect(groups[0]).toHaveAttribute('data-group', 'appearance')
+    const radios = screen
+      .getByRole('radiogroup', { name: 'Interface style' })
+      .querySelectorAll('[role="radio"]')
+    expect(Array.from(radios).map((r) => r.getAttribute('aria-label'))).toEqual(
+      ['Neutral', 'Terminal', 'Native'],
+    )
+    expect(
+      screen.getByRole('radio', { name: 'Neutral', checked: true }),
+    ).toBeInTheDocument()
+    expect(document.querySelectorAll('[data-preview]').length).toBe(3)
+  })
+
+  it('writes uiStyle when a style is picked', () => {
+    const { onUpdateSetting } = renderModal()
+    fireEvent.click(screen.getByRole('radio', { name: 'Terminal' }))
+    expect(onUpdateSetting).toHaveBeenCalledWith('uiStyle', 'terminal')
+  })
+
+  it('marks the stored style as selected', () => {
+    renderModal({ settings: { ...DEFAULT_SETTINGS, uiStyle: 'native' } })
+    expect(
+      screen.getByRole('radio', { name: 'Native', checked: true }),
+    ).toBeInTheDocument()
+  })
+
+  it('shows one group at a time on desktop, switched from the left rail', () => {
+    renderModal()
+    const section = (id: string) =>
+      document.querySelector(`[data-group="${id}"]`)!
+    // Every group is in the page; the CSS hides the inactive ones at md+
+    expect(section('appearance')).not.toHaveClass('md:hidden')
+    expect(section('keyboard')).toHaveClass('md:hidden')
+    const nav = screen.getByRole('navigation', { name: 'Settings groups' })
+    const keyboard = within(nav).getByRole('button', { name: 'Keyboard' })
+    fireEvent.click(keyboard)
+    expect(section('keyboard')).not.toHaveClass('md:hidden')
+    expect(section('appearance')).toHaveClass('md:hidden')
+    expect(keyboard).toHaveAttribute('aria-current', 'true')
+  })
+
+  it('lists the Data group in the rail only when it has actions', () => {
+    const { unmount } = renderModal()
+    const nav = () =>
+      screen.getByRole('navigation', { name: 'Settings groups' })
+    expect(
+      within(nav()).queryByRole('button', { name: 'Data & help' }),
+    ).toBeNull()
+    unmount()
+    renderModal({ onShowGestureHints: vi.fn() })
+    expect(
+      within(nav()).getByRole('button', { name: 'Data & help' }),
+    ).toBeInTheDocument()
+  })
+
+  it('falls back to the first group when the open one goes away', () => {
+    const { rerender, onClose } = renderModal({ onShowGestureHints: vi.fn() })
+    fireEvent.click(screen.getByRole('button', { name: 'Data & help' }))
+    rerender(
+      <SettingsModal
+        isOpen
+        onClose={onClose}
+        settings={DEFAULT_SETTINGS}
+        onUpdateSetting={vi.fn()}
+      />,
+    )
+    expect(document.querySelector('[data-group="appearance"]')).not.toHaveClass(
+      'md:hidden',
+    )
   })
 
   it('saves the terminal font on blur, trimmed', () => {
@@ -231,7 +308,7 @@ describe('SettingsModal', () => {
 
   it('updates pollInterval via select', () => {
     const { onUpdateSetting } = renderModal()
-    const select = document.querySelector('select') as HTMLSelectElement
+    const select = screen.getByLabelText('Session poll interval')
     fireEvent.change(select, { target: { value: '30' } })
     expect(onUpdateSetting).toHaveBeenCalledWith('pollInterval', 30)
   })
@@ -303,6 +380,15 @@ describe('SettingsModal', () => {
       fireEvent.click(checkBtn)
     })
     expect(document.body.textContent).toContain('Update available: v1.2.3')
+  })
+
+  it('announces the update message in a status region', async () => {
+    const onCheckForUpdate = vi.fn().mockResolvedValue('Up to date')
+    renderModal({ onCheckForUpdate })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Check for Updates/ }))
+    })
+    expect(screen.getByRole('status')).toHaveTextContent('Up to date')
   })
 
   it('hides inline toast after 4 seconds', async () => {
@@ -424,20 +510,16 @@ describe('SettingsModal', () => {
     expect(document.body.textContent).toContain('Clear Command History')
   })
 
-  it('ToggleRow renders checked state visually (aria-checked=true)', () => {
+  it('switches report their checked state', () => {
     renderModal({
       settings: { ...DEFAULT_SETTINGS, toolbarDefaultExpanded: true },
     })
-    const switches = document.querySelectorAll('button[role="switch"]')
-    expect(switches[0].getAttribute('aria-checked')).toBe('true')
-  })
-
-  it('ToggleRow renders unchecked state visually (aria-checked=false)', () => {
-    renderModal({
-      settings: { ...DEFAULT_SETTINGS, toolbarDefaultExpanded: false },
-    })
-    const switches = document.querySelectorAll('button[role="switch"]')
-    expect(switches[0].getAttribute('aria-checked')).toBe('false')
+    expect(
+      screen.getByRole('switch', { name: 'Toolbar default expanded' }),
+    ).toBeChecked()
+    expect(
+      screen.getByRole('switch', { name: 'Show session tabs' }),
+    ).not.toBeChecked()
   })
 
   it('Settings heading is present', () => {
@@ -454,20 +536,16 @@ describe('SettingsModal', () => {
     expect(options).toContain('300')
   })
 
-  it('IME send behavior radio group has both options', () => {
+  it('IME send behavior and paste source groups have both options', () => {
     renderModal()
-    const sendOnlyRadio = document.querySelector('input[value="send-only"]')
-    const sendEnterRadio = document.querySelector('input[value="send-enter"]')
-    expect(sendOnlyRadio).toBeInTheDocument()
-    expect(sendEnterRadio).toBeInTheDocument()
-  })
-
-  it('paste source radio group has both options', () => {
-    renderModal()
-    const clipboardRadio = document.querySelector('input[value="clipboard"]')
-    const tmuxRadio = document.querySelector('input[value="tmux"]')
-    expect(clipboardRadio).toBeInTheDocument()
-    expect(tmuxRadio).toBeInTheDocument()
+    const ime = screen.getByRole('radiogroup', {
+      name: 'Text input send behavior',
+    })
+    expect(within(ime).getAllByRole('radio')).toHaveLength(2)
+    const paste = screen.getByRole('radiogroup', {
+      name: 'Paste button source',
+    })
+    expect(within(paste).getAllByRole('radio')).toHaveLength(2)
   })
 
   it('hides the paste source choice on a backend without a tmux buffer', () => {
@@ -475,6 +553,8 @@ describe('SettingsModal', () => {
     expect(container.ownerDocument.body).not.toHaveTextContent(
       'Paste button source',
     )
-    expect(document.querySelector('input[name="pasteSource"]')).toBeNull()
+    expect(
+      screen.queryByRole('radiogroup', { name: 'Paste button source' }),
+    ).toBeNull()
   })
 })
