@@ -21,7 +21,12 @@ const { FakeTerminal, FakeFit } = vi.hoisted(() => {
   // Fake xterm.js Terminal; the latest instance is kept for assertions.
   class FakeTerminal {
     static last: FakeTerminal
-    options: { fontSize: number; fontFamily?: string; theme: unknown }
+    options: {
+      fontSize: number
+      fontFamily?: string
+      theme: unknown
+      disableStdin?: boolean
+    }
     cols = 80
     rows = 24
     dataCb: Listener<string> = () => {}
@@ -379,6 +384,23 @@ describe('TerminalView', () => {
     expect(socket.send).toHaveBeenCalledWith(
       new Uint8Array([0x1b, 0x5b, 0x4d, 0xff, 0x21]),
     )
+  })
+
+  it('readOnly sends nothing typed and disables stdin', () => {
+    const { term, rerender, ref } = renderView({ readOnly: true })
+    expect(term.options.disableStdin).toBe(true)
+    term.dataCb('x')
+    term.binaryCb('\x1b[M\xff!')
+    expect(socket.send).not.toHaveBeenCalled()
+    // Toolbar keys, tmux copy-mode scrolling and paste go through the handle
+    expect(ref.current!.send('\x1b[5~')).toBe(false)
+    ref.current!.paste('rm -rf')
+    expect(socket.send).not.toHaveBeenCalled()
+    expect(term.paste).not.toHaveBeenCalled()
+    rerender(<TerminalView ref={ref} paneId="0" />)
+    expect(term.options.disableStdin).toBe(false)
+    term.dataCb('y')
+    expect(socket.send).toHaveBeenCalledWith('y')
   })
 
   it('herdr: never sends a resize and follows the server size', () => {

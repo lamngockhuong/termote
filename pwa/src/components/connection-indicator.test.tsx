@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { ConnectionIndicator } from './connection-indicator'
+import { ConnectionDot, ConnectionIndicator } from './connection-indicator'
 
 describe('ConnectionIndicator', () => {
   it('renders connecting state', () => {
@@ -62,5 +62,13 @@ describe('ConnectionIndicator', () => {
   it('shows Wifi icon for connected state', () => {
     const { container } = render(<ConnectionIndicator state="connected" />)
     expect(container.querySelector('svg')).toBeInTheDocument()
+  })
+
+  it('ConnectionDot shows the state without a control', () => {
+    const { container } = render(<ConnectionDot state="error" />)
+    const dot = container.firstElementChild!
+    expect(dot).toHaveAttribute('data-state', 'error')
+    expect(dot).toHaveAttribute('aria-hidden', 'true')
+    expect(screen.queryByRole('button')).toBeNull()
   })
 })

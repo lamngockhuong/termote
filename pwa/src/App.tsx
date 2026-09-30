@@ -1,4 +1,4 @@
-import { Maximize, Menu, Minimize } from 'lucide-react'
+import { Eye } from 'lucide-react'
 import {
   useCallback,
   useEffect,
@@ -7,24 +7,28 @@ import {
   useRef,
   useState,
 } from 'react'
-import { AboutModal } from './components/about-modal'
-import { BottomNavigation } from './components/bottom-navigation'
-import { CommandHistoryDropdown } from './components/command-history-dropdown'
 import {
-  ConnectionIndicator,
-  type ConnectionState,
-} from './components/connection-indicator'
+  APP_VIEWS,
+  type AppView,
+  availableViews,
+  TERMINAL_VIEW_ID,
+  type ViewContext,
+  viewPanelId,
+} from './app-views'
+import { AboutModal } from './components/about-modal'
+import { AppHeader } from './components/app-header'
+import { CommandHistoryDropdown } from './components/command-history-dropdown'
+import type { ConnectionState } from './components/connection-indicator'
 import { GestureHintsOverlay } from './components/gesture-hints-overlay'
 import { HelpModal } from './components/help-modal'
 import { KeyboardToolbar } from './components/keyboard-toolbar'
 import { PaneStrip } from './components/pane-strip'
 import { QuickActionsMenu } from './components/quick-actions-menu'
 import { SessionSidebar } from './components/session-sidebar'
-import { SessionTabs } from './components/session-tabs'
-import { SettingsMenu } from './components/settings-menu'
 import { SettingsModal } from './components/settings-modal'
 import { type TerminalHandle, TerminalView } from './components/terminal-view'
 import { Toast } from './components/toast'
+import { Banner } from './components/ui/banner'
 import { useTheme } from './contexts/theme-context'
 import { useCommandHistory } from './hooks/use-command-history'
 import { useFontSize } from './hooks/use-font-size'
@@ -38,6 +42,7 @@ import { useSidebarCollapsed } from './hooks/use-sidebar-collapsed'
 import { useUpdateCheck } from './hooks/use-update-check'
 import { applyUiStyle, syncThemeColor } from './ui-style'
 import { checkApiVersion } from './utils/api-version'
+import { formatDeepLink, parseDeepLink } from './utils/deep-link'
 import {
   blurTerminal,
   focusTerminal,
@@ -79,7 +84,18 @@ const getClipboardErrorMsg = (
   }
 }
 
-export default function App() {
+interface AppProps {
+  // Views of the pane; tests register extra ones
+  views?: AppView[]
+  // View-only role: every way to send input is hidden (#236 sets it from the
+  // role the server reports; nothing does yet)
+  readOnly?: boolean
+}
+
+export default function App({
+  views = APP_VIEWS,
+  readOnly = false,
+}: AppProps = {}) {
   const terminalRef = useRef<TerminalHandle>(null)
   const getTerminal = () => terminalRef.current
   const gestureRef = useRef<HTMLDivElement>(null)
@@ -95,7 +111,6 @@ export default function App() {
   // State of the terminal stream, reported by TerminalView.
   const [streamState, setStreamState] = useState<ConnectionState>('connecting')
   const { settings, updateSetting } = useSettings()
-  const [showTitleTooltip, setShowTitleTooltip] = useState(false)
   const [ctrlActive, setCtrlActive] = useState(false)
   const [imeMode, setImeMode] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
@@ -110,12 +125,13 @@ export default function App() {
   const {
     activeSession,
     sessions,
-    groups,
+    groups = [],
     switchSession,
     selectPane,
     addSession,
     removeSession,
     updateSession,
+    isReady,
     isServerReachable,
     mux,
   } = useLocalSessions(settings.pollInterval)
@@ -129,6 +145,30 @@ export default function App() {
         : sessions,
     [sessions, activeSession.groupId],
   )
+  const groupName = groups.find((g) => g.id === activeSession.groupId)?.name
+
+  // Views offered for this pane; one that stops being offered gives way to
+  // the terminal.
+  const [viewId, setViewId] = useState(TERMINAL_VIEW_ID)
+  const viewContext: ViewContext = useMemo(
+    () => ({ mux, session: activeSession, readOnly }),
+    [mux, activeSession, readOnly],
+  )
+  const offeredViews = useMemo(
+    () => availableViews(views, viewContext),
+    [views, viewContext],
+  )
+  const currentView =
+    offeredViews.find((v) => v.id === viewId) ?? offeredViews[0]
+  const isTerminalView = currentView.id === TERMINAL_VIEW_ID
+  // A view's content in the desktop side panel, next to the terminal
+  const [sidePanelId, setSidePanelId] = useState<string | null>(null)
+  const viewProps = { ...viewContext, isMobile, setSidePanel: setSidePanelId }
+  const sidePanelView = isMobile
+    ? undefined
+    : offeredViews.find((v) => v.id === sidePanelId && v.Panel)
+  // tabpanel roles only mean something next to a switcher
+  const panelRole = offeredViews.length > 1 ? 'tabpanel' : undefined
   const { fontSize, increase, decrease } = useFontSize()
   const { resolvedTheme } = useTheme()
   // Before paint and before the terminal's effects read the tokens.
@@ -175,30 +215,35 @@ export default function App() {
 
   // tmux scrolls its own history (copy mode); other backends scroll the
   // xterm.js scrollback.
+  // tmux copy mode scrolls by sending keys, so view-only scrolls the
+  // xterm.js scrollback instead.
   const handleScroll = useCallback(
     (direction: 'up' | 'down') => {
-      if (copyModeSupported) scrollTmux(getTerminal(), direction)
+      if (copyModeSupported && !readOnly) scrollTmux(getTerminal(), direction)
       else scrollTerminal(getTerminal(), direction)
     },
-    [copyModeSupported, getTerminal],
+    [copyModeSupported, readOnly, getTerminal],
   )
 
+  // Swipes and long press send input; while view-only only scrolling and
+  // zooming remain.
   const gestureHandlers = useMemo(
     () => ({
       // A herdr pane wider than the screen scrolls sideways instead; it also
       // keeps a stray swipe from interrupting an agent with Ctrl+C.
       onSwipeLeft: () => {
         if (isHerdr && scrollTerminalHorizontal(getTerminal(), 'right')) return
-        sendKeyToTerminal(getTerminal(), 'c', { ctrl: true })
+        if (!readOnly) sendKeyToTerminal(getTerminal(), 'c', { ctrl: true })
       },
       onSwipeRight: () => {
         if (isHerdr && scrollTerminalHorizontal(getTerminal(), 'left')) return
-        sendKeyToTerminal(getTerminal(), 'Tab')
+        if (!readOnly) sendKeyToTerminal(getTerminal(), 'Tab')
       },
       // Vertical swipes scroll the history, as the toolbar's scroll keys do.
       onSwipeUp: () => handleScroll('down'),
       onSwipeDown: () => handleScroll('up'),
       onLongPress: async () => {
+        if (readOnly) return
         const result = await pasteToTerminal(getTerminal())
         if (shouldShowPasteError(result)) {
           setToastMessage(getClipboardErrorMsg(result.reason, true))
@@ -207,7 +252,7 @@ export default function App() {
       onPinchIn: decrease,
       onPinchOut: increase,
     }),
-    [decrease, increase, isHerdr, getTerminal, handleScroll],
+    [decrease, increase, isHerdr, getTerminal, handleScroll, readOnly],
   )
 
   const toggleKeyboard = () => {
@@ -342,9 +387,73 @@ export default function App() {
     setSidebarOpen(false)
   }
 
+  // Deep link: opened once the first snapshot is in, and again on each
+  // hashchange. It only selects a tab, pane and view.
+  const pendingLinkRef = useRef(parseDeepLink(window.location.hash))
+  const [linkRequest, setLinkRequest] = useState(0)
+  useEffect(() => {
+    const onHashChange = () => {
+      pendingLinkRef.current = parseDeepLink(window.location.hash)
+      setLinkRequest((n) => n + 1)
+    }
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
+  const sessionsLoaded = isReady && isServerReachable && sessions.length > 0
+  // biome-ignore lint/correctness/useExhaustiveDependencies: linkRequest re-runs it for a new link
+  useEffect(() => {
+    const link = pendingLinkRef.current
+    if (!link || !sessionsLoaded) return
+    pendingLinkRef.current = null
+    const target = sessions.find(
+      (s) => s.id === link.tab && s.groupId === link.group,
+    )
+    if (!target) {
+      setToastMessage('Session in link not found')
+      return
+    }
+    // A pane that is gone still opens its tab, with the tab's own pane.
+    if (link.pane && !target.panes?.some((p) => p.id === link.pane)) {
+      setToastMessage('Pane in link not found')
+    }
+    switchSession(target.id, link.pane)
+    if (link.view) setViewId(link.view)
+  }, [linkRequest, sessionsLoaded, sessions, switchSession])
+
+  // The address bar follows what is on screen, without adding history
+  // entries, so copying it gives a link to this very pane.
+  const currentLink = activeSession.groupId
+    ? formatDeepLink({
+        group: activeSession.groupId,
+        tab: activeSession.id,
+        pane: mux.caps.clientSideSelect ? activeSession.paneId : undefined,
+        view: currentView.id,
+      })
+    : null
+  useEffect(() => {
+    if (!sessionsLoaded || !currentLink || pendingLinkRef.current) return
+    if (window.location.hash !== currentLink) {
+      window.history.replaceState(window.history.state, '', currentLink)
+    }
+  }, [sessionsLoaded, currentLink])
+
+  // Built from what is on screen, not read from the address bar, which may
+  // still hold a link that did not open.
+  const copyLink = useCallback(async () => {
+    const { origin, pathname, search } = window.location
+    try {
+      await navigator.clipboard.writeText(
+        `${origin}${pathname}${search}${currentLink}`,
+      )
+      setToastMessage('Link copied')
+    } catch {
+      setToastMessage('Could not copy the link')
+    }
+  }, [currentLink])
+
   return (
     <div
-      className="flex flex-col bg-zinc-100 dark:bg-zinc-900 text-zinc-900 dark:text-white overflow-hidden"
+      className="flex flex-col overflow-hidden bg-bg font-ui text-fg"
       // With the keyboard open the app takes the visible height itself:
       // iOS can shrink 100dvh before innerHeight, and subtracting the
       // keyboard from an already shrunk 100dvh left the app near 0px tall.
@@ -368,7 +477,7 @@ export default function App() {
           />
         )}
 
-        {/* Mobile sidebar (slide-over) */}
+        {/* Mobile sessions sheet, opened from the session chip */}
         {isMobile && (
           <SessionSidebar
             sessions={sessions}
@@ -385,117 +494,38 @@ export default function App() {
         )}
 
         <main className="flex-1 flex flex-col min-w-0">
-          <header
-            className="relative z-10 px-4 flex items-center bg-white dark:bg-zinc-800 border-b border-zinc-200 dark:border-zinc-700 shrink-0"
-            style={{
-              paddingTop: 'env(safe-area-inset-top)',
-              minHeight: 'calc(3rem + env(safe-area-inset-top))',
+          <AppHeader
+            isMobile={isMobile}
+            session={activeSession}
+            groupSessions={groupSessions}
+            groupName={groupName}
+            showSessionTabs={settings.showSessionTabs}
+            canRemoveTab={sessions.length > 1}
+            onSelectTab={switchSession}
+            onAddTab={() => addSession('New')}
+            onRemoveTab={removeSession}
+            connectionState={connectionState}
+            onRetry={() => terminalRef.current?.reconnect()}
+            sessionsOpen={sidebarOpen}
+            onOpenSessions={() => setSidebarOpen(true)}
+            fontSize={fontSize}
+            onDecreaseFont={decrease}
+            onIncreaseFont={increase}
+            isFullscreen={isFullscreen}
+            onToggleFullscreen={toggleFullscreen}
+            views={offeredViews}
+            viewId={currentView.id}
+            onViewChange={setViewId}
+            viewPanelId={viewPanelId}
+            menu={{
+              onOpenAbout: () => setAboutOpen(true),
+              onOpenHelp: () => setHelpOpen(true),
+              onOpenSettings: () => setSettingsOpen(true),
+              onCopyLink: currentLink ? copyLink : undefined,
             }}
-          >
-            {/* Mobile hamburger */}
-            {isMobile && (
-              <button
-                onClick={() => setSidebarOpen(true)}
-                className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-zinc-200/50 dark:hover:bg-zinc-700/50 mr-2 transition-colors"
-                aria-label="Open sessions menu"
-              >
-                <Menu size={20} />
-              </button>
-            )}
-            <div
-              className="relative flex items-center min-w-0 flex-1 mr-2 cursor-pointer"
-              onClick={() => setShowTitleTooltip(!showTitleTooltip)}
-              title={
-                !isMobile
-                  ? `${activeSession.name}${activeSession.description ? ` - ${activeSession.description}` : ''}`
-                  : undefined
-              }
-            >
-              <span className="shrink-0 text-lg">{activeSession.icon}</span>
-              <span className="ml-2 font-medium text-zinc-900 dark:text-white truncate">
-                {activeSession.name}
-              </span>
-              {activeSession.description && (
-                <span className="ml-2 text-sm text-zinc-500 dark:text-zinc-400 hidden sm:inline truncate">
-                  {activeSession.description}
-                </span>
-              )}
-              {/* Mobile tooltip with backdrop */}
-              {showTitleTooltip && isMobile && (
-                <>
-                  <div
-                    className="fixed inset-0 z-40"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setShowTitleTooltip(false)
-                    }}
-                  />
-                  <div className="absolute left-0 top-full mt-1 z-50 px-3 py-2 bg-zinc-900 dark:bg-zinc-700 text-white text-sm rounded-lg shadow-lg max-w-[80vw] break-words">
-                    <div className="font-medium">{activeSession.name}</div>
-                    {activeSession.description && (
-                      <div className="text-zinc-300 text-xs mt-1">
-                        {activeSession.description}
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <ConnectionIndicator
-                state={connectionState}
-                onRetry={() => terminalRef.current?.reconnect()}
-              />
-              <button
-                onClick={decrease}
-                className="px-2 py-1 text-xs bg-zinc-200/70 dark:bg-zinc-700/70 rounded-lg hover:bg-zinc-300/70 dark:hover:bg-zinc-600/70 touch-manipulation transition-colors"
-                aria-label="Decrease font size"
-              >
-                A-
-              </button>
-              <span className="text-xs text-zinc-500 dark:text-zinc-400 w-8 text-center">
-                {fontSize}
-              </span>
-              <button
-                onClick={increase}
-                className="px-2 py-1 text-xs bg-zinc-200/70 dark:bg-zinc-700/70 rounded-lg hover:bg-zinc-300/70 dark:hover:bg-zinc-600/70 touch-manipulation transition-colors"
-                aria-label="Increase font size"
-              >
-                A+
-              </button>
-              {!isMobile && (
-                <button
-                  onClick={toggleFullscreen}
-                  className="px-2 py-1 text-xs bg-zinc-200/70 dark:bg-zinc-700/70 rounded-lg hover:bg-zinc-300/70 dark:hover:bg-zinc-600/70 transition-colors"
-                  aria-label={
-                    isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'
-                  }
-                  title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-                >
-                  {isFullscreen ? (
-                    <Minimize size={14} />
-                  ) : (
-                    <Maximize size={14} />
-                  )}
-                </button>
-              )}
-              <SettingsMenu
-                onOpenAbout={() => setAboutOpen(true)}
-                onOpenHelp={() => setHelpOpen(true)}
-                onOpenSettings={() => setSettingsOpen(true)}
-              />
-            </div>
-          </header>
-          {/* Desktop session tabs */}
-          {!isMobile && settings.showSessionTabs && (
-            <SessionTabs
-              sessions={groupSessions}
-              activeId={activeSession.id}
-              onSelect={switchSession}
-              onAdd={() => addSession('New')}
-              onRemove={removeSession}
-              canRemove={sessions.length > 1}
-            />
+          />
+          {readOnly && (
+            <Banner>View only: you can watch this terminal but not type</Banner>
           )}
           {/* Split tab: pick the pane to stream (herdr) */}
           {mux.caps.clientSideSelect && activeSession.panes && (
@@ -505,105 +535,143 @@ export default function App() {
               onSelect={selectPane}
             />
           )}
-          {/* The terminal fits the space left above the toolbar, so an open
-              keyboard shrinks it rather than hiding its bottom rows. */}
-          <div
-            className="flex-1 relative min-h-0"
-            onContextMenu={(e) => e.preventDefault()}
-          >
-            <div className="h-full">
-              <TerminalView
-                ref={terminalRef}
-                paneId={activeSession.paneId}
-                backend={mux.backend}
-                followPane={mux.caps.clientSideSelect}
-                copyModeSupported={copyModeSupported}
-                serverScroll={!!mux.caps.scroll}
-                bracketedPaste={
-                  mux.backend === 'herdr' && !!activeSession.hasAgent
-                }
-                fontSize={fontSize}
-                fontFamily={settings.terminalFont}
-                theme={resolvedTheme}
-                uiStyle={settings.uiStyle}
-                disableContextMenu={settings.disableContextMenu}
-                onConnectionStateChange={setStreamState}
-              />
+          <div className="flex min-h-0 flex-1">
+            {/* The terminal fits the space left above the toolbar, so an open
+                keyboard shrinks it rather than hiding its bottom rows. */}
+            <div className="relative min-w-0 flex-1 bg-term">
+              {/* Another view covers the terminal instead of unmounting or
+                  hiding it: it keeps its stream and its size (a display:none
+                  terminal would resize the tmux window to nothing). */}
+              <div
+                id={viewPanelId(TERMINAL_VIEW_ID)}
+                role={panelRole}
+                // inert: a covered terminal must not keep keyboard focus
+                inert={!isTerminalView}
+                className={`relative h-full ${isTerminalView ? '' : 'invisible'}`}
+                onContextMenu={(e) => e.preventDefault()}
+              >
+                <div className="h-full">
+                  <TerminalView
+                    ref={terminalRef}
+                    paneId={activeSession.paneId}
+                    backend={mux.backend}
+                    followPane={mux.caps.clientSideSelect}
+                    copyModeSupported={copyModeSupported}
+                    serverScroll={!!mux.caps.scroll}
+                    bracketedPaste={
+                      mux.backend === 'herdr' && !!activeSession.hasAgent
+                    }
+                    fontSize={fontSize}
+                    fontFamily={settings.terminalFont}
+                    theme={resolvedTheme}
+                    uiStyle={settings.uiStyle}
+                    disableContextMenu={settings.disableContextMenu}
+                    readOnly={readOnly}
+                    onConnectionStateChange={setStreamState}
+                  />
+                </div>
+                {/* Gesture overlay - captures touch gestures (mobile only) */}
+                {isMobile && (
+                  <div
+                    ref={gestureRef}
+                    className="absolute inset-0 touch-none"
+                  />
+                )}
+              </div>
+              {!isTerminalView && currentView.Main && (
+                <div
+                  id={viewPanelId(currentView.id)}
+                  role={panelRole}
+                  className="absolute inset-0 overflow-auto bg-bg"
+                >
+                  <currentView.Main {...viewProps} />
+                </div>
+              )}
             </div>
-            {/* Gesture overlay - captures touch gestures (mobile only) */}
-            {isMobile && (
-              <div ref={gestureRef} className="absolute inset-0 touch-none" />
+            {sidePanelView?.Panel && (
+              <aside
+                aria-label={sidePanelView.label}
+                className="flex w-[440px] shrink-0 flex-col border-l border-border bg-bg"
+              >
+                <sidePanelView.Panel {...viewProps} />
+              </aside>
             )}
           </div>
         </main>
       </div>
 
-      {/* Quick Actions FAB (mobile only) */}
-      {isMobile && (
-        <QuickActionsMenu
-          onSendKey={(key, opts) => {
-            if (opts?.ctrl) {
-              sendKeyToTerminal(getTerminal(), key, { ctrl: true })
-            } else {
-              sendKeyToTerminal(getTerminal(), key)
-            }
-          }}
-          onSendText={(text) => sendTextToTerminal(getTerminal(), text)}
-        />
-      )}
+      {/* The bottom input area belongs to the view: the key toolbar for the
+          terminal. View-only has no input at all. */}
+      {readOnly ? (
+        <div className="flex h-12 shrink-0 items-center gap-2 border-t border-border bg-surface px-3 pb-safe ui-terminal:bg-bg">
+          <Eye size={16} aria-hidden="true" className="text-fg-muted" />
+          <span className="text-[13px] text-fg-muted ui-terminal:font-label">
+            View only
+          </span>
+        </div>
+      ) : isTerminalView ? (
+        <>
+          {/* Quick Actions FAB (mobile only) */}
+          {isMobile && (
+            <QuickActionsMenu
+              onSendKey={(key, opts) => {
+                if (opts?.ctrl) {
+                  sendKeyToTerminal(getTerminal(), key, { ctrl: true })
+                } else {
+                  sendKeyToTerminal(getTerminal(), key)
+                }
+              }}
+              onSendText={(text) => sendTextToTerminal(getTerminal(), text)}
+            />
+          )}
 
-      <div className="relative">
-        {historyOpen && (
-          <CommandHistoryDropdown
-            history={history}
-            onSelect={handleHistorySelect}
-            onRemove={removeCommand}
-            onClear={clearHistory}
-            onClose={() => setHistoryOpen(false)}
-          />
-        )}
-        <KeyboardToolbar
-          onKey={handleKey}
-          onCtrlKey={handleCtrlKey}
-          onShiftKey={handleShiftKey}
-          onCtrlShiftKey={handleCtrlShiftKey}
-          onScroll={handleScroll}
-          onTmuxCopy={handleTmuxCopy}
-          showTmuxCopy={copyModeSupported}
-          onPaste={handlePaste}
-          onToggleKeyboard={toggleKeyboard}
-          onSendText={handleSendText}
-          ctrlActive={ctrlActive}
-          onCtrlChange={setCtrlActive}
-          imeMode={imeMode}
-          onImeModeChange={setImeMode}
-          defaultExpanded={settings.toolbarDefaultExpanded}
-          onHistoryToggle={() => setHistoryOpen((prev) => !prev)}
-          historyOpen={historyOpen}
-        />
-      </div>
-
-      {/* Mobile bottom navigation */}
-      {isMobile && (
-        <BottomNavigation
-          sessions={groupSessions}
-          activeId={activeSession.id}
-          onSelect={switchSession}
-          onAdd={() => addSession('New')}
-          onToggleSidebar={() => setSidebarOpen(true)}
-        />
+          <div className="relative">
+            {historyOpen && (
+              <CommandHistoryDropdown
+                history={history}
+                onSelect={handleHistorySelect}
+                onRemove={removeCommand}
+                onClear={clearHistory}
+                onClose={() => setHistoryOpen(false)}
+              />
+            )}
+            <KeyboardToolbar
+              onKey={handleKey}
+              onCtrlKey={handleCtrlKey}
+              onShiftKey={handleShiftKey}
+              onCtrlShiftKey={handleCtrlShiftKey}
+              onScroll={handleScroll}
+              onTmuxCopy={handleTmuxCopy}
+              showTmuxCopy={copyModeSupported}
+              onPaste={handlePaste}
+              onToggleKeyboard={toggleKeyboard}
+              onSendText={handleSendText}
+              ctrlActive={ctrlActive}
+              onCtrlChange={setCtrlActive}
+              imeMode={imeMode}
+              onImeModeChange={setImeMode}
+              defaultExpanded={settings.toolbarDefaultExpanded}
+              onHistoryToggle={() => setHistoryOpen((prev) => !prev)}
+              historyOpen={historyOpen}
+            />
+          </div>
+        </>
+      ) : (
+        currentView.Input && <currentView.Input {...viewProps} />
       )}
 
       {/* Hidden input for Ctrl+key capture - programmatically focused only */}
-      <input
-        ref={ctrlInputRef}
-        type="text"
-        className="sr-only"
-        tabIndex={-1}
-        autoComplete="off"
-        onChange={handleCtrlInput}
-        onBlur={() => setCtrlActive(false)}
-      />
+      {!readOnly && (
+        <input
+          ref={ctrlInputRef}
+          type="text"
+          className="sr-only"
+          tabIndex={-1}
+          autoComplete="off"
+          onChange={handleCtrlInput}
+          onBlur={() => setCtrlActive(false)}
+        />
+      )}
 
       {/* Modals */}
       <AboutModal isOpen={aboutOpen} onClose={() => setAboutOpen(false)} />

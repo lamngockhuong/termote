@@ -13,14 +13,18 @@ import type { Session, SessionGroup } from '../types/session'
 import { AgentStatusBadge } from './agent-status-badge'
 import { IconPicker } from './icon-picker'
 import { SwipeableSessionItem } from './swipeable-session-item'
+import { Button, FOCUS_RING, IconButton } from './ui/button'
+import { Sheet } from './ui/sheet'
 
-const ACTIVE_SESSION_CLASSES =
-  'bg-zinc-200 dark:bg-zinc-700 border-l-2 border-blue-500'
+// The row on screen: a soft accent fill, or an accent edge in the terminal style.
+const ACTIVE_ROW_CLASSES =
+  'bg-accent-soft text-fg font-medium ui-terminal:bg-surface-raised ui-terminal:shadow-[inset_2px_0_0_var(--color-accent)]'
+const ROW_CLASSES =
+  'text-fg-muted hover:bg-surface-raised hover:text-fg transition-colors duration-(--duration-fast)'
 const SIDEBAR_BASE_CLASSES =
-  'h-full min-h-0 bg-zinc-50 dark:bg-zinc-800 flex flex-col border-r border-zinc-200 dark:border-zinc-700 shrink-0'
-const DESKTOP_TRANSITION_CLASSES = 'transition-[width] duration-200'
-const HOVER_CLASSES =
-  'hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors'
+  'h-full min-h-0 flex flex-col shrink-0 border-r border-border bg-surface ui-terminal:bg-bg transition-[width] duration-(--duration-base) ease-standard'
+const INPUT_CLASSES =
+  'h-9 w-full min-w-0 rounded-control border border-border bg-bg px-2.5 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-accent pointer-coarse:h-touch'
 
 interface Props {
   sessions: Session[]
@@ -31,6 +35,7 @@ interface Props {
   onAdd: (name: string, icon?: string, description?: string) => void
   onRemove: (id: string) => void
   onUpdate?: (id: string, updates: Partial<Omit<Session, 'id'>>) => void
+  // Mobile: whether the sessions sheet is open
   isOpen?: boolean
   onClose?: () => void
   isMobile?: boolean
@@ -38,6 +43,7 @@ interface Props {
   onToggleCollapse?: () => void
 }
 
+// The session list: a bottom sheet on phones, a collapsible sidebar on desktop.
 export function SessionSidebar({
   sessions,
   groups = [],
@@ -47,7 +53,7 @@ export function SessionSidebar({
   onRemove,
   onUpdate,
   isOpen = true,
-  onClose,
+  onClose = () => {},
   isMobile = false,
   isCollapsed = false,
   onToggleCollapse,
@@ -89,74 +95,91 @@ export function SessionSidebar({
 
   // Edit form (shared)
   const renderEditForm = () => (
-    <div className="p-3 border-b border-zinc-300/30 dark:border-zinc-700/30 overflow-hidden">
-      {/* Icon + Name on same row */}
-      <div className="flex items-center gap-2 mb-2 min-w-0">
+    <div className="flex flex-col gap-2 rounded-control border border-border bg-bg p-2">
+      <div className="flex min-w-0 items-center gap-2">
         <IconPicker value={editIcon} onChange={setEditIcon} />
         <input
           type="text"
+          aria-label="Session name"
           value={editName}
           onChange={(e) => setEditName(e.target.value)}
-          className="flex-1 min-w-0 px-2 py-2 text-sm bg-zinc-200/50 dark:bg-zinc-800/50 border border-zinc-400/30 dark:border-zinc-600/30 rounded-lg focus:border-blue-500 outline-none"
+          className={INPUT_CLASSES}
           autoFocus
         />
       </div>
-      {/* Buttons */}
       <div className="flex gap-2">
-        <button
+        <Button
+          variant="primary"
+          size="sm"
           onClick={saveEdit}
-          className="flex-1 px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 rounded-lg text-white"
+          className="flex-1"
         >
           Save
-        </button>
-        <button
-          onClick={cancelEdit}
-          className="px-3 py-1.5 text-xs bg-zinc-300/50 dark:bg-zinc-700/50 hover:bg-zinc-400/50 dark:hover:bg-zinc-600/50 rounded-lg"
-        >
+        </Button>
+        <Button size="sm" onClick={cancelEdit}>
           Cancel
-        </button>
+        </Button>
       </div>
     </div>
   )
 
-  // Desktop session item
-  const renderDesktopItem = (session: Session) => (
-    <div
-      className={`group relative flex items-center ${HOVER_CLASSES} ${
-        activeId === session.id ? ACTIVE_SESSION_CLASSES : ''
-      }`}
-    >
-      <button
-        onClick={() => onSelect(session.id)}
-        onDoubleClick={() => onUpdate && startEdit(session)}
-        className="flex-1 p-3 text-left text-zinc-900 dark:text-zinc-50 flex items-center min-w-0"
+  // Desktop session item; edit and remove show on hover or keyboard focus
+  const renderDesktopItem = (session: Session) => {
+    const active = activeId === session.id
+    return (
+      <div
+        className={`group relative flex items-center rounded-control ${
+          active ? ACTIVE_ROW_CLASSES : ROW_CLASSES
+        }`}
       >
-        <span className="text-xl shrink-0">{session.icon}</span>
-        <span className="ml-2 text-sm truncate flex-1">{session.name}</span>
-        <AgentStatusBadge status={session.agentStatus} />
-      </button>
-      <div className="hidden group-hover:flex absolute right-1 top-1/2 -translate-y-1/2 gap-1">
-        {onUpdate && (
-          <button
-            onClick={() => startEdit(session)}
-            className="w-6 h-6 text-xs text-zinc-500 dark:text-zinc-400 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-zinc-300/50 dark:hover:bg-zinc-600/50 rounded transition-colors flex items-center justify-center"
-            title="Edit session"
-          >
-            <Pencil size={14} />
-          </button>
-        )}
-        {sessions.length > 1 && (
-          <button
-            onClick={() => onRemove(session.id)}
-            className="w-6 h-6 text-xs text-zinc-500 dark:text-zinc-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-zinc-300/50 dark:hover:bg-zinc-600/50 rounded transition-colors flex items-center justify-center"
-            title="Remove session"
-          >
-            <X size={14} />
-          </button>
-        )}
+        <button
+          type="button"
+          aria-current={active ? 'true' : undefined}
+          onClick={() => onSelect(session.id)}
+          onDoubleClick={() => onUpdate && startEdit(session)}
+          title={
+            session.description
+              ? `${session.name} - ${session.description}`
+              : undefined
+          }
+          className={`flex h-9 min-w-0 flex-1 items-center gap-2.5 rounded-control px-2 text-left text-[14px] ${FOCUS_RING} focus-visible:-outline-offset-2`}
+        >
+          <span className="shrink-0 text-[15px] leading-none">
+            {session.icon}
+          </span>
+          <span className="flex-1 truncate ui-terminal:font-label ui-terminal:text-[13px]">
+            {session.name}
+          </span>
+          <AgentStatusBadge status={session.agentStatus} />
+        </button>
+        <div className="absolute right-1 top-1/2 hidden -translate-y-1/2 gap-0.5 rounded-control bg-surface-raised group-focus-within:flex group-hover:flex">
+          {onUpdate && (
+            <IconButton
+              size="sm"
+              onClick={() => startEdit(session)}
+              className="size-7!"
+              title="Edit session"
+              aria-label={`Edit ${session.name}`}
+            >
+              <Pencil size={14} aria-hidden="true" />
+            </IconButton>
+          )}
+          {sessions.length > 1 && (
+            <IconButton
+              size="sm"
+              variant="danger"
+              onClick={() => onRemove(session.id)}
+              className="size-7!"
+              title="Remove session"
+              aria-label={`Remove ${session.name}`}
+            >
+              <X size={14} aria-hidden="true" />
+            </IconButton>
+          )}
+        </div>
       </div>
-    </div>
-  )
+    )
+  }
 
   const renderItem = (session: Session) => (
     <div key={session.id}>
@@ -178,163 +201,164 @@ export function SessionSidebar({
     </div>
   )
 
+  const rowGap = isMobile ? 'gap-1 ui-native:gap-px' : 'gap-0.5'
+
   // A single group (tmux) keeps the flat 0.x list without a header.
   const renderGroup = (group: SessionGroup) => {
     const tabs = sessions.filter((s) => s.groupId === group.id)
     const collapsed = isGroupCollapsed(group.id)
     const name = group.name || group.id
     return (
-      <section key={group.id} aria-label={name}>
+      <section key={group.id} aria-label={name} className="pb-2">
         <button
           type="button"
           onClick={() => toggleGroup(group.id)}
           aria-expanded={!collapsed}
-          className={`w-full px-3 py-2 flex items-center gap-1 text-xs font-semibold text-zinc-500 dark:text-zinc-400 ${HOVER_CLASSES}`}
+          className={`flex w-full items-center gap-1.5 rounded-control px-2 pb-1 pt-2 font-label text-[11px] uppercase tracking-wider text-fg-subtle hover:text-fg ${FOCUS_RING}`}
         >
-          {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-          <span className="flex-1 min-w-0 text-left truncate">{name}</span>
+          {collapsed ? (
+            <ChevronRight size={12} aria-hidden="true" />
+          ) : (
+            <ChevronDown size={12} aria-hidden="true" />
+          )}
+          <span className="min-w-0 flex-1 truncate text-left">{name}</span>
           <AgentStatusBadge status={group.agentStatus} size={12} />
           <span className="ml-1 tabular-nums">{tabs.length}</span>
         </button>
-        {!collapsed && tabs.map(renderItem)}
+        {!collapsed && (
+          <div
+            className={`flex flex-col ${rowGap} ui-native:overflow-hidden ui-native:rounded-panel`}
+          >
+            {tabs.map(renderItem)}
+          </div>
+        )}
       </section>
     )
   }
 
-  // Session list content (shared between mobile and desktop)
-  const sessionList = (
-    <>
-      {groups.length > 1 ? groups.map(renderGroup) : sessions.map(renderItem)}
-
-      {/* Add session button/form */}
-      {showAddForm ? (
-        <div className="p-3 border-t border-zinc-300/30 dark:border-zinc-700/30">
-          <input
-            type="text"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-            placeholder="Session name"
-            className="w-full px-2 py-1 text-sm bg-zinc-200/50 dark:bg-zinc-800/50 border border-zinc-400/30 dark:border-zinc-600/30 rounded-lg focus:border-blue-500 outline-none mb-2"
-            autoFocus
-          />
-          <IconPicker value={newIcon} onChange={setNewIcon} />
-          <div className="flex gap-1 mt-2">
-            <button
-              onClick={handleAdd}
-              className="flex-1 px-2 py-1 text-xs bg-blue-600 hover:bg-blue-500 rounded-lg text-white"
-            >
-              Add
-            </button>
-            <button
-              onClick={() => setShowAddForm(false)}
-              className="px-2 py-1 text-xs bg-zinc-300/50 dark:bg-zinc-700/50 hover:bg-zinc-400/50 dark:hover:bg-zinc-600/50 rounded-lg"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      ) : (
-        <button
-          onClick={() => setShowAddForm(true)}
-          className={`p-3 text-left ${HOVER_CLASSES} border-t border-zinc-200 dark:border-zinc-700 w-full text-zinc-600 dark:text-zinc-400 flex items-center`}
-          title="Add new session"
+  const addForm = (
+    <div className="flex flex-col gap-2 rounded-control border border-border bg-bg p-2">
+      <div className="flex min-w-0 items-center gap-2">
+        <IconPicker value={newIcon} onChange={setNewIcon} />
+        <input
+          type="text"
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+          placeholder="Session name"
+          className={INPUT_CLASSES}
+          autoFocus
+        />
+      </div>
+      <div className="flex gap-2">
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={handleAdd}
+          className="flex-1"
         >
-          <Plus size={20} />
-          <span
-            className={`${isMobile ? 'inline' : 'hidden md:inline'} ml-2 text-sm`}
-          >
-            Add session
-          </span>
-        </button>
-      )}
-    </>
+          Add
+        </Button>
+        <Button size="sm" onClick={() => setShowAddForm(false)}>
+          Cancel
+        </Button>
+      </div>
+    </div>
   )
 
-  // Mobile: slide-over panel
+  // Session list content (shared between mobile and desktop)
+  const sessionList =
+    groups.length > 1 ? (
+      groups.map(renderGroup)
+    ) : (
+      <div
+        className={`flex flex-col ${rowGap} ui-native:overflow-hidden ui-native:rounded-panel`}
+      >
+        {sessions.map(renderItem)}
+      </div>
+    )
+
+  // Mobile: bottom sheet; adding a session starts from its header
   if (isMobile) {
     return (
-      <>
-        {/* Backdrop */}
-        {isOpen && (
-          <div
-            className="fixed inset-0 bg-black/50 z-40 animate-fade-in"
-            onClick={onClose}
-          />
-        )}
-        {/* Panel */}
-        <aside
-          className={`fixed left-0 top-0 bottom-0 w-72 z-50 bg-zinc-50 dark:bg-zinc-800 flex flex-col transform transition-transform duration-200 ease-out ${
-            isOpen ? 'translate-x-0' : '-translate-x-full'
-          }`}
-        >
-          <div
-            className="p-4 border-b border-zinc-200 dark:border-zinc-700 flex justify-between items-center shrink-0"
-            style={{ paddingTop: 'calc(1rem + env(safe-area-inset-top))' }}
-          >
-            <span className="font-semibold text-zinc-900 dark:text-zinc-50">
-              Sessions
-            </span>
-            <button
-              onClick={onClose}
-              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-200/50 dark:hover:bg-zinc-700/50 transition-colors"
+      <Sheet
+        isOpen={isOpen}
+        onClose={onClose}
+        title="Sessions"
+        closeLabel="Close sessions"
+        actions={
+          !showAddForm && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setShowAddForm(true)}
+              title="Add new session"
+              className="ui-native:rounded-full"
             >
-              <X size={18} />
-            </button>
-          </div>
-          <div className="flex-1 min-h-0 overflow-y-auto">{sessionList}</div>
-        </aside>
-      </>
+              <Plus size={16} aria-hidden="true" />
+              New session
+            </Button>
+          )
+        }
+      >
+        <div className="flex flex-col gap-2 px-2 pb-3 pt-1">
+          {showAddForm && addForm}
+          {sessionList}
+        </div>
+      </Sheet>
     )
   }
 
   // Desktop: collapsible sidebar
   if (isCollapsed) {
     return (
-      <aside
-        className={`w-12 ${SIDEBAR_BASE_CLASSES} ${DESKTOP_TRANSITION_CLASSES}`}
-      >
-        <button
+      <aside className={`w-14 items-center gap-1 py-2 ${SIDEBAR_BASE_CLASSES}`}>
+        <IconButton
           onClick={() => onToggleCollapse?.()}
-          className="p-3 flex items-center justify-center hover:bg-zinc-200/50 dark:hover:bg-zinc-700/50 transition-colors"
           title="Expand sidebar"
           aria-label="Expand sidebar"
         >
-          <PanelLeftOpen
-            size={18}
-            className="text-zinc-500 dark:text-zinc-400"
-          />
-        </button>
-        <div className="flex-1 min-h-0 overflow-y-auto">
-          {sessions.map((session) => (
-            <button
-              key={session.id}
-              onClick={() => onSelect(session.id)}
-              className={`w-full p-2 flex items-center justify-center ${HOVER_CLASSES} ${
-                activeId === session.id ? ACTIVE_SESSION_CLASSES : ''
-              }`}
-              title={session.name}
-            >
-              <span className="relative text-lg leading-none">
-                {session.icon}
-                {session.agentStatus && (
-                  <span className="absolute -top-1.5 -right-2 flex size-3.5 items-center justify-center rounded-full bg-zinc-50 dark:bg-zinc-800">
-                    <AgentStatusBadge status={session.agentStatus} size={10} />
-                  </span>
-                )}
-              </span>
-            </button>
-          ))}
-          <button
-            onClick={() => {
-              onToggleCollapse?.()
-              setShowAddForm(true)
-            }}
-            className={`w-full p-2 flex items-center justify-center ${HOVER_CLASSES} border-t border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400`}
-            title="Add new session"
-          >
-            <Plus size={18} />
-          </button>
+          <PanelLeftOpen size={18} aria-hidden="true" />
+        </IconButton>
+        <IconButton
+          variant="primary"
+          onClick={() => {
+            onToggleCollapse?.()
+            setShowAddForm(true)
+          }}
+          title="Add new session"
+          aria-label="Add new session"
+        >
+          <Plus size={18} aria-hidden="true" />
+        </IconButton>
+        <div className="flex min-h-0 w-full flex-1 flex-col items-center gap-0.5 overflow-y-auto pt-1">
+          {sessions.map((session) => {
+            const active = activeId === session.id
+            return (
+              <button
+                key={session.id}
+                type="button"
+                aria-current={active ? 'true' : undefined}
+                onClick={() => onSelect(session.id)}
+                className={`flex size-10 shrink-0 items-center justify-center rounded-control ${FOCUS_RING} ${
+                  active ? ACTIVE_ROW_CLASSES : ROW_CLASSES
+                }`}
+                title={session.name}
+              >
+                <span className="relative text-lg leading-none">
+                  {session.icon}
+                  {session.agentStatus && (
+                    <span className="absolute -top-1.5 -right-2 flex size-3.5 items-center justify-center rounded-full bg-surface ui-terminal:bg-bg">
+                      <AgentStatusBadge
+                        status={session.agentStatus}
+                        size={10}
+                      />
+                    </span>
+                  )}
+                </span>
+              </button>
+            )
+          })}
         </div>
       </aside>
     )
@@ -342,23 +366,43 @@ export function SessionSidebar({
 
   // Desktop: expanded sidebar
   return (
-    <aside
-      className={`w-56 ${SIDEBAR_BASE_CLASSES} ${DESKTOP_TRANSITION_CLASSES}`}
-    >
-      <div className="p-2 flex justify-end shrink-0">
-        <button
+    <aside className={`w-64 ${SIDEBAR_BASE_CLASSES}`}>
+      <div className="flex h-12 shrink-0 items-center justify-between pl-3 pr-1.5">
+        <span className="flex items-center gap-2 text-[15px] font-semibold text-fg ui-terminal:font-label">
+          <span
+            aria-hidden="true"
+            className="flex size-6 items-center justify-center rounded-control bg-accent font-label text-[12px] font-bold text-accent-fg"
+          >
+            ›_
+          </span>
+          termote
+        </span>
+        <IconButton
           onClick={() => onToggleCollapse?.()}
-          className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-zinc-200/50 dark:hover:bg-zinc-700/50 transition-colors"
           title="Collapse sidebar"
           aria-label="Collapse sidebar"
         >
-          <PanelLeftClose
-            size={16}
-            className="text-zinc-500 dark:text-zinc-400"
-          />
-        </button>
+          <PanelLeftClose size={18} aria-hidden="true" />
+        </IconButton>
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto">{sessionList}</div>
+      <div className="shrink-0 px-3 pb-2">
+        {showAddForm ? (
+          addForm
+        ) : (
+          <Button
+            variant="primary"
+            onClick={() => setShowAddForm(true)}
+            title="Add new session"
+            className="w-full ui-native:rounded-full"
+          >
+            <Plus size={16} aria-hidden="true" />
+            New session
+          </Button>
+        )}
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+        {sessionList}
+      </div>
     </aside>
   )
 }

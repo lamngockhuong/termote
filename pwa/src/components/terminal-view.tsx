@@ -61,6 +61,8 @@ interface Props {
   // Current UI style: a change re-reads the background token.
   uiStyle?: UiStyle
   disableContextMenu?: boolean
+  // View-only role: the terminal shows the pane but sends nothing typed.
+  readOnly?: boolean
   onConnectionStateChange?: (state: ConnectionState) => void
 }
 
@@ -191,6 +193,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       theme = 'dark',
       uiStyle,
       disableContextMenu = true,
+      readOnly = false,
       onConnectionStateChange,
     },
     ref,
@@ -218,6 +221,8 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
     serverScrollRef.current = serverScroll
     const paneIdRef = useRef(paneId)
     paneIdRef.current = paneId
+    const readOnlyRef = useRef(readOnly)
+    readOnlyRef.current = readOnly
     // Rows scrolled but not sent yet, and the pane they are for; one request
     // is in flight at a time, so a fast wheel does not queue one per event.
     const scrollPendingRef = useRef(0)
@@ -368,11 +373,15 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
         },
         copyMode: false,
         scrollHistory: (lines) => scrollHistory(lines),
+        // View-only: every path that sends input (toolbar keys, tmux copy
+        // mode scrolling, paste) stops here, not only xterm's own onData.
         send: (data) => {
+          if (readOnlyRef.current) return false
           toLiveScreen()
           return socketRef.current.send(data)
         },
         paste: (text) => {
+          if (readOnlyRef.current) return
           toLiveScreen()
           if (bracketedRef.current) {
             socketRef.current.send(bracketPaste(text))
@@ -420,6 +429,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
 
       const subs = [
         term.onData((data) => {
+          if (readOnlyRef.current) return
           const out = isHerdrRef.current ? stripTerminalReplies(data) : data
           if (!out) return
           toLiveScreen()
@@ -428,6 +438,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
         // Non-UTF-8 input (legacy mouse reports) arrives as a binary string,
         // one char per byte.
         term.onBinary((data) => {
+          if (readOnlyRef.current) return
           socketRef.current.send(
             Uint8Array.from(data, (c) => c.charCodeAt(0) & 0xff),
           )
@@ -462,6 +473,14 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       setTerminalFontFamily(handleRef.current, terminalFontFamily(fontFamily))
       layout()
     }, [fontFamily, layout])
+
+    // No cursor or keyboard focus for input that would go nowhere.
+    useEffect(() => {
+      const term = termRef.current
+      /* v8 ignore next */
+      if (!term) return
+      term.options.disableStdin = readOnly
+    }, [readOnly])
 
     useEffect(() => {
       if (disableContextMenu) blockContextMenu(handleRef.current)

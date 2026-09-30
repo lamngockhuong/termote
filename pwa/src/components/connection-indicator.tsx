@@ -1,4 +1,5 @@
 import { Wifi, WifiOff } from 'lucide-react'
+import { FOCUS_RING } from './ui/button'
 
 export type ConnectionState =
   | 'connecting'
@@ -12,17 +13,29 @@ interface Props {
 }
 
 const STATUS_COLORS: Record<ConnectionState, string> = {
-  connecting: 'bg-yellow-500',
-  connected: 'bg-green-500',
-  disconnected: 'bg-red-500',
-  error: 'bg-red-500',
+  connecting: 'bg-warning motion-safe:animate-pulse',
+  connected: 'bg-success',
+  disconnected: 'bg-danger',
+  error: 'bg-danger',
 }
 
-const STATUS_TEXT: Record<ConnectionState, string> = {
+export const STATUS_TEXT: Record<ConnectionState, string> = {
   connecting: 'Connecting...',
   connected: 'Connected',
   disconnected: 'Disconnected',
   error: 'Connection error',
+}
+
+// The coloured dot alone, for places that show the state without the retry
+// button (the mobile session chip).
+export function ConnectionDot({ state }: { state: ConnectionState }) {
+  return (
+    <span
+      aria-hidden="true"
+      data-state={state}
+      className={`size-2 shrink-0 rounded-full ${STATUS_COLORS[state]}`}
+    />
+  )
 }
 
 export function ConnectionIndicator({ state, onRetry }: Props) {
@@ -30,23 +43,22 @@ export function ConnectionIndicator({ state, onRetry }: Props) {
 
   return (
     <button
+      type="button"
       onClick={isClickable ? onRetry : undefined}
-      className={`flex items-center gap-1.5 px-2 py-1 rounded-lg transition-colors ${
-        isClickable
-          ? 'hover:bg-zinc-200/50 dark:hover:bg-zinc-700/50 cursor-pointer'
-          : 'cursor-default'
+      className={`flex h-8 items-center gap-1.5 px-2 rounded-control text-fg-muted transition-colors duration-(--duration-fast) pointer-coarse:h-touch ${FOCUS_RING} ${
+        isClickable ? 'hover:bg-surface hover:text-fg' : 'cursor-default'
       }`}
       title={STATUS_TEXT[state]}
       aria-label={STATUS_TEXT[state]}
       disabled={!isClickable}
     >
-      <span
-        className={`w-2 h-2 rounded-full ${STATUS_COLORS[state]} ${
-          state === 'connecting' ? 'animate-pulse' : ''
-        }`}
-      />
-      <span className="text-zinc-500 dark:text-zinc-400 hidden sm:inline">
-        {state === 'connected' ? <Wifi size={14} /> : <WifiOff size={14} />}
+      <ConnectionDot state={state} />
+      <span className="hidden sm:inline">
+        {state === 'connected' ? (
+          <Wifi size={14} aria-hidden="true" />
+        ) : (
+          <WifiOff size={14} aria-hidden="true" />
+        )}
       </span>
     </button>
   )

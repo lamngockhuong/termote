@@ -1,32 +1,30 @@
+import { Monitor, Moon, Sun } from 'lucide-react'
 import { useTheme } from '../contexts/theme-context'
+import { SegmentedControl } from './ui/segmented-control'
+
+type Theme = 'light' | 'dark' | 'system'
 
 const OPTIONS = [
-  { value: 'light', icon: '☀️', label: 'Light' },
-  { value: 'dark', icon: '🌙', label: 'Dark' },
-  { value: 'system', icon: '💻', label: 'System' },
+  { value: 'light', Icon: Sun, label: 'Light' },
+  { value: 'dark', Icon: Moon, label: 'Dark' },
+  { value: 'system', Icon: Monitor, label: 'System' },
 ] as const
 
+// Theme choice as a segmented row, for places outside the overflow menu
+// (the menu uses MenuItemRadio, since a menu may only hold menu items).
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme()
 
   return (
-    <div className="flex gap-1">
-      {OPTIONS.map(({ value, icon, label }) => (
-        <button
-          key={value}
-          onClick={() => setTheme(value)}
-          className={`p-2 rounded-lg transition-colors ${
-            theme === value
-              ? 'bg-blue-600 text-white'
-              : 'bg-zinc-200 dark:bg-zinc-700 hover:bg-zinc-300 dark:hover:bg-zinc-600'
-          }`}
-          title={label}
-          aria-label={`${label} theme`}
-          aria-pressed={theme === value}
-        >
-          {icon}
-        </button>
-      ))}
-    </div>
+    <SegmentedControl<Theme>
+      label="Theme"
+      value={theme}
+      onChange={setTheme}
+      options={OPTIONS.map(({ value, Icon, label }) => ({
+        value,
+        label: `${label} theme`,
+        content: <Icon size={15} aria-hidden="true" />,
+      }))}
+    />
   )
 }

@@ -12,25 +12,25 @@ function renderWithTheme() {
 }
 
 describe('ThemeToggle', () => {
-  it('renders all three theme buttons', () => {
+  it('renders all three theme options', () => {
     renderWithTheme()
     expect(screen.getByLabelText('Light theme')).toBeInTheDocument()
     expect(screen.getByLabelText('Dark theme')).toBeInTheDocument()
     expect(screen.getByLabelText('System theme')).toBeInTheDocument()
   })
 
-  it('system theme button is pressed by default', () => {
+  it('system theme option is checked by default', () => {
     renderWithTheme()
     expect(screen.getByLabelText('System theme')).toHaveAttribute(
-      'aria-pressed',
+      'aria-checked',
       'true',
     )
     expect(screen.getByLabelText('Light theme')).toHaveAttribute(
-      'aria-pressed',
+      'aria-checked',
       'false',
     )
     expect(screen.getByLabelText('Dark theme')).toHaveAttribute(
-      'aria-pressed',
+      'aria-checked',
       'false',
     )
   })
@@ -39,11 +39,11 @@ describe('ThemeToggle', () => {
     renderWithTheme()
     fireEvent.click(screen.getByLabelText('Light theme'))
     expect(screen.getByLabelText('Light theme')).toHaveAttribute(
-      'aria-pressed',
+      'aria-checked',
       'true',
     )
     expect(screen.getByLabelText('System theme')).toHaveAttribute(
-      'aria-pressed',
+      'aria-checked',
       'false',
     )
   })
@@ -52,7 +52,7 @@ describe('ThemeToggle', () => {
     renderWithTheme()
     fireEvent.click(screen.getByLabelText('Dark theme'))
     expect(screen.getByLabelText('Dark theme')).toHaveAttribute(
-      'aria-pressed',
+      'aria-checked',
       'true',
     )
   })
@@ -62,7 +62,7 @@ describe('ThemeToggle', () => {
     fireEvent.click(screen.getByLabelText('Light theme'))
     fireEvent.click(screen.getByLabelText('System theme'))
     expect(screen.getByLabelText('System theme')).toHaveAttribute(
-      'aria-pressed',
+      'aria-checked',
       'true',
     )
   })

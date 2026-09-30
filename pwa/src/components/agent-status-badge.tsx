@@ -8,22 +8,22 @@ const STATUS_STYLE: Record<
 > = {
   blocked: {
     Icon: CircleAlert,
-    className: 'text-red-500 dark:text-red-400',
+    className: 'text-danger',
     label: 'Agent blocked',
   },
   working: {
     Icon: LoaderCircle,
-    className: 'text-amber-500 dark:text-amber-400 motion-safe:animate-spin',
+    className: 'text-warning motion-safe:animate-spin',
     label: 'Agent working',
   },
   done: {
     Icon: CircleCheck,
-    className: 'text-green-600 dark:text-green-400',
+    className: 'text-success',
     label: 'Agent done',
   },
   idle: {
     Icon: CircleDot,
-    className: 'text-zinc-400 dark:text-zinc-500',
+    className: 'text-fg-subtle',
     label: 'Agent idle',
   },
 }

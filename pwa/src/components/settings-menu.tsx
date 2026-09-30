@@ -1,12 +1,45 @@
-import { Settings } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
-import { ThemeToggle } from './theme-toggle'
+import {
+  Info,
+  LifeBuoy,
+  Link,
+  Monitor,
+  Moon,
+  MoreHorizontal,
+  RotateCcw,
+  Settings,
+  Sun,
+} from 'lucide-react'
+import { useState } from 'react'
+import { useTheme } from '../contexts/theme-context'
+import {
+  Menu,
+  MenuGroup,
+  MenuItem,
+  MenuItemRadio,
+  MenuSeparator,
+} from './ui/menu'
+
+interface FontSizeControls {
+  value: number
+  onDecrease: () => void
+  onIncrease: () => void
+}
 
 interface Props {
   onOpenAbout: () => void
   onOpenHelp: () => void
   onOpenSettings: () => void
+  // Font size in the menu (mobile: the header has no room for the buttons)
+  fontSize?: FontSizeControls
+  // Copies a link to the session on screen
+  onCopyLink?: () => void
 }
+
+const THEMES = [
+  { value: 'light', label: 'Light', Icon: Sun },
+  { value: 'dark', label: 'Dark', Icon: Moon },
+  { value: 'system', label: 'System', Icon: Monitor },
+] as const
 
 async function clearCacheAndReload() {
   try {
@@ -26,98 +59,86 @@ async function clearCacheAndReload() {
   }
 }
 
+// The header's overflow menu: font size (mobile), theme, and the dialogs.
 export function SettingsMenu({
   onOpenAbout,
   onOpenHelp,
   onOpenSettings,
+  fontSize,
+  onCopyLink,
 }: Props) {
-  const [isOpen, setIsOpen] = useState(false)
+  const { theme, setTheme } = useTheme()
   const [clearing, setClearing] = useState(false)
-  const menuRef = useRef<HTMLDivElement>(null)
 
   const handleClearCache = async () => {
     setClearing(true)
     await clearCacheAndReload()
   }
 
-  // Close on click outside
-  useEffect(() => {
-    if (!isOpen) return
-    const handler = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setIsOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [isOpen])
-
   return (
-    <div ref={menuRef} className="relative">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-zinc-200/50 dark:hover:bg-zinc-700/50 transition-colors"
-        aria-label="Settings"
-        aria-expanded={isOpen}
-      >
-        <Settings size={20} />
-      </button>
-
-      {isOpen && (
-        <div className="absolute right-0 top-full mt-2 w-56 rounded-xl bg-white dark:bg-zinc-800 shadow-lg p-2 z-50 border border-zinc-200 dark:border-zinc-700">
-          {/* Theme Section */}
-          <div className="px-3 py-2">
-            <div className="text-xs text-zinc-500 dark:text-zinc-400 mb-2">
-              Theme
-            </div>
-            <ThemeToggle />
-          </div>
-
-          <button
-            onClick={() => {
-              onOpenSettings()
-              setIsOpen(false)
-            }}
-            className="w-full px-3 py-2 text-left rounded-lg hover:bg-zinc-200/50 dark:hover:bg-zinc-700/50 transition-colors"
-          >
-            Preferences
-          </button>
-
-          <hr className="my-2 border-zinc-300/30 dark:border-zinc-700/30" />
-
-          {/* Help */}
-          <button
-            onClick={() => {
-              onOpenHelp()
-              setIsOpen(false)
-            }}
-            className="w-full px-3 py-2 text-left rounded-lg hover:bg-zinc-200/50 dark:hover:bg-zinc-700/50 transition-colors"
-          >
-            Usage Guide
-          </button>
-
-          {/* About */}
-          <button
-            onClick={() => {
-              onOpenAbout()
-              setIsOpen(false)
-            }}
-            className="w-full px-3 py-2 text-left rounded-lg hover:bg-zinc-200/50 dark:hover:bg-zinc-700/50 transition-colors"
-          >
-            About Termote
-          </button>
-
-          <hr className="my-2 border-zinc-300/30 dark:border-zinc-700/30" />
-
-          <button
-            onClick={handleClearCache}
-            disabled={clearing}
-            className="w-full px-3 py-2 text-left rounded-lg hover:bg-zinc-200/50 dark:hover:bg-zinc-700/50 transition-colors text-red-600 dark:text-red-400 disabled:opacity-50"
-          >
-            {clearing ? 'Clearing...' : 'Clear Cache & Reload'}
-          </button>
-        </div>
+    <Menu
+      label="More"
+      trigger={<MoreHorizontal size={20} aria-hidden="true" />}
+    >
+      {fontSize && (
+        <>
+          <MenuGroup label={`Font size · ${fontSize.value}`}>
+            <MenuItem
+              icon={<span className="inline-block w-5 text-center">A−</span>}
+              onSelect={fontSize.onDecrease}
+              keepOpen
+            >
+              Decrease font size
+            </MenuItem>
+            <MenuItem
+              icon={<span className="inline-block w-5 text-center">A+</span>}
+              onSelect={fontSize.onIncrease}
+              keepOpen
+            >
+              Increase font size
+            </MenuItem>
+          </MenuGroup>
+          <MenuSeparator />
+        </>
       )}
-    </div>
+      <MenuGroup label="Theme">
+        {THEMES.map(({ value, label, Icon }) => (
+          <MenuItemRadio
+            key={value}
+            checked={theme === value}
+            icon={<Icon size={17} />}
+            onSelect={() => setTheme(value)}
+            keepOpen
+          >
+            {label}
+          </MenuItemRadio>
+        ))}
+      </MenuGroup>
+      <MenuSeparator />
+      <MenuItem icon={<Settings size={17} />} onSelect={onOpenSettings}>
+        Settings
+      </MenuItem>
+      <MenuItem icon={<LifeBuoy size={17} />} onSelect={onOpenHelp}>
+        Help &amp; gestures
+      </MenuItem>
+      <MenuItem icon={<Info size={17} />} onSelect={onOpenAbout}>
+        About
+      </MenuItem>
+      {onCopyLink && (
+        <MenuItem icon={<Link size={17} />} onSelect={onCopyLink}>
+          Copy link
+        </MenuItem>
+      )}
+      <MenuSeparator />
+      <MenuItem
+        icon={<RotateCcw size={17} />}
+        onSelect={handleClearCache}
+        disabled={clearing}
+        keepOpen
+        danger
+      >
+        {clearing ? 'Clearing...' : 'Clear cache & reload'}
+      </MenuItem>
+    </Menu>
   )
 }

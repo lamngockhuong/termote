@@ -134,6 +134,20 @@ describe('useLocalSessions', () => {
     expect(result.current.activeSession.name).toBe('vim')
   })
 
+  it('switchSession on tmux only selects: the one write a deep link may cause', async () => {
+    mockFetchTabs.mockResolvedValue([WIN_SHELL, WIN_VIM])
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    await act(async () => {
+      await result.current.switchSession('1', 'ignored-pane')
+    })
+    expect(mockSelectTab).toHaveBeenCalledOnce()
+    expect(mockSelectTab).toHaveBeenCalledWith('1')
+    expect(mockCreateTab).not.toHaveBeenCalled()
+    expect(mockCloseTab).not.toHaveBeenCalled()
+    expect(mockRenameTab).not.toHaveBeenCalled()
+  })
+
   it('switchSession does nothing when session not found', async () => {
     const { result } = renderHook(() => useLocalSessions(1))
     await act(async () => {})
@@ -602,6 +616,43 @@ describe('useLocalSessions with herdr', () => {
       await result.current.refreshSessions()
     })
     expect(result.current.activeSession.id).toBe('w2:t1')
+  })
+
+  it('switchSession opens a given pane of another tab', async () => {
+    const { result } = await render()
+    await act(async () => {
+      await result.current.switchSession('w1:t2', 'w1:p5')
+    })
+    expect(result.current.activeSession.id).toBe('w1:t2')
+    expect(result.current.activeSession.paneId).toBe('w1:p5')
+  })
+
+  it('switchSession opens a given pane of the tab on screen', async () => {
+    const { result } = await render()
+    await act(async () => {
+      await result.current.switchSession('w1:t1', 'w1:p3')
+    })
+    expect(result.current.activeSession.paneId).toBe('w1:p3')
+  })
+
+  it('switchSession keeps the pane on screen when the tab is picked again', async () => {
+    const { result } = await render()
+    act(() => result.current.selectPane('w1:p3'))
+    await act(async () => {
+      await result.current.switchSession('w1:t1')
+    })
+    await act(async () => {
+      await result.current.switchSession('w1:t1', 'w1:gone')
+    })
+    expect(result.current.activeSession.paneId).toBe('w1:p3')
+  })
+
+  it('switchSession falls back to the tab pane for an unknown pane', async () => {
+    const { result } = await render()
+    await act(async () => {
+      await result.current.switchSession('w2:t1', 'w1:p2')
+    })
+    expect(result.current.activeSession.paneId).toBe('w2:p1')
   })
 
   it('selectPane streams another pane of the tab and keeps it on poll', async () => {

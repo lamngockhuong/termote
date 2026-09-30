@@ -42,6 +42,16 @@ vi.mock('./swipeable-session-item', () => ({
   ),
 }))
 
+// jsdom has no modal <dialog>; the mobile list is a Sheet.
+beforeEach(() => {
+  HTMLDialogElement.prototype.showModal = vi.fn(function (
+    this: HTMLDialogElement,
+  ) {
+    this.setAttribute('open', '')
+  })
+  HTMLDialogElement.prototype.close = vi.fn()
+})
+
 const SESSIONS: Session[] = [
   { id: '1', name: 'Shell', icon: '💻', description: 'Terminal' },
   { id: '2', name: 'Dev', icon: '🔧', description: 'Dev session' },
@@ -116,11 +126,27 @@ describe('SessionSidebar — desktop expanded (default)', () => {
     expect(onSelect).toHaveBeenCalledWith('1')
   })
 
-  it('applies active class to active session', () => {
+  it('marks the active session', () => {
     renderDesktop()
-    // The active session wrapper has ACTIVE_SESSION_CLASSES
-    const activeRow = document.querySelector('.border-l-2.border-blue-500')
-    expect(activeRow).toBeInTheDocument()
+    const active = screen.getByRole('button', { current: true })
+    expect(active).toHaveTextContent('Shell')
+    expect(active.parentElement).toHaveClass('bg-accent-soft')
+    const dev = screen.getByText('Dev').closest('button')!
+    expect(dev).not.toHaveAttribute('aria-current')
+    expect(dev.parentElement).not.toHaveClass('bg-accent-soft')
+  })
+
+  it('shows the description in the session title', () => {
+    renderDesktop()
+    expect(screen.getByTitle('Shell - Terminal')).toBeInTheDocument()
+  })
+
+  it('names the hover actions after the session', () => {
+    renderDesktop()
+    expect(screen.getByRole('button', { name: 'Edit Dev' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Remove Dev' }),
+    ).toBeInTheDocument()
   })
 
   it('shows Add session button when form is hidden', () => {
@@ -364,7 +390,9 @@ describe('SessionSidebar — desktop collapsed', () => {
   it('applies active class to active session in collapsed mode', () => {
     renderCollapsed()
     const activeBtn = screen.getByTitle('Shell')
-    expect(activeBtn.className).toContain('border-blue-500')
+    expect(activeBtn).toHaveAttribute('aria-current', 'true')
+    expect(activeBtn).toHaveClass('bg-accent-soft')
+    expect(screen.getByTitle('Dev')).not.toHaveAttribute('aria-current')
   })
 
   it('collapsed add button expands sidebar and shows add form', () => {
@@ -438,52 +466,44 @@ describe('SessionSidebar — mobile mode', () => {
     )
   }
 
-  it('renders mobile slide-over aside', () => {
+  it('renders the list in a sheet titled Sessions', () => {
     renderMobile()
-    expect(screen.getByText('Sessions')).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Sessions' })).toBeInTheDocument()
+    expect(document.querySelector('aside')).toBeNull()
   })
 
-  it('shows backdrop when isOpen is true', () => {
-    renderMobile(true)
-    const backdrop = document.querySelector('.fixed.inset-0.bg-black\\/50')
-    expect(backdrop).toBeInTheDocument()
-  })
-
-  it('hides backdrop when isOpen is false', () => {
+  it('renders nothing while closed', () => {
     renderMobile(false)
-    const backdrop = document.querySelector('.fixed.inset-0.bg-black\\/50')
-    expect(backdrop).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
-  it('panel slides in when isOpen is true', () => {
-    renderMobile(true)
-    const panel = document.querySelector('aside')!
-    expect(panel.className).toContain('translate-x-0')
-  })
-
-  it('panel slides out when isOpen is false', () => {
-    renderMobile(false)
-    const panel = document.querySelector('aside')!
-    expect(panel.className).toContain('-translate-x-full')
-  })
-
-  it('calls onClose when backdrop clicked', () => {
+  it('calls onClose on a tap on the scrim', () => {
     renderMobile()
-    const backdrop = document.querySelector('.fixed.inset-0.bg-black\\/50')!
-    fireEvent.click(backdrop)
+    const dialog = screen.getByRole('dialog')
+    fireEvent.pointerDown(dialog)
+    fireEvent.click(dialog)
     expect(onClose).toHaveBeenCalled()
   })
 
-  it('calls onClose when X button clicked', () => {
+  it('calls onClose when the close button is clicked', () => {
     renderMobile()
-    // There's an X button in the mobile header
-    const xBtn = screen
-      .getAllByRole('button')
-      .find(
-        (b) => b.className.includes('rounded-lg') && b.closest('.border-b'),
-      )!
-    fireEvent.click(xBtn)
+    fireEvent.click(screen.getByRole('button', { name: 'Close sessions' }))
     expect(onClose).toHaveBeenCalled()
+  })
+
+  it('works without onClose', () => {
+    render(
+      <SessionSidebar
+        sessions={SESSIONS}
+        activeId="1"
+        onSelect={onSelect}
+        onAdd={onAdd}
+        onRemove={onRemove}
+        isMobile
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Close sessions' }))
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
 
   it('renders SwipeableSessionItem for each session', () => {
@@ -533,6 +553,8 @@ describe('SessionSidebar — mobile mode', () => {
   it('add form works in mobile mode', () => {
     renderMobile()
     fireEvent.click(screen.getByTitle('Add new session'))
+    // The header button gives way to the form at the top of the list
+    expect(screen.queryByTitle('Add new session')).toBeNull()
     fireEvent.change(screen.getByPlaceholderText('Session name'), {
       target: { value: 'Mobile Session' },
     })

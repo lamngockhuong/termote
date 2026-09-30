@@ -1,8 +1,17 @@
 import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { IconPicker } from './icon-picker'
 
 describe('IconPicker', () => {
+  beforeEach(() => {
+    HTMLDialogElement.prototype.showModal = vi.fn(function (
+      this: HTMLDialogElement,
+    ) {
+      this.setAttribute('open', '')
+    })
+    HTMLDialogElement.prototype.close = vi.fn()
+  })
+
   it('renders trigger button with current value', () => {
     render(<IconPicker value="💻" onChange={vi.fn()} />)
     expect(screen.getByTitle('Change icon')).toBeInTheDocument()
@@ -24,18 +33,18 @@ describe('IconPicker', () => {
     render(<IconPicker value="💻" onChange={vi.fn()} />)
     fireEvent.click(screen.getByTitle('Change icon'))
     expect(screen.getByText('Choose Icon')).toBeInTheDocument()
-    fireEvent.click(screen.getByText('Cancel'))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(screen.queryByText('Choose Icon')).not.toBeInTheDocument()
   })
 
   it('closes modal on backdrop click', () => {
-    const { container } = render(<IconPicker value="💻" onChange={vi.fn()} />)
+    render(<IconPicker value="💻" onChange={vi.fn()} />)
     fireEvent.click(screen.getByTitle('Change icon'))
     expect(screen.getByText('Choose Icon')).toBeInTheDocument()
-    // The backdrop is the fixed inset-0 div
-    const backdrop = container.querySelector('.fixed.inset-0.bg-black\\/50')
-    expect(backdrop).toBeInTheDocument()
-    fireEvent.click(backdrop!)
+    // A press on the dialog element itself is a press on its scrim
+    const dialog = screen.getByRole('dialog')
+    fireEvent.pointerDown(dialog)
+    fireEvent.click(dialog)
     expect(screen.queryByText('Choose Icon')).not.toBeInTheDocument()
   })
 
@@ -56,12 +65,12 @@ describe('IconPicker', () => {
   it('applies selected styling to current value icon', () => {
     render(<IconPicker value="🚀" onChange={vi.fn()} />)
     fireEvent.click(screen.getByTitle('Change icon'))
-    // The 🚀 button inside the grid should have ring-2 class (selected)
-    const allButtons = screen.getAllByRole('button')
-    const rocketBtn = allButtons.find(
-      (b) => b.textContent === '🚀' && b.classList.contains('ring-2'),
-    )
-    expect(rocketBtn).toBeInTheDocument()
+    // The 🚀 button inside the grid is marked as the current one
+    const rocketBtn = screen.getByRole('button', { name: '🚀', pressed: true })
+    expect(rocketBtn).toHaveClass('ring-accent')
+    expect(
+      screen.getByRole('button', { name: '💻', pressed: false }),
+    ).not.toHaveClass('ring-2')
   })
 
   it('selecting currently selected icon still calls onChange', () => {
