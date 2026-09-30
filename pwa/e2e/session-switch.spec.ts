@@ -15,7 +15,7 @@ test.describe('session management', () => {
     await page.click('button[title="Add new session"]')
     await page.waitForSelector('input[placeholder="Session name"]', { timeout: 5000 })
     await page.fill('input[placeholder="Session name"]', 'test-switch')
-    await page.click('button.bg-blue-600:has-text("Add")')
+    await page.getByRole('button', { name: 'Add', exact: true }).click()
     await page.waitForTimeout(500)
 
     // Verify session was created
@@ -32,7 +32,7 @@ test.describe('session management', () => {
 
     // Fill in session name
     await page.fill('input[placeholder="Session name"]', 'test-session')
-    await page.click('button.bg-blue-600:has-text("Add")')
+    await page.getByRole('button', { name: 'Add', exact: true }).click()
     await page.waitForTimeout(500)
 
     // Verify new session appears
@@ -47,7 +47,7 @@ test.describe('session management', () => {
     await page.click('button[title="Add new session"]')
     await page.waitForSelector('input[placeholder="Session name"]', { timeout: 5000 })
     await page.fill('input[placeholder="Session name"]', 'to-delete')
-    await page.click('button.bg-blue-600:has-text("Add")')
+    await page.getByRole('button', { name: 'Add', exact: true }).click()
     await page.waitForTimeout(500)
 
     // Verify session was created
@@ -119,7 +119,7 @@ test.describe('mux API integration', () => {
     await page.click('button[title="Add new session"]')
     await page.waitForSelector('input[placeholder="Session name"]', { timeout: 5000 })
     await page.fill('input[placeholder="Session name"]', 'api-test')
-    await page.click('button.bg-blue-600:has-text("Add")')
+    await page.getByRole('button', { name: 'Add', exact: true }).click()
     await page.waitForTimeout(500)
 
     const before = await request.get('/api/mux/snapshot')
@@ -144,7 +144,7 @@ test.describe('mux API integration', () => {
     await page.click('button[title="Add new session"]')
     await page.waitForSelector('input[placeholder="Session name"]', { timeout: 5000 })
     await page.fill('input[placeholder="Session name"]', 'test-api')
-    await page.click('button.bg-blue-600:has-text("Add")')
+    await page.getByRole('button', { name: 'Add', exact: true }).click()
     await page.waitForTimeout(500)
 
     await expect(page.locator('aside')).toContainText('test-api')
@@ -160,7 +160,7 @@ test.describe('mux API integration', () => {
     await page.click('button[title="Add new session"]')
     await page.waitForSelector('input[placeholder="Session name"]', { timeout: 5000 })
     await page.fill('input[placeholder="Session name"]', name)
-    await page.click('button.bg-blue-600:has-text("Add")')
+    await page.getByRole('button', { name: 'Add', exact: true }).click()
     await page.waitForTimeout(500)
 
     const before = await request.get('/api/mux/snapshot')
@@ -177,5 +177,55 @@ test.describe('mux API integration', () => {
     const after = await request.get('/api/mux/snapshot')
     const countAfter = tabCount(await after.json())
     expect(countAfter).toBeLessThanOrEqual(countBefore)
+  })
+})
+
+test.describe('deep link', () => {
+  type Snap = { groups: Array<{ id: string; tabs: Array<{ id: string; name: string; active: boolean }> }> }
+  const snapshot = async (request: import('@playwright/test').APIRequestContext) =>
+    (await (await request.get('/api/mux/snapshot')).json()) as Snap
+  const activeTab = async (request: import('@playwright/test').APIRequestContext) =>
+    (await snapshot(request)).groups[0].tabs.find((t) => t.active)?.id
+
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/')
+    await page.evaluate(() => localStorage.clear())
+    await page.reload()
+    await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
+    // A second window, which tmux makes current
+    await page.click('button[title="Add new session"]')
+    await page.fill('input[placeholder="Session name"]', `link-${Date.now()}`)
+    await page.getByRole('button', { name: 'Add', exact: true }).click()
+    await page.waitForTimeout(500)
+  })
+
+  test('opening #/s/<group>/<tab> switches to that tab', async ({ page, request }) => {
+    const snap = await snapshot(request)
+    const group = snap.groups[0]
+    const target = group.tabs.find((t) => !t.active)!
+    await page.goto(`/#/s/${encodeURIComponent(group.id)}/${encodeURIComponent(target.id)}`)
+    await expect.poll(() => activeTab(request), { timeout: 15000 }).toBe(target.id)
+    await expect(page.locator('aside [aria-current="true"]')).toContainText(target.name)
+  })
+
+  test('an unknown tab stays put and says so', async ({ page, request }) => {
+    const before = await activeTab(request)
+    const group = (await snapshot(request)).groups[0]
+    await page.goto(`/#/s/${encodeURIComponent(group.id)}/no-such-tab`)
+    await expect(page.getByText('Session in link not found')).toBeVisible()
+    expect(await activeTab(request)).toBe(before)
+  })
+
+  test('switching sessions updates the URL without adding history', async ({ page, request }) => {
+    const group = (await snapshot(request)).groups[0]
+    const other = group.tabs.find((t) => !t.active)!
+    await expect.poll(() => page.evaluate(() => location.hash)).toMatch(/^#\/s\//)
+    const length = await page.evaluate(() => history.length)
+
+    await page.locator(`aside .group:has-text("${other.name}") button`).first().click()
+    await expect
+      .poll(() => page.evaluate(() => location.hash))
+      .toBe(`#/s/${encodeURIComponent(group.id)}/${encodeURIComponent(other.id)}`)
+    expect(await page.evaluate(() => history.length)).toBe(length)
   })
 })

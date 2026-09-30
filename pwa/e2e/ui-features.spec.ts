@@ -1,55 +1,71 @@
-import { test, expect } from '@playwright/test'
+import { expect, type Page, test } from '@playwright/test'
 
-test.describe('settings menu', () => {
+const waitForTerminal = (page: Page, timeout = 10000) =>
+  page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout })
+
+// The header's overflow menu holds the theme, the dialogs and the cache reset
+const openMenu = (page: Page) => page.getByRole('button', { name: 'More' }).click()
+
+const openFromMenu = async (page: Page, item: string) => {
+  await openMenu(page)
+  await page.getByRole('menuitem', { name: item }).click()
+}
+
+// On desktop the settings dialog shows one group at a time
+const openSettingsGroup = async (page: Page, group: string) => {
+  await openFromMenu(page, 'Settings')
+  await page
+    .getByRole('navigation', { name: 'Settings groups' })
+    .getByRole('button', { name: group })
+    .click()
+}
+
+const storedSettings = async (page: Page) =>
+  JSON.parse((await page.evaluate(() => localStorage.getItem('termote-settings')))!)
+
+const reloadFresh = async (page: Page) => {
+  await page.goto('/')
+  await page.evaluate(() => localStorage.clear())
+  await page.reload()
+  await waitForTerminal(page)
+}
+
+test.describe('overflow menu', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/')
-    await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
+    await waitForTerminal(page)
   })
 
-  test('opens settings menu on click', async ({ page }) => {
-    await page.click('button[aria-label="Settings"]')
-    await expect(page.locator('text=Theme')).toBeVisible()
-    await expect(page.locator('text=About Termote')).toBeVisible()
+  test('opens the menu on click', async ({ page }) => {
+    await openMenu(page)
+    await expect(page.getByRole('menu', { name: 'More' })).toBeVisible()
+    await expect(page.getByRole('menuitemradio', { name: 'Dark' })).toBeVisible()
+    await expect(page.getByRole('menuitem', { name: 'About' })).toBeVisible()
   })
 
-  test('closes settings menu on click outside', async ({ page }) => {
-    await page.click('button[aria-label="Settings"]')
-    await expect(page.locator('text=Theme')).toBeVisible()
-
-    // Click outside the menu
+  test('closes the menu on click outside', async ({ page }) => {
+    await openMenu(page)
+    await expect(page.getByRole('menu', { name: 'More' })).toBeVisible()
     await page.click('header', { position: { x: 10, y: 10 } })
-    await expect(page.locator('text=Theme')).not.toBeVisible()
+    await expect(page.getByRole('menu', { name: 'More' })).toBeHidden()
   })
 })
 
 test.describe('theme toggle', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/')
-    await page.evaluate(() => localStorage.clear())
-    await page.reload()
-    await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
+    await reloadFresh(page)
   })
 
+  const pickTheme = async (page: Page, name: 'Light' | 'Dark') => {
+    if (!(await page.getByRole('menu', { name: 'More' }).isVisible())) await openMenu(page)
+    await page.getByRole('menuitemradio', { name }).click()
+  }
+
   test('toggles between light and dark theme', async ({ page }) => {
-    // Open settings
-    await page.click('button[aria-label="Settings"]')
-    await page.waitForTimeout(200)
-
-    // Click light theme button (sun icon)
-    await page.click('button[aria-label="Light theme"]')
-    await page.waitForTimeout(200)
-
-    // Verify light class is applied
-    const htmlClass = await page.locator('html').getAttribute('class')
-    expect(htmlClass).toContain('light')
-
-    // Click dark theme button (moon icon)
-    await page.click('button[aria-label="Dark theme"]')
-    await page.waitForTimeout(200)
-
-    // Verify dark class is applied
-    const htmlClassDark = await page.locator('html').getAttribute('class')
-    expect(htmlClassDark).toContain('dark')
+    await pickTheme(page, 'Light')
+    await expect(page.locator('html')).toHaveClass(/light/)
+    await pickTheme(page, 'Dark')
+    await expect(page.locator('html')).toHaveClass(/dark/)
   })
 
   test('does not reconnect the terminal on theme switch', async ({ page }) => {
@@ -61,42 +77,26 @@ test.describe('theme toggle', () => {
     })
     page.on('websocket', (ws) => reopened.push(ws.url()))
 
-    await page.click('button[aria-label="Settings"]')
-    await page.waitForTimeout(200)
-    await page.click('button[aria-label="Light theme"]')
+    await pickTheme(page, 'Light')
     await page.waitForTimeout(500)
     await expect(page.locator('[data-testid="terminal-view"] .xterm')).toBeVisible()
-
-    await page.click('button[aria-label="Dark theme"]')
+    await pickTheme(page, 'Dark')
     await page.waitForTimeout(500)
     expect(reopened).toHaveLength(0)
   })
 
   test('persists theme preference', async ({ page }) => {
-    // Open settings and set dark theme
-    await page.click('button[aria-label="Settings"]')
-    await page.click('button[aria-label="Dark theme"]')
-    await page.waitForTimeout(200)
-
-    // Reload page
+    await pickTheme(page, 'Dark')
     await page.reload()
-    await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
-
-    // Verify theme persisted
-    const htmlClass = await page.locator('html').getAttribute('class')
-    expect(htmlClass).toContain('dark')
+    await waitForTerminal(page)
+    await expect(page.locator('html')).toHaveClass(/dark/)
   })
 
   test('applies correct terminal theme after page reload', async ({ page }) => {
-    // Set light theme
-    await page.click('button[aria-label="Settings"]')
-    await page.waitForTimeout(200)
-    await page.click('button[aria-label="Light theme"]')
-    await page.waitForTimeout(500)
-
-    // Reload page
+    await pickTheme(page, 'Light')
+    await page.waitForTimeout(300)
     await page.reload()
-    await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
+    await waitForTerminal(page)
 
     // xterm.js paints its scroll area with the theme background
     await expect(async () => {
@@ -158,6 +158,39 @@ test.describe('ui style', () => {
     })
     await page.goto('/')
     await expect(page.locator('html')).toHaveAttribute('data-ui-style', 'neutral')
+  })
+})
+
+
+test.describe('ui style setting', () => {
+  test('picking a style in Settings applies at once and survives a reload', async ({ page }) => {
+    await page.addInitScript(() => {
+      if (!sessionStorage.getItem('seeded')) {
+        localStorage.clear()
+        localStorage.setItem('termote-theme', 'dark')
+        sessionStorage.setItem('seeded', '1')
+      }
+    })
+    await page.goto('/')
+    await waitForTerminal(page)
+    await expect(page.locator('html')).toHaveAttribute('data-ui-style', 'neutral')
+
+    await openSettingsGroup(page, 'Appearance')
+    await page
+      .getByRole('radiogroup', { name: 'Interface style' })
+      .getByRole('radio', { name: 'Terminal' })
+      .click()
+    await expect(page.locator('html')).toHaveAttribute('data-ui-style', 'terminal')
+    expect((await storedSettings(page)).uiStyle).toBe('terminal')
+
+    await page.keyboard.press('Escape')
+    await page.reload()
+    await waitForTerminal(page)
+    await expect(page.locator('html')).toHaveAttribute('data-ui-style', 'terminal')
+    // --tm-bg of the terminal style in dark
+    expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe(
+      'rgb(12, 14, 13)',
+    )
   })
 })
 
@@ -235,388 +268,278 @@ test.describe('terminal stream', () => {
 
 test.describe('font size controls', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/')
-    await page.evaluate(() => localStorage.clear())
-    await page.reload()
-    await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
+    await reloadFresh(page)
   })
+
+  const fontSize = async (page: Page) =>
+    Number.parseInt((await page.getByTestId('font-size').textContent()) || '0', 10)
 
   test('displays current font size', async ({ page }) => {
     // Default font size should be 14
-    await expect(page.locator('header')).toContainText('14')
+    await expect(page.getByTestId('font-size')).toHaveText('14')
   })
 
   test('increases font size on A+ click', async ({ page }) => {
-    const initialSize = await page.locator('header span.text-xs.w-8').textContent()
-
-    await page.click('button[aria-label="Increase font size"]')
-    await page.waitForTimeout(100)
-
-    const newSize = await page.locator('header span.text-xs.w-8').textContent()
-    expect(parseInt(newSize || '0')).toBeGreaterThan(parseInt(initialSize || '0'))
+    const initialSize = await fontSize(page)
+    await page.getByRole('button', { name: 'Increase font size' }).click()
+    await expect.poll(() => fontSize(page)).toBeGreaterThan(initialSize)
   })
 
   test('decreases font size on A- click', async ({ page }) => {
     // First increase to have room to decrease
-    await page.click('button[aria-label="Increase font size"]')
-    await page.waitForTimeout(100)
-
-    const initialSize = await page.locator('header span.text-xs.w-8').textContent()
-
-    await page.click('button[aria-label="Decrease font size"]')
-    await page.waitForTimeout(100)
-
-    const newSize = await page.locator('header span.text-xs.w-8').textContent()
-    expect(parseInt(newSize || '0')).toBeLessThan(parseInt(initialSize || '0'))
+    await page.getByRole('button', { name: 'Increase font size' }).click()
+    await expect.poll(() => fontSize(page)).toBeGreaterThan(14)
+    const initialSize = await fontSize(page)
+    await page.getByRole('button', { name: 'Decrease font size' }).click()
+    await expect.poll(() => fontSize(page)).toBeLessThan(initialSize)
   })
 
   test('respects minimum font size', async ({ page }) => {
-    // Click decrease many times
     for (let i = 0; i < 10; i++) {
-      await page.click('button[aria-label="Decrease font size"]')
-      await page.waitForTimeout(50)
+      await page.getByRole('button', { name: 'Decrease font size' }).click()
     }
-
-    const size = await page.locator('header span.text-xs.w-8').textContent()
-    expect(parseInt(size || '0')).toBeGreaterThanOrEqual(6) // MIN_SIZE = 6
+    expect(await fontSize(page)).toBeGreaterThanOrEqual(6) // MIN_SIZE = 6
   })
 
   test('respects maximum font size', async ({ page }) => {
-    // Click increase many times
     for (let i = 0; i < 10; i++) {
-      await page.click('button[aria-label="Increase font size"]')
-      await page.waitForTimeout(50)
+      await page.getByRole('button', { name: 'Increase font size' }).click()
     }
-
-    const size = await page.locator('header span.text-xs.w-8').textContent()
-    expect(parseInt(size || '0')).toBeLessThanOrEqual(24) // MAX_SIZE = 24
+    expect(await fontSize(page)).toBeLessThanOrEqual(24) // MAX_SIZE = 24
   })
 })
 
-test.describe('about modal', () => {
+test.describe('about sheet', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/')
-    await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
+    await waitForTerminal(page)
+    await openFromMenu(page, 'About')
   })
 
-  test('opens about modal from settings', async ({ page }) => {
-    await page.click('button[aria-label="Settings"]')
-    await page.click('text=About Termote')
-    await page.waitForTimeout(200)
-
-    await expect(page.locator('dialog')).toBeVisible()
-    await expect(page.locator('dialog')).toContainText('About')
-    await expect(page.locator('dialog')).toContainText('Version')
-    await expect(page.locator('dialog')).toContainText('Author')
+  test('opens from the menu', async ({ page }) => {
+    const dialog = page.getByRole('dialog', { name: 'About Termote' })
+    await expect(dialog).toBeVisible()
+    await expect(dialog).toContainText('Version')
+    await expect(dialog).toContainText('Author')
   })
 
-  test('closes about modal on X click', async ({ page }) => {
-    await page.click('button[aria-label="Settings"]')
-    await page.click('text=About Termote')
-    await page.waitForTimeout(200)
-
-    await page.click('dialog button[aria-label="Close"]')
-    await page.waitForTimeout(200)
-
-    await expect(page.locator('dialog')).not.toBeVisible()
+  test('closes on the close button', async ({ page }) => {
+    await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click()
+    await expect(page.getByRole('dialog')).toBeHidden()
   })
 
-  test('closes about modal on Escape key', async ({ page }) => {
-    await page.click('button[aria-label="Settings"]')
-    await page.click('text=About Termote')
-    await page.waitForTimeout(200)
-
+  test('closes on Escape', async ({ page }) => {
+    await expect(page.getByRole('dialog')).toBeVisible()
     await page.keyboard.press('Escape')
-    await page.waitForTimeout(200)
-
-    await expect(page.locator('dialog')).not.toBeVisible()
+    await expect(page.getByRole('dialog')).toBeHidden()
   })
 
-  test('about modal contains expected links', async ({ page }) => {
-    await page.click('button[aria-label="Settings"]')
-    await page.click('text=About Termote')
-    await page.waitForTimeout(200)
-
-    await expect(page.locator('dialog a:has-text("GitHub")')).toBeVisible()
-    await expect(page.locator('dialog a:has-text("Changelog")')).toBeVisible()
-    await expect(page.locator('dialog a:has-text("Report Issue")')).toBeVisible()
+  test('contains the expected links', async ({ page }) => {
+    const dialog = page.getByRole('dialog')
+    for (const name of ['GitHub', 'Changelog', 'Report Issue']) {
+      await expect(dialog.getByRole('link', { name })).toBeVisible()
+    }
   })
 })
 
-test.describe('preferences modal', () => {
+test.describe('settings sheet', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/')
-    await page.evaluate(() => localStorage.clear())
-    await page.reload()
-    await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
+    await reloadFresh(page)
   })
 
-  test('opens preferences from settings menu', async ({ page }) => {
-    await page.click('button[aria-label="Settings"]')
-    await page.click('text=Preferences')
-    await page.waitForTimeout(200)
+  const imeRadio = (page: Page) => page.getByRole('radio', { name: 'Send + Enter' })
 
-    await expect(page.locator('dialog')).toBeVisible()
-    await expect(page.locator('dialog')).toContainText('Settings')
-    await expect(page.locator('dialog')).toContainText('Text input send behavior')
+  test('opens from the menu', async ({ page }) => {
+    await openFromMenu(page, 'Settings')
+    const dialog = page.getByRole('dialog', { name: 'Settings' })
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByRole('navigation', { name: 'Settings groups' })).toBeVisible()
   })
 
   test('changes IME send behavior', async ({ page }) => {
-    await page.click('button[aria-label="Settings"]')
-    await page.click('text=Preferences')
-    await page.waitForTimeout(200)
-
-    // Select "Send + Enter" option
-    await page.click('text=Send + Enter')
-    await page.waitForTimeout(100)
-
-    // Verify radio is checked
-    const radio = page.locator('input[name="imeSendBehavior"][value="send-enter"]')
-    await expect(radio).toBeChecked()
-
-    // Verify persisted to localStorage
-    const stored = await page.evaluate(() => localStorage.getItem('termote-settings'))
-    expect(JSON.parse(stored!).imeSendBehavior).toBe('send-enter')
+    await openSettingsGroup(page, 'Keyboard')
+    await imeRadio(page).click()
+    await expect(imeRadio(page)).toHaveAttribute('aria-checked', 'true')
+    expect((await storedSettings(page)).imeSendBehavior).toBe('send-enter')
   })
 
   test('toggles toolbar default expanded', async ({ page }) => {
-    await page.click('button[aria-label="Settings"]')
-    await page.click('text=Preferences')
-    await page.waitForTimeout(200)
-
-    // Click the first toggle switch (toolbar default expanded)
-    const toggle = page.locator('button[role="switch"]').first()
+    await openSettingsGroup(page, 'Keyboard')
+    const toggle = page.getByRole('switch', { name: 'Toolbar default expanded' })
     await expect(toggle).toHaveAttribute('aria-checked', 'false')
     await toggle.click()
-    await page.waitForTimeout(100)
     await expect(toggle).toHaveAttribute('aria-checked', 'true')
-
-    // Verify persisted
-    const stored = await page.evaluate(() => localStorage.getItem('termote-settings'))
-    expect(JSON.parse(stored!).toolbarDefaultExpanded).toBe(true)
+    expect((await storedSettings(page)).toolbarDefaultExpanded).toBe(true)
   })
 
   test('toggles disable context menu', async ({ page }) => {
-    await page.click('button[aria-label="Settings"]')
-    await page.click('text=Preferences')
-    await page.waitForTimeout(200)
-
-    // Second toggle is "Disable right-click menu" (default: true)
-    const toggle = page.locator('button[role="switch"]').nth(1)
+    await openSettingsGroup(page, 'Terminal')
+    const toggle = page.getByRole('switch', { name: 'Disable right-click menu' })
     await expect(toggle).toHaveAttribute('aria-checked', 'true')
     await toggle.click()
-    await page.waitForTimeout(100)
     await expect(toggle).toHaveAttribute('aria-checked', 'false')
-
-    // Verify persisted
-    const stored = await page.evaluate(() => localStorage.getItem('termote-settings'))
-    expect(JSON.parse(stored!).disableContextMenu).toBe(false)
+    expect((await storedSettings(page)).disableContextMenu).toBe(false)
   })
 
   test('disable context menu setting persists after reload', async ({ page }) => {
-    // Disable context menu blocking
-    await page.click('button[aria-label="Settings"]')
-    await page.click('text=Preferences')
-    await page.waitForTimeout(200)
-    const toggle = page.locator('button[role="switch"]').nth(1)
-    await toggle.click()
-    await page.waitForTimeout(100)
-
-    // Reload
+    await openSettingsGroup(page, 'Terminal')
+    await page.getByRole('switch', { name: 'Disable right-click menu' }).click()
     await page.keyboard.press('Escape')
     await page.reload()
-    await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
+    await waitForTerminal(page)
 
-    // Reopen and verify
-    await page.click('button[aria-label="Settings"]')
-    await page.click('text=Preferences')
-    await page.waitForTimeout(200)
-    const toggleAfter = page.locator('button[role="switch"]').nth(1)
-    await expect(toggleAfter).toHaveAttribute('aria-checked', 'false')
+    await openSettingsGroup(page, 'Terminal')
+    await expect(
+      page.getByRole('switch', { name: 'Disable right-click menu' }),
+    ).toHaveAttribute('aria-checked', 'false')
   })
 
   test('changes poll interval', async ({ page }) => {
-    await page.click('button[aria-label="Settings"]')
-    await page.click('text=Preferences')
-    await page.waitForTimeout(200)
-
-    // Change poll interval to 30s
-    const select = page.locator('select')
-    await select.selectOption('30')
-    await page.waitForTimeout(100)
-
-    // Verify persisted to localStorage
-    const stored = await page.evaluate(() => localStorage.getItem('termote-settings'))
-    expect(JSON.parse(stored!).pollInterval).toBe(30)
+    await openSettingsGroup(page, 'Sessions')
+    await page.getByRole('combobox', { name: 'Session poll interval' }).selectOption('30')
+    await expect.poll(async () => (await storedSettings(page)).pollInterval).toBe(30)
   })
 
   test('poll interval persists after reload', async ({ page }) => {
-    await page.click('button[aria-label="Settings"]')
-    await page.click('text=Preferences')
-    await page.waitForTimeout(200)
-
-    // Set to 60 (1m)
-    await page.locator('select').selectOption('60')
-    await page.waitForTimeout(100)
-
-    // Reload
+    await openSettingsGroup(page, 'Sessions')
+    await page.getByRole('combobox', { name: 'Session poll interval' }).selectOption('60')
     await page.keyboard.press('Escape')
     await page.reload()
-    await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
+    await waitForTerminal(page)
 
-    // Reopen and verify
-    await page.click('button[aria-label="Settings"]')
-    await page.click('text=Preferences')
-    await page.waitForTimeout(200)
-    await expect(page.locator('select')).toHaveValue('60')
+    await openSettingsGroup(page, 'Sessions')
+    await expect(page.getByRole('combobox', { name: 'Session poll interval' })).toHaveValue('60')
   })
 
   test('preferences persist after page reload', async ({ page }) => {
-    // Open and change setting
-    await page.click('button[aria-label="Settings"]')
-    await page.click('text=Preferences')
-    await page.waitForTimeout(200)
-    await page.click('text=Send + Enter')
-    await page.waitForTimeout(100)
-
-    // Close and reload
+    await openSettingsGroup(page, 'Keyboard')
+    await imeRadio(page).click()
     await page.keyboard.press('Escape')
     await page.reload()
-    await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
+    await waitForTerminal(page)
 
-    // Reopen and verify
-    await page.click('button[aria-label="Settings"]')
-    await page.click('text=Preferences')
-    await page.waitForTimeout(200)
-    const radio = page.locator('input[name="imeSendBehavior"][value="send-enter"]')
-    await expect(radio).toBeChecked()
+    await openSettingsGroup(page, 'Keyboard')
+    await expect(imeRadio(page)).toHaveAttribute('aria-checked', 'true')
   })
 })
 
 test.describe('clear cache button', () => {
-  test('shows clear cache option in settings menu', async ({ page }) => {
+  test('shows the clear cache item in the menu', async ({ page }) => {
     await page.goto('/')
-    await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
-
-    await page.click('button[aria-label="Settings"]')
-    await expect(page.locator('text=Clear Cache & Reload')).toBeVisible()
+    await waitForTerminal(page)
+    await openMenu(page)
+    await expect(page.getByRole('menuitem', { name: 'Clear cache & reload' })).toBeVisible()
   })
 })
 
-test.describe('help modal', () => {
+test.describe('help sheet', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/')
-    await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
+    await waitForTerminal(page)
+    await openFromMenu(page, 'Help & gestures')
   })
 
-  test('opens usage guide from settings', async ({ page }) => {
-    await page.click('button[aria-label="Settings"]')
-    await page.click('text=Usage Guide')
-    await page.waitForTimeout(200)
-
-    await expect(page.locator('dialog')).toBeVisible()
-    await expect(page.locator('dialog')).toContainText('Usage Guide')
+  test('opens the usage guide from the menu', async ({ page }) => {
+    await expect(page.getByRole('dialog', { name: 'Usage Guide' })).toBeVisible()
   })
 
-  test('help modal contains gesture and shortcut docs', async ({ page }) => {
-    await page.click('button[aria-label="Settings"]')
-    await page.click('text=Usage Guide')
-    await page.waitForTimeout(200)
-
-    // Should document gestures and shortcuts per checklist
-    const dialog = page.locator('dialog')
+  test('contains gesture and shortcut docs', async ({ page }) => {
+    const dialog = page.getByRole('dialog')
     await expect(dialog).toContainText('Swipe')
     await expect(dialog).toContainText('Ctrl')
   })
 
-  test('closes help modal on close button', async ({ page }) => {
-    await page.click('button[aria-label="Settings"]')
-    await page.click('text=Usage Guide')
-    await page.waitForTimeout(200)
-
-    await page.click('dialog button[aria-label="Close"]')
-    await page.waitForTimeout(200)
-    await expect(page.locator('dialog')).not.toBeVisible()
+  test('closes on the close button', async ({ page }) => {
+    await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click()
+    await expect(page.getByRole('dialog')).toBeHidden()
   })
 })
 
 test.describe('sidebar collapse', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/')
-    await page.evaluate(() => localStorage.clear())
-    await page.reload()
-    await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
+    await reloadFresh(page)
   })
 
   test('sidebar collapse and expand toggle works', async ({ page }) => {
-    // Desktop: sidebar should be visible with collapse button
-    const collapseBtn = page.locator('button[aria-label="Collapse sidebar"]')
-    if (await collapseBtn.isVisible()) {
-      await collapseBtn.click()
-      await page.waitForTimeout(200)
-
-      // After collapse, expand button should appear
-      await expect(
-        page.locator('button[aria-label="Expand sidebar"]'),
-      ).toBeVisible()
-
-      // Expand again
-      await page.click('button[aria-label="Expand sidebar"]')
-      await page.waitForTimeout(200)
-      await expect(collapseBtn).toBeVisible()
-    }
+    const collapseBtn = page.getByRole('button', { name: 'Collapse sidebar' })
+    await collapseBtn.click()
+    await expect(page.getByRole('button', { name: 'Expand sidebar' })).toBeVisible()
+    await page.getByRole('button', { name: 'Expand sidebar' }).click()
+    await expect(collapseBtn).toBeVisible()
   })
 
   test('sidebar collapse state persists after reload', async ({ page }) => {
-    const collapseBtn = page.locator('button[aria-label="Collapse sidebar"]')
-    if (await collapseBtn.isVisible()) {
-      await collapseBtn.click()
-      await page.waitForTimeout(200)
-
-      // Reload
-      await page.reload()
-      await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
-
-      // Should still be collapsed
-      await expect(
-        page.locator('button[aria-label="Expand sidebar"]'),
-      ).toBeVisible()
-    }
+    await page.getByRole('button', { name: 'Collapse sidebar' }).click()
+    await page.reload()
+    await waitForTerminal(page)
+    await expect(page.getByRole('button', { name: 'Expand sidebar' })).toBeVisible()
   })
 })
 
 test.describe('fullscreen toggle', () => {
   test('fullscreen button visible on desktop', async ({ page }) => {
     await page.goto('/')
-    await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
-
-    // Desktop viewport should show fullscreen button
-    const btn = page.locator('button[aria-label="Enter fullscreen"]')
-    await expect(btn).toBeVisible()
+    await waitForTerminal(page)
+    await expect(page.getByRole('button', { name: 'Enter fullscreen' })).toBeVisible()
   })
 })
 
 test.describe('sidebar scroll', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/')
-    await page.evaluate(() => localStorage.clear())
-    await page.reload()
-    await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 15000 })
+    await reloadFresh(page)
   })
 
   test('sidebar scrolls when many sessions added', async ({ page }) => {
     const tag = Date.now()
-    // Add multiple sessions to trigger scroll
     for (let i = 0; i < 8; i++) {
       await page.click('button[title="Add new session"]')
       await page.waitForSelector('input[placeholder="Session name"]', { timeout: 3000 })
       await page.fill('input[placeholder="Session name"]', `s${tag}-${i}`)
-      await page.click('button.bg-blue-600:has-text("Add")')
+      await page.getByRole('button', { name: 'Add', exact: true }).click()
       await page.waitForTimeout(300)
     }
 
     const sidebar = page.locator('aside')
     await expect(sidebar).toBeVisible()
     await expect(sidebar).toContainText(`s${tag}-0`)
+  })
+})
+
+test.describe('mobile layout', () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+
+  // Before the redesign the terminal got 674px at 390x844: a header, a key
+  // toolbar and a bottom navigation shared the rest.
+  const BEFORE_REDESIGN_PX = 674
+
+  for (const style of ['terminal', 'native', 'neutral'] as const) {
+    test(`the terminal is taller than before the redesign (${style})`, async ({ page }) => {
+      await page.addInitScript((s) => {
+        localStorage.setItem(
+          'termote-settings',
+          JSON.stringify({ uiStyle: s, hasSeenGestureHints: true }),
+        )
+      }, style)
+      await page.goto('/')
+      await waitForTerminal(page)
+      const height = await page
+        .getByTestId('terminal-view')
+        .evaluate((el) => el.getBoundingClientRect().height)
+      test.info().annotations.push({ type: 'terminal height', description: `${style}: ${height}px` })
+      expect(height).toBeGreaterThan(BEFORE_REDESIGN_PX)
+    })
+  }
+
+  test('Quick actions sit in the toolbar and open a sheet', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('termote-settings', JSON.stringify({ hasSeenGestureHints: true }))
+    })
+    await page.goto('/')
+    await waitForTerminal(page)
+    await page.getByRole('button', { name: 'Quick actions' }).click()
+    const sheet = page.getByRole('dialog', { name: 'Quick actions' })
+    await expect(sheet.getByRole('button', { name: 'Clear line' })).toBeVisible()
+    await sheet.getByRole('button', { name: 'Close' }).click()
+    await expect(sheet).toBeHidden()
   })
 })
