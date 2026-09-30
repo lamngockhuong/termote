@@ -4,7 +4,12 @@ import { HelpModal } from './help-modal'
 
 describe('HelpModal', () => {
   beforeEach(() => {
-    HTMLDialogElement.prototype.showModal = vi.fn()
+    // An open dialog is what makes its content reachable by role
+    HTMLDialogElement.prototype.showModal = vi.fn(function (
+      this: HTMLDialogElement,
+    ) {
+      this.setAttribute('open', '')
+    })
     HTMLDialogElement.prototype.close = vi.fn()
   })
 
@@ -37,32 +42,21 @@ describe('HelpModal', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
-  it('calls onClose on Escape key when open', () => {
+  it('calls onClose on Escape (the dialog cancel event)', () => {
     const onClose = vi.fn()
     render(<HelpModal isOpen={true} onClose={onClose} />)
-    fireEvent.keyDown(window, { key: 'Escape' })
+    const cancel = new Event('cancel', { cancelable: true })
+    document.querySelector('dialog')!.dispatchEvent(cancel)
     expect(onClose).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not call onClose on Escape key when closed', () => {
-    const onClose = vi.fn()
-    render(<HelpModal isOpen={false} onClose={onClose} />)
-    fireEvent.keyDown(window, { key: 'Escape' })
-    expect(onClose).not.toHaveBeenCalled()
-  })
-
-  it('does not call onClose on other keys', () => {
-    const onClose = vi.fn()
-    render(<HelpModal isOpen={true} onClose={onClose} />)
-    fireEvent.keyDown(window, { key: 'Enter' })
-    expect(onClose).not.toHaveBeenCalled()
+    expect(cancel.defaultPrevented).toBe(true)
   })
 
   it('calls onClose when clicking backdrop', () => {
     const onClose = vi.fn()
     render(<HelpModal isOpen={true} onClose={onClose} />)
     const dialog = document.querySelector('dialog')!
-    fireEvent.click(dialog, { target: dialog })
+    fireEvent.pointerDown(dialog)
+    fireEvent.click(dialog)
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
@@ -75,9 +69,9 @@ describe('HelpModal', () => {
 
   it('renders three tabs: Gestures, Toolbar, tmux', () => {
     render(<HelpModal isOpen={true} onClose={vi.fn()} />)
-    expect(screen.getByText('Gestures')).toBeInTheDocument()
-    expect(screen.getByText('Toolbar')).toBeInTheDocument()
-    expect(screen.getByText('tmux')).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'Gestures' })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'Toolbar' })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'tmux' })).toBeInTheDocument()
   })
 
   it('shows gestures content by default', () => {
@@ -144,16 +138,5 @@ describe('HelpModal', () => {
     fireEvent.click(screen.getByText('Toolbar'))
     fireEvent.click(screen.getByText('Gestures'))
     expect(screen.getByText('Touch Gestures')).toBeInTheDocument()
-  })
-
-  it('removes keydown listener on unmount', () => {
-    const removeEventListenerSpy = vi.spyOn(window, 'removeEventListener')
-    const { unmount } = render(<HelpModal isOpen={true} onClose={vi.fn()} />)
-    unmount()
-    expect(removeEventListenerSpy).toHaveBeenCalledWith(
-      'keydown',
-      expect.any(Function),
-    )
-    removeEventListenerSpy.mockRestore()
   })
 })
