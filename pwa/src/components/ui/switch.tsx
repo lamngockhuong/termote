@@ -26,7 +26,7 @@ export function Switch({
       aria-labelledby={labelledBy}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors duration-(--duration-fast) disabled:opacity-50 ui-terminal:h-6 ui-terminal:w-10 ui-terminal:rounded-control ${FOCUS_RING} ${checked ? 'bg-accent' : 'bg-border-strong'}`}
+      className={`relative inline-flex h-7 w-12 before:absolute before:-inset-x-2 before:-inset-y-2.5 before:content-[''] shrink-0 items-center rounded-full transition-colors duration-(--duration-fast) disabled:opacity-50 ui-terminal:h-6 ui-terminal:w-10 ui-terminal:rounded-control ${FOCUS_RING} ${checked ? 'bg-accent' : 'bg-border-strong'}`}
     >
       <span
         aria-hidden="true"

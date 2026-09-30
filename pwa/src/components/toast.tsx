@@ -51,7 +51,8 @@ export function Toast({
   return (
     <div className="pointer-events-none fixed inset-x-0 top-[calc(env(safe-area-inset-top)+3.5rem)] z-50 flex justify-center px-4">
       <div
-        role="status"
+        // An error interrupts; anything else waits its turn
+        role={variant === 'danger' ? 'alert' : 'status'}
         data-variant={variant}
         className={`flex max-w-[85vw] items-center gap-2 rounded-panel border border-border bg-surface-raised px-4 py-3 text-sm text-fg shadow-lg transition-[opacity,translate] duration-(--duration-base) ease-emphasized starting:opacity-0 motion-safe:starting:-translate-y-2 ${leaving ? 'opacity-0 motion-safe:-translate-y-2' : ''}`}
       >

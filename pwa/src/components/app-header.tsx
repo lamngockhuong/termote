@@ -102,7 +102,8 @@ function MobileHeader(p: Props) {
   )
 }
 
-const FONT_BUTTON = `flex h-8 w-7 items-center justify-center text-[12px] text-fg-muted hover:text-fg rounded-[calc(var(--radius-control)-2px)] ${FOCUS_RING}`
+// The pseudo-element widens the hit area to 44px without growing the header
+const FONT_BUTTON = `relative flex h-8 w-7 before:absolute before:-inset-2 before:content-[''] items-center justify-center text-[12px] text-fg-muted hover:text-fg rounded-[calc(var(--radius-control)-2px)] ${FOCUS_RING}`
 
 function DesktopHeader(p: Props) {
   const { session } = p

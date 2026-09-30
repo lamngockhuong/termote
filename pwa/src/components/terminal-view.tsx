@@ -20,6 +20,7 @@ import {
 } from '../utils/terminal-bridge'
 import { terminalFontFamily } from '../utils/terminal-font'
 import type { ConnectionState } from './connection-indicator'
+import { FOCUS_RING } from './ui/button'
 
 // What terminal-bridge drives. The object is stable for the component's
 // lifetime; its fields always reflect the current terminal.
@@ -508,7 +509,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
           <div className="absolute inset-x-0 bottom-4 flex justify-center pointer-events-none">
             <button
               onClick={socket.reconnect}
-              className="pointer-events-auto px-3 py-1 text-sm text-white bg-zinc-700/90 rounded hover:bg-zinc-600"
+              className={`pointer-events-auto h-9 rounded-control border border-border bg-surface-raised px-3 text-sm text-fg shadow-lg hover:border-border-strong pointer-coarse:h-touch ${FOCUS_RING}`}
             >
               {state === 'error' ? 'Connection lost' : 'Disconnected'} —
               Reconnect

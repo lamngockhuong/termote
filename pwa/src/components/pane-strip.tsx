@@ -25,7 +25,7 @@ export function PaneStrip({ panes, activePaneId, onSelect }: Props) {
             type="button"
             aria-pressed={active}
             onClick={() => onSelect(pane.id)}
-            className={`flex h-7 items-center gap-1.5 whitespace-nowrap px-2 text-[12px] rounded-control touch-manipulation transition-colors duration-(--duration-fast) pointer-coarse:h-9 ui-terminal:font-label ${FOCUS_RING} ${
+            className={`flex h-7 items-center gap-1.5 whitespace-nowrap px-2 text-[12px] rounded-control touch-manipulation transition-colors duration-(--duration-fast) pointer-coarse:h-touch ui-terminal:font-label ${FOCUS_RING} ${
               active
                 ? 'bg-accent-soft text-accent'
                 : 'text-fg-muted hover:bg-surface hover:text-fg'

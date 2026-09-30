@@ -68,7 +68,7 @@ export function SegmentedControl<T extends string>({
             // With no match (an unknown value) the first option keeps the tab stop
             tabIndex={selected || (current === -1 && i === 0) ? 0 : -1}
             onClick={() => onChange(o.value)}
-            className={`flex h-8 min-w-9 items-center justify-center px-2 text-[13px] rounded-[calc(var(--radius-control)-2px)] pointer-coarse:h-10 ui-terminal:font-label ${FOCUS_RING} ${
+            className={`flex h-8 min-w-9 items-center justify-center px-2 text-[13px] rounded-[calc(var(--radius-control)-2px)] pointer-coarse:h-touch ui-terminal:font-label ${FOCUS_RING} ${
               selected
                 ? 'bg-surface-raised text-fg shadow-sm ui-terminal:bg-accent-soft ui-terminal:text-accent ui-terminal:shadow-none'
                 : 'text-fg-muted hover:text-fg'

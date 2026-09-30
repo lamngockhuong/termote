@@ -70,7 +70,7 @@ export function ViewSwitcher<T extends string>({
             aria-label={showLabels ? undefined : label}
             tabIndex={selected ? 0 : -1}
             onClick={() => onChange(id)}
-            className={`flex items-center justify-center gap-1.5 rounded-[calc(var(--radius-control)-2px)] ui-native:rounded-full ${FOCUS_RING} ${showLabels ? 'h-7 px-2.5 text-[12px]' : 'size-9 pointer-coarse:size-10'} ${
+            className={`flex items-center justify-center gap-1.5 rounded-[calc(var(--radius-control)-2px)] ui-native:rounded-full ${FOCUS_RING} ${showLabels ? 'h-7 px-2.5 text-[12px] pointer-coarse:h-touch' : 'size-9 pointer-coarse:size-touch'} ${
               selected
                 ? 'bg-surface-raised text-fg shadow-sm ui-terminal:bg-accent-soft ui-terminal:text-accent ui-terminal:shadow-none'
                 : 'text-fg-muted hover:text-fg'

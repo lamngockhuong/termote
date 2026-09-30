@@ -76,8 +76,17 @@ describe('Toast', () => {
   it('uses the info variant by default and takes another', () => {
     const { rerender } = render(<Toast message="Hi" onClose={vi.fn()} />)
     expect(screen.getByRole('status')).toHaveAttribute('data-variant', 'info')
-    rerender(<Toast message="Hi" onClose={vi.fn()} variant="danger" />)
-    expect(screen.getByRole('status')).toHaveAttribute('data-variant', 'danger')
+    rerender(<Toast message="Hi" onClose={vi.fn()} variant="warning" />)
+    expect(screen.getByRole('status')).toHaveAttribute(
+      'data-variant',
+      'warning',
+    )
+  })
+
+  it('announces an error as an alert', () => {
+    render(<Toast message="Failed" onClose={vi.fn()} variant="danger" />)
+    expect(screen.getByRole('alert')).toHaveAttribute('data-variant', 'danger')
+    expect(screen.queryByRole('status')).toBeNull()
   })
 
   it('does not sit over the bottom toolbar', () => {
