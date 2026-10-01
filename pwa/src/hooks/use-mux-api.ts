@@ -283,6 +283,8 @@ export interface AgentPrompt {
   }[]
   // The tabs of a question with several parts, answered one tab at a time
   steps?: { label: string; answered?: boolean; current?: boolean }[]
+  // The question's "Type something" option, empty: answered with text
+  freeText?: { index: number; label: string }
 }
 
 export async function fetchAgentPrompt(
@@ -294,8 +296,17 @@ export async function fetchAgentPrompt(
 }
 
 // An answer to the dialog promptId names: an option's number, Escape, Right
-// on a multiSelect tab, or another tab of a question in several parts
-export type AgentChoice = number | 'cancel' | 'next' | { step: number }
+// on a multiSelect tab, another tab of a question in several parts, or text
+// typed into the question's free-text option
+export type AgentChoice =
+  | number
+  | 'cancel'
+  | 'next'
+  | { step: number }
+  | { text: string }
+
+// The server's limit on a typed answer, in UTF-8 bytes
+export const MAX_FREE_TEXT_BYTES = 1024
 
 export async function answerAgentPrompt(
   paneId: string,

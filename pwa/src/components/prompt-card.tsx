@@ -6,6 +6,7 @@ import {
   type AgentPrompt,
   AgentRequestError,
   answerAgentPrompt,
+  MAX_FREE_TEXT_BYTES,
 } from '../hooks/use-mux-api'
 import { OpenTerminalButton } from './open-terminal-button'
 import { Button } from './ui/button'
@@ -16,6 +17,8 @@ import { Button } from './ui/button'
 
 // Labels that refuse or stop: shown as such so they are not tapped by habit.
 const REFUSING = /^(no|cancel|deny|reject)\b/i
+
+const encoder = new TextEncoder()
 
 interface Props {
   paneId: string
@@ -41,9 +44,18 @@ export function PromptCard({
   const [notice, setNotice] = useState<string | null>(null)
   // This card sent the answer: a dialog without an id is that answer settling
   const [sent, setSent] = useState(false)
+  // The free-text answer being typed; null while the field is closed
+  const [text, setText] = useState<string | null>(null)
+  // A new id is another dialog, maybe asking the same again: the text was
+  // typed for the last one
+  const promptId = prompt.promptId
+  useEffect(() => {
+    if (promptId !== undefined) setText(null)
+  }, [promptId])
   const { trigger } = useHaptic()
   const titleId = useId()
   const bodyId = useId()
+  const textId = useId()
   const answerable =
     !readOnly && prompt.kind !== 'unsupported' && !!prompt.promptId
   const multi = prompt.kind === 'multiselect'
@@ -68,9 +80,31 @@ export function PromptCard({
       await answerAgentPrompt(paneId, prompt.promptId, choice)
       trigger('light')
       setSent(true)
+      setText(null)
       onAnswered()
     } catch (err) {
-      if (err instanceof AgentRequestError && err.code === 'prompt_changed') {
+      if (err instanceof AgentRequestError && err.code === 'invalid_text') {
+        // Nothing was sent and the dialog is the same: fix the text
+        setNotice('The answer cannot hold line breaks or control characters.')
+      } else if (
+        err instanceof AgentRequestError &&
+        err.code === 'text_too_long'
+      ) {
+        setNotice(
+          `The answer is too long: the limit is ${err.limit ?? MAX_FREE_TEXT_BYTES} bytes.`,
+        )
+      } else if (
+        err instanceof AgentRequestError &&
+        err.code === 'text_not_confirmed'
+      ) {
+        setNotice(
+          'The text may be in the dialog but was not sent; check it in the terminal.',
+        )
+        onAnswered()
+      } else if (
+        err instanceof AgentRequestError &&
+        err.code === 'prompt_changed'
+      ) {
         setNotice('The screen changed; check the dialog again.')
         onChanged(err.prompt ?? null)
       } else if (
@@ -100,6 +134,60 @@ export function PromptCard({
       setBusy(false)
     }
   }
+
+  const free = prompt.freeText
+  const option = (o: NonNullable<AgentPrompt['options']>[number]) => (
+    <Button
+      key={o.index}
+      variant={REFUSING.test(o.label) ? 'danger' : 'secondary'}
+      disabled={busy}
+      onClick={() => answer(o.index)}
+      // On a multiSelect tab a digit toggles the option
+      aria-pressed={multi && !isChat(o.label) ? !!o.checked : undefined}
+      size="grow"
+      className="justify-start text-left"
+    >
+      <span className="shrink-0 text-fg-subtle">{o.index}.</span>
+      {multi && !isChat(o.label) && (
+        <span aria-hidden="true" className="shrink-0">
+          {o.checked ? '☑' : '☐'}
+        </span>
+      )}
+      <span className="min-w-0">
+        {o.label}
+        {o.detail && (
+          <span className="block text-[12px] font-normal text-fg-muted">
+            {o.detail}
+          </span>
+        )}
+      </span>
+    </Button>
+  )
+  const other = (f: NonNullable<AgentPrompt['freeText']>) =>
+    text === null ? (
+      <Button
+        variant="secondary"
+        disabled={busy}
+        onClick={() => setText('')}
+        size="grow"
+        className="justify-start text-left"
+      >
+        <span className="shrink-0 text-fg-subtle">{f.index}.</span>
+        Other…
+      </Button>
+    ) : (
+      <FreeTextField
+        id={textId}
+        text={text}
+        busy={busy}
+        onChange={setText}
+        onSend={() => answer({ text })}
+        onCancel={() => {
+          setText(null)
+          setNotice(null)
+        }}
+      />
+    )
 
   const label = {
     'aria-labelledby': titleId,
@@ -158,33 +246,14 @@ export function PromptCard({
       </p>
       {answerable ? (
         <div className="flex flex-col gap-1.5">
-          {prompt.options?.map((o) => (
-            <Button
-              key={o.index}
-              variant={REFUSING.test(o.label) ? 'danger' : 'secondary'}
-              disabled={busy}
-              onClick={() => answer(o.index)}
-              // On a multiSelect tab a digit toggles the option
-              aria-pressed={multi && !isChat(o.label) ? !!o.checked : undefined}
-              size="grow"
-              className="justify-start text-left"
-            >
-              <span className="shrink-0 text-fg-subtle">{o.index}.</span>
-              {multi && !isChat(o.label) && (
-                <span aria-hidden="true" className="shrink-0">
-                  {o.checked ? '☑' : '☐'}
-                </span>
-              )}
-              <span className="min-w-0">
-                {o.label}
-                {o.detail && (
-                  <span className="block text-[12px] font-normal text-fg-muted">
-                    {o.detail}
-                  </span>
-                )}
-              </span>
-            </Button>
-          ))}
+          {/* "Type something" sits where the terminal draws it, above
+              "Chat about this" */}
+          {prompt.options
+            ?.filter((o) => !free || o.index < free.index)
+            .map(option)}
+          {free && other(free)}
+          {free &&
+            prompt.options?.filter((o) => o.index > free.index).map(option)}
           {multi && (
             <Button
               variant="primary"
@@ -227,6 +296,74 @@ export function PromptCard({
     <div role="alertdialog" {...label}>
       {content}
     </div>
+  )
+}
+
+// The answer typed for a question's free-text option. Cancel only closes
+// it: Esc in the terminal would leave the whole dialog.
+function FreeTextField({
+  id,
+  text,
+  busy,
+  onChange,
+  onSend,
+  onCancel,
+}: {
+  id: string
+  text: string
+  busy: boolean
+  onChange: (text: string) => void
+  onSend: () => void
+  onCancel: () => void
+}) {
+  const tooLong = encoder.encode(text).length > MAX_FREE_TEXT_BYTES
+  const limitId = `${id}-limit`
+  return (
+    <form
+      className="space-y-1.5"
+      onSubmit={(e) => {
+        e.preventDefault()
+        if (!busy && !tooLong && text.trim()) onSend()
+      }}
+    >
+      <label htmlFor={id} className="sr-only">
+        Your answer
+      </label>
+      <input
+        id={id}
+        type="text"
+        value={text}
+        autoFocus
+        enterKeyHint="send"
+        placeholder="Type your answer"
+        aria-invalid={tooLong || undefined}
+        aria-describedby={tooLong ? limitId : undefined}
+        onChange={(e) => onChange(e.target.value)}
+        className="min-h-touch w-full rounded-control border border-border bg-bg px-3 py-2 text-[15px] text-fg focus-visible:border-accent focus-visible:outline-none"
+      />
+      {tooLong && (
+        <p id={limitId} className="text-[12px] text-danger">
+          Too long: the limit is {MAX_FREE_TEXT_BYTES} bytes.
+        </p>
+      )}
+      <div className="flex gap-2">
+        <Button
+          type="submit"
+          variant="primary"
+          disabled={busy || tooLong || !text.trim()}
+        >
+          Send
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={busy}
+          onClick={onCancel}
+        >
+          Cancel
+        </Button>
+      </div>
+    </form>
   )
 }
 

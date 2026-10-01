@@ -54,8 +54,13 @@ card replaces the message box. Each button picks that option; **Cancel** sends E
 screen changed before your answer was sent, or another device answered first, nothing is sent
 and the card shows the dialog that is open now.
 
-A single-choice question keeps its buttons, `Chat about this` included; only `Type something`
-needs the terminal.
+A single-choice question keeps its buttons, `Chat about this` included. Its `Type something`
+option is an **Other…** button: it opens a field for an answer of your own (one line, up to
+1 KB), sent with **Send**. Termote moves the pointer to `Type something` in the terminal, types
+the text there, checks that it shows, then presses Enter. If anything on screen is not what it
+expects, it stops and the card shows the dialog that is open now; if the text did not show, it
+may be left in the terminal's field, so check it there. **Cancel** under the field only closes
+it: the dialog stays open. A line break or a control character is refused, not removed.
 
 A question in several parts (a row of tabs such as `Size · Drink · Submit`) is answered one tab
 at a time. The card shows the tabs as steps, with the one open marked; each answer moves Claude
@@ -65,7 +70,8 @@ you change tabs in the terminal before tapping, nothing is sent and the card sho
 is open now.
 
 When several choices can be ticked at once, each button ticks or unticks one option, and
-**Next** moves on with the options you ticked.
+**Next** moves on with the options you ticked. **Other…** there adds your text as one more
+option, already ticked; its button unticks it like the others.
 
 A question that shows a preview beside its options is answered the same way: one tap picks the
 option. The preview itself is only shown in the terminal.
