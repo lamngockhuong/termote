@@ -300,7 +300,7 @@ func parseDialog(region []screenLine) *AgentPrompt {
 	wizard, multi := false, false
 	for i, l := range region {
 		t := strings.TrimSpace(l.text)
-		if (strings.HasPrefix(t, "←") || strings.HasSuffix(t, "→")) && strings.Contains(t, "Submit") {
+		if isQuestionTabs(t) {
 			wizard = true
 		}
 		if m := optionRowRe.FindStringSubmatch(t); m != nil {
@@ -329,7 +329,9 @@ func parseDialog(region []screenLine) *AgentPrompt {
 	var head []string
 	for _, l := range region[:headEnd] {
 		t := strings.TrimSpace(l.text)
-		if t != "" && !isDashedRule(t) {
+		// The tab row of AskUserQuestion is navigation, not the question:
+		// the card's title is the question under it.
+		if t != "" && !isDashedRule(t) && !isQuestionTabs(t) {
 			head = append(head, t)
 		}
 	}
@@ -372,6 +374,12 @@ func parseDialog(region []screenLine) *AgentPrompt {
 	}
 	p.Options = keep
 	return p
+}
+
+// isQuestionTabs: the tab row AskUserQuestion draws above its question
+// ("←  ☐ Size  ☐ Drink  ✔ Submit  →").
+func isQuestionTabs(t string) bool {
+	return (strings.HasPrefix(t, "←") || strings.HasSuffix(t, "→")) && strings.Contains(t, "Submit")
 }
 
 // isDashedRule: the ╌ rows around a command or a diff in a permission dialog.

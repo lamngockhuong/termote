@@ -115,7 +115,7 @@ test.describe('chat view', () => {
     // A multiSelect question is shown read-only, with the way to the terminal
     await composer.fill('pick toppings')
     await send.click()
-    const question = page.getByRole('alertdialog', { name: /Toppings/ })
+    const question = page.getByRole('alertdialog', { name: 'Which toppings do you want?' })
     await expect(question).toContainText('Answer this dialog in the terminal.')
     await expect(question.getByRole('button', { name: /^1\./ })).toHaveCount(0)
     await question.getByRole('button', { name: 'Open terminal' }).click()

@@ -83,8 +83,8 @@ func TestReadClaudeScreenDialogs(t *testing.T) {
 		{"2.1.286-ask-single-narrow", "select", "Color", "1. Red | 2. Blue", "Which color do you prefer?"},
 		{"collie-claude--select-menu", "select", "Color Theme", "1. Red | 2. Green | 3. Blue", "Which color theme should the dashboard use?"},
 		// Answered in the terminal only.
-		{"2.1.286-ask-multi", "unsupported", "←  ☐ Toppings  ✔ Submit  →", "", "Which toppings"},
-		{"2.1.286-ask-wizard", "unsupported", "←  ☐ Size  ☐ Drink  ✔ Submit  →", "", "What size"},
+		{"2.1.286-ask-multi", "unsupported", "Which toppings do you want?", "", ""},
+		{"2.1.286-ask-wizard", "unsupported", "What size do you want?", "", ""},
 		{"collie-claude--wizard-multiselect-q1", "unsupported", "", "", ""},
 		{"2.1.286-trust-unnumbered", "unsupported", "Accessing workspace:", "", "Quick safety check"},
 	}
