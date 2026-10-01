@@ -172,4 +172,23 @@ describe('AppHeader — mobile', () => {
     renderHeader({ isMobile: true, views: TWO_VIEWS })
     expect(screen.getByRole('tab', { name: 'Chat' })).toHaveTextContent('')
   })
+
+  it('passes blockedElsewhere to the chip and shows in aria-label', () => {
+    renderHeader({ isMobile: true, blockedElsewhere: 2 })
+    const chip = screen.getByRole('button', {
+      name: /Open sessions menu.*2 other sessions need you/,
+    })
+    expect(chip).toBeInTheDocument()
+  })
+
+  it('shows blockedElsewhere badge on the chip', () => {
+    renderHeader({ isMobile: true, blockedElsewhere: 1 })
+    const badge = screen.getByTestId('blocked-elsewhere')
+    expect(badge).toHaveTextContent('1')
+  })
+
+  it('hides badge when blockedElsewhere is 0', () => {
+    renderHeader({ isMobile: true, blockedElsewhere: 0 })
+    expect(screen.queryByTestId('blocked-elsewhere')).not.toBeInTheDocument()
+  })
 })

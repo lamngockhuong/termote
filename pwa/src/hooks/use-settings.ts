@@ -1,5 +1,10 @@
 import { useCallback, useSyncExternalStore } from 'react'
 import { DEFAULT_UI_STYLE, resolveUiStyle, type UiStyle } from '../ui-style'
+import {
+  DEFAULT_SIDEBAR_FILTER,
+  resolveSidebarFilter,
+  type SidebarFilter,
+} from '../utils/session-filter'
 
 const STORAGE_KEY = 'termote-settings'
 
@@ -18,6 +23,8 @@ export interface Settings {
   uiStyle: UiStyle // visual style of the app chrome (tokens in index.css)
   // herdr: size the pane to this device while it shows it (Caps.driveSize)
   driveTerminalSize: boolean
+  sidebarFilter: SidebarFilter // which sessions the sidebar lists
+  sortBlockedFirst: boolean // sessions waiting on the user first in each group
 }
 
 const DEFAULTS: Settings = {
@@ -31,6 +38,8 @@ const DEFAULTS: Settings = {
   terminalFont: '',
   uiStyle: DEFAULT_UI_STYLE,
   driveTerminalSize: false,
+  sidebarFilter: DEFAULT_SIDEBAR_FILTER,
+  sortBlockedFirst: false,
 }
 
 // Listeners for useSyncExternalStore
@@ -58,7 +67,11 @@ function getSnapshot(): Settings {
         ? { ...DEFAULTS, ...JSON.parse(json) }
         : DEFAULTS
       // An edited or future config may hold a style this version does not know.
-      cachedSettings = { ...merged, uiStyle: resolveUiStyle(merged.uiStyle) }
+      cachedSettings = {
+        ...merged,
+        uiStyle: resolveUiStyle(merged.uiStyle),
+        sidebarFilter: resolveSidebarFilter(merged.sidebarFilter),
+      }
     } catch {
       cachedSettings = DEFAULTS
     }

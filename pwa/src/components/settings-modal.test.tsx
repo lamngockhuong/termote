@@ -14,6 +14,8 @@ const DEFAULT_SETTINGS: Settings = {
   terminalFont: '',
   uiStyle: 'neutral',
   driveTerminalSize: false,
+  sidebarFilter: 'all',
+  sortBlockedFirst: false,
 }
 
 describe('SettingsModal', () => {
@@ -572,5 +574,28 @@ describe('SettingsModal', () => {
     expect(
       screen.queryByRole('radiogroup', { name: 'Paste button source' }),
     ).toBeNull()
+  })
+
+  it('toggles sortBlockedFirst', () => {
+    const { onUpdateSetting } = renderModal()
+    fireEvent.click(
+      screen.getByRole('switch', { name: 'Blocked sessions first' }),
+    )
+    expect(onUpdateSetting).toHaveBeenCalledWith('sortBlockedFirst', true)
+  })
+
+  it('shows the description for sortBlockedFirst', () => {
+    renderModal()
+    expect(
+      screen.getByText('List sessions waiting on you at the top of each group'),
+    ).toBeInTheDocument()
+  })
+
+  it('reflects stored sortBlockedFirst state', () => {
+    renderModal({ settings: { ...DEFAULT_SETTINGS, sortBlockedFirst: true } })
+    const switchElement = screen.getByRole('switch', {
+      name: 'Blocked sessions first',
+    })
+    expect(switchElement).toHaveAttribute('aria-checked', 'true')
   })
 })

@@ -273,13 +273,20 @@ vi.mock('./components/session-sidebar', () => ({
     onClose,
     isMobile,
     isOpen,
+    onFilterChange,
   }: {
     onSelect?: (id: string) => void
     onClose?: () => void
     isMobile?: boolean
     isOpen?: boolean
+    onFilterChange?: (filter: string) => void
   }) => (
     <div data-testid="session-sidebar" data-open={String(!!isOpen)}>
+      {onFilterChange && (
+        <button onClick={() => onFilterChange('needs-you')}>
+          FilterNeedsYou
+        </button>
+      )}
       {isMobile && onSelect && (
         <button onClick={() => onSelect('2')}>MobileSelect</button>
       )}
@@ -846,6 +853,19 @@ describe('App', () => {
       'true',
     )
   })
+
+  it.each([false, true])(
+    'saves the sidebar filter (mobile: %s)',
+    async (mobile) => {
+      mockIsMobile.mockReturnValue(mobile)
+      const { updateSetting } = mockUseSettings()
+      render(<App />)
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'FilterNeedsYou' }),
+      )
+      expect(updateSetting).toHaveBeenCalledWith('sidebarFilter', 'needs-you')
+    },
+  )
 
   it('mobile: font size lives in the overflow menu', async () => {
     mockIsMobile.mockReturnValue(true)

@@ -369,6 +369,16 @@ export function SettingsModal({
             />
           </SettingsRow>
           <SettingsRow
+            title="Blocked sessions first"
+            desc="List sessions waiting on you at the top of each group"
+          >
+            <Switch
+              label="Blocked sessions first"
+              checked={settings.sortBlockedFirst}
+              onChange={(v) => onUpdateSetting('sortBlockedFirst', v)}
+            />
+          </SettingsRow>
+          <SettingsRow
             title="Session poll interval"
             desc={`How often to sync session list (${formatSeconds(settings.pollInterval)})`}
           >

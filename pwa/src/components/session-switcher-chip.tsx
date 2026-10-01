@@ -10,6 +10,8 @@ interface Props {
   groupName?: string
   // Tabs in that group
   sessionCount: number
+  // Other tabs, in any group, with a pane waiting on the user
+  blockedElsewhere?: number
   connectionState: ConnectionState
   // The sessions sheet it opens is showing
   expanded: boolean
@@ -22,16 +24,21 @@ export function SessionSwitcherChip({
   session,
   groupName,
   sessionCount,
+  blockedElsewhere = 0,
   connectionState,
   expanded,
   onClick,
 }: Props) {
   const count = `${sessionCount} ${sessionCount === 1 ? 'session' : 'sessions'}`
+  const waiting =
+    blockedElsewhere > 0
+      ? `, ${blockedElsewhere} other ${blockedElsewhere === 1 ? 'session needs' : 'sessions need'} you`
+      : ''
   return (
     <button
       type="button"
       onClick={onClick}
-      aria-label="Open sessions menu"
+      aria-label={`Open sessions menu${waiting}`}
       aria-haspopup="dialog"
       aria-expanded={expanded}
       className={`flex h-10 min-w-0 flex-1 items-center gap-2 rounded-control px-2 text-left transition-colors duration-(--duration-fast) hover:bg-surface ui-native:rounded-full ui-native:bg-surface ui-native:px-3 ${FOCUS_RING}`}
@@ -51,11 +58,21 @@ export function SessionSwitcherChip({
           </span>
         </span>
       </span>
-      <ChevronDown
-        size={16}
-        aria-hidden="true"
-        className="ml-auto shrink-0 text-fg-subtle"
-      />
+      {blockedElsewhere > 0 ? (
+        <span
+          aria-hidden="true"
+          data-testid="blocked-elsewhere"
+          className="ml-auto flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-danger px-1.5 text-[11px] font-semibold tabular-nums text-white dark:text-bg"
+        >
+          {blockedElsewhere}
+        </span>
+      ) : (
+        <ChevronDown
+          size={16}
+          aria-hidden="true"
+          className="ml-auto shrink-0 text-fg-subtle"
+        />
+      )}
     </button>
   )
 }
