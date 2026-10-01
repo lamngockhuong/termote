@@ -282,6 +282,39 @@ describe('TerminalView', () => {
     }
   })
 
+  it('keeps its size while another view covers it, and fits once shown again', () => {
+    vi.useFakeTimers()
+    try {
+      const { fit, rerender, ref } = renderView({ covered: true })
+      fit.fit.mockClear()
+      // The view's input area grows and shrinks below the terminal
+      for (let i = 0; i < 3; i++) {
+        resizeObserverCb()
+        vi.advanceTimersByTime(RESIZE_SETTLE_MS)
+      }
+      expect(fit.fit).not.toHaveBeenCalled()
+      rerender(<TerminalView ref={ref} paneId="0" covered={false} />)
+      expect(fit.fit).toHaveBeenCalledTimes(1)
+      // Shown, it follows its container again
+      resizeObserverCb()
+      act(() => vi.advanceTimersByTime(RESIZE_SETTLE_MS))
+      expect(fit.fit).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('a covered terminal keeps its size when its stream opens again or its font changes', () => {
+    const { fit, rerender, ref } = renderView()
+    rerender(<TerminalView ref={ref} paneId="0" covered />)
+    fit.fit.mockClear()
+    rerender(<TerminalView ref={ref} paneId="0" covered fontSize={18} />)
+    act(() => socketOpts.onOpen())
+    expect(fit.fit).not.toHaveBeenCalled()
+    rerender(<TerminalView ref={ref} paneId="0" fontSize={18} />)
+    expect(fit.fit).toHaveBeenCalled()
+  })
+
   it('drops a pending fit on unmount', () => {
     vi.useFakeTimers()
     try {

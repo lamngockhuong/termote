@@ -696,6 +696,7 @@ export default function App({
                       isTerminalView
                     }
                     onDriveLost={onDriveLost}
+                    covered={!isTerminalView}
                     onConnectionStateChange={setStreamState}
                   />
                 </div>
