@@ -15,6 +15,8 @@
 #               "order" a wizard of two single-choice questions and Submit,
 #               "extras" a wizard with a multiSelect tab (Milk toggles; the
 #               arrows move between tabs along the recorded path),
+#               "layout" a question with previews (a digit moves the
+#               pointer, Enter picks),
 #               anything else gets an echo reply
 #   1/2/3, Esc  answer or cancel an open dialog (on a wizard, a digit answers
 #               the tab open and moves to the next one)
@@ -87,11 +89,18 @@ rule() { # character, colour prefix
   printf '%s%s' "$2" "$line"
 }
 fit() { # stdin: recorded lines → lines with every rule fitted to the width
-  local l
+  local l plain
   while IFS= read -r l || [ -n "$l" ]; do
+    # Only a row that is a rule and nothing else: a box drawn beside text
+    # (the preview of an option) keeps its width. Escapes are dropped in
+    # bash, not with a process per row: every draw goes through here.
+    plain=$l
+    while [[ $plain =~ ^(.*)$'\e'\[[0-9\;]*m(.*)$ ]]; do
+      plain=${BASH_REMATCH[1]}${BASH_REMATCH[2]}
+    done
     case $l in
-      *────────*) printf '%s\n' "${l%%─*}$(rule ─ '')${l##*─}" ;;
-      *╌╌╌╌╌╌╌╌*) printf '%s\n' "${l%%╌*}$(rule ╌ '')${l##*╌}" ;;
+      *────────*) [ -z "${plain//[─ ]/}" ] && printf '%s\n' "${l%%─*}$(rule ─ '')${l##*─}" || printf '%s\n' "$l" ;;
+      *╌╌╌╌╌╌╌╌*) [ -z "${plain//[╌ ]/}" ] && printf '%s\n' "${l%%╌*}$(rule ╌ '')${l##*╌}" || printf '%s\n' "$l" ;;
       *) printf '%s\n' "$l" ;;
     esac
   done
@@ -104,7 +113,7 @@ dialog() {
 }
 
 idle_screen="$screens/2.1.286-idle-after-turn.txt"
-state=idle # idle | permission | toppings | size | drink | submit | mixed | multi | multi_milk | after_multi | partial
+state=idle # idle | permission | toppings | size | drink | submit | mixed | multi | multi_milk | after_multi | partial | layout | layout_row
 draft=""
 
 draw() {
@@ -138,6 +147,8 @@ draw() {
     multi_milk) dialog 2.1.286-ask-wizard-multi-toggled.txt ;;
     after_multi) dialog 2.1.286-ask-wizard-after-multi.txt ;;
     partial) dialog 2.1.286-ask-wizard-submit-partial.txt ;;
+    layout) dialog 2.1.286-ask-preview.txt ;;
+    layout_row) dialog 2.1.286-ask-preview-pointer-2.txt ;;
   esac
 }
 
@@ -174,6 +185,10 @@ submit() {
       state=mixed
       set_status waiting
       ;;
+    *layout*)
+      state=layout
+      set_status waiting
+      ;;
     *)
       say "You said: $text"
       set_status idle
@@ -200,6 +215,11 @@ answer() { # key
     multi_milk:right) state=after_multi && draw && return ;;
     after_multi:right) state=partial && draw && return ;;
     partial:1) say 'Ordered extras: milk.' ;;
+    layout:2) state=layout_row && draw && return ;;
+    layout:1) state=layout && return ;;
+    layout:$'\r' | layout:$'\n') say 'Layout: Stacked.' ;;
+    layout_row:$'\r' | layout_row:$'\n') say 'Layout: Row.' ;;
+    layout:esc | layout_row:esc) ;;
     toppings:esc | size:esc | drink:esc | submit:esc | submit:2) ;;
     mixed:esc | multi:esc | multi_milk:esc | after_multi:esc | partial:esc | partial:2) ;;
     *) return ;;

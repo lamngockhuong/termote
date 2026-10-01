@@ -167,6 +167,10 @@ type AgentPrompt struct {
 	Options  []PromptOption `json:"options,omitempty"`
 	// Steps is the tab row of an AskUserQuestion with several questions.
 	Steps []PromptStep `json:"steps,omitempty"`
+	// moveThenEnter: a question whose options have previews. A digit only
+	// moves the pointer there; Enter picks the option under it.
+	moveThenEnter bool
+	pointer       int // the option the ❯ is on, 0 when none
 }
 
 // PromptStep is one tab of that row: a question's header, or "Submit".
@@ -316,10 +320,14 @@ func findDialog(lines []screenLine) claudeScreen {
 	}
 	// The dialog's top edge is the first rule above the footer whose next
 	// row is not an option: AskUserQuestion draws a rule between its
-	// options and "Chat about this".
+	// options and "Chat about this" (numbered, or not with previews).
 	top := -1
 	for i := footer - 1; i >= 0 && i >= footer-claudeMaxDialogRows; i-- {
-		if isBareRule(lines[i].text) && i+1 < footer && !optionRowRe.MatchString(strings.TrimSpace(lines[i+1].text)) {
+		next := ""
+		if i+1 < footer {
+			next = strings.TrimSpace(lines[i+1].text)
+		}
+		if isBareRule(lines[i].text) && i+1 < footer && !optionRowRe.MatchString(next) && next != "Chat about this" {
 			top = i
 			break
 		}
@@ -327,7 +335,13 @@ func findDialog(lines []screenLine) claudeScreen {
 	if top < 0 {
 		return claudeScreen{}
 	}
-	return claudeScreen{sig: dialogSig(lines[top:]), prompt: parseDialog(lines[top+1 : footer])}
+	var hints []string
+	for _, l := range lines[footer:] {
+		hints = append(hints, strings.TrimSpace(l.text))
+	}
+	// Only a question whose options have previews offers notes.
+	preview := strings.Contains(strings.Join(hints, " "), "n to add notes")
+	return claudeScreen{sig: dialogSig(lines[top:]), prompt: parseDialog(lines[top+1:footer], preview)}
 }
 
 // findSubmitTab recognises the Submit tab of a wizard, which has no footer:
@@ -359,7 +373,7 @@ func findSubmitTab(lines []screenLine) claudeScreen {
 				return claudeScreen{}
 			}
 		}
-		p := parseDialog(lines[i:])
+		p := parseDialog(lines[i:], false)
 		if p.Kind != "select" || !submitOpen(p.Steps) {
 			return claudeScreen{}
 		}
@@ -384,7 +398,7 @@ func dialogSig(rows []screenLine) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-func parseDialog(region []screenLine) *AgentPrompt {
+func parseDialog(region []screenLine, preview bool) *AgentPrompt {
 	type opt struct {
 		PromptOption
 		row     int
@@ -394,8 +408,19 @@ func parseDialog(region []screenLine) *AgentPrompt {
 	var steps []PromptStep
 	first := -1
 	wizard := false
+	// Options with previews: each option row carries the preview of the
+	// option under the pointer on its right. Only the left part is the
+	// option; rows of the preview alone, and the "Notes" row, are not.
+	ruled := false // a rule came after the options
+	boxed := false // an option row with a preview beside it
 	for i, l := range region {
 		t := strings.TrimSpace(l.text)
+		if previewSplitRe.MatchString(t) && optionRowRe.MatchString(t) {
+			boxed = true
+		}
+		if preview {
+			t = beforePreview(t)
+		}
 		if isQuestionTabs(t) {
 			wizard = true
 			if strings.HasPrefix(t, "←") && strings.HasSuffix(t, "→") {
@@ -411,7 +436,12 @@ func parseDialog(region []screenLine) *AgentPrompt {
 			opts = append(opts, opt{PromptOption{Index: idx, Label: label}, i, strings.HasPrefix(t, "❯")})
 			continue
 		}
-		if len(opts) > 0 && t != "" && !isBareRule(t) && !isDashedRule(t) {
+		if len(opts) > 0 && isBareRule(t) {
+			ruled = true
+		}
+		// An unnumbered row below the rule ("Chat about this" of a question
+		// with previews) belongs to no option.
+		if len(opts) > 0 && !ruled && t != "" && !isBareRule(t) && !isDashedRule(t) {
 			o := &opts[len(opts)-1]
 			o.Detail = strings.TrimSpace(o.Detail + " " + t)
 		}
@@ -442,7 +472,7 @@ func parseDialog(region []screenLine) *AgentPrompt {
 	// the text. With the pointer on it a digit is typed into that text, so
 	// the question needs the terminal. The Submit tab has none.
 	free := -1
-	if question && !submitOpen(steps) && len(opts) > 0 {
+	if question && !preview && !submitOpen(steps) && len(opts) > 0 {
 		free = len(opts) - 1
 		if opts[free].Label == "Chat about this" {
 			free--
@@ -452,14 +482,19 @@ func parseDialog(region []screenLine) *AgentPrompt {
 		}
 	}
 	// multiSelect: every option but "Chat about this" has a box.
-	multi, boxed := false, 0
+	multi, ticks := false, 0
 	for _, o := range opts {
 		if _, ok := cutCheckbox(o.Label); ok {
-			boxed++
+			ticks++
 		}
 	}
-	if boxed > 0 && (boxed == len(opts) || (boxed == len(opts)-1 && opts[len(opts)-1].Label == "Chat about this")) {
+	if ticks > 0 && (ticks == len(opts) || (ticks == len(opts)-1 && opts[len(opts)-1].Label == "Chat about this")) {
 		multi = true
+	}
+	// A preview the footer does not announce: a digit might only move the
+	// pointer, so the question is left to the terminal.
+	if boxed && !preview {
+		return p
 	}
 	// A wizard is answered one tab at a time, so the whole tab row must be
 	// read and the tab open known: a digit answers that tab only, or on a
@@ -489,6 +524,12 @@ func parseDialog(region []screenLine) *AgentPrompt {
 	if len(keep) == 0 || len(keep) > 9 {
 		return p
 	}
+	for _, o := range opts {
+		if o.pointer {
+			p.pointer = o.Index
+		}
+	}
+	p.moveThenEnter = preview && !multi
 	switch {
 	case multi:
 		p.Kind = "multiselect"
@@ -503,6 +544,29 @@ func parseDialog(region []screenLine) *AgentPrompt {
 	}
 	p.Options = keep
 	return p
+}
+
+// previewSplitRe: where the preview box starts on a row of options with
+// previews (two spaces or more, then the box's left edge).
+var previewSplitRe = regexp.MustCompile(`\s{2,}[┌│└├╭╰]`)
+
+// beforePreview is a row of a question with previews without the preview:
+// the option part of an option row, nothing for a row of the preview alone
+// or for the "Notes" row. Cut at the box, not at a column, since a wide
+// character takes two columns but one rune.
+func beforePreview(t string) string {
+	if strings.HasPrefix(t, "Notes:") || strings.ContainsAny(firstRune(t), "┌│└├╭╰") {
+		return ""
+	}
+	if m := previewSplitRe.FindStringIndex(t); m != nil {
+		return strings.TrimSpace(t[:m[0]])
+	}
+	return t
+}
+
+func firstRune(s string) string {
+	_, n := utf8.DecodeRuneInString(s)
+	return s[:n]
 }
 
 // checkbox splits a multiSelect label ("[✔] Milk") into its text and

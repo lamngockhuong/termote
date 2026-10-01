@@ -520,6 +520,11 @@ func TestAnswerWizard(t *testing.T) {
 		"2.1.286-ask-wizard-multi-open":    {"2": "2.1.286-ask-wizard-multi-toggled", "Left": "2.1.286-ask-wizard-mixed"},
 		"2.1.286-ask-wizard-multi-toggled": {"Right": "2.1.286-ask-wizard-after-multi"},
 		"2.1.286-ask-wizard-after-multi":   {"Right": "2.1.286-ask-wizard-submit-partial"},
+		// Previews: a digit moves the pointer, Enter picks.
+		"2.1.286-ask-preview":                  {"2": "2.1.286-ask-preview-pointer-2", "Enter": "2.1.286-ask-preview-after"},
+		"2.1.286-ask-preview-pointer-2":        {"Enter": "2.1.286-ask-preview-after"},
+		"2.1.286-ask-wizard-preview":           {"2": "2.1.286-ask-wizard-preview-pointer-2"},
+		"2.1.286-ask-wizard-preview-pointer-2": {"Enter": "2.1.286-ask-wizard-preview-next"},
 	}
 	setup := func(first string) (*fakeWriter, *http.ServeMux, *string) {
 		f := newFakeWriter()
@@ -609,6 +614,47 @@ func TestAnswerWizard(t *testing.T) {
 		}
 		if got := f.keys; len(got) != 2 || got[0][0] != "2" || got[1][0] != "Right" {
 			t.Errorf("keys = %v", got)
+		}
+	})
+	t.Run("previews: the digit, then Enter once the pointer is there", func(t *testing.T) {
+		f, mux, on := setup("2.1.286-ask-preview")
+		if code, body := answer(mux, idOf(mux), 2); code != http.StatusNoContent || *on != "2.1.286-ask-preview-after" {
+			t.Fatalf("preview = %d %v on %s", code, body, *on)
+		}
+		if got := f.keys; len(got) != 2 || got[0][0] != "2" || got[1][0] != "Enter" {
+			t.Errorf("keys = %v", got)
+		}
+		// The pointer already on the option: Enter alone.
+		f2, mux2, on2 := setup("2.1.286-ask-preview")
+		if code, body := answer(mux2, idOf(mux2), 1); code != http.StatusNoContent || *on2 != "2.1.286-ask-preview-after" || len(f2.keys) != 1 || f2.keys[0][0] != "Enter" {
+			t.Errorf("pointer there = %d %v on %s keys %v", code, body, *on2, f2.keys)
+		}
+		// In a wizard, Enter moves on to the next tab.
+		_, mux3, on3 := setup("2.1.286-ask-wizard-preview")
+		if code, body := answer(mux3, idOf(mux3), 2); code != http.StatusNoContent || *on3 != "2.1.286-ask-wizard-preview-next" {
+			t.Errorf("wizard preview = %d %v on %s", code, body, *on3)
+		}
+	})
+	t.Run("previews: no Enter unless the pointer reached the option", func(t *testing.T) {
+		// The pointer does not move.
+		f, mux, _ := setup("2.1.286-ask-preview")
+		f.onKeys = nil
+		if code, body := answer(mux, idOf(mux), 2); code != 502 || body["code"] != "answer_not_confirmed" || len(f.keys) != 1 {
+			t.Errorf("stuck = %d %v keys %v", code, body, f.keys)
+		}
+		// The digit lands on another question.
+		f2, mux2, _ := setup("2.1.286-ask-preview")
+		f2.onKeys = func(f *fakeWriter, keys []string) {
+			f.setScreen(strings.Replace(fixtureScreen(t, "2.1.286-ask-preview-pointer-2"), "☐ Layout ", "☐ Colour ", 1))
+		}
+		if code, body := answer(mux2, idOf(mux2), 2); code != 409 || body["code"] != "prompt_changed" || len(f2.keys) != 1 {
+			t.Errorf("other question = %d %v keys %v", code, body, f2.keys)
+		}
+		// The key cannot be sent.
+		f3, mux3, _ := setup("2.1.286-ask-preview")
+		f3.keyErr = errors.New("pane gone")
+		if code, _ := answer(mux3, idOf(mux3), 2); code < 500 {
+			t.Errorf("send error = %d", code)
 		}
 	})
 	t.Run("next only on a multiSelect tab", func(t *testing.T) {
@@ -731,5 +777,33 @@ func TestPromptStoreBounds(t *testing.T) {
 func TestCleanText(t *testing.T) {
 	if got := cleanText("a\r\nb\rc\x00\x1b[201~\u009b1m ok\t"); got != "a\nb\nc[201~1m ok\t" {
 		t.Errorf("cleanText = %q", got)
+	}
+}
+
+func TestSameQuestion(t *testing.T) {
+	q := AgentPrompt{Kind: "select", Title: "Layout", Options: []PromptOption{{Index: 1, Label: "Stacked"}, {Index: 2, Label: "Row"}}}
+	same := q
+	if !sameQuestion(&same, &q) {
+		t.Error("same question")
+	}
+	for name, edit := range map[string]func(p *AgentPrompt){
+		"kind":         func(p *AgentPrompt) { p.Kind = "permission" },
+		"text":         func(p *AgentPrompt) { p.Body = "Another question?" },
+		"option count": func(p *AgentPrompt) { p.Options = p.Options[:1] },
+		"option label": func(p *AgentPrompt) {
+			p.Options = []PromptOption{{Index: 1, Label: "Stacked"}, {Index: 2, Label: "Grid"}}
+		},
+		"option index": func(p *AgentPrompt) {
+			p.Options = []PromptOption{{Index: 1, Label: "Stacked"}, {Index: 3, Label: "Row"}}
+		},
+	} {
+		other := q
+		edit(&other)
+		if sameQuestion(&other, &q) {
+			t.Errorf("%s changed, still the same question", name)
+		}
+	}
+	if sameQuestion(nil, &q) {
+		t.Error("no dialog is not the same question")
 	}
 }

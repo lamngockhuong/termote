@@ -557,14 +557,66 @@ func (a *agentAPI) answer(ctx context.Context, wr agentWriter, paneID, promptID 
 	if step >= 0 {
 		return a.moveToStep(ctx, wr, paneID, s, rec, step)
 	}
+	closeFrom := rec.sig
+	if n, err := strconv.Atoi(key); err == nil && rec.prompt.moveThenEnter {
+		// A question with previews: the digit moves the pointer, then Enter
+		// picks the option, once the screen shows the pointer on it.
+		if sc.prompt.pointer != n {
+			moved, err := a.movePointer(ctx, wr, paneID, s, rec, key, n)
+			if err != nil {
+				return err
+			}
+			closeFrom = moved
+		}
+		key = "Enter"
+	}
 	if err := wr.SendKeySequence(ctx, s.Target, []string{key}); err != nil {
 		return err
 	}
-	closed := pollScreen(ctx, wr, s.Target, func(sc claudeScreen) bool { return sc.sig != rec.sig })
+	closed := pollScreen(ctx, wr, s.Target, func(sc claudeScreen) bool { return sc.sig != closeFrom })
 	if !closed {
 		return fail(http.StatusBadGateway, "answer_not_confirmed", "the key was sent but the dialog is still open")
 	}
 	return nil
+}
+
+// movePointer sends an option's digit to a question with previews and
+// waits for the pointer to be on that option of the same question. It
+// returns the signature of that screen. Enter follows without another
+// read: a pointer moved in the terminal within that poll interval would get
+// the Enter, a window as small as the one between any check and its key.
+func (a *agentAPI) movePointer(ctx context.Context, wr agentWriter, paneID string, s AgentSession, rec *promptRecord, key string, n int) (string, error) {
+	if err := wr.SendKeySequence(ctx, s.Target, []string{key}); err != nil {
+		return "", err
+	}
+	var next claudeScreen
+	moved := pollScreen(ctx, wr, s.Target, func(sc claudeScreen) bool {
+		next = sc
+		return sc.prompt != nil && sc.prompt.pointer == n
+	})
+	if !moved || !sameQuestion(next.prompt, &rec.prompt) {
+		f := fail(http.StatusConflict, "prompt_changed", "the screen changed; check the dialog again")
+		if !moved && next.prompt != nil && sameQuestion(next.prompt, &rec.prompt) {
+			f = fail(http.StatusBadGateway, "answer_not_confirmed", "the pointer did not move to that option")
+		}
+		f.prompt = a.promptOf(paneID, s, next)
+		return "", f
+	}
+	a.input.markAnswered(paneID, next.sig)
+	return next.sig, nil
+}
+
+// sameQuestion: the same question, by its title, text, tabs and options.
+func sameQuestion(a, b *AgentPrompt) bool {
+	if a == nil || a.Kind != b.Kind || a.Title != b.Title || a.Body != b.Body || !sameTabs(a.Steps, b.Steps) || len(a.Options) != len(b.Options) {
+		return false
+	}
+	for i := range a.Options {
+		if a.Options[i].Index != b.Options[i].Index || a.Options[i].Label != b.Options[i].Label {
+			return false
+		}
+	}
+	return true
 }
 
 // moveToStep opens another tab of a wizard one arrow at a time. After each
