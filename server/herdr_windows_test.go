@@ -70,7 +70,7 @@ func TestHerdrPipeName(t *testing.T) {
 func startTestObserver(t *testing.T) (*observer, int) {
 	t.Helper()
 	pids := useFakeObserve(t, false)
-	p, err := startObserver("wR:p3", Size{Cols: 80, Rows: 24}, io.Discard)
+	p, err := startHerdrStream(herdrObserveArgv("wR:p3", Size{Cols: 80, Rows: 24}), false, io.Discard)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,5 +145,18 @@ func TestCheckPipeServerUserErrors(t *testing.T) {
 	}
 	if _, err := pipeServerUser(windows.InvalidHandle); err == nil {
 		t.Error("invalid handle accepted")
+	}
+}
+
+// Releasing control closes its job too: the stdin Once is not the job's.
+func TestHerdrControlReleaseClosesJob(t *testing.T) {
+	useFakeObserve(t, false)
+	p, err := startHerdrStream(herdrControlArgv("wR:p3", Size{Cols: 80, Rows: 24}), true, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.release()
+	if p.job != 0 {
+		t.Error("job handle left open after release")
 	}
 }

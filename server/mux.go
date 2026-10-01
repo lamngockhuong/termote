@@ -56,6 +56,9 @@ type Caps struct {
 	// Scroll: the stream only carries screen renders, so history is scrolled
 	// by the backend through /api/mux/panes/{id}/scroll (herdr).
 	Scroll bool `json:"scroll"`
+	// DriveSize: the client can take over the pane size while it shows the
+	// pane (the stream's drive message, herdr's control mode).
+	DriveSize bool `json:"driveSize"`
 }
 
 type Snapshot struct {
