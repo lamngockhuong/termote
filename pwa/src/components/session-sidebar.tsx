@@ -29,8 +29,11 @@ const ACTIVE_ROW_CLASSES =
   'bg-accent-soft text-fg font-medium ui-terminal:bg-surface-raised ui-terminal:shadow-[inset_2px_0_0_var(--color-accent)]'
 const ROW_CLASSES =
   'text-fg-muted hover:bg-surface-raised hover:text-fg transition-colors duration-(--duration-fast)'
+// The content inside keeps its final width while the width animates, so it is
+// revealed or clipped instead of laid out again at every frame.
 const SIDEBAR_BASE_CLASSES =
-  'h-full min-h-0 flex flex-col shrink-0 border-r border-border bg-surface ui-terminal:bg-bg transition-[width] duration-(--duration-base) ease-standard'
+  'h-full min-h-0 shrink-0 overflow-hidden border-r border-border bg-surface ui-terminal:bg-bg transition-[width] duration-(--duration-base) ease-standard'
+const SIDEBAR_CONTENT_CLASSES = 'flex h-full min-h-0 shrink-0 flex-col'
 const INPUT_CLASSES =
   'h-9 w-full min-w-0 rounded-control border border-border bg-bg px-2.5 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-accent pointer-coarse:h-touch'
 
@@ -377,60 +380,66 @@ export function SessionSidebar({
           )
         : visibleSessions
     return (
-      <aside className={`w-14 items-center gap-1 py-2 ${SIDEBAR_BASE_CLASSES}`}>
-        <IconButton
-          onClick={() => onToggleCollapse?.()}
-          title={filtering ? 'Expand sidebar (filtered)' : 'Expand sidebar'}
-          aria-label={filtering ? 'Expand sidebar, filtered' : 'Expand sidebar'}
-          className="relative"
+      <aside className={`w-14 ${SIDEBAR_BASE_CLASSES}`}>
+        <div
+          className={`w-14 items-center gap-1 py-2 ${SIDEBAR_CONTENT_CLASSES}`}
         >
-          <PanelLeftOpen size={18} aria-hidden="true" />
-          {filtering && (
-            <span
-              aria-hidden="true"
-              className="absolute right-1.5 top-1.5 size-2 rounded-full bg-accent"
-            />
-          )}
-        </IconButton>
-        <IconButton
-          variant="primary"
-          onClick={() => {
-            onToggleCollapse?.()
-            setShowAddForm(true)
-          }}
-          title="Add new session"
-          aria-label="Add new session"
-        >
-          <Plus size={18} aria-hidden="true" />
-        </IconButton>
-        <div className="flex min-h-0 w-full flex-1 flex-col items-center gap-0.5 overflow-y-auto pt-1">
-          {railSessions.map((session) => {
-            const active = activeId === session.id
-            return (
-              <button
-                key={session.id}
-                type="button"
-                aria-current={active ? 'true' : undefined}
-                onClick={() => onSelect(session.id)}
-                className={`flex size-10 shrink-0 items-center justify-center rounded-control ${FOCUS_RING} ${
-                  active ? ACTIVE_ROW_CLASSES : ROW_CLASSES
-                }`}
-                title={session.name}
-              >
-                <span className="relative text-lg leading-none">
-                  {session.icon}
-                  {session.agentStatus && (
-                    <span className="absolute -top-1.5 -right-2 flex size-3.5 items-center justify-center rounded-full bg-surface ui-terminal:bg-bg">
-                      <AgentStatusBadge
-                        status={session.agentStatus}
-                        size={10}
-                      />
-                    </span>
-                  )}
-                </span>
-              </button>
-            )
-          })}
+          <IconButton
+            onClick={() => onToggleCollapse?.()}
+            title={filtering ? 'Expand sidebar (filtered)' : 'Expand sidebar'}
+            aria-label={
+              filtering ? 'Expand sidebar, filtered' : 'Expand sidebar'
+            }
+            className="relative"
+          >
+            <PanelLeftOpen size={18} aria-hidden="true" />
+            {filtering && (
+              <span
+                aria-hidden="true"
+                className="absolute right-1.5 top-1.5 size-2 rounded-full bg-accent"
+              />
+            )}
+          </IconButton>
+          <IconButton
+            variant="primary"
+            onClick={() => {
+              onToggleCollapse?.()
+              setShowAddForm(true)
+            }}
+            title="Add new session"
+            aria-label="Add new session"
+          >
+            <Plus size={18} aria-hidden="true" />
+          </IconButton>
+          <div className="flex min-h-0 w-full flex-1 flex-col items-center gap-0.5 overflow-y-auto pt-1">
+            {railSessions.map((session) => {
+              const active = activeId === session.id
+              return (
+                <button
+                  key={session.id}
+                  type="button"
+                  aria-current={active ? 'true' : undefined}
+                  onClick={() => onSelect(session.id)}
+                  className={`flex size-10 shrink-0 items-center justify-center rounded-control ${FOCUS_RING} ${
+                    active ? ACTIVE_ROW_CLASSES : ROW_CLASSES
+                  }`}
+                  title={session.name}
+                >
+                  <span className="relative text-lg leading-none">
+                    {session.icon}
+                    {session.agentStatus && (
+                      <span className="absolute -top-1.5 -right-2 flex size-3.5 items-center justify-center rounded-full bg-surface ui-terminal:bg-bg">
+                        <AgentStatusBadge
+                          status={session.agentStatus}
+                          size={10}
+                        />
+                      </span>
+                    )}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
         </div>
       </aside>
     )
@@ -439,42 +448,44 @@ export function SessionSidebar({
   // Desktop: expanded sidebar
   return (
     <aside className={`w-64 ${SIDEBAR_BASE_CLASSES}`}>
-      <div className="flex h-12 shrink-0 items-center justify-between pl-3 pr-1.5">
-        <span className="flex items-center gap-2 text-[15px] font-semibold text-fg ui-terminal:font-label">
-          <span
-            aria-hidden="true"
-            className="flex size-6 items-center justify-center rounded-control bg-accent font-label text-[12px] font-bold text-accent-fg"
-          >
-            ›_
+      <div className={`w-64 ${SIDEBAR_CONTENT_CLASSES}`}>
+        <div className="flex h-12 shrink-0 items-center justify-between pl-3 pr-1.5">
+          <span className="flex items-center gap-2 text-[15px] font-semibold text-fg ui-terminal:font-label">
+            <span
+              aria-hidden="true"
+              className="flex size-6 items-center justify-center rounded-control bg-accent font-label text-[12px] font-bold text-accent-fg"
+            >
+              ›_
+            </span>
+            termote
           </span>
-          termote
-        </span>
-        <IconButton
-          onClick={() => onToggleCollapse?.()}
-          title="Collapse sidebar"
-          aria-label="Collapse sidebar"
-        >
-          <PanelLeftClose size={18} aria-hidden="true" />
-        </IconButton>
-      </div>
-      <div className="shrink-0 px-3 pb-2">
-        {showAddForm ? (
-          addForm
-        ) : (
-          <Button
-            variant="primary"
-            onClick={() => setShowAddForm(true)}
-            title="Add new session"
-            className="w-full ui-native:rounded-full"
+          <IconButton
+            onClick={() => onToggleCollapse?.()}
+            title="Collapse sidebar"
+            aria-label="Collapse sidebar"
           >
-            <Plus size={16} aria-hidden="true" />
-            New session
-          </Button>
-        )}
-        {filterBar && <div className="mt-2">{filterBar}</div>}
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
-        {sessionList}
+            <PanelLeftClose size={18} aria-hidden="true" />
+          </IconButton>
+        </div>
+        <div className="shrink-0 px-3 pb-2">
+          {showAddForm ? (
+            addForm
+          ) : (
+            <Button
+              variant="primary"
+              onClick={() => setShowAddForm(true)}
+              title="Add new session"
+              className="w-full ui-native:rounded-full"
+            >
+              <Plus size={16} aria-hidden="true" />
+              New session
+            </Button>
+          )}
+          {filterBar && <div className="mt-2">{filterBar}</div>}
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+          {sessionList}
+        </div>
       </div>
     </aside>
   )

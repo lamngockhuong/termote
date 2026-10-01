@@ -7,6 +7,7 @@ import {
   bracketPaste,
   fitFontSize,
   MIN_FONT_SIZE,
+  RESIZE_SETTLE_MS,
   stripTerminalReplies,
   type TerminalHandle,
   TerminalView,
@@ -149,6 +150,15 @@ const bridge = vi.hoisted(() => ({
 vi.mock('../utils/terminal-bridge', () => bridge)
 
 let resizeObserverCb: () => void
+// The observer fits the terminal once the size settles.
+function resize() {
+  vi.useFakeTimers()
+  act(() => {
+    resizeObserverCb()
+    vi.advanceTimersByTime(RESIZE_SETTLE_MS)
+  })
+  vi.useRealTimers()
+}
 const observerDisconnect = vi.fn()
 class FakeResizeObserver {
   constructor(cb: () => void) {
@@ -252,6 +262,38 @@ describe('TerminalView', () => {
     expect(term.loadAddon).toHaveBeenCalledWith(fit)
     expect(term.open).toHaveBeenCalledWith(screen.getByTestId('terminal-view'))
     expect(fit.fit).toHaveBeenCalled()
+  })
+
+  it('fits once after the container stops resizing', () => {
+    vi.useFakeTimers()
+    try {
+      const { fit } = renderView()
+      fit.fit.mockClear()
+      // An animated resize reports a new size at every frame.
+      for (let i = 0; i < 10; i++) {
+        resizeObserverCb()
+        vi.advanceTimersByTime(16)
+      }
+      expect(fit.fit).not.toHaveBeenCalled()
+      act(() => vi.advanceTimersByTime(RESIZE_SETTLE_MS))
+      expect(fit.fit).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('drops a pending fit on unmount', () => {
+    vi.useFakeTimers()
+    try {
+      const { fit, unmount } = renderView()
+      fit.fit.mockClear()
+      resizeObserverCb()
+      unmount()
+      vi.advanceTimersByTime(RESIZE_SETTLE_MS)
+      expect(fit.fit).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('passes pane and followPane to the socket', () => {
@@ -462,13 +504,13 @@ describe('TerminalView', () => {
     // Container resize keeps the server size
     term.resize.mockClear()
     fit.proposeDimensions.mockReturnValue({ cols: 200, rows: 80 })
-    act(() => resizeObserverCb())
+    resize()
     expect(term.resize).toHaveBeenCalledWith(152, 41)
     expect(term.options.fontSize).toBe(14)
 
     // A new stream drops the old server size until the next size frame
     socketOpts.onOpen()
-    act(() => resizeObserverCb())
+    resize()
     expect(fit.fit).toHaveBeenCalled()
   })
 
