@@ -69,7 +69,7 @@ Blocks the browser context menu (right-click / long-press) on the terminal area 
 
 A Herdr pane has one size, shared by the desktop and every device that shows it. By default the PWA shows the pane at the desktop's size: the font buttons then zoom in and out, and a pane larger than the screen can be dragged.
 
-With this switch on, the PWA sets the pane's size to fit its own screen while the page is shown, as it does with tmux: the font buttons change how many columns and rows the pane has. The pane on the desktop takes the same size until the page is hidden or closed, the connection is lost (after up to about 30 seconds), or another device with the switch on takes over. A device that lost the size shows a toast and keeps showing the pane at the desktop's size; it takes the size back the next time the page is shown.
+With this switch on, the PWA sets the pane's size to fit its own screen while the page shows the terminal, as it does with tmux: the font buttons change how many columns and rows the pane has. The pane on the desktop takes the same size until the page is hidden or closed, another view such as Chat opens, the connection is lost (after up to about 30 seconds), or another device with the switch on takes over. Under the Chat view the pane keeps the desktop's size, so a Claude Code dialog taller than a phone's screen is still shown whole and can be answered there. A device that lost the size shows a toast and keeps showing the pane at the desktop's size; it takes the size back the next time the page is shown.
 
 | Option | Behavior                                  | Default |
 | ------ | ----------------------------------------- | ------- |

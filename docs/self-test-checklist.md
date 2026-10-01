@@ -59,6 +59,9 @@ Manual testing checklist for Termote features before release.
       typing on the desktop still works
 - [ ] Hiding the PWA tab returns the desktop to its size within a second; showing it again
       takes the size back
+- [ ] Opening the Chat view returns the desktop to its size; a tall Claude Code dialog (a
+      multiSelect question with descriptions) shows as one steady card; back in the terminal the
+      PWA takes the size again
 - [ ] Resizing the pane on the desktop while the PWA drives it, then hiding the PWA: the PWA
       shows the desktop's new size
 - [ ] Two browsers with the switch on: the one shown last takes the size, the other shows a

@@ -58,6 +58,8 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
       `stty size` trong pane báo đúng khổ của PWA ở font đã chọn, và đổi theo font; gõ từ desktop
       vẫn được
 - [ ] Ẩn tab PWA thì desktop lấy lại khổ của mình trong vòng một giây; hiện lại thì PWA giành lại
+- [ ] Mở Chat view thì desktop lấy lại khổ; một hộp thoại cao của Claude Code (câu multiSelect có
+      mô tả) hiện thành một thẻ đứng yên; quay lại terminal thì PWA giành lại khổ
 - [ ] Đổi khổ pane trên desktop trong lúc PWA đang giữ khổ, rồi ẩn PWA: PWA hiển thị đúng khổ
       mới của desktop
 - [ ] Hai trình duyệt cùng bật công tắc: bên được hiện sau cùng giữ khổ, bên kia hiện thông báo và

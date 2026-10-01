@@ -154,7 +154,10 @@ The size frame comes before any output at that size. With Herdr it always carrie
 `false` means the size is the desktop's and client resizes are ignored; `true` means the client
 drives it, so its resizes reach the pane. `reason` (`taken-over` or `failed`) is only set when
 driving stopped without the client asking. `?drive=1` on the URL opens the stream already
-driving, so a reconnect does not start at the desktop size first. tmux ignores `drive`.
+driving, so a reconnect does not start at the desktop size first. tmux ignores `drive`. The
+PWA asks to drive only while its terminal shows: under another view (Chat) it gives the size
+back, since Claude Code cuts a dialog taller than the pane (the tab row and the question scroll
+off), and the Chat view could no longer read it.
 
 The connection requires a same-origin/allowed Origin, a single-use token minted by
 `GET /api/mux/stream-token` (30s TTL, consumed on upgrade), and `?pane=<id>` naming an
