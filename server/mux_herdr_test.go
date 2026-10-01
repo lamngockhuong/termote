@@ -1258,8 +1258,8 @@ func TestHerdrAgentSession(t *testing.T) {
 	if _, _, err := m.AgentSession(ctx, "-x"); !errors.As(err, &ie) {
 		t.Errorf("bad pane id: %v", err)
 	}
-	if !m.Caps().AgentChat {
-		t.Error("Caps().AgentChat = false")
+	if c := m.Caps(); !c.AgentChat || !c.Files {
+		t.Errorf("Caps() = %+v, want AgentChat and Files", c)
 	}
 }
 

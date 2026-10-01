@@ -90,7 +90,9 @@ type tmuxMux struct{}
 
 func (tmuxMux) Name() string { return "tmux" }
 
-func (tmuxMux) Caps() Caps { return Caps{CopyMode: true, AgentChat: agentProcSupported} }
+func (tmuxMux) Caps() Caps {
+	return Caps{CopyMode: true, AgentChat: agentProcSupported, Files: tmuxFilesSupported}
+}
 
 // listWindowsAttempts bounds retries of an empty list-windows reply.
 const listWindowsAttempts = 5
@@ -347,6 +349,32 @@ func tmuxAgentSession(ctx context.Context, paneID string, find func(string, int)
 	s, ok := tmuxPaneAgentWith(parts[2], parts[3], find)
 	s.InMode = parts[1] == "1"
 	return s, ok, nil
+}
+
+// PaneDir reports the working directory of a window's active pane. As in
+// tmuxAgentSession, the window index in the reply must be the one asked for:
+// tmux would otherwise resolve the target as a window name, or answer with
+// the current window. The path goes last so a ':' in it is kept.
+func (tmuxMux) PaneDir(ctx context.Context, paneID string) (string, string, error) {
+	if !tmuxFilesSupported {
+		return "", "", errUnsupported
+	}
+	if !validTmuxID(paneID) {
+		return "", "", inputError("invalid pane id")
+	}
+	if _, err := strconv.Atoi(paneID); err != nil {
+		return "", "", inputError("invalid pane id")
+	}
+	out, err := tmuxCmd(ctx, "display-message", "-p", "-t", qualifyTarget(paneID),
+		"#{window_index}:#{pane_id}:#{pane_current_path}").Output()
+	parts := strings.SplitN(strings.TrimRight(string(out), "\r\n"), ":", 3)
+	if err != nil || len(parts) != 3 || parts[0] != paneID || !tmuxPaneIDRe.MatchString(parts[1]) {
+		return "", "", inputError("unknown pane")
+	}
+	if parts[2] == "" || strings.HasPrefix(parts[2], "#{") {
+		return "", "", errUnsupported
+	}
+	return parts[2], parts[1], nil
 }
 
 // Capture returns the pane's visible screen with its SGR attributes.

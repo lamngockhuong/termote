@@ -141,16 +141,9 @@ func writeGuard(allowed hostAllowlist, next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if site := r.Header.Get("Sec-Fetch-Site"); site != "" && site != "same-origin" {
-			jsonError(w, "cross-site request rejected", http.StatusForbidden)
+		if msg := crossSiteRejection(allowed, r); msg != "" {
+			jsonError(w, msg, http.StatusForbidden)
 			return
-		}
-		if origin := r.Header.Get("Origin"); origin != "" {
-			u, err := url.Parse(origin)
-			if err != nil || u.Host == "" || !allowed.allows(r, u.Host) {
-				jsonError(w, "origin not allowed", http.StatusForbidden)
-				return
-			}
 		}
 		if mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type")); err != nil || mt != "application/json" {
 			jsonError(w, "Content-Type must be application/json", http.StatusUnsupportedMediaType)
@@ -158,6 +151,23 @@ func writeGuard(allowed hostAllowlist, next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// crossSiteRejection returns why r must be refused as cross-site, or "".
+// Browsers send Sec-Fetch-Site and Origin on fetches; a request without them
+// (some mobile browsers, curl) passes, as it cannot come from another page's
+// script with the user's credentials.
+func crossSiteRejection(allowed hostAllowlist, r *http.Request) string {
+	if site := r.Header.Get("Sec-Fetch-Site"); site != "" && site != "same-origin" {
+		return "cross-site request rejected"
+	}
+	if origin := r.Header.Get("Origin"); origin != "" {
+		u, err := url.Parse(origin)
+		if err != nil || u.Host == "" || !allowed.allows(r, u.Host) {
+			return "origin not allowed"
+		}
+	}
+	return ""
 }
 
 // apiNotFound answers unknown /api/ paths with JSON so an old PWA bundle gets a

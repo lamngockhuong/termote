@@ -100,7 +100,7 @@ func newHerdrMux(ctx context.Context, socket string) (*herdrMux, error) {
 func (*herdrMux) Name() string { return "herdr" }
 
 func (*herdrMux) Caps() Caps {
-	return Caps{ClientSideSelect: true, Scroll: true, DriveSize: true, AgentChat: true}
+	return Caps{ClientSideSelect: true, Scroll: true, DriveSize: true, AgentChat: true, Files: true}
 }
 
 // AgentSession reads the session herdr's Claude integration reported for the
@@ -619,6 +619,31 @@ func (m *herdrMux) SendKeys(ctx context.Context, paneID, keys string) error {
 		return nil
 	}
 	return m.typeInput(ctx, paneID, keys)
+}
+
+// PaneDir reads the pane's directory from pane.get: the foreground process's
+// directory, else the shell's. A herdr that reports neither is too old.
+func (m *herdrMux) PaneDir(ctx context.Context, paneID string) (string, string, error) {
+	if !herdrPaneIDRe.MatchString(paneID) {
+		return "", "", inputError("invalid pane id")
+	}
+	var res struct {
+		Pane struct {
+			Cwd           string `json:"cwd"`
+			ForegroundCwd string `json:"foreground_cwd"`
+		} `json:"pane"`
+	}
+	if err := m.rpc.call(ctx, "pane.get", map[string]string{"pane_id": paneID}, &res); err != nil {
+		return "", "", herdrInputError(err)
+	}
+	dir := res.Pane.ForegroundCwd
+	if dir == "" {
+		dir = res.Pane.Cwd
+	}
+	if dir == "" {
+		return "", "", errUnsupported
+	}
+	return dir, paneID, nil
 }
 
 // AgentSessionNow is AgentSession: pane.get is never cached.

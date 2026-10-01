@@ -64,6 +64,9 @@ type Caps struct {
 	// AgentChat: the backend can tell which agent session a pane runs, so
 	// the agent routes (/api/mux/panes/{id}/agent/*) work.
 	AgentChat bool `json:"agentChat"`
+	// Files: the backend reports a pane's working directory, so the files
+	// routes (/api/mux/panes/{id}/files/*) work.
+	Files bool `json:"files"`
 }
 
 type Snapshot struct {
