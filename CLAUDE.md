@@ -41,7 +41,7 @@ termote/
 │   ├── mux_tmux.go         # tmux/psmux backend
 │   ├── mux_herdr.go        # Herdr backend
 │   ├── herdr_socket_*.go   # Herdr socket path + dial (Unix socket / Windows named pipe)
-│   ├── herdr_observer_*.go # Stops `observe` (process group / Windows Job Object)
+│   ├── herdr_observer_*.go # Stops `observe`/`control` (process group / Windows Job Object)
 │   ├── stream.go           # Terminal WebSocket (xterm.js stream)
 │   ├── webui/              # Embeds the built PWA into the binary (build output, .gitkeep only in git)
 │   ├── install_layout.go   # Versioned install layout (versions/<v>, current pointer, prune)

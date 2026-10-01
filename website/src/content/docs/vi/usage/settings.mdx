@@ -65,6 +65,27 @@ Chặn menu ngữ cảnh trình duyệt (nhấn chuột phải / nhấn giữ) t
 | Bật      | Menu ngữ cảnh bị chặn trên terminal         | ✓        |
 | Tắt      | Hiển thị menu ngữ cảnh mặc định trình duyệt |          |
 
+## Cho pane Herdr vừa với thiết bị này (Chỉ Herdr)
+
+Nhãn trong ứng dụng: **Fit herdr pane to this device**.
+
+Mỗi pane của Herdr chỉ có một kích thước, dùng chung cho desktop và mọi thiết bị đang xem nó. Mặc định PWA hiển thị pane theo khổ của desktop. Khi đó nút font dùng để phóng to, thu nhỏ, và pane to hơn màn hình thì kéo để xem.
+
+Bật công tắc này thì trong lúc trang đang hiện, PWA đặt khổ pane vừa với màn hình của mình, giống cách chạy với tmux: nút font đổi số cột và số dòng của pane. Pane trên desktop cũng mang khổ đó cho tới khi một trong các việc sau xảy ra:
+
+- trang bị ẩn hoặc bị đóng;
+- mất kết nối (desktop lấy lại khổ sau tối đa khoảng 30 giây);
+- một thiết bị khác cũng bật công tắc giành lấy khổ.
+
+Thiết bị bị giành mất khổ sẽ hiện một thông báo và tiếp tục hiển thị pane theo khổ desktop. Lần kế tiếp trang được hiện lại, thiết bị đó lấy lại khổ.
+
+| Tùy chọn | Hành vi                                     | Mặc định |
+| -------- | ------------------------------------------- | -------- |
+| Tắt      | Pane giữ khổ của desktop                    | ✓        |
+| Bật      | Pane vừa với thiết bị này khi trang đang hiện |          |
+
+Tùy chọn này chỉ hiện khi dùng backend Herdr. Trên macOS, nếu server bị kill (`kill -9`) lúc một thiết bị đang giữ khổ pane, pane giữ nguyên khổ đó cho tới khi service khởi động lại.
+
 ## Hiện thanh tab phiên (Chỉ desktop)
 
 Bật/tắt hiển thị các tab phiên kiểu trình duyệt trên header ở desktop để chuyển đổi phiên nhanh chóng. Khi tắt, dùng sidebar để quản lý phiên.
