@@ -339,6 +339,9 @@ func TestClassifyClaudeUserText(t *testing.T) {
 	if role, s, ok := classifyClaudeUserText("<command-message>atk:review</command-message>\n<command-name>/atk:review</command-name>\n<command-args>12</command-args>"); !ok || role != "user" || s != "/atk:review 12" {
 		t.Errorf("command-message first = %q %q %v", role, s, ok)
 	}
+	if _, s, _ := classifyClaudeUserText("\n\n<pasted_content id=\"5edd\">\nCount these\nrow 1\n</pasted_content id=\"5edd\">\n"); s != "Count these\nrow 1" {
+		t.Errorf("pasted content = %q", s)
+	}
 	if role, s, ok := classifyClaudeUserText("see <system-reminder> in prose"); !ok || role != "user" || s == "" {
 		t.Error("a tag inside prose is speech")
 	}

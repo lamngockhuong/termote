@@ -40,6 +40,8 @@ export interface MuxSnapshot {
     scroll?: boolean
     // The client can take over the pane size (herdr's control mode).
     driveSize?: boolean
+    // The agent routes (/agent/*) work: transcript, message, prompt.
+    agentChat?: boolean
   }
   groups: MuxGroup[]
 }
@@ -153,4 +155,96 @@ export async function fetchTerminalToken(): Promise<string> {
     }
   }
   throw new Error('Token request failed after retries')
+}
+
+// Agent chat (/api/mux/panes/{id}/agent/*). Shapes match server/agent.go.
+
+export interface TranscriptPart {
+  kind: 'text' | 'thinking' | 'tool' | 'image'
+  text?: string
+  tool?: string
+  toolId?: string
+  // One-line summary of the tool input (a path, a command)
+  input?: string
+  result?: string
+  isError?: boolean
+  // A tool result whose call is not in this read; attached by toolId when
+  // the call is known.
+  orphan?: boolean
+  clipped?: boolean
+}
+
+export interface TranscriptEntry {
+  id: string
+  ts?: string
+  role: 'user' | 'assistant' | 'summary' | 'note'
+  parts: TranscriptPart[]
+}
+
+export interface TranscriptPage {
+  agent: string
+  sessionId: string
+  status: string
+  entries: TranscriptEntry[]
+  // Continues a forward read; empty on a reply to a before read
+  cursor: string
+  // Reads the entries older than this page; absent at the start
+  before?: string
+  // The entries replace everything held
+  reset: boolean
+}
+
+// A refused agent request: the HTTP status and the server's stable code.
+export class AgentRequestError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: string,
+    message: string,
+    readonly limit?: number,
+  ) {
+    super(message)
+  }
+}
+
+async function agentError(res: Response): Promise<AgentRequestError> {
+  const body = await res.json().catch(() => ({}))
+  return new AgentRequestError(
+    res.status,
+    body.code ?? '',
+    body.error ?? `request failed: ${res.status}`,
+    body.limit,
+  )
+}
+
+const agentPath = (paneId: string, op: string) =>
+  `${API_BASE}/panes/${encodeURIComponent(paneId)}/agent/${op}`
+
+export async function fetchTranscript(
+  paneId: string,
+  query: { cursor?: string; before?: string } = {},
+): Promise<TranscriptPage> {
+  const params = new URLSearchParams()
+  if (query.cursor) params.set('cursor', query.cursor)
+  if (query.before) params.set('before', query.before)
+  const qs = params.toString()
+  const res = await fetch(
+    agentPath(paneId, 'transcript') + (qs ? `?${qs}` : ''),
+  )
+  if (!res.ok) throw await agentError(res)
+  return res.json()
+}
+
+// Sends text to the agent as one message. Throws AgentRequestError when the
+// server refuses (the screen is not an empty input box, the session changed).
+export async function sendAgentMessage(
+  paneId: string,
+  text: string,
+  cursor: string,
+): Promise<void> {
+  const res = await fetch(agentPath(paneId, 'message'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, cursor }),
+  })
+  if (!res.ok) throw await agentError(res)
 }

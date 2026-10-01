@@ -23,6 +23,17 @@ const DEFAULT_MUX: MuxInfo = {
   caps: { clientSideSelect: false, copyMode: true },
 }
 
+// The snapshot's backend and caps, compared field by field: a cap the bundle
+// learns about later (agentChat) must reach the state too.
+function sameMux(a: MuxInfo, b: MuxInfo): boolean {
+  if (a.backend !== b.backend) return false
+  const keys = new Set([...Object.keys(a.caps), ...Object.keys(b.caps)])
+  return [...keys].every(
+    (k) =>
+      a.caps[k as keyof MuxInfo['caps']] === b.caps[k as keyof MuxInfo['caps']],
+  )
+}
+
 // Store metadata (icon, description) in localStorage since the mux only stores tab names
 interface SessionMeta {
   icon: string
@@ -107,7 +118,12 @@ const sameSelection = (a: Selection | null, b: Selection) =>
 // Point a tab at one of its panes.
 function withPane(session: Session, paneId: string | undefined): Session {
   const pane = session.panes?.find((p) => p.id === paneId)
-  return { ...session, paneId, hasAgent: !!pane?.hasAgent }
+  return {
+    ...session,
+    paneId,
+    hasAgent: !!pane?.hasAgent,
+    agentName: pane?.agentName,
+  }
 }
 
 interface Built {
@@ -134,6 +150,7 @@ function buildSessions(
         id: p.id,
         label: p.agent?.name || p.title || `Pane ${i + 1}`,
         hasAgent: !!p.agent,
+        agentName: p.agent?.name,
         agentStatus: toAgentStatus(p.agent?.status),
       }))
       const pane = tab.panes.find((p) => p.active) ?? tab.panes[0]
@@ -145,6 +162,7 @@ function buildSessions(
         groupId: g.id,
         paneId: pane?.id,
         hasAgent: !!pane?.agent,
+        agentName: pane?.agent?.name,
         panes,
         agentStatus: worstAgentStatus(panes.map((p) => p.agentStatus)),
       }
@@ -242,13 +260,7 @@ export function useLocalSessions(pollInterval = 5) {
       }
       const next: MuxInfo = { backend: snap.backend, caps: snap.caps }
       muxRef.current = next
-      setMux((prev) =>
-        prev.backend === next.backend &&
-        prev.caps.clientSideSelect === next.caps.clientSideSelect &&
-        prev.caps.copyMode === next.caps.copyMode
-          ? prev
-          : next,
-      )
+      setMux((prev) => (sameMux(prev, next) ? prev : next))
       applySnapshot(snap, version)
       setIsReady(true)
       isReadyRef.current = true

@@ -40,6 +40,11 @@ const mockUseLocalSessions = vi.fn(() => ({
     caps: { clientSideSelect: false, copyMode: true },
   },
 }))
+const mockSelectTab = vi.fn(async (_id: string) => true)
+vi.mock('./hooks/use-mux-api', async (orig) => ({
+  ...(await orig<typeof import('./hooks/use-mux-api')>()),
+  selectTab: (id: string) => mockSelectTab(id),
+}))
 vi.mock('./hooks/use-local-sessions', () => ({
   useLocalSessions: (...args: any[]) =>
     (mockUseLocalSessions as (...a: any[]) => unknown)(...args),
@@ -2191,6 +2196,7 @@ describe('App views, view-only and deep links', () => {
 
   // A second view, as #233 (chat) or #237 (files) will register one.
   const setSidePanelFrom: { current?: ViewProps['setSidePanel'] } = {}
+  const showViewFrom: { current?: ViewProps['showView'] } = {}
   const CHAT: AppView = {
     id: 'chat',
     label: 'Chat',
@@ -2198,6 +2204,7 @@ describe('App views, view-only and deep links', () => {
     available: () => true,
     Main: (p) => {
       setSidePanelFrom.current = p.setSidePanel
+      showViewFrom.current = p.showView
       return <div data-testid="chat-main">{p.readOnly ? 'ro' : 'rw'}</div>
     },
     Input: () => <div data-testid="chat-input" />,
@@ -2272,6 +2279,35 @@ describe('App views, view-only and deep links', () => {
     ).toContainElement(screen.getByTestId('chat-panel'))
     act(() => setSidePanelFrom.current!(null))
     expect(screen.queryByTestId('chat-panel')).toBeNull()
+  })
+
+  it('a view can switch back to the terminal; tmux reselects the window first', async () => {
+    mockSessions({ backend: 'tmux' })
+    render(<App views={VIEWS} />)
+    fireEvent.click(await screen.findByRole('tab', { name: 'Chat' }))
+    act(() => showViewFrom.current!('terminal'))
+    expect(mockSelectTab).toHaveBeenCalledWith('w1:t1')
+    expect(screen.queryByTestId('chat-main')).toBeNull()
+    expect(screen.getByTestId('keyboard-toolbar')).toBeInTheDocument()
+  })
+
+  it('a failed reselect still switches to the terminal', async () => {
+    mockSessions({ backend: 'tmux' })
+    mockSelectTab.mockRejectedValueOnce(new Error('offline'))
+    render(<App views={VIEWS} />)
+    fireEvent.click(await screen.findByRole('tab', { name: 'Chat' }))
+    await act(async () => showViewFrom.current!('terminal'))
+    expect(screen.getByTestId('keyboard-toolbar')).toBeInTheDocument()
+  })
+
+  it('herdr streams the pane itself: no reselect', async () => {
+    render(<App views={VIEWS} />)
+    fireEvent.click(await screen.findByRole('tab', { name: 'Chat' }))
+    act(() => showViewFrom.current!('terminal'))
+    expect(mockSelectTab).not.toHaveBeenCalled()
+    // Switching to a view other than the terminal never reselects either
+    act(() => showViewFrom.current!('chat'))
+    expect(mockSelectTab).not.toHaveBeenCalled()
   })
 
   it('mobile has no side panel', async () => {

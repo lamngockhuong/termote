@@ -1,5 +1,6 @@
 import { Eye } from 'lucide-react'
 import {
+  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -36,6 +37,7 @@ import { useGestures } from './hooks/use-gestures'
 import { useKeyboardVisible } from './hooks/use-keyboard-visible'
 import { useLocalSessions } from './hooks/use-local-sessions'
 import { useIsMobile } from './hooks/use-media-query'
+import { selectTab } from './hooks/use-mux-api'
 import { useSettings } from './hooks/use-settings'
 import { useSidebarCollapsed } from './hooks/use-sidebar-collapsed'
 import { useUpdateCheck } from './hooks/use-update-check'
@@ -184,7 +186,28 @@ export default function App({
   const isTerminalView = currentView.id === TERMINAL_VIEW_ID
   // A view's content in the desktop side panel, next to the terminal
   const [sidePanelId, setSidePanelId] = useState<string | null>(null)
-  const viewProps = { ...viewContext, isMobile, setSidePanel: setSidePanelId }
+  // The terminal is the way out of every view. tmux shares its current
+  // window between clients, so the window is selected again first: another
+  // device may have moved it while this one showed the chat.
+  const showView = useCallback(
+    (id: string) => {
+      if (
+        id === TERMINAL_VIEW_ID &&
+        !mux.caps.clientSideSelect &&
+        activeSession.id
+      ) {
+        selectTab(activeSession.id).catch(() => {})
+      }
+      setViewId(id)
+    },
+    [mux.caps.clientSideSelect, activeSession.id],
+  )
+  const viewProps = {
+    ...viewContext,
+    isMobile,
+    setSidePanel: setSidePanelId,
+    showView,
+  }
   const sidePanelView = isMobile
     ? undefined
     : offeredViews.find((v) => v.id === sidePanelId && v.Panel)
@@ -644,7 +667,9 @@ export default function App({
                   role={panelRole}
                   className="absolute inset-0 overflow-auto bg-bg"
                 >
-                  <currentView.Main {...viewProps} />
+                  <Suspense fallback={null}>
+                    <currentView.Main {...viewProps} />
+                  </Suspense>
                 </div>
               )}
             </div>
@@ -702,7 +727,11 @@ export default function App({
           />
         </div>
       ) : (
-        currentView.Input && <currentView.Input {...viewProps} />
+        // Keyed by pane: a send still in flight never lands on another
+        // pane's draft.
+        currentView.Input && (
+          <currentView.Input key={activeSession.paneId} {...viewProps} />
+        )
       )}
 
       {/* Hidden input for Ctrl+key capture - programmatically focused only */}

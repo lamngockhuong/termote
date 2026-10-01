@@ -262,8 +262,16 @@ func classifyClaudeUserText(text string) (role, out string, ok bool) {
 		s := xmlInner(t, "summary")
 		return "note", s, s != ""
 	}
+	if strings.Contains(text, "<pasted_content id=") {
+		text = strings.Trim(pastedTagRe.ReplaceAllString(text, ""), "\r\n")
+	}
 	return "user", text, strings.TrimSpace(text) != ""
 }
+
+// pastedTagRe matches the tags Claude Code wraps a long paste in when it
+// expands its [Pasted text #N] token into the message (2.1.286):
+// <pasted_content id="5edd"> … </pasted_content id="5edd">.
+var pastedTagRe = regexp.MustCompile(`</?pasted_content id="[^"<>]*">\n?`)
 
 // xmlInner returns the trimmed text of the first <tag>…</tag> in s.
 func xmlInner(s, tag string) string {

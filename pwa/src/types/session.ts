@@ -27,6 +27,8 @@ export interface SessionPane {
   id: string
   label: string
   hasAgent: boolean
+  // Which agent ("claude"), when it runs one
+  agentName?: string
   agentStatus?: AgentStatus
 }
 
@@ -39,8 +41,10 @@ export interface Session {
   groupId?: string
   // Pane the terminal streams for this tab.
   paneId?: string
-  // That pane runs a coding agent (herdr).
+  // That pane runs a coding agent.
   hasAgent?: boolean
+  // Which agent it runs ("claude").
+  agentName?: string
   panes?: SessionPane[]
   // Heaviest agent status among the tab's panes.
   agentStatus?: AgentStatus
