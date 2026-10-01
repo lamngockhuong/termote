@@ -144,4 +144,70 @@ describe('useSettings', () => {
     const { result } = renderHook(() => useSettings())
     expect(result.current.settings.pollInterval).toBe(120)
   })
+
+  it('returns default sidebarFilter of "all"', () => {
+    const { result } = renderHook(() => useSettings())
+    expect(result.current.settings.sidebarFilter).toBe('all')
+  })
+
+  it('updates sidebarFilter and persists', () => {
+    const { result } = renderHook(() => useSettings())
+    act(() => result.current.updateSetting('sidebarFilter', 'needs-you'))
+    expect(result.current.settings.sidebarFilter).toBe('needs-you')
+    expect(
+      JSON.parse(localStorage.getItem('termote-settings')!).sidebarFilter,
+    ).toBe('needs-you')
+  })
+
+  it('replaces an unknown saved sidebarFilter with "all"', () => {
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ sidebarFilter: 'invalid-filter' }),
+    )
+    const { result } = renderHook(() => useSettings())
+    expect(result.current.settings.sidebarFilter).toBe('all')
+  })
+
+  it('restores valid sidebarFilter from localStorage', () => {
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ sidebarFilter: 'working' }),
+    )
+    const { result } = renderHook(() => useSettings())
+    expect(result.current.settings.sidebarFilter).toBe('working')
+  })
+
+  it('returns default sortBlockedFirst of false', () => {
+    const { result } = renderHook(() => useSettings())
+    expect(result.current.settings.sortBlockedFirst).toBe(false)
+  })
+
+  it('updates sortBlockedFirst and persists', () => {
+    const { result } = renderHook(() => useSettings())
+    act(() => result.current.updateSetting('sortBlockedFirst', true))
+    expect(result.current.settings.sortBlockedFirst).toBe(true)
+    expect(
+      JSON.parse(localStorage.getItem('termote-settings')!).sortBlockedFirst,
+    ).toBe(true)
+  })
+
+  it('restores sortBlockedFirst from localStorage', () => {
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ sortBlockedFirst: true }),
+    )
+    const { result } = renderHook(() => useSettings())
+    expect(result.current.settings.sortBlockedFirst).toBe(true)
+  })
+
+  it('merges partial saved settings with new defaults', () => {
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ pollInterval: 30 }),
+    )
+    const { result } = renderHook(() => useSettings())
+    expect(result.current.settings.pollInterval).toBe(30)
+    expect(result.current.settings.sidebarFilter).toBe('all')
+    expect(result.current.settings.sortBlockedFirst).toBe(false)
+  })
 })

@@ -44,6 +44,7 @@ import { useUpdateCheck } from './hooks/use-update-check'
 import { applyUiStyle, syncThemeColor } from './ui-style'
 import { checkApiVersion } from './utils/api-version'
 import { formatDeepLink, parseDeepLink } from './utils/deep-link'
+import { matchesFilter } from './utils/session-filter'
 import {
   blurTerminal,
   dragTerminal,
@@ -169,6 +170,14 @@ export default function App({
     [sessions, activeSession.groupId],
   )
   const groupName = groups.find((g) => g.id === activeSession.groupId)?.name
+  // Mobile chip: tabs waiting on the user besides the one on screen.
+  const blockedElsewhere = useMemo(
+    () =>
+      sessions.filter(
+        (s) => s.id !== activeSession.id && matchesFilter(s, 'needs-you'),
+      ).length,
+    [sessions, activeSession.id],
+  )
 
   // Views offered for this pane; one that stops being offered gives way to
   // the terminal.
@@ -553,6 +562,9 @@ export default function App({
             onUpdate={updateSession}
             isCollapsed={sidebarCollapsed}
             onToggleCollapse={toggleSidebarCollapsed}
+            filter={settings.sidebarFilter}
+            onFilterChange={(f) => updateSetting('sidebarFilter', f)}
+            sortBlockedFirst={settings.sortBlockedFirst}
           />
         )}
 
@@ -569,6 +581,9 @@ export default function App({
             isOpen={sidebarOpen}
             onClose={() => setSidebarOpen(false)}
             isMobile
+            filter={settings.sidebarFilter}
+            onFilterChange={(f) => updateSetting('sidebarFilter', f)}
+            sortBlockedFirst={settings.sortBlockedFirst}
           />
         )}
 
@@ -578,6 +593,7 @@ export default function App({
             session={activeSession}
             groupSessions={groupSessions}
             groupName={groupName}
+            blockedElsewhere={blockedElsewhere}
             showSessionTabs={settings.showSessionTabs}
             canRemoveTab={sessions.length > 1}
             onSelectTab={switchSession}

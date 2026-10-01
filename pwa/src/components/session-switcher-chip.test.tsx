@@ -25,9 +25,11 @@ function renderChip(
       {...props}
     />,
   )
+  // The aria-label may be "Open sessions menu" or include blockedElsewhere count
+  const chip = screen.getByRole('button', { name: /Open sessions menu/ })
   return {
     onClick,
-    chip: screen.getByRole('button', { name: 'Open sessions menu' }),
+    chip,
   }
 }
 
@@ -59,5 +61,55 @@ describe('SessionSwitcherChip', () => {
     expect(chip).toHaveAttribute('aria-expanded', 'true')
     fireEvent.click(chip)
     expect(onClick).toHaveBeenCalledOnce()
+  })
+
+  it('shows the blocked-elsewhere count badge when there are blocked sessions elsewhere', () => {
+    renderChip({ blockedElsewhere: 2 })
+    const badge = screen.getByTestId('blocked-elsewhere')
+    expect(badge).toBeInTheDocument()
+    expect(badge).toHaveTextContent('2')
+  })
+
+  it('hides the chevron when there are blocked sessions elsewhere', () => {
+    const { chip } = renderChip({ blockedElsewhere: 2 })
+    // When blockedElsewhere > 0, the badge replaces the chevron
+    const chevron = chip.querySelector('svg[class*="chevron"]')
+    expect(chevron).not.toBeInTheDocument()
+    // And the badge should be there instead
+    const badge = screen.getByTestId('blocked-elsewhere')
+    expect(badge).toBeInTheDocument()
+  })
+
+  it('shows the chevron when blockedElsewhere is 0', () => {
+    renderChip({ blockedElsewhere: 0 })
+    // When blockedElsewhere is 0, the chevron should be visible
+    const chip = screen.getByRole('button', { name: /Open sessions menu/ })
+    const chevron = chip.querySelector('svg[class*="chevron"]')
+    expect(chevron).toBeInTheDocument()
+  })
+
+  it('updates aria-label to include blocked sessions count (singular)', () => {
+    const { chip } = renderChip({ blockedElsewhere: 1 })
+    expect(chip).toHaveAccessibleName(
+      'Open sessions menu, 1 other session needs you',
+    )
+  })
+
+  it('updates aria-label to include blocked sessions count (plural)', () => {
+    const { chip } = renderChip({ blockedElsewhere: 3 })
+    expect(chip).toHaveAccessibleName(
+      'Open sessions menu, 3 other sessions need you',
+    )
+  })
+
+  it('uses standard aria-label when blockedElsewhere is 0', () => {
+    const { chip } = renderChip({ blockedElsewhere: 0 })
+    expect(chip).toHaveAccessibleName('Open sessions menu')
+  })
+
+  it('styles the badge with danger color', () => {
+    renderChip({ blockedElsewhere: 2 })
+    const badge = screen.getByTestId('blocked-elsewhere')
+    expect(badge).toHaveClass('bg-danger')
   })
 })

@@ -19,6 +19,8 @@ interface Props {
   // Tabs of the session's group, and that group's name
   groupSessions: Session[]
   groupName?: string
+  // Mobile: other tabs waiting on the user, counted on the session chip
+  blockedElsewhere?: number
   // Desktop: tabs in the header row; off, the row names the session only
   showSessionTabs: boolean
   canRemoveTab: boolean
@@ -82,6 +84,7 @@ function MobileHeader(p: Props) {
         session={p.session}
         groupName={p.groupName}
         sessionCount={p.groupSessions.length}
+        blockedElsewhere={p.blockedElsewhere}
         connectionState={p.connectionState}
         expanded={p.sessionsOpen}
         onClick={p.onOpenSessions}

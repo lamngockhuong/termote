@@ -10,6 +10,14 @@ import {
 import { useState } from 'react'
 import { useGroupCollapsed } from '../hooks/use-group-collapsed'
 import type { Session, SessionGroup } from '../types/session'
+import {
+  blockedFirst,
+  effectiveFilter,
+  matchesFilter,
+  type SidebarFilter,
+  summarizeSessions,
+} from '../utils/session-filter'
+import { AgentFilterBar } from './agent-filter-bar'
 import { AgentStatusBadge } from './agent-status-badge'
 import { IconPicker } from './icon-picker'
 import { SwipeableSessionItem } from './swipeable-session-item'
@@ -41,6 +49,11 @@ interface Props {
   isMobile?: boolean
   isCollapsed?: boolean
   onToggleCollapse?: () => void
+  // Which sessions to list; the filter bar shows only with onFilterChange.
+  filter?: SidebarFilter
+  onFilterChange?: (filter: SidebarFilter) => void
+  // Sessions waiting on the user first in each group
+  sortBlockedFirst?: boolean
 }
 
 // The session list: a bottom sheet on phones, a collapsible sidebar on desktop.
@@ -57,6 +70,9 @@ export function SessionSidebar({
   isMobile = false,
   isCollapsed = false,
   onToggleCollapse,
+  filter = 'all',
+  onFilterChange,
+  sortBlockedFirst = false,
 }: Props) {
   const [showAddForm, setShowAddForm] = useState(false)
   const [newName, setNewName] = useState('')
@@ -67,8 +83,28 @@ export function SessionSidebar({
   const { isCollapsed: isGroupCollapsed, toggle: toggleGroup } =
     useGroupCollapsed()
 
+  // A filter applies only with the bar that can clear it.
+  const activeFilter = onFilterChange
+    ? effectiveFilter(sessions, filter)
+    : 'all'
+  const filtering = activeFilter !== 'all'
+  const summary = summarizeSessions(sessions)
+  // Hidden with no agent anywhere: there is nothing to filter by.
+  const showFilterBar = !!onFilterChange && summary.agents > 0
+  // The row being edited stays even when it stops matching, so a poll does
+  // not take the form away mid-edit.
+  const arrange = (list: Session[]) => {
+    const matching = list.filter(
+      (s) => s.id === editingId || matchesFilter(s, activeFilter),
+    )
+    return sortBlockedFirst ? blockedFirst(matching) : matching
+  }
+  const visibleSessions = arrange(sessions)
+
   const handleAdd = () => {
     if (newName.trim()) {
+      // The new session has no agent yet: clear the filter so it shows.
+      if (filtering) onFilterChange?.('all')
       onAdd(newName.trim(), newIcon)
       setNewName('')
       setNewIcon('💻')
@@ -204,17 +240,23 @@ export function SessionSidebar({
   const rowGap = isMobile ? 'gap-1 ui-native:gap-px' : 'gap-0.5'
 
   // A single group (tmux) keeps the flat 0.x list without a header.
+  // While filtering, a group with no match is hidden and one with a match is
+  // open; the saved collapsed state is left as it was.
   const renderGroup = (group: SessionGroup) => {
-    const tabs = sessions.filter((s) => s.groupId === group.id)
-    const collapsed = isGroupCollapsed(group.id)
+    const tabs = arrange(sessions.filter((s) => s.groupId === group.id))
+    if (filtering && tabs.length === 0) return null
+    const collapsed = !filtering && isGroupCollapsed(group.id)
     const name = group.name || group.id
     return (
       <section key={group.id} aria-label={name} className="pb-2">
         <button
           type="button"
           onClick={() => toggleGroup(group.id)}
+          // While filtering the group is held open; toggling would change
+          // the saved state without showing it.
+          disabled={filtering}
           aria-expanded={!collapsed}
-          className={`flex w-full items-center gap-1.5 rounded-control px-2 pb-1 pt-2 font-label text-[11px] uppercase tracking-wider text-fg-subtle hover:text-fg ${FOCUS_RING}`}
+          className={`flex w-full items-center gap-1.5 rounded-control px-2 pb-1 pt-2 font-label text-[11px] uppercase tracking-wider text-fg-subtle hover:text-fg disabled:hover:text-fg-subtle ${FOCUS_RING}`}
         >
           {collapsed ? (
             <ChevronRight size={12} aria-hidden="true" />
@@ -266,15 +308,30 @@ export function SessionSidebar({
     </div>
   )
 
+  const filterBar = showFilterBar && (
+    <AgentFilterBar
+      summary={summary}
+      filter={activeFilter}
+      onChange={(f) => onFilterChange?.(f)}
+    />
+  )
+
   // Session list content (shared between mobile and desktop)
   const sessionList =
-    groups.length > 1 ? (
+    filtering && visibleSessions.length === 0 ? (
+      <div className="flex flex-col items-center gap-2 px-2 py-6 text-center text-[13px] text-fg-muted">
+        No sessions match
+        <Button size="sm" onClick={() => onFilterChange?.('all')}>
+          Show all
+        </Button>
+      </div>
+    ) : groups.length > 1 ? (
       groups.map(renderGroup)
     ) : (
       <div
         className={`flex flex-col ${rowGap} ui-native:overflow-hidden ui-native:rounded-panel`}
       >
-        {sessions.map(renderItem)}
+        {visibleSessions.map(renderItem)}
       </div>
     )
 
@@ -303,6 +360,7 @@ export function SessionSidebar({
       >
         <div className="flex flex-col gap-2 px-2 pb-3 pt-1">
           {showAddForm && addForm}
+          {filterBar}
           {sessionList}
         </div>
       </Sheet>
@@ -311,14 +369,28 @@ export function SessionSidebar({
 
   // Desktop: collapsible sidebar
   if (isCollapsed) {
+    // Sorted within each group, as in the expanded list.
+    const railSessions =
+      groups.length > 1
+        ? groups.flatMap((g) =>
+            arrange(sessions.filter((s) => s.groupId === g.id)),
+          )
+        : visibleSessions
     return (
       <aside className={`w-14 items-center gap-1 py-2 ${SIDEBAR_BASE_CLASSES}`}>
         <IconButton
           onClick={() => onToggleCollapse?.()}
-          title="Expand sidebar"
-          aria-label="Expand sidebar"
+          title={filtering ? 'Expand sidebar (filtered)' : 'Expand sidebar'}
+          aria-label={filtering ? 'Expand sidebar, filtered' : 'Expand sidebar'}
+          className="relative"
         >
           <PanelLeftOpen size={18} aria-hidden="true" />
+          {filtering && (
+            <span
+              aria-hidden="true"
+              className="absolute right-1.5 top-1.5 size-2 rounded-full bg-accent"
+            />
+          )}
         </IconButton>
         <IconButton
           variant="primary"
@@ -332,7 +404,7 @@ export function SessionSidebar({
           <Plus size={18} aria-hidden="true" />
         </IconButton>
         <div className="flex min-h-0 w-full flex-1 flex-col items-center gap-0.5 overflow-y-auto pt-1">
-          {sessions.map((session) => {
+          {railSessions.map((session) => {
             const active = activeId === session.id
             return (
               <button
@@ -399,6 +471,7 @@ export function SessionSidebar({
             New session
           </Button>
         )}
+        {filterBar && <div className="mt-2">{filterBar}</div>}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
         {sessionList}

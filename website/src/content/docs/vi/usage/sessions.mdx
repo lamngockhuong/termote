@@ -32,6 +32,32 @@ workflow khác nhau (ví dụ: Claude Code, Copilot, build).
 - **Sửa**: Vuốt trái trên phiên, chạm Edit
 - **Xóa**: Vuốt trái trên phiên, chạm Remove
 - **Thêm**: Chạm "New session" ở đầu bảng danh sách phiên
+- **Phiên đang chờ bạn**: Khi một phiên khác có agent đang chờ bạn, chip phiên hiện số phiên
+  đó bằng màu đỏ ở chỗ mũi tên
+
+### Lọc theo trạng thái agent
+
+Khi có ít nhất một phiên chạy agent lập trình, phía trên danh sách phiên (sidebar trên desktop, bảng
+phiên trên mobile) có thêm thanh lọc:
+
+| Bộ lọc      | Hiện những phiên                                 |
+| ----------- | ------------------------------------------------ |
+| `All`       | Mọi phiên                                        |
+| `Needs you` | Có pane mà agent đang chờ bạn (blocked)          |
+| `Working`   | Có pane mà agent đang chạy                       |
+| `Agents`    | Có chạy agent lập trình                          |
+
+- Mỗi bộ lọc kèm số phiên nó hiện. Số đếm theo phiên chứ không theo pane; phiên có một pane đang
+  chờ và một pane đang chạy được tính ở cả hai.
+- Khi đang lọc, nhóm không còn phiên nào khớp bị ẩn, nhóm có phiên khớp luôn mở. Bỏ lọc thì các
+  nhóm trở lại trạng thái mở hay thu gọn như bạn để trước đó.
+- Không phiên nào khớp thì danh sách báo như vậy và có nút **Show all**.
+- Sidebar desktop khi thu gọn cũng chỉ hiện các phiên khớp; nút mở rộng có một chấm nhỏ để báo
+  đang lọc.
+- Bộ lọc được lưu trên thiết bị này. Nếu không phiên nào có agent, thanh lọc ẩn đi và mọi phiên
+  đều hiện, dù bộ lọc đã lưu là gì.
+- Muốn giữ phiên đang chờ ở đầu mỗi nhóm thay vì lọc, xem
+  [Phiên đang chờ lên đầu](/vi/usage/settings/#phiên-đang-chờ-lên-đầu).
 
 ## Tính năng phiên
 

@@ -32,6 +32,32 @@ needed for different workflows (e.g., Claude Code, Copilot, builds).
 - **Edit**: Swipe left on session, tap Edit
 - **Remove**: Swipe left on session, tap Remove
 - **Add**: Tap "New session" in the header of the sessions sheet
+- **Sessions waiting on you**: When another session has an agent waiting on you, the session
+  chip shows how many, in red, in place of its arrow
+
+### Filtering by Agent Status
+
+When at least one session runs a coding agent, a filter bar appears above the session list (in
+the desktop sidebar and in the mobile sessions sheet):
+
+| Filter      | Lists                                       |
+| ----------- | ------------------------------------------- |
+| `All`       | Every session                               |
+| `Needs you` | Sessions with a pane whose agent is blocked |
+| `Working`   | Sessions with a pane whose agent is working |
+| `Agents`    | Sessions running any coding agent           |
+
+- Each filter shows how many sessions it lists. Counts are per session, not per pane, and a
+  session with one blocked and one working pane counts under both.
+- While a filter is on, groups with no matching session are hidden, and groups with one are
+  shown open. Clearing the filter puts every group back the way you left it.
+- With no match, the list says so and offers **Show all**.
+- The collapsed desktop sidebar lists only the matching sessions too, and a dot on its expand
+  button shows that a filter is on.
+- The filter is saved on this device. With no agent in any session, the bar is hidden and every
+  session is listed, whatever filter was saved.
+- To keep blocked sessions at the top of each group instead, see
+  [Blocked Sessions First](/usage/settings/#blocked-sessions-first).
 
 ## Session Features
 

@@ -668,3 +668,424 @@ describe('SessionSidebar — groups', () => {
     expect(screen.getByRole('img', { name: 'Agent blocked' })).toBeVisible()
   })
 })
+
+describe('SessionSidebar — filter bar', () => {
+  const SESSIONS_WITH_AGENTS: Session[] = [
+    {
+      id: '1',
+      name: 'Blocked',
+      icon: '🔴',
+      description: '',
+      panes: [
+        { id: 'p1', label: 'p1', hasAgent: true, agentStatus: 'blocked' },
+      ],
+    },
+    {
+      id: '2',
+      name: 'Working',
+      icon: '🟡',
+      description: '',
+      panes: [
+        { id: 'p2', label: 'p2', hasAgent: true, agentStatus: 'working' },
+      ],
+    },
+    {
+      id: '3',
+      name: 'No agent',
+      icon: '💻',
+      description: '',
+      hasAgent: false,
+    },
+  ]
+
+  function renderWithFilter(sessions = SESSIONS_WITH_AGENTS, overrides = {}) {
+    const onFilterChange = vi.fn()
+    const onSelect = vi.fn()
+    const onAdd = vi.fn()
+    const onRemove = vi.fn()
+    const onToggleCollapse = vi.fn()
+    return {
+      ...render(
+        <SessionSidebar
+          sessions={sessions}
+          activeId="1"
+          onSelect={onSelect}
+          onAdd={onAdd}
+          onRemove={onRemove}
+          onToggleCollapse={onToggleCollapse}
+          onFilterChange={onFilterChange}
+          filter="all"
+          {...overrides}
+        />,
+      ),
+      onFilterChange,
+    }
+  }
+
+  it('hides filter bar when onFilterChange not provided', () => {
+    render(
+      <SessionSidebar
+        sessions={SESSIONS_WITH_AGENTS}
+        activeId="1"
+        onSelect={vi.fn()}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+        onToggleCollapse={vi.fn()}
+      />,
+    )
+    expect(
+      screen.queryByRole('radiogroup', { name: 'Filter sessions' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('hides filter bar when no session has an agent', () => {
+    const noAgentSessions: Session[] = [
+      { id: '1', name: 'S1', icon: '💻', description: '', hasAgent: false },
+      { id: '2', name: 'S2', icon: '💻', description: '', hasAgent: false },
+    ]
+    renderWithFilter(noAgentSessions)
+    expect(
+      screen.queryByRole('radiogroup', { name: 'Filter sessions' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('shows filter bar when onFilterChange provided and some session has agent', () => {
+    renderWithFilter()
+    expect(
+      screen.getByRole('radiogroup', { name: 'Filter sessions' }),
+    ).toBeInTheDocument()
+  })
+
+  it('displays all four filter options', () => {
+    renderWithFilter()
+    expect(
+      screen.getByRole('radio', { name: 'All sessions' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: /Needs you/ })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: /Working/ })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: /Agents/ })).toBeInTheDocument()
+  })
+
+  it('calls onFilterChange when filter radio clicked', () => {
+    const { onFilterChange } = renderWithFilter()
+    const needsYouBtn = screen.getByRole('radio', { name: /Needs you/ })
+    fireEvent.click(needsYouBtn)
+    expect(onFilterChange).toHaveBeenCalledWith('needs-you')
+  })
+
+  it('shows only matching sessions when filter is applied', () => {
+    renderWithFilter(SESSIONS_WITH_AGENTS, { filter: 'needs-you' })
+    expect(screen.getByText('Blocked')).toBeInTheDocument()
+    // When a session is not matching, it should not be visible in the main list
+  })
+
+  it('shows empty state when no sessions match the filter', () => {
+    const onlyBlocked: Session[] = [
+      {
+        id: '1',
+        name: 'Blocked',
+        icon: '🔴',
+        description: '',
+        panes: [
+          { id: 'p1', label: 'p1', hasAgent: true, agentStatus: 'blocked' },
+        ],
+      },
+    ]
+    renderWithFilter(onlyBlocked, { filter: 'working' })
+    expect(screen.getByText('No sessions match')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Show all' })).toBeInTheDocument()
+  })
+
+  it('calls onFilterChange with "all" when Show all button clicked', () => {
+    const onlyBlocked: Session[] = [
+      {
+        id: '1',
+        name: 'Blocked',
+        icon: '🔴',
+        description: '',
+        panes: [
+          { id: 'p1', label: 'p1', hasAgent: true, agentStatus: 'blocked' },
+        ],
+      },
+    ]
+    const { onFilterChange } = renderWithFilter(onlyBlocked, {
+      filter: 'working',
+    })
+    const showAllBtn = screen.getByRole('button', { name: 'Show all' })
+    fireEvent.click(showAllBtn)
+    expect(onFilterChange).toHaveBeenCalledWith('all')
+  })
+
+  it('applies sortBlockedFirst when enabled', () => {
+    const sessions: Session[] = [
+      {
+        id: '3',
+        name: 'Working',
+        icon: '🟡',
+        description: '',
+        panes: [
+          { id: 'p3', label: 'p3', hasAgent: true, agentStatus: 'working' },
+        ],
+      },
+      {
+        id: '1',
+        name: 'Blocked',
+        icon: '🔴',
+        description: '',
+        panes: [
+          { id: 'p1', label: 'p1', hasAgent: true, agentStatus: 'blocked' },
+        ],
+      },
+      {
+        id: '2',
+        name: 'Idle',
+        icon: '⚪',
+        description: '',
+        hasAgent: false,
+      },
+    ]
+    renderWithFilter(sessions, { sortBlockedFirst: true })
+    const items = screen.getAllByText(/^(Blocked|Working|Idle)$/)
+    expect(items[0]).toHaveTextContent('Blocked')
+    expect(items[1]).toHaveTextContent('Working')
+    expect(items[2]).toHaveTextContent('Idle')
+  })
+
+  it('hides group without matches when filtering', () => {
+    const GROUPED_SESSIONS: Session[] = [
+      {
+        id: '1',
+        name: 'Blocked in web',
+        icon: '🔴',
+        description: '',
+        groupId: 'web',
+        panes: [
+          { id: 'p1', label: 'p1', hasAgent: true, agentStatus: 'blocked' },
+        ],
+      },
+      {
+        id: '2',
+        name: 'Working in app',
+        icon: '🟡',
+        description: '',
+        groupId: 'app',
+        panes: [
+          { id: 'p2', label: 'p2', hasAgent: true, agentStatus: 'working' },
+        ],
+      },
+    ]
+    const GROUPS = [
+      { id: 'web', name: 'Web' },
+      { id: 'app', name: 'App' },
+    ]
+    renderWithFilter(GROUPED_SESSIONS, {
+      groups: GROUPS,
+      filter: 'needs-you',
+    })
+    // When filtering for 'needs-you' (blocked), only 'web' group with matching session shows
+    expect(screen.getByRole('region', { name: 'Web' })).toBeInTheDocument()
+    expect(
+      screen.queryByRole('region', { name: 'App' }),
+    ).not.toBeInTheDocument()
+  })
+  const pane = (id: string, agentStatus: 'blocked' | 'working') => ({
+    id,
+    label: id,
+    hasAgent: true,
+    agentStatus,
+  })
+  const TWO_GROUPS = [
+    { id: 'web', name: 'Web' },
+    { id: 'app', name: 'App' },
+  ]
+  const GROUPED: Session[] = [
+    {
+      id: 'w1',
+      name: 'Web working',
+      icon: '🟡',
+      description: '',
+      groupId: 'web',
+      panes: [pane('a', 'working')],
+    },
+    {
+      id: 'w2',
+      name: 'Web blocked',
+      icon: '🔴',
+      description: '',
+      groupId: 'web',
+      panes: [pane('b', 'blocked')],
+    },
+    {
+      id: 'a1',
+      name: 'App working',
+      icon: '🟢',
+      description: '',
+      groupId: 'app',
+      panes: [pane('c', 'working')],
+    },
+    {
+      id: 'a2',
+      name: 'App blocked',
+      icon: '🟠',
+      description: '',
+      groupId: 'app',
+      panes: [pane('d', 'blocked')],
+    },
+  ]
+
+  it('holds a matching group open while filtering and leaves its saved state alone', () => {
+    localStorage.setItem(
+      'termote-group-collapsed',
+      JSON.stringify({ web: true }),
+    )
+    const { rerender } = renderWithFilter(GROUPED, {
+      groups: TWO_GROUPS,
+      filter: 'needs-you',
+    })
+    const header = screen
+      .getByRole('region', { name: 'Web' })
+      .querySelector('button[aria-expanded]')!
+    expect(header).toBeDisabled()
+    expect(header).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByText('Web blocked')).toBeInTheDocument()
+    fireEvent.click(header)
+    expect(
+      JSON.parse(localStorage.getItem('termote-group-collapsed')!),
+    ).toEqual({ web: true })
+
+    rerender(
+      <SessionSidebar
+        sessions={GROUPED}
+        groups={TWO_GROUPS}
+        activeId="w1"
+        onSelect={vi.fn()}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+        onFilterChange={vi.fn()}
+        filter="all"
+      />,
+    )
+    expect(
+      screen
+        .getByRole('region', { name: 'Web' })
+        .querySelector('button[aria-expanded]'),
+    ).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByText('Web blocked')).not.toBeInTheDocument()
+    localStorage.removeItem('termote-group-collapsed')
+  })
+
+  it('clears the filter when a session is added so the new one shows', () => {
+    const onAdd = vi.fn()
+    const { onFilterChange } = renderWithFilter(SESSIONS_WITH_AGENTS, {
+      filter: 'needs-you',
+      onAdd,
+    })
+    fireEvent.click(screen.getByRole('button', { name: /New session/ }))
+    const input = screen.getByPlaceholderText('Session name')
+    fireEvent.change(input, { target: { value: 'Fresh' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(onFilterChange).toHaveBeenCalledWith('all')
+    expect(onAdd).toHaveBeenCalledWith('Fresh', '💻')
+  })
+
+  it('does not touch the filter when adding without one', () => {
+    const { onFilterChange } = renderWithFilter(SESSIONS_WITH_AGENTS)
+    fireEvent.click(screen.getByRole('button', { name: /New session/ }))
+    const input = screen.getByPlaceholderText('Session name')
+    fireEvent.change(input, { target: { value: 'Fresh' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(onFilterChange).not.toHaveBeenCalled()
+  })
+
+  it('keeps the row being edited when it stops matching', () => {
+    const working: Session[] = [
+      {
+        id: '1',
+        name: 'Agent',
+        icon: '🟡',
+        description: '',
+        panes: [pane('p', 'working')],
+      },
+      {
+        id: '2',
+        name: 'Other',
+        icon: '🔴',
+        description: '',
+        panes: [pane('q', 'blocked')],
+      },
+    ]
+    const props = {
+      groups: [],
+      activeId: '1',
+      onSelect: vi.fn(),
+      onAdd: vi.fn(),
+      onRemove: vi.fn(),
+      onUpdate: vi.fn(),
+      onFilterChange: vi.fn(),
+      filter: 'working' as const,
+    }
+    const { rerender } = render(
+      <SessionSidebar sessions={working} {...props} />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Agent' }))
+    const done: Session[] = [
+      {
+        ...working[0],
+        panes: [{ id: 'p', label: 'p', hasAgent: true, agentStatus: 'done' }],
+      },
+      working[1],
+    ]
+    rerender(<SessionSidebar sessions={done} {...props} />)
+    expect(screen.getByRole('textbox', { name: 'Session name' })).toHaveValue(
+      'Agent',
+    )
+  })
+
+  it('ignores a filter given without onFilterChange', () => {
+    render(
+      <SessionSidebar
+        sessions={SESSIONS_WITH_AGENTS}
+        activeId="1"
+        onSelect={vi.fn()}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+        filter="needs-you"
+      />,
+    )
+    expect(screen.getByText('Working')).toBeInTheDocument()
+    expect(screen.getByText('No agent')).toBeInTheDocument()
+  })
+
+  it('filters the collapsed rail and marks the expand button', () => {
+    renderWithFilter(SESSIONS_WITH_AGENTS, {
+      isCollapsed: true,
+      filter: 'needs-you',
+    })
+    expect(
+      screen.getByRole('button', { name: 'Expand sidebar, filtered' }),
+    ).toBeInTheDocument()
+    expect(screen.getByTitle('Blocked')).toBeInTheDocument()
+    expect(screen.queryByTitle('Working')).not.toBeInTheDocument()
+  })
+
+  it('sorts the collapsed rail blocked first within each group', () => {
+    renderWithFilter(GROUPED, {
+      groups: TWO_GROUPS,
+      isCollapsed: true,
+      sortBlockedFirst: true,
+    })
+    expect(
+      screen.getByRole('button', { name: 'Expand sidebar' }),
+    ).toBeInTheDocument()
+    const titles = screen
+      .getAllByRole('button')
+      .map((b) => b.getAttribute('title'))
+      .filter((t) => t?.startsWith('Web ') || t?.startsWith('App '))
+    expect(titles).toEqual([
+      'Web blocked',
+      'Web working',
+      'App blocked',
+      'App working',
+    ])
+  })
+})
