@@ -352,6 +352,9 @@ Run on tmux (Linux/macOS), psmux (Windows) and Herdr (`herdr integration install
 - [ ] "Type something" has no button on any tab; with the pointer on it in the terminal (or text
       typed into it and the pointer still there) the card is read-only
 - [ ] Skipping a multiSelect tab with a step leaves it unanswered (Submit warns)
+- [ ] A question whose options have previews shows one button per option (no preview text in
+      the labels, no "Chat about this" button); a tap picks the option
+- [ ] On a phone, a tall dialog card stays steady (the pane does not shrink under the Chat view)
 - [ ] Two devices answer the same dialog: only one answer reaches the pane
 - [ ] "Open terminal" switches to the terminal; the stream is still connected (no reconnect)
 
