@@ -57,6 +57,7 @@ func runServe(args []string) int {
 		return 1
 	}
 	scrubTermoteEnv()
+	cfg.FilesDenyDirs = filesDenyDirs(c.configDir(), c.stateDir())
 	cfg.OnListen = func() {
 		if err := c.writePIDFile(); err != nil {
 			fmt.Fprintf(os.Stderr, "[WARN] cannot write %s: %v\n", c.pidFile(), err)

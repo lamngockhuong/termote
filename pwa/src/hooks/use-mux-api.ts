@@ -42,6 +42,8 @@ export interface MuxSnapshot {
     driveSize?: boolean
     // The agent routes (/agent/*) work: transcript, message, prompt.
     agentChat?: boolean
+    // The files routes (/files/*) work: the backend reports a pane's directory.
+    files?: boolean
   }
   groups: MuxGroup[]
 }

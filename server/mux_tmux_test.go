@@ -301,6 +301,9 @@ func TestTmuxAgentSessionArgv(t *testing.T) {
 	if !(tmuxMux{}).Caps().AgentChat {
 		t.Error("Caps().AgentChat = false")
 	}
+	if (tmuxMux{}).Caps().Files != tmuxFilesSupported {
+		t.Error("Caps().Files does not follow tmuxFilesSupported")
+	}
 }
 
 func TestTmuxPaneAgentRejectsBadFields(t *testing.T) {

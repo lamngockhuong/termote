@@ -45,7 +45,12 @@ type serveConfig struct {
 	AllowLocalAddr bool
 	// Tailscale is "host[:port]" to publish over Tailscale HTTPS once
 	// listening; empty publishes nothing.
-	Tailscale string // OnListen runs once the port is bound (serve records its PID then, so
+	Tailscale string
+	// FilesDenyDirs are never served by the files routes, even inside a
+	// pane's root: the config and state dirs (the secret and the encrypted
+	// password).
+	FilesDenyDirs []string
+	// OnListen runs once the port is bound (serve records its PID then, so
 	// a server that cannot bind never replaces the running one's PID file).
 	OnListen func()
 }
@@ -223,6 +228,7 @@ func buildServer(cfg serveConfig, m Mux) (http.Handler, *streamHub, error) {
 
 	registerMuxRoutes(mux, m, tokenStore)
 	registerStreamRoutes(mux, m, tokenStore, allowed, hub)
+	registerFilesRoutes(mux, m, allowed, cfg.FilesDenyDirs)
 	// Unknown /api/ paths get JSON 404 instead of the SPA fallback.
 	mux.HandleFunc("/api/", apiNotFound)
 
