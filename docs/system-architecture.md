@@ -157,7 +157,9 @@ driving stopped without the client asking. `?drive=1` on the URL opens the strea
 driving, so a reconnect does not start at the desktop size first. tmux ignores `drive`. The
 PWA asks to drive only while its terminal shows: under another view (Chat) it gives the size
 back, since Claude Code cuts a dialog taller than the pane (the tab row and the question scroll
-off), and the Chat view could no longer read it.
+off), and the Chat view could no longer read it. Under another view the terminal also keeps its
+size (no fit, no resize sent): the view's input area below it grows with a dialog card, which
+would otherwise shrink the pane until the dialog no longer fits, and the card would come and go.
 
 The connection requires a same-origin/allowed Origin, a single-use token minted by
 `GET /api/mux/stream-token` (30s TTL, consumed on upgrade), and `?pane=<id>` naming an
@@ -255,6 +257,15 @@ terminal. That option is the last one above "Chat about this": its label is "Typ
 until text is typed into it, then the text. With the pointer (`❯`) on it a digit is typed into
 the text instead of picking an option, so the question is `unsupported` until the pointer moves
 off it. A tab is `multiselect` only when every option but "Chat about this" has a box.
+
+Options with previews draw the preview of the option under the pointer on the right of the
+option rows; a footer offering "n to add notes" announces them. Each option row is read up to
+where the preview box starts (two spaces or more, then its edge: not a column, since a wide
+character takes two columns), and the preview's own rows and the "Notes" row are skipped. A
+preview the footer does not announce makes the question `unsupported`. "Chat about this" there
+has no number (so no button) and there is no free-text option. A digit only moves the pointer on such a question, so `answer` sends the digit, waits for
+the pointer to be on that option of the same question (title, tabs, options), and only then
+sends Enter; a pointer already there gets Enter alone.
 
 An `AskUserQuestion` with several questions (a tab row `←  ☒ Size  ☐ Drink  ✔ Submit  →`) is
 answered one tab at a time. The row becomes `steps` (`label`, `answered`, `current`); the tab

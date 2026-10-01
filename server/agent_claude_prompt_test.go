@@ -95,6 +95,12 @@ func TestReadClaudeScreenDialogs(t *testing.T) {
 		{"2.1.286-ask-wizard-back", "select", "What size would you like?", "1. Small | 2. Large ✔ | 4. Chat about this", ""},
 		// The Submit tab, drawn without a footer.
 		{"2.1.286-ask-wizard-submit", "select", "Review your answers", "1. Submit answers | 2. Cancel", "→ Coffee"},
+		// Options with previews: the preview on the right of each option row
+		// is not part of it; "Chat about this" there has no number.
+		{"2.1.286-ask-preview", "select", "Layout", "1. Stacked | 2. Row", "Which button layout suits a phone prompt card?"},
+		{"2.1.286-ask-preview-pointer-2", "select", "Layout", "1. Stacked | 2. Row", ""},
+		{"2.1.286-ask-wizard-preview", "select", "Which button layout suits your card?", "1. Stacked | 2. Row", ""},
+		{"2.1.286-ask-wizard-preview-next", "select", "Which theme do you prefer?", "1. Light | 2. Dark | 4. Chat about this", ""},
 		// "⚠ You have not answered all questions" is part of the review.
 		{"2.1.286-ask-wizard-submit-partial", "select", "Review your answers", "1. Submit answers | 2. Cancel", "You have not answered all questions"},
 		// multiSelect: each digit toggles one option; "Type something" needs the terminal.
@@ -151,6 +157,38 @@ func TestReadClaudeScreenDialogs(t *testing.T) {
 		if got := steps(readScreen(t, name).prompt); got != want {
 			t.Errorf("%s steps = %q, want %q", name, got, want)
 		}
+	}
+	// A question with previews is answered with the pointer, then Enter.
+	for name, pointer := range map[string]int{"2.1.286-ask-preview": 1, "2.1.286-ask-preview-pointer-2": 2, "2.1.286-ask-wizard-preview-pointer-2": 2} {
+		p := readScreen(t, name).prompt
+		if !p.moveThenEnter || p.pointer != pointer || p.Options[0].Detail != "" || p.Options[1].Detail != "" {
+			t.Errorf("%s: moveThenEnter=%v pointer=%d options=%+v", name, p.moveThenEnter, p.pointer, p.Options)
+		}
+	}
+	if p := readScreen(t, "2.1.286-ask-single").prompt; p.moveThenEnter {
+		t.Error("a question without previews is answered with its digit")
+	}
+	// An option described as "Notes: …" is not a preview.
+	notes := strings.Replace(fixtureText(t, "2.1.286-ask-single"), "A calm, natural color theme", "Notes: a calm theme", 1)
+	if p := readClaudeScreen(notes).prompt; p == nil || p.moveThenEnter || labels(p) != "1. Red | 2. Green | 3. Blue | 5. Chat about this" || p.Options[1].Detail != "Notes: a calm theme" {
+		t.Errorf("Notes in a description = %+v", p)
+	}
+	// A wide character takes two columns but one rune: the label is cut at
+	// the preview box, not at a column.
+	if p := readClaudeScreen(strings.Replace(fixtureText(t, "2.1.286-ask-preview"), "153m Stacked", "153m 縦並び", 1)).prompt; p == nil || labels(p) != "1. 縦並び | 2. Row" {
+		t.Errorf("wide label = %+v", p)
+	}
+	// A preview the footer does not announce is left to the terminal.
+	quiet := strings.Replace(fixtureText(t, "2.1.286-ask-preview"), "n to add notes · ", "", 1)
+	if quiet == fixtureText(t, "2.1.286-ask-preview") {
+		t.Fatal("footer edit did not apply")
+	}
+	if p := readClaudeScreen(quiet).prompt; p == nil || p.Kind != "unsupported" {
+		t.Errorf("unannounced preview = %+v", p)
+	}
+	// Moving the pointer shows another preview: another screen.
+	if readScreen(t, "2.1.286-ask-preview").sig == readScreen(t, "2.1.286-ask-preview-pointer-2").sig {
+		t.Error("previews of two options have the same signature")
 	}
 	// A ticked option is checked, without its box in the label.
 	checked := func(name string) string {

@@ -1,0 +1,33 @@
+
+[38;5;174m ▐[48;5;16m▛███▛█[39m[49m   [1mClaude Code[0m [38;5;246mv2.1.286[39m
+[38;5;174m▝▜[48;5;16m█████[49m█▀[39m  [38;5;246mHaiku 4.5 · Claude Team[39m
+[38;5;174m ▝▝   ▝▝ [39m  [38;5;246m/…/00000000-0000-4000-8000-000000000000/scratchpad/lab[39m
+
+[38;5;220m⚠[39m [38;5;220mYour login expires in 2 days[38;5;246m · run /login to renew[39m
+
+[38;5;239m[48;5;237m❯ [38;5;231mUse the AskUserQuestion tool once with ONE single-choice question, header Layout, asking which [39m
+  [38;5;231mbutton layout suits a phone prompt card. Two options: "Stacked" and "Row". Give each option a [39m
+  [38;5;231mpreview field containing a small ASCII mockup (4-6 lines) of that layout. Do nothing else.[39m
+
+[38;5;246m[49m────────────────────────────────────────────────────────────────────────────────────────────────────
+[38;5;16m[48;5;153m ☐ Layout [39m[49m
+
+[1m[38;5;231mWhich button layout suits a phone prompt card?[0m
+
+[38;5;153m❯[38;5;246m 1.[1m[38;5;153m Stacked[0m                      [38;5;246m┌──────────────────────────────────────────┐[39m
+ [38;5;246m 2.[39m Row                          [38;5;246m│ [39m┌──────────────┐[38;5;246m                         │[39m
+                                  [38;5;246m│ [39m│   Message    │[38;5;246m                         │[39m
+                                  [38;5;246m│ [39m│   Content    │[38;5;246m                         │[39m
+                                  [38;5;246m│ [39m├──────────────┤[38;5;246m                         │[39m
+                                  [38;5;246m│ [39m│  Button One  │[38;5;246m                         │[39m
+                                  [38;5;246m│ [39m├──────────────┤[38;5;246m                         │[39m
+                                  [38;5;246m│ [39m│  Button Two  │[38;5;246m                         │[39m
+                                  [38;5;246m│ [39m└──────────────┘[38;5;246m                         │[39m
+                                  [38;5;246m└──────────────────────────────────────────┘[39m
+
+                                  [38;5;153mNotes:[39m [3m[38;5;246mpress n to add notes[0m
+
+[38;5;246m────────────────────────────────────────────────────────────────────────────────────────────────────
+[39m  Chat about this
+
+[38;5;246mEnter to select · ↑/↓ to navigate · n to add notes · Esc to cancel[39m

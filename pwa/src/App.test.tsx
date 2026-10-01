@@ -2397,10 +2397,17 @@ describe('App views, view-only and deep links', () => {
     render(<App views={VIEWS} />)
     await screen.findByTestId('terminal-view')
     expect(driving()).toBe(true)
+    const covered = () =>
+      (vi.mocked(TerminalView).mock.lastCall![0] as { covered: boolean })
+        .covered
+    expect(covered()).toBe(false)
     fireEvent.click(await screen.findByRole('tab', { name: 'Chat' }))
     expect(driving()).toBe(false)
+    // Its size stays put under the Chat view
+    expect(covered()).toBe(true)
     fireEvent.click(screen.getByRole('tab', { name: 'Terminal' }))
     expect(driving()).toBe(true)
+    expect(covered()).toBe(false)
   })
 
   it('a view can switch back to the terminal; tmux reselects the window first', async () => {

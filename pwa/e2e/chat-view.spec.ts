@@ -77,6 +77,8 @@ test.describe('chat view', () => {
   })
 
   test('reads, sends and answers through the Chat view', async ({ page }) => {
+    // One conversation through every kind of dialog: longer than the default
+    test.setTimeout(60000)
     await page.goto('/')
     await page.evaluate(() => localStorage.clear())
     await page.reload()
@@ -153,6 +155,14 @@ test.describe('chat view', () => {
     await expect(partial).toContainText('You have not answered all questions')
     await partial.getByRole('button', { name: /^1\.\s*Submit answers/ }).click()
     await expect(conversation).toContainText('Ordered extras: milk.')
+
+    // Options with previews: one tap moves the pointer and picks the option
+    await composer.fill('pick a layout')
+    await send.click()
+    const layout = page.getByRole('alertdialog', { name: 'Layout' })
+    await layout.getByRole('button', { name: /^2\.\s*Row$/ }).click()
+    await expect(conversation).toContainText('Layout: Row.')
+    await expect(layout).toBeHidden()
 
     // A single multiSelect question has toggles too, and the way to the terminal
     await composer.fill('pick toppings')

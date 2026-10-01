@@ -72,6 +72,11 @@ interface Props {
   // Driving stopped without being asked: another device took over, or the
   // backend could not drive the size.
   onDriveLost?: (reason: 'taken-over' | 'failed') => void
+  // Another view covers the terminal: its size stays as it is. The view's
+  // input area (a dialog card) grows and shrinks below it, which would
+  // otherwise resize the pane, and Claude Code cuts a dialog taller than
+  // the pane, so the card would come and go with it.
+  covered?: boolean
   onConnectionStateChange?: (state: ConnectionState) => void
 }
 
@@ -218,10 +223,16 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       readOnly = false,
       driveSize = false,
       onDriveLost,
+      covered = false,
       onConnectionStateChange,
     },
     ref,
   ) => {
+    const coveredRef = useRef(covered)
+    coveredRef.current = covered
+    // Fitted at least once: a covered terminal then keeps that size, also
+    // when its stream opens again or its font changes
+    const fittedRef = useRef(false)
     const containerRef = useRef<HTMLDivElement>(null)
     const scrollerRef = useRef<HTMLDivElement>(null)
     const termRef = useRef<Terminal | null>(null)
@@ -328,9 +339,11 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       if (!term || !fit) return
       const fixed = serverSizeRef.current
       if (!fixed) {
+        if (coveredRef.current && fittedRef.current) return
         // A fixed grid may have left a zoomed font behind.
         term.options.fontSize = fontSizeRef.current
         fit.fit()
+        fittedRef.current = true
         return
       }
       const chosen = fontSizeRef.current
@@ -543,6 +556,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       let settle: ReturnType<typeof setTimeout> | undefined
       const observer = new ResizeObserver(() => {
         clearTimeout(settle)
+        if (coveredRef.current) return
         settle = setTimeout(layout, RESIZE_SETTLE_MS)
       })
       observer.observe(container)
@@ -565,6 +579,11 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       setTerminalFontSize(handleRef.current, fontSize)
       layout()
     }, [fontSize, layout])
+
+    // Shown again: fit the space it has now.
+    useEffect(() => {
+      if (!covered) layout()
+    }, [covered, layout])
 
     // Another font changes the cell size, so the grid is fitted again.
     useEffect(() => {
