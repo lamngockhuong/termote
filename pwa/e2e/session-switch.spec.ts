@@ -58,6 +58,7 @@ test.describe('session management', () => {
     const sessionRow = page.locator('aside .group:has-text("to-delete")')
     await sessionRow.hover()
     await sessionRow.locator('button[title="Remove session"]').click()
+    await page.getByRole('dialog', { name: 'Close session?' }).getByRole('button', { name: 'Close session' }).click()
     await page.waitForTimeout(500)
 
     // Verify session is removed (psmux on Windows answers slower than tmux)
@@ -170,6 +171,7 @@ test.describe('mux API integration', () => {
     const sessionRow = page.locator(`.group:has-text("${name}")`).first()
     await sessionRow.hover()
     await sessionRow.locator('button[title="Remove session"]').click()
+    await page.getByRole('dialog', { name: 'Close session?' }).getByRole('button', { name: 'Close session' }).click()
     await page.waitForTimeout(500)
 
     await expect(page.locator('aside')).not.toContainText(name)
