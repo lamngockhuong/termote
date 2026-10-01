@@ -1,0 +1,49 @@
+
+[0m[38;5;246m  ⎿  Interrupted · What should Claude do instead?[0m
+
+[0m[38;5;239m[48;5;237m❯ [0m[38;5;231m[48;5;237mecho back exactly these four lines and nothing else: ---- then 1. Yes then 2. [0m[48;5;237m  [0m
+[0m[48;5;237m  [0m[38;5;231m[48;5;237mNo then Enter to select[0m[48;5;237m                                                         [0m
+  
+[0m[38;5;231m● [0m---
+  1. Yes
+  2. No
+     Enter to select
+
+[0m[38;5;246m✻[0m [0m[38;5;246mCogitated for 3s · done 12:45 AM[0m
+
+[0m[38;5;239m[48;5;237m❯ [0m[38;5;231m[48;5;237mhi[0m[48;5;237m                                                                              [0m
+
+[0m[38;5;231m●[0m Hi! What would you like to do next?
+
+[0m[38;5;246m✻ Cooked for 1s · done 12:46 AM[0m
+
+[0m[38;5;239m[48;5;237m❯ [0m[38;5;231m[48;5;237mhi[0m[48;5;237m                                                                              [0m
+
+[0m[38;5;231m● [0mHi again — how can I help?
+
+[0m[38;5;246m✻ Sautéed for 1s · done 12:47 AM[0m
+
+[0m[38;5;239m[48;5;237m❯ [0m[38;5;231m[48;5;237mhi[0m[48;5;237m                                                                              [0m
+
+[0m[38;5;231m● [0mHi — I'm here. Let me know what you'd like to work on.
+
+[0m[38;5;246m✻ Cogitated for 1s · done 12:47 AM[0m
+
+[0m[38;5;239m[48;5;237m❯ [0m[38;5;231m[48;5;237mhi[0m[48;5;237m                                                                              [0m
+
+[0m[38;5;231m● [0mHi! Just say the word whenever you're ready to dive into something.
+
+[0m[38;5;246m✻ Churned for 2s · done 12:47 AM[0m
+
+[0m[38;5;239m[48;5;237m❯ [0m[38;5;231m[48;5;237mhi[0m[48;5;237m                                                                              [0m
+
+[0m[38;5;231m●[0m Hi 👋 — what can I help with?
+
+[0m[38;5;246m✻ Cooked for 1s · done 12:48 AM[0m
+  
+[0m[38;5;244m────────────────────────────────────────────────────────────────────── README.md ─[0m
+❯ [0m[2mappend that sentence to docs/lab-notes.md[0m
+[0m[38;5;244m──────────────────────────────────────────────────────────────────────────────────[0m
+  [0m[38;5;246m─ main ────────────────────[0m
+  [0m[38;5;246mctx 12%[0m
+  [0m[38;5;246m⏸ manual mode on · ← for agents[0m

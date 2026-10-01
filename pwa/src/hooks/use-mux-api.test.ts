@@ -1,13 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  AgentRequestError,
+  answerAgentPrompt,
   closeTab,
   createTab,
+  fetchAgentPrompt,
   fetchHealth,
   fetchSnapshot,
   fetchTerminalToken,
+  fetchTranscript,
   renameTab,
   scrollPane,
   selectTab,
+  sendAgentMessage,
   sendKeys,
 } from './use-mux-api'
 
@@ -174,5 +179,134 @@ describe('mux API client', () => {
       'Token request failed: 503',
     )
     expect(spy).toHaveBeenCalledTimes(3)
+  })
+})
+
+describe('agent API client', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  it('reads a transcript with or without a position', async () => {
+    const page = { agent: 'claude', entries: [], cursor: 'c', reset: true }
+    const { calls } = mockFetch({ body: page })
+    expect(await fetchTranscript('%3')).toEqual(page)
+    await fetchTranscript('%3', { cursor: 'a b' })
+    await fetchTranscript('%3', { before: 'x' })
+    expect(calls.map((c) => c.url)).toEqual([
+      '/api/mux/panes/%253/agent/transcript',
+      '/api/mux/panes/%253/agent/transcript?cursor=a+b',
+      '/api/mux/panes/%253/agent/transcript?before=x',
+    ])
+  })
+
+  it('turns a refusal into an AgentRequestError with its code', async () => {
+    mockFetch({ body: { error: 'no agent session in this pane' }, status: 404 })
+    const err = await fetchTranscript('1').catch((e) => e)
+    expect(err).toBeInstanceOf(AgentRequestError)
+    expect(err).toMatchObject({
+      status: 404,
+      code: '',
+      message: 'no agent session in this pane',
+    })
+  })
+
+  it('a refusal without a JSON body still has a status', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('oops', { status: 502 })),
+    )
+    const err = await fetchTranscript('1').catch((e) => e)
+    expect(err).toMatchObject({
+      status: 502,
+      code: '',
+      message: 'request failed: 502',
+    })
+  })
+
+  it('sends a message as JSON with its cursor', async () => {
+    const { calls } = mockFetch({ body: {}, status: 204 })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({ url: String(input), init })
+        return new Response(null, { status: 204 })
+      }),
+    )
+    await sendAgentMessage('1', 'hi\nthere', 'cur')
+    expect(calls[0].url).toBe('/api/mux/panes/1/agent/message')
+    expect(calls[0].init).toMatchObject({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: 'hi\nthere', cursor: 'cur' }),
+    })
+  })
+
+  it('a refused message carries code and limit', async () => {
+    mockFetch({
+      body: {
+        error: 'text is longer than 16 KB',
+        code: 'text_too_long',
+        limit: 16384,
+      },
+      status: 413,
+    })
+    await expect(sendAgentMessage('1', 'x', 'c')).rejects.toMatchObject({
+      status: 413,
+      code: 'text_too_long',
+      limit: 16384,
+    })
+  })
+
+  it('reads the open dialog, null when none', async () => {
+    const prompt = { promptId: 'p', kind: 'permission', title: 'Bash command' }
+    const { calls } = mockFetch(
+      { body: { prompt } },
+      { body: { prompt: null } },
+    )
+    expect(await fetchAgentPrompt('%3')).toEqual(prompt)
+    expect(await fetchAgentPrompt('%3')).toBeNull()
+    expect(calls[0].url).toBe('/api/mux/panes/%253/agent/prompt')
+  })
+
+  it('a prompt read can be refused', async () => {
+    mockFetch({ body: { error: 'agent not available' }, status: 404 })
+    await expect(fetchAgentPrompt('1')).rejects.toMatchObject({ status: 404 })
+  })
+
+  it('answers with the promptId and the choice', async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({ url: String(input), init })
+        return new Response(null, { status: 204 })
+      }),
+    )
+    await answerAgentPrompt('1', 'pid', 2)
+    await answerAgentPrompt('1', 'pid', 'cancel')
+    expect(calls[0].url).toBe('/api/mux/panes/1/agent/answer')
+    expect(calls[0].init).toMatchObject({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ promptId: 'pid', choice: 2 }),
+    })
+    expect(calls[1].init?.body).toBe(
+      JSON.stringify({ promptId: 'pid', choice: 'cancel' }),
+    )
+  })
+
+  it('a changed dialog comes back with the refusal', async () => {
+    const prompt = { promptId: 'p2', kind: 'permission', title: 'Bash command' }
+    mockFetch({
+      body: { error: 'the screen changed', code: 'prompt_changed', prompt },
+      status: 409,
+    })
+    await expect(answerAgentPrompt('1', 'p1', 1)).rejects.toMatchObject({
+      status: 409,
+      code: 'prompt_changed',
+      prompt,
+    })
   })
 })

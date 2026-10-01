@@ -170,6 +170,87 @@ jobs:
         working-directory: server
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
 
+  # Playwright against a real server and tmux. The Chat view spec drives a
+  # stand-in Claude Code (tests/fixtures/fake-claude.sh) in a window of the
+  # server's own tmux socket; the screenshot spec only refreshes docs images.
+  e2e:
+    name: E2E
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.pwa == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.scripts == 'true'
+    env:
+      TERMOTE_NO_AUTH: "true"
+      TERMOTE_BIND: 127.0.0.1
+      TERMOTE_PORT: "7680"
+      TMUX_SESSION: e2e
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install tmux
+        run: sudo apt-get update && sudo apt-get install -y tmux && tmux -V
+
+      - uses: pnpm/action-setup@v6.1.0
+        with:
+          version: 12.6.0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26"
+          check-latest: true
+          cache-dependency-path: server/go.mod
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --filter termote...
+
+      - name: Install Playwright browser
+        working-directory: pwa
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Build PWA and server
+        run: |
+          pnpm --filter termote build
+          cp -R pwa/dist/. server/webui/dist/
+          cd server && CGO_ENABLED=0 go build -o termote-dev .
+
+      # No saved config here, so the server reads TERMOTE_* from the
+      # environment; XDG_CONFIG_HOME keeps it that way on any runner.
+      - name: Start server
+        run: |
+          echo "TMUX_SOCKET=$RUNNER_TEMP/tmux.sock" >> "$GITHUB_ENV"
+          XDG_CONFIG_HOME="$RUNNER_TEMP/xdg" TMUX_SOCKET="$RUNNER_TEMP/tmux.sock" \
+            nohup ./server/termote-dev serve > "$RUNNER_TEMP/serve.log" 2>&1 &
+          for _ in $(seq 1 30); do
+            # The first snapshot also creates the server's tmux session
+            curl -fsS "http://localhost:$TERMOTE_PORT/api/mux/snapshot" > /dev/null && exit 0
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/serve.log"
+          exit 1
+
+      # One worker: the specs share one tmux, and a spec that switches its
+      # active window would move the others' tabs.
+      - name: Run Playwright
+        working-directory: pwa
+        run: pnpm exec playwright test --workers=1 --grep-invert "Capture screenshots"
+
+      - name: Server log
+        if: failure()
+        run: cat "$RUNNER_TEMP/serve.log"
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-results
+          path: pwa/test-results
+          retention-days: 7
+
   test-scripts:
     name: Test Scripts
     runs-on: ubuntu-latest

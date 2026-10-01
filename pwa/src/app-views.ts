@@ -1,8 +1,10 @@
-import { SquareTerminal } from 'lucide-react'
-import type { ComponentType } from 'react'
+import { MessagesSquare, SquareTerminal } from 'lucide-react'
+import { type ComponentType, lazy } from 'react'
+import { ChatComposer } from './components/chat-composer'
 import type { ViewOption } from './components/ui/view-switcher'
 import type { MuxInfo } from './hooks/use-local-sessions'
 import type { Session } from './types/session'
+import { CHAT_VIEW_ID, TERMINAL_VIEW_ID } from './view-ids'
 
 // What decides whether a view is offered, and what a view is drawn with.
 export interface ViewContext {
@@ -17,6 +19,8 @@ export interface ViewProps extends ViewContext {
   isMobile: boolean
   // Shows a view's Panel in the desktop side panel (null closes it)
   setSidePanel: (id: string | null) => void
+  // Switches to another view of the pane (the terminal, as a way out)
+  showView: (id: string) => void
 }
 
 // A view of the current pane (terminal; later chat, files). Adding one is
@@ -32,7 +36,10 @@ export interface AppView extends ViewOption<string> {
   Panel?: ComponentType<ViewProps>
 }
 
-export const TERMINAL_VIEW_ID = 'terminal'
+export { CHAT_VIEW_ID, TERMINAL_VIEW_ID }
+
+// The chat view carries the markdown renderer: loaded on first use.
+const ChatView = lazy(() => import('./components/chat-view'))
 
 export const APP_VIEWS: AppView[] = [
   {
@@ -40,6 +47,18 @@ export const APP_VIEWS: AppView[] = [
     label: 'Terminal',
     Icon: SquareTerminal,
     available: () => true,
+  },
+  {
+    id: CHAT_VIEW_ID,
+    label: 'Chat',
+    Icon: MessagesSquare,
+    // Claude Code only: the server reads its transcript and its screen.
+    available: ({ mux, session }) =>
+      !!mux.caps.agentChat &&
+      !!session.hasAgent &&
+      session.agentName === 'claude',
+    Main: ChatView,
+    Input: ChatComposer,
   },
 ]
 

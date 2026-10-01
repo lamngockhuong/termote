@@ -5,7 +5,8 @@ export const FOCUS_RING =
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent'
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
-export type ButtonSize = 'sm' | 'md'
+// grow: at least md's height, taller for content on several lines
+export type ButtonSize = 'sm' | 'md' | 'grow'
 
 const BASE = `inline-flex shrink-0 items-center justify-center gap-1.5 rounded-control font-medium select-none transition-colors duration-(--duration-fast) ease-standard disabled:pointer-events-none disabled:opacity-50 ${FOCUS_RING}`
 
@@ -21,11 +22,13 @@ const VARIANTS: Record<ButtonVariant, string> = {
 const SIZES: Record<ButtonSize, string> = {
   sm: 'h-8 px-2.5 text-[13px] pointer-coarse:h-touch',
   md: 'h-9 px-3.5 text-sm pointer-coarse:h-touch',
+  grow: 'min-h-9 px-3.5 py-2 text-sm pointer-coarse:min-h-touch',
 }
 
 const ICON_SIZES: Record<ButtonSize, string> = {
   sm: 'size-8 pointer-coarse:size-touch',
   md: 'size-10 pointer-coarse:size-touch',
+  grow: 'size-10 pointer-coarse:size-touch',
 }
 
 // className is appended, not merged: an override of a class the variant or

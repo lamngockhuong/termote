@@ -81,6 +81,7 @@ Go HTTP server providing:
 - **Terminal WebSocket**: `/api/mux/stream` opens a PTY/ConPTY attached to the selected pane and streams it as binary WebSocket frames; a text control frame carries resize (client→server) and exit/error/size (server→client)
 - **Authentication**: Basic auth with a session cookie, rate-limited, plus a Host allowlist and an Origin/CSRF write guard in front of everything
 - **Mux API endpoints**: `/api/mux/*` — snapshot (groups→tabs→panes), tab create/rename/close/select, send-keys, health
+- **Agent chat endpoints**: `/api/mux/panes/{id}/agent/*` — the transcript of the Claude Code session in a pane, sending it a message, reading and answering its dialogs (see [Agent chat](#agent-chat-apimuxpanesidagent))
 
 Configuration: when `termote serve` finds a saved config (`~/.config/termote/config`), it reads
 that and ignores every `TERMOTE_*` variable, then strips them from its own environment so
@@ -170,6 +171,10 @@ POST   /api/mux/tabs/{id}/select                                 → {ok}
 POST   /api/mux/panes/{id}/keys    body: {keys}                 → {ok}
 POST   /api/mux/panes/{id}/scroll  body: {lines}                → {ok}   (caps.scroll only, else 501)
 GET    /api/mux/health             → {status, apiVersion, backend}
+GET    /api/mux/panes/{id}/agent/transcript?cursor=&before=     → {agent, sessionId, status, entries, cursor, before, reset}
+POST   /api/mux/panes/{id}/agent/message  body: {text, cursor}  → 204
+GET    /api/mux/panes/{id}/agent/prompt                          → {prompt: null | {promptId, kind, title, body, options}}
+POST   /api/mux/panes/{id}/agent/answer   body: {promptId, choice} → 204
 ```
 
 `caps.scroll` (Herdr): the stream only carries screen renders, so no history reaches the
@@ -185,6 +190,73 @@ live screen sends Claude Code's Ctrl+End. A pane without an agent is never sent 
 build and reloads on mismatch. The old `/api/tmux/*` paths and the `/terminal/` iframe route
 are gone; `/terminal/` now answers `410 Gone` so a stale cached PWA bundle gets a readable
 error instead of a broken page.
+
+### Agent chat (`/api/mux/panes/{id}/agent/*`)
+
+The PWA's Chat view is a second way to look at a pane running Claude Code, offered when the
+snapshot reports `caps.agentChat` and the pane's `agent.name` is `claude`. It is the same
+session as the terminal, not a session of its own: nothing runs headless.
+
+**Finding the session.** Herdr reports the session id itself (`agent_session` on the pane;
+`herdr integration install claude` must have been run). Herdr does not expose the pane's
+process, so there is no start-time check, and the transcript is looked up in the config dir of
+a Claude Code started by the server's user (the server's own `CLAUDE_CONFIG_DIR`, else
+`~/.claude`). On tmux and psmux the server walks the
+process tree under the pane's shell (at most 6 levels, 256 processes) and takes the first
+process with a session file `<claudeDir>/sessions/<pid>.json` in its **own** Claude config dir
+(`CLAUDE_CONFIG_DIR`, else `~/.claude`, read from `/proc/<pid>/environ` on Linux) whose
+`procStart` matches the process's real start time, and on Linux whose `pidDomain` matches this
+pid namespace. Claude Code never removes those files, so a file alone proves nothing: a dead
+session's pid can be reused by another process. psmux reads only `%USERPROFILE%\.claude`
+(Windows does not expose another process's environment). tmux pane ids in these routes are the
+window's active pane: a split window chats with the pane that has focus.
+
+**Transcript.** `<claudeDir>/projects/*/<sessionId>.jsonl`, with `sessionId` a UUID and the
+resolved path inside that config dir. Reads are incremental from a signed `cursor` (a position
+in one file), or backwards with `before`; lines over 2 MB are skipped and image blocks are
+dropped from the entries. When the cursor names another session or a file that was replaced,
+the server reads the end of the current file again and answers `reset: true`: the entries
+replace what the client holds (a `/clear` or a resume changed the session). Reads are shared
+between clients through a 500 ms cache per pane.
+
+**Writes: only on positive evidence.** The two POST routes pass the Host allowlist, auth and
+`writeGuard` like every other write. Each then takes a lock on the pane, re-reads the session
+bypassing every cache, and checks it is still the process and session the client saw; anything
+else is refused and sends nothing:
+
+| Code                      | Status | Meaning                                                                                |
+| ------------------------- | ------ | -------------------------------------------------------------------------------------- |
+| `session_changed`         | 409    | The pane runs another session now (the client's `cursor` names the old one)            |
+| `target_changed`          | 409    | Claude Code is no longer in this pane, or its process or session changed               |
+| `input_not_ready`         | 409    | Not an empty input box: a dialog, a draft, the agent working, copy mode                |
+| `paste_not_confirmed`     | 409    | The pasted text did not show in the input box; Enter was not sent                      |
+| `delivered_not_submitted` | 502    | The text is in the input box but was not submitted; check the terminal                 |
+| `prompt_changed`          | 409    | The dialog on screen is not the one the client answered; the reply carries the new one |
+| `prompt_expired`          | 409    | The `promptId` was already used, is unknown, or is older than 60 s                     |
+| `answer_not_confirmed`    | 502    | The key was sent but the dialog is still open                                          |
+| `invalid_choice`          | 400    | `choice` is not one of the dialog's options                                            |
+| `text_too_long`           | 413    | The text is over 16 KB; the reply carries `limit`                                      |
+| `invalid_request`         | 400    | The body is not the JSON the route expects                                             |
+
+`message` pastes the text (bracketed paste, through a named tmux buffer or Herdr's writer) only
+when the screen shows an empty input box, waits until the text shows in it, checks the session
+again, then sends Enter. The text is at most 16 KB (UTF-8 bytes; the body 64 KB), with control
+characters other than newline and tab removed, so it cannot end the paste early.
+
+`prompt` reads the screen and recognises the dialog anchored at its bottom: `permission`, a
+single-choice `select` (at most 9 options), or `unsupported` for anything else (multiSelect,
+multi-question wizards), which the PWA shows read-only with a way to the terminal. A
+single-choice question keeps its buttons; only its "Type something" and "Chat about this"
+entries are left out, since free text needs the terminal.
+Every client polling one dialog gets the same single-use `promptId`. `answer` consumes it,
+checks the session, the agent's status (on tmux the session file must say a dialog is open)
+and the dialog's signature on screen, then sends the option's digit, or Escape for
+`"cancel"`. A screen the detector does not recognise is never written to.
+
+The Chat view renders the agent's markdown without raw HTML and never loads images: an image
+becomes a text link, so a transcript cannot make the browser fetch another origin. The routes
+call `requireAgentRead`/`requireWriteRole`, where a view-only role (#236) will be enforced;
+the PWA's `readOnly` mode already hides the composer and the answer buttons.
 
 ## Deployment Modes
 
@@ -291,6 +363,10 @@ termote update --force           # Force reinstall current version
 8. **Session**: tmux isolates terminal processes; Herdr sessions are isolated by Herdr itself
 9. **Rate limiting**: 5 failed basic-auth attempts/min per IP → 429; rejected-Host log lines
    are rate-limited to one per 10s
+10. **Agent chat**: on tmux/psmux the server reads only the transcript in the Claude config
+    dir of the process found in the pane, proven by its start time (Herdr names the session
+    itself, read from the server user's config dir); every write re-checks the target and the
+    screen and sends nothing on doubt; markdown images in the Chat view never load
 
 ## Scalability Notes
 

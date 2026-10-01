@@ -43,6 +43,7 @@ termote/
 │   ├── herdr_socket_*.go   # Herdr socket path + dial (Unix socket / Windows named pipe)
 │   ├── herdr_observer_*.go # Stops `observe`/`control` (process group / Windows Job Object)
 │   ├── stream.go           # Terminal WebSocket (xterm.js stream)
+│   ├── agent*.go           # Chat view: Claude Code session, transcript, messages, dialogs
 │   ├── webui/              # Embeds the built PWA into the binary (build output, .gitkeep only in git)
 │   ├── install_layout.go   # Versioned install layout (versions/<v>, current pointer, prune)
 │   ├── release_tags.go     # Picks the newest stable 1.x GitHub tag
@@ -57,6 +58,7 @@ termote/
 │   ├── termote.sh          # Checkout-only dev shim: builds/runs server/termote-dev
 │   └── termote.ps1         # Checkout-only dev shim (Windows), same job
 ├── tests/                  # Test suite
+│   ├── fixtures/fake-claude.sh # Stand-in Claude Code for the Chat view E2E (Linux)
 │   ├── test-termote.sh     # Unix dev shim tests
 │   ├── test-termote.ps1    # Windows dev shim tests
 │   ├── test-install.sh     # install.sh tests (fake curl)
@@ -276,12 +278,22 @@ The `update` command:
 | `pwa/src/hooks/use-gestures.ts`                   | Hammer.js gesture handling                                    |
 | `pwa/src/components/terminal-view.tsx`            | xterm.js terminal component (stream, resize, reconnect)       |
 | `pwa/src/utils/terminal-bridge.ts`                | Drives the xterm.js terminal (key mapping, clipboard paste)   |
+| `pwa/src/components/chat-view.tsx`                | Chat view of a pane running Claude Code (lazy-loaded)         |
+| `pwa/src/components/chat-composer.tsx`            | Chat view message box                                         |
+| `pwa/src/components/prompt-card.tsx`              | Claude Code dialog as a card (answer buttons or read-only)    |
+| `pwa/src/hooks/use-agent-transcript.ts`           | Polls a pane's transcript, one store per pane                 |
+| `pwa/src/hooks/use-agent-prompt.ts`               | Polls a pane's open dialog, one store per pane                |
 | `server/main.go`                                  | Entry point (`serve` runs the server, no args opens the menu) |
 | `server/serve.go`                                 | Server (PWA static files, auth, guards)                       |
 | `server/mux.go`                                   | `Mux` interface + `/api/mux/*` routes                         |
 | `server/mux_tmux.go`                              | tmux/psmux backend                                            |
 | `server/mux_herdr.go`                             | Herdr backend                                                 |
 | `server/stream.go`                                | Terminal WebSocket (`/api/mux/stream`)                        |
+| `server/agent.go`                                 | `/api/mux/panes/{id}/agent/*` routes, transcript reads        |
+| `server/agent_claude.go`                          | Claude Code transcript (JSONL) and session file               |
+| `server/agent_claude_prompt.go`                   | Reads a Claude Code screen: input box, dialogs                |
+| `server/agent_input.go`                           | Sends a message, answers a dialog (checks before each write)  |
+| `server/agent_proc*.go`                           | Finds Claude Code under a tmux/psmux pane                     |
 | `server/guard.go`                                 | Host allowlist + Origin/Content-Type write guard              |
 | `server/serve_config.go`                          | Server config from the saved config, else the environment     |
 | `server/install_layout.go`                        | Versioned install layout (`versions/<v>`, `current`, prune)   |
@@ -323,11 +335,19 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   fetched via `/api/mux/stream-token`, consumed on WebSocket upgrade
 - **Herdr guard**: `--mux herdr --no-auth` is refused unless `--allow-herdr-no-auth` is also
   given, since Herdr exposes every workspace on the host
+- **Agent chat** (`/api/mux/panes/{id}/agent/*`): on tmux the server reads only the transcript
+  in the Claude config dir of the process found in the pane (`CLAUDE_CONFIG_DIR`, else
+  `~/.claude`; psmux: `%USERPROFILE%\.claude`), and only for a process whose start time matches
+  its session file's `procStart`; Herdr reports the session id itself, read from the server
+  user's config dir. The session id must be a UUID. Every write takes a lock on the pane,
+  re-checks the process, session and screen, and sends nothing unless the screen shows the
+  expected state (an empty input box, the dialog the client saw with a single-use `promptId`).
+  Markdown images in the Chat view never load (shown as links), and raw HTML is not rendered
 - Exclude sensitive dirs (.ssh, .gnupg, .aws, .config/gcloud) from container volume mounts
   (warned at `container up`)
 - Serve mode uses constant-time comparison for password verification
 - **Brute-force protection**: built-in rate limiter (5 failed attempts/min per IP → 429)
-- **Server hardening**: ReadHeaderTimeout (Slowloris protection), request body size limits (8KB on `/api/mux/*`)
+- **Server hardening**: ReadHeaderTimeout (Slowloris protection), request body size limits (8KB on `/api/mux/*`, 64KB on `agent/message`)
 - **Error sanitization**: internal errors logged server-side only, generic messages returned to clients
 - **Config persistence**: the saved password is AES-256-CBC with an HMAC, keyed by a random
   per-install `secret` file (0600) on Unix, DPAPI on Windows; the config file is also chmod

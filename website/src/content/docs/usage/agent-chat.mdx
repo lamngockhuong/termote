@@ -1,0 +1,75 @@
+---
+title: Agent Chat
+description: Read and answer Claude Code from a chat view instead of the terminal
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+Long replies are hard to read in a terminal on a phone, and so is typing a prompt into one. When
+a pane runs **Claude Code**, the header shows a **Terminal / Chat** switcher. The Chat view is a
+second way to look at the same session: what you send there is typed into the pane, and what
+Claude Code writes shows up in both views. Nothing runs in the background on its own.
+
+## Requirements
+
+- Claude Code running in a pane, under one of these backends:
+  - **tmux** on Linux or macOS
+  - **psmux** on Windows
+  - **Herdr** on any OS, after running `herdr integration install claude` once
+- A native install (`termote start`). The container image does not include Claude Code.
+
+## What the Chat View Shows
+
+- The whole conversation of the current session, read from the transcript Claude Code writes to
+  disk: your messages, replies rendered as markdown, and tool calls collapsed with their result.
+- New turns within about two seconds. After `/clear` or a resume, the view switches to the new
+  session without mixing the two.
+- Images in a reply as text links. They are never loaded, so a reply cannot make your browser
+  contact another site.
+
+## Sending a Message
+
+Type in the box at the bottom and tap the send button (Ctrl+Enter on desktop). Multi-line
+messages arrive as one turn, exactly as written.
+
+Termote only sends when the screen shows Claude Code waiting at an empty input box. Otherwise
+the message is refused and the pane gets no key at all:
+
+| Message                                                    | Code                      | Meaning                                                                                      |
+| ---------------------------------------------------------- | ------------------------- | -------------------------------------------------------------------------------------------- |
+| Not sent: the agent is working / waiting for an answer     | `input_not_ready`         | Claude Code is busy or a dialog is open                                                      |
+| Not sent: the input box already holds a draft              | `input_not_ready`         | Something is typed in the terminal's input box; send or clear it there                       |
+| Not sent: the pane is in copy mode                         | `input_not_ready`         | The tmux pane is scrolled back in copy mode; leave it (`q`) in the terminal                  |
+| Not sent: the text did not show in the input box           | `paste_not_confirmed`     | Enter was not sent; the text may be in the input box now                                     |
+| The text was pasted but not submitted                      | `delivered_not_submitted` | The text is in the input box but Enter was not sent; check the terminal before sending again |
+| The conversation changed; it has been reloaded             | `session_changed`         | The pane runs another session now (`/clear`, a resume); send again if you still want to      |
+| Too long: the limit is 16 KB.                              | `text_too_long`           | The message is over 16 KB (UTF-8); split it                                                  |
+
+Every refusal that leaves something to check offers **Open terminal**.
+
+## Answering Dialogs
+
+When Claude Code asks for permission or asks a single-choice question (up to nine options), a
+card replaces the message box. Each button picks that option; **Cancel** sends Escape. If the
+screen changed before your answer was sent, or another device answered first, nothing is sent
+and the card shows the dialog that is open now.
+
+A single-choice question keeps its buttons, but its `Type something` and `Chat about this`
+entries need the terminal. Other dialogs (several choices at once, multi-question wizards) are
+shown read-only, with an **Open terminal** button to answer them there.
+
+## Limitations
+
+- tmux: the chat follows the pane that has focus in the window. In a split window, it talks to
+  the focused pane.
+- psmux: only `%USERPROFILE%\.claude` is read. A `CLAUDE_CONFIG_DIR` set inside the pane is not
+  followed.
+- Herdr: the transcript is read from `~/.claude` of the user running Termote. A Claude Code
+  started with another `CLAUDE_CONFIG_DIR` shows no history.
+- Container mode is not supported.
+- Only Claude Code for now.
+
+<Aside>
+  **Open terminal** is always one tap away. The terminal stream stays connected while you are in
+  the Chat view, so switching back is instant.
+</Aside>

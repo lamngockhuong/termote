@@ -99,7 +99,48 @@ func newHerdrMux(ctx context.Context, socket string) (*herdrMux, error) {
 
 func (*herdrMux) Name() string { return "herdr" }
 
-func (*herdrMux) Caps() Caps { return Caps{ClientSideSelect: true, Scroll: true, DriveSize: true} }
+func (*herdrMux) Caps() Caps {
+	return Caps{ClientSideSelect: true, Scroll: true, DriveSize: true, AgentChat: true}
+}
+
+// AgentSession reads the session herdr's Claude integration reported for the
+// pane, straight from pane.get rather than the snapshot cache, so /clear or a
+// resume shows up on the next poll. herdr keeps the last session reported
+// for a pane even after another agent replaced it, hence the agent check.
+// herdr does not expose the pane's process, so the transcript is looked up in
+// the config dir of a Claude Code started by the server's user.
+func (m *herdrMux) AgentSession(ctx context.Context, paneID string) (AgentSession, bool, error) {
+	if !herdrPaneIDRe.MatchString(paneID) {
+		return AgentSession{}, false, inputError("invalid pane id")
+	}
+	var res struct {
+		Pane struct {
+			Agent        string `json:"agent"`
+			AgentStatus  string `json:"agent_status"`
+			AgentSession *struct {
+				Agent string `json:"agent"`
+				Kind  string `json:"kind"`
+				Value string `json:"value"`
+			} `json:"agent_session"`
+		} `json:"pane"`
+	}
+	if err := m.rpc.call(ctx, "pane.get", map[string]string{"pane_id": paneID}, &res); err != nil {
+		return AgentSession{}, false, herdrInputError(err)
+	}
+	p := res.Pane
+	ref := p.AgentSession
+	if p.Agent != "claude" || ref == nil || ref.Agent != "claude" || ref.Kind != "id" || !isSessionID(ref.Value) {
+		return AgentSession{}, false, nil
+	}
+	status := p.AgentStatus
+	if !herdrAgentStatuses[status] {
+		status = "unknown"
+	}
+	return AgentSession{
+		Agent: "claude", ID: ref.Value, Status: status,
+		ClaudeDir: defaultClaudeDir(), Target: paneID,
+	}, true, nil
+}
 
 // Health pings the server now; a missing socket or an unknown protocol version
 // reports degraded.
@@ -569,6 +610,49 @@ func (m *herdrMux) SendKeys(ctx context.Context, paneID, keys string) error {
 		return nil
 	}
 	return m.typeInput(ctx, paneID, keys)
+}
+
+// AgentSessionNow is AgentSession: pane.get is never cached.
+func (m *herdrMux) AgentSessionNow(ctx context.Context, paneID string) (AgentSession, bool, error) {
+	return m.AgentSession(ctx, paneID)
+}
+
+// Capture reads the pane's visible screen with SGR attributes.
+func (m *herdrMux) Capture(ctx context.Context, target string) (string, error) {
+	if !herdrPaneIDRe.MatchString(target) {
+		return "", inputError("invalid pane id")
+	}
+	var res struct {
+		Read struct {
+			Text string `json:"text"`
+		} `json:"read"`
+	}
+	err := m.rpc.call(ctx, "pane.read", map[string]string{"pane_id": target, "source": "visible", "format": "ansi"}, &res)
+	return res.Read.Text, herdrInputError(err)
+}
+
+// Paste queues the whole bracketed paste as one input, so nothing typed by a
+// stream can land inside it.
+func (m *herdrMux) Paste(ctx context.Context, target, text string) error {
+	if _, err := m.requirePane(ctx, target); err != nil {
+		return err
+	}
+	return m.typeInput(ctx, target, "\x1b[200~"+text+"\x1b[201~")
+}
+
+// SendKeySequence types the keys' bytes in one input.
+func (m *herdrMux) SendKeySequence(ctx context.Context, target string, keys []string) error {
+	if !validAgentKeys(keys) {
+		return inputError("invalid keys")
+	}
+	if _, err := m.requirePane(ctx, target); err != nil {
+		return err
+	}
+	var b strings.Builder
+	for _, k := range keys {
+		b.WriteString(agentKeys[k])
+	}
+	return m.typeInput(ctx, target, b.String())
 }
 
 // herdrScroll is a pane's scroll position in rows above the live screen.

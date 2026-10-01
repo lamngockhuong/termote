@@ -1,0 +1,44 @@
+  28
+  29
+  30
+
+[38;5;241m✻[39m [38;5;241mCrunched for 1s · done 4:26 AM[39m
+
+[38;5;241m※[39m [1m[38;5;241mrecap: [0;3m[38;5;241mSession involved testing basic file [0m
+  [3m[38;5;241moperations and Claude Code interactions. [0m
+  [3m[38;5;241mAwaiting user direction for the actual task [0m
+  [3m[38;5;241mor goal to work on. (disable recaps in [0m
+  [3m[38;5;241m/config)[0m
+
+[38;5;248m[48;5;255m❯ [38;5;16mReply with exactly: [1mhello[0m[38;5;16m[48;5;255m from [38;5;105mtermote[39m
+[49m
+[38;5;16m●[39m [1mhello[0m from [38;5;105mtermote[39m
+
+[38;5;241m✻[39m [38;5;241mCooked for 3s · done 4:42 AM[39m
+
+[38;5;248m[48;5;255m❯ [38;5;16mRun the Bash command: touch from-card.txt[39m
+
+[49m  [38;5;241mRan [1m1[0m[38;5;241m shell command [39m
+
+[38;5;16m●[39m Tệp [38;5;105mfrom-card.txt[39m đã được tạo thành công.
+
+[38;5;241m✻[39m [38;5;241mChurned for 6s · done 4:56 AM[39m
+
+[38;5;248m[48;5;255m❯ [38;5;16mUse the AskUserQuestion tool to ask me one [39m
+  [38;5;16msingle-choice question: pick a color (Red, [39m
+  [38;5;16mBlue). Do nothing else.[39m
+[38;5;241m[49m───────────────────────────────────────────────
+[38;5;231m[48;5;105m ☐ Color [39m[49m
+
+[1m[38;5;16mWhich color do you prefer?[0m
+
+[38;5;105m❯[39m [38;5;241m1.[39m [38;5;105mRed[39m
+     [38;5;241mThe color red[39m
+  [38;5;241m2.[39m Blue
+     [38;5;241mThe color blue[39m
+  [38;5;241m3. Type something.[39m
+[38;5;241m───────────────────────────────────────────────
+[39m  4. Chat about this
+
+[38;5;241mEnter to select · ↑/↓ to navigate · Esc to [39m
+[38;5;241mcancel[39m

@@ -1,0 +1,40 @@
+
+[38;5;174m ▐[48;5;16m▛███▛█[39m[49m   [1mClaude Code[0m [38;5;246mv2.1.286[39m
+[38;5;174m▝▜[48;5;16m█████[49m█▀[39m  [38;5;246mHaiku 4.5 · Claude Team[39m
+[38;5;174m ▝▝   ▝▝ [39m  [38;5;246m/…/00000000-0000-4000-8000-000000000000/scratchpad/lab[39m
+
+[38;5;220m⚠[39m [38;5;220mYour login expires in 2 days[38;5;246m · run /login to renew[39m
+
+[38;5;239m[48;5;237m❯ [38;5;231mRun this exact shell command with the Bash tool: touch scratch-one.txt[39m
+
+[49m  [38;5;246mRan [1m1[0m[38;5;246m shell command [39m
+
+[38;5;231m●[39m Đã tạo file [38;5;153mscratch-one.txt[39m.
+
+[38;5;246m✻[39m [38;5;246mCooked for 6s · done 3:32 AM[39m
+
+[38;5;239m[48;5;237m❯ [38;5;231mUse the AskUserQuestion tool to ask me one single-choice question: which color theme (options [39m
+  [38;5;231mRed, Green, Blue). Do nothing else.[39m
+[38;5;246m[49m────────────────────────────────────────────────────────────────────────────────────────────────────
+[38;5;16m[48;5;153m ☐ Theme [39m[49m
+
+[1m[38;5;231mWhich color theme do you prefer?[0m
+
+[38;5;153m❯[39m [38;5;246m1.[39m [38;5;153mRed[39m
+     [38;5;246mA warm, energetic color theme[39m
+  [38;5;246m2.[39m Green
+     [38;5;246mA calm, natural color theme[39m
+  [38;5;246m3.[39m Blue
+     [38;5;246mA cool, professional color theme[39m
+  [38;5;246m4. Type something.[39m
+[38;5;246m────────────────────────────────────────────────────────────────────────────────────────────────────
+[39m  5. Chat about this
+
+[38;5;246mEnter to select · ↑/↓ to navigate · Esc to cancel[39m
+
+
+
+
+
+
+

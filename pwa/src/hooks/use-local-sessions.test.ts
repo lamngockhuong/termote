@@ -415,6 +415,47 @@ describe('useLocalSessions', () => {
     })
   })
 
+  it('a cap the default does not have reaches the state (agentChat on tmux)', async () => {
+    mockSnapshot.extra = {
+      caps: { clientSideSelect: false, copyMode: true, agentChat: true },
+    }
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    expect(result.current.mux.caps.agentChat).toBe(true)
+  })
+
+  it('the active pane carries the agent name', async () => {
+    mockSnapshot.extra = {
+      groups: [
+        {
+          id: 'main',
+          name: 'main',
+          tabs: [
+            {
+              id: '0',
+              name: 'claude',
+              active: true,
+              panes: [
+                {
+                  id: '0',
+                  active: true,
+                  agent: { name: 'claude', status: 'idle' },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    }
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    expect(result.current.activeSession).toMatchObject({
+      hasAgent: true,
+      agentName: 'claude',
+      agentStatus: 'idle',
+    })
+  })
+
   it('treats a snapshot without groups as empty', async () => {
     mockSnapshot.extra = { groups: undefined }
     const { result } = renderHook(() => useLocalSessions(1))
@@ -595,8 +636,20 @@ describe('useLocalSessions with herdr', () => {
   it('labels panes by agent, then title, then position', async () => {
     const { result } = await render()
     expect(result.current.sessions[0].panes).toEqual([
-      { id: 'w1:p1', label: 'claude', hasAgent: true, agentStatus: 'working' },
-      { id: 'w1:p2', label: 'codex', hasAgent: true, agentStatus: 'blocked' },
+      {
+        id: 'w1:p1',
+        label: 'claude',
+        hasAgent: true,
+        agentName: 'claude',
+        agentStatus: 'working',
+      },
+      {
+        id: 'w1:p2',
+        label: 'codex',
+        hasAgent: true,
+        agentName: 'codex',
+        agentStatus: 'blocked',
+      },
       { id: 'w1:p3', label: 'logs', hasAgent: false, agentStatus: undefined },
       { id: 'w1:p4', label: 'Pane 4', hasAgent: false, agentStatus: undefined },
     ])
