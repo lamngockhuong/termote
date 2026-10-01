@@ -89,6 +89,17 @@ Displays browser-like session tabs in the header row for quick session switching
 
 This setting only appears on desktop devices.
 
+## Blocked Sessions First
+
+Lists sessions with an agent waiting on you at the top of each group in the sidebar. The other
+sessions keep their order. It is off by default, because sessions then move whenever an agent
+changes state.
+
+| Option | Behavior                                    | Default |
+| ------ | ------------------------------------------- | ------- |
+| Off    | Sessions keep their order                   | ✓       |
+| On     | Blocked sessions first in each group        |         |
+
 ## Terminal Font
 
 The font the terminal uses, typed by name (e.g. `JetBrainsMono Nerd Font`). It must be installed on the device the browser runs on; if it is not, the terminal falls back to the system monospace font. Several names can be given, separated by commas. The value is saved when the field loses focus or you press Enter.
