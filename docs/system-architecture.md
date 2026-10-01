@@ -246,9 +246,21 @@ characters other than newline and tab removed, so it cannot end the paste early.
 
 `prompt` reads the screen and recognises the dialog anchored at its bottom: `permission`, a
 single-choice `select` (at most 9 options), or `unsupported` for anything else (multiSelect,
-multi-question wizards), which the PWA shows read-only with a way to the terminal. A
-single-choice question keeps its buttons; only its "Type something" and "Chat about this"
-entries are left out, since free text needs the terminal.
+free text), which the PWA shows read-only with a way to the terminal. A single-choice question
+keeps its buttons, "Chat about this" included; only "Type something" is left out, since free
+text needs the terminal.
+
+An `AskUserQuestion` with several questions (a tab row `←  ☒ Size  ☐ Drink  ✔ Submit  →`) is
+answered one tab at a time. The row becomes `steps` (`label`, `answered`, `current`); the tab
+open is the one Claude Code draws on a background colour, which is also part of the dialog's
+signature, so two tabs that read the same are told apart. A digit on a single-choice tab picks
+the option and moves to the next tab, a new screen with its own signature and `promptId`; a
+multiSelect tab (Space toggles) stays `unsupported`. A tab row is read only whole, from `←` to
+`→` with at least one question, Submit last and exactly one tab open; a row cut or wrapped by a
+narrow pane, or one whose open tab is not known, is `unsupported`. Escape on the Submit tab
+declines the questions, as `2. Cancel` does. The Submit tab ("Review your answers", `1. Submit answers` / `2. Cancel`) is
+drawn without a footer: it is recognised only when the tab row sits right under the dialog's
+top rule with Submit open, no other rule follows, and its options are the last rows.
 Every client polling one dialog gets the same single-use `promptId`. `answer` consumes it,
 checks the session, the agent's status (on tmux the session file must say a dialog is open)
 and the dialog's signature on screen, then sends the option's digit, or Escape for

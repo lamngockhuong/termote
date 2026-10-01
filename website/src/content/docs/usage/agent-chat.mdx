@@ -54,9 +54,17 @@ card replaces the message box. Each button picks that option; **Cancel** sends E
 screen changed before your answer was sent, or another device answered first, nothing is sent
 and the card shows the dialog that is open now.
 
-A single-choice question keeps its buttons, but its `Type something` and `Chat about this`
-entries need the terminal. Other dialogs (several choices at once, multi-question wizards) are
-shown read-only, with an **Open terminal** button to answer them there.
+A single-choice question keeps its buttons, `Chat about this` included; only `Type something`
+needs the terminal.
+
+A question in several parts (a row of tabs such as `Size · Drink · Submit`) is answered one tab
+at a time. The card shows the tabs as steps, with the one open marked; each answer moves Claude
+Code to the next tab, which gets a card of its own, up to the Submit tab with **Submit answers**
+and **Cancel**. If you change tabs in the terminal before tapping, nothing is sent and the card
+shows the tab that is open now.
+
+A tab or a question where several choices can be ticked at once is shown read-only, with an
+**Open terminal** button to answer it there.
 
 ## Limitations
 

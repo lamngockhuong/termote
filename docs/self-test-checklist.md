@@ -336,8 +336,14 @@ Run on tmux (Linux/macOS), psmux (Windows) and Herdr (`herdr integration install
 
 - [ ] A permission dialog shows a card; each button picks that option, Cancel sends Escape
 - [ ] A single-choice `AskUserQuestion` (≤ 9 options) shows buttons that pick the right option;
-      its "Type something" and "Chat about this" entries have no button
-- [ ] multiSelect or a multi-question wizard shows a read-only card with "Open terminal"
+      "Type something" has no button
+- [ ] "Chat about this" has a button and returns Claude Code to the input box
+- [ ] A wizard of single-choice questions is answered to the end, one card per tab: the step row
+      marks the tab open and the tabs answered, and the Submit tab's "Submit answers" sends it
+- [ ] Moving to another tab in the terminal (or answering on another device) before tapping
+      sends nothing; the card shows the tab now open
+- [ ] A multiSelect question, or a multiSelect tab of a wizard, shows a read-only card with
+      "Open terminal"
 - [ ] Two devices answer the same dialog: only one answer reaches the pane
 - [ ] "Open terminal" switches to the terminal; the stream is still connected (no reconnect)
 
