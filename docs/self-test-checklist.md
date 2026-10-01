@@ -303,16 +303,17 @@ Manual testing checklist for Termote features before release.
 
 Test on real mobile device:
 
-| Gesture     | Expected Action | Status |
-| ----------- | --------------- | ------ |
-| Swipe left  | Ctrl+C          | [ ]    |
-| Swipe right | Tab             | [ ]    |
-| Swipe up    | Scroll down     | [ ]    |
-| Swipe down  | Scroll up       | [ ]    |
-| Long press  | Paste           | [ ]    |
-| Pinch in    | Decrease font   | [ ]    |
-| Pinch out   | Increase font   | [ ]    |
-| Tap         | Focus terminal  | [ ]    |
+| Gesture       | Expected Action                                              | Status |
+| ------------- | ------------------------------------------------------------ | ------ |
+| Swipe left    | Ctrl+C                                                       | [ ]    |
+| Swipe right   | Tab                                                          | [ ]    |
+| Drag up       | Scroll down, following the finger (tmux: one page per swipe) | [ ]    |
+| Drag down     | Scroll up, following the finger (tmux: one page per swipe)   | [ ]    |
+| Flick up/down | History keeps gliding, slows down, stops on the next touch   | [ ]    |
+| Long press    | Paste                                                        | [ ]    |
+| Pinch in      | Decrease font                                                | [ ]    |
+| Pinch out     | Increase font                                                | [ ]    |
+| Tap           | Focus terminal                                               | [ ]    |
 
 ### Scrolling & Copy Mode
 

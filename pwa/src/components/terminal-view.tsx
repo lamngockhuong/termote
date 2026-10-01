@@ -17,6 +17,7 @@ import {
   setTerminalFontFamily,
   setTerminalFontSize,
   setTerminalTheme,
+  terminalRowHeight,
   unblockContextMenu,
 } from '../utils/terminal-bridge'
 import { terminalFontFamily } from '../utils/terminal-font'
@@ -503,8 +504,9 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       term.attachCustomWheelEventHandler((ev) => {
         if (!serverScrollRef.current || term.modes.mouseTrackingMode !== 'none')
           return true
-        const rowHeight = (term.options.fontSize ?? 14) * 1.2
-        const rows = wheelRestRef.current + wheelRows(ev, rowHeight, term.rows)
+        const rows =
+          wheelRestRef.current +
+          wheelRows(ev, terminalRowHeight(term), term.rows)
         const whole = Math.trunc(rows)
         wheelRestRef.current = rows - whole
         scrollHistory(whole)

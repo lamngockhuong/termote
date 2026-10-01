@@ -2,6 +2,7 @@
  * Utilities that drive the in-page xterm.js terminal (TerminalView) through
  * its public API. Input goes straight to the terminal stream.
  */
+import type { Terminal } from '@xterm/xterm'
 import type { TerminalHandle } from '../components/terminal-view'
 
 // Key mappings for special keys (xterm escape sequences)
@@ -176,37 +177,48 @@ export function scrollTerminal(
   else term.scrollLines(amount * 5)
 }
 
-// Scroll a pane wider than the screen sideways by most of a screen width.
-// Returns false when nothing overflows, so the caller can use the gesture
-// for something else.
-export function scrollTerminalHorizontal(
-  handle: TerminalHandle | null,
-  direction: 'left' | 'right',
-): boolean {
+// A pane wider than the screen (herdr, sized by the desktop) is dragged
+// sideways rather than taking swipes as keys.
+export function overflowsHorizontally(handle: TerminalHandle | null): boolean {
   const el = handle?.scroller
-  if (!el || el.scrollWidth <= el.clientWidth) return false
-  const step = el.clientWidth * 0.8
-  el.scrollBy({ left: direction === 'left' ? -step : step, behavior: 'smooth' })
-  return true
+  return !!el && el.scrollWidth > el.clientWidth
 }
 
-// Scroll a pane taller than the screen (zoomed in) by most of a screen
-// height, up to its edge. Returns the pixels scrolled, 0 at the edge or when
-// nothing overflows, so the caller can scroll the history instead.
-export function scrollTerminalVertical(
+// Height of a terminal row in pixels, at its font size.
+export function terminalRowHeight(term: Pick<Terminal, 'options'>): number {
+  return (term.options.fontSize ?? 14) * 1.2
+}
+
+// Rows of a vertical drag not scrolled yet, per terminal.
+const dragRest = new WeakMap<TerminalHandle, number>()
+
+// Move the terminal with the finger (dx, dy in pixels, as in
+// GestureHandlers.onPan). A pane larger than the screen moves first, to its
+// edges; what is left of a vertical drag scrolls the history when history is
+// set, one row per row height dragged (down shows older rows).
+export function dragTerminal(
   handle: TerminalHandle | null,
-  direction: 'up' | 'down',
-): number {
+  dx: number,
+  dy: number,
+  history: boolean,
+) {
   const el = handle?.scroller
-  if (!el) return 0
-  const room =
-    direction === 'up'
-      ? el.scrollTop
-      : el.scrollHeight - el.clientHeight - el.scrollTop
-  const step = Math.min(el.clientHeight * 0.8, room)
-  if (step < 1) return 0
-  el.scrollBy({ top: direction === 'up' ? -step : step, behavior: 'smooth' })
-  return step
+  const term = handle?.term
+  if (!handle || !el || !term) return
+  if (dx) el.scrollLeft -= dx
+  if (!dy) return
+  const before = el.scrollTop
+  el.scrollTop = before - dy
+  // The part of the drag the pane could not take. Only at an edge: the
+  // browser rounds scrollTop, which would leak fractions mid-pane.
+  const rest = dy - (before - el.scrollTop)
+  const top = el.scrollTop <= 0
+  const bottom = el.scrollTop >= el.scrollHeight - el.clientHeight - 1
+  if (!history || !rest || !(rest > 0 ? top : bottom)) return
+  const rows = (dragRest.get(handle) ?? 0) + rest / terminalRowHeight(term)
+  const whole = Math.trunc(rows)
+  dragRest.set(handle, rows - whole)
+  if (whole && !handle.scrollHistory(whole)) term.scrollLines(-whole)
 }
 
 // Get copy mode state of this terminal

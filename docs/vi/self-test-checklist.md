@@ -301,16 +301,17 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 
 Test trên thiết bị di động thật:
 
-| Cử Chỉ     | Hành Động      | Trạng Thái |
-| ---------- | -------------- | ---------- |
-| Vuốt trái  | Ctrl+C         | [ ]        |
-| Vuốt phải  | Tab            | [ ]        |
-| Vuốt lên   | Scroll xuống   | [ ]        |
-| Vuốt xuống | Scroll lên     | [ ]        |
-| Nhấn giữ   | Dán            | [ ]        |
-| Chụm vào   | Giảm font      | [ ]        |
-| Chụm ra    | Tăng font      | [ ]        |
-| Nhấn       | Focus terminal | [ ]        |
+| Cử Chỉ               | Hành Động                                               | Trạng Thái |
+| -------------------- | ------------------------------------------------------- | ---------- |
+| Vuốt trái            | Ctrl+C                                                  | [ ]        |
+| Vuốt phải            | Tab                                                     | [ ]        |
+| Kéo lên              | Cuộn xuống theo ngón tay (tmux: mỗi lần vuốt một trang) | [ ]        |
+| Kéo xuống            | Cuộn lên theo ngón tay (tmux: mỗi lần vuốt một trang)   | [ ]        |
+| Vuốt nhanh lên/xuống | Lịch sử trôi tiếp, chậm dần, dừng khi chạm lại          | [ ]        |
+| Nhấn giữ             | Dán                                                     | [ ]        |
+| Chụm vào             | Giảm font                                               | [ ]        |
+| Chụm ra              | Tăng font                                               | [ ]        |
+| Nhấn                 | Focus terminal                                          | [ ]        |
 
 ### Scroll & Copy Mode
 

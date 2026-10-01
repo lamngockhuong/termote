@@ -44,15 +44,15 @@ import { checkApiVersion } from './utils/api-version'
 import { formatDeepLink, parseDeepLink } from './utils/deep-link'
 import {
   blurTerminal,
+  dragTerminal,
   focusTerminal,
   isTerminalDisconnected,
+  overflowsHorizontally,
   type PasteErrorReason,
   type PasteResult,
   pasteTmuxBuffer,
   pasteToTerminal,
   scrollTerminal,
-  scrollTerminalHorizontal,
-  scrollTerminalVertical,
   scrollTmux,
   sendKeyToTerminal,
   sendTextToTerminal,
@@ -246,29 +246,33 @@ export default function App({
     [copyModeSupported, readOnly, getTerminal],
   )
 
+  // The history follows the finger, except with tmux copy mode, which only
+  // scrolls by pages (keys), so a swipe there scrolls one page.
+  const dragsHistory = !(copyModeSupported && !readOnly)
+
   // Swipes and long press send input; while view-only only scrolling and
   // zooming remain.
   const gestureHandlers = useMemo(
     () => ({
-      // A herdr pane wider than the screen scrolls sideways instead; it also
-      // keeps a stray swipe from interrupting an agent with Ctrl+C.
+      // A herdr pane wider than the screen is dragged sideways instead; it
+      // also keeps a stray swipe from interrupting an agent with Ctrl+C.
       onSwipeLeft: () => {
-        if (isHerdr && scrollTerminalHorizontal(getTerminal(), 'right')) return
+        if (isHerdr && overflowsHorizontally(getTerminal())) return
         if (!readOnly) sendKeyToTerminal(getTerminal(), 'c', { ctrl: true })
       },
       onSwipeRight: () => {
-        if (isHerdr && scrollTerminalHorizontal(getTerminal(), 'left')) return
+        if (isHerdr && overflowsHorizontally(getTerminal())) return
         if (!readOnly) sendKeyToTerminal(getTerminal(), 'Tab')
       },
-      // Vertical swipes scroll the history, as the toolbar's scroll keys do;
-      // a zoomed herdr pane taller than the screen scrolls to its edge first.
+      // A zoomed herdr pane larger than the screen moves with the finger,
+      // then the history does.
+      onPan: (dx: number, dy: number) =>
+        dragTerminal(getTerminal(), isHerdr ? dx : 0, dy, dragsHistory),
       onSwipeUp: () => {
-        if (isHerdr && scrollTerminalVertical(getTerminal(), 'down')) return
-        handleScroll('down')
+        if (!dragsHistory) handleScroll('down')
       },
       onSwipeDown: () => {
-        if (isHerdr && scrollTerminalVertical(getTerminal(), 'up')) return
-        handleScroll('up')
+        if (!dragsHistory) handleScroll('up')
       },
       onLongPress: async () => {
         if (readOnly) return
@@ -282,6 +286,7 @@ export default function App({
     }),
     [
       decrease,
+      dragsHistory,
       increase,
       isHerdr,
       getTerminal,

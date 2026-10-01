@@ -19,11 +19,13 @@ On your first mobile visit, a **gesture hints overlay** will appear showing all 
 | ----------- | ---------------- | ---------------- |
 | Swipe left  | Cancel/interrupt | Ctrl+C           |
 | Swipe right | Tab completion   | Tab              |
-| Swipe up    | Scroll down      | -                |
-| Swipe down  | Scroll up        | -                |
+| Drag up     | Scroll down      | -                |
+| Drag down   | Scroll up        | -                |
 | Long press  | Paste clipboard  | Paste            |
 | Pinch in    | Decrease font    | -                |
 | Pinch out   | Increase font    | -                |
+
+Dragging up or down moves the history with your finger, and a flick keeps it gliding until it slows down or you touch the screen again. With the tmux backend the history is scrolled in tmux copy mode, one page per swipe.
 
 ## Gesture Zone
 
@@ -39,7 +41,7 @@ Gestures are disabled on desktop where mouse interactions are preferred. On mobi
 - Default: 14px
 - Adjust with pinch or toolbar buttons
 
-With the Herdr backend, and [Fit herdr pane to this device](/usage/settings/) off, the pane keeps the desktop's size and the font works as a zoom on a screen too small for it: 14 fits the pane to the screen, and each step up or down makes the text 1px larger or smaller. A pane larger than the screen is dragged with swipes: sideways, and up or down until its edge, after which swipes scroll the history.
+With the Herdr backend, and [Fit herdr pane to this device](/usage/settings/) off, the pane keeps the desktop's size and the font works as a zoom on a screen too small for it: 14 fits the pane to the screen, and each step up or down makes the text 1px larger or smaller. A pane larger than the screen moves with your finger: sideways, and up or down until its edge, after which the drag scrolls the history.
 
 ## Clipboard Paste
 

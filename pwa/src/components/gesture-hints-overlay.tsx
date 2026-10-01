@@ -10,7 +10,7 @@ interface Props {
 const GESTURE_HINTS = [
   { icon: '👈', gesture: 'Swipe Left', action: 'Cancel (Ctrl+C)' },
   { icon: '👉', gesture: 'Swipe Right', action: 'Tab completion' },
-  { icon: '👆👇', gesture: 'Swipe Up/Down', action: 'Scroll history' },
+  { icon: '👆👇', gesture: 'Drag Up/Down', action: 'Scroll history' },
   { icon: '👆', gesture: 'Long Press', action: 'Paste clipboard (limited*)' },
   { icon: '🤏', gesture: 'Pinch In/Out', action: 'Font size' },
 ]
