@@ -168,6 +168,7 @@ POST   /api/mux/tabs               body: {groupId, name}       → {ok, id}
 PATCH  /api/mux/tabs/{id}          body: {name}                → {ok}
 DELETE /api/mux/tabs/{id}                                       → {ok}
 POST   /api/mux/tabs/{id}/select                                 → {ok}
+DELETE /api/mux/panes/{id}                                      → {ok}   (herdr only, else 501)
 POST   /api/mux/panes/{id}/keys    body: {keys}                 → {ok}
 POST   /api/mux/panes/{id}/scroll  body: {lines}                → {ok}   (caps.scroll only, else 501)
 GET    /api/mux/health             → {status, apiVersion, backend}

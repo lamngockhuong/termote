@@ -270,6 +270,8 @@ Manual testing checklist for Termote features before release.
 - [ ] Pane strip is hidden for a tab with a single pane
 - [ ] Pane strip appears for a tab with more than one pane, with an agent-status badge per pane
 - [ ] Selecting a pane switches the stream without changing the Herdr desktop's focus
+- [ ] The X next to a pane asks "Close pane?"; Cancel keeps it, "Close pane" closes only that pane
+- [ ] Closing the streamed pane switches the stream to another pane of the same tab
 
 ### Deep Links
 
@@ -557,6 +559,10 @@ curl -X PATCH http://localhost:7680/api/mux/tabs/<id> \
 
 # Close a tab
 curl -X DELETE http://localhost:7680/api/mux/tabs/<id> \
+  -H 'Content-Type: application/json'
+
+# Close a pane (Herdr only)
+curl -X DELETE http://localhost:7680/api/mux/panes/<id> \
   -H 'Content-Type: application/json'
 
 # Send keys to a pane

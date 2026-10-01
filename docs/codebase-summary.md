@@ -149,7 +149,8 @@ xterm.js terminal component:
 Second-level pane switcher and per-pane agent status:
 
 - `PaneStrip` renders only when a tab has more than one pane (Herdr split panes); tmux tabs
-  never have more than one pane
+  never have more than one pane. Each pane has a close button; App confirms before calling
+  `DELETE /api/mux/panes/{id}`
 - `AgentStatusBadge` renders an icon for `idle`/`working`/`blocked`/`done`, set only by the
   Herdr backend's `agent` field on a pane
 
