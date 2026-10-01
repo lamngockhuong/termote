@@ -34,7 +34,13 @@ export interface MuxSnapshot {
   backend: string
   // scroll: history is scrolled by the backend (scrollPane), not by the
   // xterm.js scrollback, which only ever holds screen renders (herdr).
-  caps: { clientSideSelect: boolean; copyMode: boolean; scroll?: boolean }
+  caps: {
+    clientSideSelect: boolean
+    copyMode: boolean
+    scroll?: boolean
+    // The client can take over the pane size (herdr's control mode).
+    driveSize?: boolean
+  }
   groups: MuxGroup[]
 }
 

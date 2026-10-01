@@ -29,6 +29,8 @@ interface Props {
   // Name of the backend's paste buffer in the option label (e.g. "tmux buffer");
   // the backend name is not known here, so the default stays generic.
   pasteBufferLabel?: string
+  // Backend lets this device take over the pane size (caps.driveSize)
+  driveSizeSupported?: boolean
 }
 
 const CONTROL =
@@ -227,6 +229,7 @@ export function SettingsModal({
   historyCount = 0,
   tmuxBufferSupported = true,
   pasteBufferLabel = 'Session buffer',
+  driveSizeSupported = false,
 }: Props) {
   const [inlineToast, setInlineToast] = useState<string | null>(null)
   const [activeGroup, setActiveGroup] = useState('appearance')
@@ -335,6 +338,18 @@ export function SettingsModal({
               onChange={(v) => onUpdateSetting('disableContextMenu', v)}
             />
           </SettingsRow>
+          {driveSizeSupported && (
+            <SettingsRow
+              title="Fit herdr pane to this device"
+              desc="Resizes the pane on the desktop too, until this page is hidden or closed, or another device takes over"
+            >
+              <Switch
+                label="Fit herdr pane to this device"
+                checked={settings.driveTerminalSize}
+                onChange={(v) => onUpdateSetting('driveTerminalSize', v)}
+              />
+            </SettingsRow>
+          )}
         </>
       ),
     },

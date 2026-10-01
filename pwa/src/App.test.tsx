@@ -135,6 +135,7 @@ const mockIsTerminalDisconnected = vi.fn(() => false)
 const mockScrollTmux = vi.fn()
 const mockScrollTerminal = vi.fn()
 const mockScrollTerminalHorizontal = vi.fn(() => false)
+const mockScrollTerminalVertical = vi.fn(() => 0)
 const mockToggleTmuxCopyMode = vi.fn()
 const mockPasteTmuxBuffer = vi.fn()
 const mockFocusTerminal = vi.fn()
@@ -162,6 +163,9 @@ vi.mock('./utils/terminal-bridge', () => ({
 
   scrollTerminalHorizontal: (...args: any[]) =>
     (mockScrollTerminalHorizontal as (...a: any[]) => unknown)(...args),
+
+  scrollTerminalVertical: (...args: any[]) =>
+    (mockScrollTerminalVertical as (...a: any[]) => unknown)(...args),
 
   toggleTmuxCopyMode: (...args: any[]) => mockToggleTmuxCopyMode(...args),
 
@@ -1215,6 +1219,90 @@ describe('App', () => {
       ctrl: true,
     })
     expect(mockSendKeyToTerminal).toHaveBeenCalledWith(null, 'Tab')
+  })
+
+  it('herdr: vertical swipes scroll a tall pane first, then the history', async () => {
+    const base = mockUseLocalSessions()
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      mux: {
+        backend: 'herdr',
+        caps: { clientSideSelect: true, copyMode: false },
+      },
+    })
+    mockScrollTerminalVertical.mockReturnValue(120)
+    render(<App />)
+    await waitFor(() => expect(capturedGestureHandlers.onSwipeUp).toBeDefined())
+    capturedGestureHandlers.onSwipeUp()
+    capturedGestureHandlers.onSwipeDown()
+    expect(mockScrollTerminalVertical).toHaveBeenCalledWith(null, 'down')
+    expect(mockScrollTerminalVertical).toHaveBeenCalledWith(null, 'up')
+    expect(mockScrollTerminal).not.toHaveBeenCalled()
+
+    // At the edge: the history scrolls as usual
+    mockScrollTerminalVertical.mockReturnValue(0)
+    capturedGestureHandlers.onSwipeDown()
+    expect(mockScrollTerminal).toHaveBeenCalledWith(null, 'up')
+    capturedGestureHandlers.onSwipeUp()
+    expect(mockScrollTerminal).toHaveBeenCalledWith(null, 'down')
+  })
+
+  it('herdr: drives the pane size when the setting and backend allow it', async () => {
+    const base = mockUseLocalSessions()
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      mux: {
+        backend: 'herdr',
+        caps: { clientSideSelect: true, copyMode: false, driveSize: true },
+      },
+    } as any)
+    const settings = mockUseSettings()
+    mockUseSettings.mockReturnValue({
+      ...settings,
+      settings: { ...settings.settings, driveTerminalSize: true },
+    } as any)
+    render(<App />)
+    await screen.findByTestId('terminal-view')
+    const props = vi.mocked(TerminalView).mock.lastCall![0] as {
+      driveSize: boolean
+      onDriveLost: (r: 'taken-over' | 'failed') => void
+    }
+    expect(props.driveSize).toBe(true)
+    act(() => props.onDriveLost('taken-over'))
+    expect(
+      await screen.findByText(
+        'Another device took over the terminal size. Reopen the page to take it back',
+      ),
+    ).toBeInTheDocument()
+    act(() => props.onDriveLost('failed'))
+    expect(
+      await screen.findByText(
+        'Could not fit the pane to this device; showing the desktop size',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('does not drive the size when the backend cannot', async () => {
+    const settings = mockUseSettings()
+    mockUseSettings.mockReturnValue({
+      ...settings,
+      settings: { ...settings.settings, driveTerminalSize: true },
+    } as any)
+    render(<App />)
+    await screen.findByTestId('terminal-view')
+    expect(vi.mocked(TerminalView).mock.lastCall![0]).toMatchObject({
+      driveSize: false,
+    })
+  })
+
+  it('tmux: vertical swipes never scroll the pane frame', async () => {
+    mockScrollTerminalVertical.mockReturnValue(120)
+    render(<App />)
+    await waitFor(() => expect(capturedGestureHandlers.onSwipeUp).toBeDefined())
+    capturedGestureHandlers.onSwipeUp()
+    expect(mockScrollTerminalVertical).not.toHaveBeenCalled()
+    expect(mockScrollTmux).toHaveBeenCalledWith(null, 'down')
+    mockScrollTerminalVertical.mockReturnValue(0)
   })
 
   it('tmux: swipes never scroll sideways', async () => {

@@ -2,7 +2,8 @@ import { useCallback, useState } from 'react'
 
 const MIN_SIZE = 6
 const MAX_SIZE = 24
-const DEFAULT_SIZE = 14
+// Also the size a server-fixed grid is measured at before zooming.
+export const DEFAULT_SIZE = 14
 const STORAGE_KEY = 'terminal-font-size'
 
 export function useFontSize() {

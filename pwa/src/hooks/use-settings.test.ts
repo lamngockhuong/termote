@@ -13,6 +13,16 @@ describe('useSettings', () => {
     expect(result.current.settings.toolbarDefaultExpanded).toBe(false)
     expect(result.current.settings.disableContextMenu).toBe(true)
     expect(result.current.settings.pollInterval).toBe(5)
+    expect(result.current.settings.driveTerminalSize).toBe(false)
+  })
+
+  it('updates driveTerminalSize and persists', () => {
+    const { result } = renderHook(() => useSettings())
+    act(() => result.current.updateSetting('driveTerminalSize', true))
+    expect(result.current.settings.driveTerminalSize).toBe(true)
+    expect(
+      JSON.parse(localStorage.getItem('termote-settings')!).driveTerminalSize,
+    ).toBe(true)
   })
 
   it('opens a config saved before uiStyle existed in the neutral style', () => {

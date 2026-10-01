@@ -56,6 +56,7 @@ function setVisibility(state: 'visible' | 'hidden') {
 interface Opts {
   paneId?: string
   followPane?: boolean
+  drive?: () => boolean
 }
 
 function setup(initial: Opts = { paneId: 'p1' }) {
@@ -69,6 +70,7 @@ function setup(initial: Opts = { paneId: 'p1' }) {
         paneId: props.paneId,
         followPane: props.followPane ?? false,
         getSize,
+        drive: props.drive,
         onOutput,
         onControl,
         onOpen,
@@ -108,6 +110,12 @@ describe('streamURL', () => {
     const url = streamURL('t', 'p:1', { cols: 80, rows: 24 })
     expect(url).toBe(
       `ws://${window.location.host}/api/mux/stream?token=t&pane=p%3A1&cols=80&rows=24`,
+    )
+  })
+
+  it('asks to drive the size with drive=1', () => {
+    expect(streamURL('t', 'p', null, true)).toBe(
+      `ws://${window.location.host}/api/mux/stream?token=t&pane=p&drive=1`,
     )
   })
 
@@ -217,6 +225,30 @@ describe('useTermSocket', () => {
     expect(ws.send).toHaveBeenLastCalledWith(
       '{"type":"resize","cols":100,"rows":30}',
     )
+  })
+
+  it('opens with drive=1 while driving is wanted, and sends drive messages', async () => {
+    let want = true
+    const { result, rerender } = setup({ paneId: 'p1', drive: () => want })
+    await flush()
+    const ws = last()
+    expect(ws.url).toContain('drive=1')
+    // Not open yet: nothing is sent
+    act(() => result.current.sendDrive(false))
+    expect(ws.send).not.toHaveBeenCalled()
+    act(() => ws.open())
+    act(() => result.current.sendDrive(false))
+    expect(ws.send).toHaveBeenLastCalledWith('{"type":"drive","on":false}')
+    act(() => result.current.sendDrive(true))
+    expect(ws.send).toHaveBeenLastCalledWith('{"type":"drive","on":true}')
+
+    // The next stream asks again only if still wanted
+    want = false
+    rerender({ paneId: 'p1', drive: () => want })
+    act(() => result.current.reconnect())
+    await flush()
+    expect(last()).not.toBe(ws)
+    expect(last().url).not.toContain('drive=')
   })
 
   it('reconnects with backoff after an unexpected close', async () => {
