@@ -95,10 +95,17 @@ func TestReadClaudeScreenDialogs(t *testing.T) {
 		{"2.1.286-ask-wizard-back", "select", "What size would you like?", "1. Small | 2. Large ✔ | 4. Chat about this", ""},
 		// The Submit tab, drawn without a footer.
 		{"2.1.286-ask-wizard-submit", "select", "Review your answers", "1. Submit answers | 2. Cancel", "→ Coffee"},
-		// Answered in the terminal only.
-		{"2.1.286-ask-multi", "unsupported", "Which toppings do you want?", "", ""},
-		{"2.1.286-ask-wizard-multi-tab", "unsupported", "What extras would you like?", "", ""},
-		{"collie-claude--wizard-multiselect-q1", "unsupported", "", "", ""},
+		// "⚠ You have not answered all questions" is part of the review.
+		{"2.1.286-ask-wizard-submit-partial", "select", "Review your answers", "1. Submit answers | 2. Cancel", "You have not answered all questions"},
+		// multiSelect: each digit toggles one option; "Type something" needs the terminal.
+		{"2.1.286-ask-multi", "multiselect", "Which toppings do you want?", "1. Cheese | 2. Ham | 3. Olives | 5. Chat about this", ""},
+		{"2.1.286-ask-wizard-multi-tab", "multiselect", "What extras would you like?", "1. Sugar | 2. Milk | 4. Chat about this", ""},
+		{"2.1.286-ask-wizard-multi-open", "multiselect", "Which extras would you like?", "1. Sugar | 2. Milk | 4. Chat about this", ""},
+		{"2.1.286-ask-wizard-multi-toggled", "multiselect", "Which extras would you like?", "1. Sugar | 2. Milk | 4. Chat about this", ""},
+		// The pointer on the free-text option: a digit would be typed into it.
+		{"2.1.286-ask-wizard-multi-cursor-free-text", "unsupported", "Which extras would you like?", "", ""},
+		{"2.1.286-ask-wizard-multi-typed", "unsupported", "Which extras would you like?", "", ""},
+		{"collie-claude--wizard-multiselect-q1", "multiselect", "Which toppings would you like on your pizza?", "1. Pepperoni | 2. Mushrooms | 3. Bell peppers | 4. Extra cheese | 6. Chat about this", ""},
 		{"2.1.286-trust-unnumbered", "unsupported", "Accessing workspace:", "", "Quick safety check"},
 	}
 	for _, tt := range tests {
@@ -135,11 +142,34 @@ func TestReadClaudeScreenDialogs(t *testing.T) {
 		"2.1.286-ask-wizard-submit":            "☒Size ☒Drink [☐]Submit",
 		"2.1.286-ask-wizard-multi-tab":         "☒Size ☒Drink [☐]Extras ☐Submit",
 		"collie-claude--wizard-multiselect-q1": "[☐]Toppings ☐Crust ☐Submit",
-		"2.1.286-ask-single":                   "",
+		"2.1.286-ask-wizard-mixed":             "[☐]Size ☐Extras ☐Drink ☐Submit",
+		"2.1.286-ask-wizard-after-multi":       "☐Size ☒Extras [☐]Drink ☐Submit",
+		// Leaving a multiSelect tab with nothing ticked does not answer it.
+		"2.1.286-ask-wizard-skip-multi": "☐Size ☐Extras [☐]Drink ☐Submit",
+		"2.1.286-ask-single":            "",
 	} {
 		if got := steps(readScreen(t, name).prompt); got != want {
 			t.Errorf("%s steps = %q, want %q", name, got, want)
 		}
+	}
+	// A ticked option is checked, without its box in the label.
+	checked := func(name string) string {
+		var out []string
+		for _, o := range readScreen(t, name).prompt.Options {
+			if o.Checked {
+				out = append(out, o.Label)
+			}
+		}
+		return strings.Join(out, ",")
+	}
+	if got := checked("2.1.286-ask-wizard-multi-open"); got != "" {
+		t.Errorf("untouched multiSelect checked = %q", got)
+	}
+	if got := checked("2.1.286-ask-wizard-multi-toggled"); got != "Milk" {
+		t.Errorf("toggled multiSelect checked = %q", got)
+	}
+	if p := readScreen(t, "2.1.286-ask-wizard-multi-toggled").prompt; p.Options[0].Detail != "Add sugar" {
+		t.Errorf("multiSelect detail = %q", p.Options[0].Detail)
 	}
 	// An option's description rows become its detail.
 	p := readScreen(t, "2.1.286-ask-single").prompt
@@ -205,6 +235,28 @@ func TestDialogSignatureHasTheOpenTab(t *testing.T) {
 	}
 	if p := readClaudeScreen(tab("←  " + on + "☐ Q" + off + "  ☐ Q  ✔ Sub")).prompt; p != nil && p.Kind != "unsupported" {
 		t.Errorf("cut tab row = %+v", p)
+	}
+	// Text typed into the free-text option replaces "Type something"; with
+	// the pointer moved off it, it is still not an option to send.
+	typed := fixtureText(t, "2.1.286-ask-wizard-multi-typed")
+	typedAway := strings.Replace(strings.Replace(typed, "\x1b[38;5;153m❯\x1b[39m \x1b[38;5;246m3.", "  \x1b[38;5;246m3.", 1), "  \x1b[38;5;246m1.", "❯ \x1b[38;5;246m1.", 1)
+	if typedAway == typed {
+		t.Fatal("pointer move did not apply")
+	}
+	if p := readClaudeScreen(typedAway).prompt; p == nil || p.Kind != "multiselect" || labels(p) != "1. Sugar | 2. Milk | 4. Chat about this" {
+		t.Errorf("typed text, pointer away = %+v", p)
+	}
+	// A single-choice option that starts with a box is not a multiSelect.
+	if p := readClaudeScreen(tab("←  " + on + "☐ Q" + off + "  ✔ Submit  →")).prompt; p == nil || p.Kind != "select" {
+		t.Errorf("plain tab = %+v", p)
+	}
+	boxed := readClaudeScreen(rule + "\n←  " + on + "☐ Q" + off + "  ✔ Submit  →\nDone?\n❯ 1. [x] Done\n  2. Not yet\n  3. Type something.\nEnter to select · Esc to cancel\n").prompt
+	if boxed == nil || boxed.Kind != "select" {
+		t.Errorf("one boxed label = %+v", boxed)
+	}
+	// multiSelect without its tab row is not answered.
+	if p := readClaudeScreen(rule + "\n☐ Q\nPick some?\n❯ 1. [ ] A\n  2. [ ] B\nEnter to select · Esc to cancel\n").prompt; p == nil || p.Kind != "unsupported" {
+		t.Errorf("multiSelect without tabs = %+v", p)
 	}
 	// Two tabs drawn open is not a screen to answer either.
 	if p := readClaudeScreen(tab("←  " + on + "☐ Q  ☐ Q" + off + "  ✔ Submit  →")).prompt; p == nil || p.Kind != "unsupported" {
@@ -272,6 +324,15 @@ func TestParseScreenBackground(t *testing.T) {
 	if l := parseScreen("x \x1b[38;5;48my\x1b[39m\n"); strings.TrimSpace(l[0].hl) != "" {
 		t.Errorf("foreground counted as background: %q", l[0].hl)
 	}
+}
+
+func fixtureText(t *testing.T, name string) string {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join("testdata", "claude", "screens", name+".txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
 }
 
 func TestParseScreenFaint(t *testing.T) {

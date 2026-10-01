@@ -161,7 +161,7 @@ type claudeScreen struct {
 // AgentPrompt is a dialog the PWA shows as a card.
 type AgentPrompt struct {
 	PromptID string         `json:"promptId,omitempty"`
-	Kind     string         `json:"kind"` // permission | select | unsupported
+	Kind     string         `json:"kind"` // permission | select | multiselect | unsupported
 	Title    string         `json:"title"`
 	Body     string         `json:"body,omitempty"`
 	Options  []PromptOption `json:"options,omitempty"`
@@ -180,6 +180,8 @@ type PromptOption struct {
 	Index  int    `json:"index"` // the number Claude Code shows, and the key sent
 	Label  string `json:"label"`
 	Detail string `json:"detail,omitempty"`
+	// Checked: a multiSelect option ticked ("[✔]"); its digit toggles it.
+	Checked bool `json:"checked,omitempty"`
 }
 
 const (
@@ -385,12 +387,13 @@ func dialogSig(rows []screenLine) string {
 func parseDialog(region []screenLine) *AgentPrompt {
 	type opt struct {
 		PromptOption
-		row int
+		row     int
+		pointer bool // the ❯ is on this row
 	}
 	var opts []opt
 	var steps []PromptStep
 	first := -1
-	wizard, multi := false, false
+	wizard := false
 	for i, l := range region {
 		t := strings.TrimSpace(l.text)
 		if isQuestionTabs(t) {
@@ -402,13 +405,10 @@ func parseDialog(region []screenLine) *AgentPrompt {
 		if m := optionRowRe.FindStringSubmatch(t); m != nil {
 			idx, _ := strconv.Atoi(m[1])
 			label := strings.TrimSpace(m[2])
-			if strings.HasPrefix(label, "[ ]") || strings.HasPrefix(label, "[✔]") || strings.HasPrefix(label, "[x]") {
-				multi = true
-			}
 			if first < 0 {
 				first = i
 			}
-			opts = append(opts, opt{PromptOption{Index: idx, Label: label}, i})
+			opts = append(opts, opt{PromptOption{Index: idx, Label: label}, i, strings.HasPrefix(t, "❯")})
 			continue
 		}
 		if len(opts) > 0 && t != "" && !isBareRule(t) && !isDashedRule(t) {
@@ -436,10 +436,36 @@ func parseDialog(region []screenLine) *AgentPrompt {
 		p.Title = strings.TrimSpace(strings.TrimPrefix(head[0], "☐"))
 		p.Body, _ = clampText(strings.Join(head[1:], "\n"), claudeMaxBody)
 	}
+	question := wizard || (len(head) > 0 && strings.HasPrefix(head[0], "☐"))
+	// The free-text option of a question is the last one above "Chat about
+	// this": its label is "Type something" until text is typed into it, then
+	// the text. With the pointer on it a digit is typed into that text, so
+	// the question needs the terminal. The Submit tab has none.
+	free := -1
+	if question && !submitOpen(steps) && len(opts) > 0 {
+		free = len(opts) - 1
+		if opts[free].Label == "Chat about this" {
+			free--
+		}
+		if free >= 0 && opts[free].pointer {
+			return p
+		}
+	}
+	// multiSelect: every option but "Chat about this" has a box.
+	multi, boxed := false, 0
+	for _, o := range opts {
+		if _, ok := cutCheckbox(o.Label); ok {
+			boxed++
+		}
+	}
+	if boxed > 0 && (boxed == len(opts) || (boxed == len(opts)-1 && opts[len(opts)-1].Label == "Chat about this")) {
+		multi = true
+	}
 	// A wizard is answered one tab at a time, so the whole tab row must be
-	// read and the tab open known: a digit answers that tab only. Several
-	// keys (multiSelect) need the terminal.
-	if (wizard && !wholeTabs(steps)) || multi || len(opts) == 0 {
+	// read and the tab open known: a digit answers that tab only, or on a
+	// multiSelect tab toggles one option. multiSelect only comes with a tab
+	// row (a single question has "✔ Submit" as its second tab).
+	if (wizard && !wholeTabs(steps)) || (multi && !wizard) || len(opts) == 0 {
 		return p
 	}
 	// Numbering must read 1, 2, ... so a numbered list in the body is not
@@ -449,11 +475,13 @@ func parseDialog(region []screenLine) *AgentPrompt {
 			return p
 		}
 	}
-	question := wizard || (len(head) > 0 && strings.HasPrefix(head[0], "☐"))
 	var keep []PromptOption
-	for _, o := range opts {
-		if question && strings.HasPrefix(o.Label, "Type something") {
+	for i, o := range opts {
+		if i == free {
 			continue // free text needs the terminal
+		}
+		if multi {
+			o.Label, o.Checked = checkbox(o.Label)
 		}
 		o.Detail, _ = clampText(o.Detail, 300)
 		keep = append(keep, o.PromptOption)
@@ -462,6 +490,8 @@ func parseDialog(region []screenLine) *AgentPrompt {
 		return p
 	}
 	switch {
+	case multi:
+		p.Kind = "multiselect"
 	case question:
 		p.Kind = "select"
 	case len(head) > 1 && strings.HasSuffix(head[len(head)-1], "?"):
@@ -473,6 +503,25 @@ func parseDialog(region []screenLine) *AgentPrompt {
 	}
 	p.Options = keep
 	return p
+}
+
+// checkbox splits a multiSelect label ("[✔] Milk") into its text and
+// whether it is ticked.
+func checkbox(label string) (string, bool) {
+	if box, ok := cutCheckbox(label); ok {
+		return strings.TrimSpace(label[len(box):]), box != "[ ]"
+	}
+	return label, false
+}
+
+// cutCheckbox returns the box a label starts with.
+func cutCheckbox(label string) (string, bool) {
+	for _, box := range []string{"[ ]", "[✔]", "[x]"} {
+		if strings.HasPrefix(label, box) {
+			return box, true
+		}
+	}
+	return "", false
 }
 
 // isQuestionTabs: the tab row AskUserQuestion draws above its question

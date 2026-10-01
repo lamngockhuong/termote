@@ -55,7 +55,7 @@ type agentWriter interface {
 // agentKeys are the only keys a route sends, with the bytes a raw-input
 // backend (herdr) types for them.
 var agentKeys = map[string]string{
-	"Enter": "\r", "Escape": "\x1b",
+	"Enter": "\r", "Escape": "\x1b", "Left": "\x1b[D", "Right": "\x1b[C",
 	"1": "1", "2": "2", "3": "3", "4": "4", "5": "5", "6": "6", "7": "7", "8": "8", "9": "9",
 }
 
@@ -516,9 +516,13 @@ func (a *agentAPI) handleAnswer(w http.ResponseWriter, r *http.Request) {
 
 func (a *agentAPI) answer(ctx context.Context, wr agentWriter, paneID, promptID string, choice json.RawMessage) error {
 	var key string
+	step := -1
 	rec, err := a.input.consumePrompt(paneID, promptID, func(r *promptRecord) error {
 		key = choiceKey(r.prompt, choice)
 		if key == "" {
+			step = choiceStep(r.prompt, choice)
+		}
+		if key == "" && step < 0 {
 			return fail(http.StatusBadRequest, "invalid_choice", "choice is not one of the options")
 		}
 		return nil
@@ -550,6 +554,9 @@ func (a *agentAPI) answer(ctx context.Context, wr agentWriter, paneID, promptID 
 	// until the screen moves on, so a second device cannot answer the
 	// dialog that follows in its place.
 	a.input.markAnswered(paneID, rec.sig)
+	if step >= 0 {
+		return a.moveToStep(ctx, wr, paneID, s, rec, step)
+	}
 	if err := wr.SendKeySequence(ctx, s.Target, []string{key}); err != nil {
 		return err
 	}
@@ -560,19 +567,79 @@ func (a *agentAPI) answer(ctx context.Context, wr agentWriter, paneID, promptID 
 	return nil
 }
 
+// moveToStep opens another tab of a wizard one arrow at a time. After each
+// key the screen must show the same wizard (its tabs by label: one that asks
+// the very same questions again in between is not told apart) with the next
+// tab open, and a tab the arrow passes must be one this code reads (not one
+// with text being typed); anything else stops before the next key and
+// answers with the dialog on screen. The pane's lock is held throughout.
+func (a *agentAPI) moveToStep(ctx context.Context, wr agentWriter, paneID string, s AgentSession, rec *promptRecord, target int) error {
+	cur := currentStep(rec.prompt.Steps)
+	key, dir := "Right", 1
+	if target < cur {
+		key, dir = "Left", -1
+	}
+	prev := rec.sig
+	for cur != target {
+		if err := wr.SendKeySequence(ctx, s.Target, []string{key}); err != nil {
+			return err
+		}
+		var next claudeScreen
+		moved := pollScreen(ctx, wr, s.Target, func(sc claudeScreen) bool {
+			next = sc
+			return sc.sig != prev
+		})
+		if !moved {
+			f := fail(http.StatusBadGateway, "step_not_confirmed", "the tab did not change")
+			f.prompt = a.promptOf(paneID, s, next)
+			return f
+		}
+		cur += dir
+		passing := cur != target && next.prompt != nil && next.prompt.Kind == "unsupported"
+		if next.prompt == nil || passing || !sameTabs(next.prompt.Steps, rec.prompt.Steps) || currentStep(next.prompt.Steps) != cur {
+			f := fail(http.StatusConflict, "prompt_changed", "the screen changed; check the dialog again")
+			f.prompt = a.promptOf(paneID, s, next)
+			return f
+		}
+		if cur != target {
+			a.input.markAnswered(paneID, next.sig)
+		}
+		prev = next.sig
+	}
+	return nil
+}
+
+// sameTabs: the same wizard, its tabs read by label (moving across a
+// multiSelect tab can mark it answered).
+func sameTabs(a, b []PromptStep) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].Label != b[i].Label {
+			return false
+		}
+	}
+	return true
+}
+
 // dialogStatus: where the agent's own status is known from its session
 // file (tmux), it must say a dialog is open; the screen alone is not enough.
 func dialogStatus(s AgentSession) bool {
 	return s.PID == 0 || s.Status == "blocked"
 }
 
-// choiceKey is the key for a choice: an option's number, or "cancel" for
-// Escape. Anything else is "".
+// choiceKey is the key for a choice: an option's number, "cancel" for
+// Escape, or "next" for Right on a multiSelect tab (it leaves the tab with
+// the options ticked). Anything else is "".
 func choiceKey(p AgentPrompt, choice json.RawMessage) string {
 	var name string
 	if json.Unmarshal(choice, &name) == nil {
-		if name == "cancel" {
+		switch {
+		case name == "cancel":
 			return "Escape"
+		case name == "next" && p.Kind == "multiselect":
+			return "Right"
 		}
 		return ""
 	}
@@ -586,6 +653,21 @@ func choiceKey(p AgentPrompt, choice json.RawMessage) string {
 		}
 	}
 	return ""
+}
+
+// choiceStep is the tab a choice {"step": n} opens: another tab of the
+// wizard on screen. Anything else is -1.
+func choiceStep(p AgentPrompt, choice json.RawMessage) int {
+	var c struct {
+		Step *int `json:"step"`
+	}
+	if json.Unmarshal(choice, &c) != nil || c.Step == nil || !wholeTabs(p.Steps) {
+		return -1
+	}
+	if n := *c.Step; n >= 0 && n < len(p.Steps) && n != currentStep(p.Steps) {
+		return n
+	}
+	return -1
 }
 
 // writeFailure answers a refused write; other errors go through muxError.

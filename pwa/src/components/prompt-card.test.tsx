@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { type AgentPrompt, AgentRequestError } from '../hooks/use-mux-api'
 import { PromptCard, WaitingCard } from './prompt-card'
@@ -273,6 +273,119 @@ describe('PromptCard with several questions', () => {
     await click(/4\.\s*Chat about this/)
     expect(mockAnswer).toHaveBeenCalledWith('%3', 'id2', 4)
     expect(onAnswered).toHaveBeenCalled()
+  })
+
+  it('another step is a button that opens that tab; the open one is not', async () => {
+    renderCard(tab)
+    const steps = screen.getByRole('list', { name: 'Questions' })
+    expect(within(steps).queryByRole('button', { name: 'Drink' })).toBeNull()
+    await act(async () => {
+      fireEvent.click(
+        within(steps).getByRole('button', { name: /Size \(answered\)/ }),
+      )
+    })
+    expect(mockAnswer).toHaveBeenCalledWith('%3', 'id2', { step: 0 })
+    await act(async () => {
+      fireEvent.click(within(steps).getByRole('button', { name: 'Submit' }))
+    })
+    expect(mockAnswer).toHaveBeenLastCalledWith('%3', 'id2', { step: 2 })
+  })
+
+  it('steps are not buttons without an answerable card', () => {
+    renderCard(tab, true)
+    expect(
+      within(screen.getByRole('list', { name: 'Questions' })).queryAllByRole(
+        'button',
+      ),
+    ).toHaveLength(0)
+  })
+
+  it('a multiSelect tab toggles options and moves on with Next', async () => {
+    renderCard({
+      promptId: 'id3',
+      kind: 'multiselect',
+      title: 'Which extras would you like?',
+      options: [
+        { index: 1, label: 'Sugar' },
+        { index: 2, label: 'Milk', checked: true },
+        { index: 4, label: 'Chat about this' },
+      ],
+      steps: [{ label: 'Extras', current: true }, { label: 'Submit' }],
+    })
+    expect(screen.getByRole('button', { name: /1\.\s*Sugar/ })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
+    expect(screen.getByRole('button', { name: /2\.\s*Milk/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    // Chat about this is not an option to tick
+    expect(
+      screen.getByRole('button', { name: /4\.\s*Chat about this/ }),
+    ).not.toHaveAttribute('aria-pressed')
+    await click(/1\.\s*Sugar/)
+    expect(mockAnswer).toHaveBeenCalledWith('%3', 'id3', 1)
+    await click('Next')
+    expect(mockAnswer).toHaveBeenLastCalledWith('%3', 'id3', 'next')
+  })
+
+  it('a toggle keeps the focus once sent', async () => {
+    renderCard({
+      promptId: 'id3',
+      kind: 'multiselect',
+      title: 'Which extras would you like?',
+      options: [
+        { index: 1, label: 'Sugar' },
+        { index: 2, label: 'Milk' },
+      ],
+      steps: [{ label: 'Extras', current: true }, { label: 'Submit' }],
+    })
+    const sugar = screen.getByRole('button', { name: /1\.\s*Sugar/ })
+    sugar.focus()
+    await click(/1\.\s*Sugar/)
+    expect(sugar).toHaveFocus()
+  })
+
+  it('a tab that did not open says so and shows the dialog on screen', async () => {
+    const now = { ...tab, promptId: 'id9' }
+    mockAnswer.mockRejectedValueOnce(
+      new AgentRequestError(502, 'step_not_confirmed', 'x', undefined, now),
+    )
+    renderCard(tab)
+    await act(async () => {
+      fireEvent.click(
+        within(screen.getByRole('list', { name: 'Questions' })).getByRole(
+          'button',
+          { name: 'Submit' },
+        ),
+      )
+    })
+    expect(
+      screen.getByText('That tab did not open; check the dialog.'),
+    ).toBeInTheDocument()
+    expect(onChanged).toHaveBeenCalledWith(now)
+    // No dialog left on screen clears the card
+    mockAnswer.mockRejectedValueOnce(
+      new AgentRequestError(502, 'step_not_confirmed', 'x'),
+    )
+    await act(async () => {
+      fireEvent.click(
+        within(screen.getByRole('list', { name: 'Questions' })).getByRole(
+          'button',
+          { name: 'Submit' },
+        ),
+      )
+    })
+    expect(onChanged).toHaveBeenLastCalledWith(null)
+  })
+
+  it('a single-choice tab has no Next and no pressed state', () => {
+    renderCard(tab)
+    expect(screen.queryByRole('button', { name: 'Next' })).toBeNull()
+    expect(
+      screen.getByRole('button', { name: /1\.\s*Tea/ }),
+    ).not.toHaveAttribute('aria-pressed')
   })
 
   it('a single question has no steps', () => {

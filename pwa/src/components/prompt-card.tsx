@@ -1,7 +1,8 @@
-import { useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import type { ViewProps } from '../app-views'
 import { useHaptic } from '../hooks/use-haptic'
 import {
+  type AgentChoice,
   type AgentPrompt,
   AgentRequestError,
   answerAgentPrompt,
@@ -45,10 +46,22 @@ export function PromptCard({
   const bodyId = useId()
   const answerable =
     !readOnly && prompt.kind !== 'unsupported' && !!prompt.promptId
+  const multi = prompt.kind === 'multiselect'
 
-  const answer = async (choice: number | 'cancel') => {
+  // The button pressed is disabled while the answer is sent, which drops
+  // its focus: give it back, so ticking several options of a multiSelect
+  // tab from the keyboard or a screen reader does not restart each time.
+  const pressed = useRef<HTMLElement | null>(null)
+  useEffect(() => {
+    if (!busy && pressed.current?.isConnected) pressed.current.focus()
+    if (!busy) pressed.current = null
+  }, [busy])
+
+  const answer = async (choice: AgentChoice) => {
     /* v8 ignore next */
     if (!prompt.promptId) return
+    // Any focused element can take the focus back (SVG ones too)
+    pressed.current = document.activeElement as HTMLElement | null
     setBusy(true)
     setNotice(null)
     try {
@@ -59,6 +72,12 @@ export function PromptCard({
     } catch (err) {
       if (err instanceof AgentRequestError && err.code === 'prompt_changed') {
         setNotice('The screen changed; check the dialog again.')
+        onChanged(err.prompt ?? null)
+      } else if (
+        err instanceof AgentRequestError &&
+        err.code === 'step_not_confirmed'
+      ) {
+        setNotice('That tab did not open; check the dialog.')
         onChanged(err.prompt ?? null)
       } else if (
         err instanceof AgentRequestError &&
@@ -97,19 +116,25 @@ export function PromptCard({
               // biome-ignore lint/suspicious/noArrayIndexKey: tabs can share a header
               key={i}
               aria-current={s.current ? 'step' : undefined}
-              className={`rounded-full border px-2 py-0.5 text-[12px] ${
-                s.current
-                  ? 'border-accent text-fg'
-                  : 'border-border text-fg-muted'
-              }`}
+              className="flex"
             >
-              {s.answered && (
-                <span aria-hidden="true" className="mr-1">
-                  ✓
+              {answerable && !s.current ? (
+                // Another tab: the server moves there one arrow at a time
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => answer({ step: i })}
+                  className={`${STEP} border-border text-fg-muted hover:text-fg disabled:opacity-50`}
+                >
+                  <StepLabel step={s} />
+                </button>
+              ) : (
+                <span
+                  className={`${STEP} ${s.current ? 'border-accent text-fg' : 'border-border text-fg-muted'}`}
+                >
+                  <StepLabel step={s} />
                 </span>
               )}
-              {s.label}
-              {s.answered && <span className="sr-only"> (answered)</span>}
             </li>
           ))}
         </ol>
@@ -139,10 +164,17 @@ export function PromptCard({
               variant={REFUSING.test(o.label) ? 'danger' : 'secondary'}
               disabled={busy}
               onClick={() => answer(o.index)}
+              // On a multiSelect tab a digit toggles the option
+              aria-pressed={multi && !isChat(o.label) ? !!o.checked : undefined}
               size="grow"
               className="justify-start text-left"
             >
               <span className="shrink-0 text-fg-subtle">{o.index}.</span>
+              {multi && !isChat(o.label) && (
+                <span aria-hidden="true" className="shrink-0">
+                  {o.checked ? '☑' : '☐'}
+                </span>
+              )}
               <span className="min-w-0">
                 {o.label}
                 {o.detail && (
@@ -153,6 +185,15 @@ export function PromptCard({
               </span>
             </Button>
           ))}
+          {multi && (
+            <Button
+              variant="primary"
+              disabled={busy}
+              onClick={() => answer('next')}
+            >
+              Next
+            </Button>
+          )}
           <div className="flex gap-2">
             <Button
               variant="ghost"
@@ -186,6 +227,32 @@ export function PromptCard({
     <div role="alertdialog" {...label}>
       {content}
     </div>
+  )
+}
+
+// A step of a question in several parts; tall enough to tap (24px)
+const STEP =
+  'inline-flex min-h-6 items-center rounded-full border px-2.5 py-1 text-[12px]'
+
+// "Chat about this" ends the questions, on a multiSelect tab as well
+const isChat = (label: string) => label === 'Chat about this'
+
+function StepLabel({ step }: { step: NonNullable<AgentPrompt['steps']>[0] }) {
+  return (
+    <>
+      {step.answered && (
+        <span aria-hidden="true" className="mr-1">
+          ✓
+        </span>
+      )}
+      {step.label}
+      {step.answered && (
+        <>
+          {' '}
+          <span className="sr-only">(answered)</span>
+        </>
+      )}
+    </>
   )
 }
 

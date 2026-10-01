@@ -129,12 +129,39 @@ test.describe('chat view', () => {
     await expect(conversation).toContainText('Ordered: a small coffee.')
     await expect(review).toBeHidden()
 
-    // A multiSelect question is shown read-only, with the way to the terminal
+    // Tabs are reached from the steps; a multiSelect tab toggles and moves on
+    await composer.fill('choose extras')
+    await send.click()
+    const sizeTab = page.getByRole('alertdialog', { name: 'What size would you prefer?' })
+    await sizeTab
+      .getByRole('list', { name: 'Questions' })
+      .getByRole('button', { name: 'Extras' })
+      .click()
+    const extras = page.getByRole('alertdialog', { name: 'Which extras would you like?' })
+    const milk = extras.getByRole('button', { name: /^2\.\s*Milk/ })
+    await expect(milk).toHaveAttribute('aria-pressed', 'false')
+    await milk.click()
+    await expect(milk).toHaveAttribute('aria-pressed', 'true')
+    await extras.getByRole('button', { name: 'Next', exact: true }).click()
+    const drinkTab = page.getByRole('alertdialog', { name: 'What would you like to drink?' })
+    await expect(drinkTab.getByRole('list', { name: 'Questions' })).toContainText('Extras (answered)')
+    await drinkTab
+      .getByRole('list', { name: 'Questions' })
+      .getByRole('button', { name: 'Submit' })
+      .click()
+    const partial = page.getByRole('alertdialog', { name: 'Review your answers' })
+    await expect(partial).toContainText('You have not answered all questions')
+    await partial.getByRole('button', { name: /^1\.\s*Submit answers/ }).click()
+    await expect(conversation).toContainText('Ordered extras: milk.')
+
+    // A single multiSelect question has toggles too, and the way to the terminal
     await composer.fill('pick toppings')
     await send.click()
     const question = page.getByRole('alertdialog', { name: 'Which toppings do you want?' })
-    await expect(question).toContainText('Answer this dialog in the terminal.')
-    await expect(question.getByRole('button', { name: /^1\./ })).toHaveCount(0)
+    await expect(question.getByRole('button', { name: /^1\.\s*Cheese/ })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
     await question.getByRole('button', { name: 'Open terminal' }).click()
     await expect(
       page
