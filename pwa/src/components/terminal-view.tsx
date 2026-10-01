@@ -143,6 +143,11 @@ export function terminalTheme(theme: 'light' | 'dark') {
 // Smallest font a server-sized pane is shrunk to; beyond that it scrolls.
 export const MIN_FONT_SIZE = 6
 
+// Quiet time before a resized container is fitted again. An animated resize
+// (the sidebar opening) changes the size at every frame; fitting each one
+// would redraw the terminal and resize the pane on the server every frame.
+export const RESIZE_SETTLE_MS = 100
+
 // Replies xterm.js generates for terminal queries: device attributes
 // (CSI ? … c, CSI > … c), cursor position (CSI row;col R) and focus
 // reports (CSI I, CSI O). herdr answers queries itself, so any such reply
@@ -535,9 +540,14 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
           }
         }),
       ]
-      const observer = new ResizeObserver(() => layout())
+      let settle: ReturnType<typeof setTimeout> | undefined
+      const observer = new ResizeObserver(() => {
+        clearTimeout(settle)
+        settle = setTimeout(layout, RESIZE_SETTLE_MS)
+      })
       observer.observe(container)
       return () => {
+        clearTimeout(settle)
         observer.disconnect()
         for (const s of subs) s.dispose()
         term.dispose()
