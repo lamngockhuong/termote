@@ -2380,6 +2380,29 @@ describe('App views, view-only and deep links', () => {
     expect(screen.queryByTestId('chat-panel')).toBeNull()
   })
 
+  it('herdr: the pane size is driven only while the terminal shows', async () => {
+    const base = mockUseLocalSessions()
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      mux: { ...base.mux, caps: { ...base.mux.caps, driveSize: true } },
+    } as any)
+    const settings = mockUseSettings()
+    mockUseSettings.mockReturnValue({
+      ...settings,
+      settings: { ...settings.settings, driveTerminalSize: true },
+    } as any)
+    const driving = () =>
+      (vi.mocked(TerminalView).mock.lastCall![0] as { driveSize: boolean })
+        .driveSize
+    render(<App views={VIEWS} />)
+    await screen.findByTestId('terminal-view')
+    expect(driving()).toBe(true)
+    fireEvent.click(await screen.findByRole('tab', { name: 'Chat' }))
+    expect(driving()).toBe(false)
+    fireEvent.click(screen.getByRole('tab', { name: 'Terminal' }))
+    expect(driving()).toBe(true)
+  })
+
   it('a view can switch back to the terminal; tmux reselects the window first', async () => {
     mockSessions({ backend: 'tmux' })
     render(<App views={VIEWS} />)
