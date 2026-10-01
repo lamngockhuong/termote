@@ -44,7 +44,7 @@ type fakeHerdr struct {
 	sendDelay bool
 	hang      bool
 	snapDelay time.Duration // session.snapshot replies this late, with the state from before
-	failCode  string        // next tab.* call fails with this error code
+	failCode  string        // next tab.* or pane.close call fails with this error code
 	subs      []net.Conn
 	scroll    int // pane.get offset_from_bottom; pane.scroll sets it, clamped to scrollMax
 	scrollMax int
@@ -140,7 +140,7 @@ func (f *fakeHerdr) handle(c net.Conn) {
 	f.calls[req.Method]++
 	f.params[req.Method] = append(f.params[req.Method], req.Params)
 	hang, failCode := f.hang, f.failCode
-	if strings.HasPrefix(req.Method, "tab.") {
+	if strings.HasPrefix(req.Method, "tab.") || req.Method == "pane.close" {
 		f.failCode = ""
 	}
 	f.mu.Unlock()
@@ -182,12 +182,12 @@ func (f *fakeHerdr) handle(c net.Conn) {
 		f.mu.Lock()
 		f.subs = append(f.subs, c)
 		f.mu.Unlock()
-	case "tab.create", "tab.rename", "tab.close":
+	case "tab.create", "tab.rename", "tab.close", "pane.close":
 		if failCode != "" {
 			fail(failCode)
 			return
 		}
-		if req.Method == "tab.close" {
+		if req.Method == "tab.close" || req.Method == "pane.close" {
 			reply(map[string]string{"type": "ok"})
 			return
 		}
@@ -569,6 +569,12 @@ func TestHerdrTabOps(t *testing.T) {
 	if err := m.CloseTab(ctx, "wR:t3"); err != nil {
 		t.Errorf("CloseTab: %v", err)
 	}
+	if err := m.ClosePane(ctx, "wR:p3"); err != nil {
+		t.Errorf("ClosePane: %v", err)
+	}
+	if p := f.lastParams(t, "pane.close"); p["pane_id"] != "wR:p3" {
+		t.Errorf("pane.close params = %v", p)
+	}
 
 	var ie inputError
 	bad := []struct {
@@ -582,6 +588,9 @@ func TestHerdrTabOps(t *testing.T) {
 		{"close pane id", m.CloseTab(ctx, "wR:p3")},
 		{"close unknown", m.CloseTab(ctx, "wR:tZZ")},
 		{"rename empty", m.RenameTab(ctx, "wR:t3", "")},
+		{"close pane bad id", m.ClosePane(ctx, "--help")},
+		{"close pane tab id", m.ClosePane(ctx, "wR:t3")},
+		{"close pane unknown", m.ClosePane(ctx, "wR:pZZ")},
 		{"send keys bad pane", m.SendKeys(ctx, "wR:p3 x", "a")},
 		{"send keys unknown pane", m.SendKeys(ctx, "wR:pZZ", "a")},
 	}
@@ -595,6 +604,10 @@ func TestHerdrTabOps(t *testing.T) {
 	f.failCode = "tab_not_found"
 	if err := m.CloseTab(ctx, "wR:tK"); !errors.As(err, &ie) {
 		t.Errorf("tab_not_found = %v, want inputError", err)
+	}
+	f.failCode = "pane_not_found"
+	if err := m.ClosePane(ctx, "wR:p3"); !errors.As(err, &ie) {
+		t.Errorf("pane_not_found = %v, want inputError", err)
 	}
 
 	if err := m.SelectTab(ctx, "wR:t3"); !errors.Is(err, errUnsupported) {

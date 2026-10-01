@@ -8,6 +8,7 @@ import {
   worstAgentStatus,
 } from '../types/session'
 import {
+  closePane,
   closeTab,
   createTab,
   fetchSnapshot,
@@ -374,6 +375,19 @@ export function useLocalSessions(pollInterval = 5) {
     [sessions, refreshSessions],
   )
 
+  // Close a pane of the current tab, never its last one (that is closing the
+  // tab). A closed pane on screen gives way to the tab's own on refresh.
+  const removePane = useCallback(
+    async (paneId: string) => {
+      const panes = activeSession?.panes ?? []
+      if (panes.length < 2 || !panes.some((p) => p.id === paneId)) return
+      /* v8 ignore next */
+      await closePane(paneId).catch(() => {})
+      await refreshSessions()
+    },
+    [activeSession?.panes, refreshSessions],
+  )
+
   const updateSession = useCallback(
     async (sessionId: string, updates: Partial<Omit<Session, 'id'>>) => {
       const session = sessions.find((s) => s.id === sessionId)
@@ -425,6 +439,7 @@ export function useLocalSessions(pollInterval = 5) {
     selectPane,
     addSession,
     removeSession,
+    removePane,
     updateSession,
     isReady,
     isServerReachable,

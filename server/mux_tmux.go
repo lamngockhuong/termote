@@ -236,6 +236,10 @@ func (tmuxMux) RenameTab(ctx context.Context, tabID, name string) error {
 	return tmuxCmd(ctx, "rename-window", "-t", qualifyTarget(tabID), name).Run()
 }
 
+// ClosePane is not offered: a tab here is one window shown as one pane, and
+// it is closed as a tab.
+func (tmuxMux) ClosePane(context.Context, string) error { return errUnsupported }
+
 // Scroll is not offered: tmux history is scrolled in copy mode.
 func (tmuxMux) Scroll(context.Context, string, int) error { return errUnsupported }
 

@@ -97,7 +97,9 @@ It changes the session model in two ways:
 
 - **Panes**: a Herdr tab can have more than one pane. When it does, a **pane strip** appears
   below the tab bar to switch between them; a tmux tab never shows this strip (it never has
-  more than one pane).
+  more than one pane). To close a pane, click the X next to its name (shown on the streamed pane,
+  and on the others on hover or on touch screens), then confirm with "Close pane". The other panes
+  of the tab stay open; a tab's last pane is closed by closing the tab.
 - **Agent status badges**: each pane can show a small icon — idle, working, blocked, or done —
   reflecting the coding agent Herdr detected in that pane. Badges refresh at most once per the
   configured **Session poll interval** (Settings → Sessions), not instantly.
@@ -153,6 +155,7 @@ Sessions are managed via termote's `/api/mux/*` endpoints:
 | `/api/mux/tabs/{id}/select`     | POST        | Switch tab (or, for Herdr, the streamed pane) |
 | `/api/mux/tabs/{id}`            | PATCH       | Rename tab (body: `{name}`) |
 | `/api/mux/tabs/{id}`            | DELETE      | Remove tab       |
+| `/api/mux/panes/{id}`           | DELETE      | Close a pane (Herdr only, else 501) |
 
 ## Troubleshooting
 

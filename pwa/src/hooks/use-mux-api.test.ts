@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AgentRequestError,
   answerAgentPrompt,
+  closePane,
   closeTab,
   createTab,
   fetchAgentPrompt,
@@ -105,6 +106,14 @@ describe('mux API client', () => {
     const { calls } = mockFetch({ body: { ok: true } })
     expect(await closeTab('2')).toBe(true)
     expect(calls[0].url).toBe('/api/mux/tabs/2')
+    expect(calls[0].init?.method).toBe('DELETE')
+    expect(calls[0].init?.headers).toEqual(JSON_HEADERS)
+  })
+
+  it('closePane sends JSON DELETE to the encoded pane', async () => {
+    const { calls } = mockFetch({ body: { ok: true } })
+    expect(await closePane('w1:p2')).toBe(true)
+    expect(calls[0].url).toBe('/api/mux/panes/w1%3Ap2')
     expect(calls[0].init?.method).toBe('DELETE')
     expect(calls[0].init?.headers).toEqual(JSON_HEADERS)
   })

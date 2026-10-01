@@ -153,6 +153,12 @@ func TestTmuxMuxCaps(t *testing.T) {
 
 // Invalid input must be rejected before any tmux process is started, so these
 // cases run without tmux installed.
+func TestTmuxClosePaneUnsupported(t *testing.T) {
+	if err := (tmuxMux{}).ClosePane(context.Background(), "0"); !errors.Is(err, errUnsupported) {
+		t.Errorf("ClosePane = %v, want errUnsupported", err)
+	}
+}
+
 func TestTmuxMuxRejectsInvalidInput(t *testing.T) {
 	m := tmuxMux{}
 	ctx := context.Background()

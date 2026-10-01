@@ -6,6 +6,7 @@ const {
   mockFetchTabs,
   mockCreateTab,
   mockCloseTab,
+  mockClosePane,
   mockRenameTab,
   mockSelectTab,
   mockSnapshot,
@@ -15,6 +16,7 @@ const {
   mockFetchTabs: vi.fn(),
   mockCreateTab: vi.fn(),
   mockCloseTab: vi.fn(),
+  mockClosePane: vi.fn(),
   mockRenameTab: vi.fn(),
   mockSelectTab: vi.fn(),
 }))
@@ -29,6 +31,7 @@ vi.mock('./use-mux-api', () => ({
   }),
   createTab: mockCreateTab,
   closeTab: mockCloseTab,
+  closePane: mockClosePane,
   renameTab: mockRenameTab,
   selectTab: mockSelectTab,
 }))
@@ -219,6 +222,14 @@ describe('useLocalSessions', () => {
     })
     expect(mockCloseTab).toHaveBeenCalledWith('1')
     expect(result.current.sessions).toHaveLength(1)
+  })
+
+  it('removePane does nothing before the first snapshot', async () => {
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {
+      await result.current.removePane('0')
+    })
+    expect(mockClosePane).not.toHaveBeenCalled()
   })
 
   it('removeSession does nothing when only one session', async () => {
@@ -719,6 +730,36 @@ describe('useLocalSessions with herdr', () => {
       await result.current.refreshSessions()
     })
     expect(result.current.activeSession.paneId).toBe('w1:p2')
+  })
+
+  it('removePane closes a pane of the tab and falls back to the tab pane', async () => {
+    mockClosePane.mockResolvedValue(true)
+    const { result } = await render()
+    act(() => result.current.selectPane('w1:p3'))
+    // The server no longer lists the closed pane
+    const snap = herdr()
+    snap.groups[0].tabs[0].panes.splice(2, 1)
+    mockSnapshot.extra = snap
+    await act(async () => {
+      await result.current.removePane('w1:p3')
+    })
+    expect(mockClosePane).toHaveBeenCalledWith('w1:p3')
+    expect(result.current.activeSession.paneId).toBe('w1:p1')
+    expect(result.current.activeSession.panes).toHaveLength(3)
+  })
+
+  it('removePane ignores a pane outside the tab or its last pane', async () => {
+    const { result } = await render()
+    await act(async () => {
+      await result.current.removePane('w2:p1')
+    })
+    await act(async () => {
+      await result.current.switchSession('w1:t2')
+    })
+    await act(async () => {
+      await result.current.removePane('w1:p5')
+    })
+    expect(mockClosePane).not.toHaveBeenCalled()
   })
 
   it('selectPane ignores a pane outside the tab', async () => {

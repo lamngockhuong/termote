@@ -97,7 +97,9 @@ tmux. Mô hình phiên khi đó khác ở hai điểm:
 
 - **Pane**: một tab của Herdr có thể có nhiều pane. Khi đó, một **dải pane** xuất hiện bên dưới
   thanh tab để chuyển qua lại giữa các pane; tab tmux không bao giờ hiện dải này (vì chỉ có một
-  pane).
+  pane). Muốn đóng một pane, bấm dấu X cạnh tên pane (luôn hiện ở pane đang nhận luồng; các pane
+  khác hiện khi rê chuột qua hoặc trên màn hình cảm ứng), rồi xác nhận bằng "Close pane". Các pane
+  còn lại của tab vẫn mở; pane cuối cùng chỉ đóng được bằng cách đóng cả tab.
 - **Huy hiệu trạng thái agent**: mỗi pane có thể hiện một icon nhỏ (`idle`, `working`, `blocked`
   hoặc `done`) cho biết trạng thái của agent lập trình mà Herdr phát hiện trong pane đó. Huy hiệu
   được làm mới tối đa một lần trong mỗi khoảng `Session poll interval` đã cấu hình (Settings →
@@ -154,6 +156,7 @@ Phiên được quản lý qua các endpoint `/api/mux/*` của termote:
 | `/api/mux/tabs/{id}/select` | POST   | Chuyển tab (với Herdr là chuyển pane đang nhận luồng) |
 | `/api/mux/tabs/{id}`        | PATCH  | Đổi tên tab (nội dung gửi: `{name}`)                     |
 | `/api/mux/tabs/{id}`        | DELETE | Xóa tab                                          |
+| `/api/mux/panes/{id}`       | DELETE | Đóng một pane (chỉ Herdr, backend khác trả 501)  |
 
 ## Xử lý sự cố
 
