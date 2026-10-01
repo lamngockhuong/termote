@@ -274,14 +274,17 @@ vi.mock('./components/session-sidebar', () => ({
     isMobile,
     isOpen,
     onFilterChange,
+    onRemove,
   }: {
     onSelect?: (id: string) => void
     onClose?: () => void
     isMobile?: boolean
     isOpen?: boolean
     onFilterChange?: (filter: string) => void
+    onRemove?: (id: string) => void
   }) => (
     <div data-testid="session-sidebar" data-open={String(!!isOpen)}>
+      {onRemove && <button onClick={() => onRemove('1')}>SBRemove</button>}
       {onFilterChange && (
         <button onClick={() => onFilterChange('needs-you')}>
           FilterNeedsYou
@@ -441,6 +444,30 @@ vi.mock('./components/command-history-dropdown', () => ({
   ),
 }))
 
+vi.mock('./components/ui/confirm-dialog', () => ({
+  ConfirmDialog: ({
+    isOpen,
+    title,
+    children,
+    onConfirm,
+    onCancel,
+  }: {
+    isOpen: boolean
+    title: React.ReactNode
+    children: React.ReactNode
+    onConfirm: () => void
+    onCancel: () => void
+  }) =>
+    isOpen ? (
+      <div data-testid="confirm-dialog">
+        <h2>{title}</h2>
+        {children}
+        <button onClick={onConfirm}>ConfirmYes</button>
+        <button onClick={onCancel}>ConfirmNo</button>
+      </div>
+    ) : null,
+}))
+
 vi.mock('./components/session-tabs', () => ({
   SessionTabs: ({
     sessions,
@@ -598,6 +625,30 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.queryByTestId('toast')).not.toBeInTheDocument()
     })
+  })
+
+  it('asks before closing a session, and closes it on confirm', async () => {
+    render(<App />)
+    await waitFor(() => screen.getByRole('button', { name: 'SBRemove' }))
+    fireEvent.click(screen.getByRole('button', { name: 'SBRemove' }))
+    const dialog = screen.getByTestId('confirm-dialog')
+    expect(dialog).toHaveTextContent('Close session?')
+    expect(dialog).toHaveTextContent('Shell')
+    const { removeSession } = mockUseLocalSessions.mock.results[0].value
+    expect(removeSession).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'ConfirmYes' }))
+    expect(removeSession).toHaveBeenCalledWith('1')
+    expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument()
+  })
+
+  it('cancelling the confirmation keeps the session', async () => {
+    render(<App />)
+    await waitFor(() => screen.getByRole('button', { name: 'SBRemove' }))
+    fireEvent.click(screen.getByRole('button', { name: 'SBRemove' }))
+    fireEvent.click(screen.getByRole('button', { name: 'ConfirmNo' }))
+    const { removeSession } = mockUseLocalSessions.mock.results[0].value
+    expect(removeSession).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument()
   })
 
   it('opens about modal', async () => {

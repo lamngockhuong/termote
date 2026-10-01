@@ -29,6 +29,7 @@ import { SettingsModal } from './components/settings-modal'
 import { type TerminalHandle, TerminalView } from './components/terminal-view'
 import { Toast, type ToastVariant } from './components/toast'
 import { Banner } from './components/ui/banner'
+import { ConfirmDialog } from './components/ui/confirm-dialog'
 import { useTheme } from './contexts/theme-context'
 import { useCommandHistory } from './hooks/use-command-history'
 import { useFontSize } from './hooks/use-font-size'
@@ -160,6 +161,16 @@ export default function App({
     mux,
   } = useLocalSessions(settings.pollInterval)
   const copyModeSupported = mux.caps.copyMode
+  // Closing a tab ends whatever runs in it, so every way to close one (tab
+  // bar, sidebar, swipe, Delete key) asks first.
+  const [pendingRemoveId, setPendingRemoveId] = useState<string | null>(null)
+  const pendingRemove = sessions.find((s) => s.id === pendingRemoveId)
+  const cancelRemove = useCallback(() => setPendingRemoveId(null), [])
+  const confirmRemove = useCallback(() => {
+    // Only reachable from the open dialog, which needs a pending id
+    removeSession(pendingRemoveId!)
+    setPendingRemoveId(null)
+  }, [pendingRemoveId, removeSession])
   const isHerdr = mux.backend === 'herdr'
   // Tab bars show the current group only; the sidebar shows every group.
   const groupSessions = useMemo(
@@ -558,7 +569,7 @@ export default function App({
             activeId={activeSession.id}
             onSelect={switchSession}
             onAdd={addSession}
-            onRemove={removeSession}
+            onRemove={setPendingRemoveId}
             onUpdate={updateSession}
             isCollapsed={sidebarCollapsed}
             onToggleCollapse={toggleSidebarCollapsed}
@@ -576,7 +587,7 @@ export default function App({
             activeId={activeSession.id}
             onSelect={handleMobileSelect}
             onAdd={addSession}
-            onRemove={removeSession}
+            onRemove={setPendingRemoveId}
             onUpdate={updateSession}
             isOpen={sidebarOpen}
             onClose={() => setSidebarOpen(false)}
@@ -598,7 +609,7 @@ export default function App({
             canRemoveTab={sessions.length > 1}
             onSelectTab={switchSession}
             onAddTab={() => addSession('New')}
-            onRemoveTab={removeSession}
+            onRemoveTab={setPendingRemoveId}
             connectionState={connectionState}
             onRetry={() => terminalRef.current?.reconnect()}
             sessionsOpen={sidebarOpen}
@@ -764,6 +775,19 @@ export default function App({
       )}
 
       {/* Modals */}
+      <ConfirmDialog
+        isOpen={!!pendingRemove}
+        title="Close session?"
+        confirmLabel="Close session"
+        destructive
+        onConfirm={confirmRemove}
+        onCancel={cancelRemove}
+      >
+        <p className="m-0">
+          <span className="font-medium text-fg">{pendingRemove?.name}</span>{' '}
+          will be closed, along with anything still running in it.
+        </p>
+      </ConfirmDialog>
       <AboutModal isOpen={aboutOpen} onClose={() => setAboutOpen(false)} />
       <HelpModal
         isOpen={helpOpen}
