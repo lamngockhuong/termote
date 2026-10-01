@@ -600,6 +600,15 @@ func (m *herdrMux) RenameTab(ctx context.Context, tabID, name string) error {
 	return herdrInputError(err)
 }
 
+func (m *herdrMux) ClosePane(ctx context.Context, paneID string) error {
+	if _, err := m.requirePane(ctx, paneID); err != nil {
+		return err
+	}
+	err := m.rpc.call(ctx, "pane.close", map[string]string{"pane_id": paneID}, nil)
+	m.invalidate()
+	return herdrInputError(err)
+}
+
 // SendKeys types keys as raw bytes, the same way stream input is sent, and
 // waits until herdr has accepted them.
 func (m *herdrMux) SendKeys(ctx context.Context, paneID, keys string) error {

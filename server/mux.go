@@ -36,6 +36,8 @@ type Mux interface {
 	NewTab(ctx context.Context, groupID, name string) (tabID string, err error)
 	CloseTab(ctx context.Context, tabID string) error
 	RenameTab(ctx context.Context, tabID, name string) error
+	// ClosePane closes one pane of a split tab, ending what runs in it.
+	ClosePane(ctx context.Context, paneID string) error
 	SendKeys(ctx context.Context, paneID, keys string) error
 	// Scroll moves paneID's view lines rows back into its history (negative:
 	// toward the live screen), clamped to what the pane holds.
@@ -206,6 +208,19 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore) {
 		defer cancel()
 		if err := m.SelectTab(ctx, r.PathValue("id")); err != nil {
 			muxError(w, m, "select tab", err)
+			return
+		}
+		jsonOK(w, map[string]any{"ok": true})
+	})
+
+	mux.HandleFunc("/api/mux/panes/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if !requireMethod(w, r, http.MethodDelete) {
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), muxTimeout)
+		defer cancel()
+		if err := m.ClosePane(ctx, r.PathValue("id")); err != nil {
+			muxError(w, m, "close pane", err)
 			return
 		}
 		jsonOK(w, map[string]any{"ok": true})

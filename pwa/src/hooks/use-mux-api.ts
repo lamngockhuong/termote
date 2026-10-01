@@ -97,6 +97,12 @@ export async function renameTab(id: string, name: string): Promise<boolean> {
   return data.ok === true
 }
 
+// Closes one pane of a split tab (herdr); the tab stays with its other panes.
+export async function closePane(paneId: string): Promise<boolean> {
+  const data = await write('DELETE', `/panes/${encodeURIComponent(paneId)}`)
+  return data.ok === true
+}
+
 export async function sendKeys(paneId: string, keys: string): Promise<boolean> {
   const data = await write(
     'POST',

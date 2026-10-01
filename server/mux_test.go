@@ -42,6 +42,10 @@ func (f *fakeMux) RenameTab(_ context.Context, id, name string) error {
 	f.calls = append(f.calls, "rename "+id+"="+name)
 	return f.err
 }
+func (f *fakeMux) ClosePane(_ context.Context, id string) error {
+	f.calls = append(f.calls, "close pane "+id)
+	return f.err
+}
 func (f *fakeMux) SendKeys(_ context.Context, id, keys string) error {
 	f.calls = append(f.calls, "keys "+id+"="+keys)
 	return f.err
@@ -157,6 +161,7 @@ func TestWriteRoutesCallBackend(t *testing.T) {
 		{"PATCH", "/api/mux/tabs/3", `{"name":"renamed"}`, "rename 3=renamed"},
 		{"DELETE", "/api/mux/tabs/3", "", "close 3"},
 		{"POST", "/api/mux/tabs/3/select", "", "select 3"},
+		{"DELETE", "/api/mux/panes/w1M%3Ap4", "", "close pane w1M:p4"},
 		{"POST", "/api/mux/panes/3/keys", `{"keys":"ls -la"}`, "keys 3=ls -la"},
 		{"POST", "/api/mux/panes/w1M%3Ap4/keys", `{"keys":"x"}`, "keys w1M:p4=x"},
 		{"POST", "/api/mux/panes/w1M%3Ap4/scroll", `{"lines":-5}`, "scroll w1M:p4=-5"},
@@ -202,6 +207,7 @@ func TestMuxRouteErrors(t *testing.T) {
 		{"wrong method on scroll", nil, apiRequest("GET", "/api/mux/panes/0/scroll", ""), 405, "method not allowed"},
 		{"keys too long", nil, apiRequest("POST", "/api/mux/panes/0/keys", `{"keys":"`+strings.Repeat("x", 5000)+`"}`), 400, "keys too long"},
 		{"wrong method", nil, apiRequest("GET", "/api/mux/tabs", ""), 405, "method not allowed"},
+		{"wrong method on pane", nil, apiRequest("POST", "/api/mux/panes/3", "{}"), 405, "method not allowed"},
 		{"wrong method on tab", nil, apiRequest("POST", "/api/mux/tabs/3", "{}"), 405, "method not allowed"},
 		{"old tmux route", nil, apiRequest("GET", "/api/tmux/windows", ""), 404, "not found"},
 		{"unknown api", nil, apiRequest("GET", "/api/nope", ""), 404, "not found"},

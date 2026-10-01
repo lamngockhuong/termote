@@ -32,4 +32,31 @@ describe('PaneStrip', () => {
     fireEvent.click(screen.getByRole('button', { name: 'logs' }))
     expect(onSelect).toHaveBeenCalledWith('p2')
   })
+
+  it('has no close buttons without onClose', () => {
+    render(<PaneStrip panes={PANES} activePaneId="p1" onSelect={vi.fn()} />)
+    expect(screen.queryByRole('button', { name: /^Close pane/ })).toBeNull()
+  })
+
+  it('asks to close a pane without selecting it', () => {
+    const onSelect = vi.fn()
+    const onClose = vi.fn()
+    render(
+      <PaneStrip
+        panes={PANES}
+        activePaneId="p1"
+        onSelect={onSelect}
+        onClose={onClose}
+      />,
+    )
+    const group = screen.getByRole('group', { name: 'Panes' })
+    expect(
+      within(group)
+        .getAllByRole('button', { name: /^Close pane/ })
+        .map((b) => b.getAttribute('aria-label')),
+    ).toEqual(['Close pane claude', 'Close pane logs'])
+    fireEvent.click(screen.getByRole('button', { name: 'Close pane logs' }))
+    expect(onClose).toHaveBeenCalledWith('p2')
+    expect(onSelect).not.toHaveBeenCalled()
+  })
 })

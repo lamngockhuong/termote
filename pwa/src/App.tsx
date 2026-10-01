@@ -157,6 +157,7 @@ export default function App({
     selectPane,
     addSession,
     removeSession,
+    removePane,
     updateSession,
     isReady,
     isServerReachable,
@@ -173,6 +174,15 @@ export default function App({
     removeSession(pendingRemoveId!)
     setPendingRemoveId(null)
   }, [pendingRemoveId, removeSession])
+  // Closing a pane ends what runs in it too, so it asks the same way.
+  const [pendingPaneId, setPendingPaneId] = useState<string | null>(null)
+  const pendingPane = activeSession.panes?.find((p) => p.id === pendingPaneId)
+  const cancelPaneClose = useCallback(() => setPendingPaneId(null), [])
+  const confirmPaneClose = useCallback(() => {
+    // Only reachable from the open dialog, which needs a pending id
+    removePane(pendingPaneId!)
+    setPendingPaneId(null)
+  }, [pendingPaneId, removePane])
   const isHerdr = mux.backend === 'herdr'
   // Tab bars show the current group only; the sidebar shows every group.
   const groupSessions = useMemo(
@@ -641,6 +651,7 @@ export default function App({
               panes={activeSession.panes}
               activePaneId={activeSession.paneId}
               onSelect={selectPane}
+              onClose={setPendingPaneId}
             />
           )}
           <div className="flex min-h-0 flex-1">
@@ -788,6 +799,20 @@ export default function App({
         <p className="m-0">
           <span className="font-medium text-fg">{pendingRemove?.name}</span>{' '}
           will be closed, along with anything still running in it.
+        </p>
+      </ConfirmDialog>
+      <ConfirmDialog
+        isOpen={!!pendingPane}
+        title="Close pane?"
+        confirmLabel="Close pane"
+        destructive
+        onConfirm={confirmPaneClose}
+        onCancel={cancelPaneClose}
+      >
+        <p className="m-0">
+          <span className="font-medium text-fg">{pendingPane?.label}</span> will
+          be closed, along with anything still running in it. The other panes of
+          this session stay open.
         </p>
       </ConfirmDialog>
       <AboutModal isOpen={aboutOpen} onClose={() => setAboutOpen(false)} />

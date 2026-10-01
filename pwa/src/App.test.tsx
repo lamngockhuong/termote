@@ -2131,6 +2131,7 @@ describe('App groups and panes', () => {
     { id: 'w1:t1:p2', label: 'logs', hasAgent: false },
   ]
   const selectPane = vi.fn()
+  const removePane = vi.fn()
 
   function mockMux(backend: 'tmux' | 'herdr') {
     const tabs = [
@@ -2147,6 +2148,7 @@ describe('App groups and panes', () => {
       ],
       switchSession: vi.fn(),
       selectPane,
+      removePane,
       addSession: vi.fn(),
       removeSession: vi.fn(),
       updateSession: vi.fn(),
@@ -2198,6 +2200,32 @@ describe('App groups and panes', () => {
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'logs' }))
     expect(selectPane).toHaveBeenCalledWith('w1:t1:p2')
+  })
+
+  it('herdr: asks before closing a pane, and closes it on confirm', async () => {
+    mockMux('herdr')
+    render(<App />)
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Close pane logs' }),
+    )
+    const dialog = screen.getByTestId('confirm-dialog')
+    expect(dialog).toHaveTextContent('Close pane?')
+    expect(dialog).toHaveTextContent('logs')
+    expect(removePane).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'ConfirmYes' }))
+    expect(removePane).toHaveBeenCalledWith('w1:t1:p2')
+    expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument()
+  })
+
+  it('herdr: cancelling keeps the pane', async () => {
+    mockMux('herdr')
+    render(<App />)
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Close pane claude' }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'ConfirmNo' }))
+    expect(removePane).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument()
   })
 
   it('tmux: no pane strip', async () => {

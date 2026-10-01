@@ -1,3 +1,4 @@
+import { X } from 'lucide-react'
 import type { SessionPane } from '../types/session'
 import { AgentStatusBadge } from './agent-status-badge'
 import { FOCUS_RING } from './ui/button'
@@ -6,11 +7,14 @@ interface Props {
   panes: SessionPane[]
   activePaneId?: string
   onSelect: (paneId: string) => void
+  // Asks to close a pane; without it no close button is shown.
+  onClose?: (paneId: string) => void
 }
 
 // Picks which pane of a split tab the terminal streams. Only rendered for
-// tabs with more than one pane.
-export function PaneStrip({ panes, activePaneId, onSelect }: Props) {
+// tabs with more than one pane, so closing a pane here never closes the tab.
+// Each close button is a sibling of its pane button, never nested in it.
+export function PaneStrip({ panes, activePaneId, onSelect, onClose }: Props) {
   if (panes.length < 2) return null
   return (
     <fieldset
@@ -20,20 +24,40 @@ export function PaneStrip({ panes, activePaneId, onSelect }: Props) {
       {panes.map((pane) => {
         const active = pane.id === activePaneId
         return (
-          <button
+          <div
             key={pane.id}
-            type="button"
-            aria-pressed={active}
-            onClick={() => onSelect(pane.id)}
-            className={`flex h-7 items-center gap-1.5 whitespace-nowrap px-2 text-[12px] rounded-control touch-manipulation transition-colors duration-(--duration-fast) pointer-coarse:h-touch ui-terminal:font-label ${FOCUS_RING} ${
+            className={`group flex shrink-0 items-center rounded-control transition-colors duration-(--duration-fast) ${
               active
                 ? 'bg-accent-soft text-accent'
                 : 'text-fg-muted hover:bg-surface hover:text-fg'
             }`}
           >
-            <AgentStatusBadge status={pane.agentStatus} size={12} />
-            <span className="max-w-[140px] truncate">{pane.label}</span>
-          </button>
+            <button
+              type="button"
+              aria-pressed={active}
+              onClick={() => onSelect(pane.id)}
+              className={`flex h-7 items-center gap-1.5 whitespace-nowrap px-2 text-[12px] rounded-control touch-manipulation pointer-coarse:h-touch ui-terminal:font-label ${FOCUS_RING} ${
+                onClose ? 'pr-1' : ''
+              }`}
+            >
+              <AgentStatusBadge status={pane.agentStatus} size={12} />
+              <span className="max-w-[140px] truncate">{pane.label}</span>
+            </button>
+            {onClose && (
+              <button
+                type="button"
+                onClick={() => onClose(pane.id)}
+                className={`mr-1 flex size-5 items-center justify-center rounded-[calc(var(--radius-control)-2px)] text-fg-subtle touch-manipulation hover:bg-surface hover:text-fg pointer-coarse:size-8 ${FOCUS_RING} ${
+                  active
+                    ? ''
+                    : 'invisible group-hover:visible group-focus-within:visible pointer-coarse:visible'
+                }`}
+                aria-label={`Close pane ${pane.label}`}
+              >
+                <X size={12} aria-hidden="true" />
+              </button>
+            )}
+          </div>
         )
       })}
     </fieldset>
