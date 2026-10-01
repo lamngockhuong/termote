@@ -8,18 +8,18 @@ import {
 import {
   blockContextMenu,
   blurTerminal,
+  dragTerminal,
   enterTmuxCopyMode,
   exitTmuxCopyMode,
   focusTerminal,
   isInCopyMode,
   isTerminalDisconnected,
   isTerminalReady,
+  overflowsHorizontally,
   pasteTmuxBuffer,
   pasteToTerminal,
   resetCopyModeState,
   scrollTerminal,
-  scrollTerminalHorizontal,
-  scrollTerminalVertical,
   scrollTerminalViewport,
   scrollTmux,
   sendCommandToTerminal,
@@ -789,91 +789,134 @@ describe('unblockContextMenu', () => {
   })
 })
 
-describe('scrollTerminalVertical', () => {
-  function scroller(scrollHeight: number, clientHeight: number, top: number) {
+describe('overflowsHorizontally', () => {
+  it('tells a pane wider than the screen', () => {
     const el = document.createElement('div')
-    Object.defineProperty(el, 'scrollHeight', { value: scrollHeight })
-    Object.defineProperty(el, 'clientHeight', { value: clientHeight })
-    el.scrollTop = top
-    el.scrollBy = vi.fn()
-    return el
-  }
-
-  it('scrolls a taller pane by 80% of the screen, up to its edge', () => {
-    // 1000px grid, 500px view, at the bottom (scrollTop 500)
-    const el = scroller(1000, 500, 500)
-    const handle = createMockHandle({ scroller: el })
-    expect(scrollTerminalVertical(handle, 'up')).toBe(400)
-    expect(el.scrollBy).toHaveBeenLastCalledWith({
-      top: -400,
-      behavior: 'smooth',
-    })
-    // 100px left above
-    el.scrollTop = 100
-    expect(scrollTerminalVertical(handle, 'up')).toBe(100)
-    expect(el.scrollBy).toHaveBeenLastCalledWith({
-      top: -100,
-      behavior: 'smooth',
-    })
-    expect(scrollTerminalVertical(handle, 'down')).toBe(400)
-    expect(el.scrollBy).toHaveBeenLastCalledWith({
-      top: 400,
-      behavior: 'smooth',
-    })
-  })
-
-  it('reports 0 at the edge, when nothing overflows or without a terminal', () => {
-    const bottom = scroller(1000, 500, 500)
-    expect(
-      scrollTerminalVertical(createMockHandle({ scroller: bottom }), 'down'),
-    ).toBe(0)
-    const top = scroller(1000, 500, 0)
-    expect(
-      scrollTerminalVertical(createMockHandle({ scroller: top }), 'up'),
-    ).toBe(0)
-    const fits = scroller(500, 500, 0)
-    expect(
-      scrollTerminalVertical(createMockHandle({ scroller: fits }), 'down'),
-    ).toBe(0)
-    expect(bottom.scrollBy).not.toHaveBeenCalled()
-    expect(top.scrollBy).not.toHaveBeenCalled()
-    expect(fits.scrollBy).not.toHaveBeenCalled()
-    expect(scrollTerminalVertical(createMockHandle(), 'up')).toBe(0)
-    expect(scrollTerminalVertical(null, 'up')).toBe(0)
+    Object.defineProperty(el, 'scrollWidth', { value: 550 })
+    Object.defineProperty(el, 'clientWidth', { value: 360 })
+    expect(overflowsHorizontally(createMockHandle({ scroller: el }))).toBe(true)
+    const fits = document.createElement('div')
+    expect(overflowsHorizontally(createMockHandle({ scroller: fits }))).toBe(
+      false,
+    )
+    expect(overflowsHorizontally(createMockHandle())).toBe(false)
+    expect(overflowsHorizontally(null)).toBe(false)
   })
 })
 
-describe('scrollTerminalHorizontal', () => {
-  function scroller(scrollWidth: number, clientWidth: number) {
+describe('dragTerminal', () => {
+  // A scroller whose scrollTop/scrollLeft clamp to its content, as a
+  // browser's do: a 1000x1000 grid in a 500x500 view.
+  function scroller(top: number, left = 0) {
     const el = document.createElement('div')
-    Object.defineProperty(el, 'scrollWidth', { value: scrollWidth })
-    Object.defineProperty(el, 'clientWidth', { value: clientWidth })
-    el.scrollBy = vi.fn()
+    Object.defineProperty(el, 'scrollHeight', { value: 1000 })
+    Object.defineProperty(el, 'clientHeight', { value: 500 })
+    let t = top
+    let l = left
+    Object.defineProperty(el, 'scrollTop', {
+      get: () => t,
+      set: (v: number) => {
+        t = Math.max(0, Math.min(500, v))
+      },
+    })
+    Object.defineProperty(el, 'scrollLeft', {
+      get: () => l,
+      set: (v: number) => {
+        l = Math.max(0, Math.min(500, v))
+      },
+    })
     return el
   }
 
-  it('scrolls a wider pane by 80% of the screen width', () => {
-    const el = scroller(550, 360)
+  it('moves a larger pane with the finger, up to its edges', () => {
+    const el = scroller(500, 200)
     const handle = createMockHandle({ scroller: el })
-    expect(scrollTerminalHorizontal(handle, 'right')).toBe(true)
-    expect(el.scrollBy).toHaveBeenLastCalledWith({
-      left: 288,
-      behavior: 'smooth',
-    })
-    expect(scrollTerminalHorizontal(handle, 'left')).toBe(true)
-    expect(el.scrollBy).toHaveBeenLastCalledWith({
-      left: -288,
-      behavior: 'smooth',
-    })
+    // Finger right and down: the view goes left and up
+    dragTerminal(handle, 30, 40, true)
+    expect(el.scrollLeft).toBe(170)
+    expect(el.scrollTop).toBe(460)
+    expect(handle.scrollHistory).not.toHaveBeenCalled()
+    expect(handle.term!.scrollLines).not.toHaveBeenCalled()
   })
 
-  it('reports false when nothing overflows or there is no terminal', () => {
-    const el = scroller(360, 360)
-    expect(
-      scrollTerminalHorizontal(createMockHandle({ scroller: el }), 'right'),
-    ).toBe(false)
-    expect(el.scrollBy).not.toHaveBeenCalled()
-    expect(scrollTerminalHorizontal(createMockHandle(), 'left')).toBe(false)
-    expect(scrollTerminalHorizontal(null, 'left')).toBe(false)
+  it('scrolls the history with what the pane could not take', () => {
+    // At the top; 14px font: 16.8px rows
+    const el = scroller(10)
+    const handle = createMockHandle({
+      scroller: el,
+      scrollHistory: vi.fn(() => true),
+    })
+    // 10px moves the pane, 33.6px is two rows back
+    dragTerminal(handle, 0, 43.6, true)
+    expect(el.scrollTop).toBe(0)
+    expect(handle.scrollHistory).toHaveBeenLastCalledWith(2)
+    // Under a row is kept for the next drag
+    dragTerminal(handle, 0, 10, true)
+    expect(handle.scrollHistory).toHaveBeenCalledTimes(1)
+    dragTerminal(handle, 0, 10, true)
+    expect(handle.scrollHistory).toHaveBeenLastCalledWith(1)
+    // Up at the bottom: toward the live screen
+    const bottom = scroller(500)
+    const h2 = createMockHandle({
+      scroller: bottom,
+      scrollHistory: vi.fn(() => true),
+    })
+    dragTerminal(h2, 0, -16.8, true)
+    expect(h2.scrollHistory).toHaveBeenLastCalledWith(-1)
+  })
+
+  it('keeps the history still while the pane is between its edges', () => {
+    // A browser rounding scrollTop leaves a fraction of the drag over
+    const el = document.createElement('div')
+    Object.defineProperty(el, 'scrollHeight', { value: 1000 })
+    Object.defineProperty(el, 'clientHeight', { value: 500 })
+    let t = 200
+    Object.defineProperty(el, 'scrollTop', {
+      get: () => t,
+      set: (v: number) => {
+        t = Math.round(v)
+      },
+    })
+    const handle = createMockHandle({
+      scroller: el,
+      scrollHistory: vi.fn(() => true),
+    })
+    for (let i = 0; i < 60; i++) dragTerminal(handle, 0, 0.4, true)
+    expect(handle.scrollHistory).not.toHaveBeenCalled()
+    // A drag up at the top edge does not scroll the history either
+    const top = createMockHandle({
+      scroller: scroller(0),
+      scrollHistory: vi.fn(() => true),
+    })
+    dragTerminal(top, 0, -40, true)
+    expect(top.scroller!.scrollTop).toBe(40)
+    expect(top.scrollHistory).not.toHaveBeenCalled()
+  })
+
+  it('falls back to the xterm.js scrollback', () => {
+    const handle = createMockHandle({ scroller: scroller(0) })
+    dragTerminal(handle, 0, 33.6, true)
+    expect(handle.term!.scrollLines).toHaveBeenLastCalledWith(-2)
+    // No font set yet: rows of the default 14px
+    const noFont = createMockHandle({ scroller: scroller(0) })
+    noFont.term!.options.fontSize = undefined
+    dragTerminal(noFont, 0, 16.8, true)
+    expect(noFont.term!.scrollLines).toHaveBeenLastCalledWith(-1)
+  })
+
+  it('leaves the history alone when asked, and without a terminal', () => {
+    const handle = createMockHandle({ scroller: scroller(0) })
+    dragTerminal(handle, 0, 100, false)
+    dragTerminal(handle, 5, 0, true)
+    expect(handle.scrollHistory).not.toHaveBeenCalled()
+    expect(handle.term!.scrollLines).not.toHaveBeenCalled()
+    dragTerminal(
+      createMockHandle({ term: null, scroller: scroller(0) }),
+      0,
+      50,
+      true,
+    )
+    dragTerminal(createMockHandle(), 0, 50, true)
+    dragTerminal(null, 0, 50, true)
   })
 })

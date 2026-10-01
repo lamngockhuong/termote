@@ -19,11 +19,13 @@ Khi truy cập lần đầu trên di động, một **overlay hướng dẫn c�
 | ---------- | -------------- | ------------- |
 | Vuốt trái  | Hủy/ngắt       | Ctrl+C        |
 | Vuốt phải  | Tab completion | Tab           |
-| Vuốt lên   | Cuộn xuống     | -             |
-| Vuốt xuống | Cuộn lên       | -             |
+| Kéo lên    | Cuộn xuống     | -             |
+| Kéo xuống  | Cuộn lên       | -             |
 | Nhấn giữ   | Dán clipboard  | Paste         |
 | Chụm vào   | Giảm font      | -             |
 | Chụm ra    | Tăng font      | -             |
+
+Kéo lên hoặc xuống thì lịch sử chạy theo ngón tay. Vuốt nhanh rồi thả tay thì lịch sử còn trôi tiếp, chậm dần rồi dừng, hoặc dừng ngay khi bạn chạm lại màn hình. Với backend tmux, lịch sử được cuộn trong chế độ copy của tmux, mỗi lần vuốt một trang.
 
 ## Vùng cử chỉ
 
@@ -39,7 +41,7 @@ Cử chỉ bị tắt trên desktop nơi tương tác chuột được ưu tiên
 - Mặc định: 14px
 - Điều chỉnh bằng chụm hoặc nút toolbar
 
-Với backend Herdr, khi [Fit herdr pane to this device](/vi/usage/settings/) đang tắt, pane giữ khổ của desktop. Trên màn hình nhỏ hơn pane, font khi đó là mức phóng: 14 cho pane vừa màn hình, mỗi nấc tăng hoặc giảm làm chữ to hoặc nhỏ đi 1px. Pane to hơn màn hình thì vuốt để kéo: vuốt ngang để kéo sang hai bên, vuốt dọc để kéo lên xuống tới mép pane. Tới mép rồi thì vuốt dọc chuyển sang cuộn lịch sử.
+Với backend Herdr, khi [Fit herdr pane to this device](/vi/usage/settings/) đang tắt, pane giữ khổ của desktop. Trên màn hình nhỏ hơn pane, font khi đó là mức phóng: 14 cho pane vừa màn hình, mỗi nấc tăng hoặc giảm làm chữ to hoặc nhỏ đi 1px. Pane to hơn màn hình thì chạy theo ngón tay: sang hai bên, và lên xuống tới mép pane. Tới mép rồi thì kéo tiếp sẽ cuộn lịch sử.
 
 ## Dán từ Clipboard
 

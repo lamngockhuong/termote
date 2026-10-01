@@ -47,7 +47,7 @@ describe('GestureHintsOverlay', () => {
     render(<GestureHintsOverlay isOpen={true} onDismiss={vi.fn()} />)
     expect(screen.getByText('Swipe Left')).toBeInTheDocument()
     expect(screen.getByText('Swipe Right')).toBeInTheDocument()
-    expect(screen.getByText('Swipe Up/Down')).toBeInTheDocument()
+    expect(screen.getByText('Drag Up/Down')).toBeInTheDocument()
     expect(screen.getByText('Long Press')).toBeInTheDocument()
     expect(screen.getByText('Pinch In/Out')).toBeInTheDocument()
   })

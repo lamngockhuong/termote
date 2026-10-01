@@ -143,6 +143,8 @@ const bridge = vi.hoisted(() => ({
   setTerminalFontFamily: vi.fn(),
   setTerminalFontSize: vi.fn(),
   setTerminalTheme: vi.fn(),
+  terminalRowHeight: (term: { options: { fontSize?: number } }) =>
+    (term.options.fontSize ?? 14) * 1.2,
 }))
 vi.mock('../utils/terminal-bridge', () => bridge)
 

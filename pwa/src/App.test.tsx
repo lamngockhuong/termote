@@ -134,8 +134,8 @@ const mockIsInCopyMode = vi.fn(() => false)
 const mockIsTerminalDisconnected = vi.fn(() => false)
 const mockScrollTmux = vi.fn()
 const mockScrollTerminal = vi.fn()
-const mockScrollTerminalHorizontal = vi.fn(() => false)
-const mockScrollTerminalVertical = vi.fn(() => 0)
+const mockOverflowsHorizontally = vi.fn(() => false)
+const mockDragTerminal = vi.fn()
 const mockToggleTmuxCopyMode = vi.fn()
 const mockPasteTmuxBuffer = vi.fn()
 const mockFocusTerminal = vi.fn()
@@ -161,11 +161,10 @@ vi.mock('./utils/terminal-bridge', () => ({
 
   scrollTerminal: (...args: any[]) => mockScrollTerminal(...args),
 
-  scrollTerminalHorizontal: (...args: any[]) =>
-    (mockScrollTerminalHorizontal as (...a: any[]) => unknown)(...args),
+  overflowsHorizontally: (...args: any[]) =>
+    (mockOverflowsHorizontally as (...a: any[]) => unknown)(...args),
 
-  scrollTerminalVertical: (...args: any[]) =>
-    (mockScrollTerminalVertical as (...a: any[]) => unknown)(...args),
+  dragTerminal: (...args: any[]) => mockDragTerminal(...args),
 
   toggleTmuxCopyMode: (...args: any[]) => mockToggleTmuxCopyMode(...args),
 
@@ -1200,19 +1199,18 @@ describe('App', () => {
         caps: { clientSideSelect: true, copyMode: false },
       },
     })
-    mockScrollTerminalHorizontal.mockReturnValue(true)
+    mockOverflowsHorizontally.mockReturnValue(true)
     render(<App />)
     await waitFor(() =>
       expect(capturedGestureHandlers.onSwipeLeft).toBeDefined(),
     )
     capturedGestureHandlers.onSwipeLeft()
     capturedGestureHandlers.onSwipeRight()
-    expect(mockScrollTerminalHorizontal).toHaveBeenCalledWith(null, 'right')
-    expect(mockScrollTerminalHorizontal).toHaveBeenCalledWith(null, 'left')
+    expect(mockOverflowsHorizontally).toHaveBeenCalledWith(null)
     expect(mockSendKeyToTerminal).not.toHaveBeenCalled()
 
-    // Nothing to scroll: the keys are sent as usual
-    mockScrollTerminalHorizontal.mockReturnValue(false)
+    // Nothing to drag sideways: the keys are sent as usual
+    mockOverflowsHorizontally.mockReturnValue(false)
     capturedGestureHandlers.onSwipeLeft()
     capturedGestureHandlers.onSwipeRight()
     expect(mockSendKeyToTerminal).toHaveBeenCalledWith(null, 'c', {
@@ -1221,7 +1219,7 @@ describe('App', () => {
     expect(mockSendKeyToTerminal).toHaveBeenCalledWith(null, 'Tab')
   })
 
-  it('herdr: vertical swipes scroll a tall pane first, then the history', async () => {
+  it('herdr: a drag moves the pane both ways, then the history', async () => {
     const base = mockUseLocalSessions()
     mockUseLocalSessions.mockReturnValue({
       ...base,
@@ -1230,21 +1228,15 @@ describe('App', () => {
         caps: { clientSideSelect: true, copyMode: false },
       },
     })
-    mockScrollTerminalVertical.mockReturnValue(120)
     render(<App />)
-    await waitFor(() => expect(capturedGestureHandlers.onSwipeUp).toBeDefined())
+    await waitFor(() => expect(capturedGestureHandlers.onPan).toBeDefined())
+    capturedGestureHandlers.onPan(5, -12)
+    expect(mockDragTerminal).toHaveBeenCalledWith(null, 5, -12, true)
+    // The drag already scrolled: a swipe adds nothing
     capturedGestureHandlers.onSwipeUp()
     capturedGestureHandlers.onSwipeDown()
-    expect(mockScrollTerminalVertical).toHaveBeenCalledWith(null, 'down')
-    expect(mockScrollTerminalVertical).toHaveBeenCalledWith(null, 'up')
     expect(mockScrollTerminal).not.toHaveBeenCalled()
-
-    // At the edge: the history scrolls as usual
-    mockScrollTerminalVertical.mockReturnValue(0)
-    capturedGestureHandlers.onSwipeDown()
-    expect(mockScrollTerminal).toHaveBeenCalledWith(null, 'up')
-    capturedGestureHandlers.onSwipeUp()
-    expect(mockScrollTerminal).toHaveBeenCalledWith(null, 'down')
+    expect(mockScrollTmux).not.toHaveBeenCalled()
   })
 
   it('herdr: drives the pane size when the setting and backend allow it', async () => {
@@ -1295,24 +1287,23 @@ describe('App', () => {
     })
   })
 
-  it('tmux: vertical swipes never scroll the pane frame', async () => {
-    mockScrollTerminalVertical.mockReturnValue(120)
+  it('tmux: a drag never scrolls the history, a swipe pages it', async () => {
     render(<App />)
-    await waitFor(() => expect(capturedGestureHandlers.onSwipeUp).toBeDefined())
+    await waitFor(() => expect(capturedGestureHandlers.onPan).toBeDefined())
+    capturedGestureHandlers.onPan(5, -12)
+    expect(mockDragTerminal).toHaveBeenCalledWith(null, 0, -12, false)
     capturedGestureHandlers.onSwipeUp()
-    expect(mockScrollTerminalVertical).not.toHaveBeenCalled()
     expect(mockScrollTmux).toHaveBeenCalledWith(null, 'down')
-    mockScrollTerminalVertical.mockReturnValue(0)
   })
 
   it('tmux: swipes never scroll sideways', async () => {
-    mockScrollTerminalHorizontal.mockReturnValue(true)
+    mockOverflowsHorizontally.mockReturnValue(true)
     render(<App />)
     await waitFor(() =>
       expect(capturedGestureHandlers.onSwipeLeft).toBeDefined(),
     )
     capturedGestureHandlers.onSwipeLeft()
-    expect(mockScrollTerminalHorizontal).not.toHaveBeenCalled()
+    expect(mockOverflowsHorizontally).not.toHaveBeenCalled()
     expect(mockSendKeyToTerminal).toHaveBeenCalledWith(null, 'c', {
       ctrl: true,
     })
@@ -1398,23 +1389,23 @@ describe('App', () => {
     expect(mockScrollTmux).toHaveBeenCalledWith(null, 'up')
   })
 
-  it('gesture swipes scroll the xterm scrollback without copy mode', async () => {
+  it('without copy mode a drag scrolls the history and a swipe adds nothing', async () => {
     const base = mockUseLocalSessions()
     mockUseLocalSessions.mockReturnValue({
       ...base,
       mux: {
-        backend: 'herdr',
-        caps: { clientSideSelect: true, copyMode: false },
+        backend: 'fake',
+        caps: { clientSideSelect: false, copyMode: false },
       },
     })
     render(<App />)
-    await waitFor(() =>
-      expect(capturedGestureHandlers.onSwipeDown).toBeDefined(),
-    )
+    await waitFor(() => expect(capturedGestureHandlers.onPan).toBeDefined())
+    capturedGestureHandlers.onPan(5, 20)
+    // Not herdr: nothing to drag sideways
+    expect(mockDragTerminal).toHaveBeenCalledWith(null, 0, 20, true)
     capturedGestureHandlers.onSwipeDown()
-    expect(mockScrollTerminal).toHaveBeenCalledWith(null, 'up')
     capturedGestureHandlers.onSwipeUp()
-    expect(mockScrollTerminal).toHaveBeenCalledWith(null, 'down')
+    expect(mockScrollTerminal).not.toHaveBeenCalled()
     expect(mockScrollTmux).not.toHaveBeenCalled()
   })
 
@@ -2319,10 +2310,12 @@ describe('App views, view-only and deep links', () => {
       await capturedGestureHandlers.onLongPress()
       expect(mockSendKeyToTerminal).not.toHaveBeenCalled()
       expect(mockPasteToTerminal).not.toHaveBeenCalled()
-      // tmux copy mode would scroll by sending PageUp/PageDown
+      // tmux copy mode would scroll by sending PageUp/PageDown; the drag
+      // scrolls the xterm.js scrollback instead
       capturedGestureHandlers.onSwipeUp()
+      capturedGestureHandlers.onPan(0, -20)
       expect(mockScrollTmux).not.toHaveBeenCalled()
-      expect(mockScrollTerminal).toHaveBeenCalledWith(null, 'down')
+      expect(mockDragTerminal).toHaveBeenCalledWith(null, 0, -20, true)
     })
 
     it('views get the flag too', async () => {
