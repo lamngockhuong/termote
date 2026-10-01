@@ -44,6 +44,7 @@ termote/
 │   ├── herdr_observer_*.go # Stops `observe`/`control` (process group / Windows Job Object)
 │   ├── stream.go           # Terminal WebSocket (xterm.js stream)
 │   ├── agent*.go           # Chat view: Claude Code session, transcript, messages, dialogs
+│   ├── files*.go           # Files/Changes views: pane root, tree, contents, git status/diff
 │   ├── webui/              # Embeds the built PWA into the binary (build output, .gitkeep only in git)
 │   ├── install_layout.go   # Versioned install layout (versions/<v>, current pointer, prune)
 │   ├── release_tags.go     # Picks the newest stable 1.x GitHub tag
@@ -269,7 +270,7 @@ The `update` command:
 | `pwa/src/components/app-header.tsx`               | Header: session chip / tabs, More menu                        |
 | `pwa/src/components/session-switcher-chip.tsx`    | Mobile header chip that opens the sessions sheet              |
 | `pwa/src/components/ui/`                          | Shared UI primitives (Button, Sheet, Menu, Switch, ...)       |
-| `pwa/src/app-views.ts`                            | Views of a pane (only the terminal is registered)             |
+| `pwa/src/app-views.ts`                            | Views of a pane (terminal, chat, files, changes)              |
 | `pwa/src/ui-style.ts`                             | Interface styles (neutral, terminal, native)                  |
 | `pwa/src/components/toast.tsx`                    | Toast notification component                                  |
 | `pwa/src/hooks/use-settings.ts`                   | Settings state with localStorage persistence                  |
@@ -283,6 +284,12 @@ The `update` command:
 | `pwa/src/components/prompt-card.tsx`              | Claude Code dialog as a card (answer buttons or read-only)    |
 | `pwa/src/hooks/use-agent-transcript.ts`           | Polls a pane's transcript, one store per pane                 |
 | `pwa/src/hooks/use-agent-prompt.ts`               | Polls a pane's open dialog, one store per pane                |
+| `pwa/src/components/files-view.tsx`               | Files view: the pane's directory as a tree, opens a file      |
+| `pwa/src/components/changes-view.tsx`             | Changes view: git status grouped, opens a file's diff         |
+| `pwa/src/components/panel-toggles.tsx`            | Desktop header toggles of the side panel (Files, Changes)     |
+| `pwa/src/hooks/use-files.ts`                      | File tree of a pane's root, one store per pane                |
+| `pwa/src/hooks/use-git-changes.ts`                | Polls a pane's git status, one store per pane                 |
+| `pwa/src/utils/highlight.ts`                      | Syntax highlighting through a Shiki worker, with a timeout    |
 | `server/main.go`                                  | Entry point (`serve` runs the server, no args opens the menu) |
 | `server/serve.go`                                 | Server (PWA static files, auth, guards)                       |
 | `server/mux.go`                                   | `Mux` interface + `/api/mux/*` routes                         |
@@ -293,6 +300,10 @@ The `update` command:
 | `server/agent_claude.go`                          | Claude Code transcript (JSONL) and session file               |
 | `server/agent_claude_prompt.go`                   | Reads a Claude Code screen: input box, dialogs                |
 | `server/agent_input.go`                           | Sends a message, answers a dialog (checks before each write)  |
+| `server/files.go`                                 | `/api/mux/panes/{id}/files/*` routes, tree and file contents  |
+| `server/files_root.go`                            | Pane root (git toplevel), safe git runner                     |
+| `server/files_git.go`                             | git status and diff for the Changes view                      |
+| `server/files_sensitive.go`                       | Names of files that usually hold secrets                      |
 | `server/agent_proc*.go`                           | Finds Claude Code under a tmux/psmux pane                     |
 | `server/guard.go`                                 | Host allowlist + Origin/Content-Type write guard              |
 | `server/serve_config.go`                          | Server config from the saved config, else the environment     |
@@ -343,6 +354,12 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   re-checks the process, session and screen, and sends nothing unless the screen shows the
   expected state (an empty input box, the dialog the client saw with a single-use `promptId`).
   Markdown images in the Chat view never load (shown as links), and raw HTML is not rendered
+- **Files/Changes** (`/api/mux/panes/{id}/files/*`): read-only GETs that also check
+  `Sec-Fetch-Site`/`Origin`; every path is opened through `os.Root` under the pane's root (its
+  git toplevel, else its directory); termote's config/state dirs, `/proc`, `/sys`, `/dev` and
+  `.git` are never served; sensitive names (`.env`, keys, ...) return contents or a diff only
+  with `reveal=1`. git runs without a shell, with `GIT_*`/`TERMOTE_*` stripped, fsmonitor,
+  filter drivers, external diff and textconv off, submodules ignored, 10s timeout, 2 at a time
 - Exclude sensitive dirs (.ssh, .gnupg, .aws, .config/gcloud) from container volume mounts
   (warned at `container up`)
 - Serve mode uses constant-time comparison for password verification

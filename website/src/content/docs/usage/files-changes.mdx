@@ -1,0 +1,131 @@
+---
+title: Files and Changes
+description: Browse the files of a pane's directory and read what git reports as changed, without typing ls or git diff
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+To see what an agent changed, you would otherwise type `ls`, `cat` and `git diff` on a phone
+keyboard and read the output in a terminal. Termote has two read-only views for this:
+
+- **Files**: the pane's directory as a tree, opened one folder at a time. A text file opens with
+  line numbers and syntax highlighting.
+- **Changes**: when the directory is in a git repository, the files git reports as changed, and
+  the diff of each one.
+
+Both are read-only: nothing can be edited, staged, discarded or committed from them.
+
+## Where to Find Them
+
+- **Desktop**: the **Files** and **Changes** buttons in the header open a panel to the right of
+  the terminal. The terminal stays on screen and keeps working. One panel shows at a time; press
+  its button again to close it.
+- **Phone**: Files and Changes are views of the switcher in the header, next to the terminal
+  (and Chat, when Claude Code runs in the pane). Each view takes the whole screen.
+
+If the window grows or shrinks between the two layouts, an open view follows: from the
+phone view to the desktop panel, and back.
+
+## Which Directory Is Shown
+
+The root is the **working directory of the pane on screen**. When that directory is inside a git
+repository, the root is the top of the repository instead, so Files and Changes cover the whole
+repository. The root is shown at the top of both views, with `~` for your home directory.
+
+The directory is the one of the program running in the pane, so it follows a `cd` in the shell.
+A command that only passes through another directory for a moment does not move the root. When
+the root does move while a view is open, the view reloads from the new root and says
+`The pane's directory changed`.
+
+Supported backends:
+
+- **tmux** on Linux and macOS, natively or in the container
+- **Herdr** on any OS. Herdr must report the pane's directory (`cwd`); an older Herdr that does
+  not shows `Not supported by this backend`.
+- **psmux** on Windows is not supported: it does not report the pane's directory, and the two
+  views are not offered.
+
+## Files
+
+- Folders come first, then files, ignoring case. Tap a folder to open or close it.
+- A folder shows at most 5000 entries. A longer folder says that only the first 5000 are shown.
+- Devices, sockets and links that point outside the root are greyed out and do not open.
+- A file opens in place of the tree, with its path, its size, a button to copy the path and one
+  to wrap long lines (on by default on a phone). Long lines scroll inside the code area, never
+  the whole page.
+- Highlighting covers common languages and file names (TypeScript, Go, Python, shell,
+  Dockerfile, Makefile, YAML, JSON, Markdown and others). It loads the first time a file needs
+  it, so a device that never opens Files never downloads it.
+
+| Shown                                                         | Why                                                                                              |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Text with colours                                             | A text file of up to 256 KiB, up to 5000 lines, no line over 2000 characters                     |
+| Plain text, no colours                                        | A larger text file (up to 1 MiB), a language not covered, or highlighting that took over 3 seconds |
+| `Not previewable (binary, special file or larger than 1 MiB)`  | A binary file, a file over 1 MiB, or something that is not a regular file                        |
+| `This file can't be shown`                                     | A path termote never serves (see below)                                                          |
+
+## Changes
+
+The list follows `git status` and is read again every 5 seconds while the view is open and the
+browser tab is visible. It is grouped:
+
+- **Conflicts**: files with an unresolved merge conflict
+- **Staged**: changes added to the index
+- **Changes**: changes in the working tree that are not staged
+- **Untracked**: new files git does not track yet
+
+Each file shows a letter: `M` modified, `A` added, `D` deleted, `R` renamed (with the old path),
+`C` copied, `T` type changed, `U` conflict, `?` untracked. A file with both staged and unstaged
+changes is listed in both groups, and each opens the diff of its own side. An untracked file
+opens as all added lines.
+
+The diff shows each hunk with the old and new line numbers (one column on a narrow phone
+screen), added lines on green and removed lines on red, with `+` and `-` kept so the colour is
+never the only sign.
+
+| Shown                            | Why                                                                         |
+| -------------------------------- | --------------------------------------------------------------------------- |
+| `Not a git repository`            | The pane's directory is not inside a git repository                         |
+| `Binary file changed`             | git reports a binary change; there are no lines to show                     |
+| `Diff truncated at 1 MiB`         | The diff of this file is longer than 1 MiB; only its start is shown         |
+| `Unresolved conflict`             | A conflicted file is shown whole, as it is now in the working tree          |
+| `No longer changed`               | The file was committed, reverted or removed after you opened it            |
+| `git took too long; trying again` | `git status` took over 10 seconds (a very large repository); it backs off   |
+
+Submodules are not listed, and their contents are not compared.
+
+## Files That May Contain Secrets
+
+Files whose names usually mean secrets are listed with a lock and the word `Sensitive`: for
+example `.env` and `.env.*`, private keys (`*.pem`, `*.key`, `id_rsa*`, `id_ed25519*`),
+`.netrc`, `.npmrc`, `.pgpass`, `.git-credentials`, `credentials*`, `secrets.*`, Terraform state
+(`*.tfstate`) and anything under `.ssh`, `.gnupg`, `.aws`, `.kube`, `.docker`, `.config/gh`
+or `.config/gcloud`. A link to such a file counts too, as does a rename from or to one.
+
+Opening one asks `This file may contain secrets. Show its contents?` first, for the file and for
+its diff. The answer is not remembered: the next time, it asks again. The server checks this
+itself: without the confirmation it sends no contents at all.
+
+<Aside type="caution">
+  The lock is a warning based on names, not a guarantee. A secret in a file with an ordinary
+  name (`prod-creds.yaml`) is shown without asking. Anyone who can sign in to Termote can read
+  every file under the pane's directory.
+</Aside>
+
+## Never Shown
+
+Some paths are never served, even after confirming:
+
+- Termote's own config and state directories (the saved password, logs)
+- `/proc`, `/sys` and `/dev` (process environments and devices)
+- the repository's `.git` directory, which is not listed in Files either
+
+Paths are checked on the server against the root: `..`, absolute paths and links that lead
+outside the root are refused.
+
+## How git Is Run
+
+Termote runs `git status` and `git diff` itself to fill Changes. A repository's own settings
+cannot make it run a program: file system monitors, filter drivers, external diff tools and text
+conversion are turned off for these commands, and submodules are skipped. At most two git
+commands run at a time, each limited to 10 seconds.

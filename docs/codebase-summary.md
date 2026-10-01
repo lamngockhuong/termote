@@ -11,7 +11,7 @@ termote/
 │   ├── src/
 │   │   ├── App.tsx             # Main app component
 │   │   ├── main.tsx            # Entry point
-│   │   ├── app-views.ts        # Views of a pane (only the terminal is registered)
+│   │   ├── app-views.ts        # Views of a pane (terminal, chat, files, changes)
 │   │   ├── ui-style.ts         # Interface styles (neutral, terminal, native) + token helpers
 │   │   ├── index.css           # Design tokens (--tm-*) per style and theme
 │   │   ├── components/
@@ -21,13 +21,20 @@ termote/
 │   │   │   ├── chat-composer.tsx            # Chat view: message box, sends to the pane's Claude Code
 │   │   │   ├── chat-message.tsx             # One transcript entry (markdown without raw HTML, images as links)
 │   │   │   ├── chat-view.tsx                # Chat view of a pane running Claude Code (lazy-loaded)
+│   │   │   ├── changes-view.tsx             # Changes view: git status grouped, a file's diff (lazy-loaded)
+│   │   │   ├── code-block.tsx               # Code frame with line numbers, highlighted tokens
+│   │   │   ├── diff-viewer.tsx              # Unified diff of one changed file, one side
 │   │   │   ├── command-history-dropdown.tsx # Command history search/select
 │   │   │   ├── connection-indicator.tsx     # Connection status indicator
+│   │   │   ├── file-viewer.tsx              # One file of Files (asks before a sensitive one)
+│   │   │   ├── files-view.tsx               # Files view: the pane's root as a tree (lazy-loaded)
 │   │   │   ├── gesture-hints-overlay.tsx    # First-time gesture tutorial (mobile)
 │   │   │   ├── help-modal.tsx               # Help/gestures guide
 │   │   │   ├── icon-picker.tsx              # Emoji icon selector
 │   │   │   ├── keyboard-toolbar.tsx         # Virtual keyboard buttons
 │   │   │   ├── open-terminal-button.tsx     # Way out of a view to the pane's terminal
+│   │   │   ├── pane-dir-header.tsx          # Root, branch and refresh line of Files and Changes
+│   │   │   ├── panel-toggles.tsx            # Desktop header toggles of the side panel
 │   │   │   ├── pane-strip.tsx               # Pane switcher, shown only for multi-pane tabs
 │   │   │   ├── prompt-card.tsx              # Claude Code dialog as a card (answer buttons, or read-only)
 │   │   │   ├── quick-actions-menu.tsx       # Quick actions sheet (clear, cancel, clear line, exit)
@@ -44,6 +51,8 @@ termote/
 │   │   │   ├── use-agent-prompt.ts          # Polls a pane's open Claude Code dialog (one store per pane)
 │   │   │   ├── use-agent-transcript.ts      # Polls a pane's transcript (one store per pane)
 │   │   │   ├── use-command-history.ts       # Command history storage + retrieval (localStorage)
+│   │   │   ├── use-files.ts                 # File tree of a pane's root (one store per pane)
+│   │   │   ├── use-git-changes.ts           # Polls a pane's git status (one store per pane)
 │   │   │   ├── use-font-size.ts             # Font size state (6-24)
 │   │   │   ├── use-gestures.ts              # Hammer.js gesture handling
 │   │   │   ├── use-group-collapsed.ts       # Collapsed-group state (sidebar)
@@ -61,10 +70,14 @@ termote/
 │   │   │   └── session.ts                   # Group/Tab/Pane/AgentStatus types
 │   │   ├── utils/
 │   │   │   ├── app-info.ts                  # App metadata
+│   │   │   ├── files-format.ts              # Sizes and paths shown by Files and Changes
 │   │   │   ├── haptic.ts                    # Vibration API wrapper
+│   │   │   ├── highlight.ts                 # Syntax highlighting through the worker, with a timeout
+│   │   │   ├── highlight-langs.ts           # Highlighted languages by file extension or name
+│   │   │   ├── highlight-worker.ts          # Shiki in a module worker (grammars loaded on demand)
 │   │   │   └── terminal-bridge.ts           # Drives the xterm.js terminal (key mapping, clipboard paste)
 │   │   ├── test-setup.ts                    # Vitest configuration
-│   ├── e2e/                    # Playwright e2e tests (chat-view.spec.ts drives tests/fixtures/fake-claude.sh)
+│   ├── e2e/                    # Playwright e2e tests (chat-view.spec.ts drives tests/fixtures/fake-claude.sh; files-changes.spec.ts uses a throwaway git repo)
 │   └── package.json
 ├── server/                     # Go server + CLI (single binary, flat `package main`)
 │   ├── main.go                  # Entry point (`serve` runs the server, no args opens the menu)
@@ -78,6 +91,11 @@ termote/
 │   ├── herdr_socket_*.go          # Herdr socket path + dial (Unix socket / Windows named pipe)
 │   ├── herdr_observer_*.go        # Stops `observe`/`control` (process group / Windows Job Object)
 │   ├── stream.go                 # `/api/mux/stream` WebSocket (xterm.js feed)
+│   ├── files.go                  # `/api/mux/panes/{id}/files/*` routes: tree, contents, errors
+│   ├── files_root.go             # Pane root (git toplevel, settling), safe git runner
+│   ├── files_git.go              # git status (porcelain v2) and unified diff
+│   ├── files_sensitive.go        # Names of files that usually hold secrets
+│   ├── files_os_*.go             # Per-OS deny list, ownership check, non-blocking open
 │   ├── agent.go                  # `/api/mux/panes/{id}/agent/*` routes, adapter interfaces, transcript reads
 │   ├── agent_claude.go           # Claude Code transcript (JSONL) + session file (`sessions/<pid>.json`)
 │   ├── agent_claude_prompt.go    # Reads a Claude Code screen: input box state, dialogs
@@ -258,6 +276,7 @@ Single Go binary, `package main`, flat file layout:
 - **mux_tmux.go** / **mux_herdr.go** — the two backends (see [`system-architecture.md`](system-architecture.md))
 - **stream.go** — `/api/mux/stream`: WebSocket upgrade, stream token validation, the hub that caps concurrent streams and closes them on shutdown
 - **agent\*.go** — the Chat view's routes: finding the Claude Code session of a pane, reading its transcript, sending it a message and answering its dialogs, writing only when the screen shows the expected state (see [`system-architecture.md`](system-architecture.md#agent-chat-apimuxpanesidagent))
+- **files\*.go** — the Files and Changes views' read-only routes: the pane's root, directory listings and file contents through `os.Root`, git status and diff run with every repo-configured program disabled (see [`system-architecture.md`](system-architecture.md#files-and-changes-apimuxpanesidfiles))
 - **cli\*.go** — CLI subcommands (see below)
 
 **Security** (server):

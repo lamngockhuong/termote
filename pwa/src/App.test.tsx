@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { MessageSquare } from 'lucide-react'
+import { Folder, MessageSquare } from 'lucide-react'
+import { lazy, type ReactElement } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { APP_VIEWS, type AppView, type ViewProps } from './app-views'
@@ -2293,8 +2294,8 @@ describe('App views, view-only and deep links', () => {
     } as any)
   }
 
-  // A second view, as #233 (chat) or #237 (files) will register one.
-  const setSidePanelFrom: { current?: ViewProps['setSidePanel'] } = {}
+  // A second view, as #233 (chat) registers one.
+  const notifyFrom: { current?: ViewProps['notify'] } = {}
   const showViewFrom: { current?: ViewProps['showView'] } = {}
   const CHAT: AppView = {
     id: 'chat',
@@ -2302,14 +2303,25 @@ describe('App views, view-only and deep links', () => {
     Icon: MessageSquare,
     available: () => true,
     Main: (p) => {
-      setSidePanelFrom.current = p.setSidePanel
+      notifyFrom.current = p.notify
       showViewFrom.current = p.showView
       return <div data-testid="chat-main">{p.readOnly ? 'ro' : 'rw'}</div>
     },
     Input: () => <div data-testid="chat-input" />,
-    Panel: () => <div data-testid="chat-panel" />,
+  }
+  // A view that opens in the desktop side panel (#237 files and changes)
+  const FILES: AppView = {
+    id: 'files',
+    label: 'Files',
+    Icon: Folder,
+    available: () => true,
+    placement: 'panel',
+    Main: () => <div data-testid="files-main" />,
+    Panel: () => <div data-testid="files-panel" />,
   }
   const VIEWS = [...APP_VIEWS, CHAT]
+  const PANEL_VIEWS = [...APP_VIEWS, CHAT, FILES]
+  const filesToggle = () => screen.getByRole('button', { name: 'Files' })
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -2368,16 +2380,82 @@ describe('App views, view-only and deep links', () => {
     expect(screen.queryByTestId('chat-input')).toBeNull()
   })
 
-  it('the desktop side panel is closed until a view opens it', async () => {
+  it('desktop: a panel view opens next to the terminal from its header toggle', async () => {
+    render(<App views={PANEL_VIEWS} />)
+    await screen.findByRole('tablist', { name: 'View' })
+    // Not a tab: Chat still is
+    expect(screen.queryByRole('tab', { name: 'Files' })).toBeNull()
+    expect(screen.getByRole('tab', { name: 'Chat' })).toBeInTheDocument()
+    expect(filesToggle()).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.queryByTestId('files-panel')).toBeNull()
+    fireEvent.click(filesToggle())
+    expect(
+      screen.getByRole('complementary', { name: 'Files' }),
+    ).toContainElement(screen.getByTestId('files-panel'))
+    expect(filesToggle()).toHaveAttribute('aria-pressed', 'true')
+    // The terminal stays the main view, usable
+    expect(terminalPanel()).not.toHaveAttribute('inert')
+    expect(screen.getByTestId('keyboard-toolbar')).toBeInTheDocument()
+    expect(screen.queryByTestId('files-main')).toBeNull()
+    fireEvent.click(filesToggle())
+    expect(screen.queryByTestId('files-panel')).toBeNull()
+  })
+
+  it('desktop: only the switcher views make the terminal a tabpanel', async () => {
+    render(<App views={[...APP_VIEWS, FILES]} />)
+    await screen.findByTestId('terminal-view')
+    expect(screen.queryByRole('tablist', { name: 'View' })).toBeNull()
+    expect(terminalPanel()).not.toHaveAttribute('role')
+    expect(filesToggle()).toBeInTheDocument()
+  })
+
+  it('a lazy panel loads inside the panel, not blanking the app', async () => {
+    let resolve!: (m: { default: () => ReactElement }) => void
+    const Lazy = lazy(
+      () => new Promise<{ default: () => ReactElement }>((r) => (resolve = r)),
+    )
+    render(<App views={[...APP_VIEWS, { ...FILES, Panel: Lazy }]} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Files' }))
+    expect(screen.getByTestId('terminal-view')).toBeInTheDocument()
+    await act(async () =>
+      resolve({ default: () => <div data-testid="lazy-panel" /> }),
+    )
+    expect(await screen.findByTestId('lazy-panel')).toBeInTheDocument()
+  })
+
+  it('mobile: a panel view is a tab of the switcher, without a toggle', async () => {
+    mockIsMobile.mockReturnValue(true)
+    render(<App views={PANEL_VIEWS} />)
+    fireEvent.click(await screen.findByRole('tab', { name: 'Files' }))
+    expect(screen.getByTestId('files-main')).toBeInTheDocument()
+    expect(screen.queryByTestId('files-panel')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Files' })).toBeNull()
+  })
+
+  it('a panel view follows the layout between mobile and desktop', async () => {
+    mockIsMobile.mockReturnValue(true)
+    const { rerender } = render(<App views={PANEL_VIEWS} />)
+    fireEvent.click(await screen.findByRole('tab', { name: 'Files' }))
+    mockIsMobile.mockReturnValue(false)
+    rerender(<App views={PANEL_VIEWS} />)
+    expect(screen.getByTestId('files-panel')).toBeInTheDocument()
+    expect(screen.queryByTestId('files-main')).toBeNull()
+    expect(terminalPanel()).not.toHaveAttribute('inert')
+    mockIsMobile.mockReturnValue(true)
+    rerender(<App views={PANEL_VIEWS} />)
+    expect(screen.getByTestId('files-main')).toBeInTheDocument()
+    expect(screen.queryByTestId('files-panel')).toBeNull()
+    expect(screen.getByRole('tab', { name: 'Files' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+  })
+
+  it('a view can show a notice', async () => {
     render(<App views={VIEWS} />)
     fireEvent.click(await screen.findByRole('tab', { name: 'Chat' }))
-    expect(screen.queryByTestId('chat-panel')).toBeNull()
-    act(() => setSidePanelFrom.current!('chat'))
-    expect(
-      screen.getByRole('complementary', { name: 'Chat' }),
-    ).toContainElement(screen.getByTestId('chat-panel'))
-    act(() => setSidePanelFrom.current!(null))
-    expect(screen.queryByTestId('chat-panel')).toBeNull()
+    act(() => notifyFrom.current!('Path copied'))
+    expect(await screen.findByText('Path copied')).toBeInTheDocument()
   })
 
   it('herdr: the pane size is driven only while the terminal shows', async () => {
@@ -2437,14 +2515,6 @@ describe('App views, view-only and deep links', () => {
     // Switching to a view other than the terminal never reselects either
     act(() => showViewFrom.current!('chat'))
     expect(mockSelectTab).not.toHaveBeenCalled()
-  })
-
-  it('mobile has no side panel', async () => {
-    mockIsMobile.mockReturnValue(true)
-    render(<App views={VIEWS} />)
-    fireEvent.click(await screen.findByRole('tab', { name: 'Chat' }))
-    act(() => setSidePanelFrom.current!('chat'))
-    expect(screen.queryByTestId('chat-panel')).toBeNull()
   })
 
   describe('view-only', () => {
@@ -2593,6 +2663,18 @@ describe('App views, view-only and deep links', () => {
       window.history.replaceState(null, '', '/#/s/w1/w1%3At1?view=chat')
       render(<App views={VIEWS} />)
       expect(await screen.findByTestId('chat-main')).toBeInTheDocument()
+    })
+
+    it('a link to a panel view opens its panel on desktop, its view on mobile', async () => {
+      window.history.replaceState(null, '', '/#/s/w1/w1%3At1?view=files')
+      const { unmount } = render(<App views={PANEL_VIEWS} />)
+      expect(await screen.findByTestId('files-panel')).toBeInTheDocument()
+      expect(screen.queryByTestId('files-main')).toBeNull()
+      unmount()
+      mockIsMobile.mockReturnValue(true)
+      window.history.replaceState(null, '', '/#/s/w1/w1%3At1?view=files')
+      render(<App views={PANEL_VIEWS} />)
+      expect(await screen.findByTestId('files-main')).toBeInTheDocument()
     })
 
     it('falls back to the terminal for a view that is not offered', async () => {

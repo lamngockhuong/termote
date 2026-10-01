@@ -1,0 +1,127 @@
+---
+title: Files và Changes
+description: Duyệt file trong thư mục của pane và đọc những gì git báo là đã đổi, không cần gõ ls hay git diff
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+Muốn biết agent đã sửa gì, thường bạn phải gõ `ls`, `cat`, `git diff` trên bàn phím điện thoại rồi
+đọc kết quả trong terminal. Termote có hai view chỉ đọc để xem nhanh:
+
+- **Files**: thư mục của pane dạng cây, mở từng thư mục một. File văn bản mở ra có số dòng và tô
+  màu cú pháp.
+- **Changes**: khi thư mục nằm trong một repo git, danh sách file git báo đã đổi, kèm diff của
+  từng file.
+
+Cả hai đều chỉ đọc: từ đây không sửa file, không đưa thay đổi vào index, không bỏ thay đổi và không commit được.
+
+## Mở ở đâu
+
+- **Desktop**: nút **Files** và **Changes** trên header mở một panel bên phải terminal. Terminal
+  vẫn ở trên màn hình và vẫn dùng được. Mỗi lúc chỉ có một panel; bấm lại nút của nó để đóng.
+- **Điện thoại**: Files và Changes là các view trong nút chuyển trên header, cạnh terminal (và
+  Chat, khi pane chạy Claude Code). Mỗi view chiếm cả màn hình.
+
+Khi cửa sổ to lên hoặc nhỏ đi qua ranh giới giữa hai bố cục, view đang mở đi theo: từ view trên
+điện thoại sang panel trên desktop, và ngược lại.
+
+## Thư mục nào được hiện
+
+Gốc là **thư mục làm việc của pane đang xem**. Khi thư mục đó nằm trong một repo git, gốc là thư
+mục trên cùng của repo, nên Files và Changes bao cả repo. Gốc hiện ở đầu cả hai view, thư mục nhà
+viết tắt là `~`.
+
+Thư mục này là của chương trình đang chạy trong pane, nên nó đổi theo lệnh `cd` trong shell. Một
+lệnh chỉ ghé qua thư mục khác trong chốc lát thì không làm gốc đổi. Khi gốc thật sự đổi lúc view
+đang mở, view tải lại từ gốc mới và báo `The pane's directory changed`.
+
+Các bộ quản lý phiên hỗ trợ:
+
+- **tmux** trên Linux và macOS, cài native hay trong container đều được
+- **Herdr** trên mọi hệ điều hành. Herdr phải báo được thư mục của pane (`cwd`); bản Herdr cũ không
+  báo thì view hiện `Not supported by this backend`.
+- **psmux** trên Windows chưa hỗ trợ: psmux không báo thư mục của pane, nên hai view này không có.
+
+## Files
+
+- Thư mục xếp trước, rồi tới file, không phân biệt hoa thường. Chạm vào thư mục để mở hoặc đóng.
+- Mỗi thư mục hiện tối đa 5000 mục. Thư mục dài hơn sẽ ghi là chỉ hiện 5000 mục đầu.
+- Thiết bị, socket và link trỏ ra ngoài gốc hiện mờ và không mở được.
+- File mở ra thay chỗ cây thư mục, kèm đường dẫn, kích thước, nút chép đường dẫn và nút xuống
+  dòng cho dòng dài (trên điện thoại bật sẵn). Dòng dài cuộn ngang trong khung code, không bao giờ
+  làm cả trang cuộn ngang.
+- Tô màu áp dụng cho các ngôn ngữ và tên file thường gặp (TypeScript, Go, Python, shell,
+  Dockerfile, Makefile, YAML, JSON, Markdown và nhiều loại khác). Phần này chỉ tải về lần đầu có
+  file cần đến, nên máy nào chưa từng mở Files thì không tải.
+
+| Hiện                                                          | Vì sao                                                                                           |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Chữ có màu                                                    | File văn bản tối đa 256 KiB, tối đa 5000 dòng, không dòng nào quá 2000 ký tự                     |
+| Chữ thường, không màu                                         | File văn bản lớn hơn (tới 1 MiB), ngôn ngữ chưa hỗ trợ, hoặc tô màu mất quá 3 giây              |
+| `Not previewable (binary, special file or larger than 1 MiB)`  | File nhị phân, file lớn hơn 1 MiB, hoặc thứ không phải file thường                               |
+| `This file can't be shown`                                     | Đường dẫn Termote không bao giờ trả về (xem bên dưới)                                            |
+
+## Changes
+
+Danh sách lấy theo `git status`, đọc lại mỗi 5 giây khi view đang mở và tab trình duyệt đang hiện.
+Danh sách chia nhóm:
+
+- **Conflicts**: file còn xung đột khi merge, chưa giải quyết
+- **Staged**: thay đổi đã đưa vào index
+- **Changes**: thay đổi trong thư mục làm việc, chưa đưa vào index
+- **Untracked**: file mới git chưa theo dõi
+
+Mỗi file có một chữ cái: `M` sửa, `A` thêm, `D` xoá, `R` đổi tên (kèm đường dẫn cũ), `C` sao chép,
+`T` đổi loại, `U` xung đột, `?` chưa theo dõi. File vừa có thay đổi đã vào index vừa có thay đổi
+chưa vào index nằm ở cả hai nhóm, mở từ nhóm nào thì thấy diff của phía đó. File chưa theo dõi mở ra thành
+toàn bộ là dòng thêm.
+
+Diff hiện từng hunk với số dòng cũ và mới (trên màn hình điện thoại hẹp chỉ còn một cột), dòng
+thêm nền xanh, dòng xoá nền đỏ, vẫn giữ dấu `+` và `-` để không chỉ dựa vào màu.
+
+| Hiện                             | Vì sao                                                                       |
+| -------------------------------- | ---------------------------------------------------------------------------- |
+| `Not a git repository`            | Thư mục của pane không nằm trong repo git nào                               |
+| `Binary file changed`             | git báo thay đổi nhị phân; không có dòng nào để hiện                         |
+| `Diff truncated at 1 MiB`         | Diff của file này dài hơn 1 MiB; chỉ hiện phần đầu                          |
+| `Unresolved conflict`             | File đang xung đột được hiện nguyên, đúng như hiện có trong thư mục làm việc |
+| `No longer changed`               | File đã được commit, hoàn lại hoặc xoá sau khi bạn mở                        |
+| `git took too long; trying again` | `git status` chạy quá 10 giây (repo rất lớn); view giãn dần các lần đọc lại  |
+
+Repo con (`submodule`) không được liệt kê, nội dung bên trong cũng không được so sánh.
+
+## File có thể chứa bí mật
+
+File có tên thường dùng để chứa bí mật được đánh dấu bằng ổ khoá và chữ `Sensitive`: ví dụ
+`.env` và `.env.*`, khoá riêng (`*.pem`, `*.key`, `id_rsa*`, `id_ed25519*`), `.netrc`, `.npmrc`,
+`.pgpass`, `.git-credentials`, `credentials*`, `secrets.*`, state của Terraform (`*.tfstate`) và
+mọi thứ trong `.ssh`, `.gnupg`, `.aws`, `.kube`, `.docker`, `.config/gh` hoặc `.config/gcloud`.
+Link trỏ tới một file như vậy cũng tính, file đổi tên từ hoặc thành một file như vậy cũng tính.
+
+Khi mở, Termote hỏi trước `This file may contain secrets. Show its contents?`, cả với file lẫn
+diff của nó. Câu trả lời không được nhớ: lần sau mở lại, Termote lại hỏi. Server tự kiểm tra lại:
+chưa xác nhận thì server không gửi chút nội dung nào.
+
+<Aside type="caution">
+  Ổ khoá chỉ là cảnh báo dựa theo tên, không phải bảo đảm. Bí mật nằm trong một file có tên bình
+  thường (`prod-creds.yaml`) vẫn hiện mà không hỏi. Ai đăng nhập được Termote đều đọc được mọi file
+  trong thư mục của pane.
+</Aside>
+
+## Không bao giờ hiện
+
+Một số đường dẫn không bao giờ được trả về, kể cả khi đã xác nhận:
+
+- Thư mục cấu hình và trạng thái của chính Termote (mật khẩu đã lưu, log)
+- `/proc`, `/sys` và `/dev` (biến môi trường của tiến trình và thiết bị)
+- Thư mục `.git` của repo, thư mục này cũng không hiện trong Files
+
+Server kiểm mọi đường dẫn so với gốc: `..`, đường dẫn tuyệt đối và link dẫn ra ngoài gốc đều bị từ
+chối.
+
+## Termote chạy git ra sao
+
+Termote tự chạy `git status` và `git diff` để lấy dữ liệu cho Changes. Cấu hình riêng của một repo
+không thể khiến Termote chạy chương trình nào: với các lệnh này, Termote tắt bộ theo dõi hệ thống
+file, filter driver, công cụ diff bên ngoài và bước chuyển đổi văn bản, đồng thời bỏ qua repo con.
+Mỗi lúc chạy tối đa hai lệnh git, mỗi lệnh giới hạn 10 giây.

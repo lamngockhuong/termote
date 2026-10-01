@@ -202,8 +202,8 @@ export interface TranscriptPage {
   reset: boolean
 }
 
-// A refused agent request: the HTTP status and the server's stable code.
-export class AgentRequestError extends Error {
+// A refused request: the HTTP status and the server's stable code.
+export class RequestError extends Error {
   constructor(
     readonly status: number,
     readonly code: string,
@@ -211,19 +211,25 @@ export class AgentRequestError extends Error {
     readonly limit?: number,
     // prompt_changed: the dialog now on screen (null when none)
     readonly prompt?: AgentPrompt | null,
+    // files 409: the pane's root now
+    readonly root?: string,
   ) {
     super(message)
   }
 }
 
-async function agentError(res: Response): Promise<AgentRequestError> {
+// The agent routes' name for it, kept for their callers
+export { RequestError as AgentRequestError }
+
+async function requestError(res: Response): Promise<RequestError> {
   const body = await res.json().catch(() => ({}))
-  return new AgentRequestError(
+  return new RequestError(
     res.status,
     body.code ?? '',
     body.error ?? `request failed: ${res.status}`,
     body.limit,
     body.prompt,
+    body.root,
   )
 }
 
@@ -241,7 +247,7 @@ export async function fetchTranscript(
   const res = await fetch(
     agentPath(paneId, 'transcript') + (qs ? `?${qs}` : ''),
   )
-  if (!res.ok) throw await agentError(res)
+  if (!res.ok) throw await requestError(res)
   return res.json()
 }
 
@@ -257,7 +263,7 @@ export async function sendAgentMessage(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text, cursor }),
   })
-  if (!res.ok) throw await agentError(res)
+  if (!res.ok) throw await requestError(res)
 }
 
 // A dialog Claude Code has open. permission and select carry options and a
@@ -283,7 +289,7 @@ export async function fetchAgentPrompt(
   paneId: string,
 ): Promise<AgentPrompt | null> {
   const res = await fetch(agentPath(paneId, 'prompt'))
-  if (!res.ok) throw await agentError(res)
+  if (!res.ok) throw await requestError(res)
   return (await res.json()).prompt
 }
 
@@ -301,5 +307,142 @@ export async function answerAgentPrompt(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ promptId, choice }),
   })
-  if (!res.ok) throw await agentError(res)
+  if (!res.ok) throw await requestError(res)
+}
+
+// Files and changes (/api/mux/panes/{id}/files/*), read-only. Shapes match
+// server/files.go and server/files_git.go. Every response carries the pane's
+// root; a request sent with the root it saw gets a 409 with the new one once
+// the pane's directory moves.
+
+export interface FileEntry {
+  name: string
+  type: 'dir' | 'file' | 'symlink' | 'other'
+  // What a symlink inside the root leads to; absent when it leaves the root
+  target?: 'dir' | 'file' | 'other'
+  size: number
+  sensitive: boolean
+}
+
+export interface FilesTree {
+  root: string
+  isRepo: boolean
+  path: string
+  entries: FileEntry[]
+  truncated: boolean
+}
+
+export type FileContent =
+  | { root: string; path: string; size: number; text: string }
+  | {
+      root: string
+      path: string
+      size: number
+      previewable: false
+      reason: 'binary' | 'too-large' | 'not-regular'
+    }
+  // A file that usually holds secrets, asked for without reveal
+  | { root: string; path: string; sensitive: true }
+
+export interface ChangeEntry {
+  path: string
+  // The source of a rename or copy
+  orig?: string
+  // Index against HEAD (M A D R C T); worktree against the index (M D T, or
+  // ? untracked). "" is unchanged on that side.
+  staged: string
+  unstaged: string
+  conflict?: boolean
+  sensitive: boolean
+}
+
+export interface GitChanges {
+  root: string
+  isRepo: boolean
+  branch?: string
+  entries: ChangeEntry[]
+  truncated: boolean
+}
+
+export interface DiffLine {
+  kind: 'ctx' | 'add' | 'del'
+  old?: number
+  new?: number
+  text: string
+  noNewline?: boolean
+}
+
+export interface DiffHunk {
+  header: string
+  lines: DiffLine[]
+}
+
+export interface FileDiff {
+  root: string
+  path: string
+  binary?: boolean
+  conflict?: boolean
+  truncated: boolean
+  sensitive?: boolean
+  // A file read whole (untracked, conflict) that cannot be shown
+  reason?: 'too-large' | 'not-regular'
+  hunks: DiffHunk[] | null
+}
+
+async function filesGet<T>(
+  paneId: string,
+  op: string,
+  query: Record<string, string | undefined>,
+): Promise<T> {
+  const params = new URLSearchParams()
+  for (const [k, v] of Object.entries(query)) if (v) params.set(k, v)
+  const qs = params.toString()
+  const res = await fetch(
+    `${API_BASE}/panes/${encodeURIComponent(paneId)}/files/${op}${qs ? `?${qs}` : ''}`,
+  )
+  if (!res.ok) throw await requestError(res)
+  return res.json()
+}
+
+// One directory ("" is the root). root: the root the client saw, if any.
+export function fetchFilesTree(
+  paneId: string,
+  path: string,
+  root?: string,
+): Promise<FilesTree> {
+  return filesGet(paneId, 'tree', { path, root })
+}
+
+export function fetchFileContent(
+  paneId: string,
+  path: string,
+  opts: { root?: string; reveal?: boolean } = {},
+): Promise<FileContent> {
+  return filesGet(paneId, 'content', {
+    path,
+    root: opts.root,
+    reveal: opts.reveal ? '1' : undefined,
+  })
+}
+
+export function fetchGitChanges(
+  paneId: string,
+  root?: string,
+): Promise<GitChanges> {
+  return filesGet(paneId, 'changes', { root })
+}
+
+// The diff of one entry of fetchGitChanges, from its staged or unstaged side
+export function fetchFileDiff(
+  paneId: string,
+  entry: { path: string; orig?: string },
+  opts: { staged: boolean; root?: string; reveal?: boolean },
+): Promise<FileDiff> {
+  return filesGet(paneId, 'diff', {
+    path: entry.path,
+    orig: entry.orig,
+    staged: opts.staged ? '1' : undefined,
+    reveal: opts.reveal ? '1' : undefined,
+    root: opts.root,
+  })
 }

@@ -213,11 +213,35 @@ export default function App({
     () => availableViews(views, viewContext),
     [views, viewContext],
   )
+  // Desktop shows the panel views next to the terminal, from a header
+  // toggle; mobile has no room for that and keeps them in the switcher.
+  const switcherViews = useMemo(
+    () => (isMobile ? offeredViews : offeredViews.filter((v) => !v.placement)),
+    [isMobile, offeredViews],
+  )
+  const panelViews = useMemo(
+    () => (isMobile ? [] : offeredViews.filter((v) => v.placement)),
+    [isMobile, offeredViews],
+  )
+  // From the switcher's views only: a panel view is never the main view on
+  // desktop, so its Main and Panel are never on screen together.
   const currentView =
-    offeredViews.find((v) => v.id === viewId) ?? offeredViews[0]
+    switcherViews.find((v) => v.id === viewId) ?? switcherViews[0]
   const isTerminalView = currentView.id === TERMINAL_VIEW_ID
   // A view's content in the desktop side panel, next to the terminal
   const [sidePanelId, setSidePanelId] = useState<string | null>(null)
+  // A panel view follows the layout: to the side panel when the screen
+  // grows to desktop (or a link opens one there), back to the main area when
+  // it shrinks to mobile.
+  useEffect(() => {
+    if (!isMobile && views.find((v) => v.id === viewId)?.placement) {
+      setSidePanelId(viewId)
+      setViewId(TERMINAL_VIEW_ID)
+    } else if (isMobile && sidePanelId) {
+      setViewId(sidePanelId)
+      setSidePanelId(null)
+    }
+  }, [isMobile, viewId, sidePanelId, views])
   // The terminal is the way out of every view. tmux shares its current
   // window between clients, so the window is selected again first: another
   // device may have moved it while this one showed the chat.
@@ -234,17 +258,16 @@ export default function App({
     },
     [mux.caps.clientSideSelect, activeSession.id],
   )
+  const notify = useCallback((m: string) => showToast(m), [showToast])
   const viewProps = {
     ...viewContext,
     isMobile,
-    setSidePanel: setSidePanelId,
+    notify,
     showView,
   }
-  const sidePanelView = isMobile
-    ? undefined
-    : offeredViews.find((v) => v.id === sidePanelId && v.Panel)
+  const sidePanelView = panelViews.find((v) => v.id === sidePanelId && v.Panel)
   // tabpanel roles only mean something next to a switcher
-  const panelRole = offeredViews.length > 1 ? 'tabpanel' : undefined
+  const panelRole = switcherViews.length > 1 ? 'tabpanel' : undefined
   const { fontSize, increase, decrease } = useFontSize()
   const { resolvedTheme } = useTheme()
   // Before paint and before the terminal's effects read the tokens.
@@ -631,10 +654,13 @@ export default function App({
             onIncreaseFont={increase}
             isFullscreen={isFullscreen}
             onToggleFullscreen={toggleFullscreen}
-            views={offeredViews}
+            views={switcherViews}
             viewId={currentView.id}
             onViewChange={setViewId}
             viewPanelId={viewPanelId}
+            panelViews={panelViews}
+            sidePanelId={sidePanelView ? sidePanelId : null}
+            onTogglePanel={setSidePanelId}
             menu={{
               onOpenAbout: () => setAboutOpen(true),
               onOpenHelp: () => setHelpOpen(true),
@@ -725,7 +751,11 @@ export default function App({
                 aria-label={sidePanelView.label}
                 className="flex w-[440px] shrink-0 flex-col border-l border-border bg-bg"
               >
-                <sidePanelView.Panel {...viewProps} />
+                {/* Its own boundary: a lazy panel that suspends must not
+                    blank the whole app while it loads */}
+                <Suspense fallback={null}>
+                  <sidePanelView.Panel {...viewProps} />
+                </Suspense>
               </aside>
             )}
           </div>

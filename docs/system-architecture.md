@@ -66,6 +66,7 @@ React SPA with:
 - **Connection Indicator**: Real-time auto-detection of server status (connecting/connected/disconnected/error), clickable to retry
 - **Command History**: Search/recall previously sent commands (mobile-friendly delete buttons), persisted in localStorage
 - **Quick Actions**: A key in the mobile keyboard toolbar opens a sheet of preset commands (clear, cancel, clear line, exit)
+- **Files and Changes**: read-only views of the pane's directory (`caps.files`): a tree with a highlighted file viewer, and `git status` with per-file diffs. A side panel next to the terminal on desktop (header toggles), views of the switcher on mobile. Shiki runs in a module worker (`pwa/src/utils/highlight-worker.ts`); the worker, its themes and grammars are built under `assets/shiki/`, left out of the precache and cached on first use
 - **Deep Links**: `#/s/<group>/<tab>[/<pane>][?view=]` selects a session (never sends input); the address bar follows the current session via `replaceState`
 - **Context Menu Control**: Block/unblock right-click on the terminal
 - **Font Controls**: Adjustable font size (6-24px)
@@ -181,6 +182,10 @@ GET    /api/mux/panes/{id}/agent/transcript?cursor=&before=     → {agent, sess
 POST   /api/mux/panes/{id}/agent/message  body: {text, cursor}  → 204
 GET    /api/mux/panes/{id}/agent/prompt                          → {prompt: null | {promptId, kind, title, body, options}}
 POST   /api/mux/panes/{id}/agent/answer   body: {promptId, choice} → 204
+GET    /api/mux/panes/{id}/files/tree?path=&root=               → {root, isRepo, path, entries, truncated}
+GET    /api/mux/panes/{id}/files/content?path=&root=&reveal=    → {root, path, size, text} | {…, previewable: false, reason} | {…, sensitive: true}
+GET    /api/mux/panes/{id}/files/changes?root=                  → {root, isRepo, branch, entries, truncated}
+GET    /api/mux/panes/{id}/files/diff?path=&orig=&staged=&root=&reveal= → {root, path, binary, conflict, truncated, sensitive, reason, hunks}
 ```
 
 `caps.scroll` (Herdr): the stream only carries screen renders, so no history reaches the
@@ -296,6 +301,61 @@ becomes a text link, so a transcript cannot make the browser fetch another origi
 call `requireAgentRead`/`requireWriteRole`, where a view-only role (#236) will be enforced;
 the PWA's `readOnly` mode already hides the composer and the answer buttons.
 
+### Files and changes (`/api/mux/panes/{id}/files/*`)
+
+The PWA's Files and Changes views read a pane's directory, offered when the snapshot reports
+`caps.files`: tmux on Linux and macOS (`#{pane_current_path}` of the window's active pane) and
+Herdr (`foreground_cwd`, else `cwd`, of the pane; a Herdr that reports neither answers 501).
+psmux does not report the directory, so `caps.files` is off on Windows tmux. Every route is
+registered for every backend and answers 501 where it is off. All four are read-only GETs.
+
+**Root.** The pane's directory, raised to `git rev-parse --show-toplevel` when it is in a
+repository; resolutions are cached for 2 s. A directory a foreground command only passes
+through does not move the root: a new root is taken once reads at least 2 s apart
+agree on it. Every response
+carries `root`; a client sends back the root it saw, and gets `409 {error, root}` with the
+current one when it moved, so it reloads instead of mixing two trees. `safe.directory` is
+passed for the toplevel only when it belongs to the server's user (or is under `/workspace` in
+the container).
+
+**Paths.** A client path is relative to the root: absolute paths, `..`, NUL and (Windows)
+drive or device names are refused with 400, and every open goes through `os.Root`, so a symlink
+that leaves the root fails too (400 `path outside root`). Termote's config and state
+directories (`serveConfig.FilesDenyDirs`, filled by `runServe`), `/proc`, `/sys`, `/dev` and the
+repository's `.git` are never served (403 `path not allowed`), checked on the path and on what
+it resolves to; `.git` is also left out of listings. Files are opened non-blocking and judged on
+the open handle: anything not a regular file, over 1 MiB, or binary (a NUL in the first 8 KiB,
+or not UTF-8) is answered `previewable: false` with a `reason`. A directory lists at most 5000
+entries.
+
+**Sensitive files.** Names that usually hold secrets (`server/files_sensitive.go`: `.env*`,
+keys, `.netrc`, `credentials*`, `*.tfstate`, anything under `.ssh`, `.aws`, …) are listed with
+`sensitive: true`, through symlinks and on either side of a rename. Their contents and diffs are
+returned only with `reveal=1`, which the PWA sends after the user confirms, every time. This is
+a warning, not a boundary; the deny list above is the boundary.
+
+**git.** `changes` runs `git status --porcelain=v2 -z --branch` (at most 5000 entries, cached
+2 s per root); `diff` serves only a path that status lists, on the side asked for
+(`git diff [--cached] -M -- :(literal)<orig> :(literal)<path>`, at most 1 MiB, then
+`truncated`). An untracked or conflicted file has no diff: it is read whole through `os.Root`
+with the content route's checks. git is run as an argument array (no shell), with `GIT_*` and
+`TERMOTE_*` removed from its environment and overrides a repository cannot undo:
+`core.fsmonitor=false`, every `filter.<driver>` it configures emptied, `--no-ext-diff`,
+`--no-textconv`, `--ignore-submodules=all`, no lazy fetch and `protocol.allow=never`. Each
+command has a 10 s timeout (503 `git timed out`) and takes one of two server-wide slots; nothing
+a client sends becomes a git option.
+
+**Guards.** Basic auth and the Host allowlist like every route; GETs pass `writeGuard`, so the
+handlers check `Sec-Fetch-Site`/`Origin` themselves (403 cross-site), which keeps another page
+from making a `--no-auth` server run git. Other methods get 405. `requireFilesRead` is where a
+view-only role (#236) will be enforced.
+
+**PWA.** One store per pane for the tree (`use-files.ts`) and for the status
+(`use-git-changes.ts`, polled every 5 s while a view shows it and the page is visible, backing
+off to a minute on errors), shared by the mobile view and the desktop panel. Highlighting runs
+in a worker with a 3 s timeout and only for files up to 256 KiB, 5000 lines and 2000 characters
+a line; tokens are rendered as spans, never as HTML.
+
 ## Deployment Modes
 
 ### Container Mode (All-in-one)
@@ -405,6 +465,10 @@ termote update --force           # Force reinstall current version
     dir of the process found in the pane, proven by its start time (Herdr names the session
     itself, read from the server user's config dir); every write re-checks the target and the
     screen and sends nothing on doubt; markdown images in the Chat view never load
+11. **Files and changes**: read-only; paths confined to the pane's root by `os.Root`; Termote's
+    config/state dirs, `/proc`, `/sys`, `/dev` and `.git` never served; sensitive files only
+    with `reveal=1`; git run without a shell and with every repo-configured program disabled;
+    `Sec-Fetch-Site`/`Origin` checked on these GETs too
 
 ## Scalability Notes
 
