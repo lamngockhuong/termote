@@ -6,10 +6,15 @@ import {
   closeTab,
   createTab,
   fetchAgentPrompt,
+  fetchFileContent,
+  fetchFileDiff,
+  fetchFilesTree,
+  fetchGitChanges,
   fetchHealth,
   fetchSnapshot,
   fetchTerminalToken,
   fetchTranscript,
+  RequestError,
   renameTab,
   scrollPane,
   selectTab,
@@ -317,5 +322,65 @@ describe('agent API client', () => {
       code: 'prompt_changed',
       prompt,
     })
+  })
+})
+
+describe('files API client', () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('reads a directory, sending the root it saw', async () => {
+    const tree = { root: '/r', path: '', entries: [], truncated: false }
+    const { calls } = mockFetch({ body: tree })
+    expect(await fetchFilesTree('%3', '')).toEqual(tree)
+    await fetchFilesTree('%3', 'src/a b', '/r')
+    expect(calls.map((c) => c.url)).toEqual([
+      '/api/mux/panes/%253/files/tree',
+      '/api/mux/panes/%253/files/tree?path=src%2Fa+b&root=%2Fr',
+    ])
+    // GETs: no method, no body
+    expect(calls[0].init).toBeUndefined()
+  })
+
+  it('reads a file, revealing it only when asked', async () => {
+    const { calls } = mockFetch({ body: { root: '/r', path: 'a', text: '' } })
+    await fetchFileContent('1', 'a')
+    await fetchFileContent('1', '.env', { root: '/r', reveal: true })
+    expect(calls.map((c) => c.url)).toEqual([
+      '/api/mux/panes/1/files/content?path=a',
+      '/api/mux/panes/1/files/content?path=.env&root=%2Fr&reveal=1',
+    ])
+  })
+
+  it('reads the changes and the diff of one side of an entry', async () => {
+    const { calls } = mockFetch({ body: {} })
+    await fetchGitChanges('1')
+    await fetchGitChanges('1', '/r')
+    await fetchFileDiff('1', { path: 'b' }, { staged: false })
+    await fetchFileDiff(
+      '1',
+      { path: 'b', orig: 'a' },
+      { staged: true, root: '/r', reveal: true },
+    )
+    expect(calls.map((c) => c.url)).toEqual([
+      '/api/mux/panes/1/files/changes',
+      '/api/mux/panes/1/files/changes?root=%2Fr',
+      '/api/mux/panes/1/files/diff?path=b',
+      '/api/mux/panes/1/files/diff?path=b&orig=a&staged=1&reveal=1&root=%2Fr',
+    ])
+  })
+
+  it.each([
+    [409, { error: 'root changed', root: '/new' }, { root: '/new' }],
+    [403, { error: 'path not allowed' }, { message: 'path not allowed' }],
+    [501, { error: 'not supported' }, { message: 'not supported' }],
+  ])('turns a %i into a RequestError', async (status, body, want) => {
+    mockFetch({ body, status })
+    const err = await fetchFilesTree('1', '').catch((e) => e)
+    expect(err).toBeInstanceOf(RequestError)
+    // The agent routes' name is the same class
+    expect(err).toBeInstanceOf(AgentRequestError)
+    expect(err).toMatchObject({ status, ...want })
   })
 })

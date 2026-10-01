@@ -5,6 +5,7 @@ import {
   ConnectionIndicator,
   type ConnectionState,
 } from './connection-indicator'
+import { PanelToggles } from './panel-toggles'
 import { SessionSwitcherChip } from './session-switcher-chip'
 import { SessionTabs } from './session-tabs'
 import { SettingsMenu } from './settings-menu'
@@ -42,12 +43,17 @@ interface Props {
   viewId: string
   onViewChange: (id: string) => void
   viewPanelId: (id: string) => string
+  // Desktop: views shown in the side panel, the one open, and its toggle
+  panelViews?: ViewOption<string>[]
+  sidePanelId?: string | null
+  onTogglePanel?: (id: string | null) => void
   menu: MenuProps
 }
 
 // The top bar. Mobile: the session chip, the view switcher and the overflow
 // menu (which also holds the font size). Desktop: one row with the session
-// tabs, the view switcher, font size, fullscreen, connection and the menu.
+// tabs, the view switcher, the side panel toggles, font size, fullscreen,
+// connection and the menu.
 export function AppHeader(props: Props) {
   return props.isMobile ? (
     <MobileHeader {...props} />
@@ -139,6 +145,13 @@ function DesktopHeader(p: Props) {
       )}
       <div className="mb-1 flex shrink-0 items-center gap-1">
         {viewSwitcher(p, true)}
+        {p.onTogglePanel && (
+          <PanelToggles
+            views={p.panelViews ?? []}
+            open={p.sidePanelId ?? null}
+            onToggle={p.onTogglePanel}
+          />
+        )}
         <div className="flex items-center gap-0.5 rounded-control border border-border px-1 ui-native:border-0 ui-native:bg-bg">
           <button
             type="button"

@@ -1,10 +1,20 @@
-import { MessagesSquare, SquareTerminal } from 'lucide-react'
+import {
+  FolderTree,
+  GitCompare,
+  MessagesSquare,
+  SquareTerminal,
+} from 'lucide-react'
 import { type ComponentType, lazy } from 'react'
 import { ChatComposer } from './components/chat-composer'
 import type { ViewOption } from './components/ui/view-switcher'
 import type { MuxInfo } from './hooks/use-local-sessions'
 import type { Session } from './types/session'
-import { CHAT_VIEW_ID, TERMINAL_VIEW_ID } from './view-ids'
+import {
+  CHANGES_VIEW_ID,
+  CHAT_VIEW_ID,
+  FILES_VIEW_ID,
+  TERMINAL_VIEW_ID,
+} from './view-ids'
 
 // What decides whether a view is offered, and what a view is drawn with.
 export interface ViewContext {
@@ -17,14 +27,14 @@ export interface ViewContext {
 
 export interface ViewProps extends ViewContext {
   isMobile: boolean
-  // Shows a view's Panel in the desktop side panel (null closes it)
-  setSidePanel: (id: string | null) => void
+  // A short notice (a toast)
+  notify: (message: string) => void
   // Switches to another view of the pane (the terminal, as a way out)
   showView: (id: string) => void
 }
 
-// A view of the current pane (terminal; later chat, files). Adding one is
-// adding an entry here: the header shows the switcher once two are available.
+// A view of the current pane (terminal, chat, files, changes). Adding one is adding an
+// entry here: the header shows the switcher once two are available.
 export interface AppView extends ViewOption<string> {
   available: (ctx: ViewContext) => boolean
   // Main area. The terminal view has none: App keeps the terminal mounted
@@ -34,12 +44,19 @@ export interface AppView extends ViewOption<string> {
   Input?: ComponentType<ViewProps>
   // Content of the desktop side panel, next to the terminal (changes, files)
   Panel?: ComponentType<ViewProps>
+  // 'panel': on desktop the view opens in the side panel from a header
+  // toggle instead of taking the switcher's place; mobile keeps it in the
+  // switcher with its Main.
+  placement?: 'panel'
 }
 
-export { CHAT_VIEW_ID, TERMINAL_VIEW_ID }
+export { CHANGES_VIEW_ID, CHAT_VIEW_ID, FILES_VIEW_ID, TERMINAL_VIEW_ID }
 
 // The chat view carries the markdown renderer: loaded on first use.
 const ChatView = lazy(() => import('./components/chat-view'))
+// Files and Changes: loaded the first time one is opened.
+const FilesView = lazy(() => import('./components/files-view'))
+const ChangesView = lazy(() => import('./components/changes-view'))
 
 export const APP_VIEWS: AppView[] = [
   {
@@ -59,6 +76,26 @@ export const APP_VIEWS: AppView[] = [
       session.agentName === 'claude',
     Main: ChatView,
     Input: ChatComposer,
+  },
+  {
+    id: FILES_VIEW_ID,
+    label: 'Files',
+    Icon: FolderTree,
+    // The server reports the pane's directory (tmux on Linux/macOS, Herdr)
+    available: ({ mux }) => !!mux.caps.files,
+    Main: FilesView,
+    Panel: FilesView,
+    placement: 'panel',
+  },
+  {
+    id: CHANGES_VIEW_ID,
+    label: 'Changes',
+    Icon: GitCompare,
+    // Same routes; a root outside a repo says so in the view
+    available: ({ mux }) => !!mux.caps.files,
+    Main: ChangesView,
+    Panel: ChangesView,
+    placement: 'panel',
   },
 ]
 

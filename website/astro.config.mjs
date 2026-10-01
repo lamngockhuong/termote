@@ -44,6 +44,7 @@ export default defineConfig({
           label: "Usage",
           items: [
             { label: "Agent Chat", link: "/usage/agent-chat/" },
+            { label: "Files and Changes", link: "/usage/files-changes/" },
             { label: "Gestures", link: "/usage/gestures/" },
             { label: "Keyboard", link: "/usage/keyboard/" },
             { label: "Sessions", link: "/usage/sessions/" },

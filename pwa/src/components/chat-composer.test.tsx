@@ -64,7 +64,7 @@ const props = (over: Partial<ViewProps> = {}): ViewProps => ({
   },
   readOnly: false,
   isMobile: false,
-  setSidePanel: vi.fn(),
+  notify: vi.fn(),
   showView,
   ...over,
 })

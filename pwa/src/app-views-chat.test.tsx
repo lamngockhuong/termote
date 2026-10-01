@@ -77,7 +77,7 @@ describe('chat view', () => {
     const props: ViewProps = {
       ...claudePane,
       isMobile: false,
-      setSidePanel: vi.fn(),
+      notify: vi.fn(),
       showView: vi.fn(),
     }
     const Main = chat.Main!

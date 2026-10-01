@@ -38,10 +38,34 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // The highlighter worker, its themes and grammars: fetched (then
+        // cached) the first time Files shows a file, never installed upfront.
+        globIgnores: ['**/assets/shiki/**'],
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) => url.pathname.startsWith('/assets/shiki/'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'shiki',
+              // Hashed names: a new build adds entries, so old ones expire
+              expiration: { maxEntries: 120, maxAgeSeconds: 30 * 24 * 3600 },
+            },
+          },
+        ],
         navigateFallbackDenylist: [/^\/api\//],
       },
     }),
   ],
+  worker: {
+    // A module worker, so each grammar it imports is a chunk of its own
+    format: 'es',
+    rolldownOptions: {
+      output: {
+        entryFileNames: 'assets/shiki/[name]-[hash].js',
+        chunkFileNames: 'assets/shiki/[name]-[hash].js',
+      },
+    },
+  },
   test: {
     environment: 'jsdom',
     globals: true,

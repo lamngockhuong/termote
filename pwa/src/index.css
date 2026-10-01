@@ -41,6 +41,8 @@
   --color-warning: var(--tm-warning);
   --color-danger: var(--tm-danger);
   --color-info: var(--tm-info);
+  --color-diff-add: var(--tm-diff-add);
+  --color-diff-del: var(--tm-diff-del);
   --radius-control: var(--tm-radius-control);
   --radius-panel: var(--tm-radius-panel);
   --radius-sheet: var(--tm-radius-sheet);
@@ -84,6 +86,9 @@
   --tm-warning: #a16207;
   --tm-danger: #dc2626;
   --tm-info: #2563eb;
+  /* Backgrounds of added and deleted diff lines, under --tm-fg */
+  --tm-diff-add: #dcfce7;
+  --tm-diff-del: #fee2e2;
   --tm-radius-control: 7px;
   --tm-radius-panel: 10px;
   --tm-radius-sheet: 14px;
@@ -109,6 +114,8 @@
   --tm-warning: #fbbf24;
   --tm-danger: #f87171;
   --tm-info: #60a5fa;
+  --tm-diff-add: #0f2a1a;
+  --tm-diff-del: #3a1414;
 }
 
 /* ── Terminal: chrome is the terminal, one accent, mono labels ── */
@@ -130,6 +137,8 @@
   --tm-warning: #8a5a00;
   --tm-danger: #c42b2b;
   --tm-info: #0b5cb8;
+  --tm-diff-add: #dcf2e3;
+  --tm-diff-del: #fbe1e1;
   --tm-radius-control: 4px;
   --tm-radius-panel: 6px;
   --tm-radius-sheet: 8px;
@@ -156,6 +165,8 @@
   --tm-warning: #e5b454;
   --tm-danger: #ff7a7a;
   --tm-info: #74b9ff;
+  --tm-diff-add: #10291b;
+  --tm-diff-del: #341515;
 }
 
 /* ── Native: raised surfaces, large radii, sheets, system blue ── */
@@ -177,6 +188,8 @@
   --tm-warning: #a34a00;
   --tm-danger: #c8001a;
   --tm-info: #00699a;
+  --tm-diff-add: #d8f5df;
+  --tm-diff-del: #fde0de;
   --tm-radius-control: 12px;
   --tm-radius-panel: 16px;
   --tm-radius-sheet: 22px;
@@ -202,6 +215,8 @@
   --tm-warning: #ffd60a;
   --tm-danger: #ff6961;
   --tm-info: #64d2ff;
+  --tm-diff-add: #0e2a16;
+  --tm-diff-del: #3a1512;
 }
 
 html, body, #root {

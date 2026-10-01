@@ -192,3 +192,35 @@ describe('AppHeader — mobile', () => {
     expect(screen.queryByTestId('blocked-elsewhere')).not.toBeInTheDocument()
   })
 })
+
+describe('AppHeader side panel toggles', () => {
+  const PANELS = [{ id: 'files', label: 'Files', Icon: SquareTerminal }]
+
+  it('desktop: a pressed toggle closes its panel, another opens it', () => {
+    const onTogglePanel = vi.fn()
+    renderHeader({ panelViews: PANELS, sidePanelId: 'files', onTogglePanel })
+    const toggle = screen.getByRole('button', { name: 'Files' })
+    expect(toggle).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(toggle)
+    expect(onTogglePanel).toHaveBeenCalledWith(null)
+  })
+
+  it('desktop: an unpressed toggle opens its panel', () => {
+    const onTogglePanel = vi.fn()
+    renderHeader({ panelViews: PANELS, onTogglePanel })
+    const toggle = screen.getByRole('button', { name: 'Files' })
+    expect(toggle).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.click(toggle)
+    expect(onTogglePanel).toHaveBeenCalledWith('files')
+  })
+
+  it('shows no toggle group without panel views', () => {
+    renderHeader({ onTogglePanel: vi.fn() })
+    expect(screen.queryByRole('group', { name: 'Side panel' })).toBeNull()
+  })
+
+  it('mobile has no toggles', () => {
+    renderHeader({ isMobile: true, panelViews: PANELS, onTogglePanel: vi.fn() })
+    expect(screen.queryByRole('button', { name: 'Files' })).toBeNull()
+  })
+})

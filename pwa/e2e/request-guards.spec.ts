@@ -142,6 +142,41 @@ test.describe('write guards on send-keys', () => {
   })
 })
 
+test.describe('files routes', () => {
+  // Read-only GETs, guarded like writes: auth, Host, and a same-site check
+  const filesPath = async (request: APIRequestContext, rest: string) =>
+    `/api/mux/panes/${encodeURIComponent(await firstPane(request))}/files/${rest}`
+
+  test.beforeEach(async ({ request }) => {
+    const snap = await (await request.get('/api/mux/snapshot')).json()
+    test.skip(!snap.caps.files, 'the backend reports no pane directory')
+  })
+
+  test('a path that climbs out of the root is rejected', async ({ request }) => {
+    const res = await request.get(await filesPath(request, 'content?path=../../etc/passwd'))
+    expect(res.status()).toBe(400)
+  })
+
+  test('only GET is allowed', async ({ request }) => {
+    const res = await request.post(await filesPath(request, 'tree'), { data: {} })
+    expect(res.status()).toBe(405)
+  })
+
+  test('a cross-site GET is rejected', async ({ request }) => {
+    const res = await request.get(await filesPath(request, 'tree'), {
+      headers: { 'Sec-Fetch-Site': 'cross-site' },
+    })
+    expect(res.status()).toBe(403)
+  })
+
+  test('a request without credentials is rejected', async ({ request }, testInfo) => {
+    test.skip(!testInfo.project.use.httpCredentials, 'the server runs without auth')
+    // Node's fetch: Playwright's request contexts answer a challenge for us
+    const url = new URL(await filesPath(request, 'tree'), testInfo.project.use.baseURL)
+    expect((await fetch(url)).status).toBe(401)
+  })
+})
+
 test.describe('host allowlist', () => {
   test('a Host outside the allowlist is rejected', async ({ request }) => {
     const res = await request.get('/api/mux/health', { headers: { Host: 'rebind.example' } })
