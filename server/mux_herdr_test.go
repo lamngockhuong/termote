@@ -48,7 +48,8 @@ type fakeHerdr struct {
 	subs      []net.Conn
 	scroll    int // pane.get offset_from_bottom; pane.scroll sets it, clamped to scrollMax
 	scrollMax int
-	agent     string // pane.get agent
+	agent     string         // pane.get agent
+	paneExtra map[string]any // more pane.get fields (agent_session, agent_status)
 }
 
 func fakeSocketPath(t *testing.T) string {
@@ -197,8 +198,11 @@ func (f *fakeHerdr) handle(c net.Conn) {
 		}
 		scroll := map[string]int{"offset_from_bottom": f.scroll, "max_offset_from_bottom": f.scrollMax, "viewport_rows": 41}
 		agent := f.agent
-		f.mu.Unlock()
 		pane := map[string]any{"pane_id": p["pane_id"], "scroll": scroll}
+		for k, v := range f.paneExtra {
+			pane[k] = v
+		}
+		f.mu.Unlock()
 		if agent != "" {
 			pane["agent"] = agent
 		}
@@ -1185,5 +1189,57 @@ func TestHerdrStaleSnapshotKeepsNewerSize(t *testing.T) {
 		close(c.sent)
 		t.Errorf("stale snapshot moved the stream to %v", c.Size)
 	case <-time.After(300 * time.Millisecond):
+	}
+}
+
+func TestHerdrAgentSession(t *testing.T) {
+	f := newFakeHerdr(t)
+	m := newTestHerdrMux(t, f)
+	ctx := context.Background()
+	t.Setenv("CLAUDE_CONFIG_DIR", "/cfg/claude")
+	set := func(agent string, extra map[string]any) {
+		f.mu.Lock()
+		f.agent, f.paneExtra = agent, extra
+		f.mu.Unlock()
+	}
+	ref := func(agent, kind, value string) map[string]any {
+		return map[string]any{"agent_status": "blocked", "agent_session": map[string]any{
+			"agent": agent, "kind": kind, "value": value, "source": "herdr:" + agent}}
+	}
+
+	set("claude", ref("claude", "id", testSessionID))
+	s, ok, err := m.AgentSession(ctx, "wR:p3")
+	if err != nil || !ok || s.ID != testSessionID || s.Status != "blocked" || s.ClaudeDir != "/cfg/claude" || s.Target != "wR:p3" {
+		t.Fatalf("AgentSession = %+v, %v, %v", s, ok, err)
+	}
+	if p := f.lastParams(t, "pane.get"); p["pane_id"] != "wR:p3" {
+		t.Errorf("pane.get params = %v", p)
+	}
+	for name, tc := range map[string]struct {
+		agent string
+		extra map[string]any
+	}{
+		"no agent":                  {"", nil},
+		"agent without session ref": {"claude", map[string]any{}},
+		"ref left by another agent": {"pi", ref("claude", "id", testSessionID)},
+		"ref of another agent":      {"claude", ref("codex", "id", testSessionID)},
+		"path ref":                  {"claude", ref("claude", "path", "/x.jsonl")},
+		"not a uuid":                {"claude", ref("claude", "id", "../../x")},
+	} {
+		set(tc.agent, tc.extra)
+		if _, ok, err := m.AgentSession(ctx, "wR:p3"); ok || err != nil {
+			t.Errorf("%s: ok=%v err=%v", name, ok, err)
+		}
+	}
+	set("claude", map[string]any{"agent_status": "weird", "agent_session": ref("claude", "id", testSessionID)["agent_session"]})
+	if s, _, _ := m.AgentSession(ctx, "wR:p3"); s.Status != "unknown" {
+		t.Errorf("unknown status = %q", s.Status)
+	}
+	var ie inputError
+	if _, _, err := m.AgentSession(ctx, "-x"); !errors.As(err, &ie) {
+		t.Errorf("bad pane id: %v", err)
+	}
+	if !m.Caps().AgentChat {
+		t.Error("Caps().AgentChat = false")
 	}
 }

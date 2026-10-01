@@ -7,11 +7,15 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
 
 var tmuxSocket = os.Getenv("TMUX_SOCKET")
+
+// tmuxBin is the tmux executable; tests replace it with a script.
+var tmuxBin = "tmux"
 var tmuxSession = envOr("TMUX_SESSION", "main")
 
 func init() {
@@ -52,7 +56,7 @@ func qualifyTarget(id string) string {
 
 // tmuxArgv returns the full tmux command line, with the socket flag if set.
 func tmuxArgv(args ...string) []string {
-	argv := []string{"tmux"}
+	argv := []string{tmuxBin}
 	if tmuxSocket != "" {
 		argv = append(argv, "-S", tmuxSocket)
 	}
@@ -78,12 +82,13 @@ func isTmuxAttachCmdline(cmdline string) bool {
 
 // tmuxMux drives one tmux (or psmux on Windows) session. The session is the
 // only group, each window is a tab, and each tab exposes its active pane, so
-// pane IDs equal window IDs.
+// pane IDs equal window IDs. tmux's own pane id (%N) is used only where the
+// exact pane matters (the agent routes), since a window can be split.
 type tmuxMux struct{}
 
 func (tmuxMux) Name() string { return "tmux" }
 
-func (tmuxMux) Caps() Caps { return Caps{CopyMode: true} }
+func (tmuxMux) Caps() Caps { return Caps{CopyMode: true, AgentChat: agentProcSupported} }
 
 // listWindowsAttempts bounds retries of an empty list-windows reply.
 const listWindowsAttempts = 5
@@ -95,9 +100,10 @@ const listWindowsAttempts = 5
 func listWindows(ctx context.Context) (string, error) {
 	for i := 0; i < listWindowsAttempts; i++ {
 		// Name goes last: SplitN keeps any ':' inside it. psmux mangles some
-		// other separators (e.g. '|'), ':' works on both.
+		// other separators (e.g. '|'), ':' works on both. pane_id and
+		// pane_pid are the window's active pane.
 		out, err := tmuxCmd(ctx, "list-windows", "-t", tmuxSession, "-F",
-			"#{window_index}:#{window_active}:#{window_name}").Output()
+			"#{window_index}:#{window_active}:#{pane_id}:#{pane_pid}:#{window_name}").Output()
 		if err != nil {
 			return "", err
 		}
@@ -152,18 +158,25 @@ func (tmuxMux) Snapshot(ctx context.Context) (Snapshot, error) {
 		return Snapshot{}, err
 	}
 	tabs := []Tab{}
+	var agentPanes []agentPane
 	for _, line := range strings.Split(out, "\n") {
-		parts := strings.SplitN(strings.TrimRight(line, "\r"), ":", 3)
-		if len(parts) != 3 {
+		parts := strings.SplitN(strings.TrimRight(line, "\r"), ":", 5)
+		if len(parts) != 5 {
 			continue
 		}
 		active := parts[1] == "1"
 		tabs = append(tabs, Tab{
 			ID:     parts[0],
-			Name:   parts[2],
+			Name:   parts[4],
 			Active: active,
 			Panes:  []Pane{{ID: parts[0], Active: active}},
 		})
+		agentPanes = append(agentPanes, agentPane{len(tabs) - 1, parts[2], parts[3]})
+	}
+	for i, a := range lookupAgents(ctx, agentPanes) {
+		if a != nil {
+			tabs[agentPanes[i].tab].Panes[0].Agent = a
+		}
 	}
 	return Snapshot{Groups: []Group{{ID: tmuxSession, Name: tmuxSession, Tabs: tabs}}}, nil
 }
@@ -244,6 +257,74 @@ func (m tmuxMux) Attach(ctx context.Context, paneID string, size Size) (TermStre
 		return nil, err
 	}
 	return startTerminal(tmuxAttachArgv(), size)
+}
+
+// agentLookupWait bounds how long a snapshot waits for agent lookups, which
+// read files in each agent's config dir (possibly a network mount).
+const agentLookupWait = 300 * time.Millisecond
+
+type agentPane struct {
+	tab             int
+	paneID, panePID string
+}
+
+// lookupAgents finds the agent of each pane. A snapshot that would wait past
+// agentLookupWait is answered without agents; the lookup keeps running and
+// fills the caches for the next one.
+func lookupAgents(ctx context.Context, panes []agentPane) []*AgentInfo {
+	done := make(chan []*AgentInfo, 1)
+	go func() {
+		out := make([]*AgentInfo, len(panes))
+		for i, p := range panes {
+			if s, ok := tmuxPaneAgent(p.paneID, p.panePID); ok {
+				out[i] = &AgentInfo{Name: s.Agent, Status: s.Status}
+			}
+		}
+		done <- out
+	}()
+	select {
+	case out := <-done:
+		return out
+	case <-ctx.Done():
+	case <-time.After(agentLookupWait):
+	}
+	log.Printf("tmux snapshot: agent lookup took longer than %s, skipped", agentLookupWait)
+	return make([]*AgentInfo, len(panes))
+}
+
+// tmuxPaneIDRe matches tmux's own pane id, which never starts with '-'.
+var tmuxPaneIDRe = regexp.MustCompile(`^%[0-9]+$`)
+
+// tmuxPaneAgent finds the Claude Code session under a pane's process.
+func tmuxPaneAgent(paneID, panePID string) (AgentSession, bool) {
+	pid, err := strconv.Atoi(panePID)
+	if !tmuxPaneIDRe.MatchString(paneID) || err != nil {
+		return AgentSession{}, false
+	}
+	s, ok := findClaudeSession(paneID, pid)
+	s.Target = paneID
+	return s, ok
+}
+
+// AgentSession reports the agent session of a window's active pane. It asks
+// tmux for that one pane instead of listing every window. tmux answers a
+// target that does not exist with the current window instead of an error, so
+// the window index in the reply must be the one asked for.
+func (tmuxMux) AgentSession(ctx context.Context, paneID string) (AgentSession, bool, error) {
+	if !validTmuxID(paneID) {
+		return AgentSession{}, false, inputError("invalid pane id")
+	}
+	if _, err := strconv.Atoi(paneID); err != nil {
+		return AgentSession{}, false, inputError("invalid pane id")
+	}
+	out, err := tmuxCmd(ctx, "display-message", "-p", "-t", qualifyTarget(paneID),
+		"#{window_index}:#{pane_id}:#{pane_pid}").Output()
+	parts := strings.Split(strings.TrimSpace(string(out)), ":")
+	if err != nil || len(parts) != 3 || parts[0] != paneID {
+		return AgentSession{}, false, inputError("unknown pane")
+	}
+	s, ok := tmuxPaneAgent(parts[1], parts[2])
+	return s, ok, nil
 }
 
 // Health reports ok without touching tmux: the PWA creates the

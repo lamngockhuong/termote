@@ -59,6 +59,9 @@ type Caps struct {
 	// DriveSize: the client can take over the pane size while it shows the
 	// pane (the stream's drive message, herdr's control mode).
 	DriveSize bool `json:"driveSize"`
+	// AgentChat: the backend can tell which agent session a pane runs, so
+	// the agent routes (/api/mux/panes/{id}/agent/*) work.
+	AgentChat bool `json:"agentChat"`
 }
 
 type Snapshot struct {
@@ -89,7 +92,8 @@ type Pane struct {
 	Agent  *AgentInfo `json:"agent,omitempty"`
 }
 
-// AgentInfo is filled by backends that detect coding agents (herdr).
+// AgentInfo is filled by backends that detect coding agents (herdr, and tmux
+// for Claude Code).
 type AgentInfo struct {
 	Name   string `json:"name"`
 	Status string `json:"status"`
@@ -252,6 +256,8 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore) {
 		}
 		jsonOK(w, map[string]any{"ok": true})
 	})
+
+	registerAgentRoutes(mux, m)
 
 	// Only reachable via fetch/XHR from the PWA, not by direct navigation.
 	mux.HandleFunc("/api/mux/stream-token", handleTerminalToken(tokens))
