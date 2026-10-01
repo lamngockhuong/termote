@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AgentRequestError,
+  answerAgentPrompt,
   closeTab,
   createTab,
+  fetchAgentPrompt,
   fetchHealth,
   fetchSnapshot,
   fetchTerminalToken,
@@ -254,6 +256,57 @@ describe('agent API client', () => {
       status: 413,
       code: 'text_too_long',
       limit: 16384,
+    })
+  })
+
+  it('reads the open dialog, null when none', async () => {
+    const prompt = { promptId: 'p', kind: 'permission', title: 'Bash command' }
+    const { calls } = mockFetch(
+      { body: { prompt } },
+      { body: { prompt: null } },
+    )
+    expect(await fetchAgentPrompt('%3')).toEqual(prompt)
+    expect(await fetchAgentPrompt('%3')).toBeNull()
+    expect(calls[0].url).toBe('/api/mux/panes/%253/agent/prompt')
+  })
+
+  it('a prompt read can be refused', async () => {
+    mockFetch({ body: { error: 'agent not available' }, status: 404 })
+    await expect(fetchAgentPrompt('1')).rejects.toMatchObject({ status: 404 })
+  })
+
+  it('answers with the promptId and the choice', async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({ url: String(input), init })
+        return new Response(null, { status: 204 })
+      }),
+    )
+    await answerAgentPrompt('1', 'pid', 2)
+    await answerAgentPrompt('1', 'pid', 'cancel')
+    expect(calls[0].url).toBe('/api/mux/panes/1/agent/answer')
+    expect(calls[0].init).toMatchObject({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ promptId: 'pid', choice: 2 }),
+    })
+    expect(calls[1].init?.body).toBe(
+      JSON.stringify({ promptId: 'pid', choice: 'cancel' }),
+    )
+  })
+
+  it('a changed dialog comes back with the refusal', async () => {
+    const prompt = { promptId: 'p2', kind: 'permission', title: 'Bash command' }
+    mockFetch({
+      body: { error: 'the screen changed', code: 'prompt_changed', prompt },
+      status: 409,
+    })
+    await expect(answerAgentPrompt('1', 'p1', 1)).rejects.toMatchObject({
+      status: 409,
+      code: 'prompt_changed',
+      prompt,
     })
   })
 })

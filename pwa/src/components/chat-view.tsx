@@ -7,9 +7,13 @@ import {
   useState,
 } from 'react'
 import type { ViewProps } from '../app-views'
+import { useAgentPrompt } from '../hooks/use-agent-prompt'
 import { useAgentTranscript } from '../hooks/use-agent-transcript'
+import { toAgentStatus } from '../types/session'
+import { AgentStatusBadge } from './agent-status-badge'
 import { ChatMessage } from './chat-message'
 import { OpenTerminalButton } from './open-terminal-button'
+import { PromptCard } from './prompt-card'
 import { Button } from './ui/button'
 
 // Entries rendered at once; scrolling to the top shows more.
@@ -17,8 +21,11 @@ export const RENDER_WINDOW = 150
 // Within this many pixels of the bottom, the list follows new entries.
 const STICK_DISTANCE = 48
 
-export function ChatView({ session, showView }: ViewProps) {
+export function ChatView({ session, showView, readOnly }: ViewProps) {
   const t = useAgentTranscript(session.paneId)
+  const status = toAgentStatus(t.status)
+  // View-only has no composer: the dialog is shown here, without buttons.
+  const p = useAgentPrompt(readOnly ? session.paneId : undefined, status)
   const listRef = useRef<HTMLDivElement>(null)
   const [shown, setShown] = useState(RENDER_WINDOW)
   const [atBottom, setAtBottom] = useState(true)
@@ -147,6 +154,7 @@ export function ChatView({ session, showView }: ViewProps) {
   return (
     <div className="relative flex h-full flex-col">
       <header className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2 text-[13px]">
+        <AgentStatusBadge status={status} />
         <span className="min-w-0 flex-1 truncate font-medium">
           Claude Code · {session.name}
           {paneLabel && ` · ${paneLabel}`}
@@ -178,6 +186,16 @@ export function ChatView({ session, showView }: ViewProps) {
           <ChatMessage key={e.id} entry={e} />
         ))}
       </section>
+      {readOnly && p.prompt && (
+        <PromptCard
+          readOnly
+          paneId={session.paneId ?? ''}
+          prompt={p.prompt}
+          showView={showView}
+          onAnswered={p.refresh}
+          onChanged={p.show}
+        />
+      )}
       {unseen && (
         <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
           <Button

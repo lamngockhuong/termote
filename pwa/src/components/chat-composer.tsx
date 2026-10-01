@@ -1,9 +1,12 @@
 import { SendHorizontal } from 'lucide-react'
 import { type KeyboardEvent, useEffect, useId, useState } from 'react'
 import type { ViewProps } from '../app-views'
+import { useAgentPrompt } from '../hooks/use-agent-prompt'
 import { useAgentTranscript } from '../hooks/use-agent-transcript'
 import { AgentRequestError, sendAgentMessage } from '../hooks/use-mux-api'
+import { toAgentStatus } from '../types/session'
 import { OpenTerminalButton } from './open-terminal-button'
+import { PromptCard, WaitingCard } from './prompt-card'
 import { Banner, type BannerVariant } from './ui/banner'
 import { IconButton } from './ui/button'
 
@@ -89,6 +92,11 @@ function noticeFor(err: unknown): Notice {
 export function ChatComposer({ session, isMobile, showView }: ViewProps) {
   const paneId = session.paneId ?? ''
   const t = useAgentTranscript(session.paneId)
+  const status = toAgentStatus(t.status)
+  const p = useAgentPrompt(session.paneId, status)
+  // Blocked with no dialog the server can read. Only once a dialog read came
+  // back: before it, or as an answer settles, this would flash.
+  const waiting = status === 'blocked' && p.loaded && !p.prompt
   const [text, setText] = useState(() => loadDraft(paneId))
   const [sending, setSending] = useState(false)
   const [notice, setNotice] = useState<Notice | null>(null)
@@ -144,12 +152,59 @@ export function ChatComposer({ session, isMobile, showView }: ViewProps) {
   }
 
   const rows = Math.min(MAX_ROWS, Math.max(1, text.split('\n').length))
+  // One live region in every state, so a dialog, a wait or a refusal is
+  // announced when it appears.
+  const announcement =
+    notice?.text ??
+    (p.prompt
+      ? `Claude Code asks: ${p.prompt.title || 'a question'}`
+      : waiting
+        ? 'Claude Code is waiting for you in the terminal.'
+        : '')
+  const live = (
+    <p aria-live="polite" className="sr-only">
+      {announcement}
+    </p>
+  )
+  // An open dialog takes the composer's place; the draft is kept for after.
+  if (p.prompt) {
+    return (
+      <>
+        {live}
+        <PromptCard
+          // A new dialog starts without the last one's notice
+          key={p.prompt.title}
+          paneId={paneId}
+          prompt={p.prompt}
+          showView={showView}
+          onAnswered={() => {
+            p.refresh()
+            t.refresh()
+          }}
+          onChanged={(next) => {
+            p.show(next)
+            if (!next) {
+              setNotice({
+                variant: 'info',
+                text: 'The dialog closed before the answer was sent.',
+              })
+            }
+          }}
+        />
+      </>
+    )
+  }
+  if (waiting) {
+    return (
+      <>
+        {live}
+        <WaitingCard showView={showView} />
+      </>
+    )
+  }
   return (
     <div className="shrink-0 border-t border-border bg-surface pb-safe ui-terminal:bg-bg">
-      {/* Always in the page, so a refusal is announced when it appears. */}
-      <p aria-live="polite" className="sr-only">
-        {notice?.text}
-      </p>
+      {live}
       {notice && (
         <Banner
           variant={notice.variant}

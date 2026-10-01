@@ -250,10 +250,22 @@ var (
 // without "Esc to cancel" is not a dialog this code knows.
 func findDialog(lines []screenLine) claudeScreen {
 	n := len(lines)
-	if n == 0 || !strings.Contains(lines[n-1].text, "Esc to cancel") {
+	if n == 0 {
 		return claudeScreen{}
 	}
+	// A narrow pane wraps the footer onto two rows ("… · Esc to" / "cancel").
+	// Only the end of the hint may move to the last row: a row of its own
+	// below a whole footer is not part of the dialog.
 	footer := n - 1
+	if !strings.Contains(lines[footer].text, "Esc to cancel") {
+		last := strings.TrimSpace(lines[n-1].text)
+		if n < 2 || last == "" || !strings.HasSuffix("Esc to cancel", last) ||
+			strings.Contains(lines[n-2].text, "Esc to cancel") ||
+			!strings.HasSuffix(strings.TrimSpace(lines[n-2].text)+" "+last, "Esc to cancel") {
+			return claudeScreen{}
+		}
+		footer = n - 2
+	}
 	// The dialog's top edge is the first rule above the footer whose next
 	// row is not an option: AskUserQuestion draws a rule between its
 	// options and "Chat about this".
@@ -269,7 +281,7 @@ func findDialog(lines []screenLine) claudeScreen {
 	}
 	region := lines[top+1 : footer]
 	h := sha256.New()
-	for _, l := range lines[top : footer+1] {
+	for _, l := range lines[top:] {
 		h.Write([]byte(strings.TrimRight(strings.ReplaceAll(l.text, "❯", " "), " ")))
 		h.Write([]byte{'\n'})
 	}

@@ -79,6 +79,8 @@ func TestReadClaudeScreenDialogs(t *testing.T) {
 		{"2.1.286-permission-write", "permission", "Create file", "1. Yes | 2. Yes, and switch to accept edits (auto-approve file edits and common file commands) for this | 3. No", "Do you want to create hello.txt?"},
 		{"collie-claude--permission-edit", "permission", "Create file", "1. Yes | 2. Yes, allow all edits during this session (shift+tab) | 3. No", "1 hello"},
 		{"2.1.286-ask-single", "select", "Theme", "1. Red | 2. Green | 3. Blue", "Which color theme do you prefer?"},
+		// 47 columns: the footer wraps onto two rows.
+		{"2.1.286-ask-single-narrow", "select", "Color", "1. Red | 2. Blue", "Which color do you prefer?"},
 		{"collie-claude--select-menu", "select", "Color Theme", "1. Red | 2. Green | 3. Blue", "Which color theme should the dashboard use?"},
 		// Answered in the terminal only.
 		{"2.1.286-ask-multi", "unsupported", "←  ☐ Toppings  ✔ Submit  →", "", "Which toppings"},
@@ -264,3 +266,35 @@ func TestReadClaudeScreenAdversarial(t *testing.T) {
 }
 
 func itoa10(n int) string { return strconv.Itoa(n) }
+
+func TestWrappedFooterIsOnlyTheHintsTail(t *testing.T) {
+	b, _ := os.ReadFile("testdata/claude/screens/2.1.286-permission-bash.txt")
+	perm := string(b)
+	// A whole footer with another row below it is not a dialog at the
+	// bottom: the extra row (a spinner, a toast) would change the signature
+	// on every read.
+	if sc := readClaudeScreen(perm + "\n  some other row\n"); sc.prompt != nil {
+		t.Errorf("footer above a stray row = %+v", sc.prompt)
+	}
+	// Prose cut as "… Esc to" / "cancel" under a rule, nothing numbered.
+	rule := strings.Repeat("─", 40)
+	if sc := readClaudeScreen(rule + "\n Notes\n Press Esc to\n cancel\n"); sc.prompt != nil && sc.prompt.Kind != "unsupported" {
+		t.Errorf("prose = %+v", sc.prompt)
+	}
+	// A real wrap of the select footer keeps its signature as the pointer moves.
+	n, _ := os.ReadFile("testdata/claude/screens/2.1.286-ask-single-narrow.txt")
+	var plain []string
+	for _, l := range parseScreen(string(n)) {
+		plain = append(plain, l.text)
+	}
+	screen := strings.Join(plain, "\n")
+	moved := strings.Replace(strings.Replace(screen, "❯ 1. Red", "  1. Red", 1), "  2. Blue", "❯ 2. Blue", 1)
+	a := readClaudeScreen(screen)
+	if moved == screen || a.prompt == nil || readClaudeScreen(moved).sig != a.sig {
+		t.Errorf("narrow signature moved with the pointer (changed=%v)", moved != screen)
+	}
+	// "… Esc" / "to cancel" is a wrap too.
+	if sc := readClaudeScreen(rule + "\n Bash command\n Do you want to proceed?\n ❯ 1. Yes\n   2. No\n Enter to confirm · Esc\n to cancel\n"); sc.prompt == nil || sc.prompt.Kind != "permission" {
+		t.Errorf("wrap after Esc = %+v", sc.prompt)
+	}
+}

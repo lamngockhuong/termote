@@ -201,6 +201,8 @@ export class AgentRequestError extends Error {
     readonly code: string,
     message: string,
     readonly limit?: number,
+    // prompt_changed: the dialog now on screen (null when none)
+    readonly prompt?: AgentPrompt | null,
   ) {
     super(message)
   }
@@ -213,6 +215,7 @@ async function agentError(res: Response): Promise<AgentRequestError> {
     body.code ?? '',
     body.error ?? `request failed: ${res.status}`,
     body.limit,
+    body.prompt,
   )
 }
 
@@ -245,6 +248,39 @@ export async function sendAgentMessage(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text, cursor }),
+  })
+  if (!res.ok) throw await agentError(res)
+}
+
+// A dialog Claude Code has open. permission and select carry options and a
+// single-use promptId; unsupported is shown only (answered in the terminal),
+// as is a dialog whose id was just used.
+export interface AgentPrompt {
+  promptId?: string
+  kind: 'permission' | 'select' | 'unsupported'
+  title: string
+  body?: string
+  options?: { index: number; label: string; detail?: string }[]
+}
+
+export async function fetchAgentPrompt(
+  paneId: string,
+): Promise<AgentPrompt | null> {
+  const res = await fetch(agentPath(paneId, 'prompt'))
+  if (!res.ok) throw await agentError(res)
+  return (await res.json()).prompt
+}
+
+// Answers the dialog promptId names: an option's index, or 'cancel' (Esc).
+export async function answerAgentPrompt(
+  paneId: string,
+  promptId: string,
+  choice: number | 'cancel',
+): Promise<void> {
+  const res = await fetch(agentPath(paneId, 'answer'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ promptId, choice }),
   })
   if (!res.ok) throw await agentError(res)
 }

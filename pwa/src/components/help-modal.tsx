@@ -157,7 +157,7 @@ const TOOLBAR_GUIDE: GuideSection[] = [
     ],
   },
   {
-    title: 'Agent Status (Herdr)',
+    title: 'Agent Status',
     items: [
       {
         key: <AgentStatusBadge status="blocked" />,
@@ -166,6 +166,10 @@ const TOOLBAR_GUIDE: GuideSection[] = [
       { key: <AgentStatusBadge status="working" />, desc: 'Working' },
       { key: <AgentStatusBadge status="done" />, desc: 'Done' },
       { key: <AgentStatusBadge status="idle" />, desc: 'Idle' },
+      {
+        key: 'Chat',
+        desc: 'Claude Code panes: read the conversation, send a message, answer its dialogs',
+      },
     ],
   },
 ]

@@ -89,7 +89,7 @@ describe('HelpModal', () => {
   it('explains the agent status badges on the Toolbar tab', () => {
     render(<HelpModal isOpen={true} onClose={vi.fn()} />)
     fireEvent.click(screen.getByText('Toolbar'))
-    expect(screen.getByText('Agent Status (Herdr)')).toBeInTheDocument()
+    expect(screen.getByText('Agent Status')).toBeInTheDocument()
     for (const status of ['blocked', 'working', 'done', 'idle']) {
       expect(screen.getByLabelText(`Agent ${status}`)).toBeInTheDocument()
     }

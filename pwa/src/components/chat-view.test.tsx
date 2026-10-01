@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ViewProps } from '../app-views'
 import type { TranscriptState } from '../hooks/use-agent-transcript'
-import type { TranscriptEntry } from '../hooks/use-mux-api'
+import type { AgentPrompt, TranscriptEntry } from '../hooks/use-mux-api'
 import ChatView, { RENDER_WINDOW } from './chat-view'
 import { OpenTerminalButton } from './open-terminal-button'
 
@@ -11,6 +11,21 @@ const transcript = {
   refresh: vi.fn(),
   loadOlder: vi.fn(),
 }
+const promptStore = {
+  prompt: null as AgentPrompt | null,
+  pane: undefined as unknown,
+}
+vi.mock('../hooks/use-agent-prompt', () => ({
+  useAgentPrompt: (pane: unknown) => {
+    promptStore.pane = pane
+    return {
+      prompt: promptStore.prompt,
+      loaded: true,
+      refresh: vi.fn(),
+      show: vi.fn(),
+    }
+  },
+}))
 vi.mock('../hooks/use-agent-transcript', () => ({
   useAgentTranscript: () => ({
     ...transcript.state,
@@ -70,6 +85,7 @@ function layout(
 beforeEach(() => {
   vi.clearAllMocks()
   set({})
+  promptStore.prompt = null
 })
 
 describe('ChatView', () => {
@@ -185,6 +201,50 @@ describe('ChatView', () => {
     set({ entries: entries(RENDER_WINDOW + 5), sessionId: 's2' })
     rerender(<ChatView {...props} />)
     expect(screen.queryByText('message 0')).toBeNull()
+  })
+})
+
+describe('ChatView agent state', () => {
+  it('the header shows the agent status', () => {
+    set({ entries: entries(1), status: 'blocked' })
+    render(<ChatView {...props} />)
+    expect(
+      screen.getByRole('img', { name: 'Agent blocked' }),
+    ).toBeInTheDocument()
+  })
+
+  it('only view-only reads the dialog here, and shows it without buttons', () => {
+    const dialog: AgentPrompt = {
+      promptId: 'id1',
+      kind: 'permission',
+      title: 'Bash command',
+      options: [{ index: 1, label: 'Yes' }],
+    }
+    promptStore.prompt = dialog
+    set({ entries: entries(1) })
+    const { rerender } = render(<ChatView {...props} />)
+    // The composer shows the card; the view does not poll the dialog
+    expect(promptStore.pane).toBeUndefined()
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    rerender(<ChatView {...props} readOnly />)
+    expect(promptStore.pane).toBe('0')
+    expect(
+      screen.getByRole('region', { name: 'Bash command' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Yes/ })).toBeNull()
+  })
+
+  it('view-only on a pane-less session passes an empty pane id', () => {
+    promptStore.prompt = { kind: 'unsupported', title: 'x' }
+    set({ entries: entries(1) })
+    render(
+      <ChatView
+        {...props}
+        readOnly
+        session={{ ...props.session, paneId: undefined }}
+      />,
+    )
+    expect(screen.getByRole('region', { name: 'x' })).toBeInTheDocument()
   })
 })
 

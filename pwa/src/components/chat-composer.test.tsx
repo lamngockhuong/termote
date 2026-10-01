@@ -1,16 +1,40 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ViewProps } from '../app-views'
-import { AgentRequestError } from '../hooks/use-mux-api'
+import { type AgentPrompt, AgentRequestError } from '../hooks/use-mux-api'
 import { byteLength, ChatComposer, MAX_MESSAGE_BYTES } from './chat-composer'
 
-const transcript = { cursor: 'cur1' as string | undefined, refresh: vi.fn() }
+const transcript = {
+  cursor: 'cur1' as string | undefined,
+  status: 'idle' as string | undefined,
+  refresh: vi.fn(),
+}
+const mockAnswerPrompt = vi.fn(() => Promise.resolve())
+const promptStore = {
+  loaded: true,
+  prompt: null as AgentPrompt | null,
+  refresh: vi.fn(),
+  show: vi.fn(),
+  status: undefined as unknown,
+}
+vi.mock('../hooks/use-agent-prompt', () => ({
+  useAgentPrompt: (_pane: string, status: unknown) => {
+    promptStore.status = status
+    return {
+      prompt: promptStore.prompt,
+      loaded: promptStore.loaded,
+      refresh: promptStore.refresh,
+      show: promptStore.show,
+    }
+  },
+}))
 vi.mock('../hooks/use-agent-transcript', () => ({
   useAgentTranscript: () => ({
     entries: [],
     loaded: true,
     loadingOlder: false,
     cursor: transcript.cursor,
+    status: transcript.status,
     refresh: transcript.refresh,
     loadOlder: vi.fn(),
   }),
@@ -20,6 +44,7 @@ const mockSend = vi.fn()
 vi.mock('../hooks/use-mux-api', async (orig) => ({
   ...(await orig<typeof import('../hooks/use-mux-api')>()),
   sendAgentMessage: (...a: unknown[]) => mockSend(...a),
+  answerAgentPrompt: (...a: unknown[]) => mockAnswerPrompt(...(a as [])),
 }))
 
 const showView = vi.fn()
@@ -58,6 +83,10 @@ beforeEach(() => {
   vi.clearAllMocks()
   sessionStorage.clear()
   transcript.cursor = 'cur1'
+  transcript.status = 'idle'
+  promptStore.prompt = null
+  promptStore.loaded = true
+  mockAnswerPrompt.mockResolvedValue(undefined)
   mockSend.mockResolvedValue(undefined)
 })
 
@@ -340,5 +369,102 @@ describe('ChatComposer', () => {
     })
     expect(mockSend).toHaveBeenCalledTimes(1)
     vi.useRealTimers()
+  })
+
+  it("an open dialog takes the composer's place", async () => {
+    transcript.status = 'blocked'
+    promptStore.prompt = {
+      promptId: 'id1',
+      kind: 'permission',
+      title: 'Bash command',
+      options: [{ index: 1, label: 'Yes' }],
+    }
+    render(<ChatComposer {...props()} />)
+    expect(promptStore.status).toBe('blocked')
+    expect(screen.queryByRole('textbox')).toBeNull()
+    expect(
+      screen.getByRole('alertdialog', { name: 'Bash command' }),
+    ).toBeInTheDocument()
+    // Answered: the dialog and the conversation are read again
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /1\.\s*Yes/ }))
+    })
+    expect(promptStore.refresh).toHaveBeenCalled()
+    expect(transcript.refresh).toHaveBeenCalled()
+  })
+
+  it('waiting with no dialog read points to the terminal', () => {
+    transcript.status = 'blocked'
+    render(<ChatComposer {...props()} />)
+    expect(screen.queryByRole('textbox')).toBeNull()
+    // The card, and the live region that announces it
+    expect(
+      screen.getAllByText('Claude Code is waiting for you in the terminal.'),
+    ).toHaveLength(2)
+  })
+
+  it('no waiting card before the first dialog read', () => {
+    transcript.status = 'blocked'
+    promptStore.loaded = false
+    render(<ChatComposer {...props()} />)
+    expect(
+      screen.getByRole('textbox', { name: 'Message to Claude Code' }),
+    ).toBeInTheDocument()
+  })
+
+  it('a dialog is announced; a dialog gone before the answer says so', async () => {
+    promptStore.prompt = {
+      promptId: 'id1',
+      kind: 'permission',
+      title: 'Bash command',
+      options: [{ index: 1, label: 'Yes' }],
+    }
+    mockAnswerPrompt.mockRejectedValueOnce(
+      new AgentRequestError(409, 'prompt_changed', 'x'),
+    )
+    const { container, rerender } = render(<ChatComposer {...props()} />)
+    expect(
+      container.querySelector('[aria-live="polite"].sr-only'),
+    ).toHaveTextContent('Claude Code asks: Bash command')
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /1\.\s*Yes/ }))
+    })
+    expect(promptStore.show).toHaveBeenCalledWith(null)
+    promptStore.prompt = null
+    rerender(<ChatComposer {...props()} />)
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'The dialog closed before the answer was sent.',
+    )
+  })
+
+  it('a changed dialog replaces the card without a notice', async () => {
+    const next: AgentPrompt = {
+      promptId: 'id2',
+      kind: 'permission',
+      title: 'Edit file',
+      options: [{ index: 1, label: 'Yes' }],
+    }
+    promptStore.prompt = {
+      promptId: 'id1',
+      kind: 'permission',
+      title: 'Bash command',
+      options: [{ index: 1, label: 'Yes' }],
+    }
+    mockAnswerPrompt.mockRejectedValueOnce(
+      new AgentRequestError(409, 'prompt_changed', 'x', undefined, next),
+    )
+    render(<ChatComposer {...props()} />)
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /1\.\s*Yes/ }))
+    })
+    expect(promptStore.show).toHaveBeenCalledWith(next)
+  })
+
+  it('an untitled dialog is still announced', () => {
+    promptStore.prompt = { kind: 'unsupported', title: '' }
+    const { container } = render(<ChatComposer {...props()} />)
+    expect(
+      container.querySelector('[aria-live="polite"].sr-only'),
+    ).toHaveTextContent('Claude Code asks: a question')
   })
 })

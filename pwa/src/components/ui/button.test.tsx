@@ -81,4 +81,13 @@ describe('IconButton', () => {
       'focus-visible:outline-accent',
     )
   })
+
+  it('grow keeps the touch height as a minimum only', () => {
+    render(<Button size="grow">Two{'\n'}lines</Button>)
+    const b = screen.getByRole('button')
+    expect(b).toHaveClass('min-h-9', 'pointer-coarse:min-h-touch')
+    expect(b).not.toHaveClass('h-9', 'pointer-coarse:h-touch')
+    render(<IconButton aria-label="x" size="grow" />)
+    expect(screen.getByRole('button', { name: 'x' })).toHaveClass('size-10')
+  })
 })
