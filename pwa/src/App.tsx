@@ -101,7 +101,9 @@ export default function App({
   readOnly = false,
 }: AppProps = {}) {
   const terminalRef = useRef<TerminalHandle>(null)
-  const getTerminal = () => terminalRef.current
+  // Stable, so the handlers that depend on it are not rebuilt every render;
+  // it reads the ref at call time.
+  const getTerminal = useCallback(() => terminalRef.current, [])
   const gestureRef = useRef<HTMLDivElement>(null)
   const ctrlInputRef = useRef<HTMLInputElement>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
