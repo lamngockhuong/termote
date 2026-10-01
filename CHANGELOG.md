@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.2.0](https://github.com/lamngockhuong/termote/compare/v1.1.0...v1.2.0) (2026-10-01)
+
+
+### Features
+
+* add a Chat view for panes running Claude Code ([#245](https://github.com/lamngockhuong/termote/issues/245)) ([d0247c7](https://github.com/lamngockhuong/termote/commit/d0247c732f3ed3d9c633b79f9b4de9eeacc3a9d7)), closes [#233](https://github.com/lamngockhuong/termote/issues/233)
+* **pwa:** redesign the PWA interface with three selectable styles ([#239](https://github.com/lamngockhuong/termote/issues/239)) ([6de5c72](https://github.com/lamngockhuong/termote/commit/6de5c725338c34bff661f2e059bc1da3bcef1a3e)), closes [#232](https://github.com/lamngockhuong/termote/issues/232)
+* zoom the font on herdr panes and let the PWA fit them to the device ([#243](https://github.com/lamngockhuong/termote/issues/243)) ([0bae739](https://github.com/lamngockhuong/termote/commit/0bae73944e8a7447a33f334606e14fde0e4cb9be))
+
+
+### Bug Fixes
+
+* **pwa:** make sheets, menus and native keys render correctly on iOS ([#242](https://github.com/lamngockhuong/termote/issues/242)) ([c5b9a7b](https://github.com/lamngockhuong/termote/commit/c5b9a7bdb2f423870c845f6a1b0f71ebd711c973))
+* **pwa:** make touch scrolling follow the finger ([#244](https://github.com/lamngockhuong/termote/issues/244)) ([78ef5dc](https://github.com/lamngockhuong/termote/commit/78ef5dcad62cdf7c22cd0098b126330030fa6582))
+
 ## [1.1.0](https://github.com/lamngockhuong/termote/compare/v1.0.1...v1.1.0) (2026-09-29)
 
 
