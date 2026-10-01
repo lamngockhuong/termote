@@ -263,10 +263,18 @@ export async function sendAgentMessage(
 // as is a dialog whose id was just used.
 export interface AgentPrompt {
   promptId?: string
-  kind: 'permission' | 'select' | 'unsupported'
+  kind: 'permission' | 'select' | 'multiselect' | 'unsupported'
   title: string
   body?: string
-  options?: { index: number; label: string; detail?: string }[]
+  // checked: a multiSelect option ticked; its digit toggles it
+  options?: {
+    index: number
+    label: string
+    detail?: string
+    checked?: boolean
+  }[]
+  // The tabs of a question with several parts, answered one tab at a time
+  steps?: { label: string; answered?: boolean; current?: boolean }[]
 }
 
 export async function fetchAgentPrompt(
@@ -277,11 +285,14 @@ export async function fetchAgentPrompt(
   return (await res.json()).prompt
 }
 
-// Answers the dialog promptId names: an option's index, or 'cancel' (Esc).
+// An answer to the dialog promptId names: an option's number, Escape, Right
+// on a multiSelect tab, or another tab of a question in several parts
+export type AgentChoice = number | 'cancel' | 'next' | { step: number }
+
 export async function answerAgentPrompt(
   paneId: string,
   promptId: string,
-  choice: number | 'cancel',
+  choice: AgentChoice,
 ): Promise<void> {
   const res = await fetch(agentPath(paneId, 'answer'), {
     method: 'POST',

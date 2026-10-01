@@ -306,7 +306,7 @@ func TestPromptRoute(t *testing.T) {
 	if again := getPrompt(t, mux, "0"); again["promptId"] != p["promptId"] {
 		t.Errorf("id changed: %v → %v", p["promptId"], again["promptId"])
 	}
-	f.setScreen(fixtureScreen(t, "2.1.286-ask-wizard"))
+	f.setScreen(fixtureScreen(t, "2.1.286-trust-unnumbered"))
 	time.Sleep(agentCacheTTL)
 	if u := getPrompt(t, mux, "0"); u["kind"] != "unsupported" || u["promptId"] != nil {
 		t.Errorf("unsupported = %v", u)
@@ -498,11 +498,217 @@ func TestAnswer(t *testing.T) {
 	})
 	t.Run("unsupported dialog", func(t *testing.T) {
 		f := newFakeWriter()
-		f.screen = fixtureScreen(t, "2.1.286-ask-multi")
+		f.screen = fixtureScreen(t, "2.1.286-trust-unnumbered")
 		mux := agentMux(f)
 		getPrompt(t, mux, "0")
 		if code, _ := postJSON(t, mux, "/api/mux/panes/0/agent/answer", map[string]any{"promptId": "", "choice": 1}); code != 409 || len(f.keys) != 0 {
 			t.Errorf("unsupported = %d", code)
+		}
+	})
+}
+
+func TestAnswerWizard(t *testing.T) {
+	shortConfirm(t)
+	// Each key moves Claude Code to the screen recorded after it.
+	next := map[string]map[string]string{
+		"2.1.286-ask-wizard":        {"1": "2.1.286-ask-wizard-tab2"},
+		"2.1.286-ask-wizard-tab2":   {"2": "2.1.286-ask-wizard-submit"},
+		"2.1.286-ask-wizard-submit": {"1": "2.1.286-ask-wizard-after-submit", "Escape": "2.1.286-ask-wizard-submit-esc"},
+		"2.1.286-ask-single":        {"5": "2.1.286-ask-chat-after"},
+		// The mixed wizard: Size, Extras (multiSelect), Drink, Submit.
+		"2.1.286-ask-wizard-mixed":         {"Right": "2.1.286-ask-wizard-multi-open"},
+		"2.1.286-ask-wizard-multi-open":    {"2": "2.1.286-ask-wizard-multi-toggled", "Left": "2.1.286-ask-wizard-mixed"},
+		"2.1.286-ask-wizard-multi-toggled": {"Right": "2.1.286-ask-wizard-after-multi"},
+		"2.1.286-ask-wizard-after-multi":   {"Right": "2.1.286-ask-wizard-submit-partial"},
+	}
+	setup := func(first string) (*fakeWriter, *http.ServeMux, *string) {
+		f := newFakeWriter()
+		f.session.Status = "blocked"
+		f.screen = fixtureScreen(t, first)
+		on := first
+		f.onKeys = func(f *fakeWriter, keys []string) {
+			if to, ok := next[on][keys[0]]; ok {
+				on = to
+				f.setScreen(fixtureScreen(t, to))
+			}
+		}
+		return f, agentMux(f), &on
+	}
+	answer := func(mux *http.ServeMux, id string, choice any) (int, map[string]any) {
+		return postJSON(t, mux, "/api/mux/panes/0/agent/answer", map[string]any{"promptId": id, "choice": choice})
+	}
+
+	t.Run("to the end, one tab at a time", func(t *testing.T) {
+		f, mux, on := setup("2.1.286-ask-wizard")
+		seen := map[any]bool{}
+		for _, step := range []struct {
+			title  string
+			choice int
+		}{{"What size do you want?", 1}, {"Which drink do you prefer?", 2}, {"Review your answers", 1}} {
+			time.Sleep(agentCacheTTL)
+			p := getPrompt(t, mux, "0")
+			if p == nil || p["kind"] != "select" || p["title"] != step.title || p["promptId"] == nil || p["steps"] == nil || seen[p["promptId"]] {
+				t.Fatalf("on %s: prompt = %v", *on, p)
+			}
+			seen[p["promptId"]] = true
+			if code, body := answer(mux, p["promptId"].(string), step.choice); code != http.StatusNoContent {
+				t.Fatalf("on %s: answer = %d %v", *on, code, body)
+			}
+		}
+		if *on != "2.1.286-ask-wizard-after-submit" || len(f.keys) != 3 {
+			t.Errorf("ended on %s, keys %v", *on, f.keys)
+		}
+		time.Sleep(agentCacheTTL)
+		if p := getPrompt(t, mux, "0"); p != nil {
+			t.Errorf("after submit = %v", p)
+		}
+	})
+	t.Run("another device moved the wizard on", func(t *testing.T) {
+		f, mux, _ := setup("2.1.286-ask-wizard")
+		id := getPrompt(t, mux, "0")["promptId"].(string)
+		f.setScreen(fixtureScreen(t, "2.1.286-ask-wizard-tab2"))
+		code, body := answer(mux, id, 1)
+		p, _ := body["prompt"].(map[string]any)
+		if code != 409 || body["code"] != "prompt_changed" || len(f.keys) != 0 || p == nil || p["title"] != "Which drink do you prefer?" {
+			t.Errorf("moved on = %d %v keys %v", code, body, f.keys)
+		}
+	})
+	t.Run("the user went back a tab in the terminal", func(t *testing.T) {
+		f, mux, _ := setup("2.1.286-ask-wizard-tab2")
+		id := getPrompt(t, mux, "0")["promptId"].(string)
+		f.setScreen(fixtureScreen(t, "2.1.286-ask-wizard-back"))
+		if code, body := answer(mux, id, 1); code != 409 || body["code"] != "prompt_changed" || len(f.keys) != 0 {
+			t.Errorf("went back = %d %v keys %v", code, body, f.keys)
+		}
+	})
+	t.Run("Esc on the Submit tab declines", func(t *testing.T) {
+		_, mux, on := setup("2.1.286-ask-wizard-submit")
+		id := getPrompt(t, mux, "0")["promptId"].(string)
+		if code, body := answer(mux, id, "cancel"); code != http.StatusNoContent || *on != "2.1.286-ask-wizard-submit-esc" {
+			t.Errorf("cancel = %d %v on %s", code, body, *on)
+		}
+	})
+	idOf := func(mux *http.ServeMux) string {
+		time.Sleep(agentCacheTTL)
+		p := getPrompt(t, mux, "0")
+		if p == nil || p["promptId"] == nil {
+			t.Fatalf("no id: %v", p)
+		}
+		return p["promptId"].(string)
+	}
+	t.Run("multiSelect: toggle, then next", func(t *testing.T) {
+		f, mux, on := setup("2.1.286-ask-wizard-multi-open")
+		if p := getPrompt(t, mux, "0"); p["kind"] != "multiselect" {
+			t.Fatalf("multiSelect tab = %v", p)
+		}
+		if code, body := answer(mux, idOf(mux), 2); code != http.StatusNoContent || *on != "2.1.286-ask-wizard-multi-toggled" {
+			t.Fatalf("toggle = %d %v on %s", code, body, *on)
+		}
+		if code, body := answer(mux, idOf(mux), "next"); code != http.StatusNoContent || *on != "2.1.286-ask-wizard-after-multi" {
+			t.Fatalf("next = %d %v on %s", code, body, *on)
+		}
+		if got := f.keys; len(got) != 2 || got[0][0] != "2" || got[1][0] != "Right" {
+			t.Errorf("keys = %v", got)
+		}
+	})
+	t.Run("next only on a multiSelect tab", func(t *testing.T) {
+		f, mux, _ := setup("2.1.286-ask-wizard-mixed")
+		if code, _ := answer(mux, idOf(mux), "next"); code != http.StatusBadRequest || len(f.keys) != 0 {
+			t.Errorf("next on single-choice = %d keys %v", code, f.keys)
+		}
+	})
+	t.Run("a step opens that tab, one arrow at a time", func(t *testing.T) {
+		f, mux, on := setup("2.1.286-ask-wizard-mixed")
+		// Size → Extras, then back.
+		if code, body := answer(mux, idOf(mux), map[string]int{"step": 1}); code != http.StatusNoContent || *on != "2.1.286-ask-wizard-multi-open" {
+			t.Fatalf("step 1 = %d %v on %s", code, body, *on)
+		}
+		if code, body := answer(mux, idOf(mux), map[string]int{"step": 0}); code != http.StatusNoContent || *on != "2.1.286-ask-wizard-mixed" {
+			t.Fatalf("back to step 0 = %d %v on %s", code, body, *on)
+		}
+		if got := f.keys; len(got) != 2 || got[0][0] != "Right" || got[1][0] != "Left" {
+			t.Errorf("keys = %v", got)
+		}
+	})
+	t.Run("several steps, each one checked", func(t *testing.T) {
+		// Extras (ticked) → Drink → Submit: Extras turns ☒ on the way, still the same wizard.
+		f, mux, on := setup("2.1.286-ask-wizard-multi-toggled")
+		if code, body := answer(mux, idOf(mux), map[string]int{"step": 3}); code != http.StatusNoContent || *on != "2.1.286-ask-wizard-submit-partial" || len(f.keys) != 2 {
+			t.Errorf("to Submit = %d %v on %s keys %v", code, body, *on, f.keys)
+		}
+	})
+	t.Run("a step that lands elsewhere stops", func(t *testing.T) {
+		f, mux, _ := setup("2.1.286-ask-wizard-mixed")
+		// Right opens another wizard's tab: no second key.
+		f.onKeys = func(f *fakeWriter, keys []string) { f.setScreen(fixtureScreen(t, "2.1.286-ask-wizard-tab2")) }
+		code, body := answer(mux, idOf(mux), map[string]int{"step": 2})
+		p, _ := body["prompt"].(map[string]any)
+		if code != 409 || body["code"] != "prompt_changed" || len(f.keys) != 1 || p == nil || p["title"] != "Which drink do you prefer?" {
+			t.Errorf("elsewhere = %d %v keys %v", code, body, f.keys)
+		}
+		// A wizard with as many tabs, another one.
+		f3, mux3, _ := setup("2.1.286-ask-wizard-mixed")
+		f3.onKeys = func(f *fakeWriter, keys []string) {
+			f.setScreen(strings.ReplaceAll(fixtureScreen(t, "2.1.286-ask-wizard-multi-open"), "Extras", "Extrax"))
+		}
+		if code, body := answer(mux3, idOf(mux3), map[string]int{"step": 2}); code != 409 || body["code"] != "prompt_changed" || len(f3.keys) != 1 {
+			t.Errorf("other wizard = %d %v keys %v", code, body, f3.keys)
+		}
+		// The key cannot be sent.
+		f4, mux4, _ := setup("2.1.286-ask-wizard-mixed")
+		f4.keyErr = errors.New("pane gone")
+		if code, _ := answer(mux4, idOf(mux4), map[string]int{"step": 1}); code < 500 {
+			t.Errorf("send error = %d", code)
+		}
+		// The screen does not move at all.
+		f2, mux2, _ := setup("2.1.286-ask-wizard-mixed")
+		f2.onKeys = nil
+		if code, body := answer(mux2, idOf(mux2), map[string]int{"step": 1}); code != 502 || body["code"] != "step_not_confirmed" || body["prompt"] == nil {
+			t.Errorf("stuck = %d %v", code, body)
+		}
+		// A tab passed on the way with text being typed into it: no key on it.
+		f5, mux5, _ := setup("2.1.286-ask-wizard-mixed")
+		f5.onKeys = func(f *fakeWriter, keys []string) {
+			f.setScreen(fixtureScreen(t, "2.1.286-ask-wizard-multi-cursor-free-text"))
+		}
+		if code, body := answer(mux5, idOf(mux5), map[string]int{"step": 2}); code != 409 || body["code"] != "prompt_changed" || len(f5.keys) != 1 {
+			t.Errorf("passing a typing tab = %d %v keys %v", code, body, f5.keys)
+		}
+		// It can be the tab opened, though: the card shows it read-only.
+		f6, mux6, _ := setup("2.1.286-ask-wizard-mixed")
+		f6.onKeys = f5.onKeys
+		if code, body := answer(mux6, idOf(mux6), map[string]int{"step": 1}); code != http.StatusNoContent || len(f6.keys) != 1 {
+			t.Errorf("opening a typing tab = %d %v keys %v", code, body, f6.keys)
+		}
+	})
+	t.Run("bad steps keep the id", func(t *testing.T) {
+		f, mux, _ := setup("2.1.286-ask-wizard-mixed")
+		id := idOf(mux)
+		for _, c := range []any{map[string]int{"step": 0}, map[string]int{"step": 4}, map[string]int{"step": -1}, map[string]any{"step": "1"}, map[string]any{}} {
+			if code, _ := answer(mux, id, c); code != http.StatusBadRequest {
+				t.Errorf("choice %v = %d", c, code)
+			}
+		}
+		if len(f.keys) != 0 {
+			t.Errorf("keys = %v", f.keys)
+		}
+		// A single question has no steps.
+		_, mux2, _ := setup("2.1.286-ask-single")
+		if code, _ := answer(mux2, idOf(mux2), map[string]int{"step": 1}); code != http.StatusBadRequest {
+			t.Errorf("step on a single question = %d", code)
+		}
+	})
+	t.Run("chat about this", func(t *testing.T) {
+		f, mux, on := setup("2.1.286-ask-single")
+		id := getPrompt(t, mux, "0")["promptId"].(string)
+		if code, body := answer(mux, id, 5); code != http.StatusNoContent || *on != "2.1.286-ask-chat-after" || f.keys[0][0] != "5" {
+			t.Errorf("chat = %d %v on %s", code, body, *on)
+		}
+		// "Type something" is not an option the route sends.
+		f2, mux2, _ := setup("2.1.286-ask-single")
+		id2 := getPrompt(t, mux2, "0")["promptId"].(string)
+		if code, _ := answer(mux2, id2, 4); code != http.StatusBadRequest || len(f2.keys) != 0 {
+			t.Errorf("type something = %d keys %v", code, f2.keys)
 		}
 	})
 }

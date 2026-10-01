@@ -172,8 +172,9 @@ export function ChatComposer({ session, isMobile, showView }: ViewProps) {
       <>
         {live}
         <PromptCard
-          // A new dialog starts without the last one's notice
-          key={p.prompt.title}
+          // A new dialog (or another tab of one) starts without the last
+          // one's notice
+          key={`${p.prompt.title}\n${p.prompt.steps?.findIndex((s) => s.current) ?? ''}`}
           paneId={paneId}
           prompt={p.prompt}
           showView={showView}

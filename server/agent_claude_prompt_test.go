@@ -45,6 +45,11 @@ func TestReadClaudeScreenInput(t *testing.T) {
 		// Dialogs and menus have no input box.
 		{"2.1.286-permission-bash", inputNone, ""},
 		{"2.1.286-ask-single", inputNone, ""},
+		{"2.1.286-ask-wizard-submit", inputNone, ""},
+		// "Submit answers" and "Chat about this" go back to the input box.
+		{"2.1.286-ask-wizard-after-submit", inputEmpty, ""},
+		{"2.1.286-ask-wizard-submit-esc", inputEmpty, ""},
+		{"2.1.286-ask-chat-after", inputEmpty, ""},
 		{"2.1.286-trust-unnumbered", inputNone, ""},
 		{"collie-2.1.278-menu-model-picker--w82", inputNone, ""},
 		{"collie-2.1.278-plan-approval--w82", inputNone, ""},
@@ -78,14 +83,29 @@ func TestReadClaudeScreenDialogs(t *testing.T) {
 			"1. Yes | 2. Yes, and always allow access to /tmp/lab | 3. No", "touch scratch-one.txt"},
 		{"2.1.286-permission-write", "permission", "Create file", "1. Yes | 2. Yes, and switch to accept edits (auto-approve file edits and common file commands) for this | 3. No", "Do you want to create hello.txt?"},
 		{"collie-claude--permission-edit", "permission", "Create file", "1. Yes | 2. Yes, allow all edits during this session (shift+tab) | 3. No", "1 hello"},
-		{"2.1.286-ask-single", "select", "Theme", "1. Red | 2. Green | 3. Blue", "Which color theme do you prefer?"},
+		// "Type something" needs the terminal; "Chat about this" is one key.
+		{"2.1.286-ask-single", "select", "Theme", "1. Red | 2. Green | 3. Blue | 5. Chat about this", "Which color theme do you prefer?"},
 		// 47 columns: the footer wraps onto two rows.
-		{"2.1.286-ask-single-narrow", "select", "Color", "1. Red | 2. Blue", "Which color do you prefer?"},
-		{"collie-claude--select-menu", "select", "Color Theme", "1. Red | 2. Green | 3. Blue", "Which color theme should the dashboard use?"},
-		// Answered in the terminal only.
-		{"2.1.286-ask-multi", "unsupported", "Which toppings do you want?", "", ""},
-		{"2.1.286-ask-wizard", "unsupported", "What size do you want?", "", ""},
-		{"collie-claude--wizard-multiselect-q1", "unsupported", "", "", ""},
+		{"2.1.286-ask-single-narrow", "select", "Color", "1. Red | 2. Blue | 4. Chat about this", "Which color do you prefer?"},
+		{"collie-claude--select-menu", "select", "Color Theme", "1. Red | 2. Green | 3. Blue | 5. Chat about this", "Which color theme should the dashboard use?"},
+		// A wizard, one tab at a time: the question is the title.
+		{"2.1.286-ask-wizard", "select", "What size do you want?", "1. Small | 2. Large | 4. Chat about this", ""},
+		{"2.1.286-ask-wizard-tab2", "select", "Which drink do you prefer?", "1. Tea | 2. Coffee | 4. Chat about this", ""},
+		// Back on an answered tab, the earlier pick is marked.
+		{"2.1.286-ask-wizard-back", "select", "What size would you like?", "1. Small | 2. Large ✔ | 4. Chat about this", ""},
+		// The Submit tab, drawn without a footer.
+		{"2.1.286-ask-wizard-submit", "select", "Review your answers", "1. Submit answers | 2. Cancel", "→ Coffee"},
+		// "⚠ You have not answered all questions" is part of the review.
+		{"2.1.286-ask-wizard-submit-partial", "select", "Review your answers", "1. Submit answers | 2. Cancel", "You have not answered all questions"},
+		// multiSelect: each digit toggles one option; "Type something" needs the terminal.
+		{"2.1.286-ask-multi", "multiselect", "Which toppings do you want?", "1. Cheese | 2. Ham | 3. Olives | 5. Chat about this", ""},
+		{"2.1.286-ask-wizard-multi-tab", "multiselect", "What extras would you like?", "1. Sugar | 2. Milk | 4. Chat about this", ""},
+		{"2.1.286-ask-wizard-multi-open", "multiselect", "Which extras would you like?", "1. Sugar | 2. Milk | 4. Chat about this", ""},
+		{"2.1.286-ask-wizard-multi-toggled", "multiselect", "Which extras would you like?", "1. Sugar | 2. Milk | 4. Chat about this", ""},
+		// The pointer on the free-text option: a digit would be typed into it.
+		{"2.1.286-ask-wizard-multi-cursor-free-text", "unsupported", "Which extras would you like?", "", ""},
+		{"2.1.286-ask-wizard-multi-typed", "unsupported", "Which extras would you like?", "", ""},
+		{"collie-claude--wizard-multiselect-q1", "multiselect", "Which toppings would you like on your pizza?", "1. Pepperoni | 2. Mushrooms | 3. Bell peppers | 4. Extra cheese | 6. Chat about this", ""},
 		{"2.1.286-trust-unnumbered", "unsupported", "Accessing workspace:", "", "Quick safety check"},
 	}
 	for _, tt := range tests {
@@ -99,6 +119,57 @@ func TestReadClaudeScreenDialogs(t *testing.T) {
 				t.Errorf("got kind=%q title=%q options=%q body=%q", p.Kind, p.Title, labels(p), p.Body)
 			}
 		})
+	}
+	// The tab row becomes the steps, the tab open marked.
+	steps := func(p *AgentPrompt) string {
+		var out []string
+		for _, s := range p.Steps {
+			mark := "☐"
+			if s.Answered {
+				mark = "☒"
+			}
+			if s.Current {
+				mark = "[" + mark + "]"
+			}
+			out = append(out, mark+s.Label)
+		}
+		return strings.Join(out, " ")
+	}
+	for name, want := range map[string]string{
+		"2.1.286-ask-wizard":                   "[☐]Size ☐Drink ☐Submit",
+		"2.1.286-ask-wizard-tab2":              "☒Size [☐]Drink ☐Submit",
+		"2.1.286-ask-wizard-back":              "[☒]Size ☐Drink ☐Submit",
+		"2.1.286-ask-wizard-submit":            "☒Size ☒Drink [☐]Submit",
+		"2.1.286-ask-wizard-multi-tab":         "☒Size ☒Drink [☐]Extras ☐Submit",
+		"collie-claude--wizard-multiselect-q1": "[☐]Toppings ☐Crust ☐Submit",
+		"2.1.286-ask-wizard-mixed":             "[☐]Size ☐Extras ☐Drink ☐Submit",
+		"2.1.286-ask-wizard-after-multi":       "☐Size ☒Extras [☐]Drink ☐Submit",
+		// Leaving a multiSelect tab with nothing ticked does not answer it.
+		"2.1.286-ask-wizard-skip-multi": "☐Size ☐Extras [☐]Drink ☐Submit",
+		"2.1.286-ask-single":            "",
+	} {
+		if got := steps(readScreen(t, name).prompt); got != want {
+			t.Errorf("%s steps = %q, want %q", name, got, want)
+		}
+	}
+	// A ticked option is checked, without its box in the label.
+	checked := func(name string) string {
+		var out []string
+		for _, o := range readScreen(t, name).prompt.Options {
+			if o.Checked {
+				out = append(out, o.Label)
+			}
+		}
+		return strings.Join(out, ",")
+	}
+	if got := checked("2.1.286-ask-wizard-multi-open"); got != "" {
+		t.Errorf("untouched multiSelect checked = %q", got)
+	}
+	if got := checked("2.1.286-ask-wizard-multi-toggled"); got != "Milk" {
+		t.Errorf("toggled multiSelect checked = %q", got)
+	}
+	if p := readScreen(t, "2.1.286-ask-wizard-multi-toggled").prompt; p.Options[0].Detail != "Add sugar" {
+		t.Errorf("multiSelect detail = %q", p.Options[0].Detail)
 	}
 	// An option's description rows become its detail.
 	p := readScreen(t, "2.1.286-ask-single").prompt
@@ -141,6 +212,129 @@ func TestDialogSignature(t *testing.T) {
 	}
 }
 
+func TestDialogSignatureHasTheOpenTab(t *testing.T) {
+	// Two tabs that read the same are told apart by the tab open.
+	rule := strings.Repeat("─", 40)
+	tab := func(row string) string {
+		return rule + "\n" + row + "\nPick one?\n❯ 1. A\n  2. B\nEnter to select · Tab/Arrow keys to navigate · Esc to cancel\n"
+	}
+	on := "\x1b[48;5;153m"
+	off := "\x1b[49m"
+	a := readClaudeScreen(tab("←  " + on + "☐ Q" + off + "  ☐ Q  ✔ Submit  →"))
+	b := readClaudeScreen(tab("←  ☐ Q  " + on + "☐ Q" + off + "  ✔ Submit  →"))
+	if a.prompt == nil || a.prompt.Kind != "select" || b.prompt == nil || a.sig == b.sig {
+		t.Errorf("a=%+v b=%+v", a.prompt, b.prompt)
+	}
+	// Without a tab drawn open the tab to answer is unknown.
+	if p := readClaudeScreen(tab("←  ☐ Q  ☐ Q  ✔ Submit  →")).prompt; p == nil || p.Kind != "unsupported" {
+		t.Errorf("no open tab = %+v", p)
+	}
+	// A tab row cut or wrapped by a narrow pane is not read.
+	if p := readClaudeScreen(tab("←  ☒ Size  ☐ Milk\n" + on + "☐ Q" + off + "  ✔ Submit  →")).prompt; p == nil || p.Kind != "unsupported" {
+		t.Errorf("wrapped tab row = %+v", p)
+	}
+	if p := readClaudeScreen(tab("←  " + on + "☐ Q" + off + "  ☐ Q  ✔ Sub")).prompt; p != nil && p.Kind != "unsupported" {
+		t.Errorf("cut tab row = %+v", p)
+	}
+	// Text typed into the free-text option replaces "Type something"; with
+	// the pointer moved off it, it is still not an option to send.
+	typed := fixtureText(t, "2.1.286-ask-wizard-multi-typed")
+	typedAway := strings.Replace(strings.Replace(typed, "\x1b[38;5;153m❯\x1b[39m \x1b[38;5;246m3.", "  \x1b[38;5;246m3.", 1), "  \x1b[38;5;246m1.", "❯ \x1b[38;5;246m1.", 1)
+	if typedAway == typed {
+		t.Fatal("pointer move did not apply")
+	}
+	if p := readClaudeScreen(typedAway).prompt; p == nil || p.Kind != "multiselect" || labels(p) != "1. Sugar | 2. Milk | 4. Chat about this" {
+		t.Errorf("typed text, pointer away = %+v", p)
+	}
+	// A single-choice option that starts with a box is not a multiSelect.
+	if p := readClaudeScreen(tab("←  " + on + "☐ Q" + off + "  ✔ Submit  →")).prompt; p == nil || p.Kind != "select" {
+		t.Errorf("plain tab = %+v", p)
+	}
+	boxed := readClaudeScreen(rule + "\n←  " + on + "☐ Q" + off + "  ✔ Submit  →\nDone?\n❯ 1. [x] Done\n  2. Not yet\n  3. Type something.\nEnter to select · Esc to cancel\n").prompt
+	if boxed == nil || boxed.Kind != "select" {
+		t.Errorf("one boxed label = %+v", boxed)
+	}
+	// multiSelect without its tab row is not answered.
+	if p := readClaudeScreen(rule + "\n☐ Q\nPick some?\n❯ 1. [ ] A\n  2. [ ] B\nEnter to select · Esc to cancel\n").prompt; p == nil || p.Kind != "unsupported" {
+		t.Errorf("multiSelect without tabs = %+v", p)
+	}
+	// Two tabs drawn open is not a screen to answer either.
+	if p := readClaudeScreen(tab("←  " + on + "☐ Q  ☐ Q" + off + "  ✔ Submit  →")).prompt; p == nil || p.Kind != "unsupported" {
+		t.Errorf("two open tabs = %+v", p)
+	}
+}
+
+func TestSubmitTabLookalikes(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join("testdata", "claude", "screens", "2.1.286-ask-wizard-submit.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	submit := string(b)
+	if sc := readClaudeScreen(submit); sc.prompt == nil || sc.sig == "" {
+		t.Fatalf("fixture not read: %+v", sc)
+	}
+	tests := map[string]string{
+		// A row of another kind below the options: not at the bottom.
+		"row below the options": submit + "\n  some output\n",
+		// The tab row with a question tab open: a question tab has a footer.
+		"question tab open": strings.Replace(submit, "\x1b[38;5;16m\x1b[48;5;153m ✔ Submit", " ✔ Submit", 1),
+		// No rule above the tab row.
+		"no top edge": strings.Replace(submit, "────", "    ", -1),
+		// A rule between the tab row and the options.
+		"rule inside": strings.Replace(submit, "Ready to submit your answers?", strings.Repeat("─", 40), 1),
+		// A row that only looks like the tab row: a message drawn on a
+		// background, Submit its only "tab".
+		"one-step row": strings.Repeat("─", 40) + "\n\x1b[48;5;237m❯ please ✔ Submit →\x1b[49m\nReview\n1. Yes\n2. No\n",
+		"Submit alone": strings.Repeat("─", 40) + "\n←  \x1b[48;5;153m✔ Submit\x1b[49m  →\nReview\n1. Yes\n2. No\n",
+		// Options above prose above options.
+		"options in the body": strings.Replace(submit, "Review your answers", "1. Review your answers", 1),
+	}
+	for name, s := range tests {
+		if s == submit {
+			t.Fatalf("%s: fixture edit did not apply", name)
+		}
+		if sc := readClaudeScreen(s); sc.prompt != nil {
+			t.Errorf("%s = %+v", name, sc.prompt)
+		}
+	}
+	// A numbered list at the bottom of plain output is not a dialog.
+	if sc := readClaudeScreen("Steps:\n1. build\n2. test\n"); sc.prompt != nil {
+		t.Errorf("plain list = %+v", sc.prompt)
+	}
+	// Options numbered from elsewhere are not answered.
+	renumbered := strings.Replace(strings.Replace(submit, "1. \x1b[38;5;153mSubmit", "3. \x1b[38;5;153mSubmit", 1), "2. \x1b[39mCancel", "4. \x1b[39mCancel", 1)
+	if renumbered == submit {
+		t.Fatal("renumbering did not apply")
+	}
+	if sc := readClaudeScreen(renumbered); sc.prompt != nil {
+		t.Errorf("renumbered = %+v", sc.prompt)
+	}
+}
+
+func TestParseScreenBackground(t *testing.T) {
+	lines := parseScreen("a \x1b[48;5;153mB\x1b[49m c \x1b[48;2;1;2;3mD\x1b[0m e \x1b[7mF\x1b[27m g \x1b[41mH\x1b[m i\n")
+	if lines[0].hl != "  B   D   F   H" {
+		t.Errorf("hl = %q", lines[0].hl)
+	}
+	// The colon form keeps its arguments in one field.
+	if l := parseScreen("a \x1b[48:5:153mB\x1b[49m \x1b[38:2::1:2:3mc\x1b[0m \x1b[48:2::1:2:3mD\x1b[m \x1b[48:me\n"); l[0].hl != "  B   D" {
+		t.Errorf("colon hl = %q", l[0].hl)
+	}
+	// 38;5;48 is a foreground colour whose index happens to be 48.
+	if l := parseScreen("x \x1b[38;5;48my\x1b[39m\n"); strings.TrimSpace(l[0].hl) != "" {
+		t.Errorf("foreground counted as background: %q", l[0].hl)
+	}
+}
+
+func fixtureText(t *testing.T, name string) string {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join("testdata", "claude", "screens", name+".txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
 func TestParseScreenFaint(t *testing.T) {
 	lines := parseScreen("❯ \x1b[2mTry this\x1b[0m\r\nplain \x1b[38;5;2mgreen\x1b[0m\n\x1b]0;title\x07x\n\n")
 	if len(lines) != 3 {
@@ -148,6 +342,10 @@ func TestParseScreenFaint(t *testing.T) {
 	}
 	if lines[0].text != "❯ Try this" || strings.TrimSpace(strings.TrimPrefix(lines[0].solid, "❯ ")) != "" {
 		t.Errorf("faint row = %q / %q", lines[0].text, lines[0].solid)
+	}
+	// 22 ends faint without a full reset.
+	if l := parseScreen("\x1b[2mfa\x1b[22mok\n"); l[0].solid != "  ok" {
+		t.Errorf("after 22 solid = %q", l[0].solid)
 	}
 	// 38;5;2 is a colour, not SGR 2.
 	if lines[1].solid != "plain green" {

@@ -1,0 +1,50 @@
+[38;5;246m● [39mUser answered Claude's questions:
+[38;5;246m  ⎿  · What size would you like? → Large[39m
+     [38;5;246m· Which drink do you prefer? → Tea[39m
+     [38;5;246m· What extras would you like? → Sugar[39m
+
+[38;5;231m●[39m Perfect! Here's what you selected:
+
+  - [1mSize:[0m Large
+  - [1mDrink:[0m Tea
+  - [1mExtras:[0m Sugar
+
+  Your order is ready: a large tea with sugar. Enjoy!
+
+[38;5;246m✻[39m [38;5;246mSautéed for 9s · done 9:02 AM[39m
+
+[38;5;239m[48;5;237m❯ [38;5;231mUse the AskUserQuestion tool to ask me TWO questions in ONE call: size (Small, Large) and drink [39m
+  [38;5;231m(Tea, Coffee). Do nothing else.[39m
+
+[38;5;246m[49m● [39mUser declined to answer questions
+[38;5;246m  ⎿  · What size would you like? (Small / Large)[39m
+     [38;5;246m· Which drink do you prefer? (Tea / Coffee)[39m
+
+[38;5;246m✻[39m [38;5;246mCrunched for 2s · done 9:02 AM[39m
+
+[38;5;239m[48;5;237m❯ [38;5;231mUse the AskUserQuestion tool to ask me one single-choice question: which color theme (options [39m
+  [38;5;231mRed, Green, Blue). Do nothing else.[39m
+
+[38;5;246m[49m● [39mUser declined to answer questions
+[38;5;246m  ⎿  · Which color theme do you prefer? (Red / Green / Blue)[39m
+
+[38;5;231m●[39m What would you like to clarify about the color theme question?
+
+[38;5;246m✻[39m [38;5;246mChurned for 4s · done 9:02 AM[39m
+
+[38;5;239m[48;5;237m❯ [38;5;231mUse the AskUserQuestion tool to ask me TWO questions in ONE call: size (Small, Large) and drink [39m
+  [38;5;231m(Tea, Coffee). Do nothing else.[39m
+[38;5;246m[49m────────────────────────────────────────────────────────────────────────────────────────────────────
+← [38;5;16m[48;5;153m ☒ Size [39m[49m ☐ Drink  ✔ Submit  →
+
+[1m[38;5;231mWhat size would you like?[0m
+
+[38;5;153m❯[39m [38;5;246m1.[39m [38;5;153mSmall[39m
+     [38;5;246mSmall[39m
+  [38;5;246m2.[39m [38;5;114mLarge[39m [38;5;114m✔[39m
+     [38;5;246mLarge[39m
+  [38;5;246m3. Type something.[39m
+[38;5;246m────────────────────────────────────────────────────────────────────────────────────────────────────
+[39m  4. Chat about this
+
+[38;5;246mEnter to select · Tab/Arrow keys to navigate · Esc to cancel[39m

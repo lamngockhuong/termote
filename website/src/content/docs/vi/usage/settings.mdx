@@ -71,13 +71,16 @@ Nhãn trong ứng dụng: **Fit herdr pane to this device**.
 
 Mỗi pane của Herdr chỉ có một kích thước, dùng chung cho desktop và mọi thiết bị đang xem nó. Mặc định PWA hiển thị pane theo khổ của desktop. Khi đó nút font dùng để phóng to, thu nhỏ, và pane to hơn màn hình thì kéo để xem.
 
-Bật công tắc này thì trong lúc trang đang hiện, PWA đặt khổ pane vừa với màn hình của mình, giống cách chạy với tmux: nút font đổi số cột và số dòng của pane. Pane trên desktop cũng mang khổ đó cho tới khi một trong các việc sau xảy ra:
+Bật công tắc này thì trong lúc trang đang hiện terminal, PWA đặt khổ pane vừa với màn hình của mình, giống cách chạy với tmux: nút font đổi số cột và số dòng của pane. Pane trên desktop cũng mang khổ đó cho tới khi một trong các việc sau xảy ra:
 
 - trang bị ẩn hoặc bị đóng;
+- bạn chuyển sang một view khác, chẳng hạn Chat;
 - mất kết nối (desktop lấy lại khổ sau tối đa khoảng 30 giây);
 - một thiết bị khác cũng bật công tắc giành lấy khổ.
 
 Thiết bị bị giành mất khổ sẽ hiện một thông báo và tiếp tục hiển thị pane theo khổ desktop. Lần kế tiếp trang được hiện lại, thiết bị đó lấy lại khổ.
+
+Ở Chat view, pane giữ khổ của desktop. Nhờ vậy một hộp thoại của Claude Code cao hơn màn hình điện thoại vẫn hiện đủ và trả lời được trong Chat view.
 
 | Tùy chọn | Hành vi                                     | Mặc định |
 | -------- | ------------------------------------------- | -------- |

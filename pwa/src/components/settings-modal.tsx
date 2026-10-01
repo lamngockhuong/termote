@@ -341,7 +341,7 @@ export function SettingsModal({
           {driveSizeSupported && (
             <SettingsRow
               title="Fit herdr pane to this device"
-              desc="Resizes the pane on the desktop too, until this page is hidden or closed, or another device takes over"
+              desc="While the terminal shows; resizes the pane on the desktop too, until this page is hidden or closed, another view opens, or another device takes over"
             >
               <Switch
                 label="Fit herdr pane to this device"

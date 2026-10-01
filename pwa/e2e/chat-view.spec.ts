@@ -112,12 +112,56 @@ test.describe('chat view', () => {
     await expect(conversation).toContainText('Created scratch-one.txt.')
     await expect(card).toBeHidden()
 
-    // A multiSelect question is shown read-only, with the way to the terminal
+    // A wizard of single-choice questions is answered one card per tab
+    await composer.fill('place an order')
+    await send.click()
+    const size = page.getByRole('alertdialog', { name: 'What size do you want?' })
+    await expect(
+      size.getByRole('list', { name: 'Questions' }).locator('[aria-current="step"]'),
+    ).toHaveText('Size')
+    await size.getByRole('button', { name: /^1\.\s*Small/ }).click()
+    const drink = page.getByRole('alertdialog', { name: 'Which drink do you prefer?' })
+    await expect(drink.getByRole('list', { name: 'Questions' })).toContainText('Size (answered)')
+    await drink.getByRole('button', { name: /^2\.\s*Coffee/ }).click()
+    const review = page.getByRole('alertdialog', { name: 'Review your answers' })
+    await expect(review).toContainText('Ready to submit your answers?')
+    await review.getByRole('button', { name: /^1\.\s*Submit answers/ }).click()
+    await expect(conversation).toContainText('Ordered: a small coffee.')
+    await expect(review).toBeHidden()
+
+    // Tabs are reached from the steps; a multiSelect tab toggles and moves on
+    await composer.fill('choose extras')
+    await send.click()
+    const sizeTab = page.getByRole('alertdialog', { name: 'What size would you prefer?' })
+    await sizeTab
+      .getByRole('list', { name: 'Questions' })
+      .getByRole('button', { name: 'Extras' })
+      .click()
+    const extras = page.getByRole('alertdialog', { name: 'Which extras would you like?' })
+    const milk = extras.getByRole('button', { name: /^2\.\s*Milk/ })
+    await expect(milk).toHaveAttribute('aria-pressed', 'false')
+    await milk.click()
+    await expect(milk).toHaveAttribute('aria-pressed', 'true')
+    await extras.getByRole('button', { name: 'Next', exact: true }).click()
+    const drinkTab = page.getByRole('alertdialog', { name: 'What would you like to drink?' })
+    await expect(drinkTab.getByRole('list', { name: 'Questions' })).toContainText('Extras (answered)')
+    await drinkTab
+      .getByRole('list', { name: 'Questions' })
+      .getByRole('button', { name: 'Submit' })
+      .click()
+    const partial = page.getByRole('alertdialog', { name: 'Review your answers' })
+    await expect(partial).toContainText('You have not answered all questions')
+    await partial.getByRole('button', { name: /^1\.\s*Submit answers/ }).click()
+    await expect(conversation).toContainText('Ordered extras: milk.')
+
+    // A single multiSelect question has toggles too, and the way to the terminal
     await composer.fill('pick toppings')
     await send.click()
     const question = page.getByRole('alertdialog', { name: 'Which toppings do you want?' })
-    await expect(question).toContainText('Answer this dialog in the terminal.')
-    await expect(question.getByRole('button', { name: /^1\./ })).toHaveCount(0)
+    await expect(question.getByRole('button', { name: /^1\.\s*Cheese/ })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
     await question.getByRole('button', { name: 'Open terminal' }).click()
     await expect(
       page

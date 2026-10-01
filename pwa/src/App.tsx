@@ -686,8 +686,14 @@ export default function App({
                     uiStyle={settings.uiStyle}
                     disableContextMenu={settings.disableContextMenu}
                     readOnly={readOnly}
+                    // Only while the terminal shows: under another view the
+                    // pane keeps the desktop's size, so a Claude Code dialog
+                    // taller than this device's screen is not cut by
+                    // Claude Code and the Chat view can still read it.
                     driveSize={
-                      settings.driveTerminalSize && !!mux.caps.driveSize
+                      settings.driveTerminalSize &&
+                      !!mux.caps.driveSize &&
+                      isTerminalView
                     }
                     onDriveLost={onDriveLost}
                     onConnectionStateChange={setStreamState}

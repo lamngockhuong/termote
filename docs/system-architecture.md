@@ -154,7 +154,10 @@ The size frame comes before any output at that size. With Herdr it always carrie
 `false` means the size is the desktop's and client resizes are ignored; `true` means the client
 drives it, so its resizes reach the pane. `reason` (`taken-over` or `failed`) is only set when
 driving stopped without the client asking. `?drive=1` on the URL opens the stream already
-driving, so a reconnect does not start at the desktop size first. tmux ignores `drive`.
+driving, so a reconnect does not start at the desktop size first. tmux ignores `drive`. The
+PWA asks to drive only while its terminal shows: under another view (Chat) it gives the size
+back, since Claude Code cuts a dialog taller than the pane (the tab row and the question scroll
+off), and the Chat view could no longer read it.
 
 The connection requires a same-origin/allowed Origin, a single-use token minted by
 `GET /api/mux/stream-token` (30s TTL, consumed on upgrade), and `?pane=<id>` naming an
@@ -245,14 +248,37 @@ again, then sends Enter. The text is at most 16 KB (UTF-8 bytes; the body 64 KB)
 characters other than newline and tab removed, so it cannot end the paste early.
 
 `prompt` reads the screen and recognises the dialog anchored at its bottom: `permission`, a
-single-choice `select` (at most 9 options), or `unsupported` for anything else (multiSelect,
-multi-question wizards), which the PWA shows read-only with a way to the terminal. A
-single-choice question keeps its buttons; only its "Type something" and "Chat about this"
-entries are left out, since free text needs the terminal.
+single-choice `select` (at most 9 options), a `multiselect` tab, or `unsupported` for anything
+else, which the PWA shows read-only with a way to the terminal. A question keeps its buttons,
+"Chat about this" included; only its free-text option is left out, since free text needs the
+terminal. That option is the last one above "Chat about this": its label is "Type something"
+until text is typed into it, then the text. With the pointer (`❯`) on it a digit is typed into
+the text instead of picking an option, so the question is `unsupported` until the pointer moves
+off it. A tab is `multiselect` only when every option but "Chat about this" has a box.
+
+An `AskUserQuestion` with several questions (a tab row `←  ☒ Size  ☐ Drink  ✔ Submit  →`) is
+answered one tab at a time. The row becomes `steps` (`label`, `answered`, `current`); the tab
+open is the one Claude Code draws on a background colour, which is also part of the dialog's
+signature, so two tabs that read the same are told apart. A digit on a single-choice tab picks
+the option and moves to the next tab, a new screen with its own signature and `promptId`. On a
+`multiselect` tab (options carry `checked`) a digit toggles one option and the tab stays open;
+`"next"` sends Right, which leaves the tab with its options kept (a single multiSelect question
+has `✔ Submit` as its second tab). `{"step": n}` opens another tab: Right or Left one key at a
+time, and after each key the screen must show the same tabs (by label) with the next one open,
+and a tab the arrows pass must not be `unsupported`; otherwise nothing more is sent and the
+reply carries the dialog on screen (`prompt_changed`, or `step_not_confirmed` when the tab did
+not change). Leaving a multiSelect tab with nothing ticked does not answer it. The row does not wrap: Left
+on the first tab and Right on Submit do nothing. A tab row is read only whole, from `←` to
+`→` with at least one question, Submit last and exactly one tab open; a row cut or wrapped by a
+narrow pane, or one whose open tab is not known, is `unsupported`. Escape on the Submit tab
+declines the questions, as `2. Cancel` does. The Submit tab ("Review your answers", `1. Submit answers` / `2. Cancel`) is
+drawn without a footer: it is recognised only when the tab row sits right under the dialog's
+top rule with Submit open, no other rule follows, and its options are the last rows.
 Every client polling one dialog gets the same single-use `promptId`. `answer` consumes it,
 checks the session, the agent's status (on tmux the session file must say a dialog is open)
-and the dialog's signature on screen, then sends the option's digit, or Escape for
-`"cancel"`. A screen the detector does not recognise is never written to.
+and the dialog's signature on screen, then sends the option's digit, Escape for `"cancel"`, or
+the arrows above. The keys a route may send are Enter, Escape, Left, Right and the digits 1–9.
+A screen the detector does not recognise is never written to.
 
 The Chat view renders the agent's markdown without raw HTML and never loads images: an image
 becomes a text link, so a transcript cannot make the browser fetch another origin. The routes

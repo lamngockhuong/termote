@@ -59,6 +59,9 @@ Manual testing checklist for Termote features before release.
       typing on the desktop still works
 - [ ] Hiding the PWA tab returns the desktop to its size within a second; showing it again
       takes the size back
+- [ ] Opening the Chat view returns the desktop to its size; a tall Claude Code dialog (a
+      multiSelect question with descriptions) shows as one steady card; back in the terminal the
+      PWA takes the size again
 - [ ] Resizing the pane on the desktop while the PWA drives it, then hiding the PWA: the PWA
       shows the desktop's new size
 - [ ] Two browsers with the switch on: the one shown last takes the size, the other shows a
@@ -336,8 +339,19 @@ Run on tmux (Linux/macOS), psmux (Windows) and Herdr (`herdr integration install
 
 - [ ] A permission dialog shows a card; each button picks that option, Cancel sends Escape
 - [ ] A single-choice `AskUserQuestion` (≤ 9 options) shows buttons that pick the right option;
-      its "Type something" and "Chat about this" entries have no button
-- [ ] multiSelect or a multi-question wizard shows a read-only card with "Open terminal"
+      "Type something" has no button
+- [ ] "Chat about this" has a button and returns Claude Code to the input box
+- [ ] A wizard of single-choice questions is answered to the end, one card per tab: the step row
+      marks the tab open and the tabs answered, and the Submit tab's "Submit answers" sends it
+- [ ] Moving to another tab in the terminal (or answering on another device) before tapping
+      sends nothing; the card shows the tab now open
+- [ ] Tapping another step opens that tab (also backwards, and straight to Submit); a step that
+      lands on another screen stops and the card shows it
+- [ ] A multiSelect question or tab shows toggles: each tap ticks or unticks one option, "Next"
+      moves on with the options kept and marks the tab answered
+- [ ] "Type something" has no button on any tab; with the pointer on it in the terminal (or text
+      typed into it and the pointer still there) the card is read-only
+- [ ] Skipping a multiSelect tab with a step leaves it unanswered (Submit warns)
 - [ ] Two devices answer the same dialog: only one answer reaches the pane
 - [ ] "Open terminal" switches to the terminal; the stream is still connected (no reconnect)
 
