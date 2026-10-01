@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.3.0](https://github.com/lamngockhuong/termote/compare/v1.2.0...v1.3.0) (2026-10-01)
+
+
+### Features
+
+* close a pane from the pane strip ([#253](https://github.com/lamngockhuong/termote/issues/253)) ([053a72d](https://github.com/lamngockhuong/termote/commit/053a72dd76e601aed6cab32c72a1a309a1d90b25))
+* **pwa:** ask for confirmation before closing a session ([#251](https://github.com/lamngockhuong/termote/issues/251)) ([f58dad8](https://github.com/lamngockhuong/termote/commit/f58dad87daea7419f7c6f870c12bfb570587156e))
+* **pwa:** filter the session sidebar by agent status ([#248](https://github.com/lamngockhuong/termote/issues/248)) ([e66eb4d](https://github.com/lamngockhuong/termote/commit/e66eb4da5cc8368a0131178f5e9d710940d623b1))
+
+
+### Bug Fixes
+
+* **pwa:** make the desktop sidebar open and close smoothly ([#250](https://github.com/lamngockhuong/termote/issues/250)) ([9f9bb56](https://github.com/lamngockhuong/termote/commit/9f9bb56ce968faf46e82a9821019e9135ade138d))
+
 ## [1.2.0](https://github.com/lamngockhuong/termote/compare/v1.1.0...v1.2.0) (2026-10-01)
 
 
