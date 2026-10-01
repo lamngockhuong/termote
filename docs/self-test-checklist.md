@@ -299,6 +299,53 @@ Manual testing checklist for Termote features before release.
 
 ---
 
+## Chat View (Claude Code)
+
+Run on tmux (Linux/macOS), psmux (Windows) and Herdr (`herdr integration install claude` done).
+
+### Availability
+
+- [ ] A tab running `claude` shows the Terminal/Chat switcher; a tab without it does not
+- [ ] Quitting Claude Code hides the switcher and returns to the terminal
+- [ ] tmux window split in two: the chat follows the pane with focus; switching focus mid-way
+      never sends a message to the shell pane
+
+### History
+
+- [ ] The whole conversation shows: user messages (with a note for an attached image), markdown
+      replies, tool calls collapsed with their result
+- [ ] A new turn appears within 2 seconds; scrolling up keeps the position while new entries arrive
+- [ ] An image in a reply shows as a text link and loads nothing (no request to another origin in
+      the browser's network panel)
+- [ ] `/clear` or `/resume` in the terminal: the chat switches to the new transcript within 2 seconds,
+      without mixing the two
+
+### Sending
+
+- [ ] A multi-line message (with Vietnamese text) reaches Claude Code verbatim, as one turn
+- [ ] While Claude Code works, a dialog is open or the input box holds a draft: sending is refused
+      with `input not ready` and the pane gets no key
+- [ ] A message typed before `/clear` in another client is refused and the composer says the
+      conversation changed
+- [ ] (Once a view-only role exists, #236) view-only mode shows no composer and no answer
+      buttons; until then this is covered by unit tests only
+
+### Dialogs
+
+- [ ] A permission dialog shows a card; each button picks that option, Cancel sends Escape
+- [ ] A single-choice `AskUserQuestion` (≤ 9 options) shows buttons that pick the right option;
+      its "Type something" and "Chat about this" entries have no button
+- [ ] multiSelect or a multi-question wizard shows a read-only card with "Open terminal"
+- [ ] Two devices answer the same dialog: only one answer reaches the pane
+- [ ] "Open terminal" switches to the terminal; the stream is still connected (no reconnect)
+
+### Mobile (iPhone Safari PWA, Android Chrome)
+
+- [ ] The on-screen keyboard does not cover the composer
+- [ ] The conversation scrolls smoothly; buttons are easy to hit
+
+---
+
 ## Mobile Gestures
 
 Test on real mobile device:

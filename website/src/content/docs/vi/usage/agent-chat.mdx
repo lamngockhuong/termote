@@ -1,0 +1,75 @@
+---
+title: Chat với agent
+description: Đọc và trả lời Claude Code trong view chat thay cho terminal
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+Trên điện thoại, câu trả lời dài trong terminal rất khó đọc, gõ lệnh vào đó cũng vậy. Khi một
+pane chạy **Claude Code**, header hiện nút chuyển **Terminal / Chat**. View Chat là cách nhìn thứ
+hai vào cùng một phiên: tin bạn gửi ở đây được gõ vào pane, còn Claude Code viết gì thì cả hai view
+đều thấy. Không có gì tự chạy ngầm.
+
+## Yêu cầu
+
+- Claude Code chạy trong một pane, với một trong các bộ quản lý phiên sau:
+  - **tmux** trên Linux hoặc macOS
+  - **psmux** trên Windows
+  - **Herdr** trên mọi hệ điều hành, sau khi đã chạy `herdr integration install claude` một lần
+- Cài native (`termote start`). Container của Termote không cài sẵn Claude Code.
+
+## View Chat hiện gì
+
+- Toàn bộ hội thoại của phiên hiện tại, đọc từ transcript mà Claude Code ghi ra đĩa: tin nhắn của
+  bạn, câu trả lời hiển thị dạng markdown, các lần gọi tool thu gọn kèm kết quả.
+- Lượt mới hiện ra trong khoảng hai giây. Sau `/clear` hoặc khi resume, view chuyển sang phiên mới
+  và không trộn hai phiên với nhau.
+- Ảnh trong câu trả lời hiện thành link chữ. Ảnh không bao giờ được tải, nên một câu trả lời không
+  thể khiến trình duyệt gửi yêu cầu tới trang khác.
+
+## Gửi tin nhắn
+
+Gõ vào ô ở dưới cùng rồi bấm nút gửi (trên desktop dùng Ctrl+Enter). Tin nhiều dòng tới Claude
+Code thành một lượt, giữ nguyên văn.
+
+Termote chỉ gửi khi màn hình cho thấy Claude Code đang chờ ở ô nhập trống. Nếu không, tin bị từ
+chối và pane không nhận phím nào:
+
+| Thông báo                                                  | Mã                        | Ý nghĩa                                                                              |
+| ---------------------------------------------------------- | ------------------------- | ------------------------------------------------------------------------------------ |
+| `Not sent: the agent is working / waiting for an answer`    | `input_not_ready`         | Claude Code đang chạy hoặc đang mở hộp thoại                                         |
+| `Not sent: the input box already holds a draft`             | `input_not_ready`         | Ô nhập trong terminal đang có chữ; gửi hoặc xoá nó trong terminal                    |
+| `Not sent: the pane is in copy mode`                       | `input_not_ready`         | Pane tmux đang cuộn lại trong copy mode; thoát nó (`q`) trong terminal               |
+| `Not sent: the text did not show in the input box`          | `paste_not_confirmed`     | Enter chưa được gửi; có thể chữ đã nằm trong ô nhập                                  |
+| `The text was pasted but not submitted`                     | `delivered_not_submitted` | Chữ đã vào ô nhập nhưng chưa có Enter; xem lại terminal trước khi gửi lần nữa        |
+| `The conversation changed; it has been reloaded`            | `session_changed`         | Pane giờ chạy phiên khác (`/clear`, resume); gửi lại nếu bạn vẫn muốn                |
+| `Too long: the limit is 16 KB.`                            | `text_too_long`           | Tin dài quá 16 KB (UTF-8); hãy chia nhỏ                                              |
+
+Lần từ chối nào cần bạn kiểm tra lại đều có nút **Open terminal**.
+
+## Trả lời hộp thoại
+
+Khi Claude Code xin quyền hoặc hỏi một câu chọn một đáp án (tối đa chín lựa chọn), một thẻ thay
+chỗ ô soạn tin. Mỗi nút chọn đúng lựa chọn đó; **Cancel** gửi Escape. Nếu màn hình đã đổi trước khi
+câu trả lời được gửi, hoặc thiết bị khác đã trả lời trước, sẽ không có gì được gửi và thẻ hiện hộp
+thoại đang mở lúc đó.
+
+Câu hỏi chọn một đáp án vẫn có nút, riêng hai mục `Type something` và `Chat about this` phải dùng
+terminal. Các hộp thoại khác (chọn nhiều đáp án, wizard nhiều câu hỏi) chỉ hiện để xem, kèm nút
+**Open terminal** để trả lời trong terminal.
+
+## Giới hạn
+
+- tmux: chat đi theo pane đang được focus trong cửa sổ tmux. Ở cửa sổ chia đôi, chat nói chuyện với pane
+  đang focus.
+- psmux: chỉ đọc `%USERPROFILE%\.claude`. `CLAUDE_CONFIG_DIR` đặt riêng bên trong pane không được
+  dùng tới.
+- Herdr: transcript được đọc từ `~/.claude` của người dùng chạy Termote. Claude Code chạy với
+  `CLAUDE_CONFIG_DIR` khác sẽ không hiện lịch sử.
+- Chưa hỗ trợ chế độ container.
+- Hiện chỉ có Claude Code.
+
+<Aside>
+  Nút **Open terminal** luôn ở ngay đó. Stream terminal vẫn giữ kết nối khi bạn ở view Chat, nên
+  quay lại terminal là thấy ngay.
+</Aside>

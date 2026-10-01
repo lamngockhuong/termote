@@ -18,13 +18,18 @@ termote/
 │   │   │   ├── about-modal.tsx              # About dialog
 │   │   │   ├── agent-status-badge.tsx       # Herdr agent status icon (idle/working/blocked/done)
 │   │   │   ├── app-header.tsx               # Header: session chip (mobile) / tabs (desktop), More menu
+│   │   │   ├── chat-composer.tsx            # Chat view: message box, sends to the pane's Claude Code
+│   │   │   ├── chat-message.tsx             # One transcript entry (markdown without raw HTML, images as links)
+│   │   │   ├── chat-view.tsx                # Chat view of a pane running Claude Code (lazy-loaded)
 │   │   │   ├── command-history-dropdown.tsx # Command history search/select
 │   │   │   ├── connection-indicator.tsx     # Connection status indicator
 │   │   │   ├── gesture-hints-overlay.tsx    # First-time gesture tutorial (mobile)
 │   │   │   ├── help-modal.tsx               # Help/gestures guide
 │   │   │   ├── icon-picker.tsx              # Emoji icon selector
 │   │   │   ├── keyboard-toolbar.tsx         # Virtual keyboard buttons
+│   │   │   ├── open-terminal-button.tsx     # Way out of a view to the pane's terminal
 │   │   │   ├── pane-strip.tsx               # Pane switcher, shown only for multi-pane tabs
+│   │   │   ├── prompt-card.tsx              # Claude Code dialog as a card (answer buttons, or read-only)
 │   │   │   ├── quick-actions-menu.tsx       # Quick actions sheet (clear, cancel, clear line, exit)
 │   │   │   ├── session-sidebar.tsx          # Group switcher sidebar
 │   │   │   ├── session-switcher-chip.tsx    # Mobile header chip that opens the sessions sheet
@@ -36,6 +41,8 @@ termote/
 │   │   │   ├── toast.tsx                    # Toast notification component
 │   │   │   └── ui/                          # Shared primitives (Button, Sheet, Menu, Switch, ...)
 │   │   ├── hooks/
+│   │   │   ├── use-agent-prompt.ts          # Polls a pane's open Claude Code dialog (one store per pane)
+│   │   │   ├── use-agent-transcript.ts      # Polls a pane's transcript (one store per pane)
 │   │   │   ├── use-command-history.ts       # Command history storage + retrieval (localStorage)
 │   │   │   ├── use-font-size.ts             # Font size state (6-24)
 │   │   │   ├── use-gestures.ts              # Hammer.js gesture handling
@@ -57,7 +64,7 @@ termote/
 │   │   │   ├── haptic.ts                    # Vibration API wrapper
 │   │   │   └── terminal-bridge.ts           # Drives the xterm.js terminal (key mapping, clipboard paste)
 │   │   ├── test-setup.ts                    # Vitest configuration
-│   ├── e2e/                    # Playwright e2e tests
+│   ├── e2e/                    # Playwright e2e tests (chat-view.spec.ts drives tests/fixtures/fake-claude.sh)
 │   └── package.json
 ├── server/                     # Go server + CLI (single binary, flat `package main`)
 │   ├── main.go                  # Entry point (`serve` runs the server, no args opens the menu)
@@ -71,6 +78,12 @@ termote/
 │   ├── herdr_socket_*.go          # Herdr socket path + dial (Unix socket / Windows named pipe)
 │   ├── herdr_observer_*.go        # Stops `observe`/`control` (process group / Windows Job Object)
 │   ├── stream.go                 # `/api/mux/stream` WebSocket (xterm.js feed)
+│   ├── agent.go                  # `/api/mux/panes/{id}/agent/*` routes, adapter interfaces, transcript reads
+│   ├── agent_claude.go           # Claude Code transcript (JSONL) + session file (`sessions/<pid>.json`)
+│   ├── agent_claude_prompt.go    # Reads a Claude Code screen: input box state, dialogs
+│   ├── agent_input.go            # Send a message, read and answer a dialog (checks before every write)
+│   ├── agent_proc*.go            # Finds Claude Code under a tmux/psmux pane (start time, config dir)
+│   ├── testdata/claude/          # Recorded Claude Code screens and a transcript fixture
 │   ├── pty_*.go                  # PTY (Unix) / ConPTY (Windows) terminal backing
 │   ├── webui/                    # Embeds the built PWA into the binary
 │   ├── cli.go                    # Subcommand dispatch, flag parsing, output helpers
@@ -91,13 +104,14 @@ termote/
 │   ├── termote.sh               # Checkout-only dev shim: builds/runs server/termote-dev
 │   └── termote.ps1              # Checkout-only dev shim (Windows), same job
 ├── tests/                      # Shell script tests
+│   ├── fixtures/fake-claude.sh # Stand-in Claude Code for the Chat view E2E (Linux)
 │   ├── test-termote.sh         # Dev shim tests (Unix)
 │   ├── test-termote.ps1        # Dev shim tests (Windows)
 │   ├── test-install.sh         # install.sh tests (fake curl)
 │   ├── test-install.ps1        # install.ps1 tests
 │   └── test-entrypoints.sh     # Docker entrypoint tests
 ├── .github/workflows/
-│   ├── ci.yml                  # CI (PWA build/lint/test, `go test` on Ubuntu/macOS/Windows)
+│   ├── ci.yml                  # CI (PWA build/lint/test, `go test` on Ubuntu/macOS/Windows, Playwright E2E)
 │   ├── release.yml             # Release: build, draft, upload assets, publish, Docker push
 │   ├── release-please.yml      # Auto versioning from commits
 │   └── deploy-website.yml      # Docs site deploy, only after a stable release
@@ -242,6 +256,7 @@ Single Go binary, `package main`, flat file layout:
 - **mux.go** — the `Mux` interface and the `/api/mux/*` HTTP routes shared by both backends
 - **mux_tmux.go** / **mux_herdr.go** — the two backends (see [`system-architecture.md`](system-architecture.md))
 - **stream.go** — `/api/mux/stream`: WebSocket upgrade, stream token validation, the hub that caps concurrent streams and closes them on shutdown
+- **agent\*.go** — the Chat view's routes: finding the Claude Code session of a pane, reading its transcript, sending it a message and answering its dialogs, writing only when the screen shows the expected state (see [`system-architecture.md`](system-architecture.md#agent-chat-apimuxpanesidagent))
 - **cli\*.go** — CLI subcommands (see below)
 
 **Security** (server):
@@ -304,6 +319,8 @@ start` — they never start the server or touch any saved config.
 | @xterm/addon-fit | Terminal auto-resize |
 | hammerjs         | Touch gestures       |
 | lucide-react     | Icons                |
+| react-markdown   | Chat view markdown   |
+| remark-gfm       | GFM tables, lists    |
 | vite-plugin-pwa  | PWA generation       |
 | tailwindcss      | Styling              |
 
@@ -317,7 +334,7 @@ enforce HTTP methods; invalid requests return 400/404/405/413 JSON errors.
 
 | Workflow             | Trigger                                 | Purpose                                                                                                   |
 | -------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `ci.yml`             | Push/PR                                 | Build, lint, type check, PWA test, `go test` (Ubuntu/macOS/Windows), website build                        |
+| `ci.yml`             | Push/PR                                 | Build, lint, type check, PWA test, `go test` (Ubuntu/macOS/Windows), Playwright E2E, website build        |
 | `release-please.yml` | Push to `main` / Manual                 | Create/update the release PR (draft release), then call `deploy-website.yml` after a stable one publishes |
 | `release.yml`        | Tag push / Manual / Release Please      | Build assets, create a draft GitHub Release, upload assets, publish, push Docker images                   |
 | `deploy-website.yml` | Called by `release-please.yml` / Manual | Build + deploy the docs site to GitHub Pages (only after a stable release, not on every push to `main`)   |
