@@ -1,0 +1,40 @@
+
+[38;5;220m⚠[39m [38;5;220mYour login expires in 2 days[38;5;246m · run /login to renew[39m
+
+[38;5;239m[48;5;237m❯ [38;5;231mRun this exact shell command with the Bash tool: touch scratch-one.txt[39m
+
+[49m  [38;5;246mRan [1m1[0m[38;5;246m shell command [39m
+
+[38;5;231m●[39m Đã tạo file [38;5;153mscratch-one.txt[39m.
+
+[38;5;246m✻[39m [38;5;246mCooked for 6s · done 3:32 AM[39m
+
+[38;5;239m[48;5;237m❯ [38;5;231mUse the AskUserQuestion tool to ask me one single-choice question: which color theme (options [39m
+  [38;5;231mRed, Green, Blue). Do nothing else.[39m
+
+[38;5;246m[49m● [39mUser answered Claude's questions:
+[38;5;246m  ⎿  · Which color theme do you prefer? → Green[39m
+
+[38;5;231m●[39m Bạn đã chọn [1mGreen[0m.
+
+[38;5;246m✻[39m [38;5;246mBaked for 4s · done 3:33 AM[39m
+
+[38;5;239m[48;5;237m❯ [38;5;231mUse the AskUserQuestion tool with multiSelect true to ask which toppings I want (options Cheese, [39m
+  [38;5;231mHam, Olives). Do nothing else.[39m
+[38;5;246m[49m────────────────────────────────────────────────────────────────────────────────────────────────────
+← [38;5;16m[48;5;153m ☐ Toppings [39m[49m ✔ Submit  →
+
+[1m[38;5;231mWhich toppings do you want?[0m
+
+[38;5;153m❯[39m [38;5;246m1.[39m [ ] [38;5;153mCheese[39m
+         [38;5;246mMelted cheese[39m
+  [38;5;246m2.[39m [ ] Ham
+         [38;5;246mSliced ham[39m
+  [38;5;246m3.[39m [ ] Olives
+         [38;5;246mBlack or green olives[39m
+  [38;5;246m4. [39m[ ] [38;5;246mType something[39m
+     [1mSubmit[0m
+[38;5;246m────────────────────────────────────────────────────────────────────────────────────────────────────
+[39m  5. Chat about this
+
+[38;5;246mEnter to select · ↑/↓ to navigate · Esc to cancel[39m

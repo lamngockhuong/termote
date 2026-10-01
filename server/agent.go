@@ -48,6 +48,9 @@ type AgentSession struct {
 	PID       int
 	ProcStart string
 	Target    string // backend address of the pane: tmux "%N", herdr pane id
+	// InMode: the pane shows tmux copy mode, which takes the keys sent to it
+	// (only looked up for a write).
+	InMode bool
 }
 
 // agentSessionLocator is implemented by backends that can tell which agent
@@ -230,6 +233,7 @@ type agentAPI struct {
 	loc      agentSessionLocator // nil when the backend has none
 	sessions *ttlCache[agentLookup]
 	reads    *ttlCache[transcriptResponse]
+	input    *agentInput
 }
 
 type agentLookup struct {
@@ -244,12 +248,14 @@ func newAgentAPI(m Mux) *agentAPI {
 		loc:      loc,
 		sessions: newTTLCache[agentLookup](agentCacheTTL),
 		reads:    newTTLCache[transcriptResponse](agentCacheTTL),
+		input:    newAgentInput(),
 	}
 }
 
 func registerAgentRoutes(mux *http.ServeMux, m Mux) *agentAPI {
 	a := newAgentAPI(m)
 	mux.HandleFunc("/api/mux/panes/{id}/agent/transcript", a.handleTranscript)
+	a.registerInputRoutes(mux)
 	return a
 }
 

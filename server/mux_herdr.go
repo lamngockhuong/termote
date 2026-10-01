@@ -612,6 +612,49 @@ func (m *herdrMux) SendKeys(ctx context.Context, paneID, keys string) error {
 	return m.typeInput(ctx, paneID, keys)
 }
 
+// AgentSessionNow is AgentSession: pane.get is never cached.
+func (m *herdrMux) AgentSessionNow(ctx context.Context, paneID string) (AgentSession, bool, error) {
+	return m.AgentSession(ctx, paneID)
+}
+
+// Capture reads the pane's visible screen with SGR attributes.
+func (m *herdrMux) Capture(ctx context.Context, target string) (string, error) {
+	if !herdrPaneIDRe.MatchString(target) {
+		return "", inputError("invalid pane id")
+	}
+	var res struct {
+		Read struct {
+			Text string `json:"text"`
+		} `json:"read"`
+	}
+	err := m.rpc.call(ctx, "pane.read", map[string]string{"pane_id": target, "source": "visible", "format": "ansi"}, &res)
+	return res.Read.Text, herdrInputError(err)
+}
+
+// Paste queues the whole bracketed paste as one input, so nothing typed by a
+// stream can land inside it.
+func (m *herdrMux) Paste(ctx context.Context, target, text string) error {
+	if _, err := m.requirePane(ctx, target); err != nil {
+		return err
+	}
+	return m.typeInput(ctx, target, "\x1b[200~"+text+"\x1b[201~")
+}
+
+// SendKeySequence types the keys' bytes in one input.
+func (m *herdrMux) SendKeySequence(ctx context.Context, target string, keys []string) error {
+	if !validAgentKeys(keys) {
+		return inputError("invalid keys")
+	}
+	if _, err := m.requirePane(ctx, target); err != nil {
+		return err
+	}
+	var b strings.Builder
+	for _, k := range keys {
+		b.WriteString(agentKeys[k])
+	}
+	return m.typeInput(ctx, target, b.String())
+}
+
 // herdrScroll is a pane's scroll position in rows above the live screen.
 type herdrScroll struct {
 	Offset uint64 `json:"offset_from_bottom"`

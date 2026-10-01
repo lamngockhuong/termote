@@ -321,7 +321,7 @@ func TestReadClaudeSessionFile(t *testing.T) {
 }
 
 func TestClaudeStatus(t *testing.T) {
-	for in, want := range map[string]string{"busy": "working", "idle": "idle", "": "unknown", "blocked": "unknown"} {
+	for in, want := range map[string]string{"busy": "working", "idle": "idle", "waiting": "blocked", "": "unknown", "blocked": "unknown"} {
 		if got := claudeStatus(in); got != want {
 			t.Errorf("claudeStatus(%q) = %q, want %q", in, got, want)
 		}

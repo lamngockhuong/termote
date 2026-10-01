@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -274,11 +275,11 @@ func TestTmuxSnapshotParsesPaneFields(t *testing.T) {
 }
 
 func TestTmuxAgentSessionArgv(t *testing.T) {
-	args := useFakeTmux(t, "2:%5:1")
+	args := useFakeTmux(t, "2:0:%5:1")
 	if _, ok, err := (tmuxMux{}).AgentSession(context.Background(), "2"); ok || err != nil {
 		t.Errorf("AgentSession = %v, %v", ok, err)
 	}
-	if got := strings.TrimSpace(args()); got != "display-message -p -t "+tmuxSession+":2 #{window_index}:#{pane_id}:#{pane_pid}" {
+	if got := strings.TrimSpace(args()); got != "display-message -p -t "+tmuxSession+":2 #{window_index}:#{pane_in_mode}:#{pane_id}:#{pane_pid}" {
 		t.Errorf("argv = %q", got)
 	}
 	// tmux answers a missing window with the current one.
@@ -352,6 +353,10 @@ func TestTmuxAgentInRealSession(t *testing.T) {
 	if !ok || err != nil || s.Target != first || s.PID != pid {
 		t.Fatalf("AgentSession = %+v, %v, %v", s, ok, err)
 	}
+	// The uncached lookup a write checks with sees the same session.
+	if now, ok, err := (tmuxMux{}).AgentSessionNow(ctx, "0"); !ok || err != nil || !sameAgent(now, s) {
+		t.Fatalf("AgentSessionNow = %+v, %v, %v", now, ok, err)
+	}
 
 	// Split: the new pane (no Claude session file) is active, so the window has no agent.
 	if err := tmuxCmd(ctx, "split-window", "-t", tmuxSession+":0", "exec sleep 60").Run(); err != nil {
@@ -389,5 +394,98 @@ func TestLookupAgentsDoesNotBlockSnapshot(t *testing.T) {
 	}
 	if len(out) != 1 || out[0] != nil {
 		t.Errorf("out = %v", out)
+	}
+}
+
+func TestTmuxAgentWriterArgv(t *testing.T) {
+	args := useFakeTmux(t, "")
+	ctx := context.Background()
+	m := tmuxMux{}
+	if _, err := m.Capture(ctx, "%3"); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.SendKeySequence(ctx, "%3", []string{"2", "Enter"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Paste(ctx, "%3", "-flag-like text"); err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(args()), "\n")
+	if len(lines) != 4 || lines[0] != "capture-pane -p -e -t %3" || lines[1] != "send-keys -t %3 2 Enter" {
+		t.Fatalf("argv = %q", lines)
+	}
+	// The text goes through stdin, never argv; the buffer has its own name.
+	load, paste := strings.Fields(lines[2]), strings.Fields(lines[3])
+	if len(load) != 4 || load[0] != "load-buffer" || load[1] != "-b" || !strings.HasPrefix(load[2], "termote-") || load[3] != "-" {
+		t.Errorf("load = %q", lines[2])
+	}
+	if strings.Join(paste, " ") != "paste-buffer -b "+load[2]+" -p -d -t %3" {
+		t.Errorf("paste = %q", lines[3])
+	}
+	var ie inputError
+	for name, err := range map[string]error{
+		"window id as target": m.Paste(ctx, "3", "x"),
+		"flag as target":      m.SendKeySequence(ctx, "-t", []string{"1"}),
+		"key name injection":  m.SendKeySequence(ctx, "%3", []string{"C-c"}),
+		"flag as key":         m.SendKeySequence(ctx, "%3", []string{"-X"}),
+		"capture bad target":  func() error { _, err := m.Capture(ctx, "main:0"); return err }(),
+	} {
+		if !errors.As(err, &ie) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+}
+
+// Two pastes into two panes at once land each in its own pane, and the
+// user's own paste buffer is left alone.
+func TestTmuxPasteConcurrentRealPanes(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil || runtime.GOOS == "windows" {
+		t.Skip("needs tmux with a private socket")
+	}
+	origSocket, origSession := tmuxSocket, tmuxSession
+	tmuxSocket = filepath.Join(t.TempDir(), "tmux.sock")
+	tmuxSession = fmt.Sprintf("termote-paste-%d", os.Getpid())
+	t.Cleanup(func() {
+		tmuxCmd(context.Background(), "kill-server").Run()
+		tmuxSocket, tmuxSession = origSocket, origSession
+	})
+	ctx := context.Background()
+	dir := t.TempDir()
+	out := func(i int) string { return filepath.Join(dir, fmt.Sprintf("out%d", i)) }
+	if err := tmuxCmd(ctx, "-f", "/dev/null", "new-session", "-d", "-s", tmuxSession, "stty raw -echo; cat > "+out(0)).Run(); err != nil {
+		t.Fatal(err)
+	}
+	tmuxCmd(ctx, "new-window", "-t", tmuxSession, "stty raw -echo; cat > "+out(1)).Run()
+	tmuxCmd(ctx, "set-buffer", "user clipboard").Run()
+	var targets [2]string
+	for i := range targets {
+		b, _ := tmuxCmd(ctx, "display-message", "-p", "-t", fmt.Sprintf("%s:%d", tmuxSession, i), "#{pane_id}").Output()
+		targets[i] = strings.TrimSpace(string(b))
+	}
+	texts := [2]string{strings.Repeat("alpha ", 500), strings.Repeat("omega ", 500)}
+	var wg sync.WaitGroup
+	for i := range targets {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := (tmuxMux{}).Paste(ctx, targets[i], texts[i]); err != nil {
+				t.Error(err)
+			}
+		}()
+	}
+	wg.Wait()
+	for i := range texts {
+		waitUntil(t, "paste in pane", func() bool {
+			b, _ := os.ReadFile(out(i))
+			return len(b) >= len(texts[i])
+		})
+		b, _ := os.ReadFile(out(i))
+		if got := strings.TrimSuffix(string(b), "\r"); !strings.Contains(got, texts[i]) || strings.Contains(got, texts[1-i][:6]) {
+			t.Errorf("pane %d got %q…", i, got[:min(40, len(got))])
+		}
+	}
+	bufs, _ := tmuxCmd(ctx, "list-buffers", "-F", "#{buffer_name}=#{buffer_sample}").Output()
+	if strings.Contains(string(bufs), "termote-") || !strings.Contains(string(bufs), "user clipboard") {
+		t.Errorf("buffers after paste: %q", bufs)
 	}
 }

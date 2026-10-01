@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"log"
 	"os"
@@ -297,11 +299,15 @@ var tmuxPaneIDRe = regexp.MustCompile(`^%[0-9]+$`)
 
 // tmuxPaneAgent finds the Claude Code session under a pane's process.
 func tmuxPaneAgent(paneID, panePID string) (AgentSession, bool) {
+	return tmuxPaneAgentWith(paneID, panePID, findClaudeSession)
+}
+
+func tmuxPaneAgentWith(paneID, panePID string, find func(string, int) (AgentSession, bool)) (AgentSession, bool) {
 	pid, err := strconv.Atoi(panePID)
 	if !tmuxPaneIDRe.MatchString(paneID) || err != nil {
 		return AgentSession{}, false
 	}
-	s, ok := findClaudeSession(paneID, pid)
+	s, ok := find(paneID, pid)
 	s.Target = paneID
 	return s, ok
 }
@@ -311,6 +317,17 @@ func tmuxPaneAgent(paneID, panePID string) (AgentSession, bool) {
 // target that does not exist with the current window instead of an error, so
 // the window index in the reply must be the one asked for.
 func (tmuxMux) AgentSession(ctx context.Context, paneID string) (AgentSession, bool, error) {
+	return tmuxAgentSession(ctx, paneID, findClaudeSession)
+}
+
+// AgentSessionNow is AgentSession with a fresh process walk: the window's
+// active pane, its process tree and the session file as they are now, plus
+// whether the pane is in copy mode.
+func (tmuxMux) AgentSessionNow(ctx context.Context, paneID string) (AgentSession, bool, error) {
+	return tmuxAgentSession(ctx, paneID, func(_ string, pid int) (AgentSession, bool) { return findClaudeSessionNow(pid) })
+}
+
+func tmuxAgentSession(ctx context.Context, paneID string, find func(string, int) (AgentSession, bool)) (AgentSession, bool, error) {
 	if !validTmuxID(paneID) {
 		return AgentSession{}, false, inputError("invalid pane id")
 	}
@@ -318,13 +335,55 @@ func (tmuxMux) AgentSession(ctx context.Context, paneID string) (AgentSession, b
 		return AgentSession{}, false, inputError("invalid pane id")
 	}
 	out, err := tmuxCmd(ctx, "display-message", "-p", "-t", qualifyTarget(paneID),
-		"#{window_index}:#{pane_id}:#{pane_pid}").Output()
+		"#{window_index}:#{pane_in_mode}:#{pane_id}:#{pane_pid}").Output()
 	parts := strings.Split(strings.TrimSpace(string(out)), ":")
-	if err != nil || len(parts) != 3 || parts[0] != paneID {
+	if err != nil || len(parts) != 4 || parts[0] != paneID {
 		return AgentSession{}, false, inputError("unknown pane")
 	}
-	s, ok := tmuxPaneAgent(parts[1], parts[2])
+	s, ok := tmuxPaneAgentWith(parts[2], parts[3], find)
+	s.InMode = parts[1] == "1"
 	return s, ok, nil
+}
+
+// Capture returns the pane's visible screen with its SGR attributes.
+func (tmuxMux) Capture(ctx context.Context, target string) (string, error) {
+	if !tmuxPaneIDRe.MatchString(target) {
+		return "", inputError("invalid pane")
+	}
+	out, err := tmuxCmd(ctx, "capture-pane", "-p", "-e", "-t", target).Output()
+	return string(out), err
+}
+
+// Paste loads text into a buffer of its own name and pastes it bracketed
+// (-p), deleting the buffer (-d): the user's own buffers, and a concurrent
+// paste, are never touched.
+func (tmuxMux) Paste(ctx context.Context, target, text string) error {
+	if !tmuxPaneIDRe.MatchString(target) {
+		return inputError("invalid pane")
+	}
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		return err
+	}
+	name := "termote-" + hex.EncodeToString(b)
+	load := tmuxCmd(ctx, "load-buffer", "-b", name, "-")
+	load.Stdin = strings.NewReader(text)
+	if err := load.Run(); err != nil {
+		return err
+	}
+	if err := tmuxCmd(ctx, "paste-buffer", "-b", name, "-p", "-d", "-t", target).Run(); err != nil {
+		tmuxCmd(context.Background(), "delete-buffer", "-b", name).Run()
+		return err
+	}
+	return nil
+}
+
+// SendKeySequence passes each key as its own send-keys argument.
+func (tmuxMux) SendKeySequence(ctx context.Context, target string, keys []string) error {
+	if !tmuxPaneIDRe.MatchString(target) || !validAgentKeys(keys) {
+		return inputError("invalid keys")
+	}
+	return tmuxCmd(ctx, append([]string{"send-keys", "-t", target}, keys...)...).Run()
 }
 
 // Health reports ok without touching tmux: the PWA creates the

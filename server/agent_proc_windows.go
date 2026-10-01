@@ -63,3 +63,6 @@ func claudePIDDomain() string { return "" }
 // fileIdentity is empty on Windows; a cursor then relies on the session id,
 // the size and the line boundary check.
 func fileIdentity(os.FileInfo) string { return "" }
+
+// procForeground is true: a ConPTY has no job control to suspend Claude Code.
+func procForeground(int) bool { return true }

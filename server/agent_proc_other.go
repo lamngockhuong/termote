@@ -15,3 +15,4 @@ func procStartTime(int) (string, bool)           { return "", false }
 func procClaudeDir(int) (string, bool)           { return "", false }
 func claudePIDDomain() string                    { return "" }
 func fileIdentity(os.FileInfo) string            { return "" }
+func procForeground(int) bool                    { return false }

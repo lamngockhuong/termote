@@ -138,3 +138,13 @@ func fileIdentity(fi os.FileInfo) string {
 	}
 	return ""
 }
+
+// procForeground reports whether pid runs (not stopped) in the foreground
+// process group of its terminal: state is field 3, pgrp field 5, tpgid field 8.
+func procForeground(pid int) bool {
+	f := procStatFields(pid)
+	if len(f) < 6 || f[0] == "T" || f[0] == "t" {
+		return false
+	}
+	return f[2] == f[5]
+}

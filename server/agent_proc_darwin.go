@@ -105,3 +105,13 @@ func fileIdentity(fi os.FileInfo) string {
 	}
 	return ""
 }
+
+// procForeground reports whether pid runs in its terminal's foreground
+// process group: ps marks that with '+' in STAT, and a stopped one with 'T'.
+func procForeground(pid int) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "ps", "-o", "stat=", "-p", strconv.Itoa(pid)).Output()
+	st := strings.TrimSpace(string(out))
+	return err == nil && strings.Contains(st, "+") && !strings.Contains(st, "T")
+}

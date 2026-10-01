@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -158,5 +159,24 @@ func TestProcClaudeDirRejectsRelative(t *testing.T) {
 	_, leaf = startFakeClaude(t, "HOME=relhome", "CLAUDE_CONFIG_DIR=")
 	if d, ok := procClaudeDir(leaf); ok {
 		t.Errorf("relative HOME accepted: %q", d)
+	}
+}
+
+func TestProcForeground(t *testing.T) {
+	// A child of the test runs in the test's process group, which is not a
+	// terminal's foreground group here: its tpgid differs from its pgrp.
+	_, leaf := startFakeClaude(t)
+	f := procStatFields(leaf)
+	if got, want := procForeground(leaf), f[2] == f[5]; got != want {
+		t.Errorf("procForeground = %v, want %v (pgrp %s tpgid %s)", got, want, f[2], f[5])
+	}
+	syscall.Kill(leaf, syscall.SIGSTOP)
+	defer syscall.Kill(leaf, syscall.SIGCONT)
+	waitUntil(t, "stopped", func() bool { s := procStatFields(leaf); return len(s) > 0 && s[0] == "T" })
+	if procForeground(leaf) {
+		t.Error("a stopped process is foreground")
+	}
+	if procForeground(1 << 30) {
+		t.Error("missing process is foreground")
 	}
 }

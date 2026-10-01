@@ -46,28 +46,52 @@ func findClaudeSession(key string, rootPID int) (AgentSession, bool) {
 		return AgentSession{}, false
 	}
 	r, _ := agentTrees.do(fmt.Sprintf("%s|%d", key, rootPID), func() (claudeProcResult, error) {
-		p, ok := walkForClaude(rootPID)
+		children, err := procTables.do("", procChildrenFunc)
+		if err != nil {
+			return claudeProcResult{}, nil
+		}
+		p, ok := walkForClaude(rootPID, children)
 		return claudeProcResult{p, ok}, nil
 	})
 	if !r.found {
 		return AgentSession{}, false
 	}
-	f, ok := readClaudeSessionFile(r.p.claudeDir, r.p.pid)
-	if !ok || f.procStart() != r.p.procStart || !isSessionID(f.SessionID) {
+	return sessionOfProc(r.p)
+}
+
+// findClaudeSessionNow is findClaudeSession without caches, for the checks
+// right before a write.
+func findClaudeSessionNow(rootPID int) (AgentSession, bool) {
+	if rootPID <= 0 || !agentProcSupported {
+		return AgentSession{}, false
+	}
+	children, err := procChildrenFunc()
+	if err != nil {
+		return AgentSession{}, false
+	}
+	p, ok := walkForClaude(rootPID, children)
+	// A suspended Claude Code (Ctrl+Z) still has an idle session file, but
+	// the pane's keys now go to the shell.
+	if !ok || !procForeground(p.pid) {
+		return AgentSession{}, false
+	}
+	return sessionOfProc(p)
+}
+
+// sessionOfProc reads the session file of a proven Claude Code process.
+func sessionOfProc(p claudeProc) (AgentSession, bool) {
+	f, ok := readClaudeSessionFile(p.claudeDir, p.pid)
+	if !ok || f.procStart() != p.procStart || !isSessionID(f.SessionID) {
 		return AgentSession{}, false
 	}
 	return AgentSession{
 		Agent: "claude", ID: f.SessionID, Status: claudeStatus(f.Status),
-		ClaudeDir: r.p.claudeDir, PID: r.p.pid, ProcStart: r.p.procStart,
+		ClaudeDir: p.claudeDir, PID: p.pid, ProcStart: p.procStart,
 	}, true
 }
 
 // walkForClaude searches rootPID and its descendants breadth-first.
-func walkForClaude(rootPID int) (claudeProc, bool) {
-	children, err := procTables.do("", procChildrenFunc)
-	if err != nil {
-		return claudeProc{}, false
-	}
+func walkForClaude(rootPID int, children func(int) []int) (claudeProc, bool) {
 	domain := claudePIDDomain()
 	type node struct{ pid, depth int }
 	queue := []node{{rootPID, 0}}

@@ -392,14 +392,16 @@ func (f claudeSessionFile) procStart() string {
 	return f.ProcStart
 }
 
-// claudeStatus maps a session file status to the badge statuses. The file
-// only knows busy and idle; "waiting for the user" is not in it.
+// claudeStatus maps a session file status to the badge statuses: busy while
+// a turn runs, waiting while a dialog is open, idle otherwise.
 func claudeStatus(s string) string {
 	switch s {
 	case "busy":
 		return "working"
 	case "idle":
 		return "idle"
+	case "waiting": // a dialog is open (measured on 2.1.286)
+		return "blocked"
 	}
 	return "unknown"
 }

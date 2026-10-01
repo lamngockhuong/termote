@@ -50,6 +50,7 @@ type fakeHerdr struct {
 	scrollMax int
 	agent     string         // pane.get agent
 	paneExtra map[string]any // more pane.get fields (agent_session, agent_status)
+	readText  string         // pane.read text
 }
 
 func fakeSocketPath(t *testing.T) string {
@@ -207,6 +208,11 @@ func (f *fakeHerdr) handle(c net.Conn) {
 			pane["agent"] = agent
 		}
 		reply(map[string]any{"type": "pane_info", "pane": pane})
+	case "pane.read":
+		f.mu.Lock()
+		text := f.readText
+		f.mu.Unlock()
+		reply(map[string]any{"type": "pane_read", "read": map[string]any{"pane_id": p["pane_id"], "text": text, "revision": 0}})
 	case "pane.send_text":
 		f.mu.Lock()
 		f.inFlight++
@@ -1241,5 +1247,48 @@ func TestHerdrAgentSession(t *testing.T) {
 	}
 	if !m.Caps().AgentChat {
 		t.Error("Caps().AgentChat = false")
+	}
+}
+
+func TestHerdrAgentWriter(t *testing.T) {
+	f := newFakeHerdr(t)
+	m := newTestHerdrMux(t, f)
+	ctx := context.Background()
+	f.mu.Lock()
+	f.readText = "\x1b[2mfaint\x1b[0m"
+	f.mu.Unlock()
+	if s, err := m.Capture(ctx, "wR:p3"); err != nil || s != "\x1b[2mfaint\x1b[0m" {
+		t.Errorf("Capture = %q, %v", s, err)
+	}
+	if p := f.lastParams(t, "pane.read"); p["format"] != "ansi" || p["source"] != "visible" || p["pane_id"] != "wR:p3" {
+		t.Errorf("pane.read params = %v", p)
+	}
+	if err := m.Paste(ctx, "wR:p3", "a\nb"); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.SendKeySequence(ctx, "wR:p3", []string{"2", "Enter", "Escape"}); err != nil {
+		t.Fatal(err)
+	}
+	f.mu.Lock()
+	texts := append([]string(nil), f.texts...)
+	f.mu.Unlock()
+	// The paste is one input; nothing can land inside the brackets.
+	if len(texts) != 2 || texts[0] != "\x1b[200~a\nb\x1b[201~" || texts[1] != "2\r\x1b" {
+		t.Errorf("sent %q", texts)
+	}
+	var ie inputError
+	for name, err := range map[string]error{
+		"bad key":        m.SendKeySequence(ctx, "wR:p3", []string{"C-c"}),
+		"no keys":        m.SendKeySequence(ctx, "wR:p3", nil),
+		"bad pane":       m.SendKeySequence(ctx, "-x", []string{"1"}),
+		"capture bad id": func() error { _, err := m.Capture(ctx, "x"); return err }(),
+		"paste bad pane": m.Paste(ctx, "wR:pNOPE", "x"),
+	} {
+		if !errors.As(err, &ie) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	if _, ok, err := m.AgentSessionNow(ctx, "wR:p3"); ok || err != nil {
+		t.Errorf("AgentSessionNow without agent = %v %v", ok, err)
 	}
 }
