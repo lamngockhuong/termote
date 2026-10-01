@@ -65,6 +65,19 @@ Blocks the browser context menu (right-click / long-press) on the terminal area 
 | On     | Context menu is blocked on terminal     | ✓       |
 | Off    | Browser default context menu is allowed |         |
 
+## Fit Herdr Pane to This Device (Herdr Only)
+
+A Herdr pane has one size, shared by the desktop and every device that shows it. By default the PWA shows the pane at the desktop's size: the font buttons then zoom in and out, and a pane larger than the screen can be dragged.
+
+With this switch on, the PWA sets the pane's size to fit its own screen while the page is shown, as it does with tmux: the font buttons change how many columns and rows the pane has. The pane on the desktop takes the same size until the page is hidden or closed, the connection is lost (after up to about 30 seconds), or another device with the switch on takes over. A device that lost the size shows a toast and keeps showing the pane at the desktop's size; it takes the size back the next time the page is shown.
+
+| Option | Behavior                                  | Default |
+| ------ | ----------------------------------------- | ------- |
+| Off    | Pane keeps the desktop's size             | ✓       |
+| On     | Pane fits this device while it is shown   |         |
+
+This setting only appears with the Herdr backend. On macOS, if the server is killed (`kill -9`) while a device drives the size, the pane keeps that size until the service starts again.
+
 ## Show Session Tabs (Desktop Only)
 
 Displays browser-like session tabs in the header row for quick session switching on desktop. The sidebar remains available for more detailed session management.

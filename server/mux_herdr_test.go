@@ -990,13 +990,22 @@ func TestHerdrStreamOverWebSocket(t *testing.T) {
 	}
 }
 
-func TestIsHerdrObserveCmdline(t *testing.T) {
-	argv := herdrObserveArgv("w1:p1", Size{Cols: 80, Rows: 24})
-	if !isHerdrObserveCmdline(strings.Join(argv, " ")) {
-		t.Error("observe command line not matched")
+func TestIsHerdrStreamCmdline(t *testing.T) {
+	size := Size{Cols: 80, Rows: 24}
+	for _, argv := range [][]string{herdrObserveArgv("w1:p1", size), herdrControlArgv("w1:p1", size)} {
+		if !isHerdrStreamCmdline(strings.Join(argv, " ")) {
+			t.Errorf("%q not matched", argv)
+		}
 	}
-	if isHerdrObserveCmdline("herdr terminal session control w1:p1") || isHerdrObserveCmdline("vim herdr terminal session observe x") {
-		t.Error("other command lines matched")
+	for _, cmdline := range []string{
+		"vim herdr terminal session observe x",
+		"vim herdr terminal session control x",
+		"herdr terminal session list",
+		"herdr terminal session controlx w1:p1",
+	} {
+		if isHerdrStreamCmdline(cmdline) {
+			t.Errorf("%q matched", cmdline)
+		}
 	}
 }
 

@@ -4,7 +4,15 @@ import { fetchTerminalToken } from './use-mux-api'
 
 // Server → client text frame on /api/mux/stream.
 export type StreamControl =
-  | { type: 'size'; cols: number; rows: number }
+  | {
+      type: 'size'
+      cols: number
+      rows: number
+      // herdr: whether this client now drives the pane size.
+      driving?: boolean
+      // Why driving stopped when the client did not ask it to.
+      reason?: 'taken-over' | 'failed'
+    }
   | { type: 'exit'; code?: number }
   | { type: 'error'; message?: string }
 
@@ -22,6 +30,9 @@ interface Options {
   followPane: boolean
   // Size requested when the stream opens.
   getSize: () => TermSize | null
+  // Open already driving the pane size (herdr), so a reconnect does not start
+  // at the desktop size only to switch at once.
+  drive?: () => boolean
   onOutput: (data: Uint8Array) => void
   onControl?: (msg: StreamControl) => void
   // Called on every successful open, after the state becomes 'connected'.
@@ -42,13 +53,19 @@ export function backoffDelay(attempt: number): number {
   return Math.round(step * (0.5 + Math.random() / 2))
 }
 
-export function streamURL(token: string, pane: string, size: TermSize | null) {
+export function streamURL(
+  token: string,
+  pane: string,
+  size: TermSize | null,
+  drive = false,
+) {
   const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
   const q = new URLSearchParams({ token, pane })
   if (size) {
     q.set('cols', String(size.cols))
     q.set('rows', String(size.rows))
   }
+  if (drive) q.set('drive', '1')
   return `${proto}://${window.location.host}/api/mux/stream?${q}`
 }
 
@@ -58,6 +75,7 @@ export function useTermSocket({
   paneId,
   followPane,
   getSize,
+  drive,
   onOutput,
   onControl,
   onOpen,
@@ -76,8 +94,8 @@ export function useTermSocket({
   paneRef.current = paneId
 
   // Callbacks change every render; the socket reads the latest through a ref.
-  const cbRef = useRef({ getSize, onOutput, onControl, onOpen })
-  cbRef.current = { getSize, onOutput, onControl, onOpen }
+  const cbRef = useRef({ getSize, drive, onOutput, onControl, onOpen })
+  cbRef.current = { getSize, drive, onOutput, onControl, onOpen }
 
   const teardown = useCallback(() => {
     genRef.current++
@@ -119,7 +137,10 @@ export function useTermSocket({
     }
     if (gen !== genRef.current) return
 
-    const ws = new WebSocket(streamURL(token, pane, cbRef.current.getSize()))
+    const cb = cbRef.current
+    const ws = new WebSocket(
+      streamURL(token, pane, cb.getSize(), cb.drive?.() ?? false),
+    )
     ws.binaryType = 'arraybuffer'
     wsRef.current = ws
     // Set by an exit frame so the following close does not reconnect.
@@ -243,10 +264,17 @@ export function useTermSocket({
     ws.send(JSON.stringify({ type: 'resize', ...size }))
   }, [])
 
+  // Ask to drive the pane size (herdr), or give it back.
+  const sendDrive = useCallback((on: boolean) => {
+    const ws = wsRef.current
+    if (!ws || ws.readyState !== WebSocket.OPEN) return
+    ws.send(JSON.stringify({ type: 'drive', on }))
+  }, [])
+
   const reconnect = useCallback(() => {
     attemptRef.current = 0
     connect()
   }, [connect])
 
-  return { state, send, sendResize, reconnect }
+  return { state, send, sendResize, sendDrive, reconnect }
 }

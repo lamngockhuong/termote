@@ -16,6 +16,8 @@ export interface Settings {
   showSessionTabs: boolean // show session tabs bar on desktop
   terminalFont: string // font installed on this device, tried before the defaults
   uiStyle: UiStyle // visual style of the app chrome (tokens in index.css)
+  // herdr: size the pane to this device while it shows it (Caps.driveSize)
+  driveTerminalSize: boolean
 }
 
 const DEFAULTS: Settings = {
@@ -28,6 +30,7 @@ const DEFAULTS: Settings = {
   showSessionTabs: true,
   terminalFont: '',
   uiStyle: DEFAULT_UI_STYLE,
+  driveTerminalSize: false,
 }
 
 // Listeners for useSyncExternalStore

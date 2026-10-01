@@ -99,7 +99,7 @@ func newHerdrMux(ctx context.Context, socket string) (*herdrMux, error) {
 
 func (*herdrMux) Name() string { return "herdr" }
 
-func (*herdrMux) Caps() Caps { return Caps{ClientSideSelect: true, Scroll: true} }
+func (*herdrMux) Caps() Caps { return Caps{ClientSideSelect: true, Scroll: true, DriveSize: true} }
 
 // Health pings the server now; a missing socket or an unknown protocol version
 // reports degraded.

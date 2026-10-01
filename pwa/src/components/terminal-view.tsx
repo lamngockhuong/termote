@@ -8,6 +8,7 @@ import {
   useImperativeHandle,
   useRef,
 } from 'react'
+import { DEFAULT_SIZE } from '../hooks/use-font-size'
 import { MAX_SCROLL_LINES, scrollPane } from '../hooks/use-mux-api'
 import { type StreamControl, useTermSocket } from '../hooks/use-term-socket'
 import { readToken, type UiStyle } from '../ui-style'
@@ -64,6 +65,12 @@ interface Props {
   disableContextMenu?: boolean
   // View-only role: the terminal shows the pane but sends nothing typed.
   readOnly?: boolean
+  // herdr: size the pane to this terminal while the page is shown
+  // (Caps.driveSize and the setting both on).
+  driveSize?: boolean
+  // Driving stopped without being asked: another device took over, or the
+  // backend could not drive the size.
+  onDriveLost?: (reason: 'taken-over' | 'failed') => void
   onConnectionStateChange?: (state: ConnectionState) => void
 }
 
@@ -180,6 +187,14 @@ export function fitFontSize(
   return Math.max(MIN_FONT_SIZE, Math.floor(fontSize * scale))
 }
 
+// Font shown for a server-fixed grid: the chosen size counts zoom steps from
+// the default, one pixel per step of 2, added to the size the grid fits at
+// (base, measured at the default size). A scaled font would stick at the
+// minimum for every step on a phone, where base is often already there.
+export function zoomFontSize(base: number, chosen: number): number {
+  return Math.max(MIN_FONT_SIZE, Math.floor(base + (chosen - DEFAULT_SIZE) / 2))
+}
+
 export const TerminalView = forwardRef<TerminalHandle, Props>(
   (
     {
@@ -195,6 +210,8 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       uiStyle,
       disableContextMenu = true,
       readOnly = false,
+      driveSize = false,
+      onDriveLost,
       onConnectionStateChange,
     },
     ref,
@@ -224,6 +241,24 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
     paneIdRef.current = paneId
     const readOnlyRef = useRef(readOnly)
     readOnlyRef.current = readOnly
+    const driveSizeRef = useRef(driveSize)
+    driveSizeRef.current = driveSize
+    const onDriveLostRef = useRef(onDriveLost)
+    onDriveLostRef.current = onDriveLost
+    // This client drives the pane size: the server said so in its latest
+    // size frame. Reset with every stream.
+    const drivingRef = useRef(false)
+    // Driving was lost (taken over or failed); not asked for again until the
+    // page is shown again or the setting is turned on again.
+    const driveLostRef = useRef(false)
+    const wantsDrive = useCallback(
+      () =>
+        isHerdrRef.current &&
+        driveSizeRef.current &&
+        !driveLostRef.current &&
+        document.visibilityState === 'visible',
+      [],
+    )
     // Rows scrolled but not sent yet, and the pane they are for; one request
     // is in flight at a time, so a fast wheel does not queue one per event.
     const scrollPendingRef = useRef(0)
@@ -287,15 +322,26 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       if (!term || !fit) return
       const fixed = serverSizeRef.current
       if (!fixed) {
+        // A fixed grid may have left a zoomed font behind.
+        term.options.fontSize = fontSizeRef.current
         fit.fit()
         return
       }
-      term.options.fontSize = fontSizeRef.current
-      term.options.fontSize = fitFontSize(
-        fontSizeRef.current,
-        fit.proposeDimensions(),
-        fixed,
-      )
+      const chosen = fontSizeRef.current
+      term.options.fontSize = DEFAULT_SIZE
+      const base = fitFontSize(DEFAULT_SIZE, fit.proposeDimensions(), fixed)
+      if (base < DEFAULT_SIZE) {
+        term.options.fontSize = zoomFontSize(base, chosen)
+      } else {
+        // The grid fits at the default size (a large screen): the chosen
+        // size applies as is, shrunk only as far as the grid needs.
+        term.options.fontSize = chosen
+        term.options.fontSize = fitFontSize(
+          chosen,
+          fit.proposeDimensions(),
+          fixed,
+        )
+      }
       term.resize(fixed.cols, fixed.rows)
       // A grid still taller than the view (the font is at its minimum, e.g.
       // with the keyboard open) keeps its bottom rows, where the prompt is,
@@ -312,6 +358,29 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
         /* v8 ignore next */
         if (!term) return
         if (msg.type === 'size') {
+          drivingRef.current = !!msg.driving
+          if (msg.reason) {
+            driveLostRef.current = true
+            // Shown again, the page asks again: nothing to tell then.
+            if (document.visibilityState === 'visible') {
+              onDriveLostRef.current?.(msg.reason)
+            }
+          } else if (isHerdrRef.current && !!msg.driving !== wantsDrive()) {
+            // A request made while the socket was still opening was dropped,
+            // or this frame is older than the latest request: ask again.
+            socketRef.current.sendDrive(wantsDrive())
+          }
+          if (msg.driving) {
+            // Sized like tmux: the chosen font, fitted, and sent once the
+            // view has a size to fit.
+            serverSizeRef.current = null
+            layout()
+            const dims = fitRef.current?.proposeDimensions()
+            if (dims?.cols && dims.rows) {
+              socketRef.current.sendResize({ cols: term.cols, rows: term.rows })
+            }
+            return
+          }
           serverSizeRef.current = { cols: msg.cols, rows: msg.rows }
           layout()
         } else if (msg.type === 'exit') {
@@ -320,16 +389,28 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
           term.write(`\r\n[${msg.message ?? 'stream error'}]\r\n`)
         }
       },
-      [layout],
+      [layout, wantsDrive],
     )
 
     const socket = useTermSocket({
       paneId,
       followPane,
+      // The size the client would take, so measured at the chosen font,
+      // not the zoomed one a fixed grid shows.
       getSize: () => {
-        const dims = fitRef.current?.proposeDimensions()
+        const term = termRef.current
+        const fit = fitRef.current
+        /* v8 ignore next */
+        if (!term || !fit) return null
+        const shown = term.options.fontSize
+        if (shown !== fontSizeRef.current) {
+          term.options.fontSize = fontSizeRef.current
+        }
+        const dims = fit.proposeDimensions()
+        if (term.options.fontSize !== shown) term.options.fontSize = shown
         return dims?.cols && dims.rows ? dims : null
       },
+      drive: () => wantsDrive(),
       onOutput: (data) => termRef.current?.write(data),
       onControl,
       onOpen: () => {
@@ -340,6 +421,8 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
         term.reset()
         scrolledRef.current = true
         serverSizeRef.current = null
+        // The old stream's mode does not carry over; wait for a size frame.
+        drivingRef.current = false
         layout()
         if (!isHerdrRef.current) {
           socket.sendResize({ cols: term.cols, rows: term.rows })
@@ -445,7 +528,9 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
           )
         }),
         term.onResize((size) => {
-          if (!isHerdrRef.current) socketRef.current.sendResize(size)
+          if (!isHerdrRef.current || drivingRef.current) {
+            socketRef.current.sendResize(size)
+          }
         }),
       ]
       const observer = new ResizeObserver(() => layout())
@@ -474,6 +559,40 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       setTerminalFontFamily(handleRef.current, terminalFontFamily(fontFamily))
       layout()
     }, [fontFamily, layout])
+
+    // Drive the pane size while the setting is on and the page is shown;
+    // give it back as soon as the page is hidden, so the desktop is not left
+    // at this device's size. A stream opened while wanted asks with drive=1.
+    const prevDriveRef = useRef(driveSize)
+    useEffect(() => {
+      if (!isHerdr) return
+      const changed = prevDriveRef.current !== driveSize
+      prevDriveRef.current = driveSize
+      if (changed) {
+        if (driveSize) driveLostRef.current = false
+        socketRef.current.sendDrive(wantsDrive())
+      }
+      if (!driveSize) return
+      const onVisibility = () => {
+        if (document.visibilityState === 'visible') driveLostRef.current = false
+        socketRef.current.sendDrive(wantsDrive())
+      }
+      const onPageHide = () => socketRef.current.sendDrive(false)
+      // Back from the back/forward cache, where visibilitychange may not fire.
+      const onPageShow = (e: PageTransitionEvent) => {
+        if (!e.persisted) return
+        driveLostRef.current = false
+        socketRef.current.sendDrive(wantsDrive())
+      }
+      document.addEventListener('visibilitychange', onVisibility)
+      window.addEventListener('pagehide', onPageHide)
+      window.addEventListener('pageshow', onPageShow)
+      return () => {
+        document.removeEventListener('visibilitychange', onVisibility)
+        window.removeEventListener('pagehide', onPageHide)
+        window.removeEventListener('pageshow', onPageShow)
+      }
+    }, [driveSize, isHerdr, wantsDrive])
 
     // No cursor or keyboard focus for input that would go nowhere.
     useEffect(() => {

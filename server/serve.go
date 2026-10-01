@@ -265,7 +265,7 @@ func startServeMode(cfg serveConfig) {
 		reapOrphanTerminals(isTmuxAttachCmdline)
 		scrubTmuxSecrets(ctx)
 	case "herdr":
-		reapOrphanTerminals(isHerdrObserveCmdline)
+		reapOrphanTerminals(isHerdrStreamCmdline)
 	}
 	ln, err := net.Listen("tcp", net.JoinHostPort(cfg.Bind, cfg.Port))
 	if err != nil {

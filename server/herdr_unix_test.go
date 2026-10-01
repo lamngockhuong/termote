@@ -35,7 +35,7 @@ func TestHerdrSocketPath(t *testing.T) {
 func TestHerdrObserverKillEscalates(t *testing.T) {
 	pids := useFakeObserve(t, false)
 	t.Setenv(observeNoTermEnv, "1")
-	p, err := startObserver("wR:p3", Size{Cols: 80, Rows: 24}, io.Discard)
+	p, err := startHerdrStream(herdrObserveArgv("wR:p3", Size{Cols: 80, Rows: 24}), false, io.Discard)
 	if err != nil {
 		t.Fatal(err)
 	}

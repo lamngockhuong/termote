@@ -113,15 +113,24 @@ attach a terminal, health) with two implementations:
 - **`mux_herdr.go`** (native mode only, `TERMOTE_MUX=herdr`): drives a Herdr server over its
   socket. A Herdr workspace is a group, a Herdr tab is a tab, a Herdr pane is a pane. Selecting
   a tab in the PWA only changes which pane the client streams (`Caps.ClientSideSelect`); it
-  never changes what is shown on the Herdr desktop. The stream follows the pane's real size
-  (`session.observe`) and sends keys with `pane.send_text` through a single serialising writer;
-  it does not use Herdr's `control`, which would resize the shared desktop PTY. Per-pane agent
+  never changes what is shown on the Herdr desktop. By default the stream follows the pane's
+  real size (`terminal session observe`) and sends keys with `pane.send_text` through a single
+  serialising writer. A pane is one PTY with one size, so the PWA cannot have its own size next
+  to the desktop's; when the client asks to drive it (`Caps.DriveSize`, see the stream protocol
+  below) the stream switches to `terminal session control --takeover` at the client's size,
+  resizes it in place by writing `terminal.resize` to its stdin, and switches back to `observe`
+  when the client gives the size back, another client takes over, or `control` ends for any
+  other reason while the pane is still there. Ending `control` (stdin closed, or the process
+  killed) returns the PTY to the desktop's size; keys still go through `pane.send_text`. Mode
+  switches are at least 500ms apart. Per-pane agent
   status comes from Herdr's `pane.agent_status_changed` event and is surfaced as the PWA's
   agent-status badge, refreshed at most once per `pollInterval`. The OS-specific parts are split
   by build tag: `herdr_socket_*.go` finds and dials the socket (a Unix socket, or on Windows the
   named pipe `\\.\pipe\<socket path>`, kept only when its server runs as the same user), and
-  `herdr_observer_*.go` stops `observe` (a process group on Unix, a `KILL_ON_JOB_CLOSE` Job
-  Object on Windows, so it dies with the server as a ConPTY terminal does).
+  `herdr_observer_*.go` stops `observe` and `control` (a process group on Unix, a
+  `KILL_ON_JOB_CLOSE` Job Object on Windows, so it dies with the server as a ConPTY terminal
+  does). On macOS a `control` left behind by a server killed with `kill -9` keeps the pane at
+  the client's size until the next `termote serve` reaps it.
 
 ## Communication Protocols
 
@@ -131,13 +140,20 @@ attach a terminal, health) with two implementations:
 Client → Server:
   - binary frame                      (input bytes)
   - {"type":"resize","cols":N,"rows":N} (text frame)
+  - {"type":"drive","on":true|false}   (caps.driveSize: take over / give back the pane size)
 
 Server → Client:
   - binary frame                      (output bytes)
-  - {"type":"size","cols":N,"rows":N}   (backend-fixed size, e.g. Herdr)
+  - {"type":"size","cols":N,"rows":N,"driving":B,"reason":R}   (Herdr)
   - {"type":"exit","code":N}
   - {"type":"error","message":"..."}
 ```
+
+The size frame comes before any output at that size. With Herdr it always carries `driving`:
+`false` means the size is the desktop's and client resizes are ignored; `true` means the client
+drives it, so its resizes reach the pane. `reason` (`taken-over` or `failed`) is only set when
+driving stopped without the client asking. `?drive=1` on the URL opens the stream already
+driving, so a reconnect does not start at the desktop size first. tmux ignores `drive`.
 
 The connection requires a same-origin/allowed Origin, a single-use token minted by
 `GET /api/mux/stream-token` (30s TTL, consumed on upgrade), and `?pane=<id>` naming an

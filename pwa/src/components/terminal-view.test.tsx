@@ -12,6 +12,7 @@ import {
   TerminalView,
   THEMES,
   wheelRows,
+  zoomFontSize,
 } from './terminal-view'
 
 type Listener<T> = (v: T) => void
@@ -76,10 +77,16 @@ const { FakeTerminal, FakeFit } = vi.hoisted(() => {
   class FakeFit {
     static last: FakeFit
     fit = vi.fn()
-    proposeDimensions = vi.fn<() => TermSize | undefined>(() => ({
-      cols: 100,
-      rows: 50,
-    }))
+    // Space for the grid, in pixels; the fitted size depends on the font
+    // the terminal has when measured (100x50 at 14px), as xterm's does.
+    static space = { width: 840, height: 840 }
+    proposeDimensions = vi.fn<() => TermSize | undefined>(() => {
+      const font = FakeTerminal.last.options.fontSize
+      return {
+        cols: Math.floor(FakeFit.space.width / (font * 0.6)),
+        rows: Math.floor(FakeFit.space.height / (font * 1.2)),
+      }
+    })
     constructor() {
       FakeFit.last = this
     }
@@ -102,6 +109,7 @@ interface SocketOpts {
   paneId?: string
   followPane: boolean
   getSize: () => TermSize | null
+  drive?: () => boolean
   onOutput: (d: Uint8Array) => void
   onControl: (m: StreamControl) => void
   onOpen: () => void
@@ -111,7 +119,16 @@ const socket = {
   state: 'connected' as string,
   send: vi.fn(() => true),
   sendResize: vi.fn(),
+  sendDrive: vi.fn(),
   reconnect: vi.fn(),
+}
+
+function setVisibility(state: 'visible' | 'hidden') {
+  Object.defineProperty(document, 'visibilityState', {
+    configurable: true,
+    get: () => state,
+  })
+  document.dispatchEvent(new Event('visibilitychange'))
 }
 vi.mock('../hooks/use-term-socket', () => ({
   useTermSocket: (opts: SocketOpts) => {
@@ -196,9 +213,32 @@ describe('fitFontSize', () => {
   })
 })
 
+describe('zoomFontSize', () => {
+  it('adds one pixel per step of 2 from the default size', () => {
+    // A phone with a wide pane: base already at the minimum
+    expect(zoomFontSize(6, 14)).toBe(6)
+    expect(zoomFontSize(6, 16)).toBe(7)
+    expect(zoomFontSize(6, 18)).toBe(8)
+    expect(zoomFontSize(6, 12)).toBe(6)
+    expect(zoomFontSize(12, 14)).toBe(12)
+    expect(zoomFontSize(12, 16)).toBe(13)
+    expect(zoomFontSize(12, 10)).toBe(10)
+  })
+
+  it('never goes under the minimum, and rounds an odd saved size down', () => {
+    expect(zoomFontSize(7, 6)).toBe(MIN_FONT_SIZE)
+    expect(zoomFontSize(12, 15)).toBe(12)
+  })
+})
+
 describe('TerminalView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    FakeFit.space = { width: 840, height: 840 }
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => 'visible',
+    })
     socket.state = 'connected'
     vi.stubGlobal('ResizeObserver', FakeResizeObserver)
   })
@@ -440,6 +480,293 @@ describe('TerminalView', () => {
     Object.defineProperty(scroller, 'scrollHeight', { value: 900 })
     act(() => socketOpts.onControl({ type: 'size', cols: 152, rows: 41 }))
     expect(scroller.scrollTop).toBe(900)
+  })
+
+  it('herdr: the font zooms the fixed grid from the size it fits at 14px', () => {
+    // Room for 76x40 at 14px, so a 152x41 pane fits at 7px
+    FakeFit.space = { width: 76 * 8.4, height: 40 * 16.8 }
+    const { term, rerender, ref } = renderView({
+      backend: 'herdr',
+      fontSize: 14,
+    })
+    act(() => socketOpts.onControl({ type: 'size', cols: 152, rows: 41 }))
+    expect(term.options.fontSize).toBe(7)
+
+    rerender(
+      <TerminalView ref={ref} paneId="0" backend="herdr" fontSize={20} />,
+    )
+    expect(term.options.fontSize).toBe(10)
+    expect(term.resize).toHaveBeenLastCalledWith(152, 41)
+
+    rerender(
+      <TerminalView ref={ref} paneId="0" backend="herdr" fontSize={10} />,
+    )
+    expect(term.options.fontSize).toBe(MIN_FONT_SIZE)
+  })
+
+  it('herdr: a grid that fits at 14px takes the chosen font, shrunk to fit', () => {
+    // Room for 100x50 at 14px; the pane is 80x24
+    const { term, rerender, ref } = renderView({
+      backend: 'herdr',
+      fontSize: 6,
+    })
+    act(() => socketOpts.onControl({ type: 'size', cols: 80, rows: 24 }))
+    expect(term.options.fontSize).toBe(6)
+
+    // 24px would leave room for 58x29: shrunk to 80 columns
+    rerender(
+      <TerminalView ref={ref} paneId="0" backend="herdr" fontSize={24} />,
+    )
+    expect(term.options.fontSize).toBe(17)
+    expect(term.resize).toHaveBeenLastCalledWith(80, 24)
+  })
+
+  it('an unfixed grid goes back to the chosen font after a fixed one', () => {
+    FakeFit.space = { width: 76 * 8.4, height: 40 * 16.8 }
+    const { term, fit } = renderView({ backend: 'herdr', fontSize: 16 })
+    act(() => socketOpts.onControl({ type: 'size', cols: 152, rows: 41 }))
+    expect(term.options.fontSize).toBe(8)
+
+    // A new stream drops the fixed size
+    fit.fit.mockClear()
+    act(() => socketOpts.onOpen())
+    expect(term.options.fontSize).toBe(16)
+    expect(fit.fit).toHaveBeenCalled()
+  })
+
+  it('asks for the size at the chosen font, not the zoomed one', () => {
+    FakeFit.space = { width: 76 * 8.4, height: 40 * 16.8 }
+    const { term } = renderView({ backend: 'herdr', fontSize: 14 })
+    act(() => socketOpts.onControl({ type: 'size', cols: 152, rows: 41 }))
+    expect(term.options.fontSize).toBe(7)
+    // At 7px it would be 152x80
+    expect(socketOpts.getSize()).toEqual({ cols: 76, rows: 40 })
+    expect(term.options.fontSize).toBe(7)
+  })
+
+  describe('herdr drive', () => {
+    // fit.fit sizes the grid from the space at the current font, as xterm's.
+    function renderDriving(
+      props: Partial<React.ComponentProps<typeof TerminalView>> = {},
+    ) {
+      const r = renderView({ backend: 'herdr', driveSize: true, ...props })
+      r.fit.fit.mockImplementation(() => {
+        const d = r.fit.proposeDimensions()!
+        r.term.cols = d.cols
+        r.term.rows = d.rows
+      })
+      return r
+    }
+
+    it('asks to drive while shown, and gives the size back when hidden', () => {
+      renderDriving()
+      expect(socketOpts.drive?.()).toBe(true)
+      // Nothing changed yet: the stream asks with drive=1 itself
+      expect(socket.sendDrive).not.toHaveBeenCalled()
+
+      act(() => setVisibility('hidden'))
+      expect(socket.sendDrive).toHaveBeenLastCalledWith(false)
+      expect(socketOpts.drive?.()).toBe(false)
+      act(() => setVisibility('visible'))
+      expect(socket.sendDrive).toHaveBeenLastCalledWith(true)
+      act(() => {
+        window.dispatchEvent(new Event('pagehide'))
+      })
+      expect(socket.sendDrive).toHaveBeenLastCalledWith(false)
+    })
+
+    it('follows the setting being turned off and on', () => {
+      const { rerender, ref } = renderDriving()
+      rerender(
+        <TerminalView ref={ref} paneId="0" backend="herdr" driveSize={false} />,
+      )
+      expect(socket.sendDrive).toHaveBeenLastCalledWith(false)
+      expect(socketOpts.drive?.()).toBe(false)
+      // Hidden while off: nothing sent
+      socket.sendDrive.mockClear()
+      act(() => setVisibility('hidden'))
+      act(() => setVisibility('visible'))
+      expect(socket.sendDrive).not.toHaveBeenCalled()
+      rerender(<TerminalView ref={ref} paneId="0" backend="herdr" driveSize />)
+      expect(socket.sendDrive).toHaveBeenLastCalledWith(true)
+    })
+
+    it('sizes the terminal like tmux once the server says it drives', () => {
+      FakeFit.space = { width: 76 * 8.4, height: 40 * 16.8 }
+      const { term } = renderDriving({ fontSize: 14 })
+      act(() => socketOpts.onOpen())
+      // Desktop size first: shrunk to fit
+      act(() => socketOpts.onControl({ type: 'size', cols: 152, rows: 41 }))
+      expect(term.options.fontSize).toBe(7)
+      expect(socket.sendResize).not.toHaveBeenCalled()
+
+      act(() =>
+        socketOpts.onControl({
+          type: 'size',
+          cols: 76,
+          rows: 40,
+          driving: true,
+        }),
+      )
+      expect(term.options.fontSize).toBe(14)
+      expect(socket.sendResize).toHaveBeenLastCalledWith({ cols: 76, rows: 40 })
+      // Its own resizes now reach the pane
+      term.resizeCb({ cols: 70, rows: 30 })
+      expect(socket.sendResize).toHaveBeenLastCalledWith({ cols: 70, rows: 30 })
+
+      // A later frame without driving wins: the desktop size again
+      socket.sendResize.mockClear()
+      act(() => socketOpts.onControl({ type: 'size', cols: 152, rows: 41 }))
+      expect(term.resize).toHaveBeenLastCalledWith(152, 41)
+      term.resizeCb({ cols: 70, rows: 30 })
+      expect(socket.sendResize).not.toHaveBeenCalled()
+    })
+
+    it('a new stream starts out not driving', () => {
+      const { term } = renderDriving()
+      act(() =>
+        socketOpts.onControl({
+          type: 'size',
+          cols: 100,
+          rows: 50,
+          driving: true,
+        }),
+      )
+      socket.sendResize.mockClear()
+      act(() => socketOpts.onOpen())
+      term.resizeCb({ cols: 90, rows: 30 })
+      expect(socket.sendResize).not.toHaveBeenCalled()
+    })
+
+    it.each([['taken-over' as const], ['failed' as const]])(
+      'stops asking after %s until shown again',
+      (reason) => {
+        const onDriveLost = vi.fn()
+        renderDriving({ onDriveLost })
+        act(() =>
+          socketOpts.onControl({
+            type: 'size',
+            cols: 100,
+            rows: 50,
+            driving: true,
+          }),
+        )
+        act(() =>
+          socketOpts.onControl({ type: 'size', cols: 152, rows: 41, reason }),
+        )
+        expect(onDriveLost).toHaveBeenCalledWith(reason)
+        expect(socketOpts.drive?.()).toBe(false)
+
+        // Hidden: gives it back; shown again: asks again
+        act(() => setVisibility('hidden'))
+        expect(socket.sendDrive).toHaveBeenLastCalledWith(false)
+        act(() => setVisibility('visible'))
+        expect(socket.sendDrive).toHaveBeenLastCalledWith(true)
+        expect(socketOpts.drive?.()).toBe(true)
+      },
+    )
+
+    it('turning the setting on again clears a takeover', () => {
+      const { rerender, ref } = renderDriving()
+      act(() =>
+        socketOpts.onControl({
+          type: 'size',
+          cols: 152,
+          rows: 41,
+          reason: 'taken-over',
+        }),
+      )
+      rerender(
+        <TerminalView ref={ref} paneId="0" backend="herdr" driveSize={false} />,
+      )
+      rerender(<TerminalView ref={ref} paneId="0" backend="herdr" driveSize />)
+      expect(socket.sendDrive).toHaveBeenLastCalledWith(true)
+    })
+
+    it('asks again when a size frame disagrees with what is wanted', () => {
+      const { rerender, ref } = renderDriving()
+      // Opened driving, then the switch went off before the socket was open
+      rerender(
+        <TerminalView ref={ref} paneId="0" backend="herdr" driveSize={false} />,
+      )
+      socket.sendDrive.mockClear()
+      act(() =>
+        socketOpts.onControl({
+          type: 'size',
+          cols: 100,
+          rows: 50,
+          driving: true,
+        }),
+      )
+      expect(socket.sendDrive).toHaveBeenLastCalledWith(false)
+      // Agreeing frames send nothing
+      socket.sendDrive.mockClear()
+      act(() => socketOpts.onControl({ type: 'size', cols: 152, rows: 41 }))
+      expect(socket.sendDrive).not.toHaveBeenCalled()
+    })
+
+    it('does not send a size the view cannot fit yet', () => {
+      const { fit } = renderDriving()
+      fit.proposeDimensions.mockReturnValue(undefined)
+      fit.fit.mockImplementation(() => {})
+      act(() =>
+        socketOpts.onControl({
+          type: 'size',
+          cols: 100,
+          rows: 50,
+          driving: true,
+        }),
+      )
+      expect(socket.sendResize).not.toHaveBeenCalled()
+    })
+
+    it('a takeover seen while hidden shows no toast', () => {
+      const onDriveLost = vi.fn()
+      renderDriving({ onDriveLost })
+      act(() => setVisibility('hidden'))
+      act(() =>
+        socketOpts.onControl({
+          type: 'size',
+          cols: 152,
+          rows: 41,
+          reason: 'taken-over',
+        }),
+      )
+      expect(onDriveLost).not.toHaveBeenCalled()
+    })
+
+    it('asks again when restored from the back/forward cache', () => {
+      renderDriving()
+      act(() =>
+        socketOpts.onControl({
+          type: 'size',
+          cols: 152,
+          rows: 41,
+          reason: 'taken-over',
+        }),
+      )
+      socket.sendDrive.mockClear()
+      act(() => {
+        window.dispatchEvent(
+          new PageTransitionEvent('pageshow', { persisted: false }),
+        )
+      })
+      expect(socket.sendDrive).not.toHaveBeenCalled()
+      act(() => {
+        window.dispatchEvent(
+          new PageTransitionEvent('pageshow', { persisted: true }),
+        )
+      })
+      expect(socket.sendDrive).toHaveBeenLastCalledWith(true)
+    })
+
+    it('tmux never drives', () => {
+      renderView({ driveSize: true })
+      expect(socketOpts.drive?.()).toBe(false)
+      act(() => setVisibility('hidden'))
+      act(() => setVisibility('visible'))
+      expect(socket.sendDrive).not.toHaveBeenCalled()
+    })
   })
 
   it('reports exit and errors in the terminal', () => {

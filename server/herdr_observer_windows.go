@@ -47,8 +47,8 @@ func (p *observer) attach() error {
 }
 
 // kill terminates the job at once: observe only reads, so it has nothing to
-// finish. The process itself is killed if it is still there after
-// processKillWait.
+// finish, and control is released by closing its stdin before it gets here.
+// The process itself is killed if it is still there after processKillWait.
 func (p *observer) kill() {
 	select {
 	case <-p.waited:

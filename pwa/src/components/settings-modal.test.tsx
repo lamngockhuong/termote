@@ -13,6 +13,7 @@ const DEFAULT_SETTINGS: Settings = {
   hasSeenGestureHints: false,
   terminalFont: '',
   uiStyle: 'neutral',
+  driveTerminalSize: false,
 }
 
 describe('SettingsModal', () => {
@@ -200,6 +201,21 @@ describe('SettingsModal', () => {
       screen.getByRole('switch', { name: 'Disable right-click menu' }),
     )
     expect(onUpdateSetting).toHaveBeenCalledWith('disableContextMenu', false)
+  })
+
+  it('offers the herdr drive switch only when the backend supports it', () => {
+    renderModal()
+    expect(
+      screen.queryByRole('switch', { name: 'Fit herdr pane to this device' }),
+    ).toBeNull()
+  })
+
+  it('toggles driveTerminalSize', () => {
+    const { onUpdateSetting } = renderModal({ driveSizeSupported: true })
+    fireEvent.click(
+      screen.getByRole('switch', { name: 'Fit herdr pane to this device' }),
+    )
+    expect(onUpdateSetting).toHaveBeenCalledWith('driveTerminalSize', true)
   })
 
   it('toggles showSessionTabs', () => {

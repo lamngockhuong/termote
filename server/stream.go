@@ -72,19 +72,37 @@ type sizeReporter interface {
 	Sizes() <-chan sizeChange
 }
 
+// sizeChange is one size frame. Driving tells whether the client now drives
+// the size (sizeDriver); Reason says why it stopped when it did not ask to.
 type sizeChange struct {
-	Size Size
-	sent chan<- struct{}
+	Size    Size
+	Driving bool
+	Reason  string
+	sent    chan<- struct{}
 }
 
-// streamControl is a text frame. Client → server: resize. Server → client:
-// exit, error, size.
+// sizeDriver is implemented by streams that can take over the pane size
+// (herdr's control mode) when the client asks for it. While driving, client
+// resizes reach the pane and size frames carry the client's size.
+type sizeDriver interface {
+	Drive(on bool)
+}
+
+// streamControl is a text frame. Client → server: resize, drive. Server →
+// client: exit, error, size.
 type streamControl struct {
 	Type    string `json:"type"`
 	Cols    int    `json:"cols,omitempty"`
 	Rows    int    `json:"rows,omitempty"`
 	Code    *int   `json:"code,omitempty"`
 	Message string `json:"message,omitempty"`
+	// On is the drive request; a drive message without it is ignored.
+	On *bool `json:"on,omitempty"`
+	// Driving is set on every size frame, so false is sent too.
+	Driving *bool `json:"driving,omitempty"`
+	// Reason is "taken-over" or "failed" when driving stopped without the
+	// client asking.
+	Reason string `json:"reason,omitempty"`
 }
 
 // errStreamEvicted and errServerShutdown end a stream from outside.
@@ -244,6 +262,11 @@ func handleStream(w http.ResponseWriter, r *http.Request, m Mux, tokens *tokenSt
 		go conn.Close(websocket.StatusInternalError, "attach failed")
 		return
 	}
+	// drive=1 opens the stream already driving the size, so a reconnect does
+	// not start at the desktop size only to switch at once.
+	if sd, ok := ts.(sizeDriver); ok && q.Get("drive") == "1" {
+		sd.Drive(true)
+	}
 	runStream(sctx, scancel, conn, ts)
 }
 
@@ -292,10 +315,18 @@ func runStream(ctx context.Context, cancel context.CancelCauseFunc, conn *websoc
 				continue
 			}
 			var msg streamControl
+			if json.Unmarshal(data, &msg) != nil {
+				continue
+			}
+			switch {
 			// A resize without a size is ignored rather than clamped to 1x1.
-			if json.Unmarshal(data, &msg) == nil && msg.Type == "resize" && msg.Cols > 0 && msg.Rows > 0 {
+			case msg.Type == "resize" && msg.Cols > 0 && msg.Rows > 0:
 				if err := ts.Resize(Size{Cols: clampDim(msg.Cols), Rows: clampDim(msg.Rows)}); err != nil {
 					log.Printf("stream resize: %v", err)
+				}
+			case msg.Type == "drive" && msg.On != nil:
+				if sd, ok := ts.(sizeDriver); ok {
+					sd.Drive(*msg.On)
 				}
 			}
 		}
@@ -311,7 +342,8 @@ func runStream(ctx context.Context, cancel context.CancelCauseFunc, conn *websoc
 					if !ok {
 						return
 					}
-					sendControl(conn, streamControl{Type: "size", Cols: c.Size.Cols, Rows: c.Size.Rows})
+					driving := c.Driving
+					sendControl(conn, streamControl{Type: "size", Cols: c.Size.Cols, Rows: c.Size.Rows, Driving: &driving, Reason: c.Reason})
 					close(c.sent)
 				}
 			}

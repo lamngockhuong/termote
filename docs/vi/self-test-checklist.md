@@ -52,6 +52,18 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 - [ ] Chọn tab/pane trên PWA không làm đổi tab đang focus trong giao diện Herdr trên máy host
 - [ ] Huy hiệu trạng thái agent đổi trong vòng một `pollInterval` sau khi `herdr` báo trạng thái mới
 - [ ] Gõ từ PWA vào pane của Herdr giữ đúng thứ tự (không bị xen lẫn)
+- [ ] Nút font khi công tắc fit đang tắt: cỡ 14 hiển thị như trước; mỗi nấc tăng làm chữ to thêm
+      1px, và trên điện thoại kéo được pane to hơn màn hình theo cả hai chiều
+- [ ] Bật Settings → Terminal → **Fit herdr pane to this device** (chỉ trên workspace thử):
+      `stty size` trong pane báo đúng khổ của PWA ở font đã chọn, và đổi theo font; gõ từ desktop
+      vẫn được
+- [ ] Ẩn tab PWA thì desktop lấy lại khổ của mình trong vòng một giây; hiện lại thì PWA giành lại
+- [ ] Đổi khổ pane trên desktop trong lúc PWA đang giữ khổ, rồi ẩn PWA: PWA hiển thị đúng khổ
+      mới của desktop
+- [ ] Hai trình duyệt cùng bật công tắc: bên được hiện sau cùng giữ khổ, bên kia hiện thông báo và
+      vẫn xem được pane
+- [ ] Tắt mạng điện thoại trong lúc nó giữ khổ: desktop lấy lại khổ trong khoảng 30 giây
+- [ ] `kill -9` server trong lúc PWA giữ khổ: desktop lấy lại khổ
 
 ### Chế Độ Native + Herdr (Windows)
 
@@ -63,6 +75,8 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 - [ ] `observe` khởi động từ Scheduled Task không mở cửa sổ dòng lệnh nào
 - [ ] Sau `termote stop`, và sau `Stop-Process -Force` với server,
       `Get-CimInstance Win32_Process -Filter "Name='herdr.exe'"` không còn tiến trình `terminal session observe`
+      hay `terminal session control`
+- [ ] Dừng một stream đang giữ khổ pane thì desktop lấy lại khổ của mình
 
 ### Chế Độ Container
 

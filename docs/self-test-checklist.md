@@ -52,6 +52,20 @@ Manual testing checklist for Termote features before release.
 - [ ] Selecting a tab/pane on the PWA does not change the Herdr desktop's focused tab
 - [ ] Agent status badge changes within one `pollInterval` after `herdr` reports a status change
 - [ ] Typing from the PWA lands in the correct order in the Herdr pane (no interleaving)
+- [ ] Font buttons, fit switch off: 14 shows as before; each step up makes the text 1px larger,
+      and a pane larger than the screen can be dragged both ways on a phone
+- [ ] Settings → Terminal → **Fit herdr pane to this device** on (test workspace only):
+      `stty size` in the pane reports the PWA's size at the chosen font, and changes with it;
+      typing on the desktop still works
+- [ ] Hiding the PWA tab returns the desktop to its size within a second; showing it again
+      takes the size back
+- [ ] Resizing the pane on the desktop while the PWA drives it, then hiding the PWA: the PWA
+      shows the desktop's new size
+- [ ] Two browsers with the switch on: the one shown last takes the size, the other shows a
+      toast and keeps showing the pane
+- [ ] Turning the phone's network off while it drives: the desktop gets its size back within
+      about 30 seconds
+- [ ] `kill -9` of the server while the PWA drives: the desktop gets its size back
 
 ### Native Mode + Herdr (Windows)
 
@@ -63,6 +77,8 @@ Manual testing checklist for Termote features before release.
 - [ ] No console window opens when `observe` starts from the Scheduled Task
 - [ ] After `termote stop`, and after `Stop-Process -Force` on the server,
       `Get-CimInstance Win32_Process -Filter "Name='herdr.exe'"` lists no `terminal session observe`
+      or `terminal session control`
+- [ ] Stopping a stream that drives the pane size returns the desktop to its size
 
 ### Container Mode
 

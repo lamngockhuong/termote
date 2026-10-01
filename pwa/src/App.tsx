@@ -52,6 +52,7 @@ import {
   pasteToTerminal,
   scrollTerminal,
   scrollTerminalHorizontal,
+  scrollTerminalVertical,
   scrollTmux,
   sendKeyToTerminal,
   sendTextToTerminal,
@@ -117,6 +118,16 @@ export default function App({
     (message: string, variant: ToastVariant = 'info') =>
       setToast({ id: ++toastIdRef.current, message, variant }),
     [],
+  )
+  const onDriveLost = useCallback(
+    (reason: 'taken-over' | 'failed') =>
+      showToast(
+        reason === 'taken-over'
+          ? 'Another device took over the terminal size. Reopen the page to take it back'
+          : 'Could not fit the pane to this device; showing the desktop size',
+        'warning',
+      ),
+    [showToast],
   )
   // State of the terminal stream, reported by TerminalView.
   const [streamState, setStreamState] = useState<ConnectionState>('connecting')
@@ -249,9 +260,16 @@ export default function App({
         if (isHerdr && scrollTerminalHorizontal(getTerminal(), 'left')) return
         if (!readOnly) sendKeyToTerminal(getTerminal(), 'Tab')
       },
-      // Vertical swipes scroll the history, as the toolbar's scroll keys do.
-      onSwipeUp: () => handleScroll('down'),
-      onSwipeDown: () => handleScroll('up'),
+      // Vertical swipes scroll the history, as the toolbar's scroll keys do;
+      // a zoomed herdr pane taller than the screen scrolls to its edge first.
+      onSwipeUp: () => {
+        if (isHerdr && scrollTerminalVertical(getTerminal(), 'down')) return
+        handleScroll('down')
+      },
+      onSwipeDown: () => {
+        if (isHerdr && scrollTerminalVertical(getTerminal(), 'up')) return
+        handleScroll('up')
+      },
       onLongPress: async () => {
         if (readOnly) return
         const result = await pasteToTerminal(getTerminal())
@@ -600,6 +618,10 @@ export default function App({
                     uiStyle={settings.uiStyle}
                     disableContextMenu={settings.disableContextMenu}
                     readOnly={readOnly}
+                    driveSize={
+                      settings.driveTerminalSize && !!mux.caps.driveSize
+                    }
+                    onDriveLost={onDriveLost}
                     onConnectionStateChange={setStreamState}
                   />
                 </div>
@@ -707,6 +729,7 @@ export default function App({
         pasteBufferLabel={
           mux.backend === 'tmux' ? 'tmux buffer' : 'Session buffer'
         }
+        driveSizeSupported={!!mux.caps.driveSize}
         onShowGestureHints={isMobile ? showGestureHints : undefined}
         onCheckForUpdate={async () => {
           const result = await checkForUpdate(true)

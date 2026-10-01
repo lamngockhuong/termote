@@ -19,6 +19,7 @@ import {
   resetCopyModeState,
   scrollTerminal,
   scrollTerminalHorizontal,
+  scrollTerminalVertical,
   scrollTerminalViewport,
   scrollTmux,
   sendCommandToTerminal,
@@ -785,6 +786,60 @@ describe('unblockContextMenu', () => {
   it('returns false when handle is null', () => {
     const result = unblockContextMenu(null)
     expect(result).toBe(false)
+  })
+})
+
+describe('scrollTerminalVertical', () => {
+  function scroller(scrollHeight: number, clientHeight: number, top: number) {
+    const el = document.createElement('div')
+    Object.defineProperty(el, 'scrollHeight', { value: scrollHeight })
+    Object.defineProperty(el, 'clientHeight', { value: clientHeight })
+    el.scrollTop = top
+    el.scrollBy = vi.fn()
+    return el
+  }
+
+  it('scrolls a taller pane by 80% of the screen, up to its edge', () => {
+    // 1000px grid, 500px view, at the bottom (scrollTop 500)
+    const el = scroller(1000, 500, 500)
+    const handle = createMockHandle({ scroller: el })
+    expect(scrollTerminalVertical(handle, 'up')).toBe(400)
+    expect(el.scrollBy).toHaveBeenLastCalledWith({
+      top: -400,
+      behavior: 'smooth',
+    })
+    // 100px left above
+    el.scrollTop = 100
+    expect(scrollTerminalVertical(handle, 'up')).toBe(100)
+    expect(el.scrollBy).toHaveBeenLastCalledWith({
+      top: -100,
+      behavior: 'smooth',
+    })
+    expect(scrollTerminalVertical(handle, 'down')).toBe(400)
+    expect(el.scrollBy).toHaveBeenLastCalledWith({
+      top: 400,
+      behavior: 'smooth',
+    })
+  })
+
+  it('reports 0 at the edge, when nothing overflows or without a terminal', () => {
+    const bottom = scroller(1000, 500, 500)
+    expect(
+      scrollTerminalVertical(createMockHandle({ scroller: bottom }), 'down'),
+    ).toBe(0)
+    const top = scroller(1000, 500, 0)
+    expect(
+      scrollTerminalVertical(createMockHandle({ scroller: top }), 'up'),
+    ).toBe(0)
+    const fits = scroller(500, 500, 0)
+    expect(
+      scrollTerminalVertical(createMockHandle({ scroller: fits }), 'down'),
+    ).toBe(0)
+    expect(bottom.scrollBy).not.toHaveBeenCalled()
+    expect(top.scrollBy).not.toHaveBeenCalled()
+    expect(fits.scrollBy).not.toHaveBeenCalled()
+    expect(scrollTerminalVertical(createMockHandle(), 'up')).toBe(0)
+    expect(scrollTerminalVertical(null, 'up')).toBe(0)
   })
 })
 

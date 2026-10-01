@@ -190,6 +190,25 @@ export function scrollTerminalHorizontal(
   return true
 }
 
+// Scroll a pane taller than the screen (zoomed in) by most of a screen
+// height, up to its edge. Returns the pixels scrolled, 0 at the edge or when
+// nothing overflows, so the caller can scroll the history instead.
+export function scrollTerminalVertical(
+  handle: TerminalHandle | null,
+  direction: 'up' | 'down',
+): number {
+  const el = handle?.scroller
+  if (!el) return 0
+  const room =
+    direction === 'up'
+      ? el.scrollTop
+      : el.scrollHeight - el.clientHeight - el.scrollTop
+  const step = Math.min(el.clientHeight * 0.8, room)
+  if (step < 1) return 0
+  el.scrollBy({ top: direction === 'up' ? -step : step, behavior: 'smooth' })
+  return step
+}
+
 // Get copy mode state of this terminal
 export function isInCopyMode(handle: TerminalHandle | null): boolean {
   return handle?.copyMode ?? false
