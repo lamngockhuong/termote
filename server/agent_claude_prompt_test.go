@@ -275,13 +275,14 @@ func TestDialogSignatureHasTheOpenTab(t *testing.T) {
 		t.Errorf("cut tab row = %+v", p)
 	}
 	// Text typed into the free-text option replaces "Type something"; with
-	// the pointer moved off it, it is still not an option to send.
+	// the pointer moved off it, it is an option of the tab, ticked, that its
+	// digit toggles.
 	typed := fixtureText(t, "2.1.286-ask-wizard-multi-typed")
 	typedAway := strings.Replace(strings.Replace(typed, "\x1b[38;5;153m❯\x1b[39m \x1b[38;5;246m3.", "  \x1b[38;5;246m3.", 1), "  \x1b[38;5;246m1.", "❯ \x1b[38;5;246m1.", 1)
 	if typedAway == typed {
 		t.Fatal("pointer move did not apply")
 	}
-	if p := readClaudeScreen(typedAway).prompt; p == nil || p.Kind != "multiselect" || labels(p) != "1. Sugar | 2. Milk | 4. Chat about this" {
+	if p := readClaudeScreen(typedAway).prompt; p == nil || p.Kind != "multiselect" || labels(p) != "1. Sugar | 2. Milk | 3. 2 | 4. Chat about this" || !p.Options[2].Checked || p.FreeText != nil {
 		t.Errorf("typed text, pointer away = %+v", p)
 	}
 	// A single-choice option that starts with a box is not a multiSelect.
@@ -532,5 +533,80 @@ func TestWrappedFooterIsOnlyTheHintsTail(t *testing.T) {
 	// "… Esc" / "to cancel" is a wrap too.
 	if sc := readClaudeScreen(rule + "\n Bash command\n Do you want to proceed?\n ❯ 1. Yes\n   2. No\n Enter to confirm · Esc\n to cancel\n"); sc.prompt == nil || sc.prompt.Kind != "permission" {
 		t.Errorf("wrap after Esc = %+v", sc.prompt)
+	}
+}
+
+func TestFreeTextOption(t *testing.T) {
+	tests := []struct {
+		screen, kind, options string
+		freeText              int // FreeText.Index, 0 when not offered
+		free                  freeField
+		pointer               int
+	}{
+		// Empty, the pointer elsewhere: offered.
+		{"2.1.286-ask-single", "select", "1. Red | 2. Green | 3. Blue | 5. Chat about this", 4, freeField{4, "Type something.", true, false}, 1},
+		{"2.1.286-ask-wizard-tab2", "select", "1. Tea | 2. Coffee | 4. Chat about this", 3, freeField{3, "Type something.", true, false}, 1},
+		{"2.1.286-ask-wizard-free-after-enter", "select", "1. Tea | 2. Coffee | 4. Chat about this", 3, freeField{3, "Type something.", true, false}, 1},
+		{"2.1.286-ask-wizard-multi-open", "multiselect", "1. Sugar | 2. Milk | 4. Chat about this", 3, freeField{3, "Type something", true, false}, 1},
+		{"2.1.286-ask-multi", "multiselect", "1. Cheese | 2. Ham | 3. Olives | 5. Chat about this", 4, freeField{4, "Type something", true, false}, 1},
+		// Ticked by its digit, still the placeholder.
+		{"2.1.286-ask-wizard-multi-free-digit", "multiselect", "1. Sugar | 2. Milk | 4. Chat about this", 3, freeField{3, "Type something", true, true}, 1},
+		// The pointer on it: the card is read-only, the field still read.
+		{"2.1.286-ask-free-pointer", "unsupported", "", 0, freeField{4, "Type something.", true, false}, 4},
+		{"2.1.286-ask-free-typed", "unsupported", "", 0, freeField{4, "Purple please", false, false}, 4},
+		{"2.1.286-ask-free-typed-vi", "unsupported", "", 0, freeField{4, "Tím nhạt", false, false}, 4},
+		{"2.1.286-ask-free-wrapped", "unsupported", "", 0, freeField{4, "Purple — tím nhạt, or maybe a soft lavender with a hint of grey so that the contrast stays readable at night on a phone", false, false}, 4},
+		{"2.1.286-ask-wizard-free-pointer", "unsupported", "", 0, freeField{3, "Type something.", true, false}, 3},
+		{"2.1.286-ask-wizard-free-typed", "unsupported", "", 0, freeField{3, "Medium", false, false}, 3},
+		{"2.1.286-ask-wizard-multi-free-pointer", "unsupported", "", 0, freeField{3, "Type something", true, false}, 3},
+		{"2.1.286-ask-wizard-multi-free-typed", "unsupported", "", 0, freeField{3, "Honey", false, true}, 3},
+		// Holding text, the pointer away: single-choice drops it (its digit
+		// moves the pointer into the text), multiSelect toggles it.
+		{"2.1.286-ask-wizard-free-back", "select", "1. Small | 2. Large | 4. Chat about this", 0, freeField{3, "Medium ✔", false, false}, 1},
+		{"2.1.286-ask-wizard-multi-free-up", "multiselect", "1. Sugar | 2. Milk | 3. Honey | 4. Chat about this", 0, freeField{3, "Honey", false, true}, 2},
+		{"2.1.286-ask-wizard-multi-free-back", "multiselect", "1. Sugar | 2. Milk | 3. Honey | 4. Chat about this", 0, freeField{3, "Honey", false, true}, 1},
+		{"2.1.286-ask-wizard-multi-free-untick", "multiselect", "1. Sugar | 2. Milk | 3. Honey | 4. Chat about this", 0, freeField{3, "Honey", false, false}, 2},
+		// No free-text option: previews, a permission, the Submit tab.
+		{"2.1.286-ask-preview", "select", "1. Stacked | 2. Row", 0, freeField{}, 1},
+		{"2.1.286-permission-bash", "permission", "1. Yes | 2. Yes, and always allow access to /tmp/lab | 3. No", 0, freeField{}, 1},
+		{"2.1.286-ask-wizard-submit", "select", "1. Submit answers | 2. Cancel", 0, freeField{}, 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.screen, func(t *testing.T) {
+			p := readScreen(t, tt.screen).prompt
+			if p == nil {
+				t.Fatal("no dialog")
+			}
+			got := 0
+			if p.FreeText != nil {
+				got = p.FreeText.Index
+				if label := p.FreeText.Label; label != "Type something." && label != "Type something" {
+					t.Errorf("label = %q", label)
+				}
+			}
+			if p.Kind != tt.kind || labels(p) != tt.options || got != tt.freeText || p.free != tt.free || p.pointer != tt.pointer {
+				t.Errorf("got kind=%q options=%q freeText=%d free=%+v pointer=%d", p.Kind, labels(p), got, p.free, p.pointer)
+			}
+		})
+	}
+	// Text that wraps or holds a pasted newline is read row by row.
+	if p := readScreen(t, "2.1.286-ask-free-multiline").prompt; p == nil || !strings.Contains(p.free.value, "phoneX line two") || p.free.empty {
+		t.Errorf("multiline = %+v", p)
+	}
+	// After Enter on typed text the question is gone.
+	if sc := readScreen(t, "2.1.286-ask-free-after-enter"); sc.prompt != nil || sc.input != inputEmpty {
+		t.Errorf("after enter = %+v", sc)
+	}
+	// "Type something." typed as the answer is drawn solid: not the
+	// placeholder.
+	typed := strings.Replace(fixtureText(t, "2.1.286-ask-free-typed"), "Purple please", "Type something.", 1)
+	if p := readClaudeScreen(typed).prompt; p == nil || p.free.empty || p.free.value != "Type something." {
+		t.Errorf("typed placeholder = %+v", p)
+	}
+	// A multiSelect tab with the pointer below the free-text option (on
+	// "Chat about this") is not typed into: the pointer only moves down.
+	chat := strings.Replace(strings.Replace(fixtureText(t, "2.1.286-ask-wizard-multi-open"), "❯", " ", 1), "  4. Chat about this", "❯ 4. Chat about this", 1)
+	if p := readClaudeScreen(chat).prompt; p == nil || p.Kind != "multiselect" || p.pointer != 4 || p.FreeText != nil {
+		t.Errorf("pointer on chat = %+v", p)
 	}
 }

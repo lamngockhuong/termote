@@ -180,7 +180,7 @@ POST   /api/mux/panes/{id}/scroll  body: {lines}                → {ok}   (caps
 GET    /api/mux/health             → {status, apiVersion, backend}
 GET    /api/mux/panes/{id}/agent/transcript?cursor=&before=     → {agent, sessionId, status, entries, cursor, before, reset}
 POST   /api/mux/panes/{id}/agent/message  body: {text, cursor}  → 204
-GET    /api/mux/panes/{id}/agent/prompt                          → {prompt: null | {promptId, kind, title, body, options}}
+GET    /api/mux/panes/{id}/agent/prompt                          → {prompt: null | {promptId, kind, title, body, options, steps, freeText}}
 POST   /api/mux/panes/{id}/agent/answer   body: {promptId, choice} → 204
 GET    /api/mux/panes/{id}/files/tree?path=&root=               → {root, isRepo, path, entries, truncated}
 GET    /api/mux/panes/{id}/files/content?path=&root=&reveal=    → {root, path, size, text} | {…, previewable: false, reason} | {…, sensitive: true}
@@ -245,8 +245,10 @@ else is refused and sends nothing:
 | `prompt_changed`          | 409    | The dialog on screen is not the one the client answered; the reply carries the new one |
 | `prompt_expired`          | 409    | The `promptId` was already used, is unknown, or is older than 60 s                     |
 | `answer_not_confirmed`    | 502    | The key was sent but the dialog is still open                                          |
+| `text_not_confirmed`      | 502    | A typed answer did not show in the free-text option, or was not submitted              |
 | `invalid_choice`          | 400    | `choice` is not one of the dialog's options                                            |
-| `text_too_long`           | 413    | The text is over 16 KB; the reply carries `limit`                                      |
+| `invalid_text`            | 400    | A typed answer is empty or holds a control character (a newline or tab included)       |
+| `text_too_long`           | 413    | The text is over 16 KB (a typed answer: 1 KB); the reply carries `limit`               |
 | `invalid_request`         | 400    | The body is not the JSON the route expects                                             |
 
 `message` pastes the text (bracketed paste, through a named tmux buffer or Herdr's writer) only
@@ -257,11 +259,38 @@ characters other than newline and tab removed, so it cannot end the paste early.
 `prompt` reads the screen and recognises the dialog anchored at its bottom: `permission`, a
 single-choice `select` (at most 9 options), a `multiselect` tab, or `unsupported` for anything
 else, which the PWA shows read-only with a way to the terminal. A question keeps its buttons,
-"Chat about this" included; only its free-text option is left out, since free text needs the
-terminal. That option is the last one above "Chat about this": its label is "Type something"
-until text is typed into it, then the text. With the pointer (`❯`) on it a digit is typed into
-the text instead of picking an option, so the question is `unsupported` until the pointer moves
-off it. A tab is `multiselect` only when every option but "Chat about this" has a box.
+"Chat about this" included; its free-text option is not one of them. That option is the last
+one above "Chat about this": its label is "Type something" (drawn faint under the pointer, so
+text typed to read the same is not taken for it) until text is typed into it, then the text,
+wrapped onto the rows below it. With the pointer (`❯`) on it a digit is typed into the text
+instead of picking an option, so the question is `unsupported` until the pointer moves off it.
+A tab is `multiselect` only when every option but "Chat about this" has a box.
+
+While the free-text option is empty the prompt carries it as `freeText` (`{index, label}`), and
+`answer` takes `{"text": "..."}` for it: at most 1 KB (UTF-8 bytes), not blank, with no control
+character at all (a newline or tab included). The text is refused whole, never cut or cleaned,
+and the promptId stays usable. Then, one key at a time, each checked on a new read of the same
+question (title, text, tabs, free-text option):
+
+1. the pointer onto the option: its digit on a single-choice question; Down a row at a time on
+   a multiSelect tab, where a digit only toggles it (so `freeText` is offered there only with
+   the pointer on an option above it);
+2. once the option shows its placeholder under the pointer and the session is the same, the
+   text, pasted;
+3. once the option shows the text (ticked, on a multiSelect tab) and the session is still the
+   same: Enter on a single-choice question, which picks it (a wizard moves to the next tab);
+   Up on a multiSelect tab, which leaves the text ticked and the tab answerable for "Next".
+
+Escape is never sent: inside the option it leaves the whole dialog. A read that does not show
+the step's effect stops before the next key: `prompt_changed` with the dialog now on screen,
+`answer_not_confirmed` when the pointer did not move, Enter did not close the question or Up
+did not leave the option, `text_not_confirmed` when the text did not show (the text itself: a
+`[Pasted text #n]` token is not taken for it) or the session changed after it was pasted (the
+text may be left in the option). A promptId reused for the same dialog holds its latest read,
+since the signature leaves out the pointer that decides whether a multiSelect tab offers
+`freeText`. Holding
+text with the pointer away, the option is a toggle of a multiSelect tab like the others; on a
+single-choice question it has no button, since its digit only moves the pointer into it.
 
 Options with previews draw the preview of the option under the pointer on the right of the
 option rows; a footer offering "n to add notes" announces them. Each option row is read up to

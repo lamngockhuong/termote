@@ -40,6 +40,7 @@ type fakeWriter struct {
 	pasted   []string
 	keys     [][]string
 	keyErr   error
+	pasteErr error
 	nowErr   error
 	onPaste  func(f *fakeWriter, text string)
 	onKeys   func(f *fakeWriter, keys []string)
@@ -76,8 +77,11 @@ func (f *fakeWriter) Capture(context.Context, string) (string, error) {
 func (f *fakeWriter) Paste(_ context.Context, _ string, text string) error {
 	f.mu.Lock()
 	f.pasted = append(f.pasted, text)
-	hook := f.onPaste
+	hook, err := f.onPaste, f.pasteErr
 	f.mu.Unlock()
+	if err != nil {
+		return err
+	}
 	if hook != nil {
 		hook(f, text)
 	}

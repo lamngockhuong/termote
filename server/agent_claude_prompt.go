@@ -167,10 +167,30 @@ type AgentPrompt struct {
 	Options  []PromptOption `json:"options,omitempty"`
 	// Steps is the tab row of an AskUserQuestion with several questions.
 	Steps []PromptStep `json:"steps,omitempty"`
+	// FreeText is the question's "Type something" option, empty and ready
+	// to take an answer typed on the client.
+	FreeText *PromptFreeText `json:"freeText,omitempty"`
 	// moveThenEnter: a question whose options have previews. A digit only
 	// moves the pointer there; Enter picks the option under it.
 	moveThenEnter bool
 	pointer       int // the option the ❯ is on, 0 when none
+	free          freeField
+}
+
+// PromptFreeText is the option of a question that takes typed text.
+type PromptFreeText struct {
+	Index int    `json:"index"`
+	Label string `json:"label"`
+}
+
+// freeField is the free-text option as the screen shows it, read even when
+// the card is not answerable (the pointer on it), so each step of typing an
+// answer can be checked.
+type freeField struct {
+	index   int    // the number Claude Code shows, 0 when the question has none
+	value   string // the text it shows, rows joined, without the box
+	empty   bool   // it shows the placeholder, not typed text
+	checked bool   // multiSelect: its box is ticked
 }
 
 // PromptStep is one tab of that row: a question's header, or "Submit".
@@ -403,6 +423,8 @@ func parseDialog(region []screenLine, preview bool) *AgentPrompt {
 		PromptOption
 		row     int
 		pointer bool // the ❯ is on this row
+		faint   bool // the label is drawn faint (a placeholder)
+		rows    []string
 	}
 	var opts []opt
 	var steps []PromptStep
@@ -433,7 +455,8 @@ func parseDialog(region []screenLine, preview bool) *AgentPrompt {
 			if first < 0 {
 				first = i
 			}
-			opts = append(opts, opt{PromptOption{Index: idx, Label: label}, i, strings.HasPrefix(t, "❯")})
+			faint := !strings.Contains(l.solid, label)
+			opts = append(opts, opt{PromptOption{Index: idx, Label: label}, i, strings.HasPrefix(t, "❯"), faint, nil})
 			continue
 		}
 		if len(opts) > 0 && isBareRule(t) {
@@ -444,6 +467,7 @@ func parseDialog(region []screenLine, preview bool) *AgentPrompt {
 		if len(opts) > 0 && !ruled && t != "" && !isBareRule(t) && !isDashedRule(t) {
 			o := &opts[len(opts)-1]
 			o.Detail = strings.TrimSpace(o.Detail + " " + t)
+			o.rows = append(o.rows, t)
 		}
 	}
 	// The head of the dialog: rows above the first option (all rows when
@@ -467,18 +491,9 @@ func parseDialog(region []screenLine, preview bool) *AgentPrompt {
 		p.Body, _ = clampText(strings.Join(head[1:], "\n"), claudeMaxBody)
 	}
 	question := wizard || (len(head) > 0 && strings.HasPrefix(head[0], "☐"))
-	// The free-text option of a question is the last one above "Chat about
-	// this": its label is "Type something" until text is typed into it, then
-	// the text. With the pointer on it a digit is typed into that text, so
-	// the question needs the terminal. The Submit tab has none.
-	free := -1
-	if question && !preview && !submitOpen(steps) && len(opts) > 0 {
-		free = len(opts) - 1
-		if opts[free].Label == "Chat about this" {
-			free--
-		}
-		if free >= 0 && opts[free].pointer {
-			return p
+	for _, o := range opts {
+		if o.pointer {
+			p.pointer = o.Index
 		}
 	}
 	// multiSelect: every option but "Chat about this" has a box.
@@ -490,6 +505,37 @@ func parseDialog(region []screenLine, preview bool) *AgentPrompt {
 	}
 	if ticks > 0 && (ticks == len(opts) || (ticks == len(opts)-1 && opts[len(opts)-1].Label == "Chat about this")) {
 		multi = true
+	}
+	// The free-text option of a question is the last one above "Chat about
+	// this": its label is "Type something" until text is typed into it, then
+	// the text. With the pointer on it a digit is typed into that text, so
+	// the question needs the terminal. The Submit tab has none.
+	free := -1
+	if question && !preview && !submitOpen(steps) && len(opts) > 0 {
+		free = len(opts) - 1
+		if opts[free].Label == "Chat about this" {
+			free--
+		}
+		if free >= 0 {
+			o := &opts[free]
+			// A multiSelect question draws its "Next" (or, alone, "Submit")
+			// row under that option.
+			if multi && len(o.rows) > 0 && isMultiEndRow(o.rows[len(o.rows)-1]) {
+				o.rows = o.rows[:len(o.rows)-1]
+				o.Detail = strings.Join(o.rows, " ")
+			}
+			label, checked := o.Label, false
+			if multi {
+				label, checked = checkbox(label)
+			}
+			// The placeholder is drawn faint under the pointer, so text typed
+			// to read the same is not taken for it.
+			empty := (label == "Type something." || label == "Type something") && (!o.pointer || o.faint)
+			p.free = freeField{index: o.Index, value: strings.Join(append([]string{label}, o.rows...), " "), empty: empty, checked: checked}
+		}
+		if free >= 0 && opts[free].pointer {
+			return p
+		}
 	}
 	// A preview the footer does not announce: a digit might only move the
 	// pointer, so the question is left to the terminal.
@@ -512,8 +558,12 @@ func parseDialog(region []screenLine, preview bool) *AgentPrompt {
 	}
 	var keep []PromptOption
 	for i, o := range opts {
-		if i == free {
-			continue // free text needs the terminal
+		// Empty, the free-text option is answered with FreeText. Holding
+		// text, it is an option of a multiSelect tab like the others (its
+		// digit toggles it); on a single-choice question its digit only
+		// moves the pointer into the text, so it is not one to send.
+		if i == free && (p.free.empty || !multi) {
+			continue
 		}
 		if multi {
 			o.Label, o.Checked = checkbox(o.Label)
@@ -523,11 +573,6 @@ func parseDialog(region []screenLine, preview bool) *AgentPrompt {
 	}
 	if len(keep) == 0 || len(keep) > 9 {
 		return p
-	}
-	for _, o := range opts {
-		if o.pointer {
-			p.pointer = o.Index
-		}
 	}
 	p.moveThenEnter = preview && !multi
 	switch {
@@ -543,7 +588,21 @@ func parseDialog(region []screenLine, preview bool) *AgentPrompt {
 		return p
 	}
 	p.Options = keep
+	// A multiSelect tab is typed into by moving the pointer down to the
+	// option one row at a time (a digit there only toggles it), so the
+	// pointer must be on an option above it.
+	if free >= 0 && p.free.empty && (!multi || (p.pointer >= 1 && p.pointer < p.free.index)) {
+		label, _ := checkbox(opts[free].Label)
+		p.FreeText = &PromptFreeText{Index: p.free.index, Label: label}
+	}
 	return p
+}
+
+// isMultiEndRow: the unnumbered row a multiSelect question draws under its
+// free-text option, which Enter on leaves the question.
+func isMultiEndRow(t string) bool {
+	t = strings.TrimSpace(strings.TrimPrefix(t, "❯"))
+	return t == "Next" || t == "Submit"
 }
 
 // previewSplitRe: where the preview box starts on a row of options with

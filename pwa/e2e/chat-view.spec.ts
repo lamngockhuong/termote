@@ -164,6 +164,16 @@ test.describe('chat view', () => {
     await expect(conversation).toContainText('Layout: Row.')
     await expect(layout).toBeHidden()
 
+    // An answer of one's own, typed into the question's free-text option
+    await composer.fill('pick a color')
+    await send.click()
+    const color = page.getByRole('alertdialog', { name: 'Color Theme' })
+    await color.getByRole('button', { name: /^4\.\s*Other…$/ }).click()
+    await color.getByRole('textbox', { name: 'Your answer' }).fill('Tím nhạt')
+    await color.getByRole('button', { name: 'Send' }).click()
+    await expect(conversation).toContainText('Theme: Tím nhạt.')
+    await expect(color).toBeHidden()
+
     // A single multiSelect question has toggles too, and the way to the terminal
     await composer.fill('pick toppings')
     await send.click()

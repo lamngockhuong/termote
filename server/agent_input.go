@@ -26,6 +26,10 @@ const (
 	// UTF-8 bytes (16 KB of Vietnamese is about 5,500 characters).
 	agentMessageBody = 64 * 1024
 	agentMaxText     = 16 * 1024
+	// agentMaxFreeText caps an answer typed into a question's free-text
+	// option: it wraps under the option, and must fit on the screen to be
+	// checked before Enter.
+	agentMaxFreeText = 1024
 	// agentPromptTTL is how long a promptId can be used.
 	agentPromptTTL  = 60 * time.Second
 	agentMaxPrompts = 256
@@ -55,7 +59,7 @@ type agentWriter interface {
 // agentKeys are the only keys a route sends, with the bytes a raw-input
 // backend (herdr) types for them.
 var agentKeys = map[string]string{
-	"Enter": "\r", "Escape": "\x1b", "Left": "\x1b[D", "Right": "\x1b[C",
+	"Enter": "\r", "Escape": "\x1b", "Left": "\x1b[D", "Right": "\x1b[C", "Up": "\x1b[A", "Down": "\x1b[B",
 	"1": "1", "2": "2", "3": "3", "4": "4", "5": "5", "6": "6", "7": "7", "8": "8", "9": "9",
 }
 
@@ -86,6 +90,7 @@ func fail(status int, code, msg string) *agentFailure {
 
 var (
 	errTextTooLong    = &agentFailure{status: http.StatusRequestEntityTooLarge, code: "text_too_long", msg: "text is longer than 16 KB", limit: agentMaxText}
+	errFreeTooLong    = &agentFailure{status: http.StatusRequestEntityTooLarge, code: "text_too_long", msg: "text is longer than 1 KB", limit: agentMaxFreeText}
 	errTargetChanged  = fail(http.StatusConflict, "target_changed", "the agent is no longer in this pane")
 	errSessionChanged = fail(http.StatusConflict, "session_changed", "the pane runs another session now")
 )
@@ -153,6 +158,9 @@ func (in *agentInput) issuePrompt(pane string, s AgentSession, sig string, p Age
 			continue
 		}
 		if r.pane == pane && r.sig == sig && sameAgent(r.session, s) {
+			// The latest read: the signature leaves out the pointer, which
+			// decides whether a multiSelect tab offers FreeText.
+			r.prompt = p
 			r.expires = now.Add(agentPromptTTL)
 			return id
 		}
@@ -505,7 +513,9 @@ func (a *agentAPI) handleAnswer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer unlock()
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 2*agentConfirmWait+muxTimeout)
+	// A typed answer takes up to one poll per key; once text is typed, the
+	// key that submits it must follow even if the client goes away.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 12*agentConfirmWait+muxTimeout)
 	defer cancel()
 	if err := a.answer(ctx, wr, paneID, body.PromptID, body.Choice); err != nil {
 		a.writeFailure(w, err)
@@ -515,14 +525,19 @@ func (a *agentAPI) handleAnswer(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *agentAPI) answer(ctx context.Context, wr agentWriter, paneID, promptID string, choice json.RawMessage) error {
-	var key string
+	var key, text string
 	step := -1
+	typed := false
 	rec, err := a.input.consumePrompt(paneID, promptID, func(r *promptRecord) error {
 		key = choiceKey(r.prompt, choice)
 		if key == "" {
 			step = choiceStep(r.prompt, choice)
 		}
 		if key == "" && step < 0 {
+			var err error
+			if text, typed, err = choiceText(r.prompt, choice); typed || err != nil {
+				return err
+			}
 			return fail(http.StatusBadRequest, "invalid_choice", "choice is not one of the options")
 		}
 		return nil
@@ -545,7 +560,9 @@ func (a *agentAPI) answer(ctx context.Context, wr agentWriter, paneID, promptID 
 		return err
 	}
 	sc := readClaudeScreen(screen)
-	if sc.prompt == nil || sc.sig != rec.sig || sc.prompt.Kind == "unsupported" || !dialogStatus(s) {
+	// A typed answer also needs the free-text option ready now: the
+	// signature leaves out the pointer, which a multiSelect tab moves from.
+	if sc.prompt == nil || sc.sig != rec.sig || sc.prompt.Kind == "unsupported" || !dialogStatus(s) || (typed && sc.prompt.FreeText == nil) {
 		f := fail(http.StatusConflict, "prompt_changed", "the screen changed; check the dialog again")
 		f.prompt = a.promptOf(paneID, s, sc)
 		return f
@@ -556,6 +573,9 @@ func (a *agentAPI) answer(ctx context.Context, wr agentWriter, paneID, promptID 
 	a.input.markAnswered(paneID, rec.sig)
 	if step >= 0 {
 		return a.moveToStep(ctx, wr, paneID, s, rec, step)
+	}
+	if typed {
+		return a.typeAnswer(ctx, wr, paneID, s, rec, sc, text)
 	}
 	closeFrom := rec.sig
 	if n, err := strconv.Atoi(key); err == nil && rec.prompt.moveThenEnter {
@@ -720,6 +740,138 @@ func choiceStep(p AgentPrompt, choice json.RawMessage) int {
 		return n
 	}
 	return -1
+}
+
+// choiceText is the text of a choice {"text": "..."}: typed reports a
+// choice of that shape, err why it is refused. The text is refused whole,
+// never cut or cleaned: a control character (a newline included) or more
+// than agentMaxFreeText bytes is not sent at all.
+func choiceText(p AgentPrompt, choice json.RawMessage) (text string, typed bool, err error) {
+	var c struct {
+		Text *string `json:"text"`
+	}
+	if json.Unmarshal(choice, &c) != nil || c.Text == nil {
+		return "", false, nil
+	}
+	text = *c.Text
+	switch {
+	case p.FreeText == nil:
+		return "", true, fail(http.StatusBadRequest, "invalid_choice", "this question takes no typed answer")
+	case len(text) > agentMaxFreeText:
+		return "", true, errFreeTooLong
+	case strings.TrimSpace(text) == "":
+		return "", true, fail(http.StatusBadRequest, "invalid_text", "text is empty")
+	case strings.IndexFunc(text, unicode.IsControl) >= 0:
+		return "", true, fail(http.StatusBadRequest, "invalid_text", "text has a control character")
+	}
+	return text, true, nil
+}
+
+// typeAnswer answers a question with text typed into its free-text option,
+// one key at a time, each followed by a read of the screen:
+//
+//  1. the pointer onto the option: its digit on a single-choice question,
+//     Down a row at a time on a multiSelect tab (a digit there toggles it);
+//  2. the text, pasted once the option shows its placeholder under the
+//     pointer;
+//  3. once the option shows the text: Enter on a single-choice question,
+//     which picks it; Up on a multiSelect tab, which leaves the text ticked
+//     and the tab answerable again.
+//
+// Escape is never sent: inside the option it leaves the whole dialog. Any
+// read that does not show the step's effect on the same question stops
+// before the next key and answers with the dialog on screen.
+func (a *agentAPI) typeAnswer(ctx context.Context, wr agentWriter, paneID string, s AgentSession, rec *promptRecord, sc claudeScreen, text string) error {
+	want := rec.prompt.free
+	multi := rec.prompt.Kind == "multiselect"
+	var next claudeScreen
+	// step sends key and waits for ok on the same question. A screen
+	// reached on the way (hold) gets no promptId while it shows.
+	step := func(key string, ok func(*AgentPrompt) bool, missed string, hold bool) error {
+		if err := wr.SendKeySequence(ctx, s.Target, []string{key}); err != nil {
+			return err
+		}
+		done := pollScreen(ctx, wr, s.Target, func(sc claudeScreen) bool {
+			next = sc
+			return sameFreeQuestion(sc.prompt, &rec.prompt) && ok(sc.prompt)
+		})
+		if done {
+			if hold {
+				a.input.markAnswered(paneID, next.sig)
+			}
+			return nil
+		}
+		f := fail(http.StatusConflict, "prompt_changed", "the screen changed; check the dialog again")
+		if sameFreeQuestion(next.prompt, &rec.prompt) {
+			f = fail(http.StatusBadGateway, "answer_not_confirmed", missed)
+		}
+		f.prompt = a.promptOf(paneID, s, next)
+		return f
+	}
+	inField := func(p *AgentPrompt) bool { return p.pointer == want.index && p.free.empty }
+	if multi {
+		for row := sc.prompt.pointer + 1; row <= want.index; row++ {
+			at := row
+			if err := step("Down", func(p *AgentPrompt) bool {
+				return p.pointer == at && (at < want.index || inField(p))
+			}, "the pointer did not move to the free-text option", true); err != nil {
+				return err
+			}
+		}
+	} else if err := step(strconv.Itoa(want.index), inField, "the pointer did not move to the free-text option", true); err != nil {
+		return err
+	}
+	// The same process and session, still on the dialog, right before the
+	// text; the same again before the key that submits it.
+	still := func() bool {
+		now, err := sessionNow(ctx, wr, paneID)
+		return err == nil && sameAgent(now, s) && !now.InMode && dialogStatus(now)
+	}
+	if !still() {
+		return errTargetChanged
+	}
+	if err := wr.Paste(ctx, s.Target, text); err != nil {
+		return err
+	}
+	// The text itself, rows joined, spaces aside: not a token standing for
+	// a paste, which would be the text submitted.
+	strip := func(s string) string { return strings.Join(strings.Fields(s), "") }
+	shows := func(p *AgentPrompt) bool {
+		return !p.free.empty && strip(p.free.value) == strip(text) && (!multi || p.free.checked)
+	}
+	shown := pollScreen(ctx, wr, s.Target, func(sc claudeScreen) bool {
+		next = sc
+		return sameFreeQuestion(sc.prompt, &rec.prompt) && sc.prompt.pointer == want.index && shows(sc.prompt)
+	})
+	if !shown {
+		f := fail(http.StatusBadGateway, "text_not_confirmed", "the text did not show in the free-text option; check it in the terminal")
+		f.prompt = a.promptOf(paneID, s, next)
+		return f
+	}
+	a.input.markAnswered(paneID, next.sig)
+	if !still() {
+		return fail(http.StatusBadGateway, "text_not_confirmed", "the text is in the free-text option but was not submitted")
+	}
+	if multi {
+		// Up leaves the option, onto the tab the card answers again.
+		return step("Up", func(p *AgentPrompt) bool { return p.pointer == want.index-1 && shows(p) },
+			"the text is ticked but the pointer is still in it", false)
+	}
+	typedSig := next.sig
+	if err := wr.SendKeySequence(ctx, s.Target, []string{"Enter"}); err != nil {
+		return err
+	}
+	if !pollScreen(ctx, wr, s.Target, func(sc claudeScreen) bool { return sc.sig != typedSig }) {
+		return fail(http.StatusBadGateway, "answer_not_confirmed", "Enter was sent but the dialog is still open")
+	}
+	return nil
+}
+
+// sameFreeQuestion: the question a typed answer was meant for, by its title,
+// text, tabs and free-text option. The options themselves are not compared:
+// with the pointer on the free-text option the card has none.
+func sameFreeQuestion(a, b *AgentPrompt) bool {
+	return a != nil && a.Title == b.Title && a.Body == b.Body && sameTabs(a.Steps, b.Steps) && a.free.index == b.free.index
 }
 
 // writeFailure answers a refused write; other errors go through muxError.

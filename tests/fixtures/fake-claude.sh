@@ -17,6 +17,8 @@
 #               arrows move between tabs along the recorded path),
 #               "layout" a question with previews (a digit moves the
 #               pointer, Enter picks),
+#               "color" a single question whose free-text option (4) takes
+#               a pasted answer, Enter submitting it,
 #               anything else gets an echo reply
 #   1/2/3, Esc  answer or cancel an open dialog (on a wizard, a digit answers
 #               the tab open and moves to the next one)
@@ -113,8 +115,9 @@ dialog() {
 }
 
 idle_screen="$screens/2.1.286-idle-after-turn.txt"
-state=idle # idle | permission | toppings | size | drink | submit | mixed | multi | multi_milk | after_multi | partial | layout | layout_row
+state=idle # idle | permission | toppings | size | drink | submit | mixed | multi | multi_milk | after_multi | partial | layout | layout_row | color | color_free
 draft=""
+typed="" # pasted into the free-text option of "color"
 
 draw() {
   printf '\e[H\e[2J\e[3J'
@@ -149,6 +152,15 @@ draw() {
     partial) dialog 2.1.286-ask-wizard-submit-partial.txt ;;
     layout) dialog 2.1.286-ask-preview.txt ;;
     layout_row) dialog 2.1.286-ask-preview-pointer-2.txt ;;
+    color) dialog 2.1.286-ask-free-open.txt ;;
+    color_free)
+      # The pointer on the free-text option: the faint placeholder, or the
+      # text pasted, drawn as Claude Code draws typed text.
+      local out
+      out=$(dialog 2.1.286-ask-free-pointer.txt)
+      [ -z "$typed" ] || out=${out//$'\e[2m\e[39mType something.\e[0m'/$'\e[39m'"$typed"}
+      printf '%s\n' "$out"
+      ;;
   esac
 }
 
@@ -189,6 +201,11 @@ submit() {
       state=layout
       set_status waiting
       ;;
+    *color*)
+      state=color
+      typed=""
+      set_status waiting
+      ;;
     *)
       say "You said: $text"
       set_status idle
@@ -220,6 +237,13 @@ answer() { # key
     layout:$'\r' | layout:$'\n') say 'Layout: Stacked.' ;;
     layout_row:$'\r' | layout_row:$'\n') say 'Layout: Row.' ;;
     layout:esc | layout_row:esc) ;;
+    color:4) state=color_free && draw && return ;;
+    color:1) say 'Theme: Red.' ;;
+    color_free:$'\r' | color_free:$'\n')
+      [ -n "$typed" ] || return
+      say "Theme: $typed."
+      ;;
+    color:esc | color_free:esc) ;;
     toppings:esc | size:esc | drink:esc | submit:esc | submit:2) ;;
     mixed:esc | multi:esc | multi_milk:esc | after_multi:esc | partial:esc | partial:2) ;;
     *) return ;;
@@ -269,7 +293,11 @@ while :; do
     continue
   fi
   if [ $pasting = 1 ]; then
-    case $ch in $'\r' | $'\n') draft+=$'\n' ;; *) draft+=$ch ;; esac
+    case $state:$ch in
+      idle:$'\r' | idle:$'\n') draft+=$'\n' ;;
+      idle:*) draft+=$ch ;;
+      color_free:*) typed+=$ch ;;
+    esac
     continue
   fi
   case $state:$ch in

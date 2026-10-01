@@ -394,6 +394,183 @@ describe('PromptCard with several questions', () => {
   })
 })
 
+describe('PromptCard free-text answer', () => {
+  const question: AgentPrompt = {
+    promptId: 'id3',
+    kind: 'select',
+    title: 'Color Theme',
+    body: 'Which color theme do you prefer?',
+    options: [
+      { index: 1, label: 'Red' },
+      { index: 2, label: 'Blue' },
+      { index: 4, label: 'Chat about this' },
+    ],
+    freeText: { index: 3, label: 'Type something.' },
+  }
+  const field = () => screen.getByRole('textbox', { name: 'Your answer' })
+  const type = (value: string) =>
+    fireEvent.change(field(), { target: { value } })
+  const open = async () => {
+    renderCard(question)
+    await click(/3\.\s*Other…/)
+  }
+
+  it('offers Other… only on an answerable card with a free-text option', () => {
+    const { unmount } = renderCard(question)
+    expect(
+      screen.getByRole('button', { name: /3\.\s*Other…/ }),
+    ).toBeInTheDocument()
+    unmount()
+    const { unmount: u2 } = renderCard(question, true)
+    expect(screen.queryByRole('button', { name: /Other…/ })).toBeNull()
+    u2()
+    renderCard({ ...question, freeText: undefined })
+    expect(screen.queryByRole('button', { name: /Other…/ })).toBeNull()
+  })
+
+  it('opens a field, focused, and sends the text typed', async () => {
+    await open()
+    expect(field()).toHaveFocus()
+    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled()
+    type('   ')
+    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled()
+    type('Tím nhạt')
+    await click('Send')
+    expect(mockAnswer).toHaveBeenCalledWith('%3', 'id3', { text: 'Tím nhạt' })
+    expect(onAnswered).toHaveBeenCalled()
+    // Sent: the field closes
+    expect(screen.queryByRole('textbox')).toBeNull()
+  })
+
+  it('Enter in the field sends; an empty one sends nothing', async () => {
+    await open()
+    await act(async () => {
+      fireEvent.submit(field())
+    })
+    expect(mockAnswer).not.toHaveBeenCalled()
+    type('Purple')
+    await act(async () => {
+      fireEvent.submit(field())
+    })
+    expect(mockAnswer).toHaveBeenCalledWith('%3', 'id3', { text: 'Purple' })
+  })
+
+  it('Cancel closes the field without sending anything', async () => {
+    await open()
+    type('Purple')
+    await click('Cancel')
+    expect(screen.queryByRole('textbox')).toBeNull()
+    expect(mockAnswer).not.toHaveBeenCalled()
+    // Reopened, it starts empty
+    await click(/3\.\s*Other…/)
+    expect(field()).toHaveValue('')
+  })
+
+  it('text over the limit is refused before sending', async () => {
+    await open()
+    type('ạ'.repeat(342)) // 3 bytes each
+    expect(field()).toHaveAttribute('aria-invalid', 'true')
+    expect(field()).toHaveAccessibleDescription(/limit is 1024 bytes/)
+    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled()
+    await act(async () => {
+      fireEvent.submit(field())
+    })
+    expect(mockAnswer).not.toHaveBeenCalled()
+  })
+
+  it('a refused text keeps the field to fix it', async () => {
+    await open()
+    type('a\tb')
+    mockAnswer.mockRejectedValueOnce(
+      new AgentRequestError(400, 'invalid_text', 'control'),
+    )
+    await click('Send')
+    expect(
+      screen.getByText(
+        'The answer cannot hold line breaks or control characters.',
+      ),
+    ).toBeInTheDocument()
+    expect(field()).toHaveValue('a\tb')
+    expect(onAnswered).not.toHaveBeenCalled()
+    mockAnswer.mockRejectedValueOnce(
+      new AgentRequestError(413, 'text_too_long', 'long', 512),
+    )
+    await click('Send')
+    expect(
+      screen.getByText('The answer is too long: the limit is 512 bytes.'),
+    ).toBeInTheDocument()
+    mockAnswer.mockRejectedValueOnce(
+      new AgentRequestError(413, 'text_too_long', 'long'),
+    )
+    await click('Send')
+    expect(
+      screen.getByText('The answer is too long: the limit is 1024 bytes.'),
+    ).toBeInTheDocument()
+    // Cancel clears the notice with the field
+    await click('Cancel')
+    expect(screen.queryByText(/too long/)).toBeNull()
+  })
+
+  it('text that did not show says to check the terminal', async () => {
+    await open()
+    type('Purple')
+    mockAnswer.mockRejectedValueOnce(
+      new AgentRequestError(502, 'text_not_confirmed', 'no'),
+    )
+    await click('Send')
+    expect(
+      screen.getByText(
+        'The text may be in the dialog but was not sent; check it in the terminal.',
+      ),
+    ).toBeInTheDocument()
+    expect(onAnswered).toHaveBeenCalled()
+  })
+
+  it('sits where the terminal draws it, above Chat about this', () => {
+    renderCard(question)
+    const names = screen
+      .getAllByRole('button')
+      .map((b) => b.textContent)
+      .filter((t) => /^\d\./.test(t ?? ''))
+    expect(names).toEqual(['1.Red', '2.Blue', '3.Other…', '4.Chat about this'])
+  })
+
+  it('a new id closes the field: the text was for the last dialog', async () => {
+    const { rerender } = renderCard(question)
+    await click(/3\.\s*Other…/)
+    type('Purple')
+    const card = (p: AgentPrompt) => (
+      <PromptCard
+        paneId="%3"
+        prompt={p}
+        showView={showView}
+        onAnswered={onAnswered}
+        onChanged={onChanged}
+      />
+    )
+    // The same dialog polled again keeps it
+    rerender(card({ ...question }))
+    expect(field()).toHaveValue('Purple')
+    rerender(card({ ...question, promptId: 'id4' }))
+    expect(screen.queryByRole('textbox')).toBeNull()
+  })
+
+  it('locks the field while sending', async () => {
+    let resolve: () => void = () => {}
+    mockAnswer.mockReturnValueOnce(
+      new Promise<void>((r) => {
+        resolve = r
+      }),
+    )
+    await open()
+    type('Purple')
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled()
+    await act(async () => resolve())
+  })
+})
+
 describe('WaitingCard', () => {
   it('points to the terminal', () => {
     render(<WaitingCard showView={showView} />)

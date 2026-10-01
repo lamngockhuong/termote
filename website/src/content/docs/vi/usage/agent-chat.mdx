@@ -54,8 +54,13 @@ chỗ ô soạn tin. Mỗi nút chọn đúng lựa chọn đó; **Cancel** gử
 câu trả lời được gửi, hoặc thiết bị khác đã trả lời trước, sẽ không có gì được gửi và thẻ hiện hộp
 thoại đang mở lúc đó.
 
-Câu hỏi chọn một đáp án vẫn có nút, kể cả `Chat about this`; chỉ mục `Type something` phải dùng
-terminal.
+Câu hỏi chọn một đáp án vẫn có nút, kể cả `Chat about this`. Mục `Type something` trở thành nút
+**Other…**: bấm vào sẽ mở một ô để bạn tự gõ câu trả lời (một dòng, tối đa 1 KB), rồi gửi bằng
+**Send**. Termote đưa con trỏ tới `Type something` trong terminal, gõ chữ vào đó, kiểm tra chữ đã
+hiện rồi mới nhấn Enter. Chỉ cần màn hình khác với dự kiến ở bất kỳ bước nào, Termote dừng lại và
+thẻ hiện hộp thoại đang mở lúc đó. Nếu chữ không hiện ra, có thể nó vẫn nằm trong ô của terminal,
+nên hãy mở terminal kiểm tra. Nút **Cancel** dưới ô chỉ đóng ô, hộp thoại vẫn mở. Chữ có xuống
+dòng hoặc ký tự điều khiển bị từ chối nguyên vẹn chứ không bị lược bớt.
 
 Câu hỏi gồm nhiều phần (một hàng tab như `Size · Drink · Submit`) được trả lời lần lượt từng tab.
 Thẻ hiện các tab thành từng bước và đánh dấu tab đang mở; mỗi câu trả lời đưa Claude Code sang tab
@@ -64,7 +69,8 @@ Muốn bỏ qua một câu hay quay lại câu trước, bấm vào bước tư�
 trong terminal trước khi bấm, sẽ không có gì được gửi và thẻ hiện tab đang mở lúc đó.
 
 Với câu cho phép tích nhiều lựa chọn, mỗi nút tích hoặc bỏ tích một lựa chọn, còn **Next** chuyển
-sang tab sau và giữ nguyên các lựa chọn đã tích.
+sang tab sau và giữ nguyên các lựa chọn đã tích. Ở đây **Other…** thêm chữ của bạn thành một lựa
+chọn nữa, được tích sẵn; nút của nó bỏ tích được như các lựa chọn khác.
 
 Câu hỏi có khung xem trước bên cạnh các lựa chọn cũng trả lời như vậy: bấm một lần là chọn. Riêng
 khung xem trước chỉ hiện trong terminal.

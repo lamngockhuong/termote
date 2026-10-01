@@ -339,7 +339,7 @@ Run on tmux (Linux/macOS), psmux (Windows) and Herdr (`herdr integration install
 
 - [ ] A permission dialog shows a card; each button picks that option, Cancel sends Escape
 - [ ] A single-choice `AskUserQuestion` (≤ 9 options) shows buttons that pick the right option;
-      "Type something" has no button
+      "Type something" is an "Other…" button instead
 - [ ] "Chat about this" has a button and returns Claude Code to the input box
 - [ ] A wizard of single-choice questions is answered to the end, one card per tab: the step row
       marks the tab open and the tabs answered, and the Submit tab's "Submit answers" sends it
@@ -349,8 +349,14 @@ Run on tmux (Linux/macOS), psmux (Windows) and Herdr (`herdr integration install
       lands on another screen stops and the card shows it
 - [ ] A multiSelect question or tab shows toggles: each tap ticks or unticks one option, "Next"
       moves on with the options kept and marks the tab answered
-- [ ] "Type something" has no button on any tab; with the pointer on it in the terminal (or text
-      typed into it and the pointer still there) the card is read-only
+- [ ] "Other…" opens a field: a Vietnamese answer sent from it reaches Claude Code as the answer
+      (single question), or moves a wizard to its next tab; Cancel closes the field, the dialog stays
+- [ ] On a multiSelect tab, "Other…" adds the text as a ticked option that its button unticks;
+      "Next" then moves on with it
+- [ ] With the pointer on "Type something" in the terminal (or text typed into it and the pointer
+      still there) the card is read-only; text typed there and left has no "Other…" button
+- [ ] Moving the pointer in the terminal between opening "Other…" and Send sends nothing
+      or stops before typing; the card shows the dialog now on screen
 - [ ] Skipping a multiSelect tab with a step leaves it unanswered (Submit warns)
 - [ ] A question whose options have previews shows one button per option (no preview text in
       the labels, no "Chat about this" button); a tap picks the option
