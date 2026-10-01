@@ -342,8 +342,13 @@ Run on tmux (Linux/macOS), psmux (Windows) and Herdr (`herdr integration install
       marks the tab open and the tabs answered, and the Submit tab's "Submit answers" sends it
 - [ ] Moving to another tab in the terminal (or answering on another device) before tapping
       sends nothing; the card shows the tab now open
-- [ ] A multiSelect question, or a multiSelect tab of a wizard, shows a read-only card with
-      "Open terminal"
+- [ ] Tapping another step opens that tab (also backwards, and straight to Submit); a step that
+      lands on another screen stops and the card shows it
+- [ ] A multiSelect question or tab shows toggles: each tap ticks or unticks one option, "Next"
+      moves on with the options kept and marks the tab answered
+- [ ] "Type something" has no button on any tab; with the pointer on it in the terminal (or text
+      typed into it and the pointer still there) the card is read-only
+- [ ] Skipping a multiSelect tab with a step leaves it unanswered (Submit warns)
 - [ ] Two devices answer the same dialog: only one answer reaches the pane
 - [ ] "Open terminal" switches to the terminal; the stream is still connected (no reconnect)
 
