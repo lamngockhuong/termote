@@ -17,26 +17,35 @@ import (
 // Anything not recognised is "not ready": no route writes to a screen it
 // cannot name.
 
-// screenLine is one row: its text, and the same text with faint (SGR 2)
+// screenLine is one row: its text, the same text with faint (SGR 2)
 // characters blanked, so a suggestion Claude paints faint in an empty box is
-// told from a draft.
+// told from a draft, and the same text with everything not drawn on a
+// background colour blanked, so the tab AskUserQuestion has open is known.
 type screenLine struct {
 	text  string
 	solid string
+	hl    string
 }
 
-// parseScreen splits a capture into rows, keeping only text and the faint
-// attribute. Escapes other than SGR are dropped.
+// sgrStyle is the part of the SGR state the screen reader keeps.
+type sgrStyle struct {
+	faint bool
+	bg    bool // a background colour (or reverse video) is set
+}
+
+// parseScreen splits a capture into rows, keeping only text, the faint
+// attribute and whether a background is set. Escapes other than SGR are
+// dropped.
 func parseScreen(s string) []screenLine {
 	var out []screenLine
-	faint := false
+	var st sgrStyle
 	for _, row := range strings.Split(s, "\n") {
 		row = strings.TrimSuffix(row, "\r")
-		var text, solid strings.Builder
+		var text, solid, hl strings.Builder
 		for i := 0; i < len(row); {
 			c := row[i]
 			if c == 0x1b {
-				i = skipEscape(row, i, &faint)
+				i = skipEscape(row, i, &st)
 				continue
 			}
 			r, size := utf8.DecodeRuneInString(row[i:])
@@ -45,13 +54,22 @@ func parseScreen(s string) []screenLine {
 				continue
 			}
 			text.WriteRune(r)
-			if faint && r != ' ' {
+			if st.faint && r != ' ' {
 				solid.WriteByte(' ')
 			} else {
 				solid.WriteRune(r)
 			}
+			if st.bg {
+				hl.WriteRune(r)
+			} else {
+				hl.WriteByte(' ')
+			}
 		}
-		out = append(out, screenLine{strings.TrimRight(text.String(), " "), strings.TrimRight(solid.String(), " ")})
+		out = append(out, screenLine{
+			strings.TrimRight(text.String(), " "),
+			strings.TrimRight(solid.String(), " "),
+			strings.TrimRight(hl.String(), " "),
+		})
 	}
 	for len(out) > 0 && strings.TrimSpace(out[len(out)-1].text) == "" {
 		out = out[:len(out)-1]
@@ -59,9 +77,9 @@ func parseScreen(s string) []screenLine {
 	return out
 }
 
-// skipEscape consumes the escape at s[i], applying an SGR to faint, and
-// returns the index after it.
-func skipEscape(s string, i int, faint *bool) int {
+// skipEscape consumes the escape at s[i], applying an SGR to st, and returns
+// the index after it.
+func skipEscape(s string, i int, st *sgrStyle) int {
 	if i+1 >= len(s) {
 		return len(s)
 	}
@@ -72,7 +90,7 @@ func skipEscape(s string, i int, faint *bool) int {
 			j++
 		}
 		if j < len(s) && s[j] == 'm' {
-			applySGR(s[i+2:j], faint)
+			applySGR(s[i+2:j], st)
 		}
 		return min(j+1, len(s))
 	case ']': // OSC, ended by BEL or ST
@@ -89,16 +107,34 @@ func skipEscape(s string, i int, faint *bool) int {
 	return i + 2
 }
 
-func applySGR(params string, faint *bool) {
+func applySGR(params string, st *sgrStyle) {
 	ps := strings.Split(params, ";")
 	for k := 0; k < len(ps); k++ {
-		n, _ := strconv.Atoi(ps[k]) // "" is 0, a reset
-		switch n {
-		case 0, 22:
-			*faint = false
-		case 2:
-			*faint = true
-		case 38, 48, 58: // extended colour: skip its arguments
+		// "48:5:153" carries its arguments after colons, in the same field.
+		head, sub, colon := strings.Cut(ps[k], ":")
+		n, _ := strconv.Atoi(head) // "" is 0, a reset
+		if colon && sub == "" {
+			continue
+		}
+		switch {
+		case n == 0:
+			*st = sgrStyle{}
+		case n == 22:
+			st.faint = false
+		case n == 2:
+			st.faint = true
+		case n == 7, n >= 40 && n <= 47, n >= 100 && n <= 107:
+			st.bg = true
+		case n == 27, n == 49:
+			st.bg = false
+		}
+		if n == 38 || n == 48 || n == 58 { // extended colour: skip its arguments
+			if n == 48 {
+				st.bg = true
+			}
+			if colon {
+				continue
+			}
 			if k+1 < len(ps) && ps[k+1] == "5" {
 				k += 2
 			} else if k+1 < len(ps) && ps[k+1] == "2" {
@@ -129,6 +165,15 @@ type AgentPrompt struct {
 	Title    string         `json:"title"`
 	Body     string         `json:"body,omitempty"`
 	Options  []PromptOption `json:"options,omitempty"`
+	// Steps is the tab row of an AskUserQuestion with several questions.
+	Steps []PromptStep `json:"steps,omitempty"`
+}
+
+// PromptStep is one tab of that row: a question's header, or "Submit".
+type PromptStep struct {
+	Label    string `json:"label"`
+	Answered bool   `json:"answered,omitempty"`
+	Current  bool   `json:"current,omitempty"`
 }
 
 type PromptOption struct {
@@ -247,7 +292,8 @@ var (
 )
 
 // findDialog recognises a dialog whose footer is the last row. A footer
-// without "Esc to cancel" is not a dialog this code knows.
+// without "Esc to cancel" is not a dialog this code knows, except the Submit
+// tab of AskUserQuestion, which Claude Code draws without one.
 func findDialog(lines []screenLine) claudeScreen {
 	n := len(lines)
 	if n == 0 {
@@ -262,7 +308,7 @@ func findDialog(lines []screenLine) claudeScreen {
 		if n < 2 || last == "" || !strings.HasSuffix("Esc to cancel", last) ||
 			strings.Contains(lines[n-2].text, "Esc to cancel") ||
 			!strings.HasSuffix(strings.TrimSpace(lines[n-2].text)+" "+last, "Esc to cancel") {
-			return claudeScreen{}
+			return findSubmitTab(lines)
 		}
 		footer = n - 2
 	}
@@ -279,15 +325,61 @@ func findDialog(lines []screenLine) claudeScreen {
 	if top < 0 {
 		return claudeScreen{}
 	}
-	region := lines[top+1 : footer]
+	return claudeScreen{sig: dialogSig(lines[top:]), prompt: parseDialog(lines[top+1 : footer])}
+}
+
+// findSubmitTab recognises the Submit tab of a wizard, which has no footer:
+// a rule, the tab row right under it with Submit the tab open, no other rule,
+// and its options as the last rows. Anything else is not a dialog.
+func findSubmitTab(lines []screenLine) claudeScreen {
+	n := len(lines)
+	if !optionRowRe.MatchString(strings.TrimSpace(lines[n-1].text)) {
+		return claudeScreen{}
+	}
+	for i := n - 2; i >= 1 && i >= n-claudeMaxDialogRows; i-- {
+		t := strings.TrimSpace(lines[i].text)
+		if isBareRule(t) || isDashedRule(t) {
+			return claudeScreen{}
+		}
+		if !isQuestionTabs(t) {
+			continue
+		}
+		if !isBareRule(lines[i-1].text) {
+			return claudeScreen{}
+		}
+		// The options close the dialog: no row of another kind below them.
+		first := n - 1
+		for first > i+1 && optionRowRe.MatchString(strings.TrimSpace(lines[first-1].text)) {
+			first--
+		}
+		for _, l := range lines[i+1 : first] {
+			if optionRowRe.MatchString(strings.TrimSpace(l.text)) {
+				return claudeScreen{}
+			}
+		}
+		p := parseDialog(lines[i:])
+		if p.Kind != "select" || !submitOpen(p.Steps) {
+			return claudeScreen{}
+		}
+		return claudeScreen{sig: dialogSig(lines[i-1:]), prompt: p}
+	}
+	return claudeScreen{}
+}
+
+// dialogSig identifies a dialog by its rows from the top edge down, without
+// the pointer, so moving the pointer is the same dialog. The open tab is part
+// of it: two tabs can read the same.
+func dialogSig(rows []screenLine) string {
 	h := sha256.New()
-	for _, l := range lines[top:] {
+	for _, l := range rows {
 		h.Write([]byte(strings.TrimRight(strings.ReplaceAll(l.text, "❯", " "), " ")))
 		h.Write([]byte{'\n'})
+		if isQuestionTabs(strings.TrimSpace(l.text)) {
+			h.Write([]byte(l.hl))
+			h.Write([]byte{'\n'})
+		}
 	}
-	sc := claudeScreen{sig: hex.EncodeToString(h.Sum(nil))}
-	sc.prompt = parseDialog(region)
-	return sc
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 func parseDialog(region []screenLine) *AgentPrompt {
@@ -296,12 +388,16 @@ func parseDialog(region []screenLine) *AgentPrompt {
 		row int
 	}
 	var opts []opt
+	var steps []PromptStep
 	first := -1
 	wizard, multi := false, false
 	for i, l := range region {
 		t := strings.TrimSpace(l.text)
 		if isQuestionTabs(t) {
 			wizard = true
+			if strings.HasPrefix(t, "←") && strings.HasSuffix(t, "→") {
+				steps = questionSteps(l)
+			}
 		}
 		if m := optionRowRe.FindStringSubmatch(t); m != nil {
 			idx, _ := strconv.Atoi(m[1])
@@ -335,12 +431,15 @@ func parseDialog(region []screenLine) *AgentPrompt {
 			head = append(head, t)
 		}
 	}
-	p := &AgentPrompt{Kind: "unsupported"}
+	p := &AgentPrompt{Kind: "unsupported", Steps: steps}
 	if len(head) > 0 {
 		p.Title = strings.TrimSpace(strings.TrimPrefix(head[0], "☐"))
 		p.Body, _ = clampText(strings.Join(head[1:], "\n"), claudeMaxBody)
 	}
-	if wizard || multi || len(opts) == 0 {
+	// A wizard is answered one tab at a time, so the whole tab row must be
+	// read and the tab open known: a digit answers that tab only. Several
+	// keys (multiSelect) need the terminal.
+	if (wizard && !wholeTabs(steps)) || multi || len(opts) == 0 {
 		return p
 	}
 	// Numbering must read 1, 2, ... so a numbered list in the body is not
@@ -350,11 +449,11 @@ func parseDialog(region []screenLine) *AgentPrompt {
 			return p
 		}
 	}
-	question := len(head) > 0 && strings.HasPrefix(head[0], "☐")
+	question := wizard || (len(head) > 0 && strings.HasPrefix(head[0], "☐"))
 	var keep []PromptOption
 	for _, o := range opts {
-		if question && (strings.HasPrefix(o.Label, "Type something") || o.Label == "Chat about this") {
-			continue // free text and chat need the terminal
+		if question && strings.HasPrefix(o.Label, "Type something") {
+			continue // free text needs the terminal
 		}
 		o.Detail, _ = clampText(o.Detail, 300)
 		keep = append(keep, o.PromptOption)
@@ -377,9 +476,71 @@ func parseDialog(region []screenLine) *AgentPrompt {
 }
 
 // isQuestionTabs: the tab row AskUserQuestion draws above its question
-// ("←  ☐ Size  ☐ Drink  ✔ Submit  →").
+// ("←  ☐ Size  ☐ Drink  ✔ Submit  →"), or a part of it a narrow pane cut or
+// wrapped, so such a row is never read as the question.
 func isQuestionTabs(t string) bool {
-	return (strings.HasPrefix(t, "←") || strings.HasSuffix(t, "→")) && strings.Contains(t, "Submit")
+	return (strings.HasPrefix(t, "←") || strings.HasSuffix(t, "→")) &&
+		(strings.Contains(t, "Submit") || strings.ContainsAny(t, "☐☒"))
+}
+
+// questionSteps reads the tab row: each tab starts at its mark (☐ open, ☒
+// answered, ✔ Submit), and the tab drawn on a background is the one open.
+func questionSteps(l screenLine) []PromptStep {
+	text := []rune(l.text)
+	hl := []rune(l.hl)
+	var steps []PromptStep
+	start := -1
+	flush := func(end int) {
+		if start < 0 {
+			return
+		}
+		label := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(string(text[start+1:end])), "→"))
+		step := PromptStep{Label: label, Answered: text[start] == '☒'}
+		for k := start; k < end && k < len(hl); k++ {
+			if hl[k] != ' ' {
+				step.Current = true
+				break
+			}
+		}
+		if label != "" {
+			steps = append(steps, step)
+		}
+	}
+	for i, r := range text {
+		if r == '☐' || r == '☒' || r == '✔' {
+			flush(i)
+			start = i
+		}
+	}
+	flush(len(text))
+	return steps
+}
+
+// wholeTabs: a tab row read whole, from "←" to "→" (a row cut or wrapped by
+// a narrow pane is not), with at least one question, Submit last, and one
+// tab open.
+func wholeTabs(steps []PromptStep) bool {
+	return len(steps) >= 2 && steps[len(steps)-1].Label == "Submit" && currentStep(steps) >= 0
+}
+
+// currentStep is the index of the one tab open, or -1 when it is not known.
+func currentStep(steps []PromptStep) int {
+	cur := -1
+	for i, s := range steps {
+		if s.Current {
+			if cur >= 0 {
+				return -1
+			}
+			cur = i
+		}
+	}
+	return cur
+}
+
+// submitOpen: the tab open is the last one, Submit.
+func submitOpen(steps []PromptStep) bool {
+	c := currentStep(steps)
+	return c >= 0 && c == len(steps)-1 && steps[c].Label == "Submit"
 }
 
 // isDashedRule: the ╌ rows around a command or a diff in a permission dialog.

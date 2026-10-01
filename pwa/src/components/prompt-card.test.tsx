@@ -238,6 +238,49 @@ describe('PromptCard', () => {
   })
 })
 
+describe('PromptCard with several questions', () => {
+  const tab: AgentPrompt = {
+    promptId: 'id2',
+    kind: 'select',
+    title: 'Which drink do you prefer?',
+    options: [
+      { index: 1, label: 'Tea' },
+      { index: 2, label: 'Coffee' },
+      { index: 4, label: 'Chat about this' },
+    ],
+    steps: [
+      { label: 'Size', answered: true },
+      { label: 'Drink', current: true },
+      { label: 'Submit' },
+    ],
+  }
+
+  it('shows the tabs as steps, the open one current', () => {
+    renderCard(tab)
+    const steps = screen.getByRole('list', { name: 'Questions' })
+    const items = Array.from(steps.querySelectorAll('li'))
+    expect(items.map((li) => li.textContent)).toEqual([
+      '✓Size (answered)',
+      'Drink',
+      'Submit',
+    ])
+    expect(items[1]).toHaveAttribute('aria-current', 'step')
+    expect(items[0]).not.toHaveAttribute('aria-current')
+  })
+
+  it('answers the open tab with its digit, Chat about this included', async () => {
+    renderCard(tab)
+    await click(/4\.\s*Chat about this/)
+    expect(mockAnswer).toHaveBeenCalledWith('%3', 'id2', 4)
+    expect(onAnswered).toHaveBeenCalled()
+  })
+
+  it('a single question has no steps', () => {
+    renderCard(permission)
+    expect(screen.queryByRole('list', { name: 'Questions' })).toBeNull()
+  })
+})
+
 describe('WaitingCard', () => {
   it('points to the terminal', () => {
     render(<WaitingCard showView={showView} />)

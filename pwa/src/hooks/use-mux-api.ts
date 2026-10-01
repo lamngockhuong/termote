@@ -267,6 +267,8 @@ export interface AgentPrompt {
   title: string
   body?: string
   options?: { index: number; label: string; detail?: string }[]
+  // The tabs of a question with several parts, answered one tab at a time
+  steps?: { label: string; answered?: boolean; current?: boolean }[]
 }
 
 export async function fetchAgentPrompt(

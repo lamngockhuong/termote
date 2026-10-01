@@ -460,6 +460,36 @@ describe('ChatComposer', () => {
     expect(promptStore.show).toHaveBeenCalledWith(next)
   })
 
+  it('another tab of a wizard starts without the last notice, even with the same question', async () => {
+    const tab = (current: number): AgentPrompt => ({
+      promptId: `id${current}`,
+      kind: 'select',
+      title: 'Pick one?',
+      options: [{ index: 1, label: 'A' }],
+      steps: [
+        { label: 'Q', current: current === 0 },
+        { label: 'Q', current: current === 1 },
+        { label: 'Submit' },
+      ],
+    })
+    promptStore.prompt = tab(0)
+    mockAnswerPrompt.mockRejectedValueOnce(
+      new AgentRequestError(409, 'prompt_changed', 'x'),
+    )
+    const { rerender } = render(<ChatComposer {...props()} />)
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /1\.\s*A/ }))
+    })
+    expect(
+      screen.getByText('The screen changed; check the dialog again.'),
+    ).toBeInTheDocument()
+    promptStore.prompt = tab(1)
+    rerender(<ChatComposer {...props()} />)
+    expect(
+      screen.queryByText('The screen changed; check the dialog again.'),
+    ).toBeNull()
+  })
+
   it('an untitled dialog is still announced', () => {
     promptStore.prompt = { kind: 'unsupported', title: '' }
     const { container } = render(<ChatComposer {...props()} />)

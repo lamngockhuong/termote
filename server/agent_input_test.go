@@ -306,7 +306,7 @@ func TestPromptRoute(t *testing.T) {
 	if again := getPrompt(t, mux, "0"); again["promptId"] != p["promptId"] {
 		t.Errorf("id changed: %v → %v", p["promptId"], again["promptId"])
 	}
-	f.setScreen(fixtureScreen(t, "2.1.286-ask-wizard"))
+	f.setScreen(fixtureScreen(t, "2.1.286-ask-wizard-multi-tab"))
 	time.Sleep(agentCacheTTL)
 	if u := getPrompt(t, mux, "0"); u["kind"] != "unsupported" || u["promptId"] != nil {
 		t.Errorf("unsupported = %v", u)
@@ -503,6 +503,103 @@ func TestAnswer(t *testing.T) {
 		getPrompt(t, mux, "0")
 		if code, _ := postJSON(t, mux, "/api/mux/panes/0/agent/answer", map[string]any{"promptId": "", "choice": 1}); code != 409 || len(f.keys) != 0 {
 			t.Errorf("unsupported = %d", code)
+		}
+	})
+}
+
+func TestAnswerWizard(t *testing.T) {
+	shortConfirm(t)
+	// Each key moves Claude Code to the screen recorded after it.
+	next := map[string]map[string]string{
+		"2.1.286-ask-wizard":        {"1": "2.1.286-ask-wizard-tab2"},
+		"2.1.286-ask-wizard-tab2":   {"2": "2.1.286-ask-wizard-submit"},
+		"2.1.286-ask-wizard-submit": {"1": "2.1.286-ask-wizard-after-submit", "Escape": "2.1.286-ask-wizard-submit-esc"},
+		"2.1.286-ask-single":        {"5": "2.1.286-ask-chat-after"},
+	}
+	setup := func(first string) (*fakeWriter, *http.ServeMux, *string) {
+		f := newFakeWriter()
+		f.session.Status = "blocked"
+		f.screen = fixtureScreen(t, first)
+		on := first
+		f.onKeys = func(f *fakeWriter, keys []string) {
+			if to, ok := next[on][keys[0]]; ok {
+				on = to
+				f.setScreen(fixtureScreen(t, to))
+			}
+		}
+		return f, agentMux(f), &on
+	}
+	answer := func(mux *http.ServeMux, id string, choice any) (int, map[string]any) {
+		return postJSON(t, mux, "/api/mux/panes/0/agent/answer", map[string]any{"promptId": id, "choice": choice})
+	}
+
+	t.Run("to the end, one tab at a time", func(t *testing.T) {
+		f, mux, on := setup("2.1.286-ask-wizard")
+		seen := map[any]bool{}
+		for _, step := range []struct {
+			title  string
+			choice int
+		}{{"What size do you want?", 1}, {"Which drink do you prefer?", 2}, {"Review your answers", 1}} {
+			time.Sleep(agentCacheTTL)
+			p := getPrompt(t, mux, "0")
+			if p == nil || p["kind"] != "select" || p["title"] != step.title || p["promptId"] == nil || p["steps"] == nil || seen[p["promptId"]] {
+				t.Fatalf("on %s: prompt = %v", *on, p)
+			}
+			seen[p["promptId"]] = true
+			if code, body := answer(mux, p["promptId"].(string), step.choice); code != http.StatusNoContent {
+				t.Fatalf("on %s: answer = %d %v", *on, code, body)
+			}
+		}
+		if *on != "2.1.286-ask-wizard-after-submit" || len(f.keys) != 3 {
+			t.Errorf("ended on %s, keys %v", *on, f.keys)
+		}
+		time.Sleep(agentCacheTTL)
+		if p := getPrompt(t, mux, "0"); p != nil {
+			t.Errorf("after submit = %v", p)
+		}
+	})
+	t.Run("another device moved the wizard on", func(t *testing.T) {
+		f, mux, _ := setup("2.1.286-ask-wizard")
+		id := getPrompt(t, mux, "0")["promptId"].(string)
+		f.setScreen(fixtureScreen(t, "2.1.286-ask-wizard-tab2"))
+		code, body := answer(mux, id, 1)
+		p, _ := body["prompt"].(map[string]any)
+		if code != 409 || body["code"] != "prompt_changed" || len(f.keys) != 0 || p == nil || p["title"] != "Which drink do you prefer?" {
+			t.Errorf("moved on = %d %v keys %v", code, body, f.keys)
+		}
+	})
+	t.Run("the user went back a tab in the terminal", func(t *testing.T) {
+		f, mux, _ := setup("2.1.286-ask-wizard-tab2")
+		id := getPrompt(t, mux, "0")["promptId"].(string)
+		f.setScreen(fixtureScreen(t, "2.1.286-ask-wizard-back"))
+		if code, body := answer(mux, id, 1); code != 409 || body["code"] != "prompt_changed" || len(f.keys) != 0 {
+			t.Errorf("went back = %d %v keys %v", code, body, f.keys)
+		}
+	})
+	t.Run("Esc on the Submit tab declines", func(t *testing.T) {
+		_, mux, on := setup("2.1.286-ask-wizard-submit")
+		id := getPrompt(t, mux, "0")["promptId"].(string)
+		if code, body := answer(mux, id, "cancel"); code != http.StatusNoContent || *on != "2.1.286-ask-wizard-submit-esc" {
+			t.Errorf("cancel = %d %v on %s", code, body, *on)
+		}
+	})
+	t.Run("a multiSelect tab has no id", func(t *testing.T) {
+		_, mux, _ := setup("2.1.286-ask-wizard-multi-tab")
+		if p := getPrompt(t, mux, "0"); p == nil || p["kind"] != "unsupported" || p["promptId"] != nil {
+			t.Errorf("multiSelect tab = %v", p)
+		}
+	})
+	t.Run("chat about this", func(t *testing.T) {
+		f, mux, on := setup("2.1.286-ask-single")
+		id := getPrompt(t, mux, "0")["promptId"].(string)
+		if code, body := answer(mux, id, 5); code != http.StatusNoContent || *on != "2.1.286-ask-chat-after" || f.keys[0][0] != "5" {
+			t.Errorf("chat = %d %v on %s", code, body, *on)
+		}
+		// "Type something" is not an option the route sends.
+		f2, mux2, _ := setup("2.1.286-ask-single")
+		id2 := getPrompt(t, mux2, "0")["promptId"].(string)
+		if code, _ := answer(mux2, id2, 4); code != http.StatusBadRequest || len(f2.keys) != 0 {
+			t.Errorf("type something = %d keys %v", code, f2.keys)
 		}
 	})
 }

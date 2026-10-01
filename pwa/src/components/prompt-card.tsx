@@ -90,6 +90,30 @@ export function PromptCard({
   }
   const content = (
     <>
+      {prompt.steps && prompt.steps.length > 0 && (
+        <ol aria-label="Questions" className="flex flex-wrap gap-1.5">
+          {prompt.steps.map((s, i) => (
+            <li
+              // biome-ignore lint/suspicious/noArrayIndexKey: tabs can share a header
+              key={i}
+              aria-current={s.current ? 'step' : undefined}
+              className={`rounded-full border px-2 py-0.5 text-[12px] ${
+                s.current
+                  ? 'border-accent text-fg'
+                  : 'border-border text-fg-muted'
+              }`}
+            >
+              {s.answered && (
+                <span aria-hidden="true" className="mr-1">
+                  ✓
+                </span>
+              )}
+              {s.label}
+              {s.answered && <span className="sr-only"> (answered)</span>}
+            </li>
+          ))}
+        </ol>
+      )}
       <p id={titleId} className="font-medium text-fg">
         {prompt.title || 'Claude Code is asking'}
       </p>

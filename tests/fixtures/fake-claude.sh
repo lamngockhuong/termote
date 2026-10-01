@@ -12,8 +12,10 @@
 #   Enter       records the draft as a user turn, then answers it:
 #               "permission" in it opens the Bash permission dialog,
 #               "toppings" the multiSelect question (answerable only here),
+#               "order" a wizard of two single-choice questions and Submit,
 #               anything else gets an echo reply
-#   1/2/3, Esc  answer or cancel an open dialog
+#   1/2/3, Esc  answer or cancel an open dialog (on a wizard, a digit answers
+#               the tab open and moves to the next one)
 #
 # Environment: CLAUDE_CONFIG_DIR (required), FAKE_CLAUDE_SESSION (session id,
 # default a fixed UUID).
@@ -99,7 +101,7 @@ dialog() {
 }
 
 idle_screen="$screens/2.1.286-idle-after-turn.txt"
-state=idle # idle | permission | toppings
+state=idle # idle | permission | toppings | size | drink | submit
 draft=""
 
 draw() {
@@ -125,6 +127,9 @@ draw() {
       ;;
     permission) dialog 2.1.286-permission-bash.txt ;;
     toppings) dialog 2.1.286-ask-multi.txt ;;
+    size) dialog 2.1.286-ask-wizard.txt ;;
+    drink) dialog 2.1.286-ask-wizard-tab2.txt ;;
+    submit) dialog 2.1.286-ask-wizard-submit.txt ;;
   esac
 }
 
@@ -153,6 +158,10 @@ submit() {
       state=toppings
       set_status waiting
       ;;
+    *order*)
+      state=size
+      set_status waiting
+      ;;
     *)
       say "You said: $text"
       set_status idle
@@ -170,7 +179,10 @@ answer() { # key
     permission:3 | permission:esc)
       entry user '[{"type":"tool_result","tool_use_id":"toolu_touch","content":"The user doesn'"'"'t want to proceed with this tool use.","is_error":true}]'
       ;;
-    toppings:esc) ;;
+    size:1 | size:2) state=drink && draw && return ;;
+    drink:1 | drink:2) state=submit && draw && return ;;
+    submit:1) say 'Ordered: a small coffee.' ;;
+    toppings:esc | size:esc | drink:esc | submit:esc | submit:2) ;;
     *) return ;;
   esac
   state=idle

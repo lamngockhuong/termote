@@ -112,6 +112,23 @@ test.describe('chat view', () => {
     await expect(conversation).toContainText('Created scratch-one.txt.')
     await expect(card).toBeHidden()
 
+    // A wizard of single-choice questions is answered one card per tab
+    await composer.fill('place an order')
+    await send.click()
+    const size = page.getByRole('alertdialog', { name: 'What size do you want?' })
+    await expect(
+      size.getByRole('list', { name: 'Questions' }).locator('[aria-current="step"]'),
+    ).toHaveText('Size')
+    await size.getByRole('button', { name: /^1\.\s*Small/ }).click()
+    const drink = page.getByRole('alertdialog', { name: 'Which drink do you prefer?' })
+    await expect(drink.getByRole('list', { name: 'Questions' })).toContainText('Size (answered)')
+    await drink.getByRole('button', { name: /^2\.\s*Coffee/ }).click()
+    const review = page.getByRole('alertdialog', { name: 'Review your answers' })
+    await expect(review).toContainText('Ready to submit your answers?')
+    await review.getByRole('button', { name: /^1\.\s*Submit answers/ }).click()
+    await expect(conversation).toContainText('Ordered: a small coffee.')
+    await expect(review).toBeHidden()
+
     // A multiSelect question is shown read-only, with the way to the terminal
     await composer.fill('pick toppings')
     await send.click()
