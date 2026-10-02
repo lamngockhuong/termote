@@ -175,14 +175,14 @@ function FencedCode({
   const [tokens, setTokens] = useState<Token[][] | null>(null)
 
   useEffect(() => {
-    let live = true
+    // Aborted once the block is gone or shows other text: a request still
+    // waiting for the worker is dropped
+    const ac = new AbortController()
     setTokens(null)
-    highlightLang(text, lang, resolvedTheme).then((t) => {
-      if (live) setTokens(t)
+    highlightLang(text, lang, resolvedTheme, ac.signal).then((t) => {
+      if (!ac.signal.aborted) setTokens(t)
     })
-    return () => {
-      live = false
-    }
+    return () => ac.abort()
   }, [text, lang, resolvedTheme])
 
   const copy = async () => {

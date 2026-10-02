@@ -33,21 +33,37 @@ export function canHighlight(text: string): boolean {
   )
 }
 
+// Files in the worker at once. Up to this many grammars download in
+// parallel; the rest wait here, so a code block gone meanwhile (its signal
+// aborted) is dropped before the worker ever sees it. A cancel posted to the
+// worker could not do that: while it tokenizes, its messages wait their turn.
+export const HIGHLIGHT_CONCURRENCY = 4
+
 let worker: Worker | undefined
 let nextId = 0
-interface Pending {
+interface Job {
+  req: HighlightRequest
   done: (lines: Token[][] | null) => void
-  started: () => void
+  timer?: ReturnType<typeof setTimeout>
 }
-const pending = new Map<number, Pending>()
+const queue: Job[] = []
+// In the worker, by request id
+const running = new Map<number, Job>()
+
+function finish(job: Job, lines: Token[][] | null) {
+  clearTimeout(job.timer)
+  job.done(lines)
+}
 
 // Ends the worker (stuck in a grammar, or broken): every pending file is
 // shown plain, and the next one starts a new worker.
 function resetWorker() {
   worker?.terminate()
   worker = undefined
-  for (const p of pending.values()) p.done(null)
-  pending.clear()
+  const jobs = [...running.values(), ...queue]
+  running.clear()
+  queue.length = 0
+  for (const job of jobs) finish(job, null)
 }
 
 function getWorker(): Worker | undefined {
@@ -57,17 +73,32 @@ function getWorker(): Worker | undefined {
       type: 'module',
     })
     worker.onmessage = (e: MessageEvent<HighlightReply | HighlightStarted>) => {
-      const p = pending.get(e.data.id)
+      const job = running.get(e.data.id)
+      if (!job) return
       if ('started' in e.data) {
-        p?.started()
+        clearTimeout(job.timer)
+        job.timer = setTimeout(resetWorker, HIGHLIGHT_TIMEOUT)
         return
       }
-      p?.done(e.data.lines)
-      pending.delete(e.data.id)
+      running.delete(e.data.id)
+      finish(job, e.data.lines)
+      runNext()
     }
     worker.onerror = resetWorker
   }
   return worker
+}
+
+// Hands waiting files to the worker while it has room
+function runNext() {
+  while (running.size < HIGHLIGHT_CONCURRENCY && queue.length) {
+    const job = queue.shift() as Job
+    running.set(job.req.id, job)
+    job.timer = setTimeout(resetWorker, HIGHLIGHT_LOAD_TIMEOUT)
+    // A file is queued only where workers exist
+    const w = getWorker() as Worker
+    w.postMessage(job.req)
+  }
 }
 
 // The tokens of text, one array per line, or null to show it plain (unknown
@@ -80,29 +111,33 @@ export function highlight(
   return highlightLang(text, languageFor(path), theme)
 }
 
-// The same for text in a known language (a fenced code block)
+// The same for text in a known language (a fenced code block). Once signal
+// aborts the answer is null, and a file still waiting is never tokenized.
 export function highlightLang(
   text: string,
   lang: LanguageId | undefined,
   theme: 'light' | 'dark',
+  signal?: AbortSignal,
 ): Promise<Token[][] | null> {
   const w = lang && canHighlight(text) ? getWorker() : undefined
-  if (!lang || !w) return Promise.resolve(null)
-  const id = ++nextId
+  if (!lang || !w || signal?.aborted) return Promise.resolve(null)
   return new Promise((resolve) => {
-    let timer = setTimeout(resetWorker, HIGHLIGHT_LOAD_TIMEOUT)
-    pending.set(id, {
+    const onAbort = () => {
+      const i = queue.indexOf(job)
+      if (i >= 0) queue.splice(i, 1)
+      // One already in the worker runs to its end; its answer is ignored
+      resolve(null)
+    }
+    const job: Job = {
+      req: { id: ++nextId, text, lang, theme },
       done: (lines) => {
-        clearTimeout(timer)
+        signal?.removeEventListener('abort', onAbort)
         resolve(lines)
       },
-      started: () => {
-        clearTimeout(timer)
-        timer = setTimeout(resetWorker, HIGHLIGHT_TIMEOUT)
-      },
-    })
-    const req: HighlightRequest = { id, text, lang, theme }
-    w.postMessage(req)
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
+    queue.push(job)
+    runNext()
   })
 }
 

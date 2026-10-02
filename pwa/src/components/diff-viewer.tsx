@@ -214,7 +214,9 @@ type Content =
   | { kind: 'message'; text: string }
 
 // The file as it is now in the working tree, rendered; read again whenever
-// the diff is.
+// the diff is. What shows stays until the new read answers, so a refresh
+// keeps the preview where it was scrolled (the caller keys this view by
+// entry, so another file never shows the previous one).
 function WorkingTreePreview({
   paneId,
   root,
@@ -239,7 +241,6 @@ function WorkingTreePreview({
   // biome-ignore lint/correctness/useExhaustiveDependencies: version re-reads the file
   useEffect(() => {
     let live = true
-    setContent({ kind: 'loading' })
     fetchFileContent(paneId, path, { root, reveal }).then(
       (c) => {
         if (!live) return

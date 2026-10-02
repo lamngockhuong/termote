@@ -98,6 +98,13 @@ export function FileViewer({
   const tooLarge = state.kind === 'text' && state.size > PREVIEW_MAX_BYTES
   const canPreview = markdown && state.kind === 'text' && !tooLarge
   const preview = canPreview && settings.markdownPreview
+  // Where the preview started (the link's heading, the offset Back restored)
+  // is used up once the user leaves it: Source then Preview starts at the top
+  const [leftPreview, setLeftPreview] = useState(false)
+  const togglePreview = () => {
+    if (preview) setLeftPreview(true)
+    updateSetting('markdownPreview', !preview)
+  }
   const back = backTo
     ? `Back to ${backTo.slice(backTo.lastIndexOf('/') + 1)}`
     : 'Back to files'
@@ -161,7 +168,7 @@ export function FileViewer({
         {canPreview && (
           <IconButton
             size="sm"
-            onClick={() => updateSetting('markdownPreview', !preview)}
+            onClick={togglePreview}
             aria-label="Preview"
             aria-pressed={preview}
             title={preview ? 'Show the source' : 'Show the preview'}
@@ -186,8 +193,8 @@ export function FileViewer({
           text={state.text}
           path={path}
           wrap={wrap}
-          anchor={anchor}
-          scrollTop={scrollTop}
+          anchor={leftPreview ? undefined : anchor}
+          scrollTop={leftPreview ? undefined : scrollTop}
           onFollow={onFollow}
           notify={notify}
         />

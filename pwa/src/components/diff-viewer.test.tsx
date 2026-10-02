@@ -274,6 +274,31 @@ describe('DiffViewer: Markdown preview', () => {
     expect(await screen.findByTestId('diff')).toBeInTheDocument()
   })
 
+  it('keeps the preview and its scroll while it is read again', async () => {
+    let finish!: (v: unknown) => void
+    mockContent
+      .mockResolvedValueOnce(content('# Before'))
+      .mockReturnValueOnce(new Promise((r) => (finish = r)))
+    const v = show({ entry: MD, path: 'docs/a.md' })
+    await screen.findByTestId('diff')
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+    await screen.findByRole('heading', { name: 'Before' })
+    const box = screen.getByTestId('markdown-preview')
+    box.scrollTop = 80
+
+    // Refresh: the previous version stays until the new one is read
+    v.again({ entry: MD, path: 'docs/a.md', reload: 1 })
+    await act(async () => {})
+    expect(screen.queryByText('Loading…')).toBeNull()
+    expect(screen.getByRole('heading', { name: 'Before' })).toBeVisible()
+
+    await act(async () => finish(content('# After')))
+    expect(screen.getByRole('heading', { name: 'After' })).toBeVisible()
+    // The same scroll box, where it was
+    expect(screen.getByTestId('markdown-preview')).toBe(box)
+    expect(box.scrollTop).toBe(80)
+  })
+
   it('has no preview of a deleted file or of other files', async () => {
     show({ entry: { ...MD, unstaged: 'D' }, path: 'docs/a.md' })
     await screen.findByTestId('diff')

@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   canHighlight,
+  HIGHLIGHT_CONCURRENCY,
   HIGHLIGHT_LOAD_TIMEOUT,
   HIGHLIGHT_MAX_BYTES,
   HIGHLIGHT_MAX_LINE,
   HIGHLIGHT_MAX_LINES,
   HIGHLIGHT_TIMEOUT,
   highlight,
+  highlightLang,
   resetHighlighter,
 } from './highlight'
 
@@ -81,6 +83,95 @@ describe('highlight', () => {
     w.reply(9, [])
     expect(await b).toEqual([[['b']]])
     expect(await a).toBeNull()
+  })
+
+  // Fills every slot of the worker: the next file waits its turn
+  const fill = () =>
+    Array.from({ length: HIGHLIGHT_CONCURRENCY }, (_, i) =>
+      highlightLang(`busy${i}`, 'typescript', 'dark'),
+    )
+
+  it('sends a file once the worker has room', async () => {
+    const busy = fill()
+    const next = highlightLang('next', 'go', 'dark')
+    const w = FakeWorker.all[0]
+    expect(w.posted).toHaveLength(HIGHLIGHT_CONCURRENCY)
+    w.reply(2, [])
+    expect(await busy[1]).toEqual([])
+    expect(w.posted[w.posted.length - 1]).toMatchObject({
+      text: 'next',
+      lang: 'go',
+    })
+    w.reply(HIGHLIGHT_CONCURRENCY + 1, [[['next']]])
+    expect(await next).toEqual([[['next']]])
+  })
+
+  it('never sends a file whose block is gone before its turn', async () => {
+    fill()
+    const ac = new AbortController()
+    const gone = highlightLang('gone', 'go', 'dark', ac.signal)
+    const after = highlightLang('after', 'go', 'dark')
+    ac.abort()
+    expect(await gone).toBeNull()
+    const w = FakeWorker.all[0]
+    w.reply(1, [])
+    // gone is skipped: after goes next
+    expect(w.posted.map((r) => r.id)).toEqual([
+      ...Array.from({ length: HIGHLIGHT_CONCURRENCY }, (_, i) => i + 1),
+      HIGHLIGHT_CONCURRENCY + 2,
+    ])
+    w.reply(HIGHLIGHT_CONCURRENCY + 2, [[['after']]])
+    expect(await after).toEqual([[['after']]])
+  })
+
+  it('answers null at once for a block gone while it is tokenized', async () => {
+    const ac = new AbortController()
+    const a = highlightLang('a', 'typescript', 'dark', ac.signal)
+    ac.abort()
+    expect(await a).toBeNull()
+    // The worker still finishes it; its answer changes nothing
+    FakeWorker.all[0].reply(1, [[['a']]])
+    expect(await a).toBeNull()
+  })
+
+  it('lets go of the signal once the answer is in', async () => {
+    const ac = new AbortController()
+    const remove = vi.spyOn(ac.signal, 'removeEventListener')
+    const a = highlightLang('a', 'typescript', 'dark', ac.signal)
+    FakeWorker.all[0].reply(1, [[['a']]])
+    expect(await a).toEqual([[['a']]])
+    expect(remove).toHaveBeenCalledWith('abort', expect.any(Function))
+    // Aborted afterwards: nothing to drop
+    ac.abort()
+  })
+
+  it('sends nothing for a block already gone', async () => {
+    const ac = new AbortController()
+    ac.abort()
+    expect(await highlightLang('a', 'typescript', 'dark', ac.signal)).toBeNull()
+    expect(FakeWorker.all[0].posted).toEqual([])
+  })
+
+  it('counts the download timeout from when the file is sent', async () => {
+    const busy = fill()
+    const next = highlightLang('next', 'go', 'dark')
+    const w = FakeWorker.all[0]
+    vi.advanceTimersByTime(HIGHLIGHT_LOAD_TIMEOUT - 1)
+    for (let id = 1; id <= HIGHLIGHT_CONCURRENCY; id++) w.reply(id, [])
+    await Promise.all(busy)
+    // next waited for room: its own download time starts now
+    vi.advanceTimersByTime(HIGHLIGHT_LOAD_TIMEOUT - 1)
+    expect(w.terminated).toBe(false)
+    vi.advanceTimersByTime(1)
+    expect(w.terminated).toBe(true)
+    expect(await next).toBeNull()
+  })
+
+  it('shows plain every file waiting when the worker is ended', async () => {
+    fill()
+    const next = highlightLang('next', 'go', 'dark')
+    FakeWorker.all[0].onerror!()
+    expect(await next).toBeNull()
   })
 
   it('does not start the worker for plain text or a file too big', async () => {
