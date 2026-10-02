@@ -14,6 +14,16 @@ describe('useSettings', () => {
     expect(result.current.settings.disableContextMenu).toBe(true)
     expect(result.current.settings.pollInterval).toBe(5)
     expect(result.current.settings.driveTerminalSize).toBe(false)
+    expect(result.current.settings.sidePanelWidth).toBe(440)
+  })
+
+  it('updates sidePanelWidth and persists', () => {
+    const { result } = renderHook(() => useSettings())
+    act(() => result.current.updateSetting('sidePanelWidth', 600))
+    expect(result.current.settings.sidePanelWidth).toBe(600)
+    expect(
+      JSON.parse(localStorage.getItem('termote-settings')!).sidePanelWidth,
+    ).toBe(600)
   })
 
   it('updates driveTerminalSize and persists', () => {

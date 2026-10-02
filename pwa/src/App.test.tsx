@@ -6,6 +6,7 @@ import App from './App'
 import { APP_VIEWS, type AppView, type ViewProps } from './app-views'
 import { KeyboardToolbar } from './components/keyboard-toolbar'
 import type { QuickActionHandlers } from './components/quick-actions-menu'
+import { PanelMaximizeButton } from './components/side-panel'
 import { TerminalView } from './components/terminal-view'
 
 // ─── Mock all hooks ───────────────────────────────────────────────────────────
@@ -2537,6 +2538,99 @@ describe('App views, view-only and deep links', () => {
     expect(
       screen.getByRole('button', { name: 'View: Files' }),
     ).toBeInTheDocument()
+  })
+
+  describe('desktop side panel size', () => {
+    // A panel with the maximize button its real views draw in their header
+    const SIZED: AppView = {
+      ...FILES,
+      Panel: () => (
+        <div data-testid="files-panel">
+          <PanelMaximizeButton />
+        </div>
+      ),
+    }
+    const coveredNow = () =>
+      (vi.mocked(TerminalView).mock.lastCall![0] as { covered: boolean })
+        .covered
+    const handle = () => screen.getByRole('separator', { name: 'Resize Files' })
+    const main = () =>
+      screen.getByTestId('terminal-view').closest('[id="view-panel-terminal"]')!
+        .parentElement!
+
+    it('opens at the saved width and saves a dragged one', async () => {
+      const updateSetting = vi.fn()
+      const settings = mockUseSettings()
+      mockUseSettings.mockReturnValue({
+        settings: { ...settings.settings, sidePanelWidth: 520 },
+        updateSetting,
+      } as any)
+      render(<App views={[...APP_VIEWS, SIZED]} />)
+      fireEvent.click(await screen.findByRole('button', { name: 'Files' }))
+      const panel = screen.getByRole('complementary', { name: 'Files' })
+      expect(panel).toHaveStyle({ width: '520px' })
+      fireEvent.pointerDown(handle(), { button: 0, clientX: 800 })
+      fireEvent.pointerMove(handle(), { clientX: 700 })
+      expect(updateSetting).not.toHaveBeenCalled()
+      fireEvent.pointerUp(handle())
+      expect(updateSetting).toHaveBeenCalledWith('sidePanelWidth', 620)
+    })
+
+    it('the terminal keeps its size while dragged and is fitted on release', async () => {
+      render(<App views={[...APP_VIEWS, SIZED]} />)
+      fireEvent.click(await screen.findByRole('button', { name: 'Files' }))
+      expect(coveredNow()).toBe(false)
+      fireEvent.pointerDown(handle(), { button: 0, clientX: 800 })
+      expect(coveredNow()).toBe(true)
+      fireEvent.pointerMove(handle(), { clientX: 700 })
+      expect(coveredNow()).toBe(true)
+      fireEvent.pointerUp(handle())
+      expect(coveredNow()).toBe(false)
+    })
+
+    it('maximized, the panel covers the main area and the terminal keeps its size', async () => {
+      render(<App views={[...APP_VIEWS, SIZED]} />)
+      fireEvent.click(await screen.findByRole('button', { name: 'Files' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Maximize panel' }))
+      const panel = screen.getByRole('complementary', { name: 'Files' })
+      expect(panel).toHaveClass('absolute', 'inset-0')
+      expect(main()).toHaveAttribute('inert')
+      expect(coveredNow()).toBe(true)
+      fireEvent.keyDown(screen.getByRole('button', { name: 'Restore panel' }), {
+        key: 'Escape',
+      })
+      expect(panel).not.toHaveClass('absolute')
+      expect(main()).not.toHaveAttribute('inert')
+      expect(coveredNow()).toBe(false)
+    })
+
+    it('closing the panel leaves the maximized state', async () => {
+      render(<App views={[...APP_VIEWS, SIZED]} />)
+      fireEvent.click(await screen.findByRole('button', { name: 'Files' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Maximize panel' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Files' }))
+      expect(coveredNow()).toBe(false)
+      expect(main()).not.toHaveAttribute('inert')
+      fireEvent.click(screen.getByRole('button', { name: 'Files' }))
+      expect(
+        screen.getByRole('button', { name: 'Maximize panel' }),
+      ).toBeInTheDocument()
+      expect(handle()).toBeInTheDocument()
+    })
+
+    it('mobile: the view has no resize handle and no maximize button', async () => {
+      mockIsMobile.mockReturnValue(true)
+      render(<App views={[...APP_VIEWS, { ...SIZED, Main: SIZED.Panel }]} />)
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'View: Terminal' }),
+      )
+      fireEvent.click(screen.getByRole('menuitemradio', { name: 'Files' }))
+      expect(screen.getByTestId('files-panel')).toBeInTheDocument()
+      expect(screen.queryByRole('separator')).toBeNull()
+      expect(
+        screen.queryByRole('button', { name: 'Maximize panel' }),
+      ).toBeNull()
+    })
   })
 
   it('a view can show a notice', async () => {

@@ -1,6 +1,7 @@
 import { GitBranch, RefreshCw } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { keepOrder, shortRoot, TRUNCATE_START } from '../utils/files-format'
+import { PanelMaximizeButton } from './side-panel'
 import { IconButton } from './ui/button'
 
 interface Props {
@@ -12,7 +13,8 @@ interface Props {
 }
 
 // The top line of Files and Changes: the pane's root (the git toplevel of its
-// directory, else the directory), the branch, and a refresh button.
+// directory, else the directory), the branch, a refresh button and, in the
+// desktop side panel, its maximize button.
 export function PaneDirHeader({
   root,
   branch,
@@ -53,6 +55,7 @@ export function PaneDirHeader({
           }
         />
       </IconButton>
+      <PanelMaximizeButton />
     </div>
   )
 }
