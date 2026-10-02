@@ -13,8 +13,15 @@ quét bằng điện thoại, chép liên kết, và bật, tắt hoặc khởi 
 ## Yêu cầu
 
 - Herdr 0.7.4 trở lên.
-- Lệnh `termote` nằm trên `PATH`: chạy `termote link` một lần. Mọi việc plugin làm đều qua lệnh
-  `termote`, nên không cần cài thêm runtime nào khác.
+- Termote 1.5.0 trở lên (có `termote url` và `termote panel`; cập nhật bằng `termote update`). Mọi việc plugin làm đều qua lệnh `termote`, nên không cần cài
+  thêm runtime nào khác.
+- Linux và macOS: Herdr chạy lệnh của plugin với `PATH` của Herdr server, mà `PATH` này thường
+  không có `~/.local/bin`. Script khởi chạy của plugin tự tìm thêm ở đó và trong thư mục cài đặt
+  (`~/.local/share/termote/current/bin`, hoặc dưới `$XDG_DATA_HOME`), nên không bắt buộc chạy
+  `termote link`; bản nào quá cũ so với plugin thì bị bỏ qua. Khi không có bản nào dùng được,
+  bảng điều khiển báo lý do và giữ nguyên tới khi bạn bấm Enter.
+- Windows: bộ cài đặt đã thêm `termote` vào `PATH` của người dùng; khởi động lại Herdr sau khi cài để
+  Herdr nhận `PATH` mới.
 - Server chạy backend Herdr (`termote start --mux herdr`). Với tmux, ID trong liên kết của Herdr
   không có nghĩa gì với Termote, nên liên kết chỉ mở màn hình chính và plugin báo điều đó.
 
@@ -52,7 +59,9 @@ vẫn phải đăng nhập.
 ## Action
 
 Các việc trên cũng có sẵn dưới dạng action của plugin, để gán phím tắt hoặc gọi bằng
-`herdr plugin action invoke`:
+`herdr plugin action invoke`. Herdr chỉ cho mỗi id xuất hiện một lần, nên trên Windows các id có
+thêm hậu tố `-windows` (`lamngockhuong.termote.panel-windows`,
+`lamngockhuong.termote.open-windows`, ...):
 
 | Action                          | Chạy                             |
 | ------------------------------- | -------------------------------- |
@@ -74,6 +83,8 @@ type = "plugin_action"
 command = "lamngockhuong.termote.panel"
 description = "Termote link and QR code"
 ```
+
+Trên Windows, hãy gán `lamngockhuong.termote.panel-windows`.
 
 <Aside type="note">
   `copy` dùng lệnh chép vào bộ nhớ tạm của hệ thống (`wl-copy`, `xclip`, `xsel`, `pbcopy`, `clip`). Action

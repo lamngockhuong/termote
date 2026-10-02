@@ -40,6 +40,7 @@ jobs:
             scripts:
               - 'scripts/**'
               - 'tests/**'
+              - 'herdr-plugin/**'
               - 'Makefile'
               - 'entrypoint.sh'
             docker:
@@ -275,6 +276,9 @@ jobs:
 
       - name: Run entrypoint tests
         run: ./tests/test-entrypoints.sh
+
+      - name: Run Herdr plugin launcher tests
+        run: ./tests/test-herdr-plugin.sh
 
   # install.sh is POSIX sh; macOS has BSD tools and shasum.
   test-install-macos:

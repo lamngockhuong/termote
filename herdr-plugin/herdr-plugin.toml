@@ -1,7 +1,12 @@
-# Termote's Herdr plugin. Every command runs the `termote` binary, which must
-# be on PATH (`termote link`); the logic lives there, so the plugin needs no
-# runtime of its own. Action output only reaches the plugin log, so what the
-# user has to read is shown in the `panel` popup.
+# Termote's Herdr plugin. Every command runs the `termote` binary; the logic
+# lives there, so the plugin needs no runtime of its own. Action output only
+# reaches the plugin log, so what the user has to read is shown in the
+# `panel` popup.
+#
+# Linux and macOS go through bin/termote.sh, which finds termote even when
+# Herdr's PATH lacks ~/.local/bin and keeps a popup open on an error. Herdr
+# allows each id once, so Windows, where the installer puts termote on the
+# user PATH, has its own entries with a `-windows` suffix.
 id = "lamngockhuong.termote"
 name = "Termote"
 version = "1.5.0" # x-release-please-version
@@ -13,6 +18,16 @@ platforms = ["linux", "macos", "windows"]
 [[panes]]
 id = "panel"
 title = "Termote"
+platforms = ["linux", "macos"]
+placement = "popup"
+width = "80%"
+height = "90%"
+command = ["sh", "bin/termote.sh", "panel"]
+
+[[panes]]
+id = "panel-windows"
+title = "Termote"
+platforms = ["windows"]
 placement = "popup"
 width = "80%"
 height = "90%"
@@ -23,34 +38,82 @@ command = ["termote", "panel"]
 id = "panel"
 title = "Termote: show the link, QR code and server controls"
 contexts = ["pane", "workspace"]
-command = ["herdr", "plugin", "pane", "open", "--plugin", "lamngockhuong.termote", "--entrypoint", "panel"]
+platforms = ["linux", "macos"]
+command = ["sh", "bin/termote.sh", "open-panel"]
+
+[[actions]]
+id = "panel-windows"
+title = "Termote: show the link, QR code and server controls"
+contexts = ["pane", "workspace"]
+platforms = ["windows"]
+command = ["herdr", "plugin", "pane", "open", "--plugin", "lamngockhuong.termote", "--entrypoint", "panel-windows"]
 
 [[actions]]
 id = "open"
 title = "Termote: open this pane in the browser"
 contexts = ["pane", "workspace"]
+platforms = ["linux", "macos"]
+command = ["sh", "bin/termote.sh", "url", "--herdr", "--open"]
+
+[[actions]]
+id = "open-windows"
+title = "Termote: open this pane in the browser"
+contexts = ["pane", "workspace"]
+platforms = ["windows"]
 command = ["termote", "url", "--herdr", "--open"]
 
 [[actions]]
 id = "copy"
 title = "Termote: copy the link to this pane"
 contexts = ["pane", "workspace"]
+platforms = ["linux", "macos"]
+command = ["sh", "bin/termote.sh", "url", "--herdr", "--copy"]
+
+[[actions]]
+id = "copy-windows"
+title = "Termote: copy the link to this pane"
+contexts = ["pane", "workspace"]
+platforms = ["windows"]
 command = ["termote", "url", "--herdr", "--copy"]
 
 [[actions]]
 id = "start"
 title = "Termote: start the server"
 contexts = ["pane", "workspace"]
+platforms = ["linux", "macos"]
+command = ["sh", "bin/termote.sh", "start"]
+
+[[actions]]
+id = "start-windows"
+title = "Termote: start the server"
+contexts = ["pane", "workspace"]
+platforms = ["windows"]
 command = ["termote", "start"]
 
 [[actions]]
 id = "stop"
 title = "Termote: stop the server"
 contexts = ["pane", "workspace"]
+platforms = ["linux", "macos"]
+command = ["sh", "bin/termote.sh", "stop"]
+
+[[actions]]
+id = "stop-windows"
+title = "Termote: stop the server"
+contexts = ["pane", "workspace"]
+platforms = ["windows"]
 command = ["termote", "stop"]
 
 [[actions]]
 id = "restart"
 title = "Termote: restart the server"
 contexts = ["pane", "workspace"]
+platforms = ["linux", "macos"]
+command = ["sh", "bin/termote.sh", "restart"]
+
+[[actions]]
+id = "restart-windows"
+title = "Termote: restart the server"
+contexts = ["pane", "workspace"]
+platforms = ["windows"]
 command = ["termote", "restart"]
