@@ -293,8 +293,11 @@ The Herdr plugin in [`herdr-plugin/`](../herdr-plugin/README.md)
 (`herdr plugin install lamngockhuong/termote/herdr-plugin`, Herdr 0.7.4+) runs these commands:
 a `panel` popup (`termote panel`: status, every address, a QR code of the focused pane's link,
 keys to open, copy, start, stop and restart) and the actions `panel`, `open`, `copy`, `start`,
-`stop`, `restart`. It needs `termote` on `PATH` (`termote link`), and selects the pane only when
-the server runs the Herdr backend. User guide:
+`stop`, `restart`. On Linux and macOS each entry runs `herdr-plugin/bin/termote.sh`, which finds
+`termote` on `PATH`, in `~/.local/bin` or in the install (Herdr's own `PATH` often lacks
+`~/.local/bin`) and keeps the popup open when it is missing, too old or fails; Windows entries
+(ids ending in `-windows`) run `termote` from the user `PATH`. It selects the pane only when the
+server runs the Herdr backend. User guide:
 [Herdr Plugin](https://termote.ohnice.app/usage/herdr-plugin/).
 
 A server started detached (no systemd/launchd/Scheduled Task) from a Herdr pane or the plugin

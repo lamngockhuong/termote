@@ -13,8 +13,16 @@ phone, copies it, and starts, stops or restarts the server.
 ## Requirements
 
 - Herdr 0.7.4 or later.
-- Termote on `PATH`: run `termote link` once. The plugin runs the `termote` command for
+- Termote 1.5.0 or later (it has `termote url` and `termote panel`; update with
+  `termote update`). The plugin runs the `termote` command for
   everything it does, so it needs no other runtime.
+- Linux and macOS: Herdr starts plugin commands with its server's `PATH`, which often lacks
+  `~/.local/bin`. The plugin's launcher also looks there and in the install
+  (`~/.local/share/termote/current/bin`, or under `$XDG_DATA_HOME`), so `termote link` is not
+  required, and skips a copy too old for the plugin. When it finds none that works, the panel
+  says why and stays open until you press Enter.
+- Windows: the installer puts `termote` on the user `PATH`; restart Herdr after installing so it
+  sees it.
 - The server runs the Herdr backend (`termote start --mux herdr`). With tmux, the IDs in a
   Herdr link mean nothing to Termote, so the link opens the home screen and the plugin says so.
 
@@ -51,7 +59,9 @@ still signs in.
 
 ## Actions
 
-The same tasks are plugin actions, for a key binding or `herdr plugin action invoke`:
+The same tasks are plugin actions, for a key binding or `herdr plugin action invoke`. Herdr
+allows each id once, so on Windows the ids end in `-windows` (`lamngockhuong.termote.panel-windows`,
+`lamngockhuong.termote.open-windows`, ...):
 
 | Action                          | Runs                             |
 | ------------------------------- | -------------------------------- |
@@ -73,6 +83,8 @@ type = "plugin_action"
 command = "lamngockhuong.termote.panel"
 description = "Termote link and QR code"
 ```
+
+On Windows, bind `lamngockhuong.termote.panel-windows` instead.
 
 <Aside type="note">
   `copy` uses the system's clipboard command (`wl-copy`, `xclip`, `xsel`, `pbcopy`, `clip`). An
