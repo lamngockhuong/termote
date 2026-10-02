@@ -146,7 +146,9 @@ describe('FileViewer', () => {
         'This file may contain secrets. Show its contents?',
       ),
     ).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Show' }))
+    // The dialog's text renders before showModal opens it, and its buttons are
+    // only accessible once it is open
+    fireEvent.click(await screen.findByRole('button', { name: 'Show' }))
     expect(await screen.findByTestId('code-block')).toHaveTextContent('A=1')
     expect(mockContent).toHaveBeenLastCalledWith('%1', '.env', {
       root: '/r',
@@ -261,7 +263,9 @@ describe('FileViewer: Markdown', () => {
     ).toBeInTheDocument()
     expect(screen.queryByTestId('markdown-preview')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Preview' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Show' }))
+    // The dialog's text renders before showModal opens it, and its buttons are
+    // only accessible once it is open
+    fireEvent.click(await screen.findByRole('button', { name: 'Show' }))
     expect(await screen.findByTestId('markdown-preview')).toHaveTextContent(
       'Secret',
     )

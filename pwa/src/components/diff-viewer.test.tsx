@@ -196,7 +196,9 @@ describe('DiffViewer', () => {
         'This file may contain secrets. Show its contents?',
       ),
     ).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Show' }))
+    // The dialog's text renders before showModal opens it, and its buttons are
+    // only accessible once it is open
+    fireEvent.click(await screen.findByRole('button', { name: 'Show' }))
     await screen.findByTestId('diff')
     expect(mockDiff).toHaveBeenLastCalledWith(
       '%1',
