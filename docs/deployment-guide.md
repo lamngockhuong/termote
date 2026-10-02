@@ -277,8 +277,29 @@ termote start --tailscale myhost.ts.net
 make health
 # Or manually:
 termote status
+termote status --json   # one JSON object for scripts (no password); exit 1 when not running
 curl http://localhost:7680/api/mux/health
 ```
+
+## Links and the Herdr Plugin
+
+`termote url` prints the address to open, on Tailscale, else the first LAN address, else
+`localhost` (never with the password): `--group/--tab/--pane` (the ids of
+`/api/mux/snapshot`) and `--view` make it a deep link, `--herdr` takes them from a Herdr plugin
+context, and `--open`, `--copy`, `--qr` open it, copy it or print a QR code. Only the link goes to
+stdout.
+
+The Herdr plugin in [`herdr-plugin/`](../herdr-plugin/README.md)
+(`herdr plugin install lamngockhuong/termote/herdr-plugin`, Herdr 0.7.4+) runs these commands:
+a `panel` popup (`termote panel`: status, every address, a QR code of the focused pane's link,
+keys to open, copy, start, stop and restart) and the actions `panel`, `open`, `copy`, `start`,
+`stop`, `restart`. It needs `termote` on `PATH` (`termote link`), and selects the pane only when
+the server runs the Herdr backend. User guide:
+[Herdr Plugin](https://termote.ohnice.app/usage/herdr-plugin/).
+
+A server started detached (no systemd/launchd/Scheduled Task) from a Herdr pane or the plugin
+drops Herdr's per-pane variables (`HERDR_ENV`, `HERDR_PANE_ID`, `HERDR_PLUGIN_*`, ...) and keeps
+`HERDR_SOCKET_PATH`, so its terminals do not claim to be that pane.
 
 ## Troubleshooting
 

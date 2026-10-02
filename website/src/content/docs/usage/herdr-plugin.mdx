@@ -1,0 +1,99 @@
+---
+title: Herdr Plugin
+description: Open the Herdr pane you are on in Termote, show its link as a QR code for a phone, and start or stop the server, without leaving Herdr
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+When Termote runs the [Herdr backend](/usage/sessions/#herdr-backend), the Termote plugin for
+Herdr gives you its link from inside Herdr: it opens Termote on the workspace, tab and pane you
+are on (a [deep link](/usage/sessions/#deep-links)), shows that link as a QR code to scan with a
+phone, copies it, and starts, stops or restarts the server.
+
+## Requirements
+
+- Herdr 0.7.4 or later.
+- Termote on `PATH`: run `termote link` once. The plugin runs the `termote` command for
+  everything it does, so it needs no other runtime.
+- The server runs the Herdr backend (`termote start --mux herdr`). With tmux, the IDs in a
+  Herdr link mean nothing to Termote, so the link opens the home screen and the plugin says so.
+
+## Install
+
+```bash
+herdr plugin install lamngockhuong/termote/herdr-plugin
+```
+
+Herdr shows the manifest and the commands it will run before installing. To remove it:
+`herdr plugin uninstall lamngockhuong.termote`.
+
+## The Panel
+
+The panel is a popup with the server's status, every address it answers on (Tailscale, LAN,
+this machine), and a QR code of the link to the pane that was focused when you opened it:
+
+```bash
+herdr plugin action invoke lamngockhuong.termote.panel
+```
+
+| Key          | Does                                                                  |
+| ------------ | --------------------------------------------------------------------- |
+| `o`          | Open the link in this machine's browser                               |
+| `c`          | Copy the link                                                         |
+| `s`          | Start the server (shown when it is not running)                       |
+| `x`          | Stop the server                                                       |
+| `r`          | Restart the server                                                    |
+| `q`, `Esc`   | Close the panel                                                       |
+
+The link uses the first address another device is likely to reach: the Tailscale name, else the
+first LAN address, else `localhost`. The password is never part of it; the device that opens it
+still signs in.
+
+## Actions
+
+The same tasks are plugin actions, for a key binding or `herdr plugin action invoke`:
+
+| Action                          | Runs                             |
+| ------------------------------- | -------------------------------- |
+| `lamngockhuong.termote.panel`   | Opens the panel                  |
+| `lamngockhuong.termote.open`    | `termote url --herdr --open`     |
+| `lamngockhuong.termote.copy`    | `termote url --herdr --copy`     |
+| `lamngockhuong.termote.start`   | `termote start`                  |
+| `lamngockhuong.termote.stop`    | `termote stop`                   |
+| `lamngockhuong.termote.restart` | `termote restart`                |
+
+Herdr only writes an action's output to the plugin log (`herdr plugin log list --plugin
+lamngockhuong.termote`), so use the panel when you want to read the result. To open the panel with
+a key, add this to Herdr's `config.toml`:
+
+```toml
+[[keys.command]]
+key = "prefix+o"
+type = "plugin_action"
+command = "lamngockhuong.termote.panel"
+description = "Termote link and QR code"
+```
+
+<Aside type="note">
+  `copy` uses the system's clipboard command (`wl-copy`, `xclip`, `xsel`, `pbcopy`, `clip`). An
+  action has no terminal, so when none of them works there (for example `xclip` without a
+  display), use `c` in the panel: it falls back to the terminal's clipboard (OSC 52), which also
+  works over SSH.
+</Aside>
+
+## From a Script
+
+The plugin is a thin layer over two commands you can use yourself:
+
+- `termote status --json` prints the server's state as one JSON object: `running`, `status`,
+  `version`, `backend`, `pid`, `port`, `lan`, `auth`, `tailscale`, `urls` (`local`, `lan`, `tailscale`) and
+  `supervisor`. It exits with 1 when the server is not running.
+- `termote url` prints the link: `--group`, `--tab` and `--pane` select a session (the IDs of
+  `/api/mux/snapshot`), `--view` a view, and `--herdr` takes the session from the Herdr plugin
+  context. `--open`, `--copy` and `--qr` open it, copy it, or print it as a QR code. Only the
+  link goes to stdout.
+
+```bash
+termote url --group main --tab 1          # tmux: session "main", window 1
+termote url --group w1 --tab w1:t2 --qr   # Herdr: workspace w1, tab w1:t2, with a QR code
+```

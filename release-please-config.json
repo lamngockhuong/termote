@@ -18,6 +18,10 @@
         {
           "type": "generic",
           "path": "server/cli_version.go"
+        },
+        {
+          "type": "generic",
+          "path": "herdr-plugin/herdr-plugin.toml"
         }
       ]
     }

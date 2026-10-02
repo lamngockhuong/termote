@@ -53,6 +53,7 @@ termote/
 │   ├── cli_service*.go     # OS supervisor registration (systemd/launchd/Scheduled Task)
 │   ├── cli_container.go    # `container up|down|logs|status` (podman/docker)
 │   └── cli*.go             # Remaining CLI subcommands (update, logs, link, show-password, ...)
+├── herdr-plugin/           # Herdr plugin manifest (every command runs `termote ...`)
 ├── scripts/
 │   ├── install.sh          # Unix release installer (curl | sh): downloads, verifies, lays out
 │   ├── install.ps1         # Windows release installer (irm | iex), same job
@@ -224,7 +225,9 @@ from a checkout):
 start [options]      Save the options, register the service and start it
 stop                 Stop the server (it starts again at the next login)
 restart              Stop and start with the saved options
-status               Show what the running server reports (alias: health)
+status [--json]      Show what the running server reports (alias: health)
+url [options]        Print the link to open, or a deep link to one session
+panel                Status, links and a QR code, with keys to open, copy, start, stop
 container <cmd>      Run the server in a container: up, down, logs [-f], status
 update               Update to the latest release
 uninstall            Remove the service, the command and the install (config and logs stay)
@@ -243,7 +246,9 @@ turned off with `=false`): `--port <port>` (default 7680, Windows 7690), `--lan[
 `--tailscale <host[:port]>`, `--no-tailscale`, `--no-auth[=false]`, `--mux <tmux|herdr>`,
 `--allow-host <name>` (repeatable), `--remove-host <name>` (repeatable),
 `--allow-herdr-no-auth`, `--fresh`. `update` takes `--version <X.Y.Z>` and `--force`.
-`container up` additionally takes `--workspace <dir>` and `--build`. There is no `--ttyd` flag
+`container up` additionally takes `--workspace <dir>` and `--build`. `url` takes `--herdr` (ids from
+the Herdr plugin context) or `--group/--tab/--pane`, `--view`, and `--open`/`--copy`/`--qr`; only
+the link goes to stdout. There is no `--ttyd` flag
 and no PowerShell `-Flag` variants in 1.0.
 
 The `update` command:
@@ -314,6 +319,9 @@ The `update` command:
 | `server/cli_start.go`                             | `start`/`stop`/`restart`: options, service registration       |
 | `server/cli_service*.go`                          | OS supervisor registration (systemd/launchd/Scheduled Task)   |
 | `server/cli_container.go`                         | `container up/down/logs/status`                               |
+| `server/cli_url.go`                               | `status --json`, `url` (deep link, open, copy, QR)            |
+| `server/cli_panel.go`                             | `panel`: the Herdr plugin's popup                             |
+| `herdr-plugin/herdr-plugin.toml`                  | Herdr plugin manifest (actions + `panel` popup)               |
 | `Dockerfile`                                      | Docker mode container                                         |
 | `entrypoint.sh`                                   | Container entrypoint                                          |
 

@@ -209,6 +209,7 @@ compare against it, so a 0.x patch marked latest would downgrade every 1.x insta
 
 ### Version mismatch
 
-- `pwa/package.json` and `server/cli_version.go` are synced by `release-please-config.json`'s
-  `extra-files`, or by the release workflow's `sync-version` job on a tag push
+- `pwa/package.json`, `server/cli_version.go` and `herdr-plugin/herdr-plugin.toml` (the
+  `# x-release-please-version` line) are synced by `release-please-config.json`'s `extra-files`;
+  the release workflow's `sync-version` job also syncs `pwa/package.json` on a tag push
 - `.release-please-manifest.json` tracks the Release Please version
