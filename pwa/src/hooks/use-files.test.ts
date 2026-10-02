@@ -1,6 +1,12 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { filesError, resetFilesStores, useFiles } from './use-files'
+import {
+  filesError,
+  followInFiles,
+  isOpenable,
+  resetFilesStores,
+  useFiles,
+} from './use-files'
 import { type FileEntry, RequestError } from './use-mux-api'
 
 const mockTree = vi.fn()
@@ -186,5 +192,226 @@ describe('useFiles', () => {
     act(() => result.current.rootChanged('/n'))
     await act(async () => fail(new Error('offline')))
     expect(result.current.dirs.src).toBeUndefined()
+  })
+})
+
+describe('isOpenable', () => {
+  it('files, directories and symlinks to them', () => {
+    expect(isOpenable(file('a'))).toBe(true)
+    expect(isOpenable(dir('a'))).toBe(true)
+    expect(isOpenable({ ...file('a'), type: 'symlink', target: 'file' })).toBe(
+      true,
+    )
+    expect(isOpenable({ ...file('a'), type: 'symlink' })).toBe(false)
+    expect(isOpenable({ ...file('a'), type: 'other' })).toBe(false)
+  })
+})
+
+describe('following links', () => {
+  const listing: Record<string, FileEntry[]> = {
+    '': [dir('docs'), file('README.md'), { ...file('dev'), type: 'other' }],
+    docs: [file('guide.md'), dir('img')],
+    'docs/img': [file('a.png')],
+  }
+  beforeEach(() => {
+    mockTree.mockImplementation(async (_p, path: string, root?: string) => {
+      if (!listing[path]) throw new RequestError(404, '', 'x')
+      return tree(path, listing[path], root ?? '/r')
+    })
+  })
+
+  it('opens a file, then Back returns to the one before with its offset', async () => {
+    const { result } = renderHook(() => useFiles('%1'))
+    act(() => result.current.open('README.md'))
+    let r = ''
+    await act(async () => {
+      r = await result.current.follow(
+        { path: 'docs/guide.md', anchor: 'usage' },
+        120,
+      )
+    })
+    expect(r).toBe('opened')
+    expect(mockTree).toHaveBeenLastCalledWith('%1', 'docs', undefined)
+    expect(result.current.openPath).toBe('docs/guide.md')
+    expect(result.current.openAnchor).toBe('usage')
+    expect(result.current.history).toEqual([
+      { path: 'README.md', scrollTop: 120 },
+    ])
+
+    act(() => result.current.back())
+    expect(result.current.openPath).toBe('README.md')
+    expect(result.current.openScroll).toBe(120)
+    expect(result.current.openAnchor).toBeUndefined()
+    expect(result.current.history).toEqual([])
+
+    act(() => result.current.back())
+    expect(result.current.openPath).toBeNull()
+  })
+
+  it('opening from the tree starts a new trail', async () => {
+    const { result } = renderHook(() => useFiles('%1'))
+    act(() => result.current.open('README.md'))
+    await act(() => result.current.follow({ path: 'docs/guide.md' }, 0))
+    act(() => result.current.open('README.md'))
+    expect(result.current.history).toEqual([])
+  })
+
+  it('a directory shows in the tree, opened with every parent', async () => {
+    const { result } = renderHook(() => useFiles('%1'))
+    act(() => result.current.load())
+    await waitFor(() => expect(result.current.dirs[''].entries).toBeDefined())
+    act(() => result.current.open('README.md'))
+    let r = ''
+    await act(async () => {
+      r = await result.current.follow({ path: 'docs/img' }, 0)
+    })
+    expect(r).toBe('opened')
+    expect(result.current.openPath).toBeNull()
+    expect(result.current.expanded).toEqual({ docs: true, 'docs/img': true })
+    await waitFor(() =>
+      expect(result.current.dirs['docs/img'].entries).toHaveLength(1),
+    )
+  })
+
+  it('the root itself closes the file', async () => {
+    const { result } = renderHook(() => useFiles('%1'))
+    act(() => result.current.open('README.md'))
+    await act(() => result.current.follow({ path: '' }, 0))
+    expect(result.current.openPath).toBeNull()
+    expect(mockTree).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['docs/missing.md', 'missing'],
+    ['nodir/a.md', 'missing'],
+    ['dev', 'failed'],
+  ])('%s is %s', async (path, want) => {
+    const { result } = renderHook(() => useFiles('%1'))
+    act(() => result.current.open('README.md'))
+    let r = ''
+    await act(async () => {
+      r = await result.current.follow({ path }, 0)
+    })
+    expect(r).toBe(want)
+    expect(result.current.openPath).toBe('README.md')
+  })
+
+  it('a directory that cannot be read fails', async () => {
+    mockTree.mockRejectedValue(new RequestError(403, '', 'x'))
+    const { result } = renderHook(() => useFiles('%1'))
+    let r = ''
+    await act(async () => {
+      r = await result.current.follow({ path: 'docs/a.md' }, 0)
+    })
+    expect(r).toBe('failed')
+  })
+
+  // A read of docs that answers when told to
+  function held() {
+    let answer: (v: unknown) => void = () => {}
+    mockTree.mockReturnValueOnce(
+      new Promise((res) => {
+        answer = res
+      }),
+    )
+    return (root = '/r') => answer(tree('docs', listing.docs, root))
+  }
+
+  it('tries once more when the root moves under the read', async () => {
+    const answer = held()
+    const { result } = renderHook(() => useFiles('%1'))
+    let pending: Promise<string> = Promise.resolve('')
+    act(() => {
+      pending = result.current.follow({ path: 'docs/guide.md' }, 0)
+    })
+    act(() => result.current.rootChanged('/new'))
+    answer()
+    let r = ''
+    await act(async () => {
+      r = await pending
+    })
+    expect(r).toBe('opened')
+    expect(mockTree).toHaveBeenLastCalledWith('%1', 'docs', '/new')
+    expect(result.current.openPath).toBe('docs/guide.md')
+  })
+
+  it('gives up when the root moves again', async () => {
+    const first = held()
+    const { result } = renderHook(() => useFiles('%1'))
+    let pending: Promise<string> = Promise.resolve('')
+    act(() => {
+      pending = result.current.follow({ path: 'docs/guide.md' }, 0)
+    })
+    act(() => result.current.rootChanged('/new'))
+    // The second try's read
+    const second = held()
+    await act(async () => first())
+    act(() => result.current.rootChanged('/newer'))
+    second('/new')
+    let r = ''
+    await act(async () => {
+      r = await pending
+    })
+    expect(r).toBe('stale')
+    expect(result.current.openPath).toBeNull()
+  })
+
+  it('a second tap on a link while it opens counts once', async () => {
+    const first = held()
+    const { result } = renderHook(() => useFiles('%1'))
+    act(() => result.current.open('README.md'))
+    const results: Promise<string>[] = []
+    act(() => {
+      results.push(result.current.follow({ path: 'docs/guide.md' }, 5))
+      results.push(result.current.follow({ path: 'docs/guide.md' }, 5))
+    })
+    await act(async () => {
+      first()
+      await Promise.all(results)
+    })
+    expect(await Promise.all(results)).toEqual(['stale', 'opened'])
+    expect(result.current.openPath).toBe('docs/guide.md')
+    expect(result.current.history).toEqual([
+      { path: 'README.md', scrollTop: 5 },
+    ])
+  })
+
+  it('Back while a link opens drops the link', async () => {
+    const answer = held()
+    const { result } = renderHook(() => useFiles('%1'))
+    act(() => result.current.open('README.md'))
+    let pending: Promise<string> = Promise.resolve('')
+    act(() => {
+      pending = result.current.follow({ path: 'docs/guide.md' }, 0)
+    })
+    act(() => result.current.back())
+    answer()
+    let r = ''
+    await act(async () => {
+      r = await pending
+    })
+    expect(r).toBe('stale')
+    expect(result.current.openPath).toBeNull()
+  })
+
+  it('followInFiles reaches the pane store from elsewhere', async () => {
+    const { result } = renderHook(() => useFiles('%1'))
+    await act(async () => {
+      expect(await followInFiles('%1', { path: 'docs/guide.md' })).toBe(
+        'opened',
+      )
+    })
+    expect(result.current.openPath).toBe('docs/guide.md')
+    // Nothing was open: no step back
+    expect(result.current.history).toEqual([])
+  })
+
+  it('followInFiles starts a new trail: Back goes to the tree', async () => {
+    const { result } = renderHook(() => useFiles('%1'))
+    act(() => result.current.open('README.md'))
+    await act(() => result.current.follow({ path: 'docs/img/a.png' }, 0))
+    await act(() => followInFiles('%1', { path: 'docs/guide.md' }))
+    expect(result.current.openPath).toBe('docs/guide.md')
+    expect(result.current.history).toEqual([])
   })
 })

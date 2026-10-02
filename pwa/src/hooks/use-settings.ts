@@ -25,6 +25,7 @@ export interface Settings {
   driveTerminalSize: boolean
   sidebarFilter: SidebarFilter // which sessions the sidebar lists
   sortBlockedFirst: boolean // sessions waiting on the user first in each group
+  markdownPreview: boolean // Files: Markdown rendered (else its source)
 }
 
 const DEFAULTS: Settings = {
@@ -40,6 +41,7 @@ const DEFAULTS: Settings = {
   driveTerminalSize: false,
   sidebarFilter: DEFAULT_SIDEBAR_FILTER,
   sortBlockedFirst: false,
+  markdownPreview: true,
 }
 
 // Listeners for useSyncExternalStore

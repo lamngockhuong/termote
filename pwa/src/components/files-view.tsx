@@ -6,16 +6,25 @@ import {
   FolderOpen,
   Lock,
 } from 'lucide-react'
-import { type KeyboardEvent, useEffect, useRef, useState } from 'react'
+import {
+  type KeyboardEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react'
 import type { ViewProps } from '../app-views'
 import {
   type FilesError,
   type FilesState,
+  FOLLOW_NOTICES,
   isDir,
+  isOpenable,
   joinPath,
   useFiles,
 } from '../hooks/use-files'
 import type { FileEntry } from '../hooks/use-mux-api'
+import type { LinkPath } from '../utils/markdown-links'
 import { FileViewer } from './file-viewer'
 import { PaneDirHeader, ViewMessage } from './pane-dir-header'
 import { FOCUS_RING } from './ui/button'
@@ -68,11 +77,6 @@ function visibleRows(s: FilesState, dir = '', level = 1): Row[] {
   return rows
 }
 
-// Neither a file nor a directory that can be opened: a device, a socket, a
-// symlink that is broken or leaves the root
-const openable = (e: FileEntry) =>
-  isDir(e) || e.type === 'file' || e.target === 'file'
-
 // Files: the pane's root as a tree, read one directory at a time, and the
 // file chosen from it. The same component is the mobile view and the desktop
 // panel.
@@ -90,7 +94,15 @@ function PaneFiles({
   notify,
 }: { paneId: string } & Pick<ViewProps, 'isMobile' | 'notify'>) {
   const f = useFiles(paneId)
-  const { load, rootChanges } = f
+  const { load, rootChanges, follow } = f
+
+  const onFollow = useCallback(
+    async (target: LinkPath, scrollTop: number) => {
+      const notice = FOLLOW_NOTICES[await follow(target, scrollTop)]
+      if (notice) notify(notice)
+    },
+    [follow, notify],
+  )
 
   useEffect(() => load(), [load])
 
@@ -118,7 +130,11 @@ function PaneFiles({
           root={f.root}
           path={f.openPath}
           wrapByDefault={isMobile}
-          onClose={() => f.open(null)}
+          anchor={f.openAnchor}
+          scrollTop={f.openScroll}
+          backTo={f.history[f.history.length - 1]?.path}
+          onClose={f.back}
+          onFollow={onFollow}
           onRootChanged={f.rootChanged}
           notify={notify}
         />
@@ -157,7 +173,7 @@ function FileTree({
 
   const activate = (r: Extract<Row, { kind: 'entry' }>) => {
     if (isDir(r.entry)) onToggle(r.path)
-    else if (openable(r.entry)) onOpen(r.path)
+    else if (isOpenable(r.entry)) onOpen(r.path)
   }
 
   const onKeyDown = (e: KeyboardEvent) => {
@@ -253,7 +269,7 @@ function TreeItem({
 }) {
   const { entry, level } = row
   const dir = isDir(entry)
-  const can = openable(entry)
+  const can = isOpenable(entry)
   const Icon = dir
     ? expanded
       ? FolderOpen

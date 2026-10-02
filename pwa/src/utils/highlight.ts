@@ -77,7 +77,15 @@ export function highlight(
   path: string,
   theme: 'light' | 'dark',
 ): Promise<Token[][] | null> {
-  const lang: LanguageId | undefined = languageFor(path)
+  return highlightLang(text, languageFor(path), theme)
+}
+
+// The same for text in a known language (a fenced code block)
+export function highlightLang(
+  text: string,
+  lang: LanguageId | undefined,
+  theme: 'light' | 'dark',
+): Promise<Token[][] | null> {
   const w = lang && canHighlight(text) ? getWorker() : undefined
   if (!lang || !w) return Promise.resolve(null)
   const id = ++nextId

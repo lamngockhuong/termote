@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ViewProps } from '../app-views'
 import { ThemeProvider } from '../contexts/theme-context'
 import { resetFilesStores } from '../hooks/use-files'
@@ -13,7 +13,11 @@ vi.mock('../hooks/use-mux-api', async (orig) => ({
   fetchFilesTree: (...a: unknown[]) => mockTree(...a),
   fetchFileContent: (...a: unknown[]) => mockContent(...a),
 }))
-vi.mock('../utils/highlight', () => ({ highlight: async () => null }))
+vi.mock('../utils/highlight', async (orig) => ({
+  ...(await orig<typeof import('../utils/highlight')>()),
+  highlight: async () => null,
+  highlightLang: async () => null,
+}))
 
 const e = (name: string, over: Partial<FileEntry> = {}): FileEntry => ({
   name,
@@ -73,7 +77,13 @@ const item = (name: string) =>
     name: new RegExp(`^${name.replace('.', '\\.')}`),
   })
 
+// The lazy Markdown renderer, loaded once up front: its first load can
+// outlast a find under coverage
+beforeAll(() => import('./markdown-preview'))
+
 beforeEach(() => {
+  localStorage.clear()
+  Element.prototype.scrollIntoView = vi.fn()
   resetFilesStores()
   mockContent.mockReset()
   mockTree.mockReset()
@@ -157,7 +167,7 @@ describe('FilesView', () => {
     })
     await show({ isMobile: true })
     fireEvent.click(item('README.md'))
-    expect(await screen.findByTestId('code-block')).toBeInTheDocument()
+    expect(await screen.findByTestId('markdown-preview')).toBeInTheDocument()
     expect(screen.queryByRole('tree')).toBeNull()
     // Mobile wraps at first
     expect(screen.getByRole('button', { name: 'Wrap lines' })).toHaveAttribute(
@@ -222,7 +232,7 @@ describe('FilesView', () => {
     expect(item('link')).toHaveAttribute('aria-expanded', 'true')
     key('End')
     key('Enter')
-    expect(await screen.findByTestId('code-block')).toBeInTheDocument()
+    expect(await screen.findByTestId('markdown-preview')).toBeInTheDocument()
   })
 
   it('a Show is not carried to the same path under a new root', async () => {
@@ -308,5 +318,35 @@ describe('FilesView', () => {
       </ThemeProvider>,
     )
     expect(p.notify).toHaveBeenCalledTimes(1)
+  })
+
+  it('follows the links of a Markdown file, and Back retraces them', async () => {
+    mockContent.mockImplementation(async (_p: string, path: string) => ({
+      root: '/home/kim/app',
+      path,
+      size: 3,
+      text:
+        path === 'README.md'
+          ? '[code](src/a.ts) [lib](src/lib/) [gone](nope.md) [fifo](fifo)'
+          : 'code',
+    }))
+    const p = await show()
+    fireEvent.click(item('README.md'))
+    fireEvent.click(await screen.findByRole('button', { name: 'code' }))
+    expect(await screen.findByTestId('code-block')).toHaveTextContent('code')
+    fireEvent.click(screen.getByRole('button', { name: 'Back to README.md' }))
+    expect(await screen.findByTestId('markdown-preview')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'gone' }))
+    await act(async () => {})
+    expect(p.notify).toHaveBeenCalledWith('Not found')
+    fireEvent.click(screen.getByRole('button', { name: 'fifo' }))
+    await act(async () => {})
+    expect(p.notify).toHaveBeenCalledWith("This link can't be opened")
+
+    fireEvent.click(screen.getByRole('button', { name: 'lib' }))
+    await act(async () => {})
+    expect(item('src')).toHaveAttribute('aria-expanded', 'true')
+    expect(item('lib')).toHaveAttribute('aria-expanded', 'true')
   })
 })

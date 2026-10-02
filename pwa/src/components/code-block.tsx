@@ -36,7 +36,7 @@ const ITALIC = 1
 const BOLD = 2
 const UNDERLINE = 4
 
-function tokenStyle([, color, font = 0]: Token): CSSProperties {
+export function tokenStyle([, color, font = 0]: Token): CSSProperties {
   return {
     color,
     fontStyle: font & ITALIC ? 'italic' : undefined,

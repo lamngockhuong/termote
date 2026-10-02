@@ -400,7 +400,14 @@ view-only role (#236) will be enforced.
 (`use-git-changes.ts`, polled every 5 s while a view shows it and the page is visible, backing
 off to a minute on errors), shared by the mobile view and the desktop panel. Highlighting runs
 in a worker with a 3 s timeout and only for files up to 256 KiB, 5000 lines and 2000 characters
-a line; tokens are rendered as spans, never as HTML.
+a line; tokens are rendered as spans, never as HTML. A Markdown file (`.md`, `.markdown`, `.mdx`,
+up to 256 KiB) is previewed by `markdown-preview.tsx` (lazy chunk): the Chat view's rules
+(`utils/markdown-safety.ts`: raw HTML as text, only http(s) links leave the app, no image
+loads), fenced code through the same worker, and relative links resolved client side by
+`utils/markdown-links.ts` against the file's directory (a leading `/` is the root); a path that
+would leave the root is never built, so never requested. Following a link reads the target's
+parent directory to tell file from folder; the files store keeps a Back trail with scroll
+offsets. Changes previews the working-tree version of a changed Markdown file the same way.
 
 ## Deployment Modes
 

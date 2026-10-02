@@ -1,9 +1,12 @@
 import { Lock } from 'lucide-react'
-import { type ReactNode, useEffect, useRef, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import type { ViewProps } from '../app-views'
+import { FOLLOW_NOTICES, followInFiles } from '../hooks/use-files'
 import { type ChangesError, useGitChanges } from '../hooks/use-git-changes'
 import type { ChangeEntry } from '../hooks/use-mux-api'
 import { splitPath } from '../utils/files-format'
+import type { LinkPath } from '../utils/markdown-links'
+import { FILES_VIEW_ID } from '../view-ids'
 import { DiffViewer } from './diff-viewer'
 import { PaneDirHeader, ViewMessage } from './pane-dir-header'
 import { Banner } from './ui/banner'
@@ -89,10 +92,20 @@ function groups(entries: ChangeEntry[]): [string, Item[]][] {
 // Changes: what git status reports under the pane's root, grouped, and the
 // diff of the file chosen. The same component is the mobile view and the
 // desktop panel.
-export function ChangesView({ session, isMobile, notify }: ViewProps) {
+export function ChangesView({
+  session,
+  isMobile,
+  notify,
+  showView,
+}: ViewProps) {
   if (!session.paneId) return <ViewMessage>Loading…</ViewMessage>
   return (
-    <PaneChanges paneId={session.paneId} isMobile={isMobile} notify={notify} />
+    <PaneChanges
+      paneId={session.paneId}
+      isMobile={isMobile}
+      notify={notify}
+      showView={showView}
+    />
   )
 }
 
@@ -100,7 +113,8 @@ function PaneChanges({
   paneId,
   isMobile,
   notify,
-}: { paneId: string } & Pick<ViewProps, 'isMobile' | 'notify'>) {
+  showView,
+}: { paneId: string } & Pick<ViewProps, 'isMobile' | 'notify' | 'showView'>) {
   const c = useGitChanges(paneId)
   const [selected, setSelected] = useState<Selected | null>(null)
   const [reload, setReload] = useState(0)
@@ -111,6 +125,17 @@ function PaneChanges({
       notify("The pane's directory changed")
     seenChanges.current = c.rootChanges
   }, [c.rootChanges, notify])
+
+  // A link of a previewed file opens in the Files view
+  const follow = useCallback(
+    async (target: LinkPath) => {
+      const result = await followInFiles(paneId, target)
+      if (result === 'opened') showView(FILES_VIEW_ID)
+      const notice = FOLLOW_NOTICES[result]
+      if (notice) notify(notice)
+    },
+    [paneId, showView, notify],
+  )
 
   const refresh = () => {
     c.refresh()
@@ -133,6 +158,8 @@ function PaneChanges({
         reload={reload}
         onClose={() => setSelected(null)}
         onRootChanged={c.rootChanged}
+        onFollow={follow}
+        notify={notify}
       />
     )
   } else if (!c.loaded) {

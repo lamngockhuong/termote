@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { TranscriptEntry } from '../hooks/use-mux-api'
-import { ChatMessage, safeUrl } from './chat-message'
+import { ChatMessage } from './chat-message'
 
 const assistant = (text: string): TranscriptEntry => ({
   id: 'a',
@@ -244,15 +244,5 @@ describe('ChatMessage', () => {
     const link = screen.getByRole('link', { name: 'image: example.com' })
     expect(link).toHaveAttribute('href', 'https://example.com/image.jpg')
     fetchSpy.mockRestore()
-  })
-})
-
-describe('safeUrl', () => {
-  it('accepts http(s) URLs only', () => {
-    expect(safeUrl('https://a.example/x')?.host).toBe('a.example')
-    expect(safeUrl('http://a.example')).not.toBeNull()
-    expect(safeUrl('javascript:alert(1)')).toBeNull()
-    expect(safeUrl('not a url')).toBeNull()
-    expect(safeUrl(undefined)).toBeNull()
   })
 })

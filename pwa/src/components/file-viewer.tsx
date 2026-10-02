@@ -1,16 +1,36 @@
-import { ArrowLeft, Copy, Lock, WrapText } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { ArrowLeft, Copy, Eye, Lock, WrapText } from 'lucide-react'
+import { type ComponentProps, lazy, Suspense, useEffect, useState } from 'react'
 import { type FilesError, filesError } from '../hooks/use-files'
 import {
   type FileContent,
   fetchFileContent,
   RequestError,
 } from '../hooks/use-mux-api'
+import { useSettings } from '../hooks/use-settings'
 import { formatSize, keepOrder, TRUNCATE_START } from '../utils/files-format'
+import { HIGHLIGHT_MAX_BYTES } from '../utils/highlight'
+import { isMarkdownPath, type LinkPath } from '../utils/markdown-links'
 import { CodeBlock } from './code-block'
 import { ViewMessage } from './pane-dir-header'
+import { Banner } from './ui/banner'
 import { IconButton } from './ui/button'
 import { ConfirmDialog } from './ui/confirm-dialog'
+
+// The markdown renderer: loaded the first time a Markdown file is previewed
+const MarkdownPreview = lazy(() => import('./markdown-preview'))
+
+export function LazyMarkdownPreview(
+  props: ComponentProps<typeof MarkdownPreview>,
+) {
+  return (
+    <Suspense fallback={<ViewMessage>Loading…</ViewMessage>}>
+      <MarkdownPreview {...props} />
+    </Suspense>
+  )
+}
+
+// Beyond this a Markdown file is shown as its source
+export const PREVIEW_MAX_BYTES = HIGHLIGHT_MAX_BYTES
 
 type Loaded =
   | { kind: 'loading' }
@@ -38,7 +58,15 @@ interface Props {
   path: string
   // Wrap long lines at first (mobile)
   wrapByDefault: boolean
+  // Where a Markdown preview starts: a heading, else an offset to restore
+  anchor?: string
+  scrollTop?: number
+  // The file a link was followed from, which Back returns to
+  backTo?: string
+  // Back: to backTo, else to the tree
   onClose: () => void
+  // A link of the preview to another file or a directory
+  onFollow: (target: LinkPath, scrollTop: number) => void
   onRootChanged: (root: string) => void
   notify: (message: string) => void
 }
@@ -52,13 +80,27 @@ export function FileViewer({
   root,
   path,
   wrapByDefault,
+  anchor,
+  scrollTop,
+  backTo,
   onClose,
+  onFollow,
   onRootChanged,
   notify,
 }: Props) {
   const [state, setState] = useState<Loaded>({ kind: 'loading' })
   const [reveal, setReveal] = useState(false)
   const [wrap, setWrap] = useState(wrapByDefault)
+  const { settings, updateSetting } = useSettings()
+  // Markdown that can be previewed: the choice (remembered on this device)
+  // says how it shows
+  const markdown = isMarkdownPath(path)
+  const tooLarge = state.kind === 'text' && state.size > PREVIEW_MAX_BYTES
+  const canPreview = markdown && state.kind === 'text' && !tooLarge
+  const preview = canPreview && settings.markdownPreview
+  const back = backTo
+    ? `Back to ${backTo.slice(backTo.lastIndexOf('/') + 1)}`
+    : 'Back to files'
 
   useEffect(() => {
     let live = true
@@ -92,12 +134,7 @@ export function FileViewer({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="sticky top-0 z-10 flex shrink-0 items-center gap-1 border-b border-border bg-surface px-1 py-1 ui-terminal:bg-bg">
-        <IconButton
-          size="sm"
-          onClick={onClose}
-          aria-label="Back to files"
-          title="Back to files"
-        >
+        <IconButton size="sm" onClick={onClose} aria-label={back} title={back}>
           <ArrowLeft size={16} aria-hidden="true" />
         </IconButton>
         <div className="flex min-w-0 flex-1 flex-col">
@@ -121,6 +158,18 @@ export function FileViewer({
         >
           <Copy size={15} aria-hidden="true" />
         </IconButton>
+        {canPreview && (
+          <IconButton
+            size="sm"
+            onClick={() => updateSetting('markdownPreview', !preview)}
+            aria-label="Preview"
+            aria-pressed={preview}
+            title={preview ? 'Show the source' : 'Show the preview'}
+            className={preview ? 'text-accent' : ''}
+          >
+            <Eye size={15} aria-hidden="true" />
+          </IconButton>
+        )}
         <IconButton
           size="sm"
           onClick={() => setWrap((w) => !w)}
@@ -132,8 +181,24 @@ export function FileViewer({
           <WrapText size={15} aria-hidden="true" />
         </IconButton>
       </div>
-      {state.kind === 'text' && (
-        <CodeBlock text={state.text} path={path} wrap={wrap} />
+      {state.kind === 'text' && preview && (
+        <LazyMarkdownPreview
+          text={state.text}
+          path={path}
+          wrap={wrap}
+          anchor={anchor}
+          scrollTop={scrollTop}
+          onFollow={onFollow}
+          notify={notify}
+        />
+      )}
+      {state.kind === 'text' && !preview && (
+        <>
+          {markdown && tooLarge && (
+            <Banner>Too large to preview: shown as source</Banner>
+          )}
+          <CodeBlock text={state.text} path={path} wrap={wrap} />
+        </>
       )}
       {state.kind === 'loading' && <ViewMessage>Loading…</ViewMessage>}
       {state.kind === 'unpreviewable' && (

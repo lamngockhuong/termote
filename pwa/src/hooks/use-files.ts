@@ -1,4 +1,5 @@
 import { useCallback, useSyncExternalStore } from 'react'
+import type { LinkPath } from '../utils/markdown-links'
 import {
   type FileEntry,
   type FilesTree,
@@ -43,6 +44,11 @@ export interface FilesState {
   expanded: Record<string, boolean>
   // The file shown instead of the tree
   openPath: string | null
+  // Where the open file starts: a heading, or the offset it was left at
+  openAnchor?: string
+  openScroll?: number
+  // Files left by following a link, the latest last: Back returns to them
+  history: { path: string; scrollTop: number }[]
   // Bumped each time the pane's root moves while the view is open
   rootChanges: number
 }
@@ -52,6 +58,7 @@ const INITIAL: FilesState = {
   dirs: {},
   expanded: {},
   openPath: null,
+  history: [],
   rootChanges: 0,
 }
 
@@ -61,6 +68,20 @@ export const joinPath = (dir: string, name: string) =>
 // A directory, or a symlink inside the root that leads to one
 export const isDir = (e: FileEntry) => e.type === 'dir' || e.target === 'dir'
 
+// Neither a file nor a directory that can be opened: a device, a socket, a
+// symlink that is broken or leaves the root
+export const isOpenable = (e: FileEntry) =>
+  isDir(e) || e.type === 'file' || e.target === 'file'
+
+// What following a link did. 'stale': the root moved meanwhile, nothing done
+export type FollowResult = 'opened' | 'missing' | 'failed' | 'stale'
+
+// What to tell the user when a link went nowhere
+export const FOLLOW_NOTICES: Partial<Record<FollowResult, string>> = {
+  missing: 'Not found',
+  failed: "This link can't be opened",
+}
+
 interface Store {
   get: () => FilesState
   subscribe: (fn: () => void) => () => void
@@ -68,7 +89,17 @@ interface Store {
   load: () => void
   toggle: (path: string) => void
   refresh: () => void
+  // Opens a file from the tree (or closes it): a new trail of links
   open: (path: string | null) => void
+  // Follows a link of the open file (left at scrollTop): a file opens, a
+  // directory shows in the tree, opened
+  follow: (
+    target: LinkPath,
+    scrollTop: number,
+    fresh?: boolean,
+  ) => Promise<FollowResult>
+  // Back to the file a link was followed from, else to the tree
+  back: () => void
   // Another request saw the root move to root
   rootChanged: (root: string) => void
 }
@@ -112,6 +143,67 @@ function createStore(paneId: string): Store {
     })
   }
 
+  function open(openPath: string | null) {
+    set({ openPath, openAnchor: undefined, openScroll: undefined, history: [] })
+  }
+
+  // A link of the open file (left at scrollTop) to target. fresh: followed
+  // from another view, so the file open here is not a step to go back to.
+  async function follow(
+    target: LinkPath,
+    scrollTop: number,
+    fresh = false,
+    retried = false,
+  ): Promise<FollowResult> {
+    const gen = generation
+    const from = state.openPath
+    const at = target.path.lastIndexOf('/')
+    const parent = at < 0 ? '' : target.path.slice(0, at)
+    const name = target.path.slice(at + 1)
+    // The root itself
+    if (!name) {
+      open(null)
+      return 'opened'
+    }
+    // Read again: the listing says what the path is now
+    await read(parent)
+    // The user moved on meanwhile (another link, Back): this one is dropped
+    if (state.openPath !== from) return 'stale'
+    // The root moved under the read: once more, from the new root
+    if (gen !== generation)
+      return retried ? 'stale' : follow(target, scrollTop, fresh, true)
+    const dir = state.dirs[parent]
+    if (!dir.entries) return dir.error === 'not-found' ? 'missing' : 'failed'
+    const entry = dir.entries.find((e) => e.name === name)
+    if (!entry) return 'missing'
+    if (!isOpenable(entry)) return 'failed'
+    if (isDir(entry)) {
+      // The tree, with the directory and every one above it open
+      const expanded = { ...state.expanded }
+      const parts = target.path.split('/')
+      for (let i = 1; i <= parts.length; i++)
+        expanded[parts.slice(0, i).join('/')] = true
+      open(null)
+      set({ expanded })
+      for (const path of Object.keys(expanded)) {
+        const d = state.dirs[path]
+        if (!d || d.error) read(path)
+      }
+      return 'opened'
+    }
+    set({
+      openPath: target.path,
+      openAnchor: target.anchor,
+      openScroll: undefined,
+      history: fresh
+        ? []
+        : from
+          ? [...state.history, { path: from, scrollTop }]
+          : state.history,
+    })
+    return 'opened'
+  }
+
   // The tree starts again from the new root; an open file stays open, and
   // shows what the same path holds there.
   function rootChanged(root: string) {
@@ -148,8 +240,20 @@ function createStore(paneId: string): Store {
     refresh() {
       for (const path of ['', ...Object.keys(state.expanded)]) read(path)
     },
-    open(openPath) {
-      set({ openPath })
+    open,
+    follow,
+    back() {
+      const prev = state.history[state.history.length - 1]
+      if (!prev) {
+        open(null)
+        return
+      }
+      set({
+        openPath: prev.path,
+        openAnchor: undefined,
+        openScroll: prev.scrollTop,
+        history: state.history.slice(0, -1),
+      })
     },
     rootChanged,
   }
@@ -176,8 +280,19 @@ export function useFiles(paneId: string) {
     toggle: useCallback((p: string) => store.toggle(p), [store]),
     refresh: useCallback(() => store.refresh(), [store]),
     open: useCallback((p: string | null) => store.open(p), [store]),
+    follow: useCallback(
+      (t: LinkPath, scrollTop: number) => store.follow(t, scrollTop),
+      [store],
+    ),
+    back: useCallback(() => store.back(), [store]),
     rootChanged: useCallback((r: string) => store.rootChanged(r), [store]),
   }
+}
+
+// Follows a link into the Files view of paneId from elsewhere (the Changes
+// view's preview)
+export function followInFiles(paneId: string, target: LinkPath) {
+  return storeFor(paneId).follow(target, 0, true)
 }
 
 // For tests: forget every store.
