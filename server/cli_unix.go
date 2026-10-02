@@ -154,3 +154,25 @@ func restrictToOwner(string) error { return nil }
 
 // hideConsole is for the Windows Scheduled Task; Unix has no window.
 func hideConsole() {}
+
+// readKeyRaw reads one byte from the terminal with line buffering and echo
+// off, so a key acts without Enter; Ctrl-C arrives as byte 3.
+func readKeyRaw(f *os.File) (byte, error) {
+	fd := int(f.Fd())
+	old, err := unix.IoctlGetTermios(fd, ioctlGetTermios)
+	if err != nil {
+		return 0, err
+	}
+	raw := *old
+	raw.Lflag &^= unix.ECHO | unix.ICANON | unix.ISIG
+	raw.Cc[unix.VMIN], raw.Cc[unix.VTIME] = 1, 0
+	if err := unix.IoctlSetTermios(fd, ioctlSetTermios, &raw); err != nil {
+		return 0, err
+	}
+	defer unix.IoctlSetTermios(fd, ioctlSetTermios, old)
+	var b [1]byte
+	if _, err := f.Read(b[:]); err != nil {
+		return 0, err
+	}
+	return b[0], nil
+}

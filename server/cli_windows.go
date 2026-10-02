@@ -184,3 +184,23 @@ func hideConsole() {
 		procShowWindow.Call(hwnd, swHide)
 	}
 }
+
+// readKeyRaw reads one byte from the console with line input, echo and
+// Ctrl-C processing off, so a key acts without Enter; Ctrl-C arrives as 3.
+func readKeyRaw(f *os.File) (byte, error) {
+	h := windows.Handle(f.Fd())
+	var mode uint32
+	if err := windows.GetConsoleMode(h, &mode); err != nil {
+		return 0, err
+	}
+	raw := mode &^ (windows.ENABLE_LINE_INPUT | windows.ENABLE_ECHO_INPUT | windows.ENABLE_PROCESSED_INPUT)
+	if err := windows.SetConsoleMode(h, raw); err != nil {
+		return 0, err
+	}
+	defer windows.SetConsoleMode(h, mode)
+	var b [1]byte
+	if _, err := f.Read(b[:]); err != nil {
+		return 0, err
+	}
+	return b[0], nil
+}

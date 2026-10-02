@@ -22,6 +22,7 @@ type fakeRunner struct {
 	outputs map[string]string // Output results
 	fail    map[string]bool   // Run/Output fail for these
 	calls   []string
+	inputs  []string // stdin of RunQuiet calls
 	// onOutput, when set, answers Output calls not in outputs (commands
 	// with generated arguments such as temp file names).
 	onOutput func(argv, env []string) (string, bool)
@@ -65,6 +66,17 @@ func (f *fakeRunner) Output(dir string, env []string, name string, args ...strin
 
 func (f *fakeRunner) Run(dir string, env []string, name string, args ...string) error {
 	key := f.record(name, args)
+	if f.fail[key] {
+		return errors.New("fake: " + key + " failed")
+	}
+	return nil
+}
+
+func (f *fakeRunner) RunQuiet(input string, name string, args ...string) error {
+	key := f.record(name, args)
+	f.mu.Lock()
+	f.inputs = append(f.inputs, input)
+	f.mu.Unlock()
 	if f.fail[key] {
 		return errors.New("fake: " + key + " failed")
 	}

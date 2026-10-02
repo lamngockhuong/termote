@@ -9,3 +9,5 @@ require (
 	github.com/creack/pty v1.1.24
 	golang.org/x/sys v0.48.0
 )
+
+require rsc.io/qr v0.2.0
