@@ -295,6 +295,23 @@ export async function fetchAgentPrompt(
   return (await res.json()).prompt
 }
 
+// A custom command or skill of the pane's project or its user, as listed by
+// /agent/commands: never the file's body.
+export interface AgentCommand {
+  name: string
+  description?: string
+  source: 'project' | 'user'
+  kind: 'command' | 'skill'
+}
+
+export async function fetchAgentCommands(
+  paneId: string,
+): Promise<AgentCommand[]> {
+  const res = await fetch(agentPath(paneId, 'commands'))
+  if (!res.ok) throw await requestError(res)
+  return (await res.json()).commands ?? []
+}
+
 // An answer to the dialog promptId names: an option's number, Escape, Right
 // on a multiSelect tab, another tab of a question in several parts, or text
 // typed into the question's free-text option

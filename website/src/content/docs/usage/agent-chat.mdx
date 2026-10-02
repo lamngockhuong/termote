@@ -48,6 +48,31 @@ the message is refused and the pane gets no key at all:
 
 Every refusal that leaves something to check offers **Open terminal**.
 
+## Slash Commands
+
+Type `/` at the start of a message and a list of commands opens above the box. Keep typing to
+narrow it: names that start with what you typed come first, then any whose name or description
+contains it. Each row shows where the command comes from:
+
+- `built-in`: Claude Code's own commands, with `/exit` first.
+- `project`: `.claude/commands/` and `.claude/skills/` in the pane's project (the folder the
+  Files view shows).
+- `user`: `commands/` and `skills/` in your Claude config dir (`~/.claude`, or
+  `CLAUDE_CONFIG_DIR`). Skills carry a `skill` tag as well.
+
+Tap a row, or press Enter or Tab, and the box becomes `/name ` so you can type arguments; it is
+not sent until you send it. The arrow keys move through the list and Escape closes it, as does a
+space after the name.
+
+A few commands open a screen the Chat view cannot drive, such as `/model`, `/config`,
+`/permissions`, `/resume` and `/mcp`. They are marked `opens in Terminal`: picking one sends it
+and switches to the terminal. `/exit` asks before it is sent, since it ends Claude Code; the app
+then goes back to the terminal.
+
+Only names and descriptions are read, never what a command contains. A skill or command that is
+a symlink to a folder outside the project or the config dir is not listed, and neither are
+plugin commands nor MCP prompts. Any command can still be typed in full.
+
 ## Answering Dialogs
 
 When Claude Code asks for permission or asks a single-choice question (up to nine options), a

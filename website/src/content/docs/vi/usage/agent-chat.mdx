@@ -47,6 +47,31 @@ chối và pane không nhận phím nào:
 
 Lần từ chối nào cần bạn kiểm tra lại đều có nút **Open terminal**.
 
+## Lệnh slash
+
+Gõ `/` ở đầu tin nhắn, một danh sách lệnh mở ra phía trên ô nhập. Gõ tiếp để thu hẹp: lệnh có
+tên bắt đầu bằng chữ bạn gõ đứng trước, sau đó là lệnh có chữ đó trong tên hoặc phần mô tả. Mỗi
+dòng ghi lệnh lấy từ đâu:
+
+- `built-in`: lệnh sẵn có của Claude Code, `/exit` đứng đầu.
+- `project`: `.claude/commands/` và `.claude/skills/` trong dự án của pane (thư mục mà Files
+  view hiển thị).
+- `user`: `commands/` và `skills/` trong thư mục cấu hình Claude của bạn (`~/.claude`, hoặc
+  `CLAUDE_CONFIG_DIR`). Skill có thêm nhãn `skill`.
+
+Chạm vào một dòng, hoặc bấm Enter hay Tab, ô nhập sẽ thành `/name ` để bạn gõ tham số; tin chỉ
+được gửi khi bạn bấm gửi. Phím mũi tên di chuyển trong danh sách, Escape đóng danh sách, gõ dấu
+cách sau tên lệnh cũng vậy.
+
+Vài lệnh mở một màn hình mà Chat view không điều khiển được, như `/model`, `/config`,
+`/permissions`, `/resume` và `/mcp`. Các lệnh này có nhãn `opens in Terminal`: chọn là lệnh
+được gửi đi và app chuyển sang terminal. `/exit` hỏi lại trước khi gửi vì nó tắt Claude Code;
+sau đó app quay về terminal.
+
+Termote chỉ đọc tên và mô tả, không bao giờ đọc nội dung lệnh. Skill hoặc lệnh là liên kết tượng trưng trỏ
+ra ngoài dự án hay ngoài thư mục cấu hình sẽ không được liệt kê; lệnh của plugin và MCP prompt
+cũng vậy. Lệnh nào cũng vẫn gõ đầy đủ được.
+
 ## Trả lời hộp thoại
 
 Khi Claude Code xin quyền hoặc hỏi một câu chọn một đáp án (tối đa chín lựa chọn), một thẻ thay

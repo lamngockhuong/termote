@@ -226,9 +226,10 @@ func buildServer(cfg serveConfig, m Mux) (http.Handler, *streamHub, error) {
 	allowed := parseAllowedHosts(cfg.AllowedHosts, cfg.AllowLocalAddr)
 	hub := newStreamHub(maxStreams)
 
-	registerMuxRoutes(mux, m, tokenStore)
+	agent := registerMuxRoutes(mux, m, tokenStore)
 	registerStreamRoutes(mux, m, tokenStore, allowed, hub)
-	registerFilesRoutes(mux, m, allowed, cfg.FilesDenyDirs)
+	files := registerFilesRoutes(mux, m, allowed, cfg.FilesDenyDirs)
+	agent.registerCommandsRoute(mux, files, allowed)
 	// Unknown /api/ paths get JSON 404 instead of the SPA fallback.
 	mux.HandleFunc("/api/", apiNotFound)
 

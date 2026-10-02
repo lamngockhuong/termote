@@ -182,6 +182,7 @@ GET    /api/mux/panes/{id}/agent/transcript?cursor=&before=     → {agent, sess
 POST   /api/mux/panes/{id}/agent/message  body: {text, cursor}  → 204
 GET    /api/mux/panes/{id}/agent/prompt                          → {prompt: null | {promptId, kind, title, body, options, steps, freeText}}
 POST   /api/mux/panes/{id}/agent/answer   body: {promptId, choice} → 204
+GET    /api/mux/panes/{id}/agent/commands                        → {commands: [{name, description, source, kind}]}
 GET    /api/mux/panes/{id}/files/tree?path=&root=               → {root, isRepo, path, entries, truncated}
 GET    /api/mux/panes/{id}/files/content?path=&root=&reveal=    → {root, path, size, text} | {…, previewable: false, reason} | {…, sensitive: true}
 GET    /api/mux/panes/{id}/files/changes?root=                  → {root, isRepo, branch, entries, truncated}
@@ -229,6 +230,22 @@ dropped from the entries. When the cursor names another session or a file that w
 the server reads the end of the current file again and answers `reset: true`: the entries
 replace what the client holds (a `/clear` or a resume changed the session). Reads are shared
 between clients through a 500 ms cache per pane.
+
+**Custom commands.** `commands` lists the slash commands and skills the Chat composer
+suggests after `/`, next to Claude Code's built-ins (a static list in the PWA,
+`pwa/src/utils/slash-commands.ts`). It reads `.claude/commands/**/*.md` and
+`.claude/skills/*/SKILL.md` under the pane's root (the Files view's root; none on a backend
+without pane directories, or a root in a denied dir), then `commands/` and `skills/` in the
+session's Claude config dir, each opened as an `os.Root`, so a symlink leading out of it is not
+followed. A file that is itself a symlink is never read (inside the root it could still name
+`.env`), symlinked dirs under `commands/` are not walked, and a file the files routes would
+refuse (a denied dir, a sensitive name) is skipped. A command in a subdirectory is named `dir:name`; a skill takes its front matter `name`,
+else its directory, and one with `user-invocable: false` is left out. Only the first 8 KB of a
+file is read, for the front matter `description` or else the first line, clipped to 200
+characters: the body never leaves the server. At most 500 entries per dir and 5000 dir entries
+looked at, `commands/` walked 4 levels deep; a name met twice keeps the first (project before user). It is a GET, so it checks
+`Sec-Fetch-Site`/`Origin` itself like the files routes, and answers 404 without an agent session.
+Results are cached 5 s per root and config dir.
 
 **Writes: only on positive evidence.** The two POST routes pass the Host allowlist, auth and
 `writeGuard` like every other write. Each then takes a lock on the pane, re-reads the session

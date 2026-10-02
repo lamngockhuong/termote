@@ -234,6 +234,11 @@ type agentAPI struct {
 	sessions *ttlCache[agentLookup]
 	reads    *ttlCache[transcriptResponse]
 	input    *agentInput
+	// Set by registerCommandsRoute: the files routes' pane roots, the host
+	// allowlist and the custom command listings.
+	files    *filesAPI
+	allowed  hostAllowlist
+	commands *ttlCache[commandsResponse]
 }
 
 type agentLookup struct {

@@ -1,7 +1,11 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ViewProps } from '../app-views'
-import { type AgentPrompt, AgentRequestError } from '../hooks/use-mux-api'
+import {
+  type AgentCommand,
+  type AgentPrompt,
+  AgentRequestError,
+} from '../hooks/use-mux-api'
 import { byteLength, ChatComposer, MAX_MESSAGE_BYTES } from './chat-composer'
 
 const transcript = {
@@ -38,6 +42,17 @@ vi.mock('../hooks/use-agent-transcript', () => ({
     refresh: transcript.refresh,
     loadOlder: vi.fn(),
   }),
+}))
+
+const commandsStore = {
+  enabled: false,
+  list: [] as AgentCommand[],
+}
+vi.mock('../hooks/use-agent-commands', () => ({
+  useAgentCommands: (_pane: string, enabled: boolean) => {
+    commandsStore.enabled = enabled
+    return commandsStore.list
+  },
 }))
 
 const mockSend = vi.fn()
@@ -88,6 +103,8 @@ beforeEach(() => {
   promptStore.loaded = true
   mockAnswerPrompt.mockResolvedValue(undefined)
   mockSend.mockResolvedValue(undefined)
+  commandsStore.enabled = false
+  commandsStore.list = []
 })
 
 describe('ChatComposer', () => {
@@ -496,5 +513,224 @@ describe('ChatComposer', () => {
     expect(
       container.querySelector('[aria-live="polite"].sr-only'),
     ).toHaveTextContent('Claude Code asks: a question')
+  })
+
+  describe('slash commands', () => {
+    const options = () => screen.queryAllByRole('option')
+    const names = () =>
+      options().map((o) => o.querySelector('span span')?.textContent)
+    const key = (k: string, init: Partial<KeyboardEventInit> = {}) =>
+      fireEvent.keyDown(box(), { key: k, ...init })
+
+    it('opens on "/" at the start, filters and picks without sending', async () => {
+      render(<ChatComposer {...props()} />)
+      expect(screen.queryByRole('listbox')).toBeNull()
+      expect(commandsStore.enabled).toBe(false)
+      type('/')
+      expect(commandsStore.enabled).toBe(true)
+      expect(names()[0]).toBe('/exit')
+      expect(box()).toHaveAttribute(
+        'aria-controls',
+        screen.getByRole('listbox').id,
+      )
+      expect(box()).toHaveAttribute('aria-activedescendant', options()[0].id)
+      type('/comp')
+      expect(names()).toEqual(['/compact'])
+      const raf = vi
+        .spyOn(window, 'requestAnimationFrame')
+        .mockImplementation((cb) => {
+          cb(0)
+          return 0
+        })
+      key('Enter')
+      raf.mockRestore()
+      expect(box()).toHaveValue('/compact ')
+      expect((box() as HTMLTextAreaElement).selectionStart).toBe(9)
+      expect(screen.queryByRole('listbox')).toBeNull()
+      expect(mockSend).not.toHaveBeenCalled()
+      // Enter is a new line again once arguments are being typed
+      key('Enter')
+      expect(mockSend).not.toHaveBeenCalled()
+    })
+
+    it('not in the middle of a message; a space or a new line closes it', () => {
+      render(<ChatComposer {...props()} />)
+      type('hello /comp')
+      expect(screen.queryByRole('listbox')).toBeNull()
+      type('/compact ')
+      expect(screen.queryByRole('listbox')).toBeNull()
+      type('/compact\n')
+      expect(screen.queryByRole('listbox')).toBeNull()
+    })
+
+    it('arrow keys move and wrap; Tab picks the highlighted row', () => {
+      render(<ChatComposer {...props()} />)
+      type('/co')
+      const n = options().length
+      expect(n).toBeGreaterThan(3)
+      key('ArrowUp')
+      expect(options()[n - 1]).toHaveAttribute('aria-selected', 'true')
+      key('ArrowDown')
+      expect(options()[0]).toHaveAttribute('aria-selected', 'true')
+      key('ArrowDown')
+      key('ArrowDown')
+      expect(options()[2]).toHaveAttribute('aria-selected', 'true')
+      expect(names()[2]).toBe('/context')
+      key('Tab')
+      expect(box()).toHaveValue('/context ')
+    })
+
+    it('Shift+Enter is a new line, Ctrl+Enter sends, with the list open', async () => {
+      render(<ChatComposer {...props()} />)
+      type('/comp')
+      key('Enter', { shiftKey: true })
+      expect(box()).toHaveValue('/comp')
+      await act(async () => {
+        key('Enter', { ctrlKey: true })
+      })
+      expect(mockSend).toHaveBeenCalledWith('%3', '/comp', 'cur1')
+    })
+
+    it('Escape closes it until the "/" is gone', () => {
+      render(<ChatComposer {...props()} />)
+      type('/co')
+      key('Escape')
+      expect(screen.queryByRole('listbox')).toBeNull()
+      expect(box()).not.toHaveAttribute('aria-activedescendant')
+      type('/com')
+      expect(screen.queryByRole('listbox')).toBeNull()
+      type('')
+      type('/')
+      expect(screen.getByRole('listbox')).toBeTruthy()
+      // Escape with the list closed does nothing special
+      type('x')
+      key('Escape')
+    })
+
+    it('says when nothing matches, and the keys do nothing then', () => {
+      render(<ChatComposer {...props()} />)
+      type('/zzzz')
+      expect(screen.getByText('No matching command')).toBeTruthy()
+      expect(box()).not.toHaveAttribute('aria-controls')
+      key('Enter')
+      expect(box()).toHaveValue('/zzzz')
+    })
+
+    it('lists the project and user commands after the built-ins, tapped to pick', () => {
+      commandsStore.list = [
+        {
+          name: 'deploy',
+          description: 'Ship it',
+          source: 'project',
+          kind: 'command',
+        },
+        { name: 'compact', description: 'mine', source: 'user', kind: 'skill' },
+      ]
+      render(<ChatComposer {...props({ isMobile: true })} />)
+      type('/dep')
+      expect(names()).toEqual(['/deploy'])
+      type('/compact')
+      // The built-in wins over a custom command of the same name
+      expect(options()).toHaveLength(1)
+      expect(options()[0].textContent).toContain('built-in')
+      type('/dep')
+      fireEvent.click(options()[0])
+      expect(box()).toHaveValue('/deploy ')
+    })
+
+    it('on a phone Enter picks while the list is open', () => {
+      render(<ChatComposer {...props({ isMobile: true })} />)
+      type('/comp')
+      key('Enter')
+      expect(box()).toHaveValue('/compact ')
+    })
+
+    it('another agent gets no Claude Code built-ins', () => {
+      commandsStore.list = [{ name: 'mine', source: 'user', kind: 'command' }]
+      const p = props()
+      render(
+        <ChatComposer {...p} session={{ ...p.session, agentName: 'codex' }} />,
+      )
+      type('/')
+      expect(names()).toEqual(['/mine'])
+    })
+
+    it('a session without an agent name gets no built-ins either', () => {
+      commandsStore.list = [{ name: 'mine', source: 'user', kind: 'command' }]
+      const p = props()
+      render(
+        <ChatComposer
+          {...p}
+          session={{ ...p.session, agentName: undefined }}
+        />,
+      )
+      type('/')
+      expect(names()).toEqual(['/mine'])
+    })
+
+    it('a terminal-only command is sent and shows the terminal', async () => {
+      render(<ChatComposer {...props()} />)
+      type('/mod')
+      expect(options()[0].textContent).toContain('opens in Terminal')
+      await act(async () => {
+        key('Enter')
+      })
+      expect(mockSend).toHaveBeenCalledWith('%3', '/model', 'cur1')
+      expect(showView).toHaveBeenCalledWith('terminal')
+      expect(box()).toHaveValue('')
+    })
+
+    it('typed with arguments, it stays in the chat; a refusal stays too', async () => {
+      render(<ChatComposer {...props()} />)
+      type('/model sonnet')
+      await send()
+      expect(mockSend).toHaveBeenCalledWith('%3', '/model sonnet', 'cur1')
+      expect(showView).not.toHaveBeenCalled()
+      mockSend.mockRejectedValueOnce(
+        new AgentRequestError(409, 'input_not_ready', 'busy'),
+      )
+      type('/model')
+      await send()
+      expect(showView).not.toHaveBeenCalled()
+    })
+
+    it('/exit asks first, picked or typed; Cancel sends nothing', async () => {
+      HTMLDialogElement.prototype.showModal = vi.fn(function (
+        this: HTMLDialogElement,
+      ) {
+        this.setAttribute('open', '')
+      })
+      HTMLDialogElement.prototype.close = vi.fn()
+      render(<ChatComposer {...props()} />)
+      type('/ex')
+      key('Enter')
+      expect(screen.getByText('Exit Claude Code?')).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+      expect(mockSend).not.toHaveBeenCalled()
+      type('/quit')
+      await send()
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Exit' }))
+      })
+      expect(mockSend).toHaveBeenCalledWith('%3', '/quit', 'cur1')
+      expect(box()).toHaveValue('')
+    })
+
+    it('nothing is sent before the conversation is read or while too long', async () => {
+      transcript.cursor = undefined
+      const { rerender } = render(<ChatComposer {...props()} />)
+      type('/mod')
+      await act(async () => {
+        key('Enter')
+      })
+      expect(mockSend).not.toHaveBeenCalled()
+      transcript.cursor = 'cur1'
+      rerender(<ChatComposer {...props()} />)
+      type(`/${'a'.repeat(MAX_MESSAGE_BYTES + 1)}`)
+      await act(async () => {
+        key('Enter', { ctrlKey: true })
+      })
+      expect(mockSend).not.toHaveBeenCalled()
+    })
   })
 })
