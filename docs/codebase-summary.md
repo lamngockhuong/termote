@@ -42,6 +42,7 @@ termote/
 │   │   │   ├── session-sidebar.tsx          # Group switcher sidebar
 │   │   │   ├── session-switcher-chip.tsx    # Mobile header chip that opens the sessions sheet
 │   │   │   ├── session-tabs.tsx             # Tab bar (switch, add, remove)
+│   │   │   ├── side-panel.tsx               # Desktop side panel: resize handle, maximize over the main area
 │   │   │   ├── settings-menu.tsx            # "More" overflow menu (font size, theme, Settings, Help, About, Copy link)
 │   │   │   ├── settings-modal.tsx           # Settings dialog (IME, toolbar, paste, etc.)
 │   │   │   ├── swipeable-session-item.tsx   # Swipe-to-delete session
@@ -78,6 +79,7 @@ termote/
 │   │   │   ├── highlight-worker.ts          # Shiki in a module worker (grammars loaded on demand)
 │   │   │   ├── markdown-links.ts            # Markdown preview: link resolution under the root, heading ids, front matter
 │   │   │   ├── markdown-safety.ts           # Raw HTML as text, http(s)-only URLs (Chat and Markdown preview)
+│   │   │   ├── side-panel-width.ts          # Side panel width limits (min panel, min main area)
 │   │   │   └── terminal-bridge.ts           # Drives the xterm.js terminal (key mapping, clipboard paste)
 │   │   ├── test-setup.ts                    # Vitest configuration
 │   ├── e2e/                    # Playwright e2e tests (chat-view.spec.ts drives tests/fixtures/fake-claude.sh; files-changes.spec.ts uses a throwaway git repo)

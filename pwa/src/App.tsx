@@ -26,6 +26,7 @@ import { KeyboardToolbar } from './components/keyboard-toolbar'
 import { PaneStrip } from './components/pane-strip'
 import { SessionSidebar } from './components/session-sidebar'
 import { SettingsModal } from './components/settings-modal'
+import { SidePanel } from './components/side-panel'
 import { type TerminalHandle, TerminalView } from './components/terminal-view'
 import { Toast, type ToastVariant } from './components/toast'
 import { Banner } from './components/ui/banner'
@@ -266,6 +267,20 @@ export default function App({
     showView,
   }
   const sidePanelView = panelViews.find((v) => v.id === sidePanelId && v.Panel)
+  const hasSidePanel = !!sidePanelView
+  // Neither is kept once the panel goes: it opens again at its saved width.
+  const [panelMaximized, setPanelMaximized] = useState(false)
+  const [panelResizing, setPanelResizing] = useState(false)
+  useEffect(() => {
+    if (hasSidePanel) return
+    setPanelMaximized(false)
+    setPanelResizing(false)
+  }, [hasSidePanel])
+  const holdTerminalSize = hasSidePanel && (panelResizing || panelMaximized)
+  const setSidePanelWidth = useCallback(
+    (width: number) => updateSetting('sidePanelWidth', width),
+    [updateSetting],
+  )
   // tabpanel roles only mean something next to the desktop tabs; the mobile
   // header switches views from a menu
   const panelRole =
@@ -694,10 +709,15 @@ export default function App({
               onClose={setPendingPaneId}
             />
           )}
-          <div className="flex min-h-0 flex-1">
+          {/* isolate: the maximized side panel stays under the header's menus */}
+          <div className="relative isolate flex min-h-0 flex-1">
             {/* The terminal fits the space left above the toolbar, so an open
                 keyboard shrinks it rather than hiding its bottom rows. */}
-            <div className="relative min-w-0 flex-1 bg-term">
+            <div
+              // Under the maximized side panel nothing here takes focus
+              inert={hasSidePanel && panelMaximized}
+              className="relative min-w-0 flex-1 bg-term"
+            >
               {/* Another view covers the terminal instead of unmounting or
                   hiding it: it keeps its stream and its size (a display:none
                   terminal would resize the tmux window to nothing). */}
@@ -736,7 +756,9 @@ export default function App({
                       isTerminalView
                     }
                     onDriveLost={onDriveLost}
-                    covered={!isTerminalView}
+                    // Also while the side panel is dragged (fitted once on
+                    // release) or covers it maximized (no resize at all)
+                    covered={!isTerminalView || holdTerminalSize}
                     onConnectionStateChange={setStreamState}
                   />
                 </div>
@@ -761,16 +783,20 @@ export default function App({
               )}
             </div>
             {sidePanelView?.Panel && (
-              <aside
-                aria-label={sidePanelView.label}
-                className="flex w-[440px] shrink-0 flex-col border-l border-border bg-bg"
+              <SidePanel
+                label={sidePanelView.label}
+                width={settings.sidePanelWidth}
+                onWidthChange={setSidePanelWidth}
+                maximized={panelMaximized}
+                onMaximizedChange={setPanelMaximized}
+                onResizingChange={setPanelResizing}
               >
                 {/* Its own boundary: a lazy panel that suspends must not
                     blank the whole app while it loads */}
                 <Suspense fallback={null}>
                   <sidePanelView.Panel {...viewProps} />
                 </Suspense>
-              </aside>
+              </SidePanel>
             )}
           </div>
         </main>

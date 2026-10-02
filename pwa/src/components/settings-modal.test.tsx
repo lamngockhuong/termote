@@ -17,6 +17,7 @@ const DEFAULT_SETTINGS: Settings = {
   sidebarFilter: 'all',
   sortBlockedFirst: false,
   markdownPreview: true,
+  sidePanelWidth: 440,
 }
 
 describe('SettingsModal', () => {
