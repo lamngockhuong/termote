@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.1](https://github.com/lamngockhuong/termote/compare/v1.5.0...v1.5.1) (2026-10-02)
+
+
+### Bug Fixes
+
+* **herdr-plugin:** find termote outside Herdr's PATH and show why it fails ([#281](https://github.com/lamngockhuong/termote/issues/281)) ([eb4005b](https://github.com/lamngockhuong/termote/commit/eb4005b067e1257a2aa6ac66ba566796e07b9bb1))
+
 ## [1.5.0](https://github.com/lamngockhuong/termote/compare/v1.4.0...v1.5.0) (2026-10-02)
 
 
