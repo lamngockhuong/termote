@@ -20,28 +20,33 @@ import (
 // screenLine is one row: its text, the same text with faint (SGR 2)
 // characters blanked, so a suggestion Claude paints faint in an empty box is
 // told from a draft, and the same text with everything not drawn on a
-// background colour blanked, so the tab AskUserQuestion has open is known.
+// background colour blanked, so the tab AskUserQuestion has open is known,
+// and the same text with everything not in reverse video blanked: Codex
+// draws the option under its pointer in reverse video, and in some terminals
+// its composer on a background, so only the former tells them apart.
 type screenLine struct {
 	text  string
 	solid string
 	hl    string
+	rv    string
 }
 
 // sgrStyle is the part of the SGR state the screen reader keeps.
 type sgrStyle struct {
 	faint bool
 	bg    bool // a background colour (or reverse video) is set
+	rev   bool // reverse video is set
 }
 
 // parseScreen splits a capture into rows, keeping only text, the faint
-// attribute and whether a background is set. Escapes other than SGR are
-// dropped.
+// attribute, whether a background is set and whether reverse video is.
+// Escapes other than SGR are dropped.
 func parseScreen(s string) []screenLine {
 	var out []screenLine
 	var st sgrStyle
 	for _, row := range strings.Split(s, "\n") {
 		row = strings.TrimSuffix(row, "\r")
-		var text, solid, hl strings.Builder
+		var text, solid, hl, rv strings.Builder
 		for i := 0; i < len(row); {
 			c := row[i]
 			if c == 0x1b {
@@ -64,11 +69,17 @@ func parseScreen(s string) []screenLine {
 			} else {
 				hl.WriteByte(' ')
 			}
+			if st.rev {
+				rv.WriteRune(r)
+			} else {
+				rv.WriteByte(' ')
+			}
 		}
 		out = append(out, screenLine{
 			strings.TrimRight(text.String(), " "),
 			strings.TrimRight(solid.String(), " "),
 			strings.TrimRight(hl.String(), " "),
+			strings.TrimRight(rv.String(), " "),
 		})
 	}
 	for len(out) > 0 && strings.TrimSpace(out[len(out)-1].text) == "" {
@@ -123,9 +134,13 @@ func applySGR(params string, st *sgrStyle) {
 			st.faint = false
 		case n == 2:
 			st.faint = true
-		case n == 7, n >= 40 && n <= 47, n >= 100 && n <= 107:
+		case n == 7:
+			st.bg, st.rev = true, true
+		case n >= 40 && n <= 47, n >= 100 && n <= 107:
 			st.bg = true
-		case n == 27, n == 49:
+		case n == 27:
+			st.bg, st.rev = false, false
+		case n == 49:
 			st.bg = false
 		}
 		if n == 38 || n == 48 || n == 58 { // extended colour: skip its arguments
@@ -206,6 +221,9 @@ type PromptOption struct {
 	Detail string `json:"detail,omitempty"`
 	// Checked: a multiSelect option ticked ("[✔]"); its digit toggles it.
 	Checked bool `json:"checked,omitempty"`
+	// key: the key Codex shows for the option ("y", "esc"); Claude Code's
+	// options are picked by their number and have none.
+	key string
 }
 
 const (
