@@ -267,6 +267,49 @@ describe('FileViewer: Markdown', () => {
     )
   })
 
+  it('starts at the heading of the link once, not again after Source', async () => {
+    const scrollIntoView = vi.fn()
+    Element.prototype.scrollIntoView = scrollIntoView
+    mockContent.mockResolvedValue(md('# A\n\n## Usage'))
+    show({ path: 'docs/a.md', anchor: 'usage' })
+    await screen.findByTestId('markdown-preview')
+    expect(scrollIntoView).toHaveBeenCalledTimes(1)
+
+    const toggle = screen.getByRole('button', { name: 'Preview' })
+    fireEvent.click(toggle)
+    await screen.findByTestId('code-block')
+    fireEvent.click(toggle)
+    expect(await screen.findByTestId('markdown-preview')).toBeInTheDocument()
+    expect(scrollIntoView).toHaveBeenCalledTimes(1)
+  })
+
+  it('restores where Back left it once, not again after Source', async () => {
+    mockContent.mockResolvedValue(md('# A'))
+    show({ path: 'docs/a.md', scrollTop: 120 })
+    expect((await screen.findByTestId('markdown-preview')).scrollTop).toBe(120)
+
+    const toggle = screen.getByRole('button', { name: 'Preview' })
+    fireEvent.click(toggle)
+    await screen.findByTestId('code-block')
+    fireEvent.click(toggle)
+    expect((await screen.findByTestId('markdown-preview')).scrollTop).toBe(0)
+  })
+
+  it('starts at the heading when Source showed first', async () => {
+    const scrollIntoView = vi.fn()
+    Element.prototype.scrollIntoView = scrollIntoView
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ markdownPreview: false }),
+    )
+    mockContent.mockResolvedValue(md('# A\n\n## Usage'))
+    show({ path: 'docs/a.md', anchor: 'usage' })
+    await screen.findByTestId('code-block')
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+    await screen.findByTestId('markdown-preview')
+    expect(scrollIntoView).toHaveBeenCalledTimes(1)
+  })
+
   it('hands a followed link and where it was left to the caller', async () => {
     mockContent.mockResolvedValue(md('[guide](guide.md#usage)'))
     const p = show({ path: 'docs/a.md' })

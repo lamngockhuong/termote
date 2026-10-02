@@ -73,7 +73,12 @@ describe('MarkdownPreview: rendering', () => {
     expect(blocks[0]).toHaveTextContent('front matter')
     expect(blocks[0]).toHaveTextContent('title: Hi')
     expect(container.querySelector('hr')).toBeNull()
-    expect(mockHighlight).toHaveBeenCalledWith('title: Hi', 'yaml', 'light')
+    expect(mockHighlight).toHaveBeenCalledWith(
+      'title: Hi',
+      'yaml',
+      'light',
+      expect.any(AbortSignal),
+    )
   })
 
   it('shows raw HTML and MDX JSX as text, never as elements', () => {
@@ -110,6 +115,7 @@ describe('MarkdownPreview: code blocks', () => {
       'const\nx',
       'typescript',
       'light',
+      expect.any(AbortSignal),
     )
     await waitFor(() =>
       expect(screen.getByText('const')).toHaveStyle({
@@ -126,8 +132,19 @@ describe('MarkdownPreview: code blocks', () => {
     expect(plain).toHaveTextContent('text')
     expect(plain).toHaveTextContent('plain')
     expect(mermaid).toHaveTextContent('mermaid')
-    expect(mockHighlight).toHaveBeenCalledWith('plain', undefined, 'light')
-    expect(mockHighlight).toHaveBeenCalledWith('graph TD', undefined, 'light')
+    const signal = expect.any(AbortSignal)
+    expect(mockHighlight).toHaveBeenCalledWith(
+      'plain',
+      undefined,
+      'light',
+      signal,
+    )
+    expect(mockHighlight).toHaveBeenCalledWith(
+      'graph TD',
+      undefined,
+      'light',
+      signal,
+    )
   })
 
   it('wraps code blocks when Wrap is on', () => {
@@ -150,6 +167,21 @@ describe('MarkdownPreview: code blocks', () => {
     )
     await act(async () => finish([[['old', '#f00']]]))
     expect(screen.getByTestId('fenced-code')).toHaveTextContent('new')
+  })
+
+  it('cancels the highlight of a block that is gone or changed', () => {
+    const p = show('```ts\nold\n```')
+    const first: AbortSignal = mockHighlight.mock.calls[0][3]
+    expect(first.aborted).toBe(false)
+    p.rerender(
+      <ThemeProvider>
+        <MarkdownPreview {...p} text={'```ts\nnew\n```'} />
+      </ThemeProvider>,
+    )
+    expect(first.aborted).toBe(true)
+    const second: AbortSignal = mockHighlight.mock.calls[1][3]
+    p.unmount()
+    expect(second.aborted).toBe(true)
   })
 
   it('copies a block', async () => {
