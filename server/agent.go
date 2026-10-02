@@ -13,6 +13,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -39,10 +40,16 @@ const (
 
 // AgentSession is the agent session a pane is running, as its backend found it.
 type AgentSession struct {
-	Agent     string // "claude"
-	ID        string // the agent's session id (a UUID for Claude Code)
+	Agent     string // "claude" | "codex"
+	ID        string // the agent's session id (a UUID)
 	Status    string // working | idle | blocked | done | unknown
-	ClaudeDir string // the agent's config dir, where its transcripts live
+	ClaudeDir string // Claude Code: its config dir, where its transcripts live
+	// Codex: CODEX_HOME of the Codex process holding the rollout, the
+	// resolved rollout path it holds open for writing, and the rollout's
+	// fileIdentity when the process was found.
+	CodexHome string
+	Rollout   string
+	RolloutID string
 	// PID and ProcStart identify the agent process (tmux), so a write can
 	// check that the same process still runs before it touches the pane.
 	PID       int
@@ -60,8 +67,8 @@ type agentSessionLocator interface {
 	AgentSession(ctx context.Context, paneID string) (AgentSession, bool, error)
 }
 
-// journalAdapter reads one agent's transcript format. Only Claude Code has one
-// today; another agent adds an adapter and a locator that reports it.
+// journalAdapter reads one agent's transcript format. An agent has an adapter
+// and a locator that reports it.
 type journalAdapter interface {
 	Agent() string
 	// Locate returns the transcript path of s, never built from client input.
@@ -73,7 +80,7 @@ type journalAdapter interface {
 	Parse(r io.Reader, start int64) ([]TranscriptEntry, int64)
 }
 
-var journalAdapters = map[string]journalAdapter{"claude": claudeJournal{}}
+var journalAdapters = map[string]journalAdapter{"claude": claudeJournal{}, "codex": codexJournal{}}
 
 type TranscriptEntry struct {
 	ID    string           `json:"id"`
@@ -308,7 +315,7 @@ func (a *agentAPI) handleTranscript(w http.ResponseWriter, r *http.Request) {
 		a.agentError(w, "transcript", errInvalidBefore)
 		return
 	}
-	key := s.Agent + "\x00" + s.ID + "\x00" + s.ClaudeDir + "\x00" + cursor + "\x00" + before
+	key := strings.Join([]string{s.Agent, s.ID, s.ClaudeDir, s.CodexHome, s.Rollout, s.RolloutID, cursor, before}, "\x00")
 	res, err := a.reads.do(key, func() (transcriptResponse, error) {
 		return readTranscript(s, cursor, before)
 	})
@@ -355,6 +362,14 @@ func readTranscript(s AgentSession, cursor, before string) (transcriptResponse, 
 		return transcriptResponse{}, err
 	}
 	size, id := fi.Size(), fileIdentity(fi)
+	if s.RolloutID != "" && id != s.RolloutID {
+		return transcriptResponse{}, errNoTranscript // replaced since the locator found it
+	}
+	if id == "" {
+		// No device and inode (Windows): the file name still tells a new
+		// rollout of the same session from the old one.
+		id = filepath.Base(path)
+	}
 	res := transcriptResponse{Agent: s.Agent, SessionID: s.ID, Status: s.Status}
 	sameFile := func(c agentCursor) bool { return c.Session == s.ID && c.File == id && c.Offset <= size }
 

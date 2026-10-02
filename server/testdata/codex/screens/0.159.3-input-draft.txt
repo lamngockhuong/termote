@@ -1,0 +1,40 @@
+[2m╭───────────────────────────────────────────────────────────────╮[0m
+[2m│ [0;1m[38;2;99;168;248m✨ Update available![0m [1m0.159.3 -> 0.160.0[0;2m                       │[0m
+[2m│ [0mSee [4m[38;2;99;168;248m]8;;https://github.com/openai/codex\https://github.com/openai/codex[0m]8;;\ for installation options.[2m │[0m
+[2m│                                                               │[0m
+[2m│ [0mSee full release notes:[2m                                       │[0m
+[2m│ [0;4m[38;2;99;168;248m]8;;https://github.com/openai/codex/releases/latest\https://github.com/openai/codex/releases/latest[0;2m]8;;\               │[0m
+[2m╰───────────────────────────────────────────────────────────────╯[0m
+
+
+  [38;2;99;168;248m>_ [1m[39mOpenAI Codex[0;2m (v0.159.3)[0m
+     [2m/home/user/proj[0m
+
+  [38;2;99;168;248mWhoa, fancy meeting you here![39m
+
+[1m⚠ Heads up, you have less than 10% of your monthly limit left. Run /status for a breakdown.[0m
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                                    [1m[38;2;196;167;103m⚠ monthly limit: 10% left · /status[0m
+
+[1m›[0m draft text not sent
+
+  [38;2;246;226;183mGPT-5.6-Terra low[39m · [38;2;171;223;167m/home/user/proj
+[39m                                                                                               ⚠ [38;2;196;167;103m1 warning[39m · [1mf2[0m to view
