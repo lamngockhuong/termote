@@ -1,6 +1,6 @@
 ---
 title: Chat với agent
-description: Đọc và trả lời Claude Code, xem hội thoại của Codex, trong view chat thay cho terminal
+description: Đọc và trả lời Claude Code và Codex trong view chat thay cho terminal
 ---
 
 import { Aside } from "@astrojs/starlight/components";
@@ -9,7 +9,7 @@ Trên điện thoại, câu trả lời dài trong terminal rất khó đọc, g
 pane chạy **Claude Code** hoặc **Codex**, header hiện nút chuyển **Terminal / Chat** (trên điện thoại là một nút
 view, chạm vào sẽ mở danh sách các view). View Chat là cách nhìn thứ hai vào cùng một phiên:
 tin bạn gửi ở đây được gõ vào pane, còn agent viết gì thì cả hai view đều thấy. Không có gì tự chạy ngầm.
-Với Codex, view này hiện chỉ để xem, chưa gửi được gì (xem [Codex](#codex-chỉ-đọc)).
+Codex dùng được theo cách tương tự, có yêu cầu riêng và một điểm khác ở hộp thoại (xem [Codex](#codex)).
 
 ## Yêu cầu
 
@@ -18,7 +18,7 @@ Với Codex, view này hiện chỉ để xem, chưa gửi được gì (xem [Co
   - **psmux** trên Windows
   - **Herdr** trên mọi hệ điều hành, sau khi đã chạy `herdr integration install claude` một lần
 - Cài native (`termote start`). Container của Termote không cài sẵn Claude Code.
-- Với Codex: xem [Codex](#codex-chỉ-đọc).
+- Với Codex: xem [Codex](#codex).
 
 ## View Chat hiện gì
 
@@ -107,12 +107,24 @@ chọn nữa, được tích sẵn; nút của nó bỏ tích được như các
 Câu hỏi có khung xem trước bên cạnh các lựa chọn cũng trả lời như vậy: bấm một lần là chọn. Riêng
 khung xem trước chỉ hiện trong terminal.
 
-## Codex (chỉ đọc)
+## Codex
 
 Pane chạy Codex cũng có view Chat với hội thoại của phiên: tin nhắn của bạn, câu trả lời dạng
-markdown, lệnh đã chạy kèm kết quả, các thay đổi file dạng diff. View này không có ô nhập tin
-và không có thẻ hộp thoại. Thay vào đó là thanh **Read only** kèm nút **Open terminal**: muốn gõ
-tin hay trả lời yêu cầu duyệt (chạy lệnh, sửa file) thì làm trong terminal.
+markdown, lệnh đã chạy kèm kết quả, các thay đổi file dạng diff. Bạn gửi tin từ ô ở dưới cùng,
+theo cùng quy tắc như với Claude Code: Termote chỉ gửi khi màn hình cho thấy Codex đang ở ô nhập
+trống và không chạy gì, còn bị từ chối thì pane không nhận phím nào. Danh sách gợi ý `/` không
+áp dụng cho Codex; cần lệnh nào thì gõ đầy đủ.
+
+Hộp thoại xin duyệt (chạy lệnh, sửa file) khác nhau tuỳ bộ quản lý phiên:
+
+- **Herdr**: Herdr báo agent đang bị chặn chờ trả lời, nên hộp thoại hiện thành thẻ với một nút
+  cho mỗi lựa chọn. **Cancel** gửi Escape.
+- **tmux**: file phiên của Codex không ghi lại yêu cầu duyệt, nên Termote không biết có hộp thoại
+  đang chờ bạn. Thẻ hiện hộp thoại ở chế độ chỉ đọc và ghi "Answer this dialog in the terminal."
+  (trả lời hộp thoại này trong terminal).
+
+Các hộp thoại khác của Codex (chọn model, nhắc về giới hạn lượt dùng, v.v.) luôn chỉ để xem, trên
+cả hai bộ quản lý phiên.
 
 Yêu cầu:
 
@@ -146,7 +158,7 @@ Những điều cần biết:
 - Herdr: transcript được đọc từ `~/.claude` của người dùng chạy Termote. Claude Code chạy với
   `CLAUDE_CONFIG_DIR` khác sẽ không hiện lịch sử.
 - Chưa hỗ trợ chế độ container.
-- Hiện chỉ có Claude Code, và Codex ở chế độ chỉ đọc.
+- Hiện chỉ có Claude Code và Codex.
 
 <Aside>
   Nút **Open terminal** luôn ở ngay đó. Stream terminal vẫn giữ kết nối khi bạn ở view Chat, nên

@@ -82,7 +82,7 @@ Go HTTP server providing:
 - **Terminal WebSocket**: `/api/mux/stream` opens a PTY/ConPTY attached to the selected pane and streams it as binary WebSocket frames; a text control frame carries resize (client→server) and exit/error/size (server→client)
 - **Authentication**: Basic auth with a session cookie, rate-limited, plus a Host allowlist and an Origin/CSRF write guard in front of everything
 - **Mux API endpoints**: `/api/mux/*` — snapshot (groups→tabs→panes), tab create/rename/close/select, send-keys, health
-- **Agent chat endpoints**: `/api/mux/panes/{id}/agent/*` — the transcript of the Claude Code or Codex session in a pane; for Claude Code also sending it a message, reading and answering its dialogs (see [Agent chat](#agent-chat-apimuxpanesidagent))
+- **Agent chat endpoints**: `/api/mux/panes/{id}/agent/*` — the transcript of the Claude Code or Codex session in a pane, sending it a message, reading and answering its dialogs (see [Agent chat](#agent-chat-apimuxpanesidagent))
 
 Configuration: when `termote serve` finds a saved config (`~/.config/termote/config`), it reads
 that and ignores every `TERMOTE_*` variable, then strips them from its own environment so
@@ -208,9 +208,10 @@ error instead of a broken page.
 The PWA's Chat view is a second way to look at a pane running Claude Code or Codex, offered
 when the snapshot reports `caps.agentChat` and the pane's `agent.name` is `claude` or `codex`
 (`pwa/src/chat-agents.ts`). It is the same session as the terminal, not a session of its own:
-nothing runs headless. Codex is read only: the PWA shows no composer and no dialog card, and
-`message`, `prompt` and `answer` answer 404 `agent not available` for it, `commands` an empty
-list.
+nothing runs headless. Both agents take a message and a dialog answer under the rules in
+"Writes" below, each with its own screen reader
+(`agentScreenReaders`: `agent_claude_prompt.go`, `agent_codex_prompt.go`); `commands` is an
+empty list for Codex, whose composer offers no built-in `/` commands either.
 
 **Finding the session.** Herdr reports the session id itself (`agent_session` on the pane;
 `herdr integration install claude` must have been run). Herdr does not expose the pane's
@@ -253,7 +254,7 @@ summaries, commands, file changes, MCP and extension calls, compactions), or `us
 `agent_message` in a legacy rollout; the messages Codex adds for the model (`response_item`) are
 never shown. The tmux status reads back from the end to the latest of `task_started` (working),
 `task_complete` or `turn_aborted` (idle); it is never `blocked`, since the rollout does not record
-an approval request. `thread_settings_applied` is skipped: Codex writes it for a model change in
+an approval request (so a dialog is never answerable on tmux, see Writes). `thread_settings_applied` is skipped: Codex writes it for a model change in
 the middle of a turn as well as for a resume, so a turn killed and then resumed reads as working
 until the next turn ends. Herdr reports its own status.
 
@@ -306,7 +307,7 @@ else is refused and sends nothing:
 | Code                      | Status | Meaning                                                                                |
 | ------------------------- | ------ | -------------------------------------------------------------------------------------- |
 | `session_changed`         | 409    | The pane runs another session now (the client's `cursor` names the old one)            |
-| `target_changed`          | 409    | Claude Code is no longer in this pane, or its process or session changed               |
+| `target_changed`          | 409    | The agent is no longer in this pane, or its process, session or rollout changed        |
 | `input_not_ready`         | 409    | Not an empty input box: a dialog, a draft, the agent working, copy mode                |
 | `paste_not_confirmed`     | 409    | The pasted text did not show in the input box; Enter was not sent                      |
 | `delivered_not_submitted` | 502    | The text is in the input box but was not submitted; check the terminal                 |
@@ -323,6 +324,31 @@ else is refused and sends nothing:
 when the screen shows an empty input box, waits until the text shows in it, checks the session
 again, then sends Enter. The text is at most 16 KB (UTF-8 bytes; the body 64 KB), with control
 characters other than newline and tab removed, so it cannot end the paste early.
+
+**Codex writes.** The same routes, with these differences. The pane lock is keyed by the pane's
+backend address alone, so two agents in turn on one pane share it. `sameAgent` also compares
+the rollout (resolved path and dev:inode), so a Codex that moved to another rollout is
+`target_changed`. The screen reader (`server/agent_codex_prompt.go`, checked against recorded
+screens of Codex 0.159.3 and 0.160.0 on tmux and Herdr, `server/testdata/codex/screens`) draws
+no frame to lean on: the composer is a `›` row at column 0 not in reverse video, with at most
+four footer rows under it. A message is sent only onto an empty composer (Codex's faint
+placeholder counts as empty) with no working line (`• Working (… esc to interrupt)`) in the
+rows above it, and with status idle or done. The paste must show in the composer before Enter:
+for a paste over 1000 characters Codex shows `[Pasted Content N chars]` instead of the text,
+and that token is matched against the text's length. A dialog-like text the model printed above
+the composer is never a dialog: an approval dialog is recognised only with its footer ("Press
+enter to confirm or esc to cancel") as the last row, a known title (run a command, make edits)
+with no row at column 0 between it and the numbered options, and every option ending in the key
+Codex shows for it. If a second approval title sits in that stretch, or the options do not
+parse, the card is read only (`unsupported`).
+
+Who may answer is decided by `dialogStatus`: the agent's own status must say a dialog is open.
+On Herdr it reports `blocked`, so an approval card has options and a single-use `promptId`;
+`answer` sends the option's digit, or Escape for `"cancel"`. On tmux the rollout records no
+approval request, so the status is never `blocked`: `AgentSession.DialogsReadOnly` makes
+`prompt` answer `unsupported` with no options and no `promptId` (the PWA shows "Answer this
+dialog in the terminal."), and `answer` has nothing to consume. Other Codex dialogs (model
+picker, rate-limit prompt, …) are always read only, on either backend.
 
 `prompt` reads the screen and recognises the dialog anchored at its bottom: `permission`, a
 single-choice `select` (at most 9 options), a `multiselect` tab, or `unsupported` for anything
@@ -569,9 +595,10 @@ termote update --force           # Force reinstall current version
     dir of the process found in the pane, proven by its start time (Herdr names the session
     itself, read from the server user's config dir); a Codex rollout only when a process named
     `codex`, not an `app-server`, holds it open for writing inside its `CODEX_HOME/sessions`,
-    the identity checked again after opening; every write re-checks the target and the screen
-    and sends nothing on doubt, and Codex has no write route; markdown images in the Chat view
-    never load
+    the identity checked again after opening; every write, Codex's included, re-checks the
+    target and the screen and sends nothing on doubt, and a Codex approval dialog is answerable
+    only where Herdr reports the agent blocked (read only on tmux); markdown images in the Chat
+    view never load
 11. **Files and changes**: read-only; paths confined to the pane's root by `os.Root`; Termote's
     config/state dirs, `/proc`, `/sys`, `/dev` and `.git` never served; sensitive files only
     with `reveal=1`; git run without a shell and with every repo-configured program disabled;

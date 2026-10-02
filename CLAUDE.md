@@ -61,7 +61,7 @@ termote/
 │   └── termote.ps1         # Checkout-only dev shim (Windows), same job
 ├── tests/                  # Test suite
 │   ├── fixtures/fake-claude.sh # Stand-in Claude Code for the Chat view E2E (Linux)
-│   ├── fixtures/fake-codex.sh  # Stand-in Codex (--no-daemon) for the read-only Chat E2E (Linux)
+│   ├── fixtures/fake-codex.sh  # Stand-in Codex (--no-daemon) for the Chat view E2E (Linux)
 │   ├── test-termote.sh     # Unix dev shim tests
 │   ├── test-termote.ps1    # Windows dev shim tests
 │   ├── test-install.sh     # install.sh tests (fake curl)
@@ -312,6 +312,7 @@ The `update` command:
 | `server/agent_claude_prompt.go`                   | Reads a Claude Code screen: input box, dialogs                |
 | `server/agent_input.go`                           | Sends a message, answers a dialog (checks before each write)  |
 | `server/agent_codex.go`                           | Codex rollout (JSONL): locate, parse, turn status             |
+| `server/agent_codex_prompt.go`                    | Reads a Codex screen: composer, approval dialogs              |
 | `server/agent_proc_codex.go`                      | Finds the Codex process holding a rollout (tmux, Herdr)       |
 | `server/files.go`                                 | `/api/mux/panes/{id}/files/*` routes, tree and file contents  |
 | `server/files_root.go`                            | Pane root (git toplevel), safe git runner                     |
@@ -362,13 +363,14 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   fetched via `/api/mux/stream-token`, consumed on WebSocket upgrade
 - **Herdr guard**: `--mux herdr --no-auth` is refused unless `--allow-herdr-no-auth` is also
   given, since Herdr exposes every workspace on the host
-- **Agent chat** (`/api/mux/panes/{id}/agent/*`): on tmux the server reads only the transcript
-  in the Claude config dir of the process found in the pane (`CLAUDE_CONFIG_DIR`, else
-  `~/.claude`; psmux: `%USERPROFILE%\.claude`), and only for a process whose start time matches
-  its session file's `procStart`; Herdr reports the session id itself, read from the server
-  user's config dir. The session id must be a UUID. Every write takes a lock on the pane,
-  re-checks the process, session and screen, and sends nothing unless the screen shows the
-  expected state (an empty input box, the dialog the client saw with a single-use `promptId`).
+- **Agent chat** (`/api/mux/panes/{id}/agent/*`): for Claude Code on tmux the server reads only
+  the transcript in the Claude config dir of the process found in the pane (`CLAUDE_CONFIG_DIR`,
+  else `~/.claude`; psmux: `%USERPROFILE%\.claude`), and only for a process whose start time
+  matches its session file's `procStart`; Herdr reports the session id itself, read from the
+  server user's config dir. The session id must be a UUID. Every write (Claude Code or Codex)
+  takes a lock on the pane, re-checks the process, session and screen, and sends nothing unless
+  the screen shows the expected state (an empty input box, the dialog the client saw with a
+  single-use `promptId`).
   Markdown images in the Chat view never load (shown as links), and raw HTML is not rendered.
   `agent/commands` (the composer's `/` suggestions) returns only names, descriptions, sources
   and kinds of `.claude/commands`/`.claude/skills` under the pane root and `commands`/`skills`
@@ -379,13 +381,24 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   plugins `installed_plugins.json` lists and `enabledPlugins` (user, project, local settings)
   turns on; an `installPath` is read only when it resolves inside `<config dir>/plugins/`
   (at most 50 plugins, JSON files capped at 1 MB)
-- **Codex chat** (read only): a rollout is read only when a process whose executable is named
+- **Codex chat**: a rollout is read only when a process whose executable is named
   `codex`, without `app-server` in its argv, holds it open for writing as a regular
   `rollout-*-<uuid>.jsonl` inside its own `CODEX_HOME/sessions` (resolved), with exactly one
   such rollout of a user thread; its dev:inode is checked again after opening. Herdr's session id
   is trusted only when such a process holds that rollout. So only `codex --no-daemon` has a Chat
   view (the shared daemon writes every pane's rollout), `/new` gives 404 on tmux until Codex
-  restarts, and Windows has none. `message`/`prompt`/`answer` are 404 for Codex, `commands` empty
+  restarts, and Windows has none. `message` and `answer` write under the Claude Code rules: the
+  pane lock (keyed by the pane address alone), then the process, session, rollout (path and
+  dev:inode) and screen read again right before each write. A message is pasted (bracketed)
+  only onto an empty composer with no working line and status idle/done, and must show in the
+  composer (`[Pasted Content N chars]` over 1000 characters) before Enter. An approval dialog
+  (run a command, make edits) is answerable only on Herdr, where Herdr reports the agent
+  blocked: the option goes as its digit, Cancel as Escape. On tmux the rollout records no
+  approval request, so `prompt` answers `unsupported` with no options or `promptId`
+  (`AgentSession.DialogsReadOnly`), as it does for any other Codex dialog. The screen reader
+  (`server/agent_codex_prompt.go`) never takes text the model printed above the composer for a
+  dialog, and reads a card as read only when two approval titles sit in its stretch. `commands`
+  is empty
 - **Files/Changes** (`/api/mux/panes/{id}/files/*`): read-only GETs that also check
   `Sec-Fetch-Site`/`Origin`; every path is opened through `os.Root` under the pane's root (its
   git toplevel, else its directory); termote's config/state dirs, `/proc`, `/sys`, `/dev` and
