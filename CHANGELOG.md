@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.6.0](https://github.com/lamngockhuong/termote/compare/v1.5.1...v1.6.0) (2026-10-02)
+
+
+### Features
+
+* configurable Basic auth username ([3fddb81](https://github.com/lamngockhuong/termote/commit/3fddb814cc5298647632c5c90cccec90dbbfacc0))
+* configurable Basic auth username ([#236](https://github.com/lamngockhuong/termote/issues/236)) ([#283](https://github.com/lamngockhuong/termote/issues/283)) ([3fddb81](https://github.com/lamngockhuong/termote/commit/3fddb814cc5298647632c5c90cccec90dbbfacc0))
+* read-only Chat view for Codex panes ([#286](https://github.com/lamngockhuong/termote/issues/286)) ([7e5e5e5](https://github.com/lamngockhuong/termote/commit/7e5e5e51ceca2f5d168d2a316ac28b3026980149))
+* send messages and answer approval dialogs in Codex panes ([#287](https://github.com/lamngockhuong/termote/issues/287)) ([cfee36b](https://github.com/lamngockhuong/termote/commit/cfee36bbe2de11be0f1ce2137affda6528f59a89))
+
 ## [1.5.1](https://github.com/lamngockhuong/termote/compare/v1.5.0...v1.5.1) (2026-10-02)
 
 
