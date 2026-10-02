@@ -1,15 +1,16 @@
 ---
 title: Agent Chat
-description: Read and answer Claude Code from a chat view instead of the terminal
+description: Read and answer Claude Code, or read Codex, from a chat view instead of the terminal
 ---
 
 import { Aside } from "@astrojs/starlight/components";
 
 Long replies are hard to read in a terminal on a phone, and so is typing a prompt into one. When
-a pane runs **Claude Code**, the header shows a **Terminal / Chat** switcher (on a phone, one
+a pane runs **Claude Code** or **Codex**, the header shows a **Terminal / Chat** switcher (on a phone, one
 view button that opens a menu of views). The Chat view is a second way to look at the same
-session: what you send there is typed into the pane, and what Claude Code writes shows up in both
-views. Nothing runs in the background on its own.
+session: what you send there is typed into the pane, and what the agent writes shows up in both
+views. Nothing runs in the background on its own. Codex is read only for now (see
+[Codex](#codex-read-only)).
 
 ## Requirements
 
@@ -18,6 +19,7 @@ views. Nothing runs in the background on its own.
   - **psmux** on Windows
   - **Herdr** on any OS, after running `herdr integration install claude` once
 - A native install (`termote start`). The container image does not include Claude Code.
+- For Codex: see [Codex](#codex-read-only).
 
 ## What the Chat View Shows
 
@@ -107,6 +109,37 @@ option, already ticked; its button unticks it like the others.
 A question that shows a preview beside its options is answered the same way: one tap picks the
 option. The preview itself is only shown in the terminal.
 
+## Codex (Read Only)
+
+A pane running Codex gets the Chat view with its conversation: your messages, replies rendered
+as markdown, commands with their output, file changes as diffs. There is no message box and no
+dialog card; a **Read only** bar with **Open terminal** takes their place, and you type and
+answer approvals in the terminal.
+
+Requirements:
+
+- Codex run with `codex --no-daemon`. By default every Codex TUI hands its session to one shared background process, and Termote cannot
+  tell which pane a session belongs to, so such panes have no Chat view.
+- **tmux** on Linux or macOS, or **Herdr** on Linux or macOS after running
+  `herdr integration install codex` once. Windows (psmux or Herdr) is not supported.
+- Checked with Codex 0.159.3. A later version that writes its session elsewhere loses the Chat
+  view; on tmux the server log notes once that it found Codex without a session file.
+
+What to expect:
+
+- A Codex that has received no message yet has no conversation to show: Codex writes its session
+  file with the first message. On tmux the Chat button appears then; on Herdr it is there from
+  the start and says no session was found until then.
+- After `/new`, a tmux pane loses the Chat view until Codex is restarted, since it then holds two
+  sessions and Termote does not guess which one is on screen. On Herdr the Chat view shows the
+  session Herdr reports for the pane, which can still be the previous one until Herdr reports
+  the new one.
+- On Herdr, a pane that started the shared background process before you switched to
+  `--no-daemon` can keep reporting a session that is not its own, even another pane's, until
+  Codex restarts in it.
+- Only the Codex process writing the session counts: another program reading the same session
+  file (`tail -f`) gets no Chat view.
+
 ## Limitations
 
 - tmux: the chat follows the pane that has focus in the window. In a split window, it talks to
@@ -116,7 +149,7 @@ option. The preview itself is only shown in the terminal.
 - Herdr: the transcript is read from `~/.claude` of the user running Termote. A Claude Code
   started with another `CLAUDE_CONFIG_DIR` shows no history.
 - Container mode is not supported.
-- Only Claude Code for now.
+- Only Claude Code and, read only, Codex for now.
 
 <Aside>
   **Open terminal** is always one tap away. The terminal stream stays connected while you are in
