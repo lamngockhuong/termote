@@ -2,5 +2,13 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended"
+  ],
+  "packageRules": [
+    {
+      "description": "pnpm refuses lockfile entries published less than a day ago (minimumReleaseAge, default 1440 minutes), so CI's frozen install fails on a release that is too new. Hold npm updates for 3 days, leaving a margin for transitive dependencies pulled in with them.",
+      "matchDatasources": ["npm"],
+      "minimumReleaseAge": "3 days",
+      "internalChecksFilter": "strict"
+    }
   ]
 }
