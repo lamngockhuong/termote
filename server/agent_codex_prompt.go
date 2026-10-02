@@ -45,20 +45,24 @@ var (
 	// pointer, "  2. …" otherwise.
 	codexOptionRe = regexp.MustCompile(`^(?:› )?(\d+)\.\s+(.+)$`)
 	// codexOptionKeyRe: the key Codex shows at the end of an option.
-	codexOptionKeyRe = regexp.MustCompile(`^(.+?)\s+\(([a-z]+)\)$`)
+	codexOptionKeyRe = regexp.MustCompile(`^(.+?)\s+\([a-z]+\)$`)
 	// codexWorkingRe: the working line, which may go on with background
 	// terminals ("… esc to interrupt) · 1 background terminal running").
 	codexWorkingRe = regexp.MustCompile(`^• .*\besc to interrupt\)`)
 )
 
+// agentScreenReaders are the agents whose screen is read; nothing is typed
+// into another agent.
+var agentScreenReaders = map[string]func(string) agentScreen{
+	"claude": readClaudeScreen,
+	"codex":  readCodexScreen,
+}
+
 // readAgentScreen classifies a capture with the reader of agent; an agent
 // without one is never ready.
 func readAgentScreen(agent, capture string) agentScreen {
-	switch agent {
-	case "claude":
-		return readClaudeScreen(capture)
-	case "codex":
-		return readCodexScreen(capture)
+	if read, ok := agentScreenReaders[agent]; ok {
+		return read(capture)
 	}
 	return agentScreen{}
 }
@@ -247,7 +251,8 @@ func findCodexApproval(lines []screenLine) (agentScreen, bool) {
 }
 
 // codexPromptOptions reads numbered options 1, 2, ... each ending in the key
-// Codex shows for it ("(y)", "(esc)").
+// Codex shows for it ("(y)", "(esc)"), which is left off the label. The
+// option is picked by its number, as Codex also takes.
 func codexPromptOptions(opts [][]screenLine) ([]PromptOption, bool) {
 	if len(opts) > 9 {
 		return nil, false
@@ -264,7 +269,7 @@ func codexPromptOptions(opts [][]screenLine) ([]PromptOption, bool) {
 		if idx != i+1 || k == nil {
 			return nil, false
 		}
-		out = append(out, PromptOption{Index: idx, Label: k[1], key: k[2]})
+		out = append(out, PromptOption{Index: idx, Label: k[1]})
 	}
 	return out, true
 }

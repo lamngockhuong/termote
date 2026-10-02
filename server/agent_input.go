@@ -16,7 +16,8 @@ import (
 )
 
 // The write half of the agent routes: send a message into the pane's input
-// box, read the dialog Claude Code has open, answer it. Every write follows
+// box, read the dialog the agent (Claude Code, Codex) has open, answer it.
+// Every write follows
 // one rule: write only on positive evidence. The pane must still run the
 // session the client saw, and the screen must show exactly the state the
 // write expects; anything else answers 409 and sends nothing.
@@ -228,9 +229,10 @@ func (in *agentInput) consumePrompt(pane, id string, accept func(*promptRecord) 
 }
 
 // sameAgent: the same process (where known) running the same session in the
-// same pane address.
+// same pane address, and for Codex writing the same rollout.
 func sameAgent(a, b AgentSession) bool {
-	return a.Agent == b.Agent && a.ID == b.ID && a.Target == b.Target && a.PID == b.PID && a.ProcStart == b.ProcStart
+	return a.Agent == b.Agent && a.ID == b.ID && a.Target == b.Target && a.PID == b.PID && a.ProcStart == b.ProcStart &&
+		a.Rollout == b.Rollout && a.RolloutID == b.RolloutID
 }
 
 func (a *agentAPI) registerInputRoutes(mux *http.ServeMux) {
@@ -259,11 +261,11 @@ func (a *agentAPI) lockPane(paneID string) (func(), error) {
 		}
 		return nil, err
 	}
-	if s.Agent != "claude" {
-		// Only Claude Code's screen is read; nothing is typed into another agent.
+	if agentScreenReaders[s.Agent] == nil {
 		return nil, errAgentUnsupported
 	}
-	return a.input.lock(s.Agent + "\x00" + s.Target), nil
+	// By the pane alone: two agents in turn on one pane share its lock.
+	return a.input.lock(s.Target), nil
 }
 
 // sessionNow re-reads the pane's session, bypassing every cache.
@@ -279,7 +281,7 @@ func sessionNow(ctx context.Context, wr agentWriter, paneID string) (AgentSessio
 	if !ok {
 		return AgentSession{}, errTargetChanged
 	}
-	if s.Agent != "claude" {
+	if agentScreenReaders[s.Agent] == nil {
 		return AgentSession{}, errAgentUnsupported // another agent took the pane
 	}
 	return s, nil
@@ -376,7 +378,7 @@ func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, sess
 	if err != nil {
 		return err
 	}
-	sc := readClaudeScreen(screen)
+	sc := readAgentScreen(s.Agent, screen)
 	switch sc.input {
 	case inputEmpty:
 	case inputDraft:
@@ -390,7 +392,7 @@ func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, sess
 	if err := wr.Paste(ctx, s.Target, text); err != nil {
 		return err
 	}
-	shown := pollScreen(ctx, wr, s.Target, func(sc agentScreen) bool {
+	shown := pollScreen(ctx, wr, s.Agent, s.Target, func(sc agentScreen) bool {
 		return sc.input == inputDraft && draftShows(sc.draft, text)
 	})
 	if !shown {
@@ -406,7 +408,7 @@ func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, sess
 		return fail(http.StatusBadGateway, "delivered_not_submitted", "the text was pasted but not submitted")
 	}
 	// Submitted: the box no longer holds the text.
-	gone := pollScreen(ctx, wr, s.Target, func(sc agentScreen) bool {
+	gone := pollScreen(ctx, wr, s.Agent, s.Target, func(sc agentScreen) bool {
 		return !(sc.input == inputDraft && draftShows(sc.draft, text))
 	})
 	if !gone {
@@ -438,10 +440,10 @@ func agentStatusWord(s string) string {
 }
 
 // pollScreen captures until ok holds or agentConfirmWait passes.
-func pollScreen(ctx context.Context, wr agentWriter, target string, ok func(agentScreen) bool) bool {
+func pollScreen(ctx context.Context, wr agentWriter, agent, target string, ok func(agentScreen) bool) bool {
 	deadline := time.Now().Add(agentConfirmWait)
 	for {
-		if screen, err := wr.Capture(ctx, target); err == nil && ok(readClaudeScreen(screen)) {
+		if screen, err := wr.Capture(ctx, target); err == nil && ok(readAgentScreen(agent, screen)) {
 			return true
 		}
 		if time.Now().After(deadline) {
@@ -469,8 +471,8 @@ func (a *agentAPI) handlePrompt(w http.ResponseWriter, r *http.Request) {
 	}
 	paneID := r.PathValue("id")
 	s, err := a.session(paneID)
-	if err == nil && s.Agent != "claude" {
-		err = errAgentUnsupported // only Claude Code's dialogs are read
+	if err == nil && agentScreenReaders[s.Agent] == nil {
+		err = errAgentUnsupported
 	}
 	if err != nil {
 		a.agentError(w, "agent session", err)
@@ -485,7 +487,7 @@ func (a *agentAPI) handlePrompt(w http.ResponseWriter, r *http.Request) {
 		a.agentError(w, "capture", err)
 		return
 	}
-	jsonOK(w, promptResponse{Prompt: a.promptOf(paneID, s, readClaudeScreen(screen))})
+	jsonOK(w, promptResponse{Prompt: a.promptOf(paneID, s, readAgentScreen(s.Agent, screen))})
 }
 
 // promptOf turns a screen's dialog into the card the client gets.
@@ -495,6 +497,11 @@ func (a *agentAPI) promptOf(paneID string, s AgentSession, sc agentScreen) *Agen
 		return nil
 	}
 	p := *sc.prompt
+	if s.DialogsReadOnly {
+		// Never answerable here: the card says to answer in the terminal
+		// instead of waiting for a status that never comes.
+		p.Kind, p.Options = "unsupported", nil
+	}
 	if p.Kind != "unsupported" && dialogStatus(s) && !a.input.answered(paneID, sc.sig) {
 		p.PromptID = a.input.issuePrompt(paneID, s, sc.sig, p)
 	}
@@ -569,7 +576,7 @@ func (a *agentAPI) answer(ctx context.Context, wr agentWriter, paneID, promptID 
 	if err != nil {
 		return err
 	}
-	sc := readClaudeScreen(screen)
+	sc := readAgentScreen(s.Agent, screen)
 	// A typed answer also needs the free-text option ready now: the
 	// signature leaves out the pointer, which a multiSelect tab moves from.
 	if sc.prompt == nil || sc.sig != rec.sig || sc.prompt.Kind == "unsupported" || !dialogStatus(s) || (typed && sc.prompt.FreeText == nil) {
@@ -603,7 +610,7 @@ func (a *agentAPI) answer(ctx context.Context, wr agentWriter, paneID, promptID 
 	if err := wr.SendKeySequence(ctx, s.Target, []string{key}); err != nil {
 		return err
 	}
-	closed := pollScreen(ctx, wr, s.Target, func(sc agentScreen) bool { return sc.sig != closeFrom })
+	closed := pollScreen(ctx, wr, s.Agent, s.Target, func(sc agentScreen) bool { return sc.sig != closeFrom })
 	if !closed {
 		return fail(http.StatusBadGateway, "answer_not_confirmed", "the key was sent but the dialog is still open")
 	}
@@ -620,7 +627,7 @@ func (a *agentAPI) movePointer(ctx context.Context, wr agentWriter, paneID strin
 		return "", err
 	}
 	var next agentScreen
-	moved := pollScreen(ctx, wr, s.Target, func(sc agentScreen) bool {
+	moved := pollScreen(ctx, wr, s.Agent, s.Target, func(sc agentScreen) bool {
 		next = sc
 		return sc.prompt != nil && sc.prompt.pointer == n
 	})
@@ -667,7 +674,7 @@ func (a *agentAPI) moveToStep(ctx context.Context, wr agentWriter, paneID string
 			return err
 		}
 		var next agentScreen
-		moved := pollScreen(ctx, wr, s.Target, func(sc agentScreen) bool {
+		moved := pollScreen(ctx, wr, s.Agent, s.Target, func(sc agentScreen) bool {
 			next = sc
 			return sc.sig != prev
 		})
@@ -705,10 +712,19 @@ func sameTabs(a, b []PromptStep) bool {
 	return true
 }
 
-// dialogStatus: where the agent's own status is known from its session
-// file (tmux), it must say a dialog is open; the screen alone is not enough.
+// dialogStatus: the agent's own status must say a dialog is open; the screen
+// alone is not enough. Claude Code: where its status is known from its
+// session file (tmux, PID set), it must say blocked. Codex: herdr reports it
+// blocked; on tmux its rollout records no approval request, so it never is
+// (DialogsReadOnly).
 func dialogStatus(s AgentSession) bool {
-	return s.PID == 0 || s.Status == "blocked"
+	switch s.Agent {
+	case "claude":
+		return s.PID == 0 || s.Status == "blocked"
+	case "codex":
+		return s.Status == "blocked"
+	}
+	return false
 }
 
 // choiceKey is the key for a choice: an option's number, "cancel" for
@@ -801,7 +817,7 @@ func (a *agentAPI) typeAnswer(ctx context.Context, wr agentWriter, paneID string
 		if err := wr.SendKeySequence(ctx, s.Target, []string{key}); err != nil {
 			return err
 		}
-		done := pollScreen(ctx, wr, s.Target, func(sc agentScreen) bool {
+		done := pollScreen(ctx, wr, s.Agent, s.Target, func(sc agentScreen) bool {
 			next = sc
 			return sameFreeQuestion(sc.prompt, &rec.prompt) && ok(sc.prompt)
 		})
@@ -849,7 +865,7 @@ func (a *agentAPI) typeAnswer(ctx context.Context, wr agentWriter, paneID string
 	shows := func(p *AgentPrompt) bool {
 		return !p.free.empty && strip(p.free.value) == strip(text) && (!multi || p.free.checked)
 	}
-	shown := pollScreen(ctx, wr, s.Target, func(sc agentScreen) bool {
+	shown := pollScreen(ctx, wr, s.Agent, s.Target, func(sc agentScreen) bool {
 		next = sc
 		return sameFreeQuestion(sc.prompt, &rec.prompt) && sc.prompt.pointer == want.index && shows(sc.prompt)
 	})
@@ -871,7 +887,7 @@ func (a *agentAPI) typeAnswer(ctx context.Context, wr agentWriter, paneID string
 	if err := wr.SendKeySequence(ctx, s.Target, []string{"Enter"}); err != nil {
 		return err
 	}
-	if !pollScreen(ctx, wr, s.Target, func(sc agentScreen) bool { return sc.sig != typedSig }) {
+	if !pollScreen(ctx, wr, s.Agent, s.Target, func(sc agentScreen) bool { return sc.sig != typedSig }) {
 		return fail(http.StatusBadGateway, "answer_not_confirmed", "Enter was sent but the dialog is still open")
 	}
 	return nil

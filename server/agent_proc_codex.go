@@ -183,6 +183,7 @@ func codexSessionOf(p claudeProc, wantID string, withStatus bool) (AgentSession,
 	}
 	if withStatus {
 		s.Status = codexStatusNow(path, fileID)
+		s.DialogsReadOnly = true
 	}
 	return s, true
 }

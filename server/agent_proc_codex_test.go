@@ -112,26 +112,6 @@ func TestParseLsofWriteFiles(t *testing.T) {
 	}
 }
 
-func TestCodexSessionWriteRoutesRefused(t *testing.T) {
-	f := newFakeWriter()
-	f.session = AgentSession{Agent: "codex", ID: testCodexID, Target: "%1", Status: "idle"}
-	f.found = true
-	f.screen = boxScreen("")
-	mux := agentMux(f)
-	for _, path := range []string{"message", "answer"} {
-		code, body := postJSON(t, mux, "/api/mux/panes/0/agent/"+path, map[string]string{"text": "hi", "cursor": encodeCursor(agentCursor{Session: testCodexID}), "promptId": "p"})
-		if code != http.StatusNotFound || body["error"] != errAgentUnsupported.Error() {
-			t.Errorf("%s = %d %v", path, code, body)
-		}
-	}
-	if code, body := getJSON(t, mux, "/api/mux/panes/0/agent/prompt"); code != http.StatusNotFound || body["error"] != errAgentUnsupported.Error() {
-		t.Errorf("prompt = %d %v", code, body)
-	}
-	if len(f.pasted) != 0 || len(f.keys) != 0 {
-		t.Errorf("typed into a codex pane: %v %v", f.pasted, f.keys)
-	}
-}
-
 func TestCommandsRouteCodexIsEmpty(t *testing.T) {
 	root, cfg := t.TempDir(), t.TempDir()
 	writeFile(t, filepath.Join(root, ".claude/commands/proj.md"), "Project one")
@@ -265,17 +245,6 @@ func TestCodexStatusNow(t *testing.T) {
 	// The first scan runs in the background; once done, the status is read.
 	codexStatusNow(p, fid)
 	waitFor(t, func() bool { return codexStatusNow(p, fid) == "working" })
-}
-
-func TestMessageRefusedWhenAnotherAgentTookThePane(t *testing.T) {
-	f := newFakeWriter()
-	f.screen = boxScreen("")
-	f.sessions = []AgentSession{{Agent: "codex", ID: f.session.ID, Target: f.session.Target}}
-	mux := agentMux(f)
-	code, body := postJSON(t, mux, "/api/mux/panes/0/agent/message", map[string]string{"text": "hi", "cursor": encodeCursor(agentCursor{Session: f.session.ID})})
-	if code != http.StatusNotFound || body["error"] != errAgentUnsupported.Error() || len(f.pasted) != 0 {
-		t.Errorf("message = %d %v, pasted %v", code, body, f.pasted)
-	}
 }
 
 func TestFindCodexSessionUnsupportedOrBadID(t *testing.T) {

@@ -221,9 +221,6 @@ type PromptOption struct {
 	Detail string `json:"detail,omitempty"`
 	// Checked: a multiSelect option ticked ("[✔]"); its digit toggles it.
 	Checked bool `json:"checked,omitempty"`
-	// key: the key Codex shows for the option ("y", "esc"); Claude Code's
-	// options are picked by their number and have none.
-	key string
 }
 
 const (
@@ -333,6 +330,9 @@ func nonEmpty(ss []string) []string {
 var (
 	optionRowRe   = regexp.MustCompile(`^(?:❯\s*)?(\d+)\.\s+(.+)$`)
 	pastedTokenRe = regexp.MustCompile(`^\[Pasted text #\d+(?: \+(\d+) lines?)?\]$`)
+	// codexPastedTokenRe: what Codex 0.160.0 shows for a paste of more than
+	// 1000 characters.
+	codexPastedTokenRe = regexp.MustCompile(`^\[Pasted Content (\d+) chars\]$`)
 )
 
 // findDialog recognises a dialog whose footer is the last row. A footer
@@ -740,9 +740,14 @@ func isDashedRule(s string) bool {
 }
 
 // draftShows reports whether the box shows text after it was pasted into an
-// empty box: the text itself, or the token Claude Code shows for a long paste
-// ("[Pasted text #3 +28 lines]", where 28 is the number of newlines).
+// empty box: the text itself, or the token the agent shows for a long paste:
+// Claude Code's "[Pasted text #3 +28 lines]" (28 is the number of newlines),
+// Codex's "[Pasted Content 1200 chars]" (characters, newlines included).
 func draftShows(draft, text string) bool {
+	if m := codexPastedTokenRe.FindStringSubmatch(draft); m != nil {
+		n, _ := strconv.Atoi(m[1])
+		return n == utf8.RuneCountInString(text)
+	}
 	if m := pastedTokenRe.FindStringSubmatch(draft); m != nil {
 		nl := strings.Count(text, "\n")
 		if m[1] == "" {

@@ -92,7 +92,7 @@ func TestFindCodexSessionUnderPane(t *testing.T) {
 	real, _ := filepath.EvalSymlinks(p)
 	start, _ := procStartTime(codex)
 	if !ok || s.Agent != "codex" || s.ID != testCodexID || s.Rollout != real || s.CodexHome != home ||
-		s.RolloutID != fileIdentity(mustStat(t, p)) || s.Status != "working" || s.PID != codex || s.ProcStart != start {
+		s.RolloutID != fileIdentity(mustStat(t, p)) || s.Status != "working" || s.PID != codex || s.ProcStart != start || !s.DialogsReadOnly {
 		t.Fatalf("session = %+v, %v", s, ok)
 	}
 	// The transcript route reads that file.

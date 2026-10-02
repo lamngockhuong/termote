@@ -50,6 +50,10 @@ type AgentSession struct {
 	CodexHome string
 	Rollout   string
 	RolloutID string
+	// DialogsReadOnly: the status never says a dialog is open (Codex on
+	// tmux, read from a rollout that records no approval request), so its
+	// dialogs are shown, never answered from the client.
+	DialogsReadOnly bool
 	// PID and ProcStart identify the agent process (tmux), so a write can
 	// check that the same process still runs before it touches the pane.
 	PID       int

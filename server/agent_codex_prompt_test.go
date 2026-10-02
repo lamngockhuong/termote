@@ -44,18 +44,18 @@ func TestReadCodexScreenRecorded(t *testing.T) {
 		{screen: "0.159.3-idle-dialog-like-text", input: inputEmpty},
 		{
 			screen: "0.159.3-approval-exec", kind: "permission", title: "Would you like to run the following command?",
-			options: "1:Yes, proceed:y|2:Yes, and don't ask again for commands that start with `touch c.txt`:p|3:No, and tell Codex what to do differently:esc",
+			options: "1:Yes, proceed|2:Yes, and don't ask again for commands that start with `touch c.txt`|3:No, and tell Codex what to do differently",
 			pointer: 1,
 		},
 		{
 			screen: "0.159.3-approval-patch", kind: "permission", title: "Would you like to make the following edits?",
-			options: "1:Yes, proceed:y|2:Yes, and don't ask again for these files:a|3:No, and tell Codex what to do differently:esc",
+			options: "1:Yes, proceed|2:Yes, and don't ask again for these files|3:No, and tell Codex what to do differently",
 			pointer: 1,
 		},
 		{screen: "0.159.3-dialog-rate-limit-model", kind: "unsupported", title: "Approaching rate limits"},
 		{
 			screen: "0.160.0-approval-exec", kind: "permission", title: "Would you like to run the following command?",
-			options: "1:Yes, proceed:y|2:Yes, and don't ask again for commands that start with `sleep 8`:p|3:No, and tell Codex what to do differently:esc",
+			options: "1:Yes, proceed|2:Yes, and don't ask again for commands that start with `sleep 8`|3:No, and tell Codex what to do differently",
 			pointer: 1,
 		},
 		{screen: "0.160.0-herdr-input-empty", input: inputEmpty},
@@ -64,7 +64,7 @@ func TestReadCodexScreenRecorded(t *testing.T) {
 		{screen: "0.160.0-herdr-working-empty", input: inputNone},
 		{
 			screen: "0.160.0-herdr-approval-exec", kind: "permission", title: "Would you like to run the following command?",
-			options: "1:Yes, proceed:y|2:Yes, and don't ask again for commands that start with `touch`:p|3:No, and tell Codex what to do differently:esc",
+			options: "1:Yes, proceed|2:Yes, and don't ask again for commands that start with `touch`|3:No, and tell Codex what to do differently",
 			pointer: 1,
 		},
 	}
@@ -94,7 +94,7 @@ func TestReadCodexScreenRecorded(t *testing.T) {
 func codexOptionsText(p *AgentPrompt) string {
 	var out []string
 	for _, o := range p.Options {
-		out = append(out, itoa10(o.Index)+":"+o.Label+":"+o.key)
+		out = append(out, itoa10(o.Index)+":"+o.Label)
 	}
 	return strings.Join(out, "|")
 }
@@ -211,7 +211,7 @@ func TestReadCodexScreenNarrow(t *testing.T) {
 		"  to cancel")
 	sc := readCodexScreen(approval)
 	if sc.prompt == nil || sc.prompt.Kind != "permission" ||
-		codexOptionsText(sc.prompt) != "1:Yes, proceed:y|2:Yes, and don't ask again for commands that start with:p|3:No, and tell Codex what to do:esc" {
+		codexOptionsText(sc.prompt) != "1:Yes, proceed|2:Yes, and don't ask again for commands that start with|3:No, and tell Codex what to do" {
 		t.Fatalf("narrow approval: %+v", sc.prompt)
 	}
 	// The end of the footer alone, or a row of its own under it, is no footer.
