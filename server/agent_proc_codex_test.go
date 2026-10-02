@@ -9,12 +9,16 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
 )
 
 func TestCodexHomeFromEnv(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix paths: Codex is only looked up on Linux and macOS")
+	}
 	for _, c := range []struct {
 		env  []string
 		want string
@@ -87,6 +91,9 @@ func TestParseProcArgs2(t *testing.T) {
 }
 
 func TestParseLsofWriteFiles(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix paths: Codex is only looked up on Linux and macOS")
+	}
 	name := "rollout-2026-10-02T08-36-50-" + testCodexID + ".jsonl"
 	out := strings.Join([]string{
 		"p123\x00",
