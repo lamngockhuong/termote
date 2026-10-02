@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"slices"
@@ -155,6 +156,10 @@ func codexUserThreadCached(path, id, fileID string) bool {
 	return user
 }
 
+// codexMissOnce logs, once per run, a Codex found in a pane without a
+// rollout, so a Codex update that moves its files does not fail silently.
+var codexMissOnce sync.Once
+
 // codexSessionOf reads the rollout a proven Codex process holds now, so /new
 // or a resume shows on the next lookup while the walk stays cached. The turn
 // status is read from the rollout when withStatus is set (herdr reports its
@@ -162,6 +167,13 @@ func codexUserThreadCached(path, id, fileID string) bool {
 func codexSessionOf(p claudeProc, wantID string, withStatus bool) (AgentSession, bool) {
 	path, id, fileID, ok := codexRollout(p.pid, p.codexHome, wantID)
 	if !ok {
+		if wantID == "" {
+			codexMissOnce.Do(func() {
+				log.Printf("agent: codex process %d in a pane holds no single rollout of its own: "+
+					"none before its first message, none in daemon mode (run it with --no-daemon), "+
+					"two after /new (restart it); no Chat view for it until then", p.pid)
+			})
+		}
 		return AgentSession{}, false
 	}
 	s := AgentSession{

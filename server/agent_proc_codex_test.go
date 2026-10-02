@@ -1,13 +1,16 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -279,5 +282,32 @@ func TestFindCodexSessionUnsupportedOrBadID(t *testing.T) {
 		if _, ok := codexProcOf(os.Getpid()); ok {
 			t.Error("codexProcOf where not supported")
 		}
+	}
+}
+
+func TestCodexSessionOfLogsMissOnce(t *testing.T) {
+	orig := procWriteFilesFn
+	t.Cleanup(func() { procWriteFilesFn = orig; codexMissOnce = sync.Once{} })
+	procWriteFilesFn = func(int, func(string) bool) []procFile { return nil }
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+	codexMissOnce = sync.Once{}
+	p := claudeProc{agent: "codex", pid: 1, codexHome: t.TempDir()}
+	os.Mkdir(filepath.Join(p.codexHome, "sessions"), 0o700)
+	// herdr's lookup by id is not a pane's Codex: not logged
+	if _, ok := codexSessionOf(p, testCodexID, false); ok {
+		t.Fatal("found a rollout that is not open")
+	}
+	if buf.Len() != 0 {
+		t.Errorf("lookup by id logged %q", buf.String())
+	}
+	for range 2 {
+		if _, ok := codexSessionOf(p, "", true); ok {
+			t.Fatal("found a rollout that is not open")
+		}
+	}
+	if n := strings.Count(buf.String(), "holds no single rollout"); n != 1 {
+		t.Errorf("logged %d times: %q", n, buf.String())
 	}
 }
