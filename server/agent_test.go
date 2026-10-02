@@ -351,7 +351,7 @@ func TestTranscriptRoute(t *testing.T) {
 	if code, body := getJSON(t, mux, "/api/mux/panes/3/agent/transcript"); code != http.StatusNotFound || body["error"] != errNoTranscript.Error() {
 		t.Errorf("no transcript = %d %v", code, body)
 	}
-	loc.s.Agent = "codex"
+	loc.s.Agent = "pi"
 	if code, _ := getJSON(t, mux, "/api/mux/panes/4/agent/transcript"); code != http.StatusNotFound {
 		t.Errorf("agent without adapter = %d", code)
 	}

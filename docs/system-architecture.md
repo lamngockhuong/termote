@@ -82,7 +82,7 @@ Go HTTP server providing:
 - **Terminal WebSocket**: `/api/mux/stream` opens a PTY/ConPTY attached to the selected pane and streams it as binary WebSocket frames; a text control frame carries resize (client→server) and exit/error/size (server→client)
 - **Authentication**: Basic auth with a session cookie, rate-limited, plus a Host allowlist and an Origin/CSRF write guard in front of everything
 - **Mux API endpoints**: `/api/mux/*` — snapshot (groups→tabs→panes), tab create/rename/close/select, send-keys, health
-- **Agent chat endpoints**: `/api/mux/panes/{id}/agent/*` — the transcript of the Claude Code session in a pane, sending it a message, reading and answering its dialogs (see [Agent chat](#agent-chat-apimuxpanesidagent))
+- **Agent chat endpoints**: `/api/mux/panes/{id}/agent/*` — the transcript of the Claude Code or Codex session in a pane; for Claude Code also sending it a message, reading and answering its dialogs (see [Agent chat](#agent-chat-apimuxpanesidagent))
 
 Configuration: when `termote serve` finds a saved config (`~/.config/termote/config`), it reads
 that and ignores every `TERMOTE_*` variable, then strips them from its own environment so
@@ -205,9 +205,12 @@ error instead of a broken page.
 
 ### Agent chat (`/api/mux/panes/{id}/agent/*`)
 
-The PWA's Chat view is a second way to look at a pane running Claude Code, offered when the
-snapshot reports `caps.agentChat` and the pane's `agent.name` is `claude`. It is the same
-session as the terminal, not a session of its own: nothing runs headless.
+The PWA's Chat view is a second way to look at a pane running Claude Code or Codex, offered
+when the snapshot reports `caps.agentChat` and the pane's `agent.name` is `claude` or `codex`
+(`pwa/src/chat-agents.ts`). It is the same session as the terminal, not a session of its own:
+nothing runs headless. Codex is read only: the PWA shows no composer and no dialog card, and
+`message`, `prompt` and `answer` answer 404 `agent not available` for it, `commands` an empty
+list.
 
 **Finding the session.** Herdr reports the session id itself (`agent_session` on the pane;
 `herdr integration install claude` must have been run). Herdr does not expose the pane's
@@ -222,6 +225,35 @@ pid namespace. Claude Code never removes those files, so a file alone proves not
 session's pid can be reused by another process. psmux reads only `%USERPROFILE%\.claude`
 (Windows does not expose another process's environment). tmux pane ids in these routes are the
 window's active pane: a split window chats with the pane that has focus.
+
+**Finding a Codex session.** Only a Codex TUI run with `--no-daemon` writes its own rollout. By default a shared
+`codex app-server --managed-daemon` writes the rollout of every pane, outside every pane's
+process tree but the one that started it, and Herdr's hook runs in that daemon and reports the
+session to the wrong pane: such panes have no Chat view on either backend. On tmux the walk
+above also takes a process as Codex when all of these hold: its executable is named `codex`
+(`/proc/<pid>/exe` on Linux, the exec path in `kern.procargs2` on macOS), checked before any of
+its files are listed, so a pane without Codex costs no fd scan; its argv does not contain
+`app-server`; it holds open **for writing** (`fdinfo` flags on Linux, `lsof` on macOS) a regular
+file `rollout-*-<uuid>.jsonl` that resolves inside `<CODEX_HOME>/sessions`, with `CODEX_HOME`
+read from its environment (else `$HOME/.codex`); and exactly one such file has
+`session_meta.thread_source` `user` (sub-agent threads are skipped). After `/new` the process
+holds the old and the new rollout, so the pane has no Chat view until Codex is restarted. Herdr
+reports the session id (`herdr integration install codex`); the server accepts it only when a
+process among all of the host's passes the same checks holding that very rollout, and takes
+`CODEX_HOME` from that process. It trusts the id as Herdr reports it: after `/new` the process
+still holds the old rollout, so the pane shows whichever session Herdr names, and a pane whose
+hook once ran in a daemon can name another pane's session. Windows (psmux, Herdr) never finds a Codex session. On tmux, a Codex found
+in a pane without such a rollout is logged once per run (usually a Codex before its first
+message or in daemon mode), so a Codex update that moves its files does not go unnoticed. Checked with Codex 0.159.3.
+
+The rollout read is the file that process holds: its resolved path and file identity
+(dev:inode) are recorded when it is found, and `transcript` refuses a file whose identity
+changed. Entries come from `event_msg` `item_completed` rows (user and agent messages, reasoning
+summaries, commands, file changes, MCP and extension calls, compactions), or `user_message` and
+`agent_message` in a legacy rollout; the messages Codex adds for the model (`response_item`) are
+never shown. The tmux status reads back from the end to the latest of `task_started` (working),
+`task_complete`, `turn_aborted` or `thread_settings_applied` (idle); it is never `blocked`, since
+the rollout does not record an approval request. Herdr reports its own status.
 
 **Transcript.** `<claudeDir>/projects/*/<sessionId>.jsonl`, with `sessionId` a UUID and the
 resolved path inside that config dir. Reads are incremental from a signed `cursor` (a position
@@ -533,8 +565,11 @@ termote update --force           # Force reinstall current version
    are rate-limited to one per 10s
 10. **Agent chat**: on tmux/psmux the server reads only the transcript in the Claude config
     dir of the process found in the pane, proven by its start time (Herdr names the session
-    itself, read from the server user's config dir); every write re-checks the target and the
-    screen and sends nothing on doubt; markdown images in the Chat view never load
+    itself, read from the server user's config dir); a Codex rollout only when a process named
+    `codex`, not an `app-server`, holds it open for writing inside its `CODEX_HOME/sessions`,
+    the identity checked again after opening; every write re-checks the target and the screen
+    and sends nothing on doubt, and Codex has no write route; markdown images in the Chat view
+    never load
 11. **Files and changes**: read-only; paths confined to the pane's root by `os.Root`; Termote's
     config/state dirs, `/proc`, `/sys`, `/dev` and `.git` never served; sensitive files only
     with `reveal=1`; git run without a shell and with every repo-configured program disabled;

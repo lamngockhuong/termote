@@ -168,7 +168,7 @@ const TOOLBAR_GUIDE: GuideSection[] = [
       { key: <AgentStatusBadge status="idle" />, desc: 'Idle' },
       {
         key: 'Chat',
-        desc: 'Claude Code panes: read the conversation, send a message, answer its dialogs',
+        desc: 'Claude Code panes: read the conversation, send a message, answer its dialogs. Codex panes: read the conversation',
       },
     ],
   },

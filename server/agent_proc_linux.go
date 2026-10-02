@@ -11,7 +11,10 @@ import (
 	"syscall"
 )
 
-const agentProcSupported = true
+const (
+	agentProcSupported = true
+	codexProcSupported = true
+)
 
 // procRoot is /proc; tests point it at a fake tree.
 var procRoot = "/proc"
@@ -113,6 +116,97 @@ func procClaudeDir(pid int) (string, bool) {
 		return "", false
 	}
 	return filepath.Join(home, ".claude"), true
+}
+
+// procNULFields reads a NUL-separated /proc/<pid> file (cmdline, environ).
+func procNULFields(pid int, name string) ([]string, bool) {
+	b, err := os.ReadFile(filepath.Join(procRoot, strconv.Itoa(pid), name))
+	if err != nil {
+		return nil, false
+	}
+	return strings.Split(strings.TrimRight(string(b), "\x00"), "\x00"), true
+}
+
+// procExeBase is the name of the file pid executes; a binary replaced by an
+// update reads "codex (deleted)", which is still the same program.
+func procExeBase(pid int) string {
+	exe, err := os.Readlink(filepath.Join(procRoot, strconv.Itoa(pid), "exe"))
+	if err != nil {
+		return ""
+	}
+	return filepath.Base(strings.TrimSuffix(exe, " (deleted)"))
+}
+
+// procArgs is pid's command line.
+func procArgs(pid int) []string {
+	args, _ := procNULFields(pid, "cmdline")
+	return args
+}
+
+// procCodexHome reads CODEX_HOME, else HOME, from the process's environment.
+func procCodexHome(pid int) (string, bool) {
+	env, ok := procNULFields(pid, "environ")
+	if !ok {
+		return "", false
+	}
+	return codexHomeFromEnv(envGetter(env))
+}
+
+// The access mode bits of the open flags fdinfo prints in octal: O_WRONLY
+// (1) and O_RDWR (2) allow writing; O_APPEND alone does not.
+const procAccMode = 0o3
+
+// procWriteFiles lists the files pid holds open for writing whose name
+// passes match: the fd link, its fdinfo flags, and the identity of the open
+// file (a stat through the fd).
+func procWriteFiles(pid int, match func(name string) bool) []procFile {
+	dir := filepath.Join(procRoot, strconv.Itoa(pid))
+	fds, err := os.ReadDir(filepath.Join(dir, "fd"))
+	if err != nil {
+		return nil
+	}
+	var out []procFile
+	for _, fd := range fds {
+		target, err := os.Readlink(filepath.Join(dir, "fd", fd.Name()))
+		if err != nil || !filepath.IsAbs(target) || !match(filepath.Base(target)) {
+			continue
+		}
+		info, err := os.ReadFile(filepath.Join(dir, "fdinfo", fd.Name()))
+		if err != nil || procFDFlags(string(info))&procAccMode == 0 {
+			continue
+		}
+		f := procFile{path: target}
+		if fi, err := os.Stat(filepath.Join(dir, "fd", fd.Name())); err == nil {
+			f.id = fileIdentity(fi)
+		}
+		out = append(out, f)
+	}
+	return out
+}
+
+// procFDFlags reads the "flags:" line of an fdinfo file (octal).
+func procFDFlags(info string) int64 {
+	for _, l := range strings.Split(info, "\n") {
+		if v, ok := strings.CutPrefix(l, "flags:"); ok {
+			n, err := strconv.ParseInt(strings.TrimSpace(v), 8, 64)
+			if err == nil {
+				return n
+			}
+		}
+	}
+	return 0
+}
+
+// procAllPIDs lists every process.
+func procAllPIDs() []int {
+	dirs, _ := os.ReadDir(procRoot)
+	var out []int
+	for _, d := range dirs {
+		if pid, err := strconv.Atoi(d.Name()); err == nil {
+			out = append(out, pid)
+		}
+	}
+	return out
 }
 
 // claudePIDDomain is how Claude Code names this pid namespace in pidDomain:

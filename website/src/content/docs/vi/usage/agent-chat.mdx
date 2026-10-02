@@ -1,14 +1,15 @@
 ---
 title: Chat với agent
-description: Đọc và trả lời Claude Code trong view chat thay cho terminal
+description: Đọc và trả lời Claude Code, xem hội thoại của Codex, trong view chat thay cho terminal
 ---
 
 import { Aside } from "@astrojs/starlight/components";
 
 Trên điện thoại, câu trả lời dài trong terminal rất khó đọc, gõ lệnh vào đó cũng vậy. Khi một
-pane chạy **Claude Code**, header hiện nút chuyển **Terminal / Chat** (trên điện thoại là một nút
+pane chạy **Claude Code** hoặc **Codex**, header hiện nút chuyển **Terminal / Chat** (trên điện thoại là một nút
 view, chạm vào sẽ mở danh sách các view). View Chat là cách nhìn thứ hai vào cùng một phiên:
-tin bạn gửi ở đây được gõ vào pane, còn Claude Code viết gì thì cả hai view đều thấy. Không có gì tự chạy ngầm.
+tin bạn gửi ở đây được gõ vào pane, còn agent viết gì thì cả hai view đều thấy. Không có gì tự chạy ngầm.
+Với Codex, view này hiện chỉ để xem, chưa gửi được gì (xem [Codex](#codex-chỉ-đọc)).
 
 ## Yêu cầu
 
@@ -17,6 +18,7 @@ tin bạn gửi ở đây được gõ vào pane, còn Claude Code viết gì th
   - **psmux** trên Windows
   - **Herdr** trên mọi hệ điều hành, sau khi đã chạy `herdr integration install claude` một lần
 - Cài native (`termote start`). Container của Termote không cài sẵn Claude Code.
+- Với Codex: xem [Codex](#codex-chỉ-đọc).
 
 ## View Chat hiện gì
 
@@ -105,6 +107,36 @@ chọn nữa, được tích sẵn; nút của nó bỏ tích được như các
 Câu hỏi có khung xem trước bên cạnh các lựa chọn cũng trả lời như vậy: bấm một lần là chọn. Riêng
 khung xem trước chỉ hiện trong terminal.
 
+## Codex (chỉ đọc)
+
+Pane chạy Codex cũng có view Chat với hội thoại của phiên: tin nhắn của bạn, câu trả lời dạng
+markdown, lệnh đã chạy kèm kết quả, các thay đổi file dạng diff. View này không có ô nhập tin
+và không có thẻ hộp thoại. Thay vào đó là thanh **Read only** kèm nút **Open terminal**: muốn gõ
+tin hay trả lời yêu cầu duyệt (chạy lệnh, sửa file) thì làm trong terminal.
+
+Yêu cầu:
+
+- Chạy Codex bằng `codex --no-daemon`. Mặc định mọi TUI Codex giao phiên của mình cho một tiến trình nền dùng chung, và Termote
+  không biết phiên nào thuộc pane nào, nên các pane đó không có view Chat.
+- **tmux** trên Linux hoặc macOS, hoặc **Herdr** trên Linux hoặc macOS sau khi đã chạy
+  `herdr integration install codex` một lần. Chưa hỗ trợ Windows (psmux hay Herdr đều không).
+- Đã kiểm với Codex 0.159.3. Bản mới hơn mà ghi phiên ra chỗ khác thì mất view Chat; trên tmux,
+  log của server ghi một lần rằng nó thấy Codex mà không tìm được file phiên.
+
+Những điều cần biết:
+
+- Codex chưa nhận tin nào thì chưa có hội thoại để hiện, vì Codex chỉ tạo file phiên khi có tin
+  đầu tiên. Trên tmux, nút Chat xuất hiện từ lúc đó; trên Herdr nút có ngay từ đầu, nhưng tới lúc
+  đó view chỉ báo không tìm thấy phiên.
+- Sau `/new`, pane tmux mất view Chat cho tới khi khởi động lại Codex: lúc đó Codex giữ hai phiên,
+  và Termote không đoán phiên nào đang hiện trên màn hình. Trên Herdr, view Chat hiện phiên mà
+  Herdr báo cho pane, nên có thể vẫn là phiên trước cho tới khi Herdr báo phiên mới.
+- Trên Herdr, pane đã từng khởi động tiến trình nền dùng chung trước khi bạn chuyển sang
+  `--no-daemon` có thể vẫn báo một phiên không phải của nó, kể cả phiên của pane khác, cho tới
+  khi Codex chạy lại trong pane đó.
+- Chỉ tiến trình Codex đang ghi phiên mới được tính: chương trình khác đọc cùng file phiên (như
+  `tail -f`) không có view Chat.
+
 ## Giới hạn
 
 - tmux: chat đi theo pane đang được focus trong cửa sổ tmux. Ở cửa sổ chia đôi, chat nói chuyện với pane
@@ -114,7 +146,7 @@ khung xem trước chỉ hiện trong terminal.
 - Herdr: transcript được đọc từ `~/.claude` của người dùng chạy Termote. Claude Code chạy với
   `CLAUDE_CONFIG_DIR` khác sẽ không hiện lịch sử.
 - Chưa hỗ trợ chế độ container.
-- Hiện chỉ có Claude Code.
+- Hiện chỉ có Claude Code, và Codex ở chế độ chỉ đọc.
 
 <Aside>
   Nút **Open terminal** luôn ở ngay đó. Stream terminal vẫn giữ kết nối khi bạn ở view Chat, nên

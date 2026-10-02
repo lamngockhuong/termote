@@ -234,6 +234,29 @@ describe('ChatView agent state', () => {
     expect(screen.queryByRole('button', { name: /Yes/ })).toBeNull()
   })
 
+  it('view-only does not read the dialog of an agent without input', () => {
+    set({ entries: entries(1) })
+    render(
+      <ChatView
+        {...props}
+        readOnly
+        session={{ ...props.session, name: 'codex', agentName: 'codex' }}
+      />,
+    )
+    expect(promptStore.pane).toBeUndefined()
+    expect(screen.getByText('Codex · codex')).toBeInTheDocument()
+  })
+
+  it('names an agent it has no label for generically', () => {
+    set({ error: 'no-session' })
+    render(
+      <ChatView {...props} session={{ ...props.session, agentName: 'pi' }} />,
+    )
+    expect(
+      screen.getByText('No agent session found in this pane.'),
+    ).toBeInTheDocument()
+  })
+
   it('view-only on a pane-less session passes an empty pane id', () => {
     promptStore.prompt = { kind: 'unsupported', title: 'x' }
     set({ entries: entries(1) })

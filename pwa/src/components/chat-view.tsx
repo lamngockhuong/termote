@@ -7,6 +7,7 @@ import {
   useState,
 } from 'react'
 import type { ViewProps } from '../app-views'
+import { agentLabel, chatInputAgent } from '../chat-agents'
 import { useAgentPrompt } from '../hooks/use-agent-prompt'
 import { useAgentTranscript } from '../hooks/use-agent-transcript'
 import { toAgentStatus } from '../types/session'
@@ -25,7 +26,12 @@ export function ChatView({ session, showView, readOnly }: ViewProps) {
   const t = useAgentTranscript(session.paneId)
   const status = toAgentStatus(t.status)
   // View-only has no composer: the dialog is shown here, without buttons.
-  const p = useAgentPrompt(readOnly ? session.paneId : undefined, status)
+  // An agent without input has no dialog reader on the server.
+  const p = useAgentPrompt(
+    readOnly && chatInputAgent(session.agentName) ? session.paneId : undefined,
+    status,
+  )
+  const agent = agentLabel(session.agentName)
   const listRef = useRef<HTMLDivElement>(null)
   const [shown, setShown] = useState(RENDER_WINDOW)
   const [atBottom, setAtBottom] = useState(true)
@@ -137,7 +143,7 @@ export function ChatView({ session, showView, readOnly }: ViewProps) {
       <Centered>
         <p>
           {t.error === 'no-session'
-            ? 'No Claude Code session found in this pane.'
+            ? `No ${agent} session found in this pane.`
             : 'Could not read the conversation.'}
         </p>
         <OpenTerminalButton showView={showView} />
@@ -156,7 +162,7 @@ export function ChatView({ session, showView, readOnly }: ViewProps) {
       <header className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2 text-[13px]">
         <AgentStatusBadge status={status} />
         <span className="min-w-0 flex-1 truncate font-medium">
-          Claude Code · {session.name}
+          {agent} · {session.name}
           {paneLabel && ` · ${paneLabel}`}
         </span>
         {t.error && <span className="text-warning">Reconnecting…</span>}

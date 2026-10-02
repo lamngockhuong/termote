@@ -61,6 +61,7 @@ termote/
 │   └── termote.ps1         # Checkout-only dev shim (Windows), same job
 ├── tests/                  # Test suite
 │   ├── fixtures/fake-claude.sh # Stand-in Claude Code for the Chat view E2E (Linux)
+│   ├── fixtures/fake-codex.sh  # Stand-in Codex (--no-daemon) for the read-only Chat E2E (Linux)
 │   ├── test-termote.sh     # Unix dev shim tests
 │   ├── test-termote.ps1    # Windows dev shim tests
 │   ├── test-install.sh     # install.sh tests (fake curl)
@@ -288,6 +289,8 @@ The `update` command:
 | `pwa/src/utils/terminal-bridge.ts`                | Drives the xterm.js terminal (key mapping, clipboard paste)   |
 | `pwa/src/components/chat-view.tsx`                | Chat view of a pane running Claude Code (lazy-loaded)         |
 | `pwa/src/components/chat-composer.tsx`            | Chat view message box                                         |
+| `pwa/src/chat-agents.ts`                          | Agents with a Chat view (claude, codex) and with input        |
+| `pwa/src/components/read-only-bar.tsx`            | Bottom bar without input (View only, a read-only chat)        |
 | `pwa/src/components/prompt-card.tsx`              | Claude Code dialog as a card (answer buttons or read-only)    |
 | `pwa/src/hooks/use-agent-transcript.ts`           | Polls a pane's transcript, one store per pane                 |
 | `pwa/src/hooks/use-agent-prompt.ts`               | Polls a pane's open dialog, one store per pane                |
@@ -308,11 +311,13 @@ The `update` command:
 | `server/agent_claude.go`                          | Claude Code transcript (JSONL) and session file               |
 | `server/agent_claude_prompt.go`                   | Reads a Claude Code screen: input box, dialogs                |
 | `server/agent_input.go`                           | Sends a message, answers a dialog (checks before each write)  |
+| `server/agent_codex.go`                           | Codex rollout (JSONL): locate, parse, turn status             |
+| `server/agent_proc_codex.go`                      | Finds the Codex process holding a rollout (tmux, Herdr)       |
 | `server/files.go`                                 | `/api/mux/panes/{id}/files/*` routes, tree and file contents  |
 | `server/files_root.go`                            | Pane root (git toplevel), safe git runner                     |
 | `server/files_git.go`                             | git status and diff for the Changes view                      |
 | `server/files_sensitive.go`                       | Names of files that usually hold secrets                      |
-| `server/agent_proc*.go`                           | Finds Claude Code under a tmux/psmux pane                     |
+| `server/agent_proc*.go`                           | Finds Claude Code (or Codex) under a tmux/psmux pane          |
 | `server/guard.go`                                 | Host allowlist + Origin/Content-Type write guard              |
 | `server/serve_config.go`                          | Server config from the saved config, else the environment     |
 | `server/install_layout.go`                        | Versioned install layout (`versions/<v>`, `current`, prune)   |
@@ -374,6 +379,13 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   plugins `installed_plugins.json` lists and `enabledPlugins` (user, project, local settings)
   turns on; an `installPath` is read only when it resolves inside `<config dir>/plugins/`
   (at most 50 plugins, JSON files capped at 1 MB)
+- **Codex chat** (read only): a rollout is read only when a process whose executable is named
+  `codex`, without `app-server` in its argv, holds it open for writing as a regular
+  `rollout-*-<uuid>.jsonl` inside its own `CODEX_HOME/sessions` (resolved), with exactly one
+  such rollout of a user thread; its dev:inode is checked again after opening. Herdr's session id
+  is trusted only when such a process holds that rollout. So only `codex --no-daemon` has a Chat
+  view (the shared daemon writes every pane's rollout), `/new` gives 404 on tmux until Codex
+  restarts, and Windows has none. `message`/`prompt`/`answer` are 404 for Codex, `commands` empty
 - **Files/Changes** (`/api/mux/panes/{id}/files/*`): read-only GETs that also check
   `Sec-Fetch-Site`/`Origin`; every path is opened through `os.Root` under the pane's root (its
   git toplevel, else its directory); termote's config/state dirs, `/proc`, `/sys`, `/dev` and

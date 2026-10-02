@@ -1,0 +1,40 @@
+
+  [38;2;99;168;248m>_ [1m[39mOpenAI Codex[0;2m (v0.159.3)[0m
+     [2m/home/user/proj-worktree[0m
+
+[2m• [0mWorking directory changed to: /home/user/proj-worktree
+
+
+[1m⚠ Heads up, you have less than 10% of your monthly limit left. Run /status for a breakdown.[0m
+
+
+[1;2m› [0mreply with the word ok
+
+
+[2m• [0mok
+
+[2m  Worked for 2s • 08:42
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[0m  [1mApproaching rate limits[0m
+  [2mSwitch to gpt-6-luna for lower credit usage?[0m
+
+
+[1;7m› 1. Switch to gpt-6-luna                   [0;7mFast and affordable model for easier tasks.[1m
+[0m  2. Keep current model
+  3. Keep current model (never show again)  [2mHide future rate limit reminders about switching models[0m
+
+  [1menter[0;2m select · [0;1mesc[0;2m back

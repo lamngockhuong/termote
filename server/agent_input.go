@@ -259,6 +259,10 @@ func (a *agentAPI) lockPane(paneID string) (func(), error) {
 		}
 		return nil, err
 	}
+	if s.Agent != "claude" {
+		// Only Claude Code's screen is read; nothing is typed into another agent.
+		return nil, errAgentUnsupported
+	}
 	return a.input.lock(s.Agent + "\x00" + s.Target), nil
 }
 
@@ -274,6 +278,9 @@ func sessionNow(ctx context.Context, wr agentWriter, paneID string) (AgentSessio
 	}
 	if !ok {
 		return AgentSession{}, errTargetChanged
+	}
+	if s.Agent != "claude" {
+		return AgentSession{}, errAgentUnsupported // another agent took the pane
 	}
 	return s, nil
 }
@@ -462,6 +469,9 @@ func (a *agentAPI) handlePrompt(w http.ResponseWriter, r *http.Request) {
 	}
 	paneID := r.PathValue("id")
 	s, err := a.session(paneID)
+	if err == nil && s.Agent != "claude" {
+		err = errAgentUnsupported // only Claude Code's dialogs are read
+	}
 	if err != nil {
 		a.agentError(w, "agent session", err)
 		return
