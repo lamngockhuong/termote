@@ -17,6 +17,7 @@ const SOURCE_LABEL: Record<SlashCommand['source'], string> = {
   builtin: 'built-in',
   project: 'project',
   user: 'user',
+  plugin: 'plugin',
 }
 
 function Tag({ children }: { children: string }) {

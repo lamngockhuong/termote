@@ -17,6 +17,7 @@ const commands: SlashCommand[] = [
     kind: 'command',
   },
   { name: 'helper', source: 'user', kind: 'skill' },
+  { name: 'kai:translate', source: 'plugin', kind: 'skill' },
 ]
 
 describe('SlashCommandList', () => {
@@ -31,7 +32,7 @@ describe('SlashCommandList', () => {
       />,
     )
     const options = screen.getAllByRole('option')
-    expect(options).toHaveLength(3)
+    expect(options).toHaveLength(4)
     expect(options[0].textContent).toContain('/model')
     expect(options[0].textContent).toContain('Switch the model')
     expect(options[0].textContent).toContain('opens in Terminal')
@@ -41,6 +42,8 @@ describe('SlashCommandList', () => {
     expect(options[1].textContent).toContain('project')
     expect(options[2].textContent).toContain('skill')
     expect(options[2].textContent).toContain('user')
+    expect(options[3].textContent).toContain('/kai:translate')
+    expect(options[3].textContent).toContain('plugin')
   })
 
   it('picks on click, highlights on hover and keeps the focus where it is', () => {

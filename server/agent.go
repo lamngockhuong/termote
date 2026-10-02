@@ -235,10 +235,12 @@ type agentAPI struct {
 	reads    *ttlCache[transcriptResponse]
 	input    *agentInput
 	// Set by registerCommandsRoute: the files routes' pane roots, the host
-	// allowlist and the custom command listings.
+	// allowlist, the custom command listings and the server user's home
+	// (for ~/.agents/skills).
 	files    *filesAPI
 	allowed  hostAllowlist
 	commands *ttlCache[commandsResponse]
+	home     string
 }
 
 type agentLookup struct {

@@ -74,11 +74,12 @@ func TestListAgentCommands(t *testing.T) {
 	writeFile(t, filepath.Join(root, ".claude/skills/internal/SKILL.md"), "---\nuser-invocable: false\ndescription: x\n---\n")
 	writeFile(t, filepath.Join(root, ".claude/skills/no-skill-file/README.md"), "x")
 	writeFile(t, filepath.Join(root, ".claude/skills/loose.md"), "a file, not a skill dir")
+	writeFile(t, filepath.Join(root, ".claude/skills/.hidden/SKILL.md"), "hidden skill dir")
 	writeFile(t, filepath.Join(claude, "commands/deploy.md"), "user deploy, shadowed by the project's")
 	writeFile(t, filepath.Join(claude, "commands/mine.md"), "---\ndescription: Mine\n---\n")
 	writeFile(t, filepath.Join(claude, "skills/helper/SKILL.md"), "---\ndescription: Helps\n---\n")
 
-	got := listAgentCommands(root, claude, nil).Commands
+	got := listAgentCommands(root, claude, "", nil).Commands
 	want := []agentCommand{
 		{"a:b:c:d", "deepest kept", "project", "command"},
 		{"deploy", "Deploy it", "project", "command"},
@@ -95,10 +96,10 @@ func TestListAgentCommands(t *testing.T) {
 			t.Errorf("a command body leaked: %+v", c)
 		}
 	}
-	if got := listAgentCommands("", "", nil).Commands; len(got) != 0 {
+	if got := listAgentCommands("", "", "", nil).Commands; len(got) != 0 {
 		t.Errorf("no dirs = %v", got)
 	}
-	if got := listAgentCommands("relative", "also/relative", nil).Commands; len(got) != 0 {
+	if got := listAgentCommands("relative", "also/relative", "", nil).Commands; len(got) != 0 {
 		t.Errorf("relative dirs = %v", got)
 	}
 }
@@ -133,7 +134,7 @@ func TestListAgentCommandsStaysInRoot(t *testing.T) {
 	os.MkdirAll(filepath.Join(root, ".claude/skills/linkfile"), 0o755)
 	must(os.Symlink("../../../shared/linked/SKILL.md", filepath.Join(root, ".claude/skills/linkfile/SKILL.md")))
 
-	got := listAgentCommands(root, "", nil).Commands
+	got := listAgentCommands(root, "", "", nil).Commands
 	want := []agentCommand{{"in", "inside skill", "project", "skill"}}
 	if fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Fatalf("commands = %v, want %v", got, want)
@@ -147,7 +148,7 @@ func TestListAgentCommandsLimits(t *testing.T) {
 	}
 	// Only the head of a file is read: a description past it is not found.
 	writeFile(t, filepath.Join(claude, "skills/big/SKILL.md"), "---\n"+strings.Repeat("k: v\n", commandHeadSize/5)+"description: late\n---\n")
-	got := listAgentCommands("", claude, nil).Commands
+	got := listAgentCommands("", claude, "", nil).Commands
 	if len(got) != commandsMaxPerSource+1 {
 		t.Fatalf("got %d commands, want %d", len(got), commandsMaxPerSource+1)
 	}
@@ -264,7 +265,7 @@ func TestListAgentCommandsSkip(t *testing.T) {
 		asked = append(asked, rel)
 		return strings.Contains(rel, "id_rsa")
 	}
-	got := listAgentCommands(root, "", skip).Commands
+	got := listAgentCommands(root, "", "", skip).Commands
 	if len(got) != 1 || got[0].Name != "ok" {
 		t.Fatalf("commands = %v", got)
 	}
@@ -296,7 +297,7 @@ func TestListAgentCommandsVisitBudget(t *testing.T) {
 	}
 	writeFile(t, filepath.Join(claude, "commands/zz/late.md"), "late")
 	writeFile(t, filepath.Join(claude, "skills/s/SKILL.md"), "a skill")
-	got := listAgentCommands("", claude, nil).Commands
+	got := listAgentCommands("", claude, "", nil).Commands
 	if len(got) != 1 || got[0].Name != "s" {
 		t.Fatalf("commands = %v", got)
 	}
@@ -313,11 +314,11 @@ func TestListAgentCommandsOddEntries(t *testing.T) {
 	for i := 0; i < commandsMaxPerSource+2; i++ {
 		writeFile(t, filepath.Join(claude, "skills", fmt.Sprintf("s%03d/SKILL.md", i)), "x")
 	}
-	got := listAgentCommands("", claude, nil).Commands
+	got := listAgentCommands("", claude, "", nil).Commands
 	if len(got) != commandsMaxPerSource || got[0].Name != "esc" || got[0].Description != `a \q b` {
 		t.Fatalf("got %d skills, first %+v", len(got), got[0])
 	}
-	if got := listAgentCommands(filepath.Join(claude, "missing"), "", nil).Commands; len(got) != 0 {
+	if got := listAgentCommands(filepath.Join(claude, "missing"), "", "", nil).Commands; len(got) != 0 {
 		t.Errorf("missing root = %v", got)
 	}
 }
