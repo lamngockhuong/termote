@@ -8,6 +8,7 @@ import {
   useState,
 } from 'react'
 import type { ViewProps } from '../app-views'
+import { agentLabel } from '../chat-agents'
 import { useAgentCommands } from '../hooks/use-agent-commands'
 import { useAgentPrompt } from '../hooks/use-agent-prompt'
 import { useAgentTranscript } from '../hooks/use-agent-transcript'
@@ -113,6 +114,7 @@ function noticeFor(err: unknown): Notice {
 
 export function ChatComposer({ session, isMobile, showView }: ViewProps) {
   const paneId = session.paneId ?? ''
+  const agent = agentLabel(session.agentName)
   const t = useAgentTranscript(session.paneId)
   const status = toAgentStatus(t.status)
   const p = useAgentPrompt(session.paneId, status)
@@ -176,10 +178,10 @@ export function ChatComposer({ session, isMobile, showView }: ViewProps) {
       setConfirming(message)
       return
     }
-    // "!" runs the rest as a shell command in Claude Code.
+    // "!" runs the rest as a shell command in the agent.
     if (
       message.trimStart().startsWith('!') &&
-      !window.confirm('Run this as a shell command in Claude Code?')
+      !window.confirm(`Run this as a shell command in ${agent}?`)
     ) {
       return
     }
@@ -262,9 +264,9 @@ export function ChatComposer({ session, isMobile, showView }: ViewProps) {
   const announcement =
     notice?.text ??
     (p.prompt
-      ? `Claude Code asks: ${p.prompt.title || 'a question'}`
+      ? `${agent} asks: ${p.prompt.title || 'a question'}`
       : waiting
-        ? 'Claude Code is waiting for you in the terminal.'
+        ? `${agent} is waiting for you in the terminal.`
         : '')
   const live = (
     <p aria-live="polite" className="sr-only">
@@ -281,6 +283,7 @@ export function ChatComposer({ session, isMobile, showView }: ViewProps) {
           // one's notice
           key={`${p.prompt.title}\n${p.prompt.steps?.findIndex((s) => s.current) ?? ''}`}
           paneId={paneId}
+          agentName={session.agentName}
           prompt={p.prompt}
           showView={showView}
           onAnswered={() => {
@@ -304,7 +307,7 @@ export function ChatComposer({ session, isMobile, showView }: ViewProps) {
     return (
       <>
         {live}
-        <WaitingCard showView={showView} />
+        <WaitingCard agentName={session.agentName} showView={showView} />
       </>
     )
   }
@@ -321,7 +324,7 @@ export function ChatComposer({ session, isMobile, showView }: ViewProps) {
       )}
       <ConfirmDialog
         isOpen={confirming !== null}
-        title="Exit Claude Code?"
+        title={`Exit ${agent}?`}
         confirmLabel="Exit"
         destructive
         onCancel={() => setConfirming(null)}
@@ -351,7 +354,7 @@ export function ChatComposer({ session, isMobile, showView }: ViewProps) {
       <div className="flex items-end gap-2 p-2">
         <textarea
           ref={boxRef}
-          aria-label="Message to Claude Code"
+          aria-label={`Message to ${agent}`}
           aria-describedby={tooLong ? limitId : undefined}
           aria-autocomplete="list"
           aria-controls={listOpen && matches.length > 0 ? listId : undefined}

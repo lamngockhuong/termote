@@ -240,10 +240,23 @@ describe('ChatView agent state', () => {
       <ChatView
         {...props}
         readOnly
-        session={{ ...props.session, name: 'codex', agentName: 'codex' }}
+        session={{ ...props.session, name: 'pi', agentName: 'pi' }}
       />,
     )
     expect(promptStore.pane).toBeUndefined()
+    expect(screen.getByText('agent · pi')).toBeInTheDocument()
+  })
+
+  it('view-only reads the dialog of a Codex pane', () => {
+    set({ entries: entries(1) })
+    render(
+      <ChatView
+        {...props}
+        readOnly
+        session={{ ...props.session, name: 'codex', agentName: 'codex' }}
+      />,
+    )
+    expect(promptStore.pane).toBe('0')
     expect(screen.getByText('Codex · codex')).toBeInTheDocument()
   })
 

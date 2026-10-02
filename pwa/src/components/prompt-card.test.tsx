@@ -37,6 +37,7 @@ function renderCard(prompt: AgentPrompt, readOnly = false) {
   return render(
     <PromptCard
       paneId="%3"
+      agentName="claude"
       prompt={prompt}
       readOnly={readOnly}
       showView={showView}
@@ -219,6 +220,20 @@ describe('PromptCard', () => {
     // Not this card's answer: just waiting
     expect(screen.getByText('Waiting for Claude Code…')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Yes/ })).toBeNull()
+  })
+
+  it("waits for the pane's agent by name", () => {
+    render(
+      <PromptCard
+        paneId="%3"
+        agentName="codex"
+        prompt={{ ...permission, promptId: undefined }}
+        showView={showView}
+        onAnswered={onAnswered}
+        onChanged={onChanged}
+      />,
+    )
+    expect(screen.getByText('Waiting for Codex…')).toBeInTheDocument()
   })
 
   it('view-only shows the dialog, with no button at all', () => {
@@ -573,11 +588,18 @@ describe('PromptCard free-text answer', () => {
 
 describe('WaitingCard', () => {
   it('points to the terminal', () => {
-    render(<WaitingCard showView={showView} />)
+    render(<WaitingCard agentName="claude" showView={showView} />)
     expect(
       screen.getByText('Claude Code is waiting for you in the terminal.'),
     ).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Open terminal' }))
     expect(showView).toHaveBeenCalledWith('terminal')
+  })
+
+  it("names the pane's agent", () => {
+    render(<WaitingCard agentName="codex" showView={showView} />)
+    expect(
+      screen.getByText('Codex is waiting for you in the terminal.'),
+    ).toBeInTheDocument()
   })
 })

@@ -362,9 +362,11 @@ const codexMarkerMax = 64 * 1024
 
 // codexStatus reads the rollout backwards, a block at a time and as far as it
 // takes, to the latest turn marker: task_started means a turn runs; a turn
-// that completed or was aborted, and thread_settings_applied (a resume after
-// a killed turn, which never closes it, writes only that), mean idle. A turn
-// can be megabytes long, so no fixed window is enough. path comes from Locate.
+// that completed or was aborted means idle. thread_settings_applied is no
+// marker: Codex writes it on a model change in the middle of a turn as well
+// as on a resume, so a turn killed and then resumed reads as working until
+// the next turn ends. A turn can be megabytes long, so no fixed window is
+// enough. path comes from Locate.
 func codexStatus(path string) string {
 	f, err := os.Open(path)
 	if err != nil {
@@ -460,7 +462,7 @@ func codexLatestMarker(r io.ReaderAt, floor, size int64) (status string, found b
 	return "unknown", false, end
 }
 
-var codexMarkerNames = [][]byte{[]byte(`"task_started"`), []byte(`"task_complete"`), []byte(`"turn_aborted"`), []byte(`"thread_settings_applied"`)}
+var codexMarkerNames = [][]byte{[]byte(`"task_started"`), []byte(`"task_complete"`), []byte(`"turn_aborted"`)}
 
 // codexMarker maps a turn marker row to a status.
 func codexMarker(line []byte) (string, bool) {
@@ -487,7 +489,7 @@ func codexMarker(line []byte) (string, bool) {
 	switch row.Payload.Type {
 	case "task_started":
 		return "working", true
-	case "task_complete", "turn_aborted", "thread_settings_applied":
+	case "task_complete", "turn_aborted":
 		return "idle", true
 	}
 	return "", false

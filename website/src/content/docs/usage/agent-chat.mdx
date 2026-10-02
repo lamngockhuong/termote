@@ -1,6 +1,6 @@
 ---
 title: Agent Chat
-description: Read and answer Claude Code, or read Codex, from a chat view instead of the terminal
+description: Read and answer Claude Code and Codex from a chat view instead of the terminal
 ---
 
 import { Aside } from "@astrojs/starlight/components";
@@ -9,8 +9,8 @@ Long replies are hard to read in a terminal on a phone, and so is typing a promp
 a pane runs **Claude Code** or **Codex**, the header shows a **Terminal / Chat** switcher (on a phone, one
 view button that opens a menu of views). The Chat view is a second way to look at the same
 session: what you send there is typed into the pane, and what the agent writes shows up in both
-views. Nothing runs in the background on its own. Codex is read only for now (see
-[Codex](#codex-read-only)).
+views. Nothing runs in the background on its own. Codex works the same way, with its own requirements
+and one difference for dialogs (see [Codex](#codex)).
 
 ## Requirements
 
@@ -19,7 +19,7 @@ views. Nothing runs in the background on its own. Codex is read only for now (se
   - **psmux** on Windows
   - **Herdr** on any OS, after running `herdr integration install claude` once
 - A native install (`termote start`). The container image does not include Claude Code.
-- For Codex: see [Codex](#codex-read-only).
+- For Codex: see [Codex](#codex).
 
 ## What the Chat View Shows
 
@@ -109,12 +109,24 @@ option, already ticked; its button unticks it like the others.
 A question that shows a preview beside its options is answered the same way: one tap picks the
 option. The preview itself is only shown in the terminal.
 
-## Codex (Read Only)
+## Codex
 
 A pane running Codex gets the Chat view with its conversation: your messages, replies rendered
-as markdown, commands with their output, file changes as diffs. There is no message box and no
-dialog card; a **Read only** bar with **Open terminal** takes their place, and you type and
-answer approvals in the terminal.
+as markdown, commands with their output, file changes as diffs. You send a message from the box
+at the bottom, under the same rules as for Claude Code: Termote only sends when the screen shows
+Codex at an empty input box with nothing running, and a refusal leaves the pane untouched. The
+`/` suggestions do not apply to Codex; type a command in full if you need one.
+
+Approval dialogs (run a command, make file edits) depend on the backend:
+
+- **Herdr**: Herdr reports the agent as blocked, so the dialog is a card with a button per
+  option. **Cancel** sends Escape.
+- **tmux**: Codex's session file records no approval request, so Termote cannot tell that a
+  dialog is waiting for you. The card shows the dialog read only and says "Answer this dialog in
+  the terminal."
+
+Other Codex dialogs (model picker, rate-limit prompt, and so on) are always shown read only, on
+either backend.
 
 Requirements:
 
@@ -149,7 +161,7 @@ What to expect:
 - Herdr: the transcript is read from `~/.claude` of the user running Termote. A Claude Code
   started with another `CLAUDE_CONFIG_DIR` shows no history.
 - Container mode is not supported.
-- Only Claude Code and, read only, Codex for now.
+- Only Claude Code and Codex for now.
 
 <Aside>
   **Open terminal** is always one tap away. The terminal stream stays connected while you are in

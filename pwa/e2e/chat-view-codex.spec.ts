@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { expect, type Page, test } from '@playwright/test'
 
-// The read-only Chat view against a stand-in Codex (tests/fixtures/fake-codex.sh)
+// The Chat view against a stand-in Codex (tests/fixtures/fake-codex.sh)
 // in a window of the server's tmux, next to a window that only holds the same
 // rollout open for reading, under an executable also named codex: only the
 // fd's access mode tells the two apart. Like chat-view.spec.ts it needs the socket and session of the
@@ -131,15 +131,9 @@ test.describe('chat view of a Codex pane', () => {
     if (tmp) rmSync(tmp, { recursive: true, force: true, maxRetries: 5 })
   })
 
-  test('reads the conversation, without a way to write to it', async ({
+  test('sends a message, and shows a dialog to answer in the terminal', async ({
     page,
   }) => {
-    // The Chat view of Codex never asks for a dialog, commands, or a send
-    const writes: string[] = []
-    page.on('request', (r) => {
-      if (/\/agent\/(prompt|commands|message|answer)/.test(r.url()))
-        writes.push(r.url())
-    })
     await page.goto('/')
     await page.evaluate(() => localStorage.clear())
     await page.reload()
@@ -152,27 +146,40 @@ test.describe('chat view of a Codex pane', () => {
     await expect(conversation.locator('strong')).toHaveText('2')
     await expect(page.getByText('Codex ·', { exact: false })).toBeVisible()
 
-    // No composer: a bar that leads to the terminal
-    await expect(page.getByText('Read only', { exact: true })).toBeVisible()
-    await expect(page.getByRole('textbox', { name: /Message to/ })).toHaveCount(0)
+    // A message of two lines arrives as one turn
+    const composer = page.getByRole('textbox', { name: 'Message to Codex' })
+    const send = page.getByRole('button', { name: 'Send', exact: true })
+    await composer.fill('hello from e2e\nsecond line')
+    await send.click()
+    await expect(conversation).toContainText('You said: hello from e2e')
+    await expect(conversation).toContainText('second line')
+
+    // On tmux the rollout records no approval request: the dialog is shown
+    // to answer in the terminal, with no button that answers it
+    await composer.fill('ask permission please')
+    await send.click()
+    const card = page.getByRole('alertdialog', {
+      name: 'Would you like to run the following command?',
+    })
+    await expect(card).toBeVisible()
+    await expect(card).toContainText('$ touch c.txt')
+    await expect(card).toContainText('Answer this dialog in the terminal.')
+    await expect(card.getByRole('button', { name: /Yes/ })).toHaveCount(0)
+    tmux('send-keys', '-t', windowIds[0], '1')
+    await expect(conversation).toContainText('Approved: ran touch c.txt.')
+    await expect(card).toBeHidden()
 
     // A line typed in the terminal shows up in the Chat view
-    await page.getByRole('button', { name: 'Open terminal' }).click()
+    await viewTab(page, 'Terminal').click()
     await expect(viewTab(page, 'Terminal')).toHaveAttribute(
       'aria-selected',
       'true',
     )
-    // Typed once the stand-in shows its prompt
-    await expect
-      .poll(() => tmux('capture-pane', '-p', '-t', windowIds[0]))
-      .toContain('›')
     await page.locator('[data-testid="terminal-view"] .xterm').click()
-    await page.keyboard.type('hello from e2e')
+    await page.keyboard.type('typed in the terminal')
     await page.keyboard.press('Enter')
     await viewTab(page, 'Chat').click()
-    await expect(conversation).toContainText('You said: hello from e2e')
-
-    expect(writes).toEqual([])
+    await expect(conversation).toContainText('You said: typed in the terminal')
   })
 
   test('a pane that only reads the rollout has no Chat view', async ({
