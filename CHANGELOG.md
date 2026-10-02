@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/lamngockhuong/termote/compare/v1.4.0...v1.5.0) (2026-10-02)
+
+
+### Features
+
+* Herdr plugin for Termote ([#235](https://github.com/lamngockhuong/termote/issues/235)) ([#279](https://github.com/lamngockhuong/termote/issues/279)) ([257247f](https://github.com/lamngockhuong/termote/commit/257247fa53ae82199e360de2b0a746b8da41e0f0))
+
 ## [1.4.0](https://github.com/lamngockhuong/termote/compare/v1.3.0...v1.4.0) (2026-10-02)
 
 

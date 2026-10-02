@@ -4,7 +4,7 @@
 # user has to read is shown in the `panel` popup.
 id = "lamngockhuong.termote"
 name = "Termote"
-version = "1.4.0" # x-release-please-version
+version = "1.5.0" # x-release-please-version
 # `placement = "popup"` needs Herdr 0.7.4.
 min_herdr_version = "0.7.4"
 description = "Open the focused Herdr pane in Termote from a phone or browser: link, QR code, copy, and start or stop the server"
