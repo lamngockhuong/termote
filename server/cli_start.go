@@ -504,10 +504,15 @@ func (c *cli) savedPort(saved *savedConfig) int {
 // supervised and reached.
 func (c *cli) cmdStatus(args []string) error {
 	port := 0
+	asJSON := false
 	fs := c.newFlagSet("status")
 	fs.IntVar(&port, "port", 0, "")
+	fs.BoolVar(&asJSON, "json", false, "")
 	if _, err := parseArgs(fs, args); err != nil {
 		return flagErr(err)
+	}
+	if asJSON {
+		return c.printStatusJSON(port)
 	}
 	saved, _ := c.loadConfig()
 	if port == 0 {
@@ -632,6 +637,12 @@ func (c *cli) showAccessInfo(o startOptions, pass string, reused bool) {
 	}
 	if reused {
 		c.infof("Using the saved password (show it with: termote show-password; new one: termote start --fresh)")
+		return
+	}
+	// A Herdr plugin action's output is kept in Herdr's plugin log, so the
+	// password is not printed there.
+	if c.getenv("HERDR_PLUGIN_ID") != "" {
+		c.infof("A new password was set; show it with: termote show-password")
 		return
 	}
 	c.showCredentials(pass)

@@ -46,6 +46,7 @@ export default defineConfig({
             { label: "Agent Chat", link: "/usage/agent-chat/" },
             { label: "Files and Changes", link: "/usage/files-changes/" },
             { label: "Gestures", link: "/usage/gestures/" },
+            { label: "Herdr Plugin", link: "/usage/herdr-plugin/" },
             { label: "Keyboard", link: "/usage/keyboard/" },
             { label: "Sessions", link: "/usage/sessions/" },
             { label: "Settings", link: "/usage/settings/" },

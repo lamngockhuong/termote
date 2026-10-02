@@ -170,7 +170,7 @@ func (d *detachedSupervisor) Start() error {
 	}
 	exe := d.c.stableExe()
 	env := environ(d.c.serviceEnv())
-	env = withoutTermoteEnv(env)
+	env = withoutHerdrPaneEnv(withoutTermoteEnv(env))
 	_, exited, err := startDetached(exe, []string{"serve"}, d.c.home, env, d.c.serverLog())
 	if err != nil {
 		return err
@@ -205,6 +205,21 @@ func withoutTermoteEnv(env []string) []string {
 	out := env[:0:0]
 	for _, kv := range env {
 		if !isTermoteEnv(kv) {
+			out = append(out, kv)
+		}
+	}
+	return out
+}
+
+// withoutHerdrPaneEnv drops what Herdr sets for one pane or plugin command
+// (HERDR_ENV, HERDR_PANE_ID, HERDR_PLUGIN_*, ...), so a server started from a
+// Herdr pane or the Herdr plugin, and every terminal it opens, does not claim
+// to be that pane. HERDR_SOCKET_PATH stays: it names the Herdr to serve.
+func withoutHerdrPaneEnv(env []string) []string {
+	out := env[:0:0]
+	for _, kv := range env {
+		k, _, _ := strings.Cut(kv, "=")
+		if !strings.HasPrefix(k, "HERDR_") || k == "HERDR_SOCKET_PATH" {
 			out = append(out, kv)
 		}
 	}

@@ -31,6 +31,10 @@ type commandRunner interface {
 	Output(dir string, env []string, name string, args ...string) ([]byte, error)
 	// Run runs a command attached to the user's terminal (sudo, compose, pnpm).
 	Run(dir string, env []string, name string, args ...string) error
+	// RunQuiet runs a command with input on its stdin and its output
+	// discarded, so a child it leaves running (a browser) holds no pipe open
+	// and the call returns when the command itself exits.
+	RunQuiet(input string, name string, args ...string) error
 }
 
 type execRunner struct{}
@@ -42,6 +46,12 @@ func (execRunner) Output(dir string, env []string, name string, args ...string) 
 	cmd.Dir = dir
 	cmd.Env = env
 	return cmd.Output()
+}
+
+func (execRunner) RunQuiet(input string, name string, args ...string) error {
+	cmd := exec.Command(name, args...)
+	cmd.Stdin = strings.NewReader(input)
+	return cmd.Run()
 }
 
 func (execRunner) Run(dir string, env []string, name string, args ...string) error {
@@ -60,6 +70,10 @@ type cli struct {
 	// interactive is true when stdin is a terminal: prompts are allowed.
 	interactive bool
 	color       bool
+	// outTTY is true when stdout is a terminal (OSC 52 copy, panel redraws).
+	outTTY bool
+	// readKey reads one key press from the terminal without waiting for Enter.
+	readKey func() (byte, error)
 
 	home       string
 	projectDir string
@@ -135,6 +149,8 @@ func newCLI() (*cli, error) {
 		in:          bufio.NewReader(os.Stdin),
 		interactive: isTerminal(os.Stdin),
 		color:       isTerminal(os.Stdout) && enableTerminalColor(),
+		outTTY:      isTerminal(os.Stdout),
+		readKey:     func() (byte, error) { return readKeyRaw(os.Stdin) },
 		home:        home,
 		exe:         exe,
 		goos:        runtime.GOOS,
@@ -208,6 +224,10 @@ func (c *cli) dispatch(cmd string, args []string) error {
 		return c.cmdRestart(args)
 	case "status", "health":
 		return c.cmdStatus(args)
+	case "url":
+		return c.cmdURL(args)
+	case "panel":
+		return c.cmdPanel(args)
 	case "container":
 		return c.cmdContainer(args)
 	case "uninstall":
@@ -433,7 +453,9 @@ Commands:
   start [options]      Save the options, register the service and start it
   stop                 Stop the server (it starts again at the next login)
   restart              Stop and start with the saved options
-  status               Show what the running server reports (alias: health)
+  status [--json]      Show what the running server reports (alias: health)
+  url [options]        Print the link to open, or to one session (see below)
+  panel                Status, links and a QR code; keys open, copy, start, stop, restart
   container <cmd>      Run the server in a container: up, down, logs [-f], status
   update               Update to the latest release
   uninstall            Remove the service, the command and the install (config and logs stay)
@@ -462,6 +484,12 @@ Options of container up (saved apart from start's; the password is shared):
   --mux <tmux|herdr>         Backend inside the container (asked the first time, else tmux)
   --allow-herdr-no-auth      Allow herdr without auth
   --build                    Build the image from a checkout instead of pulling it
+
+Options of url (the Herdr plugin runs: url --herdr --open):
+  --herdr                    The session the Herdr plugin was invoked on
+  --group <id> --tab <id> [--pane <id>]   Select a session (ids of /api/mux/snapshot)
+  --view <terminal|chat|files|changes>    The view to open on it
+  --open / --copy / --qr     Open it in the browser, copy it, print a QR code
 
 Options of update:
   --version <X.Y.Z>          Update to a specific version

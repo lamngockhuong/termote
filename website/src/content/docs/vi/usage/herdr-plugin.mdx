@@ -1,0 +1,100 @@
+---
+title: Plugin Herdr
+description: Mở pane Herdr đang dùng trong Termote, hiện liên kết thành mã QR để quét bằng điện thoại, bật hoặc tắt server mà không rời Herdr
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+Khi Termote chạy [backend Herdr](/vi/usage/sessions/#backend-herdr), plugin Termote cho Herdr
+lấy liên kết ngay trong Herdr: mở Termote đúng workspace, tab và pane bạn đang đứng (một
+[liên kết trực tiếp](/vi/usage/sessions/#liên-kết-trực-tiếp)), hiện liên kết đó thành mã QR để
+quét bằng điện thoại, chép liên kết, và bật, tắt hoặc khởi động lại server.
+
+## Yêu cầu
+
+- Herdr 0.7.4 trở lên.
+- Lệnh `termote` nằm trên `PATH`: chạy `termote link` một lần. Mọi việc plugin làm đều qua lệnh
+  `termote`, nên không cần cài thêm runtime nào khác.
+- Server chạy backend Herdr (`termote start --mux herdr`). Với tmux, ID trong liên kết của Herdr
+  không có nghĩa gì với Termote, nên liên kết chỉ mở màn hình chính và plugin báo điều đó.
+
+## Cài đặt
+
+```bash
+herdr plugin install lamngockhuong/termote/herdr-plugin
+```
+
+Trước khi cài, Herdr hiện manifest và các lệnh plugin sẽ chạy. Gỡ plugin:
+`herdr plugin uninstall lamngockhuong.termote`.
+
+## Bảng điều khiển
+
+Bảng điều khiển là một popup hiện trạng thái server, mọi địa chỉ server trả lời (Tailscale,
+LAN, máy này) và mã QR của liên kết tới pane đang được focus lúc mở popup:
+
+```bash
+herdr plugin action invoke lamngockhuong.termote.panel
+```
+
+| Phím         | Tác dụng                                                              |
+| ------------ | --------------------------------------------------------------------- |
+| `o`          | Mở liên kết trong trình duyệt của máy này                             |
+| `c`          | Chép liên kết                                                         |
+| `s`          | Bật server (chỉ hiện khi server chưa chạy)                            |
+| `x`          | Tắt server                                                            |
+| `r`          | Khởi động lại server                                                  |
+| `q`, `Esc`   | Đóng bảng điều khiển                                                  |
+
+Liên kết dùng địa chỉ mà thiết bị khác dễ truy cập nhất: tên Tailscale, không có thì địa chỉ LAN
+đầu tiên, cuối cùng là `localhost`. Mật khẩu không bao giờ nằm trong liên kết; thiết bị mở liên kết
+vẫn phải đăng nhập.
+
+## Action
+
+Các việc trên cũng có sẵn dưới dạng action của plugin, để gán phím tắt hoặc gọi bằng
+`herdr plugin action invoke`:
+
+| Action                          | Chạy                             |
+| ------------------------------- | -------------------------------- |
+| `lamngockhuong.termote.panel`   | Mở bảng điều khiển               |
+| `lamngockhuong.termote.open`    | `termote url --herdr --open`     |
+| `lamngockhuong.termote.copy`    | `termote url --herdr --copy`     |
+| `lamngockhuong.termote.start`   | `termote start`                  |
+| `lamngockhuong.termote.stop`    | `termote stop`                   |
+| `lamngockhuong.termote.restart` | `termote restart`                |
+
+Herdr chỉ ghi kết quả của action vào log của plugin (`herdr plugin log list --plugin
+lamngockhuong.termote`), nên muốn đọc kết quả thì dùng bảng điều khiển. Để mở bảng điều khiển
+bằng một phím, thêm đoạn sau vào `config.toml` của Herdr:
+
+```toml
+[[keys.command]]
+key = "prefix+o"
+type = "plugin_action"
+command = "lamngockhuong.termote.panel"
+description = "Termote link and QR code"
+```
+
+<Aside type="note">
+  `copy` dùng lệnh chép vào bộ nhớ tạm của hệ thống (`wl-copy`, `xclip`, `xsel`, `pbcopy`, `clip`). Action
+  không có terminal, nên khi không lệnh nào chạy được (ví dụ `xclip` khi không có màn hình X), hãy
+  bấm `c` trong bảng điều khiển: khi đó liên kết được chép qua bộ nhớ tạm của terminal (OSC 52), cách
+  này chạy được cả qua SSH.
+</Aside>
+
+## Dùng trong script
+
+Plugin chỉ là lớp mỏng bên trên hai lệnh mà bạn cũng có thể tự dùng:
+
+- `termote status --json` in trạng thái server thành một object JSON: `running`, `status`,
+  `version`, `backend`, `pid`, `port`, `lan`, `auth`, `tailscale`, `urls` (`local`, `lan`, `tailscale`) và
+  `supervisor`. Lệnh trả mã thoát 1 khi server không chạy.
+- `termote url` in liên kết: `--group`, `--tab` và `--pane` chọn phiên (ID trong
+  `/api/mux/snapshot`), `--view` chọn view, còn `--herdr` lấy phiên từ ngữ cảnh plugin của
+  Herdr. `--open`, `--copy` và `--qr` lần lượt mở, chép hoặc in liên kết thành mã QR. Chỉ
+  có liên kết được ghi ra stdout.
+
+```bash
+termote url --group main --tab 1          # tmux: session "main", window 1
+termote url --group w1 --tab w1:t2 --qr   # Herdr: workspace w1, tab w1:t2, kèm mã QR
+```
