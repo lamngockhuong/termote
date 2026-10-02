@@ -171,9 +171,10 @@ jobs:
         working-directory: server
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
 
-  # Playwright against a real server and tmux. The Chat view spec drives a
-  # stand-in Claude Code (tests/fixtures/fake-claude.sh) in a window of the
-  # server's own tmux socket; the screenshot spec only refreshes docs images.
+  # Playwright against a real server and tmux. The Chat view specs drive a
+  # stand-in Claude Code (tests/fixtures/fake-claude.sh) and a stand-in Codex
+  # (tests/fixtures/fake-codex.sh) in windows of the server's own tmux socket;
+  # the screenshot spec only refreshes docs images.
   e2e:
     name: E2E
     runs-on: ubuntu-latest
