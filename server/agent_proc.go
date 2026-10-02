@@ -5,9 +5,10 @@ import (
 	"time"
 )
 
-// Finding the Claude Code process of a tmux/psmux pane: walk the process tree
-// under the pane's shell and take the first process that has a session file
-// in its own Claude config dir whose start time matches it. Claude Code never
+// Finding the agent process of a tmux/psmux pane: walk the process tree under
+// the pane's shell and take the first process that is Claude Code or Codex
+// (agent_proc_codex.go). A Claude Code process has a session file in its own
+// Claude config dir whose start time matches it. Claude Code never
 // removes its session files, so a file for a pid proves nothing on its own: a
 // dead session's pid can be reused by any other process.
 
@@ -20,11 +21,14 @@ const (
 	agentTreeTTL = 3 * time.Second
 )
 
-// claudeProc is a process proven to be Claude Code.
+// claudeProc is a process proven to be an agent: Claude Code, or Codex
+// (agent "codex", with codexHome instead of claudeDir).
 type claudeProc struct {
+	agent     string
 	pid       int
 	procStart string
 	claudeDir string
+	codexHome string
 }
 
 // agentTrees caches walks keyed by pane and root pid.
@@ -78,8 +82,12 @@ func findClaudeSessionNow(rootPID int) (AgentSession, bool) {
 	return sessionOfProc(p)
 }
 
-// sessionOfProc reads the session file of a proven Claude Code process.
+// sessionOfProc reads the session file of a proven Claude Code process, or
+// the rollout a Codex process holds.
 func sessionOfProc(p claudeProc) (AgentSession, bool) {
+	if p.agent == "codex" {
+		return codexSessionOf(p, "", true)
+	}
 	f, ok := readClaudeSessionFile(p.claudeDir, p.pid)
 	if !ok || f.procStart() != p.procStart || !isSessionID(f.SessionID) {
 		return AgentSession{}, false
@@ -90,7 +98,8 @@ func sessionOfProc(p claudeProc) (AgentSession, bool) {
 	}, true
 }
 
-// walkForClaude searches rootPID and its descendants breadth-first.
+// walkForClaude searches rootPID and its descendants breadth-first for Claude
+// Code or Codex; the first one met wins.
 func walkForClaude(rootPID int, children func(int) []int) (claudeProc, bool) {
 	domain := claudePIDDomain()
 	type node struct{ pid, depth int }
@@ -100,6 +109,9 @@ func walkForClaude(rootPID int, children func(int) []int) (claudeProc, bool) {
 		n := queue[0]
 		queue = queue[1:]
 		if p, ok := claudeProcOf(n.pid, domain); ok {
+			return p, true
+		}
+		if p, ok := codexProcOf(n.pid); ok {
 			return p, true
 		}
 		if n.depth == agentProcMaxDepth {
@@ -134,7 +146,7 @@ func claudeProcOf(pid int, domain string) (claudeProc, bool) {
 	if !ok || start != f.procStart() {
 		return claudeProc{}, false
 	}
-	return claudeProc{pid: pid, procStart: start, claudeDir: dir}, true
+	return claudeProc{agent: "claude", pid: pid, procStart: start, claudeDir: dir}, true
 }
 
 // claudeProcAlive reports whether pid still runs with the start time the

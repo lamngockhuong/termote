@@ -1,22 +1,26 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/binary"
+	"errors"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
 	"golang.org/x/sys/unix"
 )
 
-const agentProcSupported = true
+const (
+	agentProcSupported = true
+	codexProcSupported = true
+)
 
 // procChildrenFunc lists every process once with ps and answers from that.
 func procChildrenFunc() (func(int) []int, error) {
@@ -60,39 +64,87 @@ func procStartTime(pid int) (string, bool) {
 // environment through kern.procargs2, which only the process's own user (or
 // root) can read.
 func procClaudeDir(pid int) (string, bool) {
-	b, err := unix.SysctlRaw("kern.procargs2", pid)
-	if err != nil || len(b) < 4 {
+	get, ok := procEnv(pid)
+	if !ok {
 		return "", false
 	}
-	// argc, then the exec path, then argc arguments, then the environment,
-	// each NUL-terminated (with padding NULs after the exec path).
-	argc := int(binary.LittleEndian.Uint32(b))
-	fields := bytes.Split(b[4:], []byte{0})
-	i := 1 // skip the exec path
-	for i < len(fields) && len(fields[i]) == 0 {
-		i++
-	}
-	i += argc
-	var home string
-	for ; i < len(fields); i++ {
-		k, v, ok := strings.Cut(string(fields[i]), "=")
-		if !ok {
-			continue
-		}
-		switch k {
-		case "CLAUDE_CONFIG_DIR":
-			if v != "" {
-				return v, filepath.IsAbs(v)
-			}
-		case "HOME":
-			home = v
-		}
+	if v := get("CLAUDE_CONFIG_DIR"); v != "" {
+		return v, filepath.IsAbs(v)
 	}
 	// A relative value would resolve against the server's cwd.
+	home := get("HOME")
 	if !filepath.IsAbs(home) {
 		return "", false
 	}
 	return filepath.Join(home, ".claude"), true
+}
+
+// procArgs2 reads and splits pid's kern.procargs2.
+func procArgs2(pid int) (execPath string, args, env []string, ok bool) {
+	b, err := unix.SysctlRaw("kern.procargs2", pid)
+	if err != nil {
+		return "", nil, nil, false
+	}
+	return parseProcArgs2(b)
+}
+
+func procEnv(pid int) (func(string) string, bool) {
+	_, _, env, ok := procArgs2(pid)
+	return envGetter(env), ok
+}
+
+// procExeBase is the name of the exec path kern.procargs2 records.
+func procExeBase(pid int) string {
+	execPath, _, _, ok := procArgs2(pid)
+	if !ok || execPath == "" {
+		return ""
+	}
+	return filepath.Base(execPath)
+}
+
+func procArgs(pid int) []string {
+	_, args, _, _ := procArgs2(pid)
+	return args
+}
+
+// procCodexHome reads CODEX_HOME, else HOME, from the process's environment.
+func procCodexHome(pid int) (string, bool) {
+	get, ok := procEnv(pid)
+	if !ok {
+		return "", false
+	}
+	return codexHomeFromEnv(get)
+}
+
+var lsofMissing sync.Once
+
+// procWriteFiles asks lsof for the files pid holds open, with their access
+// mode. Only a process already known to be codex gets here. -n and -P keep
+// lsof from resolving the addresses of Codex's network sockets.
+func procWriteFiles(pid int, match func(name string) bool) []procFile {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "lsof", "-w", "-n", "-P", "-a", "-p", strconv.Itoa(pid), "-F0an").Output()
+	if err != nil && len(out) == 0 {
+		if errors.Is(err, exec.ErrNotFound) {
+			lsofMissing.Do(func() { log.Printf("agent chat: lsof not found, Codex panes are not detected") })
+		}
+		return nil
+	}
+	return parseLsofWriteFiles(out, match)
+}
+
+// procAllPIDs lists every process through kern.proc.all.
+func procAllPIDs() []int {
+	procs, err := unix.SysctlKinfoProcSlice("kern.proc.all")
+	if err != nil {
+		return nil
+	}
+	out := make([]int, 0, len(procs))
+	for _, p := range procs {
+		out = append(out, int(p.Proc.P_pid))
+	}
+	return out
 }
 
 // claudePIDDomain is empty: macOS has no pid namespaces to tell apart, so

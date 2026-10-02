@@ -77,6 +77,12 @@ func (a *agentAPI) handleCommands(w http.ResponseWriter, r *http.Request) {
 		a.agentError(w, "agent session", err)
 		return
 	}
+	if s.Agent != "claude" {
+		// The commands and skills listed are Claude Code's; another agent's
+		// config dir is never read here.
+		jsonOK(w, commandsResponse{Commands: []agentCommand{}})
+		return
+	}
 	// Without a pane root (a backend without one, a directory gone) the
 	// user's commands are still listed.
 	root := ""

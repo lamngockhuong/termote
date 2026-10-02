@@ -99,6 +99,9 @@ func newHerdrMux(ctx context.Context, socket string) (*herdrMux, error) {
 
 func (*herdrMux) Name() string { return "herdr" }
 
+// herdrCodexSession is findCodexSession; tests replace it.
+var herdrCodexSession = findCodexSession
+
 func (*herdrMux) Caps() Caps {
 	return Caps{ClientSideSelect: true, Scroll: true, DriveSize: true, AgentChat: true, Files: true}
 }
@@ -107,8 +110,10 @@ func (*herdrMux) Caps() Caps {
 // pane, straight from pane.get rather than the snapshot cache, so /clear or a
 // resume shows up on the next poll. herdr keeps the last session reported
 // for a pane even after another agent replaced it, hence the agent check.
-// herdr does not expose the pane's process, so the transcript is looked up in
-// the config dir of a Claude Code started by the server's user.
+// herdr does not expose the pane's process, so a Claude Code transcript is
+// looked up in the config dir of a Claude Code started by the server's user,
+// and a Codex session counts only while a Codex process holds its rollout
+// (findCodexSession).
 func (m *herdrMux) AgentSession(ctx context.Context, paneID string) (AgentSession, bool, error) {
 	if !herdrPaneIDRe.MatchString(paneID) {
 		return AgentSession{}, false, inputError("invalid pane id")
@@ -129,12 +134,20 @@ func (m *herdrMux) AgentSession(ctx context.Context, paneID string) (AgentSessio
 	}
 	p := res.Pane
 	ref := p.AgentSession
-	if p.Agent != "claude" || ref == nil || ref.Agent != "claude" || ref.Kind != "id" || !isSessionID(ref.Value) {
+	if (p.Agent != "claude" && p.Agent != "codex") || ref == nil || ref.Agent != p.Agent || ref.Kind != "id" || !isSessionID(ref.Value) {
 		return AgentSession{}, false, nil
 	}
 	status := p.AgentStatus
 	if !herdrAgentStatuses[status] {
 		status = "unknown"
+	}
+	if p.Agent == "codex" {
+		s, ok := herdrCodexSession(ref.Value)
+		if !ok {
+			return AgentSession{}, false, nil
+		}
+		s.Status, s.Target = status, paneID
+		return s, true, nil
 	}
 	return AgentSession{
 		Agent: "claude", ID: ref.Value, Status: status,

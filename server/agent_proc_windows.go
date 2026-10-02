@@ -12,6 +12,16 @@ import (
 
 const agentProcSupported = true
 
+// codexProcSupported is false: a Codex pane is not looked up here (no file
+// listing per process), so it has no Chat view.
+const codexProcSupported = false
+
+func procExeBase(int) string                           { return "" }
+func procArgs(int) []string                            { return nil }
+func procCodexHome(int) (string, bool)                 { return "", false }
+func procWriteFiles(int, func(string) bool) []procFile { return nil }
+func procAllPIDs() []int                               { return nil }
+
 // procChildrenFunc takes one Toolhelp32 snapshot of every process.
 func procChildrenFunc() (func(int) []int, error) {
 	snap, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
@@ -61,7 +71,7 @@ func procClaudeDir(int) (string, bool) {
 func claudePIDDomain() string { return "" }
 
 // fileIdentity is empty on Windows; a cursor then relies on the session id,
-// the size and the line boundary check.
+// the file name, the size and the line boundary check.
 func fileIdentity(os.FileInfo) string { return "" }
 
 // procForeground is true: a ConPTY has no job control to suspend Claude Code.
