@@ -12,7 +12,7 @@ import (
 // Code 2.1.286 in tmux (capture-pane -p -e) with paths sanitised; "collie-*"
 // come from collie's fixture corpus (MIT), captured through herdr pane.read
 // ansi ("collie-2.1.278-*" from Claude Code 2.1.278).
-func readScreen(t *testing.T, name string) claudeScreen {
+func readScreen(t *testing.T, name string) agentScreen {
 	t.Helper()
 	b, err := os.ReadFile(filepath.Join("testdata", "claude", "screens", name+".txt"))
 	if err != nil {

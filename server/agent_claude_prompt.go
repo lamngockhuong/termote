@@ -151,7 +151,7 @@ const (
 	inputDraft = "draft" // the box holds text
 )
 
-type claudeScreen struct {
+type agentScreen struct {
 	input  string
 	draft  string // the box's text, rows joined by a space
 	prompt *AgentPrompt
@@ -223,7 +223,7 @@ const (
 var claudeInputPlaceholders = map[string]bool{"Press up to edit queued messages": true}
 
 // readClaudeScreen classifies a capture.
-func readClaudeScreen(capture string) claudeScreen {
+func readClaudeScreen(capture string) agentScreen {
 	lines := parseScreen(capture)
 	if sc, ok := findInputBox(lines); ok {
 		return sc
@@ -248,7 +248,7 @@ func isTopBorder(s string) bool {
 // findInputBox looks for the input box at the bottom: a bottom border with at
 // most claudeMaxStatusRows rows under it, a "❯" (or shell mode "!") row with
 // its wrapped continuation rows, and a top border.
-func findInputBox(lines []screenLine) (claudeScreen, bool) {
+func findInputBox(lines []screenLine) (agentScreen, bool) {
 	n := len(lines)
 	for b := n - 1; b >= 0 && b >= n-1-claudeMaxStatusRows; b-- {
 		if !isBareRule(lines[b].text) {
@@ -272,10 +272,10 @@ func findInputBox(lines []screenLine) (claudeScreen, bool) {
 			return readInputBox(lines[p:b]), true
 		}
 	}
-	return claudeScreen{}, false
+	return agentScreen{}, false
 }
 
-func readInputBox(rows []screenLine) claudeScreen {
+func readInputBox(rows []screenLine) agentScreen {
 	head := strings.TrimSpace(rows[0].text)
 	shell := strings.HasPrefix(head, "!")
 	var text, solid []string
@@ -293,13 +293,13 @@ func readInputBox(rows []screenLine) claudeScreen {
 	draft := strings.TrimSpace(strings.Join(nonEmpty(text), " "))
 	if shell {
 		// Shell mode's marker is the mode, not text: anything here is a draft.
-		return claudeScreen{input: inputDraft, draft: "!" + draft}
+		return agentScreen{input: inputDraft, draft: "!" + draft}
 	}
 	ghost := strings.TrimSpace(strings.Join(solid, "")) == ""
 	if draft == "" || ghost || claudeInputPlaceholders[draft] {
-		return claudeScreen{input: inputEmpty}
+		return agentScreen{input: inputEmpty}
 	}
-	return claudeScreen{input: inputDraft, draft: draft}
+	return agentScreen{input: inputDraft, draft: draft}
 }
 
 func nonEmpty(ss []string) []string {
@@ -320,10 +320,10 @@ var (
 // findDialog recognises a dialog whose footer is the last row. A footer
 // without "Esc to cancel" is not a dialog this code knows, except the Submit
 // tab of AskUserQuestion, which Claude Code draws without one.
-func findDialog(lines []screenLine) claudeScreen {
+func findDialog(lines []screenLine) agentScreen {
 	n := len(lines)
 	if n == 0 {
-		return claudeScreen{}
+		return agentScreen{}
 	}
 	// A narrow pane wraps the footer onto two rows ("… · Esc to" / "cancel").
 	// Only the end of the hint may move to the last row: a row of its own
@@ -353,7 +353,7 @@ func findDialog(lines []screenLine) claudeScreen {
 		}
 	}
 	if top < 0 {
-		return claudeScreen{}
+		return agentScreen{}
 	}
 	var hints []string
 	for _, l := range lines[footer:] {
@@ -361,27 +361,27 @@ func findDialog(lines []screenLine) claudeScreen {
 	}
 	// Only a question whose options have previews offers notes.
 	preview := strings.Contains(strings.Join(hints, " "), "n to add notes")
-	return claudeScreen{sig: dialogSig(lines[top:]), prompt: parseDialog(lines[top+1:footer], preview)}
+	return agentScreen{sig: dialogSig(lines[top:]), prompt: parseDialog(lines[top+1:footer], preview)}
 }
 
 // findSubmitTab recognises the Submit tab of a wizard, which has no footer:
 // a rule, the tab row right under it with Submit the tab open, no other rule,
 // and its options as the last rows. Anything else is not a dialog.
-func findSubmitTab(lines []screenLine) claudeScreen {
+func findSubmitTab(lines []screenLine) agentScreen {
 	n := len(lines)
 	if !optionRowRe.MatchString(strings.TrimSpace(lines[n-1].text)) {
-		return claudeScreen{}
+		return agentScreen{}
 	}
 	for i := n - 2; i >= 1 && i >= n-claudeMaxDialogRows; i-- {
 		t := strings.TrimSpace(lines[i].text)
 		if isBareRule(t) || isDashedRule(t) {
-			return claudeScreen{}
+			return agentScreen{}
 		}
 		if !isQuestionTabs(t) {
 			continue
 		}
 		if !isBareRule(lines[i-1].text) {
-			return claudeScreen{}
+			return agentScreen{}
 		}
 		// The options close the dialog: no row of another kind below them.
 		first := n - 1
@@ -390,16 +390,16 @@ func findSubmitTab(lines []screenLine) claudeScreen {
 		}
 		for _, l := range lines[i+1 : first] {
 			if optionRowRe.MatchString(strings.TrimSpace(l.text)) {
-				return claudeScreen{}
+				return agentScreen{}
 			}
 		}
 		p := parseDialog(lines[i:], false)
 		if p.Kind != "select" || !submitOpen(p.Steps) {
-			return claudeScreen{}
+			return agentScreen{}
 		}
-		return claudeScreen{sig: dialogSig(lines[i-1:]), prompt: p}
+		return agentScreen{sig: dialogSig(lines[i-1:]), prompt: p}
 	}
-	return claudeScreen{}
+	return agentScreen{}
 }
 
 // dialogSig identifies a dialog by its rows from the top edge down, without

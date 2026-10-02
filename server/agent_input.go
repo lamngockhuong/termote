@@ -390,7 +390,7 @@ func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, sess
 	if err := wr.Paste(ctx, s.Target, text); err != nil {
 		return err
 	}
-	shown := pollScreen(ctx, wr, s.Target, func(sc claudeScreen) bool {
+	shown := pollScreen(ctx, wr, s.Target, func(sc agentScreen) bool {
 		return sc.input == inputDraft && draftShows(sc.draft, text)
 	})
 	if !shown {
@@ -406,7 +406,7 @@ func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, sess
 		return fail(http.StatusBadGateway, "delivered_not_submitted", "the text was pasted but not submitted")
 	}
 	// Submitted: the box no longer holds the text.
-	gone := pollScreen(ctx, wr, s.Target, func(sc claudeScreen) bool {
+	gone := pollScreen(ctx, wr, s.Target, func(sc agentScreen) bool {
 		return !(sc.input == inputDraft && draftShows(sc.draft, text))
 	})
 	if !gone {
@@ -438,7 +438,7 @@ func agentStatusWord(s string) string {
 }
 
 // pollScreen captures until ok holds or agentConfirmWait passes.
-func pollScreen(ctx context.Context, wr agentWriter, target string, ok func(claudeScreen) bool) bool {
+func pollScreen(ctx context.Context, wr agentWriter, target string, ok func(agentScreen) bool) bool {
 	deadline := time.Now().Add(agentConfirmWait)
 	for {
 		if screen, err := wr.Capture(ctx, target); err == nil && ok(readClaudeScreen(screen)) {
@@ -489,7 +489,7 @@ func (a *agentAPI) handlePrompt(w http.ResponseWriter, r *http.Request) {
 }
 
 // promptOf turns a screen's dialog into the card the client gets.
-func (a *agentAPI) promptOf(paneID string, s AgentSession, sc claudeScreen) *AgentPrompt {
+func (a *agentAPI) promptOf(paneID string, s AgentSession, sc agentScreen) *AgentPrompt {
 	if sc.prompt == nil {
 		a.input.answered(paneID, "") // the screen left the dialog
 		return nil
@@ -603,7 +603,7 @@ func (a *agentAPI) answer(ctx context.Context, wr agentWriter, paneID, promptID 
 	if err := wr.SendKeySequence(ctx, s.Target, []string{key}); err != nil {
 		return err
 	}
-	closed := pollScreen(ctx, wr, s.Target, func(sc claudeScreen) bool { return sc.sig != closeFrom })
+	closed := pollScreen(ctx, wr, s.Target, func(sc agentScreen) bool { return sc.sig != closeFrom })
 	if !closed {
 		return fail(http.StatusBadGateway, "answer_not_confirmed", "the key was sent but the dialog is still open")
 	}
@@ -619,8 +619,8 @@ func (a *agentAPI) movePointer(ctx context.Context, wr agentWriter, paneID strin
 	if err := wr.SendKeySequence(ctx, s.Target, []string{key}); err != nil {
 		return "", err
 	}
-	var next claudeScreen
-	moved := pollScreen(ctx, wr, s.Target, func(sc claudeScreen) bool {
+	var next agentScreen
+	moved := pollScreen(ctx, wr, s.Target, func(sc agentScreen) bool {
 		next = sc
 		return sc.prompt != nil && sc.prompt.pointer == n
 	})
@@ -666,8 +666,8 @@ func (a *agentAPI) moveToStep(ctx context.Context, wr agentWriter, paneID string
 		if err := wr.SendKeySequence(ctx, s.Target, []string{key}); err != nil {
 			return err
 		}
-		var next claudeScreen
-		moved := pollScreen(ctx, wr, s.Target, func(sc claudeScreen) bool {
+		var next agentScreen
+		moved := pollScreen(ctx, wr, s.Target, func(sc agentScreen) bool {
 			next = sc
 			return sc.sig != prev
 		})
@@ -791,17 +791,17 @@ func choiceText(p AgentPrompt, choice json.RawMessage) (text string, typed bool,
 // Escape is never sent: inside the option it leaves the whole dialog. Any
 // read that does not show the step's effect on the same question stops
 // before the next key and answers with the dialog on screen.
-func (a *agentAPI) typeAnswer(ctx context.Context, wr agentWriter, paneID string, s AgentSession, rec *promptRecord, sc claudeScreen, text string) error {
+func (a *agentAPI) typeAnswer(ctx context.Context, wr agentWriter, paneID string, s AgentSession, rec *promptRecord, sc agentScreen, text string) error {
 	want := rec.prompt.free
 	multi := rec.prompt.Kind == "multiselect"
-	var next claudeScreen
+	var next agentScreen
 	// step sends key and waits for ok on the same question. A screen
 	// reached on the way (hold) gets no promptId while it shows.
 	step := func(key string, ok func(*AgentPrompt) bool, missed string, hold bool) error {
 		if err := wr.SendKeySequence(ctx, s.Target, []string{key}); err != nil {
 			return err
 		}
-		done := pollScreen(ctx, wr, s.Target, func(sc claudeScreen) bool {
+		done := pollScreen(ctx, wr, s.Target, func(sc agentScreen) bool {
 			next = sc
 			return sameFreeQuestion(sc.prompt, &rec.prompt) && ok(sc.prompt)
 		})
@@ -849,7 +849,7 @@ func (a *agentAPI) typeAnswer(ctx context.Context, wr agentWriter, paneID string
 	shows := func(p *AgentPrompt) bool {
 		return !p.free.empty && strip(p.free.value) == strip(text) && (!multi || p.free.checked)
 	}
-	shown := pollScreen(ctx, wr, s.Target, func(sc claudeScreen) bool {
+	shown := pollScreen(ctx, wr, s.Target, func(sc agentScreen) bool {
 		next = sc
 		return sameFreeQuestion(sc.prompt, &rec.prompt) && sc.prompt.pointer == want.index && shows(sc.prompt)
 	})
@@ -871,7 +871,7 @@ func (a *agentAPI) typeAnswer(ctx context.Context, wr agentWriter, paneID string
 	if err := wr.SendKeySequence(ctx, s.Target, []string{"Enter"}); err != nil {
 		return err
 	}
-	if !pollScreen(ctx, wr, s.Target, func(sc claudeScreen) bool { return sc.sig != typedSig }) {
+	if !pollScreen(ctx, wr, s.Target, func(sc agentScreen) bool { return sc.sig != typedSig }) {
 		return fail(http.StatusBadGateway, "answer_not_confirmed", "Enter was sent but the dialog is still open")
 	}
 	return nil
