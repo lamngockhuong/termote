@@ -10,6 +10,7 @@ import { SessionSwitcherChip } from './session-switcher-chip'
 import { SessionTabs } from './session-tabs'
 import { SettingsMenu } from './settings-menu'
 import { FOCUS_RING, IconButton } from './ui/button'
+import { ViewMenu } from './ui/view-menu'
 import { type ViewOption, ViewSwitcher } from './ui/view-switcher'
 
 type MenuProps = Omit<ComponentProps<typeof SettingsMenu>, 'fontSize'>
@@ -52,7 +53,7 @@ interface Props {
   menu: MenuProps
 }
 
-// The top bar. Mobile: the session chip, the view switcher and the overflow
+// The top bar. Mobile: the session chip, the view menu and the overflow
 // menu (which also holds the font size). Desktop: one row with the session
 // tabs, the view switcher, the side panel toggles, font size, fullscreen,
 // connection and the menu.
@@ -61,18 +62,6 @@ export function AppHeader(props: Props) {
     <MobileHeader {...props} />
   ) : (
     <DesktopHeader {...props} />
-  )
-}
-
-function viewSwitcher(p: Props, showLabels: boolean) {
-  return (
-    <ViewSwitcher
-      views={p.views}
-      value={p.viewId}
-      onChange={p.onViewChange}
-      panelId={p.viewPanelId}
-      showLabels={showLabels}
-    />
   )
 }
 
@@ -100,7 +89,7 @@ function MobileHeader(p: Props) {
       {down && (
         <ConnectionIndicator state={p.connectionState} onRetry={p.onRetry} />
       )}
-      {viewSwitcher(p, false)}
+      <ViewMenu views={p.views} value={p.viewId} onChange={p.onViewChange} />
       <SettingsMenu
         {...p.menu}
         fontSize={
@@ -150,7 +139,12 @@ function DesktopHeader(p: Props) {
         </div>
       )}
       <div className="mb-1 flex shrink-0 items-center gap-1">
-        {viewSwitcher(p, true)}
+        <ViewSwitcher
+          views={p.views}
+          value={p.viewId}
+          onChange={p.onViewChange}
+          panelId={p.viewPanelId}
+        />
         {p.onTogglePanel && (
           <PanelToggles
             views={p.panelViews ?? []}

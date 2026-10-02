@@ -312,6 +312,8 @@ Run on tmux (Linux/macOS), psmux (Windows) and Herdr (`herdr integration install
 
 - [ ] A tab running `claude` shows the Terminal/Chat switcher; a tab without it does not
 - [ ] Quitting Claude Code hides the switcher and returns to the terminal
+- [ ] Phone: the header shows one view button (current view's icon) instead of tabs; it opens a
+      menu of views with the current one checked, and the session name keeps its room
 - [ ] tmux window split in two: the chat follows the pane with focus; switching focus mid-way
       never sends a message to the shell pane
 

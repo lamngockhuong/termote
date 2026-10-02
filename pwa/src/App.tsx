@@ -266,8 +266,10 @@ export default function App({
     showView,
   }
   const sidePanelView = panelViews.find((v) => v.id === sidePanelId && v.Panel)
-  // tabpanel roles only mean something next to a switcher
-  const panelRole = switcherViews.length > 1 ? 'tabpanel' : undefined
+  // tabpanel roles only mean something next to the desktop tabs; the mobile
+  // header switches views from a menu
+  const panelRole =
+    !isMobile && switcherViews.length > 1 ? 'tabpanel' : undefined
   const { fontSize, increase, decrease } = useFontSize()
   const { resolvedTheme } = useTheme()
   // Before paint and before the terminal's effects read the tokens.

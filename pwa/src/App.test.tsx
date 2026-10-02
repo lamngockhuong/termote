@@ -2417,13 +2417,33 @@ describe('App views, view-only and deep links', () => {
     // under another view, so it gets no touches there.
     const overlay = terminalPanel().querySelector('.touch-none')
     expect(overlay).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('tab', { name: 'Files' }))
+    fireEvent.click(screen.getByRole('button', { name: 'View: Terminal' }))
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Files' }))
+    expect(
+      screen.getByRole('button', { name: 'View: Files' }),
+    ).toBeInTheDocument()
     expect(
       screen.queryByRole('button', { name: /MenuFontDecrease/ }),
     ).toBeNull()
     expect(terminalPanel()).toHaveClass('invisible')
     expect(terminalPanel()).toHaveAttribute('inert')
     expect(terminalPanel()).toContainElement(overlay as HTMLElement)
+  })
+
+  it('mobile: switches views from a menu, with no tab or tabpanel roles', async () => {
+    mockIsMobile.mockReturnValue(true)
+    render(<App views={VIEWS} />)
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'View: Terminal' }),
+    )
+    expect(screen.queryByRole('tablist', { name: 'View' })).toBeNull()
+    expect(terminalPanel()).not.toHaveAttribute('role')
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Chat' }))
+    expect(screen.getByTestId('chat-main')).toBeInTheDocument()
+    expect(terminalPanel()).toHaveAttribute('inert')
+    expect(
+      screen.getByTestId('chat-main').closest('[id^="view-panel-"]'),
+    ).not.toHaveAttribute('role')
   })
 
   it('a view that stops being offered gives way to the terminal', async () => {
@@ -2486,10 +2506,13 @@ describe('App views, view-only and deep links', () => {
     expect(await screen.findByTestId('lazy-panel')).toBeInTheDocument()
   })
 
-  it('mobile: a panel view is a tab of the switcher, without a toggle', async () => {
+  it('mobile: a panel view is in the view menu, without a toggle', async () => {
     mockIsMobile.mockReturnValue(true)
     render(<App views={PANEL_VIEWS} />)
-    fireEvent.click(await screen.findByRole('tab', { name: 'Files' }))
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'View: Terminal' }),
+    )
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Files' }))
     expect(screen.getByTestId('files-main')).toBeInTheDocument()
     expect(screen.queryByTestId('files-panel')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Files' })).toBeNull()
@@ -2498,7 +2521,10 @@ describe('App views, view-only and deep links', () => {
   it('a panel view follows the layout between mobile and desktop', async () => {
     mockIsMobile.mockReturnValue(true)
     const { rerender } = render(<App views={PANEL_VIEWS} />)
-    fireEvent.click(await screen.findByRole('tab', { name: 'Files' }))
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'View: Terminal' }),
+    )
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Files' }))
     mockIsMobile.mockReturnValue(false)
     rerender(<App views={PANEL_VIEWS} />)
     expect(screen.getByTestId('files-panel')).toBeInTheDocument()
@@ -2508,10 +2534,9 @@ describe('App views, view-only and deep links', () => {
     rerender(<App views={PANEL_VIEWS} />)
     expect(screen.getByTestId('files-main')).toBeInTheDocument()
     expect(screen.queryByTestId('files-panel')).toBeNull()
-    expect(screen.getByRole('tab', { name: 'Files' })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    )
+    expect(
+      screen.getByRole('button', { name: 'View: Files' }),
+    ).toBeInTheDocument()
   })
 
   it('a view can show a notice', async () => {
