@@ -5,7 +5,8 @@ import {
   SquareTerminal,
 } from 'lucide-react'
 import { type ComponentType, lazy } from 'react'
-import { ChatComposer } from './components/chat-composer'
+import { chatAgent } from './chat-agents'
+import { ChatInput } from './components/chat-input'
 import type { ViewOption } from './components/ui/view-switcher'
 import type { MuxInfo } from './hooks/use-local-sessions'
 import type { Session } from './types/session'
@@ -69,13 +70,13 @@ export const APP_VIEWS: AppView[] = [
     id: CHAT_VIEW_ID,
     label: 'Chat',
     Icon: MessagesSquare,
-    // Claude Code only: the server reads its transcript and its screen.
+    // An agent whose transcript the server reads (chat-agents.ts)
     available: ({ mux, session }) =>
       !!mux.caps.agentChat &&
       !!session.hasAgent &&
-      session.agentName === 'claude',
+      chatAgent(session.agentName),
     Main: ChatView,
-    Input: ChatComposer,
+    Input: ChatInput,
   },
   {
     id: FILES_VIEW_ID,

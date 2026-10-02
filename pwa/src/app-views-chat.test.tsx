@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { Suspense } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import {
@@ -8,6 +8,11 @@ import {
   type ViewContext,
   type ViewProps,
 } from './app-views'
+
+// The composer's own tests cover it; here only which input a pane gets
+vi.mock('./components/chat-composer', () => ({
+  ChatComposer: () => <textarea aria-label="Message" />,
+}))
 
 vi.mock('./hooks/use-agent-transcript', () => ({
   useAgentTranscript: () => ({
@@ -42,6 +47,11 @@ const claudePane: ViewContext = {
   readOnly: false,
 }
 
+const codexPane: ViewContext = {
+  ...claudePane,
+  session: { ...claudePane.session, name: 'codex', agentName: 'codex' },
+}
+
 const ids = (ctx: ViewContext) =>
   availableViews(APP_VIEWS, ctx).map((v) => v.id)
 
@@ -65,11 +75,41 @@ describe('chat view', () => {
       { session: { ...claudePane.session, hasAgent: false } },
     ],
     [
-      'the agent is not Claude Code',
-      { session: { ...claudePane.session, agentName: 'codex' } },
+      'the agent has no transcript reader',
+      { session: { ...claudePane.session, agentName: 'pi' } },
+    ],
+    [
+      'the agent is not named',
+      { session: { ...claudePane.session, agentName: undefined } },
     ],
   ])('is not offered when %s', (_, over) => {
     expect(ids({ ...claudePane, ...over })).toEqual(['terminal'])
+  })
+
+  it('is offered for a Codex pane', () => {
+    expect(ids(codexPane)).toEqual(['terminal', CHAT_VIEW_ID])
+  })
+
+  it('gives Claude Code the composer and Codex a read-only bar', () => {
+    const chat = APP_VIEWS.find((v) => v.id === CHAT_VIEW_ID)!
+    const Input = chat.Input!
+    const showView = vi.fn()
+    const props = (ctx: ViewContext): ViewProps => ({
+      ...ctx,
+      isMobile: false,
+      notify: vi.fn(),
+      showView,
+    })
+    const { unmount } = render(<Input {...props(claudePane)} />)
+    expect(screen.getByRole('textbox')).toBeInTheDocument()
+    expect(screen.queryByText('Read only')).toBeNull()
+    unmount()
+
+    render(<Input {...props(codexPane)} />)
+    expect(screen.getByText('Read only')).toBeInTheDocument()
+    expect(screen.queryByRole('textbox')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Open terminal' }))
+    expect(showView).toHaveBeenCalledWith('terminal')
   })
 
   it('loads its main area on first use', async () => {

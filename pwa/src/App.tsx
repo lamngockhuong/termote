@@ -1,4 +1,3 @@
-import { Eye } from 'lucide-react'
 import {
   Suspense,
   useCallback,
@@ -24,6 +23,7 @@ import { GestureHintsOverlay } from './components/gesture-hints-overlay'
 import { HelpModal } from './components/help-modal'
 import { KeyboardToolbar } from './components/keyboard-toolbar'
 import { PaneStrip } from './components/pane-strip'
+import { ReadOnlyBar } from './components/read-only-bar'
 import { SessionSidebar } from './components/session-sidebar'
 import { SettingsModal } from './components/settings-modal'
 import { SidePanel } from './components/side-panel'
@@ -805,12 +805,7 @@ export default function App({
       {/* The bottom input area belongs to the view: the key toolbar for the
           terminal. View-only has no input at all. */}
       {readOnly ? (
-        <div className="flex h-12 shrink-0 items-center gap-2 border-t border-border bg-surface px-3 pb-safe ui-terminal:bg-bg">
-          <Eye size={16} aria-hidden="true" className="text-fg-muted" />
-          <span className="text-[13px] text-fg-muted ui-terminal:font-label">
-            View only
-          </span>
-        </div>
+        <ReadOnlyBar label="View only" />
       ) : isTerminalView ? (
         <div className="relative">
           {historyOpen && (
