@@ -17,6 +17,9 @@ chmod 644 /etc/passwd /etc/group 2>/dev/null || true
 mkdir -p /home/termote/.local/share/nano 2>/dev/null || true
 export HOME=/home/termote
 
+# Basic auth username; termote serve refuses one with ":".
+export TERMOTE_USER="${TERMOTE_USER:-admin}"
+
 # Show auth status
 if [[ "$NO_AUTH" != "true" ]]; then
     if [[ -z "$TERMOTE_PASS" ]]; then
@@ -25,7 +28,7 @@ if [[ "$NO_AUTH" != "true" ]]; then
         echo ""
         echo "============================================"
         echo "  TERMOTE CREDENTIALS (auto-generated)"
-        echo "  Username: admin"
+        echo "  Username: $TERMOTE_USER"
         echo "  Password: $TERMOTE_PASS"
         echo "============================================"
         echo ""
@@ -33,7 +36,7 @@ if [[ "$NO_AUTH" != "true" ]]; then
         echo ""
         echo "============================================"
         echo "  TERMOTE CREDENTIALS (user-provided)"
-        echo "  Username: admin"
+        echo "  Username: $TERMOTE_USER"
         echo "  Password: ********"
         echo "============================================"
         echo ""
@@ -43,7 +46,6 @@ fi
 # Set environment for termote serve mode
 export TERMOTE_PORT="${TERMOTE_PORT:-7680}"
 export TERMOTE_BIND="${TERMOTE_BIND:-0.0.0.0}"
-export TERMOTE_USER="${TERMOTE_USER:-admin}"
 [[ "$NO_AUTH" == "true" ]] && export TERMOTE_NO_AUTH="true"
 
 # Start the backend and its shared "main" session every client attaches to

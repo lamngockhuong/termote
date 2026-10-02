@@ -82,7 +82,7 @@ func TestContainerUpRunsTheReleaseImage(t *testing.T) {
 	if strings.Contains(args, "shared-pass") || strings.Contains(args, "TERMOTE_PASS=") {
 		t.Fatalf("password on the command line: %s", args)
 	}
-	if cc.runEnv["TERMOTE_PASS"] != "shared-pass" || cc.runEnv["NO_AUTH"] != "false" ||
+	if cc.runEnv["TERMOTE_PASS"] != "shared-pass" || cc.runEnv["NO_AUTH"] != "false" || cc.runEnv["TERMOTE_USER"] != adminUser ||
 		!strings.Contains(cc.runEnv["TERMOTE_ALLOWED_HOSTS"], "c.lan") || !strings.Contains(cc.runEnv["TERMOTE_ALLOWED_HOSTS"], "192.168.1.20") {
 		t.Fatalf("run env %v", cc.runEnv)
 	}
@@ -181,6 +181,45 @@ func TestContainerDownLogsStatus(t *testing.T) {
 }
 
 // --no-auth on either side keeps the password the other one uses.
+// The username is shared like the password: up passes the saved one (or
+// --user) to the container through the environment, never the command line.
+func TestContainerUpUser(t *testing.T) {
+	cc := newContainerCLI(t)
+	cc.saveConfig(savedConfig{Port: 7690, User: "bob", Password: "shared-pass"})
+	port := strconv.Itoa(freePort(t))
+	if code := cc.main([]string{"container", "up", "--port", port}); code != 0 {
+		t.Fatalf("up: %s", cc.stderr.String())
+	}
+	args := strings.Join(cc.runArgs, " ")
+	if cc.runEnv["TERMOTE_USER"] != "bob" || !strings.Contains(args, "-e TERMOTE_USER") || strings.Contains(args, "TERMOTE_USER=") {
+		t.Fatalf("saved user not passed: env %v args %s", cc.runEnv, args)
+	}
+	if strings.Contains(cc.stdout.String(), "shares this username") {
+		t.Errorf("unchanged username reported:\n%s", cc.stdout.String())
+	}
+
+	cc.srv.Close()
+	cc.srv = nil
+	cc.stdout.Reset()
+	if code := cc.main([]string{"container", "up", "--user", "carol"}); code != 0 {
+		t.Fatalf("up --user: %s", cc.stderr.String())
+	}
+	if cfg, _ := cc.loadConfig(); cc.runEnv["TERMOTE_USER"] != "carol" || cfg.User != "carol" || cfg.Port != 7690 {
+		t.Fatalf("--user carol: env %v config %+v", cc.runEnv, cfg)
+	}
+	if out := cc.stdout.String(); !strings.Contains(out, "native server shares this username") {
+		t.Errorf("new username not reported:\n%s", out)
+	}
+
+	cc.runArgs = nil
+	if code := cc.main([]string{"container", "up", "--user", "bad:name"}); code != 2 || cc.runArgs != nil {
+		t.Fatalf("bad --user: code %d, ran %v", code, cc.runArgs)
+	}
+	if cfg, _ := cc.loadConfig(); cfg.User != "carol" {
+		t.Fatalf("refused --user saved: %+v", cfg)
+	}
+}
+
 func TestNoAuthKeepsTheSharedPassword(t *testing.T) {
 	cc := newContainerCLI(t)
 	cc.saveConfig(savedConfig{Port: 7690, Password: "shared-pass"})

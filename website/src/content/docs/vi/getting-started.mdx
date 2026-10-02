@@ -46,7 +46,7 @@ Không cần sudo hay quyền quản trị: mọi thứ đều nằm trong thư 
    [`termote start` làm những gì](/vi/installation/native/#termote-start-làm-những-gì).
 
 3. Mở URL được in ra, mặc định là http://localhost:7680 (Windows: http://localhost:7690), rồi đăng nhập bằng
-   `admin` với mật khẩu đó. Quên mật khẩu thì chạy `termote show-password`.
+   `admin` (hoặc tên đặt bằng `--user`) với mật khẩu đó. Quên mật khẩu thì chạy `termote show-password`.
 
 </Steps>
 
@@ -98,7 +98,7 @@ Cờ có cùng cú pháp trên mọi hệ điều hành, kể cả PowerShell (`
 | `termote restart`         | Dừng rồi khởi động lại với các tùy chọn đã lưu                                |
 | `termote status`          | Hiện thông tin server đang chạy báo về (tên khác: `health`)                   |
 | `termote logs [service]`  | Xem log: `server`, `all` (mặc định), `follow`, `clean`                        |
-| `termote show-password`   | Hiện mật khẩu admin đã lưu                                                    |
+| `termote show-password`   | Hiện tên đăng nhập và mật khẩu đã lưu                                         |
 | `termote update`          | Cập nhật lên bản mới nhất, quay về bản cũ nếu bản mới không chạy được         |
 | `termote uninstall`       | Gỡ dịch vụ, lệnh và bản cài (cấu hình và log vẫn còn)                         |
 | `termote container <cmd>` | Chạy server trong container: `up`, `down`, `logs [-f]`, `status`             |

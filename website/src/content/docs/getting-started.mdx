@@ -47,7 +47,7 @@ No sudo or administrator rights are needed: everything goes into your home direc
    [what `termote start` does](/installation/native/#what-termote-start-does).
 
 3. Open the URL it prints, by default http://localhost:7680 (Windows: http://localhost:7690), and log in as
-   `admin` with that password. Forgot it? `termote show-password`.
+   `admin` (or the name set with `--user`) with that password. Forgot it? `termote show-password`.
 
 </Steps>
 
@@ -99,7 +99,7 @@ Flags use the same syntax on every OS, PowerShell included (`termote start --lan
 | `termote restart`         | Stop and start with the saved options                                         |
 | `termote status`          | Show what the running server reports (alias: `health`)                        |
 | `termote logs [service]`  | View logs: `server`, `all` (default), `follow`, `clean`                       |
-| `termote show-password`   | Show the saved admin password                                                 |
+| `termote show-password`   | Show the saved username and password                                          |
 | `termote update`          | Update to the latest release, rolling back if the new one does not come up    |
 | `termote uninstall`       | Remove the service, the command and the install (config and logs stay)        |
 | `termote container <cmd>` | Run the server in a container: `up`, `down`, `logs [-f]`, `status`           |

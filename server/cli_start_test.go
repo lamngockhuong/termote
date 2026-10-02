@@ -27,7 +27,10 @@ func TestParseStartArgs(t *testing.T) {
 		strings.Join(o.allowHosts, ",") != "a.lan,b.lan" || strings.Join(o.removeHosts, ",") != "c.lan" {
 		t.Fatalf("got %+v set %v", o, set)
 	}
-	for _, bad := range [][]string{{"native"}, {"--bogus"}, {"--tailscale", "x.ts.net", "--no-tailscale"}} {
+	if o, set, err := tc.parseStartArgs([]string{"--user", "bob"}); err != nil || o.user != "bob" || !set["user"] {
+		t.Fatalf("--user: %+v %v %v", o, set, err)
+	}
+	for _, bad := range [][]string{{"native"}, {"--bogus"}, {"--tailscale", "x.ts.net", "--no-tailscale"}, {"--user"}} {
 		if _, _, err := tc.parseStartArgs(bad); err == nil {
 			t.Errorf("%v accepted", bad)
 		}
@@ -36,12 +39,12 @@ func TestParseStartArgs(t *testing.T) {
 
 func TestMergeSaved(t *testing.T) {
 	saved := &savedConfig{LAN: true, NoAuth: true, Port: 7700, Tailscale: "t.ts.net", Mux: "herdr",
-		AllowHosts: []string{"saved.lan", "old.lan"}, HerdrAllowNoAuth: true}
+		AllowHosts: []string{"saved.lan", "old.lan"}, HerdrAllowNoAuth: true, User: "bob"}
 
 	o := startOptions{allowHosts: []string{"new.lan"}, removeHosts: []string{"OLD.lan"}}
 	mergeSaved(&o, map[string]bool{}, saved)
 	if !o.lan || !o.noAuth || o.port != 7700 || o.tailscale != "t.ts.net" || o.mux != "herdr" || !o.herdrNoAuth ||
-		strings.Join(o.allowHosts, ",") != "new.lan,saved.lan" {
+		o.user != "bob" || strings.Join(o.allowHosts, ",") != "new.lan,saved.lan" {
 		t.Fatalf("saved values not kept: %+v", o)
 	}
 	// A flag given as =false turns the saved value off.
@@ -55,40 +58,53 @@ func TestMergeSaved(t *testing.T) {
 	if o.tailscale != "" {
 		t.Fatalf("--no-tailscale kept %q", o.tailscale)
 	}
+	// --user replaces the saved name; none saved (or no config) is admin.
+	o = startOptions{user: "carol"}
+	mergeSaved(&o, map[string]bool{"user": true}, saved)
+	if o.user != "carol" {
+		t.Fatalf("--user did not override: %+v", o)
+	}
+	o = startOptions{}
+	mergeSaved(&o, map[string]bool{}, &savedConfig{Port: 7700})
+	if o.user != adminUser {
+		t.Fatalf("config without a username: %+v", o)
+	}
 	o = startOptions{}
 	mergeSaved(&o, map[string]bool{}, nil)
-	if o.port != 0 || o.lan {
+	if o.port != 0 || o.lan || o.user != adminUser {
 		t.Fatalf("nil saved config changed options: %+v", o)
 	}
 }
 
 func TestValidateStart(t *testing.T) {
 	tc := newTestCLI(t, "linux")
-	o := startOptions{}
+	o := startOptions{user: adminUser}
 	if err := tc.validateStart(&o); err != nil || o.port != 7680 {
 		t.Fatalf("defaults: %v %+v", err, o)
 	}
 	for name, o := range map[string]startOptions{
-		"herdr without auth": {mux: "herdr", noAuth: true},
-		"wildcard host":      {allowHosts: []string{"*"}},
-		"bad remove-host":    {removeHosts: []string{"a b"}},
-		"bad tailscale port": {tailscale: "box.ts.net:0"},
-		"unknown mux":        {mux: "screen"},
-		"port":               {port: 70000},
+		"herdr without auth": {mux: "herdr", noAuth: true, user: adminUser},
+		"wildcard host":      {allowHosts: []string{"*"}, user: adminUser},
+		"bad remove-host":    {removeHosts: []string{"a b"}, user: adminUser},
+		"bad tailscale port": {tailscale: "box.ts.net:0", user: adminUser},
+		"unknown mux":        {mux: "screen", user: adminUser},
+		"port":               {port: 70000, user: adminUser},
+		"empty user":         {user: ""},
+		"user with colon":    {user: "bob:x"},
 	} {
 		if err := tc.validateStart(&o); err == nil {
 			t.Errorf("%s accepted", name)
 		}
 	}
-	ok := startOptions{mux: "herdr", noAuth: true, herdrNoAuth: true}
+	ok := startOptions{mux: "herdr", noAuth: true, herdrNoAuth: true, user: "bob"}
 	if err := tc.validateStart(&ok); err != nil {
 		t.Errorf("herdr no-auth with --allow-herdr-no-auth refused: %v", err)
 	}
 	win := newTestCLI(t, "windows")
-	if err := win.validateStart(&startOptions{mux: "herdr"}); err != nil {
+	if err := win.validateStart(&startOptions{mux: "herdr", user: adminUser}); err != nil {
 		t.Errorf("herdr refused on Windows: %v", err)
 	}
-	if err := win.validateStart(&startOptions{mux: "herdr", noAuth: true}); err == nil {
+	if err := win.validateStart(&startOptions{mux: "herdr", noAuth: true, user: adminUser}); err == nil {
 		t.Error("herdr --no-auth without --allow-herdr-no-auth accepted on Windows")
 	}
 }
@@ -222,6 +238,18 @@ func TestStartRefusesBusyPort(t *testing.T) {
 	}
 }
 
+func TestStartRefusesBadUser(t *testing.T) {
+	for _, bad := range []string{"", "bob:x", "a b"} {
+		tc := newTestCLI(t, "linux")
+		if code := tc.main([]string{"start", "--user", bad}); code != 2 || !strings.Contains(tc.stderr.String(), "invalid --user") {
+			t.Errorf("--user %q: code %d\n%s", bad, code, tc.stderr.String())
+		}
+		if fileExists(tc.configFile()) {
+			t.Errorf("--user %q saved a config", bad)
+		}
+	}
+}
+
 func TestStartRefusesUnreadableConfig(t *testing.T) {
 	tc := newTestCLI(t, "windows")
 	writeFile(t, tc.configFile(), "{not json")
@@ -247,11 +275,13 @@ func TestServeConfigIgnoresEnvWhenConfigExists(t *testing.T) {
 		t.Fatal(err)
 	}
 	if cfg.Bind != "127.0.0.1" || cfg.NoAuth || cfg.Pass != "pw" || cfg.Port != "7680" || cfg.PWADir != "" ||
-		cfg.AllowLocalAddr || cfg.MuxBackend != "tmux" || cfg.AllowedHosts != "box.ts.net,box.lan" || cfg.Tailscale != "Box.ts.net:8443" {
+		cfg.AllowLocalAddr || cfg.MuxBackend != "tmux" || cfg.AllowedHosts != "box.ts.net,box.lan" || cfg.Tailscale != "Box.ts.net:8443" ||
+		cfg.User != adminUser {
 		t.Fatalf("serve config %+v", cfg)
 	}
-	tc.saveConfig(savedConfig{Password: "pw", LAN: true, Port: 7700})
-	if cfg, _ = tc.loadServeConfig(); cfg.Bind != "0.0.0.0" || !cfg.AllowLocalAddr || cfg.Port != "7700" {
+	t.Setenv("TERMOTE_USER", "env-user") // ignored as well
+	tc.saveConfig(savedConfig{Password: "pw", LAN: true, Port: 7700, User: "bob"})
+	if cfg, _ = tc.loadServeConfig(); cfg.Bind != "0.0.0.0" || !cfg.AllowLocalAddr || cfg.Port != "7700" || cfg.User != "bob" {
 		t.Fatalf("LAN serve config %+v", cfg)
 	}
 	// No config: the environment configures the server (the container).
@@ -627,16 +657,21 @@ func TestStartEndToEnd(t *testing.T) {
 	tc.procs = listProcesses
 	tc.terminate = terminateProcess
 	port := freePort(t)
+	// A container config is there: it shares the new username.
+	tc.saveConfig(savedConfig{Container: &containerConfig{Port: 7681, Mux: "tmux"}})
 
-	if code := tc.main([]string{"start", "--port", strconv.Itoa(port), "--allow-host", "box.lan"}); code != 0 {
+	if code := tc.main([]string{"start", "--port", strconv.Itoa(port), "--allow-host", "box.lan", "--user", "bob"}); code != 0 {
 		t.Fatalf("start: code %d\nstdout:\n%s\nstderr:\n%s\nlog:\n%s", code, tc.stdout.String(), tc.stderr.String(), tailFile(tc.serverLog(), 20))
 	}
 	t.Cleanup(func() { tc.main([]string{"stop"}) })
 	if !strings.Contains(tc.stdout.String(), "will not start again after a reboot") {
 		t.Errorf("detached start not reported:\n%s", tc.stdout.String())
 	}
+	if !strings.Contains(tc.stdout.String(), "The container shares this username") {
+		t.Errorf("shared username not reported:\n%s", tc.stdout.String())
+	}
 	cfg, err := tc.loadConfig()
-	if err != nil || cfg.Port != port || len(cfg.Password) != 12 || cfg.Mux != "tmux" || strings.Join(cfg.AllowHosts, ",") != "box.lan" {
+	if err != nil || cfg.Port != port || len(cfg.Password) != 12 || cfg.Mux != "tmux" || strings.Join(cfg.AllowHosts, ",") != "box.lan" || cfg.User != "bob" {
 		t.Fatalf("config %+v %v", cfg, err)
 	}
 	pid := tc.readPIDFile()
@@ -656,8 +691,11 @@ func TestStartEndToEnd(t *testing.T) {
 			t.Errorf("Host %s: %d, want %d", host, resp.StatusCode, want)
 		}
 	}
-	if h, code := fetchHealth(port, cfg.Password); code != http.StatusOK || h.PID != pid || h.Version != cliVersion {
+	if h, code := fetchHealth(port, "bob", cfg.Password); code != http.StatusOK || h.PID != pid || h.Version != cliVersion {
 		t.Fatalf("health %+v %d", h, code)
+	}
+	if _, code := fetchHealth(port, adminUser, cfg.Password); code != http.StatusUnauthorized {
+		t.Fatalf("admin still accepted after --user bob: %d", code)
 	}
 
 	tc.stdout.Reset()

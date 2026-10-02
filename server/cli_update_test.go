@@ -194,6 +194,7 @@ type fakeService struct {
 	c      *cli
 	port   int
 	broken map[string]string // version -> "dead" (never answers) | "wrong" (reports another version)
+	users  map[string]string // version -> the only user it lets in with "pw" (none: no auth)
 	srv    *http.Server
 	calls  []string
 }
@@ -228,7 +229,12 @@ func (f *fakeService) Start() error {
 	if err != nil {
 		return err
 	}
+	user := f.users[v]
 	f.srv = &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if u, p, _ := r.BasicAuth(); user != "" && (u != user || p != "pw") {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
 		fmt.Fprintf(w, `{"status":"ok","version":%q}`, reported)
 	})}
 	go f.srv.Serve(ln)
@@ -338,13 +344,39 @@ func TestUpdateRollsBack(t *testing.T) {
 			if tc.currentVersion() != "1.0.0" {
 				t.Fatalf("current %s after rollback", tc.currentVersion())
 			}
-			if h, code := fetchHealth(svc.port, ""); code != 200 || h.Version != "1.0.0" {
+			if h, code := fetchHealth(svc.port, "", ""); code != 200 || h.Version != "1.0.0" {
 				t.Fatalf("old version not answering: %d %+v", code, h)
 			}
 			if !fileExists(tc.versionBinary("1.0.1")) {
 				t.Fatal("failed version removed; it is kept for inspection")
 			}
 		})
+	}
+}
+
+// The health checks log in with the saved username; a version from before it
+// still serves admin, which counts too, with a warning, instead of rolling
+// back.
+func TestUpdateUsesSavedUser(t *testing.T) {
+	for _, tt := range []struct{ serves, warn string }{{"bob", ""}, {adminUser, "ignores the saved username"}} {
+		t.Run(tt.serves, func(t *testing.T) {
+			tc, _, svc := setupUpdate(t)
+			tc.saveConfig(savedConfig{Port: svc.port, Mux: "tmux", User: "bob", Password: "pw"})
+			svc.users = map[string]string{"1.0.0": "bob", "1.0.1": tt.serves}
+			if code := tc.main([]string{"update"}); code != 0 || tc.currentVersion() != "1.0.1" {
+				t.Fatalf("code %d current %s\nstderr %s", code, tc.currentVersion(), tc.stderr.String())
+			}
+			if got := strings.Contains(tc.stderr.String()+tc.stdout.String(), "ignores the saved username"); got != (tt.warn != "") {
+				t.Fatalf("warning shown = %v\nstdout %s\nstderr %s", got, tc.stdout.String(), tc.stderr.String())
+			}
+		})
+	}
+	// Letting in neither the saved user nor admin is a failed update.
+	tc, _, svc := setupUpdate(t)
+	tc.saveConfig(savedConfig{Port: svc.port, Mux: "tmux", User: "bob", Password: "pw"})
+	svc.users = map[string]string{"1.0.0": "bob", "1.0.1": "carol"}
+	if code := tc.main([]string{"update"}); code != 1 || tc.currentVersion() != "1.0.0" || !strings.Contains(tc.stderr.String(), "rolled back to v1.0.0") {
+		t.Fatalf("code %d current %s\nstderr %s", code, tc.currentVersion(), tc.stderr.String())
 	}
 }
 

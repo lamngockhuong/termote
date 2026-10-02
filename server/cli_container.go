@@ -48,6 +48,7 @@ type containerOptions struct {
 	workspace   string
 	mux         string
 	herdrNoAuth bool
+	user        string // Basic auth username, shared with the native server
 	allowHosts  []string
 	removeHosts []string
 }
@@ -83,6 +84,7 @@ func (c *cli) parseContainerArgs(args []string) (containerOptions, map[string]bo
 	fs.StringVar(&o.workspace, "workspace", "", "")
 	fs.StringVar(&o.mux, "mux", "", "")
 	fs.BoolVar(&o.herdrNoAuth, "allow-herdr-no-auth", false, "")
+	fs.StringVar(&o.user, "user", "", "")
 	fs.Var(&hosts, "allow-host", "")
 	fs.Var(&remove, "remove-host", "")
 	pos, err := parseArgs(fs, args)
@@ -214,6 +216,13 @@ func (c *cli) containerUp(args []string) error {
 	if err := c.mergeContainer(&o, set, prev); err != nil {
 		return err
 	}
+	// The username is shared like the password, so it is not in prev.
+	if !set["user"] {
+		o.user = saved.authUser()
+	}
+	if err := validateUserName(o.user); err != nil {
+		return usageError("%v", err)
+	}
 	rt := c.containerRuntime()
 	if rt == "" {
 		return errors.New("neither podman nor docker found; install one")
@@ -295,6 +304,7 @@ func (c *cli) containerUp(args []string) error {
 	if pass != "" {
 		cfg.Password = pass
 	}
+	cfg.User = o.user
 	cfg.Container = &containerConfig{LAN: o.lan, NoAuth: o.noAuth, Port: o.port, Tailscale: o.tailscale, AllowHosts: o.allowHosts, Workspace: o.workspace,
 		Mux: o.mux, HerdrAllowNoAuth: o.herdrNoAuth}
 	if err := c.saveConfig(cfg); err != nil {
@@ -307,17 +317,21 @@ func (c *cli) containerUp(args []string) error {
 	if build {
 		version = cliVersion
 	}
-	if err := c.waitForServer(o.port, pass, version, containerStartWait, nil); err != nil {
+	if err := c.waitForServer(o.port, o.user, pass, version, containerStartWait, nil); err != nil {
 		return fmt.Errorf("the container started but the server does not answer (%v); see: termote container logs", err)
 	}
 	if rt == "podman" && c.goos == "linux" {
 		c.infof("Podman has no daemon to restart the container after a reboot; to keep it, run it as a Quadlet unit (see: https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html)")
 	}
 	c.infof("Container running (%s, image %s)", rt, image)
-	c.showAccessInfo(startOptions{lan: o.lan, noAuth: o.noAuth, port: o.port, tailscale: o.tailscale, mux: o.mux, allowHosts: o.allowHosts}, pass, reused)
-	// One password for both: a new one also changes the native server's.
+	c.showAccessInfo(startOptions{lan: o.lan, noAuth: o.noAuth, port: o.port, tailscale: o.tailscale, mux: o.mux, user: o.user, allowHosts: o.allowHosts}, pass, reused)
+	// One password and username for both: a new one also changes the native
+	// server's.
 	if !reused && pass != "" && saved != nil && saved.Password != "" {
 		c.infof("The native server shares this new password; it takes it at its next restart (termote restart)")
+	}
+	if saved != nil && saved.Port != 0 && o.user != saved.authUser() {
+		c.infof("The native server shares this username; it takes it at its next restart (termote restart)")
 	}
 	return nil
 }
@@ -329,6 +343,7 @@ func (c *cli) containerUp(args []string) error {
 func (c *cli) runContainer(rt, image, bind string, o containerOptions, pass string, hosts []string) error {
 	env := environ(map[string]string{
 		"NO_AUTH":                     strconv.FormatBool(o.noAuth),
+		"TERMOTE_USER":                o.user,
 		"TERMOTE_PASS":                pass,
 		"TERMOTE_ALLOWED_HOSTS":       strings.Join(hosts, ","),
 		"TERMOTE_MUX":                 o.mux,
@@ -337,7 +352,7 @@ func (c *cli) runContainer(rt, image, bind string, o containerOptions, pass stri
 	args := []string{"run", "-d", "--name", containerName, "--restart", "unless-stopped",
 		"-p", fmt.Sprintf("%s:%d:%d", bind, o.port, containerPort),
 		"--mount", "type=bind,src=" + o.workspace + ",dst=/workspace", "-w", "/workspace",
-		"-e", "NO_AUTH", "-e", "TERMOTE_PASS", "-e", "TERMOTE_ALLOWED_HOSTS",
+		"-e", "NO_AUTH", "-e", "TERMOTE_USER", "-e", "TERMOTE_PASS", "-e", "TERMOTE_ALLOWED_HOSTS",
 		"-e", "TERMOTE_MUX", "-e", "TERMOTE_HERDR_ALLOW_NO_AUTH"}
 	args = append(args, c.containerUserArgs(rt)...)
 	if _, err := c.run.Output("", env, rt, append(args, image)...); err != nil {
@@ -468,7 +483,7 @@ func (c *cli) containerStatus(args []string) error {
 	if !saved.Container.NoAuth {
 		pass = saved.Password
 	}
-	h, code := fetchHealth(port, pass)
+	h, code := fetchHealth(port, saved.authUser(), pass)
 	if code == 200 {
 		fmt.Fprintf(c.out, "  %s server :%d - %s (v%s)\n\n", c.paint(ansiGreen, "[OK]"), port, h.Status, h.Version)
 		return nil

@@ -25,7 +25,7 @@ it when the terminals do not need your host tools (like `claude` or `git` as ins
    termote container up
    ```
 
-2. Open http://localhost:7680 and log in as `admin` with the password it prints.
+2. Open http://localhost:7680 and log in as `admin` (or the name set with `--user`) with the password it prints.
 
 3. (Optional) Expose it to the LAN; the option is saved like any other
 
@@ -46,8 +46,9 @@ it when the terminals do not need your host tools (like `claude` or `git` as ins
 - The password and settings reach the container through the environment of the `docker`/`podman` process
   (`-e NAME`, no value), so they never appear on a command line or in a file on disk (`docker inspect` still shows
   them, as with any environment variable).
-- The container settings are saved apart from the native `termote start` options, but the admin password is
-  shared: a new one (`--fresh`) applies to both, and the native server takes it at its next `termote restart`.
+- The container settings are saved apart from the native `termote start` options, but the username and password
+  are shared: a new one (`--user`, `--fresh`) applies to both, and the native server takes it at its next
+  `termote restart`.
 - The container's default port is 7680. If the native server already uses that port, `container up` refuses and
   suggests `--port`.
 - From a git checkout, or with `--build`, it builds `termote:local` from the Dockerfile instead of pulling.
@@ -95,6 +96,7 @@ off with `=false`.
 | `--allow-host <name>`       | Allow another `Host` header name (repeatable, no wildcard)             |
 | `--remove-host <name>`      | Remove an allowed name (repeatable)                                    |
 | `--workspace <dir>`         | Directory mounted at `/workspace` (default `~/termote-workspace`)      |
+| `--user <name>`             | Login username (default `admin`; shared with the native server)        |
 | `--fresh`                   | Set a new password (shared with the native server)                     |
 | `--build`                   | Build the image from a checkout instead of pulling it                  |
 
@@ -171,7 +173,7 @@ Replace `docker` with `podman` if that is your runtime.
 ### API Test
 
 ```bash
-curl -u admin:<password> http://localhost:7680/api/mux/health
+curl -u admin:<password> http://localhost:7680/api/mux/health   # or the name set with --user
 ```
 
 ## Uninstall

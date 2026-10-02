@@ -171,6 +171,13 @@ func TestValidateConfig(t *testing.T) {
 	if err := validateConfig(serveConfig{Pass: "x"}); err != nil {
 		t.Errorf("with password: %v", err)
 	}
+	// Basic auth cuts at the first ":", so such a user could never log in.
+	if err := validateConfig(serveConfig{User: "a:b", Pass: "x"}); err == nil || !strings.Contains(err.Error(), "TERMOTE_USER") {
+		t.Errorf("user with ':' = %v, want refusal naming TERMOTE_USER", err)
+	}
+	if err := validateConfig(serveConfig{User: "a:b", NoAuth: true}); err != nil {
+		t.Errorf("user unused without auth: %v", err)
+	}
 	// herdr exposes every workspace: NoAuth alone is not enough.
 	if err := validateConfig(serveConfig{NoAuth: true, MuxBackend: "herdr"}); err == nil || !strings.Contains(err.Error(), "TERMOTE_HERDR_ALLOW_NO_AUTH") {
 		t.Errorf("herdr + NoAuth = %v, want refusal naming the opt-out", err)

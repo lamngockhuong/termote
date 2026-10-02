@@ -80,7 +80,7 @@ func (c *cli) statusReport(saved *savedConfig, port int) statusReport {
 		pass = saved.Password
 		r.LAN, r.Auth, r.Tailscale = saved.LAN, !saved.NoAuth, saved.Tailscale
 	}
-	h, code := fetchHealth(port, pass)
+	h, code := fetchHealth(port, saved.authUser(), pass)
 	switch {
 	case code == http.StatusOK:
 		r.Running, r.Status, r.Version, r.Backend, r.PID = true, h.Status, h.Version, h.Backend, h.PID

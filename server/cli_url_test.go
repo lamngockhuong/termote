@@ -380,10 +380,36 @@ func TestAccessInfoHidesPasswordInHerdrPlugin(t *testing.T) {
 	if out := tc.stdout.String(); strings.Contains(out, "S3cret-pass") || !strings.Contains(out, "termote show-password") {
 		t.Fatalf("plugin output:\n%s", out)
 	}
+	// The username is no secret: shown with a reused password as well.
+	tc.stdout.Reset()
+	tc.showAccessInfo(startOptions{port: 7680, mux: "herdr", user: "bob"}, "S3cret-pass", true)
+	if out := tc.stdout.String(); strings.Contains(out, "S3cret-pass") || !strings.Contains(out, "Username: bob, with the saved password") {
+		t.Fatalf("reused password output:\n%s", out)
+	}
 	delete(tc.env, "HERDR_PLUGIN_ID")
 	tc.stdout.Reset()
-	tc.showAccessInfo(startOptions{port: 7680, mux: "herdr"}, "S3cret-pass", false)
-	if !strings.Contains(tc.stdout.String(), "S3cret-pass") {
-		t.Fatal("terminal output lost the new password")
+	tc.showAccessInfo(startOptions{port: 7680, mux: "herdr", user: "bob"}, "S3cret-pass", false)
+	if out := tc.stdout.String(); !strings.Contains(out, "S3cret-pass") || !strings.Contains(out, "Username: bob") {
+		t.Fatalf("terminal output lost the new credentials:\n%s", out)
+	}
+}
+
+// Health checks log in with the saved username, not admin.
+func TestStatusReportUsesSavedUser(t *testing.T) {
+	tc := newTestCLI(t, "linux")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if u, p, ok := r.BasicAuth(); !ok || u != "bob" || p != "pw" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		fmt.Fprint(w, herdrHealth)
+	}))
+	t.Cleanup(srv.Close)
+	port := srv.Listener.Addr().(*net.TCPAddr).Port
+	if r := tc.statusReport(&savedConfig{User: "bob", Password: "pw"}, port); !r.Running || r.Status != "ok" {
+		t.Fatalf("saved user: %+v", r)
+	}
+	if r := tc.statusReport(&savedConfig{Password: "pw"}, port); r.Status != "unauthorized" {
+		t.Fatalf("admin accepted: %+v", r)
 	}
 }
