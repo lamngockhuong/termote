@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Session, SessionGroup } from '../types/session'
 import { SessionSidebar } from './session-sidebar'
@@ -33,7 +33,11 @@ vi.mock('./swipeable-session-item', () => ({
     canRemove: boolean
     canEdit: boolean
   }) => (
-    <div data-testid={`swipeable-${session.id}`} data-active={isActive}>
+    <div
+      data-testid={`swipeable-${session.id}`}
+      data-active={isActive}
+      aria-current={isActive ? 'true' : undefined}
+    >
       <span>{session.name}</span>
       <button onClick={onSelect}>Select</button>
       <button onClick={onEdit}>Edit</button>
@@ -50,6 +54,8 @@ beforeEach(() => {
     this.setAttribute('open', '')
   })
   HTMLDialogElement.prototype.close = vi.fn()
+  // scrollIntoView not available in jsdom
+  Element.prototype.scrollIntoView = vi.fn()
 })
 
 const SESSIONS: Session[] = [
@@ -573,6 +579,111 @@ describe('SessionSidebar — mobile mode', () => {
     fireEvent.change(input, { target: { value: 'Updated' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     expect(onUpdate).toHaveBeenCalledWith('1', { name: 'Updated', icon: '💻' })
+  })
+
+  it('scrolls the active session into view when the sheet opens', () => {
+    const scroll = vi.fn()
+    Element.prototype.scrollIntoView = scroll
+    const { rerender } = renderMobile(false)
+    expect(scroll).not.toHaveBeenCalled()
+    rerender(
+      <SessionSidebar
+        sessions={SESSIONS}
+        activeId="2"
+        onSelect={onSelect}
+        onAdd={onAdd}
+        onRemove={onRemove}
+        isMobile
+        isOpen
+      />,
+    )
+    expect(scroll).toHaveBeenCalledTimes(1)
+    expect(scroll).toHaveBeenCalledWith({ block: 'center' })
+    expect(scroll.mock.contexts[0]).toBe(screen.getByTestId('swipeable-2'))
+  })
+
+  it('shows the current session with visible Edit and Delete', () => {
+    renderMobile()
+    const current = screen.getByRole('region', { name: 'Current session' })
+    expect(current).toHaveTextContent('💻')
+    expect(current).toHaveTextContent('Shell')
+    fireEvent.click(within(current).getByRole('button', { name: 'Delete' }))
+    expect(onRemove).toHaveBeenCalledWith('1')
+  })
+
+  it('edits the current session in its row, not in the list', () => {
+    renderMobile()
+    const current = screen.getByRole('region', { name: 'Current session' })
+    fireEvent.click(within(current).getByRole('button', { name: 'Edit' }))
+    // One form, in the row; the list keeps the session's item.
+    expect(within(current).getByDisplayValue('Shell')).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'Save' })).toHaveLength(1)
+    expect(screen.getByTestId('swipeable-1')).toBeInTheDocument()
+    fireEvent.change(screen.getByDisplayValue('Shell'), {
+      target: { value: 'Renamed' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(onUpdate).toHaveBeenCalledWith('1', { name: 'Renamed', icon: '💻' })
+    expect(
+      within(current).getByRole('button', { name: 'Edit' }),
+    ).toBeInTheDocument()
+  })
+
+  it('drops an open edit when the sheet closes', () => {
+    const { rerender } = renderMobile()
+    const current = screen.getByRole('region', { name: 'Current session' })
+    fireEvent.click(within(current).getByRole('button', { name: 'Edit' }))
+    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument()
+    const props = {
+      sessions: SESSIONS,
+      activeId: '1',
+      onSelect,
+      onAdd,
+      onRemove,
+      onUpdate,
+      isMobile: true,
+    }
+    rerender(<SessionSidebar {...props} isOpen={false} />)
+    rerender(<SessionSidebar {...props} isOpen />)
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
+  })
+
+  it('keeps its forms clear of the sticky current session row', () => {
+    renderMobile()
+    fireEvent.click(screen.getByTitle('Add new session'))
+    expect(
+      screen.getByPlaceholderText('Session name').closest('.scroll-mt-24'),
+    ).toBeInTheDocument()
+  })
+
+  it('hides Delete with one session and Edit without onUpdate', () => {
+    render(
+      <SessionSidebar
+        sessions={SINGLE_SESSION}
+        activeId="1"
+        onSelect={onSelect}
+        onAdd={onAdd}
+        onRemove={onRemove}
+        isMobile
+      />,
+    )
+    const current = screen.getByRole('region', { name: 'Current session' })
+    expect(within(current).queryByRole('button', { name: 'Delete' })).toBeNull()
+    expect(within(current).queryByRole('button', { name: 'Edit' })).toBeNull()
+  })
+
+  it('has no current session row when the active id is unknown', () => {
+    render(
+      <SessionSidebar
+        sessions={SESSIONS}
+        activeId="missing"
+        onSelect={onSelect}
+        onAdd={onAdd}
+        onRemove={onRemove}
+        isMobile
+      />,
+    )
+    expect(screen.queryByRole('region', { name: 'Current session' })).toBeNull()
   })
 })
 
