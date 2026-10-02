@@ -172,7 +172,8 @@ func TestCodexDialogLookalikes(t *testing.T) {
 }
 
 func TestCodexDialogSignature(t *testing.T) {
-	real := codexCapture(t, "0.159.3-approval-exec")
+	// A checkout on Windows may give the recording CRLF line ends.
+	real := strings.ReplaceAll(codexCapture(t, "0.159.3-approval-exec"), "\r\n", "\n")
 	a := readCodexScreen(real)
 	// The pointer on option 2: the same dialog.
 	moved := strings.Replace(real, "\x1b[1;7m› 1. Yes, proceed (y)\n\x1b[0m  2.", "\x1b[0m  1. Yes, proceed (y)\n\x1b[1;7m› 2.", 1)
