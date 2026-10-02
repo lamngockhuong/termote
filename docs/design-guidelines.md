@@ -68,7 +68,8 @@ restyling raw elements. Each is written against the tokens, so it is correct in 
 | `Sheet`                      | Bottom sheet on phones, centred dialog on desktop; Escape, close button or scrim press closes it and focus returns to the opener |
 | `Menu`                       | Arrow keys, Home and End move over items; closes on Escape, focus leaving, outside press                                         |
 | `Switch`, `SegmentedControl` | `SegmentedControl` uses a roving tabindex                                                                                        |
-| `ViewSwitcher`               | Renders nothing while only one view exists                                                                                       |
+| `ViewSwitcher`               | Desktop header tabs with labels; renders nothing while only one view exists                                                      |
+| `ViewMenu`                   | Mobile header: one button with the current view's icon (`View: <name>`) opening a menu of views; nothing below two views         |
 | `Banner`                     | Inline status message                                                                                                            |
 
 ## Layout
@@ -117,7 +118,8 @@ There is no bottom navigation: the terminal takes that height.
 
 ### Views
 
-Views of a pane are listed in `pwa/src/app-views.ts`. Only the terminal is registered, so the
+Views of a pane are listed in `pwa/src/app-views.ts`: Terminal, Chat (Claude Code in the pane),
+Files and Changes (when the server reports the pane's directory). Below two available views the
 switcher stays hidden. Another view covers the terminal (invisible, inert) instead of unmounting
 it, so the stream and the multiplexer window size are kept.
 

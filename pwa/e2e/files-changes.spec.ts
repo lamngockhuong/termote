@@ -122,20 +122,21 @@ test.describe('files and changes views', () => {
     await expect(panel.getByTestId('code-block')).toContainText('TOKEN=e2e-secret')
   })
 
-  test('mobile: both are views of the switcher and fit the screen', async ({ page }) => {
+  test('mobile: both are views of the view menu and fit the screen', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 800 })
     // The first-visit gesture tour would cover the view
     await page.addInitScript(() =>
       localStorage.setItem('termote-settings', JSON.stringify({ hasSeenGestureHints: true })),
     )
     await page.goto(`${link}?view=files`)
-    await expect(page.getByRole('tab', { name: 'Files' })).toHaveAttribute('aria-selected', 'true')
+    await expect(page.getByRole('button', { name: 'View: Files' })).toBeVisible()
     await page.getByRole('treeitem', { name: 'src' }).click()
     await page.getByRole('treeitem', { name: 'app.ts' }).click()
     await expect(page.getByTestId('code-block')).toContainText('return b + a')
     expect(await noPageScroll(page)).toBe(true)
 
-    await page.getByRole('tab', { name: 'Changes' }).click()
+    await page.getByRole('button', { name: 'View: Files' }).click()
+    await page.getByRole('menuitemradio', { name: 'Changes' }).click()
     await page.getByRole('region', { name: 'Changes' }).getByRole('button', { name: /app\.ts/ }).click()
     await expect(page.locator('[data-kind="add"]')).toBeVisible()
     expect(await noPageScroll(page)).toBe(true)

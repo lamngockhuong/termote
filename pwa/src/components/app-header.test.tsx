@@ -187,9 +187,20 @@ describe('AppHeader — mobile', () => {
     expect(props.onRetry).toHaveBeenCalledOnce()
   })
 
-  it('shows the view switcher as icons', () => {
-    renderHeader({ isMobile: true, views: TWO_VIEWS })
-    expect(screen.getByRole('tab', { name: 'Chat' })).toHaveTextContent('')
+  it('switches view from one button instead of tabs', () => {
+    const props = renderHeader({ isMobile: true, views: TWO_VIEWS })
+    expect(screen.queryByRole('tablist', { name: 'View' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'View: Terminal' }))
+    expect(
+      screen.getByRole('menuitemradio', { name: 'Terminal' }),
+    ).toHaveAttribute('aria-checked', 'true')
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Chat' }))
+    expect(props.onViewChange).toHaveBeenCalledWith('chat')
+  })
+
+  it('shows no view button with a single view', () => {
+    renderHeader({ isMobile: true })
+    expect(screen.queryByRole('button', { name: /^View:/ })).toBeNull()
   })
 
   it('passes blockedElsewhere to the chip and shows in aria-label', () => {

@@ -12,19 +12,17 @@ interface Props<T extends string> {
   views: ViewOption<T>[]
   value: T
   onChange: (id: T) => void
-  // Shows the label next to the icon (desktop header)
-  showLabels?: boolean
   // Id of the role="tabpanel" element that shows a view (for aria-controls)
   panelId?: (id: T) => string
 }
 
-// Switches the pane between its views (terminal, and later chat, files).
-// Renders nothing while only one view is available.
+// Desktop header tabs switching the pane between its views (terminal, chat,
+// ...); the mobile header uses ViewMenu. Renders nothing while only one view
+// is available.
 export function ViewSwitcher<T extends string>({
   views,
   value,
   onChange,
-  showLabels = false,
   panelId,
 }: Props<T>) {
   const listRef = useRef<HTMLDivElement>(null)
@@ -67,19 +65,16 @@ export function ViewSwitcher<T extends string>({
             role="tab"
             aria-selected={selected}
             aria-controls={panelId?.(id)}
-            aria-label={showLabels ? undefined : label}
             tabIndex={selected ? 0 : -1}
             onClick={() => onChange(id)}
-            className={`flex items-center justify-center gap-1.5 rounded-[calc(var(--radius-control)-2px)] ui-native:rounded-full ${FOCUS_RING} ${showLabels ? 'h-7 px-2.5 text-[12px] pointer-coarse:h-touch' : 'size-9 pointer-coarse:size-touch'} ${
+            className={`flex items-center justify-center gap-1.5 rounded-[calc(var(--radius-control)-2px)] ui-native:rounded-full ${FOCUS_RING} h-7 px-2.5 text-[12px] pointer-coarse:h-touch ${
               selected
                 ? 'bg-surface-raised text-fg shadow-sm ui-terminal:bg-accent-soft ui-terminal:text-accent ui-terminal:shadow-none'
                 : 'text-fg-muted hover:text-fg'
             }`}
           >
-            <Icon size={showLabels ? 14 : 17} aria-hidden="true" />
-            {showLabels && (
-              <span className="ui-terminal:font-label">{label}</span>
-            )}
+            <Icon size={14} aria-hidden="true" />
+            <span className="ui-terminal:font-label">{label}</span>
           </button>
         )
       })}

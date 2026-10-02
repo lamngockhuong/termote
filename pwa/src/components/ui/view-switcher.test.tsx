@@ -11,13 +11,12 @@ const VIEWS: ViewOption<View>[] = [
   { id: 'files', label: 'Files', Icon: FolderGit2 },
 ]
 
-function Controlled({ showLabels = false, onChange = vi.fn() }) {
+function Controlled({ onChange = vi.fn() }) {
   const [view, setView] = useState<View>('terminal')
   return (
     <ViewSwitcher
       views={VIEWS}
       value={view}
-      showLabels={showLabels}
       onChange={(v) => {
         setView(v)
         onChange(v)
@@ -47,8 +46,6 @@ describe('ViewSwitcher', () => {
     expect(tab('Terminal')).toHaveAttribute('tabindex', '0')
     expect(tab('Chat')).toHaveAttribute('aria-selected', 'false')
     expect(tab('Chat')).toHaveAttribute('tabindex', '-1')
-    // Icon only: the name comes from aria-label
-    expect(tab('Chat')).toHaveAttribute('aria-label', 'Chat')
   })
 
   it('switches on click', () => {
@@ -81,8 +78,8 @@ describe('ViewSwitcher', () => {
     expect(onChange).not.toHaveBeenCalled()
   })
 
-  it('shows visible labels when asked', () => {
-    render(<Controlled showLabels />)
+  it('names each tab by its visible label', () => {
+    render(<Controlled />)
     expect(tab('Chat')).not.toHaveAttribute('aria-label')
     expect(tab('Chat')).toHaveTextContent('Chat')
   })
