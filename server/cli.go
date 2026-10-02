@@ -461,7 +461,7 @@ Commands:
   uninstall            Remove the service, the command and the install (config and logs stay)
   logs [service]       View logs (server, all, follow, clean)
   link / unlink        Create or remove the 'termote' command in ~/.local/bin
-  show-password        Show the saved admin password
+  show-password        Show the saved username and password
   version              Show version
   serve                Run the server in the foreground (what the service runs)
   (no command)         Interactive menu
@@ -476,10 +476,11 @@ Options of start (saved; a flag not given keeps its saved value):
   --allow-host <name>        Allow another Host name (repeatable)
   --remove-host <name>       Remove an allowed Host name (repeatable)
   --allow-herdr-no-auth      Allow herdr without auth
+  --user <name>              Login username (default: admin; shared with the container)
   --fresh                    Set a new password
 
-Options of container up (saved apart from start's; the password is shared):
-  --port --lan --tailscale --no-tailscale --no-auth --allow-host --remove-host --fresh
+Options of container up (saved apart from start's; the username and password are shared):
+  --port --lan --tailscale --no-tailscale --no-auth --allow-host --remove-host --user --fresh
   --workspace <dir>          Directory mounted at /workspace (default: ~/termote-workspace)
   --mux <tmux|herdr>         Backend inside the container (asked the first time, else tmux)
   --allow-herdr-no-auth      Allow herdr without auth

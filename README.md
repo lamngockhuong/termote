@@ -150,7 +150,7 @@ termote status                       # What the running server reports
 termote stop                         # Stop (it starts again at the next login)
 termote restart                      # Restart with the saved options
 termote logs follow                  # Tail the logs
-termote show-password                # Print the saved admin password
+termote show-password                # Print the saved username and password
 termote update                       # Update to the latest release
 termote uninstall                    # Remove the service, the command and the install
 ```
@@ -182,7 +182,7 @@ termote container logs -f
 termote container down
 ```
 
-`container up` runs `ghcr.io/lamngockhuong/termote` at the version of the installed `termote`, with podman (preferred) or docker, on port 7680 with `~/termote-workspace` mounted at `/workspace`. It accepts `--port`, `--lan`, `--tailscale`, `--no-auth`, `--allow-host` and `--fresh`, saved apart from the options of `start`; the password is shared with the native server. Docker restarts the container after a reboot; rootless Podman has no daemon to do that, so run it as a Quadlet unit.
+`container up` runs `ghcr.io/lamngockhuong/termote` at the version of the installed `termote`, with podman (preferred) or docker, on port 7680 with `~/termote-workspace` mounted at `/workspace`. It accepts `--port`, `--lan`, `--tailscale`, `--no-auth`, `--allow-host`, `--user` and `--fresh`, saved apart from the options of `start`; the username and password are shared with the native server. Docker restarts the container after a reboot; rootless Podman has no daemon to do that, so run it as a Quadlet unit.
 
 > **Security note**: Avoid mounting `$HOME` directly — sensitive directories like `.ssh`, `.gnupg` will be accessible in container. Mount specific project directories instead.
 
@@ -258,6 +258,7 @@ The native server runs as a user service: a systemd user unit on Linux (a detach
 | `--allow-host <name>`       | Allow an extra Host header value (repeatable; no wildcard, see security notes) |
 | `--remove-host <name>`      | Remove an allowed Host name (repeatable)                                       |
 | `--allow-herdr-no-auth`     | Required together with `--mux herdr --no-auth`                                 |
+| `--user <name>`             | Login username (default: `admin`; shared with the container)                   |
 | `--fresh`                   | Set a new password                                                             |
 
 ### With Tailscale HTTPS

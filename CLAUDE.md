@@ -91,7 +91,8 @@ termote start --allow-host box.local       # native, add a Host allowlist entry
 termote container up                       # container mode (podman/docker)
 termote container up --lan --port 7681     # container, LAN + custom port
 termote container up --mux herdr           # container, Herdr inside it instead of tmux
-termote show-password                      # print the saved admin password
+termote start --user alice                 # native, log in as alice instead of admin
+termote show-password                      # print the saved username and password
 termote link / unlink                      # create/remove the 'termote' global command
 termote update                             # update to the latest release
 termote update --version 1.0.0 --force     # pin/reinstall a specific version
@@ -233,7 +234,7 @@ update               Update to the latest release
 uninstall            Remove the service, the command and the install (config and logs stay)
 logs [service]       View logs (server, all, follow, clean)
 link / unlink        Create or remove the 'termote' command in ~/.local/bin
-show-password        Show the saved admin password
+show-password        Show the saved username and password
 version              Show version
 serve                Run the server in the foreground (what the service runs)
 (no command)         Interactive menu
@@ -245,7 +246,8 @@ There is no `install` command in 1.0 (it prints the replacement above).
 turned off with `=false`): `--port <port>` (default 7680, Windows 7690), `--lan[=false]`,
 `--tailscale <host[:port]>`, `--no-tailscale`, `--no-auth[=false]`, `--mux <tmux|herdr>`,
 `--allow-host <name>` (repeatable), `--remove-host <name>` (repeatable),
-`--allow-herdr-no-auth`, `--fresh`. `update` takes `--version <X.Y.Z>` and `--force`.
+`--allow-herdr-no-auth`, `--user <name>` (default `admin`, shared with the container like the
+password), `--fresh`. `update` takes `--version <X.Y.Z>` and `--force`.
 `container up` additionally takes `--workspace <dir>` and `--build`. `url` takes `--herdr` (ids from
 the Herdr plugin context) or `--group/--tab/--pane`, `--view`, and `--open`/`--copy`/`--qr`; only
 the link goes to stdout. There is no `--ttyd` flag

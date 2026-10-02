@@ -31,7 +31,7 @@ func serveConfigFromSaved(s savedConfig, defaultPort int) serveConfig {
 	hosts = append(hosts, s.AllowHosts...)
 	return serveConfig{
 		Port:             strconv.Itoa(port),
-		User:             adminUser,
+		User:             s.authUser(),
 		Pass:             s.Password,
 		NoAuth:           s.NoAuth,
 		Bind:             bind,

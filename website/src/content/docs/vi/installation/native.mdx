@@ -139,6 +139,7 @@ sẽ khởi động server y như lần trước. Tùy chọn kiểu bật/tắt
 | `--allow-host <name>`       | Cho phép thêm một tên trong header `Host` (lặp được, không có ký tự đại diện) |
 | `--remove-host <name>`      | Bỏ một tên đã cho phép (lặp được)                                      |
 | `--allow-herdr-no-auth`     | Bắt buộc khi dùng `--mux herdr --no-auth`                              |
+| `--user <name>`             | Tên đăng nhập (mặc định `admin`; dùng chung với container)             |
 | `--fresh`                   | Đặt mật khẩu mới                                                       |
 
 ```bash
@@ -148,6 +149,7 @@ termote start --lan=false            # back to this machine only
 termote start --allow-host box.local # accept another host name
 termote start --remove-host box.local
 termote start --fresh                # new password
+termote start --user alice           # log in as alice instead of admin
 ```
 
 Các tên host luôn được phép gồm địa chỉ nội bộ của máy (`localhost`, `127.0.0.1`), tên Tailscale, các tên trong `--allow-host`, và khi có `--lan` thì cả
@@ -186,7 +188,7 @@ termote logs            # recent lines of every log
 termote logs server     # server log only
 termote logs follow     # tail live (Ctrl+C to stop)
 termote logs clean      # delete the log files
-termote show-password   # print the saved admin password
+termote show-password   # print the saved username and password
 ```
 
 Dịch vụ chạy `termote serve`, lệnh này đọc cấu hình đã lưu. Khi đã có file cấu hình, các biến môi trường
@@ -286,5 +288,5 @@ termote logs server     # last server log lines
 API nằm sau phần đăng nhập (`termote show-password` in ra mật khẩu):
 
 ```bash
-curl -u admin:<password> http://localhost:7680/api/mux/health
+curl -u admin:<password> http://localhost:7680/api/mux/health   # or the name set with --user
 ```

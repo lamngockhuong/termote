@@ -25,6 +25,7 @@ type startOptions struct {
 	tailscale   string
 	noTailscale bool
 	mux         string
+	user        string   // Basic auth username, shared with the container
 	allowHosts  []string // user-added names, persisted
 	removeHosts []string
 }
@@ -44,6 +45,7 @@ func (c *cli) parseStartArgs(args []string) (startOptions, map[string]bool, erro
 	fs.StringVar(&o.tailscale, "tailscale", "", "")
 	fs.BoolVar(&o.noTailscale, "no-tailscale", false, "")
 	fs.StringVar(&o.mux, "mux", "", "")
+	fs.StringVar(&o.user, "user", "", "")
 	fs.Var(&hosts, "allow-host", "")
 	fs.Var(&remove, "remove-host", "")
 	pos, err := parseArgs(fs, args)
@@ -87,6 +89,9 @@ func mergeSaved(o *startOptions, set map[string]bool, s *savedConfig) {
 	if !set["allow-herdr-no-auth"] {
 		o.herdrNoAuth = s.HerdrAllowNoAuth
 	}
+	if !set["user"] {
+		o.user = s.authUser()
+	}
 	for _, h := range s.AllowHosts {
 		if !slices.Contains(o.allowHosts, h) {
 			o.allowHosts = append(o.allowHosts, h)
@@ -107,6 +112,9 @@ func (c *cli) validateStart(o *startOptions) error {
 	}
 	if err := validateMux(o.mux, o.noAuth, o.herdrNoAuth); err != nil {
 		return err
+	}
+	if err := validateUserName(o.user); err != nil {
+		return usageError("%v", err)
 	}
 	for _, h := range append(slices.Clone(o.allowHosts), o.removeHosts...) {
 		if err := validateHostName(h); err != nil {
@@ -297,6 +305,7 @@ func (c *cli) cmdStart(args []string) error {
 		Mux:              o.mux,
 		AllowHosts:       o.allowHosts,
 		HerdrAllowNoAuth: o.herdrNoAuth,
+		User:             o.user,
 		Password:         c.keptPassword(pass, saved),
 		Container:        c.savedContainer(saved),
 	}); err != nil {
@@ -310,7 +319,7 @@ func (c *cli) cmdStart(args []string) error {
 	if err := sup.Start(); err != nil {
 		return err
 	}
-	if err := c.waitForServer(o.port, pass, c.version, serverStartWait, c.detachedExited); err != nil {
+	if err := c.waitForServer(o.port, o.user, pass, c.version, serverStartWait, c.detachedExited); err != nil {
 		return fmt.Errorf("%v; last log lines:\n%s", err, tailFile(c.serverLog(), 15))
 	}
 	c.infof("Server running under %s (backend: %s)", sup.Name(), o.mux)
@@ -318,6 +327,9 @@ func (c *cli) cmdStart(args []string) error {
 		c.warnf("No service manager found: the server will not start again after a reboot or crash; run 'termote start' then")
 	}
 	c.showAccessInfo(o, pass, reused)
+	if saved != nil && saved.Container != nil && o.user != saved.authUser() {
+		c.infof("The container shares this username; it takes it at its next 'termote container up'")
+	}
 	return nil
 }
 
@@ -387,13 +399,14 @@ type serverHealth struct {
 	PID     int    `json:"pid"`
 }
 
-// fetchHealth asks the server on port for its health; code is the HTTP
-// status (0 when nothing answers).
-func fetchHealth(port int, pass string) (serverHealth, int) {
+// fetchHealth asks the server on port for its health, logging in as user
+// with pass (none when pass is empty); code is the HTTP status (0 when
+// nothing answers).
+func fetchHealth(port int, user, pass string) (serverHealth, int) {
 	var h serverHealth
 	req, _ := http.NewRequest(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/api/mux/health", port), nil)
 	if pass != "" {
-		req.SetBasicAuth(adminUser, pass)
+		req.SetBasicAuth(user, pass)
 	}
 	client := &http.Client{Timeout: 2 * time.Second}
 	resp, err := client.Do(req)
@@ -410,11 +423,11 @@ func fetchHealth(port int, pass string) (serverHealth, int) {
 // waitForServer waits until the health endpoint reports ok for version (any
 // version when empty), the process exits (exited closes) or the timeout
 // passes.
-func (c *cli) waitForServer(port int, pass, version string, timeout time.Duration, exited <-chan struct{}) error {
+func (c *cli) waitForServer(port int, user, pass, version string, timeout time.Duration, exited <-chan struct{}) error {
 	deadline := time.Now().Add(timeout)
 	last := "no answer"
 	for time.Now().Before(deadline) {
-		h, code := fetchHealth(port, pass)
+		h, code := fetchHealth(port, user, pass)
 		switch {
 		case code == http.StatusOK && h.Status == "ok" && (version == "" || h.Version == version):
 			return nil
@@ -486,7 +499,7 @@ func (c *cli) cmdRestart(args []string) error {
 	if err := sup.Start(); err != nil {
 		return err
 	}
-	if err := c.waitForServer(port, saved.Password, c.version, serverStartWait, c.detachedExited); err != nil {
+	if err := c.waitForServer(port, saved.authUser(), saved.Password, c.version, serverStartWait, c.detachedExited); err != nil {
 		return fmt.Errorf("%v; last log lines:\n%s", err, tailFile(c.serverLog(), 15))
 	}
 	c.infof("Termote restarted (%s)", sup.Name())
@@ -523,7 +536,7 @@ func (c *cli) cmdStatus(args []string) error {
 		pass = saved.Password
 	}
 	c.heading("Termote Status")
-	h, code := fetchHealth(port, pass)
+	h, code := fetchHealth(port, saved.authUser(), pass)
 	running := code == http.StatusOK
 	switch {
 	case running:
@@ -635,24 +648,25 @@ func (c *cli) showAccessInfo(o startOptions, pass string, reused bool) {
 	if pass == "" {
 		return
 	}
+	// The username is no secret, so it is shown even when the password is not.
 	if reused {
-		c.infof("Using the saved password (show it with: termote show-password; new one: termote start --fresh)")
+		c.infof("Username: %s, with the saved password (show it with: termote show-password; new one: termote start --fresh)", o.user)
 		return
 	}
 	// A Herdr plugin action's output is kept in Herdr's plugin log, so the
 	// password is not printed there.
 	if c.getenv("HERDR_PLUGIN_ID") != "" {
-		c.infof("A new password was set; show it with: termote show-password")
+		c.infof("Username: %s, with a new password; show it with: termote show-password", o.user)
 		return
 	}
-	c.showCredentials(pass)
+	c.showCredentials(o.user, pass)
 }
 
-func (c *cli) showCredentials(pass string) {
+func (c *cli) showCredentials(user, pass string) {
 	line := c.paint(ansiBold, "============================================")
 	fmt.Fprintf(c.out, "\n%s\n  %s\n  Username: %s\n  Password: %s\n%s\n%s\n", line,
 		c.paint(ansiGreen, "TERMOTE CREDENTIALS"),
-		c.paint(ansiCyan, adminUser), c.paint(ansiCyan, pass),
+		c.paint(ansiCyan, user), c.paint(ansiCyan, pass),
 		c.paint(ansiDim, "  (view it again with: termote show-password)"), line)
 }
 

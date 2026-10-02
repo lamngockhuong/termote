@@ -114,7 +114,8 @@ func (c *cli) cmdUpdate(args []string) error {
 	if saved != nil {
 		pass = saved.Password
 	}
-	if err := c.restartAndCheck(sup, port, pass, target); err == nil {
+	user := saved.authUser()
+	if err := c.restartAndCheck(sup, port, user, pass, target); err == nil {
 		c.pruneVersions()
 		c.infof("Updated to v%s (%s); config unchanged", target, sup.Name())
 		return nil
@@ -141,7 +142,7 @@ func (c *cli) cmdUpdate(args []string) error {
 		os.Remove(c.pointerPath("previous"))
 	}
 	current = back
-	if err := c.restartAndCheck(sup, port, pass, current); err != nil {
+	if err := c.restartAndCheck(sup, port, user, pass, current); err != nil {
 		return fmt.Errorf("the rollback to v%s did not come up either (%v). Both versions are kept in %s.\n"+
 			"Last log lines:\n%s\nRecover by hand: termote start, or reinstall one version with:\n"+
 			"  curl -fsSL https://termote.ohnice.app/install.sh | TERMOTE_VERSION=%s sh",
@@ -153,7 +154,7 @@ func (c *cli) cmdUpdate(args []string) error {
 // restartAndCheck restarts the server and waits until version answers
 // healthy, then keeps answering: two more checks, updateStable apart, so a
 // server that crashes right after its first reply is not kept.
-func (c *cli) restartAndCheck(sup supervisor, port int, pass, version string) error {
+func (c *cli) restartAndCheck(sup supervisor, port int, user, pass, version string) error {
 	if err := sup.Stop(); err != nil {
 		return err
 	}
@@ -163,12 +164,21 @@ func (c *cli) restartAndCheck(sup supervisor, port int, pass, version string) er
 	if err := sup.Start(); err != nil {
 		return err
 	}
-	if err := c.waitForServer(port, pass, version, serverStartWait, c.detachedExited); err != nil {
-		return err
+	if err := c.waitForServer(port, user, pass, version, serverStartWait, c.detachedExited); err != nil {
+		// A version from before the saved username ignores it and still
+		// serves admin, so a downgrade to one is not taken for a failure.
+		if user == adminUser {
+			return err
+		}
+		if h, code := fetchHealth(port, adminUser, pass); code != http.StatusOK || h.Status != "ok" || h.Version != version {
+			return err
+		}
+		c.warnf("v%s ignores the saved username %q: log in as %s until you update again", version, user, adminUser)
+		user = adminUser
 	}
 	for range 2 {
 		time.Sleep(updateStable)
-		if err := c.waitForServer(port, pass, version, time.Second, c.detachedExited); err != nil {
+		if err := c.waitForServer(port, user, pass, version, time.Second, c.detachedExited); err != nil {
 			return fmt.Errorf("stopped answering after it started: %w", err)
 		}
 	}

@@ -117,6 +117,6 @@ func (c *cli) cmdShowPassword() error {
 	case cfg.Password == "":
 		return errors.New("no password saved; set one with: termote start --fresh")
 	}
-	fmt.Fprintf(c.out, "Username: %s\nPassword: %s\n", adminUser, cfg.Password)
+	fmt.Fprintf(c.out, "Username: %s\nPassword: %s\n", cfg.authUser(), cfg.Password)
 	return nil
 }

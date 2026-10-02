@@ -176,10 +176,16 @@ func apiNotFound(w http.ResponseWriter, r *http.Request) {
 	jsonError(w, "not found", http.StatusNotFound)
 }
 
-// validateConfig refuses a config that would silently run without auth.
+// validateConfig refuses a config that would silently run without auth, or
+// with a username no client could log in as.
 func validateConfig(cfg serveConfig) error {
 	if !cfg.NoAuth && cfg.Pass == "" {
 		return errors.New("TERMOTE_PASS is empty: set a password, or set TERMOTE_NO_AUTH=true to disable auth explicitly")
+	}
+	// Basic auth splits the user from the password at the first ":", so a
+	// name holding one could never log in.
+	if !cfg.NoAuth && strings.Contains(cfg.User, ":") {
+		return errors.New("TERMOTE_USER must not contain ':' (it separates the username from the password)")
 	}
 	if cfg.NoAuth && cfg.MuxBackend == "herdr" && !cfg.HerdrAllowNoAuth {
 		return errors.New("TERMOTE_NO_AUTH=true with TERMOTE_MUX=herdr would expose every herdr workspace without a password; set TERMOTE_HERDR_ALLOW_NO_AUTH=true to accept that")

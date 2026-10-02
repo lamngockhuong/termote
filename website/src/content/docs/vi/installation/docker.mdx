@@ -24,7 +24,7 @@ này khi các terminal không cần công cụ trên máy (như `claude` hay `gi
    termote container up
    ```
 
-2. Mở http://localhost:7680 và đăng nhập bằng `admin` với mật khẩu được in ra.
+2. Mở http://localhost:7680 và đăng nhập bằng `admin` (hoặc tên đặt bằng `--user`) với mật khẩu được in ra.
 
 3. (Tùy chọn) Mở cho mạng LAN; tùy chọn này được lưu như mọi tùy chọn khác
 
@@ -45,8 +45,9 @@ này khi các terminal không cần công cụ trên máy (như `claude` hay `gi
 - Mật khẩu và cấu hình đi qua biến môi trường của tiến trình `docker`/`podman` (`-e TÊN`, không kèm giá trị), nên
   chúng không bao giờ xuất hiện trên dòng lệnh hay nằm trong file nào trên đĩa (`docker inspect` vẫn thấy, như với
   mọi biến môi trường).
-- Cấu hình container được lưu riêng với các tùy chọn `termote start` của bản native, nhưng hai bên dùng chung mật
-  khẩu admin: mật khẩu mới (`--fresh`) áp dụng cho cả hai, và server native nhận nó ở lần `termote restart` tới.
+- Cấu hình container được lưu riêng với các tùy chọn `termote start` của bản native, nhưng hai bên dùng chung tên
+  đăng nhập và mật khẩu: giá trị mới (`--user`, `--fresh`) áp dụng cho cả hai, và server native nhận nó ở lần
+  `termote restart` tới.
 - Cổng mặc định của container là 7680. Nếu server native đang giữ cổng đó, `container up` từ chối và gợi ý dùng
   `--port`.
 - Khi chạy từ thư mục mã nguồn clone bằng git, hoặc với `--build`, nó tự dựng `termote:local` từ Dockerfile
@@ -95,6 +96,7 @@ bật/tắt được tắt bằng `=false`.
 | `--allow-host <name>`       | Cho phép thêm một tên trong header `Host` (lặp được, không có ký tự đại diện) |
 | `--remove-host <name>`      | Bỏ một tên đã cho phép (lặp được)                                      |
 | `--workspace <dir>`         | Thư mục được mount vào `/workspace` (mặc định `~/termote-workspace`)   |
+| `--user <name>`             | Tên đăng nhập (mặc định `admin`; dùng chung với server native)         |
 | `--fresh`                   | Đặt mật khẩu mới (dùng chung với server native)                        |
 | `--build`                   | Tự dựng từ mã nguồn clone bằng git thay vì tải về                      |
 
@@ -171,7 +173,7 @@ Nếu bạn dùng Podman, thay `docker` bằng `podman`.
 ### Kiểm tra API
 
 ```bash
-curl -u admin:<password> http://localhost:7680/api/mux/health
+curl -u admin:<password> http://localhost:7680/api/mux/health   # or the name set with --user
 ```
 
 ## Gỡ cài đặt

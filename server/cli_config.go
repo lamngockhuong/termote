@@ -33,7 +33,10 @@ type savedConfig struct {
 	Mux              string
 	AllowHosts       []string // hosts added with --allow-host only
 	HerdrAllowNoAuth bool
-	Password         string // decrypted
+	// User is the Basic auth username, shared by native and container like
+	// the password; "" (a config saved before it existed) means admin.
+	User     string
+	Password string // decrypted
 	// PasswordUnreadable is set when a saved password exists but cannot be
 	// decrypted (the secret file is gone, or another user); start then sets
 	// a new one.
@@ -63,6 +66,14 @@ func (c *cli) savedContainer(saved *savedConfig) *containerConfig {
 		return nil
 	}
 	return saved.Container
+}
+
+// authUser is the Basic auth username: the saved one, else admin.
+func (s *savedConfig) authUser() string {
+	if s == nil || s.User == "" {
+		return adminUser
+	}
+	return s.User
 }
 
 // keptPassword is the password to save: the new one, or with auth off (an
@@ -179,6 +190,7 @@ const (
 	keyMux              = "TERMOTE_MUX"
 	keyAllowedHosts     = "TERMOTE_ALLOWED_HOSTS"
 	keyHerdrAllowNoAuth = "TERMOTE_HERDR_ALLOW_NO_AUTH"
+	keyUser             = "TERMOTE_USER"
 
 	// The container's keys; present once `container up` ran.
 	keyContainerLAN         = "TERMOTE_CONTAINER_LAN"
@@ -216,6 +228,7 @@ func parseUnixConfig(data []byte, key func() string) (*savedConfig, error) {
 		Mux:              kv[keyMux],
 		AllowHosts:       splitHosts(kv[keyAllowedHosts]),
 		HerdrAllowNoAuth: kv[keyHerdrAllowNoAuth] == "true",
+		User:             kv[keyUser],
 	}
 	cfg.Port, _ = strconv.Atoi(kv[keyPort])
 	if _, ok := kv[keyContainerPort]; ok {
@@ -251,7 +264,7 @@ func formatUnixConfig(cfg savedConfig, key string) ([]byte, error) {
 		}
 		mac = passwordMAC(enc, key)
 	}
-	values := []string{cfg.Tailscale, cfg.Mux, strings.Join(cfg.AllowHosts, ",")}
+	values := []string{cfg.Tailscale, cfg.Mux, strings.Join(cfg.AllowHosts, ","), cfg.User}
 	if cc := cfg.Container; cc != nil {
 		values = append(values, cc.Tailscale, strings.Join(cc.AllowHosts, ","), cc.Workspace, cc.Mux)
 	}
@@ -272,6 +285,7 @@ func formatUnixConfig(cfg savedConfig, key string) ([]byte, error) {
 	w(keyMux, cfg.Mux)
 	w(keyAllowedHosts, strings.Join(cfg.AllowHosts, ","))
 	w(keyHerdrAllowNoAuth, strconv.FormatBool(cfg.HerdrAllowNoAuth))
+	w(keyUser, cfg.User)
 	if cc := cfg.Container; cc != nil {
 		w(keyContainerLAN, strconv.FormatBool(cc.LAN))
 		w(keyContainerNoAuth, strconv.FormatBool(cc.NoAuth))
@@ -296,6 +310,7 @@ type windowsConfigFile struct {
 	Mux              string               `json:"Mux,omitempty"`
 	AllowHost        []string             `json:"AllowHost,omitempty"`
 	HerdrAllowNoAuth bool                 `json:"HerdrAllowNoAuth,omitempty"`
+	User             string               `json:"User,omitempty"`
 	Container        *windowsContainerCfg `json:"Container,omitempty"`
 	SavedAt          string               `json:"SavedAt"`
 }
@@ -333,6 +348,7 @@ func parseWindowsConfig(data []byte) (*savedConfig, error) {
 		Mux:              f.Mux,
 		AllowHosts:       f.AllowHost,
 		HerdrAllowNoAuth: f.HerdrAllowNoAuth,
+		User:             f.User,
 	}
 	if cc := f.Container; cc != nil {
 		cfg.Container = &containerConfig{LAN: cc.Lan, NoAuth: cc.NoAuth, Port: cc.Port, Tailscale: cc.Tailscale, AllowHosts: cc.AllowHost, Workspace: cc.Workspace,
@@ -362,6 +378,7 @@ func formatWindowsConfig(cfg savedConfig, now time.Time) ([]byte, error) {
 		Mux:              cfg.Mux,
 		AllowHost:        cfg.AllowHosts,
 		HerdrAllowNoAuth: cfg.HerdrAllowNoAuth,
+		User:             cfg.User,
 		SavedAt:          now.Format(time.RFC3339),
 	}
 	if cc := cfg.Container; cc != nil {
@@ -497,6 +514,18 @@ func validateHostName(h string) error {
 	}
 	if !hostNameRe.MatchString(h) {
 		return fmt.Errorf("invalid host name %q", h)
+	}
+	return nil
+}
+
+// userNameRe is a Basic auth username --user accepts: no ":" (it separates
+// the name from the password), nothing that could break the config line or
+// an environment variable.
+var userNameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._@-]{0,63}$`)
+
+func validateUserName(u string) error {
+	if !userNameRe.MatchString(u) {
+		return fmt.Errorf("invalid --user %q: use 1 to 64 letters, digits, '.', '_', '-' or '@', starting with a letter or digit", u)
 	}
 	return nil
 }

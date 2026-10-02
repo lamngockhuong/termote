@@ -38,6 +38,10 @@ func TestParseLinuxConfig(t *testing.T) {
 		cfg.Password != "Linux-Pass-01" || cfg.Mux != "" || cfg.PasswordUnreadable || cfg.Container != nil {
 		t.Fatalf("got %+v", *cfg)
 	}
+	// A config saved before the username existed logs in as admin.
+	if cfg.User != "" || cfg.authUser() != adminUser {
+		t.Fatalf("user %q authUser %q, want none saved and admin", cfg.User, cfg.authUser())
+	}
 }
 
 func TestParseConfigWrongSecretMarksPasswordUnreadable(t *testing.T) {
@@ -67,7 +71,7 @@ func TestParsePlainBase64AndEmptyPassword(t *testing.T) {
 func TestUnixConfigRoundTrip(t *testing.T) {
 	key := strings.Repeat("ab", 32)
 	in := savedConfig{LAN: true, Port: 7700, Tailscale: "a.ts.net", Mux: "herdr",
-		AllowHosts: []string{"mybox.local", "proxy.lan"}, HerdrAllowNoAuth: true, Password: `p@ss w0rd$!`,
+		AllowHosts: []string{"mybox.local", "proxy.lan"}, HerdrAllowNoAuth: true, User: "bob.smith", Password: `p@ss w0rd$!`,
 		Container: &containerConfig{LAN: true, Port: 7681, Tailscale: "c.ts.net:8443", AllowHosts: []string{"c.lan"}, Workspace: "/work", Mux: "herdr", HerdrAllowNoAuth: true}}
 	data, err := formatUnixConfig(in, key)
 	if err != nil {
@@ -79,8 +83,11 @@ func TestUnixConfigRoundTrip(t *testing.T) {
 	}
 	if out.LAN != in.LAN || out.Port != in.Port || out.Tailscale != in.Tailscale ||
 		out.Mux != in.Mux || strings.Join(out.AllowHosts, ",") != "mybox.local,proxy.lan" ||
-		!out.HerdrAllowNoAuth || out.Password != in.Password {
+		!out.HerdrAllowNoAuth || out.Password != in.Password || out.User != "bob.smith" || out.authUser() != "bob.smith" {
 		t.Fatalf("round trip: got %+v, want %+v", *out, in)
+	}
+	if !strings.Contains(string(data), "\nTERMOTE_USER=\"bob.smith\"\n") {
+		t.Fatalf("username not written:\n%s", data)
 	}
 	if cc := out.Container; cc == nil || !cc.LAN || cc.NoAuth || cc.Port != 7681 || cc.Tailscale != "c.ts.net:8443" ||
 		strings.Join(cc.AllowHosts, ",") != "c.lan" || cc.Workspace != "/work" || cc.Mux != "herdr" || !cc.HerdrAllowNoAuth {
@@ -158,6 +165,9 @@ func TestFormatUnixConfigRejectsQuotes(t *testing.T) {
 	if _, err := formatUnixConfig(savedConfig{Tailscale: `a"b`}, "k"); err == nil {
 		t.Fatal("quote in value accepted")
 	}
+	if _, err := formatUnixConfig(savedConfig{User: "a\nTERMOTE_NO_AUTH=\"true"}, "k"); err == nil {
+		t.Fatal("newline in the username accepted")
+	}
 }
 
 // fakeDPAPI replaces DPAPI with "dpapi:" + data, as in the Windows fixture.
@@ -187,7 +197,7 @@ func TestParseWindowsConfig(t *testing.T) {
 
 func TestWindowsConfigRoundTrip(t *testing.T) {
 	fakeDPAPI(t)
-	in := savedConfig{Port: 7690, Mux: "tmux", AllowHosts: []string{"pc.lan"}, Password: "pw", Container: &containerConfig{Port: 7680, NoAuth: true, Mux: "herdr", HerdrAllowNoAuth: true}}
+	in := savedConfig{Port: 7690, Mux: "tmux", AllowHosts: []string{"pc.lan"}, User: "bob", Password: "pw", Container: &containerConfig{Port: 7680, NoAuth: true, Mux: "herdr", HerdrAllowNoAuth: true}}
 	data, err := formatWindowsConfig(in, time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC))
 	if err != nil {
 		t.Fatal(err)
@@ -197,12 +207,12 @@ func TestWindowsConfigRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	if out.Container == nil || out.Container.Port != 7680 || !out.Container.NoAuth || out.Password != "pw" || out.Mux != "tmux" || strings.Join(out.AllowHosts, ",") != "pc.lan" ||
-		out.Container.Mux != "herdr" || !out.Container.HerdrAllowNoAuth {
+		out.Container.Mux != "herdr" || !out.Container.HerdrAllowNoAuth || out.User != "bob" {
 		t.Fatalf("round trip got %+v", *out)
 	}
 	// A config saved before the container had a backend reads as none chosen.
 	prev, err := parseWindowsConfig([]byte(`{"Port":7690,"Mux":"herdr","Container":{"Lan":false,"NoAuth":false,"Port":7680}}`))
-	if err != nil || prev.Container == nil || prev.Container.Mux != "" || prev.Container.HerdrAllowNoAuth {
+	if err != nil || prev.Container == nil || prev.Container.Mux != "" || prev.Container.HerdrAllowNoAuth || prev.authUser() != adminUser {
 		t.Fatalf("config without the container backend: %+v, %v", prev, err)
 	}
 }
@@ -269,6 +279,32 @@ func TestValidateHostName(t *testing.T) {
 	}
 }
 
+func TestValidateUserName(t *testing.T) {
+	for _, ok := range []string{"admin", "bob", "Bob.Smith", "ops_1", "me@box", "a", "9-lives", strings.Repeat("u", 64)} {
+		if err := validateUserName(ok); err != nil {
+			t.Errorf("%q rejected: %v", ok, err)
+		}
+	}
+	for _, bad := range []string{"", "a:b", ":", "a b", `a"b`, "a\nb", ".bob", "-bob", "lâm", "a/b", strings.Repeat("u", 65)} {
+		if err := validateUserName(bad); err == nil {
+			t.Errorf("%q accepted", bad)
+		}
+	}
+}
+
+func TestAuthUser(t *testing.T) {
+	var none *savedConfig
+	if got := none.authUser(); got != adminUser {
+		t.Errorf("nil config: %q", got)
+	}
+	if got := (&savedConfig{}).authUser(); got != adminUser {
+		t.Errorf("no saved user: %q", got)
+	}
+	if got := (&savedConfig{User: "bob"}).authUser(); got != "bob" {
+		t.Errorf("saved user: %q", got)
+	}
+}
+
 func TestGeneratePassword(t *testing.T) {
 	p, err := generatePassword()
 	if err != nil || len(p) != 12 || strings.Trim(p, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789") != "" {
@@ -283,8 +319,13 @@ func TestShowPassword(t *testing.T) {
 	}
 	tc.saveConfig(savedConfig{Password: "Shown-01"})
 	tc.stdout.Reset()
-	if code := tc.main([]string{"show-password"}); code != 0 || !strings.Contains(tc.stdout.String(), "Password: Shown-01") {
+	if code := tc.main([]string{"show-password"}); code != 0 || !strings.Contains(tc.stdout.String(), "Username: admin\nPassword: Shown-01") {
 		t.Fatalf("code %d out %q", code, tc.stdout.String())
+	}
+	tc.saveConfig(savedConfig{User: "bob", Password: "Shown-01"})
+	tc.stdout.Reset()
+	if code := tc.main([]string{"show-password"}); code != 0 || !strings.Contains(tc.stdout.String(), "Username: bob\nPassword: Shown-01") {
+		t.Fatalf("saved user: code %d out %q", code, tc.stdout.String())
 	}
 	tc.saveConfig(savedConfig{NoAuth: true})
 	tc.stdout.Reset()

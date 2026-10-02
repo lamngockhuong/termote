@@ -156,7 +156,7 @@ The toolbar at the bottom provides modifier keys:
 
 ### Forgot the Password
 
-- Run `termote show-password` to print the saved password
+- Run `termote show-password` to print the saved username and password
 
 ### Terminal Not Rendering Properly
 

@@ -110,11 +110,12 @@ docker; from a git checkout (or `--build`) it builds `termote:local` from the `D
 instead of pulling. Default workspace `~/termote-workspace`, mounted with `--mount` at
 `/workspace`; change it with `--workspace <dir>`. The container runs as `--user <uid>:<gid>`
 (rootless podman: `--userns=keep-id` instead; rootless Docker: no `--user` at all). The
-password and Host allowlist are passed as `-e NAME` values taken from the CLI's own process
+username, password and Host allowlist are passed as `-e NAME` values taken from the CLI's own process
 environment — never written to a file or a command-line argument (`docker inspect` still shows
 them, as with any container env var). The container's password is shared with the native
 server (setting a new one with `--fresh` applies to both; `--no-auth` on either side keeps the
-shared password saved rather than clearing it).
+shared password saved rather than clearing it), and so is the username (`--user` on either side;
+the other takes it at its next `termote restart` or `container up`).
 
 **Container Runtime:** Auto-detects podman (preferred) or docker.
 
@@ -144,6 +145,7 @@ it rather than resizing the pane.
 | `--allow-host <name>`       | Allow an extra Host header value (repeatable, no wildcard) | ✓       | ✓              |
 | `--remove-host <name>`      | Remove a previously allowed name (repeatable)              | ✓       | ✓              |
 | `--allow-herdr-no-auth`     | Required together with `--mux herdr --no-auth`             | ✓       | ✓              |
+| `--user <name>`             | Login username (default `admin`; shared by both)           | ✓       | ✓              |
 | `--fresh`                   | Set a new password (ignore the saved one)                  | ✓       | ✓              |
 | `--workspace <dir>`         | Mounted directory (default `~/termote-workspace`)          | -       | ✓              |
 | `--build`                   | Build `termote:local` from a checkout instead of pulling   | -       | ✓              |
@@ -154,21 +156,23 @@ PowerShell `-Flag` parameter names in 1.0.
 ## Config Persistence
 
 `start` and `container up` save their settings automatically, separately from each other (a
-`container` config and a native config can coexist, but share the same password):
+`container` config and a native config can coexist, but share the same username and password):
 
 - **Unix:** `~/.config/termote/config` (`$XDG_CONFIG_HOME`), plus a `secret` file (0600) that
   keys the password's encryption
 - **Windows:** `%APPDATA%\termote\config.json` (password DPAPI-encrypted)
 
 Saved settings include the port, network flags (`--lan`, `--tailscale`), auth setting
-(`--no-auth`), mux backend, the Host allowlist, the workspace (container only) and the
-encrypted password.
+(`--no-auth`), mux backend, the Host allowlist, the workspace (container only), the login
+username (`--user`, default `admin`) and the encrypted password.
 
 **Reusing saved config:**
 
 - On restart, the existing config is loaded automatically; a flag not given on the command
   line keeps its saved value
 - The password is reused unless `--fresh` is given (view it again with `termote show-password`)
+- The username is kept unless `--user <name>` is given: 1 to 64 letters, digits, `.`, `_`, `-`
+  or `@`, starting with a letter or digit (no `:`, which separates it from the password)
 
 ```bash
 # First start (saves config)
@@ -456,7 +460,7 @@ curl -v http://localhost:7680/
 # 401 = auth enabled, need credentials
 # 200 = auth disabled or credentials correct
 
-# View the saved password again
+# View the saved username and password again
 termote show-password
 
 # Reset credentials
@@ -502,7 +506,7 @@ curl http://localhost:7680/api/mux/health
 curl http://localhost:7680/api/mux/snapshot
 
 # With auth
-curl -u admin:password http://localhost:7680/api/mux/health
+curl -u admin:password http://localhost:7680/api/mux/health   # or the name set with --user
 ```
 
 ## Updating

@@ -139,6 +139,7 @@ server exactly as last time. A boolean option is turned off with `=false`.
 | `--allow-host <name>`       | Allow another `Host` header name (repeatable, no wildcard)             |
 | `--remove-host <name>`      | Remove an allowed name (repeatable)                                    |
 | `--allow-herdr-no-auth`     | Required together with `--mux herdr --no-auth`                         |
+| `--user <name>`             | Login username (default `admin`; shared with the container)            |
 | `--fresh`                   | Set a new password                                                     |
 
 ```bash
@@ -148,6 +149,7 @@ termote start --lan=false            # back to this machine only
 termote start --allow-host box.local # accept another host name
 termote start --remove-host box.local
 termote start --fresh                # new password
+termote start --user alice           # log in as alice instead of admin
 ```
 
 The allowed host names are always loopback, the Tailscale name, the `--allow-host` names, and with `--lan` the
@@ -185,7 +187,7 @@ termote logs            # recent lines of every log
 termote logs server     # server log only
 termote logs follow     # tail live (Ctrl+C to stop)
 termote logs clean      # delete the log files
-termote show-password   # print the saved admin password
+termote show-password   # print the saved username and password
 ```
 
 The service runs `termote serve`, which reads the saved config. Once a config file exists, `TERMOTE_*`
@@ -285,5 +287,5 @@ termote logs server     # last server log lines
 The API is behind the login (`termote show-password` prints the password):
 
 ```bash
-curl -u admin:<password> http://localhost:7680/api/mux/health
+curl -u admin:<password> http://localhost:7680/api/mux/health   # or the name set with --user
 ```
