@@ -252,8 +252,10 @@ changed. Entries come from `event_msg` `item_completed` rows (user and agent mes
 summaries, commands, file changes, MCP and extension calls, compactions), or `user_message` and
 `agent_message` in a legacy rollout; the messages Codex adds for the model (`response_item`) are
 never shown. The tmux status reads back from the end to the latest of `task_started` (working),
-`task_complete`, `turn_aborted` or `thread_settings_applied` (idle); it is never `blocked`, since
-the rollout does not record an approval request. Herdr reports its own status.
+`task_complete` or `turn_aborted` (idle); it is never `blocked`, since the rollout does not record
+an approval request. `thread_settings_applied` is skipped: Codex writes it for a model change in
+the middle of a turn as well as for a resume, so a turn killed and then resumed reads as working
+until the next turn ends. Herdr reports its own status.
 
 **Transcript.** `<claudeDir>/projects/*/<sessionId>.jsonl`, with `sessionId` a UUID and the
 resolved path inside that config dir. Reads are incremental from a signed `cursor` (a position

@@ -365,13 +365,17 @@ func TestCodexStatus(t *testing.T) {
 		many.WriteString(user)
 	}
 	for name, c := range map[string]struct{ content, want string }{
-		"empty":                    {"", "unknown"},
-		"no turn":                  {meta, "unknown"},
-		"no turn, no newline":      {`{"type":"session_meta"}`, "unknown"},
-		"turn running":             {meta + ev("task_started") + user, "working"},
-		"turn done":                {meta + ev("task_started") + user + ev("task_complete"), "idle"},
-		"turn aborted":             {meta + ev("task_started") + ev("turn_aborted"), "idle"},
-		"killed turn then resumed": {meta + ev("task_started") + user + ev("thread_settings_applied"), "idle"},
+		"empty":               {"", "unknown"},
+		"no turn":             {meta, "unknown"},
+		"no turn, no newline": {`{"type":"session_meta"}`, "unknown"},
+		"turn running":        {meta + ev("task_started") + user, "working"},
+		"turn done":           {meta + ev("task_started") + user + ev("task_complete"), "idle"},
+		"turn aborted":        {meta + ev("task_started") + ev("turn_aborted"), "idle"},
+		// Codex writes thread_settings_applied on a resume and on a model
+		// change within a turn alike: the turn still counts as running.
+		"killed turn then resumed": {meta + ev("task_started") + user + ev("thread_settings_applied"), "working"},
+		"model changed in a turn":  {meta + ev("task_started") + user + ev("thread_settings_applied") + user, "working"},
+		"model changed between":    {meta + ev("task_started") + ev("task_complete") + ev("thread_settings_applied"), "idle"},
 		"next turn after resume":   {meta + ev("task_started") + ev("thread_settings_applied") + ev("task_started") + user, "working"},
 		"marker being written":     {meta + ev("task_started") + `{"type":"event_msg","payload":{"type":"task_comp`, "working"},
 		"long turn":                {meta + ev("task_started") + many.String() + bigOutput + many.String(), "working"},
