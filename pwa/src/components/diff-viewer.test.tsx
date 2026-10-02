@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   type ChangeEntry,
   type FileDiff,
@@ -8,9 +8,15 @@ import {
 import { DiffViewer } from './diff-viewer'
 
 const mockDiff = vi.fn()
+const mockContent = vi.fn()
 vi.mock('../hooks/use-mux-api', async (orig) => ({
   ...(await orig<typeof import('../hooks/use-mux-api')>()),
   fetchFileDiff: (...a: unknown[]) => mockDiff(...a),
+  fetchFileContent: (...a: unknown[]) => mockContent(...a),
+}))
+vi.mock('../utils/highlight', async (orig) => ({
+  ...(await orig<typeof import('../utils/highlight')>()),
+  highlightLang: async () => null,
 }))
 vi.mock('../hooks/use-media-query', () => ({ useIsMobile: () => false }))
 
@@ -51,6 +57,8 @@ function show(over: Partial<Props> = {}) {
     reload: 0,
     onClose: vi.fn(),
     onRootChanged: vi.fn(),
+    onFollow: vi.fn(),
+    notify: vi.fn(),
     ...over,
   }
   const view = render(<DiffViewer {...props} />)
@@ -66,7 +74,12 @@ const rows = () => [
   ...screen.getByTestId('diff').querySelectorAll('[data-kind]'),
 ]
 
+// The lazy Markdown renderer, loaded once up front: its first load can
+// outlast a find under coverage
+beforeAll(() => import('./markdown-preview'))
+
 beforeEach(() => {
+  mockContent.mockReset()
   mockDiff.mockReset()
   mockDiff.mockResolvedValue(diff())
   HTMLDialogElement.prototype.showModal = vi.fn(function (
@@ -220,5 +233,124 @@ describe('DiffViewer', () => {
     expect(await screen.findByTestId('diff')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Back to changes' }))
     expect(v.onClose).toHaveBeenCalled()
+  })
+})
+
+describe('DiffViewer: Markdown preview', () => {
+  const MD: ChangeEntry = { ...ENTRY, path: 'docs/a.md' }
+  const content = (text: string, size = text.length) => ({
+    root: '/r',
+    path: 'docs/a.md',
+    size,
+    text,
+  })
+
+  it('shows the diff first, then the current version rendered', async () => {
+    mockContent.mockResolvedValue(content('# Now\n\n[b](b.md)'))
+    const v = show({ entry: MD, path: 'docs/a.md' })
+    expect(await screen.findByTestId('diff')).toBeInTheDocument()
+    const toggle = screen.getByRole('button', { name: 'Preview' })
+    expect(toggle).toHaveAttribute('aria-pressed', 'false')
+
+    fireEvent.click(toggle)
+    expect(await screen.findByRole('heading', { name: 'Now' })).toBeVisible()
+    expect(screen.queryByTestId('diff')).toBeNull()
+    expect(mockContent).toHaveBeenCalledWith('%1', 'docs/a.md', {
+      root: '/r',
+      reveal: false,
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'b' }))
+    expect(v.onFollow).toHaveBeenCalledWith(
+      { kind: 'path', path: 'docs/b.md', anchor: undefined },
+      0,
+    )
+
+    // Read again with the diff
+    v.again({ entry: MD, path: 'docs/a.md', reload: 1 })
+    await act(async () => {})
+    expect(mockContent).toHaveBeenCalledTimes(2)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+    expect(await screen.findByTestId('diff')).toBeInTheDocument()
+  })
+
+  it('has no preview of a deleted file or of other files', async () => {
+    show({ entry: { ...MD, unstaged: 'D' }, path: 'docs/a.md' })
+    await screen.findByTestId('diff')
+    expect(screen.queryByRole('button', { name: 'Preview' })).toBeNull()
+  })
+
+  it('has no preview for a file that is not Markdown', async () => {
+    show()
+    await screen.findByTestId('diff')
+    expect(screen.queryByRole('button', { name: 'Preview' })).toBeNull()
+  })
+
+  it('previews the staged side unless it deletes the file', async () => {
+    mockContent.mockResolvedValue(content('ok'))
+    show({
+      entry: { ...MD, staged: 'M', unstaged: '' },
+      path: 'docs/a.md',
+      staged: true,
+    })
+    await screen.findByTestId('diff')
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+    expect(await screen.findByText('ok')).toBeInTheDocument()
+  })
+
+  it.each([
+    [
+      { root: '/r', path: 'docs/a.md', sensitive: true },
+      'This file may contain secrets',
+    ],
+    [
+      {
+        root: '/r',
+        path: 'docs/a.md',
+        size: 9,
+        previewable: false,
+        reason: 'binary',
+      },
+      'Not previewable (binary, special file or larger than 1 MiB)',
+    ],
+    [content('x', 300 * 1024), 'Too large to preview'],
+  ])('says why it cannot preview %#', async (c, text) => {
+    mockContent.mockResolvedValue(c)
+    show({ entry: MD, path: 'docs/a.md' })
+    await screen.findByTestId('diff')
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+    expect(screen.getByText('Loading…')).toBeInTheDocument()
+    expect(await screen.findByText(text)).toBeInTheDocument()
+  })
+
+  it.each([
+    [new RequestError(404, '', 'gone'), 'File not found'],
+    [new Error('offline'), 'Could not load the file'],
+  ])('says when the file cannot be read: %s', async (err, text) => {
+    mockContent.mockRejectedValue(err)
+    show({ entry: MD, path: 'docs/a.md' })
+    await screen.findByTestId('diff')
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+    expect(await screen.findByText(text)).toBeInTheDocument()
+  })
+
+  it('drops a read no longer wanted', async () => {
+    let finish!: (v: unknown) => void
+    let fail!: (e: unknown) => void
+    mockContent
+      .mockReturnValueOnce(new Promise((r) => (finish = r)))
+      .mockReturnValueOnce(new Promise((_, r) => (fail = r)))
+      .mockResolvedValue(content('latest'))
+    const v = show({ entry: MD, path: 'docs/a.md' })
+    await screen.findByTestId('diff')
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+    v.again({ entry: MD, path: 'docs/a.md', reload: 1 })
+    v.again({ entry: MD, path: 'docs/a.md', reload: 2 })
+    await act(async () => {
+      finish(content('old'))
+      fail(new Error('x'))
+    })
+    expect(await screen.findByText('latest')).toBeInTheDocument()
+    expect(screen.queryByText('old')).toBeNull()
   })
 })

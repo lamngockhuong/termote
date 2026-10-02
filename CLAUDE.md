@@ -286,6 +286,7 @@ The `update` command:
 | `pwa/src/hooks/use-agent-prompt.ts`               | Polls a pane's open dialog, one store per pane                |
 | `pwa/src/components/files-view.tsx`               | Files view: the pane's directory as a tree, opens a file      |
 | `pwa/src/components/changes-view.tsx`             | Changes view: git status grouped, opens a file's diff         |
+| `pwa/src/components/markdown-preview.tsx`         | Markdown file rendered in Files/Changes (links, code blocks)  |
 | `pwa/src/components/panel-toggles.tsx`            | Desktop header toggles of the side panel (Files, Changes)     |
 | `pwa/src/hooks/use-files.ts`                      | File tree of a pane's root, one store per pane                |
 | `pwa/src/hooks/use-git-changes.ts`                | Polls a pane's git status, one store per pane                 |

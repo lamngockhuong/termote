@@ -65,6 +65,37 @@ Supported backends:
 | `Not previewable (binary, special file or larger than 1 MiB)`  | A binary file, a file over 1 MiB, or something that is not a regular file                        |
 | `This file can't be shown`                                     | A path termote never serves (see below)                                                          |
 
+## Markdown Preview
+
+A Markdown file (`.md`, `.markdown`, `.mdx`) opens rendered: headings, lists, tables (they
+scroll sideways on a phone), task lists, footnotes and code. The eye button in its bar switches
+between the preview and the source; the choice is remembered on this device. A Markdown file
+over 256 KiB opens as its source, with a note that it is too large to preview.
+
+- **Code blocks** are highlighted in the language named after the opening fence (` ```ts `,
+  ` ```bash `, ` ```go `...), with a button to copy the block. A block in a language not covered
+  (`mermaid`, for example) is shown as plain text. The wrap button wraps code blocks too.
+- **Front matter** (the `---` block at the top of docs and MDX pages) is shown as a code block.
+- **Raw HTML and MDX components** are shown as the text they are, never run.
+- **Images are never loaded.** An image inside the root shows as a link that opens the file in
+  Files; an image on the web shows as a link to its site.
+
+Links:
+
+- A link to another file under the root (`docs/guide.md`, `../README.md`, `/src/main.go`) opens
+  it in place; `guide.md#install` opens it at that heading. A leading `/` means the root.
+- A link to a folder shows the tree with that folder open.
+- `#heading` scrolls to the heading in the same file.
+- The back button returns to the file the link was followed from, where you left it, before
+  going back to the tree.
+- A link to a missing file says `Not found`. A link that leaves the root, or that uses another
+  scheme than `http`/`https` (`javascript:`, `file:`, `data:`), is shown as plain text.
+- `http`/`https` links open in a new tab; hovering shows the site they go to.
+
+In **Changes**, a changed Markdown file has the same eye button over its diff: it shows the
+current version of the file, rendered with the same rules. A deleted file has no preview. Its
+links open in Files.
+
 ## Changes
 
 The list follows `git status` and is read again every 5 seconds while the view is open and the

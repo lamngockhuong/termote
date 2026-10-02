@@ -1,20 +1,33 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  act,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  within,
+} from '@testing-library/react'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ViewProps } from '../app-views'
+import { resetFilesStores, useFiles } from '../hooks/use-files'
 import { resetGitChangesStores } from '../hooks/use-git-changes'
 import {
   type ChangeEntry,
   type GitChanges,
   RequestError,
 } from '../hooks/use-mux-api'
+import { FILES_VIEW_ID } from '../view-ids'
 import { ChangesView } from './changes-view'
 
 const mockChanges = vi.fn()
 const mockDiff = vi.fn()
+const mockContent = vi.fn()
+const mockTree = vi.fn()
 vi.mock('../hooks/use-mux-api', async (orig) => ({
   ...(await orig<typeof import('../hooks/use-mux-api')>()),
   fetchGitChanges: (...a: unknown[]) => mockChanges(...a),
   fetchFileDiff: (...a: unknown[]) => mockDiff(...a),
+  fetchFileContent: (...a: unknown[]) => mockContent(...a),
+  fetchFilesTree: (...a: unknown[]) => mockTree(...a),
 }))
 
 const c = (
@@ -85,8 +98,13 @@ const names = (name: string) =>
     .getAllByRole('button')
     .map((b) => b.textContent)
 
+// The lazy Markdown renderer, loaded once up front: its first load can
+// outlast a find under coverage
+beforeAll(() => import('./markdown-preview'))
+
 beforeEach(() => {
   resetGitChangesStores()
+  resetFilesStores()
   mockChanges.mockReset()
   mockDiff.mockReset()
   mockChanges.mockResolvedValue(changes())
@@ -278,5 +296,45 @@ describe('ChangesView', () => {
     expect(v.notify).toHaveBeenCalledExactlyOnceWith(
       "The pane's directory changed",
     )
+  })
+
+  it('a link of a previewed Markdown file opens in the Files view', async () => {
+    mockDiff.mockResolvedValue({
+      root: '/r',
+      path: 'notes/todo.md',
+      truncated: false,
+      hunks: [
+        {
+          header: '@@ -0,0 +1 @@',
+          lines: [{ kind: 'add', new: 1, text: 'x' }],
+        },
+      ],
+    })
+    mockContent.mockResolvedValue({
+      root: '/r',
+      path: 'notes/todo.md',
+      size: 9,
+      text: '[a](a.md) [gone](nope.md)',
+    })
+    mockTree.mockResolvedValue({
+      root: '/r',
+      isRepo: true,
+      path: 'notes',
+      entries: [{ name: 'a.md', type: 'file', size: 1, sensitive: false }],
+      truncated: false,
+    })
+    const p = await show()
+    fireEvent.click(screen.getByRole('button', { name: /todo\.md/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Preview' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'gone' }))
+    await settle()
+    expect(p.notify).toHaveBeenCalledWith('Not found')
+    expect(p.showView).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'a' }))
+    await settle()
+    expect(p.showView).toHaveBeenCalledWith(FILES_VIEW_ID)
+    const files = renderHook(() => useFiles('%1'))
+    expect(files.result.current.openPath).toBe('notes/a.md')
   })
 })

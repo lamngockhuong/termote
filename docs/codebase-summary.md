@@ -32,6 +32,7 @@ termote/
 │   │   │   ├── help-modal.tsx               # Help/gestures guide
 │   │   │   ├── icon-picker.tsx              # Emoji icon selector
 │   │   │   ├── keyboard-toolbar.tsx         # Virtual keyboard buttons
+│   │   │   ├── markdown-preview.tsx         # Markdown file rendered (Files/Changes, lazy-loaded)
 │   │   │   ├── open-terminal-button.tsx     # Way out of a view to the pane's terminal
 │   │   │   ├── pane-dir-header.tsx          # Root, branch and refresh line of Files and Changes
 │   │   │   ├── panel-toggles.tsx            # Desktop header toggles of the side panel
@@ -75,6 +76,8 @@ termote/
 │   │   │   ├── highlight.ts                 # Syntax highlighting through the worker, with a timeout
 │   │   │   ├── highlight-langs.ts           # Highlighted languages by file extension or name
 │   │   │   ├── highlight-worker.ts          # Shiki in a module worker (grammars loaded on demand)
+│   │   │   ├── markdown-links.ts            # Markdown preview: link resolution under the root, heading ids, front matter
+│   │   │   ├── markdown-safety.ts           # Raw HTML as text, http(s)-only URLs (Chat and Markdown preview)
 │   │   │   └── terminal-bridge.ts           # Drives the xterm.js terminal (key mapping, clipboard paste)
 │   │   ├── test-setup.ts                    # Vitest configuration
 │   ├── e2e/                    # Playwright e2e tests (chat-view.spec.ts drives tests/fixtures/fake-claude.sh; files-changes.spec.ts uses a throwaway git repo)

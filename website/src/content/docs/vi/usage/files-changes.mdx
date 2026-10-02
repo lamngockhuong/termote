@@ -62,6 +62,37 @@ Các bộ quản lý phiên hỗ trợ:
 | `Not previewable (binary, special file or larger than 1 MiB)`  | File nhị phân, file lớn hơn 1 MiB, hoặc thứ không phải file thường                               |
 | `This file can't be shown`                                     | Đường dẫn Termote không bao giờ trả về (xem bên dưới)                                            |
 
+## Xem trước Markdown
+
+File Markdown (`.md`, `.markdown`, `.mdx`) mở ra ở dạng đã hiển thị: tiêu đề, danh sách, bảng
+(trên điện thoại cuộn ngang được), danh sách việc cần làm, chú thích cuối trang và code. Nút hình
+con mắt trên thanh của file chuyển qua lại giữa bản xem trước và mã nguồn; máy này sẽ nhớ lựa
+chọn đó. File Markdown lớn hơn 256 KiB mở ở dạng mã nguồn, kèm dòng báo file quá lớn để xem trước.
+
+- **Khối code** được tô màu theo ngôn ngữ ghi sau dấu mở khối (` ```ts `, ` ```bash `,
+  ` ```go `...), có nút chép cả khối. Khối viết bằng ngôn ngữ chưa hỗ trợ (ví dụ `mermaid`) hiện
+  dạng chữ thường. Nút xuống dòng cũng áp dụng cho khối code.
+- **Khối `---` ở đầu file** (thường gặp ở trang tài liệu và trang MDX) hiện thành một khối code.
+- **HTML thô và component MDX** hiện nguyên văn bản, không bao giờ được chạy.
+- **Ảnh không bao giờ được tải.** Ảnh nằm trong thư mục gốc hiện thành link mở file đó trong
+  Files; ảnh trên web hiện thành link tới trang chứa nó.
+
+Link:
+
+- Link tới file khác trong thư mục gốc (`docs/guide.md`, `../README.md`, `/src/main.go`) mở file
+  đó ngay tại chỗ; `guide.md#install` mở file và nhảy tới tiêu đề đó. Dấu `/` ở đầu nghĩa là thư
+  mục gốc.
+- Link tới thư mục hiện cây thư mục với thư mục đó đang mở.
+- `#tieu-de` cuộn tới tiêu đề trong cùng file.
+- Nút quay lại đưa bạn về file chứa link vừa bấm, đúng chỗ đang đọc dở, rồi mới về cây thư mục.
+- Link tới file không tồn tại báo `Not found`. Link ra ngoài thư mục gốc, hoặc dùng giao thức
+  khác `http`/`https` (`javascript:`, `file:`, `data:`), chỉ hiện dạng chữ.
+- Link `http`/`https` mở trong tab mới; rê chuột lên sẽ thấy trang mà link dẫn tới.
+
+Trong **Changes**, file Markdown có thay đổi cũng có nút con mắt phía trên diff: bấm vào sẽ thấy
+phiên bản hiện tại của file, hiển thị theo cùng các quy tắc trên. File đã bị xoá thì không có bản
+xem trước. Link trong đó mở ở Files.
+
 ## Changes
 
 Danh sách lấy theo `git status`, đọc lại mỗi 5 giây khi view đang mở và tab trình duyệt đang hiện.

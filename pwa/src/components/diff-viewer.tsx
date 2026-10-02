@@ -1,16 +1,22 @@
-import { ArrowLeft, Lock, WrapText } from 'lucide-react'
+import { ArrowLeft, Eye, Lock, WrapText } from 'lucide-react'
 import { Fragment, useEffect, useState } from 'react'
 import { type FilesError, filesError } from '../hooks/use-files'
 import {
   type ChangeEntry,
   type DiffLine,
   type FileDiff,
+  fetchFileContent,
   fetchFileDiff,
   RequestError,
 } from '../hooks/use-mux-api'
 import { keepOrder, TRUNCATE_START } from '../utils/files-format'
+import { isMarkdownPath, type LinkPath } from '../utils/markdown-links'
 import { CODE_FRAME, codeText, GUTTER } from './code-block'
-import { SensitiveConfirm } from './file-viewer'
+import {
+  LazyMarkdownPreview,
+  PREVIEW_MAX_BYTES,
+  SensitiveConfirm,
+} from './file-viewer'
 import { ViewMessage } from './pane-dir-header'
 import { Banner } from './ui/banner'
 import { IconButton } from './ui/button'
@@ -52,6 +58,9 @@ interface Props {
   reload: number
   onClose: () => void
   onRootChanged: (root: string) => void
+  // A link of a Markdown preview to another file or a directory
+  onFollow: (target: LinkPath) => void
+  notify: (message: string) => void
 }
 
 // The unified diff of one changed file, one side (staged or not), with
@@ -67,10 +76,14 @@ export function DiffViewer({
   reload,
   onClose,
   onRootChanged,
+  onFollow,
+  notify,
 }: Props) {
   const [state, setState] = useState<Loaded>({ kind: 'loading' })
   const [reveal, setReveal] = useState(false)
   const [wrap, setWrap] = useState(isMobile)
+  // The working tree's version of a changed Markdown file, rendered
+  const [preview, setPreview] = useState(false)
   // What of the entry the diff depends on
   const version =
     entry && `${entry.staged}${entry.unstaged}${entry.conflict ?? ''}`
@@ -106,6 +119,15 @@ export function DiffViewer({
     : version
       ? state
       : { kind: 'gone' as const }
+  // Nothing to render of a file this side deletes
+  const side = staged ? entry?.staged : entry?.unstaged
+  // Offered once the diff shows (a sensitive file asked first), and kept
+  // while the diff is read again
+  const canPreview =
+    isMarkdownPath(path) &&
+    side !== 'D' &&
+    (shown.kind === 'diff' || (preview && shown.kind === 'loading'))
+  const previewing = canPreview && preview
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="sticky top-0 z-10 flex shrink-0 items-center gap-1 border-b border-border bg-surface px-1 py-1 ui-terminal:bg-bg">
@@ -128,6 +150,18 @@ export function DiffViewer({
             {staged ? 'Staged' : 'Not staged'}
           </span>
         </div>
+        {canPreview && (
+          <IconButton
+            size="sm"
+            onClick={() => setPreview((v) => !v)}
+            aria-label="Preview"
+            aria-pressed={previewing}
+            title={previewing ? 'Show the diff' : 'Show the current version'}
+            className={previewing ? 'text-accent' : ''}
+          >
+            <Eye size={15} aria-hidden="true" />
+          </IconButton>
+        )}
         <IconButton
           size="sm"
           onClick={() => setWrap((w) => !w)}
@@ -139,7 +173,9 @@ export function DiffViewer({
           <WrapText size={15} aria-hidden="true" />
         </IconButton>
       </div>
-      {shown.kind === 'loading' && <ViewMessage>Loading…</ViewMessage>}
+      {shown.kind === 'loading' && !previewing && (
+        <ViewMessage>Loading…</ViewMessage>
+      )}
       {shown.kind === 'gone' && <ViewMessage>No longer changed</ViewMessage>}
       {shown.kind === 'error' && <ViewMessage>{shown.text}</ViewMessage>}
       {shown.kind === 'sensitive' && (
@@ -148,7 +184,19 @@ export function DiffViewer({
           This file may contain secrets
         </ViewMessage>
       )}
-      {shown.kind === 'diff' && (
+      {previewing && (
+        <WorkingTreePreview
+          paneId={paneId}
+          root={root}
+          path={path}
+          reveal={reveal}
+          version={`${version}:${reload}`}
+          wrap={wrap}
+          onFollow={onFollow}
+          notify={notify}
+        />
+      )}
+      {shown.kind === 'diff' && !previewing && (
         <DiffBody diff={shown.diff} wrap={wrap} oneColumn={isMobile} />
       )}
       <SensitiveConfirm
@@ -157,6 +205,81 @@ export function DiffViewer({
         onCancel={onClose}
       />
     </div>
+  )
+}
+
+type Content =
+  | { kind: 'loading' }
+  | { kind: 'text'; text: string }
+  | { kind: 'message'; text: string }
+
+// The file as it is now in the working tree, rendered; read again whenever
+// the diff is.
+function WorkingTreePreview({
+  paneId,
+  root,
+  path,
+  reveal,
+  version,
+  wrap,
+  onFollow,
+  notify,
+}: {
+  paneId: string
+  root?: string
+  path: string
+  reveal: boolean
+  version: string
+  wrap: boolean
+  onFollow: (target: LinkPath) => void
+  notify: (message: string) => void
+}) {
+  const [content, setContent] = useState<Content>({ kind: 'loading' })
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: version re-reads the file
+  useEffect(() => {
+    let live = true
+    setContent({ kind: 'loading' })
+    fetchFileContent(paneId, path, { root, reveal }).then(
+      (c) => {
+        if (!live) return
+        if ('sensitive' in c)
+          setContent({ kind: 'message', text: 'This file may contain secrets' })
+        else if ('previewable' in c)
+          setContent({
+            kind: 'message',
+            text: 'Not previewable (binary, special file or larger than 1 MiB)',
+          })
+        else if (c.size > PREVIEW_MAX_BYTES)
+          setContent({ kind: 'message', text: 'Too large to preview' })
+        else setContent({ kind: 'text', text: c.text })
+      },
+      (err) =>
+        live &&
+        setContent({
+          kind: 'message',
+          text:
+            filesError(err) === 'not-found'
+              ? 'File not found'
+              : 'Could not load the file',
+        }),
+    )
+    return () => {
+      live = false
+    }
+  }, [paneId, root, path, reveal, version])
+
+  if (content.kind === 'loading') return <ViewMessage>Loading…</ViewMessage>
+  if (content.kind === 'message')
+    return <ViewMessage>{content.text}</ViewMessage>
+  return (
+    <LazyMarkdownPreview
+      text={content.text}
+      path={path}
+      wrap={wrap}
+      onFollow={onFollow}
+      notify={notify}
+    />
   )
 }
 

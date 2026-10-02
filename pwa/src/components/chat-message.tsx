@@ -3,37 +3,12 @@ import { type ComponentProps, memo, type ReactNode } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { TranscriptEntry, TranscriptPart } from '../hooks/use-mux-api'
+import { htmlAsText, safeUrl } from '../utils/markdown-safety'
 
 // One entry of an agent's transcript. Agent text is untrusted (a prompt
 // injection can write anything), so markdown is rendered without raw HTML,
 // links open only for http(s), and images never load: an image URL can carry
 // data out without a click.
-
-interface MdNode {
-  type: string
-  value?: string
-  children?: MdNode[]
-}
-
-// Raw HTML in the markdown is shown as the text it is.
-function htmlAsText() {
-  const walk = (node: MdNode) => {
-    if (node.type === 'html') node.type = 'text'
-    node.children?.forEach(walk)
-  }
-  return walk
-}
-
-// The URL when it is http(s), else null.
-export function safeUrl(url: unknown): URL | null {
-  if (typeof url !== 'string') return null
-  try {
-    const u = new URL(url)
-    return u.protocol === 'http:' || u.protocol === 'https:' ? u : null
-  } catch {
-    return null
-  }
-}
 
 function MdLink({ href, children }: ComponentProps<'a'>) {
   const u = safeUrl(href)

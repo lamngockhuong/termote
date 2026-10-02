@@ -1,5 +1,13 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest'
 import { ThemeProvider } from '../contexts/theme-context'
 import { RequestError } from '../hooks/use-mux-api'
 import { FileViewer } from './file-viewer'
@@ -9,7 +17,11 @@ vi.mock('../hooks/use-mux-api', async (orig) => ({
   ...(await orig<typeof import('../hooks/use-mux-api')>()),
   fetchFileContent: (...a: unknown[]) => mockContent(...a),
 }))
-vi.mock('../utils/highlight', () => ({ highlight: async () => null }))
+vi.mock('../utils/highlight', async (orig) => ({
+  ...(await orig<typeof import('../utils/highlight')>()),
+  highlight: async () => null,
+  highlightLang: async () => null,
+}))
 vi.mock('../hooks/use-media-query', () => ({ useIsMobile: () => false }))
 
 function show(over: Partial<Parameters<typeof FileViewer>[0]> = {}) {
@@ -19,6 +31,7 @@ function show(over: Partial<Parameters<typeof FileViewer>[0]> = {}) {
     path: 'src/a.ts',
     wrapByDefault: false,
     onClose: vi.fn(),
+    onFollow: vi.fn(),
     onRootChanged: vi.fn(),
     notify: vi.fn(),
     ...over,
@@ -31,7 +44,12 @@ function show(over: Partial<Parameters<typeof FileViewer>[0]> = {}) {
   return { ...props, ...view }
 }
 
+// The lazy Markdown renderer, loaded once up front: its first load can
+// outlast a find under coverage
+beforeAll(() => import('./markdown-preview'))
+
 beforeEach(() => {
+  localStorage.clear()
   mockContent.mockReset()
   HTMLDialogElement.prototype.showModal = vi.fn(function (
     this: HTMLDialogElement,
@@ -175,5 +193,87 @@ describe('FileViewer', () => {
       fail(new Error('offline'))
     })
     expect(await screen.findByTestId('code-block')).toHaveTextContent('new')
+  })
+
+  it('names the file Back returns to', async () => {
+    mockContent.mockResolvedValue({ root: '/r', path: 'a', size: 1, text: 'x' })
+    show({ backTo: 'docs/README.md' })
+    expect(
+      screen.getByRole('button', { name: 'Back to README.md' }),
+    ).toBeInTheDocument()
+  })
+})
+
+describe('FileViewer: Markdown', () => {
+  const md = (text: string, size = text.length) => ({
+    root: '/r',
+    path: 'docs/a.md',
+    size,
+    text,
+  })
+
+  it('previews Markdown first, and remembers Source', async () => {
+    mockContent.mockResolvedValue(md('# Title\n\nBody'))
+    const p = show({ path: 'docs/a.md' })
+    expect(await screen.findByTestId('markdown-preview')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Title' })).toBeInTheDocument()
+    const toggle = screen.getByRole('button', { name: 'Preview' })
+    expect(toggle).toHaveAttribute('aria-pressed', 'true')
+
+    fireEvent.click(toggle)
+    expect(await screen.findByTestId('code-block')).toHaveTextContent('# Title')
+    expect(toggle).toHaveAttribute('aria-pressed', 'false')
+    expect(
+      JSON.parse(localStorage.getItem('termote-settings') ?? '{}'),
+    ).toEqual(expect.objectContaining({ markdownPreview: false }))
+
+    // Opened again: still the source
+    p.unmount()
+    show({ path: 'docs/a.md' })
+    expect(await screen.findByTestId('code-block')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+    expect(await screen.findByTestId('markdown-preview')).toBeInTheDocument()
+  })
+
+  it('shows a large Markdown file as its source, saying why', async () => {
+    mockContent.mockResolvedValue(md('# Big', 300 * 1024))
+    show({ path: 'docs/a.md' })
+    expect(await screen.findByTestId('code-block')).toBeInTheDocument()
+    expect(screen.getByText(/Too large to preview/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Preview' })).toBeNull()
+  })
+
+  it('has no preview for other files', async () => {
+    mockContent.mockResolvedValue({ root: '/r', path: 'a', size: 1, text: 'x' })
+    show()
+    await screen.findByTestId('code-block')
+    expect(screen.queryByRole('button', { name: 'Preview' })).toBeNull()
+    expect(screen.queryByText(/Too large/)).toBeNull()
+  })
+
+  it('previews nothing of a sensitive file before Show', async () => {
+    mockContent
+      .mockResolvedValueOnce({ root: '/r', path: '.env.md', sensitive: true })
+      .mockResolvedValueOnce(md('# Secret'))
+    show({ path: '.env.md' })
+    expect(
+      await screen.findByText('This file may contain secrets'),
+    ).toBeInTheDocument()
+    expect(screen.queryByTestId('markdown-preview')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Preview' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Show' }))
+    expect(await screen.findByTestId('markdown-preview')).toHaveTextContent(
+      'Secret',
+    )
+  })
+
+  it('hands a followed link and where it was left to the caller', async () => {
+    mockContent.mockResolvedValue(md('[guide](guide.md#usage)'))
+    const p = show({ path: 'docs/a.md' })
+    fireEvent.click(await screen.findByRole('button', { name: 'guide' }))
+    expect(p.onFollow).toHaveBeenCalledWith(
+      { kind: 'path', path: 'docs/guide.md', anchor: 'usage' },
+      0,
+    )
   })
 })

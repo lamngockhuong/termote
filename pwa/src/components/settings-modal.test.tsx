@@ -16,6 +16,7 @@ const DEFAULT_SETTINGS: Settings = {
   driveTerminalSize: false,
   sidebarFilter: 'all',
   sortBlockedFirst: false,
+  markdownPreview: true,
 }
 
 describe('SettingsModal', () => {
