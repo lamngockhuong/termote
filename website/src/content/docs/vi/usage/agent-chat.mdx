@@ -57,7 +57,12 @@ dòng ghi lệnh lấy từ đâu:
 - `project`: `.claude/commands/` và `.claude/skills/` trong dự án của pane (thư mục mà Files
   view hiển thị).
 - `user`: `commands/` và `skills/` trong thư mục cấu hình Claude của bạn (`~/.claude`, hoặc
-  `CLAUDE_CONFIG_DIR`). Skill có thêm nhãn `skill`.
+  `CLAUDE_CONFIG_DIR`).
+- `plugin`: lệnh và skill của các plugin bạn đã cài và đang bật, có tên dạng
+  `/<plugin>:<name>`. Plugin bị tắt trong `.claude/settings.json` hoặc
+  `.claude/settings.local.json` của dự án sẽ không có trong danh sách.
+
+Skill có thêm nhãn `skill`.
 
 Chạm vào một dòng, hoặc bấm Enter hay Tab, ô nhập sẽ thành `/name ` để bạn gõ tham số; tin chỉ
 được gửi khi bạn bấm gửi. Phím mũi tên di chuyển trong danh sách, Escape đóng danh sách, gõ dấu
@@ -68,9 +73,9 @@ Vài lệnh mở một màn hình mà Chat view không điều khiển được,
 được gửi đi và app chuyển sang terminal. `/exit` hỏi lại trước khi gửi vì nó tắt Claude Code;
 sau đó app quay về terminal.
 
-Termote chỉ đọc tên và mô tả, không bao giờ đọc nội dung lệnh. Skill hoặc lệnh là liên kết tượng trưng trỏ
-ra ngoài dự án hay ngoài thư mục cấu hình sẽ không được liệt kê; lệnh của plugin và MCP prompt
-cũng vậy. Lệnh nào cũng vẫn gõ đầy đủ được.
+Termote chỉ đọc tên và mô tả, không bao giờ đọc nội dung lệnh. Skill cài dưới dạng liên kết
+tượng trưng chỉ được liệt kê khi liên kết trỏ vào dự án, thư mục cấu hình hoặc `~/.agents/skills`;
+trỏ đi nơi khác thì không, MCP prompt cũng không. Lệnh nào cũng vẫn gõ đầy đủ được.
 
 ## Trả lời hộp thoại
 

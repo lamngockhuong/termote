@@ -295,12 +295,12 @@ export async function fetchAgentPrompt(
   return (await res.json()).prompt
 }
 
-// A custom command or skill of the pane's project or its user, as listed by
-// /agent/commands: never the file's body.
+// A custom command or skill of the pane's project, its user or an enabled
+// plugin, as listed by /agent/commands: never the file's body.
 export interface AgentCommand {
   name: string
   description?: string
-  source: 'project' | 'user'
+  source: 'project' | 'user' | 'plugin'
   kind: 'command' | 'skill'
 }
 

@@ -58,7 +58,12 @@ contains it. Each row shows where the command comes from:
 - `project`: `.claude/commands/` and `.claude/skills/` in the pane's project (the folder the
   Files view shows).
 - `user`: `commands/` and `skills/` in your Claude config dir (`~/.claude`, or
-  `CLAUDE_CONFIG_DIR`). Skills carry a `skill` tag as well.
+  `CLAUDE_CONFIG_DIR`).
+- `plugin`: commands and skills of the plugins you have installed and enabled, named
+  `/<plugin>:<name>`. A plugin turned off in the project's `.claude/settings.json` or
+  `.claude/settings.local.json` is left out.
+
+Skills carry a `skill` tag as well.
 
 Tap a row, or press Enter or Tab, and the box becomes `/name ` so you can type arguments; it is
 not sent until you send it. The arrow keys move through the list and Escape closes it, as does a
@@ -69,9 +74,9 @@ A few commands open a screen the Chat view cannot drive, such as `/model`, `/con
 and switches to the terminal. `/exit` asks before it is sent, since it ends Claude Code; the app
 then goes back to the terminal.
 
-Only names and descriptions are read, never what a command contains. A skill or command that is
-a symlink to a folder outside the project or the config dir is not listed, and neither are
-plugin commands nor MCP prompts. Any command can still be typed in full.
+Only names and descriptions are read, never what a command contains. A skill installed as a
+symlink is listed when it leads into the project, the config dir or `~/.agents/skills`; a link to
+anywhere else is not, and neither are MCP prompts. Any command can still be typed in full.
 
 ## Answering Dialogs
 

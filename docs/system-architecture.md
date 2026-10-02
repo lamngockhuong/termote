@@ -242,8 +242,25 @@ followed. A file that is itself a symlink is never read (inside the root it coul
 refuse (a denied dir, a sensitive name) is skipped. A command in a subdirectory is named `dir:name`; a skill takes its front matter `name`,
 else its directory, and one with `user-invocable: false` is left out. Only the first 8 KB of a
 file is read, for the front matter `description` or else the first line, clipped to 200
-characters: the body never leaves the server. At most 500 entries per dir and 5000 dir entries
-looked at, `commands/` walked 4 levels deep; a name met twice keeps the first (project before user). It is a GET, so it checks
+characters: the body never leaves the server. A top-level entry of `skills/` that is a symlink to
+a dir is followed when its target resolves inside the config dir, the pane's root or the server
+user's `~/.agents/skills` (where skill managers install): the target is opened as an `os.Root`
+of its own and only its `SKILL.md` is read, a regular file and not a symlink.
+
+Plugins add a third source, `plugin`, after the user's. `<config dir>/plugins/installed_plugins.json`
+gives each `<name>@<marketplace>` its installs; `enabledPlugins` in the config dir's
+`settings.json`, then the project's `.claude/settings.json` and `.claude/settings.local.json`,
+turns it on or off (a later scope wins). An install made for another project (`projectPath`) does
+not count, and an `installPath` is opened (as an `os.Root`) only when it resolves inside
+`<config dir>/plugins/`: no path taken from the JSON is followed elsewhere. A plugin's
+`commands/**/*.md` and `skills/*/SKILL.md` are named `<plugin>:<name>`; a symlinked skill dir in
+it may only lead elsewhere in the plugin. The JSON files sit at fixed paths and may be symlinks
+(dotfile managers link `settings.json`); only `enabledPlugins`, `installPath` and `projectPath`
+are read from them. At most 50 plugins and 500 entries in all; a JSON file over 1 MB or not
+valid is ignored, which leaves the project's and the user's commands.
+
+At most 500 entries per dir and 5000 dir entries looked at, `commands/` walked 4 levels deep; a
+name met twice keeps the first (project, then user, then plugin). It is a GET, so it checks
 `Sec-Fetch-Site`/`Origin` itself like the files routes, and answers 404 without an agent session.
 Results are cached 5 s per root and config dir.
 

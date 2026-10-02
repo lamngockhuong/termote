@@ -359,7 +359,11 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   and kinds of `.claude/commands`/`.claude/skills` under the pane root and `commands`/`skills`
   in that config dir, read through `os.Root` (first 8 KB per file; a file that is a symlink, under
   a denied dir or with a sensitive name is never read), with the same
-  `Sec-Fetch-Site`/`Origin` check as the files routes
+  `Sec-Fetch-Site`/`Origin` check as the files routes. A symlinked skill dir is followed only
+  into that config dir, the pane root or `~/.agents/skills`. Plugin commands come from the
+  plugins `installed_plugins.json` lists and `enabledPlugins` (user, project, local settings)
+  turns on; an `installPath` is read only when it resolves inside `<config dir>/plugins/`
+  (at most 50 plugins, JSON files capped at 1 MB)
 - **Files/Changes** (`/api/mux/panes/{id}/files/*`): read-only GETs that also check
   `Sec-Fetch-Site`/`Origin`; every path is opened through `os.Root` under the pane's root (its
   git toplevel, else its directory); termote's config/state dirs, `/proc`, `/sys`, `/dev` and

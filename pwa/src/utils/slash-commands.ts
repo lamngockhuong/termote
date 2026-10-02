@@ -1,7 +1,8 @@
 // Slash commands offered by the Chat composer: the agent's built-ins plus the
-// project's and the user's custom commands and skills (read by the server).
+// custom commands and skills of the project, the user and the enabled plugins
+// (read by the server).
 
-export type SlashCommandSource = 'builtin' | 'project' | 'user'
+export type SlashCommandSource = 'builtin' | 'project' | 'user' | 'plugin'
 
 export interface SlashCommand {
   // Without the leading "/"

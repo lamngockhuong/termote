@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -40,7 +41,7 @@ const (
 type agentCommand struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
-	Source      string `json:"source"` // project | user
+	Source      string `json:"source"` // project | user | plugin
 	Kind        string `json:"kind"`   // command | skill
 }
 
@@ -53,6 +54,7 @@ type commandsResponse struct {
 // it is a GET, which writeGuard lets through, so the cross-site check runs here.
 func (a *agentAPI) registerCommandsRoute(mux *http.ServeMux, files *filesAPI, allowed hostAllowlist) {
 	a.files, a.allowed = files, allowed
+	a.home, _ = os.UserHomeDir()
 	a.commands = newTTLCache[commandsResponse](commandsCacheTTL)
 	mux.HandleFunc("/api/mux/panes/{id}/agent/commands", a.handleCommands)
 }
@@ -87,7 +89,7 @@ func (a *agentAPI) handleCommands(w http.ResponseWriter, r *http.Request) {
 		cancel()
 	}
 	res, _ := a.commands.do(root+"\x00"+s.ClaudeDir, func() (commandsResponse, error) {
-		return listAgentCommands(root, s.ClaudeDir, a.commandSkip), nil
+		return listAgentCommands(root, s.ClaudeDir, a.home, a.commandSkip), nil
 	})
 	jsonOK(w, res)
 }
@@ -103,17 +105,27 @@ func (a *agentAPI) commandSkip(dir, rel string) bool {
 }
 
 // listAgentCommands reads the project's commands and skills under root
-// (.claude/commands, .claude/skills) and the user's in claudeDir (commands,
-// skills). Either dir may be empty. A name met twice keeps its first entry,
-// project before user. skip, when set, refuses a file by its dir and path
-// (the files routes' denied dirs and sensitive names).
-func listAgentCommands(root, claudeDir string, skip func(dir, rel string) bool) commandsResponse {
+// (.claude/commands, .claude/skills), the user's in claudeDir (commands,
+// skills), then those of the plugins enabled and installed there. Any dir may
+// be empty. A name met twice keeps its first entry, project before user
+// before plugin. A symlinked skill dir is followed into claudeDir, root or
+// home's ~/.agents/skills (where skill managers install). skip, when set,
+// refuses a file by its dir and path (the files routes' denied dirs and
+// sensitive names).
+func listAgentCommands(root, claudeDir, home string, skip func(dir, rel string) bool) commandsResponse {
+	var allow []string
+	for _, d := range []string{claudeDir, root, filepath.Join(home, ".agents", "skills")} {
+		if real := resolvedDir(d); real != "" {
+			allow = append(allow, real)
+		}
+	}
 	var out []agentCommand
 	if root != "" {
-		out = append(out, readCommandDir(root, ".claude", "project", skip)...)
+		out = append(out, readCommandDir(root, ".claude", commandOpts{source: "project", allow: allow, skip: skip})...)
 	}
 	if claudeDir != "" {
-		out = append(out, readCommandDir(claudeDir, ".", "user", skip)...)
+		out = append(out, readCommandDir(claudeDir, ".", commandOpts{source: "user", allow: allow, skip: skip})...)
+		out = append(out, readPluginCommands(root, claudeDir, skip)...)
 	}
 	seen := map[string]bool{}
 	cmds := make([]agentCommand, 0, len(out))
@@ -126,20 +138,40 @@ func listAgentCommands(root, claudeDir string, skip func(dir, rel string) bool) 
 	return commandsResponse{Commands: cmds}
 }
 
+// resolvedDir returns dir with its symlinks resolved, or "" when it is
+// empty, relative or cannot be resolved.
+func resolvedDir(dir string) string {
+	if dir == "" || !filepath.IsAbs(dir) {
+		return ""
+	}
+	real, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return ""
+	}
+	return real
+}
+
+// commandOpts says how one dir's entries are named and read.
+type commandOpts struct {
+	source string
+	prefix string   // put before each name: "<plugin>:" for a plugin's
+	allow  []string // resolved dirs a symlinked skill dir may lead into
+	skip   func(dir, rel string) bool
+}
+
 // commandReader lists one dir's commands and skills. The dir is opened as an
 // os.Root, so neither a path nor a symlink can lead a read outside it, and a
 // file that is itself a symlink is never read: inside the root it could still
 // name a file that is not a command (.env, credentials).
 type commandReader struct {
+	commandOpts
 	rt      *os.Root
 	dir     string
-	source  string
-	skip    func(dir, rel string) bool
 	visited int // dir entries looked at, against commandsMaxVisited
 	out     []agentCommand
 }
 
-func readCommandDir(dir, base, source string, skip func(dir, rel string) bool) []agentCommand {
+func readCommandDir(dir, base string, opts commandOpts) []agentCommand {
 	if !filepath.IsAbs(dir) {
 		return nil
 	}
@@ -148,7 +180,7 @@ func readCommandDir(dir, base, source string, skip func(dir, rel string) bool) [
 		return nil
 	}
 	defer rt.Close()
-	r := &commandReader{rt: rt, dir: dir, source: source, skip: skip}
+	r := &commandReader{commandOpts: opts, rt: rt, dir: dir}
 	r.walkCommands(path.Join(base, "commands"), "", 1)
 	commands := len(r.out)
 	r.visited = 0
@@ -192,7 +224,7 @@ func (r *commandReader) walkCommands(dir, prefix string, depth int) {
 				r.walkCommands(p, prefix+name+":", depth+1)
 			}
 		case e.Type().IsRegular() && strings.EqualFold(path.Ext(name), ".md"):
-			cmd := prefix + strings.TrimSuffix(name, path.Ext(name))
+			cmd := r.prefix + prefix + strings.TrimSuffix(name, path.Ext(name))
 			if !validCommandName(cmd) {
 				continue
 			}
@@ -205,17 +237,24 @@ func (r *commandReader) walkCommands(dir, prefix string, depth int) {
 
 // readSkills lists dir/*/SKILL.md: the skill is named by its front matter
 // name, else its directory. A skill hidden from the / menu
-// (user-invocable: false) is left out. A symlinked skill dir is followed as
-// long as it stays in the root; its SKILL.md must be a file of its own.
+// (user-invocable: false) is left out. A symlinked skill dir is followed
+// when it leads into an allowed dir; its SKILL.md must be a file of its own.
 func (r *commandReader) readSkills(dir string, start int) {
 	for _, e := range r.readDir(dir) {
 		if r.full(start) {
 			return
 		}
-		if strings.HasPrefix(e.Name(), ".") || (!e.IsDir() && e.Type()&fs.ModeSymlink == 0) {
+		if strings.HasPrefix(e.Name(), ".") {
 			continue
 		}
-		meta, ok := r.readHead(path.Join(dir, e.Name(), "SKILL.md"))
+		var meta commandMeta
+		var ok bool
+		switch {
+		case e.IsDir():
+			meta, ok = r.readHead(path.Join(dir, e.Name(), "SKILL.md"))
+		case e.Type()&fs.ModeSymlink != 0:
+			meta, ok = r.readLinkedSkill(path.Join(dir, e.Name()))
+		}
 		if !ok || meta.hidden {
 			continue
 		}
@@ -223,11 +262,42 @@ func (r *commandReader) readSkills(dir string, start int) {
 		if meta.name != "" {
 			name = meta.name
 		}
+		name = r.prefix + name
 		if !validCommandName(name) {
 			continue
 		}
 		r.out = append(r.out, agentCommand{Name: name, Description: meta.description, Source: r.source, Kind: "skill"})
 	}
+}
+
+// readLinkedSkill reads the SKILL.md of the skill dir the symlink p leads to,
+// when that dir is inside one of the allowed dirs. The target is opened as an
+// os.Root of its own, so a read cannot leave it either.
+func (r *commandReader) readLinkedSkill(p string) (commandMeta, bool) {
+	target, err := filepath.EvalSymlinks(filepath.Join(r.dir, filepath.FromSlash(p)))
+	if err != nil || !slices.ContainsFunc(r.allow, func(d string) bool { return pathWithin(d, target) }) {
+		return commandMeta{}, false
+	}
+	rt, err := os.OpenRoot(target)
+	if err != nil {
+		return commandMeta{}, false
+	}
+	defer rt.Close()
+	linked := &commandReader{rt: rt, dir: target}
+	if r.skip != nil {
+		// Checked from each allowed dir holding the target too: a .git dir
+		// on the way to it is only seen from above.
+		linked.skip = func(dir, rel string) bool {
+			full := filepath.Join(dir, rel)
+			for _, d := range r.allow {
+				if rel, err := filepath.Rel(d, full); err == nil && pathWithin(d, full) && r.skip(d, rel) {
+					return true
+				}
+			}
+			return r.skip(dir, rel)
+		}
+	}
+	return linked.readHead("SKILL.md")
 }
 
 // readHead reads the start of p when it is a regular file, not a symlink,
