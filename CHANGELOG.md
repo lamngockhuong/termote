@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.4.0](https://github.com/lamngockhuong/termote/compare/v1.3.0...v1.4.0) (2026-10-02)
+
+
+### Features
+
+* answer AskUserQuestion options with previews and keep the terminal size under the Chat view ([#257](https://github.com/lamngockhuong/termote/issues/257)) ([8517548](https://github.com/lamngockhuong/termote/commit/851754808c1a12a7ecd80a197132d401a5cc4aac))
+* answer AskUserQuestion with free text from the Chat view ([#267](https://github.com/lamngockhuong/termote/issues/267)) ([5c4ccb1](https://github.com/lamngockhuong/termote/commit/5c4ccb1e16ef2e72ecce0da0790cc72f65e98c02))
+* answer multi-question AskUserQuestion wizards from the Chat view ([#254](https://github.com/lamngockhuong/termote/issues/254)) ([89521b2](https://github.com/lamngockhuong/termote/commit/89521b2e4a81386746df92e368d75a6638c664eb))
+* **pwa:** Files and Changes views of a pane's directory ([#261](https://github.com/lamngockhuong/termote/issues/261)) ([2924cd7](https://github.com/lamngockhuong/termote/commit/2924cd776c05b34b1b8c31c09ebc845cc0637168))
+* **pwa:** Markdown preview in the Files and Changes views ([adc6772](https://github.com/lamngockhuong/termote/commit/adc67728d345adaa8262417643bcefce1e49c794)), closes [#265](https://github.com/lamngockhuong/termote/issues/265)
+* **pwa:** Markdown preview in the Files and Changes views ([#265](https://github.com/lamngockhuong/termote/issues/265)) ([#273](https://github.com/lamngockhuong/termote/issues/273)) ([adc6772](https://github.com/lamngockhuong/termote/commit/adc67728d345adaa8262417643bcefce1e49c794))
+* **pwa:** one view menu button in the mobile header ([#269](https://github.com/lamngockhuong/termote/issues/269)) ([470c587](https://github.com/lamngockhuong/termote/commit/470c587e441232944126f393ef8d4d038cd28e2e))
+* **pwa:** resize the desktop side panel, or maximize it over the main view ([dec2b27](https://github.com/lamngockhuong/termote/commit/dec2b27368965061d16ce087e27964a36fefdbe7)), closes [#272](https://github.com/lamngockhuong/termote/issues/272)
+* **pwa:** resize the desktop side panel, or maximize it over the main view ([#272](https://github.com/lamngockhuong/termote/issues/272)) ([#277](https://github.com/lamngockhuong/termote/issues/277)) ([dec2b27](https://github.com/lamngockhuong/termote/commit/dec2b27368965061d16ce087e27964a36fefdbe7))
+* **server:** list plugin commands and symlinked skills in slash suggestions ([4fde30d](https://github.com/lamngockhuong/termote/commit/4fde30d786cb69a944e6af27d478e3395a53c131)), closes [#271](https://github.com/lamngockhuong/termote/issues/271)
+* **server:** list plugin commands and symlinked skills in slash suggestions ([#271](https://github.com/lamngockhuong/termote/issues/271)) ([#278](https://github.com/lamngockhuong/termote/issues/278)) ([4fde30d](https://github.com/lamngockhuong/termote/commit/4fde30d786cb69a944e6af27d478e3395a53c131))
+* **server:** read-only files and git changes API for a pane's directory ([#260](https://github.com/lamngockhuong/termote/issues/260)) ([3b39893](https://github.com/lamngockhuong/termote/commit/3b39893ad654bc5324ea7e32071b0c14dc5400b0))
+* slash command suggestions in the Chat composer ([#266](https://github.com/lamngockhuong/termote/issues/266)) ([#270](https://github.com/lamngockhuong/termote/issues/270)) ([2730577](https://github.com/lamngockhuong/termote/commit/27305774c667c5565f05ef36f43f4b7dab6d4aa2))
+
+
+### Bug Fixes
+
+* **pwa:** Markdown preview keeps its place, drops highlights no longer needed ([#276](https://github.com/lamngockhuong/termote/issues/276)) ([845ec8e](https://github.com/lamngockhuong/termote/commit/845ec8eed879cb394a9acdd8995999d8fa420aea)), closes [#274](https://github.com/lamngockhuong/termote/issues/274)
+* **pwa:** Markdown preview keeps its place, drops highlights no longer needed ([#276](https://github.com/lamngockhuong/termote/issues/276)) ([4ed6ec5](https://github.com/lamngockhuong/termote/commit/4ed6ec5164a81cf98f24f27fbba9f5094912aab2)), closes [#274](https://github.com/lamngockhuong/termote/issues/274)
+* **pwa:** sessions sheet, More menu toggle, font size only in the terminal ([#268](https://github.com/lamngockhuong/termote/issues/268)) ([5112498](https://github.com/lamngockhuong/termote/commit/51124986a3f02608006d42cd0c74346d8d0dbee0))
+
 ## [1.3.0](https://github.com/lamngockhuong/termote/compare/v1.2.0...v1.3.0) (2026-10-01)
 
 
