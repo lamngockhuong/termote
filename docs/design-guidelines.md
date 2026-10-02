@@ -54,7 +54,8 @@ Values per style and theme are in `pwa/src/index.css`; do not copy them here.
 - UI: system font stack (`--tm-font-sans`). Terminal: monospace (`--tm-font-mono`), with a
   bundled Symbols Nerd Font for icon glyphs.
 - Terminal font size: 6px to 24px, default 14px. Pinch gesture, or the font buttons in the header
-  (desktop) or the "More" menu (mobile).
+  (desktop) or the "More" menu (mobile). The buttons show only in the terminal view: Chat, Files
+  and Changes use fixed sizes.
 
 ## UI Primitives
 
@@ -94,7 +95,9 @@ There is no bottom navigation: the terminal takes that height.
 ```
 
 - The session chip (name, agent badge, connection dot; "Open sessions menu") opens the sessions
-  list as a bottom sheet with "New session".
+  list as a bottom sheet with "New session", scrolled to the current session. A sticky "Current
+  session" row under the title shows it with visible Edit and Delete; the other rows keep swipe.
+  Creating a session closes the sheet.
 - The "More" menu holds font size, theme, Settings, Help & gestures, About, Copy link and Clear
   cache & reload.
 

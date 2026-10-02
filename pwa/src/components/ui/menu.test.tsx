@@ -60,6 +60,42 @@ describe('Menu', () => {
     expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   })
 
+  it('closes on a second tap that blurs the menu before its click', () => {
+    renderMenu()
+    fireEvent.pointerDown(trigger())
+    tapOpen()
+    expect(screen.getByRole('menu')).toBeInTheDocument()
+    // Safari/iOS: the tap does not focus the trigger, so the menu box loses
+    // focus to nothing and the blur closes the menu before the click lands.
+    fireEvent.pointerDown(trigger())
+    fireEvent.blur(screen.getByRole('menu'), { relatedTarget: null })
+    tapOpen()
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    expect(trigger()).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('closes on a second click where the click focuses the trigger', () => {
+    renderMenu()
+    fireEvent.pointerDown(trigger())
+    tapOpen()
+    fireEvent.pointerDown(trigger())
+    fireEvent.blur(screen.getByRole('menu'), { relatedTarget: trigger() })
+    tapOpen()
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+  })
+
+  it('lets Enter decide by the open state, not an earlier press', () => {
+    renderMenu()
+    open()
+    // A press on the open menu's trigger that never became a click, then a
+    // press outside closing it: the first press's state is left behind.
+    fireEvent.pointerDown(trigger())
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Outside' }))
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    open()
+    expect(screen.getByRole('menu')).toBeInTheDocument()
+  })
+
   it('focuses the first enabled item on open', () => {
     renderMenu()
     open()

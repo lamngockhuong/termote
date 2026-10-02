@@ -34,6 +34,8 @@ interface Props {
   sessionsOpen: boolean
   onOpenSessions: () => void
   fontSize: number
+  // Off outside the terminal view, where the font size does nothing
+  showFontSize: boolean
   onDecreaseFont: () => void
   onIncreaseFont: () => void
   isFullscreen: boolean
@@ -101,11 +103,15 @@ function MobileHeader(p: Props) {
       {viewSwitcher(p, false)}
       <SettingsMenu
         {...p.menu}
-        fontSize={{
-          value: p.fontSize,
-          onDecrease: p.onDecreaseFont,
-          onIncrease: p.onIncreaseFont,
-        }}
+        fontSize={
+          p.showFontSize
+            ? {
+                value: p.fontSize,
+                onDecrease: p.onDecreaseFont,
+                onIncrease: p.onIncreaseFont,
+              }
+            : undefined
+        }
       />
     </header>
   )
@@ -152,30 +158,32 @@ function DesktopHeader(p: Props) {
             onToggle={p.onTogglePanel}
           />
         )}
-        <div className="flex items-center gap-0.5 rounded-control border border-border px-1 ui-native:border-0 ui-native:bg-bg">
-          <button
-            type="button"
-            onClick={p.onDecreaseFont}
-            className={FONT_BUTTON}
-            aria-label="Decrease font size"
-          >
-            A−
-          </button>
-          <span
-            data-testid="font-size"
-            className="w-6 text-center font-label text-[12px] text-fg"
-          >
-            {p.fontSize}
-          </span>
-          <button
-            type="button"
-            onClick={p.onIncreaseFont}
-            className={FONT_BUTTON}
-            aria-label="Increase font size"
-          >
-            A+
-          </button>
-        </div>
+        {p.showFontSize && (
+          <div className="flex items-center gap-0.5 rounded-control border border-border px-1 ui-native:border-0 ui-native:bg-bg">
+            <button
+              type="button"
+              onClick={p.onDecreaseFont}
+              className={FONT_BUTTON}
+              aria-label="Decrease font size"
+            >
+              A−
+            </button>
+            <span
+              data-testid="font-size"
+              className="w-6 text-center font-label text-[12px] text-fg"
+            >
+              {p.fontSize}
+            </span>
+            <button
+              type="button"
+              onClick={p.onIncreaseFont}
+              className={FONT_BUTTON}
+              aria-label="Increase font size"
+            >
+              A+
+            </button>
+          </div>
+        )}
         <IconButton
           size="sm"
           onClick={p.onToggleFullscreen}

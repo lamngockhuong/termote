@@ -50,6 +50,11 @@ export function Menu({
   const menuId = useId()
   // Opened by Enter/Space (a click with detail 0) rather than a pointer.
   const openedByKeyRef = useRef(false)
+  // Whether the menu was open when a press on the trigger began. Where a tap
+  // does not focus the trigger (Safari, iOS), the press blurs the menu box
+  // with no relatedTarget and the blur closes the menu before the click, so
+  // the click alone would open it again.
+  const openAtPressRef = useRef<boolean | null>(null)
 
   const close = () => {
     setIsOpen(false)
@@ -116,9 +121,19 @@ export function Menu({
         aria-haspopup="menu"
         aria-expanded={isOpen}
         aria-controls={isOpen ? menuId : undefined}
+        onPointerDown={() => {
+          openAtPressRef.current = isOpen
+        }}
         onClick={(e) => {
           openedByKeyRef.current = e.detail === 0
-          setIsOpen(!isOpen)
+          // Enter/Space has no press: a ref left by a press that ended
+          // elsewhere must not decide it.
+          const wasOpen =
+            e.detail !== 0 && openAtPressRef.current !== null
+              ? openAtPressRef.current
+              : isOpen
+          openAtPressRef.current = null
+          setIsOpen(!wasOpen)
         }}
       >
         {trigger}

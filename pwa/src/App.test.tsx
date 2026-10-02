@@ -276,7 +276,9 @@ vi.mock('./components/session-sidebar', () => ({
     isOpen,
     onFilterChange,
     onRemove,
+    onAdd,
   }: {
+    onAdd?: (name: string, icon?: string) => void
     onSelect?: (id: string) => void
     onClose?: () => void
     isMobile?: boolean
@@ -295,6 +297,9 @@ vi.mock('./components/session-sidebar', () => ({
         <button onClick={() => onSelect('2')}>MobileSelect</button>
       )}
       {isMobile && onClose && <button onClick={onClose}>MobileClose</button>}
+      {isMobile && onAdd && (
+        <button onClick={() => onAdd('Fresh', '🚀')}>MobileAdd</button>
+      )}
     </div>
   ),
 }))
@@ -903,6 +908,33 @@ describe('App', () => {
     expect(screen.getByTestId('session-sidebar')).toHaveAttribute(
       'data-open',
       'true',
+    )
+  })
+
+  it('mobile: creating a session closes the sheet once it is created', async () => {
+    mockIsMobile.mockReturnValue(true)
+    let created!: () => void
+    const addSession = vi.fn(
+      () => new Promise<void>((resolve) => (created = resolve)),
+    )
+    mockUseLocalSessions.mockReturnValue({
+      ...mockUseLocalSessions(),
+      addSession,
+    })
+    render(<App />)
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Open sessions menu' }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'MobileAdd' }))
+    expect(addSession).toHaveBeenCalledWith('Fresh', '🚀', undefined)
+    expect(screen.getByTestId('session-sidebar')).toHaveAttribute(
+      'data-open',
+      'true',
+    )
+    await act(async () => created())
+    expect(screen.getByTestId('session-sidebar')).toHaveAttribute(
+      'data-open',
+      'false',
     )
   })
 
@@ -2361,6 +2393,37 @@ describe('App views, view-only and deep links', () => {
     expect(screen.queryByTestId('chat-main')).toBeNull()
     expect(screen.getByTestId('keyboard-toolbar')).toBeInTheDocument()
     expect(terminalPanel()).not.toHaveClass('invisible')
+  })
+
+  it('shows the font size only while the terminal is the main view', async () => {
+    render(<App views={PANEL_VIEWS} />)
+    const decrease = () =>
+      screen.queryByRole('button', { name: 'Decrease font size' })
+    await screen.findByRole('tablist', { name: 'View' })
+    expect(decrease()).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('tab', { name: 'Chat' }))
+    expect(decrease()).toBeNull()
+    fireEvent.click(screen.getByRole('tab', { name: 'Terminal' }))
+    // The side panel leaves the terminal on screen
+    fireEvent.click(filesToggle())
+    expect(decrease()).toBeInTheDocument()
+  })
+
+  it('mobile: drops the font size from the menu and pinches only the terminal', async () => {
+    mockIsMobile.mockReturnValue(true)
+    render(<App views={PANEL_VIEWS} />)
+    await screen.findByRole('button', { name: 'MenuFontDecrease 14' })
+    // The pinch overlay sits in the terminal's panel, invisible and inert
+    // under another view, so it gets no touches there.
+    const overlay = terminalPanel().querySelector('.touch-none')
+    expect(overlay).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('tab', { name: 'Files' }))
+    expect(
+      screen.queryByRole('button', { name: /MenuFontDecrease/ }),
+    ).toBeNull()
+    expect(terminalPanel()).toHaveClass('invisible')
+    expect(terminalPanel()).toHaveAttribute('inert')
+    expect(terminalPanel()).toContainElement(overlay as HTMLElement)
   })
 
   it('a view that stops being offered gives way to the terminal', async () => {

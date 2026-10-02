@@ -5,9 +5,10 @@ import {
   PanelLeftOpen,
   Pencil,
   Plus,
+  Trash2,
   X,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useGroupCollapsed } from '../hooks/use-group-collapsed'
 import type { Session, SessionGroup } from '../types/session'
 import {
@@ -83,6 +84,10 @@ export function SessionSidebar({
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [editIcon, setEditIcon] = useState('')
+  // Mobile: the edit was started from the current session row, which then
+  // holds the form instead of the list.
+  const [editingInCurrent, setEditingInCurrent] = useState(false)
+  const sheetListRef = useRef<HTMLDivElement>(null)
   const { isCollapsed: isGroupCollapsed, toggle: toggleGroup } =
     useGroupCollapsed()
 
@@ -103,6 +108,20 @@ export function SessionSidebar({
     return sortBlockedFirst ? blockedFirst(matching) : matching
   }
   const visibleSessions = arrange(sessions)
+  const activeSession = sessions.find((s) => s.id === activeId)
+
+  // Mobile: the sheet opens on the active session, wherever it is in the list.
+  // Closed, it drops an edit left open, so it does not come back with it.
+  useEffect(() => {
+    if (!isMobile) return
+    if (!isOpen) {
+      setEditingId(null)
+      return
+    }
+    sheetListRef.current
+      ?.querySelector('[aria-current="true"]')
+      ?.scrollIntoView({ block: 'center' })
+  }, [isMobile, isOpen])
 
   const handleAdd = () => {
     if (newName.trim()) {
@@ -115,7 +134,12 @@ export function SessionSidebar({
     }
   }
 
-  const startEdit = (session: Session) => {
+  // Mobile: a form the browser scrolls to on focus clears the sticky
+  // current session row.
+  const formClasses = `flex flex-col gap-2 rounded-control border border-border bg-bg p-2 ${isMobile ? 'scroll-mt-24' : ''}`
+
+  const startEdit = (session: Session, inCurrent = false) => {
+    setEditingInCurrent(inCurrent)
     setEditingId(session.id)
     setEditName(session.name)
     setEditIcon(session.icon)
@@ -134,7 +158,7 @@ export function SessionSidebar({
 
   // Edit form (shared)
   const renderEditForm = () => (
-    <div className="flex flex-col gap-2 rounded-control border border-border bg-bg p-2">
+    <div className={formClasses}>
       <div className="flex min-w-0 items-center gap-2">
         <IconPicker value={editIcon} onChange={setEditIcon} />
         <input
@@ -222,7 +246,7 @@ export function SessionSidebar({
 
   const renderItem = (session: Session) => (
     <div key={session.id}>
-      {editingId === session.id ? (
+      {editingId === session.id && !editingInCurrent ? (
         renderEditForm()
       ) : isMobile ? (
         <SwipeableSessionItem
@@ -282,7 +306,7 @@ export function SessionSidebar({
   }
 
   const addForm = (
-    <div className="flex flex-col gap-2 rounded-control border border-border bg-bg p-2">
+    <div className={formClasses}>
       <div className="flex min-w-0 items-center gap-2">
         <IconPicker value={newIcon} onChange={setNewIcon} />
         <input
@@ -338,6 +362,47 @@ export function SessionSidebar({
       </div>
     )
 
+  // Mobile: the session on screen with its actions in sight, so they need
+  // neither a scroll nor a swipe. Held at the top while the list scrolls.
+  const currentRow = activeSession && (
+    <section
+      aria-label="Current session"
+      className="sticky top-0 z-20 flex flex-col gap-1 border-b border-border bg-bg px-4 pb-2 pt-2 ui-native:border-0 ui-native:bg-surface"
+    >
+      <div className="font-label text-[11px] uppercase tracking-wider text-fg-subtle">
+        Current session
+      </div>
+      {editingInCurrent && editingId === activeSession.id ? (
+        renderEditForm()
+      ) : (
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-control bg-surface text-[18px] ui-native:bg-bg">
+            {activeSession.icon}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-[15px] font-semibold ui-terminal:font-label ui-terminal:text-[14px]">
+            {activeSession.name}
+          </span>
+          {onUpdate && (
+            <Button size="sm" onClick={() => startEdit(activeSession, true)}>
+              <Pencil size={14} aria-hidden="true" />
+              Edit
+            </Button>
+          )}
+          {sessions.length > 1 && (
+            <Button
+              size="sm"
+              variant="danger"
+              onClick={() => onRemove(activeSession.id)}
+            >
+              <Trash2 size={14} aria-hidden="true" />
+              Delete
+            </Button>
+          )}
+        </div>
+      )}
+    </section>
+  )
+
   // Mobile: bottom sheet; adding a session starts from its header
   if (isMobile) {
     return (
@@ -361,7 +426,8 @@ export function SessionSidebar({
           )
         }
       >
-        <div className="flex flex-col gap-2 px-2 pb-3 pt-1">
+        {currentRow}
+        <div ref={sheetListRef} className="flex flex-col gap-2 px-2 pb-3 pt-1">
           {showAddForm && addForm}
           {filterBar}
           {sessionList}

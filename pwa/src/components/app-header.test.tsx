@@ -29,6 +29,7 @@ function renderHeader(overrides: Partial<Props> = {}) {
     sessionsOpen: false,
     onOpenSessions: vi.fn(),
     fontSize: 14,
+    showFontSize: true,
     onDecreaseFont: vi.fn(),
     onIncreaseFont: vi.fn(),
     isFullscreen: false,
@@ -118,6 +119,17 @@ describe('AppHeader — desktop', () => {
     expect(props.onViewChange).toHaveBeenCalledWith('chat')
   })
 
+  it('hides the font size outside the terminal view', () => {
+    renderHeader({ showFontSize: false })
+    expect(screen.queryByTestId('font-size')).toBeNull()
+    expect(
+      screen.queryByRole('button', { name: 'Decrease font size' }),
+    ).toBeNull()
+    expect(
+      screen.getByRole('button', { name: 'Enter fullscreen' }),
+    ).toBeInTheDocument()
+  })
+
   it('keeps the font size out of the desktop menu', () => {
     renderHeader()
     fireEvent.click(screen.getByRole('button', { name: 'More' }))
@@ -149,6 +161,13 @@ describe('AppHeader — mobile', () => {
       screen.getByRole('menuitem', { name: 'Increase font size' }),
     )
     expect(props.onIncreaseFont).toHaveBeenCalledOnce()
+  })
+
+  it('drops the font size from the menu outside the terminal view', () => {
+    renderHeader({ isMobile: true, showFontSize: false })
+    fireEvent.click(screen.getByRole('button', { name: 'More' }))
+    expect(screen.queryByRole('group', { name: /Font size/ })).toBeNull()
+    expect(screen.getByRole('group', { name: 'Theme' })).toBeVisible()
   })
 
   it.each(['connecting', 'connected'] as const)(

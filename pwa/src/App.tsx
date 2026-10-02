@@ -521,6 +521,16 @@ export default function App({
     setSidebarOpen(false)
   }
 
+  // The new session is selected once created; the sheet closes onto it.
+  const handleMobileAdd = async (
+    name: string,
+    icon?: string,
+    description?: string,
+  ) => {
+    await addSession(name, icon, description)
+    setSidebarOpen(false)
+  }
+
   // Deep link: opened once the first snapshot is in, and again on each
   // hashchange. It only selects a tab, pane and view.
   const pendingLinkRef = useRef(parseDeepLink(window.location.hash))
@@ -621,7 +631,7 @@ export default function App({
             groups={groups}
             activeId={activeSession.id}
             onSelect={handleMobileSelect}
-            onAdd={addSession}
+            onAdd={handleMobileAdd}
             onRemove={setPendingRemoveId}
             onUpdate={updateSession}
             isOpen={sidebarOpen}
@@ -650,6 +660,8 @@ export default function App({
             sessionsOpen={sidebarOpen}
             onOpenSessions={() => setSidebarOpen(true)}
             fontSize={fontSize}
+            // The font size only applies to the terminal
+            showFontSize={isTerminalView}
             onDecreaseFont={decrease}
             onIncreaseFont={increase}
             isFullscreen={isFullscreen}
