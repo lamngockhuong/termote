@@ -353,7 +353,12 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   user's config dir. The session id must be a UUID. Every write takes a lock on the pane,
   re-checks the process, session and screen, and sends nothing unless the screen shows the
   expected state (an empty input box, the dialog the client saw with a single-use `promptId`).
-  Markdown images in the Chat view never load (shown as links), and raw HTML is not rendered
+  Markdown images in the Chat view never load (shown as links), and raw HTML is not rendered.
+  `agent/commands` (the composer's `/` suggestions) returns only names, descriptions, sources
+  and kinds of `.claude/commands`/`.claude/skills` under the pane root and `commands`/`skills`
+  in that config dir, read through `os.Root` (first 8 KB per file; a file that is a symlink, under
+  a denied dir or with a sensitive name is never read), with the same
+  `Sec-Fetch-Site`/`Origin` check as the files routes
 - **Files/Changes** (`/api/mux/panes/{id}/files/*`): read-only GETs that also check
   `Sec-Fetch-Site`/`Origin`; every path is opened through `os.Root` under the pane's root (its
   git toplevel, else its directory); termote's config/state dirs, `/proc`, `/sys`, `/dev` and

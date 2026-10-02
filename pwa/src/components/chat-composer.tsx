@@ -1,18 +1,40 @@
 import { SendHorizontal } from 'lucide-react'
-import { type KeyboardEvent, useEffect, useId, useState } from 'react'
+import {
+  type KeyboardEvent,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import type { ViewProps } from '../app-views'
+import { useAgentCommands } from '../hooks/use-agent-commands'
 import { useAgentPrompt } from '../hooks/use-agent-prompt'
 import { useAgentTranscript } from '../hooks/use-agent-transcript'
 import { AgentRequestError, sendAgentMessage } from '../hooks/use-mux-api'
 import { toAgentStatus } from '../types/session'
+import {
+  BUILTIN_COMMANDS,
+  commandOf,
+  filterSlashCommands,
+  mergeSlashCommands,
+  type SlashCommand,
+  slashQuery,
+} from '../utils/slash-commands'
+import { TERMINAL_VIEW_ID } from '../view-ids'
 import { OpenTerminalButton } from './open-terminal-button'
 import { PromptCard, WaitingCard } from './prompt-card'
+import { SlashCommandList, slashOptionId } from './slash-command-list'
 import { Banner, type BannerVariant } from './ui/banner'
 import { IconButton } from './ui/button'
+import { ConfirmDialog } from './ui/confirm-dialog'
 
 // The server's limit on a message, in UTF-8 bytes.
 export const MAX_MESSAGE_BYTES = 16 * 1024
 const MAX_ROWS = 6
+
+// An agent without built-ins: one array, so the merged list stays memoized
+const NO_COMMANDS: SlashCommand[] = []
 
 const draftKey = (paneId: string) => `termote-chat-draft:${paneId}`
 
@@ -100,12 +122,39 @@ export function ChatComposer({ session, isMobile, showView }: ViewProps) {
   const [text, setText] = useState(() => loadDraft(paneId))
   const [sending, setSending] = useState(false)
   const [notice, setNotice] = useState<Notice | null>(null)
+  // A message waiting for the user to confirm it (/exit)
+  const [confirming, setConfirming] = useState<string | null>(null)
   const limitId = useId()
+  const listId = useId()
+  const boxRef = useRef<HTMLTextAreaElement>(null)
+
+  // Command suggestions: open while the message is only "/name", until
+  // Escape; the highlighted row resets as the list changes.
+  const query = slashQuery(text)
+  const [dismissed, setDismissed] = useState(false)
+  const [active, setActive] = useState(0)
+  const listOpen = query !== null && !dismissed
+  const custom = useAgentCommands(paneId, listOpen)
+  const builtins = BUILTIN_COMMANDS[session.agentName ?? ''] ?? NO_COMMANDS
+  const commands = useMemo(
+    () => mergeSlashCommands(builtins, custom),
+    [builtins, custom],
+  )
+  const matches = useMemo(
+    () => (listOpen ? filterSlashCommands(commands, query) : []),
+    [listOpen, commands, query],
+  )
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new query or list starts at the top
+  useEffect(() => setActive(0), [query, matches.length])
+  useEffect(() => {
+    if (query === null) setDismissed(false)
+  }, [query])
 
   // Each pane keeps its own draft.
   useEffect(() => {
     setText(loadDraft(paneId))
     setNotice(null)
+    setConfirming(null)
   }, [paneId])
 
   const update = (value: string) => {
@@ -117,11 +166,19 @@ export function ChatComposer({ session, isMobile, showView }: ViewProps) {
   const tooLong = bytes > MAX_MESSAGE_BYTES
   const canSend = !sending && !!t.cursor && text.trim() !== '' && !tooLong
 
-  const send = async () => {
-    if (!canSend || !t.cursor) return
+  // Sends message (the composer's text, or a command picked from the list).
+  // A command that ends the agent is confirmed first; one that opens an
+  // interactive screen, sent without arguments, shows the terminal after.
+  const submit = async (message: string, confirmed = false) => {
+    if (sending || !t.cursor) return
+    const cmd = commandOf(message, commands)
+    if (cmd?.confirm && !confirmed) {
+      setConfirming(message)
+      return
+    }
     // "!" runs the rest as a shell command in Claude Code.
     if (
-      text.trimStart().startsWith('!') &&
+      message.trimStart().startsWith('!') &&
       !window.confirm('Run this as a shell command in Claude Code?')
     ) {
       return
@@ -129,9 +186,12 @@ export function ChatComposer({ session, isMobile, showView }: ViewProps) {
     setSending(true)
     setNotice(null)
     try {
-      await sendAgentMessage(paneId, text, t.cursor)
+      await sendAgentMessage(paneId, message, t.cursor)
       update('')
       t.refresh()
+      if (cmd?.terminal && message.trim() === `/${cmd.name}`) {
+        showView(TERMINAL_VIEW_ID)
+      }
     } catch (err) {
       setNotice(noticeFor(err))
       if (err instanceof AgentRequestError && err.code === 'session_changed') {
@@ -142,7 +202,52 @@ export function ChatComposer({ session, isMobile, showView }: ViewProps) {
     }
   }
 
+  const send = () => {
+    if (canSend) submit(text)
+  }
+
+  // A picked command is typed in for its arguments; one that opens an
+  // interactive screen or ends the agent is sent right away (after asking).
+  const pick = (c: SlashCommand) => {
+    if (c.terminal || c.confirm) {
+      submit(`/${c.name}`)
+      return
+    }
+    const value = `/${c.name} `
+    update(value)
+    const box = boxRef.current
+    box?.focus()
+    // After React writes the value
+    requestAnimationFrame(() =>
+      box?.setSelectionRange(value.length, value.length),
+    )
+  }
+
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (listOpen && matches.length > 0 && !e.ctrlKey && !e.metaKey) {
+      const n = matches.length
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault()
+          setActive((i) => (i + 1) % n)
+          return
+        case 'ArrowUp':
+          e.preventDefault()
+          setActive((i) => (i - 1 + n) % n)
+          return
+        case 'Enter':
+        case 'Tab':
+          if (e.shiftKey) break
+          e.preventDefault()
+          pick(matches[Math.min(active, n - 1)])
+          return
+      }
+    }
+    if (listOpen && e.key === 'Escape') {
+      e.preventDefault()
+      setDismissed(true)
+      return
+    }
     // On a phone Enter is a new line and the button sends; with a keyboard,
     // Ctrl/Cmd+Enter sends.
     if (e.key === 'Enter' && !isMobile && (e.ctrlKey || e.metaKey)) {
@@ -214,6 +319,29 @@ export function ChatComposer({ session, isMobile, showView }: ViewProps) {
           {notice.text}
         </Banner>
       )}
+      <ConfirmDialog
+        isOpen={confirming !== null}
+        title="Exit Claude Code?"
+        confirmLabel="Exit"
+        destructive
+        onCancel={() => setConfirming(null)}
+        onConfirm={() => {
+          setConfirming(null)
+          // Only open while a message waits
+          submit(confirming as string, true)
+        }}
+      >
+        This ends the agent in this pane; the app goes back to the terminal.
+      </ConfirmDialog>
+      {listOpen && (
+        <SlashCommandList
+          id={listId}
+          commands={matches}
+          active={active}
+          onActive={setActive}
+          onPick={pick}
+        />
+      )}
       {tooLong && (
         <p id={limitId} className="px-3 pt-2 text-[12px] text-danger">
           {Math.ceil(bytes / 1024)} KB of {MAX_MESSAGE_BYTES / 1024} KB: shorten
@@ -222,8 +350,16 @@ export function ChatComposer({ session, isMobile, showView }: ViewProps) {
       )}
       <div className="flex items-end gap-2 p-2">
         <textarea
+          ref={boxRef}
           aria-label="Message to Claude Code"
           aria-describedby={tooLong ? limitId : undefined}
+          aria-autocomplete="list"
+          aria-controls={listOpen && matches.length > 0 ? listId : undefined}
+          aria-activedescendant={
+            listOpen && matches.length > 0
+              ? slashOptionId(listId, Math.min(active, matches.length - 1))
+              : undefined
+          }
           value={text}
           rows={rows}
           readOnly={sending}

@@ -115,7 +115,7 @@ var errUnsupported = errors.New("operation not supported by this backend")
 // registerMuxRoutes mounts /api/mux/* for the given backend. Patterns carry no
 // method so a wrong method gets a JSON 405 instead of falling through to the
 // /api/ JSON 404 handler.
-func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore) {
+func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore) *agentAPI {
 	mux.HandleFunc("/api/mux/health", func(w http.ResponseWriter, r *http.Request) {
 		if !requireMethod(w, r, http.MethodGet) {
 			return
@@ -275,10 +275,11 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore) {
 		jsonOK(w, map[string]any{"ok": true})
 	})
 
-	registerAgentRoutes(mux, m)
+	agent := registerAgentRoutes(mux, m)
 
 	// Only reachable via fetch/XHR from the PWA, not by direct navigation.
 	mux.HandleFunc("/api/mux/stream-token", handleTerminalToken(tokens))
+	return agent
 }
 
 // decodeJSON reads a size-limited JSON body into v, writing a 400 on failure.

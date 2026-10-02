@@ -5,6 +5,7 @@ import {
   closePane,
   closeTab,
   createTab,
+  fetchAgentCommands,
   fetchAgentPrompt,
   fetchFileContent,
   fetchFileDiff,
@@ -282,6 +283,16 @@ describe('agent API client', () => {
     expect(await fetchAgentPrompt('%3')).toEqual(prompt)
     expect(await fetchAgentPrompt('%3')).toBeNull()
     expect(calls[0].url).toBe('/api/mux/panes/%253/agent/prompt')
+  })
+
+  it('reads the custom commands of a pane', async () => {
+    const commands = [{ name: 'deploy', source: 'project', kind: 'command' }]
+    const { calls } = mockFetch({ body: { commands } }, { body: {} })
+    expect(await fetchAgentCommands('%3')).toEqual(commands)
+    expect(await fetchAgentCommands('%3')).toEqual([])
+    expect(calls[0].url).toBe('/api/mux/panes/%253/agent/commands')
+    mockFetch({ body: { error: 'agent not available' }, status: 404 })
+    await expect(fetchAgentCommands('1')).rejects.toMatchObject({ status: 404 })
   })
 
   it('a prompt read can be refused', async () => {

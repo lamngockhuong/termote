@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { expect, test } from '@playwright/test'
@@ -46,6 +46,17 @@ test.describe('chat view', () => {
     windowName = `fake-claude-${Date.now()}`
     claudeDir = mkdtempSync(path.join(tmpdir(), 'termote-e2e-claude-'))
     cwd = mkdtempSync(path.join(tmpdir(), 'termote-e2e-cwd-'))
+    // A project command and a user skill for the composer's suggestions
+    mkdirSync(path.join(cwd, '.claude/commands/e2e'), { recursive: true })
+    writeFileSync(
+      path.join(cwd, '.claude/commands/e2e/deploy.md'),
+      '---\ndescription: Deploy from e2e\n---\nNever shown',
+    )
+    mkdirSync(path.join(claudeDir, 'skills/e2e-helper'), { recursive: true })
+    writeFileSync(
+      path.join(claudeDir, 'skills/e2e-helper/SKILL.md'),
+      '---\ndescription: Helps in e2e\n---\n',
+    )
     windowId = tmux(
       'new-window',
       '-P',
@@ -173,6 +184,43 @@ test.describe('chat view', () => {
     await color.getByRole('button', { name: 'Send' }).click()
     await expect(conversation).toContainText('Theme: Tím nhạt.')
     await expect(color).toBeHidden()
+
+    // "/" suggests the built-ins and the project's and user's commands; a
+    // pick is typed in for its arguments, never sent on its own
+    await composer.fill('/e2e')
+    const commands = page.getByRole('listbox', { name: 'Commands' })
+    const deploy = commands.getByRole('option', { name: /\/e2e:deploy/ })
+    await expect(deploy).toContainText('Deploy from e2e')
+    await expect(deploy).toContainText('project')
+    await expect(commands.getByRole('option', { name: /\/e2e-helper/ })).toContainText('skill')
+    await expect(commands).not.toContainText('Never shown')
+    await deploy.click()
+    await expect(composer).toHaveValue('/e2e:deploy ')
+    await expect(commands).toBeHidden()
+    await composer.press('End')
+    await composer.pressSequentially('now')
+    await send.click()
+    await expect(conversation).toContainText('You said: /e2e:deploy now')
+
+    // /exit is confirmed first
+    await composer.fill('/exi')
+    await composer.press('Enter')
+    const confirmExit = page.getByRole('dialog', { name: 'Exit Claude Code?' })
+    await expect(confirmExit).toBeVisible()
+    await confirmExit.getByRole('button', { name: 'Cancel' }).click()
+    await expect(confirmExit).toBeHidden()
+
+    // A command that opens an interactive screen is sent, then the terminal shows
+    await composer.fill('/mode')
+    await expect(commands.getByRole('option').first()).toContainText('opens in Terminal')
+    await composer.press('Enter')
+    await expect(
+      page
+        .getByRole('tablist', { name: 'View' })
+        .getByRole('tab', { name: 'Terminal' }),
+    ).toHaveAttribute('aria-selected', 'true')
+    await chatTab.click()
+    await expect(conversation).toContainText('You said: /model')
 
     // A single multiSelect question has toggles too, and the way to the terminal
     await composer.fill('pick toppings')
