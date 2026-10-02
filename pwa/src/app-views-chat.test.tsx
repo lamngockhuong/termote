@@ -90,7 +90,7 @@ describe('chat view', () => {
     expect(ids(codexPane)).toEqual(['terminal', CHAT_VIEW_ID])
   })
 
-  it('gives Claude Code the composer and Codex a read-only bar', () => {
+  it('gives Claude Code and Codex the composer, another agent a read-only bar', () => {
     const chat = APP_VIEWS.find((v) => v.id === CHAT_VIEW_ID)!
     const Input = chat.Input!
     const showView = vi.fn()
@@ -100,12 +100,19 @@ describe('chat view', () => {
       notify: vi.fn(),
       showView,
     })
-    const { unmount } = render(<Input {...props(claudePane)} />)
-    expect(screen.getByRole('textbox')).toBeInTheDocument()
-    expect(screen.queryByText('Read only')).toBeNull()
-    unmount()
+    for (const pane of [claudePane, codexPane]) {
+      const { unmount } = render(<Input {...props(pane)} />)
+      expect(screen.getByRole('textbox')).toBeInTheDocument()
+      expect(screen.queryByText('Read only')).toBeNull()
+      unmount()
+    }
 
-    render(<Input {...props(codexPane)} />)
+    // An agent the server reads but cannot write to.
+    const other = {
+      ...codexPane,
+      session: { ...codexPane.session, name: 'pi', agentName: 'pi' },
+    }
+    render(<Input {...props(other)} />)
     expect(screen.getByText('Read only')).toBeInTheDocument()
     expect(screen.queryByRole('textbox')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Open terminal' }))

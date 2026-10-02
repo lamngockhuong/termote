@@ -84,8 +84,8 @@ const props = (over: Partial<ViewProps> = {}): ViewProps => ({
   ...over,
 })
 
-const box = () =>
-  screen.getByRole('textbox', { name: 'Message to Claude Code' })
+// The composer of whichever agent the test renders
+const box = () => screen.getByRole('textbox', { name: /^Message to / })
 const sendButton = () => screen.getByRole('button', { name: 'Send' })
 const type = (v: string) => fireEvent.change(box(), { target: { value: v } })
 const send = async () => {
@@ -651,6 +651,9 @@ describe('ChatComposer', () => {
       render(
         <ChatComposer {...p} session={{ ...p.session, agentName: 'codex' }} />,
       )
+      expect(
+        screen.getByRole('textbox', { name: 'Message to Codex' }),
+      ).toBeInTheDocument()
       type('/')
       expect(names()).toEqual(['/mine'])
     })

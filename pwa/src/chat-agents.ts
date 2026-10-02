@@ -5,7 +5,7 @@
 export const CHAT_AGENTS = ['claude', 'codex']
 // The server also reads these agents' screens: a message can be sent and a
 // dialog answered. The others are read only.
-export const CHAT_INPUT_AGENTS = ['claude']
+export const CHAT_INPUT_AGENTS = ['claude', 'codex']
 
 const AGENT_LABELS: Record<string, string> = {
   claude: 'Claude Code',

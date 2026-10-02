@@ -196,6 +196,7 @@ export function ChatView({ session, showView, readOnly }: ViewProps) {
         <PromptCard
           readOnly
           paneId={session.paneId ?? ''}
+          agentName={session.agentName}
           prompt={p.prompt}
           showView={showView}
           onAnswered={p.refresh}

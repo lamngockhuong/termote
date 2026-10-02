@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import type { ViewProps } from '../app-views'
+import { agentLabel } from '../chat-agents'
 import { useHaptic } from '../hooks/use-haptic'
 import {
   type AgentChoice,
@@ -22,6 +23,8 @@ const encoder = new TextEncoder()
 
 interface Props {
   paneId: string
+  // The pane's agent, named while the card waits for it
+  agentName?: string
   prompt: AgentPrompt
   // A view-only role sees the dialog but has no buttons
   readOnly?: boolean
@@ -34,6 +37,7 @@ interface Props {
 
 export function PromptCard({
   paneId,
+  agentName,
   prompt,
   readOnly,
   showView,
@@ -228,7 +232,7 @@ export function PromptCard({
         </ol>
       )}
       <p id={titleId} className="font-medium text-fg">
-        {prompt.title || 'Claude Code is asking'}
+        {prompt.title || `${agentLabel(agentName)} is asking`}
       </p>
       {prompt.body && (
         <p
@@ -279,7 +283,7 @@ export function PromptCard({
         <div className="flex items-center gap-2">
           {!readOnly && prompt.kind !== 'unsupported' && (
             <span className="text-[13px] text-fg-muted">
-              {sent ? 'Answer sent…' : 'Waiting for Claude Code…'}
+              {sent ? 'Answer sent…' : `Waiting for ${agentLabel(agentName)}…`}
             </span>
           )}
           <span className="flex-1" />
@@ -395,11 +399,14 @@ function StepLabel({ step }: { step: NonNullable<AgentPrompt['steps']>[0] }) {
 
 // The agent waits for an answer the server cannot read (a dialog this
 // version does not know): the terminal is the way.
-export function WaitingCard({ showView }: Pick<ViewProps, 'showView'>) {
+export function WaitingCard({
+  agentName,
+  showView,
+}: Pick<ViewProps, 'showView'> & { agentName?: string }) {
   return (
     <div className="flex items-center gap-2 border-t border-border bg-surface p-3 pb-safe ui-terminal:bg-bg">
       <p className="flex-1 text-[13px] text-fg">
-        Claude Code is waiting for you in the terminal.
+        {agentLabel(agentName)} is waiting for you in the terminal.
       </p>
       <OpenTerminalButton showView={showView} />
     </div>
