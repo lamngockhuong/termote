@@ -11,8 +11,8 @@ import (
 
 // Reading a Codex screen: whether its composer is at the bottom and empty,
 // and which approval dialog is open. Pure functions over a capture with SGR
-// escapes, checked against screens recorded from Codex 0.159.3
-// (testdata/codex/screens). Codex draws no frame: the composer is a "›" row at
+// escapes, checked against screens recorded from Codex 0.159.3 and 0.160.0
+// on tmux and herdr (testdata/codex/screens). Codex draws no frame: the composer is a "›" row at
 // column 0 with the model and shortcut hints under it, and an approval dialog
 // replaces the composer with its title, its fields, numbered options (the one
 // under the pointer drawn in reverse video) and a footer as the last row.
@@ -31,7 +31,8 @@ const (
 	codexMaxDialogRows = 80
 )
 
-// codexApprovalFooter ends both approval dialogs Codex 0.159.3 draws.
+// codexApprovalFooter ends both approval dialogs Codex 0.159.3 and 0.160.0
+// draw.
 const codexApprovalFooter = "Press enter to confirm or esc to cancel"
 
 // codexApprovalTitles are the approval dialogs this code answers.
@@ -197,9 +198,11 @@ func codexOptions(lines []screenLine, end int) (top int, opts [][]screenLine, ok
 
 // findCodexApproval recognises an approval dialog whose footer is the last
 // row. Its title is the nearest known title above the options with no row at
-// column 0 between them; another title in the same stretch (text in the
-// command, or a history cell right above) leaves the card read only, so the
-// card never shows less than the dialog asks.
+// column 0 between them. The card is read only, so it never shows less than
+// the dialog asks, when another title is in the same stretch (text in the
+// command, or a history cell right above), when the dialog's top may be off
+// the screen (codexDialogTopShown), or when the body is too long to show
+// whole.
 func findCodexApproval(lines []screenLine) (agentScreen, bool) {
 	footer := codexFooter(lines)
 	if footer < 0 {
@@ -225,13 +228,8 @@ func findCodexApproval(lines []screenLine) (agentScreen, bool) {
 	sc := agentScreen{sig: codexSig(lines[title:])}
 	p := &AgentPrompt{Kind: "unsupported", Title: strings.TrimSpace(lines[title].text)}
 	sc.prompt = p
-	for i := title - 1; i >= 0 && i >= footer-codexMaxDialogRows; i-- {
-		if atColumnZero(lines[i]) {
-			break
-		}
-		if codexApprovalTitles[strings.TrimSpace(lines[i].text)] {
-			return sc, true
-		}
+	if !codexDialogTopShown(lines, title) {
+		return sc, true
 	}
 	var body []string
 	for _, l := range lines[title+1 : optTop] {
@@ -239,15 +237,37 @@ func findCodexApproval(lines []screenLine) (agentScreen, bool) {
 			body = append(body, t)
 		}
 	}
-	p.Body, _ = clampText(strings.Join(body, "\n"), claudeMaxBody)
+	var cut bool
+	p.Body, cut = clampText(strings.Join(body, "\n"), claudeMaxBody)
 	options, ok := codexPromptOptions(opts)
-	if !ok {
+	if !ok || cut {
+		// A card that cannot show the whole command is not one to answer.
 		return sc, true
 	}
 	p.Kind = "permission"
 	p.Options = options
 	p.pointer = codexPointer(opts)
 	return sc, true
+}
+
+// codexDialogTopShown: the rows above the title, however many, up to a row
+// at column 0 (the history cell the dialog follows) hold no other approval
+// title, and if the screen's top comes first they are all blank. Rows of
+// text reaching the top may be the rest of a command whose real title
+// scrolled off, the "title" found being a line of that command.
+func codexDialogTopShown(lines []screenLine, title int) bool {
+	blank := true
+	for i := title - 1; i >= 0; i-- {
+		if atColumnZero(lines[i]) {
+			return true
+		}
+		t := strings.TrimSpace(lines[i].text)
+		if codexApprovalTitles[t] {
+			return false
+		}
+		blank = blank && t == ""
+	}
+	return blank
 }
 
 // codexPromptOptions reads numbered options 1, 2, ... each ending in the key

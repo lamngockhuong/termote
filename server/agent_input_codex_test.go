@@ -93,6 +93,11 @@ func TestCodexMessageRefusals(t *testing.T) {
 		{"session changed", nil, cursorFor(testSessionID), 409, "session_changed", false},
 		{"rollout changed before enter", func(f *fakeWriter) { f.sessions = []AgentSession{codexSession, otherRollout} }, "", 502, "delivered_not_submitted", true},
 		{"rollout file replaced before enter", func(f *fakeWriter) { f.sessions = []AgentSession{codexSession, otherFile} }, "", 502, "delivered_not_submitted", true},
+		{"another agent before enter", func(f *fakeWriter) {
+			claude := labSession
+			claude.Target = codexSession.Target
+			f.sessions = []AgentSession{codexSession, claude}
+		}, "", 502, "delivered_not_submitted", true},
 		// Read with Claude Code's reader, a Codex draft would never show.
 		{"paste never shows", func(f *fakeWriter) { f.onPaste = nil }, "", 409, "paste_not_confirmed", true},
 	}

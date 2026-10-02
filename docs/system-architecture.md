@@ -339,8 +339,10 @@ and that token is matched against the text's length. A dialog-like text the mode
 the composer is never a dialog: an approval dialog is recognised only with its footer ("Press
 enter to confirm or esc to cancel") as the last row, a known title (run a command, make edits)
 with no row at column 0 between it and the numbered options, and every option ending in the key
-Codex shows for it. If a second approval title sits in that stretch, or the options do not
-parse, the card is read only (`unsupported`).
+Codex shows for it. If a second approval title sits in that stretch, the rows above the title
+reach the top of the screen without a row at column 0 (the dialog's top may have scrolled off),
+the body is longer than the card shows, or the options do not parse, the card is read only
+(`unsupported`).
 
 Who may answer is decided by `dialogStatus`: the agent's own status must say a dialog is open.
 On Herdr it reports `blocked`, so an approval card has options and a single-use `promptId`;
