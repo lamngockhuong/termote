@@ -11,9 +11,9 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Go-1.21-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go" />
+  <img src="https://img.shields.io/badge/Go-1.26-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go" />
   <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React" />
-  <img src="https://img.shields.io/badge/TypeScript-5.9-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/TypeScript-7.0-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
   <img src="https://img.shields.io/badge/PWA-ready-5A0FC8?style=flat-square&logo=pwa&logoColor=white" alt="PWA" />
 </p>
 
@@ -39,6 +39,10 @@
 - **Переключение сессий**: Множество tmux-сессий с созданием/редактированием/удалением
 - **Вкладки сессий**: Горизонтальная панель вкладок для быстрого переключения окон
 - **Бэкенд Herdr** (нативно или в контейнере): управление рабочими пространствами Herdr вместо tmux, со значками состояния ИИ-агента в каждой панели — см. [Нативная установка](https://termote.ohnice.app/installation/native/)
+- **Вид Chat**: читайте панель с Claude Code (или Codex, запущенным с `--no-daemon`) как чат и отвечайте в ней, с подсказками slash-команд и ответами на диалоги — см. [Agent Chat](https://termote.ohnice.app/usage/agent-chat/)
+- **Виды Files и Changes**: просмотр каталога панели и её изменений в git с предпросмотром Markdown — см. [Files and Changes](https://termote.ohnice.app/usage/files-changes/)
+- **Вложения изображений**: отправка изображения с телефона в терминал или в сообщение вида Chat, чтобы агент прочитал его по пути
+- **Плагин Herdr**: открыть активную панель Herdr в Termote, показать её ссылку QR-кодом для телефона, запустить или остановить сервер, не выходя из Herdr — см. [Herdr Plugin](https://termote.ohnice.app/usage/herdr-plugin/)
 - **Мобильная адаптация**: Виртуальная клавиатура (Tab/Ctrl/Shift/стрелки, расширяемая)
 - **Поддержка жестов**: Свайп для Ctrl+C, Tab, прокрутки
 - **История команд**: Вызов ранее отправленных команд с поиском
@@ -182,7 +186,7 @@ termote container logs -f
 termote container down
 ```
 
-`container up` запускает `ghcr.io/lamngockhuong/termote` той же версии, что и установленный `termote`, через podman (предпочтительно) или docker, на порту 7680 с `~/termote-workspace`, смонтированным в `/workspace`. Команда принимает `--port`, `--lan`, `--tailscale`, `--no-auth`, `--allow-host` и `--fresh`; они сохраняются отдельно от параметров `start`, а пароль общий с нативным сервером. Docker перезапускает контейнер после перезагрузки; у rootless Podman нет демона для этого, поэтому запускайте его как юнит Quadlet.
+`container up` запускает `ghcr.io/lamngockhuong/termote` той же версии, что и установленный `termote`, через podman (предпочтительно) или docker, на порту 7680 с `~/termote-workspace`, смонтированным в `/workspace`. Команда принимает `--port`, `--lan`, `--tailscale`, `--no-auth`, `--allow-host`, `--user` и `--fresh`; они сохраняются отдельно от параметров `start`, а имя пользователя и пароль общие с нативным сервером. Docker перезапускает контейнер после перезагрузки; у rootless Podman нет демона для этого, поэтому запускайте его как юнит Quadlet.
 
 > **Примечание по безопасности**: Не монтируйте `$HOME` напрямую — чувствительные каталоги, такие как `.ssh`, `.gnupg`, станут доступны в контейнере. Монтируйте только конкретные каталоги проектов.
 
@@ -258,6 +262,7 @@ flowchart LR
 | `--allow-host <name>`       | Разрешить дополнительное значение заголовка Host (можно повторять; без подстановочных знаков, см. примечания по безопасности) |
 | `--remove-host <name>`      | Удалить разрешённое имя Host (можно повторять)                                                                                |
 | `--allow-herdr-no-auth`     | Обязателен вместе с `--mux herdr --no-auth`                                                                                   |
+| `--user <name>`             | Имя пользователя для входа (по умолчанию `admin`; общее с контейнером)                                                        |
 | `--fresh`                   | Задать новый пароль                                                                                                           |
 
 ### С Tailscale HTTPS
@@ -385,7 +390,7 @@ termote start --fresh      # If the saved password can no longer be read
 - **Базовая аутентификация включена по умолчанию** - используйте `--no-auth`, чтобы отключить её для локальной разработки; пароль создаётся при первом `termote start` и хранится в зашифрованном виде
 - **Список разрешённых Host**: запросы с неизвестным заголовком `Host` отклоняются (защита от DNS rebinding); добавляйте доверенные имена через `--allow-host`, подстановочного знака для отключения проверки нет
 - **Защита Origin/CSRF**: изменяющие состояние запросы `/api/mux/*` и WebSocket `/api/mux/stream` отклоняют межсайтовые `Sec-Fetch-Site`/`Origin` и требуют одноразовый токен потока с того же источника
-- **Встроенная защита от перебора** - ограничение частоты (5 попыток/мин с одного IP)
+- **Встроенная защита от перебора** - ограничение частоты (5 неудачных попыток/мин с одного IP, 20/мин на подсеть IPv6 /64)
 - **Бэкенд Herdr**: открывает доступ ко всем рабочим пространствам Herdr на хосте, поэтому `--mux herdr --no-auth` отклоняется, если не указан также `--allow-herdr-no-auth`
 - **Файлы службы не содержат секретов**: юнит systemd, агент launchd и задача планировщика никогда не содержат пароль
 - Используйте HTTPS (Tailscale) в продакшене

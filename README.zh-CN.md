@@ -11,9 +11,9 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Go-1.21-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go" />
+  <img src="https://img.shields.io/badge/Go-1.26-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go" />
   <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React" />
-  <img src="https://img.shields.io/badge/TypeScript-5.9-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/TypeScript-7.0-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
   <img src="https://img.shields.io/badge/PWA-ready-5A0FC8?style=flat-square&logo=pwa&logoColor=white" alt="PWA" />
 </p>
 
@@ -37,6 +37,10 @@
 - **会话切换**：多个 tmux 会话，支持创建/编辑/删除
 - **会话标签**：水平标签栏，快速切换窗口
 - **Herdr 后端**（原生或容器内）：用 Herdr 工作区代替 tmux，每个窗格都显示编码代理的状态徽标——参见[原生安装](https://termote.ohnice.app/installation/native/)
+- **Chat 视图**：以对话形式阅读并回复运行 Claude Code（或以 `--no-daemon` 启动的 Codex）的窗格，支持斜杠命令提示和对话框应答——参见[Agent Chat](https://termote.ohnice.app/usage/agent-chat/)
+- **Files 和 Changes 视图**：浏览窗格所在目录及其 git 变更，支持 Markdown 预览——参见[Files and Changes](https://termote.ohnice.app/usage/files-changes/)
+- **图片附件**：从手机向终端或 Chat 视图消息发送图片，代理可通过路径读取
+- **Herdr 插件**：无需离开 Herdr，即可在 Termote 中打开当前聚焦的 Herdr 窗格、将其链接显示为二维码供手机扫描、启动或停止服务器——参见[Herdr Plugin](https://termote.ohnice.app/usage/herdr-plugin/)
 - **移动端友好**：虚拟键盘工具栏（Tab/Ctrl/Shift/方向键，可展开）
 - **手势支持**：滑动执行 Ctrl+C、Tab、滚动
 - **命令历史**：搜索并调用之前发送的命令
@@ -180,7 +184,7 @@ termote container logs -f
 termote container down
 ```
 
-`container up` 使用 podman（优先）或 docker 运行与已安装 `termote` 同版本的 `ghcr.io/lamngockhuong/termote`，端口为 7680，并将 `~/termote-workspace` 挂载到 `/workspace`。它接受 `--port`、`--lan`、`--tailscale`、`--no-auth`、`--allow-host` 和 `--fresh`，这些设置与 `start` 的选项分开保存；密码与原生服务器共用。Docker 会在重启后重新启动容器；rootless Podman 没有守护进程来做这件事，因此请将其作为 Quadlet 单元运行。
+`container up` 使用 podman（优先）或 docker 运行与已安装 `termote` 同版本的 `ghcr.io/lamngockhuong/termote`，端口为 7680，并将 `~/termote-workspace` 挂载到 `/workspace`。它接受 `--port`、`--lan`、`--tailscale`、`--no-auth`、`--allow-host`、`--user` 和 `--fresh`，这些设置与 `start` 的选项分开保存；用户名和密码与原生服务器共用。Docker 会在重启后重新启动容器；rootless Podman 没有守护进程来做这件事，因此请将其作为 Quadlet 单元运行。
 
 > **安全提示**：避免直接挂载 `$HOME` —— 容器将能访问 `.ssh`、`.gnupg` 等敏感目录。请改为挂载特定的项目目录。
 
@@ -256,6 +260,7 @@ flowchart LR
 | `--allow-host <name>`       | 允许额外的 Host 头值（可重复；无通配符，参见安全说明）  |
 | `--remove-host <name>`      | 移除已允许的 Host 名称（可重复）                        |
 | `--allow-herdr-no-auth`     | 与 `--mux herdr --no-auth` 一起使用时必需               |
+| `--user <name>`             | 登录用户名（默认：`admin`；与容器共用）                 |
 | `--fresh`                   | 设置新密码                                              |
 
 ### 使用 Tailscale HTTPS
@@ -383,7 +388,7 @@ termote start --fresh      # If the saved password can no longer be read
 - **默认启用基本认证** -- 使用 `--no-auth` 可为本地开发禁用；密码由首次 `termote start` 创建并加密保存
 - **Host 白名单** -- 拒绝 `Host` 头无法识别的请求（防御 DNS 重绑定）；可用 `--allow-host` 添加受信任的名称，没有能关闭此检查的通配符
 - **Origin/CSRF 防护** -- 会改变状态的 `/api/mux/*` 请求和 `/api/mux/stream` WebSocket 会拒绝跨站的 `Sec-Fetch-Site`/`Origin`，并要求同源的一次性流令牌
-- **内置暴力破解防护** -- 速率限制（每 IP 每分钟 5 次尝试）
+- **内置暴力破解防护** -- 速率限制（每 IP 每分钟 5 次失败尝试，每个 IPv6 /64 每分钟 20 次）
 - **Herdr 后端** -- 会暴露主机上的所有 Herdr 工作区，因此除非同时指定 `--allow-herdr-no-auth`，否则拒绝 `--mux herdr --no-auth`
 - **服务文件不含机密** -- systemd 单元、launchd 代理和计划任务中都不包含密码
 - 生产环境请使用 HTTPS（Tailscale）

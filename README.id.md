@@ -11,9 +11,9 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Go-1.21-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go" />
+  <img src="https://img.shields.io/badge/Go-1.26-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go" />
   <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React" />
-  <img src="https://img.shields.io/badge/TypeScript-5.9-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/TypeScript-7.0-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
   <img src="https://img.shields.io/badge/PWA-ready-5A0FC8?style=flat-square&logo=pwa&logoColor=white" alt="PWA" />
 </p>
 
@@ -39,6 +39,10 @@ Kendalikan alat CLI (Claude Code, GitHub Copilot, terminal apa pun) dari jarak j
 - **Pergantian session**: Banyak tmux sessions dengan buat/edit/hapus
 - **Tab session**: Bilah tab horizontal untuk berpindah jendela dengan cepat
 - **Backend Herdr** (native atau di dalam container): kendalikan workspace Herdr sebagai pengganti tmux, dengan lencana status coding agent di setiap pane — lihat [Instalasi Native](https://termote.ohnice.app/installation/native/)
+- **Tampilan Chat**: baca dan balas pane yang menjalankan Claude Code (atau Codex yang dijalankan dengan `--no-daemon`) sebagai obrolan, dengan saran slash command dan jawaban dialog — lihat [Agent Chat](https://termote.ohnice.app/usage/agent-chat/)
+- **Tampilan Files dan Changes**: jelajahi direktori pane dan perubahan git-nya, dengan pratinjau Markdown — lihat [Files and Changes](https://termote.ohnice.app/usage/files-changes/)
+- **Lampiran gambar**: kirim gambar dari ponsel ke terminal atau ke pesan di tampilan Chat, agar agent dapat membacanya lewat path
+- **Plugin Herdr**: buka pane Herdr yang sedang aktif di Termote, tampilkan link-nya sebagai kode QR untuk ponsel, mulai atau hentikan server, tanpa meninggalkan Herdr — lihat [Herdr Plugin](https://termote.ohnice.app/usage/herdr-plugin/)
 - **Ramah mobile**: Toolbar keyboard virtual (Tab/Ctrl/Shift/panah, dapat diperluas)
 - **Dukungan gestur**: Geser untuk Ctrl+C, Tab, menggulir
 - **Riwayat perintah**: Panggil ulang perintah yang pernah dikirim dengan pencarian
@@ -182,7 +186,7 @@ termote container logs -f
 termote container down
 ```
 
-`container up` menjalankan `ghcr.io/lamngockhuong/termote` pada versi `termote` yang terpasang, dengan podman (diutamakan) atau docker, di port 7680 dengan `~/termote-workspace` di-mount ke `/workspace`. Perintah ini menerima `--port`, `--lan`, `--tailscale`, `--no-auth`, `--allow-host` dan `--fresh`, yang disimpan terpisah dari opsi `start`; password-nya sama dengan server native. Docker menjalankan ulang container setelah reboot; Podman rootless tidak punya daemon untuk itu, jadi jalankan sebagai unit Quadlet.
+`container up` menjalankan `ghcr.io/lamngockhuong/termote` pada versi `termote` yang terpasang, dengan podman (diutamakan) atau docker, di port 7680 dengan `~/termote-workspace` di-mount ke `/workspace`. Perintah ini menerima `--port`, `--lan`, `--tailscale`, `--no-auth`, `--allow-host`, `--user` dan `--fresh`, yang disimpan terpisah dari opsi `start`; username dan password-nya sama dengan server native. Docker menjalankan ulang container setelah reboot; Podman rootless tidak punya daemon untuk itu, jadi jalankan sebagai unit Quadlet.
 
 > **Catatan keamanan**: Hindari mount `$HOME` secara langsung — direktori sensitif seperti `.ssh`, `.gnupg` akan dapat diakses di dalam container. Mount direktori proyek tertentu saja.
 
@@ -258,6 +262,7 @@ Server native berjalan sebagai service pengguna: unit systemd user di Linux (pro
 | `--allow-host <name>`       | Izinkan nilai header Host tambahan (dapat diulang; tanpa wildcard, lihat catatan keamanan) |
 | `--remove-host <name>`      | Hapus nama Host yang diizinkan (dapat diulang)                                             |
 | `--allow-herdr-no-auth`     | Wajib bersama `--mux herdr --no-auth`                                                      |
+| `--user <name>`             | Username login (default: `admin`; sama dengan container)                                   |
 | `--fresh`                   | Buat password baru                                                                         |
 
 ### Dengan Tailscale HTTPS
@@ -385,7 +390,7 @@ termote start --fresh      # If the saved password can no longer be read
 - **Basic auth aktif secara default** - gunakan `--no-auth` untuk menonaktifkannya saat pengembangan lokal; password dibuat oleh `termote start` yang pertama dan disimpan terenkripsi
 - **Allowlist Host**: request dengan header `Host` yang tidak dikenal ditolak (perlindungan DNS rebinding); tambahkan nama tepercaya dengan `--allow-host`, tidak ada wildcard untuk mematikan pemeriksaan ini
 - **Guard Origin/CSRF**: request `/api/mux/*` yang mengubah state dan WebSocket `/api/mux/stream` menolak `Sec-Fetch-Site`/`Origin` lintas situs dan mewajibkan stream token sekali pakai dari origin yang sama
-- **Perlindungan brute-force bawaan** - pembatasan laju (5 percobaan/menit per IP)
+- **Perlindungan brute-force bawaan** - pembatasan laju (5 percobaan gagal/menit per IP, 20/menit per IPv6 /64)
 - **Backend Herdr**: mengekspos setiap workspace Herdr di host, sehingga `--mux herdr --no-auth` ditolak kecuali `--allow-herdr-no-auth` juga diberikan
 - **File service tidak menyimpan rahasia**: unit systemd, agent launchd, dan Scheduled Task tidak pernah berisi password
 - Gunakan HTTPS (Tailscale) untuk produksi

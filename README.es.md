@@ -11,9 +11,9 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Go-1.21-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go" />
+  <img src="https://img.shields.io/badge/Go-1.26-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go" />
   <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React" />
-  <img src="https://img.shields.io/badge/TypeScript-5.9-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/TypeScript-7.0-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
   <img src="https://img.shields.io/badge/PWA-ready-5A0FC8?style=flat-square&logo=pwa&logoColor=white" alt="PWA" />
 </p>
 
@@ -39,6 +39,10 @@ Controla remotamente herramientas CLI (Claude Code, GitHub Copilot, cualquier te
 - **Cambio de sesiones**: Multiples sesiones tmux con crear/editar/eliminar
 - **Pestanas de sesiones**: Barra de pestanas horizontal para cambiar rapidamente entre ventanas
 - **Backend Herdr** (nativo o en el contenedor): controla workspaces de Herdr en lugar de tmux, con insignias de estado del agente de codigo en cada panel — ver [Instalacion nativa](https://termote.ohnice.app/installation/native/)
+- **Vista Chat**: lee y responde como un chat a un panel que ejecuta Claude Code (o Codex iniciado con `--no-daemon`), con sugerencias de comandos slash y respuestas a dialogos — ver [Agent Chat](https://termote.ohnice.app/usage/agent-chat/)
+- **Vistas Files y Changes**: explora el directorio de un panel y sus cambios de git, con vista previa de Markdown — ver [Files and Changes](https://termote.ohnice.app/usage/files-changes/)
+- **Imagenes adjuntas**: envia una imagen desde el movil a la terminal o a un mensaje de la vista Chat, para que el agente la lea por su ruta
+- **Plugin de Herdr**: abre en Termote el panel de Herdr enfocado, muestra su enlace como codigo QR para el movil e inicia o detiene el servidor, sin salir de Herdr — ver [Herdr Plugin](https://termote.ohnice.app/usage/herdr-plugin/)
 - **Optimizado para movil**: Teclado virtual (Tab/Ctrl/Shift/flechas, expandible)
 - **Soporte de gestos**: Deslizar para Ctrl+C, Tab, desplazamiento
 - **Historial de comandos**: Recuperar comandos enviados previamente con busqueda
@@ -182,7 +186,7 @@ termote container logs -f
 termote container down
 ```
 
-`container up` ejecuta `ghcr.io/lamngockhuong/termote` en la version del `termote` instalado, con podman (preferido) o docker, en el puerto 7680 y con `~/termote-workspace` montado en `/workspace`. Acepta `--port`, `--lan`, `--tailscale`, `--no-auth`, `--allow-host` y `--fresh`, que se guardan aparte de las opciones de `start`; la contrasena se comparte con el servidor nativo. Docker reinicia el container tras un reinicio del sistema; Podman sin root no tiene un daemon que lo haga, asi que ejecutalo como unidad Quadlet.
+`container up` ejecuta `ghcr.io/lamngockhuong/termote` en la version del `termote` instalado, con podman (preferido) o docker, en el puerto 7680 y con `~/termote-workspace` montado en `/workspace`. Acepta `--port`, `--lan`, `--tailscale`, `--no-auth`, `--allow-host`, `--user` y `--fresh`, que se guardan aparte de las opciones de `start`; el usuario y la contrasena se comparten con el servidor nativo. Docker reinicia el container tras un reinicio del sistema; Podman sin root no tiene un daemon que lo haga, asi que ejecutalo como unidad Quadlet.
 
 > **Nota de seguridad**: Evita montar `$HOME` directamente — directorios sensibles como `.ssh`, `.gnupg` serian accesibles en el container. Monta directorios de proyecto especificos.
 
@@ -258,6 +262,7 @@ El servidor nativo se ejecuta como servicio de usuario: una unidad de usuario de
 | `--allow-host <name>`       | Permitir un valor adicional de la cabecera Host (repetible; sin comodines, ver notas de seguridad) |
 | `--remove-host <name>`      | Quitar un nombre de Host permitido (repetible)                                                     |
 | `--allow-herdr-no-auth`     | Obligatorio junto con `--mux herdr --no-auth`                                                      |
+| `--user <name>`             | Nombre de usuario de acceso (por defecto: `admin`; compartido con el container)                    |
 | `--fresh`                   | Establecer una nueva contrasena                                                                    |
 
 ### Con Tailscale HTTPS
@@ -385,7 +390,7 @@ termote start --fresh      # If the saved password can no longer be read
 - **Autenticacion basica habilitada por defecto** - usa `--no-auth` para deshabilitar en desarrollo local; la contrasena la crea el primer `termote start` y se guarda cifrada
 - **Lista de hosts permitidos** - se rechazan las peticiones con una cabecera `Host` desconocida (proteccion contra DNS rebinding); agrega nombres de confianza con `--allow-host`, no existe comodin para desactivar la comprobacion
 - **Protecciones Origin/CSRF** - las peticiones `/api/mux/*` que cambian estado y el WebSocket `/api/mux/stream` rechazan `Sec-Fetch-Site`/`Origin` de otros sitios y exigen un token de stream de un solo uso y del mismo origen
-- **Proteccion contra fuerza bruta integrada** - limitacion de tasa (5 intentos/min por IP)
+- **Proteccion contra fuerza bruta integrada** - limitacion de tasa (5 intentos fallidos/min por IP, 20/min por IPv6 /64)
 - **Backend Herdr** - expone todos los workspaces de Herdr del host, por eso `--mux herdr --no-auth` se rechaza salvo que tambien se pase `--allow-herdr-no-auth`
 - **Sin secretos en los archivos de servicio** - la unidad de systemd, el agente de launchd y la tarea programada nunca contienen la contrasena
 - Usar HTTPS (Tailscale) para produccion

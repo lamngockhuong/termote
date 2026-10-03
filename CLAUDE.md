@@ -289,6 +289,7 @@ The `update` command:
 | `pwa/src/utils/terminal-bridge.ts`                | Drives the xterm.js terminal (key mapping, clipboard paste)   |
 | `pwa/src/components/chat-view.tsx`                | Chat view of a pane running Claude Code (lazy-loaded)         |
 | `pwa/src/components/chat-composer.tsx`            | Chat view message box                                         |
+| `pwa/src/components/chat-attachments.tsx`         | Images attached to the next Chat message, above the box       |
 | `pwa/src/chat-agents.ts`                          | Agents with a Chat view (claude, codex) and with input        |
 | `pwa/src/components/read-only-bar.tsx`            | Bottom bar without input (View only, a read-only chat)        |
 | `pwa/src/components/prompt-card.tsx`              | Claude Code dialog as a card (answer buttons or read-only)    |
@@ -303,6 +304,7 @@ The `update` command:
 | `pwa/src/utils/highlight.ts`                      | Syntax highlighting through a Shiki worker, with a timeout    |
 | `pwa/src/utils/upload-image.ts`                   | Uploads an image to the host, picks one, error messages       |
 | `pwa/src/hooks/use-chat-attachments.ts`           | Images attached to a Chat view message (upload, ids, errors)  |
+| `pwa/src/hooks/use-agent-commands.ts`             | A pane's custom slash commands, read once and cached          |
 | `server/main.go`                                  | Entry point (`serve` runs the server, no args opens the menu) |
 | `server/serve.go`                                 | Server (PWA static files, auth, guards)                       |
 | `server/mux.go`                                   | `Mux` interface + `/api/mux/*` routes                         |
@@ -313,6 +315,7 @@ The `update` command:
 | `server/agent_claude.go`                          | Claude Code transcript (JSONL) and session file               |
 | `server/agent_claude_prompt.go`                   | Reads a Claude Code screen: input box, dialogs                |
 | `server/agent_input.go`                           | Sends a message, answers a dialog (checks before each write)  |
+| `server/agent_commands*.go`                       | `agent/commands`: custom commands, skills, plugin commands    |
 | `server/agent_codex.go`                           | Codex rollout (JSONL): locate, parse, turn status             |
 | `server/agent_codex_prompt.go`                    | Reads a Codex screen: composer, approval dialogs              |
 | `server/agent_proc_codex.go`                      | Finds the Codex process holding a rollout (tmux, Herdr)       |
@@ -333,6 +336,7 @@ The `update` command:
 | `server/cli_container.go`                         | `container up/down/logs/status`                               |
 | `server/cli_url.go`                               | `status --json`, `url` (deep link, open, copy, QR)            |
 | `server/cli_panel.go`                             | `panel`: the Herdr plugin's popup                             |
+| `server/listener_owner*.go`                       | Saved password sent only to the current user's listener       |
 | `herdr-plugin/herdr-plugin.toml`                  | Herdr plugin manifest (actions + `panel` popup)               |
 | `Dockerfile`                                      | Docker mode container                                         |
 | `entrypoint.sh`                                   | Container entrypoint                                          |

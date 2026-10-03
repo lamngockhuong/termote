@@ -304,7 +304,7 @@ Manual testing checklist for Termote features before release.
 
 ---
 
-## Chat View (Claude Code)
+## Chat View (Claude Code, Codex)
 
 Run on tmux (Linux/macOS), psmux (Windows) and Herdr (`herdr integration install claude` done).
 
@@ -377,6 +377,82 @@ Run on tmux (Linux/macOS), psmux (Windows) and Herdr (`herdr integration install
 
 - [ ] The on-screen keyboard does not cover the composer
 - [ ] The conversation scrolls smoothly; buttons are easy to hit
+
+### Codex
+
+Run on tmux (Linux/macOS) and Herdr (`herdr integration install codex` done); Windows has no
+Codex Chat view.
+
+- [ ] A tab running `codex --no-daemon` shows the Terminal/Chat switcher; plain `codex` (shared
+      daemon) does not
+- [ ] User and Codex messages, commands and file changes show; a new turn appears within 2 seconds
+- [ ] A message with Vietnamese text reaches Codex as one turn; one over 1000 characters too
+      (Codex shows `[Pasted Content N chars]` before Enter)
+- [ ] While Codex works or its composer holds a draft, sending is refused (`Not sent: ...`) and the
+      pane gets no key
+- [ ] `/` at the start of the message lists no commands
+- [ ] tmux: `/new` in the terminal removes the Chat view until Codex is restarted
+- [ ] tmux: an approval dialog (run a command, make edits) shows a read-only card with "Answer
+      this dialog in the terminal."
+- [ ] Herdr: the approval card's buttons pick the option, "Cancel (Esc)" sends Escape
+- [ ] Other Codex dialogs (model picker, ...) are read-only on both backends
+
+---
+
+## Files and Changes
+
+Run on tmux (Linux/macOS) and Herdr; psmux (Windows) offers neither view.
+
+### Files
+
+- [ ] Desktop: the "Files" and "Changes" header toggles open the view in the side panel, pressed
+      again they close it; phone: both are in the view menu
+- [ ] The tree shows the pane's root (its git toplevel, else its directory); Refresh reads it again
+- [ ] Folders open and close by click and by arrow keys; Enter or a click opens a file
+- [ ] A file shows with line numbers and its size; "Copy path" and "Wrap lines" work; Back returns
+      to the tree
+- [ ] A binary file or one over 1 MiB shows "Not previewable (binary, special file or larger than
+      1 MiB)"
+- [ ] `.env` (lock icon in the tree) asks "Show this file?" first: Cancel goes back, Show shows it;
+      opening it again asks again
+- [ ] `.git` does not open ("This directory can't be shown")
+- [ ] `cd` out of the root in the pane, then Refresh: toast "The pane's directory changed" and the
+      tree shows the new root
+
+### Changes
+
+- [ ] Header shows the branch; files are grouped as Conflicts, Staged, Changes, Untracked, each
+      with its count and status letter
+- [ ] A file staged and then changed again shows in Staged and in Changes, each opening its own diff
+- [ ] A diff shows hunks with added/removed lines and "Staged" or "Not staged"; a rename shows
+      `old → new`
+- [ ] Phone shows one line-number column, desktop two
+- [ ] A changed `.env` asks "Show this file?" before its diff
+- [ ] A change made in the terminal shows within 5 seconds; committing the open file shows "No
+      longer changed"
+- [ ] Outside a git repo: "Not a git repository: <dir>"; a clean tree: "No changes"
+
+### Markdown Preview
+
+- [ ] A `.md` file opens rendered; the "Preview" (eye) button switches to the source and back, and
+      the choice stays for the next Markdown file and after reload
+- [ ] A relative link opens that file (Back returns to the file it came from); a `#heading` link
+      scrolls to it; an `http(s)` link opens in a new tab; a link leaving the pane's root is plain
+      text
+- [ ] Fenced code blocks are highlighted, labelled with their language and have "Copy code"
+- [ ] Raw HTML (`<b>`, `<script>`) shows as text; an image shows as an "image: ..." link and loads
+      nothing
+- [ ] A Markdown file over 256 KiB shows "Too large to preview: shown as source"
+- [ ] Changes: a changed `.md` file's "Preview" shows the current version rendered
+
+### Side Panel (Desktop)
+
+- [ ] Dragging the panel's left edge resizes it, the terminal is fitted once on release;
+      double-click resets the width; the width persists after reload
+- [ ] The focused handle steps with arrow keys, Home/End go to the limits
+- [ ] The terminal always keeps at least 360px next to the panel
+- [ ] "Maximize panel" covers the terminal; "Restore panel" or Escape brings it back
+- [ ] Narrowing the window to phone width moves the open view to the main area
 
 ---
 
@@ -500,7 +576,25 @@ Test on real mobile device:
 - [ ] Cancel action (sends Ctrl+C)
 - [ ] Clear line action (sends Ctrl+U)
 - [ ] Exit action (sends Ctrl+D)
+- [ ] Attach image action (when the server takes uploads) opens the image picker
 - [ ] Haptic feedback on actions
+
+---
+
+## Image Attachments (Terminal)
+
+- [ ] The keyboard toolbar shows an "Attach image" key next to Paste when the server takes uploads
+- [ ] A PNG, JPEG, GIF or WebP image picked from it is uploaded and its host path (quoted when it
+      holds a space) is typed into the pane with a trailing space, without Enter
+- [ ] Pasting an image-only clipboard (paste in the terminal, Paste key, long press) uploads it the
+      same way; a clipboard holding text pastes the text
+- [ ] Over 10 MB: "Image is larger than 10 MB"; another type: "Only PNG, JPEG, GIF and WebP images
+      can be attached"; HEIC: "HEIC images are not supported. Share the photo as JPEG"
+- [ ] A slow upload shows "Uploading image…"; switching pane before it ends shows "Image uploaded:
+      <path>" with Insert
+- [ ] The file lands in the user cache dir (`~/.cache/termote/uploads` on Linux) under a random name
+- [ ] (Once a view-only role exists, #236) view-only offers no Attach image key or action; until
+      then this is covered by unit tests only
 
 ---
 

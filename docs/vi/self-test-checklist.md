@@ -270,6 +270,8 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 - [ ] Dải pane bị ẩn với tab chỉ có một pane
 - [ ] Dải pane hiện với tab có nhiều hơn một pane, mỗi pane có một huy hiệu trạng thái agent
 - [ ] Chọn một pane thì đổi luồng terminal mà không đổi focus trong giao diện Herdr trên máy host
+- [ ] Nút X cạnh một pane hỏi `Close pane?`; Cancel giữ pane lại, `Close pane` chỉ đóng đúng pane đó
+- [ ] Đóng pane đang được truyền luồng thì luồng chuyển sang một pane khác của cùng tab
 
 ### Liên Kết Trực Tiếp
 
@@ -296,6 +298,158 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 - [ ] Liệt kê session qua API: `curl localhost:7680/api/mux/snapshot`
 - [ ] Chuyển session qua API hoạt động
 - [ ] Trạng thái session giữ nguyên sau khi terminal kết nối lại
+
+---
+
+## Chat View (Claude Code, Codex)
+
+Chạy trên tmux (Linux/macOS), psmux (Windows) và Herdr (đã chạy `herdr integration install claude`).
+
+### Khi Nào Có Chat
+
+- [ ] Tab đang chạy `claude` có nút chuyển Terminal/Chat; tab không chạy thì không có
+- [ ] Thoát Claude Code thì nút chuyển biến mất và app quay về terminal
+- [ ] Điện thoại: header chỉ có một nút view (icon của view đang xem) thay cho các tab; nút này mở
+      menu các view, view đang xem có dấu chọn, tên session vẫn đủ chỗ
+- [ ] Window tmux chia đôi: chat đi theo pane đang có focus; đổi focus giữa chừng không bao giờ gửi
+      tin nhắn sang pane shell
+
+### Lịch Sử Hội Thoại
+
+- [ ] Hiện toàn bộ hội thoại: tin nhắn của người dùng (kèm ghi chú khi có ảnh đính kèm), câu trả lời
+      dạng markdown, các lần gọi tool thu gọn cùng kết quả
+- [ ] Lượt mới hiện trong vòng 2 giây; đã cuộn lên thì vị trí giữ nguyên dù có mục mới
+- [ ] Ảnh trong câu trả lời hiện thành link chữ, không tải gì (tab network của trình duyệt không có
+      request nào tới origin khác)
+- [ ] `/clear` hoặc `/resume` trong terminal: trong vòng 2 giây chat chuyển sang transcript mới,
+      không lẫn hai transcript
+
+### Gửi Tin Nhắn
+
+- [ ] Tin nhắn nhiều dòng (có tiếng Việt) tới Claude Code nguyên văn, thành một lượt
+- [ ] Khi Claude Code đang làm, đang mở hộp thoại hoặc ô nhập còn bản nháp: lệnh gửi bị từ chối với
+      `input not ready` và pane không nhận phím nào
+- [ ] Tin nhắn gõ trước khi một client khác chạy `/clear` thì bị từ chối, ô soạn báo hội thoại đã
+      đổi
+- [ ] `/` ở đầu tin nhắn liệt kê các lệnh (`/exit` đầu tiên, rồi lệnh có sẵn, lệnh và skill của dự
+      án và của người dùng kèm nhãn); gõ tiếp để lọc; chạm, Enter hoặc Tab điền `/name` mà không
+      gửi; phím mũi tên di chuyển, Escape hoặc dấu cách đóng danh sách
+- [ ] Trên điện thoại, danh sách nằm phía trên bàn phím và cuộn được; dòng nào cũng dễ chạm
+- [ ] `/model` (có ghi "opens in Terminal") được gửi đi và terminal hiện bảng chọn của lệnh này
+- [ ] `/exit` hỏi trước; Cancel không gửi gì, Exit tắt Claude Code và app quay về terminal
+- [ ] (Khi đã có quyền chỉ xem, #236) chế độ chỉ xem không có ô soạn và không có nút trả lời; trước
+      đó mục này chỉ được unit test kiểm tra
+
+### Hộp Thoại
+
+- [ ] Hộp thoại xin quyền hiện thành thẻ; mỗi nút chọn đúng lựa chọn của nó, Cancel gửi Escape
+- [ ] `AskUserQuestion` chọn một (tối đa 9 lựa chọn) hiện các nút chọn đúng lựa chọn; `Type something` được thay bằng
+      nút "Other…"
+- [ ] `Chat about this` có nút riêng và đưa Claude Code về ô nhập
+- [ ] Chuỗi câu hỏi chọn một được trả lời đến cuối, mỗi tab một thẻ: hàng bước đánh dấu tab đang
+      mở và các tab đã trả lời, nút "Submit answers" ở tab Submit gửi đi
+- [ ] Chuyển sang tab khác trong terminal (hoặc trả lời trên thiết bị khác) trước khi chạm thì không
+      gửi gì; thẻ hiện tab đang mở
+- [ ] Chạm vào bước khác thì mở tab đó (cả khi lùi lại, và nhảy thẳng tới Submit); bước nào rơi vào
+      màn hình khác thì dừng lại và thẻ hiện màn hình đó
+- [ ] Câu hỏi hoặc tab multiSelect hiện các nút bật/tắt: mỗi lần chạm đánh dấu hoặc bỏ đánh dấu một
+      lựa chọn, "Next" sang bước tiếp, giữ nguyên các lựa chọn và đánh dấu tab đã trả lời
+- [ ] "Other…" mở một ô nhập: câu trả lời tiếng Việt gửi từ ô này tới Claude Code thành câu trả lời
+      (câu hỏi đơn), hoặc đưa chuỗi câu hỏi sang tab kế; Cancel đóng ô nhập, hộp thoại vẫn còn
+- [ ] Ở tab multiSelect, "Other…" thêm đoạn chữ thành một lựa chọn đã đánh dấu, bấm nút của nó thì
+      bỏ đánh dấu; "Next" sang bước tiếp cùng lựa chọn đó
+- [ ] Con trỏ chọn đang ở `Type something` trong terminal (hoặc đã gõ chữ vào đó và con trỏ vẫn ở
+      đó) thì thẻ chỉ xem được; gõ chữ vào đó rồi rời đi thì thẻ không có nút "Other…"
+- [ ] Di chuyển con trỏ chọn trong terminal trong lúc đã mở "Other…" mà chưa gửi thì không gửi gì
+      hoặc dừng trước khi gõ; thẻ hiện hộp thoại đang có trên màn hình
+- [ ] Bỏ qua một tab multiSelect bằng cách chạm sang bước khác thì tab đó vẫn chưa trả lời (Submit
+      cảnh báo)
+- [ ] Câu hỏi có phần xem trước cho từng lựa chọn hiện mỗi lựa chọn một nút (nhãn không chứa phần
+      xem trước, không có nút `Chat about this`); chạm là chọn lựa chọn đó
+- [ ] Trên điện thoại, thẻ hộp thoại cao vẫn đứng yên (pane không co lại dưới Chat view)
+- [ ] Hai thiết bị cùng trả lời một hộp thoại: chỉ một câu trả lời tới được pane
+- [ ] "Open terminal" chuyển sang terminal; luồng terminal vẫn giữ kết nối (không kết nối lại)
+
+### Mobile (iPhone Safari PWA, Android Chrome)
+
+- [ ] Bàn phím ảo không che ô soạn
+- [ ] Hội thoại cuộn mượt; nút dễ bấm
+
+### Codex
+
+Chạy trên tmux (Linux/macOS) và Herdr (đã chạy `herdr integration install codex`); Windows không
+có Chat view cho Codex.
+
+- [ ] Tab chạy `codex --no-daemon` có nút chuyển Terminal/Chat; `codex` chạy thường (daemon dùng
+      chung) thì không có
+- [ ] Hiện tin nhắn của người dùng và của Codex, các lệnh đã chạy và file đã sửa; lượt mới hiện
+      trong vòng 2 giây
+- [ ] Tin nhắn có tiếng Việt tới Codex thành một lượt; tin dài hơn 1000 ký tự cũng vậy (Codex hiện
+      `[Pasted Content N chars]` trước khi Enter)
+- [ ] Khi Codex đang làm hoặc ô soạn của Codex còn bản nháp, lệnh gửi bị từ chối (`Not sent: ...`)
+      và pane không nhận phím nào
+- [ ] `/` ở đầu tin nhắn không liệt kê lệnh nào
+- [ ] tmux: chạy `/new` trong terminal thì Chat view biến mất cho đến khi khởi động lại Codex
+- [ ] tmux: hộp thoại xin duyệt (chạy lệnh, sửa file) hiện thành thẻ chỉ xem, kèm dòng `Answer this dialog in the
+      terminal.`
+- [ ] Herdr: các nút trên thẻ xin duyệt chọn đúng lựa chọn, "Cancel (Esc)" gửi Escape
+- [ ] Các hộp thoại khác của Codex (chọn model, ...) chỉ xem được trên cả hai backend
+
+---
+
+## Files và Changes
+
+Chạy trên tmux (Linux/macOS) và Herdr; psmux (Windows) không có hai view này.
+
+### Files
+
+- [ ] Máy tính: nút "Files" và "Changes" trên header mở view trong panel bên, bấm lại thì đóng;
+      điện thoại: cả hai nằm trong menu view
+- [ ] Cây thư mục bắt đầu từ thư mục gốc của pane (git toplevel, nếu không có thì thư mục của
+      pane); Refresh đọc lại
+- [ ] Thư mục mở/đóng bằng chuột và bằng phím mũi tên; Enter hoặc nhấn vào file thì mở file
+- [ ] File hiện kèm số dòng và kích thước; "Copy path" và "Wrap lines" hoạt động; nút quay lại đưa
+      về cây thư mục
+- [ ] File nhị phân hoặc lớn hơn 1 MiB hiện
+      `Not previewable (binary, special file or larger than 1 MiB)`
+- [ ] `.env` (có icon ổ khóa trên cây) hỏi `Show this file?` trước: Cancel quay lại, Show hiện nội
+      dung; mở lại thì hỏi lại
+- [ ] `.git` không mở được ("This directory can't be shown")
+- [ ] `cd` ra ngoài thư mục gốc trong pane rồi bấm Refresh: hiện toast "The pane's directory
+      changed" và cây chuyển sang thư mục gốc mới
+
+### Changes
+
+- [ ] Header hiện nhánh git; file được chia nhóm Conflicts, Staged, Changes, Untracked, nhóm nào
+      cũng có số lượng, file nào cũng có chữ cái trạng thái
+- [ ] File đã `git add` rồi sửa tiếp hiện ở cả Staged và Changes, mỗi chỗ mở diff của riêng phía đó
+- [ ] Diff hiện các hunk với dòng thêm/xóa cùng "Staged" hoặc "Not staged"; file đổi tên hiện
+      `old → new`
+- [ ] Điện thoại có một cột số dòng, máy tính có hai
+- [ ] `.env` có thay đổi thì hỏi `Show this file?` trước khi hiện diff
+- [ ] Thay đổi làm trong terminal hiện trong vòng 5 giây; commit file đang mở thì hiện `No longer changed`
+- [ ] Ngoài repo git: "Not a git repository: <dir>"; không có thay đổi: "No changes"
+
+### Xem Trước Markdown
+
+- [ ] File `.md` mở ra ở dạng xem trước; nút "Preview" (hình con mắt) chuyển sang mã nguồn và
+      ngược lại, lựa chọn này giữ cho file Markdown tiếp theo và sau khi tải lại
+- [ ] Link tương đối mở file đó (nút quay lại về file vừa rời); link `#heading` cuộn tới tiêu đề
+      đó; link `http(s)` mở trong tab mới; link ra ngoài thư mục gốc của pane chỉ là chữ thường
+- [ ] Khối code được tô màu cú pháp, ghi tên ngôn ngữ và có nút "Copy code"
+- [ ] HTML thô (`<b>`, `<script>`) hiện nguyên dạng chữ; ảnh hiện thành link "image: ..." và không
+      tải gì
+- [ ] File Markdown lớn hơn 256 KiB hiện `Too large to preview: shown as source`
+- [ ] Changes: nút "Preview" của file `.md` có thay đổi hiện bản hiện tại ở dạng xem trước
+
+### Panel Bên (Desktop)
+
+- [ ] Kéo cạnh trái của panel để đổi độ rộng, terminal chỉ khớp lại một lần khi thả chuột; nhấp
+      đúp đưa về độ rộng mặc định; độ rộng giữ nguyên sau khi tải lại
+- [ ] Khi tay nắm kéo có focus, phím mũi tên đổi từng bước, Home/End đưa tới giới hạn
+- [ ] Terminal luôn còn ít nhất 360px bên cạnh panel
+- [ ] "Maximize panel" phủ lên terminal; "Restore panel" hoặc Escape trả lại như cũ
+- [ ] Thu hẹp cửa sổ xuống cỡ điện thoại thì view đang mở chuyển sang vùng chính
 
 ---
 
@@ -419,7 +573,28 @@ Test trên thiết bị di động thật:
 - [ ] Thao tác Cancel (gửi Ctrl+C)
 - [ ] Thao tác `Clear line` (gửi Ctrl+U)
 - [ ] Thao tác Exit (gửi Ctrl+D)
+- [ ] Thao tác `Attach image` (khi server nhận ảnh tải lên) mở bảng chọn ảnh
 - [ ] Phản hồi rung khi thao tác
+
+---
+
+## Đính Kèm Ảnh (Terminal)
+
+- [ ] Khi server nhận ảnh tải lên, thanh công cụ bàn phím có phím "Attach image" cạnh phím Dán
+- [ ] Chọn ảnh PNG, JPEG, GIF hoặc WebP từ phím đó thì ảnh được tải lên, đường dẫn của nó trên máy
+      host (đặt trong dấu nháy khi có dấu cách) được gõ vào pane kèm một dấu cách ở cuối, không có
+      Enter
+- [ ] Dán khi bảng nhớ tạm chỉ chứa ảnh (dán trong terminal, phím Dán, nhấn giữ) cũng tải ảnh lên
+      như vậy; bảng nhớ tạm có chữ thì dán chữ
+- [ ] Ảnh lớn hơn 10 MB: `Image is larger than 10 MB`; định dạng khác:
+      `Only PNG, JPEG, GIF and WebP images can be attached`; HEIC:
+      `HEIC images are not supported. Share the photo as JPEG`
+- [ ] Tải lên chậm thì hiện "Uploading image…"; đổi pane trước khi tải xong thì hiện "Image
+      uploaded: <path>" kèm nút Insert
+- [ ] File nằm trong thư mục cache của người dùng (`~/.cache/termote/uploads` trên Linux), tên ngẫu
+      nhiên
+- [ ] (Khi đã có quyền chỉ xem, #236) chế độ chỉ xem không có phím hay thao tác Attach image; trước
+      đó mục này chỉ được unit test kiểm tra
 
 ---
 
