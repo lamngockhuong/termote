@@ -8,7 +8,11 @@
 # The screens it draws are the recordings the server's detector is tested
 # with (server/testdata/claude/screens), so the two cannot drift apart.
 #
-#   idle        the input box, empty or holding what was pasted into it
+#   idle        the input box, empty or holding what was pasted into it; a
+#               path to an image file pasted alone becomes "[Image #N]"
+#               (N keeps counting, as in Claude Code), sent with the message
+#               as an image part
+#   Ctrl+C      clears the input box
 #   Enter       records the draft as a user turn, then answers it:
 #               "permission" in it opens the Bash permission dialog,
 #               "toppings" the multiSelect question (answerable only here),
@@ -117,6 +121,9 @@ dialog() {
 idle_screen="$screens/2.1.286-idle-after-turn.txt"
 state=idle # idle | permission | toppings | size | drink | submit | mixed | multi | multi_milk | after_multi | partial | layout | layout_row | color | color_free
 draft=""
+images=()  # paths behind the draft's "[Image #N]" tokens
+n_image=0  # Claude Code never restarts the number
+pasted=""  # a bracketed paste, until its end
 typed="" # pasted into the free-text option of "color"
 
 draw() {
@@ -172,10 +179,19 @@ size() {
 }
 
 submit() {
-  local text=$draft
+  local text=$draft n=${#images[@]} content p
   draft=""
+  images=()
   [ -n "${text//[[:space:]]/}" ] || { draw; return; }
-  entry user "$(json_str "$text")"
+  if [ "$n" -gt 0 ]; then
+    content="[{\"type\":\"text\",\"text\":$(json_str "$text")}"
+    for ((p = 0; p < n; p++)); do
+      content+=',{"type":"image","source":{"type":"base64","media_type":"image/png","data":""}}'
+    done
+    entry user "$content]"
+  else
+    entry user "$(json_str "$text")"
+  fi
   set_status busy
   draw
   sleep 0.3
@@ -207,11 +223,27 @@ submit() {
       set_status waiting
       ;;
     *)
-      say "You said: $text"
+      if [ "$n" -gt 0 ]; then say "You said: $text (images: $n)"; else say "You said: $text"; fi
       set_status idle
       ;;
   esac
   draw
+}
+
+# The end of a paste into the input box: a path to an image file, alone,
+# becomes the agent's token (server/testdata/claude/screens/2.1.288-image-*).
+paste_done() {
+  local p=${pasted#\"}
+  p=${p%\"}
+  if [[ $p =~ ^/.*\.(png|jpg|gif|webp)$ ]] && [ -f "$p" ]; then
+    images+=("$p")
+    n_image=$((n_image + 1))
+    [ -z "$draft" ] || draft+=" "
+    draft+="[Image #$n_image]"
+  else
+    draft+=$pasted
+  fi
+  pasted=""
 }
 
 answer() { # key
@@ -259,7 +291,11 @@ restore() {
   set_status idle
 }
 trap restore EXIT
-trap 'exit 0' TERM HUP INT
+trap 'exit 0' TERM HUP
+# Ctrl+C clears the input box, as in the agent: the pane's tty keeps isig
+# (read -s restores it), so it arrives as SIGINT and ends the read below.
+interrupted=0
+trap 'interrupted=1' INT
 
 # Keys one at a time, Enter as CR, output processing kept (LF → CRLF).
 stty -icanon -echo -icrnl -isig -ixon min 1
@@ -271,6 +307,11 @@ draw
 pasting=0
 while :; do
   if ! IFS= read -r -s -n1 -d '' -t 0.5 ch; then
+    if [ $interrupted = 1 ]; then
+      interrupted=0
+      [ $state != idle ] || { draft="" && images=() && draw; }
+      continue
+    fi
     # No key: redraw when the pane was resized.
     old="$rows $cols"
     size
@@ -285,7 +326,7 @@ while :; do
     done
     case $seq in
       '[200~') pasting=1 ;;
-      '[201~') pasting=0 && draw ;;
+      '[201~') pasting=0 && { [ $state != idle ] || paste_done; } && draw ;;
       '') [ $state = idle ] || answer esc ;;
       '[C' | OC) [ $state = idle ] || answer right ;;
       '[D' | OD) [ $state = idle ] || answer left ;;
@@ -294,8 +335,8 @@ while :; do
   fi
   if [ $pasting = 1 ]; then
     case $state:$ch in
-      idle:$'\r' | idle:$'\n') draft+=$'\n' ;;
-      idle:*) draft+=$ch ;;
+      idle:$'\r' | idle:$'\n') pasted+=$'\n' ;;
+      idle:*) pasted+=$ch ;;
       color_free:*) typed+=$ch ;;
     esac
     continue
@@ -303,6 +344,7 @@ while :; do
   case $state:$ch in
     idle:$'\r' | idle:$'\n') submit ;;
     idle:$'\x7f') draft=${draft%?} && draw ;;
+    idle:$'\x03') draft="" && images=() && draw ;; # the same key as a byte, if it ever arrives as one
     idle:*) draft+=$ch && draw ;;
     *) answer "$ch" ;;
   esac

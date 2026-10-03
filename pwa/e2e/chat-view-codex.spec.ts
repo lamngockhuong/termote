@@ -10,6 +10,12 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { expect, type Page, test } from './fixtures'
 
+// A 1x1 PNG, attached in the composer.
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+  'base64',
+)
+
 // The Chat view against a stand-in Codex (tests/fixtures/fake-codex.sh)
 // in a window of the server's tmux, next to a window that only holds the same
 // rollout open for reading, under an executable also named codex: only the
@@ -153,6 +159,18 @@ test.describe('chat view of a Codex pane', () => {
     await send.click()
     await expect(conversation).toContainText('You said: hello from e2e')
     await expect(conversation).toContainText('second line')
+
+    // An image attached in the composer goes before the text, as Codex's own
+    // token; the rollout's local_image shows as an image part
+    const chooser = page.waitForEvent('filechooser')
+    await page.getByRole('button', { name: 'Attach image' }).click()
+    await (await chooser).setFiles({ name: 'dot.png', mimeType: 'image/png', buffer: PNG })
+    await expect(page.getByRole('img', { name: 'Attachment 1, ready' })).toBeVisible()
+    await composer.fill('what is in it?')
+    await send.click()
+    await expect(conversation).toContainText('what is in it? (images: 1)')
+    await expect(conversation).toContainText('[image]')
+    await expect(page.getByRole('list', { name: 'Attached images' })).toBeHidden()
 
     // On tmux the rollout records no approval request: the dialog is shown
     // to answer in the terminal, with no button that answers it

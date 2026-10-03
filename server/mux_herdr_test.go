@@ -1333,19 +1333,19 @@ func TestHerdrAgentWriter(t *testing.T) {
 	if err := m.Paste(ctx, "wR:p3", "a\nb"); err != nil {
 		t.Fatal(err)
 	}
-	if err := m.SendKeySequence(ctx, "wR:p3", []string{"2", "Enter", "Escape"}); err != nil {
+	if err := m.SendKeySequence(ctx, "wR:p3", []string{"2", "Enter", "Escape", "C-c"}); err != nil {
 		t.Fatal(err)
 	}
 	f.mu.Lock()
 	texts := append([]string(nil), f.texts...)
 	f.mu.Unlock()
 	// The paste is one input; nothing can land inside the brackets.
-	if len(texts) != 2 || texts[0] != "\x1b[200~a\nb\x1b[201~" || texts[1] != "2\r\x1b" {
+	if len(texts) != 2 || texts[0] != "\x1b[200~a\nb\x1b[201~" || texts[1] != "2\r\x1b\x03" {
 		t.Errorf("sent %q", texts)
 	}
 	var ie inputError
 	for name, err := range map[string]error{
-		"bad key":        m.SendKeySequence(ctx, "wR:p3", []string{"C-c"}),
+		"bad key":        m.SendKeySequence(ctx, "wR:p3", []string{"C-d"}),
 		"no keys":        m.SendKeySequence(ctx, "wR:p3", nil),
 		"bad pane":       m.SendKeySequence(ctx, "-x", []string{"1"}),
 		"capture bad id": func() error { _, err := m.Capture(ctx, "x"); return err }(),

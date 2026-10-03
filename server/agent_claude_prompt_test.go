@@ -423,6 +423,73 @@ func TestDraftShows(t *testing.T) {
 	}
 }
 
+func TestDraftShowsImages(t *testing.T) {
+	tests := []struct {
+		draft string
+		n     int
+		text  string
+		want  bool
+	}{
+		{"[Image #1]", 1, "", true},
+		{"[Image #1] [Image #2]", 2, "", true},
+		{"[Image #26]", 1, "", true}, // Claude Code keeps counting
+		{"[Image #1] [Image #2]", 1, "", false},
+		{"[Image #1]", 2, "", false},
+		{"[Image #1] hello", 1, "", false},
+		{"[Image #1]hello", 1, " hello", true},
+		{"[Image #1] [Image #2]  hello  world", 2, " hello\nworld", true},
+		{"[Image #1] [Pasted text #2 +28 lines]", 1, " " + strings.Repeat("r\n", 28), true},
+		{"[Image #1] [Image #2] hello", 1, " hello", false},
+		{"[Image #1] other", 1, " hello", false},
+		{"hello", 0, "hello", true},
+		{"/tmp/x.png hello", 1, " hello", false},
+		{"", 1, "", false},
+	}
+	for _, tt := range tests {
+		if got := draftShowsImages(tt.draft, tt.n, tt.text); got != tt.want {
+			t.Errorf("draftShowsImages(%q, %d, %q) = %v", tt.draft, tt.n, tt.text, got)
+		}
+	}
+}
+
+// Recorded screens of an image path pasted into Claude Code 2.1.288 and
+// Codex 0.160.0 (tmux, and Herdr for Claude Code).
+func TestImageTokenScreens(t *testing.T) {
+	tests := []struct {
+		agent, file string
+		n           int
+		text        string
+		want        bool
+	}{
+		{"claude", "claude/screens/2.1.288-image-one", 1, "", true},
+		{"claude", "claude/screens/2.1.288-image-two", 2, "", true},
+		{"claude", "claude/screens/2.1.288-image-two", 1, "", false},
+		{"claude", "claude/screens/2.1.288-herdr-image-two", 2, "", true},
+		{"claude", "claude/screens/2.1.288-image-quoted", 1, "", false}, // a leftover row of an earlier draft
+		{"claude", "claude/screens/2.1.288-image-tokens-text", 2, " describe both\nsecond line\nthird line", true},
+		{"claude", "claude/screens/2.1.288-image-tokens-text", 2, " describe both", false},
+		{"claude", "claude/screens/2.1.288-image-path-text", 1, " what is this", false},
+		{"codex", "codex/screens/0.160.0-image-one", 1, "", true},
+		{"codex", "codex/screens/0.160.0-image-two", 2, "", true},
+		{"codex", "codex/screens/0.160.0-image-tokens-text", 2, " describe both\nsecond line", true},
+		{"codex", "codex/screens/0.160.0-image-path-text", 1, " what is this", false},
+	}
+	for _, tt := range tests {
+		b, err := os.ReadFile(filepath.Join("testdata", tt.file+".txt"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		sc := readAgentScreen(tt.agent, string(b))
+		if sc.input != inputDraft {
+			t.Errorf("%s: input = %v", tt.file, sc.input)
+			continue
+		}
+		if got := draftShowsImages(sc.draft, tt.n, tt.text); got != tt.want {
+			t.Errorf("%s: draftShowsImages(%q, %d, %q) = %v", tt.file, sc.draft, tt.n, tt.text, got)
+		}
+	}
+}
+
 // Screens that must not read as an empty input box or as an answerable
 // dialog, built by editing recorded ones.
 func TestReadClaudeScreenAdversarial(t *testing.T) {

@@ -179,7 +179,7 @@ POST   /api/mux/panes/{id}/keys    body: {keys}                 → {ok}
 POST   /api/mux/panes/{id}/scroll  body: {lines}                → {ok}   (caps.scroll only, else 501)
 GET    /api/mux/health             → {status, apiVersion, backend}
 GET    /api/mux/panes/{id}/agent/transcript?cursor=&before=     → {agent, sessionId, status, entries, cursor, before, reset}
-POST   /api/mux/panes/{id}/agent/message  body: {text, cursor}  → 204
+POST   /api/mux/panes/{id}/agent/message  body: {text, cursor, images?}  → 204
 GET    /api/mux/panes/{id}/agent/prompt                          → {prompt: null | {promptId, kind, title, body, options, steps, freeText}}
 POST   /api/mux/panes/{id}/agent/answer   body: {promptId, choice} → 204
 GET    /api/mux/panes/{id}/agent/commands                        → {commands: [{name, description, source, kind}]}
@@ -201,6 +201,17 @@ Errors answer a JSON `code`: `unsupported_image` (415: not one of the four types
 another type), `too_large` (413, over 10 MB), `busy` (429, two uploads already running),
 `storage_full` (507), `uploads_unavailable` (503, no usable upload dir). Files live in
 `os.UserCacheDir()/termote/uploads`, 7 days or until 200 MB (see Security Model).
+
+The Chat view's composer uploads the same way (its image button, or an image pasted into the
+box) and sends the ids as `images` in `agent/message`, at most 5; `text` may then be empty.
+The server resolves each id in the store (an unknown one → 400 `invalid_request` with the bad
+ids in `images`; no store → 503 `uploads_unavailable`), pastes each path on its own and waits
+until the draft shows that many `[Image #N]` tokens (Claude Code and Codex both draw this for a
+path pasted alone, not for a path inside other text), then pastes the text after a space and
+confirms the whole draft before and after Enter. The request's time budget grows with the
+number of images. When a step after the first paste fails, the box is cleared with one `C-c`
+only if the same idle agent shows nothing but this request's paste (the code is then the step's
+own, e.g. `paste_not_confirmed`); anything else answers 409 `partial_paste` and leaves the box.
 
 `caps.scroll` (Herdr): the stream only carries screen renders, so no history reaches the
 xterm.js scrollback. The PWA turns the mouse wheel and the scroll buttons into
@@ -639,7 +650,9 @@ termote update --force           # Force reinstall current version
     `codex`, not an `app-server`, holds it open for writing inside its `CODEX_HOME/sessions`,
     the identity checked again after opening; every write, Codex's included, re-checks the
     target and the screen and sends nothing on doubt, and a Codex approval dialog is answerable
-    only where Herdr reports the agent blocked (read only on tmux); markdown images in the Chat
+    only where Herdr reports the agent blocked (read only on tmux); a message's images are
+    upload ids resolved by the server, never paths, and a failed send clears the input box
+    (one `C-c`) only when it holds nothing but its own paste; markdown images in the Chat
     view never load
 11. **Files and changes**: read-only; paths confined to the pane's root by `os.Root`; Termote's
     config/state dirs, `/proc`, `/sys`, `/dev` and `.git` never served; sensitive files only

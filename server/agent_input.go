@@ -27,6 +27,8 @@ const (
 	// UTF-8 bytes (16 KB of Vietnamese is about 5,500 characters).
 	agentMessageBody = 64 * 1024
 	agentMaxText     = 16 * 1024
+	// agentMaxImages caps the uploads one message attaches.
+	agentMaxImages = 5
 	// agentMaxFreeText caps an answer typed into a question's free-text
 	// option: it wraps under the option, and must fit on the screen to be
 	// checked before Enter.
@@ -37,9 +39,12 @@ const (
 )
 
 // agentConfirmWait bounds how long a write polls the screen for its effect
-// (the pasted text showing, a dialog closing); tests shorten it.
+// (the pasted text showing, a dialog closing); agentImageWait for a pasted
+// image path to become the agent's image token, which reads the file first
+// (twice the slowest measured, a 10 MB PNG). Tests shorten both.
 var (
 	agentConfirmWait = 2 * time.Second
+	agentImageWait   = 11 * time.Second
 	agentPollEvery   = 100 * time.Millisecond
 )
 
@@ -60,7 +65,7 @@ type agentWriter interface {
 // agentKeys are the only keys a route sends, with the bytes a raw-input
 // backend (herdr) types for them.
 var agentKeys = map[string]string{
-	"Enter": "\r", "Escape": "\x1b", "Left": "\x1b[D", "Right": "\x1b[C", "Up": "\x1b[A", "Down": "\x1b[B",
+	"Enter": "\r", "Escape": "\x1b", "C-c": "\x03", "Left": "\x1b[D", "Right": "\x1b[C", "Up": "\x1b[A", "Down": "\x1b[B",
 	"1": "1", "2": "2", "3": "3", "4": "4", "5": "5", "6": "6", "7": "7", "8": "8", "9": "9",
 }
 
@@ -80,7 +85,8 @@ type agentFailure struct {
 	code   string
 	msg    string
 	prompt *AgentPrompt
-	limit  int // bytes, for text_too_long
+	limit  int      // bytes, for text_too_long
+	images []string // upload ids that resolve to no image, for invalid_request
 }
 
 func (f *agentFailure) Error() string { return f.msg }
@@ -94,6 +100,7 @@ var (
 	errFreeTooLong    = &agentFailure{status: http.StatusRequestEntityTooLarge, code: "text_too_long", msg: "text is longer than 1 KB", limit: agentMaxFreeText}
 	errTargetChanged  = fail(http.StatusConflict, "target_changed", "the agent is no longer in this pane")
 	errSessionChanged = fail(http.StatusConflict, "session_changed", "the pane runs another session now")
+	errPartialPaste   = fail(http.StatusConflict, "partial_paste", "the input box holds part of this message; clear it in the terminal")
 )
 
 // promptRecord is a dialog a client was shown, bound to the pane, the
@@ -309,8 +316,9 @@ func (a *agentAPI) handleMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Text   string `json:"text"`
-		Cursor string `json:"cursor"`
+		Text   string   `json:"text"`
+		Cursor string   `json:"cursor"`
+		Images []string `json:"images"`
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, agentMessageBody)
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -327,8 +335,13 @@ func (a *agentAPI) handleMessage(w http.ResponseWriter, r *http.Request) {
 		a.writeFailure(w, errTextTooLong)
 		return
 	}
-	if strings.TrimSpace(text) == "" {
+	if strings.TrimSpace(text) == "" && len(body.Images) == 0 {
 		a.writeFailure(w, fail(http.StatusBadRequest, "invalid_request", "text is empty"))
+		return
+	}
+	paths, err := a.imagePaths(body.Images)
+	if err != nil {
+		a.writeFailure(w, err)
 		return
 	}
 	if body.Cursor == "" {
@@ -351,17 +364,62 @@ func (a *agentAPI) handleMessage(w http.ResponseWriter, r *http.Request) {
 	defer unlock()
 	// Once text is pasted, the Enter must follow even if the client goes
 	// away, or the text stays stranded in the input box.
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 3*agentConfirmWait+muxTimeout)
+	budget := messageBudget(len(paths))
+	if len(paths) > 0 {
+		// The body is read: the read deadline only has to outlast the
+		// pastes, which may pass requestReadTimeout with several images.
+		// Fails only on a writer without a connection (tests).
+		_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(budget + muxTimeout))
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), budget)
 	defer cancel()
-	if err := a.sendMessage(ctx, wr, paneID, c.Session, text); err != nil {
+	if err := a.sendMessage(ctx, wr, paneID, c.Session, text, paths); err != nil {
 		a.writeFailure(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// sendMessage pastes text into an empty input box of session and submits it.
-func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, session, text string) error {
+// messageBudget is how long a message with n images may take: each paste
+// and the Enter wait for the screen, and the backend calls around them.
+func messageBudget(n int) time.Duration {
+	if n == 0 {
+		return 3*agentConfirmWait + muxTimeout
+	}
+	return time.Duration(n+3)*max(agentConfirmWait, agentImageWait) + muxTimeout
+}
+
+// imagePaths resolves a message's upload ids to their files. A client never
+// names a path: an id that is not a finished upload of this server is
+// refused, and the bad ids are returned so the composer can mark them.
+func (a *agentAPI) imagePaths(ids []string) ([]string, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	if len(ids) > agentMaxImages {
+		return nil, fail(http.StatusBadRequest, "invalid_request", "too many images")
+	}
+	if a.uploads == nil {
+		return nil, fail(http.StatusServiceUnavailable, "uploads_unavailable", "uploads are not available on this server")
+	}
+	var paths, bad []string
+	for _, id := range ids {
+		p, ok := a.uploads.lookup(id)
+		if !ok {
+			bad = append(bad, id)
+			continue
+		}
+		paths = append(paths, p)
+	}
+	if len(bad) > 0 {
+		return nil, &agentFailure{status: http.StatusBadRequest, code: "invalid_request", msg: "an image is no longer on the server", images: bad}
+	}
+	return paths, nil
+}
+
+// sendMessage pastes the images, each path on its own, then text into an
+// empty input box of session and submits it.
+func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, session, text string, paths []string) error {
 	s, err := sessionNow(ctx, wr, paneID)
 	if err != nil {
 		return err
@@ -389,14 +447,59 @@ func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, sess
 		}
 		return fail(http.StatusConflict, "input_not_ready", "the screen is not the input box")
 	}
-	if err := wr.Paste(ctx, s.Target, text); err != nil {
-		return err
+	// The same idle agent before every paste that follows an image.
+	stillReady := func() bool {
+		now, err := sessionNow(ctx, wr, paneID)
+		return err == nil && sameAgent(now, s) && inputReady(now) == nil
 	}
-	shown := pollScreen(ctx, wr, s.Agent, s.Target, func(sc agentScreen) bool {
-		return sc.input == inputDraft && draftShows(sc.draft, text)
-	})
-	if !shown {
-		return fail(http.StatusConflict, "paste_not_confirmed", "the pasted text did not show in the input box")
+	// An image path becomes the agent's token only when pasted alone, so
+	// each goes in its own paste, confirmed before the next.
+	for i, p := range paths {
+		if i > 0 && !stillReady() {
+			return a.abandon(ctx, wr, paneID, s, i, "", errPartialPaste)
+		}
+		if err := wr.Paste(ctx, s.Target, pasteablePath(p)); err != nil {
+			return a.abandon(ctx, wr, paneID, s, i+1, "", err)
+		}
+		n := i + 1
+		shown := pollScreenFor(ctx, wr, s.Agent, s.Target, agentImageWait, func(sc agentScreen) bool {
+			return sc.input == inputDraft && draftShowsImages(sc.draft, n, "")
+		})
+		if !shown {
+			return a.abandon(ctx, wr, paneID, s, n, "", fail(http.StatusConflict, "paste_not_confirmed", "the image did not show in the input box"))
+		}
+	}
+	n := len(paths)
+	pasted := text
+	if n > 0 {
+		pasted = ""
+		if strings.TrimSpace(text) != "" {
+			pasted = " " + text // Claude Code adds no space after an image token
+		}
+	}
+	if pasted != "" {
+		if n > 0 && !stillReady() {
+			return a.abandon(ctx, wr, paneID, s, n, "", errPartialPaste)
+		}
+		if err := wr.Paste(ctx, s.Target, pasted); err != nil {
+			if n > 0 {
+				return a.abandon(ctx, wr, paneID, s, n, pasted, err)
+			}
+			return err
+		}
+	}
+	shows := func(sc agentScreen) bool {
+		if n == 0 {
+			return sc.input == inputDraft && draftShows(sc.draft, text)
+		}
+		return sc.input == inputDraft && draftShowsImages(sc.draft, n, pasted)
+	}
+	if !pollScreen(ctx, wr, s.Agent, s.Target, shows) {
+		notShown := fail(http.StatusConflict, "paste_not_confirmed", "the pasted text did not show in the input box")
+		if n > 0 {
+			return a.abandon(ctx, wr, paneID, s, n, pasted, notShown)
+		}
+		return notShown
 	}
 	// The same process and session, still idle, right before the key that
 	// submits; otherwise the text stays in the box for the user to see.
@@ -407,14 +510,58 @@ func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, sess
 		log.Printf("agent message: enter: %v", err)
 		return fail(http.StatusBadGateway, "delivered_not_submitted", "the text was pasted but not submitted")
 	}
-	// Submitted: the box no longer holds the text.
-	gone := pollScreen(ctx, wr, s.Agent, s.Target, func(sc agentScreen) bool {
-		return !(sc.input == inputDraft && draftShows(sc.draft, text))
-	})
-	if !gone {
+	// Submitted: the box no longer holds the message.
+	if !pollScreen(ctx, wr, s.Agent, s.Target, func(sc agentScreen) bool { return !shows(sc) }) {
 		return fail(http.StatusBadGateway, "delivered_not_submitted", "the text was pasted but not submitted")
 	}
 	return nil
+}
+
+// abandon ends a message with images that failed after its first paste. The
+// box is cleared (C-c, sent once: on an empty box it arms the agent's exit)
+// only when the same agent still runs and the box holds nothing but what this
+// request pasted, k images at most and then pasted; then failure is returned
+// as is. Anything else is left for the user, as partial_paste.
+func (a *agentAPI) abandon(ctx context.Context, wr agentWriter, paneID string, s AgentSession, k int, pasted string, failure error) error {
+	var f *agentFailure
+	if !errors.As(failure, &f) {
+		log.Printf("agent message: paste: %v", failure)
+		failure = fail(http.StatusBadGateway, "paste_not_confirmed", "the message could not be pasted")
+	}
+	// C-c to a working agent would interrupt it.
+	now, err := sessionNow(ctx, wr, paneID)
+	if err != nil || !sameAgent(now, s) || inputReady(now) != nil {
+		return errPartialPaste
+	}
+	screen, err := wr.Capture(ctx, s.Target)
+	if err != nil {
+		return errPartialPaste
+	}
+	sc := readAgentScreen(s.Agent, screen)
+	if sc.input == inputEmpty {
+		return failure
+	}
+	if sc.input != inputDraft || !ownDraft(sc.draft, k, pasted) {
+		return errPartialPaste
+	}
+	if err := wr.SendKeySequence(ctx, s.Target, []string{"C-c"}); err != nil {
+		return errPartialPaste
+	}
+	if !pollScreen(ctx, wr, s.Agent, s.Target, func(sc agentScreen) bool { return sc.input == inputEmpty }) {
+		return errPartialPaste
+	}
+	return failure
+}
+
+// ownDraft: the box holds part of what a request pasted, k images and then
+// pasted (empty when no text was pasted): k-1 or k image tokens, and with
+// k tokens the text or nothing. A path the agent left as text is not ours to
+// recognise, so it is not cleared.
+func ownDraft(draft string, k int, pasted string) bool {
+	if draftShowsImages(draft, k, "") || (k > 1 && draftShowsImages(draft, k-1, "")) {
+		return true
+	}
+	return pasted != "" && draftShowsImages(draft, k, pasted)
 }
 
 // inputReady: the agent waits for a message and the pane passes keys to it.
@@ -441,7 +588,12 @@ func agentStatusWord(s string) string {
 
 // pollScreen captures until ok holds or agentConfirmWait passes.
 func pollScreen(ctx context.Context, wr agentWriter, agent, target string, ok func(agentScreen) bool) bool {
-	deadline := time.Now().Add(agentConfirmWait)
+	return pollScreenFor(ctx, wr, agent, target, agentConfirmWait, ok)
+}
+
+// pollScreenFor captures until ok holds or wait passes.
+func pollScreenFor(ctx context.Context, wr agentWriter, agent, target string, wait time.Duration, ok func(agentScreen) bool) bool {
+	deadline := time.Now().Add(wait)
 	for {
 		if screen, err := wr.Capture(ctx, target); err == nil && ok(readAgentScreen(agent, screen)) {
 			return true
@@ -922,6 +1074,9 @@ func (a *agentAPI) writeFailure(w http.ResponseWriter, err error) {
 	}
 	if f.limit > 0 {
 		body["limit"] = f.limit
+	}
+	if len(f.images) > 0 {
+		body["images"] = f.images
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(f.status)

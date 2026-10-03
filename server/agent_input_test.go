@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -809,5 +811,329 @@ func TestSameQuestion(t *testing.T) {
 	}
 	if sameQuestion(nil, &q) {
 		t.Error("no dialog is not the same question")
+	}
+}
+
+// imageAgent makes the box behave like Claude Code's: a path pasted alone
+// becomes "[Image #N]" (N keeps counting), anything else is typed as is,
+// Enter submits and C-c clears. delay holds each image token back.
+func imageAgent(f *fakeWriter, delay time.Duration) {
+	var mu sync.Mutex
+	draft, count := "", 0
+	f.onPaste = func(f *fakeWriter, text string) {
+		mu.Lock()
+		defer mu.Unlock()
+		if strings.HasPrefix(strings.Trim(text, `"`), "/") {
+			count++
+			if draft != "" {
+				draft += " "
+			}
+			draft += "[Image #" + strconv.Itoa(count) + "]"
+		} else {
+			draft += strings.ReplaceAll(text, "\n", " ")
+		}
+		d := draft
+		if delay > 0 {
+			go func() { time.Sleep(delay); f.setScreen(boxScreen(d)) }()
+			return
+		}
+		f.setScreen(boxScreen(d))
+	}
+	f.onKeys = func(f *fakeWriter, keys []string) {
+		mu.Lock()
+		defer mu.Unlock()
+		if keys[0] == "Enter" || keys[0] == "C-c" {
+			draft = ""
+			f.setScreen(boxScreen(""))
+		}
+	}
+}
+
+func shortImageWait(t *testing.T) {
+	shortConfirm(t)
+	orig := agentImageWait
+	agentImageWait = 150 * time.Millisecond
+	t.Cleanup(func() { agentImageWait = orig })
+}
+
+// imageMux serves the agent routes with an upload store holding n images.
+func imageMux(t *testing.T, f *fakeWriter, n int) (*http.ServeMux, []string, []string) {
+	t.Helper()
+	store := newTestUploadStore(t)
+	var ids, paths []string
+	for range n {
+		u, err := store.save(bytes.NewReader(testImage(t, "image/png")), "image/png")
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids, paths = append(ids, u.ID), append(paths, u.Path)
+	}
+	mux := http.NewServeMux()
+	registerMuxRoutes(mux, f, newStreamTokenStore(), store)
+	return mux, ids, paths
+}
+
+func postMessage(t *testing.T, mux http.Handler, text string, ids []string) (int, map[string]any) {
+	t.Helper()
+	return postJSON(t, mux, "/api/mux/panes/0/agent/message", map[string]any{"text": text, "cursor": cursorFor(testSessionID), "images": ids})
+}
+
+func TestMessageWithImages(t *testing.T) {
+	shortImageWait(t)
+	f := newFakeWriter()
+	imageAgent(f, 0)
+	mux, ids, paths := imageMux(t, f, 2)
+	if code, body := postMessage(t, mux, "what is this?", ids); code != http.StatusNoContent {
+		t.Fatalf("POST = %d %v", code, body)
+	}
+	want := []string{paths[0], paths[1], " what is this?"}
+	if strings.Join(f.pasted, "|") != strings.Join(want, "|") {
+		t.Errorf("pasted %q, want %q", f.pasted, want)
+	}
+	if len(f.keys) != 1 || f.keys[0][0] != "Enter" {
+		t.Errorf("keys = %v", f.keys)
+	}
+}
+
+func TestMessageImagesOnly(t *testing.T) {
+	shortImageWait(t)
+	f := newFakeWriter()
+	imageAgent(f, 0)
+	mux, ids, paths := imageMux(t, f, 1)
+	if code, body := postMessage(t, mux, " \n", ids); code != http.StatusNoContent {
+		t.Fatalf("POST = %d %v", code, body)
+	}
+	if len(f.pasted) != 1 || f.pasted[0] != paths[0] || len(f.keys) != 1 {
+		t.Errorf("pasted %q keys %v", f.pasted, f.keys)
+	}
+}
+
+// Five images, each token showing just inside the wait, still submit: the
+// request's budget grows with the number of images.
+func TestMessageFiveSlowImages(t *testing.T) {
+	shortImageWait(t)
+	f := newFakeWriter()
+	imageAgent(f, 100*time.Millisecond)
+	mux, ids, _ := imageMux(t, f, agentMaxImages)
+	if code, body := postMessage(t, mux, "all of them", ids); code != http.StatusNoContent {
+		t.Fatalf("POST = %d %v", code, body)
+	}
+	if len(f.pasted) != agentMaxImages+1 {
+		t.Errorf("pasted %q", f.pasted)
+	}
+}
+
+func TestMessageBudget(t *testing.T) {
+	if got := messageBudget(0); got != 3*agentConfirmWait+muxTimeout {
+		t.Errorf("no images = %v", got)
+	}
+	if got := messageBudget(5); got != 8*agentImageWait+muxTimeout {
+		t.Errorf("5 images = %v", got)
+	}
+}
+
+func TestMessageImageRequests(t *testing.T) {
+	f := newFakeWriter()
+	mux, ids, _ := imageMux(t, f, 1)
+	missing := strings.Repeat("ab", 16)
+	code, body := postMessage(t, mux, "hi", []string{ids[0], missing, "../../etc/passwd"})
+	if code != http.StatusBadRequest || body["code"] != "invalid_request" {
+		t.Errorf("bad ids = %d %v", code, body)
+	}
+	if bad, _ := body["images"].([]any); len(bad) != 2 || bad[0] != missing || bad[1] != "../../etc/passwd" {
+		t.Errorf("bad ids returned = %v", body["images"])
+	}
+	six := []string{ids[0], ids[0], ids[0], ids[0], ids[0], ids[0]}
+	if code, body := postMessage(t, mux, "hi", six); code != http.StatusBadRequest || body["code"] != "invalid_request" {
+		t.Errorf("six images = %d %v", code, body)
+	}
+	// A server without an upload store never drops the images silently.
+	if code, body := postMessage(t, agentMux(f), "hi", ids); code != http.StatusServiceUnavailable || body["code"] != "uploads_unavailable" {
+		t.Errorf("no store = %d %v", code, body)
+	}
+	if len(f.pasted) != 0 {
+		t.Errorf("pasted %q", f.pasted)
+	}
+}
+
+func TestMessageImageFailures(t *testing.T) {
+	working := labSession
+	working.Status = "working"
+	moved := labSession
+	moved.Target = "%9"
+	tests := []struct {
+		name   string
+		setup  func(f *fakeWriter)
+		status int
+		code   string
+		clear  bool // C-c sent
+		enter  bool
+	}{
+		{"first image never shows", func(f *fakeWriter) { f.onPaste = nil }, 409, "paste_not_confirmed", false, false},
+		{"second image never shows: our token cleared", func(f *fakeWriter) {
+			agent := f.onPaste
+			f.onPaste = func(f *fakeWriter, text string) {
+				if len(f.pasted) == 1 {
+					agent(f, text)
+				}
+			}
+		}, 409, "paste_not_confirmed", true, false},
+		{"agent leaves the path as text", func(f *fakeWriter) {
+			f.onPaste = func(f *fakeWriter, text string) { f.setScreen(boxScreen(text)) }
+		}, 409, "partial_paste", false, false},
+		{"someone typed meanwhile", func(f *fakeWriter) {
+			agent := f.onPaste
+			f.onPaste = func(f *fakeWriter, text string) {
+				if len(f.pasted) == 1 {
+					agent(f, text)
+					return
+				}
+				f.setScreen(boxScreen("[Image #1] mine"))
+			}
+		}, 409, "partial_paste", false, false},
+		{"text never shows: images cleared", func(f *fakeWriter) {
+			agent := f.onPaste
+			f.onPaste = func(f *fakeWriter, text string) {
+				if !strings.HasPrefix(text, " ") {
+					agent(f, text)
+				}
+			}
+		}, 409, "paste_not_confirmed", true, false},
+		{"session changes between images", func(f *fakeWriter) { f.sessions = []AgentSession{labSession, moved} }, 409, "partial_paste", false, false},
+		{"agent starts working between images", func(f *fakeWriter) { f.sessions = []AgentSession{labSession, working} }, 409, "partial_paste", false, false},
+		{"paste fails", func(f *fakeWriter) { f.pasteErr = errors.New("tmux gone") }, 502, "paste_not_confirmed", false, false},
+		{"C-c does not clear", func(f *fakeWriter) {
+			agent := f.onPaste
+			f.onPaste = func(f *fakeWriter, text string) {
+				if len(f.pasted) == 1 {
+					agent(f, text)
+				}
+			}
+			f.onKeys = nil
+		}, 409, "partial_paste", true, false},
+		{"C-c fails", func(f *fakeWriter) {
+			agent := f.onPaste
+			f.onPaste = func(f *fakeWriter, text string) {
+				if len(f.pasted) == 1 {
+					agent(f, text)
+				}
+			}
+			f.keyErr = errors.New("tmux gone")
+		}, 409, "partial_paste", true, false},
+		{"enter does not submit", func(f *fakeWriter) {
+			f.onKeys = func(*fakeWriter, []string) {}
+		}, 502, "delivered_not_submitted", false, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			shortImageWait(t)
+			f := newFakeWriter()
+			imageAgent(f, 0)
+			tt.setup(f)
+			mux, ids, _ := imageMux(t, f, 2)
+			code, body := postMessage(t, mux, "hello", ids)
+			if code != tt.status || body["code"] != tt.code {
+				t.Errorf("POST = %d %v, want %d %s", code, body, tt.status, tt.code)
+			}
+			var clear, enter bool
+			for _, k := range f.keys {
+				clear = clear || k[0] == "C-c"
+				enter = enter || k[0] == "Enter"
+			}
+			if clear != tt.clear || enter != tt.enter {
+				t.Errorf("keys = %v", f.keys)
+			}
+		})
+	}
+}
+
+// The screen changes behind abandon's back: nothing is cleared.
+func TestAbandonChecksBeforeClearing(t *testing.T) {
+	shortImageWait(t)
+	a := newAgentAPI(nil)
+	failure := fail(http.StatusConflict, "paste_not_confirmed", "x")
+	f := newFakeWriter()
+	f.nowErr = errors.New("gone")
+	if err := a.abandon(context.Background(), f, "0", labSession, 1, "", failure); err != errPartialPaste {
+		t.Errorf("session read fails = %v", err)
+	}
+	c := &captureErrWriter{fakeWriter: newFakeWriter()}
+	if err := a.abandon(context.Background(), c, "0", labSession, 1, "", failure); err != errPartialPaste {
+		t.Errorf("capture fails = %v", err)
+	}
+	f = newFakeWriter()
+	f.screen = fixtureScreen(t, "2.1.286-permission-bash")
+	if err := a.abandon(context.Background(), f, "0", labSession, 1, "", failure); err != errPartialPaste || len(f.keys) != 0 {
+		t.Errorf("dialog open = %v keys %v", err, f.keys)
+	}
+}
+
+type captureErrWriter struct{ *fakeWriter }
+
+func (captureErrWriter) Capture(context.Context, string) (string, error) {
+	return "", errors.New("capture failed")
+}
+
+// textPasteFails fails the paste of the text after the images.
+type textPasteFails struct{ *fakeWriter }
+
+func (w textPasteFails) Paste(ctx context.Context, target, text string) error {
+	if strings.HasPrefix(text, " ") {
+		return errors.New("tmux gone")
+	}
+	return w.fakeWriter.Paste(ctx, target, text)
+}
+
+func TestMessageTextPasteFailsAfterImages(t *testing.T) {
+	shortImageWait(t)
+	f := newFakeWriter()
+	imageAgent(f, 0)
+	_, _, paths := imageMux(t, f, 1)
+	err := newAgentAPI(nil).sendMessage(context.Background(), textPasteFails{f}, "0", testSessionID, "hello", paths)
+	var af *agentFailure
+	if !errors.As(err, &af) || af.code != "paste_not_confirmed" || len(f.keys) != 1 || f.keys[0][0] != "C-c" {
+		t.Errorf("err = %v keys = %v", err, f.keys)
+	}
+}
+
+// The agent turns busy after the last image: the text is not pasted.
+func TestMessageRechecksBeforeText(t *testing.T) {
+	shortImageWait(t)
+	working := labSession
+	working.Status = "working"
+	f := newFakeWriter()
+	imageAgent(f, 0)
+	f.sessions = []AgentSession{labSession, working}
+	mux, ids, paths := imageMux(t, f, 1)
+	code, body := postMessage(t, mux, "hello", ids)
+	if code != http.StatusConflict || body["code"] != "partial_paste" {
+		t.Errorf("POST = %d %v", code, body)
+	}
+	if len(f.pasted) != 1 || f.pasted[0] != paths[0] || len(f.keys) != 0 {
+		t.Errorf("pasted %q keys %v", f.pasted, f.keys)
+	}
+}
+
+// A message with images may take longer than requestReadTimeout; the
+// answer still arrives over a real connection (the work runs on a context
+// the request's cancellation does not reach, and the deadline grows).
+func TestMessageWithImagesOutlastsReadDeadline(t *testing.T) {
+	shortImageWait(t)
+	orig := requestReadTimeout
+	requestReadTimeout = 150 * time.Millisecond
+	t.Cleanup(func() { requestReadTimeout = orig })
+	f := newFakeWriter()
+	imageAgent(f, 100*time.Millisecond)
+	mux, ids, _ := imageMux(t, f, 3)
+	srv := httptest.NewServer(readDeadline(mux))
+	defer srv.Close()
+	b, _ := json.Marshal(map[string]any{"text": "hi", "cursor": cursorFor(testSessionID), "images": ids})
+	res, err := http.Post(srv.URL+"/api/mux/panes/0/agent/message", "application/json", bytes.NewReader(b))
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Errorf("POST = %d", res.StatusCode)
 	}
 }

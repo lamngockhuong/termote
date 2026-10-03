@@ -13,7 +13,10 @@
 # screens), so the two cannot drift apart.
 #
 #   idle        the composer, empty (its faint placeholder) or holding what
-#               was typed or pasted into it
+#               was typed or pasted into it; a path to an image file pasted
+#               alone becomes "[Image #N] " (N restarts when the composer is
+#               cleared, as in Codex), sent as a local_image part
+#   Ctrl+C      clears the composer
 #   Enter       records the draft as a user turn, then answers it:
 #               "permission" in it opens the command approval dialog, the
 #               turn running until it is answered; anything else gets an
@@ -65,11 +68,19 @@ message() { # UserMessage | AgentMessage, content type, text
 }
 
 turn=""
-start_turn() { # user text
+start_turn() { # user text, image paths
+  local text=$1 parts="" p
+  shift
   next_id turn
   turn=$id
   event "{\"type\":\"task_started\",\"turn_id\":\"$turn\"}"
-  message UserMessage text "$1"
+  if [ $# -eq 0 ]; then
+    message UserMessage text "$text"
+    return
+  fi
+  for p in "$@"; do parts+="{\"type\":\"local_image\",\"path\":$(json_str "$p")},"; done
+  next_id msg
+  event "{\"type\":\"item_completed\",\"turn_id\":\"$turn\",\"item\":{\"type\":\"UserMessage\",\"id\":\"$id\",\"content\":[$parts{\"type\":\"text\",\"text\":$(json_str "$text")}]}}"
 }
 end_turn() { # answer
   message AgentMessage Text "$1"
@@ -92,6 +103,8 @@ size() {
 idle_screen="$screens/0.159.3-input-empty.txt"
 state=idle # idle | approval
 draft=""
+images=() # paths behind the draft's "[Image #N]" tokens
+pasted="" # a bracketed paste, until its end
 
 draw() {
   printf '\e[H\e[2J\e[3J'
@@ -121,15 +134,30 @@ draw() {
 }
 
 submit() {
-  local text=$draft
+  local text=$draft n=${#images[@]}
   draft=""
   [ -n "${text//[[:space:]]/}" ] || { draw; return; }
-  start_turn "$text"
+  start_turn "$text" "${images[@]}"
+  images=()
   case $text in
     *permission*) state=approval ;;
-    *) end_turn "You said: $text" ;;
+    *) if [ "$n" -gt 0 ]; then end_turn "You said: $text (images: $n)"; else end_turn "You said: $text"; fi ;;
   esac
   draw
+}
+
+# The end of a paste into the composer: a path to an image file, alone,
+# becomes the agent's token (server/testdata/codex/screens/0.160.0-image-*).
+paste_done() {
+  local p=${pasted#\"}
+  p=${p%\"}
+  if [[ $p =~ ^/.*\.(png|jpg|gif|webp)$ ]] && [ -f "$p" ]; then
+    images+=("$p")
+    draft+="[Image #${#images[@]}] "
+  else
+    draft+=$pasted
+  fi
+  pasted=""
 }
 
 answer() { # key
@@ -148,7 +176,11 @@ restore() {
   stty sane 2>/dev/null
 }
 trap restore EXIT
-trap 'exit 0' TERM HUP INT
+trap 'exit 0' TERM HUP
+# Ctrl+C clears the input box, as in the agent: the pane's tty keeps isig
+# (read -s restores it), so it arrives as SIGINT and ends the read below.
+interrupted=0
+trap 'interrupted=1' INT
 
 # Keys one at a time, Enter as CR, output processing kept (LF → CRLF).
 stty -icanon -echo -icrnl -isig -ixon min 1
@@ -159,6 +191,11 @@ draw
 pasting=0
 while :; do
   if ! IFS= read -r -s -n1 -d '' -t 0.5 ch; then
+    if [ $interrupted = 1 ]; then
+      interrupted=0
+      [ $state != idle ] || { draft="" && images=() && draw; }
+      continue
+    fi
     # No key: redraw when the pane was resized.
     old=$rows
     size
@@ -173,21 +210,22 @@ while :; do
     done
     case $seq in
       '[200~') pasting=1 ;;
-      '[201~') pasting=0 && draw ;;
+      '[201~') pasting=0 && { [ $state != idle ] || paste_done; } && draw ;;
       '') [ $state = idle ] || answer esc ;;
     esac
     continue
   fi
   if [ $pasting = 1 ]; then
     case $state:$ch in
-      idle:$'\r' | idle:$'\n') draft+=$'\n' ;;
-      idle:*) draft+=$ch ;;
+      idle:$'\r' | idle:$'\n') pasted+=$'\n' ;;
+      idle:*) pasted+=$ch ;;
     esac
     continue
   fi
   case $state:$ch in
     idle:$'\r' | idle:$'\n') submit ;;
     idle:$'\x7f') draft=${draft%?} && draw ;;
+    idle:$'\x03') draft="" && images=() && draw ;; # the same key as a byte, if it ever arrives as one
     idle:*) draft+=$ch && draw ;;
     *) answer "$ch" ;;
   esac

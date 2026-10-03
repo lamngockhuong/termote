@@ -47,8 +47,27 @@ the message is refused and the pane gets no key at all:
 | The text was pasted but not submitted                      | `delivered_not_submitted` | The text is in the input box but Enter was not sent; check the terminal before sending again |
 | The conversation changed; it has been reloaded             | `session_changed`         | The pane runs another session now (`/clear`, a resume); send again if you still want to      |
 | Too long: the limit is 16 KB.                              | `text_too_long`           | The message is over 16 KB (UTF-8); split it                                                  |
+| Not sent: the input box holds part of this message         | `partial_paste`           | The input box may hold some of the message's images or text; check and clear it there        |
+| Not sent: an image is no longer on the host                | `invalid_request`         | The host deleted the upload (older than 7 days, or storage full); remove it and attach again |
 
 Every refusal that leaves something to check offers **Open terminal**.
+
+### Attaching Images
+
+Tap the image button next to the box to pick a photo (or take one on a phone), or paste an image
+into the box. Each image is uploaded to the host at once and shows as a thumbnail above the box;
+the send button waits until every upload has finished. Up to 5 images go with one message, with or
+without text. Remove one with the cross on its thumbnail.
+
+Termote pastes each image's path into Claude Code (or Codex) on its own, waits for the agent to show
+it as `[Image #N]`, then pastes the text and presses Enter, so the images reach the agent as
+attachments. If a step fails halfway, the input box is cleared only when it holds nothing but what
+this message pasted; otherwise you get `partial_paste` and the box is left for you to check.
+
+The images are stored on the host as described in
+[Attach an Image](/usage/keyboard/#attach-an-image), and are kept after the message is sent. The
+image button is hidden when the server cannot store uploads, and in view-only mode. A copy that holds
+both an image and text pastes the text.
 
 ## Slash Commands
 

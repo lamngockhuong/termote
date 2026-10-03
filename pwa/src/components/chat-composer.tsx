@@ -1,6 +1,8 @@
-import { SendHorizontal } from 'lucide-react'
+import { ImagePlus, SendHorizontal } from 'lucide-react'
 import {
+  type ClipboardEvent,
   type KeyboardEvent,
+  useCallback,
   useEffect,
   useId,
   useMemo,
@@ -12,6 +14,7 @@ import { agentLabel } from '../chat-agents'
 import { useAgentCommands } from '../hooks/use-agent-commands'
 import { useAgentPrompt } from '../hooks/use-agent-prompt'
 import { useAgentTranscript } from '../hooks/use-agent-transcript'
+import { useChatAttachments } from '../hooks/use-chat-attachments'
 import { AgentRequestError, sendAgentMessage } from '../hooks/use-mux-api'
 import { toAgentStatus } from '../types/session'
 import {
@@ -22,7 +25,9 @@ import {
   type SlashCommand,
   slashQuery,
 } from '../utils/slash-commands'
+import { imageFromClipboard, pickImageFile } from '../utils/upload-image'
 import { TERMINAL_VIEW_ID } from '../view-ids'
+import { ChatAttachments } from './chat-attachments'
 import { OpenTerminalButton } from './open-terminal-button'
 import { PromptCard, WaitingCard } from './prompt-card'
 import { SlashCommandList, slashOptionId } from './slash-command-list'
@@ -81,6 +86,25 @@ function noticeFor(err: unknown): Notice {
         text: `Not sent: ${err.message}.`,
         terminal: true,
       }
+    case 'partial_paste':
+      return {
+        variant: 'danger',
+        text: 'Not sent: the input box holds part of this message. Clear it in the terminal before sending again.',
+        terminal: true,
+      }
+    case 'uploads_unavailable':
+      return {
+        variant: 'warning',
+        text: 'Not sent: this server cannot take images.',
+      }
+    case 'invalid_request':
+      if (err.images?.length) {
+        return {
+          variant: 'warning',
+          text: 'Not sent: an image is no longer on the host. Remove it and attach it again.',
+        }
+      }
+      return { variant: 'danger', text: `Not sent: ${err.message}.` }
     case 'paste_not_confirmed':
       return {
         variant: 'warning',
@@ -112,7 +136,13 @@ function noticeFor(err: unknown): Notice {
   }
 }
 
-export function ChatComposer({ session, isMobile, showView }: ViewProps) {
+export function ChatComposer({
+  session,
+  isMobile,
+  showView,
+  mux,
+  readOnly,
+}: ViewProps) {
   const paneId = session.paneId ?? ''
   const agent = agentLabel(session.agentName)
   const t = useAgentTranscript(session.paneId)
@@ -129,6 +159,13 @@ export function ChatComposer({ session, isMobile, showView }: ViewProps) {
   const limitId = useId()
   const listId = useId()
   const boxRef = useRef<HTMLTextAreaElement>(null)
+  // Images go to the host first; view-only sends nothing, so none either.
+  const uploadsOn = !!mux.caps.uploads && !readOnly
+  const showError = useCallback(
+    (text: string) => setNotice({ variant: 'danger', text }),
+    [],
+  )
+  const images = useChatAttachments(paneId, showError)
 
   // Command suggestions: open while the message is only "/name", until
   // Escape; the highlighted row resets as the list changes.
@@ -166,20 +203,35 @@ export function ChatComposer({ session, isMobile, showView }: ViewProps) {
 
   const bytes = byteLength(text)
   const tooLong = bytes > MAX_MESSAGE_BYTES
-  const canSend = !sending && !!t.cursor && text.trim() !== '' && !tooLong
+  // Every image uploaded and none refused: a message never goes without one
+  // the user attached.
+  const canSend =
+    !sending &&
+    !!t.cursor &&
+    (text.trim() !== '' || images.ids.length > 0) &&
+    !tooLong &&
+    !images.uploading &&
+    !images.failed
 
   // Sends message (the composer's text, or a command picked from the list).
   // A command that ends the agent is confirmed first; one that opens an
   // interactive screen, sent without arguments, shows the terminal after.
-  const submit = async (message: string, confirmed = false) => {
+  const submit = async (
+    message: string,
+    confirmed = false,
+    imageIds: string[] = [],
+  ) => {
     if (sending || !t.cursor) return
-    const cmd = commandOf(message, commands)
+    // With images the agent receives "[Image #1] /cmd": text, not a command.
+    const plain = imageIds.length > 0
+    const cmd = plain ? undefined : commandOf(message, commands)
     if (cmd?.confirm && !confirmed) {
       setConfirming(message)
       return
     }
     // "!" runs the rest as a shell command in the agent.
     if (
+      !plain &&
       message.trimStart().startsWith('!') &&
       !window.confirm(`Run this as a shell command in ${agent}?`)
     ) {
@@ -188,8 +240,9 @@ export function ChatComposer({ session, isMobile, showView }: ViewProps) {
     setSending(true)
     setNotice(null)
     try {
-      await sendAgentMessage(paneId, message, t.cursor)
+      await sendAgentMessage(paneId, message, t.cursor, imageIds)
       update('')
+      if (imageIds.length > 0) images.clear()
       t.refresh()
       if (cmd?.terminal && message.trim() === `/${cmd.name}`) {
         showView(TERMINAL_VIEW_ID)
@@ -199,13 +252,30 @@ export function ChatComposer({ session, isMobile, showView }: ViewProps) {
       if (err instanceof AgentRequestError && err.code === 'session_changed') {
         t.refresh()
       }
+      if (err instanceof AgentRequestError && err.images?.length) {
+        images.markGone(err.images)
+      }
     } finally {
       setSending(false)
     }
   }
 
   const send = () => {
-    if (canSend) submit(text)
+    if (canSend) submit(text, false, images.ids)
+  }
+
+  const attach = async () => {
+    const file = await pickImageFile()
+    if (file) await images.add(file)
+  }
+
+  // An image pasted without text is attached; text pasted as usual.
+  const onPaste = (e: ClipboardEvent<HTMLTextAreaElement>) => {
+    if (!uploadsOn || sending) return
+    const file = imageFromClipboard(e.clipboardData)
+    if (!file) return
+    e.preventDefault()
+    images.add(file)
   }
 
   // A picked command is typed in for its arguments; one that opens an
@@ -351,7 +421,21 @@ export function ChatComposer({ session, isMobile, showView }: ViewProps) {
           the message to send it.
         </p>
       )}
+      <ChatAttachments
+        items={images.items}
+        onRemove={images.remove}
+        disabled={sending}
+      />
       <div className="flex items-end gap-2 p-2">
+        {uploadsOn && (
+          <IconButton
+            aria-label="Attach image"
+            disabled={sending || images.full}
+            onClick={attach}
+          >
+            <ImagePlus size={18} aria-hidden="true" />
+          </IconButton>
+        )}
         <textarea
           ref={boxRef}
           aria-label={`Message to ${agent}`}
@@ -369,6 +453,7 @@ export function ChatComposer({ session, isMobile, showView }: ViewProps) {
           aria-busy={sending}
           onChange={(e) => update(e.target.value)}
           onKeyDown={onKeyDown}
+          onPaste={onPaste}
           placeholder={isMobile ? 'Message' : 'Message (Ctrl+Enter to send)'}
           className="min-h-touch min-w-0 flex-1 resize-none rounded-control border border-border bg-bg px-3 py-2 text-[15px] text-fg focus-visible:border-accent focus-visible:outline-none"
         />

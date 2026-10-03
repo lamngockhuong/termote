@@ -286,10 +286,11 @@ func buildServer(cfg serveConfig, m Mux) (http.Handler, *streamHub, error) {
 // body then sends it a byte at a time would otherwise hold its connection
 // (and a file descriptor) forever. Bodies are at most 64 KB, but for an
 // uploaded image (10 MB): its handler extends the deadline to
-// uploadReadTimeout once the request is authenticated. Past the
-// deadline, net/http's background read also cancels the request's context,
-// so no handler but the stream may run longer (mux calls take at most
-// muxTimeout, git gitTimeout).
+// uploadReadTimeout once the request is authenticated, and a Chat view
+// message with images to its own time budget once its body is read. Past
+// the deadline, net/http's background read also cancels the request's
+// context, so no other handler but the stream may run longer (mux calls
+// take at most muxTimeout, git gitTimeout).
 var requestReadTimeout = 60 * time.Second
 
 // readDeadline sets requestReadTimeout on every request but the terminal

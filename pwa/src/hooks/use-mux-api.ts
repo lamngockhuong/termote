@@ -215,6 +215,8 @@ export class RequestError extends Error {
     readonly prompt?: AgentPrompt | null,
     // files 409: the pane's root now
     readonly root?: string,
+    // message 400: the attached upload ids the server no longer has
+    readonly images?: string[],
   ) {
     super(message)
   }
@@ -232,6 +234,7 @@ async function requestError(res: Response): Promise<RequestError> {
     body.limit,
     body.prompt,
     body.root,
+    body.images,
   )
 }
 
@@ -253,17 +256,21 @@ export async function fetchTranscript(
   return res.json()
 }
 
-// Sends text to the agent as one message. Throws AgentRequestError when the
-// server refuses (the screen is not an empty input box, the session changed).
+// Sends text, after the uploaded images (ids from /uploads), to the agent as
+// one message. Throws AgentRequestError when the server refuses (the screen
+// is not an empty input box, the session changed, an image is gone).
 export async function sendAgentMessage(
   paneId: string,
   text: string,
   cursor: string,
+  images: string[] = [],
 ): Promise<void> {
   const res = await fetch(agentPath(paneId, 'message'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, cursor }),
+    body: JSON.stringify(
+      images.length > 0 ? { text, cursor, images } : { text, cursor },
+    ),
   })
   if (!res.ok) throw await requestError(res)
 }
