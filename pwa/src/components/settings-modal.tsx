@@ -472,8 +472,10 @@ export function SettingsModal({
       isOpen={isOpen}
       onClose={onClose}
       title="Settings"
-      // Full screen on a phone, a two-column dialog on desktop
-      className="max-md:h-dvh max-md:max-h-dvh md:h-[34rem] md:max-w-3xl"
+      // Full screen on a phone, a two-column dialog on desktop. Full screen
+      // reaches under the status bar of a notched phone, so the header is
+      // pushed below it.
+      className="max-md:h-dvh max-md:max-h-dvh max-md:pt-[env(safe-area-inset-top)] md:h-[34rem] md:max-w-3xl"
     >
       <div className="md:flex md:min-h-full">
         <nav
