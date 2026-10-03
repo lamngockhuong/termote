@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.8.0](https://github.com/lamngockhuong/termote/compare/v1.7.1...v1.8.0) (2026-10-03)
+
+
+### Features
+
+* attach images from the PWA to the terminal ([#241](https://github.com/lamngockhuong/termote/issues/241), part 1) ([#310](https://github.com/lamngockhuong/termote/issues/310)) ([043031f](https://github.com/lamngockhuong/termote/commit/043031fe4b49520b2f47f1003aa9156ebfc0776b))
+* attach images to a Chat view message ([#241](https://github.com/lamngockhuong/termote/issues/241), part 2) ([#312](https://github.com/lamngockhuong/termote/issues/312)) ([1534caf](https://github.com/lamngockhuong/termote/commit/1534caf6fafe8af4691d30d76719639116276349))
+
+
+### Bug Fixes
+
+* **pwa:** keep the Settings header below the iOS status bar ([#313](https://github.com/lamngockhuong/termote/issues/313)) ([248ee4a](https://github.com/lamngockhuong/termote/commit/248ee4aaed112df0ad3d8d34504da817d868f0ce))
+
 ## [1.7.1](https://github.com/lamngockhuong/termote/compare/v1.7.0...v1.7.1) (2026-10-03)
 
 
