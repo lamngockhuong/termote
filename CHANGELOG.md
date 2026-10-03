@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.7.1](https://github.com/lamngockhuong/termote/compare/v1.7.0...v1.7.1) (2026-10-03)
+
+
+### Bug Fixes
+
+* harden the server, CLI, PWA and release pipeline found by a security review ([#306](https://github.com/lamngockhuong/termote/issues/306)) ([ac3fd35](https://github.com/lamngockhuong/termote/commit/ac3fd35f890955626676bc22c463bb3a17d552db))
+* **server:** log failed logins and rate-limit each IPv6 /64 ([#309](https://github.com/lamngockhuong/termote/issues/309)) ([daf0551](https://github.com/lamngockhuong/termote/commit/daf0551c79a26203fbff797bbea7ba3f64c5856a))
+
 ## [1.7.0](https://github.com/lamngockhuong/termote/compare/v1.6.0...v1.7.0) (2026-10-03)
 
 
