@@ -368,7 +368,7 @@ const codexMarkerMax = 64 * 1024
 // the next turn ends. A turn can be megabytes long, so no fixed window is
 // enough. path comes from Locate.
 func codexStatus(path string) string {
-	f, err := os.Open(path)
+	f, err := os.OpenFile(path, os.O_RDONLY|openNonblock, 0)
 	if err != nil {
 		return "unknown"
 	}

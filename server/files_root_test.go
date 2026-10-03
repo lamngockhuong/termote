@@ -87,6 +87,7 @@ func TestGitArgvOverrides(t *testing.T) {
 	argv := g.argv(gitCall{root: "/r", safeDir: "/r"}, []string{"Evil.x"}, []string{"status"})
 	joined := strings.Join(argv, " ")
 	for _, want := range []string{"-C /r --no-pager", "core.fsmonitor=false", "protocol.allow=never", "safe.directory=/r",
+		"core.hooksPath=" + os.DevNull, "diff.autoRefreshIndex=false",
 		"filter.Evil.x.clean=", "filter.Evil.x.smudge=", "filter.Evil.x.process=", "filter.Evil.x.required=false"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("argv %q lacks %q", joined, want)
@@ -133,11 +134,72 @@ func TestDubiousRepo(t *testing.T) {
 }
 
 func TestRootFromToplevel(t *testing.T) {
-	if r := rootFromToplevel("/d", "", ""); r != (filesRoot{Root: "/d"}) {
+	if r := rootFromToplevel("/d", "", "", ""); r != (filesRoot{Root: "/d"}) {
 		t.Errorf("empty toplevel = %+v", r)
 	}
-	if r := rootFromToplevel("/d", "/no/such/top", "/s"); r != (filesRoot{Root: filepath.Clean("/no/such/top"), IsRepo: true, SafeDir: "/s"}) {
+	top, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	sub := filepath.Join(top, "sub")
+	os.MkdirAll(sub, 0o755)
+	// core.worktree naming a directory with no .git (even /): the pane's
+	// directory itself, not a tree over the toplevel.
+	if r := rootFromToplevel(sub, top, "/g", "/s"); r != (filesRoot{Root: sub}) {
+		t.Errorf("toplevel without .git = %+v", r)
+	}
+	writeFile(t, filepath.Join(top, ".git"), "gitdir: /g\n")
+	if r := rootFromToplevel(sub, top, "/g", "/s"); r != (filesRoot{Root: top, IsRepo: true, SafeDir: "/s", GitDir: filepath.Clean("/g")}) {
 		t.Errorf("toplevel = %+v", r)
+	}
+	// A toplevel the pane's directory is not under.
+	if r := rootFromToplevel("/elsewhere", top, "/g", ""); r != (filesRoot{Root: "/elsewhere"}) {
+		t.Errorf("toplevel not above dir = %+v", r)
+	}
+}
+
+// core.worktree naming a parent that holds another repo (a home directory
+// under dotfiles): its .git is not this repo's, so the pane's directory
+// stays the root.
+func TestRootResolverWorktreeInAnotherRepo(t *testing.T) {
+	requireGit(t)
+	home := newTestRepo(t)
+	inner := filepath.Join(home, "proj")
+	os.MkdirAll(inner, 0o755)
+	gitT(t, inner, "init", "-q")
+	gitT(t, inner, "config", "core.worktree", home)
+	rr := newRootResolver(newGitRunner())
+	if r, err := rr.resolve(t.Context(), inner); err != nil || r != (filesRoot{Root: inner}) {
+		t.Errorf("core.worktree=%s resolves to %+v, %v", home, r, err)
+	}
+	// The parent repo itself still resolves as one.
+	if r, err := rr.resolve(t.Context(), home); err != nil || !r.IsRepo || r.Root != home {
+		t.Errorf("parent repo = %+v, %v", r, err)
+	}
+}
+
+// A linked worktree (.git is a gitfile into the main repo) is a repo.
+func TestRootResolverLinkedWorktree(t *testing.T) {
+	requireGit(t)
+	repo := newTestRepo(t)
+	wt := filepath.Join(t.TempDir(), "wt")
+	gitT(t, repo, "worktree", "add", "-q", wt)
+	wt, _ = filepath.EvalSymlinks(wt)
+	rr := newRootResolver(newGitRunner())
+	if r, err := rr.resolve(t.Context(), wt); err != nil || !r.IsRepo || r.Root != wt {
+		t.Errorf("linked worktree = %+v, %v", r, err)
+	}
+}
+
+// A repo whose core.worktree is / browses as the pane's own directory, so
+// the Files view does not cover the whole file system.
+func TestRootResolverWorktreeElsewhere(t *testing.T) {
+	requireGit(t)
+	repo := newTestRepo(t)
+	gitT(t, repo, "config", "core.worktree", "/")
+	rr := newRootResolver(newGitRunner())
+	if r, err := rr.resolve(t.Context(), repo); err != nil || r != (filesRoot{Root: repo}) {
+		t.Errorf("core.worktree=/ resolves to %+v, %v", r, err)
 	}
 }
 
@@ -180,7 +242,7 @@ func TestResolveFilesRoot(t *testing.T) {
 	os.MkdirAll(sub, 0o755)
 	rr := newRootResolver(newGitRunner())
 
-	if r, err := rr.resolve(ctx, sub); err != nil || r != (filesRoot{Root: repo, IsRepo: true}) {
+	if r, err := rr.resolve(ctx, sub); err != nil || r != (filesRoot{Root: repo, IsRepo: true, GitDir: filepath.Join(repo, "."+"git")}) {
 		t.Errorf("subdir of repo = %+v, %v", r, err)
 	}
 	plain, _ := filepath.EvalSymlinks(t.TempDir())
@@ -223,9 +285,10 @@ func TestResolveFilesRootDubiousOwnership(t *testing.T) {
 	ctx := context.Background()
 	dir, _ := filepath.EvalSymlinks(t.TempDir())
 	fake := writeScript(t, fmt.Sprintf(`case "$*" in
-*safe.directory=%[1]s*) echo %[1]s ;;
+*safe.directory=%[1]s*) printf '%%s\n' %[1]s %[1]s/meta ;;
 *) echo "fatal: detected dubious ownership in repository at '%[1]s'" >&2; exit 128 ;;
 esac`, dir))
+	writeFile(t, filepath.Join(dir, "."+"git"), "gitdir: meta\n")
 	g := newGitRunner()
 	g.bin = fake
 	rr := newRootResolver(g)
@@ -238,7 +301,7 @@ esac`, dir))
 	}
 	trusted = true
 	rr.resolved = newTTLCache[filesRoot](0)
-	if r, err := rr.resolve(ctx, dir); err != nil || r != (filesRoot{Root: dir, IsRepo: true, SafeDir: dir}) {
+	if r, err := rr.resolve(ctx, dir); err != nil || r != (filesRoot{Root: dir, IsRepo: true, SafeDir: dir, GitDir: filepath.Join(dir, "meta")}) {
 		t.Errorf("trusted = %+v, %v", r, err)
 	}
 }

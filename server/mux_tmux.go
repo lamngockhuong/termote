@@ -31,9 +31,12 @@ func init() {
 var invalidTmuxChars = regexp.MustCompile(`[\x00-\x1f\x7f]`)
 
 // validateTmuxTarget checks if target is a safe tmux identifier
-// Allows Unicode, spaces, and printable chars; blocks control chars and empty/too-long strings
+// Allows Unicode, spaces, and printable chars; blocks control chars and empty/too-long strings.
+// tmux (and psmux) take an argument ending in ';' as the end of the command,
+// so "0;" would turn the arguments after it into a second command.
 func validateTmuxTarget(target string) bool {
-	return target != "" && len(target) <= 64 && !invalidTmuxChars.MatchString(target)
+	return target != "" && len(target) <= 64 && !invalidTmuxChars.MatchString(target) &&
+		!strings.HasSuffix(target, ";")
 }
 
 // validTmuxID accepts a window index or a window name inside TMUX_SESSION.

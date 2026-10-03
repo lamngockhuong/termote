@@ -299,7 +299,16 @@ func (a *agentAPI) session(paneID string) (AgentSession, error) {
 }
 
 func (a *agentAPI) handleTranscript(w http.ResponseWriter, r *http.Request) {
-	if !requireMethod(w, r, http.MethodGet) || !requireAgentRead(w, r) {
+	if !requireMethod(w, r, http.MethodGet) {
+		return
+	}
+	// A read, but a cross-site page has no reason to start one (with
+	// --no-auth it would make the server read the transcript for nothing).
+	if msg := crossSiteRejection(a.allowed, r); msg != "" {
+		jsonError(w, msg, http.StatusForbidden)
+		return
+	}
+	if !requireAgentRead(w, r) {
 		return
 	}
 	paneID := r.PathValue("id")
@@ -353,7 +362,7 @@ func readTranscript(s AgentSession, cursor, before string) (transcriptResponse, 
 	if err != nil {
 		return transcriptResponse{}, err
 	}
-	f, err := os.Open(path)
+	f, err := os.OpenFile(path, os.O_RDONLY|openNonblock, 0)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return transcriptResponse{}, errNoTranscript

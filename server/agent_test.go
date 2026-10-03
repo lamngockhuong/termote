@@ -459,3 +459,39 @@ func TestTranscriptRouteIgnoresJunkCursor(t *testing.T) {
 		t.Errorf("junk cursors made %d cache entries, want 1", n)
 	}
 }
+
+// Another site's page cannot start a transcript or prompt read: refused
+// before the pane's session is even looked up.
+func TestAgentReadRoutesRejectCrossSite(t *testing.T) {
+	dir := t.TempDir()
+	writeTranscript(t, dir, testSessionID, lines(0, 2))
+	loc := &fakeLocator{s: AgentSession{Agent: "claude", ID: testSessionID, ClaudeDir: dir}, found: true}
+	mux := http.NewServeMux()
+	agent := registerMuxRoutes(mux, loc, newStreamTokenStore())
+	agent.registerCommandsRoute(mux, nil, parseAllowedHosts("", false))
+	for _, route := range []string{"transcript", "prompt"} {
+		path := "/api/mux/panes/1/agent/" + route
+		for k, v := range map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": "https://evil.example"} {
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			req.Host = "localhost:7680"
+			req.Header.Set(k, v)
+			rec := httptest.NewRecorder()
+			mux.ServeHTTP(rec, req)
+			if rec.Code != http.StatusForbidden {
+				t.Errorf("%s with %s: %s = %d", route, k, v, rec.Code)
+			}
+		}
+	}
+	if n := loc.calls.Load(); n != 0 {
+		t.Errorf("session looked up %d times for cross-site requests", n)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/mux/panes/1/agent/transcript", nil)
+	req.Host = "localhost:7680"
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
+	req.Header.Set("Origin", "http://localhost:7680")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("same-origin transcript = %d %s", rec.Code, rec.Body.String())
+	}
+}

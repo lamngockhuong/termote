@@ -189,7 +189,7 @@ termote container down
 ### Docker without the CLI
 
 ```bash
-# Generates a password, printed in: docker logs termote
+# Generates a password: docker exec termote cat /home/termote/.config/termote/password
 docker run -d --name termote -p 7680:7680 \
   -v ~/projects:/workspace \
   ghcr.io/lamngockhuong/termote:latest
@@ -200,11 +200,11 @@ docker run -d --name termote -p 7680:7680 \
   ghcr.io/lamngockhuong/termote:latest
 ```
 
-| Environment Variable | Description                                   |
-| -------------------- | --------------------------------------------- |
-| `TERMOTE_USER`       | Basic auth username (default: `admin`)        |
-| `TERMOTE_PASS`       | Basic auth password (default: auto-generated) |
-| `NO_AUTH`            | Set to `true` to disable authentication       |
+| Environment Variable | Description                                                                                      |
+| -------------------- | ------------------------------------------------------------------------------------------------ |
+| `TERMOTE_USER`       | Basic auth username (default: `admin`)                                                           |
+| `TERMOTE_PASS`       | Basic auth password (default: auto-generated, saved in `/home/termote/.config/termote/password`) |
+| `NO_AUTH`            | Set to `true` to disable authentication                                                          |
 
 ### Build from source
 

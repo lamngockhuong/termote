@@ -71,6 +71,14 @@ test_auth_setup() {
         fail "password gen" "openssl rand" "not found"
     fi
 
+    # A generated password goes to a 0600 file, not to the container log
+    if grep -q 'umask 077 && mkdir -p "${pass_file%/\*}" && printf' "$PROJECT_DIR/entrypoint.sh" &&
+        ! grep -B2 'Password: \$TERMOTE_PASS' "$PROJECT_DIR/entrypoint.sh" | grep -q 'auto-generated'; then
+        pass "generated password saved to a private file"
+    else
+        fail "generated password" "written to a 0600 file" "printed to the log"
+    fi
+
     # Verify NO_AUTH check
     if grep -q 'NO_AUTH.*true' "$PROJECT_DIR/entrypoint.sh"; then
         pass "NO_AUTH check present"

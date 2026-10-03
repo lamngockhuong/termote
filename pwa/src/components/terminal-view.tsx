@@ -12,6 +12,7 @@ import { DEFAULT_SIZE } from '../hooks/use-font-size'
 import { MAX_SCROLL_LINES, scrollPane } from '../hooks/use-mux-api'
 import { type StreamControl, useTermSocket } from '../hooks/use-term-socket'
 import { readToken, type UiStyle } from '../ui-style'
+import { safeUrl } from '../utils/markdown-safety'
 import {
   blockContextMenu,
   setTerminalFontFamily,
@@ -167,8 +168,22 @@ export function stripTerminalReplies(data: string): string {
 // biome-ignore lint/suspicious/noControlCharactersInRegex: matches the paste end marker
 const PASTE_END = /\x1b\[201~/g
 
+// Control characters other than tab and line breaks, DEL and C1 (0x9b is an
+// 8-bit CSI): with ESC gone, no end marker can be rebuilt from what is left
+// after the markers are removed ("\x1b[20" + "\x1b[201~" + "1~").
+// biome-ignore lint/suspicious/noControlCharactersInRegex: matches control characters
+const PASTE_CONTROL = /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/g
+
+// Opens a link (OSC 8) a program printed: only http(s), in a new tab that
+// cannot reach this one. Terminal output is untrusted, and a javascript: URL
+// would run in the origin that controls the shell.
+export function openTerminalLink(uri: string): void {
+  const url = safeUrl(uri)
+  if (url) window.open(url.href, '_blank', 'noopener,noreferrer')
+}
+
 export function bracketPaste(text: string): string {
-  return `\x1b[200~${text.replace(PASTE_END, '')}\x1b[201~`
+  return `\x1b[200~${text.replace(PASTE_END, '').replace(PASTE_CONTROL, '')}\x1b[201~`
 }
 
 // Rows a wheel event scrolls into the history (negative: toward the live
@@ -509,6 +524,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
         theme: terminalTheme(theme),
         cursorBlink: true,
         scrollback: 5000,
+        linkHandler: { activate: (_event, uri) => openTerminalLink(uri) },
       })
       const fit = new FitAddon()
       term.loadAddon(fit)

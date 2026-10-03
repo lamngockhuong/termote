@@ -58,7 +58,10 @@ func (c *cli) accessURLs(saved *savedConfig, port int) accessURLs {
 type statusReport struct {
 	Running bool `json:"running"`
 	// Status is the server's own status ("ok"), else "unauthorized",
-	// "http <code>" or "not running".
+	// "untrusted listener" (another user holds the port), "unverified
+	// listener" (something answers, its owner unseen), "http <code>" or
+	// "not running". Running stays false for both listeners: no link to
+	// them is opened or copied.
 	// Version, Backend and PID are empty (0) unless the server answered.
 	Status  string `json:"status"`
 	Version string `json:"version"`
@@ -86,6 +89,10 @@ func (c *cli) statusReport(saved *savedConfig, port int) statusReport {
 		r.Running, r.Status, r.Version, r.Backend, r.PID = true, h.Status, h.Version, h.Backend, h.PID
 	case code == http.StatusUnauthorized:
 		r.Running, r.Status = true, "unauthorized"
+	case code == healthUntrusted:
+		r.Status = "untrusted listener"
+	case code == healthUnverified:
+		r.Status = "unverified listener"
 	case code != 0:
 		r.Status = "http " + strconv.Itoa(code)
 	default:

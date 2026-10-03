@@ -69,6 +69,15 @@ func TestIsSensitive(t *testing.T) {
 		"/r/my-service-account-key.json": true,
 		"/r/.terraformrc":                true,
 		"/r/credentials":                 true,
+		"/r/.envrc":                      true,
+		"/r/prod.env":                    true,
+		"/r/.dev.vars":                   true,
+		"/r/prod.tfvars":                 true,
+		"/r/prod.tfvars.json":            true,
+		"/home/u/.codex/auth.json":       true,
+		"/home/u/.my.cnf":                true,
+		"/home/u/.vault-token":           true,
+		"/r/release.jks":                 true,
 		"/home/u/.ssh/config":            true,
 		"/home/u/.config/gh/hosts.yml":   true,
 		"/home/u/.config/gcloud/x/y":     true,
@@ -186,6 +195,13 @@ func TestFilesTree(t *testing.T) {
 		}
 		if e := byName["out"]; e["target"] != nil {
 			t.Errorf("out (leaves the root) = %v", e)
+		}
+		// A link into a denied dir shows neither the type nor the size of
+		// what it leads to.
+		for _, n := range []string{"cfglink", "gitlink"} {
+			if e := byName[n]; e["target"] != nil || e["size"] != float64(0) {
+				t.Errorf("%s (into a denied dir) = %v", n, e)
+			}
 		}
 	}
 

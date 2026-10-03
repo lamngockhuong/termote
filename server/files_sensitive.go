@@ -15,6 +15,8 @@ var sensitiveNames = []string{
 	".netrc", ".npmrc", ".pypirc", ".pgpass", ".git-credentials", "credentials*",
 	".credentials.json", "secrets.*", "*.tfstate", "*.tfstate.*", ".htpasswd",
 	"*service-account*.json", ".terraformrc",
+	".envrc", "*.env", ".dev.vars", ".dev.vars.*", "*.tfvars", "*.tfvars.json",
+	"auth.json", ".my.cnf", ".vault-token", "*.jks",
 }
 
 // sensitiveDirs: everything under a directory of this name (lowercased path

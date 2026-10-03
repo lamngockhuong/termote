@@ -448,7 +448,8 @@ psmux does not report the directory, so `caps.files` is off on Windows tmux. Eve
 registered for every backend and answers 501 where it is off. All four are read-only GETs.
 
 **Root.** The pane's directory, raised to `git rev-parse --show-toplevel` when it is in a
-repository; resolutions are cached for 2 s. A directory a foreground command only passes
+repository and a `.git` sits at that toplevel (a `core.worktree` naming another directory, even
+`/`, leaves the pane's directory as the root); resolutions are cached for 2 s. A directory a foreground command only passes
 through does not move the root: a new root is taken once reads at least 2 s apart
 agree on it. Every response
 carries `root`; a client sends back the root it saw, and gets `409 {error, root}` with the
@@ -459,9 +460,11 @@ the container).
 **Paths.** A client path is relative to the root: absolute paths, `..`, NUL and (Windows)
 drive or device names are refused with 400, and every open goes through `os.Root`, so a symlink
 that leaves the root fails too (400 `path outside root`). Termote's config and state
-directories (`serveConfig.FilesDenyDirs`, filled by `runServe`), `/proc`, `/sys`, `/dev` and the
-repository's `.git` are never served (403 `path not allowed`), checked on the path and on what
-it resolves to; `.git` is also left out of listings. Files are opened non-blocking and judged on
+directories (`serveConfig.FilesDenyDirs`, filled by `runServe`), `/proc`, `/sys`, `/dev`, the
+repository's `.git` and its git directory wherever it is (`git rev-parse --absolute-git-dir`,
+for a `--separate-git-dir` inside the root) are never served (403 `path not allowed`), checked
+on the path and on what it resolves to; `.git` is also left out of listings, and a symlink into
+one of them is listed without its target's type or size. Files are opened non-blocking and judged on
 the open handle: anything not a regular file, over 1 MiB, or binary (a NUL in the first 8 KiB,
 or not UTF-8) is answered `previewable: false` with a `reason`. A directory lists at most 5000
 entries.
@@ -478,8 +481,10 @@ a warning, not a boundary; the deny list above is the boundary.
 `truncated`). An untracked or conflicted file has no diff: it is read whole through `os.Root`
 with the content route's checks. git is run as an argument array (no shell), with `GIT_*` and
 `TERMOTE_*` removed from its environment and overrides a repository cannot undo:
-`core.fsmonitor=false`, every `filter.<driver>` it configures emptied, `--no-ext-diff`,
-`--no-textconv`, `--ignore-submodules=all`, no lazy fetch and `protocol.allow=never`. Each
+`core.fsmonitor=false`, `core.hooksPath` set to the null device (no hook runs, even the
+`post-index-change` an index refresh would trigger), `diff.autoRefreshIndex=false`, every
+`filter.<driver>` it configures emptied, `--no-ext-diff`, `--no-textconv`,
+`--ignore-submodules=all`, no lazy fetch and `protocol.allow=never`. Each
 command has a 10 s timeout (503 `git timed out`) and takes one of two server-wide slots; nothing
 a client sends becomes a git option.
 

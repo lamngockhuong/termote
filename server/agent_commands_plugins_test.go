@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 // pluginInstall is one entry of installed_plugins.json in a test.
@@ -323,5 +325,30 @@ func TestListAgentCommandsLinkedSkillInGitDir(t *testing.T) {
 	got := listAgentCommands(root, "", "", a.commandSkip).Commands
 	if len(got) != 1 || got[0].Name != "ok" {
 		t.Fatalf("commands = %v", got)
+	}
+}
+
+// A settings file that is a FIFO with no writer (or a link to one) reads as
+// missing at once instead of hanging the commands route.
+func TestReadJSONFileFIFODoesNotHang(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no FIFOs")
+	}
+	fifo := filepath.Join(t.TempDir(), "settings.json")
+	if err := exec.Command("mkfifo", fifo).Run(); err != nil {
+		t.Skip("needs mkfifo")
+	}
+	done := make(chan bool, 1)
+	go func() {
+		var v map[string]any
+		done <- readJSONFile(fifo, &v)
+	}()
+	select {
+	case ok := <-done:
+		if ok {
+			t.Error("FIFO decoded")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("reading a FIFO without a writer did not return")
 	}
 }

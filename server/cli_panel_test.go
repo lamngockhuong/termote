@@ -101,6 +101,28 @@ func TestPanelStopped(t *testing.T) {
 	}
 }
 
+// Another user's process on the port: the panel says so, offers no link and
+// no start (it would fail on the busy port).
+func TestPanelUntrustedListener(t *testing.T) {
+	tc := newTestCLI(t, "linux")
+	port, _ := serveHealth(t, "p", herdrHealth)
+	tc.saveConfig(savedConfig{Port: port, Password: "p"})
+	old := listenerOwnerOf
+	listenerOwnerOf = func(int) listenerOwner { return listenerOtherOwner }
+	t.Cleanup(func() { listenerOwnerOf = old })
+	panelKeys(tc, "ocs \x03")
+	if code := tc.main([]string{"panel"}); code != 0 {
+		t.Fatalf("code %d", code)
+	}
+	if len(tc.runner.calls) != 0 {
+		t.Fatalf("calls %v", tc.runner.calls)
+	}
+	out := tc.stdout.String()
+	if !strings.Contains(out, untrustedListenerMsg) || strings.Contains(out, "s start") {
+		t.Fatalf("untrusted panel:\n%s", out)
+	}
+}
+
 func TestPanelOutsideHerdrAndTmux(t *testing.T) {
 	tc := newTestCLI(t, "linux")
 	port, _ := serveHealth(t, "p", `{"status":"ok","version":"1.0.0","backend":"tmux","pid":1}`)

@@ -255,6 +255,17 @@ func (c *cli) get(url string, header http.Header) (*http.Response, error) {
 	return resp, nil
 }
 
+// maxDownloadBytes caps a downloaded release archive, and maxExtractBytes
+// what all of its files add up to once unpacked (a release is about 10 MB):
+// a forged archive must not fill the disk. Variables for tests.
+var (
+	maxDownloadBytes int64 = 256 << 20
+	maxExtractBytes  int64 = 512 << 20
+)
+
+// errTooLarge is an archive, or its contents, over the caps above.
+var errTooLarge = errors.New("release archive too large")
+
 // download saves url to dst and returns its sha256.
 func (c *cli) download(url, dst string) (string, error) {
 	resp, err := c.get(url, nil)
@@ -268,8 +279,12 @@ func (c *cli) download(url, dst string) (string, error) {
 	}
 	defer f.Close()
 	h := sha256.New()
-	if _, err := io.Copy(io.MultiWriter(f, h), resp.Body); err != nil {
+	n, err := io.Copy(io.MultiWriter(f, h), io.LimitReader(resp.Body, maxDownloadBytes+1))
+	if err != nil {
 		return "", err
+	}
+	if n > maxDownloadBytes {
+		return "", errTooLarge
 	}
 	return hex.EncodeToString(h.Sum(nil)), f.Close()
 }
@@ -304,6 +319,7 @@ func extractTarball(file, dir string) error {
 		return err
 	}
 	tr := tar.NewReader(gz)
+	budget := maxExtractBytes
 	for {
 		h, err := tr.Next()
 		if errors.Is(err, io.EOF) {
@@ -323,7 +339,7 @@ func extractTarball(file, dir string) error {
 				return err
 			}
 		case tar.TypeReg:
-			if err := writeExtracted(tr, dst, h.FileInfo().Mode().Perm()); err != nil {
+			if err := writeExtracted(tr, dst, h.FileInfo().Mode().Perm(), &budget); err != nil {
 				return err
 			}
 		}
@@ -346,7 +362,9 @@ func stripTopDir(name string) (string, bool) {
 	return rel, true
 }
 
-func writeExtracted(r io.Reader, dst string, perm os.FileMode) error {
+// writeExtracted writes r to dst, at most *budget bytes, and takes what it
+// wrote off *budget.
+func writeExtracted(r io.Reader, dst string, perm os.FileMode, budget *int64) error {
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err
 	}
@@ -355,11 +373,16 @@ func writeExtracted(r io.Reader, dst string, perm os.FileMode) error {
 	if err != nil {
 		return err
 	}
-	if _, err := io.Copy(out, r); err != nil {
+	n, err := io.Copy(out, io.LimitReader(r, *budget+1))
+	if err == nil && n > *budget {
+		err = errTooLarge
+	}
+	if err != nil {
 		out.Close()
 		os.Remove(tmp)
 		return err
 	}
+	*budget -= n
 	if err := out.Close(); err != nil {
 		os.Remove(tmp)
 		return err
@@ -379,6 +402,7 @@ func extractZip(file, dir string) error {
 		return err
 	}
 	defer zr.Close()
+	budget := maxExtractBytes
 	for _, f := range zr.File {
 		rel, ok := stripTopDir(f.Name)
 		if !ok {
@@ -398,7 +422,7 @@ func extractZip(file, dir string) error {
 		if err != nil {
 			return err
 		}
-		err = writeExtracted(rc, dst, f.Mode().Perm()|0o644)
+		err = writeExtracted(rc, dst, f.Mode().Perm()|0o644, &budget)
 		rc.Close()
 		if err != nil {
 			return err

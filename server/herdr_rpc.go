@@ -124,21 +124,37 @@ func herdrReadError(ctx context.Context, method string, err error) error {
 	return fmt.Errorf("herdr %s: %w", method, err)
 }
 
-// readHerdrReply reads one NDJSON line, bounded by herdrMaxReply.
-func readHerdrReply(r *bufio.Reader) (herdrReply, error) {
+// errHerdrLineTooLong is a line from Herdr longer than its reader allows.
+var errHerdrLineTooLong = errors.New("line too long")
+
+// readHerdrLine reads one NDJSON line (without its newline), refusing one
+// longer than max: a Herdr that misbehaves must not make the server buffer
+// an endless line.
+func readHerdrLine(r *bufio.Reader, max int) ([]byte, error) {
 	var line []byte
 	for {
 		chunk, isPrefix, err := r.ReadLine()
 		if err != nil {
-			return herdrReply{}, err
+			return nil, err
 		}
 		line = append(line, chunk...)
-		if len(line) > herdrMaxReply {
-			return herdrReply{}, errors.New("reply too large")
+		if len(line) > max {
+			return nil, errHerdrLineTooLong
 		}
 		if !isPrefix {
-			break
+			return line, nil
 		}
+	}
+}
+
+// readHerdrReply reads one NDJSON line, bounded by herdrMaxReply.
+func readHerdrReply(r *bufio.Reader) (herdrReply, error) {
+	line, err := readHerdrLine(r, herdrMaxReply)
+	if errors.Is(err, errHerdrLineTooLong) {
+		return herdrReply{}, errors.New("reply too large")
+	}
+	if err != nil {
+		return herdrReply{}, err
 	}
 	var reply herdrReply
 	if err := json.Unmarshal(line, &reply); err != nil {

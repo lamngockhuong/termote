@@ -109,7 +109,7 @@ const codexMetaMax = 1 << 20
 // codexUserThread reports whether the rollout's session_meta (its first
 // line) is of thread id started by the user.
 func codexUserThread(path, id string) bool {
-	f, err := os.Open(path)
+	f, err := os.OpenFile(path, os.O_RDONLY|openNonblock, 0)
 	if err != nil {
 		return false
 	}

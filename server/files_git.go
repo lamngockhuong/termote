@@ -322,7 +322,7 @@ func (f *filesAPI) diff(ctx context.Context, root filesRoot, path, orig string, 
 	if err != nil {
 		return diffResponse{}, err
 	}
-	if f.denied(root.Root, rel) || orig != "" && f.deniedPath(root.Root, orig) {
+	if f.denied(root.Root, rel, root.GitDir) || orig != "" && f.deniedPath(root.Root, orig, root.GitDir) {
 		return diffResponse{}, errPathNotAllowed
 	}
 	res := diffResponse{Root: root.Root, Path: path, Conflict: entry.Conflict, Hunks: []diffHunk{}}
@@ -377,7 +377,7 @@ func (f *filesAPI) diff(ctx context.Context, root filesRoot, path, orig string, 
 }
 
 // deniedPath is denied for a git path ("/"-separated, relative to the root).
-func (f *filesAPI) deniedPath(root, p string) bool {
+func (f *filesAPI) deniedPath(root, p string, extra ...string) bool {
 	rel, err := cleanRelPath(p)
-	return err != nil || f.denied(root, rel)
+	return err != nil || f.denied(root, rel, extra...)
 }

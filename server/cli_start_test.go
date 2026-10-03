@@ -774,3 +774,23 @@ func TestHiddenLauncherQuoting(t *testing.T) {
 		t.Fatalf("launcher:\n%s\nwant:\n%s", got, want)
 	}
 }
+
+// The state dir (the server log, the PID file) is the owner's alone, also
+// when an older version created it 0755.
+func TestEnsureStateDirPrivate(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix permissions")
+	}
+	tc := newTestCLI(t, runtime.GOOS)
+	if err := os.MkdirAll(tc.stateDir(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	os.Chmod(tc.stateDir(), 0o755)
+	if err := tc.ensureStateDir(); err != nil {
+		t.Fatal(err)
+	}
+	fi, err := os.Stat(tc.stateDir())
+	if err != nil || fi.Mode().Perm() != 0o700 {
+		t.Fatalf("state dir = %v, %v; want 0700", fi.Mode().Perm(), err)
+	}
+}

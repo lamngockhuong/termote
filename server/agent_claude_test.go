@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -392,5 +393,19 @@ func TestReadClaudeSessionFileRejectsNonRegular(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("reading a link to /dev/zero did not return")
+	}
+	// A FIFO with no writer: opening it must not wait for one.
+	fifo := filepath.Join(dir, "sessions", "7.json")
+	if err := exec.Command("mkfifo", fifo).Run(); err != nil {
+		t.Skip("needs mkfifo")
+	}
+	go func() { _, ok := readClaudeSessionFile(dir, 7); done <- ok }()
+	select {
+	case ok := <-done:
+		if ok {
+			t.Error("FIFO accepted")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("reading a FIFO without a writer did not return")
 	}
 }
