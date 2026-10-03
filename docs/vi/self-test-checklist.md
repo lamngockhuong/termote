@@ -468,6 +468,9 @@ Test trên thiết bị di động thật:
 ### Chống Brute-Force
 
 - [ ] Bộ giới hạn tần suất chặn sau 5 lần thất bại/phút mỗi IP (429)
+- [ ] Bộ giới hạn tần suất chặn cả một dải IPv6 /64 sau 20 lần thất bại/phút (429)
+- [ ] Log server có dòng `auth: failed login from <ip>` và `auth: <ip> blocked ...`, không chứa
+      username hay mật khẩu đã gửi
 - [ ] So sánh mật khẩu trong thời gian không đổi
 
 ### Bảo Mật Server
