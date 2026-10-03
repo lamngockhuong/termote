@@ -489,7 +489,10 @@ func TestUploadReadDeadline(t *testing.T) {
 	srv := httptest.NewServer(h)
 	defer srv.Close()
 	img := testImage(t, "image/png")
-	send := func(auth bool, pause time.Duration) string {
+	// finish: send the rest of the body after pause; without it the body
+	// never completes. Writing to a connection the server already closed
+	// resets it on macOS and Windows, so the refused client never does.
+	send := func(auth bool, pause time.Duration, finish bool) string {
 		conn, err := net.Dial("tcp", srv.Listener.Addr().String())
 		if err != nil {
 			t.Fatal(err)
@@ -501,21 +504,25 @@ func TestUploadReadDeadline(t *testing.T) {
 		}
 		fmt.Fprintf(conn, "POST /api/mux/uploads HTTP/1.1\r\nHost: %s\r\nContent-Type: image/png\r\n%sContent-Length: %d\r\nConnection: close\r\n\r\n", srv.Listener.Addr(), hdr, len(img))
 		conn.Write(img[:20])
-		time.Sleep(pause)
-		conn.Write(img[20:])
+		if finish {
+			time.Sleep(pause)
+			conn.Write(img[20:])
+		}
 		conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		// Closed either way: an EOF, or a reset when the server closes with
+		// body bytes it never read. Only our own deadline means still open.
 		out, err := io.ReadAll(conn)
-		if err != nil {
-			t.Fatalf("connection still open: %v (read %q)", err, out)
+		if ne, ok := err.(net.Error); ok && ne.Timeout() {
+			t.Fatalf("connection still open (read %q)", out)
 		}
 		return string(out)
 	}
-	if out := send(true, 600*time.Millisecond); !strings.HasPrefix(out, "HTTP/1.1 200") {
+	if out := send(true, 600*time.Millisecond, true); !strings.HasPrefix(out, "HTTP/1.1 200") {
 		t.Errorf("authenticated slow upload = %q", out)
 	}
 	// Without credentials: the body never completes, the 60s deadline cuts it.
 	start := time.Now()
-	if out := send(false, 2*time.Second); !strings.Contains(out, "401") {
+	if out := send(false, 0, false); !strings.Contains(out, "401") {
 		t.Errorf("unauthenticated upload = %q", out)
 	}
 	if d := time.Since(start); d > 4*time.Second {
