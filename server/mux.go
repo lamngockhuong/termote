@@ -67,6 +67,9 @@ type Caps struct {
 	// Files: the backend reports a pane's working directory, so the files
 	// routes (/api/mux/panes/{id}/files/*) work.
 	Files bool `json:"files"`
+	// Uploads: the server has a usable upload dir (/api/mux/uploads). Set
+	// by the snapshot route, not by the backend.
+	Uploads bool `json:"uploads"`
 }
 
 type Snapshot struct {
@@ -115,7 +118,8 @@ var errUnsupported = errors.New("operation not supported by this backend")
 // registerMuxRoutes mounts /api/mux/* for the given backend. Patterns carry no
 // method so a wrong method gets a JSON 405 instead of falling through to the
 // /api/ JSON 404 handler.
-func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore) *agentAPI {
+// uploads is nil when the server has no usable upload dir.
+func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *uploadStore) *agentAPI {
 	mux.HandleFunc("/api/mux/health", func(w http.ResponseWriter, r *http.Request) {
 		if !requireMethod(w, r, http.MethodGet) {
 			return
@@ -147,6 +151,7 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore) *agentAPI 
 		snap.APIVersion = apiVersion
 		snap.Backend = m.Name()
 		snap.Caps = m.Caps()
+		snap.Caps.Uploads = uploads != nil
 		if snap.Groups == nil {
 			snap.Groups = []Group{}
 		}
@@ -275,7 +280,9 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore) *agentAPI 
 		jsonOK(w, map[string]any{"ok": true})
 	})
 
-	agent := registerAgentRoutes(mux, m)
+	mux.HandleFunc("/api/mux/uploads", handleUpload(uploads))
+
+	agent := registerAgentRoutes(mux, m, uploads)
 
 	// Only reachable via fetch/XHR from the PWA, not by direct navigation.
 	mux.HandleFunc("/api/mux/stream-token", handleTerminalToken(tokens))

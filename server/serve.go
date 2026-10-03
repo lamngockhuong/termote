@@ -51,6 +51,8 @@ type serveConfig struct {
 	// pane's root: the config and state dirs (the secret and the encrypted
 	// password).
 	FilesDenyDirs []string
+	// UploadDir holds images uploaded from the PWA; empty disables uploads.
+	UploadDir string
 	// OnListen runs once the port is bound (serve records its PID then, so
 	// a server that cannot bind never replaces the running one's PID file).
 	OnListen func()
@@ -243,7 +245,14 @@ func buildServer(cfg serveConfig, m Mux) (http.Handler, *streamHub, error) {
 	allowed := parseAllowedHosts(cfg.AllowedHosts, cfg.AllowLocalAddr)
 	hub := newStreamHub(maxStreams)
 
-	agent := registerMuxRoutes(mux, m, tokenStore)
+	var uploads *uploadStore
+	if cfg.UploadDir != "" {
+		var err error
+		if uploads, err = newUploadStore(cfg.UploadDir); err != nil {
+			log.Printf("uploads disabled: %v", err)
+		}
+	}
+	agent := registerMuxRoutes(mux, m, tokenStore, uploads)
 	registerStreamRoutes(mux, m, tokenStore, allowed, hub)
 	files := registerFilesRoutes(mux, m, allowed, cfg.FilesDenyDirs)
 	agent.registerCommandsRoute(mux, files, allowed)
@@ -275,7 +284,9 @@ func buildServer(cfg serveConfig, m Mux) (http.Handler, *streamHub, error) {
 // requestReadTimeout bounds reading one request, its body included:
 // ReadHeaderTimeout covers only the headers, and a client that announces a
 // body then sends it a byte at a time would otherwise hold its connection
-// (and a file descriptor) forever. Bodies are at most 64 KB. Past the
+// (and a file descriptor) forever. Bodies are at most 64 KB, but for an
+// uploaded image (10 MB): its handler extends the deadline to
+// uploadReadTimeout once the request is authenticated. Past the
 // deadline, net/http's background read also cancels the request's context,
 // so no handler but the stream may run longer (mux calls take at most
 // muxTimeout, git gitTimeout).
