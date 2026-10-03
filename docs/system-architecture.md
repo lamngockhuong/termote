@@ -364,10 +364,16 @@ A tab is `multiselect` only when every option but "Chat about this" has a box. T
 every option's detail are sent whole, never cut (the dialog search, `claudeMaxDialogRows`,
 bounds them), so the card can show all a dialog asks. The dialog's top edge is a rule at column
 0: a rule inside a command (a heredoc's separator) is indented, so it is never taken for the edge
-and the card never starts partway through the command. In the PWA the card takes at most 70% of
-the screen, its content scrolls and the Cancel row stays at its foot. A body taller than its box
-shows a fade and **Show all**; on a `permission` card only the refusing options can be tapped
-until the body is opened or scrolled to its end, so a long command is not approved unread.
+and the card never starts partway through the command. Claude Code 2.1.288 draws a command's rows
+behind a `│`, a file's behind its line number and a carriage return in a file as `�`, and refuses a
+Bash command holding a control character, so neither a wide character nor a carriage return puts
+a rule at column 0 (recorded on tmux and Herdr). In a narrow pane Claude Code can draw `3. No`
+over the last row of a wrapped path above it without clearing that row's end (`3. Nooject`):
+the last option of a `permission` dialog, under one that wraps, reading `No` followed by anything
+but `,` is read as `No`, and the option above gets `…` for the row it lost. In the PWA the card
+takes at most 70% of the screen, its content scrolls and the Cancel row stays at its foot. A body
+taller than its box shows a fade and **Show all**; on a `permission` card only the refusing
+options can be tapped until the body is opened or scrolled to its end, so a long command is not approved unread.
 
 While the free-text option is empty the prompt carries it as `freeText` (`{index, label}`), and
 `answer` takes `{"text": "..."}` for it: at most 1 KB (UTF-8 bytes), not blank, with no control
