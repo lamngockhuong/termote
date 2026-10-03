@@ -11,9 +11,9 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Go-1.21-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go" />
+  <img src="https://img.shields.io/badge/Go-1.26-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go" />
   <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React" />
-  <img src="https://img.shields.io/badge/TypeScript-5.9-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/TypeScript-7.0-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
   <img src="https://img.shields.io/badge/PWA-ready-5A0FC8?style=flat-square&logo=pwa&logoColor=white" alt="PWA" />
 </p>
 
@@ -37,6 +37,10 @@
 - **セッション切り替え**: 作成/編集/削除が可能な複数のtmuxセッション
 - **セッションタブ**: ウィンドウをすばやく切り替えるための水平タブバー
 - **Herdrバックエンド**（ネイティブまたはコンテナ内）: tmuxの代わりにHerdrのワークスペースを操作し、ペインごとにコーディングエージェントの状態バッジを表示 — [ネイティブインストール](https://termote.ohnice.app/installation/native/)を参照
+- **Chatビュー**: Claude Code（または`--no-daemon`で起動したCodex）を実行中のペインをチャットとして読み、返信できます。スラッシュコマンドの候補表示とダイアログへの応答に対応 — [Agent Chat](https://termote.ohnice.app/usage/agent-chat/)を参照
+- **Files・Changesビュー**: ペインのディレクトリとそのgitの変更を閲覧し、Markdownをプレビュー — [Files and Changes](https://termote.ohnice.app/usage/files-changes/)を参照
+- **画像の添付**: スマートフォンから画像をターミナルやChatビューのメッセージに送り、エージェントがパスから読み取れるようにします
+- **Herdrプラグイン**: Herdrを離れずに、フォーカス中のHerdrペインをTermoteで開く、そのリンクをスマートフォン用のQRコードで表示する、サーバーを起動・停止する — [Herdr Plugin](https://termote.ohnice.app/usage/herdr-plugin/)を参照
 - **モバイル対応**: 仮想キーボードツールバー（Tab/Ctrl/Shift/矢印キー、展開可能）
 - **ジェスチャー操作**: スワイプでCtrl+C、Tab、スクロール
 - **コマンド履歴**: 検索機能付きの送信済みコマンド呼び出し
@@ -180,7 +184,7 @@ termote container logs -f
 termote container down
 ```
 
-`container up`はインストール済みの`termote`と同じバージョンの`ghcr.io/lamngockhuong/termote`をpodman（優先）またはdockerで実行し、ポート7680を使い、`~/termote-workspace`を`/workspace`にマウントします。`--port`、`--lan`、`--tailscale`、`--no-auth`、`--allow-host`、`--fresh`を受け付け、これらは`start`のオプションとは別に保存されます。パスワードはネイティブサーバーと共有されます。Dockerは再起動後にコンテナを再開しますが、rootlessのPodmanにはそれを行うデーモンがないため、Quadletユニットとして実行してください。
+`container up`はインストール済みの`termote`と同じバージョンの`ghcr.io/lamngockhuong/termote`をpodman（優先）またはdockerで実行し、ポート7680を使い、`~/termote-workspace`を`/workspace`にマウントします。`--port`、`--lan`、`--tailscale`、`--no-auth`、`--allow-host`、`--user`、`--fresh`を受け付け、これらは`start`のオプションとは別に保存されます。ユーザー名とパスワードはネイティブサーバーと共有されます。Dockerは再起動後にコンテナを再開しますが、rootlessのPodmanにはそれを行うデーモンがないため、Quadletユニットとして実行してください。
 
 > **セキュリティ注意**: `$HOME`を直接マウントしないでください — `.ssh`、`.gnupg`などの機密ディレクトリがコンテナからアクセス可能になります。代わりに特定のプロジェクトディレクトリをマウントしてください。
 
@@ -256,6 +260,7 @@ flowchart LR
 | `--allow-host <name>`       | 追加のHostヘッダー値を許可（複数指定可。ワイルドカードなし、セキュリティ注意を参照） |
 | `--remove-host <name>`      | 許可済みのHost名を削除（複数指定可）                                                 |
 | `--allow-herdr-no-auth`     | `--mux herdr --no-auth`と併用する場合に必須                                          |
+| `--user <name>`             | ログインユーザー名（デフォルト: `admin`、コンテナと共有）                            |
 | `--fresh`                   | 新しいパスワードを設定                                                               |
 
 ### Tailscale HTTPS付き
@@ -383,7 +388,7 @@ termote start --fresh      # If the saved password can no longer be read
 - **Basic認証はデフォルトで有効** - ローカル開発では`--no-auth`で無効化。パスワードは最初の`termote start`で作成され、暗号化して保存されます
 - **Host許可リスト** - 認識できない`Host`ヘッダーのリクエストを拒否します（DNSリバインディング対策）。信頼する名前は`--allow-host`で追加でき、チェックを無効にするワイルドカードはありません
 - **Origin/CSRFガード** - 状態を変更する`/api/mux/*`リクエストと`/api/mux/stream`のWebSocketは、クロスサイトの`Sec-Fetch-Site`/`Origin`を拒否し、同一オリジンで一度だけ使えるストリームトークンを要求します
-- **ブルートフォース攻撃防止機能内蔵** - レート制限（IPあたり5回/分）
+- **ブルートフォース攻撃防止機能内蔵** - レート制限（IPあたり失敗5回/分、IPv6 /64あたり20回/分）
 - **Herdrバックエンド** - ホスト上のすべてのHerdrワークスペースを公開するため、`--allow-herdr-no-auth`も指定しない限り`--mux herdr --no-auth`は拒否されます
 - **サービスファイルに秘密情報なし** - systemdユニット、launchdエージェント、スケジュールタスクにパスワードは含まれません
 - 本番環境ではHTTPS（Tailscale）を使用

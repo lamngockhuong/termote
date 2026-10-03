@@ -11,9 +11,9 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Go-1.21-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go" />
+  <img src="https://img.shields.io/badge/Go-1.26-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go" />
   <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React" />
-  <img src="https://img.shields.io/badge/TypeScript-5.9-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/TypeScript-7.0-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
   <img src="https://img.shields.io/badge/PWA-ready-5A0FC8?style=flat-square&logo=pwa&logoColor=white" alt="PWA" />
 </p>
 
@@ -39,6 +39,10 @@
 - **Chuyển đổi session**: Nhiều tmux sessions với tạo/sửa/xóa
 - **Tab sessions**: Thanh tab ngang để chuyển nhanh giữa các cửa sổ
 - **Backend Herdr** (native hoặc trong container): điều khiển workspace của Herdr thay cho tmux, kèm huy hiệu trạng thái của agent lập trình trên từng pane — xem [Cài đặt Native](https://termote.ohnice.app/vi/installation/native/)
+- **View Chat**: đọc và trả lời một pane đang chạy Claude Code (hoặc Codex khởi động với `--no-daemon`) như một cuộc trò chuyện, có gợi ý slash command và nút trả lời hộp thoại — xem [Chat với agent](https://termote.ohnice.app/vi/usage/agent-chat/)
+- **View Files và Changes**: duyệt thư mục của pane và các thay đổi git trong đó, xem trước file Markdown — xem [Files và Changes](https://termote.ohnice.app/vi/usage/files-changes/)
+- **Đính kèm ảnh**: gửi ảnh từ điện thoại vào terminal hoặc vào tin nhắn trong view Chat, agent đọc ảnh qua đường dẫn
+- **Plugin Herdr**: mở pane Herdr đang dùng trong Termote, hiện liên kết thành mã QR để quét bằng điện thoại, bật hoặc tắt server mà không rời Herdr — xem [Plugin Herdr](https://termote.ohnice.app/vi/usage/herdr-plugin/)
 - **Thân thiện mobile**: Bàn phím ảo (Tab/Ctrl/Shift/mũi tên, mở rộng được)
 - **Hỗ trợ cử chỉ**: Vuốt cho Ctrl+C, Tab, cuộn màn hình
 - **Lịch sử lệnh**: Gợi nhớ các lệnh đã gửi trước đó với tìm kiếm
@@ -182,7 +186,7 @@ termote container logs -f
 termote container down
 ```
 
-`container up` chạy image `ghcr.io/lamngockhuong/termote` đúng với phiên bản của `termote` đã cài, bằng podman (ưu tiên) hoặc docker, trên port 7680, gắn thư mục `~/termote-workspace` vào `/workspace`. Lệnh nhận `--port`, `--lan`, `--tailscale`, `--no-auth`, `--allow-host` và `--fresh`; các giá trị này được lưu riêng với tùy chọn của `start`, còn mật khẩu thì dùng chung với server native. Docker tự khởi động lại container sau khi máy khởi động lại; Podman chạy không cần quyền root thì không có tiến trình nền nào khởi động lại container, nên hãy chạy nó dưới dạng Quadlet unit.
+`container up` chạy image `ghcr.io/lamngockhuong/termote` đúng với phiên bản của `termote` đã cài, bằng podman (ưu tiên) hoặc docker, trên port 7680, gắn thư mục `~/termote-workspace` vào `/workspace`. Lệnh nhận `--port`, `--lan`, `--tailscale`, `--no-auth`, `--allow-host`, `--user` và `--fresh`; các giá trị này được lưu riêng với tùy chọn của `start`, còn tên đăng nhập và mật khẩu thì dùng chung với server native. Docker tự khởi động lại container sau khi máy khởi động lại; Podman chạy không cần quyền root thì không có tiến trình nền nào khởi động lại container, nên hãy chạy nó dưới dạng Quadlet unit.
 
 > **Lưu ý bảo mật**: Tránh mount trực tiếp `$HOME` — các thư mục nhạy cảm như `.ssh`, `.gnupg` sẽ truy cập được từ trong container. Hãy mount các thư mục dự án cụ thể.
 
@@ -258,6 +262,7 @@ Server native chạy dưới dạng service của người dùng: systemd user u
 | `--allow-host <name>`       | Cho phép thêm một giá trị header Host (lặp lại được; không có ký tự đại diện, xem ghi chú bảo mật) |
 | `--remove-host <name>`      | Bỏ một tên Host đã cho phép (lặp lại được)                                                         |
 | `--allow-herdr-no-auth`     | Bắt buộc khi dùng cùng `--mux herdr --no-auth`                                                     |
+| `--user <name>`             | Tên đăng nhập (mặc định: `admin`; dùng chung với container)                                        |
 | `--fresh`                   | Đặt mật khẩu mới                                                                                   |
 
 ### Với Tailscale HTTPS
@@ -385,7 +390,7 @@ termote start --fresh      # If the saved password can no longer be read
 - **Basic auth bật mặc định** - dùng `--no-auth` để tắt khi phát triển trên máy; mật khẩu được tạo ở lần `termote start` đầu tiên và lưu ở dạng mã hóa
 - **Danh sách Host được phép**: request có header `Host` lạ bị từ chối (chống tấn công đổi địa chỉ DNS); thêm các tên tin cậy bằng `--allow-host`, không có ký tự đại diện nào tắt được lớp kiểm tra này
 - **Chặn Origin/CSRF**: các request thay đổi trạng thái tới `/api/mux/*` và WebSocket `/api/mux/stream` từ chối request có `Sec-Fetch-Site`/`Origin` đến từ site khác, đồng thời yêu cầu stream token cùng origin và chỉ dùng một lần
-- **Chống brute-force tích hợp** - rate limiting (5 lần thử/phút mỗi IP)
+- **Chống brute-force tích hợp** - rate limiting (5 lần thử sai/phút mỗi IP, 20/phút mỗi dải IPv6 /64)
 - **Backend Herdr**: để lộ mọi workspace Herdr trên máy host, nên `--mux herdr --no-auth` bị từ chối nếu không kèm `--allow-herdr-no-auth`
 - **File service không chứa bí mật**: systemd unit, launchd agent và Scheduled Task không bao giờ chứa mật khẩu
 - Dùng HTTPS (Tailscale) cho production

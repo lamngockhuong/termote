@@ -11,9 +11,9 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Go-1.21-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go" />
+  <img src="https://img.shields.io/badge/Go-1.26-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go" />
   <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React" />
-  <img src="https://img.shields.io/badge/TypeScript-5.9-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/TypeScript-7.0-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
   <img src="https://img.shields.io/badge/PWA-ready-5A0FC8?style=flat-square&logo=pwa&logoColor=white" alt="PWA" />
 </p>
 
@@ -39,6 +39,10 @@ Remote control CLI tools (Claude Code, GitHub Copilot, any terminal) from mobile
 - **Session switching**: Multiple tmux sessions with create/edit/delete
 - **Session tabs**: Horizontal tab bar for quick window switching
 - **Herdr backend** (native or in the container): drive Herdr workspaces instead of tmux, with per-pane coding-agent status badges — see [Native Installation](https://termote.ohnice.app/installation/native/)
+- **Chat view**: read and answer a pane running Claude Code (or Codex started with `--no-daemon`) as a chat, with slash command suggestions and dialog answers — see [Agent Chat](https://termote.ohnice.app/usage/agent-chat/)
+- **Files and Changes views**: browse a pane's directory and its git changes, with a Markdown preview — see [Files and Changes](https://termote.ohnice.app/usage/files-changes/)
+- **Image attachments**: send an image from the phone to the terminal or to a Chat view message, so the agent can read it by path
+- **Herdr plugin**: open the focused Herdr pane in Termote, show its link as a QR code for a phone, start or stop the server, without leaving Herdr — see [Herdr Plugin](https://termote.ohnice.app/usage/herdr-plugin/)
 - **Mobile-friendly**: Virtual keyboard toolbar (Tab/Ctrl/Shift/arrows, expandable)
 - **Gesture support**: Swipe for Ctrl+C, Tab, scrolling
 - **Command history**: Recall previously sent commands with search
@@ -386,7 +390,7 @@ termote start --fresh      # If the saved password can no longer be read
 - **Basic auth enabled by default** - use `--no-auth` to disable for local dev; the password is created by the first `termote start` and saved encrypted
 - **Host allowlist**: requests with an unrecognised `Host` header are rejected (DNS-rebinding protection); add trusted names with `--allow-host`, there is no wildcard to turn the check off
 - **Origin/CSRF guards**: state-changing `/api/mux/*` requests and the `/api/mux/stream` WebSocket reject cross-site `Sec-Fetch-Site`/`Origin` and require a same-origin, single-use stream token
-- **Built-in brute-force protection** - rate limiting (5 attempts/min per IP)
+- **Built-in brute-force protection** - rate limiting (5 failed attempts/min per IP, 20/min per IPv6 /64)
 - **Herdr backend**: exposes every Herdr workspace on the host, so `--mux herdr --no-auth` is refused unless `--allow-herdr-no-auth` is also given
 - **Service files hold no secrets**: the systemd unit, launchd agent and Scheduled Task never contain the password
 - Use HTTPS (Tailscale) for production

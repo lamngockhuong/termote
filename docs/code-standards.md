@@ -153,7 +153,7 @@ import type { Session } from "./types/session";
 
 File layout is flat `package main` in `server/`: server code (`serve.go`, `guard.go`,
 `mux*.go`, `stream.go`, `pty_*.go`) and CLI code (`cli*.go`) share the package and its build
-tags (`cli_unix.go`/`cli_windows.go`, `pty_linux.go`/`pty_bsd.go`/`pty_windows.go`).
+tags (`cli_unix.go`/`cli_windows.go`, `pty_unix.go`/`pty_linux.go`/`pty_bsd.go`/`pty_windows.go`).
 
 ### File Naming
 
