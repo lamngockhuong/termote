@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import type { ViewProps } from '../app-views'
 import { agentLabel } from '../chat-agents'
 import { useHaptic } from '../hooks/use-haptic'
@@ -60,9 +60,14 @@ export function PromptCard({
   const titleId = useId()
   const bodyId = useId()
   const textId = useId()
+  const lockedId = useId()
   const answerable =
     !readOnly && prompt.kind !== 'unsupported' && !!prompt.promptId
   const multi = prompt.kind === 'multiselect'
+  // The body was read whole: it fits, was opened or scrolled to its end
+  const [bodySeen, setBodySeen] = useState(true)
+  // A command is not approved unread: until then only refusing is offered
+  const locked = prompt.kind === 'permission' && !!prompt.body && !bodySeen
 
   // The button pressed is disabled while the answer is sent, which drops
   // its focus: give it back, so ticking several options of a multiSelect
@@ -144,7 +149,11 @@ export function PromptCard({
     <Button
       key={o.index}
       variant={REFUSING.test(o.label) ? 'danger' : 'secondary'}
-      disabled={busy}
+      disabled={busy || (locked && !REFUSING.test(o.label))}
+      // A screen reader hears why it cannot be pressed yet
+      aria-describedby={
+        locked && !REFUSING.test(o.label) ? lockedId : undefined
+      }
       onClick={() => answer(o.index)}
       // On a multiSelect tab a digit toggles the option
       aria-pressed={multi && !isChat(o.label) ? !!o.checked : undefined}
@@ -157,10 +166,10 @@ export function PromptCard({
           {o.checked ? '☑' : '☐'}
         </span>
       )}
-      <span className="min-w-0">
+      <span className="min-w-0 break-words">
         {o.label}
         {o.detail && (
-          <span className="block text-[12px] font-normal text-fg-muted">
+          <span className="block break-words text-[12px] font-normal text-fg-muted">
             {o.detail}
           </span>
         )}
@@ -196,91 +205,102 @@ export function PromptCard({
   const label = {
     'aria-labelledby': titleId,
     'aria-describedby': prompt.body ? bodyId : undefined,
+    // At most most of the screen: the rest scrolls, the actions stay
     className:
-      'space-y-2 border-t border-border bg-surface p-3 pb-safe ui-terminal:bg-bg',
+      'flex max-h-[70dvh] flex-col gap-2 border-t border-border bg-surface p-3 pb-safe ui-terminal:bg-bg',
   }
   const content = (
     <>
-      {prompt.steps && prompt.steps.length > 0 && (
-        <ol aria-label="Questions" className="flex flex-wrap gap-1.5">
-          {prompt.steps.map((s, i) => (
-            <li
-              // biome-ignore lint/suspicious/noArrayIndexKey: tabs can share a header
-              key={i}
-              aria-current={s.current ? 'step' : undefined}
-              className="flex"
-            >
-              {answerable && !s.current ? (
-                // Another tab: the server moves there one arrow at a time
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => answer({ step: i })}
-                  className={`${STEP} border-border text-fg-muted hover:text-fg disabled:opacity-50`}
-                >
-                  <StepLabel step={s} />
-                </button>
-              ) : (
-                <span
-                  className={`${STEP} ${s.current ? 'border-accent text-fg' : 'border-border text-fg-muted'}`}
-                >
-                  <StepLabel step={s} />
-                </span>
-              )}
-            </li>
-          ))}
-        </ol>
-      )}
-      <p id={titleId} className="font-medium text-fg">
-        {prompt.title || `${agentLabel(agentName)} is asking`}
-      </p>
-      {prompt.body && (
-        <p
-          id={bodyId}
-          className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words font-mono text-[12px] text-fg-muted"
-        >
-          {prompt.body}
+      <div className="min-h-0 space-y-2 overflow-y-auto">
+        {prompt.steps && prompt.steps.length > 0 && (
+          <ol aria-label="Questions" className="flex flex-wrap gap-1.5">
+            {prompt.steps.map((s, i) => (
+              <li
+                // biome-ignore lint/suspicious/noArrayIndexKey: tabs can share a header
+                key={i}
+                aria-current={s.current ? 'step' : undefined}
+                className="flex"
+              >
+                {answerable && !s.current ? (
+                  // Another tab: the server moves there one arrow at a time
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => answer({ step: i })}
+                    className={`${STEP} border-border text-fg-muted hover:text-fg disabled:opacity-50`}
+                  >
+                    <StepLabel step={s} />
+                  </button>
+                ) : (
+                  <span
+                    className={`${STEP} ${s.current ? 'border-accent text-fg' : 'border-border text-fg-muted'}`}
+                  >
+                    <StepLabel step={s} />
+                  </span>
+                )}
+              </li>
+            ))}
+          </ol>
+        )}
+        <p id={titleId} className="font-medium text-fg">
+          {prompt.title || `${agentLabel(agentName)} is asking`}
         </p>
-      )}
-      <p aria-live="polite" className="text-[13px] text-warning empty:hidden">
-        {notice ??
-          (prompt.kind === 'unsupported' && !readOnly
-            ? 'Answer this dialog in the terminal.'
-            : '')}
-      </p>
-      {answerable ? (
-        <div className="flex flex-col gap-1.5">
-          {/* "Type something" sits where the terminal draws it, above
+        {prompt.body && (
+          // A new body is read from its start, shut again
+          <PromptBody
+            key={prompt.body}
+            id={bodyId}
+            body={prompt.body}
+            onSeen={setBodySeen}
+          />
+        )}
+        {locked && answerable && (
+          <p id={lockedId} className="text-[12px] text-warning">
+            Read the whole dialog to answer.
+          </p>
+        )}
+        <p aria-live="polite" className="text-[13px] text-warning empty:hidden">
+          {notice ??
+            (prompt.kind === 'unsupported' && !readOnly
+              ? 'Answer this dialog in the terminal.'
+              : '')}
+        </p>
+        {answerable && (
+          <div className="flex flex-col gap-1.5">
+            {/* "Type something" sits where the terminal draws it, above
               "Chat about this" */}
-          {prompt.options
-            ?.filter((o) => !free || o.index < free.index)
-            .map(option)}
-          {free && other(free)}
-          {free &&
-            prompt.options?.filter((o) => o.index > free.index).map(option)}
-          {multi && (
-            <Button
-              variant="primary"
-              disabled={busy}
-              onClick={() => answer('next')}
-            >
-              Next
-            </Button>
-          )}
-          <div className="flex gap-2">
-            <Button
-              variant="ghost"
-              disabled={busy}
-              onClick={() => answer('cancel')}
-            >
-              Cancel (Esc)
-            </Button>
-            <span className="flex-1" />
-            <OpenTerminalButton showView={showView} />
+            {prompt.options
+              ?.filter((o) => !free || o.index < free.index)
+              .map(option)}
+            {free && other(free)}
+            {free &&
+              prompt.options?.filter((o) => o.index > free.index).map(option)}
+            {multi && (
+              <Button
+                variant="primary"
+                disabled={busy}
+                onClick={() => answer('next')}
+              >
+                Next
+              </Button>
+            )}
           </div>
+        )}
+      </div>
+      {answerable ? (
+        <div className="flex shrink-0 gap-2">
+          <Button
+            variant="ghost"
+            disabled={busy}
+            onClick={() => answer('cancel')}
+          >
+            Cancel (Esc)
+          </Button>
+          <span className="flex-1" />
+          <OpenTerminalButton showView={showView} />
         </div>
       ) : (
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           {!readOnly && prompt.kind !== 'unsupported' && (
             <span className="text-[13px] text-fg-muted">
               {sent ? 'Answer sent…' : `Waiting for ${agentLabel(agentName)}…`}
@@ -370,6 +390,82 @@ function FreeTextField({
     </form>
   )
 }
+
+// A dialog's body, a command or a question. Taller than its box, it shows
+// a fade and "Show all"; it counts as seen once it fits, is opened, or is
+// scrolled to its end.
+function PromptBody({
+  id,
+  body,
+  onSeen,
+}: {
+  id: string
+  body: string
+  onSeen: (seen: boolean) => void
+}) {
+  const ref = useRef<HTMLParagraphElement>(null)
+  const [expanded, setExpanded] = useState(false)
+  const [overflows, setOverflows] = useState(false)
+  const [atEnd, setAtEnd] = useState(false)
+  // Measured before paint, so a long command never shows its buttons
+  // enabled for a frame. Opened, the box has no height to overflow.
+  useLayoutEffect(() => {
+    const el = ref.current
+    /* v8 ignore next */
+    if (!el || expanded) return
+    const measure = () => {
+      setOverflows(el.scrollHeight > el.clientHeight + 1)
+      setAtEnd(scrolledToEnd(el))
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [expanded])
+  // Read once is read: shutting it again does not lock the answer
+  const [read, setRead] = useState(false)
+  const seen = read || !overflows || expanded || atEnd
+  useLayoutEffect(() => {
+    if (seen && overflows) setRead(true)
+    onSeen(seen)
+  }, [seen, overflows, onSeen])
+
+  return (
+    <div className="space-y-1">
+      <div className="relative">
+        <p
+          ref={ref}
+          id={id}
+          onScroll={(e) => setAtEnd(scrolledToEnd(e.currentTarget))}
+          className={`whitespace-pre-wrap break-words font-mono text-[12px] text-fg-muted ${expanded ? '' : 'max-h-40 overflow-y-auto'}`}
+        >
+          {body}
+        </p>
+        {overflows && !expanded && !atEnd && (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-linear-to-t from-surface to-transparent ui-terminal:from-bg"
+          />
+        )}
+      </div>
+      {overflows && (
+        <Button
+          size="sm"
+          variant="ghost"
+          aria-expanded={expanded}
+          aria-controls={id}
+          onClick={() => setExpanded(!expanded)}
+        >
+          {expanded ? 'Show less' : 'Show all'}
+        </Button>
+      )}
+    </div>
+  )
+}
+
+const scrolledToEnd = (el: HTMLElement) =>
+  el.scrollTop + el.clientHeight >= el.scrollHeight - 2
 
 // A step of a question in several parts; tall enough to tap (24px)
 const STEP =

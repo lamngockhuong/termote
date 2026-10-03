@@ -341,8 +341,8 @@ enter to confirm or esc to cancel") as the last row, a known title (run a comman
 with no row at column 0 between it and the numbered options, and every option ending in the key
 Codex shows for it. If a second approval title sits in that stretch, the rows above the title
 reach the top of the screen without a row at column 0 (the dialog's top may have scrolled off),
-the body is longer than the card shows, or the options do not parse, the card is read only
-(`unsupported`).
+or the options do not parse, the card is read only (`unsupported`). The body is sent whole, as
+for Claude Code.
 
 Who may answer is decided by `dialogStatus`: the agent's own status must say a dialog is open.
 On Herdr it reports `blocked`, so an approval card has options and a single-use `promptId`;
@@ -360,7 +360,14 @@ one above "Chat about this": its label is "Type something" (drawn faint under th
 text typed to read the same is not taken for it) until text is typed into it, then the text,
 wrapped onto the rows below it. With the pointer (`❯`) on it a digit is typed into the text
 instead of picking an option, so the question is `unsupported` until the pointer moves off it.
-A tab is `multiselect` only when every option but "Chat about this" has a box.
+A tab is `multiselect` only when every option but "Chat about this" has a box. The body and
+every option's detail are sent whole, never cut (the dialog search, `claudeMaxDialogRows`,
+bounds them), so the card can show all a dialog asks. The dialog's top edge is a rule at column
+0: a rule inside a command (a heredoc's separator) is indented, so it is never taken for the edge
+and the card never starts partway through the command. In the PWA the card takes at most 70% of
+the screen, its content scrolls and the Cancel row stays at its foot. A body taller than its box
+shows a fade and **Show all**; on a `permission` card only the refusing options can be tapped
+until the body is opened or scrolled to its end, so a long command is not approved unread.
 
 While the free-text option is empty the prompt carries it as `freeText` (`{index, label}`), and
 `answer` takes `{"text": "..."}` for it: at most 1 KB (UTF-8 bytes), not blank, with no control

@@ -231,7 +231,6 @@ const (
 	claudeMaxBoxRows = 100
 	// claudeMaxDialogRows bounds how far up a dialog is searched for.
 	claudeMaxDialogRows = 80
-	claudeMaxBody       = 4096
 )
 
 // claudeInputPlaceholders are hints Claude Code paints in an empty box.
@@ -251,6 +250,11 @@ func readClaudeScreen(capture string) agentScreen {
 func isBareRule(s string) bool {
 	t := strings.TrimSpace(s)
 	return utf8.RuneCountInString(t) >= 10 && strings.Trim(t, "─") == ""
+}
+
+// isEdgeRule: a dialog's top edge, a rule at column 0.
+func isEdgeRule(l screenLine) bool {
+	return atColumnZero(l) && isBareRule(l.text)
 }
 
 // isTopBorder also accepts the top border with a session label in it
@@ -358,14 +362,17 @@ func findDialog(lines []screenLine) agentScreen {
 	}
 	// The dialog's top edge is the first rule above the footer whose next
 	// row is not an option: AskUserQuestion draws a rule between its
-	// options and "Chat about this" (numbered, or not with previews).
+	// options and "Chat about this" (numbered, or not with previews). It
+	// starts at column 0, where nothing inside the dialog is drawn: a rule
+	// in a command (a heredoc's separator) is indented, and taken for the
+	// edge it would leave the command's start off the card.
 	top := -1
 	for i := footer - 1; i >= 0 && i >= footer-claudeMaxDialogRows; i-- {
 		next := ""
 		if i+1 < footer {
 			next = strings.TrimSpace(lines[i+1].text)
 		}
-		if isBareRule(lines[i].text) && i+1 < footer && !optionRowRe.MatchString(next) && next != "Chat about this" {
+		if isEdgeRule(lines[i]) && i+1 < footer && !optionRowRe.MatchString(next) && next != "Chat about this" {
 			top = i
 			break
 		}
@@ -398,7 +405,7 @@ func findSubmitTab(lines []screenLine) agentScreen {
 		if !isQuestionTabs(t) {
 			continue
 		}
-		if !isBareRule(lines[i-1].text) {
+		if !isEdgeRule(lines[i-1]) {
 			return agentScreen{}
 		}
 		// The options close the dialog: no row of another kind below them.
@@ -504,9 +511,12 @@ func parseDialog(region []screenLine, preview bool) *AgentPrompt {
 		}
 	}
 	p := &AgentPrompt{Kind: "unsupported", Steps: steps}
+	// The body and option details are kept whole, never cut: the card must
+	// show all a dialog asks before it is answered. The dialog search bounds
+	// them (claudeMaxDialogRows).
 	if len(head) > 0 {
 		p.Title = strings.TrimSpace(strings.TrimPrefix(head[0], "☐"))
-		p.Body, _ = clampText(strings.Join(head[1:], "\n"), claudeMaxBody)
+		p.Body = strings.Join(head[1:], "\n")
 	}
 	question := wizard || (len(head) > 0 && strings.HasPrefix(head[0], "☐"))
 	for _, o := range opts {
@@ -586,7 +596,6 @@ func parseDialog(region []screenLine, preview bool) *AgentPrompt {
 		if multi {
 			o.Label, o.Checked = checkbox(o.Label)
 		}
-		o.Detail, _ = clampText(o.Detail, 300)
 		keep = append(keep, o.PromptOption)
 	}
 	if len(keep) == 0 || len(keep) > 9 {
