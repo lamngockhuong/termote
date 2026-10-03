@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -823,7 +824,7 @@ func imageAgent(f *fakeWriter, delay time.Duration) {
 	f.onPaste = func(f *fakeWriter, text string) {
 		mu.Lock()
 		defer mu.Unlock()
-		if strings.HasPrefix(strings.Trim(text, `"`), "/") {
+		if filepath.IsAbs(strings.Trim(text, `"`)) { // C:\... on Windows
 			count++
 			if draft != "" {
 				draft += " "
