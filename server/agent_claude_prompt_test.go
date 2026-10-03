@@ -519,11 +519,12 @@ func TestReadClaudeScreenAdversarial(t *testing.T) {
 	})
 	t.Run("long typed answer on a multiSelect tab", func(t *testing.T) {
 		s := read("2.1.286-ask-wizard-multi-free-up")
-		old := "\x1b[39mHoney\n"
+		// No line end in the match: Windows checks the fixture out with CRLF
+		old := "\x1b[39mHoney"
 		if !strings.Contains(s, old) {
 			t.Fatalf("fixture lacks %q", old)
 		}
-		s = strings.Replace(s, old, old+"     "+strings.Repeat("h", 400)+"\n", 1)
+		s = strings.Replace(s, old, old+"\n     "+strings.Repeat("h", 400), 1)
 		if p := readClaudeScreen(s).prompt; p == nil || p.Kind != "multiselect" {
 			t.Errorf("%+v", p)
 		}
