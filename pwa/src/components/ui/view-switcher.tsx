@@ -18,7 +18,8 @@ interface Props<T extends string> {
 
 // Desktop header tabs switching the pane between its views (terminal, chat,
 // ...); the mobile header uses ViewMenu. Renders nothing while only one view
-// is available.
+// is available. On a touch screen a button is 36px, its group level with the
+// session tabs, and a pseudo-element grows its hit area to 44px.
 export function ViewSwitcher<T extends string>({
   views,
   value,
@@ -67,7 +68,7 @@ export function ViewSwitcher<T extends string>({
             aria-controls={panelId?.(id)}
             tabIndex={selected ? 0 : -1}
             onClick={() => onChange(id)}
-            className={`flex items-center justify-center gap-1.5 rounded-[calc(var(--radius-control)-2px)] ui-native:rounded-full ${FOCUS_RING} h-7 px-2.5 text-[12px] pointer-coarse:h-touch ${
+            className={`relative before:absolute before:inset-x-0 before:-inset-y-1 before:content-[''] flex items-center justify-center gap-1.5 rounded-[calc(var(--radius-control)-2px)] ui-native:rounded-full ${FOCUS_RING} h-7 px-2.5 text-[12px] pointer-coarse:h-9 ${
               selected
                 ? 'bg-surface-raised text-fg shadow-sm ui-terminal:bg-accent-soft ui-terminal:text-accent ui-terminal:shadow-none'
                 : 'text-fg-muted hover:text-fg'

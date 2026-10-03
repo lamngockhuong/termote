@@ -7,6 +7,8 @@
 @custom-variant ui-terminal (&:where([data-ui-style="terminal"] *));
 @custom-variant ui-native (&:where([data-ui-style="native"] *));
 @custom-variant ui-neutral (&:where([data-ui-style="neutral"] *));
+/* An installed iPad app shown in a window (utils/ipad-window.ts) */
+@custom-variant ipad-window (&:where([data-ipad-window] *));
 
 /* Nerd Font icons for the terminal (prompt themes, file icons). Only the
    icon code points use it; every other character keeps the monospace font. */

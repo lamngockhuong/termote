@@ -92,8 +92,8 @@ export function SessionTabs({
               key={session.id}
               className={`group flex h-9 shrink-0 items-center pr-1.5 text-[13px] transition-colors duration-(--duration-fast) ${
                 active
-                  ? 'rounded-t-control border border-b-0 border-border bg-term text-fg shadow-sm ui-terminal:shadow-[inset_0_2px_0_var(--color-accent)] ui-native:rounded-t-panel ui-native:border-0'
-                  : 'mb-1 h-8 rounded-control text-fg-muted hover:bg-surface-raised hover:text-fg'
+                  ? 'pointer-coarse:h-11 rounded-t-control border border-b-0 border-border bg-term text-fg shadow-sm ui-terminal:shadow-[inset_0_2px_0_var(--color-accent)] ui-native:rounded-t-panel ui-native:border-0'
+                  : 'mb-1 h-8 pointer-coarse:h-10 rounded-control text-fg-muted hover:bg-surface-raised hover:text-fg'
               }`}
             >
               <button
