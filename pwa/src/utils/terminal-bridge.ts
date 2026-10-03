@@ -4,6 +4,7 @@
  */
 import type { Terminal } from '@xterm/xterm'
 import type { TerminalHandle } from '../components/terminal-view'
+import { type UploadErrorReason, uploadImage } from './upload-image'
 
 // Key mappings for special keys (xterm escape sequences)
 // Format: { base: unmodified sequence, code: CSI code for modifiers }
@@ -103,11 +104,42 @@ export type PasteErrorReason =
   | 'not-supported' // Browser doesn't support clipboard API
   | 'unknown'
 
-export type PasteResult = { ok: true } | { ok: false; reason: PasteErrorReason }
+// image: the clipboard held an image and no text; nothing was pasted, the
+// caller uploads it (attachImageToTerminal).
+export type PasteResult =
+  | { ok: true; image?: Blob }
+  | { ok: false; reason: PasteErrorReason }
 
-// Paste text into terminal - returns result with specific error reason
+// What clipboard.read() found: an image only when no item has text (the same
+// rule as a paste event), else the text. null when read() is missing or
+// fails, so the caller falls back to readText().
+async function readClipboardItems(): Promise<
+  { image: Blob } | { text: string } | null
+> {
+  if (!navigator.clipboard.read) return null
+  try {
+    const items = await navigator.clipboard.read()
+    const textItem = items.find((i) => i.types.includes('text/plain'))
+    if (textItem) {
+      return { text: await (await textItem.getType('text/plain')).text() }
+    }
+    for (const item of items) {
+      const type = item.types.find((t) => t.startsWith('image/'))
+      if (type) return { image: await item.getType(type) }
+    }
+    return { text: '' }
+  } catch (err) {
+    const error = err as Error
+    console.warn('Clipboard read failed:', error.name, error.message)
+    return null
+  }
+}
+
+// Paste text into terminal - returns result with specific error reason.
+// With images, an image-only clipboard is returned instead of pasted.
 export async function pasteToTerminal(
   handle: TerminalHandle | null,
+  { images = false }: { images?: boolean } = {},
 ): Promise<PasteResult> {
   if (!handle?.term) return { ok: false, reason: 'no-terminal' }
 
@@ -116,13 +148,14 @@ export async function pasteToTerminal(
     return { ok: false, reason: 'not-supported' }
   }
 
+  const items = images ? await readClipboardItems() : null
+  if (items && 'image' in items) return { ok: true, image: items.image }
+
   try {
-    const text = await navigator.clipboard.readText()
-    if (text) {
-      handle.paste(text)
-      return { ok: true }
-    }
-    return { ok: false, reason: 'empty' }
+    const text = items ? items.text : await navigator.clipboard.readText()
+    if (!text) return { ok: false, reason: 'empty' }
+    handle.paste(text)
+    return { ok: true }
   } catch (err) {
     const error = err as Error
     console.warn('Clipboard access failed:', error.name, error.message)
@@ -139,6 +172,31 @@ export async function pasteToTerminal(
     }
     return { ok: false, reason: 'unknown' }
   }
+}
+
+export type AttachResult =
+  | { status: 'inserted' }
+  // The user moved to another pane while it uploaded; nothing was pasted.
+  | { status: 'pane-changed'; insert: string }
+  // The stream was not open (or the terminal is view-only).
+  | { status: 'not-inserted'; insert: string }
+  | { status: 'failed'; reason: UploadErrorReason }
+
+// Uploads an image and types its path, plus a space, into the pane it was
+// picked for: paneId is the pane active when the upload started, compared
+// with the active one once it ends (a slow upload must not land elsewhere).
+export async function attachImageToTerminal(
+  handle: TerminalHandle | null,
+  image: Blob,
+  paneId: string,
+  getActivePaneId: () => string,
+): Promise<AttachResult> {
+  const result = await uploadImage(image)
+  if (!result.ok) return { status: 'failed', reason: result.reason }
+  const { insert } = result.upload
+  if (getActivePaneId() !== paneId) return { status: 'pane-changed', insert }
+  if (!handle?.paste(`${insert} `)) return { status: 'not-inserted', insert }
+  return { status: 'inserted' }
 }
 
 // Send a command string to terminal

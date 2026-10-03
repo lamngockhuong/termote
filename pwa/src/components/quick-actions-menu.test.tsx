@@ -41,6 +41,24 @@ describe('QuickActionsSheet', () => {
     for (const name of ['Clear', 'Cancel', 'Clear line', 'Exit']) {
       expect(screen.getByRole('button', { name })).toBeInTheDocument()
     }
+    expect(
+      screen.queryByRole('button', { name: 'Attach image' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('Attach image closes the sheet, then opens the picker', () => {
+    const calls: string[] = []
+    render(
+      <QuickActionsSheet
+        isOpen
+        onClose={() => calls.push('close')}
+        onSendKey={vi.fn()}
+        onSendText={vi.fn()}
+        onAttachImage={() => calls.push('attach')}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Attach image' }))
+    expect(calls).toEqual(['close', 'attach'])
   })
 
   it.each([

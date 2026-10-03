@@ -22,6 +22,7 @@ import {
   unblockContextMenu,
 } from '../utils/terminal-bridge'
 import { terminalFontFamily } from '../utils/terminal-font'
+import { imageFromClipboard } from '../utils/upload-image'
 import type { ConnectionState } from './connection-indicator'
 import { FOCUS_RING } from './ui/button'
 
@@ -43,7 +44,8 @@ export interface TerminalHandle {
   scrollHistory: (lines: number) => boolean
   // Sends raw input; false when the stream is not open.
   send: (data: string) => boolean
-  paste: (text: string) => void
+  // Pastes text; false when the stream is not open (nothing was sent).
+  paste: (text: string) => boolean
   reconnect: () => void
 }
 
@@ -79,6 +81,9 @@ interface Props {
   // the pane, so the card would come and go with it.
   covered?: boolean
   onConnectionStateChange?: (state: ConnectionState) => void
+  // A paste that carries an image and no text goes here instead of the
+  // terminal (the server has uploads); unset, every paste is text.
+  onPasteImage?: (image: File) => void
 }
 
 // Foreground colours reach WCAG AA (4.5:1) on the terminal background of every
@@ -240,6 +245,7 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       onDriveLost,
       covered = false,
       onConnectionStateChange,
+      onPasteImage,
     },
     ref,
   ) => {
@@ -273,6 +279,8 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
     paneIdRef.current = paneId
     const readOnlyRef = useRef(readOnly)
     readOnlyRef.current = readOnly
+    const onPasteImageRef = useRef(onPasteImage)
+    onPasteImageRef.current = onPasteImage
     const driveSizeRef = useRef(driveSize)
     driveSizeRef.current = driveSize
     const onDriveLostRef = useRef(onDriveLost)
@@ -499,13 +507,16 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
           return socketRef.current.send(data)
         },
         paste: (text) => {
-          if (readOnlyRef.current) return
+          if (readOnlyRef.current) return false
           toLiveScreen()
           if (bracketedRef.current) {
-            socketRef.current.send(bracketPaste(text))
-          } else {
-            termRef.current?.paste(text)
+            return socketRef.current.send(bracketPaste(text))
           }
+          // xterm sends it through onData, which cannot report back.
+          const term = termRef.current
+          if (!term || socketRef.current.state !== 'connected') return false
+          term.paste(text)
+          return true
         },
         reconnect: () => socketRef.current.reconnect(),
       }
@@ -640,6 +651,26 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
         window.removeEventListener('pageshow', onPageShow)
       }
     }, [driveSize, isHerdr, wantsDrive])
+
+    // An image pasted without text is taken before xterm sees the paste:
+    // capture phase on the container runs ahead of xterm's own listener, and
+    // stopping it there keeps xterm from sending even an empty paste.
+    useEffect(() => {
+      const container = containerRef.current
+      /* v8 ignore next */
+      if (!container) return
+      const onPaste = (e: ClipboardEvent) => {
+        const handler = onPasteImageRef.current
+        if (!handler || readOnlyRef.current) return
+        const image = imageFromClipboard(e.clipboardData)
+        if (!image) return
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        handler(image)
+      }
+      container.addEventListener('paste', onPaste, true)
+      return () => container.removeEventListener('paste', onPaste, true)
+    }, [])
 
     // No cursor or keyboard focus for input that would go nowhere.
     useEffect(() => {

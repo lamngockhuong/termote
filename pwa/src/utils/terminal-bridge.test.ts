@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalHandle } from '../components/terminal-view'
 import {
   bracketPaste,
@@ -6,6 +6,7 @@ import {
   stripTerminalReplies,
 } from '../components/terminal-view'
 import {
+  attachImageToTerminal,
   blockContextMenu,
   blurTerminal,
   dragTerminal,
@@ -650,6 +651,148 @@ describe('pasteToTerminal', () => {
 
     const result = await pasteToTerminal(handle)
     expect(result).toEqual({ ok: false, reason: 'unknown' })
+  })
+})
+
+describe('pasteToTerminal with images', () => {
+  const image = new Blob(['img'], { type: 'image/png' })
+  const item = (parts: Record<string, Blob>) => ({
+    types: Object.keys(parts),
+    getType: vi.fn(async (t: string) => parts[t]),
+  })
+  function stubClipboard(clipboard: Partial<Clipboard>) {
+    Object.defineProperty(navigator, 'clipboard', {
+      value: clipboard,
+      writable: true,
+    })
+  }
+
+  it('returns an image-only clipboard instead of pasting it', async () => {
+    const handle = createMockHandle()
+    const readText = vi.fn()
+    stubClipboard({
+      readText,
+      read: vi.fn(async () => [item({ 'image/png': image })]),
+    } as unknown as Clipboard)
+    expect(await pasteToTerminal(handle, { images: true })).toEqual({
+      ok: true,
+      image,
+    })
+    expect(handle.paste).not.toHaveBeenCalled()
+    expect(readText).not.toHaveBeenCalled()
+  })
+
+  it('pastes the text when the clipboard holds an image and text', async () => {
+    const handle = createMockHandle()
+    stubClipboard({
+      readText: vi.fn(),
+      read: vi.fn(async () => [
+        item({ 'image/png': image }),
+        item({ 'text/plain': new Blob(['caption']) }),
+      ]),
+    } as unknown as Clipboard)
+    expect(await pasteToTerminal(handle, { images: true })).toEqual({
+      ok: true,
+    })
+    expect(handle.paste).toHaveBeenCalledWith('caption')
+  })
+
+  it('reports an empty clipboard read through read()', async () => {
+    const handle = createMockHandle()
+    stubClipboard({
+      readText: vi.fn(),
+      read: vi.fn(async () => [item({ 'text/html': new Blob(['<b>']) })]),
+    } as unknown as Clipboard)
+    expect(await pasteToTerminal(handle, { images: true })).toEqual({
+      ok: false,
+      reason: 'empty',
+    })
+  })
+
+  it('falls back to readText when read() fails or is missing', async () => {
+    const handle = createMockHandle()
+    stubClipboard({
+      readText: vi.fn(async () => 'text'),
+      read: vi.fn(async () => {
+        throw new DOMException('denied', 'NotAllowedError')
+      }),
+    } as unknown as Clipboard)
+    expect(await pasteToTerminal(handle, { images: true })).toEqual({
+      ok: true,
+    })
+    expect(handle.paste).toHaveBeenCalledWith('text')
+
+    stubClipboard({ readText: vi.fn(async () => 'plain') })
+    await pasteToTerminal(handle, { images: true })
+    expect(handle.paste).toHaveBeenLastCalledWith('plain')
+  })
+
+  it('never calls read() without images', async () => {
+    const handle = createMockHandle()
+    const read = vi.fn()
+    stubClipboard({
+      readText: vi.fn(async () => 'text'),
+      read,
+    } as unknown as Clipboard)
+    await pasteToTerminal(handle)
+    expect(read).not.toHaveBeenCalled()
+  })
+})
+
+describe('attachImageToTerminal', () => {
+  const image = new Blob(['img'], { type: 'image/png' })
+  const upload = {
+    id: 'a'.repeat(32),
+    path: '/c/a b.png',
+    insert: '"/c/a b.png"',
+  }
+  function stubUpload(status: number, body: unknown) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify(body), { status })),
+    )
+  }
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('types the path and a space into the pane it was picked for', async () => {
+    stubUpload(200, upload)
+    const handle = createMockHandle({ paste: vi.fn(() => true) })
+    expect(
+      await attachImageToTerminal(handle, image, '%1', () => '%1'),
+    ).toEqual({ status: 'inserted' })
+    expect(handle.paste).toHaveBeenCalledWith('"/c/a b.png" ')
+  })
+
+  it('pastes nothing when the active pane changed during the upload', async () => {
+    stubUpload(200, upload)
+    const handle = createMockHandle({ paste: vi.fn(() => true) })
+    expect(
+      await attachImageToTerminal(handle, image, '%1', () => '%2'),
+    ).toEqual({ status: 'pane-changed', insert: upload.insert })
+    expect(handle.paste).not.toHaveBeenCalled()
+  })
+
+  it('reports a paste that did not go out', async () => {
+    stubUpload(200, upload)
+    const handle = createMockHandle({ paste: vi.fn(() => false) })
+    expect(
+      await attachImageToTerminal(handle, image, '%1', () => '%1'),
+    ).toEqual({ status: 'not-inserted', insert: upload.insert })
+    expect(await attachImageToTerminal(null, image, '%1', () => '%1')).toEqual({
+      status: 'not-inserted',
+      insert: upload.insert,
+    })
+  })
+
+  it('reports a failed upload', async () => {
+    stubUpload(413, { error: 'x', code: 'too_large' })
+    const handle = createMockHandle()
+    expect(
+      await attachImageToTerminal(handle, image, '%1', () => '%1'),
+    ).toEqual({ status: 'failed', reason: 'too_large' })
+    expect(handle.paste).not.toHaveBeenCalled()
   })
 })
 
