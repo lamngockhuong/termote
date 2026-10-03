@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.7.0](https://github.com/lamngockhuong/termote/compare/v1.6.0...v1.7.0) (2026-10-03)
+
+
+### Features
+
+* send a Content-Security-Policy and other security headers ([#303](https://github.com/lamngockhuong/termote/issues/303)) ([1ee6560](https://github.com/lamngockhuong/termote/commit/1ee656075eaf597bb458a7ab340990aa1c883120)), closes [#247](https://github.com/lamngockhuong/termote/issues/247)
+
+
+### Bug Fixes
+
+* read a permission dialog's No drawn over a wrapped row ([#302](https://github.com/lamngockhuong/termote/issues/302)) ([8c5582d](https://github.com/lamngockhuong/termote/commit/8c5582d832ddc55932af0e17217511cb773a616e))
+* **server:** read a permission dialog's No drawn over a wrapped row ([8c5582d](https://github.com/lamngockhuong/termote/commit/8c5582d832ddc55932af0e17217511cb773a616e)), closes [#300](https://github.com/lamngockhuong/termote/issues/300) [#299](https://github.com/lamngockhuong/termote/issues/299)
+* show a long dialog whole on its card instead of cutting it ([#298](https://github.com/lamngockhuong/termote/issues/298)) ([e6ebe3b](https://github.com/lamngockhuong/termote/commit/e6ebe3b173b7c15dcd5f1981644932b147447b82))
+
 ## [1.6.0](https://github.com/lamngockhuong/termote/compare/v1.5.1...v1.6.0) (2026-10-02)
 
 
