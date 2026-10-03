@@ -73,7 +73,7 @@ jobs:
 
       - uses: pnpm/action-setup@v6.1.0
         with:
-          version: 12.6.0
+          version: 12.8.1
 
       - uses: actions/setup-node@v7
         with:
@@ -113,7 +113,7 @@ jobs:
 
       - uses: actions/setup-go@v7
         with:
-          go-version: "1.26"
+          go-version: "1.27"
           check-latest: true
           cache-dependency-path: server/go.mod
 
