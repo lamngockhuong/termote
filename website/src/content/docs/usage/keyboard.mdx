@@ -88,6 +88,7 @@ full-screen program does not redraw.
 | ------------------------ | -------------------------------------------------------------------------------- |
 | Copy mode icon (history) | Toggle tmux copy mode (hidden with the Herdr backend)                            |
 | Paste icon (clipboard)   | Paste from the source chosen in [Settings](/usage/settings/) (default: clipboard) |
+| Image icon               | Attach an image: see [Attach an image](#attach-an-image)                          |
 | ⇈                        | Scroll up: a page of tmux history, or the terminal scrollback with Herdr         |
 | ⇊                        | Scroll down: a page of tmux history, or the terminal scrollback with Herdr       |
 
@@ -190,10 +191,34 @@ There is no floating button over the terminal.
 | Cancel       | Interrupt process     | Ctrl+C               |
 | Clear line   | Delete current line   | Ctrl+U               |
 | Exit         | Logout/EOF            | Ctrl+D               |
+| Attach image | Attach an image       | The image's path     |
 
 <Aside>
 The Quick actions key appears on mobile devices only. On desktop, use the keyboard toolbar keys instead.
 </Aside>
+
+## Attach an Image
+
+Claude Code reads an image you paste, but only from the clipboard of the machine it runs on, which
+is empty when the image is on your phone. Termote uploads the image to that machine instead and
+types its path into the terminal, followed by a space; Claude Code (or Codex) turns the path into
+an attachment.
+
+- **Image key** on the toolbar, or **Attach image** in Quick actions: pick a photo, or take one
+  with the camera.
+- **Paste**: paste an image into the terminal (Ctrl+V on desktop), or tap the Paste key, long
+  press the terminal or press Ctrl+Shift+V with an image on the clipboard. When the clipboard holds
+  text too, the text is pasted, not the image.
+
+PNG, JPEG, GIF and WebP up to 10 MB are accepted. iOS normally sends a photo as JPEG; a HEIC file
+is refused, share it as JPEG instead. If you switch to another pane while the image uploads,
+nothing is typed: a message offers to insert the path into the pane you are on.
+
+The images are saved on the host in the user's cache directory (`~/.cache/termote/uploads` on
+Linux, `~/Library/Caches/termote/uploads` on macOS, `%LOCALAPPDATA%\termote\uploads` on
+Windows), readable only by that user. They are deleted after 7 days, or sooner, oldest first,
+when they take more than 200 MB. The image key is hidden when the server cannot store uploads, and
+for a view-only session.
 
 ## Tips
 

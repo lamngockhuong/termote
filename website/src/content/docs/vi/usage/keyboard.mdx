@@ -88,6 +88,7 @@ và chương trình toàn màn hình đang chạy không phải vẽ lại.
 | ------------------------------ | ------------------------------------------------------------------------------------ |
 | Icon chế độ sao chép (lịch sử) | Bật/tắt chế độ sao chép tmux (ẩn khi dùng backend Herdr)                             |
 | Icon Paste (clipboard)         | Dán từ nguồn đã chọn trong [Cài đặt](/vi/usage/settings/) (mặc định: clipboard)      |
+| Icon ảnh                       | Đính kèm ảnh: xem [Đính kèm ảnh](#đính-kèm-ảnh)                                      |
 | ⇈                              | Cuộn lên: một trang lịch sử tmux, hoặc phần scrollback của terminal khi dùng Herdr   |
 | ⇊                              | Cuộn xuống: một trang lịch sử tmux, hoặc phần scrollback của terminal khi dùng Herdr |
 
@@ -190,10 +191,34 @@ phổ biến. Không có nút nổi nào nằm đè lên terminal.
 | Cancel     | Ngắt tiến trình      | Ctrl+C         |
 | Clear line | Xóa dòng hiện tại    | Ctrl+U         |
 | Exit       | Logout/EOF           | Ctrl+D         |
+| Attach image | Đính kèm ảnh       | Đường dẫn ảnh  |
 
 <Aside>
 Phím Quick actions chỉ hiện trên thiết bị di động. Trên desktop, dùng các phím trên thanh công cụ bàn phím.
 </Aside>
+
+## Đính kèm ảnh
+
+Claude Code đọc được ảnh bạn dán vào, nhưng chỉ lấy từ bộ nhớ tạm của máy đang chạy nó. Khi ảnh
+nằm trên điện thoại, bộ nhớ tạm đó trống. Vì vậy Termote tải ảnh lên máy đó rồi gõ đường dẫn của
+ảnh vào terminal, kèm một dấu cách; Claude Code (hoặc Codex) sẽ biến đường dẫn này thành tệp đính
+kèm.
+
+- **Phím ảnh** trên thanh công cụ, hoặc **Attach image** trong Quick actions: chọn ảnh có sẵn hoặc
+  chụp bằng camera.
+- **Dán**: dán ảnh vào terminal (Ctrl+V trên desktop); hoặc khi bộ nhớ tạm đang chứa ảnh, chạm
+  phím Paste, nhấn giữ terminal hay bấm Ctrl+Shift+V. Nếu bộ nhớ tạm có cả chữ, Termote dán chữ
+  chứ không dán ảnh.
+
+Termote nhận ảnh PNG, JPEG, GIF và WebP, tối đa 10 MB. iOS thường gửi ảnh dưới dạng JPEG; tệp HEIC
+sẽ bị từ chối, hãy chia sẻ ảnh đó dưới dạng JPEG. Nếu bạn chuyển sang pane khác trong lúc ảnh đang
+tải lên, Termote không gõ gì cả mà hiện thông báo để bạn chèn đường dẫn vào pane đang mở.
+
+Ảnh được lưu trên máy chủ, trong thư mục cache của người dùng (`~/.cache/termote/uploads` trên
+Linux, `~/Library/Caches/termote/uploads` trên macOS, `%LOCALAPPDATA%\termote\uploads` trên
+Windows), và chỉ người dùng đó đọc được. Ảnh bị xóa sau 7 ngày, hoặc sớm hơn (ảnh cũ nhất trước)
+khi tổng dung lượng vượt 200 MB. Phím ảnh bị ẩn khi máy chủ không lưu được ảnh tải lên, và trong
+phiên chỉ xem.
 
 ## Mẹo
 

@@ -187,7 +187,20 @@ GET    /api/mux/panes/{id}/files/tree?path=&root=               → {root, isRep
 GET    /api/mux/panes/{id}/files/content?path=&root=&reveal=    → {root, path, size, text} | {…, previewable: false, reason} | {…, sensitive: true}
 GET    /api/mux/panes/{id}/files/changes?root=                  → {root, isRepo, branch, entries, truncated}
 GET    /api/mux/panes/{id}/files/diff?path=&orig=&staged=&root=&reveal= → {root, path, binary, conflict, truncated, sensitive, reason, hunks}
+POST   /api/mux/uploads            body: raw image (image/png|jpeg|gif|webp) → {id, path, insert}
 ```
+
+`/uploads` (`caps.uploads`) saves an image on the host so an agent can read it by path: the
+host clipboard is empty when the image sits on a phone. The PWA types `insert` (the path,
+double-quoted when it holds a space) plus a space into the pane it was picked for, from the
+toolbar's Attach key, the Quick actions sheet, an image pasted into the terminal, the Paste
+key, a long press or Ctrl+Shift+V (each only for an image without text; with text, the text is
+pasted). If the user moved to another
+pane while it uploaded, nothing is typed: a toast offers to insert it into the current one.
+Errors answer a JSON `code`: `unsupported_image` (415: not one of the four types, or bytes of
+another type), `too_large` (413, over 10 MB), `busy` (429, two uploads already running),
+`storage_full` (507), `uploads_unavailable` (503, no usable upload dir). Files live in
+`os.UserCacheDir()/termote/uploads`, 7 days or until 200 MB (see Security Model).
 
 `caps.scroll` (Herdr): the stream only carries screen renders, so no history reaches the
 xterm.js scrollback. The PWA turns the mouse wheel and the scroll buttons into
@@ -529,6 +542,11 @@ the world-writable `/tmp`). A server that does not answer within 10s
 stops the container. The Herdr binary is pinned by version and sha256 per arch in the
 `Dockerfile`. This Herdr sees only the container's terminals.
 
+The container runs as the host uid, which cannot create directories in the root-owned
+`/home/termote`; the image creates `/home/termote/.cache` mode 1777 (sticky, like `/tmp`) so
+`termote serve` can create its upload dir `~/.cache/termote/uploads` (0700, its own). The
+agent runs in the same container, so the path it is given is valid there.
+
 ### Native
 
 ```bash
@@ -603,7 +621,10 @@ termote update --force           # Force reinstall current version
    with `--allow-host`; there is no wildcard, so DNS rebinding from an attacker-controlled page
    cannot reach the server
 5. **Write/CSRF guard**: state-changing `/api/mux/*` requests must be same-site
-   (`Sec-Fetch-Site`/`Origin` on the allowlist) and `Content-Type: application/json`
+   (`Sec-Fetch-Site`/`Origin` on the allowlist) and `Content-Type: application/json`, except
+   `/api/mux/uploads`, which also takes a raw `image/png|jpeg|gif|webp` body: those types are
+   not CORS-safelisted either, so another site's request still needs a preflight that is never
+   answered; multipart, which a form posts without one, stays refused
 6. **Terminal access** (`/api/mux/stream`): same Origin check, plus a single-use 30s-TTL token
    minted by `/api/mux/stream-token` and consumed on WebSocket upgrade
 7. **Herdr guard**: `--mux herdr --no-auth` is refused unless `--allow-herdr-no-auth` is also
@@ -624,7 +645,13 @@ termote update --force           # Force reinstall current version
     config/state dirs, `/proc`, `/sys`, `/dev` and `.git` never served; sensitive files only
     with `reveal=1`; git run without a shell and with every repo-configured program disabled;
     `Sec-Fetch-Site`/`Origin` checked on these GETs too
-12. **Content-Security-Policy**: every response for an allowed `Host` carries
+12. **Image uploads**: at most 10 MB and 2 at a time; the 60s read deadline every request gets
+    grows to 5 minutes only after auth and once the upload has a slot; the type is read from the bytes; a random server-chosen
+    name, written to a `.part` (0600) then renamed, in a 0700 dir that must be a real dir owned
+    by the server user; 10 MB reserved against a 200 MB quota before writing; files older than
+    7 days go, then the oldest past the quota, never one younger than an hour, and nothing but
+    the store's own names
+13. **Content-Security-Policy**: every response for an allowed `Host` carries
     `default-src 'self'`; `script-src 'self'` plus the `sha256` of each inline script in the
     served `index.html` (the pre-paint theme script), computed at startup, so no other inline
     script runs; `style-src 'self' 'unsafe-inline'` (xterm.js and React set inline styles);
