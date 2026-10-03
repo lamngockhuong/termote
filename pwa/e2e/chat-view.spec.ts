@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures'
 
 // The Chat view against a stand-in Claude Code (tests/fixtures/fake-claude.sh)
 // running in a window of the server's tmux. It needs the socket and session

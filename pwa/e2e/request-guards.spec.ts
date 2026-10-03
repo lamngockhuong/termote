@@ -1,5 +1,5 @@
 import http from 'node:http'
-import { test, expect, type APIRequestContext, type TestInfo } from '@playwright/test'
+import { test, expect, type APIRequestContext, type TestInfo } from './fixtures'
 
 // The browser WebSocket API cannot set Origin or Host, so the handshakes here
 // are sent with node:http and judged by the status the server answers with.

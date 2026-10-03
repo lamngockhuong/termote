@@ -320,6 +320,7 @@ The `update` command:
 | `server/files_sensitive.go`                       | Names of files that usually hold secrets                      |
 | `server/agent_proc*.go`                           | Finds Claude Code (or Codex) under a tmux/psmux pane          |
 | `server/guard.go`                                 | Host allowlist + Origin/Content-Type write guard              |
+| `server/security_headers.go`                      | Content-Security-Policy and other security headers            |
 | `server/serve_config.go`                          | Server config from the saved config, else the environment     |
 | `server/install_layout.go`                        | Versioned install layout (`versions/<v>`, `current`, prune)   |
 | `server/tailscale.go`                             | `tailscale serve` mapping (apply/remove, never sudo)          |
@@ -411,6 +412,15 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
 - **Brute-force protection**: built-in rate limiter (5 failed attempts/min per IP → 429)
 - **Server hardening**: ReadHeaderTimeout (Slowloris protection), request body size limits (8KB on `/api/mux/*`, 64KB on `agent/message`)
 - **Error sanitization**: internal errors logged server-side only, generic messages returned to clients
+- **Content-Security-Policy** (`server/security_headers.go`): on every response, `script-src 'self'`
+  plus the `sha256` of the inline theme script in the served `index.html` (hashed at startup,
+  so a changed `TERMOTE_PWA_DIR` page needs a restart), `style-src 'self' 'unsafe-inline'`,
+  `img-src 'self' data:`, `connect-src 'self'` + `ws://`/`wss://` of the request's `Host` (a
+  name or IPv4) + `https://api.github.com`, `worker-src`/`manifest-src 'self'`,
+  `object-src 'none'`, `base-uri`/`form-action 'self'`, `frame-ancestors 'none'`; plus
+  `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`.
+  Every E2E spec imports `test` from `pwa/e2e/fixtures.ts`, which fails a test on any CSP
+  violation
 - **Config persistence**: the saved password is AES-256-CBC with an HMAC, keyed by a random
   per-install `secret` file (0600) on Unix, DPAPI on Windows; the config file is also chmod
   600. The password is never written to the systemd unit, launchd plist, Scheduled Task or any

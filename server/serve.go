@@ -240,13 +240,17 @@ func buildServer(cfg serveConfig, m Mux) (http.Handler, *streamHub, error) {
 	})
 
 	// PWA static files (fallback to index.html for SPA routing)
-	mux.Handle("/", spaHandler(webui.FS(cfg.PWADir)))
+	pwa := webui.FS(cfg.PWADir)
+	mux.Handle("/", spaHandler(pwa))
 
 	var handler http.Handler = mux
 	if !cfg.NoAuth {
 		handler = basicAuth(cfg.User, cfg.Pass, handler)
 	}
 	handler = writeGuard(allowed, handler)
+	// Inside hostGuard: the policy names the request's Host, so only an
+	// allowed one.
+	handler = securityHeaders(pwa, handler)
 	handler = hostGuard(allowed, handler)
 	return noCacheMiddleware(handler), hub, nil
 }

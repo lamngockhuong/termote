@@ -1,6 +1,6 @@
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { type Browser, type Page, type TestInfo, test } from '@playwright/test'
+import { type Browser, type Page, type TestInfo, test } from './fixtures'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const screenshotsDir = join(__dirname, '../../docs/images/screenshots')

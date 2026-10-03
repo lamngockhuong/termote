@@ -618,6 +618,16 @@ termote update --force           # Force reinstall current version
     config/state dirs, `/proc`, `/sys`, `/dev` and `.git` never served; sensitive files only
     with `reveal=1`; git run without a shell and with every repo-configured program disabled;
     `Sec-Fetch-Site`/`Origin` checked on these GETs too
+12. **Content-Security-Policy**: every response for an allowed `Host` carries
+    `default-src 'self'`; `script-src 'self'` plus the `sha256` of each inline script in the
+    served `index.html` (the pre-paint theme script), computed at startup, so no other inline
+    script runs; `style-src 'self' 'unsafe-inline'` (xterm.js and React set inline styles);
+    `img-src 'self' data:`; `connect-src 'self'`, `ws://`/`wss://` of the request's `Host` (a
+    name or IPv4 address) and `https://api.github.com` (update check);
+    `worker-src`/`manifest-src 'self'`;
+    `object-src 'none'`, `base-uri`/`form-action 'self'`, `frame-ancestors 'none'`. With it go
+    `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` and
+    `X-Frame-Options: DENY`. Every E2E spec fails on a CSP violation (`pwa/e2e/fixtures.ts`)
 
 ## Scalability Notes
 
