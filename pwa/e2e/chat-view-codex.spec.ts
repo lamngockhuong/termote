@@ -8,7 +8,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { expect, type Page, test } from '@playwright/test'
+import { expect, type Page, test } from './fixtures'
 
 // The Chat view against a stand-in Codex (tests/fixtures/fake-codex.sh)
 // in a window of the server's tmux, next to a window that only holds the same

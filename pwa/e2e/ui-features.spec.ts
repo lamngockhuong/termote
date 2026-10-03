@@ -1,4 +1,4 @@
-import { expect, type Page, test } from '@playwright/test'
+import { expect, type Page, test } from './fixtures'
 
 const waitForTerminal = (page: Page, timeout = 10000) =>
   page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout })
