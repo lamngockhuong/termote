@@ -320,7 +320,7 @@ func TestTranscriptRoute(t *testing.T) {
 	writeTranscript(t, dir, testSessionID, lines(0, 2))
 	loc := &fakeLocator{s: AgentSession{Agent: "claude", ID: testSessionID, ClaudeDir: dir, Status: "working"}, found: true}
 	mux := http.NewServeMux()
-	registerMuxRoutes(mux, loc, newStreamTokenStore())
+	registerMuxRoutes(mux, loc, newStreamTokenStore(), nil)
 
 	code, body := getJSON(t, mux, "/api/mux/panes/1/agent/transcript")
 	if code != http.StatusOK || body["agent"] != "claude" || body["status"] != "working" || body["reset"] != true || len(body["entries"].([]any)) != 2 {
@@ -363,7 +363,7 @@ func TestTranscriptRoute(t *testing.T) {
 
 func TestTranscriptRouteWithoutLocator(t *testing.T) {
 	mux := http.NewServeMux()
-	registerMuxRoutes(mux, &fakeMux{}, newStreamTokenStore())
+	registerMuxRoutes(mux, &fakeMux{}, newStreamTokenStore(), nil)
 	if code, body := getJSON(t, mux, "/api/mux/panes/1/agent/transcript"); code != http.StatusNotFound || body["error"] != "agent not available" {
 		t.Errorf("GET = %d %v", code, body)
 	}
@@ -374,7 +374,7 @@ func TestTranscriptRouteSharesWorkBetweenClients(t *testing.T) {
 	writeTranscript(t, dir, testSessionID, lines(0, 2))
 	loc := &fakeLocator{s: AgentSession{Agent: "claude", ID: testSessionID, ClaudeDir: filepath.Clean(dir)}, found: true}
 	mux := http.NewServeMux()
-	registerMuxRoutes(mux, loc, newStreamTokenStore())
+	registerMuxRoutes(mux, loc, newStreamTokenStore(), nil)
 	var wg sync.WaitGroup
 	for i := 0; i < 3; i++ {
 		wg.Add(1)
@@ -449,7 +449,7 @@ func TestTranscriptRouteIgnoresJunkCursor(t *testing.T) {
 	writeTranscript(t, dir, testSessionID, lines(0, 2))
 	loc := &fakeLocator{s: AgentSession{Agent: "claude", ID: testSessionID, ClaudeDir: dir}, found: true}
 	mux := http.NewServeMux()
-	a := registerAgentRoutes(mux, loc)
+	a := registerAgentRoutes(mux, loc, nil)
 	for i := 0; i < 5; i++ {
 		if code, body := getJSON(t, mux, fmt.Sprintf("/api/mux/panes/1/agent/transcript?cursor=junk%d", i)); code != http.StatusOK || body["reset"] != true {
 			t.Fatalf("junk cursor = %d %v", code, body)
@@ -467,7 +467,7 @@ func TestAgentReadRoutesRejectCrossSite(t *testing.T) {
 	writeTranscript(t, dir, testSessionID, lines(0, 2))
 	loc := &fakeLocator{s: AgentSession{Agent: "claude", ID: testSessionID, ClaudeDir: dir}, found: true}
 	mux := http.NewServeMux()
-	agent := registerMuxRoutes(mux, loc, newStreamTokenStore())
+	agent := registerMuxRoutes(mux, loc, newStreamTokenStore(), nil)
 	agent.registerCommandsRoute(mux, nil, parseAllowedHosts("", false))
 	for _, route := range []string{"transcript", "prompt"} {
 		path := "/api/mux/panes/1/agent/" + route

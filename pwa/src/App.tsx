@@ -48,6 +48,7 @@ import { checkApiVersion } from './utils/api-version'
 import { formatDeepLink, parseDeepLink } from './utils/deep-link'
 import { matchesFilter } from './utils/session-filter'
 import {
+  attachImageToTerminal,
   blurTerminal,
   dragTerminal,
   focusTerminal,
@@ -63,6 +64,11 @@ import {
   sendTextToTerminal,
   toggleTmuxCopyMode,
 } from './utils/terminal-bridge'
+import {
+  pickImageFile,
+  UPLOAD_TIMEOUT_MS,
+  uploadErrorMessage,
+} from './utils/upload-image'
 
 // Check if paste result should show an error toast
 const shouldShowPasteError = (
@@ -88,6 +94,14 @@ const getClipboardErrorMsg = (
       return 'Clipboard access failed. Use text input to paste.'
   }
 }
+
+type ToastAction = { label: string; onClick: () => void }
+
+// A toast with an action stays long enough to reach the button.
+const ACTION_TOAST_MS = 10000
+
+// An upload slower than this shows that it is running.
+const SLOW_UPLOAD_MS = 300
 
 interface AppProps {
   // Views of the pane; tests register extra ones
@@ -118,12 +132,23 @@ export default function App({
     id: number
     message: string
     variant: ToastVariant
+    action?: ToastAction
+    duration?: number
   } | null>(null)
   // Each toast gets its own id, so the same message again starts afresh
   const toastIdRef = useRef(0)
+  // Returns the toast's id, so its owner can close only that one.
   const showToast = useCallback(
-    (message: string, variant: ToastVariant = 'info') =>
-      setToast({ id: ++toastIdRef.current, message, variant }),
+    (
+      message: string,
+      variant: ToastVariant = 'info',
+      action?: ToastAction,
+      duration?: number,
+    ) => {
+      const id = ++toastIdRef.current
+      setToast({ id, message, variant, action, duration })
+      return id
+    },
     [],
   )
   const onDriveLost = useCallback(
@@ -341,6 +366,90 @@ export default function App({
     [copyModeSupported, readOnly, getTerminal],
   )
 
+  // Images reach the agent as a path typed into the pane: uploaded to the
+  // host first. View-only sends nothing, so it uploads nothing either.
+  const uploadsOn = !!mux.caps.uploads && !readOnly
+  // The pane an upload is for is compared with this once it ends.
+  const activePaneRef = useRef('')
+  activePaneRef.current = activeSession.paneId ?? activeSession.id
+
+  // Types an uploaded path into the current pane, or offers to copy it.
+  const insertUploadedPath = useCallback(
+    (insert: string) => {
+      if (getTerminal()?.paste(`${insert} `)) return
+      showToast(`Image not inserted: ${insert}`, 'warning', {
+        label: 'Copy',
+        // No clipboard API over plain HTTP: that throws, and is caught too.
+        onClick: () => {
+          Promise.resolve()
+            .then(() => navigator.clipboard.writeText(insert))
+            .catch(() => showToast('Could not copy the path', 'danger'))
+        },
+      })
+    },
+    [getTerminal, showToast],
+  )
+
+  const attachImage = useCallback(
+    async (image: Blob) => {
+      // Shown for as long as the upload may run; closed only if still shown.
+      let uploadingToast = 0
+      const timer = setTimeout(() => {
+        uploadingToast = showToast(
+          'Uploading image…',
+          'info',
+          undefined,
+          UPLOAD_TIMEOUT_MS,
+        )
+      }, SLOW_UPLOAD_MS)
+      const result = await attachImageToTerminal(
+        getTerminal(),
+        image,
+        activePaneRef.current,
+        () => activePaneRef.current,
+      )
+      clearTimeout(timer)
+      switch (result.status) {
+        case 'inserted':
+          setToast((t) => (t?.id === uploadingToast ? null : t))
+          break
+        case 'pane-changed':
+          showToast(`Image uploaded: ${result.insert}`, 'info', {
+            label: 'Insert',
+            onClick: () => insertUploadedPath(result.insert),
+          })
+          break
+        case 'not-inserted':
+          insertUploadedPath(result.insert)
+          break
+        case 'failed':
+          showToast(uploadErrorMessage(result.reason), 'danger')
+      }
+    },
+    [getTerminal, showToast, insertUploadedPath],
+  )
+
+  const handleAttachImage = useCallback(async () => {
+    const file = await pickImageFile()
+    if (file) await attachImage(file)
+  }, [attachImage])
+
+  // Pastes the clipboard's text; an image without text is uploaded instead
+  // when the server takes uploads. Long press gets its own error wording.
+  const pasteClipboard = useCallback(
+    async (longPress = false) => {
+      const result = await pasteToTerminal(getTerminal(), {
+        images: uploadsOn,
+      })
+      if (shouldShowPasteError(result)) {
+        showToast(getClipboardErrorMsg(result.reason, longPress), 'danger')
+      } else if (result.ok && result.image) {
+        await attachImage(result.image)
+      }
+    },
+    [getTerminal, uploadsOn, showToast, attachImage],
+  )
+
   // The history follows the finger, except with tmux copy mode, which only
   // scrolls by pages (keys), so a swipe there scrolls one page.
   const dragsHistory = !(copyModeSupported && !readOnly)
@@ -370,11 +479,7 @@ export default function App({
         if (!dragsHistory) handleScroll('up')
       },
       onLongPress: async () => {
-        if (readOnly) return
-        const result = await pasteToTerminal(getTerminal())
-        if (shouldShowPasteError(result)) {
-          showToast(getClipboardErrorMsg(result.reason, true), 'danger')
-        }
+        if (!readOnly) await pasteClipboard(true)
       },
       onPinchIn: decrease,
       onPinchOut: increase,
@@ -387,7 +492,7 @@ export default function App({
       getTerminal,
       handleScroll,
       readOnly,
-      showToast,
+      pasteClipboard,
     ],
   )
 
@@ -471,15 +576,12 @@ export default function App({
   const handleCtrlShiftKey = useCallback(
     async (key: string) => {
       if (key === 'v') {
-        const result = await pasteToTerminal(getTerminal())
-        if (shouldShowPasteError(result)) {
-          showToast(getClipboardErrorMsg(result.reason), 'danger')
-        }
+        await pasteClipboard()
         return
       }
       sendKeyToTerminal(getTerminal(), key, { ctrl: true, shift: true })
     },
-    [getTerminal, showToast],
+    [getTerminal, pasteClipboard],
   )
 
   const handleTmuxCopy = useCallback(() => {
@@ -491,12 +593,9 @@ export default function App({
     if (settings.pasteSource === 'tmux' && copyModeSupported) {
       pasteTmuxBuffer(getTerminal())
     } else {
-      const result = await pasteToTerminal(getTerminal())
-      if (shouldShowPasteError(result)) {
-        showToast(getClipboardErrorMsg(result.reason), 'danger')
-      }
+      await pasteClipboard()
     }
-  }, [settings.pasteSource, copyModeSupported, getTerminal, showToast])
+  }, [settings.pasteSource, copyModeSupported, getTerminal, pasteClipboard])
 
   const handleSendText = useCallback(
     (text: string) => {
@@ -520,8 +619,9 @@ export default function App({
       },
       onSendText: (text: string) =>
         sendTextToTerminal(terminalRef.current, text),
+      onAttachImage: uploadsOn ? handleAttachImage : undefined,
     }),
-    [],
+    [uploadsOn, handleAttachImage],
   )
 
   const handleHistorySelect = useCallback(
@@ -760,6 +860,7 @@ export default function App({
                     // release) or covers it maximized (no resize at all)
                     covered={!isTerminalView || holdTerminalSize}
                     onConnectionStateChange={setStreamState}
+                    onPasteImage={uploadsOn ? attachImage : undefined}
                   />
                 </div>
                 {/* Gesture overlay - captures touch gestures (mobile only) */}
@@ -826,6 +927,7 @@ export default function App({
             onTmuxCopy={handleTmuxCopy}
             showTmuxCopy={copyModeSupported}
             onPaste={handlePaste}
+            onAttachImage={uploadsOn ? handleAttachImage : undefined}
             onToggleKeyboard={toggleKeyboard}
             onSendText={handleSendText}
             ctrlActive={ctrlActive}
@@ -929,6 +1031,10 @@ export default function App({
           key={toast.id}
           message={toast.message}
           variant={toast.variant}
+          action={toast.action}
+          duration={
+            toast.duration ?? (toast.action ? ACTION_TOAST_MS : undefined)
+          }
           onClose={() => setToast(null)}
         />
       )}

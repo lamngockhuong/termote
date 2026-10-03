@@ -123,6 +123,8 @@ func TestWriteGuard(t *testing.T) {
 		{"no browser headers (curl)", func(r *http.Request) { r.Header.Del("Origin"); r.Header.Del("Sec-Fetch-Site") }, http.StatusOK},
 		{"text/plain", func(r *http.Request) { r.Header.Set("Content-Type", "text/plain") }, http.StatusUnsupportedMediaType},
 		{"form", func(r *http.Request) { r.Header.Set("Content-Type", "application/x-www-form-urlencoded") }, http.StatusUnsupportedMediaType},
+		// Only the upload route takes an image body.
+		{"image on another route", func(r *http.Request) { r.Header.Set("Content-Type", "image/png") }, http.StatusUnsupportedMediaType},
 		{"missing content type", func(r *http.Request) { r.Header.Del("Content-Type") }, http.StatusUnsupportedMediaType},
 		{"cross-site", func(r *http.Request) { r.Header.Set("Sec-Fetch-Site", "cross-site") }, http.StatusForbidden},
 		{"same-site", func(r *http.Request) { r.Header.Set("Sec-Fetch-Site", "same-site") }, http.StatusForbidden},

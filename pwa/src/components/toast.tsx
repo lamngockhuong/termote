@@ -1,5 +1,6 @@
 import { CircleAlert, CircleCheck, Info, TriangleAlert } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { FOCUS_RING } from './ui/button'
 
 export type ToastVariant = 'info' | 'success' | 'warning' | 'danger'
 
@@ -8,6 +9,8 @@ interface Props {
   onClose: () => void
   duration?: number
   variant?: ToastVariant
+  // A button next to the message; pressing it closes the toast, then runs it.
+  action?: { label: string; onClick: () => void }
 }
 
 const VARIANTS = {
@@ -28,6 +31,7 @@ export function Toast({
   onClose,
   duration = 4000,
   variant = 'info',
+  action,
 }: Props) {
   const [leaving, setLeaving] = useState(false)
   // Callers pass an inline onClose; depending on it would restart the timer
@@ -57,7 +61,20 @@ export function Toast({
         className={`flex max-w-[85vw] items-center gap-2 rounded-panel border border-border bg-surface-raised px-4 py-3 text-sm text-fg shadow-lg transition-[opacity,translate] duration-(--duration-base) ease-emphasized starting:opacity-0 motion-safe:starting:-translate-y-2 ${leaving ? 'opacity-0 motion-safe:-translate-y-2' : ''}`}
       >
         <Icon size={16} aria-hidden="true" className={`shrink-0 ${color}`} />
-        {message}
+        <span className="min-w-0 break-words">{message}</span>
+        {action && (
+          <button
+            type="button"
+            // Closed first: the action may show the next toast.
+            onClick={() => {
+              onCloseRef.current()
+              action.onClick()
+            }}
+            className={`pointer-events-auto shrink-0 rounded-control px-2 py-1 font-medium text-accent hover:bg-surface ${FOCUS_RING}`}
+          >
+            {action.label}
+          </button>
+        )}
       </div>
     </div>
   )

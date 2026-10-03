@@ -11,6 +11,23 @@ describe('Toast', () => {
     vi.useRealTimers()
   })
 
+  it('runs its action and closes', () => {
+    const onClose = vi.fn()
+    const onClick = vi.fn()
+    render(
+      <Toast
+        message="Image uploaded"
+        onClose={onClose}
+        action={{ label: 'Insert', onClick }}
+      />,
+    )
+    act(() => {
+      screen.getByRole('button', { name: 'Insert' }).click()
+    })
+    expect(onClick).toHaveBeenCalled()
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
   it('renders the message', () => {
     render(<Toast message="Hello world" onClose={vi.fn()} />)
     expect(screen.getByText('Hello world')).toBeInTheDocument()

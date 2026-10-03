@@ -301,6 +301,7 @@ The `update` command:
 | `pwa/src/hooks/use-files.ts`                      | File tree of a pane's root, one store per pane                |
 | `pwa/src/hooks/use-git-changes.ts`                | Polls a pane's git status, one store per pane                 |
 | `pwa/src/utils/highlight.ts`                      | Syntax highlighting through a Shiki worker, with a timeout    |
+| `pwa/src/utils/upload-image.ts`                   | Uploads an image to the host, picks one, error messages       |
 | `server/main.go`                                  | Entry point (`serve` runs the server, no args opens the menu) |
 | `server/serve.go`                                 | Server (PWA static files, auth, guards)                       |
 | `server/mux.go`                                   | `Mux` interface + `/api/mux/*` routes                         |
@@ -320,6 +321,7 @@ The `update` command:
 | `server/files_sensitive.go`                       | Names of files that usually hold secrets                      |
 | `server/agent_proc*.go`                           | Finds Claude Code (or Codex) under a tmux/psmux pane          |
 | `server/guard.go`                                 | Host allowlist + Origin/Content-Type write guard              |
+| `server/uploads.go`                               | `/api/mux/uploads`: image store (naming, quota, retention)    |
 | `server/security_headers.go`                      | Content-Security-Policy and other security headers            |
 | `server/serve_config.go`                          | Server config from the saved config, else the environment     |
 | `server/install_layout.go`                        | Versioned install layout (`versions/<v>`, `current`, prune)   |
@@ -408,6 +410,23 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   without a shell, with `GIT_*`/`TERMOTE_*` stripped, hooks (`core.hooksPath` to the null
   device), index refresh on diff, fsmonitor, filter drivers, external diff and textconv off,
   submodules ignored, 10s timeout, 2 at a time
+- **Image uploads** (`POST /api/mux/uploads`): the PWA sends an image so an agent can read it by
+  path (the host clipboard is empty when the image sits on a phone). Same auth, Host allowlist,
+  `Sec-Fetch-Site`/`Origin` check and `requireWriteRole` as every write; the body is a raw
+  `image/png|jpeg|gif|webp` (`writeGuard` takes these types on this path only: `image/*` is not
+  CORS-safelisted, so another site still needs the preflight; multipart stays 415, since a form
+  posts it without one). At most 10 MB (a larger `Content-Length` is refused unread); once
+  authenticated and given a slot its read deadline grows to 5 minutes; the type is read
+  from the first bytes and must equal the declared one; the name is random (`<32 hex>.<ext>`,
+  the client's name is never read), written to a `.part` (0600, `O_EXCL`) then renamed, in
+  `os.UserCacheDir()/termote/uploads` (`serveConfig.UploadDir`, set by `serve`): created 0700,
+  refused when a symlink or (Unix) owned by another user, and then uploads answer 503
+  `uploads_unavailable`. 2 uploads at a time (429 `busy`); 10 MB is reserved against a 200 MB
+  quota before writing (507 `storage_full`); files older than 7 days go, then the oldest when
+  over quota, never one younger than an hour; only the store's own names are ever deleted.
+  Errors carry a JSON `code`. `Caps.uploads` tells the PWA (snapshot); a view-only client
+  offers no upload, enforced in the UI only while `requireWriteRole` is a stub. The container
+  creates `/home/termote/.cache` mode 1777 so the host uid can create its upload dir
 - Exclude sensitive dirs (.ssh, .gnupg, .aws, .config/gcloud) from container volume mounts
   (warned at `container up`)
 - Serve mode uses constant-time comparison for password verification
@@ -417,7 +436,8 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   blocked clients are logged with the client address (never the credentials), at most one
   line per 10s each
 - **Server hardening**: ReadHeaderTimeout (Slowloris protection), a 60s read deadline on every
-  request but the terminal stream (a body sent a byte at a time), at most 256 sessions (the
+  request but the terminal stream (a body sent a byte at a time); an authenticated image upload
+  extends it to 5 minutes (a slow mobile link), at most 256 sessions (the
   least recently used is dropped), request
   body size limits (8KB on `/api/mux/*`, 64KB on `agent/message`)
 - **CLI and the saved password**: `status`, `url`, `panel`, `container status` and the health

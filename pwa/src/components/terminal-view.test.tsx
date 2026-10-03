@@ -915,13 +915,97 @@ describe('TerminalView', () => {
 
   it('pastes through xterm, or bracketed when asked', () => {
     const { ref, term, rerender } = renderView()
-    ref.current!.paste('a\nb')
+    expect(ref.current!.paste('a\nb')).toBe(true)
     expect(term.paste).toHaveBeenCalledWith('a\nb')
     expect(socket.send).not.toHaveBeenCalled()
 
     rerender(<TerminalView ref={ref} paneId="0" bracketedPaste />)
-    ref.current!.paste('a\nb')
+    expect(ref.current!.paste('a\nb')).toBe(true)
     expect(socket.send).toHaveBeenCalledWith('\x1b[200~a\nb\x1b[201~')
+  })
+
+  it('reports a paste that could not go out', () => {
+    const { ref, term, rerender } = renderView()
+    socket.state = 'disconnected'
+    try {
+      expect(ref.current!.paste('x')).toBe(false)
+      expect(term.paste).not.toHaveBeenCalled()
+      rerender(<TerminalView ref={ref} paneId="0" bracketedPaste />)
+      socket.send.mockReturnValueOnce(false)
+      expect(ref.current!.paste('x')).toBe(false)
+    } finally {
+      socket.state = 'connected'
+    }
+  })
+
+  describe('paste event', () => {
+    const image = new File(['x'], 'a.png', { type: 'image/png' })
+    // jsdom's ClipboardEvent carries no clipboardData; attach one.
+    function pasteEvent(types: string[], file: File | null) {
+      const e = new Event('paste', {
+        bubbles: true,
+        cancelable: true,
+      }) as ClipboardEvent
+      Object.defineProperty(e, 'clipboardData', {
+        value: {
+          types,
+          items: file
+            ? [{ kind: 'file', type: file.type, getAsFile: () => file }]
+            : [],
+        },
+      })
+      return e
+    }
+    // Stands in for xterm's own paste listener on its textarea.
+    function xtermTarget(container: HTMLElement) {
+      const textarea = document.createElement('textarea')
+      const xtermPaste = vi.fn()
+      textarea.addEventListener('paste', xtermPaste)
+      container.querySelector('[data-testid="terminal-view"]')!.append(textarea)
+      return { textarea, xtermPaste }
+    }
+
+    it('takes an image-only paste before xterm sees it', () => {
+      const onPasteImage = vi.fn()
+      const { container } = renderView({ onPasteImage })
+      const { textarea, xtermPaste } = xtermTarget(container)
+      const e = pasteEvent(['Files'], image)
+      textarea.dispatchEvent(e)
+      expect(onPasteImage).toHaveBeenCalledWith(image)
+      expect(e.defaultPrevented).toBe(true)
+      expect(xtermPaste).not.toHaveBeenCalled()
+      expect(socket.send).not.toHaveBeenCalled()
+    })
+
+    it('leaves text pastes, read-only terminals and no handler to xterm', () => {
+      const onPasteImage = vi.fn()
+      const { container, rerender, ref } = renderView({ onPasteImage })
+      const { textarea, xtermPaste } = xtermTarget(container)
+      textarea.dispatchEvent(pasteEvent(['text/plain', 'Files'], image))
+      textarea.dispatchEvent(pasteEvent([], null))
+      rerender(
+        <TerminalView
+          ref={ref}
+          paneId="0"
+          onPasteImage={onPasteImage}
+          readOnly
+        />,
+      )
+      textarea.dispatchEvent(pasteEvent(['Files'], image))
+      rerender(<TerminalView ref={ref} paneId="0" />)
+      textarea.dispatchEvent(pasteEvent(['Files'], image))
+      expect(onPasteImage).not.toHaveBeenCalled()
+      expect(xtermPaste).toHaveBeenCalledTimes(4)
+    })
+
+    it('stops listening on unmount', () => {
+      const onPasteImage = vi.fn()
+      const { container, unmount } = renderView({ onPasteImage })
+      const el = container.querySelector('[data-testid="terminal-view"]')!
+      unmount()
+      el.dispatchEvent(pasteEvent(['Files'], image))
+      expect(onPasteImage).not.toHaveBeenCalled()
+    })
   })
 
   it('applies theme, font size and context menu setting through the bridge', () => {

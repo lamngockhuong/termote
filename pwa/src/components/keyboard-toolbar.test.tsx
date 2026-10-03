@@ -485,6 +485,23 @@ describe('KeyboardToolbar', () => {
     expect(onPaste).toHaveBeenCalled()
   })
 
+  // Attach image: only when the server takes uploads
+  it('shows an Attach image key next to Paste only with a handler', () => {
+    const { unmount } = renderToolbar()
+    expect(document.querySelector('[data-key="Attach"]')).toBeNull()
+    unmount()
+    const onAttachImage = vi.fn()
+    renderToolbar({ onAttachImage })
+    const attach = screen.getByRole('button', { name: 'Attach image' })
+    expect(attach.dataset.key).toBe('Attach')
+    expect(
+      document.querySelector('[data-key="TmuxPaste"]')?.nextElementSibling,
+    ).toBe(attach)
+    fireEvent.click(attach)
+    expect(onAttachImage).toHaveBeenCalled()
+    expect(onPaste).not.toHaveBeenCalled()
+  })
+
   // Keyboard toggle
   it('calls onToggleKeyboard when keyboard button clicked', () => {
     renderToolbar()

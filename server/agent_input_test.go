@@ -151,7 +151,7 @@ func postJSON(t *testing.T, h http.Handler, path string, body any) (int, map[str
 
 func agentMux(m Mux) *http.ServeMux {
 	mux := http.NewServeMux()
-	registerMuxRoutes(mux, m, newStreamTokenStore())
+	registerMuxRoutes(mux, m, newStreamTokenStore(), nil)
 	return mux
 }
 

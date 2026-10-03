@@ -252,6 +252,8 @@ type agentAPI struct {
 	allowed  hostAllowlist
 	commands *ttlCache[commandsResponse]
 	home     string
+	// uploads resolves image ids in a message; nil when the server has none.
+	uploads *uploadStore
 }
 
 type agentLookup struct {
@@ -270,8 +272,9 @@ func newAgentAPI(m Mux) *agentAPI {
 	}
 }
 
-func registerAgentRoutes(mux *http.ServeMux, m Mux) *agentAPI {
+func registerAgentRoutes(mux *http.ServeMux, m Mux, uploads *uploadStore) *agentAPI {
 	a := newAgentAPI(m)
+	a.uploads = uploads
 	mux.HandleFunc("/api/mux/panes/{id}/agent/transcript", a.handleTranscript)
 	a.registerInputRoutes(mux)
 	return a

@@ -147,6 +147,12 @@ const mockToggleTmuxCopyMode = vi.fn()
 const mockPasteTmuxBuffer = vi.fn()
 const mockFocusTerminal = vi.fn()
 const mockBlurTerminal = vi.fn()
+const mockAttachImageToTerminal = vi.fn()
+const mockPickImageFile = vi.fn()
+vi.mock('./utils/upload-image', async (orig) => ({
+  ...(await orig<typeof import('./utils/upload-image')>()),
+  pickImageFile: () => mockPickImageFile(),
+}))
 
 vi.mock('./utils/terminal-bridge', () => ({
   sendKeyToTerminal: (...args: any[]) => mockSendKeyToTerminal(...args),
@@ -161,6 +167,8 @@ vi.mock('./utils/terminal-bridge', () => ({
     (mockIsTerminalDisconnected as (...a: any[]) => unknown)(...args),
 
   pasteToTerminal: (...args: any[]) => mockPasteToTerminal(...args),
+
+  attachImageToTerminal: (...args: any[]) => mockAttachImageToTerminal(...args),
 
   pasteTmuxBuffer: (...args: any[]) => mockPasteTmuxBuffer(...args),
 
@@ -187,22 +195,36 @@ vi.mock('./utils/api-version', () => ({
 
 // Lets tests report stream state changes the way TerminalView does.
 let reportStreamState: (state: string) => void = () => {}
+let pasteImage: ((image: File) => void) | undefined
+// The handle the mocked terminal hands App through its ref; none by default.
+let terminalHandle: { paste: (text: string) => boolean } | null = null
 vi.mock('./components/terminal-view', () => ({
   TerminalView: vi.fn(
-    (props: { onConnectionStateChange: (s: string) => void }) => {
+    (props: {
+      onConnectionStateChange: (s: string) => void
+      onPasteImage?: (image: File) => void
+      ref?: { current: unknown }
+    }) => {
       reportStreamState = props.onConnectionStateChange
+      pasteImage = props.onPasteImage
+      if (props.ref) props.ref.current = terminalHandle
       return <div data-testid="terminal-view">Terminal</div>
     },
   ),
 }))
 
 // Stands in for the toolbar's Quick actions sheet
-function QuickActionsMock({ onSendKey, onSendText }: QuickActionHandlers) {
+function QuickActionsMock({
+  onSendKey,
+  onSendText,
+  onAttachImage,
+}: QuickActionHandlers) {
   return (
     <div data-testid="quick-actions">
       <button onClick={() => onSendKey('c', { ctrl: true })}>QACtrlKey</button>
       <button onClick={() => onSendKey('Tab')}>QAKey</button>
       <button onClick={() => onSendText('hello')}>QAText</button>
+      {onAttachImage && <button onClick={onAttachImage}>QAAttach</button>}
     </div>
   )
 }
@@ -241,6 +263,11 @@ vi.mock('./components/keyboard-toolbar', () => ({
         TmuxCopy
       </button>
       <button onClick={() => (props.onPaste as () => void)?.()}>Paste</button>
+      {props.onAttachImage ? (
+        <button onClick={() => (props.onAttachImage as () => void)()}>
+          Attach
+        </button>
+      ) : null}
       <button onClick={() => (props.onToggleKeyboard as () => void)?.()}>
         ToggleKbd
       </button>
@@ -409,14 +436,33 @@ vi.mock('./components/toast', () => ({
     message,
     variant = 'info',
     onClose,
+    action,
+    duration,
   }: {
     message: string
     variant?: string
     onClose: () => void
+    action?: { label: string; onClick: () => void }
+    duration?: number
   }) => (
-    <div data-testid="toast" data-variant={variant} role="alert">
+    <div
+      data-testid="toast"
+      data-variant={variant}
+      data-duration={duration}
+      role="alert"
+    >
       {message}
       <button onClick={onClose}>CloseToast</button>
+      {action && (
+        <button
+          onClick={() => {
+            onClose()
+            action.onClick()
+          }}
+        >
+          {action.label}
+        </button>
+      )}
     </div>
   ),
 }))
@@ -1712,6 +1758,269 @@ describe('App', () => {
       fireEvent.click(screen.getByRole('button', { name: 'CheckUpdate' }))
     })
     // Returns "Could not check for updates"
+  })
+
+  describe('attach image', () => {
+    const image = new File(['x'], 'a.png', { type: 'image/png' })
+    const withUploads = (extra: Record<string, unknown> = {}) => {
+      const base = mockUseLocalSessions()
+      // The mock's type knows only the caps of its first value.
+      mockUseLocalSessions.mockReturnValue({
+        ...base,
+        mux: {
+          backend: 'tmux',
+          caps: { clientSideSelect: false, copyMode: true, uploads: true },
+        },
+        ...extra,
+      } as typeof base)
+    }
+
+    it('offers nothing without the uploads capability', async () => {
+      mockIsMobile.mockReturnValue(true)
+      render(<App />)
+      await screen.findByTestId('quick-actions')
+      expect(screen.queryByRole('button', { name: 'Attach' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'QAAttach' })).toBeNull()
+      expect(pasteImage).toBeUndefined()
+      fireEvent.click(screen.getByRole('button', { name: 'Paste' }))
+      await waitFor(() =>
+        expect(mockPasteToTerminal).toHaveBeenCalledWith(null, {
+          images: false,
+        }),
+      )
+    })
+
+    it('offers nothing to a view-only client', async () => {
+      withUploads()
+      render(<App readOnly />)
+      await screen.findByTestId('terminal-view')
+      expect(screen.queryByRole('button', { name: 'Attach' })).toBeNull()
+      expect(pasteImage).toBeUndefined()
+    })
+
+    it('the Attach key picks an image and types its path into this pane', async () => {
+      withUploads()
+      mockPickImageFile.mockResolvedValue(image)
+      mockAttachImageToTerminal.mockResolvedValue({ status: 'inserted' })
+      render(<App />)
+      fireEvent.click(await screen.findByRole('button', { name: 'Attach' }))
+      await waitFor(() =>
+        expect(mockAttachImageToTerminal).toHaveBeenCalledWith(
+          null,
+          image,
+          'pane1',
+          expect.any(Function),
+        ),
+      )
+      const getActive = mockAttachImageToTerminal.mock.calls[0][3]
+      expect(getActive()).toBe('pane1')
+      expect(screen.queryByTestId('toast')).toBeNull()
+    })
+
+    it('a cancelled picker uploads nothing', async () => {
+      withUploads()
+      mockPickImageFile.mockResolvedValue(null)
+      render(<App />)
+      await act(async () => {
+        fireEvent.click(await screen.findByRole('button', { name: 'Attach' }))
+      })
+      expect(mockAttachImageToTerminal).not.toHaveBeenCalled()
+    })
+
+    it('quick actions and an image paste attach too', async () => {
+      withUploads()
+      mockIsMobile.mockReturnValue(true)
+      mockPickImageFile.mockResolvedValue(image)
+      mockAttachImageToTerminal.mockResolvedValue({ status: 'inserted' })
+      render(<App />)
+      fireEvent.click(await screen.findByRole('button', { name: 'QAAttach' }))
+      await waitFor(() =>
+        expect(mockAttachImageToTerminal).toHaveBeenCalledTimes(1),
+      )
+      await act(async () => pasteImage!(image))
+      expect(mockAttachImageToTerminal).toHaveBeenCalledTimes(2)
+    })
+
+    it('the Paste key uploads an image-only clipboard', async () => {
+      withUploads()
+      mockPasteToTerminal.mockResolvedValue({ ok: true, image })
+      mockAttachImageToTerminal.mockResolvedValue({ status: 'inserted' })
+      render(<App />)
+      fireEvent.click(await screen.findByRole('button', { name: 'Paste' }))
+      await waitFor(() =>
+        expect(mockAttachImageToTerminal).toHaveBeenCalledWith(
+          null,
+          image,
+          'pane1',
+          expect.any(Function),
+        ),
+      )
+      expect(mockPasteToTerminal).toHaveBeenCalledWith(null, { images: true })
+    })
+
+    it('long press and Ctrl+Shift+V upload an image-only clipboard too', async () => {
+      withUploads()
+      mockPasteToTerminal.mockResolvedValue({ ok: true, image })
+      mockAttachImageToTerminal.mockResolvedValue({ status: 'inserted' })
+      render(<App />)
+      fireEvent.click(await screen.findByRole('button', { name: 'CtrlShiftV' }))
+      await waitFor(() =>
+        expect(mockAttachImageToTerminal).toHaveBeenCalledTimes(1),
+      )
+      await act(async () => capturedGestureHandlers.onLongPress?.())
+      expect(mockAttachImageToTerminal).toHaveBeenCalledTimes(2)
+      expect(mockPasteToTerminal).toHaveBeenCalledWith(null, { images: true })
+    })
+
+    it('says a slow upload is running, then clears it once inserted', async () => {
+      withUploads()
+      let finish: (r: unknown) => void = () => {}
+      mockAttachImageToTerminal.mockReturnValue(
+        new Promise((r) => {
+          finish = r
+        }),
+      )
+      render(<App />)
+      await screen.findByTestId('terminal-view')
+      act(() => {
+        void pasteImage!(image)
+      })
+      const toast = await screen.findByTestId('toast')
+      expect(toast).toHaveTextContent('Uploading image…')
+      // Stays for as long as the upload may run
+      expect(toast).toHaveAttribute('data-duration', '330000')
+      await act(async () => finish({ status: 'inserted' }))
+      expect(screen.queryByTestId('toast')).toBeNull()
+    })
+
+    it('leaves a toast that replaced the upload one', async () => {
+      withUploads()
+      let finish: (r: unknown) => void = () => {}
+      mockAttachImageToTerminal.mockReturnValue(
+        new Promise((r) => {
+          finish = r
+        }),
+      )
+      mockPasteToTerminal.mockResolvedValue({ ok: false, reason: 'unknown' })
+      render(<App />)
+      await screen.findByTestId('terminal-view')
+      act(() => {
+        void pasteImage!(image)
+      })
+      await screen.findByText('Uploading image…')
+      fireEvent.click(screen.getByRole('button', { name: 'Paste' }))
+      await screen.findByText(/Clipboard access failed/)
+      await act(async () => finish({ status: 'inserted' }))
+      expect(screen.getByTestId('toast')).toHaveTextContent(
+        'Clipboard access failed',
+      )
+    })
+
+    it('says so when the path cannot be copied', async () => {
+      withUploads()
+      Object.defineProperty(navigator, 'clipboard', {
+        value: undefined,
+        configurable: true,
+      })
+      mockAttachImageToTerminal.mockResolvedValue({
+        status: 'not-inserted',
+        insert: '/c/a.png',
+      })
+      render(<App />)
+      await screen.findByTestId('terminal-view')
+      await act(async () => pasteImage!(image))
+      fireEvent.click(screen.getByRole('button', { name: 'Copy' }))
+      expect(await screen.findByTestId('toast')).toHaveTextContent(
+        'Could not copy the path',
+      )
+    })
+
+    it('offers to insert into the current pane after a pane switch', async () => {
+      withUploads()
+      const writeText = vi.fn().mockResolvedValue(undefined)
+      Object.defineProperty(navigator, 'clipboard', {
+        value: { writeText },
+        configurable: true,
+      })
+      mockAttachImageToTerminal.mockResolvedValue({
+        status: 'pane-changed',
+        insert: '/c/a.png',
+      })
+      render(<App />)
+      await screen.findByTestId('terminal-view')
+      await act(async () => pasteImage!(image))
+      const toast = screen.getByTestId('toast')
+      expect(toast).toHaveTextContent('Image uploaded: /c/a.png')
+      expect(toast).toHaveAttribute('data-duration', '10000')
+      // The mocked terminal has no handle: the paste cannot go out, so the
+      // path is offered for copying instead.
+      fireEvent.click(screen.getByRole('button', { name: 'Insert' }))
+      expect(screen.getByTestId('toast')).toHaveTextContent(
+        'Image not inserted: /c/a.png',
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'Copy' }))
+      await waitFor(() => expect(writeText).toHaveBeenCalledWith('/c/a.png'))
+    })
+
+    it('Insert types the path into the pane shown now', async () => {
+      withUploads()
+      const paste = vi.fn(() => true)
+      terminalHandle = { paste }
+      mockAttachImageToTerminal.mockResolvedValue({
+        status: 'pane-changed',
+        insert: '/c/a.png',
+      })
+      try {
+        render(<App />)
+        await screen.findByTestId('terminal-view')
+        await act(async () => pasteImage!(image))
+        fireEvent.click(screen.getByRole('button', { name: 'Insert' }))
+        expect(paste).toHaveBeenCalledWith('/c/a.png ')
+        expect(screen.queryByTestId('toast')).toBeNull()
+      } finally {
+        terminalHandle = null
+      }
+    })
+
+    it('a tab without its own pane id is told apart by its id', async () => {
+      const base = mockUseLocalSessions()
+      withUploads({
+        activeSession: { ...base.activeSession, paneId: undefined },
+      })
+      mockAttachImageToTerminal.mockResolvedValue({ status: 'inserted' })
+      render(<App />)
+      await screen.findByTestId('terminal-view')
+      await act(async () => pasteImage!(image))
+      expect(mockAttachImageToTerminal.mock.calls[0][2]).toBe('1')
+    })
+
+    it('offers the path when the paste did not go out', async () => {
+      withUploads()
+      mockAttachImageToTerminal.mockResolvedValue({
+        status: 'not-inserted',
+        insert: '/c/a.png',
+      })
+      render(<App />)
+      await screen.findByTestId('terminal-view')
+      await act(async () => pasteImage!(image))
+      const toast = screen.getByTestId('toast')
+      expect(toast).toHaveTextContent('Image not inserted: /c/a.png')
+      expect(toast).toHaveAttribute('data-variant', 'warning')
+    })
+
+    it('reports a failed upload by its reason', async () => {
+      withUploads()
+      mockAttachImageToTerminal.mockResolvedValue({
+        status: 'failed',
+        reason: 'too_large',
+      })
+      render(<App />)
+      await screen.findByTestId('terminal-view')
+      await act(async () => pasteImage!(image))
+      const toast = screen.getByTestId('toast')
+      expect(toast).toHaveTextContent('Image is larger than 10 MB')
+      expect(toast).toHaveAttribute('data-variant', 'danger')
+    })
   })
 })
 

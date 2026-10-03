@@ -13,6 +13,7 @@ import {
   Delete,
   Expand,
   History,
+  ImagePlus,
   Keyboard,
   Languages,
   Minimize2,
@@ -46,6 +47,8 @@ interface Props {
   // Hide the tmux copy-mode key (backend without copy mode)
   showTmuxCopy?: boolean
   onPaste?: () => void
+  // Adds an Attach image key next to Paste (the server takes uploads)
+  onAttachImage?: () => void
   onToggleKeyboard?: () => void
   onSendText?: (text: string) => void
   ctrlActive?: boolean
@@ -72,6 +75,7 @@ interface KeyConfig {
   scrollDir?: 'up' | 'down'
   isTmuxCopy?: boolean
   isPaste?: boolean
+  isAttach?: boolean
   isKeyboardToggle?: boolean
   isImeToggle?: boolean
   isExpandToggle?: boolean
@@ -127,6 +131,7 @@ const UTILITY_KEYS: KeyConfig[] = [
     key: 'TmuxPaste',
     isPaste: true,
   },
+  { label: <ImagePlus size={ICON_SIZE} />, key: 'Attach', isAttach: true },
   {
     label: <ChevronsUp size={ICON_SIZE} />,
     key: 'ScrollUp',
@@ -255,6 +260,7 @@ export function KeyboardToolbar({
   onTmuxCopy,
   showTmuxCopy = true,
   onPaste,
+  onAttachImage,
   onToggleKeyboard,
   onSendText,
   ctrlActive: externalCtrlActive,
@@ -303,8 +309,11 @@ export function KeyboardToolbar({
   }, [onSendText, onHistoryToggle])
   const utilityKeys = useMemo(
     () =>
-      showTmuxCopy ? UTILITY_KEYS : UTILITY_KEYS.filter((k) => !k.isTmuxCopy),
-    [showTmuxCopy],
+      UTILITY_KEYS.filter(
+        (k) =>
+          (showTmuxCopy || !k.isTmuxCopy) && (!!onAttachImage || !k.isAttach),
+      ),
+    [showTmuxCopy, onAttachImage],
   )
 
   const setCtrlActive = useCallback(
@@ -380,6 +389,7 @@ export function KeyboardToolbar({
         scrollDir?: 'up' | 'down'
         isTmuxCopy?: boolean
         isPaste?: boolean
+        isAttach?: boolean
         isKeyboardToggle?: boolean
         isImeToggle?: boolean
         isHistoryToggle?: boolean
@@ -408,6 +418,10 @@ export function KeyboardToolbar({
       }
       if (opts?.isPaste && onPaste) {
         onPaste()
+        return
+      }
+      if (opts?.isAttach && onAttachImage) {
+        onAttachImage()
         return
       }
       if (opts?.scrollDir && onScroll) {
@@ -455,6 +469,7 @@ export function KeyboardToolbar({
       onScroll,
       onTmuxCopy,
       onPaste,
+      onAttachImage,
       onToggleKeyboard,
       onHistoryToggle,
       toggleImeMode,
@@ -531,6 +546,7 @@ export function KeyboardToolbar({
           scrollDir: keyConfig.scrollDir,
           isTmuxCopy: keyConfig.isTmuxCopy,
           isPaste: keyConfig.isPaste,
+          isAttach: keyConfig.isAttach,
           isKeyboardToggle: keyConfig.isKeyboardToggle,
           isImeToggle: keyConfig.isImeToggle,
           isHistoryToggle: keyConfig.isHistoryToggle,
@@ -541,7 +557,9 @@ export function KeyboardToolbar({
           ? expanded
             ? 'Collapse keyboard'
             : 'Expand keyboard'
-          : undefined
+          : keyConfig.isAttach
+            ? 'Attach image'
+            : undefined
       }
     >
       {keyConfig.isExpandToggle ? (

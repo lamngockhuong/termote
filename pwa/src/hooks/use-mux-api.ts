@@ -44,6 +44,8 @@ export interface MuxSnapshot {
     agentChat?: boolean
     // The files routes (/files/*) work: the backend reports a pane's directory.
     files?: boolean
+    // The server takes image uploads (/uploads).
+    uploads?: boolean
   }
   groups: MuxGroup[]
 }

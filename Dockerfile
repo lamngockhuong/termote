@@ -25,8 +25,11 @@ RUN echo "set-option -g default-shell /bin/bash" > /etc/tmux.conf && \
 # Make passwd/group writable for entrypoint (locked to 644 after writes)
 RUN chmod 644 /etc/passwd /etc/group
 
-# Create directories
-RUN mkdir -p /home/termote/.local/share/nano && chmod -R 755 /home/termote
+# Create directories. The container runs as the host uid, which cannot create
+# dirs in the root-owned home: .cache is open to it (sticky, like /tmp) for
+# termote's upload dir, which it then creates 0700 for itself.
+RUN mkdir -p /home/termote/.local/share/nano /home/termote/.cache && chmod -R 755 /home/termote && \
+    chmod 1777 /home/termote/.cache
 
 # herdr, the other terminal backend (TERMOTE_MUX=herdr). Pinned with the
 # checksum of each arch: termote speaks herdr's protocol of this release.

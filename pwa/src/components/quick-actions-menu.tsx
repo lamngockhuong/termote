@@ -1,4 +1,4 @@
-import { Ban, Eraser, LogOut, Sparkles } from 'lucide-react'
+import { Ban, Eraser, ImagePlus, LogOut, Sparkles } from 'lucide-react'
 import { useHaptic } from '../hooks/use-haptic'
 import { FOCUS_RING } from './ui/button'
 import { Sheet } from './ui/sheet'
@@ -33,6 +33,8 @@ const ACTIONS: Action[] = [
 export interface QuickActionHandlers {
   onSendKey: (key: string, opts?: { ctrl?: boolean }) => void
   onSendText: (text: string) => void
+  // Adds an Attach image item (the server takes uploads)
+  onAttachImage?: () => void
 }
 
 function runAction(
@@ -48,11 +50,14 @@ function runAction(
 }
 
 // Common actions in a sheet, opened by the toolbar's Quick actions key.
+const ITEM_CLASS = `flex h-12 w-full items-center gap-3 px-4 text-left text-[15px] text-fg hover:bg-surface ui-terminal:font-label ui-terminal:text-[13px] ${FOCUS_RING} focus-visible:-outline-offset-2`
+
 export function QuickActionsSheet({
   isOpen,
   onClose,
   onSendKey,
   onSendText,
+  onAttachImage,
 }: QuickActionHandlers & { isOpen: boolean; onClose: () => void }) {
   const { trigger: haptic } = useHaptic()
   return (
@@ -67,7 +72,7 @@ export function QuickActionsSheet({
               runAction(action, { onSendKey, onSendText })
               onClose()
             }}
-            className={`flex h-12 w-full items-center gap-3 px-4 text-left text-[15px] text-fg hover:bg-surface ui-terminal:font-label ui-terminal:text-[13px] ${FOCUS_RING} focus-visible:-outline-offset-2`}
+            className={ITEM_CLASS}
           >
             <span aria-hidden="true" className="text-fg-muted">
               {action.icon}
@@ -75,6 +80,22 @@ export function QuickActionsSheet({
             {action.label}
           </button>
         ))}
+        {onAttachImage && (
+          <button
+            type="button"
+            onClick={() => {
+              haptic('medium')
+              onClose()
+              onAttachImage()
+            }}
+            className={ITEM_CLASS}
+          >
+            <span aria-hidden="true" className="text-fg-muted">
+              <ImagePlus size={ICON_SIZE} />
+            </span>
+            Attach image
+          </button>
+        )}
       </div>
     </Sheet>
   )
