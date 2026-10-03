@@ -360,7 +360,11 @@ one above "Chat about this": its label is "Type something" (drawn faint under th
 text typed to read the same is not taken for it) until text is typed into it, then the text,
 wrapped onto the rows below it. With the pointer (`❯`) on it a digit is typed into the text
 instead of picking an option, so the question is `unsupported` until the pointer moves off it.
-A tab is `multiselect` only when every option but "Chat about this" has a box.
+A tab is `multiselect` only when every option but "Chat about this" has a box. A dialog whose
+body is longer than the card shows (4096 bytes), or with an option detail over 300 bytes (the
+path "always allow" grants, for one), is `unsupported` too: the user would answer something they
+could not read whole. The free-text option is not held to that limit, since its rows are the
+answer typed into it, and a Submit tab cut that way is still shown, read only.
 
 While the free-text option is empty the prompt carries it as `freeText` (`{index, label}`), and
 `answer` takes `{"text": "..."}` for it: at most 1 KB (UTF-8 bytes), not blank, with no control

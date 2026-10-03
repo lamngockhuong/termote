@@ -190,6 +190,9 @@ type AgentPrompt struct {
 	moveThenEnter bool
 	pointer       int // the option the ❯ is on, 0 when none
 	free          freeField
+	// clipped: an answerable dialog left read only because its text is
+	// longer than the card shows.
+	clipped bool
 }
 
 // PromptFreeText is the option of a question that takes typed text.
@@ -412,7 +415,7 @@ func findSubmitTab(lines []screenLine) agentScreen {
 			}
 		}
 		p := parseDialog(lines[i:], false)
-		if p.Kind != "select" || !submitOpen(p.Steps) {
+		if (p.Kind != "select" && !p.clipped) || !submitOpen(p.Steps) {
 			return agentScreen{}
 		}
 		return agentScreen{sig: dialogSig(lines[i-1:]), prompt: p}
@@ -504,9 +507,12 @@ func parseDialog(region []screenLine, preview bool) *AgentPrompt {
 		}
 	}
 	p := &AgentPrompt{Kind: "unsupported", Steps: steps}
+	// cut: some text of the dialog is longer than the card shows. A card
+	// that cannot show the whole command (or question) is not one to answer.
+	var cut bool
 	if len(head) > 0 {
 		p.Title = strings.TrimSpace(strings.TrimPrefix(head[0], "☐"))
-		p.Body, _ = clampText(strings.Join(head[1:], "\n"), claudeMaxBody)
+		p.Body, cut = clampText(strings.Join(head[1:], "\n"), claudeMaxBody)
 	}
 	question := wizard || (len(head) > 0 && strings.HasPrefix(head[0], "☐"))
 	for _, o := range opts {
@@ -586,7 +592,11 @@ func parseDialog(region []screenLine, preview bool) *AgentPrompt {
 		if multi {
 			o.Label, o.Checked = checkbox(o.Label)
 		}
-		o.Detail, _ = clampText(o.Detail, 300)
+		var detailCut bool
+		o.Detail, detailCut = clampText(o.Detail, 300)
+		// The free-text option's detail is the answer typed into it (up to
+		// agentMaxFreeText), not text the user is asked to approve.
+		cut = cut || (detailCut && i != free)
 		keep = append(keep, o.PromptOption)
 	}
 	if len(keep) == 0 || len(keep) > 9 {
@@ -603,6 +613,10 @@ func parseDialog(region []screenLine, preview bool) *AgentPrompt {
 		// options; a picker (/model) states what it does instead.
 		p.Kind = "permission"
 	default:
+		return p
+	}
+	if cut {
+		p.Kind, p.clipped = "unsupported", true
 		return p
 	}
 	p.Options = keep
