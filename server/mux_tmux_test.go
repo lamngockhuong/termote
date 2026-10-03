@@ -416,14 +416,14 @@ func TestTmuxAgentWriterArgv(t *testing.T) {
 	if _, err := m.Capture(ctx, "%3"); err != nil {
 		t.Fatal(err)
 	}
-	if err := m.SendKeySequence(ctx, "%3", []string{"2", "Enter"}); err != nil {
+	if err := m.SendKeySequence(ctx, "%3", []string{"2", "Enter", "C-c"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := m.Paste(ctx, "%3", "-flag-like text"); err != nil {
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimSpace(args()), "\n")
-	if len(lines) != 4 || lines[0] != "capture-pane -p -e -t %3" || lines[1] != "send-keys -t %3 2 Enter" {
+	if len(lines) != 4 || lines[0] != "capture-pane -p -e -t %3" || lines[1] != "send-keys -t %3 2 Enter C-c" {
 		t.Fatalf("argv = %q", lines)
 	}
 	// The text goes through stdin, never argv; the buffer has its own name.
@@ -438,7 +438,7 @@ func TestTmuxAgentWriterArgv(t *testing.T) {
 	for name, err := range map[string]error{
 		"window id as target": m.Paste(ctx, "3", "x"),
 		"flag as target":      m.SendKeySequence(ctx, "-t", []string{"1"}),
-		"key name injection":  m.SendKeySequence(ctx, "%3", []string{"C-c"}),
+		"key name injection":  m.SendKeySequence(ctx, "%3", []string{"C-d"}),
 		"flag as key":         m.SendKeySequence(ctx, "%3", []string{"-X"}),
 		"capture bad target":  func() error { _, err := m.Capture(ctx, "main:0"); return err }(),
 	} {

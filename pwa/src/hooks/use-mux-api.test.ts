@@ -258,6 +258,28 @@ describe('agent API client', () => {
     })
   })
 
+  it('sends the image ids with the text; a refusal names the bad ones', async () => {
+    const calls: { init?: RequestInit }[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({ init })
+        return new Response(null, { status: 204 })
+      }),
+    )
+    await sendAgentMessage('1', '', 'cur', ['a1', 'b2'])
+    expect(calls[0].init?.body).toBe(
+      JSON.stringify({ text: '', cursor: 'cur', images: ['a1', 'b2'] }),
+    )
+    mockFetch({
+      body: { error: 'gone', code: 'invalid_request', images: ['b2'] },
+      status: 400,
+    })
+    await expect(
+      sendAgentMessage('1', '', 'cur', ['a1', 'b2']),
+    ).rejects.toMatchObject({ code: 'invalid_request', images: ['b2'] })
+  })
+
   it('a refused message carries code and limit', async () => {
     mockFetch({
       body: {

@@ -222,10 +222,11 @@ jobs:
 
       # No saved config here, so the server reads TERMOTE_* from the
       # environment; XDG_CONFIG_HOME keeps it that way on any runner.
+      # XDG_CACHE_HOME keeps the image uploads in the run's own dir.
       - name: Start server
         run: |
           echo "TMUX_SOCKET=$RUNNER_TEMP/tmux.sock" >> "$GITHUB_ENV"
-          XDG_CONFIG_HOME="$RUNNER_TEMP/xdg" TMUX_SOCKET="$RUNNER_TEMP/tmux.sock" \
+          XDG_CONFIG_HOME="$RUNNER_TEMP/xdg" XDG_CACHE_HOME="$RUNNER_TEMP/cache" TMUX_SOCKET="$RUNNER_TEMP/tmux.sock" \
             nohup ./server/termote-dev serve > "$RUNNER_TEMP/serve.log" 2>&1 &
           for _ in $(seq 1 30); do
             # The first snapshot also creates the server's tmux session

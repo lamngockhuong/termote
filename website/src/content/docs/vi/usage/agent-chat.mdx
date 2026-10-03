@@ -46,8 +46,26 @@ chối và pane không nhận phím nào:
 | `The text was pasted but not submitted`                     | `delivered_not_submitted` | Chữ đã vào ô nhập nhưng chưa có Enter; xem lại terminal trước khi gửi lần nữa        |
 | `The conversation changed; it has been reloaded`            | `session_changed`         | Pane giờ chạy phiên khác (`/clear`, resume); gửi lại nếu bạn vẫn muốn                |
 | `Too long: the limit is 16 KB.`                            | `text_too_long`           | Tin dài quá 16 KB (UTF-8); hãy chia nhỏ                                              |
+| `Not sent: the input box holds part of this message`       | `partial_paste`           | Ô nhập có thể đang giữ một phần ảnh hoặc chữ của tin này; xem và xoá nó trong terminal |
+| `Not sent: an image is no longer on the host`              | `invalid_request`         | Máy chủ đã xoá ảnh (quá 7 ngày, hoặc hết chỗ); bỏ ảnh đó rồi đính kèm lại            |
 
 Lần từ chối nào cần bạn kiểm tra lại đều có nút **Open terminal**.
+
+### Đính kèm ảnh
+
+Bấm nút ảnh cạnh ô nhập để chọn ảnh (trên điện thoại có thể chụp luôn), hoặc dán ảnh vào ô. Mỗi ảnh
+được tải lên máy chủ ngay và hiện thành ảnh thu nhỏ phía trên ô nhập; nút gửi chờ đến khi mọi ảnh tải
+xong. Một tin mang được tối đa 5 ảnh, có chữ hay không đều được. Bấm dấu nhân trên ảnh thu nhỏ để bỏ
+ảnh đó.
+
+Termote dán đường dẫn của từng ảnh vào Claude Code (hoặc Codex), mỗi lần một ảnh, chờ agent hiện nó
+thành `[Image #N]`, rồi mới dán chữ và nhấn Enter, nhờ vậy agent nhận ảnh dưới dạng tệp đính kèm. Khi
+một bước hỏng giữa chừng, ô nhập chỉ được xoá nếu nó không chứa gì ngoài những gì tin này đã dán; nếu
+không, bạn nhận `partial_paste` và ô nhập được giữ nguyên để bạn tự xem.
+
+Ảnh được lưu trên máy chủ như mô tả ở [Đính kèm ảnh](/vi/usage/keyboard/#đính-kèm-ảnh), và vẫn còn
+sau khi tin đã gửi. Nút ảnh bị ẩn khi máy chủ không lưu được ảnh tải lên, và ở chế độ chỉ xem. Nội dung
+sao chép có cả ảnh lẫn chữ thì dán chữ.
 
 ## Lệnh slash
 

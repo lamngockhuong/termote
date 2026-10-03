@@ -302,6 +302,7 @@ The `update` command:
 | `pwa/src/hooks/use-git-changes.ts`                | Polls a pane's git status, one store per pane                 |
 | `pwa/src/utils/highlight.ts`                      | Syntax highlighting through a Shiki worker, with a timeout    |
 | `pwa/src/utils/upload-image.ts`                   | Uploads an image to the host, picks one, error messages       |
+| `pwa/src/hooks/use-chat-attachments.ts`           | Images attached to a Chat view message (upload, ids, errors)  |
 | `server/main.go`                                  | Entry point (`serve` runs the server, no args opens the menu) |
 | `server/serve.go`                                 | Server (PWA static files, auth, guards)                       |
 | `server/mux.go`                                   | `Mux` interface + `/api/mux/*` routes                         |
@@ -374,6 +375,13 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   takes a lock on the pane, re-checks the process, session and screen, and sends nothing unless
   the screen shows the expected state (an empty input box, the dialog the client saw with a
   single-use `promptId`).
+  `agent/message` may carry `images`: at most 5 upload ids, each resolved through the upload
+  store (a path is never taken from the client; unknown ids → 400 with the bad ids, no store →
+  503 `uploads_unavailable`). Each path is pasted alone and the draft must show that many
+  `[Image #N]` tokens (11s wait each) before the next, then the text, then Enter, with the
+  process and session re-checked between pastes. If a step fails after the first paste, the
+  box is cleared with one `C-c` only when the same idle agent shows nothing but what this
+  request pasted; otherwise 409 `partial_paste` and nothing is touched.
   Markdown images in the Chat view never load (shown as links), and raw HTML is not rendered.
   `agent/commands` (the composer's `/` suggestions) returns only names, descriptions, sources
   and kinds of `.claude/commands`/`.claude/skills` under the pane root and `commands`/`skills`
@@ -424,7 +432,8 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   `uploads_unavailable`. 2 uploads at a time (429 `busy`); 10 MB is reserved against a 200 MB
   quota before writing (507 `storage_full`); files older than 7 days go, then the oldest when
   over quota, never one younger than an hour; only the store's own names are ever deleted.
-  Errors carry a JSON `code`. `Caps.uploads` tells the PWA (snapshot); a view-only client
+  Errors carry a JSON `code`. The Chat view sends the returned ids in `agent/message` (see
+  Agent chat). `Caps.uploads` tells the PWA (snapshot); a view-only client
   offers no upload, enforced in the UI only while `requireWriteRole` is a stub. The container
   creates `/home/termote/.cache` mode 1777 so the host uid can create its upload dir
 - Exclude sensitive dirs (.ssh, .gnupg, .aws, .config/gcloud) from container volume mounts

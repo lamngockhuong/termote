@@ -4,6 +4,12 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { expect, test } from './fixtures'
 
+// A 1x1 PNG, attached in the composer.
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+  'base64',
+)
+
 // The Chat view against a stand-in Claude Code (tests/fixtures/fake-claude.sh)
 // running in a window of the server's tmux. It needs the socket and session
 // the server under test uses (TMUX_SOCKET, TMUX_SESSION), so it never opens
@@ -115,6 +121,18 @@ test.describe('chat view', () => {
     await send.click()
     await expect(conversation).toContainText('You said: hello from e2e')
     await expect(conversation).toContainText('second line')
+
+    // An image attached in the composer goes before the text, as the
+    // agent's own token; the transcript shows the image part
+    const chooser = page.waitForEvent('filechooser')
+    await page.getByRole('button', { name: 'Attach image' }).click()
+    await (await chooser).setFiles({ name: 'dot.png', mimeType: 'image/png', buffer: PNG })
+    await expect(page.getByRole('img', { name: 'Attachment 1, ready' })).toBeVisible()
+    await composer.fill('what is in it?')
+    await send.click()
+    await expect(conversation).toContainText('You said: [Image #1] what is in it? (images: 1)')
+    await expect(conversation).toContainText('[image]')
+    await expect(page.getByRole('list', { name: 'Attached images' })).toBeHidden()
 
     // A permission dialog becomes a card whose buttons answer it
     await composer.fill('ask permission please')

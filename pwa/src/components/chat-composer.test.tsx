@@ -62,6 +62,18 @@ vi.mock('../hooks/use-mux-api', async (orig) => ({
   answerAgentPrompt: (...a: unknown[]) => mockAnswerPrompt(...(a as [])),
 }))
 
+const mockUpload = vi.fn()
+const mockPick = vi.fn()
+vi.mock('../utils/upload-image', async (orig) => ({
+  ...(await orig<typeof import('../utils/upload-image')>()),
+  uploadImage: (...a: unknown[]) => mockUpload(...a),
+  pickImageFile: () => mockPick(),
+}))
+const mockThumb = vi.fn()
+vi.mock('../utils/image-thumbnail', () => ({
+  imageThumbnail: (...a: unknown[]) => mockThumb(...a),
+}))
+
 const showView = vi.fn()
 const props = (over: Partial<ViewProps> = {}): ViewProps => ({
   mux: {
@@ -105,6 +117,244 @@ beforeEach(() => {
   mockSend.mockResolvedValue(undefined)
   commandsStore.enabled = false
   commandsStore.list = []
+  mockThumb.mockResolvedValue(null)
+  mockPick.mockResolvedValue(null)
+  let n = 0
+  mockUpload.mockImplementation(async () => {
+    n++
+    return {
+      ok: true,
+      upload: { id: `id${n}`, path: `/c/id${n}.png`, insert: `/c/id${n}.png` },
+    }
+  })
+})
+
+const uploadsProps = (over: Partial<ViewProps> = {}) =>
+  props({
+    mux: {
+      backend: 'tmux',
+      caps: {
+        clientSideSelect: false,
+        copyMode: true,
+        agentChat: true,
+        uploads: true,
+      },
+    },
+    ...over,
+  })
+const png = (name = 'a.png') => new File(['x'], name, { type: 'image/png' })
+const attachButton = () => screen.getByRole('button', { name: 'Attach image' })
+const attach = async (file = png()) => {
+  mockPick.mockResolvedValueOnce(file)
+  await act(async () => {
+    fireEvent.click(attachButton())
+  })
+}
+const pasteImage = async (types = ['Files']) => {
+  const file = png()
+  await act(async () => {
+    fireEvent.paste(box(), {
+      clipboardData: {
+        types,
+        items: [{ kind: 'file', type: 'image/png', getAsFile: () => file }],
+      },
+    })
+  })
+}
+
+describe('ChatComposer images', () => {
+  it('no attach button without uploads on the server, or view only', () => {
+    const { unmount } = render(<ChatComposer {...props()} />)
+    expect(screen.queryByRole('button', { name: 'Attach image' })).toBeNull()
+    unmount()
+    render(<ChatComposer {...uploadsProps({ readOnly: true })} />)
+    expect(screen.queryByRole('button', { name: 'Attach image' })).toBeNull()
+  })
+
+  it('attaches, shows a thumbnail and sends the ids with the text', async () => {
+    mockThumb.mockResolvedValue('data:image/png;base64,AA==')
+    render(<ChatComposer {...uploadsProps()} />)
+    await attach()
+    await attach()
+    expect(mockUpload).toHaveBeenCalledTimes(2)
+    expect(
+      screen.getByRole('img', { name: 'Attachment 1, ready' }),
+    ).toHaveAttribute('src', 'data:image/png;base64,AA==')
+    type('what are these?')
+    await send()
+    expect(mockSend).toHaveBeenCalledWith('%3', 'what are these?', 'cur1', [
+      'id1',
+      'id2',
+    ])
+    expect(screen.queryByRole('list', { name: 'Attached images' })).toBeNull()
+  })
+
+  it('sends images without text', async () => {
+    render(<ChatComposer {...uploadsProps()} />)
+    expect(sendButton()).toBeDisabled()
+    await attach()
+    expect(sendButton()).toBeEnabled()
+    await send()
+    expect(mockSend).toHaveBeenCalledWith('%3', '', 'cur1', ['id1'])
+  })
+
+  it('a cancelled picker attaches nothing', async () => {
+    render(<ChatComposer {...uploadsProps()} />)
+    await act(async () => {
+      fireEvent.click(attachButton())
+    })
+    expect(mockUpload).not.toHaveBeenCalled()
+  })
+
+  it('send waits while an image uploads', async () => {
+    let finish: (v: unknown) => void = () => {}
+    mockUpload.mockImplementationOnce(
+      () =>
+        new Promise((r) => {
+          finish = r
+        }),
+    )
+    render(<ChatComposer {...uploadsProps()} />)
+    type('hi')
+    await attach()
+    expect(
+      screen.getByRole('img', { name: 'Attachment 1, uploading' }),
+    ).toBeTruthy()
+    expect(sendButton()).toBeDisabled()
+    await act(async () => {
+      finish({ ok: true, upload: { id: 'late', path: '/p', insert: '/p' } })
+    })
+    expect(sendButton()).toBeEnabled()
+  })
+
+  it('a failed upload is announced, marked and blocks send until removed', async () => {
+    mockUpload.mockResolvedValueOnce({ ok: false, reason: 'too_large' })
+    render(<ChatComposer {...uploadsProps()} />)
+    type('hi')
+    await attach()
+    expect(screen.getAllByText('Image is larger than 10 MB.').length).toBe(2)
+    expect(
+      screen.getByRole('img', {
+        name: 'Attachment 1, Image is larger than 10 MB',
+      }),
+    ).toBeTruthy()
+    expect(sendButton()).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove image 1' }))
+    expect(sendButton()).toBeEnabled()
+  })
+
+  it('at most five images', async () => {
+    render(<ChatComposer {...uploadsProps()} />)
+    for (let i = 0; i < 5; i++) await attach()
+    expect(attachButton()).toBeDisabled()
+    await pasteImage()
+    expect(mockUpload).toHaveBeenCalledTimes(5)
+    expect(
+      screen.getAllByText('At most 5 images per message.').length,
+    ).toBeGreaterThan(0)
+  })
+
+  it('a pasted image is attached; an image with text pastes the text', async () => {
+    render(<ChatComposer {...uploadsProps()} />)
+    await pasteImage(['Files', 'text/plain'])
+    expect(mockUpload).not.toHaveBeenCalled()
+    await pasteImage()
+    expect(mockUpload).toHaveBeenCalledTimes(1)
+  })
+
+  it('without uploads a pasted image is left to the browser', async () => {
+    render(<ChatComposer {...props()} />)
+    await pasteImage()
+    expect(mockUpload).not.toHaveBeenCalled()
+  })
+
+  it('a refusal keeps the images; ids the host lost are marked', async () => {
+    render(<ChatComposer {...uploadsProps()} />)
+    await attach()
+    await attach()
+    type('hi')
+    mockSend.mockRejectedValueOnce(
+      new AgentRequestError(
+        400,
+        'invalid_request',
+        'an image is no longer on the server',
+        undefined,
+        undefined,
+        undefined,
+        ['id2'],
+      ),
+    )
+    await send()
+    expect(
+      screen.getAllByText(/an image is no longer on the host/).length,
+    ).toBeGreaterThan(0)
+    expect(
+      screen.getByRole('img', { name: 'Attachment 1, ready' }),
+    ).toBeTruthy()
+    expect(
+      screen.getByRole('img', { name: 'Attachment 2, No longer on the host' }),
+    ).toBeTruthy()
+    expect(sendButton()).toBeDisabled()
+    expect(box()).toHaveValue('hi')
+  })
+
+  it.each([
+    ['partial_paste', 409, /holds part of this message/],
+    ['uploads_unavailable', 503, /cannot take images/],
+    ['invalid_request', 400, /Not sent: too many images\./],
+  ])('%s is explained', async (code, status, text) => {
+    render(<ChatComposer {...uploadsProps()} />)
+    await attach()
+    mockSend.mockRejectedValueOnce(
+      new AgentRequestError(status, code, 'too many images'),
+    )
+    await send()
+    expect(screen.getAllByText(text).length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('listitem').length).toBe(1)
+  })
+
+  it('another pane starts without the images', async () => {
+    const { rerender } = render(<ChatComposer {...uploadsProps()} />)
+    await attach()
+    expect(screen.getAllByRole('listitem').length).toBe(1)
+    rerender(
+      <ChatComposer
+        {...uploadsProps({
+          session: { ...uploadsProps().session, paneId: '%4' },
+        })}
+      />,
+    )
+    expect(screen.queryAllByRole('listitem').length).toBe(0)
+  })
+
+  it('with images, "!" and "/" are text: no shell question, no terminal', async () => {
+    const confirm = vi.spyOn(window, 'confirm')
+    render(<ChatComposer {...uploadsProps()} />)
+    await attach()
+    type('!ls')
+    await send()
+    expect(confirm).not.toHaveBeenCalled()
+    expect(mockSend).toHaveBeenLastCalledWith('%3', '!ls', 'cur1', ['id1'])
+    await attach()
+    type('/model')
+    await act(async () => {
+      fireEvent.keyDown(box(), { key: 'Escape' })
+    })
+    await send()
+    expect(mockSend).toHaveBeenLastCalledWith('%3', '/model', 'cur1', ['id2'])
+    expect(showView).not.toHaveBeenCalled()
+    confirm.mockRestore()
+  })
+
+  it('a slash command picked from the list goes without the images', async () => {
+    render(<ChatComposer {...uploadsProps()} />)
+    await attach()
+    type('/model')
+    await act(async () => {
+      fireEvent.keyDown(box(), { key: 'Enter' })
+    })
+    expect(mockSend).toHaveBeenCalledWith('%3', '/model', 'cur1', [])
+  })
 })
 
 describe('ChatComposer', () => {
@@ -117,7 +367,7 @@ describe('ChatComposer', () => {
     )
     expect(box()).toHaveAttribute('rows', '2')
     await send()
-    expect(mockSend).toHaveBeenCalledWith('%3', 'line 1\nline 2', 'cur1')
+    expect(mockSend).toHaveBeenCalledWith('%3', 'line 1\nline 2', 'cur1', [])
     expect(box()).toHaveValue('')
     expect(sessionStorage.getItem('termote-chat-draft:%3')).toBeNull()
     expect(transcript.refresh).toHaveBeenCalled()
@@ -238,7 +488,7 @@ describe('ChatComposer', () => {
     expect(mockSend).not.toHaveBeenCalled()
     confirm.mockReturnValue(true)
     await send()
-    expect(mockSend).toHaveBeenCalledWith('%3', '!rm -rf build', 'cur1')
+    expect(mockSend).toHaveBeenCalledWith('%3', '!rm -rf build', 'cur1', [])
     confirm.mockRestore()
   })
 
@@ -366,7 +616,7 @@ describe('ChatComposer', () => {
     )
     type('x')
     await send()
-    expect(mockSend).toHaveBeenCalledWith('', 'x', 'cur1')
+    expect(mockSend).toHaveBeenCalledWith('', 'x', 'cur1', [])
   })
 
   it('502 delivered_not_submitted never retries, even after time passes', async () => {
@@ -588,7 +838,7 @@ describe('ChatComposer', () => {
       await act(async () => {
         key('Enter', { ctrlKey: true })
       })
-      expect(mockSend).toHaveBeenCalledWith('%3', '/comp', 'cur1')
+      expect(mockSend).toHaveBeenCalledWith('%3', '/comp', 'cur1', [])
     })
 
     it('Escape closes it until the "/" is gone', () => {
@@ -678,7 +928,7 @@ describe('ChatComposer', () => {
       await act(async () => {
         key('Enter')
       })
-      expect(mockSend).toHaveBeenCalledWith('%3', '/model', 'cur1')
+      expect(mockSend).toHaveBeenCalledWith('%3', '/model', 'cur1', [])
       expect(showView).toHaveBeenCalledWith('terminal')
       expect(box()).toHaveValue('')
     })
@@ -687,7 +937,7 @@ describe('ChatComposer', () => {
       render(<ChatComposer {...props()} />)
       type('/model sonnet')
       await send()
-      expect(mockSend).toHaveBeenCalledWith('%3', '/model sonnet', 'cur1')
+      expect(mockSend).toHaveBeenCalledWith('%3', '/model sonnet', 'cur1', [])
       expect(showView).not.toHaveBeenCalled()
       mockSend.mockRejectedValueOnce(
         new AgentRequestError(409, 'input_not_ready', 'busy'),
@@ -715,7 +965,7 @@ describe('ChatComposer', () => {
       await act(async () => {
         fireEvent.click(screen.getByRole('button', { name: 'Exit' }))
       })
-      expect(mockSend).toHaveBeenCalledWith('%3', '/quit', 'cur1')
+      expect(mockSend).toHaveBeenCalledWith('%3', '/quit', 'cur1', [])
       expect(box()).toHaveValue('')
     })
 

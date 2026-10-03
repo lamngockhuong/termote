@@ -337,6 +337,10 @@ var (
 	// codexPastedTokenRe: what Codex 0.160.0 shows for a paste of more than
 	// 1000 characters.
 	codexPastedTokenRe = regexp.MustCompile(`^\[Pasted Content (\d+) chars\]$`)
+	// imageTokenRe: what Claude Code 2.1.288 and Codex 0.160.0 show for an
+	// image path pasted alone. Claude Code does not restart the number when
+	// the box is cleared, so it is never checked.
+	imageTokenRe = regexp.MustCompile(`^\[Image #\d+\]`)
 )
 
 // findDialog recognises a dialog whose footer is the last row. A footer
@@ -789,4 +793,25 @@ func draftShows(draft, text string) bool {
 	}
 	strip := func(s string) string { return strings.Join(strings.Fields(s), "") }
 	return draft != "" && strip(draft) == strip(text)
+}
+
+// draftShowsImages reports whether the box shows exactly n image tokens
+// followed by text (as draftShows reads it), or nothing after the tokens when
+// text is empty. Whitespace between the tokens is the agent's own.
+func draftShowsImages(draft string, n int, text string) bool {
+	rest := strings.TrimSpace(draft)
+	for range n {
+		loc := imageTokenRe.FindStringIndex(rest)
+		if loc == nil {
+			return false
+		}
+		rest = strings.TrimSpace(rest[loc[1]:])
+	}
+	if imageTokenRe.MatchString(rest) {
+		return false // more images than this request pasted
+	}
+	if strings.TrimSpace(text) == "" {
+		return rest == ""
+	}
+	return draftShows(rest, text)
 }
