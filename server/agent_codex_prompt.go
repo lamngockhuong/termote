@@ -237,11 +237,10 @@ func findCodexApproval(lines []screenLine) (agentScreen, bool) {
 			body = append(body, t)
 		}
 	}
-	var cut bool
-	p.Body, cut = clampText(strings.Join(body, "\n"), claudeMaxBody)
+	// Kept whole, never cut: the card shows the whole command it answers.
+	p.Body = strings.Join(body, "\n")
 	options, ok := codexPromptOptions(opts)
-	if !ok || cut {
-		// A card that cannot show the whole command is not one to answer.
+	if !ok {
 		return sc, true
 	}
 	p.Kind = "permission"
@@ -337,7 +336,7 @@ func findCodexDialog(lines []screenLine) agentScreen {
 		}
 		if len(rows) > 0 {
 			p.Title = rows[0]
-			p.Body, _ = clampText(strings.Join(rows[1:], "\n"), claudeMaxBody)
+			p.Body = strings.Join(rows[1:], "\n")
 		}
 		return agentScreen{sig: codexSig(lines[start:]), prompt: p}
 	}
