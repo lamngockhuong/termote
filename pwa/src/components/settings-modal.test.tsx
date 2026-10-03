@@ -62,6 +62,14 @@ describe('SettingsModal', () => {
     expect(dialog).toBeInTheDocument()
   })
 
+  it('keeps the full-screen phone sheet below the status bar', () => {
+    const { container } = renderModal()
+    expect(container.querySelector('dialog')).toHaveClass(
+      'max-md:h-dvh',
+      'max-md:pt-[env(safe-area-inset-top)]',
+    )
+  })
+
   it('calls showModal on open', () => {
     renderModal()
     expect(HTMLDialogElement.prototype.showModal).toHaveBeenCalled()
