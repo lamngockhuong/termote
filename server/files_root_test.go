@@ -143,17 +143,28 @@ func TestRootFromToplevel(t *testing.T) {
 	}
 	sub := filepath.Join(top, "sub")
 	os.MkdirAll(sub, 0o755)
+	// An absolute path on every OS (git gives one with a drive on Windows),
+	// written into the gitfile with '/' as git does.
+	gitDir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	// core.worktree naming a directory with no .git (even /): the pane's
 	// directory itself, not a tree over the toplevel.
-	if r := rootFromToplevel(sub, top, "/g", "/s"); r != (filesRoot{Root: sub}) {
+	if r := rootFromToplevel(sub, top, gitDir, "/s"); r != (filesRoot{Root: sub}) {
 		t.Errorf("toplevel without .git = %+v", r)
 	}
-	writeFile(t, filepath.Join(top, ".git"), "gitdir: /g\n")
-	if r := rootFromToplevel(sub, top, "/g", "/s"); r != (filesRoot{Root: top, IsRepo: true, SafeDir: "/s", GitDir: filepath.Clean("/g")}) {
+	writeFile(t, filepath.Join(top, ".git"), "gitdir: "+filepath.ToSlash(gitDir)+"\n")
+	if r := rootFromToplevel(sub, top, gitDir, "/s"); r != (filesRoot{Root: top, IsRepo: true, SafeDir: "/s", GitDir: gitDir}) {
 		t.Errorf("toplevel = %+v", r)
 	}
+	// A gitfile naming another git dir is not this repo's.
+	if r := rootFromToplevel(sub, top, filepath.Join(gitDir, "other"), "/s"); r != (filesRoot{Root: sub}) {
+		t.Errorf("gitfile of another repo = %+v", r)
+	}
 	// A toplevel the pane's directory is not under.
-	if r := rootFromToplevel("/elsewhere", top, "/g", ""); r != (filesRoot{Root: "/elsewhere"}) {
+	elsewhere := filepath.Join(gitDir, "elsewhere")
+	if r := rootFromToplevel(elsewhere, top, gitDir, ""); r != (filesRoot{Root: elsewhere}) {
 		t.Errorf("toplevel not above dir = %+v", r)
 	}
 }
