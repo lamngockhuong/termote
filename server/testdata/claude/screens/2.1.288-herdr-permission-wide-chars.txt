@@ -1,0 +1,34 @@
+
+[0m[38;2;255;255;255m●[0m Command executed successfully. The file [0m[38;2;177;185;249mwide.txt[0m
+  has been created with the emojis and dashes.
+
+[0m[38;2;153;153;153m✻ Worked for 7s · done 2:09 AM[0m
+  
+[0m[38;2;153;153;153m[48;2;55;55;55m❯ [0m[38;2;255;255;255m[48;2;55;55;55mRun this exact shell command with the Bash tool, [0m[48;2;55;55;55m [0m
+[0m[48;2;55;55;55m  [0m[38;2;255;255;255m[48;2;55;55;55mdo not change a single character: echo [0m[48;2;55;55;55m           [0m
+[0m[48;2;55;55;55m  [0m[38;2;255;255;255m[48;2;55;55;55m'🇻🇳🇻🇳🇻🇳👍🏽👍🏽👍🏽1️⃣1️⃣1️⃣🏳️‍🌈🏳️‍🌈🏳️‍🌈────────────────────────[0m[48;2;55;55;55m [0m
+[0m[48;2;55;55;55m  [0m[38;2;255;255;255m[48;2;55;55;55m────────────────' > wide2.txt[0m[48;2;55;55;55m                     [0m
+
+[0m[38;2;153;153;153m  [0mRunning the echo command with emojis and dashes,
+  redirecting output to wide2.txt
+[0m[38;2;153;153;153m  ⎿  $ echo '🇻🇳🇻🇳🇻🇳👍🏽👍🏽👍🏽1️⃣1️⃣1️⃣🏳️‍🌈🏳️‍🌈🏳️‍🌈───────────────[0m
+     [0m[38;2;153;153;153m─────────────────────────' > wide2.txt[0m
+
+[0m[38;2;177;185;249m────────────────────────────────────────────────────[0m
+ [0m[1m[38;2;177;185;249mBash command[0m 
+ [0m[38;2;153;153;153mRun the echo command with emojis and dashes, [0m
+ [0m[38;2;153;153;153mredirect output to wide2.txt[0m
+[0m[38;2;80;80;80m╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌[0m
+ [0m[2m│ [0mecho '🇻🇳🇻🇳🇻🇳👍🏽👍🏽👍🏽1⃣1⃣1⃣🏳‍🌈🏳‍🌈🏳‍🌈──────────────────
+ [0m[2m│[0m ──────────────────────' > wide2.txt
+[0m[38;2;80;80;80m╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌[0m
+ Do you want to proceed?
+ [0m[38;2;177;185;249m❯[0m [0m[38;2;153;153;153m1. [0m[38;2;177;185;249mYes[0m
+   [0m[38;2;153;153;153m2. [0mYes, and always allow access to
+      [0m[1m/tmp/claude-1000/-home-lamngockhuong-develop-p[0m
+      [0m[1mroject-lamngockhuong-termote/00000000-0000-400[0m
+      [0m[1m0-8000-000000000000/scratchpad/lab[0m from this
+      project
+   [0m[38;2;153;153;153m3. [0mNo
+
+ [0m[38;2;153;153;153mEsc to cancel · Tab to amend[0m

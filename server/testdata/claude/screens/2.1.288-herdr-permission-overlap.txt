@@ -1,0 +1,34 @@
+
+[0m[38;2;153;153;153m[48;2;55;55;55m❯ [0m[38;2;255;255;255m[48;2;55;55;55mRun this exact command with the Bash tool, as two[0m[48;2;55;55;55m [0m
+[0m[48;2;55;55;55m  [0m[38;2;255;255;255m[48;2;55;55;55mlines: first line 'echo a', second line [0m[48;2;55;55;55m          [0m
+[0m[48;2;55;55;55m  [0m[38;2;255;255;255m[48;2;55;55;55m'──────────────────────────────────────── > [0m[48;2;55;55;55m      [0m
+[0m[48;2;55;55;55m  [0m[38;2;255;255;255m[48;2;55;55;55m/tmp/claude-1000/-home-lamngockhuong-develop-proj[0m[48;2;55;55;55m [0m
+[0m[48;2;55;55;55m  [0m[38;2;255;255;255m[48;2;55;55;55mect-lamngockhuong-termote/00000000-0000-4000-8000[0m[48;2;55;55;55m [0m
+[0m[48;2;55;55;55m  [0m[38;2;255;255;255m[48;2;55;55;55m-000000000000/scratchpad/cr6.txt'[0m[48;2;55;55;55m                 [0m
+
+[0m[38;2;153;153;153m [0m Running the exact command as two lines
+[0m[38;2;153;153;153m  ⎿  $ echo a[0m
+     [0m[38;2;153;153;153m──────────────────────────────────────── > [0m
+     [0m[38;2;153;153;153m/tmp/claude-1000/-home-lamngockhuong-develop-pr[0m
+     [0m[38;2;153;153;153moject-lamngockhuong-termote/00000000-0000-4000-[0m
+     [0m[38;2;153;153;153m8000-000000000000/scratchpad/cr6.txt[0m
+
+[0m[38;2;177;185;249m────────────────────────────────────────────────────[0m
+ [0m[1m[38;2;177;185;249mBash command[0m
+ [0m[38;2;153;153;153mRun the exact command as two lines[0m
+[0m[38;2;80;80;80m╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌[0m
+ [0m[2m│[0m echo a
+ [0m[2m│[0m ──────────────────────────────────────── >
+ [0m[2m│[0m /tmp/claude-1000/-home-lamngockhuong-develop-pro
+ [0m[2m│ [0mject-lamngockhuong-termote/00000000-0000-4000-80
+ [0m[2m│ [0m00-000000000000/scratchpad/cr6.txt
+[0m[38;2;80;80;80m╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌[0m
+ Do you want to proceed?
+ [0m[38;2;177;185;249m❯ [0m[38;2;153;153;153m1. [0m[38;2;177;185;249mYes[0m
+   [0m[38;2;153;153;153m2. [0mYes, and always allow access to
+      [0m[1m/tmp/claude-1000/-home-lamngockhuong-develop-p[0m
+      [0m[1mroject-lamngockhuong-termote/00000000-0000-400[0m
+      [0m[1m0-8000-000000000000/scratchpad[0m from this
+   [0m[38;2;153;153;153m3. [0mNooject
+
+ [0m[38;2;153;153;153mEsc to cancel · Tab to amend[0m

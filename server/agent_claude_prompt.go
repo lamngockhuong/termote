@@ -614,6 +614,14 @@ func parseDialog(region []screenLine, preview bool) *AgentPrompt {
 	default:
 		return p
 	}
+	// Only the last option is drawn over a row of the one above it, and only
+	// when that one wraps; the row it lost is marked as cut.
+	if n := len(keep); p.Kind == "permission" && n > 1 && keep[n-2].Detail != "" {
+		if label := refusalLabel(keep[n-1].Label); label != keep[n-1].Label {
+			keep[n-1].Label = label
+			keep[n-2].Detail += " …"
+		}
+	}
 	p.Options = keep
 	// A multiSelect tab is typed into by moving the pointer down to the
 	// option one row at a time (a digit there only toggles it), so the
@@ -623,6 +631,20 @@ func parseDialog(region []screenLine, preview bool) *AgentPrompt {
 		p.FreeText = &PromptFreeText{Index: p.free.index, Label: label}
 	}
 	return p
+}
+
+// refusalLabel is the label of a permission dialog's option without what
+// Claude Code left of a row it drew it over. Claude Code 2.1.288 can lay out
+// a wrapped option (a long path cut mid-word) one row shorter than it draws
+// it, then draws the next option on that last row without clearing its end:
+// "3. No" over "      project" reads "3. Nooject", on tmux and Herdr alike.
+// The last option of a permission dialog refuses with "No" or "No, and …",
+// so anything else after "No" there is from that row.
+func refusalLabel(label string) string {
+	if rest, ok := strings.CutPrefix(label, "No"); ok && rest != "" && !strings.HasPrefix(rest, ",") {
+		return "No"
+	}
+	return label
 }
 
 // isMultiEndRow: the unnumbered row a multiSelect question draws under its

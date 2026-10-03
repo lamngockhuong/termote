@@ -9,7 +9,9 @@ import (
 )
 
 // Screens under testdata/claude/screens: "2.1.286-*" were recorded from Claude
-// Code 2.1.286 in tmux (capture-pane -p -e) with paths sanitised; "collie-*"
+// Code 2.1.286 in tmux (capture-pane -p -e) with paths sanitised; "2.1.288-*"
+// from Claude Code 2.1.288 the same way, "2.1.288-herdr-*" through herdr
+// pane.read ansi, both 52 columns wide; "collie-*"
 // come from collie's fixture corpus (MIT), captured through herdr pane.read
 // ansi ("collie-2.1.278-*" from Claude Code 2.1.278).
 func readScreen(t *testing.T, name string) agentScreen {
@@ -83,6 +85,10 @@ func TestReadClaudeScreenDialogs(t *testing.T) {
 			"1. Yes | 2. Yes, and always allow access to /tmp/lab | 3. No", "touch scratch-one.txt"},
 		{"2.1.286-permission-write", "permission", "Create file", "1. Yes | 2. Yes, and switch to accept edits (auto-approve file edits and common file commands) for this | 3. No", "Do you want to create hello.txt?"},
 		{"collie-claude--permission-edit", "permission", "Create file", "1. Yes | 2. Yes, allow all edits during this session (shift+tab) | 3. No", "1 hello"},
+		// 52 columns: Claude Code draws "3. No" over the last row of the
+		// path above it, whose end is left on the row ("3. Nooject").
+		{"2.1.288-permission-overlap", "permission", "Bash command", "1. Yes | 2. Yes, and always allow access to | 3. No", "echo a"},
+		{"2.1.288-herdr-permission-overlap", "permission", "Bash command", "1. Yes | 2. Yes, and always allow access to | 3. No", "echo a"},
 		// "Type something" needs the terminal; "Chat about this" is one key.
 		{"2.1.286-ask-single", "select", "Theme", "1. Red | 2. Green | 3. Blue | 5. Chat about this", "Which color theme do you prefer?"},
 		// 47 columns: the footer wraps onto two rows.
@@ -517,6 +523,46 @@ func TestReadClaudeScreenAdversarial(t *testing.T) {
 			t.Errorf("%+v", p)
 		}
 	})
+	// Recorded from Claude Code 2.1.288 at 52 columns, on tmux 3.6 and Herdr
+	// 0.9.3: neither a wide character (flags, skin tones, keycaps, ZWJ and
+	// tag sequences, Hangul, Thai) nor a carriage return puts a rule at
+	// column 0 inside a dialog. Claude Code draws a command's rows behind
+	// "│ ", a file's behind its line number, and a carriage return in a
+	// file as "�"; it refuses a Bash command holding a control character.
+	// So the card starts at the dialog's real edge, with the command whole.
+	t.Run("rules after wide characters and a carriage return", func(t *testing.T) {
+		for name, start := range map[string]string{
+			"2.1.288-permission-wide-chars":       "printf '%s\\n' 'A0",
+			"2.1.288-herdr-permission-wide-chars": "echo '🇻🇳",
+			"2.1.288-write-carriage-return":       "1 line a�",
+			"2.1.288-herdr-write-carriage-return": "1 line a�",
+			"2.1.288-permission-overlap":          "│ echo a\n│ ────",
+			"2.1.288-herdr-permission-overlap":    "│ echo a\n│ ────",
+		} {
+			lines := parseScreen(read(name))
+			p := readClaudeScreen(read(name)).prompt
+			if p == nil || p.Kind != "permission" || (p.Title != "Bash command" && p.Title != "Create file") || !strings.Contains(p.Body, start) {
+				t.Errorf("%s: %+v", name, p)
+				continue
+			}
+			// No rule at column 0 below the dialog's edge, the row above its title.
+			title := -1
+			for i, l := range lines {
+				if strings.TrimSpace(l.text) == p.Title {
+					title = i
+				}
+			}
+			if title < 1 || !isEdgeRule(lines[title-1]) {
+				t.Errorf("%s: no edge above the title", name)
+				continue
+			}
+			for _, l := range lines[title:] {
+				if isEdgeRule(l) {
+					t.Errorf("%s: a rule at column 0 inside the dialog: %q", name, l.text)
+				}
+			}
+		}
+	})
 	t.Run("long typed answer on a multiSelect tab", func(t *testing.T) {
 		s := read("2.1.286-ask-wizard-multi-free-up")
 		// No line end in the match: Windows checks the fixture out with CRLF
@@ -668,5 +714,45 @@ func TestFreeTextOption(t *testing.T) {
 	chat := strings.Replace(strings.Replace(fixtureText(t, "2.1.286-ask-wizard-multi-open"), "❯", " ", 1), "  4. Chat about this", "❯ 4. Chat about this", 1)
 	if p := readClaudeScreen(chat).prompt; p == nil || p.Kind != "multiselect" || p.pointer != 4 || p.FreeText != nil {
 		t.Errorf("pointer on chat = %+v", p)
+	}
+}
+
+func TestRefusalLabel(t *testing.T) {
+	for in, want := range map[string]string{
+		"No":      "No",
+		"Nooject": "No",
+		"No  ect": "No",
+		"No, and tell Claude what to do differently (esc)": "No, and tell Claude what to do differently (esc)",
+		"Yes":                             "Yes",
+		"Yes, and always allow access to": "Yes, and always allow access to",
+	} {
+		if got := refusalLabel(in); got != want {
+			t.Errorf("refusalLabel(%q) = %q, want %q", in, got, want)
+		}
+	}
+	// The overlap: the last option, under one that wraps, whose lost row is
+	// marked on it.
+	p := readScreen(t, "2.1.288-permission-overlap").prompt
+	if !strings.HasSuffix(p.Options[1].Detail, "scratchpad from this …") {
+		t.Errorf("cut detail = %q", p.Options[1].Detail)
+	}
+	rule := strings.Repeat("─", 40)
+	for opts, want := range map[string]string{
+		// Not the last option.
+		"   1. Yes\n      to this dir\n   2. Not now, ask later\n   3. No\n": "1. Yes | 2. Not now, ask later | 3. No",
+		// The option above does not wrap.
+		"   1. Yes\n   2. Notify me\n": "1. Yes | 2. Notify me",
+	} {
+		s := rule + "\n Bash command\n Do you want to proceed?\n" + opts + " Esc to cancel\n"
+		p := readClaudeScreen(s).prompt
+		if p == nil || p.Kind != "permission" || labels(p) != want || strings.HasSuffix(p.Options[0].Detail, "…") {
+			t.Errorf("%q: %+v", opts, p)
+		}
+	}
+	// Only a permission dialog's options are fixed: a question may offer
+	// an option named "Nothing".
+	s := strings.Repeat("─", 40) + "\n ☐ Extras\n What do you want?\n ❯ 1. Nothing\n   2. Milk\n Enter to select · Esc to cancel\n"
+	if p := readClaudeScreen(s).prompt; p == nil || p.Kind != "select" || p.Options[0].Label != "Nothing" {
+		t.Errorf("%+v", p)
 	}
 }

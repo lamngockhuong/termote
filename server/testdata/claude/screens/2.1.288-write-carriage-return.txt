@@ -1,0 +1,40 @@
+  2. Clarify if you intentionally want those special
+     Unicode dashes executed?
+
+  For example, with regular dashes:
+  [36mecho[39m a
+  ---------------------------------------- >
+  /tmp/claude-1000/-home-lamngockhuong-develop-proje
+  ct-lamngockhuong-termote/00000000-0000-4000-8000-0
+  00000000000/scratchpad/cr3.txt
+
+[38;5;246m✻[39m [38;5;246mWorked for 8s · done 2:14 AM[39m
+
+[38;5;246m[48;5;237m❯ [38;5;231mUse the Write tool to create [39m
+  [38;5;231m/tmp/claude-1000/-home-lamngockhuong-develop-proj[39m
+  [38;5;231mect-lamngockhuong-termote/00000000-0000-4000-8000[39m
+  [38;5;231m-000000000000/scratchpad/cr4.txt with exactly two[39m
+  [38;5;231mlines: first line 'line a', second line [39m
+  [38;5;231m'────────────────────────────────────────'[39m
+[49m
+[38;5;246m●[39m [1mWrite[0m(]8;id=68emfc;file:///tmp/claude-1000/-home-lamngockhuong-develop-project-lamngockhuong-termote/00000000-0000-4000-8000-000000000000/scratchpad/cr4.txt\/tmp/claude-1000/-home-lamngockhuo…/cr4.txt]8;;\)
+
+[38;5;153m────────────────────────────────────────────────────
+[39m [1m[38;5;153mCreate file[0m
+ [38;5;246m../cr4.txt[39m
+[38;5;239m╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+[39m [2m[38;5;231m 1 [0m[38;5;231mline a�──────────────────────────────────────[39m
+ [2m[38;5;231m   [0m[38;5;231m──[39m
+[38;5;239m╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+[39m Do you want to create [1mcr4.txt[0m?
+ [38;5;153m❯[39m [38;5;246m1. [38;5;153mYes[39m
+   [38;5;246m2. [39mYes, and switch to [1maccept edits (auto-approve
+[0m      [1mfile edits and common file commands)[0m for this
+      session; Yes, and always allow access to
+      [1m/tmp/claude-1000/-home-lamngockhuong-develop-p
+[0m      [1mroject-lamngockhuong-termote/00000000-0000-400
+[0m      [1m0-8000-000000000000/scratchpad[0m for this
+      session [1m(shift+tab)[0m
+   [38;5;246m3. [39mNo
+
+ [38;5;246mEsc to cancel · Tab to amend[39m
