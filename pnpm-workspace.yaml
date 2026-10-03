@@ -6,3 +6,10 @@ packages:
 allowBuilds:
   esbuild: true
   sharp: true
+
+# Advisories reviewed and accepted until a patched release exists.
+# GHSA-ch52-4w7c-c8xp (http-cache-semantics <=4.2.0, no patch yet): reached only through
+# website > astro, which builds a static site and serves no shared cache to other users.
+auditConfig:
+  ignoreGhsas:
+    - GHSA-ch52-4w7c-c8xp
