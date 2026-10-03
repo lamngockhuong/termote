@@ -75,6 +75,8 @@ func TestValidTmuxID(t *testing.T) {
 		{"other:0", false}, // would address another session
 		{"main:0", false},  // qualified targets are built server-side only
 		{"a\nb", false},    // control character
+		{"0;", false},      // ends the command: what follows runs as another one
+		{"a;b", true},      // only a trailing ';' separates
 		{"", false},
 	}
 	for _, tt := range tests {
@@ -93,6 +95,7 @@ func TestValidTmuxName(t *testing.T) {
 		{"a:b c", true}, // ':' is fine inside a name
 		{"-dash", false},
 		{"bad\tname", false},
+		{"name;", false},
 		{"", false},
 	}
 	for _, tt := range tests {

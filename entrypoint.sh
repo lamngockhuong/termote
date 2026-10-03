@@ -23,13 +23,22 @@ export TERMOTE_USER="${TERMOTE_USER:-admin}"
 # Show auth status
 if [[ "$NO_AUTH" != "true" ]]; then
     if [[ -z "$TERMOTE_PASS" ]]; then
-        # Auto-generate password if not provided
+        # Auto-generate password if not provided. It goes to a file only this
+        # user reads (termote's config dir, which the Files view never
+        # serves), not to the log anyone with access to the logs can read.
         export TERMOTE_PASS=$(openssl rand -base64 16 | tr -dc 'a-zA-Z0-9' | head -c 12)
+        pass_file="$HOME/.config/termote/password"
         echo ""
         echo "============================================"
         echo "  TERMOTE CREDENTIALS (auto-generated)"
         echo "  Username: $TERMOTE_USER"
-        echo "  Password: $TERMOTE_PASS"
+        if (umask 077 && mkdir -p "${pass_file%/*}" && printf '%s\n' "$TERMOTE_PASS" > "$pass_file") 2>/dev/null; then
+            echo "  Password: in $pass_file"
+            echo "    (docker exec <container> cat $pass_file)"
+        else
+            # Nowhere to keep it: the log is the only way to learn it.
+            echo "  Password: $TERMOTE_PASS"
+        fi
         echo "============================================"
         echo ""
     else

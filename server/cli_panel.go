@@ -45,7 +45,7 @@ func (c *cli) cmdPanel(args []string) error {
 				msg = c.panelResult("Copied the link ("+via+")", err)
 			}
 		case 's', 'S':
-			if !running {
+			if !running && info.report.Status == "not running" {
 				c.panelRun("start")
 			}
 		case 'x', 'X':
@@ -85,8 +85,17 @@ func (c *cli) drawPanel(info linkInfo, fromHerdr bool, msg string) {
 	r := info.report
 	fmt.Fprintf(c.out, "%s", c.paint(ansiBold, "Termote"))
 	if !r.Running {
-		fmt.Fprintf(c.out, "  %s\n\n", c.paint(ansiRed, "not running"))
-		fmt.Fprintf(c.out, "%s\n", c.paint(ansiDim, "s start  q close"))
+		state, keys := "not running", "s start  q close"
+		// Something else holds the port: start would fail, and no link to
+		// it is offered.
+		switch r.Status {
+		case "untrusted listener":
+			state, keys = untrustedListenerMsg, "q close"
+		case "unverified listener":
+			state, keys = unverifiedListenerMsg, "q close"
+		}
+		fmt.Fprintf(c.out, "  %s\n\n", c.paint(ansiRed, state))
+		fmt.Fprintf(c.out, "%s\n", c.paint(ansiDim, keys))
 		c.panelMessage(msg)
 		return
 	}

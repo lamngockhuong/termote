@@ -550,3 +550,18 @@ func removeFile(path string) error {
 
 // ensureDir creates dir and its parents.
 func ensureDir(dir string) error { return os.MkdirAll(filepath.Clean(dir), 0o755) }
+
+// ensureStateDir creates the state dir only its owner can enter: the server
+// log is opened by systemd or launchd, which may create it 0644, and records
+// the clients' IP addresses. A dir an older version created 0755 is
+// tightened too. Windows: the default ACL of %LOCALAPPDATA% applies.
+func (c *cli) ensureStateDir() error {
+	dir := filepath.Clean(c.stateDir())
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	if c.goos == "windows" {
+		return nil
+	}
+	return os.Chmod(dir, 0o700)
+}

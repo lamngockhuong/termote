@@ -149,12 +149,12 @@ func cleanRelPath(p string) (string, error) {
 	return c, nil
 }
 
-// denied reports whether rel under root is never served: under a deny dir,
-// or inside the repo's .git, by its path or by where its symlinks lead.
-// The check runs before the open: a local process that can write inside the
-// root could swap a link in between, but such a process can read the file
-// itself anyway.
-func (f *filesAPI) denied(root, rel string) bool {
+// denied reports whether rel under root is never served: under a deny dir
+// (f.deny, then extra), or inside the repo's .git, by its path or by where
+// its symlinks lead. The check runs before the open: a local process that
+// can write inside the root could swap a link in between, but such a process
+// can read the file itself anyway.
+func (f *filesAPI) denied(root, rel string, extra ...string) bool {
 	abs := filepath.Join(root, rel)
 	paths := []string{abs}
 	if real, err := filepath.EvalSymlinks(abs); err == nil && real != abs {
@@ -163,6 +163,11 @@ func (f *filesAPI) denied(root, rel string) bool {
 	for _, p := range paths {
 		for _, d := range f.deny {
 			if underDir(d, p) {
+				return true
+			}
+		}
+		for _, d := range extra {
+			if d != "" && underDir(d, p) {
 				return true
 			}
 		}
@@ -243,7 +248,7 @@ func (f *filesAPI) tree(root filesRoot, p string) (treeResponse, error) {
 	if err != nil {
 		return treeResponse{}, err
 	}
-	if f.denied(root.Root, rel) {
+	if f.denied(root.Root, rel, root.GitDir) {
 		return treeResponse{}, errPathNotAllowed
 	}
 	rt, err := os.OpenRoot(root.Root)
@@ -281,7 +286,11 @@ func (f *filesAPI) tree(root filesRoot, p string) (treeResponse, error) {
 				fe.Size = info.Size()
 			}
 		case "symlink":
-			// Stat through the root: a link that leaves it fails.
+			// Stat through the root: a link that leaves it fails. A link
+			// into a denied dir shows nothing of its target.
+			if f.denied(root.Root, child, root.GitDir) {
+				break
+			}
 			if info, err := rt.Stat(child); err == nil {
 				fe.Target = entryType(info.Mode().Type())
 				if fe.Target == "file" {
@@ -360,7 +369,7 @@ func (f *filesAPI) content(root filesRoot, p string, reveal bool) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if f.denied(root.Root, rel) {
+	if f.denied(root.Root, rel, root.GitDir) {
 		return nil, errPathNotAllowed
 	}
 	rt, err := os.OpenRoot(root.Root)

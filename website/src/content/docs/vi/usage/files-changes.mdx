@@ -132,8 +132,10 @@ Repo con (`submodule`) không được liệt kê, nội dung bên trong cũng k
 ## File có thể chứa bí mật
 
 File có tên thường dùng để chứa bí mật được đánh dấu bằng ổ khoá và chữ `Sensitive`: ví dụ
-`.env` và `.env.*`, khoá riêng (`*.pem`, `*.key`, `id_rsa*`, `id_ed25519*`), `.netrc`, `.npmrc`,
-`.pgpass`, `.git-credentials`, `credentials*`, `secrets.*`, state của Terraform (`*.tfstate`) và
+`.env`, `.env.*`, `*.env` và `.envrc`, khoá riêng (`*.pem`, `*.key`, `*.jks`, `id_rsa*`,
+`id_ed25519*`), `.netrc`, `.npmrc`, `.pgpass`, `.my.cnf`, `.vault-token`, `.git-credentials`,
+`credentials*`, `auth.json`, `secrets.*`, `.dev.vars`, state và biến của Terraform (`*.tfstate`,
+`*.tfvars`) và
 mọi thứ trong `.ssh`, `.gnupg`, `.aws`, `.kube`, `.docker`, `.config/gh` hoặc `.config/gcloud`.
 Link trỏ tới một file như vậy cũng tính, file đổi tên từ hoặc thành một file như vậy cũng tính.
 

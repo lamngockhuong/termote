@@ -401,13 +401,35 @@ func (s *herdrStream) announce(c sizeChange) bool {
 	}
 }
 
+// observerStderrMax caps what is kept of an observer's stderr: only its
+// start is ever logged.
+const observerStderrMax = 64 << 10
+
+// cappedBuffer keeps the first max bytes written to it and drops the rest,
+// still reporting each write as complete so the process never blocks on it.
+// The buffer is a field, not embedded: an embedded bytes.Buffer would bring
+// its ReadFrom, which io.Copy (os/exec's stderr copy) prefers to Write.
+type cappedBuffer struct {
+	buf bytes.Buffer
+	max int
+}
+
+func (b *cappedBuffer) Write(p []byte) (int, error) {
+	if room := b.max - b.buf.Len(); room > 0 {
+		b.buf.Write(p[:min(len(p), room)])
+	}
+	return len(p), nil
+}
+
+func (b *cappedBuffer) String() string { return b.buf.String() }
+
 // observer is one running observe or control process. How it is stopped
 // depends on the OS: a process group on Unix, a Job Object on Windows
 // (observerProc).
 type observer struct {
 	observerProc
 	cmd     *exec.Cmd
-	stderr  *bytes.Buffer
+	stderr  *cappedBuffer
 	decoded chan struct{} // stdout ended
 	closed  bool          // herdr reported terminal.closed
 	reason  string        // its reason
@@ -437,7 +459,7 @@ func startHerdrStream(argv []string, stdin bool, out io.Writer) (*observer, erro
 			return nil, err
 		}
 	}
-	p := &observer{cmd: cmd, stderr: &bytes.Buffer{}, decoded: make(chan struct{}), waited: make(chan struct{})}
+	p := &observer{cmd: cmd, stderr: &cappedBuffer{max: observerStderrMax}, decoded: make(chan struct{}), waited: make(chan struct{})}
 	cmd.Stderr = p.stderr
 	if err := cmd.Start(); err != nil {
 		return nil, err
@@ -455,7 +477,7 @@ func startHerdrStream(argv []string, stdin bool, out io.Writer) (*observer, erro
 		defer close(p.decoded)
 		r := bufio.NewReaderSize(stdout, 64*1024)
 		for {
-			line, err := r.ReadBytes('\n')
+			line, err := readHerdrLine(r, herdrMaxReply)
 			if err != nil {
 				return
 			}

@@ -358,6 +358,60 @@ func TestReadHerdrReplyRejectsBadLines(t *testing.T) {
 	}
 }
 
+// A line longer than the cap fails once it passes the cap, without reading
+// (or buffering) the rest; lines within it come back without the newline.
+func TestReadHerdrLineBounded(t *testing.T) {
+	r := bufio.NewReaderSize(strings.NewReader("short\n"+strings.Repeat("x", 300)+"\nnext\n"), 16)
+	if line, err := readHerdrLine(r, 100); err != nil || string(line) != "short" {
+		t.Fatalf("short line = %q, %v", line, err)
+	}
+	if _, err := readHerdrLine(r, 100); !errors.Is(err, errHerdrLineTooLong) {
+		t.Fatalf("long line: %v", err)
+	}
+	endless := bufio.NewReaderSize(io.MultiReader(strings.NewReader("{"), neverEnding('x')), 16)
+	if _, err := readHerdrLine(endless, 1<<10); !errors.Is(err, errHerdrLineTooLong) {
+		t.Fatalf("endless line: %v", err)
+	}
+}
+
+// neverEnding is an endless stream of one byte.
+type neverEnding byte
+
+func (b neverEnding) Read(p []byte) (int, error) {
+	for i := range p {
+		p[i] = byte(b)
+	}
+	return len(p), nil
+}
+
+func TestCappedBuffer(t *testing.T) {
+	b := &cappedBuffer{max: 5}
+	for _, s := range []string{"abc", "defgh", "ij"} {
+		if n, err := b.Write([]byte(s)); n != len(s) || err != nil {
+			t.Fatalf("Write(%q) = %d, %v", s, n, err)
+		}
+	}
+	if b.String() != "abcde" {
+		t.Errorf("kept %q, want the first 5 bytes", b.String())
+	}
+	// As a process's stderr: os/exec copies through io.Copy, which must not
+	// find a ReadFrom that bypasses the cap.
+	if _, ok := any(b).(io.ReaderFrom); ok {
+		t.Fatal("cappedBuffer is an io.ReaderFrom: io.Copy would skip the cap")
+	}
+	if runtime.GOOS != "windows" {
+		big := &cappedBuffer{max: 1024}
+		cmd := exec.Command("sh", "-c", "head -c 1000000 /dev/zero >&2")
+		cmd.Stderr = big
+		if err := cmd.Run(); err != nil {
+			t.Fatal(err)
+		}
+		if n := len(big.String()); n != 1024 {
+			t.Errorf("kept %d bytes of a process's stderr, want 1024", n)
+		}
+	}
+}
+
 func TestMapHerdrSnapshot(t *testing.T) {
 	f := newFakeHerdr(t)
 	m := newTestHerdrMux(t, f)

@@ -208,6 +208,25 @@ func TestStatus(t *testing.T) {
 	if code := tc.main([]string{"health"}); code != 0 || !strings.Contains(tc.stdout.String(), "not accepted") {
 		t.Fatalf("wrong password: code %d\n%s", code, tc.stdout.String())
 	}
+	// Another user's process on the port: no password sent, and it says so.
+	tc.saveConfig(savedConfig{Port: port, Password: "p"})
+	old := listenerOwnerOf
+	listenerOwnerOf = func(int) listenerOwner { return listenerOtherOwner }
+	tc.stdout.Reset()
+	code := tc.main([]string{"status"})
+	r := tc.statusReport(&savedConfig{Port: port, Password: "p"}, port)
+	listenerOwnerOf = func(int) listenerOwner { return listenerNoneSeen }
+	unseen := tc.statusReport(&savedConfig{Port: port, Password: "p"}, port)
+	listenerOwnerOf = old
+	if unseen.Running || unseen.Status != "unverified listener" {
+		t.Errorf("report with an unseen listener = %+v", unseen)
+	}
+	if code != 1 || !strings.Contains(tc.stdout.String(), untrustedListenerMsg) {
+		t.Fatalf("untrusted listener: code %d\n%s", code, tc.stdout.String())
+	}
+	if r.Running || r.Status != "untrusted listener" {
+		t.Errorf("report with an untrusted listener = %+v", r)
+	}
 	srv.Close()
 	tc.stdout.Reset()
 	if code := tc.main([]string{"status"}); code != 1 || !strings.Contains(tc.stdout.String(), "not running") {

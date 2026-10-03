@@ -163,6 +163,22 @@ func (s *tokenStore) generate() (string, error) {
 // validate checks a token. If singleUse is true, consumes the token.
 func (s *tokenStore) validate(token string) bool {
 	now := time.Now()
+	// A capped store of reusable tokens (sessions) keeps the most recently
+	// used ones: a token in use moves to the end of the eviction order, so
+	// logins without a cookie (curl -u, scripts) drop idle sessions first,
+	// not the phone that uses its session all day.
+	if !s.singleUse && s.max > 0 {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		expiry, ok := s.tokens[token]
+		if !ok || now.After(expiry) {
+			return false
+		}
+		if i := slices.Index(s.order, token); i >= 0 {
+			s.order = append(append(s.order[:i:i], s.order[i+1:]...), token)
+		}
+		return true
+	}
 	// Fast path: read-only check for reusable tokens
 	if !s.singleUse {
 		s.mu.RLock()
@@ -252,7 +268,30 @@ func buildServer(cfg serveConfig, m Mux) (http.Handler, *streamHub, error) {
 	// allowed one.
 	handler = securityHeaders(pwa, handler)
 	handler = hostGuard(allowed, handler)
-	return noCacheMiddleware(handler), hub, nil
+	return readDeadline(noCacheMiddleware(handler)), hub, nil
+}
+
+// requestReadTimeout bounds reading one request, its body included:
+// ReadHeaderTimeout covers only the headers, and a client that announces a
+// body then sends it a byte at a time would otherwise hold its connection
+// (and a file descriptor) forever. Bodies are at most 64 KB. Past the
+// deadline, net/http's background read also cancels the request's context,
+// so no handler but the stream may run longer (mux calls take at most
+// muxTimeout, git gitTimeout).
+var requestReadTimeout = 60 * time.Second
+
+// readDeadline sets requestReadTimeout on every request but the terminal
+// stream, a WebSocket that reads for as long as it is open. Matched by path,
+// not by an Upgrade header any request could carry. The server clears the
+// deadline before it reads the connection's next request.
+func readDeadline(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/mux/stream" {
+			// Fails only on a writer without a connection (tests).
+			_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(requestReadTimeout))
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // shutdownTimeout bounds how long SIGTERM/SIGINT waits for requests and
@@ -346,13 +385,14 @@ func newAuthRateLimiter() *authRateLimiter {
 	return &authRateLimiter{failures: make(map[string][]time.Time)}
 }
 
-// isBlocked returns true if the IP has exceeded 5 failed attempts in the last minute.
-func (rl *authRateLimiter) isBlocked(ip string) bool {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-	cutoff := time.Now().Add(-1 * time.Minute)
+// authMaxFailures failed attempts per IP within a minute block further ones.
+const authMaxFailures = 5
+
+// recentLocked returns ip's failures of the last minute, dropping older
+// ones (and the entry once empty). rl.mu must be held.
+func (rl *authRateLimiter) recentLocked(ip string, now time.Time) []time.Time {
+	cutoff := now.Add(-1 * time.Minute)
 	recent := rl.failures[ip]
-	// Sweep old entries
 	filtered := recent[:0]
 	for _, t := range recent {
 		if t.After(cutoff) {
@@ -361,18 +401,57 @@ func (rl *authRateLimiter) isBlocked(ip string) bool {
 	}
 	if len(filtered) == 0 {
 		delete(rl.failures, ip)
-		return false
+		return nil
 	}
 	rl.failures[ip] = filtered
-	return len(filtered) >= 5
+	return filtered
 }
 
-// record adds a failed attempt for the given IP.
-// Sweeps all expired entries when map exceeds 1000 IPs to prevent unbounded growth.
-func (rl *authRateLimiter) record(ip string) {
+// isBlocked returns true if the IP has exceeded 5 failed attempts in the last minute.
+func (rl *authRateLimiter) isBlocked(ip string) bool {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	return len(rl.recentLocked(ip, time.Now())) >= authMaxFailures
+}
+
+// reserve checks the limit and counts the attempt as failed in one step,
+// before its credentials are compared: a burst of concurrent requests cannot
+// all pass the check before any failure is recorded. false: blocked.
+func (rl *authRateLimiter) reserve(ip string) bool {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 	now := time.Now()
+	if len(rl.recentLocked(ip, now)) >= authMaxFailures {
+		return false
+	}
+	rl.addLocked(ip, now)
+	return true
+}
+
+// refund takes back one reservation of ip: its credentials were right, or
+// it sent none.
+func (rl *authRateLimiter) refund(ip string) {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	f := rl.failures[ip]
+	switch {
+	case len(f) > 1:
+		rl.failures[ip] = f[:len(f)-1]
+	case len(f) == 1:
+		delete(rl.failures, ip)
+	}
+}
+
+// record adds a failed attempt for the given IP.
+func (rl *authRateLimiter) record(ip string) {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	rl.addLocked(ip, time.Now())
+}
+
+// addLocked adds a failure of ip at now. It sweeps all expired entries when
+// the map exceeds 1000 IPs to prevent unbounded growth. rl.mu must be held.
+func (rl *authRateLimiter) addLocked(ip string, now time.Time) {
 	rl.failures[ip] = append(rl.failures[ip], now)
 	if len(rl.failures) > 1000 {
 		cutoff := now.Add(-1 * time.Minute)
@@ -418,6 +497,10 @@ func isPWAPublicPath(p string) bool {
 const (
 	sessionCookieName = "termote_session"
 	sessionTTL        = 24 * time.Hour
+	// maxSessions caps live sessions: each login without a valid cookie
+	// makes one, and past the cap the least recently used is dropped (its
+	// device logs in again with the saved credentials).
+	maxSessions = 256
 )
 
 // basicAuth wraps a handler with HTTP basic authentication.
@@ -428,6 +511,7 @@ const (
 func basicAuth(user, pass string, next http.Handler) http.Handler {
 	limiter := newAuthRateLimiter()
 	sessions := newTokenStore(sessionTTL, false)
+	sessions.max = maxSessions
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Skip auth for PWA public paths (manifest, service worker)
@@ -449,25 +533,27 @@ func basicAuth(user, pass string, next http.Handler) http.Handler {
 		if ip == "" {
 			ip = r.RemoteAddr
 		}
-		if limiter.isBlocked(ip) {
+		// Counted as a failure until the credentials prove right.
+		if !limiter.reserve(ip) {
 			http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
 			return
 		}
 		u, p, ok := r.BasicAuth()
 		if !ok {
 			// No credentials provided — prompt browser, don't count as failure
+			limiter.refund(ip)
 			w.Header().Set("WWW-Authenticate", `Basic realm="Terminal Access"`)
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 		if subtle.ConstantTimeCompare([]byte(u), []byte(user)) != 1 ||
 			subtle.ConstantTimeCompare([]byte(p), []byte(pass)) != 1 {
-			// Wrong credentials — count as failed attempt
-			limiter.record(ip)
+			// Wrong credentials — the reservation stays as a failed attempt
 			w.Header().Set("WWW-Authenticate", `Basic realm="Terminal Access"`)
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
+		limiter.refund(ip)
 
 		// Set session cookie to avoid re-prompting on mobile reloads
 		sessionToken, err := sessions.generate()

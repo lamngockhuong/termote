@@ -28,6 +28,7 @@ const { FakeTerminal, FakeFit } = vi.hoisted(() => {
       fontFamily?: string
       theme: unknown
       disableStdin?: boolean
+      linkHandler?: { activate: (event: MouseEvent, uri: string) => void }
     }
     cols = 80
     rows = 24
@@ -54,11 +55,13 @@ const { FakeTerminal, FakeFit } = vi.hoisted(() => {
       fontSize: number
       fontFamily?: string
       theme: unknown
+      linkHandler?: { activate: (event: MouseEvent, uri: string) => void }
     }) {
       this.options = {
         fontSize: opts.fontSize,
         fontFamily: opts.fontFamily,
         theme: opts.theme,
+        linkHandler: opts.linkHandler,
       }
       FakeTerminal.last = this
     }
@@ -191,6 +194,19 @@ describe('bracketPaste', () => {
   it('wraps text and drops an embedded end marker', () => {
     expect(bracketPaste('a\x1b[201~b\n')).toBe('\x1b[200~ab\n\x1b[201~')
   })
+
+  it('cannot be escaped by an end marker nested in another', () => {
+    const out = bracketPaste('x\x1b[20\x1b[201~1~\r!rm -rf ~\r')
+    expect(out).toBe('\x1b[200~x[201~\r!rm -rf ~\r\x1b[201~')
+    // Only the closing marker is left, at the very end.
+    expect(out.indexOf('\x1b[201~')).toBe(out.length - 6)
+  })
+
+  it('drops control characters but keeps tabs and line breaks', () => {
+    expect(bracketPaste('a\tb\r\nc\x03\x7f\x9bd\x1b')).toBe(
+      '\x1b[200~a\tb\r\ncd\x1b[201~',
+    )
+  })
 })
 
 describe('wheelRows', () => {
@@ -262,6 +278,24 @@ describe('TerminalView', () => {
     expect(term.loadAddon).toHaveBeenCalledWith(fit)
     expect(term.open).toHaveBeenCalledWith(screen.getByTestId('terminal-view'))
     expect(fit.fit).toHaveBeenCalled()
+  })
+
+  it('opens only http(s) links the output printed, cut off from this tab', () => {
+    const { term } = renderView()
+    const open = vi.spyOn(window, 'open').mockReturnValue(null)
+    const activate = (uri: string) =>
+      term.options.linkHandler?.activate(new MouseEvent('click'), uri)
+    activate('javascript:alert(1)')
+    activate('data:text/html,<script>alert(1)</script>')
+    activate('file:///etc/passwd')
+    expect(open).not.toHaveBeenCalled()
+    activate('https://example.com/a?b=1')
+    expect(open).toHaveBeenCalledWith(
+      'https://example.com/a?b=1',
+      '_blank',
+      'noopener,noreferrer',
+    )
+    open.mockRestore()
   })
 
   it('fits once after the container stops resizing', () => {

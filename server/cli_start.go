@@ -340,7 +340,7 @@ func (c *cli) registerService() (supervisor, error) {
 	exe := c.stableExe()
 	env := c.serviceEnv()
 	// systemd and launchd open the log themselves, before serve runs.
-	if err := ensureDir(c.stateDir()); err != nil {
+	if err := c.ensureStateDir(); err != nil {
 		return nil, err
 	}
 	sup := c.preferredSupervisor()
@@ -401,9 +401,23 @@ type serverHealth struct {
 
 // fetchHealth asks the server on port for its health, logging in as user
 // with pass (none when pass is empty); code is the HTTP status (0 when
-// nothing answers).
+// nothing answers). The password goes only to a listener of the current
+// user (or root); otherwise code is healthUntrusted, or 0 when nothing
+// answers at all.
 func fetchHealth(port int, user, pass string) (serverHealth, int) {
 	var h serverHealth
+	if pass != "" {
+		if owner := listenerOwnerOf(port); owner != listenerTrustedOwner {
+			switch {
+			case !portAnswers(port):
+				return h, 0
+			case owner == listenerOtherOwner:
+				return h, healthUntrusted
+			default:
+				return h, healthUnverified
+			}
+		}
+	}
 	req, _ := http.NewRequest(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/api/mux/health", port), nil)
 	if pass != "" {
 		req.SetBasicAuth(user, pass)
@@ -433,6 +447,10 @@ func (c *cli) waitForServer(port int, user, pass, version string, timeout time.D
 			return nil
 		case code == http.StatusOK && h.Status == "ok":
 			last = fmt.Sprintf("version %s answers, expected %s", h.Version, version)
+		case code == healthUntrusted:
+			last = untrustedListenerMsg
+		case code == healthUnverified:
+			last = unverifiedListenerMsg
 		case code != 0:
 			last = fmt.Sprintf("HTTP %d, status %q", code, h.Status)
 		}
@@ -545,6 +563,10 @@ func (c *cli) cmdStatus(args []string) error {
 	case code == http.StatusUnauthorized:
 		running = true
 		fmt.Fprintf(c.out, "  %s server :%d - running (the saved password was not accepted)\n", c.paint(ansiYellow, "[OK]"), port)
+	case code == healthUntrusted:
+		fmt.Fprintf(c.out, "  %s server :%d - %s\n", c.paint(ansiRed, "[--]"), port, untrustedListenerMsg)
+	case code == healthUnverified:
+		fmt.Fprintf(c.out, "  %s server :%d - %s\n", c.paint(ansiYellow, "[??]"), port, unverifiedListenerMsg)
 	case code != 0:
 		fmt.Fprintf(c.out, "  %s server :%d - HTTP %d\n", c.paint(ansiRed, "[--]"), port, code)
 	default:

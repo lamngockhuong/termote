@@ -7,6 +7,7 @@ import (
 	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -519,5 +520,47 @@ func TestUninstallKeepsStateAndOthersInstalls(t *testing.T) {
 	tc.main([]string{"uninstall"})
 	if !fileExists(tc.versionBinary("1.0.0")) || !strings.Contains(tc.stdout.String(), "left alone") {
 		t.Fatalf("checkout uninstall touched the install:\n%s", tc.stdout.String())
+	}
+}
+
+// What a release archive unpacks to is capped in total, for a tarball and a
+// zip alike: a forged archive cannot fill the disk.
+func TestExtractCapsTotalSize(t *testing.T) {
+	old := maxExtractBytes
+	maxExtractBytes = 10
+	t.Cleanup(func() { maxExtractBytes = old })
+	dir := t.TempDir()
+	files := map[string]string{"a.txt": "123456", "b.txt": "abcdef"}
+	tgz := filepath.Join(dir, "t.tar.gz")
+	os.WriteFile(tgz, makeTarball(t, "1.0.0", files), 0o644)
+	if err := extractTarball(tgz, filepath.Join(dir, "tar")); !errors.Is(err, errTooLarge) {
+		t.Errorf("tarball over the cap: %v", err)
+	}
+	zf := filepath.Join(dir, "t.zip")
+	os.WriteFile(zf, makeZip(t, "termote-v1.0.0", files), 0o644)
+	if err := extractZip(zf, filepath.Join(dir, "zip")); !errors.Is(err, errTooLarge) {
+		t.Errorf("zip over the cap: %v", err)
+	}
+	maxExtractBytes = 12
+	if err := extractTarball(tgz, filepath.Join(dir, "fits")); err != nil {
+		t.Errorf("tarball at the cap: %v", err)
+	}
+}
+
+// An archive larger than the download cap is refused, and the install stays
+// on the current version.
+func TestUpdateRefusesOversizedDownload(t *testing.T) {
+	tc, _, _ := setupUpdate(t)
+	old := maxDownloadBytes
+	maxDownloadBytes = 10
+	t.Cleanup(func() { maxDownloadBytes = old })
+	if code := tc.main([]string{"update"}); code == 0 {
+		t.Fatalf("update succeeded\n%s", tc.stdout.String())
+	}
+	if !strings.Contains(tc.stderr.String(), errTooLarge.Error()) {
+		t.Errorf("stderr = %q", tc.stderr.String())
+	}
+	if tc.currentVersion() != "1.0.0" {
+		t.Errorf("current = %q", tc.currentVersion())
 	}
 }

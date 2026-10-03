@@ -378,6 +378,66 @@ func TestFilesGitRoutesDoNotRunRepoPrograms(t *testing.T) {
 	}
 }
 
+// A file whose stat changed but whose contents match the index makes git
+// diff refresh the index, which runs the repo's post-index-change hook.
+// Through the routes, no hook runs; the same diff without the overrides does.
+func TestFilesGitRoutesDoNotRunRepoHooks(t *testing.T) {
+	requireUnixShell(t)
+	gx := newGitFixture(t)
+	r := gx.repo
+	marker := filepath.Join(t.TempDir(), "ran")
+	gitDir := strings.TrimSpace(gitT(t, r, "rev-parse", "--absolute-git-dir"))
+	hook := filepath.Join(gitDir, "hooks", "post-index-change")
+	os.MkdirAll(filepath.Dir(hook), 0o755)
+	if err := os.WriteFile(hook, []byte("#!/bin/sh\ntouch "+marker+"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	a := filepath.Join(r, "a.txt")
+	writeFile(t, a, "two\n")
+	if _, by := gx.changes(t); by["a.txt"] == nil {
+		t.Fatalf("a.txt not listed: %v", by)
+	}
+	// Back to the index contents with a new mtime, while the listing that
+	// still shows a.txt is cached: only its stat differs now.
+	writeFile(t, a, "one\n")
+	later := time.Now().Add(time.Minute)
+	os.Chtimes(a, later, later)
+
+	gx.get(t, "diff", url.Values{"path": {"a.txt"}})
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("a repo hook ran")
+	}
+	cmd := exec.Command("git", "--no-pager", "diff")
+	cmd.Dir = r
+	cmd.Run()
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatal("control: a plain git diff did not run the hook, so the test proves nothing")
+	}
+}
+
+// A git directory inside the root that is not named .git (git init
+// --separate-git-dir) is never served: its config can hold a remote's token.
+func TestFilesSeparateGitDirDenied(t *testing.T) {
+	requireGit(t)
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	gitT(t, root, "init", "-q", "--separate-git-dir="+filepath.Join(root, "meta"))
+	gitT(t, root, "config", "remote.origin.url", "https://token@example.com/x")
+	writeFile(t, filepath.Join(root, "a.txt"), "one\n")
+	h := newTestHandler(t, &filesFakeMux{dir: root, files: true})
+	for _, route := range []string{"content?path=meta/config", "tree?path=meta", "tree?path=meta/refs"} {
+		rec := serve(h, apiRequest("GET", "/api/mux/panes/0/files/"+route, ""))
+		if rec.Code != http.StatusForbidden || strings.Contains(rec.Body.String(), "token@") {
+			t.Errorf("%s = %d %s", route, rec.Code, rec.Body.String())
+		}
+	}
+	if rec := serve(h, apiRequest("GET", "/api/mux/panes/0/files/content?path=a.txt", "")); rec.Code != http.StatusOK {
+		t.Errorf("a.txt = %d %s", rec.Code, rec.Body.String())
+	}
+}
+
 // An untracked symlink to a sensitive file is flagged in the list, and its
 // diff (the file read whole) needs reveal=1.
 func TestFilesDiffSensitiveSymlink(t *testing.T) {

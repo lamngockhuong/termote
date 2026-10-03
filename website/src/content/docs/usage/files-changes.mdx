@@ -136,9 +136,10 @@ Submodules are not listed, and their contents are not compared.
 ## Files That May Contain Secrets
 
 Files whose names usually mean secrets are listed with a lock and the word `Sensitive`: for
-example `.env` and `.env.*`, private keys (`*.pem`, `*.key`, `id_rsa*`, `id_ed25519*`),
-`.netrc`, `.npmrc`, `.pgpass`, `.git-credentials`, `credentials*`, `secrets.*`, Terraform state
-(`*.tfstate`) and anything under `.ssh`, `.gnupg`, `.aws`, `.kube`, `.docker`, `.config/gh`
+example `.env`, `.env.*`, `*.env` and `.envrc`, private keys (`*.pem`, `*.key`, `*.jks`,
+`id_rsa*`, `id_ed25519*`), `.netrc`, `.npmrc`, `.pgpass`, `.my.cnf`, `.vault-token`,
+`.git-credentials`, `credentials*`, `auth.json`, `secrets.*`, `.dev.vars`, Terraform state and
+variables (`*.tfstate`, `*.tfvars`) and anything under `.ssh`, `.gnupg`, `.aws`, `.kube`, `.docker`, `.config/gh`
 or `.config/gcloud`. A link to such a file counts too, as does a rename from or to one.
 
 Opening one asks `This file may contain secrets. Show its contents?` first, for the file and for

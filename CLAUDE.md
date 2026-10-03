@@ -402,15 +402,28 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   is empty
 - **Files/Changes** (`/api/mux/panes/{id}/files/*`): read-only GETs that also check
   `Sec-Fetch-Site`/`Origin`; every path is opened through `os.Root` under the pane's root (its
-  git toplevel, else its directory); termote's config/state dirs, `/proc`, `/sys`, `/dev` and
-  `.git` are never served; sensitive names (`.env`, keys, ...) return contents or a diff only
-  with `reveal=1`. git runs without a shell, with `GIT_*`/`TERMOTE_*` stripped, fsmonitor,
-  filter drivers, external diff and textconv off, submodules ignored, 10s timeout, 2 at a time
+  git toplevel when a `.git` sits at it, else its directory); termote's config/state dirs,
+  `/proc`, `/sys`, `/dev`, `.git` and the repo's git dir (`--separate-git-dir`) are never served;
+  sensitive names (`.env`, keys, ...) return contents or a diff only with `reveal=1`. git runs
+  without a shell, with `GIT_*`/`TERMOTE_*` stripped, hooks (`core.hooksPath` to the null
+  device), index refresh on diff, fsmonitor, filter drivers, external diff and textconv off,
+  submodules ignored, 10s timeout, 2 at a time
 - Exclude sensitive dirs (.ssh, .gnupg, .aws, .config/gcloud) from container volume mounts
   (warned at `container up`)
 - Serve mode uses constant-time comparison for password verification
-- **Brute-force protection**: built-in rate limiter (5 failed attempts/min per IP → 429)
-- **Server hardening**: ReadHeaderTimeout (Slowloris protection), request body size limits (8KB on `/api/mux/*`, 64KB on `agent/message`)
+- **Brute-force protection**: built-in rate limiter (5 failed attempts/min per IP → 429); the
+  check and the count are one step, so a concurrent burst gets no more than 5 tries
+- **Server hardening**: ReadHeaderTimeout (Slowloris protection), a 60s read deadline on every
+  request but the terminal stream (a body sent a byte at a time), at most 256 sessions (the
+  least recently used is dropped), request
+  body size limits (8KB on `/api/mux/*`, 64KB on `agent/message`)
+- **CLI and the saved password**: `status`, `url`, `panel`, `container status` and the health
+  wait of `start`/`restart`/`update` send the saved password to `127.0.0.1:<port>` only when
+  every socket listening on it runs as the current user or root/SYSTEM (`server/listener_owner*.go`:
+  `/proc/net/tcp*` on Linux, `lsof` on macOS, the TCP table and process SID on Windows); otherwise
+  the status reads "untrusted listener" (another user's socket seen) or "unverified listener"
+  (the port answers but no listener is seen: a runtime forwarding it without a proxy process,
+  macOS without `lsof`)
 - **Error sanitization**: internal errors logged server-side only, generic messages returned to clients
 - **Content-Security-Policy** (`server/security_headers.go`): on every response, `script-src 'self'`
   plus the `sha256` of the inline theme script in the served `index.html` (hashed at startup,

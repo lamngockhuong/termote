@@ -462,7 +462,16 @@ type promptResponse struct {
 }
 
 func (a *agentAPI) handlePrompt(w http.ResponseWriter, r *http.Request) {
-	if !requireMethod(w, r, http.MethodGet) || !requireAgentRead(w, r) {
+	if !requireMethod(w, r, http.MethodGet) {
+		return
+	}
+	// A read, but a cross-site page has no reason to start one (with
+	// --no-auth it would make the server read the transcript for nothing).
+	if msg := crossSiteRejection(a.allowed, r); msg != "" {
+		jsonError(w, msg, http.StatusForbidden)
+		return
+	}
+	if !requireAgentRead(w, r) {
 		return
 	}
 	wr, ok := a.writer(w)

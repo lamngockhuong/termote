@@ -130,7 +130,7 @@ func mergeEnabledPlugins(p string, enabled map[string]bool) {
 // readJSONFile decodes the regular file p into v. A file missing, larger
 // than pluginJSONMax or not valid JSON reports false.
 func readJSONFile(p string, v any) bool {
-	f, err := os.Open(p)
+	f, err := os.OpenFile(p, os.O_RDONLY|openNonblock, 0)
 	if err != nil {
 		return false
 	}

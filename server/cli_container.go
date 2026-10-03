@@ -499,6 +499,10 @@ func describeCode(code int) string {
 		return "not answering"
 	case 401:
 		return "running (the saved password was not accepted)"
+	case healthUntrusted:
+		return untrustedListenerMsg
+	case healthUnverified:
+		return unverifiedListenerMsg
 	}
 	return "HTTP " + strconv.Itoa(code)
 }

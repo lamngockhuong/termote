@@ -165,7 +165,7 @@ func (d *detachedSupervisor) Start() error {
 	if err := d.Stop(); err != nil {
 		return err
 	}
-	if err := ensureDir(d.c.stateDir()); err != nil {
+	if err := d.c.ensureStateDir(); err != nil {
 		return err
 	}
 	exe := d.c.stableExe()
@@ -250,7 +250,7 @@ func (c *cli) waitStopped(port int, timeout time.Duration) error {
 
 // writePIDFile records this server for stop and status.
 func (c *cli) writePIDFile() error {
-	if err := ensureDir(c.stateDir()); err != nil {
+	if err := c.ensureStateDir(); err != nil {
 		return err
 	}
 	return os.WriteFile(c.pidFile(), []byte(strconv.Itoa(os.Getpid())+"\n"), 0o600)

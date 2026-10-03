@@ -103,7 +103,7 @@ func (t *taskSupervisor) Install(exe string, _ map[string]string) error {
 	if user == "" {
 		return errors.New("cannot tell the current user (whoami)")
 	}
-	if err := ensureDir(t.c.stateDir()); err != nil {
+	if err := t.c.ensureStateDir(); err != nil {
 		return err
 	}
 	launcher := t.launcherPath()

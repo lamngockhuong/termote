@@ -374,13 +374,14 @@ type claudeSessionFile struct {
 // readClaudeSessionFile reads the session file of pid, if Claude Code wrote one.
 func readClaudeSessionFile(claudeDir string, pid int) (claudeSessionFile, bool) {
 	var f claudeSessionFile
-	fh, err := os.Open(filepath.Join(claudeDir, "sessions", fmt.Sprintf("%d.json", pid)))
+	fh, err := os.OpenFile(filepath.Join(claudeDir, "sessions", fmt.Sprintf("%d.json", pid)), os.O_RDONLY|openNonblock, 0)
 	if err != nil {
 		return f, false
 	}
 	defer fh.Close()
 	// Only a regular file, read up to a limit: a FIFO or a link to a device
-	// must not block or exhaust memory.
+	// must not block or exhaust memory (openNonblock: opening a FIFO does
+	// not wait for a writer).
 	if fi, err := fh.Stat(); err != nil || !fi.Mode().IsRegular() {
 		return f, false
 	}

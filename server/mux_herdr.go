@@ -463,7 +463,7 @@ func (m *herdrMux) subscribeOnce(ctx context.Context) (live bool, err error) {
 	defer close(quit)
 	go func() {
 		for {
-			line, err := r.ReadBytes('\n')
+			line, err := readHerdrLine(r, herdrMaxReply)
 			if err != nil {
 				readErr <- err
 				return

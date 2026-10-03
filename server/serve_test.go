@@ -2,10 +2,14 @@ package main
 
 import (
 	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -728,5 +732,135 @@ func TestTerminalsNeverSeeTermoteVariables(t *testing.T) {
 		if _, ok := os.LookupEnv(k); ok {
 			t.Fatalf("%s still in the process environment, so tmux would inherit it", k)
 		}
+	}
+}
+
+// A burst of concurrent wrong passwords from one IP gets no more than the
+// limit through to the password check; the rest are refused as blocked.
+func TestBasicAuthConcurrentFailuresBounded(t *testing.T) {
+	var reached atomic.Int32
+	h := basicAuth("admin", "secret", http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for range 1000 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			req.RemoteAddr = "1.2.3.4:5"
+			req.SetBasicAuth("admin", "wrong")
+			<-start
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+			if rec.Code == http.StatusUnauthorized {
+				reached.Add(1)
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+	if n := reached.Load(); n > authMaxFailures {
+		t.Errorf("%d wrong passwords checked in a burst, want at most %d", n, authMaxFailures)
+	}
+}
+
+// Right credentials and requests without any do not count as failures.
+func TestBasicAuthRefundsNonFailures(t *testing.T) {
+	h := basicAuth("admin", "secret", http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	for range 10 {
+		for _, creds := range [][2]string{{"admin", "secret"}, {}} {
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			req.RemoteAddr = "1.2.3.4:5"
+			if creds[0] != "" {
+				req.SetBasicAuth(creds[0], creds[1])
+			}
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+			if rec.Code == http.StatusTooManyRequests {
+				t.Fatalf("blocked after logins that were not failures (%q)", creds)
+			}
+		}
+	}
+}
+
+// Logins without a cookie cannot grow the session store past its cap: the
+// oldest session is dropped, the newest still works.
+func TestBasicAuthSessionsBounded(t *testing.T) {
+	h := basicAuth("admin", "secret", http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	login := func() *http.Cookie {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.SetBasicAuth("admin", "secret")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		for _, c := range rec.Result().Cookies() {
+			if c.Name == sessionCookieName {
+				return c
+			}
+		}
+		t.Fatal("no session cookie")
+		return nil
+	}
+	withCookie := func(c *http.Cookie) int {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.AddCookie(c)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec.Code
+	}
+	first := login()
+	var last *http.Cookie
+	for range maxSessions {
+		last = login()
+	}
+	if code := withCookie(first); code != http.StatusUnauthorized {
+		t.Errorf("oldest session past the cap = %d, want 401", code)
+	}
+	if code := withCookie(last); code != http.StatusOK {
+		t.Errorf("newest session = %d", code)
+	}
+
+	// A session in use survives logins without a cookie: the least recently
+	// used one goes first.
+	phone := login()
+	for range maxSessions - 1 {
+		login()
+	}
+	if code := withCookie(phone); code != http.StatusOK {
+		t.Fatalf("phone session before the cap = %d", code)
+	}
+	for range maxSessions - 1 {
+		login()
+	}
+	if code := withCookie(phone); code != http.StatusOK {
+		t.Errorf("session in use dropped past the cap = %d", code)
+	}
+}
+
+// A client that announces a body and never sends it is cut off once the
+// request read timeout passes, even on a route that answers without reading
+// the body (a 401).
+func TestSlowBodyConnectionClosed(t *testing.T) {
+	old := requestReadTimeout
+	requestReadTimeout = 300 * time.Millisecond
+	t.Cleanup(func() { requestReadTimeout = old })
+	h, err := newServeHandler(testConfig(t), &fakeMux{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	conn, err := net.Dial("tcp", srv.Listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	fmt.Fprintf(conn, "POST /api/mux/panes/0/keys HTTP/1.1\r\nHost: %s\r\nContent-Type: application/json\r\nContent-Length: 1000\r\n\r\n{", srv.Listener.Addr())
+	conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	out, err := io.ReadAll(conn)
+	if err != nil {
+		t.Fatalf("connection still open after the read timeout: %v (read %q)", err, out)
+	}
+	if !strings.Contains(string(out), "401") {
+		t.Errorf("response = %q", out)
 	}
 }

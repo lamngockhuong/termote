@@ -60,6 +60,9 @@ type filesRoot struct {
 	// SafeDir is passed as safe.directory to every git command in Root: git
 	// refused the repo for its owner, and the server decided to trust it.
 	SafeDir string
+	// GitDir is the repo's git directory, never served: it is not always a
+	// .git inside Root (--separate-git-dir).
+	GitDir string
 }
 
 // gitRunner is the only place the server runs git. Every command gets a
@@ -133,8 +136,12 @@ func containsFold(list []string, s string) bool {
 func (g *gitRunner) argv(c gitCall, filters []string, args []string) []string {
 	// protocol.allow=never: no transport at all (lazy fetch on a git older
 	// than GIT_NO_LAZY_FETCH). -c settings reach any git git runs itself.
+	// core.hooksPath to the null device: no hook of the repo runs (diff
+	// refreshing the index would run post-index-change), and
+	// diff.autoRefreshIndex=false keeps diff from writing the index at all.
 	argv := []string{"-C", c.root, "--no-pager",
-		"-c", "core.fsmonitor=false", "-c", "core.untrackedCache=false", "-c", "protocol.allow=never"}
+		"-c", "core.fsmonitor=false", "-c", "core.untrackedCache=false", "-c", "protocol.allow=never",
+		"-c", "core.hooksPath=" + os.DevNull, "-c", "diff.autoRefreshIndex=false"}
 	if c.safeDir != "" {
 		argv = append(argv, "-c", "safe.directory="+c.safeDir)
 	}
@@ -399,7 +406,7 @@ func (rr *rootResolver) resolve(ctx context.Context, dir string) (filesRoot, err
 		if fi, err := os.Stat(abs); err != nil || !fi.IsDir() {
 			return filesRoot{}, errDirNotAvailable
 		}
-		top, err := rr.toplevel(ctx, abs, "")
+		top, gitDir, err := rr.toplevel(ctx, abs, "")
 		var ge *gitError
 		if errors.As(err, &ge) {
 			if owned, ok := dubiousRepo(ge.stderr); ok {
@@ -407,15 +414,15 @@ func (rr *rootResolver) resolve(ctx context.Context, dir string) (filesRoot, err
 					log.Printf("files: %s not trusted by git (owner differs), browsing it as a plain directory", owned)
 					return filesRoot{Root: abs}, nil
 				}
-				top, err = rr.toplevel(ctx, abs, owned)
+				top, gitDir, err = rr.toplevel(ctx, abs, owned)
 				if err == nil {
-					return rootFromToplevel(abs, top, owned), nil
+					return rootFromToplevel(abs, top, gitDir, owned), nil
 				}
 			}
 		}
 		switch {
 		case err == nil:
-			return rootFromToplevel(abs, top, ""), nil
+			return rootFromToplevel(abs, top, gitDir, ""), nil
 		case errors.As(err, &ge), errors.Is(err, exec.ErrNotFound):
 			// Not a repo, or no git: the directory itself.
 			return filesRoot{Root: abs}, nil
@@ -425,24 +432,75 @@ func (rr *rootResolver) resolve(ctx context.Context, dir string) (filesRoot, err
 	})
 }
 
-func (rr *rootResolver) toplevel(ctx context.Context, dir, safeDir string) (string, error) {
+// toplevel returns the work tree and the git directory of the repo dir is in.
+func (rr *rootResolver) toplevel(ctx context.Context, dir, safeDir string) (top, gitDir string, err error) {
 	out, _, err := rr.git.output(ctx, gitCall{root: dir, safeDir: safeDir, limit: 64 << 10},
-		"rev-parse", "--show-toplevel")
+		"rev-parse", "--show-toplevel", "--absolute-git-dir")
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	return strings.TrimRight(string(out), "\r\n"), nil
+	top, gitDir, _ = strings.Cut(strings.TrimRight(string(out), "\r\n"), "\n")
+	return strings.TrimRight(top, "\r"), gitDir, nil
 }
 
-func rootFromToplevel(dir, top, safeDir string) filesRoot {
-	top = filepath.Clean(filepath.FromSlash(top))
-	if t, err := filepath.EvalSymlinks(top); err == nil {
-		top = t
+// rootFromToplevel turns git's toplevel into the root, or dir itself when
+// the toplevel is not a work tree holding the repo: core.worktree can name
+// any directory (even /), but a real one (a clone, a linked worktree, a
+// submodule, --separate-git-dir) always has a .git entry at its top.
+func rootFromToplevel(dir, top, gitDir, safeDir string) filesRoot {
+	clean := func(p string) string {
+		if p == "" {
+			return ""
+		}
+		p = filepath.Clean(filepath.FromSlash(p))
+		if r, err := filepath.EvalSymlinks(p); err == nil {
+			p = r
+		}
+		return p
 	}
-	if top == "" || top == "." {
+	top, gitDir = clean(top), clean(gitDir)
+	if top == "" || top == "." || !underDir(top, dir) {
 		return filesRoot{Root: dir}
 	}
-	return filesRoot{Root: top, IsRepo: true, SafeDir: safeDir}
+	if !gitEntryLeadsTo(top, gitDir) {
+		log.Printf("files: %s has %s as its work tree, browsing it as a plain directory", dir, top)
+		return filesRoot{Root: dir}
+	}
+	return filesRoot{Root: top, IsRepo: true, SafeDir: safeDir, GitDir: gitDir}
+}
+
+// gitEntryLeadsTo reports whether top's .git is gitDir: that directory, or a
+// gitfile ("gitdir: <path>", relative to top) naming it. A .git of another
+// repo (core.worktree pointing at a parent with a repo of its own, such as
+// a home directory under dotfiles) does not count.
+func gitEntryLeadsTo(top, gitDir string) bool {
+	entry := filepath.Join(top, ".git")
+	fi, err := os.Lstat(entry)
+	if err != nil {
+		return false
+	}
+	target := entry
+	if fi.Mode().IsRegular() {
+		f, err := os.Open(entry)
+		if err != nil {
+			return false
+		}
+		b, _ := io.ReadAll(io.LimitReader(f, 4096))
+		f.Close()
+		p, ok := strings.CutPrefix(strings.TrimSpace(string(b)), "gitdir:")
+		if !ok {
+			return false
+		}
+		target = filepath.FromSlash(strings.TrimSpace(p))
+		if !filepath.IsAbs(target) {
+			target = filepath.Join(top, target)
+		}
+	}
+	if r, err := filepath.EvalSymlinks(target); err == nil {
+		target = r
+	}
+	target = filepath.Clean(target)
+	return underDir(target, gitDir) && underDir(gitDir, target)
 }
 
 // trustRepo decides whether to pass safe.directory for a repo git refused
