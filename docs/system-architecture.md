@@ -609,8 +609,9 @@ termote update --force           # Force reinstall current version
 7. **Herdr guard**: `--mux herdr --no-auth` is refused unless `--allow-herdr-no-auth` is also
    given, since Herdr exposes every workspace on the host, not just this session's pane
 8. **Session**: tmux isolates terminal processes; Herdr sessions are isolated by Herdr itself
-9. **Rate limiting**: 5 failed basic-auth attempts/min per IP → 429; rejected-Host log lines
-   are rate-limited to one per 10s
+9. **Rate limiting**: 5 failed basic-auth attempts/min per IP, and 20/min per IPv6 /64 → 429;
+   failed logins, blocked clients and rejected Hosts are logged with the client address (never
+   the credentials), each at most one line per 10s
 10. **Agent chat**: on tmux/psmux the server reads only the transcript in the Claude config
     dir of the process found in the pane, proven by its start time (Herdr names the session
     itself, read from the server user's config dir); a Codex rollout only when a process named

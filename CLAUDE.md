@@ -411,8 +411,11 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
 - Exclude sensitive dirs (.ssh, .gnupg, .aws, .config/gcloud) from container volume mounts
   (warned at `container up`)
 - Serve mode uses constant-time comparison for password verification
-- **Brute-force protection**: built-in rate limiter (5 failed attempts/min per IP → 429); the
-  check and the count are one step, so a concurrent burst gets no more than 5 tries
+- **Brute-force protection**: built-in rate limiter (5 failed attempts/min per IP → 429, and
+  20/min per IPv6 /64 so a host cannot take a new address for each try); the check and the
+  count are one step, so a concurrent burst gets no more than 5 tries. Failed logins and
+  blocked clients are logged with the client address (never the credentials), at most one
+  line per 10s each
 - **Server hardening**: ReadHeaderTimeout (Slowloris protection), a 60s read deadline on every
   request but the terminal stream (a body sent a byte at a time), at most 256 sessions (the
   least recently used is dropped), request

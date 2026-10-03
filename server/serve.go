@@ -12,6 +12,7 @@ import (
 	"mime"
 	"net"
 	"net/http"
+	"net/netip"
 	"os"
 	"os/signal"
 	"path"
@@ -375,10 +376,11 @@ func runServer(ctx context.Context, cfg serveConfig, m Mux, ln net.Listener) err
 	return nil
 }
 
-// authRateLimiter tracks failed auth attempts per IP to prevent brute force attacks.
+// authRateLimiter tracks failed auth attempts per IP, and per /64 for IPv6, to
+// prevent brute force attacks.
 type authRateLimiter struct {
 	mu       sync.Mutex
-	failures map[string][]time.Time // IP → timestamps of recent failures
+	failures map[string][]time.Time // IP or IPv6 /64 → timestamps of recent failures
 }
 
 func newAuthRateLimiter() *authRateLimiter {
@@ -387,6 +389,26 @@ func newAuthRateLimiter() *authRateLimiter {
 
 // authMaxFailures failed attempts per IP within a minute block further ones.
 const authMaxFailures = 5
+
+// authMaxPrefixFailures failed attempts within a minute from one IPv6 /64
+// block further ones from all of it: a host usually holds a whole /64 and
+// could take a new address for each try. It is above authMaxFailures so one
+// device's typos do not lock out the other devices of its LAN or tailnet.
+const authMaxPrefixFailures = 20
+
+// authPrefix is the /64 of an IPv6 address (zone dropped), or "" for IPv4,
+// IPv4-mapped IPv6 and anything that does not parse.
+func authPrefix(ip string) string {
+	a, err := netip.ParseAddr(ip)
+	if err != nil || a.Unmap().Is4() {
+		return ""
+	}
+	p, err := a.WithZone("").Prefix(64)
+	if err != nil {
+		return ""
+	}
+	return p.String()
+}
 
 // recentLocked returns ip's failures of the last minute, dropping older
 // ones (and the entry once empty). rl.mu must be held.
@@ -414,18 +436,26 @@ func (rl *authRateLimiter) isBlocked(ip string) bool {
 	return len(rl.recentLocked(ip, time.Now())) >= authMaxFailures
 }
 
-// reserve checks the limit and counts the attempt as failed in one step,
+// reserve checks the limits and counts the attempt as failed in one step,
 // before its credentials are compared: a burst of concurrent requests cannot
-// all pass the check before any failure is recorded. false: blocked.
-func (rl *authRateLimiter) reserve(ip string) bool {
+// all pass the check before any failure is recorded. It returns "" when the
+// attempt may go on, else the key that is blocked: ip, or its IPv6 /64.
+func (rl *authRateLimiter) reserve(ip string) string {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 	now := time.Now()
+	prefix := authPrefix(ip)
 	if len(rl.recentLocked(ip, now)) >= authMaxFailures {
-		return false
+		return ip
+	}
+	if prefix != "" && len(rl.recentLocked(prefix, now)) >= authMaxPrefixFailures {
+		return prefix
 	}
 	rl.addLocked(ip, now)
-	return true
+	if prefix != "" {
+		rl.addLocked(prefix, now)
+	}
+	return ""
 }
 
 // refund takes back one reservation of ip: its credentials were right, or
@@ -433,12 +463,20 @@ func (rl *authRateLimiter) reserve(ip string) bool {
 func (rl *authRateLimiter) refund(ip string) {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
-	f := rl.failures[ip]
+	rl.dropLastLocked(ip)
+	if prefix := authPrefix(ip); prefix != "" {
+		rl.dropLastLocked(prefix)
+	}
+}
+
+// dropLastLocked removes key's newest failure. rl.mu must be held.
+func (rl *authRateLimiter) dropLastLocked(key string) {
+	f := rl.failures[key]
 	switch {
 	case len(f) > 1:
-		rl.failures[ip] = f[:len(f)-1]
+		rl.failures[key] = f[:len(f)-1]
 	case len(f) == 1:
-		delete(rl.failures, ip)
+		delete(rl.failures, key)
 	}
 }
 
@@ -512,6 +550,10 @@ func basicAuth(user, pass string, next http.Handler) http.Handler {
 	limiter := newAuthRateLimiter()
 	sessions := newTokenStore(sessionTTL, false)
 	sessions.max = maxSessions
+	// Bounded like hostGuard's rejects, so a password guesser cannot flood
+	// the log. The credentials sent are never logged.
+	failedLogins := &rateLimitedLog{every: rejectLogEvery}
+	blockedLogins := &rateLimitedLog{every: rejectLogEvery}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Skip auth for PWA public paths (manifest, service worker)
@@ -534,7 +576,8 @@ func basicAuth(user, pass string, next http.Handler) http.Handler {
 			ip = r.RemoteAddr
 		}
 		// Counted as a failure until the credentials prove right.
-		if !limiter.reserve(ip) {
+		if blocked := limiter.reserve(ip); blocked != "" {
+			blockedLogins.printf("auth: %s blocked after too many failed logins from %s", ip, blocked)
 			http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
 			return
 		}
@@ -549,6 +592,7 @@ func basicAuth(user, pass string, next http.Handler) http.Handler {
 		if subtle.ConstantTimeCompare([]byte(u), []byte(user)) != 1 ||
 			subtle.ConstantTimeCompare([]byte(p), []byte(pass)) != 1 {
 			// Wrong credentials — the reservation stays as a failed attempt
+			failedLogins.printf("auth: failed login from %s", ip)
 			w.Header().Set("WWW-Authenticate", `Basic realm="Terminal Access"`)
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return

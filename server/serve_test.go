@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -780,6 +782,94 @@ func TestBasicAuthRefundsNonFailures(t *testing.T) {
 				t.Fatalf("blocked after logins that were not failures (%q)", creds)
 			}
 		}
+	}
+}
+
+// An IPv6 client taking a new address of its /64 for each try still runs into
+// a limit, while one address's failures leave the rest of its /64 alone.
+func TestBasicAuthIPv6PrefixBounded(t *testing.T) {
+	newTry := func() func(addr, pass string) int {
+		h := basicAuth("admin", "secret", http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+		return func(addr, pass string) int {
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			req.RemoteAddr = net.JoinHostPort(addr, "5")
+			req.SetBasicAuth("admin", pass)
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+			return rec.Code
+		}
+	}
+
+	try := newTry()
+	for range authMaxFailures {
+		try("2001:db8:1:2::1", "wrong")
+	}
+	if got := try("2001:db8:1:2::2", "secret"); got != http.StatusOK {
+		t.Fatalf("another address of the /64 after one address's failures: %d, want 200", got)
+	}
+
+	// The /64 limit is exactly authMaxPrefixFailures, and right logins are
+	// refunded on the /64 as well as on the address.
+	try = newTry()
+	for i := range authMaxPrefixFailures - 1 {
+		try(fmt.Sprintf("2001:db8:1:2::%x", 0x100+i), "wrong")
+	}
+	for i := range 10 {
+		if got := try(fmt.Sprintf("2001:db8:1:2::%x", 0x200+i), "secret"); got != http.StatusOK {
+			t.Fatalf("right login %d one failure under the /64 limit: %d, want 200", i, got)
+		}
+	}
+	try("2001:db8:1:2::300", "wrong")
+	if got := try("2001:db8:1:2::ffff", "secret"); got != http.StatusTooManyRequests {
+		t.Errorf("a fresh address of a /64 at its limit: %d, want 429", got)
+	}
+	if got := try("2001:db8:1:3::1", "secret"); got != http.StatusOK {
+		t.Errorf("an address of another /64: %d, want 200", got)
+	}
+	if got := try("192.0.2.1", "secret"); got != http.StatusOK {
+		t.Errorf("an IPv4 address: %d, want 200", got)
+	}
+}
+
+func TestAuthPrefix(t *testing.T) {
+	for _, tt := range []struct{ ip, want string }{
+		{"2001:db8:1:2:aaaa:bbbb:cccc:dddd", "2001:db8:1:2::/64"},
+		{"fe80::1%eth0", "fe80::/64"},
+		{"192.0.2.1", ""},
+		{"::ffff:192.0.2.1", ""},
+		{"not-an-ip", ""},
+	} {
+		if got := authPrefix(tt.ip); got != tt.want {
+			t.Errorf("authPrefix(%q) = %q, want %q", tt.ip, got, tt.want)
+		}
+	}
+}
+
+// Wrong credentials and a blocked client are logged with the client's
+// address; the credentials sent never are.
+func TestBasicAuthLogsFailures(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+	h := basicAuth("admin", "secret", http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	for range authMaxFailures + 3 {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.RemoteAddr = "198.51.100.7:5"
+		req.SetBasicAuth("mallory", "hunter2")
+		h.ServeHTTP(httptest.NewRecorder(), req)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "failed login from 198.51.100.7") {
+		t.Errorf("no failed login line:\n%s", out)
+	}
+	if !strings.Contains(out, "198.51.100.7 blocked after too many failed logins from 198.51.100.7") {
+		t.Errorf("no blocked line:\n%s", out)
+	}
+	if strings.Contains(out, "hunter2") || strings.Contains(out, "mallory") {
+		t.Errorf("credentials in the log:\n%s", out)
+	}
+	if n := strings.Count(out, "\n"); n > 2 {
+		t.Errorf("%d log lines for one burst, want at most 2:\n%s", n, out)
 	}
 }
 
