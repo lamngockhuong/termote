@@ -107,6 +107,14 @@ describe('SessionSidebar — desktop expanded (default)', () => {
     expect(screen.getByText('Dev')).toBeInTheDocument()
   })
 
+  it('keeps its content below the status bar', () => {
+    renderDesktop()
+    expect(screen.getByRole('complementary')).toHaveClass(
+      'pt-[env(safe-area-inset-top)]',
+      'ipad-window:pt-9',
+    )
+  })
+
   it('renders collapse button', () => {
     renderDesktop()
     expect(
@@ -371,6 +379,14 @@ describe('SessionSidebar — desktop collapsed', () => {
     expect(
       screen.getByRole('button', { name: 'Expand sidebar' }),
     ).toBeInTheDocument()
+  })
+
+  it('keeps the rail below the status bar', () => {
+    renderCollapsed()
+    expect(screen.getByRole('complementary')).toHaveClass(
+      'pt-[env(safe-area-inset-top)]',
+      'ipad-window:pt-9',
+    )
   })
 
   it('calls onToggleCollapse when expand button clicked', () => {

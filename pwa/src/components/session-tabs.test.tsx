@@ -62,6 +62,17 @@ describe('SessionTabs', () => {
     expect(code.parentElement).not.toHaveClass('shadow-sm')
   })
 
+  it('grows the tabs to touch size on a touch screen', () => {
+    render(<SessionTabs {...defaultProps} />)
+    expect(
+      screen.getByRole('tab', { name: /Shell/ }).parentElement,
+    ).toHaveClass('h-9', 'pointer-coarse:h-11')
+    expect(screen.getByRole('tab', { name: /Code/ }).parentElement).toHaveClass(
+      'h-8',
+      'pointer-coarse:h-10',
+    )
+  })
+
   it('never nests the close button in the tab', () => {
     render(<SessionTabs {...defaultProps} />)
     expect(

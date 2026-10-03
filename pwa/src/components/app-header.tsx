@@ -106,13 +106,17 @@ function MobileHeader(p: Props) {
   )
 }
 
-// The pseudo-element widens the hit area to 44px without growing the header
-const FONT_BUTTON = `relative flex h-8 w-7 before:absolute before:-inset-2 before:content-[''] items-center justify-center text-[12px] text-fg-muted hover:text-fg rounded-[calc(var(--radius-control)-2px)] ${FOCUS_RING}`
+// The pseudo-element widens the hit area to 44px; on a touch screen the
+// button is 36px tall, like the view switcher beside it
+const FONT_BUTTON = `relative flex h-8 w-7 pointer-coarse:h-9 before:absolute before:-inset-2 before:content-[''] items-center justify-center text-[12px] text-fg-muted hover:text-fg rounded-[calc(var(--radius-control)-2px)] ${FOCUS_RING}`
 
 function DesktopHeader(p: Props) {
   const { session } = p
   return (
-    <header className="relative z-10 flex h-11 shrink-0 items-end gap-2 border-b border-border bg-surface px-2 ui-terminal:bg-bg">
+    // At least 44px, padded below the status bar of an installed iPad app;
+    // it grows when touch-sized controls are taller than the row, instead of
+    // cutting off their top
+    <header className="relative z-10 flex min-h-11 shrink-0 items-end gap-2 border-b border-border bg-surface px-2 pt-[env(safe-area-inset-top)] ui-terminal:bg-bg">
       {p.showSessionTabs ? (
         <SessionTabs
           sessions={p.groupSessions}
@@ -138,7 +142,9 @@ function DesktopHeader(p: Props) {
           )}
         </div>
       )}
-      <div className="mb-1 flex shrink-0 items-center gap-1">
+      {/* 2px above the border: the controls' middle then sits between the
+          middle of the active tab (on the border) and of the others (4px up) */}
+      <div className="mb-0.5 flex shrink-0 items-center gap-1">
         <ViewSwitcher
           views={p.views}
           value={p.viewId}
@@ -153,7 +159,7 @@ function DesktopHeader(p: Props) {
           />
         )}
         {p.showFontSize && (
-          <div className="flex items-center gap-0.5 rounded-control border border-border px-1 ui-native:border-0 ui-native:bg-bg">
+          <div className="flex items-center gap-0.5 rounded-control border border-border px-1 pointer-coarse:py-0.5 ui-native:border-0 ui-native:bg-bg">
             <button
               type="button"
               onClick={p.onDecreaseFont}

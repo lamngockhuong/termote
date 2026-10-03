@@ -9,7 +9,8 @@ interface Props {
 }
 
 // Desktop: the views shown in the side panel next to the terminal (files,
-// changes), one at a time. A pressed button closes its panel.
+// changes), one at a time. A pressed button closes its panel. Sized like the
+// view switcher beside it.
 export function PanelToggles({ views, open, onToggle }: Props) {
   if (views.length === 0) return null
   return (
@@ -26,7 +27,7 @@ export function PanelToggles({ views, open, onToggle }: Props) {
             aria-pressed={pressed}
             onClick={() => onToggle(pressed ? null : id)}
             title={pressed ? `Close ${label}` : label}
-            className={`flex h-7 items-center justify-center gap-1.5 rounded-[calc(var(--radius-control)-2px)] px-2.5 text-[12px] ui-native:rounded-full pointer-coarse:h-touch ${FOCUS_RING} ${
+            className={`relative before:absolute before:inset-x-0 before:-inset-y-1 before:content-[''] flex h-7 items-center justify-center gap-1.5 rounded-[calc(var(--radius-control)-2px)] px-2.5 text-[12px] ui-native:rounded-full pointer-coarse:h-9 ${FOCUS_RING} ${
               pressed
                 ? 'bg-surface-raised text-fg shadow-sm ui-terminal:bg-accent-soft ui-terminal:text-accent ui-terminal:shadow-none'
                 : 'text-fg-muted hover:text-fg'

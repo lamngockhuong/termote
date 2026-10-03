@@ -32,8 +32,11 @@ const ROW_CLASSES =
   'text-fg-muted hover:bg-surface-raised hover:text-fg transition-colors duration-(--duration-fast)'
 // The content inside keeps its final width while the width animates, so it is
 // revealed or clipped instead of laid out again at every frame.
+// The top padding keeps the sidebar below the status bar of an installed iPad
+// app, where the page reaches under it (viewport-fit=cover), and, in a window,
+// below the window controls drawn over its top-left corner
 const SIDEBAR_BASE_CLASSES =
-  'h-full min-h-0 shrink-0 overflow-hidden border-r border-border bg-surface ui-terminal:bg-bg transition-[width] duration-(--duration-base) ease-standard'
+  'h-full min-h-0 pt-[env(safe-area-inset-top)] ipad-window:pt-9 shrink-0 overflow-hidden border-r border-border bg-surface ui-terminal:bg-bg transition-[width] duration-(--duration-base) ease-standard'
 const SIDEBAR_CONTENT_CLASSES = 'flex h-full min-h-0 shrink-0 flex-col'
 const INPUT_CLASSES =
   'h-9 w-full min-w-0 rounded-control border border-border bg-bg px-2.5 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-accent pointer-coarse:h-touch'

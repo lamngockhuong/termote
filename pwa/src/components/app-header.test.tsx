@@ -74,6 +74,14 @@ describe('AppHeader — desktop', () => {
     expect(props.onRemoveTab).toHaveBeenCalledWith('2')
   })
 
+  it('sits below the status bar and grows with touch-sized controls', () => {
+    renderHeader()
+    const header = screen.getByRole('banner')
+    expect(header).toHaveClass('min-h-11')
+    expect(header).not.toHaveClass('h-11')
+    expect(header).toHaveClass('pt-[env(safe-area-inset-top)]')
+  })
+
   it('names the session only, with its description, when tabs are off', () => {
     renderHeader({ showSessionTabs: false })
     expect(screen.queryByRole('tablist', { name: 'Sessions' })).toBeNull()
@@ -108,6 +116,17 @@ describe('AppHeader — desktop', () => {
     expect(
       screen.getByRole('button', { name: 'Exit fullscreen' }),
     ).toBeVisible()
+  })
+
+  it('keeps the touch-size view and font buttons level with the tabs', () => {
+    renderHeader({ views: TWO_VIEWS })
+    for (const name of ['Chat', 'Decrease font size', 'Increase font size']) {
+      const button =
+        screen.queryByRole('tab', { name }) ??
+        screen.getByRole('button', { name })
+      expect(button).toHaveClass('pointer-coarse:h-9')
+      expect(button).not.toHaveClass('pointer-coarse:h-touch')
+    }
   })
 
   it('shows the view switcher with labels once there are two views', () => {
