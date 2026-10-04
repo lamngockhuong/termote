@@ -325,6 +325,7 @@ The `update` command:
 | `server/files_sensitive.go`                       | Names of files that usually hold secrets                      |
 | `server/agent_proc*.go`                           | Finds Claude Code (or Codex) under a tmux/psmux pane          |
 | `server/guard.go`                                 | Host allowlist + Origin/Content-Type write guard              |
+| `server/login.go`                                 | Sign-in form for browsers (iOS home-screen app has no prompt) |
 | `server/uploads.go`                               | `/api/mux/uploads`: image store (naming, quota, retention)    |
 | `server/security_headers.go`                      | Content-Security-Policy and other security headers            |
 | `server/serve_config.go`                          | Server config from the saved config, else the environment     |
@@ -360,6 +361,14 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
 - Basic auth enabled by default (use `--no-auth` to disable for local dev); an empty saved
   password no longer disables auth — `start` generates and saves a new one instead
 - Basic auth over HTTPS required for production
+- **Sign-in form** (`/login`, `server/login.go`): a browser page load without a session gets
+  a 401 with a plain HTML form (no script) and no `WWW-Authenticate`, since an iOS home-screen
+  app never shows the Basic prompt and the prompt would otherwise sit on top of the form; only a
+  client without `Sec-Fetch-Mode` (curl) is still challenged. The form POST must be urlencoded,
+  at most 8 KB, not cross-site (`Sec-Fetch-Site`), shares the Basic auth rate limiter and sets
+  the same session cookie; `next` is kept only as a path on this server. The PWA opens `/login`
+  when the snapshot or health read answers 401, and the service worker never serves its shell
+  for `/login`
 - termote binds to `127.0.0.1` by default; only `--lan` makes it listen on `0.0.0.0`
 - **Host allowlist** (`hostGuard`): requests with an unrecognised `Host` header get a 403; the
   allowed set is loopback + (with `--lan`) the address the request arrived on, so it keeps

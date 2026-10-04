@@ -65,6 +65,41 @@ describe('mux API client', () => {
     expect(calls[0].url).toBe('/api/mux/snapshot')
   })
 
+  it('opens the sign-in page with the current path when the session ended', async () => {
+    window.history.replaceState(null, '', '/?view=chat&pane=%251#x')
+    for (const read of [fetchSnapshot, fetchHealth]) {
+      mockFetch({ body: 'Unauthorized', status: 401 })
+      const signIn = vi.fn()
+      await expect(read(signIn)).rejects.toMatchObject({
+        status: 401,
+        code: 'unauthorized',
+      })
+      expect(signIn).toHaveBeenCalledWith(
+        '/login?next=%2F%3Fview%3Dchat%26pane%3D%25251%23x',
+      )
+    }
+    window.history.replaceState(null, '', '/')
+  })
+
+  it('signs in through a page load by default', async () => {
+    mockFetch({ body: 'Unauthorized', status: 401 })
+    const assign = vi.fn()
+    const real = window.location
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { pathname: '/', search: '', hash: '', assign },
+    })
+    try {
+      await expect(fetchSnapshot()).rejects.toMatchObject({ status: 401 })
+      expect(assign).toHaveBeenCalledWith('/login?next=%2F')
+    } finally {
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        value: real,
+      })
+    }
+  })
+
   it('fetchHealth reads the health route', async () => {
     const { calls } = mockFetch({ body: { status: 'ok', apiVersion: 1 } })
     expect(await fetchHealth()).toEqual({ status: 'ok', apiVersion: 1 })

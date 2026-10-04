@@ -567,6 +567,97 @@ func basicAuth(user, pass string, next http.Handler) http.Handler {
 	failedLogins := &rateLimitedLog{every: rejectLogEvery}
 	blockedLogins := &rateLimitedLog{every: rejectLogEvery}
 
+	// credsMatch compares in constant time, so the time taken does not tell
+	// how much of a guess was right.
+	credsMatch := func(u, p string) bool {
+		return subtle.ConstantTimeCompare([]byte(u), []byte(user)) == 1 &&
+			subtle.ConstantTimeCompare([]byte(p), []byte(pass)) == 1
+	}
+	// Set session cookie to avoid re-prompting on mobile reloads
+	startSession := func(w http.ResponseWriter, r *http.Request) {
+		sessionToken, err := sessions.generate()
+		if err != nil {
+			log.Printf("session token generation failed: %v", err)
+			return
+		}
+		http.SetCookie(w, &http.Cookie{
+			Name:     sessionCookieName,
+			Value:    sessionToken,
+			Path:     "/",
+			MaxAge:   int(sessionTTL.Seconds()),
+			HttpOnly: true,
+			SameSite: http.SameSiteStrictMode,
+			Secure:   requestIsHTTPS(r),
+		})
+	}
+	hasSession := func(r *http.Request) bool {
+		cookie, err := r.Cookie(sessionCookieName)
+		return err == nil && sessions.validate(cookie.Value)
+	}
+	// challenge asks for credentials. A browser gets the sign-in form on a
+	// page load and no Basic auth challenge: its prompt would sit on top of
+	// the form (two logins at once), and an iOS home-screen app never shows
+	// it. Other clients (curl --anyauth) still get the challenge; the CLI
+	// sends its credentials up front.
+	challenge := func(w http.ResponseWriter, r *http.Request) {
+		if isNavigation(r) {
+			writeLoginPage(w, http.StatusUnauthorized, loginForm{Next: safeNext(r.URL.RequestURI())})
+			return
+		}
+		if r.Header.Get("Sec-Fetch-Mode") == "" {
+			w.Header().Set("WWW-Authenticate", `Basic realm="Terminal Access"`)
+		}
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+	}
+	// login serves the sign-in form (GET) and checks what it posts, under
+	// the same rate limit as Basic auth.
+	login := func(w http.ResponseWriter, r *http.Request, ip string) {
+		switch r.Method {
+		case http.MethodGet:
+			next := safeNext(r.URL.Query().Get("next"))
+			if hasSession(r) {
+				http.Redirect(w, r, next, http.StatusSeeOther)
+				return
+			}
+			writeLoginPage(w, http.StatusOK, loginForm{Next: next})
+			return
+		case http.MethodPost:
+		default:
+			w.Header().Set("Allow", "GET, POST")
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if isCrossSiteLogin(r) {
+			http.Error(w, "cross-site request rejected", http.StatusForbidden)
+			return
+		}
+		if !isFormPost(r) {
+			http.Error(w, "Unsupported Media Type", http.StatusUnsupportedMediaType)
+			return
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, maxLoginBody)
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+		next := safeNext(r.PostForm.Get("next"))
+		// A phone's keyboard suggestion ends the username with a space.
+		username := strings.TrimSpace(r.PostForm.Get("username"))
+		if blocked := limiter.reserve(ip); blocked != "" {
+			blockedLogins.printf("auth: %s blocked after too many failed logins from %s", ip, blocked)
+			writeLoginPage(w, http.StatusTooManyRequests, loginForm{next, "Too many failed attempts. Wait a minute and try again.", username})
+			return
+		}
+		if !credsMatch(username, r.PostForm.Get("password")) {
+			failedLogins.printf("auth: failed login from %s", ip)
+			writeLoginPage(w, http.StatusUnauthorized, loginForm{next, "Wrong username or password.", username})
+			return
+		}
+		limiter.refund(ip)
+		startSession(w, r)
+		http.Redirect(w, r, next, http.StatusSeeOther)
+	}
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Skip auth for PWA public paths (manifest, service worker)
 		if isPWAPublicPath(r.URL.Path) {
@@ -574,19 +665,22 @@ func basicAuth(user, pass string, next http.Handler) http.Handler {
 			return
 		}
 
-		// Check session cookie first (mobile browsers drop basic auth)
-		if cookie, err := r.Cookie(sessionCookieName); err == nil {
-			if sessions.validate(cookie.Value) {
-				next.ServeHTTP(w, r)
-				return
-			}
-		}
-
 		// Extract client IP (strip port)
 		ip, _, _ := net.SplitHostPort(r.RemoteAddr)
 		if ip == "" {
 			ip = r.RemoteAddr
 		}
+		if r.URL.Path == loginPath {
+			login(w, r, ip)
+			return
+		}
+
+		// Check session cookie first (mobile browsers drop basic auth)
+		if hasSession(r) {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		// Counted as a failure until the credentials prove right.
 		if blocked := limiter.reserve(ip); blocked != "" {
 			blockedLogins.printf("auth: %s blocked after too many failed logins from %s", ip, blocked)
@@ -597,36 +691,17 @@ func basicAuth(user, pass string, next http.Handler) http.Handler {
 		if !ok {
 			// No credentials provided — prompt browser, don't count as failure
 			limiter.refund(ip)
-			w.Header().Set("WWW-Authenticate", `Basic realm="Terminal Access"`)
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			challenge(w, r)
 			return
 		}
-		if subtle.ConstantTimeCompare([]byte(u), []byte(user)) != 1 ||
-			subtle.ConstantTimeCompare([]byte(p), []byte(pass)) != 1 {
+		if !credsMatch(u, p) {
 			// Wrong credentials — the reservation stays as a failed attempt
 			failedLogins.printf("auth: failed login from %s", ip)
-			w.Header().Set("WWW-Authenticate", `Basic realm="Terminal Access"`)
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			challenge(w, r)
 			return
 		}
 		limiter.refund(ip)
-
-		// Set session cookie to avoid re-prompting on mobile reloads
-		sessionToken, err := sessions.generate()
-		if err != nil {
-			log.Printf("session token generation failed: %v", err)
-		} else {
-			http.SetCookie(w, &http.Cookie{
-				Name:     sessionCookieName,
-				Value:    sessionToken,
-				Path:     "/",
-				MaxAge:   int(sessionTTL.Seconds()),
-				HttpOnly: true,
-				SameSite: http.SameSiteStrictMode,
-				Secure:   requestIsHTTPS(r),
-			})
-		}
-
+		startSession(w, r)
 		next.ServeHTTP(w, r)
 	})
 }

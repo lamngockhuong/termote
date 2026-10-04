@@ -80,7 +80,7 @@ Go HTTP server providing:
 
 - **Static file serving**: PWA assets from /pwa/dist
 - **Terminal WebSocket**: `/api/mux/stream` opens a PTY/ConPTY attached to the selected pane and streams it as binary WebSocket frames; a text control frame carries resize (client→server) and exit/error/size (server→client)
-- **Authentication**: Basic auth with a session cookie, rate-limited, plus a Host allowlist and an Origin/CSRF write guard in front of everything
+- **Authentication**: Basic auth or a sign-in form (`/login`, for browsers: an iOS home-screen app never shows the Basic prompt), then a session cookie, rate-limited, plus a Host allowlist and an Origin/CSRF write guard in front of everything
 - **Mux API endpoints**: `/api/mux/*` — snapshot (groups→tabs→panes), tab create/rename/close/select, send-keys, health
 - **Agent chat endpoints**: `/api/mux/panes/{id}/agent/*` — the transcript of the Claude Code or Codex session in a pane, sending it a message, reading and answering its dialogs (see [Agent chat](#agent-chat-apimuxpanesidagent))
 
