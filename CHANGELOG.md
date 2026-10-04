@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.8.1](https://github.com/lamngockhuong/termote/compare/v1.8.0...v1.8.1) (2026-10-04)
+
+
+### Bug Fixes
+
+* **pwa:** fit the desktop header and sidebar to the iPad status bar and window ([#314](https://github.com/lamngockhuong/termote/issues/314)) ([d2e300f](https://github.com/lamngockhuong/termote/commit/d2e300fd3f26e1758a5eea2573ba3e218af7f446))
+* sign in from an iOS home-screen app with a login form ([#318](https://github.com/lamngockhuong/termote/issues/318)) ([4b37124](https://github.com/lamngockhuong/termote/commit/4b37124bfadba4934539599153bda2c5aa93fe74))
+
 ## [1.8.0](https://github.com/lamngockhuong/termote/compare/v1.7.1...v1.8.0) (2026-10-03)
 
 
