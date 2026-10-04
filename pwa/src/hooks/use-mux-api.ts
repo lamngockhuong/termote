@@ -67,14 +67,38 @@ async function write(
 
 const tabPath = (id: string) => `/tabs/${encodeURIComponent(id)}`
 
-export async function fetchSnapshot(): Promise<MuxSnapshot> {
-  const res = await fetch(`${API_BASE}/snapshot`)
+// The session ended (24h, or a server restart) and the page was served by
+// the service worker, so the server could not ask for credentials itself.
+// An iOS home-screen app never shows the Basic auth prompt either: open the
+// server's sign-in page, which comes back here once signed in.
+export function signInUrl(): string {
+  const { pathname, search, hash } = window.location
+  return `/login?next=${encodeURIComponent(pathname + search + hash)}`
+}
+
+async function readJSON<T>(
+  res: Response,
+  signIn: (url: string) => void,
+): Promise<T> {
+  if (res.status === 401) {
+    signIn(signInUrl())
+    throw new RequestError(401, 'unauthorized', 'sign-in required')
+  }
   return res.json()
 }
 
-export async function fetchHealth(): Promise<{ apiVersion?: number }> {
-  const res = await fetch(`${API_BASE}/health`)
-  return res.json()
+const openSignIn = (url: string) => window.location.assign(url)
+
+// The snapshot is polled and the health read on load, so a session that
+// ended is noticed within one poll.
+export async function fetchSnapshot(signIn = openSignIn): Promise<MuxSnapshot> {
+  return readJSON(await fetch(`${API_BASE}/snapshot`), signIn)
+}
+
+export async function fetchHealth(
+  signIn = openSignIn,
+): Promise<{ apiVersion?: number }> {
+  return readJSON(await fetch(`${API_BASE}/health`), signIn)
 }
 
 export async function selectTab(id: string): Promise<boolean> {
