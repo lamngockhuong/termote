@@ -6,8 +6,10 @@ const GITHUB_API =
 const CACHE_KEY = 'termote-update-check'
 const CACHE_DURATION = 60 * 60 * 1000 // 1 hour
 
+// The latest release, as GitHub named it. Whether it is an update is
+// decided against the app version at each read, never cached: the app may
+// have been updated since (to that very release).
 interface CachedResult {
-  hasUpdate: boolean
   latestVersion: string | null
   releaseUrl: string | null
   checkedAt: number
@@ -48,7 +50,8 @@ function getCachedResult(): CachedResult | null {
 
 function setCachedResult(result: UpdateCheckResult) {
   const cached: CachedResult = {
-    ...result,
+    latestVersion: result.latestVersion,
+    releaseUrl: result.releaseUrl,
     checkedAt: Date.now(),
   }
   localStorage.setItem(CACHE_KEY, JSON.stringify(cached))
@@ -64,7 +67,9 @@ export function useUpdateCheck() {
         const cached = getCachedResult()
         if (cached) {
           return {
-            hasUpdate: cached.hasUpdate,
+            hasUpdate:
+              !!cached.latestVersion &&
+              compareVersions(APP_INFO.version, cached.latestVersion) < 0,
             latestVersion: cached.latestVersion,
             releaseUrl: cached.releaseUrl,
           }
