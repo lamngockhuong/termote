@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import {
   afterEach,
   beforeAll,
@@ -13,9 +13,11 @@ import { RequestError } from '../hooks/use-mux-api'
 import { FileViewer } from './file-viewer'
 
 const mockContent = vi.fn()
+const mockImage = vi.fn()
 vi.mock('../hooks/use-mux-api', async (orig) => ({
   ...(await orig<typeof import('../hooks/use-mux-api')>()),
   fetchFileContent: (...a: unknown[]) => mockContent(...a),
+  fetchFileImage: (...a: unknown[]) => mockImage(...a),
 }))
 vi.mock('../utils/highlight', async (orig) => ({
   ...(await orig<typeof import('../utils/highlight')>()),
@@ -322,5 +324,91 @@ describe('FileViewer: Markdown', () => {
       { kind: 'path', path: 'docs/guide.md', anchor: 'usage' },
       0,
     )
+  })
+})
+
+describe('FileViewer: images', () => {
+  let made = 0
+  beforeEach(() => {
+    made = 0
+    mockImage.mockReset()
+    mockImage.mockResolvedValue(new Blob(['12345']))
+    URL.createObjectURL = vi.fn(() => `blob:u${++made}`)
+    URL.revokeObjectURL = vi.fn()
+  })
+
+  it('shows an image with its size, without reading it as text', async () => {
+    show({ path: 'img/a.PNG' })
+    const img = await screen.findByRole('img', { name: 'img/a.PNG' })
+    expect(img).toHaveAttribute('src', 'blob:u1')
+    expect(screen.getAllByText('5 B')).toHaveLength(2)
+    expect(mockContent).not.toHaveBeenCalled()
+    expect(mockImage).toHaveBeenCalledWith(
+      '%1',
+      'img/a.PNG',
+      expect.objectContaining({ root: '/r', reveal: false }),
+      expect.any(AbortSignal),
+    )
+    // Nothing to wrap, nothing to preview
+    expect(screen.queryByRole('button', { name: 'Wrap lines' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Image' })).toBeNull()
+  })
+
+  it('asks before showing a sensitive image, then reads it revealed', async () => {
+    mockImage.mockRejectedValueOnce(
+      new RequestError(403, 'sensitive', 'sensitive'),
+    )
+    show({ path: 'secrets.png' })
+    expect(
+      await screen.findByText('This file may contain secrets'),
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Show' }))
+    expect(await screen.findByRole('img')).toBeInTheDocument()
+    expect(mockImage.mock.calls[1][2]).toMatchObject({ reveal: true })
+  })
+
+  it('says why an image cannot be shown, and retries when busy', async () => {
+    mockImage.mockRejectedValueOnce(new RequestError(429, 'busy', 'busy'))
+    show({ path: 'a.png' })
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry' }))
+    expect(await screen.findByRole('img')).toBeInTheDocument()
+    expect(mockImage).toHaveBeenCalledTimes(2)
+  })
+
+  it('hands a moved root to the caller', async () => {
+    mockImage.mockRejectedValue(
+      new RequestError(409, '', 'root changed', undefined, undefined, '/new'),
+    )
+    const p = show({ path: 'a.png' })
+    await waitFor(() => expect(p.onRootChanged).toHaveBeenCalledWith('/new'))
+  })
+
+  it('shows an SVG as text until Image is picked, and remembers it', async () => {
+    mockContent.mockResolvedValue({
+      root: '/r',
+      path: 'logo.svg',
+      size: 6,
+      text: '<svg/>',
+    })
+    const p = show({ path: 'logo.svg' })
+    expect(await screen.findByTestId('code-block')).toHaveTextContent('<svg/>')
+    expect(mockImage).not.toHaveBeenCalled()
+    const toggle = screen.getByRole('button', { name: 'Image' })
+    expect(toggle).toHaveAttribute('aria-pressed', 'false')
+
+    fireEvent.click(toggle)
+    expect(await screen.findByRole('img')).toHaveAttribute('src', 'blob:u1')
+    expect(toggle).toHaveAttribute('aria-pressed', 'true')
+    expect(
+      JSON.parse(localStorage.getItem('termote-settings') ?? '{}'),
+    ).toEqual(expect.objectContaining({ svgPreview: true }))
+
+    // Opened again: still the image; back to the source
+    p.unmount()
+    show({ path: 'logo.svg' })
+    expect(await screen.findByRole('img')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Image' }))
+    expect(await screen.findByTestId('code-block')).toBeInTheDocument()
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:u2')
   })
 })

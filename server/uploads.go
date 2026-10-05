@@ -236,7 +236,7 @@ func (s *uploadStore) save(r io.Reader, declared string) (upload, error) {
 		return upload{}, readUploadError(err)
 	}
 	head = head[:n]
-	if n == 0 || http.DetectContentType(head) != declared {
+	if mt, _ := imageTypeOf(head); n == 0 || mt != declared {
 		return upload{}, errUploadUnsupported
 	}
 	if err := s.reserve(); err != nil {

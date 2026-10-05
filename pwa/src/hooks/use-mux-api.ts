@@ -450,17 +450,23 @@ export interface FileDiff {
   hunks: DiffHunk[] | null
 }
 
+function filesUrl(
+  paneId: string,
+  op: string,
+  query: Record<string, string | undefined>,
+): string {
+  const params = new URLSearchParams()
+  for (const [k, v] of Object.entries(query)) if (v) params.set(k, v)
+  const qs = params.toString()
+  return `${API_BASE}/panes/${encodeURIComponent(paneId)}/files/${op}${qs ? `?${qs}` : ''}`
+}
+
 async function filesGet<T>(
   paneId: string,
   op: string,
   query: Record<string, string | undefined>,
 ): Promise<T> {
-  const params = new URLSearchParams()
-  for (const [k, v] of Object.entries(query)) if (v) params.set(k, v)
-  const qs = params.toString()
-  const res = await fetch(
-    `${API_BASE}/panes/${encodeURIComponent(paneId)}/files/${op}${qs ? `?${qs}` : ''}`,
-  )
+  const res = await fetch(filesUrl(paneId, op, query))
   if (!res.ok) throw await requestError(res)
   return res.json()
 }
@@ -506,4 +512,39 @@ export function fetchFileDiff(
     reveal: opts.reveal ? '1' : undefined,
     root: opts.root,
   })
+}
+
+// Which version of an image files/raw reads. Without side, the file in the
+// working tree (Files view); with it, one side of a git status entry, as
+// fetchFileDiff picks the entry (Changes view).
+export interface ImageQuery {
+  root?: string
+  reveal?: boolean
+  side?: 'old' | 'new'
+  staged?: boolean
+  orig?: string
+}
+
+// An image under the pane's root (server/files_raw.go), for a blob: URL.
+// A refusal is a RequestError with the server's code (too_large,
+// too_many_pixels, not_image, lfs_pointer, busy, no_version, sensitive).
+export async function fetchFileImage(
+  paneId: string,
+  path: string,
+  opts: ImageQuery = {},
+  signal?: AbortSignal,
+): Promise<Blob> {
+  const res = await fetch(
+    filesUrl(paneId, 'raw', {
+      path,
+      orig: opts.orig,
+      side: opts.side,
+      staged: opts.staged ? '1' : undefined,
+      reveal: opts.reveal ? '1' : undefined,
+      root: opts.root,
+    }),
+    { signal },
+  )
+  if (!res.ok) throw await requestError(res)
+  return res.blob()
 }

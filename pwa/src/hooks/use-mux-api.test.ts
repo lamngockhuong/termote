@@ -9,6 +9,7 @@ import {
   fetchAgentPrompt,
   fetchFileContent,
   fetchFileDiff,
+  fetchFileImage,
   fetchFilesTree,
   fetchGitChanges,
   fetchHealth,
@@ -437,6 +438,34 @@ describe('files API client', () => {
       '/api/mux/panes/1/files/diff?path=b',
       '/api/mux/panes/1/files/diff?path=b&orig=a&staged=1&reveal=1&root=%2Fr',
     ])
+  })
+
+  it('reads an image as a blob, with the version asked for', async () => {
+    const spy = vi.fn(async () => new Response('png'))
+    vi.stubGlobal('fetch', spy)
+    const ctl = new AbortController()
+    expect(await (await fetchFileImage('1', 'a.png')).text()).toBe('png')
+    await fetchFileImage(
+      '1',
+      'b.png',
+      { side: 'old', staged: true, orig: 'a.png', reveal: true, root: '/r' },
+      ctl.signal,
+    )
+    expect(spy.mock.calls).toEqual([
+      ['/api/mux/panes/1/files/raw?path=a.png', { signal: undefined }],
+      [
+        '/api/mux/panes/1/files/raw?path=b.png&orig=a.png&side=old&staged=1&reveal=1&root=%2Fr',
+        { signal: ctl.signal },
+      ],
+    ])
+  })
+
+  it('a refused image carries the server code', async () => {
+    mockFetch({ body: { error: 'too large', code: 'too_large' }, status: 413 })
+    await expect(fetchFileImage('1', 'a.png')).rejects.toMatchObject({
+      status: 413,
+      code: 'too_large',
+    })
   })
 
   it.each([

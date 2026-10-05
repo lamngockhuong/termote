@@ -187,6 +187,7 @@ GET    /api/mux/panes/{id}/files/tree?path=&root=               → {root, isRep
 GET    /api/mux/panes/{id}/files/content?path=&root=&reveal=    → {root, path, size, text} | {…, previewable: false, reason} | {…, sensitive: true}
 GET    /api/mux/panes/{id}/files/changes?root=                  → {root, isRepo, branch, entries, truncated}
 GET    /api/mux/panes/{id}/files/diff?path=&orig=&staged=&root=&reveal= → {root, path, binary, conflict, truncated, sensitive, reason, hunks}
+GET    /api/mux/panes/{id}/files/raw?path=&root=&reveal=[&side=old|new&staged=&orig=] → image bytes | {error, code}
 POST   /api/mux/uploads            body: raw image (image/png|jpeg|gif|webp) → {id, path, insert}
 ```
 
@@ -469,7 +470,7 @@ The PWA's Files and Changes views read a pane's directory, offered when the snap
 `caps.files`: tmux on Linux and macOS (`#{pane_current_path}` of the window's active pane) and
 Herdr (`foreground_cwd`, else `cwd`, of the pane; a Herdr that reports neither answers 501).
 psmux does not report the directory, so `caps.files` is off on Windows tmux. Every route is
-registered for every backend and answers 501 where it is off. All four are read-only GETs.
+registered for every backend and answers 501 where it is off. All five are read-only GETs.
 
 **Root.** The pane's directory, raised to `git rev-parse --show-toplevel` when it is in a
 repository and a `.git` sits at that toplevel (a `core.worktree` naming another directory, even
@@ -512,6 +513,28 @@ with the content route's checks. git is run as an argument array (no shell), wit
 command has a 10 s timeout (503 `git timed out`) and takes one of two server-wide slots; nothing
 a client sends becomes a git option.
 
+**Images (`raw`).** The bytes of one image, for the PWA to show through a `blob:` URL. Without
+`side` it reads the file in the worktree, with the content route's checks in the same order
+(missing → 404, then sensitive without `reveal=1` → 403 `sensitive`), streamed from the open
+handle, never buffered whole. With `side=old|new` (and `staged`, `orig` picking the entry as
+`diff` does) it serves one version of an entry git status lists: unstaged old is the index
+(`:0:<path>`, or `:0:<orig>` for an unstaged rename or copy; none for untracked,
+intent-to-add or a conflict), unstaged new the worktree (none when deleted), staged old
+`HEAD:<orig or path>` (none when added), staged new `:0:<path>` (none when deleted). The index
+is always named with stage `0`, since git reads `:1:a.png` as stage 1 of `a.png`. A version
+from git is read with one `git cat-file --batch` (the name on stdin, a name holding `\r` or `\n`
+is 400), with filter drivers disabled and without taking a status/diff slot or backing the
+root off; a missing object is 404 `no_version`, a request whose time ran out 503. The type is
+told from the first bytes by the helper uploads use (PNG, JPEG, GIF, WebP), plus SVG only when
+the path ends in `.svg` and its first element is `<svg`. Limits: 10 MiB (413 `too_large`) and
+40 megapixels for PNG/JPEG/GIF, read from the header (413 `too_many_pixels`); anything else is
+415 `not_image`, a Git LFS pointer 415 `lfs_pointer`. At most 4 run at once server-wide (429
+`busy`), each with a 2-minute write deadline. A response carries `Content-Disposition: inline`,
+`Cache-Control: no-store` and `Cross-Origin-Resource-Policy: same-origin` (another site's
+`<img>` cannot probe for files); an SVG also gets a second CSP,
+`sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:`, and
+`Content-Disposition: attachment`, so opening its URL runs no script under termote's origin.
+
 **Guards.** Basic auth and the Host allowlist like every route; GETs pass `writeGuard`, so the
 handlers check `Sec-Fetch-Site`/`Origin` themselves (403 cross-site), which keeps another page
 from making a `--no-auth` server run git. Other methods get 405. `requireFilesRead` is where a
@@ -529,6 +552,12 @@ loads), fenced code through the same worker, and relative links resolved client 
 would leave the root is never built, so never requested. Following a link reads the target's
 parent directory to tell file from folder; the files store keeps a Back trail with scroll
 offsets. Changes previews the working-tree version of a changed Markdown file the same way.
+An image (`.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`) opens through `raw` instead: Files shows it
+(`image-preview.tsx`), Changes shows its two versions side by side, stacked on a phone
+(`image-compare.tsx`), reading nothing for a side without a version. An SVG shows as text or a
+diff until the user picks "Image" (setting `svgPreview`). `use-image-blob.ts` turns each read
+into a `blob:` URL, keeps the previous image while reading again, and revokes every URL once
+replaced or unmounted; Changes reads again on a refresh or a new status, not on every poll.
 
 ## Deployment Modes
 
@@ -668,7 +697,8 @@ termote update --force           # Force reinstall current version
     `default-src 'self'`; `script-src 'self'` plus the `sha256` of each inline script in the
     served `index.html` (the pre-paint theme script), computed at startup, so no other inline
     script runs; `style-src 'self' 'unsafe-inline'` (xterm.js and React set inline styles);
-    `img-src 'self' data:`; `connect-src 'self'`, `ws://`/`wss://` of the request's `Host` (a
+    `img-src 'self' data: blob:` (`blob:` is an image the page read itself from `files/raw`);
+    `connect-src 'self'`, `ws://`/`wss://` of the request's `Host` (a
     name or IPv4 address) and `https://api.github.com` (update check);
     `worker-src`/`manifest-src 'self'`;
     `object-src 'none'`, `base-uri`/`form-action 'self'`, `frame-ancestors 'none'`. With it go

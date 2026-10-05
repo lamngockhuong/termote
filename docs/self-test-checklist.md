@@ -445,6 +445,22 @@ Run on tmux (Linux/macOS) and Herdr; psmux (Windows) offers neither view.
 - [ ] A Markdown file over 256 KiB shows "Too large to preview: shown as source"
 - [ ] Changes: a changed `.md` file's "Preview" shows the current version rendered
 
+### Images
+
+- [ ] A PNG, JPEG, GIF and WebP open as the picture with "<width>×<height> · <size>"; a text file
+      renamed to `.png` shows "Not previewable (not a PNG, JPEG, GIF, WebP or SVG image)"
+- [ ] An image over 10 MiB shows "Larger than 10 MiB"; a Git LFS pointer shows "Stored in Git LFS:
+      only the pointer is in git"
+- [ ] An `.svg` opens as source; the "Image" button shows the picture, and the choice stays for
+      the next SVG and after reload; opening `/api/mux/panes/<id>/files/raw?path=<x>.svg`
+      directly downloads it and runs no script
+- [ ] A sensitive name (`secrets.png`) asks "Show this file?" first
+- [ ] Changes: a modified image shows "Before · Index" and "After · Working tree" (staged: "HEAD"
+      and "Index"), side by side on desktop, stacked on a phone; a new image shows "Added", a
+      deleted one "Deleted"; a staged rename names the old path
+- [ ] Changes: replacing the image in the terminal, then Refresh, shows the new picture; waiting
+      for the 5-second poll alone does not reload it
+
 ### Side Panel (Desktop)
 
 - [ ] Dragging the panel's left edge resizes it, the terminal is fitted once on release;

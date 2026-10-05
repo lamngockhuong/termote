@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   type ChangeEntry,
@@ -9,10 +9,12 @@ import { DiffViewer } from './diff-viewer'
 
 const mockDiff = vi.fn()
 const mockContent = vi.fn()
+const mockImage = vi.fn()
 vi.mock('../hooks/use-mux-api', async (orig) => ({
   ...(await orig<typeof import('../hooks/use-mux-api')>()),
   fetchFileDiff: (...a: unknown[]) => mockDiff(...a),
   fetchFileContent: (...a: unknown[]) => mockContent(...a),
+  fetchFileImage: (...a: unknown[]) => mockImage(...a),
 }))
 vi.mock('../utils/highlight', async (orig) => ({
   ...(await orig<typeof import('../utils/highlight')>()),
@@ -379,5 +381,78 @@ describe('DiffViewer: Markdown preview', () => {
     })
     expect(await screen.findByText('latest')).toBeInTheDocument()
     expect(screen.queryByText('old')).toBeNull()
+  })
+})
+
+describe('DiffViewer: images', () => {
+  const PNG: ChangeEntry = { ...ENTRY, path: 'img/a.png' }
+  const SVG: ChangeEntry = { ...ENTRY, path: 'logo.svg' }
+  let made = 0
+  beforeEach(() => {
+    made = 0
+    localStorage.clear()
+    mockImage.mockReset()
+    mockImage.mockResolvedValue(new Blob(['x']))
+    URL.createObjectURL = vi.fn(() => `blob:u${++made}`)
+    URL.revokeObjectURL = vi.fn()
+  })
+
+  it('shows before and after instead of a diff', async () => {
+    show({ entry: PNG, path: 'img/a.png' })
+    expect(await screen.findAllByRole('img')).toHaveLength(2)
+    expect(mockDiff).not.toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: 'Wrap lines' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Image' })).toBeNull()
+  })
+
+  it('reads again on a refresh, with the version of the entry', async () => {
+    const v = show({ entry: PNG, path: 'img/a.png' })
+    await screen.findAllByRole('img')
+    v.again({ entry: { ...PNG }, path: 'img/a.png' })
+    expect(mockImage).toHaveBeenCalledTimes(2)
+    v.again({ entry: PNG, path: 'img/a.png', reload: 1 })
+    await waitFor(() => expect(mockImage).toHaveBeenCalledTimes(4))
+  })
+
+  it('asks before reading a sensitive image', async () => {
+    show({ entry: { ...PNG, sensitive: true }, path: 'img/a.png' })
+    expect(
+      screen.getByText('This file may contain secrets'),
+    ).toBeInTheDocument()
+    expect(mockImage).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Show' }))
+    expect(await screen.findAllByRole('img')).toHaveLength(2)
+    expect(mockImage.mock.calls[0][2]).toMatchObject({ reveal: true })
+  })
+
+  it('asks when the server finds the name sensitive', async () => {
+    mockImage.mockRejectedValueOnce(
+      new RequestError(403, 'sensitive', 'sensitive'),
+    )
+    show({ entry: PNG, path: 'img/a.png' })
+    fireEvent.click(await screen.findByRole('button', { name: 'Show' }))
+    expect(await screen.findAllByRole('img')).toHaveLength(2)
+    expect(mockImage.mock.lastCall?.[2]).toMatchObject({ reveal: true })
+  })
+
+  it('waits for the status, and says when the image is no longer changed', () => {
+    const v = show({ entry: PNG, path: 'img/a.png', waiting: true })
+    expect(screen.getByText('Loading…')).toBeInTheDocument()
+    v.again({ entry: undefined, path: 'img/a.png', waiting: false })
+    expect(screen.getByText('No longer changed')).toBeInTheDocument()
+    expect(mockImage).not.toHaveBeenCalled()
+  })
+
+  it('shows an SVG as a diff until Image is picked', async () => {
+    show({ entry: SVG, path: 'logo.svg' })
+    await screen.findByTestId('diff')
+    const toggle = screen.getByRole('button', { name: 'Image' })
+    expect(toggle).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.click(toggle)
+    expect(await screen.findAllByRole('img')).toHaveLength(2)
+    expect(toggle).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(toggle)
+    expect(await screen.findByTestId('diff')).toBeInTheDocument()
+    expect(mockDiff).toHaveBeenCalledTimes(2)
   })
 })

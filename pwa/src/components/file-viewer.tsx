@@ -1,6 +1,14 @@
-import { ArrowLeft, Copy, Eye, Lock, WrapText } from 'lucide-react'
+import {
+  ArrowLeft,
+  Copy,
+  Eye,
+  Image as ImageIcon,
+  Lock,
+  WrapText,
+} from 'lucide-react'
 import { type ComponentProps, lazy, Suspense, useEffect, useState } from 'react'
 import { type FilesError, filesError } from '../hooks/use-files'
+import { imageErrorCode, useImageBlob } from '../hooks/use-image-blob'
 import {
   type FileContent,
   fetchFileContent,
@@ -9,8 +17,10 @@ import {
 import { useSettings } from '../hooks/use-settings'
 import { formatSize, keepOrder, TRUNCATE_START } from '../utils/files-format'
 import { HIGHLIGHT_MAX_BYTES } from '../utils/highlight'
+import { isImagePath, isSvgPath } from '../utils/image-path'
 import { isMarkdownPath, type LinkPath } from '../utils/markdown-links'
 import { CodeBlock } from './code-block'
+import { ImagePreview } from './image-preview'
 import { ViewMessage } from './pane-dir-header'
 import { Banner } from './ui/banner'
 import { IconButton } from './ui/button'
@@ -105,11 +115,32 @@ export function FileViewer({
     if (preview) setLeftPreview(true)
     updateSetting('markdownPreview', !preview)
   }
+  // An image (or an SVG the user wants as one) is read through files/raw
+  const svg = isSvgPath(path)
+  const asImage = isImagePath(path) || (svg && settings.svgPreview)
+  const [retry, setRetry] = useState(0)
+  const image = useImageBlob(
+    paneId,
+    asImage ? { path, root, reveal } : null,
+    String(retry),
+    onRootChanged,
+  )
+  const sensitive = asImage
+    ? imageErrorCode(image) === 'sensitive'
+    : state.kind === 'sensitive'
+  const size = asImage
+    ? image.status === 'ready'
+      ? image.size
+      : undefined
+    : 'size' in state
+      ? state.size
+      : undefined
   const back = backTo
     ? `Back to ${backTo.slice(backTo.lastIndexOf('/') + 1)}`
     : 'Back to files'
 
   useEffect(() => {
+    if (asImage) return
     let live = true
     setState({ kind: 'loading' })
     fetchFileContent(paneId, path, { root, reveal }).then(
@@ -127,7 +158,7 @@ export function FileViewer({
     return () => {
       live = false
     }
-  }, [paneId, root, path, reveal, onRootChanged])
+  }, [paneId, root, path, reveal, asImage, onRootChanged])
 
   const copyPath = async () => {
     try {
@@ -151,9 +182,9 @@ export function FileViewer({
           >
             {keepOrder(path)}
           </span>
-          {'size' in state && (
+          {size !== undefined && (
             <span className="text-[11px] text-fg-muted">
-              {formatSize(state.size)}
+              {formatSize(size)}
             </span>
           )}
         </div>
@@ -177,18 +208,41 @@ export function FileViewer({
             <Eye size={15} aria-hidden="true" />
           </IconButton>
         )}
-        <IconButton
-          size="sm"
-          onClick={() => setWrap((w) => !w)}
-          aria-label="Wrap lines"
-          aria-pressed={wrap}
-          title="Wrap lines"
-          className={wrap ? 'text-accent' : ''}
-        >
-          <WrapText size={15} aria-hidden="true" />
-        </IconButton>
+        {svg && (
+          <IconButton
+            size="sm"
+            onClick={() => updateSetting('svgPreview', !asImage)}
+            aria-label="Image"
+            aria-pressed={asImage}
+            title={asImage ? 'Show the source' : 'Show as an image'}
+            className={asImage ? 'text-accent' : ''}
+          >
+            <ImageIcon size={15} aria-hidden="true" />
+          </IconButton>
+        )}
+        {!asImage && (
+          <IconButton
+            size="sm"
+            onClick={() => setWrap((w) => !w)}
+            aria-label="Wrap lines"
+            aria-pressed={wrap}
+            title="Wrap lines"
+            className={wrap ? 'text-accent' : ''}
+          >
+            <WrapText size={15} aria-hidden="true" />
+          </IconButton>
+        )}
       </div>
-      {state.kind === 'text' && preview && (
+      {asImage && !sensitive && (
+        <div className="min-h-0 flex-1 overflow-auto">
+          <ImagePreview
+            state={image}
+            alt={path}
+            onRetry={() => setRetry((n) => n + 1)}
+          />
+        </div>
+      )}
+      {!asImage && state.kind === 'text' && preview && (
         <LazyMarkdownPreview
           text={state.text}
           path={path}
@@ -199,7 +253,7 @@ export function FileViewer({
           notify={notify}
         />
       )}
-      {state.kind === 'text' && !preview && (
+      {!asImage && state.kind === 'text' && !preview && (
         <>
           {markdown && tooLarge && (
             <Banner>Too large to preview: shown as source</Banner>
@@ -207,23 +261,25 @@ export function FileViewer({
           <CodeBlock text={state.text} path={path} wrap={wrap} />
         </>
       )}
-      {state.kind === 'loading' && <ViewMessage>Loading…</ViewMessage>}
-      {state.kind === 'unpreviewable' && (
+      {!asImage && state.kind === 'loading' && (
+        <ViewMessage>Loading…</ViewMessage>
+      )}
+      {!asImage && state.kind === 'unpreviewable' && (
         <ViewMessage>
           Not previewable (binary, special file or larger than 1 MiB)
         </ViewMessage>
       )}
-      {state.kind === 'error' && (
+      {!asImage && state.kind === 'error' && (
         <ViewMessage>{ERRORS[state.error]}</ViewMessage>
       )}
-      {state.kind === 'sensitive' && (
+      {sensitive && (
         <ViewMessage>
           <Lock size={20} aria-hidden="true" />
           This file may contain secrets
         </ViewMessage>
       )}
       <SensitiveConfirm
-        isOpen={state.kind === 'sensitive'}
+        isOpen={sensitive}
         onConfirm={() => setReveal(true)}
         onCancel={onClose}
       />
