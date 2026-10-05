@@ -187,8 +187,15 @@ export function openTerminalLink(uri: string): void {
   if (url) window.open(url.href, '_blank', 'noopener,noreferrer')
 }
 
+// A paste without end markers or control characters: whatever brackets it
+// (xterm, or bracketPaste), nothing in it ends the paste early and reaches
+// the program as typed keys.
+export function cleanPaste(text: string): string {
+  return text.replace(PASTE_END, '').replace(PASTE_CONTROL, '')
+}
+
 export function bracketPaste(text: string): string {
-  return `\x1b[200~${text.replace(PASTE_END, '').replace(PASTE_CONTROL, '')}\x1b[201~`
+  return `\x1b[200~${cleanPaste(text)}\x1b[201~`
 }
 
 // Rows a wheel event scrolls into the history (negative: toward the live
@@ -512,10 +519,11 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
           if (bracketedRef.current) {
             return socketRef.current.send(bracketPaste(text))
           }
-          // xterm sends it through onData, which cannot report back.
+          // xterm sends it through onData, which cannot report back. It
+          // brackets the paste but leaves an end marker inside it.
           const term = termRef.current
           if (!term || socketRef.current.state !== 'connected') return false
-          term.paste(text)
+          term.paste(cleanPaste(text))
           return true
         },
         reconnect: () => socketRef.current.reconnect(),
@@ -652,14 +660,23 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       }
     }, [driveSize, isHerdr, wantsDrive])
 
-    // An image pasted without text is taken before xterm sees the paste:
-    // capture phase on the container runs ahead of xterm's own listener, and
-    // stopping it there keeps xterm from sending even an empty paste.
+    // Every paste is taken before xterm sees it: capture phase on the
+    // container runs ahead of xterm's own listener, and stopping it there
+    // keeps xterm from sending it. Text goes through the handle's paste,
+    // cleaned like the toolbar's (xterm's own paste would send an end marker
+    // inside it as is); an image pasted without text goes to onPasteImage.
     useEffect(() => {
       const container = containerRef.current
       /* v8 ignore next */
       if (!container) return
       const onPaste = (e: ClipboardEvent) => {
+        const text = e.clipboardData?.getData('text/plain') ?? ''
+        if (text) {
+          e.preventDefault()
+          e.stopImmediatePropagation()
+          handleRef.current?.paste(text)
+          return
+        }
         const handler = onPasteImageRef.current
         if (!handler || readOnlyRef.current) return
         const image = imageFromClipboard(e.clipboardData)
