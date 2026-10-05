@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -402,30 +403,36 @@ type serverHealth struct {
 // fetchHealth asks the server on port for its health, logging in as user
 // with pass (none when pass is empty); code is the HTTP status (0 when
 // nothing answers). The password goes only to a listener of the current
-// user (or root); otherwise code is healthUntrusted, or 0 when nothing
-// answers at all.
+// user (or root); otherwise code is healthUntrusted or healthUnverified.
+// With a password, the owner is checked once the connection is made, and
+// the request goes over that connection: a listener that takes the port
+// after the check never gets it.
 func fetchHealth(port int, user, pass string) (serverHealth, int) {
 	var h serverHealth
+	var refused atomic.Int32
+	tr := &http.Transport{DisableKeepAlives: true}
 	if pass != "" {
-		if owner := listenerOwnerOf(port); owner != listenerTrustedOwner {
-			switch {
-			case !portAnswers(port):
-				return h, 0
-			case owner == listenerOtherOwner:
-				return h, healthUntrusted
-			default:
-				return h, healthUnverified
+		tr.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+			conn, err := (&net.Dialer{}).DialContext(ctx, network, addr)
+			if err != nil {
+				return nil, err
 			}
+			if code := untrustedConn(port, conn); code != 0 {
+				conn.Close()
+				refused.Store(int32(code))
+				return nil, errors.New(untrustedListenerMsg)
+			}
+			return conn, nil
 		}
 	}
 	req, _ := http.NewRequest(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/api/mux/health", port), nil)
 	if pass != "" {
 		req.SetBasicAuth(user, pass)
 	}
-	client := &http.Client{Timeout: 2 * time.Second}
+	client := &http.Client{Timeout: 2 * time.Second, Transport: tr}
 	resp, err := client.Do(req)
 	if err != nil {
-		return h, 0
+		return h, int(refused.Load())
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusOK {
