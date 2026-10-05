@@ -1,6 +1,6 @@
 name: Deploy Website
 
-# Deploys only with a stable release (called from release-please.yml) or by
+# Deploys only with a stable release (called from release.yml) or by
 # hand from a release tag, not on every push to main: main runs ahead of the
 # latest release, and the site's docs and its install.sh/install.ps1 must be
 # the ones of the version people install.
@@ -47,7 +47,7 @@ jobs:
         with:
           version: 12.8.1
 
-      # No cache: called from release-please on main, it shares the cache
+      # No cache: called from a release run, it shares the cache
       # any CI job on main can write.
       - name: Setup Node
         uses: actions/setup-node@v7

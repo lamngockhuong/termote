@@ -523,6 +523,8 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   the signature with the key `install.sh` pins. `update` and `install.sh` (OpenSSL 3) refuse a
   1.10.0+ release whose signature does not verify; `container up` runs the image by that digest.
   Immutable releases are on for the repo, so assets and tags cannot change after publishing.
+  `release-please.yml` starts `release.yml` with `workflow_dispatch` on the tag, never as a
+  called workflow: a `workflow_call` job does not get the environment's secret (actions/runner#1490)
 - **Tailscale mapping**: `serve` removes its `tailscale serve` mapping when it stops (only while
   it still proxies to its port), so the name never leads to a free port another user could take;
   `start --lan` warns when lingering is off (the port is free while the user is logged out)

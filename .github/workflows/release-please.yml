@@ -28,32 +28,21 @@ jobs:
           manifest-file: .release-please-manifest.json
           config-file: release-please-config.json
 
-  # Trigger release workflow when release is created
-  call-release:
+  # Start release.yml as a workflow of its own, on the release tag. Called
+  # as a reusable workflow (workflow_call) its release job never got the
+  # `release` environment's signing key (actions/runner#1490): 1.10.0 failed
+  # that way. A workflow_dispatch made with GITHUB_TOKEN still starts a run;
+  # release.yml then publishes the website too.
+  dispatch-release:
     needs: release-please
     if: needs.release-please.outputs.release_created == 'true'
-    # The most any job of release.yml gets: it uploads the release assets
-    # and pushes the image.
+    runs-on: ubuntu-latest
     permissions:
-      contents: write
-      packages: write
-    uses: ./.github/workflows/release.yml
-    with:
-      version: ${{ needs.release-please.outputs.version }}
-    secrets:
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-
-  # Publish the website with each stable release, after its assets are out.
-  # A release created with GITHUB_TOKEN does not trigger `on: release`, so
-  # the deploy is called here instead.
-  call-deploy-website:
-    needs: [release-please, call-release]
-    if: needs.release-please.outputs.release_created == 'true' && !contains(needs.release-please.outputs.version, '-')
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-    uses: ./.github/workflows/deploy-website.yml
-    with:
-      tag: ${{ needs.release-please.outputs.tag_name }}
+      actions: write
+    steps:
+      - name: Start the release workflow
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+          VERSION: ${{ needs.release-please.outputs.version }}
+        run: gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref "$TAG" -f version="$VERSION"
