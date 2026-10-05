@@ -48,12 +48,13 @@ jobs:
         with:
           version: 12.8.1
 
+      # No cache: called from release-please on main, it shares the cache
+      # any CI job on main can write.
       - name: Setup Node
         uses: actions/setup-node@v7
         with:
           node-version: "24"
-          cache: "pnpm"
-          cache-dependency-path: pnpm-lock.yaml
+          package-manager-cache: false
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --filter @termote/website...
