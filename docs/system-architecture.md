@@ -66,7 +66,7 @@ React SPA with:
 - **Connection Indicator**: Real-time auto-detection of server status (connecting/connected/disconnected/error), clickable to retry
 - **Command History**: Search/recall previously sent commands (mobile-friendly delete buttons), persisted in localStorage
 - **Quick Actions**: A key in the mobile keyboard toolbar opens a sheet of preset commands (clear, cancel, clear line, exit)
-- **Files and Changes**: read-only views of the pane's directory (`caps.files`): a tree with a highlighted file viewer, and `git status` with per-file diffs. A side panel next to the terminal on desktop (header toggles), views of the header's view menu on mobile. Shiki runs in a module worker (`pwa/src/utils/highlight-worker.ts`); the worker, its themes and grammars are built under `assets/shiki/`, left out of the precache and cached on first use
+- **Files and Changes**: views of the pane's directory (`caps.files`), where a text file can also be edited and saved: a tree with a highlighted file viewer, and `git status` with per-file diffs. A side panel next to the terminal on desktop (header toggles), views of the header's view menu on mobile. Shiki runs in a module worker (`pwa/src/utils/highlight-worker.ts`); the worker, its themes and grammars are built under `assets/shiki/`, left out of the precache and cached on first use
 - **Deep Links**: `#/s/<group>/<tab>[/<pane>][?view=]` selects a session (never sends input); the address bar follows the current session via `replaceState`
 - **Context Menu Control**: Block/unblock right-click on the terminal
 - **Font Controls**: Adjustable font size (6-24px)
@@ -185,7 +185,8 @@ GET    /api/mux/panes/{id}/agent/prompt                          → {prompt: nu
 POST   /api/mux/panes/{id}/agent/answer   body: {promptId, choice} → 204
 GET    /api/mux/panes/{id}/agent/commands                        → {commands: [{name, description, source, kind}]}
 GET    /api/mux/panes/{id}/files/tree?path=&root=               → {root, isRepo, path, entries, truncated}
-GET    /api/mux/panes/{id}/files/content?path=&root=&reveal=    → {root, path, size, text} | {…, previewable: false, reason} | {…, sensitive: true}
+GET    /api/mux/panes/{id}/files/content?path=&root=&reveal=    → {root, path, size, text, hash, editable, notEditable?} | {…, previewable: false, reason} | {…, sensitive: true}
+PUT    /api/mux/panes/{id}/files/content?root=  body: {path, baseHash, text, reveal} → {root, path, size, hash} | {error, code, reason?}
 GET    /api/mux/panes/{id}/files/changes?root=                  → {root, isRepo, branch, entries, truncated}
 GET    /api/mux/panes/{id}/files/diff?path=&orig=&staged=&root=&reveal= → {root, path, binary, conflict, truncated, sensitive, reason, hunks}
 GET    /api/mux/panes/{id}/files/raw?path=&root=&reveal=[&side=old|new&staged=&orig=] → image bytes | {error, code}
@@ -471,7 +472,8 @@ The PWA's Files and Changes views read a pane's directory, offered when the snap
 `caps.files`: tmux on Linux and macOS (`#{pane_current_path}` of the window's active pane) and
 Herdr (`foreground_cwd`, else `cwd`, of the pane; a Herdr that reports neither answers 501).
 psmux does not report the directory, so `caps.files` is off on Windows tmux. Every route is
-registered for every backend and answers 501 where it is off. All five are read-only GETs.
+registered for every backend and answers 501 where it is off. Five are read-only GETs; the
+sixth, `PUT files/content`, saves a text file (see Saving a file).
 
 **Root.** The pane's directory, raised to `git rev-parse --show-toplevel` when it is in a
 repository and a `.git` sits at that toplevel (a `core.worktree` naming another directory, even
@@ -539,12 +541,62 @@ and a WebP's first chunk (VP8, VP8L, or the VP8X canvas) (413 `too_many_pixels`)
 `sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:`, and
 `Content-Disposition: attachment`, so opening its URL runs no script under termote's origin.
 
+**Saving a file (`PUT content`).** Replaces the whole text of an existing file (no create,
+delete or rename) in `server/files_write.go`. A signed-in user already has a shell in the
+terminal, so the route grants nothing new; what it guards is not overwriting an agent's change
+and not opening a write path into what the reads refuse.
+
+- The `root` query is required (400 without it, 409 with the new root once the pane's moved);
+  the body is `{path, baseHash, text, reveal}`. `baseHash` is the `hash` GET `content` returned
+  (sha256 of the bytes read): bytes on disk that differ from it answer 409 `changed`, unless
+  they already equal the text being saved, which answers 200 (a save repeated after a lost
+  reply is not a conflict). There is no overwrite.
+- The path checks of a read (`cleanRelPath`, deny dirs, `.git`, the git dir) plus a write-only
+  deny list: the install's data dir (its `current` pointer picks the binary the service runs)
+  and the upload store. A sensitive name needs `reveal: true` (403 `sensitive`).
+- The parent directory is opened once through `os.Root` after checking no component of the
+  path is a symlink, and every later step uses that handle. The file must be a regular file
+  with one link, owned by the server user (Unix), writable by its owner, UTF-8 without NUL,
+  and with uniform line breaks (all `\n` or all `\r\n`); otherwise 422 `not_editable` with a
+  `reason` (`symlink`, `not-regular`, `hardlink`, `mixed-eol`, `nul`) or 403 `permission`
+  (`not-writable`, `other-owner`, EACCES). GET `content` runs the same check and reports it as
+  `editable`/`notEditable`, so the PWA offers Edit only where a save would be taken.
+- The text arrives with `\n` line breaks (a textarea's); a `\r\n` file gets them back. Text
+  with NUL or a lone `\r` is 422 `not_text`; the file and the final bytes are at most 1 MiB
+  (413 `too_large`). The body has its own limit, 6 MiB + 64 KiB (JSON writes a control
+  character in six bytes), not the 8 KB of other routes; 2 saves at a time server-wide (429
+  `busy`), and once authenticated and given a slot the read deadline grows to 5 minutes.
+- The new bytes go to `.termote-edit-<random>` in the same directory (`O_EXCL`, 0600, the
+  file's mode set on the open handle, then `fsync`), the file is read again and must still
+  hold what was checked, then the temporary file is renamed over it. Any failure removes the
+  temporary file, and a save removes ones older than 10 minutes left in its directory (only
+  names of exactly that form: a user's `.termote-edit-notes` stays). Every
+  `.termote-edit-*` name counts as sensitive. Saves of one file are serialised in the process,
+  and a save drops the root's cached git status, so the Changes view's next read sees it.
+- Limits: a file system has no compare-and-swap, so an agent writing the file between the
+  last read and the rename still loses its change (the lock and the second read only narrow
+  that window). The rename makes a new inode: ACLs, xattrs and SELinux labels of the old file
+  are not kept (its owner is, since a file of another user is refused). File contents are never
+  logged.
+
 **Guards.** Basic auth and the Host allowlist like every route; GETs pass `writeGuard`, so the
 handlers check `Sec-Fetch-Site`/`Origin` themselves (403 cross-site), which keeps another page
-from making a `--no-auth` server run git. Other methods get 405. `requireFilesRead` is where a
-view-only role (#236) will be enforced.
+from making a `--no-auth` server run git. `PUT content` goes through `writeGuard` like every
+write (same-site, `application/json`) and its handler checks again. Other methods get 405.
+`requireFilesRead` and `requireFilesWrite` are where a view-only role (#236) will be enforced;
+`requireWriteRole` is still a stub, so today a view-only client is kept from editing only by
+the PWA, which hides Edit in `readOnly` mode.
 
-**PWA.** One store per pane for the tree (`use-files.ts`) and for the status
+**PWA.** Edit (Files, and the diff of a file the working tree still has as text in Changes)
+turns the file into a plain `<textarea>` (`file-editor.tsx`), a Markdown file as its source.
+The draft is kept per pane in `use-files.ts` (`useFileDraft`), in memory only, so a remount, a
+switch of view or a move of the root does not lose it (a draft read under an old root can no
+longer be saved, only copied). Editing another file while one has unsaved changes asks
+first, and leaving the page asks while any pane has them; a 409 `changed` keeps it with Reload and Copy my text, and a
+timeout says the save may have gone through (saving again is safe). In Changes a save goes
+back to the unstaged diff, read again, and to the list once git status no longer lists it.
+
+One store per pane for the tree (`use-files.ts`) and for the status
 (`use-git-changes.ts`, polled every 5 s while a view shows it and the page is visible, backing
 off to a minute on errors), shared by the mobile view and the desktop panel. Highlighting runs
 in a worker with a 3 s timeout and only for files up to 256 KiB, 5000 lines and 2000 characters
@@ -704,7 +756,7 @@ termote update --force           # Force reinstall current version
     upload ids resolved by the server, never paths, and a failed send clears the input box
     (one `C-c`) only when it holds nothing but its own paste; markdown images in the Chat
     view never load
-11. **Files and changes**: read-only; paths confined to the pane's root by `os.Root`; Termote's
+11. **Files and changes**: reads, plus `PUT content` saving a text file (see above); paths confined to the pane's root by `os.Root`; Termote's
     config/state dirs, `/proc`, `/sys`, `/dev` and `.git` never served (a path differing only in
     case is checked by directory identity, for mounts that ignore case); sensitive files only
     with `reveal=1`; git run without a shell and with every repo-configured program disabled;

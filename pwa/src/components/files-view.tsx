@@ -80,11 +80,16 @@ function visibleRows(s: FilesState, dir = '', level = 1): Row[] {
 // Files: the pane's root as a tree, read one directory at a time, and the
 // file chosen from it. The same component is the mobile view and the desktop
 // panel.
-export function FilesView({ session, isMobile, notify }: ViewProps) {
+export function FilesView({ session, isMobile, notify, readOnly }: ViewProps) {
   // Before the first snapshot there is no pane to read
   if (!session.paneId) return <ViewMessage>Loading…</ViewMessage>
   return (
-    <PaneFiles paneId={session.paneId} isMobile={isMobile} notify={notify} />
+    <PaneFiles
+      paneId={session.paneId}
+      isMobile={isMobile}
+      notify={notify}
+      readOnly={readOnly}
+    />
   )
 }
 
@@ -92,7 +97,8 @@ function PaneFiles({
   paneId,
   isMobile,
   notify,
-}: { paneId: string } & Pick<ViewProps, 'isMobile' | 'notify'>) {
+  readOnly,
+}: { paneId: string } & Pick<ViewProps, 'isMobile' | 'notify' | 'readOnly'>) {
   const f = useFiles(paneId)
   const { load, rootChanges, follow } = f
 
@@ -137,6 +143,9 @@ function PaneFiles({
           onFollow={onFollow}
           onRootChanged={f.rootChanged}
           notify={notify}
+          // A view-only client is kept from editing here only: the server
+          // has no roles yet
+          canEdit={!readOnly}
         />
       ) : root?.error ? (
         <ViewMessage>{ERRORS[root.error]}</ViewMessage>

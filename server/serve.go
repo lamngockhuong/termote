@@ -51,6 +51,9 @@ type serveConfig struct {
 	// pane's root: the config and state dirs (the secret and the encrypted
 	// password).
 	FilesDenyDirs []string
+	// FilesWriteDenyDirs are never written by a save from the Files view,
+	// on top of FilesDenyDirs and UploadDir: the install's data dir.
+	FilesWriteDenyDirs []string
 	// UploadDir holds images uploaded from the PWA; empty disables uploads.
 	UploadDir string
 	// OnListen runs once the port is bound (serve records its PID then, so
@@ -262,6 +265,7 @@ func buildServer(cfg serveConfig, m Mux) (http.Handler, *streamHub, error) {
 	agent := registerMuxRoutes(mux, m, tokenStore, uploads)
 	registerStreamRoutes(mux, m, tokenStore, allowed, hub)
 	files := registerFilesRoutes(mux, m, allowed, cfg.FilesDenyDirs)
+	files.writeDeny = filesDenyDirs(append(cfg.FilesWriteDenyDirs, cfg.UploadDir)...)
 	agent.registerCommandsRoute(mux, files, allowed)
 	// Unknown /api/ paths get JSON 404 instead of the SPA fallback.
 	mux.HandleFunc("/api/", apiNotFound)
@@ -292,9 +296,10 @@ func buildServer(cfg serveConfig, m Mux) (http.Handler, *streamHub, error) {
 // ReadHeaderTimeout covers only the headers, and a client that announces a
 // body then sends it a byte at a time would otherwise hold its connection
 // (and a file descriptor) forever. Bodies are at most 64 KB, but for an
-// uploaded image (10 MB): its handler extends the deadline to
-// uploadReadTimeout once the request is authenticated, and a Chat view
-// message with images to its own time budget once its body is read. Past
+// uploaded image (10 MB) and a saved file (6 MiB + 64 KiB of JSON): their
+// handlers extend the deadline to uploadReadTimeout once the request is
+// authenticated and holds a slot, and a Chat view message with images to
+// its own time budget once its body is read. Past
 // the deadline, net/http's background read also cancels the request's
 // context, so no other handler but the stream may run longer (mux calls
 // take at most muxTimeout, git gitTimeout).

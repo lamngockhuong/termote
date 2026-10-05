@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import type { Locator } from '@playwright/test'
@@ -204,5 +204,102 @@ test.describe('files and changes views', () => {
     await expect(panel.locator('img[src^="blob:"]')).toHaveCount(0)
     await expect.poll(() => decodedWidth(img)).toBeGreaterThan(0)
     await expect.poll(async () => (await img.boundingBox())?.width ?? 0).toBeGreaterThan(100)
+  })
+
+  test('edits a CRLF Markdown file, keeping every other byte', async ({ page }) => {
+    mkdirSync(path.join(repo, 'docs'), { recursive: true })
+    const rec = path.join(repo, 'docs/rec.md')
+    writeFileSync(rec, '---\r\nstatus: review\r\n---\r\n# Record\r\n\r\nBody\r\n')
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await page.goto(`${link}?view=files`)
+    const panel = page.getByRole('complementary', { name: 'Files' })
+    await panel.getByRole('treeitem', { name: 'docs' }).click()
+    await panel.getByRole('treeitem', { name: 'rec.md' }).click()
+    await panel.getByRole('button', { name: 'Edit', exact: true }).click()
+    // The source, not the preview, with "\n" line breaks
+    const box = panel.getByRole('textbox', { name: 'Text of docs/rec.md' })
+    await expect(box).toHaveValue('---\nstatus: review\n---\n# Record\n\nBody\n')
+    await box.fill('---\nstatus: approved\n---\n# Record\n\nBody\n')
+    await panel.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(page.getByText('Saved')).toBeVisible()
+    await expect(box).toHaveCount(0)
+    expect(readFileSync(rec, 'utf-8')).toBe('---\r\nstatus: approved\r\n---\r\n# Record\r\n\r\nBody\r\n')
+  })
+
+  test('a save after the host changed the file is a conflict, never an overwrite', async ({ page }) => {
+    const f = path.join(repo, 'race.txt')
+    writeFileSync(f, 'one\n')
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await page.goto(`${link}?view=files`)
+    const panel = page.getByRole('complementary', { name: 'Files' })
+    await panel.getByRole('treeitem', { name: 'race.txt' }).click()
+    await panel.getByRole('button', { name: 'Edit', exact: true }).click()
+    const box = panel.getByRole('textbox', { name: 'Text of race.txt' })
+    await box.fill('mine\n')
+    writeFileSync(f, 'agent\n')
+    await panel.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(panel.getByText('The file changed on the host since you opened it')).toBeVisible()
+    await expect(box).toHaveValue('mine\n')
+    expect(readFileSync(f, 'utf-8')).toBe('agent\n')
+    await panel.getByRole('button', { name: 'Reload' }).click()
+    await expect(panel.getByTestId('code-block')).toContainText('agent')
+  })
+
+  test('no Edit for mixed line breaks or a symlink', async ({ page }) => {
+    writeFileSync(path.join(repo, 'mixed.txt'), 'a\r\nb\n')
+    symlinkSync('race.txt', path.join(repo, 'alias.txt'))
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await page.goto(`${link}?view=files`)
+    const panel = page.getByRole('complementary', { name: 'Files' })
+    for (const name of ['mixed.txt', 'alias.txt']) {
+      await panel.getByRole('treeitem', { name }).click()
+      await expect(panel.getByTestId('code-block')).toBeVisible()
+      await expect(panel.getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0)
+      await panel.getByRole('button', { name: 'Back to files' }).click()
+    }
+  })
+
+  test('Changes: an edit updates the diff; one back to the index leaves the list', async ({ page }) => {
+    const app = path.join(repo, 'src/app.ts')
+    const original = git(repo, 'show', 'HEAD:src/app.ts')
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await page.goto(`${link}?view=changes`)
+    const changes = page.getByRole('complementary', { name: 'Changes' })
+    const row = changes.getByRole('region', { name: 'Changes' }).getByRole('button', { name: /app\.ts/ })
+    await row.click()
+    await changes.getByRole('button', { name: 'Edit', exact: true }).click()
+    const box = changes.getByRole('textbox', { name: 'Text of src/app.ts' })
+    await box.fill(original.replace('a + b', 'a * b'))
+    await changes.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(changes.locator('[data-kind="add"]')).toContainText('return a * b', { timeout: 10000 })
+
+    await changes.getByRole('button', { name: 'Edit', exact: true }).click()
+    await box.fill(original)
+    await changes.getByRole('button', { name: 'Save', exact: true }).click()
+    // git status is cached 2s on the server and polled every 5s here
+    await expect(page.getByText('No changes left in app.ts')).toBeVisible({ timeout: 15000 })
+    // Back on the list, where app.ts is no longer changed
+    await expect(changes.getByRole('button', { name: /app\.ts/ })).toHaveCount(0)
+    await expect(changes.getByRole('region', { name: 'Untracked' })).toBeVisible()
+    expect(readFileSync(app, 'utf-8')).toBe(original)
+  })
+
+  test('mobile: Edit and the text box fit the screen', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 800 })
+    await page.addInitScript(() =>
+      localStorage.setItem('termote-settings', JSON.stringify({ hasSeenGestureHints: true })),
+    )
+    const f = path.join(repo, 'phone.txt')
+    writeFileSync(f, 'from the desk\n')
+    await page.goto(`${link}?view=files`)
+    await page.getByRole('treeitem', { name: 'phone.txt' }).click()
+    await page.getByRole('button', { name: 'Edit', exact: true }).click()
+    const box = page.getByRole('textbox', { name: 'Text of phone.txt' })
+    await expect(box).toBeVisible()
+    expect(await noPageScroll(page)).toBe(true)
+    await box.fill('from the phone\n')
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(page.getByText('Saved')).toBeVisible()
+    expect(readFileSync(f, 'utf-8')).toBe('from the phone\n')
   })
 })

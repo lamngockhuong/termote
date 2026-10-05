@@ -14,6 +14,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"syscall"
 	"unicode/utf8"
 )
@@ -46,8 +47,9 @@ func (e *rootChangedError) Error() string { return "root changed" }
 // contents of sensitive files.
 func requireFilesRead(http.ResponseWriter, *http.Request) bool { return true }
 
-// filesAPI serves /api/mux/panes/{id}/files/*: read-only views of the files
-// under a pane's root (its git toplevel, else its directory).
+// filesAPI serves /api/mux/panes/{id}/files/*: views of the files under a
+// pane's root (its git toplevel, else its directory), and saves of a text
+// file's whole contents (PUT files/content).
 type filesAPI struct {
 	m        Mux
 	dirs     PaneDirer // nil when the backend has none
@@ -57,6 +59,12 @@ type filesAPI struct {
 	roots    *rootResolver
 	statuses *ttlCache[gitStatus] // root → git status
 	rawSlots chan struct{}        // raw requests running, server-wide
+	// writeDeny are directories a save never writes to, on top of deny:
+	// the install's data dir (its current pointer picks the binary the
+	// service runs) and the upload store.
+	writeDeny  []string
+	writeSlots chan struct{} // saves running, server-wide
+	writeLocks *writeLocks
 }
 
 // filesDenyDirs returns the directories the files routes never serve, as
@@ -82,12 +90,16 @@ func registerFilesRoutes(mux *http.ServeMux, m Mux, allowed hostAllowlist, denyD
 	git := newGitRunner()
 	f := &filesAPI{
 		m: m, dirs: dirs, allowed: allowed, git: git, roots: newRootResolver(git),
-		statuses: newTTLCache[gitStatus](filesRootTTL),
-		rawSlots: make(chan struct{}, rawMaxRunning),
-		deny:     append(filesDenyDirs(systemDenyDirs...), filesDenyDirs(denyDirs...)...),
+		statuses:   newTTLCache[gitStatus](filesRootTTL),
+		rawSlots:   make(chan struct{}, rawMaxRunning),
+		deny:       append(filesDenyDirs(systemDenyDirs...), filesDenyDirs(denyDirs...)...),
+		writeSlots: make(chan struct{}, writeMaxRunning),
+		writeLocks: &writeLocks{locks: map[string]*sync.Mutex{}},
 	}
 	mux.HandleFunc("/api/mux/panes/{id}/files/tree", f.handleTree)
 	mux.HandleFunc("/api/mux/panes/{id}/files/content", f.handleContent)
+	// More specific than the pattern above: only PUT comes here.
+	mux.HandleFunc("PUT /api/mux/panes/{id}/files/content", f.handleWriteContent)
 	mux.HandleFunc("/api/mux/panes/{id}/files/changes", f.handleChanges)
 	mux.HandleFunc("/api/mux/panes/{id}/files/diff", f.handleDiff)
 	mux.HandleFunc("/api/mux/panes/{id}/files/raw", f.handleRaw)
@@ -100,19 +112,24 @@ type filesRequest struct {
 	root filesRoot
 }
 
-// begin checks the request and resolves the pane's root. The files routes
-// are GETs, which writeGuard lets through, so the cross-site check runs here:
-// with --no-auth another page could otherwise make the server run git in a
-// pane's repo.
+// begin checks a GET and resolves the pane's root.
 func (f *filesAPI) begin(w http.ResponseWriter, r *http.Request) (*filesRequest, context.CancelFunc, bool) {
 	if !requireMethod(w, r, http.MethodGet) {
 		return nil, nil, false
 	}
+	return f.start(w, r, requireFilesRead)
+}
+
+// start checks a files request (cross-site, then allow for the role) and
+// resolves the pane's root, refusing one the client saw as another (the root
+// query). writeGuard lets GETs through, and with --no-auth another page could
+// otherwise make the server run git in a pane's repo.
+func (f *filesAPI) start(w http.ResponseWriter, r *http.Request, allow func(http.ResponseWriter, *http.Request) bool) (*filesRequest, context.CancelFunc, bool) {
 	if msg := crossSiteRejection(f.allowed, r); msg != "" {
 		jsonError(w, msg, http.StatusForbidden)
 		return nil, nil, false
 	}
-	if !requireFilesRead(w, r) {
+	if !allow(w, r) {
 		return nil, nil, false
 	}
 	w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -356,6 +373,11 @@ type contentResponse struct {
 	Path string `json:"path"`
 	Size int64  `json:"size"`
 	Text string `json:"text"`
+	// Hash is the sha256 of the bytes read, sent back as a save's baseHash.
+	Hash string `json:"hash"`
+	// Editable: a save of this file would be taken; NotEditable says why not.
+	Editable    bool   `json:"editable"`
+	NotEditable string `json:"notEditable,omitempty"`
 }
 
 type unpreviewableResponse struct {
@@ -411,7 +433,11 @@ func (f *filesAPI) content(root filesRoot, p string, reveal bool) (any, error) {
 	if reason != "" {
 		return unpreviewableResponse{Root: root.Root, Path: slash, Size: size, Reason: reason}, nil
 	}
-	return contentResponse{Root: root.Root, Path: slash, Size: size, Text: text}, nil
+	why := f.editCheck(rt, root, rel, []byte(text))
+	return contentResponse{
+		Root: root.Root, Path: slash, Size: size, Text: text,
+		Hash: hashHex([]byte(text)), Editable: why == "", NotEditable: why,
+	}, nil
 }
 
 // readPreview reads a regular text file of at most maxPreviewSize. Every
@@ -458,9 +484,14 @@ func (f *filesAPI) error(w http.ResponseWriter, op string, err error) {
 	var rc *rootChangedError
 	var ie inputError
 	var re *rawError
+	var ne *notEditableError
 	switch {
 	case errors.As(err, &re):
 		jsonErrorCode(w, re.code, re.msg, re.status)
+	case errors.As(err, &ne):
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		json.NewEncoder(w).Encode(map[string]string{"error": ne.Error(), "code": "not_editable", "reason": ne.reason})
 	case errors.As(err, &rc):
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusConflict)

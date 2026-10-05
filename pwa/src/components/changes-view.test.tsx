@@ -8,6 +8,7 @@ import {
 } from '@testing-library/react'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ViewProps } from '../app-views'
+import { ThemeProvider } from '../contexts/theme-context'
 import { resetFilesStores, useFiles } from '../hooks/use-files'
 import { resetGitChangesStores } from '../hooks/use-git-changes'
 import {
@@ -22,8 +23,12 @@ const mockChanges = vi.fn()
 const mockDiff = vi.fn()
 const mockContent = vi.fn()
 const mockTree = vi.fn()
+const mockSave = vi.fn()
+const mockImage = vi.fn()
 vi.mock('../hooks/use-mux-api', async (orig) => ({
   ...(await orig<typeof import('../hooks/use-mux-api')>()),
+  saveFileContent: (...a: unknown[]) => mockSave(...a),
+  fetchFileImage: (...a: unknown[]) => mockImage(...a),
   fetchGitChanges: (...a: unknown[]) => mockChanges(...a),
   fetchFileDiff: (...a: unknown[]) => mockDiff(...a),
   fetchFileContent: (...a: unknown[]) => mockContent(...a),
@@ -87,7 +92,12 @@ const settle = () => act(() => new Promise((r) => setTimeout(r, 5)))
 
 async function show(over: Partial<ViewProps> = {}) {
   const p = props(over)
-  const view = render(<ChangesView {...p} />)
+  // The editor's file view highlights through the theme
+  const view = render(
+    <ThemeProvider>
+      <ChangesView {...p} />
+    </ThemeProvider>,
+  )
   await settle()
   return { ...p, ...view }
 }
@@ -107,6 +117,14 @@ beforeEach(() => {
   resetFilesStores()
   mockChanges.mockReset()
   mockDiff.mockReset()
+  mockContent.mockReset()
+  mockSave.mockReset()
+  HTMLDialogElement.prototype.showModal = vi.fn(function (
+    this: HTMLDialogElement,
+  ) {
+    this.setAttribute('open', '')
+  })
+  HTMLDialogElement.prototype.close = vi.fn()
   mockChanges.mockResolvedValue(changes())
   mockDiff.mockResolvedValue({
     root: '/r',
@@ -336,5 +354,250 @@ describe('ChangesView', () => {
     expect(p.showView).toHaveBeenCalledWith(FILES_VIEW_ID)
     const files = renderHook(() => useFiles('%1'))
     expect(files.result.current.openPath).toBe('notes/a.md')
+  })
+})
+
+// A diff with one line: text the server read
+const textDiff = (path: string) => ({
+  root: '/r',
+  path,
+  truncated: false,
+  hunks: [{ header: '@@', lines: [{ kind: 'add', new: 1, text: 'x' }] }],
+})
+
+// Opens the row of path in the group named
+async function openDiff(groupName: string, path: string) {
+  const name = path.slice(path.lastIndexOf('/') + 1)
+  fireEvent.click(
+    within(group(groupName)).getByRole('button', {
+      name: new RegExp(name.replace('.', '\\.')),
+    }),
+  )
+  await act(async () => {})
+}
+
+describe('ChangesView editing', () => {
+  const EDIT = [
+    c('mod.ts', '', 'M'),
+    c('new.md', '', '?'),
+    c('both.go', '', '', { conflict: true }),
+    c('to.ts', 'R', '', { orig: 'from.ts' }),
+    c('del.ts', '', 'D'),
+    c('rm.ts', 'D', ''),
+    c('back.ts', 'D', '?'),
+    c('ln', 'T', ''),
+    c('pic.png', '', 'M'),
+    c('bin.dat', '', 'M'),
+    c('big.log', '', 'M'),
+  ]
+  beforeEach(() => {
+    mockChanges.mockResolvedValue(changes({ entries: EDIT }))
+    mockDiff.mockImplementation(async (_p: string, e: { path: string }) =>
+      e.path === 'bin.dat'
+        ? { ...textDiff(e.path), binary: true, hunks: null }
+        : e.path === 'big.log'
+          ? { ...textDiff(e.path), reason: 'too-large', hunks: null }
+          : textDiff(e.path),
+    )
+    mockImage.mockReturnValue(new Promise(() => {}))
+  })
+
+  it.each([
+    ['Changes', 'mod.ts', 'Edit'],
+    ['Untracked', 'new.md', 'Edit'],
+    ['Conflicts', 'both.go', 'Edit'],
+    ['Staged', 'to.ts', 'Edit working copy'],
+    ['Staged', 'back.ts', 'Edit working copy'],
+  ])('%s %s offers %s', async (g, path, label) => {
+    await show()
+    await openDiff(g, path)
+    expect(screen.getByRole('button', { name: label })).toBeInTheDocument()
+  })
+
+  it.each([
+    ['Changes', 'del.ts'],
+    ['Staged', 'rm.ts'],
+    ['Staged', 'ln'],
+    ['Changes', 'pic.png'],
+    ['Changes', 'bin.dat'],
+    ['Changes', 'big.log'],
+  ])('%s %s offers no Edit', async (g, path) => {
+    await show()
+    await openDiff(g, path)
+    expect(screen.queryByRole('button', { name: /^Edit/ })).toBeNull()
+  })
+
+  it('a view-only client gets no Edit', async () => {
+    await show({ readOnly: true })
+    await openDiff('Changes', 'mod.ts')
+    expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull()
+  })
+
+  it('edits the working copy, then shows the unstaged diff read again', async () => {
+    mockContent.mockResolvedValue({
+      root: '/r',
+      path: 'to.ts',
+      size: 1,
+      text: 'a',
+      hash: 'h',
+      editable: true,
+    })
+    mockSave.mockResolvedValue({
+      root: '/r',
+      path: 'to.ts',
+      size: 1,
+      hash: 'h2',
+    })
+    const p = await show()
+    await openDiff('Staged', 'to.ts')
+    fireEvent.click(screen.getByRole('button', { name: 'Edit working copy' }))
+    const box = await screen.findByRole('textbox', { name: 'Text of to.ts' })
+    expect(mockContent).toHaveBeenCalledWith('%1', 'to.ts', {
+      root: '/r',
+      reveal: false,
+    })
+    // A poll that changes the entry meanwhile leaves the editor open
+    mockChanges.mockResolvedValue(
+      changes({
+        entries: EDIT.map((e) =>
+          e.path === 'to.ts' ? { ...e, unstaged: 'M' } : e,
+        ),
+      }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+    await settle()
+    expect(screen.getByRole('textbox')).toBe(box)
+    fireEvent.change(box, { target: { value: 'b' } })
+    const diffs = mockDiff.mock.calls.length
+    const polls = mockChanges.mock.calls.length
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Save' })),
+    )
+    await settle()
+    expect(p.notify).toHaveBeenCalledWith('Saved')
+    expect(screen.getByText('Not staged')).toBeInTheDocument()
+    expect(mockChanges.mock.calls.length).toBeGreaterThan(polls)
+    expect(mockDiff.mock.calls.length).toBeGreaterThan(diffs)
+    expect(mockDiff).toHaveBeenLastCalledWith(
+      '%1',
+      { path: 'to.ts', orig: 'from.ts' },
+      expect.objectContaining({ staged: false }),
+    )
+  })
+
+  it('a save that leaves nothing changed goes back to the list', async () => {
+    mockContent.mockResolvedValue({
+      root: '/r',
+      path: 'mod.ts',
+      size: 1,
+      text: 'a',
+      hash: 'h',
+      editable: true,
+    })
+    mockSave.mockResolvedValue({
+      root: '/r',
+      path: 'mod.ts',
+      size: 1,
+      hash: 'h2',
+    })
+    const p = await show()
+    await openDiff('Changes', 'mod.ts')
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    fireEvent.change(await screen.findByRole('textbox'), {
+      target: { value: 'b' },
+    })
+    mockChanges.mockResolvedValue(
+      changes({ entries: EDIT.filter((e) => e.path !== 'mod.ts') }),
+    )
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Save' })),
+    )
+    await settle()
+    expect(p.notify).toHaveBeenCalledWith('No changes left in mod.ts')
+    expect(screen.getByRole('region', { name: 'Changes' })).toBeInTheDocument()
+  })
+
+  it('Back from the editor returns to the diff', async () => {
+    mockContent.mockResolvedValue({
+      root: '/r',
+      path: 'mod.ts',
+      size: 1,
+      text: 'a',
+      hash: 'h',
+      editable: true,
+    })
+    await show()
+    await openDiff('Changes', 'mod.ts')
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    await screen.findByRole('textbox')
+    fireEvent.click(screen.getByRole('button', { name: 'Back to the diff' }))
+    expect(
+      screen.getByRole('button', { name: 'Back to changes' }),
+    ).toBeInTheDocument()
+  })
+
+  it('a sensitive file shown once is edited without asking again', async () => {
+    mockChanges.mockResolvedValue(changes())
+    mockDiff.mockImplementation(
+      async (_p: string, _e: unknown, o: { reveal: boolean }) =>
+        o.reveal
+          ? textDiff('.env')
+          : {
+              root: '/r',
+              path: '.env',
+              truncated: false,
+              sensitive: true,
+              hunks: null,
+            },
+    )
+    mockContent.mockResolvedValue({
+      root: '/r',
+      path: '.env',
+      size: 3,
+      text: 'A=1',
+      hash: 'h',
+      editable: true,
+    })
+    await show()
+    fireEvent.click(screen.getByRole('button', { name: /\.env/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Show' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }))
+    expect(
+      await screen.findByRole('textbox', { name: 'Text of .env' }),
+    ).toHaveValue('A=1')
+    expect(mockContent).toHaveBeenCalledWith('%1', '.env', {
+      root: '/r',
+      reveal: true,
+    })
+    // Back to the diff: still shown
+    fireEvent.click(screen.getByRole('button', { name: 'Back to the diff' }))
+    expect(await screen.findByTestId('diff')).toBeInTheDocument()
+  })
+
+  it('a Show ends when the diff is left for the list', async () => {
+    mockChanges.mockResolvedValue(changes())
+    mockDiff.mockImplementation(
+      async (_p: string, _e: unknown, o: { reveal: boolean }) =>
+        o.reveal
+          ? textDiff('.env')
+          : {
+              root: '/r',
+              path: '.env',
+              truncated: false,
+              sensitive: true,
+              hunks: null,
+            },
+    )
+    await show()
+    fireEvent.click(screen.getByRole('button', { name: /\.env/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Show' }))
+    expect(await screen.findByTestId('diff')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Back to changes' }))
+    fireEvent.click(screen.getByRole('button', { name: /\.env/ }))
+    expect(
+      await screen.findByText(
+        'This file may contain secrets. Show its contents?',
+      ),
+    ).toBeInTheDocument()
   })
 })

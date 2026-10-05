@@ -3,6 +3,7 @@ import {
   Eye,
   Image as ImageIcon,
   Lock,
+  Pencil,
   WrapText,
 } from 'lucide-react'
 import { Fragment, useCallback, useEffect, useState } from 'react'
@@ -70,6 +71,12 @@ interface Props {
   // A link of a Markdown preview to another file or a directory
   onFollow: (target: LinkPath) => void
   notify: (message: string) => void
+  // A sensitive file was shown: held by the caller so editing it, then
+  // coming back, asks only once. Without it the diff keeps its own.
+  reveal?: boolean
+  onReveal?: () => void
+  // Edits the working tree's file; absent for a view-only client
+  onEdit?: () => void
 }
 
 // The unified diff of one changed file, one side (staged or not), with
@@ -87,9 +94,17 @@ export function DiffViewer({
   onRootChanged,
   onFollow,
   notify,
+  reveal: revealProp,
+  onReveal,
+  onEdit,
 }: Props) {
   const [state, setState] = useState<Loaded>({ kind: 'loading' })
-  const [reveal, setReveal] = useState(false)
+  const [ownReveal, setOwnReveal] = useState(false)
+  const reveal = revealProp ?? ownReveal
+  const setReveal = () => {
+    setOwnReveal(true)
+    onReveal?.()
+  }
   const [wrap, setWrap] = useState(isMobile)
   // The working tree's version of a changed Markdown file, rendered
   const [preview, setPreview] = useState(false)
@@ -161,6 +176,23 @@ export function DiffViewer({
     side !== 'D' &&
     (shown.kind === 'diff' || (preview && shown.kind === 'loading'))
   const previewing = canPreview && preview
+  // The file is in the working tree as text: not deleted there (nor staged
+  // as deleted and gone), not a type change (a symlink), and its diff is
+  // text the server read. The server still decides once it is opened.
+  const inWorktree =
+    !!entry &&
+    entry.unstaged !== 'D' &&
+    !(entry.staged === 'D' && entry.unstaged === '') &&
+    entry.staged !== 'T' &&
+    entry.unstaged !== 'T'
+  const editable =
+    !!onEdit &&
+    inWorktree &&
+    !asImage &&
+    shown.kind === 'diff' &&
+    !shown.diff.binary &&
+    !shown.diff.reason
+  const editLabel = staged ? 'Edit working copy' : 'Edit'
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="sticky top-0 z-10 flex shrink-0 items-center gap-1 border-b border-border bg-surface px-1 py-1 ui-terminal:bg-bg">
@@ -183,6 +215,16 @@ export function DiffViewer({
             {staged ? 'Staged' : 'Not staged'}
           </span>
         </div>
+        {editable && (
+          <IconButton
+            size="sm"
+            onClick={onEdit}
+            aria-label={editLabel}
+            title={editLabel}
+          >
+            <Pencil size={15} aria-hidden="true" />
+          </IconButton>
+        )}
         {canPreview && (
           <IconButton
             size="sm"
@@ -262,7 +304,7 @@ export function DiffViewer({
       )}
       <SensitiveConfirm
         isOpen={shown.kind === 'sensitive'}
-        onConfirm={() => setReveal(true)}
+        onConfirm={setReveal}
         onCancel={onClose}
       />
     </div>

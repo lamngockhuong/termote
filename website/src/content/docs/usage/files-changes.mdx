@@ -6,14 +6,16 @@ description: Browse the files of a pane's directory and read what git reports as
 import { Aside } from "@astrojs/starlight/components";
 
 To see what an agent changed, you would otherwise type `ls`, `cat` and `git diff` on a phone
-keyboard and read the output in a terminal. Termote has two read-only views for this:
+keyboard and read the output in a terminal. Termote has two views for this:
 
 - **Files**: the pane's directory as a tree, opened one folder at a time. A text file opens with
   line numbers and syntax highlighting, an image as the picture.
 - **Changes**: when the directory is in a git repository, the files git reports as changed, and
   the diff of each one (for an image, the version before and after).
 
-Both are read-only: nothing can be edited, staged, discarded or committed from them.
+A text file can be edited and saved from either view (see [Editing a File](#editing-a-file)).
+Nothing else changes from them: no file is created, deleted or renamed, and nothing is staged,
+discarded or committed.
 
 ## Where to Find Them
 
@@ -71,6 +73,48 @@ Supported backends:
 | Plain text, no colours                                        | A larger text file (up to 1 MiB), a language not covered, or highlighting that took over 3 seconds |
 | `Not previewable (binary, special file or larger than 1 MiB)`  | A binary file that is not an image, a file over 1 MiB, or something that is not a regular file   |
 | `This file can't be shown`                                     | A path termote never serves (see below)                                                          |
+
+## Editing a File
+
+The pencil button (**Edit**) in a text file's bar turns its text into a plain text box, with
+**Cancel** and **Save** in place of the other buttons. It is meant for small changes, such as
+turning `status: review` into `status: approved` in a record's front matter, without asking the
+agent or typing `sed`.
+
+- A Markdown file is edited as its source, even when the preview is on.
+- Ctrl+S (Cmd+S on a Mac) saves. Cancel, or Back, with unsaved changes asks
+  `Discard changes?` first.
+- Line breaks stay as the file had them: a file with Windows line breaks (`\r\n`) keeps them.
+- The text being edited stays while you switch views or the panel closes and opens again. It is
+  kept only in the page's memory, never in the browser's storage, so closing or reloading the
+  app loses it (a phone may close an app left in the background).
+- In **Changes**, the diff of a file the working tree still has as text has the same Edit button
+  (**Edit working copy** on the staged side: the working tree's file is what is saved). After
+  saving, the diff of what is not staged shows, read again; when the file then matches the
+  index, the list shows with `No changes left in <file>`.
+
+When saving does not go through, your text stays in the box:
+
+| Shown                                                 | What to do                                                                                         |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `The file changed on the host since you opened it`    | Something (often the agent) wrote the file meanwhile. **Reload** reads it again and drops your text; **Copy my text** copies it first. A save never overwrites the other change. |
+| `This pane's folder changed`                           | The pane moved to another directory. Copy your text, then Cancel to see the file there.             |
+| `Not sure the file was saved. Saving again is safe.`   | The connection dropped or the server did not answer within 30 seconds. Save again: the same text is not a conflict. |
+| `The server can't write this file`                     | The file is read-only, belongs to another user, or its folder cannot be written                    |
+
+Some files have no Edit button, because the server would refuse the save: a symbolic link (or a
+file reached through a linked folder), a file with several hard links, a file that mixes line
+break styles or holds a NUL character, a file over 1 MiB, an image, and a file in Termote's own
+data or upload folders. A file that may contain secrets can be edited once it has been shown.
+
+<Aside type="caution">
+  A save replaces the file with a new one in the same folder. If the agent writes the same file
+  in the instant between the last check and the replacement, its change is lost. The new file
+  keeps the old one's permissions, but not extended attributes or ACLs.
+</Aside>
+
+A view-only session (once that role exists) has no Edit button. Until the server enforces roles,
+this is only hidden in the app.
 
 ## Markdown Preview
 
@@ -190,7 +234,7 @@ itself: without the confirmation it sends no contents at all.
 
 ## Never Shown
 
-Some paths are never served, even after confirming:
+Some paths are never served (or saved), even after confirming:
 
 - Termote's own config and state directories (the saved password, logs)
 - `/proc`, `/sys` and `/dev` (process environments and devices)

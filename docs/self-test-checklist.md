@@ -433,6 +433,28 @@ Run on tmux (Linux/macOS) and Herdr; psmux (Windows) offers neither view.
       longer changed"
 - [ ] Outside a git repo: "Not a git repository: <dir>"; a clean tree: "No changes"
 
+### Editing a File
+
+- [ ] A text file has "Edit" (pencil); it shows the text in a box with "Cancel editing" and "Save";
+      a `.md` file shows its source even with the preview on
+- [ ] Change one line of a `docs/records/*.md` front matter on a phone, Save: toast "Saved", and
+      on the host only that line changed (`git diff`); a file with `\r\n` line breaks keeps them
+- [ ] Save stays off until the text changes; Ctrl+S (Cmd+S) saves; Cancel or Back with changes
+      asks "Discard changes?"
+- [ ] Edit, then change the file in the terminal, then Save: "The file changed on the host since
+      you opened it"; the text stays; "Copy my text" copies it, "Reload" shows the host's version
+- [ ] Switching view (or closing and reopening the panel) while editing keeps the text
+- [ ] No "Edit" for a symlink, a file with mixed line breaks, an image, a file over 1 MiB, or
+      `chmod 444` file (a save there: "The server can't write this file")
+- [ ] `.env`: Edit appears only after "Show"; saving it works without asking again
+- [ ] Changes: "Edit" on a modified or untracked text file ("Edit working copy" on the staged
+      side), none on a deleted file, an image or a binary diff; after Save the unstaged diff
+      shows the new text; editing the file back to the index version shows the list and "No
+      changes left in <file>"
+- [ ] No `.termote-edit-*` file is left next to the saved file
+- [ ] (Once a view-only role exists, #236) view-only shows no "Edit", and `PUT files/content` is
+      refused for that role; until then this is covered by unit tests only
+
 ### Markdown Preview
 
 - [ ] A `.md` file opens rendered; the "Preview" (eye) button switches to the source and back, and

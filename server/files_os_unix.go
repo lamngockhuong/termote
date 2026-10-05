@@ -3,6 +3,7 @@
 package main
 
 import (
+	"io/fs"
 	"os"
 	"syscall"
 )
@@ -25,4 +26,15 @@ func ownedByServer(path string) bool {
 	}
 	st, ok := fi.Sys().(*syscall.Stat_t)
 	return ok && int(st.Uid) == os.Geteuid()
+}
+
+// fileLinks is the number of hard links to the file fi describes.
+func fileLinks(_ *os.File, fi fs.FileInfo) (uint64, error) {
+	return uint64(fi.Sys().(*syscall.Stat_t).Nlink), nil
+}
+
+// fileOwnedByServer reports whether the file fi describes belongs to the
+// user the server runs as.
+func fileOwnedByServer(fi fs.FileInfo) bool {
+	return int(fi.Sys().(*syscall.Stat_t).Uid) == os.Geteuid()
 }

@@ -181,6 +181,24 @@ describe('FilesView', () => {
     expect(screen.getByRole('tree')).toBeInTheDocument()
   })
 
+  it.each([
+    [false, true],
+    [true, false],
+  ])('readOnly %s: Edit offered %s', async (readOnly, offered) => {
+    mockContent.mockResolvedValue({
+      root: '/home/kim/app',
+      path: 'README.md',
+      size: 3,
+      text: 'hi',
+      hash: 'h',
+      editable: true,
+    })
+    await show({ readOnly })
+    fireEvent.click(item('README.md'))
+    await screen.findByTestId('markdown-preview')
+    expect(!!screen.queryByRole('button', { name: 'Edit' })).toBe(offered)
+  })
+
   it('moves through the tree with the keyboard', async () => {
     mockContent.mockResolvedValue({
       root: '/home/kim/app',

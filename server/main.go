@@ -58,6 +58,7 @@ func runServe(args []string) int {
 	}
 	scrubTermoteEnv()
 	cfg.FilesDenyDirs = filesDenyDirs(c.configDir(), c.stateDir())
+	cfg.FilesWriteDenyDirs = []string{c.dataDir()}
 	cfg.UploadDir = uploadDir()
 	cfg.OnListen = func() {
 		if err := c.writePIDFile(); err != nil {
