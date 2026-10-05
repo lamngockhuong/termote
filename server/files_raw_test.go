@@ -375,31 +375,39 @@ func TestFilesRawVersions(t *testing.T) {
 	gx := newGitFixture(t)
 	r := gx.repo
 	img := func(n uint8) string { return string(colorImage(t, "png", color.RGBA{n, n, n, 255})) }
-	for _, p := range []string{"m.png", "s.png", "mm.png", "sd.png", "ud.png", "o.png", "o2.png", "0:a.png", "1:a.png", "a.png", "lfs.png"} {
+	// Windows has no ':' in a file name: the stage-like names exist elsewhere
+	stageLike := runtime.GOOS != "windows"
+	names := []string{"m.png", "s.png", "mm.png", "sd.png", "ud.png", "o.png", "o2.png", "a.png", "lfs.png"}
+	if stageLike {
+		names = append(names, "0:a.png", "1:a.png")
+	}
+	for _, p := range names {
 		writeFile(t, filepath.Join(r, p), img(1)+p)
 	}
 	gitT(t, r, "add", ".")
 	gitT(t, r, "commit", "-q", "-m", "images")
 
-	writeFile(t, filepath.Join(r, "m.png"), img(2))               // .M
-	writeFile(t, filepath.Join(r, "s.png"), img(2))               // M.
-	gitT(t, r, "add", "s.png")                                    //
-	writeFile(t, filepath.Join(r, "mm.png"), img(2))              // MM
-	gitT(t, r, "add", "mm.png")                                   //
-	writeFile(t, filepath.Join(r, "mm.png"), img(3))              //
-	writeFile(t, filepath.Join(r, "u.png"), img(4))               // ?
-	writeFile(t, filepath.Join(r, "added.png"), img(5))           // A.
-	gitT(t, r, "add", "added.png")                                //
-	writeFile(t, filepath.Join(r, "ita.png"), img(6))             // .A
-	gitT(t, r, "add", "-N", "ita.png")                            //
-	gitT(t, r, "rm", "-q", "sd.png")                              // D.
-	os.Remove(filepath.Join(r, "ud.png"))                         // .D
-	gitT(t, r, "mv", "o.png", "r.png")                            // R.
-	gitT(t, r, "mv", "o2.png", "r2.png")                          // RM
-	writeFile(t, filepath.Join(r, "r2.png"), img(7))              //
-	writeFile(t, filepath.Join(r, "0:a.png"), img(8))             // .M, next to a.png
-	writeFile(t, filepath.Join(r, "a.png"), img(9))               // .M
-	writeFile(t, filepath.Join(r, "1:a.png"), img(11))            // .M
+	writeFile(t, filepath.Join(r, "m.png"), img(2))     // .M
+	writeFile(t, filepath.Join(r, "s.png"), img(2))     // M.
+	gitT(t, r, "add", "s.png")                          //
+	writeFile(t, filepath.Join(r, "mm.png"), img(2))    // MM
+	gitT(t, r, "add", "mm.png")                         //
+	writeFile(t, filepath.Join(r, "mm.png"), img(3))    //
+	writeFile(t, filepath.Join(r, "u.png"), img(4))     // ?
+	writeFile(t, filepath.Join(r, "added.png"), img(5)) // A.
+	gitT(t, r, "add", "added.png")                      //
+	writeFile(t, filepath.Join(r, "ita.png"), img(6))   // .A
+	gitT(t, r, "add", "-N", "ita.png")                  //
+	gitT(t, r, "rm", "-q", "sd.png")                    // D.
+	os.Remove(filepath.Join(r, "ud.png"))               // .D
+	gitT(t, r, "mv", "o.png", "r.png")                  // R.
+	gitT(t, r, "mv", "o2.png", "r2.png")                // RM
+	writeFile(t, filepath.Join(r, "r2.png"), img(7))    //
+	writeFile(t, filepath.Join(r, "a.png"), img(9))     // .M
+	if stageLike {
+		writeFile(t, filepath.Join(r, "0:a.png"), img(8)) // .M, next to a.png
+		writeFile(t, filepath.Join(r, "1:a.png"), img(11))
+	}
 	writeFile(t, filepath.Join(r, "lfs.png"), lfsPointer)         // M. holding a pointer
 	gitT(t, r, "add", "lfs.png")                                  //
 	writeFile(t, filepath.Join(r, "notes.txt"), "not an image\n") // ?
@@ -447,6 +455,9 @@ func TestFilesRawVersions(t *testing.T) {
 		{"not listed", "keep.png", "", false, "old", "not changed"},
 		{"wrong side", "m.png", "", true, "old", "not changed"},
 	} {
+		if !stageLike && strings.Contains(c.path, ":") {
+			continue
+		}
 		q := url.Values{"path": {c.path}, "side": {c.side}}
 		if c.orig != "" {
 			q.Set("orig", c.orig)
