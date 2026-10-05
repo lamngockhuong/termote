@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.12.0](https://github.com/lamngockhuong/termote/compare/v1.11.0...v1.12.0) (2026-10-05)
+
+
+### Features
+
+* create a text file from the Files view ([#333](https://github.com/lamngockhuong/termote/issues/333)) ([ef03fbf](https://github.com/lamngockhuong/termote/commit/ef03fbfcc459d78ac92bd055ab59abe2261c583e))
+
 ## [1.11.0](https://github.com/lamngockhuong/termote/compare/v1.10.0...v1.11.0) (2026-10-05)
 
 
