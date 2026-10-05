@@ -203,7 +203,8 @@ func createError(err error) error {
 	switch {
 	case errors.As(err, &re):
 		return err
-	case errors.Is(err, fs.ErrExist):
+	// Windows answers an O_EXCL open of a directory with EISDIR
+	case errors.Is(err, fs.ErrExist), errors.Is(err, syscall.EISDIR):
 		return errCreateExists
 	case errors.Is(err, syscall.ENOTDIR):
 		return errCreateNotDir

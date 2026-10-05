@@ -114,7 +114,8 @@ func TestFilesCreateDenied(t *testing.T) {
 			t.Errorf("%s = %d %v", rel, code, got)
 		}
 	}
-	for _, p := range []string{".git/x", ".git/new", ".GIT", "cfg/x", "cfg/new", "data/x", "data/new"} {
+	// .GIT/hooks is .git/hooks where names ignore case (macOS, Windows)
+	for _, p := range []string{".git/x", ".git/new", ".git/hooks", ".GIT/hooks", "cfg/x", "cfg/new", "data/x", "data/new"} {
 		notExist(t, filepath.Join(root, p))
 	}
 }
@@ -290,6 +291,7 @@ func TestCreateError(t *testing.T) {
 	for in, want := range map[error]error{
 		errCreateSymlink: errCreateSymlink,
 		&fs.PathError{Op: "mkdirat", Path: "x", Err: fs.ErrExist}:      errCreateExists,
+		&fs.PathError{Op: "openat", Path: "x", Err: syscall.EISDIR}:    errCreateExists,
 		&fs.PathError{Op: "openat", Path: "x", Err: syscall.ENOTDIR}:   errCreateNotDir,
 		&fs.PathError{Op: "mkdirat", Path: "x", Err: fs.ErrPermission}: errEditPermission,
 		escape: errCreateSymlink,
