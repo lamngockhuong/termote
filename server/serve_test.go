@@ -504,6 +504,30 @@ func TestAuthRateLimiter(t *testing.T) {
 			t.Errorf("after sweep: map size = %d, want 1", size)
 		}
 	})
+
+	t.Run("sweeps at most once per authSweepEvery", func(t *testing.T) {
+		rl := newAuthRateLimiter()
+		now := time.Now()
+		fill := func() {
+			for i := 0; i < 1001; i++ {
+				rl.failures[fmt.Sprintf("10.0.%d.%d", i/256, i%256)] = []time.Time{now.Add(-2 * time.Minute)}
+			}
+		}
+		fill()
+		rl.addLocked("1.1.1.1", now)
+		if len(rl.failures) != 1 {
+			t.Fatalf("first sweep: map size = %d, want 1", len(rl.failures))
+		}
+		fill()
+		rl.addLocked("2.2.2.2", now.Add(authSweepEvery-time.Second))
+		if len(rl.failures) != 1003 {
+			t.Errorf("within authSweepEvery: map size = %d, want 1003 (no sweep)", len(rl.failures))
+		}
+		rl.addLocked("3.3.3.3", now.Add(authSweepEvery))
+		if len(rl.failures) != 3 {
+			t.Errorf("after authSweepEvery: map size = %d, want 3", len(rl.failures))
+		}
+	})
 }
 
 func TestBasicAuthRateLimiting(t *testing.T) {

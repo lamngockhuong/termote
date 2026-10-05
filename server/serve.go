@@ -391,9 +391,14 @@ func runServer(ctx context.Context, cfg serveConfig, m Mux, ln net.Listener) err
 // authRateLimiter tracks failed auth attempts per IP, and per /64 for IPv6, to
 // prevent brute force attacks.
 type authRateLimiter struct {
-	mu       sync.Mutex
-	failures map[string][]time.Time // IP or IPv6 /64 → timestamps of recent failures
+	mu        sync.Mutex
+	failures  map[string][]time.Time // IP or IPv6 /64 → timestamps of recent failures
+	lastSweep time.Time              // when addLocked last dropped expired entries
 }
+
+// authSweepEvery spaces sweeps of the failures map: sweeping on every failure
+// once it holds many keys costs a full scan under the lock each time.
+const authSweepEvery = 10 * time.Second
 
 func newAuthRateLimiter() *authRateLimiter {
 	return &authRateLimiter{failures: make(map[string][]time.Time)}
@@ -500,10 +505,12 @@ func (rl *authRateLimiter) record(ip string) {
 }
 
 // addLocked adds a failure of ip at now. It sweeps all expired entries when
-// the map exceeds 1000 IPs to prevent unbounded growth. rl.mu must be held.
+// the map exceeds 1000 IPs to prevent unbounded growth, at most once per
+// authSweepEvery. rl.mu must be held.
 func (rl *authRateLimiter) addLocked(ip string, now time.Time) {
 	rl.failures[ip] = append(rl.failures[ip], now)
-	if len(rl.failures) > 1000 {
+	if len(rl.failures) > 1000 && now.Sub(rl.lastSweep) >= authSweepEvery {
+		rl.lastSweep = now
 		cutoff := now.Add(-1 * time.Minute)
 		for k, times := range rl.failures {
 			filtered := times[:0]
