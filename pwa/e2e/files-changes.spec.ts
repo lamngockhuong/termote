@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import type { Locator } from '@playwright/test'
 import { expect, type Page, test } from './fixtures'
 
 // Files and Changes against a pane whose directory is a throwaway git repo,
@@ -14,6 +15,23 @@ const tmux = (...args: string[]) =>
   execFileSync('tmux', ['-S', socket as string, ...args], { encoding: 'utf-8' })
 const git = (cwd: string, ...args: string[]) =>
   execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf-8' })
+
+// A 4×3 red PNG, then a 5×3 blue one (another size: git would take a file
+// of the same size written in the same second as unchanged), and an SVG. The
+// image views read them through files/raw as blob: URLs, which the page's
+// CSP must allow
+const RED_PNG =
+  'iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA7ljmRAAAAEElEQVR4nGO4o6EBRww4OQAa3g4RLYR9sQAAAABJRU5ErkJggg=='
+const BLUE_PNG =
+  'iVBORw0KGgoAAAANSUhEUgAAAAUAAAADCAIAAADUVFKvAAAAEElEQVR4nGPQ0LiDjBgI8AGbkxGVdkTjRAAAAABJRU5ErkJggg=='
+// Only a viewBox, no width or height: it has no size of its own and must
+// still fill the view rather than collapse
+const SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 10"><rect width="16" height="10" fill="red"/></svg>\n'
+
+// The width the browser decoded: 0 while loading or when it failed
+const decodedWidth = (img: Locator) =>
+  img.evaluate((el) => (el as HTMLImageElement).naturalWidth)
 
 // The page has nothing wider than the screen: only code frames scroll sideways
 const noPageScroll = (page: Page) =>
@@ -140,5 +158,49 @@ test.describe('files and changes views', () => {
     await page.getByRole('region', { name: 'Changes' }).getByRole('button', { name: /app\.ts/ }).click()
     await expect(page.locator('[data-kind="add"]')).toBeVisible()
     expect(await noPageScroll(page)).toBe(true)
+  })
+
+  test('images: Files shows one, Changes shows before and after', async ({ page }) => {
+    writeFileSync(path.join(repo, 'logo.png'), Buffer.from(RED_PNG, 'base64'))
+    git(repo, 'add', 'logo.png')
+    git(repo, 'commit', '-q', '-m', 'logo')
+    writeFileSync(path.join(repo, 'logo.png'), Buffer.from(BLUE_PNG, 'base64'))
+    // The server keeps a root's git status for 2s (filesRootTTL), and the
+    // previous test just read it: the first read must see logo.png
+    await page.waitForTimeout(2500)
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await page.goto(`${link}?view=files`)
+
+    const panel = page.getByRole('complementary', { name: 'Files' })
+    await panel.getByRole('treeitem', { name: 'logo.png' }).click()
+    const img = panel.locator('img[src^="blob:"]')
+    await expect(img).toHaveCount(1)
+    await expect.poll(() => decodedWidth(img)).toBe(5)
+    await expect(panel.getByText('5×3 ·')).toBeVisible()
+
+    await page.getByRole('group', { name: 'Side panel' }).getByRole('button', { name: 'Changes' }).click()
+    const changes = page.getByRole('complementary', { name: 'Changes' })
+    await changes.getByRole('region', { name: 'Changes' }).getByRole('button', { name: /logo\.png/ }).click()
+    await expect(changes.getByText('Before · Index')).toBeVisible()
+    await expect(changes.getByText('After · Working tree')).toBeVisible()
+    const sides = changes.locator('img[src^="blob:"]')
+    await expect(sides).toHaveCount(2)
+    await expect.poll(() => decodedWidth(sides.first())).toBe(4)
+    await expect.poll(() => decodedWidth(sides.last())).toBe(5)
+  })
+
+  test('an SVG shows as text until Image is picked', async ({ page }) => {
+    writeFileSync(path.join(repo, 'icon.svg'), SVG)
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await page.goto(`${link}?view=files`)
+
+    const panel = page.getByRole('complementary', { name: 'Files' })
+    await panel.getByRole('treeitem', { name: 'icon.svg' }).click()
+    await expect(panel.getByTestId('code-block')).toContainText('<svg')
+    await panel.getByRole('button', { name: 'Image', exact: true }).click()
+    const img = panel.locator('img[src^="blob:"]')
+    await expect(img).toHaveCount(1)
+    await expect.poll(() => decodedWidth(img)).toBeGreaterThan(0)
+    await expect.poll(async () => (await img.boundingBox())?.width ?? 0).toBeGreaterThan(100)
   })
 })

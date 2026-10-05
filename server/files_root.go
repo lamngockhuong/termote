@@ -102,6 +102,8 @@ type gitCall struct {
 	// Light ones (rev-parse, config) do neither, so a slow status never
 	// holds up resolving or browsing a root.
 	heavy bool
+	// stdin is fed to git (cat-file --batch); nil gives it none.
+	stdin []byte
 }
 
 // gitEnv is the server environment without anything that configures git or
@@ -244,6 +246,9 @@ func (g *gitRunner) exec(ctx context.Context, c gitCall, filters []string, args 
 	cmd := exec.CommandContext(run, g.bin, g.argv(c, filters, args)...)
 	cmd.Env = gitEnv()
 	cmd.Dir = c.root
+	if c.stdin != nil {
+		cmd.Stdin = bytes.NewReader(c.stdin)
+	}
 	// A child that outlives git (it should not have any) must not hold the
 	// pipes open past the timeout.
 	cmd.WaitDelay = time.Second

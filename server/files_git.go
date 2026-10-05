@@ -303,18 +303,7 @@ func (f *filesAPI) diff(ctx context.Context, root filesRoot, path, orig string, 
 	if err != nil {
 		return diffResponse{}, err
 	}
-	var entry *changeEntry
-	for i := range st.Entries {
-		e := &st.Entries[i]
-		side := e.Unstaged != "" || e.Conflict
-		if staged {
-			side = e.Staged != ""
-		}
-		if e.Path == path && e.Orig == orig && side {
-			entry = e
-			break
-		}
-	}
+	entry := findChange(st, path, orig, staged)
 	if entry == nil {
 		return diffResponse{}, errNotChanged
 	}
@@ -374,6 +363,23 @@ func (f *filesAPI) diff(ctx context.Context, root filesRoot, path, orig string, 
 	}
 	res.Truncated = cut
 	return res, nil
+}
+
+// findChange returns the status entry for path (and orig) when it is listed
+// on the side asked for, else nil. Only listed paths reach git, so a client
+// cannot steer it at anything else.
+func findChange(st gitStatus, path, orig string, staged bool) *changeEntry {
+	for i := range st.Entries {
+		e := &st.Entries[i]
+		side := e.Unstaged != "" || e.Conflict
+		if staged {
+			side = e.Staged != ""
+		}
+		if e.Path == path && e.Orig == orig && side {
+			return e
+		}
+	}
+	return nil
 }
 
 // deniedPath is denied for a git path ("/"-separated, relative to the root).

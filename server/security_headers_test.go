@@ -41,6 +41,9 @@ func TestContentSecurityPolicy(t *testing.T) {
 		"default-src 'self'",
 		"script-src 'self' 'sha256-x';",
 		"style-src 'self' 'unsafe-inline'",
+		// blob: is an image the page fetched itself (files/raw); data: a
+		// thumbnail drawn on a canvas.
+		"img-src 'self' data: blob:;",
 		"connect-src 'self' ws://box.local:7680 wss://box.local:7680 https://api.github.com;",
 		"worker-src 'self'",
 		"object-src 'none'",

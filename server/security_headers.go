@@ -53,7 +53,7 @@ func contentSecurityPolicy(scripts []string, host string) string {
 		"default-src 'self'",
 		"script-src " + strings.Join(append([]string{"'self'"}, scripts...), " "),
 		"style-src 'self' 'unsafe-inline'",
-		"img-src 'self' data:",
+		"img-src 'self' data: blob:",
 		"connect-src " + connect,
 		"worker-src 'self'",
 		"manifest-src 'self'",

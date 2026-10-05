@@ -42,7 +42,8 @@ func (e *rootChangedError) Error() string { return "root changed" }
 
 // requireFilesRead is where roles (#236, a view-only role) will be enforced on
 // the files routes. It allows everything today; a view-only role must at
-// least be refused reveal=1 and the contents of sensitive files.
+// least be refused reveal=1 (content, diff and raw all take it) and the
+// contents of sensitive files.
 func requireFilesRead(http.ResponseWriter, *http.Request) bool { return true }
 
 // filesAPI serves /api/mux/panes/{id}/files/*: read-only views of the files
@@ -55,6 +56,7 @@ type filesAPI struct {
 	git      *gitRunner
 	roots    *rootResolver
 	statuses *ttlCache[gitStatus] // root → git status
+	rawSlots chan struct{}        // raw requests running, server-wide
 }
 
 // filesDenyDirs returns the directories the files routes never serve, as
@@ -81,12 +83,14 @@ func registerFilesRoutes(mux *http.ServeMux, m Mux, allowed hostAllowlist, denyD
 	f := &filesAPI{
 		m: m, dirs: dirs, allowed: allowed, git: git, roots: newRootResolver(git),
 		statuses: newTTLCache[gitStatus](filesRootTTL),
+		rawSlots: make(chan struct{}, rawMaxRunning),
 		deny:     append(filesDenyDirs(systemDenyDirs...), filesDenyDirs(denyDirs...)...),
 	}
 	mux.HandleFunc("/api/mux/panes/{id}/files/tree", f.handleTree)
 	mux.HandleFunc("/api/mux/panes/{id}/files/content", f.handleContent)
 	mux.HandleFunc("/api/mux/panes/{id}/files/changes", f.handleChanges)
 	mux.HandleFunc("/api/mux/panes/{id}/files/diff", f.handleDiff)
+	mux.HandleFunc("/api/mux/panes/{id}/files/raw", f.handleRaw)
 	return f
 }
 
@@ -434,7 +438,10 @@ func isBinary(b []byte) bool {
 func (f *filesAPI) error(w http.ResponseWriter, op string, err error) {
 	var rc *rootChangedError
 	var ie inputError
+	var re *rawError
 	switch {
+	case errors.As(err, &re):
+		jsonErrorCode(w, re.code, re.msg, re.status)
 	case errors.As(err, &rc):
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusConflict)

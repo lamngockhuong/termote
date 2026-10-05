@@ -9,9 +9,9 @@ To see what an agent changed, you would otherwise type `ls`, `cat` and `git diff
 keyboard and read the output in a terminal. Termote has two read-only views for this:
 
 - **Files**: the pane's directory as a tree, opened one folder at a time. A text file opens with
-  line numbers and syntax highlighting.
+  line numbers and syntax highlighting, an image as the picture.
 - **Changes**: when the directory is in a git repository, the files git reports as changed, and
-  the diff of each one.
+  the diff of each one (for an image, the version before and after).
 
 Both are read-only: nothing can be edited, staged, discarded or committed from them.
 
@@ -69,7 +69,7 @@ Supported backends:
 | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | Text with colours                                             | A text file of up to 256 KiB, up to 5000 lines, no line over 2000 characters                     |
 | Plain text, no colours                                        | A larger text file (up to 1 MiB), a language not covered, or highlighting that took over 3 seconds |
-| `Not previewable (binary, special file or larger than 1 MiB)`  | A binary file, a file over 1 MiB, or something that is not a regular file                        |
+| `Not previewable (binary, special file or larger than 1 MiB)`  | A binary file that is not an image, a file over 1 MiB, or something that is not a regular file   |
 | `This file can't be shown`                                     | A path termote never serves (see below)                                                          |
 
 ## Markdown Preview
@@ -102,6 +102,42 @@ Links:
 In **Changes**, a changed Markdown file has the same eye button over its diff: it shows the
 current version of the file, rendered with the same rules. A deleted file has no preview. Its
 links open in Files.
+
+## Images
+
+A PNG, JPEG, GIF or WebP file (`.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`) opens as the picture,
+fit to the width of the view, over a checkerboard so transparent parts show. Under it are its
+size in pixels and its file size. The server checks the file's contents, not only its name: a
+file named `.png` that holds something else is not shown.
+
+An SVG file opens as its source first, like any text file. The **Image** button in its bar
+switches between the source and the picture; the choice is remembered on this device. In
+Changes, the same button switches between the diff and the pictures.
+
+In **Changes**, a changed image shows the version before and after, side by side on a desktop
+and one above the other on a phone:
+
+| Side                 | Before    | After          |
+| -------------------- | --------- | -------------- |
+| Not staged (Changes) | the index | the working tree |
+| Staged               | `HEAD`    | the index      |
+
+A new image shows only the after side (`Added`), a deleted one only the before side
+(`Deleted`). A renamed image reads the before side from its old path, shown next to the label.
+For a conflict, only the file as it is now in the working tree is shown. The pictures are read
+again when you press Refresh or when the file's status changes, not every 5 seconds.
+
+| Shown                                                          | Why                                                                     |
+| -------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `Larger than 10 MiB`                                            | Images over 10 MiB are not shown                                         |
+| `Too many pixels to show (over 40 megapixels)`                  | A PNG, JPEG or GIF over 40 million pixels, which a phone may not hold   |
+| `Not previewable (not a PNG, JPEG, GIF, WebP or SVG image)`     | The contents are not one of these types (or an SVG without an `<svg>`)  |
+| `Stored in Git LFS: only the pointer is in git`                 | git holds a Git LFS pointer, not the image; termote does not fetch it   |
+| `The image could not be decoded`                                | The browser could not read the file (damaged, or a format it lacks)     |
+| `Busy, try again`                                               | Several images are being read at once; the **Retry** button reads it again |
+
+A name that usually holds secrets asks first, as for text. An SVG opened by its address never
+runs a script: the server sends it with a policy that forbids scripts, and as a download.
 
 ## Changes
 
@@ -165,7 +201,8 @@ outside the root are refused.
 
 ## How git Is Run
 
-Termote runs `git status` and `git diff` itself to fill Changes. A repository's own settings
+Termote runs `git status` and `git diff` itself to fill Changes, and `git cat-file` to read the
+before and after versions of an image. A repository's own settings
 cannot make it run a program: file system monitors, filter drivers, external diff tools and text
 conversion are turned off for these commands, and submodules are skipped. At most two git
 commands run at a time, each limited to 10 seconds.

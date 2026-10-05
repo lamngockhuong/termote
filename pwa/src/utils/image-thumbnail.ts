@@ -1,6 +1,6 @@
 /**
- * A small preview of an image the user attached, as a data: URL: the page's
- * Content-Security-Policy allows `img-src 'self' data:`, not blob: URLs.
+ * A small preview of an image the user attached, as a data: URL: it stays
+ * valid as long as the chip shows it, with no blob: URL to revoke.
  */
 
 export const THUMBNAIL_SIZE = 128

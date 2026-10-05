@@ -9,9 +9,9 @@ Muốn biết agent đã sửa gì, thường bạn phải gõ `ls`, `cat`, `git
 đọc kết quả trong terminal. Termote có hai view chỉ đọc để xem nhanh:
 
 - **Files**: thư mục của pane dạng cây, mở từng thư mục một. File văn bản mở ra có số dòng và tô
-  màu cú pháp.
+  màu cú pháp, file ảnh mở ra thành hình.
 - **Changes**: khi thư mục nằm trong một repo git, danh sách file git báo đã đổi, kèm diff của
-  từng file.
+  từng file (với ảnh thì là bản trước và bản sau khi đổi).
 
 Cả hai đều chỉ đọc: từ đây không sửa file, không đưa thay đổi vào index, không bỏ thay đổi và không commit được.
 
@@ -66,7 +66,7 @@ Các bộ quản lý phiên hỗ trợ:
 | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | Chữ có màu                                                    | File văn bản tối đa 256 KiB, tối đa 5000 dòng, không dòng nào quá 2000 ký tự                     |
 | Chữ thường, không màu                                         | File văn bản lớn hơn (tới 1 MiB), ngôn ngữ chưa hỗ trợ, hoặc tô màu mất quá 3 giây              |
-| `Not previewable (binary, special file or larger than 1 MiB)`  | File nhị phân, file lớn hơn 1 MiB, hoặc thứ không phải file thường                               |
+| `Not previewable (binary, special file or larger than 1 MiB)`  | File nhị phân không phải ảnh, file lớn hơn 1 MiB, hoặc thứ không phải file thường                |
 | `This file can't be shown`                                     | Đường dẫn Termote không bao giờ trả về (xem bên dưới)                                            |
 
 ## Xem trước Markdown
@@ -99,6 +99,43 @@ Link:
 Trong **Changes**, file Markdown có thay đổi cũng có nút con mắt phía trên diff: bấm vào sẽ thấy
 phiên bản hiện tại của file, hiển thị theo cùng các quy tắc trên. File đã bị xoá thì không có bản
 xem trước. Link trong đó mở ở Files.
+
+## Ảnh
+
+File PNG, JPEG, GIF hoặc WebP (`.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`) mở ra thành hình, co vừa
+chiều rộng của view, trên nền kẻ ô vuông để thấy được phần trong suốt. Bên dưới hình ghi kích
+thước tính bằng điểm ảnh và dung lượng file. Server xem nội dung file chứ không chỉ dựa vào tên: file đặt
+tên `.png` mà bên trong là thứ khác thì không được hiện.
+
+File SVG mở ra ở dạng mã nguồn trước, như mọi file văn bản. Nút **Image** trên thanh của file
+chuyển qua lại giữa mã nguồn và hình; máy này sẽ nhớ lựa chọn đó. Trong Changes, cũng nút này
+chuyển qua lại giữa diff và hình.
+
+Trong **Changes**, ảnh có thay đổi hiện bản trước và bản sau: trên máy tính đặt cạnh nhau, trên
+điện thoại xếp chồng lên nhau.
+
+| Phía                         | Trước  | Sau              |
+| ---------------------------- | ------ | ---------------- |
+| Chưa đưa vào index (Changes) | index  | thư mục làm việc |
+| Đã đưa vào index (Staged)    | `HEAD` | index            |
+
+Ảnh mới chỉ có bản sau (ghi `Added`), ảnh đã xoá chỉ có bản trước (ghi `Deleted`). Ảnh đổi tên
+lấy bản trước từ đường dẫn cũ, đường dẫn này ghi cạnh nhãn. Khi có conflict, chỉ hiện file đang
+nằm trong thư mục làm việc. Hình được đọc lại khi bạn bấm Refresh hoặc khi trạng thái của file
+đổi, chứ không phải 5 giây một lần.
+
+| Hiện ra                                                        | Lý do                                                                    |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `Larger than 10 MiB`                                            | Ảnh lớn hơn 10 MiB không được hiện                                        |
+| `Too many pixels to show (over 40 megapixels)`                  | PNG, JPEG hoặc GIF quá 40 triệu điểm ảnh, điện thoại có thể không chứa nổi |
+| `Not previewable (not a PNG, JPEG, GIF, WebP or SVG image)`     | Nội dung không thuộc các loại này (hoặc file SVG không có thẻ `<svg>`)   |
+| `Stored in Git LFS: only the pointer is in git`                 | git chỉ giữ con trỏ Git LFS chứ không giữ ảnh; termote không tải ảnh về  |
+| `The image could not be decoded`                                | Trình duyệt không đọc được file (file hỏng, hoặc định dạng nó không hỗ trợ) |
+| `Busy, try again`                                               | Đang có nhiều ảnh được đọc cùng lúc; nút **Retry** đọc lại ảnh đó         |
+
+Tên file thường chứa bí mật thì được hỏi trước, giống như với văn bản. File SVG mở thẳng bằng địa
+chỉ của nó không bao giờ chạy script: server gửi file kèm một chính sách cấm script, và gửi dưới
+dạng file tải về.
 
 ## Changes
 
@@ -162,7 +199,8 @@ chối.
 
 ## Termote chạy git ra sao
 
-Termote tự chạy `git status` và `git diff` để lấy dữ liệu cho Changes. Cấu hình riêng của một repo
+Termote tự chạy `git status` và `git diff` để lấy dữ liệu cho Changes, và `git cat-file` để đọc
+bản trước và bản sau của ảnh. Cấu hình riêng của một repo
 không thể khiến Termote chạy chương trình nào: với các lệnh này, Termote tắt bộ theo dõi hệ thống
 file, filter driver, công cụ diff bên ngoài và bước chuyển đổi văn bản, đồng thời bỏ qua repo con.
 Mỗi lúc chạy tối đa hai lệnh git, mỗi lệnh giới hạn 10 giây.

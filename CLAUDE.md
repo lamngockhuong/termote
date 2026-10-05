@@ -44,7 +44,7 @@ termote/
 │   ├── herdr_observer_*.go # Stops `observe`/`control` (process group / Windows Job Object)
 │   ├── stream.go           # Terminal WebSocket (xterm.js stream)
 │   ├── agent*.go           # Chat view: Claude Code session, transcript, messages, dialogs
-│   ├── files*.go           # Files/Changes views: pane root, tree, contents, git status/diff
+│   ├── files*.go           # Files/Changes views: pane root, tree, contents, git status/diff, images
 │   ├── webui/              # Embeds the built PWA into the binary (build output, .gitkeep only in git)
 │   ├── install_layout.go   # Versioned install layout (versions/<v>, current pointer, prune)
 │   ├── release_tags.go     # Picks the newest stable 1.x GitHub tag
@@ -298,6 +298,9 @@ The `update` command:
 | `pwa/src/components/files-view.tsx`               | Files view: the pane's directory as a tree, opens a file      |
 | `pwa/src/components/changes-view.tsx`             | Changes view: git status grouped, opens a file's diff         |
 | `pwa/src/components/markdown-preview.tsx`         | Markdown file rendered in Files/Changes (links, code blocks)  |
+| `pwa/src/components/image-preview.tsx`            | One image of Files/Changes (sizes, why it cannot be shown)    |
+| `pwa/src/components/image-compare.tsx`            | Changes: an image's old and new versions side by side         |
+| `pwa/src/hooks/use-image-blob.ts`                 | Reads `files/raw` into a `blob:` URL, revokes replaced ones   |
 | `pwa/src/components/panel-toggles.tsx`            | Desktop header toggles of the side panel (Files, Changes)     |
 | `pwa/src/hooks/use-files.ts`                      | File tree of a pane's root, one store per pane                |
 | `pwa/src/hooks/use-git-changes.ts`                | Polls a pane's git status, one store per pane                 |
@@ -323,6 +326,7 @@ The `update` command:
 | `server/files_root.go`                            | Pane root (git toplevel), safe git runner                     |
 | `server/files_git.go`                             | git status and diff for the Changes view                      |
 | `server/files_sensitive.go`                       | Names of files that usually hold secrets                      |
+| `server/files_raw.go`                             | `files/raw`: an image's bytes (worktree, or a git version)    |
 | `server/agent_proc*.go`                           | Finds Claude Code (or Codex) under a tmux/psmux pane          |
 | `server/guard.go`                                 | Host allowlist + Origin/Content-Type write guard              |
 | `server/login.go`                                 | Sign-in form for browsers (iOS home-screen app has no prompt) |
@@ -430,7 +434,20 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   sensitive names (`.env`, keys, ...) return contents or a diff only with `reveal=1`. git runs
   without a shell, with `GIT_*`/`TERMOTE_*` stripped, hooks (`core.hooksPath` to the null
   device), index refresh on diff, fsmonitor, filter drivers, external diff and textconv off,
-  submodules ignored, 10s timeout, 2 at a time
+  submodules ignored, 10s timeout, 2 at a time.
+  `files/raw` serves an image's bytes (Files: the worktree file, streamed from the open handle;
+  Changes: `side=old|new` of an entry git status lists, picked like `diff`, never a client rev):
+  the index is always `:0:<path>` (git reads `:1:a.png` as stage 1), `HEAD:<orig‖path>` for the
+  staged old side, read by one `git cat-file --batch` (no filters, not `heavy`: no status/diff
+  slot, no backoff; a name with `\r` or `\n` → 400, missing → 404 `no_version`, time out → 503). The type
+  comes from the first bytes through `imageTypeOf` (shared with uploads: PNG/JPEG/GIF/WebP), plus
+  SVG only for a `.svg` path whose first element is `<svg`; 10 MiB (413 `too_large`), 40 MP for
+  PNG/JPEG/GIF (413 `too_many_pixels`), else 415 `not_image`, a Git LFS pointer 415
+  `lfs_pointer`, a sensitive name without `reveal=1` 403 `sensitive`. 4 at a time server-wide
+  (429 `busy`), 2-minute write deadline, `Cross-Origin-Resource-Policy: same-origin`,
+  `Cache-Control: no-store`; an SVG also gets a second CSP
+  (`sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:`) and
+  `Content-Disposition: attachment`
 - **Image uploads** (`POST /api/mux/uploads`): the PWA sends an image so an agent can read it by
   path (the host clipboard is empty when the image sits on a phone). Same auth, Host allowlist,
   `Sec-Fetch-Site`/`Origin` check and `requireWriteRole` as every write; the body is a raw
@@ -473,7 +490,7 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
 - **Content-Security-Policy** (`server/security_headers.go`): on every response, `script-src 'self'`
   plus the `sha256` of the inline theme script in the served `index.html` (hashed at startup,
   so a changed `TERMOTE_PWA_DIR` page needs a restart), `style-src 'self' 'unsafe-inline'`,
-  `img-src 'self' data:`, `connect-src 'self'` + `ws://`/`wss://` of the request's `Host` (a
+  `img-src 'self' data: blob:` (`blob:`: images the PWA read from `files/raw`), `connect-src 'self'` + `ws://`/`wss://` of the request's `Host` (a
   name or IPv4) + `https://api.github.com`, `worker-src`/`manifest-src 'self'`,
   `object-src 'none'`, `base-uri`/`form-action 'self'`, `frame-ancestors 'none'`; plus
   `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`.

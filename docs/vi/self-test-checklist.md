@@ -442,6 +442,22 @@ Chạy trên tmux (Linux/macOS) và Herdr; psmux (Windows) không có hai view n
 - [ ] File Markdown lớn hơn 256 KiB hiện `Too large to preview: shown as source`
 - [ ] Changes: nút "Preview" của file `.md` có thay đổi hiện bản hiện tại ở dạng xem trước
 
+### Ảnh
+
+- [ ] PNG, JPEG, GIF và WebP mở ra thành hình kèm "<rộng>×<cao> · <dung lượng>"; file văn bản đổi
+      tên thành `.png` hiện `Not previewable (not a PNG, JPEG, GIF, WebP or SVG image)`
+- [ ] Ảnh lớn hơn 10 MiB hiện `Larger than 10 MiB`; con trỏ Git LFS hiện
+      `Stored in Git LFS: only the pointer is in git`
+- [ ] File `.svg` mở ra ở dạng mã nguồn; nút "Image" hiện hình, lựa chọn này giữ cho file SVG
+      tiếp theo và sau khi tải lại; mở thẳng `/api/mux/panes/<id>/files/raw?path=<x>.svg` thì
+      trình duyệt tải file về và không chạy script nào
+- [ ] Tên nhạy cảm (`secrets.png`) hỏi `Show this file?` trước
+- [ ] Changes: ảnh đã sửa hiện "Before · Index" và "After · Working tree" (phía Staged thì là
+      "HEAD" và "Index"), trên máy tính đặt cạnh nhau, trên điện thoại xếp chồng; ảnh mới hiện "Added",
+      ảnh đã xoá hiện "Deleted"; ảnh đổi tên ở phía Staged ghi đường dẫn cũ
+- [ ] Changes: thay ảnh trong terminal rồi bấm Refresh thì thấy hình mới; chỉ chờ lượt poll
+      5 giây thì hình không đổi
+
 ### Panel Bên (Desktop)
 
 - [ ] Kéo cạnh trái của panel để đổi độ rộng, terminal chỉ khớp lại một lần khi thả chuột; nhấp

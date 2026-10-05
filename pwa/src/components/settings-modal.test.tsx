@@ -17,6 +17,7 @@ const DEFAULT_SETTINGS: Settings = {
   sidebarFilter: 'all',
   sortBlockedFirst: false,
   markdownPreview: true,
+  svgPreview: false,
   sidePanelWidth: 440,
 }
 

@@ -1,5 +1,11 @@
-import { ArrowLeft, Eye, Lock, WrapText } from 'lucide-react'
-import { Fragment, useEffect, useState } from 'react'
+import {
+  ArrowLeft,
+  Eye,
+  Image as ImageIcon,
+  Lock,
+  WrapText,
+} from 'lucide-react'
+import { Fragment, useCallback, useEffect, useState } from 'react'
 import { type FilesError, filesError } from '../hooks/use-files'
 import {
   type ChangeEntry,
@@ -9,7 +15,9 @@ import {
   fetchFileDiff,
   RequestError,
 } from '../hooks/use-mux-api'
+import { useSettings } from '../hooks/use-settings'
 import { keepOrder, TRUNCATE_START } from '../utils/files-format'
+import { isImagePath, isSvgPath } from '../utils/image-path'
 import { isMarkdownPath, type LinkPath } from '../utils/markdown-links'
 import { CODE_FRAME, codeText, GUTTER } from './code-block'
 import {
@@ -17,6 +25,7 @@ import {
   PREVIEW_MAX_BYTES,
   SensitiveConfirm,
 } from './file-viewer'
+import { ImageCompare } from './image-compare'
 import { ViewMessage } from './pane-dir-header'
 import { Banner } from './ui/banner'
 import { IconButton } from './ui/button'
@@ -88,10 +97,18 @@ export function DiffViewer({
   const version =
     entry && `${entry.staged}${entry.unstaged}${entry.conflict ?? ''}`
   const orig = entry?.orig
+  // An image (or an SVG the user wants as one) shows before and after
+  // through files/raw instead of a diff
+  const { settings, updateSetting } = useSettings()
+  const svg = isSvgPath(path)
+  const asImage = isImagePath(path) || (svg && settings.svgPreview)
+  // The server found the name sensitive although the status did not say so
+  const [imageSensitive, setImageSensitive] = useState(false)
+  const onImageSensitive = useCallback(() => setImageSensitive(true), [])
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: version and reload re-read the diff
   useEffect(() => {
-    if (!version) return
+    if (!version || asImage) return
     let live = true
     setState({ kind: 'loading' })
     fetchFileDiff(paneId, { path, orig }, { staged, root, reveal }).then(
@@ -112,13 +129,29 @@ export function DiffViewer({
     return () => {
       live = false
     }
-  }, [paneId, root, path, orig, staged, reveal, version, reload, onRootChanged])
+  }, [
+    paneId,
+    root,
+    path,
+    orig,
+    staged,
+    reveal,
+    version,
+    reload,
+    asImage,
+    onRootChanged,
+  ])
 
   const shown = waiting
     ? { kind: 'loading' as const }
-    : version
-      ? state
-      : { kind: 'gone' as const }
+    : !version
+      ? { kind: 'gone' as const }
+      : !asImage
+        ? state
+        : (entry?.sensitive || imageSensitive) && !reveal
+          ? { kind: 'sensitive' as const }
+          : // version is only set with an entry
+            { kind: 'image' as const, entry: entry as ChangeEntry, version }
   // Nothing to render of a file this side deletes
   const side = staged ? entry?.staged : entry?.unstaged
   // Offered once the diff shows (a sensitive file asked first), and kept
@@ -162,16 +195,30 @@ export function DiffViewer({
             <Eye size={15} aria-hidden="true" />
           </IconButton>
         )}
-        <IconButton
-          size="sm"
-          onClick={() => setWrap((w) => !w)}
-          aria-label="Wrap lines"
-          aria-pressed={wrap}
-          title="Wrap lines"
-          className={wrap ? 'text-accent' : ''}
-        >
-          <WrapText size={15} aria-hidden="true" />
-        </IconButton>
+        {svg && (
+          <IconButton
+            size="sm"
+            onClick={() => updateSetting('svgPreview', !asImage)}
+            aria-label="Image"
+            aria-pressed={asImage}
+            title={asImage ? 'Show the diff' : 'Show as images'}
+            className={asImage ? 'text-accent' : ''}
+          >
+            <ImageIcon size={15} aria-hidden="true" />
+          </IconButton>
+        )}
+        {!asImage && (
+          <IconButton
+            size="sm"
+            onClick={() => setWrap((w) => !w)}
+            aria-label="Wrap lines"
+            aria-pressed={wrap}
+            title="Wrap lines"
+            className={wrap ? 'text-accent' : ''}
+          >
+            <WrapText size={15} aria-hidden="true" />
+          </IconButton>
+        )}
       </div>
       {shown.kind === 'loading' && !previewing && (
         <ViewMessage>Loading…</ViewMessage>
@@ -194,6 +241,20 @@ export function DiffViewer({
           wrap={wrap}
           onFollow={onFollow}
           notify={notify}
+        />
+      )}
+      {shown.kind === 'image' && (
+        <ImageCompare
+          paneId={paneId}
+          entry={shown.entry}
+          staged={staged}
+          root={root}
+          reveal={reveal}
+          version={shown.version}
+          reload={reload}
+          oneColumn={isMobile}
+          onRootChanged={onRootChanged}
+          onSensitive={onImageSensitive}
         />
       )}
       {shown.kind === 'diff' && !previewing && (
