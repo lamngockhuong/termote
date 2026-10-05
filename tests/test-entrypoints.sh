@@ -223,6 +223,7 @@ test_container_runtime() {
     runtime_backend "$image" tmux
     runtime_backend "$image" herdr
     runtime_unknown_mux "$image"
+    runtime_generated_password "$image"
 }
 
 # runtime_backend IMAGE MUX runs the image with TERMOTE_MUX=MUX.
@@ -335,6 +336,22 @@ runtime_unknown_mux() {
         pass "TERMOTE_MUX=zellij exits $code with an error"
     else
         fail "unknown mux" "exit != 0 + error" "exit $code: $(echo "$out" | tail -1)"
+    fi
+}
+
+# runtime_generated_password IMAGE: run as the host uid without TERMOTE_PASS
+# (docker compose, docker run --user), the generated password goes to a file
+# in the home, not to the log. The unknown backend stops it right after.
+runtime_generated_password() {
+    local image="$1" rt="$RT" out
+    echo ""
+    echo "--- generated password, host uid ---"
+    out=$("$rt" run --rm --user 1000:1000 -e TERMOTE_MUX=zellij "$image" 2>&1)
+    if [[ "$out" == *"Password: in /home/termote/.config/termote/password"* ]] &&
+        ! grep -qE 'Password: [A-Za-z0-9]{12}$' <<<"$out"; then
+        pass "generated password kept out of the log"
+    else
+        fail "generated password" "in a file under .config" "$(grep 'Password:' <<<"$out")"
     fi
 }
 

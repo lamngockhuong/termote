@@ -586,7 +586,9 @@ stops the container. The Herdr binary is pinned by version and sha256 per arch i
 The container runs as the host uid, which cannot create directories in the root-owned
 `/home/termote`; the image creates `/home/termote/.cache` mode 1777 (sticky, like `/tmp`) so
 `termote serve` can create its upload dir `~/.cache/termote/uploads` (0700, its own). The
-agent runs in the same container, so the path it is given is valid there.
+agent runs in the same container, so the path it is given is valid there. `/home/termote/.config`
+is 1777 too, so a password the entrypoint generates (no `TERMOTE_PASS`) goes to
+`~/.config/termote/password` (0600) rather than to the container log.
 
 ### Native
 

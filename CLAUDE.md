@@ -466,7 +466,8 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   Errors carry a JSON `code`. The Chat view sends the returned ids in `agent/message` (see
   Agent chat). `Caps.uploads` tells the PWA (snapshot); a view-only client
   offers no upload, enforced in the UI only while `requireWriteRole` is a stub. The container
-  creates `/home/termote/.cache` mode 1777 so the host uid can create its upload dir
+  creates `/home/termote/.cache` and `/home/termote/.config` mode 1777 so the host uid can
+  create its upload dir and the generated password's file (kept out of the log)
 - Exclude sensitive dirs (.ssh, .gnupg, .aws, .config/gcloud) from container volume mounts
   (warned at `container up`)
 - Serve mode uses constant-time comparison for password verification
