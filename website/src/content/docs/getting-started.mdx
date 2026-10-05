@@ -82,6 +82,34 @@ rescue an install that no longer runs. Your config is kept either way.
 `GH_TOKEN` or `GITHUB_TOKEN`, when set, only raise the GitHub API rate limit the installer uses to find the
 newest release.
 
+### Pre-releases
+
+The installer, like `termote update`, only picks a pre-release (`X.Y.Z-rc.N`) when you name it with `TERMOTE_VERSION`
+(or `termote update --version X.Y.Z-rc.N`). Without it, you get the newest **published** stable 1.x release: a
+release still waiting to be published already has its tag, but none of its files can be downloaded yet. The same
+goes for a pre-release you name: until it is published, the install fails with `still publishing`.
+
+This site serves the installer of the last stable release. To run a pre-release's own installer, take it from its tag
+and still name the version:
+
+<Tabs>
+  <TabItem label="Linux / macOS">
+
+    ```bash
+    curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/v1.13.0-rc.1/scripts/install.sh | TERMOTE_VERSION=1.13.0-rc.1 sh
+    ```
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+
+    ```powershell
+    $env:TERMOTE_VERSION='1.13.0-rc.1'; irm https://raw.githubusercontent.com/lamngockhuong/termote/v1.13.0-rc.1/scripts/install.ps1 | iex
+    ```
+  </TabItem>
+</Tabs>
+
+To go back to a stable release, run `termote update`. Until the final `X.Y.Z` is out, this is a downgrade (a
+pre-release counts as newer than the release before it), which `update` makes with a warning.
+
 <Aside type="caution" title="Coming from Termote 0.x">
   There is no upgrade from 0.x: 1.0 does not read the config or anything else 0.x left behind. Uninstall 0.x
   first, following the archived [0.x native](/0.x/installation/native/#uninstall) or

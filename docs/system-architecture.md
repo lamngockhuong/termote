@@ -741,7 +741,7 @@ termote update --force           # Force reinstall current version
 
 **Update flow** (`server/cli_update.go`):
 
-1. Fetch the newest stable 1.x release tag from GitHub (or use `--version` to pin)
+1. Fetch the newest published stable 1.x release from GitHub (the releases list, not the tags: a draft still waiting for approval already has its tag) (or use `--version` to pin)
 2. Download the archive and its checksum (mandatory), verify it; from 1.10.0 the checksum comes
    from the release's `checksums.txt`, whose Ed25519 signature (`checksums.txt.sig`) must verify
    with the key pinned in the binary (`server/release_sign.go`)

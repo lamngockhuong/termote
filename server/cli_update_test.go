@@ -131,7 +131,8 @@ func TestStripTopDirRejectsBackslashAndEscapes(t *testing.T) {
 	}
 }
 
-// fakeReleases serves the tag list and release assets like GitHub does.
+// fakeReleases serves the release list and release assets like GitHub does.
+// A tag ending in ":draft" or ":pre" is listed as a draft or a pre-release.
 type fakeReleases struct {
 	tags   []string
 	assets map[string][]byte // "v1.0.1/termote-1.0.1-linux-amd64.tar.gz" -> body
@@ -152,10 +153,12 @@ func updateGOOS() string {
 }
 
 func (g *fakeReleases) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path == "/repos/"+updateRepo+"/tags" {
+	if r.URL.Path == "/repos/"+updateRepo+"/releases" {
 		var parts []string
 		for _, t := range g.tags {
-			parts = append(parts, fmt.Sprintf(`{"name":%q}`, t))
+			name, kind, _ := strings.Cut(t, ":")
+			parts = append(parts, fmt.Sprintf(`{"tag_name":%q,"name":%q,"draft":%t,"prerelease":%t,"assets":[{"name":"x"}]}`,
+				name, name, kind == "draft", kind == "pre"))
 		}
 		fmt.Fprint(w, "["+strings.Join(parts, ",")+"]")
 		return
@@ -260,7 +263,7 @@ func setupUpdate(t *testing.T) (*testCLI, *fakeReleases, *fakeService) {
 	port := freePort(t)
 	tc.saveConfig(savedConfig{Port: port, NoAuth: true, Mux: "tmux", AllowHosts: []string{"box.lan"}})
 
-	gh := &fakeReleases{tags: []string{"v0.1.0", "v1.0.0-rc.1", "v1.0.0", "v1.0.1", "latest"}, assets: map[string][]byte{}, goos: tc.goos}
+	gh := &fakeReleases{tags: []string{"v0.1.0", "v1.0.0-rc.1", "v1.0.0", "v1.0.1", "latest", "v1.0.2:draft", "v1.0.3:pre"}, assets: map[string][]byte{}, goos: tc.goos}
 	gh.publish(t, "1.0.1", "good")
 	srv := httptest.NewServer(gh)
 	t.Cleanup(srv.Close)
@@ -562,5 +565,41 @@ func TestUpdateRefusesOversizedDownload(t *testing.T) {
 	}
 	if tc.currentVersion() != "1.0.0" {
 		t.Errorf("current = %q", tc.currentVersion())
+	}
+}
+
+// TestLatestReleaseErrors covers the token header and each way the release
+// list can fail: a rate limit, an unreachable API and a body that is not a
+// release list.
+func TestLatestReleaseErrors(t *testing.T) {
+	tc := newTestCLI(t, "linux")
+	var status int
+	var body, auth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auth = r.Header.Get("Authorization")
+		if status != 0 {
+			w.WriteHeader(status)
+		}
+		fmt.Fprint(w, body)
+	}))
+	t.Cleanup(srv.Close)
+	tc.http, tc.apiBase = srv.Client(), srv.URL
+
+	tc.env["GITHUB_TOKEN"] = "tok"
+	body = `[{"tag_name":"v1.2.0","draft":true},{"tag_name":"v1.1.0"}]`
+	if v, err := tc.latestRelease(); err != nil || v != "1.1.0" || auth != "Bearer tok" {
+		t.Fatalf("token: %q %v %q", v, err, auth)
+	}
+	status = http.StatusTooManyRequests
+	if _, err := tc.latestRelease(); err == nil || !strings.Contains(err.Error(), "rate limit") {
+		t.Fatalf("rate limit: %v", err)
+	}
+	status, body = 0, `{"message":"x"}`
+	if _, err := tc.latestRelease(); err == nil || !strings.Contains(err.Error(), "read the release list") {
+		t.Fatalf("bad body: %v", err)
+	}
+	tc.apiBase = "http://127.0.0.1:1"
+	if _, err := tc.latestRelease(); err == nil || !strings.Contains(err.Error(), "cannot list the releases") {
+		t.Fatalf("unreachable: %v", err)
 	}
 }

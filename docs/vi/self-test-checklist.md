@@ -22,7 +22,7 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 - [ ] `irm https://termote.ohnice.app/install.ps1 | iex` hoàn thành không lỗi (Windows)
 - [ ] Chỉ cần curl/tar/sha256sum (hoặc PowerShell trên Windows); không hỏi sudo/quyền quản trị
 - [ ] Kiểm tra `.sha256` của gói tải về; một bản tải hỏng bị từ chối, không được cài
-- [ ] Chọn đúng tag ổn định 1.x mới nhất (không bao giờ chọn tag 0.x hay bản thử nghiệm)
+- [ ] Chọn đúng bản ổn định 1.x mới nhất đã phát hành (không bao giờ chọn bản 0.x, bản thử nghiệm, hay bản nháp mà release-please đã đẩy tag lên)
 - [ ] `TERMOTE_VERSION=X.Y.Z` (hoặc `-rc.N`) cố định/khôi phục đúng phiên bản đó
 - [ ] Chạy lại trình cài đặt trên một bản đã cài in ra `termote update` và không đổi gì cả
 - [ ] Trình cài đặt không bao giờ tự khởi động server; nó chỉ in ra `termote start`

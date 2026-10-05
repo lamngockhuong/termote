@@ -168,7 +168,7 @@ stable release (not a pre-release) has been published, and it can be run by hand
 Actions for a docs-only fix. This keeps the site's root docs — and the installer scripts it
 serves at `https://termote.ohnice.app/install.sh`/`install.ps1` — on the version
 `releases/latest` installs, while `main` runs ahead of it. Test a pre-release installer from
-the raw GitHub tag URL instead (see [`getting-started.md`](getting-started.md)).
+the raw GitHub tag URL instead (see [`deployment-guide.md`](deployment-guide.md#pre-releases)).
 
 ## Maintaining 0.x
 
