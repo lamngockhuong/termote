@@ -39,7 +39,7 @@ import { useGestures } from './hooks/use-gestures'
 import { useKeyboardVisible } from './hooks/use-keyboard-visible'
 import { useLocalSessions } from './hooks/use-local-sessions'
 import { useIsMobile } from './hooks/use-media-query'
-import { selectTab } from './hooks/use-mux-api'
+import { logout, selectTab } from './hooks/use-mux-api'
 import { useSettings } from './hooks/use-settings'
 import { useSidebarCollapsed } from './hooks/use-sidebar-collapsed'
 import { useUpdateCheck } from './hooks/use-update-check'
@@ -155,6 +155,18 @@ export default function App({
     },
     [],
   )
+  // Ends the session on the server, then shows the sign-in page.
+  const handleLogout = useCallback(async () => {
+    try {
+      if (await logout()) {
+        window.location.assign('/login')
+        return
+      }
+    } catch {
+      // Shown below, like a refusal.
+    }
+    showToast('Could not log out. Try again', 'danger')
+  }, [showToast])
   const onDriveLost = useCallback(
     (reason: 'taken-over' | 'failed') =>
       showToast(
@@ -821,6 +833,7 @@ export default function App({
               onOpenHelp: () => setHelpOpen(true),
               onOpenSettings: () => setSettingsOpen(true),
               onCopyLink: currentLink ? copyLink : undefined,
+              onLogout: mux.caps.auth ? handleLogout : undefined,
             }}
           />
           {readOnly && (

@@ -70,6 +70,9 @@ type Caps struct {
 	// Uploads: the server has a usable upload dir (/api/mux/uploads). Set
 	// by the snapshot route, not by the backend.
 	Uploads bool `json:"uploads"`
+	// Auth: sign-in is on, so the PWA offers Log out. Set by the snapshot
+	// route, from the request basicAuth let through.
+	Auth bool `json:"auth"`
 }
 
 type Snapshot struct {
@@ -152,6 +155,7 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *u
 		snap.Backend = m.Name()
 		snap.Caps = m.Caps()
 		snap.Caps.Uploads = uploads != nil
+		snap.Caps.Auth = authenticated(r.Context())
 		if snap.Groups == nil {
 			snap.Groups = []Group{}
 		}

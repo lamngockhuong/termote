@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ThemeProvider } from '../contexts/theme-context'
 import { SettingsMenu } from './settings-menu'
 
+const mockLogout = vi.fn(async () => true)
+vi.mock('../hooks/use-mux-api', () => ({ logout: () => mockLogout() }))
+
 function renderWithTheme(props = {}) {
   const defaultProps = {
     onOpenAbout: vi.fn(),
@@ -157,6 +160,20 @@ describe('SettingsMenu', () => {
     expect(screen.getByRole('menu')).toBeInTheDocument()
   })
 
+  it('Log out is offered only when given, and calls onLogout', () => {
+    const { unmount } = renderWithTheme()
+    open()
+    expect(
+      screen.queryByRole('menuitem', { name: 'Log out' }),
+    ).not.toBeInTheDocument()
+    unmount()
+    const onLogout = vi.fn()
+    renderWithTheme({ onLogout })
+    open()
+    fireEvent.click(item('Log out'))
+    expect(onLogout).toHaveBeenCalledTimes(1)
+  })
+
   it('Copy link calls onCopyLink', () => {
     const onCopyLink = vi.fn()
     renderWithTheme({ onCopyLink })
@@ -176,6 +193,22 @@ describe('SettingsMenu', () => {
     await waitFor(() => {
       expect(window.location.reload).toHaveBeenCalled()
     })
+  })
+
+  it('clear cache ends the session on the server before reloading', async () => {
+    renderWithTheme()
+    open()
+    fireEvent.click(item('Clear cache & reload'))
+    await waitFor(() => expect(window.location.reload).toHaveBeenCalled())
+    expect(mockLogout).toHaveBeenCalledTimes(1)
+  })
+
+  it('clear cache still reloads when the logout fails', async () => {
+    mockLogout.mockRejectedValueOnce(new Error('offline'))
+    renderWithTheme()
+    open()
+    fireEvent.click(item('Clear cache & reload'))
+    await waitFor(() => expect(window.location.reload).toHaveBeenCalled())
   })
 
   it('disables clear cache button while clearing', async () => {

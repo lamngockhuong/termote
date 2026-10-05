@@ -16,6 +16,7 @@ import {
   fetchSnapshot,
   fetchTerminalToken,
   fetchTranscript,
+  logout,
   REQUEST_TIMEOUT_MS,
   RequestError,
   renameTab,
@@ -124,6 +125,25 @@ describe('mux API client', () => {
       name: 'TimeoutError',
     })
     expect(timeout).toHaveBeenCalledWith(REQUEST_TIMEOUT_MS)
+  })
+
+  it('logout posts JSON to the logout route and reads its status', async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = []
+    const statuses = [204, 404]
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        calls.push({ url, init })
+        return new Response(null, { status: statuses[calls.length - 1] })
+      }),
+    )
+    expect(await logout()).toBe(true)
+    expect(calls[0].url).toBe('/api/mux/logout')
+    expect(calls[0].init?.method).toBe('POST')
+    expect(calls[0].init?.headers).toEqual(JSON_HEADERS)
+    expect(calls[0].init?.body).toBe('{}')
+    expect(calls[0].init?.signal).toBeInstanceOf(AbortSignal)
+    expect(await logout()).toBe(false)
   })
 
   it('selectTab sends JSON POST to the tab select route', async () => {

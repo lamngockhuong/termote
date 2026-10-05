@@ -203,6 +203,13 @@ func (s *tokenStore) validate(token string) bool {
 	return true
 }
 
+// revoke ends token before it expires.
+func (s *tokenStore) revoke(token string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.tokens, token)
+}
+
 // maxStreamTokens caps unused stream tokens an authenticated client can pile
 // up.
 const maxStreamTokens = 32
@@ -560,6 +567,15 @@ const (
 	maxSessions = 256
 )
 
+// authCtxKey marks a request basicAuth let through.
+type authCtxKey struct{}
+
+// authenticated reports whether sign-in is on and the request passed it.
+func authenticated(ctx context.Context) bool {
+	ok, _ := ctx.Value(authCtxKey{}).(bool)
+	return ok
+}
+
 // basicAuth wraps a handler with HTTP basic authentication.
 // After successful basic auth, sets a session cookie to avoid re-prompting
 // (fixes mobile browsers not persisting basic auth across page loads).
@@ -665,6 +681,33 @@ func basicAuth(user, pass string, next http.Handler) http.Handler {
 		http.Redirect(w, r, next, http.StatusSeeOther)
 	}
 
+	// logout ends the cookie's session, if any, and expires the cookie. It
+	// needs no credentials and counts as no failed login: without a valid
+	// session it ends nothing.
+	logout := func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.Header().Set("Allow", http.MethodPost)
+			jsonError(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if cookie, err := r.Cookie(sessionCookieName); err == nil {
+			sessions.revoke(cookie.Value)
+		}
+		http.SetCookie(w, &http.Cookie{
+			Name:     sessionCookieName,
+			Path:     "/",
+			MaxAge:   -1,
+			HttpOnly: true,
+			SameSite: http.SameSiteStrictMode,
+			Secure:   requestIsHTTPS(r),
+		})
+		w.WriteHeader(http.StatusNoContent)
+	}
+	// serveSignedIn serves a request that passed sign-in.
+	serveSignedIn := func(w http.ResponseWriter, r *http.Request) {
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), authCtxKey{}, true)))
+	}
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Skip auth for PWA public paths (manifest, service worker)
 		if isPWAPublicPath(r.URL.Path) {
@@ -681,10 +724,14 @@ func basicAuth(user, pass string, next http.Handler) http.Handler {
 			login(w, r, ip)
 			return
 		}
+		if r.URL.Path == logoutPath {
+			logout(w, r)
+			return
+		}
 
 		// Check session cookie first (mobile browsers drop basic auth)
 		if hasSession(r) {
-			next.ServeHTTP(w, r)
+			serveSignedIn(w, r)
 			return
 		}
 
@@ -709,7 +756,7 @@ func basicAuth(user, pass string, next http.Handler) http.Handler {
 		}
 		limiter.refund(ip)
 		startSession(w, r)
-		next.ServeHTTP(w, r)
+		serveSignedIn(w, r)
 	})
 }
 
