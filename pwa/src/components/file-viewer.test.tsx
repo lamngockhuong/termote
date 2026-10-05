@@ -362,7 +362,8 @@ describe('FileViewer: images', () => {
     expect(
       await screen.findByText('This file may contain secrets'),
     ).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Show' }))
+    // The dialog opens in an effect after the message renders.
+    fireEvent.click(await screen.findByRole('button', { name: 'Show' }))
     expect(await screen.findByRole('img')).toBeInTheDocument()
     expect(mockImage.mock.calls[1][2]).toMatchObject({ reveal: true })
   })
