@@ -254,14 +254,21 @@ test_real_binary() {
 }
 
 # A copy of install.sh pinning a key made here, whose private half signs the
-# fake releases (the real key signs only real releases).
+# fake releases (the real key signs only real releases). The PEM is read
+# from a file: BSD awk refuses a newline in a -v value.
 setup_signing() {
     openssl genpkey -algorithm ed25519 -out "$TMP/key.pem" 2>/dev/null
+    openssl pkey -in "$TMP/key.pem" -pubout >"$TMP/pub.pem"
     SIGNED_SCRIPT="$TMP/install-signed.sh"
-    awk -v pem="$(openssl pkey -in "$TMP/key.pem" -pubout)" '
-        /^# BEGIN RELEASE KEY/ { print; print "RELEASE_KEY='"'"'" pem "'"'"'"; skip = 1; next }
+    awk -v q="'" '
+        FNR == NR { pem = pem (pem == "" ? "" : "\n") $0; next }
+        /^# BEGIN RELEASE KEY/ { print; print "RELEASE_KEY=" q pem q; skip = 1; next }
         /^# END RELEASE KEY/ { skip = 0 }
-        !skip' "$INSTALL_SCRIPT" >"$SIGNED_SCRIPT"
+        !skip' "$TMP/pub.pem" "$INSTALL_SCRIPT" >"$SIGNED_SCRIPT"
+    grep -q "BEGIN PUBLIC KEY" "$SIGNED_SCRIPT" || { fail "signed install.sh copy" "the test key" "$(head -c 200 "$SIGNED_SCRIPT")"; return 1; }
+    # The installer runs with PATH=$FAKE_PATH:/usr/bin:/bin, where macOS has
+    # LibreSSL: give it the OpenSSL 3 this test found.
+    ln -sf "$(command -v openssl)" "$FAKE_PATH/openssl"
 }
 
 # sign_release <version> [good|otherkey|nosig|unlisted]: checksums.txt and
@@ -285,7 +292,7 @@ test_signed_releases() {
         echo "skipped: needs OpenSSL 3 to make the test key"
         return
     fi
-    setup_signing
+    setup_signing || return
     local saved="$INSTALL_SCRIPT"
     INSTALL_SCRIPT="$SIGNED_SCRIPT"
     new_home signed
@@ -309,6 +316,7 @@ test_signed_releases() {
     # was not checked.
     new_home signed-libressl
     sign_release 1.11.0
+    rm -f "$FAKE_PATH/openssl"
     printf '#!/bin/sh\necho "LibreSSL 3.3.6"\n' >"$FAKE_PATH/openssl"
     chmod +x "$FAKE_PATH/openssl"
     run_install TERMOTE_VERSION=1.11.0
