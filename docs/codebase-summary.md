@@ -51,21 +51,22 @@ Entry points by concern. Behavior lives in the code and its tests; routes, limit
 described in [`system-architecture.md`](system-architecture.md), conventions in
 [`code-standards.md`](code-standards.md).
 
-| Concern                                      | Start at                                                                                            |
-| -------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| App shell: layout, header, menus, deep links | `pwa/src/App.tsx`, `components/app-header.tsx`, `utils/deep-link.ts`                                |
-| Terminal stream and keys                     | `components/terminal-view.tsx`, `hooks/use-term-socket.ts`, `utils/terminal-bridge.ts`              |
-| Sessions (group → tab → pane)                | `hooks/use-local-sessions.ts`, `hooks/use-mux-api.ts`, `components/session-*.tsx`, `pane-strip.tsx` |
-| Mobile input                                 | `components/keyboard-toolbar.tsx`, `quick-actions-menu.tsx`, `hooks/use-gestures.ts`                |
-| Settings                                     | `hooks/use-settings.ts` (keys and defaults), `components/settings-modal.tsx`                        |
-| Pane views (terminal, chat, files, changes)  | `pwa/src/app-views.ts`, then `components/chat-*`, `files-view.tsx`, `changes-view.tsx`              |
-| Images in Files and Changes                  | `components/image-preview.tsx`, `image-compare.tsx`, `hooks/use-image-blob.ts`                      |
-| Editing a file in Files and Changes          | `components/file-editor.tsx`, `file-viewer.tsx`, `hooks/use-files.ts` (`useFileDraft`)              |
-| Server entry, auth, guards                   | `server/main.go`, `serve.go`, `guard.go`, `security_headers.go`                                     |
-| Mux backends                                 | `server/mux.go` (interface + routes), `mux_tmux.go`, `mux_herdr.go`                                 |
-| Chat view (server)                           | `server/agent.go`, then `agent_claude*.go` / `agent_codex*.go`, `agent_input.go`                    |
-| Files and Changes (server)                   | `server/files.go`, `files_root.go`, `files_git.go`, `files_raw.go`, `files_write.go`                |
-| CLI                                          | `server/cli.go` (dispatch), then the `cli_<command>.go` file (see [CLI](#cli-go-servercligo))       |
+| Concern                                      | Start at                                                                                                |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| App shell: layout, header, menus, deep links | `pwa/src/App.tsx`, `components/app-header.tsx`, `utils/deep-link.ts`                                    |
+| Terminal stream and keys                     | `components/terminal-view.tsx`, `hooks/use-term-socket.ts`, `utils/terminal-bridge.ts`                  |
+| Sessions (group → tab → pane)                | `hooks/use-local-sessions.ts`, `hooks/use-mux-api.ts`, `components/session-*.tsx`, `pane-strip.tsx`     |
+| Mobile input                                 | `components/keyboard-toolbar.tsx`, `quick-actions-menu.tsx`, `hooks/use-gestures.ts`                    |
+| Settings                                     | `hooks/use-settings.ts` (keys and defaults), `components/settings-modal.tsx`                            |
+| Pane views (terminal, chat, files, changes)  | `pwa/src/app-views.ts`, then `components/chat-*`, `files-view.tsx`, `changes-view.tsx`                  |
+| Images in Files and Changes                  | `components/image-preview.tsx`, `image-compare.tsx`, `hooks/use-image-blob.ts`                          |
+| Editing a file in Files and Changes          | `components/file-editor.tsx`, `file-viewer.tsx`, `hooks/use-files.ts` (`useFileDraft`)                  |
+| Creating a file in Files                     | `components/new-file-dialog.tsx`, `files-view.tsx`, `hooks/use-files.ts` (`created`)                    |
+| Server entry, auth, guards                   | `server/main.go`, `serve.go`, `guard.go`, `security_headers.go`                                         |
+| Mux backends                                 | `server/mux.go` (interface + routes), `mux_tmux.go`, `mux_herdr.go`                                     |
+| Chat view (server)                           | `server/agent.go`, then `agent_claude*.go` / `agent_codex*.go`, `agent_input.go`                        |
+| Files and Changes (server)                   | `server/files.go`, `files_root.go`, `files_git.go`, `files_raw.go`, `files_write.go`, `files_create.go` |
+| CLI                                          | `server/cli.go` (dispatch), then the `cli_<command>.go` file (see [CLI](#cli-go-servercligo))           |
 
 Two things the code does not explain on its own:
 

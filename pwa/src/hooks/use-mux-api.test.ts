@@ -4,6 +4,7 @@ import {
   answerAgentPrompt,
   closePane,
   closeTab,
+  createFile,
   createTab,
   fetchAgentCommands,
   fetchAgentPrompt,
@@ -501,6 +502,42 @@ describe('files API client', () => {
         reveal: true,
       }),
     ).rejects.toMatchObject({ status: 409, code: 'changed' })
+  })
+
+  it('creates a file with POST, the root in the query, with a timeout', async () => {
+    const created = { root: '/r', path: 'd/n.md' }
+    const { calls } = mockFetch({ body: created, status: 201 })
+    const timeout = vi.spyOn(AbortSignal, 'timeout')
+    expect(
+      await createFile('%1', { root: '/r', path: 'd/n.md', reveal: false }),
+    ).toEqual(created)
+    expect(calls[0].url).toBe('/api/mux/panes/%251/files/create?root=%2Fr')
+    expect(calls[0].init?.method).toBe('POST')
+    expect(new Headers(calls[0].init?.headers).get('Content-Type')).toBe(
+      'application/json',
+    )
+    expect(JSON.parse(calls[0].init?.body as string)).toEqual({
+      path: 'd/n.md',
+      reveal: false,
+    })
+    expect(timeout).toHaveBeenCalledWith(REQUEST_TIMEOUT_MS)
+    timeout.mockRestore()
+  })
+
+  it('a refused create throws its code, or the root it moved to', async () => {
+    mockFetch(
+      { body: { error: 'x', code: 'exists' }, status: 409 },
+      { body: { error: 'root changed', root: '/n' }, status: 409 },
+    )
+    const create = { root: '/r', path: 'a', reveal: true }
+    await expect(createFile('1', create)).rejects.toMatchObject({
+      status: 409,
+      code: 'exists',
+    })
+    await expect(createFile('1', create)).rejects.toMatchObject({
+      status: 409,
+      root: '/n',
+    })
   })
 
   it('reads the changes and the diff of one side of an entry', async () => {

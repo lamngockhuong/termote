@@ -399,8 +399,8 @@ export async function answerAgentPrompt(
   if (!res.ok) throw await requestError(res)
 }
 
-// Files and changes (/api/mux/panes/{id}/files/*): reads, and saves of a
-// text file (saveFileContent). Shapes match
+// Files and changes (/api/mux/panes/{id}/files/*): reads, saves of a text
+// file (saveFileContent) and creates of an empty one (createFile). Shapes match
 // server/files.go and server/files_git.go. Every response carries the pane's
 // root; a request sent with the root it saw gets a 409 with the new one once
 // the pane's directory moves.
@@ -567,6 +567,33 @@ export async function saveFileContent(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(SAVE_TIMEOUT_MS),
+  })
+  if (!res.ok) throw await requestError(res)
+  return res.json()
+}
+
+export interface CreatedFile {
+  root: string
+  path: string
+}
+
+// Creates path under root as an empty file, with the directories missing
+// above it; never replaces anything. The text then goes through
+// saveFileContent. A refusal is a RequestError with the server's code
+// (exists, not_directory, symlink, not_allowed, sensitive, permission,
+// invalid_name, busy), or a 409 with the root once it moved; a timeout or a
+// dropped connection throws something else, after which the file may or may
+// not have been made.
+export async function createFile(
+  paneId: string,
+  create: { root: string; path: string; reveal: boolean },
+): Promise<CreatedFile> {
+  const { root, ...body } = create
+  const res = await fetch(filesUrl(paneId, 'create', { root }), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   })
   if (!res.ok) throw await requestError(res)
   return res.json()

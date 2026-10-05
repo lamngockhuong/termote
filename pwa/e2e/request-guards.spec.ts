@@ -203,6 +203,23 @@ test.describe('files routes', () => {
     const res = await request.put(await filesPath(request, 'content'), { data: save })
     expect(res.status()).toBe(400)
   })
+
+  // A create (POST create) is a write too
+  test('a create from a cross-site context is rejected', async ({ request }) => {
+    const root = encodeURIComponent(await rootOf(request))
+    const res = await request.post(await filesPath(request, `create?root=${root}`), {
+      headers: { 'Sec-Fetch-Site': 'cross-site' },
+      data: { path: 'termote-e2e-none.txt' },
+    })
+    expect(res.status()).toBe(403)
+  })
+
+  test('a create without the root it saw is rejected', async ({ request }) => {
+    const res = await request.post(await filesPath(request, 'create'), {
+      data: { path: 'termote-e2e-none.txt' },
+    })
+    expect(res.status()).toBe(400)
+  })
 })
 
 test.describe('host allowlist', () => {

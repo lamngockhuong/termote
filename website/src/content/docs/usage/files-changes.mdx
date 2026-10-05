@@ -13,9 +13,9 @@ keyboard and read the output in a terminal. Termote has two views for this:
 - **Changes**: when the directory is in a git repository, the files git reports as changed, and
   the diff of each one (for an image, the version before and after).
 
-A text file can be edited and saved from either view (see [Editing a File](#editing-a-file)).
-Nothing else changes from them: no file is created, deleted or renamed, and nothing is staged,
-discarded or committed.
+A text file can be edited and saved from either view (see [Editing a File](#editing-a-file)),
+and a new one created in Files (see [Creating a File](#creating-a-file)). Nothing else changes
+from them: no file is deleted or renamed, and nothing is staged, discarded or committed.
 
 ## Where to Find Them
 
@@ -115,6 +115,43 @@ data or upload folders. A file that may contain secrets can be edited once it ha
 
 A view-only session (once that role exists) has no Edit button. Until the server enforces roles,
 this is only hidden in the app.
+
+## Creating a File
+
+The **New file** button (a page with a plus) at the top of Files asks for a path from the pane's
+directory, such as `docs/notes/today.md`. It starts with the folder you last tapped in the tree.
+**Create** makes an empty file, and every folder on the path that is missing, then opens it in
+the text box to type its contents and **Save**. The button shows over the tree only, not while a
+file is open.
+
+- An existing file or folder is never replaced: the box says
+  `A file or directory of that name already exists`, with **Open it** to open that one instead.
+- A name that usually holds secrets (`.env.local`, for example) asks
+  `This name usually holds secrets. Create it anyway?` once; the new file then opens without
+  asking to show it.
+- When another file has unsaved changes, `Discard other changes?` asks first.
+- When the connection drops before the server answers, the box says
+  `The file may have been created. Refresh to check.`, and **Refresh** reads the tree again.
+- The folders made for the path stay when a later step fails, as with `mkdir -p`. A new file left
+  empty stays too.
+
+| Shown                                          | Why                                                                                                 |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `Part of this path is a file, not a directory` | A folder on the path is a file                                                                      |
+| `Part of this path is a symbolic link`         | A folder on the path is a symbolic link: nothing is ever created through one                        |
+| `Files can't be created there`                 | A path Termote never serves (see [Never Shown](#never-shown)), or its own data or upload folders    |
+| `The server can't create a file there`         | The folder cannot be written                                                                        |
+| `This name can't be used`                      | An empty part (`a//b`, a trailing `/`), a part that ends in a dot or a space, a control character such as a line break, more than 32 levels or 1024 bytes, or on Windows one of `<>:"\|?*` |
+
+<Aside type="caution">
+  A new file can be one that another tool reads or runs by itself, such as
+  `.claude/settings.local.json`, `.vscode/tasks.json` or a file under `.github/workflows`.
+  Anyone who can sign in to Termote can already run commands in the terminal, so this allows
+  nothing new, but check what you create in such places.
+</Aside>
+
+A view-only session (once that role exists) has no New file button either; until the server
+enforces roles, it is only hidden in the app.
 
 ## Markdown Preview
 
@@ -234,7 +271,7 @@ itself: without the confirmation it sends no contents at all.
 
 ## Never Shown
 
-Some paths are never served (or saved), even after confirming:
+Some paths are never served (or saved, or created in), even after confirming:
 
 - Termote's own config and state directories (the saved password, logs)
 - `/proc`, `/sys` and `/dev` (process environments and devices)

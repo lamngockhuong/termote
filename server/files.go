@@ -48,8 +48,9 @@ func (e *rootChangedError) Error() string { return "root changed" }
 func requireFilesRead(http.ResponseWriter, *http.Request) bool { return true }
 
 // filesAPI serves /api/mux/panes/{id}/files/*: views of the files under a
-// pane's root (its git toplevel, else its directory), and saves of a text
-// file's whole contents (PUT files/content).
+// pane's root (its git toplevel, else its directory), saves of a text file's
+// whole contents (PUT files/content) and creates of an empty file (POST
+// files/create).
 type filesAPI struct {
 	m        Mux
 	dirs     PaneDirer // nil when the backend has none
@@ -100,6 +101,8 @@ func registerFilesRoutes(mux *http.ServeMux, m Mux, allowed hostAllowlist, denyD
 	mux.HandleFunc("/api/mux/panes/{id}/files/content", f.handleContent)
 	// More specific than the pattern above: only PUT comes here.
 	mux.HandleFunc("PUT /api/mux/panes/{id}/files/content", f.handleWriteContent)
+	// Without a method: a GET or PUT gets 405 here, not the /api/ 404.
+	mux.HandleFunc("/api/mux/panes/{id}/files/create", f.handleCreateFile)
 	mux.HandleFunc("/api/mux/panes/{id}/files/changes", f.handleChanges)
 	mux.HandleFunc("/api/mux/panes/{id}/files/diff", f.handleDiff)
 	mux.HandleFunc("/api/mux/panes/{id}/files/raw", f.handleRaw)
