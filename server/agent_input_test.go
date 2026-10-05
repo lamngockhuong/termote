@@ -205,8 +205,12 @@ func TestMessageRefusals(t *testing.T) {
 		{"dialog open", func(f *fakeWriter) { f.screen = fixtureScreen(t, "2.1.286-permission-bash") }, "", 409, "input_not_ready", false, false},
 		{"unknown screen", func(f *fakeWriter) { f.screen = "$ ls\nfile\n$ " }, "", 409, "input_not_ready", false, false},
 		{"paste never shows", func(f *fakeWriter) { f.onPaste = nil }, "", 409, "paste_not_confirmed", true, false},
-		{"pane changed before enter", func(f *fakeWriter) { f.sessions = []AgentSession{labSession, moved} }, "", 502, "delivered_not_submitted", true, false},
-		{"agent started working before enter", func(f *fakeWriter) { f.sessions = []AgentSession{labSession, working} }, "", 502, "delivered_not_submitted", true, false},
+		// Read again right before the paste: an agent that exited since the
+		// screen check leaves a shell, which runs each line of the text.
+		{"pane changed before paste", func(f *fakeWriter) { f.sessions = []AgentSession{labSession, moved} }, "", 409, "session_changed", false, false},
+		{"agent started working before paste", func(f *fakeWriter) { f.sessions = []AgentSession{labSession, working} }, "", 409, "input_not_ready", false, false},
+		{"pane changed before enter", func(f *fakeWriter) { f.sessions = []AgentSession{labSession, labSession, moved} }, "", 502, "delivered_not_submitted", true, false},
+		{"agent started working before enter", func(f *fakeWriter) { f.sessions = []AgentSession{labSession, labSession, working} }, "", 502, "delivered_not_submitted", true, false},
 		{"copy mode", func(f *fakeWriter) { f.session.InMode = true }, "", 409, "input_not_ready", false, false},
 		{"pane gone", func(f *fakeWriter) { f.nowErr = inputError("unknown pane") }, "", 409, "target_changed", false, false},
 		{"enter fails", func(f *fakeWriter) { f.keyErr = errors.New("tmux gone") }, "", 502, "delivered_not_submitted", true, true},
