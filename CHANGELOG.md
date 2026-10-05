@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.9.0](https://github.com/lamngockhuong/termote/compare/v1.8.1...v1.9.0) (2026-10-05)
+
+
+### Features
+
+* show images in the Files and Changes views ([#319](https://github.com/lamngockhuong/termote/issues/319)) ([701fad3](https://github.com/lamngockhuong/termote/commit/701fad3934f6a8bf30698a2a5212bc561222c394))
+
+
+### Bug Fixes
+
+* clean every terminal paste, add logout, and harden image limits, file reads and the CLI password check ([#325](https://github.com/lamngockhuong/termote/issues/325)) ([604101f](https://github.com/lamngockhuong/termote/commit/604101f0023c55e454400772385b0e469b5f6dc5))
+* harden the stream deadline, git transports, tmux tab names and CI tokens ([#322](https://github.com/lamngockhuong/termote/issues/322)) ([9fb9c4e](https://github.com/lamngockhuong/termote/commit/9fb9c4e920eaf7b57bd0ea67256c1f581138dcaa))
+* **pwa:** keep the caret where typing left it after picking a slash command ([#323](https://github.com/lamngockhuong/termote/issues/323)) ([22ee2de](https://github.com/lamngockhuong/termote/commit/22ee2de581dfd26a374f36eea1e74b3f7a0c6a90))
+* **pwa:** stop waiting forever when the network drops large replies ([#321](https://github.com/lamngockhuong/termote/issues/321)) ([505b089](https://github.com/lamngockhuong/termote/commit/505b0890431620302720864c0b61ef1c88bbd4bd))
+* re-check the agent before a text paste, refuse foreign login origins, keep container passwords out of logs, harden CI ([#324](https://github.com/lamngockhuong/termote/issues/324)) ([467db4c](https://github.com/lamngockhuong/termote/commit/467db4ce4332786cd944cafe44d5f30c1316b47d))
+
 ## [1.8.1](https://github.com/lamngockhuong/termote/compare/v1.8.0...v1.8.1) (2026-10-04)
 
 
