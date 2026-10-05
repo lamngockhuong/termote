@@ -49,6 +49,41 @@ An existing install is left alone (the installer prints `termote update` instead
 `TERMOTE_VERSION` names a different version, in which case that version is laid down beside it
 and made current.
 
+### Pre-releases
+
+A pre-release (`X.Y.Z-rc.N`) is never picked on its own: without `TERMOTE_VERSION` the installer,
+like `termote update` without `--version`, takes the newest **published** stable 1.x release. A
+release counts once it is published, not when its tag appears: release-please pushes the tag
+while the release is still a draft waiting for the `release` environment's approval, and a
+draft's archives cannot be downloaded. Name the pre-release to install it:
+
+```bash
+curl -fsSL https://termote.ohnice.app/install.sh | TERMOTE_VERSION=1.13.0-rc.1 sh
+termote update --version 1.13.0-rc.1   # an existing install
+```
+
+```powershell
+$env:TERMOTE_VERSION = '1.13.0-rc.1'; irm https://termote.ohnice.app/install.ps1 | iex
+```
+
+It too has to be published first; until then the download fails with `still publishing`. The
+site serves the installer of the last stable release (it is redeployed only after one, see
+[`release-guide.md`](release-guide.md#website-deploys)); to run the pre-release's own installer,
+take it from the tag:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/v1.13.0-rc.1/scripts/install.sh | TERMOTE_VERSION=1.13.0-rc.1 sh
+```
+
+```powershell
+$env:TERMOTE_VERSION = '1.13.0-rc.1'; irm https://raw.githubusercontent.com/lamngockhuong/termote/v1.13.0-rc.1/scripts/install.ps1 | iex
+```
+
+The tag's installer still needs `TERMOTE_VERSION`: without it, it takes the newest stable release
+like any other. To go back to stable, run `termote update`. Before the final `X.Y.Z` is out
+that is a downgrade (a pre-release sorts above the release before it), which `update` makes
+with a warning.
+
 **Coming from 0.x:** there is no in-place upgrade. Uninstall the 0.x version first (see the
 archived [0.x documentation](https://termote.ohnice.app/0.x/) for its own uninstall steps),
 then install 1.0 fresh with the command above.
@@ -524,6 +559,7 @@ curl -u admin:password http://localhost:7680/api/mux/health   # or the name set 
 ```bash
 termote update                   # Update to the latest stable 1.x release
 termote update --version 1.0.1   # Pin to a specific version
+termote update --version 1.13.0-rc.1  # A pre-release (never picked without --version)
 termote update --force           # Force reinstall current version
 ```
 

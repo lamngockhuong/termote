@@ -81,6 +81,34 @@ không còn chạy được. Cấu hình của bạn được giữ nguyên tron
 `GH_TOKEN` hoặc `GITHUB_TOKEN`, nếu được đặt, chỉ nâng giới hạn gọi GitHub API mà trình cài đặt dùng để tìm bản
 mới nhất.
 
+### Bản thử nghiệm
+
+Trình cài đặt, cũng như `termote update`, chỉ chọn bản thử nghiệm (`X.Y.Z-rc.N`) khi bạn ghi rõ nó trong
+`TERMOTE_VERSION` (hoặc `termote update --version X.Y.Z-rc.N`). Không ghi thì bạn nhận bản ổn định 1.x mới nhất **đã
+phát hành**: một bản đang chờ phát hành đã có tag, nhưng chưa tải được tệp nào của nó. Bản thử nghiệm bạn ghi rõ cũng
+vậy: khi nó chưa phát hành, quá trình cài báo lỗi `still publishing`.
+
+Trang này phục vụ trình cài đặt của bản ổn định gần nhất. Muốn chạy chính trình cài đặt của một bản thử nghiệm, hãy
+lấy nó từ tag của bản đó và vẫn ghi rõ phiên bản:
+
+<Tabs>
+  <TabItem label="Linux / macOS">
+
+    ```bash
+    curl -fsSL https://raw.githubusercontent.com/lamngockhuong/termote/v1.13.0-rc.1/scripts/install.sh | TERMOTE_VERSION=1.13.0-rc.1 sh
+    ```
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+
+    ```powershell
+    $env:TERMOTE_VERSION='1.13.0-rc.1'; irm https://raw.githubusercontent.com/lamngockhuong/termote/v1.13.0-rc.1/scripts/install.ps1 | iex
+    ```
+  </TabItem>
+</Tabs>
+
+Muốn quay về bản ổn định, chạy `termote update`. Khi bản `X.Y.Z` chính thức chưa ra, đây là một lần hạ phiên bản (bản
+thử nghiệm được tính là mới hơn bản phát hành trước nó); `update` vẫn làm, kèm một cảnh báo.
+
 <Aside type="caution" title="Chuyển từ Termote 0.x">
   Không có đường nâng cấp từ 0.x: bản 1.0 không đọc cấu hình hay bất cứ thứ gì 0.x để lại. Hãy gỡ 0.x trước
   theo trang lưu trữ [0.x native](/vi/0.x/installation/native/#gỡ-cài-đặt) hoặc

@@ -174,7 +174,7 @@ termote update --version 1.0.0
 $env:TERMOTE_VERSION='1.0.0'; irm https://termote.ohnice.app/install.ps1 | iex
 ```
 
-Without `TERMOTE_VERSION` the installer takes the newest stable 1.x release and leaves an existing install alone. With it, that version is installed beside the current one and becomes the active version, which also repairs a broken install.
+Without `TERMOTE_VERSION` the installer takes the newest stable 1.x release and leaves an existing install alone. With it, that version is installed beside the current one and becomes the active version, which also repairs a broken install. A pre-release (`X.Y.Z-rc.N`) is installed only when named this way (or with `termote update --version`), and only once it is published; see the [Deployment Guide](docs/deployment-guide.md#pre-releases).
 
 ### Container mode
 
