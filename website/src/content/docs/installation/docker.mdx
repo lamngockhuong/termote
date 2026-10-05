@@ -38,7 +38,8 @@ it when the terminals do not need your host tools (like `claude` or `git` as ins
 ## How It Runs
 
 - The image is `ghcr.io/lamngockhuong/termote:<version>`, where `<version>` is the version of your `termote`
-  binary, so the container always matches the command that started it. `container up` pulls it, replaces any
+  binary, so the container always matches the command that started it. From 1.10.0 on it is pulled by the digest
+  the release's signed checksums name, never by the tag. `container up` pulls it, replaces any
   existing `termote` container and waits until the server answers.
 - It runs as your user and group, with `--restart unless-stopped`, and mounts the workspace directory
   (default `~/termote-workspace`, created if missing) at `/workspace`. It warns when the workspace contains

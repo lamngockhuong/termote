@@ -15,8 +15,9 @@ import (
 // Termote publishes the local server over Tailscale HTTPS with
 // `tailscale serve --bg --https=<tsPort> http://127.0.0.1:<port>`. serve
 // applies it at every start (boot, restart, update), so the mapping follows
-// the saved config; stop removes only that mapping (`--https=<tsPort> off`,
-// never `serve reset`, which would drop mappings that are not Termote's).
+// the saved config, and removes it again when it stops; both remove only
+// that mapping (`--https=<tsPort> off`, never `serve reset`, which would drop
+// mappings that are not Termote's).
 // sudo is never used: on Linux the user runs `tailscale set --operator` once.
 
 // tailscaleApplyTimeout bounds serve's attempt, so a hung tailscaled never
@@ -109,6 +110,30 @@ func applyTailscale(ctx context.Context, ts string, port int) {
 		return
 	}
 	log.Printf("tailscale serve: https:%s -> %s", tsPort, target)
+}
+
+// releaseTailscale is what serve runs once it stops: remove the mapping when
+// it still proxies to this server's port. Left in place, the Tailscale name
+// would keep leading to a port nobody holds, where another user of the
+// machine could listen and serve a sign-in page of their own under a valid
+// certificate. A mapping to anything else stays, and a failure is only
+// logged.
+func releaseTailscale(ts string, port int) {
+	if ts == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), tailscaleApplyTimeout)
+	defer cancel()
+	_, tsPort := splitTailscale(ts)
+	out, err := tailscaleRun(ctx, "serve", "status", "--json")
+	if err != nil || tailscaleTarget(out, tsPort) != localTarget(port) {
+		return
+	}
+	if _, err := tailscaleRun(ctx, tailscaleOffArgs(tsPort)...); err != nil {
+		log.Printf("tailscale serve not removed: %v", err)
+		return
+	}
+	log.Printf("tailscale serve: removed https:%s", tsPort)
 }
 
 // tailscaleOperatorHint is the one-time fix for "access denied" on Linux.

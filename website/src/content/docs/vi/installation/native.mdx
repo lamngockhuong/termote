@@ -210,7 +210,8 @@ termote update --version 1.0.1   # a specific version
 termote update --force           # reinstall the current version
 ```
 
-`update` tải bản phát hành về và kiểm tra `.sha256`, cài nó cạnh bản hiện tại, chuyển sang bản mới, khởi động lại
+`update` tải bản phát hành về và kiểm tra `.sha256`, và từ bản 1.10.0 trở đi kiểm cả chữ ký của bản phát hành: một
+tệp nén không được khoá phát hành của Termote ký sẽ bị từ chối, kể cả khi mã băm khớp. Sau đó nó cài bản mới cạnh bản hiện tại, chuyển sang bản mới, khởi động lại
 dịch vụ rồi chờ tới khi server báo phiên bản mới và tiếp tục trả lời. Nếu không được như vậy, nó chuyển về bản
 trước và khởi động lại bản đó. Bản hiện tại và bản trước đều được giữ lại; cấu hình và phần đăng ký dịch vụ không
 đổi. Lệnh này chạy được ngay cả khi gõ trong một pane của Termote.

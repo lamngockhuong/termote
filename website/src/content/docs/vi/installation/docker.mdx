@@ -37,7 +37,8 @@ này khi các terminal không cần công cụ trên máy (như `claude` hay `gi
 ## Cách container chạy
 
 - Container dùng `ghcr.io/lamngockhuong/termote:<version>`, trong đó `<version>` là phiên bản của binary
-  `termote`, nên container luôn khớp với lệnh đã khởi động nó. `container up` tải bản đó về, thay container
+  `termote`, nên container luôn khớp với lệnh đã khởi động nó. Từ bản 1.10.0 trở đi, image được tải theo mã băm
+  ghi trong danh sách mã băm đã ký của bản phát hành, không theo tag. `container up` tải bản đó về, thay container
   `termote` cũ nếu có rồi chờ tới khi server trả lời.
 - Container chạy dưới user và group của bạn, với `--restart unless-stopped`, và mount thư mục workspace (mặc định
   `~/termote-workspace`, tự tạo nếu chưa có) vào `/workspace`. Nó cảnh báo khi workspace chứa thư mục nhạy cảm

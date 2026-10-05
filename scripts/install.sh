@@ -160,6 +160,44 @@ grep -q "[[:space:]]\*\{0,1\}$NAME.tar.gz\$" "$TMP/$NAME.tar.gz.sha256" ||
 (cd "$TMP" && $SHA -c "$NAME.tar.gz.sha256" >/dev/null 2>&1) ||
   die "CHECKSUM MISMATCH for $NAME.tar.gz: the download was discarded and nothing was installed. Try again; if it repeats, report it."
 
+# From 1.10.0 on, a release's checksums.txt is signed with the key below by
+# the release workflow, once a release is approved. OpenSSL 3 (most Linux)
+# checks that signature and the archive's line in checksums.txt. Without an
+# OpenSSL that can (LibreSSL on macOS) this says so and relies on HTTPS and
+# the sha256 above; `termote update` checks the signature from then on.
+# BEGIN RELEASE KEY
+RELEASE_KEY='-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEAOr7k5razFbKPXHHupRqpC3u1QUJ1U6ESJghM9us9PaA=
+-----END PUBLIC KEY-----'
+# END RELEASE KEY
+
+# release_signed <version>: 1.10.0 and later (not a 1.10.0 pre-release).
+release_signed() {
+  core=${1%%-*}
+  maj=${core%%.*}; rest=${core#*.}; min=${rest%%.*}
+  if [ "$maj" -ne 1 ]; then [ "$maj" -gt 1 ]; return; fi
+  [ "$min" -gt 10 ] || { [ "$min" -eq 10 ] && [ "$core" = "$1" ]; }
+}
+
+if release_signed "$VERSION"; then
+  curl -fsSL -o "$TMP/checksums.txt" "$BASE/checksums.txt" &&
+    curl -fsSL -o "$TMP/checksums.txt.sig" "$BASE/checksums.txt.sig" ||
+    die "release ${VERSION} has no signed checksums.txt; refusing to install it."
+  if command -v openssl >/dev/null 2>&1 && openssl version 2>/dev/null | grep -qE '^OpenSSL [3-9]'; then
+    printf '%s\n' "$RELEASE_KEY" >"$TMP/release-key.pem"
+    openssl pkeyutl -verify -pubin -inkey "$TMP/release-key.pem" -rawin \
+      -in "$TMP/checksums.txt" -sigfile "$TMP/checksums.txt.sig" >/dev/null 2>&1 ||
+      die "SIGNATURE CHECK FAILED for release ${VERSION}: its checksums.txt is not signed by the Termote release key. Nothing was installed; report it."
+    SIGNED_SUM=$(awk -v n="$NAME.tar.gz" '$2 == n || $2 == "*" n { print $1 }' "$TMP/checksums.txt")
+    ACTUAL_SUM=$($SHA "$TMP/$NAME.tar.gz" | cut -d' ' -f1)
+    [ -n "$SIGNED_SUM" ] && [ "$SIGNED_SUM" = "$ACTUAL_SUM" ] ||
+      die "the signed checksums.txt does not vouch for $NAME.tar.gz; nothing was installed."
+    echo "Signature verified."
+  else
+    echo "note: no OpenSSL 3 here, so the release signature was not checked (the sha256 was); 'termote update' checks it from now on."
+  fi
+fi
+
 # Unpack beside versions/ (same file system), so the move into place is a
 # rename: a version dir is never half written.
 mkdir -p "$DIR/versions" || die "could not create $DIR/versions."

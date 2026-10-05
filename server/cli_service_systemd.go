@@ -93,13 +93,34 @@ func (s *systemdSupervisor) Install(exe string, env map[string]string) error {
 // lingerHint: without lingering, a user service stops at logout and only
 // starts again at the next login.
 func (s *systemdSupervisor) lingerHint() {
-	user := s.c.getenv("USER")
+	if user, off := s.c.lingerOff(); off {
+		s.c.infof("To keep Termote running after you log out (and start it at boot): loginctl enable-linger %s", user)
+	}
+}
+
+// lingerOff reports, with the user's name, whether systemd stops the user's
+// services at logout (loginctl says Linger=no).
+func (c *cli) lingerOff() (string, bool) {
+	user := c.getenv("USER")
 	if user == "" {
+		return "", false
+	}
+	out, err := c.run.Output("", nil, "loginctl", "show-user", user, "-p", "Linger", "--value")
+	return user, err == nil && strings.TrimSpace(string(out)) == "no"
+}
+
+// lanLingerWarning: with --lan and no lingering, the server stops at logout
+// and leaves its port free on every interface, where another user of the
+// machine could listen and ask the LAN's browsers for the password. (A
+// Tailscale mapping is removed when the server stops, so it does not lead
+// there.)
+func (c *cli) lanLingerWarning(lan bool, port int, sup supervisor) {
+	if _, ok := sup.(*systemdSupervisor); !ok || !lan {
 		return
 	}
-	out, err := s.c.run.Output("", nil, "loginctl", "show-user", user, "-p", "Linger", "--value")
-	if err == nil && strings.TrimSpace(string(out)) == "no" {
-		s.c.infof("To keep Termote running after you log out (and start it at boot): loginctl enable-linger %s", user)
+	if user, off := c.lingerOff(); off {
+		c.warnf("While you are logged out the server is stopped and port %d is free: another user of this machine "+
+			"could listen on it and show the LAN a sign-in page of their own. Keep it running with: loginctl enable-linger %s", port, user)
 	}
 }
 

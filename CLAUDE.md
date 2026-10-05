@@ -208,7 +208,8 @@ stream WebSocket, an Origin/`Sec-Fetch-Site` and single-use-token check — see
 ### Shell Scripts
 
 `scripts/install.sh`/`install.ps1` are the release installers: they download the archive for
-the current OS/arch, verify its `.sha256` (mandatory), lay it out under the versioned install
+the current OS/arch, verify its `.sha256` (mandatory; `install.sh` also checks the release
+signature from 1.10.0 with OpenSSL 3, and says so without it), lay it out under the versioned install
 root and print `termote start` — they never start anything and hold no CLI logic themselves.
 `scripts/termote.sh`/`termote.ps1` are a separate, checkout-only dev shim: they build the PWA
 if missing, rebuild `server/termote-dev` when a Go source or the PWA build is newer, then run
@@ -257,7 +258,10 @@ and no PowerShell `-Flag` variants in 1.0.
 The `update` command:
 
 - Fetches the newest stable 1.x release tag from GitHub (or uses `--version` to pin)
-- Downloads the archive + `.sha256` (mandatory) into `versions/<v>`, switches `current` atomically
+- Downloads the archive + its checksum (mandatory) into `versions/<v>`, switches `current` atomically;
+  from 1.10.0 (`firstSignedVersion`) the checksum must come from the release's `checksums.txt`,
+  whose Ed25519 signature `checksums.txt.sig` verifies with `releasePublicKey`
+  (`server/release_sign.go`, equal to the PEM in `install.sh`, a test checks)
 - Restarts the service, waits until health reports the new version and keeps answering
 - Otherwise switches `current` back to the previous version and restarts it (both kept)
 - Preserves config and service registration; refuses in a git checkout or for a binary not
@@ -513,6 +517,15 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`.
   Every E2E spec imports `test` from `pwa/e2e/fixtures.ts`, which fails a test on any CSP
   violation
+- **Release integrity**: `release.yml`'s release job runs in the `release` environment (the
+  maintainer approves each release; it holds `RELEASE_SIGNING_KEY`), writes `image-digest.txt`
+  (the pushed image by digest) into `checksums.txt`, signs it with `openssl pkeyutl` and checks
+  the signature with the key `install.sh` pins. `update` and `install.sh` (OpenSSL 3) refuse a
+  1.10.0+ release whose signature does not verify; `container up` runs the image by that digest.
+  Immutable releases are on for the repo, so assets and tags cannot change after publishing.
+- **Tailscale mapping**: `serve` removes its `tailscale serve` mapping when it stops (only while
+  it still proxies to its port), so the name never leads to a free port another user could take;
+  `start --lan` warns when lingering is off (the port is free while the user is logged out)
 - **Config persistence**: the saved password is AES-256-CBC with an HMAC, keyed by a random
   per-install `secret` file (0600) on Unix, DPAPI on Windows; the config file is also chmod
   600. The password is never written to the systemd unit, launchd plist, Scheduled Task or any

@@ -72,7 +72,9 @@ Tailnet device → Tailscale (HTTPS) → 127.0.0.1:7680 → termote (terminal st
 
 - **Native:** the service's `termote serve` applies
   `tailscale serve --bg --https=<port> http://127.0.0.1:<port>` every time it starts, at boot, on restart and
-  after an update, so the mapping always follows the saved config.
+  after an update, so the mapping always follows the saved config. It removes the mapping again when it stops, so
+  while the server is not running (you logged out, it was stopped) the Tailscale name leads nowhere, rather than to
+  a free port another user of the machine could listen on.
 - If that HTTPS port on Tailscale already serves something else, `start` refuses and suggests another port
   (`--tailscale myhost.tailnet-name.ts.net:8443`); the server never replaces a mapping that is not its own.
 - **Container:** `container up` applies the same mapping on the host; `tailscaled` keeps it across reboots.
