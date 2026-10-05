@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.10.0](https://github.com/lamngockhuong/termote/compare/v1.9.0...v1.10.0) (2026-10-05)
+
+
+### Features
+
+* sign releases and remove the Tailscale mapping when the server stops ([#327](https://github.com/lamngockhuong/termote/issues/327)) ([add0d3a](https://github.com/lamngockhuong/termote/commit/add0d3a3bbecb1d209f779e4aff02ffdef7528f7))
+
 ## [1.9.0](https://github.com/lamngockhuong/termote/compare/v1.8.1...v1.9.0) (2026-10-05)
 
 
