@@ -665,7 +665,9 @@ termote update --force           # Force reinstall current version
    (`termote show-password` to see it again)
 3. **Session cookies**: Stored after initial basic auth to prevent double prompts on mobile;
    Log out (`POST /api/mux/logout`, a JSON write under the same guard) removes the session on
-   the server and expires the cookie, so a copied cookie stops working too
+   the server and expires the cookie, so a copied cookie stops working too. Cookies are not
+   bound to a port: any service on the same host name receives this one, so Termote needs a host
+   name of its own (accepted, see the deployment guide)
 4. **Host allowlist**: every request's `Host` header must match loopback, the address the
    request arrived on when `--lan` is set, the Tailscale name (`--tailscale`), or a name added
    with `--allow-host`; there is no wildcard, so DNS rebinding from an attacker-controlled page

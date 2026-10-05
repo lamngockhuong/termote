@@ -274,6 +274,11 @@ termote start --tailscale myhost.ts.net
 3. **Never expose to public internet** without additional security
 4. **Herdr backend**: only use `--allow-herdr-no-auth` when you understand it exposes every
    Herdr workspace on the host, not just the pane the PWA is showing
+5. **A host name of its own**: browsers send cookies to every port of a host name, so any other
+   web service on the same name (another port, another app on the same domain) receives the
+   session cookie when the user opens it. On a server that runs anything else, reach Termote
+   under a name only it answers on (its Tailscale name, or e.g. `termote.example.com`); Log out
+   in the More menu ends a session on the server
 
 ## Health Check
 
