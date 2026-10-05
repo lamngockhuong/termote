@@ -32,7 +32,9 @@ irm https://termote.ohnice.app/install.ps1 | iex           # Windows
 The installer needs only `curl`, `tar` and `sha256sum`/`shasum` (Windows: PowerShell) — no
 sudo/admin. It downloads the newest stable 1.x release for your OS/arch, verifies its
 `.sha256` (mandatory), lays it out under a versioned install root and prints `termote start` —
-it never starts anything itself. Pin a version, or rescue a broken install, with
+it never starts anything itself. From 1.10.0 on, `install.sh` also checks the release
+signature (see Updating) when OpenSSL 3 is there, and says so when it is not (LibreSSL on
+macOS); `install.ps1` cannot check it, as Windows PowerShell has no Ed25519. Pin a version, or rescue a broken install, with
 `TERMOTE_VERSION`:
 
 ```bash
@@ -106,7 +108,8 @@ termote container up --lan          # LAN accessible
 
 Single container with termote + tmux or Herdr (no ttyd), published at `-p <bind>:<port>:7680`. Runs
 `ghcr.io/lamngockhuong/termote:<version of the installed binary>` with podman (preferred) or
-docker; from a git checkout (or `--build`) it builds `termote:local` from the `Dockerfile`
+docker (from 1.10.0 by the digest the release's signed `image-digest.txt` names, never by the
+tag, which can be moved); from a git checkout (or `--build`) it builds `termote:local` from the `Dockerfile`
 instead of pulling. Default workspace `~/termote-workspace`, mounted with `--mount` at
 `/workspace`; change it with `--workspace <dir>`. The container runs as `--user <uid>:<gid>`
 (rootless podman: `--userns=keep-id` instead; rootless Docker: no `--user` at all). The
@@ -200,8 +203,10 @@ termote start --tailscale myhost.ts.net --lan
 On Linux, run `sudo tailscale set --operator=$USER` once — `start` prints this hint if the
 `tailscale serve` call is refused. An HTTPS port already serving something else (for example
 the native server, from `container up`) is refused too; pick another port
-(`--tailscale host:8443`). `stop`, `start --no-tailscale`, `container down` and `uninstall`
-remove only Termote's own mapping, and only while it still points at their own port
+(`--tailscale host:8443`). The native server removes its mapping when it stops (a stop, or a
+logout without lingering), so the Tailscale name
+never leads to a port it no longer holds (a crash leaves it until the service restarts); it adds it again when it starts. `stop`,
+`start --no-tailscale`, `container down` and `uninstall` remove only Termote's own mapping, and only while it still points at their own port
 (`tailscale serve --https=<port> off`), never `tailscale serve reset`, which would drop
 mappings that are not Termote's.
 
@@ -522,7 +527,11 @@ termote update --version 1.0.1   # Pin to a specific version
 termote update --force           # Force reinstall current version
 ```
 
-`update` downloads the archive and its `.sha256` (mandatory), unpacks it into a new
+`update` downloads the archive and its checksum (mandatory) and, for 1.10.0 and later, the
+release's `checksums.txt` with its signature, checked against the public key built into the
+binary: a release published from a pushed tag, or an asset replaced afterwards, is refused even
+when its checksums match. A release before 1.10.0 is checked against its `.sha256` alone, with a
+warning. It then unpacks it into a new
 `versions/<v>`, switches the `current` pointer atomically, restarts the service and waits for
 health to report the new version. It refuses in a git checkout, and for a binary not installed
 by the installer; the saved config and service registration are untouched, and only the

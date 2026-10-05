@@ -575,7 +575,8 @@ termote container up
 
 Single container with termote + tmux or Herdr (no ttyd).
 Uses `Dockerfile` (`debian:stable-slim`, pinned by digest, `tini -s` as PID 1) and `entrypoint.sh`.
-Runs `ghcr.io/lamngockhuong/termote:<version>` with podman (preferred) or docker; from a git
+Runs `ghcr.io/lamngockhuong/termote:<version>` (from 1.10.0 by the digest in the release's
+signed `image-digest.txt`) with podman (preferred) or docker; from a git
 checkout (or `--build`) it builds `termote:local` from the Dockerfile instead of pulling.
 
 **Container Runtime:** Auto-detects podman or docker (podman preferred).
@@ -620,7 +621,8 @@ termote container up --tailscale myhost.ts.net
 - Auto SSL via `tailscale serve --bg` (no manual cert management, never run with sudo)
 - Access via Tailscale network (default port 443); the Tailscale name is also added to the
   Host allowlist automatically
-- `serve` re-applies the mapping at every start (boot, restart, update); `stop`,
+- `serve` re-applies the mapping at every start (boot, restart, update) and removes it when it
+  stops, so the name never leads to a port another user could take; `stop`,
   `start --no-tailscale` and `uninstall` remove only Termote's own mapping
   (`tailscale serve --https=<port> off`, never `serve reset`)
 
@@ -644,7 +646,9 @@ termote update --force           # Force reinstall current version
 **Update flow** (`server/cli_update.go`):
 
 1. Fetch the newest stable 1.x release tag from GitHub (or use `--version` to pin)
-2. Download the archive and its `.sha256` (mandatory), verify it
+2. Download the archive and its checksum (mandatory), verify it; from 1.10.0 the checksum comes
+   from the release's `checksums.txt`, whose Ed25519 signature (`checksums.txt.sig`) must verify
+   with the key pinned in the binary (`server/release_sign.go`)
 3. Unpack into `versions/<v>`, switch the `current` pointer atomically
 4. Restart the service, wait until health reports the new version and keeps answering
 5. Otherwise switch `current` back to the previous version and restart it (both kept)

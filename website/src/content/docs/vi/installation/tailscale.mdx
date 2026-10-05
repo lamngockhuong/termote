@@ -73,7 +73,9 @@ Tailnet device → Tailscale (HTTPS) → 127.0.0.1:7680 → termote (terminal st
 
 - **Native:** `termote serve` của dịch vụ áp dụng
   `tailscale serve --bg --https=<port> http://127.0.0.1:<port>` mỗi khi nó khởi động, lúc bật máy, khi restart
-  và sau khi cập nhật, nên ánh xạ luôn khớp với cấu hình đã lưu.
+  và sau khi cập nhật, nên ánh xạ luôn khớp với cấu hình đã lưu. Khi dừng, nó gỡ ánh xạ đi. Nhờ vậy, trong lúc
+  server không chạy (bạn đã đăng xuất, hoặc đã dừng nó), tên Tailscale không dẫn tới đâu cả, thay vì dẫn tới một
+  cổng đang trống mà user khác trên máy có thể chiếm.
 - Nếu cổng HTTPS đó trên Tailscale đang phục vụ thứ khác, `start` từ chối và gợi ý một cổng khác
   (`--tailscale myhost.tailnet-name.ts.net:8443`); server không bao giờ thay một ánh xạ không phải của nó.
 - **Container:** `container up` áp dụng cùng ánh xạ đó trên máy; `tailscaled` tự giữ nó qua các lần khởi động lại.

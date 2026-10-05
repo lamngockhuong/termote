@@ -209,7 +209,8 @@ termote update --version 1.0.1   # a specific version
 termote update --force           # reinstall the current version
 ```
 
-`update` downloads the release and checks its `.sha256`, installs it beside the current version, switches to it,
+`update` downloads the release and checks its `.sha256` and, from 1.10.0 on, the release signature: an archive
+the Termote release key did not sign is refused even when its checksum matches. It installs it beside the current version, switches to it,
 restarts the service and waits until the server reports the new version and keeps answering. If it does not, it
 switches back to the previous version and restarts that one. The current and the previous version are kept; your
 config and the service registration do not change. It works when typed inside a Termote pane.
