@@ -28,6 +28,11 @@ var sensitiveDirs = []string{".ssh", ".gnupg", ".aws", ".kube", ".docker", ".con
 func isSensitive(p string) bool {
 	parts := strings.Split(strings.ToLower(filepath.ToSlash(filepath.Clean(p))), "/")
 	base := parts[len(parts)-1]
+	// A save's temporary file holds the new contents of any file, a .env
+	// one included.
+	if strings.HasPrefix(base, editTempPrefix) {
+		return true
+	}
 	for _, pat := range sensitiveNames {
 		if ok, _ := path.Match(pat, base); ok {
 			return true

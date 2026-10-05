@@ -225,6 +225,18 @@ func (c *ttlCache[V]) do(key string, fn func() (V, error)) (V, error) {
 	return e.val, e.err
 }
 
+// forgetPrefix drops every entry whose key starts with prefix, so the next
+// do reads again. A read in flight still answers its own waiters.
+func (c *ttlCache[V]) forgetPrefix(prefix string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for k := range c.entries {
+		if strings.HasPrefix(k, prefix) {
+			delete(c.entries, k)
+		}
+	}
+}
+
 // requireAgentRead and requireWriteRole are where roles (#236, a view-only
 // role) will be enforced. The transcript shows more than the screen does, so
 // the read check is its own decision. Both allow everything today.
