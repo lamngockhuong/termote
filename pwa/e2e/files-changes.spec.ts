@@ -18,8 +18,9 @@ const git = (cwd: string, ...args: string[]) =>
 
 // A 4×3 red PNG, then a 5×3 blue one (another size: git would take a file
 // of the same size written in the same second as unchanged), and an SVG. The
-// image views read them through files/raw as blob: URLs, which the page's
-// CSP must allow
+// image views read them through files/raw as blob: URLs (an SVG as a data:
+// URL, so it never becomes a document of this origin), which the page's CSP
+// must allow
 const RED_PNG =
   'iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA7ljmRAAAAEElEQVR4nGO4o6EBRww4OQAa3g4RLYR9sQAAAABJRU5ErkJggg=='
 const BLUE_PNG =
@@ -198,8 +199,9 @@ test.describe('files and changes views', () => {
     await panel.getByRole('treeitem', { name: 'icon.svg' }).click()
     await expect(panel.getByTestId('code-block')).toContainText('<svg')
     await panel.getByRole('button', { name: 'Image', exact: true }).click()
-    const img = panel.locator('img[src^="blob:"]')
+    const img = panel.locator('img[src^="data:image/svg+xml;base64,"]')
     await expect(img).toHaveCount(1)
+    await expect(panel.locator('img[src^="blob:"]')).toHaveCount(0)
     await expect.poll(() => decodedWidth(img)).toBeGreaterThan(0)
     await expect.poll(async () => (await img.boundingBox())?.width ?? 0).toBeGreaterThan(100)
   })
