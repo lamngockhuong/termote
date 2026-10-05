@@ -29,7 +29,7 @@ termote/
 │   ├── mux*.go, stream*.go, pty_*.go # Mux interface + tmux/Herdr backends, terminal WebSocket, PTY/ConPTY
 │   ├── herdr_*.go              # Herdr JSON-RPC client, socket/pipe, observer lifetime
 │   ├── agent*.go               # Chat view: Claude Code and Codex sessions, transcripts, dialogs, input
-│   ├── files*.go               # Files/Changes views: pane root, tree, contents, git status/diff, images
+│   ├── files*.go               # Files/Changes views: pane root, tree, contents, git status/diff, images, saves
 │   ├── uploads*.go             # `/api/mux/uploads` image store
 │   ├── cli*.go                 # CLI subcommands (start/stop, service, container, update, url, panel, ...)
 │   ├── listener_owner*.go      # CLI sends the saved password only to the current user's listener
@@ -60,10 +60,11 @@ described in [`system-architecture.md`](system-architecture.md), conventions in
 | Settings                                     | `hooks/use-settings.ts` (keys and defaults), `components/settings-modal.tsx`                        |
 | Pane views (terminal, chat, files, changes)  | `pwa/src/app-views.ts`, then `components/chat-*`, `files-view.tsx`, `changes-view.tsx`              |
 | Images in Files and Changes                  | `components/image-preview.tsx`, `image-compare.tsx`, `hooks/use-image-blob.ts`                      |
+| Editing a file in Files and Changes          | `components/file-editor.tsx`, `file-viewer.tsx`, `hooks/use-files.ts` (`useFileDraft`)              |
 | Server entry, auth, guards                   | `server/main.go`, `serve.go`, `guard.go`, `security_headers.go`                                     |
 | Mux backends                                 | `server/mux.go` (interface + routes), `mux_tmux.go`, `mux_herdr.go`                                 |
 | Chat view (server)                           | `server/agent.go`, then `agent_claude*.go` / `agent_codex*.go`, `agent_input.go`                    |
-| Files and Changes (server)                   | `server/files.go`, `files_root.go`, `files_git.go`, `files_raw.go`                                  |
+| Files and Changes (server)                   | `server/files.go`, `files_root.go`, `files_git.go`, `files_raw.go`, `files_write.go`                |
 | CLI                                          | `server/cli.go` (dispatch), then the `cli_<command>.go` file (see [CLI](#cli-go-servercligo))       |
 
 Two things the code does not explain on its own:

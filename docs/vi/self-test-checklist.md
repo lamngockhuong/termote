@@ -431,6 +431,28 @@ Chạy trên tmux (Linux/macOS) và Herdr; psmux (Windows) không có hai view n
 - [ ] Thay đổi làm trong terminal hiện trong vòng 5 giây; commit file đang mở thì hiện `No longer changed`
 - [ ] Ngoài repo git: "Not a git repository: <dir>"; không có thay đổi: "No changes"
 
+### Sửa File
+
+- [ ] File văn bản có nút "Edit" (bút chì); bấm vào thì nội dung hiện trong một ô nhập, kèm
+      "Cancel editing" và "Save"; file `.md` hiện văn bản gốc kể cả khi đang bật xem trước
+- [ ] Trên điện thoại, đổi một dòng trong front matter của `docs/records/*.md` rồi Save: hiện toast
+      "Saved", trên máy chỉ đúng dòng đó đổi (`git diff`); file xuống dòng `\r\n` vẫn giữ kiểu đó
+- [ ] Nút Save tắt cho tới khi văn bản đổi; Ctrl+S (Cmd+S) để lưu; Cancel hoặc nút quay lại khi còn
+      thay đổi thì hỏi "Discard changes?"
+- [ ] Bấm Edit, sửa file trong terminal, rồi Save: hiện "The file changed on the host since you
+      opened it"; văn bản vẫn còn; "Copy my text" chép văn bản ra, "Reload" hiện bản trên máy
+- [ ] Đổi view (hay đóng rồi mở lại panel) khi đang sửa thì văn bản vẫn còn
+- [ ] Không có "Edit" cho liên kết mềm, file trộn kiểu xuống dòng, ảnh, file lớn hơn 1 MiB, hay
+      file đã `chmod 444` (lưu vào đó thì hiện "The server can't write this file")
+- [ ] `.env`: "Edit" chỉ hiện sau khi bấm "Show"; lưu được mà không bị hỏi lại
+- [ ] Changes: có "Edit" cho file văn bản đã sửa hoặc chưa được git theo dõi (phía Staged là "Edit
+      working copy"), không có cho file đã xoá, ảnh hay diff nhị phân; Save xong thì diff phần chưa
+      đưa vào index hiện văn bản mới; sửa file về đúng bản trong index thì danh sách hiện lại kèm
+      "No changes left in <file>"
+- [ ] Không còn file `.termote-edit-*` nào nằm cạnh file vừa lưu
+- [ ] (Khi đã có quyền chỉ xem, #236) chế độ chỉ xem không có "Edit", và `PUT files/content` bị từ
+      chối với quyền đó; trước đó mục này chỉ được unit test kiểm tra
+
 ### Xem Trước Markdown
 
 - [ ] File `.md` mở ra ở dạng xem trước; nút "Preview" (hình con mắt) chuyển sang mã nguồn và

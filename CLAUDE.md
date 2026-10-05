@@ -300,7 +300,8 @@ The `update` command:
 | `pwa/src/hooks/use-agent-transcript.ts`           | Polls a pane's transcript, one store per pane                 |
 | `pwa/src/hooks/use-agent-prompt.ts`               | Polls a pane's open dialog, one store per pane                |
 | `pwa/src/components/files-view.tsx`               | Files view: the pane's directory as a tree, opens a file      |
-| `pwa/src/components/changes-view.tsx`             | Changes view: git status grouped, opens a file's diff         |
+| `pwa/src/components/changes-view.tsx`             | Changes view: git status grouped, a file's diff, edits it     |
+| `pwa/src/components/file-editor.tsx`              | A file's text in a textarea, why a save failed                |
 | `pwa/src/components/markdown-preview.tsx`         | Markdown file rendered in Files/Changes (links, code blocks)  |
 | `pwa/src/components/image-preview.tsx`            | One image of Files/Changes (sizes, why it cannot be shown)    |
 | `pwa/src/components/image-compare.tsx`            | Changes: an image's old and new versions side by side         |
@@ -331,6 +332,7 @@ The `update` command:
 | `server/files_git.go`                             | git status and diff for the Changes view                      |
 | `server/files_sensitive.go`                       | Names of files that usually hold secrets                      |
 | `server/files_raw.go`                             | `files/raw`: an image's bytes (worktree, or a git version)    |
+| `server/files_write.go`                           | `PUT files/content`: saves a text file (baseHash, rename)     |
 | `server/agent_proc*.go`                           | Finds Claude Code (or Codex) under a tmux/psmux pane          |
 | `server/guard.go`                                 | Host allowlist + Origin/Content-Type write guard              |
 | `server/login.go`                                 | Sign-in form for browsers (iOS home-screen app has no prompt) |
@@ -441,8 +443,8 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   (`server/agent_codex_prompt.go`) never takes text the model printed above the composer for a
   dialog, and reads a card as read only when two approval titles sit in its stretch. `commands`
   is empty
-- **Files/Changes** (`/api/mux/panes/{id}/files/*`): read-only GETs that also check
-  `Sec-Fetch-Site`/`Origin`; every path is opened through `os.Root` under the pane's root (its
+- **Files/Changes** (`/api/mux/panes/{id}/files/*`): GETs that also check
+  `Sec-Fetch-Site`/`Origin` (and one write, `PUT files/content`, below); every path is opened through `os.Root` under the pane's root (its
   git toplevel when a `.git` sits at it, else its directory); termote's config/state dirs,
   `/proc`, `/sys`, `/dev`, `.git` and the repo's git dir (`--separate-git-dir`) are never served
   (on Linux a path differing only in case is denied when its directory is the same one: WSL
@@ -465,6 +467,27 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   `Cache-Control: no-store`; an SVG also gets a second CSP
   (`sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:`) and
   `Content-Disposition: attachment`
+- **Saving a file** (`PUT files/content?root=`, `server/files_write.go`): replaces the whole text
+  of an existing file. `writeGuard` (same-site JSON) plus the handler's own cross-site check and
+  `requireWriteRole`; the `root` query is required (400, 409 once it moved). Body
+  `{path, baseHash, text, reveal}`: bytes on disk other than `baseHash` (GET `content`'s `hash`,
+  sha256) → 409 `changed`, unless they already equal the text (200: a repeated save is no
+  conflict); never an overwrite. The read's path checks plus a write-only deny list (the
+  install's data dir, the upload store); a sensitive name needs `reveal: true` (403
+  `sensitive`). No component of the path may be a symlink; the parent is opened once through
+  `os.Root` and used for every step. The file must be regular, one link, owned by the server user
+  (Unix), owner-writable, UTF-8 without NUL, line breaks all `\n` or all `\r\n` (422
+  `not_editable` + `reason`, or 403 `permission`); GET `content` reports the same check as
+  `editable`/`notEditable`. Text arrives with `\n` (a `\r\n` file gets them back), NUL or a lone
+  `\r` → 422 `not_text`, at most 1 MiB (413 `too_large`); body limit 6 MiB + 64 KiB, 2 saves at a
+  time (429 `busy`), read deadline 5 minutes once authenticated with a slot. Written to
+  `.termote-edit-<random>` in the same directory (`O_EXCL`, mode set on the handle, `fsync`),
+  the file read again, then renamed over it; the temporary file goes on any failure, ones older
+  than 10 minutes are swept (only names of that exact form), every `.termote-edit-*` name is
+  sensitive, and a save drops the root's cached git status. Saves of one file are serialised; an agent writing between the last read and the rename still loses its change (no
+  compare-and-swap), and the rename drops ACLs/xattrs. A view-only client is kept from editing in
+  the UI only while `requireWriteRole` is a stub. The draft stays in the PWA's memory, never in
+  browser storage
 - **Image uploads** (`POST /api/mux/uploads`): the PWA sends an image so an agent can read it by
   path (the host clipboard is empty when the image sits on a phone). Same auth, Host allowlist,
   `Sec-Fetch-Site`/`Origin` check and `requireWriteRole` as every write; the body is a raw

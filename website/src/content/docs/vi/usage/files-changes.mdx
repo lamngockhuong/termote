@@ -6,14 +6,16 @@ description: Duyệt file trong thư mục của pane và đọc những gì git
 import { Aside } from "@astrojs/starlight/components";
 
 Muốn biết agent đã sửa gì, thường bạn phải gõ `ls`, `cat`, `git diff` trên bàn phím điện thoại rồi
-đọc kết quả trong terminal. Termote có hai view chỉ đọc để xem nhanh:
+đọc kết quả trong terminal. Termote có hai view để xem nhanh:
 
 - **Files**: thư mục của pane dạng cây, mở từng thư mục một. File văn bản mở ra có số dòng và tô
   màu cú pháp, file ảnh mở ra thành hình.
 - **Changes**: khi thư mục nằm trong một repo git, danh sách file git báo đã đổi, kèm diff của
   từng file (với ảnh thì là bản trước và bản sau khi đổi).
 
-Cả hai đều chỉ đọc: từ đây không sửa file, không đưa thay đổi vào index, không bỏ thay đổi và không commit được.
+Ở cả hai view đều sửa và lưu được file văn bản (xem [Sửa file](#sửa-file)). Ngoài ra không đổi
+được gì khác: không tạo, xoá hay đổi tên file, không đưa thay đổi vào index, không bỏ thay đổi và
+không commit.
 
 ## Mở ở đâu
 
@@ -68,6 +70,48 @@ Các bộ quản lý phiên hỗ trợ:
 | Chữ thường, không màu                                         | File văn bản lớn hơn (tới 1 MiB), ngôn ngữ chưa hỗ trợ, hoặc tô màu mất quá 3 giây              |
 | `Not previewable (binary, special file or larger than 1 MiB)`  | File nhị phân không phải ảnh, file lớn hơn 1 MiB, hoặc thứ không phải file thường                |
 | `This file can't be shown`                                     | Đường dẫn Termote không bao giờ trả về (xem bên dưới)                                            |
+
+## Sửa file
+
+Nút bút chì (**Edit**) trên thanh của file văn bản biến nội dung file thành một ô nhập văn bản
+thường, thay các nút khác bằng **Cancel** và **Save**. Nút này dành cho sửa nhỏ, chẳng hạn đổi
+`status: review` thành `status: approved` trong front matter của một bản ghi, khỏi phải nhờ agent
+hay gõ `sed`.
+
+- File Markdown được sửa ở văn bản gốc, kể cả khi đang bật xem trước.
+- Ctrl+S (Cmd+S trên macOS) để lưu. Bấm Cancel hoặc Back khi còn thay đổi chưa lưu thì app hỏi
+  `Discard changes?` trước.
+- Xuống dòng giữ nguyên như file đang dùng: file xuống dòng kiểu Windows (`\r\n`) vẫn giữ kiểu đó.
+- Đổi view, hay đóng rồi mở lại panel, văn bản đang sửa vẫn còn. Văn bản chỉ nằm trong bộ nhớ của
+  trang, không bao giờ vào bộ nhớ của trình duyệt, nên đóng hoặc tải lại app là mất (điện thoại có
+  thể tự đóng app để chạy nền).
+- Trong **Changes**, diff của file mà working tree vẫn còn ở dạng văn bản cũng có nút Edit này
+  (ở phía đã đưa vào index thì nút là **Edit working copy**: thứ được lưu là file trong working tree). Lưu xong
+  thì diff phần chưa đưa vào index hiện ra, đã đọc lại; nếu lúc đó file đã khớp index thì danh sách hiện
+  lại, kèm `No changes left in <file>`.
+
+Khi lưu không thành công, văn bản của bạn vẫn còn trong ô:
+
+| Hiện ra                                               | Nên làm gì                                                                                          |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `The file changed on the host since you opened it`    | Có thứ gì đó (thường là agent) vừa ghi vào file. **Reload** đọc lại file và bỏ văn bản của bạn; **Copy my text** chép văn bản đó ra trước. Lưu không bao giờ ghi đè thay đổi kia. |
+| `This pane's folder changed`                           | Pane đã chuyển sang thư mục khác. Chép văn bản của bạn ra, rồi bấm Cancel để xem file ở thư mục mới. |
+| `Not sure the file was saved. Saving again is safe.`   | Mất kết nối, hoặc server không trả lời trong 30 giây. Cứ lưu lại: cùng một nội dung thì không tính là xung đột. |
+| `The server can't write this file`                     | File chỉ đọc, thuộc người dùng khác, hoặc thư mục chứa nó không ghi được                                    |
+
+Có những file không có nút Edit, vì server sẽ từ chối khi lưu: liên kết mềm (hay file nằm dưới một
+thư mục là liên kết mềm), file có nhiều liên kết cứng, file trộn nhiều kiểu xuống dòng hoặc có ký tự NUL, file
+lớn hơn 1 MiB, ảnh, và file trong thư mục dữ liệu hay thư mục upload của chính Termote. File có
+thể chứa bí mật thì sửa được sau khi đã bấm hiện nội dung.
+
+<Aside type="caution">
+  Lưu là thay file bằng một file mới trong cùng thư mục. Nếu agent ghi đúng file đó vào khoảnh khắc
+  giữa lần kiểm tra cuối và lúc thay, thay đổi của agent sẽ mất. File mới giữ quyền truy cập của
+  file cũ, nhưng không giữ thuộc tính mở rộng hay ACL.
+</Aside>
+
+Phiên chỉ xem (khi đã có quyền này) không có nút Edit. Chừng nào server chưa kiểm quyền, nút này
+chỉ được ẩn trong app.
 
 ## Xem trước Markdown
 
@@ -188,7 +232,7 @@ chưa xác nhận thì server không gửi chút nội dung nào.
 
 ## Không bao giờ hiện
 
-Một số đường dẫn không bao giờ được trả về, kể cả khi đã xác nhận:
+Một số đường dẫn không bao giờ được trả về (hay được lưu), kể cả khi đã xác nhận:
 
 - Thư mục cấu hình và trạng thái của chính Termote (mật khẩu đã lưu, log)
 - `/proc`, `/sys` và `/dev` (biến môi trường của tiến trình và thiết bị)
