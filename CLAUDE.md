@@ -369,7 +369,8 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   a 401 with a plain HTML form (no script) and no `WWW-Authenticate`, since an iOS home-screen
   app never shows the Basic prompt and the prompt would otherwise sit on top of the form; only a
   client without `Sec-Fetch-Mode` (curl) is still challenged. The form POST must be urlencoded,
-  at most 8 KB, not cross-site (`Sec-Fetch-Site`), shares the Basic auth rate limiter and sets
+  at most 8 KB, not cross-site (`Sec-Fetch-Site`, or an `Origin` off the allowlist other than
+  `null`, which the form itself sends under `no-referrer`), shares the Basic auth rate limiter and sets
   the same session cookie; `next` is kept only as a path on this server. The PWA opens `/login`
   when the snapshot or health read answers 401, and the service worker never serves its shell
   for `/login`
@@ -465,7 +466,8 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   Errors carry a JSON `code`. The Chat view sends the returned ids in `agent/message` (see
   Agent chat). `Caps.uploads` tells the PWA (snapshot); a view-only client
   offers no upload, enforced in the UI only while `requireWriteRole` is a stub. The container
-  creates `/home/termote/.cache` mode 1777 so the host uid can create its upload dir
+  creates `/home/termote/.cache` and `/home/termote/.config` mode 1777 so the host uid can
+  create its upload dir and the generated password's file (kept out of the log)
 - Exclude sensitive dirs (.ssh, .gnupg, .aws, .config/gcloud) from container volume mounts
   (warned at `container up`)
 - Serve mode uses constant-time comparison for password verification

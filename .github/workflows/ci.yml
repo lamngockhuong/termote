@@ -32,6 +32,8 @@ jobs:
       docs: ${{ steps.filter.outputs.docs }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
@@ -72,6 +74,8 @@ jobs:
     if: needs.changes.outputs.pwa == 'true' || needs.changes.outputs.docker == 'true' || needs.changes.outputs.api == 'true'
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
@@ -124,6 +128,8 @@ jobs:
       (needs.changes.outputs.api == 'true' || needs.changes.outputs.docker == 'true')
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-go@v7
         with:
@@ -160,6 +166,8 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-go@v7
         with:
@@ -196,6 +204,8 @@ jobs:
       TMUX_SESSION: e2e
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Install tmux
         run: sudo apt-get update && sudo apt-get install -y tmux && tmux -V
@@ -271,6 +281,8 @@ jobs:
     if: needs.changes.outputs.scripts == 'true' || needs.changes.outputs.api == 'true'
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       # The shim tests build a stand-in binary and the real CLI with Go
       - uses: actions/setup-go@v7
@@ -299,6 +311,8 @@ jobs:
     if: needs.changes.outputs.scripts == 'true' || needs.changes.outputs.api == 'true'
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-go@v7
         with:
@@ -316,6 +330,8 @@ jobs:
     if: needs.changes.outputs.scripts == 'true' || needs.changes.outputs.api == 'true'
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-go@v7
         with:
@@ -355,6 +371,8 @@ jobs:
       needs.build-api.result == 'success'
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Download server binary
         if: needs.build-api.result == 'success'
@@ -389,6 +407,8 @@ jobs:
     if: needs.changes.outputs.website == 'true'
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
@@ -414,6 +434,8 @@ jobs:
     if: needs.changes.outputs.docs == 'true'
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Check formatting (dprint)
-        run: npx dprint check
+        run: npx --yes dprint@0.60.1 check

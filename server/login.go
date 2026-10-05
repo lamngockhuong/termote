@@ -111,6 +111,19 @@ func isCrossSiteLogin(r *http.Request) bool {
 	return site != "" && site != "same-origin" && site != "none"
 }
 
+// foreignLoginOrigin reports a form POST another site made in a browser too
+// old to send Sec-Fetch-Site (Safari before 16.4), which still sends Origin.
+// "null" passes: a browser following the Fetch spec sends it on this page's
+// own form, under the no-referrer policy every response carries.
+func foreignLoginOrigin(allowed hostAllowlist, r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" || origin == "null" {
+		return false
+	}
+	u, err := url.Parse(origin)
+	return err != nil || u.Host == "" || !allowed.allows(r, u.Host)
+}
+
 // isFormPost reports a urlencoded POST body, the only one the form sends.
 func isFormPost(r *http.Request) bool {
 	mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))

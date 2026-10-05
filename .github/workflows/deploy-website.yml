@@ -13,10 +13,9 @@ on:
         type: string
   workflow_dispatch:
 
+# Only the deploy job may publish: build runs the site's dependencies.
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: "pages"
@@ -63,6 +62,15 @@ jobs:
         run: pnpm build
         working-directory: website
 
+      # The installers people pipe into a shell must be the tag's, byte for
+      # byte, before anything is published (verify checks the served ones).
+      - name: Check the built installers
+        run: |
+          for f in install.sh install.ps1; do
+            git show "HEAD:scripts/$f" | cmp - "website/dist/$f" ||
+              { echo "::error::website/dist/$f differs from scripts/$f in the tag"; exit 1; }
+          done
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5
         with:
@@ -71,6 +79,9 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

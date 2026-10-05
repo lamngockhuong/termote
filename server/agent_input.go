@@ -477,6 +477,20 @@ func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, sess
 			pasted = " " + text // Claude Code adds no space after an image token
 		}
 	}
+	// Text alone is read again right before it goes: an agent that exited
+	// since the screen check leaves a shell, which runs each line of it.
+	if n == 0 {
+		now, err := sessionNow(ctx, wr, paneID)
+		if err != nil {
+			return err
+		}
+		if !sameAgent(now, s) {
+			return errSessionChanged
+		}
+		if err := inputReady(now); err != nil {
+			return err
+		}
+	}
 	if pasted != "" {
 		if n > 0 && !stillReady() {
 			return a.abandon(ctx, wr, paneID, s, n, "", errPartialPaste)

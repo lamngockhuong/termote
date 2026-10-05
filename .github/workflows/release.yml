@@ -159,6 +159,8 @@ jobs:
           exe=termote
           [ "$GOOS" = windows ] && exe=termote.exe
           mkdir -p "pkg/$name/bin" out
+          # The modules in the module cache must match go.sum before they are built in.
+          (cd server && go mod verify)
           # The version comes from the tag, whatever server/cli_version.go says.
           (cd server && go build -ldflags="-s -w -X main.cliVersion=${VERSION}" -o "../pkg/$name/bin/$exe" .)
           if [ "$GOOS" = linux ] && [ "$GOARCH" = amd64 ]; then

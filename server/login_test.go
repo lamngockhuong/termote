@@ -214,6 +214,35 @@ func TestLoginPostRejected(t *testing.T) {
 	}
 }
 
+// A browser too old to send Sec-Fetch-Site (Safari before 16.4) still sends
+// Origin on a form another site posts: a foreign one is refused before the
+// rate limiter counts it, so that site cannot lock the user out.
+func TestLoginPostForeignOriginWithoutFetchMetadata(t *testing.T) {
+	h := newTestHandler(t, &fakeMux{})
+	right := url.Values{"username": {"admin"}, "password": {"secret"}}
+	post := func(origin string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest("POST", loginPath, strings.NewReader(right.Encode()))
+		req.Host = "localhost:7680"
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		if origin != "" {
+			req.Header.Set("Origin", origin)
+		}
+		return serve(h, req)
+	}
+	for _, origin := range []string{"https://evil.example", "http://localhost.evil.example:7680"} {
+		if rec := post(origin); rec.Code != http.StatusForbidden || sessionCookieOf(rec) != nil {
+			t.Errorf("Origin %q = %d, want 403 and no cookie", origin, rec.Code)
+		}
+	}
+	// The form's own origin; none (curl); "null", which a browser following
+	// the Fetch spec sends on this page's form under its no-referrer policy.
+	for _, origin := range []string{"http://localhost:7680", "", "null"} {
+		if rec := post(origin); rec.Code != http.StatusSeeOther {
+			t.Errorf("Origin %q = %d, want 303", origin, rec.Code)
+		}
+	}
+}
+
 // The form shares Basic auth's limiter: wrong passwords by either way add up,
 // and a blocked client cannot log in even with the right one.
 func TestLoginPostRateLimited(t *testing.T) {

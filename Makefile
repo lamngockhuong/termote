@@ -89,10 +89,10 @@ test-herdr-plugin:
 
 # Format targets (dprint)
 fmt:
-	npx dprint fmt
+	npx --yes dprint@0.60.1 fmt
 
 fmt-check:
-	npx dprint check
+	npx --yes dprint@0.60.1 check
 
 # Health check
 health:

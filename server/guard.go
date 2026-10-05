@@ -137,6 +137,12 @@ func isWriteMethod(method string) bool {
 // required JSON Content-Type forces a CORS preflight that we never answer.
 func writeGuard(allowed hostAllowlist, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// The sign-in form is not JSON; only its Origin is checked here, where
+		// the allowlist is, before the login rate limiter counts the POST.
+		if r.URL.Path == loginPath && r.Method == http.MethodPost && foreignLoginOrigin(allowed, r) {
+			http.Error(w, "cross-site request rejected", http.StatusForbidden)
+			return
+		}
 		if !strings.HasPrefix(r.URL.Path, "/api/") || !isWriteMethod(r.Method) {
 			next.ServeHTTP(w, r)
 			return
