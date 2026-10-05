@@ -9,7 +9,7 @@
 # user PATH, has its own entries with a `-windows` suffix.
 id = "lamngockhuong.termote"
 name = "Termote"
-version = "1.12.0" # x-release-please-version
+version = "1.12.1" # x-release-please-version
 # `placement = "popup"` needs Herdr 0.7.4.
 min_herdr_version = "0.7.4"
 description = "Open the focused Herdr pane in Termote from a phone or browser: link, QR code, copy, and start or stop the server"
