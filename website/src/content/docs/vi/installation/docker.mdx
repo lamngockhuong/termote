@@ -105,6 +105,14 @@ bật/tắt được tắt bằng `=false`.
   một quy tắc tường lửa, nên Windows sẽ hỏi quyền quản trị. `container down` gỡ chúng đi.
 </Aside>
 
+<Aside type="caution" title="Dùng một host name riêng cho Termote">
+  Trình duyệt gửi cookie của một trang tới mọi cổng của cùng host name. Vì vậy một dịch vụ web khác trên cùng tên
+  (một cổng khác của cùng server, một ứng dụng khác trên cùng domain) sẽ nhận cookie session của Termote mỗi khi bạn
+  mở nó, tức là có luôn một terminal đã đăng nhập. Trên server còn chạy thứ khác, hãy mở Termote qua một tên chỉ
+  mình nó dùng: tên Tailscale, hoặc một tên riêng như `termote.example.com`. Với thiết bị không còn dùng, hãy chọn
+  `Log out` trong menu **More**.
+</Aside>
+
 ## Quản lý container
 
 ```bash

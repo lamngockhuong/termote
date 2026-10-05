@@ -156,6 +156,14 @@ The allowed host names are always loopback, the Tailscale name, the `--allow-hos
 address a request arrived on (so it keeps working when the LAN IP changes). A request for any other name gets a
 403 that names the `termote start --allow-host <name>` to run.
 
+<Aside type="caution" title="Give Termote a host name of its own">
+  Browsers send a site's cookies to every port of its host name, so another web service on the same name (another
+  port on the same server, another app on the same domain) receives Termote's session cookie whenever you open
+  it, and with it a signed-in terminal. On a server that runs anything else, reach Termote under a name only it
+  answers on: a Tailscale name, or a name of its own such as `termote.example.com`. Log out from the **More** menu
+  on a device you no longer use.
+</Aside>
+
 ## Herdr Backend
 
 Linux, macOS and Windows can drive Herdr workspaces instead of tmux (psmux on Windows). Herdr must already be running on this host
