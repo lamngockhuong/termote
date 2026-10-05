@@ -465,3 +465,41 @@ func TestFilesErrorFallback(t *testing.T) {
 		t.Errorf("gone dir = %d", rec.Code)
 	}
 }
+
+// underDir by name, and through a path differing only in case: under dir
+// when its ancestor of that name is the same directory (a mount that ignores
+// case, stood in for here by a symlink), not when it is another one.
+func TestUnderDir(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("darwin and windows compare names without case")
+	}
+	root := t.TempDir()
+	meta := filepath.Join(root, "meta")
+	for _, d := range []string{meta, filepath.Join(root, "other"), filepath.Join(root, "META2"), filepath.Join(root, "meta2")} {
+		if err := os.Mkdir(d, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink("meta", filepath.Join(root, "Meta")); err != nil {
+		t.Fatal(err)
+	}
+	for p, want := range map[string]bool{
+		"meta":         true,
+		"meta/config":  true,
+		"other/config": false,
+		"metadata/x":   false,
+		"Meta":         true,
+		"Meta/config":  true,
+		"Meta/refs/x":  true,
+		"META2/config": false, // another directory: case matters here
+		"MISSING/x":    false,
+		"META/config":  false, // no such directory on a case-sensitive mount
+	} {
+		if got := underDir(meta, filepath.Join(root, p)); got != want {
+			t.Errorf("underDir(meta, %s) = %v, want %v", p, got, want)
+		}
+	}
+	if !underDir(filepath.Join(root, "meta2"), filepath.Join(root, "meta2", "x")) || underDir(filepath.Join(root, "meta2"), filepath.Join(root, "META2", "x")) {
+		t.Error("meta2 and META2 are two directories")
+	}
+}

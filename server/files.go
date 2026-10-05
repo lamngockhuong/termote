@@ -195,13 +195,32 @@ func isGitDirName(part string) bool {
 }
 
 // underDir reports whether p is dir or below it. File names are compared
-// without case where the file system usually ignores it.
+// without case where the file system usually ignores it. Elsewhere a mount
+// can ignore case too (a Windows drive under WSL, ext4 casefold, vfat): a
+// path that only differs in case is under dir when its ancestor of that name
+// is the same directory.
 func underDir(dir, p string) bool {
 	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
-		dir, p = strings.ToLower(dir), strings.ToLower(p)
+		rel, err := filepath.Rel(strings.ToLower(dir), strings.ToLower(p))
+		return err == nil && filepath.IsLocal(rel)
 	}
-	rel, err := filepath.Rel(dir, p)
-	return err == nil && filepath.IsLocal(rel)
+	if rel, err := filepath.Rel(dir, p); err == nil && filepath.IsLocal(rel) {
+		return true
+	}
+	rel, err := filepath.Rel(strings.ToLower(dir), strings.ToLower(p))
+	if err != nil || !filepath.IsLocal(rel) {
+		return false
+	}
+	// The ancestor of p as deep as dir: p with rel's components dropped.
+	anc := p
+	if rel != "." {
+		for range strings.Split(rel, string(filepath.Separator)) {
+			anc = filepath.Dir(anc)
+		}
+	}
+	a, errA := os.Stat(anc)
+	d, errD := os.Stat(dir)
+	return errA == nil && errD == nil && os.SameFile(a, d)
 }
 
 // sensitivePath checks the path asked for and, through symlinks, the file it
