@@ -270,6 +270,13 @@ func (c *cli) containerUp(args []string) error {
 			return err
 		}
 	} else {
+		if releaseSigned(c.version) {
+			ref, err := c.signedImageRef(c.version)
+			if err != nil {
+				return err
+			}
+			image = ref
+		}
 		c.infof("Pulling %s...", image)
 		if err := c.run.Run("", nil, rt, "pull", image); err != nil {
 			return fmt.Errorf("cannot pull %s (%v); a pre-release has no image until it is published", image, err)

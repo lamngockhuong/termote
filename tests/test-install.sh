@@ -253,6 +253,77 @@ test_real_binary() {
     [[ "$out" =~ ^Termote\ v[0-9] ]] && pass "installed command runs: $out" || fail "installed command" "Termote vX" "$out"
 }
 
+# A copy of install.sh pinning a key made here, whose private half signs the
+# fake releases (the real key signs only real releases).
+setup_signing() {
+    openssl genpkey -algorithm ed25519 -out "$TMP/key.pem" 2>/dev/null
+    SIGNED_SCRIPT="$TMP/install-signed.sh"
+    awk -v pem="$(openssl pkey -in "$TMP/key.pem" -pubout)" '
+        /^# BEGIN RELEASE KEY/ { print; print "RELEASE_KEY='"'"'" pem "'"'"'"; skip = 1; next }
+        /^# END RELEASE KEY/ { skip = 0 }
+        !skip' "$INSTALL_SCRIPT" >"$SIGNED_SCRIPT"
+}
+
+# sign_release <version> [good|otherkey|nosig|unlisted]: checksums.txt and
+# its signature for a release made by make_release.
+sign_release() {
+    local dir="$RELEASES/v$1" name="termote-$1-$OS-$ARCH" key="$TMP/key.pem"
+    (cd "$dir" && sha256 "$name.tar.gz" >checksums.txt)
+    case "${2:-good}" in
+        unlisted) (cd "$dir" && sha256 "$name.tar.gz" | sed "s/$name.tar.gz/other.tar.gz/" >checksums.txt) ;;
+        otherkey) openssl genpkey -algorithm ed25519 -out "$TMP/other.pem" 2>/dev/null; key="$TMP/other.pem" ;;
+    esac
+    rm -f "$dir/checksums.txt.sig"
+    [[ "${2:-good}" == nosig ]] && return
+    openssl pkeyutl -sign -inkey "$key" -rawin -in "$dir/checksums.txt" -out "$dir/checksums.txt.sig"
+}
+
+test_signed_releases() {
+    echo ""
+    echo "=== Signed releases (1.10.0 and later) ==="
+    if ! openssl version 2>/dev/null | grep -qE '^OpenSSL [3-9]'; then
+        echo "skipped: needs OpenSSL 3 to make the test key"
+        return
+    fi
+    setup_signing
+    local saved="$INSTALL_SCRIPT"
+    INSTALL_SCRIPT="$SIGNED_SCRIPT"
+    new_home signed
+    make_release 1.10.0
+    sign_release 1.10.0
+    run_install TERMOTE_VERSION=1.10.0
+    check "signed release installs" "0" "$CODE"
+    echo "$OUT" | grep -q "Signature verified" && pass "says the signature was checked" || fail "signature" "verified" "$OUT"
+
+    for mode in otherkey nosig unlisted; do
+        new_home "signed-$mode"
+        make_release 1.11.0
+        sign_release 1.11.0 "$mode"
+        run_install TERMOTE_VERSION=1.11.0
+        [[ $CODE -ne 0 && ! -e "$DATA/current" ]] && pass "$mode: refused, nothing installed" || fail "$mode" "refused" "$OUT"
+    done
+    run_install TERMOTE_VERSION=1.11.0
+    echo "$OUT" | grep -q "does not vouch" && pass "unlisted archive explained" || fail "unlisted" "does not vouch" "$OUT"
+
+    # No OpenSSL 3 (LibreSSL on macOS): installs, and says the signature
+    # was not checked.
+    new_home signed-libressl
+    sign_release 1.11.0
+    printf '#!/bin/sh\necho "LibreSSL 3.3.6"\n' >"$FAKE_PATH/openssl"
+    chmod +x "$FAKE_PATH/openssl"
+    run_install TERMOTE_VERSION=1.11.0
+    rm -f "$FAKE_PATH/openssl"
+    check "installs without OpenSSL 3" "0" "$CODE"
+    echo "$OUT" | grep -q "signature was not checked" && pass "says the signature was not checked" || fail "no openssl" "note" "$OUT"
+
+    # A 1.10.0 pre-release, like everything before 1.10.0, has no signature.
+    new_home signed-rc
+    make_release 1.10.0-rc.1
+    run_install TERMOTE_VERSION=1.10.0-rc.1
+    check "1.10.0-rc.1 needs no signature" "0" "$CODE"
+    INSTALL_SCRIPT="$saved"
+}
+
 test_syntax
 test_real_binary
 test_fresh_install
@@ -260,6 +331,7 @@ test_existing_install
 test_pin_and_rescue
 test_refusals
 test_unsupported_platform
+test_signed_releases
 
 echo ""
 echo "=== Results ==="

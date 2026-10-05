@@ -200,7 +200,9 @@ func (c *cli) releaseAsset(version string) string {
 }
 
 // downloadVerified saves the release archive into tmp and checks it against
-// its .sha256 file. A missing or wrong checksum always fails.
+// the release's signed checksums.txt, or, for a release older than
+// firstSignedVersion, its .sha256 file. A missing or wrong checksum or
+// signature always fails.
 func (c *cli) downloadVerified(version, tmp string) (string, error) {
 	name := c.releaseAsset(version)
 	base := c.downloadBase + "/" + updateRepo + "/releases/download/v" + version + "/"
@@ -214,6 +216,21 @@ func (c *cli) downloadVerified(version, tmp string) (string, error) {
 	case err != nil:
 		return "", fmt.Errorf("download %s: %w", name, err)
 	}
+	if releaseSigned(version) {
+		listing, err := c.signedChecksums(base)
+		if err != nil {
+			return "", fmt.Errorf("%v; refusing to install v%s", err, version)
+		}
+		expected := checksumOf(listing, name)
+		switch {
+		case expected == "":
+			return "", fmt.Errorf("the signed %s does not list %s; refusing to install an unverified binary", checksumsName, name)
+		case !strings.EqualFold(expected, sum):
+			return "", fmt.Errorf("checksum mismatch for %s (expected %s, got %s); nothing was installed", name, expected, sum)
+		}
+		c.infof("Signature and checksum verified")
+		return file, nil
+	}
 	expected, err := c.expectedChecksum(base+name+".sha256", name)
 	switch {
 	case err != nil:
@@ -223,7 +240,7 @@ func (c *cli) downloadVerified(version, tmp string) (string, error) {
 	case !strings.EqualFold(expected, sum):
 		return "", fmt.Errorf("checksum mismatch for %s (expected %s, got %s); nothing was installed", name, expected, sum)
 	}
-	c.infof("Checksum verified")
+	c.warnf("v%s predates signed releases: checked against its sha256 only", version)
 	return file, nil
 }
 
