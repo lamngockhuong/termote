@@ -501,3 +501,40 @@ func TestTmuxPasteConcurrentRealPanes(t *testing.T) {
 		t.Errorf("buffers after paste: %q", bufs)
 	}
 }
+
+// tmux expands formats in a window name it is given, #() jobs included: a
+// tab name is kept as typed, so no '#' sequence in it runs or changes anything.
+func TestTabNameIsNotAFormat(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil || runtime.GOOS == "windows" {
+		t.Skip("needs tmux with a private socket")
+	}
+	origSocket, origSession := tmuxSocket, tmuxSession
+	tmuxSocket = filepath.Join(t.TempDir(), "tmux.sock")
+	tmuxSession = fmt.Sprintf("termote-tabname-%d", os.Getpid())
+	t.Cleanup(func() {
+		tmuxCmd(context.Background(), "kill-server").Run()
+		tmuxSocket, tmuxSession = origSocket, origSession
+	})
+	ctx := context.Background()
+	name := func(id string) string {
+		out, err := tmuxCmd(ctx, "display-message", "-p", "-t", qualifyTarget(id), "#{window_name}").Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return strings.TrimSuffix(string(out), "\n")
+	}
+	const typed = "a#b ##c #{session_name} #[fg=red] ##[x] #(true) #"
+	id, err := tmuxMux{}.NewTab(ctx, "", typed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := name(id); got != typed {
+		t.Errorf("NewTab name = %q, want %q", got, typed)
+	}
+	if err := (tmuxMux{}).RenameTab(ctx, id, "x"+typed); err != nil {
+		t.Fatal(err)
+	}
+	if got := name(id); got != "x"+typed {
+		t.Errorf("RenameTab name = %q, want %q", got, "x"+typed)
+	}
+}
