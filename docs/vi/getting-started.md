@@ -156,6 +156,15 @@ Thanh công cụ ở dưới cùng cung cấp các phím bổ trợ:
 - Nếu truy cập từ mạng ngoài (không phải LAN), cân nhắc đặt một proxy ngược có HTTPS phía trước
 - PWA sẽ tự động kết nối lại khi có mạng trở lại
 
+### Chạy trên Wi-Fi nhưng treo trên 4G (Tailscale)
+
+- Header đứng ở "Loading...", hoặc terminal trắng trơn, và có thông báo rằng mạng có vẻ đang làm rơi
+  các phản hồi lớn
+- Đường IPv6 của nhà mạng làm rơi các gói đầy cỡ của Tailscale: hạ MTU của Tailscale trên server
+  (`TS_DEBUG_MTU=1200` trong `/etc/default/tailscaled`, rồi khởi động lại `tailscaled`)
+- Xem [Treo khi dùng dữ liệu di động](https://termote.ohnice.app/vi/installation/tailscale/)
+  để biết cách kiểm tra và các tác dụng phụ
+
 ## Nếu bạn đang dùng bản 0.x
 
 Không có đường nâng cấp tại chỗ từ 0.x lên 1.0: cấu trúc cài đặt, định dạng cấu hình và CLI đều đã đổi khác. Hãy gỡ bản 0.x trước (xem [tài liệu 0.x đã lưu trữ](https://termote.ohnice.app/0.x/) để biết các bước gỡ riêng của bản đó), rồi cài bản 1.0 từ đầu bằng hai lệnh phía trên.

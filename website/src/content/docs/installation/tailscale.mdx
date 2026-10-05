@@ -86,3 +86,40 @@ Tailscale handles:
 - TLS certificates (auto-renewed)
 - Authentication (Tailscale ACLs)
 - NAT traversal
+
+## Stalls on mobile data
+
+Termote works on Wi-Fi, but on mobile data the header stays at **Loading...** with 0 sessions, or the terminal
+stays blank, while the Chat view may still load. The PWA shows a toast saying the network seems to drop large
+replies.
+
+Some carriers' IPv6 paths carry packets of at most 1280 bytes. Tailscale's tunnel is 1280 bytes inside, and
+WireGuard adds 80 bytes on IPv6, so a full-size packet is 1360 bytes on the carrier's network and is dropped
+without an error coming back. Small replies (health, a short chat poll) get through; a session list, a terminal
+redraw or an image upload never does.
+
+Check it from the server while the phone is on mobile data (`100.x.y.z` is the phone's Tailscale address,
+`tailscale status` lists it):
+
+```bash
+ping -c 3 -M do -s 1172 100.x.y.z   # 1200-byte packets: replies
+ping -c 3 -M do -s 1252 100.x.y.z   # 1280-byte packets: 100% loss on an affected network
+```
+
+Fix it by lowering Tailscale's MTU on the server to 1200 (Linux, `tailscaled` as a systemd service):
+
+```bash
+echo 'TS_DEBUG_MTU=1200' | sudo tee -a /etc/default/tailscaled
+sudo systemctl restart tailscaled
+ip link show tailscale0   # mtu 1200
+```
+
+`tailscale serve` handles the phone's TCP connection inside `tailscaled`, so a smaller MTU there makes both
+directions fit, uploads included; Termote needs no change.
+
+<Aside type="caution">
+  With an MTU below 1280, Linux removes the IPv6 address from `tailscale0`: this machine is then reachable over
+  its Tailscale IPv4 address and MagicDNS name only, and HTTP/3 (QUIC) does not run over Tailscale. Traffic
+  outside Tailscale is not affected. The setting lives in the system config, not in Termote, so set it again
+  after moving to another machine or reinstalling Tailscale.
+</Aside>

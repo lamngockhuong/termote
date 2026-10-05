@@ -88,3 +88,40 @@ Tailscale lo phần:
 - Chứng chỉ TLS (tự động gia hạn)
 - Xác thực (Tailscale ACL)
 - Vượt NAT
+
+## Treo khi dùng dữ liệu di động
+
+Termote chạy bình thường trên Wi-Fi, nhưng khi dùng 4G thì header đứng ở **Loading...** với 0 phiên, hoặc
+terminal trắng trơn, trong khi Chat view có thể vẫn tải được. PWA hiện một thông báo rằng mạng có vẻ đang làm
+rơi các phản hồi lớn.
+
+Đường IPv6 của một số nhà mạng chỉ chở được gói tối đa 1280 byte. Bên trong đường hầm, Tailscale dùng gói 1280
+byte, và WireGuard bọc thêm 80 byte khi đi qua IPv6, nên một gói đầy cỡ nặng 1360 byte trên mạng nhà mạng và bị
+bỏ đi mà không có lỗi nào báo về. Phản hồi nhỏ (health, một lần đọc chat ngắn) vẫn qua được; danh sách phiên,
+màn hình terminal hay ảnh tải lên thì không bao giờ tới nơi.
+
+Kiểm tra từ server khi điện thoại đang dùng 4G (`100.x.y.z` là địa chỉ Tailscale của điện thoại, có trong
+`tailscale status`):
+
+```bash
+ping -c 3 -M do -s 1172 100.x.y.z   # gói 1200 byte: có phản hồi
+ping -c 3 -M do -s 1252 100.x.y.z   # gói 1280 byte: mất 100% trên mạng bị lỗi
+```
+
+Sửa bằng cách hạ MTU của Tailscale trên server xuống 1200 (Linux, `tailscaled` chạy dưới dạng dịch vụ systemd):
+
+```bash
+echo 'TS_DEBUG_MTU=1200' | sudo tee -a /etc/default/tailscaled
+sudo systemctl restart tailscaled
+ip link show tailscale0   # mtu 1200
+```
+
+`tailscale serve` xử lý kết nối TCP của điện thoại ngay trong `tailscaled`, nên khi MTU ở đó nhỏ lại thì cả hai
+chiều đều vừa, kể cả tải ảnh lên; Termote không cần thay đổi gì.
+
+<Aside type="caution">
+  Khi MTU dưới 1280, Linux gỡ địa chỉ IPv6 khỏi `tailscale0`: máy này khi đó chỉ còn truy cập được qua địa chỉ
+  IPv4 Tailscale và tên MagicDNS, và HTTP/3 (QUIC) không chạy qua Tailscale. Lưu lượng ngoài Tailscale không bị
+  ảnh hưởng. Thiết lập này nằm trong cấu hình hệ thống chứ không trong Termote, nên phải đặt lại khi chuyển sang
+  máy khác hoặc cài lại Tailscale.
+</Aside>
