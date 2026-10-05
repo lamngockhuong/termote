@@ -293,16 +293,16 @@ func buildServer(cfg serveConfig, m Mux) (http.Handler, *streamHub, error) {
 // take at most muxTimeout, git gitTimeout).
 var requestReadTimeout = 60 * time.Second
 
-// readDeadline sets requestReadTimeout on every request but the terminal
-// stream, a WebSocket that reads for as long as it is open. Matched by path,
-// not by an Upgrade header any request could carry. The server clears the
-// deadline before it reads the connection's next request.
+// readDeadline sets requestReadTimeout on every request, the terminal
+// stream's included, so a body sent a byte at a time to the stream path is
+// cut off like on any other route. A stream that passed every check reads
+// for as long as it is open: hijacking the connection for the WebSocket
+// clears the deadline. The server clears it too before it reads the
+// connection's next request.
 func readDeadline(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/mux/stream" {
-			// Fails only on a writer without a connection (tests).
-			_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(requestReadTimeout))
-		}
+		// Fails only on a writer without a connection (tests).
+		_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(requestReadTimeout))
 		next.ServeHTTP(w, r)
 	})
 }

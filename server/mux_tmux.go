@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -52,6 +53,27 @@ func validTmuxID(id string) bool {
 func validTmuxName(name string) bool {
 	return validateTmuxTarget(name) && !strings.HasPrefix(name, "-")
 }
+
+// tmuxWindowName escapes a validated tab name for new-window -n and
+// rename-window: tmux expands formats in the name it is given, running a
+// #() job and replacing #{...}, so a '#' is doubled to keep the name as
+// typed. A run of '#' right before '[' (a style) is the one thing tmux
+// leaves as it is, so it is kept. psmux is left as it was: whether it
+// expands formats is unchecked.
+func tmuxWindowName(name string) string {
+	if runtime.GOOS == "windows" {
+		return name
+	}
+	return tmuxHashRun.ReplaceAllStringFunc(name, func(run string) string {
+		if strings.HasSuffix(run, "[") {
+			return run
+		}
+		return run + run
+	})
+}
+
+// tmuxHashRun matches a whole run of '#', with the '[' after it if any.
+var tmuxHashRun = regexp.MustCompile(`#+\[?`)
 
 // qualifyTarget prefixes a validated window index/name with the session name
 // so that psmux (and tmux) can resolve it correctly, e.g. "0" → "main:0".
@@ -206,7 +228,7 @@ func (tmuxMux) NewTab(ctx context.Context, groupID, name string) (string, error)
 		if !validTmuxName(name) {
 			return "", inputError("invalid tab name")
 		}
-		args = append(args, "-n", name)
+		args = append(args, "-n", tmuxWindowName(name))
 	}
 	out, err := tmuxCmd(ctx, args...).Output()
 	// A client may create a tab before anything asked for a snapshot (a
@@ -238,7 +260,7 @@ func (tmuxMux) RenameTab(ctx context.Context, tabID, name string) error {
 	if !validTmuxName(name) {
 		return inputError("invalid tab name")
 	}
-	return tmuxCmd(ctx, "rename-window", "-t", qualifyTarget(tabID), name).Run()
+	return tmuxCmd(ctx, "rename-window", "-t", qualifyTarget(tabID), tmuxWindowName(name)).Run()
 }
 
 // ClosePane is not offered: a tab here is one window shown as one pane, and

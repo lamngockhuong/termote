@@ -475,7 +475,8 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   blocked clients are logged with the client address (never the credentials), at most one
   line per 10s each
 - **Server hardening**: ReadHeaderTimeout (Slowloris protection), a 60s read deadline on every
-  request but the terminal stream (a body sent a byte at a time); an authenticated image upload
+  request, the terminal stream's handshake included (a body sent a byte at a time; hijacking the
+  connection for the WebSocket clears it); an authenticated image upload
   extends it to 5 minutes (a slow mobile link), at most 256 sessions (the
   least recently used is dropped), request
   body size limits (8KB on `/api/mux/*`, 64KB on `agent/message`)

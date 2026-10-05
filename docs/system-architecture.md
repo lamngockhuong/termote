@@ -509,7 +509,8 @@ with the content route's checks. git is run as an argument array (no shell), wit
 `core.fsmonitor=false`, `core.hooksPath` set to the null device (no hook runs, even the
 `post-index-change` an index refresh would trigger), `diff.autoRefreshIndex=false`, every
 `filter.<driver>` it configures emptied, `--no-ext-diff`, `--no-textconv`,
-`--ignore-submodules=all`, no lazy fetch and `protocol.allow=never`. Each
+`--ignore-submodules=all`, no lazy fetch and no transport at all (an empty
+`GIT_ALLOW_PROTOCOL`, which a repository's `protocol.<name>.allow` cannot re-enable). Each
 command has a 10 s timeout (503 `git timed out`) and takes one of two server-wide slots; nothing
 a client sends becomes a git option.
 

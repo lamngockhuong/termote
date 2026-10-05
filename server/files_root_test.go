@@ -111,7 +111,7 @@ func TestGitEnv(t *testing.T) {
 			t.Errorf("env keeps %s", kv)
 		}
 	}
-	for _, want := range []string{"KEEP_ME=1", "LC_ALL=C", "GIT_OPTIONAL_LOCKS=0", "GIT_TERMINAL_PROMPT=0", "GIT_CONFIG_NOSYSTEM=1", "GIT_NO_LAZY_FETCH=1"} {
+	for _, want := range []string{"KEEP_ME=1", "LC_ALL=C", "GIT_OPTIONAL_LOCKS=0", "GIT_TERMINAL_PROMPT=0", "GIT_CONFIG_NOSYSTEM=1", "GIT_NO_LAZY_FETCH=1", "GIT_ALLOW_PROTOCOL="} {
 		if !slices.Contains(env, want) {
 			t.Errorf("env lacks %s", want)
 		}
@@ -601,5 +601,59 @@ func TestTmuxPaneDirInRealSession(t *testing.T) {
 	var ie inputError
 	if _, _, err := (tmuxMux{}).PaneDir(ctx, "5"); !errors.As(err, &ie) || ie != "unknown pane" {
 		t.Errorf("PaneDir(5) with a window named 5-x = %v, want unknown pane", err)
+	}
+}
+
+// A partial clone whose config re-enables a transport (protocol.<name>.allow
+// wins over protocol.allow) must still fetch nothing on a git older than
+// GIT_NO_LAZY_FETCH (2.44), simulated here by dropping that variable: the
+// repo's ext:: remote and its core.sshCommand never run.
+func TestGitLazyFetchRunsNothingWithoutNoLazyFetch(t *testing.T) {
+	requireGit(t)
+	if runtime.GOOS == "windows" {
+		t.Skip("the stand-in transport is a shell script")
+	}
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv, clone, marker := filepath.Join(dir, "srv"), filepath.Join(dir, "clone"), filepath.Join(dir, "ran")
+	script := filepath.Join(dir, "transport.sh")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\ntouch '"+marker+"'\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(srv, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	gitT(t, srv, "init", "-q")
+	os.WriteFile(filepath.Join(srv, "a.txt"), []byte("v1\n"), 0o644)
+	gitT(t, srv, "add", "a.txt")
+	gitT(t, srv, "commit", "-qm", "1")
+	os.WriteFile(filepath.Join(srv, "a.txt"), []byte("v2\n"), 0o644)
+	gitT(t, srv, "commit", "-qam", "2")
+	gitT(t, srv, "config", "uploadpack.allowFilter", "true")
+	gitT(t, dir, "clone", "-q", "--filter=blob:none", "--no-checkout", "file://"+srv, clone)
+
+	var env []string
+	for _, kv := range gitEnv() {
+		if !strings.HasPrefix(kv, "GIT_NO_LAZY_FETCH=") {
+			env = append(env, kv)
+		}
+	}
+	g := newGitRunner()
+	for _, cfg := range [][]string{
+		{"remote.origin.url", "ext::" + script, "protocol.ext.allow", "always"},
+		{"remote.origin.url", "ssh://host/repo", "core.sshCommand", script, "protocol.ssh.allow", "always"},
+	} {
+		for i := 0; i < len(cfg); i += 2 {
+			gitT(t, clone, "config", cfg[i], cfg[i+1])
+		}
+		cmd := exec.Command("git", g.argv(gitCall{root: clone}, nil, []string{"cat-file", "blob", "HEAD~1:a.txt"})...)
+		cmd.Env = env
+		out, _ := cmd.CombinedOutput()
+		if _, err := os.Stat(marker); err == nil {
+			t.Errorf("%s: the repo's transport ran (git said %q)", cfg[1], out)
+			os.Remove(marker)
+		}
 	}
 }

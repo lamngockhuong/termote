@@ -120,8 +120,11 @@ func gitEnv() []string {
 	}
 	// GIT_NO_LAZY_FETCH: a partial clone would otherwise fetch a missing
 	// object from its promisor remote, running the repo's core.sshCommand.
+	// An empty GIT_ALLOW_PROTOCOL allows no transport whatever the config
+	// says, so a git older than GIT_NO_LAZY_FETCH (2.44) fetches nothing
+	// either.
 	return append(env, "LANG=C", "LC_ALL=C", "GIT_OPTIONAL_LOCKS=0",
-		"GIT_TERMINAL_PROMPT=0", "GIT_CONFIG_NOSYSTEM=1", "GIT_NO_LAZY_FETCH=1")
+		"GIT_TERMINAL_PROMPT=0", "GIT_CONFIG_NOSYSTEM=1", "GIT_NO_LAZY_FETCH=1", "GIT_ALLOW_PROTOCOL=")
 }
 
 func containsFold(list []string, s string) bool {
@@ -136,8 +139,10 @@ func containsFold(list []string, s string) bool {
 // argv builds the full git command line. Overrides go through -c, so they
 // win over every config file of the repo.
 func (g *gitRunner) argv(c gitCall, filters []string, args []string) []string {
-	// protocol.allow=never: no transport at all (lazy fetch on a git older
-	// than GIT_NO_LAZY_FETCH). -c settings reach any git git runs itself.
+	// protocol.allow=never: no transport by default. It does not override
+	// a protocol.<name>.allow of the repo's own config, which is why
+	// gitEnv also sets an empty GIT_ALLOW_PROTOCOL. -c settings reach any
+	// git git runs itself.
 	// core.hooksPath to the null device: no hook of the repo runs (diff
 	// refreshing the index would run post-index-change), and
 	// diff.autoRefreshIndex=false keeps diff from writing the index at all.
