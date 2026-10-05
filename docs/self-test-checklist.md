@@ -22,7 +22,7 @@ Manual testing checklist for Termote features before release.
 - [ ] `irm https://termote.ohnice.app/install.ps1 | iex` completes without error (Windows)
 - [ ] Needs only curl/tar/sha256sum (or PowerShell on Windows); no sudo/admin prompt
 - [ ] Verifies the archive's `.sha256`; a corrupted download is refused, not installed
-- [ ] Picks the newest stable 1.x tag (never a 0.x or pre-release tag)
+- [ ] Picks the newest published stable 1.x release (never a 0.x, a pre-release, or a draft whose tag release-please already pushed)
 - [ ] `TERMOTE_VERSION=X.Y.Z` (or `-rc.N`) pins/rescues a specific version
 - [ ] Re-running the installer on an existing install prints `termote update` and changes nothing
 - [ ] Installer never starts the server itself; it only prints `termote start`

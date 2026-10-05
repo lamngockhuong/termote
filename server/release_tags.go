@@ -14,9 +14,9 @@ import (
 // no pre-release (those are only installed when named).
 var stableTagRe = regexp.MustCompile(`^v\d+\.\d+\.\d+$`)
 
-// newestStable picks the highest stable version at or above 1.0.0 from tag
-// names. releases/latest is not used: it can name a 0.x release, and the
-// installer uses this same rule.
+// newestStable picks the highest stable version at or above 1.0.0 from the
+// tag names of published releases. releases/latest is not used: it can name
+// a 0.x release, and the installer uses this same rule.
 func newestStable(tags []string) string {
 	best := ""
 	for _, t := range tags {
@@ -34,8 +34,12 @@ func newestStable(tags []string) string {
 	return best
 }
 
-// latestRelease asks GitHub for the tags and returns the newest stable
-// version. A token in GH_TOKEN or GITHUB_TOKEN only raises the rate limit.
+// latestRelease asks GitHub for the releases and returns the newest stable
+// version among the published ones. The tag list is not enough: release-please
+// pushes the tag while the release is still a draft waiting for the release
+// environment's approval, with no archive yet. A token in GH_TOKEN or
+// GITHUB_TOKEN only raises the rate limit (one with push access also lists
+// drafts, hence the draft check).
 func (c *cli) latestRelease() (string, error) {
 	header := http.Header{"Accept": {"application/vnd.github+json"}}
 	token := c.getenv("GH_TOKEN")
@@ -45,7 +49,7 @@ func (c *cli) latestRelease() (string, error) {
 	if token != "" {
 		header.Set("Authorization", "Bearer "+token)
 	}
-	resp, err := c.get(c.apiBase+"/repos/"+updateRepo+"/tags?per_page=100", header)
+	resp, err := c.get(c.apiBase+"/repos/"+updateRepo+"/releases?per_page=30", header)
 	var he *httpError
 	switch {
 	case errors.As(err, &he) && (he.code == http.StatusForbidden || he.code == http.StatusTooManyRequests):
@@ -54,15 +58,20 @@ func (c *cli) latestRelease() (string, error) {
 		return "", fmt.Errorf("cannot list the releases on GitHub (%v); name the version instead: termote update --version X.Y.Z", err)
 	}
 	defer resp.Body.Close()
-	var tags []struct {
-		Name string `json:"name"`
+	// Newest first; 30 releases with their notes are well under the limit.
+	var releases []struct {
+		TagName    string `json:"tag_name"`
+		Draft      bool   `json:"draft"`
+		Prerelease bool   `json:"prerelease"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&tags); err != nil {
-		return "", fmt.Errorf("read the tag list: %w", err)
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 8<<20)).Decode(&releases); err != nil {
+		return "", fmt.Errorf("read the release list: %w", err)
 	}
-	names := make([]string, len(tags))
-	for i, t := range tags {
-		names[i] = t.Name
+	var names []string
+	for _, r := range releases {
+		if !r.Draft && !r.Prerelease {
+			names = append(names, r.TagName)
+		}
 	}
 	v := newestStable(names)
 	if v == "" {

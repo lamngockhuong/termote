@@ -62,7 +62,7 @@ if ($Pin) {
     $token = if ($env:GH_TOKEN) { $env:GH_TOKEN } else { $env:GITHUB_TOKEN }
     if ($token) { $headers.Authorization = "Bearer $token" }
     try {
-        $tags = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$Repo/tags?per_page=100"
+        $releases = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$Repo/releases?per_page=30"
     } catch {
         $code = [int]$_.Exception.Response.StatusCode
         if ($code -eq 403 -or $code -eq 429) {
@@ -70,8 +70,12 @@ if ($Pin) {
         }
         Stop-Install "could not list the releases on GitHub ($($_.Exception.Message)). Name the version instead: `$env:TERMOTE_VERSION='X.Y.Z'"
     }
-    # The newest stable 1.x tag; releases/latest can name a 0.x release.
-    $Version = $tags | ForEach-Object { $_.name } | Where-Object { $_ -match '^v[0-9]+\.[0-9]+\.[0-9]+$' } |
+    # The newest published stable 1.x release; releases/latest can name a 0.x
+    # release. Not the tag list: release-please pushes the tag while the
+    # release is still a draft waiting for approval, with no archive yet. A
+    # token with push access also lists drafts.
+    $Version = $releases | Where-Object { -not $_.draft -and -not $_.prerelease } | ForEach-Object { $_.tag_name } |
+        Where-Object { $_ -match '^v[0-9]+\.[0-9]+\.[0-9]+$' } |
         ForEach-Object { [version]$_.TrimStart('v') } | Where-Object { $_.Major -ge 1 } |
         Sort-Object -Descending | Select-Object -First 1
     if (-not $Version) { Stop-Install "no 1.x release found for $Repo. Name one with `$env:TERMOTE_VERSION='X.Y.Z'" }

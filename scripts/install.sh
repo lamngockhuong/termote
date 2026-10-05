@@ -81,8 +81,10 @@ STAGE=""
 trap 'rm -rf "$TMP" ${STAGE:+"$STAGE"}' EXIT
 trap 'exit 130' INT HUP TERM
 
-# The newest release: the tag list sorted by version, stable 1.x and later
-# only. releases/latest is not used, as it can name a 0.x release.
+# The newest release: the published releases sorted by version, stable 1.x
+# and later only. releases/latest is not used, as it can name a 0.x release.
+# The tag list is not used either: release-please pushes the tag while the
+# release is still a draft waiting for approval, with no archive yet.
 if [ -n "$PIN" ]; then
   VERSION="$PIN"
 else
@@ -97,16 +99,25 @@ else
   else
     set --
   fi
-  CODE=$(curl -sSL -o "$TMP/tags.json" -w '%{http_code}' -H 'Accept: application/vnd.github+json' "$@" \
-    "https://api.github.com/repos/${REPO}/tags?per_page=100") ||
+  CODE=$(curl -sSL -o "$TMP/releases.json" -w '%{http_code}' -H 'Accept: application/vnd.github+json' "$@" \
+    "https://api.github.com/repos/${REPO}/releases?per_page=30") ||
     die "could not reach api.github.com to list the releases. Check your network and try again."
   case "$CODE" in
     200) ;;
     403 | 429) die "GitHub's API rate limit says no (HTTP $CODE). Set GH_TOKEN to a GitHub token with no scopes, wait an hour, or name the version and skip this call:  TERMOTE_VERSION=X.Y.Z  (see https://github.com/${REPO}/releases)" ;;
-    *) die "api.github.com answered HTTP $CODE for the tags of ${REPO}. Try again later, or name the version:  TERMOTE_VERSION=X.Y.Z" ;;
+    *) die "api.github.com answered HTTP $CODE for the releases of ${REPO}. Try again later, or name the version:  TERMOTE_VERSION=X.Y.Z" ;;
   esac
-  VERSION=$(tr ',{}' '\n\n\n' <"$TMP/tags.json" | grep -o '"name":[[:space:]]*"[^"]*"' | sed 's/.*"v\{0,1\}\([^"]*\)"$/\1/' |
-    grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | grep -vE '^0\.' | sort -t. -k1,1n -k2,2n -k3,3n | tail -n 1 || true)
+  # tag_name, draft and prerelease are keys of a release only (an asset or the
+  # author has none), and a quote inside the notes is escaped, so they never
+  # match there. A release is kept once all three were seen, in any order; a
+  # token with push access also lists drafts.
+  VERSION=$(grep -oE '"(tag_name|draft|prerelease)":[[:space:]]*("[^"]*"|true|false)' "$TMP/releases.json" |
+    awk -F: '{ k = $1; v = $0; sub(/^[^:]*:[[:space:]]*/, "", v); gsub(/"/, "", k); gsub(/"/, "", v); r[k] = v
+      if (("tag_name" in r) && ("draft" in r) && ("prerelease" in r)) {
+        if (r["draft"] == "false" && r["prerelease"] == "false") print r["tag_name"]
+        delete r["tag_name"]; delete r["draft"]; delete r["prerelease"]
+      } }' |
+    sed 's/^v//' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | grep -vE '^0\.' | sort -t. -k1,1n -k2,2n -k3,3n | tail -n 1 || true)
   [ -n "$VERSION" ] || die "no 1.x release found for ${REPO}. Name one with TERMOTE_VERSION=X.Y.Z (see https://github.com/${REPO}/releases)."
 fi
 

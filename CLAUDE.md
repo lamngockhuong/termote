@@ -47,7 +47,7 @@ termote/
 │   ├── files*.go           # Files/Changes views: pane root, tree, contents, git status/diff, images
 │   ├── webui/              # Embeds the built PWA into the binary (build output, .gitkeep only in git)
 │   ├── install_layout.go   # Versioned install layout (versions/<v>, current pointer, prune)
-│   ├── release_tags.go     # Picks the newest stable 1.x GitHub tag
+│   ├── release_tags.go     # Picks the newest published stable 1.x release
 │   ├── tailscale.go        # `tailscale serve` mapping (apply/remove, never sudo)
 │   ├── cli_start.go        # `start`/`stop`/`restart`: saves options, registers and runs the service
 │   ├── cli_service*.go     # OS supervisor registration (systemd/launchd/Scheduled Task)
@@ -257,7 +257,8 @@ and no PowerShell `-Flag` variants in 1.0.
 
 The `update` command:
 
-- Fetches the newest stable 1.x release tag from GitHub (or uses `--version` to pin)
+- Fetches the newest published stable 1.x release from GitHub (the releases list, never the
+  tags: a draft waiting for approval already has its tag), or uses `--version` to pin
 - Downloads the archive + its checksum (mandatory) into `versions/<v>`, switches `current` atomically;
   from 1.10.0 (`firstSignedVersion`) the checksum must come from the release's `checksums.txt`,
   whose Ed25519 signature `checksums.txt.sig` verifies with `releasePublicKey`
@@ -345,7 +346,7 @@ The `update` command:
 | `server/serve_config.go`                          | Server config from the saved config, else the environment     |
 | `server/install_layout.go`                        | Versioned install layout (`versions/<v>`, `current`, prune)   |
 | `server/tailscale.go`                             | `tailscale serve` mapping (apply/remove, never sudo)          |
-| `server/release_tags.go`                          | Picks the newest stable 1.x GitHub tag                        |
+| `server/release_tags.go`                          | Picks the newest published stable 1.x release                 |
 | `server/cli_start.go`                             | `start`/`stop`/`restart`: options, service registration       |
 | `server/cli_service*.go`                          | OS supervisor registration (systemd/launchd/Scheduled Task)   |
 | `server/cli_container.go`                         | `container up/down/logs/status`                               |

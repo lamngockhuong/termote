@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests for scripts/install.sh, run end to end against a fake curl that
-# serves the tag list and release archives from a local directory, with a
+# serves the release list and release archives from a local directory, with a
 # fake termote binary that logs its calls.
 # Usage: make test-install
 
@@ -39,7 +39,8 @@ case "$(uname -m)" in aarch64 | arm64) ARCH=arm64 ;; *) ARCH=amd64 ;; esac
 
 sha256() { if command -v sha256sum >/dev/null; then sha256sum "$@"; else shasum -a 256 "$@"; fi; }
 
-# Fake curl: the tag list comes from $FAKE_TAGS (HTTP $FAKE_TAGS_CODE),
+# Fake curl: the release list comes from $FAKE_TAGS (HTTP $FAKE_TAGS_CODE; a
+# tag ending in :draft or :pre is a draft or a pre-release),
 # release downloads from $RELEASES; anything else fails like a 404 with -f.
 cat >"$FAKE_PATH/curl" <<'EOF'
 #!/bin/bash
@@ -56,10 +57,16 @@ while [[ $# -gt 0 ]]; do
 done
 echo "$url" >>"$CURL_LOG"
 case "$url" in
-    */tags\?per_page=100)
+    */releases\?per_page=30)
         code="${FAKE_TAGS_CODE:-200}"
         body="["
-        for t in $FAKE_TAGS; do body="$body{\"name\":\"$t\",\"commit\":{\"sha\":\"x\"}},"; done
+        for t in $FAKE_TAGS; do
+            tag="${t%%:*}" draft=false pre=false
+            case "$t" in *:draft) draft=true ;; *:pre) pre=true ;; esac
+            # Asset names and notes quoting a key must not count as a release.
+            body="$body{\"tag_name\":\"$tag\",\"name\":\"$tag\",\"draft\":$draft,\"prerelease\":$pre,"
+            body="$body\"assets\":[{\"name\":\"v9.9.9\"}],\"body\":\"see \\\"tag_name\\\": \\\"v9.9.8\\\", \\\"draft\\\": false\"},"
+        done
         echo "${body%,}]" >"$out"
         [[ -n "$write" ]] && printf '%s' "$code"
         exit 0 ;;
@@ -120,11 +127,11 @@ test_syntax() {
 
 test_fresh_install() {
     echo ""
-    echo "=== Fresh install picks the newest stable 1.x tag ==="
+    echo "=== Fresh install picks the newest published stable 1.x release ==="
     new_home fresh
     make_release 1.0.1
     make_release 1.0.10
-    FAKE_TAGS="v0.1.0 v1.0.1 v1.0.10 v1.0.2 v1.1.0-rc.1 latest" run_install
+    FAKE_TAGS="v1.0.11:draft v1.0.12:pre v0.1.0 v1.0.1 v1.0.10 v1.0.2 v1.1.0-rc.1 latest" run_install
     check "exit status" "0" "$CODE"
     check "current points at 1.0.10" "versions/1.0.10" "$(readlink "$DATA/current")"
     [[ -x "$DATA/versions/1.0.10/bin/termote" && -f "$DATA/versions/1.0.10/LICENSE" ]] &&

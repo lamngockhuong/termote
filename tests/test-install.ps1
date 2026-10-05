@@ -65,7 +65,11 @@ $global:TermoteDownloads = @()
 $global:TermoteReleases = $Releases
 function global:Invoke-RestMethod {
     param([hashtable]$Headers, [string]$Uri)
-    return $global:TermoteFakeTags | ForEach-Object { [pscustomobject]@{ name = $_ } }
+    # A tag ending in :draft or :pre is listed as a draft or a pre-release.
+    return $global:TermoteFakeTags | ForEach-Object {
+        $tag, $kind = $_ -split ':', 2
+        [pscustomobject]@{ tag_name = $tag; name = $tag; draft = ($kind -eq 'draft'); prerelease = ($kind -eq 'pre') }
+    }
 }
 function global:Invoke-WebRequest {
     param([switch]$UseBasicParsing, [string]$Uri, [string]$OutFile)
@@ -129,7 +133,7 @@ try {
     New-Release '1.0.1'
     New-Release '1.0.10'
 
-    $global:TermoteFakeTags = @('v0.1.0', 'v1.0.1', 'v1.0.10', 'v1.1.0-rc.1', 'latest')
+    $global:TermoteFakeTags = @('v1.0.11:draft', 'v1.0.12:pre', 'v0.1.0', 'v1.0.1', 'v1.0.10', 'v1.1.0-rc.1', 'latest')
     $ok = Invoke-Installer
     Write-TestResult "Fresh install succeeds" $ok $script:Out
     Write-TestResult "current.txt names the newest stable 1.x" ((Get-Current) -eq '1.0.10')
