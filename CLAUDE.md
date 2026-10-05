@@ -369,7 +369,8 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   a 401 with a plain HTML form (no script) and no `WWW-Authenticate`, since an iOS home-screen
   app never shows the Basic prompt and the prompt would otherwise sit on top of the form; only a
   client without `Sec-Fetch-Mode` (curl) is still challenged. The form POST must be urlencoded,
-  at most 8 KB, not cross-site (`Sec-Fetch-Site`), shares the Basic auth rate limiter and sets
+  at most 8 KB, not cross-site (`Sec-Fetch-Site`, or an `Origin` off the allowlist other than
+  `null`, which the form itself sends under `no-referrer`), shares the Basic auth rate limiter and sets
   the same session cookie; `next` is kept only as a path on this server. The PWA opens `/login`
   when the snapshot or health read answers 401, and the service worker never serves its shell
   for `/login`
