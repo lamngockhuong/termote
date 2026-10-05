@@ -49,6 +49,9 @@ export interface FilesState {
   openScroll?: number
   // Files left by following a link, the latest last: Back returns to them
   history: { path: string; scrollTop: number }[]
+  // The open file opens straight into editing: one this view just created.
+  // Dropped as soon as another file (or the tree) opens.
+  openIntent?: { root: string; path: string; reveal: boolean }
   // Bumped each time the pane's root moves while the view is open
   rootChanges: number
 }
@@ -100,6 +103,10 @@ interface Store {
   ) => Promise<FollowResult>
   // Back to the file a link was followed from, else to the tree
   back: () => void
+  // A file just created at path under root (or found there): the tree is
+  // read again and opened down to it, then it opens into editing; a
+  // directory found there shows in the tree, opened
+  created: (path: string, root: string, reveal: boolean) => Promise<void>
   // Another request saw the root move to root
   rootChanged: (root: string) => void
 }
@@ -144,7 +151,54 @@ function createStore(paneId: string): Store {
   }
 
   function open(openPath: string | null) {
-    set({ openPath, openAnchor: undefined, openScroll: undefined, history: [] })
+    set({
+      openPath,
+      openAnchor: undefined,
+      openScroll: undefined,
+      history: [],
+      openIntent: undefined,
+    })
+  }
+
+  // state.expanded with path and every directory above it open
+  function expandTo(path: string) {
+    const expanded = { ...state.expanded }
+    if (!path) return expanded
+    const parts = path.split('/')
+    for (let i = 1; i <= parts.length; i++)
+      expanded[parts.slice(0, i).join('/')] = true
+    return expanded
+  }
+
+  async function created(path: string, root: string, reveal: boolean) {
+    const gen = generation
+    const from = state.openPath
+    const parts = path.split('/')
+    const name = parts[parts.length - 1]
+    const dirs = parts
+      .slice(0, -1)
+      .map((_, i) => parts.slice(0, i + 1).join('/'))
+    const parent = dirs[dirs.length - 1] ?? ''
+    set({ expanded: expandTo(parent) })
+    // The directories just made are in no listing read so far
+    await Promise.all(['', ...dirs].map(read))
+    // The root moved, or the user opened something else meanwhile
+    if (gen !== generation || state.openPath !== from) return
+    const entry = state.dirs[parent]?.entries?.find((e) => e.name === name)
+    if (entry && isDir(entry)) {
+      open(null)
+      set({ expanded: expandTo(path) })
+      read(path)
+      return
+    }
+    // One update: the viewer mounts with the intent already there
+    set({
+      openPath: path,
+      openAnchor: undefined,
+      openScroll: undefined,
+      history: [],
+      openIntent: { root, path, reveal },
+    })
   }
 
   // A link of the open file (left at scrollTop) to target. fresh: followed
@@ -179,10 +233,7 @@ function createStore(paneId: string): Store {
     if (!isOpenable(entry)) return 'failed'
     if (isDir(entry)) {
       // The tree, with the directory and every one above it open
-      const expanded = { ...state.expanded }
-      const parts = target.path.split('/')
-      for (let i = 1; i <= parts.length; i++)
-        expanded[parts.slice(0, i).join('/')] = true
+      const expanded = expandTo(target.path)
       open(null)
       set({ expanded })
       for (const path of Object.keys(expanded)) {
@@ -195,6 +246,7 @@ function createStore(paneId: string): Store {
       openPath: target.path,
       openAnchor: target.anchor,
       openScroll: undefined,
+      openIntent: undefined,
       history: fresh
         ? []
         : from
@@ -252,10 +304,12 @@ function createStore(paneId: string): Store {
         openPath: prev.path,
         openAnchor: undefined,
         openScroll: prev.scrollTop,
+        openIntent: undefined,
         history: state.history.slice(0, -1),
       })
     },
     rootChanged,
+    created,
   }
 }
 
@@ -285,6 +339,11 @@ export function useFiles(paneId: string) {
       [store],
     ),
     back: useCallback(() => store.back(), [store]),
+    created: useCallback(
+      (p: string, root: string, reveal: boolean) =>
+        store.created(p, root, reveal),
+      [store],
+    ),
     rootChanged: useCallback((r: string) => store.rootChanged(r), [store]),
   }
 }

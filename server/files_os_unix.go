@@ -15,6 +15,9 @@ const tmuxFilesSupported = true
 // one never hangs; regular files ignore it.
 const openNonblock = syscall.O_NONBLOCK
 
+// createBadChars: a Unix file name takes every character but '/' and NUL.
+const createBadChars = ""
+
 // systemDenyDirs hold process environments and devices; never served.
 var systemDenyDirs = []string{"/proc", "/sys", "/dev"}
 

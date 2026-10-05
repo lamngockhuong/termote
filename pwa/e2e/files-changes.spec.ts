@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import type { Locator } from '@playwright/test'
@@ -301,5 +301,52 @@ test.describe('files and changes views', () => {
     await page.getByRole('button', { name: 'Save', exact: true }).click()
     await expect(page.getByText('Saved')).toBeVisible()
     expect(readFileSync(f, 'utf-8')).toBe('from the phone\n')
+  })
+
+  test('creates a file, its directories too, and opens it to edit', async ({ page }) => {
+    const made = path.join(repo, 'e2e-new')
+    try {
+      await page.setViewportSize({ width: 1280, height: 800 })
+      await page.goto(`${link}?view=files`)
+      const panel = page.getByRole('complementary', { name: 'Files' })
+      const dialog = page.getByRole('dialog', { name: 'New file' })
+      const create = async (p: string) => {
+        await panel.getByRole('button', { name: 'New file' }).click()
+        await dialog.getByRole('textbox').fill(p)
+        await dialog.getByRole('button', { name: 'Create' }).click()
+      }
+
+      await create('e2e-new/dir/note.md')
+      const box = panel.getByRole('textbox', { name: 'Text of e2e-new/dir/note.md' })
+      await expect(box).toHaveValue('')
+      expect(readFileSync(path.join(made, 'dir/note.md'), 'utf-8')).toBe('')
+      await box.fill('# Note\n')
+      await panel.getByRole('button', { name: 'Save', exact: true }).click()
+      await expect(page.getByText('Saved')).toBeVisible()
+      expect(readFileSync(path.join(made, 'dir/note.md'), 'utf-8')).toBe('# Note\n')
+      // Back: the tree is open down to it
+      await panel.getByRole('button', { name: 'Back to files' }).click()
+      await expect(panel.getByRole('treeitem', { name: 'note.md' })).toBeVisible()
+
+      // The same name again: refused, with the way to open it
+      await create('e2e-new/dir/note.md')
+      await expect(dialog.getByRole('alert')).toContainText('already exists')
+      await dialog.getByRole('button', { name: 'Open it' }).click()
+      await expect(box).toHaveValue('# Note\n')
+      expect(readFileSync(path.join(made, 'dir/note.md'), 'utf-8')).toBe('# Note\n')
+      await panel.getByRole('button', { name: 'Cancel editing' }).click()
+      await panel.getByRole('button', { name: 'Back to files' }).click()
+
+      // A name that usually holds secrets: asked once, then no Show
+      await create('e2e-new/.env.local')
+      const ask = page.getByRole('dialog', { name: 'Create this file?' })
+      await ask.getByRole('button', { name: 'Create' }).click()
+      await expect(panel.getByRole('textbox', { name: 'Text of e2e-new/.env.local' })).toBeVisible()
+      await expect(page.getByText('This file may contain secrets. Show its contents?')).toHaveCount(0)
+      expect(existsSync(path.join(made, '.env.local'))).toBe(true)
+    } finally {
+      // The Changes tests must never see it as untracked
+      rmSync(made, { recursive: true, force: true })
+    }
   })
 })

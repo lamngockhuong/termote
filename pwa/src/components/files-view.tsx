@@ -1,6 +1,7 @@
 import {
   ChevronRight,
   File,
+  FilePlus,
   FileSymlink,
   Folder,
   FolderOpen,
@@ -26,8 +27,9 @@ import {
 import type { FileEntry } from '../hooks/use-mux-api'
 import type { LinkPath } from '../utils/markdown-links'
 import { FileViewer } from './file-viewer'
+import { NewFileDialog } from './new-file-dialog'
 import { PaneDirHeader, ViewMessage } from './pane-dir-header'
-import { FOCUS_RING } from './ui/button'
+import { FOCUS_RING, IconButton } from './ui/button'
 
 const ERRORS: Record<FilesError, string> = {
   unsupported: 'Not supported by this backend',
@@ -77,6 +79,18 @@ function visibleRows(s: FilesState, dir = '', level = 1): Row[] {
   return rows
 }
 
+// The directory a new file starts in, with its /: the focused one, or the
+// focused file's
+function focusedDir(s: FilesState, focused?: string): string {
+  if (!focused) return ''
+  const at = focused.lastIndexOf('/')
+  const parent = at < 0 ? '' : focused.slice(0, at)
+  const name = focused.slice(at + 1)
+  const entry = s.dirs[parent]?.entries?.find((e) => e.name === name)
+  const dir = entry && isDir(entry) ? focused : parent
+  return dir ? `${dir}/` : ''
+}
+
 // Files: the pane's root as a tree, read one directory at a time, and the
 // file chosen from it. The same component is the mobile view and the desktop
 // panel.
@@ -101,6 +115,10 @@ function PaneFiles({
 }: { paneId: string } & Pick<ViewProps, 'isMobile' | 'notify' | 'readOnly'>) {
   const f = useFiles(paneId)
   const { load, rootChanges, follow } = f
+  // The tree's focused item, which a new file starts next to
+  const [focused, setFocused] = useState<string>()
+  // The root the New file box was opened under, while it is open
+  const [creating, setCreating] = useState<string>()
 
   const onFollow = useCallback(
     async (target: LinkPath, scrollTop: number) => {
@@ -121,13 +139,45 @@ function PaneFiles({
   }, [rootChanges, notify])
 
   const root = f.dirs['']
+  // Once the root is read, from the tree only. A view-only client is kept
+  // from creating here only: the server has no roles yet
+  const newFileRoot =
+    !readOnly && !f.openPath && root?.entries ? f.root : undefined
+  // The file this view just created opens into editing
+  const intent =
+    f.openIntent?.path === f.openPath && f.openIntent?.root === f.root
+      ? f.openIntent
+      : undefined
   return (
     <div className="flex h-full min-h-0 flex-col">
       <PaneDirHeader
         root={f.root}
         onRefresh={f.refresh}
         refreshing={root?.loading}
-      />
+      >
+        {newFileRoot !== undefined && (
+          <IconButton
+            size="sm"
+            variant="ghost"
+            onClick={() => setCreating(newFileRoot)}
+            aria-label="New file"
+            title="New file"
+          >
+            <FilePlus size={15} aria-hidden="true" />
+          </IconButton>
+        )}
+      </PaneDirHeader>
+      {creating !== undefined && (
+        <NewFileDialog
+          paneId={paneId}
+          root={creating}
+          initialPath={focusedDir(f, focused)}
+          onClose={() => setCreating(undefined)}
+          onCreated={f.created}
+          onRootChanged={f.rootChanged}
+          onRefresh={f.refresh}
+        />
+      )}
       {f.openPath ? (
         <FileViewer
           // A new root or path starts unrevealed: a Show never carries over
@@ -146,6 +196,8 @@ function PaneFiles({
           // A view-only client is kept from editing here only: the server
           // has no roles yet
           canEdit={!readOnly}
+          startEditing={!!intent}
+          initialReveal={intent?.reveal}
         />
       ) : root?.error ? (
         <ViewMessage>{ERRORS[root.error]}</ViewMessage>
@@ -154,7 +206,13 @@ function PaneFiles({
       ) : root.entries.length === 0 ? (
         <ViewMessage>This directory is empty</ViewMessage>
       ) : (
-        <FileTree state={f} onToggle={f.toggle} onOpen={f.open} />
+        <FileTree
+          state={f}
+          focused={focused}
+          onFocus={setFocused}
+          onToggle={f.toggle}
+          onOpen={f.open}
+        />
       )}
     </div>
   )
@@ -162,16 +220,19 @@ function PaneFiles({
 
 function FileTree({
   state,
+  focused,
+  onFocus: setFocused,
   onToggle,
   onOpen,
 }: {
   state: FilesState
+  focused?: string
+  onFocus: (path: string) => void
   onToggle: (path: string) => void
   onOpen: (path: string) => void
 }) {
   const rows = visibleRows(state)
   const entries = rows.filter((r) => r.kind === 'entry')
-  const [focused, setFocused] = useState<string>()
   const current = entries.find((r) => r.path === focused) ?? entries[0]
   const items = useRef(new Map<string, HTMLElement>())
 

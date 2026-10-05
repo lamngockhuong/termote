@@ -417,6 +417,110 @@ describe('following links', () => {
   })
 })
 
+describe('a created file', () => {
+  // The directories x and x/y were just made, holding z.md
+  const listing: Record<string, FileEntry[]> = {
+    '': [dir('x'), dir('docs'), file('a.md')],
+    x: [dir('y')],
+    'x/y': [file('z.md')],
+    docs: [],
+  }
+  beforeEach(() => {
+    mockTree.mockImplementation(async (_p, path: string) =>
+      tree(path, listing[path]),
+    )
+  })
+
+  it('opens into editing, the tree read again and opened down to it', async () => {
+    const { result } = renderHook(() => useFiles('%1'))
+    act(() => result.current.load())
+    await waitFor(() => expect(result.current.root).toBe('/r'))
+    mockTree.mockClear()
+    await act(() => result.current.created('x/y/z.md', '/r', false))
+    expect(mockTree.mock.calls.map((c) => c[1])).toEqual(['', 'x', 'x/y'])
+    expect(result.current.expanded).toEqual({ x: true, 'x/y': true })
+    expect(result.current.dirs['x/y'].entries).toEqual([file('z.md')])
+    expect(result.current.openPath).toBe('x/y/z.md')
+    expect(result.current.openIntent).toEqual({
+      root: '/r',
+      path: 'x/y/z.md',
+      reveal: false,
+    })
+    // Back: the tree shows where it went
+    act(() => result.current.back())
+    expect(result.current.openPath).toBeNull()
+    expect(result.current.openIntent).toBeUndefined()
+    expect(result.current.expanded).toEqual({ x: true, 'x/y': true })
+  })
+
+  it('at the root, with the reveal it was made with', async () => {
+    const { result } = renderHook(() => useFiles('%1'))
+    await act(() => result.current.created('a.md', '/r', true))
+    expect(mockTree.mock.calls.map((c) => c[1])).toEqual([''])
+    expect(result.current.expanded).toEqual({})
+    expect(result.current.openIntent).toEqual({
+      root: '/r',
+      path: 'a.md',
+      reveal: true,
+    })
+  })
+
+  it('a directory found there shows in the tree, opened', async () => {
+    const { result } = renderHook(() => useFiles('%1'))
+    await act(() => result.current.created('docs', '/r', false))
+    expect(result.current.openPath).toBeNull()
+    expect(result.current.openIntent).toBeUndefined()
+    expect(result.current.expanded).toEqual({ docs: true })
+    await waitFor(() => expect(result.current.dirs.docs.entries).toEqual([]))
+  })
+
+  it('the intent goes once another file or a link opens', async () => {
+    const { result } = renderHook(() => useFiles('%1'))
+    await act(() => result.current.created('a.md', '/r', false))
+    act(() => result.current.open('x/y/z.md'))
+    expect(result.current.openIntent).toBeUndefined()
+    await act(() => result.current.created('a.md', '/r', false))
+    await act(() => result.current.follow({ path: 'x/y/z.md' }, 0))
+    expect(result.current.openPath).toBe('x/y/z.md')
+    expect(result.current.openIntent).toBeUndefined()
+  })
+
+  it('opens nothing when the root moves or another file opens meanwhile', async () => {
+    const { result } = renderHook(() => useFiles('%1'))
+    let finish!: () => void
+    const real = mockTree.getMockImplementation()!
+    mockTree.mockImplementationOnce(
+      (...a: [string, string]) =>
+        new Promise((r) => (finish = () => r(real(...a)))),
+    )
+    let done!: Promise<void>
+    act(() => {
+      done = result.current.created('a.md', '/r', false)
+    })
+    act(() => result.current.rootChanged('/n'))
+    await act(async () => {
+      finish()
+      await done
+    })
+    expect(result.current.openPath).toBeNull()
+
+    mockTree.mockImplementationOnce(
+      (...a: [string, string]) =>
+        new Promise((r) => (finish = () => r(real(...a)))),
+    )
+    act(() => {
+      done = result.current.created('a.md', '/n', false)
+    })
+    act(() => result.current.open('x/y/z.md'))
+    await act(async () => {
+      finish()
+      await done
+    })
+    expect(result.current.openPath).toBe('x/y/z.md')
+    expect(result.current.openIntent).toBeUndefined()
+  })
+})
+
 describe('useFileDraft', () => {
   const draft = {
     root: '/r',

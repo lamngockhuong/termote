@@ -13,9 +13,9 @@ Muốn biết agent đã sửa gì, thường bạn phải gõ `ls`, `cat`, `git
 - **Changes**: khi thư mục nằm trong một repo git, danh sách file git báo đã đổi, kèm diff của
   từng file (với ảnh thì là bản trước và bản sau khi đổi).
 
-Ở cả hai view đều sửa và lưu được file văn bản (xem [Sửa file](#sửa-file)). Ngoài ra không đổi
-được gì khác: không tạo, xoá hay đổi tên file, không đưa thay đổi vào index, không bỏ thay đổi và
-không commit.
+Ở cả hai view đều sửa và lưu được file văn bản (xem [Sửa file](#sửa-file)), còn trong Files thì
+tạo được file mới (xem [Tạo file mới](#tạo-file-mới)). Ngoài ra không đổi được gì khác: không xoá
+hay đổi tên file, không đưa thay đổi vào index, không bỏ thay đổi và không commit.
 
 ## Mở ở đâu
 
@@ -112,6 +112,43 @@ thể chứa bí mật thì sửa được sau khi đã bấm hiện nội dung.
 
 Phiên chỉ xem (khi đã có quyền này) không có nút Edit. Chừng nào server chưa kiểm quyền, nút này
 chỉ được ẩn trong app.
+
+## Tạo file mới
+
+Ở đầu Files có nút **New file** (hình trang giấy kèm dấu cộng). Bấm vào, app hỏi đường dẫn tính từ
+thư mục của pane, chẳng hạn `docs/notes/today.md`, và điền sẵn thư mục bạn bấm gần nhất trên cây.
+**Create** tạo một file rỗng, tạo luôn các thư mục còn thiếu trên đường dẫn, rồi mở file trong ô
+nhập văn bản để bạn gõ nội dung và bấm **Save**. Nút chỉ hiện khi đang xem cây, không hiện lúc đang
+mở một file.
+
+- File hay thư mục đã có thì không bao giờ bị thay: ô báo
+  `A file or directory of that name already exists`, kèm nút **Open it** để mở chính nó.
+- Tên thường chứa bí mật (ví dụ `.env.local`) thì app hỏi
+  `This name usually holds secrets. Create it anyway?` một lần; tạo xong, file mở ra luôn mà không
+  hỏi lại có hiện nội dung không.
+- Đang có file khác sửa dở chưa lưu thì app hỏi `Discard other changes?` trước.
+- Mất kết nối trước khi server trả lời thì ô báo
+  `The file may have been created. Refresh to check.`, bấm **Refresh** để đọc lại cây.
+- Thư mục đã tạo cho đường dẫn vẫn giữ nguyên khi một bước sau đó lỗi, giống `mkdir -p`. File mới
+  để trống cũng vẫn còn đó.
+
+| Hiện ra                                        | Lý do                                                                                               |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `Part of this path is a file, not a directory` | Trên đường dẫn có một chỗ là file chứ không phải thư mục                                            |
+| `Part of this path is a symbolic link`         | Trên đường dẫn có một thư mục là liên kết mềm: không bao giờ tạo gì xuyên qua liên kết mềm          |
+| `Files can't be created there`                 | Đường dẫn Termote không bao giờ trả về (xem [Không bao giờ hiện](#không-bao-giờ-hiện)), hoặc thư mục dữ liệu hay thư mục upload của chính Termote |
+| `The server can't create a file there`         | Thư mục đó không ghi được                                                                           |
+| `This name can't be used`                      | Có phần rỗng (`a//b`, dấu `/` ở cuối), có phần kết thúc bằng dấu chấm hay khoảng trắng, có ký tự điều khiển như dấu xuống dòng, sâu quá 32 cấp hoặc dài quá 1024 byte, hoặc trên Windows có một trong các ký tự `<>:"\|?*` |
+
+<Aside type="caution">
+  File mới có thể là file mà công cụ khác tự đọc hay tự chạy, như `.claude/settings.local.json`,
+  `.vscode/tasks.json` hoặc một file trong `.github/workflows`. Ai đăng nhập được Termote thì vốn đã
+  chạy được lệnh trong terminal, nên tính năng này không cho thêm quyền gì, nhưng hãy xem kỹ thứ mình
+  tạo ở những chỗ đó.
+</Aside>
+
+Phiên chỉ xem (khi đã có quyền này) cũng không có nút New file; chừng nào server chưa kiểm quyền,
+nút chỉ được ẩn trong app.
 
 ## Xem trước Markdown
 
@@ -232,7 +269,8 @@ chưa xác nhận thì server không gửi chút nội dung nào.
 
 ## Không bao giờ hiện
 
-Một số đường dẫn không bao giờ được trả về (hay được lưu), kể cả khi đã xác nhận:
+Một số đường dẫn không bao giờ được trả về (hay được lưu, hay được tạo file trong đó), kể cả khi đã
+xác nhận:
 
 - Thư mục cấu hình và trạng thái của chính Termote (mật khẩu đã lưu, log)
 - `/proc`, `/sys` và `/dev` (biến môi trường của tiến trình và thiết bị)

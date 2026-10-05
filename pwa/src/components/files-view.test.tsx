@@ -8,10 +8,12 @@ import { FilesView } from './files-view'
 
 const mockTree = vi.fn()
 const mockContent = vi.fn()
+const mockCreate = vi.fn()
 vi.mock('../hooks/use-mux-api', async (orig) => ({
   ...(await orig<typeof import('../hooks/use-mux-api')>()),
   fetchFilesTree: (...a: unknown[]) => mockTree(...a),
   fetchFileContent: (...a: unknown[]) => mockContent(...a),
+  createFile: (...a: unknown[]) => mockCreate(...a),
 }))
 vi.mock('../utils/highlight', async (orig) => ({
   ...(await orig<typeof import('../utils/highlight')>()),
@@ -366,5 +368,164 @@ describe('FilesView', () => {
     await act(async () => {})
     expect(item('src')).toHaveAttribute('aria-expanded', 'true')
     expect(item('lib')).toHaveAttribute('aria-expanded', 'true')
+  })
+
+  describe('New file', () => {
+    const newFile = () => screen.queryByRole('button', { name: 'New file' })
+    beforeEach(() => {
+      mockCreate.mockReset()
+      HTMLDialogElement.prototype.showModal = vi.fn(function (
+        this: HTMLDialogElement,
+      ) {
+        this.setAttribute('open', '')
+      })
+      HTMLDialogElement.prototype.close = vi.fn()
+    })
+
+    it('is offered from the tree only, and not to a view-only client', async () => {
+      mockContent.mockResolvedValue({
+        root: '/home/kim/app',
+        path: 'README.md',
+        size: 3,
+        text: 'hi',
+      })
+      const { unmount } = await show({ readOnly: true })
+      expect(newFile()).toBeNull()
+      unmount()
+      await show()
+      expect(newFile()).toBeInTheDocument()
+      fireEvent.click(item('README.md'))
+      expect(newFile()).toBeNull()
+    })
+
+    it('is offered under an empty root', async () => {
+      mockTree.mockResolvedValue({
+        root: '/home/kim/app',
+        isRepo: false,
+        path: '',
+        entries: [],
+        truncated: false,
+      })
+      await show()
+      expect(screen.getByText('This directory is empty')).toBeInTheDocument()
+      fireEvent.click(newFile()!)
+      expect(screen.getByRole('textbox')).toHaveValue('')
+    })
+
+    it.each([
+      [[], ''],
+      [['src'], 'src/'],
+      [['src', 'a.ts'], 'src/'],
+      [['src', 'lib'], 'src/lib/'],
+      [['README.md'], ''],
+    ])('after a click on %j it starts in %j', async (clicks, start) => {
+      mockContent.mockResolvedValue({
+        root: '/home/kim/app',
+        size: 1,
+        text: 'x',
+      })
+      await show()
+      for (const name of clicks) {
+        fireEvent.click(item(name))
+        await act(async () => {})
+      }
+      // A file opened: the tree, back, still knows where it was
+      const back = screen.queryByRole('button', { name: 'Back to files' })
+      if (back) fireEvent.click(back)
+      fireEvent.click(newFile()!)
+      expect(screen.getByRole('textbox')).toHaveValue(start)
+      // Closed: the box starts again next time
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+      expect(screen.queryByRole('textbox')).toBeNull()
+    })
+
+    it('opens the new file into editing, with the tree opened down to it', async () => {
+      DIRS.src.push(e('new.md', { size: 0 }))
+      mockCreate.mockResolvedValue({
+        root: '/home/kim/app',
+        path: 'src/new.md',
+      })
+      mockContent.mockImplementation(async (_p: string, path: string) => ({
+        root: '/home/kim/app',
+        path,
+        size: 0,
+        text: '',
+        hash: 'h0',
+        editable: true,
+      }))
+      try {
+        await show()
+        fireEvent.click(newFile()!)
+        fireEvent.change(screen.getByRole('textbox'), {
+          target: { value: 'src/new.md' },
+        })
+        await act(async () => {
+          fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+        })
+        expect(mockCreate).toHaveBeenCalledWith('%1', {
+          root: '/home/kim/app',
+          path: 'src/new.md',
+          reveal: false,
+        })
+        expect(
+          await screen.findByRole('textbox', { name: 'Text of src/new.md' }),
+        ).toHaveValue('')
+        expect(mockContent).toHaveBeenLastCalledWith('%1', 'src/new.md', {
+          root: '/home/kim/app',
+          reveal: false,
+        })
+        fireEvent.click(screen.getByRole('button', { name: 'Cancel editing' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Back to files' }))
+        expect(item('src')).toHaveAttribute('aria-expanded', 'true')
+        expect(item('new.md')).toHaveAttribute('aria-level', '2')
+      } finally {
+        DIRS.src.pop()
+      }
+    })
+
+    it('a name that holds secrets opens without asking to Show it', async () => {
+      mockCreate
+        .mockRejectedValueOnce(new RequestError(403, 'sensitive', 'x'))
+        .mockResolvedValueOnce({ root: '/home/kim/app', path: '.env.local' })
+      mockContent.mockImplementation(
+        async (_p: string, path: string, o: { reveal: boolean }) =>
+          o.reveal
+            ? {
+                root: '/home/kim/app',
+                path,
+                size: 0,
+                text: '',
+                hash: 'h0',
+                editable: true,
+              }
+            : { root: '/home/kim/app', path, sensitive: true },
+      )
+      await show()
+      fireEvent.click(newFile()!)
+      fireEvent.change(screen.getByRole('textbox'), {
+        target: { value: '.env.local' },
+      })
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+      })
+      await act(async () => {
+        fireEvent.click(
+          within(
+            screen.getByRole('dialog', { name: 'Create this file?' }),
+          ).getByRole('button', { name: 'Create' }),
+        )
+      })
+      expect(
+        await screen.findByRole('textbox', { name: 'Text of .env.local' }),
+      ).toBeInTheDocument()
+      expect(mockContent).toHaveBeenCalledTimes(1)
+      expect(mockContent).toHaveBeenCalledWith('%1', '.env.local', {
+        root: '/home/kim/app',
+        reveal: true,
+      })
+      expect(
+        screen.queryByRole('dialog', { name: 'Show this file?' }),
+      ).toBeNull()
+    })
   })
 })

@@ -304,6 +304,7 @@ The `update` command:
 | `pwa/src/components/files-view.tsx`               | Files view: the pane's directory as a tree, opens a file      |
 | `pwa/src/components/changes-view.tsx`             | Changes view: git status grouped, a file's diff, edits it     |
 | `pwa/src/components/file-editor.tsx`              | A file's text in a textarea, why a save failed                |
+| `pwa/src/components/new-file-dialog.tsx`          | Files: asks for a new file's path, creates it, says why not   |
 | `pwa/src/components/markdown-preview.tsx`         | Markdown file rendered in Files/Changes (links, code blocks)  |
 | `pwa/src/components/image-preview.tsx`            | One image of Files/Changes (sizes, why it cannot be shown)    |
 | `pwa/src/components/image-compare.tsx`            | Changes: an image's old and new versions side by side         |
@@ -335,6 +336,7 @@ The `update` command:
 | `server/files_sensitive.go`                       | Names of files that usually hold secrets                      |
 | `server/files_raw.go`                             | `files/raw`: an image's bytes (worktree, or a git version)    |
 | `server/files_write.go`                           | `PUT files/content`: saves a text file (baseHash, rename)     |
+| `server/files_create.go`                          | `POST files/create`: an empty file, never replacing anything  |
 | `server/agent_proc*.go`                           | Finds Claude Code (or Codex) under a tmux/psmux pane          |
 | `server/guard.go`                                 | Host allowlist + Origin/Content-Type write guard              |
 | `server/login.go`                                 | Sign-in form for browsers (iOS home-screen app has no prompt) |
@@ -470,7 +472,7 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   (`sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:`) and
   `Content-Disposition: attachment`
 - **Saving a file** (`PUT files/content?root=`, `server/files_write.go`): replaces the whole text
-  of an existing file. `writeGuard` (same-site JSON) plus the handler's own cross-site check and
+  of an existing file (a new one comes from `POST files/create`, see Creating a file). `writeGuard` (same-site JSON) plus the handler's own cross-site check and
   `requireWriteRole`; the `root` query is required (400, 409 once it moved). Body
   `{path, baseHash, text, reveal}`: bytes on disk other than `baseHash` (GET `content`'s `hash`,
   sha256) → 409 `changed`, unless they already equal the text (200: a repeated save is no
@@ -490,6 +492,29 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   compare-and-swap), and the rename drops ACLs/xattrs. A view-only client is kept from editing in
   the UI only while `requireWriteRole` is a stub. The draft stays in the PWA's memory, never in
   browser storage
+- **Creating a file** (`POST files/create?root=`, `server/files_create.go`): an empty file and
+  the directories missing above it (0666/0777 under the umask; directories made before a later
+  failure stay, as with `mkdir -p`); the text then goes through `PUT files/content`. Same guards
+  as a save (`writeGuard`, the handler's cross-site check, `requireWriteRole`, `root` required:
+  400, 409 once it moved); the body (`{path, reveal}`, 8 KB) is read before one of the 2 write
+  slots is taken (429 `busy`), and its read deadline stays 60s; 201 `{root, path}`. The name is checked
+  before the disk is touched (400 `invalid_name`): no empty component, at most 32 components and
+  1024 bytes, 255 a component, none ending in a dot or a space, no control character, no
+  `<>:"|?*` on Windows, not a
+  `.termote-edit-<16 hex>` name, then `cleanRelPath`. Deny dirs, `.git`/the git dir and the
+  write-only deny list → 403 `not_allowed`; a sensitive name needs `reveal: true` (403
+  `sensitive`; the PWA asks once, then opens the editor without a Show). One lock per root; each
+  directory is opened from the one before (`Lstat`, `Mkdir` when missing, `OpenRoot`, then
+  `SameFile` with what was checked): a symlink or a directory swapped in → 403 `symlink`, a
+  parent that is a file → 409 `not_directory`, EACCES → 403 `permission`; each directory is
+  checked against the deny lists again once it exists, before anything is made inside it (an 8.3
+  name or a junction is only caught there). The file is opened `O_CREATE|O_EXCL` on its parent's
+  handle: anything there, a dangling symlink included → 409 `exists`, never replaced. A create
+  drops the root's cached git status. Accepted risk: a new file can be one another tool trusts
+  or runs (`.claude/settings.local.json`, `.claude/commands/*.md`, `.vscode/tasks.json`,
+  `.github/workflows/*`, a systemd/launchd unit when the root is the home dir); a signed-in user
+  has a shell anyway, and the view-only role (#236) must refuse creates as well as saves. A
+  view-only client gets no New file button only in the UI while `requireWriteRole` is a stub
 - **Image uploads** (`POST /api/mux/uploads`): the PWA sends an image so an agent can read it by
   path (the host clipboard is empty when the image sits on a phone). Same auth, Host allowlist,
   `Sec-Fetch-Site`/`Origin` check and `requireWriteRole` as every write; the body is a raw

@@ -15,6 +15,10 @@ const tmuxFilesSupported = false
 // openNonblock: Windows opens never wait on a pipe the way a FIFO does.
 const openNonblock = 0
 
+// createBadChars are refused in a Windows file name (':' would also name an
+// alternate data stream).
+const createBadChars = `<>:"|?*`
+
 var systemDenyDirs []string
 
 // ownedByServer is not checked on Windows: a repo git refuses for its owner

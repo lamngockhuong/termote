@@ -187,6 +187,7 @@ GET    /api/mux/panes/{id}/agent/commands                        → {commands: 
 GET    /api/mux/panes/{id}/files/tree?path=&root=               → {root, isRepo, path, entries, truncated}
 GET    /api/mux/panes/{id}/files/content?path=&root=&reveal=    → {root, path, size, text, hash, editable, notEditable?} | {…, previewable: false, reason} | {…, sensitive: true}
 PUT    /api/mux/panes/{id}/files/content?root=  body: {path, baseHash, text, reveal} → {root, path, size, hash} | {error, code, reason?}
+POST   /api/mux/panes/{id}/files/create?root=   body: {path, reveal}           → 201 {root, path} | {error, code}
 GET    /api/mux/panes/{id}/files/changes?root=                  → {root, isRepo, branch, entries, truncated}
 GET    /api/mux/panes/{id}/files/diff?path=&orig=&staged=&root=&reveal= → {root, path, binary, conflict, truncated, sensitive, reason, hunks}
 GET    /api/mux/panes/{id}/files/raw?path=&root=&reveal=[&side=old|new&staged=&orig=] → image bytes | {error, code}
@@ -472,8 +473,9 @@ The PWA's Files and Changes views read a pane's directory, offered when the snap
 `caps.files`: tmux on Linux and macOS (`#{pane_current_path}` of the window's active pane) and
 Herdr (`foreground_cwd`, else `cwd`, of the pane; a Herdr that reports neither answers 501).
 psmux does not report the directory, so `caps.files` is off on Windows tmux. Every route is
-registered for every backend and answers 501 where it is off. Five are read-only GETs; the
-sixth, `PUT files/content`, saves a text file (see Saving a file).
+registered for every backend and answers 501 where it is off. Five are read-only GETs;
+`PUT files/content` saves a text file and `POST files/create` creates an empty one (see Saving
+a file, Creating a file).
 
 **Root.** The pane's directory, raised to `git rev-parse --show-toplevel` when it is in a
 repository and a `.git` sits at that toplevel (a `core.worktree` naming another directory, even
@@ -541,8 +543,8 @@ and a WebP's first chunk (VP8, VP8L, or the VP8X canvas) (413 `too_many_pixels`)
 `sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:`, and
 `Content-Disposition: attachment`, so opening its URL runs no script under termote's origin.
 
-**Saving a file (`PUT content`).** Replaces the whole text of an existing file (no create,
-delete or rename) in `server/files_write.go`. A signed-in user already has a shell in the
+**Saving a file (`PUT content`).** Replaces the whole text of an existing file (no delete or
+rename; a new file comes from `POST create`, below) in `server/files_write.go`. A signed-in user already has a shell in the
 terminal, so the route grants nothing new; what it guards is not overwriting an agent's change
 and not opening a write path into what the reads refuse.
 
@@ -579,13 +581,46 @@ and not opening a write path into what the reads refuse.
   are not kept (its owner is, since a file of another user is refused). File contents are never
   logged.
 
+**Creating a file (`POST create`).** Creates an empty file, and the directories missing above
+it, in `server/files_create.go`; the text then goes through `PUT content`. As for a save, the
+route grants nothing a shell does not; what it guards is never replacing anything and never
+making anything inside what the reads and saves refuse, through a symlink, a junction or a
+short name included.
+
+- The `root` query is required (400, 409 with the new root once it moved); the body
+  `{path, reveal}` is read with the 8 KB JSON limit before one of the 2 write slots is taken
+  (429 `busy`), and the read deadline is not extended. 201 `{root, path}` on success.
+- The name is checked before anything touches the disk (400 `invalid_name`): no empty component
+  (a leading, doubled or trailing separator), at most 32 components and 1024 bytes, 255 bytes a
+  component, none ending in a dot or a space (Windows drops them, so `a.` would open `a`), no
+  control character (`files/raw` refuses a name with a line break), no `<>:"|?*` on Windows, not a `.termote-edit-<16 hex>` name, then `cleanRelPath` (a Windows
+  device name too).
+- The deny dirs, `.git` and the git dir, and the write-only deny list answer 403 `not_allowed`;
+  a sensitive name needs `reveal: true` (403 `sensitive`).
+- One lock per root (creates in a root run one at a time). The walk opens each directory from
+  the one before: `Lstat`, `Mkdir` (0777 under the umask) when it is missing, `OpenRoot`, and
+  the directory opened must be `SameFile` with the one checked. A symlink, or a directory
+  swapped in between, answers 403 `symlink`; a parent that is a file 409 `not_directory`;
+  EACCES 403 `permission`. Each directory is checked against the deny lists again once it
+  exists, before anything is made inside it: a path that does not exist yet can only be
+  compared by name, which misses an 8.3 name (`TERMOT~1`) or a junction.
+- The file is opened `O_CREATE|O_EXCL` (0666 under the umask) on its parent's handle: anything
+  already there, a dangling symlink included, answers 409 `exists` and is never replaced.
+  Directories made before a later step fails stay, as with `mkdir -p`. A create drops the
+  root's cached git status.
+- Accepted risk: a new file can be one another tool trusts or runs (`.claude/settings.local.json`,
+  `.claude/commands/*.md`, `.vscode/tasks.json`, `.github/workflows/*`, a systemd or launchd
+  unit when the root is the home directory). A signed-in user has a shell anyway; the
+  view-only role (#236) must refuse creates as well as saves.
+
 **Guards.** Basic auth and the Host allowlist like every route; GETs pass `writeGuard`, so the
 handlers check `Sec-Fetch-Site`/`Origin` themselves (403 cross-site), which keeps another page
-from making a `--no-auth` server run git. `PUT content` goes through `writeGuard` like every
-write (same-site, `application/json`) and its handler checks again. Other methods get 405.
+from making a `--no-auth` server run git. `PUT content` and `POST create` go through
+`writeGuard` like every write (same-site, `application/json`) and their handlers check again.
+Other methods get 405.
 `requireFilesRead` and `requireFilesWrite` are where a view-only role (#236) will be enforced;
 `requireWriteRole` is still a stub, so today a view-only client is kept from editing only by
-the PWA, which hides Edit in `readOnly` mode.
+the PWA, which hides Edit and New file in `readOnly` mode.
 
 **PWA.** Edit (Files, and the diff of a file the working tree still has as text in Changes)
 turns the file into a plain `<textarea>` (`file-editor.tsx`), a Markdown file as its source.
@@ -595,6 +630,15 @@ longer be saved, only copied). Editing another file while one has unsaved change
 first, and leaving the page asks while any pane has them; a 409 `changed` keeps it with Reload and Copy my text, and a
 timeout says the save may have gone through (saving again is safe). In Changes a save goes
 back to the unstaged diff, read again, and to the list once git status no longer lists it.
+
+New file (the Files header, over the tree only) asks for a path from the root in a sheet
+(`new-file-dialog.tsx`), prefilled with the directory the tree has focus in. Unsaved changes to
+another file are dropped only once the user says so, and a sensitive name is created after a
+second ask. Once made, the store (`created`) reads the root and every directory above the file
+again, opens them, and opens the file straight into editing (`openIntent`, with the reveal it
+was created with): the draft, `hash` and `editable` come from GET `content`. A 409 `exists`
+offers Open it; a lost reply says the file may have been made, with Refresh, and never guesses
+from the tree.
 
 One store per pane for the tree (`use-files.ts`) and for the status
 (`use-git-changes.ts`, polled every 5 s while a view shows it and the page is visible, backing
@@ -756,7 +800,8 @@ termote update --force           # Force reinstall current version
     upload ids resolved by the server, never paths, and a failed send clears the input box
     (one `C-c`) only when it holds nothing but its own paste; markdown images in the Chat
     view never load
-11. **Files and changes**: reads, plus `PUT content` saving a text file (see above); paths confined to the pane's root by `os.Root`; Termote's
+11. **Files and changes**: reads, plus `PUT content` saving a text file and `POST create`
+    making an empty one, never replacing anything (see above); paths confined to the pane's root by `os.Root`; Termote's
     config/state dirs, `/proc`, `/sys`, `/dev` and `.git` never served (a path differing only in
     case is checked by directory identity, for mounts that ignore case); sensitive files only
     with `reveal=1`; git run without a shell and with every repo-configured program disabled;
