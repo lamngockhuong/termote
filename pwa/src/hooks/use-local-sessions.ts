@@ -8,9 +8,14 @@ import {
   worstAgentStatus,
 } from '../types/session'
 import {
+  isTimeoutError,
+  reportLargePacketLoss,
+} from '../utils/large-packet-loss'
+import {
   closePane,
   closeTab,
   createTab,
+  fetchHealth,
   fetchSnapshot,
   type MuxSnapshot,
   renameTab,
@@ -194,6 +199,9 @@ export function useLocalSessions(pollInterval = 5) {
   // latest pick must not undo it.
   const selectionVersionRef = useRef(0)
   const isReadyRef = useRef(false)
+  // Reads still waiting on the network; a timer tick skips while any is,
+  // instead of piling another request onto a stalled connection.
+  const inFlightRef = useRef(0)
 
   const storeSelection = useCallback((sel: Selection) => {
     selectionRef.current = sel
@@ -250,6 +258,7 @@ export function useLocalSessions(pollInterval = 5) {
 
   // Fetch sessions from mux API
   const refreshSessions = useCallback(async () => {
+    inFlightRef.current++
     const version = selectionVersionRef.current
     try {
       let snap = await fetchSnapshot()
@@ -269,6 +278,11 @@ export function useLocalSessions(pollInterval = 5) {
     } catch (err) {
       console.warn('[mux] API not available:', err)
       setIsServerReachable(false)
+      // The snapshot timed out: a health reply (a few hundred bytes) that
+      // still arrives means only the large reply was lost on the way.
+      if (isTimeoutError(err)) {
+        fetchHealth().then(reportLargePacketLoss, () => {})
+      }
       // Fallback: create a default session only on first load
       if (!isReadyRef.current) {
         const fallback: Session = {
@@ -282,6 +296,8 @@ export function useLocalSessions(pollInterval = 5) {
         setIsReady(true)
         isReadyRef.current = true
       }
+    } finally {
+      inFlightRef.current--
     }
   }, [applySnapshot])
 
@@ -289,7 +305,9 @@ export function useLocalSessions(pollInterval = 5) {
   useEffect(() => {
     refreshSessions()
     const ms = Math.max(pollInterval, 1) * 1000
-    const interval = setInterval(refreshSessions, ms)
+    const interval = setInterval(() => {
+      if (inFlightRef.current === 0) refreshSessions()
+    }, ms)
     return () => clearInterval(interval)
   }, [refreshSessions, pollInterval])
 

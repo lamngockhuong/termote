@@ -4,6 +4,10 @@ const API_BASE = '/api/mux'
 // server/mux.go. A server reporting another version gets a reload.
 export const MUX_API_VERSION = 1
 
+// A read the network swallows (a stalled connection, replies dropped on the
+// way) fails after this long, body included, instead of waiting forever.
+export const REQUEST_TIMEOUT_MS = 10_000
+
 export interface MuxAgent {
   name: string
   status: string
@@ -92,13 +96,23 @@ const openSignIn = (url: string) => window.location.assign(url)
 // The snapshot is polled and the health read on load, so a session that
 // ended is noticed within one poll.
 export async function fetchSnapshot(signIn = openSignIn): Promise<MuxSnapshot> {
-  return readJSON(await fetch(`${API_BASE}/snapshot`), signIn)
+  return readJSON(
+    await fetch(`${API_BASE}/snapshot`, {
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    }),
+    signIn,
+  )
 }
 
 export async function fetchHealth(
   signIn = openSignIn,
 ): Promise<{ apiVersion?: number }> {
-  return readJSON(await fetch(`${API_BASE}/health`), signIn)
+  return readJSON(
+    await fetch(`${API_BASE}/health`, {
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    }),
+    signIn,
+  )
 }
 
 export async function selectTab(id: string): Promise<boolean> {

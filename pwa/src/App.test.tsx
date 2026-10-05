@@ -8,6 +8,10 @@ import { KeyboardToolbar } from './components/keyboard-toolbar'
 import type { QuickActionHandlers } from './components/quick-actions-menu'
 import { PanelMaximizeButton } from './components/side-panel'
 import { TerminalView } from './components/terminal-view'
+import {
+  LARGE_PACKET_HELP_URL,
+  reportLargePacketLoss,
+} from './utils/large-packet-loss'
 
 // ─── Mock all hooks ───────────────────────────────────────────────────────────
 
@@ -632,6 +636,27 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.getByTestId('keyboard-toolbar')).toBeInTheDocument()
     })
+  })
+
+  it('explains lost large replies once, with a link to the fix', async () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null)
+    render(<App />)
+    act(() => {
+      reportLargePacketLoss()
+      reportLargePacketLoss()
+    })
+    const toast = await screen.findByTestId('toast')
+    expect(toast).toHaveAttribute('data-variant', 'warning')
+    expect(toast).toHaveTextContent(/drop large replies/)
+    fireEvent.click(screen.getByRole('button', { name: 'How to fix' }))
+    expect(open).toHaveBeenCalledWith(
+      LARGE_PACKET_HELP_URL,
+      '_blank',
+      'noopener',
+    )
+    // Already explained on this page load: no second toast
+    act(() => reportLargePacketLoss())
+    expect(screen.queryByTestId('toast')).not.toBeInTheDocument()
   })
 
   it('shows toast when update is available on mount', async () => {

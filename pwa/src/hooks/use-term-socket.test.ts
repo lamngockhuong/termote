@@ -5,6 +5,7 @@ import {
   backoffDelay,
   CLOSE_EVICTED,
   HIDDEN_CLOSE_MS,
+  STREAM_START_TIMEOUT_MS,
   streamURL,
   useTermSocket,
 } from './use-term-socket'
@@ -12,6 +13,11 @@ import {
 const mockFetchTerminalToken = vi.fn()
 vi.mock('./use-mux-api', () => ({
   fetchTerminalToken: () => mockFetchTerminalToken(),
+}))
+
+const mockReportLargePacketLoss = vi.fn()
+vi.mock('../utils/large-packet-loss', () => ({
+  reportLargePacketLoss: () => mockReportLargePacketLoss(),
 }))
 
 // Fake WebSocket that tests drive by hand; every instance is recorded.
@@ -137,6 +143,7 @@ describe('useTermSocket', () => {
     vi.useFakeTimers()
     vi.spyOn(Math, 'random').mockReturnValue(0)
     mockFetchTerminalToken.mockReset().mockResolvedValue('tok')
+    mockReportLargePacketLoss.mockReset()
     setVisibility('visible')
   })
 
@@ -393,6 +400,7 @@ describe('useTermSocket', () => {
     await flush()
     const ws = last()
     act(() => ws.open())
+    act(() => ws.message(new ArrayBuffer(1)))
     act(() => setVisibility('hidden'))
     act(() => {
       vi.advanceTimersByTime(HIDDEN_CLOSE_MS - 1)
@@ -421,6 +429,7 @@ describe('useTermSocket', () => {
     await flush()
     const ws = last()
     act(() => ws.open())
+    act(() => ws.message(new ArrayBuffer(1)))
     act(() => setVisibility('hidden'))
     act(() => setVisibility('visible'))
     act(() => {
@@ -522,5 +531,69 @@ describe('useTermSocket', () => {
     rerender({ paneId: undefined, followPane: true })
     expect(result.current.state).toBe('connecting')
     expect(last().close).toHaveBeenCalled()
+  })
+
+  it('drops an open stream that shows no output and reports lost replies', async () => {
+    const { result } = setup()
+    await flush()
+    const ws = last()
+    act(() => ws.open())
+    act(() => {
+      vi.advanceTimersByTime(STREAM_START_TIMEOUT_MS - 1)
+    })
+    expect(ws.close).not.toHaveBeenCalled()
+    act(() => {
+      vi.advanceTimersByTime(1)
+    })
+    expect(ws.close).toHaveBeenCalled()
+    expect(result.current.state).toBe('error')
+    expect(mockReportLargePacketLoss).toHaveBeenCalledTimes(1)
+    // Retried after the backoff
+    act(() => {
+      vi.advanceTimersByTime(backoffDelay(0))
+    })
+    await flush()
+    expect(FakeWS.instances).toHaveLength(2)
+  })
+
+  it('retries a stream that never opens without reporting lost replies', async () => {
+    const { result } = setup()
+    await flush()
+    const ws = last()
+    act(() => {
+      vi.advanceTimersByTime(STREAM_START_TIMEOUT_MS)
+    })
+    expect(ws.close).toHaveBeenCalled()
+    expect(result.current.state).toBe('error')
+    expect(mockReportLargePacketLoss).not.toHaveBeenCalled()
+  })
+
+  it('keeps a stream whose output arrived', async () => {
+    const { result, onOutput } = setup()
+    await flush()
+    const ws = last()
+    act(() => ws.open())
+    act(() => ws.message(new ArrayBuffer(1)))
+    expect(onOutput).toHaveBeenCalledTimes(1)
+    act(() => {
+      vi.advanceTimersByTime(STREAM_START_TIMEOUT_MS)
+    })
+    expect(ws.close).not.toHaveBeenCalled()
+    expect(result.current.state).toBe('connected')
+  })
+
+  it('does not reopen a stream that closed before any output', async () => {
+    const { result } = setup()
+    await flush()
+    const ws = last()
+    act(() => ws.open())
+    act(() => ws.closeWith(CLOSE_EVICTED))
+    act(() => {
+      vi.advanceTimersByTime(STREAM_START_TIMEOUT_MS)
+    })
+    await flush()
+    expect(FakeWS.instances).toHaveLength(1)
+    expect(result.current.state).toBe('error')
+    expect(mockReportLargePacketLoss).not.toHaveBeenCalled()
   })
 })

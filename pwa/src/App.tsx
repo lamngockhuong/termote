@@ -46,6 +46,10 @@ import { useUpdateCheck } from './hooks/use-update-check'
 import { applyUiStyle, syncThemeColor } from './ui-style'
 import { checkApiVersion } from './utils/api-version'
 import { formatDeepLink, parseDeepLink } from './utils/deep-link'
+import {
+  LARGE_PACKET_HELP_URL,
+  onLargePacketLoss,
+} from './utils/large-packet-loss'
 import { matchesFilter } from './utils/session-filter'
 import {
   attachImageToTerminal,
@@ -340,6 +344,28 @@ export default function App({
   useEffect(() => {
     checkApiVersion()
   }, [])
+
+  // Shown once per page load: the poll and the stream report it on every
+  // retry while the network keeps dropping large replies.
+  const packetHintShownRef = useRef(false)
+  useEffect(
+    () =>
+      onLargePacketLoss(() => {
+        if (packetHintShownRef.current) return
+        packetHintShownRef.current = true
+        showToast(
+          'This network seems to drop large replies, so the terminal cannot load. Lowering the Tailscale MTU on the server fixes it',
+          'warning',
+          {
+            label: 'How to fix',
+            onClick: () =>
+              window.open(LARGE_PACKET_HELP_URL, '_blank', 'noopener'),
+          },
+          15_000,
+        )
+      }),
+    [showToast],
+  )
 
   // Check for updates on mount
   useEffect(() => {

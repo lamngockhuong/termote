@@ -176,6 +176,15 @@ The toolbar at the bottom provides modifier keys:
 - If using over internet (not LAN), consider a reverse proxy with HTTPS
 - The PWA will automatically reconnect when connection is restored
 
+### Works on Wi-Fi, Stalls on Mobile Data (Tailscale)
+
+- The header stays at "Loading...", or the terminal stays blank, and a toast says the network seems
+  to drop large replies
+- The carrier's IPv6 path drops Tailscale's full-size packets: lower Tailscale's MTU on the server
+  (`TS_DEBUG_MTU=1200` in `/etc/default/tailscaled`, then restart `tailscaled`)
+- See [Stalls on mobile data](https://termote.ohnice.app/installation/tailscale/#stalls-on-mobile-data)
+  for the check and its side effects
+
 ## Coming from a 0.x install
 
 There is no in-place upgrade from 0.x to 1.0: the install layout, config format and CLI all

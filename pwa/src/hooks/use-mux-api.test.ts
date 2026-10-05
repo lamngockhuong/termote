@@ -16,6 +16,7 @@ import {
   fetchSnapshot,
   fetchTerminalToken,
   fetchTranscript,
+  REQUEST_TIMEOUT_MS,
   RequestError,
   renameTab,
   scrollPane,
@@ -105,6 +106,24 @@ describe('mux API client', () => {
     const { calls } = mockFetch({ body: { status: 'ok', apiVersion: 1 } })
     expect(await fetchHealth()).toEqual({ status: 'ok', apiVersion: 1 })
     expect(calls[0].url).toBe('/api/mux/health')
+    expect(calls[0].init?.signal).toBeInstanceOf(AbortSignal)
+  })
+
+  it('fetchSnapshot gives up on a reply that never arrives', async () => {
+    const timedOut = AbortSignal.abort(
+      new DOMException('signal timed out', 'TimeoutError'),
+    )
+    const timeout = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(timedOut)
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        throw init?.signal?.reason
+      }),
+    )
+    await expect(fetchSnapshot()).rejects.toMatchObject({
+      name: 'TimeoutError',
+    })
+    expect(timeout).toHaveBeenCalledWith(REQUEST_TIMEOUT_MS)
   })
 
   it('selectTab sends JSON POST to the tab select route', async () => {

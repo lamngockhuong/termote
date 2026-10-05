@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ConnectionState } from '../components/connection-indicator'
+import { reportLargePacketLoss } from '../utils/large-packet-loss'
 import { fetchTerminalToken } from './use-mux-api'
 
 // Server → client text frame on /api/mux/stream.
@@ -44,6 +45,11 @@ interface Options {
 export const CLOSE_EVICTED = 4001
 // A hidden page keeps its stream this long before closing it.
 export const HIDDEN_CLOSE_MS = 30_000
+// A stream that shows no output this long after it was created is dropped
+// and retried. Every stream starts with a full redraw, so silence means the
+// connection stalled; an open socket with no output means the small
+// handshake got through and the large redraw did not.
+export const STREAM_START_TIMEOUT_MS = 15_000
 const BACKOFF_BASE_MS = 1000
 export const BACKOFF_MAX_MS = 30_000
 
@@ -87,6 +93,7 @@ export function useTermSocket({
   const attemptRef = useRef(0)
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hiddenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const startTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Why the stream is closed on purpose: 'hidden' reopens when the page is
   // shown again; 'stopped' (process exited, evicted) waits for reconnect().
   const stopRef = useRef<'hidden' | 'stopped' | null>(null)
@@ -97,19 +104,27 @@ export function useTermSocket({
   const cbRef = useRef({ getSize, drive, onOutput, onControl, onOpen })
   cbRef.current = { getSize, drive, onOutput, onControl, onOpen }
 
+  const clearStartTimer = useCallback(() => {
+    if (startTimerRef.current) {
+      clearTimeout(startTimerRef.current)
+      startTimerRef.current = null
+    }
+  }, [])
+
   const teardown = useCallback(() => {
     genRef.current++
     if (retryTimerRef.current) {
       clearTimeout(retryTimerRef.current)
       retryTimerRef.current = null
     }
+    clearStartTimer()
     const ws = wsRef.current
     wsRef.current = null
     if (ws) {
       ws.onopen = ws.onmessage = ws.onclose = ws.onerror = null
       ws.close()
     }
-  }, [])
+  }, [clearStartTimer])
 
   const connect = useCallback(async () => {
     teardown()
@@ -145,6 +160,14 @@ export function useTermSocket({
     wsRef.current = ws
     // Set by an exit frame so the following close does not reconnect.
     let exited = false
+    // teardown clears this timer, so it only fires for the current socket.
+    startTimerRef.current = setTimeout(() => {
+      startTimerRef.current = null
+      const opened = ws.readyState === WebSocket.OPEN
+      teardown()
+      if (opened) reportLargePacketLoss()
+      scheduleRetry('error')
+    }, STREAM_START_TIMEOUT_MS)
 
     ws.onopen = () => {
       attemptRef.current = 0
@@ -153,6 +176,7 @@ export function useTermSocket({
     }
     ws.onmessage = (ev: MessageEvent) => {
       if (typeof ev.data !== 'string') {
+        clearStartTimer()
         cbRef.current.onOutput(new Uint8Array(ev.data as ArrayBuffer))
         return
       }
@@ -168,6 +192,7 @@ export function useTermSocket({
     // teardown detaches these handlers, so they only run for the current socket.
     ws.onclose = (ev: CloseEvent) => {
       wsRef.current = null
+      clearStartTimer()
       if (ev.code === CLOSE_EVICTED || exited) {
         stopRef.current = 'stopped'
         setState(exited ? 'disconnected' : 'error')
@@ -175,7 +200,7 @@ export function useTermSocket({
       }
       scheduleRetry('disconnected')
     }
-  }, [teardown])
+  }, [teardown, clearStartTimer])
 
   // Open on mount and when the pane first becomes known; follow pane changes
   // only when asked.

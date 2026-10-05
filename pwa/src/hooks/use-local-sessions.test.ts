@@ -10,7 +10,11 @@ const {
   mockRenameTab,
   mockSelectTab,
   mockSnapshot,
+  mockFetchHealth,
+  mockReportLargePacketLoss,
 } = vi.hoisted(() => ({
+  mockFetchHealth: vi.fn(),
+  mockReportLargePacketLoss: vi.fn(),
   // Overrides merged into every snapshot (backend, caps, groups).
   mockSnapshot: { extra: {} as Record<string, unknown> },
   mockFetchTabs: vi.fn(),
@@ -34,6 +38,12 @@ vi.mock('./use-mux-api', () => ({
   closePane: mockClosePane,
   renameTab: mockRenameTab,
   selectTab: mockSelectTab,
+  fetchHealth: mockFetchHealth,
+}))
+
+vi.mock('../utils/large-packet-loss', async (orig) => ({
+  ...(await orig<typeof import('../utils/large-packet-loss')>()),
+  reportLargePacketLoss: mockReportLargePacketLoss,
 }))
 
 import { useLocalSessions } from './use-local-sessions'
@@ -105,6 +115,62 @@ describe('useLocalSessions', () => {
     expect(result.current.isReady).toBe(true)
     expect(result.current.sessions[0].name).toBe('shell')
     expect(result.current.activeSession.name).toBe('shell')
+  })
+
+  it('asks for health when the snapshot times out, and reports lost replies if it answers', async () => {
+    mockFetchTabs.mockRejectedValue(
+      new DOMException('signal timed out', 'TimeoutError'),
+    )
+    mockFetchHealth.mockResolvedValue({ apiVersion: 1 })
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    expect(result.current.isServerReachable).toBe(false)
+    expect(mockFetchHealth).toHaveBeenCalledTimes(1)
+    expect(mockReportLargePacketLoss).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports nothing when health times out too', async () => {
+    mockFetchTabs.mockRejectedValue(
+      new DOMException('signal timed out', 'TimeoutError'),
+    )
+    mockFetchHealth.mockRejectedValue(
+      new DOMException('signal timed out', 'TimeoutError'),
+    )
+    renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    expect(mockFetchHealth).toHaveBeenCalledTimes(1)
+    expect(mockReportLargePacketLoss).not.toHaveBeenCalled()
+  })
+
+  it('does not ask for health when the snapshot fails outright', async () => {
+    mockFetchTabs.mockRejectedValue(new Error('API down'))
+    renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    expect(mockFetchHealth).not.toHaveBeenCalled()
+  })
+
+  it('skips a poll while the previous read is still waiting', async () => {
+    vi.useFakeTimers()
+    try {
+      let release: (tabs: unknown[]) => void = () => {}
+      mockFetchTabs.mockReturnValueOnce(
+        new Promise((resolve) => {
+          release = resolve
+        }),
+      )
+      renderHook(() => useLocalSessions(1))
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3000)
+      })
+      expect(mockFetchTabs).toHaveBeenCalledTimes(1)
+      await act(async () => {
+        release([WIN_SHELL])
+        await vi.advanceTimersByTimeAsync(1000)
+      })
+      expect(mockFetchTabs).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('does not reset sessions on subsequent API errors after ready', async () => {
