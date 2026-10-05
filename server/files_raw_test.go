@@ -66,6 +66,50 @@ func pngHeader(w, h uint32) []byte {
 	return out.Bytes()
 }
 
+// gifFrames is a GIF whose logical screen is sw×sh, holding one frame per
+// rect (left, top, width, height), each with an empty image.
+func gifFrames(sw, sh uint16, rects ...[4]uint16) []byte {
+	var b bytes.Buffer
+	b.WriteString("GIF89a")
+	binary.Write(&b, binary.LittleEndian, [2]uint16{sw, sh})
+	b.Write([]byte{0, 0, 0}) // no global color table
+	// A graphic control extension, so the walk skips one.
+	b.Write([]byte{0x21, 0xf9, 4, 0, 0, 0, 0, 0})
+	for _, r := range rects {
+		b.WriteByte(0x2c)
+		binary.Write(&b, binary.LittleEndian, r)
+		b.WriteByte(0)                    // no local color table
+		b.Write([]byte{2, 2, 0x4c, 1, 0}) // LZW code size, one sub-block
+	}
+	b.WriteByte(0x3b)
+	return b.Bytes()
+}
+
+// webpHeader is the start of a WebP of w×h pixels in the given chunk kind
+// ("VP8 ", "VP8L" or "VP8X"): enough to read its size.
+func webpHeader(kind string, w, h uint32) []byte {
+	var data []byte
+	switch kind {
+	case "VP8 ":
+		data = []byte{0, 0, 0, 0x9d, 0x01, 0x2a}
+		data = binary.LittleEndian.AppendUint16(data, uint16(w))
+		data = binary.LittleEndian.AppendUint16(data, uint16(h))
+	case "VP8L":
+		data = binary.LittleEndian.AppendUint32([]byte{0x2f}, (w-1)|(h-1)<<14)
+	case "VP8X":
+		data = []byte{0, 0, 0, 0}
+		data = append(data, byte(w-1), byte((w-1)>>8), byte((w-1)>>16))
+		data = append(data, byte(h-1), byte((h-1)>>8), byte((h-1)>>16))
+	}
+	var b bytes.Buffer
+	b.WriteString("RIFF")
+	binary.Write(&b, binary.LittleEndian, uint32(12+len(data)))
+	b.WriteString("WEBP" + kind)
+	binary.Write(&b, binary.LittleEndian, uint32(len(data)))
+	b.Write(data)
+	return b.Bytes()
+}
+
 const lfsPointer = "version https://git-lfs.github.com/spec/v1\noid sha256:4d7a\nsize 12345\n"
 
 func rawGet(h http.Handler, q url.Values) *httptest.ResponseRecorder {
@@ -161,6 +205,19 @@ func TestCheckImage(t *testing.T) {
 		"lfs pointer":    {"a.png", lfsPointer, "", errLFSPointer},
 		"too many px":    {"a.png", string(big), "", errTooManyPixels},
 		"40 MP exactly":  {"a.png", string(pngHeader(8000, 5000)), "image/png", nil},
+		"gif big frame":  {"a.gif", string(gifFrames(1, 1, [4]uint16{0, 0, 30000, 30000})), "", errTooManyPixels},
+		"gif 2nd frame":  {"a.gif", string(gifFrames(100, 100, [4]uint16{0, 0, 100, 100}, [4]uint16{0, 0, 8000, 6000})), "", errTooManyPixels},
+		"gif off screen": {"a.gif", string(gifFrames(10, 10, [4]uint16{7000, 5000, 1000, 1000})), "", errTooManyPixels},
+		"gif frames ok":  {"a.gif", string(gifFrames(8000, 5000, [4]uint16{0, 0, 8000, 5000}, [4]uint16{10, 10, 20, 20})), "image/gif", nil},
+		"gif no trailer": {"a.gif", strings.TrimSuffix(string(gifFrames(10, 10, [4]uint16{0, 0, 10, 10})), ";"), "image/gif", nil},
+		"vp8 too big":    {"a.webp", string(webpHeader("VP8 ", 16383, 16383)), "", errTooManyPixels},
+		"vp8 ok":         {"a.webp", string(webpHeader("VP8 ", 8000, 5000)), "image/webp", nil},
+		"vp8l too big":   {"a.webp", string(webpHeader("VP8L", 16384, 16384)), "", errTooManyPixels},
+		"vp8l ok":        {"a.webp", string(webpHeader("VP8L", 8000, 5000)), "image/webp", nil},
+		"vp8x too big":   {"a.webp", string(webpHeader("VP8X", 16383, 16383)), "", errTooManyPixels},
+		"vp8x ok":        {"a.webp", string(webpHeader("VP8X", 8000, 5000)), "image/webp", nil},
+		"vp8 no start":   {"a.webp", strings.Replace(string(webpHeader("VP8 ", 10, 10)), "\x9d\x01\x2a", "abc", 1), "", errNotImage},
+		"webp truncated": {"a.webp", string(webpHeader("VP8X", 10, 10))[:24], "", errNotImage},
 	} {
 		r := bytes.NewReader([]byte(c.data))
 		got, err := checkImage(c.path, r)
@@ -688,5 +745,52 @@ func TestFilesRawConflict(t *testing.T) {
 	}
 	if rec := rawGet(gx.h, url.Values{"path": {"c.png"}, "side": {"new"}}); rec.Code != 200 || rec.Body.String() != img(3) {
 		t.Errorf("conflict new = %d", rec.Code)
+	}
+}
+
+// A GIF cut anywhere is checked up to where it ends (as a browser shows
+// it); one too short for its header, or with a block no GIF has, is not an
+// image.
+func TestGifPixels(t *testing.T) {
+	one := gifFrames(10, 10, [4]uint16{0, 0, 10, 10})
+	// A global color table (2 entries), then the same frame with a local one.
+	tables := append([]byte("GIF89a\x0a\x00\x0a\x00\x80\x00\x00"), 0, 0, 0, 1, 1, 1)
+	tables = append(tables, 0x2c, 0, 0, 0, 0, 0x20, 0, 0x20, 0, 0x80, 0, 0, 0, 1, 1, 1, 2, 1, 0, 0, 0x3b)
+	for name, c := range map[string]struct {
+		data []byte
+		want int64
+		err  bool
+	}{
+		"whole":             {one, 100, false},
+		"color tables":      {tables, 32 * 32, false},
+		"short header":      {one[:10], 0, true},
+		"cut in global":     {tables[:15], 0, true},
+		"cut after ext tag": {one[:14], 100, false},
+		"cut in extension":  {one[:17], 100, false},
+		"cut before blocks": {one[:15], 100, false},
+		"cut in descriptor": {one[:25], 100, false},
+		"cut in local":      {tables[:31], 32 * 32, false}, // its descriptor was read
+		"cut before lzw":    {tables[:35], 32 * 32, false},
+		"cut in sub-block":  {tables[:37], 32 * 32, false},
+		"unknown block":     {append(one[:13:13], 0x99), 0, true},
+	} {
+		got, err := gifPixels(bytes.NewReader(c.data))
+		if got != c.want || (err != nil) != c.err {
+			t.Errorf("%s = %d, %v; want %d, error %v", name, got, err, c.want, c.err)
+		}
+	}
+}
+
+func TestWebpPixels(t *testing.T) {
+	for name, head := range map[string]string{
+		"short":          "RIFF\x00\x00\x00\x00WEBP",
+		"vp8l signature": strings.Replace(string(webpHeader("VP8L", 10, 10)), "\x2f", "\x00", 1),
+		"vp8l short":     string(webpHeader("VP8L", 10, 10))[:22],
+		"vp8 short":      string(webpHeader("VP8 ", 10, 10))[:26],
+		"unknown chunk":  strings.Replace(string(webpHeader("VP8X", 10, 10)), "VP8X", "ALPH", 1),
+	} {
+		if n, err := webpPixels([]byte(head)); err == nil {
+			t.Errorf("%s = %d, want an error", name, n)
+		}
 	}
 }

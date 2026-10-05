@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"image"
-	"image/gif"
 	"image/jpeg"
 	"image/png"
 	"io"
@@ -23,8 +22,8 @@ import (
 const (
 	// maxImageSize caps an image served by the raw route.
 	maxImageSize = 10 << 20
-	// maxImagePixels caps the decoded size of a PNG, JPEG or GIF: a small
-	// file can expand to gigabytes in the browser.
+	// maxImagePixels caps the decoded size of an image (a GIF's largest
+	// frame): a small file can expand to gigabytes in the browser.
 	maxImagePixels = 40_000_000
 	// rawMaxRunning raw requests run at once, server-wide; the next gets 429.
 	// A git read holds the whole image, so this bounds that memory too.
@@ -93,8 +92,9 @@ func checkImage(path string, r io.ReadSeeker) (string, error) {
 	return mt, nil
 }
 
-// imageType checks head, then for a PNG, JPEG or GIF its pixel count, read
-// from its header through all (the whole file from its start).
+// imageType checks head, then for a PNG, JPEG, GIF or WebP its pixel
+// count, read from its header through all (the whole file from its start):
+// a GIF's frames, a WebP's first chunk.
 func imageType(path string, head []byte, all io.Reader) (string, error) {
 	if strings.EqualFold(filepath.Ext(path), ".svg") {
 		if !isSVG(head) {
@@ -106,23 +106,25 @@ func imageType(path string, head []byte, all io.Reader) (string, error) {
 	if !ok {
 		return "", errNotImage
 	}
-	// WebP has no decoder in the standard library: its size is not checked.
-	var decodeConfig func(io.Reader) (image.Config, error)
+	var pixels int64
+	var cfg image.Config
+	var err error
 	switch mt {
 	case "image/png":
-		decodeConfig = png.DecodeConfig
+		cfg, err = png.DecodeConfig(all)
+		pixels = int64(cfg.Width) * int64(cfg.Height)
 	case "image/jpeg":
-		decodeConfig = jpeg.DecodeConfig
+		cfg, err = jpeg.DecodeConfig(all)
+		pixels = int64(cfg.Width) * int64(cfg.Height)
 	case "image/gif":
-		decodeConfig = gif.DecodeConfig
-	default:
-		return mt, nil
+		pixels, err = gifPixels(all)
+	case "image/webp":
+		pixels, err = webpPixels(head)
 	}
-	cfg, err := decodeConfig(all)
 	if err != nil {
 		return "", errNotImage
 	}
-	if int64(cfg.Width)*int64(cfg.Height) > maxImagePixels {
+	if pixels > maxImagePixels {
 		return "", errTooManyPixels
 	}
 	return mt, nil
