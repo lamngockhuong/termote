@@ -954,3 +954,31 @@ func TestSlowBodyConnectionClosed(t *testing.T) {
 		t.Errorf("response = %q", out)
 	}
 }
+
+// The stream path skips the request read timeout only for a WebSocket the
+// handler accepted: a body sent to it a byte at a time, before auth and from
+// a Host that is not allowed, is cut off like on any other route.
+func TestSlowBodyOnStreamPathClosed(t *testing.T) {
+	old := requestReadTimeout
+	requestReadTimeout = 300 * time.Millisecond
+	t.Cleanup(func() { requestReadTimeout = old })
+	h, err := newServeHandler(testConfig(t), &fakeMux{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	for _, host := range []string{srv.Listener.Addr().String(), "evil.example"} {
+		conn, err := net.Dial("tcp", srv.Listener.Addr().String())
+		if err != nil {
+			t.Fatal(err)
+		}
+		fmt.Fprintf(conn, "POST /api/mux/stream HTTP/1.1\r\nHost: %s\r\nContent-Length: 200000\r\n\r\n{", host)
+		conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+		out, err := io.ReadAll(conn)
+		conn.Close()
+		if err != nil {
+			t.Errorf("Host %s: connection still open after the read timeout: %v (read %q)", host, err, out)
+		}
+	}
+}

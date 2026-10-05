@@ -719,3 +719,23 @@ func (o *outputReader) waitFor(t *testing.T, pattern string) []string {
 		}
 	}
 }
+
+// An accepted stream keeps reading past the request read timeout, which
+// covers the handshake only.
+func TestStreamOutlivesRequestReadTimeout(t *testing.T) {
+	old := requestReadTimeout
+	requestReadTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { requestReadTimeout = old })
+	s := newStreamServer(t)
+	c := mustDial(t, s, "pane=0")
+	ft := s.term(t, 0)
+	time.Sleep(3 * requestReadTimeout)
+	if err := c.Write(context.Background(), websocket.MessageBinary, []byte("ls\r")); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-ft.inCh:
+	case <-time.After(5 * time.Second):
+		t.Fatal("input sent after the request read timeout never reached the terminal")
+	}
+}
