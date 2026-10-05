@@ -4,4 +4,4 @@ package main
 // release, and the release build also sets it from the tag
 // (-ldflags "-X main.cliVersion=<v>"), so a pre-release or a release made by
 // hand reports its own tag too.
-var cliVersion = "1.12.0" // x-release-please-version
+var cliVersion = "1.12.1" // x-release-please-version

@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.12.1](https://github.com/lamngockhuong/termote/compare/v1.12.0...v1.12.1) (2026-10-05)
+
+
+### Bug Fixes
+
+* install and update the newest published release, not the newest tag ([#341](https://github.com/lamngockhuong/termote/issues/341)) ([937cdaf](https://github.com/lamngockhuong/termote/commit/937cdaf203f79b70eac1b783d09110ca5ed7b328))
+
 ## [1.12.0](https://github.com/lamngockhuong/termote/compare/v1.11.0...v1.12.0) (2026-10-05)
 
 
