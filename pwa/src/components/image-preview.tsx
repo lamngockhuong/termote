@@ -23,6 +23,8 @@ const ERRORS = {
   unavailable: 'Could not load the image',
 }
 
+const SVG_TYPE = 'image/svg+xml'
+
 // Transparent parts show over a checkerboard, light or dark theme alike
 const CHECKERBOARD = {
   background:
@@ -80,26 +82,31 @@ export function ImagePreview({ state, alt, label, missing, onRetry }: Props) {
     body = <ViewMessage>The image could not be decoded</ViewMessage>
   else
     body = (
-      <div className="flex flex-col items-start gap-1 p-2">
-        <div style={CHECKERBOARD} className="max-w-full">
-          <img
-            src={state.url}
-            alt={alt}
-            decoding="async"
-            aria-busy={state.stale}
-            className={`block h-auto max-w-full ${state.stale ? 'opacity-60' : ''}`}
-            onLoad={(e) =>
-              setDecoded({
-                url: state.url,
-                width: e.currentTarget.naturalWidth,
-                height: e.currentTarget.naturalHeight,
-              })
-            }
-            onError={() => setDecoded({ url: state.url, failed: true })}
-          />
-        </div>
-        <span className="text-[11px] text-fg-muted">
-          {seen?.width !== undefined && `${seen.width}×${seen.height} · `}
+      // A block, not a shrink-to-fit flex item: an SVG with only a viewBox
+      // has no width of its own and would collapse to nothing; here it
+      // fills the width, and a small bitmap keeps its own size
+      <div className="p-2">
+        <img
+          src={state.url}
+          alt={alt}
+          decoding="async"
+          aria-busy={state.stale}
+          style={CHECKERBOARD}
+          className={`block h-auto max-w-full ${state.stale ? 'opacity-60' : ''}`}
+          onLoad={(e) =>
+            setDecoded({
+              url: state.url,
+              width: e.currentTarget.naturalWidth,
+              height: e.currentTarget.naturalHeight,
+            })
+          }
+          onError={() => setDecoded({ url: state.url, failed: true })}
+        />
+        <span className="mt-1 block text-[11px] text-fg-muted">
+          {/* An SVG's pixel size is whatever the browser picks for it */}
+          {seen?.width !== undefined &&
+            state.type !== SVG_TYPE &&
+            `${seen.width}×${seen.height} · `}
           {formatSize(state.size)}
         </span>
       </div>

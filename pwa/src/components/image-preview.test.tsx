@@ -8,10 +8,15 @@ const refused = (status: number, code: string): ImageState => ({
   status: 'error',
   error: new RequestError(status, code, code),
 })
-const ready = (url = 'blob:u1', stale = false): ImageState => ({
+const ready = (
+  url = 'blob:u1',
+  stale = false,
+  type = 'image/png',
+): ImageState => ({
   status: 'ready',
   url,
   size: 2048,
+  type,
   stale,
 })
 
@@ -44,6 +49,18 @@ describe('ImagePreview', () => {
     rerender(<ImagePreview state={ready('blob:u2')} alt="a.png" />)
     expect(screen.queryByText(/1×2/)).toBeNull()
     expect(screen.getByRole('img')).not.toHaveClass('opacity-60')
+  })
+
+  it('gives an SVG no pixel size, which each browser picks differently', () => {
+    render(
+      <ImagePreview
+        state={ready('blob:u1', false, 'image/svg+xml')}
+        alt="logo.svg"
+      />,
+    )
+    loadAs(screen.getByRole('img'), 240, 150)
+    expect(screen.getByText('2.0 KiB')).toBeInTheDocument()
+    expect(screen.queryByText(/240×150/)).toBeNull()
   })
 
   it('says so when the browser cannot decode it', () => {

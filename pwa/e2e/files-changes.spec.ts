@@ -24,8 +24,10 @@ const RED_PNG =
   'iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA7ljmRAAAAEElEQVR4nGO4o6EBRww4OQAa3g4RLYR9sQAAAABJRU5ErkJggg=='
 const BLUE_PNG =
   'iVBORw0KGgoAAAANSUhEUgAAAAUAAAADCAIAAADUVFKvAAAAEElEQVR4nGPQ0LiDjBgI8AGbkxGVdkTjRAAAAABJRU5ErkJggg=='
+// Only a viewBox, no width or height: it has no size of its own and must
+// still fill the view rather than collapse
 const SVG =
-  '<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8" fill="red"/></svg>\n'
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 10"><rect width="16" height="10" fill="red"/></svg>\n'
 
 // The width the browser decoded: 0 while loading or when it failed
 const decodedWidth = (img: Locator) =>
@@ -198,6 +200,7 @@ test.describe('files and changes views', () => {
     await panel.getByRole('button', { name: 'Image', exact: true }).click()
     const img = panel.locator('img[src^="blob:"]')
     await expect(img).toHaveCount(1)
-    await expect.poll(() => decodedWidth(img)).toBe(8)
+    await expect.poll(() => decodedWidth(img)).toBeGreaterThan(0)
+    await expect.poll(async () => (await img.boundingBox())?.width ?? 0).toBeGreaterThan(100)
   })
 })

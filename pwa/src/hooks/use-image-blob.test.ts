@@ -74,6 +74,7 @@ describe('useImageBlob', () => {
       status: 'ready',
       url: 'blob:u1',
       size: 5,
+      type: 'image/png',
       stale: false,
     })
     expect(mockImage).toHaveBeenCalledWith(
@@ -109,6 +110,7 @@ describe('useImageBlob', () => {
       status: 'ready',
       url: 'blob:u1',
       size: 3,
+      type: 'image/png',
       stale: true,
     })
     expect(URL.revokeObjectURL).not.toHaveBeenCalled()

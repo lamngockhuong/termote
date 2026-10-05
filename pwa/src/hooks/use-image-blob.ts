@@ -10,7 +10,7 @@ export type ImageState =
   | { status: 'idle' }
   | { status: 'loading' }
   // stale: an earlier image, shown while the new read runs
-  | { status: 'ready'; url: string; size: number; stale: boolean }
+  | { status: 'ready'; url: string; size: number; type: string; stale: boolean }
   | { status: 'error'; error: unknown }
 
 // The image as a blob: URL (the page's CSP allows img-src blob:, and only
@@ -55,6 +55,7 @@ export function useImageBlob(
           status: 'ready',
           url: URL.createObjectURL(blob),
           size: blob.size,
+          type: blob.type,
           stale: false,
         })
       },
