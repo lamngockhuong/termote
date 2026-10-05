@@ -300,7 +300,7 @@ The `update` command:
 | `pwa/src/components/markdown-preview.tsx`         | Markdown file rendered in Files/Changes (links, code blocks)  |
 | `pwa/src/components/image-preview.tsx`            | One image of Files/Changes (sizes, why it cannot be shown)    |
 | `pwa/src/components/image-compare.tsx`            | Changes: an image's old and new versions side by side         |
-| `pwa/src/hooks/use-image-blob.ts`                 | Reads `files/raw` into a `blob:` URL, revokes replaced ones   |
+| `pwa/src/hooks/use-image-blob.ts`                 | Reads `files/raw` into a `blob:` URL (SVG: `data:`), revokes  |
 | `pwa/src/components/panel-toggles.tsx`            | Desktop header toggles of the side panel (Files, Changes)     |
 | `pwa/src/hooks/use-files.ts`                      | File tree of a pane's root, one store per pane                |
 | `pwa/src/hooks/use-git-changes.ts`                | Polls a pane's git status, one store per pane                 |
@@ -364,6 +364,10 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   terminal it opens inherits one.
 - Basic auth enabled by default (use `--no-auth` to disable for local dev); an empty saved
   password no longer disables auth — `start` generates and saves a new one instead
+- **Logout** (`POST /api/mux/logout`, handled in `basicAuth`): a JSON write under `writeGuard`;
+  removes the cookie's session from the store and expires the cookie (204), needs no
+  credentials and counts as no failed login. The snapshot's `caps.auth` (set from the request
+  `basicAuth` let through) tells the PWA to offer Log out
 - Basic auth over HTTPS required for production
 - **Sign-in form** (`/login`, `server/login.go`): a browser page load without a session gets
   a 401 with a plain HTML form (no script) and no `WWW-Authenticate`, since an iOS home-screen
@@ -382,7 +386,10 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
 - **Write/CSRF guard** (`writeGuard`): state-changing `/api/mux/*` requests must be
   same-site (`Sec-Fetch-Site`/`Origin` on the allowlist) with `Content-Type: application/json`
 - **Terminal stream** (`/api/mux/stream`): same Origin check plus a single-use, 30s-TTL token
-  fetched via `/api/mux/stream-token`, consumed on WebSocket upgrade
+  fetched via `/api/mux/stream-token`, consumed on WebSocket upgrade. Every paste into the
+  terminal (native paste events are taken in capture phase, ahead of xterm) goes through
+  `cleanPaste` in `terminal-view.tsx`: end-of-paste markers and control characters other than
+  tab and line breaks removed, since xterm brackets a paste without removing a marker inside it
 - **Herdr guard**: `--mux herdr --no-auth` is refused unless `--allow-herdr-no-auth` is also
   given, since Herdr exposes every workspace on the host
 - **Agent chat** (`/api/mux/panes/{id}/agent/*`): for Claude Code on tmux the server reads only
@@ -431,7 +438,9 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
 - **Files/Changes** (`/api/mux/panes/{id}/files/*`): read-only GETs that also check
   `Sec-Fetch-Site`/`Origin`; every path is opened through `os.Root` under the pane's root (its
   git toplevel when a `.git` sits at it, else its directory); termote's config/state dirs,
-  `/proc`, `/sys`, `/dev`, `.git` and the repo's git dir (`--separate-git-dir`) are never served;
+  `/proc`, `/sys`, `/dev`, `.git` and the repo's git dir (`--separate-git-dir`) are never served
+  (on Linux a path differing only in case is denied when its directory is the same one: WSL
+  `/mnt/c`, casefold, vfat);
   sensitive names (`.env`, keys, ...) return contents or a diff only with `reveal=1`. git runs
   without a shell, with `GIT_*`/`TERMOTE_*` stripped, hooks (`core.hooksPath` to the null
   device), index refresh on diff, fsmonitor, filter drivers, external diff and textconv off,
@@ -442,8 +451,9 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   staged old side, read by one `git cat-file --batch` (no filters, not `heavy`: no status/diff
   slot, no backoff; a name with `\r` or `\n` → 400, missing → 404 `no_version`, time out → 503). The type
   comes from the first bytes through `imageTypeOf` (shared with uploads: PNG/JPEG/GIF/WebP), plus
-  SVG only for a `.svg` path whose first element is `<svg`; 10 MiB (413 `too_large`), 40 MP for
-  PNG/JPEG/GIF (413 `too_many_pixels`), else 415 `not_image`, a Git LFS pointer 415
+  SVG only for a `.svg` path whose first element is `<svg`; 10 MiB (413 `too_large`), 40 MP
+  (PNG/JPEG header, a GIF's largest frame with its offset, a WebP's first chunk; 413
+  `too_many_pixels`), else 415 `not_image`, a Git LFS pointer 415
   `lfs_pointer`, a sensitive name without `reveal=1` 403 `sensitive`. 4 at a time server-wide
   (429 `busy`), 2-minute write deadline, `Cross-Origin-Resource-Policy: same-origin`,
   `Cache-Control: no-store`; an SVG also gets a second CSP
@@ -485,7 +495,9 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
 - **CLI and the saved password**: `status`, `url`, `panel`, `container status` and the health
   wait of `start`/`restart`/`update` send the saved password to `127.0.0.1:<port>` only when
   every socket listening on it runs as the current user or root/SYSTEM (`server/listener_owner*.go`:
-  `/proc/net/tcp*` on Linux, `lsof` on macOS, the TCP table and process SID on Windows); otherwise
+  `/proc/net/tcp*` on Linux, `lsof` on macOS, the TCP table and process SID on Windows), checked
+  once the connection is made and before the request is written on it; on Linux the server end
+  of that connection (its uid in `/proc/net/tcp*`) must be trusted too; otherwise
   the status reads "untrusted listener" (another user's socket seen) or "unverified listener"
   (the port answers but no listener is seen: a runtime forwarding it without a proxy process,
   macOS without `lsof`)
@@ -493,7 +505,7 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
 - **Content-Security-Policy** (`server/security_headers.go`): on every response, `script-src 'self'`
   plus the `sha256` of the inline theme script in the served `index.html` (hashed at startup,
   so a changed `TERMOTE_PWA_DIR` page needs a restart), `style-src 'self' 'unsafe-inline'`,
-  `img-src 'self' data: blob:` (`blob:`: images the PWA read from `files/raw`), `connect-src 'self'` + `ws://`/`wss://` of the request's `Host` (a
+  `img-src 'self' data: blob:` (`blob:`: images the PWA read from `files/raw`; an SVG is shown as a `data:` URL, never a `blob:` one, which opened in a tab would be a document of this origin), `connect-src 'self'` + `ws://`/`wss://` of the request's `Host` (a
   name or IPv4) + `https://api.github.com`, `worker-src`/`manifest-src 'self'`,
   `object-src 'none'`, `base-uri`/`form-action 'self'`, `frame-ancestors 'none'`; plus
   `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`.

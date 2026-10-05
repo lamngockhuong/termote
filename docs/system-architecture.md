@@ -80,7 +80,7 @@ Go HTTP server providing:
 
 - **Static file serving**: PWA assets from /pwa/dist
 - **Terminal WebSocket**: `/api/mux/stream` opens a PTY/ConPTY attached to the selected pane and streams it as binary WebSocket frames; a text control frame carries resize (client→server) and exit/error/size (server→client)
-- **Authentication**: Basic auth or a sign-in form (`/login`, for browsers: an iOS home-screen app never shows the Basic prompt), then a session cookie, rate-limited, plus a Host allowlist and an Origin/CSRF write guard in front of everything
+- **Authentication**: Basic auth or a sign-in form (`/login`, for browsers: an iOS home-screen app never shows the Basic prompt), then a session cookie, rate-limited, plus a Host allowlist and an Origin/CSRF write guard in front of everything; `POST /api/mux/logout` ends the session on the server (the More menu's Log out, shown when the snapshot reports `caps.auth`)
 - **Mux API endpoints**: `/api/mux/*` — snapshot (groups→tabs→panes), tab create/rename/close/select, send-keys, health
 - **Agent chat endpoints**: `/api/mux/panes/{id}/agent/*` — the transcript of the Claude Code or Codex session in a pane, sending it a message, reading and answering its dialogs (see [Agent chat](#agent-chat-apimuxpanesidagent))
 
@@ -178,6 +178,7 @@ DELETE /api/mux/panes/{id}                                      → {ok}   (herd
 POST   /api/mux/panes/{id}/keys    body: {keys}                 → {ok}
 POST   /api/mux/panes/{id}/scroll  body: {lines}                → {ok}   (caps.scroll only, else 501)
 GET    /api/mux/health             → {status, apiVersion, backend}
+POST   /api/mux/logout             body: {}                      → 204   (sign-in on only, else 404)
 GET    /api/mux/panes/{id}/agent/transcript?cursor=&before=     → {agent, sessionId, status, entries, cursor, before, reset}
 POST   /api/mux/panes/{id}/agent/message  body: {text, cursor, images?}  → 204
 GET    /api/mux/panes/{id}/agent/prompt                          → {prompt: null | {promptId, kind, title, body, options, steps, freeText}}
@@ -514,7 +515,8 @@ with the content route's checks. git is run as an argument array (no shell), wit
 command has a 10 s timeout (503 `git timed out`) and takes one of two server-wide slots; nothing
 a client sends becomes a git option.
 
-**Images (`raw`).** The bytes of one image, for the PWA to show through a `blob:` URL. Without
+**Images (`raw`).** The bytes of one image, for the PWA to show through a `blob:` URL (an SVG
+through a `data:` URL, see below). Without
 `side` it reads the file in the worktree, with the content route's checks in the same order
 (missing → 404, then sensitive without `reveal=1` → 403 `sensitive`), streamed from the open
 handle, never buffered whole. With `side=old|new` (and `staged`, `orig` picking the entry as
@@ -528,7 +530,8 @@ is 400), with filter drivers disabled and without taking a status/diff slot or b
 root off; a missing object is 404 `no_version`, a request whose time ran out 503. The type is
 told from the first bytes by the helper uploads use (PNG, JPEG, GIF, WebP), plus SVG only when
 the path ends in `.svg` and its first element is `<svg`. Limits: 10 MiB (413 `too_large`) and
-40 megapixels for PNG/JPEG/GIF, read from the header (413 `too_many_pixels`); anything else is
+40 megapixels, read from the header: the largest GIF frame (with its offset) or logical screen,
+and a WebP's first chunk (VP8, VP8L, or the VP8X canvas) (413 `too_many_pixels`); anything else is
 415 `not_image`, a Git LFS pointer 415 `lfs_pointer`. At most 4 run at once server-wide (429
 `busy`), each with a 2-minute write deadline. A response carries `Content-Disposition: inline`,
 `Cache-Control: no-store` and `Cross-Origin-Resource-Policy: same-origin` (another site's
@@ -557,7 +560,9 @@ An image (`.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`) opens through `raw` instead:
 (`image-preview.tsx`), Changes shows its two versions side by side, stacked on a phone
 (`image-compare.tsx`), reading nothing for a side without a version. An SVG shows as text or a
 diff until the user picks "Image" (setting `svgPreview`). `use-image-blob.ts` turns each read
-into a `blob:` URL, keeps the previous image while reading again, and revokes every URL once
+into a `blob:` URL (an SVG into a `data:` URL: opened in a tab of its own, a `blob:` SVG would be
+a document of termote's origin without the server's `sandbox` policy, while a `data:` one has an
+opaque origin), keeps the previous image while reading again, and revokes every `blob:` URL once
 replaced or unmounted; Changes reads again on a refresh or a new status, not on every poll.
 
 ## Deployment Modes
@@ -658,7 +663,9 @@ termote update --force           # Force reinstall current version
 2. **Auth**: Basic auth over HTTPS (use `--no-auth` for local dev only); an empty saved
    password no longer disables auth — `start` generates a new one and prints it once
    (`termote show-password` to see it again)
-3. **Session cookies**: Stored after initial basic auth to prevent double prompts on mobile
+3. **Session cookies**: Stored after initial basic auth to prevent double prompts on mobile;
+   Log out (`POST /api/mux/logout`, a JSON write under the same guard) removes the session on
+   the server and expires the cookie, so a copied cookie stops working too
 4. **Host allowlist**: every request's `Host` header must match loopback, the address the
    request arrived on when `--lan` is set, the Tailscale name (`--tailscale`), or a name added
    with `--allow-host`; there is no wildcard, so DNS rebinding from an attacker-controlled page
@@ -669,11 +676,16 @@ termote update --force           # Force reinstall current version
    not CORS-safelisted either, so another site's request still needs a preflight that is never
    answered; multipart, which a form posts without one, stays refused
 6. **Terminal access** (`/api/mux/stream`): same Origin check, plus a single-use 30s-TTL token
-   minted by `/api/mux/stream-token` and consumed on WebSocket upgrade
+   minted by `/api/mux/stream-token` and consumed on WebSocket upgrade. Every paste (Ctrl+V,
+   the iOS Paste menu, the toolbar) loses its end-of-paste markers and control characters other
+   than tab and line breaks before it is sent, so text a page put on the clipboard cannot end a
+   bracketed paste early and reach the program as typed keys
 7. **Herdr guard**: `--mux herdr --no-auth` is refused unless `--allow-herdr-no-auth` is also
    given, since Herdr exposes every workspace on the host, not just this session's pane
 8. **Session**: tmux isolates terminal processes; Herdr sessions are isolated by Herdr itself
-9. **Rate limiting**: 5 failed basic-auth attempts/min per IP, and 20/min per IPv6 /64 → 429;
+9. **Rate limiting**: 5 failed basic-auth attempts/min per IP, and 20/min per IPv6 /64 → 429
+   (expired entries swept at most every 10s, so many source addresses cannot make each failure
+   scan the whole table);
    failed logins, blocked clients and rejected Hosts are logged with the client address (never
    the credentials), each at most one line per 10s
 10. **Agent chat**: on tmux/psmux the server reads only the transcript in the Claude config
@@ -687,7 +699,8 @@ termote update --force           # Force reinstall current version
     (one `C-c`) only when it holds nothing but its own paste; markdown images in the Chat
     view never load
 11. **Files and changes**: read-only; paths confined to the pane's root by `os.Root`; Termote's
-    config/state dirs, `/proc`, `/sys`, `/dev` and `.git` never served; sensitive files only
+    config/state dirs, `/proc`, `/sys`, `/dev` and `.git` never served (a path differing only in
+    case is checked by directory identity, for mounts that ignore case); sensitive files only
     with `reveal=1`; git run without a shell and with every repo-configured program disabled;
     `Sec-Fetch-Site`/`Origin` checked on these GETs too
 12. **Image uploads**: at most 10 MB and 2 at a time; the 60s read deadline every request gets
