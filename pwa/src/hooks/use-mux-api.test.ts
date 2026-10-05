@@ -20,6 +20,8 @@ import {
   REQUEST_TIMEOUT_MS,
   RequestError,
   renameTab,
+  SAVE_TIMEOUT_MS,
+  saveFileContent,
   scrollPane,
   selectTab,
   sendAgentMessage,
@@ -459,6 +461,46 @@ describe('files API client', () => {
       '/api/mux/panes/1/files/content?path=a',
       '/api/mux/panes/1/files/content?path=.env&root=%2Fr&reveal=1',
     ])
+  })
+
+  it('saves a file with PUT, the root in the query, with a timeout', async () => {
+    const saved = { root: '/r', path: 'a', size: 1, hash: 'h' }
+    const { calls } = mockFetch({ body: saved })
+    const timeout = vi.spyOn(AbortSignal, 'timeout')
+    const save = {
+      root: '/r',
+      path: 'a',
+      baseHash: 'b',
+      text: 'x',
+      reveal: false,
+    }
+    expect(await saveFileContent('%1', save)).toEqual(saved)
+    expect(calls[0].url).toBe('/api/mux/panes/%251/files/content?root=%2Fr')
+    expect(calls[0].init?.method).toBe('PUT')
+    expect(new Headers(calls[0].init?.headers).get('Content-Type')).toBe(
+      'application/json',
+    )
+    expect(JSON.parse(calls[0].init?.body as string)).toEqual({
+      path: 'a',
+      baseHash: 'b',
+      text: 'x',
+      reveal: false,
+    })
+    expect(timeout).toHaveBeenCalledWith(SAVE_TIMEOUT_MS)
+    timeout.mockRestore()
+  })
+
+  it('a refused save throws its code', async () => {
+    mockFetch({ body: { error: 'x', code: 'changed' }, status: 409 })
+    await expect(
+      saveFileContent('1', {
+        root: '/r',
+        path: 'a',
+        baseHash: 'b',
+        text: '',
+        reveal: true,
+      }),
+    ).rejects.toMatchObject({ status: 409, code: 'changed' })
   })
 
   it('reads the changes and the diff of one side of an entry', async () => {

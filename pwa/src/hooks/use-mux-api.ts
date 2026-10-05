@@ -399,7 +399,8 @@ export async function answerAgentPrompt(
   if (!res.ok) throw await requestError(res)
 }
 
-// Files and changes (/api/mux/panes/{id}/files/*), read-only. Shapes match
+// Files and changes (/api/mux/panes/{id}/files/*): reads, and saves of a
+// text file (saveFileContent). Shapes match
 // server/files.go and server/files_git.go. Every response carries the pane's
 // root; a request sent with the root it saw gets a 409 with the new one once
 // the pane's directory moves.
@@ -421,8 +422,22 @@ export interface FilesTree {
   truncated: boolean
 }
 
+// A text file. hash: the sha256 of its bytes, sent back as a save's
+// baseHash. editable: a save would be taken; notEditable says why not
+// (symlink, hardlink, not-writable, other-owner, mixed-eol, nul,
+// denied-write, ...).
+export interface TextFileContent {
+  root: string
+  path: string
+  size: number
+  text: string
+  hash: string
+  editable: boolean
+  notEditable?: string
+}
+
 export type FileContent =
-  | { root: string; path: string; size: number; text: string }
+  | TextFileContent
   | {
       root: string
       path: string
@@ -518,6 +533,43 @@ export function fetchFileContent(
     root: opts.root,
     reveal: opts.reveal ? '1' : undefined,
   })
+}
+
+// A save gets longer than a read: up to 6 MiB of JSON from a slow link.
+export const SAVE_TIMEOUT_MS = 30_000
+
+export interface SavedFile {
+  root: string
+  path: string
+  size: number
+  hash: string
+}
+
+// Replaces the whole text of path, read with baseHash, under root (the root
+// it was read from: a 409 with the new one once it moved). A refusal is a
+// RequestError with the server's code (changed, sensitive, permission,
+// not_editable, not_text, too_large, busy); a timeout or a dropped
+// connection throws something else, after which the save may or may not
+// have been made (saving again is safe: the same text is not a conflict).
+export async function saveFileContent(
+  paneId: string,
+  save: {
+    root: string
+    path: string
+    baseHash: string
+    text: string
+    reveal: boolean
+  },
+): Promise<SavedFile> {
+  const { root, ...body } = save
+  const res = await fetch(filesUrl(paneId, 'content', { root }), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(SAVE_TIMEOUT_MS),
+  })
+  if (!res.ok) throw await requestError(res)
+  return res.json()
 }
 
 export function fetchGitChanges(

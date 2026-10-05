@@ -295,7 +295,61 @@ export function followInFiles(paneId: string, target: LinkPath) {
   return storeFor(paneId).follow(target, 0, true)
 }
 
-// For tests: forget every store.
+// A file being edited in a pane. It is kept here, out of the viewer, so a
+// remount (another view, the desktop panel, a move of the root) never loses
+// it; only in memory, since the text may be a .env file's.
+export interface FileDraft {
+  // The root and the bytes (their sha256) the text was read from
+  root: string
+  path: string
+  baseHash: string
+  // The text read, with "\n" line breaks: what the draft is compared to
+  base: string
+  // The file uses "\r\n" throughout; the server writes them back
+  crlf: boolean
+  text: string
+  // A sensitive file the user chose to show
+  reveal: boolean
+}
+
+const drafts = new Map<string, FileDraft>()
+const draftListeners = new Set<() => void>()
+
+// Leaving the page asks first while any pane has unsaved changes, whether
+// or not its editor is on screen
+const askBeforeUnload = (e: BeforeUnloadEvent) => e.preventDefault()
+function guardUnload() {
+  const dirty = [...drafts.values()].some((d) => d.text !== d.base)
+  if (dirty) window.addEventListener('beforeunload', askBeforeUnload)
+  else window.removeEventListener('beforeunload', askBeforeUnload)
+}
+
+function subscribeDrafts(fn: () => void) {
+  draftListeners.add(fn)
+  return () => {
+    draftListeners.delete(fn)
+  }
+}
+
+// The draft of paneId (at most one file at a time), and a setter that
+// replaces it, or with undefined drops it.
+export function useFileDraft(paneId: string) {
+  const draft = useSyncExternalStore(subscribeDrafts, () => drafts.get(paneId))
+  const setDraft = useCallback(
+    (next: FileDraft | undefined) => {
+      if (next) drafts.set(paneId, next)
+      else drafts.delete(paneId)
+      guardUnload()
+      for (const fn of draftListeners) fn()
+    },
+    [paneId],
+  )
+  return [draft, setDraft] as const
+}
+
+// For tests: forget every store and draft.
 export function resetFilesStores() {
   stores.clear()
+  drafts.clear()
+  guardUnload()
 }

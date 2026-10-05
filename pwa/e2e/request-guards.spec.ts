@@ -175,6 +175,34 @@ test.describe('files routes', () => {
     const url = new URL(await filesPath(request, 'tree'), testInfo.project.use.baseURL)
     expect((await fetch(url)).status).toBe(401)
   })
+  // A save (PUT content) is a write: same-site JSON only, with the root the
+  // client read from
+  const save = { path: 'termote-e2e-none.txt', baseHash: 'x', text: 'csrf' }
+  const rootOf = async (request: APIRequestContext) =>
+    (await (await request.get(await filesPath(request, 'tree'))).json()).root as string
+
+  test('a save from a foreign Origin is rejected', async ({ request }) => {
+    const root = encodeURIComponent(await rootOf(request))
+    const res = await request.put(await filesPath(request, `content?root=${root}`), {
+      headers: { Origin: 'https://evil.example' },
+      data: save,
+    })
+    expect(res.status()).toBe(403)
+  })
+
+  test('a save that is not JSON is rejected', async ({ request }) => {
+    const root = encodeURIComponent(await rootOf(request))
+    const res = await request.put(await filesPath(request, `content?root=${root}`), {
+      headers: { 'Content-Type': 'text/plain' },
+      data: JSON.stringify(save),
+    })
+    expect(res.status()).toBe(415)
+  })
+
+  test('a save without the root it read from is rejected', async ({ request }) => {
+    const res = await request.put(await filesPath(request, 'content'), { data: save })
+    expect(res.status()).toBe(400)
+  })
 })
 
 test.describe('host allowlist', () => {

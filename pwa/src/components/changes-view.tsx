@@ -8,6 +8,7 @@ import { splitPath } from '../utils/files-format'
 import type { LinkPath } from '../utils/markdown-links'
 import { FILES_VIEW_ID } from '../view-ids'
 import { DiffViewer } from './diff-viewer'
+import { FileViewer } from './file-viewer'
 import { PaneDirHeader, ViewMessage } from './pane-dir-header'
 import { Banner } from './ui/banner'
 import { FOCUS_RING } from './ui/button'
@@ -97,6 +98,7 @@ export function ChangesView({
   isMobile,
   notify,
   showView,
+  readOnly,
 }: ViewProps) {
   if (!session.paneId) return <ViewMessage>Loading…</ViewMessage>
   return (
@@ -105,6 +107,7 @@ export function ChangesView({
       isMobile={isMobile}
       notify={notify}
       showView={showView}
+      readOnly={readOnly}
     />
   )
 }
@@ -114,10 +117,37 @@ function PaneChanges({
   isMobile,
   notify,
   showView,
-}: { paneId: string } & Pick<ViewProps, 'isMobile' | 'notify' | 'showView'>) {
+  readOnly,
+}: { paneId: string } & Pick<
+  ViewProps,
+  'isMobile' | 'notify' | 'showView' | 'readOnly'
+>) {
   const c = useGitChanges(paneId)
   const [selected, setSelected] = useState<Selected | null>(null)
   const [reload, setReload] = useState(0)
+  // The working tree's file being edited, in place of the diff. A poll or
+  // a move of the root never closes it: the draft is the pane's.
+  const [editing, setEditing] = useState<string>()
+  // The file (root and path) a sensitive diff was shown for, while it stays
+  // open: editing it and coming back to either side asks only once
+  const [revealed, setRevealed] = useState<string>()
+  // The side a save went back to: once the status no longer lists it, the
+  // file matches the index and the list shows again
+  const saved = useRef<Selected | null>(null)
+  // Another entry, or back to the list: a Show of the last one ends there
+  const select = (s: Selected | null) => {
+    saved.current = null
+    setRevealed(undefined)
+    setSelected(s)
+  }
+
+  useEffect(() => {
+    const s = saved.current
+    if (!s || !c.loaded || findEntry(c.entries, s)) return
+    saved.current = null
+    setSelected(null)
+    notify(`No changes left in ${s.path.slice(s.path.lastIndexOf('/') + 1)}`)
+  }, [c.entries, c.loaded, notify])
 
   const seenChanges = useRef(c.rootChanges)
   useEffect(() => {
@@ -143,7 +173,34 @@ function PaneChanges({
   }
 
   let body: ReactNode
-  if (selected) {
+  const revealKey = selected ? `${c.root}\u0000${selected.path}` : undefined
+  if (selected && editing) {
+    body = (
+      <FileViewer
+        key={`${c.root}\u0000${editing}`}
+        paneId={paneId}
+        root={c.root}
+        path={editing}
+        wrapByDefault={isMobile}
+        backLabel="Back to the diff"
+        onClose={() => setEditing(undefined)}
+        onFollow={follow}
+        onRootChanged={c.rootChanged}
+        notify={notify}
+        canEdit
+        startEditing
+        initialReveal={revealed === revealKey}
+        onSaved={() => {
+          // Back to the diff of what is not staged, read again
+          const s = { ...selected, staged: false }
+          setSelected(s)
+          saved.current = s
+          setEditing(undefined)
+          refresh()
+        }}
+      />
+    )
+  } else if (selected) {
     body = (
       <DiffViewer
         // A new root or entry starts unrevealed: a Show never carries over
@@ -156,10 +213,15 @@ function PaneChanges({
         staged={selected.staged}
         isMobile={isMobile}
         reload={reload}
-        onClose={() => setSelected(null)}
+        onClose={() => select(null)}
         onRootChanged={c.rootChanged}
         onFollow={follow}
         notify={notify}
+        reveal={revealed === revealKey}
+        onReveal={() => setRevealed(revealKey)}
+        // A view-only client is kept from editing here only: the server
+        // has no roles yet
+        onEdit={readOnly ? undefined : () => setEditing(selected.path)}
       />
     )
   } else if (!c.loaded) {
@@ -186,7 +248,7 @@ function PaneChanges({
                   <ChangeRow
                     item={it}
                     onOpen={() =>
-                      setSelected({
+                      select({
                         path: it.entry.path,
                         orig: it.entry.orig,
                         staged: it.staged,

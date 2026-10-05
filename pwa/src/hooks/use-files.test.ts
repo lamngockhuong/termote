@@ -5,6 +5,7 @@ import {
   followInFiles,
   isOpenable,
   resetFilesStores,
+  useFileDraft,
   useFiles,
 } from './use-files'
 import { type FileEntry, RequestError } from './use-mux-api'
@@ -413,5 +414,58 @@ describe('following links', () => {
     await act(() => followInFiles('%1', { path: 'docs/guide.md' }))
     expect(result.current.openPath).toBe('docs/guide.md')
     expect(result.current.history).toEqual([])
+  })
+})
+
+describe('useFileDraft', () => {
+  const draft = {
+    root: '/r',
+    path: 'a',
+    baseHash: 'h',
+    base: 'x',
+    crlf: false,
+    text: 'y',
+    reveal: false,
+  }
+
+  it('keeps one draft per pane, shared by every reader, until dropped', () => {
+    const one = renderHook(() => useFileDraft('%1'))
+    const again = renderHook(() => useFileDraft('%1'))
+    const other = renderHook(() => useFileDraft('%2'))
+    expect(one.result.current[0]).toBeUndefined()
+    act(() => one.result.current[1](draft))
+    expect(again.result.current[0]).toEqual(draft)
+    expect(other.result.current[0]).toBeUndefined()
+    // Outlives its readers
+    one.unmount()
+    again.unmount()
+    const later = renderHook(() => useFileDraft('%1'))
+    expect(later.result.current[0]).toEqual(draft)
+    act(() => later.result.current[1](undefined))
+    expect(later.result.current[0]).toBeUndefined()
+  })
+
+  it('is forgotten with the stores', () => {
+    const h = renderHook(() => useFileDraft('%1'))
+    act(() => h.result.current[1](draft))
+    act(() => resetFilesStores())
+    h.rerender()
+    expect(h.result.current[0]).toBeUndefined()
+  })
+
+  it('leaving the page asks while a draft has changes, shown or not', () => {
+    const unload = () => {
+      const ev = new Event('beforeunload', { cancelable: true })
+      window.dispatchEvent(ev)
+      return ev.defaultPrevented
+    }
+    const h = renderHook(() => useFileDraft('%1'))
+    act(() => h.result.current[1]({ ...draft, text: draft.base }))
+    expect(unload()).toBe(false)
+    act(() => h.result.current[1](draft))
+    h.unmount()
+    expect(unload()).toBe(true)
+    act(() => resetFilesStores())
+    expect(unload()).toBe(false)
   })
 })
