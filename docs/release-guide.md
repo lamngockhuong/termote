@@ -73,7 +73,11 @@ chore: update deps             # No bump
 
 1. Push conventional commits to `main`
 2. `release-please.yml` opens or updates the `chore: release x.y.z` PR (CHANGELOG, version bump)
-3. Merging the PR creates the tag, which triggers `release.yml`
+3. Merging the PR creates the tag; `release-please.yml` then starts `release.yml` on that tag
+   (`workflow_dispatch`, not `workflow_call`: a called workflow does not get the `release`
+   environment's signing key, actions/runner#1490)
+4. Approve the run's `release` deployment in GitHub Actions: only then is `checksums.txt` signed
+   and the release published
 
 ### Manual Release
 
@@ -159,7 +163,7 @@ Each release produces, per platform (`linux`/`darwin` × `amd64`/`arm64`, plus
 
 ## Website Deploys
 
-`deploy-website.yml` does not run on pushes to `main`. `release-please.yml` calls it after a
+`deploy-website.yml` does not run on pushes to `main`. `release.yml` calls it after a
 stable release (not a pre-release) has been published, and it can be run by hand from GitHub
 Actions for a docs-only fix. This keeps the site's root docs — and the installer scripts it
 serves at `https://termote.ohnice.app/install.sh`/`install.ps1` — on the version
