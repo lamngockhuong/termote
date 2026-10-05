@@ -289,10 +289,12 @@ export function ChatComposer({
     update(value)
     const box = boxRef.current
     box?.focus()
-    // After React writes the value
-    requestAnimationFrame(() =>
-      box?.setSelectionRange(value.length, value.length),
-    )
+    // After React writes the value, unless typing already began: a late frame
+    // would pull the caret back into the middle of what was typed
+    requestAnimationFrame(() => {
+      if (box?.value === value)
+        box.setSelectionRange(value.length, value.length)
+    })
   }
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
