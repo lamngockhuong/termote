@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.11.0](https://github.com/lamngockhuong/termote/compare/v1.10.0...v1.11.0) (2026-10-05)
+
+
+### Features
+
+* edit a text file in the Files and Changes views ([#328](https://github.com/lamngockhuong/termote/issues/328)) ([bf9e6ed](https://github.com/lamngockhuong/termote/commit/bf9e6ede8f17d2e1e10d3abe79961c4273563a78))
+
+
+### Bug Fixes
+
+* compare the update check with the running version, and refuse to update a service running another binary ([#332](https://github.com/lamngockhuong/termote/issues/332)) ([9a58bd1](https://github.com/lamngockhuong/termote/commit/9a58bd1de1a9e914c0f43a0e97efd88c0f7ecc59))
+
 ## [1.10.0](https://github.com/lamngockhuong/termote/compare/v1.9.0...v1.10.0) (2026-10-05)
 
 
