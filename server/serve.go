@@ -346,13 +346,30 @@ func startServeMode(cfg serveConfig) {
 	}
 	// After the first signal, a second one kills the process as usual.
 	go func() { <-ctx.Done(); stop() }()
-	// Publish over Tailscale only once the port answers.
-	if cfg.Tailscale != "" {
-		go applyTailscale(ctx, cfg.Tailscale, ln.Addr().(*net.TCPAddr).Port)
-	}
-	if err := runServer(ctx, cfg, m, ln); err != nil {
+	if err := serveAndPublish(ctx, cfg, m, ln); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// serveAndPublish runs the server on ln and, with cfg.Tailscale, publishes
+// it over Tailscale while it runs: applied once the port answers, removed
+// once the server stopped.
+func serveAndPublish(ctx context.Context, cfg serveConfig, m Mux, ln net.Listener) error {
+	if cfg.Tailscale == "" {
+		return runServer(ctx, cfg, m, ln)
+	}
+	port := ln.Addr().(*net.TCPAddr).Port
+	applied := make(chan struct{})
+	go func() {
+		defer close(applied)
+		applyTailscale(ctx, cfg.Tailscale, port)
+	}()
+	err := runServer(ctx, cfg, m, ln)
+	// Not before the apply is over (its commands fail once ctx is done), or
+	// it could add the mapping back after it was removed.
+	<-applied
+	releaseTailscale(cfg.Tailscale, port)
+	return err
 }
 
 // runServer serves on ln until ctx is cancelled, then stops accepting

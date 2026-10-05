@@ -327,6 +327,7 @@ func (c *cli) cmdStart(args []string) error {
 	if !sup.AutoStart() {
 		c.warnf("No service manager found: the server will not start again after a reboot or crash; run 'termote start' then")
 	}
+	c.lanLingerWarning(o.lan, o.port, sup)
 	c.showAccessInfo(o, pass, reused)
 	if saved != nil && saved.Container != nil && o.user != saved.authUser() {
 		c.infof("The container shares this username; it takes it at its next 'termote container up'")
