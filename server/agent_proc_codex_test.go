@@ -41,7 +41,7 @@ func TestCodexUserThread(t *testing.T) {
 	home := t.TempDir()
 	write := func(content string) string { return writeRollout(t, home, testCodexID, content) }
 	meta := `{"type":"session_meta","payload":{"id":"` + testCodexID + `","thread_source":"user"}}` + "\n"
-	if !codexUserThread(write(meta), testCodexID) {
+	if !codexUserThread(write(meta), testCodexID, "") {
 		t.Error("user thread refused")
 	}
 	for name, content := range map[string]string{
@@ -52,11 +52,11 @@ func TestCodexUserThread(t *testing.T) {
 		"broken":        "{\n",
 		"line too long": `{"type":"session_meta","x":"` + strings.Repeat("a", codexMetaMax) + "\"}\n",
 	} {
-		if codexUserThread(write(content), testCodexID) {
+		if codexUserThread(write(content), testCodexID, "") {
 			t.Errorf("%s accepted", name)
 		}
 	}
-	if codexUserThread(filepath.Join(home, "missing"), testCodexID) {
+	if codexUserThread(filepath.Join(home, "missing"), testCodexID, "") {
 		t.Error("missing file accepted")
 	}
 }
