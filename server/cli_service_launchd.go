@@ -166,3 +166,28 @@ func (l *launchdSupervisor) Uninstall() error {
 	l.launchctl("bootout", l.service())
 	return removeFile(l.plistPath())
 }
+
+// RegisteredExe reads the first of the plist's ProgramArguments, undoing
+// the XML escaping it was written with.
+func (l *launchdSupervisor) RegisteredExe() (string, bool) {
+	b, err := os.ReadFile(l.plistPath())
+	if err != nil {
+		return "", false
+	}
+	_, rest, ok := strings.Cut(string(b), "<key>ProgramArguments</key>")
+	if !ok {
+		return "", false
+	}
+	_, rest, ok = strings.Cut(rest, "<string>")
+	value, _, ok2 := strings.Cut(rest, "</string>")
+	if !ok || !ok2 {
+		return "", false
+	}
+	var text struct {
+		Value string `xml:",chardata"`
+	}
+	if xml.Unmarshal([]byte("<s>"+value+"</s>"), &text) != nil {
+		return "", false
+	}
+	return text.Value, true
+}
