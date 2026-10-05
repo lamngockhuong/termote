@@ -107,13 +107,18 @@ func codexRollout(pid int, home, wantID string) (path, id, fileID string, ok boo
 const codexMetaMax = 1 << 20
 
 // codexUserThread reports whether the rollout's session_meta (its first
-// line) is of thread id started by the user.
-func codexUserThread(path, id string) bool {
+// line) is of thread id started by the user. The file opened must be the
+// regular file of identity fileID (when known) that was found at path: it
+// can be replaced in between.
+func codexUserThread(path, id, fileID string) bool {
 	f, err := os.OpenFile(path, os.O_RDONLY|openNonblock, 0)
 	if err != nil {
 		return false
 	}
 	defer f.Close()
+	if fi, err := f.Stat(); err != nil || !fi.Mode().IsRegular() || (fileID != "" && fileIdentity(fi) != fileID) {
+		return false
+	}
 	line, err := bufio.NewReaderSize(io.LimitReader(f, codexMetaMax), codexMetaMax).ReadSlice('\n')
 	if err != nil {
 		return false
@@ -146,7 +151,7 @@ func codexUserThreadCached(path, id, fileID string) bool {
 	if ok {
 		return user
 	}
-	user = codexUserThread(path, id)
+	user = codexUserThread(path, id, fileID)
 	codexMetas.Lock()
 	if len(codexMetas.m) >= codexScansMax {
 		clear(codexMetas.m)

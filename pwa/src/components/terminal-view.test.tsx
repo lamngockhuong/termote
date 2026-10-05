@@ -924,6 +924,14 @@ describe('TerminalView', () => {
     expect(socket.send).toHaveBeenCalledWith('\x1b[200~a\nb\x1b[201~')
   })
 
+  // xterm brackets a paste without removing an end marker inside it: the
+  // rest would reach the program as typed keys.
+  it('pastes through xterm without control characters', () => {
+    const { ref, term } = renderView()
+    expect(ref.current!.paste('a\x1b[201~\r!id\r\tb\x03\x9b')).toBe(true)
+    expect(term.paste).toHaveBeenCalledWith('a\r!id\r\tb')
+  })
+
   it('reports a paste that could not go out', () => {
     const { ref, term, rerender } = renderView()
     socket.state = 'disconnected'
@@ -941,7 +949,7 @@ describe('TerminalView', () => {
   describe('paste event', () => {
     const image = new File(['x'], 'a.png', { type: 'image/png' })
     // jsdom's ClipboardEvent carries no clipboardData; attach one.
-    function pasteEvent(types: string[], file: File | null) {
+    function pasteEvent(types: string[], file: File | null, text = '') {
       const e = new Event('paste', {
         bubbles: true,
         cancelable: true,
@@ -952,6 +960,7 @@ describe('TerminalView', () => {
           items: file
             ? [{ kind: 'file', type: file.type, getAsFile: () => file }]
             : [],
+          getData: (type: string) => (type === 'text/plain' ? text : ''),
         },
       })
       return e
@@ -977,7 +986,44 @@ describe('TerminalView', () => {
       expect(socket.send).not.toHaveBeenCalled()
     })
 
-    it('leaves text pastes, read-only terminals and no handler to xterm', () => {
+    // Ctrl+V, the iOS Paste menu, a middle click: every paste of text is
+    // cleaned the same way as the toolbar's, before xterm sees it.
+    it('takes a text paste and sends it cleaned', () => {
+      const { container, term } = renderView()
+      const { textarea, xtermPaste } = xtermTarget(container)
+      const e = pasteEvent(['text/plain'], null, 'ls\x1b[201~\r!id\r')
+      textarea.dispatchEvent(e)
+      expect(e.defaultPrevented).toBe(true)
+      expect(xtermPaste).not.toHaveBeenCalled()
+      expect(term.paste).toHaveBeenCalledWith('ls\r!id\r')
+    })
+
+    it('a text paste in a herdr agent pane goes bracketed, cleaned', () => {
+      const { container, term } = renderView({ bracketedPaste: true })
+      const { textarea } = xtermTarget(container)
+      textarea.dispatchEvent(pasteEvent(['text/plain'], null, 'a\x1b[201~b'))
+      expect(socket.send).toHaveBeenCalledWith('\x1b[200~ab\x1b[201~')
+      expect(term.paste).not.toHaveBeenCalled()
+    })
+
+    it('leaves a paste without clipboard data to xterm', () => {
+      const { container, term } = renderView()
+      const { textarea, xtermPaste } = xtermTarget(container)
+      textarea.dispatchEvent(new Event('paste', { bubbles: true }))
+      expect(xtermPaste).toHaveBeenCalledTimes(1)
+      expect(term.paste).not.toHaveBeenCalled()
+    })
+
+    it('a text paste into a view-only terminal sends nothing', () => {
+      const { container, term } = renderView({ readOnly: true })
+      const { textarea, xtermPaste } = xtermTarget(container)
+      textarea.dispatchEvent(pasteEvent(['text/plain'], null, 'rm -rf'))
+      expect(xtermPaste).not.toHaveBeenCalled()
+      expect(term.paste).not.toHaveBeenCalled()
+      expect(socket.send).not.toHaveBeenCalled()
+    })
+
+    it('leaves empty pastes, read-only terminals and no handler to xterm', () => {
       const onPasteImage = vi.fn()
       const { container, rerender, ref } = renderView({ onPasteImage })
       const { textarea, xtermPaste } = xtermTarget(container)

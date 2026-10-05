@@ -309,13 +309,14 @@ func (r *commandReader) readLinkedSkill(p string) (commandMeta, bool) {
 // readHead reads the start of p when it is a regular file, not a symlink,
 // and skip does not refuse it.
 func (r *commandReader) readHead(p string) (commandMeta, bool) {
-	if fi, err := r.rt.Lstat(p); err != nil || !fi.Mode().IsRegular() {
+	fi, err := r.rt.Lstat(p)
+	if err != nil || !fi.Mode().IsRegular() {
 		return commandMeta{}, false
 	}
 	if r.skip != nil && r.skip(r.dir, filepath.FromSlash(p)) {
 		return commandMeta{}, false
 	}
-	return readCommandHead(r.rt, p)
+	return readCommandHead(r.rt, p, fi)
 }
 
 type commandMeta struct {
@@ -324,14 +325,19 @@ type commandMeta struct {
 	hidden      bool
 }
 
-// readCommandHead reads the first commandHeadSize bytes of p. A read that
-// fails part way leaves the description to what was read.
-func readCommandHead(rt *os.Root, p string) (commandMeta, bool) {
-	f, err := rt.Open(p)
+// readCommandHead reads the first commandHeadSize bytes of p, when the file
+// opened is still the one checked as checked (p can be replaced in between,
+// by a FIFO or a symlink to a file that is never read). A read that fails
+// part way leaves the description to what was read.
+func readCommandHead(rt *os.Root, p string, checked os.FileInfo) (commandMeta, bool) {
+	f, err := rt.OpenFile(p, os.O_RDONLY|openNonblock, 0)
 	if err != nil {
 		return commandMeta{}, false
 	}
 	defer f.Close()
+	if fi, err := f.Stat(); err != nil || !os.SameFile(fi, checked) {
+		return commandMeta{}, false
+	}
 	head := make([]byte, commandHeadSize)
 	n, _ := io.ReadFull(f, head)
 	return parseCommandMeta(head[:n]), true

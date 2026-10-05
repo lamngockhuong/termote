@@ -180,7 +180,8 @@ Manual testing checklist for Termote features before release.
 - [ ] Desktop: Icon list displays correctly (no layout issues)
 - [ ] About page looks good in dark mode
 - [ ] "More" (⋯) menu opens from the header on mobile and desktop
-- [ ] "Clear cache & reload" in the More menu works (unregisters SW, clears caches, clears session cookie, reloads)
+- [ ] "Clear cache & reload" in the More menu works (unregisters SW, clears caches, ends the session on the server, reloads)
+- [ ] With sign-in on, "Log out" in the More menu opens the sign-in page, and the old session no longer works after it (reload asks to sign in again); without sign-in (`--no-auth`) the item is not shown
 
 ### Connection Indicator
 

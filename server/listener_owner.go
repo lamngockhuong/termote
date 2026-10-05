@@ -1,10 +1,6 @@
 package main
 
-import (
-	"net"
-	"strconv"
-	"time"
-)
+import "net"
 
 // The CLI sends the saved password to whatever answers on 127.0.0.1:port.
 // While the server is stopped, any local user can listen there, so the
@@ -39,6 +35,25 @@ const (
 // listenerOwnerOf finds who listens on port. Tests replace it.
 var listenerOwnerOf = listenerOwnedLocally
 
+// untrustedConn checks conn, just made to 127.0.0.1:port, before anything is
+// sent on it: every listener on port, then the owner of conn's server end
+// where the system shows it. It returns 0 when the password may go, else
+// healthUntrusted or healthUnverified.
+func untrustedConn(port int, conn net.Conn) int {
+	owner := listenerOwnerOf(port)
+	if owner == listenerTrustedOwner {
+		owner = connPeerOwner(port, conn)
+	}
+	switch owner {
+	case listenerTrustedOwner:
+		return 0
+	case listenerOtherOwner:
+		return healthUntrusted
+	default:
+		return healthUnverified
+	}
+}
+
 // ownerOf judges the owners seen: each self or root (uid 0), or not.
 func ownerOf(uids []int, self int) listenerOwner {
 	if len(uids) == 0 {
@@ -50,15 +65,4 @@ func ownerOf(uids []int, self int) listenerOwner {
 		}
 	}
 	return listenerTrustedOwner
-}
-
-// portAnswers reports whether anything accepts a connection on
-// 127.0.0.1:port.
-func portAnswers(port int) bool {
-	conn, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)), time.Second)
-	if err != nil {
-		return false
-	}
-	conn.Close()
-	return true
 }

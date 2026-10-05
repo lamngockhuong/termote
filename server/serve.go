@@ -203,6 +203,13 @@ func (s *tokenStore) validate(token string) bool {
 	return true
 }
 
+// revoke ends token before it expires.
+func (s *tokenStore) revoke(token string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.tokens, token)
+}
+
 // maxStreamTokens caps unused stream tokens an authenticated client can pile
 // up.
 const maxStreamTokens = 32
@@ -391,9 +398,14 @@ func runServer(ctx context.Context, cfg serveConfig, m Mux, ln net.Listener) err
 // authRateLimiter tracks failed auth attempts per IP, and per /64 for IPv6, to
 // prevent brute force attacks.
 type authRateLimiter struct {
-	mu       sync.Mutex
-	failures map[string][]time.Time // IP or IPv6 /64 → timestamps of recent failures
+	mu        sync.Mutex
+	failures  map[string][]time.Time // IP or IPv6 /64 → timestamps of recent failures
+	lastSweep time.Time              // when addLocked last dropped expired entries
 }
+
+// authSweepEvery spaces sweeps of the failures map: sweeping on every failure
+// once it holds many keys costs a full scan under the lock each time.
+const authSweepEvery = 10 * time.Second
 
 func newAuthRateLimiter() *authRateLimiter {
 	return &authRateLimiter{failures: make(map[string][]time.Time)}
@@ -500,10 +512,12 @@ func (rl *authRateLimiter) record(ip string) {
 }
 
 // addLocked adds a failure of ip at now. It sweeps all expired entries when
-// the map exceeds 1000 IPs to prevent unbounded growth. rl.mu must be held.
+// the map exceeds 1000 IPs to prevent unbounded growth, at most once per
+// authSweepEvery. rl.mu must be held.
 func (rl *authRateLimiter) addLocked(ip string, now time.Time) {
 	rl.failures[ip] = append(rl.failures[ip], now)
-	if len(rl.failures) > 1000 {
+	if len(rl.failures) > 1000 && now.Sub(rl.lastSweep) >= authSweepEvery {
+		rl.lastSweep = now
 		cutoff := now.Add(-1 * time.Minute)
 		for k, times := range rl.failures {
 			filtered := times[:0]
@@ -552,6 +566,15 @@ const (
 	// device logs in again with the saved credentials).
 	maxSessions = 256
 )
+
+// authCtxKey marks a request basicAuth let through.
+type authCtxKey struct{}
+
+// authenticated reports whether sign-in is on and the request passed it.
+func authenticated(ctx context.Context) bool {
+	ok, _ := ctx.Value(authCtxKey{}).(bool)
+	return ok
+}
 
 // basicAuth wraps a handler with HTTP basic authentication.
 // After successful basic auth, sets a session cookie to avoid re-prompting
@@ -658,6 +681,33 @@ func basicAuth(user, pass string, next http.Handler) http.Handler {
 		http.Redirect(w, r, next, http.StatusSeeOther)
 	}
 
+	// logout ends the cookie's session, if any, and expires the cookie. It
+	// needs no credentials and counts as no failed login: without a valid
+	// session it ends nothing.
+	logout := func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.Header().Set("Allow", http.MethodPost)
+			jsonError(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if cookie, err := r.Cookie(sessionCookieName); err == nil {
+			sessions.revoke(cookie.Value)
+		}
+		http.SetCookie(w, &http.Cookie{
+			Name:     sessionCookieName,
+			Path:     "/",
+			MaxAge:   -1,
+			HttpOnly: true,
+			SameSite: http.SameSiteStrictMode,
+			Secure:   requestIsHTTPS(r),
+		})
+		w.WriteHeader(http.StatusNoContent)
+	}
+	// serveSignedIn serves a request that passed sign-in.
+	serveSignedIn := func(w http.ResponseWriter, r *http.Request) {
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), authCtxKey{}, true)))
+	}
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Skip auth for PWA public paths (manifest, service worker)
 		if isPWAPublicPath(r.URL.Path) {
@@ -674,10 +724,14 @@ func basicAuth(user, pass string, next http.Handler) http.Handler {
 			login(w, r, ip)
 			return
 		}
+		if r.URL.Path == logoutPath {
+			logout(w, r)
+			return
+		}
 
 		// Check session cookie first (mobile browsers drop basic auth)
 		if hasSession(r) {
-			next.ServeHTTP(w, r)
+			serveSignedIn(w, r)
 			return
 		}
 
@@ -702,7 +756,7 @@ func basicAuth(user, pass string, next http.Handler) http.Handler {
 		}
 		limiter.refund(ip)
 		startSession(w, r)
-		next.ServeHTTP(w, r)
+		serveSignedIn(w, r)
 	})
 }
 

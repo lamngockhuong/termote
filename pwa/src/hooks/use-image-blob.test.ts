@@ -49,6 +49,58 @@ function hook(initial: HookProps) {
 }
 
 describe('useImageBlob', () => {
+  // Opened in a tab of its own, a blob: SVG would be a document of this
+  // origin; a data: one has an opaque origin.
+  it('reads an SVG into a data: URL, never a blob: one', async () => {
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg"/>'
+    mockImage.mockResolvedValue(new Blob([svg], { type: 'image/svg+xml' }))
+    const { result, unmount } = hook({
+      req: { path: 'a.svg' },
+      reloadKey: '',
+    })
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+    const state = result.current as Extract<ImageState, { status: 'ready' }>
+    expect(state.url).toBe(`data:image/svg+xml;base64,${btoa(svg)}`)
+    expect(state.type).toBe('image/svg+xml')
+    expect(state.size).toBe(svg.length)
+    expect(URL.createObjectURL).not.toHaveBeenCalled()
+    unmount()
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled()
+  })
+
+  it('reports an SVG that cannot be read into a data: URL', async () => {
+    const failure = new DOMException('read failed', 'NotReadableError')
+    class FailingReader {
+      error = failure
+      onerror: (() => void) | null = null
+      readAsDataURL() {
+        queueMicrotask(() => this.onerror?.())
+      }
+    }
+    vi.stubGlobal('FileReader', FailingReader)
+    try {
+      mockImage.mockResolvedValue(
+        new Blob(['<svg/>'], { type: 'image/svg+xml' }),
+      )
+      const { result } = hook({ req: { path: 'a.svg' }, reloadKey: '' })
+      await waitFor(() => expect(result.current.status).toBe('error'))
+      expect(result.current).toEqual({ status: 'error', error: failure })
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('makes no URL for an SVG read after cleanup', async () => {
+    const read = pending()
+    mockImage.mockReturnValue(read.p)
+    const { result, unmount } = hook({ req: { path: 'a.svg' }, reloadKey: '' })
+    unmount()
+    await act(async () =>
+      read.resolve(new Blob(['<svg/>'], { type: 'image/svg+xml' })),
+    )
+    expect(result.current.status).toBe('loading')
+  })
+
   it('reads nothing without a request', () => {
     const { result } = hook({ req: null, reloadKey: '' })
     expect(result.current).toEqual({ status: 'idle' })

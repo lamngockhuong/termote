@@ -14,6 +14,12 @@ import (
 // in again once its session ended (24h, or a server restart).
 const loginPath = "/login"
 
+// logoutPath ends the session of the cookie it carries, on the server too:
+// clearing the cookie in the browser alone would leave a copied one valid
+// for the rest of its 24 hours. A JSON write under /api/, so writeGuard
+// refuses it from another site.
+const logoutPath = "/api/mux/logout"
+
 // maxLoginBody bounds the form POST: a username, a password and a path.
 const maxLoginBody = 8 << 10
 

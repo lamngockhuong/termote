@@ -2,6 +2,7 @@ import {
   Info,
   LifeBuoy,
   Link,
+  LogOut,
   Monitor,
   Moon,
   MoreHorizontal,
@@ -11,6 +12,7 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { useTheme } from '../contexts/theme-context'
+import { logout } from '../hooks/use-mux-api'
 import {
   Menu,
   MenuGroup,
@@ -33,6 +35,8 @@ interface Props {
   fontSize?: FontSizeControls
   // Copies a link to the session on screen
   onCopyLink?: () => void
+  // Ends the session (only when the server has sign-in on)
+  onLogout?: () => void
 }
 
 const THEMES = [
@@ -51,9 +55,9 @@ async function clearCacheAndReload() {
       const cacheNames = await caches.keys()
       await Promise.all(cacheNames.map((name) => caches.delete(name)))
     }
-    // Clear session cookie to trigger basic auth on reload
-    // biome-ignore lint/suspicious/noDocumentCookie: needed to clear auth session before reload
-    document.cookie = 'termote_session=; Max-Age=0; path=/'
+    // End the session on the server: the cookie is HttpOnly, so the page
+    // cannot clear it itself. Without sign-in there is none to end.
+    await logout().catch(() => false)
   } finally {
     window.location.reload()
   }
@@ -66,6 +70,7 @@ export function SettingsMenu({
   onOpenSettings,
   fontSize,
   onCopyLink,
+  onLogout,
 }: Props) {
   const { theme, setTheme } = useTheme()
   const [clearing, setClearing] = useState(false)
@@ -127,6 +132,11 @@ export function SettingsMenu({
       {onCopyLink && (
         <MenuItem icon={<Link size={17} />} onSelect={onCopyLink}>
           Copy link
+        </MenuItem>
+      )}
+      {onLogout && (
+        <MenuItem icon={<LogOut size={17} />} onSelect={onLogout}>
+          Log out
         </MenuItem>
       )}
       <MenuSeparator />

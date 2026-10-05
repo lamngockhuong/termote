@@ -50,6 +50,8 @@ export interface MuxSnapshot {
     files?: boolean
     // The server takes image uploads (/uploads).
     uploads?: boolean
+    // Sign-in is on: the session can be ended (/logout).
+    auth?: boolean
   }
   groups: MuxGroup[]
 }
@@ -113,6 +115,18 @@ export async function fetchHealth(
     }),
     signIn,
   )
+}
+
+// Ends this browser's session on the server and expires its cookie.
+// Resolves to whether the server did.
+export async function logout(): Promise<boolean> {
+  const res = await fetch(`${API_BASE}/logout`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  })
+  return res.ok
 }
 
 export async function selectTab(id: string): Promise<boolean> {

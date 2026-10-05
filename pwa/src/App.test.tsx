@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { Folder, MessageSquare } from 'lucide-react'
 import { lazy, type ReactElement } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { APP_VIEWS, type AppView, type ViewProps } from './app-views'
 import { KeyboardToolbar } from './components/keyboard-toolbar'
@@ -47,9 +47,11 @@ const mockUseLocalSessions = vi.fn(() => ({
   },
 }))
 const mockSelectTab = vi.fn(async (_id: string) => true)
+const mockLogout = vi.fn(async () => true)
 vi.mock('./hooks/use-mux-api', async (orig) => ({
   ...(await orig<typeof import('./hooks/use-mux-api')>()),
   selectTab: (id: string) => mockSelectTab(id),
+  logout: () => mockLogout(),
 }))
 vi.mock('./hooks/use-local-sessions', () => ({
   useLocalSessions: (...args: any[]) =>
@@ -394,12 +396,14 @@ vi.mock('./components/settings-menu', () => ({
     onOpenSettings,
     fontSize,
     onCopyLink,
+    onLogout,
   }: {
     onOpenAbout: () => void
     onOpenHelp: () => void
     onOpenSettings: () => void
     fontSize?: { value: number; onDecrease: () => void; onIncrease: () => void }
     onCopyLink?: () => void
+    onLogout?: () => void
   }) => (
     <div>
       <button onClick={onOpenAbout}>About</button>
@@ -414,6 +418,7 @@ vi.mock('./components/settings-menu', () => ({
         </>
       )}
       {onCopyLink && <button onClick={onCopyLink}>CopyLink</button>}
+      {onLogout && <button onClick={onLogout}>LogOut</button>}
     </div>
   ),
 }))
@@ -727,6 +732,55 @@ describe('App', () => {
     const { removeSession } = mockUseLocalSessions.mock.results[0].value
     expect(removeSession).not.toHaveBeenCalled()
     expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument()
+  })
+
+  describe('log out', () => {
+    const withAuth = () => {
+      const base = mockUseLocalSessions()
+      // The mock's type knows only the caps of its first value.
+      mockUseLocalSessions.mockReturnValue({
+        ...base,
+        mux: {
+          backend: 'tmux',
+          caps: { clientSideSelect: false, copyMode: true, auth: true },
+        },
+      } as typeof base)
+    }
+    const assign = vi.fn()
+    beforeEach(() => {
+      assign.mockClear()
+      vi.stubGlobal('location', { ...window.location, assign })
+    })
+    afterEach(() => vi.unstubAllGlobals())
+
+    it('is not offered when sign-in is off', async () => {
+      render(<App />)
+      await screen.findByRole('button', { name: 'About' })
+      expect(screen.queryByRole('button', { name: 'LogOut' })).toBeNull()
+    })
+
+    it('ends the session, then opens the sign-in page', async () => {
+      withAuth()
+      mockLogout.mockResolvedValueOnce(true)
+      render(<App />)
+      fireEvent.click(await screen.findByRole('button', { name: 'LogOut' }))
+      await waitFor(() => expect(assign).toHaveBeenCalledWith('/login'))
+      expect(mockLogout).toHaveBeenCalledTimes(1)
+    })
+
+    it.each([
+      ['refused', () => mockLogout.mockResolvedValueOnce(false)],
+      ['failed', () => mockLogout.mockRejectedValueOnce(new Error('offline'))],
+    ])('stays and says so when the server %s', async (_, arrange) => {
+      withAuth()
+      arrange()
+      render(<App />)
+      fireEvent.click(await screen.findByRole('button', { name: 'LogOut' }))
+      expect(await screen.findByTestId('toast')).toHaveTextContent(
+        'Could not log out. Try again',
+      )
+      expect(assign).not.toHaveBeenCalled()
+    })
   })
 
   it('opens about modal', async () => {

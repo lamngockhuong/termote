@@ -4,6 +4,8 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"sync/atomic"
 	"testing"
 )
 
@@ -105,5 +107,63 @@ func TestFetchHealthWithholdsPasswordFromUntrustedListener(t *testing.T) {
 	srv.Close()
 	if _, code := fetchHealth(port, "admin", "secret"); code != 0 {
 		t.Errorf("closed port = %d", code)
+	}
+}
+
+// The listener checked is gone right after the check, and another takes its
+// port: the password goes over the connection made before the check, to the
+// listener that was checked, never to the one that came after.
+func TestFetchHealthChecksTheConnectionUsed(t *testing.T) {
+	var lateAuth atomic.Bool
+	first := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"status":"ok"}`))
+	}))
+	port := first.Listener.Addr().(*net.TCPAddr).Port
+	late := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _, ok := r.BasicAuth()
+		lateAuth.Store(ok)
+		w.Write([]byte(`{"status":"ok"}`))
+	}))
+	defer late.Close()
+	old := listenerOwnerOf
+	t.Cleanup(func() { listenerOwnerOf = old })
+	listenerOwnerOf = func(int) listenerOwner {
+		// Checked while the first listener still holds the port, which it
+		// then loses.
+		first.Close()
+		ln, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
+		if err != nil {
+			t.Errorf("rebind: %v", err)
+			return listenerTrustedOwner
+		}
+		late.Listener = ln
+		late.Start()
+		return listenerTrustedOwner
+	}
+	fetchHealth(port, "admin", "secret")
+	if lateAuth.Load() {
+		t.Error("password sent to the listener that came after the check")
+	}
+}
+
+func TestProcNetPeerUIDs(t *testing.T) {
+	table := `  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
+   0: 0100007F:1E00 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 1 1 0000000000000000 100 0 0 10 0
+   1: 0100007F:1E00 0100007F:D431 01 00000000:00000000 00:00000000 00000000  1001        0 0 1 0000000000000000 20 4 30 10 -1
+   2: 0100007F:D431 0100007F:1E00 01 00000000:00000000 00:00000000 00000000  1000        0 3 1 0000000000000000 20 4 30 10 -1
+   3: 0A000001:1E00 0A000002:D431 01 00000000:00000000 00:00000000 00000000  1002        0 4 1 0000000000000000 20 4 30 10 -1
+   4: 0000000000000000FFFF00000100007F:1E00 0000000000000000FFFF00000100007F:D432 01 0 0 0 x 0
+`
+	// 0x1E00 = 7680, 0xD431 = 54321: only the server end (row 1) of that
+	// connection counts, not the listener, the client end or another host.
+	if got := procNetPeerUIDs(table, 7680, 54321); len(got) != 1 || got[0] != 1001 {
+		t.Errorf("uids = %v, want [1001]", got)
+	}
+	// tcp6, IPv4-mapped: an owner that does not parse is never trusted.
+	if got := procNetPeerUIDs(table, 7680, 54322); len(got) != 1 || got[0] != -1 {
+		t.Errorf("mapped = %v, want [-1]", got)
+	}
+	if got := procNetPeerUIDs(table, 7680, 1); len(got) != 0 {
+		t.Errorf("no connection = %v", got)
 	}
 }

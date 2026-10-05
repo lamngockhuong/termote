@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -46,6 +47,28 @@ func procNetListenerUIDs(table string, port int) []int {
 		uid, err := strconv.Atoi(f[7])
 		if err != nil {
 			// Unreadable owner: never trusted.
+			uid = -1
+		}
+		uids = append(uids, uid)
+	}
+	return uids
+}
+
+// procNetPeerUIDs returns the uid of each socket in a /proc/net/tcp listing
+// on 127.0.0.1:port whose peer is 127.0.0.1:peerPort (in tcp6, as the
+// IPv4-mapped ::ffff:127.0.0.1): the server end of a connection made from
+// peerPort.
+func procNetPeerUIDs(table string, port, peerPort int) []int {
+	local := fmt.Sprintf("0100007F:%04X", port)
+	remote := fmt.Sprintf("0100007F:%04X", peerPort)
+	var uids []int
+	for _, line := range strings.Split(table, "\n") {
+		f := strings.Fields(line)
+		if len(f) < 8 || f[3] == "0A" || !strings.HasSuffix(f[1], local) || !strings.HasSuffix(f[2], remote) {
+			continue
+		}
+		uid, err := strconv.Atoi(f[7])
+		if err != nil {
 			uid = -1
 		}
 		uids = append(uids, uid)
