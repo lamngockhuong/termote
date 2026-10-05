@@ -59,6 +59,12 @@ func (c *cli) supervisors() []supervisor {
 // installedSupervisor is the one Termote registered with, or nil. The choice
 // is not saved: asking each one follows reality (systemd enabled in WSL
 // later, a task removed by hand).
+// exeRegistrar is a supervisor that can tell the binary its registration
+// runs (systemd's ExecStart, launchd's ProgramArguments).
+type exeRegistrar interface {
+	RegisteredExe() (string, bool)
+}
+
 func (c *cli) installedSupervisor() supervisor {
 	for _, s := range c.supervisors() {
 		if s.Installed() {

@@ -265,7 +265,9 @@ The `update` command:
 - Restarts the service, waits until health reports the new version and keeps answering
 - Otherwise switches `current` back to the previous version and restarts it (both kept)
 - Preserves config and service registration; refuses in a git checkout or for a binary not
-  installed by the installer; warns on downgrade, skips reinstall if already on target version
+  installed by the installer, and when the registered service (systemd `ExecStart`, launchd
+  `ProgramArguments`) runs another binary than this install's `current` one (a checkout's dev
+  shim registered it); warns on downgrade, skips reinstall if already on target version
 
 ## Key Files
 

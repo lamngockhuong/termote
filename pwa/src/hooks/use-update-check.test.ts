@@ -25,6 +25,48 @@ describe('useUpdateCheck', () => {
     vi.stubGlobal('fetch', vi.fn())
   })
 
+  // A result cached by an older app (here: before an update to 1.0.0)
+  // still says there is an update; the app is now the version it named.
+  it('compares a cached latest version with the app version now', async () => {
+    localStorage.setItem(
+      CACHE_KEY,
+      JSON.stringify({
+        hasUpdate: true,
+        latestVersion: '0.9.0',
+        releaseUrl: 'https://example.com/v0.9.0',
+        checkedAt: Date.now(),
+      }),
+    )
+    const { result } = renderHook(() => useUpdateCheck())
+    let res: Awaited<ReturnType<typeof result.current.checkForUpdate>>
+    await act(async () => {
+      res = await result.current.checkForUpdate()
+    })
+    expect(fetch).not.toHaveBeenCalled()
+    expect(res!).toEqual({
+      hasUpdate: false,
+      latestVersion: '0.9.0',
+      releaseUrl: 'https://example.com/v0.9.0',
+    })
+  })
+
+  it('a cached result without a version is no update', async () => {
+    localStorage.setItem(
+      CACHE_KEY,
+      JSON.stringify({
+        latestVersion: null,
+        releaseUrl: null,
+        checkedAt: Date.now(),
+      }),
+    )
+    const { result } = renderHook(() => useUpdateCheck())
+    let res: Awaited<ReturnType<typeof result.current.checkForUpdate>>
+    await act(async () => {
+      res = await result.current.checkForUpdate()
+    })
+    expect(res!.hasUpdate).toBe(false)
+  })
+
   it('starts with checking=false', () => {
     const { result } = renderHook(() => useUpdateCheck())
     expect(result.current.checking).toBe(false)

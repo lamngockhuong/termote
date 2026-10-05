@@ -169,3 +169,31 @@ func (s *systemdSupervisor) Uninstall() error {
 	s.systemctl("reset-failed", systemdUnit)
 	return nil
 }
+
+// RegisteredExe reads the binary from the unit's ExecStart, undoing
+// systemdQuote.
+func (s *systemdSupervisor) RegisteredExe() (string, bool) {
+	b, err := os.ReadFile(s.unitPath())
+	if err != nil {
+		return "", false
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		v, ok := strings.CutPrefix(line, "ExecStart=\"")
+		if !ok {
+			continue
+		}
+		var exe strings.Builder
+		for i := 0; i < len(v); i++ {
+			switch {
+			case v[i] == '"':
+				return exe.String(), true
+			case v[i] == '\\' && i+1 < len(v):
+				i++
+			case (v[i] == '$' || v[i] == '%') && i+1 < len(v) && v[i+1] == v[i]:
+				i++
+			}
+			exe.WriteByte(v[i])
+		}
+	}
+	return "", false
+}

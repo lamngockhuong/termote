@@ -533,8 +533,9 @@ binary: a release published from a pushed tag, or an asset replaced afterwards, 
 when its checksums match. A release before 1.10.0 is checked against its `.sha256` alone, with a
 warning. It then unpacks it into a new
 `versions/<v>`, switches the `current` pointer atomically, restarts the service and waits for
-health to report the new version. It refuses in a git checkout, and for a binary not installed
-by the installer; the saved config and service registration are untouched, and only the
+health to report the new version. It refuses in a git checkout, for a binary not installed
+by the installer, and when the service runs another binary (registered from a checkout with
+`./scripts/termote.sh start`: run `termote start` from the install first); the saved config and service registration are untouched, and only the
 current and previous version are kept on disk.
 
 ## Uninstall

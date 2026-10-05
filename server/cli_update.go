@@ -54,6 +54,15 @@ func (c *cli) cmdUpdate(args []string) error {
 	if !c.isInstalledRelease() {
 		return fmt.Errorf("update works on an install made by install.sh (%s); this binary runs from %s", c.versionsDir(), c.exe)
 	}
+	// The service must run this install's current binary: a registration
+	// made elsewhere (a checkout's ./scripts/termote.sh start) keeps running
+	// its own binary after the switch, so the new version never answers and
+	// the update rolls back.
+	if sup, ok := c.installedSupervisor().(exeRegistrar); ok {
+		if exe, ok := sup.RegisteredExe(); ok && !sameFile(exe, c.currentExe()) {
+			return fmt.Errorf("the service runs %s, not this install (%s); register this install first with: %s start", exe, c.currentExe(), c.currentExe())
+		}
+	}
 
 	target := pin
 	if target == "" {
@@ -501,4 +510,15 @@ func compareDotted(a, b string, numericOnly bool) int {
 		}
 	}
 	return 0
+}
+
+// sameFile reports whether a and b name one file: the same path, or two
+// paths to it (a symlinked home).
+func sameFile(a, b string) bool {
+	if a == b {
+		return true
+	}
+	fa, errA := os.Stat(a)
+	fb, errB := os.Stat(b)
+	return errA == nil && errB == nil && os.SameFile(fa, fb)
 }
