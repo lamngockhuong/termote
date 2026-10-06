@@ -222,12 +222,17 @@ installer did not put in place.
 ## Uninstall
 
 ```bash
-termote uninstall
+termote uninstall          # keeps your config, saved password and logs
+termote uninstall --purge  # removes them too
 ```
 
-This removes the service registration, Termote's Tailscale mapping, the `termote` command and the install root.
-Your config (`~/.config/termote`) and logs (`~/.local/state/termote`) stay, and `uninstall` prints both paths so
-you can delete them by hand. On Windows, `%APPDATA%\termote` and `%LOCALAPPDATA%\termote\state` stay.
+This removes the service registration, Termote's Tailscale mapping, the `termote` command, the install root and
+the images you uploaded from the app (a cache). Your config (`~/.config/termote`) and logs (`~/.local/state/termote`)
+stay, so a reinstall keeps your password and your devices stay signed in; `uninstall` prints both paths. On Windows,
+`%APPDATA%\termote` and `%LOCALAPPDATA%\termote\state` stay. Add `--purge` to remove them as well; the interactive
+menu asks.
+
+On Windows, the files of the running `termote.exe` are removed a moment after the command exits.
 
 ## Prevent macOS Sleep
 

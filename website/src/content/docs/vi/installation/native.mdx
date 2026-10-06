@@ -223,12 +223,17 @@ trình cài đặt đặt vào.
 ## Gỡ cài đặt
 
 ```bash
-termote uninstall
+termote uninstall          # giữ cấu hình, mật khẩu đã lưu và log
+termote uninstall --purge  # xóa luôn những thứ đó
 ```
 
-Lệnh này gỡ phần đăng ký dịch vụ, ánh xạ Tailscale của Termote, lệnh `termote` và thư mục cài. Cấu hình
-(`~/.config/termote`) và log (`~/.local/state/termote`) vẫn còn; `uninstall` in ra cả hai đường dẫn để bạn tự xóa.
-Trên Windows, `%APPDATA%\termote` và `%LOCALAPPDATA%\termote\state` được giữ lại.
+Lệnh này gỡ phần đăng ký dịch vụ, ánh xạ Tailscale của Termote, lệnh `termote`, thư mục cài và ảnh bạn đã tải
+lên từ ứng dụng (chỉ là bộ nhớ đệm). Cấu hình (`~/.config/termote`) và log (`~/.local/state/termote`) vẫn còn, nên
+khi cài lại, mật khẩu giữ nguyên và các thiết bị không phải đăng nhập lại; `uninstall` in ra cả hai đường dẫn.
+Trên Windows, `%APPDATA%\termote` và `%LOCALAPPDATA%\termote\state` được giữ lại. Thêm `--purge` để xóa cả
+những thư mục này; menu tương tác sẽ hỏi bạn.
+
+Trên Windows, các file của `termote.exe` đang chạy được xóa ngay sau khi lệnh kết thúc.
 
 ## Ngăn macOS ngủ
 

@@ -99,6 +99,22 @@ func terminateProcess(pid int, wait time.Duration) error {
 	return nil
 }
 
+// startHiddenPowerShell runs a PowerShell script in a console of its own
+// without a window, so it keeps running once this process exits or its
+// console closes. Not DETACHED_PROCESS: Windows PowerShell started without a
+// console exits 0 without running the script.
+func startHiddenPowerShell(script string) error {
+	cmd := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-EncodedCommand", encodePowerShell(script))
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		HideWindow:    true,
+		CreationFlags: windows.CREATE_NO_WINDOW | windows.CREATE_NEW_PROCESS_GROUP,
+	}
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	return cmd.Process.Release()
+}
+
 // startDetached starts bin without a console window, detached from the CLI's
 // console, with stdout and stderr appended to logPath.
 // The returned channel closes if the process exits while the CLI still runs.

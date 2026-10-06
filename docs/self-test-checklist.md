@@ -130,8 +130,11 @@ Manual testing checklist for Termote features before release.
 
 ### Uninstall
 
-- [ ] `termote uninstall` stops the service, removes the registration, the `termote` command
-      and the install root, but keeps the saved config and logs (prints both paths)
+- [ ] `termote uninstall` stops the service, removes the registration, the `termote` command,
+      the install root and the uploaded images, but keeps the saved config and logs (prints both paths)
+- [ ] `termote uninstall --purge` also removes the config and the logs; the menu's Uninstall asks
+- [ ] Windows: after `termote uninstall` exits, `%LOCALAPPDATA%\termote` holds only `state\`
+      (nothing with `--purge`), and no "The system cannot find the path specified." is printed
 
 ### Link/Unlink
 

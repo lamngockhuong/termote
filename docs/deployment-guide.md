@@ -577,9 +577,17 @@ current and previous version are kept on disk.
 ## Uninstall
 
 ```bash
-termote uninstall
+termote uninstall          # keeps the config (and saved password) and the logs
+termote uninstall --purge  # removes them too
 ```
 
-Removes the service registration, Termote's Tailscale mapping, the `termote` command and the
-install root. The saved config (`~/.config/termote/`) and logs (`~/.local/state/termote/`)
-stay; the command prints both paths to delete by hand.
+Removes the service registration, Termote's Tailscale mapping, the `termote` command, the
+install root and the images uploaded from the PWA (a cache: `~/.cache/termote/uploads`,
+`~/Library/Caches/termote/uploads` on macOS, inside the install root on Windows). The saved
+config (`~/.config/termote/`) and logs (`~/.local/state/termote/`) stay, so a reinstall keeps the
+password (signed-in devices stay signed in) and the container still shares it; the command prints
+both paths. `--purge` removes them as well (the interactive menu asks). Run from a checkout while
+a release is installed, `--purge` keeps them, since that install still uses them.
+
+On Windows the command cannot delete the binary it runs from: what is still locked is removed
+by a hidden PowerShell process once the command has exited.

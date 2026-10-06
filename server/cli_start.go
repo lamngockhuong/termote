@@ -607,13 +607,19 @@ func (c *cli) cmdStatus(args []string) error {
 }
 
 // cmdUninstall removes the service, Termote's Tailscale mapping, the
-// `termote` command and the installed versions. The config (and its saved
-// password) and the logs stay; the message names both dirs.
+// `termote` command, the installed versions and the uploaded images (a
+// cache). The config (and its saved password) and the logs stay, so a
+// reinstall keeps the password and the container still shares it; --purge
+// removes them too. On Windows what this running binary locks goes once it
+// exits.
 func (c *cli) cmdUninstall(args []string) error {
-	if pos, err := parseArgs(c.newFlagSet("uninstall"), args); err != nil {
+	var purge bool
+	fs := c.newFlagSet("uninstall")
+	fs.BoolVar(&purge, "purge", false, "")
+	if pos, err := parseArgs(fs, args); err != nil {
 		return flagErr(err)
 	} else if len(pos) > 0 {
-		return usageError("uninstall takes no arguments (the container has its own: termote container down)")
+		return usageError("usage: termote uninstall [--purge] (the container has its own: termote container down)")
 	}
 	saved, _ := c.loadConfig()
 	c.heading("Termote Uninstall")
@@ -630,12 +636,28 @@ func (c *cli) cmdUninstall(args []string) error {
 		c.removeTailscale(saved.Tailscale, c.savedPort(saved))
 	}
 	c.cmdUnlink()
-	if c.isInstalledRelease() {
-		c.removeInstall()
-	} else if isDir(c.versionsDir()) {
+	left := c.removeUploads()
+	installed := c.isInstalledRelease()
+	// From a checkout, an install elsewhere stays, and so do the config and
+	// logs it uses.
+	otherInstall := !installed && isDir(c.versionsDir())
+	if purge && !otherInstall {
+		// Before the install: on Windows the state dir sits in the install
+		// root, which can then go as a whole.
+		left = append(left, c.purgeData()...)
+	}
+	if installed {
+		left = append(left, c.removeInstall()...)
+	} else if otherInstall {
 		c.infof("An install in %s was left alone (this command runs from %s); remove it with: %s uninstall", c.dataDir(), c.exe, c.currentExe())
 	}
-	c.infof("Kept the config in %s and the logs in %s; delete them to forget everything", c.configDir(), c.stateDir())
+	c.removeLater(left)
+	switch {
+	case purge && otherInstall:
+		c.infof("Kept the config in %s and the logs in %s: the install in %s still uses them", c.configDir(), c.stateDir(), c.dataDir())
+	case !purge:
+		c.infof("Kept the config in %s and the logs in %s; delete them to forget everything", c.configDir(), c.stateDir())
+	}
 	return nil
 }
 

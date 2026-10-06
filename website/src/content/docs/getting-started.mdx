@@ -129,7 +129,7 @@ Flags use the same syntax on every OS, PowerShell included (`termote start --lan
 | `termote logs [service]`  | View logs: `server`, `all` (default), `follow`, `clean`                       |
 | `termote show-password`   | Show the saved username and password                                          |
 | `termote update`          | Update to the latest release, rolling back if the new one does not come up    |
-| `termote uninstall`       | Remove the service, the command and the install (config and logs stay)        |
+| `termote uninstall`       | Remove the service, the command and the install (`--purge`: config and logs too) |
 | `termote container <cmd>` | Run the server in a container: `up`, `down`, `logs [-f]`, `status`           |
 | `termote link` / `unlink` | Create or remove the `termote` command in `~/.local/bin`                      |
 | `termote version`         | Show the version                                                              |

@@ -40,6 +40,9 @@ func (c *cli) cmdMenu() error {
 	case "Container down":
 		return c.cmdContainer([]string{"down"})
 	case "Uninstall":
+		if c.confirm("Also delete the config, password and logs?") {
+			return c.cmdUninstall([]string{"--purge"})
+		}
 		return c.cmdUninstall(nil)
 	}
 	return nil

@@ -127,8 +127,11 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 
 ### Gỡ Cài Đặt
 
-- [ ] `termote uninstall` dừng dịch vụ, gỡ đăng ký, lệnh `termote` và thư mục cài đặt, nhưng
-      giữ nguyên cấu hình và log đã lưu (in ra cả hai đường dẫn)
+- [ ] `termote uninstall` dừng dịch vụ, gỡ đăng ký, lệnh `termote`, thư mục cài đặt và ảnh đã
+      tải lên, nhưng giữ nguyên cấu hình và log đã lưu (in ra cả hai đường dẫn)
+- [ ] `termote uninstall --purge` xóa luôn cấu hình và log; mục Uninstall trong menu hỏi trước
+- [ ] Windows: khi `termote uninstall` kết thúc, `%LOCALAPPDATA%\termote` chỉ còn `state\`
+      (không còn gì với `--purge`), và không in ra "The system cannot find the path specified."
 
 ### Link/Unlink
 
