@@ -90,6 +90,9 @@ async function readJSON<T>(
     signIn(signInUrl())
     throw new RequestError(401, 'unauthorized', 'sign-in required')
   }
+  // A failed read ({"error": ...}) is no snapshot: reading it as one would
+  // crash on the missing caps instead of reporting the server unreachable.
+  if (!res.ok) throw await requestError(res)
   return res.json()
 }
 
