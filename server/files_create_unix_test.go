@@ -10,6 +10,13 @@ import (
 	"testing"
 )
 
+// The errors a full disk, a full quota and a read-only mount give.
+var (
+	errDiskFull      error = syscall.ENOSPC
+	errQuotaFull     error = syscall.EDQUOT
+	errReadOnlyMount error = syscall.EROFS
+)
+
 func TestFilesCreateSymlink(t *testing.T) {
 	fx := newFilesFixture(t)
 	os.Symlink(".git", filepath.Join(fx.root, "gd"))

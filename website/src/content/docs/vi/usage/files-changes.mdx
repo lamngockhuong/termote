@@ -129,6 +129,8 @@ mở một file.
 - Đang có file khác sửa dở chưa lưu thì app hỏi `Discard other changes?` trước.
 - Mất kết nối trước khi server trả lời thì ô báo
   `The file may have been created. Refresh to check.`, bấm **Refresh** để đọc lại cây.
+- Đóng ô trong lúc **Create** đang chạy không dừng được nó: file vẫn được tạo và hiện trên cây,
+  nhưng không mở ra.
 - Thư mục đã tạo cho đường dẫn vẫn giữ nguyên khi một bước sau đó lỗi, giống `mkdir -p`. File mới
   để trống cũng vẫn còn đó.
 
@@ -138,6 +140,8 @@ mở một file.
 | `Part of this path is a symbolic link`         | Trên đường dẫn có một thư mục là liên kết mềm: không bao giờ tạo gì xuyên qua liên kết mềm          |
 | `Files can't be created there`                 | Đường dẫn Termote không bao giờ trả về (xem [Không bao giờ hiện](#không-bao-giờ-hiện)), hoặc thư mục dữ liệu hay thư mục upload của chính Termote |
 | `The server can't create a file there`         | Thư mục đó không ghi được                                                                           |
+| `The file system there is read-only`           | Thư mục nằm trên ổ đĩa hay mount chỉ đọc, ví dụ volume container gắn ở chế độ chỉ đọc               |
+| `The host's disk or quota is full`             | Ổ đĩa của máy chủ, hoặc hạn mức đĩa của bạn, đã hết chỗ                                             |
 | `This name can't be used`                      | Có phần rỗng (`a//b`, dấu `/` ở cuối), có phần kết thúc bằng dấu chấm hay khoảng trắng, có ký tự điều khiển như dấu xuống dòng, sâu quá 32 cấp hoặc dài quá 1024 byte, hoặc trên Windows có một trong các ký tự `<>:"\|?*` |
 
 <Aside type="caution">

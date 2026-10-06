@@ -37,10 +37,10 @@ function show(initialPath = 'docs/') {
     onRootChanged: vi.fn(),
     onRefresh: vi.fn(),
   }
-  render(
+  const { unmount } = render(
     <NewFileDialog paneId="%1" root="/r" initialPath={initialPath} {...p} />,
   )
-  return p
+  return { ...p, unmount }
 }
 
 const box = () => screen.getByRole('textbox')
@@ -52,8 +52,17 @@ const create = async () => {
 }
 const dialog = (name: string) => screen.getByRole('dialog', { name })
 
-const refused = (status: number, code: string, root?: string) =>
-  new RequestError(status, code, 'x', undefined, undefined, root)
+const refused = (status: number, code: string, root?: string, path?: string) =>
+  new RequestError(
+    status,
+    code,
+    'x',
+    undefined,
+    undefined,
+    root,
+    undefined,
+    path,
+  )
 
 // A draft of another file in the pane, changed or not
 function draft(text: string) {
@@ -195,6 +204,15 @@ describe('NewFileDialog', () => {
     expect(p.onCreated).toHaveBeenCalledWith('a.md', '/r', false)
   })
 
+  it("Open it opens the server's name for an existing file", async () => {
+    // A Windows host takes \ as a separator and reports the name with /
+    mockCreate.mockRejectedValue(refused(409, 'exists', undefined, 'w/v.md'))
+    const p = show('w\\v.md')
+    await create()
+    fireEvent.click(screen.getByRole('button', { name: 'Open it' }))
+    expect(p.onCreated).toHaveBeenCalledWith('w/v.md', '/r', false)
+  })
+
   it('a moved root closes the box and is handed on', async () => {
     mockCreate.mockRejectedValue(refused(409, '', '/n'))
     const p = show('a.md')
@@ -228,6 +246,8 @@ describe('NewFileDialog', () => {
     [403, 'permission', "The server can't create a file there"],
     [400, 'invalid_name', "This name can't be used"],
     [429, 'busy', 'Too many writes at once. Try again'],
+    [507, 'storage_full', "The host's disk or quota is full"],
+    [403, 'read_only', 'The file system there is read-only'],
     [500, '', 'Could not create the file'],
   ])('%i %s says why', async (status, code, message) => {
     mockCreate.mockRejectedValue(refused(status, code))
@@ -248,6 +268,58 @@ describe('NewFileDialog', () => {
     expect(mockCreate).toHaveBeenCalledTimes(1)
     await act(async () => finish({ root: '/r', path: 'a.md' }))
     expect(p.onCreated).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    ['Cancel', 1],
+    ['an unmount', 0],
+  ])(
+    'a reply after %s refreshes the tree without opening the file',
+    async (how, closes) => {
+      let finish!: (v: unknown) => void
+      mockCreate.mockReturnValue(new Promise((r) => (finish = r)))
+      const d = draft('changed')
+      const p = show('a.md')
+      await create()
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
+      })
+      // Cancel stays usable while the create runs
+      const cancel = screen.getByRole('button', { name: 'Cancel' })
+      expect(cancel).toBeEnabled()
+      if (how === 'Cancel') fireEvent.click(cancel)
+      else p.unmount()
+      await act(async () => finish({ root: '/r', path: 'a.md' }))
+      expect(p.onRefresh).toHaveBeenCalledTimes(1)
+      expect(p.onCreated).not.toHaveBeenCalled()
+      // Only the user's close, never a second one from the reply
+      expect(p.onClose).toHaveBeenCalledTimes(closes)
+      expect(d.current[0]?.text).toBe('changed')
+    },
+  )
+
+  it('a refusal after closing shows nothing and closes nothing', async () => {
+    let fail!: (e: unknown) => void
+    mockCreate.mockReturnValue(new Promise((_, r) => (fail = r)))
+    const p = show('a.md')
+    await create()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    await act(async () => fail(refused(409, 'exists')))
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(p.onClose).toHaveBeenCalledTimes(1)
+    expect(p.onCreated).not.toHaveBeenCalled()
+    expect(p.onRefresh).not.toHaveBeenCalled()
+  })
+
+  it('a moved root after closing still reaches the tree', async () => {
+    let fail!: (e: unknown) => void
+    mockCreate.mockReturnValue(new Promise((_, r) => (fail = r)))
+    const p = show('a.md')
+    await create()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    await act(async () => fail(refused(409, '', '/n')))
+    expect(p.onRootChanged).toHaveBeenCalledWith('/n')
+    expect(p.onClose).toHaveBeenCalledTimes(1)
   })
 
   it('Cancel closes the box', () => {

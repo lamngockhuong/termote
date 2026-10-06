@@ -1,12 +1,26 @@
 package main
 
 import (
+	"io/fs"
 	"net/http"
 	"path/filepath"
 	"testing"
 
 	"golang.org/x/sys/windows"
 )
+
+// The errors a full disk, a full quota and write-protected media give.
+var (
+	errDiskFull      error = windows.ERROR_DISK_FULL
+	errQuotaFull     error = windows.ERROR_DISK_QUOTA_EXCEEDED
+	errReadOnlyMount error = windows.ERROR_WRITE_PROTECT
+)
+
+func TestIsStorageFullHandle(t *testing.T) {
+	if !isStorageFull(&fs.PathError{Op: "write", Path: "x", Err: windows.ERROR_HANDLE_DISK_FULL}) {
+		t.Error("ERROR_HANDLE_DISK_FULL is a full disk")
+	}
+}
 
 func TestFilesCreateWindowsNames(t *testing.T) {
 	fx := newFilesFixture(t)
@@ -19,6 +33,10 @@ func TestFilesCreateWindowsNames(t *testing.T) {
 	// '\' separates directories.
 	if code, got := fx.create(t, fx.root, map[string]any{"path": `w\v.md`}); code != http.StatusCreated || got["path"] != "w/v.md" {
 		t.Errorf(`w\v.md = %d %v`, code, got)
+	}
+	// And the name taken is reported with '/', as a create reports it.
+	if code, got := fx.create(t, fx.root, map[string]any{"path": `w\v.md`}); code != http.StatusConflict || got["path"] != "w/v.md" {
+		t.Errorf(`w\v.md again = %d %v`, code, got)
 	}
 }
 

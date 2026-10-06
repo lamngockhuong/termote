@@ -27,7 +27,22 @@ var (
 	errCreateSymlink     = &rawError{"symlink", "a directory on that path is a symbolic link", http.StatusForbidden}
 	errCreateNotAllowed  = &rawError{"not_allowed", "path not allowed", http.StatusForbidden}
 	errCreateInvalidName = &rawError{"invalid_name", "invalid file name", http.StatusBadRequest}
+	// errStorageFull uses the code uploads answer when their store is full.
+	errStorageFull   = &rawError{"storage_full", "the disk or the quota is full", http.StatusInsufficientStorage}
+	errReadOnlyFiles = &rawError{"read_only", "the file system is read-only", http.StatusForbidden}
 )
+
+// createExistsError: the name asked for is taken. path is that name cleaned,
+// as a create would have reported it, so the client opens what is there
+// without parsing its own input ('\' separates directories on Windows).
+type createExistsError struct{ path string }
+
+func (e *createExistsError) Error() string { return errCreateExists.msg }
+func (e *createExistsError) Unwrap() error { return errCreateExists }
+
+// createBeforeLock runs right before a create waits on its root's lock; only
+// tests set it, to hold creates there.
+var createBeforeLock = func() {}
 
 // createBeforeOpenDir runs between a directory's checks and its open; only
 // tests set it, to swap the directory in between.
@@ -67,14 +82,14 @@ func (f *filesAPI) handleCreateFile(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &in) {
 		return
 	}
-	select {
-	case f.writeSlots <- struct{}{}:
-		defer func() { <-f.writeSlots }()
-	default:
-		f.error(w, "files create", errEditBusy)
+	res, err := f.createFile(req.root, in)
+	var ee *createExistsError
+	if errors.As(err, &ee) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(errCreateExists.status)
+		json.NewEncoder(w).Encode(map[string]string{"error": ee.Error(), "code": errCreateExists.code, "path": ee.path})
 		return
 	}
-	res, err := f.createFile(req.root, in)
 	if err != nil {
 		f.error(w, "files create", err)
 		return
@@ -105,8 +120,18 @@ func (f *filesAPI) createFile(root filesRoot, in createRequest) (createResponse,
 	}
 	// One lock per root: two creates never race on each other's
 	// directories, and the lock map grows with roots, not paths tried.
+	// Taken before a write slot, so a create waiting on another one in the
+	// same root holds no slot a save could have used; once it has the lock,
+	// a create only waits on the disk.
+	createBeforeLock()
 	unlock := f.writeLocks.lock(root.Root + "\x00create")
 	defer unlock()
+	select {
+	case f.writeSlots <- struct{}{}:
+		defer func() { <-f.writeSlots }()
+	default:
+		return createResponse{}, errEditBusy
+	}
 
 	rt, err := os.OpenRoot(root.Root)
 	if err != nil {
@@ -119,7 +144,10 @@ func (f *filesAPI) createFile(root filesRoot, in createRequest) (createResponse,
 	defer dir.Close()
 	fh, err := dir.OpenFile(filepath.Base(rel), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o666)
 	if err != nil {
-		return createResponse{}, createError(err)
+		if err = createError(err); err == errCreateExists {
+			err = &createExistsError{filepath.ToSlash(rel)}
+		}
+		return createResponse{}, err
 	}
 	fh.Close()
 	// The Changes view lists the new file right away.
@@ -203,6 +231,11 @@ func createError(err error) error {
 	switch {
 	case errors.As(err, &re):
 		return err
+	case isStorageFull(err):
+		return errStorageFull
+	// A read-only mount, not the permissions, refused the write
+	case isReadOnlyFS(err):
+		return errReadOnlyFiles
 	// Windows answers an O_EXCL open of a directory with EISDIR
 	case errors.Is(err, fs.ErrExist), errors.Is(err, syscall.EISDIR):
 		return errCreateExists

@@ -3,12 +3,15 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 )
@@ -68,7 +71,8 @@ func TestFilesCreateExists(t *testing.T) {
 	fx := newFilesFixture(t)
 	for _, rel := range []string{"a.txt", "sub", "sub/b.go", "B.md"} {
 		code, got := fx.create(t, fx.root, map[string]any{"path": rel})
-		if code != http.StatusConflict || got["code"] != "exists" {
+		// The name is reported back cleaned: Open it opens what is there.
+		if code != http.StatusConflict || got["code"] != "exists" || got["path"] != rel {
 			t.Errorf("%s = %d %v", rel, code, got)
 		}
 	}
@@ -261,6 +265,48 @@ func TestFilesCreateBusy(t *testing.T) {
 	}
 }
 
+// A create waiting on another one in the same root holds no write slot: a
+// save meanwhile is not refused as busy, and both creates then succeed.
+func TestFilesCreateWaitsWithoutSlot(t *testing.T) {
+	dir, _ := filepath.EvalSymlinks(t.TempDir())
+	writeFile(t, filepath.Join(dir, "s.md"), "a\n")
+	mux := http.NewServeMux()
+	f := registerFilesRoutes(mux, &filesFakeMux{dir: dir, files: true}, hostAllowlist{}, nil)
+	send := func(method, route, body string) *httptest.ResponseRecorder {
+		req := apiRequest(method, "/api/mux/panes/0/files/"+route+"?root="+url.QueryEscape(dir), body)
+		req.Header.Del("Origin")
+		return serve(mux, req)
+	}
+	// Another create holds the root's lock.
+	unlock := f.writeLocks.lock(dir + "\x00create")
+	var waiting sync.WaitGroup
+	waiting.Add(writeMaxRunning)
+	old := createBeforeLock
+	createBeforeLock = waiting.Done
+	defer func() { createBeforeLock = old }()
+	codes := make(chan int, writeMaxRunning)
+	for i := range writeMaxRunning {
+		go func() { codes <- send("POST", "create", fmt.Sprintf(`{"path":"c%d.md"}`, i)).Code }()
+	}
+	waiting.Wait()
+	if n := len(f.writeSlots); n != 0 {
+		t.Errorf("slots held by waiting creates = %d", n)
+	}
+	body := fmt.Sprintf(`{"path":"s.md","baseHash":%q,"text":"b\n"}`, diskHash(t, filepath.Join(dir, "s.md")))
+	if rec := send("PUT", "content", body); rec.Code != http.StatusOK {
+		t.Errorf("save while creates wait = %d %s", rec.Code, rec.Body.String())
+	}
+	unlock()
+	for range writeMaxRunning {
+		if code := <-codes; code != http.StatusCreated {
+			t.Errorf("create = %d", code)
+		}
+	}
+	if len(f.writeSlots) != 0 {
+		t.Errorf("slots held = %d", len(f.writeSlots))
+	}
+}
+
 // A create drops the cached git status of its root.
 func TestFilesCreateForgetsStatus(t *testing.T) {
 	dir, _ := filepath.EvalSymlinks(t.TempDir())
@@ -278,6 +324,10 @@ func TestFilesCreateForgetsStatus(t *testing.T) {
 	if calls != 2 {
 		t.Errorf("reads after a create = %d, want 2", calls)
 	}
+	// A name taken is still errCreateExists to errors.Is.
+	if _, err := f.createFile(filesRoot{Root: dir}, createRequest{Path: "s.md"}); !errors.Is(err, errCreateExists) {
+		t.Errorf("again = %v", err)
+	}
 	// A root that is gone: nothing is made.
 	gone := filepath.Join(dir, "gone")
 	if _, err := f.createFile(filesRoot{Root: gone}, createRequest{Path: "s.md"}); !errors.Is(err, fs.ErrNotExist) {
@@ -294,6 +344,9 @@ func TestCreateError(t *testing.T) {
 		&fs.PathError{Op: "openat", Path: "x", Err: syscall.EISDIR}:    errCreateExists,
 		&fs.PathError{Op: "openat", Path: "x", Err: syscall.ENOTDIR}:   errCreateNotDir,
 		&fs.PathError{Op: "mkdirat", Path: "x", Err: fs.ErrPermission}: errEditPermission,
+		&fs.PathError{Op: "openat", Path: "x", Err: errDiskFull}:       errStorageFull,
+		&fs.PathError{Op: "openat", Path: "x", Err: errQuotaFull}:      errStorageFull,
+		&fs.PathError{Op: "mkdirat", Path: "x", Err: errReadOnlyMount}: errReadOnlyFiles,
 		escape: errCreateSymlink,
 		other:  other,
 	} {

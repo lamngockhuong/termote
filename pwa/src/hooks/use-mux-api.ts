@@ -272,6 +272,8 @@ export class RequestError extends Error {
     readonly root?: string,
     // message 400: the attached upload ids the server no longer has
     readonly images?: string[],
+    // files/create 409 exists: the name taken, as the server cleaned it
+    readonly path?: string,
   ) {
     super(message)
   }
@@ -290,6 +292,7 @@ async function requestError(res: Response): Promise<RequestError> {
     body.prompt,
     body.root,
     body.images,
+    body.path,
   )
 }
 

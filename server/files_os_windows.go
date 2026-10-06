@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"io/fs"
 	"os"
 
@@ -37,3 +38,12 @@ func fileLinks(fh *os.File, _ fs.FileInfo) (uint64, error) {
 // fileOwnedByServer is not checked on Windows: a file the server user cannot
 // write is refused by its read-only attribute or by the rename.
 func fileOwnedByServer(fs.FileInfo) bool { return true }
+
+// isStorageFull reports whether err is a full disk or quota.
+func isStorageFull(err error) bool {
+	return errors.Is(err, windows.ERROR_DISK_FULL) || errors.Is(err, windows.ERROR_HANDLE_DISK_FULL) ||
+		errors.Is(err, windows.ERROR_DISK_QUOTA_EXCEEDED)
+}
+
+// isReadOnlyFS reports whether err is a write to write-protected media.
+func isReadOnlyFS(err error) bool { return errors.Is(err, windows.ERROR_WRITE_PROTECT) }
