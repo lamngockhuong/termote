@@ -482,7 +482,8 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   `sensitive`). No component of the path may be a symlink; the parent is opened once through
   `os.Root` and used for every step. The file must be regular, one link, owned by the server user
   (Unix), owner-writable, UTF-8 without NUL, line breaks all `\n` or all `\r\n` (422
-  `not_editable` + `reason`, or 403 `permission`); GET `content` reports the same check as
+  `not_editable` + `reason`, or 403 `permission`; writing the new text on a read-only mount → 403
+  `read_only`, on a full disk or quota → 507 `storage_full`, as a create); GET `content` reports the same check as
   `editable`/`notEditable`. Text arrives with `\n` (a `\r\n` file gets them back), NUL or a lone
   `\r` → 422 `not_text`, at most 1 MiB (413 `too_large`); body limit 6 MiB + 64 KiB, 2 saves at a
   time (429 `busy`), read deadline 5 minutes once authenticated with a slot. Written to

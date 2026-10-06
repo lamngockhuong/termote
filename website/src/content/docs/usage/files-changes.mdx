@@ -101,6 +101,8 @@ When saving does not go through, your text stays in the box:
 | `This pane's folder changed`                           | The pane moved to another directory. Copy your text, then Cancel to see the file there.             |
 | `Not sure the file was saved. Saving again is safe.`   | The connection dropped or the server did not answer within 30 seconds. Save again: the same text is not a conflict. |
 | `The server can't write this file`                     | The file is read-only, belongs to another user, or its folder cannot be written                    |
+| `The file system there is read-only`                   | The file is on a read-only disk or mount, such as a container volume mounted read-only             |
+| `The host's disk or quota is full`                     | The host's disk, or your disk quota, has no room left                                              |
 
 Some files have no Edit button, because the server would refuse the save: a symbolic link (or a
 file reached through a linked folder), a file with several hard links, a file that mixes line

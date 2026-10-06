@@ -41,6 +41,9 @@ var (
 	errEditNotText    = &rawError{"not_text", "text must be UTF-8 without NUL", http.StatusUnprocessableEntity}
 	errEditTooLarge   = &rawError{"too_large", "file is larger than 1 MiB", http.StatusRequestEntityTooLarge}
 	errEditBusy       = &rawError{"busy", "too many saves at once; try again", http.StatusTooManyRequests}
+	// errStorageFull uses the code uploads answer when their store is full.
+	errStorageFull    = &rawError{"storage_full", "the disk or the quota is full", http.StatusInsufficientStorage}
+	errReadOnlyFiles  = &rawError{"read_only", "the file system is read-only", http.StatusForbidden}
 	errRootRequired   = inputError("root is required")
 	errBaseHashNeeded = inputError("baseHash is required")
 )
@@ -219,15 +222,27 @@ func (f *filesAPI) writeContent(root filesRoot, in writeRequest) (writeResponse,
 	}
 	sweepEditTemps(dir, time.Now())
 	if err := replaceFile(dir, base, out, fi.Mode().Perm(), cur); err != nil {
-		if errors.Is(err, fs.ErrPermission) {
-			return writeResponse{}, errEditPermission
-		}
-		return writeResponse{}, err
+		return writeResponse{}, saveError(err)
 	}
 	// The Changes view reads the status right after a save: not the one
 	// cached from before it.
 	f.statuses.forgetPrefix(root.Root + "\x00")
 	return res, nil
+}
+
+// saveError turns an OS error of writing the new text into the one the
+// client is told.
+func saveError(err error) error {
+	switch {
+	case isStorageFull(err):
+		return errStorageFull
+	// A read-only mount, not the permissions, refused the write
+	case isReadOnlyFS(err):
+		return errReadOnlyFiles
+	case errors.Is(err, fs.ErrPermission):
+		return errEditPermission
+	}
+	return err
 }
 
 // replaceFile writes out to a new temporary file in dir with perm, checks

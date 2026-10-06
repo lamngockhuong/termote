@@ -570,7 +570,9 @@ and not opening a write path into what the reads refuse.
   `busy`), and once authenticated and given a slot the read deadline grows to 5 minutes.
 - The new bytes go to `.termote-edit-<random>` in the same directory (`O_EXCL`, 0600, the
   file's mode set on the open handle, then `fsync`), the file is read again and must still
-  hold what was checked, then the temporary file is renamed over it. Any failure removes the
+  hold what was checked, then the temporary file is renamed over it. A read-only mount (EROFS,
+  Windows `ERROR_WRITE_PROTECT`) answers 403 `read_only` and a full disk or quota 507
+  `storage_full`, as a create does; EACCES 403 `permission`. Any failure removes the
   temporary file, and a save removes ones older than 10 minutes left in its directory (only
   names of exactly that form: a user's `.termote-edit-notes` stays). Every
   `.termote-edit-*` name counts as sensitive. Saves of one file are serialised in the process,

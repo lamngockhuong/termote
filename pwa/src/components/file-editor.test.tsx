@@ -31,6 +31,14 @@ describe('saveErrorOf', () => {
       { kind: 'refused', message: 'Too many saves at once. Try again' },
     ],
     [
+      new RequestError(507, 'storage_full', 'x'),
+      { kind: 'refused', message: "The host's disk or quota is full" },
+    ],
+    [
+      new RequestError(403, 'read_only', 'x'),
+      { kind: 'refused', message: 'The file system there is read-only' },
+    ],
+    [
       new RequestError(403, '', 'path not allowed'),
       { kind: 'refused', message: "This file can't be written" },
     ],

@@ -27,9 +27,6 @@ var (
 	errCreateSymlink     = &rawError{"symlink", "a directory on that path is a symbolic link", http.StatusForbidden}
 	errCreateNotAllowed  = &rawError{"not_allowed", "path not allowed", http.StatusForbidden}
 	errCreateInvalidName = &rawError{"invalid_name", "invalid file name", http.StatusBadRequest}
-	// errStorageFull uses the code uploads answer when their store is full.
-	errStorageFull   = &rawError{"storage_full", "the disk or the quota is full", http.StatusInsufficientStorage}
-	errReadOnlyFiles = &rawError{"read_only", "the file system is read-only", http.StatusForbidden}
 )
 
 // createExistsError: the name asked for is taken. path is that name cleaned,
