@@ -270,6 +270,7 @@ termote logs server     # last server log lines
 | Không giải mã được mật khẩu đã lưu       | File `secret` đã bị xóa hoặc thay: `termote start --fresh`                                   |
 | Dừng khi bạn đăng xuất (Linux)           | `loginctl enable-linger $USER`                                                               |
 | Không chạy sau khi khởi động lại (WSL2)  | Ở đó không có user systemd: chạy lại `termote start`, hoặc bật systemd trong WSL             |
+| Không có phiên nào, `mux command failed` (Windows) | `psmux list-windows -t main` không in gì dù `psmux ls` vẫn liệt kê phiên: có phần mềm đang lọc lưu lượng localhost. Với AdGuard, tắt "Filter localhost" |
 | PWA cache cũ                             | menu More (⋯) → `Clear cache & reload` để làm mới                                                |
 
 ### Phiên tmux / psmux

@@ -106,6 +106,14 @@ describe('mux API client', () => {
     }
   })
 
+  it('fetchSnapshot rejects a failed read instead of returning its body', async () => {
+    mockFetch({ body: { error: 'mux command failed' }, status: 500 })
+    await expect(fetchSnapshot()).rejects.toMatchObject({
+      status: 500,
+      message: 'mux command failed',
+    })
+  })
+
   it('fetchHealth reads the health route', async () => {
     const { calls } = mockFetch({ body: { status: 'ok', apiVersion: 1 } })
     expect(await fetchHealth()).toEqual({ status: 'ok', apiVersion: 1 })
