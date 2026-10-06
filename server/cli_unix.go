@@ -142,6 +142,12 @@ func startDetached(bin string, args []string, dir string, env []string, logPath 
 	return cmd.Process.Pid, exited, nil
 }
 
+// startHiddenPowerShell is Windows only: elsewhere a running binary can be
+// deleted, so uninstall never needs to remove anything late.
+func startHiddenPowerShell(string) error {
+	return errors.New("only available on Windows")
+}
+
 func protectCurrentUser([]byte) ([]byte, error) {
 	return nil, errors.New("DPAPI is only available on Windows")
 }

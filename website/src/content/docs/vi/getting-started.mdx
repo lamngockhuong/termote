@@ -128,7 +128,7 @@ Cờ có cùng cú pháp trên mọi hệ điều hành, kể cả PowerShell (`
 | `termote logs [service]`  | Xem log: `server`, `all` (mặc định), `follow`, `clean`                        |
 | `termote show-password`   | Hiện tên đăng nhập và mật khẩu đã lưu                                         |
 | `termote update`          | Cập nhật lên bản mới nhất, quay về bản cũ nếu bản mới không chạy được         |
-| `termote uninstall`       | Gỡ dịch vụ, lệnh và bản cài (cấu hình và log vẫn còn)                         |
+| `termote uninstall`       | Gỡ dịch vụ, lệnh và bản cài (`--purge`: xóa cả cấu hình và log)               |
 | `termote container <cmd>` | Chạy server trong container: `up`, `down`, `logs [-f]`, `status`             |
 | `termote link` / `unlink` | Tạo hoặc xóa lệnh `termote` trong `~/.local/bin`                              |
 | `termote version`         | Hiện phiên bản                                                                |

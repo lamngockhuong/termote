@@ -233,7 +233,7 @@ url [options]        Print the link to open, or a deep link to one session
 panel                Status, links and a QR code, with keys to open, copy, start, stop
 container <cmd>      Run the server in a container: up, down, logs [-f], status
 update               Update to the latest release
-uninstall            Remove the service, the command and the install (config and logs stay)
+uninstall [--purge]  Remove the service, the command, the install and uploads (--purge: config and logs too)
 logs [service]       View logs (server, all, follow, clean)
 link / unlink        Create or remove the 'termote' command in ~/.local/bin
 show-password        Show the saved username and password

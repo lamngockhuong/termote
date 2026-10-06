@@ -159,7 +159,7 @@ termote update                       # Update to the latest release
 termote uninstall                    # Remove the service, the command and the install
 ```
 
-`update` switches to the new version, restarts the service and switches back if the new version does not come up. `uninstall` keeps the configuration (`~/.config/termote`) and the logs (`~/.local/state/termote`) and prints both paths.
+`update` switches to the new version, restarts the service and switches back if the new version does not come up. `uninstall` keeps the configuration (`~/.config/termote`) and the logs (`~/.local/state/termote`) and prints both paths; `uninstall --purge` removes them too.
 
 ## Installation
 

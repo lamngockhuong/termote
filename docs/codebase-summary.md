@@ -96,7 +96,7 @@ current command and flag list — it is generated from the same code that parses
 never drifts from behavior.
 
 **Commands:** `start [options]`, `stop`, `restart`, `status`/`health`, `container <cmd>`
-(`up`/`down`/`logs`/`status`), `update [--version X.Y.Z] [--force]`, `uninstall`,
+(`up`/`down`/`logs`/`status`), `update [--version X.Y.Z] [--force]`, `uninstall [--purge]`,
 `logs [server|all|follow|clean]`, `link`, `unlink`, `show-password`, `version`, `serve`,
 `menu` (no arguments). There is no `install` command in 1.0 (it prints the replacement above).
 

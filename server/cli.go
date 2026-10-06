@@ -99,6 +99,9 @@ type cli struct {
 	herdrRunning func() bool
 	// detachedExited closes when a server this CLI started detached exits.
 	detachedExited <-chan struct{}
+	// startHidden runs a PowerShell script in a detached process with no
+	// window that outlives this one (Windows only; uninstall's late cleanup).
+	startHidden func(script string) error
 	// testSupervisors replaces the OS supervisors in tests.
 	testSupervisors []supervisor
 	// pid of this process, never stopped.
@@ -169,6 +172,7 @@ func newCLI() (*cli, error) {
 		terminate:    terminateProcess,
 		localIPv4s:   localIPv4s,
 		herdrRunning: herdrReachable,
+		startHidden:  startHiddenPowerShell,
 		pid:          os.Getpid(),
 		getenv:       os.Getenv,
 	}
@@ -458,7 +462,8 @@ Commands:
   panel                Status, links and a QR code; keys open, copy, start, stop, restart
   container <cmd>      Run the server in a container: up, down, logs [-f], status
   update               Update to the latest release
-  uninstall            Remove the service, the command and the install (config and logs stay)
+  uninstall [--purge]  Remove the service, the command, the install and uploaded images
+                       (config and logs stay; --purge removes them too)
   logs [service]       View logs (server, all, follow, clean)
   link / unlink        Create or remove the 'termote' command in ~/.local/bin
   show-password        Show the saved username and password

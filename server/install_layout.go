@@ -141,14 +141,17 @@ func (c *cli) switchCurrent(version string) error {
 //
 // setlocal keeps its variable out of the caller's session (and so out of
 // the server's environment); a missing current.txt fails instead of running
-// a value left from before.
+// a value left from before. "& exit /b" ends the batch on the line that runs
+// the exe, keeping its exit code: cmd.exe reads a batch file line by line,
+// so once uninstall has deleted this file, reading on would fail with "The
+// system cannot find the path specified".
 const windowsLauncher = "@echo off\r\n" +
 	"rem Written by the Termote installer: runs the version named in current.txt.\r\n" +
 	"setlocal\r\n" +
 	"set \"_termote_version=\"\r\n" +
 	"set /p _termote_version=<\"%~dp0..\\current.txt\"\r\n" +
 	"if not defined _termote_version (echo termote: %~dp0..\\current.txt names no version; reinstall Termote 1>&2 & exit /b 1)\r\n" +
-	"\"%~dp0..\\versions\\%_termote_version%\\bin\\termote.exe\" %*\r\n"
+	"\"%~dp0..\\versions\\%_termote_version%\\bin\\termote.exe\" %* & exit /b\r\n"
 
 func (c *cli) ensureWindowsLauncher() error {
 	if c.goos != "windows" {
@@ -202,9 +205,9 @@ func (c *cli) installVersion(archive, version string) error {
 
 // removeInstall deletes the install but its state dir (Windows keeps the
 // logs inside the install root), the current pointer first so a half-removed
-// install never looks installed. Windows cannot delete the binary running
-// this command; what is left goes once it exits.
-func (c *cli) removeInstall() {
+// install never looks installed. It returns what could not be removed yet:
+// Windows cannot delete the binary running this command.
+func (c *cli) removeInstall() []string {
 	os.Remove(c.pointerPath("current"))
 	entries, _ := os.ReadDir(c.dataDir())
 	var left []string
@@ -214,15 +217,110 @@ func (c *cli) removeInstall() {
 			continue
 		}
 		if err := os.RemoveAll(path); err != nil {
-			left = append(left, e.Name())
+			left = append(left, path)
 		}
 	}
-	if len(left) > 0 {
-		c.warnf("Could not remove %s from %s yet (in use); delete it once this command has exited", strings.Join(left, ", "), c.dataDir())
+	if len(left) == 0 {
+		os.Remove(c.dataDir()) // only when empty (no state dir inside)
+		c.infof("Removed the install in %s", c.dataDir())
+	}
+	return left
+}
+
+// uploadsDir is the server's upload store, uploadDir's os.UserCacheDir
+// worked out from this CLI's home and environment. On Windows it sits in
+// the install root (%LOCALAPPDATA%\termote\uploads).
+func (c *cli) uploadsDir() string {
+	var cache string
+	switch c.goos {
+	case "windows":
+		cache = c.envDir("LOCALAPPDATA", filepath.Join(c.home, "AppData", "Local"))
+	case "darwin":
+		cache = filepath.Join(c.home, "Library", "Caches")
+	default:
+		cache = c.envDir("XDG_CACHE_HOME", filepath.Join(c.home, ".cache"))
+	}
+	return filepath.Join(cache, "termote", "uploads")
+}
+
+// removeUploads deletes the images sent from the PWA: the store is a cache
+// (7-day retention), so nothing in it is worth keeping once Termote goes.
+// It returns the store when it could not be removed yet.
+func (c *cli) removeUploads() []string {
+	dir := c.uploadsDir()
+	if !isDir(dir) {
+		return nil
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		return []string{dir}
+	}
+	if parent := filepath.Dir(dir); parent != c.dataDir() {
+		os.Remove(parent) // only when empty
+	}
+	c.infof("Removed the uploaded images in %s", dir)
+	return nil
+}
+
+// purgeData deletes the config (saved options, password, secret) and the
+// state dir (logs, PID file), for uninstall --purge. It returns what could
+// not be removed yet.
+func (c *cli) purgeData() []string {
+	var left []string
+	for _, dir := range []string{c.configDir(), c.stateDir()} {
+		if !isDir(dir) {
+			continue
+		}
+		if err := os.RemoveAll(dir); err != nil {
+			left = append(left, dir)
+			continue
+		}
+		c.infof("Removed %s", dir)
+	}
+	return left
+}
+
+// removeLater deletes paths once this process has exited, through a
+// detached PowerShell with no window that waits for it, retrying while
+// antivirus or a closing handle holds a file, then removes the install root
+// when that leaves it empty. Only Windows locks a running binary, so other
+// systems never get here; without that process the user is told what to
+// delete by hand.
+func (c *cli) removeLater(paths []string) {
+	if len(paths) == 0 {
 		return
 	}
-	os.Remove(c.dataDir()) // only when empty (no state dir inside)
-	c.infof("Removed the install in %s", c.dataDir())
+	if c.goos == "windows" && c.startHidden != nil {
+		if err := c.startHidden(removeLaterScript(c.pid, paths, c.dataDir())); err == nil {
+			c.infof("%s is in use by this command; it is removed once the command exits", strings.Join(paths, ", "))
+			return
+		}
+	}
+	c.warnf("Could not remove %s yet (in use); delete it once this command has exited", strings.Join(paths, ", "))
+}
+
+// removeLaterScript is the PowerShell removeLater runs: wait for pid (at
+// most two minutes), remove each path for up to 30 seconds, then the
+// install root if it is empty.
+func removeLaterScript(pid int, paths []string, root string) string {
+	quoted := make([]string, len(paths))
+	for i, p := range paths {
+		quoted[i] = psQuote(p)
+	}
+	return "$ErrorActionPreference = 'SilentlyContinue'\n" +
+		fmt.Sprintf("Wait-Process -Id %d -Timeout 120\n", pid) +
+		"$paths = @(" + strings.Join(quoted, ",") + ")\n" +
+		"for ($i = 0; $i -lt 30; $i++) {\n" +
+		"  $paths | Where-Object { Test-Path -LiteralPath $_ } | ForEach-Object { Remove-Item -LiteralPath $_ -Recurse -Force }\n" +
+		"  if (-not ($paths | Where-Object { Test-Path -LiteralPath $_ })) { break }\n" +
+		"  Start-Sleep -Seconds 1\n" +
+		"}\n" +
+		"$root = " + psQuote(root) + "\n" +
+		"if ((Test-Path -LiteralPath $root) -and -not (Get-ChildItem -LiteralPath $root -Force)) { Remove-Item -LiteralPath $root -Force }\n"
+}
+
+// psQuote quotes s as a PowerShell single-quoted string.
+func psQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
 }
 
 // pruneVersions keeps current and previous and removes every other version.

@@ -636,14 +636,18 @@ func (c *cli) warnSensitiveDirs(workspace string) {
 // runElevated runs a PowerShell script through a UAC prompt. The script is
 // passed as -EncodedCommand so no quoting survives two shells.
 func (c *cli) runElevated(script string) error {
+	outer := "Start-Process powershell -Verb RunAs -Wait -WindowStyle Hidden -ArgumentList '-NoProfile','-EncodedCommand','" + encodePowerShell(script) + "'"
+	return c.run.Run("", nil, "powershell", "-NoProfile", "-Command", outer)
+}
+
+// encodePowerShell encodes a script for -EncodedCommand: base64 of UTF-16LE.
+func encodePowerShell(script string) string {
 	u := utf16.Encode([]rune(script))
 	b := make([]byte, 2*len(u))
 	for i, r := range u {
 		b[2*i], b[2*i+1] = byte(r), byte(r>>8)
 	}
-	enc := base64.StdEncoding.EncodeToString(b)
-	outer := "Start-Process powershell -Verb RunAs -Wait -WindowStyle Hidden -ArgumentList '-NoProfile','-EncodedCommand','" + enc + "'"
-	return c.run.Run("", nil, "powershell", "-NoProfile", "-Command", outer)
+	return base64.StdEncoding.EncodeToString(b)
 }
 
 func portProxyScript(port int, add bool) string {
