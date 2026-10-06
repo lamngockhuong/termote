@@ -223,7 +223,7 @@ trình cài đặt đặt vào.
 ## Gỡ cài đặt
 
 ```bash
-termote uninstall          # giữ cấu hình, mật khẩu đã lưu và log
+termote uninstall          # giữ cấu hình, mật khẩu đã lưu, log và các file đã xoá
 termote uninstall --purge  # xóa luôn những thứ đó
 ```
 
@@ -232,6 +232,10 @@ lên từ ứng dụng (chỉ là bộ nhớ đệm). Cấu hình (`~/.config/te
 khi cài lại, mật khẩu giữ nguyên và các thiết bị không phải đăng nhập lại; `uninstall` in ra cả hai đường dẫn.
 Trên Windows, `%APPDATA%\termote` và `%LOCALAPPDATA%\termote\state` được giữ lại. Thêm `--purge` để xóa cả
 những thư mục này; menu tương tác sẽ hỏi bạn.
+
+Các file bạn đã xoá từ view Files cũng được giữ lại (chúng nằm trong một thùng rác cạnh thư mục ảnh tải lên,
+như `~/.cache/termote/trash`), vì đó là file của bạn chứ không phải bộ nhớ đệm; `uninstall` in ra thư mục này.
+`--purge` xoá luôn nó.
 
 Trên Windows, các file của `termote.exe` đang chạy được xóa ngay sau khi lệnh kết thúc.
 

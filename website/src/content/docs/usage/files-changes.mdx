@@ -13,9 +13,11 @@ keyboard and read the output in a terminal. Termote has two views for this:
 - **Changes**: when the directory is in a git repository, the files git reports as changed, and
   the diff of each one (for an image, the version before and after).
 
-A text file can be edited and saved from either view (see [Editing a File](#editing-a-file)),
-and a new one created in Files (see [Creating a File](#creating-a-file)). Nothing else changes
-from them: no file is deleted or renamed, and nothing is staged, discarded or committed.
+A file can be found by name in Files (see [Finding a File](#finding-a-file)). A text file can be
+edited and saved from either view (see [Editing a File](#editing-a-file)), a new one created in
+Files (see [Creating a File](#creating-a-file)), and a file or an empty folder deleted there (see
+[Deleting a File](#deleting-a-file)). Nothing else changes from them: no file is renamed, and
+nothing is staged, discarded or committed.
 
 ## Where to Find Them
 
@@ -73,6 +75,34 @@ Supported backends:
 | Plain text, no colours                                        | A larger text file (up to 1 MiB), a language not covered, or highlighting that took over 3 seconds |
 | `Not previewable (binary, special file or larger than 1 MiB)`  | A binary file that is not an image, a file over 1 MiB, or something that is not a regular file   |
 | `This file can't be shown`                                     | A path termote never serves (see below)                                                          |
+
+## Finding a File
+
+The **Find a file…** box at the top of Files (above the keyboard on a phone) searches the names
+of the files under the root. Results replace the tree after a moment's pause in typing; each row
+shows the path.
+
+- Tap a result, or press Enter on it, to open the file; the tree opens down to it, and Back
+  returns to the results. The arrow keys move between the box and the results, and Escape clears
+  the box.
+- A file that git ignores is not searched unless **Include ignored** (the switch next to the box,
+  shown only in a git repository) is on. Those results are dimmed and tagged `ignored`. The
+  choice is remembered on this device.
+- A name that usually holds secrets shows a lock, as in the tree. Only names are searched, never
+  contents.
+- Only the first 200 matches are shown (`More than 200 matches — type more to narrow`). In a very
+  large repository or folder the search can stop early, and the list says
+  `Search stopped early in a large tree`.
+- The list of files is kept for 30 seconds, and saving, creating or deleting a file drops it.
+  **Refresh** reads it again.
+- Outside a git repository, the folder is walked (at most 32 levels deep, for 5 seconds), and
+  linked folders are not entered.
+
+The folders never searched for ignored files are set in Settings → Files →
+**Excluded folders** (see [Settings](/usage/settings/#excluded-folders)). A file git tracks is
+always found, even under one of them.
+
+Paths Termote never serves (see [Never Shown](#never-shown)) never appear in the results.
 
 ## Editing a File
 
@@ -158,6 +188,48 @@ file is open.
 
 A view-only session (once that role exists) has no New file button either; until the server
 enforces roles, it is only hidden in the app.
+
+## Deleting a File
+
+A file or an **empty** folder can be deleted from Files, three ways: **Delete** in the **⋯** menu
+of a row in the tree (with a mouse the button shows on hover or focus; on a touch screen it is
+always there), the Delete key on a focused row, or the **Delete** button in the header of an open
+file (not while it is being edited). A dialog shows the full path and asks first; **Cancel** has
+the focus, so pressing Enter does not delete.
+
+- A deleted file is not erased: it moves to Termote's trash on the host. A toast says
+  `Deleted <name>` with **Undo** for 10 seconds, which puts it back where it was (it never
+  replaces anything now there). A deleted empty folder is made again by Undo.
+- The trash keeps a file for 7 days, at most 1 GiB in all (the oldest go first), and never
+  removes one younger than an hour. The app has no trash browser: after the toast is gone, take
+  the file from the trash folder on the host (`~/.cache/termote/trash` on Linux).
+- A folder that is not empty is not deleted, and neither is the root itself.
+- Deleting asks the server to check that the file is still the one you saw. If something (often
+  the agent) changed it meanwhile, nothing is deleted.
+- On another file system than the trash's (WSL's `/mnt/c`, a mounted volume, the container's
+  `/workspace`), the file cannot be moved to the trash. The dialog then asks a second time,
+  `Delete permanently? This cannot be undone.`, and only after that deletes it, with no Undo. In
+  the container, every delete under `/workspace` is permanent in this way.
+- A file whose name usually holds secrets is marked `This is a sensitive file` in the dialog.
+
+| Shown                                                              | Why                                                                |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| `The folder is not empty`                                           | Only an empty folder is deleted                                    |
+| `The file changed since it was read`                                | Something changed the file after the dialog read it                |
+| `Part of this path is a symbolic link`                              | Nothing is deleted through a link, and a link itself is not deleted |
+| `This file has several hard links; delete it from a terminal`       | Another name would keep the file                                   |
+| `The server can't delete this`                                      | The file belongs to another user                                   |
+| `The file system there is read-only`                                | The file is on a read-only disk or mount                           |
+| `Too large to delete here; use the terminal`                        | The file is over 512 MiB                                           |
+| `Deleting is not available on this server`                          | The server has no usable trash                                     |
+
+A view-only session (once that role exists) has no Delete button; until the server enforces
+roles, it is only hidden in the app.
+
+<Aside type="note">
+  `termote uninstall` keeps the trash and prints its path; `termote uninstall --purge` removes it
+  too. See [Uninstall](/installation/native/#uninstall).
+</Aside>
 
 ## Markdown Preview
 
@@ -256,6 +328,12 @@ never the only sign.
 
 Submodules are not listed, and their contents are not compared.
 
+When the list has more than 15 entries, a **Filter changes…** box appears above it. It keeps the
+files whose path contains what you typed, ignoring case (for a rename, the old path counts too).
+Groups with nothing left are hidden, the counts show the filtered numbers, and
+`No changes match` shows when nothing is left. Escape clears the box. The filter lives in the
+page only: it is cleared when you leave the view or when the root moves.
+
 ## Files That May Contain Secrets
 
 Files whose names usually mean secrets are listed with a lock and the word `Sensitive`: for
@@ -277,9 +355,9 @@ itself: without the confirmation it sends no contents at all.
 
 ## Never Shown
 
-Some paths are never served (or saved, or created in), even after confirming:
+Some paths are never served (or saved, created in, deleted, or found by name), even after confirming:
 
-- Termote's own config and state directories (the saved password, logs)
+- Termote's own config and state directories (the saved password, logs) and its trash
 - `/proc`, `/sys` and `/dev` (process environments and devices)
 - the repository's `.git` directory, which is not listed in Files either
 

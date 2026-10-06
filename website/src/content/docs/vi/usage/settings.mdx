@@ -4,7 +4,7 @@ description: Tùy chỉnh cấu hình Termote
 ---
 
 Mở cài đặt từ menu **More** (⋯) trên header → **Settings**. Cài đặt chia thành các nhóm:
-**Appearance**, **Keyboard**, **Terminal**, **Sessions** và **Data & help**. Trên điện thoại,
+**Appearance**, **Keyboard**, **Terminal**, **Sessions**, **Files** và **Data & help**. Trên điện thoại,
 hộp thoại là một bảng toàn màn hình; trên desktop là hộp thoại hai cột với danh sách nhóm bên
 trái. Help & gestures và About mở trong cùng kiểu bảng này, từ menu **More**.
 
@@ -128,6 +128,24 @@ Biểu tượng Nerd Font (prompt theme như Starship hay Powerlevel10k, icon fi
 | Tùy chọn                          | Mặc định |
 | --------------------------------- | -------- |
 | 3s, 5s, 10s, 15s, 30s, 1m, 2m, 5m | 5s ✓     |
+
+## Thư mục loại trừ
+
+Ô `Excluded folders` trong nhóm Files của Settings là danh sách tên thư mục mà tính năng
+[tìm file](/vi/usage/files-changes/#tìm-file) không bao giờ đi vào. Danh sách chỉ áp dụng cho file mà git bỏ qua và cho thư mục nằm ngoài repo; file
+git theo dõi thì luôn được tìm, kể cả nằm dưới một trong các tên này.
+
+- Bỏ một tên bằng dấu **x** trên nó. Thêm một tên bằng cách gõ vào **Folder name** rồi bấm **Add**
+  (hoặc Enter). Mỗi tên là tên một thư mục, như `node_modules`: không có `/`, `*`, `?` hay `[`,
+  không phải `.` hoặc `..`, dài tối đa 255 byte. Ô nhập cho biết vì sao một tên bị từ chối. Tối đa
+  50 tên.
+- Nút `Reset to defaults` khôi phục danh sách ở bảng dưới.
+
+| Thư mục mặc định |
+| ---------------- |
+| `node_modules`, `.venv`, `venv`, `__pycache__`, `dist`, `build`, `target`, `.next`, `.nuxt`, `.turbo`, `.cache`, `coverage`, `vendor` |
+
+Công tắc `Include ignored` không nằm ở đây: nó đặt cạnh ô tìm file trong Files.
 
 ## Kiểm tra cập nhật
 
