@@ -463,7 +463,7 @@ Commands:
   container <cmd>      Run the server in a container: up, down, logs [-f], status
   update               Update to the latest release
   uninstall [--purge]  Remove the service, the command, the install and uploaded images
-                       (config and logs stay; --purge removes them too)
+                       (config, logs and deleted files stay; --purge removes them too)
   logs [service]       View logs (server, all, follow, clean)
   link / unlink        Create or remove the 'termote' command in ~/.local/bin
   show-password        Show the saved username and password

@@ -60,6 +60,7 @@ func runServe(args []string) int {
 	cfg.FilesDenyDirs = filesDenyDirs(c.configDir(), c.stateDir())
 	cfg.FilesWriteDenyDirs = []string{c.dataDir()}
 	cfg.UploadDir = uploadDir()
+	cfg.TrashDir = trashDir()
 	cfg.OnListen = func() {
 		if err := c.writePIDFile(); err != nil {
 			fmt.Fprintf(os.Stderr, "[WARN] cannot write %s: %v\n", c.pidFile(), err)

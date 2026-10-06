@@ -215,7 +215,9 @@ func (c *cli) removeInstall() []string {
 	var left []string
 	for _, e := range entries {
 		path := filepath.Join(c.dataDir(), e.Name())
-		if path == c.stateDir() {
+		// The logs and (Windows) the trash sit in the install root; they
+		// go only with --purge, which removed them already.
+		if path == c.stateDir() || path == c.trashDir() {
 			continue
 		}
 		if err := os.RemoveAll(path); err != nil {
@@ -229,27 +231,42 @@ func (c *cli) removeInstall() []string {
 	return left
 }
 
-// uploadsDir is the server's upload store, uploadDir's os.UserCacheDir
-// worked out from this CLI's home and environment. On Windows it sits in
-// the install root (%LOCALAPPDATA%\termote\uploads).
-func (c *cli) uploadsDir() string {
-	var cache string
+// cacheDir is the server's os.UserCacheDir worked out from this CLI's home
+// and environment. On Windows it holds the install root
+// (%LOCALAPPDATA%\termote).
+func (c *cli) cacheDir() string {
 	switch c.goos {
 	case "windows":
-		cache = c.envDir("LOCALAPPDATA", filepath.Join(c.home, "AppData", "Local"))
+		return c.envDir("LOCALAPPDATA", filepath.Join(c.home, "AppData", "Local"))
 	case "darwin":
-		cache = filepath.Join(c.home, "Library", "Caches")
-	default:
-		cache = c.envDir("XDG_CACHE_HOME", filepath.Join(c.home, ".cache"))
+		return filepath.Join(c.home, "Library", "Caches")
 	}
-	return filepath.Join(cache, "termote", "uploads")
+	return c.envDir("XDG_CACHE_HOME", filepath.Join(c.home, ".cache"))
 }
+
+// uploadsDir is the server's upload store (uploadDir).
+func (c *cli) uploadsDir() string { return filepath.Join(c.cacheDir(), "termote", "uploads") }
+
+// trashDir is the server's trash (trashDir): what the Files view deleted.
+func (c *cli) trashDir() string { return filepath.Join(c.cacheDir(), "termote", "trash") }
 
 // removeUploads deletes the images sent from the PWA: the store is a cache
 // (7-day retention), so nothing in it is worth keeping once Termote goes.
 // It returns the store when it could not be removed yet.
 func (c *cli) removeUploads() []string {
-	dir := c.uploadsDir()
+	return c.removeCacheDir(c.uploadsDir(), "Removed the uploaded images in %s")
+}
+
+// removeTrash deletes the files the Files view deleted, for uninstall
+// --purge: they are the user's files, not a cache, so a plain uninstall
+// keeps them.
+func (c *cli) removeTrash() []string {
+	return c.removeCacheDir(c.trashDir(), "Removed the files deleted from the Files view in %s")
+}
+
+// removeCacheDir deletes dir, then its termote parent when that leaves it
+// empty. It returns dir when it could not be removed yet.
+func (c *cli) removeCacheDir(dir, done string) []string {
 	if !isDir(dir) {
 		return nil
 	}
@@ -259,7 +276,7 @@ func (c *cli) removeUploads() []string {
 	if parent := filepath.Dir(dir); parent != c.dataDir() {
 		os.Remove(parent) // only when empty
 	}
-	c.infof("Removed the uploaded images in %s", dir)
+	c.infof(done, dir)
 	return nil
 }
 

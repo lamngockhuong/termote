@@ -102,6 +102,9 @@ type gitCall struct {
 	// Light ones (rev-parse, config) do neither, so a slow status never
 	// holds up resolving or browsing a root.
 	heavy bool
+	// noBackoff: a heavy command whose timeout does not back the root off
+	// (find lists files, and a huge untracked tree must not fail Changes).
+	noBackoff bool
 	// stdin is fed to git (cat-file --batch); nil gives it none.
 	stdin []byte
 }
@@ -271,7 +274,7 @@ func (g *gitRunner) exec(ctx context.Context, c gitCall, filters []string, args 
 		return stdout.buf.Bytes(), true, nil
 	}
 	if errors.Is(run.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
-		if c.heavy {
+		if c.heavy && !c.noBackoff {
 			g.mu.Lock()
 			g.failedAt[c.root] = time.Now()
 			g.mu.Unlock()

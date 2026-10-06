@@ -80,13 +80,6 @@ func (f *filesAPI) handleCreateFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	res, err := f.createFile(req.root, in)
-	var ee *createExistsError
-	if errors.As(err, &ee) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(errCreateExists.status)
-		json.NewEncoder(w).Encode(map[string]string{"error": ee.Error(), "code": errCreateExists.code, "path": ee.path})
-		return
-	}
 	if err != nil {
 		f.error(w, "files create", err)
 		return
@@ -121,7 +114,7 @@ func (f *filesAPI) createFile(root filesRoot, in createRequest) (createResponse,
 	// same root holds no slot a save could have used; once it has the lock,
 	// a create only waits on the disk.
 	createBeforeLock()
-	unlock := f.writeLocks.lock(root.Root + "\x00create")
+	unlock := f.writeLocks.lock(rootLockKey(root.Root))
 	defer unlock()
 	select {
 	case f.writeSlots <- struct{}{}:
@@ -134,7 +127,7 @@ func (f *filesAPI) createFile(root filesRoot, in createRequest) (createResponse,
 	if err != nil {
 		return createResponse{}, err
 	}
-	dir, err := f.walkParents(rt, root, filepath.Dir(rel))
+	dir, err := f.walkParents(rt, root, filepath.Dir(rel), true)
 	if err != nil {
 		return createResponse{}, createError(err)
 	}
@@ -147,10 +140,15 @@ func (f *filesAPI) createFile(root filesRoot, in createRequest) (createResponse,
 		return createResponse{}, err
 	}
 	fh.Close()
-	// The Changes view lists the new file right away.
-	f.statuses.forgetPrefix(root.Root + "\x00")
+	// The Changes view lists the new file right away, and find finds it.
+	f.forgetRoot(root.Root)
 	return createResponse{Root: root.Root, Path: filepath.ToSlash(rel)}, nil
 }
+
+// rootLockKey names the lock a create, a delete and a restore take on their
+// root. '\x01' never appears in a path: a file named "create" at the root
+// locks root + "\x00create", and taking the same mutex twice would hang.
+func rootLockKey(root string) string { return root + "\x01create" }
 
 // createDenied reports whether a create may not touch rel: the repo's git
 // dir, a deny dir, or a dir a save never writes to.
@@ -159,9 +157,10 @@ func (f *filesAPI) createDenied(root filesRoot, rel string) bool {
 }
 
 // walkParents opens parent under rt, making each directory missing on the
-// way. It takes rt: every directory but the one returned (which may be rt)
+// way when create is set (a missing one is fs.ErrNotExist otherwise). It
+// takes rt: every directory but the one returned (which may be rt)
 // is closed, and the caller closes that one.
-func (f *filesAPI) walkParents(rt *os.Root, root filesRoot, parent string) (*os.Root, error) {
+func (f *filesAPI) walkParents(rt *os.Root, root filesRoot, parent string, create bool) (*os.Root, error) {
 	cur, walked := rt, "."
 	var parts []string
 	if parent != "." {
@@ -172,7 +171,7 @@ func (f *filesAPI) walkParents(rt *os.Root, root filesRoot, parent string) (*os.
 			cur.Close()
 			return nil, errCreateNotAllowed
 		}
-		next, err := openChildDir(cur, part)
+		next, err := openChildDir(cur, part, create)
 		cur.Close()
 		if err != nil {
 			return nil, err
@@ -186,12 +185,13 @@ func (f *filesAPI) walkParents(rt *os.Root, root filesRoot, parent string) (*os.
 	return cur, nil
 }
 
-// openChildDir opens the directory name in cur, making it when missing. A
+// openChildDir opens the directory name in cur, making it when missing and
+// create is set. A
 // symlink is refused, and so is a directory swapped after its checks: the
 // one opened must be the one checked.
-func openChildDir(cur *os.Root, name string) (*os.Root, error) {
+func openChildDir(cur *os.Root, name string, create bool) (*os.Root, error) {
 	fi, err := cur.Lstat(name)
-	if errors.Is(err, fs.ErrNotExist) {
+	if create && errors.Is(err, fs.ErrNotExist) {
 		// Made in between by another process: use it like one found.
 		if err = cur.Mkdir(name, 0o777); err == nil || errors.Is(err, fs.ErrExist) {
 			fi, err = cur.Lstat(name)

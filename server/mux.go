@@ -70,6 +70,9 @@ type Caps struct {
 	// Uploads: the server has a usable upload dir (/api/mux/uploads). Set
 	// by the snapshot route, not by the backend.
 	Uploads bool `json:"uploads"`
+	// Trash: the server has a usable trash (files/delete, files/restore).
+	// Set by the snapshot route, not by the backend.
+	Trash bool `json:"trash"`
 	// Auth: sign-in is on, so the PWA offers Log out. Set by the snapshot
 	// route, from the request basicAuth let through.
 	Auth bool `json:"auth"`
@@ -123,6 +126,9 @@ var errUnsupported = errors.New("operation not supported by this backend")
 // /api/ JSON 404 handler.
 // uploads is nil when the server has no usable upload dir.
 func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *uploadStore) *agentAPI {
+	// Set below, before any request: the snapshot reads the files routes'
+	// trash through it once registerCommandsRoute has wired them.
+	var agent *agentAPI
 	mux.HandleFunc("/api/mux/health", func(w http.ResponseWriter, r *http.Request) {
 		if !requireMethod(w, r, http.MethodGet) {
 			return
@@ -155,6 +161,7 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *u
 		snap.Backend = m.Name()
 		snap.Caps = m.Caps()
 		snap.Caps.Uploads = uploads != nil
+		snap.Caps.Trash = agent.files != nil && agent.files.trash != nil
 		snap.Caps.Auth = authenticated(r.Context())
 		if snap.Groups == nil {
 			snap.Groups = []Group{}
@@ -286,7 +293,7 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *u
 
 	mux.HandleFunc("/api/mux/uploads", handleUpload(uploads))
 
-	agent := registerAgentRoutes(mux, m, uploads)
+	agent = registerAgentRoutes(mux, m, uploads)
 
 	// Only reachable via fetch/XHR from the PWA, not by direct navigation.
 	mux.HandleFunc("/api/mux/stream-token", handleTerminalToken(tokens))

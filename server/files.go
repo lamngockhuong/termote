@@ -49,8 +49,9 @@ func requireFilesRead(http.ResponseWriter, *http.Request) bool { return true }
 
 // filesAPI serves /api/mux/panes/{id}/files/*: views of the files under a
 // pane's root (its git toplevel, else its directory), saves of a text file's
-// whole contents (PUT files/content) and creates of an empty file (POST
-// files/create).
+// whole contents (PUT files/content), creates of an empty file (POST
+// files/create), and deletes into a trash and back (POST files/delete,
+// files/restore).
 type filesAPI struct {
 	m        Mux
 	dirs     PaneDirer // nil when the backend has none
@@ -59,6 +60,7 @@ type filesAPI struct {
 	git      *gitRunner
 	roots    *rootResolver
 	statuses *ttlCache[gitStatus] // root → git status
+	finds    *ttlCache[findList]  // root + list kind → file list (files/find)
 	rawSlots chan struct{}        // raw requests running, server-wide
 	// writeDeny are directories a save never writes to, on top of deny:
 	// the install's data dir (its current pointer picks the binary the
@@ -66,6 +68,9 @@ type filesAPI struct {
 	writeDeny  []string
 	writeSlots chan struct{} // saves running, server-wide
 	writeLocks *writeLocks
+	// trash keeps what files/delete removed, for files/restore; nil when
+	// the server has no usable trash dir.
+	trash *trashStore
 }
 
 // filesDenyDirs returns the directories the files routes never serve, as
@@ -92,6 +97,7 @@ func registerFilesRoutes(mux *http.ServeMux, m Mux, allowed hostAllowlist, denyD
 	f := &filesAPI{
 		m: m, dirs: dirs, allowed: allowed, git: git, roots: newRootResolver(git),
 		statuses:   newTTLCache[gitStatus](filesRootTTL),
+		finds:      newTTLCache[findList](findListTTL),
 		rawSlots:   make(chan struct{}, rawMaxRunning),
 		deny:       append(filesDenyDirs(systemDenyDirs...), filesDenyDirs(denyDirs...)...),
 		writeSlots: make(chan struct{}, writeMaxRunning),
@@ -103,6 +109,9 @@ func registerFilesRoutes(mux *http.ServeMux, m Mux, allowed hostAllowlist, denyD
 	mux.HandleFunc("PUT /api/mux/panes/{id}/files/content", f.handleWriteContent)
 	// Without a method: a GET or PUT gets 405 here, not the /api/ 404.
 	mux.HandleFunc("/api/mux/panes/{id}/files/create", f.handleCreateFile)
+	mux.HandleFunc("/api/mux/panes/{id}/files/delete", f.handleDeleteFile)
+	mux.HandleFunc("/api/mux/panes/{id}/files/restore", f.handleRestoreFile)
+	mux.HandleFunc("/api/mux/panes/{id}/files/find", f.handleFind)
 	mux.HandleFunc("/api/mux/panes/{id}/files/changes", f.handleChanges)
 	mux.HandleFunc("/api/mux/panes/{id}/files/diff", f.handleDiff)
 	mux.HandleFunc("/api/mux/panes/{id}/files/raw", f.handleRaw)
@@ -404,6 +413,24 @@ func (f *filesAPI) handleContent(w http.ResponseWriter, r *http.Request) {
 	}
 	defer cancel()
 	q := r.URL.Query()
+	if q.Get("hash") == "1" {
+		// Hashing reads up to 512 MiB: a slot of the raw route's, so a
+		// burst of them never reads several at once.
+		select {
+		case f.rawSlots <- struct{}{}:
+			defer func() { <-f.rawSlots }()
+		default:
+			f.error(w, "files hash", errRawBusy)
+			return
+		}
+		res, err := f.contentHash(req.root, q.Get("path"))
+		if err != nil {
+			f.error(w, "files hash", err)
+			return
+		}
+		jsonOK(w, res)
+		return
+	}
 	res, err := f.content(req.root, q.Get("path"), q.Get("reveal") == "1")
 	if err != nil {
 		f.error(w, "files content", err)
@@ -488,7 +515,16 @@ func (f *filesAPI) error(w http.ResponseWriter, op string, err error) {
 	var ie inputError
 	var re *rawError
 	var ne *notEditableError
+	var ee *createExistsError
+	var dc *deleteChangedError
 	switch {
+	case errors.As(err, &ee):
+		// The name taken, cleaned, so the client opens what is there.
+		jsonCodeBody(w, errCreateExists.status, map[string]string{"error": ee.Error(), "code": errCreateExists.code, "path": ee.path})
+	case errors.As(err, &dc):
+		// The file was swapped while it was deleted, and what was moved
+		// could not go back: the client can still undo it.
+		jsonCodeBody(w, errEditChanged.status, map[string]string{"error": errEditChanged.msg, "code": errEditChanged.code, "trashId": dc.trashID})
 	case errors.As(err, &re):
 		jsonErrorCode(w, re.code, re.msg, re.status)
 	case errors.As(err, &ne):
@@ -519,6 +555,13 @@ func (f *filesAPI) error(w http.ResponseWriter, op string, err error) {
 		log.Printf("%s %s error: %v", f.m.Name(), op, err)
 		jsonError(w, "files request failed", http.StatusInternalServerError)
 	}
+}
+
+// jsonCodeBody writes body as a JSON error response with status.
+func jsonCodeBody(w http.ResponseWriter, status int, body map[string]string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(body)
 }
 
 // isPathEscape matches os.Root's error for a path (or symlink) that leaves the
