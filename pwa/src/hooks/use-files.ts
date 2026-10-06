@@ -109,6 +109,16 @@ interface Store {
   created: (path: string, root: string, reveal: boolean) => Promise<void>
   // Another request saw the root move to root
   rootChanged: (root: string) => void
+  // A search result chosen: the tree opened down to it and, for a file, the
+  // file opened (a new trail of links); a directory shows in the tree
+  reveal: (path: string, kind?: 'file' | 'dir') => Promise<void>
+  // The directory read again: what it holds now
+  list: (path: string) => Promise<DirState>
+  // path was deleted: closed if open, gone from the tree
+  deleted: (path: string) => void
+  // path was put back: the tree opened down to it, read again; what is
+  // open stays open
+  restored: (path: string) => Promise<void>
 }
 
 function createStore(paneId: string): Store {
@@ -256,6 +266,56 @@ function createStore(paneId: string): Store {
     return 'opened'
   }
 
+  // Every directory from the root down to dir, read again: the path may
+  // be newer than their listings (a search result, a restored file)
+  function readDown(dir: string) {
+    const parts = dir ? dir.split('/') : []
+    const chain = ['', ...parts.map((_, i) => parts.slice(0, i + 1).join('/'))]
+    return Promise.all(chain.map(read))
+  }
+
+  async function reveal(path: string, kind: 'file' | 'dir' = 'file') {
+    const gen = generation
+    const at = path.lastIndexOf('/')
+    const parent = at < 0 ? '' : path.slice(0, at)
+    const target = kind === 'dir' ? path : parent
+    set({ expanded: expandTo(target) })
+    await readDown(target)
+    if (gen !== generation) return
+    if (kind === 'dir') {
+      open(null)
+      return
+    }
+    open(path)
+  }
+
+  async function list(path: string) {
+    await read(path)
+    return state.dirs[path]
+  }
+
+  async function restored(path: string) {
+    const at = path.lastIndexOf('/')
+    const parent = at < 0 ? '' : path.slice(0, at)
+    set({ expanded: expandTo(parent) })
+    await readDown(parent)
+  }
+
+  function deleted(path: string) {
+    const at = path.lastIndexOf('/')
+    const parent = at < 0 ? '' : path.slice(0, at)
+    if (state.openPath === path) open(null)
+    // A deleted directory is closed, and so is everything under it
+    const expanded = Object.fromEntries(
+      Object.entries(state.expanded).filter(
+        ([p]) => p !== path && !p.startsWith(`${path}/`),
+      ),
+    )
+    const { [path]: _, ...dirs } = state.dirs
+    set({ expanded, dirs })
+    read(parent)
+  }
+
   // The tree starts again from the new root; an open file stays open, and
   // shows what the same path holds there.
   function rootChanged(root: string) {
@@ -310,6 +370,10 @@ function createStore(paneId: string): Store {
     },
     rootChanged,
     created,
+    reveal,
+    list,
+    deleted,
+    restored,
   }
 }
 
@@ -345,6 +409,13 @@ export function useFiles(paneId: string) {
       [store],
     ),
     rootChanged: useCallback((r: string) => store.rootChanged(r), [store]),
+    reveal: useCallback(
+      (p: string, kind?: 'file' | 'dir') => store.reveal(p, kind),
+      [store],
+    ),
+    list: useCallback((p: string) => store.list(p), [store]),
+    deleted: useCallback((p: string) => store.deleted(p), [store]),
+    restored: useCallback((p: string) => store.restored(p), [store]),
   }
 }
 

@@ -123,7 +123,7 @@ func newUploadStore(dir string) (*uploadStore, error) {
 	if fi, err := os.Lstat(dir); err != nil || !fi.IsDir() {
 		return nil, fmt.Errorf("%s is not a directory", dir)
 	}
-	if err := checkPrivateUploadDir(dir); err != nil {
+	if err := checkPrivateDir(dir); err != nil {
 		return nil, err
 	}
 	s := &uploadStore{

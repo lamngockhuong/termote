@@ -65,7 +65,7 @@ func editReasonError(reason string) error {
 }
 
 // requireFilesWrite is where roles (#236, a view-only role) will refuse a
-// save or a create. requireWriteRole allows everything today, so a view-only client is
+// save, a create, a delete or a restore. requireWriteRole allows everything today, so a view-only client is
 // only kept from editing by the PWA.
 func requireFilesWrite(w http.ResponseWriter, r *http.Request) bool {
 	return requireWriteRole(w, r)
@@ -225,8 +225,8 @@ func (f *filesAPI) writeContent(root filesRoot, in writeRequest) (writeResponse,
 		return writeResponse{}, saveError(err)
 	}
 	// The Changes view reads the status right after a save: not the one
-	// cached from before it.
-	f.statuses.forgetPrefix(root.Root + "\x00")
+	// cached from before it, and find lists what it saved.
+	f.forgetRoot(root.Root)
 	return res, nil
 }
 

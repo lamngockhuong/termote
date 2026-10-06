@@ -222,7 +222,7 @@ installer did not put in place.
 ## Uninstall
 
 ```bash
-termote uninstall          # keeps your config, saved password and logs
+termote uninstall          # keeps your config, saved password, logs and deleted files
 termote uninstall --purge  # removes them too
 ```
 
@@ -231,6 +231,10 @@ the images you uploaded from the app (a cache). Your config (`~/.config/termote`
 stay, so a reinstall keeps your password and your devices stay signed in; `uninstall` prints both paths. On Windows,
 `%APPDATA%\termote` and `%LOCALAPPDATA%\termote\state` stay. Add `--purge` to remove them as well; the interactive
 menu asks.
+
+The files you deleted from the Files view stay as well (they move to a trash next to the uploads, such as
+`~/.cache/termote/trash`), since they are your files and not a cache; `uninstall` prints the folder. `--purge`
+removes it too.
 
 On Windows, the files of the running `termote.exe` are removed a moment after the command exits.
 

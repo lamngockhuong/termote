@@ -186,8 +186,12 @@ POST   /api/mux/panes/{id}/agent/answer   body: {promptId, choice} → 204
 GET    /api/mux/panes/{id}/agent/commands                        → {commands: [{name, description, source, kind}]}
 GET    /api/mux/panes/{id}/files/tree?path=&root=               → {root, isRepo, path, entries, truncated}
 GET    /api/mux/panes/{id}/files/content?path=&root=&reveal=    → {root, path, size, text, hash, editable, notEditable?} | {…, previewable: false, reason} | {…, sensitive: true}
+GET    /api/mux/panes/{id}/files/content?path=&root=&hash=1     → {root, path, size, hash} (never the contents, sensitive or not)
 PUT    /api/mux/panes/{id}/files/content?root=  body: {path, baseHash, text, reveal} → {root, path, size, hash} | {error, code, reason?}
 POST   /api/mux/panes/{id}/files/create?root=   body: {path, reveal}           → 201 {root, path} | {error, code[, path]}
+POST   /api/mux/panes/{id}/files/delete?root=   body: {path, kind, baseHash, reveal, permanent} → {root, path[, trashId, size, permanent]} | {error, code}
+POST   /api/mux/panes/{id}/files/restore?root=  body: {trashId, reveal}         → {root, path} | {error, code}
+GET    /api/mux/panes/{id}/files/find?q=&root=&ignored=1&exclude=&fresh=1 → {root, isRepo, results, truncated, incomplete} | {error, code}
 GET    /api/mux/panes/{id}/files/changes?root=                  → {root, isRepo, branch, entries, truncated}
 GET    /api/mux/panes/{id}/files/diff?path=&orig=&staged=&root=&reveal= → {root, path, binary, conflict, truncated, sensitive, reason, hunks}
 GET    /api/mux/panes/{id}/files/raw?path=&root=&reveal=[&side=old|new&staged=&orig=] → image bytes | {error, code}
@@ -473,9 +477,10 @@ The PWA's Files and Changes views read a pane's directory, offered when the snap
 `caps.files`: tmux on Linux and macOS (`#{pane_current_path}` of the window's active pane) and
 Herdr (`foreground_cwd`, else `cwd`, of the pane; a Herdr that reports neither answers 501).
 psmux does not report the directory, so `caps.files` is off on Windows tmux. Every route is
-registered for every backend and answers 501 where it is off. Five are read-only GETs;
-`PUT files/content` saves a text file and `POST files/create` creates an empty one (see Saving
-a file, Creating a file).
+registered for every backend and answers 501 where it is off. Six are read-only GETs (`find`
+included); `PUT files/content` saves a text file, `POST files/create` creates an empty one and
+`POST files/delete` / `files/restore` remove a file and put it back (see Saving a file, Creating
+a file, Finding a file, Deleting a file).
 
 **Root.** The pane's directory, raised to `git rev-parse --show-toplevel` when it is in a
 repository and a `.git` sits at that toplevel (a `core.worktree` naming another directory, even
@@ -623,14 +628,66 @@ short name included.
   unit when the root is the home directory). A signed-in user has a shell anyway; the
   view-only role (#236) must refuse creates as well as saves.
 
+**Finding a file (`GET find`).** Names under the root that match a query, for the PWA's "Find a
+file" box, in `server/files_find.go` and `server/files_find_match.go`. The `root` query is
+required as elsewhere. It answers names only (`path`, `ignored`, `sensitive`), never contents.
+
+- `q` is trimmed and must be 1 to 256 bytes. `exclude` (repeated) names folders to skip: at most
+  50, each one directory name of at most 255 bytes, not `.` or `..`, with no `/`, `\`, NUL, `*`,
+  `?` or `[` (400 `invalid_exclude`). `ignored=1` adds ignored files; `fresh=1` skips the cache.
+- In a repository the list is `git ls-files -co --exclude-standard --deduplicate -z`, minus the
+  files deleted from disk (`ls-files -d`), with the directories git lists (a nested repository, a
+  submodule) dropped. Tracked files are always searched, even under an excluded name. With
+  `ignored=1`, `git ls-files -o -i --exclude-standard --directory -z` is added and the ignored
+  directories it names are walked through `os.Root`, never entering an excluded name at any depth.
+  Outside a repository the root is walked, excluded names never entered, symlinked directories
+  and junctions not entered, symlinks to files listed.
+- Limits: 200 results (`truncated`), 200,000 paths read, depth 32, a walk of 5 s and 16 MiB of
+  git output; past the last three the list is `incomplete`. A git timeout answers 503 but does
+  not make the root back off, so Changes keeps working. A root's file list is cached for 30 s
+  and dropped by a save, create, delete or restore; the PWA's Refresh sends `fresh=1`.
+- `.git`, the git dir and the deny dirs (config and state, the upload store, the trash) never
+  appear, checked through symlinks.
+
+**Deleting a file (`POST delete`, `POST restore`).** `server/files_delete.go` and
+`server/files_trash.go`. As for a save, a signed-in user has a shell; what these guard is losing
+a change an agent just made and never touching what the reads refuse.
+
+- Same guards as create and save: `writeGuard`, the handler's cross-site check, `requireWriteRole`,
+  `root` required (400, 409 once it moved). The body is `{path, kind: "file"|"dir", baseHash,
+  reveal, permanent}`. `baseHash` must be the file's sha256 (409 `changed` otherwise); the PWA
+  takes it from the open text or from GET `content?hash=1`, which answers size and hash without
+  reading the contents out, a sensitive file included. A file over 512 MiB gets no hash (413
+  `too_large`): it is deleted from a terminal.
+- A file is renamed into the trash, `os.UserCacheDir()/termote/trash` (`serveConfig.TrashDir`,
+  set by `serve`): created 0700, refused when a symlink or (Unix) owned by another user, and then
+  the route answers 503 `trash_unavailable`. The snapshot's `Caps.trash` tells the PWA. An empty
+  directory is removed with `rmdir`, with a record so that restore makes it again; a non-empty one
+  is 409 `not_empty`, and the root itself is never deleted.
+- Refusals: a symlink or junction on the path or as the target 403 `symlink`; several hard links
+  409 `hardlink`; another owner 403 `permission`; read-only 403 `read_only`; deny dirs 403
+  `not_allowed`; a sensitive name without `reveal: true` 403 `sensitive`; no free write slot 429
+  `busy`.
+- Another file system (`EXDEV`: WSL `/mnt/c`, a volume, the container's `/workspace` bind mount)
+  cannot be renamed into the trash: 409 `cross_device` and nothing is deleted. The PWA then asks
+  a second time ("Delete permanently? This cannot be undone.") and only then sends
+  `permanent: true`, which removes the file with no Undo. So in the container every delete under
+  `/workspace` is permanent, after the second confirmation.
+- `POST restore` takes `{trashId, reveal}` and puts the entry back at its path, making missing
+  parent directories; it never replaces anything (409 `exists`).
+- The trash keeps an entry 7 days, at most 1 GiB in all (the oldest go first), and never removes
+  one younger than an hour (`trashMaxAge`, `trashMaxTotal`, `trashMinAge`). Nothing lists the
+  trash: the PWA has no trash browser, only the Undo of the delete that made the entry.
+  `uninstall` keeps it (see Uninstall).
+
 **Guards.** Basic auth and the Host allowlist like every route; GETs pass `writeGuard`, so the
 handlers check `Sec-Fetch-Site`/`Origin` themselves (403 cross-site), which keeps another page
-from making a `--no-auth` server run git. `PUT content` and `POST create` go through
+from making a `--no-auth` server run git. `PUT content`, `POST create`, `POST delete` and `POST restore` go through
 `writeGuard` like every write (same-site, `application/json`) and their handlers check again.
 Other methods get 405.
 `requireFilesRead` and `requireFilesWrite` are where a view-only role (#236) will be enforced;
 `requireWriteRole` is still a stub, so today a view-only client is kept from editing only by
-the PWA, which hides Edit and New file in `readOnly` mode.
+the PWA, which hides Edit, New file and Delete in `readOnly` mode.
 
 **PWA.** Edit (Files, and the diff of a file the working tree still has as text in Changes)
 turns the file into a plain `<textarea>` (`file-editor.tsx`), a Markdown file as its source.
@@ -649,6 +706,20 @@ again, opens them, and opens the file straight into editing (`openIntent`, with 
 was created with): the draft, `hash` and `editable` come from GET `content`. A 409 `exists`
 offers Open it; a lost reply says the file may have been made, with Refresh, and never guesses
 from the tree.
+
+Find (`file-search.tsx`) is a box at the top of the Files view (above the keyboard on a phone).
+It asks `find` after a 150 ms pause and shows the results in place of the tree (ignored ones
+dimmed and tagged, a lock for a sensitive name); opening one opens the tree down to the file, and
+Back returns to the results. "Include ignored" (setting `findIncludeIgnored`, only in a repository)
+and the excluded folder names (setting `findExcludes`, defaults in `use-settings.ts`, edited in
+Settings → Files) are sent as `ignored` and `exclude`. The Changes view has a client-side filter
+on the path (a rename's source too) once the list has more than 15 entries; it asks the server
+for nothing.
+
+Delete is in a tree row's menu, on the Delete key of the focused row and in an open file's header
+(`delete-file-dialog.tsx`; the dialog shows the full path and Cancel has the focus). It sends the
+hash it has or reads one with `content?hash=1`, then shows a toast with Undo (`files/restore`) for
+10 s. A 409 `cross_device` opens the second, permanent confirmation described above.
 
 One store per pane for the tree (`use-files.ts`) and for the status
 (`use-git-changes.ts`, polled every 5 s while a view shows it and the page is visible, backing
@@ -740,7 +811,9 @@ termote uninstall [--purge]
 
 Removes the service registration, Termote's Tailscale mapping, the `termote` command, the
 install root and the upload store (a cache); the saved config and logs stay unless `--purge` is
-given (the command prints both paths). On Windows the running binary stays locked, so
+given (the command prints both paths). The trash of the Files view's deletes
+(`<cache dir>/termote/trash`) stays too, since those are the user's files and not a cache; the
+command prints its path, and `--purge` removes it (`removeTrash` in `server/install_layout.go`). On Windows the running binary stays locked, so
 `uninstall` starts a windowless PowerShell in a console of its own (`CREATE_NO_WINDOW`; with
 `DETACHED_PROCESS` Windows PowerShell exits without running the script) that waits for its PID
 to exit, then removes what was left (`removeLater` in `server/install_layout.go`). The
@@ -817,8 +890,9 @@ termote update --force           # Force reinstall current version
     upload ids resolved by the server, never paths, and a failed send clears the input box
     (one `C-c`) only when it holds nothing but its own paste; markdown images in the Chat
     view never load
-11. **Files and changes**: reads, plus `PUT content` saving a text file and `POST create`
-    making an empty one, never replacing anything (see above); paths confined to the pane's root by `os.Root`; Termote's
+11. **Files and changes**: reads, plus `PUT content` saving a text file, `POST create`
+    making an empty one, never replacing anything, and `POST delete` moving a file into a 0700
+    trash only when its hash is the one the client read (see above); paths confined to the pane's root by `os.Root`; Termote's
     config/state dirs, `/proc`, `/sys`, `/dev` and `.git` never served (a path differing only in
     case is checked by directory identity, for mounts that ignore case); sensitive files only
     with `reveal=1`; git run without a shell and with every repo-configured program disabled;

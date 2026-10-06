@@ -56,6 +56,9 @@ type serveConfig struct {
 	FilesWriteDenyDirs []string
 	// UploadDir holds images uploaded from the PWA; empty disables uploads.
 	UploadDir string
+	// TrashDir holds what the Files view deleted, for its Undo; empty
+	// disables deletes.
+	TrashDir string
 	// OnListen runs once the port is bound (serve records its PID then, so
 	// a server that cannot bind never replaces the running one's PID file).
 	OnListen func()
@@ -264,8 +267,17 @@ func buildServer(cfg serveConfig, m Mux) (http.Handler, *streamHub, error) {
 	}
 	agent := registerMuxRoutes(mux, m, tokenStore, uploads)
 	registerStreamRoutes(mux, m, tokenStore, allowed, hub)
-	files := registerFilesRoutes(mux, m, allowed, cfg.FilesDenyDirs)
-	files.writeDeny = filesDenyDirs(append(cfg.FilesWriteDenyDirs, cfg.UploadDir)...)
+	// The upload store and the trash are never read through the Files view
+	// either: with a pane in the home dir, a deleted .env would otherwise
+	// be served under its random name, and the records name other repos.
+	files := registerFilesRoutes(mux, m, allowed, append(slices.Clone(cfg.FilesDenyDirs), cfg.UploadDir, cfg.TrashDir))
+	files.writeDeny = filesDenyDirs(append(cfg.FilesWriteDenyDirs, cfg.UploadDir, cfg.TrashDir)...)
+	if cfg.TrashDir != "" {
+		var err error
+		if files.trash, err = newTrashStore(cfg.TrashDir); err != nil {
+			log.Printf("trash disabled: %v", err)
+		}
+	}
 	agent.registerCommandsRoute(mux, files, allowed)
 	// Unknown /api/ paths get JSON 404 instead of the SPA fallback.
 	mux.HandleFunc("/api/", apiNotFound)

@@ -11,6 +11,7 @@ import {
   APP_VIEWS,
   type AppView,
   availableViews,
+  type NotifyOptions,
   TERMINAL_VIEW_ID,
   type ViewContext,
   viewPanelId,
@@ -28,7 +29,7 @@ import { SessionSidebar } from './components/session-sidebar'
 import { SettingsModal } from './components/settings-modal'
 import { SidePanel } from './components/side-panel'
 import { type TerminalHandle, TerminalView } from './components/terminal-view'
-import { Toast, type ToastVariant } from './components/toast'
+import { Toast, type ToastAction, type ToastVariant } from './components/toast'
 import { Banner } from './components/ui/banner'
 import { ConfirmDialog } from './components/ui/confirm-dialog'
 import { useTheme } from './contexts/theme-context'
@@ -98,8 +99,6 @@ const getClipboardErrorMsg = (
       return 'Clipboard access failed. Use text input to paste.'
   }
 }
-
-type ToastAction = { label: string; onClick: () => void }
 
 // A toast with an action stays long enough to reach the button.
 const ACTION_TOAST_MS = 10000
@@ -300,7 +299,11 @@ export default function App({
     },
     [mux.caps.clientSideSelect, activeSession.id],
   )
-  const notify = useCallback((m: string) => showToast(m), [showToast])
+  const notify = useCallback(
+    (m: string, o?: NotifyOptions) =>
+      showToast(m, o?.variant, o?.action, o?.duration),
+    [showToast],
+  )
   const viewProps = {
     ...viewContext,
     isMobile,

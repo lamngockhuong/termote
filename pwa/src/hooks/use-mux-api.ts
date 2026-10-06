@@ -50,6 +50,8 @@ export interface MuxSnapshot {
     files?: boolean
     // The server takes image uploads (/uploads).
     uploads?: boolean
+    // The server keeps deleted files for an Undo (files/delete, files/restore).
+    trash?: boolean
     // Sign-in is on: the session can be ended (/logout).
     auth?: boolean
   }
@@ -274,6 +276,8 @@ export class RequestError extends Error {
     readonly images?: string[],
     // files/create 409 exists: the name taken, as the server cleaned it
     readonly path?: string,
+    // files/delete 409 changed: a swapped file that stayed in the trash
+    readonly trashId?: string,
   ) {
     super(message)
   }
@@ -293,6 +297,7 @@ async function requestError(res: Response): Promise<RequestError> {
     body.root,
     body.images,
     body.path,
+    body.trashId,
   )
 }
 
@@ -499,13 +504,15 @@ export interface FileDiff {
   hunks: DiffHunk[] | null
 }
 
+// A list sends the parameter once per value (exclude=a&exclude=b)
 function filesUrl(
   paneId: string,
   op: string,
-  query: Record<string, string | undefined>,
+  query: Record<string, string | string[] | undefined>,
 ): string {
   const params = new URLSearchParams()
-  for (const [k, v] of Object.entries(query)) if (v) params.set(k, v)
+  for (const [k, v] of Object.entries(query))
+    for (const one of Array.isArray(v) ? v : [v]) if (one) params.append(k, one)
   const qs = params.toString()
   return `${API_BASE}/panes/${encodeURIComponent(paneId)}/files/${op}${qs ? `?${qs}` : ''}`
 }
@@ -600,6 +607,125 @@ export async function createFile(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  })
+  if (!res.ok) throw await requestError(res)
+  return res.json()
+}
+
+// One path files/find matched: ignored (a repo's ignored file, searched
+// with ignored), sensitive (a name that usually holds secrets).
+export interface FindResult {
+  path: string
+  ignored: boolean
+  sensitive: boolean
+}
+
+// truncated: more than the 200 results matched. incomplete: the search
+// stopped early in a large tree, so some files may be missing.
+export interface FindResponse {
+  root: string
+  isRepo: boolean
+  results: FindResult[]
+  truncated: boolean
+  incomplete: boolean
+}
+
+export interface FindQuery {
+  q: string
+  root?: string
+  // A repo's ignored files too
+  ignored: boolean
+  // Directory names never searched for ignored files, nor outside a repo
+  exclude: string[]
+  // Read the file list again (the user refreshed)
+  fresh?: boolean
+}
+
+// Files under the pane's root whose path matches q, best first
+export async function findFiles(
+  paneId: string,
+  query: FindQuery,
+  signal?: AbortSignal,
+): Promise<FindResponse> {
+  const url = filesUrl(paneId, 'find', {
+    q: query.q,
+    root: query.root,
+    ignored: query.ignored ? '1' : undefined,
+    exclude: query.exclude,
+    fresh: query.fresh ? '1' : undefined,
+  })
+  const res = await fetch(url, { signal })
+  if (!res.ok) throw await requestError(res)
+  return res.json()
+}
+
+// A file's size and the sha256 a delete takes as its baseHash, never its
+// contents (a sensitive file's too). hash is absent past 512 MiB, or for
+// something other than a regular file.
+export interface FileHash {
+  root: string
+  path: string
+  size: number
+  hash?: string
+}
+
+export function fetchFileHash(
+  paneId: string,
+  path: string,
+  root?: string,
+): Promise<FileHash> {
+  return filesGet(paneId, 'content', { path, root, hash: '1' })
+}
+
+export interface DeletedFile {
+  root: string
+  path: string
+  // In the trash under this id, for restoreFile; absent for a permanent delete
+  trashId?: string
+  size?: number
+  permanent?: boolean
+}
+
+// Deletes path under root: a file (read with baseHash) goes to the trash, an
+// empty directory is removed. permanent: the trash is on another file system
+// and the user said to delete the file for good. A refusal is a
+// RequestError with the server's code (cross_device, changed, not_empty,
+// symlink, not_allowed, sensitive, permission, read_only, hardlink,
+// too_large, busy, trash_unavailable), or a 409 with the root once it moved.
+export async function deleteFile(
+  paneId: string,
+  del: {
+    root: string
+    path: string
+    kind: 'file' | 'dir'
+    baseHash?: string
+    reveal: boolean
+    permanent: boolean
+  },
+): Promise<DeletedFile> {
+  const { root, ...body } = del
+  const res = await fetch(filesUrl(paneId, 'delete', { root }), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(SAVE_TIMEOUT_MS),
+  })
+  if (!res.ok) throw await requestError(res)
+  return res.json()
+}
+
+// Puts a deleted file (or directory) back at its path, never replacing
+// anything there (409 exists).
+export async function restoreFile(
+  paneId: string,
+  restore: { root: string; trashId: string; reveal: boolean },
+): Promise<CreatedFile> {
+  const { root, ...body } = restore
+  const res = await fetch(filesUrl(paneId, 'restore', { root }), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(SAVE_TIMEOUT_MS),
   })
   if (!res.ok) throw await requestError(res)
   return res.json()

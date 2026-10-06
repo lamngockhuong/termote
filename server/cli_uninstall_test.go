@@ -22,6 +22,7 @@ func installedCLI(t *testing.T, goos string) *testCLI {
 	writeFile(t, tc.configFile(), "{}")
 	writeFile(t, filepath.Join(tc.stateDir(), "termote.log"), "log")
 	writeFile(t, filepath.Join(tc.uploadsDir(), "0123.png"), "png")
+	writeFile(t, filepath.Join(tc.trashDir(), strings.Repeat("a", 32)), "deleted")
 	return tc
 }
 
@@ -38,14 +39,27 @@ func TestUninstallRemovesUploadsKeepsConfig(t *testing.T) {
 			if !fileExists(tc.configFile()) || !fileExists(filepath.Join(tc.stateDir(), "termote.log")) {
 				t.Fatal("config or logs removed without --purge")
 			}
+			// The deleted files are the user's: kept, and said where.
+			if !fileExists(filepath.Join(tc.trashDir(), strings.Repeat("a", 32))) {
+				t.Fatal("trash removed without --purge")
+			}
 			out := tc.stdout.String()
-			if !strings.Contains(out, "Removed the uploaded images") || !strings.Contains(out, "Kept the config") {
+			if !strings.Contains(out, "Removed the uploaded images") || !strings.Contains(out, "Kept the config") ||
+				!strings.Contains(out, "Kept the files deleted from the Files view in "+tc.trashDir()) {
 				t.Fatalf("output:\n%s", out)
 			}
-			// The empty cache/termote dir goes with the store (on Windows it
-			// is the install root, which keeps the logs).
+			// Without a trash, the empty cache/termote dir goes with the
+			// store (on Windows it is the install root, which keeps the
+			// logs).
+			os.RemoveAll(tc.trashDir())
+			tc.stdout.Reset()
+			writeFile(t, filepath.Join(tc.uploadsDir(), "0123.png"), "png")
+			tc.main([]string{"uninstall"})
 			if goos != "windows" && isDir(filepath.Dir(tc.uploadsDir())) {
 				t.Fatal("empty termote cache dir stayed")
+			}
+			if strings.Contains(tc.stdout.String(), "Kept the files deleted") {
+				t.Fatalf("output without a trash:\n%s", tc.stdout.String())
 			}
 		})
 	}
@@ -78,7 +92,7 @@ func TestUninstallPurge(t *testing.T) {
 			if code := tc.main([]string{"uninstall", "--purge"}); code != 0 {
 				t.Fatal(tc.stderr.String())
 			}
-			for _, dir := range []string{tc.configDir(), tc.stateDir(), tc.dataDir(), tc.uploadsDir()} {
+			for _, dir := range []string{tc.configDir(), tc.stateDir(), tc.dataDir(), tc.uploadsDir(), tc.trashDir()} {
 				if isDir(dir) {
 					t.Errorf("%s stayed", dir)
 				}
@@ -220,6 +234,27 @@ func TestPurgeDataReturnsLockedDirs(t *testing.T) {
 	writeFile(t, log, "log")
 	lockIn(t, log)
 	if left := tc.purgeData(); len(left) != 1 || left[0] != tc.stateDir() {
+		t.Fatalf("left %v", left)
+	}
+}
+
+func TestTrashDirFollowsUserCacheDir(t *testing.T) {
+	tc := newTestCLI(t, "darwin")
+	if got, want := tc.trashDir(), filepath.Join(tc.home, "Library", "Caches", "termote", "trash"); got != want {
+		t.Fatalf("darwin %s, want %s", got, want)
+	}
+	win := newTestCLI(t, "windows")
+	if got := win.trashDir(); filepath.Dir(got) != win.dataDir() {
+		t.Fatalf("windows %s, want inside %s", got, win.dataDir())
+	}
+}
+
+func TestRemoveTrashReturnsLockedStore(t *testing.T) {
+	tc := newTestCLI(t, "linux")
+	f := filepath.Join(tc.trashDir(), strings.Repeat("b", 32))
+	writeFile(t, f, "x")
+	lockIn(t, f)
+	if left := tc.removeTrash(); len(left) != 1 || left[0] != tc.trashDir() {
 		t.Fatalf("left %v", left)
 	}
 }

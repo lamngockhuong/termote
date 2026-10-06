@@ -233,7 +233,7 @@ url [options]        Print the link to open, or a deep link to one session
 panel                Status, links and a QR code, with keys to open, copy, start, stop
 container <cmd>      Run the server in a container: up, down, logs [-f], status
 update               Update to the latest release
-uninstall [--purge]  Remove the service, the command, the install and uploads (--purge: config and logs too)
+uninstall [--purge]  Remove the service, the command, the install and uploads (--purge: config, logs and the trash too)
 logs [service]       View logs (server, all, follow, clean)
 link / unlink        Create or remove the 'termote' command in ~/.local/bin
 show-password        Show the saved username and password
@@ -306,6 +306,8 @@ The `update` command:
 | `pwa/src/components/changes-view.tsx`             | Changes view: git status grouped, a file's diff, edits it     |
 | `pwa/src/components/file-editor.tsx`              | A file's text in a textarea, why a save failed                |
 | `pwa/src/components/new-file-dialog.tsx`          | Files: asks for a new file's path, creates it, says why not   |
+| `pwa/src/components/file-search.tsx`              | Files: find a file by name under the root, results, switch    |
+| `pwa/src/components/delete-file-dialog.tsx`       | Files: asks before a delete, second ask for a permanent one   |
 | `pwa/src/components/markdown-preview.tsx`         | Markdown file rendered in Files/Changes (links, code blocks)  |
 | `pwa/src/components/image-preview.tsx`            | One image of Files/Changes (sizes, why it cannot be shown)    |
 | `pwa/src/components/image-compare.tsx`            | Changes: an image's old and new versions side by side         |
@@ -338,6 +340,9 @@ The `update` command:
 | `server/files_raw.go`                             | `files/raw`: an image's bytes (worktree, or a git version)    |
 | `server/files_write.go`                           | `PUT files/content`: saves a text file (baseHash, rename)     |
 | `server/files_create.go`                          | `POST files/create`: an empty file, never replacing anything  |
+| `server/files_find*.go`                           | `GET files/find`: file lists (git, walk), cache, ranking      |
+| `server/files_delete.go`                          | `POST files/delete`/`restore`, `content?hash=1`               |
+| `server/files_trash*.go`                          | Trash store, sweep, no-replace rename/rmdir by descriptor     |
 | `server/agent_proc*.go`                           | Finds Claude Code (or Codex) under a tmux/psmux pane          |
 | `server/guard.go`                                 | Host allowlist + Origin/Content-Type write guard              |
 | `server/login.go`                                 | Sign-in form for browsers (iOS home-screen app has no prompt) |
@@ -450,7 +455,9 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   is empty
 - **Files/Changes** (`/api/mux/panes/{id}/files/*`): GETs that also check
   `Sec-Fetch-Site`/`Origin` (and one write, `PUT files/content`, below); every path is opened through `os.Root` under the pane's root (its
-  git toplevel when a `.git` sits at it, else its directory); termote's config/state dirs,
+  git toplevel when a `.git` sits at it, else its directory); termote's config/state dirs, the
+  upload store and the trash (a pane in the home dir would otherwise serve a deleted `.env` under
+  its random name),
   `/proc`, `/sys`, `/dev`, `.git` and the repo's git dir (`--separate-git-dir`) are never served
   (on Linux a path differing only in case is denied when its directory is the same one: WSL
   `/mnt/c`, casefold, vfat);
@@ -523,7 +530,71 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   or runs (`.claude/settings.local.json`, `.claude/commands/*.md`, `.vscode/tasks.json`,
   `.github/workflows/*`, a systemd/launchd unit when the root is the home dir); a signed-in user
   has a shell anyway, and the view-only role (#236) must refuse creates as well as saves. A
-  view-only client gets no New file button only in the UI while `requireWriteRole` is a stub
+  view-only client gets no New file button only in the UI while `requireWriteRole` is a stub.
+  The root's lock is keyed `root + "\x01create"`: `"\x00create"` was the key of a file named
+  `create` at the root, and a delete takes both
+- **Finding a file** (`GET files/find?q=&root=&ignored=1&exclude=…&fresh=1`,
+  `server/files_find.go`): the GET guards of the other files routes; only names are sent, as
+  the tree does. `q` is trimmed, 1–256 bytes; `exclude` (repeated) is at most 50 directory
+  names of at most 255 bytes, never `.`/`..` nor holding `/ \` NUL `* ? [` (400
+  `invalid_exclude`), compared without case on Windows/macOS. In a repo the list is
+  `git ls-files -co --exclude-standard --deduplicate -z` less `ls-files -d` (files gone from the
+  disk) and less what git lists as a directory (a nested repo, a submodule); tracked files are
+  never filtered by `exclude`. `ignored=1` adds `git ls-files -o -i --exclude-standard
+  --directory -z`, read and cached apart: a path with an excluded component is dropped unread,
+  a directory git names whole is walked through `os.Root` without entering an excluded name at
+  any depth. Outside a repo the root is walked the same way. A walk never enters a symlinked
+  directory or a junction (irregular), lists a symlink only when `os.Root` stats it as a file,
+  and is bounded per list: 200 000 paths, 32 levels, 5 s, git output 16 MiB → `incomplete`.
+  Building a list drops `.git` components and paths under a deny dir or the git dir by name;
+  the ranked results then pass `f.denied` (through symlinks) and an `Lstat` (gone or a directory
+  → dropped) until 200 are kept (`truncated` past that). git runs as `heavy` with `noBackoff`: a
+  timeout answers 503 but never makes Changes back off. Lists are built under
+  `context.WithoutCancel` (the PWA aborts the previous request at each key), cached 30 s per
+  root + `SafeDir` + kind (+ the sorted excludes; a failure is not kept), dropped by `forgetRoot` on a save, a create, a
+  delete and a restore, and by `fresh=1` (the PWA's refresh)
+- **Deleting a file** (`POST files/delete?root=`, `POST files/restore?root=`,
+  `server/files_delete.go`, `server/files_trash*.go`): the guards of a create (`writeGuard`, the
+  handler's cross-site check, `requireWriteRole`, `root` required), body read first (8 KB);
+  then the root's lock, the file's lock (shared with saves) and a write slot without waiting
+  (429 `busy`), then the trash's mutex: a save takes its slot before the file's lock, but a
+  delete never waits on a slot, so they never wait on each other. Delete body
+  `{path, kind: file|dir, baseHash, reveal, permanent}`: `.`/`""` → 400 `invalid_path`, the
+  create's deny lists → 403 `not_allowed`, a sensitive name without `reveal` → 403 `sensitive`;
+  the parents are opened one at a time without making any (a symlink, a junction or a swapped
+  directory → 403 `symlink`, a missing one 404). A file must be regular (409 `not_file`), the
+  one opened (`SameFile`), one link (409 `hardlink`), the server user's (403 `permission`), and
+  its sha256 (streamed, at most 512 MiB, else 413 `too_large`) must equal `baseHash` (409
+  `changed`). A record `<32 hex>.json` (`{root, path, kind, deletedAt, size, mode}`, `.part`
+  0600 `O_EXCL` then rename) is written, then the file is renamed into
+  `os.UserCacheDir()/termote/trash/<32 hex>` (0700, refused when a symlink or another user's →
+  503 `trash_unavailable`, `Caps.trash` false) by directory descriptors (`renameat2`
+  `RENAME_NOREPLACE`, `renameatx_np` `RENAME_EXCL`, else `linkat` + `unlinkat`; Windows
+  `MoveFileEx` without `MOVEFILE_REPLACE_EXISTING` on paths checked first, an accepted gap: a
+  local writer of the root has a shell anyway); what landed must be the file checked, or it
+  goes back (never replacing) and 409 `changed` (with `trashId` when its name was taken again
+  meanwhile). `EXDEV`/`ERROR_NOT_SAME_DEVICE` (WSL `/mnt/c`, a volume, the container's
+  `/workspace` bind mount): 409 `cross_device`, nothing deleted, unless `permanent: true` (the
+  PWA asks a second time): then the file is checked again (`SameFile`) and unlinked by
+  descriptor, 200 `{permanent: true}`; `permanent` never skips a trash that works. An empty
+  directory is removed by `unlinkat(AT_REMOVEDIR)`/`RemoveDirectory` (a file swapped in →
+  409 `changed`; entries → 409 `not_empty`) after its record; the root never. Never
+  `os.Root.Remove`, which unlinks before trying rmdir. Restore `{trashId, reveal}`: a 32-hex id
+  (400), its record (404 `not_in_trash`), the record's root (409 with the root), its path
+  checked as a create's but not its name (`a.` must come back), parents made, then renamed back
+  never replacing (409 `exists` with `path`; `cross_device`); the trash's mutex is held from
+  reading the record again to removing it. The sweep (at start and before every delete) ages an
+  entry by `deletedAt` only, never the mtime a rename keeps: 7 days, then the oldest past 1 GiB,
+  never one younger than an hour; names left half done (a payload or a record alone, a `.part`)
+  go 10 minutes after the sweep first sees them; a payload that is the restored file itself (a
+  `linkat` restore that died) is only unlinked; only `^[0-9a-f]{32}(\.json(\.part)?)?$` names
+  are removed, never through a directory or a symlink. `GET files/content?hash=1` answers
+  `{root, path, size, hash}` with no text for any regular file (no `hash` past 512 MiB), even a
+  sensitive one not revealed, so deleting a `.env` never sends its secret to the browser
+  (accepted risk: a short secret's hash can be guessed by a signed-in user, who has a shell);
+  it takes one of the 4 `files/raw` slots (429 `busy`). `termote uninstall` keeps the trash
+  (the user's files) and says where; `--purge` removes it. The view-only role (#236) must refuse
+  deletes and restores; a view-only client gets no Delete only in the UI meanwhile
 - **Image uploads** (`POST /api/mux/uploads`): the PWA sends an image so an agent can read it by
   path (the host clipboard is empty when the image sits on a phone). Same auth, Host allowlist,
   `Sec-Fetch-Site`/`Origin` check and `requireWriteRole` as every write; the body is a raw
@@ -542,7 +613,8 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   Agent chat). `Caps.uploads` tells the PWA (snapshot); a view-only client
   offers no upload, enforced in the UI only while `requireWriteRole` is a stub. The container
   creates `/home/termote/.cache` and `/home/termote/.config` mode 1777 so the host uid can
-  create its upload dir and the generated password's file (kept out of the log)
+  create its upload dir and the generated password's file (kept out of the log). The store is
+  never served by the Files view, even when a pane's root holds it
 - Exclude sensitive dirs (.ssh, .gnupg, .aws, .config/gcloud) from container volume mounts
   (warned at `container up`)
 - Serve mode uses constant-time comparison for password verification

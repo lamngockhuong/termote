@@ -21,6 +21,11 @@ interface MenuProps {
   children: ReactNode
   align?: 'start' | 'end'
   className?: string
+  // The trigger's tab order: -1 keeps it out of Tab (a row's own key opens
+  // what it offers)
+  triggerTabIndex?: number
+  // The trigger's size (a tree row's is small)
+  triggerSize?: 'sm' | 'md'
 }
 
 // menuitem and menuitemradio
@@ -42,6 +47,8 @@ export function Menu({
   children,
   align = 'end',
   className = '',
+  triggerTabIndex,
+  triggerSize,
 }: MenuProps) {
   const [isOpen, setIsOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -117,6 +124,8 @@ export function Menu({
     >
       <IconButton
         ref={triggerRef}
+        tabIndex={triggerTabIndex}
+        size={triggerSize}
         aria-label={label}
         aria-haspopup="menu"
         aria-expanded={isOpen}

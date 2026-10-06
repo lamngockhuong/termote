@@ -135,7 +135,7 @@ func TestWalkParentsDenied(t *testing.T) {
 	f.writeDeny = []string{filepath.Join(dir, "data")}
 	for _, parent := range []string{"data", filepath.Join("data", "new")} {
 		rt, _ := os.OpenRoot(dir)
-		if d, err := f.walkParents(rt, filesRoot{Root: dir}, parent); err != errCreateNotAllowed {
+		if d, err := f.walkParents(rt, filesRoot{Root: dir}, parent, true); err != errCreateNotAllowed {
 			t.Errorf("%s = %v %v", parent, d, err)
 		}
 	}
@@ -278,7 +278,7 @@ func TestFilesCreateWaitsWithoutSlot(t *testing.T) {
 		return serve(mux, req)
 	}
 	// Another create holds the root's lock.
-	unlock := f.writeLocks.lock(dir + "\x00create")
+	unlock := f.writeLocks.lock(rootLockKey(dir))
 	var waiting sync.WaitGroup
 	waiting.Add(writeMaxRunning)
 	old := createBeforeLock

@@ -521,6 +521,96 @@ describe('a created file', () => {
   })
 })
 
+describe('useFiles search, delete and restore', () => {
+  const listing: Record<string, FileEntry[]> = {
+    '': [dir('x'), file('a.md')],
+    x: [dir('y')],
+    'x/y': [file('z.md')],
+    e: [],
+  }
+  beforeEach(() => {
+    mockTree.mockImplementation(async (_p, path: string) =>
+      tree(path, listing[path] ?? []),
+    )
+  })
+
+  it('reveal opens the tree down to a file, read again, then the file', async () => {
+    const { result } = renderHook(() => useFiles('%1'))
+    act(() => result.current.load())
+    await waitFor(() => expect(result.current.root).toBe('/r'))
+    mockTree.mockClear()
+    await act(() => result.current.reveal('x/y/z.md'))
+    expect(mockTree.mock.calls.map((c) => c[1])).toEqual(['', 'x', 'x/y'])
+    expect(result.current.expanded).toEqual({ x: true, 'x/y': true })
+    expect(result.current.openPath).toBe('x/y/z.md')
+    expect(result.current.history).toEqual([])
+    // A directory shows in the tree, opened
+    await act(() => result.current.reveal('x/y', 'dir'))
+    expect(result.current.openPath).toBeNull()
+    expect(result.current.expanded).toEqual({ x: true, 'x/y': true })
+  })
+
+  it('reveal opens nothing once the root moved meanwhile', async () => {
+    const { result } = renderHook(() => useFiles('%1'))
+    let finish!: () => void
+    const real = mockTree.getMockImplementation()!
+    mockTree.mockImplementationOnce(
+      (...a: [string, string]) =>
+        new Promise((r) => (finish = () => r(real(...a)))),
+    )
+    let done!: Promise<void>
+    act(() => {
+      done = result.current.reveal('a.md')
+    })
+    act(() => result.current.rootChanged('/n'))
+    await act(async () => {
+      finish()
+      await done
+    })
+    expect(result.current.openPath).toBeNull()
+  })
+
+  it('list reads a directory again and says what it holds', async () => {
+    const { result } = renderHook(() => useFiles('%1'))
+    let got: Awaited<ReturnType<typeof result.current.list>> | undefined
+    await act(async () => {
+      got = await result.current.list('e')
+    })
+    expect(got?.entries).toEqual([])
+  })
+
+  it('deleted closes the file, forgets what was under it and reads its directory', async () => {
+    const { result } = renderHook(() => useFiles('%1'))
+    await act(() => result.current.reveal('x/y/z.md'))
+    mockTree.mockClear()
+    act(() => result.current.deleted('x/y/z.md'))
+    expect(result.current.openPath).toBeNull()
+    expect(mockTree.mock.calls.map((c) => c[1])).toEqual(['x/y'])
+    // A folder: closed with everything below it, gone from the listings
+    act(() => result.current.deleted('x'))
+    expect(result.current.expanded).toEqual({})
+    expect(result.current.dirs.x).toBeUndefined()
+    expect(mockTree).toHaveBeenLastCalledWith('%1', '', '/r')
+    // Another file stays open
+    await act(() => result.current.reveal('a.md'))
+    act(() => result.current.deleted('x/y/z.md'))
+    expect(result.current.openPath).toBe('a.md')
+  })
+
+  it('restored opens the tree down to it, read again, keeping what is open', async () => {
+    const { result } = renderHook(() => useFiles('%1'))
+    await act(() => result.current.reveal('a.md'))
+    mockTree.mockClear()
+    await act(() => result.current.restored('x/y/z.md'))
+    expect(mockTree.mock.calls.map((c) => c[1])).toEqual(['', 'x', 'x/y'])
+    expect(result.current.expanded).toEqual({ x: true, 'x/y': true })
+    expect(result.current.openPath).toBe('a.md')
+    mockTree.mockClear()
+    await act(() => result.current.restored('top.md'))
+    expect(mockTree.mock.calls.map((c) => c[1])).toEqual([''])
+  })
+})
+
 describe('useFileDraft', () => {
   const draft = {
     root: '/r',

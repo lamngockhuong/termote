@@ -17,7 +17,7 @@ import {
   RequestError,
 } from '../hooks/use-mux-api'
 import { FILES_VIEW_ID } from '../view-ids'
-import { ChangesView } from './changes-view'
+import { CHANGES_FILTER_MIN, ChangesView } from './changes-view'
 
 const mockChanges = vi.fn()
 const mockDiff = vi.fn()
@@ -599,5 +599,73 @@ describe('ChangesView editing', () => {
         'This file may contain secrets. Show its contents?',
       ),
     ).toBeInTheDocument()
+  })
+})
+
+describe('ChangesView filter', () => {
+  const many = [
+    ...Array.from({ length: CHANGES_FILTER_MIN }, (_, i) =>
+      c(`lib/f${i}.ts`, '', 'M'),
+    ),
+    c('docs/Guide.md', '', '?'),
+    c('src/new.ts', 'R', '', { orig: 'old/legacy.ts' }),
+  ]
+  const box = () => screen.getByRole('searchbox', { name: 'Filter changes' })
+
+  it('is offered only past the threshold', async () => {
+    await show()
+    expect(screen.queryByRole('searchbox')).toBeNull()
+  })
+
+  it('filters by path or a rename source, hiding empty groups, counts after', async () => {
+    mockChanges.mockResolvedValue(changes({ entries: many }))
+    await show()
+    fireEvent.change(box(), { target: { value: 'GUIDE' } })
+    expect(names('Untracked')).toEqual(['?Untracked: Guide.mddocs/'])
+    expect(screen.queryByRole('region', { name: 'Changes' })).toBeNull()
+    expect(screen.queryByRole('region', { name: 'Staged' })).toBeNull()
+    fireEvent.change(box(), { target: { value: 'legacy' } })
+    expect(names('Staged')).toHaveLength(1)
+    fireEvent.change(box(), { target: { value: 'f1' } })
+    // f1, f10..f14
+    expect(within(group('Changes')).getByRole('heading')).toHaveTextContent(
+      'Changes 6',
+    )
+    fireEvent.change(box(), { target: { value: 'nothing here' } })
+    expect(screen.getByRole('status')).toHaveTextContent('No changes match')
+    // Escape clears it; once empty it does nothing more
+    fireEvent.keyDown(box(), { key: 'Escape' })
+    expect(box()).toHaveValue('')
+    fireEvent.keyDown(box(), { key: 'Escape' })
+    fireEvent.keyDown(box(), { key: 'a' })
+    expect(names('Changes')).toHaveLength(CHANGES_FILTER_MIN)
+  })
+
+  it('drops its text once the list is short enough to lose the box', async () => {
+    mockChanges.mockResolvedValue(changes({ entries: many }))
+    await show()
+    fireEvent.change(box(), { target: { value: 'guide' } })
+    mockChanges.mockResolvedValue(changes())
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+    await settle()
+    expect(screen.queryByRole('searchbox')).toBeNull()
+    mockChanges.mockResolvedValue(changes({ entries: many }))
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+    await settle()
+    expect(box()).toHaveValue('')
+  })
+
+  it('starts empty again when the view is left or the root moves', async () => {
+    mockChanges.mockResolvedValue(changes({ entries: many }))
+    const v = await show()
+    fireEvent.change(box(), { target: { value: 'guide' } })
+    v.unmount()
+    await show()
+    expect(box()).toHaveValue('')
+    fireEvent.change(box(), { target: { value: 'guide' } })
+    mockChanges.mockResolvedValue(changes({ entries: many, root: '/n' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+    await settle()
+    expect(box()).toHaveValue('')
   })
 })

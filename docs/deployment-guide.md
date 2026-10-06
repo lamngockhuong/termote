@@ -577,7 +577,7 @@ current and previous version are kept on disk.
 ## Uninstall
 
 ```bash
-termote uninstall          # keeps the config (and saved password) and the logs
+termote uninstall          # keeps the config (and saved password), the logs and the deleted files
 termote uninstall --purge  # removes them too
 ```
 
@@ -586,7 +586,10 @@ install root and the images uploaded from the PWA (a cache: `~/.cache/termote/up
 `~/Library/Caches/termote/uploads` on macOS, inside the install root on Windows). The saved
 config (`~/.config/termote/`) and logs (`~/.local/state/termote/`) stay, so a reinstall keeps the
 password (signed-in devices stay signed in) and the container still shares it; the command prints
-both paths. `--purge` removes them as well (the interactive menu asks). Run from a checkout while
+both paths. The files deleted from the PWA's Files view stay as well, in the trash next to the
+uploads (`~/.cache/termote/trash`, `~/Library/Caches/termote/trash` on macOS): they are the
+user's files, not a cache, so a plain `uninstall` prints their path and keeps them. `--purge`
+removes all of these (the interactive menu asks). Run from a checkout while
 a release is installed, `--purge` keeps them, since that install still uses them.
 
 On Windows the command cannot delete the binary it runs from: what is still locked is removed

@@ -608,8 +608,9 @@ func (c *cli) cmdStatus(args []string) error {
 
 // cmdUninstall removes the service, Termote's Tailscale mapping, the
 // `termote` command, the installed versions and the uploaded images (a
-// cache). The config (and its saved password) and the logs stay, so a
-// reinstall keeps the password and the container still shares it; --purge
+// cache). The config (and its saved password), the logs and the files the
+// Files view deleted (its trash) stay, so a reinstall keeps the password,
+// the container still shares it and nothing deleted is lost; --purge
 // removes them too. On Windows what this running binary locks goes once it
 // exits.
 func (c *cli) cmdUninstall(args []string) error {
@@ -645,6 +646,7 @@ func (c *cli) cmdUninstall(args []string) error {
 		// Before the install: on Windows the state dir sits in the install
 		// root, which can then go as a whole.
 		left = append(left, c.purgeData()...)
+		left = append(left, c.removeTrash()...)
 	}
 	if installed {
 		left = append(left, c.removeInstall()...)
@@ -657,6 +659,9 @@ func (c *cli) cmdUninstall(args []string) error {
 		c.infof("Kept the config in %s and the logs in %s: the install in %s still uses them", c.configDir(), c.stateDir(), c.dataDir())
 	case !purge:
 		c.infof("Kept the config in %s and the logs in %s; delete them to forget everything", c.configDir(), c.stateDir())
+		if isDir(c.trashDir()) {
+			c.infof("Kept the files deleted from the Files view in %s; --purge removes them", c.trashDir())
+		}
 	}
 	return nil
 }

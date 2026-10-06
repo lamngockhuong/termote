@@ -6,6 +6,7 @@ import {
   Image as ImageIcon,
   Lock,
   Pencil,
+  Trash2,
   WrapText,
   X,
 } from 'lucide-react'
@@ -122,6 +123,10 @@ interface Props {
   initialReveal?: boolean
   // A save went through
   onSaved?: () => void
+  // Offers Delete (not while editing, so a draft is never lost unasked):
+  // the hash of the text shown, when it is shown, and whether the file
+  // usually holds secrets
+  onDelete?: (file: { hash?: string; sensitive: boolean }) => void
 }
 
 // One file of the tree: its text with line numbers, or why it cannot be
@@ -147,6 +152,7 @@ export function FileViewer({
   startEditing = false,
   initialReveal = false,
   onSaved,
+  onDelete,
 }: Props) {
   const [state, setState] = useState<Loaded>({ kind: 'loading' })
   const [draft, setDraft] = useFileDraft(paneId)
@@ -391,6 +397,22 @@ export function FileViewer({
             title="Edit"
           >
             <Pencil size={15} aria-hidden="true" />
+          </IconButton>
+        )}
+        {!mine && onDelete && (
+          <IconButton
+            size="sm"
+            onClick={() =>
+              onDelete({
+                // The text shown: its bytes are what a delete must match
+                hash: state.kind === 'text' ? state.hash : undefined,
+                sensitive: sensitive || reveal,
+              })
+            }
+            aria-label="Delete"
+            title="Delete"
+          >
+            <Trash2 size={15} aria-hidden="true" />
           </IconButton>
         )}
         {!mine && (

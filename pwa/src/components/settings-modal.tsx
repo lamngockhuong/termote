@@ -1,12 +1,15 @@
-import { RefreshCw, Trash2 } from 'lucide-react'
+import { RefreshCw, Trash2, X } from 'lucide-react'
 import { type ReactNode, useEffect, useId, useRef, useState } from 'react'
-import type {
-  ImeSendBehavior,
-  PasteSource,
-  Settings,
+import {
+  FIND_EXCLUDES_DEFAULT,
+  FIND_EXCLUDES_MAX,
+  findExcludeProblem,
+  type ImeSendBehavior,
+  type PasteSource,
+  type Settings,
 } from '../hooks/use-settings'
 import { UI_STYLES, type UiStyle } from '../ui-style'
-import { Button, FOCUS_RING } from './ui/button'
+import { Button, FOCUS_RING, IconButton } from './ui/button'
 import { SegmentedControl } from './ui/segmented-control'
 import { Sheet } from './ui/sheet'
 import { Switch } from './ui/switch'
@@ -136,6 +139,118 @@ function TerminalFontRow({
         className={`w-36 px-2 ui-terminal:font-label ${CONTROL} ${FOCUS_RING}`}
       />
     </SettingsRow>
+  )
+}
+
+// The folder names a file search never enters: each removable, one added at
+// a time (refused with the reason), and the defaults back in one press.
+function ExcludedFoldersRow({
+  value,
+  onSave,
+}: {
+  value: string[]
+  onSave: (value: string[]) => void
+}) {
+  const [name, setName] = useState('')
+  const [problem, setProblem] = useState<string>()
+  const inputId = useId()
+  const errorId = useId()
+  const add = () => {
+    const next = name.trim()
+    const why =
+      findExcludeProblem(next) ??
+      (value.includes(next) ? 'Already in the list' : undefined) ??
+      (value.length >= FIND_EXCLUDES_MAX
+        ? `At most ${FIND_EXCLUDES_MAX} folders`
+        : undefined)
+    if (why) {
+      setProblem(why)
+      return
+    }
+    onSave([...value, next])
+    setName('')
+  }
+  const isDefault =
+    value.length === FIND_EXCLUDES_DEFAULT.length &&
+    value.every((v, i) => v === FIND_EXCLUDES_DEFAULT[i])
+  return (
+    <div className="flex flex-col gap-2 px-4 py-2.5 ui-native:bg-surface-raised">
+      <div>
+        <label
+          htmlFor={inputId}
+          className="block text-[15px] text-fg ui-terminal:font-label ui-terminal:text-[13px]"
+        >
+          Excluded folders
+        </label>
+        <p className="m-0 text-[12px] text-fg-muted">
+          Never searched for ignored files, and never outside a repository.
+          Tracked files are always searched.
+        </p>
+      </div>
+      <ul
+        aria-label="Folders never searched"
+        className="flex flex-wrap gap-1.5"
+      >
+        {value.map((v) => (
+          <li
+            key={v}
+            className="flex items-center gap-0.5 rounded-control border border-border bg-bg pl-2 font-term text-[12px] text-fg"
+          >
+            {v}
+            <IconButton
+              size="sm"
+              variant="ghost"
+              aria-label={`Remove ${v}`}
+              onClick={() => onSave(value.filter((x) => x !== v))}
+            >
+              <X size={12} aria-hidden="true" />
+            </IconButton>
+          </li>
+        ))}
+      </ul>
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          id={inputId}
+          type="text"
+          value={name}
+          placeholder="Folder name"
+          spellCheck={false}
+          autoCapitalize="off"
+          autoCorrect="off"
+          aria-invalid={problem ? true : undefined}
+          aria-describedby={problem ? errorId : undefined}
+          onChange={(e) => {
+            setName(e.target.value)
+            setProblem(undefined)
+          }}
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter') return
+            e.preventDefault()
+            add()
+          }}
+          className={`w-40 px-2 font-term ${CONTROL} ${FOCUS_RING}`}
+        />
+        <Button size="sm" onClick={add}>
+          Add
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={isDefault}
+          onClick={() => {
+            onSave(FIND_EXCLUDES_DEFAULT)
+            setProblem(undefined)
+          }}
+        >
+          Reset to defaults
+        </Button>
+      </div>
+      {problem && (
+        <p id={errorId} role="alert" className="m-0 text-[12px] text-danger">
+          {problem}
+        </p>
+      )}
+    </div>
   )
 }
 
@@ -401,6 +516,17 @@ export function SettingsModal({
       ),
     },
   ]
+
+  groups.push({
+    id: 'files',
+    title: 'Files',
+    rows: (
+      <ExcludedFoldersRow
+        value={settings.findExcludes}
+        onSave={(v) => onUpdateSetting('findExcludes', v)}
+      />
+    ),
+  })
 
   if (hasActions) {
     groups.push({

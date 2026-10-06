@@ -8,9 +8,10 @@ import (
 	"os"
 )
 
-// checkPrivateUploadDir makes dir 0700 and refuses it unless the server user
-// owns it: another user could otherwise swap the files an agent is told to read.
-func checkPrivateUploadDir(dir string) error {
+// checkPrivateDir makes dir 0700 and refuses it unless the server user
+// owns it: another user could otherwise swap the files an agent is told to
+// read (uploads) or a restore puts back (trash).
+func checkPrivateDir(dir string) error {
 	if !ownedByServer(dir) {
 		return fmt.Errorf("%s is not owned by the server user", dir)
 	}

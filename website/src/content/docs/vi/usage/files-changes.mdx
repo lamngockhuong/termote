@@ -13,9 +13,11 @@ Muốn biết agent đã sửa gì, thường bạn phải gõ `ls`, `cat`, `git
 - **Changes**: khi thư mục nằm trong một repo git, danh sách file git báo đã đổi, kèm diff của
   từng file (với ảnh thì là bản trước và bản sau khi đổi).
 
-Ở cả hai view đều sửa và lưu được file văn bản (xem [Sửa file](#sửa-file)), còn trong Files thì
-tạo được file mới (xem [Tạo file mới](#tạo-file-mới)). Ngoài ra không đổi được gì khác: không xoá
-hay đổi tên file, không đưa thay đổi vào index, không bỏ thay đổi và không commit.
+Trong Files, bạn tìm được file theo tên (xem [Tìm file](#tìm-file)). Ở cả hai view đều sửa và lưu
+được file văn bản (xem [Sửa file](#sửa-file)); riêng trong Files thì tạo được file mới (xem
+[Tạo file mới](#tạo-file-mới)) và xoá được file hoặc thư mục rỗng (xem [Xoá file](#xoá-file)).
+Ngoài ra không đổi được gì khác: không đổi tên file, không đưa thay đổi vào index, không bỏ thay
+đổi và không commit.
 
 ## Mở ở đâu
 
@@ -70,6 +72,33 @@ Các bộ quản lý phiên hỗ trợ:
 | Chữ thường, không màu                                         | File văn bản lớn hơn (tới 1 MiB), ngôn ngữ chưa hỗ trợ, hoặc tô màu mất quá 3 giây              |
 | `Not previewable (binary, special file or larger than 1 MiB)`  | File nhị phân không phải ảnh, file lớn hơn 1 MiB, hoặc thứ không phải file thường                |
 | `This file can't be shown`                                     | Đường dẫn Termote không bao giờ trả về (xem bên dưới)                                            |
+
+## Tìm file
+
+Ô **Find a file…** ở đầu Files (trên điện thoại, nằm ngay trên bàn phím) tìm theo tên các file dưới
+gốc. Kết quả thay chỗ cây thư mục sau một nhịp ngừng gõ ngắn; mỗi dòng hiện đường dẫn của file.
+
+- Chạm vào một kết quả, hoặc nhấn Enter khi đang chọn nó, để mở file; cây thư mục mở sẵn tới file
+  đó, và nút Back đưa bạn về danh sách kết quả. Phím mũi tên chuyển giữa ô nhập và các kết quả,
+  Escape xoá nội dung ô.
+- File mà git bỏ qua (ignored) chỉ được tìm khi bật **Include ignored** (công tắc cạnh ô nhập, chỉ
+  hiện trong repo git). Kết quả loại này hiện mờ, kèm nhãn `ignored`. Thiết bị này nhớ lựa chọn của
+  bạn.
+- File có tên thường dùng để chứa bí mật có ổ khoá, giống trong cây thư mục. Termote chỉ tìm theo
+  tên, không bao giờ tìm trong nội dung.
+- Chỉ hiện 200 kết quả đầu (`More than 200 matches — type more to narrow`). Trong repo hoặc thư
+  mục rất lớn, việc tìm có thể dừng sớm, và danh sách ghi `Search stopped early in a large tree`.
+- Danh sách file được giữ 30 giây; lưu, tạo hoặc xoá một file thì danh sách bị bỏ đi. Nút
+  **Refresh** đọc lại nó.
+- Ngoài repo git, Termote duyệt thư mục (sâu tối đa 32 cấp, trong 5 giây) và không đi vào thư mục
+  là link.
+
+Các thư mục không bao giờ được tìm khi xét file bị git bỏ qua đặt ở mục Files của Settings, ô
+`Excluded folders` (xem [Cài đặt](/vi/usage/settings/#thư-mục-loại-trừ)). File mà git theo dõi thì
+luôn tìm được, kể cả nằm dưới một trong các thư mục đó.
+
+Những đường dẫn Termote không bao giờ trả về (xem [Không bao giờ hiện](#không-bao-giờ-hiện)) cũng
+không bao giờ xuất hiện trong kết quả.
 
 ## Sửa file
 
@@ -155,6 +184,48 @@ mở một file.
 
 Phiên chỉ xem (khi đã có quyền này) cũng không có nút New file; chừng nào server chưa kiểm quyền,
 nút chỉ được ẩn trong app.
+
+## Xoá file
+
+Trong Files, xoá được một file hoặc một thư mục **rỗng**, theo ba cách: **Delete** trong menu **⋯**
+của một dòng ở cây thư mục (dùng chuột thì nút hiện khi rê chuột hoặc khi có focus; trên màn hình
+cảm ứng thì luôn hiện), phím Delete khi dòng đang có focus, hoặc nút **Delete** trên đầu file đang
+mở (không hiện khi đang sửa file). Hộp thoại hiện đầy đủ đường dẫn và hỏi trước; **Cancel** đang
+có focus, nên nhấn Enter không xoá.
+
+- File bị xoá không mất hẳn: nó được chuyển vào thùng rác của Termote trên máy chủ. Một toast ghi
+  `Deleted <name>` kèm nút **Undo** trong 10 giây; Undo đặt file về chỗ cũ (và không bao giờ ghi
+  đè thứ gì đang có ở đó). Thư mục rỗng đã xoá thì Undo tạo lại.
+- Thùng rác giữ một file 7 ngày, tổng cộng tối đa 1 GiB (file cũ nhất bị xoá trước), và không bao
+  giờ xoá file mới hơn một giờ. Ứng dụng không có màn hình xem thùng rác: khi toast đã mất, muốn
+  lấy file lại thì vào thư mục thùng rác trên máy chủ (`~/.cache/termote/trash` trên Linux).
+- Thư mục không rỗng không xoá được, thư mục gốc cũng vậy.
+- Khi xoá, server kiểm tra file vẫn đúng là file bạn đã thấy. Nếu trong lúc đó có thứ gì (thường
+  là agent) đã sửa nó thì không xoá gì cả.
+- Nếu file nằm trên hệ thống file khác với thùng rác (`/mnt/c` của WSL, một ổ đĩa gắn ngoài,
+  `/workspace` của container), không thể chuyển nó vào thùng rác. Hộp thoại khi đó hỏi lần thứ
+  hai, `Delete permanently? This cannot be undone.`, và chỉ sau đó mới xoá, không có Undo. Trong
+  container, mọi lần xoá dưới `/workspace` đều là xoá vĩnh viễn theo cách này.
+- File có tên thường dùng để chứa bí mật được ghi `This is a sensitive file` trong hộp thoại.
+
+| Hiện                                                          | Vì sao                                                           |
+| ------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `The folder is not empty`                                      | Chỉ xoá được thư mục rỗng                                        |
+| `The file changed since it was read`                           | File đã đổi sau khi hộp thoại đọc nó                             |
+| `Part of this path is a symbolic link`                         | Không xoá gì qua link, và bản thân link cũng không bị xoá        |
+| `This file has several hard links; delete it from a terminal`  | Một tên khác vẫn giữ file lại                                    |
+| `The server can't delete this`                                 | File thuộc về người dùng khác                                    |
+| `The file system there is read-only`                           | File nằm trên đĩa hoặc mount chỉ đọc                             |
+| `Too large to delete here; use the terminal`                   | File lớn hơn 512 MiB                                             |
+| `Deleting is not available on this server`                     | Server không có thùng rác dùng được                              |
+
+Phiên chỉ xem (khi vai trò đó có) không có nút Delete; cho tới khi server áp dụng vai trò, nút chỉ
+bị ẩn trong ứng dụng.
+
+<Aside type="note">
+  `termote uninstall` giữ lại thùng rác và in ra đường dẫn của nó; `termote uninstall --purge`
+  xoá cả thùng rác. Xem [Gỡ cài đặt](/vi/installation/native/#gỡ-cài-đặt).
+</Aside>
 
 ## Xem trước Markdown
 
@@ -253,6 +324,12 @@ thêm nền xanh, dòng xoá nền đỏ, vẫn giữ dấu `+` và `-` để kh
 
 Repo con (`submodule`) không được liệt kê, nội dung bên trong cũng không được so sánh.
 
+Khi danh sách có hơn 15 mục, một ô **Filter changes…** hiện phía trên nó. Ô này giữ lại những file
+có đường dẫn chứa chuỗi bạn gõ, không phân biệt hoa thường (với file đổi tên, đường dẫn cũ cũng
+được tính). Nhóm không còn mục nào thì ẩn, số đếm là số sau khi lọc, và khi không còn gì thì hiện
+`No changes match`. Escape xoá ô. Bộ lọc chỉ nằm trong trang: nó được xoá khi bạn rời view hoặc
+khi gốc đổi.
+
 ## File có thể chứa bí mật
 
 File có tên thường dùng để chứa bí mật được đánh dấu bằng ổ khoá và chữ `Sensitive`: ví dụ
@@ -275,10 +352,10 @@ chưa xác nhận thì server không gửi chút nội dung nào.
 
 ## Không bao giờ hiện
 
-Một số đường dẫn không bao giờ được trả về (hay được lưu, hay được tạo file trong đó), kể cả khi đã
-xác nhận:
+Một số đường dẫn không bao giờ được trả về (hay được lưu, tạo file trong đó, xoá, hay tìm theo
+tên), kể cả khi đã xác nhận:
 
-- Thư mục cấu hình và trạng thái của chính Termote (mật khẩu đã lưu, log)
+- Thư mục cấu hình và trạng thái của chính Termote (mật khẩu đã lưu, log) và thùng rác của nó
 - `/proc`, `/sys` và `/dev` (biến môi trường của tiến trình và thiết bị)
 - Thư mục `.git` của repo, thư mục này cũng không hiện trong Files
 

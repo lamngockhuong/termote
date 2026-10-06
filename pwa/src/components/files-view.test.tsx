@@ -1,19 +1,35 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import {
+  act,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ViewProps } from '../app-views'
 import { ThemeProvider } from '../contexts/theme-context'
-import { resetFilesStores } from '../hooks/use-files'
+import { resetFilesStores, useFileDraft } from '../hooks/use-files'
 import { type FileEntry, RequestError } from '../hooks/use-mux-api'
 import { FilesView } from './files-view'
 
 const mockTree = vi.fn()
 const mockContent = vi.fn()
 const mockCreate = vi.fn()
+const mockFind = vi.fn()
+const mockHash = vi.fn()
+const mockDelete = vi.fn()
+const mockRestore = vi.fn()
 vi.mock('../hooks/use-mux-api', async (orig) => ({
   ...(await orig<typeof import('../hooks/use-mux-api')>()),
   fetchFilesTree: (...a: unknown[]) => mockTree(...a),
   fetchFileContent: (...a: unknown[]) => mockContent(...a),
   createFile: (...a: unknown[]) => mockCreate(...a),
+  findFiles: (...a: unknown[]) => mockFind(...a),
+  fetchFileHash: (...a: unknown[]) => mockHash(...a),
+  deleteFile: (...a: unknown[]) => mockDelete(...a),
+  restoreFile: (...a: unknown[]) => mockRestore(...a),
 }))
 vi.mock('../utils/highlight', async (orig) => ({
   ...(await orig<typeof import('../utils/highlight')>()),
@@ -527,5 +543,407 @@ describe('FilesView', () => {
         screen.queryByRole('dialog', { name: 'Show this file?' }),
       ).toBeNull()
     })
+  })
+})
+
+describe('FilesView search', () => {
+  it('finds a file anywhere, opens it, and Back returns to the results', async () => {
+    mockFind.mockResolvedValue({
+      root: '/home/kim/app',
+      isRepo: true,
+      results: [{ path: 'src/a.ts', ignored: false, sensitive: false }],
+      truncated: false,
+      incomplete: false,
+    })
+    mockContent.mockResolvedValue({
+      root: '/home/kim/app',
+      path: 'src/a.ts',
+      size: 1,
+      text: 'x',
+      hash: 'h',
+      editable: true,
+    })
+    await show()
+    const box = screen.getByRole('searchbox', { name: 'Find a file' })
+    fireEvent.change(box, { target: { value: 'a.ts' } })
+    const hit = await screen.findByRole('button', { name: /a\.ts/ })
+    expect(screen.queryByRole('tree')).toBeNull()
+    fireEvent.click(hit)
+    expect(
+      await screen.findByRole('button', { name: 'Back to files' }),
+    ).toBeInTheDocument()
+    expect(mockContent).toHaveBeenCalledWith(
+      '%1',
+      'src/a.ts',
+      expect.anything(),
+    )
+    // The tree was opened down to it meanwhile
+    fireEvent.click(screen.getByRole('button', { name: 'Back to files' }))
+    expect(screen.getByRole('searchbox')).toHaveValue('a.ts')
+    expect(
+      await screen.findByRole('button', { name: /a\.ts/ }),
+    ).toBeInTheDocument()
+    // A refresh with a query reads the files again
+    mockFind.mockClear()
+    fireEvent.click(screen.getByRole('button', { name: /refresh/i }))
+    await waitFor(() =>
+      expect(mockFind).toHaveBeenLastCalledWith(
+        '%1',
+        expect.objectContaining({ fresh: true }),
+        expect.any(AbortSignal),
+      ),
+    )
+    // Cleared: the tree as it was, src opened down to the file
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: '' } })
+    expect(item('src')).toHaveAttribute('aria-expanded', 'true')
+  })
+})
+
+// The button of the last toast asked for
+function lastAction(notify: ViewProps['notify']) {
+  const calls = vi.mocked(notify).mock.calls
+  return calls[calls.length - 1][1]!.action!
+}
+
+describe('FilesView delete', () => {
+  const trashCaps = {
+    backend: 'tmux',
+    caps: { clientSideSelect: false, copyMode: true, files: true, trash: true },
+  }
+  const withTrash = (over: Partial<ViewProps> = {}) =>
+    show({ mux: trashCaps, ...over })
+  const actions = (name: string) =>
+    within(item(name)).getByRole('button', { name: `Actions for ${name}` })
+  const choose = async (name: string) => {
+    fireEvent.click(actions(name))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('menuitem', { name: /^Delete/ }))
+    })
+  }
+  const confirm = async () => {
+    const del = await within(await screen.findByRole('dialog')).findByRole(
+      'button',
+      { name: 'Delete' },
+    )
+    await waitFor(() => expect(del).toBeEnabled())
+    await act(async () => fireEvent.click(del))
+  }
+
+  beforeEach(() => {
+    HTMLDialogElement.prototype.showModal = vi.fn(function (
+      this: HTMLDialogElement,
+    ) {
+      this.setAttribute('open', '')
+    })
+    HTMLDialogElement.prototype.close = vi.fn()
+    mockHash.mockReset()
+    mockDelete.mockReset()
+    mockRestore.mockReset()
+    mockHash.mockResolvedValue({ root: '/r', path: 'x', size: 1, hash: 'hh' })
+  })
+
+  it('is offered only with a trash and to a client that may write', async () => {
+    const { unmount } = await show()
+    expect(
+      within(item('README.md')).queryByRole('button', { name: /Actions/ }),
+    ).toBeNull()
+    unmount()
+    const second = await withTrash({ readOnly: true })
+    expect(
+      within(item('README.md')).queryByRole('button', { name: /Actions/ }),
+    ).toBeNull()
+    // The Delete key does nothing then
+    fireEvent.keyDown(screen.getByRole('tree'), { key: 'Delete' })
+    expect(screen.queryByText('Delete file?')).toBeNull()
+    second.unmount()
+    await withTrash()
+    expect(actions('README.md')).toHaveAttribute('tabindex', '-1')
+  })
+
+  it('deletes a file into the trash, and Undo puts it back', async () => {
+    mockDelete.mockResolvedValue({
+      root: '/home/kim/app',
+      path: 'README.md',
+      trashId: 't1',
+    })
+    mockRestore.mockResolvedValue({ root: '/home/kim/app', path: 'README.md' })
+    const p = await withTrash()
+    await choose('README.md')
+    expect(screen.getByText('/home/kim/app/README.md')).toBeInTheDocument()
+    await confirm()
+    expect(mockDelete.mock.calls[0][1]).toMatchObject({
+      root: '/home/kim/app',
+      path: 'README.md',
+      kind: 'file',
+      baseHash: 'hh',
+    })
+    expect(p.notify).toHaveBeenLastCalledWith('Deleted README.md', {
+      action: { label: 'Undo', onClick: expect.any(Function) },
+    })
+    const undo = lastAction(p.notify)
+    await act(async () => undo.onClick())
+    expect(mockRestore).toHaveBeenCalledWith('%1', {
+      root: '/home/kim/app',
+      trashId: 't1',
+      reveal: false,
+    })
+    expect(p.notify).toHaveBeenLastCalledWith('Restored README.md', {
+      variant: 'success',
+    })
+  })
+
+  it('Undo says why it could not restore', async () => {
+    mockDelete.mockResolvedValue({ root: '/r', path: '.env', trashId: 't' })
+    mockRestore
+      .mockRejectedValueOnce(
+        new RequestError(
+          409,
+          'exists',
+          'x',
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          'n/.env',
+        ),
+      )
+      .mockRejectedValueOnce(new RequestError(409, 'exists', 'x'))
+      .mockRejectedValueOnce(
+        new RequestError(409, '', 'root changed', undefined, undefined, '/n'),
+      )
+      .mockRejectedValueOnce(new Error('offline'))
+    const p = await withTrash()
+    await choose('.env')
+    expect(screen.getByText('This is a sensitive file')).toBeInTheDocument()
+    await confirm()
+    expect(mockDelete.mock.calls[0][1].reveal).toBe(true)
+    const undo = lastAction(p.notify)
+    await act(async () => undo.onClick())
+    expect(mockRestore.mock.calls[0][1].reveal).toBe(true)
+    expect(p.notify).toHaveBeenLastCalledWith(
+      'A file now exists at n/.env; not restored',
+      { variant: 'warning' },
+    )
+    await act(async () => undo.onClick())
+    expect(p.notify).toHaveBeenLastCalledWith(
+      'A file now exists at .env; not restored',
+      { variant: 'warning' },
+    )
+    await act(async () => undo.onClick())
+    expect(p.notify).toHaveBeenCalledWith(
+      "The pane's directory changed; .env was not restored",
+      { variant: 'warning' },
+    )
+    await act(async () => undo.onClick())
+    expect(p.notify).toHaveBeenLastCalledWith('Could not restore .env', {
+      variant: 'danger',
+    })
+  })
+
+  it('deletes for good after a second ask, with no Undo', async () => {
+    mockDelete
+      .mockRejectedValueOnce(new RequestError(409, 'cross_device', 'x'))
+      .mockResolvedValueOnce({ root: '/r', path: 'README.md', permanent: true })
+    const p = await withTrash()
+    await choose('README.md')
+    await confirm()
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Delete permanently' }),
+      ),
+    )
+    expect(p.notify).toHaveBeenLastCalledWith('Deleted README.md permanently')
+  })
+
+  it('a swapped file in the trash still gets an Undo', async () => {
+    mockDelete.mockRejectedValue(
+      new RequestError(
+        409,
+        'changed',
+        'x',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'sw',
+      ),
+    )
+    const p = await withTrash()
+    await choose('README.md')
+    await confirm()
+    expect(p.notify).toHaveBeenLastCalledWith(
+      'README.md changed; the file that was there is in the trash',
+      {
+        variant: 'warning',
+        action: { label: 'Undo', onClick: expect.any(Function) },
+      },
+    )
+    expect(item('README.md')).toBeInTheDocument()
+    mockRestore.mockResolvedValue({ root: '/r', path: 'README.md' })
+    const undo = lastAction(p.notify)
+    await act(async () => undo.onClick())
+    expect(mockRestore.mock.calls[0][1].trashId).toBe('sw')
+  })
+
+  it("the row menu's own keys never reach the tree", async () => {
+    await withTrash()
+    fireEvent.keyDown(actions('README.md'), { key: 'Delete' })
+    await act(async () => {})
+    expect(screen.queryByText('Delete file?')).toBeNull()
+  })
+
+  it('a file shown without its text is hashed by the box', async () => {
+    mockContent.mockResolvedValue({
+      root: '/home/kim/app',
+      path: 'README.md',
+      size: 9,
+      previewable: false,
+      reason: 'binary',
+    })
+    mockDelete.mockResolvedValue({
+      root: '/r',
+      path: 'README.md',
+      trashId: 't',
+    })
+    await withTrash()
+    fireEvent.click(item('README.md'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }))
+    await confirm()
+    expect(mockHash).toHaveBeenCalled()
+    expect(mockDelete.mock.calls[0][1].baseHash).toBe('hh')
+  })
+
+  it('a folder goes only once it is known to be empty', async () => {
+    mockDelete.mockResolvedValue({ root: '/r', path: 'src/lib', trashId: 't' })
+    const p = await withTrash()
+    // Not read yet: read now, and it holds something
+    await choose('src')
+    expect(p.notify).toHaveBeenLastCalledWith('The folder is not empty')
+    // Read: its menu says so
+    fireEvent.click(item('src'))
+    await act(async () => {})
+    fireEvent.click(actions('src'))
+    expect(
+      screen.getByRole('menuitem', { name: 'Delete (not empty)' }),
+    ).toBeDisabled()
+    // An empty one, read already
+    fireEvent.click(item('lib'))
+    await act(async () => {})
+    mockTree.mockClear()
+    await choose('lib')
+    expect(mockTree).not.toHaveBeenCalled()
+    expect(screen.getByText('Delete folder?')).toBeInTheDocument()
+    await confirm()
+    expect(mockDelete.mock.calls[0][1]).toMatchObject({
+      path: 'src/lib',
+      kind: 'dir',
+    })
+    expect(p.notify).toHaveBeenLastCalledWith('Deleted lib', {
+      action: { label: 'Undo', onClick: expect.any(Function) },
+    })
+  })
+
+  it("says when a folder can't be read", async () => {
+    const p = await withTrash()
+    mockTree.mockRejectedValueOnce(new RequestError(403, '', 'x'))
+    await choose('src')
+    expect(p.notify).toHaveBeenLastCalledWith("This folder can't be read")
+  })
+
+  it('the Delete key opens the same box, never deleting at once', async () => {
+    await withTrash()
+    fireEvent.keyDown(screen.getByRole('tree'), { key: 'End' })
+    fireEvent.keyDown(screen.getByRole('tree'), { key: 'Delete' })
+    await act(async () => {})
+    expect(screen.getByText('Delete file?')).toBeInTheDocument()
+    expect(mockDelete).not.toHaveBeenCalled()
+  })
+
+  it('Cmd+Backspace opens it too; Backspace alone does nothing', async () => {
+    await withTrash()
+    const tree = screen.getByRole('tree')
+    fireEvent.keyDown(tree, { key: 'End' })
+    fireEvent.keyDown(tree, { key: 'Backspace' })
+    await act(async () => {})
+    expect(screen.queryByText('Delete file?')).toBeNull()
+    fireEvent.keyDown(tree, { key: 'Backspace', metaKey: true })
+    await act(async () => {})
+    expect(screen.getByText('Delete file?')).toBeInTheDocument()
+  })
+
+  it('deletes the open file from its header, its unsaved changes too', async () => {
+    mockContent.mockResolvedValue({
+      root: '/home/kim/app',
+      path: 'README.md',
+      size: 2,
+      text: 'hi',
+      hash: 'shown',
+      editable: true,
+    })
+    mockDelete.mockResolvedValue({
+      root: '/home/kim/app',
+      path: 'README.md',
+      trashId: 't',
+    })
+    await withTrash()
+    fireEvent.click(item('README.md'))
+    await screen.findByTestId('markdown-preview')
+    // Not while editing: the draft is never lost unasked
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull()
+    fireEvent.change(screen.getByRole('textbox'), {
+      target: { value: 'changed' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel editing' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Discard' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    await confirm()
+    expect(mockHash).not.toHaveBeenCalled()
+    expect(mockDelete.mock.calls[0][1].baseHash).toBe('shown')
+    expect(screen.getByRole('tree')).toBeInTheDocument()
+  })
+
+  it('a file deleted from the tree while it has a draft drops the draft', async () => {
+    mockDelete.mockResolvedValue({
+      root: '/home/kim/app',
+      path: 'README.md',
+      trashId: 't',
+    })
+    const draft = renderHook(() => useFileDraft('%1'))
+    act(() =>
+      draft.result.current[1]({
+        root: '/home/kim/app',
+        path: 'README.md',
+        baseHash: 'h',
+        base: 'a',
+        crlf: false,
+        text: 'b',
+        reveal: false,
+      }),
+    )
+    await withTrash()
+    await choose('README.md')
+    await confirm()
+    expect(draft.result.current[0]).toBeUndefined()
+  })
+
+  it("a deleted file keeps another file's draft", async () => {
+    mockDelete.mockResolvedValue({ root: '/r', path: 'src', trashId: 't' })
+    const draft = renderHook(() => useFileDraft('%1'))
+    const other = {
+      root: '/home/kim/app',
+      path: 'other.md',
+      baseHash: 'h',
+      base: 'a',
+      crlf: false,
+      text: 'b',
+      reveal: false,
+    }
+    act(() => draft.result.current[1](other))
+    await withTrash()
+    await choose('README.md')
+    await confirm()
+    expect(draft.result.current[0]).toEqual(other)
   })
 })

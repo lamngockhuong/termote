@@ -1,6 +1,12 @@
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { useSettings } from './use-settings'
+import {
+  FIND_EXCLUDES_DEFAULT,
+  FIND_EXCLUDES_MAX,
+  findExcludeProblem,
+  resolveFindExcludes,
+  useSettings,
+} from './use-settings'
 
 describe('useSettings', () => {
   beforeEach(() => {
@@ -219,5 +225,50 @@ describe('useSettings', () => {
     expect(result.current.settings.pollInterval).toBe(30)
     expect(result.current.settings.sidebarFilter).toBe('all')
     expect(result.current.settings.sortBlockedFirst).toBe(false)
+  })
+
+  it('searches without ignored files and with the default exclusions', () => {
+    const { result } = renderHook(() => useSettings())
+    expect(result.current.settings.findIncludeIgnored).toBe(false)
+    expect(result.current.settings.findExcludes).toEqual(FIND_EXCLUDES_DEFAULT)
+    act(() => result.current.updateSetting('findIncludeIgnored', true))
+    act(() => result.current.updateSetting('findExcludes', ['x']))
+    const saved = JSON.parse(localStorage.getItem('termote-settings')!)
+    expect(saved.findIncludeIgnored).toBe(true)
+    expect(saved.findExcludes).toEqual(['x'])
+  })
+
+  it('reads a broken saved search setting as its default', () => {
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ findIncludeIgnored: 'yes', findExcludes: 'dist' }),
+    )
+    const { result } = renderHook(() => useSettings())
+    expect(result.current.settings.findIncludeIgnored).toBe(false)
+    expect(result.current.settings.findExcludes).toEqual(FIND_EXCLUDES_DEFAULT)
+  })
+})
+
+describe('excluded folder names', () => {
+  it('takes one folder name, never a path or a pattern', () => {
+    expect(findExcludeProblem('node_modules')).toBeUndefined()
+    expect(findExcludeProblem('')).toBe('Enter a folder name')
+    for (const bad of ['.', '..', 'a\0b'])
+      expect(findExcludeProblem(bad)).toBe('Not a folder name')
+    expect(findExcludeProblem('a/b')).toBe('One folder name, not a path')
+    expect(findExcludeProblem('a\\b')).toBe('One folder name, not a path')
+    expect(findExcludeProblem('*.js')).toBe('A name, not a pattern')
+    expect(findExcludeProblem('a'.repeat(256))).toBe('Name too long')
+  })
+
+  it('keeps the valid names of a saved list, each once, up to the cap', () => {
+    expect(resolveFindExcludes(['a', 'a', 'b/c', 3, 'd'])).toEqual(['a', 'd'])
+    expect(resolveFindExcludes([])).toEqual([])
+    const many = Array.from(
+      { length: FIND_EXCLUDES_MAX + 5 },
+      (_, i) => `d${i}`,
+    )
+    expect(resolveFindExcludes(many)).toHaveLength(FIND_EXCLUDES_MAX)
+    expect(resolveFindExcludes(null)).toBe(FIND_EXCLUDES_DEFAULT)
   })
 })

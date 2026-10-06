@@ -6,10 +6,12 @@ import {
   closeTab,
   createFile,
   createTab,
+  deleteFile,
   fetchAgentCommands,
   fetchAgentPrompt,
   fetchFileContent,
   fetchFileDiff,
+  fetchFileHash,
   fetchFileImage,
   fetchFilesTree,
   fetchGitChanges,
@@ -17,10 +19,12 @@ import {
   fetchSnapshot,
   fetchTerminalToken,
   fetchTranscript,
+  findFiles,
   logout,
   REQUEST_TIMEOUT_MS,
   RequestError,
   renameTab,
+  restoreFile,
   SAVE_TIMEOUT_MS,
   saveFileContent,
   scrollPane,
@@ -547,6 +551,112 @@ describe('files API client', () => {
       status: 409,
       root: '/n',
     })
+  })
+
+  it('finds files with the query, the switch and every excluded name', async () => {
+    const found = {
+      root: '/r',
+      isRepo: true,
+      results: [],
+      truncated: false,
+      incomplete: false,
+    }
+    const { calls } = mockFetch({ body: found })
+    const abort = new AbortController()
+    expect(
+      await findFiles(
+        '%1',
+        {
+          q: 'ma in',
+          root: '/r',
+          ignored: true,
+          exclude: ['node_modules', 'dist'],
+          fresh: true,
+        },
+        abort.signal,
+      ),
+    ).toEqual(found)
+    expect(calls[0].url).toBe(
+      '/api/mux/panes/%251/files/find?q=ma+in&root=%2Fr&ignored=1&exclude=node_modules&exclude=dist&fresh=1',
+    )
+    expect(calls[0].init?.signal).toBe(abort.signal)
+    await findFiles('1', { q: 'x', ignored: false, exclude: [] })
+    expect(calls[1].url).toBe('/api/mux/panes/1/files/find?q=x')
+  })
+
+  it('a refused find throws its code', async () => {
+    mockFetch({ body: { error: 'x', code: 'invalid_exclude' }, status: 400 })
+    await expect(
+      findFiles('1', { q: 'x', ignored: false, exclude: ['a/b'] }),
+    ).rejects.toMatchObject({ status: 400, code: 'invalid_exclude' })
+  })
+
+  it('reads a hash without the contents', async () => {
+    const { calls } = mockFetch({ body: { root: '/r', path: 'a', size: 1 } })
+    await fetchFileHash('1', 'a')
+    await fetchFileHash('1', '.env', '/r')
+    expect(calls.map((c) => c.url)).toEqual([
+      '/api/mux/panes/1/files/content?path=a&hash=1',
+      '/api/mux/panes/1/files/content?path=.env&root=%2Fr&hash=1',
+    ])
+  })
+
+  it('deletes and restores with POST, the root in the query, with a timeout', async () => {
+    const { calls } = mockFetch(
+      { body: { root: '/r', path: 'a', trashId: 'f'.repeat(32) } },
+      { body: { root: '/r', path: 'a' } },
+    )
+    const timeout = vi.spyOn(AbortSignal, 'timeout')
+    expect(
+      await deleteFile('%1', {
+        root: '/r',
+        path: 'a',
+        kind: 'file',
+        baseHash: 'h',
+        reveal: false,
+        permanent: false,
+      }),
+    ).toEqual({ root: '/r', path: 'a', trashId: 'f'.repeat(32) })
+    expect(calls[0].url).toBe('/api/mux/panes/%251/files/delete?root=%2Fr')
+    expect(calls[0].init?.method).toBe('POST')
+    expect(JSON.parse(calls[0].init?.body as string)).toEqual({
+      path: 'a',
+      kind: 'file',
+      baseHash: 'h',
+      reveal: false,
+      permanent: false,
+    })
+    expect(
+      await restoreFile('%1', { root: '/r', trashId: 'x', reveal: true }),
+    ).toEqual({ root: '/r', path: 'a' })
+    expect(calls[1].url).toBe('/api/mux/panes/%251/files/restore?root=%2Fr')
+    expect(JSON.parse(calls[1].init?.body as string)).toEqual({
+      trashId: 'x',
+      reveal: true,
+    })
+    expect(timeout).toHaveBeenCalledWith(SAVE_TIMEOUT_MS)
+    timeout.mockRestore()
+  })
+
+  it('a refused delete or restore throws its code and a kept trashId', async () => {
+    mockFetch(
+      { body: { error: 'x', code: 'changed', trashId: 'id' }, status: 409 },
+      { body: { error: 'x', code: 'exists', path: 'a' }, status: 409 },
+    )
+    const del = {
+      root: '/r',
+      path: 'a',
+      kind: 'dir' as const,
+      reveal: false,
+      permanent: true,
+    }
+    await expect(deleteFile('1', del)).rejects.toMatchObject({
+      code: 'changed',
+      trashId: 'id',
+    })
+    await expect(
+      restoreFile('1', { root: '/r', trashId: 'x', reveal: false }),
+    ).rejects.toMatchObject({ code: 'exists', path: 'a' })
   })
 
   it('reads the changes and the diff of one side of an entry', async () => {
