@@ -111,9 +111,17 @@ export async function fetchSnapshot(signIn = openSignIn): Promise<MuxSnapshot> {
   )
 }
 
-export async function fetchHealth(
-  signIn = openSignIn,
-): Promise<{ apiVersion?: number }> {
+// How the server was installed, which names the way to update it.
+export type InstallKind = 'release' | 'checkout' | 'container' | 'unknown'
+
+export interface Health {
+  apiVersion?: number
+  // The server binary's version (absent before 1.14)
+  version?: string
+  install?: InstallKind
+}
+
+export async function fetchHealth(signIn = openSignIn): Promise<Health> {
   return readJSON(
     await fetch(`${API_BASE}/health`, {
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),

@@ -147,11 +147,33 @@ git theo dõi thì luôn được tìm, kể cả nằm dưới một trong các
 
 Công tắc `Include ignored` không nằm ở đây: nó đặt cạnh ô tìm file trong Files.
 
-## Kiểm tra cập nhật
+## Cập nhật (Updates)
 
-Ứng dụng tự động kiểm tra cập nhật từ GitHub khi bạn mở app. Bạn cũng có thể kiểm tra thủ công:
-- Click nút "Check for updates" trong Settings
-- Kết quả hiện inline dưới nút (có sẵn, cập nhật, hoặc lỗi)
+Hiện phiên bản server đang chạy và bản stable mới nhất trên GitHub (đúng bản `termote update`
+cài), đọc khi mở Settings và giữ trong một giờ; nút **Check for updates** hỏi lại GitHub. Khi
+server cũ hơn, mục này hiện lệnh cập nhật đúng với cách cài, kèm nút **Copy** và link release notes:
+
+| Cách cài                   | Lệnh                                                      |
+| -------------------------- | --------------------------------------------------------- |
+| `install.sh`/`install.ps1` | `termote update`                                          |
+| Container                  | `termote update && termote container up` (chạy trên host) |
+
+Bản chạy từ git checkout chỉ có gợi ý thay cho lệnh (pull, build lại rồi khởi động lại; lệnh khác
+nhau theo hệ điều hành). Termote không tự kiểm tra khi mở app.
+
+### Tải lại sau khi cập nhật
+
+Giao diện do server phục vụ, nên khi server chạy bản mới, một banner **Termote vX.Y.Z is ready**
+hiện ra với nút **Reload** (cũng có trong **Updates**). Termote không tự tải lại khi có bản mới, vì
+như vậy sẽ mất nội dung đang sửa trong Files. App nhận ra bản mới khi mở
+app, khi terminal kết nối lại sau lúc server khởi động lại, và khi app hiện lại. Không cần dùng
+**Clear cache & reload**. Chỉ khi API của server đổi tới mức trang cũ không dùng được thì app mới tự
+tải lại ngay. Khi mở nhiều tab, **Reload** chỉ tải lại tab của nó; các tab khác hiện banner.
+
+:::note[Cập nhật từ 1.13 trở về trước]
+Trang của các bản đó chưa biết banner này. Sau lần cập nhật đầu tiên vượt qua chúng, hãy đóng hết các
+tab Termote (trên điện thoại: tắt hẳn app đã cài) một lần; bản mới sẽ tải khi mở lại.
+:::
 
 ## Xóa lịch sử lệnh
 

@@ -177,7 +177,7 @@ POST   /api/mux/tabs/{id}/select                                 → {ok}
 DELETE /api/mux/panes/{id}                                      → {ok}   (herdr only, else 501)
 POST   /api/mux/panes/{id}/keys    body: {keys}                 → {ok}
 POST   /api/mux/panes/{id}/scroll  body: {lines}                → {ok}   (caps.scroll only, else 501)
-GET    /api/mux/health             → {status, apiVersion, backend}
+GET    /api/mux/health             → {status, apiVersion, backend, version, pid, install}
 POST   /api/mux/logout             body: {}                      → 204   (sign-in on only, else 404)
 GET    /api/mux/panes/{id}/agent/transcript?cursor=&before=     → {agent, sessionId, status, entries, cursor, before, reset}
 POST   /api/mux/panes/{id}/agent/message  body: {text, cursor, images?}  → 204
@@ -231,7 +231,10 @@ screen) gets SGR wheel reports instead, one per row and at most 50 per call; ret
 live screen sends Claude Code's Ctrl+End. A pane without an agent is never sent wheel reports.
 
 `apiVersion` is bumped on every breaking change to this API; the PWA compares it with its own
-build and reloads on mismatch. The old `/api/tmux/*` paths and the `/terminal/` iframe route
+build and reloads on mismatch. A health `version` other than the PWA's own (or a new service
+worker waiting, `registerType: 'prompt'`) only shows a Reload banner, so an unsaved edit is never
+lost to a reload; the reload tells the waiting worker to skip waiting first. `install`
+(`release`, `checkout`, `container`, `unknown`) names the update command Settings > Updates shows. The old `/api/tmux/*` paths and the `/terminal/` iframe route
 are gone; `/terminal/` now answers `410 Gone` so a stale cached PWA bundle gets a readable
 error instead of a broken page.
 

@@ -14,6 +14,10 @@ import (
 // it with its own build and reloads when they differ.
 const apiVersion = 1
 
+// serverInstall is how this server was installed (installKind), reported by
+// health so the PWA can name the update command; serve sets it at start.
+var serverInstall = "unknown"
+
 // muxTimeout bounds every backend call made on behalf of one HTTP request.
 const muxTimeout = 5 * time.Second
 
@@ -141,9 +145,10 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *u
 			status = "degraded"
 		}
 		// version and pid let the CLI tell this server from an older one
-		// still holding the port (start, restart, update).
+		// still holding the port (start, restart, update); the PWA compares
+		// version with its own build and names the update for install.
 		jsonOK(w, map[string]any{"status": status, "apiVersion": apiVersion, "backend": m.Name(),
-			"version": cliVersion, "pid": os.Getpid()})
+			"version": cliVersion, "pid": os.Getpid(), "install": serverInstall})
 	})
 
 	mux.HandleFunc("/api/mux/snapshot", func(w http.ResponseWriter, r *http.Request) {

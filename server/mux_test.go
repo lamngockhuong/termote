@@ -143,7 +143,8 @@ func TestSnapshotRouteEmptyGroupsIsArray(t *testing.T) {
 func TestHealthRoute(t *testing.T) {
 	rec := serve(newTestHandler(t, &fakeMux{}), apiRequest("GET", "/api/mux/health", ""))
 	body := decodeBody(t, rec)
-	if rec.Code != http.StatusOK || body["status"] != "ok" || body["apiVersion"] != float64(apiVersion) || body["backend"] != "fake" {
+	if rec.Code != http.StatusOK || body["status"] != "ok" || body["apiVersion"] != float64(apiVersion) || body["backend"] != "fake" ||
+		body["version"] != cliVersion || body["install"] != "unknown" {
 		t.Errorf("health = %d %v", rec.Code, body)
 	}
 

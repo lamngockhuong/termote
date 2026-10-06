@@ -14,7 +14,9 @@ export default defineConfig({
     VitePWA({
       // Disable SW in development
       selfDestroying: process.env.NODE_ENV !== 'production',
-      registerType: 'autoUpdate',
+      // A new worker waits until the user reloads (the update banner): taking
+      // over on its own would reload the page and lose an unsaved edit.
+      registerType: 'prompt',
       // main.tsx registers through virtual:pwa-register.
       injectRegister: false,
       includeAssets: ['favicon.ico', 'favicon.svg', 'robots.txt', 'apple-touch-icon.png'],

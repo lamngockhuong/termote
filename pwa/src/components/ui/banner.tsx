@@ -16,6 +16,8 @@ interface Props {
   children: ReactNode
   // Optional control at the end of the line (Retry, Update...)
   action?: ReactNode
+  // false: the caller's own status region, kept mounted, announces it
+  live?: boolean
 }
 
 // A one-line notice under the top bar: view-only mode, lost connection,
@@ -23,12 +25,17 @@ interface Props {
 // its content changes after it is in the page, so a caller that must be heard
 // keeps the Banner mounted and changes its children, rather than mounting it
 // together with the message.
-export function Banner({ variant = 'info', children, action }: Props) {
+export function Banner({
+  variant = 'info',
+  children,
+  action,
+  live = true,
+}: Props) {
   const { box, icon } = VARIANTS[variant]
   const Icon = ICONS[variant]
   return (
     <div
-      role="status"
+      role={live ? 'status' : undefined}
       data-variant={variant}
       className={`flex shrink-0 items-center gap-2 px-3 py-2 text-[13px] text-fg ${box}`}
     >

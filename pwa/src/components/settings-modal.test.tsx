@@ -1,7 +1,23 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { FIND_EXCLUDES_DEFAULT, type Settings } from '../hooks/use-settings'
 import { SettingsModal } from './settings-modal'
+
+// The Updates group's own behaviour is tested in updates-section.test.tsx.
+vi.mock('./updates-section', () => ({
+  UpdatesSection: (p: {
+    server: { version: string } | null
+    stale: boolean
+    onReload: () => void
+  }) => (
+    <div data-testid="updates-section">
+      {p.server?.version} {p.stale ? 'stale' : ''}
+      <button type="button" onClick={p.onReload}>
+        Reload
+      </button>
+    </div>
+  ),
+}))
 
 const DEFAULT_SETTINGS: Settings = {
   imeSendBehavior: 'send-only',
@@ -451,114 +467,23 @@ describe('SettingsModal', () => {
     expect(onShowGestureHints).toHaveBeenCalled()
   })
 
-  it('renders Check for Updates button when handler provided', () => {
-    const onCheckForUpdate = vi.fn().mockResolvedValue(null)
-    renderModal({ onCheckForUpdate })
-    expect(document.body.textContent).toContain('Check for Updates')
-  })
-
-  it('disables Check for Updates button when updateChecking is true', () => {
-    const onCheckForUpdate = vi.fn().mockResolvedValue(null)
-    renderModal({ onCheckForUpdate, updateChecking: true })
-    const btns = document.querySelectorAll('button')
-    const checkBtn = Array.from(btns).find((b) =>
-      b.textContent?.includes('Checking'),
-    )! as HTMLButtonElement
-    expect(checkBtn.disabled).toBe(true)
-  })
-
-  it('shows inline toast when onCheckForUpdate returns a message', async () => {
-    const onCheckForUpdate = vi
-      .fn()
-      .mockResolvedValue('Update available: v1.2.3')
-    const { container } = renderModal({ onCheckForUpdate })
-    const checkBtn = Array.from(container.querySelectorAll('button')).find(
-      (b) => b.textContent?.includes('Check for Updates'),
-    )!
-    await act(async () => {
-      fireEvent.click(checkBtn)
+  it('shows the Updates group only when given', () => {
+    renderModal()
+    expect(screen.queryByTestId('updates-section')).not.toBeInTheDocument()
+    const onReload = vi.fn()
+    renderModal({
+      updates: {
+        server: { version: '1.2.3', install: 'release' },
+        stale: true,
+        reloading: false,
+        onReload,
+      },
     })
-    expect(document.body.textContent).toContain('Update available: v1.2.3')
-  })
-
-  it('announces the update message in a status region', async () => {
-    const onCheckForUpdate = vi.fn().mockResolvedValue('Up to date')
-    renderModal({ onCheckForUpdate })
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /Check for Updates/ }))
-    })
-    expect(screen.getByRole('status')).toHaveTextContent('Up to date')
-  })
-
-  it('hides inline toast after 4 seconds', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true })
-    const onCheckForUpdate = vi.fn().mockResolvedValue('Update available!')
-    const { container } = renderModal({ onCheckForUpdate })
-    const checkBtn = Array.from(container.querySelectorAll('button')).find(
-      (b) => b.textContent?.includes('Check for Updates'),
-    )!
-    await act(async () => {
-      fireEvent.click(checkBtn)
-    })
-    expect(document.body.textContent).toContain('Update available!')
-    act(() => {
-      vi.advanceTimersByTime(4001)
-    })
-    expect(document.body.textContent).not.toContain('Update available!')
-    vi.useRealTimers()
-  })
-
-  it('does not show toast when onCheckForUpdate returns null', async () => {
-    const onCheckForUpdate = vi.fn().mockResolvedValue(null)
-    const { container } = renderModal({ onCheckForUpdate })
-    const checkBtn = Array.from(container.querySelectorAll('button')).find(
-      (b) => b.textContent?.includes('Check for Updates'),
-    )!
-    await act(async () => {
-      fireEvent.click(checkBtn)
-    })
-    expect(document.body.textContent).not.toContain('Update available')
-  })
-
-  it('clears previous toast timer when update button clicked again', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true })
-    const onCheckForUpdate = vi
-      .fn()
-      .mockResolvedValueOnce('First message')
-      .mockResolvedValue('Second message')
-    const { container } = renderModal({ onCheckForUpdate })
-    const checkBtn = Array.from(container.querySelectorAll('button')).find(
-      (b) => b.textContent?.includes('Check for Updates'),
-    )!
-    await act(async () => {
-      fireEvent.click(checkBtn)
-    })
-    expect(document.body.textContent).toContain('First message')
-    await act(async () => {
-      fireEvent.click(checkBtn)
-    })
-    expect(document.body.textContent).toContain('Second message')
-    vi.useRealTimers()
-  })
-
-  it('cleans up toast timer on unmount', () => {
-    vi.useFakeTimers()
-    const onCheckForUpdate = vi.fn().mockResolvedValue('msg')
-    const { unmount } = render(
-      <SettingsModal
-        isOpen={true}
-        onClose={vi.fn()}
-        settings={DEFAULT_SETTINGS}
-        onUpdateSetting={vi.fn()}
-        onCheckForUpdate={onCheckForUpdate}
-      />,
-    )
-    unmount()
-    act(() => {
-      vi.advanceTimersByTime(5000)
-    })
-    vi.useRealTimers()
-    // No error = pass
+    const section = screen.getByTestId('updates-section')
+    expect(section).toHaveTextContent('1.2.3 stale')
+    fireEvent.click(within(section).getByRole('button', { name: 'Reload' }))
+    expect(onReload).toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Updates' })).toBeInTheDocument()
   })
 
   it('renders Clear Command History button when handler provided', () => {
@@ -596,16 +521,13 @@ describe('SettingsModal', () => {
 
   it('renders all optional action buttons in footer section', () => {
     const onShowGestureHints = vi.fn()
-    const onCheckForUpdate = vi.fn().mockResolvedValue(null)
     const onClearHistory = vi.fn()
     renderModal({
       onShowGestureHints,
-      onCheckForUpdate,
       onClearHistory,
       historyCount: 1,
     })
     expect(document.body.textContent).toContain('Show Gesture Hints')
-    expect(document.body.textContent).toContain('Check for Updates')
     expect(document.body.textContent).toContain('Clear Command History')
   })
 
