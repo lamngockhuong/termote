@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.14.0](https://github.com/lamngockhuong/termote/compare/v1.13.0...v1.14.0) (2026-10-06)
+
+
+### Features
+
+* reload banner after an update, Settings &gt; Updates for the server ([#367](https://github.com/lamngockhuong/termote/issues/367)) ([140d627](https://github.com/lamngockhuong/termote/commit/140d6275ab5df01ef65036cf32ccd1f982cd57ac))
+
 ## [1.13.0](https://github.com/lamngockhuong/termote/compare/v1.12.3...v1.13.0) (2026-10-06)
 
 
