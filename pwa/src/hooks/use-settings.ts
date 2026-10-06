@@ -9,6 +9,51 @@ import { SIDE_PANEL_DEFAULT } from '../utils/side-panel-width'
 
 const STORAGE_KEY = 'termote-settings'
 
+// Directory names a file search never enters for ignored files, nor
+// outside a repository: dependencies and build output
+export const FIND_EXCLUDES_DEFAULT = [
+  'node_modules',
+  '.venv',
+  'venv',
+  '__pycache__',
+  'dist',
+  'build',
+  'target',
+  '.next',
+  '.nuxt',
+  '.turbo',
+  '.cache',
+  'coverage',
+  'vendor',
+]
+
+// The server takes at most this many excluded names, each one directory
+// name of at most 255 bytes (server/files_find.go)
+export const FIND_EXCLUDES_MAX = 50
+const FIND_EXCLUDE_NAME_MAX = 255
+
+// Why name cannot be an excluded folder, or undefined when it can: one
+// directory name, never a path or a pattern
+export function findExcludeProblem(name: string): string | undefined {
+  if (!name) return 'Enter a folder name'
+  if (name === '.' || name === '..' || name.includes('\0'))
+    return 'Not a folder name'
+  if (/[/\\]/.test(name)) return 'One folder name, not a path'
+  if (/[*?[]/.test(name)) return 'A name, not a pattern'
+  if (new TextEncoder().encode(name).length > FIND_EXCLUDE_NAME_MAX)
+    return 'Name too long'
+}
+
+// A saved list, kept only when it is one: valid names, each once, at most
+// FIND_EXCLUDES_MAX; anything else is the defaults
+export function resolveFindExcludes(value: unknown): string[] {
+  if (!Array.isArray(value)) return FIND_EXCLUDES_DEFAULT
+  const names = value.filter(
+    (v): v is string => typeof v === 'string' && !findExcludeProblem(v),
+  )
+  return [...new Set(names)].slice(0, FIND_EXCLUDES_MAX)
+}
+
 export type ImeSendBehavior = 'send-only' | 'send-enter'
 export type PasteSource = 'clipboard' | 'tmux'
 
@@ -29,6 +74,8 @@ export interface Settings {
   markdownPreview: boolean // Files: Markdown rendered (else its source)
   svgPreview: boolean // Files/Changes: an SVG shown as an image (else as text)
   sidePanelWidth: number // desktop Files/Changes panel, in px
+  findIncludeIgnored: boolean // Files search: a repo's ignored files too
+  findExcludes: string[] // Files search: folder names never searched (above)
 }
 
 const DEFAULTS: Settings = {
@@ -47,6 +94,8 @@ const DEFAULTS: Settings = {
   markdownPreview: true,
   svgPreview: false,
   sidePanelWidth: SIDE_PANEL_DEFAULT,
+  findIncludeIgnored: false,
+  findExcludes: FIND_EXCLUDES_DEFAULT,
 }
 
 // Listeners for useSyncExternalStore
@@ -78,6 +127,8 @@ function getSnapshot(): Settings {
         ...merged,
         uiStyle: resolveUiStyle(merged.uiStyle),
         sidebarFilter: resolveSidebarFilter(merged.sidebarFilter),
+        findIncludeIgnored: merged.findIncludeIgnored === true,
+        findExcludes: resolveFindExcludes(merged.findExcludes),
       }
     } catch {
       cachedSettings = DEFAULTS

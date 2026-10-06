@@ -7,6 +7,7 @@ import {
 import { type ComponentType, lazy } from 'react'
 import { chatAgent } from './chat-agents'
 import { ChatInput } from './components/chat-input'
+import type { ToastAction, ToastVariant } from './components/toast'
 import type { ViewOption } from './components/ui/view-switcher'
 import type { MuxInfo } from './hooks/use-local-sessions'
 import type { Session } from './types/session'
@@ -16,6 +17,12 @@ import {
   FILES_VIEW_ID,
   TERMINAL_VIEW_ID,
 } from './view-ids'
+
+export interface NotifyOptions {
+  action?: ToastAction
+  variant?: ToastVariant
+  duration?: number
+}
 
 // What decides whether a view is offered, and what a view is drawn with.
 export interface ViewContext {
@@ -28,8 +35,8 @@ export interface ViewContext {
 
 export interface ViewProps extends ViewContext {
   isMobile: boolean
-  // A short notice (a toast)
-  notify: (message: string) => void
+  // A short notice (a toast), with a button (Undo) or a tone when given
+  notify: (message: string, options?: NotifyOptions) => void
   // Switches to another view of the pane (the terminal, as a way out)
   showView: (id: string) => void
 }

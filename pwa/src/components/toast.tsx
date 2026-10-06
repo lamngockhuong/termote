@@ -4,13 +4,15 @@ import { FOCUS_RING } from './ui/button'
 
 export type ToastVariant = 'info' | 'success' | 'warning' | 'danger'
 
+// A button next to the message; pressing it closes the toast, then runs it.
+export type ToastAction = { label: string; onClick: () => void }
+
 interface Props {
   message: string
   onClose: () => void
   duration?: number
   variant?: ToastVariant
-  // A button next to the message; pressing it closes the toast, then runs it.
-  action?: { label: string; onClick: () => void }
+  action?: ToastAction
 }
 
 const VARIANTS = {

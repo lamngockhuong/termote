@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { Suspense } from 'react'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 import {
   APP_VIEWS,
   availableViews,
@@ -54,6 +54,10 @@ const codexPane: ViewContext = {
 
 const ids = (ctx: ViewContext) =>
   availableViews(APP_VIEWS, ctx).map((v) => v.id)
+
+// The lazy chat view, loaded once up front: its first load can outlast a
+// find under coverage
+beforeAll(() => import('./components/chat-view'))
 
 describe('chat view', () => {
   it('is offered for a Claude Code pane on a backend with agentChat', () => {

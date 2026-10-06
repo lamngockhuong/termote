@@ -40,6 +40,20 @@ const TONE: Record<string, string> = {
   U: 'text-warning',
 }
 
+// Past this many entries the list gets a filter box
+export const CHANGES_FILTER_MIN = 15
+
+// The entries whose path (or a rename's source) holds q, without case
+function filterEntries(entries: ChangeEntry[], q: string) {
+  const needle = q.trim().toLowerCase()
+  if (!needle) return entries
+  return entries.filter(
+    (e) =>
+      e.path.toLowerCase().includes(needle) ||
+      !!e.orig?.toLowerCase().includes(needle),
+  )
+}
+
 interface Selected {
   path: string
   orig?: string
@@ -131,6 +145,16 @@ function PaneChanges({
   // The file (root and path) a sensitive diff was shown for, while it stays
   // open: editing it and coming back to either side asks only once
   const [revealed, setRevealed] = useState<string>()
+  // The list's filter: local to this view, so leaving it (or the side
+  // panel closing) clears it, and so does a move of the root
+  const [filter, setFilter] = useState('')
+  const [filterRoot, setFilterRoot] = useState(c.root)
+  if (filterRoot !== c.root) {
+    setFilterRoot(c.root)
+    setFilter('')
+  }
+  // A list short enough to lose the box loses its text too
+  if (filter && c.entries.length <= CHANGES_FILTER_MIN) setFilter('')
   // The side a save went back to: once the status no longer lists it, the
   // file matches the index and the list shows again
   const saved = useRef<Selected | null>(null)
@@ -233,11 +257,42 @@ function PaneChanges({
   } else if (c.entries.length === 0) {
     body = <ViewMessage>No changes</ViewMessage>
   } else {
+    const filtering = c.entries.length > CHANGES_FILTER_MIN
+    const shown = groups(
+      filtering ? filterEntries(c.entries, filter) : c.entries,
+    )
     body = (
       <div className="min-h-0 flex-1 overflow-y-auto pb-2">
         {c.error && <Banner variant="warning">{ERRORS[c.error]}</Banner>}
         {c.truncated && <Banner>Only the first 5000 changes are shown</Banner>}
-        {groups(c.entries).map(([title, items]) => (
+        {filtering && (
+          <div className="sticky top-0 z-10 border-b border-border bg-bg px-2 py-1.5">
+            <input
+              type="search"
+              aria-label="Filter changes"
+              placeholder="Filter changes…"
+              value={filter}
+              spellCheck={false}
+              autoCapitalize="off"
+              autoCorrect="off"
+              autoComplete="off"
+              onChange={(e) => setFilter(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== 'Escape' || !filter) return
+                e.preventDefault()
+                setFilter('')
+              }}
+              // 16px on a phone: iOS zooms the page into a smaller field
+              className="h-8 w-full min-w-0 rounded-control border border-border bg-bg px-2.5 text-base text-fg outline-none placeholder:text-fg-subtle focus:border-accent md:text-[13px] pointer-coarse:h-touch"
+            />
+          </div>
+        )}
+        {shown.length === 0 && (
+          <p role="status" className="m-0 px-3 py-2 text-[12px] text-fg-subtle">
+            No changes match
+          </p>
+        )}
+        {shown.map(([title, items]) => (
           <section key={title} aria-label={title}>
             <h3 className="px-3 pt-3 pb-1 text-[11px] font-medium uppercase tracking-wide text-fg-muted ui-terminal:font-label">
               {title} <span className="text-fg-subtle">{items.length}</span>

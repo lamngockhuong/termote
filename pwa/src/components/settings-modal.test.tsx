@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Settings } from '../hooks/use-settings'
+import { FIND_EXCLUDES_DEFAULT, type Settings } from '../hooks/use-settings'
 import { SettingsModal } from './settings-modal'
 
 const DEFAULT_SETTINGS: Settings = {
@@ -19,6 +19,8 @@ const DEFAULT_SETTINGS: Settings = {
   markdownPreview: true,
   svgPreview: false,
   sidePanelWidth: 440,
+  findIncludeIgnored: false,
+  findExcludes: FIND_EXCLUDES_DEFAULT,
 }
 
 describe('SettingsModal', () => {
@@ -279,6 +281,74 @@ describe('SettingsModal', () => {
     expect(section('keyboard')).not.toHaveClass('md:hidden')
     expect(section('appearance')).toHaveClass('md:hidden')
     expect(keyboard).toHaveAttribute('aria-current', 'true')
+  })
+
+  it('edits the folders a file search never enters', () => {
+    const { onUpdateSetting, rerender } = renderModal({
+      settings: { ...DEFAULT_SETTINGS, findExcludes: ['dist', 'vendor'] },
+    })
+    const group = document.querySelector('[data-group="files"]') as HTMLElement
+    const list = within(group).getByRole('list', {
+      name: 'Folders never searched',
+    })
+    expect(within(list).getAllByRole('listitem')).toHaveLength(2)
+    fireEvent.click(within(group).getByRole('button', { name: 'Remove dist' }))
+    expect(onUpdateSetting).toHaveBeenLastCalledWith('findExcludes', ['vendor'])
+    const input = within(group).getByLabelText('Excluded folders')
+    // Refused with the reason, under the box
+    for (const [name, why] of [
+      ['a/b', 'One folder name, not a path'],
+      ['vendor', 'Already in the list'],
+      ['  ', 'Enter a folder name'],
+    ]) {
+      fireEvent.change(input, { target: { value: name } })
+      fireEvent.click(within(group).getByRole('button', { name: 'Add' }))
+      expect(within(group).getByRole('alert')).toHaveTextContent(why)
+      expect(input).toHaveAttribute('aria-invalid', 'true')
+    }
+    // Typing again clears it; Enter adds
+    fireEvent.change(input, { target: { value: ' build ' } })
+    expect(within(group).queryByRole('alert')).toBeNull()
+    fireEvent.keyDown(input, { key: 'a' })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(onUpdateSetting).toHaveBeenLastCalledWith('findExcludes', [
+      'dist',
+      'vendor',
+      'build',
+    ])
+    expect(input).toHaveValue('')
+    // Back to the defaults; disabled once there
+    fireEvent.click(
+      within(group).getByRole('button', { name: 'Reset to defaults' }),
+    )
+    expect(onUpdateSetting).toHaveBeenLastCalledWith(
+      'findExcludes',
+      FIND_EXCLUDES_DEFAULT,
+    )
+    rerender(
+      <SettingsModal
+        isOpen
+        onClose={vi.fn()}
+        settings={DEFAULT_SETTINGS}
+        onUpdateSetting={onUpdateSetting}
+      />,
+    )
+    expect(
+      within(group).getByRole('button', { name: 'Reset to defaults' }),
+    ).toBeDisabled()
+  })
+
+  it('refuses a folder past the cap', () => {
+    const full = Array.from({ length: 50 }, (_, i) => `d${i}`)
+    renderModal({ settings: { ...DEFAULT_SETTINGS, findExcludes: full } })
+    const group = document.querySelector('[data-group="files"]') as HTMLElement
+    fireEvent.change(within(group).getByLabelText('Excluded folders'), {
+      target: { value: 'more' },
+    })
+    fireEvent.click(within(group).getByRole('button', { name: 'Add' }))
+    expect(within(group).getByRole('alert')).toHaveTextContent(
+      'At most 50 folders',
+    )
   })
 
   it('lists the Data group in the rail only when it has actions', () => {
