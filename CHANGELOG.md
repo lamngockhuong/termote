@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.13.0](https://github.com/lamngockhuong/termote/compare/v1.12.3...v1.13.0) (2026-10-06)
+
+
+### Features
+
+* find a file, filter Changes, delete into a trash with Undo ([#364](https://github.com/lamngockhuong/termote/issues/364)) ([a4ca8fe](https://github.com/lamngockhuong/termote/commit/a4ca8fe964261a4ee8bc9d19d3979647528b63ab))
+
 ## [1.12.3](https://github.com/lamngockhuong/termote/compare/v1.12.2...v1.12.3) (2026-10-06)
 
 
