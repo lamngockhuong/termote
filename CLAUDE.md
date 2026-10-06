@@ -290,7 +290,9 @@ The `update` command:
 | `pwa/src/components/toast.tsx`                    | Toast notification component                                  |
 | `pwa/src/hooks/use-settings.ts`                   | Settings state with localStorage persistence                  |
 | `pwa/src/hooks/use-command-history.ts`            | Command history storage and management                        |
-| `pwa/src/hooks/use-update-check.ts`               | GitHub release checker with caching                           |
+| `pwa/src/hooks/use-update-check.ts`               | Newest stable release on GitHub (rule of `termote update`)    |
+| `pwa/src/utils/app-update.ts`                     | Server version vs this page, reload banner, SW skip waiting   |
+| `pwa/src/components/updates-section.tsx`          | Settings > Updates: running/newest version, update command    |
 | `pwa/src/hooks/use-gestures.ts`                   | Hammer.js gesture handling                                    |
 | `pwa/src/components/terminal-view.tsx`            | xterm.js terminal component (stream, resize, reconnect)       |
 | `pwa/src/utils/terminal-bridge.ts`                | Drives the xterm.js terminal (key mapping, clipboard paste)   |

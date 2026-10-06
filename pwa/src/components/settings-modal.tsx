@@ -1,5 +1,5 @@
-import { RefreshCw, Trash2, X } from 'lucide-react'
-import { type ReactNode, useEffect, useId, useRef, useState } from 'react'
+import { Trash2, X } from 'lucide-react'
+import { type ReactNode, useEffect, useId, useState } from 'react'
 import {
   FIND_EXCLUDES_DEFAULT,
   FIND_EXCLUDES_MAX,
@@ -9,10 +9,12 @@ import {
   type Settings,
 } from '../hooks/use-settings'
 import { UI_STYLES, type UiStyle } from '../ui-style'
+import type { ServerInfo } from '../utils/app-update'
 import { Button, FOCUS_RING, IconButton } from './ui/button'
 import { SegmentedControl } from './ui/segmented-control'
 import { Sheet } from './ui/sheet'
 import { Switch } from './ui/switch'
+import { UpdatesSection } from './updates-section'
 
 interface Props {
   isOpen: boolean
@@ -23,8 +25,13 @@ interface Props {
     value: Settings[K],
   ) => void
   onShowGestureHints?: () => void
-  onCheckForUpdate?: () => Promise<string | null>
-  updateChecking?: boolean
+  // The Updates group: what the server runs, and the reload to its page
+  updates?: {
+    server: ServerInfo | null
+    stale: boolean
+    reloading: boolean
+    onReload: () => void
+  }
   onClearHistory?: () => void
   historyCount?: number
   // Backend has a paste buffer (caps.copyMode); false hides the paste source choice
@@ -338,32 +345,21 @@ export function SettingsModal({
   settings,
   onUpdateSetting,
   onShowGestureHints,
-  onCheckForUpdate,
-  updateChecking,
+  updates,
   onClearHistory,
   historyCount = 0,
   tmuxBufferSupported = true,
   pasteBufferLabel = 'Session buffer',
   driveSizeSupported = false,
 }: Props) {
-  const [inlineToast, setInlineToast] = useState<string | null>(null)
   const [activeGroup, setActiveGroup] = useState('appearance')
-  const toastTimerRef = useRef<ReturnType<typeof setTimeout>>(null)
-
-  // Cleanup toast timer on unmount
-  useEffect(
-    () => () => {
-      if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
-    },
-    [],
-  )
 
   const imeOption = IME_SEND_OPTIONS.find(
     (o) => o.value === settings.imeSendBehavior,
   )
   const pasteOptions = pasteSourceOptions(pasteBufferLabel)
   const pasteOption = pasteOptions.find((o) => o.value === settings.pasteSource)
-  const hasActions = onShowGestureHints || onCheckForUpdate || onClearHistory
+  const hasActions = onShowGestureHints || onClearHistory
 
   // Adding a group (e.g. Devices) is one more entry here.
   const groups: GroupDef[] = [
@@ -528,6 +524,14 @@ export function SettingsModal({
     ),
   })
 
+  if (updates) {
+    groups.push({
+      id: 'updates',
+      title: 'Updates',
+      rows: <UpdatesSection {...updates} />,
+    })
+  }
+
   if (hasActions) {
     groups.push({
       id: 'data',
@@ -538,40 +542,6 @@ export function SettingsModal({
             <Button variant="ghost" onClick={onShowGestureHints}>
               Show Gesture Hints
             </Button>
-          )}
-          {onCheckForUpdate && (
-            <>
-              <Button
-                variant="ghost"
-                disabled={updateChecking}
-                onClick={async () => {
-                  const msg = await onCheckForUpdate()
-                  if (msg) {
-                    setInlineToast(msg)
-                    if (toastTimerRef.current)
-                      clearTimeout(toastTimerRef.current)
-                    toastTimerRef.current = setTimeout(
-                      () => setInlineToast(null),
-                      4000,
-                    )
-                  }
-                }}
-              >
-                <RefreshCw
-                  size={16}
-                  aria-hidden="true"
-                  className={updateChecking ? 'motion-safe:animate-spin' : ''}
-                />
-                {updateChecking ? 'Checking...' : 'Check for Updates'}
-              </Button>
-              {/* Stays mounted so a screen reader announces the message */}
-              <p
-                role="status"
-                className="m-0 text-center text-[12px] text-fg-muted empty:hidden"
-              >
-                {inlineToast}
-              </p>
-            </>
           )}
           {onClearHistory && (
             <Button

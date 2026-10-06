@@ -38,6 +38,26 @@ func (c *cli) currentExe() string {
 	return filepath.Join(c.dataDir(), "current", "bin", "termote")
 }
 
+// containerMarkers are the files a container runtime leaves at the root of
+// every container: Docker's /.dockerenv, Podman's /run/.containerenv.
+var containerMarkers = []string{"/.dockerenv", "/run/.containerenv"}
+
+// installKind names how this binary was installed, so the PWA can say how to
+// update it: "release" (the installer's layout, `termote update`),
+// "checkout" (a git checkout, pull and rebuild), "container" (the image, run
+// again by the host's termote) or "unknown" (a binary copied by hand).
+func (c *cli) installKind() string {
+	switch {
+	case c.isInstalledRelease():
+		return "release"
+	case c.isCheckout():
+		return "checkout"
+	case slices.ContainsFunc(containerMarkers, fileExists):
+		return "container"
+	}
+	return "unknown"
+}
+
 // isInstalledRelease reports a binary running from versions/<v>/bin. c.exe
 // has its symlinks resolved, so it points into versions/ even when started
 // through current or ~/.local/bin.

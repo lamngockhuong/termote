@@ -31,6 +31,7 @@ import { SidePanel } from './components/side-panel'
 import { type TerminalHandle, TerminalView } from './components/terminal-view'
 import { Toast, type ToastAction, type ToastVariant } from './components/toast'
 import { Banner } from './components/ui/banner'
+import { Button } from './components/ui/button'
 import { ConfirmDialog } from './components/ui/confirm-dialog'
 import { useTheme } from './contexts/theme-context'
 import { useCommandHistory } from './hooks/use-command-history'
@@ -43,9 +44,14 @@ import { useIsMobile } from './hooks/use-media-query'
 import { logout, selectTab } from './hooks/use-mux-api'
 import { useSettings } from './hooks/use-settings'
 import { useSidebarCollapsed } from './hooks/use-sidebar-collapsed'
-import { useUpdateCheck } from './hooks/use-update-check'
 import { applyUiStyle, syncThemeColor } from './ui-style'
-import { checkApiVersion } from './utils/api-version'
+import { APP_INFO } from './utils/app-info'
+import {
+  checkOnShow,
+  checkServerVersion,
+  reloadToNewVersion,
+  useAppUpdate,
+} from './utils/app-update'
 import { formatDeepLink, parseDeepLink } from './utils/deep-link'
 import {
   LARGE_PACKET_HELP_URL,
@@ -336,7 +342,7 @@ export default function App({
   // biome-ignore lint/correctness/useExhaustiveDependencies: the tokens it reads change with both
   useEffect(() => syncThemeColor(), [settings.uiStyle, resolvedTheme])
   const { isFullscreen, toggleFullscreen } = useFullscreen()
-  const { checkForUpdate, checking: updateChecking } = useUpdateCheck()
+  const appUpdate = useAppUpdate()
 
   // The indicator follows the stream; a failing session poll can only mark
   // it down, never up, so it does not show "connected" while the stream is
@@ -345,19 +351,26 @@ export default function App({
     ? streamState
     : 'disconnected'
 
-  // A server running another /api/mux version gets this bundle replaced:
-  // checked on start and whenever the terminal stream comes back.
+  // The server's version, read on start, whenever the terminal stream comes
+  // back (an update restarts the server) and when the app is shown again:
+  // another /api/mux version replaces this page at once, another release
+  // offers the reload (the banner).
   const droppedRef = useRef(false)
   useEffect(() => {
     if (streamState === 'disconnected' || streamState === 'error') {
       droppedRef.current = true
     } else if (streamState === 'connected' && droppedRef.current) {
       droppedRef.current = false
-      checkApiVersion()
+      checkServerVersion()
     }
   }, [streamState])
   useEffect(() => {
-    checkApiVersion()
+    checkServerVersion()
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') checkOnShow()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
   }, [])
 
   // Shown once per page load: the poll and the stream report it on every
@@ -381,19 +394,6 @@ export default function App({
       }),
     [showToast],
   )
-
-  // Check for updates on mount
-  useEffect(() => {
-    checkForUpdate()
-      .then((result) => {
-        if (result.hasUpdate && result.latestVersion) {
-          showToast(`Update available: v${result.latestVersion}`)
-        }
-      })
-      .catch(() => {
-        // Silently ignore - already handled internally
-      })
-  }, [checkForUpdate, showToast])
 
   // tmux scrolls its own history (copy mode); other backends scroll the
   // xterm.js scrollback.
@@ -839,6 +839,29 @@ export default function App({
               onLogout: mux.caps.auth ? handleLogout : undefined,
             }}
           />
+          {/* Mounted before the banner, so the news is announced */}
+          <div role="status" className="shrink-0">
+            {appUpdate.stale && (
+              <Banner
+                live={false}
+                action={
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    disabled={appUpdate.reloading}
+                    onClick={() => reloadToNewVersion()}
+                  >
+                    {appUpdate.reloading ? 'Reloading…' : 'Reload'}
+                  </Button>
+                }
+              >
+                {appUpdate.server &&
+                appUpdate.server.version !== APP_INFO.version
+                  ? `Termote v${appUpdate.server.version} is ready`
+                  : 'A new version is ready'}
+              </Banner>
+            )}
+          </div>
           {readOnly && (
             <Banner>View only: you can watch this terminal but not type</Banner>
           )}
@@ -1048,17 +1071,12 @@ export default function App({
         }
         driveSizeSupported={!!mux.caps.driveSize}
         onShowGestureHints={isMobile ? showGestureHints : undefined}
-        onCheckForUpdate={async () => {
-          const result = await checkForUpdate(true)
-          if (result.hasUpdate && result.latestVersion) {
-            return `Update available: v${result.latestVersion}`
-          }
-          if (result.latestVersion) {
-            return 'You are on the latest version'
-          }
-          return 'Could not check for updates'
+        updates={{
+          server: appUpdate.server,
+          stale: appUpdate.stale,
+          reloading: appUpdate.reloading,
+          onReload: () => reloadToNewVersion(),
         }}
-        updateChecking={updateChecking}
         onClearHistory={clearHistory}
         historyCount={history.length}
       />

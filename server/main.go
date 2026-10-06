@@ -57,6 +57,7 @@ func runServe(args []string) int {
 		return 1
 	}
 	scrubTermoteEnv()
+	serverInstall = c.installKind()
 	cfg.FilesDenyDirs = filesDenyDirs(c.configDir(), c.stateDir())
 	cfg.FilesWriteDenyDirs = []string{c.dataDir()}
 	cfg.UploadDir = uploadDir()

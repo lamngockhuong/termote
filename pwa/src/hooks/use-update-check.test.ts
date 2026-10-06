@@ -1,23 +1,59 @@
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { useUpdateCheck } from './use-update-check'
-
-// A fixed app version, so the comparisons do not change with each release
-vi.mock('../utils/app-info', async (importOriginal) => {
-  const { APP_INFO } =
-    await importOriginal<typeof import('../utils/app-info')>()
-  return { APP_INFO: { ...APP_INFO, version: '1.0.0' } }
-})
+import {
+  compareVersions,
+  newestStable,
+  useUpdateCheck,
+} from './use-update-check'
 
 const CACHE_KEY = 'termote-update-check'
 
-function makeFetchResponse(data: unknown, ok = true, status = 200) {
-  return Promise.resolve({
+function release(tag: string, extra: Record<string, unknown> = {}) {
+  return { tag_name: tag, html_url: `https://example.com/${tag}`, ...extra }
+}
+
+function respond(data: unknown, ok = true, status = 200) {
+  vi.mocked(fetch).mockResolvedValue({
     ok,
     status,
     json: () => Promise.resolve(data),
   } as Response)
 }
+
+describe('compareVersions', () => {
+  it('orders by major, minor and patch', () => {
+    expect(compareVersions('1.2.3', '1.2.4')).toBe(-1)
+    expect(compareVersions('1.10.0', '1.9.9')).toBe(1)
+    expect(compareVersions('v2.0.0', '2.0.0')).toBe(0)
+  })
+
+  it('puts a pre-release before its version', () => {
+    expect(compareVersions('1.14.0-rc.1', '1.14.0')).toBe(-1)
+    expect(compareVersions('1.14.0', '1.14.0-rc.1')).toBe(1)
+    expect(compareVersions('1.14.0-rc.1', '1.13.0')).toBe(1)
+    expect(compareVersions('1.14.0-rc.1', '1.14.0-rc.2')).toBe(0)
+  })
+})
+
+describe('newestStable', () => {
+  // The rule of server/release_tags.go: `termote update` installs the same.
+  it('takes the highest stable 1.x, skipping 0.x, pre-releases and drafts', () => {
+    const best = newestStable([
+      release('v0.9.9'),
+      release('v1.13.0'),
+      release('v1.15.0-rc.1'),
+      release('v1.14.0', { prerelease: true }),
+      release('v1.16.0', { draft: true }),
+      release('v1.12.3'),
+      release('nightly'),
+    ])
+    expect(best?.tag_name).toBe('v1.13.0')
+  })
+
+  it('is null without a stable release', () => {
+    expect(newestStable([release('v0.5.0'), release('v1.0.0-rc.1')])).toBe(null)
+  })
+})
 
 describe('useUpdateCheck', () => {
   beforeEach(() => {
@@ -25,261 +61,100 @@ describe('useUpdateCheck', () => {
     vi.stubGlobal('fetch', vi.fn())
   })
 
-  // A result cached by an older app (here: before an update to 1.0.0)
-  // still says there is an update; the app is now the version it named.
-  it('compares a cached latest version with the app version now', async () => {
-    localStorage.setItem(
-      CACHE_KEY,
-      JSON.stringify({
-        hasUpdate: true,
-        latestVersion: '0.9.0',
-        releaseUrl: 'https://example.com/v0.9.0',
-        checkedAt: Date.now(),
-      }),
-    )
+  it('reads the releases list and keeps the newest stable one', async () => {
+    respond([release('v1.14.0'), release('v1.15.0-rc.1'), release('v1.13.0')])
     const { result } = renderHook(() => useUpdateCheck())
-    let res: Awaited<ReturnType<typeof result.current.checkForUpdate>>
-    await act(async () => {
-      res = await result.current.checkForUpdate()
+    await act(() => result.current.check())
+    expect(vi.mocked(fetch).mock.calls[0][0]).toContain('/releases?per_page=')
+    expect(result.current.latest).toMatchObject({
+      version: '1.14.0',
+      url: 'https://example.com/v1.14.0',
     })
+    expect(result.current.failed).toBe(false)
+    expect(JSON.parse(localStorage.getItem(CACHE_KEY)!).version).toBe('1.14.0')
+  })
+
+  it('uses a result younger than an hour without asking GitHub', async () => {
+    const kept = { version: '1.14.0', url: 'u', checkedAt: Date.now() }
+    localStorage.setItem(CACHE_KEY, JSON.stringify(kept))
+    const { result } = renderHook(() => useUpdateCheck())
+    // Shown at once, before any check
+    expect(result.current.latest).toEqual(kept)
+    await act(() => result.current.check())
     expect(fetch).not.toHaveBeenCalled()
-    expect(res!).toEqual({
-      hasUpdate: false,
-      latestVersion: '0.9.0',
-      releaseUrl: 'https://example.com/v0.9.0',
-    })
   })
 
-  it('a cached result without a version is no update', async () => {
+  it('asks again past an hour, or when forced', async () => {
+    respond([release('v1.15.0')])
     localStorage.setItem(
       CACHE_KEY,
-      JSON.stringify({
-        latestVersion: null,
-        releaseUrl: null,
-        checkedAt: Date.now(),
-      }),
+      JSON.stringify({ version: '1.14.0', url: 'u', checkedAt: 0 }),
     )
     const { result } = renderHook(() => useUpdateCheck())
-    let res: Awaited<ReturnType<typeof result.current.checkForUpdate>>
-    await act(async () => {
-      res = await result.current.checkForUpdate()
-    })
-    expect(res!.hasUpdate).toBe(false)
-  })
+    expect(result.current.latest).toBe(null)
+    await act(() => result.current.check())
+    expect(result.current.latest?.version).toBe('1.15.0')
 
-  it('starts with checking=false', () => {
-    const { result } = renderHook(() => useUpdateCheck())
-    expect(result.current.checking).toBe(false)
-  })
-
-  it('fetches from network when cache is empty (no force needed)', async () => {
-    // Empty localStorage → getCachedResult returns null → fetches fresh
-    vi.mocked(fetch).mockReturnValue(
-      makeFetchResponse({ tag_name: 'v1.0.0', html_url: 'https://github.com' }),
-    )
-    const { result } = renderHook(() => useUpdateCheck())
-    await act(async () => {
-      await result.current.checkForUpdate()
-    })
-    expect(fetch).toHaveBeenCalledTimes(1)
-  })
-
-  it('sets checking true while fetching, false after', async () => {
-    vi.mocked(fetch).mockReturnValue(
-      makeFetchResponse({
-        tag_name: 'v999.0.0',
-        html_url: 'https://example.com',
-      }),
-    )
-    const { result } = renderHook(() => useUpdateCheck())
-    let promise: Promise<unknown>
-    act(() => {
-      promise = result.current.checkForUpdate(true)
-    })
-    // checking becomes true during fetch
-    expect(result.current.checking).toBe(true)
-    await act(async () => {
-      await promise
-    })
-    expect(result.current.checking).toBe(false)
-  })
-
-  it('returns hasUpdate=true when latest version is newer', async () => {
-    vi.mocked(fetch).mockReturnValue(
-      makeFetchResponse({
-        tag_name: 'v999.0.0',
-        html_url: 'https://github.com/release',
-      }),
-    )
-    const { result } = renderHook(() => useUpdateCheck())
-    let updateResult: Awaited<ReturnType<typeof result.current.checkForUpdate>>
-    await act(async () => {
-      updateResult = await result.current.checkForUpdate(true)
-    })
-    expect(updateResult!.hasUpdate).toBe(true)
-    expect(updateResult!.latestVersion).toBe('999.0.0')
-    expect(updateResult!.releaseUrl).toBe('https://github.com/release')
-  })
-
-  it('returns hasUpdate=false when versions are equal', async () => {
-    vi.mocked(fetch).mockReturnValue(
-      makeFetchResponse({
-        tag_name: 'v1.0.0',
-        html_url: 'https://github.com/release',
-      }),
-    )
-    const { result } = renderHook(() => useUpdateCheck())
-    let updateResult: Awaited<ReturnType<typeof result.current.checkForUpdate>>
-    await act(async () => {
-      updateResult = await result.current.checkForUpdate(true)
-    })
-    expect(updateResult!.hasUpdate).toBe(false)
-  })
-
-  it('returns hasUpdate=false when on newer version than latest', async () => {
-    vi.mocked(fetch).mockReturnValue(
-      makeFetchResponse({
-        tag_name: 'v0.9.0',
-        html_url: 'https://github.com/release',
-      }),
-    )
-    const { result } = renderHook(() => useUpdateCheck())
-    let updateResult: Awaited<ReturnType<typeof result.current.checkForUpdate>>
-    await act(async () => {
-      updateResult = await result.current.checkForUpdate(true)
-    })
-    expect(updateResult!.hasUpdate).toBe(false)
-  })
-
-  it('caches result and uses cache on second call', async () => {
-    vi.mocked(fetch).mockReturnValue(
-      makeFetchResponse({
-        tag_name: 'v999.0.0',
-        html_url: 'https://github.com/release',
-      }),
-    )
-    const { result } = renderHook(() => useUpdateCheck())
-    await act(async () => {
-      await result.current.checkForUpdate(true)
-    })
-    // Second call — no force, should use cache
-    await act(async () => {
-      await result.current.checkForUpdate()
-    })
-    expect(fetch).toHaveBeenCalledTimes(1)
-  })
-
-  it('bypasses cache when force=true', async () => {
-    vi.mocked(fetch).mockReturnValue(
-      makeFetchResponse({
-        tag_name: 'v999.0.0',
-        html_url: 'https://github.com/release',
-      }),
-    )
-    const { result } = renderHook(() => useUpdateCheck())
-    await act(async () => {
-      await result.current.checkForUpdate(true)
-    })
-    await act(async () => {
-      await result.current.checkForUpdate(true)
-    })
+    await act(() => result.current.check(true))
     expect(fetch).toHaveBeenCalledTimes(2)
   })
 
-  it('returns cached result when cache is fresh', async () => {
-    const cached = {
-      hasUpdate: true,
-      latestVersion: '5.0.0',
-      releaseUrl: 'https://cached.url',
-      checkedAt: Date.now(),
-    }
-    localStorage.setItem(CACHE_KEY, JSON.stringify(cached))
-    const { result } = renderHook(() => useUpdateCheck())
-    let updateResult: Awaited<ReturnType<typeof result.current.checkForUpdate>>
-    await act(async () => {
-      updateResult = await result.current.checkForUpdate()
-    })
-    expect(fetch).not.toHaveBeenCalled()
-    expect(updateResult!.hasUpdate).toBe(true)
-    expect(updateResult!.latestVersion).toBe('5.0.0')
-  })
-
-  it('ignores expired cache and fetches fresh', async () => {
-    const expired = {
-      hasUpdate: false,
-      latestVersion: '1.0.0',
-      releaseUrl: 'https://old.url',
-      checkedAt: Date.now() - 2 * 60 * 60 * 1000, // 2 hours ago
-    }
-    localStorage.setItem(CACHE_KEY, JSON.stringify(expired))
-    vi.mocked(fetch).mockReturnValue(
-      makeFetchResponse({ tag_name: 'v999.0.0', html_url: 'https://new.url' }),
-    )
-    const { result } = renderHook(() => useUpdateCheck())
-    await act(async () => {
-      await result.current.checkForUpdate()
-    })
-    expect(fetch).toHaveBeenCalledTimes(1)
-  })
-
-  it('handles corrupt cache gracefully', async () => {
-    localStorage.setItem(CACHE_KEY, 'not-json')
-    vi.mocked(fetch).mockReturnValue(
-      makeFetchResponse({
-        tag_name: 'v999.0.0',
-        html_url: 'https://github.com',
+  // What an older app kept: { latestVersion, releaseUrl, checkedAt }
+  it('ignores a result kept in the old shape', async () => {
+    respond([release('v1.14.0')])
+    localStorage.setItem(
+      CACHE_KEY,
+      JSON.stringify({
+        latestVersion: '1.13.0',
+        releaseUrl: 'u',
+        checkedAt: Date.now(),
       }),
     )
     const { result } = renderHook(() => useUpdateCheck())
-    let updateResult: Awaited<ReturnType<typeof result.current.checkForUpdate>>
-    await act(async () => {
-      updateResult = await result.current.checkForUpdate()
-    })
-    expect(fetch).toHaveBeenCalledTimes(1)
-    expect(updateResult!.hasUpdate).toBe(true)
+    expect(result.current.latest).toBe(null)
+    await act(() => result.current.check())
+    expect(result.current.latest?.version).toBe('1.14.0')
   })
 
-  it('returns null result on fetch error', async () => {
-    vi.mocked(fetch).mockRejectedValue(new Error('Network error'))
+  it('ignores a kept result that is not JSON', () => {
+    localStorage.setItem(CACHE_KEY, '{')
     const { result } = renderHook(() => useUpdateCheck())
-    let updateResult: Awaited<ReturnType<typeof result.current.checkForUpdate>>
-    await act(async () => {
-      updateResult = await result.current.checkForUpdate(true)
-    })
-    expect(updateResult!.hasUpdate).toBe(false)
-    expect(updateResult!.latestVersion).toBeNull()
-    expect(updateResult!.releaseUrl).toBeNull()
+    expect(result.current.latest).toBe(null)
   })
 
-  it('returns null result on non-ok response', async () => {
-    vi.mocked(fetch).mockReturnValue(makeFetchResponse({}, false, 403))
+  it('fails on an error reply and keeps the last result', async () => {
+    respond([release('v1.14.0')])
     const { result } = renderHook(() => useUpdateCheck())
-    let updateResult: Awaited<ReturnType<typeof result.current.checkForUpdate>>
-    await act(async () => {
-      updateResult = await result.current.checkForUpdate(true)
-    })
-    expect(updateResult!.hasUpdate).toBe(false)
-    expect(updateResult!.latestVersion).toBeNull()
-  })
-
-  it('checking returns to false even after error', async () => {
-    vi.mocked(fetch).mockRejectedValue(new Error('fail'))
-    const { result } = renderHook(() => useUpdateCheck())
-    await act(async () => {
-      await result.current.checkForUpdate(true)
-    })
+    await act(() => result.current.check())
+    respond({ message: 'rate limited' }, false, 403)
+    await act(() => result.current.check(true))
+    expect(result.current.failed).toBe(true)
+    expect(result.current.latest?.version).toBe('1.14.0')
     expect(result.current.checking).toBe(false)
   })
 
-  it('strips leading v from latestVersion', async () => {
-    vi.mocked(fetch).mockReturnValue(
-      makeFetchResponse({ tag_name: 'v2.3.4', html_url: 'https://github.com' }),
-    )
+  it('fails when the network does or no stable release exists', async () => {
+    vi.mocked(fetch).mockRejectedValue(new Error('offline'))
     const { result } = renderHook(() => useUpdateCheck())
-    let updateResult: Awaited<ReturnType<typeof result.current.checkForUpdate>>
-    await act(async () => {
-      updateResult = await result.current.checkForUpdate(true)
-    })
-    expect(updateResult!.latestVersion).toBe('2.3.4')
+    await act(() => result.current.check())
+    expect(result.current.failed).toBe(true)
+
+    respond([release('v0.9.0')])
+    await act(() => result.current.check(true))
+    expect(result.current.failed).toBe(true)
+    expect(result.current.latest).toBe(null)
+  })
+
+  it('still reports the result when storage cannot keep it', async () => {
+    respond([release('v1.14.0')])
+    const spy = vi
+      .spyOn(Storage.prototype, 'setItem')
+      .mockImplementation(() => {
+        throw new Error('quota')
+      })
+    const { result } = renderHook(() => useUpdateCheck())
+    await act(() => result.current.check())
+    expect(result.current.latest?.version).toBe('1.14.0')
+    spy.mockRestore()
   })
 })

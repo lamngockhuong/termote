@@ -1,4 +1,11 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import { Folder, MessageSquare } from 'lucide-react'
 import { lazy, type ReactElement } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -64,14 +71,6 @@ vi.mock('./hooks/use-command-history', () => ({
     addCommand: vi.fn(),
     removeCommand: vi.fn(),
     clearHistory: vi.fn(),
-  }),
-}))
-
-const mockCheckForUpdate = vi.fn()
-vi.mock('./hooks/use-update-check', () => ({
-  useUpdateCheck: () => ({
-    checkForUpdate: mockCheckForUpdate,
-    checking: false,
   }),
 }))
 
@@ -192,9 +191,19 @@ vi.mock('./utils/terminal-bridge', () => ({
   sendTextToTerminal: (...args: any[]) => mockSendTextToTerminal(...args),
 }))
 
-const mockCheckApiVersion = vi.fn()
-vi.mock('./utils/api-version', () => ({
-  checkApiVersion: () => mockCheckApiVersion(),
+const mockCheckServerVersion = vi.fn()
+const mockReloadToNewVersion = vi.fn()
+const mockCheckOnShow = vi.fn()
+let mockAppUpdate: {
+  server: { version: string; install: string } | null
+  stale: boolean
+  reloading: boolean
+} = { server: null, stale: false, reloading: false }
+vi.mock('./utils/app-update', () => ({
+  checkOnShow: () => mockCheckOnShow(),
+  checkServerVersion: () => mockCheckServerVersion(),
+  reloadToNewVersion: () => mockReloadToNewVersion(),
+  useAppUpdate: () => mockAppUpdate,
 }))
 
 // ─── Mock all components ──────────────────────────────────────────────────────
@@ -342,21 +351,21 @@ vi.mock('./components/settings-modal', () => ({
   SettingsModal: ({
     isOpen,
     onClose,
-    onCheckForUpdate,
+    updates,
     onShowGestureHints,
     pasteBufferLabel,
   }: {
     isOpen: boolean
     pasteBufferLabel?: string
     onClose: () => void
-    onCheckForUpdate?: () => Promise<string | null>
+    updates?: { onReload: () => void }
     onShowGestureHints?: () => void
   }) =>
     isOpen ? (
       <div data-testid="settings-modal" data-paste-label={pasteBufferLabel}>
         <button onClick={onClose}>CloseSettings</button>
-        {onCheckForUpdate && (
-          <button onClick={() => onCheckForUpdate()}>CheckUpdate</button>
+        {updates && (
+          <button onClick={() => updates.onReload()}>ReloadUpdate</button>
         )}
         {onShowGestureHints && (
           <button onClick={onShowGestureHints}>GestureHints</button>
@@ -561,11 +570,6 @@ beforeEach(() => {
 describe('App', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockCheckForUpdate.mockResolvedValue({
-      hasUpdate: false,
-      latestVersion: null,
-      releaseUrl: null,
-    })
     mockPasteToTerminal.mockResolvedValue({ ok: true })
     mockIsMobile.mockReturnValue(false)
     mockUseKeyboardVisible.mockReturnValue({
@@ -664,50 +668,48 @@ describe('App', () => {
     expect(screen.queryByTestId('toast')).not.toBeInTheDocument()
   })
 
-  it('shows toast when update is available on mount', async () => {
-    mockCheckForUpdate.mockResolvedValue({
-      hasUpdate: true,
-      latestVersion: '2.0.0',
-      releaseUrl: null,
-    })
+  it('closes a toast from its close button', async () => {
     render(<App />)
-    await waitFor(() => {
-      expect(screen.getByTestId('toast')).toBeInTheDocument()
-      expect(screen.getByText('Update available: v2.0.0')).toBeInTheDocument()
-    })
-    expect(screen.getByTestId('toast')).toHaveAttribute('data-variant', 'info')
-  })
-
-  it('does not show toast when no update available', async () => {
-    mockCheckForUpdate.mockResolvedValue({
-      hasUpdate: false,
-      latestVersion: null,
-      releaseUrl: null,
-    })
-    render(<App />)
-    await waitFor(() => {
-      expect(screen.queryByTestId('toast')).not.toBeInTheDocument()
-    })
-  })
-
-  it('closes toast when onClose called', async () => {
-    mockCheckForUpdate.mockResolvedValue({
-      hasUpdate: true,
-      latestVersion: '1.1.0',
-      releaseUrl: null,
-    })
-    render(<App />)
-    await waitFor(() => expect(screen.getByTestId('toast')).toBeInTheDocument())
+    act(() => reportLargePacketLoss())
+    await screen.findByTestId('toast')
     fireEvent.click(screen.getByRole('button', { name: 'CloseToast' }))
     expect(screen.queryByTestId('toast')).not.toBeInTheDocument()
   })
 
-  it('does not show toast when checkForUpdate rejects', async () => {
-    mockCheckForUpdate.mockRejectedValue(new Error('network fail'))
+  // No toast at start any more: the banner and Settings > Updates say it.
+  it('shows the reload banner while the page is older than the server', async () => {
+    mockAppUpdate = {
+      server: { version: '9.9.9', install: 'release' },
+      stale: true,
+      reloading: false,
+    }
     render(<App />)
-    await waitFor(() => {
-      expect(screen.queryByTestId('toast')).not.toBeInTheDocument()
-    })
+    const banner = await screen.findByText('Termote v9.9.9 is ready')
+    expect(screen.queryByTestId('toast')).not.toBeInTheDocument()
+    fireEvent.click(
+      within(banner.closest('[role="status"]') as HTMLElement).getByRole(
+        'button',
+        { name: 'Reload' },
+      ),
+    )
+    expect(mockReloadToNewVersion).toHaveBeenCalled()
+    mockAppUpdate = { server: null, stale: false, reloading: false }
+  })
+
+  it('names no version in the banner when only a new worker waits', async () => {
+    mockAppUpdate = { server: null, stale: true, reloading: true }
+    render(<App />)
+    expect(
+      await screen.findByText('A new version is ready'),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Reloading…' })).toBeDisabled()
+    mockAppUpdate = { server: null, stale: false, reloading: false }
+  })
+
+  it('shows no banner on the current version', async () => {
+    render(<App />)
+    await waitFor(() => screen.getByRole('button', { name: 'Settings' }))
+    expect(screen.queryByText(/is ready/)).not.toBeInTheDocument()
   })
 
   it('asks before closing a session, and closes it on confirm', async () => {
@@ -1544,19 +1546,38 @@ describe('App', () => {
     })
   })
 
-  it('checks the API version on start and after the stream comes back', async () => {
+  it('checks the server version when the app is shown again', async () => {
     render(<App />)
-    await waitFor(() => expect(mockCheckApiVersion).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(mockCheckServerVersion).toHaveBeenCalledTimes(1))
+    mockCheckServerVersion.mockClear()
+    const visibility = vi
+      .spyOn(document, 'visibilityState', 'get')
+      .mockReturnValue('hidden')
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    expect(mockCheckOnShow).not.toHaveBeenCalled()
+    visibility.mockReturnValue('visible')
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    expect(mockCheckOnShow).toHaveBeenCalledTimes(1)
+    visibility.mockRestore()
+  })
+
+  it('checks the server version on start and after the stream comes back', async () => {
+    render(<App />)
+    await waitFor(() => expect(mockCheckServerVersion).toHaveBeenCalledTimes(1))
     // First connect is not a reconnect
     act(() => reportStreamState('connected'))
-    expect(mockCheckApiVersion).toHaveBeenCalledTimes(1)
+    expect(mockCheckServerVersion).toHaveBeenCalledTimes(1)
     act(() => reportStreamState('disconnected'))
     act(() => reportStreamState('connecting'))
     act(() => reportStreamState('connected'))
-    expect(mockCheckApiVersion).toHaveBeenCalledTimes(2)
+    expect(mockCheckServerVersion).toHaveBeenCalledTimes(2)
     act(() => reportStreamState('error'))
     act(() => reportStreamState('connected'))
-    expect(mockCheckApiVersion).toHaveBeenCalledTimes(3)
+    expect(mockCheckServerVersion).toHaveBeenCalledTimes(3)
   })
 
   it('indicator follows the stream but shows down while the server is unreachable', async () => {
@@ -1791,52 +1812,12 @@ describe('App', () => {
     })
   })
 
-  it('settings modal onCheckForUpdate returns update message', async () => {
-    mockCheckForUpdate.mockResolvedValue({
-      hasUpdate: true,
-      latestVersion: '3.0.0',
-      releaseUrl: null,
-    })
+  it('settings modal reloads to the new version', async () => {
     render(<App />)
     await waitFor(() => screen.getByRole('button', { name: 'Settings' }))
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
-    await waitFor(() => screen.getByRole('button', { name: 'CheckUpdate' }))
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'CheckUpdate' }))
-    })
-    // Returns "Update available: v3.0.0"
-  })
-
-  it('settings modal onCheckForUpdate returns latest version message', async () => {
-    mockCheckForUpdate.mockResolvedValue({
-      hasUpdate: false,
-      latestVersion: '3.0.0',
-      releaseUrl: null,
-    })
-    render(<App />)
-    await waitFor(() => screen.getByRole('button', { name: 'Settings' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
-    await waitFor(() => screen.getByRole('button', { name: 'CheckUpdate' }))
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'CheckUpdate' }))
-    })
-    // Returns "You are on the latest version"
-  })
-
-  it('settings modal onCheckForUpdate returns could not check when no latestVersion', async () => {
-    mockCheckForUpdate.mockResolvedValue({
-      hasUpdate: false,
-      latestVersion: null,
-      releaseUrl: null,
-    })
-    render(<App />)
-    await waitFor(() => screen.getByRole('button', { name: 'Settings' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
-    await waitFor(() => screen.getByRole('button', { name: 'CheckUpdate' }))
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'CheckUpdate' }))
-    })
-    // Returns "Could not check for updates"
+    fireEvent.click(await screen.findByRole('button', { name: 'ReloadUpdate' }))
+    expect(mockReloadToNewVersion).toHaveBeenCalled()
   })
 
   describe('attach image', () => {
@@ -2108,11 +2089,6 @@ describe('App', () => {
 describe('shouldShowPasteError (via handlePaste)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockCheckForUpdate.mockResolvedValue({
-      hasUpdate: false,
-      latestVersion: null,
-      releaseUrl: null,
-    })
     mockIsMobile.mockReturnValue(false)
     mockUseSettings.mockReturnValue({
       settings: {
@@ -2221,11 +2197,6 @@ describe('shouldShowPasteError (via handlePaste)', () => {
 describe('getClipboardErrorMsg long-press variant (via CtrlShiftV toast)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockCheckForUpdate.mockResolvedValue({
-      hasUpdate: false,
-      latestVersion: null,
-      releaseUrl: null,
-    })
     mockIsMobile.mockReturnValue(false)
     mockUseSettings.mockReturnValue({
       settings: {
@@ -2292,11 +2263,6 @@ describe('getClipboardErrorMsg long-press variant (via CtrlShiftV toast)', () =>
 describe('App with tmux paste source', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockCheckForUpdate.mockResolvedValue({
-      hasUpdate: false,
-      latestVersion: null,
-      releaseUrl: null,
-    })
     mockIsMobile.mockReturnValue(false)
     mockUseLocalSessions.mockReturnValue({
       activeSession: {
@@ -2357,11 +2323,6 @@ describe('App with tmux paste source', () => {
 describe('App server reachability effect', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockCheckForUpdate.mockResolvedValue({
-      hasUpdate: false,
-      latestVersion: null,
-      releaseUrl: null,
-    })
     mockIsMobile.mockReturnValue(false)
     mockUseSettings.mockReturnValue({
       settings: {
@@ -2421,11 +2382,6 @@ describe('App server reachability effect', () => {
 describe('App gesture hints (mobile, first visit)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockCheckForUpdate.mockResolvedValue({
-      hasUpdate: false,
-      latestVersion: null,
-      releaseUrl: null,
-    })
     mockIsMobile.mockReturnValue(true)
     mockUseLocalSessions.mockReturnValue({
       activeSession: {
@@ -2530,11 +2486,6 @@ describe('App gesture hints (mobile, first visit)', () => {
 describe('App groups and panes', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockCheckForUpdate.mockResolvedValue({
-      hasUpdate: false,
-      latestVersion: null,
-      releaseUrl: null,
-    })
     mockIsMobile.mockReturnValue(false)
   })
 
@@ -2746,11 +2697,6 @@ describe('App views, view-only and deep links', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    mockCheckForUpdate.mockResolvedValue({
-      hasUpdate: false,
-      latestVersion: null,
-      releaseUrl: null,
-    })
     mockIsMobile.mockReturnValue(false)
     mockSessions()
   })
@@ -3092,9 +3038,11 @@ describe('App views, view-only and deep links', () => {
       mockIsMobile.mockReturnValue(true)
       render(<App readOnly />)
       await screen.findByTestId('terminal-view')
-      expect(screen.getByRole('status')).toHaveTextContent(
-        'View only: you can watch this terminal but not type',
-      )
+      expect(
+        screen
+          .getByText('View only: you can watch this terminal but not type')
+          .closest('[role="status"]'),
+      ).toBeInTheDocument()
       expect(screen.getByText('View only')).toBeInTheDocument()
       expect(screen.queryByTestId('keyboard-toolbar')).toBeNull()
       expect(screen.queryByTestId('quick-actions')).toBeNull()

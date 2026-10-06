@@ -745,7 +745,7 @@ curl -X POST http://localhost:7680/api/mux/panes/<id>/keys \
 curl http://localhost:7680/api/mux/stream-token
 ```
 
-- [ ] Health endpoint returns 200 with `apiVersion` and `backend`
+- [ ] Health endpoint returns 200 with `apiVersion`, `backend`, `version` and `install`
 - [ ] Snapshot endpoint lists groups/tabs/panes
 - [ ] Create tab works
 - [ ] Select tab works (tmux; Herdr answers 501 because the PWA selects client-side)

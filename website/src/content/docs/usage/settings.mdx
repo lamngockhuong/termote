@@ -136,9 +136,34 @@ git tracks is always searched, even under one of these names.
 
 The **Include ignored** switch is not here: it sits next to the Find a file box in Files.
 
-## Check for Updates
+## Updates
 
-Manually check GitHub for new Termote releases. Shows inline result (already up to date, new version available, or error message). The app also auto-checks on load.
+Shows the version the server runs and the newest stable release on GitHub (the one
+`termote update` installs), read when Settings opens and kept for an hour; **Check for updates**
+asks GitHub again. When the server is older, it shows the command for this install with a
+**Copy** button, and a link to the release notes:
+
+| Install                    | Command                                                  |
+| -------------------------- | -------------------------------------------------------- |
+| `install.sh`/`install.ps1` | `termote update`                                         |
+| Container                  | `termote update && termote container up` (on the host)   |
+
+A git checkout gets a hint instead of a command (pull, rebuild and restart it; the commands differ
+by OS). Termote does not check on its own when the app opens.
+
+### Reloading after an update
+
+The page comes from the server, so once the server runs a new version a banner reads
+**Termote vX.Y.Z is ready** with a **Reload** button (also offered in **Updates**). Termote never
+reloads on its own for a new release, since an unsaved edit in Files would be lost. It notices the new version when the app opens, when the terminal reconnects after the
+server restarted, and when the app is shown again. There is no need for **Clear cache & reload**.
+Only a server whose API changed in a way this page cannot use reloads it at once. With several
+tabs open, **Reload** reloads only its own tab; the others show the banner.
+
+:::note[Updating from 1.13 or older]
+Pages of those versions do not know this banner yet. After the first update past them, close every
+Termote tab (on a phone, quit the installed app) once; the new version loads when it opens again.
+:::
 
 ## Clear Command History
 
