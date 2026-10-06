@@ -20,6 +20,8 @@ const REFUSED: Record<string, string> = {
   not_text: 'Only UTF-8 text without NUL characters can be saved',
   too_large: 'The file would be larger than 1 MiB',
   busy: 'Too many saves at once. Try again',
+  storage_full: "The host's disk or quota is full",
+  read_only: 'The file system there is read-only',
 }
 
 export function saveErrorOf(err: unknown): SaveError {

@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"net/http"
 	"net/url"
 	"os"
@@ -435,5 +436,20 @@ func TestFilesWriteForgetsStatus(t *testing.T) {
 	read()
 	if calls != 2 {
 		t.Errorf("reads after a save = %d, want 2", calls)
+	}
+}
+
+func TestSaveError(t *testing.T) {
+	other := errors.New("disk on fire")
+	for in, want := range map[error]error{
+		&fs.PathError{Op: "write", Path: "x", Err: errDiskFull}:         errStorageFull,
+		&fs.PathError{Op: "write", Path: "x", Err: errQuotaFull}:        errStorageFull,
+		&fs.PathError{Op: "openat", Path: "x", Err: errReadOnlyMount}:   errReadOnlyFiles,
+		&fs.PathError{Op: "renameat", Path: "x", Err: fs.ErrPermission}: errEditPermission,
+		other: other,
+	} {
+		if got := saveError(in); got != want {
+			t.Errorf("saveError(%v) = %v, want %v", in, got, want)
+		}
 	}
 }

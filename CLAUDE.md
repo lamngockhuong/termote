@@ -482,7 +482,8 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   `sensitive`). No component of the path may be a symlink; the parent is opened once through
   `os.Root` and used for every step. The file must be regular, one link, owned by the server user
   (Unix), owner-writable, UTF-8 without NUL, line breaks all `\n` or all `\r\n` (422
-  `not_editable` + `reason`, or 403 `permission`); GET `content` reports the same check as
+  `not_editable` + `reason`, or 403 `permission`; writing the new text on a read-only mount → 403
+  `read_only`, on a full disk or quota → 507 `storage_full`, as a create); GET `content` reports the same check as
   `editable`/`notEditable`. Text arrives with `\n` (a `\r\n` file gets them back), NUL or a lone
   `\r` → 422 `not_text`, at most 1 MiB (413 `too_large`); body limit 6 MiB + 64 KiB, 2 saves at a
   time (429 `busy`), read deadline 5 minutes once authenticated with a slot. Written to
@@ -497,20 +498,27 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   the directories missing above it (0666/0777 under the umask; directories made before a later
   failure stay, as with `mkdir -p`); the text then goes through `PUT files/content`. Same guards
   as a save (`writeGuard`, the handler's cross-site check, `requireWriteRole`, `root` required:
-  400, 409 once it moved); the body (`{path, reveal}`, 8 KB) is read before one of the 2 write
-  slots is taken (429 `busy`), and its read deadline stays 60s; 201 `{root, path}`. The name is checked
+  400, 409 once it moved); the body (`{path, reveal}`, 8 KB) is read first, and its read deadline
+  stays 60s; 201 `{root, path}`. The name is checked
   before the disk is touched (400 `invalid_name`): no empty component, at most 32 components and
   1024 bytes, 255 a component, none ending in a dot or a space, no control character, no
   `<>:"|?*` on Windows, not a
   `.termote-edit-<16 hex>` name, then `cleanRelPath`. Deny dirs, `.git`/the git dir and the
   write-only deny list → 403 `not_allowed`; a sensitive name needs `reveal: true` (403
-  `sensitive`; the PWA asks once, then opens the editor without a Show). One lock per root; each
+  `sensitive`; the PWA asks once, then opens the editor without a Show). One lock per root, taken
+  before one of the 2 write slots shared with saves (429 `busy`), so a create waiting on another
+  holds no slot a save could use; each
   directory is opened from the one before (`Lstat`, `Mkdir` when missing, `OpenRoot`, then
-  `SameFile` with what was checked): a symlink or a directory swapped in → 403 `symlink`, a
-  parent that is a file → 409 `not_directory`, EACCES → 403 `permission`; each directory is
+  `SameFile` with what was checked): a symlink, a Windows junction (Go reports it irregular) or a
+  directory swapped in → 403 `symlink`, a
+  parent that is a file → 409 `not_directory`, EACCES → 403 `permission`, EROFS (Windows
+  `ERROR_WRITE_PROTECT`) → 403 `read_only`, ENOSPC/EDQUOT (Windows disk full or quota) → 507
+  `storage_full` (as uploads); each directory is
   checked against the deny lists again once it exists, before anything is made inside it (an 8.3
   name or a junction is only caught there). The file is opened `O_CREATE|O_EXCL` on its parent's
-  handle: anything there, a dangling symlink included → 409 `exists`, never replaced. A create
+  handle: anything there, a dangling symlink included → 409 `exists` with the cleaned `path`
+  (`/`-separated; Open it opens that), never replaced. A reply after the box was closed opens
+  nothing, the tree is only read again. A create
   drops the root's cached git status. Accepted risk: a new file can be one another tool trusts
   or runs (`.claude/settings.local.json`, `.claude/commands/*.md`, `.vscode/tasks.json`,
   `.github/workflows/*`, a systemd/launchd unit when the root is the home dir); a signed-in user

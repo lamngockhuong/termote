@@ -3,6 +3,7 @@
 package main
 
 import (
+	"errors"
 	"io/fs"
 	"os"
 	"syscall"
@@ -41,3 +42,11 @@ func fileLinks(_ *os.File, fi fs.FileInfo) (uint64, error) {
 func fileOwnedByServer(fi fs.FileInfo) bool {
 	return int(fi.Sys().(*syscall.Stat_t).Uid) == os.Geteuid()
 }
+
+// isStorageFull reports whether err is a full disk or quota.
+func isStorageFull(err error) bool {
+	return errors.Is(err, syscall.ENOSPC) || errors.Is(err, syscall.EDQUOT)
+}
+
+// isReadOnlyFS reports whether err is a write to a read-only mount.
+func isReadOnlyFS(err error) bool { return errors.Is(err, syscall.EROFS) }

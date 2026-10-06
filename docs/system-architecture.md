@@ -187,7 +187,7 @@ GET    /api/mux/panes/{id}/agent/commands                        → {commands: 
 GET    /api/mux/panes/{id}/files/tree?path=&root=               → {root, isRepo, path, entries, truncated}
 GET    /api/mux/panes/{id}/files/content?path=&root=&reveal=    → {root, path, size, text, hash, editable, notEditable?} | {…, previewable: false, reason} | {…, sensitive: true}
 PUT    /api/mux/panes/{id}/files/content?root=  body: {path, baseHash, text, reveal} → {root, path, size, hash} | {error, code, reason?}
-POST   /api/mux/panes/{id}/files/create?root=   body: {path, reveal}           → 201 {root, path} | {error, code}
+POST   /api/mux/panes/{id}/files/create?root=   body: {path, reveal}           → 201 {root, path} | {error, code[, path]}
 GET    /api/mux/panes/{id}/files/changes?root=                  → {root, isRepo, branch, entries, truncated}
 GET    /api/mux/panes/{id}/files/diff?path=&orig=&staged=&root=&reveal= → {root, path, binary, conflict, truncated, sensitive, reason, hunks}
 GET    /api/mux/panes/{id}/files/raw?path=&root=&reveal=[&side=old|new&staged=&orig=] → image bytes | {error, code}
@@ -570,7 +570,9 @@ and not opening a write path into what the reads refuse.
   `busy`), and once authenticated and given a slot the read deadline grows to 5 minutes.
 - The new bytes go to `.termote-edit-<random>` in the same directory (`O_EXCL`, 0600, the
   file's mode set on the open handle, then `fsync`), the file is read again and must still
-  hold what was checked, then the temporary file is renamed over it. Any failure removes the
+  hold what was checked, then the temporary file is renamed over it. A read-only mount (EROFS,
+  Windows `ERROR_WRITE_PROTECT`) answers 403 `read_only` and a full disk or quota 507
+  `storage_full`, as a create does; EACCES 403 `permission`. Any failure removes the
   temporary file, and a save removes ones older than 10 minutes left in its directory (only
   names of exactly that form: a user's `.termote-edit-notes` stays). Every
   `.termote-edit-*` name counts as sensitive. Saves of one file are serialised in the process,
@@ -588,8 +590,8 @@ making anything inside what the reads and saves refuse, through a symlink, a jun
 short name included.
 
 - The `root` query is required (400, 409 with the new root once it moved); the body
-  `{path, reveal}` is read with the 8 KB JSON limit before one of the 2 write slots is taken
-  (429 `busy`), and the read deadline is not extended. 201 `{root, path}` on success.
+  `{path, reveal}` is read with the 8 KB JSON limit before anything else, and the read deadline
+  is not extended. 201 `{root, path}` on success.
 - The name is checked before anything touches the disk (400 `invalid_name`): no empty component
   (a leading, doubled or trailing separator), at most 32 components and 1024 bytes, 255 bytes a
   component, none ending in a dot or a space (Windows drops them, so `a.` would open `a`), no
@@ -597,15 +599,23 @@ short name included.
   device name too).
 - The deny dirs, `.git` and the git dir, and the write-only deny list answer 403 `not_allowed`;
   a sensitive name needs `reveal: true` (403 `sensitive`).
-- One lock per root (creates in a root run one at a time). The walk opens each directory from
+- One lock per root (creates in a root run one at a time), taken after the name checks and
+  before one of the 2 write slots shared with saves (429 `busy` when none is free): a create
+  waiting on another one in its root holds no slot, so it never makes a save get 429. The walk opens each directory from
   the one before: `Lstat`, `Mkdir` (0777 under the umask) when it is missing, `OpenRoot`, and
-  the directory opened must be `SameFile` with the one checked. A symlink, or a directory
-  swapped in between, answers 403 `symlink`; a parent that is a file 409 `not_directory`;
-  EACCES 403 `permission`. Each directory is checked against the deny lists again once it
+  the directory opened must be `SameFile` with the one checked. A symlink, a Windows junction
+  (Go reports it irregular, neither a symlink nor a directory), or a directory swapped in
+  between, answers 403 `symlink`; a parent that is a file 409 `not_directory`;
+  EACCES 403 `permission`; EROFS (Windows `ERROR_WRITE_PROTECT`) 403 `read_only`; ENOSPC or
+  EDQUOT (Windows `ERROR_DISK_FULL`, `ERROR_HANDLE_DISK_FULL`, `ERROR_DISK_QUOTA_EXCEEDED`) 507
+  `storage_full`, the code uploads use. Each directory is checked against the deny lists again once it
   exists, before anything is made inside it: a path that does not exist yet can only be
   compared by name, which misses an 8.3 name (`TERMOT~1`) or a junction.
 - The file is opened `O_CREATE|O_EXCL` (0666 under the umask) on its parent's handle: anything
-  already there, a dangling symlink included, answers 409 `exists` and is never replaced.
+  already there, a dangling symlink included, answers 409 `exists` with `path`, the name as a
+  create would have reported it (`/`-separated), and is never replaced; the PWA's Open it opens
+  that `path`. A reply that arrives after the user closed the box opens nothing: the PWA only
+  reads the tree again.
   Directories made before a later step fails stay, as with `mkdir -p`. A create drops the
   root's cached git status.
 - Accepted risk: a new file can be one another tool trusts or runs (`.claude/settings.local.json`,

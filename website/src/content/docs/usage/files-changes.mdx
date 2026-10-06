@@ -101,6 +101,8 @@ When saving does not go through, your text stays in the box:
 | `This pane's folder changed`                           | The pane moved to another directory. Copy your text, then Cancel to see the file there.             |
 | `Not sure the file was saved. Saving again is safe.`   | The connection dropped or the server did not answer within 30 seconds. Save again: the same text is not a conflict. |
 | `The server can't write this file`                     | The file is read-only, belongs to another user, or its folder cannot be written                    |
+| `The file system there is read-only`                   | The file is on a read-only disk or mount, such as a container volume mounted read-only             |
+| `The host's disk or quota is full`                     | The host's disk, or your disk quota, has no room left                                              |
 
 Some files have no Edit button, because the server would refuse the save: a symbolic link (or a
 file reached through a linked folder), a file with several hard links, a file that mixes line
@@ -132,6 +134,8 @@ file is open.
 - When another file has unsaved changes, `Discard other changes?` asks first.
 - When the connection drops before the server answers, the box says
   `The file may have been created. Refresh to check.`, and **Refresh** reads the tree again.
+- Closing the box while **Create** runs does not stop it: the file is still made and shows in the
+  tree, but it does not open.
 - The folders made for the path stay when a later step fails, as with `mkdir -p`. A new file left
   empty stays too.
 
@@ -141,6 +145,8 @@ file is open.
 | `Part of this path is a symbolic link`         | A folder on the path is a symbolic link: nothing is ever created through one                        |
 | `Files can't be created there`                 | A path Termote never serves (see [Never Shown](#never-shown)), or its own data or upload folders    |
 | `The server can't create a file there`         | The folder cannot be written                                                                        |
+| `The file system there is read-only`           | The folder is on a read-only disk or mount, such as a container volume mounted read-only            |
+| `The host's disk or quota is full`             | The host's disk, or your disk quota, has no room left                                               |
 | `This name can't be used`                      | An empty part (`a//b`, a trailing `/`), a part that ends in a dot or a space, a control character such as a line break, more than 32 levels or 1024 bytes, or on Windows one of `<>:"\|?*` |
 
 <Aside type="caution">

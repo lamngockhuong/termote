@@ -13,6 +13,8 @@ const REFUSED: Record<string, string> = {
   permission: "The server can't create a file there",
   invalid_name: "This name can't be used",
   busy: 'Too many writes at once. Try again',
+  storage_full: "The host's disk or quota is full",
+  read_only: 'The file system there is read-only',
 }
 
 // Caught before sending; the server checks the name again
@@ -65,6 +67,18 @@ export function NewFileDialog({
   // The user agreed to drop the other draft: done once the file is made,
   // so a create that fails loses nothing
   const dropDraft = useRef(false)
+  // The user closed the box: a reply arriving later opens nothing
+  const closed = useRef(false)
+  const close = () => {
+    closed.current = true
+    onClose()
+  }
+  useEffect(() => {
+    closed.current = false
+    return () => {
+      closed.current = true
+    }
+  }, [])
 
   // After the sheet focuses itself on open
   useEffect(() => {
@@ -81,11 +95,21 @@ export function NewFileDialog({
     setProblem(undefined)
     try {
       const res = await createFile(paneId, { root, path, reveal })
+      // Closed meanwhile: the file is there, so the tree shows it, but it
+      // is not opened and the other draft stays
+      if (closed.current) {
+        onRefresh()
+        return
+      }
       if (dropDraft.current) setDraft(undefined)
       onClose()
       onCreated(res.path, res.root, reveal)
     } catch (err) {
-      if (!(err instanceof RequestError)) {
+      if (closed.current) {
+        // Never closes a box opened since; the tree still follows the root
+        if (err instanceof RequestError && err.status === 409 && err.root)
+          onRootChanged(err.root)
+      } else if (!(err instanceof RequestError)) {
         // Lost on the way back, perhaps after the file was made: never
         // guessed from the tree, where an agent may have made one too
         setProblem({
@@ -100,8 +124,9 @@ export function NewFileDialog({
       } else if (err.code === 'exists') {
         setProblem({
           message: 'A file or directory of that name already exists',
-          // Opened like any file found there: a secret one asks to Show
-          action: { kind: 'open', path, reveal: false },
+          // Opened like any file found there: a secret one asks to Show.
+          // The server's name for it: '\' separates directories on Windows
+          action: { kind: 'open', path: err.path ?? path, reveal: false },
         })
       } else {
         setProblem({
@@ -125,7 +150,7 @@ export function NewFileDialog({
   const action = problem?.action
   return (
     <>
-      <Sheet isOpen onClose={onClose} title="New file">
+      <Sheet isOpen onClose={close} title="New file">
         <form onSubmit={submit} className="flex flex-col gap-3 p-4">
           <label htmlFor={inputId} className="text-sm text-fg-muted">
             Path from the pane's directory. Missing directories are created.
@@ -160,7 +185,7 @@ export function NewFileDialog({
                 <Button
                   size="sm"
                   onClick={() => {
-                    onClose()
+                    close()
                     if (action.kind === 'open')
                       onCreated(action.path, root, action.reveal)
                     else onRefresh()
@@ -172,7 +197,7 @@ export function NewFileDialog({
             </div>
           )}
           <div className="flex justify-end gap-2">
-            <Button onClick={onClose}>Cancel</Button>
+            <Button onClick={close}>Cancel</Button>
             <Button type="submit" variant="primary" disabled={sending}>
               Create
             </Button>

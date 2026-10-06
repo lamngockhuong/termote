@@ -534,13 +534,14 @@ describe('files API client', () => {
 
   it('a refused create throws its code, or the root it moved to', async () => {
     mockFetch(
-      { body: { error: 'x', code: 'exists' }, status: 409 },
+      { body: { error: 'x', code: 'exists', path: 'w/a' }, status: 409 },
       { body: { error: 'root changed', root: '/n' }, status: 409 },
     )
     const create = { root: '/r', path: 'a', reveal: true }
     await expect(createFile('1', create)).rejects.toMatchObject({
       status: 409,
       code: 'exists',
+      path: 'w/a',
     })
     await expect(createFile('1', create)).rejects.toMatchObject({
       status: 409,
