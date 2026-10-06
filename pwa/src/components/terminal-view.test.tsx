@@ -112,6 +112,8 @@ vi.mock('../hooks/use-mux-api', () => muxApi)
 interface SocketOpts {
   paneId?: string
   followPane: boolean
+  streamKey?: string
+  paneSeen?: unknown
   getSize: () => TermSize | null
   drive?: () => boolean
   onOutput: (d: Uint8Array) => void
@@ -367,6 +369,13 @@ describe('TerminalView', () => {
     renderView({ paneId: 'w1:p2', followPane: true })
     expect(socketOpts.paneId).toBe('w1:p2')
     expect(socketOpts.followPane).toBe(true)
+  })
+
+  it('passes the stream key and pane listing to the socket', () => {
+    const seen = {}
+    renderView({ paneId: '$3:0', streamKey: '$3', paneSeen: seen })
+    expect(socketOpts.streamKey).toBe('$3')
+    expect(socketOpts.paneSeen).toBe(seen)
   })
 
   it('asks for the fitted size, or none when it is unknown', () => {

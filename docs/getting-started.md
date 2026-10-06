@@ -89,7 +89,8 @@ The PWA works offline and feels like a native app.
 ### Sessions
 
 Termote organises terminals in three levels: **group → tab → pane**. With tmux (the default),
-a group is the tmux session and each tab is a tmux window:
+a group is a tmux session (every session on the tmux server is listed, ones you started
+yourself included) and each tab is a tmux window:
 
 - **Create:** Tap the "+" button in the sidebar
 - **Switch:** Tap a session name in the sidebar

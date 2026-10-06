@@ -1511,6 +1511,71 @@ describe('App', () => {
     ).toBeInTheDocument()
   })
 
+  it('tmux: one stream per session, reopened while its pane is listed', async () => {
+    const base = mockUseLocalSessions()
+    const tab = (id: string, groupId: string, panes?: { id: string }[]) => ({
+      id,
+      name: id,
+      icon: '💻',
+      description: '',
+      groupId,
+      paneId: id,
+      ...(panes && { panes }),
+    })
+    const listed = [tab('$3:0', '$3', [{ id: '$3:0' }]), tab('0', 'main')]
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      activeSession: listed[0],
+      sessions: listed,
+    } as any)
+    const { rerender } = render(<App />)
+    await screen.findByTestId('terminal-view')
+    expect(vi.mocked(TerminalView).mock.lastCall![0]).toMatchObject({
+      streamKey: '$3',
+      paneSeen: listed,
+    })
+    // A tab without its pane list counts by its own id.
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      activeSession: listed[1],
+      sessions: listed,
+    } as any)
+    rerender(<App />)
+    expect(vi.mocked(TerminalView).mock.lastCall![0]).toMatchObject({
+      streamKey: 'main',
+      paneSeen: listed,
+    })
+    // The pane is gone from the snapshot.
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      activeSession: listed[0],
+      sessions: [listed[1]],
+    } as any)
+    rerender(<App />)
+    expect(
+      (vi.mocked(TerminalView).mock.lastCall![0] as { paneSeen?: unknown })
+        .paneSeen,
+    ).toBeUndefined()
+  })
+
+  it('herdr: no stream key and no reopen after exit', async () => {
+    const base = mockUseLocalSessions()
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      activeSession: { ...base.activeSession, id: 'pane1', groupId: 'w1' },
+      sessions: [{ ...base.sessions[0], id: 'pane1', groupId: 'w1' }],
+      mux: { backend: 'herdr', caps: { clientSideSelect: true } },
+    } as any)
+    render(<App />)
+    await screen.findByTestId('terminal-view')
+    const props = vi.mocked(TerminalView).mock.lastCall![0] as {
+      streamKey?: string
+      paneSeen?: unknown
+    }
+    expect(props.streamKey).toBeUndefined()
+    expect(props.paneSeen).toBeUndefined()
+  })
+
   it('does not drive the size when the backend cannot', async () => {
     const settings = mockUseSettings()
     mockUseSettings.mockReturnValue({

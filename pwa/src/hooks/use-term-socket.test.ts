@@ -62,6 +62,8 @@ function setVisibility(state: 'visible' | 'hidden') {
 interface Opts {
   paneId?: string
   followPane?: boolean
+  streamKey?: string
+  paneSeen?: unknown
   drive?: () => boolean
 }
 
@@ -75,6 +77,8 @@ function setup(initial: Opts = { paneId: 'p1' }) {
       useTermSocket({
         paneId: props.paneId,
         followPane: props.followPane ?? false,
+        streamKey: props.streamKey,
+        paneSeen: props.paneSeen,
         getSize,
         drive: props.drive,
         onOutput,
@@ -393,6 +397,58 @@ describe('useTermSocket', () => {
     rerender({ paneId: 'p4', followPane: true })
     await flush()
     expect(last().url).toContain('pane=p4')
+  })
+
+  it('reconnects when the stream key changes (tmux: another session)', async () => {
+    const { rerender } = setup({ paneId: '0', streamKey: 'main' })
+    await flush()
+    rerender({ paneId: '1', streamKey: 'main' })
+    await flush()
+    expect(FakeWS.instances).toHaveLength(1)
+    rerender({ paneId: '$3:0', streamKey: '$3' })
+    await flush()
+    expect(FakeWS.instances).toHaveLength(2)
+    expect(last().url).toContain('pane=%243%3A0')
+  })
+
+  it('reconnects an exited stream once while its pane is still listed', async () => {
+    const { result, rerender } = setup({ paneId: '0', paneSeen: 1 })
+    await flush()
+    act(() => last().open())
+    // A poll while the stream runs changes nothing.
+    rerender({ paneId: '0', paneSeen: 2 })
+    await flush()
+    expect(FakeWS.instances).toHaveLength(1)
+    last().message('{"type":"exit","code":0}')
+    act(() => last().closeWith(1000))
+    expect(result.current.state).toBe('disconnected')
+    // The pane is gone from the next snapshot: nothing.
+    rerender({ paneId: '0', paneSeen: undefined })
+    await flush()
+    expect(FakeWS.instances).toHaveLength(1)
+    // Listed again (the session was made again): one reconnect.
+    rerender({ paneId: '0', paneSeen: 3 })
+    await flush()
+    expect(FakeWS.instances).toHaveLength(2)
+    rerender({ paneId: '0', paneSeen: 4 })
+    await flush()
+    expect(FakeWS.instances).toHaveLength(2)
+    // Each exit gets its own retry, at the next poll at most.
+    last().message('{"type":"exit","code":1}')
+    act(() => last().closeWith(1000))
+    rerender({ paneId: '0', paneSeen: 5 })
+    await flush()
+    expect(FakeWS.instances).toHaveLength(3)
+  })
+
+  it('does not reconnect an evicted stream when its pane is listed', async () => {
+    const { rerender } = setup({ paneId: '0', paneSeen: 1 })
+    await flush()
+    act(() => last().open())
+    act(() => last().closeWith(CLOSE_EVICTED))
+    rerender({ paneId: '0', paneSeen: 2 })
+    await flush()
+    expect(FakeWS.instances).toHaveLength(1)
   })
 
   it('closes a stream hidden for 30s and reopens it when shown', async () => {

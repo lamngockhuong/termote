@@ -211,6 +211,20 @@ export default function App({
     mux,
   } = useLocalSessions(settings.pollInterval)
   const copyModeSupported = mux.caps.copyMode
+  // Each snapshot that still lists the pane on screen (a new sessions array
+  // per poll): a stream that exited with it, a tmux session closed and made
+  // again, reconnects.
+  const paneSeen = useMemo(
+    () =>
+      sessions.some((s) =>
+        s.panes?.length
+          ? s.panes.some((p) => p.id === activeSession.paneId)
+          : s.id === activeSession.paneId,
+      )
+        ? sessions
+        : undefined,
+    [sessions, activeSession.paneId],
+  )
   // Closing a tab ends whatever runs in it, so every way to close one (tab
   // bar, sidebar, swipe, Delete key) asks first.
   const [pendingRemoveId, setPendingRemoveId] = useState<string | null>(null)
@@ -900,6 +914,14 @@ export default function App({
                     paneId={activeSession.paneId}
                     backend={mux.backend}
                     followPane={mux.caps.clientSideSelect}
+                    // tmux attaches a whole session: another session needs
+                    // another stream.
+                    streamKey={
+                      mux.caps.clientSideSelect
+                        ? undefined
+                        : activeSession.groupId
+                    }
+                    paneSeen={mux.caps.clientSideSelect ? undefined : paneSeen}
                     copyModeSupported={copyModeSupported}
                     serverScroll={!!mux.caps.scroll}
                     bracketedPaste={

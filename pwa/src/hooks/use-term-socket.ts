@@ -29,6 +29,13 @@ interface Options {
   // tmux attaches the whole session, so a new pane id is only used on the
   // next connect.
   followPane: boolean
+  // Without followPane, reconnect when this changes (tmux: the session the
+  // stream attaches to).
+  streamKey?: string
+  // A new value each time a snapshot still lists paneId. A stream that ended
+  // with an exit frame (tmux: its session was closed, then made again)
+  // reconnects once at the next value.
+  paneSeen?: unknown
   // Size requested when the stream opens.
   getSize: () => TermSize | null
   // Open already driving the pane size (herdr), so a reconnect does not start
@@ -80,6 +87,8 @@ const encoder = new TextEncoder()
 export function useTermSocket({
   paneId,
   followPane,
+  streamKey,
+  paneSeen,
   getSize,
   drive,
   onOutput,
@@ -97,6 +106,9 @@ export function useTermSocket({
   // Why the stream is closed on purpose: 'hidden' reopens when the page is
   // shown again; 'stopped' (process exited, evicted) waits for reconnect().
   const stopRef = useRef<'hidden' | 'stopped' | null>(null)
+  // Set when the last stream ended with an exit frame; cleared by the next
+  // connect, so each exit is retried at most once.
+  const exitedRef = useRef(false)
   const paneRef = useRef(paneId)
   paneRef.current = paneId
 
@@ -131,6 +143,7 @@ export function useTermSocket({
     const pane = paneRef.current
     if (!pane) return
     stopRef.current = null
+    exitedRef.current = false
     const gen = genRef.current
     setState('connecting')
 
@@ -195,6 +208,7 @@ export function useTermSocket({
       clearStartTimer()
       if (ev.code === CLOSE_EVICTED || exited) {
         stopRef.current = 'stopped'
+        exitedRef.current = exited
         setState(exited ? 'disconnected' : 'error')
         return
       }
@@ -204,7 +218,11 @@ export function useTermSocket({
 
   // Open on mount and when the pane first becomes known; follow pane changes
   // only when asked.
-  const connectKey = followPane ? paneId : paneId ? 'pane' : undefined
+  const connectKey = followPane
+    ? paneId
+    : paneId
+      ? `pane:${streamKey ?? ''}`
+      : undefined
   useEffect(() => {
     if (!connectKey) {
       setState('connecting')
@@ -214,6 +232,13 @@ export function useTermSocket({
     connect()
     return teardown
   }, [connectKey, connect, teardown])
+
+  // An exited stream whose pane is still listed reconnects, once per exit.
+  useEffect(() => {
+    if (paneSeen === undefined || !exitedRef.current) return
+    attemptRef.current = 0
+    connect()
+  }, [paneSeen, connect])
 
   // Close a stream hidden for a while; reopen it when the page is shown again
   // or the network comes back. A socket can look open after it died: mobile

@@ -34,7 +34,7 @@
 └────────────────────────┬────────────────────────────────────────┘
                          ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                         tmux Session                            │
+│              tmux server: one or more sessions                  │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐                       │
 │  │ Window 0 │  │ Window 1 │  │ Window 2 │  ...                  │
 │  │ claude   │  │ copilot  │  │ shell    │                       │
@@ -110,8 +110,16 @@ For a native install, `termote start` computes the equivalent of `TERMOTE_ALLOWE
 `server/mux.go` defines a `Mux` interface (snapshot, select/new/rename/close tab, send-keys,
 attach a terminal, health) with two implementations:
 
-- **`mux_tmux.go`** (tmux on Unix, psmux on Windows): a tmux/psmux session is a group, a window
-  is a tab, panes are tmux panes. Every client shares the same attached window, as in 0.x.
+- **`mux_tmux.go`** (tmux on Unix, psmux on Windows): every session on the tmux server is a
+  group (sessions made outside Termote too), a window is a tab, and a tab shows its window's
+  active pane. The default session (`TMUX_SESSION`, `main`) is listed first, keeps its name as
+  group id and bare window indexes as tab ids (`0`), and is made again by the next snapshot when
+  it is missing; any other session is addressed by tmux's session id (group `$3`, tab `$3:1`),
+  which a rename keeps and a tmux server restart changes. Every command targets exactly (`$N:=i`,
+  `=main:=i`: no prefix match on the session name or on a window name), and `display-message` replies are checked against the session and window asked
+  for. A stream runs `attach -E -t <session>` after selecting the window, so every client of a
+  session shares its current window, as in 0.x; the PWA keeps which session it shows per device
+  and opens a new stream when it switches session.
 - **`mux_herdr.go`** (native mode only, `TERMOTE_MUX=herdr`): drives a Herdr server over its
   socket. A Herdr workspace is a group, a Herdr tab is a tab, a Herdr pane is a pane. Selecting
   a tab in the PWA only changes which pane the client streams (`Caps.ClientSideSelect`); it
@@ -876,7 +884,9 @@ termote update --force           # Force reinstall current version
    than tab and line breaks before it is sent, so text a page put on the clipboard cannot end a
    bracketed paste early and reach the program as typed keys
 7. **Herdr guard**: `--mux herdr --no-auth` is refused unless `--allow-herdr-no-auth` is also
-   given, since Herdr exposes every workspace on the host, not just this session's pane
+   given, since Herdr exposes every workspace on the host, not just this session's pane. tmux
+   likewise lists every session on its server, the user's own included (accepted): ids and
+   targets are exact (`$N`, `=name`), so no request reaches a session by a prefix of its name
 8. **Session**: tmux isolates terminal processes; Herdr sessions are isolated by Herdr itself
 9. **Rate limiting**: 5 failed basic-auth attempts/min per IP, and 20/min per IPv6 /64 → 429
    (expired entries swept at most every 10s, so many source addresses cannot make each failure

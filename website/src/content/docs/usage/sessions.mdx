@@ -9,6 +9,12 @@ Termote models terminals as three levels — **group → tab → pane** — rega
 With the default tmux backend a group is a tmux session and a tab is a tmux window; panes are
 only used by the Herdr backend.
 
+With tmux, every session on the tmux server appears as a group, including sessions you started
+yourself outside Termote (`tmux new -s work`): anyone signed in to Termote can switch to them and
+type into them. Termote's own session (`main` unless `TMUX_SESSION` says otherwise) is always
+listed first. Each device remembers which session it shows; within a session, every device
+attached to it shares the current window.
+
 ## Default Session
 
 Fresh installs start with a single **Shell** session (group). Create additional groups as
@@ -78,8 +84,10 @@ Every screen has an address you can copy and open later or on another device:
 <base>/#/s/<group>/<tab>[/<pane>][?view=terminal|chat|files]
 ```
 
-- `group`, `tab` and `pane` are the IDs from `/api/mux/snapshot`. With tmux, `group` is the
-  session name, `tab` is the window index and there is no `pane`. With Herdr they are the IDs
+- `group`, `tab` and `pane` are the IDs from `/api/mux/snapshot`. With tmux and Termote's own
+  session, `group` is the session name and `tab` the window index (`#/s/main/0`); another session
+  uses tmux's session id, `group` `$3` and `tab` `$3:1` (URI-encoded), which stays the same when
+  the session is renamed but changes when the tmux server restarts. There is no `pane`. With Herdr they are the IDs
   Herdr assigns to the workspace, tab and pane.
 - Opening a link selects that group, tab and pane once the session list has loaded. An unknown ID
   keeps the current session and shows a toast.

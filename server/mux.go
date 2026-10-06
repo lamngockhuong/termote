@@ -12,7 +12,7 @@ import (
 
 // apiVersion is bumped on every breaking change to /api/mux/*. The PWA compares
 // it with its own build and reloads when they differ.
-const apiVersion = 1
+const apiVersion = 2
 
 // serverInstall is how this server was installed (installKind), reported by
 // health so the PWA can name the update command; serve sets it at start.
