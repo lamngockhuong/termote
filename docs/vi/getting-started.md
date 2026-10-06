@@ -167,4 +167,21 @@ Thanh công cụ ở dưới cùng cung cấp các phím bổ trợ:
 
 ## Nếu bạn đang dùng bản 0.x
 
-Không có đường nâng cấp tại chỗ từ 0.x lên 1.0: cấu trúc cài đặt, định dạng cấu hình và CLI đều đã đổi khác. Hãy gỡ bản 0.x trước (xem [tài liệu 0.x đã lưu trữ](https://termote.ohnice.app/0.x/) để biết các bước gỡ riêng của bản đó), rồi cài bản 1.0 từ đầu bằng hai lệnh phía trên.
+Không có đường nâng cấp tại chỗ từ 0.x lên 1.0: cấu trúc cài đặt, định dạng cấu hình và CLI đều đã đổi khác, và bản 1.0 không đọc bất cứ thứ gì 0.x để lại. Hãy gỡ hoàn toàn bản 0.x trước; lệnh `uninstall` của nó chỉ dừng dịch vụ, nên cần xoá thêm lệnh `termote` và thư mục cài đặt (`~/.termote`, trừ khi đã đặt `TERMOTE_INSTALL_DIR`):
+
+```bash
+# Linux, macOS
+~/.termote/scripts/termote.sh uninstall all   # dừng native + container, reset Tailscale serve
+~/.termote/scripts/termote.sh unlink          # xoá symlink 'termote'
+rm -rf ~/.termote
+hash -r                                       # zsh: rehash
+```
+
+```powershell
+# Windows (PowerShell)
+& "$HOME\.termote\scripts\termote.ps1" uninstall all
+& "$HOME\.termote\scripts\termote.ps1" unlink
+Remove-Item -Recurse -Force "$HOME\.termote"
+```
+
+`uninstall all` chạy `tailscale serve reset`, lệnh này xoá mọi mapping `tailscale serve` trên máy chứ không riêng của Termote. Bản cài container còn để lại image đã build (`docker images | grep termote`). Xem thêm trang lưu trữ 0.x [native](https://termote.ohnice.app/vi/0.x/installation/native/#gỡ-cài-đặt) và [container](https://termote.ohnice.app/vi/0.x/installation/docker/#gỡ-cài-đặt). Sau đó cài bản 1.0 từ đầu bằng hai lệnh phía trên.

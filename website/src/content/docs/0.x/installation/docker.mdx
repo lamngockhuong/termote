@@ -302,16 +302,35 @@ Re-run the installer - it compares versions and prompts before updating:
 
 ## Uninstall
 
+`uninstall` only stops Termote: it leaves the install directory (`~/.termote` by default, or
+`TERMOTE_INSTALL_DIR`), its config and logs, and the `termote` command in place. To remove 0.x
+completely, for example before installing 1.0:
+
 <Tabs>
   <TabItem label="Unix (macOS/Linux)">
     ```bash
-    ./scripts/termote.sh uninstall container
+    ~/.termote/scripts/termote.sh uninstall all   # stop native + container, reset Tailscale serve, delete the config
+    ~/.termote/scripts/termote.sh unlink          # remove the 'termote' symlink (/usr/local/bin or ~/.local/bin)
+    rm -rf ~/.termote                             # scripts, binaries, PWA, logs
+    hash -r                                       # zsh: rehash
     ```
   </TabItem>
 
   <TabItem label="Windows (PowerShell)">
     ```powershell
-    .\scripts\termote.ps1 uninstall container
+    & "$HOME\.termote\scripts\termote.ps1" uninstall all   # stop native + container, reset Tailscale serve
+    & "$HOME\.termote\scripts\termote.ps1" unlink          # remove termote.cmd/termote.ps1 from ~\.local\bin
+    Remove-Item -Recurse -Force "$HOME\.termote"           # scripts, binaries, PWA, logs, config.json
     ```
   </TabItem>
 </Tabs>
+
+<Aside type="caution">
+  `uninstall all` runs `tailscale serve reset`, which removes **every** `tailscale serve` mapping on the
+  machine, not only Termote's (on Unix only when the saved config used Tailscale, through `sudo`). Check
+  `tailscale serve status` first if you serve anything else.
+</Aside>
+
+If you used container mode, also remove the image built for it: find it with `docker images | grep termote`
+(or `podman images`), then `docker rmi <image>`. 1.0 does not read anything 0.x left behind, so nothing else
+needs to stay.

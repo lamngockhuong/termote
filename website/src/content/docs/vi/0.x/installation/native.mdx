@@ -350,16 +350,34 @@ Chạy lại installer - sẽ so sánh version và hỏi trước khi cập nh�
 
 ## Gỡ cài đặt
 
+`uninstall` chỉ dừng Termote: thư mục cài đặt (mặc định `~/.termote`, hoặc `TERMOTE_INSTALL_DIR`), cấu
+hình, log và lệnh `termote` vẫn còn nguyên. Để gỡ 0.x hoàn toàn, ví dụ trước khi cài 1.0:
+
 <Tabs>
   <TabItem label="Unix (macOS/Linux)">
     ```bash
-    ./scripts/termote.sh uninstall native
+    ~/.termote/scripts/termote.sh uninstall all   # dừng native + container, reset Tailscale serve, xoá cấu hình
+    ~/.termote/scripts/termote.sh unlink          # xoá symlink 'termote' (/usr/local/bin hoặc ~/.local/bin)
+    rm -rf ~/.termote                             # script, binary, PWA, log
+    hash -r                                       # zsh: rehash
     ```
   </TabItem>
 
   <TabItem label="Windows (PowerShell)">
     ```powershell
-    .\scripts\termote.ps1 uninstall native
+    & "$HOME\.termote\scripts\termote.ps1" uninstall all   # dừng native + container, reset Tailscale serve
+    & "$HOME\.termote\scripts\termote.ps1" unlink          # xoá termote.cmd/termote.ps1 trong ~\.local\bin
+    Remove-Item -Recurse -Force "$HOME\.termote"           # script, binary, PWA, log, config.json
     ```
   </TabItem>
 </Tabs>
+
+<Aside type="caution">
+  `uninstall all` chạy `tailscale serve reset`, lệnh này xoá **mọi** mapping `tailscale serve` trên máy chứ
+  không riêng của Termote (trên Unix chỉ khi cấu hình đã lưu có dùng Tailscale, qua `sudo`). Nếu bạn còn serve
+  thứ khác, hãy xem `tailscale serve status` trước.
+</Aside>
+
+Nếu đã dùng chế độ container, hãy xoá cả image đã build cho nó: tìm bằng `docker images | grep termote`
+(hoặc `podman images`), rồi `docker rmi <image>`. Bản 1.0 không đọc bất cứ thứ gì 0.x để lại, nên không cần
+giữ lại gì.

@@ -188,6 +188,28 @@ The toolbar at the bottom provides modifier keys:
 ## Coming from a 0.x install
 
 There is no in-place upgrade from 0.x to 1.0: the install layout, config format and CLI all
-changed. Uninstall the 0.x version first (see the archived
-[0.x documentation](https://termote.ohnice.app/0.x/) for its own uninstall steps), then install
+changed, and 1.0 reads nothing 0.x left behind. Remove 0.x completely first; its `uninstall`
+only stops it, so also remove the command and the install directory (`~/.termote` unless
+`TERMOTE_INSTALL_DIR` was set):
+
+```bash
+# Linux, macOS
+~/.termote/scripts/termote.sh uninstall all   # stops native + container, resets Tailscale serve
+~/.termote/scripts/termote.sh unlink          # removes the 'termote' symlink
+rm -rf ~/.termote
+hash -r                                       # zsh: rehash
+```
+
+```powershell
+# Windows (PowerShell)
+& "$HOME\.termote\scripts\termote.ps1" uninstall all
+& "$HOME\.termote\scripts\termote.ps1" unlink
+Remove-Item -Recurse -Force "$HOME\.termote"
+```
+
+`uninstall all` runs `tailscale serve reset`, which removes every `tailscale serve` mapping on
+the machine, not only Termote's. A container install also leaves the image it built
+(`docker images | grep termote`). See the archived 0.x
+[native](https://termote.ohnice.app/0.x/installation/native/#uninstall) and
+[container](https://termote.ohnice.app/0.x/installation/docker/#uninstall) pages. Then install
 1.0 fresh with the two commands above.
