@@ -138,7 +138,14 @@ describe('UpdatesSection', () => {
     expect(writeText).toHaveBeenCalledWith('termote update')
     expect(screen.getByText('Copied')).toBeInTheDocument()
     expect(screen.getByText('Command copied')).toHaveAttribute('role', 'status')
-    act(() => vi.advanceTimersByTime(2000))
+    // A second copy keeps "Copied" for 2s from then
+    act(() => vi.advanceTimersByTime(1500))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Copied' }))
+    })
+    act(() => vi.advanceTimersByTime(1500))
+    expect(screen.getByText('Copied')).toBeInTheDocument()
+    act(() => vi.advanceTimersByTime(500))
     expect(screen.queryByText('Copied')).toBe(null)
     vi.useRealTimers()
   })

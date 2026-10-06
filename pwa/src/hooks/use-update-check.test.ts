@@ -25,6 +25,9 @@ describe('compareVersions', () => {
     expect(compareVersions('1.2.3', '1.2.4')).toBe(-1)
     expect(compareVersions('1.10.0', '1.9.9')).toBe(1)
     expect(compareVersions('v2.0.0', '2.0.0')).toBe(0)
+    // A missing part counts as 0
+    expect(compareVersions('1.2', '1.2.0')).toBe(0)
+    expect(compareVersions('1.2.1', '1.2')).toBe(1)
   })
 
   it('puts a pre-release before its version', () => {
