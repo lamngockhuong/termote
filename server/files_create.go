@@ -200,7 +200,9 @@ func openChildDir(cur *os.Root, name string) (*os.Root, error) {
 	if err != nil {
 		return nil, err
 	}
-	if fi.Mode()&fs.ModeSymlink != 0 {
+	// Windows reports a junction (a reparse point) as irregular, neither a
+	// symlink nor a directory: refused as the link it is.
+	if fi.Mode()&(fs.ModeSymlink|fs.ModeIrregular) != 0 {
 		return nil, errCreateSymlink
 	}
 	if !fi.IsDir() {

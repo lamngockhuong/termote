@@ -603,8 +603,9 @@ short name included.
   before one of the 2 write slots shared with saves (429 `busy` when none is free): a create
   waiting on another one in its root holds no slot, so it never makes a save get 429. The walk opens each directory from
   the one before: `Lstat`, `Mkdir` (0777 under the umask) when it is missing, `OpenRoot`, and
-  the directory opened must be `SameFile` with the one checked. A symlink, or a directory
-  swapped in between, answers 403 `symlink`; a parent that is a file 409 `not_directory`;
+  the directory opened must be `SameFile` with the one checked. A symlink, a Windows junction
+  (Go reports it irregular, neither a symlink nor a directory), or a directory swapped in
+  between, answers 403 `symlink`; a parent that is a file 409 `not_directory`;
   EACCES 403 `permission`; EROFS (Windows `ERROR_WRITE_PROTECT`) 403 `read_only`; ENOSPC or
   EDQUOT (Windows `ERROR_DISK_FULL`, `ERROR_HANDLE_DISK_FULL`, `ERROR_DISK_QUOTA_EXCEEDED`) 507
   `storage_full`, the code uploads use. Each directory is checked against the deny lists again once it

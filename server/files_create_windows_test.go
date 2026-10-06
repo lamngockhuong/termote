@@ -91,8 +91,7 @@ func shortName(t *testing.T, p string) string {
 
 // A junction on the path is never walked through, wherever it leads: inside
 // the root, out of it, or into termote's own data or upload dir. Go reports
-// a junction as a directory, not a symlink, so SameFile (or os.Root's escape
-// check) is what refuses it.
+// a junction as irregular, neither a symlink nor a directory: 403 symlink.
 func TestFilesCreateJunction(t *testing.T) {
 	base, _ := filepath.EvalSymlinks(t.TempDir())
 	root := filepath.Join(base, "root")
@@ -117,7 +116,7 @@ func TestFilesCreateJunction(t *testing.T) {
 		junction(t, filepath.Join(root, name), target)
 		for _, rel := range []string{name + "/x.md", name + "/new/x.md"} {
 			code, got := fx.create(t, root, map[string]any{"path": rel})
-			if code != http.StatusForbidden {
+			if code != http.StatusForbidden || got["code"] != "symlink" {
 				t.Errorf("%s = %d %v", rel, code, got)
 			}
 		}

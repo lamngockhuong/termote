@@ -509,7 +509,8 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   before one of the 2 write slots shared with saves (429 `busy`), so a create waiting on another
   holds no slot a save could use; each
   directory is opened from the one before (`Lstat`, `Mkdir` when missing, `OpenRoot`, then
-  `SameFile` with what was checked): a symlink or a directory swapped in → 403 `symlink`, a
+  `SameFile` with what was checked): a symlink, a Windows junction (Go reports it irregular) or a
+  directory swapped in → 403 `symlink`, a
   parent that is a file → 409 `not_directory`, EACCES → 403 `permission`, EROFS (Windows
   `ERROR_WRITE_PROTECT`) → 403 `read_only`, ENOSPC/EDQUOT (Windows disk full or quota) → 507
   `storage_full` (as uploads); each directory is
