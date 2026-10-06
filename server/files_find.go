@@ -219,6 +219,9 @@ type findWalk struct {
 	b       *findBudget
 	ignored bool
 	out     []findEntry
+	// deep: a directory past findMaxDepth was not read. The walk goes on
+	// with its siblings, but the list is incomplete.
+	deep bool
 }
 
 // walk adds the files under dir ('/'-separated, "." for the root, depth
@@ -227,7 +230,7 @@ type findWalk struct {
 // root is listed, as the tree shows it.
 func (w *findWalk) walk(dir string, depth int) {
 	if depth >= findMaxDepth {
-		w.b.stopped = true
+		w.deep = true
 		return
 	}
 	findBeforeReadDir(dir)
@@ -347,7 +350,7 @@ func (f *filesAPI) findIgnored(ctx context.Context, root filesRoot, ex findExclu
 			break
 		}
 	}
-	return findList{entries: w.out, incomplete: cut || w.b.stopped}, nil
+	return findList{entries: w.out, incomplete: cut || w.b.stopped || w.deep}, nil
 }
 
 func hasExcludedPart(rel string, ex findExcludes) bool {
@@ -368,7 +371,7 @@ func (f *filesAPI) findWalkRoot(root filesRoot, ex findExcludes) (findList, erro
 	defer rt.Close()
 	w := &findWalk{rt: rt, ex: ex, ff: f.newFindFilter(root), b: newFindBudget()}
 	w.walk(".", 0)
-	return findList{entries: w.out, incomplete: w.b.stopped}, nil
+	return findList{entries: w.out, incomplete: w.b.stopped || w.deep}, nil
 }
 
 // findLists returns the lists a query of root is matched against, from the

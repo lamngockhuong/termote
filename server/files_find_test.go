@@ -308,10 +308,13 @@ func TestFilesFindLimits(t *testing.T) {
 	// Too deep, and out of time.
 	deep := plainDir(t)
 	writeFile(t, filepath.Join(deep, "a", "b", "c", "hit.txt"), "")
+	// Read after "a" whatever the order: a directory too deep never stops
+	// the rest of the walk
 	writeFile(t, filepath.Join(deep, "hit.txt"), "")
+	writeFile(t, filepath.Join(deep, "z", "hit2.txt"), "")
 	fx = newFindFixture(t, deep)
 	setFindHook(t, &findMaxDepth, 2)
-	if body, by := fx.findOK(t, url.Values{"q": {"hit"}}); len(by) != 1 || body["incomplete"] != true {
+	if body, by := fx.findOK(t, url.Values{"q": {"hit"}}); len(by) != 2 || body["incomplete"] != true {
 		t.Errorf("depth = %v %v", by, body)
 	}
 	setFindHook(t, &findMaxDepth, 32)

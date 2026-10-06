@@ -239,8 +239,10 @@ func TestFilesDeleteCrossDevice(t *testing.T) {
 	// Swapped before the unlink: nothing deleted.
 	fx.write(t, "b.txt", "b\n")
 	setTrashRename(t, func(*os.Root, string, *os.Root, string) error {
-		os.Remove(filepath.Join(fx.root, "b.txt"))
-		writeFile(t, filepath.Join(fx.root, "b.txt"), "other\n")
+		// Renamed over it: removing it first would let the new file take
+		// the freed inode number
+		writeFile(t, filepath.Join(fx.root, "b.new"), "other\n")
+		os.Rename(filepath.Join(fx.root, "b.new"), filepath.Join(fx.root, "b.txt"))
 		return &os.LinkError{Op: "rename", Err: errXDev}
 	})
 	if code, body := fx.del(t, "b.txt", map[string]any{"permanent": true}); code != 409 || body["code"] != "changed" {
@@ -704,8 +706,9 @@ func TestFilesDeleteEdgeFailures(t *testing.T) {
 	// Swapped between the check and the open.
 	fx.write(t, "a.txt", "a\n")
 	setFindHook(t, &deleteBeforeOpen, func(dir *os.Root, base string) {
-		dir.Remove(base)
-		writeFile(t, filepath.Join(fx.root, "a.txt"), "b\n")
+		// Renamed over it, so the new file never reuses the old inode
+		writeFile(t, filepath.Join(fx.root, "a.new"), "b\n")
+		os.Rename(filepath.Join(fx.root, "a.new"), filepath.Join(fx.root, "a.txt"))
 	})
 	if code, body := fx.del(t, "a.txt", nil); code != 409 || body["code"] != "changed" {
 		t.Errorf("swapped before open = %d %v", code, body)

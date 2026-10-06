@@ -118,10 +118,11 @@ func TestTrashSweepOrphansAndStrangers(t *testing.T) {
 	write(part)
 	bad := strings.Repeat("d", 32) + ".json"
 	write(bad) // does not parse
-	// Names the store never makes, a directory and a symlink under a
-	// payload's name: never touched.
+	// Names the store never makes (upper case: no other name here differs
+	// only in case, which a case-insensitive file system would merge), a
+	// directory and a symlink under a payload's name: never touched.
 	write("notes.txt")
-	write(strings.Repeat("A", 32))
+	write(strings.Repeat("C", 32))
 	dir := strings.Repeat("e", 32)
 	writeFile(t, filepath.Join(tt.dir, dir, "inner"), "keep")
 	link := strings.Repeat("f", 32)
@@ -143,7 +144,7 @@ func TestTrashSweepOrphansAndStrangers(t *testing.T) {
 			t.Errorf("%s stayed past trashOrphanAge", n)
 		}
 	}
-	for _, n := range []string{"notes.txt", strings.Repeat("A", 32), filepath.Join(dir, "inner")} {
+	for _, n := range []string{"notes.txt", strings.Repeat("C", 32), filepath.Join(dir, "inner")} {
 		if !tt.has(n) {
 			t.Errorf("%s removed", n)
 		}
