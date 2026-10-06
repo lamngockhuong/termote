@@ -84,8 +84,9 @@ like any other. To go back to stable, run `termote update`. Before the final `X.
 that is a downgrade (a pre-release sorts above the release before it), which `update` makes
 with a warning.
 
-**Coming from 0.x:** there is no in-place upgrade. Uninstall the 0.x version first (see the
-archived [0.x documentation](https://termote.ohnice.app/0.x/) for its own uninstall steps),
+**Coming from 0.x:** there is no in-place upgrade. Remove the 0.x version completely first (its
+`uninstall` only stops it; see
+[Coming from a 0.x install](getting-started.md#coming-from-a-0x-install) for the commands),
 then install 1.0 fresh with the command above.
 
 ## Deployment Modes
