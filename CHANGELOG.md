@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.12.3](https://github.com/lamngockhuong/termote/compare/v1.12.2...v1.12.3) (2026-10-06)
+
+
+### Bug Fixes
+
+* clean up fully on uninstall and add --purge ([#346](https://github.com/lamngockhuong/termote/issues/346)) ([a52c6f1](https://github.com/lamngockhuong/termote/commit/a52c6f1259947ea350b441f92685e2beb93f630e))
+* New file and save follow-ups (errors, Open it, write slots, late replies, junctions) ([#349](https://github.com/lamngockhuong/termote/issues/349)) ([5216a30](https://github.com/lamngockhuong/termote/commit/5216a30fd2ab1a64e90d83640e267233be1e0793))
+
 ## [1.12.2](https://github.com/lamngockhuong/termote/compare/v1.12.1...v1.12.2) (2026-10-06)
 
 
