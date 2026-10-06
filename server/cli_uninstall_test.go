@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -55,8 +56,9 @@ func TestUploadsDirFollowsUserCacheDir(t *testing.T) {
 	if got, want := tc.uploadsDir(), filepath.Join(tc.home, ".cache", "termote", "uploads"); got != want {
 		t.Fatalf("default %s, want %s", got, want)
 	}
-	tc.env["XDG_CACHE_HOME"] = "/xdg/cache"
-	if got := tc.uploadsDir(); got != filepath.Join("/xdg/cache", "termote", "uploads") {
+	xdg := filepath.Join(tc.home, "xdg-cache") // absolute on the host, Windows included
+	tc.env["XDG_CACHE_HOME"] = xdg
+	if got := tc.uploadsDir(); got != filepath.Join(xdg, "termote", "uploads") {
 		t.Fatalf("XDG %s", got)
 	}
 	mac := newTestCLI(t, "darwin")
@@ -176,16 +178,32 @@ func TestRemoveLaterScript(t *testing.T) {
 	}
 }
 
-// What cannot be deleted (Windows: the running binary) is returned for the
-// late cleanup instead of failing the uninstall.
-func TestUninstallHandsLockedPathsToRemoveLater(t *testing.T) {
+// lockIn keeps file's directory from being removed until the test ends: an
+// open handle on Windows (as the running binary holds it), a read-only
+// directory elsewhere.
+func lockIn(t *testing.T, file string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		f, err := os.Open(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { f.Close() })
+		return
+	}
 	if os.Geteuid() == 0 {
 		t.Skip("root deletes from a read-only dir")
 	}
+	dir := filepath.Dir(file)
+	os.Chmod(dir, 0o500)
+	t.Cleanup(func() { os.Chmod(dir, 0o755) })
+}
+
+// What cannot be deleted (Windows: the running binary) is returned for the
+// late cleanup instead of failing the uninstall.
+func TestUninstallHandsLockedPathsToRemoveLater(t *testing.T) {
 	tc := installedCLI(t, "windows")
-	bin := filepath.Dir(tc.exe)
-	os.Chmod(bin, 0o500)
-	t.Cleanup(func() { os.Chmod(bin, 0o755) })
+	lockIn(t, tc.exe)
 	var script string
 	tc.startHidden = func(s string) error { script = s; return nil }
 	if code := tc.main([]string{"uninstall"}); code != 0 {
@@ -197,36 +215,31 @@ func TestUninstallHandsLockedPathsToRemoveLater(t *testing.T) {
 }
 
 func TestPurgeDataReturnsLockedDirs(t *testing.T) {
-	if os.Geteuid() == 0 {
-		t.Skip("root deletes from a read-only dir")
-	}
 	tc := newTestCLI(t, "linux")
-	writeFile(t, filepath.Join(tc.stateDir(), "termote.log"), "log")
-	os.Chmod(tc.stateDir(), 0o500)
-	t.Cleanup(func() { os.Chmod(tc.stateDir(), 0o755) })
+	log := filepath.Join(tc.stateDir(), "termote.log")
+	writeFile(t, log, "log")
+	lockIn(t, log)
 	if left := tc.purgeData(); len(left) != 1 || left[0] != tc.stateDir() {
 		t.Fatalf("left %v", left)
 	}
 }
 
 func TestRemoveUploadsReturnsLockedStore(t *testing.T) {
-	if os.Geteuid() == 0 {
-		t.Skip("root deletes from a read-only dir")
-	}
 	tc := newTestCLI(t, "linux")
-	writeFile(t, filepath.Join(tc.uploadsDir(), "a.png"), "png")
-	os.Chmod(tc.uploadsDir(), 0o500)
-	t.Cleanup(func() { os.Chmod(tc.uploadsDir(), 0o755) })
+	img := filepath.Join(tc.uploadsDir(), "a.png")
+	writeFile(t, img, "png")
+	lockIn(t, img)
 	if left := tc.removeUploads(); len(left) != 1 || left[0] != tc.uploadsDir() {
 		t.Fatalf("left %v", left)
 	}
 }
 
-// The launcher ends the batch on the line that runs the exe, so cmd.exe
-// never reads the file again after uninstall deleted it.
+// The launcher leaves the batch before running the exe, so cmd.exe never
+// reads the file again after uninstall deleted it, and the exe's exit code
+// is the last one on the line.
 func TestWindowsLauncherExitsAfterTheExe(t *testing.T) {
 	lines := strings.Split(strings.TrimSuffix(windowsLauncher, "\r\n"), "\r\n")
-	if last := lines[len(lines)-1]; !strings.HasSuffix(last, `termote.exe" %* & exit /b`) {
+	if last := lines[len(lines)-1]; !strings.HasPrefix(last, `(goto) 2>nul & "`) || !strings.HasSuffix(last, `termote.exe" %*`) {
 		t.Fatalf("last line %q", last)
 	}
 }

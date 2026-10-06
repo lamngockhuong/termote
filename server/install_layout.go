@@ -141,17 +141,19 @@ func (c *cli) switchCurrent(version string) error {
 //
 // setlocal keeps its variable out of the caller's session (and so out of
 // the server's environment); a missing current.txt fails instead of running
-// a value left from before. "& exit /b" ends the batch on the line that runs
-// the exe, keeping its exit code: cmd.exe reads a batch file line by line,
-// so once uninstall has deleted this file, reading on would fail with "The
-// system cannot find the path specified".
+// a value left from before. "(goto) 2>nul" ends the batch before the exe
+// runs (the rest of the line is already parsed): cmd.exe reads a batch file
+// line by line, so once uninstall has deleted this file, reading on would
+// fail with "The system cannot find the path specified". "& exit /b" does
+// not avoid that (it reads to the end of the file) and loses the exit code
+// under "cmd /c", which is how PowerShell runs a .cmd.
 const windowsLauncher = "@echo off\r\n" +
 	"rem Written by the Termote installer: runs the version named in current.txt.\r\n" +
 	"setlocal\r\n" +
 	"set \"_termote_version=\"\r\n" +
 	"set /p _termote_version=<\"%~dp0..\\current.txt\"\r\n" +
 	"if not defined _termote_version (echo termote: %~dp0..\\current.txt names no version; reinstall Termote 1>&2 & exit /b 1)\r\n" +
-	"\"%~dp0..\\versions\\%_termote_version%\\bin\\termote.exe\" %* & exit /b\r\n"
+	"(goto) 2>nul & \"%~dp0..\\versions\\%_termote_version%\\bin\\termote.exe\" %*\r\n"
 
 func (c *cli) ensureWindowsLauncher() error {
 	if c.goos != "windows" {

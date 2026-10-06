@@ -731,10 +731,12 @@ termote uninstall [--purge]
 Removes the service registration, Termote's Tailscale mapping, the `termote` command, the
 install root and the upload store (a cache); the saved config and logs stay unless `--purge` is
 given (the command prints both paths). On Windows the running binary stays locked, so
-`uninstall` starts a detached, windowless PowerShell that waits for its PID to exit, then
-removes what was left (`removeLater` in `server/install_layout.go`). The launcher
-`bin\termote.cmd` ends with `& exit /b`, so `cmd.exe` never reads the batch again after
-`uninstall` deleted it.
+`uninstall` starts a windowless PowerShell in a console of its own (`CREATE_NO_WINDOW`; with
+`DETACHED_PROCESS` Windows PowerShell exits without running the script) that waits for its PID
+to exit, then removes what was left (`removeLater` in `server/install_layout.go`). The
+launcher `bin\termote.cmd` runs the exe after `(goto) 2>nul`, which leaves the batch first, so
+`cmd.exe` never reads it again after `uninstall` deleted it and the exe's exit code is kept
+(`& exit /b` reads on to the end of the file and returns 0 under `cmd /c`).
 
 ### Self-Update
 
