@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.12.2](https://github.com/lamngockhuong/termote/compare/v1.12.1...v1.12.2) (2026-10-06)
+
+
+### Bug Fixes
+
+* report a failed snapshot read instead of crashing on its error body ([#344](https://github.com/lamngockhuong/termote/issues/344)) ([e98ec49](https://github.com/lamngockhuong/termote/commit/e98ec496be11f605f6cfe65f13bad1ef872ad720))
+
 ## [1.12.1](https://github.com/lamngockhuong/termote/compare/v1.12.0...v1.12.1) (2026-10-05)
 
 
