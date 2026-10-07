@@ -173,8 +173,10 @@ func resolveGroupCwd(ctx context.Context, cwd string, deny []string) (string, er
 		err error
 	}
 	done := make(chan result, 1)
+	// Read once here: the goroutine can outlive this call (a hung mount).
+	check := groupCwdCheck
 	go func() {
-		dir, err := groupCwdCheck(filepath.Clean(cwd), deny)
+		dir, err := check(filepath.Clean(cwd), deny)
 		done <- result{dir, err}
 	}()
 	select {
