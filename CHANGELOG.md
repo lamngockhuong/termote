@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.15.0](https://github.com/lamngockhuong/termote/compare/v1.14.0...v1.15.0) (2026-10-07)
+
+
+### Features
+
+* create, rename and close tmux sessions and Herdr workspaces ([#354](https://github.com/lamngockhuong/termote/issues/354), part 2) ([#374](https://github.com/lamngockhuong/termote/issues/374)) ([cbf7cdb](https://github.com/lamngockhuong/termote/commit/cbf7cdb4c83e6fa450923490cb5e105a7036eee1))
+* list every tmux session as a group ([#354](https://github.com/lamngockhuong/termote/issues/354), part 1) ([#370](https://github.com/lamngockhuong/termote/issues/370)) ([48c85cc](https://github.com/lamngockhuong/termote/commit/48c85ccc7df2ab6f17d521a024f40eef0c1c8abc))
+
+
+### Bug Fixes
+
+* stop a Windows dev server whose binary go build moved aside ([#372](https://github.com/lamngockhuong/termote/issues/372)) ([458a607](https://github.com/lamngockhuong/termote/commit/458a607432251d6852c2663ae58cf55d7ccf7a87))
+
 ## [1.14.0](https://github.com/lamngockhuong/termote/compare/v1.13.0...v1.14.0) (2026-10-06)
 
 
