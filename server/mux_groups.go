@@ -202,6 +202,21 @@ func validCwdForm(p string, windows bool) bool {
 	return c >= 'a' && c <= 'z'
 }
 
+// missingCwd tells a directory that is not there from a path that runs
+// through a file, which Windows reports as missing too: the nearest parent
+// that exists decides.
+func missingCwd(dir string) error {
+	for p := filepath.Dir(dir); p != dir; dir, p = p, filepath.Dir(p) {
+		if info, err := os.Stat(p); err == nil {
+			if !info.IsDir() {
+				return errCwdNotDirectory
+			}
+			break
+		}
+	}
+	return errCwdNotFound
+}
+
 // groupCwdCheck is checkGroupCwd; tests replace it with one that hangs.
 var groupCwdCheck = checkGroupCwd
 
@@ -217,7 +232,7 @@ func checkGroupCwd(dir string, deny []string) (string, error) {
 	}
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
-		return "", errCwdNotFound
+		return "", missingCwd(dir)
 	case errors.Is(err, syscall.ENOTDIR):
 		return "", errCwdNotDirectory
 	case err != nil:

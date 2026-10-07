@@ -97,13 +97,15 @@ func TestGroupRoutesRefuseBadInput(t *testing.T) {
 		status                   int
 		code                     string
 	}{
-		{"empty name", "POST", "/api/mux/groups", `{"name":"","cwd":"` + root + `"}`, 400, "invalid_name"},
+		{"empty name", "POST", "/api/mux/groups", jsonBody(map[string]string{"name": "", "cwd": root}), 400, "invalid_name"},
 		{"long name", "POST", "/api/mux/groups", `{"name":"` + long + `"}`, 400, "invalid_name"},
 		{"control char", "POST", "/api/mux/groups", `{"name":"a\nb"}`, 400, "invalid_name"},
 		{"relative cwd", "POST", "/api/mux/groups", `{"name":"a","cwd":"src"}`, 400, "invalid_cwd"},
 		{"missing cwd", "POST", "/api/mux/groups", jsonBody(map[string]string{"name": "a", "cwd": filepath.Join(root, "nope")}), 400, "not_found"},
 		{"file cwd", "POST", "/api/mux/groups", jsonBody(map[string]string{"name": "a", "cwd": file}), 409, "not_directory"},
 		{"under a file", "POST", "/api/mux/groups", jsonBody(map[string]string{"name": "a", "cwd": filepath.Join(file, "x")}), 409, "not_directory"},
+		{"deeper under a file", "POST", "/api/mux/groups", jsonBody(map[string]string{"name": "a", "cwd": filepath.Join(file, "x", "y")}), 409, "not_directory"},
+		{"missing parent", "POST", "/api/mux/groups", jsonBody(map[string]string{"name": "a", "cwd": filepath.Join(root, "no", "pe")}), 400, "not_found"},
 		{"denied cwd", "POST", "/api/mux/groups", jsonBody(map[string]string{"name": "a", "cwd": filepath.Join(denied)}), 403, "not_allowed"},
 		{"rename empty", "PATCH", "/api/mux/groups/g1", `{"name":""}`, 400, "invalid_name"},
 	}
@@ -321,5 +323,19 @@ func TestGroupRoutesBusyAfterWaiting(t *testing.T) {
 	}
 	if len(f.calls) != 0 {
 		t.Errorf("backend called: %q", f.calls)
+	}
+}
+
+// Windows reports a path through a file as missing: the nearest parent that
+// exists tells the two apart.
+func TestMissingCwd(t *testing.T) {
+	root := t.TempDir()
+	file := filepath.Join(root, "file")
+	os.WriteFile(file, nil, 0o644)
+	if err := missingCwd(filepath.Join(file, "x", "y")); !errors.Is(err, errCwdNotDirectory) {
+		t.Errorf("under a file = %v", err)
+	}
+	if err := missingCwd(filepath.Join(root, "no", "pe")); !errors.Is(err, errCwdNotFound) {
+		t.Errorf("missing = %v", err)
 	}
 }
