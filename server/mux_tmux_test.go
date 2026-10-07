@@ -65,6 +65,7 @@ func TestParseTmuxID(t *testing.T) {
 	orig := tmuxSession
 	defer func() { tmuxSession = orig }()
 	tmuxSession = "main"
+	usePsmux(t, false)
 	tests := []struct {
 		input, target, sessionID string
 		ok                       bool

@@ -102,10 +102,46 @@ type tmuxWindow struct {
 	index     string
 }
 
+// tmuxIsPsmux is set on Windows, where the tmux server is psmux. It differs
+// from tmux in two things the targets here rely on: it has no "=" before a
+// window index (it answers "can't find window: =0" with exit 0, and
+// select-window and send-keys silently do nothing), and it numbers panes per
+// session, so every session has a %1 and "-t %1" reaches the most recent one.
+// A variable so that tests on Unix cover both.
+var tmuxIsPsmux = runtime.GOOS == "windows"
+
 // target is the window's exact tmux target. The '=' before the index makes
 // tmux take it as an index only: without it, a missing index 9 would match
-// a window named "9x".
-func (w tmuxWindow) target() string { return w.session + ":=" + w.index }
+// a window named "9x". psmux never matches a window name, so it gets the
+// bare index.
+func (w tmuxWindow) target() string {
+	if tmuxIsPsmux {
+		return w.session + ":" + w.index
+	}
+	return w.session + ":=" + w.index
+}
+
+// agentTarget is the target the agent routes read and type into, from
+// tmux's own reply: tmux's pane id, unique on the server, which stays on the
+// pane even when the window is split. On psmux a pane id is not unique, so
+// it is the window ("$N:i", whichever pane has focus). Built from the reply,
+// never from the client's id, so one window always has one target (the
+// pane lock's key): "1" and "$0:1" may name the same window.
+func agentTarget(sessionID, index, paneID string) string {
+	if tmuxIsPsmux {
+		return sessionID + ":" + index
+	}
+	return paneID
+}
+
+// validAgentTarget accepts only what agentTarget returns: a pane id on tmux,
+// "$N:i" on psmux.
+func validAgentTarget(target string) bool {
+	if tmuxIsPsmux {
+		return tmuxTabIDRe.MatchString(target)
+	}
+	return tmuxPaneIDRe.MatchString(target)
+}
 
 // matches reports whether a reply's session id, session name and window
 // index are this window's. tmux answers a target that no longer exists with
@@ -197,7 +233,8 @@ func isTmuxAttachCmdline(cmdline string) bool {
 // tmuxMux drives every session on a tmux (or psmux on Windows) server. A
 // session is a group, each window is a tab, and each tab exposes its active
 // pane, so pane IDs equal window IDs. tmux's own pane id (%N) is used only
-// where the exact pane matters (the agent routes), since a window can be
+// where the exact pane matters (the agent routes, except on psmux: see
+// agentTarget), since a window can be
 // split.
 type tmuxMux struct{}
 
@@ -379,6 +416,16 @@ func (tmuxMux) SelectTab(ctx context.Context, tabID string) error {
 	w, ok := parseTmuxID(tabID)
 	if !ok {
 		return inputError("invalid tab id")
+	}
+	// psmux answers select-window on a missing window with exit 0, so Attach
+	// would show the session's current window instead: ask for it first.
+	if tmuxIsPsmux {
+		out, err := tmuxCmd(ctx, "display-message", "-p", "-t", w.target(),
+			"#{session_id}:#{window_index}:#{session_name}").Output()
+		parts := strings.SplitN(strings.TrimRight(string(out), "\r\n"), ":", 3)
+		if err != nil || len(parts) != 3 || !w.matches(parts[0], parts[2], parts[1]) {
+			return inputError("unknown tab")
+		}
 	}
 	return tmuxCmd(ctx, "select-window", "-t", w.target()).Run()
 }
@@ -566,6 +613,9 @@ func tmuxAgentSession(ctx context.Context, paneID string, find func(string, int)
 	}
 	s, ok := tmuxPaneAgentWith(parts[3], parts[4], find)
 	s.InMode = parts[2] == "1"
+	if ok {
+		s.Target = agentTarget(parts[0], parts[1], s.Target)
+	}
 	return s, ok, nil
 }
 
@@ -573,7 +623,9 @@ func tmuxAgentSession(ctx context.Context, paneID string, find func(string, int)
 // tmuxAgentSession, the session and window index in the reply must be the
 // ones asked for: tmux would otherwise answer with another window. The path
 // goes last so a ':' in it is kept; a session name has none (tmux turns it
-// into '_').
+// into '_'). The pane id it returns keys the root's state, so it must be
+// unique on the server: never on psmux, which has no Files (and no
+// directory to report).
 func (tmuxMux) PaneDir(ctx context.Context, paneID string) (string, string, error) {
 	if !tmuxFilesSupported {
 		return "", "", errUnsupported
@@ -597,7 +649,7 @@ func (tmuxMux) PaneDir(ctx context.Context, paneID string) (string, string, erro
 
 // Capture returns the pane's visible screen with its SGR attributes.
 func (tmuxMux) Capture(ctx context.Context, target string) (string, error) {
-	if !tmuxPaneIDRe.MatchString(target) {
+	if !validAgentTarget(target) {
 		return "", inputError("invalid pane")
 	}
 	out, err := tmuxCmd(ctx, "capture-pane", "-p", "-e", "-t", target).Output()
@@ -608,7 +660,7 @@ func (tmuxMux) Capture(ctx context.Context, target string) (string, error) {
 // (-p), deleting the buffer (-d): the user's own buffers, and a concurrent
 // paste, are never touched.
 func (tmuxMux) Paste(ctx context.Context, target, text string) error {
-	if !tmuxPaneIDRe.MatchString(target) {
+	if !validAgentTarget(target) {
 		return inputError("invalid pane")
 	}
 	b := make([]byte, 8)
@@ -630,7 +682,7 @@ func (tmuxMux) Paste(ctx context.Context, target, text string) error {
 
 // SendKeySequence passes each key as its own send-keys argument.
 func (tmuxMux) SendKeySequence(ctx context.Context, target string, keys []string) error {
-	if !tmuxPaneIDRe.MatchString(target) || !validAgentKeys(keys) {
+	if !validAgentTarget(target) || !validAgentKeys(keys) {
 		return inputError("invalid keys")
 	}
 	return tmuxCmd(ctx, append([]string{"send-keys", "-t", target}, keys...)...).Run()

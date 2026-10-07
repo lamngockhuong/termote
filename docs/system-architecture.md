@@ -117,7 +117,10 @@ attach a terminal, health) with two implementations:
   it is missing; any other session is addressed by tmux's session id (group `$3`, tab `$3:1`),
   which a rename keeps and a tmux server restart changes. Every command targets exactly (`$N:=i`,
   `=main:=i`: no prefix match on the session name or on a window name), and `display-message` replies are checked against the session and window asked
-  for. A stream runs `attach -E -t <session>` after selecting the window, so every client of a
+  for. psmux has no `=` before a window index (it answers `can't find window: =0` with exit 0,
+  and `select-window`/`send-keys` do nothing) and never matches a window name, so on Windows the
+  index is bare (`$N:i`, `=main:i`) and a tab is selected only after `display-message` answered
+  for that window. A stream runs `attach -E -t <session>` after selecting the window, so every client of a
   session shares its current window, as in 0.x; the PWA keeps which session it shows per device
   and opens a new stream when it switches session.
 - **`mux_herdr.go`** (native mode only, `TERMOTE_MUX=herdr`): drives a Herdr server over its
@@ -268,7 +271,12 @@ process with a session file `<claudeDir>/sessions/<pid>.json` in its **own** Cla
 pid namespace. Claude Code never removes those files, so a file alone proves nothing: a dead
 session's pid can be reused by another process. psmux reads only `%USERPROFILE%\.claude`
 (Windows does not expose another process's environment). tmux pane ids in these routes are the
-window's active pane: a split window chats with the pane that has focus.
+window's active pane: a split window chats with the pane that has focus. Reads and writes go to
+tmux's own pane id (`%N`, unique on the server, which stays on its pane) on tmux, and to the
+window (`$N:i`, from psmux's reply rather than the client's id, so one window has one pane lock)
+on psmux, which numbers panes per session: every session has a `%1`, and `-t %1` reaches the
+most recent one. On psmux the target follows the window's focus; the process, session and
+screen checks before each write still apply.
 
 **Finding a Codex session.** Only a Codex TUI run with `--no-daemon` writes its own rollout. By default a shared
 `codex app-server --managed-daemon` writes the rollout of every pane, outside every pane's

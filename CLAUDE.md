@@ -420,7 +420,12 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   a rename keeps and a tmux server restart changes. A window name is never an id. Every command
   targets exactly: `$N:=i`, or `=<TMUX_SESSION>:=i` (each `=` turns off tmux's prefix and
   pattern matching, so `ma` never reaches `main` nor a missing index 9 a window named `9x`), and
-  `new-window -t <session>:`; the default session's existence is checked by exact
+  `new-window -t <session>:`; psmux (Windows, `tmuxIsPsmux`) has no `=` before an index and
+  never matches a window name, so it gets `$N:i`/`=<TMUX_SESSION>:i`, `SelectTab` checks the
+  window with `display-message` first (psmux's `select-window` exits 0 on a missing one), and
+  the agent routes read and type into that window (`$N:i` from psmux's reply, so one window has
+  one pane lock) instead of `%N` (psmux numbers panes per session, `-t %1` reaches the most
+  recent one); the default session's existence is checked by exact
   name in the `list-windows -a` reply, and `ensureSession` uses `has-session -t =<name>`.
   `display-message` (agent routes, Files) asks for `#{session_id}`/`#{session_name}` with the
   window index and refuses a reply that is not the window asked for: tmux answers a missing
