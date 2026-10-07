@@ -13,11 +13,19 @@ export interface MuxAgent {
   status: string
 }
 
+// A pane's foreground process: the first word of its name (never its
+// arguments) and its directory.
+export interface MuxProcess {
+  name: string
+  cwd?: string
+}
+
 export interface MuxPane {
   id: string
   active: boolean
   title?: string
   agent?: MuxAgent
+  process?: MuxProcess
 }
 
 export interface MuxTab {
@@ -25,6 +33,9 @@ export interface MuxTab {
   name: string
   active: boolean
   panes: MuxPane[]
+  // Every pane's process, in pane order, when panes lists only some of them
+  // (tmux: only the window's active pane).
+  processes?: MuxProcess[]
 }
 
 export interface MuxGroup {

@@ -16,6 +16,12 @@ interface Props {
 // Each close button is a sibling of its pane button, never nested in it.
 export function PaneStrip({ panes, activePaneId, onSelect, onClose }: Props) {
   if (panes.length < 2) return null
+  // The command under a pane's label, unless it only repeats the label (an
+  // agent pane named after what it runs). When one pane shows a command,
+  // every button keeps room for it, so the strip does not change height.
+  const commandOf = (pane: SessionPane) =>
+    pane.command && pane.command !== pane.label ? pane.command : undefined
+  const twoLines = panes.some((p) => commandOf(p))
   return (
     <fieldset
       aria-label="Panes"
@@ -23,6 +29,7 @@ export function PaneStrip({ panes, activePaneId, onSelect, onClose }: Props) {
     >
       {panes.map((pane) => {
         const active = pane.id === activePaneId
+        const command = commandOf(pane)
         return (
           <div
             key={pane.id}
@@ -36,12 +43,19 @@ export function PaneStrip({ panes, activePaneId, onSelect, onClose }: Props) {
               type="button"
               aria-pressed={active}
               onClick={() => onSelect(pane.id)}
-              className={`flex h-7 items-center gap-1.5 whitespace-nowrap px-2 text-[12px] rounded-control touch-manipulation pointer-coarse:h-touch ui-terminal:font-label ${FOCUS_RING} ${
-                onClose ? 'pr-1' : ''
-              }`}
+              className={`flex items-center gap-1.5 whitespace-nowrap px-2 text-[12px] rounded-control touch-manipulation pointer-coarse:h-touch ui-terminal:font-label ${FOCUS_RING} ${
+                twoLines ? 'h-9' : 'h-7'
+              } ${onClose ? 'pr-1' : ''}`}
             >
               <AgentStatusBadge status={pane.agentStatus} size={12} />
-              <span className="max-w-[140px] truncate">{pane.label}</span>
+              <span className="flex min-w-0 flex-col text-left leading-tight">
+                <span className="max-w-[140px] truncate">{pane.label}</span>
+                {command && (
+                  <span className="max-w-[140px] truncate text-[11px] text-fg-subtle">
+                    {command}
+                  </span>
+                )}
+              </span>
             </button>
             {onClose && (
               <button

@@ -150,6 +150,16 @@ describe('SessionSidebar — desktop expanded (default)', () => {
     expect(dev.parentElement).not.toHaveClass('bg-accent-soft')
   })
 
+  it('shows what runs in a session under its name', () => {
+    renderDesktop([{ ...SESSIONS[0], commands: ['bash', 'vim'] }, SESSIONS[1]])
+    const shell = screen.getByText('Shell').closest('button')!
+    expect(shell).toHaveTextContent('Shellbash, vim')
+    expect(shell).toHaveClass('min-h-9')
+    const dev = screen.getByText('Dev').closest('button')!
+    expect(dev).toHaveTextContent(/^🔧Dev$/)
+    expect(dev).toHaveClass('h-9')
+  })
+
   it('shows the description in the session title', () => {
     renderDesktop()
     expect(screen.getByTitle('Shell - Terminal')).toBeInTheDocument()

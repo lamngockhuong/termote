@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -75,12 +76,16 @@ type herdrMux struct {
 	writers   map[string]*paneWriter
 
 	scrollMu sync.Mutex // one read-then-set of a scroll offset at a time
+
+	procs *herdrProcCache // each pane's foreground process name
 }
 
-// herdrView is a mapped snapshot plus the pane sizes streams need.
+// herdrView is a mapped snapshot plus the pane sizes streams need and each
+// pane's foreground directory (for its process).
 type herdrView struct {
 	snap  Snapshot
 	sizes map[string]Size
+	cwds  map[string]string
 }
 
 // newHerdrMux returns a backend for the herdr server at socket. The event
@@ -92,6 +97,7 @@ func newHerdrMux(ctx context.Context, socket string) (*herdrMux, error) {
 		resub:    make(chan struct{}, 1),
 		watchers: map[string]map[chan Size]struct{}{},
 		writers:  map[string]*paneWriter{},
+		procs:    newHerdrProcCache(),
 	}
 	go m.subscribeLoop(ctx)
 	return m, nil
@@ -168,9 +174,86 @@ func (m *herdrMux) Health(ctx context.Context) error {
 	return nil
 }
 
+// Snapshot is the cached view with each pane's foreground process. The view
+// is shared (streams, requirePane read it too), so the processes go into a
+// copy of it, read outside fetchMu.
 func (m *herdrMux) Snapshot(ctx context.Context) (Snapshot, error) {
 	v, err := m.view(ctx)
-	return v.snap, err
+	if err != nil {
+		return Snapshot{}, err
+	}
+	snap := copySnapshot(v.snap)
+	var panes []string
+	for _, g := range snap.Groups {
+		for _, t := range g.Tabs {
+			for _, p := range t.Panes {
+				panes = append(panes, p.ID)
+			}
+		}
+	}
+	names := m.procs.names(ctx, panes, m.paneProcessName)
+	for gi := range snap.Groups {
+		for ti := range snap.Groups[gi].Tabs {
+			tab := &snap.Groups[gi].Tabs[ti]
+			for pi := range tab.Panes {
+				p := &tab.Panes[pi]
+				if name := names[p.ID]; name != "" {
+					p.Process = &ProcessInfo{Name: name, Cwd: v.cwds[p.ID]}
+				}
+			}
+		}
+	}
+	return snap, nil
+}
+
+// copySnapshot copies a snapshot's groups, tabs and panes, so filling the
+// copy never writes into the one it came from.
+func copySnapshot(s Snapshot) Snapshot {
+	out := s
+	out.Groups = make([]Group, len(s.Groups))
+	for gi, g := range s.Groups {
+		g.Tabs = slices.Clone(g.Tabs)
+		for ti := range g.Tabs {
+			g.Tabs[ti].Panes = slices.Clone(g.Tabs[ti].Panes)
+		}
+		out.Groups[gi] = g
+	}
+	return out
+}
+
+// paneProcess reads a pane's foreground processes (pane.process_info, from
+// herdr 0.9.3 / protocol 22). Only pids and names are decoded.
+func (m *herdrMux) paneProcess(ctx context.Context, paneID string) (herdrProcessInfo, error) {
+	var res struct {
+		ProcessInfo herdrProcessInfo `json:"process_info"`
+	}
+	err := m.rpc.call(ctx, "pane.process_info", map[string]string{"pane_id": paneID}, &res)
+	return res.ProcessInfo, err
+}
+
+// paneProcessName is the name of the pane's foreground group leader, "" when
+// the pane has no foreground process.
+func (m *herdrMux) paneProcessName(ctx context.Context, paneID string) (string, error) {
+	info, err := m.paneProcess(ctx, paneID)
+	if err != nil {
+		return "", err
+	}
+	_, name, _ := info.leader()
+	return processName(name), nil
+}
+
+// paneIdleShell reports whether the pane shows only its shell, waiting for
+// input: nothing started from it, not even through exec. Read now, never
+// from the cache.
+func (m *herdrMux) paneIdleShell(ctx context.Context, paneID string) (bool, error) {
+	if !herdrPaneIDRe.MatchString(paneID) {
+		return false, inputError("invalid pane id")
+	}
+	info, err := m.paneProcess(ctx, paneID)
+	if err != nil {
+		return false, herdrInputError(err)
+	}
+	return info.idleShell(), nil
 }
 
 // view returns the cached snapshot when it is still fresh, else fetches one.
@@ -249,11 +332,13 @@ type herdrSnapshot struct {
 		Label       string `json:"label"`
 	} `json:"tabs"`
 	Panes []struct {
-		ID          string  `json:"pane_id"`
-		TabID       string  `json:"tab_id"`
-		Title       string  `json:"terminal_title_stripped"`
-		Agent       *string `json:"agent"`
-		AgentStatus string  `json:"agent_status"`
+		ID            string  `json:"pane_id"`
+		TabID         string  `json:"tab_id"`
+		Title         string  `json:"terminal_title_stripped"`
+		Agent         *string `json:"agent"`
+		AgentStatus   string  `json:"agent_status"`
+		Cwd           string  `json:"cwd"`
+		ForegroundCwd string  `json:"foreground_cwd"`
 	} `json:"panes"`
 	Layouts []herdrLayout `json:"layouts"`
 }
@@ -288,7 +373,15 @@ func mapHerdrSnapshot(s herdrSnapshot) herdrView {
 	}
 
 	panesByTab := map[string][]Pane{}
+	cwds := map[string]string{}
 	for _, p := range s.Panes {
+		dir := p.ForegroundCwd
+		if dir == "" {
+			dir = p.Cwd
+		}
+		if dir = processCwd(dir); dir != "" {
+			cwds[p.ID] = dir
+		}
 		pane := Pane{ID: p.ID, Title: p.Title, Active: layouts[p.TabID].FocusedPaneID == p.ID}
 		if p.Agent != nil && *p.Agent != "" {
 			status := p.AgentStatus
@@ -333,7 +426,7 @@ func mapHerdrSnapshot(s herdrSnapshot) herdrView {
 		}
 		groups = append(groups, Group{ID: w.ID, Name: w.Label, Tabs: tabs})
 	}
-	return herdrView{snap: Snapshot{Groups: groups}, sizes: sizes}
+	return herdrView{snap: Snapshot{Groups: groups}, sizes: sizes, cwds: cwds}
 }
 
 func sameKeys(a map[string]bool, b map[string]Size) bool {

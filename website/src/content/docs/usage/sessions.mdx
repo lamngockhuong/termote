@@ -42,6 +42,15 @@ needed for different workflows (e.g., Claude Code, Copilot, builds).
 - **Sessions waiting on you**: When another session has an agent waiting on you, the session
   chip shows how many, in red, in place of its arrow
 
+### What runs in a session
+
+Each session in the sidebar and in the mobile sheet shows the commands running in its panes under
+its name (`bash, vim`), and the Herdr pane strip shows each pane's command under the pane's name.
+Only the first word of each command's name is shown (`npm`, never `npm run dev`), never its
+arguments. The confirmations to close a session, a pane or a group add what will be stopped
+(`Running: bash, vim.`), as the last poll saw it, so a command started a few seconds earlier may
+be missing. An idle pane shows its shell (`bash`).
+
 ### Groups: tmux sessions and Herdr workspaces
 
 When the server can manage groups, every group has a header with a **⋯** menu, even a single
@@ -128,7 +137,7 @@ It changes the session model in two ways:
 
 - **Panes**: a Herdr tab can have more than one pane. When it does, a **pane strip** appears
   below the tab bar to switch between them; a tmux tab never shows this strip (it never has
-  more than one pane). To close a pane, click the X next to its name (shown on the streamed pane,
+  more than one pane). Each pane shows the command it runs under its name. To close a pane, click the X next to its name (shown on the streamed pane,
   and on the others on hover or on touch screens), then confirm with "Close pane". The other panes
   of the tab stay open; a tab's last pane is closed by closing the tab.
 - **Agent status badges**: each pane can show a small icon — idle, working, blocked, or done —

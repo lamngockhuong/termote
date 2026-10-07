@@ -30,6 +30,8 @@ export interface SessionPane {
   // Which agent ("claude"), when it runs one
   agentName?: string
   agentStatus?: AgentStatus
+  // Name of its foreground process ("vim"), when the server tells.
+  command?: string
 }
 
 export interface Session {
@@ -48,6 +50,8 @@ export interface Session {
   panes?: SessionPane[]
   // Heaviest agent status among the tab's panes.
   agentStatus?: AgentStatus
+  // Foreground process names of every pane of the tab, without repeats.
+  commands?: string[]
 }
 
 export interface SessionGroup {

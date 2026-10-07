@@ -145,6 +145,27 @@ attach a terminal, health) with two implementations:
   does). On macOS a `control` left behind by a server killed with `kill -9` keeps the pane at
   the client's size until the next `termote serve` reaps it.
 
+**Foreground process** (`server/mux_process.go`): each pane of the snapshot carries
+`process: {name, cwd?}` when the backend can tell, and a tmux tab also carries `processes` for
+every pane of its window (the snapshot holds only the active one), in pane order. The name is
+the first word of what the OS reports (cut at whitespace, `=` or `:`, then after the last `/`),
+at most 32 bytes, with control and format characters (zero-width, bidi) removed; argv and the
+environment never leave the server. tmux fills it from one `list-panes -a` call
+(`#{pane_current_command}`, `#{pane_current_path}`, each after its byte length from `#{n:}`,
+with `-u` on tmux so the lengths match without a UTF-8 locale), read as a stream keyed by session
+id and window index, never split into lines; a parse that stops drops the window it stopped in,
+a window missing from a reply keeps its last names for 10 s (psmux sometimes prints nothing),
+and a failure never fails the snapshot. Herdr fills it from
+`pane.process_info` (the foreground group leader's `name`; `argv`/`cmdline` are not decoded)
+through a cache apart from the snapshot cache: a name is fresh for 5 s, one refresh runs at a
+time, 4 calls at once within 1.5 s (not cut short when the request that started it leaves), a
+name whose reads have failed for 15 s is dropped, and an `invalid_request` (a Herdr without the
+method; a closed pane answers `pane_not_found`) stops the calls, and serving names, for 5
+minutes. The cwd comes from the pane's `foreground_cwd` in `session.snapshot`.
+The snapshot route refuses cross-site reads (`crossSiteRejection`), as the other pane reads do.
+The PWA shows the names in the sessions list and the pane strip, and the close confirmations
+add "Running: …"; the cwd is not shown.
+
 ## Communication Protocols
 
 ### Terminal WebSocket (`/api/mux/stream`)
@@ -180,7 +201,7 @@ existing pane from the last snapshot.
 ### Mux API (REST, JSON)
 
 ```bash
-GET    /api/mux/snapshot          → {apiVersion, backend, caps, groups:[{id,name,tabs:[{id,name,active,panes:[{id,active,title,agent}]}]}]}
+GET    /api/mux/snapshot          → {apiVersion, backend, caps, groups:[{id,name,tabs:[{id,name,active,processes?,panes:[{id,active,title,agent,process?}]}]}]}
 POST   /api/mux/tabs               body: {groupId, name}       → {ok, id}
 PATCH  /api/mux/tabs/{id}          body: {name}                → {ok}
 DELETE /api/mux/tabs/{id}                                       → {ok}

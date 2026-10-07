@@ -58,6 +58,7 @@ import {
   LARGE_PACKET_HELP_URL,
   onLargePacketLoss,
 } from './utils/large-packet-loss'
+import { formatRunning, uniqueNames } from './utils/running-commands'
 import { matchesFilter } from './utils/session-filter'
 import {
   attachImageToTerminal,
@@ -259,9 +260,10 @@ export default function App({
     null,
   )
   const pendingGroupClose = groups.find((g) => g.id === pendingGroupCloseId)
-  const pendingGroupTabs = sessions.filter(
+  const pendingGroupSessions = sessions.filter(
     (s) => s.groupId === pendingGroupCloseId,
-  ).length
+  )
+  const pendingGroupTabs = pendingGroupSessions.length
   const groupActions: GroupActions | undefined = mux.caps.groups
     ? {
         noun: groupNoun,
@@ -1106,6 +1108,7 @@ export default function App({
           <span className="font-medium text-fg">{pendingRemove?.name}</span>{' '}
           will be closed, along with anything still running in it.
         </p>
+        <RunningLine names={pendingRemove?.commands ?? []} />
       </ConfirmDialog>
       <ConfirmDialog
         isOpen={!!pendingGroupClose}
@@ -1130,6 +1133,11 @@ export default function App({
             </>
           )}
         </p>
+        <RunningLine
+          names={uniqueNames(
+            pendingGroupSessions.flatMap((s) => s.commands ?? []),
+          )}
+        />
       </ConfirmDialog>
       {newGroupOpen && (
         <GroupDialog
@@ -1155,6 +1163,9 @@ export default function App({
           be closed, along with anything still running in it. The other panes of
           this session stay open.
         </p>
+        <RunningLine
+          names={pendingPane?.command ? [pendingPane.command] : []}
+        />
       </ConfirmDialog>
       <AboutModal isOpen={aboutOpen} onClose={() => setAboutOpen(false)} />
       <HelpModal
@@ -1202,4 +1213,10 @@ export default function App({
       )}
     </div>
   )
+}
+
+// What a close confirmation will stop, as the last snapshot named it.
+function RunningLine({ names }: { names: string[] }) {
+  const text = formatRunning(names)
+  return text ? <p className="m-0 mt-2">{text}</p> : null
 }

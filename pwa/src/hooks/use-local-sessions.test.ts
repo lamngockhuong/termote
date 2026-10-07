@@ -91,6 +91,32 @@ describe('useLocalSessions', () => {
     expect(result.current.isServerReachable).toBe(true)
   })
 
+  it("maps each pane's process and the tab's processes", async () => {
+    mockFetchTabs.mockResolvedValue([
+      {
+        ...WIN_SHELL,
+        panes: [
+          { id: '0', active: true, process: { name: 'vim', cwd: '/src' } },
+        ],
+        // tmux lists every pane of the window here, the split ones too
+        processes: [{ name: 'bash' }, { name: 'vim' }, { name: 'bash' }],
+      },
+      {
+        ...WIN_VIM,
+        panes: [{ id: '1', active: true, process: { name: 'top' } }],
+      },
+      { id: '2', name: 'idle', active: false, panes: [{ id: '2' }] },
+    ])
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    const [shell, vim, idle] = result.current.sessions
+    expect(shell.panes?.[0].command).toBe('vim')
+    expect(shell.commands).toEqual(['bash', 'vim'])
+    expect(vim.commands).toEqual(['top'])
+    expect(idle.panes?.[0].command).toBeUndefined()
+    expect(idle.commands).toBeUndefined()
+  })
+
   it('sets activeSession to the active window', async () => {
     mockFetchTabs.mockResolvedValue([WIN_SHELL, WIN_VIM])
     const { result } = renderHook(() => useLocalSessions(1))

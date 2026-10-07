@@ -414,6 +414,20 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   tab and line breaks removed, since xterm brackets a paste without removing a marker inside it
 - **Herdr guard**: `--mux herdr --no-auth` is refused unless `--allow-herdr-no-auth` is also
   given, since Herdr exposes every workspace on the host
+- **Pane processes** (`server/mux_process.go`): the snapshot carries each pane's foreground
+  process `{name, cwd}`; tmux tabs also carry every pane's in `processes` (the snapshot holds
+  only the window's active pane). The name is the first word of what the OS reports (cut at
+  whitespace, `=` or `:`, then after the last `/`; a process can set its own title), at most 32
+  bytes, control and format characters (zero-width, bidi) removed; argv and the environment never
+  leave the server. tmux: one `list-panes -a`, read by `#{n:}` byte lengths keyed by session id and
+  window index (a path can hold `\n` or `:`; psmux numbers panes per session), with `-u` on
+  tmux. Herdr: `pane.process_info`, decoding only pids and names (never `argv`, `argv0`,
+  `cmdline`), through a 5 s cache with one refresher, 4 calls at once within 1.5 s, never under
+  `fetchMu` and never into the cached view; a name whose reads failed for 15 s, or any while an
+  `invalid_request` turned the calls off for 5 minutes, is not served. macOS names are the kernel's short name. The
+  snapshot is a same-site read (`crossSiteRejection`, `Sec-Fetch-Site: none` included). The PWA
+  shows names in the sessions list and pane strip and adds "Running: …" to the close
+  confirmations; the cwd is not shown
 - **Groups** (`POST /api/mux/groups` `{name, cwd}` → `{ok, id}`, `PATCH /api/mux/groups/{id}`
   `{name}`, `DELETE /api/mux/groups/{id}`; `server/mux_groups.go`, `caps.groups`): auth,
   `hostGuard`, `writeGuard` (same-site JSON), 8 KB body, `requireWriteRole` first (a stub until

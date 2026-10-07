@@ -145,6 +145,39 @@ func TestSnapshotRoute(t *testing.T) {
 	}
 }
 
+// The snapshot names what runs in every pane, so another site's page cannot
+// read it, like the other pane reads; curl (no headers) still can.
+func TestSnapshotRouteRefusesCrossSite(t *testing.T) {
+	h := newTestHandler(t, &fakeMux{})
+	for _, c := range []struct {
+		site, origin string
+		want         int
+	}{
+		{"", "", http.StatusOK},
+		{"same-origin", "", http.StatusOK},
+		{"same-origin", "http://localhost:7680", http.StatusOK},
+		{"cross-site", "", http.StatusForbidden},
+		{"same-site", "", http.StatusForbidden},
+		{"none", "", http.StatusForbidden},
+		{"", "http://evil.example", http.StatusForbidden},
+	} {
+		req := apiRequest("GET", "/api/mux/snapshot", "")
+		if c.site != "" {
+			req.Header.Set("Sec-Fetch-Site", c.site)
+		}
+		if c.origin != "" {
+			req.Header.Set("Origin", c.origin)
+		}
+		rec := serve(h, req)
+		if rec.Code != c.want {
+			t.Errorf("Sec-Fetch-Site %q, Origin %q: status = %d, want %d", c.site, c.origin, rec.Code, c.want)
+		}
+		if body := decodeBody(t, rec); c.want == http.StatusForbidden && body["error"] == nil {
+			t.Errorf("403 without a JSON error: %v", body)
+		}
+	}
+}
+
 func TestSnapshotRouteEmptyGroupsIsArray(t *testing.T) {
 	rec := serve(newTestHandler(t, &fakeMux{}), apiRequest("GET", "/api/mux/snapshot", ""))
 	if !strings.Contains(rec.Body.String(), `"groups":[]`) {

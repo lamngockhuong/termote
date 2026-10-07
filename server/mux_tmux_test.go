@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -375,7 +376,7 @@ func useFakeTmuxScript(t *testing.T, replies map[string]fakeTmuxReply) func() st
 	logPath := filepath.Join(dir, "args")
 	script := filepath.Join(dir, "tmux")
 	var b strings.Builder
-	b.WriteString("#!/bin/sh\nprintf '%s\\n' \"$*\" >> '" + logPath + "'\ncase \"$1\" in\n")
+	b.WriteString("#!/bin/sh\nprintf '%s\\n' \"$*\" >> '" + logPath + "'\n[ \"$1\" = -u ] && shift\ncase \"$1\" in\n")
 	for sub, r := range replies {
 		out, errf := filepath.Join(dir, sub+".out"), filepath.Join(dir, sub+".err")
 		os.WriteFile(out, []byte(r.out), 0o644)
@@ -423,7 +424,7 @@ func TestTmuxSnapshotParsesPaneFields(t *testing.T) {
 	if tabs[0].Panes[0].Agent != nil || tabs[1].Panes[0].Agent != nil {
 		t.Error("agent reported for panes without Claude Code")
 	}
-	if got := strings.TrimSpace(args()); got != "list-windows -a -F "+tmuxListFormat {
+	if got := strings.TrimSpace(args()); got != "list-windows -a -F "+tmuxListFormat+"\n-u list-panes -a -F "+tmuxPaneFormat {
 		t.Errorf("argv = %q", got)
 	}
 }
@@ -446,7 +447,8 @@ func TestTmuxSnapshotCreatesMissingDefaultSession(t *testing.T) {
 		t.Errorf("groups = %+v", snap.Groups)
 	}
 	lines := strings.Split(strings.TrimSpace(args()), "\n")
-	if len(lines) != 4 || lines[1] != "has-session -t =main" || lines[2] != "new-session -d -s main" || !strings.HasPrefix(lines[3], "list-windows -a") {
+	if len(lines) != 5 || lines[1] != "has-session -t =main" || lines[2] != "new-session -d -s main" || !strings.HasPrefix(lines[3], "list-windows -a") ||
+		!strings.HasPrefix(lines[4], "-u list-panes -a") {
 		t.Errorf("argv = %q", lines)
 	}
 }
@@ -998,5 +1000,196 @@ func TestTmuxNewGroupOnPsmuxRefusesHash(t *testing.T) {
 	}
 	if args() != "" {
 		t.Errorf("argv = %q", args())
+	}
+}
+
+// tmuxPaneLine is one tmuxPaneFormat entry as tmux prints it.
+func tmuxPaneLine(sid, win, pane, active, cmd, path string) string {
+	return fmt.Sprintf("%s:%s:%s:%s:%d:%s%d:%s\n", sid, win, pane, active, len(cmd), cmd, len(path), path)
+}
+
+func TestParseTmuxPanes(t *testing.T) {
+	w := func(sid, idx string) tmuxWindowKey { return tmuxWindowKey{sid, idx} }
+	names := func(panes []tmuxPaneProc) string {
+		var s []string
+		for _, p := range panes {
+			s = append(s, p.proc.Name+"@"+p.proc.Cwd)
+		}
+		return strings.Join(s, ",")
+	}
+
+	// Plain, out of pane order, a command and a path holding ':'.
+	got := parseTmuxPanes([]byte(tmuxPaneLine("$0", "0", "1", "1", "python3", "/a:b") +
+		tmuxPaneLine("$0", "0", "0", "0", "bash", "/home/u") + tmuxPaneLine("$0", "1", "0", "1", "npm: dev", "/x")))
+	if s := names(got[w("$0", "0")]); s != "bash@/home/u,python3@/a:b" || !got[w("$0", "0")][1].active {
+		t.Errorf("window 0 = %q %+v", s, got[w("$0", "0")])
+	}
+	if s := names(got[w("$0", "1")]); s != "npm@/x" {
+		t.Errorf("window 1 = %q", s)
+	}
+
+	// A path holding a newline that spells another pane's entry forges nothing.
+	fake := "/tmp/x\n$9:9:0:1:3:vim1:/"
+	got = parseTmuxPanes([]byte(tmuxPaneLine("$0", "0", "0", "1", "bash", fake)))
+	if len(got) != 1 || got[w("$0", "0")][0].proc.Name != "bash" || got[w("$9", "9")] != nil {
+		t.Errorf("forged entry: %+v", got)
+	}
+
+	// Stops at what it cannot read, keeping the windows before but not the
+	// one it stopped in, which would be missing panes.
+	head := tmuxPaneLine("$0", "0", "0", "1", "bash", "/h") + tmuxPaneLine("$0", "1", "0", "1", "vim", "/h")
+	for name, c := range map[string]struct {
+		tail string
+		want []tmuxWindowKey
+	}{
+		"length past the end":  {"$0:1:1:0:40:bash", []tmuxWindowKey{w("$0", "0")}},
+		"n: not expanded":      {"$0:1:1:0:#{n:pane_current_command}:bash#{n:pane_current_path}:/x\n", []tmuxWindowKey{w("$0", "0")}},
+		"short multibyte (_)":  {"$0:1:1:0:4:bash4:/_x\n$0:2:0:1:3:vim2:/y\n", []tmuxWindowKey{w("$0", "0")}},
+		"another window":       {"$0:2:0:1:40:bash", []tmuxWindowKey{w("$0", "0"), w("$0", "1")}},
+		"unreadable window id": {"%1:1:0:1:4:bash2:/x\n", []tmuxWindowKey{w("$0", "0")}},
+	} {
+		got := parseTmuxPanes([]byte(head + c.tail))
+		if len(got) != len(c.want) {
+			t.Errorf("%s: %+v", name, got)
+		}
+		for _, k := range c.want {
+			if len(got[k]) != 1 {
+				t.Errorf("%s: window %v = %+v", name, k, got[k])
+			}
+		}
+	}
+	if got := parseTmuxPanes([]byte("#{session_id}:#{window_index}:...\n")); len(got) != 0 {
+		t.Errorf("psmux without formats: %+v", got)
+	}
+
+	// A pane listed twice is dropped, its window's other panes kept.
+	got = parseTmuxPanes([]byte(tmuxPaneLine("$0", "0", "0", "1", "bash", "/a") +
+		tmuxPaneLine("$0", "0", "0", "1", "vim", "/a") + tmuxPaneLine("$0", "0", "1", "0", "top", "/a")))
+	if s := names(got[w("$0", "0")]); s != "top@/a" {
+		t.Errorf("duplicate kept: %q", s)
+	}
+
+	// psmux numbers panes per session: two sessions with the same pane and
+	// window index stay apart. CRLF line ends are read too.
+	got = parseTmuxPanes([]byte(strings.ReplaceAll(tmuxPaneLine("$1", "0", "0", "1", "vim", "/a")+
+		tmuxPaneLine("$2", "0", "0", "1", "htop", "/b"), "\n", "\r\n")))
+	if names(got[w("$1", "0")]) != "vim@/a" || names(got[w("$2", "0")]) != "htop@/b" {
+		t.Errorf("sessions mixed: %+v", got)
+	}
+
+	// No name: no entry. A relative path: no cwd.
+	got = parseTmuxPanes([]byte(tmuxPaneLine("$0", "0", "0", "1", "", "/a") + tmuxPaneLine("$0", "0", "1", "1", "sh", "rel")))
+	if s := names(got[w("$0", "0")]); s != "sh@" {
+		t.Errorf("window = %q", s)
+	}
+}
+
+// resetTmuxProcs empties the last processes read, before and after a test.
+func resetTmuxProcs(t *testing.T) {
+	reset := func() {
+		tmuxProcs.Lock()
+		tmuxProcs.windows = nil
+		tmuxProcs.Unlock()
+	}
+	reset()
+	t.Cleanup(reset)
+}
+
+func TestTmuxSnapshotProcesses(t *testing.T) {
+	orig := tmuxSession
+	t.Cleanup(func() { tmuxSession = orig })
+	tmuxSession = "main"
+	resetTmuxProcs(t)
+	panes := tmuxPaneLine("$0", "0", "0", "0", "bash", "/home/u") + tmuxPaneLine("$0", "0", "1", "1", "vim", "/home/u/p") +
+		tmuxPaneLine("$4", "0", "0", "1", "top", "/")
+	useFakeTmuxScript(t, map[string]fakeTmuxReply{
+		"list-windows": {out: "$0:0:1:%3:1:main:edit\n$0:1:0:%5:1:main:logs\n$4:0:1:%1:1:other:x\n"},
+		"list-panes":   {out: panes},
+	})
+	snap, err := tmuxMux{}.Snapshot(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	edit, logs, other := snap.Groups[0].Tabs[0], snap.Groups[0].Tabs[1], snap.Groups[1].Tabs[0]
+	if p := edit.Panes[0].Process; p == nil || p.Name != "vim" || p.Cwd != "/home/u/p" {
+		t.Errorf("active pane process = %+v", p)
+	}
+	if len(edit.Processes) != 2 || edit.Processes[0].Name != "bash" || edit.Processes[1].Name != "vim" {
+		t.Errorf("tab processes = %+v", edit.Processes)
+	}
+	if logs.Panes[0].Process != nil || logs.Processes != nil {
+		t.Errorf("window missing from list-panes got %+v / %+v", logs.Panes[0].Process, logs.Processes)
+	}
+	if p := other.Panes[0].Process; p == nil || p.Name != "top" {
+		t.Errorf("other session process = %+v", p)
+	}
+
+	// An empty reply (psmux) reuses what was just read; a failure never
+	// fails the snapshot.
+	for _, r := range []fakeTmuxReply{{}, {stderr: "boom", code: 1}} {
+		useFakeTmuxScript(t, map[string]fakeTmuxReply{
+			"list-windows": {out: "$0:0:1:%3:1:main:edit\n"},
+			"list-panes":   r,
+		})
+		snap, err := tmuxMux{}.Snapshot(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if p := snap.Groups[0].Tabs[0].Panes[0].Process; p == nil || p.Name != "vim" {
+			t.Errorf("reply %+v: process = %+v, want the last one read", r, p)
+		}
+	}
+	// Past tmuxProcKeep the last read is forgotten.
+	tmuxProcs.Lock()
+	for k, w := range tmuxProcs.windows {
+		w.at = w.at.Add(-tmuxProcKeep)
+		tmuxProcs.windows[k] = w
+	}
+	tmuxProcs.Unlock()
+	snap, _ = tmuxMux{}.Snapshot(context.Background())
+	if p := snap.Groups[0].Tabs[0].Panes[0].Process; p != nil {
+		t.Errorf("process = %+v after %v", p, tmuxProcKeep)
+	}
+}
+
+// A real tmux server: the snapshot names every pane's command, never its
+// arguments.
+func TestTmuxProcessesInRealSession(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil || runtime.GOOS != "linux" {
+		t.Skip("needs tmux on Linux")
+	}
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("needs python3")
+	}
+	resetTmuxProcs(t)
+	origSocket, origSession := tmuxSocket, tmuxSession
+	tmuxSocket = filepath.Join(t.TempDir(), "tmux.sock")
+	tmuxSession = fmt.Sprintf("termote-proc-%d", os.Getpid())
+	t.Cleanup(func() {
+		tmuxCmd(context.Background(), "kill-server").Run()
+		tmuxSocket, tmuxSession = origSocket, origSession
+	})
+	ctx := context.Background()
+	if err := tmuxCmd(ctx, "-f", "/dev/null", "new-session", "-d", "-s", tmuxSession, "bash --norc").Run(); err != nil {
+		t.Fatal(err)
+	}
+	if err := tmuxCmd(ctx, "split-window", "-t", "="+tmuxSession+":=0",
+		"exec python3 -c 'import time; time.sleep(60)' --password=SECRET-123").Run(); err != nil {
+		t.Fatal(err)
+	}
+	var body []byte
+	waitUntil(t, "both panes' commands", func() bool {
+		resetTmuxProcs(t)
+		snap, err := tmuxMux{}.Snapshot(ctx)
+		if err != nil {
+			return false
+		}
+		body, _ = json.Marshal(snap)
+		tab := snap.Groups[0].Tabs[0]
+		return len(tab.Processes) == 2 && tab.Processes[0].Name == "bash" && tab.Processes[1].Name == "python3" &&
+			tab.Panes[0].Process != nil && tab.Panes[0].Process.Name == "python3"
+	})
+	if strings.Contains(string(body), "SECRET") || strings.Contains(string(body), "time.sleep") {
+		t.Errorf("argv in the snapshot: %s", body)
 	}
 }

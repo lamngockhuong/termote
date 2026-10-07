@@ -756,6 +756,19 @@ describe('App', () => {
     expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument()
   })
 
+  it('names what runs in the session it asks to close', async () => {
+    const base = mockUseLocalSessions()
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      sessions: [{ ...base.sessions[0], commands: ['bash', 'vim'] }],
+    } as any)
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'SBRemove' }))
+    expect(screen.getByTestId('confirm-dialog')).toHaveTextContent(
+      'along with anything still running in it.Running: bash, vim.',
+    )
+  })
+
   it('cancelling the confirmation keeps the session', async () => {
     render(<App />)
     await waitFor(() => screen.getByRole('button', { name: 'SBRemove' }))
@@ -2679,10 +2692,30 @@ describe('App groups and panes', () => {
     const dialog = screen.getByTestId('confirm-dialog')
     expect(dialog).toHaveTextContent('Close pane?')
     expect(dialog).toHaveTextContent('logs')
+    expect(dialog).not.toHaveTextContent('Running:')
     expect(removePane).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'ConfirmYes' }))
     expect(removePane).toHaveBeenCalledWith('w1:t1:p2')
     expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument()
+  })
+
+  it('herdr: names what runs in the pane it asks to close', async () => {
+    mockMux('herdr')
+    const base = mockUseLocalSessions()
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      activeSession: {
+        ...base.activeSession,
+        panes: [PANES[0], { ...PANES[1], command: 'tail' }],
+      },
+    } as any)
+    render(<App />)
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Close pane logs' }),
+    )
+    expect(screen.getByTestId('confirm-dialog')).toHaveTextContent(
+      'Running: tail.',
+    )
   })
 
   it('herdr: cancelling keeps the pane', async () => {
@@ -3508,8 +3541,28 @@ describe('App — group actions', () => {
       'Close tmux session "work"? Its 1 tab and everything running in them will end.',
     )
     expect(dialog).not.toHaveTextContent('starts a new')
+    expect(dialog).not.toHaveTextContent('Running:')
     fireEvent.click(within(dialog).getByText('ConfirmYes'))
     expect(closeGroup).toHaveBeenCalledWith('$3')
+  })
+
+  it('names what runs in every tab of the group, once each', async () => {
+    withGroups()
+    const base = mockUseLocalSessions()
+    const commands = [['bash', 'vim'], undefined, ['bash', 'top']]
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      sessions: base.sessions.map((s: object, i: number) => ({
+        ...s,
+        groupId: 'main',
+        commands: commands[i],
+      })),
+    } as any)
+    render(<App />)
+    fireEvent.click(await screen.findByText('GroupCloseMain'))
+    expect(screen.getByTestId('confirm-dialog')).toHaveTextContent(
+      'Running: bash, vim, top.',
+    )
   })
 
   it('says that the default session comes back empty and other devices drop', async () => {

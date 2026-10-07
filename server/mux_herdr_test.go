@@ -52,6 +52,11 @@ type fakeHerdr struct {
 	paneExtra map[string]any // more pane.get fields (agent_session, agent_status)
 	readText  string         // pane.read text
 	createID  string         // workspace.create workspace_id, "wNEW" when empty
+	// pane.process_info: the process_info per pane (a bash shell when
+	// missing), a delay per pane, and an error code for every call.
+	procs     map[string]any
+	procDelay map[string]time.Duration
+	procFail  string
 }
 
 func fakeSocketPath(t *testing.T) string {
@@ -245,9 +250,36 @@ func (f *fakeHerdr) handle(c net.Conn) {
 		f.texts = append(f.texts, p["text"].(string))
 		f.mu.Unlock()
 		reply(map[string]string{"type": "ok"})
+	case "pane.process_info":
+		id, _ := p["pane_id"].(string)
+		f.mu.Lock()
+		info, ok := f.procs[id]
+		delay, code := f.procDelay[id], f.procFail
+		f.mu.Unlock()
+		time.Sleep(delay)
+		if code != "" {
+			fail(code)
+			return
+		}
+		if !ok {
+			info = fakeProcessInfo(id, 100, 100, fakeProc(100, "bash", "/bin/bash"))
+		}
+		reply(map[string]any{"type": "pane_process_info", "process_info": info})
 	default:
 		fail("unknown_method")
 	}
+}
+
+// fakeProc is one foreground process as pane.process_info reports it, argv
+// and cmdline included.
+func fakeProc(pid int, name string, argv ...string) map[string]any {
+	return map[string]any{"pid": pid, "name": name, "argv": argv, "argv0": argv[0],
+		"cmdline": strings.Join(argv, " "), "cwd": "/home/user/project-a"}
+}
+
+func fakeProcessInfo(pane string, shellPID, groupID int, procs ...map[string]any) map[string]any {
+	return map[string]any{"pane_id": pane, "shell_pid": shellPID, "foreground_process_group_id": groupID,
+		"tty": "/dev/pts/3", "foreground_processes": procs}
 }
 
 // emit sends one event line to every open subscription.

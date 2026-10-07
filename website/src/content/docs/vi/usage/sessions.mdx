@@ -42,6 +42,15 @@ workflow khác nhau (ví dụ: Claude Code, Copilot, build).
 - **Phiên đang chờ bạn**: Khi một phiên khác có agent đang chờ bạn, chip phiên hiện số phiên
   đó bằng màu đỏ ở chỗ mũi tên
 
+### Phiên đang chạy gì
+
+Mỗi phiên trong sidebar và trong bảng trên mobile hiện các lệnh đang chạy trong các pane của nó,
+ngay dưới tên phiên (`bash, vim`), và dải pane của Herdr hiện lệnh của từng pane dưới tên pane. Chỉ
+từ đầu tiên trong tên lệnh được hiện (`npm`, không bao giờ là `npm run dev`), không bao giờ có tham
+số. Hộp xác nhận đóng phiên, pane hay group có thêm một dòng nói những gì sẽ bị dừng
+(`Running: bash, vim.`), theo lần đọc gần nhất, nên một lệnh vừa chạy vài giây trước có thể chưa
+có. Pane đang rảnh hiện tên shell của nó (`bash`).
+
 ### Group: session tmux và workspace Herdr
 
 Khi server quản lý được group, group nào cũng có header kèm menu **⋯**, kể cả khi tmux chỉ có một
@@ -126,7 +135,7 @@ tmux. Mô hình phiên khi đó khác ở hai điểm:
 
 - **Pane**: một tab của Herdr có thể có nhiều pane. Khi đó, một **dải pane** xuất hiện bên dưới
   thanh tab để chuyển qua lại giữa các pane; tab tmux không bao giờ hiện dải này (vì chỉ có một
-  pane). Muốn đóng một pane, bấm dấu X cạnh tên pane (luôn hiện ở pane đang nhận luồng; các pane
+  pane). Mỗi pane hiện lệnh nó đang chạy dưới tên pane. Muốn đóng một pane, bấm dấu X cạnh tên pane (luôn hiện ở pane đang nhận luồng; các pane
   khác hiện khi rê chuột qua hoặc trên màn hình cảm ứng), rồi xác nhận bằng "Close pane". Các pane
   còn lại của tab vẫn mở; pane cuối cùng chỉ đóng được bằng cách đóng cả tab.
 - **Huy hiệu trạng thái agent**: mỗi pane có thể hiện một icon nhỏ (`idle`, `working`, `blocked`
