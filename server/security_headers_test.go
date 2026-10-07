@@ -53,6 +53,12 @@ func TestContentSecurityPolicy(t *testing.T) {
 			t.Errorf("policy lacks %q: %s", want, csp)
 		}
 	}
+	// The server, not the page, talks to push services.
+	for host := range pushHosts {
+		if strings.Contains(csp, host) {
+			t.Errorf("policy names the push service %s: %s", host, csp)
+		}
+	}
 	// A Host that cannot be a source adds none, and never reaches the header.
 	for _, host := range []string{"localhost:7680;sandbox", "[fe80::1]:7680", "a b", "box:port"} {
 		if got := contentSecurityPolicy(nil, host); strings.Contains(got, "ws://") || strings.Contains(got, "sandbox") {

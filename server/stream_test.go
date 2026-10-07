@@ -197,7 +197,7 @@ func newStreamServer(t *testing.T) *streamServer {
 		s.mu.Unlock()
 		return ft, nil
 	}
-	h, hub, err := buildServer(testConfig(t), m)
+	h, hub, _, err := buildServer(testConfig(t), m)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -22,6 +22,7 @@ import {
   fetchTerminalToken,
   fetchTranscript,
   findFiles,
+  getPushKey,
   logout,
   REQUEST_TIMEOUT_MS,
   RequestError,
@@ -34,6 +35,8 @@ import {
   selectTab,
   sendAgentMessage,
   sendKeys,
+  subscribePush,
+  unsubscribePush,
 } from './use-mux-api'
 
 // Helper: create a mock fetch that captures calls and returns responses
@@ -162,6 +165,42 @@ describe('mux API client', () => {
     expect(calls[0].init?.body).toBe('{}')
     expect(calls[0].init?.signal).toBeInstanceOf(AbortSignal)
     expect(await logout()).toBe(false)
+  })
+
+  it('reads the push key', async () => {
+    const { calls } = mockFetch({ body: { publicKey: 'BKEY' } })
+    expect(await getPushKey()).toBe('BKEY')
+    expect(calls[0].url).toBe('/api/mux/push/key')
+    expect(calls[0].init?.signal).toBeInstanceOf(AbortSignal)
+    mockFetch({ body: { error: 'x', code: 'push_unavailable' }, status: 503 })
+    await expect(getPushKey()).rejects.toMatchObject({
+      status: 503,
+      code: 'push_unavailable',
+    })
+  })
+
+  it('subscribes and unsubscribes this device for push', async () => {
+    const { calls } = mockFetch({ body: { ok: true } })
+    const keys = { p256dh: 'P', auth: 'A' }
+    await subscribePush({ endpoint: 'https://e', keys, expirationTime: null })
+    await unsubscribePush('https://e')
+    expect(calls.map((c) => [c.url, c.init?.method, c.init?.body])).toEqual([
+      [
+        '/api/mux/push/subscribe',
+        'POST',
+        JSON.stringify({ endpoint: 'https://e', keys }),
+      ],
+      [
+        '/api/mux/push/subscribe',
+        'DELETE',
+        JSON.stringify({ endpoint: 'https://e' }),
+      ],
+    ])
+    expect(calls[0].init?.headers).toEqual(JSON_HEADERS)
+    mockFetch({ body: { error: 'x', code: 'invalid_keys' }, status: 400 })
+    await expect(subscribePush({ endpoint: 'https://e' })).rejects.toThrow(
+      RequestError,
+    )
   })
 
   it('selectTab sends JSON POST to the tab select route', async () => {

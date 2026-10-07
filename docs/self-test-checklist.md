@@ -300,6 +300,27 @@ Manual testing checklist for Termote features before release.
 - [ ] Switching session/tab/pane updates the address without new history entries
 - [ ] "Copy link" in the More menu copies the current link
 
+### Agent Notifications
+
+Use a production build (the service worker is off in `pnpm dev`) and a pane running Claude Code.
+
+- [ ] Settings → Sessions → "Notify when an agent needs me": turning it on asks for permission;
+      denied reads "Blocked in browser settings" and stays off
+- [ ] Desktop Chrome, tab in the background: a permission dialog raises one "Agent needs you";
+      clicking it focuses the tab on that pane
+- [ ] A finished turn raises "Agent finished"; without push (an older server), the pane on
+      screen in a focused window raises none; with push it raises one, replacing any earlier one
+      for that pane
+- [ ] Android Chrome (installed app), PWA closed: a dialog raises a push; tapping it opens the pane
+- [ ] Desktop Chrome and Firefox, every Termote tab closed: a push arrives
+- [ ] iPhone/iPad Home Screen app (iOS 16.4+): turning it on subscribes, a push arrives with the
+      app closed; Safari shows the Home Screen hint instead
+- [ ] A subscription revoked in the browser: the next push gets 410 and the server drops it
+- [ ] `termote start --fresh`: no push reaches any device until it signs in again
+- [ ] Log out: no more pushes to that device
+- [ ] With a subscription and no page open, `tmux kill-session -t main`: `main` is not recreated
+- [ ] `ls -l ~/.local/state/termote/push`: 0600 files in a 0700 dir
+
 ### Fullscreen (Desktop)
 
 - [ ] Fullscreen button visible in header (desktop only)

@@ -10,6 +10,12 @@ import {
 } from '../hooks/use-settings'
 import { UI_STYLES, type UiStyle } from '../ui-style'
 import type { ServerInfo } from '../utils/app-update'
+import {
+  needsHomeScreenApp,
+  notificationSupport,
+  notifyWorkerReady,
+  requestNotify,
+} from '../utils/notify-permission'
 import { Button, FOCUS_RING, IconButton } from './ui/button'
 import { SegmentedControl } from './ui/segmented-control'
 import { Sheet } from './ui/sheet'
@@ -41,6 +47,11 @@ interface Props {
   pasteBufferLabel?: string
   // Backend lets this device take over the pane size (caps.driveSize)
   driveSizeSupported?: boolean
+  // The server sends Web Push (caps.push); turning notifications on then
+  // subscribes this device, turning them off unsubscribes it.
+  pushAvailable?: boolean
+  onEnableNotify?: () => Promise<unknown>
+  onDisableNotify?: () => void
 }
 
 const CONTROL =
@@ -302,6 +313,75 @@ function pasteSourceOptions(bufferLabel: string): {
   ]
 }
 
+// Notify when an agent needs me. Turning it on asks for the permission first
+// thing in the click (Safari asks only from a gesture), then subscribes this
+// device to Web Push in the same click when the server sends it; it stays
+// off while the browser blocks notifications or the active service worker
+// predates the click handler.
+function NotifyAgentsRow({
+  enabled,
+  onChange,
+  pushAvailable,
+  onEnable,
+  onDisable,
+}: {
+  enabled: boolean
+  onChange: (on: boolean) => void
+  pushAvailable: boolean
+  onEnable?: () => Promise<unknown>
+  onDisable?: () => void
+}) {
+  const [permission, setPermission] = useState(notificationSupport)
+  // undefined while the worker is asked
+  const [workerReady, setWorkerReady] = useState<boolean>()
+  const [homeScreenOnly] = useState(needsHomeScreenApp)
+  useEffect(() => {
+    let live = true
+    notifyWorkerReady().then((ready) => {
+      if (live) setWorkerReady(ready)
+    })
+    return () => {
+      live = false
+    }
+  }, [])
+  if (permission === 'unsupported' && !homeScreenOnly) return null
+  const checked = enabled && permission === 'granted'
+  const desc = homeScreenOnly
+    ? 'iPhone/iPad: works only from the Home Screen app (iOS 16.4+)'
+    : permission === 'denied'
+      ? 'Blocked in browser settings'
+      : workerReady === false
+        ? 'Reload to turn on'
+        : 'A dialog waits or a turn finished. On a phone, needs the installed app'
+  const toggle = async (on: boolean) => {
+    if (!on) {
+      onChange(false)
+      onDisable?.()
+      return
+    }
+    const result = await requestNotify()
+    setPermission(result)
+    if (result !== 'granted') return
+    // Nothing awaited between the permission and the subscribe.
+    const subscribed = pushAvailable ? onEnable?.() : undefined
+    onChange(true)
+    await subscribed
+  }
+  return (
+    <SettingsRow title="Notify when an agent needs me" desc={desc}>
+      <Switch
+        label="Notify when an agent needs me"
+        checked={checked}
+        disabled={
+          !checked &&
+          (homeScreenOnly || permission === 'denied' || !workerReady)
+        }
+        onChange={toggle}
+      />
+    </SettingsRow>
+  )
+}
+
 // A tiny drawing of each style's shape: corner radius, hairline or raised.
 const STYLE_PREVIEW: Record<UiStyle, string> = {
   terminal: 'rounded-[2px] border border-border-strong bg-bg',
@@ -351,6 +431,9 @@ export function SettingsModal({
   tmuxBufferSupported = true,
   pasteBufferLabel = 'Session buffer',
   driveSizeSupported = false,
+  pushAvailable = false,
+  onEnableNotify,
+  onDisableNotify,
 }: Props) {
   const [activeGroup, setActiveGroup] = useState('appearance')
 
@@ -489,6 +572,13 @@ export function SettingsModal({
               onChange={(v) => onUpdateSetting('sortBlockedFirst', v)}
             />
           </SettingsRow>
+          <NotifyAgentsRow
+            enabled={settings.notifyAgents}
+            onChange={(v) => onUpdateSetting('notifyAgents', v)}
+            pushAvailable={pushAvailable}
+            onEnable={onEnableNotify}
+            onDisable={onDisableNotify}
+          />
           <SettingsRow
             title="Session poll interval"
             desc={`How often to sync session list (${formatSeconds(settings.pollInterval)})`}

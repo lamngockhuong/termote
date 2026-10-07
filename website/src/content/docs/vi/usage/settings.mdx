@@ -110,6 +110,42 @@ thứ tự cũ. Mặc định tắt, vì khi bật, phiên sẽ đổi chỗ m�
 | Tắt      | Phiên giữ thứ tự                            | ✓        |
 | Bật      | Phiên đang chờ lên đầu mỗi nhóm             |          |
 
+## Báo khi agent cần tôi
+
+Settings → Sessions → **Notify when an agent needs me** hiện một thông báo khi hộp thoại của agent
+đang chờ bạn trả lời, hoặc khi agent làm xong một lượt. Chạm vào thông báo sẽ mở đúng pane đó.
+Khi không có Web Push, pane bạn đang xem không bao giờ báo. Khi có, mỗi lần push đều hiện thông
+báo, kể cả cho pane đó, vì trình duyệt bắt buộc như vậy. Thông báo chỉ ghi tên agent, tên nhóm và
+tên tab, không bao giờ chứa nội dung màn hình hay transcript.
+
+Khi bật, trình duyệt sẽ hỏi quyền hiện thông báo. Nếu trình duyệt đang chặn, dòng này ghi
+**Blocked in browser settings**: hãy cho phép thông báo của trang trong phần cài đặt của trình
+duyệt rồi bật lại. Nếu dòng này ghi **Reload to turn on**, trang vẫn đang chạy bản app cũ: hãy tải
+lại trang trước.
+
+Thông báo đến theo cách khác nhau tùy thiết bị:
+
+- **Khi app đã đóng** (Chrome trên Android, Chrome, Edge và Firefox trên desktop): server gửi Web
+  Push, nên thông báo vẫn đến dù không có trang Termote nào đang mở.
+- **iPhone và iPad**: chỉ hoạt động trong app đã thêm vào Màn hình chính, từ iOS 16.4. Trong
+  Safari, dòng này ghi "iPhone/iPad: works only from the Home Screen app (iOS 16.4+)".
+- **Không có Web Push** (server cũ, hoặc trình duyệt không hỗ trợ): chỉ trang đang mở mới báo,
+  thực tế là một tab trên desktop, vì điện thoại tạm dừng trang không hiển thị.
+
+Giới hạn:
+
+- Với tmux, chỉ pane đang active của mỗi window được theo dõi, nên agent ở một split pane không
+  active sẽ không báo.
+- Server kiểm tra mỗi 5 giây, nên một lượt ngắn hơn khoảng đó có thể không báo.
+- `termote start --fresh`, hay bất kỳ lần đổi mật khẩu nào, dừng push tới mọi thiết bị. Một thiết
+  bị nhận lại push khi nó mở Termote và đăng nhập bằng mật khẩu mới.
+- Đăng xuất cũng dừng push tới thiết bị đó.
+
+| Tùy chọn | Hành vi                                       | Mặc định |
+| -------- | --------------------------------------------- | -------- |
+| Tắt      | Không có thông báo                            | ✓        |
+| Bật      | Báo khi agent đang chờ hoặc đã làm xong       |          |
+
 ## Font terminal
 
 Font mà terminal dùng, nhập theo tên (ví dụ `JetBrainsMono Nerd Font`). Font phải được cài trên thiết bị đang chạy trình duyệt; nếu chưa cài, terminal quay về font monospace của hệ thống. Có thể nhập nhiều tên, cách nhau bằng dấu phẩy. Giá trị được lưu khi rời khỏi ô nhập hoặc khi nhấn Enter.

@@ -72,7 +72,7 @@ func waitTmux(t *testing.T, format, want string) {
 // handler chain, the way websocat or the PWA would.
 func TestIntegrationStreamTmux(t *testing.T) {
 	setupStreamTmux(t)
-	h, hub, err := buildServer(testConfig(t), tmuxMux{})
+	h, hub, _, err := buildServer(testConfig(t), tmuxMux{})
 	if err != nil {
 		t.Fatal(err)
 	}

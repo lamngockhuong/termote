@@ -154,7 +154,7 @@ func postJSON(t *testing.T, h http.Handler, path string, body any) (int, map[str
 
 func agentMux(m Mux) *http.ServeMux {
 	mux := http.NewServeMux()
-	registerMuxRoutes(mux, m, newStreamTokenStore(), nil)
+	registerMuxRoutes(mux, m, newStreamTokenStore(), nil, nil)
 	return mux
 }
 
@@ -874,7 +874,7 @@ func imageMux(t *testing.T, f *fakeWriter, n int) (*http.ServeMux, []string, []s
 		ids, paths = append(ids, u.ID), append(paths, u.Path)
 	}
 	mux := http.NewServeMux()
-	registerMuxRoutes(mux, f, newStreamTokenStore(), store)
+	registerMuxRoutes(mux, f, newStreamTokenStore(), store, nil)
 	return mux, ids, paths
 }
 

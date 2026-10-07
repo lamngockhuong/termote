@@ -290,7 +290,7 @@ func TestHerdrStreamDriveOverWebSocket(t *testing.T) {
 	useFakeControl(t)
 	f := newFakeHerdr(t)
 	m := newTestHerdrMux(t, f)
-	h, _, err := buildServer(testConfig(t), m)
+	h, _, _, err := buildServer(testConfig(t), m)
 	if err != nil {
 		t.Fatal(err)
 	}

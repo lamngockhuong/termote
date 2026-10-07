@@ -1,0 +1,81 @@
+{
+  "comment": "Agent status transitions and the notifications they raise. Read by pwa/src/utils/agent-notify.test.ts and server/push_watch_test.go. Each step maps a pane id to its status (null: the pane shows no status, e.g. a lookup that timed out); a pane missing from a step is gone. events[i] lists what step i raises.",
+  "cases": [
+    {
+      "name": "first sighting never notifies",
+      "steps": [{ "p1": "blocked", "p2": "done", "p3": "working" }],
+      "events": [[]]
+    },
+    {
+      "name": "working, done and idle each become blocked",
+      "steps": [
+        { "p1": "working", "p2": "done", "p3": "idle" },
+        { "p1": "blocked", "p2": "blocked", "p3": "blocked" }
+      ],
+      "events": [
+        [],
+        [
+          { "paneId": "p1", "kind": "blocked" },
+          { "paneId": "p2", "kind": "blocked" },
+          { "paneId": "p3", "kind": "blocked" }
+        ]
+      ]
+    },
+    {
+      "name": "blocked staying blocked raises nothing",
+      "steps": [{ "p1": "working" }, { "p1": "blocked" }, { "p1": "blocked" }],
+      "events": [[], [{ "paneId": "p1", "kind": "blocked" }], []]
+    },
+    {
+      "name": "a finished turn notifies",
+      "steps": [{ "p1": "working", "p2": "working" }, { "p1": "done", "p2": "idle" }],
+      "events": [
+        [],
+        [
+          { "paneId": "p1", "kind": "done" },
+          { "paneId": "p2", "kind": "done" }
+        ]
+      ]
+    },
+    {
+      "name": "an answered dialog raises nothing",
+      "steps": [{ "p1": "blocked", "p2": "blocked" }, { "p1": "done", "p2": "idle" }],
+      "events": [[], []]
+    },
+    {
+      "name": "idle to done and done to idle raise nothing",
+      "steps": [{ "p1": "idle", "p2": "done" }, { "p1": "done", "p2": "idle" }],
+      "events": [[], []]
+    },
+    {
+      "name": "working to working raises nothing",
+      "steps": [{ "p1": "working" }, { "p1": "working" }],
+      "events": [[], []]
+    },
+    {
+      "name": "no status keeps the last known one",
+      "steps": [{ "p1": "working" }, { "p1": null }, { "p1": "idle" }],
+      "events": [[], [], [{ "paneId": "p1", "kind": "done" }]]
+    },
+    {
+      "name": "unknown keeps the last known one",
+      "steps": [{ "p1": "working" }, { "p1": "unknown" }, { "p1": "done" }],
+      "events": [[], [], [{ "paneId": "p1", "kind": "done" }]]
+    },
+    {
+      "name": "blocked through a gap is no duplicate",
+      "steps": [{ "p1": "working" }, { "p1": "blocked" }, { "p1": null }, { "p1": "blocked" }],
+      "events": [[], [{ "paneId": "p1", "kind": "blocked" }], [], []]
+    },
+    {
+      "name": "a pane first seen without a status, then with one, is a first sighting",
+      "steps": [{ "p1": null }, { "p1": "blocked" }, { "p1": "done" }],
+      "events": [[], [], []]
+    },
+    {
+      "name": "a pane that is gone is forgotten",
+      "steps": [{ "p1": "working" }, {}, { "p1": "done" }],
+      "events": [[], [], []]
+    }
+  ]
+}

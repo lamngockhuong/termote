@@ -25,7 +25,7 @@ func newFindFixture(t *testing.T, root string, deny ...string) *findFixture {
 	t.Helper()
 	cfg := testConfig(t)
 	cfg.FilesDenyDirs = deny
-	h, _, err := buildServer(cfg, &filesFakeMux{dir: root, files: true})
+	h, _, _, err := buildServer(cfg, &filesFakeMux{dir: root, files: true})
 	if err != nil {
 		t.Fatal(err)
 	}

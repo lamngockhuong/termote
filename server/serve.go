@@ -59,6 +59,9 @@ type serveConfig struct {
 	// TrashDir holds what the Files view deleted, for its Undo; empty
 	// disables deletes.
 	TrashDir string
+	// PushDir holds the Web Push key and the devices' subscriptions; empty
+	// disables push.
+	PushDir string
 	// OnListen runs once the port is bound (serve records its PID then, so
 	// a server that cannot bind never replaces the running one's PID file).
 	OnListen func()
@@ -243,15 +246,16 @@ func newMux(ctx context.Context, backend string) (Mux, error) {
 // newServeHandler builds the full handler chain: PWA static files,
 // /api/mux/*, auth, Host allowlist and cross-site write protection.
 func newServeHandler(cfg serveConfig, m Mux) (http.Handler, error) {
-	h, _, err := buildServer(cfg, m)
+	h, _, _, err := buildServer(cfg, m)
 	return h, err
 }
 
 // buildServer is newServeHandler plus the hub that owns open terminal streams,
-// which the caller must shut down.
-func buildServer(cfg serveConfig, m Mux) (http.Handler, *streamHub, error) {
+// which the caller must shut down, and the Web Push store (nil without one),
+// whose watcher the caller starts.
+func buildServer(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushStore, error) {
 	if err := validateConfig(cfg); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	mux := http.NewServeMux()
 	tokenStore := newStreamTokenStore()
@@ -265,7 +269,15 @@ func buildServer(cfg serveConfig, m Mux) (http.Handler, *streamHub, error) {
 			log.Printf("uploads disabled: %v", err)
 		}
 	}
-	agent := registerMuxRoutes(mux, m, tokenStore, uploads)
+	var push *pushStore
+	if cfg.PushDir != "" {
+		var err error
+		if push, err = newPushStore(cfg.PushDir, cfg.User, cfg.Pass, cfg.NoAuth); err != nil {
+			log.Printf("push notifications disabled: %v", err)
+		}
+	}
+	agent := registerMuxRoutes(mux, m, tokenStore, uploads, push)
+	registerPushRoutes(mux, push)
 	registerStreamRoutes(mux, m, tokenStore, allowed, hub)
 	// The upload store and the trash are never read through the Files view
 	// either: with a pane in the home dir, a deleted .env would otherwise
@@ -302,7 +314,7 @@ func buildServer(cfg serveConfig, m Mux) (http.Handler, *streamHub, error) {
 	// allowed one.
 	handler = securityHeaders(pwa, handler)
 	handler = hostGuard(allowed, handler)
-	return readDeadline(noCacheMiddleware(handler)), hub, nil
+	return readDeadline(noCacheMiddleware(handler)), hub, push, nil
 }
 
 // requestReadTimeout bounds reading one request, its body included:
@@ -393,11 +405,13 @@ func serveAndPublish(ctx context.Context, cfg serveConfig, m Mux, ln net.Listene
 // runServer serves on ln until ctx is cancelled, then stops accepting
 // requests, closes every terminal stream and waits for their processes.
 func runServer(ctx context.Context, cfg serveConfig, m Mux, ln net.Listener) error {
-	handler, hub, err := buildServer(cfg, m)
+	handler, hub, push, err := buildServer(cfg, m)
 	if err != nil {
 		ln.Close()
 		return err
 	}
+	// Here, not in buildServer: a handler built for a test sends nothing.
+	startPushWatcher(ctx, m, push)
 	pwa := "embedded"
 	if cfg.PWADir != "" {
 		pwa, _ = filepath.Abs(cfg.PWADir)

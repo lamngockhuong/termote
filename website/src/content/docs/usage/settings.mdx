@@ -100,6 +100,42 @@ changes state.
 | Off    | Sessions keep their order                   | ✓       |
 | On     | Blocked sessions first in each group        |         |
 
+## Notify When an Agent Needs Me
+
+Settings → Sessions → **Notify when an agent needs me** shows a notification when an agent's
+dialog waits for an answer, or when it finishes a turn. Tapping the notification opens that pane.
+Without Web Push, the pane you are looking at never notifies. With it, every push shows a
+notification, that pane included: browsers require it. The notification names the agent, the
+group and the tab, and never holds screen or transcript text.
+
+Turning it on asks the browser for permission to show notifications. If the browser blocks them,
+the row reads **Blocked in browser settings**. Allow notifications for the site there, then turn it
+on again. If the row reads **Reload to turn on**, the page is still running an older version of
+the app: reload it first.
+
+How the notification arrives depends on the device:
+
+- **With the app closed** (Android Chrome, desktop Chrome, Edge and Firefox): the server sends a
+  Web Push, so it arrives even when no Termote page is open.
+- **iPhone and iPad**: it works only in the app added to the Home Screen, on iOS 16.4 or later.
+  In Safari the row reads "iPhone/iPad: works only from the Home Screen app (iOS 16.4+)".
+- **Without Web Push** (an older server, or a browser without it): only an open page notifies,
+  which in practice means a desktop tab, since a phone suspends a page it does not show.
+
+Limits:
+
+- With tmux, only the active pane of each window is watched, so an agent in a split pane that is
+  not active does not notify.
+- The server checks every 5 seconds, so a turn shorter than that may not notify.
+- `termote start --fresh`, or any change of the password, stops push to every device. A device
+  gets it again once it opens Termote and signs in with the new password.
+- Logging out also stops push to that device.
+
+| Option | Behavior                                     | Default |
+| ------ | -------------------------------------------- | ------- |
+| Off    | No notifications                             | ✓       |
+| On     | Notify when an agent is blocked or finished  |         |
+
 ## Terminal Font
 
 The font the terminal uses, typed by name (e.g. `JetBrainsMono Nerd Font`). It must be installed on the device the browser runs on; if it is not, the terminal falls back to the system monospace font. Several names can be given, separated by commas. The value is saved when the field loses focus or you press Enter.

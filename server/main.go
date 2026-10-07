@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 )
 
 // `termote serve` runs the server; it is what the service and the container
@@ -62,6 +63,9 @@ func runServe(args []string) int {
 	cfg.FilesWriteDenyDirs = []string{c.dataDir()}
 	cfg.UploadDir = uploadDir()
 	cfg.TrashDir = trashDir()
+	// Under the state dir, which FilesDenyDirs already keeps from the Files
+	// view, and which does not roam on Windows (a private key).
+	cfg.PushDir = filepath.Join(c.stateDir(), "push")
 	cfg.OnListen = func() {
 		if err := c.writePIDFile(); err != nil {
 			fmt.Fprintf(os.Stderr, "[WARN] cannot write %s: %v\n", c.pidFile(), err)

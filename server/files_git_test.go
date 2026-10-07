@@ -500,7 +500,7 @@ func TestFilesDiffDenied(t *testing.T) {
 	writeFile(t, filepath.Join(deny, "secret"), "k\n")
 	cfg := testConfig(t)
 	cfg.FilesDenyDirs = []string{deny}
-	h, _, err := buildServer(cfg, &filesFakeMux{dir: gx.repo, files: true})
+	h, _, _, err := buildServer(cfg, &filesFakeMux{dir: gx.repo, files: true})
 	if err != nil {
 		t.Fatal(err)
 	}

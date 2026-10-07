@@ -311,8 +311,22 @@ func ensureSession(ctx context.Context) bool {
 }
 
 func (tmuxMux) Snapshot(ctx context.Context) (Snapshot, error) {
+	return tmuxSnapshot(ctx, true)
+}
+
+// peekSnapshot is Snapshot for the push watcher: it never creates the
+// default session (nor, through it, a tmux server), so a user who closed it
+// does not see it come back while no page is open.
+func (tmuxMux) peekSnapshot(ctx context.Context) (Snapshot, error) {
+	return tmuxSnapshot(ctx, false)
+}
+
+// tmuxSnapshot reads every session; create makes the default session first
+// when it is missing. Without create, the sessions there are read as they
+// are, and no server is an error.
+func tmuxSnapshot(ctx context.Context, create bool) (Snapshot, error) {
 	out, err := listWindows(ctx)
-	if (err != nil || !hasDefaultSession(out)) && ensureSession(ctx) {
+	if create && (err != nil || !hasDefaultSession(out)) && ensureSession(ctx) {
 		out, err = listWindows(ctx)
 	}
 	if err != nil {

@@ -76,6 +76,7 @@ export interface Settings {
   sidePanelWidth: number // desktop Files/Changes panel, in px
   findIncludeIgnored: boolean // Files search: a repo's ignored files too
   findExcludes: string[] // Files search: folder names never searched (above)
+  notifyAgents: boolean // notify when an agent is blocked or ends a turn
 }
 
 const DEFAULTS: Settings = {
@@ -96,6 +97,7 @@ const DEFAULTS: Settings = {
   sidePanelWidth: SIDE_PANEL_DEFAULT,
   findIncludeIgnored: false,
   findExcludes: FIND_EXCLUDES_DEFAULT,
+  notifyAgents: false,
 }
 
 // Listeners for useSyncExternalStore
@@ -129,6 +131,7 @@ function getSnapshot(): Settings {
         sidebarFilter: resolveSidebarFilter(merged.sidebarFilter),
         findIncludeIgnored: merged.findIncludeIgnored === true,
         findExcludes: resolveFindExcludes(merged.findExcludes),
+        notifyAgents: merged.notifyAgents === true,
       }
     } catch {
       cachedSettings = DEFAULTS
