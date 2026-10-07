@@ -22,11 +22,11 @@ const (
 )
 
 var (
-	errCreateExists      = &rawError{"exists", "a file or directory of that name already exists", http.StatusConflict}
-	errCreateNotDir      = &rawError{"not_directory", "a parent on that path is not a directory", http.StatusConflict}
-	errCreateSymlink     = &rawError{"symlink", "a directory on that path is a symbolic link", http.StatusForbidden}
-	errCreateNotAllowed  = &rawError{"not_allowed", "path not allowed", http.StatusForbidden}
-	errCreateInvalidName = &rawError{"invalid_name", "invalid file name", http.StatusBadRequest}
+	errCreateExists      = &codedError{"exists", "a file or directory of that name already exists", http.StatusConflict}
+	errCreateNotDir      = &codedError{"not_directory", "a parent on that path is not a directory", http.StatusConflict}
+	errCreateSymlink     = &codedError{"symlink", "a directory on that path is a symbolic link", http.StatusForbidden}
+	errCreateNotAllowed  = &codedError{"not_allowed", "path not allowed", http.StatusForbidden}
+	errCreateInvalidName = &codedError{"invalid_name", "invalid file name", http.StatusBadRequest}
 )
 
 // createExistsError: the name asked for is taken. path is that name cleaned,
@@ -226,7 +226,7 @@ func openChildDir(cur *os.Root, name string, create bool) (*os.Root, error) {
 
 // createError turns an OS error of a create into the one the client is told.
 func createError(err error) error {
-	var re *rawError
+	var re *codedError
 	switch {
 	case errors.As(err, &re):
 		return err

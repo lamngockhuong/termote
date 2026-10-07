@@ -320,7 +320,15 @@ vi.mock('./components/session-sidebar', () => ({
     onFilterChange,
     onRemove,
     onAdd,
+    groupActions,
   }: {
+    groupActions?: {
+      noun: string
+      onNew: () => void
+      onRename: (id: string, name: string) => Promise<void>
+      onClose: (id: string) => void
+      canRename: (id: string) => boolean
+    }
     onAdd?: (name: string, icon?: string) => void
     onSelect?: (id: string) => void
     onClose?: () => void
@@ -342,6 +350,28 @@ vi.mock('./components/session-sidebar', () => ({
       {isMobile && onClose && <button onClick={onClose}>MobileClose</button>}
       {isMobile && onAdd && (
         <button onClick={() => onAdd('Fresh', '🚀')}>MobileAdd</button>
+      )}
+      {groupActions && !isMobile && (
+        <>
+          <span>
+            {groupActions.noun}: rename main{' '}
+            {String(groupActions.canRename('main'))}, rename $3{' '}
+            {String(groupActions.canRename('$3'))}
+          </span>
+          <button onClick={groupActions.onNew}>GroupNew</button>
+          <button onClick={() => groupActions.onRename('$3', 'web')}>
+            GroupRename
+          </button>
+          <button onClick={() => groupActions.onClose('main')}>
+            GroupCloseMain
+          </button>
+          <button onClick={() => groupActions.onClose('$3')}>
+            GroupCloseWork
+          </button>
+        </>
+      )}
+      {groupActions && isMobile && (
+        <button onClick={groupActions.onNew}>MobileGroupNew</button>
       )}
     </div>
   ),
@@ -3333,5 +3363,200 @@ describe('App views, view-only and deep links', () => {
       expect(toast).toHaveTextContent('Could not copy the link')
       expect(toast).toHaveAttribute('data-variant', 'danger')
     })
+  })
+})
+
+describe('App — group actions', () => {
+  const tab = (id: string, groupId: string) => ({
+    id,
+    name: id,
+    icon: '💻',
+    description: '',
+    groupId,
+    paneId: id,
+  })
+  const createGroup = vi.fn(async () => {})
+  const renameGroup = vi.fn(async () => {})
+  const closeGroup = vi.fn(async () => {})
+  const withGroups = (backend = 'tmux') => {
+    const base = mockUseLocalSessions()
+    const tabs = [tab('0', 'main'), tab('1', 'main'), tab('$3:0', '$3')]
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      activeSession: tabs[0],
+      sessions: tabs,
+      groups: [
+        { id: 'main', name: 'main' },
+        { id: '$3', name: 'work' },
+      ],
+      createGroup,
+      renameGroup,
+      closeGroup,
+      mux: {
+        backend,
+        caps: {
+          clientSideSelect: backend === 'herdr',
+          copyMode: true,
+          groups: true,
+        },
+      },
+    } as any)
+  }
+
+  beforeEach(() => {
+    HTMLDialogElement.prototype.showModal = vi.fn(function (
+      this: HTMLDialogElement,
+    ) {
+      this.setAttribute('open', '')
+    })
+    HTMLDialogElement.prototype.close = vi.fn()
+    createGroup.mockReset().mockResolvedValue(undefined)
+    closeGroup.mockReset().mockResolvedValue(undefined)
+    renameGroup.mockReset().mockResolvedValue(undefined)
+  })
+
+  it('offers no group actions without caps.groups', async () => {
+    render(<App />)
+    await screen.findAllByTestId('session-sidebar')
+    expect(screen.queryByText('GroupNew')).toBeNull()
+  })
+
+  it('tmux: names them tmux sessions; the default one cannot be renamed', async () => {
+    withGroups()
+    render(<App />)
+    expect(
+      await screen.findByText(
+        'tmux session: rename main false, rename $3 true',
+      ),
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getByText('GroupRename'))
+    expect(renameGroup).toHaveBeenCalledWith('$3', 'web')
+  })
+
+  it('herdr: names them workspaces, every one can be renamed', async () => {
+    withGroups('herdr')
+    render(<App />)
+    expect(
+      await screen.findByText('workspace: rename main true, rename $3 true'),
+    ).toBeInTheDocument()
+  })
+
+  it('creates a group from the dialog', async () => {
+    withGroups()
+    render(<App />)
+    fireEvent.click(await screen.findByText('GroupNew'))
+    expect(screen.getByText('New tmux session')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Name'), {
+      target: { value: 'api' },
+    })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+    })
+    expect(createGroup).toHaveBeenCalledWith('api', '', expect.any(Function))
+    expect(screen.queryByText('New tmux session')).toBeNull()
+  })
+
+  it('closes the sessions sheet once a group is made on mobile', async () => {
+    mockIsMobile.mockReturnValue(true)
+    withGroups()
+    render(<App />)
+    fireEvent.click(await screen.findByText('MobileGroupNew'))
+    fireEvent.change(screen.getByLabelText('Name'), {
+      target: { value: 'api' },
+    })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+    })
+    expect(createGroup).toHaveBeenCalled()
+    for (const el of screen.getAllByTestId('session-sidebar')) {
+      expect(el).toHaveAttribute('data-open', 'false')
+    }
+    mockIsMobile.mockReturnValue(false)
+  })
+
+  it('a create that ends after Cancel leaves the mobile sheet open', async () => {
+    mockIsMobile.mockReturnValue(true)
+    withGroups()
+    let resolve!: () => void
+    createGroup.mockImplementation(
+      () => new Promise<void>((r) => (resolve = r)),
+    )
+    render(<App />)
+    fireEvent.click(await screen.findByText('MobileGroupNew'))
+    fireEvent.change(screen.getByLabelText('Name'), {
+      target: { value: 'api' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    const open = screen
+      .getAllByTestId('session-sidebar')
+      .map((el) => el.dataset.open)
+    await act(async () => resolve())
+    expect(
+      screen.getAllByTestId('session-sidebar').map((el) => el.dataset.open),
+    ).toEqual(open)
+    mockIsMobile.mockReturnValue(false)
+  })
+
+  it('asks before closing, with the tab count', async () => {
+    withGroups()
+    render(<App />)
+    fireEvent.click(await screen.findByText('GroupCloseWork'))
+    const dialog = screen.getByTestId('confirm-dialog')
+    expect(dialog).toHaveTextContent('Close tmux session?')
+    expect(dialog).toHaveTextContent(
+      'Close tmux session "work"? Its 1 tab and everything running in them will end.',
+    )
+    expect(dialog).not.toHaveTextContent('starts a new')
+    fireEvent.click(within(dialog).getByText('ConfirmYes'))
+    expect(closeGroup).toHaveBeenCalledWith('$3')
+  })
+
+  it('says that the default session comes back empty and other devices drop', async () => {
+    withGroups()
+    render(<App />)
+    fireEvent.click(await screen.findByText('GroupCloseMain'))
+    const dialog = screen.getByTestId('confirm-dialog')
+    expect(dialog).toHaveTextContent('Its 2 tabs')
+    expect(dialog).toHaveTextContent(
+      'Termote starts a new, empty "main" right away, and every device viewing it is disconnected.',
+    )
+    fireEvent.click(within(dialog).getByText('ConfirmNo'))
+    expect(closeGroup).not.toHaveBeenCalled()
+  })
+
+  it('tells why a workspace was not closed', async () => {
+    const { RequestError } = await import('./hooks/use-mux-api')
+    withGroups('herdr')
+    render(<App />)
+    for (const [err, text] of [
+      [
+        new RequestError(409, 'has_worktrees', 'x'),
+        'This workspace has linked worktrees; close it in Herdr',
+      ],
+      [new RequestError(500, '', 'x'), 'Could not close the workspace'],
+    ] as const) {
+      closeGroup.mockRejectedValueOnce(err)
+      fireEvent.click(screen.getByText('GroupCloseWork'))
+      const dialog = screen.getByTestId('confirm-dialog')
+      await act(async () => {
+        fireEvent.click(within(dialog).getByText('ConfirmYes'))
+      })
+      expect(await screen.findByText(text)).toBeInTheDocument()
+    }
+  })
+
+  it('says nothing when the group was already gone', async () => {
+    const { RequestError } = await import('./hooks/use-mux-api')
+    withGroups('herdr')
+    render(<App />)
+    closeGroup.mockRejectedValueOnce(
+      new RequestError(404, 'unknown_group', 'x'),
+    )
+    fireEvent.click(await screen.findByText('GroupCloseWork'))
+    await act(async () => {
+      fireEvent.click(screen.getByText('ConfirmYes'))
+    })
+    expect(screen.queryByText('Could not close the workspace')).toBeNull()
   })
 })

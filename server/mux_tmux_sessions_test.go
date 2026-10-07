@@ -182,3 +182,111 @@ func waitPaneDir(t *testing.T, id, want string) string {
 	})
 	return got
 }
+
+// Sessions made, renamed and closed through the backend. tmux expands
+// formats in -s, -c and rename-session: no '#' sequence in a name or a
+// directory runs anything or changes, and every command reaches only the
+// session asked for.
+func TestTmuxGroupsInRealServer(t *testing.T) {
+	useRealTmux(t, fmt.Sprintf("termote-groups-%d", os.Getpid()))
+	ctx := context.Background()
+	m := tmuxMux{}
+	// The tmux server starts here with HOME at the marker dir, so a job
+	// that ran would leave a file there.
+	marker := t.TempDir()
+	t.Setenv("HOME", marker)
+	if _, err := m.Snapshot(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	odd, _ := filepath.EvalSymlinks(t.TempDir())
+	odd = filepath.Join(odd, "#(cd;touch y) ##z #{host}")
+	if err := os.Mkdir(odd, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	name := "p#(cd;touch x) h#{host} ##y #"
+	sid, err := m.NewGroup(ctx, name, odd)
+	if err != nil {
+		t.Fatalf("NewGroup = %v", err)
+	}
+	if !tmuxSessionIDRe.MatchString(sid) {
+		t.Fatalf("NewGroup id = %q", sid)
+	}
+	if entries, _ := os.ReadDir(marker); len(entries) != 0 {
+		t.Fatalf("a #() job ran: %v", entries)
+	}
+	snap, _ := m.Snapshot(ctx)
+	g := findGroup(snap, sid)
+	if g == nil || g.Name != name {
+		t.Fatalf("group = %+v, want name %q", g, name)
+	}
+	if dir := waitPaneDir(t, sid+":0", odd); dir != odd {
+		t.Errorf("pane directory = %q, want %q", dir, odd)
+	}
+
+	// A name taken, by this session or the default one.
+	if _, err := m.NewGroup(ctx, name, odd); !errors.Is(err, errGroupExists) {
+		t.Errorf("NewGroup with a taken name = %v", err)
+	}
+	if err := m.RenameGroup(ctx, sid, tmuxSession); !errors.Is(err, errGroupExists) {
+		t.Errorf("RenameGroup to the default name = %v", err)
+	}
+	renamed := "x" + name
+	if err := m.RenameGroup(ctx, sid, renamed); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.RenameGroup(ctx, sid, renamed); err != nil {
+		t.Errorf("RenameGroup to its own name = %v", err)
+	}
+	snap, _ = m.Snapshot(ctx)
+	if g := findGroup(snap, sid); g == nil || g.Name != renamed {
+		t.Fatalf("after rename = %+v", g)
+	}
+	if entries, _ := os.ReadDir(marker); len(entries) != 0 {
+		t.Fatalf("a #() job ran on rename: %v", entries)
+	}
+	if err := m.RenameGroup(ctx, tmuxSession, "y"); !errors.Is(err, errDefaultSession) {
+		t.Errorf("RenameGroup of the default session = %v", err)
+	}
+
+	// A session whose name a closed one's starts with stays.
+	prefix := tmuxSession[:len(tmuxSession)-1]
+	other, err := m.NewGroup(ctx, prefix, odd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m.CloseGroup(ctx, other); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.CloseGroup(ctx, other); !errors.Is(err, errUnknownGroup) {
+		t.Errorf("CloseGroup twice = %v", err)
+	}
+	if err := m.CloseGroup(ctx, sid); err != nil {
+		t.Fatal(err)
+	}
+	snap, _ = m.Snapshot(ctx)
+	if len(snap.Groups) != 1 || snap.Groups[0].ID != tmuxSession {
+		t.Fatalf("after closing = %+v", snap.Groups)
+	}
+	if err := m.RenameGroup(ctx, sid, "z"); !errors.Is(err, errUnknownGroup) {
+		t.Errorf("RenameGroup of a closed session = %v", err)
+	}
+
+	// The default session may be closed: the next snapshot starts it again.
+	if err := m.CloseGroup(ctx, tmuxSession); err != nil {
+		t.Fatal(err)
+	}
+	if snap, err := m.Snapshot(ctx); err != nil || len(snap.Groups) != 1 || snap.Groups[0].ID != tmuxSession {
+		t.Fatalf("after closing the default session = %+v, %v", snap.Groups, err)
+	}
+}
+
+// The first session can be made before any tmux server runs.
+func TestTmuxNewGroupStartsTheServer(t *testing.T) {
+	useRealTmux(t, fmt.Sprintf("termote-first-%d", os.Getpid()))
+	dir, _ := filepath.EvalSymlinks(t.TempDir())
+	sid, err := tmuxMux{}.NewGroup(context.Background(), "first", dir)
+	if err != nil || !tmuxSessionIDRe.MatchString(sid) {
+		t.Fatalf("NewGroup with no server = %q, %v", sid, err)
+	}
+}

@@ -54,6 +54,9 @@ export interface MuxSnapshot {
     trash?: boolean
     // Sign-in is on: the session can be ended (/logout).
     auth?: boolean
+    // Groups (tmux sessions, Herdr workspaces) can be created, renamed and
+    // closed (/groups).
+    groups?: boolean
   }
   groups: MuxGroup[]
 }
@@ -164,6 +167,41 @@ export async function closeTab(id: string): Promise<boolean> {
 export async function renameTab(id: string, name: string): Promise<boolean> {
   const data = await write('PATCH', tabPath(id), { name })
   return data.ok === true
+}
+
+const groupPath = (id: string) => `/groups/${encodeURIComponent(id)}`
+
+// A group write; a refusal throws RequestError with the server's code (empty
+// when a guard in front of the route answered).
+async function groupWrite(
+  method: 'POST' | 'PATCH' | 'DELETE',
+  path: string,
+  body?: unknown,
+): Promise<{ id?: string }> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  })
+  if (!res.ok) throw await requestError(res)
+  return res.json()
+}
+
+// Opens a group (tmux session, Herdr workspace) starting in cwd (the host's
+// home directory when empty) and returns its id.
+export async function createGroup(name: string, cwd = ''): Promise<string> {
+  const data = await groupWrite('POST', '/groups', { name, cwd })
+  return data.id ?? ''
+}
+
+export async function renameGroup(id: string, name: string): Promise<void> {
+  await groupWrite('PATCH', groupPath(id), { name })
+}
+
+// Ends the group and everything running in it.
+export async function closeGroup(id: string): Promise<void> {
+  await groupWrite('DELETE', groupPath(id))
 }
 
 // Closes one pane of a split tab (herdr); the tab stays with its other panes.

@@ -2,9 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AgentRequestError,
   answerAgentPrompt,
+  closeGroup,
   closePane,
   closeTab,
   createFile,
+  createGroup,
   createTab,
   deleteFile,
   fetchAgentCommands,
@@ -23,6 +25,7 @@ import {
   logout,
   REQUEST_TIMEOUT_MS,
   RequestError,
+  renameGroup,
   renameTab,
   restoreFile,
   SAVE_TIMEOUT_MS,
@@ -284,6 +287,54 @@ describe('mux API client', () => {
       'Token request failed: 503',
     )
     expect(spy).toHaveBeenCalledTimes(3)
+  })
+})
+
+describe('group API client', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  it('creates, renames and closes a group with JSON writes', async () => {
+    const { calls } = mockFetch(
+      { body: { ok: true, id: '$3' } },
+      { body: { ok: true } },
+      { body: { ok: true } },
+    )
+    expect(await createGroup('api', '/srv/api')).toBe('$3')
+    await renameGroup('$3', 'web')
+    await closeGroup('$3')
+    expect(calls.map((c) => [c.url, c.init?.method, c.init?.body])).toEqual([
+      ['/api/mux/groups', 'POST', '{"name":"api","cwd":"/srv/api"}'],
+      ['/api/mux/groups/%243', 'PATCH', '{"name":"web"}'],
+      ['/api/mux/groups/%243', 'DELETE', undefined],
+    ])
+    expect(
+      (calls[0].init!.headers as Record<string, string>)['Content-Type'],
+    ).toBe('application/json')
+  })
+
+  it('sends an empty directory for the home directory', async () => {
+    const { calls } = mockFetch({ body: { ok: true } })
+    expect(await createGroup('home')).toBe('')
+    expect(calls[0].init?.body).toBe('{"name":"home","cwd":""}')
+  })
+
+  it('throws the server code, or none from a guard', async () => {
+    mockFetch({
+      body: { error: 'no such directory', code: 'not_found' },
+      status: 400,
+    })
+    await expect(createGroup('a', '/nope')).rejects.toMatchObject({
+      status: 400,
+      code: 'not_found',
+      message: 'no such directory',
+    })
+    mockFetch({ body: { error: 'forbidden' }, status: 403 })
+    const err = await closeGroup('w1').catch((e) => e)
+    expect(err).toBeInstanceOf(RequestError)
+    expect(err.code).toBe('')
   })
 })
 

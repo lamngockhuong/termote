@@ -859,3 +859,144 @@ func TestTmuxAttachRejectsBadID(t *testing.T) {
 		t.Errorf("Attach(other:0) = %v", err)
 	}
 }
+
+func TestValidTmuxGroupName(t *testing.T) {
+	usePsmux(t, false)
+	for name, want := range map[string]bool{
+		"api": true, "my work": true, "a#b": true, "-x": false, "": false, "a:b": false, "a.b": false,
+		"w*": false, "w?": false, "w[1]": false, "=main": false, "x;": false, `a\b`: false, "é😀": true,
+	} {
+		if got := validTmuxGroupName(name); got != want {
+			t.Errorf("validTmuxGroupName(%q) = %v, want %v", name, got, want)
+		}
+	}
+	usePsmux(t, true)
+	if validTmuxGroupName("a#b") {
+		t.Error("psmux accepted a '#' in a session name")
+	}
+}
+
+func TestTmuxGroupArgv(t *testing.T) {
+	orig := tmuxSession
+	defer func() { tmuxSession = orig }()
+	tmuxSession = "main"
+	usePsmux(t, false)
+	ctx := context.Background()
+	m := tmuxMux{}
+	sessions := fakeTmuxReply{out: "$0:main\n$3:work\n"}
+
+	args := useFakeTmuxScript(t, map[string]fakeTmuxReply{
+		"list-sessions":   {out: "$0:main\n$3:work\n$7:a#b\n"},
+		"new-session":     {out: "$7\n"},
+		"display-message": {out: "$7:/srv/x##y\n"},
+	})
+	if _, err := m.NewGroup(ctx, "a#b", "/srv/x##y"); err == nil || !errors.Is(err, errGroupExists) {
+		t.Errorf("NewGroup with a taken name = %v", err)
+	}
+	if strings.Contains(args(), "new-session") {
+		t.Errorf("argv = %q", args())
+	}
+
+	args = useFakeTmuxScript(t, map[string]fakeTmuxReply{
+		"list-sessions":   sessions,
+		"new-session":     {out: "$7\n"},
+		"display-message": {out: "$7:/srv/x\n"},
+	})
+	// The session read back under another name (a tmux that expanded it).
+	if _, err := m.NewGroup(ctx, "a#b", "/srv/x"); err == nil {
+		t.Error("NewGroup accepted a session that came out wrong")
+	}
+	lines := strings.Split(strings.TrimSpace(args()), "\n")
+	if lines[1] != "new-session -d -s a##b -P -F #{session_id} -c /srv/x" || lines[len(lines)-1] != "kill-session -t $7" {
+		t.Errorf("argv = %q", lines)
+	}
+
+	args = useFakeTmuxScript(t, map[string]fakeTmuxReply{"list-sessions": sessions})
+	if err := m.CloseGroup(ctx, "$3"); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.CloseGroup(ctx, "main"); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.RenameGroup(ctx, "$3", "x#y"); err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Split(strings.TrimSpace(args()), "\n")
+	want := []string{
+		"list-sessions -F #{session_id}:#{session_name}", "kill-session -t $3",
+		"list-sessions -F #{session_id}:#{session_name}", "kill-session -t $0",
+		"list-sessions -F #{session_id}:#{session_name}", "rename-session -t $3 x##y",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("argv = %q", got)
+	}
+
+	for name, c := range map[string]struct {
+		err  error
+		want error
+	}{
+		"close unknown":        {m.CloseGroup(ctx, "$9"), errUnknownGroup},
+		"close by name":        {m.CloseGroup(ctx, "work"), errInvalidGroupID},
+		"close empty":          {m.CloseGroup(ctx, ""), errInvalidGroupID},
+		"rename default":       {m.RenameGroup(ctx, "main", "x"), errDefaultSession},
+		"rename default by id": {m.RenameGroup(ctx, "$0", "x"), errDefaultSession},
+		"rename taken":         {m.RenameGroup(ctx, "$3", "main"), errGroupExists},
+		"rename bad name":      {m.RenameGroup(ctx, "$3", "a:b"), errInvalidGroupName},
+		"rename to its own":    {m.RenameGroup(ctx, "$3", "work"), nil},
+		"create bad name":      {func() error { _, err := m.NewGroup(ctx, "=x", ""); return err }(), errInvalidGroupName},
+	} {
+		if !errors.Is(c.err, c.want) {
+			t.Errorf("%s = %v, want %v", name, c.err, c.want)
+		}
+	}
+
+	// The session went away between the check and the command, or the name
+	// was taken meanwhile.
+	useFakeTmuxScript(t, map[string]fakeTmuxReply{"list-sessions": sessions,
+		"kill-session": {stderr: "can't find session: $3", code: 1}})
+	if err := m.CloseGroup(ctx, "$3"); !errors.Is(err, errUnknownGroup) {
+		t.Errorf("close of a vanished session = %v", err)
+	}
+	useFakeTmuxScript(t, map[string]fakeTmuxReply{"list-sessions": sessions,
+		"rename-session": {stderr: "duplicate session: x", code: 1},
+		"new-session":    {stderr: "duplicate session: x", code: 1}})
+	if err := m.RenameGroup(ctx, "$3", "x"); !errors.Is(err, errGroupExists) {
+		t.Errorf("rename onto a name taken meanwhile = %v", err)
+	}
+	if _, err := m.NewGroup(ctx, "x", ""); !errors.Is(err, errGroupExists) {
+		t.Errorf("create onto a name taken meanwhile = %v", err)
+	}
+	useFakeTmuxScript(t, map[string]fakeTmuxReply{"list-sessions": sessions,
+		"kill-session": {stderr: "lost server", code: 1}, "new-session": {out: "nonsense"}})
+	if err := m.CloseGroup(ctx, "$3"); err == nil || errors.Is(err, errUnknownGroup) {
+		t.Errorf("other kill failure = %v", err)
+	}
+	if _, err := m.NewGroup(ctx, "y", ""); err == nil {
+		t.Error("NewGroup accepted a reply that is no session id")
+	}
+	useFakeTmuxScript(t, map[string]fakeTmuxReply{"list-sessions": sessions, "new-session": {stderr: "lost server", code: 1}})
+	if _, err := m.NewGroup(ctx, "y", ""); err == nil || errors.Is(err, errGroupExists) {
+		t.Errorf("other new-session failure = %v", err)
+	}
+	if tmuxNoServer(errors.New("no server running")) {
+		t.Error("an error that is not tmux's exit status counted as no server")
+	}
+	useFakeTmuxScript(t, map[string]fakeTmuxReply{"list-sessions": {stderr: "lost server", code: 1}})
+	if _, err := m.NewGroup(ctx, "y", ""); err == nil {
+		t.Error("NewGroup ignored a failed list")
+	}
+	if err := m.CloseGroup(ctx, "$3"); err == nil {
+		t.Error("CloseGroup ignored a failed list")
+	}
+}
+
+func TestTmuxNewGroupOnPsmuxRefusesHash(t *testing.T) {
+	usePsmux(t, true)
+	args := useFakeTmuxScript(t, map[string]fakeTmuxReply{})
+	if _, err := (tmuxMux{}).NewGroup(context.Background(), "ok", `C:\a#b`); !errors.Is(err, errInvalidCwd) {
+		t.Errorf("NewGroup with '#' in cwd on psmux = %v", err)
+	}
+	if args() != "" {
+		t.Errorf("argv = %q", args())
+	}
+}

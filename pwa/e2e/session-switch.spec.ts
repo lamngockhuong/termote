@@ -110,8 +110,13 @@ test.describe('mux API integration', () => {
     expect(res.status()).toBe(415)
   })
 
-  test('tmux shows the flat 0.x list: no group header, no pane strip', async ({ page }) => {
-    await expect(page.locator('aside section')).toHaveCount(0)
+  test('tmux shows a header per session with its actions, and no pane strip', async ({ page, request }) => {
+    const snap = await (await request.get('/api/mux/snapshot')).json()
+    // Sessions can be managed: even a single one gets a header for its menu
+    await expect(page.locator('aside section')).toHaveCount(snap.groups.length)
+    await expect(
+      page.getByRole('button', { name: `Actions for tmux session ${snap.groups[0].name}` }),
+    ).toBeVisible()
     await expect(page.getByRole('group', { name: 'Panes' })).toHaveCount(0)
   })
 

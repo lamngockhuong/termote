@@ -513,7 +513,7 @@ func isBinary(b []byte) bool {
 func (f *filesAPI) error(w http.ResponseWriter, op string, err error) {
 	var rc *rootChangedError
 	var ie inputError
-	var re *rawError
+	var re *codedError
 	var ne *notEditableError
 	var ee *createExistsError
 	var dc *deleteChangedError

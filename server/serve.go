@@ -279,6 +279,7 @@ func buildServer(cfg serveConfig, m Mux) (http.Handler, *streamHub, error) {
 		}
 	}
 	agent.registerCommandsRoute(mux, files, allowed)
+	registerGroupRoutes(mux, m, files.deny)
 	// Unknown /api/ paths get JSON 404 instead of the SPA fallback.
 	mux.HandleFunc("/api/", apiNotFound)
 

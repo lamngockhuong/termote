@@ -17,12 +17,12 @@ import (
 var deleteHashMax int64 = 512 << 20
 
 var (
-	errDeleteInvalidPath = &rawError{"invalid_path", "invalid path", http.StatusBadRequest}
-	errDeleteNotFile     = &rawError{"not_file", "not a regular file", http.StatusConflict}
-	errDeleteNotDir      = &rawError{"not_directory", "not a directory", http.StatusConflict}
-	errDeleteNotEmpty    = &rawError{"not_empty", "the directory is not empty", http.StatusConflict}
-	errDeleteHardlink    = &rawError{"hardlink", "the file has several hard links", http.StatusConflict}
-	errDeleteTooLarge    = &rawError{"too_large", "file is larger than 512 MiB", http.StatusRequestEntityTooLarge}
+	errDeleteInvalidPath = &codedError{"invalid_path", "invalid path", http.StatusBadRequest}
+	errDeleteNotFile     = &codedError{"not_file", "not a regular file", http.StatusConflict}
+	errDeleteNotDir      = &codedError{"not_directory", "not a directory", http.StatusConflict}
+	errDeleteNotEmpty    = &codedError{"not_empty", "the directory is not empty", http.StatusConflict}
+	errDeleteHardlink    = &codedError{"hardlink", "the file has several hard links", http.StatusConflict}
+	errDeleteTooLarge    = &codedError{"too_large", "file is larger than 512 MiB", http.StatusRequestEntityTooLarge}
 	errDeleteKind        = inputError("kind must be file or dir")
 )
 

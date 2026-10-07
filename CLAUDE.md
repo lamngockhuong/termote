@@ -308,6 +308,7 @@ The `update` command:
 | `pwa/src/components/changes-view.tsx`             | Changes view: git status grouped, a file's diff, edits it     |
 | `pwa/src/components/file-editor.tsx`              | A file's text in a textarea, why a save failed                |
 | `pwa/src/components/new-file-dialog.tsx`          | Files: asks for a new file's path, creates it, says why not   |
+| `pwa/src/components/group-dialog.tsx`             | New tmux session / workspace: name, directory, why refused    |
 | `pwa/src/components/file-search.tsx`              | Files: find a file by name under the root, results, switch    |
 | `pwa/src/components/delete-file-dialog.tsx`       | Files: asks before a delete, second ask for a permanent one   |
 | `pwa/src/components/markdown-preview.tsx`         | Markdown file rendered in Files/Changes (links, code blocks)  |
@@ -325,6 +326,7 @@ The `update` command:
 | `server/serve.go`                                 | Server (PWA static files, auth, guards)                       |
 | `server/mux.go`                                   | `Mux` interface + `/api/mux/*` routes                         |
 | `server/mux_tmux.go`                              | tmux/psmux backend                                            |
+| `server/mux_groups.go`                            | `/api/mux/groups*`: create, rename, close a group; cwd check  |
 | `server/mux_herdr.go`                             | Herdr backend                                                 |
 | `server/stream.go`                                | Terminal WebSocket (`/api/mux/stream`)                        |
 | `server/agent.go`                                 | `/api/mux/panes/{id}/agent/*` routes, transcript reads        |
@@ -412,6 +414,35 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   tab and line breaks removed, since xterm brackets a paste without removing a marker inside it
 - **Herdr guard**: `--mux herdr --no-auth` is refused unless `--allow-herdr-no-auth` is also
   given, since Herdr exposes every workspace on the host
+- **Groups** (`POST /api/mux/groups` `{name, cwd}` → `{ok, id}`, `PATCH /api/mux/groups/{id}`
+  `{name}`, `DELETE /api/mux/groups/{id}`; `server/mux_groups.go`, `caps.groups`): auth,
+  `hostGuard`, `writeGuard` (same-site JSON), 8 KB body, `requireWriteRole` first (a stub until
+  #236, which must refuse all three), `muxTimeout`; creates, renames and closes run one at a time
+  (one mutex), with no cap on the number of groups. Errors the handler or backend raises carry a
+  `code` (`invalid_name`, `invalid_cwd`, `not_found`, `not_directory`, `not_allowed`, `busy`,
+  `invalid_group_id`, 404 `unknown_group` also when the group vanishes between check and command,
+  409 `exists`/`default_session`/`has_worktrees`, 501 `unsupported`), through the shared
+  `codedError` (also the uploads' and `files/raw`'s); guard and JSON errors keep `{error}` without
+  one. The name is 1–64 bytes, no control character, no trailing `;`; tmux also refuses `:` `.`
+  `*` `?` `[` `\` (stored escaped) and a leading `=` or `-` in a new session's name. The `cwd` check is against
+  mistakes, **not a security boundary** (the shell that opens can `cd` anywhere; signing in is
+  the boundary): empty → the server user's home, absolute only, on Windows only `X:\…` (a UNC
+  `\\host\share`, `\\?\` or `\\.\` would make the stat send the NTLM hash to that host),
+  `EvalSymlinks` + `Stat` in a goroutine bounded by `muxTimeout` (a hung mount → 503 `busy`; a local symlink to a UNC path still reaches it, an accepted gap:
+  only someone with the host can make one), and
+  neither the path nor its resolved form under the files deny list (`files.deny`); the resolved
+  path goes to the backend through argv/RPC, never a shell. tmux expands formats in
+  `new-session -s`, `-c` and `rename-session`, running `#()` through `/bin/sh`: name and `cwd` go
+  through `tmuxLiteral` (`#` doubled), and the new session's name and `session_path` are read back
+  (anything else → `kill-session`, 500); psmux, unchecked, refuses `#` in both. A new session gets
+  `terminalEnv()`, is checked to be free by exact name in `list-sessions`, and is addressed by its
+  `$N` (`-P -F '#{session_id}'`); close and rename find it by exact id/name first. The default
+  session cannot be renamed (409 `default_session`); closing it is allowed (the next snapshot
+  makes it again, empty, and the PWA's confirmation says so). Herdr: `workspace.create`
+  `{label, cwd, focus:false}`, `workspace.rename`, `workspace.close` without `close_group` (linked
+  worktrees → 409 `has_worktrees`, closed in Herdr), `workspace_not_found` → 404 (Herdr answers a method it lacks with
+  `invalid_request`, so an older Herdr gets a 500, not 501). A request that waited past
+  `muxTimeout` for another group change gets 503 `busy`. Closing a group ends every process in it
 - **tmux sessions**: every session on the tmux server is a group, the user's own ones made
   outside Termote included, so anyone signed in sees, switches to and types into them (as Herdr
   exposes every workspace; accepted). `TMUX_SESSION` (default `main`; no `:`, `.`, leading `=`

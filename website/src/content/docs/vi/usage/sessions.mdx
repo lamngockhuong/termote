@@ -42,6 +42,24 @@ workflow khác nhau (ví dụ: Claude Code, Copilot, build).
 - **Phiên đang chờ bạn**: Khi một phiên khác có agent đang chờ bạn, chip phiên hiện số phiên
   đó bằng màu đỏ ở chỗ mũi tên
 
+### Group: session tmux và workspace Herdr
+
+Khi server quản lý được group, group nào cũng có header kèm menu **⋯**, kể cả khi tmux chỉ có một
+session:
+
+- **Tạo**: **New tmux session** (tmux) hoặc **New workspace** (Herdr), nằm dưới **New session** trong
+  sidebar hoặc ở đầu bảng trên mobile, hỏi tên và thư mục: đường dẫn tuyệt đối trên máy chủ, hoặc
+  để trống thì dùng thư mục home. Tạo xong, tab đầu của group được mở. Tên đã có, thư mục tương đối
+  hoặc không tồn tại, hay một file đều bị từ chối kèm lý do, và nội dung bạn đã gõ được giữ nguyên.
+- **Đổi tên**: trong menu **⋯**, sửa tên ngay tại chỗ. Session tmux riêng của Termote (`main`) không
+  đổi tên được.
+- **Đóng**: trong menu **⋯**, hỏi trước và nói bao nhiêu tab sẽ kết thúc theo. Đóng session tmux
+  riêng của Termote thì một session mới, rỗng được tạo ngay, và mọi thiết bị đang xem nó tự kết nối
+  lại vào đó. Workspace Herdr có `worktree` liên kết thì phải đóng trong Herdr.
+
+Bước kiểm tra thư mục chỉ để bắt lỗi gõ nhầm: terminal mở ra vẫn `cd` đi đâu cũng được. Trên Windows,
+thư mục phải nằm trên một ổ đĩa (`C:\work`), và tên lẫn thư mục trên psmux không được chứa `#`.
+
 ### Lọc theo trạng thái agent
 
 Khi có ít nhất một phiên chạy agent lập trình, phía trên danh sách phiên (sidebar trên desktop, bảng
@@ -168,6 +186,9 @@ Phiên được quản lý qua các endpoint `/api/mux/*` của termote:
 | `/api/mux/tabs/{id}`        | PATCH  | Đổi tên tab (nội dung gửi: `{name}`)                     |
 | `/api/mux/tabs/{id}`        | DELETE | Xóa tab                                          |
 | `/api/mux/panes/{id}`       | DELETE | Đóng một pane (chỉ Herdr, backend khác trả 501)  |
+| `/api/mux/groups`           | POST   | Tạo group (nội dung `{name, cwd}`)               |
+| `/api/mux/groups/{id}`      | PATCH  | Đổi tên group (nội dung `{name}`)                |
+| `/api/mux/groups/{id}`      | DELETE | Đóng group cùng mọi thứ đang chạy trong đó       |
 
 ## Xử lý sự cố
 

@@ -264,6 +264,18 @@ Manual testing checklist for Termote features before release.
 - [ ] Active session highlighted in sidebar
 - [ ] Sessions persist after page refresh
 - [ ] Double-click to edit session (desktop)
+- [ ] With `caps.groups`: every group has a header with a ⋯ menu, a single tmux session included
+- [ ] "New tmux session" (tmux) / "New workspace" (Herdr) opens a dialog; a name and an absolute
+      directory create it there (`tmux ls`, `herdr workspace list`), and its first tab shows
+- [ ] The dialog says why it refused (relative or missing directory, a file, a name taken) and keeps
+      what was typed; an empty directory starts in the home directory
+- [ ] A name with `#(…)` or `#{…}` shows as typed in `tmux ls` and runs nothing
+- [ ] Rename in the ⋯ menu edits the name in place; tmux's default session has no Rename
+- [ ] Close asks first with the number of tabs; for tmux's default session it says a new, empty one
+      starts and other devices are disconnected, and they reconnect to it
+- [ ] Closing the group on screen shows the first group left
+- [ ] Herdr: closing a workspace with linked worktrees shows "close it in Herdr"
+- [ ] tmux: a session started outside Termote (`tmux new -s x`) shows as a group and can be closed
 
 ### Session Tabs (Desktop)
 

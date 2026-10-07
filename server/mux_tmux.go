@@ -56,14 +56,15 @@ func validTmuxName(name string) bool {
 	return validateTmuxTarget(name) && !strings.HasPrefix(name, "-")
 }
 
-// tmuxWindowName escapes a validated tab name for new-window -n and
-// rename-window: tmux expands formats in the name it is given, running a
-// #() job and replacing #{...}, so a '#' is doubled to keep the name as
-// typed. A run of '#' right before '[' (a style) is the one thing tmux
-// leaves as it is, so it is kept. psmux is left as it was: whether it
-// expands formats is unchecked.
-func tmuxWindowName(name string) string {
-	if runtime.GOOS == "windows" {
+// tmuxLiteral escapes a validated name or directory for tmux arguments that
+// it expands as formats (new-window -n, rename-window, new-session -s and
+// -c, rename-session): tmux would run a #() job and replace #{...}, so a '#'
+// is doubled to keep the text as typed. A run of '#' right before '[' (a
+// style) is the one thing tmux leaves as it is, so it is kept. psmux is left
+// as it was: whether it expands formats is unchecked, so a new session's
+// name and directory are refused there when they hold a '#'.
+func tmuxLiteral(name string) string {
+	if tmuxIsPsmux {
 		return name
 	}
 	return tmuxHashRun.ReplaceAllStringFunc(name, func(run string) string {
@@ -241,7 +242,7 @@ type tmuxMux struct{}
 func (tmuxMux) Name() string { return "tmux" }
 
 func (tmuxMux) Caps() Caps {
-	return Caps{CopyMode: true, AgentChat: agentProcSupported, Files: tmuxFilesSupported}
+	return Caps{CopyMode: true, AgentChat: agentProcSupported, Files: tmuxFilesSupported, Groups: true}
 }
 
 // tmuxListFormat is one window per line, every session's.
@@ -446,7 +447,7 @@ func (tmuxMux) NewTab(ctx context.Context, groupID, name string) (string, error)
 		if !validTmuxName(name) {
 			return "", inputError("invalid tab name")
 		}
-		args = append(args, "-n", tmuxWindowName(name))
+		args = append(args, "-n", tmuxLiteral(name))
 	}
 	out, err := tmuxCmd(ctx, args...).Output()
 	// A client may create a tab before anything asked for a snapshot (a
@@ -499,7 +500,172 @@ func (tmuxMux) RenameTab(ctx context.Context, tabID, name string) error {
 	if !validTmuxName(name) {
 		return inputError("invalid tab name")
 	}
-	return tmuxCmd(ctx, "rename-window", "-t", w.target(), tmuxWindowName(name)).Run()
+	return tmuxCmd(ctx, "rename-window", "-t", w.target(), tmuxLiteral(name)).Run()
+}
+
+// validTmuxGroupName accepts the name of a new session: a valid name with
+// none of the characters tmux reads in a target (":", ".", a pattern's "*?["),
+// not starting with "=" (an exact-name target), and no "\", which tmux stores
+// escaped ("\\"), so the session would not get the name asked for. Sessions
+// that exist are addressed by id, so this binds only names Termote gives.
+func validTmuxGroupName(name string) bool {
+	return validTmuxName(name) && !strings.ContainsAny(name, ":.*?[\\") &&
+		!strings.HasPrefix(name, "=") && !(tmuxIsPsmux && strings.Contains(name, "#"))
+}
+
+// tmuxSessionInfo is one line of list-sessions.
+type tmuxSessionInfo struct{ id, name string }
+
+// listTmuxSessions lists every session by id and exact name.
+func listTmuxSessions(ctx context.Context) ([]tmuxSessionInfo, error) {
+	out, err := tmuxCmd(ctx, "list-sessions", "-F", "#{session_id}:#{session_name}").Output()
+	if err != nil {
+		return nil, err
+	}
+	var list []tmuxSessionInfo
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		id, name, ok := strings.Cut(strings.TrimRight(line, "\r"), ":")
+		if ok && tmuxSessionIDRe.MatchString(id) {
+			list = append(list, tmuxSessionInfo{id, name})
+		}
+	}
+	return list, nil
+}
+
+// findTmuxGroup returns the session a group id names, compared exactly: by
+// name for the default session, by id for any other; and every session.
+func findTmuxGroup(ctx context.Context, groupID string) (tmuxSessionInfo, []tmuxSessionInfo, error) {
+	if groupID == "" {
+		return tmuxSessionInfo{}, nil, errInvalidGroupID
+	}
+	if _, ok := parseTmuxGroupID(groupID); !ok {
+		return tmuxSessionInfo{}, nil, errInvalidGroupID
+	}
+	list, err := listTmuxSessions(ctx)
+	if err != nil {
+		return tmuxSessionInfo{}, nil, err
+	}
+	for _, s := range list {
+		if groupID == tmuxSession && s.name == tmuxSession || s.id == groupID {
+			return s, list, nil
+		}
+	}
+	return tmuxSessionInfo{}, nil, errUnknownGroup
+}
+
+// tmuxRun runs a group command, telling a missing session (gone between the
+// check and the command) and a taken name from other failures.
+func tmuxRun(ctx context.Context, args ...string) error {
+	_, err := tmuxCmd(ctx, args...).Output()
+	var ee *exec.ExitError
+	switch {
+	case err == nil:
+		return nil
+	case tmuxMissing(err):
+		return errUnknownGroup
+	case errors.As(err, &ee) && strings.Contains(string(ee.Stderr), "duplicate session"):
+		return errGroupExists
+	}
+	return err
+}
+
+// NewGroup starts a detached session named name in cwd and returns its id.
+// Both go through tmuxLiteral, and the session's name and start directory are
+// read back: a tmux that expanded either anyway loses the session again.
+func (tmuxMux) NewGroup(ctx context.Context, name, cwd string) (string, error) {
+	if !validTmuxGroupName(name) {
+		return "", errInvalidGroupName
+	}
+	if tmuxIsPsmux && strings.Contains(cwd, "#") {
+		return "", errInvalidCwd
+	}
+	list, err := listTmuxSessions(ctx)
+	if err != nil && !tmuxNoServer(err) {
+		return "", err
+	}
+	for _, s := range list {
+		if s.name == name {
+			return "", errGroupExists
+		}
+	}
+	args := []string{"new-session", "-d", "-s", tmuxLiteral(name), "-P", "-F", "#{session_id}"}
+	if cwd != "" {
+		args = append(args, "-c", tmuxLiteral(cwd))
+	}
+	cmd := tmuxCmd(ctx, args...)
+	cmd.Env = terminalEnv()
+	out, err := cmd.Output()
+	var ee *exec.ExitError
+	if errors.As(err, &ee) && strings.Contains(string(ee.Stderr), "duplicate session") {
+		return "", errGroupExists
+	}
+	if err != nil {
+		return "", err
+	}
+	sid := strings.TrimSpace(string(out))
+	if !tmuxSessionIDRe.MatchString(sid) {
+		return "", fmt.Errorf("new-session printed %q", out)
+	}
+	got, err := tmuxCmd(ctx, "display-message", "-p", "-t", sid, "#{session_id}:#{session_path}").Output()
+	gotID, gotPath, _ := strings.Cut(strings.TrimRight(string(got), "\r\n"), ":")
+	gotName := ""
+	if list, lerr := listTmuxSessions(ctx); lerr == nil {
+		for _, s := range list {
+			if s.id == sid {
+				gotName = s.name
+			}
+		}
+	}
+	if err != nil || gotID != sid || gotName != name || cwd != "" && gotPath != cwd {
+		tmuxCmd(context.WithoutCancel(ctx), "kill-session", "-t", sid).Run()
+		return "", fmt.Errorf("new session %s came out as %q in %q, want %q in %q", sid, gotName, gotPath, name, cwd)
+	}
+	return sid, nil
+}
+
+// tmuxNoServer reports whether a command failed because no tmux server is
+// running yet (the first session starts it).
+func tmuxNoServer(err error) bool {
+	var ee *exec.ExitError
+	if !errors.As(err, &ee) {
+		return false
+	}
+	msg := string(ee.Stderr)
+	return strings.Contains(msg, "no server running") || strings.Contains(msg, "error connecting to")
+}
+
+// CloseGroup ends a session and everything running in it. The default one
+// may be closed too: the next snapshot starts it again, empty.
+func (tmuxMux) CloseGroup(ctx context.Context, groupID string) error {
+	s, _, err := findTmuxGroup(ctx, groupID)
+	if err != nil {
+		return err
+	}
+	return tmuxRun(ctx, "kill-session", "-t", s.id)
+}
+
+// RenameGroup renames a session other than the default one: renaming that
+// would make the next snapshot start a new, empty one under its name.
+func (tmuxMux) RenameGroup(ctx context.Context, groupID, name string) error {
+	s, list, err := findTmuxGroup(ctx, groupID)
+	if err != nil {
+		return err
+	}
+	if s.name == tmuxSession {
+		return errDefaultSession
+	}
+	if !validTmuxGroupName(name) {
+		return errInvalidGroupName
+	}
+	if s.name == name {
+		return nil
+	}
+	for _, o := range list {
+		if o.name == name {
+			return errGroupExists
+		}
+	}
+	return tmuxRun(ctx, "rename-session", "-t", s.id, tmuxLiteral(name))
 }
 
 // ClosePane is not offered: a tab here is one window shown as one pane, and

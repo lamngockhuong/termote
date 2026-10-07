@@ -142,6 +142,38 @@ test.describe('write guards on send-keys', () => {
   })
 })
 
+test.describe('write guards on group routes', () => {
+  // The group ids do not exist: a request that got past the guard would be
+  // answered 404 (or 400), never create or close anything.
+  const routes = [
+    { method: 'POST', path: '/api/mux/groups', data: { name: 'csrf-e2e', cwd: '/tmp' } },
+    { method: 'PATCH', path: '/api/mux/groups/%249999', data: { name: 'csrf-e2e' } },
+    { method: 'DELETE', path: '/api/mux/groups/%249999', data: {} },
+  ]
+  const groupNames = async (request: APIRequestContext) =>
+    (await (await request.get('/api/mux/snapshot')).json()).groups.map(
+      (g: { name: string }) => g.name,
+    )
+
+  for (const r of routes) {
+    test(`${r.method} ${r.path}: text/plain, cross-site and a foreign Origin are rejected`, async ({ request }) => {
+      for (const [headers, status] of [
+        [{ 'Content-Type': 'text/plain' }, 415],
+        [{ 'Sec-Fetch-Site': 'cross-site' }, 403],
+        [{ Origin: 'https://evil.example' }, 403],
+      ] as const) {
+        const res = await request.fetch(r.path, {
+          method: r.method,
+          headers: { ...headers },
+          data: JSON.stringify(r.data),
+        })
+        expect(res.status(), JSON.stringify(headers)).toBe(status)
+      }
+      expect(await groupNames(request)).not.toContain('csrf-e2e')
+    })
+  }
+})
+
 test.describe('files routes', () => {
   // Read-only GETs, guarded like writes: auth, Host, and a same-site check
   const filesPath = async (request: APIRequestContext, rest: string) =>

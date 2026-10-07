@@ -40,6 +40,12 @@ type Mux interface {
 	NewTab(ctx context.Context, groupID, name string) (tabID string, err error)
 	CloseTab(ctx context.Context, tabID string) error
 	RenameTab(ctx context.Context, tabID, name string) error
+	// NewGroup opens a group (a tmux session, a Herdr workspace) named name,
+	// starting in cwd (absolute, already checked), and returns its id.
+	NewGroup(ctx context.Context, name, cwd string) (groupID string, err error)
+	// CloseGroup closes a group, ending everything running in it.
+	CloseGroup(ctx context.Context, groupID string) error
+	RenameGroup(ctx context.Context, groupID, name string) error
 	// ClosePane closes one pane of a split tab, ending what runs in it.
 	ClosePane(ctx context.Context, paneID string) error
 	SendKeys(ctx context.Context, paneID, keys string) error
@@ -80,6 +86,8 @@ type Caps struct {
 	// Auth: sign-in is on, so the PWA offers Log out. Set by the snapshot
 	// route, from the request basicAuth let through.
 	Auth bool `json:"auth"`
+	// Groups: groups can be created, renamed and closed (/api/mux/groups).
+	Groups bool `json:"groups"`
 }
 
 type Snapshot struct {
@@ -121,6 +129,17 @@ type AgentInfo struct {
 type inputError string
 
 func (e inputError) Error() string { return string(e) }
+
+// codedError is a failure the client is told about with an HTTP status and a
+// machine-readable code (uploads, files/raw, groups). Its message is safe to
+// return verbatim.
+type codedError struct {
+	code   string
+	msg    string
+	status int
+}
+
+func (e *codedError) Error() string { return e.msg }
 
 // errUnsupported is returned by a backend for an operation it does not offer.
 var errUnsupported = errors.New("operation not supported by this backend")
@@ -319,7 +338,10 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 // client; everything else is logged server-side and answered generically.
 func muxError(w http.ResponseWriter, m Mux, op string, err error) {
 	var ie inputError
+	var ce *codedError
 	switch {
+	case errors.As(err, &ce):
+		jsonErrorCode(w, ce.code, ce.msg, ce.status)
 	case errors.As(err, &ie):
 		jsonError(w, ie.Error(), http.StatusBadRequest)
 	case errors.Is(err, errUnsupported):

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Session, SessionGroup } from '../types/session'
 import { SessionSidebar } from './session-sidebar'
@@ -1214,5 +1214,225 @@ describe('SessionSidebar — filter bar', () => {
       'App blocked',
       'App working',
     ])
+  })
+})
+
+describe('SessionSidebar — group actions', () => {
+  const MAIN: Session = {
+    id: '0',
+    name: 'shell',
+    icon: '💻',
+    description: '',
+    groupId: 'main',
+  }
+  const WORK: Session = {
+    id: '$3:0',
+    name: 'build',
+    icon: '💻',
+    description: '',
+    groupId: '$3',
+  }
+  const actions = (over = {}) => ({
+    noun: 'tmux session',
+    onNew: vi.fn(),
+    onRename: vi.fn(async () => {}),
+    onClose: vi.fn(),
+    canRename: (id: string) => id.startsWith('$'),
+    ...over,
+  })
+
+  beforeEach(() => localStorage.clear())
+
+  const renderWith = (groupActions?: ReturnType<typeof actions>, props = {}) =>
+    render(
+      <SessionSidebar
+        sessions={[MAIN, WORK]}
+        groups={[
+          { id: 'main', name: 'main' },
+          { id: '$3', name: 'work' },
+        ]}
+        activeId="0"
+        onSelect={vi.fn()}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+        groupActions={groupActions}
+        {...props}
+      />,
+    )
+
+  const openMenu = (name: string) =>
+    fireEvent.click(
+      screen.getByRole('button', { name: `Actions for tmux session ${name}` }),
+    )
+
+  it('offers nothing without caps.groups', () => {
+    renderWith(undefined)
+    expect(screen.queryByText('New tmux session')).toBeNull()
+    expect(screen.queryByRole('button', { name: /actions:/ })).toBeNull()
+  })
+
+  it('shows the header of a single group so its menu has a place', () => {
+    render(
+      <SessionSidebar
+        sessions={[MAIN]}
+        groups={[{ id: 'main', name: 'main' }]}
+        activeId="0"
+        onSelect={vi.fn()}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+        groupActions={actions()}
+      />,
+    )
+    expect(screen.getByRole('region', { name: 'main' })).toBeInTheDocument()
+  })
+
+  it('opens the New dialog, clearing a filter first', () => {
+    const a = actions()
+    const onFilterChange = vi.fn()
+    renderWith(a, {
+      filter: 'agents',
+      onFilterChange,
+      sessions: [{ ...MAIN, hasAgent: true }, WORK],
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'New tmux session' }))
+    expect(a.onNew).toHaveBeenCalled()
+    expect(onFilterChange).toHaveBeenCalledWith('all')
+  })
+
+  it('the default session has Close and no Rename', () => {
+    const a = actions()
+    renderWith(a)
+    openMenu('main')
+    expect(screen.queryByRole('menuitem', { name: 'Rename' })).toBeNull()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Close' }))
+    expect(a.onClose).toHaveBeenCalledWith('main')
+  })
+
+  it('renames a group in place', async () => {
+    const a = actions()
+    renderWith(a)
+    openMenu('work')
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }))
+    const input = screen.getByRole('textbox', {
+      name: 'New name for tmux session work',
+    })
+    fireEvent.change(input, { target: { value: ' web ' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await vi.waitFor(() => expect(a.onRename).toHaveBeenCalledWith('$3', 'web'))
+    await vi.waitFor(() =>
+      expect(
+        screen.queryByRole('textbox', {
+          name: 'New name for tmux session work',
+        }),
+      ).toBeNull(),
+    )
+  })
+
+  it('an unchanged or empty name just closes the field; Escape and Cancel too', () => {
+    const a = actions()
+    renderWith(a)
+    for (const close of [
+      () => fireEvent.click(screen.getByRole('button', { name: 'Save' })),
+      () =>
+        fireEvent.keyDown(
+          screen.getByRole('textbox', {
+            name: 'New name for tmux session work',
+          }),
+          {
+            key: 'Escape',
+          },
+        ),
+      () => fireEvent.click(screen.getByRole('button', { name: 'Cancel' })),
+    ]) {
+      openMenu('work')
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }))
+      close()
+      expect(
+        screen.queryByRole('textbox', {
+          name: 'New name for tmux session work',
+        }),
+      ).toBeNull()
+    }
+    openMenu('work')
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }))
+    fireEvent.change(
+      screen.getByRole('textbox', { name: 'New name for tmux session work' }),
+      {
+        target: { value: '  ' },
+      },
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(a.onRename).not.toHaveBeenCalled()
+  })
+
+  it('a name over 64 bytes is refused before sending', () => {
+    const a = actions()
+    renderWith(a)
+    openMenu('work')
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }))
+    const input = screen.getByRole('textbox', {
+      name: 'New name for tmux session work',
+    })
+    fireEvent.change(input, { target: { value: 'é'.repeat(33) } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('Use at most 64 bytes')
+    expect(input).toHaveAccessibleDescription('Use at most 64 bytes')
+    expect(a.onRename).not.toHaveBeenCalled()
+  })
+
+  it('a second Enter while saving sends nothing more', async () => {
+    let resolve!: () => void
+    const a = actions({
+      onRename: vi.fn(() => new Promise<void>((r) => (resolve = r))),
+    })
+    renderWith(a)
+    openMenu('work')
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }))
+    const input = screen.getByRole('textbox', {
+      name: 'New name for tmux session work',
+    })
+    fireEvent.change(input, { target: { value: 'web' } })
+    fireEvent.submit(input.closest('form')!)
+    fireEvent.submit(input.closest('form')!)
+    expect(a.onRename).toHaveBeenCalledTimes(1)
+    await act(async () => resolve())
+  })
+
+  it('says why a rename was refused and keeps the field', async () => {
+    const { RequestError } = await import('../hooks/use-mux-api')
+    for (const [err, message] of [
+      [
+        new RequestError(409, 'exists', 'x'),
+        'A tmux session of that name already exists',
+      ],
+      [
+        new RequestError(400, 'invalid_name', 'x'),
+        "This name can't be used. Avoid : . * ? [ \\ and a leading = or -",
+      ],
+      [new RequestError(500, '', 'x'), 'Could not rename the tmux session'],
+      [new Error('lost'), 'Could not rename the tmux session'],
+    ] as const) {
+      const a = actions({ onRename: vi.fn(async () => Promise.reject(err)) })
+      const { unmount } = renderWith(a)
+      openMenu('work')
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }))
+      const input = screen.getByRole('textbox', {
+        name: 'New name for tmux session work',
+      })
+      fireEvent.change(input, { target: { value: 'main' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+      expect(await screen.findByRole('alert')).toHaveTextContent(message)
+      // Typing again clears the message
+      fireEvent.change(input, { target: { value: 'main2' } })
+      expect(screen.queryByRole('alert')).toBeNull()
+      unmount()
+    }
+  })
+
+  it('the mobile sheet has the New button too', () => {
+    const a = actions({ noun: 'workspace' })
+    renderWith(a, { isMobile: true })
+    fireEvent.click(screen.getByRole('button', { name: 'New workspace' }))
+    expect(a.onNew).toHaveBeenCalled()
   })
 })
