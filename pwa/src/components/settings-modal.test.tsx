@@ -11,6 +11,7 @@ import { FIND_EXCLUDES_DEFAULT, type Settings } from '../hooks/use-settings'
 import { SettingsModal } from './settings-modal'
 
 const notify = vi.hoisted(() => ({
+  needsHomeScreenApp: vi.fn(() => false),
   notificationSupport: vi.fn(() => 'unsupported'),
   notifyWorkerReady: vi.fn(() => Promise.resolve(true)),
   requestNotify: vi.fn(() => Promise.resolve('granted')),
@@ -620,6 +621,7 @@ describe('SettingsModal', () => {
   describe('Notify when an agent needs me', () => {
     const NAME = 'Notify when an agent needs me'
     beforeEach(() => {
+      notify.needsHomeScreenApp.mockReturnValue(false)
       notify.notificationSupport.mockReturnValue('default')
       notify.notifyWorkerReady.mockResolvedValue(true)
       notify.requestNotify.mockResolvedValue('granted')
@@ -647,6 +649,53 @@ describe('SettingsModal', () => {
         expect(onUpdateSetting).toHaveBeenCalledWith('notifyAgents', true),
       )
       expect(notify.requestNotify).toHaveBeenCalled()
+    })
+
+    it('subscribes to push in the same click when the server sends it', async () => {
+      const order: string[] = []
+      const onEnableNotify = vi.fn(async () => {
+        order.push('subscribe')
+      })
+      const onUpdateSetting = vi.fn(() => order.push('setting'))
+      renderModal({ pushAvailable: true, onEnableNotify, onUpdateSetting })
+      const sw = screen.getByRole('switch', { name: NAME })
+      await waitFor(() => expect(sw).not.toBeDisabled())
+      await act(async () => fireEvent.click(sw))
+      await waitFor(() => expect(order).toEqual(['subscribe', 'setting']))
+    })
+
+    it('leaves push alone when the server does not send it', async () => {
+      const onEnableNotify = vi.fn(async () => {})
+      renderModal({ onEnableNotify })
+      const sw = screen.getByRole('switch', { name: NAME })
+      await waitFor(() => expect(sw).not.toBeDisabled())
+      await act(async () => fireEvent.click(sw))
+      expect(onEnableNotify).not.toHaveBeenCalled()
+    })
+
+    it('unsubscribes when turned off', async () => {
+      notify.notificationSupport.mockReturnValue('granted')
+      const onDisableNotify = vi.fn()
+      renderModal({
+        settings: { ...DEFAULT_SETTINGS, notifyAgents: true },
+        onDisableNotify,
+      })
+      await act(async () =>
+        fireEvent.click(screen.getByRole('switch', { name: NAME })),
+      )
+      expect(onDisableNotify).toHaveBeenCalled()
+    })
+
+    it('points iOS browsers to the Home Screen app', async () => {
+      notify.notificationSupport.mockReturnValue('unsupported')
+      notify.needsHomeScreenApp.mockReturnValue(true)
+      const { sw } = await renderReady()
+      expect(
+        screen.getByText(
+          'iPhone/iPad: works only from the Home Screen app (iOS 16.4+)',
+        ),
+      ).toBeInTheDocument()
+      expect(sw).toBeDisabled()
     })
 
     it('stays off when the permission is not given', async () => {

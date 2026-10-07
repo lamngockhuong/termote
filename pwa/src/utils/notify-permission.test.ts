@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  needsHomeScreenApp,
   notificationSupport,
   notifyWorkerReady,
   requestNotify,
@@ -46,7 +47,7 @@ describe('notify permission', () => {
   })
 
   it('is ready when the active worker answers the ping', async () => {
-    const worker = stubWorker({ version: 1 })
+    const worker = stubWorker({ version: 2 })
     await expect(notifyWorkerReady()).resolves.toBe(true)
     expect(worker.postMessage).toHaveBeenCalledWith(
       { type: 'termote-notify-ping' },
@@ -76,5 +77,27 @@ describe('notify permission', () => {
       value: { getRegistration: vi.fn().mockRejectedValue(new Error('x')) },
     })
     await expect(notifyWorkerReady()).resolves.toBe(false)
+  })
+
+  it('asks iOS browsers for the Home Screen app', () => {
+    const nav = (userAgent: string, extra = {}) =>
+      ({ userAgent, maxTouchPoints: 5, ...extra }) as unknown as Navigator
+    const iphone = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)'
+    const ipad = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
+    expect(needsHomeScreenApp(nav(iphone))).toBe(true)
+    expect(needsHomeScreenApp(nav(ipad))).toBe(true)
+    expect(needsHomeScreenApp(nav(ipad, { maxTouchPoints: 0 }))).toBe(false)
+    expect(needsHomeScreenApp(nav(iphone, { standalone: true }))).toBe(false)
+    expect(needsHomeScreenApp(nav('Mozilla/5.0 (X11; Linux x86_64)'))).toBe(
+      false,
+    )
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({ matches: true })),
+    )
+    expect(needsHomeScreenApp(nav(iphone))).toBe(false)
+    vi.stubGlobal('matchMedia', undefined)
+    expect(needsHomeScreenApp(nav(iphone))).toBe(true)
+    expect(needsHomeScreenApp()).toBe(false)
   })
 })

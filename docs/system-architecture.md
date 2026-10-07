@@ -82,6 +82,7 @@ Go HTTP server providing:
 - **Terminal WebSocket**: `/api/mux/stream` opens a PTY/ConPTY attached to the selected pane and streams it as binary WebSocket frames; a text control frame carries resize (client→server) and exit/error/size (server→client)
 - **Authentication**: Basic auth or a sign-in form (`/login`, for browsers: an iOS home-screen app never shows the Basic prompt), then a session cookie, rate-limited, plus a Host allowlist and an Origin/CSRF write guard in front of everything; `POST /api/mux/logout` ends the session on the server (the More menu's Log out, shown when the snapshot reports `caps.auth`)
 - **Mux API endpoints**: `/api/mux/*` — snapshot (groups→tabs→panes), tab create/rename/close/select, send-keys, health
+- **Web Push**: `/api/mux/push/*` — the server's key and this device's subscription; a watcher sends a push when an agent needs the user (see [Agent notifications](#agent-notifications-apimuxpush))
 - **Agent chat endpoints**: `/api/mux/panes/{id}/agent/*` — the transcript of the Claude Code or Codex session in a pane, sending it a message, reading and answering its dialogs (see [Agent chat](#agent-chat-apimuxpanesidagent))
 
 Configuration: when `termote serve` finds a saved config (`~/.config/termote/config`), it reads
@@ -214,6 +215,9 @@ POST   /api/mux/panes/{id}/keys    body: {keys}                 → {ok}
 POST   /api/mux/panes/{id}/scroll  body: {lines}                → {ok}   (caps.scroll only, else 501)
 GET    /api/mux/health             → {status, apiVersion, backend, version, pid, install}
 POST   /api/mux/logout             body: {}                      → 204   (sign-in on only, else 404)
+GET    /api/mux/push/key                                        → {publicKey} | 503 push_unavailable   (caps.push)
+POST   /api/mux/push/subscribe     body: {endpoint, keys:{p256dh, auth}}  → {ok} | {error, code}
+DELETE /api/mux/push/subscribe     body: {endpoint}             → {ok}   (unknown endpoint too)
 GET    /api/mux/panes/{id}/agent/transcript?cursor=&before=     → {agent, sessionId, status, entries, cursor, before, reset}
 POST   /api/mux/panes/{id}/agent/message  body: {text, cursor, images?}  → 204
 GET    /api/mux/panes/{id}/agent/prompt                          → {prompt: null | {promptId, kind, title, body, options, steps, freeText}}
@@ -785,6 +789,48 @@ a document of termote's origin without the server's `sandbox` policy, while a `d
 opaque origin), keeps the previous image while reading again, and revokes every `blob:` URL once
 replaced or unmounted; Changes reads again on a refresh or a new status, not on every poll.
 
+### Agent notifications (`/api/mux/push/*`)
+
+The setting "Notify when an agent needs me" notifies when a pane's agent becomes `blocked`
+(from a known other status) or goes from `working` to `done`/`idle`. A missing or `unknown`
+status keeps the last known one, and a first sighting never notifies. The PWA
+(`pwa/src/utils/agent-notify.ts`) and the server (`server/push_watch.go`) run the same rule,
+held to `server/testdata/agent-transitions.json`.
+
+```
+Agent status (Herdr event / Claude session file)
+  ├── PWA open: each snapshot poll → transitions → notify (no confirmed push on this device,
+  │     not the visible, focused pane) through the service worker
+  └── server watcher, every 5 s, only with ≥1 subscription → peekSnapshot (never creates)
+        → transitions → queue (64, oldest dropped) → sender (4 at a time, 5 s each)
+        → push service (allowlist, IP check after DNS, no proxy, no redirects)
+  notify-sw.js: push → names from /api/mux/snapshot?peek=1 (3 s) → showNotification (always)
+                notificationclick → focus a window + postMessage(hash), or openWindow
+                pushsubscriptionchange → POST the new subscription
+```
+
+- **Watcher**: started by `runServer` only. tmux's `peekSnapshot` reads the sessions there
+  without `ensureSession`, so a closed default session is not recreated, and the others still
+  notify; `snapshot?peek=1` (the service worker naming a push) reads the same way; Herdr's `Snapshot` is cached
+  and has no side effects. Reads and sends run apart, so a slow push service never delays a
+  read. A 404/410 drops the subscription; 401/403 is logged and kept; 429 backs that push
+  service off for its `Retry-After` (at most 1 h), a timeout for 1 minute.
+- **Payload**: `{groupId, tabId, paneId, kind}`, aes128gcm (RFC 8291), VAPID (RFC 8292,
+  `sub` = `https://termote.ohnice.app`, 12 h tokens), `TTL: 3600`, `Urgency: high` for both
+  kinds, `Topic` = HMAC of pane and kind. Standard library only (`server/webpush.go`).
+- **Storage** (`server/push_store.go`): `<stateDir>/push/` (0700): `vapid.json` (private key,
+  `topicKey`, `bindKey`) and `subscriptions.json` (at most 20, the least recently subscribed
+  evicted), both 0600, written through an `O_EXCL` temp file and a rename. Each subscription
+  carries `gen` = HMAC(bindKey, user + password); a server started with another credential
+  drops the others.
+- **PWA** (`pwa/src/hooks/use-push-subscription.ts`): subscribes in the click that turns the
+  setting on (a repair started meanwhile waits for it), and repeats the subscribe POST (an
+  upsert) on load, when `caps.push` turns on, every 10 minutes while shown and when shown again
+  after as long; a new server key makes it subscribe again. Nothing subscribes while the active
+  service worker answers an older version than 2 (no push handler).
+  The page notifies itself only while the server has not confirmed this device's
+  subscription. Log out removes the subscription first.
+
 ## Deployment Modes
 
 ### Container Mode (All-in-one)
@@ -959,6 +1005,13 @@ termote update --force           # Force reinstall current version
     `object-src 'none'`, `base-uri`/`form-action 'self'`, `frame-ancestors 'none'`. With it go
     `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` and
     `X-Frame-Options: DENY`. Every E2E spec fails on a CSP violation (`pwa/e2e/fixtures.ts`)
+14. **Web Push**: only the public key leaves the server; subscriptions are never returned.
+    Endpoints must be HTTPS on 443 at a known push service (`fcm.googleapis.com`,
+    `updates.push.services.mozilla.com`, `web.push.apple.com`, `*.push.apple.com`,
+    `*.notify.windows.com`), checked at subscribe, at load and before each send; the address
+    dialled must be public (no loopback, private, link-local, CGNAT, ULA, multicast or
+    IPv4-mapped), with no proxy and no redirects. Payloads carry ids only; the names are read
+    by the service worker from the snapshot and stripped of control and bidi characters
 
 ## Scalability Notes
 

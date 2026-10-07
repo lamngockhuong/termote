@@ -44,6 +44,7 @@ import { useKeyboardVisible } from './hooks/use-keyboard-visible'
 import { useLocalSessions } from './hooks/use-local-sessions'
 import { useIsMobile } from './hooks/use-media-query'
 import { logout, RequestError, selectTab } from './hooks/use-mux-api'
+import { usePushSubscription } from './hooks/use-push-subscription'
 import { useSettings } from './hooks/use-settings'
 import { useSidebarCollapsed } from './hooks/use-sidebar-collapsed'
 import { applyUiStyle, syncThemeColor } from './ui-style'
@@ -163,18 +164,6 @@ export default function App({
     },
     [],
   )
-  // Ends the session on the server, then shows the sign-in page.
-  const handleLogout = useCallback(async () => {
-    try {
-      if (await logout()) {
-        window.location.assign('/login')
-        return
-      }
-    } catch {
-      // Shown below, like a refusal.
-    }
-    showToast('Could not log out. Try again', 'danger')
-  }, [showToast])
   const onDriveLost = useCallback(
     (reason: 'taken-over' | 'failed') =>
       showToast(
@@ -217,13 +206,32 @@ export default function App({
     mux,
   } = useLocalSessions(settings.pollInterval)
   const copyModeSupported = mux.caps.copyMode
+  const push = usePushSubscription({
+    available: !!mux.caps.push,
+    enabled: settings.notifyAgents,
+  })
   useAgentNotifications({
     sessions,
     groups,
     activePaneId: activeSession.paneId,
     enabled: settings.notifyAgents,
-    pushActive: false,
+    pushActive: push.pushActive,
   })
+  // Ends the session on the server, then shows the sign-in page. This
+  // device stops getting pushes first (the server forgets it within 3 s).
+  const disablePush = push.disable
+  const handleLogout = useCallback(async () => {
+    await disablePush()
+    try {
+      if (await logout()) {
+        window.location.assign('/login')
+        return
+      }
+    } catch {
+      // Shown below, like a refusal.
+    }
+    showToast('Could not log out. Try again', 'danger')
+  }, [showToast, disablePush])
   // Each snapshot that still lists the pane on screen (a new sessions array
   // per poll): a stream that exited with it, a tmux session closed and made
   // again, reconnects.
@@ -1191,6 +1199,9 @@ export default function App({
           mux.backend === 'tmux' ? 'tmux buffer' : 'Session buffer'
         }
         driveSizeSupported={!!mux.caps.driveSize}
+        pushAvailable={!!mux.caps.push}
+        onEnableNotify={push.enable}
+        onDisableNotify={push.disable}
         onShowGestureHints={isMobile ? showGestureHints : undefined}
         updates={{
           server: appUpdate.server,

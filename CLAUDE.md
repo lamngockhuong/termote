@@ -362,6 +362,15 @@ The `update` command:
 | `server/cli_url.go`                               | `status --json`, `url` (deep link, open, copy, QR)            |
 | `server/cli_panel.go`                             | `panel`: the Herdr plugin's popup                             |
 | `server/listener_owner*.go`                       | Saved password sent only to the current user's listener       |
+| `server/push_routes.go`                           | `/api/mux/push/key`, `/api/mux/push/subscribe`                |
+| `server/push_store.go`                            | VAPID key + subscriptions (`<stateDir>/push`, allowlist)      |
+| `server/push_watch.go`                            | Agent status transitions → Web Push (queue, back-off)         |
+| `server/webpush.go`                               | aes128gcm + VAPID sender, hardened HTTP client                |
+| `server/testdata/agent-transitions.json`          | Transition cases shared by the PWA and the server             |
+| `pwa/src/utils/agent-notify.ts`                   | When an agent notifies, and the notification's text           |
+| `pwa/src/hooks/use-agent-notifications.ts`        | Notifies from the open page (no confirmed push)               |
+| `pwa/src/hooks/use-push-subscription.ts`          | This device's Web Push subscription, repaired                 |
+| `pwa/public/notify-sw.js`                         | SW handlers: push, notification click, resubscribe            |
 | `herdr-plugin/herdr-plugin.toml`                  | Herdr plugin manifest (actions + `panel` popup)               |
 | `Dockerfile`                                      | Docker mode container                                         |
 | `entrypoint.sh`                                   | Container entrypoint                                          |
@@ -682,6 +691,37 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   creates `/home/termote/.cache` and `/home/termote/.config` mode 1777 so the host uid can
   create its upload dir and the generated password's file (kept out of the log). The store is
   never served by the Files view, even when a pane's root holds it
+- **Notifications / Web Push** (`/api/mux/push/*`, `caps.push`): the setting "Notify when an
+  agent needs me" notifies when an agent becomes `blocked` or ends a turn (`working` →
+  `done`/`idle`; a missing or `unknown` status keeps the last known one, a first sighting never
+  notifies; the PWA and `server/push_watch.go` share `server/testdata/agent-transitions.json`).
+  `GET push/key` (auth, `hostGuard`) returns only the public key; `POST`/`DELETE push/subscribe`
+  go through `writeGuard` (same-site JSON), `requireWriteRole` (the view-only role, #236, must
+  refuse them) and the 8 KB body limit, answer 200 `{ok}` (400 `invalid_endpoint`/`invalid_keys`,
+  503 `push_unavailable`), and no route lists or echoes a subscription. Endpoints must be HTTPS
+  on 443 at `fcm.googleapis.com`, `updates.push.services.mozilla.com`, `web.push.apple.com`,
+  `*.push.apple.com` or `*.notify.windows.com` (no IP literal, no userinfo, 2048 bytes), checked
+  at subscribe, at load and before each send; the dialled address must be public (`Dialer.Control`
+  after DNS: no loopback, private, link-local, CGNAT, ULA, unspecified, multicast or IPv4-mapped),
+  no proxy, no redirects. The payload is ids only (`{groupId, tabId, paneId, kind}`, aes128gcm,
+  VAPID ES256 with `sub` `https://termote.ohnice.app` and 12 h tokens, stdlib only); `Topic` is an
+  HMAC of pane and kind under a random key and `Urgency` is `high` for both kinds, so the push
+  service learns neither. The service worker reads the names from the snapshot (3 s) and strips
+  C0/C1 and bidi controls (64 characters max); `Pane.Title` is never used; every push shows a
+  notification (Safari revokes silent ones). State: `<stateDir>/push` (0700; `vapid.json` and
+  `subscriptions.json` 0600, owner-only ACL on Windows, `%LOCALAPPDATA%` so it does not roam, no
+  DPAPI), already on the Files deny list; at most 20 subscriptions, the least recently subscribed
+  evicted; each bound to `gen` = HMAC(bindKey, user + password), so `start --fresh` or a new
+  password drops every device until it signs in again (its page re-subscribes). Only 404/410
+  drop a subscription; 401/403 are logged and kept ("check the server clock" when all fail);
+  429 and timeouts back the push service off (`Retry-After`, at most 1 h). The watcher runs only
+  from `runServer`, every 5 s and only with a subscription, reading tmux through `peekSnapshot`,
+  which reads the sessions there and never recreates the default one; the service worker names a
+  push from `snapshot?peek=1`, which reads the same way. The PWA subscribes only while the active
+  worker answers version 2 (`notify-sw.js` has the push handler), and repeats the subscribe POST
+  on load, every 10 minutes while shown and when shown again. Log out deletes this device's subscription first.
+  The CSP is unchanged: the server, not the page, talks to push services. The container opens
+  `/home/termote/.local/state` 1777 like `.cache`/`.config`
 - Exclude sensitive dirs (.ssh, .gnupg, .aws, .config/gcloud) from container volume mounts
   (warned at `container up`)
 - Serve mode uses constant-time comparison for password verification

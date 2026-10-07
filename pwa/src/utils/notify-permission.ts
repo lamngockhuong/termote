@@ -3,8 +3,9 @@
 
 export type NotifySupport = NotificationPermission | 'unsupported'
 
-// Answered by notify-sw.js; a worker from before it never answers.
-export const NOTIFY_WORKER_VERSION = 1
+// Answered by notify-sw.js; a worker from before it never answers, and one
+// before 2 has no push handler.
+export const NOTIFY_WORKER_VERSION = 2
 const PING_TIMEOUT_MS = 500
 
 export function notificationSupport(): NotifySupport {
@@ -12,6 +13,20 @@ export function notificationSupport(): NotifySupport {
     return 'unsupported'
   }
   return Notification.permission
+}
+
+// iPhone and iPad notify only from the app added to the Home Screen (iOS
+// 16.4+); in Safari, Notification does not exist at all.
+export function needsHomeScreenApp(
+  nav: Navigator & { standalone?: boolean } = navigator,
+): boolean {
+  const ios =
+    /iPhone|iPad|iPod/.test(nav.userAgent) ||
+    (/Macintosh/.test(nav.userAgent) && nav.maxTouchPoints > 1)
+  const standalone =
+    nav.standalone === true ||
+    window.matchMedia?.('(display-mode: standalone)').matches === true
+  return ios && !standalone
 }
 
 // Called first thing in a click: Safari asks only from a user gesture.

@@ -68,6 +68,8 @@ export interface MuxSnapshot {
     // Groups (tmux sessions, Herdr workspaces) can be created, renamed and
     // closed (/groups).
     groups?: boolean
+    // The server sends Web Push when an agent needs the user (/push).
+    push?: boolean
   }
   groups: MuxGroup[]
 }
@@ -154,6 +156,49 @@ export async function logout(): Promise<boolean> {
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   })
   return res.ok
+}
+
+// The server's Web Push key (caps.push): a subscription's
+// applicationServerKey, base64url.
+export async function getPushKey(): Promise<string> {
+  const res = await fetch(`${API_BASE}/push/key`, {
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  })
+  if (!res.ok) throw await requestError(res)
+  const body = await res.json()
+  return body.publicKey
+}
+
+async function pushWrite(
+  method: 'POST' | 'DELETE',
+  body: unknown,
+  signal: AbortSignal,
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/push/subscribe`, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal,
+  })
+  if (!res.ok) throw await requestError(res)
+}
+
+// Stores this device's subscription on the server (repeating it is no
+// harm). Throws RequestError when refused (invalid_endpoint, invalid_keys,
+// push_unavailable).
+export function subscribePush(
+  sub: PushSubscriptionJSON,
+  signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+): Promise<void> {
+  return pushWrite('POST', { endpoint: sub.endpoint, keys: sub.keys }, signal)
+}
+
+// Removes this device's subscription from the server.
+export function unsubscribePush(
+  endpoint: string,
+  signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+): Promise<void> {
+  return pushWrite('DELETE', { endpoint }, signal)
 }
 
 export async function selectTab(id: string): Promise<boolean> {
