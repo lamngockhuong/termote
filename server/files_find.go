@@ -39,7 +39,7 @@ var (
 
 	errFindQueryRequired  = inputError("q is required")
 	errFindQueryTooLong   = inputError("q is too long")
-	errFindInvalidExclude = &rawError{"invalid_exclude", "invalid excluded name", http.StatusBadRequest}
+	errFindInvalidExclude = &codedError{"invalid_exclude", "invalid excluded name", http.StatusBadRequest}
 )
 
 // findBeforeReadDir runs before a walk reads a directory ('/'-separated,

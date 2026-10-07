@@ -186,6 +186,9 @@ PATCH  /api/mux/tabs/{id}          body: {name}                → {ok}
 DELETE /api/mux/tabs/{id}                                       → {ok}
 POST   /api/mux/tabs/{id}/select                                 → {ok}
 DELETE /api/mux/panes/{id}                                      → {ok}   (herdr only, else 501)
+POST   /api/mux/groups             body: {name, cwd}            → {ok, id} | {error, code}   (caps.groups)
+PATCH  /api/mux/groups/{id}        body: {name}                 → {ok} | {error, code}
+DELETE /api/mux/groups/{id}                                     → {ok} | {error, code}
 POST   /api/mux/panes/{id}/keys    body: {keys}                 → {ok}
 POST   /api/mux/panes/{id}/scroll  body: {lines}                → {ok}   (caps.scroll only, else 501)
 GET    /api/mux/health             → {status, apiVersion, backend, version, pid, install}

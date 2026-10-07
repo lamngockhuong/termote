@@ -42,6 +42,26 @@ needed for different workflows (e.g., Claude Code, Copilot, builds).
 - **Sessions waiting on you**: When another session has an agent waiting on you, the session
   chip shows how many, in red, in place of its arrow
 
+### Groups: tmux sessions and Herdr workspaces
+
+When the server can manage groups, every group has a header with a **⋯** menu, even a single
+tmux session:
+
+- **New**: **New tmux session** (tmux) or **New workspace** (Herdr), under **New session** in the
+  sidebar or at the top of the mobile sheet, asks for a name and a directory: an absolute path on
+  the host, or empty for your home directory. Its first tab opens once it is created. A name
+  already taken, a relative or missing directory, or a file is refused with the reason, and what
+  you typed stays.
+- **Rename**: in the **⋯** menu; the name is edited in place. Termote's own tmux session (`main`)
+  cannot be renamed.
+- **Close**: in the **⋯** menu; it asks first and says how many tabs end with it. Closing
+  Termote's own tmux session starts a new, empty one right away, and every device viewing it
+  reconnects to that. A Herdr workspace with linked worktrees is closed in Herdr.
+
+The directory check only catches mistakes: the shell that opens can still `cd` anywhere. On
+Windows, the directory must be on a drive letter (`C:\work`), and psmux names and directories
+cannot contain `#`.
+
 ### Filtering by Agent Status
 
 When at least one session runs a coding agent, a filter bar appears above the session list (in
@@ -167,6 +187,9 @@ Sessions are managed via termote's `/api/mux/*` endpoints:
 | `/api/mux/tabs/{id}`            | PATCH       | Rename tab (body: `{name}`) |
 | `/api/mux/tabs/{id}`            | DELETE      | Remove tab       |
 | `/api/mux/panes/{id}`           | DELETE      | Close a pane (Herdr only, else 501) |
+| `/api/mux/groups`               | POST        | Create a group (body: `{name, cwd}`) |
+| `/api/mux/groups/{id}`          | PATCH       | Rename a group (body: `{name}`) |
+| `/api/mux/groups/{id}`          | DELETE      | Close a group and everything in it |
 
 ## Troubleshooting
 

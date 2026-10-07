@@ -59,21 +59,12 @@ func isUploadType(mt string) bool {
 	return ok
 }
 
-// uploadError is an upload failure the client is told about, by code.
-type uploadError struct {
-	code   string
-	msg    string
-	status int
-}
-
-func (e *uploadError) Error() string { return e.msg }
-
 var (
-	errUploadUnsupported = &uploadError{"unsupported_image", "only PNG, JPEG, GIF and WebP images are accepted", http.StatusUnsupportedMediaType}
-	errUploadTooLarge    = &uploadError{"too_large", "image is larger than 10 MB", http.StatusRequestEntityTooLarge}
-	errUploadStorageFull = &uploadError{"storage_full", "upload storage is full; try again later", http.StatusInsufficientStorage}
-	errUploadBusy        = &uploadError{"busy", "too many uploads at once; try again", http.StatusTooManyRequests}
-	errUploadUnavailable = &uploadError{"uploads_unavailable", "uploads are not available on this server", http.StatusServiceUnavailable}
+	errUploadUnsupported = &codedError{"unsupported_image", "only PNG, JPEG, GIF and WebP images are accepted", http.StatusUnsupportedMediaType}
+	errUploadTooLarge    = &codedError{"too_large", "image is larger than 10 MB", http.StatusRequestEntityTooLarge}
+	errUploadStorageFull = &codedError{"storage_full", "upload storage is full; try again later", http.StatusInsufficientStorage}
+	errUploadBusy        = &codedError{"busy", "too many uploads at once; try again", http.StatusTooManyRequests}
+	errUploadUnavailable = &codedError{"uploads_unavailable", "uploads are not available on this server", http.StatusServiceUnavailable}
 )
 
 // upload is what the client gets back: the id names the file in a Chat view
@@ -346,10 +337,10 @@ func handleUpload(s *uploadStore) http.HandlerFunc {
 // writeUploadError answers with the error's code, so the PWA tells the
 // reasons apart; anything else is logged and answered generically.
 func writeUploadError(w http.ResponseWriter, err error) {
-	var ue *uploadError
+	var ue *codedError
 	if !errors.As(err, &ue) {
 		log.Printf("upload error: %v", err)
-		ue = &uploadError{"upload_failed", "upload failed", http.StatusInternalServerError}
+		ue = &codedError{"upload_failed", "upload failed", http.StatusInternalServerError}
 	}
 	jsonErrorCode(w, ue.code, ue.msg, ue.status)
 }

@@ -51,6 +51,7 @@ type fakeHerdr struct {
 	agent     string         // pane.get agent
 	paneExtra map[string]any // more pane.get fields (agent_session, agent_status)
 	readText  string         // pane.read text
+	createID  string         // workspace.create workspace_id, "wNEW" when empty
 }
 
 func fakeSocketPath(t *testing.T) string {
@@ -140,7 +141,7 @@ func (f *fakeHerdr) handle(c net.Conn) {
 	f.calls[req.Method]++
 	f.params[req.Method] = append(f.params[req.Method], req.Params)
 	hang, failCode := f.hang, f.failCode
-	if strings.HasPrefix(req.Method, "tab.") || req.Method == "pane.close" {
+	if strings.HasPrefix(req.Method, "tab.") || strings.HasPrefix(req.Method, "workspace.") || req.Method == "pane.close" {
 		f.failCode = ""
 	}
 	f.mu.Unlock()
@@ -192,6 +193,23 @@ func (f *fakeHerdr) handle(c net.Conn) {
 			return
 		}
 		reply(map[string]any{"type": "tab_created", "tab": map[string]any{"tab_id": "wR:tNEW", "workspace_id": "wR"}})
+	case "workspace.create", "workspace.rename", "workspace.close":
+		if failCode != "" {
+			fail(failCode)
+			return
+		}
+		if req.Method != "workspace.create" {
+			reply(map[string]string{"type": "ok"})
+			return
+		}
+		f.mu.Lock()
+		wid := f.createID
+		f.mu.Unlock()
+		if wid == "" {
+			wid = "wNEW"
+		}
+		reply(map[string]any{"type": "workspace_created", "workspace": map[string]any{"workspace_id": wid},
+			"tab": map[string]any{"tab_id": "wNEW:t1"}, "root_pane": map[string]any{"pane_id": "wNEW:p1"}})
 	case "pane.get", "pane.scroll":
 		f.mu.Lock()
 		if req.Method == "pane.scroll" {
@@ -1357,5 +1375,83 @@ func TestHerdrAgentWriter(t *testing.T) {
 	}
 	if _, ok, err := m.AgentSessionNow(ctx, "wR:p3"); ok || err != nil {
 		t.Errorf("AgentSessionNow without agent = %v %v", ok, err)
+	}
+}
+
+func TestHerdrGroupOps(t *testing.T) {
+	f := newFakeHerdr(t)
+	m := newTestHerdrMux(t, f)
+	ctx := context.Background()
+
+	id, err := m.NewGroup(ctx, "api", "/srv/api")
+	if err != nil || id != "wNEW" {
+		t.Fatalf("NewGroup = %q, %v", id, err)
+	}
+	if p := f.lastParams(t, "workspace.create"); p["label"] != "api" || p["cwd"] != "/srv/api" || p["focus"] != false {
+		t.Errorf("workspace.create params = %v; must not focus the desktop", p)
+	}
+	if err := m.RenameGroup(ctx, "wR", "web"); err != nil {
+		t.Errorf("RenameGroup: %v", err)
+	}
+	if p := f.lastParams(t, "workspace.rename"); p["workspace_id"] != "wR" || p["label"] != "web" {
+		t.Errorf("workspace.rename params = %v", p)
+	}
+	if err := m.CloseGroup(ctx, "wR"); err != nil {
+		t.Errorf("CloseGroup: %v", err)
+	}
+	if p := f.lastParams(t, "workspace.close"); p["workspace_id"] != "wR" || p["close_group"] != nil {
+		t.Errorf("workspace.close params = %v; must never close a group", p)
+	}
+	if !m.Caps().Groups {
+		t.Error("Caps().Groups = false")
+	}
+
+	// Refused before any call.
+	before := f.count("workspace.close") + f.count("workspace.rename") + f.count("workspace.create")
+	for name, c := range map[string]struct {
+		err  error
+		want error
+	}{
+		"create bad name": {func() error { _, err := m.NewGroup(ctx, "", ""); return err }(), errInvalidGroupName},
+		"rename bad name": {m.RenameGroup(ctx, "wR", "a\x1bb"), errInvalidGroupName},
+		"close bad id":    {m.CloseGroup(ctx, "--help"), errInvalidGroupID},
+		"close tab id":    {m.CloseGroup(ctx, "wR:t3"), errInvalidGroupID},
+		"close unknown":   {m.CloseGroup(ctx, "wZZ"), errUnknownGroup},
+		"rename unknown":  {m.RenameGroup(ctx, "wZZ", "x"), errUnknownGroup},
+	} {
+		if !errors.Is(c.err, c.want) {
+			t.Errorf("%s = %v, want %v", name, c.err, c.want)
+		}
+	}
+	if after := f.count("workspace.close") + f.count("workspace.rename") + f.count("workspace.create"); after != before {
+		t.Errorf("workspace calls made for refused requests: %d", after-before)
+	}
+
+	// Herdr's own refusals.
+	for code, want := range map[string]error{
+		"workspace_not_found":            errUnknownGroup,
+		"workspace_group_close_required": errHasWorktrees,
+		"unknown_method":                 errUnsupported,
+	} {
+		f.failCode = code
+		if err := m.CloseGroup(ctx, "wR"); !errors.Is(err, want) {
+			t.Errorf("close with %s = %v, want %v", code, err, want)
+		}
+	}
+	f.failCode = "unknown_method"
+	if _, err := m.NewGroup(ctx, "x", ""); !errors.Is(err, errUnsupported) {
+		t.Errorf("create on an old Herdr = %v", err)
+	}
+	if p := f.lastParams(t, "workspace.create"); p["cwd"] != nil {
+		t.Errorf("empty cwd should be omitted, got %v", p)
+	}
+	f.createID = "../x"
+	if id, err := m.NewGroup(ctx, "x", ""); err == nil {
+		t.Errorf("NewGroup accepted workspace id %q", id)
+	}
+	f.failCode = "label_too_long"
+	var ie inputError
+	if err := m.RenameGroup(ctx, "wR", "x"); err == nil || errors.As(err, &ie) {
+		t.Errorf("other Herdr error = %v", err)
 	}
 }

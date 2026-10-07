@@ -103,7 +103,7 @@ func (*herdrMux) Name() string { return "herdr" }
 var herdrCodexSession = findCodexSession
 
 func (*herdrMux) Caps() Caps {
-	return Caps{ClientSideSelect: true, Scroll: true, DriveSize: true, AgentChat: true, Files: true}
+	return Caps{ClientSideSelect: true, Scroll: true, DriveSize: true, AgentChat: true, Files: true, Groups: true}
 }
 
 // AgentSession reads the session herdr's Claude integration reported for the
@@ -610,6 +610,89 @@ func (m *herdrMux) RenameTab(ctx context.Context, tabID, name string) error {
 	}
 	err := m.rpc.call(ctx, "tab.rename", map[string]string{"tab_id": tabID, "label": name}, nil)
 	m.invalidate()
+	return herdrInputError(err)
+}
+
+// NewGroup creates a workspace in the background (focus: false, so the
+// desktop keeps showing what it showed), with the cwd already checked.
+func (m *herdrMux) NewGroup(ctx context.Context, name, cwd string) (string, error) {
+	if !validateTmuxTarget(name) {
+		return "", errInvalidGroupName
+	}
+	params := map[string]any{"label": name, "focus": false}
+	if cwd != "" {
+		params["cwd"] = cwd
+	}
+	var res struct {
+		Workspace struct {
+			ID string `json:"workspace_id"`
+		} `json:"workspace"`
+	}
+	err := m.rpc.call(ctx, "workspace.create", params, &res)
+	m.invalidate()
+	if err != nil {
+		return "", herdrGroupError(err)
+	}
+	if !herdrWorkspaceIDRe.MatchString(res.Workspace.ID) {
+		return "", fmt.Errorf("workspace.create returned workspace id %q", res.Workspace.ID)
+	}
+	return res.Workspace.ID, nil
+}
+
+// CloseGroup closes one workspace. A workspace with linked worktrees is left
+// to Herdr (close_group is never sent): closing it would close them too.
+// Herdr keeps running with no workspace left, so the last one may go.
+func (m *herdrMux) CloseGroup(ctx context.Context, groupID string) error {
+	if err := m.requireGroupCoded(ctx, groupID); err != nil {
+		return err
+	}
+	err := m.rpc.call(ctx, "workspace.close", map[string]string{"workspace_id": groupID}, nil)
+	m.invalidate()
+	return herdrGroupError(err)
+}
+
+func (m *herdrMux) RenameGroup(ctx context.Context, groupID, name string) error {
+	if !validateTmuxTarget(name) {
+		return errInvalidGroupName
+	}
+	if err := m.requireGroupCoded(ctx, groupID); err != nil {
+		return err
+	}
+	err := m.rpc.call(ctx, "workspace.rename", map[string]string{"workspace_id": groupID, "label": name}, nil)
+	m.invalidate()
+	return herdrGroupError(err)
+}
+
+// requireGroupCoded is requireGroup for the group routes, whose errors carry
+// a code.
+func (m *herdrMux) requireGroupCoded(ctx context.Context, id string) error {
+	if !herdrWorkspaceIDRe.MatchString(id) {
+		return errInvalidGroupID
+	}
+	err := m.requireGroup(ctx, id)
+	var ie inputError
+	if errors.As(err, &ie) {
+		return errUnknownGroup
+	}
+	return err
+}
+
+// herdrGroupError maps Herdr's replies to a workspace call: the workspace
+// gone between the check and the call, linked worktrees, a Herdr without
+// the method.
+func herdrGroupError(err error) error {
+	var he *herdrError
+	if !errors.As(err, &he) {
+		return err
+	}
+	switch he.Code {
+	case "workspace_not_found":
+		return errUnknownGroup
+	case "workspace_group_close_required":
+		return errHasWorktrees
+	case "unknown_method":
+		return errUnsupported
+	}
 	return herdrInputError(err)
 }
 

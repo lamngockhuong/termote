@@ -1,6 +1,8 @@
 import {
   ChevronDown,
   ChevronRight,
+  FolderPlus,
+  MoreHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
   Pencil,
@@ -8,8 +10,9 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useGroupCollapsed } from '../hooks/use-group-collapsed'
+import { RequestError } from '../hooks/use-mux-api'
 import type { Session, SessionGroup } from '../types/session'
 import {
   blockedFirst,
@@ -20,9 +23,15 @@ import {
 } from '../utils/session-filter'
 import { AgentFilterBar } from './agent-filter-bar'
 import { AgentStatusBadge } from './agent-status-badge'
+import {
+  invalidNameMessage,
+  MAX_GROUP_NAME_BYTES,
+  nameTooLong,
+} from './group-dialog'
 import { IconPicker } from './icon-picker'
 import { SwipeableSessionItem } from './swipeable-session-item'
 import { Button, FOCUS_RING, IconButton } from './ui/button'
+import { Menu, MenuItem } from './ui/menu'
 import { Sheet } from './ui/sheet'
 
 // The row on screen: a soft accent fill, or an accent edge in the terminal style.
@@ -61,6 +70,28 @@ interface Props {
   onFilterChange?: (filter: SidebarFilter) => void
   // Sessions waiting on the user first in each group
   sortBlockedFirst?: boolean
+  // Groups can be created, renamed and closed (caps.groups): what one is
+  // called ("workspace", "tmux session"), and the actions. Without it the
+  // list is as before: no group actions, no header for a single group.
+  groupActions?: GroupActions
+}
+
+export interface GroupActions {
+  noun: string
+  onNew: () => void
+  // Rejects with RequestError on a refusal
+  onRename: (id: string, name: string) => Promise<void>
+  onClose: (id: string) => void
+  // Whether a group can be renamed (tmux's default session cannot)
+  canRename: (id: string) => boolean
+}
+
+// Why a rename was refused, by the server's code
+function renameProblem(err: unknown, noun: string): string {
+  if (!(err instanceof RequestError)) return `Could not rename the ${noun}`
+  if (err.code === 'exists') return `A ${noun} of that name already exists`
+  if (err.code === 'invalid_name') return invalidNameMessage(noun)
+  return `Could not rename the ${noun}`
 }
 
 // The session list: a bottom sheet on phones, a collapsible sidebar on desktop.
@@ -80,6 +111,7 @@ export function SessionSidebar({
   filter = 'all',
   onFilterChange,
   sortBlockedFirst = false,
+  groupActions,
 }: Props) {
   const [showAddForm, setShowAddForm] = useState(false)
   const [newName, setNewName] = useState('')
@@ -91,6 +123,12 @@ export function SessionSidebar({
   // holds the form instead of the list.
   const [editingInCurrent, setEditingInCurrent] = useState(false)
   const sheetListRef = useRef<HTMLDivElement>(null)
+  // The group whose name is being edited in its header
+  const [renamingGroup, setRenamingGroup] = useState<string | null>(null)
+  const [groupName, setGroupName] = useState('')
+  const [groupNameProblem, setGroupNameProblem] = useState<string>()
+  const [savingGroup, setSavingGroup] = useState(false)
+  const groupErrorId = useId()
   const { isCollapsed: isGroupCollapsed, toggle: toggleGroup } =
     useGroupCollapsed()
 
@@ -268,6 +306,126 @@ export function SessionSidebar({
   )
 
   const rowGap = isMobile ? 'gap-1 ui-native:gap-px' : 'gap-0.5'
+  // Every group has a header (and its actions) once groups can be managed;
+  // otherwise a single group (tmux) keeps the flat 0.x list.
+  const showGroups = groups.length > 1 || (!!groupActions && groups.length > 0)
+
+  const startGroupRename = (group: SessionGroup) => {
+    setRenamingGroup(group.id)
+    setGroupName(group.name)
+    setGroupNameProblem(undefined)
+  }
+
+  const saveGroupRename = async (
+    actions: GroupActions,
+    group: SessionGroup,
+  ) => {
+    const name = groupName.trim()
+    if (savingGroup) return
+    if (!name || name === group.name) {
+      setRenamingGroup(null)
+      return
+    }
+    if (nameTooLong(name)) {
+      setGroupNameProblem(`Use at most ${MAX_GROUP_NAME_BYTES} bytes`)
+      return
+    }
+    setSavingGroup(true)
+    try {
+      await actions.onRename(group.id, name)
+      setRenamingGroup(null)
+    } catch (err) {
+      setGroupNameProblem(renameProblem(err, actions.noun))
+    } finally {
+      setSavingGroup(false)
+    }
+  }
+
+  // The header of a group being renamed: its name in a field, in place
+  const renderGroupRename = (actions: GroupActions, group: SessionGroup) => (
+    <form
+      className={`${formClasses} mb-1`}
+      onSubmit={(e) => {
+        e.preventDefault()
+        saveGroupRename(actions, group)
+      }}
+    >
+      <input
+        type="text"
+        aria-label={`New name for ${actions.noun} ${group.name}`}
+        value={groupName}
+        onChange={(e) => {
+          setGroupName(e.target.value)
+          setGroupNameProblem(undefined)
+        }}
+        onKeyDown={(e) => e.key === 'Escape' && setRenamingGroup(null)}
+        aria-invalid={groupNameProblem ? true : undefined}
+        aria-describedby={groupNameProblem ? groupErrorId : undefined}
+        className={INPUT_CLASSES}
+        autoFocus
+      />
+      {groupNameProblem && (
+        <div id={groupErrorId} role="alert" className="text-[13px] text-danger">
+          {groupNameProblem}
+        </div>
+      )}
+      <div className="flex gap-2">
+        <Button
+          type="submit"
+          variant="primary"
+          size="sm"
+          disabled={savingGroup}
+          className="flex-1"
+        >
+          Save
+        </Button>
+        <Button size="sm" onClick={() => setRenamingGroup(null)}>
+          Cancel
+        </Button>
+      </div>
+    </form>
+  )
+
+  // Rename and Close of a group, next to its header
+  const renderGroupMenu = (group: SessionGroup, name: string) =>
+    groupActions && (
+      <Menu
+        label={`Actions for ${groupActions.noun} ${name}`}
+        trigger={<MoreHorizontal size={14} aria-hidden="true" />}
+        triggerSize="sm"
+      >
+        {groupActions.canRename(group.id) && (
+          <MenuItem
+            icon={<Pencil size={16} />}
+            onSelect={() => startGroupRename(group)}
+          >
+            Rename
+          </MenuItem>
+        )}
+        <MenuItem
+          icon={<Trash2 size={16} />}
+          danger
+          onSelect={() => groupActions.onClose(group.id)}
+        >
+          Close
+        </MenuItem>
+      </Menu>
+    )
+
+  // Opens the New group dialog; a filter would hide the new group's tab
+  const newGroupButton = groupActions && (
+    <Button
+      size="sm"
+      onClick={() => {
+        if (filtering) onFilterChange?.('all')
+        groupActions.onNew()
+      }}
+      className="w-full"
+    >
+      <FolderPlus size={14} aria-hidden="true" />
+      New {groupActions.noun}
+    </Button>
+  )
 
   // A single group (tmux) keeps the flat 0.x list without a header.
   // While filtering, a group with no match is hidden and one with a match is
@@ -279,24 +437,31 @@ export function SessionSidebar({
     const name = group.name || group.id
     return (
       <section key={group.id} aria-label={name} className="pb-2">
-        <button
-          type="button"
-          onClick={() => toggleGroup(group.id)}
-          // While filtering the group is held open; toggling would change
-          // the saved state without showing it.
-          disabled={filtering}
-          aria-expanded={!collapsed}
-          className={`flex w-full items-center gap-1.5 rounded-control px-2 pb-1 pt-2 font-label text-[11px] uppercase tracking-wider text-fg-subtle hover:text-fg disabled:hover:text-fg-subtle ${FOCUS_RING}`}
-        >
-          {collapsed ? (
-            <ChevronRight size={12} aria-hidden="true" />
-          ) : (
-            <ChevronDown size={12} aria-hidden="true" />
-          )}
-          <span className="min-w-0 flex-1 truncate text-left">{name}</span>
-          <AgentStatusBadge status={group.agentStatus} size={12} />
-          <span className="ml-1 tabular-nums">{tabs.length}</span>
-        </button>
+        {groupActions && renamingGroup === group.id ? (
+          renderGroupRename(groupActions, group)
+        ) : (
+          <div className="flex items-center gap-0.5">
+            <button
+              type="button"
+              onClick={() => toggleGroup(group.id)}
+              // While filtering the group is held open; toggling would change
+              // the saved state without showing it.
+              disabled={filtering}
+              aria-expanded={!collapsed}
+              className={`flex w-full items-center gap-1.5 rounded-control px-2 pb-1 pt-2 font-label text-[11px] uppercase tracking-wider text-fg-subtle hover:text-fg disabled:hover:text-fg-subtle ${FOCUS_RING}`}
+            >
+              {collapsed ? (
+                <ChevronRight size={12} aria-hidden="true" />
+              ) : (
+                <ChevronDown size={12} aria-hidden="true" />
+              )}
+              <span className="min-w-0 flex-1 truncate text-left">{name}</span>
+              <AgentStatusBadge status={group.agentStatus} size={12} />
+              <span className="ml-1 tabular-nums">{tabs.length}</span>
+            </button>
+            {renderGroupMenu(group, name)}
+          </div>
+        )}
         {!collapsed && (
           <div
             className={`flex flex-col ${rowGap} ui-native:overflow-hidden ui-native:rounded-panel`}
@@ -355,7 +520,7 @@ export function SessionSidebar({
           Show all
         </Button>
       </div>
-    ) : groups.length > 1 ? (
+    ) : showGroups ? (
       groups.map(renderGroup)
     ) : (
       <div
@@ -432,6 +597,7 @@ export function SessionSidebar({
         {currentRow}
         <div ref={sheetListRef} className="flex flex-col gap-2 px-2 pb-3 pt-1">
           {showAddForm && addForm}
+          {newGroupButton}
           {filterBar}
           {sessionList}
         </div>
@@ -442,12 +608,11 @@ export function SessionSidebar({
   // Desktop: collapsible sidebar
   if (isCollapsed) {
     // Sorted within each group, as in the expanded list.
-    const railSessions =
-      groups.length > 1
-        ? groups.flatMap((g) =>
-            arrange(sessions.filter((s) => s.groupId === g.id)),
-          )
-        : visibleSessions
+    const railSessions = showGroups
+      ? groups.flatMap((g) =>
+          arrange(sessions.filter((s) => s.groupId === g.id)),
+        )
+      : visibleSessions
     return (
       <aside className={`w-14 ${SIDEBAR_BASE_CLASSES}`}>
         <div
@@ -550,6 +715,7 @@ export function SessionSidebar({
               New session
             </Button>
           )}
+          {newGroupButton && <div className="mt-2">{newGroupButton}</div>}
           {filterBar && <div className="mt-2">{filterBar}</div>}
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">

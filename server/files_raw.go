@@ -42,23 +42,14 @@ const (
 	lfsPointerPrefix = "version https://git-lfs.github.com/spec/v1"
 )
 
-// rawError is a raw route failure the client is told about, by code.
-type rawError struct {
-	code   string
-	msg    string
-	status int
-}
-
-func (e *rawError) Error() string { return e.msg }
-
 var (
-	errImageTooLarge  = &rawError{"too_large", "image is larger than 10 MiB", http.StatusRequestEntityTooLarge}
-	errTooManyPixels  = &rawError{"too_many_pixels", "image has more than 40 megapixels", http.StatusRequestEntityTooLarge}
-	errNotImage       = &rawError{"not_image", "not a PNG, JPEG, GIF, WebP or SVG image", http.StatusUnsupportedMediaType}
-	errLFSPointer     = &rawError{"lfs_pointer", "file is a Git LFS pointer", http.StatusUnsupportedMediaType}
-	errRawBusy        = &rawError{"busy", "too many images at once; try again", http.StatusTooManyRequests}
-	errNoVersion      = &rawError{"no_version", "no such version of this file", http.StatusNotFound}
-	errSensitiveImage = &rawError{"sensitive", "sensitive file; reveal=1 to show it", http.StatusForbidden}
+	errImageTooLarge  = &codedError{"too_large", "image is larger than 10 MiB", http.StatusRequestEntityTooLarge}
+	errTooManyPixels  = &codedError{"too_many_pixels", "image has more than 40 megapixels", http.StatusRequestEntityTooLarge}
+	errNotImage       = &codedError{"not_image", "not a PNG, JPEG, GIF, WebP or SVG image", http.StatusUnsupportedMediaType}
+	errLFSPointer     = &codedError{"lfs_pointer", "file is a Git LFS pointer", http.StatusUnsupportedMediaType}
+	errRawBusy        = &codedError{"busy", "too many images at once; try again", http.StatusTooManyRequests}
+	errNoVersion      = &codedError{"no_version", "no such version of this file", http.StatusNotFound}
+	errSensitiveImage = &codedError{"sensitive", "sensitive file; reveal=1 to show it", http.StatusForbidden}
 	errInvalidSide    = inputError("invalid side")
 )
 

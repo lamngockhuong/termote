@@ -9,6 +9,9 @@ const {
   mockClosePane,
   mockRenameTab,
   mockSelectTab,
+  mockCreateGroup,
+  mockRenameGroup,
+  mockCloseGroup,
   mockSnapshot,
   mockFetchHealth,
   mockReportLargePacketLoss,
@@ -23,6 +26,9 @@ const {
   mockClosePane: vi.fn(),
   mockRenameTab: vi.fn(),
   mockSelectTab: vi.fn(),
+  mockCreateGroup: vi.fn(),
+  mockRenameGroup: vi.fn(),
+  mockCloseGroup: vi.fn(),
 }))
 
 vi.mock('./use-mux-api', () => ({
@@ -38,6 +44,9 @@ vi.mock('./use-mux-api', () => ({
   closePane: mockClosePane,
   renameTab: mockRenameTab,
   selectTab: mockSelectTab,
+  createGroup: mockCreateGroup,
+  renameGroup: mockRenameGroup,
+  closeGroup: mockCloseGroup,
   fetchHealth: mockFetchHealth,
 }))
 
@@ -821,6 +830,100 @@ describe('useLocalSessions with several tmux sessions', () => {
   })
 })
 
+describe('useLocalSessions group actions on tmux', () => {
+  const tab = (id: string, name: string, active: boolean) => ({
+    id,
+    name,
+    active,
+    panes: [{ id, active: true }],
+  })
+  const main = { id: 'main', name: 'main', tabs: [tab('0', 'shell', true)] }
+  const work = { id: '$3', name: 'work', tabs: [tab('$3:0', 'build', true)] }
+
+  beforeEach(() => {
+    localStorage.clear()
+    vi.clearAllMocks()
+    mockFetchTabs.mockResolvedValue([])
+    mockSnapshot.extra = { groups: [main] }
+    mockSelectTab.mockResolvedValue(true)
+  })
+
+  it('a new session shows its first tab', async () => {
+    mockCreateGroup.mockImplementation(async () => {
+      mockSnapshot.extra = { groups: [main, work] }
+      return '$3'
+    })
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    await act(async () => {
+      await result.current.createGroup('work', '/srv')
+    })
+    expect(mockCreateGroup).toHaveBeenCalledWith('work', '/srv')
+    expect(result.current.activeSession.id).toBe('$3:0')
+  })
+
+  it('a create the dialog gave up on shows nothing new', async () => {
+    mockCreateGroup.mockImplementation(async () => {
+      mockSnapshot.extra = { groups: [main, work] }
+      return '$3'
+    })
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    await act(async () => {
+      await result.current.createGroup('work', '', () => false)
+    })
+    expect(result.current.groups.map((g) => g.id)).toEqual(['main', '$3'])
+    expect(result.current.activeSession.id).toBe('0')
+  })
+
+  it('a refused create reaches the caller and changes nothing', async () => {
+    mockCreateGroup.mockRejectedValue(new Error('exists'))
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    await expect(result.current.createGroup('main')).rejects.toThrow('exists')
+    expect(result.current.activeSession.id).toBe('0')
+  })
+
+  it('renames a session and reads the list again', async () => {
+    mockSnapshot.extra = { groups: [main, work] }
+    mockRenameGroup.mockImplementation(async () => {
+      mockSnapshot.extra = { groups: [main, { ...work, name: 'web' }] }
+    })
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    await act(async () => {
+      await result.current.renameGroup('$3', 'web')
+    })
+    expect(mockRenameGroup).toHaveBeenCalledWith('$3', 'web')
+    expect(result.current.groups[1].name).toBe('web')
+  })
+
+  it('closing the session on screen shows the default one and drops its metadata', async () => {
+    localStorage.setItem(
+      'termote-sessions',
+      JSON.stringify({
+        'tmux:name:$3\u0000build': { icon: '🔨', description: '' },
+        'tmux:name:shell': { icon: '🏠', description: '' },
+      }),
+    )
+    localStorage.setItem('termote-selection-tmux', '{"groupId":"$3"}')
+    mockSnapshot.extra = { groups: [main, work] }
+    mockCloseGroup.mockImplementation(async () => {
+      mockSnapshot.extra = { groups: [main] }
+    })
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    expect(result.current.activeSession.id).toBe('$3:0')
+    await act(async () => {
+      await result.current.closeGroup('$3')
+    })
+    expect(result.current.activeSession.id).toBe('0')
+    const meta = JSON.parse(localStorage.getItem('termote-sessions')!)
+    expect(meta['tmux:name:$3\u0000build']).toBeUndefined()
+    expect(meta['tmux:name:shell']).toBeDefined()
+  })
+})
+
 describe('useLocalSessions with herdr', () => {
   const pane = (
     id: string,
@@ -1234,5 +1337,65 @@ describe('useLocalSessions with herdr', () => {
     })
     // The stored group follows where the tab really is
     expect(saved()).toEqual({ tabId: 'w2:t9', groupId: 'w2', paneId: 'w2:p9' })
+  })
+})
+
+describe('useLocalSessions group create on herdr', () => {
+  const ws = (id: string, tab: string) => ({
+    id,
+    name: id,
+    tabs: [
+      {
+        id: tab,
+        name: 'shell',
+        active: true,
+        panes: [{ id: `${tab}:p`, active: true }],
+      },
+    ],
+  })
+  const caps = { clientSideSelect: true, copyMode: false }
+
+  beforeEach(() => {
+    localStorage.clear()
+    vi.clearAllMocks()
+    mockSnapshot.extra = { backend: 'herdr', caps, groups: [ws('w1', 'w1:t1')] }
+  })
+
+  it('keeps the pick until the new workspace is reported, then shows it', async () => {
+    mockCreateGroup.mockResolvedValue('w9')
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    await act(async () => {
+      await result.current.createGroup('api')
+    })
+    // Not reported yet: nothing moves.
+    expect(result.current.activeSession.id).toBe('w1:t1')
+    mockSnapshot.extra = {
+      backend: 'herdr',
+      caps,
+      groups: [ws('w1', 'w1:t1'), ws('w9', 'w9:t1')],
+    }
+    await act(async () => {
+      await result.current.refreshSessions()
+    })
+    expect(result.current.activeSession.id).toBe('w9:t1')
+  })
+
+  it('stops waiting for a workspace that never shows', async () => {
+    mockCreateGroup.mockResolvedValue('w9')
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    await act(async () => {
+      await result.current.createGroup('api')
+    })
+    for (let i = 0; i < 3; i++) {
+      await act(async () => {
+        await result.current.refreshSessions()
+      })
+    }
+    expect(result.current.activeSession.id).toBe('w1:t1')
+    expect(
+      JSON.parse(localStorage.getItem('termote-selection-herdr')!).groupId,
+    ).toBe('w1')
   })
 })

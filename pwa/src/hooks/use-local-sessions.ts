@@ -12,6 +12,9 @@ import {
   reportLargePacketLoss,
 } from '../utils/large-packet-loss'
 import {
+  closeGroup as apiCloseGroup,
+  createGroup as apiCreateGroup,
+  renameGroup as apiRenameGroup,
   closePane,
   closeTab,
   createTab,
@@ -217,6 +220,10 @@ export function useLocalSessions(pollInterval = 5) {
   // latest pick must not undo it.
   const selectionVersionRef = useRef(0)
   const isReadyRef = useRef(false)
+  // A group just created and the snapshots left that may still lack it
+  // (Herdr reports a new workspace a little later): until then the pick of
+  // its tab is kept rather than replaced.
+  const pendingGroupRef = useRef<{ id: string; left: number } | null>(null)
   // Reads still waiting on the network; a timer tick skips while any is,
   // instead of piling another request onto a stalled connection.
   const inFlightRef = useRef(0)
@@ -246,6 +253,15 @@ export function useLocalSessions(pollInterval = 5) {
       setGroups(built.groups)
       const fallback = built.serverActive ?? built.sessions[0] ?? null
       if (version !== selectionVersionRef.current) return
+      const pending = pendingGroupRef.current
+      if (pending) {
+        if (
+          built.groups.some((g) => g.id === pending.id) ||
+          --pending.left <= 0
+        ) {
+          pendingGroupRef.current = null
+        } else return
+      }
       selectionRef.current ??= loadSelection(snap.backend)
       const sel = selectionRef.current
       if (!snap.caps.clientSideSelect) {
@@ -495,6 +511,49 @@ export function useLocalSessions(pollInterval = 5) {
     [sessions, activeSession?.id],
   )
 
+  // Open a group and show its first tab once a snapshot has it, unless show
+  // says no by then (the dialog was cancelled meanwhile). Refusals
+  // (RequestError with the server's code) reach the caller.
+  const createGroup = useCallback(
+    async (name: string, cwd = '', show: () => boolean = () => true) => {
+      const id = await apiCreateGroup(name, cwd)
+      if (!show()) {
+        await refreshSessions()
+        return
+      }
+      selectionVersionRef.current++
+      pendingGroupRef.current = { id, left: 3 }
+      storeSelection({ tabId: '', groupId: id })
+      await refreshSessions()
+    },
+    [refreshSessions, storeSelection],
+  )
+
+  const renameGroup = useCallback(
+    async (id: string, name: string) => {
+      await apiRenameGroup(id, name)
+      await refreshSessions()
+    },
+    [refreshSessions],
+  )
+
+  // Close a group with everything in it. When it is the one on screen, the
+  // next snapshot shows the first group left.
+  const closeGroup = useCallback(
+    async (id: string) => {
+      await apiCloseGroup(id)
+      const { backend } = muxRef.current
+      for (const s of sessions) {
+        if (s.groupId === id) {
+          delete metaRef.current[metaKey(backend, s.id, s.name, s.groupId)]
+        }
+      }
+      saveMeta(metaRef.current)
+      await refreshSessions()
+    },
+    [sessions, refreshSessions],
+  )
+
   return {
     activeSession: activeSession || {
       id: '0',
@@ -510,6 +569,9 @@ export function useLocalSessions(pollInterval = 5) {
     removeSession,
     removePane,
     updateSession,
+    createGroup,
+    renameGroup,
+    closeGroup,
     isReady,
     isServerReachable,
     refreshSessions,

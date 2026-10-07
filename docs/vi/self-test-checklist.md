@@ -261,6 +261,18 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 - [ ] Session đang chọn được tô sáng trong sidebar
 - [ ] Session giữ nguyên sau khi tải lại trang
 - [ ] Nhấp đúp để sửa session (máy tính)
+- [ ] Có `caps.groups`: group nào cũng có header kèm menu ⋯, kể cả khi tmux chỉ có một session
+- [ ] "New tmux session" (tmux) / "New workspace" (Herdr) mở hộp thoại; nhập tên và thư mục tuyệt
+      đối thì group được tạo ở đó (`tmux ls`, `herdr workspace list`) và tab đầu của nó hiện ra
+- [ ] Hộp thoại nói lý do khi bị từ chối (thư mục tương đối hoặc không tồn tại, là file, tên đã có)
+      và giữ nội dung đã gõ; để trống thư mục thì bắt đầu ở thư mục home
+- [ ] Tên có `#(…)` hoặc `#{…}` hiện nguyên văn trong `tmux ls` và không chạy gì
+- [ ] Rename trong menu ⋯ sửa tên ngay tại chỗ; session mặc định của tmux không có Rename
+- [ ] Close hỏi trước, nêu số tab; với session mặc định của tmux thì nói thêm rằng một session mới,
+      rỗng sẽ được tạo và các thiết bị khác bị ngắt, rồi chúng tự kết nối lại vào đó
+- [ ] Đóng group đang xem thì màn hình chuyển sang group đầu còn lại
+- [ ] Herdr: đóng workspace có worktree liên kết thì hiện thông báo "close it in Herdr"
+- [ ] tmux: session tạo ngoài Termote (`tmux new -s x`) hiện thành group và đóng được
 
 ### Session Tabs (Desktop)
 

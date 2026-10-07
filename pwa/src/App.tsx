@@ -21,11 +21,12 @@ import { AppHeader } from './components/app-header'
 import { CommandHistoryDropdown } from './components/command-history-dropdown'
 import type { ConnectionState } from './components/connection-indicator'
 import { GestureHintsOverlay } from './components/gesture-hints-overlay'
+import { GroupDialog } from './components/group-dialog'
 import { HelpModal } from './components/help-modal'
 import { KeyboardToolbar } from './components/keyboard-toolbar'
 import { PaneStrip } from './components/pane-strip'
 import { ReadOnlyBar } from './components/read-only-bar'
-import { SessionSidebar } from './components/session-sidebar'
+import { type GroupActions, SessionSidebar } from './components/session-sidebar'
 import { SettingsModal } from './components/settings-modal'
 import { SidePanel } from './components/side-panel'
 import { type TerminalHandle, TerminalView } from './components/terminal-view'
@@ -41,7 +42,7 @@ import { useGestures } from './hooks/use-gestures'
 import { useKeyboardVisible } from './hooks/use-keyboard-visible'
 import { useLocalSessions } from './hooks/use-local-sessions'
 import { useIsMobile } from './hooks/use-media-query'
-import { logout, selectTab } from './hooks/use-mux-api'
+import { logout, RequestError, selectTab } from './hooks/use-mux-api'
 import { useSettings } from './hooks/use-settings'
 import { useSidebarCollapsed } from './hooks/use-sidebar-collapsed'
 import { applyUiStyle, syncThemeColor } from './ui-style'
@@ -206,6 +207,9 @@ export default function App({
     removeSession,
     removePane,
     updateSession,
+    createGroup,
+    renameGroup,
+    closeGroup,
     isReady,
     isServerReachable,
     mux,
@@ -245,6 +249,28 @@ export default function App({
     setPendingPaneId(null)
   }, [pendingPaneId, removePane])
   const isHerdr = mux.backend === 'herdr'
+  // Groups (tmux sessions, Herdr workspaces) made, renamed and closed here.
+  // tmux's default session (its id is its name; the others are "$N") cannot
+  // be renamed, and closing it starts a new, empty one at once.
+  const groupNoun = isHerdr ? 'workspace' : 'tmux session'
+  const isDefaultTmuxGroup = (id: string) => !isHerdr && !id.startsWith('$')
+  const [newGroupOpen, setNewGroupOpen] = useState(false)
+  const [pendingGroupCloseId, setPendingGroupCloseId] = useState<string | null>(
+    null,
+  )
+  const pendingGroupClose = groups.find((g) => g.id === pendingGroupCloseId)
+  const pendingGroupTabs = sessions.filter(
+    (s) => s.groupId === pendingGroupCloseId,
+  ).length
+  const groupActions: GroupActions | undefined = mux.caps.groups
+    ? {
+        noun: groupNoun,
+        onNew: () => setNewGroupOpen(true),
+        onRename: renameGroup,
+        onClose: setPendingGroupCloseId,
+        canRename: (id) => !isDefaultTmuxGroup(id),
+      }
+    : undefined
   // Tab bars show the current group only; the sidebar shows every group.
   const groupSessions = useMemo(
     () =>
@@ -694,6 +720,23 @@ export default function App({
   }
 
   // The new session is selected once created; the sheet closes onto it.
+  const confirmGroupClose = () => {
+    const id = pendingGroupCloseId!
+    setPendingGroupCloseId(null)
+    closeGroup(id).catch((err) => {
+      if (err instanceof RequestError && err.code === 'has_worktrees') {
+        showToast(
+          'This workspace has linked worktrees; close it in Herdr',
+          'warning',
+        )
+      } else if (
+        !(err instanceof RequestError && err.code === 'unknown_group')
+      ) {
+        showToast(`Could not close the ${groupNoun}`, 'danger')
+      }
+    })
+  }
+
   const handleMobileAdd = async (
     name: string,
     icon?: string,
@@ -793,6 +836,7 @@ export default function App({
             filter={settings.sidebarFilter}
             onFilterChange={(f) => updateSetting('sidebarFilter', f)}
             sortBlockedFirst={settings.sortBlockedFirst}
+            groupActions={groupActions}
           />
         )}
 
@@ -812,6 +856,7 @@ export default function App({
             filter={settings.sidebarFilter}
             onFilterChange={(f) => updateSetting('sidebarFilter', f)}
             sortBlockedFirst={settings.sortBlockedFirst}
+            groupActions={groupActions}
           />
         )}
 
@@ -1062,6 +1107,41 @@ export default function App({
           will be closed, along with anything still running in it.
         </p>
       </ConfirmDialog>
+      <ConfirmDialog
+        isOpen={!!pendingGroupClose}
+        title={`Close ${groupNoun}?`}
+        confirmLabel={`Close ${groupNoun}`}
+        destructive
+        onConfirm={confirmGroupClose}
+        onCancel={() => setPendingGroupCloseId(null)}
+      >
+        <p className="m-0">
+          Close {groupNoun}{' '}
+          <span className="font-medium text-fg">
+            "{pendingGroupClose?.name}"
+          </span>
+          ? Its {pendingGroupTabs} {pendingGroupTabs === 1 ? 'tab' : 'tabs'} and
+          everything running in them will end.
+          {pendingGroupClose && isDefaultTmuxGroup(pendingGroupClose.id) && (
+            <>
+              {' '}
+              Termote starts a new, empty "{pendingGroupClose.name}" right away,
+              and every device viewing it is disconnected.
+            </>
+          )}
+        </p>
+      </ConfirmDialog>
+      {newGroupOpen && (
+        <GroupDialog
+          noun={groupNoun}
+          onClose={() => setNewGroupOpen(false)}
+          onCreate={async (name, cwd, isOpen) => {
+            await createGroup(name, cwd, isOpen)
+            // As a new session does: the sheet closes on what was made
+            if (isMobile && isOpen()) setSidebarOpen(false)
+          }}
+        />
+      )}
       <ConfirmDialog
         isOpen={!!pendingPane}
         title="Close pane?"

@@ -35,15 +35,15 @@ const (
 )
 
 var (
-	errEditChanged    = &rawError{"changed", "the file changed on the host since it was read", http.StatusConflict}
-	errEditSensitive  = &rawError{"sensitive", "sensitive file; reveal it to edit it", http.StatusForbidden}
-	errEditPermission = &rawError{"permission", "the server cannot write this file", http.StatusForbidden}
-	errEditNotText    = &rawError{"not_text", "text must be UTF-8 without NUL", http.StatusUnprocessableEntity}
-	errEditTooLarge   = &rawError{"too_large", "file is larger than 1 MiB", http.StatusRequestEntityTooLarge}
-	errEditBusy       = &rawError{"busy", "too many saves at once; try again", http.StatusTooManyRequests}
+	errEditChanged    = &codedError{"changed", "the file changed on the host since it was read", http.StatusConflict}
+	errEditSensitive  = &codedError{"sensitive", "sensitive file; reveal it to edit it", http.StatusForbidden}
+	errEditPermission = &codedError{"permission", "the server cannot write this file", http.StatusForbidden}
+	errEditNotText    = &codedError{"not_text", "text must be UTF-8 without NUL", http.StatusUnprocessableEntity}
+	errEditTooLarge   = &codedError{"too_large", "file is larger than 1 MiB", http.StatusRequestEntityTooLarge}
+	errEditBusy       = &codedError{"busy", "too many saves at once; try again", http.StatusTooManyRequests}
 	// errStorageFull uses the code uploads answer when their store is full.
-	errStorageFull    = &rawError{"storage_full", "the disk or the quota is full", http.StatusInsufficientStorage}
-	errReadOnlyFiles  = &rawError{"read_only", "the file system is read-only", http.StatusForbidden}
+	errStorageFull    = &codedError{"storage_full", "the disk or the quota is full", http.StatusInsufficientStorage}
+	errReadOnlyFiles  = &codedError{"read_only", "the file system is read-only", http.StatusForbidden}
 	errRootRequired   = inputError("root is required")
 	errBaseHashNeeded = inputError("baseHash is required")
 )

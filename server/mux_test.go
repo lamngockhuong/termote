@@ -42,6 +42,18 @@ func (f *fakeMux) RenameTab(_ context.Context, id, name string) error {
 	f.calls = append(f.calls, "rename "+id+"="+name)
 	return f.err
 }
+func (f *fakeMux) NewGroup(_ context.Context, name, cwd string) (string, error) {
+	f.calls = append(f.calls, "new group "+name+" in "+cwd)
+	return "g9", f.err
+}
+func (f *fakeMux) CloseGroup(_ context.Context, id string) error {
+	f.calls = append(f.calls, "close group "+id)
+	return f.err
+}
+func (f *fakeMux) RenameGroup(_ context.Context, id, name string) error {
+	f.calls = append(f.calls, "rename group "+id+"="+name)
+	return f.err
+}
 func (f *fakeMux) ClosePane(_ context.Context, id string) error {
 	f.calls = append(f.calls, "close pane "+id)
 	return f.err

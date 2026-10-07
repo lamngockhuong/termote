@@ -32,9 +32,9 @@ const (
 )
 
 var (
-	errTrashUnavailable = &rawError{"trash_unavailable", "the trash is not available on this server", http.StatusServiceUnavailable}
-	errNotInTrash       = &rawError{"not_in_trash", "nothing in the trash under that id", http.StatusNotFound}
-	errCrossDevice      = &rawError{"cross_device", "the file is on another file system than the trash", http.StatusConflict}
+	errTrashUnavailable = &codedError{"trash_unavailable", "the trash is not available on this server", http.StatusServiceUnavailable}
+	errNotInTrash       = &codedError{"not_in_trash", "nothing in the trash under that id", http.StatusNotFound}
+	errCrossDevice      = &codedError{"cross_device", "the file is on another file system than the trash", http.StatusConflict}
 	errInvalidTrashID   = inputError("invalid trashId")
 
 	// trashIDRe is an entry's id; trashNameRe every name the store makes:
