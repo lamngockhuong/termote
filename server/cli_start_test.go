@@ -493,7 +493,8 @@ func TestDetachedServerProcessNeedsServeCmdline(t *testing.T) {
 		t.Fatalf("stop: %v killed %v", err, tc.killed)
 	}
 	win := newTestCLI(t, "windows")
-	if !win.isServeProcess(procInfo{Exe: `C:\x\versions\1.0.0\bin\TERMOTE.EXE`}) || win.isServeProcess(procInfo{Exe: `C:\x\other.exe`}) {
+	if !win.isServeProcess(procInfo{Exe: `C:\x\versions\1.0.0\bin\TERMOTE.EXE`}) || win.isServeProcess(procInfo{Exe: `C:\x\other.exe`}) ||
+		!win.isServeProcess(procInfo{Exe: `C:\src\server\termote-dev.exe~`}) || win.isServeProcess(procInfo{Exe: `C:\x\other.exe~`}) {
 		t.Error("windows serve matcher wrong")
 	}
 }

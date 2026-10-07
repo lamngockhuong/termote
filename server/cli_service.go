@@ -134,10 +134,13 @@ func (c *cli) serverProcess() (procInfo, bool) {
 }
 
 // isServeProcess reports a `termote serve` process. Unix sees the argv; a
-// Windows process listing only has the image, so its name is checked.
+// Windows process listing only has the image, so its name is checked. A
+// running image cannot be replaced there, so `go build` (the dev shim's
+// rebuild) moves it aside as `termote-dev.exe~`: still the server to stop.
 func (c *cli) isServeProcess(p procInfo) bool {
 	if c.goos == "windows" {
 		base := strings.ToLower(p.Exe[strings.LastIndexAny(p.Exe, `\/`)+1:])
+		base = strings.TrimSuffix(base, "~")
 		return base == "termote.exe" || base == "termote-dev.exe"
 	}
 	// The argv is joined by spaces, so the binary path may contain some:
