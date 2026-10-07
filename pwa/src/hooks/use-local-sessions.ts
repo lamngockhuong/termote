@@ -11,6 +11,7 @@ import {
   isTimeoutError,
   reportLargePacketLoss,
 } from '../utils/large-packet-loss'
+import { uniqueNames } from '../utils/running-commands'
 import {
   closeGroup as apiCloseGroup,
   createGroup as apiCreateGroup,
@@ -175,8 +176,12 @@ function buildSessions(
         hasAgent: !!p.agent,
         agentName: p.agent?.name,
         agentStatus: toAgentStatus(p.agent?.status),
+        command: p.process?.name,
       }))
       const pane = tab.panes.find((p) => p.active) ?? tab.panes[0]
+      const commands = uniqueNames(
+        (tab.processes ?? tab.panes.map((p) => p.process)).map((p) => p?.name),
+      )
       const session: Session = {
         id: tab.id,
         name: tab.name,
@@ -188,6 +193,7 @@ function buildSessions(
         agentName: pane?.agent?.name,
         panes,
         agentStatus: worstAgentStatus(panes.map((p) => p.agentStatus)),
+        commands: commands.length ? commands : undefined,
       }
       groupTabs.push(session)
       if (tab.active && !serverActive) serverActive = session

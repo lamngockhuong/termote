@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -11,8 +12,10 @@ import (
 	"os/exec"
 	"regexp"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -333,6 +336,7 @@ func (tmuxMux) Snapshot(ctx context.Context) (Snapshot, error) {
 			groups[agentPanes[i].group].Tabs[agentPanes[i].tab].Panes[0].Agent = a
 		}
 	}
+	attachTmuxProcesses(groups, tmuxPaneProcesses(ctx))
 	snap := Snapshot{Groups: make([]Group, len(groups))}
 	for i, g := range groups {
 		snap.Groups[i] = g.Group
@@ -340,10 +344,12 @@ func (tmuxMux) Snapshot(ctx context.Context) (Snapshot, error) {
 	return snap, nil
 }
 
-// tmuxGroup is a group with the tmux pane of each tab, for the agent lookup.
+// tmuxGroup is a group with the tmux pane of each tab, for the agent lookup,
+// and its session id and window indexes, for the process lookup.
 type tmuxGroup struct {
 	Group
-	paneIDs, panePIDs []string
+	sessionID                    string
+	paneIDs, panePIDs, windowIdx []string
 }
 
 // tmuxListLine is one line of tmuxListFormat.
@@ -385,7 +391,7 @@ func parseTmuxWindows(out string) []tmuxGroup {
 		isDefault := l.sessionName == tmuxSession
 		i, seen := at[l.sessionID]
 		if !seen {
-			g := tmuxGroup{Group: Group{ID: l.sessionID, Name: l.sessionName, Tabs: []Tab{}}}
+			g := tmuxGroup{Group: Group{ID: l.sessionID, Name: l.sessionName, Tabs: []Tab{}}, sessionID: l.sessionID}
 			if isDefault {
 				g.ID = tmuxSession
 			}
@@ -399,6 +405,7 @@ func parseTmuxWindows(out string) []tmuxGroup {
 			Panes: []Pane{{ID: id, Active: l.active}}})
 		g.paneIDs = append(g.paneIDs, l.paneID)
 		g.panePIDs = append(g.panePIDs, l.panePID)
+		g.windowIdx = append(g.windowIdx, l.index)
 	}
 	for i := range groups {
 		if groups[i].ID == tmuxSession && i > 0 {
@@ -409,6 +416,196 @@ func parseTmuxWindows(out string) []tmuxGroup {
 		}
 	}
 	return groups
+}
+
+// tmuxPaneFormat is every pane of every session: its window, its index and
+// whether it is the window's active one, then the command and the directory,
+// each after its length in bytes (#{n:}). A directory can hold a newline or
+// a ':', so the output is read by those lengths, never split into lines.
+const tmuxPaneFormat = "#{session_id}:#{window_index}:#{pane_index}:#{pane_active}:" +
+	"#{n:pane_current_command}:#{pane_current_command}#{n:pane_current_path}:#{pane_current_path}"
+
+// tmuxWindowKey names a window across sessions: psmux numbers panes per
+// session, so a pane id (%N) is not one.
+type tmuxWindowKey struct{ sessionID, index string }
+
+// tmuxPaneProc is one pane's process, as tmuxPaneFormat reports it.
+type tmuxPaneProc struct {
+	index  int
+	active bool
+	proc   ProcessInfo
+}
+
+// parseTmuxPanes reads tmuxPaneFormat output into each window's panes, in
+// pane order. It stops at the first entry it cannot read (a psmux that does
+// not expand #{n:}, a length that does not match), keeping the windows
+// before it but not the one it was in, which would be missing panes; a pane
+// listed twice is dropped altogether.
+func parseTmuxPanes(out []byte) map[tmuxWindowKey][]tmuxPaneProc {
+	type paneKey struct {
+		w     tmuxWindowKey
+		index int
+	}
+	seen := map[paneKey]int{}
+	var order []paneKey
+	procs := map[paneKey]tmuxPaneProc{}
+	field := func(b []byte) (string, []byte, bool) {
+		i := bytes.IndexByte(b, ':')
+		if i < 0 || i > 16 {
+			return "", nil, false
+		}
+		return string(b[:i]), b[i+1:], true
+	}
+	sized := func(b []byte) (string, []byte, bool) {
+		n, rest, ok := field(b)
+		size, err := strconv.Atoi(n)
+		if !ok || err != nil || size < 0 || size > len(rest) || !tmuxIndexRe.MatchString(n) {
+			return "", nil, false
+		}
+		return string(rest[:size]), rest[size:], true
+	}
+	// broken is the window of the entry that could not be read: the one it
+	// names, else (its window unreadable) the last one read, to be safe.
+	var broken *tmuxWindowKey
+	complete := false
+	for b := out; ; {
+		if len(b) == 0 {
+			complete = true
+			break
+		}
+		var sid, win, idx, active, cmd, path string
+		var ok bool
+		if sid, b, ok = field(b); !ok || !tmuxSessionIDRe.MatchString(sid) {
+			break
+		}
+		if win, b, ok = field(b); !ok || !tmuxIndexRe.MatchString(win) {
+			break
+		}
+		broken = &tmuxWindowKey{sid, win}
+		if idx, b, ok = field(b); !ok || !tmuxIndexRe.MatchString(idx) {
+			break
+		}
+		if active, b, ok = field(b); !ok || (active != "0" && active != "1") {
+			break
+		}
+		if cmd, b, ok = sized(b); !ok {
+			break
+		}
+		if path, b, ok = sized(b); !ok {
+			break
+		}
+		b = bytes.TrimPrefix(b, []byte("\r"))
+		if len(b) > 0 {
+			if b[0] != '\n' {
+				break
+			}
+			b = b[1:]
+		}
+		n, _ := strconv.Atoi(idx)
+		k := paneKey{tmuxWindowKey{sid, win}, n}
+		if seen[k]++; seen[k] == 1 {
+			order = append(order, k)
+		}
+		if name := processName(cmd); name != "" {
+			procs[k] = tmuxPaneProc{index: n, active: active == "1", proc: ProcessInfo{Name: name, Cwd: processCwd(path)}}
+		}
+	}
+	windows := map[tmuxWindowKey][]tmuxPaneProc{}
+	for _, k := range order {
+		if p, ok := procs[k]; ok && seen[k] == 1 {
+			windows[k.w] = append(windows[k.w], p)
+		}
+	}
+	if broken != nil && !complete {
+		delete(windows, *broken)
+	}
+	for _, panes := range windows {
+		sort.Slice(panes, func(i, j int) bool { return panes[i].index < panes[j].index })
+	}
+	return windows
+}
+
+const (
+	// tmuxProcKeep is how long a window's last processes stand in for a
+	// reply that lacks them (psmux sometimes prints nothing with exit 0).
+	tmuxProcKeep = 10 * time.Second
+	// tmuxProcLogEvery spaces out the log line of a failing list-panes.
+	tmuxProcLogEvery = time.Minute
+)
+
+// tmuxProcs is the last processes read per window, and when.
+var tmuxProcs struct {
+	sync.Mutex
+	windows map[tmuxWindowKey]tmuxProcWindow
+	logged  time.Time
+}
+
+type tmuxProcWindow struct {
+	panes []tmuxPaneProc
+	at    time.Time
+}
+
+// tmuxPaneProcesses lists every pane's process. A window missing from the
+// reply keeps what was read for it in the last tmuxProcKeep, so names do not
+// blink between polls; a failure never fails the snapshot.
+func tmuxPaneProcesses(ctx context.Context) map[tmuxWindowKey][]tmuxPaneProc {
+	args := []string{"list-panes", "-a", "-F", tmuxPaneFormat}
+	// Without a UTF-8 locale (a service, env -i) tmux prints each multibyte
+	// character as '_', and the lengths no longer match; -u makes it send
+	// UTF-8 whatever the locale. psmux (Windows) is not known to take it.
+	if !tmuxIsPsmux {
+		args = append([]string{"-u"}, args...)
+	}
+	out, err := tmuxCmd(ctx, args...).Output()
+	var got map[tmuxWindowKey][]tmuxPaneProc
+	if err == nil {
+		got = parseTmuxPanes(out)
+	}
+	now := time.Now()
+	tmuxProcs.Lock()
+	defer tmuxProcs.Unlock()
+	if err != nil && now.Sub(tmuxProcs.logged) >= tmuxProcLogEvery {
+		tmuxProcs.logged = now
+		log.Printf("tmux list-panes: %v", err)
+	}
+	if tmuxProcs.windows == nil {
+		tmuxProcs.windows = map[tmuxWindowKey]tmuxProcWindow{}
+	}
+	for k, w := range tmuxProcs.windows {
+		if now.Sub(w.at) >= tmuxProcKeep {
+			delete(tmuxProcs.windows, k)
+		}
+	}
+	for k, panes := range got {
+		tmuxProcs.windows[k] = tmuxProcWindow{panes: panes, at: now}
+	}
+	all := make(map[tmuxWindowKey][]tmuxPaneProc, len(tmuxProcs.windows))
+	for k, w := range tmuxProcs.windows {
+		all[k] = w.panes
+	}
+	return all
+}
+
+// attachTmuxProcesses gives each tab's pane (the window's active one) its
+// process, and the tab every pane's, in pane order.
+func attachTmuxProcesses(groups []tmuxGroup, windows map[tmuxWindowKey][]tmuxPaneProc) {
+	for gi := range groups {
+		g := &groups[gi]
+		for ti := range g.Tabs {
+			panes := windows[tmuxWindowKey{g.sessionID, g.windowIdx[ti]}]
+			if len(panes) == 0 {
+				continue
+			}
+			tab := &g.Tabs[ti]
+			tab.Processes = make([]ProcessInfo, len(panes))
+			for i, p := range panes {
+				tab.Processes[i] = p.proc
+				if p.active {
+					tab.Panes[0].Process = &p.proc
+				}
+			}
+		}
+	}
 }
 
 // SelectTab switches its session's current window, so every client attached

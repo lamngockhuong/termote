@@ -246,13 +246,22 @@ export function SessionSidebar({
               ? `${session.name} - ${session.description}`
               : undefined
           }
-          className={`flex h-9 min-w-0 flex-1 items-center gap-2.5 rounded-control px-2 text-left text-[14px] ${FOCUS_RING} focus-visible:-outline-offset-2`}
+          className={`flex min-w-0 flex-1 items-center gap-2.5 rounded-control px-2 text-left text-[14px] ${
+            session.commands ? 'min-h-9 py-1' : 'h-9'
+          } ${FOCUS_RING} focus-visible:-outline-offset-2`}
         >
           <span className="shrink-0 text-[15px] leading-none">
             {session.icon}
           </span>
-          <span className="flex-1 truncate ui-terminal:font-label ui-terminal:text-[13px]">
-            {session.name}
+          <span className="min-w-0 flex-1">
+            <span className="block truncate ui-terminal:font-label ui-terminal:text-[13px]">
+              {session.name}
+            </span>
+            {session.commands && (
+              <span className="block truncate text-[11px] font-normal text-fg-subtle">
+                {session.commands.join(', ')}
+              </span>
+            )}
           </span>
           <AgentStatusBadge status={session.agentStatus} />
         </button>

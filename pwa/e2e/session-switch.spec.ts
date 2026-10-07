@@ -66,6 +66,42 @@ test.describe('session management', () => {
   })
 })
 
+test.describe('close confirmation', () => {
+  test('names the command running in the session', async ({ page }) => {
+    // psmux may not report the command (no #{n:} format)
+    test.skip(process.platform === 'win32', 'process names are read on tmux, not psmux')
+    await page.goto('/')
+    await page.evaluate(() => localStorage.clear())
+    await page.reload()
+    await page.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 10000 })
+
+    const name = `proc-${Date.now()}`
+    await page.click('button[title="Add new session"]')
+    await page.fill('input[placeholder="Session name"]', name)
+    await page.getByRole('button', { name: 'Add', exact: true }).click()
+    await expect(page.locator('aside')).toContainText(name)
+    await page.waitForSelector('[aria-label="Connected"]', { timeout: 15000 })
+
+    const sessionRow = page.locator(`aside .group:has-text("${name}")`)
+    const dialog = page.getByRole('dialog', { name: 'Close session?' })
+    // An idle shell is named too (bash or sh, depending on the image)
+    await sessionRow.hover()
+    await sessionRow.locator('button[title="Remove session"]').click()
+    await expect(dialog).toContainText('Running:', { timeout: 15000 })
+    await dialog.getByRole('button', { name: 'Cancel' }).click()
+
+    await page.locator('[data-testid="terminal-view"] .xterm').click()
+    await page.keyboard.type('sleep 60')
+    await page.keyboard.press('Enter')
+    await sessionRow.hover()
+    await sessionRow.locator('button[title="Remove session"]').click()
+    // The dialog follows the snapshot poll while it is open
+    await expect(dialog).toContainText('sleep', { timeout: 15000 })
+    await dialog.getByRole('button', { name: 'Close session' }).click()
+    await expect(page.locator('aside')).not.toContainText(name, { timeout: 15000 })
+  })
+})
+
 const tabCount = (snap: { groups: Array<{ tabs: unknown[] }> }) =>
   snap.groups[0].tabs.length
 

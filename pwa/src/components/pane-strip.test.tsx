@@ -26,6 +26,35 @@ describe('PaneStrip', () => {
     expect(screen.getByRole('img', { name: 'Agent working' })).toBeVisible()
   })
 
+  it('shows each command under its label, all buttons as tall', () => {
+    render(
+      <PaneStrip
+        panes={[
+          { ...PANES[0], command: 'claude' },
+          { ...PANES[1], command: 'vim' },
+          { id: 'p3', label: 'Pane 3', hasAgent: false },
+        ]}
+        activePaneId="p1"
+        onSelect={vi.fn()}
+      />,
+    )
+    const buttons = within(
+      screen.getByRole('group', { name: 'Panes' }),
+    ).getAllByRole('button')
+    // A command equal to the label is not repeated
+    expect(buttons.map((b) => b.textContent)).toEqual([
+      'claude',
+      'logsvim',
+      'Pane 3',
+    ])
+    for (const b of buttons) expect(b).toHaveClass('h-9')
+  })
+
+  it('keeps one line without commands', () => {
+    render(<PaneStrip panes={PANES} activePaneId="p1" onSelect={vi.fn()} />)
+    for (const b of screen.getAllByRole('button')) expect(b).toHaveClass('h-7')
+  })
+
   it('selects a pane on click', () => {
     const onSelect = vi.fn()
     render(<PaneStrip panes={PANES} activePaneId="p1" onSelect={onSelect} />)

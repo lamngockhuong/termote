@@ -73,6 +73,18 @@ describe('SwipeableSessionItem', () => {
     expect(screen.getByText('Shell')).toBeInTheDocument()
   })
 
+  it('shows the description and what runs in the session', () => {
+    renderItem({ session: { ...SESSION, commands: ['bash', 'vim'] } })
+    expect(screen.getByText('Terminal · bash, vim')).toBeInTheDocument()
+  })
+
+  it('shows what runs without a description', () => {
+    renderItem({
+      session: { ...SESSION, description: '', commands: ['top'] },
+    })
+    expect(screen.getByText('top')).toBeInTheDocument()
+  })
+
   it('renders edit and remove buttons when both canEdit and canRemove are true', () => {
     renderItem()
     expect(document.querySelectorAll('button').length).toBe(2)

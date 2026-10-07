@@ -109,13 +109,25 @@ type Tab struct {
 	Name   string `json:"name"`
 	Active bool   `json:"active"`
 	Panes  []Pane `json:"panes"`
+	// Processes: every pane of the tab that reports one, in pane order, when
+	// the backend lists panes the snapshot does not carry (tmux: only the
+	// active pane is a Pane).
+	Processes []ProcessInfo `json:"processes,omitempty"`
 }
 
 type Pane struct {
-	ID     string     `json:"id"`
-	Active bool       `json:"active"`
-	Title  string     `json:"title,omitempty"`
-	Agent  *AgentInfo `json:"agent,omitempty"`
+	ID      string       `json:"id"`
+	Active  bool         `json:"active"`
+	Title   string       `json:"title,omitempty"`
+	Agent   *AgentInfo   `json:"agent,omitempty"`
+	Process *ProcessInfo `json:"process,omitempty"`
+}
+
+// ProcessInfo is a pane's foreground process: the first word of the name the
+// OS reports, never its arguments or environment (processName).
+type ProcessInfo struct {
+	Name string `json:"name"`
+	Cwd  string `json:"cwd,omitempty"`
 }
 
 // AgentInfo is filled by backends that detect coding agents (herdr, and tmux
@@ -172,6 +184,12 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *u
 
 	mux.HandleFunc("/api/mux/snapshot", func(w http.ResponseWriter, r *http.Request) {
 		if !requireMethod(w, r, http.MethodGet) {
+			return
+		}
+		// A read, but it names what runs in every pane: like the other pane
+		// reads, another site's page gets nothing (writeGuard lets GETs by).
+		if msg := crossSiteRejection(agent.allowed, r); msg != "" {
+			jsonError(w, msg, http.StatusForbidden)
 			return
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), muxTimeout)
