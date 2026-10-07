@@ -32,6 +32,7 @@ server/termote-server
 server/termote-server.exe
 server/termote-dev
 server/termote-dev.exe
+server/termote-dev.exe~
 server/termote-linux-*
 server/termote-darwin-*
 server/termote-windows-*
