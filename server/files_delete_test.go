@@ -474,7 +474,7 @@ func TestFilesDeleteGuards(t *testing.T) {
 	writeFile(t, filepath.Join(root, "a.txt"), "a\n")
 	cfg := testConfig(t)
 	cfg.TrashDir = filepath.Join(base, "trash")
-	h, _, err := buildServer(cfg, &filesFakeMux{dir: root, files: true})
+	h, _, _, err := buildServer(cfg, &filesFakeMux{dir: root, files: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -522,7 +522,7 @@ func TestFilesDeleteTrashUnavailable(t *testing.T) {
 	for _, dir := range []string{blocker, ""} {
 		cfg := testConfig(t)
 		cfg.TrashDir = dir
-		h, _, err := buildServer(cfg, &filesFakeMux{dir: root, files: true})
+		h, _, _, err := buildServer(cfg, &filesFakeMux{dir: root, files: true})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -539,7 +539,7 @@ func TestFilesDeleteTrashUnavailable(t *testing.T) {
 	}
 	cfg := testConfig(t)
 	cfg.TrashDir = filepath.Join(base, "ok")
-	h, _, err := buildServer(cfg, &filesFakeMux{dir: root, files: true})
+	h, _, _, err := buildServer(cfg, &filesFakeMux{dir: root, files: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -579,7 +579,7 @@ func TestFilesTrashNeverServed(t *testing.T) {
 	cfg := testConfig(t)
 	cfg.UploadDir = filepath.Join(cache, "uploads")
 	cfg.TrashDir = filepath.Join(cache, "trash")
-	h, _, err := buildServer(cfg, &filesFakeMux{dir: home, files: true})
+	h, _, _, err := buildServer(cfg, &filesFakeMux{dir: home, files: true})
 	if err != nil {
 		t.Fatal(err)
 	}

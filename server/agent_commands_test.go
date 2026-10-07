@@ -161,7 +161,7 @@ func commandsServer(t *testing.T, s AgentSession, found bool, dir string, files 
 	t.Helper()
 	m := &commandsFakeMux{filesFakeMux: filesFakeMux{dir: dir, files: files}, s: s, found: found}
 	mux := http.NewServeMux()
-	agent := registerMuxRoutes(mux, m, newStreamTokenStore(), nil)
+	agent := registerMuxRoutes(mux, m, newStreamTokenStore(), nil, nil)
 	f := registerFilesRoutes(mux, m, parseAllowedHosts("", false), nil)
 	agent.registerCommandsRoute(mux, f, parseAllowedHosts("", false))
 	return mux
@@ -234,7 +234,7 @@ func TestCommandsRoute(t *testing.T) {
 
 func TestCommandsRouteUnsupportedBackend(t *testing.T) {
 	mux := http.NewServeMux()
-	agent := registerMuxRoutes(mux, &fakeMux{}, newStreamTokenStore(), nil)
+	agent := registerMuxRoutes(mux, &fakeMux{}, newStreamTokenStore(), nil, nil)
 	agent.registerCommandsRoute(mux, nil, parseAllowedHosts("", false))
 	if code, _ := getCommands(t, mux, httptest.NewRequest(http.MethodGet, "/api/mux/panes/1/agent/commands", nil)); code != http.StatusNotFound {
 		t.Errorf("no locator = %d", code)
@@ -246,7 +246,7 @@ func TestCommandsRouteSkipsDeniedRoot(t *testing.T) {
 	writeFile(t, filepath.Join(root, ".claude/commands/proj.md"), "Project one")
 	m := &commandsFakeMux{filesFakeMux: filesFakeMux{dir: root, files: true}, s: AgentSession{Agent: "claude", ID: testSessionID, ClaudeDir: claude}, found: true}
 	mux := http.NewServeMux()
-	agent := registerMuxRoutes(mux, m, newStreamTokenStore(), nil)
+	agent := registerMuxRoutes(mux, m, newStreamTokenStore(), nil, nil)
 	f := registerFilesRoutes(mux, m, parseAllowedHosts("", false), []string{root})
 	agent.registerCommandsRoute(mux, f, parseAllowedHosts("", false))
 	code, cmds := getCommands(t, mux, httptest.NewRequest(http.MethodGet, "/api/mux/panes/1/agent/commands", nil))

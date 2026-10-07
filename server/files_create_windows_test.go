@@ -55,7 +55,7 @@ func TestFilesCreateShortName(t *testing.T) {
 	}
 	cfg := testConfig(t)
 	cfg.FilesWriteDenyDirs = []string{data}
-	h, _, err := buildServer(cfg, &filesFakeMux{dir: root, files: true})
+	h, _, _, err := buildServer(cfg, &filesFakeMux{dir: root, files: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +107,7 @@ func TestFilesCreateJunction(t *testing.T) {
 	cfg := testConfig(t)
 	cfg.FilesWriteDenyDirs = []string{data}
 	cfg.UploadDir = uploads
-	h, _, err := buildServer(cfg, &filesFakeMux{dir: root, files: true})
+	h, _, _, err := buildServer(cfg, &filesFakeMux{dir: root, files: true})
 	if err != nil {
 		t.Fatal(err)
 	}

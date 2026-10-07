@@ -88,6 +88,24 @@ type Caps struct {
 	Auth bool `json:"auth"`
 	// Groups: groups can be created, renamed and closed (/api/mux/groups).
 	Groups bool `json:"groups"`
+	// Push: the server can send Web Push (/api/mux/push/*). Set by the
+	// snapshot route, not by the backend.
+	Push bool `json:"push"`
+}
+
+// snapshotPeeker is a backend whose Snapshot has side effects (tmux makes
+// the default session); peekSnapshot reads without them.
+type snapshotPeeker interface {
+	peekSnapshot(ctx context.Context) (Snapshot, error)
+}
+
+// peekSnapshot reads m's panes without changing anything: the push watcher
+// runs with no page open.
+func peekSnapshot(ctx context.Context, m Mux) (Snapshot, error) {
+	if p, ok := m.(snapshotPeeker); ok {
+		return p.peekSnapshot(ctx)
+	}
+	return m.Snapshot(ctx)
 }
 
 type Snapshot struct {
@@ -159,8 +177,9 @@ var errUnsupported = errors.New("operation not supported by this backend")
 // registerMuxRoutes mounts /api/mux/* for the given backend. Patterns carry no
 // method so a wrong method gets a JSON 405 instead of falling through to the
 // /api/ JSON 404 handler.
-// uploads is nil when the server has no usable upload dir.
-func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *uploadStore) *agentAPI {
+// uploads is nil when the server has no usable upload dir, push when it
+// cannot send Web Push.
+func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *uploadStore, push *pushStore) *agentAPI {
 	// Set below, before any request: the snapshot reads the files routes'
 	// trash through it once registerCommandsRoute has wired them.
 	var agent *agentAPI
@@ -205,6 +224,7 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *u
 		snap.Caps.Uploads = uploads != nil
 		snap.Caps.Trash = agent.files != nil && agent.files.trash != nil
 		snap.Caps.Auth = authenticated(r.Context())
+		snap.Caps.Push = push != nil
 		if snap.Groups == nil {
 			snap.Groups = []Group{}
 		}

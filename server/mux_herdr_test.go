@@ -1069,7 +1069,7 @@ func TestHerdrStreamOverWebSocket(t *testing.T) {
 	pids := useFakeObserve(t, false)
 	f := newFakeHerdr(t)
 	m := newTestHerdrMux(t, f)
-	h, hub, err := buildServer(testConfig(t), m)
+	h, hub, _, err := buildServer(testConfig(t), m)
 	if err != nil {
 		t.Fatal(err)
 	}

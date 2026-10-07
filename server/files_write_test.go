@@ -242,7 +242,7 @@ func TestFilesWriteDenied(t *testing.T) {
 	cfg.FilesDenyDirs = []string{filepath.Join(root, "cfg")}
 	cfg.FilesWriteDenyDirs = []string{filepath.Join(root, "data")}
 	cfg.UploadDir = filepath.Join(root, "uploads")
-	h, _, err := buildServer(cfg, &filesFakeMux{dir: root, files: true})
+	h, _, _, err := buildServer(cfg, &filesFakeMux{dir: root, files: true})
 	if err != nil {
 		t.Fatal(err)
 	}

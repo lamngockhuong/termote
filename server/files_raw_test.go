@@ -626,7 +626,7 @@ func TestFilesRawVersionDenied(t *testing.T) {
 	writeFile(t, filepath.Join(r, "deny", "new.png"), png)
 	cfg := testConfig(t)
 	cfg.FilesDenyDirs = []string{filepath.Join(r, "deny")}
-	h, _, err := buildServer(cfg, &filesFakeMux{dir: r, files: true})
+	h, _, _, err := buildServer(cfg, &filesFakeMux{dir: r, files: true})
 	if err != nil {
 		t.Fatal(err)
 	}
