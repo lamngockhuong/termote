@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/url"
@@ -178,5 +179,35 @@ func TestPushDirDeniedToFiles(t *testing.T) {
 	rec := serve(h, apiRequest("GET", "/api/mux/panes/0/files/content?"+q.Encode(), ""))
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("files/content served the push key: %d %s", rec.Code, rec.Body)
+	}
+}
+
+// peekMux records which read the snapshot route used.
+type peekMux struct {
+	fakeMux
+	peeked, snapped int
+}
+
+func (p *peekMux) Snapshot(ctx context.Context) (Snapshot, error) {
+	p.snapped++
+	return p.fakeMux.Snapshot(ctx)
+}
+
+func (p *peekMux) peekSnapshot(ctx context.Context) (Snapshot, error) {
+	p.peeked++
+	return p.fakeMux.Snapshot(ctx)
+}
+
+// The service worker names a push from snapshot?peek=1, which never makes
+// tmux's default session again while no page is open.
+func TestSnapshotPeekCreatesNothing(t *testing.T) {
+	m := &peekMux{}
+	h := newTestHandler(t, m)
+	if rec := serve(h, apiRequest("GET", "/api/mux/snapshot?peek=1", "")); rec.Code != http.StatusOK {
+		t.Fatalf("peek = %d %s", rec.Code, rec.Body)
+	}
+	serve(h, apiRequest("GET", "/api/mux/snapshot", ""))
+	if m.peeked != 1 || m.snapped != 1 {
+		t.Fatalf("peeked %d, snapped %d", m.peeked, m.snapped)
 	}
 }

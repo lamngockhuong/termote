@@ -162,6 +162,7 @@ func (w *pushWatcher) tick(ctx context.Context) {
 	snap, err := w.peek(pctx)
 	cancel()
 	if err != nil {
+		w.logf("peek", "push: reading the panes: %v", err)
 		return
 	}
 	next, events := transitions(w.prev, snap)

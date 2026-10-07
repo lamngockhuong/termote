@@ -269,23 +269,39 @@ func parseRetryAfter(v string, now time.Time) time.Duration {
 	return max(0, min(d, pushMaxRetryAfter))
 }
 
-// cgnatPrefix (100.64.0.0/10) and thisNetPrefix (0.0.0.0/8) are not covered
-// by netip's own predicates.
-var (
-	cgnatPrefix   = netip.MustParsePrefix("100.64.0.0/10")
-	thisNetPrefix = netip.MustParsePrefix("0.0.0.0/8")
-)
+// blockedPushPrefixes are ranges netip's own predicates leave out: CGNAT,
+// "this network", IETF protocol assignments, benchmarking, reserved, and the
+// IPv6 ranges that carry an IPv4 address (NAT64, 6to4, Teredo).
+var blockedPushPrefixes = []netip.Prefix{
+	netip.MustParsePrefix("100.64.0.0/10"),
+	netip.MustParsePrefix("0.0.0.0/8"),
+	netip.MustParsePrefix("192.0.0.0/24"),
+	netip.MustParsePrefix("198.18.0.0/15"),
+	netip.MustParsePrefix("240.0.0.0/4"),
+	netip.MustParsePrefix("64:ff9b::/96"),
+	netip.MustParsePrefix("64:ff9b:1::/48"),
+	netip.MustParsePrefix("2002::/16"),
+	netip.MustParsePrefix("2001::/32"),
+}
 
 // blockedPushAddr reports whether a push request must not go to addr: any
-// loopback, private, link-local, CGNAT, unique-local, unspecified or
-// multicast address, and any IPv4-mapped IPv6 one.
+// loopback, private, link-local, unique-local, unspecified or multicast
+// address, one of blockedPushPrefixes, and any IPv4-mapped IPv6 one.
 func blockedPushAddr(addr netip.Addr) bool {
 	if !addr.IsValid() || addr.Is4In6() {
 		return true
 	}
-	return addr.IsLoopback() || addr.IsPrivate() || addr.IsLinkLocalUnicast() ||
+	if addr.IsLoopback() || addr.IsPrivate() || addr.IsLinkLocalUnicast() ||
 		addr.IsLinkLocalMulticast() || addr.IsInterfaceLocalMulticast() || addr.IsMulticast() ||
-		addr.IsUnspecified() || cgnatPrefix.Contains(addr) || thisNetPrefix.Contains(addr)
+		addr.IsUnspecified() {
+		return true
+	}
+	for _, p := range blockedPushPrefixes {
+		if p.Contains(addr) {
+			return true
+		}
+	}
+	return false
 }
 
 // pushDialCheck is net.Dialer.Control for push requests: it runs on the

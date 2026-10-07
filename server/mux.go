@@ -213,7 +213,13 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *u
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), muxTimeout)
 		defer cancel()
-		snap, err := m.Snapshot(ctx)
+		// peek=1 (the service worker naming a push) creates nothing: no
+		// page is open, so a closed default session stays closed.
+		read := m.Snapshot
+		if r.URL.Query().Get("peek") == "1" {
+			read = func(ctx context.Context) (Snapshot, error) { return peekSnapshot(ctx, m) }
+		}
+		snap, err := read(ctx)
 		if err != nil {
 			muxError(w, m, "snapshot", err)
 			return

@@ -292,7 +292,8 @@ func TestTmuxNewGroupStartsTheServer(t *testing.T) {
 }
 
 // The push watcher's read never brings back a default session the user
-// closed, nor a tmux server, as Snapshot does for a page.
+// closed, nor a tmux server, as Snapshot does for a page; the sessions still
+// open are read as they are.
 func TestTmuxPeekSnapshotCreatesNothing(t *testing.T) {
 	useRealTmux(t, fmt.Sprintf("termote-peek-%d", os.Getpid()))
 	ctx := context.Background()
@@ -304,19 +305,19 @@ func TestTmuxPeekSnapshotCreatesNothing(t *testing.T) {
 		t.Fatal("peek without a server succeeded")
 	}
 	// Another session alive, the default one closed.
-	tmuxNewSession(t, "work", work)
-	if _, err := peekSnapshot(ctx, m); err == nil {
-		t.Fatal("peek without the default session succeeded")
+	sid := tmuxNewSession(t, "work", work)
+	snap, err := peekSnapshot(ctx, m)
+	if err != nil || len(snap.Groups) != 1 || findGroup(snap, sid) == nil {
+		t.Fatalf("peek without the default session = %+v, %v", snap.Groups, err)
 	}
 	if tmuxCmd(ctx, "has-session", "-t", defaultSessionTarget()).Run() == nil {
 		t.Fatal("peek created the default session")
 	}
-	// Once it exists, peek reads it like Snapshot.
+	// Snapshot, for a page, makes it.
 	if _, err := m.Snapshot(ctx); err != nil {
 		t.Fatal(err)
 	}
-	snap, err := peekSnapshot(ctx, m)
-	if err != nil || findGroup(snap, tmuxSession) == nil {
+	if snap, err = peekSnapshot(ctx, m); err != nil || findGroup(snap, tmuxSession) == nil {
 		t.Fatalf("peek = %+v, %v", snap.Groups, err)
 	}
 	tmuxCmd(ctx, "kill-server").Run()

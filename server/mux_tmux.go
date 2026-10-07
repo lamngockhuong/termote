@@ -322,19 +322,12 @@ func (tmuxMux) peekSnapshot(ctx context.Context) (Snapshot, error) {
 }
 
 // tmuxSnapshot reads every session; create makes the default session first
-// when it is missing, else its absence is an error.
+// when it is missing. Without create, the sessions there are read as they
+// are, and no server is an error.
 func tmuxSnapshot(ctx context.Context, create bool) (Snapshot, error) {
 	out, err := listWindows(ctx)
-	if err != nil || !hasDefaultSession(out) {
-		if !create {
-			if err == nil {
-				err = fmt.Errorf("tmux session %q not found", tmuxSession)
-			}
-			return Snapshot{}, err
-		}
-		if ensureSession(ctx) {
-			out, err = listWindows(ctx)
-		}
+	if create && (err != nil || !hasDefaultSession(out)) && ensureSession(ctx) {
+		out, err = listWindows(ctx)
 	}
 	if err != nil {
 		return Snapshot{}, err
