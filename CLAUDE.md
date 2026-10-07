@@ -412,6 +412,26 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   tab and line breaks removed, since xterm brackets a paste without removing a marker inside it
 - **Herdr guard**: `--mux herdr --no-auth` is refused unless `--allow-herdr-no-auth` is also
   given, since Herdr exposes every workspace on the host
+- **tmux sessions**: every session on the tmux server is a group, the user's own ones made
+  outside Termote included, so anyone signed in sees, switches to and types into them (as Herdr
+  exposes every workspace; accepted). `TMUX_SESSION` (default `main`; no `:`, `.`, leading `=`
+  or `$`) keeps group id = its name and bare tab ids (`0`), so links, saved selections and E2E
+  keep working; any other session is tmux's own session id: group `$3`, tab/pane `$3:1`, which
+  a rename keeps and a tmux server restart changes. A window name is never an id. Every command
+  targets exactly: `$N:=i`, or `=<TMUX_SESSION>:=i` (each `=` turns off tmux's prefix and
+  pattern matching, so `ma` never reaches `main` nor a missing index 9 a window named `9x`), and
+  `new-window -t <session>:`; psmux (Windows, `tmuxIsPsmux`) has no `=` before an index and
+  never matches a window name, so it gets `$N:i`/`=<TMUX_SESSION>:i`, `SelectTab` checks the
+  window with `display-message` first (psmux's `select-window` exits 0 on a missing one), and
+  the agent routes read and type into that window (`$N:i` from psmux's reply, so one window has
+  one pane lock) instead of `%N` (psmux numbers panes per session, `-t %1` reaches the most
+  recent one); the default session's existence is checked by exact
+  name in the `list-windows -a` reply, and `ensureSession` uses `has-session -t =<name>`.
+  `display-message` (agent routes, Files) asks for `#{session_id}`/`#{session_name}` with the
+  window index and refuses a reply that is not the window asked for: tmux answers a missing
+  target with another window or nothing. A stream runs `attach -E -t <$N|=name>`; the macOS
+  reaper matches exactly that, plus `attach -t <TMUX_SESSION>` left by older releases, never a
+  user's own `tmux attach`
 - **Agent chat** (`/api/mux/panes/{id}/agent/*`): for Claude Code on tmux the server reads only
   the transcript in the Claude config dir of the process found in the pane (`CLAUDE_CONFIG_DIR`,
   else `~/.claude`; psmux: `%USERPROFILE%\.claude`), and only for a process whose start time

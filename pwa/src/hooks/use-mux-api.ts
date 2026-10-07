@@ -2,7 +2,7 @@ const API_BASE = '/api/mux'
 
 // /api/mux/* version this bundle speaks; must match apiVersion in
 // server/mux.go. A server reporting another version gets a reload.
-export const MUX_API_VERSION = 1
+export const MUX_API_VERSION = 2
 
 // A read the network swallows (a stalled connection, replies dropped on the
 // way) fails after this long, body included, instead of waiting forever.

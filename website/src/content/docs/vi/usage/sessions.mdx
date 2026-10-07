@@ -9,6 +9,12 @@ Dù chạy trên tmux hay Herdr, Termote cũng tổ chức terminal theo ba cấ
 Với tmux (mặc định), mỗi group là một tmux session và mỗi tab là một tmux window; chỉ Herdr mới
 dùng đến pane.
 
+Trên tmux, mọi session của tmux server đều hiện thành group, kể cả session bạn tự tạo ngoài
+Termote (`tmux new -s work`): ai đăng nhập Termote cũng chuyển sang và gõ vào được. Session riêng
+của Termote (`main`, trừ khi `TMUX_SESSION` đặt tên khác) luôn đứng đầu danh sách. Mỗi thiết bị
+nhớ session mình đang xem; trong cùng một session, mọi thiết bị đang gắn vào dùng chung window
+hiện tại.
+
 ## Phiên mặc định
 
 Cài đặt mới bắt đầu với một phiên **Shell** (group) duy nhất. Tạo thêm group khi cần cho các
@@ -78,8 +84,10 @@ Mỗi màn hình có một địa chỉ để bạn sao chép, rồi mở lại 
 <base>/#/s/<group>/<tab>[/<pane>][?view=terminal|chat|files]
 ```
 
-- `group`, `tab` và `pane` là các ID lấy từ `/api/mux/snapshot`. Với tmux, `group` là tên session,
-  `tab` là chỉ số window và không có `pane`. Với Herdr, đó là các ID mà Herdr cấp cho workspace,
+- `group`, `tab` và `pane` là các ID lấy từ `/api/mux/snapshot`. Với tmux, session riêng của
+  Termote có `group` là tên session và `tab` là chỉ số window (`#/s/main/0`); session khác dùng ID
+  session của tmux, `group` là `$3` và `tab` là `$3:1` (đã mã hoá URI). ID này giữ nguyên khi đổi
+  tên session nhưng đổi khi tmux server khởi động lại. Không có `pane`. Với Herdr, đó là các ID mà Herdr cấp cho workspace,
   tab và pane.
 - Mở liên kết sẽ chọn đúng group, tab và pane sau khi danh sách phiên tải xong. Nếu ID không tồn
   tại, phiên hiện tại được giữ nguyên và một toast báo lại.

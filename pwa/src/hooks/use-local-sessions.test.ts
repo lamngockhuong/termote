@@ -602,14 +602,16 @@ describe('useLocalSessions', () => {
     ])
   })
 
-  it('tmux ignores selectPane', async () => {
+  it('tmux ignores selectPane: only the session is kept', async () => {
     mockFetchTabs.mockResolvedValue([
       { ...WIN_SHELL, panes: [{ id: '0', active: true }] },
     ])
     const { result } = renderHook(() => useLocalSessions(1))
     await act(async () => {})
     act(() => result.current.selectPane('0'))
-    expect(localStorage.getItem('termote-selection-tmux')).toBeNull()
+    expect(JSON.parse(localStorage.getItem('termote-selection-tmux')!)).toEqual(
+      { tabId: '0', groupId: 'main' },
+    )
   })
 
   it('tmux follows the window the server reports as current', async () => {
@@ -626,6 +628,196 @@ describe('useLocalSessions', () => {
       await result.current.refreshSessions()
     })
     expect(result.current.activeSession.id).toBe('1')
+  })
+})
+
+describe('useLocalSessions with several tmux sessions', () => {
+  const tab = (id: string, name: string, active: boolean) => ({
+    id,
+    name,
+    active,
+    panes: [{ id, active: true }],
+  })
+  // The default session (id = its name, bare tab ids) and "$3".
+  const groups = (mainActive = '0', workActive = '$3:1', withWork = true) => [
+    {
+      id: 'main',
+      name: 'main',
+      tabs: [
+        tab('0', 'shell', mainActive === '0'),
+        tab('1', 'logs', mainActive === '1'),
+      ],
+    },
+    ...(withWork
+      ? [
+          {
+            id: '$3',
+            name: 'work',
+            tabs: [
+              tab('$3:0', 'shell', workActive === '$3:0'),
+              tab('$3:1', 'build', workActive === '$3:1'),
+            ],
+          },
+        ]
+      : []),
+  ]
+  const saved = () =>
+    JSON.parse(localStorage.getItem('termote-selection-tmux') ?? 'null')
+
+  beforeEach(() => {
+    localStorage.clear()
+    vi.clearAllMocks()
+    mockFetchTabs.mockResolvedValue([])
+    mockSnapshot.extra = { groups: groups() }
+    mockSelectTab.mockResolvedValue(true)
+    mockCreateTab.mockResolvedValue('$3:2')
+    mockRenameTab.mockResolvedValue(true)
+    mockCloseTab.mockResolvedValue(true)
+  })
+
+  it('without a saved session, shows the default session and keeps it', async () => {
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    expect(result.current.activeSession.id).toBe('0')
+    expect(result.current.groups.map((g) => g.id)).toEqual(['main', '$3'])
+    expect(saved()).toEqual({ tabId: '0', groupId: 'main' })
+  })
+
+  it('shows the current window of the saved session', async () => {
+    localStorage.setItem(
+      'termote-selection-tmux',
+      JSON.stringify({ tabId: '$3:0', groupId: '$3' }),
+    )
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    // The session's current window, not the one saved with it.
+    expect(result.current.activeSession.id).toBe('$3:1')
+    expect(saved()).toEqual({ tabId: '$3:0', groupId: '$3' })
+  })
+
+  it('follows the current window of its session only', async () => {
+    localStorage.setItem('termote-selection-tmux', '{"groupId":"$3"}')
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    // Another device moves the default session: this one stays on $3.
+    mockSnapshot.extra = { groups: groups('1', '$3:0') }
+    await act(async () => {
+      await result.current.refreshSessions()
+    })
+    expect(result.current.activeSession.id).toBe('$3:0')
+  })
+
+  it('a session that is gone gives way to the default one', async () => {
+    localStorage.setItem('termote-selection-tmux', '{"groupId":"$3"}')
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    mockSnapshot.extra = { groups: groups('1', '', false) }
+    await act(async () => {
+      await result.current.refreshSessions()
+    })
+    expect(result.current.activeSession.id).toBe('1')
+    expect(saved()).toEqual({ tabId: '1', groupId: 'main' })
+  })
+
+  it('a session with no current window shows its first one', async () => {
+    localStorage.setItem('termote-selection-tmux', '{"groupId":"$3"}')
+    mockSnapshot.extra = { groups: groups('0', 'none') }
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    expect(result.current.activeSession.id).toBe('$3:0')
+  })
+
+  it('falls back to the server pick when no group has a tab', async () => {
+    mockSnapshot.extra = { groups: [{ id: 'main', name: 'main', tabs: [] }] }
+    mockFetchTabs.mockResolvedValue([])
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    expect(result.current.activeSession.name).toBe('Loading...')
+  })
+
+  it('switching to another session shows the tab at once and keeps it', async () => {
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    let release!: (v: unknown[]) => void
+    mockFetchTabs.mockReturnValueOnce(
+      new Promise((r) => {
+        release = r
+      }),
+    )
+    // A poll sent before the pick, answered after it.
+    let poll!: Promise<void>
+    act(() => {
+      poll = result.current.refreshSessions()
+    })
+    await act(async () => {
+      await result.current.switchSession('$3:0')
+    })
+    expect(mockSelectTab).toHaveBeenCalledWith('$3:0')
+    expect(result.current.activeSession.id).toBe('$3:0')
+    expect(saved()).toEqual({ tabId: '$3:0', groupId: '$3' })
+    await act(async () => {
+      release([])
+      await poll
+    })
+    expect(result.current.activeSession.id).toBe('$3:0')
+  })
+
+  it('keeps metadata per session, the default one under its old key', async () => {
+    localStorage.setItem(
+      'termote-sessions',
+      JSON.stringify({
+        'tmux:name:shell': { icon: '🏠', description: 'home' },
+        'tmux:name:$3\u0000shell': { icon: '🛠', description: 'work' },
+      }),
+    )
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    const icon = (id: string) =>
+      result.current.sessions.find((s) => s.id === id)?.icon
+    expect(icon('0')).toBe('🏠')
+    expect(icon('$3:0')).toBe('🛠')
+    expect(icon('$3:1')).toBe('📺')
+  })
+
+  it('a new tab of another session keeps its metadata there', async () => {
+    localStorage.setItem('termote-selection-tmux', '{"groupId":"$3"}')
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    await act(async () => {
+      await result.current.addSession('shell', '🧪', 'tests')
+    })
+    expect(mockCreateTab).toHaveBeenCalledWith('shell', '$3')
+    const meta = JSON.parse(localStorage.getItem('termote-sessions')!)
+    expect(meta['tmux:name:$3\u0000shell']).toEqual({
+      icon: '🧪',
+      description: 'tests',
+    })
+    expect(meta['tmux:name:shell']).toBeUndefined()
+  })
+
+  it('renaming and closing a tab of another session use its key', async () => {
+    localStorage.setItem(
+      'termote-sessions',
+      JSON.stringify({
+        'tmux:name:$3\u0000build': { icon: '🔨', description: '' },
+      }),
+    )
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    await act(async () => {
+      await result.current.updateSession('$3:1', { name: 'make' })
+    })
+    let meta = JSON.parse(localStorage.getItem('termote-sessions')!)
+    expect(meta['tmux:name:$3\u0000make']).toEqual({
+      icon: '🔨',
+      description: '',
+    })
+    expect(meta['tmux:name:$3\u0000build']).toBeUndefined()
+    await act(async () => {
+      await result.current.removeSession('$3:1')
+    })
+    meta = JSON.parse(localStorage.getItem('termote-sessions')!)
+    expect(meta['tmux:name:$3\u0000make']).toBeUndefined()
   })
 })
 

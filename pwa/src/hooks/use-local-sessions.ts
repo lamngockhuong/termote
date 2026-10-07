@@ -49,14 +49,23 @@ interface SessionMeta {
 const DEFAULT_META: SessionMeta = { icon: '📺', description: '' }
 
 // tmux keys metadata by window name, as 0.x did, so it survives window
-// renumbering; other backends have stable tab ids.
+// renumbering; other backends have stable tab ids. A window of a session
+// other than the default one (group id "$N", which a rename keeps) is keyed
+// by that id too, so two "shell" windows in two sessions keep their own; the
+// default session (whose group id never starts with '$') keeps the 0.x key.
 const TMUX_META_PREFIX = 'tmux:name:'
 const HERDR_META_PREFIX = 'herdr:'
 
-function metaKey(backend: string, tabId: string, tabName: string): string {
-  return backend === 'tmux'
-    ? `${TMUX_META_PREFIX}${tabName}`
-    : `${backend}:${tabId}`
+function metaKey(
+  backend: string,
+  tabId: string,
+  tabName: string,
+  groupId?: string,
+): string {
+  if (backend !== 'tmux') return `${backend}:${tabId}`
+  return groupId?.startsWith('$')
+    ? `${TMUX_META_PREFIX}${groupId}\u0000${tabName}`
+    : `${TMUX_META_PREFIX}${tabName}`
 }
 
 // 0.x stored metadata under the bare window name; those keys become tmux
@@ -93,8 +102,9 @@ function loadMeta(): Record<string, SessionMeta> {
   return {}
 }
 
-// Tab and pane picked on this device, for backends where selecting does not
-// touch the server (herdr). Kept per backend.
+// Tab and pane picked on this device, kept per backend. herdr keeps all of
+// it; tmux keeps only the group (session), since the window shown is the
+// session's current one, shared by every client attached to it.
 interface Selection {
   tabId: string
   // Group of that tab, so a closed tab falls back within its workspace.
@@ -138,6 +148,8 @@ interface Built {
   // Tab the server reports as current (first one for herdr, which has one
   // per workspace).
   serverActive: Session | null
+  // Current tab of each group (its first tab when none is), by group id.
+  activeByGroup: Map<string, Session>
 }
 
 // Flatten the snapshot into tabs (each tagged with its group) and groups.
@@ -148,10 +160,12 @@ function buildSessions(
   const sessions: Session[] = []
   const groups: SessionGroup[] = []
   let serverActive: Session | null = null
+  const activeByGroup = new Map<string, Session>()
   for (const g of snap.groups || []) {
     const groupTabs: Session[] = []
     for (const tab of g.tabs) {
-      const m = meta[metaKey(snap.backend, tab.id, tab.name)] || DEFAULT_META
+      const m =
+        meta[metaKey(snap.backend, tab.id, tab.name, g.id)] || DEFAULT_META
       const panes: SessionPane[] = tab.panes.map((p, i) => ({
         id: p.id,
         label: p.agent?.name || p.title || `Pane ${i + 1}`,
@@ -174,7 +188,11 @@ function buildSessions(
       }
       groupTabs.push(session)
       if (tab.active && !serverActive) serverActive = session
+      if (tab.active && !activeByGroup.has(g.id))
+        activeByGroup.set(g.id, session)
     }
+    if (groupTabs[0] && !activeByGroup.has(g.id))
+      activeByGroup.set(g.id, groupTabs[0])
     sessions.push(...groupTabs)
     groups.push({
       id: g.id,
@@ -182,7 +200,7 @@ function buildSessions(
       agentStatus: worstAgentStatus(groupTabs.map((t) => t.agentStatus)),
     })
   }
-  return { sessions, groups, serverActive }
+  return { sessions, groups, serverActive, activeByGroup }
 }
 
 export function useLocalSessions(pollInterval = 5) {
@@ -218,21 +236,30 @@ export function useLocalSessions(pollInterval = 5) {
     [storeSelection],
   )
 
-  // Apply a snapshot to session state. tmux follows the server's current
-  // window (every client shares it); herdr keeps this device's own pick.
+  // Apply a snapshot to session state. tmux keeps this device's session and
+  // follows that session's current window (every client of it shares it);
+  // herdr keeps this device's own pick.
   const applySnapshot = useCallback(
     (snap: MuxSnapshot, version: number) => {
       const built = buildSessions(snap, metaRef.current)
       setSessions(built.sessions)
       setGroups(built.groups)
       const fallback = built.serverActive ?? built.sessions[0] ?? null
-      if (!snap.caps.clientSideSelect) {
-        setActiveSession(fallback)
-        return
-      }
       if (version !== selectionVersionRef.current) return
       selectionRef.current ??= loadSelection(snap.backend)
       const sel = selectionRef.current
+      if (!snap.caps.clientSideSelect) {
+        // A session that is gone gives way to the first one, the default.
+        const picked =
+          (sel?.groupId && built.activeByGroup.get(sel.groupId)) ||
+          (built.groups[0] && built.activeByGroup.get(built.groups[0].id)) ||
+          fallback
+        if (picked && picked.groupId !== sel?.groupId) {
+          storeSelection({ tabId: picked.id, groupId: picked.groupId })
+        }
+        setActiveSession(picked)
+        return
+      }
       // A tab that is gone gives way to another of its group, then to the
       // server's pick. Whatever is shown is stored, so later polls do not
       // follow the desktop around.
@@ -326,11 +353,22 @@ export function useLocalSessions(pollInterval = 5) {
         return
       }
       if (isActive) return
+      // Show the tab right away: a snapshot requested before the pick, or
+      // while the server switches window, must not undo it.
+      selectionVersionRef.current++
+      storeSelection({ tabId: session.id, groupId: session.groupId })
+      setActiveSession(session)
       /* v8 ignore next */
       await selectTab(sessionId).catch(() => {})
-      setActiveSession(session)
+      selectionVersionRef.current++
     },
-    [sessions, activeSession?.id, activeSession?.paneId, select],
+    [
+      sessions,
+      activeSession?.id,
+      activeSession?.paneId,
+      select,
+      storeSelection,
+    ],
   )
 
   // Stream another pane of the current tab (client-side select only).
@@ -348,7 +386,10 @@ export function useLocalSessions(pollInterval = 5) {
       const { backend, caps } = muxRef.current
       // tmux keys metadata by name, so it can be saved before the tab exists
       if (backend === 'tmux') {
-        metaRef.current[metaKey(backend, '', name)] = { icon, description }
+        metaRef.current[metaKey(backend, '', name, activeSession?.groupId)] = {
+          icon,
+          description,
+        }
         saveMeta(metaRef.current)
       }
 
@@ -383,7 +424,12 @@ export function useLocalSessions(pollInterval = 5) {
 
       // Remove metadata
       delete metaRef.current[
-        metaKey(muxRef.current.backend, session.id, session.name)
+        metaKey(
+          muxRef.current.backend,
+          session.id,
+          session.name,
+          session.groupId,
+        )
       ]
       saveMeta(metaRef.current)
 
@@ -412,8 +458,13 @@ export function useLocalSessions(pollInterval = 5) {
       if (!session) return
 
       const { backend } = muxRef.current
-      const oldKey = metaKey(backend, sessionId, session.name)
-      const newKey = metaKey(backend, sessionId, updates.name ?? session.name)
+      const oldKey = metaKey(backend, sessionId, session.name, session.groupId)
+      const newKey = metaKey(
+        backend,
+        sessionId,
+        updates.name ?? session.name,
+        session.groupId,
+      )
       const oldMeta = metaRef.current[oldKey] || DEFAULT_META
 
       // If name changed, rename mux tab. A rejected rename (e.g. invalid

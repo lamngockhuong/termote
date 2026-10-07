@@ -61,28 +61,130 @@ func TestValidateTmuxTarget(t *testing.T) {
 	}
 }
 
-func TestValidTmuxID(t *testing.T) {
+func TestParseTmuxID(t *testing.T) {
+	orig := tmuxSession
+	defer func() { tmuxSession = orig }()
+	tmuxSession = "main"
+	usePsmux(t, false)
 	tests := []struct {
-		input string
-		want  bool
+		input, target, sessionID string
+		ok                       bool
 	}{
-		{"0", true},
-		{"12", true},
-		{"my-window", true},
-		{"tên", true},
-		{"-x", false},      // would be parsed as a flag
-		{"-t", false},      // would be parsed as a flag
-		{"other:0", false}, // would address another session
-		{"main:0", false},  // qualified targets are built server-side only
-		{"a\nb", false},    // control character
-		{"0;", false},      // ends the command: what follows runs as another one
-		{"a;b", true},      // only a trailing ';' separates
-		{"", false},
+		{"0", "=main:=0", "", true},
+		{"12", "=main:=12", "", true},
+		{"$3:1", "$3:=1", "$3", true},
+		{"$30:0", "$30:=0", "$30", true},
+		{"$3:x", "", "", false},
+		{"$:1", "", "", false},
+		{"3:1", "", "", false},
+		{"$3", "", "", false},
+		{"other:0", "", "", false}, // a session name is not an id
+		{"main:0", "", "", false},  // the default session's tabs are bare
+		{"a;:1", "", "", false},
+		{"w*:0", "", "", false},
+		{"=x:0", "", "", false},
+		{"shell", "", "", false}, // a window name is not an id
+		{"my-window", "", "", false},
+		{"-t", "", "", false},
+		{"0;", "", "", false},
+		{"-1", "", "", false},
+		{"$3:1\n", "", "", false},
+		{"1234567890", "", "", false},
+		{"", "", "", false},
 	}
 	for _, tt := range tests {
-		if got := validTmuxID(tt.input); got != tt.want {
-			t.Errorf("validTmuxID(%q) = %v, want %v", tt.input, got, tt.want)
+		w, ok := parseTmuxID(tt.input)
+		if ok != tt.ok || ok && (w.target() != tt.target || w.sessionID != tt.sessionID) {
+			t.Errorf("parseTmuxID(%q) = %+v, %v", tt.input, w, ok)
 		}
+	}
+}
+
+func TestParseTmuxGroupID(t *testing.T) {
+	orig := tmuxSession
+	defer func() { tmuxSession = orig }()
+	tmuxSession = "main"
+	for in, want := range map[string]string{"": "=main", "main": "=main", "$3": "$3", "$0": "$0"} {
+		if got, ok := parseTmuxGroupID(in); !ok || got != want {
+			t.Errorf("parseTmuxGroupID(%q) = %q, %v; want %q", in, got, ok, want)
+		}
+	}
+	for _, in := range []string{"ma", "=main", "work", "$", "$3:0", "$x", "-t"} {
+		if got, ok := parseTmuxGroupID(in); ok {
+			t.Errorf("parseTmuxGroupID(%q) = %q, accepted", in, got)
+		}
+	}
+}
+
+func TestFormatTmuxID(t *testing.T) {
+	if got := formatTmuxID("$0", true, "2"); got != "2" {
+		t.Errorf("default session = %q", got)
+	}
+	if got := formatTmuxID("$3", false, "2"); got != "$3:2" {
+		t.Errorf("other session = %q", got)
+	}
+}
+
+func TestValidTmuxSessionName(t *testing.T) {
+	for in, want := range map[string]bool{
+		"main": true, "e2e": true, "my work": true,
+		"a:b": false, "a.b": false, "=main": false, "$3": false, "-x": false, "": false, "x;": false,
+	} {
+		if got := validTmuxSessionName(in); got != want {
+			t.Errorf("validTmuxSessionName(%q) = %v, want %v", in, got, want)
+		}
+	}
+}
+
+func TestTmuxWindowMatches(t *testing.T) {
+	orig := tmuxSession
+	defer func() { tmuxSession = orig }()
+	tmuxSession = "main"
+	def, _ := parseTmuxID("1")
+	other, _ := parseTmuxID("$3:1")
+	for _, tc := range []struct {
+		w             tmuxWindow
+		sid, name, ix string
+		want          bool
+	}{
+		{def, "$0", "main", "1", true},
+		{def, "$0", "main", "0", false}, // tmux answered with the current window
+		{def, "$4", "main2", "1", false},
+		{def, "", "", "", false}, // tmux answered nothing: the session is gone
+		{other, "$3", "work", "1", true},
+		{other, "$0", "main", "1", false}, // another session's window 1
+		{other, "$3", "work", "0", false},
+	} {
+		if got := tc.w.matches(tc.sid, tc.name, tc.ix); got != tc.want {
+			t.Errorf("%+v.matches(%q, %q, %q) = %v", tc.w, tc.sid, tc.name, tc.ix, got)
+		}
+	}
+}
+
+func TestIsTmuxAttachCmdline(t *testing.T) {
+	origSocket, origSession, origBin := tmuxSocket, tmuxSession, tmuxBin
+	defer func() { tmuxSocket, tmuxSession, tmuxBin = origSocket, origSession, origBin }()
+	tmuxSocket, tmuxSession, tmuxBin = "/run/t.sock", "main", "tmux"
+	for cmdline, want := range map[string]bool{
+		"tmux -S /run/t.sock attach -E -t =main": true,
+		"tmux -S /run/t.sock attach -E -t $3":    true,
+		"tmux -S /run/t.sock attach -t main":     true, // left by a release before several sessions
+		"tmux -S /run/t.sock attach -t =main":    false,
+		"tmux -S /run/t.sock attach -t =work":    false, // the user's own client
+		"tmux -S /run/t.sock attach -E -t =ma":   false,
+		"tmux -S /run/t.sock attach -E -t $3:1":  false,
+		"tmux -S /run/t.sock attach -E -t $":     false,
+		"tmux -S /run/t.sock attach -E -t $3 x":  false,
+		"tmux -S /run/t.sock attach -t main2":    false,
+		"tmux attach -E -t $3":                   false, // another server
+		"tmux -S /run/t.sock attach -E -t":       false,
+	} {
+		if got := isTmuxAttachCmdline(cmdline); got != want {
+			t.Errorf("isTmuxAttachCmdline(%q) = %v, want %v", cmdline, got, want)
+		}
+	}
+	if got := strings.Join(tmuxAttachArgv("$3"), " "); got != "tmux -S /run/t.sock attach -E -t $3" {
+		t.Errorf("tmuxAttachArgv = %q", got)
 	}
 }
 
@@ -102,20 +204,6 @@ func TestValidTmuxName(t *testing.T) {
 		if got := validTmuxName(tt.input); got != tt.want {
 			t.Errorf("validTmuxName(%q) = %v, want %v", tt.input, got, tt.want)
 		}
-	}
-}
-
-func TestQualifyTarget(t *testing.T) {
-	orig := tmuxSession
-	defer func() { tmuxSession = orig }()
-
-	tmuxSession = "main"
-	if got := qualifyTarget("0"); got != "main:0" {
-		t.Errorf("qualifyTarget(0) = %q, want main:0", got)
-	}
-	tmuxSession = "custom"
-	if got := qualifyTarget("win"); got != "custom:win" {
-		t.Errorf("qualifyTarget(win) = %q, want custom:win", got)
 	}
 }
 
@@ -171,6 +259,9 @@ func TestTmuxMuxRejectsInvalidInput(t *testing.T) {
 	}{
 		{"select flag-like id", func() error { return m.SelectTab(ctx, "-t") }},
 		{"select other session", func() error { return m.SelectTab(ctx, "other:0") }},
+		{"select window name", func() error { return m.SelectTab(ctx, "shell") }},
+		{"select bad session id", func() error { return m.SelectTab(ctx, "$3:x") }},
+		{"select exact-name target", func() error { return m.SelectTab(ctx, "=main:0") }},
 		{"close control char", func() error { return m.CloseTab(ctx, "a\x00b") }},
 		{"rename bad id", func() error { return m.RenameTab(ctx, "x:1", "ok") }},
 		{"rename empty name", func() error { return m.RenameTab(ctx, "0", "") }},
@@ -178,7 +269,9 @@ func TestTmuxMuxRejectsInvalidInput(t *testing.T) {
 		{"rename control char name", func() error { return m.RenameTab(ctx, "0", "a\nb") }},
 		{"new flag-like name", func() error { _, err := m.NewTab(ctx, "", "-d"); return err }},
 		{"new unknown group", func() error { _, err := m.NewTab(ctx, "other", "x"); return err }},
+		{"new group by exact name", func() error { _, err := m.NewTab(ctx, "="+tmuxSession, "x"); return err }},
 		{"keys bad pane", func() error { return m.SendKeys(ctx, "other:1", "ls") }},
+		{"keys session id alone", func() error { return m.SendKeys(ctx, "$3", "ls") }},
 		{"keys flag-like", func() error { return m.SendKeys(ctx, "0", "-la") }},
 	}
 	for _, tt := range tests {
@@ -265,35 +358,190 @@ func useFakeTmux(t *testing.T, out string) func() string {
 	}
 }
 
+// fakeTmuxReply is what the fake tmux does for one subcommand.
+type fakeTmuxReply struct {
+	out, stderr string
+	code        int
+}
+
+// useFakeTmuxScript is useFakeTmux with a reply per subcommand ($1); a
+// subcommand without one prints nothing and exits 0.
+func useFakeTmuxScript(t *testing.T, replies map[string]fakeTmuxReply) func() string {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("fake tmux is a shell script")
+	}
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "args")
+	script := filepath.Join(dir, "tmux")
+	var b strings.Builder
+	b.WriteString("#!/bin/sh\nprintf '%s\\n' \"$*\" >> '" + logPath + "'\ncase \"$1\" in\n")
+	for sub, r := range replies {
+		out, errf := filepath.Join(dir, sub+".out"), filepath.Join(dir, sub+".err")
+		os.WriteFile(out, []byte(r.out), 0o644)
+		os.WriteFile(errf, []byte(r.stderr), 0o644)
+		fmt.Fprintf(&b, "%s) cat '%s'; cat '%s' >&2; exit %d;;\n", sub, out, errf, r.code)
+	}
+	b.WriteString("esac\n")
+	if err := os.WriteFile(script, []byte(b.String()), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	orig, origSocket := tmuxBin, tmuxSocket
+	tmuxBin, tmuxSocket = script, ""
+	t.Cleanup(func() { tmuxBin, tmuxSocket = orig, origSocket })
+	return func() string {
+		b, _ := os.ReadFile(logPath)
+		return string(b)
+	}
+}
+
 func TestTmuxSnapshotParsesPaneFields(t *testing.T) {
-	args := useFakeTmux(t, "0:1:%3:1:edit: main.go\n1:0:%7:notapid:logs")
+	orig := tmuxSession
+	defer func() { tmuxSession = orig }()
+	tmuxSession = "main"
+	// The default session is listed after another one, as tmux sorts by name.
+	args := useFakeTmux(t, "$4:0:1:%9:1:ma2:a:b\n$0:0:1:%3:1:main:edit: main.go\n$0:1:0:%7:notapid:main:logs\n"+
+		"$5:2:0:%8:1:wo_rk:x\nbad line\n$x:0:1:%1:1:z:y")
 	snap, err := tmuxMux{}.Snapshot(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	tabs := snap.Groups[0].Tabs
+	if len(snap.Groups) != 3 {
+		t.Fatalf("groups = %+v", snap.Groups)
+	}
+	def, ma2, work := snap.Groups[0], snap.Groups[1], snap.Groups[2]
+	if def.ID != "main" || def.Name != "main" || ma2.ID != "$4" || ma2.Name != "ma2" || work.ID != "$5" || work.Name != "wo_rk" {
+		t.Fatalf("groups = %+v", snap.Groups)
+	}
+	tabs := def.Tabs
 	if len(tabs) != 2 || tabs[0].Name != "edit: main.go" || tabs[1].Name != "logs" || tabs[0].Panes[0].ID != "0" || !tabs[0].Active {
 		t.Fatalf("tabs = %+v", tabs)
+	}
+	if ma2.Tabs[0].ID != "$4:0" || ma2.Tabs[0].Name != "a:b" || ma2.Tabs[0].Panes[0].ID != "$4:0" || work.Tabs[0].ID != "$5:2" {
+		t.Fatalf("other tabs = %+v, %+v", ma2.Tabs, work.Tabs)
 	}
 	if tabs[0].Panes[0].Agent != nil || tabs[1].Panes[0].Agent != nil {
 		t.Error("agent reported for panes without Claude Code")
 	}
-	if !strings.Contains(args(), "#{window_index}:#{window_active}:#{pane_id}:#{pane_pid}:#{window_name}") {
-		t.Errorf("list-windows format: %s", args())
+	if got := strings.TrimSpace(args()); got != "list-windows -a -F "+tmuxListFormat {
+		t.Errorf("argv = %q", got)
+	}
+}
+
+// Without the default session (no server yet, or only the user's own
+// sessions), the snapshot creates it by its exact name, then lists again.
+func TestTmuxSnapshotCreatesMissingDefaultSession(t *testing.T) {
+	orig := tmuxSession
+	defer func() { tmuxSession = orig }()
+	tmuxSession = "main"
+	args := useFakeTmuxScript(t, map[string]fakeTmuxReply{
+		"list-windows": {out: "$1:0:1:%2:1:mainx:sh"},
+		"has-session":  {stderr: "can't find session: =main", code: 1},
+	})
+	snap, err := tmuxMux{}.Snapshot(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snap.Groups) != 1 || snap.Groups[0].ID != "$1" {
+		t.Errorf("groups = %+v", snap.Groups)
+	}
+	lines := strings.Split(strings.TrimSpace(args()), "\n")
+	if len(lines) != 4 || lines[1] != "has-session -t =main" || lines[2] != "new-session -d -s main" || !strings.HasPrefix(lines[3], "list-windows -a") {
+		t.Errorf("argv = %q", lines)
+	}
+}
+
+// Every command addresses its session exactly: "$N" for another session,
+// "=name" for the default one.
+func TestTmuxTargetsAreExact(t *testing.T) {
+	orig := tmuxSession
+	defer func() { tmuxSession = orig }()
+	tmuxSession = "main"
+	args := useFakeTmuxScript(t, map[string]fakeTmuxReply{"new-window": {out: "$3:4:work\n"}})
+	ctx := context.Background()
+	m := tmuxMux{}
+	m.SelectTab(ctx, "$3:1")
+	m.SelectTab(ctx, "1")
+	m.CloseTab(ctx, "$3:2")
+	m.RenameTab(ctx, "0", "x")
+	m.SendKeys(ctx, "$3:0", "ls")
+	if id, err := m.NewTab(ctx, "$3", ""); err != nil || id != "$3:4" {
+		t.Errorf("NewTab($3) = %q, %v", id, err)
+	}
+	want := []string{
+		"select-window -t $3:=1",
+		"select-window -t =main:=1",
+		"kill-window -t $3:=2",
+		"rename-window -t =main:=0 x",
+		"send-keys -t $3:=0 ls",
+		"new-window -t $3: -P -F #{session_id}:#{window_index}:#{session_name}",
+	}
+	if got := strings.Split(strings.TrimSpace(args()), "\n"); strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("argv = %q", got)
+	}
+}
+
+func TestTmuxNewTabIDs(t *testing.T) {
+	orig := tmuxSession
+	defer func() { tmuxSession = orig }()
+	tmuxSession = "main"
+	ctx := context.Background()
+
+	args := useFakeTmuxScript(t, map[string]fakeTmuxReply{"new-window": {out: "$0:5:main\n"}})
+	if id, err := (tmuxMux{}).NewTab(ctx, "main", "x"); err != nil || id != "5" {
+		t.Errorf("NewTab(main) = %q, %v", id, err)
+	}
+	if got := strings.TrimSpace(args()); got != "new-window -t =main: -P -F #{session_id}:#{window_index}:#{session_name} -n x" {
+		t.Errorf("argv = %q", got)
+	}
+	// The default session named by its session id still gets a bare id.
+	useFakeTmuxScript(t, map[string]fakeTmuxReply{"new-window": {out: "$0:6:main\n"}})
+	if id, err := (tmuxMux{}).NewTab(ctx, "$0", ""); err != nil || id != "6" {
+		t.Errorf("NewTab($0) = %q, %v", id, err)
+	}
+
+	// A session that is gone: unknown group, with no retry through ensureSession.
+	args = useFakeTmuxScript(t, map[string]fakeTmuxReply{"new-window": {stderr: "can't find session: $9", code: 1}})
+	var ie inputError
+	if _, err := (tmuxMux{}).NewTab(ctx, "$9", ""); !errors.As(err, &ie) || ie != "unknown group" {
+		t.Errorf("NewTab($9) = %v", err)
+	}
+	if strings.Contains(args(), "has-session") {
+		t.Errorf("argv = %q", args())
+	}
+
+	// Any other failure is not the client's.
+	useFakeTmuxScript(t, map[string]fakeTmuxReply{"new-window": {stderr: "server exited", code: 1}})
+	if _, err := (tmuxMux{}).NewTab(ctx, "$9", ""); err == nil || errors.As(err, &ie) {
+		t.Errorf("NewTab failure = %v", err)
+	}
+	// A reply that is not the session asked for, or not an index.
+	for _, out := range []string{"$4:1:x", "$3:x:work", "$3:1", ""} {
+		useFakeTmuxScript(t, map[string]fakeTmuxReply{"new-window": {out: out}})
+		if id, err := (tmuxMux{}).NewTab(ctx, "$3", ""); err == nil {
+			t.Errorf("NewTab with reply %q = %q", out, id)
+		}
 	}
 }
 
 func TestTmuxAgentSessionArgv(t *testing.T) {
-	args := useFakeTmux(t, "2:0:%5:1")
+	orig := tmuxSession
+	defer func() { tmuxSession = orig }()
+	tmuxSession = "main"
+	args := useFakeTmux(t, "$0:2:0:%5:1:main")
 	if _, ok, err := (tmuxMux{}).AgentSession(context.Background(), "2"); ok || err != nil {
 		t.Errorf("AgentSession = %v, %v", ok, err)
 	}
-	if got := strings.TrimSpace(args()); got != "display-message -p -t "+tmuxSession+":2 #{window_index}:#{pane_in_mode}:#{pane_id}:#{pane_pid}" {
+	if got := strings.TrimSpace(args()); got != "display-message -p -t =main:=2 #{session_id}:#{window_index}:#{pane_in_mode}:#{pane_id}:#{pane_pid}:#{session_name}" {
 		t.Errorf("argv = %q", got)
 	}
 	// tmux answers a missing window with the current one.
 	if _, _, err := (tmuxMux{}).AgentSession(context.Background(), "3"); err == nil {
 		t.Error("reply for another window accepted")
+	}
+	// ... and a missing session's window with the default session's.
+	if _, _, err := (tmuxMux{}).AgentSession(context.Background(), "$3:2"); err == nil {
+		t.Error("reply for another session accepted")
 	}
 	for _, bad := range []string{"-t", "other:1", "", "name"} {
 		var ie inputError
@@ -306,6 +554,36 @@ func TestTmuxAgentSessionArgv(t *testing.T) {
 	}
 	if (tmuxMux{}).Caps().Files != tmuxFilesSupported {
 		t.Error("Caps().Files does not follow tmuxFilesSupported")
+	}
+}
+
+func TestTmuxPaneDirChecksTheSession(t *testing.T) {
+	if !tmuxFilesSupported {
+		t.Skip("no Files on this platform")
+	}
+	orig := tmuxSession
+	defer func() { tmuxSession = orig }()
+	tmuxSession = "main"
+	useFakeTmux(t, "$3:1:%5:work:/srv/a:b")
+	if dir, key, err := (tmuxMux{}).PaneDir(context.Background(), "$3:1"); err != nil || dir != "/srv/a:b" || key != "%5" {
+		t.Errorf("PaneDir($3:1) = %q, %q, %v", dir, key, err)
+	}
+	var ie inputError
+	for _, id := range []string{"1", "$4:1", "$3:0"} {
+		if _, _, err := (tmuxMux{}).PaneDir(context.Background(), id); !errors.As(err, &ie) {
+			t.Errorf("PaneDir(%q) = %v, want unknown pane", id, err)
+		}
+	}
+	useFakeTmux(t, "$0:1:%5:main:/home/u")
+	if dir, _, err := (tmuxMux{}).PaneDir(context.Background(), "1"); err != nil || dir != "/home/u" {
+		t.Errorf("PaneDir(1) = %q, %v", dir, err)
+	}
+	useFakeTmux(t, "$0:1:%5:main:")
+	if _, _, err := (tmuxMux{}).PaneDir(context.Background(), "1"); !errors.Is(err, errUnsupported) {
+		t.Errorf("PaneDir without a path = %v", err)
+	}
+	if _, _, err := (tmuxMux{}).PaneDir(context.Background(), "shell"); !errors.As(err, &ie) {
+		t.Errorf("PaneDir(shell) = %v", err)
 	}
 }
 
@@ -400,7 +678,7 @@ func TestLookupAgentsDoesNotBlockSnapshot(t *testing.T) {
 	<-started
 	defer close(release)
 	start := time.Now()
-	out := lookupAgents(context.Background(), []agentPane{{0, "%999", "424242"}})
+	out := lookupAgents(context.Background(), []agentPane{{0, 0, "%999", "424242"}})
 	if d := time.Since(start); d > agentLookupWait+500*time.Millisecond {
 		t.Errorf("lookupAgents waited %v", d)
 	}
@@ -517,7 +795,8 @@ func TestTabNameIsNotAFormat(t *testing.T) {
 	})
 	ctx := context.Background()
 	name := func(id string) string {
-		out, err := tmuxCmd(ctx, "display-message", "-p", "-t", qualifyTarget(id), "#{window_name}").Output()
+		w, _ := parseTmuxID(id)
+		out, err := tmuxCmd(ctx, "display-message", "-p", "-t", w.target(), "#{window_name}").Output()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -536,5 +815,47 @@ func TestTabNameIsNotAFormat(t *testing.T) {
 	}
 	if got := name(id); got != "x"+typed {
 		t.Errorf("RenameTab name = %q, want %q", got, "x"+typed)
+	}
+}
+
+// A server that answers with an error while the default session exists:
+// nothing is created and the error is reported.
+func TestTmuxSnapshotReportsListFailure(t *testing.T) {
+	args := useFakeTmuxScript(t, map[string]fakeTmuxReply{
+		"list-windows": {stderr: "lost server", code: 1},
+	})
+	if _, err := (tmuxMux{}).Snapshot(context.Background()); err == nil {
+		t.Fatal("Snapshot succeeded")
+	}
+	if strings.Contains(args(), "new-session") {
+		t.Errorf("argv = %q", args())
+	}
+}
+
+// A tmux (psmux) that does not know the list format prints lines none of
+// which can be read: an error, never an empty snapshot.
+func TestTmuxSnapshotRefusesUnreadableList(t *testing.T) {
+	orig := tmuxSession
+	defer func() { tmuxSession = orig }()
+	tmuxSession = "main"
+	useFakeTmuxScript(t, map[string]fakeTmuxReply{
+		"list-windows": {out: "0:1:%3:1:shell"},
+		"has-session":  {},
+	})
+	if snap, err := (tmuxMux{}).Snapshot(context.Background()); err == nil {
+		t.Fatalf("Snapshot = %+v", snap)
+	}
+}
+
+func TestTmuxMissingNeedsTmuxsOwnError(t *testing.T) {
+	if tmuxMissing(errors.New("can't find session: x")) {
+		t.Error("an error that is not tmux's exit status counted as missing")
+	}
+}
+
+func TestTmuxAttachRejectsBadID(t *testing.T) {
+	var ie inputError
+	if _, err := (tmuxMux{}).Attach(context.Background(), "other:0", Size{Cols: 80, Rows: 24}); !errors.As(err, &ie) {
+		t.Errorf("Attach(other:0) = %v", err)
 	}
 }

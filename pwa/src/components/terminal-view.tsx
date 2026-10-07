@@ -54,6 +54,11 @@ interface Props {
   backend?: string
   // Reconnect when paneId changes (Caps.clientSideSelect).
   followPane?: boolean
+  // Without followPane, reconnect when this changes (tmux: the session).
+  streamKey?: string
+  // A new value each time a snapshot still lists paneId: an exited stream
+  // reconnects once at the next value.
+  paneSeen?: unknown
   copyModeSupported?: boolean
   // The backend scrolls the pane's history (Caps.scroll): the stream only
   // carries screen renders, so the xterm.js scrollback stays empty.
@@ -239,6 +244,8 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       paneId,
       backend = 'tmux',
       followPane = false,
+      streamKey,
+      paneSeen,
       copyModeSupported = true,
       serverScroll = false,
       bracketedPaste = false,
@@ -444,6 +451,8 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
     const socket = useTermSocket({
       paneId,
       followPane,
+      streamKey,
+      paneSeen,
       // The size the client would take, so measured at the chosen font,
       // not the zoomed one a fixed grid shows.
       getSize: () => {

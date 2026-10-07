@@ -83,7 +83,7 @@ test.describe('mux API integration', () => {
     expect(res.ok()).toBe(true)
     const data = await res.json()
     expect(data.status).toBe('ok')
-    expect(data.apiVersion).toBe(1)
+    expect(data.apiVersion).toBe(2)
     expect(data.backend).toBe('tmux')
   })
 
