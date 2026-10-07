@@ -46,6 +46,8 @@ jobs:
             pwa:
               - *workspace
               - 'pwa/**'
+              # Agent transition cases, also read by the PWA tests
+              - 'server/testdata/agent-transitions.json'
             api:
               - 'server/**'
             scripts:

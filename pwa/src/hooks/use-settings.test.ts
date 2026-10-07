@@ -247,6 +247,19 @@ describe('useSettings', () => {
     expect(result.current.settings.findIncludeIgnored).toBe(false)
     expect(result.current.settings.findExcludes).toEqual(FIND_EXCLUDES_DEFAULT)
   })
+
+  it('notifies about agents only once turned on', () => {
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ notifyAgents: 'yes' }),
+    )
+    const { result } = renderHook(() => useSettings())
+    expect(result.current.settings.notifyAgents).toBe(false)
+    act(() => result.current.updateSetting('notifyAgents', true))
+    expect(result.current.settings.notifyAgents).toBe(true)
+    const saved = JSON.parse(localStorage.getItem('termote-settings')!)
+    expect(saved.notifyAgents).toBe(true)
+  })
 })
 
 describe('excluded folder names', () => {

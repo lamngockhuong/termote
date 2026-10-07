@@ -43,6 +43,8 @@ export default defineConfig({
         // The highlighter worker, its themes and grammars: fetched (then
         // cached) the first time Files shows a file, never installed upfront.
         globIgnores: ['**/assets/shiki/**'],
+        // Notification click (and push) handlers: public/notify-sw.js
+        importScripts: ['notify-sw.js'],
         runtimeCaching: [
           {
             urlPattern: ({ url }) => url.pathname.startsWith('/assets/shiki/'),

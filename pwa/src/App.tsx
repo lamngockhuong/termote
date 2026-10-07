@@ -35,6 +35,7 @@ import { Banner } from './components/ui/banner'
 import { Button } from './components/ui/button'
 import { ConfirmDialog } from './components/ui/confirm-dialog'
 import { useTheme } from './contexts/theme-context'
+import { useAgentNotifications } from './hooks/use-agent-notifications'
 import { useCommandHistory } from './hooks/use-command-history'
 import { useFontSize } from './hooks/use-font-size'
 import { useFullscreen } from './hooks/use-fullscreen'
@@ -216,6 +217,13 @@ export default function App({
     mux,
   } = useLocalSessions(settings.pollInterval)
   const copyModeSupported = mux.caps.copyMode
+  useAgentNotifications({
+    sessions,
+    groups,
+    activePaneId: activeSession.paneId,
+    enabled: settings.notifyAgents,
+    pushActive: false,
+  })
   // Each snapshot that still lists the pane on screen (a new sessions array
   // per poll): a stream that exited with it, a tmux session closed and made
   // again, reconnects.

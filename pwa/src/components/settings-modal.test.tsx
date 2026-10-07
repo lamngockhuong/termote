@@ -1,7 +1,21 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { FIND_EXCLUDES_DEFAULT, type Settings } from '../hooks/use-settings'
 import { SettingsModal } from './settings-modal'
+
+const notify = vi.hoisted(() => ({
+  notificationSupport: vi.fn(() => 'unsupported'),
+  notifyWorkerReady: vi.fn(() => Promise.resolve(true)),
+  requestNotify: vi.fn(() => Promise.resolve('granted')),
+}))
+vi.mock('../utils/notify-permission', () => notify)
 
 // The Updates group's own behaviour is tested in updates-section.test.tsx.
 vi.mock('./updates-section', () => ({
@@ -37,6 +51,7 @@ const DEFAULT_SETTINGS: Settings = {
   sidePanelWidth: 440,
   findIncludeIgnored: false,
   findExcludes: FIND_EXCLUDES_DEFAULT,
+  notifyAgents: false,
 }
 
 describe('SettingsModal', () => {
@@ -600,5 +615,87 @@ describe('SettingsModal', () => {
       name: 'Blocked sessions first',
     })
     expect(switchElement).toHaveAttribute('aria-checked', 'true')
+  })
+
+  describe('Notify when an agent needs me', () => {
+    const NAME = 'Notify when an agent needs me'
+    beforeEach(() => {
+      notify.notificationSupport.mockReturnValue('default')
+      notify.notifyWorkerReady.mockResolvedValue(true)
+      notify.requestNotify.mockResolvedValue('granted')
+    })
+
+    async function renderReady(settings: Partial<Settings> = {}) {
+      const r = renderModal({ settings: { ...DEFAULT_SETTINGS, ...settings } })
+      const sw = screen.getByRole('switch', { name: NAME })
+      await waitFor(() => expect(notify.notifyWorkerReady).toHaveBeenCalled())
+      await act(async () => {})
+      return { ...r, sw }
+    }
+
+    it('is hidden where notifications are unsupported', () => {
+      notify.notificationSupport.mockReturnValue('unsupported')
+      renderModal()
+      expect(screen.queryByRole('switch', { name: NAME })).toBeNull()
+    })
+
+    it('asks for the permission, then turns on', async () => {
+      const { sw, onUpdateSetting } = await renderReady()
+      await waitFor(() => expect(sw).not.toBeDisabled())
+      await act(async () => fireEvent.click(sw))
+      await waitFor(() =>
+        expect(onUpdateSetting).toHaveBeenCalledWith('notifyAgents', true),
+      )
+      expect(notify.requestNotify).toHaveBeenCalled()
+    })
+
+    it('stays off when the permission is not given', async () => {
+      notify.requestNotify.mockResolvedValue('denied')
+      const { sw, onUpdateSetting } = await renderReady()
+      await act(async () => fireEvent.click(sw))
+      expect(onUpdateSetting).not.toHaveBeenCalled()
+      expect(
+        screen.getByText('Blocked in browser settings'),
+      ).toBeInTheDocument()
+      expect(sw).toBeDisabled()
+    })
+
+    it('turns off without asking', async () => {
+      notify.notificationSupport.mockReturnValue('granted')
+      const { sw, onUpdateSetting } = await renderReady({ notifyAgents: true })
+      expect(sw).toHaveAttribute('aria-checked', 'true')
+      await act(async () => fireEvent.click(sw))
+      expect(notify.requestNotify).not.toHaveBeenCalled()
+      expect(onUpdateSetting).toHaveBeenCalledWith('notifyAgents', false)
+    })
+
+    it('reads as off and blocked once the browser denies it', async () => {
+      notify.notificationSupport.mockReturnValue('denied')
+      const { sw } = await renderReady({ notifyAgents: true })
+      expect(sw).toHaveAttribute('aria-checked', 'false')
+      expect(sw).toBeDisabled()
+      expect(
+        screen.getByText('Blocked in browser settings'),
+      ).toBeInTheDocument()
+    })
+
+    it('asks for a reload while an older worker is active', async () => {
+      notify.notifyWorkerReady.mockResolvedValue(false)
+      const { sw } = await renderReady()
+      expect(screen.getByText('Reload to turn on')).toBeInTheDocument()
+      expect(sw).toBeDisabled()
+    })
+
+    it('ignores the worker answer after closing', async () => {
+      let answer = (_: boolean) => {}
+      notify.notifyWorkerReady.mockReturnValue(
+        new Promise((r) => {
+          answer = r
+        }),
+      )
+      const { unmount } = renderModal()
+      unmount()
+      await act(async () => answer(false))
+    })
   })
 })

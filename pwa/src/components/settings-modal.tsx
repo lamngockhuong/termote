@@ -10,6 +10,11 @@ import {
 } from '../hooks/use-settings'
 import { UI_STYLES, type UiStyle } from '../ui-style'
 import type { ServerInfo } from '../utils/app-update'
+import {
+  notificationSupport,
+  notifyWorkerReady,
+  requestNotify,
+} from '../utils/notify-permission'
 import { Button, FOCUS_RING, IconButton } from './ui/button'
 import { SegmentedControl } from './ui/segmented-control'
 import { Sheet } from './ui/sheet'
@@ -302,6 +307,58 @@ function pasteSourceOptions(bufferLabel: string): {
   ]
 }
 
+// Notify when an agent needs me. Turning it on asks for the permission first
+// thing in the click (Safari asks only from a gesture); it stays off while
+// the browser blocks notifications or the active service worker predates
+// the click handler.
+function NotifyAgentsRow({
+  enabled,
+  onChange,
+}: {
+  enabled: boolean
+  onChange: (on: boolean) => void
+}) {
+  const [permission, setPermission] = useState(notificationSupport)
+  // undefined while the worker is asked
+  const [workerReady, setWorkerReady] = useState<boolean>()
+  useEffect(() => {
+    let live = true
+    notifyWorkerReady().then((ready) => {
+      if (live) setWorkerReady(ready)
+    })
+    return () => {
+      live = false
+    }
+  }, [])
+  if (permission === 'unsupported') return null
+  const checked = enabled && permission === 'granted'
+  const desc =
+    permission === 'denied'
+      ? 'Blocked in browser settings'
+      : workerReady === false
+        ? 'Reload to turn on'
+        : 'A dialog waits or a turn finished. On a phone, needs the installed app'
+  const toggle = async (on: boolean) => {
+    if (!on) {
+      onChange(false)
+      return
+    }
+    const result = await requestNotify()
+    setPermission(result)
+    if (result === 'granted') onChange(true)
+  }
+  return (
+    <SettingsRow title="Notify when an agent needs me" desc={desc}>
+      <Switch
+        label="Notify when an agent needs me"
+        checked={checked}
+        disabled={!checked && (permission === 'denied' || !workerReady)}
+        onChange={toggle}
+      />
+    </SettingsRow>
+  )
+}
+
 // A tiny drawing of each style's shape: corner radius, hairline or raised.
 const STYLE_PREVIEW: Record<UiStyle, string> = {
   terminal: 'rounded-[2px] border border-border-strong bg-bg',
@@ -489,6 +546,10 @@ export function SettingsModal({
               onChange={(v) => onUpdateSetting('sortBlockedFirst', v)}
             />
           </SettingsRow>
+          <NotifyAgentsRow
+            enabled={settings.notifyAgents}
+            onChange={(v) => onUpdateSetting('notifyAgents', v)}
+          />
           <SettingsRow
             title="Session poll interval"
             desc={`How often to sync session list (${formatSeconds(settings.pollInterval)})`}
