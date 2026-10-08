@@ -1,7 +1,10 @@
 import {
   ChevronDown,
   ChevronRight,
+  FolderGit2,
+  FolderOpen,
   FolderPlus,
+  GitBranch,
   MoreHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
@@ -84,6 +87,13 @@ export interface GroupActions {
   onClose: (id: string) => void
   // Whether a group can be renamed (tmux's default session cannot)
   canRename: (id: string) => boolean
+  // Git worktrees (caps.worktrees): a new worktree of the group's
+  // repository and an existing one opened (not from a linked worktree,
+  // which Herdr refuses as the source), and the group removed with its
+  // checkout (a linked worktree only)
+  onNewWorktree?: (id: string) => void
+  onOpenWorktree?: (id: string) => void
+  onRemoveWorktree?: (id: string) => void
 }
 
 // Why a rename was refused, by the server's code
@@ -411,6 +421,22 @@ export function SessionSidebar({
             Rename
           </MenuItem>
         )}
+        {groupActions.onNewWorktree && !group.worktree?.linked && (
+          <MenuItem
+            icon={<FolderGit2 size={16} />}
+            onSelect={() => groupActions.onNewWorktree?.(group.id)}
+          >
+            New worktree
+          </MenuItem>
+        )}
+        {groupActions.onOpenWorktree && !group.worktree?.linked && (
+          <MenuItem
+            icon={<FolderOpen size={16} />}
+            onSelect={() => groupActions.onOpenWorktree?.(group.id)}
+          >
+            Open worktree
+          </MenuItem>
+        )}
         <MenuItem
           icon={<Trash2 size={16} />}
           danger
@@ -418,6 +444,15 @@ export function SessionSidebar({
         >
           Close
         </MenuItem>
+        {groupActions.onRemoveWorktree && group.worktree?.linked && (
+          <MenuItem
+            icon={<Trash2 size={16} />}
+            danger
+            onSelect={() => groupActions.onRemoveWorktree?.(group.id)}
+          >
+            Remove worktree
+          </MenuItem>
+        )}
       </Menu>
     )
 
@@ -464,7 +499,23 @@ export function SessionSidebar({
               ) : (
                 <ChevronDown size={12} aria-hidden="true" />
               )}
-              <span className="min-w-0 flex-1 truncate text-left">{name}</span>
+              <span className="min-w-0 flex-1 truncate text-left">
+                {name}
+                {group.worktree?.branch && (
+                  <span
+                    title={group.worktree.branch}
+                    className="ml-1.5 normal-case tracking-normal text-fg-subtle"
+                  >
+                    <GitBranch
+                      size={11}
+                      aria-hidden="true"
+                      className="mr-0.5 inline align-[-1px]"
+                    />
+                    <span className="sr-only">branch </span>
+                    {group.worktree.branch}
+                  </span>
+                )}
+              </span>
               <AgentStatusBadge status={group.agentStatus} size={12} />
               <span className="ml-1 tabular-nums">{tabs.length}</span>
             </button>

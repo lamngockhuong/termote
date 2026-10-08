@@ -34,6 +34,11 @@ import { Toast, type ToastAction, type ToastVariant } from './components/toast'
 import { Banner } from './components/ui/banner'
 import { Button } from './components/ui/button'
 import { ConfirmDialog } from './components/ui/confirm-dialog'
+import {
+  WorktreeDialog,
+  WorktreeRemoveDialog,
+  worktreeProblem,
+} from './components/worktree-dialog'
 import { useTheme } from './contexts/theme-context'
 import { useAgentNotifications } from './hooks/use-agent-notifications'
 import { useCommandHistory } from './hooks/use-command-history'
@@ -202,8 +207,13 @@ export default function App({
     createGroup,
     renameGroup,
     closeGroup,
+    createWorktree,
+    openWorktree,
+    showGroup,
+    removeWorktree,
     isReady,
     isServerReachable,
+    refreshSessions,
     mux,
   } = useLocalSessions(settings.pollInterval)
   const copyModeSupported = mux.caps.copyMode
@@ -281,6 +291,25 @@ export default function App({
     (s) => s.groupId === pendingGroupCloseId,
   )
   const pendingGroupTabs = pendingGroupSessions.length
+  // Git worktrees of a workspace's repository (Herdr): the New/Open dialog
+  // and the removal, asked twice when the worktree has changes.
+  const [worktreeDialog, setWorktreeDialog] = useState<{
+    mode: 'new' | 'open'
+    groupId: string
+  } | null>(null)
+  const [worktreeRemove, setWorktreeRemove] = useState<{
+    groupId: string
+    force?: { path: string; branch: string }
+  } | null>(null)
+  const worktreeActions = mux.caps.worktrees
+    ? {
+        onNewWorktree: (groupId: string) =>
+          setWorktreeDialog({ mode: 'new', groupId }),
+        onOpenWorktree: (groupId: string) =>
+          setWorktreeDialog({ mode: 'open', groupId }),
+        onRemoveWorktree: (groupId: string) => setWorktreeRemove({ groupId }),
+      }
+    : {}
   const groupActions: GroupActions | undefined = mux.caps.groups
     ? {
         noun: groupNoun,
@@ -288,6 +317,7 @@ export default function App({
         onRename: renameGroup,
         onClose: setPendingGroupCloseId,
         canRename: (id) => !isDefaultTmuxGroup(id),
+        ...worktreeActions,
       }
     : undefined
   // Tab bars show the current group only; the sidebar shows every group.
@@ -762,7 +792,7 @@ export default function App({
     closeGroup(id).catch((err) => {
       if (err instanceof RequestError && err.code === 'has_worktrees') {
         showToast(
-          'This workspace has linked worktrees; close it in Herdr',
+          'This workspace has worktrees; remove them first, or close it in Herdr',
           'warning',
         )
       } else if (
@@ -770,6 +800,29 @@ export default function App({
       ) {
         showToast(`Could not close the ${groupNoun}`, 'danger')
       }
+    })
+  }
+
+  // A dirty worktree is asked about a second time; any other refusal is a
+  // toast, and the list is read again.
+  const confirmWorktreeRemove = (
+    groupId: string,
+    w: { force: boolean; path: string; branch: string },
+  ) => {
+    setWorktreeRemove(null)
+    removeWorktree(groupId, w).catch((err) => {
+      const code = err instanceof RequestError ? err.code : ''
+      if (code === 'dirty' && !w.force) {
+        setWorktreeRemove({
+          groupId,
+          force: { path: w.path, branch: w.branch },
+        })
+        return
+      }
+      const variant =
+        code === 'changed' ? 'info' : code === 'unknown' ? 'warning' : 'danger'
+      showToast(worktreeProblem(code), variant)
+      if (code !== 'unknown') void refreshSessions()
     })
   }
 
@@ -1183,6 +1236,41 @@ export default function App({
             if (isMobile && isOpen()) setSidebarOpen(false)
           }}
         />
+      )}
+      {worktreeDialog && (
+        <WorktreeDialog
+          mode={worktreeDialog.mode}
+          groupId={worktreeDialog.groupId}
+          onClose={() => setWorktreeDialog(null)}
+          onCreate={async (w, isOpen) => {
+            await createWorktree(w, isOpen)
+            if (isMobile && isOpen()) setSidebarOpen(false)
+          }}
+          onOpen={async (branch, isOpen) => {
+            await openWorktree(worktreeDialog.groupId, branch, isOpen)
+            if (isMobile && isOpen()) setSidebarOpen(false)
+          }}
+          onShow={(id) => {
+            showGroup(id)
+            if (isMobile) setSidebarOpen(false)
+          }}
+        />
+      )}
+      {worktreeRemove && (
+        <WorktreeRemoveDialog
+          groupId={worktreeRemove.groupId}
+          force={worktreeRemove.force}
+          onConfirm={(w) => confirmWorktreeRemove(worktreeRemove.groupId, w)}
+          onCancel={() => setWorktreeRemove(null)}
+        >
+          <RunningLine
+            names={uniqueNames(
+              sessions
+                .filter((s) => s.groupId === worktreeRemove.groupId)
+                .flatMap((s) => s.commands ?? []),
+            )}
+          />
+        </WorktreeRemoveDialog>
       )}
       <ConfirmDialog
         isOpen={!!pendingPane}

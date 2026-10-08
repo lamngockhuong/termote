@@ -38,10 +38,19 @@ export interface MuxTab {
   processes?: MuxProcess[]
 }
 
+// A group's place in a Herdr worktree group: a linked worktree, or the
+// repository's own checkout. branch is read in the background, so it can
+// be missing for a moment.
+export interface MuxGroupWorktree {
+  linked: boolean
+  branch?: string
+}
+
 export interface MuxGroup {
   id: string
   name: string
   tabs: MuxTab[]
+  worktree?: MuxGroupWorktree
 }
 
 export interface MuxSnapshot {
@@ -73,6 +82,9 @@ export interface MuxSnapshot {
     // Claude Code or Codex can be started in a pane that shows only its
     // shell (/agent/start): Herdr 0.8.2 or later, not on Windows.
     agentStart?: boolean
+    // Git worktree workspaces can be listed, created, opened and removed
+    // (/worktrees): Herdr 0.9.2 or later, not on Windows.
+    worktrees?: boolean
   }
   groups: MuxGroup[]
 }
@@ -236,12 +248,13 @@ async function groupWrite(
   method: 'POST' | 'PATCH' | 'DELETE',
   path: string,
   body?: unknown,
-): Promise<{ id?: string }> {
+  timeoutMs = REQUEST_TIMEOUT_MS,
+): Promise<{ id?: string; alreadyOpen?: boolean }> {
   const res = await fetch(`${API_BASE}${path}`, {
     method,
     headers: { 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    signal: AbortSignal.timeout(timeoutMs),
   })
   if (!res.ok) throw await requestError(res)
   return res.json()
@@ -261,6 +274,103 @@ export async function renameGroup(id: string, name: string): Promise<void> {
 // Ends the group and everything running in it.
 export async function closeGroup(id: string): Promise<void> {
   await groupWrite('DELETE', groupPath(id))
+}
+
+// A create or remove answers once git is done: the server waits up to 5s
+// for another change, then 60s for git.
+export const WORKTREE_REQUEST_TIMEOUT_MS = 75_000
+
+// One checkout of a workspace's repository, its main one included.
+// openable: a linked worktree on a branch, which Open worktree can open.
+// groupId: the workspace showing it, when one does.
+export interface Worktree {
+  path: string
+  branch?: string
+  linked: boolean
+  openable: boolean
+  groupId?: string
+}
+
+export interface WorktreeList {
+  repoName: string
+  worktrees: Worktree[]
+  // Local branches, most recently committed first: bases of a new branch.
+  branches: string[]
+}
+
+// The worktrees of the workspace's repository and its local branches.
+export async function listWorktrees(groupId: string): Promise<WorktreeList> {
+  const res = await fetch(
+    `${API_BASE}/worktrees?groupId=${encodeURIComponent(groupId)}`,
+    { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) },
+  )
+  if (!res.ok) throw await requestError(res)
+  return res.json()
+}
+
+// A worktree change that ran out of time may still finish in Herdr: the
+// client cannot tell, so it is reported as the server's unknown.
+async function worktreeWrite(
+  method: 'POST' | 'DELETE',
+  path: string,
+  body: unknown,
+  timeoutMs: number,
+) {
+  try {
+    return await groupWrite(method, path, body, timeoutMs)
+  } catch (err) {
+    const name = (err as Error)?.name
+    if (name === 'TimeoutError' || name === 'AbortError') {
+      throw new RequestError(0, 'unknown', 'no answer in time')
+    }
+    throw err
+  }
+}
+
+// Checks out branch in a new worktree of the workspace's repository, made
+// from base ('' for the current HEAD) when it is a new branch, and returns
+// the new workspace's id.
+export async function createWorktree(w: {
+  groupId: string
+  branch: string
+  base: string
+  label: string
+}): Promise<string> {
+  const data = await worktreeWrite(
+    'POST',
+    '/worktrees',
+    w,
+    WORKTREE_REQUEST_TIMEOUT_MS,
+  )
+  return data.id ?? ''
+}
+
+// Opens the existing worktree of branch and returns its workspace's id.
+export async function openWorktree(
+  groupId: string,
+  branch: string,
+): Promise<string> {
+  const data = await worktreeWrite(
+    'POST',
+    '/worktrees/open',
+    { groupId, branch },
+    REQUEST_TIMEOUT_MS,
+  )
+  return data.id ?? ''
+}
+
+// Deletes the worktree workspace groupId shows and closes it. path and
+// branch are what the user confirmed: the server removes nothing else.
+export async function removeWorktree(
+  groupId: string,
+  w: { force: boolean; path: string; branch: string },
+): Promise<void> {
+  await worktreeWrite(
+    'DELETE',
+    `/worktrees/${encodeURIComponent(groupId)}`,
+    w,
+    WORKTREE_REQUEST_TIMEOUT_MS,
+  )
 }
 
 // Closes one pane of a split tab (herdr); the tab stays with its other panes.

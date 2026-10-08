@@ -1446,3 +1446,97 @@ describe('SessionSidebar — group actions', () => {
     expect(a.onNew).toHaveBeenCalled()
   })
 })
+
+describe('SessionSidebar — worktree actions', () => {
+  const REPO: Session = {
+    id: 'w1:t1',
+    name: 'shell',
+    icon: '💻',
+    description: '',
+    groupId: 'w1',
+  }
+  const WT: Session = { ...REPO, id: 'w2:t1', groupId: 'w2' }
+  const actions = (over = {}) => ({
+    noun: 'workspace',
+    onNew: vi.fn(),
+    onRename: vi.fn(async () => {}),
+    onClose: vi.fn(),
+    canRename: () => true,
+    ...over,
+  })
+  const worktrees = () => ({
+    onNewWorktree: vi.fn(),
+    onOpenWorktree: vi.fn(),
+    onRemoveWorktree: vi.fn(),
+  })
+
+  beforeEach(() => localStorage.clear())
+
+  const renderWith = (groupActions: ReturnType<typeof actions>) =>
+    render(
+      <SessionSidebar
+        sessions={[REPO, WT]}
+        groups={[
+          {
+            id: 'w1',
+            name: 'repo',
+            worktree: { linked: false, branch: 'main' },
+          },
+          {
+            id: 'w2',
+            name: 'feature',
+            worktree: { linked: true, branch: 'feat/Very-Long-Name' },
+          },
+        ]}
+        activeId="w1:t1"
+        onSelect={vi.fn()}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+        groupActions={groupActions}
+      />,
+    )
+
+  const openMenu = (name: string) =>
+    fireEvent.click(
+      screen.getByRole('button', { name: `Actions for workspace ${name}` }),
+    )
+
+  it('offers no worktree item without the callbacks', () => {
+    renderWith(actions())
+    openMenu('feature')
+    expect(screen.queryByRole('menuitem', { name: 'New worktree' })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: 'Open worktree' })).toBeNull()
+    expect(
+      screen.queryByRole('menuitem', { name: 'Remove worktree' }),
+    ).toBeNull()
+  })
+
+  it('offers Remove on a linked worktree only', () => {
+    const w = worktrees()
+    renderWith(actions(w))
+    openMenu('repo')
+    expect(
+      screen.queryByRole('menuitem', { name: 'Remove worktree' }),
+    ).toBeNull()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'New worktree' }))
+    expect(w.onNewWorktree).toHaveBeenCalledWith('w1')
+    openMenu('feature')
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove worktree' }))
+    expect(w.onRemoveWorktree).toHaveBeenCalledWith('w2')
+    // A linked worktree is no source for New or Open
+    openMenu('feature')
+    expect(screen.queryByRole('menuitem', { name: 'New worktree' })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: 'Open worktree' })).toBeNull()
+    openMenu('repo')
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Open worktree' }))
+    expect(w.onOpenWorktree).toHaveBeenCalledWith('w1')
+  })
+
+  it('shows the branch after the name, in its own case, with a title', () => {
+    renderWith(actions())
+    const branch = screen.getByTitle('feat/Very-Long-Name')
+    expect(branch).toHaveTextContent('feat/Very-Long-Name')
+    expect(branch.className).toContain('normal-case')
+    expect(screen.getByTitle('main')).toHaveTextContent('main')
+  })
+})

@@ -8,6 +8,7 @@ import {
   createFile,
   createGroup,
   createTab,
+  createWorktree,
   deleteFile,
   fetchAgentCommands,
   fetchAgentPrompt,
@@ -23,9 +24,12 @@ import {
   fetchTranscript,
   findFiles,
   getPushKey,
+  listWorktrees,
   logout,
+  openWorktree,
   REQUEST_TIMEOUT_MS,
   RequestError,
+  removeWorktree,
   renameGroup,
   renameTab,
   restoreFile,
@@ -37,6 +41,7 @@ import {
   sendKeys,
   subscribePush,
   unsubscribePush,
+  WORKTREE_REQUEST_TIMEOUT_MS,
 } from './use-mux-api'
 
 // Helper: create a mock fetch that captures calls and returns responses
@@ -374,6 +379,84 @@ describe('group API client', () => {
     const err = await closeGroup('w1').catch((e) => e)
     expect(err).toBeInstanceOf(RequestError)
     expect(err.code).toBe('')
+  })
+})
+
+describe('worktree API client', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  it('lists, creates, opens and removes with JSON writes', async () => {
+    const list = { repoName: 'repo', worktrees: [], branches: ['main'] }
+    const { calls } = mockFetch(
+      { body: list },
+      { body: { ok: true, id: 'w2' } },
+      { body: { ok: true, id: 'w3', alreadyOpen: true } },
+      { body: { ok: true } },
+    )
+    expect(await listWorktrees('w1')).toEqual(list)
+    const w = { groupId: 'w1', branch: 'feat/x', base: '', label: '' }
+    expect(await createWorktree(w)).toBe('w2')
+    expect(await openWorktree('w1', 'old')).toBe('w3')
+    await removeWorktree('w2', {
+      force: false,
+      path: '/wt/x',
+      branch: 'feat/x',
+    })
+    expect(calls.map((c) => [c.url, c.init?.method, c.init?.body])).toEqual([
+      ['/api/mux/worktrees?groupId=w1', undefined, undefined],
+      ['/api/mux/worktrees', 'POST', JSON.stringify(w)],
+      ['/api/mux/worktrees/open', 'POST', '{"groupId":"w1","branch":"old"}'],
+      [
+        '/api/mux/worktrees/w2',
+        'DELETE',
+        '{"force":false,"path":"/wt/x","branch":"feat/x"}',
+      ],
+    ])
+  })
+
+  it('answers an empty id when the server sends none', async () => {
+    mockFetch({ body: { ok: true } })
+    expect(
+      await createWorktree({ groupId: 'w1', branch: 'a', base: '', label: '' }),
+    ).toBe('')
+    mockFetch({ body: { ok: true } })
+    expect(await openWorktree('w1', 'a')).toBe('')
+  })
+
+  it('throws the server code', async () => {
+    mockFetch({ body: { error: 'x', code: 'not_git' }, status: 409 })
+    await expect(listWorktrees('w1')).rejects.toMatchObject({
+      code: 'not_git',
+    })
+    mockFetch({ body: { error: 'x', code: 'dirty' }, status: 409 })
+    await expect(
+      removeWorktree('w2', { force: false, path: '/p', branch: 'b' }),
+    ).rejects.toMatchObject({ code: 'dirty' })
+  })
+
+  it('reports its own timeout or abort as unknown, and other failures as they are', async () => {
+    for (const name of ['TimeoutError', 'AbortError']) {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => {
+          throw new DOMException('gone', name)
+        }),
+      )
+      await expect(
+        createWorktree({ groupId: 'w1', branch: 'a', base: '', label: '' }),
+      ).rejects.toMatchObject({ status: 0, code: 'unknown' })
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new TypeError('network')
+      }),
+    )
+    await expect(openWorktree('w1', 'a')).rejects.toThrow('network')
+    expect(WORKTREE_REQUEST_TIMEOUT_MS).toBe(75_000)
   })
 })
 

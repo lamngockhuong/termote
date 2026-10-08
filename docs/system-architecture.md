@@ -202,7 +202,7 @@ existing pane from the last snapshot.
 ### Mux API (REST, JSON)
 
 ```bash
-GET    /api/mux/snapshot          → {apiVersion, backend, caps, groups:[{id,name,tabs:[{id,name,active,processes?,panes:[{id,active,title,agent,process?}]}]}]}
+GET    /api/mux/snapshot          → {apiVersion, backend, caps, groups:[{id,name,worktree?:{linked,branch?},tabs:[{id,name,active,processes?,panes:[{id,active,title,agent,process?}]}]}]}
 POST   /api/mux/tabs               body: {groupId, name}       → {ok, id}
 PATCH  /api/mux/tabs/{id}          body: {name}                → {ok}
 DELETE /api/mux/tabs/{id}                                       → {ok}
@@ -211,6 +211,10 @@ DELETE /api/mux/panes/{id}                                      → {ok}   (herd
 POST   /api/mux/groups             body: {name, cwd}            → {ok, id} | {error, code}   (caps.groups)
 PATCH  /api/mux/groups/{id}        body: {name}                 → {ok} | {error, code}
 DELETE /api/mux/groups/{id}                                     → {ok} | {error, code}
+GET    /api/mux/worktrees?groupId=                              → {repoName, worktrees:[{path,branch?,linked,openable,groupId?}], branches} | {error, code}   (caps.worktrees)
+POST   /api/mux/worktrees          body: {groupId, branch, base, label}  → {ok, id} | {error, code}
+POST   /api/mux/worktrees/open     body: {groupId, branch}      → {ok, id, alreadyOpen} | {error, code}
+DELETE /api/mux/worktrees/{id}     body: {force, path, branch}  → {ok} | {error, code}
 POST   /api/mux/panes/{id}/keys    body: {keys}                 → {ok}
 POST   /api/mux/panes/{id}/scroll  body: {lines}                → {ok}   (caps.scroll only, else 501)
 GET    /api/mux/health             → {status, apiVersion, backend, version, pid, install}
@@ -285,6 +289,23 @@ older Herdr's `invalid_request` naming the method), 504 `start_unknown` (the `ag
 call timed out; the start is followed as if typed) and 500 `start_failed`. The Chat view is
 offered on such a pane and holds the start buttons; Codex writes its rollout only with its first
 message, so after a Codex start the Chat view asks for that message in the terminal.
+
+`/worktrees` (`caps.worktrees`: Herdr 0.9.2 or later, not on Windows) drives Herdr's
+`worktree.*` calls from a workspace's menu. The GET lists the worktrees of the workspace's
+repository (`worktree.list`) and its local branches, newest commit first, read by the server's
+own git (`for-each-ref`, at most 500). The POST checks out `branch` in a new worktree, made from
+`base` (empty: the current HEAD) when the branch is new; Herdr ignores the base of a branch that
+exists, so that pair answers 409 `branch_exists` instead. `open` opens an existing linked
+worktree (by its branch), never a branch without one. The DELETE carries the path and branch the
+user confirmed and removes nothing unless the workspace still shows that linked checkout (409
+`changed`); without `force` a worktree with changes answers 409 `dirty`, which the PWA asks
+about a second time. Removing deletes the checkout (ignored files too, and with `force` the
+panes end first) and closes the workspace; the branch is kept. Changes run one at a time (503
+`busy` after a 5 s wait) and outlive the client for up to 60 s; past that the answer is 504
+`unknown` (Herdr may still finish). The snapshot's `worktree` marks a workspace of a Herdr
+worktree group (`linked`: a linked worktree, else the repository's own checkout); its `branch`
+is read from `worktree.list` in the background, at most every 10 s per repository and never on
+the snapshot's own path, so it can be missing for a moment. See Security Model.
 
 `caps.scroll` (Herdr): the stream only carries screen renders, so no history reaches the
 xterm.js scrollback. The PWA turns the mouse wheel and the scroll buttons into
@@ -1043,6 +1064,14 @@ termote update --force           # Force reinstall current version
     dialled must be public (no loopback, private, link-local, CGNAT, ULA, multicast or
     IPv4-mapped), with no proxy and no redirects. Payloads carry ids only; the names are read
     by the service worker from the snapshot and stripped of control, bidi and zero-width space characters
+15. **Worktrees** (Herdr): writes go through the write guard and `requireWriteRole`; the GET
+    refuses any cross-site or `Sec-Fetch-Site: none` read. Branch and base names are checked
+    against git's ref rules and more (no leading `-`, which Herdr would pass to git as an option,
+    no `HEAD`, no control, format or space character, so a name cannot pose as another in the
+    Remove confirmation). Herdr never gets `trust_repository`, a `path` or `close_group`; its
+    messages (git's stderr, with paths) are logged, never returned. A remove is bound to the
+    path and branch the user confirmed. Create and remove run git with the user's own config,
+    hooks and filters included, as typing the command would; a remove deletes ignored files.
 
 ## Scalability Notes
 

@@ -328,6 +328,9 @@ vi.mock('./components/session-sidebar', () => ({
       onRename: (id: string, name: string) => Promise<void>
       onClose: (id: string) => void
       canRename: (id: string) => boolean
+      onNewWorktree?: (id: string) => void
+      onOpenWorktree?: (id: string) => void
+      onRemoveWorktree?: (id: string) => void
     }
     onAdd?: (name: string, icon?: string) => void
     onSelect?: (id: string) => void
@@ -368,10 +371,30 @@ vi.mock('./components/session-sidebar', () => ({
           <button onClick={() => groupActions.onClose('$3')}>
             GroupCloseWork
           </button>
+          {groupActions.onNewWorktree && (
+            <button onClick={() => groupActions.onNewWorktree?.('$3')}>
+              WorktreeNew
+            </button>
+          )}
+          {groupActions.onOpenWorktree && (
+            <button onClick={() => groupActions.onOpenWorktree?.('$3')}>
+              WorktreeOpen
+            </button>
+          )}
+          {groupActions.onRemoveWorktree && (
+            <button onClick={() => groupActions.onRemoveWorktree?.('$3')}>
+              WorktreeRemove
+            </button>
+          )}
         </>
       )}
       {groupActions && isMobile && (
         <button onClick={groupActions.onNew}>MobileGroupNew</button>
+      )}
+      {groupActions?.onNewWorktree && isMobile && (
+        <button onClick={() => groupActions.onNewWorktree?.('$3')}>
+          MobileWorktreeNew
+        </button>
       )}
     </div>
   ),
@@ -541,6 +564,71 @@ vi.mock('./components/command-history-dropdown', () => ({
     <div data-testid="history-dropdown">
       <button onClick={onClose}>CloseHistory</button>
       <button onClick={() => onSelect('git status')}>SelectHistory</button>
+    </div>
+  ),
+}))
+
+vi.mock('./components/worktree-dialog', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./components/worktree-dialog')>()),
+  WorktreeDialog: ({
+    mode,
+    groupId,
+    onClose,
+    onCreate,
+    onOpen,
+    onShow,
+  }: {
+    mode: string
+    groupId: string
+    onClose: () => void
+    onCreate: (
+      w: { groupId: string; branch: string; base: string; label: string },
+      isOpen: () => boolean,
+    ) => Promise<void>
+    onOpen: (branch: string, isOpen: () => boolean) => Promise<void>
+    onShow: (id: string) => void
+  }) => (
+    <div data-testid="worktree-dialog">
+      {mode} {groupId}
+      <button
+        onClick={() =>
+          onCreate(
+            { groupId, branch: 'feat/x', base: '', label: '' },
+            () => true,
+          )
+        }
+      >
+        DlgCreate
+      </button>
+      <button onClick={() => onOpen('feat/x', () => true)}>DlgOpen</button>
+      <button onClick={() => onShow('w7')}>DlgShow</button>
+      <button onClick={onClose}>DlgClose</button>
+    </div>
+  ),
+  WorktreeRemoveDialog: ({
+    groupId,
+    force,
+    onConfirm,
+    onCancel,
+    children,
+  }: {
+    groupId: string
+    force?: { path: string; branch: string }
+    onConfirm: (w: { force: boolean; path: string; branch: string }) => void
+    onCancel: () => void
+    children?: React.ReactNode
+  }) => (
+    <div data-testid="worktree-remove">
+      {force ? 'second' : 'first'} {groupId}
+      {children}
+      <button onClick={onCancel}>RemoveNo</button>
+      <button
+        onClick={() =>
+          onConfirm({ force: !!force, path: '/wt/feat-x', branch: 'feat/x' })
+        }
+      >
+        RemoveYes
+      </button>
     </div>
   ),
 }))
@@ -3578,6 +3666,142 @@ describe('App — group actions', () => {
     expect(closeGroup).not.toHaveBeenCalled()
   })
 
+  describe('worktrees', () => {
+    const removeWorktree = vi.fn(async () => {})
+    const refreshSessions = vi.fn(async () => {})
+    const createWorktree = vi.fn(async () => {})
+    const openWorktree = vi.fn(async () => {})
+    const showGroup = vi.fn(async () => {})
+    const withWorktrees = (worktrees: boolean) => {
+      withGroups('herdr')
+      const base = mockUseLocalSessions()
+      mockUseLocalSessions.mockReturnValue({
+        ...base,
+        removeWorktree,
+        refreshSessions,
+        createWorktree,
+        openWorktree,
+        showGroup,
+        mux: { ...base.mux, caps: { ...base.mux.caps, worktrees } },
+      } as any)
+    }
+    beforeEach(() => {
+      removeWorktree.mockReset()
+      refreshSessions.mockClear()
+    })
+
+    it('offers nothing without caps.worktrees', async () => {
+      withWorktrees(false)
+      render(<App />)
+      await screen.findByText('GroupCloseWork')
+      expect(screen.queryByText('WorktreeNew')).toBeNull()
+      expect(screen.queryByText('WorktreeRemove')).toBeNull()
+    })
+
+    it('opens the New worktree dialog for the group', async () => {
+      withWorktrees(true)
+      render(<App />)
+      fireEvent.click(await screen.findByText('WorktreeNew'))
+      expect(screen.getByTestId('worktree-dialog')).toHaveTextContent('new $3')
+    })
+
+    it('runs the dialog create, open and show, then closes it', async () => {
+      withWorktrees(true)
+      render(<App />)
+      fireEvent.click(await screen.findByText('WorktreeOpen'))
+      expect(screen.getByTestId('worktree-dialog')).toHaveTextContent('open $3')
+      await act(async () => fireEvent.click(screen.getByText('DlgCreate')))
+      await act(async () => fireEvent.click(screen.getByText('DlgOpen')))
+      fireEvent.click(screen.getByText('DlgShow'))
+      expect(createWorktree).toHaveBeenCalledWith(
+        { groupId: '$3', branch: 'feat/x', base: '', label: '' },
+        expect.any(Function),
+      )
+      expect(openWorktree).toHaveBeenCalledWith(
+        '$3',
+        'feat/x',
+        expect.any(Function),
+      )
+      expect(showGroup).toHaveBeenCalledWith('w7')
+      fireEvent.click(screen.getByText('DlgClose'))
+      expect(screen.queryByTestId('worktree-dialog')).toBeNull()
+    })
+
+    it('closes the mobile sheet on what the dialog made or showed', async () => {
+      mockIsMobile.mockReturnValue(true)
+      withWorktrees(true)
+      render(<App />)
+      fireEvent.click((await screen.findAllByText('MobileWorktreeNew'))[0])
+      await act(async () => fireEvent.click(screen.getByText('DlgCreate')))
+      await act(async () => fireEvent.click(screen.getByText('DlgOpen')))
+      fireEvent.click(screen.getByText('DlgShow'))
+      for (const el of screen.getAllByTestId('session-sidebar')) {
+        expect(el).toHaveAttribute('data-open', 'false')
+      }
+      mockIsMobile.mockReturnValue(false)
+    })
+
+    it('cancels a removal, and words a failure without a code', async () => {
+      withWorktrees(true)
+      render(<App />)
+      fireEvent.click(await screen.findByText('WorktreeRemove'))
+      fireEvent.click(screen.getByText('RemoveNo'))
+      expect(screen.queryByTestId('worktree-remove')).toBeNull()
+      expect(removeWorktree).not.toHaveBeenCalled()
+      removeWorktree.mockRejectedValueOnce(new TypeError('fetch'))
+      fireEvent.click(screen.getByText('WorktreeRemove'))
+      await act(async () => fireEvent.click(screen.getByText('RemoveYes')))
+      expect(
+        await screen.findByText('Could not change the worktree'),
+      ).toBeInTheDocument()
+    })
+
+    it('asks again with force for a dirty worktree, same checkout', async () => {
+      const { RequestError } = await import('./hooks/use-mux-api')
+      withWorktrees(true)
+      removeWorktree.mockRejectedValueOnce(
+        new RequestError(409, 'dirty', 'dirty'),
+      )
+      render(<App />)
+      fireEvent.click(await screen.findByText('WorktreeRemove'))
+      await act(async () => fireEvent.click(screen.getByText('RemoveYes')))
+      expect(removeWorktree).toHaveBeenCalledWith('$3', {
+        force: false,
+        path: '/wt/feat-x',
+        branch: 'feat/x',
+      })
+      expect(screen.getByTestId('worktree-remove')).toHaveTextContent(
+        'second $3',
+      )
+      await act(async () => fireEvent.click(screen.getByText('RemoveYes')))
+      expect(removeWorktree).toHaveBeenLastCalledWith('$3', {
+        force: true,
+        path: '/wt/feat-x',
+        branch: 'feat/x',
+      })
+      expect(screen.queryByTestId('worktree-remove')).toBeNull()
+    })
+
+    it('words other refusals and reads the list again', async () => {
+      const { RequestError } = await import('./hooks/use-mux-api')
+      withWorktrees(true)
+      render(<App />)
+      for (const [code, text] of [
+        ['changed', 'This worktree changed; look again'],
+        ['unknown', 'Herdr is still working on it; check the list in a moment'],
+        ['not_linked', 'Herdr does not manage this worktree'],
+      ] as const) {
+        removeWorktree.mockRejectedValueOnce(new RequestError(409, code, 'x'))
+        fireEvent.click(screen.getByText('WorktreeRemove'))
+        await act(async () => fireEvent.click(screen.getByText('RemoveYes')))
+        expect(await screen.findByText(text)).toBeInTheDocument()
+        expect(screen.queryByTestId('worktree-remove')).toBeNull()
+      }
+      // unknown is followed by the hook itself
+      expect(refreshSessions).toHaveBeenCalledTimes(2)
+    })
+  })
+
   it('tells why a workspace was not closed', async () => {
     const { RequestError } = await import('./hooks/use-mux-api')
     withGroups('herdr')
@@ -3585,7 +3809,7 @@ describe('App — group actions', () => {
     for (const [err, text] of [
       [
         new RequestError(409, 'has_worktrees', 'x'),
-        'This workspace has linked worktrees; close it in Herdr',
+        'This workspace has worktrees; remove them first, or close it in Herdr',
       ],
       [new RequestError(500, '', 'x'), 'Could not close the workspace'],
     ] as const) {

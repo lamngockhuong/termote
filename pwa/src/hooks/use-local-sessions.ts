@@ -15,6 +15,9 @@ import { uniqueNames } from '../utils/running-commands'
 import {
   closeGroup as apiCloseGroup,
   createGroup as apiCreateGroup,
+  createWorktree as apiCreateWorktree,
+  openWorktree as apiOpenWorktree,
+  removeWorktree as apiRemoveWorktree,
   renameGroup as apiRenameGroup,
   closePane,
   closeTab,
@@ -22,6 +25,7 @@ import {
   fetchHealth,
   fetchSnapshot,
   type MuxSnapshot,
+  RequestError,
   renameTab,
   selectTab,
 } from './use-mux-api'
@@ -207,6 +211,7 @@ export function buildSessions(
       id: g.id,
       name: g.name,
       agentStatus: worstAgentStatus(groupTabs.map((t) => t.agentStatus)),
+      ...(g.worktree && { worktree: g.worktree }),
     })
   }
   return { sessions, groups, serverActive, activeByGroup }
@@ -517,13 +522,11 @@ export function useLocalSessions(pollInterval = 5) {
     [sessions, activeSession?.id],
   )
 
-  // Open a group and show its first tab once a snapshot has it, unless show
-  // says no by then (the dialog was cancelled meanwhile). Refusals
-  // (RequestError with the server's code) reach the caller.
-  const createGroup = useCallback(
-    async (name: string, cwd = '', show: () => boolean = () => true) => {
-      const id = await apiCreateGroup(name, cwd)
-      if (!show()) {
+  // Show a group once a snapshot has it, unless show says no by then (the
+  // dialog was closed meanwhile).
+  const showNewGroup = useCallback(
+    async (id: string, show: () => boolean) => {
+      if (!id || !show()) {
         await refreshSessions()
         return
       }
@@ -535,6 +538,17 @@ export function useLocalSessions(pollInterval = 5) {
     [refreshSessions, storeSelection],
   )
 
+  // Open a group and show its first tab once a snapshot has it, unless show
+  // says no by then (the dialog was cancelled meanwhile). Refusals
+  // (RequestError with the server's code) reach the caller.
+  const createGroup = useCallback(
+    async (name: string, cwd = '', show: () => boolean = () => true) => {
+      const id = await apiCreateGroup(name, cwd)
+      await showNewGroup(id, show)
+    },
+    [showNewGroup],
+  )
+
   const renameGroup = useCallback(
     async (id: string, name: string) => {
       await apiRenameGroup(id, name)
@@ -543,11 +557,51 @@ export function useLocalSessions(pollInterval = 5) {
     [refreshSessions],
   )
 
-  // Close a group with everything in it. When it is the one on screen, the
-  // next snapshot shows the first group left.
-  const closeGroup = useCallback(
-    async (id: string) => {
-      await apiCloseGroup(id)
+  // A worktree change Herdr may still be making (unknown) is followed by a
+  // snapshot anyway, so the list shows what happened.
+  const refreshOnUnknown = useCallback(
+    async (err: unknown) => {
+      if (err instanceof RequestError && err.code === 'unknown') {
+        await refreshSessions()
+      }
+      throw err
+    },
+    [refreshSessions],
+  )
+
+  // Create a worktree workspace from groupId's repository and show it.
+  const createWorktree = useCallback(
+    async (
+      w: { groupId: string; branch: string; base: string; label: string },
+      show: () => boolean = () => true,
+    ) => {
+      const id = await apiCreateWorktree(w).catch(refreshOnUnknown)
+      await showNewGroup(id, show)
+    },
+    [refreshOnUnknown, showNewGroup],
+  )
+
+  // Open an existing worktree of groupId's repository and show it.
+  const openWorktree = useCallback(
+    async (
+      groupId: string,
+      branch: string,
+      show: () => boolean = () => true,
+    ) => {
+      const id = await apiOpenWorktree(groupId, branch).catch(refreshOnUnknown)
+      await showNewGroup(id, show)
+    },
+    [refreshOnUnknown, showNewGroup],
+  )
+
+  // Show a group that is already open.
+  const showGroup = useCallback(
+    (id: string) => showNewGroup(id, () => true),
+    [showNewGroup],
+  )
+
+  const forgetGroup = useCallback(
+    (id: string) => {
       const { backend } = muxRef.current
       for (const s of sessions) {
         if (s.groupId === id) {
@@ -555,9 +609,30 @@ export function useLocalSessions(pollInterval = 5) {
         }
       }
       saveMeta(metaRef.current)
+    },
+    [sessions],
+  )
+
+  // Close a group with everything in it. When it is the one on screen, the
+  // next snapshot shows the first group left.
+  const closeGroup = useCallback(
+    async (id: string) => {
+      await apiCloseGroup(id)
+      forgetGroup(id)
       await refreshSessions()
     },
-    [sessions, refreshSessions],
+    [forgetGroup, refreshSessions],
+  )
+
+  // Remove a worktree workspace: its checkout is deleted and the workspace
+  // closed, like closeGroup.
+  const removeWorktree = useCallback(
+    async (id: string, w: { force: boolean; path: string; branch: string }) => {
+      await apiRemoveWorktree(id, w).catch(refreshOnUnknown)
+      forgetGroup(id)
+      await refreshSessions()
+    },
+    [forgetGroup, refreshOnUnknown, refreshSessions],
   )
 
   return {
@@ -578,6 +653,10 @@ export function useLocalSessions(pollInterval = 5) {
     createGroup,
     renameGroup,
     closeGroup,
+    createWorktree,
+    openWorktree,
+    showGroup,
+    removeWorktree,
     isReady,
     isServerReachable,
     refreshSessions,
