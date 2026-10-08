@@ -67,6 +67,7 @@ function NoAgentChat({ mux, session, showView, agentStart }: ViewProps) {
     return (
       <Centered>
         <StartAgentPanel
+          kinds={mux.caps.agentStartCodex ? ['claude', 'codex'] : ['claude']}
           record={record}
           onStart={(kind) => agentStart.start(paneId, kind)}
         />

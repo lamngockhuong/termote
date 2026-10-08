@@ -411,6 +411,41 @@ có Chat view cho Codex.
 - [ ] Herdr: các nút trên thẻ xin duyệt chọn đúng lựa chọn, "Cancel (Esc)" gửi Escape
 - [ ] Các hộp thoại khác của Codex (chọn model, ...) chỉ xem được trên cả hai backend
 
+### Khởi động agent (Herdr)
+
+Herdr 0.8.2 trở lên, `termote-dev serve --mux herdr` (hoặc `termote start --mux herdr`).
+
+- [ ] Pane đang rảnh có view Chat với hai nút "Claude Code" và "Codex"; pane đang chạy `vim` thì
+      không; tmux không có nút nào và `POST …/agent/start` trả 501
+- [ ] Claude Code chạy, trạng thái đi từ `starting` sang `ready`, hội thoại hiện ra; tin đầu tiên
+      gửi từ view Chat tới nơi
+- [ ] Codex chạy bằng `codex --no-daemon`; view Chat nhắc gõ tin đầu tiên trong terminal, sau đó
+      hội thoại hiện ra
+- [ ] Gõ dở `echo hi` rồi khởi động: chỉ agent chạy. Tương tự ở dấu nhắc tiếp dòng và trong
+      `cat <<EOF`
+- [ ] Thư mục mới mà Claude Code hỏi tin cậy: PWA mở Terminal kèm dòng "Claude Code is asking
+      something in the terminal."
+- [ ] `PATH` không có `codex`: sau vài giây trạng thái `exited` và có cảnh báo kèm Open terminal;
+      khởi động lại ngay thì báo Herdr còn giữ lần trước (409 `start_pending`, không gõ gì), qua
+      30 giây thì chạy được
+- [ ] `curl` POST tới pane đang chạy `vim` → 409 `pane_busy`, không gõ gì (màn hình không đổi)
+- [ ] Hai thiết bị cùng khởi động: một bên nhận 200, bên kia 409 `starting` và theo dõi cùng lần
+      khởi động
+- [ ] `curl` với `{"kind":"bash"}` → 400 `invalid_kind`
+
+Windows, Herdr 0.8.2 trở lên, shell của pane là pwsh, `termote start --mux herdr`.
+
+- [ ] Pane pwsh đang rảnh chỉ có nút "Claude Code" (không có "Codex"); khởi động tới `ready`, hoặc
+      `blocked` ở hộp thoại tin cậy thư mục (PWA mở Terminal)
+- [ ] Đang chạy `ping -t 127.0.0.1`, `nvim` hay một `cmd` lồng nhau, rồi
+      `curl` POST → 409 `pane_busy` và chương trình vẫn chạy (Ctrl+C không tới nó)
+- [ ] `Read-Host` đang chờ, hoặc đang gõ dở, rồi khởi động: dấu nhắc được xóa và chỉ agent chạy
+      (`Start-Sleep 60` và vòng lặp `while ($true) {}` cũng vậy)
+- [ ] `Start-Job { Start-Sleep 300 }` đang chạy: 409 `pane_busy` (từ chối cho an toàn); sau
+      `Remove-Job -Force` pane rảnh trở lại
+- [ ] `curl` với `{"kind":"codex"}` → 501 `unsupported`, không gõ gì; `caps.agentStartCodex` trong
+      snapshot là false
+
 ---
 
 ## Files và Changes

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"regexp"
 	"slices"
@@ -19,7 +20,8 @@ func shortStart(t *testing.T) {
 	idle, poll, clear, call := agentStartIdleWait, agentStartIdlePoll, agentStartClearWait, agentStartCallTimeout
 	agentStartIdleWait, agentStartIdlePoll, agentStartClearWait = 60*time.Millisecond, 20*time.Millisecond, 5*time.Millisecond
 	agentStartCallTimeout = 300 * time.Millisecond
-	// The route's behaviour, not the Windows gate (TestAgentStartCaps)
+	// The route's behaviour, not the Windows idle check
+	// (TestHerdrPaneIdleShellWindows, TestAgentStartWindowsBusyChild)
 	goos := herdrStartGOOS
 	herdrStartGOOS = "linux"
 	t.Cleanup(func() {
@@ -101,17 +103,21 @@ func TestAgentStartClaude(t *testing.T) {
 // args and name in the body are never read: the kind's table and the
 // server's alias go to Herdr.
 func TestAgentStartIgnoresClientArgsAndName(t *testing.T) {
+	kind := "codex" // Codex has arguments of its own
+	if !codexProcSupported {
+		kind = "claude"
+	}
 	f := newFakeHerdr(t)
 	h, _ := startHandler(t, f)
-	status, _, body := postStart(t, h, `{"kind":"codex","args":["--dangerously-bypass-approvals-and-sandbox"],"name":"reviewer"}`)
+	status, _, body := postStart(t, h, `{"kind":"`+kind+`","args":["--dangerously-bypass-approvals-and-sandbox"],"name":"reviewer"}`)
 	if status != http.StatusOK {
 		t.Fatalf("POST = %d %v", status, body)
 	}
 	p := f.lastParams(t, "agent.start")
-	if args, _ := p["args"].([]any); len(args) != 1 || args[0] != "--no-daemon" {
-		t.Errorf("args = %v, want [--no-daemon]", p["args"])
+	if args, _ := p["args"].([]any); fmt.Sprint(args) != fmt.Sprint(agentStartArgs[kind]) {
+		t.Errorf("args = %v, want %v", p["args"], agentStartArgs[kind])
 	}
-	if name, _ := p["name"].(string); !strings.HasPrefix(name, "termote-codex-") {
+	if name, _ := p["name"].(string); !strings.HasPrefix(name, "termote-"+kind+"-") {
 		t.Errorf("name = %q", name)
 	}
 }
@@ -144,6 +150,33 @@ func TestAgentStartBusyPane(t *testing.T) {
 	calls := startCalls(f)
 	if len(calls) < 2 || slices.ContainsFunc(calls, func(c string) bool { return c != "pane.process_info" }) {
 		t.Errorf("calls = %q, want only retried process reads", calls)
+	}
+}
+
+// On Windows a shell with a child is busy although Herdr names only the
+// shell: nothing is typed, not even the C-c.
+func TestAgentStartWindowsBusyChild(t *testing.T) {
+	f := newFakeHerdr(t)
+	h, _ := startHandler(t, f)
+	children := herdrProcChildren
+	t.Cleanup(func() { herdrProcChildren = children })
+	herdrStartGOOS = "windows"
+	herdrProcChildren = func() (func(int) []int, error) {
+		return func(pid int) []int {
+			if pid == 100 {
+				return []int{23240}
+			}
+			return nil
+		}, nil
+	}
+	f.mu.Lock()
+	f.procs = map[string]any{startPane: fakeProcessInfo(startPane, 100, 100, fakeProc(100, "pwsh.exe", "pwsh.exe"))}
+	f.mu.Unlock()
+	if status, code, _ := postStart(t, h, `{"kind":"claude"}`); status != http.StatusConflict || code != "pane_busy" {
+		t.Fatalf("POST = %d %q", status, code)
+	}
+	if calls := startCalls(f); slices.ContainsFunc(calls, func(c string) bool { return c != "pane.process_info" }) {
+		t.Errorf("calls = %q, want only process reads", calls)
 	}
 }
 
@@ -183,7 +216,7 @@ func TestAgentStartWhileStarting(t *testing.T) {
 		t.Fatalf("first POST = %d %q", status, code)
 	}
 	before := len(startCalls(f))
-	if status, code, _ := postStart(t, h, `{"kind":"codex"}`); status != http.StatusConflict || code != "starting" {
+	if status, code, _ := postStart(t, h, `{"kind":"claude"}`); status != http.StatusConflict || code != "starting" {
 		t.Fatalf("second POST = %d %q", status, code)
 	}
 	if after := startCalls(f)[before:]; !slices.Equal(after, []string{"agent.get"}) {
@@ -394,7 +427,7 @@ func TestAgentStartStateCommandEnded(t *testing.T) {
 	f.mu.Lock()
 	f.agentGet = map[string]any{"agent_status": "unknown", "launch_pending": true}
 	f.mu.Unlock()
-	if status, _, _ := postStart(t, h, `{"kind":"codex"}`); status != http.StatusOK {
+	if status, _, _ := postStart(t, h, `{"kind":"claude"}`); status != http.StatusOK {
 		t.Fatal("POST failed")
 	}
 	// The shell is back at once, but the start has not settled yet.
@@ -405,7 +438,7 @@ func TestAgentStartStateCommandEnded(t *testing.T) {
 	a.starts.panes[startPane].started = time.Now().Add(-agentStartSettle)
 	a.starts.mu.Unlock()
 	f.mu.Lock()
-	f.procs = map[string]any{startPane: fakeProcessInfo(startPane, 100, 300, fakeProc(300, "codex", "codex"))}
+	f.procs = map[string]any{startPane: fakeProcessInfo(startPane, 100, 300, fakeProc(300, "claude", "claude"))}
 	f.mu.Unlock()
 	if _, body := getStart(t, h); body["state"] != "starting" {
 		t.Fatalf("GET with the agent running = %v", body)
@@ -433,8 +466,8 @@ func TestAgentStartStateCommandEnded(t *testing.T) {
 	}
 	// The refused start leaves the last one's state for a client still
 	// following it.
-	if status, body := getStart(t, h); status != http.StatusOK || body["state"] != "exited" || body["kind"] != "codex" {
-		t.Errorf("GET after a refused start = %d %v, want the exited codex start", status, body)
+	if status, body := getStart(t, h); status != http.StatusOK || body["state"] != "exited" || body["kind"] != "claude" {
+		t.Errorf("GET after a refused start = %d %v, want the exited claude start", status, body)
 	}
 	// Once Herdr let it go, a start goes ahead.
 	f.mu.Lock()
@@ -450,40 +483,50 @@ func TestAgentStartCaps(t *testing.T) {
 		t.Error("tmux AgentStart = true")
 	}
 	for _, c := range []struct {
-		version, goos string
-		want          bool
+		version string
+		want    bool
 	}{
-		{"0.8.1", "linux", false},
-		{"0.8.2", "linux", true},
-		{"0.9.3", "darwin", true},
-		{"1.0.0", "linux", true},
-		{"0.8.2-rc.1", "linux", false},
-		{"0.9.3", "windows", false},
-		{"", "linux", false},
-		{"dev", "linux", false},
-		{"0.9", "linux", false},
+		{"0.8.1", false},
+		{"0.8.2", true},
+		{"0.9.3", true},
+		{"1.0.0", true},
+		{"0.8.2-rc.1", false},
+		// The Windows build checked for #357.
+		{"0.9.2-preview.2026-09-29-8e78f929d8f0", true},
+		{"", false},
+		{"dev", false},
+		{"0.9", false},
 	} {
-		if got := herdrCanStartAgents(c.version, c.goos); got != c.want {
-			t.Errorf("herdrCanStartAgents(%q, %s) = %v", c.version, c.goos, got)
+		if got := herdrCanStartAgents(c.version); got != c.want {
+			t.Errorf("herdrCanStartAgents(%q) = %v", c.version, got)
 		}
+	}
+}
+
+// Codex is offered only where it has a Chat view (not on Windows): there a
+// codex start answers 501 before anything reaches Herdr, and Claude Code
+// still starts.
+func TestAgentStartCodexKind(t *testing.T) {
+	f := newFakeHerdr(t)
+	h, m := startHandler(t, f)
+	if c := m.Caps(); !c.AgentStart || c.AgentStartCodex != codexProcSupported {
+		t.Fatalf("Caps() AgentStart %v, AgentStartCodex %v, want true, %v", c.AgentStart, c.AgentStartCodex, codexProcSupported)
+	}
+	if !codexProcSupported {
+		if status, code, _ := postStart(t, h, `{"kind":"codex"}`); status != http.StatusNotImplemented || code != "unsupported" {
+			t.Errorf("POST codex = %d %q", status, code)
+		}
+		if calls := startCalls(f); len(calls) != 0 {
+			t.Errorf("POST codex called %q, want nothing", calls)
+		}
+	}
+	if status, code, _ := postStart(t, h, `{"kind":"claude"}`); status != http.StatusOK {
+		t.Errorf("POST claude = %d %q", status, code)
 	}
 }
 
 // Too old a Herdr: the snapshot says so and the route answers 501 without a
 // call.
-// On Windows the route stays off whatever the Herdr version.
-func TestAgentStartOffOnWindows(t *testing.T) {
-	f := newFakeHerdr(t)
-	h, m := startHandler(t, f)
-	herdrStartGOOS = "windows"
-	if m.Caps().AgentStart {
-		t.Fatal("Caps().AgentStart on Windows")
-	}
-	if status, code, _ := postStart(t, h, `{"kind":"claude"}`); status != http.StatusNotImplemented || code != "unsupported" {
-		t.Errorf("POST = %d %q", status, code)
-	}
-}
-
 func TestAgentStartOldHerdr(t *testing.T) {
 	f := newFakeHerdr(t)
 	f.version = "0.8.1"

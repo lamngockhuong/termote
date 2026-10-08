@@ -4,9 +4,9 @@ import type { StartAgentKind } from '../hooks/use-mux-api'
 import type { StartRecord } from '../hooks/use-start-agent'
 import { Button } from './ui/button'
 
-const KINDS: StartAgentKind[] = ['claude', 'codex']
-
 interface StartAgentPanelProps {
+  // The agents the server can start (Codex not on Windows)
+  kinds: StartAgentKind[]
   // This pane's start, if one was made from this page
   record?: StartRecord
   onStart: (kind: StartAgentKind) => void
@@ -14,13 +14,17 @@ interface StartAgentPanelProps {
 
 // The Chat view of a pane that shows only its shell: starts Claude Code or
 // Codex there, says why a start was refused.
-export function StartAgentPanel({ record, onStart }: StartAgentPanelProps) {
+export function StartAgentPanel({
+  kinds,
+  record,
+  onStart,
+}: StartAgentPanelProps) {
   const busy = record?.phase === 'sending' || record?.phase === 'starting'
   return (
     <>
       <p>Start an agent in this pane</p>
       <div className="flex flex-wrap justify-center gap-2">
-        {KINDS.map((kind) => (
+        {kinds.map((kind) => (
           <Button
             key={kind}
             variant="secondary"

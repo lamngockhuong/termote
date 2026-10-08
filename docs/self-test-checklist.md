@@ -479,6 +479,18 @@ Linux, Herdr 0.8.2 or later, `termote-dev serve --mux herdr` (or `termote start 
 - [ ] `/exit` in an agent while its Chat view is open: the view stays on Chat and offers the start
       buttons again (it no longer falls back to the Terminal)
 
+Windows, Herdr 0.8.2 or later, pwsh as the pane shell, `termote start --mux herdr`.
+
+- [ ] An idle pwsh pane offers the Chat view with only "Claude Code" (no "Codex"); the start
+      reaches `ready`, or `blocked` on the folder-trust dialog (the PWA opens the Terminal)
+- [ ] `ping -t 127.0.0.1`, `nvim` and a nested `cmd` running, then a
+      `curl` POST → 409 `pane_busy` and the program keeps running (no Ctrl+C reached it)
+- [ ] `Read-Host` waiting, or half-typed text, then a start: the prompt is cleared and only the
+      agent runs (`Start-Sleep 60` and a `while ($true) {}` loop too)
+- [ ] `Start-Job { Start-Sleep 300 }` running: 409 `pane_busy` (fail-closed); after `Remove-Job -Force`
+      the pane is idle again
+- [ ] `curl` `{"kind":"codex"}` → 501 `unsupported`, nothing typed; the snapshot's `caps.agentStartCodex` is false
+
 ---
 
 ## Files and Changes

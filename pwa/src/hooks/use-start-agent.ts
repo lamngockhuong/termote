@@ -74,12 +74,17 @@ export interface StartAgentOptions {
 }
 
 // What a refused start tells the user.
-export function startErrorMessage(err: RequestError): string {
+export function startErrorMessage(
+  err: RequestError,
+  kind: StartAgentKind,
+): string {
   switch (err.code) {
     case 'pane_busy':
       return 'This pane is running something. Start the agent in a pane that shows only its shell.'
     case 'unsupported':
-      return 'This Herdr cannot start agents. Update Herdr to 0.8.2 or later.'
+      return kind === 'codex'
+        ? 'This server cannot start Codex.'
+        : 'This Herdr cannot start agents. Update Herdr to 0.8.2 or later.'
     case 'not_found':
       return 'This pane is gone.'
     case 'start_pending':
@@ -127,7 +132,7 @@ export function useStartAgent(opts: StartAgentOptions): AgentStartControl {
               : {
                   kind,
                   phase: 'failed',
-                  error: startErrorMessage(err),
+                  error: startErrorMessage(err, kind),
                   since: Date.now(),
                 },
           ),

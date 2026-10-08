@@ -234,6 +234,17 @@ describe('useStartAgent', () => {
     expect(requests.filter((r) => r.method === 'GET')).toHaveLength(0)
   })
 
+  it('says a refused Codex start is about Codex, not the Herdr version', async () => {
+    postReply = { status: 501, body: { code: 'unsupported', error: 'x' } }
+    const { result } = setup()
+    act(() => result.current.start(PANE, 'codex'))
+    await settle()
+    expect(result.current.starts[PANE]).toMatchObject({
+      phase: 'failed',
+      error: 'This server cannot start Codex.',
+    })
+  })
+
   it('keeps a ready start while its agent runs, forgets it once gone', async () => {
     const { result, snapshot } = setup()
     act(() => result.current.start(PANE, 'claude'))

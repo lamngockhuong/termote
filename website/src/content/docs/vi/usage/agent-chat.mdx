@@ -193,8 +193,17 @@ Termote nhờ Herdr khởi động agent đó trong pane.
   gõ tin đầu tiên trong terminal, từ tin sau view Chat sẽ theo kịp.
 - Bạn có thể chuyển sang pane khác trong lúc chờ: một thông báo sẽ cho biết kết quả.
 
-Yêu cầu: Herdr 0.8.2 trở lên trên Linux hoặc macOS. tmux, psmux và Herdr trên Windows không có
-tính năng này, chế độ chỉ xem cũng ẩn nó.
+Yêu cầu: Herdr 0.8.2 trở lên trên Linux, macOS hoặc Windows. tmux và psmux không có tính năng
+này, chế độ chỉ xem cũng ẩn nó.
+
+Trên Windows chỉ có nút **Claude Code**, vì Codex chưa có view Chat ở đó. Pane chỉ được coi là
+rảnh khi shell của nó không có tiến trình con, nên pane đang chạy `ping`, `nvim` hay một `cmd`
+lồng nhau bị từ chối và không nhận gì. Shell còn giữ một tiến trình con sống lâu (`Start-Job`,
+chương trình giao diện mở từ nó, thứ mà profile đã chạy) cũng bị từ chối như vậy, pane `wsl.exe`
+cũng thế. Việc chạy ngay trong PowerShell thì không có tiến trình con, nên pane trông như đang
+rảnh: Ctrl+C của lệnh khởi động xóa được lệnh đang chờ (`Start-Sleep`, `Read-Host`), nhưng cũng
+dừng giữa chừng một script `.ps1` hay lệnh như `Copy-Item -Recurse`, giống hệt khi bạn tự bấm
+Ctrl+C. Chỉ khởi động agent ở pane mà bạn biết chắc đang ở dấu nhắc.
 
 ## Giới hạn
 

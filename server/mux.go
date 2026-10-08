@@ -87,9 +87,11 @@ type Caps struct {
 	// route, from the request basicAuth let through.
 	Auth bool `json:"auth"`
 	// AgentStart: an agent can be started in a pane that shows only its
-	// shell (/api/mux/panes/{id}/agent/start): Herdr 0.8.2 or later, not on
-	// Windows.
+	// shell (/api/mux/panes/{id}/agent/start): Herdr 0.8.2 or later.
 	AgentStart bool `json:"agentStart"`
+	// AgentStartCodex: Codex can be started too (AgentStart, and Codex has
+	// a Chat view on this OS: not on Windows).
+	AgentStartCodex bool `json:"agentStartCodex"`
 	// Groups: groups can be created, renamed and closed (/api/mux/groups).
 	Groups bool `json:"groups"`
 	// Push: the server can send Web Push (/api/mux/push/*). Set by the

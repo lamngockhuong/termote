@@ -412,6 +412,7 @@ describe('ChatView without an agent', () => {
         copyMode: false,
         agentChat: true,
         agentStart: true,
+        agentStartCodex: true,
       },
     },
     session: {
@@ -444,6 +445,16 @@ describe('ChatView without an agent', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Codex' }))
     expect(start).toHaveBeenCalledWith('w1:p1', 'codex')
     expect(screen.getByRole('button', { name: 'Claude Code' })).toBeTruthy()
+  })
+
+  it('offers only Claude Code when the server cannot start Codex (Windows)', () => {
+    const mux = {
+      ...idle.mux,
+      caps: { ...idle.mux.caps, agentStartCodex: false },
+    }
+    render(<ChatView {...idle} mux={mux} />)
+    expect(screen.getByRole('button', { name: 'Claude Code' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Codex' })).toBeNull()
   })
 
   it('follows a start while the pane runs the agent but the snapshot has none yet', () => {

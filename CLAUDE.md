@@ -575,18 +575,25 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   turns on; an `installPath` is read only when it resolves inside `<config dir>/plugins/`
   (at most 50 plugins, JSON files capped at 1 MB)
 - **Starting an agent** (`POST /api/mux/panes/{id}/agent/start` `{kind}`, `GET` of the same path,
-  `server/agent_start.go`, `caps.agentStart`: Herdr ≥ 0.8.2 from the subscription's `ping`, never
-  on Windows, whose idle check is unverified): `writeGuard` (same-site JSON), `requireWriteRole`
+  `server/agent_start.go`, `caps.agentStart`: Herdr ≥ 0.8.2 from the subscription's `ping`, on
+  every OS; `caps.agentStartCodex`: also Codex has a Chat view on this OS, so false on Windows):
+  `writeGuard` (same-site JSON), `requireWriteRole`
   (the view-only role, #236, must refuse it; a view-only client is kept from it only in the UI
   meanwhile), 8 KB body. Only `kind` is decoded (`claude` → no arguments, `codex` →
-  `--no-daemon`, else 400 `invalid_kind`); arguments and the Herdr alias
+  `--no-daemon`, else 400 `invalid_kind`; `codex` where Codex has no Chat view (Windows, #295)
+  → 501 `unsupported`, checked before the pane is resolved, nothing sent to Herdr; the PWA then
+  offers only Claude Code); arguments and the Herdr alias
   (`termote-<kind>-<8 hex>`, one retry on `agent_name_taken`) are the server's. The pane is
   resolved (`requirePane`) before the pane lock, the one message/answer take, so the locks map
   holds only existing panes (404 `not_found`). Under it: a start of this server still running
   there → 409 `starting`; the pane must be an idle shell (`paneIdleShell`: one foreground
   process, the shell, leading its group, a `knownShells` name, shared with the PWA through
   `server/testdata/known-shells.json`), read again every 250 ms for 1.5 s, else 409 `pane_busy`
-  with nothing sent; `agent.get` on the pane id: Herdr holds a start pending until its deadline
+  with nothing sent. On Windows the shell must also have no child process (Toolhelp32 snapshot,
+  `procChildrenFunc`; a snapshot error fails the start): Herdr there reports as foreground only
+  an agent it knows, else the shell, never `ping`, `nvim` or a nested `cmd`, so without this a
+  busy pane would read idle and the `C-c` below would kill the program (Herdr's own
+  `available_pane_shell` rule); Linux and macOS keep the rule above; `agent.get` on the pane id: Herdr holds a start pending until its deadline
   even when the command failed at once, and lets an expired one go only when it is read (this
   read does), so one still held → 409 `start_pending` with nothing sent; then `C-c` (clears half-typed text, a `PS2` line, a heredoc, a `read`),
   200 ms, the idle check again (409 `pane_busy`), then `agent.start` with `timeout_ms` 30000.
@@ -600,7 +607,13 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   gone, another agent, `launch_pending` false, or no agent seen and the pane an idle shell again
   4 s after the start: the command failed), `timeout` 35 s after the start, or 404 `no_start`; a final state is kept 60 s, and a refused start leaves it. Accepted gaps: stream input from another client is not
   under the pane lock and can land between `C-c` and the command; a refusal decided by Herdr
-  comes after the `C-c`. The PWA offers it in the Chat view of an idle pane and polls the `GET`
+  comes after the `C-c`. Windows gaps (accepted for #357): work that runs inside pwsh itself
+  reads idle, so the `C-c` clears a wait (`Start-Sleep`, `Read-Host`, `ReadKey`, a loop;
+  verified) but also stops a `.ps1` script or a `Copy-Item -Recurse` halfway (on Linux/macOS only
+  shell builtins behave so); a process left on the pane's console by `start /b` has no live
+  parent, is missed, and gets the `C-c` too (Herdr's own check misses it as well); a shell with a long-lived
+  child (`Start-Job`, a GUI app started from it, a process its profile started) is never idle,
+  409 `pane_busy` (fail-closed); a `wsl.exe` pane is never idle. The PWA offers it in the Chat view of an idle pane and polls the `GET`
   every 2 s; Codex writes no rollout before its first message, so after a Codex start the Chat
   view asks for that message in the terminal
 - **Codex chat**: a rollout is read only when a process whose executable is named

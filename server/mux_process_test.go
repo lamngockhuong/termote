@@ -390,6 +390,9 @@ func TestHerdrSnapshotConcurrent(t *testing.T) {
 }
 
 func TestHerdrPaneIdleShell(t *testing.T) {
+	goos := herdrStartGOOS
+	herdrStartGOOS = "linux"
+	t.Cleanup(func() { herdrStartGOOS = goos })
 	f := newFakeHerdr(t)
 	f.procs = map[string]any{
 		"wR:p3":  fakeProcessInfo("wR:p3", 100, 100, fakeProc(100, "vim", "vim")),
@@ -412,5 +415,56 @@ func TestHerdrPaneIdleShell(t *testing.T) {
 	f.mu.Unlock()
 	if _, err := m.paneIdleShell(ctx, "wR:p9"); !errors.As(err, &ie) {
 		t.Errorf("missing pane: %v", err)
+	}
+}
+
+// Herdr on Windows names only the shell, or an agent it knows, as
+// foreground: a shell running nvim reads exactly like an idle one (captured
+// from Herdr 0.9.2-preview for #357). Its child process is what tells them
+// apart there; elsewhere children are not read.
+func TestHerdrPaneIdleShellWindows(t *testing.T) {
+	f := newFakeHerdr(t)
+	f.procs = map[string]any{
+		"wN:p1": fakeProcessInfo("wN:p1", 6268, 6268, fakeProc(6268, "pwsh.exe", `C:\Program Files\PowerShell\7\pwsh.exe`)),
+		"wJ:p2": fakeProcessInfo("wJ:p2", 22616, 23464, fakeProc(23464, "claude.exe", `C:\Users\u\.local\bin\claude.exe`)),
+		"wC:p1": fakeProcessInfo("wC:p1", 4100, 4100, fakeProc(4100, "cmd.exe", `C:\Windows\System32\cmd.exe`)),
+		"wP:p1": fakeProcessInfo("wP:p1", 4200, 4200, fakeProc(4200, "powershell.exe", "powershell.exe")),
+	}
+	m := newTestHerdrMux(t, f)
+	goos, children := herdrStartGOOS, herdrProcChildren
+	t.Cleanup(func() { herdrStartGOOS, herdrProcChildren = goos, children })
+	var kids map[int][]int
+	var snapErr error
+	read := false
+	herdrProcChildren = func() (func(int) []int, error) {
+		read = true
+		return func(pid int) []int { return kids[pid] }, snapErr
+	}
+	ctx := context.Background()
+	for _, c := range []struct {
+		what, goos, pane string
+		kids             map[int][]int
+		want             bool
+	}{
+		{"idle pwsh", "windows", "wN:p1", nil, true},
+		{"idle cmd", "windows", "wC:p1", nil, true},
+		{"idle powershell", "windows", "wP:p1", nil, true},
+		{"pwsh running nvim", "windows", "wN:p1", map[int][]int{6268: {23240}}, false},
+		{"cmd running ping", "windows", "wC:p1", map[int][]int{4100: {77}}, false},
+		{"claude", "windows", "wJ:p2", nil, false},
+		{"another process's child", "windows", "wN:p1", map[int][]int{999: {23240}}, true},
+		{"a child on Linux", "linux", "wN:p1", map[int][]int{6268: {23240}}, true},
+	} {
+		herdrStartGOOS, kids, read = c.goos, c.kids, false
+		if idle, err := m.paneIdleShell(ctx, c.pane); err != nil || idle != c.want {
+			t.Errorf("%s: idle = %v, %v, want %v", c.what, idle, err, c.want)
+		}
+		if read && c.goos != "windows" {
+			t.Errorf("%s: children read off Windows", c.what)
+		}
+	}
+	herdrStartGOOS, kids, snapErr = "windows", nil, errors.New("snapshot failed")
+	if idle, err := m.paneIdleShell(ctx, "wN:p1"); err == nil || idle {
+		t.Errorf("snapshot failed: idle = %v, %v", idle, err)
 	}
 }
