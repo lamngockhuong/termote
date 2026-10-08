@@ -492,7 +492,7 @@ export function SessionSidebar({
               // the saved state without showing it.
               disabled={filtering}
               aria-expanded={!collapsed}
-              className={`flex w-full items-center gap-1.5 rounded-control px-2 pb-1 pt-2 font-label text-[11px] uppercase tracking-wider text-fg-subtle hover:text-fg disabled:hover:text-fg-subtle ${FOCUS_RING}`}
+              className={`flex w-full min-w-0 items-center gap-1.5 rounded-control px-2 pb-1 pt-2 font-label text-[11px] uppercase tracking-wider text-fg-subtle hover:text-fg disabled:hover:text-fg-subtle ${FOCUS_RING}`}
             >
               {collapsed ? (
                 <ChevronRight size={12} aria-hidden="true" />
