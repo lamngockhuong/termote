@@ -457,3 +457,50 @@ describe('DiffViewer: images', () => {
     expect(mockDiff).toHaveBeenCalledTimes(2)
   })
 })
+
+describe('DiffViewer in a tab', () => {
+  it('starts where its tab was left and tells where it is scrolled to', async () => {
+    const onScroll = vi.fn()
+    show({ scrollTop: 30, onScroll })
+    const frame = await screen.findByTestId('diff')
+    expect(frame.scrollTop).toBe(30)
+    frame.scrollTop = 55
+    fireEvent.scroll(frame)
+    expect(onScroll).toHaveBeenCalledWith(55)
+  })
+
+  it('a scroll of the Markdown preview is not kept', async () => {
+    mockContent.mockResolvedValue({
+      root: '/r',
+      path: 'a.md',
+      size: 3,
+      text: '# a',
+      hash: 'h',
+      editable: true,
+    })
+    const onScroll = vi.fn()
+    show({ path: 'a.md', entry: { ...ENTRY, path: 'a.md' }, onScroll })
+    await screen.findByTestId('diff')
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+    const heading = await screen.findByRole('heading', { name: 'a' })
+    const box = heading.closest('[data-scroll-restore]') as HTMLElement
+    fireEvent.scroll(box)
+    expect(onScroll).not.toHaveBeenCalled()
+  })
+
+  it('shows more buttons at the end of the header', async () => {
+    show({ headerExtra: <button type="button">Open files (2)</button> })
+    expect(
+      screen.getByRole('button', { name: 'Open files (2)' }),
+    ).toBeInTheDocument()
+  })
+
+  it('not showing a sensitive file calls onCancelReveal instead of Back', async () => {
+    mockDiff.mockResolvedValue({ ...diff(), sensitive: true, hunks: null })
+    const onCancelReveal = vi.fn()
+    const p = show({ onCancelReveal })
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }))
+    expect(onCancelReveal).toHaveBeenCalledOnce()
+    expect(p.onClose).not.toHaveBeenCalled()
+  })
+})

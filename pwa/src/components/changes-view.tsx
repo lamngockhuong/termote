@@ -1,15 +1,36 @@
 import { Lock } from 'lucide-react'
-import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from 'react'
 import type { ViewProps } from '../app-views'
-import { FOLLOW_NOTICES, followInFiles } from '../hooks/use-files'
-import { type ChangesError, useGitChanges } from '../hooks/use-git-changes'
+import {
+  FOLLOW_NOTICES,
+  followInFiles,
+  useDirtyCheck,
+} from '../hooks/use-files'
+import {
+  type ChangeSide,
+  type ChangesError,
+  type ChangeTab,
+  changeKey,
+  findEntry,
+  useGitChanges,
+} from '../hooks/use-git-changes'
 import type { ChangeEntry } from '../hooks/use-mux-api'
 import { splitPath } from '../utils/files-format'
 import type { LinkPath } from '../utils/markdown-links'
 import { FILES_VIEW_ID } from '../view-ids'
 import { DiffViewer } from './diff-viewer'
+import { FileTabBar, type TabListProps, tabElementId } from './file-tab-bar'
 import { FileViewer } from './file-viewer'
+import { OpenFilesButton, OpenFilesSheet } from './open-files-sheet'
 import { PaneDirHeader, ViewMessage } from './pane-dir-header'
+import { DiscardTabDialog, RootCloseDialog } from './tab-close-dialogs'
 import { Banner } from './ui/banner'
 import { FOCUS_RING } from './ui/button'
 
@@ -54,21 +75,19 @@ function filterEntries(entries: ChangeEntry[], q: string) {
   )
 }
 
-interface Selected {
-  path: string
-  orig?: string
-  staged: boolean
-}
+// How soon after a diff opens from the list a double click still pins it
+export const LIST_DOUBLE_CLICK_MS = 500
 
-// The entry of the side the diff was opened from, matched like the server
-// does
-function findEntry(entries: ChangeEntry[], s: Selected) {
-  return entries.find(
-    (e) =>
-      e.path === s.path &&
-      e.orig === s.orig &&
-      (s.staged ? e.staged !== '' : e.unstaged !== '' || !!e.conflict),
-  )
+// What a tab shows of its side: the file's name (the staged side says so,
+// next to the same file's other side), its path and directory
+function tabLabel(t: ChangeTab) {
+  const [dir, name] = splitPath(t.path)
+  const side = t.staged ? 'Staged' : 'Not staged'
+  return {
+    name: t.staged ? `${name} (staged)` : name,
+    title: `${t.orig ? `${t.orig} → ` : ''}${t.path} (${side})`,
+    detail: dir ? `${dir} · ${side}` : side,
+  }
 }
 
 interface Item {
@@ -105,8 +124,9 @@ function groups(entries: ChangeEntry[]): [string, Item[]][] {
 }
 
 // Changes: what git status reports under the pane's root, grouped, and the
-// diff of the file chosen. The same component is the mobile view and the
-// desktop panel.
+// diffs opened from it, one tab each (a tab bar on a desktop, a sheet of open
+// files on a phone). The same component is the mobile view and the desktop
+// panel.
 export function ChangesView({
   session,
   isMobile,
@@ -137,14 +157,11 @@ function PaneChanges({
   'isMobile' | 'notify' | 'showView' | 'readOnly'
 >) {
   const c = useGitChanges(paneId)
-  const [selected, setSelected] = useState<Selected | null>(null)
+  const isDirty = useDirtyCheck(paneId)
+  const tab = c.active
   const [reload, setReload] = useState(0)
-  // The working tree's file being edited, in place of the diff. A poll or
-  // a move of the root never closes it: the draft is the pane's.
-  const [editing, setEditing] = useState<string>()
-  // The file (root and path) a sensitive diff was shown for, while it stays
-  // open: editing it and coming back to either side asks only once
-  const [revealed, setRevealed] = useState<string>()
+  // The tab with unsaved changes the Discard box is open for
+  const [closing, setClosing] = useState<string>()
   // The list's filter: local to this view, so leaving it (or the side
   // panel closing) clears it, and so does a move of the root
   const [filter, setFilter] = useState('')
@@ -155,23 +172,38 @@ function PaneChanges({
   }
   // A list short enough to lose the box loses its text too
   if (filter && c.entries.length <= CHANGES_FILTER_MIN) setFilter('')
-  // The side a save went back to: once the status no longer lists it, the
-  // file matches the index and the list shows again
-  const saved = useRef<Selected | null>(null)
-  // Another entry, or back to the list: a Show of the last one ends there
-  const select = (s: Selected | null) => {
-    saved.current = null
-    setRevealed(undefined)
-    setSelected(s)
+  // The side a click in the list just opened. The diff takes the list's
+  // place under the pointer, so a double click's second click lands on the
+  // diff: a double click that soon pins the tab.
+  const listOpened = useRef<{ key: string; at: number }>(undefined)
+  const openFromList = (side: ChangeSide) => {
+    listOpened.current = { key: changeKey(side), at: Date.now() }
+    c.open(side)
+  }
+  const pinIfDoubleClick = () => {
+    const o = listOpened.current
+    listOpened.current = undefined
+    if (
+      tab &&
+      o?.key === changeKey(tab) &&
+      Date.now() - o.at < LIST_DOUBLE_CLICK_MS
+    )
+      c.pin(tab.id)
   }
 
+  // Tabs whose side git no longer lists closed: one notice per poll
+  const seenGone = useRef(c.gone.count)
   useEffect(() => {
-    const s = saved.current
-    if (!s || !c.loaded || findEntry(c.entries, s)) return
-    saved.current = null
-    setSelected(null)
-    notify(`No changes left in ${s.path.slice(s.path.lastIndexOf('/') + 1)}`)
-  }, [c.entries, c.loaded, notify])
+    if (c.gone.count > seenGone.current) {
+      const { names } = c.gone
+      notify(
+        names.length === 1
+          ? `No changes left in ${names[0]}`
+          : `No changes left in ${names.length} files`,
+      )
+    }
+    seenGone.current = c.gone.count
+  }, [c.gone, notify])
 
   const seenChanges = useRef(c.rootChanges)
   useEffect(() => {
@@ -196,57 +228,100 @@ function PaneChanges({
     setReload((n) => n + 1)
   }
 
+  // Only an editor holds unsaved changes
+  const tabDirty = (t: ChangeTab) => t.editing && isDirty(t.path)
+  // A tab with unsaved changes closes only once the user says so, unless
+  // another tab edits the same file: the changes stay there
+  const requestClose = (id: string) => {
+    const t = c.tabs.find((x) => x.id === id)
+    const shared = c.tabs.some(
+      (x) => x !== t && x.editing && x.path === t?.path,
+    )
+    if (t && tabDirty(t) && !shared) setClosing(id)
+    else c.close(id)
+  }
+
+  // What the tab bar's tabs show (desktop)
+  const panelId = useId()
+  const tabBar = !isMobile && c.tabs.length > 0
+  const tabList: TabListProps = {
+    tabs: c.tabs.map((t) => ({
+      id: t.id,
+      ...tabLabel(t),
+      pinned: t.pinned,
+      dirty: tabDirty(t),
+    })),
+    activeId: c.activeId,
+    homeLabel: 'Changes',
+    onActivate: c.activate,
+    onClose: requestClose,
+    onPin: c.pin,
+    panelId,
+  }
+  // A phone has a sheet of the open diffs in place of the tab bar
+  const [listing, setListing] = useState(false)
+  const openFiles = isMobile && c.tabs.length > 0 && (
+    <OpenFilesButton count={c.tabs.length} onClick={() => setListing(true)} />
+  )
+  const closingTab = c.tabs.find((t) => t.id === closing)
+
   let body: ReactNode
-  const revealKey = selected ? `${c.root}\u0000${selected.path}` : undefined
-  if (selected && editing) {
+  if (tab?.editing) {
     body = (
       <FileViewer
-        key={`${c.root}\u0000${editing}`}
+        key={`${tab.id}\u0000${c.root}\u0000${tab.path}`}
         paneId={paneId}
         root={c.root}
-        path={editing}
+        path={tab.path}
         wrapByDefault={isMobile}
         compact={isMobile}
         backLabel="Back to the diff"
-        onClose={() => setEditing(undefined)}
+        onClose={() => c.setEditing(tab.id, false)}
         onFollow={follow}
         onRootChanged={c.rootChanged}
         notify={notify}
         canEdit
         startEditing
-        initialReveal={revealed === revealKey}
+        initialReveal={tab.revealed}
+        onRevealed={() => c.setReveal(tab.id)}
+        scrollTop={tab.editScrollTop}
+        onScroll={(top) => c.setScroll(tab.id, top)}
+        headerExtra={openFiles}
         onSaved={() => {
           // Back to the diff of what is not staged, read again
-          const s = { ...selected, staged: false }
-          setSelected(s)
-          saved.current = s
-          setEditing(undefined)
+          c.saved(tab.id)
           refresh()
         }}
       />
     )
-  } else if (selected) {
+  } else if (tab) {
     body = (
       <DiffViewer
-        // A new root or entry starts unrevealed: a Show never carries over
-        key={`${c.root}\u0000${selected.staged}:${selected.orig}:${selected.path}`}
+        // A new tab, root or side starts unrevealed unless the tab was
+        // shown: a Show never carries over to another file
+        key={`${tab.id}\u0000${c.root}\u0000${changeKey(tab)}`}
         paneId={paneId}
         root={c.root}
-        entry={findEntry(c.entries, selected)}
+        entry={findEntry(c.entries, tab)}
         waiting={!c.loaded}
-        path={selected.path}
-        staged={selected.staged}
+        path={tab.path}
+        staged={tab.staged}
         isMobile={isMobile}
         reload={reload}
-        onClose={() => select(null)}
+        onClose={() => c.activate(null)}
         onRootChanged={c.rootChanged}
         onFollow={follow}
         notify={notify}
-        reveal={revealed === revealKey}
-        onReveal={() => setRevealed(revealKey)}
+        reveal={tab.revealed}
+        onReveal={() => c.setReveal(tab.id)}
+        // Nothing to see in this tab: it closes
+        onCancelReveal={() => c.close(tab.id)}
+        scrollTop={tab.scrollTop}
+        onScroll={(top) => c.setScroll(tab.id, top)}
+        headerExtra={openFiles}
         // A view-only client is kept from editing here only: the server
         // has no roles yet
-        onEdit={readOnly ? undefined : () => setEditing(selected.path)}
+        onEdit={readOnly ? undefined : () => c.setEditing(tab.id, true)}
       />
     )
   } else if (!c.loaded) {
@@ -304,7 +379,7 @@ function PaneChanges({
                   <ChangeRow
                     item={it}
                     onOpen={() =>
-                      select({
+                      openFromList({
                         path: it.entry.path,
                         orig: it.entry.orig,
                         staged: it.staged,
@@ -320,10 +395,43 @@ function PaneChanges({
     )
   }
 
+  const moved = c.pendingRootClose?.length ?? 0
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <PaneDirHeader root={c.root} branch={c.branch} onRefresh={refresh} />
-      {body}
+    <div
+      className="flex h-full min-h-0 flex-col"
+      onDoubleClick={pinIfDoubleClick}
+    >
+      <PaneDirHeader root={c.root} branch={c.branch} onRefresh={refresh}>
+        {!tab && openFiles}
+      </PaneDirHeader>
+      {tabBar && <FileTabBar {...tabList} />}
+      <OpenFilesSheet
+        {...tabList}
+        isOpen={isMobile && listing}
+        onDismiss={() => setListing(false)}
+      />
+      {closingTab && (
+        <DiscardTabDialog
+          name={splitPath(closingTab.path)[1]}
+          onConfirm={() => {
+            setClosing(undefined)
+            c.close(closingTab.id)
+          }}
+          onCancel={() => setClosing(undefined)}
+        />
+      )}
+      <RootCloseDialog count={moved} onResolve={c.resolveRootClose} />
+      <div
+        id={panelId}
+        // A tab panel only below the tab bar
+        {...(tabBar && {
+          role: 'tabpanel',
+          'aria-labelledby': tabElementId(panelId, c.activeId),
+        })}
+        className="flex min-h-0 flex-1 flex-col"
+      >
+        {body}
+      </div>
     </div>
   )
 }
