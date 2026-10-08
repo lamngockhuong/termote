@@ -276,6 +276,119 @@ jobs:
           path: pwa/test-results
           retention-days: 7
 
+  # Worktree workspaces against a real Herdr (#355): a headless Herdr 0.9.3 on
+  # its own socket, HOME and XDG dirs, a throwaway repo, and the server with
+  # --mux herdr. worktrees.spec.ts runs only with TERMOTE_E2E_HERDR=1, and
+  # fails there (never skips) when caps.worktrees is off.
+  e2e-herdr:
+    name: E2E (Herdr worktrees)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.pwa == 'true' || needs.changes.outputs.api == 'true'
+    env:
+      TERMOTE_NO_AUTH: "true"
+      TERMOTE_HERDR_ALLOW_NO_AUTH: "true"
+      TERMOTE_MUX: herdr
+      TERMOTE_BIND: 127.0.0.1
+      TERMOTE_PORT: "7680"
+      HERDR_VERSION: v0.9.3
+      HERDR_SHA256: 18a8dc65f1c2fa485884344356dea1cfd911c6f06cf46fa78e193f4087f4dba7
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # A failed download or a checksum mismatch fails the job.
+      - name: Install Herdr
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          curl -fsSL -o "$RUNNER_TEMP/bin/herdr" \
+            "https://github.com/herdrdev/herdr/releases/download/$HERDR_VERSION/herdr-linux-x86_64"
+          echo "$HERDR_SHA256  $RUNNER_TEMP/bin/herdr" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/bin/herdr"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 12.8.1
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.27"
+          check-latest: true
+          cache-dependency-path: server/go.mod
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --filter termote...
+
+      - name: Install Playwright browser
+        working-directory: pwa
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Build PWA and server
+        run: |
+          pnpm --filter termote build
+          cp -R pwa/dist/. server/webui/dist/
+          cd server && CGO_ENABLED=0 go build -o termote-dev .
+
+      # Everything Herdr and the server write stays under $RUNNER_TEMP/herdr
+      # (HOME and XDG only for this step: Playwright's browsers live in the
+      # runner's own HOME); the server runs without a saved config, so it
+      # reads TERMOTE_*.
+      - name: Start Herdr, a repo and the server
+        run: |
+          H="$RUNNER_TEMP/herdr"
+          mkdir -p "$H/home" "$H/config" "$H/state" "$H/cache"
+          {
+            echo "HERDR_SOCKET_PATH=$H/herdr.sock"
+            echo "TERMOTE_E2E_REPO=$H/repo"
+          } >> "$GITHUB_ENV"
+          export HOME="$H/home" XDG_CONFIG_HOME="$H/config" XDG_STATE_HOME="$H/state" \
+            XDG_CACHE_HOME="$H/cache" HERDR_SOCKET_PATH="$H/herdr.sock"
+          nohup herdr server > "$H/herdr.log" 2>&1 &
+          for _ in $(seq 1 30); do herdr api snapshot > /dev/null 2>&1 && break; sleep 1; done
+          herdr api snapshot > /dev/null
+          git init -q -b main "$H/repo"
+          git -C "$H/repo" -c user.name=e2e -c user.email=e2e@example.com commit -q --allow-empty -m init
+          git -C "$H/repo" branch e2e-base
+          herdr workspace create --cwd "$H/repo" --label e2e-repo --no-focus
+          nohup ./server/termote-dev serve > "$H/serve.log" 2>&1 &
+          for _ in $(seq 1 30); do
+            curl -fsS -H 'Sec-Fetch-Site: same-origin' "http://localhost:$TERMOTE_PORT/api/mux/snapshot" |
+              grep -q '"worktrees":true' && exit 0
+            sleep 1
+          done
+          cat "$H/serve.log"
+          exit 1
+
+      - name: Run Playwright
+        working-directory: pwa
+        env:
+          TERMOTE_E2E_HERDR: "1"
+        run: pnpm exec playwright test worktrees --workers=1
+
+      - name: Stop Herdr
+        if: always()
+        run: herdr server stop || true
+
+      - name: Logs
+        if: failure()
+        run: cat "$RUNNER_TEMP/herdr/serve.log" "$RUNNER_TEMP/herdr/herdr.log"
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-results-herdr
+          path: pwa/test-results
+          retention-days: 7
+
   test-scripts:
     name: Test Scripts
     runs-on: ubuntu-latest

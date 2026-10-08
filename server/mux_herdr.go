@@ -51,6 +51,10 @@ var herdrEventTypes = []string{
 	"layout.updated",
 }
 
+// herdrWorktreeEventTypes tell a worktree was created, opened or removed: the
+// branches are read again. Subscribed only when worktrees are offered.
+var herdrWorktreeEventTypes = []string{"worktree.created", "worktree.opened", "worktree.removed"}
+
 // herdrAgentStatuses are the agent_status values herdr documents; anything
 // else is reported as "unknown".
 var herdrAgentStatuses = map[string]bool{"idle": true, "working": true, "blocked": true, "done": true, "unknown": true}
@@ -80,17 +84,28 @@ type herdrMux struct {
 
 	scrollMu sync.Mutex // one read-then-set of a scroll offset at a time
 
-	procs *herdrProcCache // each pane's foreground process name
+	procs    *herdrProcCache   // each pane's foreground process name
+	branches *herdrBranchCache // each worktree workspace's branch
 
 	version atomic.Value // string: the Herdr version the last ping reported
 }
 
-// herdrView is a mapped snapshot plus the pane sizes streams need and each
-// pane's foreground directory (for its process).
+// herdrView is a mapped snapshot plus the pane sizes streams need, each
+// pane's foreground directory (for its process) and each worktree group
+// member's repository (for its branch).
 type herdrView struct {
-	snap  Snapshot
-	sizes map[string]Size
-	cwds  map[string]string
+	snap      Snapshot
+	sizes     map[string]Size
+	cwds      map[string]string
+	worktrees map[string]herdrWorktreeRef
+}
+
+// herdrWorktreeRef is a workspace's membership of a Herdr worktree group:
+// its repository and whether it is a linked worktree (else the repository's
+// own checkout).
+type herdrWorktreeRef struct {
+	repoKey string
+	linked  bool
 }
 
 // newHerdrMux returns a backend for the herdr server at socket. The event
@@ -104,6 +119,7 @@ func newHerdrMux(ctx context.Context, socket string) (*herdrMux, error) {
 		writers:  map[string]*paneWriter{},
 		procs:    newHerdrProcCache(),
 	}
+	m.branches = newHerdrBranchCache(m.worktreeBranches)
 	go m.subscribeLoop(ctx)
 	return m, nil
 }
@@ -116,12 +132,22 @@ var herdrCodexSession = findCodexSession
 func (m *herdrMux) Caps() Caps {
 	v, _ := m.version.Load().(string)
 	return Caps{ClientSideSelect: true, Scroll: true, DriveSize: true, AgentChat: true, Files: true, Groups: true,
-		AgentStart: herdrCanStartAgents(v, herdrStartGOOS)}
+		AgentStart: herdrCanStartAgents(v, herdrStartGOOS), Worktrees: herdrCanWorktrees(v, herdrStartGOOS)}
 }
 
-// herdrStartGOOS is the OS the start gate checks; tests of the start route
-// set it so they run on Windows too.
+// herdrStartGOOS is the OS the start and worktree gates check; tests of
+// those routes set it so they run on Windows too.
 var herdrStartGOOS = runtime.GOOS
+
+// herdrWorktreesMin is the first Herdr whose worktree.open no longer takes
+// over the repository's own workspace (a remove then closed that one).
+const herdrWorktreesMin = "0.9.2"
+
+// herdrCanWorktrees: worktrees are offered on Herdr version v. Not on
+// Windows until someone checks them there.
+func herdrCanWorktrees(v, goos string) bool {
+	return goos != "windows" && versionRe.MatchString(v) && compareVersions(v, herdrWorktreesMin) >= 0
+}
 
 // herdrAgentStartMin is the first Herdr whose agent.start waits for a new
 // pane's shell and for first-run prompts.
@@ -196,10 +222,20 @@ func (m *herdrMux) Health(ctx context.Context) error {
 	return nil
 }
 
-// Snapshot is the cached view with each pane's foreground process. The view
-// is shared (streams, requirePane read it too), so the processes go into a
-// copy of it, read outside fetchMu.
+// Snapshot is the cached view with each pane's foreground process and each
+// worktree workspace's branch. The view is shared (streams, requirePane read
+// it too), so these go into a copy of it, read outside fetchMu.
 func (m *herdrMux) Snapshot(ctx context.Context) (Snapshot, error) {
+	return m.snapshot(ctx, true)
+}
+
+// peekSnapshot is Snapshot without the branches: the push watcher and the
+// service worker never start a worktree.list.
+func (m *herdrMux) peekSnapshot(ctx context.Context) (Snapshot, error) {
+	return m.snapshot(ctx, false)
+}
+
+func (m *herdrMux) snapshot(ctx context.Context, withBranches bool) (Snapshot, error) {
 	v, err := m.view(ctx)
 	if err != nil {
 		return Snapshot{}, err
@@ -223,6 +259,16 @@ func (m *herdrMux) Snapshot(ctx context.Context) (Snapshot, error) {
 					p.Process = &ProcessInfo{Name: name, Cwd: v.cwds[p.ID]}
 				}
 			}
+		}
+	}
+	var branches map[string]string
+	if withBranches {
+		branches = m.branches.branches(v)
+	}
+	for gi := range snap.Groups {
+		g := &snap.Groups[gi]
+		if ref, ok := v.worktrees[g.ID]; ok {
+			g.Worktree = &GroupWorktree{Linked: ref.linked, Branch: branches[g.ID]}
 		}
 	}
 	return snap, nil
@@ -346,6 +392,10 @@ type herdrSnapshot struct {
 		Number      int    `json:"number"`
 		Label       string `json:"label"`
 		ActiveTabID string `json:"active_tab_id"`
+		Worktree    *struct {
+			RepoKey  string `json:"repo_key"`
+			IsLinked bool   `json:"is_linked_worktree"`
+		} `json:"worktree"`
 	} `json:"workspaces"`
 	Tabs []struct {
 		ID          string `json:"tab_id"`
@@ -438,7 +488,11 @@ func mapHerdrSnapshot(s herdrSnapshot) herdrView {
 	wss := s.Workspaces
 	sort.SliceStable(wss, func(i, j int) bool { return wss[i].Number < wss[j].Number })
 	groups := make([]Group, 0, len(wss))
+	worktrees := map[string]herdrWorktreeRef{}
 	for _, w := range wss {
+		if w.Worktree != nil && w.Worktree.RepoKey != "" {
+			worktrees[w.ID] = herdrWorktreeRef{repoKey: w.Worktree.RepoKey, linked: w.Worktree.IsLinked}
+		}
 		tabs := tabsByWS[w.ID]
 		if tabs == nil {
 			tabs = []Tab{}
@@ -448,7 +502,7 @@ func mapHerdrSnapshot(s herdrSnapshot) herdrView {
 		}
 		groups = append(groups, Group{ID: w.ID, Name: w.Label, Tabs: tabs})
 	}
-	return herdrView{snap: Snapshot{Groups: groups}, sizes: sizes, cwds: cwds}
+	return herdrView{snap: Snapshot{Groups: groups}, sizes: sizes, cwds: cwds, worktrees: worktrees}
 }
 
 func sameKeys(a map[string]bool, b map[string]Size) bool {
@@ -530,9 +584,16 @@ func (m *herdrMux) subscribeOnce(ctx context.Context) (live bool, err error) {
 	if err != nil {
 		return false, err
 	}
-	subs := make([]herdrSubscription, 0, len(herdrEventTypes)+len(v.sizes))
+	subs := make([]herdrSubscription, 0, len(herdrEventTypes)+len(herdrWorktreeEventTypes)+len(v.sizes))
 	for _, t := range herdrEventTypes {
 		subs = append(subs, herdrSubscription{Type: t})
+	}
+	// An older Herdr refuses a type it does not know, and the whole
+	// subscription with it.
+	if herdrCanWorktrees(p.Version, herdrStartGOOS) {
+		for _, t := range herdrWorktreeEventTypes {
+			subs = append(subs, herdrSubscription{Type: t})
+		}
 	}
 	panes := map[string]bool{}
 	for id := range v.sizes {
@@ -604,8 +665,14 @@ func (m *herdrMux) subscribeOnce(ctx context.Context) (live bool, err error) {
 		case line := <-lines:
 			m.invalidate()
 			var ev herdrEvent
-			if json.Unmarshal(line, &ev) == nil && ev.Data.Layout != nil {
+			if json.Unmarshal(line, &ev) != nil {
+				break
+			}
+			if ev.Data.Layout != nil {
 				m.notifySizes(*ev.Data.Layout)
+			}
+			if strings.HasPrefix(ev.Event, "worktree_") {
+				m.branches.drop()
 			}
 		case <-m.resub:
 			if resubAfter == nil {
@@ -810,6 +877,191 @@ func herdrGroupError(err error) error {
 		return errUnsupported
 	}
 	return herdrInputError(err)
+}
+
+// ValidGroupID: a workspace id.
+func (*herdrMux) ValidGroupID(id string) bool { return herdrWorkspaceIDRe.MatchString(id) }
+
+// herdrWorktreeInfo is a worktree as worktree.list and its events report it.
+type herdrWorktreeInfo struct {
+	Path            string `json:"path"`
+	Branch          string `json:"branch"`
+	IsBare          bool   `json:"is_bare"`
+	IsDetached      bool   `json:"is_detached"`
+	IsPrunable      bool   `json:"is_prunable"`
+	IsLinked        bool   `json:"is_linked_worktree"`
+	OpenWorkspaceID string `json:"open_workspace_id"`
+}
+
+// herdrWorktreeList is worktree.list's result.
+type herdrWorktreeList struct {
+	Source struct {
+		RepoKey  string `json:"repo_key"`
+		RepoName string `json:"repo_name"`
+		RepoRoot string `json:"repo_root"`
+	} `json:"source"`
+	Worktrees []herdrWorktreeInfo `json:"worktrees"`
+}
+
+// listWorktrees calls worktree.list with sourceID as the source. It changes
+// nothing in Herdr.
+func (m *herdrMux) listWorktrees(ctx context.Context, sourceID string) (herdrWorktreeList, error) {
+	var res herdrWorktreeList
+	err := m.rpc.call(ctx, "worktree.list", map[string]string{"workspace_id": sourceID}, &res)
+	return res, err
+}
+
+// ListWorktrees lists the worktrees of the source's repository. A branch
+// name validBranchName refuses is dropped, so the entry cannot be opened by
+// it nor shown under it.
+func (m *herdrMux) ListWorktrees(ctx context.Context, sourceID string) (WorktreeList, error) {
+	if err := m.requireGroupCoded(ctx, sourceID); err != nil {
+		return WorktreeList{}, err
+	}
+	res, err := m.listWorktrees(ctx, sourceID)
+	if err != nil {
+		return WorktreeList{}, herdrWorktreeError(err)
+	}
+	out := WorktreeList{RepoName: res.Source.RepoName, RepoRoot: res.Source.RepoRoot, Worktrees: []Worktree{}}
+	for _, w := range res.Worktrees {
+		branch := w.Branch
+		if !validBranchName(branch) {
+			branch = ""
+		}
+		group := w.OpenWorkspaceID
+		if !herdrWorkspaceIDRe.MatchString(group) {
+			group = ""
+		}
+		out.Worktrees = append(out.Worktrees, Worktree{
+			Path: w.Path, Branch: branch, Linked: w.IsLinked, GroupID: group,
+			Openable: w.IsLinked && branch != "" && !w.IsBare && !w.IsPrunable && !w.IsDetached,
+		})
+	}
+	return out, nil
+}
+
+// worktreeBranches maps each workspace showing a worktree of the source's
+// repository to its branch (the branch cache's fetch).
+func (m *herdrMux) worktreeBranches(ctx context.Context, sourceID string) (map[string]string, error) {
+	res, err := m.listWorktrees(ctx, sourceID)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	for _, w := range res.Worktrees {
+		if herdrWorkspaceIDRe.MatchString(w.OpenWorkspaceID) && validBranchName(w.Branch) {
+			out[w.OpenWorkspaceID] = w.Branch
+		}
+	}
+	return out, nil
+}
+
+// CreateWorktree asks Herdr for a worktree of branch in the background
+// (focus: false). Herdr picks the path; trust_repository and path are never
+// sent. An empty base or label is left out.
+func (m *herdrMux) CreateWorktree(ctx context.Context, sourceID, branch, base, label string) (string, error) {
+	if err := m.requireGroupCoded(ctx, sourceID); err != nil {
+		return "", err
+	}
+	params := map[string]any{"workspace_id": sourceID, "branch": branch, "focus": false}
+	if base != "" {
+		params["base"] = base
+	}
+	if label != "" {
+		params["label"] = label
+	}
+	var res struct {
+		Workspace struct {
+			ID string `json:"workspace_id"`
+		} `json:"workspace"`
+	}
+	err := m.rpc.call(ctx, "worktree.create", params, &res)
+	m.worktreesChanged()
+	if err != nil {
+		return "", herdrWorktreeError(err)
+	}
+	if !herdrWorkspaceIDRe.MatchString(res.Workspace.ID) {
+		return "", fmt.Errorf("worktree.create returned workspace id %q", res.Workspace.ID)
+	}
+	return res.Workspace.ID, nil
+}
+
+// OpenWorktree opens the existing worktree of branch in the background.
+func (m *herdrMux) OpenWorktree(ctx context.Context, sourceID, branch string) (string, bool, error) {
+	if err := m.requireGroupCoded(ctx, sourceID); err != nil {
+		return "", false, err
+	}
+	var res struct {
+		Workspace struct {
+			ID string `json:"workspace_id"`
+		} `json:"workspace"`
+		AlreadyOpen bool `json:"already_open"`
+	}
+	err := m.rpc.call(ctx, "worktree.open", map[string]any{"workspace_id": sourceID, "branch": branch, "focus": false}, &res)
+	m.worktreesChanged()
+	if err != nil {
+		return "", false, herdrWorktreeError(err)
+	}
+	if !herdrWorkspaceIDRe.MatchString(res.Workspace.ID) {
+		return "", false, fmt.Errorf("worktree.open returned workspace id %q", res.Workspace.ID)
+	}
+	return res.Workspace.ID, res.AlreadyOpen, nil
+}
+
+// RemoveWorktree removes a linked worktree workspace: Herdr deletes the
+// checkout (with force, after ending its panes) and closes the workspace.
+// close_group is never sent; force only when true.
+func (m *herdrMux) RemoveWorktree(ctx context.Context, groupID string, force bool) error {
+	if err := m.requireGroupCoded(ctx, groupID); err != nil {
+		return err
+	}
+	params := map[string]any{"workspace_id": groupID}
+	if force {
+		params["force"] = true
+	}
+	err := m.rpc.call(ctx, "worktree.remove", params, nil)
+	m.worktreesChanged()
+	return herdrWorktreeError(err)
+}
+
+// worktreesChanged drops what a worktree change made stale.
+func (m *herdrMux) worktreesChanged() {
+	m.invalidate()
+	m.branches.drop()
+}
+
+// herdrWorktreeError maps Herdr's replies to a worktree call to the routes'
+// codes. Its message (often git's, with paths) is logged by the route.
+func herdrWorktreeError(err error) error {
+	var he *herdrError
+	if !errors.As(err, &he) {
+		return err
+	}
+	coded := map[string]error{
+		"workspace_not_found":            errUnknownGroup,
+		"worktree_not_found":             errWorktreeNotFound,
+		"not_git_worktree":               errWorktreeNotGit,
+		"linked_worktree_source":         errWorktreeLinkedSource,
+		"not_linked_worktree":            errWorktreeNotLinked,
+		"ambiguous_worktree_branch":      errWorktreeAmbiguous,
+		"worktree_create_failed":         errWorktreeCreateFailed,
+		"worktree_open_failed":           errWorktreeOpenFailed,
+		"dirty_worktree_requires_force":  errWorktreeDirty,
+		"worktree_operation_in_progress": errWorktreeBusy,
+		"stale_worktree_operation":       errWorktreeBusy,
+		"worktree_busy":                  errWorktreeBusy,
+		"unknown_method":                 errWorktreeUnsupported,
+	}
+	if c, ok := coded[he.Code]; ok {
+		if c != errUnknownGroup && c != errWorktreeUnsupported {
+			log.Printf("herdr %s: %s", he.Code, he.Message)
+		}
+		return c
+	}
+	if he.Code == "invalid_request" && strings.Contains(he.Message, "`worktree.") {
+		return errWorktreeUnsupported
+	}
+	return err
 }
 
 func (m *herdrMux) ClosePane(ctx context.Context, paneID string) error {

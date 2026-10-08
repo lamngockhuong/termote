@@ -64,7 +64,7 @@ session:
   đổi tên được.
 - **Đóng**: trong menu **⋯**, hỏi trước và nói bao nhiêu tab sẽ kết thúc theo. Đóng session tmux
   riêng của Termote thì một session mới, rỗng được tạo ngay, và mọi thiết bị đang xem nó tự kết nối
-  lại vào đó. Workspace Herdr có `worktree` liên kết thì phải đóng trong Herdr.
+  lại vào đó. Workspace Herdr có worktree thì đóng trong Herdr, hoặc sau khi đã gỡ hết worktree.
 
 Bước kiểm tra thư mục chỉ để bắt lỗi gõ nhầm: terminal mở ra vẫn `cd` đi đâu cũng được. Trên Windows,
 thư mục phải nằm trên một ổ đĩa (`C:\work`), và tên lẫn thư mục trên psmux không được chứa `#`.
@@ -183,6 +183,27 @@ tmux select-window -t 0
 tmux kill-window -t 0
 ```
 
+### Worktree (Herdr)
+
+Với Herdr 0.9.2 trở lên (chưa có trên Windows), một workspace nằm trong repo git có thể mở các git
+worktree thành workspace riêng, từ menu **⋯** của nó:
+
+- **New worktree** hỏi branch, base và một tên tuỳ chọn. Branch mới được tạo từ base (mặc định
+  **Current HEAD**, hoặc một branch local của repo); branch đã có thì được checkout nguyên trạng nên
+  phần base bị ẩn. Herdr tự chọn thư mục (`~/.herdr/worktrees/<repo>/<slug>`, tức tên branch chỉ còn chữ
+  thường, số và `-`, nên `feat/x` và `feat-x` trùng một thư mục và cái thứ hai bị từ chối), và workspace mới
+  được mở ngay khi tạo xong.
+- **Open worktree** liệt kê các worktree khác của repo: cái đang mở thì được chọn, cái đã đóng thì
+  được mở lại.
+- **Remove worktree**, trên workspace của chính worktree đó, nêu branch và thư mục rồi hỏi trước.
+  Thao tác xoá thư mục, kể cả các file git bỏ qua (`.env`, `node_modules`), và đóng workspace;
+  branch được giữ lại. Worktree còn thay đổi chưa commit hoặc file chưa track sẽ được hỏi thêm lần
+  nữa: xoá tiếp thì mất các thay đổi đó, và terminal của nó bị dừng trước.
+
+Workspace của một worktree hiện branch ngay cạnh tên. Tạo và xoá chạy git với cấu hình của chính
+bạn, kể cả hook, như khi bạn tự gõ lệnh. Tên branch có khoảng trắng, ký tự điều khiển hoặc ký tự
+vô hình bị từ chối.
+
 ## API Endpoints
 
 Phiên được quản lý qua các endpoint `/api/mux/*` của termote:
@@ -198,6 +219,10 @@ Phiên được quản lý qua các endpoint `/api/mux/*` của termote:
 | `/api/mux/groups`           | POST   | Tạo group (nội dung `{name, cwd}`)               |
 | `/api/mux/groups/{id}`      | PATCH  | Đổi tên group (nội dung `{name}`)                |
 | `/api/mux/groups/{id}`      | DELETE | Đóng group cùng mọi thứ đang chạy trong đó       |
+| `/api/mux/worktrees?groupId=` | GET  | Các worktree và branch local của workspace (Herdr) |
+| `/api/mux/worktrees`        | POST   | Tạo worktree (nội dung `{groupId, branch, base, label}`) |
+| `/api/mux/worktrees/open`   | POST   | Mở worktree (nội dung `{groupId, branch}`)       |
+| `/api/mux/worktrees/{id}`   | DELETE | Gỡ workspace worktree (nội dung `{force, path, branch}`) |
 
 ## Xử lý sự cố
 

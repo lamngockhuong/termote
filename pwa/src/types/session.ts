@@ -59,6 +59,9 @@ export interface SessionGroup {
   name: string
   // Heaviest agent status among the group's tabs.
   agentStatus?: AgentStatus
+  // Its place in a Herdr worktree group (linked worktree, or the
+  // repository's own checkout) and the branch, when known.
+  worktree?: { linked: boolean; branch?: string }
 }
 
 // Default sessions (single session on fresh install)

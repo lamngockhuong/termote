@@ -65,7 +65,8 @@ tmux session:
   cannot be renamed.
 - **Close**: in the **⋯** menu; it asks first and says how many tabs end with it. Closing
   Termote's own tmux session starts a new, empty one right away, and every device viewing it
-  reconnects to that. A Herdr workspace with linked worktrees is closed in Herdr.
+  reconnects to that. A Herdr workspace with worktrees is closed in Herdr, or after removing
+  them.
 
 The directory check only catches mistakes: the shell that opens can still `cd` anywhere. On
 Windows, the directory must be on a drive letter (`C:\work`), and psmux names and directories
@@ -184,6 +185,27 @@ tmux select-window -t 0
 tmux kill-window -t 0
 ```
 
+### Worktrees (Herdr)
+
+With Herdr 0.9.2 or later (not yet on Windows), a workspace in a git repository can open git
+worktrees as workspaces of their own, from its **⋯** menu:
+
+- **New worktree** asks for a branch, a base and an optional name. A new branch is made from the
+  base (**Current HEAD** by default, or one of the repository's local branches); a branch that
+  exists is checked out as it is, so the base is hidden. Herdr picks the folder
+  (`~/.herdr/worktrees/<repo>/<slug>`, the branch in lowercase letters, digits and `-`, so
+  `feat/x` and `feat-x` would share one and the second is refused), and the new workspace opens once it is made.
+- **Open worktree** lists the repository's other worktrees: one already open is shown, a closed
+  one is opened.
+- **Remove worktree**, on a worktree's own workspace, names its branch and folder and asks first.
+  It deletes the folder, files git ignores (`.env`, `node_modules`) included, and closes the
+  workspace; the branch is kept. A worktree with uncommitted or untracked changes is asked about a
+  second time: removing it then loses those changes and ends its terminals first.
+
+A worktree's workspace shows its branch next to its name. Creating and removing run git with your
+own config, hooks included, as typing the command would. Branch names with spaces, control or
+invisible characters are refused.
+
 ## API Endpoints
 
 Sessions are managed via termote's `/api/mux/*` endpoints:
@@ -199,6 +221,10 @@ Sessions are managed via termote's `/api/mux/*` endpoints:
 | `/api/mux/groups`               | POST        | Create a group (body: `{name, cwd}`) |
 | `/api/mux/groups/{id}`          | PATCH       | Rename a group (body: `{name}`) |
 | `/api/mux/groups/{id}`          | DELETE      | Close a group and everything in it |
+| `/api/mux/worktrees?groupId=`   | GET         | A workspace's worktrees and local branches (Herdr) |
+| `/api/mux/worktrees`            | POST        | Create a worktree (body: `{groupId, branch, base, label}`) |
+| `/api/mux/worktrees/open`       | POST        | Open a worktree (body: `{groupId, branch}`) |
+| `/api/mux/worktrees/{id}`       | DELETE      | Remove a worktree workspace (body: `{force, path, branch}`) |
 
 ## Troubleshooting
 

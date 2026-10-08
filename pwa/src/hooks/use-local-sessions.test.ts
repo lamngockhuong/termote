@@ -12,6 +12,9 @@ const {
   mockCreateGroup,
   mockRenameGroup,
   mockCloseGroup,
+  mockCreateWorktree,
+  mockOpenWorktree,
+  mockRemoveWorktree,
   mockSnapshot,
   mockFetchHealth,
   mockReportLargePacketLoss,
@@ -29,9 +32,17 @@ const {
   mockCreateGroup: vi.fn(),
   mockRenameGroup: vi.fn(),
   mockCloseGroup: vi.fn(),
+  mockCreateWorktree: vi.fn(),
+  mockOpenWorktree: vi.fn(),
+  mockRemoveWorktree: vi.fn(),
 }))
 
-vi.mock('./use-mux-api', () => ({
+vi.mock('./use-mux-api', async (importOriginal) => ({
+  RequestError: (await importOriginal<typeof import('./use-mux-api')>())
+    .RequestError,
+  createWorktree: mockCreateWorktree,
+  openWorktree: mockOpenWorktree,
+  removeWorktree: mockRemoveWorktree,
   fetchSnapshot: async () => ({
     apiVersion: 1,
     backend: 'tmux',
@@ -947,6 +958,158 @@ describe('useLocalSessions group actions on tmux', () => {
     const meta = JSON.parse(localStorage.getItem('termote-sessions')!)
     expect(meta['tmux:name:$3\u0000build']).toBeUndefined()
     expect(meta['tmux:name:shell']).toBeDefined()
+  })
+})
+
+describe('useLocalSessions — worktrees', () => {
+  const tab = (id: string) => ({
+    id,
+    name: 'shell',
+    active: true,
+    panes: [{ id, active: true }],
+  })
+  const repo = {
+    id: 'w1',
+    name: 'repo',
+    tabs: [tab('w1:t1')],
+    worktree: { linked: false, branch: 'main' },
+  }
+  const wt = {
+    id: 'w2',
+    name: 'feat',
+    tabs: [tab('w2:t1')],
+    worktree: { linked: true, branch: 'feat/x' },
+  }
+
+  beforeEach(() => {
+    localStorage.clear()
+    vi.clearAllMocks()
+    mockFetchTabs.mockResolvedValue([])
+    mockSnapshot.extra = { backend: 'herdr', groups: [repo] }
+    mockSelectTab.mockResolvedValue(true)
+  })
+
+  it("carries each group's worktree and branch", async () => {
+    mockSnapshot.extra = {
+      backend: 'herdr',
+      groups: [repo, wt, { ...wt, id: 'w3', worktree: undefined }],
+    }
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    expect(result.current.groups.map((g) => g.worktree)).toEqual([
+      { linked: false, branch: 'main' },
+      { linked: true, branch: 'feat/x' },
+      undefined,
+    ])
+  })
+
+  it('a new worktree shows its workspace', async () => {
+    mockCreateWorktree.mockImplementation(async () => {
+      mockSnapshot.extra = { backend: 'herdr', groups: [repo, wt] }
+      return 'w2'
+    })
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    const w = { groupId: 'w1', branch: 'feat/x', base: '', label: '' }
+    await act(async () => {
+      await result.current.createWorktree(w)
+    })
+    expect(mockCreateWorktree).toHaveBeenCalledWith(w)
+    expect(result.current.activeSession.id).toBe('w2:t1')
+  })
+
+  it('an open the dialog gave up on shows nothing new', async () => {
+    mockOpenWorktree.mockImplementation(async () => {
+      mockSnapshot.extra = { backend: 'herdr', groups: [repo, wt] }
+      return 'w2'
+    })
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    await act(async () => {
+      await result.current.openWorktree('w1', 'feat/x', () => false)
+    })
+    expect(mockOpenWorktree).toHaveBeenCalledWith('w1', 'feat/x')
+    expect(result.current.groups.map((g) => g.id)).toEqual(['w1', 'w2'])
+    expect(result.current.activeSession.id).toBe('w1:t1')
+  })
+
+  it('opens with the dialog open by default, and shows an open group', async () => {
+    mockOpenWorktree.mockImplementation(async () => {
+      mockSnapshot.extra = { backend: 'herdr', groups: [repo, wt] }
+      return 'w2'
+    })
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    await act(async () => {
+      await result.current.openWorktree('w1', 'feat/x')
+    })
+    expect(result.current.activeSession.id).toBe('w2:t1')
+    await act(async () => {
+      await result.current.showGroup('w1')
+    })
+    expect(result.current.activeSession.id).toBe('w1:t1')
+  })
+
+  it('removes a worktree workspace and reads the list again', async () => {
+    mockSnapshot.extra = { backend: 'herdr', groups: [repo, wt] }
+    mockRemoveWorktree.mockImplementation(async () => {
+      mockSnapshot.extra = { backend: 'herdr', groups: [repo] }
+    })
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    await act(async () => {
+      await result.current.removeWorktree('w2', {
+        force: true,
+        path: '/wt/feat-x',
+        branch: 'feat/x',
+      })
+    })
+    expect(result.current.groups.map((g) => g.id)).toEqual(['w1'])
+  })
+
+  it('a refusal other than unknown reaches the caller without a read', async () => {
+    const { RequestError } = await import('./use-mux-api')
+    mockCreateWorktree.mockRejectedValue(new RequestError(409, 'dirty', 'x'))
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    mockFetchTabs.mockClear()
+    await expect(
+      result.current.createWorktree({
+        groupId: 'w1',
+        branch: 'a',
+        base: '',
+        label: '',
+      }),
+    ).rejects.toMatchObject({ code: 'dirty' })
+    mockCreateWorktree.mockRejectedValue(new Error('lost'))
+    await expect(
+      result.current.createWorktree({
+        groupId: 'w1',
+        branch: 'a',
+        base: '',
+        label: '',
+      }),
+    ).rejects.toThrow('lost')
+    expect(mockFetchTabs).not.toHaveBeenCalled()
+  })
+
+  it('reads the list again after an unknown, and still reports it', async () => {
+    const { RequestError } = await import('./use-mux-api')
+    mockRemoveWorktree.mockImplementation(async () => {
+      mockSnapshot.extra = { backend: 'herdr', groups: [repo] }
+      throw new RequestError(504, 'unknown', 'late')
+    })
+    mockSnapshot.extra = { backend: 'herdr', groups: [repo, wt] }
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    const w = { force: false, path: '/wt/feat-x', branch: 'feat/x' }
+    await act(async () => {
+      await expect(result.current.removeWorktree('w2', w)).rejects.toThrow(
+        'late',
+      )
+    })
+    expect(mockRemoveWorktree).toHaveBeenCalledWith('w2', w)
+    expect(result.current.groups.map((g) => g.id)).toEqual(['w1'])
   })
 })
 

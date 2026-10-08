@@ -314,6 +314,8 @@ The `update` command:
 | `pwa/src/components/file-editor.tsx`              | A file's text in a textarea, why a save failed                |
 | `pwa/src/components/new-file-dialog.tsx`          | Files: asks for a new file's path, creates it, says why not   |
 | `pwa/src/components/group-dialog.tsx`             | New tmux session / workspace: name, directory, why refused    |
+| `pwa/src/components/worktree-dialog.tsx`          | New/Open worktree, the Remove confirmations, why refused      |
+| `pwa/src/utils/git-ref.ts`                        | Branch names the server accepts (validBranchName)             |
 | `pwa/src/components/file-search.tsx`              | Files: find a file by name under the root, results, switch    |
 | `pwa/src/components/delete-file-dialog.tsx`       | Files: asks before a delete, second ask for a permanent one   |
 | `pwa/src/components/markdown-preview.tsx`         | Markdown file rendered in Files/Changes (links, code blocks)  |
@@ -343,6 +345,8 @@ The `update` command:
 | `server/mux_tmux.go`                              | tmux/psmux backend                                            |
 | `server/mux_groups.go`                            | `/api/mux/groups*`: create, rename, close a group; cwd check  |
 | `server/mux_herdr.go`                             | Herdr backend                                                 |
+| `server/mux_worktrees.go`                         | `/api/mux/worktrees*`: list, create, open, remove; name check |
+| `server/herdr_worktree_branches.go`               | Each worktree workspace's branch, read in the background      |
 | `server/stream.go`                                | Terminal WebSocket (`/api/mux/stream`)                        |
 | `server/agent.go`                                 | `/api/mux/panes/{id}/agent/*` routes, transcript reads        |
 | `server/agent_claude.go`                          | Claude Code transcript (JSONL) and session file               |
@@ -482,6 +486,44 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   worktrees → 409 `has_worktrees`, closed in Herdr), `workspace_not_found` → 404 (Herdr answers a method it lacks with
   `invalid_request`, so an older Herdr gets a 500, not 501). A request that waited past
   `muxTimeout` for another group change gets 503 `busy`. Closing a group ends every process in it
+- **Worktrees** (`GET /api/mux/worktrees?groupId=` → `{repoName, worktrees, branches}`,
+  `POST /api/mux/worktrees` `{groupId, branch, base, label}` → `{ok, id}`, `POST
+  /api/mux/worktrees/open` `{groupId, branch}` → `{ok, id, alreadyOpen}`, `DELETE
+  /api/mux/worktrees/{id}` `{force, path, branch}`; `server/mux_worktrees.go`, `caps.worktrees`:
+  Herdr ≥ 0.9.2 from the `ping` version, never on Windows until checked there; tmux has none, 501
+  `unsupported`): writes go through `writeGuard` (same-site JSON), `requireWriteRole` first (the
+  view-only role, #236, must refuse all three), the 8 KB body; the GET through
+  `crossSiteRejection` (so `Sec-Fetch-Site: none` too). Everything is checked before the slot:
+  `branch` by `validBranchName` (git's `check-ref-format --branch` rules, 1–255 bytes, no leading
+  `-`, not `HEAD` or `@`, and no Unicode control, format or space character, which git accepts
+  and would let a name pose as another in the Remove confirmation), `base` empty (HEAD), `HEAD`
+  or the same check (Herdr passes it to git positionally without `--`), a non-empty `label` by
+  `validateTmuxTarget`. Creates, opens and removes take one slot (a one-slot channel, waited for
+  at most `muxTimeout`, then 503 `busy`); once held, the read deadline grows and the change runs
+  under `WithoutCancel` for 60 s (open: `muxTimeout`), so a client leaving never cuts git short;
+  past that 504 `unknown` (Herdr may still finish; the PWA treats its own 75 s abort the same).
+  Create with a non-empty `base` first runs `git show-ref --verify refs/heads/<branch>` on the
+  repo root `worktree.list` names: Herdr ignores the base of an existing branch, so that is 409
+  `branch_exists`. The DELETE needs all three fields (400 `invalid_request`; only a JSON `true`
+  forces) and lists again under the slot: unless the entry whose `open_workspace_id` is the id is
+  linked with that path and branch → 409 `changed` (`not_linked` for the repo's own). Herdr codes
+  map to `unknown_group`, `not_found`, `not_git`, `linked_source`, `not_linked`, `ambiguous`,
+  `create_failed`, `open_failed`, `dirty` (the PWA asks again, then sends `force`), `busy`,
+  `unsupported` (also `invalid_request` naming a `worktree.` method), else 500
+  `worktree_failed`; Herdr's message (git's stderr, with paths) is logged, never returned. Herdr
+  never gets `trust_repository`, `path`, `cwd` or `close_group`. The GET's `branches` come from
+  the files routes' `gitRunner` (`for-each-ref --count=500`, heavy, no backoff, 160 KiB, the
+  last line dropped when cut, names failing `validBranchName` dropped, `[]` when git refuses).
+  Create and remove run git with the user's config (hooks, LFS filters), as typing the command
+  would; a remove deletes ignored files too and, with `force`, ends the panes first; the branch
+  is kept. The snapshot's `worktree: {linked, branch?}` comes from `session.snapshot`'s
+  membership (kept across a Herdr restart); the branch from a cache apart from the view
+  (`herdr_worktree_branches.go`): served stale while one background `worktree.list` per
+  repository refreshes it (10 s fresh, 1.5 s budget, 30 s kept after failures, 5 minutes off
+  after `worktree_busy`/`invalid_request`), never filled by `peekSnapshot` (push watcher,
+  `snapshot?peek=1`). The `worktree.*` event types are subscribed only when the gate holds (an
+  older Herdr would refuse the subscription); an event or a change makes the branches stale.
+  Closing a workspace with worktrees stays 409 `has_worktrees`
 - **tmux sessions**: every session on the tmux server is a group, the user's own ones made
   outside Termote included, so anyone signed in sees, switches to and types into them (as Herdr
   exposes every workspace; accepted). `TMUX_SESSION` (default `main`; no `:`, `.`, leading `=`
@@ -855,5 +897,10 @@ make start                      # or: ./scripts/termote.sh start
 pnpm --filter termote test:e2e              # Run Playwright tests
 pnpm --filter termote test:e2e:ui           # Run with UI debugger
 ```
+
+`pwa/e2e/worktrees.spec.ts` skips unless `TERMOTE_E2E_HERDR=1` (with `TERMOTE_E2E_REPO`): CI's
+`e2e-herdr` job runs it against a headless Herdr 0.9.3 (sha256 pinned) on its own socket,
+`HOME` and XDG dirs, a throwaway repo with a branch `e2e-base` and a workspace `e2e-repo`. Never
+point it at your own Herdr.
 
 Windows equivalents: `tests/test-termote.ps1`, `tests/test-install.ps1`.

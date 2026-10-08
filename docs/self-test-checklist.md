@@ -274,8 +274,27 @@ Manual testing checklist for Termote features before release.
 - [ ] Close asks first with the number of tabs; for tmux's default session it says a new, empty one
       starts and other devices are disconnected, and they reconnect to it
 - [ ] Closing the group on screen shows the first group left
-- [ ] Herdr: closing a workspace with linked worktrees shows "close it in Herdr"
+- [ ] Herdr: closing a workspace with worktrees shows "remove them first, or close it in Herdr"
 - [ ] tmux: a session started outside Termote (`tmux new -s x`) shows as a group and can be closed
+
+### Worktrees (Herdr 0.9.2+, Linux/macOS)
+
+Run against a Herdr of its own (`HERDR_SOCKET_PATH`, `HOME` and XDG dirs under a temp dir), or
+on a repo you can throw away.
+
+- [ ] A workspace's ⋯ menu has New worktree and Open worktree; tmux, Windows and Herdr 0.9.1 have
+      neither (`caps.worktrees` false)
+- [ ] New worktree from Current HEAD and from another base: the workspace appears, is selected and
+      its header shows the branch, on a phone (390×844) and on desktop
+- [ ] Typing an existing branch hides the base ("Checks out the existing branch") and checks it
+      out; an invalid name (`-x`, a bidi or zero-width character) is pointed out before sending
+- [ ] Open worktree lists only linked worktrees; a closed one opens, an open one is selected
+- [ ] Remove worktree (linked worktrees only) names the branch and path; a clean one goes, a
+      dirty one asks a second time and Cancel keeps its files; the branch is kept
+- [ ] Remove after another client changed the worktree says "This worktree changed; look again"
+      and removes nothing
+- [ ] After a Herdr server restart, the branch labels and Remove are still offered
+- [ ] A slow repo (`strace -e inject`, a network mount) does not slow the sidebar
 
 ### Session Tabs (Desktop)
 

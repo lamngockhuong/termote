@@ -48,7 +48,8 @@ type fakeHerdr struct {
 	snapDelay time.Duration // session.snapshot replies this late, with the state from before
 	failCode  string        // next tab.* or pane.close call fails with this error code
 	subs      []net.Conn
-	scroll    int // pane.get offset_from_bottom; pane.scroll sets it, clamped to scrollMax
+	subTypes  [][]string // each subscription's types, in the order of subs
+	scroll    int        // pane.get offset_from_bottom; pane.scroll sets it, clamped to scrollMax
 	scrollMax int
 	agent     string         // pane.get agent
 	paneExtra map[string]any // more pane.get fields (agent_session, agent_status)
@@ -75,6 +76,13 @@ type fakeHerdr struct {
 	agentGet     map[string]any
 	agentGetFail string
 	paneAgent    map[string]any
+	// worktree.list answers wtList (one linked worktree of wR when nil);
+	// a worktree.* method fails once with wtFail's code for it (with
+	// wtMessage), and every worktree.* call waits wtDelay first.
+	wtList    map[string]any
+	wtFail    map[string]string
+	wtMessage string
+	wtDelay   time.Duration
 }
 
 func fakeSocketPath(t *testing.T) string {
@@ -141,7 +149,7 @@ func (f *fakeHerdr) close() {
 	for _, c := range f.subs {
 		c.Close()
 	}
-	f.subs = nil
+	f.subs, f.subTypes = nil, nil
 	f.mu.Unlock()
 }
 
@@ -208,11 +216,44 @@ func (f *fakeHerdr) handle(c net.Conn) {
 		time.Sleep(delay)
 		reply(map[string]any{"type": "session_snapshot", "snapshot": json.RawMessage(snap)})
 	case "events.subscribe":
+		var sp struct {
+			Subscriptions []struct{ Type string }
+		}
+		json.Unmarshal(req.Params, &sp)
+		var types []string
+		for _, s := range sp.Subscriptions {
+			types = append(types, s.Type)
+		}
 		b, _ := json.Marshal(map[string]any{"id": req.ID, "result": map[string]string{"type": "subscription_started"}})
 		c.Write(append(b, '\n'))
 		f.mu.Lock()
 		f.subs = append(f.subs, c)
+		f.subTypes = append(f.subTypes, types)
 		f.mu.Unlock()
+	case "worktree.list", "worktree.create", "worktree.open", "worktree.remove":
+		f.mu.Lock()
+		delay, code, msg, list := f.wtDelay, f.wtFail[req.Method], f.wtMessage, f.wtList
+		delete(f.wtFail, req.Method)
+		f.mu.Unlock()
+		time.Sleep(delay)
+		if code != "" {
+			b, _ := json.Marshal(map[string]any{"id": req.ID, "error": map[string]string{"code": code, "message": cmp.Or(msg, code)}})
+			c.Write(append(b, '\n'))
+			c.Close()
+			return
+		}
+		switch req.Method {
+		case "worktree.list":
+			if list == nil {
+				list = fakeWorktreeList()
+			}
+			reply(list)
+		case "worktree.create", "worktree.open":
+			reply(map[string]any{"type": strings.Replace(req.Method, ".", "_", 1) + "d",
+				"workspace": map[string]any{"workspace_id": "wWT"}, "already_open": req.Method == "worktree.open"})
+		default:
+			reply(map[string]any{"type": "worktree_removed", "workspace_id": p["workspace_id"], "path": "/wt/feat-x", "forced": p["force"] == true})
+		}
 	case "tab.create", "tab.rename", "tab.close", "pane.close":
 		if failCode != "" {
 			fail(failCode)
@@ -362,15 +403,43 @@ func fakeProcessInfo(pane string, shellPID, groupID int, procs ...map[string]any
 		"tty": "/dev/pts/3", "foreground_processes": procs}
 }
 
-// emit sends one event line to every open subscription.
+// emit sends one event line to every open subscription that asked for its
+// type (layout_updated is the type layout.updated), as Herdr does.
 func (f *fakeHerdr) emit(event string, data map[string]any) {
 	data["type"] = event
 	b, _ := json.Marshal(map[string]any{"event": event, "data": data})
+	want := strings.Replace(event, "_", ".", 1)
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	for _, c := range f.subs {
-		c.Write(append(b, '\n'))
+	for i, c := range f.subs {
+		if slices.Contains(f.subTypes[i], want) {
+			c.Write(append(b, '\n'))
+		}
 	}
+}
+
+// subscribedTypes is the types of the latest subscription.
+func (f *fakeHerdr) subscribedTypes() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.subTypes) == 0 {
+		return nil
+	}
+	return slices.Clone(f.subTypes[len(f.subTypes)-1])
+}
+
+// fakeWorktreeList is worktree.list of a repo whose own checkout is wR and
+// whose linked worktree feat/x is open in w13.
+func fakeWorktreeList() map[string]any {
+	return map[string]any{"type": "worktree_list",
+		"source": map[string]any{"repo_key": "/repo/gitdir", "repo_name": "repo", "repo_root": "/repo",
+			"source_checkout_path": "/repo", "source_workspace_id": "wR"},
+		"worktrees": []any{
+			map[string]any{"path": "/repo", "branch": "main", "is_bare": false, "is_detached": false,
+				"is_prunable": false, "is_linked_worktree": false, "open_workspace_id": "wR", "label": "repo"},
+			map[string]any{"path": "/wt/feat-x", "branch": "feat/x", "is_bare": false, "is_detached": false,
+				"is_prunable": false, "is_linked_worktree": true, "open_workspace_id": "w13", "label": "repo"},
+		}}
 }
 
 // emitLayout reports pane's rect as width x height, as layout_updated does.

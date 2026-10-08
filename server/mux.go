@@ -95,6 +95,9 @@ type Caps struct {
 	// Push: the server can send Web Push (/api/mux/push/*). Set by the
 	// snapshot route, not by the backend.
 	Push bool `json:"push"`
+	// Worktrees: git worktree workspaces can be listed, created, opened and
+	// removed (/api/mux/worktrees): Herdr 0.9.2 or later, not on Windows.
+	Worktrees bool `json:"worktrees"`
 }
 
 // snapshotPeeker is a backend whose Snapshot has side effects (tmux makes
@@ -124,6 +127,16 @@ type Group struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 	Tabs []Tab  `json:"tabs"`
+	// Worktree: the group belongs to a Herdr worktree group, as the
+	// repository's own checkout or as a linked worktree.
+	Worktree *GroupWorktree `json:"worktree,omitempty"`
+}
+
+// GroupWorktree is a group's place in a Herdr worktree group. Branch is the
+// checked out branch when known (read in the background, so it can lag).
+type GroupWorktree struct {
+	Linked bool   `json:"linked"`
+	Branch string `json:"branch,omitempty"`
 }
 
 type Tab struct {
