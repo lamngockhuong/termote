@@ -507,7 +507,9 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   server user's config dir. The session id must be a UUID. Every write (Claude Code or Codex)
   takes a lock on the pane, re-checks the process, session and screen, and sends nothing unless
   the screen shows the expected state (an empty input box, the dialog the client saw with a
-  single-use `promptId`).
+  single-use `promptId`). Claude Code writes its transcript only with the first message: until
+  then `transcript` answers an empty conversation whose cursor names the session, so the Chat
+  view can send it.
   `agent/message` may carry `images`: at most 5 upload ids, each resolved through the upload
   store (a path is never taken from the client; unknown ids → 400 with the bad ids, no store →
   503 `uploads_unavailable`). Each path is pasted alone and the draft must show that many
@@ -549,7 +551,7 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   `unsupported`, anything else 500 `start_failed` (logged, never Herdr's text). `GET` (same-site
   read) reads `agent.get` by the alias: `ready` (`interactive_ready`), `blocked`, `exited` (alias
   gone, another agent, `launch_pending` false, or no agent seen and the pane an idle shell again
-  4 s after the start: the command failed), `timeout` 35 s after the start, or 404 `no_start`; a final state is kept 60 s. Accepted gaps: stream input from another client is not
+  4 s after the start: the command failed), `timeout` 35 s after the start, or 404 `no_start`; a final state is kept 60 s, and a refused start leaves it. Accepted gaps: stream input from another client is not
   under the pane lock and can land between `C-c` and the command; a refusal decided by Herdr
   comes after the `C-c`. The PWA offers it in the Chat view of an idle pane and polls the `GET`
   every 2 s; Codex writes no rollout before its first message, so after a Codex start the Chat

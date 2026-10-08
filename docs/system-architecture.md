@@ -279,7 +279,7 @@ continuation prompt, a heredoc or a `read`), checks the shell again after 200 ms
 and answers at once, so the POST answers 200 `starting`; the PWA then polls the GET every 2 s,
 which reads `agent.get` by the alias: `ready` (interactive), `blocked` (a first-run dialog),
 `exited` (also when no agent was seen and the pane shows only its shell again 4 s after the
-start), or `timeout` 35 s after the start, kept 60 s once final. Other codes: 400
+start), or `timeout` 35 s after the start, kept 60 s once final (a refused start leaves it). Other codes: 400
 `invalid_kind`, 404 `not_found`, 501 `unsupported` (also Herdr's `unsupported_agent_kind` and an
 older Herdr's `invalid_request` naming the method), 504 `start_unknown` (the `agent.start`
 call timed out; the start is followed as if typed) and 500 `start_failed`. The Chat view is
@@ -331,6 +331,11 @@ window (`$N:i`, from psmux's reply rather than the client's id, so one window ha
 on psmux, which numbers panes per session: every session has a `%1`, and `-t %1` reaches the
 most recent one. On psmux the target follows the window's focus; the process, session and
 screen checks before each write still apply.
+
+Claude Code writes its transcript only with a session's first message. Until then
+`transcript` answers an empty conversation (`reset`, no entries) whose cursor names the session
+with no file, so the Chat view can send that message; the read after it finds the file under
+another identity than the cursor's and starts over.
 
 **Finding a Codex session.** Only a Codex TUI run with `--no-daemon` writes its own rollout. By default a shared
 `codex app-server --managed-daemon` writes the rollout of every pane, outside every pane's

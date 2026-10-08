@@ -244,10 +244,13 @@ func requireAgentRead(http.ResponseWriter, *http.Request) bool { return true }
 func requireWriteRole(http.ResponseWriter, *http.Request) bool { return true }
 
 var (
-	errNoAgentSession   = inputError("no agent session in this pane")
-	errNoTranscript     = inputError("transcript not found")
-	errInvalidBefore    = inputError("invalid before")
-	errAgentUnsupported = errors.New("agent not available")
+	errNoAgentSession = inputError("no agent session in this pane")
+	errNoTranscript   = inputError("transcript not found")
+	// errTranscriptNotWritten: the session is known but its transcript does
+	// not exist yet (Claude Code writes it with the first message).
+	errTranscriptNotWritten = inputError("transcript not written yet")
+	errInvalidBefore        = inputError("invalid before")
+	errAgentUnsupported     = errors.New("agent not available")
 )
 
 // agentAPI serves /api/mux/panes/{id}/agent/*.
@@ -376,6 +379,16 @@ func readTranscript(s AgentSession, cursor, before string) (transcriptResponse, 
 		return transcriptResponse{}, errAgentUnsupported
 	}
 	path, err := adapter.Locate(s)
+	if errors.Is(err, errTranscriptNotWritten) {
+		// An empty conversation: its cursor names the session, so the
+		// client can send the first message. The file it then finds has
+		// another identity than this cursor's, so that read starts over.
+		return transcriptResponse{
+			Agent: s.Agent, SessionID: s.ID, Status: s.Status,
+			Entries: []TranscriptEntry{}, Reset: true,
+			Cursor: encodeCursor(agentCursor{Session: s.ID}),
+		}, nil
+	}
 	if err != nil {
 		return transcriptResponse{}, err
 	}

@@ -158,6 +158,30 @@ func TestReadTranscriptFollowsTheFile(t *testing.T) {
 	}
 }
 
+// Claude Code writes its transcript with the first message: until then the
+// conversation is empty, with a cursor naming the session, and the read that
+// follows once the file exists starts over with it.
+func TestReadTranscriptNotWrittenYet(t *testing.T) {
+	dir := t.TempDir()
+	s := AgentSession{Agent: "claude", ID: testSessionID, ClaudeDir: dir, Status: "idle"}
+	empty, err := readTranscript(s, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, ok := decodeCursor(empty.Cursor)
+	if !empty.Reset || len(empty.Entries) != 0 || empty.Entries == nil || empty.SessionID != testSessionID || empty.Status != "idle" || !ok || c.Session != testSessionID {
+		t.Fatalf("before the file = %+v", empty)
+	}
+	writeTranscript(t, dir, testSessionID, lines(0, 2))
+	next, err := readTranscript(s, empty.Cursor, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !next.Reset || len(next.Entries) != 2 {
+		t.Fatalf("once written = %+v", next)
+	}
+}
+
 func TestReadTranscriptResets(t *testing.T) {
 	dir := t.TempDir()
 	p := writeTranscript(t, dir, testSessionID, lines(0, 4))
@@ -348,7 +372,11 @@ func TestTranscriptRoute(t *testing.T) {
 		t.Errorf("no session = %d %v", code, body)
 	}
 	loc.found, loc.s.ID = true, "99999999-2222-4333-8444-555555555555"
-	if code, body := getJSON(t, mux, "/api/mux/panes/3/agent/transcript"); code != http.StatusNotFound || body["error"] != errNoTranscript.Error() {
+	if code, body := getJSON(t, mux, "/api/mux/panes/3/agent/transcript"); code != http.StatusOK || body["sessionId"] != loc.s.ID || body["cursor"] == "" || len(body["entries"].([]any)) != 0 {
+		t.Errorf("transcript not written yet = %d %v", code, body)
+	}
+	loc.s.ClaudeDir = ""
+	if code, body := getJSON(t, mux, "/api/mux/panes/6/agent/transcript"); code != http.StatusNotFound || body["error"] != errNoTranscript.Error() {
 		t.Errorf("no transcript = %d %v", code, body)
 	}
 	loc.s.Agent = "pi"
@@ -421,8 +449,8 @@ func TestReadTranscriptWithoutCompleteLine(t *testing.T) {
 	if r, _ := readTranscript(s, r.Cursor, ""); r.Reset || len(r.Entries) != 1 {
 		t.Errorf("after completing the line = %+v", r)
 	}
-	if r, _ := readTranscript(AgentSession{Agent: "claude", ID: testSessionID, ClaudeDir: t.TempDir()}, "", ""); r.Agent != "" {
-		t.Errorf("missing transcript = %+v", r)
+	if r, err := readTranscript(AgentSession{Agent: "claude", ID: testSessionID, ClaudeDir: filepath.Join(dir, "gone")}, "", ""); err != errNoTranscript || r.Agent != "" {
+		t.Errorf("missing config dir = %+v, %v", r, err)
 	}
 }
 
