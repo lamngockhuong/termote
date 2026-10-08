@@ -1278,6 +1278,8 @@ describe('FileViewer: editing a table', () => {
       // The conflict stays, so the reload can be tried again
       expect(screen.getByText(/changed on the host/)).toBeInTheDocument()
     },
+    // Many clicks: about 1 s, several on a loaded machine
+    15000,
   )
 
   it('a reload naming the row added at the top', async () => {
