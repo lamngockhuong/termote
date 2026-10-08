@@ -2,6 +2,7 @@ import {
   ArrowLeft,
   Check,
   Copy,
+  Ellipsis,
   Eye,
   Image as ImageIcon,
   Lock,
@@ -60,6 +61,7 @@ import type { TableState } from './table-preview'
 import { Banner } from './ui/banner'
 import { Button, IconButton } from './ui/button'
 import { ConfirmDialog } from './ui/confirm-dialog'
+import { Menu, MenuItem, MenuItemCheckbox } from './ui/menu'
 
 // The markdown renderer: loaded the first time a Markdown file is previewed
 const MarkdownPreview = lazy(() => import('./markdown-preview'))
@@ -273,6 +275,19 @@ interface Props {
   onCloseTab?: () => void
   // More buttons at the end of the header
   headerExtra?: ReactNode
+  // A narrow screen: the header keeps Back, the name and the main buttons,
+  // the others go in a menu
+  compact?: boolean
+}
+
+// A header button after the main ones: pressed is set for an on/off one
+interface HeaderAction {
+  label: string
+  title?: string
+  icon: ReactNode
+  pressed?: boolean
+  danger?: boolean
+  onClick: () => void
 }
 
 // One file of the tree: its text with line numbers, or why it cannot be
@@ -306,6 +321,7 @@ export function FileViewer({
   onScroll,
   onCloseTab,
   headerExtra,
+  compact = false,
 }: Props) {
   const [state, setState] = useState<Loaded>({ kind: 'loading' })
   const [mine, setDraft] = useFileDraft(paneId, path)
@@ -572,6 +588,58 @@ export function FileViewer({
     }
   }
 
+  // The header's buttons after the main ones (Edit, or Cancel and Save):
+  // icons in the header, or a menu of them on a phone, where the file's
+  // name needs the room
+  const extras: HeaderAction[] = []
+  if (!pinned && onPin)
+    extras.push({
+      label: 'Keep open',
+      icon: <Pin size={15} />,
+      onClick: onPin,
+    })
+  if (!mine && onDelete)
+    extras.push({
+      label: 'Delete',
+      icon: <Trash2 size={15} />,
+      danger: true,
+      onClick: () =>
+        onDelete({
+          // The text shown: its bytes are what a delete must match
+          hash: state.kind === 'text' ? state.hash : undefined,
+          sensitive: sensitive || reveal,
+        }),
+    })
+  if (!mine)
+    extras.push({
+      label: 'Copy path',
+      icon: <Copy size={15} />,
+      onClick: copyPath,
+    })
+  if (!mine && (canPreview || canTable))
+    extras.push({
+      label: 'Preview',
+      title: previewOn ? 'Show the source' : 'Show the preview',
+      icon: <Eye size={15} />,
+      pressed: previewOn,
+      onClick: togglePreview,
+    })
+  if (!mine && svg)
+    extras.push({
+      label: 'Image',
+      title: asImage ? 'Show the source' : 'Show as an image',
+      icon: <ImageIcon size={15} />,
+      pressed: asImage,
+      onClick: () => updateSetting('svgPreview', !asImage),
+    })
+  if (!asImage)
+    extras.push({
+      label: 'Wrap lines',
+      icon: <WrapText size={15} />,
+      pressed: wrap,
+      onClick: () => setWrap((w) => !w),
+    })
+
   return (
     <div
       className="flex min-h-0 flex-1 flex-col"
@@ -644,78 +712,50 @@ export function FileViewer({
             <Pencil size={15} aria-hidden="true" />
           </IconButton>
         )}
-        {!pinned && onPin && (
-          <IconButton
-            size="sm"
-            onClick={onPin}
-            aria-label="Keep open"
-            title="Keep open"
-          >
-            <Pin size={15} aria-hidden="true" />
-          </IconButton>
-        )}
-        {!mine && onDelete && (
-          <IconButton
-            size="sm"
-            onClick={() =>
-              onDelete({
-                // The text shown: its bytes are what a delete must match
-                hash: state.kind === 'text' ? state.hash : undefined,
-                sensitive: sensitive || reveal,
-              })
-            }
-            aria-label="Delete"
-            title="Delete"
-          >
-            <Trash2 size={15} aria-hidden="true" />
-          </IconButton>
-        )}
-        {!mine && (
-          <IconButton
-            size="sm"
-            onClick={copyPath}
-            aria-label="Copy path"
-            title="Copy path"
-          >
-            <Copy size={15} aria-hidden="true" />
-          </IconButton>
-        )}
-        {!mine && (canPreview || canTable) && (
-          <IconButton
-            size="sm"
-            onClick={togglePreview}
-            aria-label="Preview"
-            aria-pressed={previewOn}
-            title={previewOn ? 'Show the source' : 'Show the preview'}
-            className={previewOn ? 'text-accent' : ''}
-          >
-            <Eye size={15} aria-hidden="true" />
-          </IconButton>
-        )}
-        {!mine && svg && (
-          <IconButton
-            size="sm"
-            onClick={() => updateSetting('svgPreview', !asImage)}
-            aria-label="Image"
-            aria-pressed={asImage}
-            title={asImage ? 'Show the source' : 'Show as an image'}
-            className={asImage ? 'text-accent' : ''}
-          >
-            <ImageIcon size={15} aria-hidden="true" />
-          </IconButton>
-        )}
-        {!asImage && (
-          <IconButton
-            size="sm"
-            onClick={() => setWrap((w) => !w)}
-            aria-label="Wrap lines"
-            aria-pressed={wrap}
-            title="Wrap lines"
-            className={wrap ? 'text-accent' : ''}
-          >
-            <WrapText size={15} aria-hidden="true" />
-          </IconButton>
-        )}
+        {compact
+          ? extras.length > 0 && (
+              <Menu
+                label="More actions"
+                trigger={<Ellipsis size={16} aria-hidden="true" />}
+                triggerSize="sm"
+                align="end"
+              >
+                {extras.map((a) =>
+                  a.pressed === undefined ? (
+                    <MenuItem
+                      key={a.label}
+                      icon={a.icon}
+                      danger={a.danger}
+                      onSelect={a.onClick}
+                    >
+                      {a.label}
+                    </MenuItem>
+                  ) : (
+                    <MenuItemCheckbox
+                      key={a.label}
+                      icon={a.icon}
+                      checked={a.pressed}
+                      onSelect={a.onClick}
+                    >
+                      {a.label}
+                    </MenuItemCheckbox>
+                  ),
+                )}
+              </Menu>
+            )
+          : extras.map((a) => (
+              <IconButton
+                key={a.label}
+                size="sm"
+                onClick={a.onClick}
+                aria-label={a.label}
+                aria-pressed={a.pressed}
+                title={a.title ?? a.label}
+                className={a.pressed ? 'text-accent' : ''}
+              >
+                {a.icon}
+              </IconButton>
+            ))}
         {headerExtra}
       </div>
       {mine && !cells && (

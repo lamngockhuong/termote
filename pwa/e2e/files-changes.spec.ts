@@ -614,7 +614,9 @@ test.describe('files and changes views', () => {
       await page.getByRole('treeitem', { name: 'beta.txt' }).click()
       await expect(page.getByTestId('code-block')).toContainText('beta line 1')
       // The preview tab was replaced: keep it, then open another
-      await page.getByRole('button', { name: 'Keep open' }).click()
+      // On a phone the file's other buttons are in its More actions menu
+      await page.getByRole('button', { name: 'More actions' }).click()
+      await page.getByRole('menuitem', { name: 'Keep open' }).click()
       await page.getByRole('button', { name: 'Back to files' }).click()
       await page.getByRole('treeitem', { name: 'alpha.txt' }).click()
       await page.getByRole('button', { name: 'Open files (2)' }).click()

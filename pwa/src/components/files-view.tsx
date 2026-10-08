@@ -414,6 +414,7 @@ function PaneFiles({
             root={f.root}
             path={tab.path}
             wrapByDefault={isMobile}
+            compact={isMobile}
             anchor={tab.anchor}
             scrollTop={tab.scrollTop}
             backTo={tab.history[tab.history.length - 1]?.path}

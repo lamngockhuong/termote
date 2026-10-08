@@ -206,6 +206,7 @@ function PaneChanges({
         root={c.root}
         path={editing}
         wrapByDefault={isMobile}
+        compact={isMobile}
         backLabel="Back to the diff"
         onClose={() => setEditing(undefined)}
         onFollow={follow}

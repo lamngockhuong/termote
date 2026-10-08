@@ -956,6 +956,83 @@ describe('FileViewer in a tab', () => {
     expect(screen.getByTestId('code-block').scrollTop).toBe(0)
   })
 
+  it('on a narrow screen keeps the main buttons and puts the rest in a menu', async () => {
+    mockContent.mockResolvedValue(editable('# A', { path: 'a.md' }))
+    const onPin = vi.fn()
+    const onDelete = vi.fn()
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    show({
+      path: 'a.md',
+      compact: true,
+      canEdit: true,
+      pinned: false,
+      onPin,
+      onDelete,
+      headerExtra: <button type="button">extra</button>,
+    })
+    await screen.findByTestId('markdown-preview')
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'extra' })).toBeInTheDocument()
+    for (const name of [
+      'Keep open',
+      'Delete',
+      'Copy path',
+      'Preview',
+      'Wrap lines',
+    ])
+      expect(screen.queryByRole('button', { name })).toBeNull()
+    const more = () =>
+      fireEvent.click(screen.getByRole('button', { name: 'More actions' }))
+    more()
+    const menu = screen.getByRole('menu')
+    expect(
+      [...menu.querySelectorAll('[role^="menuitem"]')].map(
+        (i) => i.textContent,
+      ),
+    ).toEqual(['Keep open', 'Delete', 'Copy path', 'Preview', 'Wrap lines'])
+    expect(
+      within(menu).getByRole('menuitemcheckbox', { name: 'Preview' }),
+    ).toHaveAttribute('aria-checked', 'true')
+    expect(
+      within(menu).getByRole('menuitemcheckbox', { name: 'Wrap lines' }),
+    ).toHaveAttribute('aria-checked', 'false')
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Keep open' }))
+    expect(onPin).toHaveBeenCalled()
+    more()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }))
+    expect(onDelete).toHaveBeenCalledWith({ hash: 'h:# A', sensitive: false })
+    more()
+    await act(async () =>
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Copy path' })),
+    )
+    expect(writeText).toHaveBeenCalledWith('a.md')
+    more()
+    fireEvent.click(
+      screen.getByRole('menuitemcheckbox', { name: 'Wrap lines' }),
+    )
+    more()
+    expect(
+      screen.getByRole('menuitemcheckbox', { name: 'Wrap lines' }),
+    ).toHaveAttribute('aria-checked', 'true')
+    // Preview off: the source shows
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Preview' }))
+    expect(await screen.findByTestId('code-block')).toBeInTheDocument()
+  })
+
+  it('an SVG on a narrow screen switches to its image from the menu', async () => {
+    mockContent.mockResolvedValue(editable('<svg/>', { path: 'a.svg' }))
+    show({ path: 'a.svg', compact: true })
+    await screen.findByTestId('code-block')
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }))
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Image' }))
+    expect(
+      JSON.parse(localStorage.getItem('termote-settings') ?? '{}'),
+    ).toMatchObject({
+      svgPreview: true,
+    })
+  })
+
   it('shows more buttons at the end of the header', async () => {
     mockContent.mockResolvedValue(editable('x'))
     show({ headerExtra: <button type="button">extra</button> })

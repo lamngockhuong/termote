@@ -187,11 +187,13 @@ describe('FilesView', () => {
     fireEvent.click(item('README.md'))
     expect(await screen.findByTestId('markdown-preview')).toBeInTheDocument()
     expect(screen.queryByRole('tree')).toBeNull()
-    // Mobile wraps at first
-    expect(screen.getByRole('button', { name: 'Wrap lines' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
+    // Mobile wraps at first; the setting is in the More actions menu there
+    expect(screen.queryByRole('button', { name: 'Wrap lines' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }))
+    expect(
+      screen.getByRole('menuitemcheckbox', { name: 'Wrap lines' }),
+    ).toHaveAttribute('aria-checked', 'true')
+    fireEvent.keyDown(document.activeElement as Element, { key: 'Escape' })
     fireEvent.click(screen.getByRole('button', { name: 'Back to files' }))
     expect(screen.getByRole('tree')).toBeInTheDocument()
     // An entry that is neither file nor directory does not open
