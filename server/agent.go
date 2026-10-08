@@ -257,6 +257,7 @@ type agentAPI struct {
 	sessions *ttlCache[agentLookup]
 	reads    *ttlCache[transcriptResponse]
 	input    *agentInput
+	starts   *agentStarts
 	// Set by registerCommandsRoute: the files routes' pane roots, the host
 	// allowlist, the custom command listings and the server user's home
 	// (for ~/.agents/skills).
@@ -281,6 +282,7 @@ func newAgentAPI(m Mux) *agentAPI {
 		sessions: newTTLCache[agentLookup](agentCacheTTL),
 		reads:    newTTLCache[transcriptResponse](agentCacheTTL),
 		input:    newAgentInput(),
+		starts:   newAgentStarts(),
 	}
 }
 

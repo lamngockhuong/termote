@@ -339,7 +339,7 @@ func TestHerdrStreamDriveOverWebSocket(t *testing.T) {
 }
 
 func TestHerdrCapsDriveSize(t *testing.T) {
-	var m *herdrMux
+	m := &herdrMux{}
 	if !m.Caps().DriveSize {
 		t.Error("herdr does not offer DriveSize")
 	}

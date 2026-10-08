@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -14,6 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -57,6 +59,22 @@ type fakeHerdr struct {
 	procs     map[string]any
 	procDelay map[string]time.Duration
 	procFail  string
+	// procSeq: process_info replies per pane, one per call, the last one
+	// repeated (ahead of procs).
+	procSeq map[string][]any
+	version string // ping version, "0.9.1" when empty
+	// log: every method in call order, pane.send_text with its text.
+	log []string
+	// agent.start fails with the next of startFail's codes (with
+	// startMessage), or hangs past the caller's deadline; agent.get of an
+	// alias answers agentGet's AgentInfo, or fails with agentGetFail; of a
+	// pane id, paneAgent's, or agent_not_found without one.
+	startFail    []string
+	startMessage string
+	startHang    bool
+	agentGet     map[string]any
+	agentGetFail string
+	paneAgent    map[string]any
 }
 
 func fakeSocketPath(t *testing.T) string {
@@ -145,6 +163,13 @@ func (f *fakeHerdr) handle(c net.Conn) {
 	f.mu.Lock()
 	f.calls[req.Method]++
 	f.params[req.Method] = append(f.params[req.Method], req.Params)
+	entry := req.Method
+	if req.Method == "pane.send_text" {
+		var tp struct{ Text string }
+		json.Unmarshal(req.Params, &tp)
+		entry += " " + tp.Text
+	}
+	f.log = append(f.log, entry)
 	hang, failCode := f.hang, f.failCode
 	if strings.HasPrefix(req.Method, "tab.") || strings.HasPrefix(req.Method, "workspace.") || req.Method == "pane.close" {
 		f.failCode = ""
@@ -167,9 +192,9 @@ func (f *fakeHerdr) handle(c net.Conn) {
 	switch req.Method {
 	case "ping":
 		f.mu.Lock()
-		proto := f.protocol
+		proto, version := f.protocol, cmp.Or(f.version, "0.9.1")
 		f.mu.Unlock()
-		reply(map[string]any{"type": "pong", "version": "0.9.1", "protocol": proto})
+		reply(map[string]any{"type": "pong", "version": version, "protocol": proto})
 	case "session.snapshot":
 		if hang {
 			time.Sleep(2 * time.Second)
@@ -254,6 +279,12 @@ func (f *fakeHerdr) handle(c net.Conn) {
 		id, _ := p["pane_id"].(string)
 		f.mu.Lock()
 		info, ok := f.procs[id]
+		if seq := f.procSeq[id]; len(seq) > 0 {
+			info, ok = seq[0], true
+			if len(seq) > 1 {
+				f.procSeq[id] = seq[1:]
+			}
+		}
 		delay, code := f.procDelay[id], f.procFail
 		f.mu.Unlock()
 		time.Sleep(delay)
@@ -265,9 +296,58 @@ func (f *fakeHerdr) handle(c net.Conn) {
 			info = fakeProcessInfo(id, 100, 100, fakeProc(100, "bash", "/bin/bash"))
 		}
 		reply(map[string]any{"type": "pane_process_info", "process_info": info})
+	case "agent.start":
+		f.mu.Lock()
+		hang, code, msg := f.startHang, "", f.startMessage
+		if len(f.startFail) > 0 {
+			code, f.startFail = f.startFail[0], f.startFail[1:]
+		}
+		f.mu.Unlock()
+		if hang {
+			time.Sleep(2 * time.Second)
+			c.Close()
+			return
+		}
+		if code != "" {
+			b, _ := json.Marshal(map[string]any{"id": req.ID, "error": map[string]string{"code": code, "message": cmp.Or(msg, code)}})
+			c.Write(append(b, '\n'))
+			c.Close()
+			return
+		}
+		argv := []any{p["kind"]}
+		if args, ok := p["args"].([]any); ok {
+			argv = append(argv, args...)
+		}
+		reply(map[string]any{"type": "agent_started", "argv": argv, "agent": map[string]any{
+			"terminal_id": "t1", "agent_status": "unknown", "workspace_id": "wR", "tab_id": "wR:t3",
+			"pane_id": p["pane_id"], "focused": false, "revision": 0, "name": p["name"],
+			"launch_pending": true, "interactive_ready": false,
+		}})
+	case "agent.get":
+		f.mu.Lock()
+		info, code := f.agentGet, f.agentGetFail
+		if target, _ := p["target"].(string); herdrPaneIDRe.MatchString(target) {
+			info, code = f.paneAgent, ""
+			if info == nil {
+				code = "agent_not_found"
+			}
+		}
+		f.mu.Unlock()
+		if code != "" {
+			fail(code)
+			return
+		}
+		reply(map[string]any{"type": "agent_info", "agent": info})
 	default:
 		fail("unknown_method")
 	}
+}
+
+// callLog returns every method called so far, in order.
+func (f *fakeHerdr) callLog() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.log)
 }
 
 // fakeProc is one foreground process as pane.process_info reports it, argv
