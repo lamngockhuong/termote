@@ -227,7 +227,7 @@ POST   /api/mux/panes/{id}/agent/message  body: {text, cursor, images?}  → 204
 GET    /api/mux/panes/{id}/agent/prompt                          → {prompt: null | {promptId, kind, title, body, options, steps, freeText}}
 POST   /api/mux/panes/{id}/agent/answer   body: {promptId, choice} → 204
 GET    /api/mux/panes/{id}/agent/commands                        → {commands: [{name, description, source, kind}]}
-POST   /api/mux/panes/{id}/agent/start    body: {kind}          → {ok, state: "starting"} | {error, code}   (caps.agentStart)
+POST   /api/mux/panes/{id}/agent/start    body: {kind}          → {ok, state: "starting"} | {error, code}   (caps.agentStart; codex: caps.agentStartCodex)
 GET    /api/mux/panes/{id}/agent/start                           → {kind, state} | 404 no_start
 GET    /api/mux/panes/{id}/files/tree?path=&root=               → {root, isRepo, path, entries, truncated}
 GET    /api/mux/panes/{id}/files/content?path=&root=&reveal=    → {root, path, size, text, hash, editable, notEditable?} | {…, previewable: false, reason} | {…, sensitive: true}
@@ -266,14 +266,19 @@ number of images. When a step after the first paste fails, the box is cleared wi
 only if the same idle agent shows nothing but this request's paste (the code is then the step's
 own, e.g. `paste_not_confirmed`); anything else answers 409 `partial_paste` and leaves the box.
 
-`/agent/start` (`caps.agentStart`: Herdr 0.8.2 or later, not on Windows) starts Claude Code
-(`kind: "claude"`) or Codex (`"codex"`, run as `codex --no-daemon`) in a pane that shows only
-its shell, through Herdr's `agent.start`. Only `kind` is read: the arguments come from a fixed
+`/agent/start` (`caps.agentStart`: Herdr 0.8.2 or later, on Linux, macOS and Windows) starts
+Claude Code (`kind: "claude"`) or Codex (`"codex"`, run as `codex --no-daemon`; only where Codex
+has a Chat view, `caps.agentStartCodex`, so not on Windows, where it answers 501 `unsupported`)
+in a pane that shows only its shell, through Herdr's `agent.start`. Only `kind` is read: the arguments come from a fixed
 table and the alias Herdr tracks the agent by is the server's (`termote-<kind>-<8 hex>`, one
 retry on `agent_name_taken`). The pane is resolved before the pane lock (the one `message` and
 `answer` take); then a start of this server still running there answers 409 `starting`; a
 pane whose foreground is not its shell alone, read again for up to 1.5 s, answers 409
-`pane_busy` with nothing typed. Herdr keeps a start pending until its deadline even when the
+`pane_busy` with nothing typed (on Windows Herdr never reports a program other than an agent or
+the shell as foreground, so the shell must also have no child process, else a running `ping` or
+`nvim` would read idle and the `C-c` would kill it; a shell with a long-lived child is never
+idle; work running inside pwsh itself, a `.ps1` script included, still reads idle and is stopped
+by the `C-c`, an accepted gap). Herdr keeps a start pending until its deadline even when the
 command failed at once (not installed), refuses another start meanwhile, and lets an expired one
 go only when it is read: the server reads `agent.get` on the pane id first, which releases an
 expired one, and answers 409 `start_pending` with nothing typed while one is held. Otherwise the

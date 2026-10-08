@@ -79,12 +79,14 @@ export interface MuxSnapshot {
     groups?: boolean
     // The server sends Web Push when an agent needs the user (/push).
     push?: boolean
-    // Claude Code or Codex can be started in a pane that shows only its
-    // shell (/agent/start): Herdr 0.8.2 or later, not on Windows.
+    // Claude Code can be started in a pane that shows only its shell
+    // (/agent/start): Herdr 0.8.2 or later.
     agentStart?: boolean
     // Git worktree workspaces can be listed, created, opened and removed
     // (/worktrees): Herdr 0.9.2 or later, not on Windows.
     worktrees?: boolean
+    // Codex can be started too (it has a Chat view: not on Windows).
+    agentStartCodex?: boolean
   }
   groups: MuxGroup[]
 }

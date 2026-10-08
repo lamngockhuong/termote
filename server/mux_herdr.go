@@ -131,13 +131,20 @@ var herdrCodexSession = findCodexSession
 
 func (m *herdrMux) Caps() Caps {
 	v, _ := m.version.Load().(string)
+	start := herdrCanStartAgents(v)
 	return Caps{ClientSideSelect: true, Scroll: true, DriveSize: true, AgentChat: true, Files: true, Groups: true,
-		AgentStart: herdrCanStartAgents(v, herdrStartGOOS), Worktrees: herdrCanWorktrees(v, herdrStartGOOS)}
+		AgentStart: start, AgentStartCodex: start && agentStartKind("codex"),
+		Worktrees: herdrCanWorktrees(v, herdrStartGOOS)}
 }
 
-// herdrStartGOOS is the OS the start and worktree gates check; tests of
-// those routes set it so they run on Windows too.
+// herdrStartGOOS is the OS the worktree gate and a start's idle check
+// (paneIdleShell) use; tests of those routes set it so they run on Windows
+// too.
 var herdrStartGOOS = runtime.GOOS
+
+// herdrProcChildren lists each process's children (paneIdleShell on
+// Windows); tests replace it.
+var herdrProcChildren = procChildrenFunc
 
 // herdrWorktreesMin is the first Herdr whose worktree.open no longer takes
 // over the repository's own workspace (a remove then closed that one).
@@ -153,11 +160,9 @@ func herdrCanWorktrees(v, goos string) bool {
 // pane's shell and for first-run prompts.
 const herdrAgentStartMin = "0.8.2"
 
-// herdrCanStartAgents: agent.start is offered on Herdr version v. Not on
-// Windows until it is checked there: the idle check rests on a POSIX
-// foreground process group.
-func herdrCanStartAgents(v, goos string) bool {
-	return goos != "windows" && versionRe.MatchString(v) && compareVersions(v, herdrAgentStartMin) >= 0
+// herdrCanStartAgents: agent.start is offered on Herdr version v.
+func herdrCanStartAgents(v string) bool {
+	return versionRe.MatchString(v) && compareVersions(v, herdrAgentStartMin) >= 0
 }
 
 // AgentSession reads the session herdr's Claude integration reported for the
@@ -321,7 +326,19 @@ func (m *herdrMux) paneIdleShell(ctx context.Context, paneID string) (bool, erro
 	if err != nil {
 		return false, herdrInputError(err)
 	}
-	return info.idleShell(), nil
+	if !info.idleShell() || herdrStartGOOS != "windows" {
+		return info.idleShell(), nil
+	}
+	// Herdr on Windows reports as foreground only an agent it knows, else
+	// the shell, never another program the shell runs (ping, nvim, a nested
+	// cmd). A shell with a child is busy, as in Herdr's own agent.start
+	// check. Herdr runs on this host (a named pipe), so the processes are
+	// the same.
+	children, err := herdrProcChildren()
+	if err != nil {
+		return false, err
+	}
+	return len(children(info.ShellPID)) == 0, nil
 }
 
 // view returns the cached snapshot when it is still fresh, else fetches one.

@@ -5,7 +5,7 @@ import { StartAgentPanel } from './start-agent-panel'
 describe('StartAgentPanel', () => {
   it('offers Claude Code and Codex', () => {
     const onStart = vi.fn()
-    render(<StartAgentPanel onStart={onStart} />)
+    render(<StartAgentPanel kinds={['claude', 'codex']} onStart={onStart} />)
     fireEvent.click(screen.getByRole('button', { name: 'Codex' }))
     fireEvent.click(screen.getByRole('button', { name: 'Claude Code' }))
     expect(onStart.mock.calls).toEqual([['codex'], ['claude']])
@@ -16,6 +16,7 @@ describe('StartAgentPanel', () => {
     const onStart = vi.fn()
     render(
       <StartAgentPanel
+        kinds={['claude', 'codex']}
         record={{ kind: 'codex', phase: 'sending', since: 0 }}
         onStart={onStart}
       />,
@@ -28,6 +29,7 @@ describe('StartAgentPanel', () => {
   it('shows the error of a refused start, buttons back', () => {
     render(
       <StartAgentPanel
+        kinds={['claude', 'codex']}
         record={{ kind: 'claude', phase: 'failed', error: 'No.', since: 0 }}
         onStart={vi.fn()}
       />,

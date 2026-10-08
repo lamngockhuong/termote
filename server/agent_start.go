@@ -25,6 +25,11 @@ var agentStartArgs = map[string][]string{
 	"codex":  {"--no-daemon"},
 }
 
+// agentStartKind: kind can be started on this server. Codex only where it
+// has a Chat view (codexProcSupported; not on Windows), since its Chat view
+// is what the start leads to.
+func agentStartKind(kind string) bool { return kind != "codex" || codexProcSupported }
+
 // agentStartTimeout is Herdr's startup deadline (timeout_ms); a start not
 // ready agentStartGrace after it is reported as timed out.
 const (
@@ -63,6 +68,7 @@ const (
 var (
 	errStartPaneBusy    = &codedError{code: "pane_busy", msg: "the pane is running something other than its shell", status: http.StatusConflict}
 	errStartUnsupported = &codedError{code: "unsupported", msg: "this backend cannot start agents", status: http.StatusNotImplemented}
+	errStartKind        = &codedError{code: "unsupported", msg: "this kind cannot be started on this server", status: http.StatusNotImplemented}
 	errStartNotFound    = &codedError{code: "not_found", msg: "pane not found", status: http.StatusNotFound}
 	// errStartUnknown: the start request timed out, so whether Herdr typed
 	// the command is not known; the start is followed as if it had.
@@ -206,6 +212,10 @@ func (a *agentAPI) startAgent(w http.ResponseWriter, r *http.Request) {
 	}
 	st, ok := a.starter(w)
 	if !ok {
+		return
+	}
+	if !agentStartKind(body.Kind) {
+		jsonErrorCode(w, errStartKind.code, errStartKind.msg, errStartKind.status)
 		return
 	}
 	paneID := r.PathValue("id")
