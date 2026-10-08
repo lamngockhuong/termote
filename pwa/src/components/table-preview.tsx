@@ -1,6 +1,7 @@
-import { ListPlus, Redo2, Undo2 } from 'lucide-react'
+import { Columns3, ListPlus, Redo2, Undo2 } from 'lucide-react'
 import {
   type KeyboardEvent,
+  useCallback,
   useDeferredValue,
   useEffect,
   useMemo,
@@ -28,6 +29,15 @@ import {
   valueAt,
 } from '../utils/csv-parse'
 import type { ViewOptions } from '../utils/csv-view'
+import {
+  emptyLayout,
+  FIT_BUDGET_MS,
+  FIT_ROWS,
+  fitWidths,
+  initialWidths,
+  type ReadCell,
+  type TableLayout,
+} from '../utils/table-columns'
 import { CellEditSheet } from './cell-edit-sheet'
 import { CellSheet } from './cell-sheet'
 import { CodeBlock } from './code-block'
@@ -37,13 +47,16 @@ import { TableRecords } from './table-records'
 import { Banner } from './ui/banner'
 import { Button, FOCUS_RING, IconButton } from './ui/button'
 import { ConfirmDialog } from './ui/confirm-dialog'
+import {
+  Menu,
+  MenuGroup,
+  MenuItem,
+  MenuItemCheckbox,
+  MenuSeparator,
+} from './ui/menu'
 
 // Columns rendered: a 1 MiB file of commas would otherwise be a million
 export const MAX_COLUMNS = 200
-// Rows read to size the columns
-const WIDTH_ROWS = 200
-const MIN_WIDTH = 4
-const MAX_WIDTH = 32
 
 export interface TableState {
   ok: boolean
@@ -77,19 +90,14 @@ interface Props {
   editing?: TableEditing
   // Where the grid starts scrolled to (a tab shown again)
   scrollTop?: number
+  // Widths and wrapped columns the tab kept, taken as it mounts when set
+  // under the same delimiter and header row; told each time they change
+  layout?: TableLayout
+  onLayout?: (layout: TableLayout) => void
 }
 
-// Column widths in ch, from the first rows: the longest first line, clamped
-function columnWidths(text: string, t: CsvTable, names: string[]): number[] {
-  const rows = Math.min(t.rowCount, WIDTH_ROWS)
-  return names.map((name, c) => {
-    let w = cellText(name).length
-    for (let r = 0; r < rows && w < MAX_WIDTH; r++) {
-      w = Math.max(w, shownAt(text, t, r, c).length)
-    }
-    return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, w))
-  })
-}
+const layoutKey = (delimiter: Delimiter, header: boolean) =>
+  `${delimiter}|${header ? 1 : 0}`
 
 // A CSV/TSV file as a table: a virtual grid, or one record at a time.
 // Sorting, filtering, the delimiter and the header row change only what is
@@ -104,14 +112,40 @@ export default function TablePreview({
   onTableState,
   editing,
   scrollTop,
+  layout: kept,
+  onLayout,
 }: Props) {
   const [chosen, setDelimiter] = useState(() => delimiterFor(path, text))
   const delimiter = editing?.delimiter ?? chosen
   const [header, setHeader] = useState(true)
+  // Widths set by hand and wrapped columns: kept while the text changes (an
+  // edit, the file changed on the host), dropped with the delimiter or the
+  // header row, which make other columns
+  const [layout, setLayoutState] = useState(() => {
+    const key = layoutKey(delimiter, header)
+    return kept?.key === key ? kept : emptyLayout(key)
+  })
+  const setLayout = (next: TableLayout) => {
+    setLayoutState(next)
+    onLayout?.(next)
+  }
+  // The record shown, as a file row (a sort or a filter moves its place)
+  const [recordRow, setRecordRow] = useState<number>()
+  // Place in rows of the first row in view of the grid
+  const topRef = useRef(0)
+  // Opened from a row number: the grid it had the focus in is covered, so
+  // the focus goes to the record
+  const recordsBox = useRef<HTMLDivElement>(null)
+  const focusRecords = useRef(false)
   const [filterInput, setFilterInput] = useState('')
   const filter = useDeferredValue(filterInput)
   const [sort, setSort] = useState<ViewOptions['sort']>(null)
   const [records, setRecords] = useState(false)
+  useEffect(() => {
+    if (!records || !focusRecords.current) return
+    focusRecords.current = false
+    recordsBox.current?.focus()
+  }, [records])
   // The cell opened, and the text it was opened on: another text closes it
   const [open, setOpen] = useState<{ row: number; col: number; text: string }>()
   // The row a delete asks about, and the text it was asked on: another
@@ -160,9 +194,26 @@ export default function TablePreview({
       return name || `Column ${c + 1}`
     })
   }, [shown, table, header])
-  const widths = useMemo(
-    () => (table ? columnWidths(shown, table, names) : []),
-    [shown, table, names],
+  // Called only once there is a table (its widths, a fit)
+  const read = useCallback<ReadCell>(
+    (r, c, multiline) => shownAt(shown, table as CsvTable, r, c, multiline),
+    [shown, table],
+  )
+  const autoWidths = useMemo(
+    () =>
+      table
+        ? initialWidths(
+            read,
+            table.rowCount,
+            names.map((n) => cellText(n)),
+          )
+        : [],
+    [read, table, names],
+  )
+  const widths = autoWidths.map((w, c) => layout.widths[c] ?? w)
+  const wrapped = useMemo(
+    () => new Set(layout.wrapped.filter((c) => c < names.length)),
+    [layout.wrapped, names.length],
   )
   // Edits are taken only on the current parse of text, outside a save
   const live =
@@ -247,6 +298,36 @@ export default function TablePreview({
 
   const total = t.rowCount - (header ? 1 : 0)
   const expected = header ? cellsIn(t, 0) : t.columnCount
+  // A fit reads the rows on screen: never the rows of an older table, nor
+  // none while they are worked out
+  const canFit = !!computed && !stale
+  const fitColumns = (cols: number[], pos: number) => {
+    if (!canFit) return
+    const widths = fitWidths(
+      read,
+      computed.subarray(pos, pos + FIT_ROWS),
+      names.map((n) => cellText(n)),
+      cols,
+      wrapped,
+      layout.widths,
+      performance.now() + FIT_BUDGET_MS,
+    )
+    setLayout({ ...layout, widths })
+  }
+  const resize = (col: number, width: number) =>
+    setLayout({ ...layout, widths: { ...layout.widths, [col]: width } })
+  const toggleWrap = (col: number) =>
+    setLayout({
+      ...layout,
+      wrapped: wrapped.has(col)
+        ? layout.wrapped.filter((c) => c !== col)
+        : [...layout.wrapped, col],
+    })
+  const openRecord = (row: number) => {
+    setRecordRow(row)
+    setRecords(true)
+    focusRecords.current = true
+  }
   const toggleSort = (col: number) =>
     setSort((s) =>
       s?.col !== col
@@ -308,8 +389,10 @@ export default function TablePreview({
               editing ? 'Edits are written with this delimiter' : undefined
             }
             onChange={(e) => {
-              setDelimiter(e.target.value as Delimiter)
+              const next = e.target.value as Delimiter
+              setDelimiter(next)
               setSort(null)
+              setLayout(emptyLayout(layoutKey(next, header)))
             }}
             className={`h-8 rounded-control border border-border bg-surface px-1.5 text-fg pointer-coarse:h-touch ${FOCUS_RING}`}
           >
@@ -323,7 +406,10 @@ export default function TablePreview({
         <Button
           size="sm"
           aria-pressed={header}
-          onClick={() => setHeader((h) => !h)}
+          onClick={() => {
+            setHeader(!header)
+            setLayout(emptyLayout(layoutKey(delimiter, !header)))
+          }}
           className={header ? 'text-accent' : ''}
         >
           Header row
@@ -347,38 +433,98 @@ export default function TablePreview({
         >
           Records
         </Button>
+        <Menu
+          label="Columns"
+          trigger={<Columns3 size={15} aria-hidden="true" />}
+          triggerSize="sm"
+          className="max-h-[60vh] overflow-y-auto"
+        >
+          <MenuItem
+            disabled={!canFit}
+            onSelect={() =>
+              fitColumns(
+                names.map((_, c) => c),
+                topRef.current,
+              )
+            }
+          >
+            Fit columns
+          </MenuItem>
+          <MenuItem
+            disabled={!Object.keys(layout.widths).length}
+            onSelect={() => setLayout({ ...layout, widths: {} })}
+          >
+            Reset widths
+          </MenuItem>
+          <MenuSeparator />
+          <MenuGroup label="Wrap">
+            {names.map((name, c) => (
+              <MenuItemCheckbox
+                // biome-ignore lint/suspicious/noArrayIndexKey: a column is its index
+                key={c}
+                keepOpen
+                checked={wrapped.has(c)}
+                onSelect={() => toggleWrap(c)}
+              >
+                {/* The number tells apart two columns of one name */}
+                <span className="block truncate">
+                  {c + 1} · <bdi>{cellText(name)}</bdi>
+                </span>
+              </MenuItemCheckbox>
+            ))}
+          </MenuGroup>
+        </Menu>
       </div>
       {t.columnCount > MAX_COLUMNS && (
         <Banner variant="warning">
           Showing {MAX_COLUMNS} of {t.columnCount} columns. See all in Source
         </Banner>
       )}
-      {records && !rows && <ViewMessage>Sorting and filtering…</ViewMessage>}
-      {records && rows && (
-        <TableRecords
-          text={shown}
-          table={t}
-          rows={rows}
-          names={names}
-          onOpen={openCell}
-        />
-      )}
-      {!records && (
+      {/* Records cover the grid, which stays laid out: back on it, it is
+          where it was left */}
+      <div className="relative flex min-h-0 flex-1 flex-col">
         <TableGrid
           text={shown}
           table={t}
           rows={rows ?? new Int32Array()}
           names={names}
           widths={widths}
+          wrapped={wrapped}
           header={header}
           expected={expected}
           sort={sort}
           onSort={toggleSort}
           onOpen={openCell}
+          onOpenRow={openRecord}
+          onResize={resize}
+          onFit={(col, pos) => fitColumns([col], pos)}
+          topRef={topRef}
           busy={!computed || stale}
+          covered={records}
           scrollTop={scrollTop}
         />
-      )}
+        {records && (
+          <div
+            ref={recordsBox}
+            tabIndex={-1}
+            className="absolute inset-0 z-20 flex flex-col bg-bg outline-none"
+          >
+            {rows ? (
+              <TableRecords
+                text={shown}
+                table={t}
+                rows={rows}
+                names={names}
+                row={recordRow}
+                onRow={setRecordRow}
+                onOpen={openCell}
+              />
+            ) : (
+              <ViewMessage>Sorting and filtering…</ViewMessage>
+            )}
+          </div>
+        )}
+      </div>
       {editing && cell ? (
         <CellEditSheet
           cell={cell}

@@ -1063,6 +1063,53 @@ describe('FilesView tabs', () => {
     expect((await screen.findByTestId('code-block')).scrollTop).toBe(90)
   })
 
+  it('switching tabs brings back a table as it was left: widths, wraps, first row', async () => {
+    const csv = `n,note\n${Array.from({ length: 2000 }, (_, i) => `${i},x`).join('\n')}\n`
+    mockTree.mockImplementation(async (_p: string, path: string) => ({
+      root: '/home/kim/app',
+      isRepo: true,
+      path,
+      entries: path === 'src' ? [...DIRS.src, e('data.csv')] : DIRS[path],
+      truncated: false,
+    }))
+    const text = mockContent.getMockImplementation()
+    mockContent.mockImplementation(async (p: string, path: string) =>
+      path === 'src/data.csv'
+        ? {
+            root: '/home/kim/app',
+            path,
+            size: csv.length,
+            text: csv,
+            hash: 'h',
+          }
+        : text?.(p, path),
+    )
+    await show()
+    fireEvent.click(item('src'))
+    await act(async () => {})
+    fireEvent.click(item('data.csv'))
+    const grid = await screen.findByRole('grid')
+    fireEvent.doubleClick(tab(/^data\.csv/))
+    fireEvent.keyDown(
+      screen.getByRole('separator', { name: 'Resize column note' }),
+      { key: 'End' },
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Columns' }))
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: '2 · note' }))
+    grid.scrollTop = 61 * 500
+    fireEvent.scroll(grid)
+    fireEvent.click(tab('Files'))
+    fireEvent.click(item('README.md'))
+    await screen.findByTestId('markdown-preview')
+    fireEvent.click(tab('data.csv'))
+    const again = await screen.findByRole('grid')
+    expect(again).not.toBe(grid)
+    expect(again.scrollTop).toBe(61 * 500)
+    const rows = within(again).getAllByRole('row')
+    expect(rows[0].style.gridTemplateColumns).toContain('var(--w-1, 120ch)')
+    expect(rows[1]).toHaveStyle({ height: '61px' })
+  })
+
   it('a tab with unsaved changes closes only after Discard', async () => {
     await show()
     await openA()

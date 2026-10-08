@@ -1,5 +1,4 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { useState } from 'react'
 import type { CsvTable } from '../utils/csv-parse'
 import { cellText, shownAt } from './table-grid'
 import { FOCUS_RING, IconButton } from './ui/button'
@@ -9,19 +8,30 @@ interface Props {
   table: CsvTable
   rows: Int32Array
   names: string[]
+  // The file row shown; the first record when unset or not in rows (a
+  // filter left it out)
+  row: number | undefined
+  onRow: (row: number) => void
   onOpen: (row: number, col: number) => void
 }
 
 // One record at a time, as "column: value" with values wrapped: a table on
 // a phone, where a row is wider than the screen.
-export function TableRecords({ text, table, rows, names, onOpen }: Props) {
-  const [index, setIndex] = useState(0)
+export function TableRecords({
+  text,
+  table,
+  rows,
+  names,
+  row,
+  onRow,
+  onOpen,
+}: Props) {
   if (!rows.length) {
     return (
       <p className="p-4 text-center text-sm text-fg-muted">No matching rows</p>
     )
   }
-  const i = Math.min(index, rows.length - 1)
+  const i = row === undefined ? 0 : Math.max(0, rows.indexOf(row))
   const r = rows[i]
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -30,7 +40,7 @@ export function TableRecords({ text, table, rows, names, onOpen }: Props) {
           size="sm"
           aria-label="Previous record"
           disabled={i === 0}
-          onClick={() => setIndex(i - 1)}
+          onClick={() => onRow(rows[i - 1])}
         >
           <ChevronLeft size={16} aria-hidden="true" />
         </IconButton>
@@ -44,7 +54,7 @@ export function TableRecords({ text, table, rows, names, onOpen }: Props) {
           size="sm"
           aria-label="Next record"
           disabled={i === rows.length - 1}
-          onClick={() => setIndex(i + 1)}
+          onClick={() => onRow(rows[i + 1])}
         >
           <ChevronRight size={16} aria-hidden="true" />
         </IconButton>

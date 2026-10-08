@@ -750,6 +750,27 @@ describe('tabs', () => {
     })
   })
 
+  it('setTableLayout keeps a table layout until the tab shows another path', async () => {
+    const { result } = await loaded()
+    act(() => result.current.open('a.csv', { pin: true }))
+    const id = result.current.activeId as string
+    const layout = { key: ',|1', widths: { 0: 40 }, wrapped: [1] }
+    const before = result.current
+    result.current.setTableLayout(id, layout)
+    result.current.setTableLayout('nope', layout)
+    expect(result.current).toBe(before)
+    expect(result.current.tabs[0].table).toBe(layout)
+    // A link followed in the tab starts over, and so does Back
+    await act(() => result.current.follow({ path: 'docs/guide.md' }, 0))
+    expect(result.current.active?.table).toBeUndefined()
+    result.current.setTableLayout(id, layout)
+    act(() => result.current.back())
+    expect(result.current.active).toMatchObject({
+      path: 'a.csv',
+      table: undefined,
+    })
+  })
+
   it('a Show is kept by its own tab only', async () => {
     const { result } = await loaded()
     act(() => result.current.open('a.md', { pin: true }))

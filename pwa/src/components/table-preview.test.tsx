@@ -12,7 +12,8 @@ import { ThemeProvider } from '../contexts/theme-context'
 import type { TableOp } from '../utils/csv-edits'
 import type { Delimiter } from '../utils/csv-parse'
 import { CSV_WORKER_MIN } from '../utils/csv-parse-client'
-import { MAX_CELL_CHARS, MAX_SCROLL_HEIGHT } from './table-grid'
+import { MAX_SCROLL_HEIGHT } from '../utils/table-columns'
+import { MAX_CELL_CHARS } from './table-grid'
 import TablePreview, { MAX_COLUMNS, type TableEditing } from './table-preview'
 
 vi.mock('../utils/highlight', async (orig) => ({
@@ -53,6 +54,9 @@ function shownRows(): string[][] {
         .map((c) => c.textContent ?? ''),
     )
 }
+
+// The record shown (the grid stays under it, hidden)
+const record = () => document.querySelector('dl') as HTMLElement
 
 const people = 'name,age,city\nBình,30,Huế\nan,4,"Hà Nội, VN"\nCuong,100\n'
 
@@ -373,7 +377,7 @@ describe('TablePreview', () => {
     const grid = screen.getByRole('grid')
     grid.scrollTop = 44 * 2
     fireEvent.scroll(grid)
-    expect(screen.getAllByRole('row')[1]).toHaveClass('pointer-coarse:h-touch')
+    expect(screen.getAllByRole('row')[1]).toHaveStyle({ height: '44px' })
   })
 
   it('moves the focus with the arrow keys, scrolling as it goes', () => {
@@ -425,13 +429,13 @@ describe('TablePreview', () => {
     const next = screen.getByRole('button', { name: 'Next record' })
     expect(prev).toBeDisabled()
     fireEvent.click(next)
-    expect(screen.getByText('Hà Nội, VN')).toBeInTheDocument()
+    expect(within(record()).getByText('Hà Nội, VN')).toBeInTheDocument()
     fireEvent.click(next)
     expect(next).toBeDisabled()
     expect(screen.getByText('Record 3 / 3 · row 4')).toBeInTheDocument()
     fireEvent.click(prev)
     expect(screen.getByText('Record 2 / 3 · row 3')).toBeInTheDocument()
-    fireEvent.click(screen.getByText('Hà Nội, VN'))
+    fireEvent.click(within(record()).getByText('Hà Nội, VN'))
     expect(
       screen.getByRole('dialog', { name: /Row 3 · city/ }),
     ).toBeInTheDocument()
@@ -948,5 +952,544 @@ describe('TablePreview scroll', () => {
     show('name,n\n', { scrollTop: 300 })
     const grid = await screen.findByRole('grid')
     expect(grid.scrollTop).toBe(0)
+  })
+})
+
+// The column template of the header row, and a column's width in it (ch)
+const template = () =>
+  (screen.getAllByRole('row')[0] as HTMLElement).style.gridTemplateColumns
+const widthOf = (col: number) =>
+  Number(new RegExp(`var\\(--w-${col}, ([\\d.]+)ch\\)`).exec(template())?.[1])
+const handle = (name: string) =>
+  screen.getByRole('separator', { name: `Resize column ${name}` })
+const columnsMenu = () =>
+  fireEvent.click(screen.getByRole('button', { name: 'Columns' }))
+const menuItem = (name: string) => screen.getByRole('menuitem', { name })
+const wrapItem = (name: string) =>
+  screen.getByRole('menuitemcheckbox', { name })
+const bodyRow = () => screen.getAllByRole('row')[1] as HTMLElement
+
+const notes = `id,note\n1,${'x'.repeat(60)}\n2,short\n`
+
+describe('TablePreview column widths', () => {
+  it('a handle per column has a name and a value; the header keeps its name', () => {
+    show(notes)
+    const h = handle('note')
+    expect(h).toHaveAttribute('aria-orientation', 'vertical')
+    expect(h).toHaveAttribute('aria-valuenow', '32')
+    expect(h).toHaveAttribute('aria-valuemin', '4')
+    expect(h).toHaveAttribute('aria-valuemax', '120')
+    expect(screen.getByRole('columnheader', { name: 'note' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'note' })).toBeVisible()
+  })
+
+  it('arrow keys step a width, Home and End go to the limits, Enter fits', () => {
+    show(notes)
+    fireEvent.keyDown(handle('note'), { key: 'ArrowRight' })
+    expect(handle('note')).toHaveAttribute('aria-valuenow', '34')
+    expect(widthOf(1)).toBe(34)
+    expect(widthOf(0)).toBe(4)
+    fireEvent.keyDown(handle('note'), { key: 'Home' })
+    expect(widthOf(1)).toBe(4)
+    fireEvent.keyDown(handle('note'), { key: 'ArrowLeft' })
+    expect(widthOf(1)).toBe(4)
+    fireEvent.keyDown(handle('note'), { key: 'End' })
+    expect(widthOf(1)).toBe(120)
+    fireEvent.keyDown(handle('note'), { key: 'Enter' })
+    expect(widthOf(1)).toBe(60)
+    // A key on a handle never moves the focus between cells
+    expect(document.activeElement).not.toHaveAttribute('data-pos')
+  })
+
+  it('a drag sets the width on the frame only, then on the column as it ends', () => {
+    show(notes)
+    const grid = screen.getByRole('grid')
+    const cell = screen.getByRole('gridcell', { name: 'short' })
+    const before = template()
+    fireEvent.pointerDown(handle('id'), { button: 0, clientX: 100 })
+    // 7px a ch where nothing has a size
+    fireEvent.pointerMove(handle('id'), { clientX: 170 })
+    expect(grid.style.getPropertyValue('--w-0')).toBe('14ch')
+    // Nothing rendered again meanwhile
+    expect(template()).toBe(before)
+    expect(screen.getByRole('gridcell', { name: 'short' })).toBe(cell)
+    fireEvent.pointerUp(handle('id'), { clientX: 170 })
+    expect(grid.style.getPropertyValue('--w-0')).toBe('')
+    expect(widthOf(0)).toBe(14)
+    expect(widthOf(1)).toBe(32)
+    // A drag past the ceiling stops there; a cancel still keeps the width
+    fireEvent.pointerDown(handle('note'), { button: 0, clientX: 0 })
+    fireEvent.pointerMove(handle('note'), { clientX: 5000 })
+    fireEvent.pointerCancel(handle('note'))
+    expect(widthOf(1)).toBe(120)
+    // Only the main button drags
+    fireEvent.pointerDown(handle('note'), { button: 2, clientX: 0 })
+    fireEvent.pointerMove(handle('note'), { clientX: -500 })
+    expect(grid.style.getPropertyValue('--w-1')).toBe('')
+  })
+
+  it('two quick releases of a handle fit its column; slow ones do not', () => {
+    vi.useFakeTimers()
+    try {
+      show(notes)
+      const tap = () => {
+        fireEvent.pointerDown(handle('note'), { button: 0, clientX: 10 })
+        fireEvent.pointerUp(handle('note'), { clientX: 11 })
+      }
+      fireEvent.keyDown(handle('note'), { key: 'Home' })
+      tap()
+      vi.advanceTimersByTime(500)
+      tap()
+      expect(widthOf(1)).toBe(4)
+      vi.advanceTimersByTime(100)
+      tap()
+      expect(widthOf(1)).toBe(60)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('a click a finger leaves on a sort button right after a fit does not sort', () => {
+    vi.useFakeTimers()
+    try {
+      show(notes)
+      const tap = () => {
+        fireEvent.pointerDown(handle('note'), {
+          button: 0,
+          clientX: 10,
+          pointerType: 'touch',
+        })
+        fireEvent.pointerUp(handle('note'), {
+          clientX: 10,
+          pointerType: 'touch',
+        })
+      }
+      tap()
+      tap()
+      expect(widthOf(1)).toBe(60)
+      const note = screen.getByRole('columnheader', { name: 'note' })
+      fireEvent.click(screen.getByRole('button', { name: 'note' }))
+      expect(note).toHaveAttribute('aria-sort', 'none')
+      vi.advanceTimersByTime(600)
+      fireEvent.click(screen.getByRole('button', { name: 'note' }))
+      expect(note).toHaveAttribute('aria-sort', 'ascending')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('Fit columns fits every column, Reset widths drops what was set', () => {
+    show(notes)
+    columnsMenu()
+    expect(menuItem('Reset widths')).toBeDisabled()
+    fireEvent.click(menuItem('Fit columns'))
+    expect(widthOf(0)).toBe(4)
+    expect(widthOf(1)).toBe(60)
+    columnsMenu()
+    fireEvent.click(menuItem('Reset widths'))
+    expect(widthOf(1)).toBe(32)
+  })
+
+  it('a fit reads from the first row in view', () => {
+    vi.useFakeTimers({ toFake: ['requestAnimationFrame'] })
+    try {
+      const values = Array.from({ length: 2000 }, (_, i) =>
+        i === 1500 ? 'y'.repeat(80) : 'v',
+      )
+      show(`n\n${values.join('\n')}\n`)
+      fireEvent.keyDown(handle('n'), { key: 'Enter' })
+      expect(widthOf(0)).toBe(4)
+      const grid = screen.getByRole('grid')
+      grid.scrollTop = 32 * 1000
+      fireEvent.scroll(grid)
+      act(() => vi.advanceTimersToNextFrame())
+      fireEvent.keyDown(handle('n'), { key: 'Enter' })
+      expect(widthOf(0)).toBe(80)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('widths go with another delimiter or header row, there and back', () => {
+    show(notes)
+    fireEvent.keyDown(handle('note'), { key: 'End' })
+    fireEvent.click(screen.getByRole('button', { name: 'Header row' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Header row' }))
+    expect(widthOf(1)).toBe(32)
+    fireEvent.keyDown(handle('note'), { key: 'End' })
+    const select = screen.getByRole('combobox', { name: 'Delimiter' })
+    fireEvent.change(select, { target: { value: ';' } })
+    fireEvent.change(select, { target: { value: ',' } })
+    expect(widthOf(1)).toBe(32)
+  })
+
+  it('widths stay while the text changes (an edit)', () => {
+    edit('a,b\n1,2\n')
+    fireEvent.keyDown(handle('b'), { key: 'End' })
+    fireEvent.click(cellButton('2'))
+    fireEvent.change(valueBox(), { target: { value: '9' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    expect(screen.getByRole('gridcell', { name: '9' })).toBeInTheDocument()
+    expect(widthOf(1)).toBe(120)
+  })
+
+  it('a move under the slop is no drag, and a release with no drag sets nothing', () => {
+    show(notes)
+    fireEvent.pointerUp(handle('note'), { clientX: 0 })
+    expect(widthOf(1)).toBe(32)
+    fireEvent.pointerDown(handle('note'), { button: 0, clientX: 100 })
+    fireEvent.pointerMove(handle('note'), { clientX: 103 })
+    expect(screen.getByRole('grid').style.getPropertyValue('--w-1')).toBe('')
+    fireEvent.pointerUp(handle('note'), { clientX: 103 })
+    expect(widthOf(1)).toBe(32)
+  })
+
+  it('a drag takes its ch from the cell it starts in, and ending where it began sets nothing', () => {
+    show(notes)
+    // 116px cell less its 16px padding: 100px over 32ch
+    const cell = handle('note').parentElement as HTMLElement
+    cell.getBoundingClientRect = () => ({ width: 116 }) as DOMRect
+    fireEvent.pointerDown(handle('note'), { button: 0, clientX: 100 })
+    fireEvent.pointerMove(handle('note'), { clientX: 131.25 })
+    expect(screen.getByRole('grid').style.getPropertyValue('--w-1')).toBe(
+      '42ch',
+    )
+    fireEvent.pointerMove(handle('note'), { clientX: 100 })
+    fireEvent.pointerUp(handle('note'), { clientX: 100 })
+    expect(widthOf(1)).toBe(32)
+  })
+
+  it('a cancel with no move is no tap, and a lost capture ends a drag', () => {
+    show(notes)
+    fireEvent.pointerDown(handle('note'), { button: 0, clientX: 0 })
+    fireEvent.pointerCancel(handle('note'))
+    fireEvent.pointerDown(handle('note'), { button: 0, clientX: 100 })
+    fireEvent.pointerUp(handle('note'), { clientX: 100 })
+    // One release is no second tap: nothing fits
+    expect(widthOf(1)).toBe(32)
+    fireEvent.lostPointerCapture(handle('note'))
+    expect(widthOf(1)).toBe(32)
+    fireEvent.pointerDown(handle('note'), { button: 0, clientX: 100 })
+    fireEvent.pointerMove(handle('note'), { clientX: 170 })
+    fireEvent.lostPointerCapture(handle('note'))
+    expect(widthOf(1)).toBe(42)
+  })
+
+  it('a mouse release does not hold back a sort click on the header', () => {
+    show(notes)
+    fireEvent.pointerDown(handle('note'), {
+      button: 0,
+      clientX: 10,
+      pointerType: 'mouse',
+    })
+    fireEvent.pointerUp(handle('note'), {
+      clientX: 10,
+      pointerType: 'mouse',
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'note' }))
+    expect(screen.getByRole('columnheader', { name: 'note' })).toHaveAttribute(
+      'aria-sort',
+      'ascending',
+    )
+  })
+
+  it('a key the handle does not take goes on to the page', () => {
+    show(notes)
+    expect(fireEvent.keyDown(handle('note'), { key: 'a' })).toBe(true)
+    expect(widthOf(1)).toBe(32)
+    expect(fireEvent.keyDown(handle('note'), { key: 'ArrowLeft' })).toBe(false)
+    expect(widthOf(1)).toBe(30)
+  })
+
+  it('a drag starting closes the Columns menu', () => {
+    show(notes)
+    columnsMenu()
+    expect(screen.getByRole('menu')).toBeInTheDocument()
+    fireEvent.pointerDown(handle('note'), { button: 0, clientX: 0 })
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
+  it('takes widths a tab kept under the same delimiter and header row, and tells each change', () => {
+    const onLayout = vi.fn()
+    const kept = { key: ',|1', widths: { 1: 50 }, wrapped: [1] }
+    const p = show(notes, { layout: kept, onLayout })
+    expect(widthOf(1)).toBe(50)
+    expect(bodyRow()).toHaveStyle({ height: '61px' })
+    fireEvent.keyDown(handle('note'), { key: 'ArrowRight' })
+    expect(onLayout).toHaveBeenLastCalledWith({
+      key: ',|1',
+      widths: { 1: 52 },
+      wrapped: [1],
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Header row' }))
+    expect(onLayout).toHaveBeenLastCalledWith({
+      key: ',|0',
+      widths: {},
+      wrapped: [],
+    })
+    p.unmount()
+    // Kept under another header row: dropped
+    show(notes, { layout: { ...kept, key: ',|0' } })
+    expect(widthOf(1)).toBe(32)
+    expect(bodyRow()).toHaveStyle({ height: '32px' })
+  })
+})
+
+describe('TablePreview wrapped columns', () => {
+  const lines = 'id,note\n1,"\n\nREJECTED"\n2,b\n'
+
+  it('a wrapped column shows its lines, ↵ kept, in taller rows', () => {
+    show(lines)
+    expect(bodyRow()).toHaveStyle({ height: '32px' })
+    columnsMenu()
+    const item = wrapItem('2 · note')
+    expect(item).toHaveAttribute('aria-checked', 'false')
+    fireEvent.click(item)
+    // The menu stays open for the next column
+    expect(wrapItem('2 · note')).toHaveAttribute('aria-checked', 'true')
+    expect(bodyRow()).toHaveStyle({ height: '61px' })
+    expect(bodyRow()).toHaveClass('overflow-hidden')
+    const cell = screen.getAllByRole('gridcell')[1]
+    expect(cell.querySelector('.line-clamp-3')?.textContent).toBe(
+      '↵\n↵\nREJECTED',
+    )
+    expect(
+      screen
+        .getByRole('columnheader', { name: 'note' })
+        .querySelector('.lucide-wrap-text'),
+    ).not.toBeNull()
+    expect(
+      screen
+        .getByRole('columnheader', { name: 'id' })
+        .querySelector('.lucide-wrap-text'),
+    ).toBeNull()
+    fireEvent.click(wrapItem('2 · note'))
+    expect(bodyRow()).toHaveStyle({ height: '32px' })
+  })
+
+  it('a value longer than three lines opens whole in the sheet', () => {
+    const long = Array.from({ length: 6 }, (_, i) => `line ${i}`).join('\n')
+    show(`n\n"${long}"\n`)
+    columnsMenu()
+    fireEvent.click(wrapItem('1 · n'))
+    fireEvent.click(screen.getAllByRole('gridcell')[0])
+    expect(screen.getByRole('dialog').querySelector('pre')?.textContent).toBe(
+      long,
+    )
+  })
+
+  it('names columns in the menu as shown, numbered', () => {
+    show(`a‮b,${'h'.repeat(MAX_CELL_CHARS + 1)}\n1,2\n`)
+    columnsMenu()
+    expect(wrapItem('1 · a⟨U+202E⟩b')).toBeInTheDocument()
+    expect(wrapItem(`2 · ${'h'.repeat(MAX_CELL_CHARS)}…`)).toBeInTheDocument()
+  })
+
+  it('wrapping goes with another delimiter', () => {
+    show(lines)
+    columnsMenu()
+    fireEvent.click(wrapItem('2 · note'))
+    fireEvent.change(screen.getByRole('combobox', { name: 'Delimiter' }), {
+      target: { value: ';' },
+    })
+    expect(bodyRow()).toHaveStyle({ height: '32px' })
+  })
+
+  it('maps the scroll offset onto wrapped rows past the scroll height cap', async () => {
+    vi.useFakeTimers({ toFake: ['requestAnimationFrame'] })
+    try {
+      const count = Math.ceil(MAX_SCROLL_HEIGHT / 61) + 50_000
+      show(`n\n${'x\n'.repeat(count)}`)
+      const grid = await screen.findByRole('grid')
+      columnsMenu()
+      fireEvent.click(wrapItem('1 · n'))
+      const spacers = () => {
+        const inner = grid.firstElementChild as HTMLElement
+        const top = inner.children[1] as HTMLElement
+        const bottom = inner.lastElementChild as HTMLElement
+        const rendered = inner.children.length - 3
+        return (
+          Number.parseFloat(top.style.height) +
+          rendered * 61 +
+          Number.parseFloat(bottom.style.height)
+        )
+      }
+      const numbers = () =>
+        screen.getAllByRole('rowheader').map((h) => Number(h.textContent))
+      expect(spacers()).toBe(MAX_SCROLL_HEIGHT)
+      grid.scrollTop = MAX_SCROLL_HEIGHT - 600
+      fireEvent.scroll(grid)
+      act(() => vi.advanceTimersToNextFrame())
+      expect(numbers()).toContain(count + 1)
+      expect(spacers()).toBe(MAX_SCROLL_HEIGHT)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('arrow keys and pages move by wrapped rows, below the header', () => {
+    const text = `a\n${Array.from({ length: 100 }, (_, i) => i).join('\n')}\n`
+    show(text)
+    columnsMenu()
+    fireEvent.click(wrapItem('1 · a'))
+    const grid = screen.getByRole('grid')
+    const first = screen.getAllByRole('gridcell')[0]
+    first.focus()
+    fireEvent.keyDown(first, { key: 'PageDown' })
+    expect(document.activeElement).toHaveAttribute('data-pos', '9')
+    // Row 9 ends at 610px, under a 32px header in a 600px frame
+    expect(grid.scrollTop).toBe(9 * 61 + 32 + 61 - 600)
+    fireEvent.keyDown(document.activeElement as Element, { key: 'PageUp' })
+    expect(document.activeElement).toHaveAttribute('data-pos', '0')
+    expect(grid.scrollTop).toBe(0)
+  })
+
+  it('starting or stopping a wrap keeps the first row in view on top', () => {
+    vi.useFakeTimers({ toFake: ['requestAnimationFrame'] })
+    try {
+      const text = `n\n${Array.from({ length: 2000 }, (_, i) => i).join('\n')}\n`
+      show(text)
+      const grid = screen.getByRole('grid')
+      grid.scrollTop = 32 * 500
+      fireEvent.scroll(grid)
+      act(() => vi.advanceTimersToNextFrame())
+      columnsMenu()
+      fireEvent.click(wrapItem('1 · n'))
+      expect(grid.scrollTop).toBe(61 * 500)
+      fireEvent.click(wrapItem('1 · n'))
+      expect(grid.scrollTop).toBe(32 * 500)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
+describe('TablePreview row numbers', () => {
+  const openRow = (n: number) =>
+    fireEvent.click(
+      screen.getByRole('button', { name: `Open row ${n} as a record` }),
+    )
+
+  it('a row number opens that row as a record, sorted or filtered', async () => {
+    show(people)
+    // The row header keeps its name
+    expect(screen.getByRole('rowheader', { name: 'Row 3' })).toBeVisible()
+    openRow(3)
+    expect(screen.getByText('Record 2 / 3 · row 3')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Records' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Next record' }))
+    expect(screen.getByText('Record 3 / 3 · row 4')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Records' }))
+    // Sorted by age: row 3 (an, 4) comes first, and is still row 3
+    fireEvent.click(screen.getByRole('button', { name: 'age' }))
+    openRow(3)
+    expect(screen.getByText('Record 1 / 3 · row 3')).toBeInTheDocument()
+    // Filtered to it, then back
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'an' } })
+    expect(await screen.findByText('Record 1 / 1 · row 3')).toBeInTheDocument()
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: '' } })
+    expect(await screen.findByText('Record 1 / 3 · row 3')).toBeInTheDocument()
+    // Filtered out: the first record
+    fireEvent.change(screen.getByRole('searchbox'), {
+      target: { value: 'Bình' },
+    })
+    expect(await screen.findByText('Record 1 / 1 · row 2')).toBeInTheDocument()
+  })
+
+  it('the arrow keys reach a row number without another Tab stop', () => {
+    show(people)
+    const first = screen.getAllByRole('gridcell')[0]
+    first.focus()
+    fireEvent.keyDown(first, { key: 'ArrowLeft' })
+    const number = document.activeElement as HTMLElement
+    expect(number).toHaveAccessibleName('Open row 2 as a record')
+    expect(number).toHaveAttribute('tabindex', '0')
+    expect(first).toHaveAttribute('tabindex', '-1')
+    // Opened from it, the focus goes to the record, out of the covered grid
+    fireEvent.click(number)
+    expect(document.activeElement).toContainElement(
+      screen.getByText('Record 1 / 3 · row 2'),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Records' }))
+    fireEvent.keyDown(number, { key: 'ArrowLeft' })
+    expect(document.activeElement).toBe(number)
+    fireEvent.keyDown(number, { key: 'ArrowDown' })
+    expect(document.activeElement).toHaveAccessibleName(
+      'Open row 3 as a record',
+    )
+    fireEvent.keyDown(document.activeElement as Element, { key: 'ArrowRight' })
+    expect(document.activeElement).toHaveTextContent('an')
+  })
+
+  it('a flagged row keeps its warning', () => {
+    show(people)
+    expect(
+      screen.getByRole('rowheader', {
+        name: 'Row 4: 2 cells, the header has 3',
+      }),
+    ).toHaveClass('text-warning')
+    openRow(4)
+    expect(screen.getByText('Record 3 / 3 · row 4')).toBeInTheDocument()
+  })
+
+  it('back from records, the grid is where it was, wrapped meanwhile or not', () => {
+    vi.useFakeTimers({ toFake: ['requestAnimationFrame'] })
+    try {
+      const text = `n\n${Array.from({ length: 2000 }, (_, i) => i).join('\n')}\n`
+      show(text)
+      const grid = screen.getByRole('grid')
+      grid.scrollTop = 32 * 500
+      fireEvent.scroll(grid)
+      act(() => vi.advanceTimersToNextFrame())
+      openRow(510)
+      // Covered: out of the accessibility tree and of the focus order
+      expect(screen.queryByRole('grid')).toBeNull()
+      expect(grid).toHaveAttribute('inert')
+      columnsMenu()
+      fireEvent.click(wrapItem('1 · n'))
+      fireEvent.click(screen.getByRole('button', { name: 'Records' }))
+      expect(screen.getByRole('grid')).toBe(grid)
+      expect(grid).not.toHaveAttribute('inert')
+      expect(grid.scrollTop).toBe(61 * 500)
+      openRow(505)
+      fireEvent.click(screen.getByRole('button', { name: 'Records' }))
+      expect(grid.scrollTop).toBe(61 * 500)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
+describe('TablePreview of a large file, while its rows are worked out', () => {
+  const rows = Math.ceil(CSV_WORKER_MIN / 8) + 10
+  const big = `id,name\n${Array.from({ length: rows }, (_, i) => `${rows - i},n${i}`).join('\n')}\n`
+
+  beforeEach(() => {
+    FakeWorker.all = []
+    FakeWorker.hold = false
+    vi.stubGlobal('Worker', FakeWorker)
+  })
+
+  it('neither fits nor opens a row number', async () => {
+    FakeWorker.hold = true
+    show(big)
+    const w = FakeWorker.all[0]
+    await act(() => w.flush())
+    fireEvent.click(screen.getByRole('button', { name: 'id' }))
+    expect(screen.getByRole('grid')).toHaveAttribute('aria-busy', 'true')
+    columnsMenu()
+    expect(menuItem('Fit columns')).toBeDisabled()
+    const before = widthOf(1)
+    fireEvent.keyDown(handle('name'), { key: 'Enter' })
+    expect(widthOf(1)).toBe(before)
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Open row 2 as a record' }),
+    )
+    expect(screen.queryByText(/^Record /)).toBeNull()
+    await act(() => w.flush())
+    expect(screen.getByRole('grid')).toHaveAttribute('aria-busy', 'false')
   })
 })
