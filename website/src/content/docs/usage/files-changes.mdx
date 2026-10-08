@@ -435,10 +435,23 @@ never the only sign.
 | `Binary file changed`             | git reports a binary change; there are no lines to show                     |
 | `Diff truncated at 1 MiB`         | The diff of this file is longer than 1 MiB; only its start is shown         |
 | `Unresolved conflict`             | A conflicted file is shown whole, as it is now in the working tree          |
-| `No longer changed`               | The file was committed, reverted or removed after you opened it            |
+| `No longer changed`               | git stopped listing this side of the file while it was being read           |
 | `git took too long; trying again` | `git status` took over 10 seconds (a very large repository); it backs off   |
 
 Submodules are not listed, and their contents are not compared.
+
+Diffs open as tabs, the same way files do in Files (see
+[Open Files as Tabs](#open-files-as-tabs)), with tabs of their own:
+
+- Each side of a file is a tab: the staged and the unstaged diff of one file are two tabs, the
+  staged one named `(staged)`. The first tab, **Changes**, shows the list.
+- A single click opens the preview tab; a double click (on the list or on the tab) or **Edit**
+  keeps it. **Edit** opens the editor in that tab, and switching tabs keeps it with its unsaved
+  changes. Back from the diff shows the list; the tab stays open.
+- When git no longer lists a side (committed, staged, reverted), its tab closes with
+  `No changes left in <file>`. A tab being edited stays open.
+- Closing, the limit of 10, the sheet on a phone, a move of the root and a file that may contain
+  secrets work as in Files.
 
 When the list has more than 15 entries, a **Filter changes…** box appears above it. It keeps the
 files whose path contains what you typed, ignoring case (for a rename, the old path counts too).

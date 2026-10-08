@@ -313,8 +313,9 @@ The `update` command:
 | `pwa/src/utils/file-tabs.ts`                      | Open files as tabs: preview tab, pin, close, cap of 10 (LRU)  |
 | `pwa/src/components/file-tab-bar.tsx`             | Desktop tab bar of the open files (keys, middle click, pin)   |
 | `pwa/src/components/open-files-sheet.tsx`         | Phone: "Open files (N)" button and the sheet listing them     |
+| `pwa/src/components/tab-close-dialogs.tsx`        | Files/Changes: Discard a tab's changes, close on a root move  |
 | `pwa/src/hooks/use-long-press.ts`                 | Long press of a finger (a Markdown link opens a new tab)      |
-| `pwa/src/components/changes-view.tsx`             | Changes view: git status grouped, a file's diff, edits it     |
+| `pwa/src/components/changes-view.tsx`             | Changes view: git status grouped, diffs as tabs, edits a file |
 | `pwa/src/components/file-editor.tsx`              | A file's text in a textarea, why a save failed                |
 | `pwa/src/components/new-file-dialog.tsx`          | Files: asks for a new file's path, creates it, says why not   |
 | `pwa/src/components/group-dialog.tsx`             | New tmux session / workspace: name, directory, why refused    |
@@ -338,7 +339,7 @@ The `update` command:
 | `pwa/src/hooks/use-image-blob.ts`                 | Reads `files/raw` into a `blob:` URL (SVG: `data:`), revokes  |
 | `pwa/src/components/panel-toggles.tsx`            | Desktop header toggles of the side panel (Files, Changes)     |
 | `pwa/src/hooks/use-files.ts`                      | File tree of a pane's root, one store per pane                |
-| `pwa/src/hooks/use-git-changes.ts`                | Polls a pane's git status, one store per pane                 |
+| `pwa/src/hooks/use-git-changes.ts`                | Polls a pane's git status, the Changes tabs, one store a pane |
 | `pwa/src/utils/highlight.ts`                      | Syntax highlighting through a Shiki worker, with a timeout    |
 | `pwa/src/utils/upload-image.ts`                   | Uploads an image to the host, picks one, error messages       |
 | `pwa/src/hooks/use-chat-attachments.ts`           | Images attached to a Chat view message (upload, ids, errors)  |
