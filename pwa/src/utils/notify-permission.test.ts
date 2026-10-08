@@ -3,8 +3,16 @@ import {
   needsHomeScreenApp,
   notificationSupport,
   notifyWorkerReady,
+  readNotifyPermission,
   requestNotify,
 } from './notify-permission'
+
+function stubQuery(query: () => Promise<unknown>) {
+  Object.defineProperty(navigator, 'permissions', {
+    configurable: true,
+    value: { query: vi.fn(query) },
+  })
+}
 
 // A service worker that answers the ping with `reply`, or never answers.
 function stubWorker(reply?: unknown) {
@@ -25,6 +33,7 @@ describe('notify permission', () => {
     vi.unstubAllGlobals()
     vi.useRealTimers()
     Reflect.deleteProperty(navigator, 'serviceWorker')
+    Reflect.deleteProperty(navigator, 'permissions')
   })
 
   it('is unsupported without Notification or a service worker', () => {
@@ -38,6 +47,54 @@ describe('notify permission', () => {
     stubWorker()
     vi.stubGlobal('Notification', { permission: 'denied' })
     expect(notificationSupport()).toBe('denied')
+  })
+
+  // Zen reports Notification.permission 'denied' for a site the user
+  // allowed, while the Permissions API says granted.
+  it('trusts a granted answer from the Permissions API', async () => {
+    stubWorker()
+    vi.stubGlobal('Notification', { permission: 'denied' })
+    stubQuery(() => Promise.resolve({ state: 'granted' }))
+    await expect(readNotifyPermission()).resolves.toBe('granted')
+    expect(notificationSupport()).toBe('granted')
+    expect(navigator.permissions.query).toHaveBeenCalledWith({
+      name: 'notifications',
+    })
+  })
+
+  it('keeps Notification.permission when the query says otherwise', async () => {
+    stubWorker()
+    vi.stubGlobal('Notification', { permission: 'denied' })
+    stubQuery(() => Promise.resolve({ state: 'prompt' }))
+    await expect(readNotifyPermission()).resolves.toBe('denied')
+    vi.stubGlobal('Notification', { permission: 'granted' })
+    stubQuery(() => Promise.resolve({ state: 'denied' }))
+    await expect(readNotifyPermission()).resolves.toBe('granted')
+  })
+
+  it('forgets an earlier grant when the query fails or is missing', async () => {
+    stubWorker()
+    vi.stubGlobal('Notification', { permission: 'denied' })
+    stubQuery(() => Promise.resolve({ state: 'granted' }))
+    await readNotifyPermission()
+    stubQuery(() => Promise.reject(new TypeError('unknown name')))
+    await expect(readNotifyPermission()).resolves.toBe('denied')
+    stubQuery(() => Promise.resolve({ state: 'granted' }))
+    await readNotifyPermission()
+    Reflect.deleteProperty(navigator, 'permissions')
+    await expect(readNotifyPermission()).resolves.toBe('denied')
+  })
+
+  it('takes a refusal the Permissions API contradicts as granted', async () => {
+    stubWorker()
+    vi.stubGlobal('Notification', {
+      permission: 'denied',
+      requestPermission: vi.fn().mockResolvedValue('denied'),
+    })
+    stubQuery(() => Promise.resolve({ state: 'granted' }))
+    await expect(requestNotify()).resolves.toBe('granted')
+    stubQuery(() => Promise.resolve({ state: 'prompt' }))
+    await expect(requestNotify()).resolves.toBe('denied')
   })
 
   it('asks for the permission', async () => {

@@ -53,6 +53,7 @@ describe('push subscription', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     Reflect.deleteProperty(navigator, 'serviceWorker')
+    Reflect.deleteProperty(navigator, 'permissions')
   })
 
   it('is supported with PushManager and a service worker', () => {
@@ -132,6 +133,14 @@ describe('push subscription', () => {
   })
 
   describe('repairPushSubscription', () => {
+    // A registration implies a service worker; the permission read needs it.
+    beforeEach(() => {
+      Object.defineProperty(navigator, 'serviceWorker', {
+        configurable: true,
+        value: {},
+      })
+    })
+
     it('posts the existing subscription again', async () => {
       const sub = fakeSub(pushKeyBytes(KEY))
       const { reg, pushManager } = fakeReg(sub)
@@ -169,6 +178,17 @@ describe('push subscription', () => {
       const { reg, pushManager } = fakeReg(null)
       expect(await repairPushSubscription(reg, KEY)).toBe(false)
       expect(pushManager.subscribe).not.toHaveBeenCalled()
+    })
+
+    it('makes one when only the Permissions API reports it granted', async () => {
+      vi.stubGlobal('Notification', { permission: 'denied' })
+      Object.defineProperty(navigator, 'permissions', {
+        configurable: true,
+        value: { query: vi.fn().mockResolvedValue({ state: 'granted' }) },
+      })
+      const { reg, pushManager } = fakeReg(null)
+      expect(await repairPushSubscription(reg, KEY)).toBe(true)
+      expect(pushManager.subscribe).toHaveBeenCalled()
     })
 
     it('fails on a refused subscribe or a server error', async () => {

@@ -14,6 +14,7 @@ import {
   needsHomeScreenApp,
   notificationSupport,
   notifyWorkerReady,
+  readNotifyPermission,
   requestNotify,
 } from '../utils/notify-permission'
 import { Button, FOCUS_RING, IconButton } from './ui/button'
@@ -339,6 +340,11 @@ function NotifyAgentsRow({
     let live = true
     notifyWorkerReady().then((ready) => {
       if (live) setWorkerReady(ready)
+    })
+    // Notification.permission can read 'denied' where the Permissions API
+    // says granted (notify-permission.ts).
+    readNotifyPermission().then((p) => {
+      if (live) setPermission(p)
     })
     return () => {
       live = false

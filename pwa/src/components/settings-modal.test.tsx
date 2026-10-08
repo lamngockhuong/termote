@@ -14,6 +14,9 @@ const notify = vi.hoisted(() => ({
   needsHomeScreenApp: vi.fn(() => false),
   notificationSupport: vi.fn(() => 'unsupported'),
   notifyWorkerReady: vi.fn(() => Promise.resolve(true)),
+  readNotifyPermission: vi.fn(() =>
+    Promise.resolve(notify.notificationSupport()),
+  ),
   requestNotify: vi.fn(() => Promise.resolve('granted')),
 }))
 vi.mock('../utils/notify-permission', () => notify)
@@ -727,6 +730,14 @@ describe('SettingsModal', () => {
       expect(
         screen.getByText('Blocked in browser settings'),
       ).toBeInTheDocument()
+    })
+
+    it('turns on where only the Permissions API reports it granted', async () => {
+      notify.notificationSupport.mockReturnValue('denied')
+      notify.readNotifyPermission.mockResolvedValueOnce('granted')
+      const { sw } = await renderReady({ notifyAgents: true })
+      expect(sw).toHaveAttribute('aria-checked', 'true')
+      expect(screen.queryByText('Blocked in browser settings')).toBeNull()
     })
 
     it('asks for a reload while an older worker is active', async () => {

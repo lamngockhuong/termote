@@ -8,11 +8,34 @@ export type NotifySupport = NotificationPermission | 'unsupported'
 export const NOTIFY_WORKER_VERSION = 2
 const PING_TIMEOUT_MS = 500
 
+// The Permissions API's last answer for notifications. Zen (Firefox based)
+// can report Notification.permission 'denied' for a site the user allowed,
+// while the Permissions API says 'granted' and showNotification works; a
+// 'granted' answer from it is trusted over Notification.permission.
+let queried: PermissionState | undefined
+
 export function notificationSupport(): NotifySupport {
   if (typeof Notification === 'undefined' || !('serviceWorker' in navigator)) {
     return 'unsupported'
   }
+  if (Notification.permission !== 'granted' && queried === 'granted') {
+    return 'granted'
+  }
   return Notification.permission
+}
+
+// Asks the Permissions API again, then answers as notificationSupport does.
+// Without it, or when it refuses the name, Notification.permission alone.
+export async function readNotifyPermission(): Promise<NotifySupport> {
+  try {
+    const status = await navigator.permissions?.query({
+      name: 'notifications',
+    })
+    queried = status?.state
+  } catch {
+    queried = undefined
+  }
+  return notificationSupport()
 }
 
 // iPhone and iPad notify only from the app added to the Home Screen (iOS
@@ -29,9 +52,13 @@ export function needsHomeScreenApp(
   return ios && !standalone
 }
 
-// Called first thing in a click: Safari asks only from a user gesture.
-export function requestNotify(): Promise<NotificationPermission> {
-  return Notification.requestPermission()
+// Called first thing in a click: Safari asks only from a user gesture. A
+// refusal is checked against the Permissions API (see `queried`), which is
+// awaited only then, so a granted answer reaches the subscribe at once.
+export async function requestNotify(): Promise<NotificationPermission> {
+  const result = await Notification.requestPermission()
+  if (result === 'granted') return result
+  return (await readNotifyPermission()) === 'granted' ? 'granted' : result
 }
 
 // The active worker answers the ping. With registerType 'prompt' a worker

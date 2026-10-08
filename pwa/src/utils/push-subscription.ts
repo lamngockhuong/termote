@@ -1,4 +1,5 @@
 import { subscribePush, unsubscribePush } from '../hooks/use-mux-api'
+import { readNotifyPermission } from './notify-permission'
 
 // This device's Web Push subscription. The server is told of it on every
 // repair (an idempotent upsert), so a subscription it dropped or never got
@@ -77,7 +78,7 @@ export async function repairPushSubscription(
     sub = null
   }
   if (!sub) {
-    if (Notification.permission !== 'granted') return false
+    if ((await readNotifyPermission()) !== 'granted') return false
     try {
       sub = await reg.pushManager.subscribe(subscribeOptions(key))
     } catch {
