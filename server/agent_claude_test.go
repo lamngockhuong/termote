@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -411,5 +412,65 @@ func TestReadClaudeSessionFileRejectsNonRegular(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("reading a FIFO without a writer did not return")
+	}
+}
+
+func TestClaudeToolDetail(t *testing.T) {
+	parse := func(s string) map[string]any {
+		var in map[string]any
+		if err := json.Unmarshal([]byte(s), &in); err != nil {
+			t.Fatal(err)
+		}
+		return in
+	}
+	tests := []struct {
+		name, tool, in string
+		want           *ToolDetail
+	}{
+		{"bash", "Bash", `{"command":"ls -la\nwc -l","description":"List  files"}`,
+			&ToolDetail{Description: "List files", Command: "ls -la\nwc -l"}},
+		{"edit", "Edit", `{"file_path":"/r/a.go","old_string":"a","new_string":"b"}`,
+			&ToolDetail{Edits: []ToolEdit{{Old: "a", New: "b"}}}},
+		{"multi edit, empty one dropped", "MultiEdit", `{"file_path":"/r/a.go","edits":[{"old_string":"a","new_string":"b"},{"old_string":"","new_string":""},"x"]}`,
+			&ToolDetail{Edits: []ToolEdit{{Old: "a", New: "b"}}}},
+		{"write", "Write", `{"file_path":"/r/new.md","content":"# hi\n"}`,
+			&ToolDetail{Edits: []ToolEdit{{New: "# hi\n"}}}},
+		{"sensitive edit hidden", "Edit", `{"file_path":"/r/.env","old_string":"K=1","new_string":"K=2"}`,
+			&ToolDetail{Hidden: true}},
+		{"task description", "Task", `{"description":"Scout files","prompt":"long"}`,
+			&ToolDetail{Description: "Scout files"}},
+		{"command of another tool ignored", "Grep", `{"command":"x","pattern":"y"}`, nil},
+		{"nothing", "Read", `{"file_path":"/r/a.go"}`, nil},
+	}
+	for _, tt := range tests {
+		got := claudeToolDetail(tt.tool, parse(tt.in))
+		if !reflect.DeepEqual(got, tt.want) {
+			t.Errorf("%s: got %+v, want %+v", tt.name, got, tt.want)
+		}
+	}
+}
+
+func TestClaudeToolDetailClamps(t *testing.T) {
+	long := strings.Repeat("é", claudeMaxCommand)
+	d := claudeToolDetail("Bash", map[string]any{"command": long})
+	if !d.Clipped || len(d.Command) > claudeMaxCommand || !strings.HasPrefix(long, d.Command) {
+		t.Errorf("command clipped=%v len=%d", d.Clipped, len(d.Command))
+	}
+	half := strings.Repeat("x", claudeMaxEdits/2)
+	edits := []any{
+		map[string]any{"old_string": half, "new_string": "y"},
+		map[string]any{"old_string": half, "new_string": "z"},
+		map[string]any{"old_string": "never", "new_string": "kept"},
+	}
+	d = claudeToolDetail("MultiEdit", map[string]any{"file_path": "/r/a", "edits": edits})
+	if !d.Clipped || len(d.Edits) != 2 {
+		t.Fatalf("edits clipped=%v n=%d", d.Clipped, len(d.Edits))
+	}
+	total := 0
+	for _, e := range d.Edits {
+		total += len(e.Old) + len(e.New)
+	}
+	if total > claudeMaxEdits {
+		t.Errorf("edits total %d over %d", total, claudeMaxEdits)
 	}
 }

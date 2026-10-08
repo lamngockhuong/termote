@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ViewProps } from '../app-views'
 import type { TranscriptState } from '../hooks/use-agent-transcript'
 import type { AgentPrompt, TranscriptEntry } from '../hooks/use-mux-api'
-import ChatView, { RENDER_WINDOW } from './chat-view'
+import ChatView, { chatLayout, RENDER_WINDOW } from './chat-view'
 import { OpenTerminalButton } from './open-terminal-button'
 
 const transcript = {
@@ -531,5 +531,48 @@ describe('ChatView without an agent', () => {
     )
     expect(screen.getByText('No agent runs in this pane.')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Codex' })).toBeNull()
+  })
+})
+
+describe('chatLayout', () => {
+  const e = (
+    id: string,
+    role: TranscriptEntry['role'],
+    ts?: string,
+    tool = false,
+  ): TranscriptEntry => ({
+    id,
+    role,
+    ts,
+    parts: [tool ? { kind: 'tool', orphan: true } : { kind: 'text', text: id }],
+  })
+  it('times the start of each run and joins the agent steps', () => {
+    const layout = chatLayout([
+      e('u1', 'user', '2026-10-08T09:00:00Z'),
+      e('a1', 'assistant', '2026-10-08T09:00:10Z'),
+      e('r1', 'user', '2026-10-08T09:00:20Z', true),
+      e('a2', 'assistant', '2026-10-08T09:10:00Z'),
+      e('n1', 'note'),
+      e('u2', 'user', '2026-10-08T09:11:00Z'),
+      e('u3', 'user', '2026-10-08T09:12:00Z'),
+    ])
+    expect(layout.map((l) => l.showTime)).toEqual([
+      true,
+      true,
+      false,
+      true,
+      false,
+      true,
+      false,
+    ])
+    expect(layout.map((l) => l.joinsNext)).toEqual([
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+    ])
   })
 })

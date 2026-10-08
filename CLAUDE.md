@@ -298,6 +298,8 @@ The `update` command:
 | `pwa/src/utils/terminal-bridge.ts`                | Drives the xterm.js terminal (key mapping, clipboard paste)   |
 | `pwa/src/components/chat-view.tsx`                | Chat view of a pane running Claude Code (lazy-loaded)         |
 | `pwa/src/components/chat-composer.tsx`            | Chat view message box                                         |
+| `pwa/src/components/chat-tool-card.tsx`           | Chat view tool call: IN/OUT, an edit's diff, shown capped     |
+| `pwa/src/utils/line-diff.ts`                      | Line diff of an edit's old and new text, its summary          |
 | `pwa/src/components/chat-attachments.tsx`         | Images attached to the next Chat message, above the box       |
 | `pwa/src/chat-agents.ts`                          | Agents with a Chat view (claude, codex) and with input        |
 | `pwa/src/components/start-agent-panel.tsx`        | Chat view of an idle pane: start Claude Code or Codex         |
@@ -518,6 +520,9 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   box is cleared with one `C-c` only when the same idle agent shows nothing but what this
   request pasted; otherwise 409 `partial_paste` and nothing is touched.
   Markdown images in the Chat view never load (shown as links), and raw HTML is not rendered.
+  A tool call carries `detail` for its card: the model's description, a Bash/Codex command whole
+  (8 KiB) and an Edit/MultiEdit/Write's old and new text (16 KiB per call); the edits of a file
+  `isSensitive` names are left out (`hidden`), as its diff is in Changes.
   `agent/commands` (the composer's `/` suggestions) returns only names, descriptions, sources
   and kinds of `.claude/commands`/`.claude/skills` under the pane root and `commands`/`skills`
   in that config dir, read through `os.Root` (first 8 KB per file; a file that is a symlink, under

@@ -344,6 +344,20 @@ export interface TranscriptPart {
   // the call is known.
   orphan?: boolean
   clipped?: boolean
+  // What a tool call's card shows beyond the one-line input
+  detail?: ToolDetail
+}
+
+export interface ToolDetail {
+  // The description the model gave the call
+  description?: string
+  // A command whole (Bash, a Codex command)
+  command?: string
+  // Replacements of an edit; a new file (Write) has only new
+  edits?: { old?: string; new?: string }[]
+  clipped?: boolean
+  // The edits of a sensitive file were left out
+  hidden?: boolean
 }
 
 export interface TranscriptEntry {

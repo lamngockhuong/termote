@@ -264,10 +264,16 @@ func parseCodexRow(line []byte, off int64) (e TranscriptEntry, recognised, ok bo
 		}
 	case "CommandExecution":
 		result, clipped := clampText(stripANSI(it.AggregatedOutput), claudeMaxResult)
-		e.Parts = append(e.Parts, TranscriptPart{
+		p := TranscriptPart{
 			Kind: "tool", Tool: codexToolNames["CommandExecution"], ToolID: it.ID, Input: oneLine(codexCommand(it.Command)),
 			Result: result, IsError: it.Status == "failed" || (it.ExitCode != nil && *it.ExitCode != 0), Clipped: clipped,
-		})
+		}
+		if cmd := strings.TrimSpace(stripANSI(codexCommand(it.Command))); cmd != "" {
+			d := &ToolDetail{}
+			d.Command, d.Clipped = clampText(cmd, claudeMaxCommand)
+			p.Detail = d
+		}
+		e.Parts = append(e.Parts, p)
 	case "FileChange":
 		paths := make([]string, 0, len(it.Changes))
 		for p := range it.Changes {

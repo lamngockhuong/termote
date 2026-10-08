@@ -106,6 +106,26 @@ type TranscriptPart struct {
 	// earlier poll); the client attaches it by ToolID when it has the call.
 	Orphan  bool `json:"orphan,omitempty"`
 	Clipped bool `json:"clipped,omitempty"`
+	// Detail: what the Chat view's card of a tool call shows beyond the
+	// one-line Input; absent when the call has nothing more.
+	Detail *ToolDetail `json:"detail,omitempty"`
+}
+
+// ToolDetail is a tool call's own description, its whole command and the
+// text an edit replaced and put in, each capped.
+type ToolDetail struct {
+	Description string     `json:"description,omitempty"`
+	Command     string     `json:"command,omitempty"`
+	Edits       []ToolEdit `json:"edits,omitempty"`
+	// Some of the above was cut, or edits of a sensitive file were left out
+	Clipped bool `json:"clipped,omitempty"`
+	Hidden  bool `json:"hidden,omitempty"`
+}
+
+// ToolEdit is one replacement of an edit; a new file has only New.
+type ToolEdit struct {
+	Old string `json:"old,omitempty"`
+	New string `json:"new,omitempty"`
 }
 
 type transcriptResponse struct {

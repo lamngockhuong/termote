@@ -219,9 +219,13 @@ func TestCodexParseItems(t *testing.T) {
 	check(0, "user", func(p TranscriptPart) bool { return p.Kind == "image" })
 	check(1, "user", func(p TranscriptPart) bool { return p.Kind == "image" })
 	check(2, "assistant", func(p TranscriptPart) bool { return p.Kind == "thinking" && p.Text == "one\n\ntwo" })
-	check(3, "assistant", func(p TranscriptPart) bool { return p.Input == "git status" && p.Result == "x" && p.IsError })
+	check(3, "assistant", func(p TranscriptPart) bool {
+		return p.Input == "git status" && p.Result == "x" && p.IsError && p.Detail.Command == "git status"
+	})
 	check(4, "assistant", func(p TranscriptPart) bool { return p.Input == "ls -la" && p.IsError })
-	check(5, "assistant", func(p TranscriptPart) bool { return p.Clipped && len(p.Result) == claudeMaxResult && !p.IsError })
+	check(5, "assistant", func(p TranscriptPart) bool {
+		return p.Clipped && len(p.Result) == claudeMaxResult && !p.IsError && p.Detail == nil
+	})
 	check(6, "assistant", func(p TranscriptPart) bool {
 		return p.Tool == "Edit" && p.Input == "/p/gone.txt" && p.Result == "-x\n-y\n" && p.IsError
 	})
