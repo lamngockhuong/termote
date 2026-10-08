@@ -103,8 +103,8 @@ test.describe('theme toggle', () => {
       const bg = await page
         .locator('[data-testid="terminal-view"] .xterm-scrollable-element')
         .evaluate((el) => getComputedStyle(el).backgroundColor)
-      // --tm-term-bg of the default (neutral) style in light: #fcfcfd
-      expect(bg).toBe('rgb(252, 252, 253)')
+      // --tm-term-bg of the default (neutral) style in light: #f7f7f8
+      expect(bg).toBe('rgb(247, 247, 248)')
     }).toPass({ timeout: 5000 })
   })
 })
@@ -112,9 +112,9 @@ test.describe('theme toggle', () => {
 test.describe('ui style', () => {
   // [style, --tm-bg in dark, --tm-term-bg in dark]
   const styles = [
-    ['terminal', 'rgb(12, 14, 13)', 'rgb(12, 14, 13)'],
-    ['native', 'rgb(0, 0, 0)', 'rgb(11, 11, 12)'],
-    ['neutral', 'rgb(9, 9, 11)', 'rgb(12, 12, 14)'],
+    ['terminal', 'rgb(15, 17, 16)', 'rgb(15, 17, 16)'],
+    ['native', 'rgb(18, 18, 20)', 'rgb(11, 11, 12)'],
+    ['neutral', 'rgb(26, 26, 29)', 'rgb(12, 12, 14)'],
   ] as const
 
   for (const [style, bg, termBg] of styles) {
@@ -189,7 +189,7 @@ test.describe('ui style setting', () => {
     await expect(page.locator('html')).toHaveAttribute('data-ui-style', 'terminal')
     // --tm-bg of the terminal style in dark
     expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe(
-      'rgb(12, 14, 13)',
+      'rgb(15, 17, 16)',
     )
   })
 })
