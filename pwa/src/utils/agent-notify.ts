@@ -27,9 +27,10 @@ export function transitionKind(
   return undefined
 }
 
-// Last known status of every pane, and what the new snapshot raised. A pane
-// with no status (a lookup that timed out, an agent starting) keeps its last
-// known one; a pane no longer listed is forgotten.
+// Last known status of every pane, and what the new snapshot raised. An
+// agent with no status (one starting) keeps its last known one; a pane with
+// no agent, or no longer listed, is forgotten, so a new agent there is a
+// first sighting.
 export function agentTransitions(
   prev: ReadonlyMap<string, AgentStatus>,
   sessions: readonly Session[],
@@ -38,7 +39,7 @@ export function agentTransitions(
   const events: AgentEvent[] = []
   for (const s of sessions) {
     for (const p of s.panes ?? []) {
-      const last = prev.get(p.id)
+      const last = p.hasAgent ? prev.get(p.id) : undefined
       const status = p.agentStatus ?? last
       if (status) next.set(p.id, status)
       const kind = p.agentStatus && transitionKind(last, p.agentStatus)

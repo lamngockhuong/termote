@@ -919,18 +919,40 @@ type agentPane struct {
 	paneID, panePID string
 }
 
+// lastAgents is each pane's agent as the newest finished lookup found it
+// (seq: the order lookups started in, so an older one finishing late never
+// replaces a newer one's result).
+var lastAgents = struct {
+	sync.Mutex
+	next, seq uint64
+	panes     map[string]AgentInfo
+}{panes: map[string]AgentInfo{}}
+
 // lookupAgents finds the agent of each pane. A snapshot that would wait past
-// agentLookupWait is answered without agents; the lookup keeps running and
-// fills the caches for the next one.
+// agentLookupWait is answered with the agents the last finished lookup
+// found, never with none: a pane without an agent forgets its status (push,
+// notifications). The lookup keeps running and fills the caches for the
+// next one.
 func lookupAgents(ctx context.Context, panes []agentPane) []*AgentInfo {
+	lastAgents.Lock()
+	lastAgents.next++
+	seq := lastAgents.next
+	lastAgents.Unlock()
 	done := make(chan []*AgentInfo, 1)
 	go func() {
 		out := make([]*AgentInfo, len(panes))
+		found := map[string]AgentInfo{}
 		for i, p := range panes {
 			if s, ok := tmuxPaneAgent(p.paneID, p.panePID); ok {
 				out[i] = &AgentInfo{Name: s.Agent, Status: s.Status}
+				found[p.paneID] = *out[i]
 			}
 		}
+		lastAgents.Lock()
+		if seq > lastAgents.seq {
+			lastAgents.seq, lastAgents.panes = seq, found
+		}
+		lastAgents.Unlock()
 		done <- out
 	}()
 	select {
@@ -940,7 +962,15 @@ func lookupAgents(ctx context.Context, panes []agentPane) []*AgentInfo {
 	case <-time.After(agentLookupWait):
 	}
 	log.Printf("tmux snapshot: agent lookup took longer than %s, skipped", agentLookupWait)
-	return make([]*AgentInfo, len(panes))
+	out := make([]*AgentInfo, len(panes))
+	lastAgents.Lock()
+	defer lastAgents.Unlock()
+	for i, p := range panes {
+		if a, ok := lastAgents.panes[p.paneID]; ok {
+			out[i] = &a
+		}
+	}
+	return out
 }
 
 // tmuxPaneIDRe matches tmux's own pane id, which never starts with '-'.

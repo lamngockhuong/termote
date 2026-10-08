@@ -109,7 +109,10 @@ func pushTransitionKind(prev, next string) string {
 }
 
 // transitions returns the last known status of every pane in snap and the
-// events since prev. A pane no longer listed is forgotten.
+// events since prev. A pane no longer listed, or listed without an agent, is
+// forgotten: the next agent there is a first sighting, so a killed working
+// agent and a new one's first idle raise no finished turn. An agent with no
+// status keeps its last known one.
 func transitions(prev map[string]string, snap Snapshot) (map[string]string, []pushEvent) {
 	next := map[string]string{}
 	var events []pushEvent
@@ -122,7 +125,7 @@ func transitions(prev map[string]string, snap Snapshot) (map[string]string, []pu
 					status = p.Agent.Status
 				}
 				if status == "" {
-					if last != "" {
+					if p.Agent != nil && last != "" {
 						next[p.ID] = last
 					}
 					continue
