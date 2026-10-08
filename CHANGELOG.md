@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.17.0](https://github.com/lamngockhuong/termote/compare/v1.16.0...v1.17.0) (2026-10-08)
+
+
+### Features
+
+* create, open and remove Herdr git worktree workspaces ([#355](https://github.com/lamngockhuong/termote/issues/355)) ([#392](https://github.com/lamngockhuong/termote/issues/392)) ([0ac4943](https://github.com/lamngockhuong/termote/commit/0ac4943e18a8890da76a9bf362bb79d518ac71dc))
+* **pwa:** open diffs in tabs in the Changes view ([#385](https://github.com/lamngockhuong/termote/issues/385)) ([#397](https://github.com/lamngockhuong/termote/issues/397)) ([aeff4d6](https://github.com/lamngockhuong/termote/commit/aeff4d657e3247bc674b05b7cfecf94d8e877ccd))
+* **pwa:** open files in tabs in the Files view ([#385](https://github.com/lamngockhuong/termote/issues/385)) ([#396](https://github.com/lamngockhuong/termote/issues/396)) ([e92c566](https://github.com/lamngockhuong/termote/commit/e92c5660e0bf75387ca9ca567bddd70f4334c277))
+* **pwa:** resize and wrap table columns, open a row as a record ([#386](https://github.com/lamngockhuong/termote/issues/386)) ([#400](https://github.com/lamngockhuong/termote/issues/400)) ([a69beb3](https://github.com/lamngockhuong/termote/commit/a69beb3763ee689677d6892a53d041f87c1dbc23))
+* show tool calls in the Chat view as cards on a timeline ([#387](https://github.com/lamngockhuong/termote/issues/387)) ([aee02c3](https://github.com/lamngockhuong/termote/commit/aee02c32d910462dd1dc59aad5d0796453d0b3e0))
+* start Claude Code in an idle Herdr pane on Windows ([#357](https://github.com/lamngockhuong/termote/issues/357)) ([#391](https://github.com/lamngockhuong/termote/issues/391)) ([2a93268](https://github.com/lamngockhuong/termote/commit/2a93268edb2404a91cb0c8d23ef71d15c0bfde2b))
+
+
+### Bug Fixes
+
+* **pwa:** keep the group menu visible next to a long group name ([#394](https://github.com/lamngockhuong/termote/issues/394)) ([5ed54e8](https://github.com/lamngockhuong/termote/commit/5ed54e8c895ea5ec8292608f5faaef73a9372096))
+* **pwa:** soften text and background contrast in every UI style ([#389](https://github.com/lamngockhuong/termote/issues/389)) ([5eb6ec2](https://github.com/lamngockhuong/termote/commit/5eb6ec2b1acfdfa5d95e49e569c7ae0fae554c00))
+* **server:** report a Chat message unsent when Enter leaves a draft ([#399](https://github.com/lamngockhuong/termote/issues/399)) ([94ee888](https://github.com/lamngockhuong/termote/commit/94ee8884829a8fcaa681e7261ca1fde636a863ff))
+
 ## [1.16.0](https://github.com/lamngockhuong/termote/compare/v1.15.0...v1.16.0) (2026-10-08)
 
 
