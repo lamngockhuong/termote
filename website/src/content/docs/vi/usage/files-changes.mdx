@@ -59,8 +59,9 @@ Các bộ quản lý phiên hỗ trợ:
 - Thư mục xếp trước, rồi tới file, không phân biệt hoa thường. Chạm vào thư mục để mở hoặc đóng.
 - Mỗi thư mục hiện tối đa 5000 mục. Thư mục dài hơn sẽ ghi là chỉ hiện 5000 mục đầu.
 - Thiết bị, socket và link trỏ ra ngoài gốc hiện mờ và không mở được.
-- File mở ra thay chỗ cây thư mục, kèm đường dẫn, kích thước, nút chép đường dẫn và nút xuống
-  dòng cho dòng dài (trên điện thoại bật sẵn). Dòng dài cuộn ngang trong khung code, không bao giờ
+- File mở ra thay chỗ cây thư mục, trong một tab (xem
+  [Mở nhiều file theo tab](#mở-nhiều-file-theo-tab)), kèm đường dẫn, kích thước, nút chép đường
+  dẫn và nút xuống dòng cho dòng dài (trên điện thoại bật sẵn). Dòng dài cuộn ngang trong khung code, không bao giờ
   làm cả trang cuộn ngang.
 - Tô màu áp dụng cho các ngôn ngữ và tên file thường gặp (TypeScript, Go, Python, shell,
   Dockerfile, Makefile, YAML, JSON, Markdown và nhiều loại khác). Phần này chỉ tải về lần đầu có
@@ -72,6 +73,33 @@ Các bộ quản lý phiên hỗ trợ:
 | Chữ thường, không màu                                         | File văn bản lớn hơn (tới 1 MiB), ngôn ngữ chưa hỗ trợ, hoặc tô màu mất quá 3 giây              |
 | `Not previewable (binary, special file or larger than 1 MiB)`  | File nhị phân không phải ảnh, file lớn hơn 1 MiB, hoặc thứ không phải file thường                |
 | `This file can't be shown`                                     | Đường dẫn Termote không bao giờ trả về (xem bên dưới)                                            |
+
+## Mở nhiều file theo tab
+
+Mở thêm file thì các file đang mở vẫn còn: mỗi file một tab, quay lại tab nào thì file đó vẫn ở
+đúng chỗ bạn đang đọc, phần sửa dở chưa lưu cũng còn nguyên.
+
+- **Bấm một lần là mở ở tab xem trước**, tên tab in nghiêng: file kế tiếp mở cùng cách sẽ thế chỗ
+  nó. File được giữ ở tab riêng khi bạn bấm đúp vào nó (trên cây hoặc trên tab), bắt đầu sửa, vừa
+  tạo nó, hoặc bấm **Keep open** (hình ghim trên thanh của file).
+- File đã mở rồi thì app chuyển sang tab của nó, không bao giờ mở thêm tab thứ hai.
+- Tab đầu tiên, **Files**, hiện cây thư mục; các file vẫn mở phía sau. Bấm Back khi không còn link
+  nào để quay lại cũng về cây thư mục.
+- **Đóng tab**: bấm nút ×, bấm chuột giữa, hoặc nhấn Delete khi tab đang được chọn. Tab còn thay
+  đổi chưa lưu (có chấm sau tên) thì app hỏi `Discard changes?` trước.
+- **Tối đa 10 tab.** Mở thêm thì tab lâu không dùng nhất sẽ đóng, trừ tab đang xem và tab còn thay
+  đổi chưa lưu. Nếu mọi tab khác đều còn thay đổi chưa lưu thì app để mở quá 10 tab.
+- **Trên điện thoại** không có thanh tab. Nút ghi số file đang mở (`Open files (N)`), nằm trên thanh
+  của file và trên cây thư mục, mở ra danh sách các file: chạm một file để xem, giữ nó lại, hoặc
+  đóng nó.
+- Xoá file trong Termote thì tab của file đó đóng theo. File bị thứ khác xoá hay đổi tên thì tab vẫn
+  ở lại, hiện `File not found` kèm nút **Close tab**.
+- Pane chuyển sang thư mục khác thì các tab mở ở thư mục cũ đóng lại. Tab nào còn thay đổi chưa
+  lưu thì app hỏi trước: **Discard and close** bỏ các thay đổi, **Keep** giữ tab lại để bạn chép văn
+  bản ra (không lưu được nữa).
+- File có thể chứa bí mật thì mỗi tab mới đều hỏi lại. Tab nào bạn đã chọn hiện thì vẫn hiện cho tới
+  khi đóng tab.
+- Tab chỉ nằm trong bộ nhớ của trang: tải lại app là không còn tab nào.
 
 ## Tìm file
 
@@ -113,8 +141,9 @@ hay gõ `sed`.
 - Ctrl+S (Cmd+S trên macOS) để lưu. Bấm Cancel hoặc Back khi còn thay đổi chưa lưu thì app hỏi
   `Discard changes?` trước.
 - Xuống dòng giữ nguyên như file đang dùng: file xuống dòng kiểu Windows (`\r\n`) vẫn giữ kiểu đó.
-- Đổi view, hay đóng rồi mở lại panel, văn bản đang sửa vẫn còn. Văn bản chỉ nằm trong bộ nhớ của
-  trang, không bao giờ vào bộ nhớ của trình duyệt, nên đóng hoặc tải lại app là mất (điện thoại có
+- Đổi view, chuyển tab, hay đóng rồi mở lại panel, văn bản đang sửa vẫn còn. Mỗi file giữ phần sửa
+  dở của riêng nó, nên sửa được nhiều file cùng lúc; file sửa từ Changes dùng chung văn bản với
+  chính file đó trong Files. Văn bản chỉ nằm trong bộ nhớ của trang, không bao giờ vào bộ nhớ của trình duyệt, nên đóng hoặc tải lại app là mất (điện thoại có
   thể tự đóng app để chạy nền).
 - Trong **Changes**, diff của file mà working tree vẫn còn ở dạng văn bản cũng có nút Edit này
   (ở phía đã đưa vào index thì nút là **Edit working copy**: thứ được lưu là file trong working tree). Lưu xong
@@ -151,15 +180,14 @@ chỉ được ẩn trong app.
 Ở đầu Files có nút **New file** (hình trang giấy kèm dấu cộng). Bấm vào, app hỏi đường dẫn tính từ
 thư mục của pane, chẳng hạn `docs/notes/today.md`, và điền sẵn thư mục bạn bấm gần nhất trên cây.
 **Create** tạo một file rỗng, tạo luôn các thư mục còn thiếu trên đường dẫn, rồi mở file trong ô
-nhập văn bản để bạn gõ nội dung và bấm **Save**. Nút chỉ hiện khi đang xem cây, không hiện lúc đang
-mở một file.
+nhập văn bản, ở một tab riêng, để bạn gõ nội dung và bấm **Save**. Nút chỉ hiện khi đang xem cây,
+không hiện lúc đang xem một file.
 
 - File hay thư mục đã có thì không bao giờ bị thay: ô báo
   `A file or directory of that name already exists`, kèm nút **Open it** để mở chính nó.
 - Tên thường chứa bí mật (ví dụ `.env.local`) thì app hỏi
   `This name usually holds secrets. Create it anyway?` một lần; tạo xong, file mở ra luôn mà không
   hỏi lại có hiện nội dung không.
-- Đang có file khác sửa dở chưa lưu thì app hỏi `Discard other changes?` trước.
 - Mất kết nối trước khi server trả lời thì ô báo
   `The file may have been created. Refresh to check.`, bấm **Refresh** để đọc lại cây.
 - Đóng ô trong lúc **Create** đang chạy không dừng được nó: file vẫn được tạo và hiện trên cây,
@@ -247,11 +275,14 @@ chọn đó. File Markdown lớn hơn 256 KiB mở ở dạng mã nguồn, kèm 
 Link:
 
 - Link tới file khác trong thư mục gốc (`docs/guide.md`, `../README.md`, `/src/main.go`) mở file
-  đó ngay tại chỗ; `guide.md#install` mở file và nhảy tới tiêu đề đó. Dấu `/` ở đầu nghĩa là thư
-  mục gốc.
+  đó ngay trong tab đang xem; `guide.md#install` mở file và nhảy tới tiêu đề đó. Dấu `/` ở đầu
+  nghĩa là thư mục gốc. File đã mở ở tab khác thì app chuyển sang tab đó.
+- Giữ Ctrl (Cmd trên macOS) rồi bấm, bấm chuột giữa, hoặc nhấn giữ trên điện thoại thì link mở ở
+  tab mới.
 - Link tới thư mục hiện cây thư mục với thư mục đó đang mở.
 - `#tieu-de` cuộn tới tiêu đề trong cùng file.
-- Nút quay lại đưa bạn về file chứa link vừa bấm, đúng chỗ đang đọc dở, rồi mới về cây thư mục.
+- Nút quay lại đưa bạn về file chứa link vừa bấm trong tab đó, đúng chỗ đang đọc dở, rồi mới về cây
+  thư mục.
 - Link tới file không tồn tại báo `Not found`. Link ra ngoài thư mục gốc, hoặc dùng giao thức
   khác `http`/`https` (`javascript:`, `file:`, `data:`), chỉ hiện dạng chữ.
 - Link `http`/`https` mở trong tab mới; rê chuột lên sẽ thấy trang mà link dẫn tới.

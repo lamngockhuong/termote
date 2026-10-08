@@ -13,6 +13,7 @@ import {
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useTheme } from '../contexts/theme-context'
+import { useLongPress } from '../hooks/use-long-press'
 import { highlightLang, type Token } from '../utils/highlight'
 import { type LanguageId, languageForName } from '../utils/highlight-langs'
 import {
@@ -40,15 +41,20 @@ interface Props {
   // Where to start: a heading, else an offset to restore
   anchor?: string
   scrollTop?: number
-  // A link to another file or a directory, followed from scrollTop
-  onFollow: (target: LinkPath, scrollTop: number) => void
+  // A link to another file or a directory, followed from scrollTop; newTab
+  // for Ctrl/Cmd+click, a middle click or a long press
+  onFollow: (
+    target: LinkPath,
+    scrollTop: number,
+    opts: { newTab: boolean },
+  ) => void
   notify: (message: string) => void
 }
 
 interface Ctx {
   path: string
   wrap: boolean
-  go: (target: LinkPath) => void
+  go: (target: LinkPath, newTab?: boolean) => void
   notify: (message: string) => void
 }
 
@@ -57,7 +63,8 @@ const PreviewContext = createContext({} as Ctx)
 
 const LINK = 'text-accent underline underline-offset-2'
 
-// A link inside the app: a button, so it never navigates the page
+// A link inside the app: a button, so it never navigates the page.
+// Ctrl/Cmd+click, a middle click or a long press ask for a new tab.
 function LinkButton({
   id,
   label,
@@ -67,16 +74,27 @@ function LinkButton({
   id?: string
   // A footnote's back link is only an arrow: its label names it
   label?: string
-  onClick: () => void
+  onClick: (newTab: boolean) => void
   children: ReactNode
 }) {
+  const press = useLongPress(() => onClick(true))
   return (
     <button
       type="button"
       id={id}
       aria-label={label}
-      onClick={onClick}
-      className={`${LINK} inline cursor-pointer text-left`}
+      {...press}
+      onClick={(e) => onClick(e.ctrlKey || e.metaKey)}
+      onMouseDown={(e) => {
+        // No autoscroll: a middle click opens the link
+        if (e.button === 1) e.preventDefault()
+      }}
+      onAuxClick={(e) => {
+        if (e.button !== 1) return
+        e.preventDefault()
+        onClick(true)
+      }}
+      className={`${LINK} inline cursor-pointer text-left [-webkit-touch-callout:none]`}
     >
       {children}
     </button>
@@ -118,7 +136,7 @@ function MdLink({
       )
     case 'path':
       return (
-        <LinkButton id={id} label={label} onClick={() => go(t)}>
+        <LinkButton id={id} label={label} onClick={(n) => go(t, n)}>
           {children}
         </LinkButton>
       )
@@ -149,7 +167,7 @@ function MdImage({ src, alt }: ComponentProps<'img'>) {
   if (t.kind === 'path') {
     const name = t.path.slice(t.path.lastIndexOf('/') + 1)
     return (
-      <LinkButton onClick={() => go(t)}>
+      <LinkButton onClick={(n) => go(t, n)}>
         <ImageIcon size={13} aria-hidden="true" className="mr-1 inline" />
         image: {alt || name}
       </LinkButton>
@@ -317,13 +335,13 @@ export default function MarkdownPreview({
     path,
     wrap,
     notify,
-    go: (target) => {
+    go: (target, newTab = false) => {
       if (target.path === path) {
         if (target.anchor) scrollTo(target.anchor)
         else box().scrollTop = 0
         return
       }
-      onFollow(target, box().scrollTop)
+      onFollow(target, box().scrollTop, { newTab })
     },
   }
 
@@ -333,6 +351,7 @@ export default function MarkdownPreview({
         ref={ref}
         className="min-h-0 flex-1 overflow-auto bg-bg"
         data-testid="markdown-preview"
+        data-scroll-restore
       >
         <div className={PROSE}>
           {frontMatter !== undefined && (

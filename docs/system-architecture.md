@@ -66,7 +66,7 @@ React SPA with:
 - **Connection Indicator**: Real-time auto-detection of server status (connecting/connected/disconnected/error), clickable to retry
 - **Command History**: Search/recall previously sent commands (mobile-friendly delete buttons), persisted in localStorage
 - **Quick Actions**: A key in the mobile keyboard toolbar opens a sheet of preset commands (clear, cancel, clear line, exit)
-- **Files and Changes**: views of the pane's directory (`caps.files`), where a text file can also be edited and saved: a tree with a highlighted file viewer, and `git status` with per-file diffs. A side panel next to the terminal on desktop (header toggles), views of the header's view menu on mobile. Shiki runs in a module worker (`pwa/src/utils/highlight-worker.ts`); the worker, its themes and grammars are built under `assets/shiki/`, left out of the precache and cached on first use
+- **Files and Changes**: views of the pane's directory (`caps.files`), where a text file can also be edited and saved: a tree with a highlighted file viewer, and `git status` with per-file diffs. Files keeps each open file in a tab (`pwa/src/utils/file-tabs.ts`: a preview tab, pinned tabs, at most 10, the least recently used clean one closed past that), in memory only; only the tab shown has a viewer, the others keep their scroll offset, link trail and Show. A tab bar on desktop (`file-tab-bar.tsx`), a sheet of open files on mobile (`open-files-sheet.tsx`). A side panel next to the terminal on desktop (header toggles), views of the header's view menu on mobile. Shiki runs in a module worker (`pwa/src/utils/highlight-worker.ts`); the worker, its themes and grammars are built under `assets/shiki/`, left out of the precache and cached on first use
 - **Deep Links**: `#/s/<group>/<tab>[/<pane>][?view=]` selects a session (never sends input); the address bar follows the current session via `replaceState`
 - **Context Menu Control**: Block/unblock right-click on the terminal
 - **Font Controls**: Adjustable font size (6-24px)
@@ -795,19 +795,20 @@ the PWA, which hides Edit, New file and Delete in `readOnly` mode.
 
 **PWA.** Edit (Files, and the diff of a file the working tree still has as text in Changes)
 turns the file into a plain `<textarea>` (`file-editor.tsx`), a Markdown file as its source.
-The draft is kept per pane in `use-files.ts` (`useFileDraft`), in memory only, so a remount, a
-switch of view or a move of the root does not lose it (a draft read under an old root can no
-longer be saved, only copied). Editing another file while one has unsaved changes asks
-first, and leaving the page asks while any pane has them; a 409 `changed` keeps it with Reload and Copy my text, and a
+The draft is kept per pane and path in `use-files.ts` (`useFileDraft`), in memory only, so a
+remount, a switch of view or tab or a move of the root does not lose it (a draft read under an
+old root can no longer be saved, only copied); Files and Changes share the draft of a path.
+Several files can have drafts at once; closing a tab with one asks first, a move of the root
+asks before closing the old root's tabs that have one, and leaving the page asks while any
+file has one; a 409 `changed` keeps it with Reload and Copy my text, and a
 timeout says the save may have gone through (saving again is safe). In Changes a save goes
 back to the unstaged diff, read again, and to the list once git status no longer lists it.
 
 New file (the Files header, over the tree only) asks for a path from the root in a sheet
-(`new-file-dialog.tsx`), prefilled with the directory the tree has focus in. Unsaved changes to
-another file are dropped only once the user says so, and a sensitive name is created after a
-second ask. Once made, the store (`created`) reads the root and every directory above the file
-again, opens them, and opens the file straight into editing (`openIntent`, with the reveal it
-was created with): the draft, `hash` and `editable` come from GET `content`. A 409 `exists`
+(`new-file-dialog.tsx`), prefilled with the directory the tree has focus in. A sensitive name
+is created after a second ask. Once made, the store (`created`) reads the root and every
+directory above the file again, opens them, and opens the file in a pinned tab straight into
+editing (the tab's `intent`, with the reveal it was created with): the draft, `hash` and `editable` come from GET `content`. A 409 `exists`
 offers Open it; a lost reply says the file may have been made, with Refresh, and never guesses
 from the tree.
 

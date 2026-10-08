@@ -310,6 +310,10 @@ The `update` command:
 | `pwa/src/hooks/use-agent-transcript.ts`           | Polls a pane's transcript, one store per pane                 |
 | `pwa/src/hooks/use-agent-prompt.ts`               | Polls a pane's open dialog, one store per pane                |
 | `pwa/src/components/files-view.tsx`               | Files view: the pane's directory as a tree, opens a file      |
+| `pwa/src/utils/file-tabs.ts`                      | Open files as tabs: preview tab, pin, close, cap of 10 (LRU)  |
+| `pwa/src/components/file-tab-bar.tsx`             | Desktop tab bar of the open files (keys, middle click, pin)   |
+| `pwa/src/components/open-files-sheet.tsx`         | Phone: "Open files (N)" button and the sheet listing them     |
+| `pwa/src/hooks/use-long-press.ts`                 | Long press of a finger (a Markdown link opens a new tab)      |
 | `pwa/src/components/changes-view.tsx`             | Changes view: git status grouped, a file's diff, edits it     |
 | `pwa/src/components/file-editor.tsx`              | A file's text in a textarea, why a save failed                |
 | `pwa/src/components/new-file-dialog.tsx`          | Files: asks for a new file's path, creates it, says why not   |

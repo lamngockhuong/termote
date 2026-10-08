@@ -2,7 +2,9 @@ import {
   type CSSProperties,
   type ReactNode,
   useEffect,
+  useLayoutEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react'
 import { useTheme } from '../contexts/theme-context'
@@ -50,14 +52,22 @@ interface Props {
   // Picks the language
   path: string
   wrap: boolean
+  // Where it starts scrolled to (a tab shown again)
+  scrollTop?: number
 }
 
 // A text file with line numbers, highlighted once the worker answers; plain
 // until then and whenever it does not.
-export function CodeBlock({ text, path, wrap }: Props) {
+export function CodeBlock({ text, path, wrap, scrollTop }: Props) {
   const { resolvedTheme } = useTheme()
   const lines = useMemo(() => splitLines(text), [text])
   const [tokens, setTokens] = useState<Token[][] | null>(null)
+  const frame = useRef<HTMLDivElement>(null)
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only where it opens
+  useLayoutEffect(() => {
+    if (scrollTop && frame.current) frame.current.scrollTop = scrollTop
+  }, [])
 
   useEffect(() => {
     let live = true
@@ -72,7 +82,12 @@ export function CodeBlock({ text, path, wrap }: Props) {
 
   const gutter = `${String(lines.length).length + 1}ch`
   return (
-    <div className={CODE_FRAME} data-testid="code-block">
+    <div
+      ref={frame}
+      className={CODE_FRAME}
+      data-testid="code-block"
+      data-scroll-restore
+    >
       <div className={wrap ? '' : 'w-max min-w-full'}>
         {lines.map((line, i) => {
           const parts = tokens?.[i]

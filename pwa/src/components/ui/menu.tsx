@@ -182,12 +182,16 @@ function ItemButton({
   disabled = false,
   keepOpen = false,
   checked,
-}: MenuItemProps & { checked?: boolean }) {
+  checkbox = false,
+}: MenuItemProps & { checked?: boolean; checkbox?: boolean }) {
   const close = useContext(MenuContext)
   const role =
     checked === undefined
       ? { role: 'menuitem' }
-      : { role: 'menuitemradio', 'aria-checked': checked }
+      : {
+          role: checkbox ? 'menuitemcheckbox' : 'menuitemradio',
+          'aria-checked': checked,
+        }
   return (
     <button
       type="button"
@@ -223,6 +227,11 @@ export function MenuItem(props: MenuItemProps) {
 // One choice of a MenuGroup (e.g. a theme); the checked one shows a tick.
 export function MenuItemRadio(props: MenuItemProps & { checked: boolean }) {
   return <ItemButton {...props} />
+}
+
+// A setting turned on or off (e.g. Wrap lines); when on it shows a tick.
+export function MenuItemCheckbox(props: MenuItemProps & { checked: boolean }) {
+  return <ItemButton {...props} checkbox />
 }
 
 // Labelled set of items, e.g. the theme choices as MenuItemRadio.

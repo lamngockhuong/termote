@@ -102,3 +102,26 @@ describe('FileEditor', () => {
     expect(screen.getByText('Could not save the file')).toBeInTheDocument()
   })
 })
+
+describe('FileEditor scroll', () => {
+  it('starts at the offset it was left at, marked for the viewer', () => {
+    render(
+      <FileEditor
+        path="a.txt"
+        text="x"
+        onChange={vi.fn()}
+        wrap={false}
+        saving={false}
+        rootMoved={false}
+        dirty={false}
+        onSave={vi.fn()}
+        onReload={vi.fn()}
+        onCopy={vi.fn()}
+        scrollTop={33}
+      />,
+    )
+    const box = screen.getByRole('textbox', { name: 'Text of a.txt' })
+    expect(box.scrollTop).toBe(33)
+    expect(box).toHaveAttribute('data-scroll-restore')
+  })
+})

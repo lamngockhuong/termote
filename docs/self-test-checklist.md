@@ -507,9 +507,26 @@ Run on tmux (Linux/macOS) and Herdr; psmux (Windows) offers neither view.
       to the tree
 - [ ] A binary file or one over 1 MiB shows "Not previewable (binary, special file or larger than
       1 MiB)"
-- [ ] `.env` (lock icon in the tree) asks "Show this file?" first: Cancel goes back, Show shows it;
-      opening it again asks again
+- [ ] `.env` (lock icon in the tree) asks "Show this file?" first: Cancel closes its tab, Show
+      shows it; switching tabs and back keeps it shown, closing its tab and opening it again asks
+      again
 - [ ] `.git` does not open ("This directory can't be shown")
+
+### Open Files as Tabs
+
+- [ ] Desktop: a click opens a file in the preview tab (italic name), the next click replaces it;
+      a double click (tree or tab), Edit or "Keep open" keeps it; a file already open shows its tab
+- [ ] Switching tabs brings back the scroll offset (code, Markdown, table, editor) and the draft
+- [ ] Closing a tab with unsaved changes asks "Discard changes?"; a middle click or Delete closes a
+      tab; opening an 11th file closes the least recently used clean tab, never one with a draft
+- [ ] Ctrl/Cmd+click or a middle click on a Markdown link opens a new tab; a plain click goes on in
+      the same tab and Back returns
+- [ ] Phone: no tab bar; "Open files (N)" in the file's bar and above the tree opens a sheet to
+      switch, keep open and close; a long press on a Markdown link opens a new tab; nothing scrolls
+      sideways at 360 px
+- [ ] A file deleted outside Termote keeps its tab with "File not found" and "Close tab"; when the
+      pane moves to another directory, clean tabs close and tabs with a draft ask (Discard and
+      close / Keep)
 - [ ] `cd` out of the root in the pane, then Refresh: toast "The pane's directory changed" and the
       tree shows the new root
 
@@ -552,7 +569,8 @@ Run on tmux (Linux/macOS) and Herdr; psmux (Windows) offers neither view.
 
 - [ ] A `.md` file opens rendered; the "Preview" (eye) button switches to the source and back, and
       the choice stays for the next Markdown file and after reload
-- [ ] A relative link opens that file (Back returns to the file it came from); a `#heading` link
+- [ ] A relative link opens that file in the same tab (Back returns to the file it came from); a
+      `#heading` link
       scrolls to it; an `http(s)` link opens in a new tab; a link leaving the pane's root is plain
       text
 - [ ] Fenced code blocks are highlighted, labelled with their language and have "Copy code"

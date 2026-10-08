@@ -501,6 +501,137 @@ test.describe('files and changes views', () => {
     }
   })
 
+  test.describe('open files as tabs', () => {
+    const tabsDir = () => path.join(repo, 'e2e-tabs')
+    // A file longer than a few screens, to scroll in
+    const long = (name: string) =>
+      Array.from({ length: 300 }, (_, i) => `${name} line ${i + 1}`).join('\n') + '\n'
+
+    test.beforeEach(() => {
+      mkdirSync(tabsDir(), { recursive: true })
+      writeFileSync(path.join(tabsDir(), 'alpha.txt'), long('alpha'))
+      writeFileSync(path.join(tabsDir(), 'beta.txt'), long('beta'))
+      writeFileSync(path.join(tabsDir(), 'notes.md'), '# Notes\n\n[alpha](alpha.txt)\n')
+      for (let i = 0; i < 11; i++) writeFileSync(path.join(tabsDir(), `f${i}.txt`), `f${i}\n`)
+    })
+    test.afterEach(() => rmSync(tabsDir(), { recursive: true, force: true }))
+
+    async function openPanel(page: Page) {
+      await page.setViewportSize({ width: 1280, height: 800 })
+      await page.goto(`${link}?view=files`)
+      const panel = page.getByRole('complementary', { name: 'Files' })
+      await panel.getByRole('treeitem', { name: 'e2e-tabs' }).click()
+      const bar = panel.getByRole('tablist', { name: 'Open files' })
+      return { panel, bar }
+    }
+
+    test('desktop: preview and pinned tabs keep their scroll and drafts', async ({ page }) => {
+      const { panel, bar } = await openPanel(page)
+      // A single click opens the preview tab; another replaces it
+      await panel.getByRole('treeitem', { name: 'beta.txt' }).click()
+      await expect(bar.getByRole('tab', { name: 'beta.txt (preview)' })).toBeVisible()
+      await bar.getByRole('tab', { name: 'Files' }).click()
+      await panel.getByRole('treeitem', { name: 'alpha.txt' }).click()
+      await expect(bar.getByRole('tab')).toHaveText(['Files', 'alpha.txt (preview)'])
+      // A double click on the tab keeps it
+      await bar.getByRole('tab', { name: /^alpha\.txt/ }).dblclick()
+      await expect(bar.getByRole('tab', { name: 'alpha.txt', exact: true })).toBeVisible()
+
+      const code = panel.getByTestId('code-block')
+      await expect(code).toContainText('alpha line 300')
+      await code.evaluate((el) => {
+        el.scrollTop = 1500
+      })
+      // Where it really stopped (a fractional device pixel ratio rounds it)
+      const left = await code.evaluate((el) => el.scrollTop)
+      expect(left).toBeGreaterThan(1000)
+      await bar.getByRole('tab', { name: 'Files' }).click()
+      await panel.getByRole('treeitem', { name: 'beta.txt' }).dblclick()
+      await expect(bar.getByRole('tab')).toHaveText(['Files', 'alpha.txt', 'beta.txt'])
+      await panel.getByRole('button', { name: 'Edit', exact: true }).click()
+      const box = panel.getByRole('textbox', { name: 'Text of e2e-tabs/beta.txt' })
+      await box.fill('draft of beta\n')
+      await expect(bar.getByRole('tab', { name: 'beta.txt (unsaved changes)' })).toBeVisible()
+
+      // Back to alpha.txt: where it was left
+      await bar.getByRole('tab', { name: 'alpha.txt', exact: true }).click()
+      await expect(code).toContainText('alpha line 1')
+      await expect.poll(() => code.evaluate((el, at) => Math.abs(el.scrollTop - at), left)).toBeLessThan(2)
+      // And beta.txt's draft is still there
+      await bar.getByRole('tab', { name: /^beta\.txt/ }).click()
+      await expect(box).toHaveValue('draft of beta\n')
+
+      // Closing it asks first; Cancel keeps it
+      await panel.getByLabel('Close beta.txt', { exact: true }).click()
+      const ask = page.getByRole('dialog', { name: 'Discard changes?' })
+      await ask.getByRole('button', { name: 'Cancel' }).click()
+      await expect(box).toHaveValue('draft of beta\n')
+      await panel.getByLabel('Close beta.txt', { exact: true }).click()
+      await ask.getByRole('button', { name: 'Discard' }).click()
+      await expect(bar.getByRole('tab')).toHaveText(['Files', 'alpha.txt'])
+      expect(readFileSync(path.join(tabsDir(), 'beta.txt'), 'utf-8')).toBe(long('beta'))
+    })
+
+    test('desktop: Ctrl+click opens a link in a new tab', async ({ page }) => {
+      const { panel, bar } = await openPanel(page)
+      await panel.getByRole('treeitem', { name: 'notes.md' }).click()
+      await panel.getByRole('button', { name: 'alpha', exact: true }).click({ modifiers: ['ControlOrMeta'] })
+      await expect(panel.getByTestId('code-block')).toContainText('alpha line 1')
+      await expect(bar.getByRole('tab')).toHaveText(['Files', 'notes.md (preview)', 'alpha.txt'])
+      // A plain click goes on in the same tab, and Back returns
+      await bar.getByRole('tab', { name: /^notes\.md/ }).click()
+      await panel.getByRole('button', { name: 'alpha', exact: true }).click()
+      await expect(bar.getByRole('tab', { name: 'alpha.txt', exact: true })).toHaveAttribute('aria-selected', 'true')
+    })
+
+    test('desktop: past 10 tabs the least used clean one closes, never one with changes', async ({ page }) => {
+      const { panel, bar } = await openPanel(page)
+      await panel.getByRole('treeitem', { name: 'f0.txt' }).dblclick()
+      await panel.getByRole('button', { name: 'Edit', exact: true }).click()
+      await panel.getByRole('textbox', { name: 'Text of e2e-tabs/f0.txt' }).fill('changed\n')
+      for (let i = 1; i <= 10; i++) {
+        await bar.getByRole('tab', { name: 'Files' }).click()
+        await panel.getByRole('treeitem', { name: `f${i}.txt` }).dblclick()
+        await expect(bar.getByRole('tab', { name: `f${i}.txt`, exact: true })).toBeVisible()
+      }
+      // 11 opened: f1 went, f0 (unsaved) stayed
+      await expect(bar.getByRole('tab')).toHaveCount(11)
+      await expect(bar.getByRole('tab', { name: /^f1\.txt/ })).toHaveCount(0)
+      await expect(bar.getByRole('tab', { name: 'f0.txt (unsaved changes)' })).toBeVisible()
+    })
+
+    test('mobile: a sheet of open files instead of a tab bar', async ({ page }) => {
+      await page.setViewportSize({ width: 360, height: 800 })
+      await page.addInitScript(() =>
+        localStorage.setItem('termote-settings', JSON.stringify({ hasSeenGestureHints: true })),
+      )
+      await page.goto(`${link}?view=files`)
+      await page.getByRole('treeitem', { name: 'e2e-tabs' }).click()
+      await page.getByRole('treeitem', { name: 'alpha.txt' }).click()
+      await expect(page.getByTestId('code-block')).toContainText('alpha line 1')
+      await expect(page.getByRole('tablist', { name: 'Open files' })).toHaveCount(0)
+      await page.getByRole('button', { name: 'Back to files' }).click()
+      await page.getByRole('treeitem', { name: 'beta.txt' }).click()
+      await expect(page.getByTestId('code-block')).toContainText('beta line 1')
+      // The preview tab was replaced: keep it, then open another
+      // On a phone the file's other buttons are in its More actions menu
+      await page.getByRole('button', { name: 'More actions' }).click()
+      await page.getByRole('menuitem', { name: 'Keep open' }).click()
+      await page.getByRole('button', { name: 'Back to files' }).click()
+      await page.getByRole('treeitem', { name: 'alpha.txt' }).click()
+      await page.getByRole('button', { name: 'Open files (2)' }).click()
+      const sheet = page.getByRole('dialog', { name: 'Open files' })
+      expect(await noPageScroll(page)).toBe(true)
+      await sheet.getByRole('button', { name: /^beta\.txt/ }).click()
+      await expect(page.getByTestId('code-block')).toContainText('beta line 1')
+      await page.getByRole('button', { name: 'Open files (2)' }).click()
+      await sheet.getByRole('button', { name: 'Close beta.txt' }).click()
+      await sheet.getByRole('button', { name: 'Files' }).click()
+      await expect(page.getByRole('button', { name: 'Open files (1)' })).toBeVisible()
+      expect(await noPageScroll(page)).toBe(true)
+    })
+  })
+
   test.describe('a 1 MiB CSV', () => {
     test.setTimeout(60000)
 

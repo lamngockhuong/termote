@@ -353,7 +353,7 @@ describe('ChangesView', () => {
     await settle()
     expect(p.showView).toHaveBeenCalledWith(FILES_VIEW_ID)
     const files = renderHook(() => useFiles('%1'))
-    expect(files.result.current.openPath).toBe('notes/a.md')
+    expect(files.result.current.active?.path).toBe('notes/a.md')
   })
 })
 

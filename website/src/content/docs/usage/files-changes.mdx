@@ -62,8 +62,9 @@ Supported backends:
 - Folders come first, then files, ignoring case. Tap a folder to open or close it.
 - A folder shows at most 5000 entries. A longer folder says that only the first 5000 are shown.
 - Devices, sockets and links that point outside the root are greyed out and do not open.
-- A file opens in place of the tree, with its path, its size, a button to copy the path and one
-  to wrap long lines (on by default on a phone). Long lines scroll inside the code area, never
+- A file opens in place of the tree, in a tab (see [Open Files as Tabs](#open-files-as-tabs)),
+  with its path, its size, a button to copy the path and one to wrap long lines (on by default on
+  a phone). Long lines scroll inside the code area, never
   the whole page.
 - Highlighting covers common languages and file names (TypeScript, Go, Python, shell,
   Dockerfile, Makefile, YAML, JSON, Markdown and others). It loads the first time a file needs
@@ -75,6 +76,34 @@ Supported backends:
 | Plain text, no colours                                        | A larger text file (up to 1 MiB), a language not covered, or highlighting that took over 3 seconds |
 | `Not previewable (binary, special file or larger than 1 MiB)`  | A binary file that is not an image, a file over 1 MiB, or something that is not a regular file   |
 | `This file can't be shown`                                     | A path termote never serves (see below)                                                          |
+
+## Open Files as Tabs
+
+Opening a file keeps the ones already open: each has a tab, and going back to a tab brings back
+where you were in that file and its unsaved changes.
+
+- **A single click opens a preview tab**, its name in italics: the next file opened the same way
+  replaces it. A file gets a tab of its own once you double-click it (in the tree or on its tab),
+  start editing it, create it, or tap **Keep open** (the pin in its bar).
+- A file that is already open shows its tab; it never opens twice.
+- The first tab, **Files**, shows the tree; the files stay open behind it. Back, when no link is
+  left to retrace, shows the tree too.
+- **Closing a tab**: its × button, a middle click, or Delete on the focused tab. A tab with
+  unsaved changes (a dot after its name) asks `Discard changes?` first.
+- **At most 10 tabs.** Opening one more closes the tab used longest ago, never the one shown and
+  never one with unsaved changes. When every other tab has unsaved changes, more than 10 stay
+  open.
+- **On a phone** there is no tab bar. The button with the number of open files
+  (`Open files (N)`), in the file's bar and above the tree, lists them in a sheet: tap one to show
+  it, or keep it open, or close it.
+- A file deleted in Termote closes its tab. A file deleted or renamed by something else keeps its
+  tab, which shows `File not found` with **Close tab**.
+- When the pane moves to another directory, the tabs opened in the old one close. Tabs with
+  unsaved changes ask first: **Discard and close** drops the changes, **Keep** leaves them open
+  so you can copy their text (they can no longer be saved).
+- A file that may contain secrets asks again in every new tab. A tab where you chose to show it
+  keeps it shown until the tab closes.
+- Tabs live only in the page's memory: reloading the app starts with none.
 
 ## Finding a File
 
@@ -117,8 +146,10 @@ agent or typing `sed`.
 - Ctrl+S (Cmd+S on a Mac) saves. Cancel, or Back, with unsaved changes asks
   `Discard changes?` first.
 - Line breaks stay as the file had them: a file with Windows line breaks (`\r\n`) keeps them.
-- The text being edited stays while you switch views or the panel closes and opens again. It is
-  kept only in the page's memory, never in the browser's storage, so closing or reloading the
+- The text being edited stays while you switch views or tabs, or the panel closes and opens
+  again. Each file keeps its own unsaved changes, so several files can be edited at once; a file
+  edited from Changes shares its text with the same file in Files. It is kept only in the page's
+  memory, never in the browser's storage, so closing or reloading the
   app loses it (a phone may close an app left in the background).
 - In **Changes**, the diff of a file the working tree still has as text has the same Edit button
   (**Edit working copy** on the staged side: the working tree's file is what is saved). After
@@ -155,15 +186,14 @@ this is only hidden in the app.
 The **New file** button (a page with a plus) at the top of Files asks for a path from the pane's
 directory, such as `docs/notes/today.md`. It starts with the folder you last tapped in the tree.
 **Create** makes an empty file, and every folder on the path that is missing, then opens it in
-the text box to type its contents and **Save**. The button shows over the tree only, not while a
-file is open.
+the text box to type its contents and **Save**, in a tab of its own. The button shows over the
+tree only, not while a file is shown.
 
 - An existing file or folder is never replaced: the box says
   `A file or directory of that name already exists`, with **Open it** to open that one instead.
 - A name that usually holds secrets (`.env.local`, for example) asks
   `This name usually holds secrets. Create it anyway?` once; the new file then opens without
   asking to show it.
-- When another file has unsaved changes, `Discard other changes?` asks first.
 - When the connection drops before the server answers, the box says
   `The file may have been created. Refresh to check.`, and **Refresh** reads the tree again.
 - Closing the box while **Create** runs does not stop it: the file is still made and shows in the
@@ -251,11 +281,14 @@ over 256 KiB opens as its source, with a note that it is too large to preview.
 Links:
 
 - A link to another file under the root (`docs/guide.md`, `../README.md`, `/src/main.go`) opens
-  it in place; `guide.md#install` opens it at that heading. A leading `/` means the root.
+  it in the same tab; `guide.md#install` opens it at that heading. A leading `/` means the root.
+  A file already open in another tab shows that tab.
+- Ctrl+click (Cmd+click on a Mac), a middle click, or a long press on a phone opens the link in
+  a new tab.
 - A link to a folder shows the tree with that folder open.
 - `#heading` scrolls to the heading in the same file.
-- The back button returns to the file the link was followed from, where you left it, before
-  going back to the tree.
+- The back button returns to the file the link was followed from in that tab, where you left
+  it, before going back to the tree.
 - A link to a missing file says `Not found`. A link that leaves the root, or that uses another
   scheme than `http`/`https` (`javascript:`, `file:`, `data:`), is shown as plain text.
 - `http`/`https` links open in a new tab; hovering shows the site they go to.

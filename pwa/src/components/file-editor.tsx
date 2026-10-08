@@ -1,4 +1,4 @@
-import type { KeyboardEvent } from 'react'
+import { type KeyboardEvent, useLayoutEffect, useRef } from 'react'
 import { RequestError } from '../hooks/use-mux-api'
 import { Banner } from './ui/banner'
 import { Button } from './ui/button'
@@ -54,6 +54,8 @@ interface Props {
   // Drops the draft and reads the file again
   onReload: () => void
   onCopy: () => void
+  // Where it starts scrolled to (a tab shown again)
+  scrollTop?: number
 }
 
 // Why the last save of a draft failed, and what the user can do about it:
@@ -119,7 +121,14 @@ export function FileEditor({
   onSave,
   onReload,
   onCopy,
+  scrollTop,
 }: Props) {
+  const area = useRef<HTMLTextAreaElement>(null)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only where it opens
+  useLayoutEffect(() => {
+    if (scrollTop && area.current) area.current.scrollTop = scrollTop
+  }, [])
+
   const onKeyDown = (e: KeyboardEvent) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
       e.preventDefault()
@@ -136,6 +145,8 @@ export function FileEditor({
         onCopy={onCopy}
       />
       <textarea
+        ref={area}
+        data-scroll-restore
         aria-label={`Text of ${path}`}
         value={text}
         onChange={(e) => onChange(e.target.value)}

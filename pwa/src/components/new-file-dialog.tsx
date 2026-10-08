@@ -1,5 +1,4 @@
 import { type FormEvent, useEffect, useId, useRef, useState } from 'react'
-import { useFileDraft } from '../hooks/use-files'
 import { createFile, RequestError } from '../hooks/use-mux-api'
 import { Button } from './ui/button'
 import { ConfirmDialog } from './ui/confirm-dialog'
@@ -44,9 +43,8 @@ interface Props {
 }
 
 // Asks for the path of a new file under the pane's root and creates it,
-// empty. Unsaved changes to another file of the pane are dropped only once
-// the user says so, and a name that usually holds secrets is created only
-// after a second ask.
+// empty. A name that usually holds secrets is created only after a second
+// ask.
 export function NewFileDialog({
   paneId,
   root,
@@ -59,14 +57,10 @@ export function NewFileDialog({
   const [path, setPath] = useState(initialPath)
   const [sending, setSending] = useState(false)
   const [problem, setProblem] = useState<Problem>()
-  const [ask, setAsk] = useState<'draft' | 'sensitive'>()
-  const [draft, setDraft] = useFileDraft(paneId)
+  const [ask, setAsk] = useState<'sensitive'>()
   const inputId = useId()
   const errorId = useId()
   const input = useRef<HTMLInputElement>(null)
-  // The user agreed to drop the other draft: done once the file is made,
-  // so a create that fails loses nothing
-  const dropDraft = useRef(false)
   // The user closed the box: a reply arriving later opens nothing
   const closed = useRef(false)
   const close = () => {
@@ -96,12 +90,11 @@ export function NewFileDialog({
     try {
       const res = await createFile(paneId, { root, path, reveal })
       // Closed meanwhile: the file is there, so the tree shows it, but it
-      // is not opened and the other draft stays
+      // is not opened
       if (closed.current) {
         onRefresh()
         return
       }
-      if (dropDraft.current) setDraft(undefined)
       onClose()
       onCreated(res.path, res.root, reveal)
     } catch (err) {
@@ -143,7 +136,6 @@ export function NewFileDialog({
     if (sending) return
     const message = nameProblem(path)
     if (message) setProblem({ message })
-    else if (draft && draft.text !== draft.base) setAsk('draft')
     else send(false)
   }
 
@@ -204,20 +196,6 @@ export function NewFileDialog({
           </div>
         </form>
       </Sheet>
-      <ConfirmDialog
-        isOpen={ask === 'draft'}
-        title="Discard other changes?"
-        confirmLabel="Discard"
-        destructive
-        onConfirm={() => {
-          setAsk(undefined)
-          dropDraft.current = true
-          send(false)
-        }}
-        onCancel={() => setAsk(undefined)}
-      >
-        Your unsaved changes to {draft?.path} will be lost.
-      </ConfirmDialog>
       <ConfirmDialog
         isOpen={ask === 'sensitive'}
         title="Create this file?"

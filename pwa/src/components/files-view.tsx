@@ -13,28 +13,34 @@ import {
   type KeyboardEvent,
   useCallback,
   useEffect,
+  useId,
   useRef,
   useState,
 } from 'react'
 import type { ViewProps } from '../app-views'
 import {
+  dropDraft,
   type FilesError,
   type FilesState,
   FOLLOW_NOTICES,
   isDir,
   isOpenable,
   joinPath,
-  useFileDraft,
+  useDirtyCheck,
   useFiles,
 } from '../hooks/use-files'
 import { type FileEntry, RequestError, restoreFile } from '../hooks/use-mux-api'
+import { splitPath } from '../utils/files-format'
 import type { LinkPath } from '../utils/markdown-links'
 import { DeleteFileDialog, type DeleteOutcome } from './delete-file-dialog'
 import { FileSearch } from './file-search'
+import { FileTabBar, type TabListProps, tabElementId } from './file-tab-bar'
 import { FileViewer } from './file-viewer'
 import { NewFileDialog } from './new-file-dialog'
+import { OpenFilesButton, OpenFilesSheet } from './open-files-sheet'
 import { PaneDirHeader, ViewMessage } from './pane-dir-header'
 import { FOCUS_RING, IconButton } from './ui/button'
+import { ConfirmDialog } from './ui/confirm-dialog'
 import { Menu, MenuItem } from './ui/menu'
 
 const ERRORS: Record<FilesError, string> = {
@@ -101,8 +107,12 @@ function focusedDir(s: FilesState, focused?: string): string {
 
 const baseName = (path: string) => path.slice(path.lastIndexOf('/') + 1)
 
+// How soon after a file opens from the tree a double click still pins it
+export const TREE_DOUBLE_CLICK_MS = 500
+
 // Files: the pane's root as a tree, read one directory at a time, and the
-// file chosen from it. The same component is the mobile view and the desktop
+// files opened from it, one tab each (a tab bar on a desktop, a sheet of open
+// files on a phone). The same component is the mobile view and the desktop
 // panel.
 export function FilesView({
   session,
@@ -147,7 +157,24 @@ function PaneFiles({
 >) {
   const f = useFiles(paneId)
   const { load, rootChanges, follow } = f
-  const [draft, setDraft] = useFileDraft(paneId)
+  const isDirty = useDirtyCheck(paneId)
+  const tab = f.active
+  // The tab with unsaved changes the Discard box is open for
+  const [closing, setClosing] = useState<string>()
+  // The file a click in the tree just opened. The viewer takes the tree's
+  // place under the pointer, so a double click's second click lands on the
+  // viewer: a double click that soon pins the tab.
+  const treeOpened = useRef<{ path: string; at: number }>(undefined)
+  const openFromTree = (path: string) => {
+    treeOpened.current = { path, at: Date.now() }
+    f.open(path)
+  }
+  const pinIfDoubleClick = () => {
+    const o = treeOpened.current
+    treeOpened.current = undefined
+    if (tab && o?.path === tab.path && Date.now() - o.at < TREE_DOUBLE_CLICK_MS)
+      f.pin(tab.id)
+  }
   // The tree's focused item, which a new file starts next to
   const [focused, setFocused] = useState<string>()
   // The root the New file box was opened under, while it is open
@@ -159,12 +186,49 @@ function PaneFiles({
   const [refreshTick, setRefreshTick] = useState(0)
 
   const onFollow = useCallback(
-    async (target: LinkPath, scrollTop: number) => {
-      const notice = FOLLOW_NOTICES[await follow(target, scrollTop)]
+    async (target: LinkPath, scrollTop: number, opts: { newTab: boolean }) => {
+      const notice = FOLLOW_NOTICES[await follow(target, scrollTop, opts)]
       if (notice) notify(notice)
     },
     [follow, notify],
   )
+
+  // A tab with unsaved changes closes only once the user says so
+  const requestClose = (id: string) => {
+    const t = f.tabs.find((x) => x.id === id)
+    if (t && isDirty(t.path)) setClosing(id)
+    else f.close(id)
+  }
+
+  // What the tab bar's tabs show (desktop)
+  const panelId = useId()
+  const tabBar = !isMobile && f.tabs.length > 0
+  const tabList: TabListProps = {
+    tabs: f.tabs.map((t) => {
+      const [dir, name] = splitPath(t.path)
+      return {
+        id: t.id,
+        name,
+        title: t.path,
+        detail: dir,
+        pinned: t.pinned,
+        dirty: isDirty(t.path),
+      }
+    }),
+    activeId: f.activeId,
+    homeLabel: 'Files',
+    onActivate: f.activate,
+    onClose: requestClose,
+    onPin: f.pin,
+    panelId,
+  }
+  // A phone has a sheet of the open files in place of the tab bar
+  const [listing, setListing] = useState(false)
+  const openFiles = isMobile && f.tabs.length > 0 && (
+    <OpenFilesButton count={f.tabs.length} onClick={() => setListing(true)} />
+  )
+  const closingTab = f.tabs.find((t) => t.id === closing)
+  const moved = f.pendingRootClose?.length ?? 0
 
   useEffect(() => load(), [load])
 
@@ -234,7 +298,7 @@ function PaneFiles({
       return
     }
     // Its unsaved changes go with it: the user asked to delete it
-    if (draft?.path === o.path) setDraft(undefined)
+    dropDraft(paneId, o.path)
     f.deleted(o.path)
     if (o.permanent || !o.trashId) {
       notify(`Deleted ${name} permanently`)
@@ -249,16 +313,12 @@ function PaneFiles({
   const root = f.dirs['']
   // Once the root is read, from the tree only. A view-only client is kept
   // from creating here only: the server has no roles yet
-  const newFileRoot =
-    !readOnly && !f.openPath && root?.entries ? f.root : undefined
-  // The file this view just created opens into editing
-  const intent =
-    f.openIntent?.path === f.openPath && f.openIntent?.root === f.root
-      ? f.openIntent
-      : undefined
-  const openPath = f.openPath
+  const newFileRoot = !readOnly && !tab && root?.entries ? f.root : undefined
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div
+      className="flex h-full min-h-0 flex-col"
+      onDoubleClick={pinIfDoubleClick}
+    >
       <PaneDirHeader
         root={f.root}
         onRefresh={refresh}
@@ -275,7 +335,14 @@ function PaneFiles({
             <FilePlus size={15} aria-hidden="true" />
           </IconButton>
         )}
+        {!tab && openFiles}
       </PaneDirHeader>
+      {tabBar && <FileTabBar {...tabList} />}
+      <OpenFilesSheet
+        {...tabList}
+        isOpen={isMobile && listing}
+        onDismiss={() => setListing(false)}
+      />
       {creating !== undefined && (
         <NewFileDialog
           paneId={paneId}
@@ -301,69 +368,118 @@ function PaneFiles({
           onRefresh={f.refresh}
         />
       )}
-      {openPath ? (
-        <FileViewer
-          // A new root or path starts unrevealed: a Show never carries over
-          key={`${f.root}\u0000${openPath}`}
-          paneId={paneId}
-          root={f.root}
-          path={openPath}
-          wrapByDefault={isMobile}
-          anchor={f.openAnchor}
-          scrollTop={f.openScroll}
-          backTo={f.history[f.history.length - 1]?.path}
-          onClose={f.back}
-          onFollow={onFollow}
-          onRootChanged={f.rootChanged}
-          notify={notify}
-          // A view-only client is kept from editing here only: the server
-          // has no roles yet
-          canEdit={!readOnly}
-          startEditing={!!intent}
-          initialReveal={intent?.reveal}
-          onDelete={
-            canDelete
-              ? ({ hash, sensitive }) =>
-                  setDeleting({
-                    // A file opens once the root is read
-                    root: f.root as string,
-                    path: openPath,
-                    kind: 'file',
-                    sensitive,
-                    hash,
-                  })
-              : undefined
-          }
-        />
-      ) : root?.error ? (
-        <ViewMessage>{ERRORS[root.error]}</ViewMessage>
-      ) : !root?.entries ? (
-        <ViewMessage>Loading…</ViewMessage>
-      ) : (
-        <FileSearch
-          paneId={paneId}
-          root={f.root}
-          isRepo={f.isRepo}
-          query={query}
-          onQuery={setQuery}
-          refreshTick={refreshTick}
-          onPick={(p) => f.reveal(p)}
-          onRootChanged={f.rootChanged}
+      {closingTab && (
+        <ConfirmDialog
+          isOpen
+          title="Discard changes?"
+          confirmLabel="Discard"
+          destructive
+          onConfirm={() => {
+            setClosing(undefined)
+            f.close(closingTab.id)
+          }}
+          onCancel={() => setClosing(undefined)}
         >
-          {root.entries.length === 0 ? (
-            <ViewMessage>This directory is empty</ViewMessage>
-          ) : (
-            <FileTree
-              state={f}
-              focused={focused}
-              onFocus={setFocused}
-              onToggle={f.toggle}
-              onOpen={f.open}
-              onDelete={canDelete ? askDelete : undefined}
-            />
-          )}
-        </FileSearch>
+          Your changes to {splitPath(closingTab.path)[1]} will be lost.
+        </ConfirmDialog>
       )}
+      <ConfirmDialog
+        isOpen={moved > 0}
+        title={`Close ${moved === 1 ? 'a file' : `${moved} files`} with unsaved changes?`}
+        // Not "Close": the sheet's own close button has that name
+        confirmLabel="Discard and close"
+        cancelLabel="Keep"
+        destructive
+        onConfirm={() => f.resolveRootClose(true)}
+        onCancel={() => f.resolveRootClose(false)}
+      >
+        The pane's directory changed. Closing drops the changes; kept files can
+        no longer be saved, but their text can be copied.
+      </ConfirmDialog>
+      <div
+        id={panelId}
+        // A tab panel only below the tab bar
+        {...(tabBar && {
+          role: 'tabpanel',
+          'aria-labelledby': tabElementId(panelId, f.activeId),
+        })}
+        className="flex min-h-0 flex-1 flex-col"
+      >
+        {tab ? (
+          <FileViewer
+            // A new tab, root or path starts unrevealed unless the tab was
+            // shown: a Show never carries over to another file
+            key={`${tab.id}\u0000${f.root}\u0000${tab.path}`}
+            paneId={paneId}
+            root={f.root}
+            path={tab.path}
+            wrapByDefault={isMobile}
+            compact={isMobile}
+            anchor={tab.anchor}
+            scrollTop={tab.scrollTop}
+            backTo={tab.history[tab.history.length - 1]?.path}
+            onClose={f.back}
+            onFollow={onFollow}
+            onRootChanged={f.rootChanged}
+            notify={notify}
+            // A view-only client is kept from editing here only: the server
+            // has no roles yet
+            canEdit={!readOnly}
+            // The file this view just created opens into editing
+            startEditing={!!tab.intent && tab.root === f.root}
+            initialReveal={tab.reveal}
+            pinned={tab.pinned}
+            onPin={() => f.pin(tab.id)}
+            onRevealed={() => f.setReveal(tab.id)}
+            // Nothing to see in this tab: it closes, unless a link led here
+            onCancelReveal={tab.history.length ? f.back : () => f.close(tab.id)}
+            onScroll={(top) => f.setScroll(tab.id, top)}
+            onCloseTab={() => requestClose(tab.id)}
+            headerExtra={openFiles}
+            onDelete={
+              canDelete
+                ? ({ hash, sensitive }) =>
+                    setDeleting({
+                      // A file opens once the root is read
+                      root: f.root as string,
+                      path: tab.path,
+                      kind: 'file',
+                      sensitive,
+                      hash,
+                    })
+                : undefined
+            }
+          />
+        ) : root?.error ? (
+          <ViewMessage>{ERRORS[root.error]}</ViewMessage>
+        ) : !root?.entries ? (
+          <ViewMessage>Loading…</ViewMessage>
+        ) : (
+          <FileSearch
+            paneId={paneId}
+            root={f.root}
+            isRepo={f.isRepo}
+            query={query}
+            onQuery={setQuery}
+            refreshTick={refreshTick}
+            onPick={(p) => f.reveal(p)}
+            onRootChanged={f.rootChanged}
+          >
+            {root.entries.length === 0 ? (
+              <ViewMessage>This directory is empty</ViewMessage>
+            ) : (
+              <FileTree
+                state={f}
+                focused={focused}
+                onFocus={setFocused}
+                onToggle={f.toggle}
+                onOpen={openFromTree}
+                onDelete={canDelete ? askDelete : undefined}
+              />
+            )}
+          </FileSearch>
+        )}
+      </div>
     </div>
   )
 }
@@ -380,6 +496,7 @@ function FileTree({
   focused?: string
   onFocus: (path: string) => void
   onToggle: (path: string) => void
+  // Opens the file in the preview tab
   onOpen: (path: string) => void
   // Offered on each row (its menu, the Delete key) when deleting is allowed
   onDelete?: (path: string, entry: FileEntry) => void

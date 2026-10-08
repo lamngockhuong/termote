@@ -2,10 +2,12 @@ import {
   ArrowLeft,
   Check,
   Copy,
+  Ellipsis,
   Eye,
   Image as ImageIcon,
   Lock,
   Pencil,
+  Pin,
   Trash2,
   WrapText,
   X,
@@ -13,6 +15,7 @@ import {
 import {
   type ComponentProps,
   lazy,
+  type ReactNode,
   Suspense,
   useEffect,
   useRef,
@@ -58,6 +61,7 @@ import type { TableState } from './table-preview'
 import { Banner } from './ui/banner'
 import { Button, IconButton } from './ui/button'
 import { ConfirmDialog } from './ui/confirm-dialog'
+import { Menu, MenuItem, MenuItemCheckbox } from './ui/menu'
 
 // The markdown renderer: loaded the first time a Markdown file is previewed
 const MarkdownPreview = lazy(() => import('./markdown-preview'))
@@ -237,8 +241,13 @@ interface Props {
   backLabel?: string
   // Back: to backTo, else to the tree
   onClose: () => void
-  // A link of the preview to another file or a directory
-  onFollow: (target: LinkPath, scrollTop: number) => void
+  // A link of the preview to another file or a directory; newTab for
+  // Ctrl/Cmd+click, a middle click or a long press
+  onFollow: (
+    target: LinkPath,
+    scrollTop: number,
+    opts: { newTab: boolean },
+  ) => void
   onRootChanged: (root: string) => void
   notify: (message: string) => void
   // The file may be edited (not a view-only client)
@@ -253,13 +262,39 @@ interface Props {
   // the hash of the text shown, when it is shown, and whether the file
   // usually holds secrets
   onDelete?: (file: { hash?: string; sensitive: boolean }) => void
+  // The file's tab is the preview one: Keep open (and editing) pins it
+  pinned?: boolean
+  onPin?: () => void
+  // The user chose to show the sensitive file
+  onRevealed?: () => void
+  // Not showing the sensitive file after all (Back when not given)
+  onCancelReveal?: () => void
+  // The file was scrolled to top (its tab keeps it)
+  onScroll?: (top: number) => void
+  // Closes the file's tab: offered when the file is gone
+  onCloseTab?: () => void
+  // More buttons at the end of the header
+  headerExtra?: ReactNode
+  // A narrow screen: the header keeps Back, the name and the main buttons,
+  // the others go in a menu
+  compact?: boolean
+}
+
+// A header button after the main ones: pressed is set for an on/off one
+interface HeaderAction {
+  label: string
+  title?: string
+  icon: ReactNode
+  pressed?: boolean
+  danger?: boolean
+  onClick: () => void
 }
 
 // One file of the tree: its text with line numbers, or why it cannot be
 // shown. A file that usually holds secrets is shown only after the user says
 // so, every time it is opened: the caller keys this by root and path, so
 // another file (or the same path under a new root) never inherits a reveal.
-// Edit turns the text into a textarea; the draft is the pane's
+// Edit turns the text into a textarea; the draft is the file's
 // (useFileDraft), so a remount opens it again where it was.
 export function FileViewer({
   paneId,
@@ -279,28 +314,24 @@ export function FileViewer({
   initialReveal = false,
   onSaved,
   onDelete,
+  pinned = true,
+  onPin,
+  onRevealed,
+  onCancelReveal,
+  onScroll,
+  onCloseTab,
+  headerExtra,
+  compact = false,
 }: Props) {
   const [state, setState] = useState<Loaded>({ kind: 'loading' })
-  const [draft, setDraft] = useFileDraft(paneId)
-  // The pane's draft, when it is this file's
-  const mine = draft?.path === path ? draft : undefined
+  const [mine, setDraft] = useFileDraft(paneId, path)
   const [reveal, setReveal] = useState(initialReveal || !!mine?.reveal)
   const [saving, setSaving] = useState(false)
   // What a confirmed Discard goes on to do
   const [discarding, setDiscarding] = useState<'cancel' | 'back'>()
-  // A pane keeps one draft: unsaved changes to another file are dropped
-  // only once the user says so
-  const other =
-    draft && draft.path !== path && draft.text !== draft.base
-      ? draft
-      : undefined
-  // The file to edit once the other draft is discarded, that draft's path,
-  // and the delimiter of the table it is edited in, if it is
-  const [replacing, setReplacing] = useState<{
-    file: TextLoaded
-    other: string
-    delimiter?: Delimiter
-  }>()
+  // Where the text is scrolled to: the next view of it (source, editor)
+  // starts there
+  const scrolled = useRef(scrollTop)
   // A table edit asked with another delimiter than the file's own
   const [asking, setAsking] = useState<{
     file: TextLoaded
@@ -329,10 +360,13 @@ export function FileViewer({
   const tableView = canTable && settings.tablePreview
   const togglePreview = () => {
     if (canTable) {
+      scrolled.current = undefined
       updateSetting('tablePreview', !tableView)
       return
     }
     if (preview) setLeftPreview(true)
+    // The other view of the file is laid out otherwise: from the top
+    scrolled.current = undefined
     updateSetting('markdownPreview', !preview)
   }
   const previewOn = preview || tableView
@@ -402,6 +436,8 @@ export function FileViewer({
     setSaveError(undefined)
     setSkipped([])
     setDraft(draftOf(file, path, reveal, delimiter))
+    // Edited: no longer a preview tab
+    onPin?.()
   }
 
   // Into the table editor with delimiter, after asking when the file reads
@@ -413,19 +449,13 @@ export function FileViewer({
     } else beginEdit(file, delimiter)
   }
 
-  // With a delimiter, the table being viewed is edited; else the text
-  const requestEdit = (file: TextLoaded, delimiter?: Delimiter) =>
-    other
-      ? setReplacing({ file, other: other.path, delimiter })
-      : editWith(file, delimiter)
-
   // Changes view: into editing once, as soon as the file can be; not again
   // after the draft found at mount is discarded
   const started = useRef(!!mine)
   useEffect(() => {
     if (!startEditing || started.current || mine || !editable) return
     started.current = true
-    requestEdit(editable)
+    editWith(editable)
   })
 
   const discard = () => {
@@ -471,9 +501,7 @@ export function FileViewer({
       setDraft((now) =>
         now === edit
           ? undefined
-          : now?.path === path
-            ? rebaseDraft(now, edit, res.root, res.hash)
-            : now,
+          : now && rebaseDraft(now, edit, res.root, res.hash),
       )
       setSkipped([])
       notify('Saved')
@@ -560,8 +588,69 @@ export function FileViewer({
     }
   }
 
+  // The header's buttons after the main ones (Edit, or Cancel and Save):
+  // icons in the header, or a menu of them on a phone, where the file's
+  // name needs the room
+  const extras: HeaderAction[] = []
+  if (!pinned && onPin)
+    extras.push({
+      label: 'Keep open',
+      icon: <Pin size={15} />,
+      onClick: onPin,
+    })
+  if (!mine && onDelete)
+    extras.push({
+      label: 'Delete',
+      icon: <Trash2 size={15} />,
+      danger: true,
+      onClick: () =>
+        onDelete({
+          // The text shown: its bytes are what a delete must match
+          hash: state.kind === 'text' ? state.hash : undefined,
+          sensitive: sensitive || reveal,
+        }),
+    })
+  if (!mine)
+    extras.push({
+      label: 'Copy path',
+      icon: <Copy size={15} />,
+      onClick: copyPath,
+    })
+  if (!mine && (canPreview || canTable))
+    extras.push({
+      label: 'Preview',
+      title: previewOn ? 'Show the source' : 'Show the preview',
+      icon: <Eye size={15} />,
+      pressed: previewOn,
+      onClick: togglePreview,
+    })
+  if (!mine && svg)
+    extras.push({
+      label: 'Image',
+      title: asImage ? 'Show the source' : 'Show as an image',
+      icon: <ImageIcon size={15} />,
+      pressed: asImage,
+      onClick: () => updateSetting('svgPreview', !asImage),
+    })
+  if (!asImage)
+    extras.push({
+      label: 'Wrap lines',
+      icon: <WrapText size={15} />,
+      pressed: wrap,
+      onClick: () => setWrap((w) => !w),
+    })
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div
+      className="flex min-h-0 flex-1 flex-col"
+      // Each view of the text marks the element it scrolls
+      onScrollCapture={(e) => {
+        const el = e.target as HTMLElement
+        if (el.dataset?.scrollRestore === undefined) return
+        scrolled.current = el.scrollTop
+        onScroll?.(el.scrollTop)
+      }}
+    >
       <div className="sticky top-0 z-10 flex shrink-0 items-center gap-1 border-b border-border bg-surface px-1 py-1 ui-terminal:bg-bg">
         <IconButton
           size="sm"
@@ -612,7 +701,7 @@ export function FileViewer({
           <IconButton
             size="sm"
             onClick={() =>
-              requestEdit(
+              editWith(
                 editable,
                 tableView && tableState?.ok ? tableState.delimiter : undefined,
               )
@@ -623,68 +712,51 @@ export function FileViewer({
             <Pencil size={15} aria-hidden="true" />
           </IconButton>
         )}
-        {!mine && onDelete && (
-          <IconButton
-            size="sm"
-            onClick={() =>
-              onDelete({
-                // The text shown: its bytes are what a delete must match
-                hash: state.kind === 'text' ? state.hash : undefined,
-                sensitive: sensitive || reveal,
-              })
-            }
-            aria-label="Delete"
-            title="Delete"
-          >
-            <Trash2 size={15} aria-hidden="true" />
-          </IconButton>
-        )}
-        {!mine && (
-          <IconButton
-            size="sm"
-            onClick={copyPath}
-            aria-label="Copy path"
-            title="Copy path"
-          >
-            <Copy size={15} aria-hidden="true" />
-          </IconButton>
-        )}
-        {!mine && (canPreview || canTable) && (
-          <IconButton
-            size="sm"
-            onClick={togglePreview}
-            aria-label="Preview"
-            aria-pressed={previewOn}
-            title={previewOn ? 'Show the source' : 'Show the preview'}
-            className={previewOn ? 'text-accent' : ''}
-          >
-            <Eye size={15} aria-hidden="true" />
-          </IconButton>
-        )}
-        {!mine && svg && (
-          <IconButton
-            size="sm"
-            onClick={() => updateSetting('svgPreview', !asImage)}
-            aria-label="Image"
-            aria-pressed={asImage}
-            title={asImage ? 'Show the source' : 'Show as an image'}
-            className={asImage ? 'text-accent' : ''}
-          >
-            <ImageIcon size={15} aria-hidden="true" />
-          </IconButton>
-        )}
-        {!asImage && (
-          <IconButton
-            size="sm"
-            onClick={() => setWrap((w) => !w)}
-            aria-label="Wrap lines"
-            aria-pressed={wrap}
-            title="Wrap lines"
-            className={wrap ? 'text-accent' : ''}
-          >
-            <WrapText size={15} aria-hidden="true" />
-          </IconButton>
-        )}
+        {compact
+          ? extras.length > 0 && (
+              <Menu
+                label="More actions"
+                trigger={<Ellipsis size={16} aria-hidden="true" />}
+                triggerSize="sm"
+                align="end"
+              >
+                {extras.map((a) =>
+                  a.pressed === undefined ? (
+                    <MenuItem
+                      key={a.label}
+                      icon={a.icon}
+                      danger={a.danger}
+                      onSelect={a.onClick}
+                    >
+                      {a.label}
+                    </MenuItem>
+                  ) : (
+                    <MenuItemCheckbox
+                      key={a.label}
+                      icon={a.icon}
+                      checked={a.pressed}
+                      onSelect={a.onClick}
+                    >
+                      {a.label}
+                    </MenuItemCheckbox>
+                  ),
+                )}
+              </Menu>
+            )
+          : extras.map((a) => (
+              <IconButton
+                key={a.label}
+                size="sm"
+                onClick={a.onClick}
+                aria-label={a.label}
+                aria-pressed={a.pressed}
+                title={a.title ?? a.label}
+                className={a.pressed ? 'text-accent' : ''}
+              >
+                {a.icon}
+              </IconButton>
+            ))}
+        {headerExtra}
       </div>
       {mine && !cells && (
         <FileEditor
@@ -702,6 +774,7 @@ export function FileViewer({
             setReload((n) => n + 1)
           }}
           onCopy={() => copyText(mine.text)}
+          scrollTop={scrolled.current}
         />
       )}
       {!mine && asImage && !sensitive && (
@@ -719,7 +792,7 @@ export function FileViewer({
           path={path}
           wrap={wrap}
           anchor={leftPreview ? undefined : anchor}
-          scrollTop={leftPreview ? undefined : scrollTop}
+          scrollTop={scrolled.current}
           onFollow={onFollow}
           notify={notify}
         />
@@ -745,6 +818,7 @@ export function FileViewer({
           wrap={wrap}
           notify={notify}
           onTableState={setTableState}
+          scrollTop={scrolled.current}
           editing={
             cells && {
               delimiter: cells.delimiter,
@@ -764,7 +838,12 @@ export function FileViewer({
           {markdown && tooLarge && (
             <Banner>Too large to preview: shown as source</Banner>
           )}
-          <CodeBlock text={state.text} path={path} wrap={wrap} />
+          <CodeBlock
+            text={state.text}
+            path={path}
+            wrap={wrap}
+            scrollTop={scrolled.current}
+          />
         </>
       )}
       {!mine && !asImage && state.kind === 'loading' && (
@@ -776,7 +855,16 @@ export function FileViewer({
         </ViewMessage>
       )}
       {!mine && !asImage && state.kind === 'error' && (
-        <ViewMessage>{ERRORS[state.error]}</ViewMessage>
+        <ViewMessage>
+          {ERRORS[state.error]}
+          {state.error === 'not-found' && onCloseTab && (
+            // Gone from the host (deleted or renamed elsewhere): the tab
+            // stays until the user closes it
+            <Button size="sm" onClick={onCloseTab}>
+              Close tab
+            </Button>
+          )}
+        </ViewMessage>
       )}
       {!mine && sensitive && (
         <ViewMessage>
@@ -786,8 +874,11 @@ export function FileViewer({
       )}
       <SensitiveConfirm
         isOpen={!mine && sensitive}
-        onConfirm={() => setReveal(true)}
-        onCancel={onClose}
+        onConfirm={() => {
+          setReveal(true)
+          onRevealed?.()
+        }}
+        onCancel={onCancelReveal ?? onClose}
       />
       <ConfirmDialog
         isOpen={!!discarding}
@@ -804,21 +895,6 @@ export function FileViewer({
       >
         Your changes to this file will be lost.
       </ConfirmDialog>
-      {replacing && (
-        <ConfirmDialog
-          isOpen
-          title="Discard other changes?"
-          confirmLabel="Discard"
-          destructive
-          onConfirm={() => {
-            setReplacing(undefined)
-            editWith(replacing.file, replacing.delimiter)
-          }}
-          onCancel={() => setReplacing(undefined)}
-        >
-          Your unsaved changes to {replacing.other} will be lost.
-        </ConfirmDialog>
-      )}
       {asking && (
         <ConfirmDialog
           isOpen

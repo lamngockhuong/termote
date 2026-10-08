@@ -75,6 +75,8 @@ interface Props {
   // parse, and undefined while one runs
   onTableState?: (state: TableState | undefined) => void
   editing?: TableEditing
+  // Where the grid starts scrolled to (a tab shown again)
+  scrollTop?: number
 }
 
 // Column widths in ch, from the first rows: the longest first line, clamped
@@ -101,6 +103,7 @@ export default function TablePreview({
   notify,
   onTableState,
   editing,
+  scrollTop,
 }: Props) {
   const [chosen, setDelimiter] = useState(() => delimiterFor(path, text))
   const delimiter = editing?.delimiter ?? chosen
@@ -373,6 +376,7 @@ export default function TablePreview({
           onSort={toggleSort}
           onOpen={openCell}
           busy={!computed || stale}
+          scrollTop={scrollTop}
         />
       )}
       {editing && cell ? (
