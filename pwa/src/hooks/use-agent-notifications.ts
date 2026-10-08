@@ -6,7 +6,10 @@ import {
   shouldNotify,
 } from '../utils/agent-notify'
 import { parseDeepLink } from '../utils/deep-link'
-import { notificationSupport } from '../utils/notify-permission'
+import {
+  notificationSupport,
+  readNotifyPermission,
+} from '../utils/notify-permission'
 
 interface Options {
   sessions: Session[]
@@ -26,6 +29,12 @@ export function useAgentNotifications(opts: Options) {
   const optsRef = useRef(opts)
   optsRef.current = opts
   const prevRef = useRef(new Map<string, AgentStatus>())
+
+  // notificationSupport trusts the Permissions API once it was read; the
+  // read never rejects.
+  useEffect(() => {
+    void readNotifyPermission()
+  }, [])
 
   useEffect(() => {
     const { next, events } = agentTransitions(prevRef.current, opts.sessions)
