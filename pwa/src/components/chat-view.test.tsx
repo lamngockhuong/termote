@@ -400,3 +400,136 @@ describe('OpenTerminalButton', () => {
     expect(showView).toHaveBeenCalledWith('terminal')
   })
 })
+
+describe('ChatView without an agent', () => {
+  const start = vi.fn()
+  const idle: ViewProps = {
+    ...props,
+    mux: {
+      backend: 'herdr',
+      caps: {
+        clientSideSelect: true,
+        copyMode: false,
+        agentChat: true,
+        agentStart: true,
+      },
+    },
+    session: {
+      id: 'w1:t1',
+      name: 'tab',
+      icon: '',
+      description: '',
+      paneId: 'w1:p1',
+      hasAgent: false,
+      panes: [
+        { id: 'w1:p1', label: 'Pane 1', hasAgent: false, command: 'bash' },
+      ],
+    },
+    agentStart: { starts: {}, start },
+  }
+  const withStart = (
+    kind: 'claude' | 'codex',
+    phase: 'sending' | 'starting' | 'ready' | 'failed',
+    error?: string,
+  ): ViewProps => ({
+    ...idle,
+    agentStart: {
+      starts: { 'w1:p1': { kind, phase, error, since: 0 } },
+      start,
+    },
+  })
+
+  it('offers both agents on an idle pane and starts the one picked', () => {
+    render(<ChatView {...idle} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Codex' }))
+    expect(start).toHaveBeenCalledWith('w1:p1', 'codex')
+    expect(screen.getByRole('button', { name: 'Claude Code' })).toBeTruthy()
+  })
+
+  it('follows a start while the pane runs the agent but the snapshot has none yet', () => {
+    render(
+      <ChatView
+        {...withStart('claude', 'starting')}
+        session={{
+          ...idle.session,
+          panes: [
+            { id: 'w1:p1', label: '', hasAgent: false, command: 'claude' },
+          ],
+        }}
+      />,
+    )
+    expect(screen.getByRole('status').textContent).toContain(
+      'Starting Claude Code…',
+    )
+  })
+
+  it('tells Codex users to type the first message in the terminal', () => {
+    render(<ChatView {...withStart('codex', 'ready')} />)
+    expect(
+      screen.getByText(/Type your first message in the terminal/),
+    ).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Open terminal' }))
+    expect(showView).toHaveBeenCalledWith('terminal')
+  })
+
+  it('says Claude Code is starting until its session shows', () => {
+    const p = withStart('claude', 'ready')
+    const { rerender } = render(<ChatView {...p} />)
+    expect(screen.getByText('Claude Code is starting…')).toBeTruthy()
+    // The snapshot has the agent, Herdr not its session yet
+    set({ error: 'no-session' })
+    rerender(
+      <ChatView
+        {...p}
+        session={{ ...p.session, hasAgent: true, agentName: 'claude' }}
+      />,
+    )
+    expect(screen.getByText('Claude Code is starting…')).toBeTruthy()
+  })
+
+  it('shows why a start was refused', () => {
+    render(
+      <ChatView {...withStart('claude', 'failed', 'This pane is gone.')} />,
+    )
+    expect(screen.getByRole('alert').textContent).toBe('This pane is gone.')
+  })
+
+  it('offers nothing on a tab with no pane yet', () => {
+    render(
+      <ChatView {...idle} session={{ ...idle.session, paneId: undefined }} />,
+    )
+    expect(screen.getByText('No agent runs in this pane.')).toBeTruthy()
+  })
+
+  it('reads a tab with no pane as one without a start', () => {
+    set({ error: 'no-session' })
+    render(
+      <ChatView
+        {...withStart('claude', 'ready')}
+        session={{
+          ...idle.session,
+          paneId: undefined,
+          hasAgent: true,
+          agentName: 'claude',
+        }}
+      />,
+    )
+    expect(
+      screen.getByText('No Claude Code session found in this pane.'),
+    ).toBeTruthy()
+  })
+
+  it('offers nothing on a pane running something else', () => {
+    render(
+      <ChatView
+        {...idle}
+        session={{
+          ...idle.session,
+          panes: [{ id: 'w1:p1', label: '', hasAgent: false, command: 'vim' }],
+        }}
+      />,
+    )
+    expect(screen.getByText('No agent runs in this pane.')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Codex' })).toBeNull()
+  })
+})

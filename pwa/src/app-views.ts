@@ -10,7 +10,9 @@ import { ChatInput } from './components/chat-input'
 import type { ToastAction, ToastVariant } from './components/toast'
 import type { ViewOption } from './components/ui/view-switcher'
 import type { MuxInfo } from './hooks/use-local-sessions'
+import type { AgentStartControl } from './hooks/use-start-agent'
 import type { Session } from './types/session'
+import { canStartAgent } from './utils/agent-start'
 import {
   CHANGES_VIEW_ID,
   CHAT_VIEW_ID,
@@ -31,6 +33,8 @@ export interface ViewContext {
   session: Session
   // View-only role: no view may offer a way to send input
   readOnly: boolean
+  // Agents started from this page (App's useStartAgent)
+  agentStart?: AgentStartControl
 }
 
 export interface ViewProps extends ViewContext {
@@ -77,11 +81,13 @@ export const APP_VIEWS: AppView[] = [
     id: CHAT_VIEW_ID,
     label: 'Chat',
     Icon: MessagesSquare,
-    // An agent whose transcript the server reads (chat-agents.ts)
-    available: ({ mux, session }) =>
-      !!mux.caps.agentChat &&
-      !!session.hasAgent &&
-      chatAgent(session.agentName),
+    // An agent whose transcript the server reads (chat-agents.ts), or a
+    // pane where one can be started or was started from this page
+    available: (ctx) =>
+      (!!ctx.mux.caps.agentChat &&
+        !!ctx.session.hasAgent &&
+        chatAgent(ctx.session.agentName)) ||
+      startOffered(ctx),
     Main: ChatView,
     Input: ChatInput,
   },
@@ -106,6 +112,20 @@ export const APP_VIEWS: AppView[] = [
     placement: 'panel',
   },
 ]
+
+// The Chat view of a pane without an agent: its start, or the start made
+// there from this page while the snapshot does not show the agent yet (a
+// refused one only while the pane can still start one).
+export function startOffered({
+  mux,
+  session,
+  readOnly,
+  agentStart,
+}: ViewContext): boolean {
+  if (readOnly || !mux.caps.agentStart || session.hasAgent) return false
+  const record = session.paneId ? agentStart?.starts[session.paneId] : undefined
+  return canStartAgent(mux, session) || (!!record && record.phase !== 'failed')
+}
 
 export function availableViews(views: AppView[], ctx: ViewContext): AppView[] {
   return views.filter((v) => v.available(ctx))

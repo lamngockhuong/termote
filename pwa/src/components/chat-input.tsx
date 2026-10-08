@@ -5,8 +5,10 @@ import { OpenTerminalButton } from './open-terminal-button'
 import { ReadOnlyBar } from './read-only-bar'
 
 // The Chat view's input area: the composer for an agent the server can write
-// to, else a bar that points to the terminal.
+// to, else a bar that points to the terminal. A pane with no agent (its
+// start panel) has none.
 export function ChatInput(props: ViewProps) {
+  if (!props.session.hasAgent) return null
   if (chatInputAgent(props.session.agentName))
     return <ChatComposer {...props} />
   return (

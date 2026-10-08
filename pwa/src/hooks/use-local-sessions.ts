@@ -157,7 +157,7 @@ interface Built {
 }
 
 // Flatten the snapshot into tabs (each tagged with its group) and groups.
-function buildSessions(
+export function buildSessions(
   snap: MuxSnapshot,
   meta: Record<string, SessionMeta>,
 ): Built {

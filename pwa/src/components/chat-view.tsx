@@ -10,11 +10,14 @@ import type { ViewProps } from '../app-views'
 import { agentLabel, chatInputAgent } from '../chat-agents'
 import { useAgentPrompt } from '../hooks/use-agent-prompt'
 import { useAgentTranscript } from '../hooks/use-agent-transcript'
+import type { StartRecord } from '../hooks/use-start-agent'
 import { toAgentStatus } from '../types/session'
+import { canStartAgent } from '../utils/agent-start'
 import { AgentStatusBadge } from './agent-status-badge'
 import { ChatMessage } from './chat-message'
 import { OpenTerminalButton } from './open-terminal-button'
 import { PromptCard } from './prompt-card'
+import { StartAgentPanel } from './start-agent-panel'
 import { Button } from './ui/button'
 
 // Entries rendered at once; scrolling to the top shows more.
@@ -22,7 +25,66 @@ export const RENDER_WINDOW = 150
 // Within this many pixels of the bottom, the list follows new entries.
 const STICK_DISTANCE = 48
 
-export function ChatView({ session, showView, readOnly }: ViewProps) {
+export function ChatView(props: ViewProps) {
+  if (!props.session.hasAgent) return <NoAgentChat {...props} />
+  return <AgentChat {...props} />
+}
+
+// A pane with no agent (yet): start one, follow the start, or say there is
+// none.
+function NoAgentChat({ mux, session, showView, agentStart }: ViewProps) {
+  const paneId = session.paneId ?? ''
+  const record = agentStart?.starts[paneId]
+  if (record?.phase === 'ready') {
+    return <StartedNotice record={record} showView={showView} />
+  }
+  if (
+    agentStart &&
+    ((record && record.phase !== 'failed') || canStartAgent(mux, session))
+  ) {
+    return (
+      <Centered>
+        <StartAgentPanel
+          record={record}
+          onStart={(kind) => agentStart.start(paneId, kind)}
+        />
+      </Centered>
+    )
+  }
+  return (
+    <Centered>
+      <p>No agent runs in this pane.</p>
+      <OpenTerminalButton showView={showView} />
+    </Centered>
+  )
+}
+
+// An agent started from this page that has no conversation to show yet.
+// Codex writes its rollout only with its first message, which the Chat view
+// cannot send without one; Claude Code's session is reported by Herdr a
+// moment after it is ready.
+function StartedNotice({
+  record,
+  showView,
+}: {
+  record: StartRecord
+  showView: ViewProps['showView']
+}) {
+  if (record.kind === 'codex') {
+    return (
+      <Centered>
+        <p>
+          Codex is running. Type your first message in the terminal; the Chat
+          view follows from the next one.
+        </p>
+        <OpenTerminalButton showView={showView} />
+      </Centered>
+    )
+  }
+  return <Centered>{agentLabel(record.kind)} is starting…</Centered>
+}
+
+function AgentChat({ session, showView, readOnly, agentStart }: ViewProps) {
   const t = useAgentTranscript(session.paneId)
   const status = toAgentStatus(t.status)
   // View-only has no composer: the dialog is shown here, without buttons.
@@ -137,6 +199,15 @@ export function ChatView({ session, showView, readOnly }: ViewProps) {
 
   if (!t.loaded) {
     return <Centered>Loading the conversation…</Centered>
+  }
+  const started = agentStart?.starts[session.paneId ?? '']
+  if (
+    t.error === 'no-session' &&
+    t.entries.length === 0 &&
+    started?.phase === 'ready' &&
+    started.kind === session.agentName
+  ) {
+    return <StartedNotice record={started} showView={showView} />
   }
   if (t.error && t.entries.length === 0) {
     return (

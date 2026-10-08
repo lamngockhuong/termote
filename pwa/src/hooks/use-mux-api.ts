@@ -70,6 +70,9 @@ export interface MuxSnapshot {
     groups?: boolean
     // The server sends Web Push when an agent needs the user (/push).
     push?: boolean
+    // Claude Code or Codex can be started in a pane that shows only its
+    // shell (/agent/start): Herdr 0.8.2 or later, not on Windows.
+    agentStart?: boolean
   }
   groups: MuxGroup[]
 }
@@ -438,6 +441,50 @@ export async function sendAgentMessage(
     ),
   })
   if (!res.ok) throw await requestError(res)
+}
+
+// The agents a pane can start, with the arguments the server picks.
+export type StartAgentKind = 'claude' | 'codex'
+
+// How a start goes: starting until the agent is ready for a message, asks
+// something first (blocked), ends (exited) or never gets ready (timeout).
+export type AgentStartState =
+  | 'starting'
+  | 'ready'
+  | 'blocked'
+  | 'exited'
+  | 'timeout'
+
+// A start may wait for a shell and make several Herdr calls (about 22 s at
+// worst on the server): waited for longer than a read.
+export const START_REQUEST_TIMEOUT_MS = 30_000
+
+// Asks the server to start kind in the pane's shell. Resolves once the
+// command is typed, not once the agent is ready (agentStartState). Throws
+// RequestError when refused (pane_busy, starting, unsupported, ...).
+export async function startAgent(
+  paneId: string,
+  kind: StartAgentKind,
+): Promise<void> {
+  const res = await fetch(agentPath(paneId, 'start'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind }),
+    signal: AbortSignal.timeout(START_REQUEST_TIMEOUT_MS),
+  })
+  if (!res.ok) throw await requestError(res)
+}
+
+// The state of this server's latest start in the pane. Throws RequestError
+// no_start (404) when there is none.
+export async function agentStartState(
+  paneId: string,
+): Promise<{ kind: StartAgentKind; state: AgentStartState }> {
+  const res = await fetch(agentPath(paneId, 'start'), {
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  })
+  if (!res.ok) throw await requestError(res)
+  return res.json()
 }
 
 // A dialog Claude Code has open. permission and select carry options and a
