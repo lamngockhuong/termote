@@ -68,25 +68,32 @@
   --tm-duration-base: 200ms;
 }
 
+/*
+ * Every style keeps text around 12-15:1 on its background, never pure black
+ * on white nor white on black, which tires the eyes over long reads. A dark
+ * terminal background stays at or below #0f1110 so every ANSI colour of
+ * terminal-view.tsx keeps 4.5:1 on it.
+ */
+
 /* ── Neutral (default): zinc, hairlines, restrained indigo ── */
 :root,
 :root[data-ui-style="neutral"] {
-  --tm-bg: #ffffff;
-  --tm-surface: #fafafa;
+  --tm-bg: #f7f7f8;
+  --tm-surface: #f0f0f2;
   --tm-surface-raised: #ffffff;
   --tm-overlay: rgb(9 9 11 / 0.35);
-  --tm-term-bg: #fcfcfd;
-  --tm-fg: #09090b;
+  --tm-term-bg: #f7f7f8;
+  --tm-fg: #27272a;
   --tm-fg-muted: #52525b;
   --tm-fg-subtle: #63636b;
-  --tm-border: #e4e4e7;
-  --tm-border-strong: #d4d4d8;
+  --tm-border: #e1e1e5;
+  --tm-border-strong: #d1d1d6;
   --tm-accent: #4f46e5;
   --tm-accent-fg: #ffffff;
   --tm-accent-soft: rgb(79 70 229 / 0.08);
-  --tm-success: #15803d;
-  --tm-warning: #a16207;
-  --tm-danger: #dc2626;
+  --tm-success: #15773a;
+  --tm-warning: #975c06;
+  --tm-danger: #c81e1e;
   --tm-info: #2563eb;
   /* Backgrounds of added and deleted diff lines, under --tm-fg */
   --tm-diff-add: #dcfce7;
@@ -99,16 +106,16 @@
 }
 :root.dark,
 :root[data-ui-style="neutral"].dark {
-  --tm-bg: #09090b;
-  --tm-surface: #111113;
-  --tm-surface-raised: #18181b;
+  --tm-bg: #1a1a1d;
+  --tm-surface: #202024;
+  --tm-surface-raised: #29292e;
   --tm-overlay: rgb(0 0 0 / 0.6);
   --tm-term-bg: #0c0c0e;
-  --tm-fg: #fafafa;
+  --tm-fg: #d4d4d8;
   --tm-fg-muted: #a1a1aa;
-  --tm-fg-subtle: #8a8a93;
-  --tm-border: #27272a;
-  --tm-border-strong: #3f3f46;
+  --tm-fg-subtle: #909099;
+  --tm-border: #2f2f34;
+  --tm-border-strong: #424249;
   --tm-accent: #818cf8;
   --tm-accent-fg: #0b0b1a;
   --tm-accent-soft: rgb(129 140 248 / 0.14);
@@ -116,8 +123,8 @@
   --tm-warning: #fbbf24;
   --tm-danger: #f87171;
   --tm-info: #60a5fa;
-  --tm-diff-add: #0f2a1a;
-  --tm-diff-del: #3a1414;
+  --tm-diff-add: #163020;
+  --tm-diff-del: #3b1a1a;
 }
 
 /* ── Terminal: chrome is the terminal, one accent, mono labels ── */
@@ -127,7 +134,7 @@
   --tm-surface-raised: #ffffff;
   --tm-overlay: rgb(10 14 12 / 0.4);
   --tm-term-bg: #f7f8f6;
-  --tm-fg: #141816;
+  --tm-fg: #262b28;
   --tm-fg-muted: #4b5650;
   --tm-fg-subtle: #5f6a64;
   --tm-border: #d9ded8;
@@ -150,16 +157,16 @@
   --tm-duration-base: 120ms;
 }
 :root[data-ui-style="terminal"].dark {
-  --tm-bg: #0c0e0d;
-  --tm-surface: #131615;
-  --tm-surface-raised: #1a1e1c;
+  --tm-bg: #0f1110;
+  --tm-surface: #161917;
+  --tm-surface-raised: #1d2120;
   --tm-overlay: rgb(0 0 0 / 0.6);
-  --tm-term-bg: #0c0e0d;
-  --tm-fg: #e4ebe7;
+  --tm-term-bg: #0f1110;
+  --tm-fg: #cdd5d0;
   --tm-fg-muted: #a0aca6;
-  --tm-fg-subtle: #7f8a84;
-  --tm-border: #242a27;
-  --tm-border-strong: #353d39;
+  --tm-fg-subtle: #88938d;
+  --tm-border: #272d2a;
+  --tm-border-strong: #384039;
   --tm-accent: #3ddc84;
   --tm-accent-fg: #04140b;
   --tm-accent-soft: rgb(61 220 132 / 0.12);
@@ -177,8 +184,8 @@
   --tm-surface: #ffffff;
   --tm-surface-raised: #ffffff;
   --tm-overlay: rgb(0 0 0 / 0.3);
-  --tm-term-bg: #ffffff;
-  --tm-fg: #000000;
+  --tm-term-bg: #fafafa;
+  --tm-fg: #1c1c1e;
   --tm-fg-muted: #4a4a50;
   --tm-fg-subtle: #6c6c72;
   --tm-border: #d8d8dd;
@@ -200,19 +207,19 @@
   --tm-duration-base: 240ms;
 }
 :root[data-ui-style="native"].dark {
-  --tm-bg: #000000;
+  --tm-bg: #121214;
   --tm-surface: #1c1c1e;
   --tm-surface-raised: #2c2c2e;
   --tm-overlay: rgb(0 0 0 / 0.55);
   --tm-term-bg: #0b0b0c;
-  --tm-fg: #ffffff;
+  --tm-fg: #e5e5ea;
   --tm-fg-muted: #b4b4ba;
-  --tm-fg-subtle: #98989e;
+  --tm-fg-subtle: #a0a0a6;
   --tm-border: #38383a;
   --tm-border-strong: #4a4a4d;
-  --tm-accent: #0074e8;
-  --tm-accent-fg: #ffffff;
-  --tm-accent-soft: rgb(0 116 232 / 0.22);
+  --tm-accent: #4c9cf8;
+  --tm-accent-fg: #050d18;
+  --tm-accent-soft: rgb(76 156 248 / 0.2);
   --tm-success: #30d158;
   --tm-warning: #ffd60a;
   --tm-danger: #ff6961;

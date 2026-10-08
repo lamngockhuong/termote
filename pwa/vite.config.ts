@@ -26,8 +26,8 @@ export default defineConfig({
         description: 'Remote control CLI tools from mobile',
         // --tm-bg of the default (neutral) style in dark; a static manifest
         // cannot follow the chosen style.
-        theme_color: '#09090b',
-        background_color: '#09090b',
+        theme_color: '#1a1a1d',
+        background_color: '#1a1a1d',
         display: 'standalone',
         orientation: 'any',
         start_url: '/',
