@@ -112,25 +112,28 @@ func pushTransitionKind(prev, next string) string {
 // events since prev. A pane no longer listed, or listed without an agent, is
 // forgotten: the next agent there is a first sighting, so a killed working
 // agent and a new one's first idle raise no finished turn. An agent with no
-// status keeps its last known one.
+// status keeps its last known one. Panes are known by their key (paneKey),
+// so a tmux pane whose id a window move shifted is still the same pane, and
+// never takes the status of the one that had the id before.
 func transitions(prev map[string]string, snap Snapshot) (map[string]string, []pushEvent) {
 	next := map[string]string{}
 	var events []pushEvent
 	for _, g := range snap.Groups {
 		for _, t := range g.Tabs {
 			for _, p := range t.Panes {
-				last := prev[p.ID]
+				key := paneKey(p)
+				last := prev[key]
 				status := ""
 				if p.Agent != nil && pushStatuses[p.Agent.Status] {
 					status = p.Agent.Status
 				}
 				if status == "" {
 					if p.Agent != nil && last != "" {
-						next[p.ID] = last
+						next[key] = last
 					}
 					continue
 				}
-				next[p.ID] = status
+				next[key] = status
 				if kind := pushTransitionKind(last, status); kind != "" {
 					events = append(events, pushEvent{GroupID: g.ID, TabID: t.ID, PaneID: p.ID, Kind: kind})
 				}

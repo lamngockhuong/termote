@@ -1,4 +1,6 @@
 import {
+  ArrowDown,
+  ArrowUp,
   ChevronDown,
   ChevronRight,
   FolderGit2,
@@ -13,10 +15,18 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import { useEffect, useId, useRef, useState } from 'react'
+import {
+  type DragEvent,
+  type KeyboardEvent,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from 'react'
 import { useGroupCollapsed } from '../hooks/use-group-collapsed'
 import { RequestError } from '../hooks/use-mux-api'
 import type { Session, SessionGroup } from '../types/session'
+import { dropIndex, movableGroups, targetIndex } from '../utils/reorder'
 import {
   blockedFirst,
   effectiveFilter,
@@ -77,7 +87,63 @@ interface Props {
   // called ("workspace", "tmux session"), and the actions. Without it the
   // list is as before: no group actions, no header for a single group.
   groupActions?: GroupActions
+  // Moving tabs and groups (caps.reorderTabs, caps.reorderGroups)
+  reorder?: ReorderActions
 }
+
+export interface ReorderActions {
+  tabs: boolean
+  groups: boolean
+  // A move is running; its snapshot is not in yet
+  moving: boolean
+  // index: the final position, in the server's order
+  onMoveTab: (id: string, index: number) => void
+  onMoveGroup: (id: string, index: number) => void
+}
+
+// Why a move was refused, by the server's code
+export function moveProblem(err: unknown): string {
+  const code = err instanceof RequestError ? err.code : ''
+  switch (code) {
+    case 'busy':
+      return 'Another move is running; try again'
+    case 'invalid_index':
+      return 'The list changed; try again'
+    case 'linked_worktree':
+      return "A worktree moves with its repository's workspace"
+    case 'unsupported':
+      return 'Reordering is not supported here'
+  }
+  return 'Could not move'
+}
+
+// The key a tab keeps when its id changes
+const keyOf = (s: Session) => s.key ?? s.id
+
+// A row being dragged, kept here: while dragging over a row the browser
+// shows only the data's types, never the data.
+interface Dragged {
+  kind: 'tab' | 'group'
+  id: string
+  // The group of a tab: it can be dropped only within it
+  groupId?: string
+}
+
+// Where a dragged row would land: before or after the row under the pointer
+interface DropTarget {
+  id: string
+  after: boolean
+}
+
+// A 2 px accent line where a dragged row would land
+const dropLine = (after: boolean) => (
+  <span
+    aria-hidden="true"
+    className={`pointer-events-none absolute inset-x-1 z-10 h-0.5 rounded-full bg-accent ${
+      after ? '-bottom-px' : '-top-px'
+    }`}
+  />
+)
 
 export interface GroupActions {
   noun: string
@@ -122,11 +188,14 @@ export function SessionSidebar({
   onFilterChange,
   sortBlockedFirst = false,
   groupActions,
+  reorder,
 }: Props) {
   const [showAddForm, setShowAddForm] = useState(false)
   const [newName, setNewName] = useState('')
   const [newIcon, setNewIcon] = useState('💻')
-  const [editingId, setEditingId] = useState<string | null>(null)
+  // The tab being edited, by key: a move that shifts its id (tmux) leaves
+  // the form on it, and it closes when the tab is gone.
+  const [editingKey, setEditingKey] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [editIcon, setEditIcon] = useState('')
   // Mobile: the edit was started from the current session row, which then
@@ -141,6 +210,14 @@ export function SessionSidebar({
   const groupErrorId = useId()
   const { isCollapsed: isGroupCollapsed, toggle: toggleGroup } =
     useGroupCollapsed()
+  const dragged = useRef<Dragged | null>(null)
+  const [dropTarget, setDropTarget] = useState<DropTarget | null>(null)
+  // Each desktop row's button by key, and the row whose button had focus
+  // when Alt+Arrow moved it: focus goes back to it once the move is in.
+  const rowButtons = useRef(new Map<string, HTMLButtonElement>())
+  const refocusKey = useRef<string | null>(null)
+  const editingSession = sessions.find((s) => keyOf(s) === editingKey)
+  const editingId = editingSession?.id ?? null
 
   // A filter applies only with the bar that can clear it.
   const activeFilter = onFilterChange
@@ -161,12 +238,101 @@ export function SessionSidebar({
   const visibleSessions = arrange(sessions)
   const activeSession = sessions.find((s) => s.id === activeId)
 
+  // Reordering works on the list in the server's order: hidden while the
+  // list on screen is filtered or sorted.
+  const canReorder = !!reorder && !filtering && !sortBlockedFirst
+  const groupTabIds = (groupId?: string) =>
+    sessions.filter((s) => s.groupId === groupId).map((s) => s.id)
+  const canMoveTabs = (groupId?: string) =>
+    canReorder && reorder.tabs && groupTabIds(groupId).length > 1
+  const movableIds = movableGroups(groups).map((g) => g.id)
+  const canMoveGroup = (group: SessionGroup) =>
+    canReorder &&
+    reorder.groups &&
+    movableIds.length > 1 &&
+    movableIds.includes(group.id)
+
+  // Move a tab one place up or down in its group; nothing at an end.
+  const stepTab = (session: Session, delta: -1 | 1) => {
+    const index = targetIndex(groupTabIds(session.groupId), session.id, delta)
+    if (index === null) return false
+    reorder?.onMoveTab(session.id, index)
+    return true
+  }
+  // A group's menu offers only the moves that exist (disabled at the ends).
+  const stepGroup = (group: SessionGroup, delta: -1 | 1) =>
+    reorder?.onMoveGroup(
+      group.id,
+      targetIndex(movableIds, group.id, delta) as number,
+    )
+
+  // Focus follows a row moved from the keyboard to its new place.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new list may hold the moved row
+  useEffect(() => {
+    const key = refocusKey.current
+    if (!key || reorder?.moving) return
+    refocusKey.current = null
+    rowButtons.current.get(key)?.focus()
+  }, [sessions, reorder?.moving])
+
+  // Drag and drop (desktop): a tab within its group, a group among those
+  // that can move. The half of the row under the pointer says before or
+  // after it.
+  const dragProps = (
+    item: Dragged,
+    enabled: boolean,
+    ids: string[],
+    onMove?: (id: string, index: number) => void,
+  ) => {
+    if (!enabled) return {}
+    const accepts = () => {
+      const d = dragged.current
+      return d?.kind === item.kind && d.groupId === item.groupId ? d : null
+    }
+    const isAfter = (e: DragEvent<HTMLElement>) => {
+      const box = e.currentTarget.getBoundingClientRect()
+      return e.clientY > box.top + box.height / 2
+    }
+    const end = () => {
+      dragged.current = null
+      setDropTarget(null)
+    }
+    return {
+      draggable: true,
+      onDragStart: (e: DragEvent) => {
+        dragged.current = item
+        e.dataTransfer.effectAllowed = 'move'
+        e.dataTransfer.setData(`text/x-termote-${item.kind}`, item.id)
+      },
+      onDragOver: (e: DragEvent<HTMLElement>) => {
+        if (!accepts()) return
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'move'
+        const after = isAfter(e)
+        if (dropTarget?.id !== item.id || dropTarget.after !== after) {
+          setDropTarget({ id: item.id, after })
+        }
+      },
+      onDrop: (e: DragEvent<HTMLElement>) => {
+        const d = accepts()
+        if (!d) return
+        e.preventDefault()
+        const index = dropIndex(ids, d.id, item.id, isAfter(e))
+        if (index !== null) onMove?.(d.id, index)
+        end()
+      },
+      onDragEnd: end,
+    }
+  }
+  const dropLineFor = (id: string) =>
+    dropTarget?.id === id && dropLine(dropTarget.after)
+
   // Mobile: the sheet opens on the active session, wherever it is in the list.
   // Closed, it drops an edit left open, so it does not come back with it.
   useEffect(() => {
     if (!isMobile) return
     if (!isOpen) {
-      setEditingId(null)
+      setEditingKey(null)
       return
     }
     sheetListRef.current
@@ -191,7 +357,7 @@ export function SessionSidebar({
 
   const startEdit = (session: Session, inCurrent = false) => {
     setEditingInCurrent(inCurrent)
-    setEditingId(session.id)
+    setEditingKey(keyOf(session))
     setEditName(session.name)
     setEditIcon(session.icon)
   }
@@ -200,11 +366,11 @@ export function SessionSidebar({
     if (editingId && editName.trim() && onUpdate) {
       onUpdate(editingId, { name: editName.trim(), icon: editIcon })
     }
-    setEditingId(null)
+    setEditingKey(null)
   }
 
   const cancelEdit = () => {
-    setEditingId(null)
+    setEditingKey(null)
   }
 
   // Edit form (shared)
@@ -238,18 +404,42 @@ export function SessionSidebar({
   )
 
   // Desktop session item; edit and remove show on hover or keyboard focus
+  // Drag it within its group, or Alt+Up/Down while its button has focus.
   const renderDesktopItem = (session: Session) => {
     const active = activeId === session.id
+    const movable = canMoveTabs(session.groupId)
+    const key = keyOf(session)
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!movable || !e.altKey) return
+      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
+      e.preventDefault()
+      if (stepTab(session, e.key === 'ArrowUp' ? -1 : 1)) {
+        refocusKey.current = key
+      }
+    }
     return (
       <div
         className={`group relative flex items-center rounded-control ${
           active ? ACTIVE_ROW_CLASSES : ROW_CLASSES
         }`}
+        {...dragProps(
+          { kind: 'tab', id: session.id, groupId: session.groupId },
+          movable,
+          groupTabIds(session.groupId),
+          reorder?.onMoveTab,
+        )}
       >
+        {dropLineFor(session.id)}
         <button
           type="button"
+          ref={(el) => {
+            if (el) rowButtons.current.set(key, el)
+            else rowButtons.current.delete(key)
+          }}
           aria-current={active ? 'true' : undefined}
+          aria-keyshortcuts={movable ? 'Alt+ArrowUp Alt+ArrowDown' : undefined}
           onClick={() => onSelect(session.id)}
+          onKeyDown={onKeyDown}
           onDoubleClick={() => onUpdate && startEdit(session)}
           title={
             session.description
@@ -305,7 +495,7 @@ export function SessionSidebar({
   }
 
   const renderItem = (session: Session) => (
-    <div key={session.id}>
+    <div key={keyOf(session)}>
       {editingId === session.id && !editingInCurrent ? (
         renderEditForm()
       ) : isMobile ? (
@@ -421,6 +611,24 @@ export function SessionSidebar({
             Rename
           </MenuItem>
         )}
+        {canMoveGroup(group) && (
+          <>
+            <MenuItem
+              icon={<ArrowUp size={16} />}
+              disabled={movableIds[0] === group.id}
+              onSelect={() => stepGroup(group, -1)}
+            >
+              Move up
+            </MenuItem>
+            <MenuItem
+              icon={<ArrowDown size={16} />}
+              disabled={movableIds[movableIds.length - 1] === group.id}
+              onSelect={() => stepGroup(group, 1)}
+            >
+              Move down
+            </MenuItem>
+          </>
+        )}
         {groupActions.onNewWorktree && !group.worktree?.linked && (
           <MenuItem
             icon={<FolderGit2 size={16} />}
@@ -484,7 +692,16 @@ export function SessionSidebar({
         {groupActions && renamingGroup === group.id ? (
           renderGroupRename(groupActions, group)
         ) : (
-          <div className="flex items-center gap-0.5">
+          <div
+            className="relative flex items-center gap-0.5"
+            {...dragProps(
+              { kind: 'group', id: group.id },
+              !isMobile && canMoveGroup(group),
+              movableIds,
+              reorder?.onMoveGroup,
+            )}
+          >
+            {dropLineFor(group.id)}
             <button
               type="button"
               onClick={() => toggleGroup(group.id)}
@@ -610,6 +827,33 @@ export function SessionSidebar({
           <span className="min-w-0 flex-1 truncate text-[15px] font-semibold ui-terminal:font-label ui-terminal:text-[14px]">
             {activeSession.name}
           </span>
+          {canMoveTabs(activeSession.groupId) && (
+            <>
+              <IconButton
+                size="sm"
+                onClick={() => stepTab(activeSession, -1)}
+                disabled={
+                  groupTabIds(activeSession.groupId)[0] === activeSession.id
+                }
+                aria-label={`Move ${activeSession.name} up`}
+                title="Move up"
+              >
+                <ArrowUp size={16} aria-hidden="true" />
+              </IconButton>
+              <IconButton
+                size="sm"
+                onClick={() => stepTab(activeSession, 1)}
+                disabled={
+                  groupTabIds(activeSession.groupId).slice(-1)[0] ===
+                  activeSession.id
+                }
+                aria-label={`Move ${activeSession.name} down`}
+                title="Move down"
+              >
+                <ArrowDown size={16} aria-hidden="true" />
+              </IconButton>
+            </>
+          )}
           {onUpdate && (
             <Button size="sm" onClick={() => startEdit(activeSession, true)}>
               <Pencil size={14} aria-hidden="true" />

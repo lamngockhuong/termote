@@ -38,8 +38,18 @@ type Mux interface {
 	Snapshot(ctx context.Context) (Snapshot, error)
 	SelectTab(ctx context.Context, tabID string) error
 	NewTab(ctx context.Context, groupID, name string) (tabID string, err error)
-	CloseTab(ctx context.Context, tabID string) error
-	RenameTab(ctx context.Context, tabID, name string) error
+	// CloseTab and RenameTab act on tabID only while key (Tab.Key) still
+	// names the tab there, else errTabChanged; an empty key skips the check.
+	CloseTab(ctx context.Context, tabID, key string) error
+	RenameTab(ctx context.Context, tabID, name, key string) error
+	// MoveTab moves tabID to position index (0-based) among its group's tabs
+	// and returns its id afterwards: a tmux id is a window index, which a
+	// move changes.
+	MoveTab(ctx context.Context, tabID string, index int) (newID string, err error)
+	// MoveGroup moves groupID to position index (0-based) among the groups
+	// that can move (a Herdr linked worktree cannot, it moves with its
+	// repository's workspace).
+	MoveGroup(ctx context.Context, groupID string, index int) error
 	// NewGroup opens a group (a tmux session, a Herdr workspace) named name,
 	// starting in cwd (absolute, already checked), and returns its id.
 	NewGroup(ctx context.Context, name, cwd string) (groupID string, err error)
@@ -100,6 +110,13 @@ type Caps struct {
 	// Worktrees: git worktree workspaces can be listed, created, opened and
 	// removed (/api/mux/worktrees): Herdr 0.9.2 or later, not on Windows.
 	Worktrees bool `json:"worktrees"`
+	// ReorderTabs: a tab can be moved within its group
+	// (/api/mux/tabs/{id}/move): Herdr 0.8.0 or later, not on Windows; tmux
+	// 3.2 or later (the server's version), not psmux.
+	ReorderTabs bool `json:"reorderTabs"`
+	// ReorderGroups: a group can be moved (/api/mux/groups/{id}/move):
+	// Herdr 0.8.0 or later, not on Windows. tmux has no session order.
+	ReorderGroups bool `json:"reorderGroups"`
 }
 
 // snapshotPeeker is a backend whose Snapshot has side effects (tmux makes
@@ -142,7 +159,11 @@ type GroupWorktree struct {
 }
 
 type Tab struct {
-	ID     string `json:"id"`
+	ID string `json:"id"`
+	// Key names the same tab for as long as the backend runs, when its id
+	// changes: tmux's window id (@N; a tab id is a window index, which a
+	// move or renumber-windows shifts), Herdr the tab id.
+	Key    string `json:"key"`
 	Name   string `json:"name"`
 	Active bool   `json:"active"`
 	Panes  []Pane `json:"panes"`
@@ -158,6 +179,17 @@ type Pane struct {
 	Title   string       `json:"title,omitempty"`
 	Agent   *AgentInfo   `json:"agent,omitempty"`
 	Process *ProcessInfo `json:"process,omitempty"`
+	// key names the same pane while its id shifts (tmux %N), for the push
+	// watcher; never sent. Empty means the id.
+	key string
+}
+
+// paneKey is what names p across snapshots: its key, else its id.
+func paneKey(p Pane) string {
+	if p.key != "" {
+		return p.key
+	}
+	return p.ID
 }
 
 // ProcessInfo is a pane's foreground process: the first word of the name the
@@ -285,16 +317,17 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *u
 		case http.MethodPatch:
 			var body struct {
 				Name string `json:"name"`
+				Key  string `json:"key"`
 			}
 			if !decodeJSON(w, r, &body) {
 				return
 			}
-			if err := m.RenameTab(ctx, id, body.Name); err != nil {
+			if err := m.RenameTab(ctx, id, body.Name, body.Key); err != nil {
 				muxError(w, m, "rename tab", err)
 				return
 			}
 		case http.MethodDelete:
-			if err := m.CloseTab(ctx, id); err != nil {
+			if err := m.CloseTab(ctx, id, r.URL.Query().Get("key")); err != nil {
 				muxError(w, m, "close tab", err)
 				return
 			}

@@ -18,10 +18,21 @@ type fakeMux struct {
 	err    error
 	calls  []string
 	attach func(pane string, size Size) (TermStream, error)
+	// caps replaces the default caps when set.
+	caps *Caps
+	// move runs in MoveTab and MoveGroup when set, with the request's
+	// context; moveID is MoveTab's id (else the id given).
+	move   func(ctx context.Context) error
+	moveID string
 }
 
 func (f *fakeMux) Name() string { return "fake" }
-func (f *fakeMux) Caps() Caps   { return Caps{CopyMode: true} }
+func (f *fakeMux) Caps() Caps {
+	if f.caps != nil {
+		return *f.caps
+	}
+	return Caps{CopyMode: true}
+}
 func (f *fakeMux) Snapshot(context.Context) (Snapshot, error) {
 	f.calls = append(f.calls, "snapshot")
 	return f.snap, f.err
@@ -34,13 +45,42 @@ func (f *fakeMux) NewTab(_ context.Context, group, name string) (string, error) 
 	f.calls = append(f.calls, "new "+group+"/"+name)
 	return "7", f.err
 }
-func (f *fakeMux) CloseTab(_ context.Context, id string) error {
-	f.calls = append(f.calls, "close "+id)
+func (f *fakeMux) CloseTab(_ context.Context, id, key string) error {
+	f.calls = append(f.calls, "close "+id+keySuffix(key))
 	return f.err
 }
-func (f *fakeMux) RenameTab(_ context.Context, id, name string) error {
-	f.calls = append(f.calls, "rename "+id+"="+name)
+func (f *fakeMux) RenameTab(_ context.Context, id, name, key string) error {
+	f.calls = append(f.calls, "rename "+id+"="+name+keySuffix(key))
 	return f.err
+}
+func (f *fakeMux) MoveTab(ctx context.Context, id string, index int) (string, error) {
+	f.calls = append(f.calls, fmt.Sprintf("move tab %s to %d", id, index))
+	if f.move != nil {
+		if err := f.move(ctx); err != nil {
+			return "", err
+		}
+	}
+	if f.moveID != "" {
+		return f.moveID, f.err
+	}
+	return id, f.err
+}
+func (f *fakeMux) MoveGroup(ctx context.Context, id string, index int) error {
+	f.calls = append(f.calls, fmt.Sprintf("move group %s to %d", id, index))
+	if f.move != nil {
+		if err := f.move(ctx); err != nil {
+			return err
+		}
+	}
+	return f.err
+}
+
+// keySuffix shows a close or rename's key in fakeMux's calls.
+func keySuffix(key string) string {
+	if key == "" {
+		return ""
+	}
+	return " key " + key
 }
 func (f *fakeMux) NewGroup(_ context.Context, name, cwd string) (string, error) {
 	f.calls = append(f.calls, "new group "+name+" in "+cwd)

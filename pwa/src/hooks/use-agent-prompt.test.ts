@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatus } from '../types/session'
+import { remapPanes } from '../utils/pane-remap'
 import {
   FAST_POLL,
   promptPollInterval,
@@ -227,5 +228,19 @@ describe('useAgentPrompt', () => {
     await act(async () => resolve(null))
     await tick(0)
     expect(mockFetchPrompt).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('useAgentPrompt and shifted ids', () => {
+  it('a pane id that names another pane now starts again', async () => {
+    mockFetchPrompt.mockResolvedValue(dialog)
+    const a = renderHook(() => useAgentPrompt('%1', 'blocked'))
+    await tick()
+    expect(a.result.current.loaded).toBe(true)
+    a.unmount()
+    remapPanes({ moved: new Map(), stale: new Set(['%1']) })
+    const b = renderHook(() => useAgentPrompt('%1', 'blocked'))
+    expect(b.result.current.loaded).toBe(false)
+    b.unmount()
   })
 })

@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatus, Session } from '../types/session'
+import { remapPanes } from '../utils/pane-remap'
 import { useAgentNotifications } from './use-agent-notifications'
 
 function sessionsWith(statuses: Record<string, AgentStatus>): Session[] {
@@ -84,6 +85,23 @@ describe('useAgentNotifications', () => {
     next({ p1: 'blocked', p2: 'done' })
     await Promise.resolve()
     expect(showNotification).toHaveBeenCalledTimes(1)
+  })
+
+  it('a status follows its pane when a move shifts the ids', async () => {
+    const { next } = setup({
+      sessions: sessionsWith({ p1: 'idle', p2: 'working' }),
+    })
+    // p2's pane is p1 now, and p1's is p2: no turn ended
+    remapPanes({
+      moved: new Map([
+        ['p1', 'p2'],
+        ['p2', 'p1'],
+      ]),
+      stale: new Set(['p1', 'p2']),
+    })
+    next({ p1: 'working', p2: 'idle' })
+    await Promise.resolve()
+    expect(showNotification).not.toHaveBeenCalled()
   })
 
   it('notifies for the active pane when the page is hidden', async () => {

@@ -178,6 +178,12 @@ jobs:
           check-latest: true
           cache-dependency-path: server/go.mod
 
+      # The tmux backend's tests run against a private real tmux server;
+      # without tmux they skip.
+      - name: Install tmux
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y tmux && tmux -V
+
       - name: Vet
         working-directory: server
         run: go vet ./...

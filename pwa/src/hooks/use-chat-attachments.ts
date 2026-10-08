@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useSyncExternalStore } from 'react'
 import { imageThumbnail } from '../utils/image-thumbnail'
+import { onPaneRemap, remapEntries } from '../utils/pane-remap'
 import { uploadErrorMessage, uploadImage } from '../utils/upload-image'
 
 // The server's limit on the images of one message.
@@ -17,40 +18,76 @@ export type ChatAttachment = {
   | { status: 'failed'; error: string }
 )
 
+// Each pane's attached images, out of the composer so they survive its
+// remount and follow their pane when its id shifts (a tmux window move).
+const lists = new Map<string, ChatAttachment[]>()
+const listeners = new Set<() => void>()
+const NONE: ChatAttachment[] = []
+// Keys are unique across panes, so a late answer finds its image wherever
+// it is now.
+let seq = 0
+
+function notify() {
+  for (const fn of listeners) fn()
+}
+
+function subscribe(fn: () => void) {
+  listeners.add(fn)
+  return () => {
+    listeners.delete(fn)
+  }
+}
+
+function setList(
+  paneId: string,
+  update: (list: ChatAttachment[]) => ChatAttachment[],
+) {
+  const next = update(lists.get(paneId) ?? NONE)
+  if (next.length) lists.set(paneId, next)
+  else lists.delete(paneId)
+  notify()
+}
+
+// A late answer for an image removed changes nothing.
+function patch(key: number, p: Partial<ChatAttachment>) {
+  for (const [paneId, list] of lists) {
+    if (!list.some((a) => a.key === key)) continue
+    setList(paneId, (l) =>
+      l.map((a) => (a.key === key ? ({ ...a, ...p } as ChatAttachment) : a)),
+    )
+  }
+}
+
+onPaneRemap((shift) => {
+  remapEntries(lists, shift)
+  notify()
+})
+
+// For tests: forget every pane's images.
+export function resetChatAttachments() {
+  lists.clear()
+  seq = 0
+}
+
 // The images attached to the Chat view's next message. Each uploads as soon
-// as it is added; the message carries the ids. A pane starts with none.
+// as it is added; the message carries the ids. Each pane has its own.
 export function useChatAttachments(
   paneId: string,
   onError: (message: string) => void,
 ) {
-  const [items, setItems] = useState<ChatAttachment[]>([])
-  const count = useRef(0)
-  const seq = useRef(0)
-  count.current = items.length
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: another pane starts without this one's images
-  useEffect(() => setItems([]), [paneId])
-
-  // A late answer for an image removed (or of another pane) changes nothing.
-  const patch = useCallback(
-    (key: number, p: Partial<ChatAttachment>) =>
-      setItems((list) =>
-        list.map((a) =>
-          a.key === key ? ({ ...a, ...p } as ChatAttachment) : a,
-        ),
-      ),
-    [],
-  )
+  const items = useSyncExternalStore(subscribe, () => lists.get(paneId) ?? NONE)
 
   const add = useCallback(
     async (file: File) => {
-      if (count.current >= MAX_CHAT_IMAGES) {
+      if ((lists.get(paneId)?.length ?? 0) >= MAX_CHAT_IMAGES) {
         onError(`At most ${MAX_CHAT_IMAGES} images per message.`)
         return
       }
-      count.current++
-      const key = ++seq.current
-      setItems((list) => [...list, { key, thumb: null, status: 'uploading' }])
+      const key = ++seq
+      setList(paneId, (list) => [
+        ...list,
+        { key, thumb: null, status: 'uploading' },
+      ])
       imageThumbnail(file).then((thumb) => thumb && patch(key, { thumb }))
       const result = await uploadImage(file)
       if (result.ok) {
@@ -61,20 +98,21 @@ export function useChatAttachments(
       patch(key, { status: 'failed', error })
       onError(`${error}.`)
     },
-    [onError, patch],
+    [paneId, onError],
   )
 
   const remove = useCallback(
-    (key: number) => setItems((list) => list.filter((a) => a.key !== key)),
-    [],
+    (key: number) =>
+      setList(paneId, (list) => list.filter((a) => a.key !== key)),
+    [paneId],
   )
-  const clear = useCallback(() => setItems([]), [])
+  const clear = useCallback(() => setList(paneId, () => []), [paneId])
 
   // The server no longer has these uploads (swept, or the host's cache
   // cleared): marked, so the user removes and attaches them again.
   const markGone = useCallback(
     (ids: string[]) =>
-      setItems((list) =>
+      setList(paneId, (list) =>
         list.map((a) =>
           a.id && ids.includes(a.id)
             ? {
@@ -85,7 +123,7 @@ export function useChatAttachments(
             : a,
         ),
       ),
-    [],
+    [paneId],
   )
 
   return useMemo(

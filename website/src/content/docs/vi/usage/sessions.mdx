@@ -69,6 +69,30 @@ session:
 Bước kiểm tra thư mục chỉ để bắt lỗi gõ nhầm: terminal mở ra vẫn `cd` đi đâu cũng được. Trên Windows,
 thư mục phải nằm trên một ổ đĩa (`C:\work`), và tên lẫn thư mục trên psmux không được chứa `#`.
 
+### Sắp xếp lại tab và workspace
+
+Tab giữ thứ tự lúc được tạo cho tới khi bạn di chuyển nó, và Termote hiển thị đúng thứ tự backend
+đang giữ, nên thanh tab và sidebar của chính Herdr cũng khớp.
+
+- **Desktop**: kéo một tab trong sidebar lên trên hoặc xuống dưới một tab khác cùng group; một vạch
+  cho thấy chỗ nó sẽ nằm. Khi một tab đang được focus, **Alt+↑** và **Alt+↓** di chuyển nó một bậc.
+- **Mobile**: hàng **Current session** trong bảng phiên có nút **↑** và **↓** để di chuyển tab đang
+  xem trong group của nó.
+- **Workspace Herdr**: **Move up** và **Move down** trong menu **⋯** của workspace, hoặc kéo header
+  của nó trên desktop. Workspace của một repository di chuyển cùng các worktree của nó, như trong
+  Herdr; một linked worktree không di chuyển riêng được.
+
+Các nút này bị ẩn khi đang bật lọc agent hoặc sắp xếp "blocked first", vì lúc đó danh sách trên màn
+hình không phải thứ tự thật. Không hỗ trợ: session tmux (tmux không có thứ tự session), tmux cũ hơn
+3.2, psmux trên Windows, Herdr cũ hơn 0.8.0, và tạm thời Herdr trên Windows.
+
+<Aside type="caution">
+Với tmux, id của tab là số thứ tự window, và di chuyển một window sẽ đánh số lại các window nó đi
+qua. Termote giữ tin nhắn Chat chưa gửi, ảnh đính kèm và chỉnh sửa file chưa lưu đi theo đúng window
+của chúng, nhưng một liên kết tới tab (hoặc lựa chọn đã lưu trên thiết bị khác) trỏ tới window bị
+đánh số lại sẽ mở một tab khác sau đó.
+</Aside>
+
 ### Lọc theo trạng thái agent
 
 Khi có ít nhất một phiên chạy agent lập trình, phía trên danh sách phiên (sidebar trên desktop, bảng
@@ -213,8 +237,10 @@ Phiên được quản lý qua các endpoint `/api/mux/*` của termote:
 | `/api/mux/snapshot`         | GET    | Liệt kê tất cả group/tab/pane                    |
 | `/api/mux/tabs`             | POST   | Tạo tab (nội dung gửi: `{groupId, name}`)                |
 | `/api/mux/tabs/{id}/select` | POST   | Chuyển tab (với Herdr là chuyển pane đang nhận luồng) |
-| `/api/mux/tabs/{id}`        | PATCH  | Đổi tên tab (nội dung gửi: `{name}`)                     |
-| `/api/mux/tabs/{id}`        | DELETE | Xóa tab                                          |
+| `/api/mux/tabs/{id}`        | PATCH  | Đổi tên tab (nội dung gửi: `{name, key}`; `key` của tab khiến id đã cũ bị từ chối với 409) |
+| `/api/mux/tabs/{id}?key=`   | DELETE | Xóa tab (cùng kiểm tra `key`)                    |
+| `/api/mux/tabs/{id}/move`   | POST   | Di chuyển tab trong group (nội dung `{index}`; trả về `id` mới) |
+| `/api/mux/groups/{id}/move` | POST   | Di chuyển workspace Herdr (nội dung `{index}`)   |
 | `/api/mux/panes/{id}`       | DELETE | Đóng một pane (chỉ Herdr, backend khác trả 501)  |
 | `/api/mux/groups`           | POST   | Tạo group (nội dung `{name, cwd}`)               |
 | `/api/mux/groups/{id}`      | PATCH  | Đổi tên group (nội dung `{name}`)                |

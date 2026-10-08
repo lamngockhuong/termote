@@ -1,5 +1,6 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { remapPanes } from '../utils/pane-remap'
 import {
   type FileDraft,
   isDraftDirty,
@@ -569,5 +570,35 @@ describe('Changes tabs', () => {
       act(() => result.current.open(side(`f${i}`), { pin: true }))
     expect(result.current.tabs.map((t) => t.id)).not.toContain(id)
     expect(result.current.pendingRootClose).toBeUndefined()
+  })
+})
+
+describe('useGitChanges and shifted ids', () => {
+  it('a pane id that names another pane now starts again', async () => {
+    const a = renderHook(() => useGitChanges('%1'))
+    await tick()
+    expect(a.result.current.loaded).toBe(true)
+    a.unmount()
+    remapPanes({ moved: new Map(), stale: new Set(['%1']) })
+    const b = renderHook(() => useGitChanges('%1'))
+    expect(b.result.current.loaded).toBe(false)
+    b.unmount()
+  })
+
+  it('a store follows its pane to its new id, polling that one', async () => {
+    const a = renderHook(() => useGitChanges('%1'))
+    await tick()
+    act(() =>
+      remapPanes({
+        moved: new Map([['%1', '%2']]),
+        stale: new Set(['%1', '%2']),
+      }),
+    )
+    const b = renderHook(() => useGitChanges('%2'))
+    expect(b.result.current.loaded).toBe(true)
+    await tick()
+    expect(mockChanges).toHaveBeenLastCalledWith('%2', '/r')
+    a.unmount()
+    b.unmount()
   })
 })

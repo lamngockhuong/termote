@@ -1,5 +1,6 @@
 import { useCallback, useSyncExternalStore } from 'react'
 import { closeTab, openTab, pinTab, type TabBase } from '../utils/file-tabs'
+import { onPaneRemap, remapEntries } from '../utils/pane-remap'
 import {
   dropDraft,
   type FilesError,
@@ -111,6 +112,8 @@ interface Store {
   get: () => ChangesState
   subscribe: (fn: () => void) => () => void
   refresh: () => void
+  // The pane's id changed (a tmux window move): polls go to the new one
+  moveTo: (paneId: string) => void
   rootChanged: (root: string) => void
   // Opens a side in its tab: the one it has, else the preview tab, else a
   // new one (pinned when asked)
@@ -137,7 +140,8 @@ interface Store {
   resolveRootClose: (close: boolean) => void
 }
 
-function createStore(paneId: string): Store {
+function createStore(id: string): Store {
+  let paneId = id
   let state = INITIAL
   const listeners = new Set<() => void>()
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -390,6 +394,11 @@ function createStore(paneId: string): Store {
       }
     },
     refresh,
+    moveTo(id) {
+      paneId = id
+      generation++
+      refresh()
+    },
     rootChanged,
     open,
     activate,
@@ -467,6 +476,13 @@ export function useGitChanges(paneId: string) {
     ),
   }
 }
+
+// A store follows its pane to the id it has now, so its open tabs stay; a
+// pane id that names another pane now starts again from the server.
+onPaneRemap((shift) => {
+  remapEntries(stores, shift)
+  for (const to of shift.moved.values()) stores.get(to)?.moveTo(to)
+})
 
 // For tests: forget every store.
 export function resetGitChangesStores() {

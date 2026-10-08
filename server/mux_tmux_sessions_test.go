@@ -22,9 +22,11 @@ func useRealTmux(t *testing.T, name string) {
 	origSocket, origSession := tmuxSocket, tmuxSession
 	tmuxSocket = filepath.Join(t.TempDir(), "tmux.sock")
 	tmuxSession = name
+	resetTmuxVersion()
 	t.Cleanup(func() {
 		tmuxCmd(context.Background(), "kill-server").Run()
 		tmuxSocket, tmuxSession = origSocket, origSession
+		resetTmuxVersion()
 	})
 }
 
@@ -95,10 +97,10 @@ func TestTmuxSessionsInRealServer(t *testing.T) {
 	if _, _, err := m.AgentSession(ctx, sid+":0"); err != nil {
 		t.Errorf("AgentSession(%s:0) = %v", sid, err)
 	}
-	if err := m.RenameTab(ctx, sid+":1", "x"); err != nil {
+	if err := m.RenameTab(ctx, sid+":1", "x", ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := m.CloseTab(ctx, sid+":1"); err != nil {
+	if err := m.CloseTab(ctx, sid+":1", ""); err != nil {
 		t.Fatal(err)
 	}
 	snap, _ = m.Snapshot(ctx)
@@ -110,10 +112,10 @@ func TestTmuxSessionsInRealServer(t *testing.T) {
 	if err := tmuxCmd(ctx, "new-window", "-d", "-t", sid+":", "-n", "9x").Run(); err != nil {
 		t.Fatal(err)
 	}
-	if err := m.CloseTab(ctx, sid+":9"); err == nil {
+	if err := m.CloseTab(ctx, sid+":9", ""); err == nil {
 		t.Error("CloseTab of a missing index succeeded")
 	}
-	if err := m.RenameTab(ctx, "9", "y"); err == nil {
+	if err := m.RenameTab(ctx, "9", "y", ""); err == nil {
 		t.Error("RenameTab of a missing index succeeded")
 	}
 	snap, _ = m.Snapshot(ctx)
@@ -326,5 +328,155 @@ func TestTmuxPeekSnapshotCreatesNothing(t *testing.T) {
 	}
 	if tmuxCmd(ctx, "has-session", "-t", defaultSessionTarget()).Run() == nil {
 		t.Fatal("peek started a tmux server")
+	}
+}
+
+// tmuxWindowsOf lists a session's windows as "index=name" with a '*' after
+// the current one, in index order.
+func tmuxWindowsOf(t *testing.T, session string) string {
+	t.Helper()
+	out, err := tmuxCmd(context.Background(), "list-windows", "-t", session, "-F",
+		"#{window_index}=#{window_name}#{?window_active,*,}").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return strings.Join(strings.Fields(string(out)), " ")
+}
+
+// tmuxReorderSession makes windows 1=a 2=b* 4=c in session target (one
+// made by tmuxNewSession, or the default one) and returns their window ids.
+func tmuxReorderSession(t *testing.T, target string) map[string]string {
+	t.Helper()
+	ctx := context.Background()
+	ids := map[string]string{}
+	for _, w := range []struct{ index, name string }{{"1", "a"}, {"2", "b"}, {"4", "c"}} {
+		out, err := tmuxCmd(ctx, "new-window", "-d", "-t", target+":"+w.index, "-n", w.name,
+			"-P", "-F", "#{window_id}", "exec sleep 60").Output()
+		if err != nil {
+			t.Fatalf("new-window %s: %v", w.name, err)
+		}
+		ids[w.name] = strings.TrimSpace(string(out))
+	}
+	if err := tmuxCmd(ctx, "select-window", "-t", target+":=2").Run(); err != nil {
+		t.Fatal(err)
+	}
+	if err := tmuxCmd(ctx, "kill-window", "-t", target+":=0").Run(); err != nil {
+		t.Fatal(err)
+	}
+	if got := tmuxWindowsOf(t, target); got != "1=a 2=b* 4=c" {
+		t.Fatalf("windows = %s", got)
+	}
+	return ids
+}
+
+// One move-window per move: the window lands at the place asked for, the
+// current window stays current, and the id returned is the window's new one.
+func TestTmuxMoveTabInRealServer(t *testing.T) {
+	useRealTmux(t, fmt.Sprintf("termote-move-%d", os.Getpid()))
+	ctx := context.Background()
+	m := tmuxMux{}
+	sid := tmuxNewSession(t, "work", t.TempDir())
+	if !m.Caps().ReorderTabs {
+		t.Skip("tmux older than 3.2")
+	}
+	ids := tmuxReorderSession(t, sid)
+
+	id, err := m.MoveTab(ctx, sid+":4", 0)
+	if err != nil || tmuxWindowsOf(t, sid) != "1=c 2=a 3=b*" {
+		t.Fatalf("move c to 0 = %q, %v; windows %s", id, err, tmuxWindowsOf(t, sid))
+	}
+	if id != sid+":1" {
+		t.Errorf("returned id = %q, want %s:1", id, sid)
+	}
+	// The current window moves without -d and stays current.
+	if id, err = m.MoveTab(ctx, sid+":3", 0); err != nil || id != sid+":1" || tmuxWindowsOf(t, sid) != "1=b* 2=c 3=a" {
+		t.Fatalf("move current b to 0 = %q, %v; windows %s", id, err, tmuxWindowsOf(t, sid))
+	}
+	// Down: after the window now at the index.
+	if id, err = m.MoveTab(ctx, sid+":1", 2); err != nil || id != sid+":4" || tmuxWindowsOf(t, sid) != "2=c 3=a 4=b*" {
+		t.Fatalf("move b to 2 = %q, %v; windows %s", id, err, tmuxWindowsOf(t, sid))
+	}
+	if id, err = m.MoveTab(ctx, sid+":3", 1); err != nil || id != sid+":3" {
+		t.Errorf("move to its own place = %q, %v", id, err)
+	}
+	for _, c := range []struct {
+		id    string
+		index int
+		want  error
+	}{
+		{sid + ":2", 3, errInvalidIndex}, {sid + ":9", 0, errUnknownTab}, {"$999:1", 0, errUnknownTab},
+		{"x:1", 0, errInvalidTabID}, {"-t", 0, errInvalidTabID},
+	} {
+		if _, err := m.MoveTab(ctx, c.id, c.index); err != c.want {
+			t.Errorf("MoveTab(%s, %d) = %v, want %v", c.id, c.index, err, c.want)
+		}
+	}
+	if got := tmuxWindowsOf(t, sid); got != "2=c 3=a 4=b*" {
+		t.Errorf("windows after refused moves = %s", got)
+	}
+
+	// Tabs carry their window id as key; a close or rename with the key of
+	// the window that had the id before a move is refused.
+	snap, err := m.Snapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := findGroup(snap, sid)
+	if g == nil || len(g.Tabs) != 3 || g.Tabs[0].Key != ids["c"] || g.Tabs[2].Key != ids["b"] {
+		t.Fatalf("group = %+v", g)
+	}
+	if err := m.CloseTab(ctx, sid+":2", ids["a"]); err != errTabChanged {
+		t.Errorf("close with another window's key = %v", err)
+	}
+	if err := m.RenameTab(ctx, sid+":2", "x", ids["a"]); err != errTabChanged {
+		t.Errorf("rename with another window's key = %v", err)
+	}
+	if err := m.CloseTab(ctx, sid+":2", "%3"); err != errInvalidTabID {
+		t.Errorf("close with a malformed key = %v", err)
+	}
+	if got := tmuxWindowsOf(t, sid); got != "2=c 3=a 4=b*" {
+		t.Errorf("windows after stale close/rename = %s", got)
+	}
+	if err := m.RenameTab(ctx, sid+":3", "a2", ids["a"]); err != nil {
+		t.Errorf("rename with its key = %v", err)
+	}
+	if err := m.CloseTab(ctx, sid+":2", ids["c"]); err != nil {
+		t.Errorf("close with its key = %v", err)
+	}
+	if got := tmuxWindowsOf(t, sid); got != "3=a2 4=b*" {
+		t.Errorf("windows after keyed close and rename = %s", got)
+	}
+}
+
+// In the default session the id returned is a bare index.
+func TestTmuxMoveTabDefaultSession(t *testing.T) {
+	useRealTmux(t, fmt.Sprintf("termote-movedef-%d", os.Getpid()))
+	ctx := context.Background()
+	m := tmuxMux{}
+	if _, err := m.Snapshot(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if !m.Caps().ReorderTabs {
+		t.Skip("tmux older than 3.2")
+	}
+	tmuxReorderSession(t, defaultSessionTarget())
+	if id, err := m.MoveTab(ctx, "1", 2); err != nil || id != "5" || tmuxWindowsOf(t, defaultSessionTarget()) != "2=b* 4=c 5=a" {
+		t.Errorf("move a to 2 = %q, %v; windows %s", id, err, tmuxWindowsOf(t, defaultSessionTarget()))
+	}
+}
+
+func TestTmuxMoveTabPsmux(t *testing.T) {
+	orig := tmuxIsPsmux
+	t.Cleanup(func() { tmuxIsPsmux = orig })
+	tmuxIsPsmux = true
+	args := useFakeTmuxScript(t, map[string]fakeTmuxReply{"display-message": {out: "3.4\n"}})
+	if (tmuxMux{}).Caps().ReorderTabs {
+		t.Error("ReorderTabs on psmux")
+	}
+	if _, err := (tmuxMux{}).MoveTab(context.Background(), "1", 0); !errors.Is(err, errUnsupported) {
+		t.Errorf("MoveTab on psmux = %v", err)
+	}
+	if got := args(); got != "" {
+		t.Errorf("psmux was asked: %q", got)
 	}
 }

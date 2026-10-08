@@ -264,6 +264,12 @@ func (f *fakeHerdr) handle(c net.Conn) {
 			return
 		}
 		reply(map[string]any{"type": "tab_created", "tab": map[string]any{"tab_id": "wR:tNEW", "workspace_id": "wR"}})
+	case "tab.move", "workspace.move_block":
+		if failCode != "" {
+			fail(failCode)
+			return
+		}
+		reply(map[string]string{"type": "ok"})
 	case "workspace.create", "workspace.rename", "workspace.close":
 		if failCode != "" {
 			fail(failCode)
@@ -813,13 +819,13 @@ func TestHerdrTabOps(t *testing.T) {
 		t.Errorf("empty group/name should be omitted, got %v", p)
 	}
 
-	if err := m.RenameTab(ctx, "wR:t3", "shell"); err != nil {
+	if err := m.RenameTab(ctx, "wR:t3", "shell", ""); err != nil {
 		t.Errorf("RenameTab: %v", err)
 	}
 	if p := f.lastParams(t, "tab.rename"); p["tab_id"] != "wR:t3" || p["label"] != "shell" {
 		t.Errorf("tab.rename params = %v", p)
 	}
-	if err := m.CloseTab(ctx, "wR:t3"); err != nil {
+	if err := m.CloseTab(ctx, "wR:t3", ""); err != nil {
 		t.Errorf("CloseTab: %v", err)
 	}
 	if err := m.ClosePane(ctx, "wR:p3"); err != nil {
@@ -837,10 +843,10 @@ func TestHerdrTabOps(t *testing.T) {
 		{"new tab bad group", func() error { _, err := m.NewTab(ctx, "-w1", ""); return err }()},
 		{"new tab unknown group", func() error { _, err := m.NewTab(ctx, "wZZ", ""); return err }()},
 		{"new tab control char", func() error { _, err := m.NewTab(ctx, "wR", "a\x1bb"); return err }()},
-		{"close bad id", m.CloseTab(ctx, "--help")},
-		{"close pane id", m.CloseTab(ctx, "wR:p3")},
-		{"close unknown", m.CloseTab(ctx, "wR:tZZ")},
-		{"rename empty", m.RenameTab(ctx, "wR:t3", "")},
+		{"close bad id", m.CloseTab(ctx, "--help", "")},
+		{"close pane id", m.CloseTab(ctx, "wR:p3", "")},
+		{"close unknown", m.CloseTab(ctx, "wR:tZZ", "")},
+		{"rename empty", m.RenameTab(ctx, "wR:t3", "", "")},
 		{"close pane bad id", m.ClosePane(ctx, "--help")},
 		{"close pane tab id", m.ClosePane(ctx, "wR:t3")},
 		{"close pane unknown", m.ClosePane(ctx, "wR:pZZ")},
@@ -855,7 +861,7 @@ func TestHerdrTabOps(t *testing.T) {
 
 	// The tab vanished between the snapshot check and the call.
 	f.failCode = "tab_not_found"
-	if err := m.CloseTab(ctx, "wR:tK"); !errors.As(err, &ie) {
+	if err := m.CloseTab(ctx, "wR:tK", ""); !errors.As(err, &ie) {
 		t.Errorf("tab_not_found = %v, want inputError", err)
 	}
 	f.failCode = "pane_not_found"
@@ -1634,5 +1640,269 @@ func TestHerdrGroupOps(t *testing.T) {
 	var ie inputError
 	if err := m.RenameGroup(ctx, "wR", "x"); err == nil || errors.As(err, &ie) {
 		t.Errorf("other Herdr error = %v", err)
+	}
+}
+
+// reorderHerdr is a fake Herdr new enough to reorder, with workspaces
+// given as id → worktree (nil: none) in order, each with one tab.
+func reorderHerdr(t *testing.T, workspaces ...[2]any) (*fakeHerdr, *herdrMux) {
+	t.Helper()
+	f := newFakeHerdr(t)
+	f.version = "0.9.3"
+	if len(workspaces) > 0 {
+		var wss, tabs []any
+		for i, w := range workspaces {
+			ws := map[string]any{"workspace_id": w[0], "number": i + 1, "label": w[0], "active_tab_id": w[0].(string) + ":t1"}
+			if w[1] != nil {
+				ws["worktree"] = w[1]
+			}
+			wss = append(wss, ws)
+			tabs = append(tabs, map[string]any{"tab_id": w[0].(string) + ":t1", "workspace_id": w[0], "number": 1, "label": "x"})
+		}
+		f.snapshot["workspaces"], f.snapshot["tabs"] = wss, tabs
+		f.snapshot["panes"], f.snapshot["layouts"] = []any{}, []any{}
+	}
+	m := newTestHerdrMux(t, f)
+	waitUntil(t, "herdr version", func() bool { return m.Caps().ReorderTabs })
+	return f, m
+}
+
+func wt(repo string, linked bool) map[string]any {
+	return map[string]any{"repo_key": repo, "is_linked_worktree": linked}
+}
+
+// A tab's number is its creation number: a moved tab keeps it, so the
+// snapshot lists tabs as Herdr does, never by number.
+func TestHerdrSnapshotKeepsTabOrder(t *testing.T) {
+	f := newFakeHerdr(t)
+	tabs := f.snapshot["tabs"].([]any)
+	tabs[0], tabs[2] = tabs[2], tabs[0]
+	m := newTestHerdrMux(t, f)
+	snap, err := m.Snapshot(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []string
+	for _, tab := range snap.Groups[0].Tabs {
+		ids = append(ids, tab.ID)
+		if tab.Key != tab.ID {
+			t.Errorf("tab %s key = %q, want its id", tab.ID, tab.Key)
+		}
+	}
+	if got := strings.Join(ids, ","); got != "wR:tP,wR:tK,wR:t3,wR:tV" {
+		t.Errorf("tab order = %s", got)
+	}
+}
+
+func TestHerdrReorderCaps(t *testing.T) {
+	for _, c := range []struct {
+		v, goos string
+		want    bool
+	}{
+		{"0.7.2", "linux", false}, {"0.8.0", "linux", true}, {"0.9.3", "darwin", true},
+		{"0.8.0", "windows", false}, {"", "linux", false}, {"junk", "linux", false},
+	} {
+		if got := herdrCanReorder(c.v, c.goos); got != c.want {
+			t.Errorf("herdrCanReorder(%q, %q) = %v", c.v, c.goos, got)
+		}
+	}
+	f := newFakeHerdr(t)
+	f.version = "0.7.2"
+	m := newTestHerdrMux(t, f)
+	waitUntil(t, "herdr version", func() bool { v, _ := m.version.Load().(string); return v == "0.7.2" })
+	if c := m.Caps(); c.ReorderTabs || c.ReorderGroups {
+		t.Errorf("caps on 0.7.2 = %+v", c)
+	}
+	if _, err := m.MoveTab(context.Background(), "wR:t3", 1); !errors.Is(err, errUnsupported) {
+		t.Errorf("MoveTab on 0.7.2 = %v", err)
+	}
+	if err := m.MoveGroup(context.Background(), "wR", 1); !errors.Is(err, errUnsupported) {
+		t.Errorf("MoveGroup on 0.7.2 = %v", err)
+	}
+	if f.count("tab.move")+f.count("workspace.move_block") != 0 {
+		t.Error("a move reached Herdr")
+	}
+}
+
+// insert_index is a gap in the list before the tab is taken out: moving
+// down lands one past the index asked for.
+func TestHerdrMoveTab(t *testing.T) {
+	f, m := reorderHerdr(t)
+	ctx := context.Background()
+	for _, c := range []struct {
+		id         string
+		index      int
+		wantInsert float64
+	}{
+		{"wR:t3", 2, 3}, {"wR:tP", 0, 0}, {"wR:t3", 3, 4}, {"wR:tV", 1, 1},
+	} {
+		id, err := m.MoveTab(ctx, c.id, c.index)
+		if err != nil || id != c.id {
+			t.Fatalf("MoveTab(%s, %d) = %q, %v", c.id, c.index, id, err)
+		}
+		if p := f.lastParams(t, "tab.move"); p["tab_id"] != c.id || p["insert_index"] != c.wantInsert {
+			t.Errorf("MoveTab(%s, %d) params = %v, want insert_index %v", c.id, c.index, p, c.wantInsert)
+		}
+	}
+	before := f.count("tab.move")
+	if id, err := m.MoveTab(ctx, "wR:tK", 1); err != nil || id != "wR:tK" {
+		t.Errorf("move to its own place = %q, %v", id, err)
+	}
+	for _, c := range []struct {
+		id    string
+		index int
+		want  error
+	}{
+		{"wR:t3", 4, errInvalidIndex}, {"w13:t1", 2, errInvalidIndex}, {"wR:tZZ", 0, errUnknownTab},
+		{"w5:2", 0, errInvalidTabID}, {"t_w5_2", 0, errInvalidTabID}, {"--help", 0, errInvalidTabID},
+	} {
+		if _, err := m.MoveTab(ctx, c.id, c.index); err != c.want {
+			t.Errorf("MoveTab(%s, %d) = %v, want %v", c.id, c.index, err, c.want)
+		}
+	}
+	if f.count("tab.move") != before {
+		t.Error("a refused move reached Herdr")
+	}
+	for code, want := range map[string]error{"tab_not_found": errUnknownTab, "tab_move_failed": errInvalidIndex,
+		"unknown_method": errUnsupported} {
+		f.failCode = code
+		if _, err := m.MoveTab(ctx, "wR:t3", 1); err != want {
+			t.Errorf("%s: err = %v, want %v", code, err, want)
+		}
+	}
+	f.failCode = "internal"
+	if _, err := m.MoveTab(ctx, "wR:t3", 1); err == nil || errors.Is(err, errUnsupported) {
+		t.Errorf("internal: err = %v", err)
+	}
+}
+
+// The order a move reads is fresh: a view cached before another client's
+// move is not used.
+func TestHerdrMoveReadsFreshOrder(t *testing.T) {
+	f, m := reorderHerdr(t)
+	ctx := context.Background()
+	if _, err := m.Snapshot(ctx); err != nil {
+		t.Fatal(err)
+	}
+	f.mu.Lock()
+	tabs := f.snapshot["tabs"].([]any)
+	tabs[0], tabs[3] = tabs[3], tabs[0] // wR:tV, wR:tK, wR:tP, wR:t3
+	f.mu.Unlock()
+	if _, err := m.MoveTab(ctx, "wR:t3", 0); err != nil {
+		t.Fatal(err)
+	}
+	if p := f.lastParams(t, "tab.move"); p["insert_index"] != float64(0) {
+		t.Errorf("params = %v", p)
+	}
+	before := f.count("tab.move")
+	if _, err := m.MoveTab(ctx, "wR:tV", 0); err != nil || f.count("tab.move") != before {
+		t.Errorf("wR:tV is first now: err %v, calls %d → %d", err, before, f.count("tab.move"))
+	}
+}
+
+func TestHerdrMoveGroup(t *testing.T) {
+	// a, then repo r: its checkout wP with linked m1 and m2 placed apart,
+	// then b.
+	f, m := reorderHerdr(t,
+		[2]any{"wA", nil}, [2]any{"wP", wt("r", false)}, [2]any{"wM1", wt("r", true)},
+		[2]any{"wB", nil}, [2]any{"wM2", wt("r", true)}, [2]any{"wC", nil})
+	ctx := context.Background()
+	// Movable: wA, wP, wB, wC.
+	for _, c := range []struct {
+		id     string
+		index  int
+		block  string
+		before any
+	}{
+		{"wP", 0, "wP,wM1,wM2", "wA"},
+		{"wP", 3, "wP,wM1,wM2", nil},
+		{"wP", 2, "wP,wM1,wM2", "wC"},
+		{"wA", 3, "wA", nil},
+		{"wC", 0, "wC", "wA"},
+		// Its own place, but the block is scattered: sent, so it packs.
+		{"wP", 1, "wP,wM1,wM2", "wB"},
+	} {
+		if err := m.MoveGroup(ctx, c.id, c.index); err != nil {
+			t.Fatalf("MoveGroup(%s, %d) = %v", c.id, c.index, err)
+		}
+		p := f.lastParams(t, "workspace.move_block")
+		var ids []string
+		for _, id := range p["workspace_ids"].([]any) {
+			ids = append(ids, id.(string))
+		}
+		if strings.Join(ids, ",") != c.block || p["before_workspace_id"] != c.before {
+			t.Errorf("MoveGroup(%s, %d) params = %v, want %s before %v", c.id, c.index, p, c.block, c.before)
+		}
+	}
+	before := f.count("workspace.move_block")
+	if err := m.MoveGroup(ctx, "wB", 2); err != nil {
+		t.Errorf("wB at its own place = %v", err)
+	}
+	for _, c := range []struct {
+		id    string
+		index int
+		want  error
+	}{
+		{"wM1", 0, errLinkedWorktree}, {"wA", 4, errInvalidIndex}, {"wZ", 0, errUnknownGroup}, {"x:y", 0, errInvalidGroupID},
+	} {
+		if err := m.MoveGroup(ctx, c.id, c.index); err != c.want {
+			t.Errorf("MoveGroup(%s, %d) = %v, want %v", c.id, c.index, err, c.want)
+		}
+	}
+	if f.count("workspace.move_block") != before {
+		t.Error("a refused or no-op move reached Herdr")
+	}
+	for code, want := range map[string]error{"workspace_not_found": errInvalidIndex, "unknown_method": errUnsupported} {
+		f.failCode = code
+		if err := m.MoveGroup(ctx, "wA", 2); err != want {
+			t.Errorf("%s: err = %v, want %v", code, err, want)
+		}
+	}
+	f.failCode = "workspace_move_block_failed"
+	if err := m.MoveGroup(ctx, "wA", 2); err == nil || errors.Is(err, errInvalidIndex) {
+		t.Errorf("workspace_move_block_failed: err = %v", err)
+	}
+}
+
+// Two workspaces on one repository that are not linked (two checkouts) move
+// together, as Herdr's own drag sends: the workspace, then every other one
+// with the same repository.
+func TestHerdrMoveGroupTwoCheckouts(t *testing.T) {
+	f, m := reorderHerdr(t, [2]any{"wA", nil}, [2]any{"wP", wt("r", false)}, [2]any{"wQ", wt("r", false)}, [2]any{"wB", nil})
+	if err := m.MoveGroup(context.Background(), "wQ", 0); err != nil {
+		t.Fatal(err)
+	}
+	if p := f.lastParams(t, "workspace.move_block"); fmt.Sprint(p["workspace_ids"]) != "[wQ wP]" || p["before_workspace_id"] != "wA" {
+		t.Errorf("params = %v", p)
+	}
+	// Movable: wA, wP, wQ, wB; the last place puts the block at the end.
+	if err := m.MoveGroup(context.Background(), "wP", 3); err != nil {
+		t.Fatal(err)
+	}
+	if p := f.lastParams(t, "workspace.move_block"); fmt.Sprint(p["workspace_ids"]) != "[wP wQ]" || p["before_workspace_id"] != nil {
+		t.Errorf("params = %v", p)
+	}
+}
+
+// A Herdr tab id never changes, so it is its own key: another key is a
+// client mistaking one tab for another.
+func TestHerdrTabKey(t *testing.T) {
+	f := newFakeHerdr(t)
+	m := newTestHerdrMux(t, f)
+	ctx := context.Background()
+	if err := m.CloseTab(ctx, "wR:t3", "wR:tK"); err != errTabChanged {
+		t.Errorf("close with another key = %v", err)
+	}
+	if err := m.RenameTab(ctx, "wR:t3", "x", "wR:tK"); err != errTabChanged {
+		t.Errorf("rename with another key = %v", err)
+	}
+	if f.count("tab.close")+f.count("tab.rename") != 0 {
+		t.Error("a stale close or rename reached Herdr")
+	}
+	if err := m.RenameTab(ctx, "wR:t3", "x", "wR:t3"); err != nil {
+		t.Errorf("rename with its key = %v", err)
+	}
+	if err := m.CloseTab(ctx, "wR:t3", "wR:t3"); err != nil {
+		t.Errorf("close with its key = %v", err)
 	}
 }

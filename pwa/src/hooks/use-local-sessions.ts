@@ -7,15 +7,24 @@ import {
   toAgentStatus,
   worstAgentStatus,
 } from '../types/session'
+import { remapChatDrafts } from '../utils/chat-draft'
 import {
   isTimeoutError,
   reportLargePacketLoss,
 } from '../utils/large-packet-loss'
+import {
+  type PaneShift,
+  paneKeys,
+  remapPanes,
+  shiftedIds,
+} from '../utils/pane-remap'
 import { uniqueNames } from '../utils/running-commands'
 import {
   closeGroup as apiCloseGroup,
   createGroup as apiCreateGroup,
   createWorktree as apiCreateWorktree,
+  moveGroup as apiMoveGroup,
+  moveTab as apiMoveTab,
   openWorktree as apiOpenWorktree,
   removeWorktree as apiRemoveWorktree,
   renameGroup as apiRenameGroup,
@@ -139,6 +148,12 @@ function saveSelection(backend: string, sel: Selection) {
 const sameSelection = (a: Selection | null, b: Selection) =>
   a?.tabId === b.tabId && a.groupId === b.groupId && a.paneId === b.paneId
 
+// The selection with its tab and pane following a shift of their ids.
+function shiftSelection(sel: Selection, shift: PaneShift): Selection {
+  const follow = (id?: string) => (id && shift.moved.get(id)) || id
+  return { ...sel, tabId: follow(sel.tabId) ?? '', paneId: follow(sel.paneId) }
+}
+
 // Point a tab at one of its panes.
 function withPane(session: Session, paneId: string | undefined): Session {
   const pane = session.panes?.find((p) => p.id === paneId)
@@ -188,6 +203,7 @@ export function buildSessions(
       )
       const session: Session = {
         id: tab.id,
+        key: tab.key ?? tab.id,
         name: tab.name,
         icon: m.icon,
         description: m.description,
@@ -238,6 +254,17 @@ export function useLocalSessions(pollInterval = 5) {
   // Reads still waiting on the network; a timer tick skips while any is,
   // instead of piling another request onto a stalled connection.
   const inFlightRef = useRef(0)
+  // Each snapshot read takes the next number; a reply older than the one
+  // last applied is dropped (a poll sent before a move, answered after the
+  // refresh that followed it, would show the old order again).
+  const readSeqRef = useRef(0)
+  const appliedSeqRef = useRef(0)
+  // Every id of the last snapshot applied, with its key (pane-remap).
+  const keysRef = useRef(new Map<string, string>())
+  // A move is running, until a snapshot read after it is applied; another
+  // one meanwhile would be computed on the old order.
+  const movingRef = useRef(false)
+  const [moving, setMoving] = useState(false)
 
   const storeSelection = useCallback((sel: Selection) => {
     selectionRef.current = sel
@@ -259,6 +286,21 @@ export function useLocalSessions(pollInterval = 5) {
   // herdr keeps this device's own pick.
   const applySnapshot = useCallback(
     (snap: MuxSnapshot, version: number) => {
+      // State kept by tab or pane id follows its tab when a move shifted
+      // the ids (tmux), before anything renders with the new ones.
+      const keys = paneKeys(snap)
+      const shift = shiftedIds(keysRef.current, keys)
+      keysRef.current = keys
+      if (shift.stale.size) {
+        remapPanes(shift)
+        remapChatDrafts(shift)
+        // Only a snapshot with tabs can shift ids, and applying one stores
+        // a selection: this is a guard, never reached in practice.
+        /* v8 ignore next */
+        if (selectionRef.current) {
+          storeSelection(shiftSelection(selectionRef.current, shift))
+        }
+      }
       const built = buildSessions(snap, metaRef.current)
       setSessions(built.sessions)
       setGroups(built.groups)
@@ -314,6 +356,7 @@ export function useLocalSessions(pollInterval = 5) {
   const refreshSessions = useCallback(async () => {
     inFlightRef.current++
     const version = selectionVersionRef.current
+    const seq = ++readSeqRef.current
     try {
       let snap = await fetchSnapshot()
       const hasTabs = (s: MuxSnapshot) =>
@@ -322,6 +365,8 @@ export function useLocalSessions(pollInterval = 5) {
         await createTab('shell')
         snap = await fetchSnapshot()
       }
+      if (seq < appliedSeqRef.current) return
+      appliedSeqRef.current = seq
       const next: MuxInfo = { backend: snap.backend, caps: snap.caps }
       muxRef.current = next
       setMux((prev) => (sameMux(prev, next) ? prev : next))
@@ -445,9 +490,17 @@ export function useLocalSessions(pollInterval = 5) {
       const session = sessions.find((s) => s.id === sessionId)
       if (!session) return
 
-      // Close mux tab
-      /* v8 ignore next */
-      await closeTab(sessionId).catch(() => {})
+      // Close mux tab, only while the id still names it: a tab whose id a
+      // move shifted is refused (RequestError 'changed') for the caller to
+      // tell. Other failures show on the next snapshot.
+      try {
+        await closeTab(sessionId, session.key)
+      } catch (err) {
+        if (err instanceof RequestError && err.code === 'changed') {
+          await refreshSessions()
+          throw err
+        }
+      }
 
       // Remove metadata
       delete metaRef.current[
@@ -497,9 +550,11 @@ export function useLocalSessions(pollInterval = 5) {
       // If name changed, rename mux tab. A rejected rename (e.g. invalid
       // name) leaves the session and its metadata as is.
       if (updates.name && updates.name !== session.name) {
-        const renamed = await renameTab(sessionId, updates.name).catch(
-          () => false,
-        )
+        const renamed = await renameTab(
+          sessionId,
+          updates.name,
+          session.key,
+        ).catch(() => false)
         if (!renamed) return
         if (oldKey !== newKey) delete metaRef.current[oldKey]
       }
@@ -635,6 +690,39 @@ export function useLocalSessions(pollInterval = 5) {
     [forgetGroup, refreshOnUnknown, refreshSessions],
   )
 
+  // Runs one move, then reads a snapshot; another move asked for before
+  // that snapshot is applied is ignored. Refusals (RequestError with the
+  // server's code) reach the caller.
+  const runMove = useCallback(
+    async (move: () => Promise<unknown>) => {
+      if (movingRef.current) return
+      movingRef.current = true
+      setMoving(true)
+      try {
+        await move()
+      } finally {
+        await refreshSessions()
+        movingRef.current = false
+        setMoving(false)
+      }
+    },
+    [refreshSessions],
+  )
+
+  // Moves a tab to position index of its group.
+  const moveTab = useCallback(
+    (sessionId: string, index: number) =>
+      runMove(() => apiMoveTab(sessionId, index)),
+    [runMove],
+  )
+
+  // Moves a group to position index among the groups that can move.
+  const moveGroup = useCallback(
+    (groupId: string, index: number) =>
+      runMove(() => apiMoveGroup(groupId, index)),
+    [runMove],
+  )
+
   return {
     activeSession: activeSession || {
       id: '0',
@@ -657,6 +745,9 @@ export function useLocalSessions(pollInterval = 5) {
     openWorktree,
     showGroup,
     removeWorktree,
+    moveTab,
+    moveGroup,
+    moving,
     isReady,
     isServerReachable,
     refreshSessions,

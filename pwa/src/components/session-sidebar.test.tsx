@@ -1,7 +1,15 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import {
+  act,
+  createEvent,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { RequestError } from '../hooks/use-mux-api'
 import type { Session, SessionGroup } from '../types/session'
-import { SessionSidebar } from './session-sidebar'
+import { moveProblem, SessionSidebar } from './session-sidebar'
 
 vi.mock('./icon-picker', () => ({
   IconPicker: ({
@@ -1538,5 +1546,286 @@ describe('SessionSidebar — worktree actions', () => {
     expect(branch).toHaveTextContent('feat/Very-Long-Name')
     expect(branch.className).toContain('normal-case')
     expect(screen.getByTitle('main')).toHaveTextContent('main')
+  })
+})
+
+describe('SessionSidebar — reorder', () => {
+  const tab = (id: string, name: string, groupId = 'main'): Session => ({
+    id,
+    key: `@${name}`,
+    name,
+    icon: '💻',
+    description: '',
+    groupId,
+  })
+  const TABS = [
+    tab('1', 'a'),
+    tab('2', 'b'),
+    tab('4', 'c'),
+    tab('$3:0', 'x', '$3'),
+  ]
+  const GROUPS: SessionGroup[] = [
+    { id: 'main', name: 'main' },
+    { id: '$3', name: 'work' },
+  ]
+  const reorderOf = (over = {}) => ({
+    tabs: true,
+    groups: true,
+    moving: false,
+    onMoveTab: vi.fn(),
+    onMoveGroup: vi.fn(),
+    ...over,
+  })
+  const groupActions = {
+    noun: 'workspace',
+    onNew: vi.fn(),
+    onRename: vi.fn(async () => {}),
+    onClose: vi.fn(),
+    canRename: () => true,
+  }
+  const props = (over = {}) => ({
+    sessions: TABS,
+    groups: GROUPS,
+    activeId: '2',
+    onSelect: vi.fn(),
+    onAdd: vi.fn(),
+    onRemove: vi.fn(),
+    onUpdate: vi.fn(),
+    groupActions,
+    ...over,
+  })
+  const row = (name: string) => rowButton(name).parentElement as HTMLElement
+  const rowButton = (name: string) =>
+    screen
+      .getByText(name, { selector: 'span' })
+      .closest('button') as HTMLElement
+  // jsdom has no DragEvent, so a drag event's clientY is set by hand
+  const dragAt = (
+    type: 'dragOver' | 'drop',
+    el: HTMLElement,
+    clientY: number,
+  ) => {
+    const ev = createEvent[type](el, { dataTransfer: dt() })
+    Object.defineProperty(ev, 'clientY', { value: clientY })
+    fireEvent(el, ev)
+  }
+  const dt = () => ({ setData: vi.fn(), effectAllowed: '', dropEffect: '' })
+
+  beforeEach(() => localStorage.clear())
+
+  it('says why a move was refused', () => {
+    const err = (code: string) => new RequestError(400, code, code)
+    expect(moveProblem(err('busy'))).toBe('Another move is running; try again')
+    expect(moveProblem(err('invalid_index'))).toBe(
+      'The list changed; try again',
+    )
+    expect(moveProblem(err('linked_worktree'))).toBe(
+      "A worktree moves with its repository's workspace",
+    )
+    expect(moveProblem(err('unsupported'))).toBe(
+      'Reordering is not supported here',
+    )
+    expect(moveProblem(err('other'))).toBe('Could not move')
+    expect(moveProblem(new Error('x'))).toBe('Could not move')
+  })
+
+  it('drags a tab within its group, before or after the row under it', () => {
+    const r = reorderOf()
+    render(<SessionSidebar {...props({ reorder: r })} />)
+    const c = row('c')
+    expect(c).toHaveAttribute('draggable', 'true')
+    const data = dt()
+    fireEvent.dragStart(c, { dataTransfer: data })
+    expect(data.setData).toHaveBeenCalledWith('text/x-termote-tab', '4')
+    // The top half of a: before it; the line shows there
+    dragAt('dragOver', row('a'), 0)
+    dragAt('dragOver', row('a'), 0)
+    expect(row('a').querySelector('.-top-px')).not.toBeNull()
+    dragAt('drop', row('a'), 0)
+    expect(r.onMoveTab).toHaveBeenCalledWith('4', 0)
+    expect(row('a').querySelector('.bg-accent')).toBeNull()
+    // The bottom half of b: after it
+    fireEvent.dragStart(row('a'), { dataTransfer: dt() })
+    dragAt('dragOver', row('b'), 5)
+    expect(row('b').querySelector('.-bottom-px')).not.toBeNull()
+    dragAt('drop', row('b'), 5)
+    expect(r.onMoveTab).toHaveBeenLastCalledWith('1', 1)
+    // A drop on itself sends nothing; drag end clears
+    fireEvent.dragStart(row('b'), { dataTransfer: dt() })
+    dragAt('drop', row('b'), 0)
+    fireEvent.dragEnd(row('b'))
+    expect(r.onMoveTab).toHaveBeenCalledTimes(2)
+  })
+
+  it('takes no drop from another group, nor without a drag', () => {
+    const r = reorderOf()
+    render(<SessionSidebar {...props({ reorder: r, activeId: '1' })} />)
+    dragAt('drop', row('a'), 0)
+    fireEvent.dragStart(row('a'), { dataTransfer: dt() })
+    dragAt('dragOver', row('x'), 0)
+    dragAt('drop', row('x'), 0)
+    expect(r.onMoveTab).not.toHaveBeenCalled()
+    // A single tab in its group cannot be dragged
+    expect(row('x')).not.toHaveAttribute('draggable')
+  })
+
+  it('moves a tab with Alt+Arrow, and focus follows it once moved', () => {
+    const r = reorderOf()
+    const { rerender } = render(<SessionSidebar {...props({ reorder: r })} />)
+    const b = rowButton('b')
+    expect(b).toHaveAttribute('aria-keyshortcuts', 'Alt+ArrowUp Alt+ArrowDown')
+    fireEvent.keyDown(b, { key: 'ArrowUp' })
+    fireEvent.keyDown(b, { key: 'Enter', altKey: true })
+    expect(r.onMoveTab).not.toHaveBeenCalled()
+    fireEvent.keyDown(b, { key: 'ArrowUp', altKey: true })
+    expect(r.onMoveTab).toHaveBeenCalledWith('2', 0)
+    fireEvent.keyDown(b, { key: 'ArrowDown', altKey: true })
+    expect(r.onMoveTab).toHaveBeenLastCalledWith('2', 2)
+    // At the top, Alt+Up does nothing
+    fireEvent.keyDown(rowButton('a'), {
+      key: 'ArrowUp',
+      altKey: true,
+    })
+    expect(r.onMoveTab).toHaveBeenCalledTimes(2)
+    // The move is in: b has another id, and the focus is on its row
+    rerender(<SessionSidebar {...props({ reorder: { ...r, moving: true } })} />)
+    const moved = [tab('1', 'b'), tab('2', 'a'), tab('4', 'c'), TABS[3]]
+    moved[0].key = '@b'
+    moved[1].key = '@a'
+    rerender(<SessionSidebar {...props({ sessions: moved, reorder: r })} />)
+    expect(rowButton('b')).toHaveFocus()
+  })
+
+  it('shows no control while filtered, sorted, or without the caps', () => {
+    for (const over of [
+      { reorder: reorderOf({ tabs: false, groups: false }) },
+      { reorder: reorderOf(), sortBlockedFirst: true },
+      {},
+    ]) {
+      const { unmount } = render(<SessionSidebar {...props(over)} />)
+      expect(row('a')).not.toHaveAttribute('draggable')
+      fireEvent.keyDown(rowButton('a'), {
+        key: 'ArrowDown',
+        altKey: true,
+      })
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Actions for workspace main' }),
+      )
+      expect(screen.queryByRole('menuitem', { name: 'Move down' })).toBeNull()
+      unmount()
+    }
+  })
+
+  it('moves a group from its menu, disabled at the ends, never a linked worktree', () => {
+    const r = reorderOf()
+    const groups: SessionGroup[] = [
+      ...GROUPS,
+      { id: 'w9', name: 'wt', worktree: { linked: true } },
+    ]
+    render(
+      <SessionSidebar
+        {...props({
+          reorder: r,
+          groups,
+          sessions: [...TABS, tab('w9:t1', 'y', 'w9')],
+        })}
+      />,
+    )
+    const open = (name: string) =>
+      fireEvent.click(
+        screen.getByRole('button', { name: `Actions for workspace ${name}` }),
+      )
+    open('main')
+    expect(screen.getByRole('menuitem', { name: 'Move up' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Move down' }))
+    expect(r.onMoveGroup).toHaveBeenCalledWith('main', 1)
+    open('work')
+    expect(screen.getByRole('menuitem', { name: 'Move down' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Move up' }))
+    expect(r.onMoveGroup).toHaveBeenLastCalledWith('$3', 0)
+    open('wt')
+    expect(screen.queryByRole('menuitem', { name: 'Move up' })).toBeNull()
+  })
+
+  it('drags a group header among the groups that can move', () => {
+    const r = reorderOf()
+    render(<SessionSidebar {...props({ reorder: r })} />)
+    const header = (name: string) =>
+      screen.getByRole('region', { name }).firstElementChild as HTMLElement
+    const data = dt()
+    fireEvent.dragStart(header('work'), { dataTransfer: data })
+    expect(data.setData).toHaveBeenCalledWith('text/x-termote-group', '$3')
+    // A tab row takes no group
+    dragAt('dragOver', row('a'), 0)
+    expect(row('a').querySelector('.bg-accent')).toBeNull()
+    dragAt('dragOver', header('main'), 0)
+    dragAt('drop', header('main'), 0)
+    expect(r.onMoveGroup).toHaveBeenCalledWith('$3', 0)
+  })
+
+  it('mobile: Move up and down on the current session row', () => {
+    const r = reorderOf()
+    const { rerender } = render(
+      <SessionSidebar {...props({ reorder: r, isMobile: true })} />,
+    )
+    const current = within(
+      screen.getByRole('region', { name: 'Current session' }),
+    )
+    fireEvent.click(current.getByRole('button', { name: 'Move b up' }))
+    expect(r.onMoveTab).toHaveBeenCalledWith('2', 0)
+    fireEvent.click(current.getByRole('button', { name: 'Move b down' }))
+    expect(r.onMoveTab).toHaveBeenLastCalledWith('2', 2)
+    rerender(
+      <SessionSidebar
+        {...props({ reorder: r, isMobile: true, activeId: '1' })}
+      />,
+    )
+    expect(
+      within(screen.getByRole('region', { name: 'Current session' })).getByRole(
+        'button',
+        { name: 'Move a up' },
+      ),
+    ).toBeDisabled()
+    rerender(
+      <SessionSidebar
+        {...props({ reorder: r, isMobile: true, activeId: '4' })}
+      />,
+    )
+    expect(
+      within(screen.getByRole('region', { name: 'Current session' })).getByRole(
+        'button',
+        { name: 'Move c down' },
+      ),
+    ).toBeDisabled()
+    // Group headers are not dragged on a phone
+    expect(
+      screen.getByRole('region', { name: 'main' }).firstElementChild,
+    ).not.toHaveAttribute('draggable')
+  })
+
+  it('an edit follows its tab when the id shifts, and closes when it is gone', () => {
+    const onUpdate = vi.fn()
+    const { rerender } = render(<SessionSidebar {...props({ onUpdate })} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit c' }))
+    // c moved from 4 to 1, a and b shifted down
+    const shifted = [
+      { ...tab('1', 'c') },
+      { ...tab('2', 'a') },
+      { ...tab('3', 'b') },
+      TABS[3],
+    ]
+    rerender(<SessionSidebar {...props({ onUpdate, sessions: shifted })} />)
+    const input = screen.getByRole('textbox', { name: 'Session name' })
+    expect(input).toHaveValue('c')
+    fireEvent.change(input, { target: { value: 'c2' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(onUpdate).toHaveBeenCalledWith('1', { name: 'c2', icon: '💻' })
+    fireEvent.click(screen.getByRole('button', { name: 'Edit a' }))
+    rerender(
+      <SessionSidebar
+        {...props({ onUpdate, sessions: [shifted[0], shifted[2], TABS[3]] })}
+      />,
+    )
+    expect(screen.queryByRole('textbox', { name: 'Session name' })).toBeNull()
   })
 })

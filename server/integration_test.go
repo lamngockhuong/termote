@@ -92,13 +92,13 @@ func TestIntegrationSelectRenameClose(t *testing.T) {
 	if !snap.Groups[0].Tabs[0].Active {
 		t.Error("tab 0 should be active after select")
 	}
-	if err := m.RenameTab(ctx, "1", "renamed"); err != nil {
+	if err := m.RenameTab(ctx, "1", "renamed", ""); err != nil {
 		t.Fatalf("RenameTab: %v", err)
 	}
 	if names := tabNames(t); names[1] != "renamed" {
 		t.Errorf("names = %q", names)
 	}
-	if err := m.CloseTab(ctx, "1"); err != nil {
+	if err := m.CloseTab(ctx, "1", ""); err != nil {
 		t.Fatalf("CloseTab: %v", err)
 	}
 	if names := tabNames(t); len(names) != 1 {

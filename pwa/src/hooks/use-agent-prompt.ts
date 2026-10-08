@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useSyncExternalStore } from 'react'
 import type { AgentStatus } from '../types/session'
+import { onPaneRemap } from '../utils/pane-remap'
 import { type AgentPrompt, fetchAgentPrompt } from './use-mux-api'
 
 // The dialog a pane's Claude Code has open, polled from its screen. Like the
@@ -148,6 +149,11 @@ export function useAgentPrompt(
   const show = useCallback((p: AgentPrompt | null) => store.show(p), [store])
   return { ...state, refresh, show }
 }
+
+// A pane id that names another pane now starts again from the server.
+onPaneRemap((shift) => {
+  for (const id of shift.stale) stores.delete(id)
+})
 
 // For tests: forget every store.
 export function resetAgentPromptStores() {

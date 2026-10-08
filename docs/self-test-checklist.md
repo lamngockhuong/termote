@@ -277,6 +277,29 @@ Manual testing checklist for Termote features before release.
 - [ ] Herdr: closing a workspace with worktrees shows "remove them first, or close it in Herdr"
 - [ ] tmux: a session started outside Termote (`tmux new -s x`) shows as a group and can be closed
 
+### Reordering (tmux 3.2+, Herdr 0.8.0+ on Linux/macOS)
+
+Run Herdr on a throwaway socket and `HOME`, never your live Herdr.
+
+- [ ] Desktop: drag a tab row above or below another of its group; a 2 px line shows where it
+      lands; `tmux list-windows` (or Herdr's tab bar) shows the new order; a click still selects
+- [ ] Desktop: Alt+↑/Alt+↓ on a focused tab row moves it; focus stays on the same row
+- [ ] Phone (390×844): ↑/↓ on the "Current session" row move the tab on screen, disabled at the
+      ends of its group; swipe still reveals Edit/Delete
+- [ ] Herdr: Move up/Move down in a workspace's ⋯ menu (disabled at the ends) and dragging its
+      header move it; Herdr's sidebar agrees
+- [ ] Herdr: a tab reordered in Herdr itself shows in the same order in Termote
+- [ ] Herdr worktree group: the repository's workspace moves with its worktrees; a linked worktree
+      has no Move and its route answers 409 `linked_worktree`
+- [ ] Herdr restarted: the order is kept
+- [ ] No reorder control while the agent filter or "blocked first" is on, nor on tmux older than
+      3.2, psmux (Windows), Herdr older than 0.8.0 or Herdr on Windows; tmux sessions have no Move
+- [ ] tmux: a Chat draft and an attached image in one window stay with it when another window is
+      moved across it, on a second open device too; an open Edit form stays on its window
+- [ ] tmux: closing a tab whose id another device's move shifted says "The tab changed; try
+      again" and closes nothing
+- [ ] psmux: whether `tmux display-message -p '#{window_id}'` prints `@N` (record it here)
+
 ### Worktrees (Herdr 0.9.2+, Linux/macOS)
 
 Run against a Herdr of its own (`HERDR_SOCKET_PATH`, `HOME` and XDG dirs under a temp dir), or
@@ -351,11 +374,15 @@ Use a production build (the service worker is off in `pnpm dev`) and a pane runn
 
 - [ ] Edit/Delete buttons hidden by default
 - [ ] Swipe left/right on session item reveals Edit/Delete buttons
+- [ ] With `caps.reorderTabs`: Move up/Move down buttons on the "Current session" row
 
 ### Sessions via API
 
 - [ ] Sessions listed via API: `curl localhost:7680/api/mux/snapshot`
 - [ ] Switch session via API works
+- [ ] `POST /api/mux/tabs/<id>/move {"index":0}` answers `{ok, id}` (the new id on tmux);
+      `{"index":99}` → 400 `invalid_index`; a group move on tmux → 501 `unsupported`
+- [ ] `DELETE /api/mux/tabs/<id>?key=<another window's @N>` → 409 `changed`, nothing closed
 - [ ] Session state persists across terminal reconnects
 
 ---

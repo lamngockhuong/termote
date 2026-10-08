@@ -58,6 +58,27 @@ func TestPushTransitionsFixture(t *testing.T) {
 	}
 }
 
+// A tmux window move shifts pane ids; panes are known by their key, so two
+// panes trading ids raise nothing, and a pane's turn ending is told with
+// its new id.
+func TestPushTransitionsFollowPaneKeys(t *testing.T) {
+	snap := func(panes ...Pane) Snapshot {
+		return Snapshot{Groups: []Group{{ID: "main", Tabs: []Tab{{ID: "t", Panes: panes}}}}}
+	}
+	agent := func(status string) *AgentInfo { return &AgentInfo{Name: "claude", Status: status} }
+	prev, _ := transitions(map[string]string{}, snap(
+		Pane{ID: "1", key: "%1", Agent: agent("working")}, Pane{ID: "2", key: "%2", Agent: agent("idle")}))
+	next, events := transitions(prev, snap(
+		Pane{ID: "1", key: "%2", Agent: agent("idle")}, Pane{ID: "2", key: "%1", Agent: agent("working")}))
+	if len(events) != 0 {
+		t.Errorf("ids traded without a status change raised %+v", events)
+	}
+	_, events = transitions(next, snap(Pane{ID: "3", key: "%1", Agent: agent("done")}, Pane{ID: "1", key: "%2", Agent: agent("idle")}))
+	if len(events) != 1 || events[0].PaneID != "3" || events[0].Kind != "done" {
+		t.Errorf("events = %+v, want one done for pane 3", events)
+	}
+}
+
 // snapshotOf lists each pane in a tab of its own; a nil status is an agent
 // with no status, "none" a pane with no agent.
 func snapshotOf(step map[string]*string) Snapshot {

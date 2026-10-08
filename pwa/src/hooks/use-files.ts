@@ -3,6 +3,7 @@ import type { TableOp } from '../utils/csv-edits'
 import type { Delimiter } from '../utils/csv-parse'
 import { closeTab, openTab, pinTab, type TabBase } from '../utils/file-tabs'
 import type { LinkPath } from '../utils/markdown-links'
+import { onPaneRemap, remapEntries } from '../utils/pane-remap'
 import type { TableLayout } from '../utils/table-columns'
 import {
   type FileEntry,
@@ -133,6 +134,9 @@ interface Store {
   load: () => void
   toggle: (path: string) => void
   refresh: () => void
+  // The pane's id changed (a tmux window move): reads go to the new one,
+  // and the directories read are read again
+  moveTo: (paneId: string) => void
   // Opens a file in its tab: the one it has, else the preview tab, else a
   // new one (pinned when asked)
   open: (path: string, opts?: FileOpenOptions) => void
@@ -180,7 +184,8 @@ interface Store {
   restored: (path: string) => Promise<void>
 }
 
-function createStore(paneId: string): Store {
+function createStore(id: string): Store {
+  let paneId = id
   let state = INITIAL
   const listeners = new Set<() => void>()
   // Bumped when the root moves: a read sent for the old one is dropped.
@@ -497,6 +502,11 @@ function createStore(paneId: string): Store {
     refresh() {
       for (const path of ['', ...Object.keys(state.expanded)]) read(path)
     },
+    moveTo(id) {
+      paneId = id
+      generation++
+      for (const path of Object.keys(state.dirs)) read(path)
+    },
     open,
     activate,
     pin(id) {
@@ -726,6 +736,23 @@ export function useDirtyCheck(paneId: string) {
     [paneId, version],
   )
 }
+
+// A store and each draft follow their pane to the id it has now, so its open
+// tabs stay; a pane id that names another pane now starts again, and what
+// was kept for a pane that is gone is dropped.
+onPaneRemap((shift) => {
+  remapEntries(stores, shift)
+  for (const to of shift.moved.values()) stores.get(to)?.moveTo(to)
+  remapEntries(
+    drafts,
+    shift,
+    (k) => k.slice(0, k.indexOf('\u0000')),
+    (k, id) => id + k.slice(k.indexOf('\u0000')),
+  )
+  draftsVersion++
+  guardUnload()
+  for (const fn of draftListeners) fn()
+})
 
 // For tests: forget every store and draft.
 export function resetFilesStores() {
