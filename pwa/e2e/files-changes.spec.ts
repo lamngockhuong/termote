@@ -349,4 +349,115 @@ test.describe('files and changes views', () => {
       rmSync(made, { recursive: true, force: true })
     }
   })
+
+  // CSV files go under csv/ and are removed by the test that wrote them: the
+  // Changes tests must never see them as untracked
+  const csvDir = () => path.join(repo, 'csv')
+  const openCsv = async (page: Page, name: string, width = 1280) => {
+    await page.setViewportSize({ width, height: 800 })
+    await page.addInitScript(() =>
+      localStorage.setItem(
+        'termote-settings',
+        JSON.stringify({ hasSeenGestureHints: true, tablePreview: true }),
+      ),
+    )
+    await page.goto(`${link}?view=files`)
+    await page.getByRole('treeitem', { name: 'csv' }).click()
+    await page.getByRole('treeitem', { name }).click()
+  }
+
+  test('a CSV opens as a table; filtering and Source change nothing on disk', async ({ page }) => {
+    const f = path.join(csvDir(), 'people.csv')
+    const text = '\uFEFFname,note\nAn,"a, b"\nBình,"two\nlines"\nCuong,x\n'
+    try {
+      mkdirSync(csvDir(), { recursive: true })
+      writeFileSync(f, text)
+      await openCsv(page, 'people.csv')
+      const panel = page.getByRole('complementary', { name: 'Files' })
+      const grid = panel.getByRole('grid')
+      await expect(grid).toHaveAttribute('aria-busy', 'false')
+      // The BOM never shows in the first header
+      await expect(grid.getByRole('columnheader', { name: 'name', exact: true })).toBeVisible()
+      await expect(grid.getByRole('gridcell', { name: 'a, b' })).toBeVisible()
+      // A quoted line break stays in its cell
+      await expect(grid.getByRole('gridcell', { name: 'two↵lines' })).toBeVisible()
+      await expect(panel.getByText('3 / 3 rows')).toBeVisible()
+
+      await panel.getByRole('searchbox', { name: 'Filter rows' }).fill('cuong')
+      await expect(panel.getByText('1 / 3 rows')).toBeVisible()
+      await expect(grid.getByRole('row')).toHaveCount(2)
+      await grid.getByRole('button', { name: 'note' }).click()
+      expect(readFileSync(f, 'utf-8')).toBe(text)
+
+      // Source is remembered: the file opens as source again
+      await panel.getByRole('button', { name: 'Preview' }).click()
+      await expect(panel.getByTestId('code-block')).toContainText('Cuong,x')
+      await panel.getByRole('button', { name: 'Back to files' }).click()
+      await panel.getByRole('treeitem', { name: 'people.csv' }).click()
+      await expect(panel.getByTestId('code-block')).toBeVisible()
+      await panel.getByRole('button', { name: 'Preview' }).click()
+      await expect(panel.getByRole('grid')).toBeVisible()
+      expect(readFileSync(f, 'utf-8')).toBe(text)
+    } finally {
+      rmSync(csvDir(), { recursive: true, force: true })
+    }
+  })
+
+  test('mobile: a CSV shows one record at a time and fits the screen', async ({ page }) => {
+    try {
+      mkdirSync(csvDir(), { recursive: true })
+      writeFileSync(
+        path.join(csvDir(), 'wide.csv'),
+        `${Array.from({ length: 12 }, (_, i) => `column ${i}`).join(',')}\n${Array.from({ length: 12 }, (_, i) => `value ${i}`).join(',')}\nsecond,row\n`,
+      )
+      await openCsv(page, 'wide.csv', 375)
+      await expect(page.getByRole('grid')).toBeVisible()
+      expect(await noPageScroll(page)).toBe(true)
+      await page.getByRole('button', { name: 'Records' }).click()
+      await expect(page.getByText('Record 1 / 2 · row 2')).toBeVisible()
+      await expect(page.getByRole('term').first()).toHaveText('column 0')
+      await page.getByRole('button', { name: 'Next record' }).click()
+      await expect(page.getByText('Record 2 / 2 · row 3')).toBeVisible()
+      await page.getByRole('button', { name: 'Previous record' }).click()
+      await page.getByRole('button', { name: 'value 11' }).click()
+      await expect(page.getByRole('dialog', { name: /Row 2 · column 11/ })).toBeVisible()
+      expect(await noPageScroll(page)).toBe(true)
+    } finally {
+      rmSync(csvDir(), { recursive: true, force: true })
+    }
+  })
+
+  test.describe('a 1 MiB CSV', () => {
+    test.setTimeout(60000)
+
+    test('is parsed in the worker and scrolls to its last row', async ({ page }) => {
+      const rows: string[] = ['id,name,value']
+      let size = 0
+      for (let i = 1; size < 1000 * 1024; i++) {
+        const line = `${i},"name ${i}, x",${i * 3}`
+        rows.push(line)
+        size += line.length + 1
+      }
+      const last = rows.length - 1
+      try {
+        mkdirSync(csvDir(), { recursive: true })
+        writeFileSync(path.join(csvDir(), 'big.csv'), `${rows.join('\n')}\n`)
+        const worker = page.waitForRequest(/csv-parse-worker/)
+        await openCsv(page, 'big.csv')
+        // Past 256 KiB the table is read by its worker
+        await worker
+        const grid = page.getByRole('grid')
+        await expect(grid).toHaveAttribute('aria-busy', 'false', { timeout: 20000 })
+        await expect(page.getByText(`${last} / ${last} rows`)).toBeVisible()
+        await grid.evaluate((el) => {
+          el.scrollTop = el.scrollHeight
+        })
+        await expect(grid.getByRole('rowheader', { name: `Row ${last + 1}` })).toBeVisible()
+        // Only the rows in view are in the page
+        expect(await grid.getByRole('row').count()).toBeLessThan(80)
+      } finally {
+        rmSync(csvDir(), { recursive: true, force: true })
+      }
+    })
+  })
 })

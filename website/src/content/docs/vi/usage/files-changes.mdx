@@ -9,7 +9,7 @@ Muốn biết agent đã sửa gì, thường bạn phải gõ `ls`, `cat`, `git
 đọc kết quả trong terminal. Termote có hai view để xem nhanh:
 
 - **Files**: thư mục của pane dạng cây, mở từng thư mục một. File văn bản mở ra có số dòng và tô
-  màu cú pháp, file ảnh mở ra thành hình.
+  màu cú pháp, file CSV hoặc TSV mở ra thành bảng, file ảnh mở ra thành hình.
 - **Changes**: khi thư mục nằm trong một repo git, danh sách file git báo đã đổi, kèm diff của
   từng file (với ảnh thì là bản trước và bản sau khi đổi).
 
@@ -107,7 +107,8 @@ thường, thay các nút khác bằng **Cancel** và **Save**. Nút này dành 
 `status: review` thành `status: approved` trong front matter của một bản ghi, khỏi phải nhờ agent
 hay gõ `sed`.
 
-- File Markdown được sửa ở văn bản gốc, kể cả khi đang bật xem trước.
+- File Markdown, CSV hay TSV đều được sửa ở văn bản gốc, kể cả khi đang xem trước hoặc xem dạng
+  bảng.
 - Ctrl+S (Cmd+S trên macOS) để lưu. Bấm Cancel hoặc Back khi còn thay đổi chưa lưu thì app hỏi
   `Discard changes?` trước.
 - Xuống dòng giữ nguyên như file đang dùng: file xuống dòng kiểu Windows (`\r\n`) vẫn giữ kiểu đó.
@@ -257,6 +258,50 @@ Link:
 Trong **Changes**, file Markdown có thay đổi cũng có nút con mắt phía trên diff: bấm vào sẽ thấy
 phiên bản hiện tại của file, hiển thị theo cùng các quy tắc trên. File đã bị xoá thì không có bản
 xem trước. Link trong đó mở ở Files.
+
+## CSV và TSV dạng bảng
+
+File `.csv`, `.tsv` hay `.tab` mở ra thành bảng: khi cuộn, dòng tiêu đề vẫn nằm trên cùng và cột
+số dòng vẫn nằm bên trái; file 1 MiB cuộn mượt như file ngắn. Nút hình con mắt trên thanh của file
+chuyển qua lại giữa bảng và văn bản gốc; máy này nhớ lựa chọn đó, tách riêng với lựa chọn của
+Markdown. Trong Changes, diff của file CSV vẫn hiện dạng văn bản.
+
+- **Dấu phân cách**: file `.tsv` hay `.tab` luôn đọc theo dấu tab. Với file `.csv`, dấu phân cách
+  được đoán từ vài dòng đầu (dấu phẩy, chấm phẩy, tab hoặc gạch đứng); menu **Delimiter** đọc lại
+  file theo dấu khác.
+- **Dấu ngoặc kép** theo RFC 4180: giá trị nằm trong ngoặc kép có thể chứa dấu phân cách, xuống
+  dòng, và `""` để ghi một dấu ngoặc kép. Ô có giá trị xuống dòng hiện `↵` ở chỗ xuống dòng.
+- **Header row** (bật sẵn) lấy dòng đầu làm tên cột. Tắt đi thì cột tên là `Column 1`,
+  `Column 2`…, còn dòng đầu thành một dòng như mọi dòng khác.
+- **Sắp xếp**: bấm tên cột để xếp theo cột đó, bấm lần nữa để đảo chiều, lần thứ ba để về thứ tự
+  trong file. Chữ so không phân biệt hoa thường, còn các cụm chữ số so theo giá trị (`item 2` đứng
+  trước `item 10`; số thập phân được so từng cụm chữ số, nên `1.5` đứng sau `1.25`). Ô rỗng luôn
+  nằm cuối, và dòng tiêu đề không bao giờ bị xếp lẫn.
+- **Filter rows** chỉ giữ những dòng có ô chứa chuỗi bạn gõ, không phân biệt hoa thường, và cho
+  biết còn lại bao nhiêu dòng (`12 / 340 rows`).
+- **Records** hiện từng dòng một dưới dạng `cột: giá trị`, có nút trước và sau, dành cho điện
+  thoại khi một dòng rộng hơn màn hình.
+- Chạm vào một ô (hoặc nhấn Enter trên ô đó) để xem đủ giá trị, kèm nút chép. Mỗi ô hiện tối đa
+  1024 ký tự; giá trị đầy đủ chỉ có trong bảng hiện ra khi chạm.
+- Dòng có số ô khác với dòng tiêu đề thì số dòng chuyển màu cam; rê chuột lên số dòng, hoặc trình
+  đọc màn hình, sẽ cho biết dòng đó có bao nhiêu ô.
+
+Sắp xếp, lọc, đổi dấu phân cách và bật tắt dòng tiêu đề chỉ đổi cách hiển thị. Không có gì được
+ghi vào file, và các lựa chọn này mất khi đóng file.
+
+| Thông báo                                               | Lý do                                                                   |
+| ------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `Unclosed quote on line N: shown as source`             | Dấu ngoặc kép mở ở dòng đó không bao giờ đóng; file hiện ở dạng văn bản gốc |
+| `Showing 200 of N columns. See all in Source`           | Chỉ 200 cột đầu được hiện; văn bản gốc có đủ                             |
+| `No rows`                                               | File rỗng                                                               |
+
+<Aside type="caution">
+  Giá trị chỉ được hiện dạng chữ, không bao giờ được chạy: công thức như `=HYPERLINK(...)` hiện
+  đúng như đã gõ. Những ký tự có thể khiến một giá trị đọc ra thành giá trị khác, như ký tự đảo
+  chiều chữ làm `0001` đọc thành `1000`, ký tự điều khiển và khoảng trắng độ rộng 0, đều hiện
+  thành dấu như `⟨U+202E⟩`. Nút chép trong bảng của một ô chép chính giá trị đó, gồm cả những ký
+  tự kể trên, không kèm dấu ngoặc kép bao quanh nó trong file.
+</Aside>
 
 ## Ảnh
 

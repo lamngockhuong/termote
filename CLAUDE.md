@@ -312,6 +312,14 @@ The `update` command:
 | `pwa/src/components/file-search.tsx`              | Files: find a file by name under the root, results, switch    |
 | `pwa/src/components/delete-file-dialog.tsx`       | Files: asks before a delete, second ask for a permanent one   |
 | `pwa/src/components/markdown-preview.tsx`         | Markdown file rendered in Files/Changes (links, code blocks)  |
+| `pwa/src/components/table-preview.tsx`            | CSV/TSV as a table: delimiter, header, filter, sort, Records  |
+| `pwa/src/components/table-grid.tsx`               | Virtual grid of a table (sticky header and row numbers)       |
+| `pwa/src/components/cell-sheet.tsx`               | One cell's whole value, unsafe characters shown, Copy         |
+| `pwa/src/hooks/use-csv-table.ts`                  | Parses a table and its view, in a worker past 256 KiB         |
+| `pwa/src/utils/csv-parse.ts`                      | RFC 4180 parser keeping each cell's range, delimiter sniffing |
+| `pwa/src/utils/csv-patch.ts`                      | Edits of a CSV as patches of cell ranges (cell, row)          |
+| `pwa/src/utils/csv-parse-client.ts`               | The table's worker: timeouts, falls back to the main thread   |
+| `pwa/src/utils/unsafe-chars.ts`                   | Control, bidi and zero-width spaces (strip or show)           |
 | `pwa/src/components/image-preview.tsx`            | One image of Files/Changes (sizes, why it cannot be shown)    |
 | `pwa/src/components/image-compare.tsx`            | Changes: an image's old and new versions side by side         |
 | `pwa/src/hooks/use-image-blob.ts`                 | Reads `files/raw` into a `blob:` URL (SVG: `data:`), revokes  |
@@ -707,7 +715,7 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   VAPID ES256 with `sub` `https://termote.ohnice.app` and 12 h tokens, stdlib only); `Topic` is an
   HMAC of pane and kind under a random key and `Urgency` is `high` for both kinds, so the push
   service learns neither. The service worker reads the names from the snapshot (3 s) and strips
-  C0/C1 and bidi controls (64 characters max); `Pane.Title` is never used; every push shows a
+  C0/C1, bidi and zero-width space characters (64 characters max); `Pane.Title` is never used; every push shows a
   notification (Safari revokes silent ones). State: `<stateDir>/push` (0700; `vapid.json` and
   `subscriptions.json` 0600, owner-only ACL on Windows, `%LOCALAPPDATA%` so it does not roam, no
   DPAPI), already on the Files deny list; at most 20 subscriptions, the least recently subscribed

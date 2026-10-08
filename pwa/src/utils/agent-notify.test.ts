@@ -128,6 +128,12 @@ describe('cleanName', () => {
     expect(cleanName('😀'.repeat(70))).toBe('😀'.repeat(64))
     expect(cleanName(undefined)).toBe('')
   })
+
+  it('strips zero-width spaces, which could also disguise a name', () => {
+    expect(cleanName('a\u200bdm\u2060i\ufeffn')).toBe('admin')
+    // A joined emoji stays one
+    expect(cleanName('dev 👩\u200d💻')).toBe('dev 👩\u200d💻')
+  })
 })
 
 describe('notificationContent', () => {

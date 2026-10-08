@@ -187,6 +187,7 @@ describe('notify-sw.js', () => {
         'a\u0000b\u001fc\u007fd\u0085e\u009ff',
         '\u200eleft\u200f \u202aemb\u202b\u202c\u202d\u202e',
         '\u2066iso\u2067\u2068\u2069',
+        'zero\u200bwidth\u2060\ufeff 👩\u200d💻 \u200c',
         `  ${'😀'.repeat(70)}  `,
         'plain name',
       ]

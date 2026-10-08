@@ -260,6 +260,19 @@ describe('useSettings', () => {
     const saved = JSON.parse(localStorage.getItem('termote-settings')!)
     expect(saved.notifyAgents).toBe(true)
   })
+
+  it('shows tables by default, also for a config saved before the setting', () => {
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ markdownPreview: false }),
+    )
+    const { result } = renderHook(() => useSettings())
+    expect(result.current.settings.tablePreview).toBe(true)
+    act(() => result.current.updateSetting('tablePreview', false))
+    const saved = JSON.parse(localStorage.getItem('termote-settings')!)
+    expect(saved.tablePreview).toBe(false)
+    expect(saved.markdownPreview).toBe(false)
+  })
 })
 
 describe('excluded folder names', () => {

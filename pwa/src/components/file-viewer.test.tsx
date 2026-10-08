@@ -27,7 +27,10 @@ vi.mock('../utils/highlight', async (orig) => ({
   highlight: async () => null,
   highlightLang: async () => null,
 }))
-vi.mock('../hooks/use-media-query', () => ({ useIsMobile: () => false }))
+vi.mock('../hooks/use-media-query', () => ({
+  useIsMobile: () => false,
+  useMediaQuery: () => false,
+}))
 
 function show(over: Partial<Parameters<typeof FileViewer>[0]> = {}) {
   const props = {
@@ -51,7 +54,9 @@ function show(over: Partial<Parameters<typeof FileViewer>[0]> = {}) {
 
 // The lazy Markdown renderer, loaded once up front: its first load can
 // outlast a find under coverage
-beforeAll(() => import('./markdown-preview'))
+beforeAll(() =>
+  Promise.all([import('./markdown-preview'), import('./table-preview')]),
+)
 
 beforeEach(() => {
   localStorage.clear()
@@ -329,6 +334,82 @@ describe('FileViewer: Markdown', () => {
       { kind: 'path', path: 'docs/guide.md', anchor: 'usage' },
       0,
     )
+  })
+})
+
+describe('FileViewer: tables', () => {
+  const csv = (text: string, path = 'data/a.csv') => ({
+    root: '/r',
+    path,
+    size: text.length,
+    text,
+  })
+
+  it('shows a CSV as a table, and remembers Source', async () => {
+    mockContent.mockResolvedValue(csv('name,age\nAn,3\n'))
+    const p = show({ path: 'data/a.csv' })
+    const grid = await screen.findByRole('grid')
+    expect(grid).toHaveTextContent('name')
+    expect(screen.getByRole('gridcell', { name: 'An' })).toBeInTheDocument()
+    const toggle = screen.getByRole('button', { name: 'Preview' })
+    expect(toggle).toHaveAttribute('aria-pressed', 'true')
+    // Sorting, filtering and another delimiter are only a view
+    fireEvent.click(screen.getByRole('button', { name: 'age' }))
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'a' } })
+    fireEvent.change(screen.getByRole('combobox', { name: 'Delimiter' }), {
+      target: { value: ';' },
+    })
+    expect(mockSave).not.toHaveBeenCalled()
+    expect(mockContent).toHaveBeenCalledTimes(1)
+
+    fireEvent.click(toggle)
+    expect(await screen.findByTestId('code-block')).toHaveTextContent(
+      'name,age',
+    )
+    expect(toggle).toHaveAttribute('aria-pressed', 'false')
+    const saved = JSON.parse(localStorage.getItem('termote-settings') ?? '{}')
+    expect(saved.tablePreview).toBe(false)
+    // Markdown keeps its own choice
+    expect(saved.markdownPreview).toBe(true)
+
+    p.unmount()
+    show({ path: 'data/a.csv' })
+    expect(await screen.findByTestId('code-block')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+    expect(await screen.findByRole('grid')).toBeInTheDocument()
+  })
+
+  it('shows a large CSV as a table too', async () => {
+    mockContent.mockResolvedValue({
+      ...csv('a,b\n1,2\n', 'x.tsv'),
+      size: 600 * 1024,
+    })
+    show({ path: 'x.tsv' })
+    expect(await screen.findByRole('grid')).toBeInTheDocument()
+    expect(screen.queryByText(/Too large/)).toBeNull()
+  })
+
+  it('shows the source of a CSV whose quotes never close', async () => {
+    mockContent.mockResolvedValue(csv('a,b\n"open,c\n'))
+    show({ path: 'data/a.csv' })
+    expect(
+      await screen.findByText('Unclosed quote on line 2: shown as source'),
+    ).toBeInTheDocument()
+    expect(screen.getByTestId('code-block')).toHaveTextContent('"open')
+  })
+
+  it('a CSV is edited as its source', async () => {
+    mockContent.mockResolvedValue({
+      ...csv('a,b\n'),
+      hash: 'h',
+      editable: true,
+    })
+    show({ path: 'data/a.csv', canEdit: true })
+    await screen.findByRole('grid')
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    expect(screen.getByRole('textbox')).toHaveValue('a,b\n')
+    expect(screen.queryByRole('grid')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Preview' })).toBeNull()
   })
 })
 

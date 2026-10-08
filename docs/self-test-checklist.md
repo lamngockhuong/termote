@@ -504,6 +504,20 @@ Run on tmux (Linux/macOS) and Herdr; psmux (Windows) offers neither view.
 - [ ] A Markdown file over 256 KiB shows "Too large to preview: shown as source"
 - [ ] Changes: a changed `.md` file's "Preview" shows the current version rendered
 
+### CSV and TSV Tables
+
+- [ ] A `.csv` opens as a table; the "Preview" (eye) button switches to the source and back, and
+      the choice stays for the next CSV and after reload, apart from Markdown's
+- [ ] A `;` CSV and a `.tsv` read right; a quoted value with a comma or a line break stays one
+      cell; a BOM never shows in the first header
+- [ ] Sorting, "Filter rows", "Delimiter" and "Header row" change only the view (`git status`
+      shows nothing)
+- [ ] iPhone (Safari and the home-screen app): the header row stays on top and the row numbers on
+      the left while scrolling both ways; "Records" shows one row at a time and the page never
+      scrolls sideways
+- [ ] A 1 MiB CSV opens and scrolls smoothly; a quote never closed shows "Unclosed quote on line
+      N: shown as source"
+
 ### Images
 
 - [ ] A PNG, JPEG, GIF and WebP open as the picture with "<width>×<height> · <size>"; a text file

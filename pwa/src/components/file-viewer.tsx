@@ -32,6 +32,7 @@ import {
   saveFileContent,
 } from '../hooks/use-mux-api'
 import { useSettings } from '../hooks/use-settings'
+import { isTablePath } from '../utils/csv-parse'
 import { formatSize, keepOrder, TRUNCATE_START } from '../utils/files-format'
 import { HIGHLIGHT_MAX_BYTES } from '../utils/highlight'
 import { isImagePath, isSvgPath } from '../utils/image-path'
@@ -53,6 +54,17 @@ export function LazyMarkdownPreview(
   return (
     <Suspense fallback={<ViewMessage>Loading…</ViewMessage>}>
       <MarkdownPreview {...props} />
+    </Suspense>
+  )
+}
+
+// The table view of a CSV/TSV file: loaded the first time one is shown
+const TablePreview = lazy(() => import('./table-preview'))
+
+export function LazyTablePreview(props: ComponentProps<typeof TablePreview>) {
+  return (
+    <Suspense fallback={<ViewMessage>Loading…</ViewMessage>}>
+      <TablePreview {...props} />
     </Suspense>
   )
 }
@@ -185,10 +197,19 @@ export function FileViewer({
   // Where the preview started (the link's heading, the offset Back restored)
   // is used up once the user leaves it: Source then Preview starts at the top
   const [leftPreview, setLeftPreview] = useState(false)
+  // A CSV/TSV file is a table, whatever its size (up to the 1 MiB a read
+  // returns), unless the user chose its source
+  const canTable = isTablePath(path) && state.kind === 'text'
+  const tableView = canTable && settings.tablePreview
   const togglePreview = () => {
+    if (canTable) {
+      updateSetting('tablePreview', !tableView)
+      return
+    }
     if (preview) setLeftPreview(true)
     updateSetting('markdownPreview', !preview)
   }
+  const previewOn = preview || tableView
   // An image (or an SVG the user wants as one) is read through files/raw
   const svg = isSvgPath(path)
   const asImage = isImagePath(path) || (svg && settings.svgPreview)
@@ -425,14 +446,14 @@ export function FileViewer({
             <Copy size={15} aria-hidden="true" />
           </IconButton>
         )}
-        {!mine && canPreview && (
+        {!mine && (canPreview || canTable) && (
           <IconButton
             size="sm"
             onClick={togglePreview}
             aria-label="Preview"
-            aria-pressed={preview}
-            title={preview ? 'Show the source' : 'Show the preview'}
-            className={preview ? 'text-accent' : ''}
+            aria-pressed={previewOn}
+            title={previewOn ? 'Show the source' : 'Show the preview'}
+            className={previewOn ? 'text-accent' : ''}
           >
             <Eye size={15} aria-hidden="true" />
           </IconButton>
@@ -500,7 +521,15 @@ export function FileViewer({
           notify={notify}
         />
       )}
-      {!mine && !asImage && state.kind === 'text' && !preview && (
+      {!mine && !asImage && state.kind === 'text' && tableView && (
+        <LazyTablePreview
+          text={state.text}
+          path={path}
+          wrap={wrap}
+          notify={notify}
+        />
+      )}
+      {!mine && !asImage && state.kind === 'text' && !previewOn && (
         <>
           {markdown && tooLarge && (
             <Banner>Too large to preview: shown as source</Banner>

@@ -1011,7 +1011,7 @@ termote update --force           # Force reinstall current version
     `*.notify.windows.com`), checked at subscribe, at load and before each send; the address
     dialled must be public (no loopback, private, link-local, CGNAT, ULA, multicast or
     IPv4-mapped), with no proxy and no redirects. Payloads carry ids only; the names are read
-    by the service worker from the snapshot and stripped of control and bidi characters
+    by the service worker from the snapshot and stripped of control, bidi and zero-width space characters
 
 ## Scalability Notes
 
