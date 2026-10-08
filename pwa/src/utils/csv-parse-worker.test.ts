@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { reapply } from './csv-edits'
 import { parseCsv } from './csv-parse'
 import { handleRequest, resetWorkerState } from './csv-parse-worker'
 
@@ -79,5 +80,28 @@ describe('csv parse worker', () => {
       { type: 'parse', id: 4, result: { ok: false, line: 1, offset: 0 } },
       { transfer: [] },
     )
+  })
+
+  it('applies edits again, as reapply does', () => {
+    const op = {
+      kind: 'delete' as const,
+      row: 1,
+      rowValues: ['x'],
+      patch: { start: 2, removed: 'x\n', inserted: '' },
+    }
+    const [reply, transfer] = handleRequest({
+      type: 'reapply',
+      id: 3,
+      text: 'a\nb\nx\n',
+      delimiter: ',',
+      ops: [op],
+    })
+    expect(reply).toEqual({
+      type: 'reapply',
+      id: 3,
+      result: reapply('a\nb\nx\n', ',', [op]),
+    })
+    expect(reply).toMatchObject({ result: { text: 'a\nb\n' } })
+    expect(transfer).toEqual([])
   })
 })

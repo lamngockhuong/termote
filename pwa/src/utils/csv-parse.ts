@@ -8,6 +8,13 @@ export type Delimiter = ',' | ';' | '\t' | '|'
 
 export const DELIMITERS: readonly Delimiter[] = [',', ';', '\t', '|']
 
+export const DELIMITER_NAMES: Record<Delimiter, string> = {
+  ',': 'Comma',
+  ';': 'Semicolon',
+  '\t': 'Tab',
+  '|': 'Pipe',
+}
+
 export interface CsvTable {
   delimiter: Delimiter
   bom: boolean

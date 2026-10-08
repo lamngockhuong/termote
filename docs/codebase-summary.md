@@ -61,6 +61,7 @@ described in [`system-architecture.md`](system-architecture.md), conventions in
 | Pane views (terminal, chat, files, changes)  | `pwa/src/app-views.ts`, then `components/chat-*`, `files-view.tsx`, `changes-view.tsx`                  |
 | Images in Files and Changes                  | `components/image-preview.tsx`, `image-compare.tsx`, `hooks/use-image-blob.ts`                          |
 | CSV/TSV as a table in Files                  | `components/table-preview.tsx`, `table-grid.tsx`, `hooks/use-csv-table.ts`, `utils/csv-parse.ts`        |
+| Editing a CSV/TSV table (cells, rows, 409)   | `components/cell-edit-sheet.tsx`, `utils/csv-edits.ts`, `utils/csv-patch.ts`, `file-viewer.tsx`         |
 | Editing a file in Files and Changes          | `components/file-editor.tsx`, `file-viewer.tsx`, `hooks/use-files.ts` (`useFileDraft`)                  |
 | Creating a file in Files                     | `components/new-file-dialog.tsx`, `files-view.tsx`, `hooks/use-files.ts` (`created`)                    |
 | Server entry, auth, guards                   | `server/main.go`, `serve.go`, `guard.go`, `security_headers.go`                                         |

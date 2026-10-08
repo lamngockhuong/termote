@@ -517,6 +517,13 @@ Run on tmux (Linux/macOS) and Herdr; psmux (Windows) offers neither view.
       scrolls sideways
 - [ ] A 1 MiB CSV opens and scrolls smoothly; a quote never closed shows "Unclosed quote on line
       N: shown as source"
+- [ ] Edit on a table: tap a cell, change it, Apply, Save; `git diff` shows only that cell (a
+      CRLF file stays CRLF); "Add row below", "Add a row at the end" and "Delete row" work, and
+      Undo/Redo (Ctrl+Z, Ctrl+Shift+Z) walk back and forth
+- [ ] Change the file from the terminal while editing (add a row above the edited one): Save says
+      it changed; "Reload and reapply" puts the edit on the right row; a deleted row is listed
+- [ ] iPhone: the cell sheet opens above the keyboard and Apply is reachable; the page never
+      scrolls sideways while editing
 
 ### Images
 

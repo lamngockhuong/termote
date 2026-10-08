@@ -422,6 +422,80 @@ test.describe('files and changes views', () => {
       await page.getByRole('button', { name: 'value 11' }).click()
       await expect(page.getByRole('dialog', { name: /Row 2 · column 11/ })).toBeVisible()
       expect(await noPageScroll(page)).toBe(true)
+      // Editing: a tapped value opens its own sheet, which fits too
+      await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click()
+      await page.getByRole('button', { name: 'Edit' }).click()
+      await page.getByRole('button', { name: 'value 3', exact: true }).click()
+      const sheet = page.getByRole('dialog', { name: /Row 2 · column 3/ })
+      await sheet.getByRole('textbox', { name: 'Value' }).fill('three')
+      await sheet.getByRole('button', { name: 'Apply' }).click()
+      await expect(page.getByRole('button', { name: 'three', exact: true })).toBeVisible()
+      expect(await noPageScroll(page)).toBe(true)
+    } finally {
+      rmSync(csvDir(), { recursive: true, force: true })
+    }
+  })
+
+  // Edits a cell of the table open in the Files panel
+  const setCell = async (page: Page, shown: string, value: string) => {
+    const panel = page.getByRole('complementary', { name: 'Files' })
+    await panel.getByRole('grid').getByRole('gridcell', { name: shown, exact: true }).click()
+    const sheet = page.getByRole('dialog')
+    await sheet.getByRole('textbox', { name: 'Value' }).fill(value)
+    await sheet.getByRole('button', { name: 'Apply' }).click()
+    await expect(sheet).toHaveCount(0)
+  }
+
+  test('editing a cell saves only its bytes, keeping CRLF and the BOM', async ({ page }) => {
+    const f = path.join(csvDir(), 'semi.csv')
+    const text = '\uFEFFname;price\r\npear;2\r\nplum;"3"\r\n'
+    try {
+      mkdirSync(csvDir(), { recursive: true })
+      writeFileSync(f, text)
+      const before = readFileSync(f)
+      await openCsv(page, 'semi.csv')
+      const panel = page.getByRole('complementary', { name: 'Files' })
+      await expect(panel.getByRole('grid')).toHaveAttribute('aria-busy', 'false')
+      await panel.getByRole('button', { name: 'Edit' }).click()
+      await setCell(page, '2', '2;5')
+      // A quoted cell stays quoted
+      await setCell(page, '3', '4')
+      await panel.getByRole('button', { name: 'Save' }).click()
+      await expect(page.getByText('Saved')).toBeVisible()
+      const after = readFileSync(f)
+      const prefix = Buffer.from('\uFEFFname;price\r\npear;')
+      expect(after.subarray(0, prefix.length)).toEqual(before.subarray(0, prefix.length))
+      expect(after.toString('utf-8')).toBe('\uFEFFname;price\r\npear;"2;5"\r\nplum;"4"\r\n')
+    } finally {
+      rmSync(csvDir(), { recursive: true, force: true })
+    }
+  })
+
+  test('a file changed meanwhile: each edit goes back on its own row', async ({ page }) => {
+    const f = path.join(csvDir(), 'agent.csv')
+    try {
+      mkdirSync(csvDir(), { recursive: true })
+      writeFileSync(f, 'name,price\npear,2\nplum,3\nfig,4\n')
+      await openCsv(page, 'agent.csv')
+      const panel = page.getByRole('complementary', { name: 'Files' })
+      await expect(panel.getByRole('grid')).toHaveAttribute('aria-busy', 'false')
+      await panel.getByRole('button', { name: 'Edit' }).click()
+      await setCell(page, '2', '9')
+      await setCell(page, '4', '8')
+      // The agent puts a row above pear, with pear's price at pear's old
+      // index, and deletes fig
+      writeFileSync(f, 'name,price\nkiwi,2\npear,2\nplum,3\n')
+      await panel.getByRole('button', { name: 'Save' }).click()
+      await expect(panel.getByText('The file changed on the host since you opened it')).toBeVisible()
+      // Nothing was written over the agent's file
+      expect(readFileSync(f, 'utf-8')).toBe('name,price\nkiwi,2\npear,2\nplum,3\n')
+      await panel.getByRole('button', { name: 'Reload and reapply' }).click()
+      await expect(panel.getByText(/Not applied to the new file/)).toContainText(
+        'Row 4, column price: its row is no longer in the file',
+      )
+      await panel.getByRole('button', { name: 'Save' }).click()
+      await expect(page.getByText('Saved')).toBeVisible()
+      expect(readFileSync(f, 'utf-8')).toBe('name,price\nkiwi,2\npear,9\nplum,3\n')
     } finally {
       rmSync(csvDir(), { recursive: true, force: true })
     }

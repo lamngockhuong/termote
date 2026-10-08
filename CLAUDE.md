@@ -315,9 +315,11 @@ The `update` command:
 | `pwa/src/components/table-preview.tsx`            | CSV/TSV as a table: delimiter, header, filter, sort, Records  |
 | `pwa/src/components/table-grid.tsx`               | Virtual grid of a table (sticky header and row numbers)       |
 | `pwa/src/components/cell-sheet.tsx`               | One cell's whole value, unsafe characters shown, Copy         |
+| `pwa/src/components/cell-edit-sheet.tsx`          | A cell being edited: its value, add/delete row, Apply         |
 | `pwa/src/hooks/use-csv-table.ts`                  | Parses a table and its view, in a worker past 256 KiB         |
 | `pwa/src/utils/csv-parse.ts`                      | RFC 4180 parser keeping each cell's range, delimiter sniffing |
 | `pwa/src/utils/csv-patch.ts`                      | Edits of a CSV as patches of cell ranges (cell, row)          |
+| `pwa/src/utils/csv-edits.ts`                      | Table edits as ops: undo/redo, reapplied by row values        |
 | `pwa/src/utils/csv-parse-client.ts`               | The table's worker: timeouts, falls back to the main thread   |
 | `pwa/src/utils/unsafe-chars.ts`                   | Control, bidi and zero-width spaces (strip or show)           |
 | `pwa/src/components/image-preview.tsx`            | One image of Files/Changes (sizes, why it cannot be shown)    |

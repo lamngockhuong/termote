@@ -56,6 +56,54 @@ interface Props {
   onCopy: () => void
 }
 
+// Why the last save of a draft failed, and what the user can do about it:
+// the same for the textarea and the table view
+export function SaveBanner({
+  error,
+  rootMoved,
+  reloadLabel = 'Reload',
+  onReload,
+  onCopy,
+}: {
+  error?: SaveError
+  rootMoved: boolean
+  reloadLabel?: string
+  onReload: () => void
+  onCopy: () => void
+}) {
+  const copy = (
+    <Button size="sm" variant="secondary" onClick={onCopy}>
+      Copy my text
+    </Button>
+  )
+  return rootMoved ? (
+    <Banner variant="warning" action={copy}>
+      This pane's folder changed. Copy your text, then discard it to open the
+      file again.
+    </Banner>
+  ) : error?.kind === 'changed' ? (
+    <Banner
+      variant="warning"
+      action={
+        <span className="flex gap-1.5">
+          <Button size="sm" variant="secondary" onClick={onReload}>
+            {reloadLabel}
+          </Button>
+          {copy}
+        </span>
+      }
+    >
+      The file changed on the host since you opened it
+    </Banner>
+  ) : error?.kind === 'unsure' ? (
+    <Banner variant="warning">
+      Not sure the file was saved. Saving again is safe.
+    </Banner>
+  ) : error?.kind === 'refused' ? (
+    <Banner variant="danger">{error.message}</Banner>
+  ) : null
+}
+
 // The text of a file being edited, in a plain textarea, with why the last
 // save failed above it. The draft lives with the pane (useFileDraft): this
 // only shows it.
@@ -79,39 +127,14 @@ export function FileEditor({
     }
   }
 
-  const copy = (
-    <Button size="sm" variant="secondary" onClick={onCopy}>
-      Copy my text
-    </Button>
-  )
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {rootMoved ? (
-        <Banner variant="warning" action={copy}>
-          This pane's folder changed. Copy your text, then discard it to open
-          the file again.
-        </Banner>
-      ) : error?.kind === 'changed' ? (
-        <Banner
-          variant="warning"
-          action={
-            <span className="flex gap-1.5">
-              <Button size="sm" variant="secondary" onClick={onReload}>
-                Reload
-              </Button>
-              {copy}
-            </span>
-          }
-        >
-          The file changed on the host since you opened it
-        </Banner>
-      ) : error?.kind === 'unsure' ? (
-        <Banner variant="warning">
-          Not sure the file was saved. Saving again is safe.
-        </Banner>
-      ) : error?.kind === 'refused' ? (
-        <Banner variant="danger">{error.message}</Banner>
-      ) : null}
+      <SaveBanner
+        error={error}
+        rootMoved={rootMoved}
+        onReload={onReload}
+        onCopy={onCopy}
+      />
       <textarea
         aria-label={`Text of ${path}`}
         value={text}

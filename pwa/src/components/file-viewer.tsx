@@ -32,17 +32,31 @@ import {
   saveFileContent,
 } from '../hooks/use-mux-api'
 import { useSettings } from '../hooks/use-settings'
-import { isTablePath } from '../utils/csv-parse'
+import type { Reapplied, Skipped, TableOp } from '../utils/csv-edits'
+import {
+  DELIMITER_NAMES,
+  type Delimiter,
+  delimiterFor,
+  isTablePath,
+} from '../utils/csv-parse'
+import { CsvClient } from '../utils/csv-parse-client'
 import { formatSize, keepOrder, TRUNCATE_START } from '../utils/files-format'
 import { HIGHLIGHT_MAX_BYTES } from '../utils/highlight'
 import { isImagePath, isSvgPath } from '../utils/image-path'
 import { isMarkdownPath, type LinkPath } from '../utils/markdown-links'
+import { visibleUnsafe } from '../utils/unsafe-chars'
 import { CodeBlock } from './code-block'
-import { FileEditor, type SaveError, saveErrorOf } from './file-editor'
+import {
+  FileEditor,
+  SaveBanner,
+  type SaveError,
+  saveErrorOf,
+} from './file-editor'
 import { ImagePreview } from './image-preview'
 import { ViewMessage } from './pane-dir-header'
+import type { TableState } from './table-preview'
 import { Banner } from './ui/banner'
-import { IconButton } from './ui/button'
+import { Button, IconButton } from './ui/button'
 import { ConfirmDialog } from './ui/confirm-dialog'
 
 // The markdown renderer: loaded the first time a Markdown file is previewed
@@ -99,6 +113,106 @@ function loaded(c: FileContent): Loaded {
     hash: c.hash,
     editable: c.editable,
   }
+}
+
+// A draft of file: its text as read, with "\n" line breaks (a textarea turns
+// every one into "\n": compared, and sent, so). With a delimiter it is edited
+// in the table view, from edits already made on that text.
+function draftOf(
+  file: TextLoaded,
+  path: string,
+  reveal: boolean,
+  delimiter?: Delimiter,
+  edits?: { text: string; ops: TableOp[] },
+): FileDraft {
+  const base = file.text.replace(/\r\n/g, '\n')
+  return {
+    root: file.root,
+    path,
+    baseHash: file.hash,
+    base,
+    crlf: base !== file.text,
+    text: edits?.text ?? base,
+    reveal,
+    cells: delimiter && { delimiter, ops: edits?.ops ?? [], redo: [] },
+  }
+}
+
+// A draft that changed while its save ran (another view of the pane edited
+// it): the text saved becomes its base. Its table edits stay only when they
+// began with the ones saved; else it goes on as text, since edits applied
+// again after a conflict must turn the base into the text.
+export function rebaseDraft(
+  now: FileDraft,
+  saved: FileDraft,
+  saveRoot: string,
+  saveHash: string,
+): FileDraft {
+  const done = saved.cells?.ops ?? []
+  const ops = now.cells?.ops
+  const follows = !!ops && done.every((op, i) => ops[i] === op)
+  return {
+    ...now,
+    root: saveRoot,
+    baseHash: saveHash,
+    base: saved.text,
+    cells:
+      now.cells && follows
+        ? { ...now.cells, ops: now.cells.ops.slice(done.length) }
+        : undefined,
+  }
+}
+
+const separated = (d: Delimiter) =>
+  `${DELIMITER_NAMES[d].toLowerCase()}-separated`
+
+const SKIP_REASONS: Record<Skipped['reason'], string> = {
+  missing: 'its row is no longer in the file',
+  many: 'more than one row matches it',
+  depends: 'it follows a row change that was not applied',
+  unreadable: 'the file can no longer be edited as a table',
+}
+
+function describeOp(op: TableOp): string {
+  if (op.kind === 'cell') {
+    return `Row ${op.row + 1}, column ${visibleUnsafe(op.name)}`
+  }
+  if (op.kind === 'insert') {
+    return op.after < 0
+      ? 'The row added at the top'
+      : `The row added after row ${op.after + 1}`
+  }
+  return `Deleting row ${op.row + 1}`
+}
+
+// The edits a reload could not apply again, and why; a cell's value can be
+// copied, to set it again by hand
+function SkippedEdits(props: {
+  skipped: Skipped[]
+  onCopy: (value: string) => void
+}) {
+  return (
+    <Banner variant="warning">
+      Not applied to the new file:
+      <ul className="m-0 mt-1 list-none p-0">
+        {props.skipped.map(({ op, reason }, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: the list is replaced whole
+          <li key={i} className="flex flex-wrap items-center gap-1.5 py-0.5">
+            <bdi>{describeOp(op)}</bdi>: {SKIP_REASONS[reason]}
+            {op.kind === 'cell' && (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => props.onCopy(op.after)}
+              >
+                Copy value
+              </Button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </Banner>
+  )
 }
 
 const ERRORS: Record<FilesError, string> = {
@@ -180,11 +294,23 @@ export function FileViewer({
     draft && draft.path !== path && draft.text !== draft.base
       ? draft
       : undefined
-  // The file to edit once the other draft is discarded, and that draft's path
+  // The file to edit once the other draft is discarded, that draft's path,
+  // and the delimiter of the table it is edited in, if it is
   const [replacing, setReplacing] = useState<{
     file: TextLoaded
     other: string
+    delimiter?: Delimiter
   }>()
+  // A table edit asked with another delimiter than the file's own
+  const [asking, setAsking] = useState<{
+    file: TextLoaded
+    delimiter: Delimiter
+    detected: Delimiter
+  }>()
+  // The last table the view read: the delimiter an edit is written with
+  const [tableState, setTableState] = useState<TableState>()
+  // Table edits a reload could not apply again
+  const [skipped, setSkipped] = useState<Skipped[]>([])
   const [reload, setReload] = useState(0)
   const [wrap, setWrap] = useState(wrapByDefault)
   const { settings, updateSetting } = useSettings()
@@ -241,6 +367,9 @@ export function FileViewer({
     (!!mine && root !== undefined && mine.root !== root) ||
     saveError?.kind === 'root'
   const dirty = !!mine && mine.text !== mine.base
+  // The file read again is no table to apply the edits to: Save is off
+  const stuck = skipped.some((s) => s.reason === 'unreadable')
+  const cells = mine?.cells
   // The file as read, when a save of it would be taken
   const editable =
     canEdit && !asImage && state.kind === 'text' && state.editable
@@ -269,23 +398,26 @@ export function FileViewer({
     }
   }, [paneId, root, path, reveal, asImage, onRootChanged, reload])
 
-  const beginEdit = (file: TextLoaded) => {
-    // A textarea turns every line break into "\n": compared, and sent, so
-    const base = file.text.replace(/\r\n/g, '\n')
+  const beginEdit = (file: TextLoaded, delimiter?: Delimiter) => {
     setSaveError(undefined)
-    setDraft({
-      root: file.root,
-      path,
-      baseHash: file.hash,
-      base,
-      crlf: base !== file.text,
-      text: base,
-      reveal,
-    })
+    setSkipped([])
+    setDraft(draftOf(file, path, reveal, delimiter))
   }
 
-  const requestEdit = (file: TextLoaded) =>
-    other ? setReplacing({ file, other: other.path }) : beginEdit(file)
+  // Into the table editor with delimiter, after asking when the file reads
+  // as another one: edits written with the wrong one shift the columns
+  const editWith = (file: TextLoaded, delimiter?: Delimiter) => {
+    const detected = delimiter && delimiterFor(path, file.text)
+    if (delimiter && detected !== delimiter) {
+      setAsking({ file, delimiter, detected: detected as Delimiter })
+    } else beginEdit(file, delimiter)
+  }
+
+  // With a delimiter, the table being viewed is edited; else the text
+  const requestEdit = (file: TextLoaded, delimiter?: Delimiter) =>
+    other
+      ? setReplacing({ file, other: other.path, delimiter })
+      : editWith(file, delimiter)
 
   // Changes view: into editing once, as soon as the file can be; not again
   // after the draft found at mount is discarded
@@ -299,6 +431,7 @@ export function FileViewer({
   const discard = () => {
     setDraft(undefined)
     setSaveError(undefined)
+    setSkipped([])
     // The save saw the root move: now the file is read from the new one
     if (saveError?.kind === 'root' && saveError.root)
       onRootChanged(saveError.root)
@@ -334,11 +467,76 @@ export function FileViewer({
         hash: res.hash,
         editable: true,
       })
-      setDraft(undefined)
+      // Only the draft sent is dropped: one changed meanwhile stays
+      setDraft((now) =>
+        now === edit
+          ? undefined
+          : now?.path === path
+            ? rebaseDraft(now, edit, res.root, res.hash)
+            : now,
+      )
+      setSkipped([])
       notify('Saved')
       onSaved?.()
     } catch (err) {
       setSaveError(saveErrorOf(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // The file changed on the host: read it again and apply the table edits
+  // to it, each found by its row's values. The draft becomes the new file's,
+  // so the next save never sends the old hash; what was not applied is
+  // listed. Nothing is saved here.
+  const reapplyEdits = async (
+    edit: FileDraft,
+    { delimiter, ops }: NonNullable<FileDraft['cells']>,
+  ) => {
+    if (saving) return
+    setSaving(true)
+    try {
+      const file = loaded(
+        await fetchFileContent(paneId, path, {
+          root: edit.root,
+          reveal: edit.reveal,
+        }),
+      )
+      let res: Reapplied = { ok: false }
+      if (file.kind === 'text' && file.editable) {
+        const base = file.text.replace(/\r\n/g, '\n')
+        // The last save went through after all (it timed out)
+        if (base === edit.text) {
+          res = { ok: true, text: base, ops: [], skipped: [] }
+        } else {
+          const client = new CsvClient()
+          res = await client.reapply(base, delimiter, ops)
+          client.terminate()
+        }
+      }
+      if (file.kind !== 'text' || !res.ok) {
+        setSkipped(ops.map((op) => ({ op, reason: 'unreadable' })))
+        return
+      }
+      // Another view of the pane may have replaced the draft meanwhile:
+      // then it is left as it is, with its own conflict
+      let replaced = false
+      setDraft((now) => {
+        if (now !== edit) return now
+        replaced = true
+        return draftOf(file, path, edit.reveal, delimiter, res)
+      })
+      if (!replaced) return
+      setState(file)
+      setSaveError(undefined)
+      setSkipped(res.skipped)
+      if (!res.ops.length && !res.skipped.length) {
+        notify('Your changes are already in the file')
+      }
+    } catch (err) {
+      if (err instanceof RequestError && err.status === 409 && err.root) {
+        setSaveError({ kind: 'root', root: err.root })
+      } else notify('Could not read the file again')
     } finally {
       setSaving(false)
     }
@@ -401,7 +599,7 @@ export function FileViewer({
             <IconButton
               size="sm"
               onClick={() => save(mine)}
-              disabled={!dirty || saving || rootMoved}
+              disabled={!dirty || saving || rootMoved || stuck}
               aria-label="Save"
               title="Save (Ctrl+S)"
               className="text-accent"
@@ -413,7 +611,12 @@ export function FileViewer({
         {!mine && editable && (
           <IconButton
             size="sm"
-            onClick={() => requestEdit(editable)}
+            onClick={() =>
+              requestEdit(
+                editable,
+                tableView && tableState?.ok ? tableState.delimiter : undefined,
+              )
+            }
             aria-label="Edit"
             title="Edit"
           >
@@ -483,7 +686,7 @@ export function FileViewer({
           </IconButton>
         )}
       </div>
-      {mine && (
+      {mine && !cells && (
         <FileEditor
           path={path}
           text={mine.text}
@@ -521,12 +724,39 @@ export function FileViewer({
           notify={notify}
         />
       )}
-      {!mine && !asImage && state.kind === 'text' && tableView && (
+      {cells && (
+        <SaveBanner
+          error={saveError}
+          rootMoved={rootMoved}
+          reloadLabel="Reload and reapply"
+          onReload={() => reapplyEdits(mine, cells)}
+          onCopy={() => copyText(mine.text)}
+        />
+      )}
+      {cells && skipped.length > 0 && (
+        <SkippedEdits skipped={skipped} onCopy={copyText} />
+      )}
+      {/* One element for viewing and editing, so entering edits keeps the
+          view's sort, filter and header row */}
+      {(cells || (!mine && !asImage && tableView)) && (
         <LazyTablePreview
-          text={state.text}
+          text={cells ? mine.text : (state as TextLoaded).text}
           path={path}
           wrap={wrap}
           notify={notify}
+          onTableState={setTableState}
+          editing={
+            cells && {
+              delimiter: cells.delimiter,
+              ops: cells.ops,
+              redo: cells.redo,
+              saving,
+              canSave: dirty && !saving && !rootMoved && !stuck,
+              onChange: (text, ops, redo) =>
+                setDraft({ ...mine, text, cells: { ...cells, ops, redo } }),
+              onSave: () => save(mine),
+            }
+          }
         />
       )}
       {!mine && !asImage && state.kind === 'text' && !previewOn && (
@@ -581,12 +811,28 @@ export function FileViewer({
           confirmLabel="Discard"
           destructive
           onConfirm={() => {
-            beginEdit(replacing.file)
             setReplacing(undefined)
+            editWith(replacing.file, replacing.delimiter)
           }}
           onCancel={() => setReplacing(undefined)}
         >
           Your unsaved changes to {replacing.other} will be lost.
+        </ConfirmDialog>
+      )}
+      {asking && (
+        <ConfirmDialog
+          isOpen
+          title="Edit with another delimiter?"
+          confirmLabel="Edit anyway"
+          onConfirm={() => {
+            setAsking(undefined)
+            beginEdit(asking.file, asking.delimiter)
+          }}
+          onCancel={() => setAsking(undefined)}
+        >
+          This file looks {separated(asking.detected)}, and you are viewing it
+          as {separated(asking.delimiter)}. Edits are written with that
+          delimiter, which can shift its columns.
         </ConfirmDialog>
       )}
     </div>

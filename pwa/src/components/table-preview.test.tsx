@@ -6,11 +6,14 @@ import {
   waitFor,
   within,
 } from '@testing-library/react'
+import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ThemeProvider } from '../contexts/theme-context'
+import type { TableOp } from '../utils/csv-edits'
+import type { Delimiter } from '../utils/csv-parse'
 import { CSV_WORKER_MIN } from '../utils/csv-parse-client'
 import { MAX_CELL_CHARS, MAX_SCROLL_HEIGHT } from './table-grid'
-import TablePreview, { MAX_COLUMNS } from './table-preview'
+import TablePreview, { MAX_COLUMNS, type TableEditing } from './table-preview'
 
 vi.mock('../utils/highlight', async (orig) => ({
   ...(await orig<typeof import('../utils/highlight')>()),
@@ -525,8 +528,11 @@ describe('TablePreview of a large file', () => {
       </ThemeProvider>,
     )
     await act(() => FakeWorker.all[0].flush())
-    // Only the new text's parse is told and shown
-    expect(p.onTableState).toHaveBeenCalledTimes(1)
+    // Told nothing while parsing, then only the new text's parse
+    expect(p.onTableState.mock.calls).toEqual([
+      [undefined],
+      [{ ok: true, delimiter: ',' }],
+    ])
     expect(screen.getByRole('button', { name: 'key' })).toBeInTheDocument()
   })
 
@@ -577,4 +583,336 @@ describe('TablePreview of a large file', () => {
         .closest('[role="columnheader"]'),
     ).toHaveAttribute('aria-sort', 'descending')
   })
+})
+
+// A draft held the way FileViewer holds it: every edit replaces the text
+function Draft(props: {
+  initial: string
+  delimiter?: Delimiter
+  saving?: boolean
+  canSave?: boolean
+  onChange: (text: string, ops: TableOp[], redo: TableOp[]) => void
+  onSave: () => void
+  notify: () => void
+}) {
+  const [d, setD] = useState({
+    text: props.initial,
+    ops: [] as TableOp[],
+    redo: [] as TableOp[],
+  })
+  const editing: TableEditing = {
+    delimiter: props.delimiter ?? ',',
+    ops: d.ops,
+    redo: d.redo,
+    saving: props.saving ?? false,
+    canSave: props.canSave ?? true,
+    onChange: (text, ops, redo) => {
+      props.onChange(text, ops, redo)
+      setD({ text, ops, redo })
+    },
+    onSave: props.onSave,
+  }
+  return (
+    <ThemeProvider>
+      <TablePreview
+        text={d.text}
+        path="data.csv"
+        wrap={false}
+        notify={props.notify}
+        editing={editing}
+      />
+    </ThemeProvider>
+  )
+}
+
+function edit(
+  initial: string,
+  over: { delimiter?: Delimiter; saving?: boolean; canSave?: boolean } = {},
+) {
+  const props = {
+    initial,
+    onChange: vi.fn(),
+    onSave: vi.fn(),
+    notify: vi.fn(),
+    ...over,
+  }
+  const view = render(<Draft {...props} />)
+  // The text of the last edit
+  const text = () => props.onChange.mock.lastCall?.[0]
+  return { ...props, ...view, text }
+}
+
+const cellButton = (name: string) => screen.getByRole('gridcell', { name })
+const valueBox = () => screen.getByRole('textbox', { name: 'Value' })
+const press = (target: Element, key: string, over: object = {}) =>
+  fireEvent.keyDown(target, { key, ctrlKey: true, ...over })
+
+describe('TablePreview editing', () => {
+  it('sets a cell: only its characters change, undo and redo walk back and forth', () => {
+    const p = edit(people)
+    fireEvent.click(cellButton('30'))
+    expect(screen.getByRole('dialog')).toHaveTextContent('Row 2 · age')
+    expect(valueBox()).toHaveValue('30')
+    fireEvent.change(valueBox(), { target: { value: '31, or so' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    expect(p.text()).toBe(people.replace('30', '"31, or so"'))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(cellButton('31, or so')).toBeInTheDocument()
+
+    const undo = screen.getByRole('button', { name: 'Undo' })
+    const redo = screen.getByRole('button', { name: 'Redo' })
+    expect(redo).toBeDisabled()
+    fireEvent.click(undo)
+    expect(p.text()).toBe(people)
+    expect(p.onChange.mock.lastCall?.[1]).toEqual([])
+    expect(undo).toBeDisabled()
+    // The sheet opened on the text undo returned to stays closed
+    expect(screen.queryByRole('dialog')).toBeNull()
+    fireEvent.click(redo)
+    expect(p.text()).toBe(people.replace('30', '"31, or so"'))
+    // A new edit clears what could be redone
+    fireEvent.click(undo)
+    fireEvent.click(cellButton('Huế'))
+    fireEvent.change(valueBox(), { target: { value: 'Hue' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    expect(p.onChange.mock.lastCall?.[2]).toEqual([])
+    expect(redo).toBeDisabled()
+  })
+
+  it('a value set to itself, or Cancel, changes nothing', () => {
+    const p = edit(people)
+    fireEvent.click(cellButton('Bình'))
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    fireEvent.click(cellButton('Bình'))
+    fireEvent.change(valueBox(), { target: { value: 'zz' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(p.onChange).not.toHaveBeenCalled()
+    // A cell a short row lacks, set to nothing, is no edit either
+    fireEvent.click(screen.getAllByRole('gridcell')[8])
+    fireEvent.change(valueBox(), { target: { value: 'x' } })
+    fireEvent.change(valueBox(), { target: { value: '' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    expect(p.onChange).not.toHaveBeenCalled()
+  })
+
+  it('a cell a short row lacks is set after the delimiters it needs', () => {
+    const p = edit(people)
+    fireEvent.click(screen.getAllByRole('gridcell')[8])
+    expect(screen.getByRole('dialog')).toHaveTextContent('Row 4 · city')
+    fireEvent.change(valueBox(), { target: { value: 'Vinh' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    expect(p.text()).toBe(people.replace('Cuong,100', 'Cuong,100,Vinh'))
+  })
+
+  it('adds a row below a cell, or at the end, and opens its first cell', () => {
+    const p = edit('a,b\n1,2\n3,4\n')
+    fireEvent.click(cellButton('1'))
+    fireEvent.click(screen.getByRole('button', { name: 'Add row below' }))
+    expect(p.text()).toBe('a,b\n1,2\n,\n3,4\n')
+    expect(screen.getByRole('dialog')).toHaveTextContent('Row 3 · a')
+    fireEvent.change(valueBox(), { target: { value: 'new' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    expect(p.text()).toBe('a,b\n1,2\nnew,\n3,4\n')
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Add a row at the end' }),
+    )
+    expect(p.text()).toBe('a,b\n1,2\nnew,\n3,4\n,\n')
+    expect(screen.getByRole('dialog')).toHaveTextContent('Row 5 · a')
+  })
+
+  it('deletes a row once confirmed, and says when it is the header', () => {
+    const p = edit('a,b\n1,2\n')
+    fireEvent.click(cellButton('1'))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete row' }))
+    expect(screen.getByRole('dialog')).toHaveTextContent('Delete row 2?')
+    expect(screen.getByRole('dialog')).toHaveTextContent(
+      'The row is removed from the file when you save it.',
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(p.onChange).not.toHaveBeenCalled()
+    fireEvent.click(cellButton('1'))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete row' }))
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: 'Delete row',
+      }),
+    )
+    expect(p.text()).toBe('a,b\n')
+
+    // The first row: the header unless Header row is off
+    fireEvent.click(screen.getByRole('button', { name: 'Header row' }))
+    fireEvent.click(cellButton('a'))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete row' }))
+    expect(screen.getByRole('dialog')).toHaveTextContent(
+      "This is the file's first row, its header when Header row is on",
+    )
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: 'Delete row',
+      }),
+    )
+    expect(p.text()).toBe('')
+  })
+
+  it('edits a cell from Records', () => {
+    const p = edit('a,b\n1,2\n')
+    fireEvent.click(screen.getByRole('button', { name: 'Records' }))
+    fireEvent.click(screen.getByRole('button', { name: '2' }))
+    fireEvent.change(valueBox(), { target: { value: '3' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    expect(p.text()).toBe('a,b\n1,3\n')
+  })
+
+  it('an empty file offers a first row', () => {
+    const p = edit('')
+    fireEvent.click(screen.getByRole('button', { name: 'Add a row' }))
+    expect(p.text()).toBe('""')
+    expect(screen.getByRole('dialog')).toHaveTextContent('Row 1 · Column 1')
+  })
+
+  it('keys: undo, redo and save on the table, never inside a field or a sheet', () => {
+    const p = edit('a\n1\n')
+    const grid = screen.getByRole('grid')
+    fireEvent.click(cellButton('1'))
+    fireEvent.change(valueBox(), { target: { value: '2' } })
+    // Typed in the sheet: its own undo and save, not the table's
+    press(valueBox(), 'z')
+    press(valueBox(), 's')
+    expect(p.onChange).not.toHaveBeenCalled()
+    expect(p.onSave).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    expect(p.text()).toBe('a\n2\n')
+    press(screen.getByRole('searchbox'), 'z')
+    expect(p.text()).toBe('a\n2\n')
+    press(grid, 'z', { ctrlKey: false })
+    press(grid, 'a')
+    expect(p.text()).toBe('a\n2\n')
+    press(grid, 'Z', { ctrlKey: false, metaKey: true })
+    expect(p.text()).toBe('a\n1\n')
+    press(grid, 'z', { shiftKey: true })
+    expect(p.text()).toBe('a\n2\n')
+    press(grid, 's')
+    expect(p.onSave).toHaveBeenCalledTimes(1)
+  })
+
+  it('Ctrl+S does nothing when there is nothing to save, or a save runs', () => {
+    const one = edit('a\n1\n', { canSave: false })
+    press(screen.getByRole('grid'), 's')
+    expect(one.onSave).not.toHaveBeenCalled()
+    one.unmount()
+    const two = edit('a\n1\n', { saving: true })
+    press(screen.getByRole('grid'), 's')
+    expect(two.onSave).not.toHaveBeenCalled()
+  })
+
+  it('while saving, nothing opens and nothing changes', () => {
+    const p = edit('a\n1\n', { saving: true })
+    fireEvent.click(cellButton('1'))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeDisabled()
+    expect(
+      screen.getByRole('button', { name: 'Add a row at the end' }),
+    ).toBeDisabled()
+    press(screen.getByRole('grid'), 'z')
+    press(screen.getByRole('grid'), 'z', { shiftKey: true })
+    expect(p.onChange).not.toHaveBeenCalled()
+  })
+
+  it('a save that starts with a sheet open takes nothing from it', () => {
+    const p = edit('a\n1\n')
+    fireEvent.click(cellButton('1'))
+    fireEvent.change(valueBox(), { target: { value: '2' } })
+    p.rerender(<Draft {...p} saving />)
+    fireEvent.click(screen.getByRole('button', { name: 'Add row below' }))
+    expect(valueBox()).toHaveValue('2')
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(p.onChange).not.toHaveBeenCalled()
+  })
+
+  it('an empty file being saved offers no row', () => {
+    edit('', { saving: true })
+    expect(screen.getByRole('button', { name: 'Add a row' })).toBeDisabled()
+  })
+
+  it('writes with the delimiter given, which cannot change meanwhile', () => {
+    const p = edit('a;b\n1;2\n', { delimiter: ';' })
+    const select = screen.getByRole('combobox', { name: 'Delimiter' })
+    expect(select).toHaveValue(';')
+    expect(select).toBeDisabled()
+    fireEvent.click(cellButton('2'))
+    fireEvent.change(valueBox(), { target: { value: 'x;y' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    expect(p.text()).toBe('a;b\n1;"x;y"\n')
+  })
+
+  it('keys do nothing to a table only viewed', () => {
+    const p = show(people)
+    press(screen.getByRole('grid'), 'z')
+    press(screen.getByRole('grid'), 's')
+    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull()
+    expect(p.onTableState).toHaveBeenCalledTimes(1)
+  })
+
+  it('a sheet open on a text another one replaced is closed', () => {
+    const p = show(people)
+    fireEvent.click(cellButton('30'))
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    p.rerender(
+      <ThemeProvider>
+        <TablePreview {...p} text={people.replace('30', '31')} />
+      </ThemeProvider>,
+    )
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+})
+
+describe('TablePreview editing a large file', () => {
+  const rows = Math.ceil(CSV_WORKER_MIN / 8) + 10
+  const big = `id,name\n${Array.from({ length: rows }, (_, i) => `${i},n${i}`).join('\n')}\n`
+
+  beforeEach(() => {
+    FakeWorker.all = []
+    FakeWorker.hold = false
+    vi.stubGlobal('Worker', FakeWorker)
+  })
+
+  it('keeps the last table on screen, locked, while an edit parses', async () => {
+    FakeWorker.hold = true
+    const p = edit(big)
+    expect(screen.getByText('Reading the table…')).toBeInTheDocument()
+    const w = FakeWorker.all[0]
+    await act(() => w.flush())
+    fireEvent.click(cellButton('n0'))
+    fireEvent.change(valueBox(), { target: { value: 'first' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    // The new text parses in the worker: the old table stays, busy
+    expect(screen.getByRole('grid')).toHaveAttribute('aria-busy', 'true')
+    expect(cellButton('n0')).toBeInTheDocument()
+    fireEvent.click(cellButton('n1'))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeDisabled()
+    press(screen.getByRole('grid'), 'z')
+    expect(p.onChange).toHaveBeenCalledTimes(1)
+    await act(() => w.flush())
+    expect(screen.getByRole('grid')).toHaveAttribute('aria-busy', 'false')
+    expect(cellButton('first')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    expect(p.text()).toBe(big)
+  }, 15000)
+
+  it('opens a row just added once its text is on screen', async () => {
+    FakeWorker.hold = true
+    const p = edit(big)
+    const w = FakeWorker.all[0]
+    await act(() => w.flush())
+    fireEvent.click(cellButton('n0'))
+    fireEvent.click(screen.getByRole('button', { name: 'Add row below' }))
+    expect(p.onChange).toHaveBeenCalledTimes(1)
+    // The old table has no such row yet: no sheet on it
+    expect(screen.queryByRole('dialog')).toBeNull()
+    await act(() => w.flush())
+    expect(screen.getByRole('dialog')).toHaveTextContent('Row 3 · id')
+    expect(valueBox()).toHaveValue('')
+  }, 15000)
 })
