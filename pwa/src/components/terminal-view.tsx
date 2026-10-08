@@ -98,10 +98,10 @@ interface Props {
 // used when no token is readable.
 export const THEMES = {
   light: {
-    background: '#fcfcfd',
+    background: '#f7f7f8',
     foreground: '#24292e',
     cursor: '#24292e',
-    cursorAccent: '#fcfcfd',
+    cursorAccent: '#f7f7f8',
     selectionBackground: 'rgba(3, 102, 214, 0.3)',
     selectionForeground: '#24292e',
     black: '#24292e',
