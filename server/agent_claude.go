@@ -34,6 +34,9 @@ const (
 	claudeMaxText    = 32 * 1024
 	claudeMaxResult  = 8 * 1024
 	claudeMaxSummary = 200
+	// A tool card's command, and all the old and new text of one edit call
+	claudeMaxCommand = 8 * 1024
+	claudeMaxEdits   = 16 * 1024
 )
 
 var claudeSessionIDRe = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
@@ -204,7 +207,7 @@ func parseClaudeRow(line []byte, off int64) (TranscriptEntry, bool) {
 					name = "tool"
 				}
 				in, _ := b["input"].(map[string]any)
-				e.Parts = append(e.Parts, TranscriptPart{Kind: "tool", Tool: name, ToolID: jsonStr(b["id"]), Input: summarizeToolInput(in)})
+				e.Parts = append(e.Parts, TranscriptPart{Kind: "tool", Tool: name, ToolID: jsonStr(b["id"]), Input: summarizeToolInput(in), Detail: claudeToolDetail(name, in)})
 			case "tool_result":
 				result, clipped := clampText(stripANSI(toolResultText(b["content"])), claudeMaxResult)
 				isErr, _ := b["is_error"].(bool)
@@ -342,6 +345,70 @@ func summarizeToolInput(in map[string]any) string {
 		}
 	}
 	return ""
+}
+
+// claudeToolDetail reads what a tool call's card shows: the description the
+// model gave it, a Bash command whole, and the text of Edit, MultiEdit and
+// Write. Edits of a file the Files view would not show without reveal are
+// left out, as its diff is.
+func claudeToolDetail(tool string, in map[string]any) *ToolDetail {
+	d := &ToolDetail{}
+	if s := jsonStr(in["description"]); strings.TrimSpace(s) != "" {
+		d.Description = oneLine(s)
+	}
+	if tool == "Bash" {
+		if s := strings.TrimSpace(jsonStr(in["command"])); s != "" {
+			d.Command, d.Clipped = clampText(stripANSI(s), claudeMaxCommand)
+		}
+	}
+	var edits []ToolEdit
+	switch tool {
+	case "Edit":
+		edits = []ToolEdit{{Old: jsonStr(in["old_string"]), New: jsonStr(in["new_string"])}}
+	case "MultiEdit":
+		list, _ := in["edits"].([]any)
+		for _, x := range list {
+			m, _ := x.(map[string]any)
+			edits = append(edits, ToolEdit{Old: jsonStr(m["old_string"]), New: jsonStr(m["new_string"])})
+		}
+	case "Write":
+		edits = []ToolEdit{{New: jsonStr(in["content"])}}
+	}
+	if len(edits) > 0 {
+		if p := jsonStr(in["file_path"]); p != "" && isSensitive(p) {
+			d.Hidden = true
+		} else {
+			var clipped bool
+			d.Edits, clipped = clampEdits(edits, claudeMaxEdits)
+			d.Clipped = d.Clipped || clipped
+		}
+	}
+	if d.Description == "" && d.Command == "" && len(d.Edits) == 0 && !d.Hidden {
+		return nil
+	}
+	return d
+}
+
+// clampEdits keeps edits while their text fits in limit bytes; the one that
+// crosses it is cut, the rest are dropped.
+func clampEdits(edits []ToolEdit, limit int) ([]ToolEdit, bool) {
+	out := make([]ToolEdit, 0, len(edits))
+	for _, e := range edits {
+		e.Old, e.New = stripANSI(e.Old), stripANSI(e.New)
+		if e.Old == "" && e.New == "" {
+			continue
+		}
+		var c1, c2 bool
+		e.Old, c1 = clampText(e.Old, limit)
+		limit -= len(e.Old)
+		e.New, c2 = clampText(e.New, limit)
+		limit -= len(e.New)
+		out = append(out, e)
+		if c1 || c2 {
+			return out, true
+		}
+	}
+	return out, false
 }
 
 func oneLine(s string) string {
