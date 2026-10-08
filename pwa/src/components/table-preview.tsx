@@ -111,8 +111,9 @@ export default function TablePreview({
   const [records, setRecords] = useState(false)
   // The cell opened, and the text it was opened on: another text closes it
   const [open, setOpen] = useState<{ row: number; col: number; text: string }>()
-  // The row a delete asks about
-  const [deleting, setDeleting] = useState<number>()
+  // The row a delete asks about, and the text it was asked on: another
+  // text (an edit made elsewhere) may have moved that row
+  const [deleting, setDeleting] = useState<{ row: number; text: string }>()
   const { parsed: current, client } = useCsvTable(text, delimiter)
   // While an edit of a large file parses, its last table stays on screen,
   // locked: no edit is made on the ranges of an older text
@@ -137,6 +138,7 @@ export default function TablePreview({
 
   useEffect(() => {
     setOpen((o) => (o && o.text !== text ? undefined : o))
+    setDeleting((d) => (d && d.text !== text ? undefined : d))
   }, [text])
 
   // While the worker sorts or filters, the last rows of this table stay
@@ -389,7 +391,7 @@ export default function TablePreview({
           onInsertBelow={() => addRow(cell.row)}
           onDelete={() => {
             setOpen(undefined)
-            setDeleting(cell.row)
+            setDeleting({ row: cell.row, text })
           }}
           onClose={() => setOpen(undefined)}
           notify={notify}
@@ -401,19 +403,19 @@ export default function TablePreview({
           notify={notify}
         />
       )}
-      {deleting !== undefined && (
+      {deleting?.text === text && (
         <ConfirmDialog
           isOpen
-          title={`Delete row ${deleting + 1}?`}
+          title={`Delete row ${deleting.row + 1}?`}
           confirmLabel="Delete row"
           destructive
           onConfirm={() => {
             setDeleting(undefined)
-            act({ kind: 'delete', row: deleting })
+            act({ kind: 'delete', row: deleting.row })
           }}
           onCancel={() => setDeleting(undefined)}
         >
-          {deleting === 0
+          {deleting.row === 0
             ? "This is the file's first row, its header when Header row is on: the next row takes its place."
             : 'The row is removed from the file when you save it.'}
         </ConfirmDialog>

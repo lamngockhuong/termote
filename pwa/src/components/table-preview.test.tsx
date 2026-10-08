@@ -594,12 +594,19 @@ function Draft(props: {
   onChange: (text: string, ops: TableOp[], redo: TableOp[]) => void
   onSave: () => void
   notify: () => void
+  // Text another view of the pane put in the draft
+  elsewhere?: string
 }) {
   const [d, setD] = useState({
     text: props.initial,
     ops: [] as TableOp[],
     redo: [] as TableOp[],
   })
+  const [seen, setSeen] = useState(props.elsewhere)
+  if (props.elsewhere !== seen) {
+    setSeen(props.elsewhere)
+    if (props.elsewhere !== undefined) setD({ ...d, text: props.elsewhere })
+  }
   const editing: TableEditing = {
     delimiter: props.delimiter ?? ',',
     ops: d.ops,
@@ -752,6 +759,17 @@ describe('TablePreview editing', () => {
       }),
     )
     expect(p.text()).toBe('')
+  })
+
+  it('a delete asked before another view changed the text is dropped', () => {
+    const p = edit('a\n1\n2\n')
+    fireEvent.click(cellButton('2'))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete row' }))
+    expect(screen.getByRole('dialog')).toHaveTextContent('Delete row 3?')
+    // A row added above moves row 3 onto another value
+    p.rerender(<Draft {...p} elsewhere={'a\n0\n1\n2\n'} />)
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(p.onChange).not.toHaveBeenCalled()
   })
 
   it('edits a cell from Records', () => {
