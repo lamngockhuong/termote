@@ -539,9 +539,16 @@ Run on tmux (Linux/macOS) and Herdr; psmux (Windows) offers neither view.
       `old → new`
 - [ ] Phone shows one line-number column, desktop two
 - [ ] A changed `.env` asks "Show this file?" before its diff
-- [ ] A change made in the terminal shows within 5 seconds; committing the open file shows "No
-      longer changed"
+- [ ] A change made in the terminal shows within 5 seconds; committing (or staging) the open
+      side closes its tab with "No changes left in <file>"; a tab being edited stays
 - [ ] Outside a git repo: "Not a git repository: <dir>"; a clean tree: "No changes"
+- [ ] Desktop: diffs open as tabs after a "Changes" tab: a click opens the preview tab, a double
+      click (list or tab) or Edit keeps it; the staged and unstaged side of one file are two tabs,
+      the staged one named "(staged)"
+- [ ] Edit in one tab, switch to another and back: the editor and its draft are still there;
+      switching tabs brings back the diff's scroll offset; closing the edited tab asks "Discard
+      changes?"
+- [ ] Phone: no tab bar; "Open files (N)" above the list and in the diff's bar opens the sheet
 
 ### Editing a File
 

@@ -66,7 +66,7 @@ React SPA with:
 - **Connection Indicator**: Real-time auto-detection of server status (connecting/connected/disconnected/error), clickable to retry
 - **Command History**: Search/recall previously sent commands (mobile-friendly delete buttons), persisted in localStorage
 - **Quick Actions**: A key in the mobile keyboard toolbar opens a sheet of preset commands (clear, cancel, clear line, exit)
-- **Files and Changes**: views of the pane's directory (`caps.files`), where a text file can also be edited and saved: a tree with a highlighted file viewer, and `git status` with per-file diffs. Files keeps each open file in a tab (`pwa/src/utils/file-tabs.ts`: a preview tab, pinned tabs, at most 10, the least recently used clean one closed past that), in memory only; only the tab shown has a viewer, the others keep their scroll offset, link trail and Show. A tab bar on desktop (`file-tab-bar.tsx`), a sheet of open files on mobile (`open-files-sheet.tsx`). A side panel next to the terminal on desktop (header toggles), views of the header's view menu on mobile. Shiki runs in a module worker (`pwa/src/utils/highlight-worker.ts`); the worker, its themes and grammars are built under `assets/shiki/`, left out of the precache and cached on first use
+- **Files and Changes**: views of the pane's directory (`caps.files`), where a text file can also be edited and saved: a tree with a highlighted file viewer, and `git status` with per-file diffs. Files keeps each open file in a tab (`pwa/src/utils/file-tabs.ts`: a preview tab, pinned tabs, at most 10, the least recently used clean one closed past that), in memory only; only the tab shown has a viewer, the others keep their scroll offset, link trail and Show. Changes keeps its diffs as tabs of its own with the same rules (`use-git-changes.ts`: one tab per side of a file, keyed `staged:orig:path`, holding its editor, Show and scroll; a side git status stops listing closes its tab unless it is being edited). A tab bar on desktop (`file-tab-bar.tsx`), a sheet of open files on mobile (`open-files-sheet.tsx`). A side panel next to the terminal on desktop (header toggles), views of the header's view menu on mobile. Shiki runs in a module worker (`pwa/src/utils/highlight-worker.ts`); the worker, its themes and grammars are built under `assets/shiki/`, left out of the precache and cached on first use
 - **Deep Links**: `#/s/<group>/<tab>[/<pane>][?view=]` selects a session (never sends input); the address bar follows the current session via `replaceState`
 - **Context Menu Control**: Block/unblock right-click on the terminal
 - **Font Controls**: Adjustable font size (6-24px)
@@ -801,8 +801,9 @@ old root can no longer be saved, only copied); Files and Changes share the draft
 Several files can have drafts at once; closing a tab with one asks first, a move of the root
 asks before closing the old root's tabs that have one, and leaving the page asks while any
 file has one; a 409 `changed` keeps it with Reload and Copy my text, and a
-timeout says the save may have gone through (saving again is safe). In Changes a save goes
-back to the unstaged diff, read again, and to the list once git status no longer lists it.
+timeout says the save may have gone through (saving again is safe). In Changes the editor
+lives in the diff's tab; a save goes back to the unstaged diff, read again (in the tab that side
+already has, else this one), and the tab closes once git status no longer lists it.
 
 New file (the Files header, over the tree only) asks for a path from the root in a sheet
 (`new-file-dialog.tsx`), prefilled with the directory the tree has focus in. A sensitive name

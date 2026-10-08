@@ -39,8 +39,8 @@ import { FileViewer } from './file-viewer'
 import { NewFileDialog } from './new-file-dialog'
 import { OpenFilesButton, OpenFilesSheet } from './open-files-sheet'
 import { PaneDirHeader, ViewMessage } from './pane-dir-header'
+import { DiscardTabDialog, RootCloseDialog } from './tab-close-dialogs'
 import { FOCUS_RING, IconButton } from './ui/button'
-import { ConfirmDialog } from './ui/confirm-dialog'
 import { Menu, MenuItem } from './ui/menu'
 
 const ERRORS: Record<FilesError, string> = {
@@ -369,33 +369,16 @@ function PaneFiles({
         />
       )}
       {closingTab && (
-        <ConfirmDialog
-          isOpen
-          title="Discard changes?"
-          confirmLabel="Discard"
-          destructive
+        <DiscardTabDialog
+          name={splitPath(closingTab.path)[1]}
           onConfirm={() => {
             setClosing(undefined)
             f.close(closingTab.id)
           }}
           onCancel={() => setClosing(undefined)}
-        >
-          Your changes to {splitPath(closingTab.path)[1]} will be lost.
-        </ConfirmDialog>
+        />
       )}
-      <ConfirmDialog
-        isOpen={moved > 0}
-        title={`Close ${moved === 1 ? 'a file' : `${moved} files`} with unsaved changes?`}
-        // Not "Close": the sheet's own close button has that name
-        confirmLabel="Discard and close"
-        cancelLabel="Keep"
-        destructive
-        onConfirm={() => f.resolveRootClose(true)}
-        onCancel={() => f.resolveRootClose(false)}
-      >
-        The pane's directory changed. Closing drops the changes; kept files can
-        no longer be saved, but their text can be copied.
-      </ConfirmDialog>
+      <RootCloseDialog count={moved} onResolve={f.resolveRootClose} />
       <div
         id={panelId}
         // A tab panel only below the tab bar

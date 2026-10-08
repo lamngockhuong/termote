@@ -632,6 +632,117 @@ test.describe('files and changes views', () => {
     })
   })
 
+  test.describe('Changes as tabs', () => {
+    const dir = () => path.join(repo, 'e2e-ctabs')
+    const lines = (name: string, n = 300) =>
+      Array.from({ length: n }, (_, i) => `${name} line ${i + 1}`).join('\n') + '\n'
+
+    // Two committed files changed in the working tree (every line of
+    // long.txt, so its diff is several screens long) and one.txt also
+    // staged, so it has both sides
+    test.beforeEach(() => {
+      mkdirSync(dir(), { recursive: true })
+      writeFileSync(path.join(dir(), 'long.txt'), lines('old'))
+      writeFileSync(path.join(dir(), 'one.txt'), 'one\n')
+      git(repo, 'add', 'e2e-ctabs')
+      git(repo, 'commit', '-q', '-m', 'tabs')
+      writeFileSync(path.join(dir(), 'long.txt'), lines('new'))
+      writeFileSync(path.join(dir(), 'one.txt'), 'one staged\n')
+      git(repo, 'add', 'e2e-ctabs/one.txt')
+      writeFileSync(path.join(dir(), 'one.txt'), 'one staged and more\n')
+      // The repo's window already current: the link's select and the first
+      // stream (opened for the window current at load) then agree, so no
+      // snapshot moves the page to another window while these tests run
+      tmux('select-window', '-t', windowId)
+    })
+    test.afterEach(() => {
+      git(repo, 'rm', '-rqf', 'e2e-ctabs')
+      git(repo, 'commit', '-q', '-m', 'tabs done')
+      rmSync(dir(), { recursive: true, force: true })
+    })
+
+    test('desktop: each side its own tab, keeping its editor, draft and scroll', async ({ page }) => {
+      await page.setViewportSize({ width: 1280, height: 800 })
+      await page.goto(`${link}?view=changes`)
+      const changes = page.getByRole('complementary', { name: 'Changes' })
+      const bar = changes.getByRole('tablist', { name: 'Open files' })
+      const list = (group: string, name: RegExp) =>
+        changes.getByRole('region', { name: group }).getByRole('button', { name })
+
+      // A single click opens the preview tab, a double click on it keeps it
+      await list('Changes', /long\.txt/).click()
+      const diff = changes.getByTestId('diff')
+      await expect(diff).toContainText('new line 300')
+      await expect(bar.getByRole('tab')).toHaveText(['Changes', 'long.txt (preview)'])
+      await bar.getByRole('tab', { name: /^long\.txt/ }).dblclick()
+      await diff.evaluate((el) => {
+        el.scrollTop = 2000
+      })
+      const left = await diff.evaluate((el) => el.scrollTop)
+      expect(left).toBeGreaterThan(1000)
+
+      // The staged and the unstaged side of one.txt are two tabs
+      await bar.getByRole('tab', { name: 'Changes' }).click()
+      await list('Staged', /one\.txt/).dblclick()
+      await expect(changes.getByText('Staged', { exact: true })).toBeVisible()
+      await bar.getByRole('tab', { name: 'Changes' }).click()
+      await list('Changes', /one\.txt/).dblclick()
+      await expect(bar.getByRole('tab')).toHaveText(['Changes', 'long.txt', 'one.txt (staged)', 'one.txt'])
+
+      // Edit in that tab, leave it, come back: the editor and its draft
+      await changes.getByRole('button', { name: 'Edit', exact: true }).click()
+      const box = changes.getByRole('textbox', { name: 'Text of e2e-ctabs/one.txt' })
+      await box.fill('draft of one\n')
+      await expect(bar.getByRole('tab', { name: 'one.txt (unsaved changes)' })).toBeVisible()
+      await bar.getByRole('tab', { name: 'long.txt', exact: true }).click()
+      await expect.poll(() => diff.evaluate((el, at) => Math.abs(el.scrollTop - at), left)).toBeLessThan(2)
+      await bar.getByRole('tab', { name: /^one\.txt \(unsaved/ }).click()
+      await expect(box).toHaveValue('draft of one\n')
+
+      // Closing it asks first; nothing is written
+      await changes.getByLabel('Close one.txt', { exact: true }).click()
+      await page.getByRole('dialog', { name: 'Discard changes?' }).getByRole('button', { name: 'Discard' }).click()
+      await expect(bar.getByRole('tab')).toHaveText(['Changes', 'long.txt', 'one.txt (staged)'])
+      expect(readFileSync(path.join(dir(), 'one.txt'), 'utf-8')).toBe('one staged and more\n')
+
+      // A side git no longer lists closes its tab
+      git(repo, 'add', 'e2e-ctabs/long.txt')
+      await expect(page.getByText('No changes left in long.txt')).toBeVisible({ timeout: 15000 })
+      await expect(bar.getByRole('tab')).toHaveText(['Changes', 'one.txt (staged)'])
+    })
+
+    test('mobile: a sheet of the open diffs instead of a tab bar', async ({ page }) => {
+      await page.setViewportSize({ width: 360, height: 800 })
+      await page.addInitScript(() =>
+        localStorage.setItem('termote-settings', JSON.stringify({ hasSeenGestureHints: true })),
+      )
+      await page.goto(`${link}?view=changes`)
+      const list = (group: string, name: RegExp) =>
+        page.getByRole('region', { name: group }).getByRole('button', { name })
+      await list('Changes', /long\.txt/).click()
+      await expect(page.getByTestId('diff')).toContainText('new line 1')
+      await expect(page.getByRole('tablist', { name: 'Open files' })).toHaveCount(0)
+      expect(await noPageScroll(page)).toBe(true)
+
+      // Keep it from the sheet, then open another side beside it
+      await page.getByRole('button', { name: 'Open files (1)' }).click()
+      const sheet = page.getByRole('dialog', { name: 'Open files' })
+      await sheet.getByRole('button', { name: 'Keep long.txt open' }).click()
+      await sheet.getByRole('button', { name: 'Changes' }).click()
+      await list('Staged', /one\.txt/).click()
+      await expect(page.getByTestId('diff')).toContainText('one staged')
+      await page.getByRole('button', { name: 'Open files (2)' }).click()
+      expect(await noPageScroll(page)).toBe(true)
+      await sheet.getByRole('button', { name: /^long\.txt/ }).click()
+      await expect(page.getByTestId('diff')).toContainText('new line 1')
+      await page.getByRole('button', { name: 'Open files (2)' }).click()
+      await sheet.getByRole('button', { name: 'Close one.txt (staged)' }).click()
+      await sheet.getByRole('button', { name: 'Changes' }).click()
+      await expect(page.getByRole('button', { name: 'Open files (1)' })).toBeVisible()
+      expect(await noPageScroll(page)).toBe(true)
+    })
+  })
+
   test.describe('a 1 MiB CSV', () => {
     test.setTimeout(60000)
 

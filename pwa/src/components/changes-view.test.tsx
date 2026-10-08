@@ -17,7 +17,11 @@ import {
   RequestError,
 } from '../hooks/use-mux-api'
 import { FILES_VIEW_ID } from '../view-ids'
-import { CHANGES_FILTER_MIN, ChangesView } from './changes-view'
+import {
+  CHANGES_FILTER_MIN,
+  ChangesView,
+  LIST_DOUBLE_CLICK_MS,
+} from './changes-view'
 
 const mockChanges = vi.fn()
 const mockDiff = vi.fn()
@@ -187,19 +191,24 @@ describe('ChangesView', () => {
     )
   })
 
-  it('an open diff whose file is no longer changed says so', async () => {
+  it('an open diff whose file is no longer changed closes its tab', async () => {
     vi.useFakeTimers()
     try {
-      const v = render(<ChangesView {...props()} />)
+      const p = props()
+      const v = render(<ChangesView {...p} />)
       await act(async () => {
         await vi.advanceTimersByTimeAsync(0)
       })
       fireEvent.click(within(group('Changes')).getAllByRole('button')[1])
-      mockChanges.mockResolvedValue(changes({ entries: [] }))
+      mockChanges.mockResolvedValue(
+        changes({ entries: ENTRIES.filter((e) => e.path !== 'gone.txt') }),
+      )
       await act(async () => {
         await vi.advanceTimersByTimeAsync(5000)
       })
-      expect(screen.getByText('No longer changed')).toBeInTheDocument()
+      expect(p.notify).toHaveBeenCalledWith('No changes left in gone.txt')
+      expect(screen.queryByRole('tab', { name: /gone\.txt/ })).toBeNull()
+      expect(group('Staged')).toBeInTheDocument()
       v.unmount()
     } finally {
       vi.useRealTimers()
@@ -296,6 +305,10 @@ describe('ChangesView', () => {
       .mockResolvedValue(changes({ root: '/n' }))
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
     await settle()
+    await settle()
+    // The tab of the old root closed: opened again, the file asks again
+    expect(screen.queryByRole('tab', { name: /\.env/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /\.env/ }))
     await settle()
     expect(mockDiff).toHaveBeenLastCalledWith(
       '%1',
@@ -574,7 +587,7 @@ describe('ChangesView editing', () => {
     expect(await screen.findByTestId('diff')).toBeInTheDocument()
   })
 
-  it('a Show ends when the diff is left for the list', async () => {
+  it('a Show lasts while its tab is open', async () => {
     mockChanges.mockResolvedValue(changes())
     mockDiff.mockImplementation(
       async (_p: string, _e: unknown, o: { reveal: boolean }) =>
@@ -592,7 +605,14 @@ describe('ChangesView editing', () => {
     fireEvent.click(screen.getByRole('button', { name: /\.env/ }))
     fireEvent.click(await screen.findByRole('button', { name: 'Show' }))
     expect(await screen.findByTestId('diff')).toBeInTheDocument()
+    // Back to the list and in again: still shown
     fireEvent.click(screen.getByRole('button', { name: 'Back to changes' }))
+    fireEvent.click(screen.getByRole('button', { name: /\.env/ }))
+    expect(await screen.findByTestId('diff')).toBeInTheDocument()
+    // Closed and opened again: asked again
+    fireEvent.keyDown(screen.getByRole('tab', { name: /\.env/ }), {
+      key: 'Delete',
+    })
     fireEvent.click(screen.getByRole('button', { name: /\.env/ }))
     expect(
       await screen.findByText(
@@ -667,5 +687,294 @@ describe('ChangesView filter', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
     await settle()
     expect(box()).toHaveValue('')
+  })
+})
+
+describe('ChangesView tabs', () => {
+  const TABS = [
+    c('a.ts', '', 'M'),
+    c('b.ts', '', 'M'),
+    c('src/both.ts', 'M', 'M'),
+  ]
+  beforeEach(() => {
+    mockChanges.mockResolvedValue(changes({ entries: TABS }))
+    mockDiff.mockImplementation(async (_p: string, e: { path: string }) =>
+      textDiff(e.path),
+    )
+    mockContent.mockImplementation(async (_p: string, path: string) => ({
+      root: '/r',
+      path,
+      size: 1,
+      text: 'a',
+      hash: 'h',
+      editable: true,
+    }))
+  })
+
+  const tabs = () => screen.getAllByRole('tab').map((t) => t.textContent)
+
+  it('a single click replaces the preview tab, a double click pins it', async () => {
+    await show()
+    await openDiff('Changes', 'a.ts')
+    expect(tabs()).toEqual(['Changes', 'a.ts (preview)'])
+    expect(screen.getByRole('tab', { name: /a\.ts/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    fireEvent.click(screen.getByRole('tab', { name: 'Changes' }))
+    await openDiff('Changes', 'b.ts')
+    expect(tabs()).toEqual(['Changes', 'b.ts (preview)'])
+    // The second click of a double click lands on the diff
+    fireEvent.doubleClick(screen.getByTestId('diff'))
+    expect(tabs()).toEqual(['Changes', 'b.ts'])
+    fireEvent.click(screen.getByRole('tab', { name: 'Changes' }))
+    await openDiff('Changes', 'a.ts')
+    expect(tabs()).toEqual(['Changes', 'b.ts', 'a.ts (preview)'])
+    // Too late for a double click: stays a preview
+    const now = Date.now()
+    const later = vi
+      .spyOn(Date, 'now')
+      .mockReturnValue(now + LIST_DOUBLE_CLICK_MS)
+    fireEvent.doubleClick(screen.getByTestId('diff'))
+    later.mockRestore()
+    expect(tabs()).toEqual(['Changes', 'b.ts', 'a.ts (preview)'])
+    // Double click on the tab pins it
+    fireEvent.doubleClick(screen.getByRole('tab', { name: /a\.ts/ }))
+    expect(tabs()).toEqual(['Changes', 'b.ts', 'a.ts'])
+  })
+
+  it('both sides of a file are two tabs, the staged one named so', async () => {
+    await show()
+    await openDiff('Staged', 'both.ts')
+    fireEvent.doubleClick(screen.getByRole('tab', { name: /both\.ts/ }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Changes' }))
+    await openDiff('Changes', 'both.ts')
+    expect(tabs()).toEqual(['Changes', 'both.ts (staged)', 'both.ts (preview)'])
+    expect(screen.getByRole('tab', { name: /staged/ })).toHaveAttribute(
+      'title',
+      'src/both.ts (Staged)',
+    )
+    expect(screen.getByText('Not staged')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('tab', { name: /staged/ }))
+    await act(async () => {})
+    expect(screen.getByText('Staged', { selector: 'span' })).toBeInTheDocument()
+  })
+
+  it('switching tabs keeps each editor and its draft', async () => {
+    await show()
+    await openDiff('Changes', 'a.ts')
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    fireEvent.change(
+      await screen.findByRole('textbox', { name: 'Text of a.ts' }),
+      { target: { value: 'changed' } },
+    )
+    // Editing pinned the tab: the next diff opens beside it
+    fireEvent.click(screen.getByRole('tab', { name: 'Changes' }))
+    await openDiff('Changes', 'b.ts')
+    expect(tabs()).toEqual([
+      'Changes',
+      'a.ts (unsaved changes)',
+      'b.ts (preview)',
+    ])
+    expect(
+      screen.getByRole('button', { name: 'Back to changes' }),
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('tab', { name: /a\.ts/ }))
+    expect(
+      await screen.findByRole('textbox', { name: 'Text of a.ts' }),
+    ).toHaveValue('changed')
+  })
+
+  it('closing a tab with unsaved changes asks first', async () => {
+    await show()
+    await openDiff('Changes', 'a.ts')
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    fireEvent.change(await screen.findByRole('textbox'), {
+      target: { value: 'changed' },
+    })
+    const tab = () => screen.queryByRole('tab', { name: /a\.ts/ })
+    fireEvent.keyDown(tab() as HTMLElement, { key: 'Delete' })
+    expect(screen.getByText('Your changes to a.ts will be lost.')).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(tab()).toBeInTheDocument()
+    fireEvent.keyDown(tab() as HTMLElement, { key: 'Delete' })
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
+    expect(tab()).toBeNull()
+    expect(group('Changes')).toBeInTheDocument()
+    // A clean one closes without asking
+    await openDiff('Changes', 'b.ts')
+    fireEvent.keyDown(screen.getByRole('tab', { name: /b\.ts/ }), {
+      key: 'Delete',
+    })
+    expect(screen.queryAllByRole('tab')).toEqual([])
+  })
+
+  it('closing one of two tabs editing a file asks nothing: the changes stay', async () => {
+    await show()
+    await openDiff('Staged', 'both.ts')
+    fireEvent.click(screen.getByRole('button', { name: 'Edit working copy' }))
+    fireEvent.change(
+      await screen.findByRole('textbox', { name: 'Text of src/both.ts' }),
+      { target: { value: 'changed' } },
+    )
+    fireEvent.click(screen.getByRole('tab', { name: 'Changes' }))
+    await openDiff('Changes', 'both.ts')
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    expect(
+      await screen.findByRole('textbox', { name: 'Text of src/both.ts' }),
+    ).toHaveValue('changed')
+    fireEvent.keyDown(screen.getByRole('tab', { name: /staged/ }), {
+      key: 'Delete',
+    })
+    expect(screen.queryByText(/will be lost/)).toBeNull()
+    expect(screen.getAllByRole('tab')).toHaveLength(2)
+    expect(screen.getByRole('textbox')).toHaveValue('changed')
+  })
+
+  it('not showing a sensitive file closes its tab', async () => {
+    mockChanges.mockResolvedValue(changes())
+    mockDiff.mockResolvedValue({
+      root: '/r',
+      path: '.env',
+      truncated: false,
+      sensitive: true,
+      hunks: null,
+    })
+    await show()
+    fireEvent.click(screen.getByRole('button', { name: /\.env/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }))
+    expect(screen.queryAllByRole('tab')).toEqual([])
+  })
+
+  it('several tabs closing at once are told in one notice', async () => {
+    vi.useFakeTimers()
+    try {
+      const p = props()
+      const v = render(<ChangesView {...p} />)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0)
+      })
+      await openDiff('Changes', 'a.ts')
+      fireEvent.doubleClick(screen.getByRole('tab', { name: /a\.ts/ }))
+      fireEvent.click(screen.getByRole('tab', { name: 'Changes' }))
+      await openDiff('Changes', 'b.ts')
+      mockChanges.mockResolvedValue(changes({ entries: [TABS[2]] }))
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5000)
+      })
+      expect(p.notify).toHaveBeenCalledWith('No changes left in 2 files')
+      expect(screen.queryAllByRole('tab')).toEqual([])
+      v.unmount()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('a moved root asks about editors with unsaved changes', async () => {
+    await show()
+    await openDiff('Changes', 'a.ts')
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    fireEvent.change(await screen.findByRole('textbox'), {
+      target: { value: 'changed' },
+    })
+    mockChanges
+      .mockRejectedValueOnce(
+        new RequestError(409, '', 'root changed', undefined, undefined, '/n'),
+      )
+      .mockResolvedValue(changes({ root: '/n', entries: TABS }))
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+    await settle()
+    expect(screen.getByText('Close a file with unsaved changes?')).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: 'Discard and close' }))
+    expect(screen.queryAllByRole('tab')).toEqual([])
+  })
+
+  it('a phone lists the open diffs in a sheet instead of a tab bar', async () => {
+    await show({ isMobile: true })
+    await openDiff('Changes', 'a.ts')
+    expect(screen.queryByRole('tablist')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Back to changes' }))
+    // The list's header counts them too
+    fireEvent.click(screen.getByRole('button', { name: 'Open files (1)' }))
+    const sheet = screen.getByRole('dialog', { name: 'Open files' })
+    fireEvent.click(within(sheet).getByRole('button', { name: /^a\.ts/ }))
+    await act(async () => {})
+    expect(
+      screen.getByRole('button', { name: 'Back to changes' }),
+    ).toBeInTheDocument()
+    // From the diff's header: Keep open, then close
+    fireEvent.click(screen.getByRole('button', { name: 'Open files (1)' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Keep a.ts open' }))
+    expect(screen.queryByRole('button', { name: 'Keep a.ts open' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Close a.ts' }))
+    expect(group('Changes')).toBeInTheDocument()
+  })
+
+  it('a tab shown again starts its diff where it was scrolled to', async () => {
+    await show()
+    await openDiff('Changes', 'a.ts')
+    fireEvent.doubleClick(screen.getByRole('tab', { name: /a\.ts/ }))
+    const frame = await screen.findByTestId('diff')
+    frame.scrollTop = 80
+    fireEvent.scroll(frame)
+    fireEvent.click(screen.getByRole('tab', { name: 'Changes' }))
+    await openDiff('Changes', 'b.ts')
+    fireEvent.click(screen.getByRole('tab', { name: /a\.ts/ }))
+    expect((await screen.findByTestId('diff')).scrollTop).toBe(80)
+  })
+})
+
+describe('ChangesView tab editor', () => {
+  beforeEach(() => {
+    mockChanges.mockResolvedValue(
+      changes({ entries: [c('a.ts', '', 'M'), c('b.ts', '', 'M')] }),
+    )
+    mockDiff.mockImplementation(async (_p: string, e: { path: string }) =>
+      textDiff(e.path),
+    )
+  })
+
+  it('a tab shown again starts its editor where it was scrolled to', async () => {
+    mockContent.mockResolvedValue({
+      root: '/r',
+      path: 'a.ts',
+      size: 1,
+      text: 'a',
+      hash: 'h',
+      editable: true,
+    })
+    await show()
+    await openDiff('Changes', 'a.ts')
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    const box = await screen.findByRole('textbox', { name: 'Text of a.ts' })
+    box.scrollTop = 70
+    fireEvent.scroll(box)
+    fireEvent.click(screen.getByRole('tab', { name: 'Changes' }))
+    await openDiff('Changes', 'b.ts')
+    fireEvent.click(screen.getByRole('tab', { name: /a\.ts/ }))
+    expect(
+      (await screen.findByRole('textbox', { name: 'Text of a.ts' })).scrollTop,
+    ).toBe(70)
+  })
+
+  it('a file the server finds sensitive is shown in the editor once asked', async () => {
+    mockContent.mockImplementation(
+      async (_p: string, path: string, o: { reveal: boolean }) =>
+        o.reveal
+          ? { root: '/r', path, size: 1, text: 'a', hash: 'h', editable: true }
+          : { root: '/r', path, size: 1, sensitive: true },
+    )
+    await show()
+    await openDiff('Changes', 'a.ts')
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Show' }))
+    expect(
+      await screen.findByRole('textbox', { name: 'Text of a.ts' }),
+    ).toHaveValue('a')
+    // Kept by the tab: Back to the diff and in again asks no more
+    fireEvent.click(screen.getByRole('button', { name: 'Back to the diff' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }))
+    expect(await screen.findByRole('textbox')).toHaveValue('a')
+    expect(screen.queryByRole('button', { name: 'Show' })).toBeNull()
   })
 })

@@ -428,10 +428,23 @@ thêm nền xanh, dòng xoá nền đỏ, vẫn giữ dấu `+` và `-` để kh
 | `Binary file changed`             | git báo thay đổi nhị phân; không có dòng nào để hiện                         |
 | `Diff truncated at 1 MiB`         | Diff của file này dài hơn 1 MiB; chỉ hiện phần đầu                          |
 | `Unresolved conflict`             | File đang xung đột được hiện nguyên, đúng như hiện có trong thư mục làm việc |
-| `No longer changed`               | File đã được commit, hoàn lại hoặc xoá sau khi bạn mở                        |
+| `No longer changed`               | Trong lúc diff đang được đọc, git không còn liệt kê phía này của file        |
 | `git took too long; trying again` | `git status` chạy quá 10 giây (repo rất lớn); view giãn dần các lần đọc lại  |
 
 Repo con (`submodule`) không được liệt kê, nội dung bên trong cũng không được so sánh.
+
+Diff cũng mở theo tab giống file trong Files (xem
+[Mở nhiều file theo tab](#mở-nhiều-file-theo-tab)), nhưng Changes có dãy tab riêng:
+
+- Mỗi phía của một file là một tab: diff đã vào index và diff chưa vào index của cùng một file là
+  hai tab, tab phía index có thêm chữ `(staged)`. Tab đầu tiên, **Changes**, hiện danh sách.
+- Bấm một lần là mở ở tab xem trước; bấm đúp (trên danh sách hoặc trên tab) hay bấm **Edit** thì
+  tab được giữ lại. **Edit** mở trình sửa ngay trong tab đó, chuyển sang tab khác rồi quay lại thì
+  trình sửa vẫn còn, kèm phần sửa chưa lưu. Back từ diff về danh sách, tab vẫn mở.
+- Khi git không còn liệt kê một phía (đã commit, đã đưa vào index, đã hoàn lại), tab của phía đó
+  đóng lại và app báo `No changes left in <file>`. Tab đang sửa thì vẫn ở lại.
+- Đóng tab, giới hạn 10 tab, danh sách trên điện thoại, gốc đổi và file có thể chứa bí mật đều như
+  trong Files.
 
 Khi danh sách có hơn 15 mục, một ô **Filter changes…** hiện phía trên nó. Ô này giữ lại những file
 có đường dẫn chứa chuỗi bạn gõ, không phân biệt hoa thường (với file đổi tên, đường dẫn cũ cũng

@@ -6,7 +6,15 @@ import {
   Pencil,
   WrapText,
 } from 'lucide-react'
-import { Fragment, useCallback, useEffect, useState } from 'react'
+import {
+  Fragment,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react'
 import { type FilesError, filesError } from '../hooks/use-files'
 import {
   type ChangeEntry,
@@ -77,6 +85,14 @@ interface Props {
   onReveal?: () => void
   // Edits the working tree's file; absent for a view-only client
   onEdit?: () => void
+  // Not showing the sensitive file after all (Back when not given)
+  onCancelReveal?: () => void
+  // Where the diff starts scrolled to (its tab shown again), and where it
+  // was scrolled to (its tab keeps it)
+  scrollTop?: number
+  onScroll?: (top: number) => void
+  // More buttons at the end of the header
+  headerExtra?: ReactNode
 }
 
 // The unified diff of one changed file, one side (staged or not), with
@@ -97,6 +113,10 @@ export function DiffViewer({
   reveal: revealProp,
   onReveal,
   onEdit,
+  onCancelReveal,
+  scrollTop,
+  onScroll,
+  headerExtra,
 }: Props) {
   const [state, setState] = useState<Loaded>({ kind: 'loading' })
   const [ownReveal, setOwnReveal] = useState(false)
@@ -108,6 +128,8 @@ export function DiffViewer({
   const [wrap, setWrap] = useState(isMobile)
   // The working tree's version of a changed Markdown file, rendered
   const [preview, setPreview] = useState(false)
+  // Where the diff is scrolled to: the diff read again starts there
+  const scrolled = useRef(scrollTop)
   // What of the entry the diff depends on
   const version =
     entry && `${entry.staged}${entry.unstaged}${entry.conflict ?? ''}`
@@ -194,7 +216,16 @@ export function DiffViewer({
     !shown.diff.reason
   const editLabel = staged ? 'Edit working copy' : 'Edit'
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div
+      className="flex min-h-0 flex-1 flex-col"
+      // Only the diff is kept where it was scrolled to, not the preview
+      onScrollCapture={(e) => {
+        const el = e.target as HTMLElement
+        if (previewing || el.dataset?.scrollRestore === undefined) return
+        scrolled.current = el.scrollTop
+        onScroll?.(el.scrollTop)
+      }}
+    >
       <div className="sticky top-0 z-10 flex shrink-0 items-center gap-1 border-b border-border bg-surface px-1 py-1 ui-terminal:bg-bg">
         <IconButton
           size="sm"
@@ -261,6 +292,7 @@ export function DiffViewer({
             <WrapText size={15} aria-hidden="true" />
           </IconButton>
         )}
+        {headerExtra}
       </div>
       {shown.kind === 'loading' && !previewing && (
         <ViewMessage>Loading…</ViewMessage>
@@ -300,12 +332,17 @@ export function DiffViewer({
         />
       )}
       {shown.kind === 'diff' && !previewing && (
-        <DiffBody diff={shown.diff} wrap={wrap} oneColumn={isMobile} />
+        <DiffBody
+          diff={shown.diff}
+          wrap={wrap}
+          oneColumn={isMobile}
+          scrollTop={scrolled.current}
+        />
       )}
       <SensitiveConfirm
         isOpen={shown.kind === 'sensitive'}
         onConfirm={setReveal}
-        onCancel={onClose}
+        onCancel={onCancelReveal ?? onClose}
       />
     </div>
   )
@@ -391,12 +428,20 @@ function DiffBody({
   diff,
   wrap,
   oneColumn,
+  scrollTop,
 }: {
   diff: FileDiff
   wrap: boolean
   oneColumn: boolean
+  // Where it starts scrolled to
+  scrollTop?: number
 }) {
   const hunks = diff.hunks ?? []
+  const frame = useRef<HTMLDivElement>(null)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only where it opens
+  useLayoutEffect(() => {
+    if (scrollTop && frame.current) frame.current.scrollTop = scrollTop
+  }, [])
   return (
     <>
       {diff.conflict && (
@@ -416,7 +461,12 @@ function DiffBody({
       ) : hunks.length === 0 ? (
         <ViewMessage>No content changes</ViewMessage>
       ) : (
-        <div className={CODE_FRAME} data-testid="diff">
+        <div
+          ref={frame}
+          className={CODE_FRAME}
+          data-testid="diff"
+          data-scroll-restore
+        >
           <div className={wrap ? '' : 'w-max min-w-full'}>
             {hunks.map((h, i) => (
               // biome-ignore lint/suspicious/noArrayIndexKey: hunks of one diff never move
