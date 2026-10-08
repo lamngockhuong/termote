@@ -3,6 +3,7 @@ import type { TableOp } from '../utils/csv-edits'
 import type { Delimiter } from '../utils/csv-parse'
 import { closeTab, openTab, pinTab, type TabBase } from '../utils/file-tabs'
 import type { LinkPath } from '../utils/markdown-links'
+import type { TableLayout } from '../utils/table-columns'
 import {
   type FileEntry,
   type FilesTree,
@@ -48,6 +49,9 @@ export interface FileTab extends TabBase {
   // Where the file starts: a heading, or the offset it was left at
   anchor?: string
   scrollTop?: number
+  // A CSV/TSV table's column widths and wrapped columns, with the scroll
+  // offset they were left at; another path starts over
+  table?: TableLayout
   // Files of this tab left by following a link, the latest last: Back
   // returns to them
   history: { path: string; scrollTop: number }[]
@@ -150,6 +154,8 @@ interface Store {
   // Where tab id is scrolled to: kept for when it shows again, without
   // telling readers (no render per scroll event)
   setScroll: (id: string, top: number) => void
+  // Tab id's table layout: kept like its scroll offset
+  setTableLayout: (id: string, layout: TableLayout) => void
   // The user chose to show tab id's sensitive file
   setReveal: (id: string) => void
   // The user chose for the tabs in pendingRootClose: close them (and drop
@@ -385,6 +391,7 @@ function createStore(paneId: string): Store {
       path: target.path,
       anchor: target.anchor,
       scrollTop: undefined,
+      table: undefined,
       reveal: false,
       intent: undefined,
       history:
@@ -522,6 +529,7 @@ function createStore(paneId: string): Store {
         path: prev.path,
         anchor: undefined,
         scrollTop: prev.scrollTop,
+        table: undefined,
         reveal: false,
         intent: undefined,
         history: tab.history.slice(0, -1),
@@ -533,6 +541,10 @@ function createStore(paneId: string): Store {
       tab.scrollTop = top
       // Scrolled away from the heading it opened at: shown again here
       tab.anchor = undefined
+    },
+    setTableLayout(id, layout) {
+      const tab = state.tabs.find((t) => t.id === id)
+      if (tab) tab.table = layout
     },
     setReveal: (id) => patchTab(id, { reveal: true }),
     resolveRootClose(closing) {
@@ -585,6 +597,10 @@ export function useFiles(paneId: string) {
     back: useCallback(() => store.back(), [store]),
     setScroll: useCallback(
       (id: string, top: number) => store.setScroll(id, top),
+      [store],
+    ),
+    setTableLayout: useCallback(
+      (id: string, layout: TableLayout) => store.setTableLayout(id, layout),
       [store],
     ),
     setReveal: useCallback((id: string) => store.setReveal(id), [store]),

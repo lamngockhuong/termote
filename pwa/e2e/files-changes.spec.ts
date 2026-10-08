@@ -361,6 +361,9 @@ test.describe('files and changes views', () => {
         JSON.stringify({ hasSeenGestureHints: true, tablePreview: true }),
       ),
     )
+    // The app follows the window tmux has active: the test's window was
+    // made with -d, and a test longer than a snapshot poll would lose it
+    tmux('select-window', '-t', windowId)
     await page.goto(`${link}?view=files`)
     await page.getByRole('treeitem', { name: 'csv' }).click()
     await page.getByRole('treeitem', { name }).click()
@@ -499,6 +502,205 @@ test.describe('files and changes views', () => {
     } finally {
       rmSync(csvDir(), { recursive: true, force: true })
     }
+  })
+
+  test.describe('table columns, wraps and row numbers', () => {
+    // A long note in row 1, a three-line one in row 2, then short rows
+    const notes = (rows: number) =>
+      `id,note\n1,${'long note '.repeat(8).trim()}\n2,"one\ntwo\nthree\nfour"\n${Array.from(
+        { length: rows },
+        (_, i) => `${i + 3},n${i}`,
+      ).join('\n')}\n`
+    const widthOf = (header: Locator) => header.evaluate((el) => el.getBoundingClientRect().width)
+
+    test('a drag widens one column and never sorts; keys step and fit it', async ({ page }) => {
+      try {
+        mkdirSync(csvDir(), { recursive: true })
+        writeFileSync(path.join(csvDir(), 'notes.csv'), notes(5))
+        await openCsv(page, 'notes.csv')
+        const panel = page.getByRole('complementary', { name: 'Files' })
+        const grid = panel.getByRole('grid')
+        await expect(grid).toHaveAttribute('aria-busy', 'false')
+        const id = grid.getByRole('columnheader', { name: 'id', exact: true })
+        const note = grid.getByRole('columnheader', { name: 'note', exact: true })
+        const idWidth = await widthOf(id)
+        const noteWidth = await widthOf(note)
+        const handle = grid.getByRole('separator', { name: 'Resize column note' })
+        const box = (await handle.boundingBox()) as { x: number; y: number; width: number; height: number }
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+        await page.mouse.down()
+        await page.mouse.move(box.x + 100, box.y + box.height / 2, { steps: 5 })
+        await page.mouse.move(box.x + 200, box.y + box.height / 2, { steps: 5 })
+        await page.mouse.up()
+        await expect.poll(() => widthOf(note)).toBeGreaterThan(noteWidth + 150)
+        expect(await widthOf(id)).toBe(idWidth)
+        // The release over the header was no click on its sort button
+        for (const h of [id, note]) await expect(h).toHaveAttribute('aria-sort', 'none')
+
+        // Keys: a step of 2ch, then Enter fits the values (at most 120ch)
+        await handle.focus()
+        const now = Number(await handle.getAttribute('aria-valuenow'))
+        for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowRight')
+        await expect(handle).toHaveAttribute('aria-valuenow', String(Math.min(120, now + 6)))
+        await page.keyboard.press('Enter')
+        await expect(handle).toHaveAttribute('aria-valuenow', String('long note '.repeat(8).trim().length))
+
+        // Columns menu: Fit columns, then Reset widths; a drag closes it
+        await panel.getByRole('button', { name: 'Columns' }).click()
+        await page.getByRole('menuitem', { name: 'Reset widths' }).click()
+        await expect(handle).toHaveAttribute('aria-valuenow', '32')
+        await panel.getByRole('button', { name: 'Columns' }).click()
+        await page.getByRole('menuitem', { name: 'Fit columns' }).click()
+        await expect(handle).toHaveAttribute('aria-valuenow', '79')
+        await panel.getByRole('button', { name: 'Columns' }).click()
+        await expect(page.getByRole('menu')).toBeVisible()
+        const idHandle = await grid.getByRole('separator', { name: 'Resize column id' }).boundingBox()
+        if (!idHandle) throw new Error('no handle')
+        await page.mouse.move(idHandle.x + idHandle.width / 2, idHandle.y + 5)
+        await page.mouse.down()
+        await page.mouse.move(idHandle.x + 40, idHandle.y + 5, { steps: 3 })
+        await page.mouse.up()
+        await expect(page.getByRole('menu')).toHaveCount(0)
+      } finally {
+        rmSync(csvDir(), { recursive: true, force: true })
+      }
+    })
+
+    test('a wrapped column shows three lines in taller rows, paging still exact', async ({ page }) => {
+      try {
+        mkdirSync(csvDir(), { recursive: true })
+        writeFileSync(path.join(csvDir(), 'wrap.csv'), notes(3000))
+        await openCsv(page, 'wrap.csv')
+        const panel = page.getByRole('complementary', { name: 'Files' })
+        const grid = panel.getByRole('grid')
+        await expect(grid).toHaveAttribute('aria-busy', 'false')
+        const row = (n: number) => grid.getByRole('row').filter({ has: page.getByRole('rowheader', { name: `Row ${n}`, exact: true }) })
+        const height = (n: number) => row(n).evaluate((el) => el.getBoundingClientRect().height)
+        expect(await height(2)).toBe(32)
+        await panel.getByRole('button', { name: 'Columns' }).click()
+        await page.getByRole('menuitemcheckbox', { name: '2 · note' }).click()
+        await page.keyboard.press('Escape')
+        expect(await height(2)).toBe(61)
+        const cell = row(3).getByRole('gridcell').nth(1)
+        await expect(cell).toContainText('one↵')
+        // Four lines are clipped to the row, never drawn over the next one
+        expect(await cell.evaluate((el) => el.getBoundingClientRect().height)).toBeLessThanOrEqual(61)
+        // Paging to the last row
+        await grid.getByRole('gridcell', { name: '1', exact: true }).focus()
+        for (let i = 0; i < 400; i++) await page.keyboard.press('PageDown')
+        await expect(page.locator(':focus')).toHaveAttribute('data-pos', '3001')
+        await expect(grid.getByRole('rowheader', { name: 'Row 3003' })).toBeInViewport()
+        // The whole value is in the sheet
+        await page.keyboard.press('PageUp')
+        await grid.evaluate((el) => {
+          el.scrollTop = 0
+        })
+        await row(3).getByRole('gridcell').nth(1).click()
+        await expect(page.getByRole('dialog').locator('pre')).toHaveText('one\ntwo\nthree\nfour')
+        await page.keyboard.press('Escape')
+        await expect(page.getByRole('dialog')).toHaveCount(0)
+        await panel.getByRole('button', { name: 'Columns' }).click()
+        await page.getByRole('menuitemcheckbox', { name: '2 · note' }).click()
+        await page.keyboard.press('Escape')
+        expect(await height(2)).toBe(32)
+      } finally {
+        rmSync(csvDir(), { recursive: true, force: true })
+      }
+    })
+
+    test('a row number opens its record; back on the grid, it is where it was', async ({ page }) => {
+      try {
+        mkdirSync(csvDir(), { recursive: true })
+        writeFileSync(path.join(csvDir(), 'rec.csv'), notes(400))
+        await openCsv(page, 'rec.csv')
+        const panel = page.getByRole('complementary', { name: 'Files' })
+        const grid = panel.getByRole('grid')
+        await expect(grid).toHaveAttribute('aria-busy', 'false')
+        await panel.getByRole('button', { name: 'Open row 3 as a record' }).click()
+        await expect(panel.getByText('Record 2 / 402 · row 3')).toBeVisible()
+        await panel.getByRole('button', { name: 'Records', exact: true }).click()
+        await grid.evaluate((el) => {
+          el.scrollTop = 32 * 200
+        })
+        await expect(grid.getByRole('rowheader', { name: 'Row 205' })).toBeVisible()
+        const top = await grid.evaluate((el) => el.scrollTop)
+        await panel.getByRole('button', { name: 'Open row 205 as a record' }).click()
+        await expect(panel.getByText('Record 204 / 402 · row 205')).toBeVisible()
+        await panel.getByRole('button', { name: 'Records', exact: true }).click()
+        await expect(grid).toBeVisible()
+        expect(await grid.evaluate((el) => el.scrollTop)).toBe(top)
+      } finally {
+        rmSync(csvDir(), { recursive: true, force: true })
+      }
+    })
+
+    test('a tab shown again keeps its widths, wraps and first row', async ({ page }) => {
+      try {
+        mkdirSync(csvDir(), { recursive: true })
+        writeFileSync(path.join(csvDir(), 'one.csv'), notes(1000))
+        writeFileSync(path.join(csvDir(), 'two.csv'), 'a,b\n1,2\n')
+        await openCsv(page, 'one.csv')
+        const panel = page.getByRole('complementary', { name: 'Files' })
+        const bar = panel.getByRole('tablist', { name: 'Open files' })
+        const grid = panel.getByRole('grid')
+        await expect(grid).toHaveAttribute('aria-busy', 'false')
+        await bar.getByRole('tab', { name: /^one\.csv/ }).dblclick()
+        const handle = grid.getByRole('separator', { name: 'Resize column note' })
+        await handle.focus()
+        await page.keyboard.press('End')
+        await panel.getByRole('button', { name: 'Columns' }).click()
+        await page.getByRole('menuitemcheckbox', { name: '2 · note' }).click()
+        await page.keyboard.press('Escape')
+        await grid.evaluate((el) => {
+          el.scrollTop = 61 * 500
+        })
+        await expect(grid.getByRole('rowheader', { name: 'Row 502' })).toBeVisible()
+        await bar.getByRole('tab', { name: 'Files' }).click()
+        await panel.getByRole('treeitem', { name: 'two.csv' }).click()
+        await expect(panel.getByRole('grid').getByRole('columnheader', { name: 'a', exact: true })).toBeVisible()
+        await bar.getByRole('tab', { name: 'one.csv', exact: true }).click()
+        await expect(handle).toHaveAttribute('aria-valuenow', '120')
+        const again = panel.getByRole('grid')
+        await expect(again.getByRole('rowheader', { name: 'Row 502' })).toBeInViewport()
+        expect(await again.evaluate((el) => el.scrollTop)).toBe(61 * 500)
+        const first = again.getByRole('row').nth(1)
+        expect(await first.evaluate((el) => el.getBoundingClientRect().height)).toBe(61)
+      } finally {
+        rmSync(csvDir(), { recursive: true, force: true })
+      }
+    })
+
+    test.describe('on a phone', () => {
+      test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+
+      test('a double tap on a handle fits its column, the page never scrolling', async ({ page }) => {
+        try {
+          mkdirSync(csvDir(), { recursive: true })
+          writeFileSync(path.join(csvDir(), 'tap.csv'), notes(5))
+          await openCsv(page, 'tap.csv', 390)
+          const grid = page.getByRole('grid')
+          await expect(grid).toHaveAttribute('aria-busy', 'false')
+          expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(true)
+          const handle = grid.getByRole('separator', { name: 'Resize column note' })
+          await expect(handle).toHaveAttribute('aria-valuenow', '32')
+          const box = (await handle.boundingBox()) as { x: number; y: number; width: number; height: number }
+          const x = box.x + box.width / 2
+          const y = box.y + box.height / 2
+          await page.touchscreen.tap(x, y)
+          await page.touchscreen.tap(x, y)
+          await expect(handle).toHaveAttribute('aria-valuenow', '79')
+          // The column grew under the finger: its click sorts nothing
+          await expect(grid.getByRole('columnheader', { name: 'note', exact: true })).toHaveAttribute('aria-sort', 'none')
+          expect(await noPageScroll(page)).toBe(true)
+          // A tap on a row number opens its record
+          await page.getByRole('button', { name: 'Open row 4 as a record' }).tap()
+          await expect(page.getByText('Record 3 / 7 · row 4')).toBeVisible()
+          expect(await noPageScroll(page)).toBe(true)
+        } finally {
+          rmSync(csvDir(), { recursive: true, force: true })
+        }
+      })
+    })
   })
 
   test.describe('open files as tabs', () => {

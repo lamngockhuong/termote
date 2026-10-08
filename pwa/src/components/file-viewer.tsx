@@ -47,6 +47,7 @@ import { formatSize, keepOrder, TRUNCATE_START } from '../utils/files-format'
 import { HIGHLIGHT_MAX_BYTES } from '../utils/highlight'
 import { isImagePath, isSvgPath } from '../utils/image-path'
 import { isMarkdownPath, type LinkPath } from '../utils/markdown-links'
+import type { TableLayout } from '../utils/table-columns'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { CodeBlock } from './code-block'
 import {
@@ -235,6 +236,10 @@ interface Props {
   // Where a Markdown preview starts: a heading, else an offset to restore
   anchor?: string
   scrollTop?: number
+  // A CSV/TSV table's widths and wrapped columns this tab kept, and where
+  // to keep them when they change
+  tableLayout?: TableLayout
+  onTableLayout?: (layout: TableLayout) => void
   // The file a link was followed from, which Back returns to
   backTo?: string
   // What Back is called instead (the Changes view's diff)
@@ -303,6 +308,8 @@ export function FileViewer({
   wrapByDefault,
   anchor,
   scrollTop,
+  tableLayout,
+  onTableLayout,
   backTo,
   backLabel,
   onClose,
@@ -332,6 +339,9 @@ export function FileViewer({
   // Where the text is scrolled to: the next view of it (source, editor)
   // starts there
   const scrolled = useRef(scrollTop)
+  // Likewise the table's widths and wraps: a table made again here (Source
+  // and back, a reload) starts with the last ones
+  const tableKept = useRef(tableLayout)
   // A table edit asked with another delimiter than the file's own
   const [asking, setAsking] = useState<{
     file: TextLoaded
@@ -819,6 +829,11 @@ export function FileViewer({
           notify={notify}
           onTableState={setTableState}
           scrollTop={scrolled.current}
+          layout={tableKept.current}
+          onLayout={(l) => {
+            tableKept.current = l
+            onTableLayout?.(l)
+          }}
           editing={
             cells && {
               delimiter: cells.delimiter,

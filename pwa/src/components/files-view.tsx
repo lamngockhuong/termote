@@ -400,6 +400,8 @@ function PaneFiles({
             compact={isMobile}
             anchor={tab.anchor}
             scrollTop={tab.scrollTop}
+            tableLayout={tab.table}
+            onTableLayout={(l) => f.setTableLayout(tab.id, l)}
             backTo={tab.history[tab.history.length - 1]?.path}
             onClose={f.back}
             onFollow={onFollow}

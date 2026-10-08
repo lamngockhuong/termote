@@ -318,15 +318,28 @@ text.
   `1.25`). Empty cells go last, and the header row is never sorted.
 - **Filter rows** keeps the rows where any cell contains what you typed, ignoring case, and
   shows how many are left (`12 / 340 rows`).
+- **Column widths**: drag the line at the right edge of a column name, with a mouse or a finger,
+  to make that column wider or narrower; a drag never sorts. Double-click or double-tap the line
+  to fit the column to its values. From the keyboard, Tab to the line, then Left and Right change
+  the width 2 characters at a time, Home and End go to the narrowest and widest, and Enter fits.
+  A column is 4 to 120 characters wide.
+- The **Columns** button in the bar has **Fit columns**, which fits every column to the rows on
+  screen (up to 1000, from the first one in view), **Reset widths**, back to the widths the table
+  opened with, and **Wrap**, a list of the columns. A wrapped column shows up to three lines of
+  each value (a line break still ends with `↵`) and its name has a wrap icon; while any column
+  wraps, every row is three lines tall. A longer value is whole in its cell's sheet.
 - **Records** shows one row at a time as `column: value`, with **Previous** and **Next**, for a
-  phone where a row is wider than the screen.
+  phone where a row is wider than the screen. Press or tap a row number to open that row in
+  Records; turned off, Records goes back to the table where you left it.
 - Tap a cell (or press Enter on it) to see its whole value, with a button to copy it. A cell
   shows at most 1024 characters; the full value is only in that sheet.
 - A row with another number of cells than the header has its number in orange; hovering or a
   screen reader says how many cells it has.
 
-Sorting, filtering, the delimiter and the header row only change what is shown. Nothing is
-written to the file, and they are forgotten when the file is closed.
+Sorting, filtering, the delimiter, the header row, column widths and wrapped columns only change
+what is shown. Nothing is written to the file, and they are forgotten when the file is closed.
+Widths and wrapped columns also stay while you show another tab and come back, and go back to the
+defaults when the delimiter or the header row changes.
 
 | Shown                                                   | Why                                                                     |
 | ------------------------------------------------------- | ----------------------------------------------------------------------- |
