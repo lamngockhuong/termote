@@ -300,6 +300,9 @@ The `update` command:
 | `pwa/src/components/chat-composer.tsx`            | Chat view message box                                         |
 | `pwa/src/components/chat-attachments.tsx`         | Images attached to the next Chat message, above the box       |
 | `pwa/src/chat-agents.ts`                          | Agents with a Chat view (claude, codex) and with input        |
+| `pwa/src/components/start-agent-panel.tsx`        | Chat view of an idle pane: start Claude Code or Codex         |
+| `pwa/src/hooks/use-start-agent.ts`                | Sends a start, follows it (`GET agent/start`), toasts         |
+| `pwa/src/utils/agent-start.ts`                    | Whether an agent can be started in the pane on screen         |
 | `pwa/src/components/read-only-bar.tsx`            | Bottom bar without input (View only, a read-only chat)        |
 | `pwa/src/components/prompt-card.tsx`              | Claude Code dialog as a card (answer buttons or read-only)    |
 | `pwa/src/hooks/use-agent-transcript.ts`           | Polls a pane's transcript, one store per pane                 |
@@ -344,6 +347,7 @@ The `update` command:
 | `server/agent_claude_prompt.go`                   | Reads a Claude Code screen: input box, dialogs                |
 | `server/agent_input.go`                           | Sends a message, answers a dialog (checks before each write)  |
 | `server/agent_commands*.go`                       | `agent/commands`: custom commands, skills, plugin commands    |
+| `server/agent_start.go`                           | `agent/start`: starts Claude Code/Codex in an idle Herdr pane |
 | `server/agent_codex.go`                           | Codex rollout (JSONL): locate, parse, turn status             |
 | `server/agent_codex_prompt.go`                    | Reads a Codex screen: composer, approval dialogs              |
 | `server/agent_proc_codex.go`                      | Finds the Codex process holding a rollout (tmux, Herdr)       |
@@ -521,6 +525,35 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   plugins `installed_plugins.json` lists and `enabledPlugins` (user, project, local settings)
   turns on; an `installPath` is read only when it resolves inside `<config dir>/plugins/`
   (at most 50 plugins, JSON files capped at 1 MB)
+- **Starting an agent** (`POST /api/mux/panes/{id}/agent/start` `{kind}`, `GET` of the same path,
+  `server/agent_start.go`, `caps.agentStart`: Herdr ≥ 0.8.2 from the subscription's `ping`, never
+  on Windows, whose idle check is unverified): `writeGuard` (same-site JSON), `requireWriteRole`
+  (the view-only role, #236, must refuse it; a view-only client is kept from it only in the UI
+  meanwhile), 8 KB body. Only `kind` is decoded (`claude` → no arguments, `codex` →
+  `--no-daemon`, else 400 `invalid_kind`); arguments and the Herdr alias
+  (`termote-<kind>-<8 hex>`, one retry on `agent_name_taken`) are the server's. The pane is
+  resolved (`requirePane`) before the pane lock, the one message/answer take, so the locks map
+  holds only existing panes (404 `not_found`). Under it: a start of this server still running
+  there → 409 `starting`; the pane must be an idle shell (`paneIdleShell`: one foreground
+  process, the shell, leading its group, a `knownShells` name, shared with the PWA through
+  `server/testdata/known-shells.json`), read again every 250 ms for 1.5 s, else 409 `pane_busy`
+  with nothing sent; `agent.get` on the pane id: Herdr holds a start pending until its deadline
+  even when the command failed at once, and lets an expired one go only when it is read (this
+  read does), so one still held → 409 `start_pending` with nothing sent; then `C-c` (clears half-typed text, a `PS2` line, a heredoc, a `read`),
+  200 ms, the idle check again (409 `pane_busy`), then `agent.start` with `timeout_ms` 30000.
+  Each Herdr call has its own `muxTimeout`; the whole start runs without the request's
+  cancellation once begun. Herdr answers at once (`launch_pending`): 200 `{ok, state:
+  "starting"}`; `agent.start` timing out → 504 `start_unknown`, followed as if typed. Herdr's
+  `agent_pane_busy` → 409 `pane_busy`, `agent_pane_not_found`/`agent_pane_unavailable` → 404,
+  `unsupported_agent_kind` and an older Herdr's `invalid_request` naming `agent.start` → 501
+  `unsupported`, anything else 500 `start_failed` (logged, never Herdr's text). `GET` (same-site
+  read) reads `agent.get` by the alias: `ready` (`interactive_ready`), `blocked`, `exited` (alias
+  gone, another agent, `launch_pending` false, or no agent seen and the pane an idle shell again
+  4 s after the start: the command failed), `timeout` 35 s after the start, or 404 `no_start`; a final state is kept 60 s. Accepted gaps: stream input from another client is not
+  under the pane lock and can land between `C-c` and the command; a refusal decided by Herdr
+  comes after the `C-c`. The PWA offers it in the Chat view of an idle pane and polls the `GET`
+  every 2 s; Codex writes no rollout before its first message, so after a Codex start the Chat
+  view asks for that message in the terminal
 - **Codex chat**: a rollout is read only when a process whose executable is named
   `codex`, without `app-server` in its argv, holds it open for writing as a regular
   `rollout-*-<uuid>.jsonl` inside its own `CODEX_HOME/sessions` (resolved), with exactly one
@@ -703,8 +736,9 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   never served by the Files view, even when a pane's root holds it
 - **Notifications / Web Push** (`/api/mux/push/*`, `caps.push`): the setting "Notify when an
   agent needs me" notifies when an agent becomes `blocked` or ends a turn (`working` →
-  `done`/`idle`; a missing or `unknown` status keeps the last known one, a first sighting never
-  notifies; the PWA and `server/push_watch.go` share `server/testdata/agent-transitions.json`).
+  `done`/`idle`; a missing or `unknown` status keeps the last known one, a pane without an
+  agent forgets it (tmux answers a slow lookup with the last agents found, not none), a first
+  sighting never notifies; the PWA and `server/push_watch.go` share `server/testdata/agent-transitions.json`).
   `GET push/key` (auth, `hostGuard`) returns only the public key; `POST`/`DELETE push/subscribe`
   go through `writeGuard` (same-site JSON), `requireWriteRole` (the view-only role, #236, must
   refuse them) and the 8 KB body limit, answer 200 `{ok}` (400 `invalid_endpoint`/`invalid_keys`,
