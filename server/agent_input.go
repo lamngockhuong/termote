@@ -525,8 +525,10 @@ func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, sess
 		log.Printf("agent message: enter: %v", err)
 		return fail(http.StatusBadGateway, "delivered_not_submitted", "the text was pasted but not submitted")
 	}
-	// Submitted: the box no longer holds the message.
-	if !pollScreen(ctx, wr, s.Agent, s.Target, func(sc agentScreen) bool { return !shows(sc) }) {
+	// Submitted: the box holds no draft. A different draft is no submit:
+	// Enter can take a completion instead (Codex's `@` mention popup turns
+	// "@a" into a file or plugin name and keeps the text in the composer).
+	if !pollScreen(ctx, wr, s.Agent, s.Target, func(sc agentScreen) bool { return sc.input != inputDraft }) {
 		return fail(http.StatusBadGateway, "delivered_not_submitted", "the text was pasted but not submitted")
 	}
 	return nil
