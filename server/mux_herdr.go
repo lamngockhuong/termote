@@ -116,8 +116,12 @@ var herdrCodexSession = findCodexSession
 func (m *herdrMux) Caps() Caps {
 	v, _ := m.version.Load().(string)
 	return Caps{ClientSideSelect: true, Scroll: true, DriveSize: true, AgentChat: true, Files: true, Groups: true,
-		AgentStart: herdrCanStartAgents(v, runtime.GOOS)}
+		AgentStart: herdrCanStartAgents(v, herdrStartGOOS)}
 }
+
+// herdrStartGOOS is the OS the start gate checks; tests of the start route
+// set it so they run on Windows too.
+var herdrStartGOOS = runtime.GOOS
 
 // herdrAgentStartMin is the first Herdr whose agent.start waits for a new
 // pane's shell and for first-run prompts.

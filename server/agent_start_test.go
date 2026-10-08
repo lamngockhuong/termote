@@ -19,8 +19,12 @@ func shortStart(t *testing.T) {
 	idle, poll, clear, call := agentStartIdleWait, agentStartIdlePoll, agentStartClearWait, agentStartCallTimeout
 	agentStartIdleWait, agentStartIdlePoll, agentStartClearWait = 60*time.Millisecond, 20*time.Millisecond, 5*time.Millisecond
 	agentStartCallTimeout = 300 * time.Millisecond
+	// The route's behaviour, not the Windows gate (TestAgentStartCaps)
+	goos := herdrStartGOOS
+	herdrStartGOOS = "linux"
 	t.Cleanup(func() {
 		agentStartIdleWait, agentStartIdlePoll, agentStartClearWait, agentStartCallTimeout = idle, poll, clear, call
+		herdrStartGOOS = goos
 	})
 }
 
@@ -462,6 +466,19 @@ func TestAgentStartCaps(t *testing.T) {
 
 // Too old a Herdr: the snapshot says so and the route answers 501 without a
 // call.
+// On Windows the route stays off whatever the Herdr version.
+func TestAgentStartOffOnWindows(t *testing.T) {
+	f := newFakeHerdr(t)
+	h, m := startHandler(t, f)
+	herdrStartGOOS = "windows"
+	if m.Caps().AgentStart {
+		t.Fatal("Caps().AgentStart on Windows")
+	}
+	if status, code, _ := postStart(t, h, `{"kind":"claude"}`); status != http.StatusNotImplemented || code != "unsupported" {
+		t.Errorf("POST = %d %q", status, code)
+	}
+}
+
 func TestAgentStartOldHerdr(t *testing.T) {
 	f := newFakeHerdr(t)
 	f.version = "0.8.1"
