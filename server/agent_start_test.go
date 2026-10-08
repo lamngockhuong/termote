@@ -431,6 +431,11 @@ func TestAgentStartStateCommandEnded(t *testing.T) {
 	if p := f.lastParams(t, "agent.get"); p["target"] != startPane {
 		t.Errorf("agent.get target = %v, want the pane", p["target"])
 	}
+	// The refused start leaves the last one's state for a client still
+	// following it.
+	if status, body := getStart(t, h); status != http.StatusOK || body["state"] != "exited" || body["kind"] != "codex" {
+		t.Errorf("GET after a refused start = %d %v, want the exited codex start", status, body)
+	}
 	// Once Herdr let it go, a start goes ahead.
 	f.mu.Lock()
 	f.paneAgent = nil

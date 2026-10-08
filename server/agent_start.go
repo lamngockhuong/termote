@@ -232,13 +232,19 @@ func (a *agentAPI) startAgent(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// The pane's last start, ended: a refused start puts it back, so a
+	// client that has not read its final state yet still can.
+	prev, hadPrev := a.starts.get(paneID, time.Now())
 	// Recorded before Herdr is asked, so a GET while the POST runs (which
 	// can take seconds) reports it starting rather than no_start.
 	a.starts.put(paneID, pendingStart{kind: body.Kind, started: time.Now(), state: startStarting})
 	name, err := st.StartAgent(ctx, paneID, body.Kind, args)
-	if err == nil || errors.Is(err, errStartUnknown) {
+	switch {
+	case err == nil || errors.Is(err, errStartUnknown):
 		a.starts.put(paneID, pendingStart{kind: body.Kind, name: name, started: time.Now(), state: startStarting})
-	} else {
+	case hadPrev:
+		a.starts.put(paneID, prev)
+	default:
 		a.starts.drop(paneID)
 	}
 	if err != nil {
