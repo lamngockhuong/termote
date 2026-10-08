@@ -122,6 +122,31 @@ func TestCodexMessageRefusals(t *testing.T) {
 	}
 }
 
+// Enter that leaves a draft in the composer submitted nothing, whether the
+// draft is the message (Codex refused `/tmp …` as an unknown command) or a
+// completion of it (the `@` popup turned "@a" into a mention).
+func TestCodexMessageEnterKeepsDraft(t *testing.T) {
+	shortConfirm(t)
+	tests := []struct{ name, text, after string }{
+		{"unknown command", "/tmp is a directory", "/tmp is a directory"},
+		{"mention taken", "look at @a", "look at @Openai-Templates"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newCodexWriter()
+			f.onKeys = func(f *fakeWriter, keys []string) {
+				if keys[0] == "Enter" {
+					f.setScreen(codexBox(tt.after))
+				}
+			}
+			code, body := postJSON(t, agentMux(f), "/api/mux/panes/0/agent/message", map[string]string{"text": tt.text, "cursor": codexCursor()})
+			if code != http.StatusBadGateway || body["code"] != "delivered_not_submitted" {
+				t.Errorf("POST = %d %v, want 502 delivered_not_submitted", code, body)
+			}
+		})
+	}
+}
+
 func TestCodexAnswer(t *testing.T) {
 	shortConfirm(t)
 	dialog := codexCapture(t, "0.159.3-approval-exec")
