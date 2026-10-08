@@ -66,7 +66,7 @@ const refused = (status: number, code: string, root?: string, path?: string) =>
 
 // A draft of another file in the pane, changed or not
 function draft(text: string) {
-  const { result } = renderHook(() => useFileDraft('%1'))
+  const { result } = renderHook(() => useFileDraft('%1', 'notes.md'))
   act(() =>
     result.current[1]({
       root: '/r',
@@ -114,52 +114,15 @@ describe('NewFileDialog', () => {
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
-  it('asks before dropping unsaved changes to another file', async () => {
+  it("creates without asking, keeping another file's unsaved changes", async () => {
     mockCreate.mockResolvedValue({ root: '/r', path: 'a.md' })
     const d = draft('changed')
-    show('a.md')
+    const p = show('a.md')
     await create()
-    expect(
-      within(dialog('Discard other changes?')).getByText(
-        'Your unsaved changes to notes.md will be lost.',
-      ),
-    ).toBeInTheDocument()
-    fireEvent.click(
-      within(dialog('Discard other changes?')).getByRole('button', {
-        name: 'Cancel',
-      }),
-    )
-    expect(mockCreate).not.toHaveBeenCalled()
-    expect(d.current[0]).toBeDefined()
-    await create()
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
-    })
-    expect(d.current[0]).toBeUndefined()
+    expect(screen.queryByRole('dialog', { name: /Discard/ })).toBeNull()
     expect(mockCreate).toHaveBeenCalledTimes(1)
-  })
-
-  it('a create that fails after Discard keeps the other draft', async () => {
-    mockCreate.mockRejectedValue(refused(409, 'exists'))
-    const d = draft('changed')
-    show('a.md')
-    await create()
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
-    })
-    expect(screen.getByRole('alert')).toHaveTextContent('already exists')
+    expect(p.onCreated).toHaveBeenCalledWith('a.md', '/r', false)
     expect(d.current[0]?.text).toBe('changed')
-  })
-
-  it('a draft without changes is no reason to ask', async () => {
-    mockCreate.mockResolvedValue({ root: '/r', path: 'a.md' })
-    draft('a')
-    show('a.md')
-    await create()
-    expect(
-      screen.queryByRole('dialog', { name: 'Discard other changes?' }),
-    ).toBeNull()
-    expect(mockCreate).toHaveBeenCalledTimes(1)
   })
 
   it('a name that usually holds secrets is created after a second ask', async () => {
@@ -278,12 +241,8 @@ describe('NewFileDialog', () => {
     async (how, closes) => {
       let finish!: (v: unknown) => void
       mockCreate.mockReturnValue(new Promise((r) => (finish = r)))
-      const d = draft('changed')
       const p = show('a.md')
       await create()
-      await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
-      })
       // Cancel stays usable while the create runs
       const cancel = screen.getByRole('button', { name: 'Cancel' })
       expect(cancel).toBeEnabled()
@@ -294,7 +253,6 @@ describe('NewFileDialog', () => {
       expect(p.onCreated).not.toHaveBeenCalled()
       // Only the user's close, never a second one from the reply
       expect(p.onClose).toHaveBeenCalledTimes(closes)
-      expect(d.current[0]?.text).toBe('changed')
     },
   )
 

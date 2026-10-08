@@ -85,3 +85,17 @@ describe('CodeBlock', () => {
     )
   })
 })
+
+describe('CodeBlock scroll', () => {
+  it('starts at the offset it was left at, marked for the viewer', () => {
+    mockHighlight.mockResolvedValue(null)
+    render(
+      <ThemeProvider>
+        <CodeBlock text={'a\nb'} path="a.ts" wrap={false} scrollTop={64} />
+      </ThemeProvider>,
+    )
+    const frame = screen.getByTestId('code-block')
+    expect(frame.scrollTop).toBe(64)
+    expect(frame).toHaveAttribute('data-scroll-restore')
+  })
+})

@@ -267,6 +267,7 @@ describe('DiffViewer: Markdown preview', () => {
     expect(v.onFollow).toHaveBeenCalledWith(
       { kind: 'path', path: 'docs/b.md', anchor: undefined },
       0,
+      { newTab: false },
     )
 
     // Read again with the diff

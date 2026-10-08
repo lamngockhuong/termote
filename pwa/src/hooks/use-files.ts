@@ -1,6 +1,7 @@
 import { useCallback, useSyncExternalStore } from 'react'
 import type { TableOp } from '../utils/csv-edits'
 import type { Delimiter } from '../utils/csv-parse'
+import { closeTab, openTab, pinTab, type TabBase } from '../utils/file-tabs'
 import type { LinkPath } from '../utils/markdown-links'
 import {
   type FileEntry,
@@ -38,22 +39,38 @@ export interface DirState {
   error?: FilesError
 }
 
+// A file open in the Files view. Only the tab shown has a viewer; the
+// others keep what it needs to show them again where they were left.
+export interface FileTab extends TabBase {
+  // The root the file was opened under
+  root: string
+  path: string
+  // Where the file starts: a heading, or the offset it was left at
+  anchor?: string
+  scrollTop?: number
+  // Files of this tab left by following a link, the latest last: Back
+  // returns to them
+  history: { path: string; scrollTop: number }[]
+  // A sensitive file the user chose to show; starts over with another path
+  reveal: boolean
+  // Opens straight into editing: a file this view just created. Dropped
+  // once editing starts or the tab shows another path.
+  intent?: boolean
+}
+
 export interface FilesState {
   root?: string
   isRepo: boolean
   // Directories read so far, by path ("" is the root)
   dirs: Record<string, DirState>
   expanded: Record<string, boolean>
-  // The file shown instead of the tree
-  openPath: string | null
-  // Where the open file starts: a heading, or the offset it was left at
-  openAnchor?: string
-  openScroll?: number
-  // Files left by following a link, the latest last: Back returns to them
-  history: { path: string; scrollTop: number }[]
-  // The open file opens straight into editing: one this view just created.
-  // Dropped as soon as another file (or the tree) opens.
-  openIntent?: { root: string; path: string; reveal: boolean }
+  // The open files, in the order shown, one tab per path
+  tabs: FileTab[]
+  // The tab shown instead of the tree; null shows the tree
+  activeId: string | null
+  // Tabs with unsaved changes opened under a root the pane has left, while
+  // the user chooses to close or keep them
+  pendingRootClose?: string[]
   // Bumped each time the pane's root moves while the view is open
   rootChanges: number
 }
@@ -62,9 +79,27 @@ const INITIAL: FilesState = {
   isRepo: false,
   dirs: {},
   expanded: {},
-  openPath: null,
-  history: [],
+  tabs: [],
+  activeId: null,
   rootChanges: 0,
+}
+
+// The tab shown, if any
+export const activeTab = (s: FilesState) =>
+  s.tabs.find((t) => t.id === s.activeId)
+
+export interface FileOpenOptions {
+  // A tab of its own, kept until closed (else the preview tab)
+  pin?: boolean
+  // Where the file starts: a heading
+  anchor?: string
+}
+
+export interface FollowOptions {
+  // Ctrl/Cmd+click, middle click, long press: a new pinned tab
+  newTab?: boolean
+  // Followed from another view: opened like a file picked in the tree
+  fresh?: boolean
 }
 
 export const joinPath = (dir: string, name: string) =>
@@ -94,17 +129,32 @@ interface Store {
   load: () => void
   toggle: (path: string) => void
   refresh: () => void
-  // Opens a file from the tree (or closes it): a new trail of links
-  open: (path: string | null) => void
-  // Follows a link of the open file (left at scrollTop): a file opens, a
-  // directory shows in the tree, opened
+  // Opens a file in its tab: the one it has, else the preview tab, else a
+  // new one (pinned when asked)
+  open: (path: string, opts?: FileOpenOptions) => void
+  // Shows tab id, or the tree (null)
+  activate: (id: string | null) => void
+  pin: (id: string) => void
+  // Closes tab id; its unsaved changes are dropped (asked before)
+  close: (id: string) => void
+  // Follows a link of the tab shown (left at scrollTop): a file opens in
+  // that tab (or the one it has), a directory shows in the tree, opened
   follow: (
     target: LinkPath,
     scrollTop: number,
-    fresh?: boolean,
+    opts?: FollowOptions,
   ) => Promise<FollowResult>
-  // Back to the file a link was followed from, else to the tree
+  // Back to the file of this tab a link was followed from, else to the
+  // tree (the tab stays open)
   back: () => void
+  // Where tab id is scrolled to: kept for when it shows again, without
+  // telling readers (no render per scroll event)
+  setScroll: (id: string, top: number) => void
+  // The user chose to show tab id's sensitive file
+  setReveal: (id: string) => void
+  // The user chose for the tabs in pendingRootClose: close them (and drop
+  // their changes) or keep them
+  resolveRootClose: (close: boolean) => void
   // A file just created at path under root (or found there): the tree is
   // read again and opened down to it, then it opens into editing; a
   // directory found there shows in the tree, opened
@@ -116,7 +166,8 @@ interface Store {
   reveal: (path: string, kind?: 'file' | 'dir') => Promise<void>
   // The directory read again: what it holds now
   list: (path: string) => Promise<DirState>
-  // path was deleted: closed if open, gone from the tree
+  // path was deleted: its tab closed (every one under it, for a directory),
+  // gone from the tree
   deleted: (path: string) => void
   // path was put back: the tree opened down to it, read again; what is
   // open stays open
@@ -128,6 +179,10 @@ function createStore(paneId: string): Store {
   const listeners = new Set<() => void>()
   // Bumped when the root moves: a read sent for the old one is dropped.
   let generation = 0
+  // When each tab was last shown, and the ids of new ones
+  let clock = 0
+  let ids = 0
+  const isDirty = (t: FileTab) => isDraftDirty(paneId, t.path)
 
   const set = (next: Partial<FilesState>) => {
     state = { ...state, ...next }
@@ -162,15 +217,86 @@ function createStore(paneId: string): Store {
     })
   }
 
-  function open(openPath: string | null) {
+  function open(path: string, opts: FileOpenOptions = {}) {
+    const r = openTab(
+      state.tabs,
+      state.activeId,
+      (t) => t.path,
+      path,
+      () => ({
+        id: `t${++ids}`,
+        pinned: false,
+        lastUsed: 0,
+        root: state.root ?? '',
+        path,
+        anchor: opts.anchor,
+        history: [],
+        reveal: false,
+      }),
+      opts,
+      isDirty,
+      ++clock,
+    )
+    // Tabs closed to make room never had changes; an untouched draft of
+    // theirs goes with them, so the file is read again when it reopens
+    for (const t of r.closed) dropDraft(paneId, t.path)
+    const gone = new Set(r.closed.map((t) => t.id))
+    // A file already open goes to the heading asked for
+    const tabs = opts.anchor
+      ? r.tabs.map((t) =>
+          t.id === r.activeId
+            ? { ...t, anchor: opts.anchor, scrollTop: undefined }
+            : t,
+        )
+      : r.tabs
     set({
-      openPath,
-      openAnchor: undefined,
-      openScroll: undefined,
-      history: [],
-      openIntent: undefined,
+      tabs,
+      activeId: r.activeId,
+      pendingRootClose: pendingOf(
+        state.pendingRootClose?.filter((id) => !gone.has(id)),
+      ),
     })
   }
+
+  // No list at all once nothing waits for the user
+  const pendingOf = (ids?: string[]) => (ids?.length ? ids : undefined)
+
+  function activate(id: string | null) {
+    if (id === null) {
+      set({ activeId: null })
+      return
+    }
+    const now = ++clock
+    set({
+      activeId: id,
+      tabs: state.tabs.map((t) => (t.id === id ? { ...t, lastUsed: now } : t)),
+    })
+  }
+
+  // Replaces tab id with patch applied
+  function patchTab(id: string, patch: Partial<FileTab>) {
+    set({
+      tabs: state.tabs.map((t) => (t.id === id ? { ...t, ...patch } : t)),
+    })
+  }
+
+  function close(id: string) {
+    const tab = state.tabs.find((t) => t.id === id)
+    if (!tab) return
+    dropDraft(paneId, tab.path)
+    const r = closeTab(state.tabs, state.activeId, id)
+    set({
+      tabs: r.tabs,
+      activeId: r.activeId,
+      pendingRootClose: pendingOf(
+        state.pendingRootClose?.filter((p) => p !== id),
+      ),
+    })
+  }
+
+  // Where the user is: a link or a create that finds them elsewhere when
+  // it is done is dropped
+  const place = () => `${state.activeId}\u0000${activeTab(state)?.path}`
 
   // state.expanded with path and every directory above it open
   function expandTo(path: string) {
@@ -184,7 +310,7 @@ function createStore(paneId: string): Store {
 
   async function created(path: string, root: string, reveal: boolean) {
     const gen = generation
-    const from = state.openPath
+    const from = place()
     const parts = path.split('/')
     const name = parts[parts.length - 1]
     const dirs = parts
@@ -195,49 +321,42 @@ function createStore(paneId: string): Store {
     // The directories just made are in no listing read so far
     await Promise.all(['', ...dirs].map(read))
     // The root moved, or the user opened something else meanwhile
-    if (gen !== generation || state.openPath !== from) return
+    if (gen !== generation || place() !== from) return
     const entry = state.dirs[parent]?.entries?.find((e) => e.name === name)
     if (entry && isDir(entry)) {
-      open(null)
-      set({ expanded: expandTo(path) })
+      set({ activeId: null, expanded: expandTo(path) })
       read(path)
       return
     }
-    // One update: the viewer mounts with the intent already there
-    set({
-      openPath: path,
-      openAnchor: undefined,
-      openScroll: undefined,
-      history: [],
-      openIntent: { root, path, reveal },
-    })
+    open(path, { pin: true })
+    // The viewer mounts with the intent already there
+    patchTab(state.activeId as string, { root, intent: true, reveal })
   }
 
-  // A link of the open file (left at scrollTop) to target. fresh: followed
-  // from another view, so the file open here is not a step to go back to.
+  // A link of the tab shown (left at scrollTop) to target
   async function follow(
     target: LinkPath,
     scrollTop: number,
-    fresh = false,
+    opts: FollowOptions = {},
     retried = false,
   ): Promise<FollowResult> {
     const gen = generation
-    const from = state.openPath
+    const from = place()
     const at = target.path.lastIndexOf('/')
     const parent = at < 0 ? '' : target.path.slice(0, at)
     const name = target.path.slice(at + 1)
     // The root itself
     if (!name) {
-      open(null)
+      set({ activeId: null })
       return 'opened'
     }
     // Read again: the listing says what the path is now
     await read(parent)
     // The user moved on meanwhile (another link, Back): this one is dropped
-    if (state.openPath !== from) return 'stale'
+    if (place() !== from) return 'stale'
     // The root moved under the read: once more, from the new root
     if (gen !== generation)
-      return retried ? 'stale' : follow(target, scrollTop, fresh, true)
+      return retried ? 'stale' : follow(target, scrollTop, opts, true)
     const dir = state.dirs[parent]
     if (!dir.entries) return dir.error === 'not-found' ? 'missing' : 'failed'
     const entry = dir.entries.find((e) => e.name === name)
@@ -246,24 +365,32 @@ function createStore(paneId: string): Store {
     if (isDir(entry)) {
       // The tree, with the directory and every one above it open
       const expanded = expandTo(target.path)
-      open(null)
-      set({ expanded })
+      set({ activeId: null, expanded })
       for (const path of Object.keys(expanded)) {
         const d = state.dirs[path]
         if (!d || d.error) read(path)
       }
       return 'opened'
     }
-    set({
-      openPath: target.path,
-      openAnchor: target.anchor,
-      openScroll: undefined,
-      openIntent: undefined,
-      history: fresh
-        ? []
-        : from
-          ? [...state.history, { path: from, scrollTop }]
-          : state.history,
+    const current = activeTab(state)
+    const elsewhere = state.tabs.find(
+      (t) => t.path === target.path && t !== current,
+    )
+    if (opts.newTab || opts.fresh || elsewhere || !current) {
+      open(target.path, { pin: opts.newTab, anchor: target.anchor })
+      return 'opened'
+    }
+    // On in the same tab, which remembers where it was
+    patchTab(current.id, {
+      path: target.path,
+      anchor: target.anchor,
+      scrollTop: undefined,
+      reveal: false,
+      intent: undefined,
+      history:
+        current.path === target.path
+          ? current.history
+          : [...current.history, { path: current.path, scrollTop }],
     })
     return 'opened'
   }
@@ -285,7 +412,7 @@ function createStore(paneId: string): Store {
     await readDown(target)
     if (gen !== generation) return
     if (kind === 'dir') {
-      open(null)
+      set({ activeId: null })
       return
     }
     open(path)
@@ -306,7 +433,9 @@ function createStore(paneId: string): Store {
   function deleted(path: string) {
     const at = path.lastIndexOf('/')
     const parent = at < 0 ? '' : path.slice(0, at)
-    if (state.openPath === path) open(null)
+    // Its tab closes, and for a directory every tab under it
+    for (const t of state.tabs)
+      if (t.path === path || t.path.startsWith(`${path}/`)) close(t.id)
     // A deleted directory is closed, and so is everything under it
     const expanded = Object.fromEntries(
       Object.entries(state.expanded).filter(
@@ -318,16 +447,23 @@ function createStore(paneId: string): Store {
     read(parent)
   }
 
-  // The tree starts again from the new root; an open file stays open, and
-  // shows what the same path holds there.
+  // The tree starts again from the new root. Tabs opened under another
+  // root close, except those with unsaved changes: the user is asked about
+  // them (pendingRootClose), and kept ones show the old root's text.
   function rootChanged(root: string) {
     if (root === state.root) return
     generation++
+    const moved = state.tabs.filter((t) => t.root !== root)
+    for (const t of moved) if (!isDirty(t)) close(t.id)
+    // Every tab still of another root: one asked about before that is of
+    // this root again (the pane came back) is no longer asked about
+    const asked = state.tabs.filter((t) => t.root !== root).map((t) => t.id)
     set({
       root,
       dirs: {},
       expanded: {},
       rootChanges: state.rootChanges + 1,
+      pendingRootClose: pendingOf(asked),
     })
     read('')
   }
@@ -355,20 +491,54 @@ function createStore(paneId: string): Store {
       for (const path of ['', ...Object.keys(state.expanded)]) read(path)
     },
     open,
+    activate,
+    pin(id) {
+      // Pinned once editing starts: the intent is used up then too
+      set({
+        tabs: pinTab(state.tabs, id).map((t) =>
+          t.id === id && t.intent ? { ...t, intent: undefined } : t,
+        ),
+      })
+    },
+    close,
     follow,
     back() {
-      const prev = state.history[state.history.length - 1]
+      const tab = activeTab(state)
+      if (!tab) return
+      const prev = tab.history[tab.history.length - 1]
       if (!prev) {
-        open(null)
+        set({ activeId: null })
         return
       }
-      set({
-        openPath: prev.path,
-        openAnchor: undefined,
-        openScroll: prev.scrollTop,
-        openIntent: undefined,
-        history: state.history.slice(0, -1),
+      // The file went back to has a tab of its own meanwhile: shown there,
+      // this tab stays as it is, one step less to go back
+      const other = state.tabs.find((t) => t.path === prev.path)
+      if (other) {
+        patchTab(tab.id, { history: tab.history.slice(0, -1) })
+        activate(other.id)
+        return
+      }
+      patchTab(tab.id, {
+        path: prev.path,
+        anchor: undefined,
+        scrollTop: prev.scrollTop,
+        reveal: false,
+        intent: undefined,
+        history: tab.history.slice(0, -1),
       })
+    },
+    setScroll(id, top) {
+      const tab = state.tabs.find((t) => t.id === id)
+      if (!tab) return
+      tab.scrollTop = top
+      // Scrolled away from the heading it opened at: shown again here
+      tab.anchor = undefined
+    },
+    setReveal: (id) => patchTab(id, { reveal: true }),
+    resolveRootClose(closing) {
+      const ids = state.pendingRootClose ?? []
+      set({ pendingRootClose: undefined })
+      if (closing) for (const id of ids) close(id)
     },
     rootChanged,
     created,
@@ -396,15 +566,32 @@ export function useFiles(paneId: string) {
   const state = useSyncExternalStore(store.subscribe, store.get)
   return {
     ...state,
+    active: activeTab(state),
     load: useCallback(() => store.load(), [store]),
     toggle: useCallback((p: string) => store.toggle(p), [store]),
     refresh: useCallback(() => store.refresh(), [store]),
-    open: useCallback((p: string | null) => store.open(p), [store]),
+    open: useCallback(
+      (p: string, opts?: FileOpenOptions) => store.open(p, opts),
+      [store],
+    ),
+    activate: useCallback((id: string | null) => store.activate(id), [store]),
+    pin: useCallback((id: string) => store.pin(id), [store]),
+    close: useCallback((id: string) => store.close(id), [store]),
     follow: useCallback(
-      (t: LinkPath, scrollTop: number) => store.follow(t, scrollTop),
+      (t: LinkPath, scrollTop: number, opts?: FollowOptions) =>
+        store.follow(t, scrollTop, opts),
       [store],
     ),
     back: useCallback(() => store.back(), [store]),
+    setScroll: useCallback(
+      (id: string, top: number) => store.setScroll(id, top),
+      [store],
+    ),
+    setReveal: useCallback((id: string) => store.setReveal(id), [store]),
+    resolveRootClose: useCallback(
+      (close: boolean) => store.resolveRootClose(close),
+      [store],
+    ),
     created: useCallback(
       (p: string, root: string, reveal: boolean) =>
         store.created(p, root, reveal),
@@ -424,7 +611,7 @@ export function useFiles(paneId: string) {
 // Follows a link into the Files view of paneId from elsewhere (the Changes
 // view's preview)
 export function followInFiles(paneId: string, target: LinkPath) {
-  return storeFor(paneId).follow(target, 0, true)
+  return storeFor(paneId).follow(target, 0, { fresh: true })
 }
 
 // A file being edited in a pane. It is kept here, out of the viewer, so a
@@ -454,10 +641,16 @@ type DraftUpdate =
   // may be stale)
   | ((now: FileDraft | undefined) => FileDraft | undefined)
 
+// By pane and path: one draft per file, shared by every view of the pane
+// (the Files tab, the Changes editor)
 const drafts = new Map<string, FileDraft>()
 const draftListeners = new Set<() => void>()
+// Bumped on every change, so readers of several drafts render again
+let draftsVersion = 0
 
-// Leaving the page asks first while any pane has unsaved changes, whether
+const draftKey = (paneId: string, path: string) => `${paneId}\u0000${path}`
+
+// Leaving the page asks first while any file has unsaved changes, whether
 // or not its editor is on screen
 const askBeforeUnload = (e: BeforeUnloadEvent) => e.preventDefault()
 function guardUnload() {
@@ -473,22 +666,49 @@ function subscribeDrafts(fn: () => void) {
   }
 }
 
-// The draft of paneId (at most one file at a time), and a setter that
-// replaces it, or with undefined drops it.
-export function useFileDraft(paneId: string) {
-  const draft = useSyncExternalStore(subscribeDrafts, () => drafts.get(paneId))
+function setDraftOf(paneId: string, path: string, update: DraftUpdate) {
+  const key = draftKey(paneId, path)
+  const next = typeof update === 'function' ? update(drafts.get(key)) : update
+  if (next === drafts.get(key)) return
+  if (next) drafts.set(key, next)
+  else drafts.delete(key)
+  draftsVersion++
+  guardUnload()
+  for (const fn of draftListeners) fn()
+}
+
+// The draft of path in paneId, and a setter that replaces it, or with
+// undefined drops it.
+export function useFileDraft(paneId: string, path: string) {
+  const draft = useSyncExternalStore(subscribeDrafts, () =>
+    drafts.get(draftKey(paneId, path)),
+  )
   const setDraft = useCallback(
-    (update: DraftUpdate) => {
-      const next =
-        typeof update === 'function' ? update(drafts.get(paneId)) : update
-      if (next) drafts.set(paneId, next)
-      else drafts.delete(paneId)
-      guardUnload()
-      for (const fn of draftListeners) fn()
-    },
-    [paneId],
+    (update: DraftUpdate) => setDraftOf(paneId, path, update),
+    [paneId, path],
   )
   return [draft, setDraft] as const
+}
+
+// path in paneId has unsaved changes
+export function isDraftDirty(paneId: string, path: string) {
+  const d = drafts.get(draftKey(paneId, path))
+  return !!d && d.text !== d.base
+}
+
+export function dropDraft(paneId: string, path: string) {
+  setDraftOf(paneId, path, undefined)
+}
+
+// Whether a path of paneId has unsaved changes, read again whenever a
+// draft changes
+export function useDirtyCheck(paneId: string) {
+  const version = useSyncExternalStore(subscribeDrafts, () => draftsVersion)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new check per change
+  return useCallback(
+    (path: string) => isDraftDirty(paneId, path),
+    [paneId, version],
+  )
 }
 
 // For tests: forget every store and draft.

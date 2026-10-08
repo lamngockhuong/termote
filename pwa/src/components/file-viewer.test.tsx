@@ -1,5 +1,6 @@
 import {
   act,
+  cleanup,
   fireEvent,
   render,
   renderHook,
@@ -346,6 +347,7 @@ describe('FileViewer: Markdown', () => {
     expect(p.onFollow).toHaveBeenCalledWith(
       { kind: 'path', path: 'docs/guide.md', anchor: 'usage' },
       0,
+      { newTab: false },
     )
   })
 })
@@ -840,28 +842,28 @@ describe('FileViewer editing', () => {
     )
   })
 
-  it('editing another file asks before dropping unsaved changes to the first', async () => {
+  it("editing another file keeps the first file's unsaved changes", async () => {
     mockContent.mockResolvedValue(editable('x'))
     const p = await startEdit()
     type('draft of a')
     p.unmount()
     mockContent.mockResolvedValue(editable('y', { path: 'b.ts' }))
-    show({ canEdit: true, path: 'b.ts' })
+    const b = show({ canEdit: true, path: 'b.ts' })
     fireEvent.click(await screen.findByRole('button', { name: 'Edit' }))
-    expect(
-      await screen.findByText('Your unsaved changes to src/a.ts will be lost.'),
-    ).toBeInTheDocument()
-    // Keep them
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-    expect(screen.queryByRole('textbox')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Discard' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
     expect(screen.getByRole('textbox', { name: 'Text of b.ts' })).toHaveValue(
       'y',
     )
+    b.unmount()
+    // Each file opens again on its own draft
+    mockContent.mockResolvedValue(editable('x'))
+    show({ canEdit: true })
+    expect(
+      screen.getByRole('textbox', { name: 'Text of src/a.ts' }),
+    ).toHaveValue('draft of a')
   })
 
-  it('startEditing asks too when another file has unsaved changes', async () => {
+  it('startEditing goes straight into editing beside another file with changes', async () => {
     mockContent.mockResolvedValue(editable('x'))
     const p = await startEdit()
     type('draft of a')
@@ -869,21 +871,97 @@ describe('FileViewer editing', () => {
     mockContent.mockResolvedValue(editable('y', { path: 'b.ts' }))
     show({ canEdit: true, path: 'b.ts', startEditing: true })
     expect(
-      await screen.findByText('Your unsaved changes to src/a.ts will be lost.'),
-    ).toBeInTheDocument()
-    expect(screen.queryByRole('textbox')).toBeNull()
+      await screen.findByRole('textbox', { name: 'Text of b.ts' }),
+    ).toHaveValue('y')
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+})
+
+describe('FileViewer in a tab', () => {
+  it('a preview tab offers Keep open; editing pins it too', async () => {
+    mockContent.mockResolvedValue(editable('x'))
+    const onPin = vi.fn()
+    show({ canEdit: true, pinned: false, onPin })
+    fireEvent.click(await screen.findByRole('button', { name: 'Keep open' }))
+    expect(onPin).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    expect(onPin).toHaveBeenCalledTimes(2)
   })
 
-  it('an unchanged draft of another file is replaced without asking', async () => {
+  it('a pinned tab has no Keep open', async () => {
     mockContent.mockResolvedValue(editable('x'))
-    const p = await startEdit()
-    p.unmount()
-    mockContent.mockResolvedValue(editable('y', { path: 'b.ts' }))
-    show({ canEdit: true, path: 'b.ts' })
-    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }))
-    expect(screen.getByRole('textbox', { name: 'Text of b.ts' })).toHaveValue(
-      'y',
-    )
+    show({ onPin: vi.fn() })
+    await screen.findByTestId('code-block')
+    expect(screen.queryByRole('button', { name: 'Keep open' })).toBeNull()
+  })
+
+  it('tells the tab once a sensitive file is shown, or declined', async () => {
+    mockContent
+      .mockResolvedValueOnce({ root: '/r', path: '.env', sensitive: true })
+      .mockResolvedValueOnce({ root: '/r', path: '.env', size: 5, text: 'A=1' })
+    const onRevealed = vi.fn()
+    show({ path: '.env', onRevealed })
+    fireEvent.click(await screen.findByRole('button', { name: 'Show' }))
+    expect(onRevealed).toHaveBeenCalled()
+    cleanup()
+    mockContent.mockResolvedValue({ root: '/r', path: '.env', sensitive: true })
+    const onCancelReveal = vi.fn()
+    const p = show({ path: '.env', onCancelReveal })
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }))
+    expect(onCancelReveal).toHaveBeenCalled()
+    expect(p.onClose).not.toHaveBeenCalled()
+  })
+
+  it('a file gone from the host offers to close its tab', async () => {
+    mockContent.mockRejectedValue(new RequestError(404, '', 'x'))
+    const onCloseTab = vi.fn()
+    show({ onCloseTab })
+    fireEvent.click(await screen.findByRole('button', { name: 'Close tab' }))
+    expect(onCloseTab).toHaveBeenCalled()
+    cleanup()
+    // Another error: nothing to close for
+    mockContent.mockRejectedValue(new RequestError(403, '', 'x'))
+    show({ onCloseTab })
+    await screen.findByText("This file can't be shown")
+    expect(screen.queryByRole('button', { name: 'Close tab' })).toBeNull()
+  })
+
+  it('reports where the text is scrolled, and starts there again', async () => {
+    mockContent.mockResolvedValue(editable('x\ny'))
+    const onScroll = vi.fn()
+    show({ canEdit: true, onScroll, scrollTop: 30 })
+    const code = await screen.findByTestId('code-block')
+    expect(code.scrollTop).toBe(30)
+    code.scrollTop = 55
+    fireEvent.scroll(code)
+    expect(onScroll).toHaveBeenLastCalledWith(55)
+    // The editor starts where the source was left
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    expect(textarea().scrollTop).toBe(55)
+    textarea().scrollTop = 12
+    fireEvent.scroll(textarea())
+    expect(onScroll).toHaveBeenLastCalledWith(12)
+    // A scroll of anything else is not the text's
+    onScroll.mockClear()
+    fireEvent.scroll(screen.getByRole('button', { name: 'Save' }))
+    expect(onScroll).not.toHaveBeenCalled()
+  })
+
+  it('switching between preview and source starts at the top', async () => {
+    mockContent.mockResolvedValue(editable('# A', { path: 'a.md' }))
+    show({ path: 'a.md', scrollTop: 40 })
+    const preview = await screen.findByTestId('markdown-preview')
+    expect(preview.scrollTop).toBe(40)
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+    expect(screen.getByTestId('code-block').scrollTop).toBe(0)
+  })
+
+  it('shows more buttons at the end of the header', async () => {
+    mockContent.mockResolvedValue(editable('x'))
+    show({ headerExtra: <button type="button">extra</button> })
+    expect(
+      await screen.findByRole('button', { name: 'extra' }),
+    ).toBeInTheDocument()
   })
 })
 
@@ -1017,7 +1095,7 @@ describe('FileViewer: editing a table', () => {
     )
   })
 
-  it('another file with unsaved changes: asks to drop them, then the delimiter, then edits the table', async () => {
+  it('another file with unsaved changes is kept: asks only for the delimiter', async () => {
     mockContent.mockResolvedValue(editable('x'))
     const first = await startEdit()
     type('draft of a')
@@ -1029,28 +1107,26 @@ describe('FileViewer: editing a table', () => {
       target: { value: ';' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
-    // One dialog at a time; Cancel at the second keeps the first draft
     expect(screen.getAllByRole('dialog')).toHaveLength(1)
     expect(screen.getByRole('dialog')).toHaveTextContent(
       'Edit with another delimiter?',
     )
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull()
-    const draft = renderHook(() => useFileDraft('%1'))
-    expect(draft.result.current[0]?.text).toBe('draft of a')
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
     fireEvent.click(screen.getByRole('button', { name: 'Edit anyway' }))
     expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument()
     expect(screen.queryByRole('textbox', { name: /Text of/ })).toBeNull()
+    const draft = renderHook(() => useFileDraft('%1', 'd.csv'))
     expect(draft.result.current[0]).toMatchObject({
       path: 'd.csv',
       cells: { delimiter: ';', ops: [], redo: [] },
     })
+    const a = renderHook(() => useFileDraft('%1', 'src/a.ts'))
+    expect(a.result.current[0]?.text).toBe('draft of a')
   })
 
-  it('another draft with the delimiter found: straight into the table once dropped', async () => {
+  it('another draft with the delimiter found: straight into the table', async () => {
     mockContent.mockResolvedValue(editable('x'))
     const first = await startEdit()
     type('draft of a')
@@ -1059,7 +1135,6 @@ describe('FileViewer: editing a table', () => {
     show({ canEdit: true, path: 'd.csv' })
     await screen.findByRole('grid')
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument()
   })
@@ -1080,17 +1155,18 @@ describe('FileViewer: editing a table', () => {
     expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull()
   })
 
-  it('a save keeps a draft another view made meanwhile', async () => {
+  it("a save leaves another file's draft alone", async () => {
     mockContent.mockResolvedValue(csvFile('a\n1\n'))
     let done: (v: unknown) => void = () => {}
     mockSave.mockReturnValue(new Promise((r) => (done = r)))
     await editTable()
     setCell('1', '2')
     fireEvent.click(saveButton())
-    // Another view of the pane drops it for another file's draft
-    const other = renderHook(() => useFileDraft('%1'))
+    // Another view of the pane edits another file meanwhile
+    const mine = renderHook(() => useFileDraft('%1', 'd.csv'))
+    const other = renderHook(() => useFileDraft('%1', 'b.ts'))
     const theirs = {
-      ...other.result.current[0],
+      ...mine.result.current[0],
       path: 'b.ts',
       cells: undefined,
     } as FileDraft
@@ -1099,6 +1175,7 @@ describe('FileViewer: editing a table', () => {
       done({ root: '/r', path: 'd.csv', size: 1, hash: 'h2' }),
     )
     expect(other.result.current[0]).toBe(theirs)
+    expect(mine.result.current[0]).toBeUndefined()
   })
 
   it('a save keeps edits made to the same file meanwhile, on the text saved', async () => {
@@ -1108,7 +1185,7 @@ describe('FileViewer: editing a table', () => {
     await editTable()
     setCell('1', '2')
     fireEvent.click(saveButton())
-    const other = renderHook(() => useFileDraft('%1'))
+    const other = renderHook(() => useFileDraft('%1', 'd.csv'))
     const sent = other.result.current[0] as FileDraft
     act(() => other.result.current[1]({ ...sent, text: 'a\n3\n' }))
     await act(async () =>
@@ -1129,7 +1206,7 @@ describe('FileViewer: editing a table', () => {
     await editTable()
     setCell('1', '2')
     fireEvent.click(saveButton())
-    const other = renderHook(() => useFileDraft('%1'))
+    const other = renderHook(() => useFileDraft('%1', 'd.csv'))
     act(() => other.result.current[1](undefined))
     await act(async () =>
       done({ root: '/r', path: 'd.csv', size: 1, hash: 'h2' }),
@@ -1166,7 +1243,8 @@ describe('FileViewer: editing a table', () => {
       reveal: false,
     })
     expect(screen.queryByText(/changed on the host/)).toBeNull()
-    const draft = renderHook(() => useFileDraft('%1')).result.current[0]
+    const draft = renderHook(() => useFileDraft('%1', 'd.csv')).result
+      .current[0]
     expect(draft).toMatchObject({
       baseHash: `h:${agent}`,
       crlf: true,
@@ -1317,10 +1395,12 @@ describe('FileViewer: editing a table', () => {
     let done: (v: unknown) => void = () => {}
     mockContent.mockReturnValueOnce(new Promise((r) => (done = r)))
     fireEvent.click(screen.getByRole('button', { name: 'Reload and reapply' }))
-    const other = renderHook(() => useFileDraft('%1'))
+    // Another view of the pane replaced the draft of this file meanwhile
+    const other = renderHook(() => useFileDraft('%1', 'd.csv'))
     const theirs = {
       ...(other.result.current[0] as FileDraft),
-      path: 'b.ts',
+      text: 'a\n5\n',
+      cells: undefined,
     }
     act(() => other.result.current[1](theirs))
     await act(async () => done(csvFile('a\n0\n1\n')))
@@ -1405,7 +1485,8 @@ describe('FileViewer: editing a table', () => {
         screen.getByRole('button', { name: 'Reload and reapply' }),
       ),
     )
-    const draft = renderHook(() => useFileDraft('%1')).result.current[0]
+    const draft = renderHook(() => useFileDraft('%1', 'd.csv')).result
+      .current[0]
     expect(draft?.text.startsWith('id,v\n0,w\n1,v1\n')).toBe(true)
   })
 })

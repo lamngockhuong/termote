@@ -216,11 +216,13 @@ describe('MarkdownPreview: links', () => {
     expect(p.onFollow).toHaveBeenCalledWith(
       { kind: 'path', path: 'README.md', anchor: 'install' },
       40,
+      { newTab: false },
     )
     fireEvent.click(screen.getByRole('button', { name: 'src' }))
     expect(p.onFollow).toHaveBeenLastCalledWith(
       { kind: 'path', path: 'src', anchor: undefined },
       40,
+      { newTab: false },
     )
   })
 
@@ -273,6 +275,48 @@ describe('MarkdownPreview: links', () => {
     expect(p.onFollow).not.toHaveBeenCalled()
   })
 
+  it('Ctrl/Cmd+click, a middle click or a long press ask for a new tab', () => {
+    vi.useFakeTimers()
+    try {
+      const p = show('[readme](../../README.md) [up](/src/)')
+      const link = screen.getByRole('button', { name: 'readme' })
+      const target = { kind: 'path', path: 'README.md', anchor: undefined }
+      fireEvent.click(link, { ctrlKey: true })
+      expect(p.onFollow).toHaveBeenLastCalledWith(target, 0, { newTab: true })
+      fireEvent.click(link, { metaKey: true })
+      expect(p.onFollow).toHaveBeenCalledTimes(2)
+      // A middle click, without the browser's autoscroll
+      const down = new MouseEvent('mousedown', {
+        bubbles: true,
+        cancelable: true,
+        button: 1,
+      })
+      link.dispatchEvent(down)
+      expect(down.defaultPrevented).toBe(true)
+      fireEvent(link, new MouseEvent('auxclick', { bubbles: true, button: 1 }))
+      expect(p.onFollow).toHaveBeenCalledTimes(3)
+      // A right click does nothing
+      fireEvent(link, new MouseEvent('auxclick', { bubbles: true, button: 2 }))
+      fireEvent.mouseDown(link, { button: 0 })
+      expect(p.onFollow).toHaveBeenCalledTimes(3)
+      // A long press, then the click that ends it is swallowed
+      fireEvent.pointerDown(link, { pointerType: 'touch' })
+      vi.advanceTimersByTime(500)
+      expect(p.onFollow).toHaveBeenLastCalledWith(target, 0, { newTab: true })
+      fireEvent.click(link)
+      expect(p.onFollow).toHaveBeenCalledTimes(4)
+      // A tap follows in the tab
+      fireEvent.click(screen.getByRole('button', { name: 'up' }))
+      expect(p.onFollow).toHaveBeenLastCalledWith(
+        { kind: 'path', path: 'src', anchor: undefined },
+        0,
+        { newTab: false },
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('starts at the heading it was opened at', () => {
     show('# A\n\n## Usage', { anchor: 'usage' })
     expect(scrollIntoView).toHaveBeenCalledTimes(1)
@@ -296,6 +340,7 @@ describe('MarkdownPreview: images', () => {
     expect(p.onFollow).toHaveBeenCalledWith(
       { kind: 'path', path: 'docs/guide/img/shot.png', anchor: undefined },
       0,
+      { newTab: false },
     )
     expect(
       screen.getByRole('button', { name: 'image: b.png' }),

@@ -6,6 +6,7 @@ import {
   Image as ImageIcon,
   Lock,
   Pencil,
+  Pin,
   Trash2,
   WrapText,
   X,
@@ -13,6 +14,7 @@ import {
 import {
   type ComponentProps,
   lazy,
+  type ReactNode,
   Suspense,
   useEffect,
   useRef,
@@ -237,8 +239,13 @@ interface Props {
   backLabel?: string
   // Back: to backTo, else to the tree
   onClose: () => void
-  // A link of the preview to another file or a directory
-  onFollow: (target: LinkPath, scrollTop: number) => void
+  // A link of the preview to another file or a directory; newTab for
+  // Ctrl/Cmd+click, a middle click or a long press
+  onFollow: (
+    target: LinkPath,
+    scrollTop: number,
+    opts: { newTab: boolean },
+  ) => void
   onRootChanged: (root: string) => void
   notify: (message: string) => void
   // The file may be edited (not a view-only client)
@@ -253,13 +260,26 @@ interface Props {
   // the hash of the text shown, when it is shown, and whether the file
   // usually holds secrets
   onDelete?: (file: { hash?: string; sensitive: boolean }) => void
+  // The file's tab is the preview one: Keep open (and editing) pins it
+  pinned?: boolean
+  onPin?: () => void
+  // The user chose to show the sensitive file
+  onRevealed?: () => void
+  // Not showing the sensitive file after all (Back when not given)
+  onCancelReveal?: () => void
+  // The file was scrolled to top (its tab keeps it)
+  onScroll?: (top: number) => void
+  // Closes the file's tab: offered when the file is gone
+  onCloseTab?: () => void
+  // More buttons at the end of the header
+  headerExtra?: ReactNode
 }
 
 // One file of the tree: its text with line numbers, or why it cannot be
 // shown. A file that usually holds secrets is shown only after the user says
 // so, every time it is opened: the caller keys this by root and path, so
 // another file (or the same path under a new root) never inherits a reveal.
-// Edit turns the text into a textarea; the draft is the pane's
+// Edit turns the text into a textarea; the draft is the file's
 // (useFileDraft), so a remount opens it again where it was.
 export function FileViewer({
   paneId,
@@ -279,28 +299,23 @@ export function FileViewer({
   initialReveal = false,
   onSaved,
   onDelete,
+  pinned = true,
+  onPin,
+  onRevealed,
+  onCancelReveal,
+  onScroll,
+  onCloseTab,
+  headerExtra,
 }: Props) {
   const [state, setState] = useState<Loaded>({ kind: 'loading' })
-  const [draft, setDraft] = useFileDraft(paneId)
-  // The pane's draft, when it is this file's
-  const mine = draft?.path === path ? draft : undefined
+  const [mine, setDraft] = useFileDraft(paneId, path)
   const [reveal, setReveal] = useState(initialReveal || !!mine?.reveal)
   const [saving, setSaving] = useState(false)
   // What a confirmed Discard goes on to do
   const [discarding, setDiscarding] = useState<'cancel' | 'back'>()
-  // A pane keeps one draft: unsaved changes to another file are dropped
-  // only once the user says so
-  const other =
-    draft && draft.path !== path && draft.text !== draft.base
-      ? draft
-      : undefined
-  // The file to edit once the other draft is discarded, that draft's path,
-  // and the delimiter of the table it is edited in, if it is
-  const [replacing, setReplacing] = useState<{
-    file: TextLoaded
-    other: string
-    delimiter?: Delimiter
-  }>()
+  // Where the text is scrolled to: the next view of it (source, editor)
+  // starts there
+  const scrolled = useRef(scrollTop)
   // A table edit asked with another delimiter than the file's own
   const [asking, setAsking] = useState<{
     file: TextLoaded
@@ -329,10 +344,13 @@ export function FileViewer({
   const tableView = canTable && settings.tablePreview
   const togglePreview = () => {
     if (canTable) {
+      scrolled.current = undefined
       updateSetting('tablePreview', !tableView)
       return
     }
     if (preview) setLeftPreview(true)
+    // The other view of the file is laid out otherwise: from the top
+    scrolled.current = undefined
     updateSetting('markdownPreview', !preview)
   }
   const previewOn = preview || tableView
@@ -402,6 +420,8 @@ export function FileViewer({
     setSaveError(undefined)
     setSkipped([])
     setDraft(draftOf(file, path, reveal, delimiter))
+    // Edited: no longer a preview tab
+    onPin?.()
   }
 
   // Into the table editor with delimiter, after asking when the file reads
@@ -413,19 +433,13 @@ export function FileViewer({
     } else beginEdit(file, delimiter)
   }
 
-  // With a delimiter, the table being viewed is edited; else the text
-  const requestEdit = (file: TextLoaded, delimiter?: Delimiter) =>
-    other
-      ? setReplacing({ file, other: other.path, delimiter })
-      : editWith(file, delimiter)
-
   // Changes view: into editing once, as soon as the file can be; not again
   // after the draft found at mount is discarded
   const started = useRef(!!mine)
   useEffect(() => {
     if (!startEditing || started.current || mine || !editable) return
     started.current = true
-    requestEdit(editable)
+    editWith(editable)
   })
 
   const discard = () => {
@@ -471,9 +485,7 @@ export function FileViewer({
       setDraft((now) =>
         now === edit
           ? undefined
-          : now?.path === path
-            ? rebaseDraft(now, edit, res.root, res.hash)
-            : now,
+          : now && rebaseDraft(now, edit, res.root, res.hash),
       )
       setSkipped([])
       notify('Saved')
@@ -561,7 +573,16 @@ export function FileViewer({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div
+      className="flex min-h-0 flex-1 flex-col"
+      // Each view of the text marks the element it scrolls
+      onScrollCapture={(e) => {
+        const el = e.target as HTMLElement
+        if (el.dataset?.scrollRestore === undefined) return
+        scrolled.current = el.scrollTop
+        onScroll?.(el.scrollTop)
+      }}
+    >
       <div className="sticky top-0 z-10 flex shrink-0 items-center gap-1 border-b border-border bg-surface px-1 py-1 ui-terminal:bg-bg">
         <IconButton
           size="sm"
@@ -612,7 +633,7 @@ export function FileViewer({
           <IconButton
             size="sm"
             onClick={() =>
-              requestEdit(
+              editWith(
                 editable,
                 tableView && tableState?.ok ? tableState.delimiter : undefined,
               )
@@ -621,6 +642,16 @@ export function FileViewer({
             title="Edit"
           >
             <Pencil size={15} aria-hidden="true" />
+          </IconButton>
+        )}
+        {!pinned && onPin && (
+          <IconButton
+            size="sm"
+            onClick={onPin}
+            aria-label="Keep open"
+            title="Keep open"
+          >
+            <Pin size={15} aria-hidden="true" />
           </IconButton>
         )}
         {!mine && onDelete && (
@@ -685,6 +716,7 @@ export function FileViewer({
             <WrapText size={15} aria-hidden="true" />
           </IconButton>
         )}
+        {headerExtra}
       </div>
       {mine && !cells && (
         <FileEditor
@@ -702,6 +734,7 @@ export function FileViewer({
             setReload((n) => n + 1)
           }}
           onCopy={() => copyText(mine.text)}
+          scrollTop={scrolled.current}
         />
       )}
       {!mine && asImage && !sensitive && (
@@ -719,7 +752,7 @@ export function FileViewer({
           path={path}
           wrap={wrap}
           anchor={leftPreview ? undefined : anchor}
-          scrollTop={leftPreview ? undefined : scrollTop}
+          scrollTop={scrolled.current}
           onFollow={onFollow}
           notify={notify}
         />
@@ -745,6 +778,7 @@ export function FileViewer({
           wrap={wrap}
           notify={notify}
           onTableState={setTableState}
+          scrollTop={scrolled.current}
           editing={
             cells && {
               delimiter: cells.delimiter,
@@ -764,7 +798,12 @@ export function FileViewer({
           {markdown && tooLarge && (
             <Banner>Too large to preview: shown as source</Banner>
           )}
-          <CodeBlock text={state.text} path={path} wrap={wrap} />
+          <CodeBlock
+            text={state.text}
+            path={path}
+            wrap={wrap}
+            scrollTop={scrolled.current}
+          />
         </>
       )}
       {!mine && !asImage && state.kind === 'loading' && (
@@ -776,7 +815,16 @@ export function FileViewer({
         </ViewMessage>
       )}
       {!mine && !asImage && state.kind === 'error' && (
-        <ViewMessage>{ERRORS[state.error]}</ViewMessage>
+        <ViewMessage>
+          {ERRORS[state.error]}
+          {state.error === 'not-found' && onCloseTab && (
+            // Gone from the host (deleted or renamed elsewhere): the tab
+            // stays until the user closes it
+            <Button size="sm" onClick={onCloseTab}>
+              Close tab
+            </Button>
+          )}
+        </ViewMessage>
       )}
       {!mine && sensitive && (
         <ViewMessage>
@@ -786,8 +834,11 @@ export function FileViewer({
       )}
       <SensitiveConfirm
         isOpen={!mine && sensitive}
-        onConfirm={() => setReveal(true)}
-        onCancel={onClose}
+        onConfirm={() => {
+          setReveal(true)
+          onRevealed?.()
+        }}
+        onCancel={onCancelReveal ?? onClose}
       />
       <ConfirmDialog
         isOpen={!!discarding}
@@ -804,21 +855,6 @@ export function FileViewer({
       >
         Your changes to this file will be lost.
       </ConfirmDialog>
-      {replacing && (
-        <ConfirmDialog
-          isOpen
-          title="Discard other changes?"
-          confirmLabel="Discard"
-          destructive
-          onConfirm={() => {
-            setReplacing(undefined)
-            editWith(replacing.file, replacing.delimiter)
-          }}
-          onCancel={() => setReplacing(undefined)}
-        >
-          Your unsaved changes to {replacing.other} will be lost.
-        </ConfirmDialog>
-      )}
       {asking && (
         <ConfirmDialog
           isOpen

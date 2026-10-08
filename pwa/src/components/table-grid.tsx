@@ -66,6 +66,8 @@ interface Props {
   onSort: (col: number) => void
   onOpen: (row: number, col: number) => void
   busy: boolean
+  // Where it starts scrolled to (a tab shown again), once there are rows
+  scrollTop?: number
 }
 
 // A virtual grid: one scrolling frame holding a sticky header, a spacer for
@@ -84,8 +86,12 @@ export function TableGrid({
   onSort,
   onOpen,
   busy,
+  scrollTop,
 }: Props) {
   const frame = useRef<HTMLDivElement>(null)
+  // Used up by the first rows: the offset is a scroll offset of this frame,
+  // so it is set back as it was, whatever the scale
+  const restore = useRef(scrollTop)
   const coarse = useMediaQuery('(pointer: coarse)')
   const rowHeight = coarse ? TOUCH_ROW_HEIGHT : ROW_HEIGHT
   const [view, setView] = useState({ top: 0, height: 0 })
@@ -114,6 +120,16 @@ export function TableGrid({
       ro?.disconnect()
     }
   }, [])
+
+  // The rows come after the first parse: until then the frame cannot scroll
+  useLayoutEffect(() => {
+    const top = restore.current
+    if (!top || !rows.length) return
+    restore.current = undefined
+    const el = frame.current as HTMLDivElement
+    el.scrollTop = top
+    setView({ top: el.scrollTop, height: el.clientHeight })
+  }, [rows])
 
   const height = view.height || FALLBACK_HEIGHT
   const content = rows.length * rowHeight
@@ -217,6 +233,7 @@ export function TableGrid({
       tabIndex={pos >= first && pos < last ? -1 : 0}
       aria-busy={busy}
       className="min-h-0 flex-1 overflow-auto bg-bg font-term text-[12px] text-fg"
+      data-scroll-restore
       onKeyDown={onKeyDown}
       onClick={onClick}
     >

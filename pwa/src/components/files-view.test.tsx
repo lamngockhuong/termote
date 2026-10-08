@@ -12,7 +12,7 @@ import type { ViewProps } from '../app-views'
 import { ThemeProvider } from '../contexts/theme-context'
 import { resetFilesStores, useFileDraft } from '../hooks/use-files'
 import { type FileEntry, RequestError } from '../hooks/use-mux-api'
-import { FilesView } from './files-view'
+import { FilesView, TREE_DOUBLE_CLICK_MS } from './files-view'
 
 const mockTree = vi.fn()
 const mockContent = vi.fn()
@@ -308,6 +308,11 @@ describe('FilesView', () => {
       truncated: false,
     }))
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+    await act(async () => {})
+    // Its tab closed with the old root: nothing unsaved in it
+    expect(screen.queryByTestId('code-block')).toBeNull()
+    expect(screen.queryByRole('tab', { name: '.env' })).toBeNull()
+    fireEvent.click(item('.env'))
     await act(async () => {})
     expect(mockContent).toHaveBeenLastCalledWith('%1', '.env', {
       root: '/home/kim/other',
@@ -910,7 +915,7 @@ describe('FilesView delete', () => {
       path: 'README.md',
       trashId: 't',
     })
-    const draft = renderHook(() => useFileDraft('%1'))
+    const draft = renderHook(() => useFileDraft('%1', 'README.md'))
     act(() =>
       draft.result.current[1]({
         root: '/home/kim/app',
@@ -930,7 +935,7 @@ describe('FilesView delete', () => {
 
   it("a deleted file keeps another file's draft", async () => {
     mockDelete.mockResolvedValue({ root: '/r', path: 'src', trashId: 't' })
-    const draft = renderHook(() => useFileDraft('%1'))
+    const draft = renderHook(() => useFileDraft('%1', 'other.md'))
     const other = {
       root: '/home/kim/app',
       path: 'other.md',
@@ -945,5 +950,255 @@ describe('FilesView delete', () => {
     await choose('README.md')
     await confirm()
     expect(draft.result.current[0]).toEqual(other)
+  })
+})
+
+describe('FilesView tabs', () => {
+  beforeEach(() => {
+    HTMLDialogElement.prototype.showModal = vi.fn(function (
+      this: HTMLDialogElement,
+    ) {
+      this.setAttribute('open', '')
+    })
+    HTMLDialogElement.prototype.close = vi.fn()
+    mockContent.mockImplementation(async (_p: string, path: string) =>
+      path === '.env'
+        ? { root: '/home/kim/app', path, sensitive: true }
+        : {
+            root: '/home/kim/app',
+            path,
+            size: 3,
+            text:
+              path === 'README.md'
+                ? '[code](src/a.ts) [lib](src/lib/)'
+                : `text of ${path}`,
+            hash: `h:${path}`,
+            editable: true,
+          },
+    )
+  })
+
+  const tabs = () =>
+    within(screen.getByRole('tablist', { name: 'Open files' }))
+      .getAllByRole('tab')
+      .map((t) => t.textContent)
+  const tab = (name: RegExp | string) => screen.getByRole('tab', { name })
+
+  async function openA() {
+    fireEvent.click(item('src'))
+    await act(async () => {})
+    fireEvent.click(item('a.ts'))
+    await screen.findByTestId('code-block')
+  }
+
+  it('a single click opens the preview tab, a double click keeps it', async () => {
+    await show()
+    expect(screen.queryByRole('tablist')).toBeNull()
+    expect(screen.queryByRole('tabpanel')).toBeNull()
+    fireEvent.click(item('README.md'))
+    await screen.findByTestId('markdown-preview')
+    expect(tabs()).toEqual(['Files', 'README.md (preview)'])
+    // The file shows in the panel the selected tab names
+    expect(
+      screen.getByRole('tabpanel', { name: /^README\.md/ }),
+    ).toContainElement(screen.getByTestId('markdown-preview'))
+    fireEvent.click(tab('Files'))
+    await openA()
+    // The preview tab now shows a.ts
+    expect(tabs()).toEqual(['Files', 'a.ts (preview)'])
+    // A double click: the second click lands on the viewer that took the
+    // tree's place
+    fireEvent.click(tab('Files'))
+    fireEvent.click(item('a.ts'))
+    fireEvent.doubleClick(await screen.findByTestId('code-block'))
+    fireEvent.click(tab('Files'))
+    fireEvent.click(item('README.md'))
+    await screen.findByTestId('markdown-preview')
+    expect(tabs()).toEqual(['Files', 'a.ts', 'README.md (preview)'])
+    fireEvent.click(tab('a.ts'))
+    expect(await screen.findByTestId('code-block')).toHaveTextContent(
+      'text of src/a.ts',
+    )
+    // Keep open pins README.md from its header
+    fireEvent.click(tab(/^README\.md/))
+    fireEvent.click(await screen.findByRole('button', { name: 'Keep open' }))
+    expect(tabs()).toEqual(['Files', 'a.ts', 'README.md'])
+  })
+
+  it('a double click pins only right after the tree opened the file', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1000)
+    try {
+      await show()
+      fireEvent.click(item('README.md'))
+      await screen.findByTestId('markdown-preview')
+      now.mockReturnValue(1000 + TREE_DOUBLE_CLICK_MS)
+      fireEvent.doubleClick(screen.getByTestId('markdown-preview'))
+      expect(tabs()).toEqual(['Files', 'README.md (preview)'])
+      // Once only: a later double click selects text
+      now.mockReturnValue(1000)
+      fireEvent.doubleClick(screen.getByTestId('markdown-preview'))
+      expect(tabs()).toEqual(['Files', 'README.md (preview)'])
+      // A double click on the tree itself (a folder) pins nothing
+      fireEvent.click(tab('Files'))
+      fireEvent.doubleClick(item('src'))
+      expect(tabs()).toEqual(['Files', 'README.md (preview)'])
+    } finally {
+      now.mockRestore()
+    }
+  })
+
+  it('switching tabs brings back where each file was scrolled', async () => {
+    await show()
+    await openA()
+    const code = screen.getByTestId('code-block')
+    code.scrollTop = 90
+    fireEvent.scroll(code)
+    fireEvent.doubleClick(tab(/^a\.ts/))
+    fireEvent.click(tab('Files'))
+    fireEvent.click(item('README.md'))
+    await screen.findByTestId('markdown-preview')
+    fireEvent.click(tab('a.ts'))
+    expect((await screen.findByTestId('code-block')).scrollTop).toBe(90)
+  })
+
+  it('a tab with unsaved changes closes only after Discard', async () => {
+    await show()
+    await openA()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    fireEvent.change(
+      screen.getByRole('textbox', { name: 'Text of src/a.ts' }),
+      {
+        target: { value: 'changed' },
+      },
+    )
+    // Editing pinned it; the dot says it has changes
+    expect(tabs()).toEqual(['Files', 'a.ts (unsaved changes)'])
+    fireEvent.click(screen.getByLabelText('Close a.ts'))
+    const ask = screen.getByRole('dialog', { name: 'Discard changes?' })
+    expect(ask).toHaveTextContent('Your changes to a.ts will be lost.')
+    fireEvent.click(within(ask).getByRole('button', { name: 'Cancel' }))
+    expect(tabs()).toHaveLength(2)
+    // The tree, then the tab again: the draft is still there
+    fireEvent.click(tab('Files'))
+    fireEvent.click(tab(/^a\.ts/))
+    expect(
+      screen.getByRole('textbox', { name: 'Text of src/a.ts' }),
+    ).toHaveValue('changed')
+    fireEvent.keyDown(tab(/^a\.ts/), { key: 'Delete' })
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
+    expect(screen.queryByRole('tablist')).toBeNull()
+    expect(screen.getByRole('tree')).toBeInTheDocument()
+    const draft = renderHook(() => useFileDraft('%1', 'src/a.ts'))
+    expect(draft.result.current[0]).toBeUndefined()
+  })
+
+  it('a clean tab closes at once', async () => {
+    await show()
+    fireEvent.click(item('README.md'))
+    await screen.findByTestId('markdown-preview')
+    fireEvent.click(screen.getByLabelText('Close README.md'))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByRole('tree')).toBeInTheDocument()
+  })
+
+  it('Ctrl+click on a link opens it in a new tab', async () => {
+    await show()
+    fireEvent.click(item('README.md'))
+    fireEvent.click(await screen.findByRole('button', { name: 'code' }), {
+      ctrlKey: true,
+    })
+    expect(await screen.findByTestId('code-block')).toHaveTextContent(
+      'text of src/a.ts',
+    )
+    expect(tabs()).toEqual(['Files', 'README.md (preview)', 'a.ts'])
+  })
+
+  it('declining a sensitive file closes its tab', async () => {
+    await show()
+    fireEvent.click(item('.env'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('tablist')).toBeNull()
+    expect(screen.getByRole('tree')).toBeInTheDocument()
+  })
+
+  it('a file gone from the host keeps its tab until closed', async () => {
+    mockContent.mockRejectedValue(new RequestError(404, '', 'x'))
+    await show()
+    fireEvent.click(item('README.md'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Close tab' }))
+    expect(screen.queryByRole('tablist')).toBeNull()
+  })
+
+  async function moveRoot() {
+    mockTree.mockRejectedValueOnce(
+      new RequestError(409, '', 'root changed', undefined, undefined, '/n'),
+    )
+    mockTree.mockImplementation(async (_p: string, path: string) => ({
+      root: '/n',
+      isRepo: true,
+      path,
+      entries: DIRS[path],
+      truncated: false,
+    }))
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+    await act(async () => {})
+  }
+
+  it.each([
+    ['Keep', 1],
+    ['Discard and close', 0],
+  ])(
+    'a moved root asks about tabs with unsaved changes: %s',
+    async (choice, left) => {
+      await show()
+      fireEvent.click(item('README.md'))
+      await screen.findByTestId('markdown-preview')
+      fireEvent.click(tab('Files'))
+      await openA()
+      fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+      fireEvent.change(
+        screen.getByRole('textbox', { name: 'Text of src/a.ts' }),
+        {
+          target: { value: 'changed' },
+        },
+      )
+      fireEvent.click(tab('Files'))
+      await moveRoot()
+      const ask = screen.getByRole('dialog', {
+        name: 'Close a file with unsaved changes?',
+      })
+      fireEvent.click(within(ask).getByRole('button', { name: choice }))
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(screen.queryAllByRole('tab', { name: /^a\.ts/ })).toHaveLength(
+        left,
+      )
+      expect(screen.queryByRole('tab', { name: /^README/ })).toBeNull()
+    },
+  )
+
+  it('a phone lists the open files in a sheet instead of a tab bar', async () => {
+    await show({ isMobile: true })
+    expect(screen.queryByRole('button', { name: /^Open files/ })).toBeNull()
+    fireEvent.click(item('README.md'))
+    await screen.findByTestId('markdown-preview')
+    expect(screen.queryByRole('tablist')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Back to files' }))
+    // On the tree too, while a file is open
+    fireEvent.click(screen.getByRole('button', { name: 'Open files (1)' }))
+    const sheet = screen.getByRole('dialog', { name: 'Open files' })
+    fireEvent.click(within(sheet).getByRole('button', { name: /^README\.md/ }))
+    expect(await screen.findByTestId('markdown-preview')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Open files (1)' }))
+    // Closing the file shown keeps the sheet open
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: 'Open files' })).getByRole(
+        'button',
+        { name: 'Close README.md' },
+      ),
+    )
+    expect(screen.getByRole('tree')).toBeInTheDocument()
+    expect(
+      screen.getByRole('dialog', { name: 'Open files' }),
+    ).toBeInTheDocument()
   })
 })

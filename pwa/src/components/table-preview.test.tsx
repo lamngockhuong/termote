@@ -934,3 +934,19 @@ describe('TablePreview editing a large file', () => {
     expect(valueBox()).toHaveValue('')
   }, 15000)
 })
+
+describe('TablePreview scroll', () => {
+  it('the grid starts at the offset it was left at, once its rows are there', async () => {
+    const rows = Array.from({ length: 200 }, (_, i) => `r${i},${i}`).join('\n')
+    show(`name,n\n${rows}\n`, { scrollTop: 300 })
+    const grid = await screen.findByRole('grid')
+    await waitFor(() => expect(grid.scrollTop).toBe(300))
+    expect(grid).toHaveAttribute('data-scroll-restore')
+  })
+
+  it('an empty table has nothing to scroll to', async () => {
+    show('name,n\n', { scrollTop: 300 })
+    const grid = await screen.findByRole('grid')
+    expect(grid.scrollTop).toBe(0)
+  })
+})
