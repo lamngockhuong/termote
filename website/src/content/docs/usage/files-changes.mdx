@@ -111,7 +111,9 @@ The pencil button (**Edit**) in a text file's bar turns its text into a plain te
 turning `status: review` into `status: approved` in a record's front matter, without asking the
 agent or typing `sed`.
 
-- A Markdown, CSV or TSV file is edited as its source, even when the preview or the table is on.
+- A Markdown file is edited as its source, even when the preview is on. A CSV or TSV file shown
+  as a table is edited in the table (see [Editing a Table](#editing-a-table)); shown as its
+  source, or opened from Changes, it is edited as its source.
 - Ctrl+S (Cmd+S on a Mac) saves. Cancel, or Back, with unsaved changes asks
   `Discard changes?` first.
 - Line breaks stay as the file had them: a file with Windows line breaks (`\r\n`) keeps them.
@@ -306,6 +308,38 @@ written to the file, and they are forgotten when the file is closed.
   `⟨U+202E⟩`. **Copy** in a cell's sheet copies the value itself, those characters included,
   without the quotes that wrap it in the file.
 </Aside>
+
+### Editing a Table
+
+**Edit** on a file shown as a table keeps the table and makes each cell editable, with **Cancel**
+and **Save** in the bar as for any file. Opened from Changes, or shown as its source, the file is
+edited as text instead.
+
+- Tap a cell to change its value in a sheet: the value can hold several lines, and characters
+  that hide or reorder text show below it as `⟨U+XXXX⟩`. **Apply** puts it in the table; a cell
+  a short row does not have can be set too.
+- **Add row below** (in that sheet) and the **Add a row at the end** button add an empty row and
+  open its first cell. **Delete row** asks first, and says when the row is the file's first one,
+  which is the header when **Header row** is on. To rename a column or delete the header, turn
+  **Header row** off first: the header row is then a row you can open.
+- **Undo** and **Redo**, or Ctrl+Z and Ctrl+Shift+Z (Cmd on a Mac) on the table, walk through
+  your changes; Ctrl+S saves. Typed in the sheet or the filter, these keys belong to that box.
+- Saving changes only the characters of the cells you set: a value that needs quotes (it holds
+  the delimiter, a quote, a line break, or a space at either end) gets them, a cell that had
+  quotes keeps them, and a new row uses the file's delimiter and line breaks. Every other byte
+  stays as it was.
+- The delimiter cannot change while editing. When the one you are viewing with is not the one
+  found in the file, Edit asks first: edits written with another delimiter can shift the columns.
+- Sorting and filtering still work while editing; they never change the file.
+
+If the file changed on the host since you opened it, Save says so and writes nothing. **Reload
+and reapply** reads the file again and applies each of your changes to the row it was made on,
+found by that row's values rather than its number, so a row an agent added or removed above it
+does not matter. A change whose row is gone, or matches more than one row, is listed with why, and
+a cell's value can be copied to set it again by hand; changes after an added or deleted row that
+could not be applied are listed too, since they may concern that row. When the file read again is
+no longer a table that can be edited, nothing is applied and Save stays off. Nothing is saved
+until you press Save.
 
 ## Images
 

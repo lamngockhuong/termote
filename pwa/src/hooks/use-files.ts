@@ -1,4 +1,6 @@
 import { useCallback, useSyncExternalStore } from 'react'
+import type { TableOp } from '../utils/csv-edits'
+import type { Delimiter } from '../utils/csv-parse'
 import type { LinkPath } from '../utils/markdown-links'
 import {
   type FileEntry,
@@ -440,7 +442,17 @@ export interface FileDraft {
   text: string
   // A sensitive file the user chose to show
   reveal: boolean
+  // Edited in the table view: the delimiter its edits are written with,
+  // and the edits that turn base into text, in order (undone ones in redo)
+  cells?: { delimiter: Delimiter; ops: TableOp[]; redo: TableOp[] }
 }
+
+type DraftUpdate =
+  | FileDraft
+  | undefined
+  // From the draft as it is in the store now (an async caller's own copy
+  // may be stale)
+  | ((now: FileDraft | undefined) => FileDraft | undefined)
 
 const drafts = new Map<string, FileDraft>()
 const draftListeners = new Set<() => void>()
@@ -466,7 +478,9 @@ function subscribeDrafts(fn: () => void) {
 export function useFileDraft(paneId: string) {
   const draft = useSyncExternalStore(subscribeDrafts, () => drafts.get(paneId))
   const setDraft = useCallback(
-    (next: FileDraft | undefined) => {
+    (update: DraftUpdate) => {
+      const next =
+        typeof update === 'function' ? update(drafts.get(paneId)) : update
       if (next) drafts.set(paneId, next)
       else drafts.delete(paneId)
       guardUnload()

@@ -107,8 +107,9 @@ thường, thay các nút khác bằng **Cancel** và **Save**. Nút này dành 
 `status: review` thành `status: approved` trong front matter của một bản ghi, khỏi phải nhờ agent
 hay gõ `sed`.
 
-- File Markdown, CSV hay TSV đều được sửa ở văn bản gốc, kể cả khi đang xem trước hoặc xem dạng
-  bảng.
+- File Markdown được sửa ở văn bản gốc, kể cả khi đang xem trước. File CSV hay TSV đang xem dạng
+  bảng thì sửa ngay trong bảng (xem [Sửa trong bảng](#sửa-trong-bảng)); đang xem văn bản gốc,
+  hoặc mở từ Changes, thì sửa ở văn bản gốc.
 - Ctrl+S (Cmd+S trên macOS) để lưu. Bấm Cancel hoặc Back khi còn thay đổi chưa lưu thì app hỏi
   `Discard changes?` trước.
 - Xuống dòng giữ nguyên như file đang dùng: file xuống dòng kiểu Windows (`\r\n`) vẫn giữ kiểu đó.
@@ -302,6 +303,38 @@ ghi vào file, và các lựa chọn này mất khi đóng file.
   thành dấu như `⟨U+202E⟩`. Nút chép trong bảng của một ô chép chính giá trị đó, gồm cả những ký
   tự kể trên, không kèm dấu ngoặc kép bao quanh nó trong file.
 </Aside>
+
+### Sửa trong bảng
+
+Bấm **Edit** khi file đang hiện dạng bảng thì bảng vẫn giữ nguyên và từng ô sửa được; thanh trên
+cùng có **Cancel** và **Save** như với mọi file. Mở từ Changes, hoặc đang xem văn bản gốc, thì
+file được sửa dạng văn bản.
+
+- Chạm một ô để đổi giá trị của nó trong một bảng nhỏ hiện lên: giá trị có thể nhiều dòng, và
+  những ký tự làm chữ bị ẩn hay đảo thứ tự hiện bên dưới dưới dạng `⟨U+XXXX⟩`. **Apply** đưa giá
+  trị vào bảng; ô mà một dòng thiếu cũng đặt được giá trị.
+- **Add row below** (trong bảng nhỏ đó) và nút **Add a row at the end** thêm một dòng trống rồi
+  mở ô đầu tiên của nó. **Delete row** hỏi trước khi xoá, và nói rõ khi đó là dòng đầu của file,
+  tức dòng tiêu đề lúc **Header row** đang bật. Muốn đổi tên cột hay xoá dòng tiêu đề, hãy tắt
+  **Header row** trước: khi đó dòng tiêu đề thành một dòng mở được như mọi dòng khác.
+- **Undo** và **Redo**, hoặc Ctrl+Z và Ctrl+Shift+Z (Cmd trên macOS) khi đang ở bảng, lùi và tiến
+  qua các thay đổi của bạn; Ctrl+S để lưu. Gõ trong bảng nhỏ hay ô lọc thì các phím này thuộc về
+  ô đó.
+- Khi lưu, chỉ ký tự của những ô bạn đã đặt là đổi: giá trị cần ngoặc kép (chứa dấu phân cách,
+  dấu ngoặc kép, xuống dòng, hay khoảng trắng ở đầu hoặc cuối) được bọc ngoặc, ô vốn có ngoặc vẫn
+  giữ ngoặc, dòng mới dùng dấu phân cách và kiểu xuống dòng của file. Mọi byte khác giữ nguyên.
+- Trong lúc sửa không đổi được dấu phân cách. Nếu dấu bạn đang dùng để xem khác dấu dò được trong
+  file, Edit hỏi trước: ghi bằng dấu khác có thể làm lệch cột.
+- Sắp xếp và lọc vẫn dùng được khi sửa, và không bao giờ đổi file.
+
+Nếu file trên máy đã đổi từ lúc bạn mở, Save báo như vậy và không ghi gì. **Reload and reapply**
+đọc lại file rồi áp từng thay đổi của bạn vào đúng dòng đã sửa. Dòng được tìm theo các giá trị
+của nó chứ không theo số thứ tự, nên một dòng agent thêm hay xoá phía trên không ảnh hưởng gì.
+Thay đổi nào không còn dòng của nó, hoặc khớp với nhiều hơn một dòng, sẽ được liệt kê kèm lý do,
+và giá trị của ô đó chép được để đặt lại bằng tay. Các thay đổi nằm sau một lần thêm hay xoá dòng
+không áp được cũng được liệt kê, vì chúng có thể nhắm vào chính dòng đó. Nếu file đọc lại không
+còn là bảng sửa được, không thay đổi nào được áp và Save vẫn tắt. Chưa có gì được lưu cho tới khi
+bạn bấm Save.
 
 ## Ảnh
 

@@ -639,6 +639,17 @@ describe('useFileDraft', () => {
     expect(later.result.current[0]).toBeUndefined()
   })
 
+  it('updates from the draft in the store now', () => {
+    const h = renderHook(() => useFileDraft('%1'))
+    act(() => h.result.current[1](draft))
+    act(() =>
+      h.result.current[1]((now) => now && { ...now, text: `${now.text}z` }),
+    )
+    expect(h.result.current[0]?.text).toBe('yz')
+    act(() => h.result.current[1](() => undefined))
+    expect(h.result.current[0]).toBeUndefined()
+  })
+
   it('is forgotten with the stores', () => {
     const h = renderHook(() => useFileDraft('%1'))
     act(() => h.result.current[1](draft))

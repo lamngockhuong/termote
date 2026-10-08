@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { TableOp } from './csv-edits'
 import { parseCsv } from './csv-parse'
 import {
   CSV_LOAD_TIMEOUT,
@@ -198,5 +199,44 @@ describe('CsvClient', () => {
     // Terminating twice, or with no worker, is harmless
     c.terminate()
     new CsvClient().terminate()
+  })
+
+  describe('reapply', () => {
+    const op: TableOp = {
+      kind: 'cell',
+      row: 1,
+      col: 1,
+      name: 'b',
+      before: '2',
+      after: '9',
+      rowValues: ['1', '2'],
+      patch: { start: 6, removed: '2', inserted: '9' },
+    }
+
+    it('applies edits to small text here', async () => {
+      const c = new CsvClient()
+      const r = await c.reapply('a,b\n0,0\n1,2\n', ',', [op])
+      expect(r).toMatchObject({ ok: true, text: 'a,b\n0,0\n1,9\n' })
+      expect(FakeWorker.all).toHaveLength(0)
+    })
+
+    it('sends large text to the worker, and takes its answer', async () => {
+      const c = new CsvClient()
+      const p = c.reapply(big, ',', [op])
+      const w = FakeWorker.all[0]
+      expect(w.posted).toEqual([
+        { type: 'reapply', id: 1, text: big, delimiter: ',', ops: [op] },
+      ])
+      const result = { ok: false }
+      w.reply({ type: 'reapply', id: 1, result })
+      expect(await p).toBe(result)
+    })
+
+    it('applies them here when the worker breaks', async () => {
+      const c = new CsvClient()
+      const p = c.reapply(big, ',', [op])
+      FakeWorker.all[0].onerror?.()
+      expect(await p).toMatchObject({ ok: true, skipped: [{ op }] })
+    })
   })
 })

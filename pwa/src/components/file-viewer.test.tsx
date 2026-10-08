@@ -1,4 +1,12 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  act,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import {
   afterEach,
   beforeAll,
@@ -9,9 +17,14 @@ import {
   vi,
 } from 'vitest'
 import { ThemeProvider } from '../contexts/theme-context'
-import { resetFilesStores } from '../hooks/use-files'
+import {
+  type FileDraft,
+  resetFilesStores,
+  useFileDraft,
+} from '../hooks/use-files'
 import { RequestError } from '../hooks/use-mux-api'
-import { FileViewer } from './file-viewer'
+import type { TableOp } from '../utils/csv-edits'
+import { FileViewer, rebaseDraft } from './file-viewer'
 
 const mockContent = vi.fn()
 const mockImage = vi.fn()
@@ -398,7 +411,7 @@ describe('FileViewer: tables', () => {
     expect(screen.getByTestId('code-block')).toHaveTextContent('"open')
   })
 
-  it('a CSV is edited as its source', async () => {
+  it('a CSV shown as its source is edited as its source', async () => {
     mockContent.mockResolvedValue({
       ...csv('a,b\n'),
       hash: 'h',
@@ -406,6 +419,8 @@ describe('FileViewer: tables', () => {
     })
     show({ path: 'data/a.csv', canEdit: true })
     await screen.findByRole('grid')
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+    await screen.findByTestId('code-block')
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
     expect(screen.getByRole('textbox')).toHaveValue('a,b\n')
     expect(screen.queryByRole('grid')).toBeNull()
@@ -869,5 +884,577 @@ describe('FileViewer editing', () => {
     expect(screen.getByRole('textbox', { name: 'Text of b.ts' })).toHaveValue(
       'y',
     )
+  })
+})
+
+describe('FileViewer: editing a table', () => {
+  const csvFile = (text: string, over: Record<string, unknown> = {}) =>
+    editable(text, { path: 'd.csv', ...over })
+  const grid = () => screen.getByRole('grid')
+  const valueBox = () => screen.getByRole('textbox', { name: 'Value' })
+  // Sets one cell through its sheet
+  const setCell = (shown: string, value: string) => {
+    fireEvent.click(screen.getByRole('gridcell', { name: shown }))
+    fireEvent.change(valueBox(), { target: { value } })
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+  }
+  async function editTable(
+    over: Partial<Parameters<typeof FileViewer>[0]> = {},
+  ) {
+    const p = show({ canEdit: true, path: 'd.csv', ...over })
+    await screen.findByRole('grid')
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    return p
+  }
+  const changed = () => new RequestError(409, 'changed', 'changed')
+
+  it('edits the table being viewed and saves only the cell changed', async () => {
+    const text = '﻿name,price\r\npear,2\r\nplum,3\r\n'
+    mockContent.mockResolvedValue(csvFile(text))
+    mockSave.mockResolvedValue({
+      root: '/r',
+      path: 'd.csv',
+      size: 1,
+      hash: 'h2',
+    })
+    const onSaved = vi.fn()
+    const p = await editTable({ onSaved })
+    expect(grid()).toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: /Text of/ })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeDisabled()
+    expect(saveButton()).toBeDisabled()
+    setCell('2', '2.5')
+    // Ctrl+S on the table saves it
+    await act(async () =>
+      fireEvent.keyDown(grid(), { key: 's', ctrlKey: true }),
+    )
+    // The draft's "\n" text, with only the cell's characters changed; the
+    // server writes "\r\n" back
+    expect(mockSave).toHaveBeenCalledWith('%1', {
+      root: '/r',
+      path: 'd.csv',
+      baseHash: `h:${text}`,
+      text: '﻿name,price\npear,2.5\nplum,3\n',
+      reveal: false,
+    })
+    expect(p.notify).toHaveBeenCalledWith('Saved')
+    expect(onSaved).toHaveBeenCalled()
+    // Viewed again, with the view's own toolbar
+    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull()
+    expect(screen.getByRole('gridcell', { name: '2.5' })).toBeInTheDocument()
+  })
+
+  it('Cancel with edits asks; undone edits leave at once', async () => {
+    mockContent.mockResolvedValue(csvFile('a\n1\n'))
+    await editTable()
+    setCell('1', '2')
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    expect(saveButton()).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel editing' }))
+    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    setCell('1', '2')
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel editing' }))
+    expect(screen.getByText('Discard changes?')).toBeInTheDocument()
+  })
+
+  it('startEditing (Changes) opens the source, even for a table', async () => {
+    mockContent.mockResolvedValue(csvFile('a,b\n'))
+    show({ canEdit: true, path: 'd.csv', startEditing: true })
+    expect(
+      await screen.findByRole('textbox', { name: 'Text of d.csv' }),
+    ).toHaveValue('a,b\n')
+  })
+
+  it('Edit while the table is still read opens the source', async () => {
+    vi.stubGlobal(
+      'Worker',
+      class {
+        postMessage() {}
+        terminate() {}
+      },
+    )
+    mockContent.mockResolvedValue({
+      ...csvFile(`a,b\n${'1,2\n'.repeat(70000)}`),
+    })
+    show({ canEdit: true, path: 'd.csv' })
+    expect(await screen.findByText('Reading the table…')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    expect(
+      screen.getByRole('textbox', { name: 'Text of d.csv' }),
+    ).toBeInTheDocument()
+  })
+
+  it('asks before editing with a delimiter other than the one found', async () => {
+    mockContent.mockResolvedValue(csvFile('a,b;c\n1,2;3\n'))
+    show({ canEdit: true, path: 'd.csv' })
+    await screen.findByRole('grid')
+    fireEvent.change(screen.getByRole('combobox', { name: 'Delimiter' }), {
+      target: { value: ';' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    expect(screen.getByRole('dialog')).toHaveTextContent(
+      'This file looks comma-separated, and you are viewing it as semicolon-separated.',
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit anyway' }))
+    const select = screen.getByRole('combobox', { name: 'Delimiter' })
+    expect(select).toHaveValue(';')
+    expect(select).toBeDisabled()
+    setCell('3', 'x;y')
+    mockSave.mockResolvedValue({
+      root: '/r',
+      path: 'd.csv',
+      size: 1,
+      hash: 'h',
+    })
+    await act(async () => fireEvent.click(saveButton()))
+    expect(mockSave).toHaveBeenCalledWith(
+      '%1',
+      expect.objectContaining({ text: 'a,b;c\n1,2;"x;y"\n' }),
+    )
+  })
+
+  it('another file with unsaved changes: asks to drop them, then the delimiter, then edits the table', async () => {
+    mockContent.mockResolvedValue(editable('x'))
+    const first = await startEdit()
+    type('draft of a')
+    first.unmount()
+    mockContent.mockResolvedValue(csvFile('a,b;c\n1,2;3\n'))
+    show({ canEdit: true, path: 'd.csv' })
+    await screen.findByRole('grid')
+    fireEvent.change(screen.getByRole('combobox', { name: 'Delimiter' }), {
+      target: { value: ';' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
+    // One dialog at a time; Cancel at the second keeps the first draft
+    expect(screen.getAllByRole('dialog')).toHaveLength(1)
+    expect(screen.getByRole('dialog')).toHaveTextContent(
+      'Edit with another delimiter?',
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull()
+    const draft = renderHook(() => useFileDraft('%1'))
+    expect(draft.result.current[0]?.text).toBe('draft of a')
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit anyway' }))
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: /Text of/ })).toBeNull()
+    expect(draft.result.current[0]).toMatchObject({
+      path: 'd.csv',
+      cells: { delimiter: ';', ops: [], redo: [] },
+    })
+  })
+
+  it('another draft with the delimiter found: straight into the table once dropped', async () => {
+    mockContent.mockResolvedValue(editable('x'))
+    const first = await startEdit()
+    type('draft of a')
+    first.unmount()
+    mockContent.mockResolvedValue(csvFile('a,b\n1,2\n'))
+    show({ canEdit: true, path: 'd.csv' })
+    await screen.findByRole('grid')
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument()
+  })
+
+  it('while saving, the table takes no edit', async () => {
+    mockContent.mockResolvedValue(csvFile('a\n1\n'))
+    let done: (v: unknown) => void = () => {}
+    mockSave.mockReturnValue(new Promise((r) => (done = r)))
+    await editTable()
+    setCell('1', '2')
+    fireEvent.click(saveButton())
+    fireEvent.click(screen.getByRole('gridcell', { name: '2' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeDisabled()
+    await act(async () =>
+      done({ root: '/r', path: 'd.csv', size: 1, hash: 'h2' }),
+    )
+    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull()
+  })
+
+  it('a save keeps a draft another view made meanwhile', async () => {
+    mockContent.mockResolvedValue(csvFile('a\n1\n'))
+    let done: (v: unknown) => void = () => {}
+    mockSave.mockReturnValue(new Promise((r) => (done = r)))
+    await editTable()
+    setCell('1', '2')
+    fireEvent.click(saveButton())
+    // Another view of the pane drops it for another file's draft
+    const other = renderHook(() => useFileDraft('%1'))
+    const theirs = {
+      ...other.result.current[0],
+      path: 'b.ts',
+      cells: undefined,
+    } as FileDraft
+    act(() => other.result.current[1](theirs))
+    await act(async () =>
+      done({ root: '/r', path: 'd.csv', size: 1, hash: 'h2' }),
+    )
+    expect(other.result.current[0]).toBe(theirs)
+  })
+
+  it('a save keeps edits made to the same file meanwhile, on the text saved', async () => {
+    mockContent.mockResolvedValue(csvFile('a\n1\n'))
+    let done: (v: unknown) => void = () => {}
+    mockSave.mockReturnValue(new Promise((r) => (done = r)))
+    await editTable()
+    setCell('1', '2')
+    fireEvent.click(saveButton())
+    const other = renderHook(() => useFileDraft('%1'))
+    const sent = other.result.current[0] as FileDraft
+    act(() => other.result.current[1]({ ...sent, text: 'a\n3\n' }))
+    await act(async () =>
+      done({ root: '/r', path: 'd.csv', size: 1, hash: 'h2' }),
+    )
+    expect(other.result.current[0]).toMatchObject({
+      base: 'a\n2\n',
+      baseHash: 'h2',
+      text: 'a\n3\n',
+      cells: { ops: [] },
+    })
+  })
+
+  it('a save after the draft was dropped elsewhere leaves none', async () => {
+    mockContent.mockResolvedValue(csvFile('a\n1\n'))
+    let done: (v: unknown) => void = () => {}
+    mockSave.mockReturnValue(new Promise((r) => (done = r)))
+    await editTable()
+    setCell('1', '2')
+    fireEvent.click(saveButton())
+    const other = renderHook(() => useFileDraft('%1'))
+    act(() => other.result.current[1](undefined))
+    await act(async () =>
+      done({ root: '/r', path: 'd.csv', size: 1, hash: 'h2' }),
+    )
+    expect(other.result.current[0]).toBeUndefined()
+  })
+
+  it('a conflict: Reload and reapply puts each edit on its row in the new file', async () => {
+    mockContent.mockResolvedValue(csvFile('name,price\npear,2\nplum,3\n'))
+    mockSave.mockRejectedValueOnce(changed())
+    const p = await editTable()
+    setCell('2', '9')
+    await act(async () => fireEvent.click(saveButton()))
+    expect(
+      screen.getByText('The file changed on the host since you opened it'),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Reload' })).toBeNull()
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Copy my text' })),
+    )
+    expect(writeText).toHaveBeenCalledWith('name,price\npear,9\nplum,3\n')
+    // An agent put a row above pear, with pear's old price, as CRLF
+    const agent = 'name,price\r\nkiwi,2\r\npear,2\r\nplum,3\r\n'
+    mockContent.mockResolvedValueOnce(csvFile(agent))
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Reload and reapply' }),
+      ),
+    )
+    expect(mockContent).toHaveBeenLastCalledWith('%1', 'd.csv', {
+      root: '/r',
+      reveal: false,
+    })
+    expect(screen.queryByText(/changed on the host/)).toBeNull()
+    const draft = renderHook(() => useFileDraft('%1')).result.current[0]
+    expect(draft).toMatchObject({
+      baseHash: `h:${agent}`,
+      crlf: true,
+      text: 'name,price\nkiwi,2\npear,9\nplum,3\n',
+    })
+    mockSave.mockResolvedValue({
+      root: '/r',
+      path: 'd.csv',
+      size: 1,
+      hash: 'h3',
+    })
+    await act(async () => fireEvent.click(saveButton()))
+    expect(mockSave).toHaveBeenLastCalledWith(
+      '%1',
+      expect.objectContaining({
+        baseHash: `h:${agent}`,
+        text: 'name,price\nkiwi,2\npear,9\nplum,3\n',
+      }),
+    )
+    expect(p.notify).toHaveBeenLastCalledWith('Saved')
+  })
+
+  it('lists the edits a reload could not apply, with their values to copy', async () => {
+    mockContent.mockResolvedValue(csvFile('name,price\npear,2\nplum,3\n'))
+    mockSave.mockRejectedValueOnce(changed())
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    const p = await editTable()
+    setCell('2', '9')
+    setCell('3', '8')
+    await act(async () => fireEvent.click(saveButton()))
+    // pear is gone
+    mockContent.mockResolvedValueOnce(csvFile('name,price\nplum,3\n'))
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Reload and reapply' }),
+      ),
+    )
+    expect(screen.getByText(/Not applied to the new file/)).toHaveTextContent(
+      'Row 2, column price: its row is no longer in the file',
+    )
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Copy value' })),
+    )
+    expect(writeText).toHaveBeenCalledWith('9')
+    expect(p.notify).toHaveBeenLastCalledWith('Text copied')
+    expect(screen.getByRole('gridcell', { name: '8' })).toBeInTheDocument()
+    expect(saveButton()).toBeEnabled()
+    // Discarding forgets the list
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel editing' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    expect(screen.queryByText(/Not applied/)).toBeNull()
+  })
+
+  it.each([
+    [
+      'is no longer editable',
+      csvFile('a,b\n', { editable: false, notEditable: 'mixed-eol' }),
+    ],
+    ['is no table', csvFile('a,"b\n')],
+    ['asks to be shown', { root: '/r', path: 'd.csv', sensitive: true }],
+  ])(
+    'a reload whose file %s applies nothing and turns Save off',
+    async (_, next) => {
+      mockContent.mockResolvedValue(csvFile('a,b\n1,2\n'))
+      mockSave.mockRejectedValueOnce(changed())
+      await editTable()
+      setCell('2', 'x')
+      fireEvent.click(screen.getByRole('gridcell', { name: '1' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Add row below' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Add a row at the end' }),
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Header row' }))
+      fireEvent.click(screen.getByRole('gridcell', { name: 'a' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Add row below' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+      fireEvent.click(screen.getByRole('gridcell', { name: 'a' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Delete row' }))
+      fireEvent.click(
+        within(screen.getByRole('dialog')).getByRole('button', {
+          name: 'Delete row',
+        }),
+      )
+      await act(async () => fireEvent.click(saveButton()))
+      mockContent.mockResolvedValueOnce(next)
+      await act(async () =>
+        fireEvent.click(
+          screen.getByRole('button', { name: 'Reload and reapply' }),
+        ),
+      )
+      const list = screen.getByText(/Not applied to the new file/)
+      for (const line of [
+        'Row 2, column b: the file can no longer be edited as a table',
+        'The row added after row 2: the file',
+        'The row added after row 3: the file',
+        'The row added after row 1: the file',
+        'Deleting row 1: the file',
+      ]) {
+        expect(list).toHaveTextContent(line)
+      }
+      expect(saveButton()).toBeDisabled()
+      // Ctrl+S is off too
+      fireEvent.keyDown(screen.getByRole('grid'), { key: 's', ctrlKey: true })
+      expect(mockSave).toHaveBeenCalledTimes(1)
+      // The conflict stays, so the reload can be tried again
+      expect(screen.getByText(/changed on the host/)).toBeInTheDocument()
+    },
+    // Many clicks: about 1 s, several on a loaded machine
+    15000,
+  )
+
+  it('a reload naming the row added at the top', async () => {
+    mockContent.mockResolvedValue(csvFile('a\n'))
+    mockSave.mockRejectedValueOnce(changed())
+    await editTable()
+    fireEvent.click(screen.getByRole('button', { name: 'Header row' }))
+    fireEvent.click(screen.getByRole('gridcell', { name: 'a' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete row' }))
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: 'Delete row',
+      }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Add a row' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    await act(async () => fireEvent.click(saveButton()))
+    mockContent.mockResolvedValueOnce(csvFile('"a\n'))
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Reload and reapply' }),
+      ),
+    )
+    expect(screen.getByText(/Not applied/)).toHaveTextContent(
+      'The row added at the top',
+    )
+  })
+
+  it('a reload keeps a draft another view made meanwhile', async () => {
+    mockContent.mockResolvedValue(csvFile('a\n1\n'))
+    mockSave.mockRejectedValueOnce(changed())
+    await editTable()
+    setCell('1', '2')
+    await act(async () => fireEvent.click(saveButton()))
+    let done: (v: unknown) => void = () => {}
+    mockContent.mockReturnValueOnce(new Promise((r) => (done = r)))
+    fireEvent.click(screen.getByRole('button', { name: 'Reload and reapply' }))
+    const other = renderHook(() => useFileDraft('%1'))
+    const theirs = {
+      ...(other.result.current[0] as FileDraft),
+      path: 'b.ts',
+    }
+    act(() => other.result.current[1](theirs))
+    await act(async () => done(csvFile('a\n0\n1\n')))
+    expect(other.result.current[0]).toBe(theirs)
+  })
+
+  it('a reload finding the edits already saved takes the file as it is', async () => {
+    mockContent.mockResolvedValue(csvFile('a\n1\n'))
+    // Timed out, yet written
+    mockSave.mockRejectedValueOnce(new Error('offline'))
+    const p = await editTable()
+    setCell('1', '2')
+    await act(async () => fireEvent.click(saveButton()))
+    expect(screen.getByText(/Not sure the file was saved/)).toBeInTheDocument()
+    mockSave.mockRejectedValueOnce(changed())
+    await act(async () => fireEvent.click(saveButton()))
+    mockContent.mockResolvedValueOnce(csvFile('a\n2\n'))
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Reload and reapply' }),
+      ),
+    )
+    expect(p.notify).toHaveBeenLastCalledWith(
+      'Your changes are already in the file',
+    )
+    expect(saveButton()).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeDisabled()
+  })
+
+  it('a reload that finds the root moved, or fails, says so', async () => {
+    mockContent.mockResolvedValue(csvFile('a\n1\n'))
+    mockSave.mockRejectedValue(changed())
+    const p = await editTable()
+    setCell('1', '2')
+    await act(async () => fireEvent.click(saveButton()))
+    mockContent.mockRejectedValueOnce(new Error('offline'))
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Reload and reapply' }),
+      ),
+    )
+    expect(p.notify).toHaveBeenLastCalledWith('Could not read the file again')
+    expect(screen.getByText(/changed on the host/)).toBeInTheDocument()
+    mockContent.mockRejectedValueOnce(
+      Object.assign(new RequestError(409, 'moved', ''), { root: '/new' }),
+    )
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Reload and reapply' }),
+      ),
+    )
+    expect(screen.getByText(/This pane's folder changed/)).toBeInTheDocument()
+    expect(saveButton()).toBeDisabled()
+  })
+
+  it('a second Reload and reapply while one runs is ignored', async () => {
+    mockContent.mockResolvedValue(csvFile('a\n1\n'))
+    mockSave.mockRejectedValue(changed())
+    await editTable()
+    setCell('1', '2')
+    await act(async () => fireEvent.click(saveButton()))
+    mockContent.mockReturnValueOnce(new Promise(() => {}))
+    const reload = screen.getByRole('button', { name: 'Reload and reapply' })
+    fireEvent.click(reload)
+    fireEvent.click(reload)
+    expect(mockContent).toHaveBeenCalledTimes(2)
+  })
+
+  it('reapplies a large file here when no worker loads', async () => {
+    const rows = 40000
+    const big = `id,v\n${Array.from({ length: rows }, (_, i) => `${i},v${i}`).join('\n')}\n`
+    mockContent.mockResolvedValue(csvFile('id,v\n0,v0\n'))
+    mockSave.mockRejectedValueOnce(changed())
+    await editTable()
+    setCell('v0', 'w')
+    await act(async () => fireEvent.click(saveButton()))
+    // No Worker here: CsvClient applies them on this thread
+    vi.stubGlobal('Worker', undefined)
+    mockContent.mockResolvedValueOnce(csvFile(big))
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Reload and reapply' }),
+      ),
+    )
+    const draft = renderHook(() => useFileDraft('%1')).result.current[0]
+    expect(draft?.text.startsWith('id,v\n0,w\n1,v1\n')).toBe(true)
+  })
+})
+
+describe('rebaseDraft', () => {
+  const base: FileDraft = {
+    root: '/r',
+    path: 'd.csv',
+    baseHash: 'h',
+    base: 'a\n1\n',
+    crlf: false,
+    text: 'a\n2\n',
+    reveal: false,
+  }
+  const op = (n: number) =>
+    ({
+      kind: 'delete',
+      row: n,
+      rowValues: [],
+      patch: { start: 0, removed: '', inserted: '' },
+    }) as TableOp
+
+  it('a text draft takes what was saved as its base', () => {
+    const now = { ...base, text: 'a\n3\n' }
+    expect(rebaseDraft(now, base, '/r2', 'h2')).toEqual({
+      ...now,
+      root: '/r2',
+      baseHash: 'h2',
+      base: 'a\n2\n',
+      cells: undefined,
+    })
+  })
+
+  it('keeps the table edits made after the ones saved', () => {
+    const saved = {
+      ...base,
+      cells: { delimiter: ',' as const, ops: [op(1)], redo: [] },
+    }
+    const now = { ...saved, cells: { ...saved.cells, ops: [op(1), op(2)] } }
+    now.cells.ops[0] = saved.cells.ops[0]
+    expect(rebaseDraft(now, saved, '/r', 'h2').cells?.ops).toEqual([op(2)])
+  })
+
+  it('goes on as text when the edits no longer begin with the ones saved', () => {
+    const saved = {
+      ...base,
+      cells: { delimiter: ',' as const, ops: [op(1)], redo: [] },
+    }
+    const now = { ...saved, cells: { ...saved.cells, ops: [op(3)] } }
+    expect(rebaseDraft(now, saved, '/r', 'h2').cells).toBeUndefined()
   })
 })

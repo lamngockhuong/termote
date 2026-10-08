@@ -94,8 +94,9 @@ test.describe('chat view', () => {
   })
 
   test('reads, sends and answers through the Chat view', async ({ page }) => {
-    // One conversation through every kind of dialog: longer than the default
-    test.setTimeout(60000)
+    // One conversation through every kind of dialog: longer than the default.
+    // It takes 40-50 s on a dev machine, so a slower CI runner ran past 60 s
+    test.setTimeout(120000)
     await page.goto('/')
     await page.evaluate(() => localStorage.clear())
     await page.reload()

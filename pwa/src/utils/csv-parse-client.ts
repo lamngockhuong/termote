@@ -2,6 +2,7 @@
 // answer comes back: a worker that fails to load, breaks or takes too long
 // is ended, and the work is done on the main thread instead (the text is at
 // most 1 MiB), so a table never stays at "parsing".
+import { type Reapplied, reapply, type TableOp } from './csv-edits'
 import { type CsvParse, type Delimiter, parseCsv } from './csv-parse'
 import type { CsvReply, CsvRequest } from './csv-parse-worker'
 import type { ViewOptions } from './csv-view'
@@ -68,6 +69,23 @@ export class CsvClient {
     )
     if (signal?.aborted) return null
     return (reply?.type === 'view' && reply.rows) || fallback()
+  }
+
+  // ops applied again to text (csv-edits.ts reapply): in the worker for a
+  // large text, else here
+  async reapply(
+    text: string,
+    delimiter: Delimiter,
+    ops: TableOp[],
+  ): Promise<Reapplied> {
+    const reply = await this.send(
+      text.length > CSV_WORKER_MIN
+        ? { type: 'reapply', id: ++this.nextId, text, delimiter, ops }
+        : undefined,
+    )
+    return reply?.type === 'reapply'
+      ? reply.result
+      : reapply(text, delimiter, ops)
   }
 
   terminate() {

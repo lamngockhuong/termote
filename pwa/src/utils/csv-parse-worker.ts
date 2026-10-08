@@ -1,7 +1,9 @@
 /// <reference lib="webworker" />
 // Parses, sorts and filters a large CSV off the main thread (csv-client.ts
 // sends only text past CSV_WORKER_MIN here). It keeps its last parse, so a
-// sort or a filter does not send the text again.
+// sort or a filter does not send the text again. It also applies the table
+// view's edits again to a file that changed on the host.
+import { type Reapplied, reapply, type TableOp } from './csv-edits'
 import {
   type CsvParse,
   type CsvTable,
@@ -18,11 +20,19 @@ import {
 export type CsvRequest =
   | { type: 'parse'; id: number; text: string; delimiter: Delimiter }
   | { type: 'view'; id: number; parseId: number; opts: ViewOptions }
+  | {
+      type: 'reapply'
+      id: number
+      text: string
+      delimiter: Delimiter
+      ops: TableOp[]
+    }
 
 export type CsvReply =
   | { type: 'parse'; id: number; result: CsvParse }
   // null: this worker no longer holds that parse; the caller sorts itself
   | { type: 'view'; id: number; rows: Int32Array | null }
+  | { type: 'reapply'; id: number; result: Reapplied }
 
 let last: { id: number; cache: ViewCache } | undefined
 
@@ -58,6 +68,10 @@ export function handleRequest(req: CsvRequest): [CsvReply, Transferable[]] {
         t.cellQuoted.buffer,
       ],
     ]
+  }
+  if (req.type === 'reapply') {
+    const result = reapply(req.text, req.delimiter, req.ops)
+    return [{ type: 'reapply', id: req.id, result }, []]
   }
   if (last?.id !== req.parseId) {
     return [{ type: 'view', id: req.id, rows: null }, []]
