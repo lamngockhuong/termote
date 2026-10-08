@@ -1,5 +1,6 @@
 import type { AgentStatus, Session, SessionGroup } from '../types/session'
 import { formatDeepLink } from './deep-link'
+import { UNSAFE_CHARS } from './unsafe-chars'
 
 // When an agent needs the user: its dialog opened (blocked) or its turn ended
 // (done). The same rule runs on the server for Web Push
@@ -74,11 +75,6 @@ export function shouldNotify(event: AgentEvent, ctx: NotifyContext): boolean {
 }
 
 const NAME_MAX = 64
-// C0 and C1 controls, and the bidi marks, embeddings, overrides and isolates
-// that could make a name read as something else on a lock screen.
-// biome-ignore lint/suspicious/noControlCharactersInRegex: stripping them is the point
-const UNSAFE_CHARS = /[\u0000-\u001f\u007f-\u009f‎‏‪-‮⁦-⁩]/g
-
 // A name (group, tab, agent) made safe to show in a notification.
 export function cleanName(name: string | undefined): string {
   return Array.from((name ?? '').replace(UNSAFE_CHARS, '').trim())
