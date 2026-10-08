@@ -19,7 +19,8 @@ interface Fixture {
 }
 
 // One tab per pane, as the server's snapshot would list them; "unknown" and
-// null arrive as no status, as from the snapshot.
+// null arrive as an agent with no status, as from the snapshot; "none" is a
+// pane with no agent.
 function sessionsOf(step: Record<string, string | null>): Session[] {
   return Object.entries(step).map(([paneId, status]) => ({
     id: `t-${paneId}`,
@@ -31,8 +32,8 @@ function sessionsOf(step: Record<string, string | null>): Session[] {
       {
         id: paneId,
         label: paneId,
-        hasAgent: status !== null,
-        agentName: 'claude',
+        hasAgent: status !== 'none',
+        agentName: status === 'none' ? undefined : 'claude',
         agentStatus: toAgentStatus(status ?? undefined),
       },
     ],

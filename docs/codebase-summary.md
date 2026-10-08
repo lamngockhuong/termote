@@ -67,6 +67,7 @@ described in [`system-architecture.md`](system-architecture.md), conventions in
 | Server entry, auth, guards                   | `server/main.go`, `serve.go`, `guard.go`, `security_headers.go`                                         |
 | Mux backends                                 | `server/mux.go` (interface + routes), `mux_tmux.go`, `mux_herdr.go`                                     |
 | Chat view (server)                           | `server/agent.go`, then `agent_claude*.go` / `agent_codex*.go`, `agent_input.go`                        |
+| Starting an agent in a Herdr pane            | `server/agent_start.go`, `pwa/src/hooks/use-start-agent.ts`, `components/start-agent-panel.tsx`         |
 | Files and Changes (server)                   | `server/files.go`, `files_root.go`, `files_git.go`, `files_raw.go`, `files_write.go`, `files_create.go` |
 | CLI                                          | `server/cli.go` (dispatch), then the `cli_<command>.go` file (see [CLI](#cli-go-servercligo))           |
 

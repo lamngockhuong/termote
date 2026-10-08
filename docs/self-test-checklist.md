@@ -434,6 +434,32 @@ Codex Chat view.
 - [ ] Herdr: the approval card's buttons pick the option, "Cancel (Esc)" sends Escape
 - [ ] Other Codex dialogs (model picker, ...) are read-only on both backends
 
+### Starting an agent (Herdr)
+
+Linux, Herdr 0.8.2 or later, `termote-dev serve --mux herdr` (or `termote start --mux herdr`).
+
+- [ ] An idle pane offers the Chat view with "Claude Code" and "Codex"; a pane running `vim`
+      does not; tmux offers neither and `POST …/agent/start` answers 501
+- [ ] Claude Code: `claude` runs, the state goes `starting` → `ready`, the conversation shows; a
+      first message sent from the Chat view arrives (note how long until Herdr reports the
+      session, meanwhile the view says "Claude Code is starting…")
+- [ ] Codex: the process runs as `codex --no-daemon`; the Chat view asks for the first message in
+      the terminal; after one typed there, the Chat view shows the conversation
+- [ ] `echo hi` half-typed, then a start: only the agent runs. Same at a `PS2` prompt (`echo \`
+      Enter) and inside `cat <<EOF`
+- [ ] A new directory where Claude Code asks to trust the folder: the PWA opens the Terminal with
+      "Claude Code is asking something in the terminal."
+- [ ] `PATH` without `codex`: `exited` within a few seconds, a warning toast with Open terminal;
+      starting again at once says Herdr still holds the last start (409 `start_pending`, nothing
+      typed), and works once 30 seconds have passed
+- [ ] `curl` POST to a pane running `vim` → 409 `pane_busy`, nothing typed (screen unchanged)
+- [ ] Two devices start at once: one gets 200, the other 409 `starting` and follows the same start
+- [ ] `curl` `{"kind":"bash"}` → 400 `invalid_kind`; `{"kind":"claude","args":["--help"],"name":"x"}`
+      → the agent starts without them, `herdr agent list` shows the alias `termote-claude-…`
+- [ ] Kill a working Claude Code (`C-c C-c`), start a new one: no "Agent finished" notification
+- [ ] `/exit` in an agent while its Chat view is open: the view stays on Chat and offers the start
+      buttons again (it no longer falls back to the Terminal)
+
 ---
 
 ## Files and Changes

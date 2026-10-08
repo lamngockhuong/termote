@@ -246,6 +246,7 @@ func (a *agentAPI) registerInputRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/mux/panes/{id}/agent/message", a.handleMessage)
 	mux.HandleFunc("/api/mux/panes/{id}/agent/prompt", a.handlePrompt)
 	mux.HandleFunc("/api/mux/panes/{id}/agent/answer", a.handleAnswer)
+	mux.HandleFunc("/api/mux/panes/{id}/agent/start", a.handleStart)
 }
 
 func (a *agentAPI) writer(w http.ResponseWriter) (agentWriter, bool) {

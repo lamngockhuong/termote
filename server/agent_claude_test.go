@@ -244,11 +244,15 @@ func TestClaudeLocate(t *testing.T) {
 		"glob pattern": {ID: "*", ClaudeDir: dir},
 		"relative dir": {ID: testSessionID, ClaudeDir: "rel"},
 		"no dir":       {ID: testSessionID},
-		"missing":      {ID: "99999999-2222-4333-8444-555555555555", ClaudeDir: dir},
+		"missing dir":  {ID: testSessionID, ClaudeDir: filepath.Join(dir, "gone")},
 	} {
 		if _, err := (claudeJournal{}).Locate(s); err != errNoTranscript {
 			t.Errorf("%s: err = %v, want errNoTranscript", name, err)
 		}
+	}
+	// A session whose first message has not been sent has no file yet.
+	if _, err := (claudeJournal{}).Locate(AgentSession{ID: "99999999-2222-4333-8444-555555555555", ClaudeDir: dir}); err != errTranscriptNotWritten {
+		t.Errorf("not written yet: err = %v, want errTranscriptNotWritten", err)
 	}
 }
 

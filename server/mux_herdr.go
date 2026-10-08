@@ -2,16 +2,19 @@ package main
 
 import (
 	"bufio"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"regexp"
+	"runtime"
 	"slices"
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 )
@@ -78,6 +81,8 @@ type herdrMux struct {
 	scrollMu sync.Mutex // one read-then-set of a scroll offset at a time
 
 	procs *herdrProcCache // each pane's foreground process name
+
+	version atomic.Value // string: the Herdr version the last ping reported
 }
 
 // herdrView is a mapped snapshot plus the pane sizes streams need and each
@@ -108,8 +113,25 @@ func (*herdrMux) Name() string { return "herdr" }
 // herdrCodexSession is findCodexSession; tests replace it.
 var herdrCodexSession = findCodexSession
 
-func (*herdrMux) Caps() Caps {
-	return Caps{ClientSideSelect: true, Scroll: true, DriveSize: true, AgentChat: true, Files: true, Groups: true}
+func (m *herdrMux) Caps() Caps {
+	v, _ := m.version.Load().(string)
+	return Caps{ClientSideSelect: true, Scroll: true, DriveSize: true, AgentChat: true, Files: true, Groups: true,
+		AgentStart: herdrCanStartAgents(v, herdrStartGOOS)}
+}
+
+// herdrStartGOOS is the OS the start gate checks; tests of the start route
+// set it so they run on Windows too.
+var herdrStartGOOS = runtime.GOOS
+
+// herdrAgentStartMin is the first Herdr whose agent.start waits for a new
+// pane's shell and for first-run prompts.
+const herdrAgentStartMin = "0.8.2"
+
+// herdrCanStartAgents: agent.start is offered on Herdr version v. Not on
+// Windows until it is checked there: the idle check rests on a POSIX
+// foreground process group.
+func herdrCanStartAgents(v, goos string) bool {
+	return goos != "windows" && versionRe.MatchString(v) && compareVersions(v, herdrAgentStartMin) >= 0
 }
 
 // AgentSession reads the session herdr's Claude integration reported for the
@@ -498,6 +520,7 @@ func (m *herdrMux) subscribeOnce(ctx context.Context) (live bool, err error) {
 	if p.Protocol != herdrProtocol {
 		log.Printf("herdr %s speaks protocol %d, termote supports %d; continuing", p.Version, p.Protocol, herdrProtocol)
 	}
+	m.version.Store(p.Version)
 
 	// The pane set to watch. The cache is bypassed here (not connected), so
 	// this is a fresh snapshot.
@@ -1128,4 +1151,174 @@ func splitUTF8(b []byte, max int) [][]byte {
 		out = append(out, b)
 	}
 	return out
+}
+
+// StartAgent starts kind in a pane that shows only its shell: it waits for
+// a shell still starting, refuses while Herdr holds an earlier start there
+// (launchPending), clears the input line with C-c (half-typed text,
+// a continuation prompt, a heredoc or a read would otherwise take the
+// command), checks the shell again, then asks Herdr (agent.start) to type
+// the command line. A refusal from Herdr itself comes after the C-c.
+func (m *herdrMux) StartAgent(ctx context.Context, paneID, kind string, args []string) (string, error) {
+	idle, err := m.waitIdleShell(ctx, paneID, agentStartIdleWait)
+	if err != nil || !idle {
+		return "", cmp.Or(err, error(errStartPaneBusy))
+	}
+	var pending bool
+	if err := m.callStep(ctx, func(ctx context.Context) (err error) {
+		pending, err = m.launchPending(ctx, paneID)
+		return err
+	}); err != nil || pending {
+		return "", cmp.Or(err, error(errStartPending))
+	}
+	if err := m.callStep(ctx, func(ctx context.Context) error { return m.typeInput(ctx, paneID, agentKeys["C-c"]) }); err != nil {
+		return "", err
+	}
+	select {
+	case <-time.After(agentStartClearWait):
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
+	if idle, err = m.waitIdleShell(ctx, paneID, 0); err != nil || !idle {
+		return "", cmp.Or(err, error(errStartPaneBusy))
+	}
+	if args == nil {
+		args = []string{}
+	}
+	name := agentStartName(kind)
+	for retried := false; ; retried = true {
+		err = m.callStep(ctx, func(ctx context.Context) error {
+			return m.rpc.call(ctx, "agent.start", map[string]any{
+				"pane_id": paneID, "kind": kind, "name": name, "args": args,
+				"timeout_ms": agentStartTimeout.Milliseconds(),
+			}, nil)
+		})
+		var he *herdrError
+		if !retried && errors.As(err, &he) && he.Code == "agent_name_taken" {
+			name = agentStartName(kind)
+			continue
+		}
+		break
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return name, errStartUnknown
+	}
+	return name, herdrStartError(err)
+}
+
+// callStep runs one backend call of a start with its own timeout.
+func (m *herdrMux) callStep(ctx context.Context, call func(context.Context) error) error {
+	ctx, cancel := context.WithTimeout(ctx, agentStartCallTimeout)
+	defer cancel()
+	return call(ctx)
+}
+
+// waitIdleShell reads whether the pane shows only its shell, again every
+// agentStartIdlePoll for up to wait while it does not.
+func (m *herdrMux) waitIdleShell(ctx context.Context, paneID string, wait time.Duration) (bool, error) {
+	deadline := time.Now().Add(wait)
+	for {
+		var idle bool
+		err := m.callStep(ctx, func(ctx context.Context) (err error) {
+			idle, err = m.paneIdleShell(ctx, paneID)
+			return err
+		})
+		if err != nil || idle || !time.Now().Add(agentStartIdlePoll).Before(deadline) {
+			return idle, herdrStartError(err)
+		}
+		select {
+		case <-time.After(agentStartIdlePoll):
+		case <-ctx.Done():
+			return false, ctx.Err()
+		}
+	}
+}
+
+// herdrStartError maps Herdr's replies to a start. A Herdr without
+// agent.start answers invalid_request naming the method.
+func herdrStartError(err error) error {
+	var he *herdrError
+	if !errors.As(err, &he) {
+		return err
+	}
+	switch {
+	case he.Code == "agent_pane_busy":
+		return errStartPaneBusy
+	case he.Code == "agent_pane_unavailable" || strings.HasSuffix(he.Code, "_not_found"):
+		return errStartNotFound
+	case he.Code == "unsupported_agent_kind" || he.Code == "unknown_method" ||
+		he.Code == "invalid_request" && strings.Contains(he.Message, "`agent.start`"):
+		return errStartUnsupported
+	}
+	return err
+}
+
+// launchPending reads whether Herdr holds a start in the pane (agent.get on
+// the pane id). Herdr keeps a launch pending until its deadline even when
+// the command ended at once, refusing another start meanwhile, and lets an
+// expired one go only when it is read: this read does that too.
+func (m *herdrMux) launchPending(ctx context.Context, paneID string) (bool, error) {
+	var res struct {
+		Agent *struct {
+			LaunchPending    bool `json:"launch_pending"`
+			InteractiveReady bool `json:"interactive_ready"`
+		} `json:"agent"`
+	}
+	err := m.rpc.call(ctx, "agent.get", map[string]string{"target": paneID}, &res)
+	var he *herdrError
+	if errors.As(err, &he) && strings.HasSuffix(he.Code, "_not_found") {
+		return false, nil // no agent and no start in the pane
+	}
+	if err != nil {
+		return false, err
+	}
+	return res.Agent != nil && res.Agent.LaunchPending && !res.Agent.InteractiveReady, nil
+}
+
+// AgentStartState reads a started agent by its alias (agent.get). Herdr
+// drops the alias when the agent exits, another agent takes the pane or the
+// startup deadline passes; a command that ended before any agent was seen
+// is told by the pane showing only its shell again.
+func (m *herdrMux) AgentStartState(ctx context.Context, paneID, name, kind string, elapsed time.Duration) (string, error) {
+	var res struct {
+		Agent struct {
+			Agent            *string `json:"agent"`
+			Name             *string `json:"name"`
+			AgentStatus      string  `json:"agent_status"`
+			LaunchPending    bool    `json:"launch_pending"`
+			InteractiveReady bool    `json:"interactive_ready"`
+		} `json:"agent"`
+	}
+	err := m.rpc.call(ctx, "agent.get", map[string]string{"target": name}, &res)
+	var he *herdrError
+	if errors.As(err, &he) && strings.HasSuffix(he.Code, "_not_found") {
+		return startExited, nil
+	}
+	if err != nil {
+		return "", err
+	}
+	a := res.Agent
+	switch {
+	case a.Name != nil && *a.Name != name, a.Agent != nil && *a.Agent != "" && *a.Agent != kind:
+		return startExited, nil
+	case a.InteractiveReady:
+		return startReady, nil
+	case a.AgentStatus == "blocked":
+		return startBlocked, nil
+	case !a.LaunchPending:
+		return startExited, nil
+	case elapsed >= agentStartSettle && (a.Agent == nil || *a.Agent == ""):
+		idle, err := m.paneIdleShell(ctx, paneID)
+		var ie inputError
+		if errors.As(err, &ie) {
+			return startExited, nil // the pane is gone
+		}
+		if err != nil {
+			return "", err
+		}
+		if idle {
+			return startExited, nil
+		}
+	}
+	return startStarting, nil
 }

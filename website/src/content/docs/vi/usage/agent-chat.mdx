@@ -172,6 +172,30 @@ Những điều cần biết:
 - Chỉ tiến trình Codex đang ghi phiên mới được tính: chương trình khác đọc cùng file phiên (như
   `tail -f`) không có view Chat.
 
+## Khởi động agent (Herdr)
+
+Trên Herdr, pane chỉ hiện shell của nó (không chạy gì, kể cả chương trình chạy bằng `exec`) cũng
+có view Chat. Thay vì hội thoại, view hiện hai nút **Claude Code** và **Codex**: chạm một nút là
+Termote nhờ Herdr khởi động agent đó trong pane.
+
+- Claude Code chạy bằng `claude`, Codex bằng `codex --no-daemon`. Không thể thêm tham số, chọn
+  model hay đặt tên.
+- Trước khi gõ lệnh, Termote nhấn Ctrl+C trong pane, để dòng đang gõ dở, dấu nhắc tiếp dòng hay
+  heredoc không nuốt mất lệnh. Pane đang chạy thứ khác thì bị từ chối và không nhận gì.
+- Trong lúc agent khởi động, các nút chờ và view ghi "Starting Claude Code…". Khi Claude Code sẵn
+  sàng, hội thoại hiện ngay tại đây; tới khi Herdr báo phiên của nó (vài giây), view ghi là đang
+  khởi động.
+- Nếu agent hỏi gì đó trong terminal trước (tin cậy thư mục mới, đăng nhập), PWA mở view Terminal
+  và báo cho bạn. Nếu agent không chạy được (chưa cài, đã thoát), một cảnh báo có nút
+  **Open terminal** để xem lý do. Sau đó Herdr còn giữ lần khởi động ấy tới 30 giây: khởi động lại
+  sớm hơn sẽ được báo như vậy, và pane không nhận gì.
+- Codex chỉ tạo file phiên khi có tin đầu tiên, mà view Chat không gửi được khi chưa có phiên: hãy
+  gõ tin đầu tiên trong terminal, từ tin sau view Chat sẽ theo kịp.
+- Bạn có thể chuyển sang pane khác trong lúc chờ: một thông báo sẽ cho biết kết quả.
+
+Yêu cầu: Herdr 0.8.2 trở lên trên Linux hoặc macOS. tmux, psmux và Herdr trên Windows không có
+tính năng này, chế độ chỉ xem cũng ẩn nó.
+
 ## Giới hạn
 
 - tmux: chat đi theo pane đang được focus trong cửa sổ tmux. Ở cửa sổ chia đôi, chat nói chuyện với pane

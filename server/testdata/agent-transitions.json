@@ -1,5 +1,5 @@
 {
-  "comment": "Agent status transitions and the notifications they raise. Read by pwa/src/utils/agent-notify.test.ts and server/push_watch_test.go. Each step maps a pane id to its status (null: the pane shows no status, e.g. a lookup that timed out); a pane missing from a step is gone. events[i] lists what step i raises.",
+  "comment": "Agent status transitions and the notifications they raise. Read by pwa/src/utils/agent-notify.test.ts and server/push_watch_test.go. Each step maps a pane id to its status (null: the pane runs an agent that shows no status, e.g. one still starting; \"none\": the pane runs no agent, so its last status is forgotten); a pane missing from a step is gone. events[i] lists what step i raises.",
   "cases": [
     {
       "name": "first sighting never notifies",
@@ -71,6 +71,21 @@
       "name": "a pane first seen without a status, then with one, is a first sighting",
       "steps": [{ "p1": null }, { "p1": "blocked" }, { "p1": "done" }],
       "events": [[], [], []]
+    },
+    {
+      "name": "a pane without an agent forgets its status",
+      "steps": [{ "p1": "working" }, { "p1": "none" }, { "p1": "idle" }],
+      "events": [[], [], []]
+    },
+    {
+      "name": "a new agent after a gone one is a first sighting, even blocked",
+      "steps": [{ "p1": "working" }, { "p1": "none" }, { "p1": "blocked" }],
+      "events": [[], [], []]
+    },
+    {
+      "name": "an agent without a status keeps its last one",
+      "steps": [{ "p1": "working" }, { "p1": null }, { "p1": "done" }],
+      "events": [[], [], [{ "paneId": "p1", "kind": "done" }]]
     },
     {
       "name": "a pane that is gone is forgotten",

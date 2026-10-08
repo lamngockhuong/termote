@@ -1,0 +1,22 @@
+{
+  "comment": "Names of a pane's shell when it waits for input (server/mux_process.go knownShells, compared lower-case without .exe). Read by pwa/src/utils/shells.test.ts and server/mux_process_test.go.",
+  "shells": [
+    "ash",
+    "bash",
+    "cmd",
+    "csh",
+    "dash",
+    "elvish",
+    "fish",
+    "ksh",
+    "mksh",
+    "nu",
+    "powershell",
+    "pwsh",
+    "sh",
+    "tcsh",
+    "xonsh",
+    "yash",
+    "zsh"
+  ]
+}

@@ -58,13 +58,16 @@ func TestPushTransitionsFixture(t *testing.T) {
 	}
 }
 
-// snapshotOf lists each pane in a tab of its own; a nil status is a pane
-// with no agent found.
+// snapshotOf lists each pane in a tab of its own; a nil status is an agent
+// with no status, "none" a pane with no agent.
 func snapshotOf(step map[string]*string) Snapshot {
 	g := Group{ID: "g"}
 	for id, status := range step {
 		p := Pane{ID: id}
-		if status != nil {
+		switch {
+		case status == nil:
+			p.Agent = &AgentInfo{Name: "claude"}
+		case *status != "none":
 			p.Agent = &AgentInfo{Name: "claude", Status: *status}
 		}
 		g.Tabs = append(g.Tabs, Tab{ID: "t-" + id, Panes: []Pane{p}})

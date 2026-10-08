@@ -176,6 +176,31 @@ What to expect:
 - Only the Codex process writing the session counts: another program reading the same session
   file (`tail -f`) gets no Chat view.
 
+## Starting an Agent (Herdr)
+
+On Herdr, a pane that shows only its shell (nothing running, not even a program started with
+`exec`) also offers the Chat view. Instead of a conversation it shows **Claude Code** and
+**Codex**: tap one and Termote asks Herdr to start it in that pane.
+
+- Claude Code starts as `claude`, Codex as `codex --no-daemon`. No other arguments, model or name
+  can be given.
+- Before typing the command, Termote presses Ctrl+C in the pane, so a half-typed line, a
+  continuation prompt or a heredoc does not take the command. A pane running anything else is
+  refused with nothing typed.
+- While the agent starts, the buttons wait and the view says "Starting Claude Code…". Once Claude
+  Code is ready the conversation shows here; until Herdr reports its session (a few seconds) the
+  view says it is starting.
+- If the agent first asks something in the terminal (trusting a new folder, signing in), the PWA
+  opens the Terminal view and tells you so. If it does not start (not installed, it exited), a
+  warning offers **Open terminal** to see why. Herdr then holds that start for up to 30 seconds:
+  starting again sooner says so, with nothing typed.
+- Codex writes its session only with its first message, which the Chat view cannot send without
+  one: type the first message in the terminal, and the Chat view follows from the next one.
+- You can move to another pane meanwhile: a toast tells you how the start went.
+
+Requirements: Herdr 0.8.2 or later on Linux or macOS. tmux, psmux and Herdr on Windows do not
+offer it, and view-only mode hides it.
+
 ## Limitations
 
 - tmux: the chat follows the pane that has focus in the window. In a split window, it talks to

@@ -77,6 +77,10 @@ func (claudeJournal) Locate(s AgentSession) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if len(matches) == 0 {
+		// Claude Code creates the file with the session's first message.
+		return "", errTranscriptNotWritten
+	}
 	for _, m := range matches {
 		real, err := filepath.EvalSymlinks(m)
 		if err != nil || !pathWithin(root, real) {

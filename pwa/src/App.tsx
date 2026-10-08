@@ -47,6 +47,7 @@ import { logout, RequestError, selectTab } from './hooks/use-mux-api'
 import { usePushSubscription } from './hooks/use-push-subscription'
 import { useSettings } from './hooks/use-settings'
 import { useSidebarCollapsed } from './hooks/use-sidebar-collapsed'
+import { useStartAgent } from './hooks/use-start-agent'
 import { applyUiStyle, syncThemeColor } from './ui-style'
 import { APP_INFO } from './utils/app-info'
 import {
@@ -310,9 +311,47 @@ export default function App({
   // Views offered for this pane; one that stops being offered gives way to
   // the terminal.
   const [viewId, setViewId] = useState(TERMINAL_VIEW_ID)
+  // The terminal is the way out of every view. tmux shares its current
+  // window between clients, so the window is selected again first: another
+  // device may have moved it while this one showed the chat.
+  const showView = useCallback(
+    (id: string) => {
+      if (
+        id === TERMINAL_VIEW_ID &&
+        !mux.caps.clientSideSelect &&
+        activeSession.id
+      ) {
+        selectTab(activeSession.id).catch(() => {})
+      }
+      setViewId(id)
+    },
+    [mux.caps.clientSideSelect, activeSession.id],
+  )
+  const notify = useCallback(
+    (m: string, o?: NotifyOptions) =>
+      showToast(m, o?.variant, o?.action, o?.duration),
+    [showToast],
+  )
+  // Agents started from the Chat view of an idle pane, followed here so a
+  // start goes on when the user moves to another pane.
+  const agentPanes = useMemo(
+    () =>
+      new Set(
+        sessions.flatMap((s) =>
+          (s.panes ?? []).filter((p) => p.hasAgent).map((p) => p.id),
+        ),
+      ),
+    [sessions],
+  )
+  const agentStart = useStartAgent({
+    activePaneId: activeSession.paneId,
+    agentPanes,
+    showView,
+    notify,
+  })
   const viewContext: ViewContext = useMemo(
-    () => ({ mux, session: activeSession, readOnly }),
-    [mux, activeSession, readOnly],
+    () => ({ mux, session: activeSession, readOnly, agentStart }),
+    [mux, activeSession, readOnly, agentStart],
   )
   const offeredViews = useMemo(
     () => availableViews(views, viewContext),
@@ -347,27 +386,6 @@ export default function App({
       setSidePanelId(null)
     }
   }, [isMobile, viewId, sidePanelId, views])
-  // The terminal is the way out of every view. tmux shares its current
-  // window between clients, so the window is selected again first: another
-  // device may have moved it while this one showed the chat.
-  const showView = useCallback(
-    (id: string) => {
-      if (
-        id === TERMINAL_VIEW_ID &&
-        !mux.caps.clientSideSelect &&
-        activeSession.id
-      ) {
-        selectTab(activeSession.id).catch(() => {})
-      }
-      setViewId(id)
-    },
-    [mux.caps.clientSideSelect, activeSession.id],
-  )
-  const notify = useCallback(
-    (m: string, o?: NotifyOptions) =>
-      showToast(m, o?.variant, o?.action, o?.duration),
-    [showToast],
-  )
   const viewProps = {
     ...viewContext,
     isMobile,

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -36,6 +38,28 @@ func TestProcessName(t *testing.T) {
 		if got := processName(c.raw); got != c.want {
 			t.Errorf("processName(%q) = %q, want %q", c.raw, got, c.want)
 		}
+	}
+}
+
+// knownShells is the list the PWA reads too (shells.ts offers the Chat
+// view's start on a pane whose process is one of them).
+func TestKnownShellsMatchSharedList(t *testing.T) {
+	data, err := os.ReadFile("testdata/known-shells.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var shared struct{ Shells []string }
+	if err := json.Unmarshal(data, &shared); err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for name := range knownShells {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	slices.Sort(shared.Shells)
+	if !slices.Equal(names, shared.Shells) {
+		t.Errorf("knownShells = %v, testdata/known-shells.json = %v", names, shared.Shells)
 	}
 }
 

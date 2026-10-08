@@ -223,6 +223,8 @@ POST   /api/mux/panes/{id}/agent/message  body: {text, cursor, images?}  → 204
 GET    /api/mux/panes/{id}/agent/prompt                          → {prompt: null | {promptId, kind, title, body, options, steps, freeText}}
 POST   /api/mux/panes/{id}/agent/answer   body: {promptId, choice} → 204
 GET    /api/mux/panes/{id}/agent/commands                        → {commands: [{name, description, source, kind}]}
+POST   /api/mux/panes/{id}/agent/start    body: {kind}          → {ok, state: "starting"} | {error, code}   (caps.agentStart)
+GET    /api/mux/panes/{id}/agent/start                           → {kind, state} | 404 no_start
 GET    /api/mux/panes/{id}/files/tree?path=&root=               → {root, isRepo, path, entries, truncated}
 GET    /api/mux/panes/{id}/files/content?path=&root=&reveal=    → {root, path, size, text, hash, editable, notEditable?} | {…, previewable: false, reason} | {…, sensitive: true}
 GET    /api/mux/panes/{id}/files/content?path=&root=&hash=1     → {root, path, size, hash} (never the contents, sensitive or not)
@@ -259,6 +261,30 @@ confirms the whole draft before and after Enter. The request's time budget grows
 number of images. When a step after the first paste fails, the box is cleared with one `C-c`
 only if the same idle agent shows nothing but this request's paste (the code is then the step's
 own, e.g. `paste_not_confirmed`); anything else answers 409 `partial_paste` and leaves the box.
+
+`/agent/start` (`caps.agentStart`: Herdr 0.8.2 or later, not on Windows) starts Claude Code
+(`kind: "claude"`) or Codex (`"codex"`, run as `codex --no-daemon`) in a pane that shows only
+its shell, through Herdr's `agent.start`. Only `kind` is read: the arguments come from a fixed
+table and the alias Herdr tracks the agent by is the server's (`termote-<kind>-<8 hex>`, one
+retry on `agent_name_taken`). The pane is resolved before the pane lock (the one `message` and
+`answer` take); then a start of this server still running there answers 409 `starting`; a
+pane whose foreground is not its shell alone, read again for up to 1.5 s, answers 409
+`pane_busy` with nothing typed. Herdr keeps a start pending until its deadline even when the
+command failed at once (not installed), refuses another start meanwhile, and lets an expired one
+go only when it is read: the server reads `agent.get` on the pane id first, which releases an
+expired one, and answers 409 `start_pending` with nothing typed while one is held. Otherwise the
+server types `C-c` (clearing half-typed text, a
+continuation prompt, a heredoc or a `read`), checks the shell again after 200 ms (409
+`pane_busy`), then calls `agent.start` with a 30 s startup deadline. Herdr types the command
+and answers at once, so the POST answers 200 `starting`; the PWA then polls the GET every 2 s,
+which reads `agent.get` by the alias: `ready` (interactive), `blocked` (a first-run dialog),
+`exited` (also when no agent was seen and the pane shows only its shell again 4 s after the
+start), or `timeout` 35 s after the start, kept 60 s once final (a refused start leaves it). Other codes: 400
+`invalid_kind`, 404 `not_found`, 501 `unsupported` (also Herdr's `unsupported_agent_kind` and an
+older Herdr's `invalid_request` naming the method), 504 `start_unknown` (the `agent.start`
+call timed out; the start is followed as if typed) and 500 `start_failed`. The Chat view is
+offered on such a pane and holds the start buttons; Codex writes its rollout only with its first
+message, so after a Codex start the Chat view asks for that message in the terminal.
 
 `caps.scroll` (Herdr): the stream only carries screen renders, so no history reaches the
 xterm.js scrollback. The PWA turns the mouse wheel and the scroll buttons into
@@ -305,6 +331,11 @@ window (`$N:i`, from psmux's reply rather than the client's id, so one window ha
 on psmux, which numbers panes per session: every session has a `%1`, and `-t %1` reaches the
 most recent one. On psmux the target follows the window's focus; the process, session and
 screen checks before each write still apply.
+
+Claude Code writes its transcript only with a session's first message. Until then
+`transcript` answers an empty conversation (`reset`, no entries) whose cursor names the session
+with no file, so the Chat view can send that message; the read after it finds the file under
+another identity than the cursor's and starts over.
 
 **Finding a Codex session.** Only a Codex TUI run with `--no-daemon` writes its own rollout. By default a shared
 `codex app-server --managed-daemon` writes the rollout of every pane, outside every pane's
