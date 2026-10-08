@@ -606,6 +606,18 @@ Run on tmux (Linux/macOS) and Herdr; psmux (Windows) offers neither view.
       it changed; "Reload and reapply" puts the edit on the right row; a deleted row is listed
 - [ ] iPhone: the cell sheet opens above the keyboard and Apply is reachable; the page never
       scrolls sideways while editing
+- [ ] Drag the line at the right edge of a column name with the mouse: only that column changes,
+      nothing sorts; a double-click on it fits the column; Tab to it, Left/Right step it and
+      Enter fits it
+- [ ] iPhone: drag the line with a finger (the table does not scroll meanwhile), double-tap it to
+      fit the column, and the column never sorts
+- [ ] "Columns": "Fit columns", "Reset widths", and "Wrap" on a column with long or multiline
+      values: up to three lines per cell, `↵` kept, every row taller, PageDown and the arrow keys
+      still land on the right row; off again, rows go back to their height
+- [ ] Widths and wraps go back to the defaults on another "Delimiter" or "Header row", stay after
+      editing a cell, and stay after showing another tab and coming back (same first row)
+- [ ] Press a row number: Records opens on that row (also after sorting); turning Records off
+      shows the table where it was
 
 ### Images
 
