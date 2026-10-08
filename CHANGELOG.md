@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.16.0](https://github.com/lamngockhuong/termote/compare/v1.15.0...v1.16.0) (2026-10-08)
+
+
+### Features
+
+* edit CSV and TSV cells in the table, reapplied after a conflict ([#373](https://github.com/lamngockhuong/termote/issues/373), part 2) ([#383](https://github.com/lamngockhuong/termote/issues/383)) ([247e647](https://github.com/lamngockhuong/termote/commit/247e6471c28ce6c14baa491957183530ea716252))
+* notify when an agent needs the user, with Web Push ([#358](https://github.com/lamngockhuong/termote/issues/358)) ([#379](https://github.com/lamngockhuong/termote/issues/379)) ([6c6d338](https://github.com/lamngockhuong/termote/commit/6c6d338bb5aad99570f7e00c318cfe659f7cd8ec))
+* show CSV and TSV files as a table in Files ([#373](https://github.com/lamngockhuong/termote/issues/373), part 1) ([#381](https://github.com/lamngockhuong/termote/issues/381)) ([08d432d](https://github.com/lamngockhuong/termote/commit/08d432d7c78351f6378a174457198411d4304dcf))
+* show each pane's foreground process and name it when closing ([#363](https://github.com/lamngockhuong/termote/issues/363)) ([#375](https://github.com/lamngockhuong/termote/issues/375)) ([d937a90](https://github.com/lamngockhuong/termote/commit/d937a904f35c0fd4ec104ff00216e6ff9e22b06c))
+* start Claude Code or Codex in an idle Herdr pane ([#357](https://github.com/lamngockhuong/termote/issues/357)) ([#384](https://github.com/lamngockhuong/termote/issues/384)) ([2d0c087](https://github.com/lamngockhuong/termote/commit/2d0c08772ed6e14738a02f750a75653f71d2fb3b))
+
 ## [1.15.0](https://github.com/lamngockhuong/termote/compare/v1.14.0...v1.15.0) (2026-10-07)
 
 
