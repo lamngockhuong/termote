@@ -10,11 +10,12 @@ import type { ViewProps } from '../app-views'
 import { agentLabel, chatInputAgent } from '../chat-agents'
 import { useAgentPrompt } from '../hooks/use-agent-prompt'
 import { useAgentTranscript } from '../hooks/use-agent-transcript'
+import type { TranscriptEntry } from '../hooks/use-mux-api'
 import type { StartRecord } from '../hooks/use-start-agent'
 import { toAgentStatus } from '../types/session'
 import { canStartAgent } from '../utils/agent-start'
 import { AgentStatusBadge } from './agent-status-badge'
-import { ChatMessage } from './chat-message'
+import { ChatMessage, chatSide } from './chat-message'
 import { OpenTerminalButton } from './open-terminal-button'
 import { PromptCard } from './prompt-card'
 import { StartAgentPanel } from './start-agent-panel'
@@ -24,6 +25,27 @@ import { Button } from './ui/button'
 export const RENDER_WINDOW = 150
 // Within this many pixels of the bottom, the list follows new entries.
 const STICK_DISTANCE = 48
+// An entry this long after the one before shows its time again.
+const TIME_GAP_MS = 5 * 60_000
+
+// Where each entry sits among its neighbours: the time over the first entry
+// of each side's run (and after a long pause), and the agent's timeline
+// line carried on to its next entry.
+export function chatLayout(entries: TranscriptEntry[]) {
+  return entries.map((e, i) => {
+    const side = chatSide(e)
+    const prev = entries[i - 1]
+    const next = entries[i + 1]
+    const gap =
+      prev?.ts && e.ts ? Date.parse(e.ts) - Date.parse(prev.ts) : Number.NaN
+    return {
+      showTime:
+        side !== 'other' &&
+        (!prev || chatSide(prev) !== side || gap > TIME_GAP_MS),
+      joinsNext: side === 'agent' && !!next && chatSide(next) === 'agent',
+    }
+  })
+}
 
 export function ChatView(props: ViewProps) {
   if (!props.session.hasAgent) return <NoAgentChat {...props} />
@@ -223,6 +245,7 @@ function AgentChat({ session, showView, readOnly, agentStart }: ViewProps) {
   }
 
   const visible = t.entries.slice(hidden)
+  const layout = chatLayout(visible)
   // A split tab (herdr) names the pane too.
   const paneLabel =
     session.panes && session.panes.length > 1
@@ -242,7 +265,7 @@ function AgentChat({ session, showView, readOnly, agentStart }: ViewProps) {
         ref={listRef}
         onScroll={onScroll}
         aria-label="Conversation"
-        className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3"
+        className="min-h-0 flex-1 space-y-3 overflow-x-hidden overflow-y-auto px-3 py-3"
       >
         {(hidden > 0 || t.before) && (
           <div className="flex justify-center">
@@ -259,8 +282,13 @@ function AgentChat({ session, showView, readOnly, agentStart }: ViewProps) {
         {visible.length === 0 && (
           <p className="text-center text-fg-muted">No messages yet.</p>
         )}
-        {visible.map((e) => (
-          <ChatMessage key={e.id} entry={e} />
+        {visible.map((e, i) => (
+          <ChatMessage
+            key={e.id}
+            entry={e}
+            showTime={layout[i].showTime}
+            joinsNext={layout[i].joinsNext}
+          />
         ))}
       </section>
       {readOnly && p.prompt && (
