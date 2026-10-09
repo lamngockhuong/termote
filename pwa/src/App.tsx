@@ -50,6 +50,11 @@ import { useCommandHistory } from './hooks/use-command-history'
 import { useFontSize } from './hooks/use-font-size'
 import { useFullscreen } from './hooks/use-fullscreen'
 import { useGestures } from './hooks/use-gestures'
+import {
+  dropStaleViewerEntry,
+  onViewerEntryGone,
+  viewerOnTop,
+} from './hooks/use-history-close'
 import { useKeyboardVisible } from './hooks/use-keyboard-visible'
 import { useLocalSessions } from './hooks/use-local-sessions'
 import { useIsMobile } from './hooks/use-media-query'
@@ -912,12 +917,29 @@ export default function App({
         view: currentView.id,
       })
     : null
+  // Not while a viewer's history entry is on top: Back would land on an
+  // entry of another link and its hashchange would open the old pane. Done
+  // once that entry is gone instead.
+  const [viewerGone, setViewerGone] = useState(0)
+  useEffect(() => {
+    // A reload while a viewer was open left its mark on this entry; Forward
+    // can land on the entry of a viewer closed since
+    dropStaleViewerEntry()
+    window.addEventListener('popstate', dropStaleViewerEntry)
+    const off = onViewerEntryGone(() => setViewerGone((n) => n + 1))
+    return () => {
+      window.removeEventListener('popstate', dropStaleViewerEntry)
+      off()
+    }
+  }, [])
+  // biome-ignore lint/correctness/useExhaustiveDependencies: viewerGone re-runs it once a viewer's entry is gone
   useEffect(() => {
     if (!sessionsLoaded || !currentLink || pendingLinkRef.current) return
+    if (viewerOnTop()) return
     if (window.location.hash !== currentLink) {
       window.history.replaceState(window.history.state, '', currentLink)
     }
-  }, [sessionsLoaded, currentLink])
+  }, [sessionsLoaded, currentLink, viewerGone])
 
   // Built from what is on screen, not read from the address bar, which may
   // still hold a link that did not open.

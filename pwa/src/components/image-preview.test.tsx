@@ -1,8 +1,14 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { ImageState } from '../hooks/use-image-blob'
+import type { ViewerImage } from '../hooks/use-image-viewer'
 import { RequestError } from '../hooks/use-mux-api'
 import { ImagePreview, imageErrorText } from './image-preview'
+
+const opened = vi.fn()
+vi.mock('../hooks/use-image-viewer', () => ({
+  useImageViewer: () => ({ open: opened, viewer: null }),
+}))
 
 const refused = (status: number, code: string): ImageState => ({
   status: 'error',
@@ -61,6 +67,47 @@ describe('ImagePreview', () => {
     loadAs(screen.getByRole('img'), 240, 150)
     expect(screen.getByText('2.0 KiB')).toBeInTheDocument()
     expect(screen.queryByText(/240×150/)).toBeNull()
+  })
+
+  it('opens the decoded image full screen, with the URL on screen', () => {
+    opened.mockReset()
+    render(<ImagePreview state={ready()} alt={'a\u202e.png'} />)
+    const button = screen.getByRole('button', { name: /full screen/ })
+    // Not decoded yet: nothing to open
+    expect(button).toBeDisabled()
+    loadAs(screen.getByRole('img'), 640, 480)
+    expect(button).toBeEnabled()
+    // The bidi override is shown, never applied
+    expect(button.getAttribute('aria-label')).not.toContain('\u202e')
+    fireEvent.click(button)
+    expect(opened).toHaveBeenCalledWith({
+      src: 'blob:u1',
+      alt: expect.stringMatching(/^a.+\.png$/),
+      width: 640,
+      height: 480,
+      isSvg: false,
+    } satisfies ViewerImage)
+  })
+
+  it('opens an SVG without a size of its own for the viewer to measure', () => {
+    opened.mockReset()
+    render(
+      <ImagePreview
+        state={ready('data:image/svg+xml;base64,x', false, 'image/svg+xml')}
+        alt="logo.svg"
+      />,
+    )
+    loadAs(screen.getByRole('img'), 0, 0)
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Open logo.svg full screen' }),
+    )
+    expect(opened).toHaveBeenCalledWith({
+      src: 'data:image/svg+xml;base64,x',
+      alt: 'logo.svg',
+      width: undefined,
+      height: undefined,
+      isSvg: true,
+    })
   })
 
   it('says so when the browser cannot decode it', () => {

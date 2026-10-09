@@ -329,6 +329,11 @@ The `update` command:
 | `pwa/src/components/markdown-preview.tsx`         | Markdown file rendered in Files/Changes (links, code blocks)  |
 | `pwa/src/components/mermaid-block.tsx`            | A mermaid block: the diagram image, Show source, fallback     |
 | `pwa/src/utils/mermaid-render.ts`                 | Mermaid → `data:` SVG image: locked config, queue, cache      |
+| `pwa/src/components/image-viewer.tsx`             | Full-screen image viewer: zoom, pan, keys, Back closes it     |
+| `pwa/src/hooks/use-zoom-pan.ts`                   | Pinch, drag, double tap, wheel zoom (Pointer Events)          |
+| `pwa/src/utils/zoom-pan.ts`                       | Fit, zoom around a point, pan limits of the viewer            |
+| `pwa/src/hooks/use-history-close.ts`              | Viewer's history entry: Back closes, close pops it            |
+| `pwa/src/hooks/use-image-viewer.tsx`              | Opens the viewer from an image, closes it on a new URL        |
 | `pwa/build/precache-split.ts`                     | Keeps Mermaid's chunks out of the service worker precache     |
 | `pwa/src/components/table-preview.tsx`            | CSV/TSV as a table: delimiter, header, filter, sort, Records  |
 | `pwa/src/components/table-grid.tsx`               | Virtual grid of a table (sticky header and row numbers)       |
@@ -745,6 +750,18 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   build so the server never embeds Vite's manifest); a runtime `CacheFirst` (`lazy-chunks`,
   same-origin `/assets/*.js`) keeps them once fetched. Accepted: a large diagram holds the main
   thread for seconds (a 50 KB sequence diagram: about 5 s)
+- **Full-screen image viewer** (`pwa/src/components/image-viewer.tsx`, lazy chunk, mounted only
+  while open): a Mermaid diagram, an image in Files and each side of an image in Changes open in
+  a modal `<dialog>` showing the same URL already on screen (`data:`/`blob:`; nothing is read
+  again, no request is made); a `blob:` URL replaced (and revoked) while it is open closes it.
+  It pushes one history entry at the same URL (`history.state.termoteViewer`, a random id, no
+  hashchange) so Back closes it; X, Escape and Android's `cancel` pop that entry
+  (`use-history-close.ts`: one `back()` at a time, none while another is pending); `App.tsx`
+  does not replace the address on that entry and drops a mark a reload left. Zoom/pan is Pointer
+  Events and `transform` (`use-zoom-pan.ts`, `utils/zoom-pan.ts`; 0.5×–8× of fit, panning keeps
+  the image on screen), `touch-action: none` on its stage, wheel listener non-passive; an SVG is
+  drawn again at its zoomed size once a gesture ends. Its title is the app's name for the image
+  (`visibleUnsafe` path, or "Mermaid diagram N"), never text from the file
 - **Saving a file** (`PUT files/content?root=`, `server/files_write.go`): replaces the whole text
   of an existing file (a new one comes from `POST files/create`, see Creating a file). `writeGuard` (same-site JSON) plus the handler's own cross-site check and
   `requireWriteRole`; the `root` query is required (400, 409 once it moved). Body
