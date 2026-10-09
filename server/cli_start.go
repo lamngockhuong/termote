@@ -1,11 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -312,6 +314,9 @@ func (c *cli) cmdStart(args []string) error {
 	}); err != nil {
 		return fmt.Errorf("save config: %w", err)
 	}
+	if pass != "" && !reused {
+		c.pruneDevices(o.user, pass)
+	}
 
 	sup, err := c.registerService()
 	if err != nil {
@@ -403,15 +408,29 @@ type serverHealth struct {
 	Devices *bool `json:"devices"`
 }
 
-// fetchHealth asks the server on port for its health, logging in as user
-// with pass (none when pass is empty); code is the HTTP status (0 when
-// nothing answers). The password goes only to a listener of the current
-// user (or root); otherwise code is healthUntrusted or healthUnverified.
-// With a password, the owner is checked once the connection is made, and
-// the request goes over that connection: a listener that takes the port
-// after the check never gets it.
+// fetchHealth asks the server on port for its health (see authedRequest).
 func fetchHealth(port int, user, pass string) (serverHealth, int) {
 	var h serverHealth
+	resp, code := authedRequest(port, user, pass, http.MethodGet, "/api/mux/health", nil)
+	if resp == nil {
+		return h, code
+	}
+	defer resp.Body.Close()
+	if code == http.StatusOK {
+		json.NewDecoder(resp.Body).Decode(&h)
+	}
+	return h, code
+}
+
+// authedRequest sends method path to the server on 127.0.0.1:port, logging
+// in as user with pass (none when pass is empty), with body as JSON when not
+// nil. code is the HTTP status (0 when nothing answers) and resp, whose body
+// the caller closes, is nil without an answer. The password goes only to a
+// listener of the current user (or root); otherwise code is healthUntrusted
+// or healthUnverified. With a password, the owner is checked once the
+// connection is made, and the request goes over that connection: a listener
+// that takes the port after the check never gets it.
+func authedRequest(port int, user, pass, method, path string, body []byte) (resp *http.Response, code int) {
 	var refused atomic.Int32
 	tr := &http.Transport{DisableKeepAlives: true}
 	if pass != "" {
@@ -428,20 +447,30 @@ func fetchHealth(port int, user, pass string) (serverHealth, int) {
 			return conn, nil
 		}
 	}
-	req, _ := http.NewRequest(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/api/mux/health", port), nil)
+	var rd io.Reader
+	if body != nil {
+		rd = bytes.NewReader(body)
+	}
+	req, err := http.NewRequest(method, fmt.Sprintf("http://127.0.0.1:%d%s", port, path), rd)
+	if err != nil {
+		return nil, 0
+	}
+	// writeGuard takes a write only as JSON, a body or not (DELETE).
+	if body != nil || isWriteMethod(method) {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	if pass != "" {
 		req.SetBasicAuth(user, pass)
 	}
-	client := &http.Client{Timeout: 2 * time.Second, Transport: tr}
-	resp, err := client.Do(req)
+	// A redirect is never followed: it would send the password again,
+	// and as a GET.
+	client := &http.Client{Timeout: 2 * time.Second, Transport: tr,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	resp, err = client.Do(req)
 	if err != nil {
-		return h, int(refused.Load())
+		return nil, int(refused.Load())
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode == http.StatusOK {
-		json.NewDecoder(resp.Body).Decode(&h)
-	}
-	return h, resp.StatusCode
+	return resp, resp.StatusCode
 }
 
 // degradedGrace is how long a server answering "degraded" (its backend, such
