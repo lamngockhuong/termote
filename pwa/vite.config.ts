@@ -1,14 +1,24 @@
 /// <reference types="vitest" />
+import { readFileSync, rmSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { splitManifest, type ViteManifest } from './build/precache-split'
 import pkg from './package.json'
+
+// Vite's manifest of the build (build.manifest), read to keep Mermaid out of
+// the precache. The service worker is generated from the files written, so
+// it is on disk by then; it is removed afterwards, since the server embeds
+// and serves everything in the build.
+const viteDir = fileURLToPath(new URL('./dist/.vite', import.meta.url))
 
 export default defineConfig({
   define: {
     __APP_NAME__: JSON.stringify(pkg.name),
     __APP_VERSION__: JSON.stringify(pkg.version),
   },
+  build: { manifest: true },
   plugins: [
     react(),
     VitePWA({
@@ -43,6 +53,15 @@ export default defineConfig({
         // The highlighter worker, its themes and grammars: fetched (then
         // cached) the first time Files shows a file, never installed upfront.
         globIgnores: ['**/assets/shiki/**'],
+        // Mermaid and the chunks only it reaches (build/precache-split.ts)
+        manifestTransforms: [
+          (entries) => {
+            const manifest: ViteManifest = JSON.parse(
+              readFileSync(`${viteDir}/manifest.json`, 'utf8'),
+            )
+            return { manifest: splitManifest(entries, manifest), warnings: [] }
+          },
+        ],
         // Notification click (and push) handlers: public/notify-sw.js
         importScripts: ['notify-sw.js'],
         runtimeCaching: [
@@ -55,12 +74,37 @@ export default defineConfig({
               expiration: { maxEntries: 120, maxAgeSeconds: 30 * 24 * 3600 },
             },
           },
+          {
+            // Scripts left out of the precache (Mermaid): the precache route
+            // answers first, so only those reach this one.
+            urlPattern: ({ url, sameOrigin }) =>
+              sameOrigin &&
+              url.pathname.startsWith('/assets/') &&
+              url.pathname.endsWith('.js'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'lazy-chunks',
+              expiration: { maxEntries: 200, maxAgeSeconds: 30 * 24 * 3600 },
+            },
+          },
         ],
         // /login is the server's sign-in form: the cached app shell in its
         // place would leave a signed-out device with no way to sign in.
         navigateFallbackDenylist: [/^\/api\//, /^\/login(\?|$)/],
       },
     }),
+    {
+      // After the service worker is generated (the hook runs last, alone)
+      name: 'termote-drop-vite-manifest',
+      apply: 'build',
+      closeBundle: {
+        order: 'post',
+        sequential: true,
+        handler() {
+          rmSync(viteDir, { recursive: true, force: true })
+        },
+      },
+    },
   ],
   worker: {
     // A module worker, so each grammar it imports is a chunk of its own

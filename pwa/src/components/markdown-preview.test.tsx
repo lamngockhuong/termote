@@ -127,11 +127,11 @@ describe('MarkdownPreview: code blocks', () => {
   })
 
   it('a block without a known language is plain text', () => {
-    show('```\nplain\n```\n\n```mermaid\ngraph TD\n```')
-    const [plain, mermaid] = screen.getAllByTestId('fenced-code')
+    show('```\nplain\n```\n\n```nosuchlang\ngraph TD\n```')
+    const [plain, other] = screen.getAllByTestId('fenced-code')
     expect(plain).toHaveTextContent('text')
     expect(plain).toHaveTextContent('plain')
-    expect(mermaid).toHaveTextContent('mermaid')
+    expect(other).toHaveTextContent('nosuchlang')
     const signal = expect.any(AbortSignal)
     expect(mockHighlight).toHaveBeenCalledWith(
       'plain',
@@ -327,6 +327,87 @@ describe('MarkdownPreview: links', () => {
     show('# A', { scrollTop: 120 })
     expect(screen.getByTestId('markdown-preview').scrollTop).toBe(120)
     expect(scrollIntoView).not.toHaveBeenCalled()
+  })
+})
+
+describe('MarkdownPreview: start kept while diagrams draw', () => {
+  // Reports a size change of the observed content, on demand
+  let resize: (() => void) | null = null
+  let observed: Element | null = null
+  beforeEach(() => {
+    resize = null
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(private cb: () => void) {}
+        observe(el: Element) {
+          observed = el
+          resize = () => this.cb()
+        }
+        disconnect() {
+          resize = null
+        }
+      },
+    )
+  })
+  afterEach(() => vi.useRealTimers())
+
+  it('scrolls back to the heading when the content above grows', () => {
+    show('# A\n\n## Usage', { anchor: 'usage' })
+    const box = screen.getByTestId('markdown-preview')
+    expect(observed).toBe(box.firstElementChild)
+    scrollIntoView.mockClear()
+    resize?.()
+    expect(scrollIntoView).toHaveBeenCalledTimes(1)
+    expect(scrollIntoView.mock.contexts[0]).toHaveTextContent('Usage')
+  })
+
+  it('a heading gone meanwhile is left alone, without a message', () => {
+    const p = show('# A\n\n## Usage', { anchor: 'gone' })
+    scrollIntoView.mockClear()
+    resize?.()
+    expect(scrollIntoView).not.toHaveBeenCalled()
+    expect(p.notify).toHaveBeenCalledTimes(1)
+  })
+
+  it('puts the offset back when the content grows', () => {
+    show('# A', { scrollTop: 120 })
+    const box = screen.getByTestId('markdown-preview')
+    box.scrollTop = 40
+    resize?.()
+    expect(box.scrollTop).toBe(120)
+  })
+
+  it.each(['wheel', 'touchStart', 'keyDown', 'pointerDown'] as const)(
+    'stops once the user scrolls (%s)',
+    (event) => {
+      show('# A', { scrollTop: 120 })
+      const box = screen.getByTestId('markdown-preview')
+      fireEvent[event](box)
+      expect(resize).toBeNull()
+      // A second event finds nothing left to stop
+      fireEvent[event](box)
+    },
+  )
+
+  it('stops after 10 seconds', () => {
+    vi.useFakeTimers()
+    show('# A', { anchor: 'a' })
+    vi.advanceTimersByTime(9999)
+    expect(resize).not.toBeNull()
+    vi.advanceTimersByTime(1)
+    expect(resize).toBeNull()
+  })
+
+  it('stops when the preview is gone', () => {
+    const p = show('# A', { scrollTop: 10 })
+    p.unmount()
+    expect(resize).toBeNull()
+  })
+
+  it('watches nothing for a file opened at its top', () => {
+    show('# A')
+    expect(resize).toBeNull()
   })
 })
 

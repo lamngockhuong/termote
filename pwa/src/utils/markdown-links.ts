@@ -134,6 +134,35 @@ export function rehypeHeadingIds() {
   }
 }
 
+// The info string of a fenced block names Mermaid (```mermaid, any case)
+export function isMermaidInfo(info: string): boolean {
+  return info.trim().split(/[\s{]/, 1)[0].toLowerCase() === 'mermaid'
+}
+
+// A rehype plugin: the code of every Mermaid block gets its number in the
+// file (1, 2, ...) as data-mermaid-index, so its image has a name of its own
+// that is not text from the file.
+export function rehypeMermaidIndex() {
+  return (tree: HastNode) => {
+    let n = 0
+    const walk = (node: HastNode) => {
+      const code = node.tagName === 'pre' ? node.children?.[0] : undefined
+      const classes = (code?.properties?.className ?? []) as string[]
+      if (
+        code?.tagName === 'code' &&
+        classes.some(
+          (c) => c.startsWith('language-') && isMermaidInfo(c.slice(9)),
+        )
+      ) {
+        code.properties = { ...code.properties, dataMermaidIndex: ++n }
+        return
+      }
+      node.children?.forEach(walk)
+    }
+    walk(tree)
+  }
+}
+
 // The element an anchor names inside container: a heading ("#intro"), or a
 // footnote whose link already carries the prefix. Matched exactly, then in
 // lower case.

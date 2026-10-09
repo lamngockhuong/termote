@@ -265,8 +265,18 @@ con mắt trên thanh của file chuyển qua lại giữa bản xem trước v�
 chọn đó. File Markdown lớn hơn 256 KiB mở ở dạng mã nguồn, kèm dòng báo file quá lớn để xem trước.
 
 - **Khối code** được tô màu theo ngôn ngữ ghi sau dấu mở khối (` ```ts `, ` ```bash `,
-  ` ```go `...), có nút chép cả khối. Khối viết bằng ngôn ngữ chưa hỗ trợ (ví dụ `mermaid`) hiện
-  dạng chữ thường. Nút xuống dòng cũng áp dụng cho khối code.
+  ` ```go `...), có nút chép cả khối. Khối viết bằng ngôn ngữ chưa hỗ trợ hiện dạng chữ thường.
+  Nút xuống dòng cũng áp dụng cho khối code.
+- **Sơ đồ Mermaid** (` ```mermaid `) được vẽ thành ảnh khi bạn cuộn tới: lưu đồ, sơ đồ tuần
+  tự, sơ đồ lớp, sơ đồ trạng thái, Gantt và các loại khác. Nút code trên thanh của khối chuyển qua lại giữa sơ đồ
+  và mã nguồn; nút chép luôn chép mã nguồn. Sơ đồ rộng thì cuộn ngang. Sơ đồ chỉ là một bức
+  ảnh: không bấm được vào node hay link bên trong, và luôn theo giao diện sáng hoặc tối của
+  Termote, dù dòng `%%{init}%%` hay khối `---` ở đầu sơ đồ đòi gì. App hiện mã nguồn kèm lý do
+  thay cho sơ đồ khi sơ đồ lớn hơn 50 KB, có ảnh hoặc biểu tượng (`@{ img: ... }`, thứ sẽ tải
+  một URL), không phải Mermaid hợp lệ, vẽ lâu quá 10 giây, hoặc không tải được bộ vẽ sơ đồ.
+  Bộ vẽ chỉ được tải về lần đầu có sơ đồ cần hiện, không tải sẵn khi cài app: nếu đang offline
+  mà chưa tải lần nào, sơ đồ hiện dạng mã nguồn kèm dòng `Could not load the diagram renderer`.
+  Sơ đồ rất lớn có thể làm trang đứng vài giây trong lúc vẽ.
 - **Khối `---` ở đầu file** (thường gặp ở trang tài liệu và trang MDX) hiện thành một khối code.
 - **HTML thô và component MDX** hiện nguyên văn bản, không bao giờ được chạy.
 - **Ảnh không bao giờ được tải.** Ảnh nằm trong thư mục gốc hiện thành link mở file đó trong

@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   findAnchor,
   isMarkdownPath,
+  isMermaidInfo,
   rehypeHeadingIds,
+  rehypeMermaidIndex,
   resolveLink,
   slugger,
   splitFrontMatter,
@@ -183,6 +185,64 @@ describe('rehypeHeadingIds', () => {
     expect(h1.properties?.id).toBe('user-content-intro-x')
     expect(section.children?.[0].properties?.id).toBe('footnote-label')
     expect(h3.properties?.id).toBe('user-content-')
+  })
+
+  it('numbers Mermaid blocks in file order, nested ones too', () => {
+    const block = (lang?: string, props = true) => ({
+      type: 'element',
+      tagName: 'pre',
+      children: [
+        {
+          type: 'element',
+          tagName: 'code',
+          ...(props
+            ? { properties: { className: lang ? [`language-${lang}`] : [] } }
+            : {}),
+          children: [{ type: 'text', value: 'graph TD' }],
+        },
+      ],
+    })
+    const tree = {
+      type: 'root',
+      children: [
+        block('mermaid'),
+        block('ts'),
+        block(),
+        block(undefined, false),
+        { type: 'element', tagName: 'pre', children: [] },
+        {
+          type: 'element',
+          tagName: 'pre',
+          children: [{ type: 'text', value: 'x' }],
+        },
+        {
+          type: 'element',
+          tagName: 'blockquote',
+          children: [block('Mermaid')],
+        },
+      ],
+    }
+    rehypeMermaidIndex()(tree)
+    const indexOf = (n: unknown) =>
+      (n as { children: { properties?: Record<string, unknown> }[] })
+        .children[0]?.properties?.dataMermaidIndex
+    const [m1, ts, plain, bare, , , quote] = tree.children
+    expect(indexOf(m1)).toBe(1)
+    expect(indexOf(ts)).toBeUndefined()
+    expect(indexOf(plain)).toBeUndefined()
+    expect(indexOf(bare)).toBeUndefined()
+    expect(indexOf((quote as { children: unknown[] }).children[0])).toBe(2)
+  })
+
+  it.each([
+    ['mermaid', true],
+    ['Mermaid', true],
+    [' mermaid title', true],
+    ['mermaid{x}', true],
+    ['mermaidx', false],
+    ['', false],
+  ])('isMermaidInfo(%j) is %s', (info, expected) => {
+    expect(isMermaidInfo(info)).toBe(expected)
   })
 
   it('textOf reads nested text', () => {
