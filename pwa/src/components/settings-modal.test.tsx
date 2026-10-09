@@ -101,7 +101,7 @@ describe('SettingsModal', () => {
   it('keeps the full-screen phone sheet below the status bar', () => {
     const { container } = renderModal()
     expect(container.querySelector('dialog')).toHaveClass(
-      'max-md:h-dvh',
+      'max-md:h-(--app-height)',
       'max-md:pt-[env(safe-area-inset-top)]',
     )
   })

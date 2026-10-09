@@ -228,6 +228,17 @@
   --tm-diff-del: #3a1512;
 }
 
+/* The app's height. An iOS home-screen app (black-translucent status bar)
+   makes the initial containing block (height: 100%, inset: 0) short by the
+   status bar's height, leaving a bare band under the bottom bars, and clips
+   a position: fixed box at that height; 100lvh is the whole screen there.
+   So a standalone app is not fixed: html and body take the whole screen and
+   hide overflow, leaving nothing to scroll or bounce. Such an app has no
+   browser toolbars, so lvh is right wherever 100% is not short. */
+:root {
+  --app-height: 100dvh;
+}
+
 html, body, #root {
   height: 100%;
   margin: 0;
@@ -242,6 +253,27 @@ body {
   position: fixed;
   width: 100%;
   overscroll-behavior: none;
+}
+
+@media (display-mode: standalone) {
+  :root {
+    --app-height: 100lvh;
+  }
+  html,
+  body {
+    height: var(--app-height);
+    overscroll-behavior: none;
+  }
+  body {
+    position: static;
+  }
+  /* Sheets and dialogs: absolute in the top layer is placed like fixed here
+     (the page never scrolls), without the clip. Its containing block is the
+     short one, so the bottom reaches down by what that block lacks. */
+  dialog:modal {
+    position: absolute;
+    bottom: calc(100% - var(--app-height));
+  }
 }
 
 /* Dynamic viewport height for mobile */

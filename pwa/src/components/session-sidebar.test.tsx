@@ -607,25 +607,55 @@ describe('SessionSidebar — mobile mode', () => {
     expect(onUpdate).toHaveBeenCalledWith('1', { name: 'Updated', icon: '💻' })
   })
 
-  it('scrolls the active session into view when the sheet opens', () => {
+  // The sheet's scroller spans 0-400 with the sticky current session over
+  // 0-100; the active row sits at rowTop
+  const openOnRow = (rowTop: number) => {
+    const rect = Element.prototype.getBoundingClientRect
+    Element.prototype.getBoundingClientRect = function (this: Element) {
+      const [top, height] =
+        this.getAttribute('data-testid') === 'swipeable-2'
+          ? [rowTop, 40]
+          : this.getAttribute('aria-label') === 'Current session'
+            ? [0, 100]
+            : [0, 400]
+      return { top, height, bottom: top + height } as DOMRect
+    }
+    try {
+      const { rerender } = renderMobile(false)
+      rerender(
+        <SessionSidebar
+          sessions={SESSIONS}
+          activeId="2"
+          onSelect={onSelect}
+          onAdd={onAdd}
+          onRemove={onRemove}
+          isMobile
+          isOpen
+        />,
+      )
+    } finally {
+      Element.prototype.getBoundingClientRect = rect
+    }
+    const row = screen.getByTestId('swipeable-2')
+    return (row.closest('.px-2.pb-3') as HTMLElement).parentElement!
+  }
+
+  it('centres a hidden active session below the current one, scrolling nothing else', () => {
     const scroll = vi.fn()
     Element.prototype.scrollIntoView = scroll
-    const { rerender } = renderMobile(false)
+    // Row centre 720, visible area 100-400 centred on 250
+    expect(openOnRow(700).scrollTop).toBe(470)
     expect(scroll).not.toHaveBeenCalled()
-    rerender(
-      <SessionSidebar
-        sessions={SESSIONS}
-        activeId="2"
-        onSelect={onSelect}
-        onAdd={onAdd}
-        onRemove={onRemove}
-        isMobile
-        isOpen
-      />,
-    )
-    expect(scroll).toHaveBeenCalledTimes(1)
-    expect(scroll).toHaveBeenCalledWith({ block: 'center' })
-    expect(scroll.mock.contexts[0]).toBe(screen.getByTestId('swipeable-2'))
+  })
+
+  it('keeps the list at its top when the active session is in sight', () => {
+    expect(openOnRow(300).scrollTop).toBe(0)
+  })
+
+  it('scrolls to an active session hidden under the current one', () => {
+    const scroller = openOnRow(60)
+    // Row centre 80 → moves up by 170 (a browser clamps it at 0; jsdom does not)
+    expect(scroller.scrollTop).toBe(-170)
   })
 
   it('shows the current session with visible Edit and Delete', () => {
