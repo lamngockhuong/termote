@@ -17,7 +17,7 @@ describe('DiscardTabDialog', () => {
   it('shows unsafe characters in the name', () => {
     render(
       <DiscardTabDialog
-        name={'a‮b.ts'}
+        name={'a\u202eb.ts'}
         onConfirm={vi.fn()}
         onCancel={vi.fn()}
       />,
