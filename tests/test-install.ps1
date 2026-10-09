@@ -155,6 +155,17 @@ try {
     New-Release '2.0.1' 'none'
     Write-TestResult "Missing checksum refused" ((-not (Invoke-Installer '2.0.1')))
     Write-TestResult "Nothing written after refusals" (-not (Test-Path (Join-Path $Dir 'versions')))
+
+    # What uninstall leaves (logs, the trash, uploads not yet removed): installs.
+    foreach ($d in 'state', 'trash', 'uploads', 'versions\0.9.0') {
+        New-Item -ItemType Directory -Path (Join-Path $Dir $d) -Force | Out-Null
+    }
+    $ok = Invoke-Installer '1.0.1'
+    Write-TestResult "Installs over what uninstall left" ($ok -and (Get-Current) -eq '1.0.1') $script:Out
+    Remove-Item $Dir -Recurse -Force
+    New-Item -ItemType Directory -Path $Dir -Force | Out-Null
+    Set-Content (Join-Path $Dir 'other') 'x'
+    Write-TestResult "Foreign dir refused" ((-not (Invoke-Installer '1.0.1')) -and $script:Out -match 'not a Termote install')
 } finally {
     $env:LOCALAPPDATA = $savedLocal
     Remove-Item Env:BIN_LOG -ErrorAction SilentlyContinue

@@ -41,6 +41,8 @@ $Name = $null
 $Rescue = $false
 # An install is a current pointer; without one (cut short, or uninstalled
 # with its logs kept) the dir may hold only what an install leaves behind.
+# The server's cache dir is LOCALAPPDATA too, so its trash (kept by
+# uninstall) and uploads sit here as well.
 if (Test-Path (Join-Path $Dir 'current.txt')) {
     if (-not $Pin) {
         Write-Host "Termote is already installed at $Dir; leaving it alone."
@@ -51,7 +53,7 @@ if (Test-Path (Join-Path $Dir 'current.txt')) {
     Write-Host "Termote is already installed at $Dir; laying $Pin down beside it and pointing current at it."
     $Rescue = $true
 } elseif (Test-Path $Dir) {
-    $foreign = Get-ChildItem $Dir -Force | Where-Object { $_.Name -notin @('versions', 'state', 'bin', 'previous.txt') -and $_.Name -notlike '.unpack-*' }
+    $foreign = Get-ChildItem $Dir -Force | Where-Object { $_.Name -notin @('versions', 'state', 'bin', 'previous.txt', 'trash', 'uploads') -and $_.Name -notlike '.unpack-*' }
     if ($foreign) { Stop-Install "$Dir exists and is not a Termote install. Move it aside, then run this again." }
 }
 
