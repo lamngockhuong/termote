@@ -221,7 +221,7 @@ test.describe('files and changes views', () => {
     await expect(box).toHaveValue('---\nstatus: review\n---\n# Record\n\nBody\n')
     await box.fill('---\nstatus: approved\n---\n# Record\n\nBody\n')
     await panel.getByRole('button', { name: 'Save', exact: true }).click()
-    await expect(page.getByText('Saved')).toBeVisible()
+    await expect(page.getByText('Saved', { exact: true })).toBeVisible()
     await expect(box).toHaveCount(0)
     expect(readFileSync(rec, 'utf-8')).toBe('---\r\nstatus: approved\r\n---\r\n# Record\r\n\r\nBody\r\n')
   })
@@ -299,7 +299,7 @@ test.describe('files and changes views', () => {
     expect(await noPageScroll(page)).toBe(true)
     await box.fill('from the phone\n')
     await page.getByRole('button', { name: 'Save', exact: true }).click()
-    await expect(page.getByText('Saved')).toBeVisible()
+    await expect(page.getByText('Saved', { exact: true })).toBeVisible()
     expect(readFileSync(f, 'utf-8')).toBe('from the phone\n')
   })
 
@@ -322,7 +322,7 @@ test.describe('files and changes views', () => {
       expect(readFileSync(path.join(made, 'dir/note.md'), 'utf-8')).toBe('')
       await box.fill('# Note\n')
       await panel.getByRole('button', { name: 'Save', exact: true }).click()
-      await expect(page.getByText('Saved')).toBeVisible()
+      await expect(page.getByText('Saved', { exact: true })).toBeVisible()
       expect(readFileSync(path.join(made, 'dir/note.md'), 'utf-8')).toBe('# Note\n')
       // Back: the tree is open down to it
       await panel.getByRole('button', { name: 'Back to files' }).click()
@@ -464,7 +464,7 @@ test.describe('files and changes views', () => {
       // A quoted cell stays quoted
       await setCell(page, '3', '4')
       await panel.getByRole('button', { name: 'Save' }).click()
-      await expect(page.getByText('Saved')).toBeVisible()
+      await expect(page.getByText('Saved', { exact: true })).toBeVisible()
       const after = readFileSync(f)
       const prefix = Buffer.from('\uFEFFname;price\r\npear;')
       expect(after.subarray(0, prefix.length)).toEqual(before.subarray(0, prefix.length))
@@ -497,7 +497,7 @@ test.describe('files and changes views', () => {
         'Row 4, column price: its row is no longer in the file',
       )
       await panel.getByRole('button', { name: 'Save' }).click()
-      await expect(page.getByText('Saved')).toBeVisible()
+      await expect(page.getByText('Saved', { exact: true })).toBeVisible()
       expect(readFileSync(f, 'utf-8')).toBe('name,price\nkiwi,2\npear,9\nplum,3\n')
     } finally {
       rmSync(csvDir(), { recursive: true, force: true })
