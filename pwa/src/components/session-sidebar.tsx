@@ -1,6 +1,7 @@
 import {
   ArrowDown,
   ArrowUp,
+  ArrowUpDown,
   ChevronDown,
   ChevronRight,
   FolderGit2,
@@ -115,6 +116,18 @@ export function moveProblem(err: unknown): string {
       return 'Reordering is not supported here'
   }
   return 'Could not move'
+}
+
+// What to undo so tabs and groups can be moved again
+export function reorderPausedHint(
+  filtering: boolean,
+  sortBlockedFirst: boolean,
+): string {
+  if (filtering && sortBlockedFirst)
+    return 'Show All and turn off Blocked sessions first to reorder'
+  if (sortBlockedFirst)
+    return 'Turn off Blocked sessions first in Settings to reorder'
+  return 'Show All to reorder'
 }
 
 // The key a tab keeps when its id changes
@@ -239,18 +252,21 @@ export function SessionSidebar({
   const activeSession = sessions.find((s) => s.id === activeId)
 
   // Reordering works on the list in the server's order: hidden while the
-  // list on screen is filtered or sorted.
+  // list on screen is filtered or sorted, with a hint saying what to undo.
   const canReorder = !!reorder && !filtering && !sortBlockedFirst
+  const reorderPaused = !!reorder && !canReorder
   const groupTabIds = (groupId?: string) =>
     sessions.filter((s) => s.groupId === groupId).map((s) => s.id)
-  const canMoveTabs = (groupId?: string) =>
-    canReorder && reorder.tabs && groupTabIds(groupId).length > 1
+  // Whether the server could move these, the list on screen aside
+  const tabsMovable = (groupId?: string) =>
+    !!reorder?.tabs && groupTabIds(groupId).length > 1
+  const canMoveTabs = (groupId?: string) => canReorder && tabsMovable(groupId)
   const movableIds = movableGroups(groups).map((g) => g.id)
+  const groupMovable = (group: SessionGroup) =>
+    !!reorder?.groups && movableIds.length > 1 && movableIds.includes(group.id)
   const canMoveGroup = (group: SessionGroup) =>
-    canReorder &&
-    reorder.groups &&
-    movableIds.length > 1 &&
-    movableIds.includes(group.id)
+    canReorder && groupMovable(group)
+  const pausedHint = reorderPausedHint(filtering, sortBlockedFirst)
 
   // Move a tab one place up or down in its group; nothing at an end.
   const stepTab = (session: Session, delta: -1 | 1) => {
@@ -643,6 +659,11 @@ export function SessionSidebar({
             </MenuItem>
           </>
         )}
+        {reorderPaused && (groupMovable(group) || tabsMovable(group.id)) && (
+          <MenuItem icon={<ArrowUpDown size={16} />} disabled>
+            {pausedHint}
+          </MenuItem>
+        )}
         {groupActions.onNewWorktree && !group.worktree?.linked && (
           <MenuItem
             icon={<FolderGit2 size={16} />}
@@ -885,6 +906,12 @@ export function SessionSidebar({
             </Button>
           )}
         </div>
+      )}
+      {reorderPaused && tabsMovable(activeSession.groupId) && (
+        <p className="flex items-center gap-1.5 text-[12px] text-fg-subtle">
+          <ArrowUpDown size={12} aria-hidden="true" />
+          {pausedHint}
+        </p>
       )}
     </section>
   )

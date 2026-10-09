@@ -9,7 +9,11 @@ import {
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { RequestError } from '../hooks/use-mux-api'
 import type { Session, SessionGroup } from '../types/session'
-import { moveProblem, SessionSidebar } from './session-sidebar'
+import {
+  moveProblem,
+  reorderPausedHint,
+  SessionSidebar,
+} from './session-sidebar'
 
 vi.mock('./icon-picker', () => ({
   IconPicker: ({
@@ -1744,6 +1748,63 @@ describe('SessionSidebar — reorder', () => {
       expect(screen.queryByRole('menuitem', { name: 'Move down' })).toBeNull()
       unmount()
     }
+  })
+
+  it('says what to undo while the list is sorted or filtered', () => {
+    expect(reorderPausedHint(false, true)).toBe(
+      'Turn off Blocked sessions first in Settings to reorder',
+    )
+    expect(reorderPausedHint(true, false)).toBe('Show All to reorder')
+    expect(reorderPausedHint(true, true)).toBe(
+      'Show All and turn off Blocked sessions first to reorder',
+    )
+    const hint = 'Turn off Blocked sessions first in Settings to reorder'
+    const { rerender } = render(
+      <SessionSidebar
+        {...props({ reorder: reorderOf(), sortBlockedFirst: true })}
+      />,
+    )
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Actions for workspace main' }),
+    )
+    expect(screen.getByRole('menuitem', { name: hint })).toBeDisabled()
+    rerender(
+      <SessionSidebar
+        {...props({
+          reorder: reorderOf(),
+          sortBlockedFirst: true,
+          isMobile: true,
+        })}
+      />,
+    )
+    const current = within(
+      screen.getByRole('region', { name: 'Current session' }),
+    )
+    expect(current.getByText(hint)).toBeInTheDocument()
+    expect(current.queryByRole('button', { name: 'Move b up' })).toBeNull()
+    // Nothing to undo when the server cannot move anything here
+    rerender(
+      <SessionSidebar
+        {...props({
+          reorder: reorderOf({ tabs: false, groups: false }),
+          sortBlockedFirst: true,
+          isMobile: true,
+        })}
+      />,
+    )
+    expect(screen.queryByText(hint)).toBeNull()
+    // Nor a single tab in a group that cannot move
+    rerender(
+      <SessionSidebar
+        {...props({
+          reorder: reorderOf({ groups: false }),
+          sortBlockedFirst: true,
+          isMobile: true,
+          activeId: '$3:0',
+        })}
+      />,
+    )
+    expect(screen.queryByText(hint)).toBeNull()
   })
 
   it('moves a group from its menu, disabled at the ends, never a linked worktree', () => {
