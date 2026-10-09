@@ -652,7 +652,7 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   `available_pane_shell` rule); Linux and macOS keep the rule above; `agent.get` on the pane id: Herdr holds a start pending until its deadline
   even when the command failed at once, and lets an expired one go only when it is read (this
   read does), so one still held → 409 `start_pending` with nothing sent; then `C-c` (clears half-typed text, a `PS2` line, a heredoc, a `read`),
-  200 ms, the idle check again (409 `pane_busy`), then `agent.start` with `timeout_ms` 30000.
+  200 ms, the idle check again, polled like the first (the prompt it redraws can run `git`, a child that reads busy on Windows; 409 `pane_busy`), then `agent.start` with `timeout_ms` 30000.
   Each Herdr call has its own `muxTimeout`; the whole start runs without the request's
   cancellation once begun. Herdr answers at once (`launch_pending`): 200 `{ok, state:
   "starting"}`; `agent.start` timing out → 504 `start_unknown`, followed as if typed. Herdr's
