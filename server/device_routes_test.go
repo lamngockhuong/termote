@@ -453,3 +453,24 @@ func TestHubShutdownRunsOnShutdown(t *testing.T) {
 		t.Error("onShutdown skipped")
 	}
 }
+
+func TestDeviceRoutesErrors(t *testing.T) {
+	h, _, _, dir := newDeviceServer(t)
+	if rec := serve(h, apiRequest("POST", "/api/mux/devices/pair", "{nope")); rec.Code != http.StatusBadRequest {
+		t.Errorf("bad JSON: %d", rec.Code)
+	}
+	https := apiRequest("POST", "/api/mux/devices/pair", `{"role":"view"}`)
+	https.Header.Set("X-Forwarded-Proto", "https")
+	if body := decodeBody(t, serve(h, https)); !strings.HasPrefix(body["url"].(string), "https://") {
+		t.Errorf("url over HTTPS = %v", body["url"])
+	}
+	pairDevice(t, h, "view")
+	list := decodeBody(t, serve(h, apiRequest("GET", "/api/mux/devices", "")))
+	id := list["devices"].([]any)[0].(map[string]any)["id"].(string)
+	// A store that cannot be written: the revoke fails, generically.
+	os.WriteFile(filepath.Join(dir, devicesFile), []byte("{nope"), 0o600)
+	rec := serve(h, apiRequest("DELETE", "/api/mux/devices/"+id, ""))
+	if rec.Code != http.StatusInternalServerError || strings.Contains(rec.Body.String(), "nope") {
+		t.Errorf("revoke on a broken store: %d %s", rec.Code, rec.Body)
+	}
+}

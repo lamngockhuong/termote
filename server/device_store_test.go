@@ -271,3 +271,153 @@ func TestUserAgentDeviceName(t *testing.T) {
 		}
 	}
 }
+
+func TestDeviceStoreOpenErrors(t *testing.T) {
+	if _, err := newDeviceStore("", "admin", "pw"); err == nil {
+		t.Error("empty dir accepted")
+	}
+	file := filepath.Join(t.TempDir(), "file")
+	os.WriteFile(file, nil, 0o600)
+	if _, err := newDeviceStore(filepath.Join(file, "devices"), "admin", "pw"); err == nil {
+		t.Error("dir under a file accepted")
+	}
+	if runtime.GOOS != "windows" {
+		real := t.TempDir()
+		link := filepath.Join(t.TempDir(), "link")
+		os.Symlink(real, link)
+		if _, err := newDeviceStore(link, "admin", "pw"); err == nil {
+			t.Error("symlinked dir accepted")
+		}
+	}
+	// key.json that is not a regular file, or not JSON.
+	dir := t.TempDir()
+	os.Mkdir(filepath.Join(dir, deviceKeyFile), 0o700)
+	if _, err := newDeviceStore(dir, "admin", "pw"); err == nil {
+		t.Error("key.json as a dir accepted")
+	}
+	dir = t.TempDir()
+	os.WriteFile(filepath.Join(dir, deviceKeyFile), []byte("{nope"), 0o600)
+	if _, err := newDeviceStore(dir, "admin", "pw"); err == nil {
+		t.Error("unparsable key.json accepted")
+	}
+	// devices.json that is not a regular file.
+	dir = t.TempDir()
+	newTestDeviceStore(t, dir, "pw")
+	os.Mkdir(filepath.Join(dir, devicesFile), 0o700)
+	if _, err := newDeviceStore(dir, "admin", "pw"); err == nil {
+		t.Error("devices.json as a dir accepted")
+	}
+}
+
+// The file changing under the store: removed, made corrupt, unreadable.
+func TestDeviceStoreReloadCases(t *testing.T) {
+	dir := t.TempDir()
+	s := newTestDeviceStore(t, dir, "pw")
+	clock := time.Now()
+	s.now = func() time.Time { return clock }
+	tick := func() { clock = clock.Add(2 * deviceReloadEvery) }
+	// Never written: nothing to read.
+	tick()
+	if len(s.list()) != 0 {
+		t.Fatal("empty store lists a device")
+	}
+	token, _, _ := s.add("d", roleView)
+	// Removed by hand: the device is gone.
+	os.Remove(filepath.Join(dir, devicesFile))
+	tick()
+	if _, ok, _ := s.lookup(token); ok {
+		t.Error("device kept after its file was removed")
+	}
+	// Corrupt: what is in memory stays, and changes fail.
+	token, _, _ = s.add("d", roleView)
+	os.WriteFile(filepath.Join(dir, devicesFile), []byte("{nope, longer than before"), 0o600)
+	tick()
+	if _, ok, _ := s.lookup(token); !ok {
+		t.Error("a corrupt file dropped the devices in memory")
+	}
+	if _, _, err := s.add("e", roleView); err == nil {
+		t.Error("add over a corrupt file succeeded")
+	}
+	if runtime.GOOS != "windows" && os.Getuid() != 0 {
+		os.Remove(filepath.Join(dir, devicesFile))
+		os.Chmod(dir, 0o000)
+		tick()
+		s.lookup(token) // stat fails: memory stays
+		os.Chmod(dir, 0o700)
+	}
+}
+
+// A use is written once deviceTouchEvery has passed; a failed write is
+// logged and kept for the next.
+func TestDeviceStoreTouchFlush(t *testing.T) {
+	dir := t.TempDir()
+	s := newTestDeviceStore(t, dir, "pw")
+	token, _, _ := s.add("d", roleView)
+	clock := time.Now().Add(deviceTouchEvery + time.Second)
+	s.now = func() time.Time { return clock }
+	s.lookup(token)
+	if got := newTestDeviceStore(t, dir, "pw").list()[0].LastUsedAt; !got.Equal(clock.UTC()) {
+		t.Errorf("use not written after %v: %v", deviceTouchEvery, got)
+	}
+	if runtime.GOOS == "windows" || os.Getuid() == 0 {
+		return
+	}
+	os.Chmod(dir, 0o500)
+	defer os.Chmod(dir, 0o700)
+	clock = clock.Add(deviceTouchEvery + time.Second)
+	s.lookup(token)
+	if len(s.touched) != 1 {
+		t.Error("a failed write dropped the recorded use")
+	}
+}
+
+func TestPairCodeNormalizeAndDrop(t *testing.T) {
+	if got, ok := normalizePairCode("o1il0-abcde"); !ok || got != "0111"+"0ABCDE" {
+		t.Errorf("normalizePairCode = %q %v", got, ok)
+	}
+	p := newPairCodes()
+	if _, ok := p.redeem("not a code"); ok {
+		t.Error("redeemed a non-code")
+	}
+	p.create(roleView, "", "")
+	p.dropCreator("") // a code made by a password session is never dropped this way
+	if !p.waiting() {
+		t.Error("dropCreator(\"\") dropped a code")
+	}
+}
+
+func TestDeviceNamesFromBrowser(t *testing.T) {
+	for ua, want := range map[string]string{
+		"Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) Safari/604.1": "iPad Safari",
+		"Mozilla/5.0 (X11; CrOS x86_64) Chrome/120.0":                "ChromeOS Chrome",
+		"Mozilla/5.0 (X11; Linux x86_64; rv:121.0) Firefox/121.0":    "Linux Firefox",
+	} {
+		if got := userAgentDeviceName(ua); got != want {
+			t.Errorf("%q = %q, want %q", ua, got, want)
+		}
+	}
+	r := pageRequest("/")
+	if got := pairName(pendingPair{}, " Kitchen\x07 tablet ", r); got != "Kitchen tablet" {
+		t.Errorf("form name = %q", got)
+	}
+	if got := pairName(pendingPair{name: "Given"}, "Typed", r); got != "Given" {
+		t.Errorf("maker's name = %q", got)
+	}
+}
+
+func TestStateFileHelpers(t *testing.T) {
+	dir := t.TempDir()
+	os.Mkdir(filepath.Join(dir, "sub"), 0o700)
+	if _, err := readStateFile(filepath.Join(dir, "sub")); err == nil {
+		t.Error("read a dir as a state file")
+	}
+	// The rename fails (a dir is in the way): no .part is left.
+	if err := writeStateFile("test", dir, "x", filepath.Join(dir, "sub"), []byte("{}"), false); err == nil {
+		t.Error("wrote over a dir")
+	}
+	entries, _ := os.ReadDir(dir)
+	if len(entries) != 1 {
+		t.Errorf("left behind: %v", entries)
+	}
+	removeStateParts(filepath.Join(dir, "missing"), devicePartRe) // no dir: nothing to do
+}
