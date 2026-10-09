@@ -16,22 +16,24 @@ function segment(
   value: SidebarFilter,
   name: string,
   Icon: Icon,
-  colour: string,
+  active: string,
   n: number,
 ): SegmentOption<SidebarFilter> {
   const label = `${name}, ${sessionCount(n)}`
-  return { value, label, content: countContent(Icon, colour, n, label) }
+  return { value, label, content: countContent(Icon, active, n, label) }
 }
 
 // Icon and count, so four segments fit the sidebar; the label names it, and
-// the title shows that name on hover. A zero count is drawn muted and still.
-function countContent(Icon: Icon, colour: string, n: number, label: string) {
+// the title shows that name on hover. A zero count is drawn muted and still;
+// any other takes the segment's active classes (Working spins, as its badge
+// does). The size is even: an odd one spins visibly off its centre.
+function countContent(Icon: Icon, active: string, n: number, label: string) {
   return (
     <span title={label} className="flex items-center gap-1 tabular-nums">
       <Icon
-        size={13}
+        size={14}
         aria-hidden="true"
-        className={`shrink-0 ${n > 0 ? colour : 'text-fg-subtle'}`}
+        className={`shrink-0 ${n > 0 ? active : 'text-fg-subtle'}`}
       />
       {n}
     </span>
@@ -54,7 +56,7 @@ export function AgentFilterBar({ summary, filter, onChange }: Props) {
       'working',
       'Working',
       LoaderCircle,
-      'text-warning',
+      'text-warning motion-safe:animate-spin',
       summary.working,
     ),
     segment('agents', 'Agents', Bot, 'text-fg-muted', summary.agents),
