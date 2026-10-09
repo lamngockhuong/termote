@@ -1201,4 +1201,124 @@ test.describe('files and changes views', () => {
       await expect.poll(() => preview.evaluate((el, at) => Math.abs(el.scrollTop - at), left)).toBeLessThan(2)
     })
   })
+
+  test.describe('full-screen viewer', () => {
+    const dir = () => path.join(repo, 'e2e-viewer')
+    const FLOW = 'flowchart LR\n  A[Start] --> B{Ok?}\n  B -->|yes| C[Done]'
+    test.beforeEach(() => {
+      mkdirSync(dir(), { recursive: true })
+      const filler = Array.from({ length: 40 }, (_, i) => `Paragraph ${i + 1}.`).join('\n\n')
+      writeFileSync(path.join(dir(), 'diagram.md'), `${filler}\n\n\`\`\`mermaid\n${FLOW}\n\`\`\`\n\n${filler}\n`)
+      writeFileSync(path.join(dir(), 'red.png'), Buffer.from(RED_PNG, 'base64'))
+    })
+    test.afterEach(() => rmSync(dir(), { recursive: true, force: true }))
+
+    async function openFile(page: Page, name: string) {
+      await page.goto(`${link}?view=files`)
+      const panel = page.getByRole('complementary', { name: 'Files' })
+      await panel.getByRole('treeitem', { name: 'e2e-viewer' }).click()
+      await panel.getByRole('treeitem', { name }).click()
+      return panel
+    }
+
+    test('desktop: a diagram opens full screen; keys and buttons zoom; Escape and Back close', async ({ page }) => {
+      await page.setViewportSize({ width: 1280, height: 800 })
+      const panel = await openFile(page, 'diagram.md')
+      const preview = panel.getByTestId('markdown-preview')
+      const open = panel.getByRole('button', { name: 'Open Mermaid diagram 1 full screen' })
+      // Drawn only once it nears the screen
+      await panel.getByTestId('mermaid-block').scrollIntoViewIfNeeded()
+      await expect(open).toBeVisible({ timeout: 15000 })
+      const scrolled = await preview.evaluate((el) => el.scrollTop)
+      const url = page.url()
+
+      await open.click()
+      const viewer = page.getByRole('dialog', { name: 'Mermaid diagram 1' })
+      await expect(viewer).toBeVisible()
+      await expect(viewer.getByText('100%')).toBeVisible()
+      await page.keyboard.press('+')
+      await viewer.getByRole('button', { name: 'Zoom in' }).click()
+      await expect(viewer.getByText('156%')).toBeVisible()
+      await page.keyboard.press('0')
+      await expect(viewer.getByText('100%')).toBeVisible()
+      // The wheel zooms too, and scrolls nothing behind
+      await viewer.getByTestId('viewer-stage').hover()
+      await page.mouse.wheel(0, -300)
+      await expect(viewer.getByText('100%')).toBeHidden()
+
+      await page.keyboard.press('Escape')
+      await expect(viewer).toBeHidden()
+      await expect(open).toBeFocused()
+      expect(page.url()).toBe(url)
+
+      await open.click()
+      await expect(viewer).toBeVisible()
+      await page.goBack()
+      await expect(viewer).toBeHidden()
+      expect(page.url()).toBe(url)
+      await expect(preview).toBeVisible()
+      expect(Math.abs((await preview.evaluate((el) => el.scrollTop)) - scrolled)).toBeLessThan(2)
+    })
+
+    test('desktop: an image in Files and a side in Changes open full screen', async ({ page }) => {
+      await page.setViewportSize({ width: 1280, height: 800 })
+      const panel = await openFile(page, 'red.png')
+      const open = panel.getByRole('button', { name: /^Open e2e-viewer\/red\.png full screen$/ })
+      await expect(open).toBeEnabled()
+      await open.click()
+      const viewer = page.getByRole('dialog', { name: 'e2e-viewer/red.png' })
+      await expect(viewer.locator('img[src^="blob:"]')).toBeVisible()
+      await viewer.getByRole('button', { name: 'Close' }).click()
+      await expect(viewer).toBeHidden()
+
+      // A changed image: each side opens on its own
+      git(repo, 'add', 'e2e-viewer/red.png')
+      git(repo, 'commit', '-q', '-m', 'red')
+      writeFileSync(path.join(dir(), 'red.png'), Buffer.from(BLUE_PNG, 'base64'))
+      await page.waitForTimeout(2500)
+      await page.getByRole('group', { name: 'Side panel' }).getByRole('button', { name: 'Changes' }).click()
+      const changes = page.getByRole('complementary', { name: 'Changes' })
+      await changes.getByRole('region', { name: 'Changes' }).getByRole('button', { name: /red\.png/ }).click()
+      const after = changes.getByRole('button', { name: /^Open e2e-viewer\/red\.png \(After · Working tree\) full screen$/ })
+      await expect(after).toBeEnabled()
+      await after.click()
+      const side = page.getByRole('dialog', { name: 'e2e-viewer/red.png (After · Working tree)' })
+      await expect(side).toBeVisible()
+      await page.keyboard.press('Escape')
+      await expect(side).toBeHidden()
+      git(repo, 'rm', '-q', '--cached', 'e2e-viewer/red.png')
+      git(repo, 'commit', '-q', '-m', 'drop red')
+    })
+
+    test.describe('phone', () => {
+      test.use({ hasTouch: true, viewport: { width: 390, height: 844 } })
+
+      test('a tap opens the viewer; a double tap zooms; the stage takes every touch', async ({ page }) => {
+        // The first-visit gesture tour would cover the view
+        await page.addInitScript(() =>
+          localStorage.setItem('termote-settings', JSON.stringify({ hasSeenGestureHints: true })),
+        )
+        await page.goto(`${link}?view=files`)
+        await page.getByRole('treeitem', { name: 'e2e-viewer' }).tap()
+        await page.getByRole('treeitem', { name: 'diagram.md' }).tap()
+        const open = page.getByRole('button', { name: 'Open Mermaid diagram 1 full screen' })
+        await page.getByTestId('mermaid-block').scrollIntoViewIfNeeded()
+        await expect(open).toBeVisible({ timeout: 15000 })
+        await open.tap()
+        const viewer = page.getByRole('dialog', { name: 'Mermaid diagram 1' })
+        await expect(viewer).toBeVisible()
+        const stage = viewer.getByTestId('viewer-stage')
+        expect(await stage.evaluate((el) => getComputedStyle(el).touchAction)).toBe('none')
+        const box = (await stage.boundingBox())!
+        const x = box.x + box.width / 2
+        const y = box.y + box.height / 2
+        await page.touchscreen.tap(x, y)
+        await page.touchscreen.tap(x, y)
+        await expect(viewer.getByText('200%')).toBeVisible()
+        expect(await noPageScroll(page)).toBe(true)
+        await viewer.getByRole('button', { name: 'Close' }).tap()
+        await expect(viewer).toBeHidden()
+      })
+    })
+  })
 })

@@ -2,6 +2,7 @@ import { X } from 'lucide-react'
 import { type ReactNode, useCallback, useEffect, useId, useRef } from 'react'
 import { useDialogModal } from '../../hooks/use-dialog-modal'
 import { useIsMobile } from '../../hooks/use-media-query'
+import { useRestoreFocus } from '../../hooks/use-restore-focus'
 import { IconButton } from './button'
 
 interface Props {
@@ -36,14 +37,7 @@ function OpenSheet({
   const titleId = useId()
   const isMobile = useIsMobile()
 
-  // Declared before useDialogModal: the opener still has focus here, before
-  // showModal moves it into the dialog.
-  useEffect(() => {
-    const opener = document.activeElement
-    return () => {
-      if (opener instanceof HTMLElement && opener.isConnected) opener.focus()
-    }
-  }, [])
+  useRestoreFocus()
   // A stable callback: callers pass inline functions, and a new one would
   // re-run useDialogModal (showModal on an open dialog, listener churn).
   const onCloseRef = useRef(onClose)

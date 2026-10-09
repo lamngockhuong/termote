@@ -7,6 +7,7 @@ import {
   useState,
 } from 'react'
 import { useTheme } from '../contexts/theme-context'
+import { useImageViewer } from '../hooks/use-image-viewer'
 import {
   type MermaidFailure,
   type MermaidResult,
@@ -100,6 +101,8 @@ export function MermaidBlock({ text, index, scrollRoot, frame }: Props) {
   }, [text, resolvedTheme, near])
 
   const result = state.text === text ? state.result : null
+  const { open, viewer } = useImageViewer(result?.ok ? result.url : undefined)
+  const alt = `Mermaid diagram ${index}`
   let parts: FrameParts
   if (!result) {
     parts = { note: 'Rendering diagram…' }
@@ -123,21 +126,36 @@ export function MermaidBlock({ text, index, scrollRoot, frame }: Props) {
           toolbar: toggle,
           body: (
             <div className="overflow-x-auto p-3">
-              <img
-                src={result.url}
-                width={result.width}
-                height={result.height}
-                alt={`Mermaid diagram ${index}`}
-                className="mx-auto block max-w-none"
-                draggable={false}
-                // The SVG not valid as an image after all: show the source
-                onError={() =>
-                  setState({
-                    text,
-                    result: { ok: false, reason: 'render_failed' },
+              <button
+                type="button"
+                aria-label={`Open ${alt} full screen`}
+                className="mx-auto block cursor-zoom-in"
+                onClick={() =>
+                  open({
+                    src: result.url,
+                    alt,
+                    width: result.width,
+                    height: result.height,
+                    isSvg: true,
                   })
                 }
-              />
+              >
+                <img
+                  src={result.url}
+                  width={result.width}
+                  height={result.height}
+                  alt={alt}
+                  className="block max-w-none"
+                  draggable={false}
+                  // The SVG not valid as an image after all: show the source
+                  onError={() =>
+                    setState({
+                      text,
+                      result: { ok: false, reason: 'render_failed' },
+                    })
+                  }
+                />
+              </button>
             </div>
           ),
         }
@@ -146,6 +164,7 @@ export function MermaidBlock({ text, index, scrollRoot, frame }: Props) {
   return (
     <div ref={ref} data-testid="mermaid-block">
       {frame(parts)}
+      {viewer}
     </div>
   )
 }

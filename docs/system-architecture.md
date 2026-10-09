@@ -891,7 +891,9 @@ loads), fenced code through the same worker, and relative links resolved client 
 would leave the root is never built, so never requested. A `mermaid` block is drawn by
 `utils/mermaid-render.ts` as a `data:` SVG image (Mermaid lazily loaded, kept out of the
 precache by `pwa/build/precache-split.ts`, config locked against the file's directives), its
-source shown with a reason whenever it cannot be. Following a link reads the target's
+source shown with a reason whenever it cannot be. A diagram, and an image of Files or Changes,
+opens in `components/image-viewer.tsx` (lazy chunk) with the URL already shown: zoom and pan by
+Pointer Events, one history entry of its own so Back closes it. Following a link reads the target's
 parent directory to tell file from folder; the files store keeps a Back trail with scroll
 offsets. Changes previews the working-tree version of a changed Markdown file the same way.
 An image (`.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`) opens through `raw` instead: Files shows it

@@ -3512,6 +3512,53 @@ describe('App views, view-only and deep links', () => {
       expect(window.history.length).toBe(length)
     })
 
+    it('waits while a viewer’s entry is on top, then writes the base entry', async () => {
+      window.history.replaceState(null, '', '/#/s/w1/w1%3At1/w1%3At1%3Ap1')
+      render(<App views={VIEWS} />)
+      await waitFor(() => expect(switchSession).toHaveBeenCalled())
+      // A viewer opened: its entry on top, same URL
+      window.history.pushState(
+        { termoteViewer: 'v1' },
+        '',
+        window.location.href,
+      )
+      fireEvent.click(screen.getByRole('tab', { name: 'Chat' }))
+      expect(window.location.hash).toBe('#/s/w1/w1%3At1/w1%3At1%3Ap1')
+      // Back pops it: the entry under it gets the new address
+      const popped = new Promise((r) =>
+        window.addEventListener('popstate', r, { once: true }),
+      )
+      window.history.back()
+      await popped
+      await waitFor(() =>
+        expect(window.location.hash).toBe(
+          '#/s/w1/w1%3At1/w1%3At1%3Ap1?view=chat',
+        ),
+      )
+      expect(window.history.state?.termoteViewer).toBeUndefined()
+    })
+
+    it('Forward onto the entry of a closed viewer drops its mark', async () => {
+      render(<App />)
+      await screen.findByTestId('terminal-view')
+      window.history.pushState(
+        { termoteViewer: 'gone' },
+        '',
+        window.location.href,
+      )
+      act(() => {
+        window.dispatchEvent(new PopStateEvent('popstate'))
+      })
+      expect(window.history.state?.termoteViewer).toBeUndefined()
+    })
+
+    it('drops the mark of a viewer open before a reload', async () => {
+      window.history.replaceState({ termoteViewer: 'old', keep: 1 }, '', '/')
+      render(<App />)
+      await screen.findByTestId('terminal-view')
+      expect(window.history.state).toEqual({ keep: 1 })
+    })
+
     it('a link to the pane on screen leaves the address as it is', async () => {
       window.history.replaceState(null, '', '/#/s/w1/w1%3At1/w1%3At1%3Ap1')
       const replace = vi.spyOn(window.history, 'replaceState')

@@ -1,8 +1,10 @@
 import { type ReactNode, useState } from 'react'
 import { filesError } from '../hooks/use-files'
 import { type ImageState, imageErrorCode } from '../hooks/use-image-blob'
+import { useImageViewer } from '../hooks/use-image-viewer'
 import { RequestError } from '../hooks/use-mux-api'
 import { formatSize } from '../utils/files-format'
+import { visibleUnsafe } from '../utils/unsafe-chars'
 import { ViewMessage } from './pane-dir-header'
 import { Button } from './ui/button'
 
@@ -51,7 +53,8 @@ interface Props {
 }
 
 // One image read by useImageBlob: fit to the width over a checkerboard, with
-// its pixel size and file size, or why it cannot be shown.
+// its pixel size and file size, or why it cannot be shown. Once decoded, a
+// click (Enter, Space) opens it full screen.
 export function ImagePreview({ state, alt, label, missing, onRetry }: Props) {
   // What the browser made of the current URL
   const [decoded, setDecoded] = useState<{
@@ -62,6 +65,9 @@ export function ImagePreview({ state, alt, label, missing, onRetry }: Props) {
   }>()
   const url = state.status === 'ready' ? state.url : undefined
   const seen = decoded?.url === url ? decoded : undefined
+  const { open, viewer } = useImageViewer(url)
+  // A path can hold control or bidi characters: shown, never applied
+  const title = visibleUnsafe(alt)
 
   let body: ReactNode
   if (state.status === 'idle') body = <ViewMessage>{missing}</ViewMessage>
@@ -86,22 +92,40 @@ export function ImagePreview({ state, alt, label, missing, onRetry }: Props) {
       // has no width of its own and would collapse to nothing; here it
       // fills the width, and a small bitmap keeps its own size
       <div className="p-2">
-        <img
-          src={state.url}
-          alt={alt}
-          decoding="async"
-          aria-busy={state.stale}
-          style={CHECKERBOARD}
-          className={`block h-auto max-w-full ${state.stale ? 'opacity-60' : ''}`}
-          onLoad={(e) =>
-            setDecoded({
-              url: state.url,
-              width: e.currentTarget.naturalWidth,
-              height: e.currentTarget.naturalHeight,
+        <button
+          type="button"
+          // Decoded only: a broken or loading image has nothing to show
+          disabled={!seen}
+          aria-label={`Open ${title} full screen`}
+          className="block w-full cursor-zoom-in text-left disabled:cursor-default"
+          onClick={() =>
+            open({
+              src: state.url,
+              alt: title,
+              // An SVG with only a viewBox reports none: the viewer measures
+              width: seen?.width || undefined,
+              height: seen?.height || undefined,
+              isSvg: state.type === SVG_TYPE,
             })
           }
-          onError={() => setDecoded({ url: state.url, failed: true })}
-        />
+        >
+          <img
+            src={state.url}
+            alt={alt}
+            decoding="async"
+            aria-busy={state.stale}
+            style={CHECKERBOARD}
+            className={`block h-auto max-w-full ${state.stale ? 'opacity-60' : ''}`}
+            onLoad={(e) =>
+              setDecoded({
+                url: state.url,
+                width: e.currentTarget.naturalWidth,
+                height: e.currentTarget.naturalHeight,
+              })
+            }
+            onError={() => setDecoded({ url: state.url, failed: true })}
+          />
+        </button>
         <span className="mt-1 block text-[11px] text-fg-muted">
           {/* An SVG's pixel size is whatever the browser picks for it */}
           {seen?.width !== undefined &&
@@ -120,6 +144,7 @@ export function ImagePreview({ state, alt, label, missing, onRetry }: Props) {
         </div>
       )}
       {body}
+      {viewer}
     </div>
   )
 }

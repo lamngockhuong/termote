@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ThemeProvider, useTheme } from '../contexts/theme-context'
 import type { MermaidResult } from '../utils/mermaid-render'
@@ -138,6 +138,38 @@ describe('MermaidBlock', () => {
     fireEvent.error(await screen.findByAltText('Mermaid diagram 1'))
     expect(screen.getByText(MERMAID_REASONS.render_failed)).toBeInTheDocument()
     expect(screen.getByTestId('fenced-code')).toHaveTextContent('A --> B')
+  })
+
+  it('opens the diagram full screen at its own size', async () => {
+    HTMLDialogElement.prototype.showModal = vi.fn(function (
+      this: HTMLDialogElement,
+    ) {
+      this.setAttribute('open', '')
+    })
+    show(md(GRAPH))
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Open Mermaid diagram 1 full screen',
+      }),
+    )
+    const dialog = await screen.findByRole(
+      'dialog',
+      {
+        hidden: true,
+        name: 'Mermaid diagram 1',
+      },
+      { timeout: 5000 },
+    )
+    expect(dialog.querySelector('img')).toHaveAttribute('src', urlOf(1))
+    // Closed again by its own history entry
+    const popped = new Promise((r) =>
+      window.addEventListener('popstate', r, { once: true }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Close', hidden: true }))
+    await popped
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { hidden: true })).toBeNull(),
+    )
   })
 
   it('switches between the diagram and its source', async () => {
