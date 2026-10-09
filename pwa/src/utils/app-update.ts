@@ -89,31 +89,53 @@ function writeKey(key: string, value: string) {
   }
 }
 
-// Resolves on the event, or after the timeout.
+// Resolves true on the event, false after the timeout.
 function waitEvent(
   target: EventTarget,
   type: string,
   ready: () => boolean,
-): Promise<void> {
+): Promise<boolean> {
   return new Promise((resolve) => {
     const done = () => {
       if (!ready()) return
       clearTimeout(timer)
       target.removeEventListener(type, done)
-      resolve()
+      resolve(true)
     }
     const timer = setTimeout(() => {
       target.removeEventListener(type, done)
-      resolve()
+      resolve(false)
     }, SW_ACTIVATE_TIMEOUT_MS)
     target.addEventListener(type, done)
   })
 }
 
 /**
+ * Stops the service worker from answering the reload, as Clear cache does
+ * (without signing out): the page then comes from the server, and registers
+ * the new worker itself. Kept for a worker told to skip waiting that never
+ * took control (seen on iOS), which would serve the old page again.
+ */
+async function dropServiceWorker(reg: ServiceWorkerRegistration) {
+  await reg.unregister().catch(() => false)
+  try {
+    // Should the old worker still answer, it finds nothing and asks the server.
+    const names = await caches.keys()
+    await Promise.all(
+      names
+        .filter((n) => n.startsWith('workbox-precache'))
+        .map((n) => caches.delete(n)),
+    )
+  } catch {
+    // No Cache API: the unregistered worker no longer answers anyway.
+  }
+}
+
+/**
  * Loads the page the server now serves: fetches the new service worker,
  * lets it take over once installed (it waits otherwise, so a reload would
- * get the cached old page) and reloads.
+ * get the cached old page) and reloads. A worker that does not take over in
+ * time is dropped, so the reload still reaches the server.
  */
 export async function reloadToNewVersion(
   reload: () => void = () => window.location.reload(),
@@ -138,11 +160,12 @@ export async function reloadToNewVersion(
             () => worker.state !== 'installing',
           )
         }
-        // A worker that failed to install never takes over.
+        // A worker that failed to install never takes over; the old one
+        // keeps the app usable while the server is away.
         if (worker.state !== 'redundant') {
           // Workbox's worker skips waiting on this message.
           worker.postMessage({ type: 'SKIP_WAITING' })
-          await controlled
+          if (!(await controlled)) await dropServiceWorker(reg)
         }
       }
     }
