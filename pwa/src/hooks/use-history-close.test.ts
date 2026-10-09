@@ -2,6 +2,7 @@ import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   dropStaleViewerEntry,
+  onViewerEntryGone,
   useHistoryClose,
   viewerClosing,
   viewerOnTop,
@@ -157,6 +158,39 @@ describe('useHistoryClose', () => {
     window.history.pushState({ other: 1 }, '', '/#/s/main/1')
     view.unmount()
     expect(back).not.toHaveBeenCalled()
+  })
+})
+
+describe('onViewerEntryGone', () => {
+  it('tells once the entry is gone, by Back or by closing, until turned off', async () => {
+    const gone = vi.fn()
+    const off = onViewerEntryGone(gone)
+    renderHook(() => useHistoryClose(vi.fn()))
+    let pop = popped()
+    window.history.back()
+    await pop
+    expect(gone).toHaveBeenCalledTimes(1)
+
+    const { result } = renderHook(() => useHistoryClose(vi.fn()))
+    pop = popped()
+    act(() => result.current())
+    await pop
+    expect(gone).toHaveBeenCalledTimes(2)
+
+    off()
+    renderHook(() => useHistoryClose(vi.fn()))
+    pop = popped()
+    window.history.back()
+    await pop
+    expect(gone).toHaveBeenCalledTimes(2)
+  })
+
+  it('says nothing for a popstate that is not a viewer’s', () => {
+    const gone = vi.fn()
+    const off = onViewerEntryGone(gone)
+    window.dispatchEvent(new PopStateEvent('popstate'))
+    expect(gone).not.toHaveBeenCalled()
+    off()
   })
 })
 

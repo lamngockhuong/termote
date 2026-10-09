@@ -14,6 +14,22 @@ let openId: string | null = null
 let nextId = 0
 // Past this a popstate that never came no longer keeps viewers from opening
 const CLOSING_FOR = 1000
+// Told once a viewer's entry has left the top of the history
+const closedListeners = new Set<() => void>()
+
+function notifyClosed() {
+  for (const fn of closedListeners) fn()
+}
+
+// For the app: the address it held back while a viewer's entry was on top
+// can be written now. Only then: any other popstate (a link opened by its
+// hash, Back between links) must not rewrite the address.
+export function onViewerEntryGone(fn: () => void): () => void {
+  closedListeners.add(fn)
+  return () => {
+    closedListeners.delete(fn)
+  }
+}
 
 function stateId(): unknown {
   return (window.history.state as Record<string, unknown> | null)?.[KEY]
@@ -25,6 +41,7 @@ function goBack() {
     closing = false
     clearTimeout(timer)
     window.removeEventListener('popstate', done)
+    notifyClosed()
   }
   const timer = setTimeout(done, CLOSING_FOR)
   window.addEventListener('popstate', done)
@@ -76,6 +93,8 @@ export function useHistoryClose(onClose: () => void): () => void {
       if (stateId() === id || idRef.current !== id) return
       idRef.current = null
       onCloseRef.current()
+      // A back() of ours tells it once its own popstate is in
+      if (!closing) notifyClosed()
     }
     window.addEventListener('popstate', onPop)
     return () => {

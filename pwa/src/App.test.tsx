@@ -2,6 +2,7 @@ import {
   act,
   fireEvent,
   render,
+  renderHook,
   screen,
   waitFor,
   within,
@@ -15,6 +16,7 @@ import { KeyboardToolbar } from './components/keyboard-toolbar'
 import type { QuickActionHandlers } from './components/quick-actions-menu'
 import { PanelMaximizeButton } from './components/side-panel'
 import { TerminalView } from './components/terminal-view'
+import { useHistoryClose } from './hooks/use-history-close'
 import {
   LARGE_PACKET_HELP_URL,
   reportLargePacketLoss,
@@ -3517,11 +3519,8 @@ describe('App views, view-only and deep links', () => {
       render(<App views={VIEWS} />)
       await waitFor(() => expect(switchSession).toHaveBeenCalled())
       // A viewer opened: its entry on top, same URL
-      window.history.pushState(
-        { termoteViewer: 'v1' },
-        '',
-        window.location.href,
-      )
+      renderHook(() => useHistoryClose(vi.fn()))
+      expect(window.history.state?.termoteViewer).toEqual(expect.any(String))
       fireEvent.click(screen.getByRole('tab', { name: 'Chat' }))
       expect(window.location.hash).toBe('#/s/w1/w1%3At1/w1%3At1%3Ap1')
       // Back pops it: the entry under it gets the new address
@@ -3536,6 +3535,26 @@ describe('App views, view-only and deep links', () => {
         ),
       )
       expect(window.history.state?.termoteViewer).toBeUndefined()
+    })
+
+    it('a link opened by its hash is not written over by its popstate', async () => {
+      window.history.replaceState(null, '', '/#/s/w1/w1%3At1')
+      render(<App />)
+      await waitFor(() => expect(switchSession).toHaveBeenCalled())
+      switchSession.mockClear()
+      // A link typed in the address bar: popstate first, then hashchange
+      window.history.pushState(null, '', '/#/s/w2/w2%3At1')
+      act(() => {
+        window.dispatchEvent(new PopStateEvent('popstate'))
+      })
+      await act(async () => {})
+      expect(window.location.hash).toBe('#/s/w2/w2%3At1')
+      act(() => {
+        window.dispatchEvent(new HashChangeEvent('hashchange'))
+      })
+      await waitFor(() =>
+        expect(switchSession).toHaveBeenCalledWith('w2:t1', undefined),
+      )
     })
 
     it('Forward onto the entry of a closed viewer drops its mark', async () => {
