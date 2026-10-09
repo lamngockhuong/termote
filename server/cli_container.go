@@ -359,6 +359,8 @@ func (c *cli) runContainer(rt, image, bind string, o containerOptions, pass stri
 	args := []string{"run", "-d", "--name", containerName, "--restart", "unless-stopped",
 		"-p", fmt.Sprintf("%s:%d:%d", bind, o.port, containerPort),
 		"--mount", "type=bind,src=" + o.workspace + ",dst=/workspace", "-w", "/workspace",
+		// Paired devices and push subscriptions outlive the container.
+		"--mount", "type=volume,src=" + containerStateVolume() + ",dst=/home/termote/.local/state",
 		"-e", "NO_AUTH", "-e", "TERMOTE_USER", "-e", "TERMOTE_PASS", "-e", "TERMOTE_ALLOWED_HOSTS",
 		"-e", "TERMOTE_MUX", "-e", "TERMOTE_HERDR_ALLOW_NO_AUTH"}
 	args = append(args, c.containerUserArgs(rt)...)
@@ -366,6 +368,35 @@ func (c *cli) runContainer(rt, image, bind string, o containerOptions, pass stri
 		return fmt.Errorf("%s run %s: %w", rt, image, err)
 	}
 	return nil
+}
+
+// containerStateVolume names the volume holding the container's state dir
+// (paired devices, push), so a new container (`container up`, `update`)
+// keeps it. It carries the uid: two users of one rootful daemon keep apart.
+func containerStateVolume() string {
+	if uid := os.Getuid(); uid >= 0 {
+		return "termote-state-" + strconv.Itoa(uid)
+	}
+	return "termote-state"
+}
+
+// removeContainerStateVolume deletes the state volume, if a runtime has one
+// (`uninstall --purge`). In use by a container, it stays and the user is
+// told how to free it.
+func (c *cli) removeContainerStateVolume() {
+	rt := c.containerRuntime()
+	if rt == "" {
+		return
+	}
+	vol := containerStateVolume()
+	if _, err := c.run.Output("", nil, rt, "volume", "inspect", vol); err != nil {
+		return
+	}
+	if _, err := c.run.Output("", nil, rt, "volume", "rm", vol); err != nil {
+		c.warnf("Could not remove the container's state volume %s (stop the container first: termote container down): %v", vol, err)
+		return
+	}
+	c.infof("Removed the container's state volume %s", vol)
 }
 
 // containerUserArgs makes the workspace writable from the container. A
@@ -492,7 +523,11 @@ func (c *cli) containerStatus(args []string) error {
 	}
 	h, code := fetchHealth(port, saved.authUser(), pass)
 	if code == 200 {
-		fmt.Fprintf(c.out, "  %s server :%d - %s (v%s)\n\n", c.paint(ansiGreen, "[OK]"), port, h.Status, h.Version)
+		fmt.Fprintf(c.out, "  %s server :%d - %s (v%s)\n", c.paint(ansiGreen, "[OK]"), port, h.Status, h.Version)
+		if h.Devices != nil && !*h.Devices {
+			fmt.Fprintf(c.out, "  %s device pairing is off: the state volume %s is not usable (see the container's log)\n", c.paint(ansiYellow, "[!!]"), containerStateVolume())
+		}
+		fmt.Fprintln(c.out)
 		return nil
 	}
 	fmt.Fprintf(c.out, "  %s server :%d - %s\n\n", c.paint(ansiRed, "[--]"), port, describeCode(code))

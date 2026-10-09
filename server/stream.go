@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -105,11 +106,17 @@ type streamControl struct {
 	Reason string `json:"reason,omitempty"`
 }
 
-// errStreamEvicted and errServerShutdown end a stream from outside.
+// errStreamEvicted, errServerShutdown and errDeviceRevoked end a stream from
+// outside; errTooManyViewers refuses a view-only stream.
 var (
 	errStreamEvicted  = errors.New("closed: too many open streams")
 	errServerShutdown = errors.New("server shutting down")
+	errDeviceRevoked  = errors.New("closed: device revoked")
+	errTooManyViewers = errors.New("too many viewers")
 )
+
+// maxViewStreamsPerDevice caps the open streams of one view-only device.
+const maxViewStreamsPerDevice = 2
 
 // streamHub tracks open streams so the oldest can be evicted when the limit is
 // hit and every stream can be closed on shutdown.
@@ -119,32 +126,89 @@ type streamHub struct {
 	streams []*hubEntry // oldest first
 	closing bool
 	wg      sync.WaitGroup
+	// alive reports whether a paired device still exists; nil when none
+	// can be revoked. add asks it under mu, and a revoke marks the device
+	// gone before closeDevice takes mu, so a stream that was opening while
+	// its device was revoked is closed either way.
+	alive func(deviceID string) bool
+	// onShutdown runs once shutdown has closed every stream (it writes what
+	// the device store holds in memory).
+	onShutdown func()
 }
 
 type hubEntry struct {
-	cancel context.CancelCauseFunc
+	cancel   context.CancelCauseFunc
+	role     role
+	deviceID string
 }
 
 func newStreamHub(max int) *streamHub {
 	return &streamHub{max: max}
 }
 
-// add registers a stream, evicting the oldest ones beyond the limit. It returns
-// false once shutdown has started.
-func (h *streamHub) add(cancel context.CancelCauseFunc) (*hubEntry, bool) {
+// add registers a stream of a client of role r (deviceID: its paired
+// device, if any), evicting what the limits require: a view-only device's
+// oldest stream past maxViewStreamsPerDevice, then, past the server-wide
+// limit, the oldest view-only stream, else (for a full client only) the
+// oldest stream. A view-only stream never pushes out a full one: with no
+// view-only stream to evict it gets errTooManyViewers. It also fails once
+// shutdown has started (errServerShutdown) and for a revoked device
+// (errDeviceRevoked).
+func (h *streamHub) add(cancel context.CancelCauseFunc, r role, deviceID string) (*hubEntry, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.closing {
-		return nil, false
+		return nil, errServerShutdown
+	}
+	if deviceID != "" && h.alive != nil && !h.alive(deviceID) {
+		return nil, errDeviceRevoked
+	}
+	if r == roleView && deviceID != "" {
+		mine := 0
+		for _, s := range h.streams {
+			if s.deviceID == deviceID {
+				mine++
+			}
+		}
+		if mine >= maxViewStreamsPerDevice {
+			h.evict(slices.IndexFunc(h.streams, func(s *hubEntry) bool { return s.deviceID == deviceID }))
+		}
 	}
 	for len(h.streams) >= h.max {
-		h.streams[0].cancel(errStreamEvicted)
-		h.streams = h.streams[1:]
+		i := slices.IndexFunc(h.streams, func(s *hubEntry) bool { return s.role == roleView })
+		if i < 0 {
+			if r == roleView {
+				return nil, errTooManyViewers
+			}
+			i = 0
+		}
+		h.evict(i)
 	}
-	e := &hubEntry{cancel: cancel}
+	e := &hubEntry{cancel: cancel, role: r, deviceID: deviceID}
 	h.streams = append(h.streams, e)
 	h.wg.Add(1)
-	return e, true
+	return e, nil
+}
+
+// evict ends stream i; h.mu is held.
+func (h *streamHub) evict(i int) {
+	h.streams[i].cancel(errStreamEvicted)
+	h.streams = append(h.streams[:i], h.streams[i+1:]...)
+}
+
+// closeDevice ends every stream of deviceID (a revoked device). Each stays
+// in the hub until its cleanup removes it.
+func (h *streamHub) closeDevice(deviceID string) {
+	if deviceID == "" {
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for _, s := range h.streams {
+		if s.deviceID == deviceID {
+			s.cancel(errDeviceRevoked)
+		}
+	}
 }
 
 // remove unregisters a stream after its cleanup has finished.
@@ -171,6 +235,9 @@ func (h *streamHub) shutdown(ctx context.Context) error {
 	h.mu.Unlock()
 	done := make(chan struct{})
 	go func() { h.wg.Wait(); close(done) }()
+	if h.onShutdown != nil {
+		defer h.onShutdown()
+	}
 	select {
 	case <-done:
 		return nil
@@ -211,9 +278,31 @@ func handleStream(w http.ResponseWriter, r *http.Request, m Mux, tokens *tokenSt
 		}
 	}
 	q := r.URL.Query()
-	if !tokens.validate(q.Get("token")) {
+	grant, ok := tokens.consume(q.Get("token"))
+	if !ok {
 		jsonError(w, "invalid or expired stream token", http.StatusUnauthorized)
 		return
+	}
+	// The token's grant, and the request's own: either one view-only makes
+	// the stream view-only.
+	view := grant.role == roleView || isViewOnly(r)
+	deviceID := grant.deviceID
+	if a, ok := authFrom(r.Context()); ok && a.DeviceID != "" {
+		deviceID = a.DeviceID
+	}
+	var va viewAttacher
+	if view {
+		// Checked before anything runs: a backend that cannot attach a
+		// client that changes nothing is refused, never given a normal one.
+		var ok bool
+		cctx, ccancel := context.WithTimeout(r.Context(), muxTimeout)
+		va, ok = m.(viewAttacher)
+		ok = ok && va.CanView(cctx)
+		ccancel()
+		if !ok {
+			jsonErrorCode(w, "unsupported", "view-only streams are not supported by this backend", http.StatusNotImplemented)
+			return
+		}
 	}
 	pane := q.Get("pane")
 	if pane == "" {
@@ -223,7 +312,11 @@ func handleStream(w http.ResponseWriter, r *http.Request, m Mux, tokens *tokenSt
 	size := Size{Cols: queryDim(q, "cols", defaultTermCols), Rows: queryDim(q, "rows", defaultTermRows)}
 
 	ctx, cancel := context.WithTimeout(r.Context(), muxTimeout)
-	snap, err := m.Snapshot(ctx)
+	read := m.Snapshot
+	if view {
+		read = func(ctx context.Context) (Snapshot, error) { return viewSnapshot(ctx, m) }
+	}
+	snap, err := read(ctx)
 	cancel()
 	if err != nil {
 		muxError(w, m, "stream snapshot", err)
@@ -231,6 +324,14 @@ func handleStream(w http.ResponseWriter, r *http.Request, m Mux, tokens *tokenSt
 	}
 	if !snapshotHasPane(snap, pane) {
 		jsonError(w, "unknown pane", http.StatusBadRequest)
+		return
+	}
+	// Where selecting a tab is the backend's (tmux), a view-only client
+	// watches the current window: attaching to another would switch it for
+	// every client. A switch between this check and the attach only shows
+	// it the window switched to.
+	if view && !m.Caps().ClientSideSelect && !snapshotPaneActive(snap, pane) {
+		writeViewOnly(w)
 		return
 	}
 
@@ -244,17 +345,34 @@ func handleStream(w http.ResponseWriter, r *http.Request, m Mux, tokens *tokenSt
 	conn.SetReadLimit(maxStreamMessage)
 
 	sctx, scancel := context.WithCancelCause(context.Background())
-	entry, ok := hub.add(scancel)
-	if !ok {
-		scancel(errServerShutdown)
-		go conn.Close(websocket.StatusGoingAway, "server shutting down")
+	streamRole := roleFull
+	if view {
+		streamRole = roleView
+	}
+	entry, err := hub.add(scancel, streamRole, deviceID)
+	if err != nil {
+		scancel(err)
+		switch {
+		case errors.Is(err, errTooManyViewers):
+			sendControl(conn, streamControl{Type: "error", Message: "too many viewers"})
+			go conn.Close(websocket.StatusTryAgainLater, "too many viewers")
+		case errors.Is(err, errDeviceRevoked):
+			go conn.Close(websocket.StatusPolicyViolation, "device revoked")
+		default:
+			go conn.Close(websocket.StatusGoingAway, "server shutting down")
+		}
 		return
 	}
 	defer hub.remove(entry)
 	defer scancel(nil)
 
 	actx, acancel := context.WithTimeout(sctx, muxTimeout)
-	ts, err := m.Attach(actx, pane, size)
+	var ts TermStream
+	if view {
+		ts, err = va.AttachView(actx, pane, size)
+	} else {
+		ts, err = m.Attach(actx, pane, size)
+	}
 	acancel()
 	if err != nil {
 		log.Printf("%s attach %q: %v", m.Name(), pane, err)
@@ -264,10 +382,46 @@ func handleStream(w http.ResponseWriter, r *http.Request, m Mux, tokens *tokenSt
 	}
 	// drive=1 opens the stream already driving the size, so a reconnect does
 	// not start at the desktop size only to switch at once.
-	if sd, ok := ts.(sizeDriver); ok && q.Get("drive") == "1" {
+	if sd, ok := ts.(sizeDriver); ok && !view && q.Get("drive") == "1" {
 		sd.Drive(true)
 	}
-	runStream(sctx, scancel, conn, ts)
+	runStream(sctx, scancel, conn, ts, view)
+}
+
+// viewAttacher is a backend that can attach a client that changes nothing:
+// no input reaches the pane (the stream also drops it), and neither the
+// current window nor any size changes.
+type viewAttacher interface {
+	// CanView reports whether AttachView works here.
+	CanView(ctx context.Context) bool
+	// AttachView attaches to paneID read-only; size is only the client's
+	// own terminal size.
+	AttachView(ctx context.Context, paneID string, size Size) (TermStream, error)
+}
+
+// viewSnapshot reads m's panes for a view-only client: without making
+// anything (tmux's default session) where the snapshot would.
+func viewSnapshot(ctx context.Context, m Mux) (Snapshot, error) {
+	if m.Caps().ClientSideSelect {
+		// Herdr's snapshot makes nothing, and its peek leaves out the
+		// worktree branches.
+		return m.Snapshot(ctx)
+	}
+	return peekSnapshot(ctx, m)
+}
+
+// snapshotPaneActive reports whether pane is in its group's active tab.
+func snapshotPaneActive(s Snapshot, pane string) bool {
+	for _, g := range s.Groups {
+		for _, t := range g.Tabs {
+			for _, p := range t.Panes {
+				if p.ID == pane {
+					return t.Active
+				}
+			}
+		}
+	}
+	return false
 }
 
 // runStream pumps bytes both ways until the terminal exits, the client goes
@@ -280,7 +434,10 @@ func handleStream(w http.ResponseWriter, r *http.Request, m Mux, tokens *tokenSt
 // The closing handshake waits for the client's reply for up to 5s, so it runs
 // in the background: the hub only tracks terminal processes, and those are
 // gone by then.
-func runStream(ctx context.Context, cancel context.CancelCauseFunc, conn *websocket.Conn, ts TermStream) {
+//
+// A view-only stream (readOnly) drops every input frame, resize and drive:
+// nothing it sends reaches the pane or its size.
+func runStream(ctx context.Context, cancel context.CancelCauseFunc, conn *websocket.Conn, ts TermStream, readOnly bool) {
 	outDone := make(chan struct{})
 	go func() {
 		defer close(outDone)
@@ -306,6 +463,9 @@ func runStream(ctx context.Context, cancel context.CancelCauseFunc, conn *websoc
 			if err != nil {
 				cancel(err)
 				return
+			}
+			if readOnly {
+				continue
 			}
 			if typ == websocket.MessageBinary {
 				if _, err := ts.Write(data); err != nil {
@@ -397,6 +557,8 @@ func runStream(ctx context.Context, cancel context.CancelCauseFunc, conn *websoc
 		case errors.Is(cause, errStreamEvicted):
 			sendControl(conn, streamControl{Type: "error", Message: errStreamEvicted.Error()})
 			go conn.Close(closeEvicted, "too many streams")
+		case errors.Is(cause, errDeviceRevoked):
+			go conn.Close(websocket.StatusPolicyViolation, "device revoked")
 		case errors.Is(cause, errServerShutdown):
 			go conn.Close(websocket.StatusGoingAway, "server shutting down")
 		default:

@@ -346,7 +346,7 @@ func TestTerminalTokenStore(t *testing.T) {
 		token, _ := store.generate()
 		// Manually expire it
 		store.mu.Lock()
-		store.tokens[token] = time.Now().Add(-1 * time.Second)
+		store.tokens[token] = tokenInfo{exp: time.Now().Add(-1 * time.Second)}
 		store.mu.Unlock()
 		if store.validate(token) {
 			t.Error("validate() = true for expired token")
@@ -356,7 +356,7 @@ func TestTerminalTokenStore(t *testing.T) {
 	t.Run("sweep expired on generate", func(t *testing.T) {
 		// Add an expired token manually
 		store.mu.Lock()
-		store.tokens["expired1"] = time.Now().Add(-1 * time.Second)
+		store.tokens["expired1"] = tokenInfo{exp: time.Now().Add(-1 * time.Second)}
 		store.mu.Unlock()
 
 		store.generate() // should sweep

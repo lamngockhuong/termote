@@ -420,6 +420,10 @@ func (f *filesAPI) handleFind(w http.ResponseWriter, r *http.Request) {
 	}
 	defer cancel()
 	in, err := parseFindQuery(r.URL.Query())
+	// A view-only client never makes the server drop and rebuild a list.
+	if isViewOnly(r) {
+		in.fresh = false
+	}
 	if err != nil {
 		f.error(w, "files find", err)
 		return

@@ -665,7 +665,23 @@ func (a *agentAPI) handlePrompt(w http.ResponseWriter, r *http.Request) {
 		a.agentError(w, "capture", err)
 		return
 	}
-	jsonOK(w, promptResponse{Prompt: a.promptOf(paneID, s, readAgentScreen(s.Agent, screen))})
+	sc := readAgentScreen(s.Agent, screen)
+	if isViewOnly(r) {
+		jsonOK(w, promptResponse{Prompt: viewPrompt(sc)})
+		return
+	}
+	jsonOK(w, promptResponse{Prompt: a.promptOf(paneID, s, sc)})
+}
+
+// viewPrompt is the card a view-only client gets: the dialog without a
+// promptId, and nothing recorded about it.
+func viewPrompt(sc agentScreen) *AgentPrompt {
+	if sc.prompt == nil {
+		return nil
+	}
+	p := *sc.prompt
+	p.PromptID = ""
+	return &p
 }
 
 // promptOf turns a screen's dialog into the card the client gets.

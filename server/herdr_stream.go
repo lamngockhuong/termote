@@ -92,6 +92,15 @@ func (m *herdrMux) Attach(ctx context.Context, paneID string, client Size) (Term
 	return s, nil
 }
 
+// CanView: an observer never changes the pane, on every Herdr.
+func (*herdrMux) CanView(context.Context) bool { return true }
+
+// AttachView observes paneID at its own size and never drives it: the stream
+// drops a read-only client's input, resizes and drive requests.
+func (m *herdrMux) AttachView(ctx context.Context, paneID string, _ Size) (TermStream, error) {
+	return m.Attach(ctx, paneID, Size{})
+}
+
 // herdrStream is one herdr process at a time streaming the pane: `observe`,
 // restarted at the new size whenever the pane is resized, or `control` while
 // the client drives the size. Its frames are screen renders: the first one of

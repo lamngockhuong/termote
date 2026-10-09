@@ -273,7 +273,9 @@ func (a *agentAPI) startState(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, msg, http.StatusForbidden)
 		return
 	}
-	if !requireAgentRead(w, r) {
+	// Following a start changes state (it is recorded, and Herdr lets an
+	// expired one go when it is read); a view-only client never starts one.
+	if !requireWriteRole(w, r) {
 		return
 	}
 	st, ok := a.starter(w)

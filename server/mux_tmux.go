@@ -221,18 +221,33 @@ func tmuxAttachArgv(session string) []string {
 	return tmuxArgv("attach", "-E", "-t", session)
 }
 
+// tmuxViewAttachArgv attaches a read-only client: from tmux 3.2, -r is
+// read-only plus ignore-size, so the client neither types into the session
+// nor changes its windows' size.
+func tmuxViewAttachArgv(session string) []string {
+	return tmuxArgv("attach", "-E", "-r", "-t", session)
+}
+
 // isTmuxAttachCmdline matches exactly the command line of a stream's
-// tmuxAttachArgv, for reapOrphanTerminals, plus the one releases before
-// several sessions ran ("attach -t <TMUX_SESSION>"), which an update may
-// have left behind. Nothing else matches, a prefix of either included.
+// tmuxAttachArgv or tmuxViewAttachArgv, for reapOrphanTerminals, plus the one
+// releases before several sessions ran ("attach -t <TMUX_SESSION>"), which an
+// update may have left behind. Nothing else matches, a prefix of any included.
 func isTmuxAttachCmdline(cmdline string) bool {
-	if cmdline == strings.Join(tmuxArgv("attach", "-t", tmuxSession), " ") ||
-		cmdline == strings.Join(tmuxAttachArgv(defaultSessionTarget()), " ") {
+	if cmdline == strings.Join(tmuxArgv("attach", "-t", tmuxSession), " ") {
 		return true
 	}
-	prefix := strings.Join(tmuxArgv("attach", "-E", "-t"), " ") + " "
-	rest, ok := strings.CutPrefix(cmdline, prefix)
-	return ok && tmuxSessionIDRe.MatchString(rest)
+	for _, argv := range [][]string{tmuxAttachArgv(defaultSessionTarget()), tmuxViewAttachArgv(defaultSessionTarget())} {
+		if cmdline == strings.Join(argv, " ") {
+			return true
+		}
+	}
+	for _, flags := range [][]string{{"-E"}, {"-E", "-r"}} {
+		prefix := strings.Join(tmuxArgv(append(append([]string{"attach"}, flags...), "-t")...), " ") + " "
+		if rest, ok := strings.CutPrefix(cmdline, prefix); ok && tmuxSessionIDRe.MatchString(rest) {
+			return true
+		}
+	}
+	return false
 }
 
 // tmuxMux drives every session on a tmux (or psmux on Windows) server. A
@@ -278,7 +293,12 @@ func resetTmuxVersion() {
 // tmuxCanReorder reports whether a window can be moved: never on psmux,
 // whose move-window ignores -s, else the server's tmux (not the client's
 // `tmux -V`, which can differ) from 3.2.
-func tmuxCanReorder(ctx context.Context) bool {
+func tmuxCanReorder(ctx context.Context) bool { return tmuxServerFrom32(ctx) }
+
+// tmuxServerFrom32 reports whether the server is tmux (never psmux) 3.2 or
+// later, the server's version (not the client's `tmux -V`, which can
+// differ). A version that cannot be read counts as older.
+func tmuxServerFrom32(ctx context.Context) bool {
 	if tmuxIsPsmux {
 		return false
 	}
@@ -1130,6 +1150,21 @@ func (m tmuxMux) Attach(ctx context.Context, paneID string, size Size) (TermStre
 	}
 	w, _ := parseTmuxID(paneID)
 	return startTerminal(tmuxAttachArgv(w.session), size)
+}
+
+// CanView: a read-only client needs tmux 3.2 (before it, -r keeps resizing
+// the window to the client); psmux's -r is unchecked.
+func (tmuxMux) CanView(ctx context.Context) bool { return tmuxServerFrom32(ctx) }
+
+// AttachView attaches a read-only client to paneID's session, without
+// selecting paneID: the client sees the session's current window, which the
+// stream checked paneID to be.
+func (tmuxMux) AttachView(_ context.Context, paneID string, size Size) (TermStream, error) {
+	w, ok := parseTmuxID(paneID)
+	if !ok {
+		return nil, inputError("invalid tab id")
+	}
+	return startTerminal(tmuxViewAttachArgv(w.session), size)
 }
 
 // agentLookupWait bounds how long a snapshot waits for agent lookups, which

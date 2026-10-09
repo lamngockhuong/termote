@@ -117,6 +117,14 @@ type Caps struct {
 	// ReorderGroups: a group can be moved (/api/mux/groups/{id}/move):
 	// Herdr 0.8.0 or later, not on Windows. tmux has no session order.
 	ReorderGroups bool `json:"reorderGroups"`
+	// Role: what the signed-in client may do, "full" or "view" (it changes
+	// nothing on the server); empty without sign-in. Set by the snapshot
+	// route, from the request basicAuth let through.
+	Role string `json:"role,omitempty"`
+	// Devices: devices can be paired, listed and revoked
+	// (/api/mux/devices*): sign-in is on and the device store is usable.
+	// Set by the snapshot route.
+	Devices bool `json:"devices"`
 }
 
 // snapshotPeeker is a backend whose Snapshot has side effects (tmux makes
@@ -248,8 +256,14 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *u
 		// version and pid let the CLI tell this server from an older one
 		// still holding the port (start, restart, update); the PWA compares
 		// version with its own build and names the update for install.
-		jsonOK(w, map[string]any{"status": status, "apiVersion": apiVersion, "backend": m.Name(),
-			"version": cliVersion, "pid": os.Getpid(), "install": serverInstall})
+		h := map[string]any{"status": status, "apiVersion": apiVersion, "backend": m.Name(),
+			"version": cliVersion, "pid": os.Getpid(), "install": serverInstall}
+		// With sign-in on, whether pairing works: `container status` says
+		// so when the state volume is not usable.
+		if authenticated(r.Context()) {
+			h["devices"] = agent.devices
+		}
+		jsonOK(w, h)
 	})
 
 	mux.HandleFunc("/api/mux/snapshot", func(w http.ResponseWriter, r *http.Request) {
@@ -267,8 +281,13 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *u
 		// peek=1 (the service worker naming a push) creates nothing: no
 		// page is open, so a closed default session stays closed.
 		read := m.Snapshot
-		if r.URL.Query().Get("peek") == "1" {
+		switch {
+		case r.URL.Query().Get("peek") == "1":
 			read = func(ctx context.Context) (Snapshot, error) { return peekSnapshot(ctx, m) }
+		case isViewOnly(r):
+			// A view-only client makes nothing either (tmux's default
+			// session).
+			read = func(ctx context.Context) (Snapshot, error) { return viewSnapshot(ctx, m) }
 		}
 		snap, err := read(ctx)
 		if err != nil {
@@ -281,7 +300,11 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *u
 		snap.Caps.Uploads = uploads != nil
 		snap.Caps.Trash = agent.files != nil && agent.files.trash != nil
 		snap.Caps.Auth = authenticated(r.Context())
+		if snap.Caps.Auth {
+			snap.Caps.Role = string(requestRole(r.Context()))
+		}
 		snap.Caps.Push = push != nil
+		snap.Caps.Devices = agent.devices
 		if snap.Groups == nil {
 			snap.Groups = []Group{}
 		}
@@ -289,7 +312,7 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *u
 	})
 
 	mux.HandleFunc("/api/mux/tabs", func(w http.ResponseWriter, r *http.Request) {
-		if !requireMethod(w, r, http.MethodPost) {
+		if !requireMethod(w, r, http.MethodPost) || !requireWriteRole(w, r) {
 			return
 		}
 		var body struct {
@@ -310,6 +333,9 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *u
 	})
 
 	mux.HandleFunc("/api/mux/tabs/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if !requireWriteRole(w, r) {
+			return
+		}
 		id := r.PathValue("id")
 		ctx, cancel := context.WithTimeout(r.Context(), muxTimeout)
 		defer cancel()
@@ -340,7 +366,7 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *u
 	})
 
 	mux.HandleFunc("/api/mux/tabs/{id}/select", func(w http.ResponseWriter, r *http.Request) {
-		if !requireMethod(w, r, http.MethodPost) {
+		if !requireMethod(w, r, http.MethodPost) || !requireWriteRole(w, r) {
 			return
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), muxTimeout)
@@ -353,7 +379,7 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *u
 	})
 
 	mux.HandleFunc("/api/mux/panes/{id}", func(w http.ResponseWriter, r *http.Request) {
-		if !requireMethod(w, r, http.MethodDelete) {
+		if !requireMethod(w, r, http.MethodDelete) || !requireWriteRole(w, r) {
 			return
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), muxTimeout)
@@ -366,7 +392,7 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *u
 	})
 
 	mux.HandleFunc("/api/mux/panes/{id}/keys", func(w http.ResponseWriter, r *http.Request) {
-		if !requireMethod(w, r, http.MethodPost) {
+		if !requireMethod(w, r, http.MethodPost) || !requireWriteRole(w, r) {
 			return
 		}
 		var body struct {
@@ -389,7 +415,7 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *u
 	})
 
 	mux.HandleFunc("/api/mux/panes/{id}/scroll", func(w http.ResponseWriter, r *http.Request) {
-		if !requireMethod(w, r, http.MethodPost) {
+		if !requireMethod(w, r, http.MethodPost) || !requireWriteRole(w, r) {
 			return
 		}
 		var body struct {

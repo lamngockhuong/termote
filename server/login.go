@@ -52,6 +52,7 @@ var loginPage = template.Must(template.New("login").Parse(`<!doctype html>
     border-radius: 8px; background: #fafafa; color: #09090b;
   }
   .error { margin: 0; padding: 8px 12px; border-radius: 8px; background: #450a0a; color: #fecaca; font-size: 14px; }
+  a { color: #a1a1aa; font-size: 14px; }
 </style>
 </head>
 <body>
@@ -66,15 +67,20 @@ var loginPage = template.Must(template.New("login").Parse(`<!doctype html>
   </label>
   <input type="hidden" name="next" value="{{.Next}}">
   <button type="submit">Sign in</button>
+  {{if .Pairing}}<a href="/pair">Have a pairing code?</a>{{end}}
 </form>
 </body>
 </html>
 `))
 
 // loginForm is what the sign-in page shows: where to go back to, an optional
-// error line, and the username of a failed attempt so only the password is
-// typed again (the password is never sent back).
-type loginForm struct{ Next, Error, Username string }
+// error line, the username of a failed attempt so only the password is
+// typed again (the password is never sent back), and whether to link the
+// pairing form.
+type loginForm struct {
+	Next, Error, Username string
+	Pairing               bool
+}
 
 // writeLoginPage answers with the sign-in form and status code.
 func writeLoginPage(w http.ResponseWriter, code int, f loginForm) {
@@ -97,13 +103,13 @@ func isNavigation(r *http.Request) bool {
 
 // safeNext returns p when it is a path on this server to go back to after
 // signing in, else "/": never another host ("//evil", "/\evil"), a scheme,
-// or the sign-in page itself.
+// the sign-in page itself, or the pairing page (a code never rides in next).
 func safeNext(p string) string {
 	if !strings.HasPrefix(p, "/") || strings.HasPrefix(p, "//") || strings.ContainsAny(p, "\\\x00\r\n\t") {
 		return "/"
 	}
 	u, err := url.Parse(p)
-	if err != nil || u.Scheme != "" || u.Host != "" || u.Path == loginPath {
+	if err != nil || u.Scheme != "" || u.Host != "" || u.Path == loginPath || u.Path == pairPath {
 		return "/"
 	}
 	return p
