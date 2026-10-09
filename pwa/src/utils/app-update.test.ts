@@ -329,17 +329,49 @@ describe('app-update', () => {
       expect(mockReload).toHaveBeenCalledTimes(1)
     })
 
-    it('reloads anyway when the worker never takes control', async () => {
+    // iOS: the worker told to skip waiting may never take control, and the
+    // old one would serve the old page again.
+    it('drops the service worker when the new one never takes control', async () => {
       const worker = target({ state: 'installing', postMessage: vi.fn() })
+      const unregister = vi.fn().mockResolvedValue(true)
       const sw = target({
         getRegistration: vi.fn().mockResolvedValue({
           update: vi.fn().mockResolvedValue(undefined),
           installing: worker,
+          unregister,
         }),
       })
       setServiceWorker(sw)
+      const keys = vi
+        .fn()
+        .mockResolvedValue(['workbox-precache-v2-http://h/', 'shiki'])
+      const del = vi.fn().mockResolvedValue(true)
+      vi.stubGlobal('caches', { keys, delete: del })
       const done = reloadToNewVersion(mockReload)
       await vi.advanceTimersByTimeAsync(SW_ACTIVATE_TIMEOUT_MS * 2)
+      await done
+      vi.unstubAllGlobals()
+      expect(worker.postMessage).toHaveBeenCalled()
+      expect(unregister).toHaveBeenCalledTimes(1)
+      // The highlighter's cache holds hashed files only: kept
+      expect(del).toHaveBeenCalledTimes(1)
+      expect(del).toHaveBeenCalledWith('workbox-precache-v2-http://h/')
+      expect(mockReload).toHaveBeenCalledTimes(1)
+    })
+
+    it('still reloads when the worker cannot be dropped', async () => {
+      const worker = target({ state: 'installed', postMessage: vi.fn() })
+      const sw = target({
+        getRegistration: vi.fn().mockResolvedValue({
+          update: vi.fn().mockResolvedValue(undefined),
+          waiting: worker,
+          unregister: vi.fn().mockRejectedValue(new Error('denied')),
+        }),
+      })
+      setServiceWorker(sw)
+      // No Cache API (jsdom has none)
+      const done = reloadToNewVersion(mockReload)
+      await vi.advanceTimersByTimeAsync(SW_ACTIVATE_TIMEOUT_MS)
       await done
       expect(mockReload).toHaveBeenCalledTimes(1)
     })
