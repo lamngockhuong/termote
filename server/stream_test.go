@@ -42,6 +42,8 @@ func TestMain(m *testing.M) {
 		helperHerdrObserve()
 	case "serve-herdr":
 		helperServeHerdr()
+	case "codex-rollout":
+		helperCodexRollout()
 	}
 	os.Exit(0)
 }

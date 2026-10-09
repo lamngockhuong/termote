@@ -100,7 +100,7 @@ type Caps struct {
 	// shell (/api/mux/panes/{id}/agent/start): Herdr 0.8.2 or later.
 	AgentStart bool `json:"agentStart"`
 	// AgentStartCodex: Codex can be started too (AgentStart, and Codex has
-	// a Chat view on this OS: not on Windows).
+	// a Chat view on this OS, codexProcSupported).
 	AgentStartCodex bool `json:"agentStartCodex"`
 	// Groups: groups can be created, renamed and closed (/api/mux/groups).
 	Groups bool `json:"groups"`

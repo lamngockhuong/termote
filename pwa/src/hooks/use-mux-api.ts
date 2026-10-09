@@ -88,7 +88,7 @@ export interface MuxSnapshot {
     // Git worktree workspaces can be listed, created, opened and removed
     // (/worktrees): Herdr 0.9.2 or later, not on Windows.
     worktrees?: boolean
-    // Codex can be started too (it has a Chat view: not on Windows).
+    // Codex can be started too (it has a Chat view on this server's OS).
     agentStartCodex?: boolean
     // A tab can be moved within its group (/tabs/{id}/move): Herdr 0.8.0
     // or later, tmux 3.2 or later, not psmux nor Herdr on Windows.

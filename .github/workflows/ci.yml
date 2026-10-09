@@ -474,6 +474,12 @@ jobs:
             throw "Build failed"
           }
 
+      # The agent lookup on Windows (Codex rollout from the handle table,
+      # process hooks, agent start); the rest of the suite runs on Linux.
+      - name: Run Windows agent tests
+        working-directory: server
+        run: go test -count=1 -run 'Agent|Codex|SysHandle|ProcWriteFiles|RolloutIdentity|WinDrivePath|WindowsProcHooks' .
+
       # Syntax is checked inside both test scripts
       - name: Run shim tests
         shell: pwsh

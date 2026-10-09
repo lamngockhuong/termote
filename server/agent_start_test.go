@@ -503,8 +503,8 @@ func TestAgentStartCaps(t *testing.T) {
 	}
 }
 
-// Codex is offered only where it has a Chat view (not on Windows): there a
-// codex start answers 501 before anything reaches Herdr, and Claude Code
+// Codex is offered only where it has a Chat view (codexProcSupported):
+// elsewhere a codex start answers 501 before anything reaches Herdr, and Claude Code
 // still starts.
 func TestAgentStartCodexKind(t *testing.T) {
 	f := newFakeHerdr(t)

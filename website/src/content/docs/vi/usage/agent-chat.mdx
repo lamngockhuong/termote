@@ -153,9 +153,12 @@ Yêu cầu:
 
 - Chạy Codex bằng `codex --no-daemon`. Mặc định mọi TUI Codex giao phiên của mình cho một tiến trình nền dùng chung, và Termote
   không biết phiên nào thuộc pane nào, nên các pane đó không có view Chat.
-- **tmux** trên Linux hoặc macOS, hoặc **Herdr** trên Linux hoặc macOS sau khi đã chạy
-  `herdr integration install codex` một lần. Chưa hỗ trợ Windows (psmux hay Herdr đều không).
-- Đã kiểm với Codex 0.159.3. Bản mới hơn mà ghi phiên ra chỗ khác thì mất view Chat; trên tmux,
+- **tmux** trên Linux hoặc macOS, **psmux** trên Windows, hoặc **Herdr** trên cả ba sau khi đã
+  chạy `herdr integration install codex` một lần. Trên psmux, view Chat hiện hội thoại và trạng
+  thái nhưng chưa gửi tin được ([#408](https://github.com/lamngockhuong/termote/issues/408)).
+- Trên Windows, Codex phải chạy bằng tài khoản của bạn, không chạy quyền quản trị, và lưu phiên
+  trong `%USERPROFILE%\.codex` (`CODEX_HOME` chỉ đặt trong pane thì không được dùng).
+- Đã kiểm với Codex 0.159.3, và với 0.162.0 trên Windows. Bản mới hơn mà ghi phiên ra chỗ khác thì mất view Chat; trên tmux,
   log của server ghi một lần rằng nó thấy Codex mà không tìm được file phiên.
 
 Những điều cần biết:
@@ -196,7 +199,7 @@ Termote nhờ Herdr khởi động agent đó trong pane.
 Yêu cầu: Herdr 0.8.2 trở lên trên Linux, macOS hoặc Windows. tmux và psmux không có tính năng
 này, chế độ chỉ xem cũng ẩn nó.
 
-Trên Windows chỉ có nút **Claude Code**, vì Codex chưa có view Chat ở đó. Pane chỉ được coi là
+Trên Windows, pane chỉ được coi là
 rảnh khi shell của nó không có tiến trình con, nên pane đang chạy `ping`, `nvim` hay một `cmd`
 lồng nhau bị từ chối và không nhận gì. Shell còn giữ một tiến trình con sống lâu (`Start-Job`,
 chương trình giao diện mở từ nó, thứ mà profile đã chạy) cũng bị từ chối như vậy, pane `wsl.exe`

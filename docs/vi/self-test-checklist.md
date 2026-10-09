@@ -393,8 +393,8 @@ Chạy trên tmux (Linux/macOS), psmux (Windows) và Herdr (đã chạy `herdr i
 
 ### Codex
 
-Chạy trên tmux (Linux/macOS) và Herdr (đã chạy `herdr integration install codex`); Windows không
-có Chat view cho Codex.
+Chạy trên tmux (Linux/macOS), psmux (Windows) và Herdr (đã chạy `herdr integration install codex`).
+Trên psmux, gửi tin từ Chat view chưa được cho đến khi xong #408.
 
 - [ ] Tab chạy `codex --no-daemon` có nút chuyển Terminal/Chat; `codex` chạy thường (daemon dùng
       chung) thì không có
@@ -410,6 +410,10 @@ có Chat view cho Codex.
       terminal.`
 - [ ] Herdr: các nút trên thẻ xin duyệt chọn đúng lựa chọn, "Cancel (Esc)" gửi Escape
 - [ ] Các hộp thoại khác của Codex (chọn model, ...) chỉ xem được trên cả hai backend
+- [ ] Windows: `codex` chạy thường (daemon của nó là tiến trình con `codex.exe app-server`) không có
+      Chat view; `codex --no-daemon` có Chat view sau tin nhắn đầu tiên
+- [ ] Windows: Codex mở từ PowerShell chạy quyền quản trị không có Chat view; log chỉ có nhiều
+      nhất một dòng "holds no single rollout"
 
 ### Khởi động agent (Herdr)
 
@@ -435,7 +439,7 @@ Herdr 0.8.2 trở lên, `termote-dev serve --mux herdr` (hoặc `termote start -
 
 Windows, Herdr 0.8.2 trở lên, shell của pane là pwsh, `termote start --mux herdr`.
 
-- [ ] Pane pwsh đang rảnh chỉ có nút "Claude Code" (không có "Codex"); khởi động tới `ready`, hoặc
+- [ ] Pane pwsh đang rảnh có hai nút "Claude Code" và "Codex"; khởi động tới `ready`, hoặc
       `blocked` ở hộp thoại tin cậy thư mục (PWA mở Terminal)
 - [ ] Đang chạy `ping -t 127.0.0.1`, `nvim` hay một `cmd` lồng nhau, rồi
       `curl` POST → 409 `pane_busy` và chương trình vẫn chạy (Ctrl+C không tới nó)
@@ -443,8 +447,8 @@ Windows, Herdr 0.8.2 trở lên, shell của pane là pwsh, `termote start --mux
       (`Start-Sleep 60` và vòng lặp `while ($true) {}` cũng vậy)
 - [ ] `Start-Job { Start-Sleep 300 }` đang chạy: 409 `pane_busy` (từ chối cho an toàn); sau
       `Remove-Job -Force` pane rảnh trở lại
-- [ ] `curl` với `{"kind":"codex"}` → 501 `unsupported`, không gõ gì; `caps.agentStartCodex` trong
-      snapshot là false
+- [ ] `curl` với `{"kind":"codex"}` chạy `codex --no-daemon`; `caps.agentStartCodex` trong
+      snapshot là true
 
 ---
 
