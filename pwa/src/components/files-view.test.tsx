@@ -699,6 +699,20 @@ describe('FilesView delete', () => {
     })
   })
 
+  it('shows unsafe characters in the name a toast gives', async () => {
+    mockDelete.mockResolvedValue({
+      root: '/r',
+      path: 'a\u202eb.md',
+      trashId: 't',
+    })
+    const p = await withTrash()
+    await choose('README.md')
+    await confirm()
+    expect(p.notify).toHaveBeenLastCalledWith('Deleted a⟨U+202E⟩b.md', {
+      action: { label: 'Undo', onClick: expect.any(Function) },
+    })
+  })
+
   it('Undo says why it could not restore', async () => {
     mockDelete.mockResolvedValue({ root: '/r', path: '.env', trashId: 't' })
     mockRestore
