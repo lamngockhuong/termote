@@ -5,6 +5,7 @@ import {
   fetchFileHash,
   RequestError,
 } from '../hooks/use-mux-api'
+import { visibleUnsafe } from '../utils/unsafe-chars'
 import { Button } from './ui/button'
 import { ConfirmDialog } from './ui/confirm-dialog'
 import { Sheet } from './ui/sheet'
@@ -202,8 +203,7 @@ export function DeleteFileDialog({
       <Sheet isOpen onClose={close} title={`Delete ${what}?`}>
         <div className="flex flex-col gap-3 p-4">
           <p className="m-0 break-all font-term text-[13px] text-fg">
-            {root.endsWith('/') ? root : `${root}/`}
-            {path}
+            {visibleUnsafe(`${root.endsWith('/') ? root : `${root}/`}${path}`)}
           </p>
           <p className="m-0 text-sm text-fg-muted">
             {kind === 'dir'

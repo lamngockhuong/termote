@@ -1,3 +1,4 @@
+import { visibleUnsafe } from '../utils/unsafe-chars'
 import { ConfirmDialog } from './ui/confirm-dialog'
 
 // Asks before a tab with unsaved changes closes (Files, Changes); shown
@@ -21,7 +22,7 @@ export function DiscardTabDialog({
       onConfirm={onConfirm}
       onCancel={onCancel}
     >
-      Your changes to {name} will be lost.
+      Your changes to {visibleUnsafe(name)} will be lost.
     </ConfirmDialog>
   )
 }
