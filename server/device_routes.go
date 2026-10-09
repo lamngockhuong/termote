@@ -141,7 +141,9 @@ func registerDeviceRoutes(mux *http.ServeMux, d *deviceAuth, allowed hostAllowli
 			scheme = "https"
 		}
 		link := (&url.URL{Scheme: scheme, Host: r.Host, Path: pairPath, RawQuery: url.Values{"code": {code}}.Encode()}).String()
-		resp := map[string]any{"code": code, "expiresAt": exp.UTC(), "url": link}
+		// expiresIn (seconds) lets a client count down without trusting
+		// its own clock against expiresAt.
+		resp := map[string]any{"code": code, "expiresAt": exp.UTC(), "expiresIn": int(time.Until(exp).Round(time.Second).Seconds()), "url": link}
 		if c, err := qr.Encode(link, qr.M); err == nil {
 			resp["qr"] = "data:image/png;base64," + base64.StdEncoding.EncodeToString(c.PNG())
 		}

@@ -222,6 +222,7 @@ function SkippedEdits(props: {
 
 const ERRORS: Record<FilesError, string> = {
   'not-allowed': "This file can't be shown",
+  'view-only': 'View only: files show in a git repository only',
   'not-found': 'File not found',
   unsupported: 'Not supported by this backend',
   unavailable: 'Could not load the file',
@@ -272,6 +273,8 @@ interface Props {
   onPin?: () => void
   // The user chose to show the sensitive file
   onRevealed?: () => void
+  // Off for a view-only client: the server never shows it a sensitive file
+  canReveal?: boolean
   // Not showing the sensitive file after all (Back when not given)
   onCancelReveal?: () => void
   // The file was scrolled to top (its tab keeps it)
@@ -317,6 +320,7 @@ export function FileViewer({
   onRootChanged,
   notify,
   canEdit = false,
+  canReveal = true,
   startEditing = false,
   initialReveal = false,
   onSaved,
@@ -885,10 +889,11 @@ export function FileViewer({
         <ViewMessage>
           <Lock size={20} aria-hidden="true" />
           This file may contain secrets
+          {!canReveal && <span>A view-only device cannot show it</span>}
         </ViewMessage>
       )}
       <SensitiveConfirm
-        isOpen={!mine && sensitive}
+        isOpen={canReveal && !mine && sensitive}
         onConfirm={() => {
           setReveal(true)
           onRevealed?.()

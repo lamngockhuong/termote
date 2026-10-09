@@ -8,7 +8,8 @@ interface Props {
   sessions: Session[]
   activeId: string
   onSelect: (id: string) => void
-  onAdd: () => void
+  // Unset (view-only role): no Add button.
+  onAdd?: () => void
   onRemove: (id: string) => void
   // Whether a tab may be closed; defaults to "more than one tab here".
   canRemove?: boolean
@@ -135,15 +136,17 @@ export function SessionTabs({
         })}
       </div>
 
-      <IconButton
-        size="sm"
-        onClick={onAdd}
-        className="mb-1"
-        aria-label="Add session"
-        title="Add session"
-      >
-        <Plus size={16} aria-hidden="true" />
-      </IconButton>
+      {onAdd && (
+        <IconButton
+          size="sm"
+          onClick={onAdd}
+          className="mb-1"
+          aria-label="Add session"
+          title="Add session"
+        >
+          <Plus size={16} aria-hidden="true" />
+        </IconButton>
+      )}
     </div>
   )
 }

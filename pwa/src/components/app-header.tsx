@@ -27,7 +27,8 @@ interface Props {
   showSessionTabs: boolean
   canRemoveTab: boolean
   onSelectTab: (id: string) => void
-  onAddTab: () => void
+  // Unset (view-only role): no Add button
+  onAddTab?: () => void
   onRemoveTab: (id: string) => void
   connectionState: ConnectionState
   onRetry: () => void

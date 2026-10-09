@@ -246,6 +246,8 @@ export function useLocalSessions(pollInterval = 5) {
   // Bumped on every client-side pick; a snapshot requested before the
   // latest pick must not undo it.
   const selectionVersionRef = useRef(0)
+  // Each group's current tab on the server, from the latest snapshot
+  const currentTabsRef = useRef<Set<string>>(new Set())
   const isReadyRef = useRef(false)
   // A group just created and the snapshots left that may still lack it
   // (Herdr reports a new workspace a little later): until then the pick of
@@ -302,6 +304,9 @@ export function useLocalSessions(pollInterval = 5) {
         }
       }
       const built = buildSessions(snap, metaRef.current)
+      currentTabsRef.current = new Set(
+        [...built.activeByGroup.values()].map((s) => s.id),
+      )
       setSessions(built.sessions)
       setGroups(built.groups)
       const fallback = built.serverActive ?? built.sessions[0] ?? null
@@ -361,7 +366,8 @@ export function useLocalSessions(pollInterval = 5) {
       let snap = await fetchSnapshot()
       const hasTabs = (s: MuxSnapshot) =>
         (s.groups || []).some((g) => g.tabs.length > 0)
-      if (!hasTabs(snap)) {
+      // A view-only device makes nothing: it waits for a tab to exist.
+      if (!hasTabs(snap) && snap.caps.role !== 'view') {
         await createTab('shell')
         snap = await fetchSnapshot()
       }
@@ -412,8 +418,14 @@ export function useLocalSessions(pollInterval = 5) {
 
   // paneId (client-side select only) picks a pane of that tab; an unknown one
   // falls back to the tab's own.
+  // Resolves to 'view-only' when a view-only device asked for a tab the
+  // server would refuse to switch to (tmux: only each session's current
+  // window can be watched); nothing changes then.
   const switchSession = useCallback(
-    async (sessionId: string, paneId?: string) => {
+    async (
+      sessionId: string,
+      paneId?: string,
+    ): Promise<'view-only' | undefined> => {
       const session = sessions.find((s) => s.id === sessionId)
       if (!session) return
       const isActive = session.id === activeSession?.id
@@ -425,6 +437,14 @@ export function useLocalSessions(pollInterval = 5) {
         return
       }
       if (isActive) return
+      if (muxRef.current.caps.role === 'view') {
+        if (!currentTabsRef.current.has(session.id)) return 'view-only'
+        // Another session's current window: shown, nothing switched
+        selectionVersionRef.current++
+        storeSelection({ tabId: session.id, groupId: session.groupId })
+        setActiveSession(session)
+        return
+      }
       // Show the tab right away: a snapshot requested before the pick, or
       // while the server switches window, must not undo it.
       selectionVersionRef.current++

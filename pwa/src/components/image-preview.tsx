@@ -20,6 +20,7 @@ const CODES: Record<string, string> = {
 
 const ERRORS = {
   'not-allowed': "This file can't be shown",
+  'view-only': 'View only: files show in a git repository only',
   'not-found': 'File not found',
   unsupported: 'Not supported by this backend',
   unavailable: 'Could not load the image',

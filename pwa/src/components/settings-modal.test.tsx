@@ -34,6 +34,11 @@ vi.mock('./updates-section', () => ({
   ),
 }))
 
+// The Devices group's own behaviour is tested in devices-section.test.tsx.
+vi.mock('./devices-section', () => ({
+  DevicesSection: () => <div data-testid="devices-section" />,
+}))
+
 const DEFAULT_SETTINGS: Settings = {
   imeSendBehavior: 'send-only',
   pasteSource: 'clipboard',
@@ -747,5 +752,62 @@ describe('SettingsModal', () => {
       unmount()
       await act(async () => answer(false))
     })
+  })
+})
+
+describe('SettingsModal for a view-only device or with devices', () => {
+  beforeEach(() => {
+    HTMLDialogElement.prototype.showModal = vi
+      .fn()
+      .mockImplementation(function (this: HTMLDialogElement) {
+        this.removeAttribute('hidden')
+        this.style.display = 'block'
+      })
+    HTMLDialogElement.prototype.close = vi.fn().mockImplementation(function (
+      this: HTMLDialogElement,
+    ) {
+      this.style.display = 'none'
+    })
+    notify.notificationSupport.mockReturnValue('default')
+    notify.notifyWorkerReady.mockResolvedValue(true)
+  })
+
+  const renderWith = (props: Record<string, unknown>) =>
+    render(
+      <SettingsModal
+        isOpen
+        onClose={vi.fn()}
+        settings={DEFAULT_SETTINGS}
+        onUpdateSetting={vi.fn()}
+        {...props}
+      />,
+    )
+
+  it('has no Devices group unless the server offers devices', () => {
+    renderWith({})
+    expect(screen.queryByRole('button', { name: 'Devices' })).toBeNull()
+  })
+
+  it('shows the Devices group with the section in it', () => {
+    renderWith({ devices: true })
+    fireEvent.click(screen.getByRole('button', { name: 'Devices' }))
+    expect(screen.getByTestId('devices-section')).toBeInTheDocument()
+  })
+
+  it('offers notifications to a full device', async () => {
+    renderWith({})
+    await waitFor(() => expect(notify.notifyWorkerReady).toHaveBeenCalled())
+    expect(
+      screen.getByRole('switch', { name: 'Notify when an agent needs me' }),
+    ).toBeInTheDocument()
+  })
+
+  it('a view-only device gets no notification switch, since that would subscribe it to Web Push', async () => {
+    renderWith({ readOnly: true })
+    await act(async () => {})
+    expect(
+      screen.queryByRole('switch', { name: 'Notify when an agent needs me' }),
+    ).toBeNull()
+    expect(notify.notifyWorkerReady).not.toHaveBeenCalled()
   })
 })

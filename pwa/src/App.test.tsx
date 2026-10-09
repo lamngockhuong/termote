@@ -17,6 +17,7 @@ import type { QuickActionHandlers } from './components/quick-actions-menu'
 import { PanelMaximizeButton } from './components/side-panel'
 import { TerminalView } from './components/terminal-view'
 import { useHistoryClose } from './hooks/use-history-close'
+import { usePushSubscription } from './hooks/use-push-subscription'
 import {
   LARGE_PACKET_HELP_URL,
   reportLargePacketLoss,
@@ -57,11 +58,22 @@ const mockUseLocalSessions = vi.fn(() => ({
 }))
 const mockSelectTab = vi.fn(async (_id: string) => true)
 const mockLogout = vi.fn(async () => true)
+// The listener the App registers for a write refused as view-only
+let viewOnlyListener: (() => void) | undefined
 vi.mock('./hooks/use-mux-api', async (orig) => ({
   ...(await orig<typeof import('./hooks/use-mux-api')>()),
   selectTab: (id: string) => mockSelectTab(id),
   logout: () => mockLogout(),
+  onViewOnlyRefusal: (listener: () => void) => {
+    viewOnlyListener = listener
+    return () => {}
+  },
 }))
+// Real, but spied: what the App asks of Web Push
+vi.mock('./hooks/use-push-subscription', async (orig) => {
+  const real = await orig<typeof import('./hooks/use-push-subscription')>()
+  return { ...real, usePushSubscription: vi.fn(real.usePushSubscription) }
+})
 vi.mock('./hooks/use-local-sessions', () => ({
   useLocalSessions: (...args: any[]) =>
     (mockUseLocalSessions as (...a: any[]) => unknown)(...args),
@@ -429,15 +441,24 @@ vi.mock('./components/settings-modal', () => ({
     updates,
     onShowGestureHints,
     pasteBufferLabel,
+    devices,
+    readOnly,
   }: {
     isOpen: boolean
     pasteBufferLabel?: string
     onClose: () => void
     updates?: { onReload: () => void }
     onShowGestureHints?: () => void
+    devices?: boolean
+    readOnly?: boolean
   }) =>
     isOpen ? (
-      <div data-testid="settings-modal" data-paste-label={pasteBufferLabel}>
+      <div
+        data-testid="settings-modal"
+        data-paste-label={pasteBufferLabel}
+        data-devices={String(!!devices)}
+        data-read-only={String(!!readOnly)}
+      >
         <button onClick={onClose}>CloseSettings</button>
         {updates && (
           <button onClick={() => updates.onReload()}>ReloadUpdate</button>
@@ -1381,10 +1402,13 @@ describe('App', () => {
       await screen.findByRole('button', { name: 'Open sessions menu' }),
     )
     fireEvent.click(screen.getByRole('button', { name: 'MobileSelect' }))
-    expect(mockSwitchSession).toHaveBeenCalledWith('2')
-    expect(screen.getByTestId('session-sidebar')).toHaveAttribute(
-      'data-open',
-      'false',
+    expect(mockSwitchSession).toHaveBeenCalledWith('2', undefined)
+    // The sheet closes once the pick has resolved
+    await waitFor(() =>
+      expect(screen.getByTestId('session-sidebar')).toHaveAttribute(
+        'data-open',
+        'false',
+      ),
     )
   })
 
@@ -3385,6 +3409,177 @@ describe('App views, view-only and deep links', () => {
       expect(vi.mocked(TerminalView).mock.lastCall![0]).toMatchObject({
         readOnly: false,
       })
+    })
+  })
+
+  describe('view-only role from the server', () => {
+    const setCaps = (
+      caps: Record<string, unknown>,
+      backend: 'tmux' | 'herdr' = 'tmux',
+    ) => {
+      const base = mockUseLocalSessions()
+      mockUseLocalSessions.mockReturnValue({
+        ...base,
+        mux: { backend, caps },
+      } as typeof base)
+    }
+    const terminalProps = () => vi.mocked(TerminalView).mock.lastCall![0]
+
+    it('a view-only tmux before 3.2 gets no stream and says why', async () => {
+      setCaps({
+        clientSideSelect: false,
+        copyMode: true,
+        role: 'view',
+        viewStream: false,
+      })
+      render(<App />)
+      await screen.findByTestId('terminal-view')
+      expect(
+        screen.getByText(/View only is not available with this tmux/),
+      ).toBeInTheDocument()
+      expect(terminalProps().paneId).toBeUndefined()
+      expect(terminalProps().readOnly).toBe(true)
+    })
+
+    it('a view-only device with a stream gets its pane and no such notice', async () => {
+      setCaps({
+        clientSideSelect: false,
+        copyMode: true,
+        role: 'view',
+        viewStream: true,
+      })
+      render(<App />)
+      await screen.findByTestId('terminal-view')
+      expect(
+        screen.queryByText(/View only is not available with this tmux/),
+      ).toBeNull()
+      expect(terminalProps().paneId).toBe(
+        mockUseLocalSessions().activeSession.paneId,
+      )
+    })
+
+    it('a view-only device gets no server scroll and no Devices group', async () => {
+      setCaps({
+        clientSideSelect: false,
+        copyMode: true,
+        role: 'view',
+        viewStream: true,
+        scroll: true,
+        devices: true,
+      })
+      render(<App />)
+      await screen.findByTestId('terminal-view')
+      expect(terminalProps().serverScroll).toBe(false)
+      fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+      expect(screen.getByTestId('settings-modal')).toHaveAttribute(
+        'data-devices',
+        'false',
+      )
+      expect(screen.getByTestId('settings-modal')).toHaveAttribute(
+        'data-read-only',
+        'true',
+      )
+    })
+
+    it('a full device gets server scroll and the Devices group', async () => {
+      setCaps({
+        clientSideSelect: false,
+        copyMode: true,
+        role: 'full',
+        scroll: true,
+        devices: true,
+      })
+      render(<App />)
+      await screen.findByTestId('terminal-view')
+      expect(terminalProps().serverScroll).toBe(true)
+      expect(terminalProps().readOnly).toBe(false)
+      fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+      expect(screen.getByTestId('settings-modal')).toHaveAttribute(
+        'data-devices',
+        'true',
+      )
+      expect(screen.getByTestId('settings-modal')).toHaveAttribute(
+        'data-read-only',
+        'false',
+      )
+    })
+
+    it('a view-only device gets no Web Push, a full one may', async () => {
+      const push = vi.mocked(usePushSubscription)
+      setCaps({
+        clientSideSelect: false,
+        copyMode: true,
+        role: 'view',
+        push: true,
+      })
+      const { unmount } = render(<App />)
+      await screen.findByTestId('terminal-view')
+      expect(push).toHaveBeenLastCalledWith(
+        expect.objectContaining({ available: false }),
+      )
+      unmount()
+      setCaps({
+        clientSideSelect: false,
+        copyMode: true,
+        role: 'full',
+        push: true,
+      })
+      render(<App />)
+      await screen.findByTestId('terminal-view')
+      expect(push).toHaveBeenLastCalledWith(
+        expect.objectContaining({ available: true }),
+      )
+    })
+
+    it('a refused write tells a view-only device once, in a warning', async () => {
+      render(<App />)
+      await screen.findByTestId('terminal-view')
+      act(() => viewOnlyListener?.())
+      const toast = screen.getByTestId('toast')
+      expect(toast).toHaveTextContent('This device is view-only')
+      expect(toast).toHaveAttribute('data-variant', 'warning')
+    })
+
+    it('picking a tab the server will not show says it follows the active window', async () => {
+      mockIsMobile.mockReturnValue(true)
+      setCaps({ clientSideSelect: false, copyMode: true, role: 'view' })
+      const base = mockUseLocalSessions()
+      const switchSession = vi.fn().mockResolvedValueOnce('view-only')
+      mockUseLocalSessions.mockReturnValue({
+        ...base,
+        switchSession,
+      } as typeof base)
+      render(<App />)
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Open sessions menu' }),
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'MobileSelect' }))
+      expect(switchSession).toHaveBeenCalledWith('2', undefined)
+      const toast = await screen.findByTestId('toast')
+      expect(toast).toHaveTextContent('View only: follows the active window')
+      expect(toast).toHaveAttribute('data-variant', 'info')
+      // The sheet stays open on a tab this device cannot watch
+      expect(screen.getByTestId('session-sidebar')).toHaveAttribute(
+        'data-open',
+        'true',
+      )
+    })
+
+    it('a pick that is shown needs no notice', async () => {
+      mockIsMobile.mockReturnValue(true)
+      setCaps({ clientSideSelect: false, copyMode: true, role: 'view' })
+      const base = mockUseLocalSessions()
+      const switchSession = vi.fn().mockResolvedValue(undefined)
+      mockUseLocalSessions.mockReturnValue({
+        ...base,
+        switchSession,
+      } as typeof base)
+      render(<App />)
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'MobileSelect' }),
+      )
+      await act(async () => {})
+      expect(screen.queryByTestId('toast')).toBeNull()
     })
   })
 

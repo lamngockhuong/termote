@@ -95,6 +95,14 @@ export interface MuxSnapshot {
     reorderTabs?: boolean
     // A group can be moved (/groups/{id}/move): Herdr only.
     reorderGroups?: boolean
+    // What this client may do: "view" changes nothing on the server (every
+    // write is refused with 403 view_only). Absent without sign-in.
+    role?: 'full' | 'view'
+    // Devices can be paired, listed and revoked (/api/mux/devices*).
+    devices?: boolean
+    // View-only role: the backend can stream a pane to it (tmux 3.2 or
+    // later, Herdr); off, the stream is refused.
+    viewStream?: boolean
   }
   groups: MuxGroup[]
 }
@@ -111,7 +119,23 @@ async function write(
     headers: { 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
   })
-  return res.json()
+  const data = await res.json()
+  if (res.status === 403 && data?.code === 'view_only') reportViewOnly()
+  return data
+}
+
+// A write the server refused because this device is view-only: the UI hides
+// every way to write, so this only fires for one it missed, told once here
+// instead of by each caller.
+const viewOnlyRefusals = new EventTarget()
+
+function reportViewOnly() {
+  viewOnlyRefusals.dispatchEvent(new Event('refused'))
+}
+
+export function onViewOnlyRefusal(listener: () => void): () => void {
+  viewOnlyRefusals.addEventListener('refused', listener)
+  return () => viewOnlyRefusals.removeEventListener('refused', listener)
 }
 
 const tabPath = (id: string) => `/tabs/${encodeURIComponent(id)}`
@@ -122,6 +146,8 @@ const tabPath = (id: string) => `/tabs/${encodeURIComponent(id)}`
 // server's sign-in page, which comes back here once signed in.
 export function signInUrl(): string {
   const { pathname, search, hash } = window.location
+  // The pairing page is never a place to come back to: its code is spent.
+  if (pathname === '/pair') return '/login'
   return `/login?next=${encodeURIComponent(pathname + search + hash)}`
 }
 
@@ -574,8 +600,17 @@ export class RequestError extends Error {
 // The agent routes' name for it, kept for their callers
 export { RequestError as AgentRequestError }
 
-async function requestError(res: Response): Promise<RequestError> {
+// read: a refusal of a read, which its view tells in place (a view-only
+// device reads files in a git repository only), never in the toast that a
+// poll would repeat.
+async function requestError(
+  res: Response,
+  read = false,
+): Promise<RequestError> {
   const body = await res.json().catch(() => ({}))
+  if (!read && res.status === 403 && body.code === 'view_only') {
+    reportViewOnly()
+  }
   return new RequestError(
     res.status,
     body.code ?? '',
@@ -855,7 +890,7 @@ async function filesGet<T>(
   query: Record<string, string | undefined>,
 ): Promise<T> {
   const res = await fetch(filesUrl(paneId, op, query))
-  if (!res.ok) throw await requestError(res)
+  if (!res.ok) throw await requestError(res, true)
   return res.json()
 }
 
@@ -987,7 +1022,7 @@ export async function findFiles(
     fresh: query.fresh ? '1' : undefined,
   })
   const res = await fetch(url, { signal })
-  if (!res.ok) throw await requestError(res)
+  if (!res.ok) throw await requestError(res, true)
   return res.json()
 }
 
@@ -1116,6 +1151,70 @@ export async function fetchFileImage(
     }),
     { signal },
   )
-  if (!res.ok) throw await requestError(res)
+  if (!res.ok) throw await requestError(res, true)
   return res.blob()
+}
+
+// A paired device as /api/mux/devices lists it (never its token).
+export interface PairedDevice {
+  id: string
+  name: string
+  role: 'full' | 'view'
+  createdAt: string
+  lastUsedAt: string
+  // The device this page runs on
+  current: boolean
+}
+
+// A pairing code: shown once, spent by the first device that enters it.
+export interface PairingCode {
+  // XXXXX-XXXXX
+  code: string
+  expiresAt: string
+  // Seconds left when the server answered: counted from the reply, not
+  // against this device's clock
+  expiresIn?: number
+  // /pair?code=… on the host this page reached
+  url: string
+  // The link as a QR code (data:image/png), drawn by the server
+  qr?: string
+}
+
+// Lists the paired devices. Throws RequestError when refused (view_only,
+// unsupported without sign-in or a usable state dir).
+export async function fetchDevices(
+  signal?: AbortSignal,
+): Promise<PairedDevice[]> {
+  const res = await fetch(`${API_BASE}/devices`, {
+    signal: signal ?? AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  })
+  if (!res.ok) throw await requestError(res)
+  return (await res.json()).devices ?? []
+}
+
+// Makes a code another device signs in with, for 5 minutes. An empty name
+// lets that device name itself. Throws RequestError (too_many_codes,
+// invalid_name, invalid_role).
+export async function createPairingCode(
+  role: 'full' | 'view',
+  name: string,
+): Promise<PairingCode> {
+  const res = await fetch(`${API_BASE}/devices/pair`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role, name }),
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  })
+  if (!res.ok) throw await requestError(res)
+  return res.json()
+}
+
+// Revokes a device: its next request is refused and its streams close.
+export async function revokeDevice(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/devices/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  })
+  if (!res.ok) throw await requestError(res)
 }

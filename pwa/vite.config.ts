@@ -88,9 +88,14 @@ export default defineConfig({
             },
           },
         ],
-        // /login is the server's sign-in form: the cached app shell in its
-        // place would leave a signed-out device with no way to sign in.
-        navigateFallbackDenylist: [/^\/api\//, /^\/login(\?|$)/],
+        // /login and /pair are the server's sign-in and pairing forms: the
+        // cached app shell in their place would leave a signed-out device
+        // with no way to sign in.
+        navigateFallbackDenylist: [
+          /^\/api\//,
+          /^\/login(\?|$)/,
+          /^\/pair(\?|$)/,
+        ],
       },
     }),
     {

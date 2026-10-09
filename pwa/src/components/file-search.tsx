@@ -25,6 +25,7 @@ const ERRORS: Record<FilesError, string> = {
   unsupported: 'Not supported by this backend',
   'not-found': 'Directory not found',
   'not-allowed': "This directory can't be searched",
+  'view-only': 'View only: files show in a git repository only',
   unavailable: 'Could not search the files',
 }
 

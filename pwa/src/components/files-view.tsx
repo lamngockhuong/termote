@@ -48,6 +48,7 @@ const ERRORS: Record<FilesError, string> = {
   unsupported: 'Not supported by this backend',
   'not-found': 'Directory not found',
   'not-allowed': "This directory can't be shown",
+  'view-only': 'View only: files show in a git repository only',
   unavailable: 'Could not load the directory',
 }
 
@@ -130,8 +131,7 @@ export function FilesView({
       isMobile={isMobile}
       notify={notify}
       readOnly={readOnly}
-      // A view-only client is kept from deleting here only: the server has
-      // no roles yet
+      // The server refuses a view-only client's deletes as well
       canDelete={!readOnly && !!mux.caps.trash}
     />
   )
@@ -313,8 +313,8 @@ function PaneFiles({
   }
 
   const root = f.dirs['']
-  // Once the root is read, from the tree only. A view-only client is kept
-  // from creating here only: the server has no roles yet
+  // Once the root is read, from the tree only. Never for a view-only client,
+  // whose creates the server refuses as well
   const newFileRoot = !readOnly && !tab && root?.entries ? f.root : undefined
   return (
     <div
@@ -409,9 +409,9 @@ function PaneFiles({
             onFollow={onFollow}
             onRootChanged={f.rootChanged}
             notify={notify}
-            // A view-only client is kept from editing here only: the server
-            // has no roles yet
+            // The server refuses a view-only client both as well
             canEdit={!readOnly}
+            canReveal={!readOnly}
             // The file this view just created opens into editing
             startEditing={!!tab.intent && tab.root === f.root}
             initialReveal={tab.reveal}

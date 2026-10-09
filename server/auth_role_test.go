@@ -220,8 +220,17 @@ func TestViewSnapshotMakesNothing(t *testing.T) {
 	}
 	var snap Snapshot
 	json.Unmarshal(rec.Body.Bytes(), &snap)
-	if snap.Caps.Role != "view" || !snap.Caps.Auth {
-		t.Errorf("caps = %+v, want role view", snap.Caps)
+	if snap.Caps.Role != "view" || !snap.Caps.Auth || snap.Caps.ViewStream {
+		t.Errorf("caps = %+v, want role view, no view stream", snap.Caps)
+	}
+	// The backend can attach a client that changes nothing: the PWA streams.
+	m.canView = true
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, viewRequest("GET", "/api/mux/snapshot", ""))
+	snap = Snapshot{}
+	json.Unmarshal(rec.Body.Bytes(), &snap)
+	if !snap.Caps.ViewStream {
+		t.Errorf("caps = %+v, want a view stream", snap.Caps)
 	}
 	// Herdr (client-side select) makes nothing in its snapshot, and its peek
 	// would drop the worktree branches.
@@ -239,7 +248,7 @@ func TestViewSnapshotMakesNothing(t *testing.T) {
 	h.ServeHTTP(rec, full)
 	snap = Snapshot{}
 	json.Unmarshal(rec.Body.Bytes(), &snap)
-	if !slices.Equal(m.calls, []string{"snapshot"}) || snap.Caps.Role != "" {
+	if !slices.Equal(m.calls, []string{"snapshot"}) || snap.Caps.Role != "" || snap.Caps.ViewStream {
 		t.Errorf("full: calls %v, role %q", m.calls, snap.Caps.Role)
 	}
 }
