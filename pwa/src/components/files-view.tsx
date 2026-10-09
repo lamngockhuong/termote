@@ -32,6 +32,7 @@ import {
 import { type FileEntry, RequestError, restoreFile } from '../hooks/use-mux-api'
 import { splitPath } from '../utils/files-format'
 import type { LinkPath } from '../utils/markdown-links'
+import { visibleUnsafe } from '../utils/unsafe-chars'
 import { DeleteFileDialog, type DeleteOutcome } from './delete-file-dialog'
 import { FileSearch } from './file-search'
 import { FileTabBar, type TabListProps, tabElementId } from './file-tab-bar'
@@ -261,7 +262,7 @@ function PaneFiles({
   }
 
   const undo = async (d: Deleting, trashId: string) => {
-    const name = baseName(d.path)
+    const name = visibleUnsafe(baseName(d.path))
     try {
       const res = await restoreFile(paneId, {
         root: d.root,
@@ -277,9 +278,10 @@ function PaneFiles({
           variant: 'warning',
         })
       } else if (err instanceof RequestError && err.code === 'exists') {
-        notify(`A file now exists at ${err.path ?? d.path}; not restored`, {
-          variant: 'warning',
-        })
+        notify(
+          `A file now exists at ${visibleUnsafe(err.path ?? d.path)}; not restored`,
+          { variant: 'warning' },
+        )
       } else {
         notify(`Could not restore ${name}`, { variant: 'danger' })
       }
@@ -287,7 +289,7 @@ function PaneFiles({
   }
 
   const onDeleted = (d: Deleting, o: DeleteOutcome) => {
-    const name = baseName(o.path)
+    const name = visibleUnsafe(baseName(o.path))
     if (o.swapped) {
       // Only ever told with the id it stayed in the trash under
       const id = o.trashId as string

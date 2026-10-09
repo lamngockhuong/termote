@@ -3,6 +3,18 @@
   "extends": [
     "config:recommended"
   ],
+  "customManagers": [
+    {
+      "description": "The gitleaks release the Secret Scan job downloads, with the sha256 of its archive (read from the release's checksums file)",
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/workflows/ci\\.yml$/"],
+      "matchStrings": [
+        "GITLEAKS_VERSION: (?<currentValue>v\\d+\\.\\d+\\.\\d+)\\s+GITLEAKS_SHA256: (?<currentDigest>[0-9a-f]{64})"
+      ],
+      "depNameTemplate": "gitleaks/gitleaks",
+      "datasourceTemplate": "github-release-attachments"
+    }
+  ],
   "packageRules": [
     {
       "description": "pnpm refuses lockfile entries published less than a day ago (minimumReleaseAge, default 1440 minutes), so CI's frozen install fails on a release that is too new. Hold npm updates for 3 days, leaving a margin for transitive dependencies pulled in with them.",

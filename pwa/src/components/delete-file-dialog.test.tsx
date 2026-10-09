@@ -63,6 +63,14 @@ describe('DeleteFileDialog', () => {
     expect(p.onClose).toHaveBeenCalled()
   })
 
+  it('shows unsafe characters in the path', async () => {
+    show({ path: 'src/a\u202eb.ts' })
+    expect(
+      screen.getByText('/home/kim/app/src/a⟨U+202E⟩b.ts'),
+    ).toBeInTheDocument()
+    await waitFor(() => expect(del()).toBeEnabled())
+  })
+
   it('moves the file to the trash with the hash read, and says so', async () => {
     mockDelete.mockResolvedValue({
       root: '/home/kim/app',

@@ -7,7 +7,7 @@ Manual testing checklist for Termote features before release.
 - [ ] tmux installed (macOS/Linux)
 - [ ] psmux installed (Windows)
 - [ ] herdr installed (only for Herdr backend testing, native; the container image has its own)
-- [ ] Go 1.26+ (for native build)
+- [ ] Go 1.26.9+ (for native build; an older Go downloads it when `GOTOOLCHAIN` is `auto`)
 - [ ] Node.js 22.22+ or 24.15+ & pnpm (for PWA build)
 - [ ] Docker or Podman (for container mode)
 - [ ] Mobile device or emulator (for gesture testing)

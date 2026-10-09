@@ -1,0 +1,3 @@
+# Findings reviewed and known not to be secrets, by gitleaks fingerprint.
+# fixtureKey in cli_config_test.go: the passphrase the test config fixture was encrypted with.
+45a3126623b54e8bcf14d8d157c677981ea52c8c:server/cli_config_test.go:generic-api-key:30
