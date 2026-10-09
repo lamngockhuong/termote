@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.18.0](https://github.com/lamngockhuong/termote/compare/v1.17.0...v1.18.0) (2026-10-09)
+
+
+### Features
+
+* reorder tabs and Herdr workspaces ([#360](https://github.com/lamngockhuong/termote/issues/360)) ([#402](https://github.com/lamngockhuong/termote/issues/402)) ([493cd03](https://github.com/lamngockhuong/termote/commit/493cd032fe91690ab203c0ae7922df63b2db59dd))
+
+
+### Bug Fixes
+
+* **install:** accept the trash and uploads dirs uninstall leaves on Windows ([#403](https://github.com/lamngockhuong/termote/issues/403)) ([fc5f67b](https://github.com/lamngockhuong/termote/commit/fc5f67b205d5d06cd61f7e1235e53ebf52b314e7))
+* **pwa:** CSV preview and Copy path over a diff in Changes ([#412](https://github.com/lamngockhuong/termote/issues/412)) ([dd49651](https://github.com/lamngockhuong/termote/commit/dd496511d1639e036d8e52e9148e3149c74a5bd8))
+* **pwa:** phone layout fixes for menus, the sessions sheet and iOS home-screen apps ([#405](https://github.com/lamngockhuong/termote/issues/405)) ([a981205](https://github.com/lamngockhuong/termote/commit/a98120534bc96fac77d3c2ea538ae9bd59735125))
+* **pwa:** reload into the new version when the new worker never takes over ([#407](https://github.com/lamngockhuong/termote/issues/407)) ([b20ba3b](https://github.com/lamngockhuong/termote/commit/b20ba3bb9647d5dc02a97f4a42ce278b4e8b38b0))
+
 ## [1.17.0](https://github.com/lamngockhuong/termote/compare/v1.16.0...v1.17.0) (2026-10-08)
 
 
