@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.19.0](https://github.com/lamngockhuong/termote/compare/v1.18.0...v1.19.0) (2026-10-09)
+
+
+### Features
+
+* **pwa:** draw Mermaid diagrams in the Markdown preview ([#352](https://github.com/lamngockhuong/termote/issues/352)) ([#417](https://github.com/lamngockhuong/termote/issues/417)) ([39a9aa3](https://github.com/lamngockhuong/termote/commit/39a9aa38e45a05634da464804c28ba7b999cbc6a))
+* **pwa:** open images and diagrams full screen with zoom ([#353](https://github.com/lamngockhuong/termote/issues/353)) ([#420](https://github.com/lamngockhuong/termote/issues/420)) ([faff841](https://github.com/lamngockhuong/termote/commit/faff841fcb8549c3221546bc32c57c4fcc272558))
+* **server:** Codex Chat view on Windows (psmux, Herdr) ([#295](https://github.com/lamngockhuong/termote/issues/295)) ([#415](https://github.com/lamngockhuong/termote/issues/415)) ([49a970d](https://github.com/lamngockhuong/termote/commit/49a970d204e6751e8d896fcb58795c5e22665524))
+
+
+### Bug Fixes
+
+* **pwa:** say why reordering is off while the list is sorted or filtered ([#419](https://github.com/lamngockhuong/termote/issues/419)) ([f35167a](https://github.com/lamngockhuong/termote/commit/f35167afde42b7f04988c16f6e28d89acb8636bf))
+* **server:** start succeeds while the backend is down, Windows service logs ([#418](https://github.com/lamngockhuong/termote/issues/418)) ([797d748](https://github.com/lamngockhuong/termote/commit/797d748a6e67fa71042873222822361a24fc810f))
+
 ## [1.18.0](https://github.com/lamngockhuong/termote/compare/v1.17.0...v1.18.0) (2026-10-09)
 
 
