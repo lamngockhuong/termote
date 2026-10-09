@@ -906,7 +906,8 @@ export default function App({
       // iOS can shrink 100dvh before innerHeight, and subtracting the
       // keyboard from an already shrunk 100dvh left the app near 0px tall.
       style={{
-        height: keyboardHeight > 0 ? `${viewportHeight}px` : '100dvh',
+        height:
+          keyboardHeight > 0 ? `${viewportHeight}px` : 'var(--app-height)',
       }}
     >
       <div className="flex flex-1 min-h-0">

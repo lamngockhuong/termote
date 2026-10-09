@@ -61,7 +61,7 @@ function OpenSheet({
   const pressedScrim = useRef(false)
 
   const layout = isMobile
-    ? 'mb-0 mt-auto max-h-[90dvh] w-full max-w-none rounded-t-sheet border-t border-border pb-safe starting:translate-y-8'
+    ? 'mb-0 mt-auto max-h-[calc(var(--app-height)*0.9)] w-full max-w-none rounded-t-sheet border-t border-border pb-safe starting:translate-y-8'
     : 'm-auto max-h-[85vh] w-[90vw] max-w-lg rounded-sheet border border-border starting:scale-95'
 
   return (
