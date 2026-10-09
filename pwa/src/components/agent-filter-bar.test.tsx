@@ -138,6 +138,29 @@ describe('AgentFilterBar', () => {
     expect(workingBtn.querySelector('svg')).toBeInTheDocument()
   })
 
+  it('spins the working icon only while agents are working', () => {
+    renderBar()
+    const spinning = screen
+      .getByRole('radio', { name: 'Working, 3 sessions' })
+      .querySelector('svg')
+    expect(spinning).toHaveClass('text-warning', 'motion-safe:animate-spin')
+    const others = ['Needs you, 2 sessions', 'Agents, 5 sessions'].map((name) =>
+      screen.getByRole('radio', { name }).querySelector('svg'),
+    )
+    for (const icon of others) {
+      expect(icon).not.toHaveClass('motion-safe:animate-spin')
+    }
+  })
+
+  it('keeps the working icon still and muted at zero', () => {
+    renderBar({ summary: { blocked: 0, working: 0, agents: 0 } })
+    const icon = screen
+      .getByRole('radio', { name: 'Working, 0 sessions' })
+      .querySelector('svg')
+    expect(icon).toHaveClass('text-fg-subtle')
+    expect(icon).not.toHaveClass('motion-safe:animate-spin')
+  })
+
   it('renders icon for agents (Bot)', () => {
     renderBar()
     const agentsBtn = screen.getByRole('radio', { name: 'Agents, 5 sessions' })
