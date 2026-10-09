@@ -270,9 +270,43 @@ jobs:
         working-directory: pwa
         run: pnpm exec playwright test --workers=1 --grep-invert "Capture screenshots"
 
+      # Pairing and the view-only role need sign-in: a second server with a
+      # password, on its own port, tmux socket, session and state dir (the
+      # paired devices), for devices.spec.ts alone. The password is made
+      # here and never printed.
+      - name: Start server with sign-in
+        run: |
+          pass="$(openssl rand -hex 16)"
+          echo "::add-mask::$pass"
+          echo "E2E_AUTH_PASS=$pass" >> "$GITHUB_ENV"
+          TERMOTE_NO_AUTH= TERMOTE_PASS="$pass" TERMOTE_PORT=7681 TMUX_SESSION=e2e-auth \
+            TMUX_SOCKET="$RUNNER_TEMP/tmux-auth.sock" XDG_CONFIG_HOME="$RUNNER_TEMP/xdg-auth" \
+            XDG_CACHE_HOME="$RUNNER_TEMP/cache-auth" XDG_STATE_HOME="$RUNNER_TEMP/state-auth" \
+            nohup ./server/termote-dev serve > "$RUNNER_TEMP/serve-auth.log" 2>&1 &
+          for _ in $(seq 1 30); do
+            curl -fsS -u "admin:$pass" http://localhost:7681/api/mux/snapshot > /dev/null && exit 0
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/serve-auth.log"
+          exit 1
+
+      # TERMOTE_E2E_AUTH=1: the spec fails (never skips) when the server
+      # cannot pair devices.
+      - name: Run Playwright (devices, with sign-in)
+        working-directory: pwa
+        env:
+          TERMOTE_NO_AUTH: ""
+          TERMOTE_E2E_AUTH: "1"
+          TERMOTE_PORT: "7681"
+          TERMOTE_PASS: ${{ env.E2E_AUTH_PASS }}
+          TMUX_SESSION: e2e-auth
+        run: TMUX_SOCKET="$RUNNER_TEMP/tmux-auth.sock" pnpm exec playwright test devices --workers=1
+
       - name: Server log
         if: failure()
-        run: cat "$RUNNER_TEMP/serve.log"
+        run: |
+          cat "$RUNNER_TEMP/serve.log"
+          cat "$RUNNER_TEMP/serve-auth.log" 2>/dev/null || true
 
       - name: Upload Playwright report
         if: failure()
