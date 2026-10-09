@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -327,8 +328,13 @@ func TestCodexLocate(t *testing.T) {
 	outside := filepath.Join(t.TempDir(), "rollout-2026-10-02T08-36-50-"+testCodexID+".jsonl")
 	os.WriteFile(outside, nil, 0o600)
 	link := filepath.Join(filepath.Dir(p), "rollout-2026-10-02T09-00-00-"+testCodexID+".jsonl")
+	// Symlinks need a privilege on Windows: the other cases still run.
+	hasLink := true
 	if err := os.Symlink(outside, link); err != nil {
-		t.Fatal(err)
+		if runtime.GOOS != "windows" {
+			t.Fatal(err)
+		}
+		hasLink = false
 	}
 	other := "01a0fbc6-978c-74a1-aeae-d34f439bfce2"
 	otherPath := writeRollout(t, home, other, "")
@@ -352,6 +358,9 @@ func TestCodexLocate(t *testing.T) {
 		"relative home":            {ID: testCodexID, CodexHome: "codex", Rollout: p},
 		"home without sessions":    {ID: testCodexID, CodexHome: noSessions, Rollout: p},
 	} {
+		if s.Rollout == link && !hasLink {
+			continue
+		}
 		if got, err := (codexJournal{}).Locate(s); err != errNoTranscript {
 			t.Errorf("%s: Locate = %q, %v", name, got, err)
 		}
@@ -438,7 +447,7 @@ func TestCodexStatusReadsOnlyNewRows(t *testing.T) {
 	}
 	fi := mustStat(t, p)
 	codexScans.Lock()
-	scan := codexScans.m[p+"\x00"+fileIdentity(fi)]
+	scan := codexScans.m[p+"\x00"+rolloutIdentity(p, nil, fi)]
 	codexScans.Unlock()
 	if scan.end != fi.Size() || scan.status != "idle" {
 		t.Errorf("remembered scan = %+v, size %d", scan, fi.Size())
@@ -469,7 +478,7 @@ func TestReadTranscriptCodex(t *testing.T) {
 		return codexItemRow(map[string]any{"type": "AgentMessage", "id": text, "content": []any{map[string]any{"type": "text", "text": text}}})
 	}
 	p := writeRollout(t, home, testCodexID, row("one")+row("two"))
-	id := fileIdentity(mustStat(t, p))
+	id := rolloutIdentity(p, nil, mustStat(t, p))
 	s := AgentSession{Agent: "codex", ID: testCodexID, CodexHome: home, Rollout: p, RolloutID: id, Status: "working"}
 	first, err := readTranscript(s, "", "")
 	if err != nil || !first.Reset || strings.Join(texts(first.Entries), ",") != "one,two" || first.Status != "working" || first.Agent != "codex" {

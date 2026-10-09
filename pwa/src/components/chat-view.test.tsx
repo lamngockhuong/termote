@@ -449,7 +449,7 @@ describe('ChatView without an agent', () => {
     expect(screen.getByRole('button', { name: 'Claude Code' })).toBeTruthy()
   })
 
-  it('offers only Claude Code when the server cannot start Codex (Windows)', () => {
+  it('offers only Claude Code when the server cannot start Codex', () => {
     const mux = {
       ...idle.mux,
       caps: { ...idle.mux.caps, agentStartCodex: false },

@@ -270,7 +270,7 @@ own, e.g. `paste_not_confirmed`); anything else answers 409 `partial_paste` and 
 
 `/agent/start` (`caps.agentStart`: Herdr 0.8.2 or later, on Linux, macOS and Windows) starts
 Claude Code (`kind: "claude"`) or Codex (`"codex"`, run as `codex --no-daemon`; only where Codex
-has a Chat view, `caps.agentStartCodex`, so not on Windows, where it answers 501 `unsupported`)
+has a Chat view, `caps.agentStartCodex`, else 501 `unsupported`)
 in a pane that shows only its shell, through Herdr's `agent.start`. Only `kind` is read: the arguments come from a fixed
 table and the alias Herdr tracks the agent by is the server's (`termote-<kind>-<8 hex>`, one
 retry on `agent_name_taken`). The pane is resolved before the pane lock (the one `message` and
@@ -421,9 +421,19 @@ reports the session id (`herdr integration install codex`); the server accepts i
 process among all of the host's passes the same checks holding that very rollout, and takes
 `CODEX_HOME` from that process. It trusts the id as Herdr reports it: after `/new` the process
 still holds the old rollout, so the pane shows whichever session Herdr names, and a pane whose
-hook once ran in a daemon can name another pane's session. Windows (psmux, Herdr) never finds a Codex session. On tmux, a Codex found
+hook once ran in a daemon can name another pane's session. On Windows (psmux, Herdr) the files a
+process holds come from the system handle table (`NtQuerySystemInformation`
+`SystemExtendedHandleInformation`, cached 1 s): File handles with write or append access of a
+`codex` process the server's user can open are duplicated with `FILE_READ_ATTRIBUTES` only and
+checked again in a table read after the duplicate (the cached one can be 1 s old), the
+path taken from `GetFinalPathNameByHandle` (drive letters only, never UNC), the identity from
+`GetFileInformationByHandle` (volume serial and file index); the argv from
+`NtQueryInformationProcess`, `CODEX_HOME` = `%USERPROFILE%\.codex`. Any failure or a listing
+past 2 s gives no session; an elevated Codex cannot be opened, so it has none either (expected,
+not checked live). On tmux, a Codex found
 in a pane without such a rollout is logged once per run (usually a Codex before its first
-message or in daemon mode), so a Codex update that moves its files does not go unnoticed. Checked with Codex 0.159.3.
+message or in daemon mode), so a Codex update that moves its files does not go unnoticed. Checked with Codex 0.159.3, and
+on Windows with 0.162.0 (psmux, Herdr).
 
 The rollout read is the file that process holds: its resolved path and file identity
 (dev:inode) are recorded when it is found, and `transcript` refuses a file whose identity

@@ -378,6 +378,9 @@ The `update` command:
 | `server/files_delete.go`                          | `POST files/delete`/`restore`, `content?hash=1`               |
 | `server/files_trash*.go`                          | Trash store, sweep, no-replace rename/rmdir by descriptor     |
 | `server/agent_proc*.go`                           | Finds Claude Code (or Codex) under a tmux/psmux pane          |
+| `server/agent_proc_handles_windows.go`            | Windows: write handles of every process (handle table, 1 s)   |
+| `server/agent_proc_files_windows.go`              | Windows: a process's open rollouts, checked again live        |
+| `server/agent_proc_identity_windows.go`           | Windows: drive-letter paths only, volume + file index         |
 | `server/guard.go`                                 | Host allowlist + Origin/Content-Type write guard              |
 | `server/login.go`                                 | Sign-in form for browsers (iOS home-screen app has no prompt) |
 | `server/uploads.go`                               | `/api/mux/uploads`: image store (naming, quota, retention)    |
@@ -621,13 +624,13 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   (at most 50 plugins, JSON files capped at 1 MB)
 - **Starting an agent** (`POST /api/mux/panes/{id}/agent/start` `{kind}`, `GET` of the same path,
   `server/agent_start.go`, `caps.agentStart`: Herdr ≥ 0.8.2 from the subscription's `ping`, on
-  every OS; `caps.agentStartCodex`: also Codex has a Chat view on this OS, so false on Windows):
+  every OS; `caps.agentStartCodex`: also Codex has a Chat view on this OS, `codexProcSupported`):
   `writeGuard` (same-site JSON), `requireWriteRole`
   (the view-only role, #236, must refuse it; a view-only client is kept from it only in the UI
   meanwhile), 8 KB body. Only `kind` is decoded (`claude` → no arguments, `codex` →
-  `--no-daemon`, else 400 `invalid_kind`; `codex` where Codex has no Chat view (Windows, #295)
-  → 501 `unsupported`, checked before the pane is resolved, nothing sent to Herdr; the PWA then
-  offers only Claude Code); arguments and the Herdr alias
+  `--no-daemon`, else 400 `invalid_kind`; `codex` where Codex has no Chat view
+  (`codexProcSupported` false) → 501 `unsupported`, checked before the pane is resolved, nothing
+  sent to Herdr; the PWA then offers only Claude Code); arguments and the Herdr alias
   (`termote-<kind>-<8 hex>`, one retry on `agent_name_taken`) are the server's. The pane is
   resolved (`requirePane`) before the pane lock, the one message/answer take, so the locks map
   holds only existing panes (404 `not_found`). Under it: a start of this server still running
@@ -664,10 +667,23 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
 - **Codex chat**: a rollout is read only when a process whose executable is named
   `codex`, without `app-server` in its argv, holds it open for writing as a regular
   `rollout-*-<uuid>.jsonl` inside its own `CODEX_HOME/sessions` (resolved), with exactly one
-  such rollout of a user thread; its dev:inode is checked again after opening. Herdr's session id
+  such rollout of a user thread; its dev:inode (Windows: volume serial and file index) is checked
+  again after opening. Herdr's session id
   is trusted only when such a process holds that rollout. So only `codex --no-daemon` has a Chat
-  view (the shared daemon writes every pane's rollout), `/new` gives 404 on tmux until Codex
-  restarts, and Windows has none. `message` and `answer` write under the Claude Code rules: the
+  view (the shared daemon writes every pane's rollout; on Windows 0.162.0 runs it as a child of
+  the first TUI, refused by its `app-server` argv), and `/new` gives 404 on tmux until Codex
+  restarts. On Windows (#295; psmux, Herdr) the holder comes from the system handle table
+  (`NtQuerySystemInformation`, one query cached 1 s, `server/agent_proc_handles_windows.go`):
+  only File handles with write or append access (Codex opens its rollout append-only) of a
+  `codex` process the server's user can open with `PROCESS_DUP_HANDLE` are duplicated, with
+  `FILE_READ_ATTRIBUTES` only, never read or written and always closed; only a disk file on a
+  drive letter with an identity counts (no UNC path is ever stat'ed), never `NtQueryObject`; one
+  kept must still allow writing in a table read after the duplicate (the cached one can be 1 s
+  old; the kernel hides the object addresses that would tie the two), and a listing past 2 s
+  gives nothing (logged once; no other starts while one is stuck). The argv comes from
+  `NtQueryInformationProcess` (command line class) and `CODEX_HOME` is the server user's
+  `%USERPROFILE%\.codex` only (no PEB read), so a pane-only `CODEX_HOME` or another user's Codex
+  has no Chat view, nor (expected, not checked live) an elevated one. psmux sends no Chat message yet (#408). `message` and `answer` write under the Claude Code rules: the
   pane lock (keyed by the pane address alone), then the process, session, rollout (path and
   dev:inode) and screen read again right before each write. A message is pasted (bracketed)
   only onto an empty composer with no working line and status idle/done, and must show in the

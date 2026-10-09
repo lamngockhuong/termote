@@ -5,7 +5,7 @@ import type { StartRecord } from '../hooks/use-start-agent'
 import { Button } from './ui/button'
 
 interface StartAgentPanelProps {
-  // The agents the server can start (Codex not on Windows)
+  // The agents the server can start (Codex only where it has a Chat view)
   kinds: StartAgentKind[]
   // This pane's start, if one was made from this page
   record?: StartRecord

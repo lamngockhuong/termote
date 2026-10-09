@@ -156,9 +156,12 @@ Requirements:
 
 - Codex run with `codex --no-daemon`. By default every Codex TUI hands its session to one shared background process, and Termote cannot
   tell which pane a session belongs to, so such panes have no Chat view.
-- **tmux** on Linux or macOS, or **Herdr** on Linux or macOS after running
-  `herdr integration install codex` once. Windows (psmux or Herdr) is not supported.
-- Checked with Codex 0.159.3. A later version that writes its session elsewhere loses the Chat
+- **tmux** on Linux or macOS, **psmux** on Windows, or **Herdr** on any of them after running
+  `herdr integration install codex` once. On psmux the Chat view shows the conversation and its
+  status, but sending from it does not work yet ([#408](https://github.com/lamngockhuong/termote/issues/408)).
+- On Windows, Codex must run as you, not as administrator, and keep its sessions in
+  `%USERPROFILE%\.codex` (a `CODEX_HOME` set only in the pane is not followed).
+- Checked with Codex 0.159.3, and with 0.162.0 on Windows. A later version that writes its session elsewhere loses the Chat
   view; on tmux the server log notes once that it found Codex without a session file.
 
 What to expect:
@@ -201,7 +204,7 @@ On Herdr, a pane that shows only its shell (nothing running, not even a program 
 Requirements: Herdr 0.8.2 or later on Linux, macOS or Windows. tmux and psmux do not offer it, and
 view-only mode hides it.
 
-On Windows only **Claude Code** is offered, since Codex has no Chat view there. A pane counts as
+On Windows a pane counts as
 idle only when its shell has no child process, so a pane running `ping`, `nvim` or a nested
 `cmd` is refused with nothing typed. A shell that keeps a long-lived child (`Start-Job`, a GUI
 program started from it, something its profile launched) is refused the same way, and so is a

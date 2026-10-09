@@ -463,8 +463,8 @@ Run on tmux (Linux/macOS), psmux (Windows) and Herdr (`herdr integration install
 
 ### Codex
 
-Run on tmux (Linux/macOS) and Herdr (`herdr integration install codex` done); Windows has no
-Codex Chat view.
+Run on tmux (Linux/macOS), psmux (Windows) and Herdr (`herdr integration install codex` done).
+On psmux, sending from the Chat view fails until #408.
 
 - [ ] A tab running `codex --no-daemon` shows the Terminal/Chat switcher; plain `codex` (shared
       daemon) does not
@@ -479,6 +479,10 @@ Codex Chat view.
       this dialog in the terminal."
 - [ ] Herdr: the approval card's buttons pick the option, "Cancel (Esc)" sends Escape
 - [ ] Other Codex dialogs (model picker, ...) are read-only on both backends
+- [ ] Windows: plain `codex` (its daemon is a child `codex.exe app-server`) has no Chat view;
+      `codex --no-daemon` has one after its first message
+- [ ] Windows: a Codex started from an elevated PowerShell has no Chat view; the log shows at
+      most the one "holds no single rollout" line
 
 ### Starting an agent (Herdr)
 
@@ -508,7 +512,7 @@ Linux, Herdr 0.8.2 or later, `termote-dev serve --mux herdr` (or `termote start 
 
 Windows, Herdr 0.8.2 or later, pwsh as the pane shell, `termote start --mux herdr`.
 
-- [ ] An idle pwsh pane offers the Chat view with only "Claude Code" (no "Codex"); the start
+- [ ] An idle pwsh pane offers the Chat view with "Claude Code" and "Codex"; the start
       reaches `ready`, or `blocked` on the folder-trust dialog (the PWA opens the Terminal)
 - [ ] `ping -t 127.0.0.1`, `nvim` and a nested `cmd` running, then a
       `curl` POST → 409 `pane_busy` and the program keeps running (no Ctrl+C reached it)
@@ -516,7 +520,7 @@ Windows, Herdr 0.8.2 or later, pwsh as the pane shell, `termote start --mux herd
       agent runs (`Start-Sleep 60` and a `while ($true) {}` loop too)
 - [ ] `Start-Job { Start-Sleep 300 }` running: 409 `pane_busy` (fail-closed); after `Remove-Job -Force`
       the pane is idle again
-- [ ] `curl` `{"kind":"codex"}` → 501 `unsupported`, nothing typed; the snapshot's `caps.agentStartCodex` is false
+- [ ] `curl` `{"kind":"codex"}` starts `codex --no-daemon`; the snapshot's `caps.agentStartCodex` is true
 
 ---
 

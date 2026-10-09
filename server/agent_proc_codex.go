@@ -28,7 +28,7 @@ var procWriteFilesFn = procWriteFiles
 // procFile is a file a process holds open for writing.
 type procFile struct {
 	path string // as the process opened it
-	id   string // fileIdentity of the open file, "" where unknown
+	id   string // rolloutIdentity of the open file, "" where unknown
 }
 
 // codexProcOf checks whether pid is a Codex TUI that may write its own
@@ -84,10 +84,13 @@ func codexRollout(pid int, home, wantID string) (path, id, fileID string, ok boo
 		}
 		// The path must still name the file the process has open.
 		fi, err := os.Stat(real)
-		if err != nil || !fi.Mode().IsRegular() || (f.id != "" && fileIdentity(fi) != f.id) {
+		if err != nil || !fi.Mode().IsRegular() {
 			continue
 		}
-		fid := fileIdentity(fi)
+		fid := rolloutIdentity(real, nil, fi)
+		if f.id != "" && fid != f.id {
+			continue
+		}
 		if !codexUserThreadCached(real, m[1], fid) {
 			continue // a sub-agent's thread
 		}
@@ -116,7 +119,7 @@ func codexUserThread(path, id, fileID string) bool {
 		return false
 	}
 	defer f.Close()
-	if fi, err := f.Stat(); err != nil || !fi.Mode().IsRegular() || (fileID != "" && fileIdentity(fi) != fileID) {
+	if fi, err := f.Stat(); err != nil || !fi.Mode().IsRegular() || (fileID != "" && rolloutIdentity(path, f, fi) != fileID) {
 		return false
 	}
 	line, err := bufio.NewReaderSize(io.LimitReader(f, codexMetaMax), codexMetaMax).ReadSlice('\n')
@@ -205,10 +208,14 @@ var codexScanning sync.Map
 // holds (fileID).
 func codexStatusNow(path, fileID string) string {
 	fi, err := os.Stat(path)
-	if err != nil || !fi.Mode().IsRegular() || (fileID != "" && fileIdentity(fi) != fileID) {
+	if err != nil || !fi.Mode().IsRegular() {
 		return "unknown"
 	}
-	key := path + "\x00" + fileIdentity(fi)
+	fid := rolloutIdentity(path, nil, fi)
+	if fileID != "" && fid != fileID {
+		return "unknown"
+	}
+	key := path + "\x00" + fid
 	codexScans.Lock()
 	_, scanned := codexScans.m[key]
 	codexScans.Unlock()

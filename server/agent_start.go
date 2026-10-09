@@ -26,8 +26,8 @@ var agentStartArgs = map[string][]string{
 }
 
 // agentStartKind: kind can be started on this server. Codex only where it
-// has a Chat view (codexProcSupported; not on Windows), since its Chat view
-// is what the start leads to.
+// has a Chat view (codexProcSupported), since its Chat view is what the
+// start leads to.
 func agentStartKind(kind string) bool { return kind != "codex" || codexProcSupported }
 
 // agentStartTimeout is Herdr's startup deadline (timeout_ms); a start not

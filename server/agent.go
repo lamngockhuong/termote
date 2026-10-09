@@ -46,7 +46,7 @@ type AgentSession struct {
 	ClaudeDir string // Claude Code: its config dir, where its transcripts live
 	// Codex: CODEX_HOME of the Codex process holding the rollout, the
 	// resolved rollout path it holds open for writing, and the rollout's
-	// fileIdentity when the process was found.
+	// rolloutIdentity when the process was found.
 	CodexHome string
 	Rollout   string
 	RolloutID string
@@ -425,8 +425,11 @@ func readTranscript(s AgentSession, cursor, before string) (transcriptResponse, 
 		return transcriptResponse{}, err
 	}
 	size, id := fi.Size(), fileIdentity(fi)
-	if s.RolloutID != "" && id != s.RolloutID {
-		return transcriptResponse{}, errNoTranscript // replaced since the locator found it
+	if s.RolloutID != "" {
+		// A Codex rollout's identity, read from the open file on Windows.
+		if id = rolloutIdentity(path, f, fi); id != s.RolloutID {
+			return transcriptResponse{}, errNoTranscript // replaced since the locator found it
+		}
 	}
 	if id == "" {
 		// No device and inode (Windows): the file name still tells a new

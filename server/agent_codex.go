@@ -383,7 +383,7 @@ func codexStatus(path string) string {
 	if err != nil || !fi.Mode().IsRegular() {
 		return "unknown"
 	}
-	size, key := fi.Size(), path+"\x00"+fileIdentity(fi)
+	size, key := fi.Size(), path+"\x00"+rolloutIdentity(path, f, fi)
 	codexScans.Lock()
 	prev, ok := codexScans.m[key]
 	codexScans.Unlock()

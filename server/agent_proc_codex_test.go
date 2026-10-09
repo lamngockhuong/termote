@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"fmt"
 	"log"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestCodexHomeFromEnv(t *testing.T) {
@@ -174,7 +176,7 @@ func TestCodexRolloutChecksTheOpenFile(t *testing.T) {
 	home := t.TempDir()
 	meta := `{"type":"session_meta","payload":{"id":"` + testCodexID + `","thread_source":"user"}}` + "\n"
 	p := writeRollout(t, home, testCodexID, meta)
-	id := fileIdentity(mustStat(t, p))
+	id := rolloutIdentity(p, nil, mustStat(t, p))
 	orig := procWriteFilesFn
 	t.Cleanup(func() { procWriteFilesFn = orig })
 	for name, c := range map[string]struct {
@@ -204,7 +206,7 @@ func TestCodexRolloutSameFileTwice(t *testing.T) {
 		t.Errorf("same file twice = %q, %v", id, ok)
 	}
 	// session_meta is remembered per file.
-	fid := fileIdentity(mustStat(t, p))
+	fid := rolloutIdentity(p, nil, mustStat(t, p))
 	if fid == "" {
 		t.Skip("no file identity on this OS")
 	}
@@ -233,7 +235,7 @@ func TestCodexRolloutSameFileTwice(t *testing.T) {
 
 func TestCodexStatusNow(t *testing.T) {
 	p := writeRollout(t, t.TempDir(), testCodexID, codexEvent(map[string]any{"type": "task_started"}))
-	fid := fileIdentity(mustStat(t, p))
+	fid := rolloutIdentity(p, nil, mustStat(t, p))
 	if got := codexStatusNow(p+".gone", ""); got != "unknown" {
 		t.Errorf("missing = %q", got)
 	}
@@ -286,4 +288,22 @@ func TestCodexSessionOfLogsMissOnce(t *testing.T) {
 	if n := strings.Count(buf.String(), "holds no single rollout"); n != 1 {
 		t.Errorf("logged %d times: %q", n, buf.String())
 	}
+}
+
+// helperCodexRollout stands in for a Codex TUI: it holds each rollout of
+// $FAKE_ROLLOUT (an OS path list) open append-only, as Codex does, prints
+// READY, then waits.
+func helperCodexRollout() {
+	var held []*os.File
+	for _, p := range filepath.SplitList(os.Getenv("FAKE_ROLLOUT")) {
+		f, err := os.OpenFile(p, os.O_APPEND|os.O_WRONLY, 0)
+		if err != nil {
+			fmt.Println("ERR", err)
+			os.Exit(1)
+		}
+		held = append(held, f)
+	}
+	fmt.Println("READY")
+	time.Sleep(5 * time.Minute)
+	runtime.KeepAlive(held)
 }
