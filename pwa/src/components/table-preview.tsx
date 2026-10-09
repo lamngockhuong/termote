@@ -347,7 +347,9 @@ export default function TablePreview({
     }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col" onKeyDown={onKeyDown}>
+    // isolate: the grid's sticky header and the record overlay stack inside
+    // the table, never above the viewer header's menu
+    <div className="isolate flex min-h-0 flex-1 flex-col" onKeyDown={onKeyDown}>
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border px-2 py-1.5 text-[13px]">
         {editing && (
           <span className="flex items-center gap-1">
