@@ -48,6 +48,7 @@ export default defineConfig({
             { label: "Gestures", link: "/usage/gestures/" },
             { label: "Herdr Plugin", link: "/usage/herdr-plugin/" },
             { label: "Keyboard", link: "/usage/keyboard/" },
+            { label: "Pair a Device", link: "/usage/devices/" },
             { label: "Sessions", link: "/usage/sessions/" },
             { label: "Settings", link: "/usage/settings/" },
           ],

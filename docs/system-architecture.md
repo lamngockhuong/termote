@@ -81,6 +81,7 @@ Go HTTP server providing:
 - **Static file serving**: PWA assets from /pwa/dist
 - **Terminal WebSocket**: `/api/mux/stream` opens a PTY/ConPTY attached to the selected pane and streams it as binary WebSocket frames; a text control frame carries resize (client→server) and exit/error/size (server→client)
 - **Authentication**: Basic auth or a sign-in form (`/login`, for browsers: an iOS home-screen app never shows the Basic prompt), then a session cookie, rate-limited, plus a Host allowlist and an Origin/CSRF write guard in front of everything; `POST /api/mux/logout` ends the session on the server (the More menu's Log out, shown when the snapshot reports `caps.auth`)
+- **Paired devices**: `/pair` and `/api/mux/devices*` — a one-time code signs a device in with its own cookie and a role (`full` or `view`) (see [Paired devices and the view-only role](#paired-devices-and-the-view-only-role))
 - **Mux API endpoints**: `/api/mux/*` — snapshot (groups→tabs→panes), tab create/rename/close/select, send-keys, health
 - **Web Push**: `/api/mux/push/*` — the server's key and this device's subscription; a watcher sends a push when an agent needs the user (see [Agent notifications](#agent-notifications-apimuxpush))
 - **Agent chat endpoints**: `/api/mux/panes/{id}/agent/*` — the transcript of the Claude Code or Codex session in a pane, sending it a message, reading and answering its dialogs (see [Agent chat](#agent-chat-apimuxpanesidagent))
@@ -221,6 +222,9 @@ POST   /api/mux/panes/{id}/keys    body: {keys}                 → {ok}
 POST   /api/mux/panes/{id}/scroll  body: {lines}                → {ok}   (caps.scroll only, else 501)
 GET    /api/mux/health             → {status, apiVersion, backend, version, pid, install}
 POST   /api/mux/logout             body: {}                      → 204   (sign-in on only, else 404)
+POST   /api/mux/devices/pair       body: {role, name?}           → {code, expiresAt, url, qr} | {error, code}   (full only; sign-in on, else 501)
+GET    /api/mux/devices                                          → {devices:[{id,name,role,createdAt,lastUsedAt,current}]}   (full only)
+DELETE /api/mux/devices/{id}                                     → {ok} | 404 unknown_device   (full only)
 GET    /api/mux/push/key                                        → {publicKey} | 503 push_unavailable   (caps.push)
 POST   /api/mux/push/subscribe     body: {endpoint, keys:{p256dh, auth}}  → {ok} | {error, code}
 DELETE /api/mux/push/subscribe     body: {endpoint}             → {ok}   (unknown endpoint too)
@@ -949,6 +953,30 @@ Agent status (Herdr event / Claude session file)
   The page notifies itself only while the server has not confirmed this device's
   subscription. Log out removes the subscription first.
 
+## Paired devices and the view-only role
+
+The code is `server/auth_role.go` (roles, the default refusal), `server/device_store.go` (store),
+`server/device_pairing.go` (codes), `server/device_routes.go` (routes, revoke), `server/pair_page.go`
+(`/pair`) and `server/cli_devices.go` (`termote pair`, `termote devices`).
+
+- **Identity**: `basicAuth` tries the session cookie, then the device cookie
+  `termote_device_<store id>`, then Basic. Session and Basic are always `full`; a device carries its
+  role; `--no-auth` has no identity and is `full`. The snapshot reports `caps.role`, `caps.devices`
+  and `caps.viewStream`.
+- **Store**: `<stateDir>/devices/` (`key.json`, `devices.json`, 0700/0600), only the SHA-256 of each
+  token; at most 50 devices. Records of another password are ignored, not deleted; `start --fresh`
+  deletes them. The container keeps the directory in the volume `termote-state-<uid>`.
+- **Pairing**: a 10-character code (`XXXXX-XXXXX`), 5 minutes, once, at most 5 waiting, redeemed by
+  `POST /pair` under its own rate limiter. A browser already signed in is refused (409).
+- **View-only**: `basicAuth` refuses every write method with 403 `view_only` before any handler
+  (except logout); handlers repeat the check with `requireWriteRole`. Reads that change state have
+  a view branch: the snapshot does not recreate sessions, a tmux stream attaches read-only to the
+  active window (tmux 3.2+; older tmux and psmux: 501), a Herdr stream is `observe` only, and every
+  input frame, resize and `drive` is dropped. Files only in a git repo, no `reveal=1`, no
+  `content?hash=1`; `agent/prompt` carries no `promptId`.
+- **Revoke**: removes the record, drops its stream tokens, closes its open streams and the codes it
+  made; a running request finishes.
+
 ## Deployment Modes
 
 ### Container Mode (All-in-one)
@@ -1059,7 +1087,8 @@ termote update --force           # Force reinstall current version
 1. **Network**: VPN/Tailscale or local network only
 2. **Auth**: Basic auth over HTTPS (use `--no-auth` for local dev only); an empty saved
    password no longer disables auth — `start` generates a new one and prints it once
-   (`termote show-password` to see it again)
+   (`termote show-password` to see it again); a paired device signs in with its own cookie and
+   role instead (see [Paired devices and the view-only role](#paired-devices-and-the-view-only-role))
 3. **Session cookies**: Stored after initial basic auth to prevent double prompts on mobile;
    Log out (`POST /api/mux/logout`, a JSON write under the same guard) removes the session on
    the server and expires the cookie, so a copied cookie stops working too. Cookies are not

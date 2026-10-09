@@ -285,6 +285,17 @@ termote:7680 → /api/mux/stream (terminal WebSocket, xterm.js)
   `start`/`container up` generate and save a new one instead
 - Use `--no-auth` only for local development
 
+### Paired devices and the view-only role
+
+Instead of sharing the password, `termote pair` makes a one-time code (`--role view|full`, default
+`view`; `--name`) that a new device types at `/pair`; `termote devices` lists the paired devices and
+`termote devices revoke <id>` signs one out. A paired device holds a cookie valid 400 days (a cookie
+is not bound to a port, so give Termote a host name of its own). The server must run with sign-in
+on; with `--no-auth` the commands answer 501. A new password (`start --fresh`) signs every device out.
+Devices live in `<stateDir>/devices/`; in the container that is the volume `termote-state-<uid>`,
+kept by `container down` and removed by `uninstall --purge`. Design, limits and trade-offs:
+[`system-architecture.md`](system-architecture.md#paired-devices-and-the-view-only-role).
+
 ### Host allowlist and write guard
 
 - Requests with an unrecognised `Host` header are rejected (DNS-rebinding protection); the

@@ -128,6 +128,8 @@ Flags use the same syntax on every OS, PowerShell included (`termote start --lan
 | `termote status`          | Show what the running server reports (alias: `health`)                        |
 | `termote logs [service]`  | View logs: `server`, `all` (default), `follow`, `clean`                       |
 | `termote show-password`   | Show the saved username and password                                          |
+| `termote pair [options]`  | Make a one-time code that signs a new device in (`--role view\|full`, `--name`) |
+| `termote devices`         | List the paired devices; `devices revoke <id>` signs one out                  |
 | `termote update`          | Update to the latest release, rolling back if the new one does not come up    |
 | `termote uninstall`       | Remove the service, the command and the install (`--purge`: config and logs too) |
 | `termote container <cmd>` | Run the server in a container: `up`, `down`, `logs [-f]`, `status`           |
