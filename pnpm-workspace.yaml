@@ -11,9 +11,11 @@ allowBuilds:
 # GHSA-ch52-4w7c-c8xp (http-cache-semantics <=4.2.0, no patch yet): reached only through
 # website > astro, which builds a static site and serves no shared cache to other users.
 # katex: mermaid 12.1.0 still asks for ^0.16, and no 0.16 release fixes GHSA-238p-pmpm-9mq7
-# (fixed in 0.18.2). Drop this once mermaid depends on a fixed katex.
+# (fixed in 0.18.2). 0.19.0, not 0.18.x: 0.18.11 is deprecated (a breaking change published as a
+# patch, re-released as 0.19.0). Mermaid calls katex only for HTML labels, which the PWA turns off.
+# Drop this once mermaid depends on a fixed katex.
 overrides:
-  katex: ^0.18.11
+  katex: ^0.19.0
 
 auditConfig:
   ignoreGhsas:
