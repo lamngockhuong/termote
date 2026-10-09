@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 )
@@ -43,6 +44,17 @@ func runServe(args []string) int {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
 		return 1
+	}
+	if service {
+		// The Windows task and Startup launchers give serve no output: write
+		// it to the log that start and `termote logs` read.
+		if c.ensureStateDir() == nil {
+			if f, err := os.OpenFile(c.serverLog(), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600); err == nil {
+				defer f.Close()
+				os.Stdout, os.Stderr = f, f
+				log.SetOutput(f)
+			}
+		}
 	}
 	cfg, err := c.loadServeConfig()
 	if err != nil {

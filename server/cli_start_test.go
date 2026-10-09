@@ -795,3 +795,38 @@ func TestEnsureStateDirPrivate(t *testing.T) {
 		t.Fatalf("state dir = %v, %v; want 0700", fi.Mode().Perm(), err)
 	}
 }
+
+// A server whose backend does not answer (Herdr not started yet) runs: start
+// warns instead of failing after the whole wait. Another version that is
+// degraded is still not taken for the new server.
+func TestWaitForServerDegraded(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"status":"degraded","backend":"herdr","version":"1.0.0"}`))
+	})}
+	go srv.Serve(ln)
+	defer srv.Close()
+	port := ln.Addr().(*net.TCPAddr).Port
+	old := degradedGrace
+	degradedGrace = 300 * time.Millisecond
+	defer func() { degradedGrace = old }()
+
+	tc := newTestCLI(t, "linux")
+	if err := tc.waitForServer(port, "", "", "1.0.0", 5*time.Second, nil); err != nil {
+		t.Fatalf("degraded server of the right version: %v", err)
+	}
+	// update's stability checks wait less than the grace: still running.
+	if err := tc.waitForServer(port, "", "", "1.0.0", 400*time.Millisecond, nil); err != nil {
+		t.Fatalf("degraded server, short wait: %v", err)
+	}
+	if out := tc.stderr.String() + tc.stdout.String(); strings.Count(out, "herdr backend does not answer") != 1 {
+		t.Errorf("want one warning about the backend: %q", out)
+	}
+	if err := tc.waitForServer(port, "", "", "2.0.0", time.Second, nil); err == nil {
+		t.Error("a degraded server of another version was taken for the new one")
+	}
+}
