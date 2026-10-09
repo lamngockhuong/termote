@@ -179,7 +179,7 @@ func (c *cli) restartAndCheck(sup supervisor, port int, user, pass, version stri
 		if user == adminUser {
 			return err
 		}
-		if h, code := fetchHealth(port, adminUser, pass); code != http.StatusOK || h.Status != "ok" || h.Version != version {
+		if h, code := fetchHealth(port, adminUser, pass); code != http.StatusOK || (h.Status != "ok" && h.Status != "degraded") || h.Version != version {
 			return err
 		}
 		c.warnf("v%s ignores the saved username %q: log in as %s until you update again", version, user, adminUser)

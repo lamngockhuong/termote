@@ -99,6 +99,9 @@ type cli struct {
 	herdrRunning func() bool
 	// detachedExited closes when a server this CLI started detached exits.
 	detachedExited <-chan struct{}
+	// degradedWarned is set once waitForServer has warned that the backend
+	// does not answer, so update's later checks do not repeat it.
+	degradedWarned bool
 	// startHidden runs a PowerShell script in a detached process with no
 	// window that outlives this one (Windows only; uninstall's late cleanup).
 	startHidden func(script string) error

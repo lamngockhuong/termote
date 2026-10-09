@@ -442,17 +442,39 @@ func fetchHealth(port int, user, pass string) (serverHealth, int) {
 	return h, resp.StatusCode
 }
 
+// degradedGrace is how long a server answering "degraded" (its backend, such
+// as a Herdr not started yet, does not answer) gets to turn ok before it is
+// taken as running anyway.
+var degradedGrace = 3 * time.Second
+
 // waitForServer waits until the health endpoint reports ok for version (any
 // version when empty), the process exits (exited closes) or the timeout
-// passes.
+// passes. A server of that version still degraded degradedGrace (at most
+// half the timeout) after it first said so runs: it connects to its backend
+// once that answers, so this warns instead of failing.
 func (c *cli) waitForServer(port int, user, pass, version string, timeout time.Duration, exited <-chan struct{}) error {
 	deadline := time.Now().Add(timeout)
 	last := "no answer"
+	grace := min(degradedGrace, timeout/2)
+	var degradedSince time.Time
 	for time.Now().Before(deadline) {
 		h, code := fetchHealth(port, user, pass)
+		answered := code == http.StatusOK && (version == "" || h.Version == version)
 		switch {
-		case code == http.StatusOK && h.Status == "ok" && (version == "" || h.Version == version):
+		case answered && h.Status == "ok":
 			return nil
+		case answered && h.Status == "degraded":
+			if degradedSince.IsZero() {
+				degradedSince = time.Now()
+			}
+			if time.Since(degradedSince) >= grace {
+				if !c.degradedWarned {
+					c.degradedWarned = true
+					c.warnf("The server runs, but its %s backend does not answer yet; it connects once that runs (see: termote logs)", h.Backend)
+				}
+				return nil
+			}
+			last = fmt.Sprintf("HTTP %d, status %q", code, h.Status)
 		case code == http.StatusOK && h.Status == "ok":
 			last = fmt.Sprintf("version %s answers, expected %s", h.Version, version)
 		case code == healthUntrusted:
