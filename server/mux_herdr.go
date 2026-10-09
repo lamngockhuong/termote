@@ -1617,7 +1617,10 @@ func (m *herdrMux) StartAgent(ctx context.Context, paneID, kind string, args []s
 	case <-ctx.Done():
 		return "", ctx.Err()
 	}
-	if idle, err = m.waitIdleShell(ctx, paneID, 0); err != nil || !idle {
+	// The shell redraws its prompt after the C-c, and a prompt can run a
+	// program (git for the branch): on Windows that child reads as busy for
+	// a moment, so the check waits as the first one does.
+	if idle, err = m.waitIdleShell(ctx, paneID, agentStartIdleWait); err != nil || !idle {
 		return "", cmp.Or(err, error(errStartPaneBusy))
 	}
 	if args == nil {

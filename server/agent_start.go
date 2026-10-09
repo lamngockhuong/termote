@@ -46,7 +46,8 @@ const (
 
 // The idle check waits for a shell still starting (agentStartIdleWait,
 // polled every agentStartIdlePoll); after the C-c that clears the input
-// line, the shell is checked again agentStartClearWait later. Tests shorten
+// line, the shell is checked again agentStartClearWait later, waiting the
+// same way for the prompt it redraws (which can run git). Tests shorten
 // them.
 // Each backend call of a start gets agentStartCallTimeout.
 var (
@@ -234,7 +235,7 @@ func (a *agentAPI) startAgent(w http.ResponseWriter, r *http.Request) {
 	defer unlock()
 	// Once the line is cleared the start must go on even if the client
 	// leaves, or the pane is left with nothing typed for no reason.
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), agentStartIdleWait+agentStartClearWait+4*agentStartCallTimeout)
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 2*agentStartIdleWait+agentStartClearWait+4*agentStartCallTimeout)
 	defer cancel()
 	if p, ok := a.starts.get(paneID, time.Now()); ok && p.ended.IsZero() {
 		if !startFinal(a.followStart(ctx, st, paneID, p)) {

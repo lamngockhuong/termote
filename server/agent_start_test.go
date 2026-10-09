@@ -180,6 +180,36 @@ func TestAgentStartWindowsBusyChild(t *testing.T) {
 	}
 }
 
+// The prompt redrawn after the C-c can run git for a moment: on Windows
+// that child is waited for, not taken for a busy pane.
+func TestAgentStartWindowsPromptChildAfterClear(t *testing.T) {
+	f := newFakeHerdr(t)
+	h, _ := startHandler(t, f)
+	children := herdrProcChildren
+	t.Cleanup(func() { herdrProcChildren = children })
+	herdrStartGOOS = "windows"
+	reads := 0
+	herdrProcChildren = func() (func(int) []int, error) {
+		reads++
+		read := reads
+		return func(pid int) []int {
+			if pid == 100 && read == 2 { // the first read after the C-c
+				return []int{23240}
+			}
+			return nil
+		}, nil
+	}
+	f.mu.Lock()
+	f.procs = map[string]any{startPane: fakeProcessInfo(startPane, 100, 100, fakeProc(100, "pwsh.exe", "pwsh.exe"))}
+	f.mu.Unlock()
+	if status, code, _ := postStart(t, h, `{"kind":"claude"}`); status != http.StatusOK {
+		t.Fatalf("POST = %d %q", status, code)
+	}
+	if f.count("agent.start") != 1 {
+		t.Error("agent.start not called")
+	}
+}
+
 // A shell still starting (not yet alone in its group) is waited for.
 func TestAgentStartWaitsForShell(t *testing.T) {
 	f := newFakeHerdr(t)
