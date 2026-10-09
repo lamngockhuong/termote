@@ -169,9 +169,23 @@ export function SessionSidebar({
       setEditingId(null)
       return
     }
-    sheetListRef.current
-      ?.querySelector('[aria-current="true"]')
-      ?.scrollIntoView({ block: 'center' })
+    // Only the sheet's scroller moves: scrollIntoView would also scroll the
+    // dialog itself when the row cannot be centred (the last one), pushing
+    // the title and the current session off screen above an empty gap. A row
+    // already in sight (below the sticky current session) keeps the list at
+    // its top: centring a row near the end would scroll to the bottom and
+    // show only the padding and the home indicator's inset under it.
+    const list = sheetListRef.current
+    const row = list?.querySelector('[aria-current="true"]')
+    const scroller = list?.parentElement
+    if (!row || !scroller) return
+    const r = row.getBoundingClientRect()
+    const s = scroller.getBoundingClientRect()
+    // A current row means an active session, so the sticky current session
+    // sits right above the list
+    const top = list.previousElementSibling!.getBoundingClientRect().bottom
+    if (r.top >= top && r.bottom <= s.bottom) return
+    scroller.scrollTop += r.top + r.height / 2 - (top + s.bottom) / 2
   }, [isMobile, isOpen])
 
   const handleAdd = () => {
