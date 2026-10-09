@@ -209,6 +209,17 @@ describe('Menu', () => {
     expect(document.activeElement).toBe(trigger())
   })
 
+  it('closes on an item without an action', () => {
+    render(
+      <Menu label="More" trigger="⋯">
+        <MenuItem>Note</MenuItem>
+      </Menu>,
+    )
+    open()
+    fireEvent.click(item('Note'))
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+  })
+
   it('keeps the menu open for a keepOpen item and marks danger items', () => {
     const { onClear } = renderMenu()
     open()

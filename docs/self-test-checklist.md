@@ -294,6 +294,8 @@ Run Herdr on a throwaway socket and `HOME`, never your live Herdr.
 - [ ] Herdr restarted: the order is kept
 - [ ] No reorder control while the agent filter or "blocked first" is on, nor on tmux older than
       3.2, psmux (Windows), Herdr older than 0.8.0 or Herdr on Windows; tmux sessions have no Move
+- [ ] With the agent filter or "blocked first" on: the "Current session" row (phone) and a group's
+      ⋯ menu say what to turn off to reorder; nothing said where the backend cannot reorder
 - [ ] tmux: a Chat draft and an attached image in one window stay with it when another window is
       moved across it, on a second open device too; an open Edit form stays on its window
 - [ ] tmux: closing a tab whose id another device's move shifted says "The tab changed; try
