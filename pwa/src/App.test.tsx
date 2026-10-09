@@ -43,7 +43,7 @@ const mockUseLocalSessions = vi.fn(() => ({
   ],
   switchSession: vi.fn(),
   addSession: vi.fn(),
-  removeSession: vi.fn(),
+  removeSession: vi.fn(async () => {}),
   updateSession: vi.fn(),
   isReady: true,
   isServerReachable: true,
@@ -312,6 +312,7 @@ vi.mock('./components/keyboard-toolbar', () => ({
 }))
 
 vi.mock('./components/session-sidebar', () => ({
+  moveProblem: (err: Error) => `MoveProblem ${err.message}`,
   SessionSidebar: ({
     onSelect,
     onClose,
@@ -321,7 +322,14 @@ vi.mock('./components/session-sidebar', () => ({
     onRemove,
     onAdd,
     groupActions,
+    reorder,
   }: {
+    reorder?: {
+      tabs: boolean
+      groups: boolean
+      onMoveTab: (id: string, index: number) => void
+      onMoveGroup: (id: string, index: number) => void
+    }
     groupActions?: {
       noun: string
       onNew: () => void
@@ -342,6 +350,18 @@ vi.mock('./components/session-sidebar', () => ({
   }) => (
     <div data-testid="session-sidebar" data-open={String(!!isOpen)}>
       {onRemove && <button onClick={() => onRemove('1')}>SBRemove</button>}
+      {onRemove && !isMobile && (
+        <button onClick={() => onRemove('gone')}>SBRemoveGone</button>
+      )}
+      {reorder && !isMobile && (
+        <span>
+          reorder tabs {String(reorder.tabs)} groups {String(reorder.groups)}
+          <button onClick={() => reorder.onMoveTab('1', 0)}>SBMoveTab</button>
+          <button onClick={() => reorder.onMoveGroup('main', 1)}>
+            SBMoveGroup
+          </button>
+        </span>
+      )}
       {onFilterChange && (
         <button onClick={() => onFilterChange('needs-you')}>
           FilterNeedsYou
@@ -732,7 +752,7 @@ describe('App', () => {
       ],
       switchSession: vi.fn(),
       addSession: vi.fn(),
-      removeSession: vi.fn(),
+      removeSession: vi.fn(async () => {}),
       updateSession: vi.fn(),
       isReady: true,
       isServerReachable: true,
@@ -854,6 +874,68 @@ describe('App', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'SBRemove' }))
     expect(screen.getByTestId('confirm-dialog')).toHaveTextContent(
       'along with anything still running in it.Running: bash, vim.',
+    )
+  })
+
+  it('the close question follows its tab by key, and says when it changed', async () => {
+    const base = mockUseLocalSessions()
+    const removeSession = vi.fn(async () => {
+      throw new Error('changed')
+    })
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      sessions: [{ ...base.sessions[0], key: '@7' }],
+      removeSession,
+    } as any)
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'SBRemoveGone' }))
+    expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'SBRemove' }))
+    fireEvent.click(screen.getByRole('button', { name: 'ConfirmYes' }))
+    expect(removeSession).toHaveBeenCalledWith('1')
+    expect(await screen.findByTestId('toast')).toHaveTextContent(
+      'The tab changed; try again',
+    )
+  })
+
+  it('moves tabs and groups where the server can; a refusal is a toast', async () => {
+    const base = mockUseLocalSessions()
+    const moveTab = vi.fn(async () => {
+      throw new Error('tab')
+    })
+    const moveGroup = vi.fn(async () => {
+      throw new Error('group')
+    })
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      mux: {
+        backend: 'herdr',
+        caps: {
+          clientSideSelect: true,
+          copyMode: false,
+          reorderTabs: true,
+          reorderGroups: true,
+        },
+      },
+      moveTab,
+      moveGroup,
+      moving: false,
+    } as any)
+    render(<App />)
+    expect(
+      await screen.findByText(/reorder tabs true groups true/),
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'SBMoveTab' }))
+    expect(moveTab).toHaveBeenCalledWith('1', 0)
+    expect(await screen.findByTestId('toast')).toHaveTextContent(
+      'MoveProblem tab',
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'SBMoveGroup' }))
+    expect(moveGroup).toHaveBeenCalledWith('main', 1)
+    await waitFor(() =>
+      expect(screen.getByTestId('toast')).toHaveTextContent(
+        'MoveProblem group',
+      ),
     )
   })
 
@@ -1282,7 +1364,7 @@ describe('App', () => {
       ],
       switchSession: mockSwitchSession,
       addSession: vi.fn(),
-      removeSession: vi.fn(),
+      removeSession: vi.fn(async () => {}),
       updateSession: vi.fn(),
       isReady: true,
       isServerReachable: true,
@@ -1393,7 +1475,7 @@ describe('App', () => {
       ],
       switchSession: vi.fn(),
       addSession: vi.fn(),
-      removeSession: vi.fn(),
+      removeSession: vi.fn(async () => {}),
       updateSession: vi.fn(),
       isReady: true,
       isServerReachable: true,
@@ -1481,7 +1563,7 @@ describe('App', () => {
       ],
       switchSession: vi.fn(),
       addSession: mockAddSession,
-      removeSession: vi.fn(),
+      removeSession: vi.fn(async () => {}),
       updateSession: vi.fn(),
       isReady: true,
       isServerReachable: true,
@@ -2319,7 +2401,7 @@ describe('shouldShowPasteError (via handlePaste)', () => {
       ],
       switchSession: vi.fn(),
       addSession: vi.fn(),
-      removeSession: vi.fn(),
+      removeSession: vi.fn(async () => {}),
       updateSession: vi.fn(),
       isReady: true,
       isServerReachable: true,
@@ -2427,7 +2509,7 @@ describe('getClipboardErrorMsg long-press variant (via CtrlShiftV toast)', () =>
       ],
       switchSession: vi.fn(),
       addSession: vi.fn(),
-      removeSession: vi.fn(),
+      removeSession: vi.fn(async () => {}),
       updateSession: vi.fn(),
       isReady: true,
       isServerReachable: true,
@@ -2481,7 +2563,7 @@ describe('App with tmux paste source', () => {
       ],
       switchSession: vi.fn(),
       addSession: vi.fn(),
-      removeSession: vi.fn(),
+      removeSession: vi.fn(async () => {}),
       updateSession: vi.fn(),
       isReady: true,
       isServerReachable: true,
@@ -2556,7 +2638,7 @@ describe('App server reachability effect', () => {
       ],
       switchSession: vi.fn(),
       addSession: vi.fn(),
-      removeSession: vi.fn(),
+      removeSession: vi.fn(async () => {}),
       updateSession: vi.fn(),
       isReady: true,
       isServerReachable: false,
@@ -2600,7 +2682,7 @@ describe('App gesture hints (mobile, first visit)', () => {
       ],
       switchSession: vi.fn(),
       addSession: vi.fn(),
-      removeSession: vi.fn(),
+      removeSession: vi.fn(async () => {}),
       updateSession: vi.fn(),
       isReady: true,
       isServerReachable: true,
@@ -2719,7 +2801,7 @@ describe('App groups and panes', () => {
       selectPane,
       removePane,
       addSession: vi.fn(),
-      removeSession: vi.fn(),
+      removeSession: vi.fn(async () => {}),
       updateSession: vi.fn(),
       isReady: true,
       isServerReachable: true,

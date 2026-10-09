@@ -26,6 +26,8 @@ import {
   getPushKey,
   listWorktrees,
   logout,
+  moveGroup,
+  moveTab,
   openWorktree,
   REQUEST_TIMEOUT_MS,
   RequestError,
@@ -269,6 +271,43 @@ describe('mux API client', () => {
     expect(JSON.parse(calls[0].init?.body as string)).toEqual({
       name: 'new name',
     })
+  })
+
+  it('closeTab and renameTab send the key; a changed tab throws', async () => {
+    const { calls } = mockFetch({ body: { ok: true } })
+    expect(await closeTab('2', '@5')).toBe(true)
+    expect(calls[0].url).toBe('/api/mux/tabs/2?key=%405')
+    expect(await renameTab('2', 'x', '@5')).toBe(true)
+    expect(JSON.parse(calls[1].init?.body as string)).toEqual({
+      name: 'x',
+      key: '@5',
+    })
+    mockFetch({
+      body: { error: 'the tab changed', code: 'changed' },
+      status: 409,
+    })
+    await expect(closeTab('2', '@5')).rejects.toMatchObject({
+      status: 409,
+      code: 'changed',
+    })
+  })
+
+  it('moveTab and moveGroup post the index; a refusal throws its code', async () => {
+    const { calls } = mockFetch(
+      { body: { ok: true, id: '$3:0' } },
+      { body: { ok: true } },
+      { body: { ok: true, id: 'w2' } },
+    )
+    expect(await moveTab('$3:2', 0)).toBe('$3:0')
+    expect(calls[0].url).toBe('/api/mux/tabs/%243%3A2/move')
+    expect(calls[0].init?.method).toBe('POST')
+    expect(JSON.parse(calls[0].init?.body as string)).toEqual({ index: 0 })
+    expect(await moveTab('w1:t2', 1)).toBe('w1:t2')
+    await moveGroup('w2', 3)
+    expect(calls[2].url).toBe('/api/mux/groups/w2/move')
+    expect(JSON.parse(calls[2].init?.body as string)).toEqual({ index: 3 })
+    mockFetch({ body: { error: 'x', code: 'busy' }, status: 503 })
+    await expect(moveGroup('w2', 0)).rejects.toMatchObject({ code: 'busy' })
   })
 
   it('write calls report false when server does not return ok', async () => {

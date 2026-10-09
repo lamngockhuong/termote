@@ -263,11 +263,11 @@ func TestTmuxMuxRejectsInvalidInput(t *testing.T) {
 		{"select window name", func() error { return m.SelectTab(ctx, "shell") }},
 		{"select bad session id", func() error { return m.SelectTab(ctx, "$3:x") }},
 		{"select exact-name target", func() error { return m.SelectTab(ctx, "=main:0") }},
-		{"close control char", func() error { return m.CloseTab(ctx, "a\x00b") }},
-		{"rename bad id", func() error { return m.RenameTab(ctx, "x:1", "ok") }},
-		{"rename empty name", func() error { return m.RenameTab(ctx, "0", "") }},
-		{"rename flag-like name", func() error { return m.RenameTab(ctx, "0", "-n") }},
-		{"rename control char name", func() error { return m.RenameTab(ctx, "0", "a\nb") }},
+		{"close control char", func() error { return m.CloseTab(ctx, "a\x00b", "") }},
+		{"rename bad id", func() error { return m.RenameTab(ctx, "x:1", "ok", "") }},
+		{"rename empty name", func() error { return m.RenameTab(ctx, "0", "", "") }},
+		{"rename flag-like name", func() error { return m.RenameTab(ctx, "0", "-n", "") }},
+		{"rename control char name", func() error { return m.RenameTab(ctx, "0", "a\nb", "") }},
 		{"new flag-like name", func() error { _, err := m.NewTab(ctx, "", "-d"); return err }},
 		{"new unknown group", func() error { _, err := m.NewTab(ctx, "other", "x"); return err }},
 		{"new group by exact name", func() error { _, err := m.NewTab(ctx, "="+tmuxSession, "x"); return err }},
@@ -352,7 +352,8 @@ func useFakeTmux(t *testing.T, out string) func() string {
 	}
 	orig, origSocket := tmuxBin, tmuxSocket
 	tmuxBin, tmuxSocket = script, ""
-	t.Cleanup(func() { tmuxBin, tmuxSocket = orig, origSocket })
+	resetTmuxVersion()
+	t.Cleanup(func() { tmuxBin, tmuxSocket = orig, origSocket; resetTmuxVersion() })
 	return func() string {
 		b, _ := os.ReadFile(logPath)
 		return string(b)
@@ -389,7 +390,8 @@ func useFakeTmuxScript(t *testing.T, replies map[string]fakeTmuxReply) func() st
 	}
 	orig, origSocket := tmuxBin, tmuxSocket
 	tmuxBin, tmuxSocket = script, ""
-	t.Cleanup(func() { tmuxBin, tmuxSocket = orig, origSocket })
+	resetTmuxVersion()
+	t.Cleanup(func() { tmuxBin, tmuxSocket = orig, origSocket; resetTmuxVersion() })
 	return func() string {
 		b, _ := os.ReadFile(logPath)
 		return string(b)
@@ -401,8 +403,8 @@ func TestTmuxSnapshotParsesPaneFields(t *testing.T) {
 	defer func() { tmuxSession = orig }()
 	tmuxSession = "main"
 	// The default session is listed after another one, as tmux sorts by name.
-	args := useFakeTmux(t, "$4:0:1:%9:1:ma2:a:b\n$0:0:1:%3:1:main:edit: main.go\n$0:1:0:%7:notapid:main:logs\n"+
-		"$5:2:0:%8:1:wo_rk:x\nbad line\n$x:0:1:%1:1:z:y")
+	args := useFakeTmux(t, "$4:0:1:%9:1:@11:ma2:a:b\n$0:0:1:%3:1:@12:main:edit: main.go\n$0:1:0:%7:notapid:@13:main:logs\n"+
+		"$5:2:0:%8:1:@14:wo_rk:x\nbad line\n$x:0:1:%1:1:z:y")
 	snap, err := tmuxMux{}.Snapshot(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -421,6 +423,9 @@ func TestTmuxSnapshotParsesPaneFields(t *testing.T) {
 	if ma2.Tabs[0].ID != "$4:0" || ma2.Tabs[0].Name != "a:b" || ma2.Tabs[0].Panes[0].ID != "$4:0" || work.Tabs[0].ID != "$5:2" {
 		t.Fatalf("other tabs = %+v, %+v", ma2.Tabs, work.Tabs)
 	}
+	if tabs[0].Key != "@12" || tabs[1].Key != "@13" || ma2.Tabs[0].Key != "@11" || tabs[0].Panes[0].key != "%3" {
+		t.Errorf("keys = %q %q %q, pane %q", tabs[0].Key, tabs[1].Key, ma2.Tabs[0].Key, tabs[0].Panes[0].key)
+	}
 	if tabs[0].Panes[0].Agent != nil || tabs[1].Panes[0].Agent != nil {
 		t.Error("agent reported for panes without Claude Code")
 	}
@@ -436,7 +441,7 @@ func TestTmuxSnapshotCreatesMissingDefaultSession(t *testing.T) {
 	defer func() { tmuxSession = orig }()
 	tmuxSession = "main"
 	args := useFakeTmuxScript(t, map[string]fakeTmuxReply{
-		"list-windows": {out: "$1:0:1:%2:1:mainx:sh"},
+		"list-windows": {out: "$1:0:1:%2:1:@15:mainx:sh"},
 		"has-session":  {stderr: "can't find session: =main", code: 1},
 	})
 	snap, err := tmuxMux{}.Snapshot(context.Background())
@@ -464,8 +469,8 @@ func TestTmuxTargetsAreExact(t *testing.T) {
 	m := tmuxMux{}
 	m.SelectTab(ctx, "$3:1")
 	m.SelectTab(ctx, "1")
-	m.CloseTab(ctx, "$3:2")
-	m.RenameTab(ctx, "0", "x")
+	m.CloseTab(ctx, "$3:2", "")
+	m.RenameTab(ctx, "0", "x", "")
 	m.SendKeys(ctx, "$3:0", "ls")
 	if id, err := m.NewTab(ctx, "$3", ""); err != nil || id != "$3:4" {
 		t.Errorf("NewTab($3) = %q, %v", id, err)
@@ -812,7 +817,7 @@ func TestTabNameIsNotAFormat(t *testing.T) {
 	if got := name(id); got != typed {
 		t.Errorf("NewTab name = %q, want %q", got, typed)
 	}
-	if err := (tmuxMux{}).RenameTab(ctx, id, "x"+typed); err != nil {
+	if err := (tmuxMux{}).RenameTab(ctx, id, "x"+typed, ""); err != nil {
 		t.Fatal(err)
 	}
 	if got := name(id); got != "x"+typed {
@@ -1103,7 +1108,7 @@ func TestTmuxSnapshotProcesses(t *testing.T) {
 	panes := tmuxPaneLine("$0", "0", "0", "0", "bash", "/home/u") + tmuxPaneLine("$0", "0", "1", "1", "vim", "/home/u/p") +
 		tmuxPaneLine("$4", "0", "0", "1", "top", "/")
 	useFakeTmuxScript(t, map[string]fakeTmuxReply{
-		"list-windows": {out: "$0:0:1:%3:1:main:edit\n$0:1:0:%5:1:main:logs\n$4:0:1:%1:1:other:x\n"},
+		"list-windows": {out: "$0:0:1:%3:1:@16:main:edit\n$0:1:0:%5:1:@17:main:logs\n$4:0:1:%1:1:@18:other:x\n"},
 		"list-panes":   {out: panes},
 	})
 	snap, err := tmuxMux{}.Snapshot(context.Background())
@@ -1128,7 +1133,7 @@ func TestTmuxSnapshotProcesses(t *testing.T) {
 	// fails the snapshot.
 	for _, r := range []fakeTmuxReply{{}, {stderr: "boom", code: 1}} {
 		useFakeTmuxScript(t, map[string]fakeTmuxReply{
-			"list-windows": {out: "$0:0:1:%3:1:main:edit\n"},
+			"list-windows": {out: "$0:0:1:%3:1:@19:main:edit\n"},
 			"list-panes":   r,
 		})
 		snap, err := tmuxMux{}.Snapshot(context.Background())
@@ -1191,5 +1196,46 @@ func TestTmuxProcessesInRealSession(t *testing.T) {
 	})
 	if strings.Contains(string(body), "SECRET") || strings.Contains(string(body), "time.sleep") {
 		t.Errorf("argv in the snapshot: %s", body)
+	}
+}
+
+func TestParseTmuxVersion(t *testing.T) {
+	for in, want := range map[string][3]int{
+		"3.2a": {3, 2, 1}, "3.1c": {3, 1, 1}, "next-3.6": {3, 6, 1}, "3.4": {3, 4, 1}, "2.7": {2, 7, 1},
+		"master": {0, 0, 0}, "": {0, 0, 0}, "3": {0, 0, 0}, "tmux 3.4": {0, 0, 0},
+	} {
+		major, minor, ok := parseTmuxVersion(in)
+		if [3]int{major, minor, map[bool]int{true: 1}[ok]} != want {
+			t.Errorf("parseTmuxVersion(%q) = %d, %d, %v", in, major, minor, ok)
+		}
+	}
+}
+
+// The server's version decides, read once it parses; a failed read is tried
+// again later, never cached as the answer.
+func TestTmuxReorderCap(t *testing.T) {
+	useFakeTmuxScript(t, map[string]fakeTmuxReply{"display-message": {stderr: "no server running", code: 1}})
+	if (tmuxMux{}).Caps().ReorderTabs {
+		t.Error("ReorderTabs without a server")
+	}
+	args := useFakeTmuxScript(t, map[string]fakeTmuxReply{"display-message": {out: "3.2a\n"}})
+	tmuxVersion.failedAt = time.Now().Add(-tmuxVersionRetry)
+	if !(tmuxMux{}).Caps().ReorderTabs || !(tmuxMux{}).Caps().ReorderTabs {
+		t.Error("ReorderTabs off on 3.2a")
+	}
+	if got := strings.TrimSpace(args()); got != "display-message -p #{version}" {
+		t.Errorf("argv = %q, want one read", got)
+	}
+	for v, want := range map[string]bool{"3.1c": false, "next-3.6": true, "master": false} {
+		useFakeTmuxScript(t, map[string]fakeTmuxReply{"display-message": {out: v + "\n"}})
+		if got := (tmuxMux{}).Caps().ReorderTabs; got != want {
+			t.Errorf("%s: ReorderTabs = %v", v, got)
+		}
+	}
+	if (tmuxMux{}).Caps().ReorderGroups {
+		t.Error("ReorderGroups on tmux")
+	}
+	if err := (tmuxMux{}).MoveGroup(context.Background(), "main", 0); !errors.Is(err, errUnsupported) {
+		t.Errorf("MoveGroup = %v", err)
 	}
 }

@@ -1,5 +1,6 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { remapPanes } from '../utils/pane-remap'
 import {
   foldToolResults,
   POLL_INTERVAL,
@@ -535,5 +536,19 @@ describe('useAgentTranscript', () => {
     await act(async () => resolve(page({})))
     await tick(0)
     expect(mockFetchTranscript).toHaveBeenCalledTimes(3)
+  })
+})
+
+describe('useAgentTranscript and shifted ids', () => {
+  it('a pane id that names another pane now starts again', async () => {
+    mockFetchTranscript.mockResolvedValue(page({ reset: true }))
+    const a = renderHook(() => useAgentTranscript('%1'))
+    await tick()
+    expect(a.result.current.loaded).toBe(true)
+    a.unmount()
+    remapPanes({ moved: new Map(), stale: new Set(['%1']) })
+    const b = renderHook(() => useAgentTranscript('%1'))
+    expect(b.result.current.loaded).toBe(false)
+    b.unmount()
   })
 })

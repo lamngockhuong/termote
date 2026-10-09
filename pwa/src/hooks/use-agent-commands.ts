@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { onPaneRemap } from '../utils/pane-remap'
 import { type AgentCommand, fetchAgentCommands } from './use-mux-api'
 
 // How long a pane's custom commands are reused before they are read again.
@@ -10,6 +11,11 @@ interface Entry {
 }
 
 const cache = new Map<string, Entry>()
+
+// A pane id that names another pane now reads its own list.
+onPaneRemap((shift) => {
+  for (const id of shift.stale) cache.delete(id)
+})
 
 // Drops every cached listing (tests).
 export function clearAgentCommandsCache() {

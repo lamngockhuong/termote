@@ -72,6 +72,30 @@ The directory check only catches mistakes: the shell that opens can still `cd` a
 Windows, the directory must be on a drive letter (`C:\work`), and psmux names and directories
 cannot contain `#`.
 
+### Reordering tabs and workspaces
+
+Tabs keep the order they were made in until you move them, and Termote shows the order the
+backend keeps, so Herdr's own tab bar and sidebar agree with it.
+
+- **Desktop**: drag a tab in the sidebar above or below another tab of the same group; a line
+  shows where it lands. With a tab focused, **Alt+↑** and **Alt+↓** move it one place.
+- **Mobile**: the **Current session** row of the sessions sheet has **↑** and **↓** buttons that
+  move the tab on screen within its group.
+- **Herdr workspaces**: **Move up** and **Move down** in a workspace's **⋯** menu, or drag its
+  header on desktop. A repository's workspace moves together with its worktrees, as in Herdr; a
+  linked worktree cannot be moved on its own.
+
+The controls are hidden while the agent filter or "blocked first" sorting is on, since the list on
+screen is then not the real order. Not supported: tmux sessions (tmux has no session order), tmux
+older than 3.2, psmux on Windows, Herdr older than 0.8.0, and Herdr on Windows for now.
+
+<Aside type="caution">
+With tmux, a tab's id is its window number, and moving a window renumbers the windows it passes.
+Termote keeps your unsent Chat message, attached images and unsaved file edits with their window,
+but a link to a tab (or another device's saved selection) that named a renumbered window opens
+another tab afterwards.
+</Aside>
+
 ### Filtering by Agent Status
 
 When at least one session runs a coding agent, a filter bar appears above the session list (in
@@ -215,8 +239,10 @@ Sessions are managed via termote's `/api/mux/*` endpoints:
 | `/api/mux/snapshot`             | GET         | List all groups/tabs/panes |
 | `/api/mux/tabs`                 | POST        | Create tab (body: `{groupId, name}`) |
 | `/api/mux/tabs/{id}/select`     | POST        | Switch tab (or, for Herdr, the streamed pane) |
-| `/api/mux/tabs/{id}`            | PATCH       | Rename tab (body: `{name}`) |
-| `/api/mux/tabs/{id}`            | DELETE      | Remove tab       |
+| `/api/mux/tabs/{id}`            | PATCH       | Rename tab (body: `{name, key}`; the tab's `key` refuses a stale id with 409) |
+| `/api/mux/tabs/{id}?key=`       | DELETE      | Remove tab (same `key` check) |
+| `/api/mux/tabs/{id}/move`       | POST        | Move a tab within its group (body: `{index}`; answers its new `id`) |
+| `/api/mux/groups/{id}/move`     | POST        | Move a Herdr workspace (body: `{index}`) |
 | `/api/mux/panes/{id}`           | DELETE      | Close a pane (Herdr only, else 501) |
 | `/api/mux/groups`               | POST        | Create a group (body: `{name, cwd}`) |
 | `/api/mux/groups/{id}`          | PATCH       | Rename a group (body: `{name}`) |

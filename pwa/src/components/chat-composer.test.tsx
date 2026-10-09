@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ViewProps } from '../app-views'
+import { resetChatAttachments } from '../hooks/use-chat-attachments'
 import {
   type AgentCommand,
   type AgentPrompt,
@@ -107,6 +108,7 @@ const send = async () => {
 }
 
 beforeEach(() => {
+  resetChatAttachments()
   vi.clearAllMocks()
   sessionStorage.clear()
   transcript.cursor = 'cur1'
@@ -371,6 +373,32 @@ describe('ChatComposer', () => {
     expect(box()).toHaveValue('')
     expect(sessionStorage.getItem('termote-chat-draft:%3')).toBeNull()
     expect(transcript.refresh).toHaveBeenCalled()
+  })
+
+  it('a send that lands after the pane id shifted clears the draft where it is now', async () => {
+    let finish: () => void = () => {}
+    mockSend.mockImplementationOnce(
+      () =>
+        new Promise<void>((r) => {
+          finish = r
+        }),
+    )
+    const { rerender } = render(<ChatComposer {...props()} />)
+    type('hello')
+    fireEvent.click(sendButton())
+    // A move: this pane is %5 now, and %3 names another pane with its own draft
+    sessionStorage.setItem('termote-chat-draft:%5', 'hello')
+    sessionStorage.setItem('termote-chat-draft:%3', 'other pane')
+    rerender(
+      <ChatComposer
+        {...props({ session: { ...props().session, paneId: '%5' } })}
+      />,
+    )
+    await act(async () => {
+      finish()
+    })
+    expect(sessionStorage.getItem('termote-chat-draft:%5')).toBeNull()
+    expect(sessionStorage.getItem('termote-chat-draft:%3')).toBe('other pane')
   })
 
   it('grows to six rows at most', () => {

@@ -284,6 +284,9 @@ The `update` command:
 | `pwa/src/components/quick-actions-menu.tsx`       | Quick actions sheet (opened from a toolbar key on mobile)     |
 | `pwa/src/components/app-header.tsx`               | Header: session chip / tabs, More menu                        |
 | `pwa/src/components/session-switcher-chip.tsx`    | Mobile header chip that opens the sessions sheet              |
+| `pwa/src/utils/reorder.ts`                        | Move up/down and drop indexes, groups that can move           |
+| `pwa/src/utils/pane-remap.ts`                     | Tab keys: state by pane id follows a shifted tmux id          |
+| `pwa/src/utils/chat-draft.ts`                     | Chat view drafts per pane (sessionStorage), remapped          |
 | `pwa/src/components/ui/`                          | Shared UI primitives (Button, Sheet, Menu, Switch, ...)       |
 | `pwa/src/app-views.ts`                            | Views of a pane (terminal, chat, files, changes)              |
 | `pwa/src/ui-style.ts`                             | Interface styles (neutral, terminal, native)                  |
@@ -350,6 +353,7 @@ The `update` command:
 | `server/mux.go`                                   | `Mux` interface + `/api/mux/*` routes                         |
 | `server/mux_tmux.go`                              | tmux/psmux backend                                            |
 | `server/mux_groups.go`                            | `/api/mux/groups*`: create, rename, close a group; cwd check  |
+| `server/mux_reorder.go`                           | `tabs/{id}/move`, `groups/{id}/move`: one slot, coded errors  |
 | `server/mux_herdr.go`                             | Herdr backend                                                 |
 | `server/mux_worktrees.go`                         | `/api/mux/worktrees*`: list, create, open, remove; name check |
 | `server/herdr_worktree_branches.go`               | Each worktree workspace's branch, read in the background      |
@@ -492,6 +496,37 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   worktrees → 409 `has_worktrees`, closed in Herdr), `workspace_not_found` → 404 (Herdr answers a method it lacks with
   `invalid_request`, so an older Herdr gets a 500, not 501). A request that waited past
   `muxTimeout` for another group change gets 503 `busy`. Closing a group ends every process in it
+- **Reordering** (`POST /api/mux/tabs/{id}/move` and `POST /api/mux/groups/{id}/move`, both
+  `{index}` → `{ok, id}`; `server/mux_reorder.go`, `caps.reorderTabs`/`caps.reorderGroups`):
+  `writeGuard` (same-site JSON), `requireWriteRole` first (the view-only role, #236, must refuse
+  both), `requireMethod(POST)`, the cap checked before the 8 KB body (501 `unsupported`, nothing
+  sent). `index` is the final 0-based position (a tab among its group's tabs, a group among the
+  movable ones), a JSON integer with `0 <= index < n`, else 400 `invalid_index` (also a list that
+  changed under the move); the current place is 200 with nothing done. One slot for both routes
+  (`reorderLockWait`, `muxTimeout`, then 503 `busy`); once held, the backend runs under
+  `WithoutCancel` for `muxTimeout`. Malformed ids 400 `invalid_tab_id`/`invalid_group_id`,
+  unknown 404 `unknown_tab`/`unknown_group`. Herdr (≥ 0.8.0 from `ping`, never on Windows until
+  checked): the order is read after `invalidate()`; `tab.move` with `insert_index` (`index + 1`
+  moving down; only the canonical `wN:tX` id, never Herdr's positional forms);
+  `workspace.move_block` with the workspace plus every other one of its `repo_key` (as Herdr's
+  drag sends it), before the movable workspace at `index`; a linked worktree → 409
+  `linked_worktree`; `tab_not_found` → 404, `tab_move_failed`/`workspace_not_found` → 400
+  `invalid_index`, `invalid_request` naming the method → 501, else 500 (Herdr's text logged,
+  never returned). The snapshot keeps Herdr's tab order (`number` is a creation number). tmux
+  (the server's version from `display-message -p '#{version}'`, ≥ 3.2 for `-b`, cached once
+  parsed, a failed read retried after 30 s; psmux never, its `move-window` ignores `-s`):
+  `list-windows -t <session>`, one `move-window -b|-a -s <exact> -t <exact window at index>`,
+  `-d` only for a window that is not current, then the window found again by `@N` and checked
+  like `tmuxWindow.matches`; the answer is its new id. The ids of the shifted run change:
+  `Tab.key` (tmux `@N`, Herdr the id) lets every device follow them (`pwa/src/utils/pane-remap.ts`:
+  drafts, attachments, file edits, the Files/Changes stores and the page's last agent statuses
+  move; transcript, prompt and command caches of a shifted id are dropped; rename form and close
+  dialog follow the key), and the push watcher
+  keys statuses by the pane's `%N`. `DELETE /tabs/{id}?key=` and `PATCH /tabs/{id}` `{name,
+  key}` act on `@N` only while it sits at the id's index, else 409 `changed` (Herdr: key ≠ id →
+  409); without a key, as before. Accepted gaps: deep links and saved selections to a shifted
+  index open another tab; `send-keys` and the stream carry no key, so keys typed on another
+  device within one poll of a move can reach the window that took the id
 - **Worktrees** (`GET /api/mux/worktrees?groupId=` → `{repoName, worktrees, branches}`,
   `POST /api/mux/worktrees` `{groupId, branch, base, label}` → `{ok, id}`, `POST
   /api/mux/worktrees/open` `{groupId, branch}` → `{ok, id, alreadyOpen}`, `DELETE
@@ -535,7 +570,11 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   exposes every workspace; accepted). `TMUX_SESSION` (default `main`; no `:`, `.`, leading `=`
   or `$`) keeps group id = its name and bare tab ids (`0`), so links, saved selections and E2E
   keep working; any other session is tmux's own session id: group `$3`, tab/pane `$3:1`, which
-  a rename keeps and a tmux server restart changes. A window name is never an id. Every command
+  a rename keeps and a tmux server restart changes. A window name is never an id. A window
+  index shifts with a move or `renumber-windows`, so each tab also carries `Tab.key`, tmux's
+  window id `@N` (read in `tmuxListFormat` before the names; psmux keys a tab by its id until
+  its window ids are checked to be unique on the server).
+  Every command
   targets exactly: `$N:=i`, or `=<TMUX_SESSION>:=i` (each `=` turns off tmux's prefix and
   pattern matching, so `ma` never reaches `main` nor a missing index 9 a window named `9x`), and
   `new-window -t <session>:`; psmux (Windows, `tmuxIsPsmux`) has no `=` before an index and

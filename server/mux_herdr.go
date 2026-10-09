@@ -132,9 +132,10 @@ var herdrCodexSession = findCodexSession
 func (m *herdrMux) Caps() Caps {
 	v, _ := m.version.Load().(string)
 	start := herdrCanStartAgents(v)
+	reorder := herdrCanReorder(v, herdrStartGOOS)
 	return Caps{ClientSideSelect: true, Scroll: true, DriveSize: true, AgentChat: true, Files: true, Groups: true,
 		AgentStart: start, AgentStartCodex: start && agentStartKind("codex"),
-		Worktrees: herdrCanWorktrees(v, herdrStartGOOS)}
+		Worktrees: herdrCanWorktrees(v, herdrStartGOOS), ReorderTabs: reorder, ReorderGroups: reorder}
 }
 
 // herdrStartGOOS is the OS the worktree gate and a start's idle check
@@ -154,6 +155,16 @@ const herdrWorktreesMin = "0.9.2"
 // Windows until someone checks them there.
 func herdrCanWorktrees(v, goos string) bool {
 	return goos != "windows" && versionRe.MatchString(v) && compareVersions(v, herdrWorktreesMin) >= 0
+}
+
+// herdrReorderMin is the first Herdr with workspace.move_block, which moves
+// a worktree group's workspaces together (tab.move is older).
+const herdrReorderMin = "0.8.0"
+
+// herdrCanReorder: tabs and workspaces can be moved on Herdr version v. Not
+// on Windows until someone checks it there.
+func herdrCanReorder(v, goos string) bool {
+	return goos != "windows" && versionRe.MatchString(v) && compareVersions(v, herdrReorderMin) >= 0
 }
 
 // herdrAgentStartMin is the first Herdr whose agent.start waits for a new
@@ -446,8 +457,8 @@ type herdrLayout struct {
 	} `json:"panes"`
 }
 
-// mapHerdrSnapshot orders workspaces and tabs by their herdr number and panes
-// top-left first, the way they appear on the desktop.
+// mapHerdrSnapshot orders workspaces by their herdr number, tabs as herdr
+// lists them and panes top-left first, the way they appear on the desktop.
 func mapHerdrSnapshot(s herdrSnapshot) herdrView {
 	type paneKey struct{ y, x int }
 	layouts := map[string]herdrLayout{}
@@ -491,15 +502,15 @@ func mapHerdrSnapshot(s herdrSnapshot) herdrView {
 		})
 	}
 
-	tabs := s.Tabs
-	sort.SliceStable(tabs, func(i, j int) bool { return tabs[i].Number < tabs[j].Number })
+	// A tab's number is the one it got when created, not its position: a
+	// moved tab keeps it. session.snapshot lists them in position order.
 	tabsByWS := map[string][]Tab{}
-	for _, t := range tabs {
+	for _, t := range s.Tabs {
 		panes := panesByTab[t.ID]
 		if panes == nil {
 			panes = []Pane{}
 		}
-		tabsByWS[t.WorkspaceID] = append(tabsByWS[t.WorkspaceID], Tab{ID: t.ID, Name: t.Label, Panes: panes})
+		tabsByWS[t.WorkspaceID] = append(tabsByWS[t.WorkspaceID], Tab{ID: t.ID, Key: t.ID, Name: t.Label, Panes: panes})
 	}
 
 	wss := s.Workspaces
@@ -789,7 +800,12 @@ func (m *herdrMux) NewTab(ctx context.Context, groupID, name string) (string, er
 	return res.Tab.ID, nil
 }
 
-func (m *herdrMux) CloseTab(ctx context.Context, tabID string) error {
+// CloseTab closes a tab. A Herdr tab id never changes, so it is its key: a
+// key naming another tab is a client mistaking one for the other.
+func (m *herdrMux) CloseTab(ctx context.Context, tabID, key string) error {
+	if key != "" && key != tabID {
+		return errTabChanged
+	}
 	if err := m.requireTab(ctx, tabID); err != nil {
 		return err
 	}
@@ -798,7 +814,10 @@ func (m *herdrMux) CloseTab(ctx context.Context, tabID string) error {
 	return herdrInputError(err)
 }
 
-func (m *herdrMux) RenameTab(ctx context.Context, tabID, name string) error {
+func (m *herdrMux) RenameTab(ctx context.Context, tabID, name, key string) error {
+	if key != "" && key != tabID {
+		return errTabChanged
+	}
 	if name == "" {
 		return inputError("name is required")
 	}
@@ -811,6 +830,156 @@ func (m *herdrMux) RenameTab(ctx context.Context, tabID, name string) error {
 	err := m.rpc.call(ctx, "tab.rename", map[string]string{"tab_id": tabID, "label": name}, nil)
 	m.invalidate()
 	return herdrInputError(err)
+}
+
+// MoveTab moves a tab within its workspace through tab.move, whose
+// insert_index is a gap in the list before the tab is taken out. The order
+// is read fresh: the cached view can be 30 s old. The id never changes.
+func (m *herdrMux) MoveTab(ctx context.Context, tabID string, index int) (string, error) {
+	if !m.Caps().ReorderTabs {
+		return "", errUnsupported
+	}
+	if !herdrTabIDRe.MatchString(tabID) {
+		return "", errInvalidTabID
+	}
+	m.invalidate()
+	v, err := m.view(ctx)
+	if err != nil {
+		return "", err
+	}
+	src, n := -1, 0
+	for _, g := range v.snap.Groups {
+		for i, t := range g.Tabs {
+			if t.ID == tabID {
+				src, n = i, len(g.Tabs)
+			}
+		}
+	}
+	switch {
+	case src < 0:
+		return "", errUnknownTab
+	case index >= n:
+		return "", errInvalidIndex
+	case index == src:
+		return tabID, nil
+	}
+	insert := index
+	if index > src {
+		insert = index + 1
+	}
+	err = m.rpc.call(ctx, "tab.move", map[string]any{"tab_id": tabID, "insert_index": insert}, nil)
+	m.invalidate()
+	if err != nil {
+		return "", herdrMoveError(err, "tab.move")
+	}
+	return tabID, nil
+}
+
+// MoveGroup moves a workspace through workspace.move_block, as Herdr's own
+// sidebar drag does: a linked worktree cannot move, and any other workspace
+// takes with it every workspace of its repository, packed after it. index
+// is the position among the workspaces that can move (not linked).
+func (m *herdrMux) MoveGroup(ctx context.Context, groupID string, index int) error {
+	if !m.Caps().ReorderGroups {
+		return errUnsupported
+	}
+	if !herdrWorkspaceIDRe.MatchString(groupID) {
+		return errInvalidGroupID
+	}
+	m.invalidate()
+	v, err := m.view(ctx)
+	if err != nil {
+		return err
+	}
+	ids, block, rest, pos, err := herdrMovePlan(v, groupID, index)
+	if err != nil {
+		return err
+	}
+	// Its own place: nothing to do, unless its block is scattered, which
+	// the call packs.
+	if pos == index && contiguous(ids, block) {
+		return nil
+	}
+	params := map[string]any{"workspace_ids": block}
+	if index < len(rest) {
+		params["before_workspace_id"] = rest[index]
+	}
+	err = m.rpc.call(ctx, "workspace.move_block", params, nil)
+	m.invalidate()
+	if err != nil {
+		return herdrMoveError(err, "workspace.move_block")
+	}
+	return nil
+}
+
+// herdrMovePlan reads what a workspace move needs from v: every workspace id
+// in order, the block that moves (groupID, then the other workspaces of its
+// repository in order), the workspaces that can move outside the block, and
+// groupID's position among those that can move.
+func herdrMovePlan(v herdrView, groupID string, index int) (ids, block, rest []string, pos int, err error) {
+	ref := v.worktrees[groupID]
+	pos, movable := -1, 0
+	for _, g := range v.snap.Groups {
+		ids = append(ids, g.ID)
+		if g.ID == groupID {
+			pos = movable
+		}
+		if !v.worktrees[g.ID].linked {
+			movable++
+		}
+	}
+	switch {
+	case pos < 0:
+		return nil, nil, nil, 0, errUnknownGroup
+	case ref.linked:
+		return nil, nil, nil, 0, errLinkedWorktree
+	case index >= movable:
+		return nil, nil, nil, 0, errInvalidIndex
+	}
+	block = []string{groupID}
+	inBlock := map[string]bool{groupID: true}
+	for _, id := range ids {
+		if id != groupID && ref.repoKey != "" && v.worktrees[id].repoKey == ref.repoKey {
+			block = append(block, id)
+			inBlock[id] = true
+		}
+	}
+	for _, id := range ids {
+		if !inBlock[id] && !v.worktrees[id].linked {
+			rest = append(rest, id)
+		}
+	}
+	return ids, block, rest, pos, nil
+}
+
+// contiguous reports whether block sits in ids as one run, in its order.
+func contiguous(ids, block []string) bool {
+	i := slices.Index(ids, block[0])
+	return i+len(block) <= len(ids) && slices.Equal(ids[i:i+len(block)], block)
+}
+
+// herdrMoveError maps Herdr's replies to tab.move and workspace.move_block.
+// The item was found just before the call, so a not-found or out-of-range
+// reply means the list changed meanwhile. Anything else is a plain error:
+// the route logs Herdr's message and never returns it.
+func herdrMoveError(err error, method string) error {
+	var he *herdrError
+	if !errors.As(err, &he) {
+		return err
+	}
+	switch he.Code {
+	case "tab_not_found":
+		return errUnknownTab
+	case "tab_move_failed", "workspace_not_found":
+		return errInvalidIndex
+	case "unknown_method":
+		return errUnsupported
+	case "invalid_request":
+		if strings.Contains(he.Message, "`"+method+"`") {
+			return errUnsupported
+		}
+	}
+	return err
 }
 
 // NewGroup creates a workspace in the background (focus: false, so the

@@ -26,7 +26,12 @@ import { HelpModal } from './components/help-modal'
 import { KeyboardToolbar } from './components/keyboard-toolbar'
 import { PaneStrip } from './components/pane-strip'
 import { ReadOnlyBar } from './components/read-only-bar'
-import { type GroupActions, SessionSidebar } from './components/session-sidebar'
+import {
+  type GroupActions,
+  moveProblem,
+  type ReorderActions,
+  SessionSidebar,
+} from './components/session-sidebar'
 import { SettingsModal } from './components/settings-modal'
 import { SidePanel } from './components/side-panel'
 import { type TerminalHandle, TerminalView } from './components/terminal-view'
@@ -211,6 +216,9 @@ export default function App({
     openWorktree,
     showGroup,
     removeWorktree,
+    moveTab,
+    moveGroup,
+    moving,
     isReady,
     isServerReachable,
     refreshSessions,
@@ -258,15 +266,28 @@ export default function App({
     [sessions, activeSession.paneId],
   )
   // Closing a tab ends whatever runs in it, so every way to close one (tab
-  // bar, sidebar, swipe, Delete key) asks first.
-  const [pendingRemoveId, setPendingRemoveId] = useState<string | null>(null)
-  const pendingRemove = sessions.find((s) => s.id === pendingRemoveId)
-  const cancelRemove = useCallback(() => setPendingRemoveId(null), [])
+  // bar, sidebar, swipe, Delete key) asks first. The question holds the
+  // tab's key: a move that shifts its id (tmux) leaves it on the same tab,
+  // and it goes away with the tab.
+  const [pendingRemoveKey, setPendingRemoveKey] = useState<string | null>(null)
+  const pendingRemove = sessions.find(
+    (s) => (s.key ?? s.id) === pendingRemoveKey,
+  )
+  const requestRemove = useCallback(
+    (id: string) => {
+      const session = sessions.find((s) => s.id === id)
+      setPendingRemoveKey(session?.key ?? id)
+    },
+    [sessions],
+  )
+  const cancelRemove = useCallback(() => setPendingRemoveKey(null), [])
   const confirmRemove = useCallback(() => {
-    // Only reachable from the open dialog, which needs a pending id
-    removeSession(pendingRemoveId!)
-    setPendingRemoveId(null)
-  }, [pendingRemoveId, removeSession])
+    // Only reachable from the open dialog, which needs a pending tab
+    removeSession(pendingRemove!.id).catch(() =>
+      showToast('The tab changed; try again', 'warning'),
+    )
+    setPendingRemoveKey(null)
+  }, [pendingRemove, removeSession, showToast])
   // Closing a pane ends what runs in it too, so it asks the same way.
   const [pendingPaneId, setPendingPaneId] = useState<string | null>(null)
   const pendingPane = activeSession.panes?.find((p) => p.id === pendingPaneId)
@@ -310,6 +331,19 @@ export default function App({
         onRemoveWorktree: (groupId: string) => setWorktreeRemove({ groupId }),
       }
     : {}
+  // Moving tabs and groups, where the server offers it; a refusal is told
+  // in a toast.
+  const reorder: ReorderActions = {
+    tabs: !!mux.caps.reorderTabs,
+    groups: !!mux.caps.reorderGroups,
+    onMoveTab: (id, index) =>
+      moveTab(id, index).catch((err) => showToast(moveProblem(err), 'danger')),
+    onMoveGroup: (id, index) =>
+      moveGroup(id, index).catch((err) =>
+        showToast(moveProblem(err), 'danger'),
+      ),
+    moving,
+  }
   const groupActions: GroupActions | undefined = mux.caps.groups
     ? {
         noun: groupNoun,
@@ -919,7 +953,7 @@ export default function App({
             activeId={activeSession.id}
             onSelect={switchSession}
             onAdd={addSession}
-            onRemove={setPendingRemoveId}
+            onRemove={requestRemove}
             onUpdate={updateSession}
             isCollapsed={sidebarCollapsed}
             onToggleCollapse={toggleSidebarCollapsed}
@@ -927,6 +961,7 @@ export default function App({
             onFilterChange={(f) => updateSetting('sidebarFilter', f)}
             sortBlockedFirst={settings.sortBlockedFirst}
             groupActions={groupActions}
+            reorder={reorder}
           />
         )}
 
@@ -938,7 +973,7 @@ export default function App({
             activeId={activeSession.id}
             onSelect={handleMobileSelect}
             onAdd={handleMobileAdd}
-            onRemove={setPendingRemoveId}
+            onRemove={requestRemove}
             onUpdate={updateSession}
             isOpen={sidebarOpen}
             onClose={() => setSidebarOpen(false)}
@@ -947,6 +982,7 @@ export default function App({
             onFilterChange={(f) => updateSetting('sidebarFilter', f)}
             sortBlockedFirst={settings.sortBlockedFirst}
             groupActions={groupActions}
+            reorder={reorder}
           />
         )}
 
@@ -961,7 +997,7 @@ export default function App({
             canRemoveTab={sessions.length > 1}
             onSelectTab={switchSession}
             onAddTab={() => addSession('New')}
-            onRemoveTab={setPendingRemoveId}
+            onRemoveTab={requestRemove}
             connectionState={connectionState}
             onRetry={() => terminalRef.current?.reconnect()}
             sessionsOpen={sidebarOpen}

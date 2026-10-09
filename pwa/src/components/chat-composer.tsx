@@ -17,6 +17,7 @@ import { useAgentTranscript } from '../hooks/use-agent-transcript'
 import { useChatAttachments } from '../hooks/use-chat-attachments'
 import { AgentRequestError, sendAgentMessage } from '../hooks/use-mux-api'
 import { toAgentStatus } from '../types/session'
+import { loadDraft, saveDraft } from '../utils/chat-draft'
 import {
   BUILTIN_COMMANDS,
   commandOf,
@@ -41,25 +42,6 @@ const MAX_ROWS = 6
 
 // An agent without built-ins: one array, so the merged list stays memoized
 const NO_COMMANDS: SlashCommand[] = []
-
-const draftKey = (paneId: string) => `termote-chat-draft:${paneId}`
-
-function loadDraft(paneId: string): string {
-  try {
-    return sessionStorage.getItem(draftKey(paneId)) ?? ''
-  } catch {
-    return ''
-  }
-}
-
-function saveDraft(paneId: string, text: string) {
-  try {
-    if (text) sessionStorage.setItem(draftKey(paneId), text)
-    else sessionStorage.removeItem(draftKey(paneId))
-  } catch {
-    // A private window without storage keeps the draft in memory only.
-  }
-}
 
 const encoder = new TextEncoder()
 export const byteLength = (s: string) => encoder.encode(s).length
@@ -166,6 +148,10 @@ export function ChatComposer({
     [],
   )
   const images = useChatAttachments(paneId, showError)
+  // The pane and its images now: a tmux window move can change the pane's
+  // id while a message is sending.
+  const latest = useRef({ paneId, images })
+  latest.current = { paneId, images }
 
   // Command suggestions: open while the message is only "/name", until
   // Escape; the highlighted row resets as the list changes.
@@ -241,8 +227,9 @@ export function ChatComposer({
     setNotice(null)
     try {
       await sendAgentMessage(paneId, message, t.cursor, imageIds)
-      update('')
-      if (imageIds.length > 0) images.clear()
+      setText('')
+      saveDraft(latest.current.paneId, '')
+      if (imageIds.length > 0) latest.current.images.clear()
       t.refresh()
       if (cmd?.terminal && message.trim() === `/${cmd.name}`) {
         showView(TERMINAL_VIEW_ID)

@@ -1,5 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { remapPanes } from '../utils/pane-remap'
 import {
   COMMANDS_TTL,
   clearAgentCommandsCache,
@@ -94,5 +95,18 @@ describe('useAgentCommands', () => {
     const c = renderHook(() => useAgentCommands('%1', true))
     await waitFor(() => expect(c.result.current).toEqual([deploy]))
     expect(mockFetch).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('useAgentCommands and shifted ids', () => {
+  it('a pane id that names another pane now reads its own list', async () => {
+    mockFetch.mockResolvedValue([deploy])
+    const a = renderHook(() => useAgentCommands('%1', true))
+    await waitFor(() => expect(a.result.current).toEqual([deploy]))
+    a.unmount()
+    remapPanes({ moved: new Map(), stale: new Set(['%1']) })
+    const b = renderHook(() => useAgentCommands('%1', true))
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2))
+    b.unmount()
   })
 })

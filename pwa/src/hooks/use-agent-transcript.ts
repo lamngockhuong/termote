@@ -1,4 +1,5 @@
 import { useCallback, useSyncExternalStore } from 'react'
+import { onPaneRemap } from '../utils/pane-remap'
 import {
   AgentRequestError,
   fetchTranscript,
@@ -256,6 +257,11 @@ export function useAgentTranscript(paneId: string | undefined) {
   const loadOlder = useCallback(() => store.loadOlder(), [store])
   return { ...state, refresh, loadOlder }
 }
+
+// A pane id that names another pane now starts again from the server.
+onPaneRemap((shift) => {
+  for (const id of shift.stale) stores.delete(id)
+})
 
 // For tests: forget every store.
 export function resetAgentTranscriptStores() {

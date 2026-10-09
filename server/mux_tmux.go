@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"regexp"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -245,11 +246,78 @@ type tmuxMux struct{}
 func (tmuxMux) Name() string { return "tmux" }
 
 func (tmuxMux) Caps() Caps {
-	return Caps{CopyMode: true, AgentChat: agentProcSupported, Files: tmuxFilesSupported, Groups: true}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	return Caps{CopyMode: true, AgentChat: agentProcSupported, Files: tmuxFilesSupported, Groups: true,
+		ReorderTabs: tmuxCanReorder(ctx)}
 }
 
-// tmuxListFormat is one window per line, every session's.
-const tmuxListFormat = "#{session_id}:#{window_index}:#{window_active}:#{pane_id}:#{pane_pid}:#{session_name}:#{window_name}"
+// tmuxReorderMin is the first tmux whose move-window takes -b (insert
+// before the target window).
+var tmuxReorderMin = [2]int{3, 2}
+
+// tmuxVersionRetry bounds how often a failed version read is tried again.
+const tmuxVersionRetry = 30 * time.Second
+
+// tmuxVersion caches the tmux server's version once read; a failure is
+// remembered only for tmuxVersionRetry.
+var tmuxVersion struct {
+	sync.Mutex
+	major, minor int
+	ok           bool
+	failedAt     time.Time
+}
+
+// resetTmuxVersion forgets the cached version (tests).
+func resetTmuxVersion() {
+	tmuxVersion.Lock()
+	defer tmuxVersion.Unlock()
+	tmuxVersion.ok, tmuxVersion.failedAt = false, time.Time{}
+}
+
+// tmuxCanReorder reports whether a window can be moved: never on psmux,
+// whose move-window ignores -s, else the server's tmux (not the client's
+// `tmux -V`, which can differ) from 3.2.
+func tmuxCanReorder(ctx context.Context) bool {
+	if tmuxIsPsmux {
+		return false
+	}
+	tmuxVersion.Lock()
+	defer tmuxVersion.Unlock()
+	if !tmuxVersion.ok {
+		if time.Since(tmuxVersion.failedAt) < tmuxVersionRetry {
+			return false
+		}
+		out, err := tmuxCmd(ctx, "display-message", "-p", "#{version}").Output()
+		major, minor, ok := parseTmuxVersion(strings.TrimSpace(string(out)))
+		if err != nil || !ok {
+			tmuxVersion.failedAt = time.Now()
+			return false
+		}
+		tmuxVersion.major, tmuxVersion.minor, tmuxVersion.ok = major, minor, true
+	}
+	major, minor := tmuxVersion.major, tmuxVersion.minor
+	return major > tmuxReorderMin[0] || major == tmuxReorderMin[0] && minor >= tmuxReorderMin[1]
+}
+
+// tmuxVersionRe reads a tmux version: "3.2a", "3.4", "next-3.6".
+var tmuxVersionRe = regexp.MustCompile(`^(?:next-)?([0-9]{1,4})\.([0-9]{1,4})[a-z]?$`)
+
+// parseTmuxVersion reads the major and minor number of a tmux version;
+// "master" and anything else unknown are not ok.
+func parseTmuxVersion(s string) (major, minor int, ok bool) {
+	m := tmuxVersionRe.FindStringSubmatch(s)
+	if m == nil {
+		return 0, 0, false
+	}
+	major, _ = strconv.Atoi(m[1])
+	minor, _ = strconv.Atoi(m[2])
+	return major, minor, true
+}
+
+// tmuxListFormat is one window per line, every session's. window_id (@N) is
+// the tab's key: a window keeps it when a move shifts its index.
+const tmuxListFormat = "#{session_id}:#{window_index}:#{window_active}:#{pane_id}:#{pane_pid}:#{window_id}:#{session_name}:#{window_name}"
 
 // listWindowsAttempts bounds retries of an empty list-windows reply.
 const listWindowsAttempts = 5
@@ -368,17 +436,20 @@ type tmuxGroup struct {
 
 // tmuxListLine is one line of tmuxListFormat.
 type tmuxListLine struct {
-	sessionID, index, paneID, panePID, sessionName, windowName string
-	active                                                     bool
+	sessionID, index, paneID, panePID, windowID, sessionName, windowName string
+	active                                                               bool
 }
 
+// tmuxWindowIDRe is a tmux window id, a tab's key.
+var tmuxWindowIDRe = regexp.MustCompile(`^@[0-9]{1,9}$`)
+
 func parseTmuxListLine(line string) (tmuxListLine, bool) {
-	parts := strings.SplitN(strings.TrimRight(line, "\r"), ":", 7)
-	if len(parts) != 7 || !tmuxSessionIDRe.MatchString(parts[0]) || !tmuxIndexRe.MatchString(parts[1]) {
+	parts := strings.SplitN(strings.TrimRight(line, "\r"), ":", 8)
+	if len(parts) != 8 || !tmuxSessionIDRe.MatchString(parts[0]) || !tmuxIndexRe.MatchString(parts[1]) {
 		return tmuxListLine{}, false
 	}
 	return tmuxListLine{sessionID: parts[0], index: parts[1], active: parts[2] == "1",
-		paneID: parts[3], panePID: parts[4], sessionName: parts[5], windowName: parts[6]}, true
+		paneID: parts[3], panePID: parts[4], windowID: parts[5], sessionName: parts[6], windowName: parts[7]}, true
 }
 
 // hasDefaultSession reports whether list-windows output has a window of
@@ -414,9 +485,19 @@ func parseTmuxWindows(out string) []tmuxGroup {
 			groups = append(groups, g)
 		}
 		id := formatTmuxID(l.sessionID, isDefault, l.index)
+		// psmux keys a tab by its id: whether its window ids are unique on
+		// the server is unchecked (its pane ids are not), and it offers no
+		// move. A tmux that prints none does the same.
+		key, pkey := id, id
+		if !tmuxIsPsmux && tmuxWindowIDRe.MatchString(l.windowID) {
+			key = l.windowID
+		}
+		if !tmuxIsPsmux && tmuxPaneIDRe.MatchString(l.paneID) {
+			pkey = l.paneID
+		}
 		g := &groups[i]
-		g.Tabs = append(g.Tabs, Tab{ID: id, Name: l.windowName, Active: l.active,
-			Panes: []Pane{{ID: id, Active: l.active}}})
+		g.Tabs = append(g.Tabs, Tab{ID: id, Key: key, Name: l.windowName, Active: l.active,
+			Panes: []Pane{{ID: id, Active: l.active, key: pkey}}})
 		g.paneIDs = append(g.paneIDs, l.paneID)
 		g.panePIDs = append(g.panePIDs, l.panePID)
 		g.windowIdx = append(g.windowIdx, l.index)
@@ -692,15 +773,21 @@ func tmuxMissing(err error) bool {
 	return strings.Contains(msg, "can't find session") || strings.Contains(msg, "can't find window")
 }
 
-func (tmuxMux) CloseTab(ctx context.Context, tabID string) error {
+// CloseTab kills a window. With a key, only the window that key names, and
+// only while it still has the index the id names (see keyedTarget).
+func (tmuxMux) CloseTab(ctx context.Context, tabID, key string) error {
 	w, ok := parseTmuxID(tabID)
 	if !ok {
 		return inputError("invalid tab id")
 	}
-	return tmuxCmd(ctx, "kill-window", "-t", w.target()).Run()
+	target, err := keyedTarget(ctx, w, tabID, key)
+	if err != nil {
+		return err
+	}
+	return tmuxCmd(ctx, "kill-window", "-t", target).Run()
 }
 
-func (tmuxMux) RenameTab(ctx context.Context, tabID, name string) error {
+func (tmuxMux) RenameTab(ctx context.Context, tabID, name, key string) error {
 	w, ok := parseTmuxID(tabID)
 	if !ok {
 		return inputError("invalid tab id")
@@ -711,8 +798,143 @@ func (tmuxMux) RenameTab(ctx context.Context, tabID, name string) error {
 	if !validTmuxName(name) {
 		return inputError("invalid tab name")
 	}
-	return tmuxCmd(ctx, "rename-window", "-t", w.target(), tmuxLiteral(name)).Run()
+	target, err := keyedTarget(ctx, w, tabID, key)
+	if err != nil {
+		return err
+	}
+	return tmuxCmd(ctx, "rename-window", "-t", target, tmuxLiteral(name)).Run()
 }
+
+// keyedTarget is the target of a close or rename. Without a key it is the
+// window at the id's index, as before keys. With one (a window id, @N) the
+// window must still sit at that index, else errTabChanged (a move or
+// renumber-windows shifted it, and the id now names another window); the
+// command then targets @N, so a shift right after the check still reaches
+// the window confirmed. psmux without window ids keys a tab by its id.
+func keyedTarget(ctx context.Context, w tmuxWindow, tabID, key string) (string, error) {
+	switch {
+	case key == "":
+		return w.target(), nil
+	case key == tabID && tmuxIsPsmux:
+		return w.target(), nil
+	case !tmuxWindowIDRe.MatchString(key):
+		return "", errInvalidTabID
+	}
+	wins, err := tmuxSessionWindows(ctx, w.session)
+	if err != nil {
+		return "", err
+	}
+	for _, win := range wins {
+		if win.index == w.index {
+			if win.id != key {
+				return "", errTabChanged
+			}
+			if tmuxIsPsmux {
+				return w.target(), nil
+			}
+			return key, nil
+		}
+	}
+	return "", errTabChanged
+}
+
+// tmuxSessionWindow is one window of list-windows on one session.
+type tmuxSessionWindow struct {
+	index, id, sessionID, sessionName string
+	active                            bool
+}
+
+// tmuxSessionWindows lists one session's windows in index order (tmux's
+// own). A missing session is errUnknownTab.
+func tmuxSessionWindows(ctx context.Context, session string) ([]tmuxSessionWindow, error) {
+	out, err := tmuxCmd(ctx, "list-windows", "-t", session, "-F",
+		"#{window_index}:#{window_active}:#{window_id}:#{session_id}:#{session_name}").Output()
+	if err != nil {
+		if tmuxMissing(err) {
+			return nil, errUnknownTab
+		}
+		return nil, err
+	}
+	var wins []tmuxSessionWindow
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		p := strings.SplitN(strings.TrimRight(line, "\r"), ":", 5)
+		if len(p) != 5 || !tmuxIndexRe.MatchString(p[0]) {
+			continue
+		}
+		wins = append(wins, tmuxSessionWindow{index: p[0], active: p[1] == "1", id: p[2], sessionID: p[3], sessionName: p[4]})
+	}
+	return wins, nil
+}
+
+// MoveTab moves a window to position index among its session's windows
+// with one move-window: -b before the window now at index when moving up,
+// -a after it when moving down. tmux shifts only the run of windows from
+// there to the first free index, so the window's index, and those of the
+// run, change; it is found again by its window id. -d keeps the current
+// window current when another one moves; the current one moves without it,
+// which keeps it current.
+func (tmuxMux) MoveTab(ctx context.Context, tabID string, index int) (string, error) {
+	if !tmuxCanReorder(ctx) {
+		return "", errUnsupported
+	}
+	w, ok := parseTmuxID(tabID)
+	if !ok {
+		return "", errInvalidTabID
+	}
+	wins, err := tmuxSessionWindows(ctx, w.session)
+	if err != nil {
+		return "", err
+	}
+	src := slices.IndexFunc(wins, func(x tmuxSessionWindow) bool { return x.index == w.index })
+	switch {
+	case src < 0 || !w.matches(wins[src].sessionID, wins[src].sessionName, w.index):
+		return "", errUnknownTab
+	case index >= len(wins):
+		return "", errInvalidIndex
+	case index == src:
+		return tabID, nil
+	}
+	dst := tmuxWindow{session: w.session, sessionID: w.sessionID, index: wins[index].index}
+	key := wins[src].id
+	args := []string{"move-window"}
+	if !wins[src].active {
+		args = append(args, "-d")
+	}
+	if index < src {
+		args = append(args, "-b")
+	} else {
+		args = append(args, "-a")
+	}
+	args = append(args, "-s", w.target(), "-t", dst.target())
+	if _, err := tmuxCmd(ctx, args...).Output(); err != nil {
+		var ee *exec.ExitError
+		switch {
+		case tmuxMissing(err):
+			return "", errInvalidIndex
+		case errors.As(err, &ee) && (strings.Contains(string(ee.Stderr), "unknown flag") ||
+			strings.Contains(string(ee.Stderr), "usage:")):
+			return "", errUnsupported
+		}
+		return "", err
+	}
+	after, err := tmuxSessionWindows(ctx, w.session)
+	if err != nil {
+		return "", err
+	}
+	for _, x := range after {
+		if x.id == key {
+			moved := tmuxWindow{session: w.session, sessionID: w.sessionID, index: x.index}
+			if !moved.matches(x.sessionID, x.sessionName, x.index) {
+				break
+			}
+			return formatTmuxID(x.sessionID, x.sessionName == tmuxSession, x.index), nil
+		}
+	}
+	return "", fmt.Errorf("move-window: window %s not found after the move", key)
+}
+
+// MoveGroup is not offered: tmux has no session order.
+func (tmuxMux) MoveGroup(context.Context, string, int) error { return errUnsupported }
 
 // validTmuxGroupName accepts the name of a new session: a valid name with
 // none of the characters tmux reads in a target (":", ".", a pattern's "*?["),

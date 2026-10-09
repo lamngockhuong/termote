@@ -43,8 +43,8 @@ func TestPsmuxTargets(t *testing.T) {
 	if err := m.SelectTab(ctx, "$3:1"); err != nil {
 		t.Fatal(err)
 	}
-	m.CloseTab(ctx, "$3:2")
-	m.RenameTab(ctx, "0", "x")
+	m.CloseTab(ctx, "$3:2", "")
+	m.RenameTab(ctx, "0", "x", "")
 	m.SendKeys(ctx, "$3:0", "ls")
 	want := []string{
 		"display-message -p -t $3:1 #{session_id}:#{window_index}:#{session_name}",
@@ -141,5 +141,31 @@ func TestPsmuxAgentWriterTargets(t *testing.T) {
 		if err := m.SendKeySequence(ctx, bad, []string{"Enter"}); !errors.As(err, &ie) {
 			t.Errorf("SendKeySequence(%q) = %v", bad, err)
 		}
+	}
+}
+
+// psmux keys a tab by its id (whether its window ids are unique on the
+// server is unchecked), so a close or rename with that key acts on the id's
+// target with nothing listed first.
+func TestPsmuxTabKeys(t *testing.T) {
+	orig := tmuxSession
+	defer func() { tmuxSession = orig }()
+	tmuxSession = "main"
+	usePsmux(t, true)
+	args := useFakeTmuxScript(t, map[string]fakeTmuxReply{"list-windows": {out: "$0:0:1:%1:1:@4:main:sh\n"}})
+	snap, err := (tmuxMux{}).Snapshot(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tab := snap.Groups[0].Tabs[0]; tab.Key != "0" || tab.Panes[0].key != "0" {
+		t.Errorf("tab key %q, pane key %q; want the id", tab.Key, tab.Panes[0].key)
+	}
+	before := len(strings.Split(strings.TrimSpace(args()), "\n"))
+	if err := (tmuxMux{}).CloseTab(context.Background(), "0", "0"); err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(args()), "\n")
+	if len(lines) != before+1 || lines[before] != "kill-window -t =main:0" {
+		t.Errorf("argv = %q", lines[before:])
 	}
 }

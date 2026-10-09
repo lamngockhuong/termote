@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ViewProps } from '../app-views'
 import type { TranscriptState } from '../hooks/use-agent-transcript'
+import { resetChatAttachments } from '../hooks/use-chat-attachments'
 import type { AgentPrompt, TranscriptEntry } from '../hooks/use-mux-api'
 import ChatView, { chatLayout, RENDER_WINDOW } from './chat-view'
 import { OpenTerminalButton } from './open-terminal-button'
@@ -83,6 +84,7 @@ function layout(
 }
 
 beforeEach(() => {
+  resetChatAttachments()
   vi.clearAllMocks()
   set({})
   promptStore.prompt = null

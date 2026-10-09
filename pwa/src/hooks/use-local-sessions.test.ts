@@ -16,6 +16,8 @@ const {
   mockOpenWorktree,
   mockRemoveWorktree,
   mockSnapshot,
+  mockMoveTab,
+  mockMoveGroup,
   mockFetchHealth,
   mockReportLargePacketLoss,
 } = vi.hoisted(() => ({
@@ -35,6 +37,8 @@ const {
   mockCreateWorktree: vi.fn(),
   mockOpenWorktree: vi.fn(),
   mockRemoveWorktree: vi.fn(),
+  mockMoveTab: vi.fn(),
+  mockMoveGroup: vi.fn(),
 }))
 
 vi.mock('./use-mux-api', async (importOriginal) => ({
@@ -58,6 +62,8 @@ vi.mock('./use-mux-api', async (importOriginal) => ({
   createGroup: mockCreateGroup,
   renameGroup: mockRenameGroup,
   closeGroup: mockCloseGroup,
+  moveTab: mockMoveTab,
+  moveGroup: mockMoveGroup,
   fetchHealth: mockFetchHealth,
 }))
 
@@ -66,7 +72,9 @@ vi.mock('../utils/large-packet-loss', async (orig) => ({
   reportLargePacketLoss: mockReportLargePacketLoss,
 }))
 
+import { onPaneRemap } from '../utils/pane-remap'
 import { useLocalSessions } from './use-local-sessions'
+import { RequestError } from './use-mux-api'
 
 const WIN_SHELL = { id: '0', name: 'shell', active: true, panes: [] }
 const WIN_VIM = { id: '1', name: 'vim', active: false, panes: [] }
@@ -332,7 +340,7 @@ describe('useLocalSessions', () => {
     await act(async () => {
       await result.current.removeSession('1')
     })
-    expect(mockCloseTab).toHaveBeenCalledWith('1')
+    expect(mockCloseTab).toHaveBeenCalledWith('1', '1')
     expect(result.current.sessions).toHaveLength(1)
   })
 
@@ -370,7 +378,7 @@ describe('useLocalSessions', () => {
     await act(async () => {
       await result.current.updateSession('0', { name: 'renamed' })
     })
-    expect(mockRenameTab).toHaveBeenCalledWith('0', 'renamed')
+    expect(mockRenameTab).toHaveBeenCalledWith('0', 'renamed', '0')
     expect(result.current.sessions[0].name).toBe('renamed')
   })
 
@@ -1403,7 +1411,7 @@ describe('useLocalSessions with herdr', () => {
     await act(async () => {
       await result.current.updateSession('w1:t2', { name: 'renamed' })
     })
-    expect(mockRenameTab).toHaveBeenCalledWith('w1:t2', 'renamed')
+    expect(mockRenameTab).toHaveBeenCalledWith('w1:t2', 'renamed', 'w1:t2')
     const meta = JSON.parse(localStorage.getItem('termote-sessions')!)
     expect(meta).toEqual({ 'herdr:w1:t2': { icon: '⭐', description: '' } })
   })
@@ -1417,7 +1425,7 @@ describe('useLocalSessions with herdr', () => {
     await act(async () => {
       await result.current.removeSession('w1:t2')
     })
-    expect(mockCloseTab).toHaveBeenCalledWith('w1:t2')
+    expect(mockCloseTab).toHaveBeenCalledWith('w1:t2', 'w1:t2')
     expect(JSON.parse(localStorage.getItem('termote-sessions')!)).toEqual({})
   })
 
@@ -1586,5 +1594,150 @@ describe('useLocalSessions group create on herdr', () => {
     expect(
       JSON.parse(localStorage.getItem('termote-selection-herdr')!).groupId,
     ).toBe('w1')
+  })
+})
+
+describe('useLocalSessions — keys and moves', () => {
+  const win = (id: string, key: string, name = key, active = false) => ({
+    id,
+    key,
+    name,
+    active,
+    panes: [{ id, active: true }],
+  })
+
+  beforeEach(() => {
+    localStorage.clear()
+    sessionStorage.clear()
+    vi.clearAllMocks()
+    mockSnapshot.extra = {}
+    mockCloseTab.mockResolvedValue(true)
+    mockMoveTab.mockResolvedValue('1')
+    mockMoveGroup.mockResolvedValue(undefined)
+  })
+
+  it('a tab carries its key, its id without one', async () => {
+    mockFetchTabs.mockResolvedValue([win('1', '@a'), WIN_VIM])
+    const { result } = renderHook(() => useLocalSessions(1000))
+    await act(async () => {})
+    expect(result.current.sessions.map((s) => s.key)).toEqual(['@a', '1'])
+  })
+
+  it('state follows a tab whose id a move shifted', async () => {
+    const shifts: unknown[] = []
+    const off = onPaneRemap((s) => shifts.push(s))
+    mockSnapshot.extra = {
+      caps: { clientSideSelect: true, copyMode: false },
+    }
+    mockFetchTabs.mockResolvedValue([win('1', '@a', 'a', true), win('2', '@b')])
+    const { result } = renderHook(() => useLocalSessions(1000))
+    await act(async () => {})
+    await act(async () => {
+      await result.current.switchSession('2')
+    })
+    sessionStorage.setItem('termote-chat-draft:2', 'hello b')
+    sessionStorage.setItem('termote-chat-draft:1', 'hello a')
+    // b moved to the top: b is 1 now, a is 2
+    mockFetchTabs.mockResolvedValue([win('1', '@b'), win('2', '@a', 'a', true)])
+    await act(async () => {
+      await result.current.refreshSessions()
+    })
+    expect(shifts).toHaveLength(1)
+    expect(result.current.activeSession.name).toBe('@b')
+    expect(result.current.activeSession.id).toBe('1')
+    expect(sessionStorage.getItem('termote-chat-draft:1')).toBe('hello b')
+    expect(sessionStorage.getItem('termote-chat-draft:2')).toBe('hello a')
+    // Nothing shifted: nothing told
+    await act(async () => {
+      await result.current.refreshSessions()
+    })
+    expect(shifts).toHaveLength(1)
+    off()
+  })
+
+  it('a reply older than the one applied is dropped', async () => {
+    mockFetchTabs.mockResolvedValue([win('1', '@a')])
+    const { result } = renderHook(() => useLocalSessions(1000))
+    await act(async () => {})
+    let late: (v: unknown) => void = () => {}
+    mockFetchTabs.mockImplementationOnce(() => new Promise((r) => (late = r)))
+    let first: Promise<void> = Promise.resolve()
+    act(() => {
+      first = result.current.refreshSessions()
+    })
+    mockFetchTabs.mockResolvedValueOnce([win('1', '@a', 'new')])
+    await act(async () => {
+      await result.current.refreshSessions()
+    })
+    await act(async () => {
+      late([win('1', '@a', 'old')])
+      await first
+    })
+    expect(result.current.sessions[0].name).toBe('new')
+  })
+
+  it('moves a tab or a group, then reads the order; one move at a time', async () => {
+    mockFetchTabs.mockResolvedValue([win('1', '@a'), win('2', '@b')])
+    const { result } = renderHook(() => useLocalSessions(1000))
+    await act(async () => {})
+    let finish: (v: string) => void = () => {}
+    mockMoveTab.mockImplementationOnce(() => new Promise((r) => (finish = r)))
+    let moving: Promise<void> = Promise.resolve()
+    act(() => {
+      moving = result.current.moveTab('2', 0)
+    })
+    expect(result.current.moving).toBe(true)
+    // A second move meanwhile is ignored
+    await act(async () => {
+      await result.current.moveGroup('main', 1)
+    })
+    expect(mockMoveGroup).not.toHaveBeenCalled()
+    const reads = mockFetchTabs.mock.calls.length
+    await act(async () => {
+      finish('1')
+      await moving
+    })
+    expect(mockMoveTab).toHaveBeenCalledWith('2', 0)
+    expect(mockFetchTabs.mock.calls.length).toBe(reads + 1)
+    expect(result.current.moving).toBe(false)
+    await act(async () => {
+      await result.current.moveGroup('main', 1)
+    })
+    expect(mockMoveGroup).toHaveBeenCalledWith('main', 1)
+  })
+
+  it('a refused move reaches the caller, after a refresh', async () => {
+    mockFetchTabs.mockResolvedValue([win('1', '@a'), win('2', '@b')])
+    const { result } = renderHook(() => useLocalSessions(1000))
+    await act(async () => {})
+    mockMoveTab.mockRejectedValueOnce(
+      new RequestError(400, 'invalid_index', 'x'),
+    )
+    const reads = mockFetchTabs.mock.calls.length
+    let caught: unknown
+    await act(async () => {
+      await result.current.moveTab('2', 5).catch((e) => (caught = e))
+    })
+    expect((caught as RequestError).code).toBe('invalid_index')
+    expect(mockFetchTabs.mock.calls.length).toBe(reads + 1)
+    expect(result.current.moving).toBe(false)
+  })
+
+  it('closes a tab by its key; a changed tab is refused and told', async () => {
+    mockFetchTabs.mockResolvedValue([win('1', '@a'), win('2', '@b')])
+    const { result } = renderHook(() => useLocalSessions(1000))
+    await act(async () => {})
+    mockCloseTab.mockRejectedValueOnce(new RequestError(409, 'changed', 'x'))
+    let caught: unknown
+    await act(async () => {
+      await result.current.removeSession('2').catch((e) => (caught = e))
+    })
+    expect(mockCloseTab).toHaveBeenCalledWith('2', '@b')
+    expect((caught as RequestError).code).toBe('changed')
+    // Any other failure shows on the next snapshot only
+    mockCloseTab.mockRejectedValueOnce(new Error('network'))
+    await act(async () => {
+      await result.current.removeSession('2')
+    })
   })
 })

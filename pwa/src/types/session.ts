@@ -36,6 +36,9 @@ export interface SessionPane {
 
 export interface Session {
   id: string
+  // Names the same tab while its id changes (MuxTab.key); the id when the
+  // server sends none.
+  key?: string
   name: string
   icon: string
   description: string

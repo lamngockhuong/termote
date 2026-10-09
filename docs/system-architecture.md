@@ -202,11 +202,13 @@ existing pane from the last snapshot.
 ### Mux API (REST, JSON)
 
 ```bash
-GET    /api/mux/snapshot          → {apiVersion, backend, caps, groups:[{id,name,worktree?:{linked,branch?},tabs:[{id,name,active,processes?,panes:[{id,active,title,agent,process?}]}]}]}
+GET    /api/mux/snapshot          → {apiVersion, backend, caps, groups:[{id,name,worktree?:{linked,branch?},tabs:[{id,key,name,active,processes?,panes:[{id,active,title,agent,process?}]}]}]}
 POST   /api/mux/tabs               body: {groupId, name}       → {ok, id}
-PATCH  /api/mux/tabs/{id}          body: {name}                → {ok}
-DELETE /api/mux/tabs/{id}                                       → {ok}
+PATCH  /api/mux/tabs/{id}          body: {name, key?}          → {ok} | 409 changed
+DELETE /api/mux/tabs/{id}?key=                                  → {ok} | 409 changed
 POST   /api/mux/tabs/{id}/select                                 → {ok}
+POST   /api/mux/tabs/{id}/move     body: {index}               → {ok, id} | {error, code}   (caps.reorderTabs)
+POST   /api/mux/groups/{id}/move   body: {index}               → {ok, id} | {error, code}   (caps.reorderGroups)
 DELETE /api/mux/panes/{id}                                      → {ok}   (herdr only, else 501)
 POST   /api/mux/groups             body: {name, cwd}            → {ok, id} | {error, code}   (caps.groups)
 PATCH  /api/mux/groups/{id}        body: {name}                 → {ok} | {error, code}
@@ -311,6 +313,46 @@ panes end first) and closes the workspace; the branch is kept. Changes run one a
 worktree group (`linked`: a linked worktree, else the repository's own checkout); its `branch`
 is read from `worktree.list` in the background, at most every 10 s per repository and never on
 the snapshot's own path, so it can be missing for a moment. See Security Model.
+
+`/move` reorders. `index` is the final 0-based position: for a tab, among its own group's tabs
+(never into another group); for a group, among the groups that can move. It must be a JSON
+integer with `0 <= index < n` (else 400 `invalid_index`, also when the list changed between the
+server's read and the move); the current position answers 200 and changes nothing. The server
+reads the order fresh for each move (Herdr: the view cache is dropped first) and turns the index
+into the backend's call:
+
+- Herdr (`caps.reorderTabs` and `caps.reorderGroups` from Herdr 0.8.0, not on Windows until
+  checked there): `tab.move` with `insert_index` (a gap in the list before the tab is taken out:
+  `index + 1` when moving down); `workspace.move_block` for a workspace, as Herdr's own sidebar
+  drag sends it: the workspace followed by every other workspace of its repository (a worktree
+  group moves as a block, packed), before the movable workspace now at `index` (none: the end).
+  A linked worktree cannot move: 409 `linked_worktree`. Herdr ids never change. The snapshot
+  lists tabs in Herdr's order (a tab's `number` is its creation number, not its position).
+- tmux (`caps.reorderTabs` from the tmux _server's_ 3.2, read with `display-message -p
+  '#{version}'` and cached once it parses; never on psmux, whose `move-window` ignores `-s`):
+  one `move-window -b -t <window at index>` moving up, `-a` moving down, with `-d` only when the
+  window is not the current one, so the current window stays current. tmux has no session order:
+  the group route answers 501 `unsupported`.
+
+A tmux tab id is a window index, and tmux shifts every window from the target to the first free
+index: the moved window and that run get new ids, and the route answers the moved tab's new
+`id`. Each tab therefore carries a `key` that never changes while the backend runs (tmux's
+window id `@N`, Herdr the tab id). The PWA compares each snapshot's ids and keys: user-authored
+state kept by pane id (a Chat draft, its attached images, an unsaved file edit, the Files and
+Changes views with their open tabs, the last agent statuses notifications compare) moves to the
+id its tab has now, the other caches of every shifted id (transcript, prompt, custom commands)
+are dropped and read again, an open tab rename form or close
+confirmation follows its key (and closes when the tab is gone), and the selection follows. Tab
+close and rename send the key (`?key=`, `{name, key}`): tmux acts on `@N` only while it still
+sits at the id's index, else 409 `changed` with nothing touched; Herdr compares the key with
+the id. Without a key both routes behave as before. Deep links and other devices' saved
+selections naming a shifted index open another tab afterwards, and keys typed on another device
+within one poll of a move can reach the window that took the id (accepted). Moves run one at a
+time (one slot, 503 `busy` after a 5 s wait) and outlive the client; other codes: 400
+`invalid_tab_id`/`invalid_group_id`, 404 `unknown_tab`/`unknown_group`, 501 `unsupported`
+(also a backend without the method). The PWA applies snapshot replies in request order, so a
+poll sent before a move never shows the old order after the move's refresh, and ignores another
+move until that refresh is in.
 
 `caps.scroll` (Herdr): the stream only carries screen renders, so no history reaches the
 xterm.js scrollback. The PWA turns the mouse wheel and the scroll buttons into
@@ -854,7 +896,9 @@ The setting "Notify when an agent needs me" notifies when a pane's agent becomes
 (from a known other status) or goes from `working` to `done`/`idle`. A missing or `unknown`
 status keeps the last known one, and a first sighting never notifies. The PWA
 (`pwa/src/utils/agent-notify.ts`) and the server (`server/push_watch.go`) run the same rule,
-held to `server/testdata/agent-transitions.json`.
+held to `server/testdata/agent-transitions.json`. The server watcher keys its last statuses by
+the pane's key (tmux `%N`, Herdr the pane id), never by the pane id a tmux window move shifts,
+so one agent's status is never paired with another's; events still carry the current ids.
 
 ```
 Agent status (Herdr event / Claude session file)

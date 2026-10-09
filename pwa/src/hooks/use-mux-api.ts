@@ -30,6 +30,9 @@ export interface MuxPane {
 
 export interface MuxTab {
   id: string
+  // Names the same tab while its id changes (a tmux window id, @N: a move
+  // shifts window indexes); Herdr's is the id. Absent from an older server.
+  key?: string
   name: string
   active: boolean
   panes: MuxPane[]
@@ -87,6 +90,11 @@ export interface MuxSnapshot {
     worktrees?: boolean
     // Codex can be started too (it has a Chat view: not on Windows).
     agentStartCodex?: boolean
+    // A tab can be moved within its group (/tabs/{id}/move): Herdr 0.8.0
+    // or later, tmux 3.2 or later, not psmux nor Herdr on Windows.
+    reorderTabs?: boolean
+    // A group can be moved (/groups/{id}/move): Herdr only.
+    reorderGroups?: boolean
   }
   groups: MuxGroup[]
 }
@@ -232,19 +240,57 @@ export async function createTab(
   return data.ok === true ? (data.id ?? '') : null
 }
 
-export async function closeTab(id: string): Promise<boolean> {
-  const data = await write('DELETE', tabPath(id))
+// A close or rename of a tab: with its key, the server acts only while the
+// id still names that tab, else throws RequestError 'changed' (409).
+async function tabWrite(
+  method: 'PATCH' | 'DELETE',
+  path: string,
+  body?: unknown,
+): Promise<boolean> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+  if (res.status === 409) throw await requestError(res)
+  const data = await res.json()
   return data.ok === true
 }
 
-export async function renameTab(id: string, name: string): Promise<boolean> {
-  const data = await write('PATCH', tabPath(id), { name })
-  return data.ok === true
+export function closeTab(id: string, key?: string): Promise<boolean> {
+  const query = key ? `?key=${encodeURIComponent(key)}` : ''
+  return tabWrite('DELETE', tabPath(id) + query)
+}
+
+export function renameTab(
+  id: string,
+  name: string,
+  key?: string,
+): Promise<boolean> {
+  return tabWrite('PATCH', tabPath(id), { name, key })
+}
+
+// A move answers within the server's 5 s wait for another move plus 5 s
+// for its own: the client waits a little longer, so a move that worked is
+// never reported as failed.
+export const MOVE_REQUEST_TIMEOUT_MS = 15_000
+
+// Moves a tab to position index (0-based) of its group and resolves to its
+// id afterwards (a tmux id is a window index, which a move changes).
+// Refusals throw RequestError (invalid_index, busy, unsupported, ...).
+export async function moveTab(id: string, index: number): Promise<string> {
+  const data = await groupWrite(
+    'POST',
+    `${tabPath(id)}/move`,
+    { index },
+    MOVE_REQUEST_TIMEOUT_MS,
+  )
+  return data.id ?? id
 }
 
 const groupPath = (id: string) => `/groups/${encodeURIComponent(id)}`
 
-// A group write; a refusal throws RequestError with the server's code (empty
+// A group (or move) write; a refusal throws RequestError with the server's code (empty
 // when a guard in front of the route answered).
 async function groupWrite(
   method: 'POST' | 'PATCH' | 'DELETE',
@@ -276,6 +322,17 @@ export async function renameGroup(id: string, name: string): Promise<void> {
 // Ends the group and everything running in it.
 export async function closeGroup(id: string): Promise<void> {
   await groupWrite('DELETE', groupPath(id))
+}
+
+// Moves a group to position index (0-based) among the groups that can move
+// (not a Herdr linked worktree, which moves with its repository's).
+export async function moveGroup(id: string, index: number): Promise<void> {
+  await groupWrite(
+    'POST',
+    `${groupPath(id)}/move`,
+    { index },
+    MOVE_REQUEST_TIMEOUT_MS,
+  )
 }
 
 // A create or remove answers once git is done: the server waits up to 5s

@@ -7,6 +7,7 @@ import {
 } from '../utils/agent-notify'
 import { parseDeepLink } from '../utils/deep-link'
 import { notificationSupport } from '../utils/notify-permission'
+import { onPaneRemap, remapEntries } from '../utils/pane-remap'
 
 interface Options {
   sessions: Session[]
@@ -26,6 +27,14 @@ export function useAgentNotifications(opts: Options) {
   const optsRef = useRef(opts)
   optsRef.current = opts
   const prevRef = useRef(new Map<string, AgentStatus>())
+
+  // A status follows its pane when a tmux window move shifts the ids, so
+  // one agent's last status is never paired with another's (the server's
+  // push watcher keys by pane too).
+  useEffect(
+    () => onPaneRemap((shift) => remapEntries(prevRef.current, shift)),
+    [],
+  )
 
   useEffect(() => {
     const { next, events } = agentTransitions(prevRef.current, opts.sessions)

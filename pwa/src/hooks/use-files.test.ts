@@ -1,5 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { remapPanes } from '../utils/pane-remap'
 import {
   dropDraft,
   type FileDraft,
@@ -972,6 +973,32 @@ describe('useFileDraft', () => {
     expect(later.result.current[0]).toEqual(draft)
     act(() => later.result.current[1](undefined))
     expect(later.result.current[0]).toBeUndefined()
+  })
+
+  it('follows its pane when ids shift; the tree is read again', async () => {
+    mockTree.mockResolvedValue(tree('', [file('a')]))
+    const files = renderHook(() => useFiles('1'))
+    act(() => files.result.current.load())
+    await waitFor(() => expect(files.result.current.dirs['']).toBeDefined())
+    act(() => files.result.current.open('a'))
+    files.unmount()
+    const one = renderHook(() => useFileDraft('1', 'a'))
+    const two = renderHook(() => useFileDraft('2', 'a'))
+    act(() => one.result.current[1](draft))
+    act(() => two.result.current[1]({ ...draft, text: 'other' }))
+    // 1 moved to 2; 2's pane is gone
+    act(() =>
+      remapPanes({ moved: new Map([['1', '2']]), stale: new Set(['1', '2']) }),
+    )
+    expect(one.result.current[0]).toBeUndefined()
+    expect(two.result.current[0]).toEqual(draft)
+    // The store went with its pane: its open tab stays, read by the new id
+    const moved = renderHook(() => useFiles('2'))
+    expect(moved.result.current.tabs.map((t) => t.path)).toEqual(['a'])
+    await waitFor(() =>
+      expect(mockTree).toHaveBeenLastCalledWith('2', '', '/r'),
+    )
+    expect(renderHook(() => useFiles('1')).result.current.dirs).toEqual({})
   })
 
   it('keeps a draft of each file at once', () => {
