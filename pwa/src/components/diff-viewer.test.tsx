@@ -20,7 +20,10 @@ vi.mock('../utils/highlight', async (orig) => ({
   ...(await orig<typeof import('../utils/highlight')>()),
   highlightLang: async () => null,
 }))
-vi.mock('../hooks/use-media-query', () => ({ useIsMobile: () => false }))
+vi.mock('../hooks/use-media-query', () => ({
+  useIsMobile: () => false,
+  useMediaQuery: () => false,
+}))
 
 const ENTRY: ChangeEntry = {
   path: 'src/a.ts',
@@ -78,7 +81,9 @@ const rows = () => [
 
 // The lazy Markdown renderer, loaded once up front: its first load can
 // outlast a find under coverage
-beforeAll(() => import('./markdown-preview'))
+beforeAll(() =>
+  Promise.all([import('./markdown-preview'), import('./table-preview')]),
+)
 
 beforeEach(() => {
   mockContent.mockReset()
@@ -382,6 +387,52 @@ describe('DiffViewer: Markdown preview', () => {
     })
     expect(await screen.findByText('latest')).toBeInTheDocument()
     expect(screen.queryByText('old')).toBeNull()
+  })
+})
+
+describe('DiffViewer: tables', () => {
+  const CSV: ChangeEntry = { ...ENTRY, path: 'data/a.csv' }
+
+  it('shows the diff first, then the current version as a table', async () => {
+    const text = 'name,age\nAn,3\n'
+    // Past the Markdown limit: a table still shows
+    mockContent.mockResolvedValue({
+      root: '/r',
+      path: 'data/a.csv',
+      size: 2 * 1024 * 1024,
+      text,
+    })
+    show({ entry: CSV, path: 'data/a.csv' })
+    expect(await screen.findByTestId('diff')).toBeInTheDocument()
+    const toggle = screen.getByRole('button', { name: 'Preview' })
+    expect(toggle).toHaveAttribute('aria-pressed', 'false')
+
+    fireEvent.click(toggle)
+    expect(await screen.findByRole('grid')).toHaveTextContent('name')
+    expect(screen.getByRole('gridcell', { name: 'An' })).toBeInTheDocument()
+    expect(screen.queryByTestId('diff')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+    expect(await screen.findByTestId('diff')).toBeInTheDocument()
+  })
+})
+
+describe('DiffViewer: Copy path', () => {
+  it('copies the path, or says why not', async () => {
+    const writeText = vi
+      .fn()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('no'))
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    const v = show()
+    await screen.findByTestId('diff')
+    const copy = screen.getByRole('button', { name: 'Copy path' })
+    await act(async () => fireEvent.click(copy))
+    expect(writeText).toHaveBeenCalledWith('src/a.ts')
+    expect(v.notify).toHaveBeenLastCalledWith('Path copied')
+    await act(async () => fireEvent.click(copy))
+    expect(v.notify).toHaveBeenLastCalledWith('Could not copy the path')
+    vi.unstubAllGlobals()
   })
 })
 

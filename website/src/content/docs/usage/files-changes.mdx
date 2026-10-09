@@ -302,8 +302,9 @@ links open in Files.
 A `.csv`, `.tsv` or `.tab` file opens as a table: the header row stays at the top and the row
 numbers at the left while the rest scrolls, and a 1 MiB file scrolls as smoothly as a short one.
 The eye button in its bar switches between the table and the source; the choice is remembered on
-this device, apart from the one for Markdown. Changes keeps showing the diff of a CSV file as
-text.
+this device, apart from the one for Markdown. Changes shows the diff of a CSV file as text
+first; its eye button shows the current version of the file as a table, to read only (Edit opens
+it for changes). A deleted file has no table.
 
 - **Delimiter**: a `.tsv` or `.tab` file is read with tabs. For a `.csv` file the delimiter is
   guessed from its first lines (comma, semicolon, tab or pipe); the **Delimiter** menu reads it

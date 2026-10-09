@@ -1,5 +1,6 @@
 import {
   ArrowLeft,
+  Copy,
   Eye,
   Image as ImageIcon,
   Lock,
@@ -25,12 +26,14 @@ import {
   RequestError,
 } from '../hooks/use-mux-api'
 import { useSettings } from '../hooks/use-settings'
+import { isTablePath } from '../utils/csv-parse'
 import { keepOrder, TRUNCATE_START } from '../utils/files-format'
 import { isImagePath, isSvgPath } from '../utils/image-path'
 import { isMarkdownPath, type LinkPath } from '../utils/markdown-links'
 import { CODE_FRAME, codeText, GUTTER } from './code-block'
 import {
   LazyMarkdownPreview,
+  LazyTablePreview,
   PREVIEW_MAX_BYTES,
   SensitiveConfirm,
 } from './file-viewer'
@@ -126,7 +129,8 @@ export function DiffViewer({
     onReveal?.()
   }
   const [wrap, setWrap] = useState(isMobile)
-  // The working tree's version of a changed Markdown file, rendered
+  // The working tree's version of a changed Markdown or CSV/TSV file,
+  // rendered
   const [preview, setPreview] = useState(false)
   // Where the diff is scrolled to: the diff read again starts there
   const scrolled = useRef(scrollTop)
@@ -194,7 +198,7 @@ export function DiffViewer({
   // Offered once the diff shows (a sensitive file asked first), and kept
   // while the diff is read again
   const canPreview =
-    isMarkdownPath(path) &&
+    (isMarkdownPath(path) || isTablePath(path)) &&
     side !== 'D' &&
     (shown.kind === 'diff' || (preview && shown.kind === 'loading'))
   const previewing = canPreview && preview
@@ -215,6 +219,14 @@ export function DiffViewer({
     !shown.diff.binary &&
     !shown.diff.reason
   const editLabel = staged ? 'Edit working copy' : 'Edit'
+  const copyPath = async () => {
+    try {
+      await navigator.clipboard.writeText(path)
+      notify('Path copied')
+    } catch {
+      notify('Could not copy the path')
+    }
+  }
   return (
     <div
       className="flex min-h-0 flex-1 flex-col"
@@ -256,6 +268,14 @@ export function DiffViewer({
             <Pencil size={15} aria-hidden="true" />
           </IconButton>
         )}
+        <IconButton
+          size="sm"
+          onClick={copyPath}
+          aria-label="Copy path"
+          title="Copy path"
+        >
+          <Copy size={15} aria-hidden="true" />
+        </IconButton>
         {canPreview && (
           <IconButton
             size="sm"
@@ -391,7 +411,8 @@ function WorkingTreePreview({
             kind: 'message',
             text: 'Not previewable (binary, special file or larger than 1 MiB)',
           })
-        else if (c.size > PREVIEW_MAX_BYTES)
+        // A table shows whatever its size (up to the 1 MiB a read returns)
+        else if (!isTablePath(path) && c.size > PREVIEW_MAX_BYTES)
           setContent({ kind: 'message', text: 'Too large to preview' })
         else setContent({ kind: 'text', text: c.text })
       },
@@ -413,6 +434,15 @@ function WorkingTreePreview({
   if (content.kind === 'loading') return <ViewMessage>Loading…</ViewMessage>
   if (content.kind === 'message')
     return <ViewMessage>{content.text}</ViewMessage>
+  if (isTablePath(path))
+    return (
+      <LazyTablePreview
+        text={content.text}
+        path={path}
+        wrap={wrap}
+        notify={notify}
+      />
+    )
   return (
     <LazyMarkdownPreview
       text={content.text}
