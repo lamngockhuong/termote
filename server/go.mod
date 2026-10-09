@@ -1,6 +1,6 @@
 module github.com/lamngockhuong/termote/server
 
-go 1.26.0
+go 1.26.9
 
 require (
 	github.com/Microsoft/go-winio v0.6.2
