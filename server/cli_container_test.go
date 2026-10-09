@@ -70,7 +70,8 @@ func TestContainerUpRunsTheReleaseImage(t *testing.T) {
 	}
 	args := strings.Join(cc.runArgs, " ")
 	wants := []string{"--name termote", "--restart unless-stopped", fmt.Sprintf("-p 0.0.0.0:%d:7680", port),
-		"--mount type=bind,src=" + ws + ",dst=/workspace", "-e TERMOTE_PASS", "ghcr.io/lamngockhuong/termote:1.0.0"}
+		"--mount type=bind,src=" + ws + ",dst=/workspace", "-e TERMOTE_PASS", "ghcr.io/lamngockhuong/termote:1.0.0",
+		"--mount type=volume,src=" + containerStateVolume() + ",dst=/home/termote/.local/state"}
 	if os.Getuid() >= 0 { // no uid on Windows, so no --user
 		wants = append(wants, "--user "+strconv.Itoa(os.Getuid())+":")
 	}

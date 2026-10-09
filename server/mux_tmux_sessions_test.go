@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 // useRealTmux points the backend at a tmux server of its own on a private
@@ -478,5 +479,56 @@ func TestTmuxMoveTabPsmux(t *testing.T) {
 	}
 	if got := args(); got != "" {
 		t.Errorf("psmux was asked: %q", got)
+	}
+}
+
+// A view-only client attaches read-only: it neither switches the session's
+// current window nor resizes it, and keys it sends reach nothing.
+func TestTmuxAttachViewChangesNothing(t *testing.T) {
+	useRealTmux(t, fmt.Sprintf("termote-view-%d", os.Getpid()))
+	ctx := context.Background()
+	m := tmuxMux{}
+	if !m.CanView(ctx) {
+		// No server yet: start one, then ask again.
+		if _, err := m.Snapshot(ctx); err != nil {
+			t.Fatal(err)
+		}
+		resetTmuxVersion()
+		if !m.CanView(ctx) {
+			t.Skip("needs tmux 3.2 or later")
+		}
+	}
+	if _, err := m.NewTab(ctx, "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.SelectTab(ctx, "0"); err != nil {
+		t.Fatal(err)
+	}
+	state := func() string {
+		out, _ := tmuxCmd(ctx, "display-message", "-p", "-t", defaultSessionTarget(),
+			"#{window_index} #{window_width}x#{window_height}").Output()
+		return strings.TrimSpace(string(out))
+	}
+	before := state()
+	ts, err := m.AttachView(ctx, "1", Size{Cols: 37, Rows: 11})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ts.Close()
+	waitUntil(t, "read-only client attached", func() bool {
+		out, _ := tmuxCmd(ctx, "list-clients", "-F", "#{client_readonly}").Output()
+		return strings.TrimSpace(string(out)) == "1"
+	})
+	ts.Write([]byte("\x02c")) // prefix + new window, were the client writable
+	ts.Resize(Size{Cols: 20, Rows: 5})
+	time.Sleep(300 * time.Millisecond) // what tmux would have done by now
+	if got := state(); got != before {
+		t.Errorf("window state %q, want %q unchanged", got, before)
+	}
+	if out, _ := tmuxCmd(ctx, "list-windows", "-t", defaultSessionTarget()).Output(); strings.Count(string(out), "\n") != 2 {
+		t.Errorf("windows = %q, want the two made here", out)
+	}
+	if _, err := m.AttachView(ctx, "other:0", Size{}); err == nil {
+		t.Error("AttachView took an invalid id")
 	}
 }

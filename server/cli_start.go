@@ -399,6 +399,8 @@ type serverHealth struct {
 	Version string `json:"version"`
 	Backend string `json:"backend"`
 	PID     int    `json:"pid"`
+	// Devices: pairing works (nil without sign-in, or an older server).
+	Devices *bool `json:"devices"`
 }
 
 // fetchHealth asks the server on port for its health, logging in as user
@@ -669,6 +671,7 @@ func (c *cli) cmdUninstall(args []string) error {
 		// root, which can then go as a whole.
 		left = append(left, c.purgeData()...)
 		left = append(left, c.removeTrash()...)
+		c.removeContainerStateVolume()
 	}
 	if installed {
 		left = append(left, c.removeInstall()...)

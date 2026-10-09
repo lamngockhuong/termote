@@ -41,12 +41,6 @@ type rootChangedError struct{ root string }
 
 func (e *rootChangedError) Error() string { return "root changed" }
 
-// requireFilesRead is where roles (#236, a view-only role) will be enforced on
-// the files routes. It allows everything today; a view-only role must at
-// least be refused reveal=1 (content, diff and raw all take it) and the
-// contents of sensitive files.
-func requireFilesRead(http.ResponseWriter, *http.Request) bool { return true }
-
 // filesAPI serves /api/mux/panes/{id}/files/*: views of the files under a
 // pane's root (its git toplevel, else its directory), saves of a text file's
 // whole contents (PUT files/content), creates of an empty file (POST
@@ -159,6 +153,15 @@ func (f *filesAPI) start(w http.ResponseWriter, r *http.Request, allow func(http
 	if err != nil {
 		cancel()
 		f.error(w, "files root", err)
+		return nil, nil, false
+	}
+	// The sensitive names are no boundary for a client with a shell, but a
+	// view-only client has none: a pane in the home dir would show it
+	// shell histories and tool configs holding keys under ordinary names.
+	// It reads files in a git repo only.
+	if isViewOnly(r) && !root.IsRepo {
+		cancel()
+		writeViewOnly(w)
 		return nil, nil, false
 	}
 	return &filesRequest{ctx: ctx, root: root}, cancel, true
@@ -414,6 +417,12 @@ func (f *filesAPI) handleContent(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	q := r.URL.Query()
 	if q.Get("hash") == "1" {
+		// It answers for a sensitive file not revealed too, which a client
+		// with a shell could read anyway; a view-only client deletes
+		// nothing, so has no use for it.
+		if !requireWriteRole(w, r) {
+			return
+		}
 		// Hashing reads up to 512 MiB: a slot of the raw route's, so a
 		// burst of them never reads several at once.
 		select {

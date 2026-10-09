@@ -167,18 +167,23 @@ func TestIsTmuxAttachCmdline(t *testing.T) {
 	defer func() { tmuxSocket, tmuxSession, tmuxBin = origSocket, origSession, origBin }()
 	tmuxSocket, tmuxSession, tmuxBin = "/run/t.sock", "main", "tmux"
 	for cmdline, want := range map[string]bool{
-		"tmux -S /run/t.sock attach -E -t =main": true,
-		"tmux -S /run/t.sock attach -E -t $3":    true,
-		"tmux -S /run/t.sock attach -t main":     true, // left by a release before several sessions
-		"tmux -S /run/t.sock attach -t =main":    false,
-		"tmux -S /run/t.sock attach -t =work":    false, // the user's own client
-		"tmux -S /run/t.sock attach -E -t =ma":   false,
-		"tmux -S /run/t.sock attach -E -t $3:1":  false,
-		"tmux -S /run/t.sock attach -E -t $":     false,
-		"tmux -S /run/t.sock attach -E -t $3 x":  false,
-		"tmux -S /run/t.sock attach -t main2":    false,
-		"tmux attach -E -t $3":                   false, // another server
-		"tmux -S /run/t.sock attach -E -t":       false,
+		"tmux -S /run/t.sock attach -E -t =main":    true,
+		"tmux -S /run/t.sock attach -E -t $3":       true,
+		"tmux -S /run/t.sock attach -t main":        true, // left by a release before several sessions
+		"tmux -S /run/t.sock attach -t =main":       false,
+		"tmux -S /run/t.sock attach -t =work":       false, // the user's own client
+		"tmux -S /run/t.sock attach -E -t =ma":      false,
+		"tmux -S /run/t.sock attach -E -t $3:1":     false,
+		"tmux -S /run/t.sock attach -E -t $":        false,
+		"tmux -S /run/t.sock attach -E -t $3 x":     false,
+		"tmux -S /run/t.sock attach -t main2":       false,
+		"tmux attach -E -t $3":                      false, // another server
+		"tmux -S /run/t.sock attach -E -t":          false,
+		"tmux -S /run/t.sock attach -E -r -t =main": true, // a view-only stream
+		"tmux -S /run/t.sock attach -E -r -t $3":    true,
+		"tmux -S /run/t.sock attach -r -t =main":    false,
+		"tmux -S /run/t.sock attach -E -r -t =ma":   false,
+		"tmux -S /run/t.sock attach -E -r -t $3:1":  false,
 	} {
 		if got := isTmuxAttachCmdline(cmdline); got != want {
 			t.Errorf("isTmuxAttachCmdline(%q) = %v, want %v", cmdline, got, want)
@@ -186,6 +191,9 @@ func TestIsTmuxAttachCmdline(t *testing.T) {
 	}
 	if got := strings.Join(tmuxAttachArgv("$3"), " "); got != "tmux -S /run/t.sock attach -E -t $3" {
 		t.Errorf("tmuxAttachArgv = %q", got)
+	}
+	if got := strings.Join(tmuxViewAttachArgv("$3"), " "); got != "tmux -S /run/t.sock attach -E -r -t $3" {
+		t.Errorf("tmuxViewAttachArgv = %q", got)
 	}
 }
 

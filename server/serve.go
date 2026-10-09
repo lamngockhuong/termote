@@ -6,6 +6,7 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"log"
@@ -62,6 +63,9 @@ type serveConfig struct {
 	// PushDir holds the Web Push key and the devices' subscriptions; empty
 	// disables push.
 	PushDir string
+	// DevicesDir holds the paired devices; empty disables pairing. Never
+	// read or written with NoAuth.
+	DevicesDir string
 	// OnListen runs once the port is bound (serve records its PID then, so
 	// a server that cannot bind never replaces the running one's PID file).
 	OnListen func()
@@ -122,24 +126,46 @@ func envOr(key, fallback string) string {
 // tokenStore manages time-limited tokens with configurable behavior.
 type tokenStore struct {
 	mu        sync.RWMutex
-	tokens    map[string]time.Time // token → expiry
+	tokens    map[string]tokenInfo
 	ttl       time.Duration
 	singleUse bool
 	max       int      // live tokens kept; 0 = unlimited
 	order     []string // issue order, used only when max > 0
+	// perDevice caps the live tokens of one view-only device (0 = no cap):
+	// past it, that device's oldest goes.
+	perDevice int
 }
+
+// tokenInfo is what a token was issued to.
+type tokenInfo struct {
+	exp      time.Time
+	role     role
+	deviceID string
+}
+
+// errTokensBusy: the store is full of tokens a view-only client may not push
+// out.
+var errTokensBusy = &codedError{code: "busy", msg: "too many open stream requests", status: http.StatusTooManyRequests}
 
 func newTokenStore(ttl time.Duration, singleUse bool) *tokenStore {
 	return &tokenStore{
-		tokens:    make(map[string]time.Time),
+		tokens:    make(map[string]tokenInfo),
 		ttl:       ttl,
 		singleUse: singleUse,
 	}
 }
 
-// generate creates a token valid for the configured TTL.
-// Sweeps expired tokens to prevent unbounded map growth.
+// generate creates a full client's token valid for the configured TTL.
 func (s *tokenStore) generate() (string, error) {
+	return s.generateFor(roleFull, "")
+}
+
+// generateFor creates a token for a client of role r (deviceID: its paired
+// device, if any). Sweeps expired tokens to prevent unbounded map growth. In
+// a capped store a view-only client's token never pushes out a full
+// client's: it takes the oldest view-only one, or errTokensBusy; a full
+// client's takes the oldest view-only one first.
+func (s *tokenStore) generateFor(r role, deviceID string) (string, error) {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
 		return "", err
@@ -147,13 +173,14 @@ func (s *tokenStore) generate() (string, error) {
 	token := hex.EncodeToString(b)
 	now := time.Now()
 	s.mu.Lock()
-	for k, exp := range s.tokens {
-		if now.After(exp) {
+	defer s.mu.Unlock()
+	for k, ti := range s.tokens {
+		if now.After(ti.exp) {
 			delete(s.tokens, k)
 		}
 	}
 	if s.max > 0 {
-		// Forget used and expired tokens, then drop the oldest over the cap.
+		// Forget used and expired tokens, then drop what the caps require.
 		// Issue order, not expiry: timestamps can tie on coarse clocks.
 		live := s.order[:0]
 		for _, k := range s.order {
@@ -161,19 +188,51 @@ func (s *tokenStore) generate() (string, error) {
 				live = append(live, k)
 			}
 		}
+		drop := func(i int) {
+			delete(s.tokens, live[i])
+			live = append(live[:i], live[i+1:]...)
+		}
+		if r == roleView && deviceID != "" && s.perDevice > 0 {
+			var mine []int
+			for i, k := range live {
+				if s.tokens[k].deviceID == deviceID {
+					mine = append(mine, i)
+				}
+			}
+			if len(mine) >= s.perDevice {
+				drop(mine[0])
+			}
+		}
 		for len(live) >= s.max {
-			delete(s.tokens, live[0])
-			live = live[1:]
+			i := slices.IndexFunc(live, func(k string) bool { return s.tokens[k].role == roleView })
+			if i < 0 {
+				if r == roleView {
+					s.order = live
+					return "", errTokensBusy
+				}
+				i = 0
+			}
+			drop(i)
 		}
 		s.order = append(live, token)
 	}
-	s.tokens[token] = now.Add(s.ttl)
-	s.mu.Unlock()
+	s.tokens[token] = tokenInfo{exp: now.Add(s.ttl), role: r, deviceID: deviceID}
 	return token, nil
 }
 
 // validate checks a token. If singleUse is true, consumes the token.
 func (s *tokenStore) validate(token string) bool {
+	_, ok := s.check(token)
+	return ok
+}
+
+// consume is validate for a single-use store, returning who the token was
+// issued to.
+func (s *tokenStore) consume(token string) (tokenInfo, bool) {
+	return s.check(token)
+}
+
+func (s *tokenStore) check(token string) (tokenInfo, bool) {
 	now := time.Now()
 	// A capped store of reusable tokens (sessions) keeps the most recently
 	// used ones: a token in use moves to the end of the eviction order, so
@@ -182,34 +241,48 @@ func (s *tokenStore) validate(token string) bool {
 	if !s.singleUse && s.max > 0 {
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		expiry, ok := s.tokens[token]
-		if !ok || now.After(expiry) {
-			return false
+		ti, ok := s.tokens[token]
+		if !ok || now.After(ti.exp) {
+			return tokenInfo{}, false
 		}
 		if i := slices.Index(s.order, token); i >= 0 {
 			s.order = append(append(s.order[:i:i], s.order[i+1:]...), token)
 		}
-		return true
+		return ti, true
 	}
 	// Fast path: read-only check for reusable tokens
 	if !s.singleUse {
 		s.mu.RLock()
-		expiry, ok := s.tokens[token]
+		ti, ok := s.tokens[token]
 		s.mu.RUnlock()
-		if !ok || now.After(expiry) {
-			return false
+		if !ok || now.After(ti.exp) {
+			return tokenInfo{}, false
 		}
-		return true
+		return ti, true
 	}
 	// Single-use: need write lock to delete
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	expiry, ok := s.tokens[token]
-	if !ok || now.After(expiry) {
-		return false
+	ti, ok := s.tokens[token]
+	if !ok || now.After(ti.exp) {
+		return tokenInfo{}, false
 	}
 	delete(s.tokens, token)
-	return true
+	return ti, true
+}
+
+// revokeDevice ends every token issued to deviceID.
+func (s *tokenStore) revokeDevice(deviceID string) {
+	if deviceID == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for k, ti := range s.tokens {
+		if ti.deviceID == deviceID {
+			delete(s.tokens, k)
+		}
+	}
 }
 
 // revoke ends token before it expires.
@@ -220,14 +293,18 @@ func (s *tokenStore) revoke(token string) {
 }
 
 // maxStreamTokens caps unused stream tokens an authenticated client can pile
-// up.
-const maxStreamTokens = 32
+// up; maxViewStreamTokens those of one view-only device.
+const (
+	maxStreamTokens     = 32
+	maxViewStreamTokens = 4
+)
 
 // newStreamTokenStore holds the single-use, 30s tokens that open
 // /api/mux/stream.
 func newStreamTokenStore() *tokenStore {
 	s := newTokenStore(30*time.Second, true)
 	s.max = maxStreamTokens
+	s.perDevice = maxViewStreamTokens
 	return s
 }
 
@@ -276,7 +353,19 @@ func buildServer(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushStore, 
 			log.Printf("push notifications disabled: %v", err)
 		}
 	}
+	var devices *deviceAuth
+	if cfg.DevicesDir != "" && !cfg.NoAuth {
+		if store, err := newDeviceStore(cfg.DevicesDir, cfg.User, cfg.Pass); err != nil {
+			log.Printf("device pairing disabled: %v", err)
+		} else {
+			devices = newDeviceAuth(store, tokenStore, hub)
+			hub.alive = store.alive
+			hub.onShutdown = store.flush
+		}
+	}
 	agent := registerMuxRoutes(mux, m, tokenStore, uploads, push)
+	agent.devices = devices != nil
+	registerDeviceRoutes(mux, devices, allowed)
 	registerPushRoutes(mux, push)
 	registerStreamRoutes(mux, m, tokenStore, allowed, hub)
 	// The upload store and the trash are never read through the Files view
@@ -309,7 +398,7 @@ func buildServer(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushStore, 
 
 	var handler http.Handler = mux
 	if !cfg.NoAuth {
-		handler = basicAuth(cfg.User, cfg.Pass, handler)
+		handler = newBasicAuth(cfg.User, cfg.Pass, devices, handler)
 	}
 	handler = writeGuard(allowed, handler)
 	// Inside hostGuard: the policy names the request's Host, so only an
@@ -618,21 +707,19 @@ const (
 	maxSessions = 256
 )
 
-// authCtxKey marks a request basicAuth let through.
-type authCtxKey struct{}
-
-// authenticated reports whether sign-in is on and the request passed it.
-func authenticated(ctx context.Context) bool {
-	ok, _ := ctx.Value(authCtxKey{}).(bool)
-	return ok
-}
-
 // basicAuth wraps a handler with HTTP basic authentication.
 // After successful basic auth, sets a session cookie to avoid re-prompting
 // (fixes mobile browsers not persisting basic auth across page loads).
 // Note: uses r.RemoteAddr for rate limiting. Behind a reverse proxy, all clients
 // may share one IP — consider the proxy's own rate limiting in that setup.
 func basicAuth(user, pass string, next http.Handler) http.Handler {
+	return newBasicAuth(user, pass, nil, next)
+}
+
+// newBasicAuth is basicAuth that also signs paired devices in (dev, nil
+// without a usable device store): their cookie, the /pair form, and Log out
+// revoking the device.
+func newBasicAuth(user, pass string, dev *deviceAuth, next http.Handler) http.Handler {
 	limiter := newAuthRateLimiter()
 	sessions := newTokenStore(sessionTTL, false)
 	sessions.max = maxSessions
@@ -640,6 +727,8 @@ func basicAuth(user, pass string, next http.Handler) http.Handler {
 	// the log. The credentials sent are never logged.
 	failedLogins := &rateLimitedLog{every: rejectLogEvery}
 	blockedLogins := &rateLimitedLog{every: rejectLogEvery}
+	failedPairs := &rateLimitedLog{every: rejectLogEvery}
+	blockedPairs := &rateLimitedLog{every: rejectLogEvery}
 
 	// credsMatch compares in constant time, so the time taken does not tell
 	// how much of a guess was right.
@@ -675,7 +764,7 @@ func basicAuth(user, pass string, next http.Handler) http.Handler {
 	// sends its credentials up front.
 	challenge := func(w http.ResponseWriter, r *http.Request) {
 		if isNavigation(r) {
-			writeLoginPage(w, http.StatusUnauthorized, loginForm{Next: safeNext(r.URL.RequestURI())})
+			writeLoginPage(w, http.StatusUnauthorized, loginForm{Next: safeNext(r.URL.RequestURI()), Pairing: dev != nil})
 			return
 		}
 		if r.Header.Get("Sec-Fetch-Mode") == "" {
@@ -693,7 +782,7 @@ func basicAuth(user, pass string, next http.Handler) http.Handler {
 				http.Redirect(w, r, next, http.StatusSeeOther)
 				return
 			}
-			writeLoginPage(w, http.StatusOK, loginForm{Next: next})
+			writeLoginPage(w, http.StatusOK, loginForm{Next: next, Pairing: dev != nil})
 			return
 		case http.MethodPost:
 		default:
@@ -719,12 +808,12 @@ func basicAuth(user, pass string, next http.Handler) http.Handler {
 		username := strings.TrimSpace(r.PostForm.Get("username"))
 		if blocked := limiter.reserve(ip); blocked != "" {
 			blockedLogins.printf("auth: %s blocked after too many failed logins from %s", ip, blocked)
-			writeLoginPage(w, http.StatusTooManyRequests, loginForm{next, "Too many failed attempts. Wait a minute and try again.", username})
+			writeLoginPage(w, http.StatusTooManyRequests, loginForm{next, "Too many failed attempts. Wait a minute and try again.", username, dev != nil})
 			return
 		}
 		if !credsMatch(username, r.PostForm.Get("password")) {
 			failedLogins.printf("auth: failed login from %s", ip)
-			writeLoginPage(w, http.StatusUnauthorized, loginForm{next, "Wrong username or password.", username})
+			writeLoginPage(w, http.StatusUnauthorized, loginForm{next, "Wrong username or password.", username, dev != nil})
 			return
 		}
 		limiter.refund(ip)
@@ -732,9 +821,88 @@ func basicAuth(user, pass string, next http.Handler) http.Handler {
 		http.Redirect(w, r, next, http.StatusSeeOther)
 	}
 
+	// pair serves the pairing form (GET) and redeems the code it posts, under
+	// a rate limit of its own. A browser already signed in with full rights
+	// is never paired: that would trade its rights for the code's. One that
+	// is a view-only device is paired again and its old device revoked.
+	pair := func(w http.ResponseWriter, r *http.Request, ip string) {
+		if dev == nil {
+			writePairPage(w, http.StatusNotImplemented, pairForm{Error: "Pairing is not available on this server.", Closed: true})
+			return
+		}
+		switch r.Method {
+		case http.MethodGet:
+			writePairPage(w, http.StatusOK, pairForm{Code: pairPrefill(r.URL.Query().Get("code"))})
+			return
+		case http.MethodPost:
+		default:
+			w.Header().Set("Allow", "GET, POST")
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if isCrossSiteLogin(r) {
+			http.Error(w, "cross-site request rejected", http.StatusForbidden)
+			return
+		}
+		if !isFormPost(r) {
+			http.Error(w, "Unsupported Media Type", http.StatusUnsupportedMediaType)
+			return
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, maxLoginBody)
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+		code, name := r.PostForm.Get("code"), r.PostForm.Get("name")
+		form := pairForm{Code: pairPrefill(code), Name: cleanDeviceName(name)}
+		prev, prevOK, _ := dev.deviceCookie(r)
+		if hasSession(r) || prevOK && prev.Role == roleFull {
+			writePairPage(w, http.StatusConflict, pairForm{Error: "This browser is already signed in. Log out first to pair it as another device.", Closed: true})
+			return
+		}
+		// No code waiting: nothing can match, so nothing is counted.
+		if !dev.codes.waiting() {
+			form.Error = "Wrong or expired code."
+			writePairPage(w, http.StatusUnauthorized, form)
+			return
+		}
+		if blocked := dev.limiter.reserve(ip); blocked != "" {
+			blockedPairs.printf("auth: %s blocked after too many wrong pairing codes from %s", ip, blocked)
+			form.Error = "Too many wrong codes. Wait a minute and try again."
+			writePairPage(w, http.StatusTooManyRequests, form)
+			return
+		}
+		p, ok := dev.codes.redeem(code)
+		if !ok {
+			failedPairs.printf("auth: wrong pairing code from %s", ip)
+			form.Error = "Wrong or expired code."
+			writePairPage(w, http.StatusUnauthorized, form)
+			return
+		}
+		dev.limiter.refund(ip)
+		token, _, err := dev.store.add(pairName(p, name, r), p.role)
+		if err != nil {
+			msg := "Pairing failed. Ask for a new code."
+			if errors.Is(err, errTooManyDevices) {
+				msg = "Too many paired devices. Revoke one, then ask for a new code."
+			} else {
+				log.Printf("auth: pairing failed: %v", err)
+			}
+			writePairPage(w, http.StatusConflict, pairForm{Error: msg, Closed: true})
+			return
+		}
+		if prevOK {
+			if err := dev.revoke(prev.ID); err != nil {
+				log.Printf("auth: revoke the device paired again: %v", err)
+			}
+		}
+		dev.setCookie(w, r, token)
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	}
+
 	// logout ends the cookie's session, if any, and expires the cookie. It
 	// needs no credentials and counts as no failed login: without a valid
-	// session it ends nothing.
+	// session it ends nothing. A paired device's cookie revokes the device.
 	logout := func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			w.Header().Set("Allow", http.MethodPost)
@@ -743,6 +911,19 @@ func basicAuth(user, pass string, next http.Handler) http.Handler {
 		}
 		if cookie, err := r.Cookie(sessionCookieName); err == nil {
 			sessions.revoke(cookie.Value)
+		}
+		if dev != nil {
+			if dev.hasDeviceCookie(r) {
+				if rec, ok, _ := dev.deviceCookie(r); ok {
+					// Revoked meanwhile: logged out all the same.
+					if err := dev.revoke(rec.ID); err != nil && !errors.Is(err, errUnknownDevice) {
+						log.Printf("auth: revoke on log out: %v", err)
+						jsonError(w, "internal error", http.StatusInternalServerError)
+						return
+					}
+				}
+				dev.clearCookie(w, r)
+			}
 		}
 		http.SetCookie(w, &http.Cookie{
 			Name:     sessionCookieName,
@@ -754,9 +935,8 @@ func basicAuth(user, pass string, next http.Handler) http.Handler {
 		})
 		w.WriteHeader(http.StatusNoContent)
 	}
-	// serveSignedIn serves a request that passed sign-in.
-	serveSignedIn := func(w http.ResponseWriter, r *http.Request) {
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), authCtxKey{}, true)))
+	serveSignedIn := func(w http.ResponseWriter, r *http.Request, a authInfo) {
+		serveAs(next, w, r, a)
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -775,6 +955,10 @@ func basicAuth(user, pass string, next http.Handler) http.Handler {
 			login(w, r, ip)
 			return
 		}
+		if r.URL.Path == pairPath {
+			pair(w, r, ip)
+			return
+		}
 		if r.URL.Path == logoutPath {
 			logout(w, r)
 			return
@@ -782,8 +966,18 @@ func basicAuth(user, pass string, next http.Handler) http.Handler {
 
 		// Check session cookie first (mobile browsers drop basic auth)
 		if hasSession(r) {
-			serveSignedIn(w, r)
+			serveSignedIn(w, r, authInfo{Kind: authSession, Role: roleFull})
 			return
+		}
+		if dev != nil {
+			// A cookie that names no device (revoked) is cleared; Basic auth
+			// may still sign the request in.
+			if rec, ok, unknown := dev.deviceCookie(r); ok {
+				serveSignedIn(w, r, authInfo{Kind: authDevice, Role: rec.Role, DeviceID: rec.ID})
+				return
+			} else if unknown {
+				dev.clearCookie(w, r)
+			}
 		}
 
 		// Counted as a failure until the credentials prove right.
@@ -807,7 +1001,7 @@ func basicAuth(user, pass string, next http.Handler) http.Handler {
 		}
 		limiter.refund(ip)
 		startSession(w, r)
-		serveSignedIn(w, r)
+		serveSignedIn(w, r, authInfo{Kind: authBasic, Role: roleFull})
 	})
 }
 
@@ -872,7 +1066,12 @@ func handleTerminalToken(tokens *tokenStore) http.HandlerFunc {
 			jsonError(w, "cross-site request rejected", http.StatusForbidden)
 			return
 		}
-		token, err := tokens.generate()
+		a, _ := authFrom(r.Context())
+		token, err := tokens.generateFor(requestRole(r.Context()), a.DeviceID)
+		if errors.Is(err, errTokensBusy) {
+			jsonErrorCode(w, errTokensBusy.code, errTokensBusy.msg, errTokensBusy.status)
+			return
+		}
 		if err != nil {
 			log.Printf("stream token generation failed: %v", err)
 			jsonError(w, "internal error", http.StatusInternalServerError)

@@ -257,12 +257,6 @@ func (c *ttlCache[V]) forgetPrefix(prefix string) {
 	}
 }
 
-// requireAgentRead and requireWriteRole are where roles (#236, a view-only
-// role) will be enforced. The transcript shows more than the screen does, so
-// the read check is its own decision. Both allow everything today.
-func requireAgentRead(http.ResponseWriter, *http.Request) bool { return true }
-func requireWriteRole(http.ResponseWriter, *http.Request) bool { return true }
-
 var (
 	errNoAgentSession = inputError("no agent session in this pane")
 	errNoTranscript   = inputError("transcript not found")
@@ -290,6 +284,9 @@ type agentAPI struct {
 	home     string
 	// uploads resolves image ids in a message; nil when the server has none.
 	uploads *uploadStore
+	// devices: devices can be paired (the snapshot's caps.devices); set by
+	// buildServer.
+	devices bool
 }
 
 type agentLookup struct {

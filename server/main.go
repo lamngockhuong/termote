@@ -78,6 +78,7 @@ func runServe(args []string) int {
 	// Under the state dir, which FilesDenyDirs already keeps from the Files
 	// view, and which does not roam on Windows (a private key).
 	cfg.PushDir = filepath.Join(c.stateDir(), "push")
+	cfg.DevicesDir = filepath.Join(c.stateDir(), "devices")
 	cfg.OnListen = func() {
 		if err := c.writePIDFile(); err != nil {
 			fmt.Fprintf(os.Stderr, "[WARN] cannot write %s: %v\n", c.pidFile(), err)

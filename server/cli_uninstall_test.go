@@ -285,3 +285,34 @@ func TestEncodePowerShell(t *testing.T) {
 		t.Fatalf("got %s", got)
 	}
 }
+
+// --purge removes the container's state volume (paired devices, push), and
+// says how to free one still in use.
+func TestUninstallPurgeRemovesStateVolume(t *testing.T) {
+	tc := installedCLI(t, "linux")
+	vol := containerStateVolume()
+	tc.runner.paths["podman"] = true
+	tc.runner.outputs["podman volume inspect "+vol] = "[]"
+	tc.runner.outputs["podman volume rm "+vol] = vol
+	if code := tc.main([]string{"uninstall", "--purge"}); code != 0 {
+		t.Fatal(tc.stderr.String())
+	}
+	if !tc.runner.called("podman volume rm " + vol) {
+		t.Errorf("volume not removed: %v", tc.runner.calls)
+	}
+
+	tc = installedCLI(t, "linux")
+	tc.runner.paths["podman"] = true
+	tc.runner.outputs["podman volume inspect "+vol] = "[]"
+	tc.main([]string{"uninstall", "--purge"})
+	if !strings.Contains(tc.stderr.String()+tc.stdout.String(), "termote container down") {
+		t.Errorf("no hint for a volume in use:\n%s%s", tc.stdout.String(), tc.stderr.String())
+	}
+
+	tc = installedCLI(t, "linux")
+	tc.runner.paths["podman"] = true
+	tc.main([]string{"uninstall"})
+	if tc.runner.called("podman volume rm " + vol) {
+		t.Error("volume removed without --purge")
+	}
+}

@@ -112,7 +112,7 @@ func newPushStore(dir, user, pass string, noAuth bool) (*pushStore, error) {
 		return nil, err
 	}
 	s := &pushStore{dir: dir, now: time.Now, tokens: map[string]vapidToken{}}
-	s.removeParts()
+	removeStateParts(s.dir, pushPartRe)
 	if err := s.loadKeys(); err != nil {
 		return nil, err
 	}
@@ -128,25 +128,12 @@ func newPushStore(dir, user, pass string, noAuth bool) (*pushStore, error) {
 	return s, nil
 }
 
-// removeParts deletes temporary files a crash left between write and rename.
-func (s *pushStore) removeParts() {
-	entries, err := os.ReadDir(s.dir)
-	if err != nil {
-		return
-	}
-	for _, e := range entries {
-		if pushPartRe.MatchString(e.Name()) && e.Type().IsRegular() {
-			os.Remove(filepath.Join(s.dir, e.Name()))
-		}
-	}
-}
-
 // loadKeys reads vapid.json, or creates it when missing. A file that cannot
 // be read or parsed is never replaced: a new key would silently invalidate
 // every device's subscription.
 func (s *pushStore) loadKeys() error {
 	path := filepath.Join(s.dir, vapidFile)
-	data, err := readPushFile(path)
+	data, err := readStateFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return s.createKeys(path)
 	}
@@ -189,7 +176,7 @@ func (s *pushStore) createKeys(path string) error {
 	}
 	// The private key is useless to anyone else only if nobody else can read
 	// it: an ACL that cannot be set disables push.
-	if err := writePushFile(s.dir, "vapid", path, data, true); err != nil {
+	if err := writeStateFile("push", s.dir, "vapid", path, data, true); err != nil {
 		return fmt.Errorf("write %s: %w", vapidFile, err)
 	}
 	s.key, s.topicKey, s.bindKey = key, topic, bind
@@ -200,7 +187,7 @@ func (s *pushStore) createKeys(path string) error {
 // the store starts empty; the devices subscribe again on their next visit.
 func (s *pushStore) loadSubs() error {
 	path := filepath.Join(s.dir, pushSubsFile)
-	data, err := readPushFile(path)
+	data, err := readStateFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
@@ -232,62 +219,13 @@ func (s *pushStore) loadSubs() error {
 	return s.saveLocked()
 }
 
-// readPushFile reads one of the store's files, refusing anything but a
-// regular file (a symlink in particular).
-func readPushFile(path string) ([]byte, error) {
-	fi, err := os.Lstat(path)
-	if err != nil {
-		return nil, err
-	}
-	if !fi.Mode().IsRegular() {
-		return nil, fmt.Errorf("%s is not a regular file", filepath.Base(path))
-	}
-	return os.ReadFile(path)
-}
-
-// writePushFile writes data to a new .<prefix>-<random>.part (O_EXCL, 0600,
-// owner-only ACL on Windows), syncs it and renames it over path, so a crash
-// never leaves half a file. With strict, an ACL that cannot be set fails the
-// write; otherwise it is logged.
-func writePushFile(dir, prefix, path string, data []byte, strict bool) error {
-	var id [8]byte
-	rand.Read(id[:])
-	part := filepath.Join(dir, "."+prefix+"-"+hex.EncodeToString(id[:])+".part")
-	f, err := os.OpenFile(part, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if err != nil {
-		return err
-	}
-	if err := restrictToOwner(part); err != nil {
-		if strict {
-			f.Close()
-			os.Remove(part)
-			return fmt.Errorf("restrict permissions: %w", err)
-		}
-		log.Printf("push: could not restrict permissions of %s: %v", filepath.Base(path), err)
-	}
-	_, err = f.Write(data)
-	if err == nil {
-		err = f.Sync()
-	}
-	if cerr := f.Close(); err == nil {
-		err = cerr
-	}
-	if err == nil {
-		err = os.Rename(part, path)
-	}
-	if err != nil {
-		os.Remove(part)
-	}
-	return err
-}
-
 // saveLocked writes subs to subscriptions.json; s.mu must be held.
 func (s *pushStore) saveLocked() error {
 	data, err := json.Marshal(s.subs)
 	if err != nil {
 		return err
 	}
-	return writePushFile(s.dir, "subscriptions", filepath.Join(s.dir, pushSubsFile), data, false)
+	return writeStateFile("push", s.dir, "subscriptions", filepath.Join(s.dir, pushSubsFile), data, false)
 }
 
 // commitLocked makes next the subscriptions and saves them, putting the

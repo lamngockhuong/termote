@@ -64,9 +64,8 @@ func editReasonError(reason string) error {
 	return &notEditableError{reason}
 }
 
-// requireFilesWrite is where roles (#236, a view-only role) will refuse a
-// save, a create, a delete or a restore. requireWriteRole allows everything today, so a view-only client is
-// only kept from editing by the PWA.
+// requireFilesWrite refuses a view-only client a save, a create, a delete or
+// a restore.
 func requireFilesWrite(w http.ResponseWriter, r *http.Request) bool {
 	return requireWriteRole(w, r)
 }

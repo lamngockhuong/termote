@@ -374,7 +374,7 @@ func TestStreamTokenExpired(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 	tok, _ := tokens.generate()
-	tokens.tokens[tok] = time.Now().Add(-time.Second)
+	tokens.tokens[tok] = tokenInfo{exp: time.Now().Add(-time.Second)}
 	if _, resp, err := dialStream(t, srv.URL, "pane=0&token="+tok, nil); err == nil || resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("expired token: want 401, got %v", resp)
 	}
