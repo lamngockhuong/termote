@@ -568,8 +568,10 @@ jobs:
       - name: Check formatting (dprint)
         run: npx --yes dprint@0.60.1 check
 
-  # Secrets in any commit of the history, not only the files at HEAD. A known
-  # test fixture is listed by fingerprint in .gitleaksignore.
+  # Secrets in any commit of the history of the ref under test, not only the
+  # files at HEAD; other branches on origin are not scanned, so a leak there
+  # does not fail every PR. A known test fixture is listed by fingerprint in
+  # .gitleaksignore.
   secret-scan:
     name: Secret Scan
     runs-on: ubuntu-latest
@@ -591,4 +593,4 @@ jobs:
           tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" gitleaks
 
       - name: Scan the history
-        run: '"$RUNNER_TEMP/gitleaks" git --redact --no-banner .'
+        run: '"$RUNNER_TEMP/gitleaks" git --redact --no-banner --log-opts="--full-history HEAD" .'
