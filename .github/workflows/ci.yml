@@ -575,8 +575,9 @@ jobs:
   secret-scan:
     name: Secret Scan
     runs-on: ubuntu-latest
+    # Both kept current by the gitleaks custom manager in renovate.json
     env:
-      GITLEAKS_VERSION: 8.30.1
+      GITLEAKS_VERSION: v8.30.1
       GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -586,9 +587,9 @@ jobs:
 
       - name: Install gitleaks (sha256 pinned)
         run: |
-          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          archive="gitleaks_${GITLEAKS_VERSION#v}_linux_x64.tar.gz"
           curl -fsSL -o "$RUNNER_TEMP/$archive" \
-            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$archive"
+            "https://github.com/gitleaks/gitleaks/releases/download/${GITLEAKS_VERSION}/$archive"
           echo "$GITLEAKS_SHA256  $RUNNER_TEMP/$archive" | sha256sum -c -
           tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" gitleaks
 
