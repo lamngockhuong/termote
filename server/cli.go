@@ -235,6 +235,10 @@ func (c *cli) dispatch(cmd string, args []string) error {
 		return c.cmdURL(args)
 	case "panel":
 		return c.cmdPanel(args)
+	case "pair":
+		return c.cmdPair(args)
+	case "devices":
+		return c.cmdDevices(args)
 	case "container":
 		return c.cmdContainer(args)
 	case "uninstall":
@@ -463,6 +467,8 @@ Commands:
   status [--json]      Show what the running server reports (alias: health)
   url [options]        Print the link to open, or to one session (see below)
   panel                Status, links and a QR code; keys open, copy, start, stop, restart
+  pair [options]       Make a code that signs a new device in without the password
+  devices              List the paired devices; devices revoke <id> signs one out
   container <cmd>      Run the server in a container: up, down, logs [-f], status
   update               Update to the latest release
   uninstall [--purge]  Remove the service, the command, the install and uploaded images
@@ -499,6 +505,10 @@ Options of url (the Herdr plugin runs: url --herdr --open):
   --group <id> --tab <id> [--pane <id>]   Select a session (ids of /api/mux/snapshot)
   --view <terminal|chat|files|changes>    The view to open on it
   --open / --copy / --qr     Open it in the browser, copy it, print a QR code
+
+Options of pair (the code works once, for 5 minutes):
+  --role <view|full>         What the device may do (default: view, which only watches)
+  --name <name>              The device's name (default: asked on it, else its browser)
 
 Options of update:
   --version <X.Y.Z>          Update to a specific version
