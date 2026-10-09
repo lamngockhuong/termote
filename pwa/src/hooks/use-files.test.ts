@@ -46,6 +46,7 @@ describe('filesError', () => {
     [new RequestError(501, '', 'x'), 'unsupported'],
     [new RequestError(404, '', 'x'), 'not-found'],
     [new RequestError(403, '', 'x'), 'not-allowed'],
+    [new RequestError(403, 'view_only', 'x'), 'view-only'],
     [new RequestError(500, '', 'x'), 'unavailable'],
     [new Error('offline'), 'unavailable'],
   ])('%s is %s', (err, want) => {

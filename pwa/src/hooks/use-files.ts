@@ -23,6 +23,8 @@ export type FilesError =
   | 'not-found'
   // A directory termote never serves, or one the server cannot read
   | 'not-allowed'
+  // A view-only device reads files in a git repository only
+  | 'view-only'
   // The request failed (network, server)
   | 'unavailable'
 
@@ -30,7 +32,9 @@ export function filesError(err: unknown): FilesError {
   if (!(err instanceof RequestError)) return 'unavailable'
   if (err.status === 501) return 'unsupported'
   if (err.status === 404) return 'not-found'
-  if (err.status === 403) return 'not-allowed'
+  if (err.status === 403) {
+    return err.code === 'view_only' ? 'view-only' : 'not-allowed'
+  }
   return 'unavailable'
 }
 

@@ -70,8 +70,9 @@ interface Props {
   groups?: SessionGroup[]
   activeId: string
   onSelect: (id: string) => void
-  onAdd: (name: string, icon?: string, description?: string) => void
-  onRemove: (id: string) => void
+  // Unset (view-only role): no way to add or close a tab is shown.
+  onAdd?: (name: string, icon?: string, description?: string) => void
+  onRemove?: (id: string) => void
   onUpdate?: (id: string, updates: Partial<Omit<Session, 'id'>>) => void
   // Mobile: whether the sessions sheet is open
   isOpen?: boolean
@@ -204,6 +205,8 @@ export function SessionSidebar({
   reorder,
 }: Props) {
   const [showAddForm, setShowAddForm] = useState(false)
+  const canAdd = !!onAdd
+  const canRemove = !!onRemove && sessions.length > 1
   const [newName, setNewName] = useState('')
   const [newIcon, setNewIcon] = useState('💻')
   // The tab being edited, by key: a move that shifts its id (tmux) leaves
@@ -371,7 +374,7 @@ export function SessionSidebar({
   }, [isMobile, isOpen])
 
   const handleAdd = () => {
-    if (newName.trim()) {
+    if (onAdd && newName.trim()) {
       // The new session has no agent yet: clear the filter so it shows.
       if (filtering) onFilterChange?.('all')
       onAdd(newName.trim(), newIcon)
@@ -507,11 +510,11 @@ export function SessionSidebar({
               <Pencil size={14} aria-hidden="true" />
             </IconButton>
           )}
-          {sessions.length > 1 && (
+          {canRemove && (
             <IconButton
               size="sm"
               variant="danger"
-              onClick={() => onRemove(session.id)}
+              onClick={() => onRemove?.(session.id)}
               className="size-7!"
               title="Remove session"
               aria-label={`Remove ${session.name}`}
@@ -534,8 +537,8 @@ export function SessionSidebar({
           isActive={activeId === session.id}
           onSelect={() => onSelect(session.id)}
           onEdit={() => startEdit(session)}
-          onRemove={() => onRemove(session.id)}
-          canRemove={sessions.length > 1}
+          onRemove={() => onRemove?.(session.id)}
+          canRemove={canRemove}
           canEdit={!!onUpdate}
         />
       ) : (
@@ -895,11 +898,11 @@ export function SessionSidebar({
               Edit
             </Button>
           )}
-          {sessions.length > 1 && (
+          {canRemove && (
             <Button
               size="sm"
               variant="danger"
-              onClick={() => onRemove(activeSession.id)}
+              onClick={() => onRemove?.(activeSession.id)}
             >
               <Trash2 size={14} aria-hidden="true" />
               Delete
@@ -925,6 +928,7 @@ export function SessionSidebar({
         title="Sessions"
         closeLabel="Close sessions"
         actions={
+          canAdd &&
           !showAddForm && (
             <Button
               variant="primary"
@@ -979,17 +983,19 @@ export function SessionSidebar({
               />
             )}
           </IconButton>
-          <IconButton
-            variant="primary"
-            onClick={() => {
-              onToggleCollapse?.()
-              setShowAddForm(true)
-            }}
-            title="Add new session"
-            aria-label="Add new session"
-          >
-            <Plus size={18} aria-hidden="true" />
-          </IconButton>
+          {canAdd && (
+            <IconButton
+              variant="primary"
+              onClick={() => {
+                onToggleCollapse?.()
+                setShowAddForm(true)
+              }}
+              title="Add new session"
+              aria-label="Add new session"
+            >
+              <Plus size={18} aria-hidden="true" />
+            </IconButton>
+          )}
           <div className="flex min-h-0 w-full flex-1 flex-col items-center gap-0.5 overflow-y-auto pt-1">
             {railSessions.map((session) => {
               const active = activeId === session.id
@@ -1047,19 +1053,19 @@ export function SessionSidebar({
           </IconButton>
         </div>
         <div className="shrink-0 px-3 pb-2">
-          {showAddForm ? (
-            addForm
-          ) : (
-            <Button
-              variant="primary"
-              onClick={() => setShowAddForm(true)}
-              title="Add new session"
-              className="w-full ui-native:rounded-full"
-            >
-              <Plus size={16} aria-hidden="true" />
-              New session
-            </Button>
-          )}
+          {showAddForm
+            ? addForm
+            : canAdd && (
+                <Button
+                  variant="primary"
+                  onClick={() => setShowAddForm(true)}
+                  title="Add new session"
+                  className="w-full ui-native:rounded-full"
+                >
+                  <Plus size={16} aria-hidden="true" />
+                  New session
+                </Button>
+              )}
           {newGroupButton && <div className="mt-2">{newGroupButton}</div>}
           {filterBar && <div className="mt-2">{filterBar}</div>}
         </div>

@@ -115,6 +115,16 @@ func safeNext(p string) string {
 	return p
 }
 
+// pairNext reports a sign-in asked for by a page at /pair, and the code its
+// address held (empty when none).
+func pairNext(next string) (code string, ok bool) {
+	u, err := url.Parse(next)
+	if err != nil || u.Scheme != "" || u.Host != "" || u.Path != pairPath {
+		return "", false
+	}
+	return u.Query().Get("code"), true
+}
+
 // isCrossSiteLogin reports a form POST that another site made: browsers
 // send Sec-Fetch-Site on it; one without the header (an old browser, curl)
 // passes, as a script on another page cannot omit it.

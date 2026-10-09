@@ -555,3 +555,34 @@ describe('DiffViewer in a tab', () => {
     expect(p.onClose).not.toHaveBeenCalled()
   })
 })
+
+describe('DiffViewer for a view-only device', () => {
+  it('offers no way to show a sensitive diff, and says why', async () => {
+    mockDiff.mockResolvedValueOnce({ ...diff(), sensitive: true, hunks: null })
+    const v = show({ canReveal: false })
+    expect(
+      await screen.findByText('A view-only device cannot show it'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/This file may contain secrets/),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText('This file may contain secrets. Show its contents?'),
+    ).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Show' })).toBeNull()
+    expect(mockDiff).toHaveBeenCalledTimes(1)
+    v.unmount()
+  })
+
+  it('a full device still asks, with no note about the view-only role', async () => {
+    mockDiff.mockResolvedValueOnce({ ...diff(), sensitive: true, hunks: null })
+    const v = show({ canReveal: true })
+    expect(
+      await screen.findByText(
+        'This file may contain secrets. Show its contents?',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('A view-only device cannot show it')).toBeNull()
+    v.unmount()
+  })
+})

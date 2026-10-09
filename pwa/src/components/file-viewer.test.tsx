@@ -1616,3 +1616,40 @@ describe('rebaseDraft', () => {
     expect(rebaseDraft(now, saved, '/r', 'h2').cells).toBeUndefined()
   })
 })
+
+describe('FileViewer for a view-only device', () => {
+  it('offers no way to show a sensitive file, and says why', async () => {
+    mockContent.mockResolvedValueOnce({
+      root: '/r',
+      path: '.env',
+      sensitive: true,
+    })
+    show({ path: '.env', canReveal: false })
+    expect(
+      await screen.findByText('A view-only device cannot show it'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/This file may contain secrets/),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText('This file may contain secrets. Show its contents?'),
+    ).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Show' })).toBeNull()
+    expect(mockContent).toHaveBeenCalledTimes(1)
+  })
+
+  it('a full device still asks before showing it', async () => {
+    mockContent.mockResolvedValueOnce({
+      root: '/r',
+      path: '.env',
+      sensitive: true,
+    })
+    show({ path: '.env' })
+    expect(
+      await screen.findByText(
+        'This file may contain secrets. Show its contents?',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('A view-only device cannot show it')).toBeNull()
+  })
+})

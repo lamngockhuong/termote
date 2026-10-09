@@ -110,6 +110,9 @@ func TestPairViewDeviceEndToEnd(t *testing.T) {
 	if link, _ := res["url"].(string); link != "http://localhost:7680/pair?code="+code {
 		t.Errorf("url = %q", link)
 	}
+	if in, _ := res["expiresIn"].(float64); in < 295 || in > 300 {
+		t.Errorf("expiresIn = %v, want about 300", res["expiresIn"])
+	}
 	if qr, _ := res["qr"].(string); !strings.HasPrefix(qr, "data:image/png;base64,") {
 		t.Errorf("qr = %.40q", qr)
 	}
@@ -472,5 +475,43 @@ func TestDeviceRoutesErrors(t *testing.T) {
 	rec := serve(h, apiRequest("DELETE", "/api/mux/devices/"+id, ""))
 	if rec.Code != http.StatusInternalServerError || strings.Contains(rec.Body.String(), "nope") {
 		t.Errorf("revoke on a broken store: %d %s", rec.Code, rec.Body)
+	}
+}
+
+// An app page served at /pair by an old service worker signs in through
+// /login?next=/pair?code=…: that shows the pairing form with the code.
+func TestLoginNextPairShowsPairForm(t *testing.T) {
+	h, _, _, _ := newDeviceServer(t)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, pageRequest("/login?next="+url.QueryEscape("/pair?code=abcde-fghjk")))
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK || !strings.Contains(body, `action="/pair"`) || !strings.Contains(body, `value="ABCDE-FGHJK"`) {
+		t.Fatalf("login next=/pair: %d %s", rec.Code, body)
+	}
+	// Any other next is the sign-in form.
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, pageRequest("/login?next=%2Fpairing"))
+	if strings.Contains(rec.Body.String(), `action="/pair"`) {
+		t.Error("next=/pairing showed the pairing form")
+	}
+	// Without pairing on the server, the sign-in form.
+	plain := loginHandler()
+	rec = httptest.NewRecorder()
+	plain.ServeHTTP(rec, pageRequest("/login?next=%2Fpair"))
+	if strings.Contains(rec.Body.String(), `action="/pair"`) {
+		t.Error("no pairing: showed the pairing form")
+	}
+}
+
+func TestPairNext(t *testing.T) {
+	for next, want := range map[string]string{"/pair?code=X": "X", "/pair": ""} {
+		if code, ok := pairNext(next); !ok || code != want {
+			t.Errorf("pairNext(%q) = %q, %v", next, code, ok)
+		}
+	}
+	for _, next := range []string{"/", "/pairs", "//evil/pair", "https://evil/pair", "%zz"} {
+		if _, ok := pairNext(next); ok {
+			t.Errorf("pairNext(%q) took it", next)
+		}
 	}
 }

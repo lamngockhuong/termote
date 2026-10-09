@@ -16,6 +16,7 @@ import {
   notifyWorkerReady,
   requestNotify,
 } from '../utils/notify-permission'
+import { DevicesSection } from './devices-section'
 import { Button, FOCUS_RING, IconButton } from './ui/button'
 import { SegmentedControl } from './ui/segmented-control'
 import { Sheet } from './ui/sheet'
@@ -52,6 +53,11 @@ interface Props {
   pushAvailable?: boolean
   onEnableNotify?: () => Promise<unknown>
   onDisableNotify?: () => void
+  // View-only role: nothing here may change the server (no notifications,
+  // which would subscribe this device to Web Push)
+  readOnly?: boolean
+  // The Devices group: pair, list and revoke devices (caps.devices, full)
+  devices?: boolean
 }
 
 const CONTROL =
@@ -434,6 +440,8 @@ export function SettingsModal({
   pushAvailable = false,
   onEnableNotify,
   onDisableNotify,
+  readOnly = false,
+  devices = false,
 }: Props) {
   const [activeGroup, setActiveGroup] = useState('appearance')
 
@@ -444,7 +452,6 @@ export function SettingsModal({
   const pasteOption = pasteOptions.find((o) => o.value === settings.pasteSource)
   const hasActions = onShowGestureHints || onClearHistory
 
-  // Adding a group (e.g. Devices) is one more entry here.
   const groups: GroupDef[] = [
     {
       id: 'appearance',
@@ -572,13 +579,15 @@ export function SettingsModal({
               onChange={(v) => onUpdateSetting('sortBlockedFirst', v)}
             />
           </SettingsRow>
-          <NotifyAgentsRow
-            enabled={settings.notifyAgents}
-            onChange={(v) => onUpdateSetting('notifyAgents', v)}
-            pushAvailable={pushAvailable}
-            onEnable={onEnableNotify}
-            onDisable={onDisableNotify}
-          />
+          {!readOnly && (
+            <NotifyAgentsRow
+              enabled={settings.notifyAgents}
+              onChange={(v) => onUpdateSetting('notifyAgents', v)}
+              pushAvailable={pushAvailable}
+              onEnable={onEnableNotify}
+              onDisable={onDisableNotify}
+            />
+          )}
           <SettingsRow
             title="Session poll interval"
             desc={`How often to sync session list (${formatSeconds(settings.pollInterval)})`}
@@ -613,6 +622,14 @@ export function SettingsModal({
       />
     ),
   })
+
+  if (devices) {
+    groups.push({
+      id: 'devices',
+      title: 'Devices',
+      rows: <DevicesSection />,
+    })
+  }
 
   if (updates) {
     groups.push({

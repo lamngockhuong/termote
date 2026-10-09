@@ -58,7 +58,12 @@ import {
 import { useKeyboardVisible } from './hooks/use-keyboard-visible'
 import { useLocalSessions } from './hooks/use-local-sessions'
 import { useIsMobile } from './hooks/use-media-query'
-import { logout, RequestError, selectTab } from './hooks/use-mux-api'
+import {
+  logout,
+  onViewOnlyRefusal,
+  RequestError,
+  selectTab,
+} from './hooks/use-mux-api'
 import { usePushSubscription } from './hooks/use-push-subscription'
 import { useSettings } from './hooks/use-settings'
 import { useSidebarCollapsed } from './hooks/use-sidebar-collapsed'
@@ -135,14 +140,14 @@ const SLOW_UPLOAD_MS = 300
 interface AppProps {
   // Views of the pane; tests register extra ones
   views?: AppView[]
-  // View-only role: every way to send input is hidden (#236 sets it from the
-  // role the server reports; nothing does yet)
+  // View-only role: every way to change anything on the server is hidden.
+  // The role the server reports (caps.role "view") sets it too.
   readOnly?: boolean
 }
 
 export default function App({
   views = APP_VIEWS,
-  readOnly = false,
+  readOnly: readOnlyProp = false,
 }: AppProps = {}) {
   const terminalRef = useRef<TerminalHandle>(null)
   // Stable, so the handlers that depend on it are not rebuilt every render;
@@ -190,6 +195,12 @@ export default function App({
       ),
     [showToast],
   )
+  // A write the server refused as view-only (a control the UI missed).
+  useEffect(
+    () =>
+      onViewOnlyRefusal(() => showToast('This device is view-only', 'warning')),
+    [showToast],
+  )
   // State of the terminal stream, reported by TerminalView.
   const [streamState, setStreamState] = useState<ConnectionState>('connecting')
   const { settings, updateSetting } = useSettings()
@@ -229,9 +240,15 @@ export default function App({
     refreshSessions,
     mux,
   } = useLocalSessions(settings.pollInterval)
+  // The server refuses every write of a view-only device; the UI hides them.
+  const readOnly = readOnlyProp || mux.caps.role === 'view'
+  // A view-only device on a backend that cannot stream to it (tmux before
+  // 3.2, psmux): the terminal is not opened at all.
+  const viewStreamOff = mux.caps.role === 'view' && !mux.caps.viewStream
   const copyModeSupported = mux.caps.copyMode
   const push = usePushSubscription({
-    available: !!mux.caps.push,
+    // A view-only device gets no Web Push (the server refuses it).
+    available: !!mux.caps.push && !readOnly,
     enabled: settings.notifyAgents,
   })
   useAgentNotifications({
@@ -338,27 +355,32 @@ export default function App({
     : {}
   // Moving tabs and groups, where the server offers it; a refusal is told
   // in a toast.
-  const reorder: ReorderActions = {
-    tabs: !!mux.caps.reorderTabs,
-    groups: !!mux.caps.reorderGroups,
-    onMoveTab: (id, index) =>
-      moveTab(id, index).catch((err) => showToast(moveProblem(err), 'danger')),
-    onMoveGroup: (id, index) =>
-      moveGroup(id, index).catch((err) =>
-        showToast(moveProblem(err), 'danger'),
-      ),
-    moving,
-  }
-  const groupActions: GroupActions | undefined = mux.caps.groups
-    ? {
-        noun: groupNoun,
-        onNew: () => setNewGroupOpen(true),
-        onRename: renameGroup,
-        onClose: setPendingGroupCloseId,
-        canRename: (id) => !isDefaultTmuxGroup(id),
-        ...worktreeActions,
+  const reorder: ReorderActions | undefined = readOnly
+    ? undefined
+    : {
+        tabs: !!mux.caps.reorderTabs,
+        groups: !!mux.caps.reorderGroups,
+        onMoveTab: (id, index) =>
+          moveTab(id, index).catch((err) =>
+            showToast(moveProblem(err), 'danger'),
+          ),
+        onMoveGroup: (id, index) =>
+          moveGroup(id, index).catch((err) =>
+            showToast(moveProblem(err), 'danger'),
+          ),
+        moving,
       }
-    : undefined
+  const groupActions: GroupActions | undefined =
+    mux.caps.groups && !readOnly
+      ? {
+          noun: groupNoun,
+          onNew: () => setNewGroupOpen(true),
+          onRename: renameGroup,
+          onClose: setPendingGroupCloseId,
+          canRename: (id) => !isDefaultTmuxGroup(id),
+          ...worktreeActions,
+        }
+      : undefined
   // Tab bars show the current group only; the sidebar shows every group.
   const groupSessions = useMemo(
     () =>
@@ -388,13 +410,14 @@ export default function App({
       if (
         id === TERMINAL_VIEW_ID &&
         !mux.caps.clientSideSelect &&
+        !readOnly &&
         activeSession.id
       ) {
         selectTab(activeSession.id).catch(() => {})
       }
       setViewId(id)
     },
-    [mux.caps.clientSideSelect, activeSession.id],
+    [mux.caps.clientSideSelect, readOnly, activeSession.id],
   )
   const notify = useCallback(
     (m: string, o?: NotifyOptions) =>
@@ -819,9 +842,20 @@ export default function App({
     [getTerminal],
   )
 
-  const handleMobileSelect = (id: string) => {
-    switchSession(id)
-    setSidebarOpen(false)
+  // A view-only device on tmux watches each session's current window: the
+  // server refuses to switch it, so another tab is only explained.
+  const selectSession = useCallback(
+    async (id: string, paneId?: string) => {
+      if ((await switchSession(id, paneId)) !== 'view-only') return true
+      showToast('View only: follows the active window', 'info')
+      return false
+    },
+    [switchSession, showToast],
+  )
+
+  // The sheet stays open on a tab a view-only device cannot watch.
+  const handleMobileSelect = async (id: string) => {
+    if (await selectSession(id)) setSidebarOpen(false)
   }
 
   // The new session is selected once created; the sheet closes onto it.
@@ -903,9 +937,9 @@ export default function App({
     if (link.pane && !target.panes?.some((p) => p.id === link.pane)) {
       showToast('Pane in link not found', 'warning')
     }
-    switchSession(target.id, link.pane)
+    void selectSession(target.id, link.pane)
     if (link.view) setViewId(link.view)
-  }, [linkRequest, sessionsLoaded, sessions, switchSession, showToast])
+  }, [linkRequest, sessionsLoaded, sessions, selectSession, showToast])
 
   // The address bar follows what is on screen, without adding history
   // entries, so copying it gives a link to this very pane.
@@ -973,10 +1007,10 @@ export default function App({
             sessions={sessions}
             groups={groups}
             activeId={activeSession.id}
-            onSelect={switchSession}
-            onAdd={addSession}
-            onRemove={requestRemove}
-            onUpdate={updateSession}
+            onSelect={selectSession}
+            onAdd={readOnly ? undefined : addSession}
+            onRemove={readOnly ? undefined : requestRemove}
+            onUpdate={readOnly ? undefined : updateSession}
             isCollapsed={sidebarCollapsed}
             onToggleCollapse={toggleSidebarCollapsed}
             filter={settings.sidebarFilter}
@@ -994,9 +1028,9 @@ export default function App({
             groups={groups}
             activeId={activeSession.id}
             onSelect={handleMobileSelect}
-            onAdd={handleMobileAdd}
-            onRemove={requestRemove}
-            onUpdate={updateSession}
+            onAdd={readOnly ? undefined : handleMobileAdd}
+            onRemove={readOnly ? undefined : requestRemove}
+            onUpdate={readOnly ? undefined : updateSession}
             isOpen={sidebarOpen}
             onClose={() => setSidebarOpen(false)}
             isMobile
@@ -1016,9 +1050,9 @@ export default function App({
             groupName={groupName}
             blockedElsewhere={blockedElsewhere}
             showSessionTabs={settings.showSessionTabs}
-            canRemoveTab={sessions.length > 1}
-            onSelectTab={switchSession}
-            onAddTab={() => addSession('New')}
+            canRemoveTab={!readOnly && sessions.length > 1}
+            onSelectTab={selectSession}
+            onAddTab={readOnly ? undefined : () => addSession('New')}
             onRemoveTab={requestRemove}
             connectionState={connectionState}
             onRetry={() => terminalRef.current?.reconnect()}
@@ -1069,16 +1103,24 @@ export default function App({
               </Banner>
             )}
           </div>
-          {readOnly && (
-            <Banner>View only: you can watch this terminal but not type</Banner>
-          )}
+          {readOnly &&
+            (viewStreamOff ? (
+              <Banner variant="warning">
+                View only is not available with this tmux: the terminal needs
+                tmux 3.2 or later on the server
+              </Banner>
+            ) : (
+              <Banner>
+                View only: you can watch this terminal but not type
+              </Banner>
+            ))}
           {/* Split tab: pick the pane to stream (herdr) */}
           {mux.caps.clientSideSelect && activeSession.panes && (
             <PaneStrip
               panes={activeSession.panes}
               activePaneId={activeSession.paneId}
               onSelect={selectPane}
-              onClose={setPendingPaneId}
+              onClose={readOnly ? undefined : setPendingPaneId}
             />
           )}
           {/* isolate: the maximized side panel stays under the header's menus */}
@@ -1104,7 +1146,8 @@ export default function App({
                 <div className="h-full">
                   <TerminalView
                     ref={terminalRef}
-                    paneId={activeSession.paneId}
+                    // No stream at all where the server would refuse it
+                    paneId={viewStreamOff ? undefined : activeSession.paneId}
                     backend={mux.backend}
                     followPane={mux.caps.clientSideSelect}
                     // tmux attaches a whole session: another session needs
@@ -1116,7 +1159,9 @@ export default function App({
                     }
                     paneSeen={mux.caps.clientSideSelect ? undefined : paneSeen}
                     copyModeSupported={copyModeSupported}
-                    serverScroll={!!mux.caps.scroll}
+                    // A view-only device never moves the backend's view of
+                    // the pane (Herdr scrolls it for every client)
+                    serverScroll={!!mux.caps.scroll && !readOnly}
                     bracketedPaste={
                       mux.backend === 'herdr' && !!activeSession.hasAgent
                     }
@@ -1133,6 +1178,7 @@ export default function App({
                     driveSize={
                       settings.driveTerminalSize &&
                       !!mux.caps.driveSize &&
+                      !readOnly &&
                       isTerminalView
                     }
                     onDriveLost={onDriveLost}
@@ -1363,8 +1409,10 @@ export default function App({
         pasteBufferLabel={
           mux.backend === 'tmux' ? 'tmux buffer' : 'Session buffer'
         }
-        driveSizeSupported={!!mux.caps.driveSize}
+        driveSizeSupported={!!mux.caps.driveSize && !readOnly}
         pushAvailable={!!mux.caps.push}
+        readOnly={readOnly}
+        devices={!!mux.caps.devices && !readOnly}
         onEnableNotify={push.enable}
         onDisableNotify={push.disable}
         onShowGestureHints={isMobile ? showGestureHints : undefined}

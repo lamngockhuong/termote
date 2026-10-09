@@ -1,0 +1,67 @@
+---
+title: Pair a Device
+description: Sign a phone or a colleague's browser in with a one-time code, optionally view only
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+Everyone signs in with the one saved password. To let another device in without handing that password
+over, pair it: you make a one-time code, the new device types it, and from then on that device signs in
+by itself. Each paired device has a name and a role, and you can sign it out on its own without
+changing the password. Pairing needs sign-in, so it is off with `--no-auth`.
+
+## Pair from the terminal
+
+```bash
+termote pair                      # a view-only device (the default)
+termote pair --role full --name "Work phone"
+```
+
+It prints a code like `ABCDE-FGHJK`, a link and a QR code. The code works once and expires after 5
+minutes. On the new device, scan the QR code, open the link, or open `/pair` on your Termote address and
+type the code. If you gave no `--name`, the new device is asked for one, else it is named after its
+browser.
+
+## Pair from a signed-in device
+
+On a device with full access, open **Settings > Devices > Pair a device**, pick **View only** or full
+access, optionally name it, and show the code or QR code to the new device. The same list shows each
+paired device with its role and when it was last used, with a **Revoke** button.
+
+<Aside>
+  An iOS home-screen app does not share cookies with Safari, so a scanned QR code cannot sign it in. Open
+  the app's sign-in page and use **Have a pairing code?**.
+</Aside>
+
+## List and revoke
+
+```bash
+termote devices                   # id, name, role, when paired and last used
+termote devices revoke <id>       # sign it out and close its open terminals
+```
+
+Revoking takes effect at once. Logging out on a paired device revokes that device. A new password
+(`termote start --fresh`) signs out every paired device. A device stays signed in for 400 days unless
+you revoke it, so give Termote a host name of its own: a cookie is shared by every service on the same
+host name.
+
+## View only
+
+A view-only device can watch the terminal, the Chat view and Files/Changes, and nothing else: the server
+refuses every write, and the interface hides the controls that would write, under a **View only** banner.
+
+- **Terminal:** it cannot type, resize or scroll the shared view. With tmux it follows each session's
+  active window; with Herdr it picks tabs on its own device but cannot scroll the history.
+- **Needs tmux 3.2 or later:** with an older tmux, or psmux, the terminal is not available to a view-only
+  device and the banner says so. Chat and Files still work.
+- **Files:** only for a pane inside a git repository, and never a file marked as sensitive (`.env`,
+  keys, and so on).
+- **Chat:** it reads the conversation and any open dialog, but cannot answer it.
+- **Everything the agent printed is readable.** Pair a view-only device only with someone you would let
+  look over your shoulder.
+- No push notifications, and at most 2 open terminals per view-only device.
+
+## Container
+
+`termote container up` keeps the paired devices in a volume named `termote-state-<uid>`, so they survive
+`container up` and `update`. `termote container down` keeps it; `termote uninstall --purge` removes it.

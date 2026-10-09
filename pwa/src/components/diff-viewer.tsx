@@ -50,6 +50,7 @@ type Loaded =
 
 const ERRORS: Record<FilesError, string> = {
   'not-allowed': "This file can't be shown",
+  'view-only': 'View only: files show in a git repository only',
   // Answered as gone instead: not listed by git status any more, or the
   // untracked file was removed
   'not-found': 'No longer changed',
@@ -86,6 +87,8 @@ interface Props {
   // coming back, asks only once. Without it the diff keeps its own.
   reveal?: boolean
   onReveal?: () => void
+  // Off for a view-only client: the server never shows it a sensitive file
+  canReveal?: boolean
   // Edits the working tree's file; absent for a view-only client
   onEdit?: () => void
   // Not showing the sensitive file after all (Back when not given)
@@ -115,6 +118,7 @@ export function DiffViewer({
   notify,
   reveal: revealProp,
   onReveal,
+  canReveal = true,
   onEdit,
   onCancelReveal,
   scrollTop,
@@ -323,6 +327,7 @@ export function DiffViewer({
         <ViewMessage>
           <Lock size={20} aria-hidden="true" />
           This file may contain secrets
+          {!canReveal && <span>A view-only device cannot show it</span>}
         </ViewMessage>
       )}
       {previewing && (
@@ -360,7 +365,7 @@ export function DiffViewer({
         />
       )}
       <SensitiveConfirm
-        isOpen={shown.kind === 'sensitive'}
+        isOpen={canReveal && shown.kind === 'sensitive'}
         onConfirm={setReveal}
         onCancel={onCancelReveal ?? onClose}
       />

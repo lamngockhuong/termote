@@ -782,6 +782,14 @@ func newBasicAuth(user, pass string, dev *deviceAuth, next http.Handler) http.Ha
 				http.Redirect(w, r, next, http.StatusSeeOther)
 				return
 			}
+			// A page from before /pair was kept off the service worker's
+			// app shell gets the app at /pair, whose first read sends it
+			// here with next=/pair?code=…: the pairing form is shown, with
+			// the code, instead of a sign-in it has no password for.
+			if code, ok := pairNext(r.URL.Query().Get("next")); ok && dev != nil {
+				writePairPage(w, http.StatusOK, pairForm{Code: pairPrefill(code)})
+				return
+			}
 			writeLoginPage(w, http.StatusOK, loginForm{Next: next, Pairing: dev != nil})
 			return
 		case http.MethodPost:

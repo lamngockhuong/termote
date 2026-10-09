@@ -1741,3 +1741,100 @@ describe('useLocalSessions — keys and moves', () => {
     })
   })
 })
+
+describe('useLocalSessions for a view-only device on tmux', () => {
+  // Each group's current window is the one the server would show
+  const viewOnly = () => ({
+    backend: 'tmux',
+    caps: { clientSideSelect: false, copyMode: true, role: 'view' },
+    groups: [
+      {
+        id: 'main',
+        name: 'main',
+        tabs: [
+          { ...WIN_SHELL, active: true },
+          { ...WIN_VIM, active: false },
+        ],
+      },
+      {
+        id: 'w2',
+        name: 'web',
+        tabs: [
+          { id: 'w2:t1', name: 'dev', active: true, panes: [] },
+          { id: 'w2:t2', name: 'logs', active: false, panes: [] },
+        ],
+      },
+    ],
+  })
+
+  beforeEach(() => {
+    localStorage.clear()
+    vi.clearAllMocks()
+    mockSnapshot.extra = viewOnly()
+    mockSelectTab.mockResolvedValue(true)
+  })
+
+  it('refuses a window the server would not show, and switches nothing', async () => {
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    let outcome: unknown
+    await act(async () => {
+      outcome = await result.current.switchSession('1')
+    })
+    expect(outcome).toBe('view-only')
+    expect(mockSelectTab).not.toHaveBeenCalled()
+    expect(result.current.activeSession.id).toBe('0')
+  })
+
+  it("shows another group's current window on this device only", async () => {
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    let outcome: unknown = 'unset'
+    await act(async () => {
+      outcome = await result.current.switchSession('w2:t1')
+    })
+    expect(outcome).toBeUndefined()
+    expect(mockSelectTab).not.toHaveBeenCalled()
+    expect(result.current.activeSession.id).toBe('w2:t1')
+    expect(result.current.activeSession.groupId).toBe('w2')
+  })
+
+  it("refuses another group's window that is not its current one", async () => {
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    await act(async () => {
+      expect(await result.current.switchSession('w2:t2')).toBe('view-only')
+    })
+    expect(result.current.activeSession.id).toBe('0')
+  })
+})
+
+describe('useLocalSessions with no tab yet', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    vi.clearAllMocks()
+    mockCreateTab.mockResolvedValue(true)
+  })
+
+  it('a view-only device waits for a tab and makes none', async () => {
+    mockSnapshot.extra = {
+      caps: { clientSideSelect: false, copyMode: true, role: 'view' },
+      groups: [],
+    }
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    expect(mockCreateTab).not.toHaveBeenCalled()
+    expect(result.current.sessions).toEqual([])
+    expect(result.current.isReady).toBe(true)
+  })
+
+  it('a full device gets a shell tab when there is none', async () => {
+    mockSnapshot.extra = {
+      caps: { clientSideSelect: false, copyMode: true, role: 'full' },
+      groups: [],
+    }
+    renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    expect(mockCreateTab).toHaveBeenCalledWith('shell')
+  })
+})

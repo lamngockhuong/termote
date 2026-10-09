@@ -237,6 +237,8 @@ uninstall [--purge]  Remove the service, the command, the install and uploads (-
 logs [service]       View logs (server, all, follow, clean)
 link / unlink        Create or remove the 'termote' command in ~/.local/bin
 show-password        Show the saved username and password
+pair [options]       Make a one-time code (5 min) that signs a new device in; --role <view|full> (default view), --name <name>
+devices              List the paired devices; `devices revoke <id>` signs one out
 version              Show version
 serve                Run the server in the foreground (what the service runs)
 (no command)         Interactive menu
@@ -389,6 +391,15 @@ The `update` command:
 | `server/agent_proc_handles_windows.go`            | Windows: write handles of every process (handle table, 1 s)   |
 | `server/agent_proc_files_windows.go`              | Windows: a process's open rollouts, checked again live        |
 | `server/agent_proc_identity_windows.go`           | Windows: drive-letter paths only, volume + file index         |
+| `server/auth_role.go`                             | Roles (full/view), `authInfo`, default refusal of view writes |
+| `server/device_store.go`                          | Paired-device store (`<stateDir>/devices`), tokens, `gen`     |
+| `server/device_pairing.go`                        | Pairing codes (in memory, TTL, one use)                       |
+| `server/device_routes.go`                         | `/api/mux/devices*` routes, device cookie, revoke             |
+| `server/pair_page.go`                             | `/pair`: the form a new device types its code into            |
+| `server/cli_devices.go`                           | `pair`, `devices`, `devices revoke`                           |
+| `pwa/src/components/devices-section.tsx`          | Settings > Devices: list, revoke, Pair a device               |
+| `pwa/src/components/pair-device-sheet.tsx`        | Pair a device: role, name, the code and its QR                |
+| `pwa/src/hooks/use-devices.ts`                    | Paired devices list, pair and revoke calls                    |
 | `server/guard.go`                                 | Host allowlist + Origin/Content-Type write guard              |
 | `server/login.go`                                 | Sign-in form for browsers (iOS home-screen app has no prompt) |
 | `server/uploads.go`                               | `/api/mux/uploads`: image store (naming, quota, retention)    |
@@ -478,10 +489,61 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   snapshot is a same-site read (`crossSiteRejection`, `Sec-Fetch-Site: none` included). The PWA
   shows names in the sessions list and pane strip and adds "Running: …" to the close
   confirmations; the cwd is not shown
+- **Paired devices** (`server/device_*.go`, `server/pair_page.go`, `server/cli_devices.go`,
+  `caps.devices`): a device signs in with a one-time code instead of the password and gets its own
+  cookie `termote_device_<8 hex of the store id>` (`HttpOnly`, `SameSite=Strict`, `Secure` on HTTPS,
+  400 days, never reissued; the id keeps two servers on one host name from clearing each other's).
+  The token is 32 random bytes, `tmd_` + base64url, shown once; only its SHA-256 is stored, in
+  `<stateDir>/devices/` (0700; `key.json`, `devices.json` 0600, owner-only ACL on Windows), at most
+  50 devices (409 `too_many_devices`), name 1–64 bytes. Each record carries `gen` = HMAC(store key,
+  user + password): another password makes a record ignored in memory, never deleted (a manual
+  `serve` with another password must not end every device); only `start --fresh` removes them from
+  disk. Every write rereads the file and applies one operation; a lookup stats it at most each
+  second, so a second process sees a revoke; `lastUsedAt` reaches disk each 5 minutes. `--no-auth`
+  or an unusable dir: the store is not loaded, the routes answer 501 `unsupported`, `caps.devices`
+  false. `basicAuth` order: public → `/login` → `/pair` → `/logout` → session cookie → device
+  cookie → Basic; a session wins over a device cookie, and a cookie naming no record is cleared.
+  Codes (`POST /api/mux/devices/pair` `{role, name?}`, full only, `writeGuard`) are 10 Crockford
+  base32 characters shown `XXXXX-XXXXX` (typed `O`/`I`/`L` read as `0`/`1`), 5 minutes, once, in
+  memory only, at most 5 waiting (409 `too_many_codes`); a revoked device's waiting codes go with
+  it. `termote pair` calls the same route with the saved password through the listener-owner check
+  and builds the link and QR as `url` does; `--role` defaults to `view`. `GET /pair[?code=]` only
+  shows a script-free form; `POST /pair` (urlencoded, 8 KB) is checked like `/login`
+  (`isCrossSiteLogin`, `writeGuard`'s `loginPath || pairPath`), with no code waiting → 401 at once
+  and not counted, wrong codes counted by a limiter of its own (5/min per IP, 20/min per /64, so a
+  typo never locks the password login; behind a proxy every client shares one address). A browser
+  already signed in as a session or full device → 409, never downgraded; a view-only device paired
+  again has its old record revoked. `safeNext` never returns `/pair…` and the service worker's
+  `navigateFallbackDenylist` has `/pair`, so a code never reaches `next` or the history;
+  `/login?next=/pair?code=…` (where an app page an older service worker served at `/pair` sends
+  the browser) shows the pairing form with that code. The code's reply carries `expiresIn`
+  (seconds) so the PWA counts down without trusting its own clock. Revoke
+  (`DELETE /api/mux/devices/{id}`, `GET /api/mux/devices`, full only; Log out on a device revokes
+  it): record written first, then its stream tokens dropped and its streams closed (a stream
+  mid-handshake rechecks `alive`); a running request finishes. Container: the state dir is the
+  volume `termote-state-<uid>` (kept by `container down`, removed by `uninstall --purge`);
+  `container status` says when pairing is off
+- **View-only role** (`server/auth_role.go`, `caps.role` = `full|view`, `caps.viewStream`): Basic,
+  session and `--no-auth` are always `full`; a device carries its role. `basicAuth` refuses every
+  non-GET/HEAD/OPTIONS method of a view-only client on any path (403 `{"error", "code":
+  "view_only"}`) before a handler runs, except `POST /api/mux/logout`; handlers repeat it with
+  `requireWriteRole`, so a route added later is closed without remembering to. Reads: transcript,
+  commands, snapshot, push key and `worktrees` GET are allowed; `agent/prompt` carries no
+  `promptId`; `GET agent/start` and `files/content?hash=1` are 403; Files/Changes routes only when
+  the pane root is a git toplevel, never with `reveal=1` (`requireFilesRead`), and `files/find`
+  ignores `fresh=1`. The snapshot uses `peekSnapshot` (tmux does not recreate the default session).
+  A view stream drops every input frame, `resize` and `drive`; tmux attaches `-E -r` to the
+  session's active window only (another `pane` → 403; tmux ≥ 3.2, older tmux and psmux → 501,
+  `caps.viewStream` false), Herdr only `observe`s. Limits: 2 streams and 4 waiting stream tokens
+  per view device; a view stream or token never evicts a full one (full evicts view first; a full
+  hub with no view stream to evict → "too many viewers"). The PWA hides every write control and
+  shows "View only" (`caps.role`); tmux follows each session's active window, Herdr selects tabs
+  client-side but cannot scroll history. No Web Push. A view client reads whatever the agent
+  printed (accepted)
 - **Groups** (`POST /api/mux/groups` `{name, cwd}` → `{ok, id}`, `PATCH /api/mux/groups/{id}`
   `{name}`, `DELETE /api/mux/groups/{id}`; `server/mux_groups.go`, `caps.groups`): auth,
-  `hostGuard`, `writeGuard` (same-site JSON), 8 KB body, `requireWriteRole` first (a stub until
-  #236, which must refuse all three), `muxTimeout`; creates, renames and closes run one at a time
+  `hostGuard`, `writeGuard` (same-site JSON), 8 KB body, `requireWriteRole` first (a view-only
+  client gets 403 `view_only`), `muxTimeout`; creates, renames and closes run one at a time
   (one mutex), with no cap on the number of groups. Errors the handler or backend raises carry a
   `code` (`invalid_name`, `invalid_cwd`, `not_found`, `not_directory`, `not_allowed`, `busy`,
   `invalid_group_id`, 404 `unknown_group` also when the group vanishes between check and command,
@@ -509,8 +571,8 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   `muxTimeout` for another group change gets 503 `busy`. Closing a group ends every process in it
 - **Reordering** (`POST /api/mux/tabs/{id}/move` and `POST /api/mux/groups/{id}/move`, both
   `{index}` → `{ok, id}`; `server/mux_reorder.go`, `caps.reorderTabs`/`caps.reorderGroups`):
-  `writeGuard` (same-site JSON), `requireWriteRole` first (the view-only role, #236, must refuse
-  both), `requireMethod(POST)`, the cap checked before the 8 KB body (501 `unsupported`, nothing
+  `writeGuard` (same-site JSON), `requireWriteRole` first (a view-only
+  client gets 403 `view_only`), `requireMethod(POST)`, the cap checked before the 8 KB body (501 `unsupported`, nothing
   sent). `index` is the final 0-based position (a tab among its group's tabs, a group among the
   movable ones), a JSON integer with `0 <= index < n`, else 400 `invalid_index` (also a list that
   changed under the move); the current place is 200 with nothing done. One slot for both routes
@@ -543,8 +605,8 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   /api/mux/worktrees/open` `{groupId, branch}` → `{ok, id, alreadyOpen}`, `DELETE
   /api/mux/worktrees/{id}` `{force, path, branch}`; `server/mux_worktrees.go`, `caps.worktrees`:
   Herdr ≥ 0.9.2 from the `ping` version, never on Windows until checked there; tmux has none, 501
-  `unsupported`): writes go through `writeGuard` (same-site JSON), `requireWriteRole` first (the
-  view-only role, #236, must refuse all three), the 8 KB body; the GET through
+  `unsupported`): writes go through `writeGuard` (same-site JSON), `requireWriteRole` first (a
+  view-only client gets 403 `view_only`), the 8 KB body; the GET through
   `crossSiteRejection` (so `Sec-Fetch-Site: none` too). Everything is checked before the slot:
   `branch` by `validBranchName` (git's `check-ref-format --branch` rules, 1–255 bytes, no leading
   `-`, not `HEAD` or `@`, and no Unicode control, format or space character, which git accepts
@@ -634,8 +696,7 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   `server/agent_start.go`, `caps.agentStart`: Herdr ≥ 0.8.2 from the subscription's `ping`, on
   every OS; `caps.agentStartCodex`: also Codex has a Chat view on this OS, `codexProcSupported`):
   `writeGuard` (same-site JSON), `requireWriteRole`
-  (the view-only role, #236, must refuse it; a view-only client is kept from it only in the UI
-  meanwhile), 8 KB body. Only `kind` is decoded (`claude` → no arguments, `codex` →
+  (a view-only client gets 403 `view_only`, also on `GET`), 8 KB body. Only `kind` is decoded (`claude` → no arguments, `codex` →
   `--no-daemon`, else 400 `invalid_kind`; `codex` where Codex has no Chat view
   (`codexProcSupported` false) → 501 `unsupported`, checked before the pane is resolved, nothing
   sent to Herdr; the PWA then offers only Claude Code); arguments and the Herdr alias
@@ -781,8 +842,7 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   the file read again, then renamed over it; the temporary file goes on any failure, ones older
   than 10 minutes are swept (only names of that exact form), every `.termote-edit-*` name is
   sensitive, and a save drops the root's cached git status. Saves of one file are serialised; an agent writing between the last read and the rename still loses its change (no
-  compare-and-swap), and the rename drops ACLs/xattrs. A view-only client is kept from editing in
-  the UI only while `requireWriteRole` is a stub. The draft stays in the PWA's memory, never in
+  compare-and-swap), and the rename drops ACLs/xattrs. A view-only client gets 403 `view_only`. The draft stays in the PWA's memory, never in
   browser storage
 - **Creating a file** (`POST files/create?root=`, `server/files_create.go`): an empty file and
   the directories missing above it (0666/0777 under the umask; directories made before a later
@@ -812,8 +872,7 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   drops the root's cached git status. Accepted risk: a new file can be one another tool trusts
   or runs (`.claude/settings.local.json`, `.claude/commands/*.md`, `.vscode/tasks.json`,
   `.github/workflows/*`, a systemd/launchd unit when the root is the home dir); a signed-in user
-  has a shell anyway, and the view-only role (#236) must refuse creates as well as saves. A
-  view-only client gets no New file button only in the UI while `requireWriteRole` is a stub.
+  has a shell anyway, and a view-only client gets 403 `view_only` for creates as well as saves.
   The root's lock is keyed `root + "\x01create"`: `"\x00create"` was the key of a file named
   `create` at the root, and a delete takes both
 - **Finding a file** (`GET files/find?q=&root=&ignored=1&exclude=…&fresh=1`,
@@ -876,8 +935,8 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   sensitive one not revealed, so deleting a `.env` never sends its secret to the browser
   (accepted risk: a short secret's hash can be guessed by a signed-in user, who has a shell);
   it takes one of the 4 `files/raw` slots (429 `busy`). `termote uninstall` keeps the trash
-  (the user's files) and says where; `--purge` removes it. The view-only role (#236) must refuse
-  deletes and restores; a view-only client gets no Delete only in the UI meanwhile
+  (the user's files) and says where; `--purge` removes it. A view-only client gets 403 `view_only`
+  for deletes and restores, and `content?hash=1`
 - **Image uploads** (`POST /api/mux/uploads`): the PWA sends an image so an agent can read it by
   path (the host clipboard is empty when the image sits on a phone). Same auth, Host allowlist,
   `Sec-Fetch-Site`/`Origin` check and `requireWriteRole` as every write; the body is a raw
@@ -894,7 +953,7 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   over quota, never one younger than an hour; only the store's own names are ever deleted.
   Errors carry a JSON `code`. The Chat view sends the returned ids in `agent/message` (see
   Agent chat). `Caps.uploads` tells the PWA (snapshot); a view-only client
-  offers no upload, enforced in the UI only while `requireWriteRole` is a stub. The container
+  gets 403 `view_only`. The container
   creates `/home/termote/.cache` and `/home/termote/.config` mode 1777 so the host uid can
   create its upload dir and the generated password's file (kept out of the log). The store is
   never served by the Files view, even when a pane's root holds it
@@ -904,8 +963,8 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   agent forgets it (tmux answers a slow lookup with the last agents found, not none), a first
   sighting never notifies; the PWA and `server/push_watch.go` share `server/testdata/agent-transitions.json`).
   `GET push/key` (auth, `hostGuard`) returns only the public key; `POST`/`DELETE push/subscribe`
-  go through `writeGuard` (same-site JSON), `requireWriteRole` (the view-only role, #236, must
-  refuse them) and the 8 KB body limit, answer 200 `{ok}` (400 `invalid_endpoint`/`invalid_keys`,
+  go through `writeGuard` (same-site JSON), `requireWriteRole` (a view-only client
+  gets 403 `view_only`) and the 8 KB body limit, answer 200 `{ok}` (400 `invalid_endpoint`/`invalid_keys`,
   503 `push_unavailable`), and no route lists or echoes a subscription. Endpoints must be HTTPS
   on 443 at `fcm.googleapis.com`, `updates.push.services.mozilla.com`, `web.push.apple.com`,
   `*.push.apple.com` or `*.notify.windows.com` (no IP literal, no userinfo, 2048 bytes), checked

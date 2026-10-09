@@ -38,6 +38,7 @@ const ERRORS: Record<ChangesError, string> = {
   unsupported: 'Not supported by this backend',
   'not-found': 'Directory not found',
   'not-allowed': "This directory can't be shown",
+  'view-only': 'View only: files show in a git repository only',
   timeout: 'git took too long; trying again',
   unavailable: 'Could not read the changes',
 }
@@ -319,8 +320,8 @@ function PaneChanges({
         scrollTop={tab.scrollTop}
         onScroll={(top) => c.setScroll(tab.id, top)}
         headerExtra={openFiles}
-        // A view-only client is kept from editing here only: the server
-        // has no roles yet
+        // The server refuses a view-only client both as well
+        canReveal={!readOnly}
         onEdit={readOnly ? undefined : () => c.setEditing(tab.id, true)}
       />
     )

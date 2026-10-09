@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AgentRequestError,
   answerAgentPrompt,
@@ -7,11 +7,13 @@ import {
   closeTab,
   createFile,
   createGroup,
+  createPairingCode,
   createTab,
   createWorktree,
   deleteFile,
   fetchAgentCommands,
   fetchAgentPrompt,
+  fetchDevices,
   fetchFileContent,
   fetchFileDiff,
   fetchFileHash,
@@ -28,6 +30,7 @@ import {
   logout,
   moveGroup,
   moveTab,
+  onViewOnlyRefusal,
   openWorktree,
   REQUEST_TIMEOUT_MS,
   RequestError,
@@ -35,12 +38,14 @@ import {
   renameGroup,
   renameTab,
   restoreFile,
+  revokeDevice,
   SAVE_TIMEOUT_MS,
   saveFileContent,
   scrollPane,
   selectTab,
   sendAgentMessage,
   sendKeys,
+  signInUrl,
   subscribePush,
   unsubscribePush,
   WORKTREE_REQUEST_TIMEOUT_MS,
@@ -928,5 +933,136 @@ describe('files API client', () => {
     // The agent routes' name is the same class
     expect(err).toBeInstanceOf(AgentRequestError)
     expect(err).toMatchObject({ status, ...want })
+  })
+})
+
+describe('view-only refusals and paired devices', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  afterEach(() => {
+    window.history.replaceState(null, '', '/')
+  })
+
+  it('sends the /pair page to the sign-in page, which it never returns to', () => {
+    window.history.replaceState(null, '', '/pair?code=ABCDE-FGHIJ')
+    expect(signInUrl()).toBe('/login')
+    window.history.replaceState(null, '', '/pair/x')
+    expect(signInUrl()).toBe(`/login?next=${encodeURIComponent('/pair/x')}`)
+    window.history.replaceState(null, '', '/pairs?x=1')
+    expect(signInUrl()).toBe(`/login?next=${encodeURIComponent('/pairs?x=1')}`)
+  })
+
+  it('tells every listener once when a write is refused as view-only', async () => {
+    mockFetch({ body: { error: 'view only', code: 'view_only' }, status: 403 })
+    const heard = vi.fn()
+    const off = onViewOnlyRefusal(heard)
+    expect(await selectTab('0')).toBe(false)
+    expect(heard).toHaveBeenCalledTimes(1)
+    off()
+    mockFetch({ body: { error: 'view only', code: 'view_only' }, status: 403 })
+    await selectTab('0')
+    expect(heard).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not tell about a write refused for another reason', async () => {
+    mockFetch({ body: { error: 'forbidden', code: 'forbidden' }, status: 403 })
+    const heard = vi.fn()
+    const off = onViewOnlyRefusal(heard)
+    await selectTab('0')
+    off()
+    expect(heard).not.toHaveBeenCalled()
+  })
+
+  it('tells about a request refused as view-only, except a read', async () => {
+    const heard = vi.fn()
+    const off = onViewOnlyRefusal(heard)
+    mockFetch({ body: { error: 'view only', code: 'view_only' }, status: 403 })
+    const err = await fetchDevices().catch((e) => e)
+    expect(err).toBeInstanceOf(RequestError)
+    expect(err.code).toBe('view_only')
+    expect(heard).toHaveBeenCalledTimes(1)
+
+    mockFetch({ body: { error: 'view only', code: 'view_only' }, status: 403 })
+    const read = await fetchFilesTree('1', '').catch((e) => e)
+    expect(read.code).toBe('view_only')
+    off()
+    expect(heard).toHaveBeenCalledTimes(1)
+  })
+
+  it('lists the paired devices, or none when the answer has no list', async () => {
+    const devices = [
+      {
+        id: 'd1',
+        name: 'Phone',
+        role: 'view',
+        createdAt: '2026-10-01T00:00:00Z',
+        lastUsedAt: '2026-10-02T00:00:00Z',
+        current: true,
+      },
+    ]
+    const { calls } = mockFetch({ body: { devices } })
+    expect(await fetchDevices()).toEqual(devices)
+    expect(calls[0].url).toBe('/api/mux/devices')
+    mockFetch({ body: {} })
+    expect(await fetchDevices()).toEqual([])
+  })
+
+  it('a refused device list carries the server code', async () => {
+    mockFetch({
+      body: { error: 'unsupported', code: 'unsupported' },
+      status: 501,
+    })
+    await expect(fetchDevices()).rejects.toMatchObject({
+      status: 501,
+      code: 'unsupported',
+    })
+  })
+
+  it('makes a pairing code from the role and name', async () => {
+    const made = {
+      code: 'ABCDE-FGHIJ',
+      expiresAt: '2026-10-09T00:05:00Z',
+      url: 'https://h/pair?code=ABCDE-FGHIJ',
+    }
+    const { calls } = mockFetch({ body: made })
+    expect(await createPairingCode('view', 'Phone')).toEqual(made)
+    expect(calls[0].url).toBe('/api/mux/devices/pair')
+    expect(calls[0].init?.method).toBe('POST')
+    expect(JSON.parse(calls[0].init?.body as string)).toEqual({
+      role: 'view',
+      name: 'Phone',
+    })
+  })
+
+  it('a refused pairing code carries the server code', async () => {
+    mockFetch({
+      body: { error: 'too many', code: 'too_many_codes' },
+      status: 429,
+    })
+    await expect(createPairingCode('full', '')).rejects.toMatchObject({
+      status: 429,
+      code: 'too_many_codes',
+    })
+  })
+
+  it('revokes a device by its id', async () => {
+    const { calls } = mockFetch({ body: { ok: true } })
+    await revokeDevice('a/b')
+    expect(calls[0].url).toBe('/api/mux/devices/a%2Fb')
+    expect(calls[0].init?.method).toBe('DELETE')
+  })
+
+  it('a device not revoked throws the server code', async () => {
+    mockFetch({
+      body: { error: 'unknown', code: 'unknown_device' },
+      status: 404,
+    })
+    await expect(revokeDevice('x')).rejects.toMatchObject({
+      status: 404,
+      code: 'unknown_device',
+    })
   })
 })

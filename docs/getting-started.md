@@ -159,6 +159,13 @@ The toolbar at the bottom provides modifier keys:
 
 - Run `termote show-password` to print the saved username and password
 
+### Give Another Device Access
+
+Run `termote pair` for a one-time code (5 minutes) and open `/pair` on the new device; the device
+gets its own sign-in, view only unless `--role full`. List or sign out devices with
+`termote devices` and `termote devices revoke <id>`, or in Settings > Devices. Needs sign-in
+(not `--no-auth`). The model and limits: [`system-architecture.md`](system-architecture.md).
+
 ### Terminal Not Rendering Properly
 
 - Use a modern browser (Chrome, Safari, Firefox)

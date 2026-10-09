@@ -1,0 +1,66 @@
+---
+title: Ghép thiết bị
+description: Cho điện thoại hoặc trình duyệt của đồng nghiệp đăng nhập bằng mã dùng một lần, có thể chỉ xem
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+Mọi người đăng nhập bằng một mật khẩu đã lưu. Muốn cho thiết bị khác vào mà không đưa mật khẩu đó, hãy
+ghép thiết bị: bạn tạo một mã dùng một lần, thiết bị mới nhập mã, và từ đó nó tự đăng nhập. Mỗi thiết bị
+ghép có tên và vai trò, và bạn đăng xuất riêng từng thiết bị mà không phải đổi mật khẩu. Ghép thiết bị cần
+đăng nhập, nên bị tắt khi chạy với `--no-auth`.
+
+## Ghép từ terminal
+
+```bash
+termote pair                      # thiết bị chỉ xem (mặc định)
+termote pair --role full --name "Work phone"
+```
+
+Lệnh in ra một mã dạng `ABCDE-FGHJK`, một đường dẫn và một mã QR. Mã chỉ dùng được một lần và hết hạn
+sau 5 phút. Trên thiết bị mới, quét mã QR, mở đường dẫn, hoặc mở `/pair` trên địa chỉ Termote rồi gõ mã.
+Nếu bạn không đặt `--name`, thiết bị mới được hỏi tên, không thì tên lấy theo trình duyệt của nó.
+
+## Ghép từ một thiết bị đã đăng nhập
+
+Trên thiết bị có toàn quyền, mở **Settings > Devices > Pair a device**, chọn **View only** hoặc toàn
+quyền, đặt tên nếu muốn, rồi cho thiết bị mới xem mã hoặc mã QR. Cũng trong danh sách đó, mỗi thiết bị
+đã ghép hiện kèm vai trò, lần dùng cuối và nút **Revoke**.
+
+<Aside>
+  Ứng dụng iOS cài ra màn hình chính không dùng chung cookie với Safari, nên quét QR không đăng nhập được
+  cho nó. Hãy mở trang đăng nhập của ứng dụng và dùng liên kết **Have a pairing code?**.
+</Aside>
+
+## Liệt kê và thu hồi
+
+```bash
+termote devices                   # id, tên, vai trò, ngày ghép, lần dùng cuối
+termote devices revoke <id>       # đăng xuất thiết bị và đóng các terminal đang mở của nó
+```
+
+Thu hồi có hiệu lực ngay. Đăng xuất trên một thiết bị đã ghép cũng là thu hồi chính thiết bị đó. Mật khẩu
+mới (`termote start --fresh`) đăng xuất mọi thiết bị đã ghép. Thiết bị còn đăng nhập 400 ngày nếu bạn
+không thu hồi, nên hãy cho Termote một tên máy riêng: cookie được mọi dịch vụ cùng tên máy nhận chung.
+
+## Chỉ xem
+
+Thiết bị chỉ xem được xem terminal, Chat và Files/Changes, ngoài ra không làm gì: server từ chối mọi thao
+tác ghi, còn giao diện ẩn các nút ghi và hiện biểu ngữ **View only**.
+
+- **Terminal:** không gõ, không đổi kích thước, không cuộn khung nhìn chung. Với tmux, nó theo cửa sổ đang
+  hoạt động của từng session; với Herdr, nó tự chọn tab trên thiết bị của mình nhưng không cuộn được lịch
+  sử.
+- **Cần tmux 3.2 trở lên:** với tmux cũ hơn hoặc psmux, thiết bị chỉ xem không dùng được terminal và biểu
+  ngữ nói rõ điều đó. Chat và Files vẫn dùng được.
+- **Files:** chỉ với pane nằm trong một git repository, và không bao giờ mở file thuộc loại nhạy cảm
+  (`.env`, khóa, v.v.).
+- **Chat:** đọc được hội thoại và hộp thoại đang mở, nhưng không trả lời được.
+- **Mọi thứ agent đã in ra đều đọc được.** Chỉ ghép thiết bị chỉ xem cho người bạn chấp nhận để họ nhìn
+  qua vai.
+- Không nhận thông báo đẩy, và mỗi thiết bị chỉ xem mở tối đa 2 terminal.
+
+## Container
+
+`termote container up` giữ các thiết bị đã ghép trong ổ lưu trữ tên `termote-state-<uid>`, nên chúng còn
+sau `container up` và `update`. `termote container down` giữ ổ này; `termote uninstall --purge` xóa nó.

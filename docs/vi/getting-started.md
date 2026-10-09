@@ -134,6 +134,13 @@ Thanh công cụ ở dưới cùng cung cấp các phím bổ trợ:
 - Kiểm tra tường lửa cho phép cổng 7680
 - Nếu nhận lỗi 403 do Host bị từ chối, chạy lệnh `termote start --allow-host <name>` mà thông báo lỗi gợi ý
 
+### Cho thiết bị khác truy cập
+
+Chạy `termote pair` để lấy mã dùng một lần (hiệu lực 5 phút) rồi mở `/pair` trên thiết bị mới; thiết bị
+có đăng nhập riêng, chỉ xem trừ khi dùng `--role full`. Xem hoặc đăng xuất thiết bị bằng `termote devices`
+và `termote devices revoke <id>`, hoặc trong Settings > Devices. Cần đăng nhập (không dùng với `--no-auth`).
+Mô hình và giới hạn: [`system-architecture.md`](../system-architecture.md).
+
 ### Quên mật khẩu
 
 - Chạy `termote show-password` để in lại mật khẩu đã lưu

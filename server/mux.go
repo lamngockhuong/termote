@@ -125,6 +125,11 @@ type Caps struct {
 	// (/api/mux/devices*): sign-in is on and the device store is usable.
 	// Set by the snapshot route.
 	Devices bool `json:"devices"`
+	// ViewStream: a view-only client can stream a pane here (the backend
+	// attaches a client that changes nothing: Herdr, tmux 3.2 or later).
+	// Set by the snapshot route for that role only: the stream refuses it
+	// with a 501 a browser's WebSocket cannot read.
+	ViewStream bool `json:"viewStream,omitempty"`
 }
 
 // snapshotPeeker is a backend whose Snapshot has side effects (tmux makes
@@ -302,6 +307,10 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *u
 		snap.Caps.Auth = authenticated(r.Context())
 		if snap.Caps.Auth {
 			snap.Caps.Role = string(requestRole(r.Context()))
+		}
+		if isViewOnly(r) {
+			va, ok := m.(viewAttacher)
+			snap.Caps.ViewStream = ok && va.CanView(ctx)
 		}
 		snap.Caps.Push = push != nil
 		snap.Caps.Devices = agent.devices
