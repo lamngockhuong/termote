@@ -1100,6 +1100,25 @@ test.describe('files and changes views', () => {
       expect(await mermaidNodes(page)).toBe(0)
     })
 
+    // Mermaid draws $$...$$ through KaTeX only for HTML labels, which the
+    // locked config turns off: the workspace's KaTeX override never reaches a
+    // diagram, and a label with math stays its source text
+    test('a label with math renders as its text, without KaTeX', async ({ page }) => {
+      const requests: string[] = []
+      page.on('request', (r) => requests.push(r.url()))
+      writeFileSync(path.join(dir(), 'math.md'), `# Math\n\n${fence('flowchart LR\n  A["$$x^2$$"] --> B')}`)
+      const panel = await open(page, 'math.md')
+      const img = diagrams(panel)
+      await expect(img).toHaveCount(1, { timeout: 15000 })
+      await expect.poll(() => decodedWidth(img)).toBeGreaterThan(0)
+      const svg = await svgOf(img)
+      expect(svg).toContain('>$$x^2$$</tspan>')
+      expect(svg).not.toContain('<math')
+      expect(svg).not.toContain('foreignObject')
+      expect(requests.filter((u) => /katex/i.test(u))).toEqual([])
+      expect(await mermaidNodes(page)).toBe(0)
+    })
+
     test('a broken diagram falls back to its source; the rest of the file renders', async ({ page }) => {
       writeFileSync(
         path.join(dir(), 'broken.md'),
