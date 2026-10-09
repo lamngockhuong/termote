@@ -888,7 +888,10 @@ up to 256 KiB) is previewed by `markdown-preview.tsx` (lazy chunk): the Chat vie
 (`utils/markdown-safety.ts`: raw HTML as text, only http(s) links leave the app, no image
 loads), fenced code through the same worker, and relative links resolved client side by
 `utils/markdown-links.ts` against the file's directory (a leading `/` is the root); a path that
-would leave the root is never built, so never requested. Following a link reads the target's
+would leave the root is never built, so never requested. A `mermaid` block is drawn by
+`utils/mermaid-render.ts` as a `data:` SVG image (Mermaid lazily loaded, kept out of the
+precache by `pwa/build/precache-split.ts`, config locked against the file's directives), its
+source shown with a reason whenever it cannot be. Following a link reads the target's
 parent directory to tell file from folder; the files store keeps a Back trail with scroll
 offsets. Changes previews the working-tree version of a changed Markdown file the same way.
 An image (`.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`) opens through `raw` instead: Files shows it

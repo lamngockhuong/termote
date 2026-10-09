@@ -978,4 +978,227 @@ test.describe('files and changes views', () => {
       }
     })
   })
+
+  test.describe('Mermaid diagrams', () => {
+    const dir = () => path.join(repo, 'e2e-mermaid')
+    const fence = (src: string) => `\`\`\`mermaid\n${src}\n\`\`\`\n`
+    const FLOW = 'flowchart LR\n  A[Start] --> B{Ok?}\n  B -->|yes| C[Done]'
+    const SEQUENCE = 'sequenceDiagram\n  Alice->>Bob: Hi\n  Bob-->>Alice: Hello'
+    const GANTT =
+      'gantt\n  dateFormat YYYY-MM-DD\n  section A\n  One :a1, 2026-01-01, 30d\n  Two :after a1, 20d'
+    const CLASS = 'classDiagram\n  Animal <|-- Duck\n  Animal : +int age'
+    // Paths a hostile diagram tries to load; none may be requested
+    const LEAK = '/e2e-mermaid-leak'
+
+    test.beforeEach(() => mkdirSync(dir(), { recursive: true }))
+    test.afterEach(() => rmSync(dir(), { recursive: true, force: true }))
+
+    async function open(page: Page, name: string) {
+      await page.setViewportSize({ width: 1280, height: 800 })
+      await page.goto(`${link}?view=files`)
+      const panel = page.getByRole('complementary', { name: 'Files' })
+      await panel.getByRole('treeitem', { name: 'e2e-mermaid' }).click()
+      await panel.getByRole('treeitem', { name }).click()
+      await expect(panel.getByTestId('markdown-preview')).toBeVisible()
+      return panel
+    }
+
+    const diagrams = (panel: Locator) => panel.locator('img[src^="data:image/svg+xml"]')
+    // The SVG of a diagram's data: URL
+    const svgOf = async (img: Locator) => {
+      const src = (await img.getAttribute('src')) as string
+      return decodeURIComponent(src.slice(src.indexOf(',') + 1))
+    }
+    // Nodes Mermaid made, anywhere in the document (the Copy icon is an <svg>
+    // too, so never count those)
+    const mermaidNodes = (page: Page) =>
+      page.evaluate(
+        () =>
+          document.querySelectorAll(
+            '[id^="termote-mmd"], [id^="dtermote-mmd"], [id^="itermote-mmd"], svg[aria-roledescription], #cy, .mermaidTooltip',
+          ).length +
+          Array.from(document.body.children).filter((el) => el.tagName.toLowerCase() === 'svg').length,
+      )
+
+    test('renders each kind as an image, leaving nothing of Mermaid in the page', async ({ page }) => {
+      writeFileSync(
+        path.join(dir(), 'diagram.md'),
+        `# Diagrams\n\n${[FLOW, SEQUENCE, GANTT, CLASS].map(fence).join('\n')}`,
+      )
+      const panel = await open(page, 'diagram.md')
+      const imgs = diagrams(panel)
+      await expect(imgs).toHaveCount(4, { timeout: 15000 })
+      for (let i = 0; i < 4; i++) {
+        const img = imgs.nth(i)
+        await expect(img).toHaveAttribute('alt', `Mermaid diagram ${i + 1}`)
+        // Parsed as XML by the <img>: 0 when it is not valid
+        await expect.poll(() => decodedWidth(img)).toBeGreaterThan(0)
+        expect(await svgOf(img)).not.toContain('foreignObject')
+      }
+      // The stage is 1200px wide: a Gantt chart takes its width from it
+      expect(await decodedWidth(imgs.nth(2))).toBeGreaterThan(600)
+      expect(await mermaidNodes(page)).toBe(0)
+    })
+
+    test('a hostile diagram runs nothing, loads nothing and changes no locked setting', async ({ page }) => {
+      const dialogs: string[] = []
+      page.on('dialog', (d) => {
+        dialogs.push(d.message())
+        void d.dismiss()
+      })
+      const requests: string[] = []
+      page.on('request', (r) => requests.push(r.url()))
+      writeFileSync(
+        path.join(dir(), 'evil.md'),
+        [
+          '# Evil',
+          fence(
+            [
+              'flowchart LR',
+              '  A["<img src=x onerror=alert(1)>"] --> B["<script>alert(2)</script>"]',
+              '  click A href "javascript:alert(3)"',
+              '  click B call alert(4)',
+            ].join('\n'),
+          ),
+          fence(
+            `%%{init: {"htmlLabels": true, "securityLevel": "loose", "layout": "elk", "themeCSS": "svg{background:url(${LEAK}/css)}"}}%%\nflowchart LR\n  X --> Y`,
+          ),
+          fence(
+            `---\nconfig:\n  htmlLabels: true\n  themeCSS: "svg{background:url(${LEAK}/front)}"\n---\nflowchart LR\n  P --> Q`,
+          ),
+          fence(`flowchart LR\n  I@{ img: "${LEAK}/img", h: 60 }`),
+          // A no-break space: HTML-serialized as &nbsp;, no entity in XML
+          fence('flowchart LR\n  N["no break"] --> M'),
+          '## After',
+        ].join('\n'),
+      )
+      const panel = await open(page, 'evil.md')
+      const imgs = diagrams(panel)
+      await expect(imgs).toHaveCount(4, { timeout: 15000 })
+      await expect(panel.getByText('Diagrams with images or icons are not rendered')).toBeVisible()
+      await expect(panel.getByRole('heading', { name: 'After' })).toBeVisible()
+      for (let i = 0; i < 4; i++) {
+        await expect.poll(() => decodedWidth(imgs.nth(i))).toBeGreaterThan(0)
+        const svg = await svgOf(imgs.nth(i))
+        expect(svg).not.toContain('foreignObject')
+        expect(svg).not.toContain(LEAK)
+        expect(svg).not.toMatch(/javascript:/i)
+        expect(
+          await page.evaluate((text) => {
+            const doc = new DOMParser().parseFromString(text, 'image/svg+xml')
+            return doc.querySelectorAll('script, img, [onerror], [onclick]').length
+          }, svg),
+        ).toBe(0)
+      }
+      // A click on a diagram goes nowhere
+      const url = page.url()
+      await imgs.first().click()
+      expect(page.url()).toBe(url)
+      expect(dialogs).toEqual([])
+      expect(requests.filter((u) => u.includes(LEAK))).toEqual([])
+      expect(requests.filter((u) => !u.startsWith(new URL(url).origin))).toEqual([])
+      expect(await mermaidNodes(page)).toBe(0)
+    })
+
+    test('a broken diagram falls back to its source; the rest of the file renders', async ({ page }) => {
+      writeFileSync(
+        path.join(dir(), 'broken.md'),
+        `# Broken\n\n${fence('flowchart LR\n  A -->')}\n## After\n\nText after.\n`,
+      )
+      const panel = await open(page, 'broken.md')
+      await expect(panel.getByText('Not a valid Mermaid diagram')).toBeVisible({ timeout: 15000 })
+      await expect(panel.getByTestId('fenced-code')).toContainText('A -->')
+      await expect(panel.getByRole('heading', { name: 'After' })).toBeVisible()
+      expect(await mermaidNodes(page)).toBe(0)
+    })
+
+    test('Mermaid loads only for a file with a diagram', async ({ page }) => {
+      // Scripts only: the directory's own name is in the API URLs
+      const requests: string[] = []
+      page.on('request', (r) => {
+        if (new URL(r.url()).pathname.startsWith('/assets/')) requests.push(r.url())
+      })
+      writeFileSync(path.join(dir(), 'plain.md'), '# Plain\n\n```ts\nconst a = 1\n```\n')
+      writeFileSync(path.join(dir(), 'diagram.md'), `# D\n\n${fence(FLOW)}`)
+      const panel = await open(page, 'plain.md')
+      await expect(panel.getByTestId('fenced-code')).toContainText('const a = 1')
+      expect(requests.filter((u) => /mermaid/i.test(u))).toEqual([])
+
+      await page.getByRole('tablist', { name: 'Open files' }).getByRole('tab', { name: 'Files' }).click()
+      await panel.getByRole('treeitem', { name: 'diagram.md' }).click()
+      await expect(diagrams(panel)).toHaveCount(1, { timeout: 15000 })
+      expect(requests.filter((u) => /mermaid/i.test(u)).length).toBeGreaterThan(0)
+    })
+
+    test('follows the theme; Show source and Copy work', async ({ page, context }) => {
+      await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+      writeFileSync(path.join(dir(), 'theme.md'), `# T\n\n${fence(FLOW)}`)
+      const panel = await open(page, 'theme.md')
+      const pick = async (name: 'Light' | 'Dark') => {
+        // Picking a theme leaves the menu open
+        if (!(await page.getByRole('menu', { name: 'More' }).isVisible())) {
+          await page.getByRole('button', { name: 'More' }).click()
+        }
+        await page.getByRole('menuitemradio', { name }).click()
+      }
+      await pick('Light')
+      const img = diagrams(panel)
+      await expect(img).toHaveCount(1, { timeout: 15000 })
+      // The default theme fills nodes with #ECECFF; the dark one does not
+      await expect.poll(async () => (await svgOf(img)).toLowerCase()).toContain('#ececff')
+      await pick('Dark')
+      await expect.poll(async () => (await svgOf(img)).toLowerCase()).not.toContain('#ececff')
+      await page.keyboard.press('Escape')
+
+      const toggle = panel.getByRole('button', { name: 'Show source' })
+      await toggle.click()
+      await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+      await expect(img).toHaveCount(0)
+      await expect(panel.getByTestId('fenced-code')).toContainText('A[Start] --> B{Ok?}')
+      await toggle.click()
+      await expect(img).toHaveCount(1)
+      await panel.getByRole('button', { name: 'Copy code' }).click()
+      expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(FLOW)
+    })
+
+    test('a sequence diagram near the size cap renders in time', async ({ page }) => {
+      const lines = ['sequenceDiagram']
+      for (let i = 0; lines.join('\n').length < 48_000; i++) lines.push(`  P${i % 8}->>P${(i + 1) % 8}: message ${i}`)
+      writeFileSync(path.join(dir(), 'big.md'), `# Big\n\n${fence(lines.join('\n'))}`)
+      const panel = await open(page, 'big.md')
+      // Mermaid runs on the main thread: 8 s for a diagram this large (a
+      // flowchart of 400 edges took 3 s, a 5 KB one under 1 s)
+      await expect(panel.getByText('Rendering diagram…').or(diagrams(panel))).toBeVisible()
+      const started = Date.now()
+      await expect(diagrams(panel)).toHaveCount(1, { timeout: 15000 })
+      expect(Date.now() - started).toBeLessThan(8000)
+    })
+
+    test('a tab shown again has its diagrams at once and keeps its scroll', async ({ page }) => {
+      const filler = Array.from({ length: 80 }, (_, i) => `Paragraph ${i + 1}.`).join('\n\n')
+      writeFileSync(
+        path.join(dir(), 'long.md'),
+        `# Long\n\n${fence(FLOW)}\n${filler}\n\n${fence(SEQUENCE)}\n${filler}\n`,
+      )
+      writeFileSync(path.join(dir(), 'other.txt'), 'other\n')
+      const panel = await open(page, 'long.md')
+      const bar = page.getByRole('tablist', { name: 'Open files' })
+      await bar.getByRole('tab', { name: /^long\.md/ }).dblclick()
+      const preview = panel.getByTestId('markdown-preview')
+      await expect(diagrams(panel).first()).toBeVisible({ timeout: 15000 })
+      await preview.evaluate((el) => {
+        el.scrollTop = el.scrollHeight / 2
+      })
+      await expect(diagrams(panel)).toHaveCount(2, { timeout: 15000 })
+      const left = await preview.evaluate((el) => el.scrollTop)
+
+      await bar.getByRole('tab', { name: 'Files' }).click()
+      await panel.getByRole('treeitem', { name: 'other.txt' }).click()
+      await bar.getByRole('tab', { name: 'long.md', exact: true }).click()
+      // From the cache: both images are in the first render
+      await expect(diagrams(panel)).toHaveCount(2)
+      await expect(panel.getByText('Rendering diagram…')).toHaveCount(0)
+      await expect.poll(() => preview.evaluate((el, at) => Math.abs(el.scrollTop - at), left)).toBeLessThan(2)
+    })
+  })
 })

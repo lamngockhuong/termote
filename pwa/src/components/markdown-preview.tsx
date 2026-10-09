@@ -18,14 +18,17 @@ import { highlightLang, type Token } from '../utils/highlight'
 import { type LanguageId, languageForName } from '../utils/highlight-langs'
 import {
   findAnchor,
+  isMermaidInfo,
   type LinkPath,
   rehypeHeadingIds,
+  rehypeMermaidIndex,
   resolveLink,
   splitFrontMatter,
   textOf,
 } from '../utils/markdown-links'
 import { htmlAsText } from '../utils/markdown-safety'
 import { codeText, splitLines, tokenStyle } from './code-block'
+import { type FrameParts, MermaidBlock } from './mermaid-block'
 import { IconButton } from './ui/button'
 
 // A Markdown file of the Files (or Changes) view, rendered. The file is
@@ -54,6 +57,8 @@ interface Props {
 interface Ctx {
   path: string
   wrap: boolean
+  // The scroll box, once mounted
+  scroller: () => Element | null
   go: (target: LinkPath, newTab?: boolean) => void
   notify: (message: string) => void
 }
@@ -62,6 +67,8 @@ interface Ctx {
 const PreviewContext = createContext({} as Ctx)
 
 const LINK = 'text-accent underline underline-offset-2'
+// How long a diagram drawn late may still move the start back into place
+const RESTORE_FOR = 10_000
 
 // A link inside the app: a button, so it never navigates the page.
 // Ctrl/Cmd+click, a middle click or a long press ask for a new tab.
@@ -177,16 +184,20 @@ function MdImage({ src, alt }: ComponentProps<'img'>) {
 }
 
 // A fenced code block: highlighted in its language once the worker answers,
-// plain until then and whenever it does not.
+// plain until then and whenever it does not. A Mermaid block adds its
+// buttons, a line under the bar, and its diagram in place of the code.
 function FencedCode({
   text,
   lang,
   label,
+  toolbar,
+  note,
+  body,
 }: {
   text: string
   lang?: LanguageId
   label: string
-}) {
+} & FrameParts) {
   const { wrap, notify } = useContext(PreviewContext)
   const { resolvedTheme } = useTheme()
   const lines = useMemo(() => splitLines(text), [text])
@@ -219,52 +230,81 @@ function FencedCode({
     >
       <div className="flex items-center justify-between border-b border-border bg-surface pl-3 text-[11px] text-fg-muted">
         <span className="truncate font-term">{label}</span>
-        <IconButton
-          size="sm"
-          onClick={copy}
-          aria-label="Copy code"
-          title="Copy code"
-        >
-          <Copy size={14} aria-hidden="true" />
-        </IconButton>
+        <div className="flex shrink-0 items-center">
+          {toolbar}
+          <IconButton
+            size="sm"
+            onClick={copy}
+            aria-label="Copy code"
+            title="Copy code"
+          >
+            <Copy size={14} aria-hidden="true" />
+          </IconButton>
+        </div>
       </div>
-      <pre className="overflow-x-auto p-3 font-term text-[12px] leading-[1.6] text-fg">
-        <code className={`block ${codeText(wrap)}`}>
-          {lines.map((line, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: a line is its number
-            <span key={i}>
-              {tokens?.[i]
-                ? tokens[i].map((t, j) => (
-                    // biome-ignore lint/suspicious/noArrayIndexKey: tokens of one line never move
-                    <span key={j} style={tokenStyle(t)}>
-                      {t[0]}
-                    </span>
-                  ))
-                : line}
-              {i < lines.length - 1 ? '\n' : ''}
-            </span>
-          ))}
-        </code>
-      </pre>
+      {note && (
+        <p className="border-b border-border px-3 py-1.5 text-[12px] text-fg-muted">
+          {note}
+        </p>
+      )}
+      {body ?? (
+        <pre className="overflow-x-auto p-3 font-term text-[12px] leading-[1.6] text-fg">
+          <code className={`block ${codeText(wrap)}`}>
+            {lines.map((line, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: a line is its number
+              <span key={i}>
+                {tokens?.[i]
+                  ? tokens[i].map((t, j) => (
+                      // biome-ignore lint/suspicious/noArrayIndexKey: tokens of one line never move
+                      <span key={j} style={tokenStyle(t)}>
+                        {t[0]}
+                      </span>
+                    ))
+                  : line}
+                {i < lines.length - 1 ? '\n' : ''}
+              </span>
+            ))}
+          </code>
+        </pre>
+      )}
     </div>
   )
 }
 
 interface HastElement {
   type: string
-  properties: { className?: string[] }
+  properties: { className?: string[]; dataMermaidIndex?: number }
   children: HastElement[]
 }
 
 // react-markdown hands a code block as <pre><code class="language-x">, the
 // code element always there and always alone
 function MdPre({ node }: { node?: unknown }) {
+  const { scroller } = useContext(PreviewContext)
   const code = (node as HastElement).children[0]
   const info =
     (code.properties.className ?? [])
       .find((c) => c.startsWith('language-'))
       ?.slice('language-'.length) ?? ''
   const text = textOf(code).replace(/\n$/, '')
+  if (isMermaidInfo(info)) {
+    return (
+      <MermaidBlock
+        text={text}
+        // Set by rehypeMermaidIndex for every Mermaid block
+        index={code.properties.dataMermaidIndex as number}
+        scrollRoot={scroller}
+        frame={(parts) => (
+          <FencedCode
+            text={text}
+            lang={languageForName(info)}
+            label={info}
+            {...parts}
+          />
+        )}
+      />
+    )
+  }
   return (
     <FencedCode
       text={text}
@@ -331,10 +371,36 @@ export default function MarkdownPreview({
     else if (scrollTop) box().scrollTop = scrollTop
   }, [])
 
+  // A diagram drawn after that changes the height above where the file
+  // starts: put it back there, until the user scrolls or for 10 s.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only where it opens
+  useEffect(() => {
+    if ((!anchor && !scrollTop) || typeof ResizeObserver === 'undefined') {
+      return
+    }
+    const el = box()
+    const restore = () => {
+      if (!anchor) el.scrollTop = scrollTop as number
+      else findAnchor(el, anchor)?.scrollIntoView({ block: 'start' })
+    }
+    const ro = new ResizeObserver(restore)
+    ro.observe(el.firstElementChild as Element)
+    const events = ['wheel', 'touchstart', 'keydown', 'pointerdown']
+    const stop = () => {
+      ro.disconnect()
+      clearTimeout(timer)
+      for (const e of events) el.removeEventListener(e, stop)
+    }
+    const timer = setTimeout(stop, RESTORE_FOR)
+    for (const e of events) el.addEventListener(e, stop, { passive: true })
+    return stop
+  }, [])
+
   const ctx: Ctx = {
     path,
     wrap,
     notify,
+    scroller: () => ref.current,
     go: (target, newTab = false) => {
       if (target.path === path) {
         if (target.anchor) scrollTo(target.anchor)
@@ -359,7 +425,7 @@ export default function MarkdownPreview({
           )}
           <Markdown
             remarkPlugins={[remarkGfm, htmlAsText]}
-            rehypePlugins={[rehypeHeadingIds]}
+            rehypePlugins={[rehypeHeadingIds, rehypeMermaidIndex]}
             components={COMPONENTS}
           >
             {body}

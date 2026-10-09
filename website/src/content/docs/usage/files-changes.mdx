@@ -272,7 +272,18 @@ over 256 KiB opens as its source, with a note that it is too large to preview.
 
 - **Code blocks** are highlighted in the language named after the opening fence (` ```ts `,
   ` ```bash `, ` ```go `...), with a button to copy the block. A block in a language not covered
-  (`mermaid`, for example) is shown as plain text. The wrap button wraps code blocks too.
+  is shown as plain text. The wrap button wraps code blocks too.
+- **Mermaid diagrams** (` ```mermaid `) are drawn as images once you scroll to them: flowcharts,
+  sequence, class, state, Gantt and the other kinds. The code button in the block's bar switches
+  between the diagram and its source; Copy always copies the source. A wide diagram scrolls
+  sideways. The diagram is a picture: nodes and links in it cannot be clicked, and the diagram
+  follows the light or dark theme of Termote, whatever its `%%{init}%%` line or front matter
+  asks for. The source is shown instead, with the reason, when the diagram is over 50 KB, has
+  an image or an icon (`@{ img: ... }`, which would load a URL), is not valid Mermaid, takes
+  longer than 10 seconds, or the renderer cannot be loaded. The renderer is downloaded the first
+  time a diagram is shown, not when the app is installed: offline, until then, diagrams show as
+  their source with "Could not load the diagram renderer". A very large diagram can keep the
+  page busy for a few seconds while it is drawn.
 - **Front matter** (the `---` block at the top of docs and MDX pages) is shown as a code block.
 - **Raw HTML and MDX components** are shown as the text they are, never run.
 - **Images are never loaded.** An image inside the root shows as a link that opens the file in

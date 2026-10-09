@@ -327,6 +327,9 @@ The `update` command:
 | `pwa/src/components/file-search.tsx`              | Files: find a file by name under the root, results, switch    |
 | `pwa/src/components/delete-file-dialog.tsx`       | Files: asks before a delete, second ask for a permanent one   |
 | `pwa/src/components/markdown-preview.tsx`         | Markdown file rendered in Files/Changes (links, code blocks)  |
+| `pwa/src/components/mermaid-block.tsx`            | A mermaid block: the diagram image, Show source, fallback     |
+| `pwa/src/utils/mermaid-render.ts`                 | Mermaid → `data:` SVG image: locked config, queue, cache      |
+| `pwa/build/precache-split.ts`                     | Keeps Mermaid's chunks out of the service worker precache     |
 | `pwa/src/components/table-preview.tsx`            | CSV/TSV as a table: delimiter, header, filter, sort, Records  |
 | `pwa/src/components/table-grid.tsx`               | Virtual grid of a table (sticky header and row numbers)       |
 | `pwa/src/utils/table-columns.ts`                  | Column widths (fit, clamp) and row heights while wrapping     |
@@ -721,6 +724,27 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   `Cache-Control: no-store`; an SVG also gets a second CSP
   (`sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:`) and
   `Content-Disposition: attachment`
+- **Mermaid diagrams** (`pwa/src/utils/mermaid-render.ts`, `mermaid-block.tsx`): a `mermaid`
+  fenced block of a previewed Markdown file is drawn in the PWA only, as an `<img>` whose `src` is
+  a `data:image/svg+xml` URL, so no script runs, no link navigates and nothing it names loads;
+  the SVG string never enters the DOM. Mermaid itself draws into a stage it needs for text
+  metrics: an off-screen `div` (`opacity:0`, `inert`, `aria-hidden`, `contain:strict`) in `body`,
+  removed after each render with every node Mermaid added to `body` (its measuring `svg`, `#cy`,
+  `.mermaidTooltip`), errors included; DOMPurify only cleans the string it returns. Config:
+  `securityLevel: 'strict'`, `htmlLabels: false`, `layout: 'dagre'`, `suppressErrorRendering`,
+  the app's theme and font, `maxEdges` 500, all listed in `secure` (with `themeCSS`,
+  `themeVariables`, `flowchart`, `look`, `dompurifyConfig`, ...) so a `%%{init}%%` directive or
+  front matter `config:` of the file cannot change them. Never rendered (shown as code with a
+  reason): over 50 KB; a shape with `img:`/`icon:` (Mermaid would fetch that URL with this
+  origin's cookies: a source with `@{` followed anywhere by `img`, `icon` or a backslash is
+  refused, and the parsed nodes are checked again); a syntax error; 10 s past the start of its
+  own render (Mermaid cannot be stopped, the next diagram waits for it); a chunk that fails to
+  load. One render at a time, only near the viewport, 50 results cached by source and theme.
+  Mermaid and every chunk only it reaches stay out of the precache (`pwa/build/precache-split.ts`
+  in `manifestTransforms`, checked both ways, else the build fails; `.vite` is deleted from the
+  build so the server never embeds Vite's manifest); a runtime `CacheFirst` (`lazy-chunks`,
+  same-origin `/assets/*.js`) keeps them once fetched. Accepted: a large diagram holds the main
+  thread for seconds (a 50 KB sequence diagram: about 5 s)
 - **Saving a file** (`PUT files/content?root=`, `server/files_write.go`): replaces the whole text
   of an existing file (a new one comes from `POST files/create`, see Creating a file). `writeGuard` (same-site JSON) plus the handler's own cross-site check and
   `requireWriteRole`; the `root` query is required (400, 409 once it moved). Body
