@@ -15,7 +15,7 @@ make container-up   # or: make start (native, through the dev shim)
 
 - Node.js 22.22+ or 24.15+
 - pnpm
-- Go 1.26+
+- Go 1.26.9+ (an older Go downloads it when `GOTOOLCHAIN` is `auto`, the default)
 - Docker (optional)
 
 ### Workspace Setup
