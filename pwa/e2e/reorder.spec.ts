@@ -34,8 +34,11 @@ test.describe('reordering tmux windows', () => {
   const tabNamed = async (page: Page, name: string) =>
     (await tabsOf(page)).find((t) => t.name === name) as Tab
 
-  const sidebarRow = (page: Page, name: string) =>
-    page.locator('aside').getByRole('button', { name: new RegExp(name) })
+  // A row's own button: the one with the shortcut, not its hover Edit and
+  // Remove buttons, whose labels hold the name too
+  const sidebarRows = (page: Page, name: RegExp) =>
+    page.locator('aside button[aria-keyshortcuts]').filter({ hasText: name })
+  const sidebarRow = (page: Page, name: string) => sidebarRows(page, new RegExp(name))
 
   async function open(page: Page, hash = '') {
     await page.goto('/')
@@ -75,7 +78,7 @@ test.describe('reordering tmux windows', () => {
       .locator('..')
       .dragTo(sidebarRow(page, a).locator('..'), { targetPosition: { x: 10, y: 2 } })
     await expect.poll(order).toEqual([c, a, b])
-    await expect(page.locator('aside').getByRole('button', { name: new RegExp(`${a}|${b}|${c}`) })).toHaveText([
+    await expect(sidebarRows(page, new RegExp(`${a}|${b}|${c}`))).toHaveText([
       new RegExp(c),
       new RegExp(a),
       new RegExp(b),

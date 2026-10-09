@@ -1647,6 +1647,10 @@ func TestHerdrGroupOps(t *testing.T) {
 // given as id → worktree (nil: none) in order, each with one tab.
 func reorderHerdr(t *testing.T, workspaces ...[2]any) (*fakeHerdr, *herdrMux) {
 	t.Helper()
+	// The moves, not the Windows gate (TestHerdrReorderCaps)
+	goos := herdrStartGOOS
+	herdrStartGOOS = "linux"
+	t.Cleanup(func() { herdrStartGOOS = goos })
 	f := newFakeHerdr(t)
 	f.version = "0.9.3"
 	if len(workspaces) > 0 {
