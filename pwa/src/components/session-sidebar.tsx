@@ -37,6 +37,7 @@ import {
 } from '../utils/session-filter'
 import { AgentFilterBar } from './agent-filter-bar'
 import { AgentStatusBadge } from './agent-status-badge'
+import { BrandMark } from './brand-mark'
 import {
   invalidNameMessage,
   MAX_GROUP_NAME_BYTES,
@@ -1036,13 +1037,8 @@ export function SessionSidebar({
       <div className={`w-64 ${SIDEBAR_CONTENT_CLASSES}`}>
         <div className="flex h-12 shrink-0 items-center justify-between pl-3 pr-1.5">
           <span className="flex items-center gap-2 text-[15px] font-semibold text-fg ui-terminal:font-label">
-            <span
-              aria-hidden="true"
-              className="flex size-6 items-center justify-center rounded-control bg-accent font-label text-[12px] font-bold text-accent-fg"
-            >
-              ›_
-            </span>
-            termote
+            <BrandMark className="size-6 shrink-0" />
+            Termote
           </span>
           <IconButton
             onClick={() => onToggleCollapse?.()}

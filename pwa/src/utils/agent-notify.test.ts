@@ -162,6 +162,7 @@ describe('notificationContent', () => {
         tag: '%3',
         renotify: true,
         icon: '/pwa-192x192.png',
+        badge: '/badge-96x96.png',
         data: { hash: '#/s/%241/%241%3A2/%253' },
       },
     })

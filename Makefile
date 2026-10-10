@@ -1,7 +1,7 @@
 # Termote Makefile
 # Usage: make <target>
 
-.PHONY: help build build-pwa build-api test test-go test-cli test-install test-entrypoints test-herdr-plugin start container-up container-down uninstall health clean release release-dry fmt fmt-check
+.PHONY: help build build-pwa build-api test test-go test-cli test-install test-entrypoints test-herdr-plugin start container-up container-down uninstall health clean release release-dry fmt fmt-check brand-assets
 
 # Default target
 help:
@@ -31,6 +31,9 @@ help:
 	@echo "Format:"
 	@echo "  make fmt            Format markdown/mdx files (dprint)"
 	@echo "  make fmt-check      Check markdown/mdx formatting"
+	@echo ""
+	@echo "Brand:"
+	@echo "  make brand-assets   Regenerate icons and social images from assets/branding"
 	@echo ""
 	@echo "Other:"
 	@echo "  make health         Check service health"
@@ -93,6 +96,10 @@ fmt:
 
 fmt-check:
 	npx --yes dprint@0.60.1 check
+
+# Brand assets (needs rsvg-convert and ImageMagick)
+brand-assets:
+	@./scripts/build-brand-assets.sh
 
 # Health check
 health:

@@ -261,6 +261,7 @@ describe('notify-sw.js', () => {
         expect(registration.showNotification).toHaveBeenCalledWith('Termote', {
           body: 'An agent may need you',
           icon: '/pwa-192x192.png',
+          badge: '/badge-96x96.png',
         })
       }
     })

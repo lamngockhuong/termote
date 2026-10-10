@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="pwa/public/banner-readme.svg" alt="Termote" width="600" />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/branding/termote/social/banner-readme-dark.svg" />
+    <img src="assets/branding/termote/social/banner-readme-light.svg" alt="Termote" width="600" />
+  </picture>
 </p>
 
 <p align="center">

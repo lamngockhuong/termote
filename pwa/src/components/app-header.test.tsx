@@ -74,6 +74,18 @@ describe('AppHeader — desktop', () => {
     expect(props.onRemoveTab).toHaveBeenCalledWith('2')
   })
 
+  it('leads the row with the brand mark while the sidebar is collapsed', () => {
+    renderHeader({ showBrand: true })
+    expect(screen.getByRole('banner').firstElementChild).toBe(
+      screen.getByTestId('brand-mark'),
+    )
+  })
+
+  it('leaves the brand to the expanded sidebar', () => {
+    renderHeader()
+    expect(screen.queryByTestId('brand-mark')).toBeNull()
+  })
+
   it('sits below the status bar and grows with touch-sized controls', () => {
     renderHeader()
     const header = screen.getByRole('banner')
@@ -158,7 +170,7 @@ describe('AppHeader — desktop', () => {
 
 describe('AppHeader — mobile', () => {
   it('shows the session chip and opens the sessions sheet', () => {
-    const props = renderHeader({ isMobile: true })
+    const props = renderHeader({ isMobile: true, showBrand: true })
     const chip = screen.getByRole('button', { name: 'Open sessions menu' })
     expect(chip).toHaveTextContent('main · 2 sessions')
     fireEvent.click(chip)
@@ -167,6 +179,7 @@ describe('AppHeader — mobile', () => {
     expect(
       screen.queryByRole('button', { name: 'Enter fullscreen' }),
     ).toBeNull()
+    expect(screen.queryByTestId('brand-mark')).toBeNull()
   })
 
   it('moves the font size into the overflow menu', () => {

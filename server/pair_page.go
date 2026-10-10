@@ -19,6 +19,7 @@ var pairPage = template.Must(template.New("pair").Parse(`<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="theme-color" content="#09090b">
 <title>Termote — Pair this device</title>
+` + brandHead + `
 <style>
   :root { color-scheme: dark; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   * { box-sizing: border-box; }
@@ -44,14 +45,16 @@ var pairPage = template.Must(template.New("pair").Parse(`<!doctype html>
   }
   a { color: #a1a1aa; font-size: 14px; }
   .error { margin: 0; padding: 8px 12px; border-radius: 8px; background: #450a0a; color: #fecaca; font-size: 14px; }
-</style>
+` + brandMarkCSS + `</style>
 </head>
 <body>
 {{if .Closed}}<main>
+  <div class="brand">` + brandMark + `<span class="name">Termote</span></div>
   <h1>Pair this device</h1>
   <p class="error" role="alert">{{.Error}}</p>
   <a href="/">Open Termote</a>
 </main>{{else}}<form method="post" action="/pair">
+  <div class="brand">` + brandMark + `<span class="name">Termote</span></div>
   <h1>Pair this device</h1>
   <p>Enter the code shown by <code>termote pair</code> or by Settings on a signed-in device.</p>
   {{if .Error}}<p class="error" role="alert">{{.Error}}</p>{{end}}

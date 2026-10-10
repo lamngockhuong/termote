@@ -1,5 +1,7 @@
 # Design Guidelines
 
+The logo, its colours and where each asset goes: [brand-identity.md](brand-identity.md).
+
 ## Interface Styles and Tokens
 
 Three interface styles (Neutral, the default; Terminal; Native) are chosen in Settings →

@@ -1,6 +1,7 @@
 import { Maximize, Minimize } from 'lucide-react'
 import type { ComponentProps } from 'react'
 import type { Session } from '../types/session'
+import { BrandMark } from './brand-mark'
 import {
   ConnectionIndicator,
   type ConnectionState,
@@ -23,6 +24,8 @@ interface Props {
   groupName?: string
   // Mobile: other tabs waiting on the user, counted on the session chip
   blockedElsewhere?: number
+  // Desktop: the brand mark leads the row (the sidebar is collapsed)
+  showBrand?: boolean
   // Desktop: tabs in the header row; off, the row names the session only
   showSessionTabs: boolean
   canRemoveTab: boolean
@@ -118,6 +121,11 @@ function DesktopHeader(p: Props) {
     // it grows when touch-sized controls are taller than the row, instead of
     // cutting off their top
     <header className="relative z-10 flex min-h-11 shrink-0 items-end gap-2 border-b border-border bg-surface px-2 pt-[env(safe-area-inset-top)] ui-terminal:bg-bg">
+      {/* The expanded sidebar carries the brand; the phone header has no
+          room to spare */}
+      {p.showBrand && (
+        <BrandMark className="mb-2.5 ml-1 size-5 shrink-0 text-fg" />
+      )}
       {p.showSessionTabs ? (
         <SessionTabs
           sessions={p.groupSessions}

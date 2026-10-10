@@ -134,6 +134,12 @@ describe('SessionSidebar — desktop expanded (default)', () => {
     ).toBeInTheDocument()
   })
 
+  it('heads the expanded sidebar with the brand', () => {
+    renderDesktop()
+    const mark = screen.getByTestId('brand-mark')
+    expect(mark.parentElement).toHaveTextContent(/^Termote$/)
+  })
+
   it('calls onToggleCollapse when collapse button clicked', () => {
     renderDesktop()
     fireEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }))

@@ -79,6 +79,7 @@ describe('useAgentNotifications', () => {
       tag: 'p2',
       renotify: true,
       icon: '/pwa-192x192.png',
+      badge: '/badge-96x96.png',
       data: { hash: '#/s/g/t-p2/p2' },
     })
     next({ p1: 'blocked', p2: 'blocked' })
