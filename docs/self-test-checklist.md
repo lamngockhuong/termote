@@ -702,6 +702,16 @@ Test on real mobile device:
 - [ ] Terminal fits above the toolbar in Vietnamese IME input mode
 - [ ] Scrolling still works (not blocked by swipe gestures)
 
+### Copy Text (Select text sheet)
+
+- [ ] Android Chrome: long press in the sheet shows handles; Copy puts the selection on the clipboard
+- [ ] iOS Safari (PWA): long press in the sheet shows handles and the system menu; Copy works
+- [ ] The sheet shows the history (tmux and Herdr), Load more reads more, Copy all copies it all
+- [ ] A bidi or zero-width character shows as `⟨U+XXXX⟩` and pastes as the character itself
+- [ ] View-only device: the sheet opens from the View only bar, shows the screen only, sends no `/text` request
+- [ ] Settings > Copy on select: releasing a mouse drag copies, with a short toast; off by default
+- [ ] Over plain HTTP on the LAN (no secure context): copying still works, or a clear error toast
+
 ### Gesture Hints Overlay
 
 - [ ] First-time mobile users see gesture tutorial overlay
@@ -767,7 +777,8 @@ Test on real mobile device:
 
 ### Ctrl+Shift Combos
 
-- [ ] Ctrl+Shift+C (copy) works
+- [ ] Ctrl+Shift+C with a mouse selection copies it and sends nothing (Chrome, Firefox, Edge on Linux/Windows); without a selection the keys reach the program
+- [ ] Cmd+C on macOS copies a mouse selection
 - [ ] Ctrl+Shift+V (paste) works
 - [ ] Ctrl+Shift+Z (redo) works
 - [ ] Ctrl+Shift+X (cut) works
@@ -775,6 +786,7 @@ Test on real mobile device:
 ### Utility Keys
 
 - [ ] tmux copy mode toggle works
+- [ ] Select text key: next to copy mode on tmux, in its place on Herdr
 - [ ] Paste button works (from configured source)
 - [ ] Scroll up/down buttons work
 
