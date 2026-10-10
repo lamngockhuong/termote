@@ -1,7 +1,16 @@
 import { Clock, Search, Trash2, X } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react'
 import type { HistoryCommand } from '../hooks/use-command-history'
 import { FOCUS_RING } from './ui/button'
+
+// Gap kept between the list's top and the top of what is visible
+const TOP_GAP_PX = 8
 
 interface Props {
   history: HistoryCommand[]
@@ -22,6 +31,29 @@ export function CommandHistoryDropdown({
   const [selectedIndex, setSelectedIndex] = useState(-1)
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  // Height cap from the visual viewport: with the on-screen keyboard up (iOS
+  // keeps the layout viewport, so 60vh stays the full screen's) the list
+  // must fit above the toolbar, or its search box ends up off screen
+  const [maxHeight, setMaxHeight] = useState<number>()
+
+  useLayoutEffect(() => {
+    const viewport = window.visualViewport
+    const panel = panelRef.current
+    if (!viewport || !panel) return
+    const fitHeight = () => {
+      const above =
+        panel.getBoundingClientRect().bottom - viewport.offsetTop - TOP_GAP_PX
+      setMaxHeight(Math.max(0, Math.min(viewport.height * 0.6, above)))
+    }
+    fitHeight()
+    viewport.addEventListener('resize', fitHeight)
+    viewport.addEventListener('scroll', fitHeight)
+    return () => {
+      viewport.removeEventListener('resize', fitHeight)
+      viewport.removeEventListener('scroll', fitHeight)
+    }
+  }, [])
 
   useEffect(() => {
     inputRef.current?.focus()
@@ -75,6 +107,8 @@ export function CommandHistoryDropdown({
 
   return (
     <div
+      ref={panelRef}
+      style={{ maxHeight }}
       className="absolute bottom-full left-0 right-0 z-40 mb-2 mx-2 flex max-h-[60vh] flex-col rounded-panel border border-border bg-surface-raised text-fg shadow-xl transition-[opacity,translate] duration-(--duration-fast) ease-standard starting:translate-y-1 starting:opacity-0 ui-native:border-0"
       onKeyDown={handleKeyDown}
     >
