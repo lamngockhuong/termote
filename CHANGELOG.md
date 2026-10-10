@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.20.0](https://github.com/lamngockhuong/termote/compare/v1.19.0...v1.20.0) (2026-10-10)
+
+
+### Features
+
+* **cli:** pair devices and list or revoke them from the terminal ([#236](https://github.com/lamngockhuong/termote/issues/236)) ([#430](https://github.com/lamngockhuong/termote/issues/430)) ([ca19d8b](https://github.com/lamngockhuong/termote/commit/ca19d8b4d2b68ba00df83cdea8c52add25eee05a))
+* copy terminal text (Select text sheet, Ctrl+Shift+C, copy on select) ([#434](https://github.com/lamngockhuong/termote/issues/434)) ([0ce9268](https://github.com/lamngockhuong/termote/commit/0ce92689d5176ebed09d5e5d54d56ac0ba431c64))
+* Prompt Owl brand across the app, sign-in pages, website and READMEs ([#439](https://github.com/lamngockhuong/termote/issues/439)) ([2e4d78c](https://github.com/lamngockhuong/termote/commit/2e4d78cc67602a09ef113ed173e1214d1d3dcdc3))
+* **pwa:** compact keyboard toolbar with a pinned Extra keys button ([#435](https://github.com/lamngockhuong/termote/issues/435)) ([2018fc2](https://github.com/lamngockhuong/termote/commit/2018fc2adbbc3131c440c264bc8deb2e88a30fc9))
+* **pwa:** remember each pane's view and side panel across tab switches ([#437](https://github.com/lamngockhuong/termote/issues/437)) ([6386f65](https://github.com/lamngockhuong/termote/commit/6386f650b5a1943f50fc3ca175deb93a516068c8))
+* **pwa:** view-only role and Settings &gt; Devices ([#236](https://github.com/lamngockhuong/termote/issues/236)) ([#431](https://github.com/lamngockhuong/termote/issues/431)) ([f3eec78](https://github.com/lamngockhuong/termote/commit/f3eec7815026a2ab81ae40bf38c6796c0da144d1))
+* **server:** pair devices and enforce a view-only role ([#236](https://github.com/lamngockhuong/termote/issues/236)) ([#428](https://github.com/lamngockhuong/termote/issues/428)) ([d8130bc](https://github.com/lamngockhuong/termote/commit/d8130bc65ff0d512e6aad2ed6801667da9b99d2f))
+* time-limited paired devices, cascade revoke, audit log and security model docs ([#436](https://github.com/lamngockhuong/termote/issues/436)) ([706effd](https://github.com/lamngockhuong/termote/commit/706effddb133392beaa3d8c72c62cd3f785998ca))
+
+
+### Bug Fixes
+
+* hardening from a security review (Go stdlib, action pins, secret scan, bidi names, katex) ([#427](https://github.com/lamngockhuong/termote/issues/427)) ([f4c82c0](https://github.com/lamngockhuong/termote/commit/f4c82c07221dab87406c3f22033564a7d3958e20))
+* **pwa:** spin the Working filter icon, centred ([#433](https://github.com/lamngockhuong/termote/issues/433)) ([dc2570a](https://github.com/lamngockhuong/termote/commit/dc2570aee4326085d6061eb457d1c58e041d9c2f))
+* **server:** wait for the agent's redraw before refusing a Chat message ([#414](https://github.com/lamngockhuong/termote/issues/414)) ([#438](https://github.com/lamngockhuong/termote/issues/438)) ([17d27b8](https://github.com/lamngockhuong/termote/commit/17d27b830266c65fc8caf765e46565eacfadf2f5))
+* **server:** wait for the prompt's git after the start's C-c on Windows ([#409](https://github.com/lamngockhuong/termote/issues/409)) ([#426](https://github.com/lamngockhuong/termote/issues/426)) ([d493348](https://github.com/lamngockhuong/termote/commit/d493348995c74da2ea98762648ec928e32338232))
+
 ## [1.19.0](https://github.com/lamngockhuong/termote/compare/v1.18.0...v1.19.0) (2026-10-09)
 
 
