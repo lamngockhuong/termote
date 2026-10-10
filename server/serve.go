@@ -147,6 +147,11 @@ type tokenInfo struct {
 	exp      time.Time
 	role     role
 	deviceID string
+	// sessionID: the password session a stream token was issued to.
+	sessionID string
+	// session: what a session token's sign-in list shows (session store
+	// only).
+	session *sessionMeta
 }
 
 // errTokensBusy: the store is full of tokens a view-only client may not push
@@ -167,11 +172,17 @@ func (s *tokenStore) generate() (string, error) {
 }
 
 // generateFor creates a token for a client of role r (deviceID: its paired
-// device, if any). Sweeps expired tokens to prevent unbounded map growth. In
-// a capped store a view-only client's token never pushes out a full
-// client's: it takes the oldest view-only one, or errTokensBusy; a full
-// client's takes the oldest view-only one first.
+// device, if any).
 func (s *tokenStore) generateFor(r role, deviceID string) (string, error) {
+	return s.generateGrant(r, deviceID, "")
+}
+
+// generateGrant is generateFor that also names the password session the
+// token is issued to (sessionID, "" for none). Sweeps expired tokens to
+// prevent unbounded map growth. In a capped store a view-only client's token
+// never pushes out a full client's: it takes the oldest view-only one, or
+// errTokensBusy; a full client's takes the oldest view-only one first.
+func (s *tokenStore) generateGrant(r role, deviceID, sessionID string) (string, error) {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
 		return "", err
@@ -222,7 +233,7 @@ func (s *tokenStore) generateFor(r role, deviceID string) (string, error) {
 		}
 		s.order = append(live, token)
 	}
-	s.tokens[token] = tokenInfo{exp: now.Add(s.ttl), role: r, deviceID: deviceID}
+	s.tokens[token] = tokenInfo{exp: now.Add(s.ttl), role: r, deviceID: deviceID, sessionID: sessionID}
 	return token, nil
 }
 
@@ -242,8 +253,8 @@ func (s *tokenStore) check(token string) (tokenInfo, bool) {
 	now := time.Now()
 	// A capped store of reusable tokens (sessions) keeps the most recently
 	// used ones: a token in use moves to the end of the eviction order, so
-	// logins without a cookie (curl -u, scripts) drop idle sessions first,
-	// not the phone that uses its session all day.
+	// new browser logins drop idle sessions first, not the phone that uses
+	// its session all day.
 	if !s.singleUse && s.max > 0 {
 		s.mu.Lock()
 		defer s.mu.Unlock()
@@ -286,6 +297,20 @@ func (s *tokenStore) revokeDevice(deviceID string) {
 	defer s.mu.Unlock()
 	for k, ti := range s.tokens {
 		if ti.deviceID == deviceID {
+			delete(s.tokens, k)
+		}
+	}
+}
+
+// revokeSession ends every token issued to the password session sessionID.
+func (s *tokenStore) revokeSession(sessionID string) {
+	if sessionID == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for k, ti := range s.tokens {
+		if ti.sessionID == sessionID {
 			delete(s.tokens, k)
 		}
 	}
@@ -344,6 +369,10 @@ func buildServer(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushStore, 
 	tokenStore := newStreamTokenStore()
 	allowed := parseAllowedHosts(cfg.AllowedHosts, cfg.AllowLocalAddr)
 	hub := newStreamHub(maxStreams)
+	var sessions *sessionAuth
+	if !cfg.NoAuth {
+		sessions = newSessionAuth(tokenStore, hub)
+	}
 
 	var uploads *uploadStore
 	if cfg.UploadDir != "" {
@@ -371,7 +400,9 @@ func buildServer(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushStore, 
 	}
 	agent := registerMuxRoutes(mux, m, tokenStore, uploads, push)
 	agent.devices = devices != nil
+	agent.signins = sessions != nil
 	registerDeviceRoutes(mux, devices, allowed)
+	registerSigninRoutes(mux, sessions, allowed)
 	registerPushRoutes(mux, push)
 	registerStreamRoutes(mux, m, tokenStore, allowed, hub)
 	// The upload store and the trash are never read through the Files view
@@ -404,7 +435,7 @@ func buildServer(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushStore, 
 
 	var handler http.Handler = mux
 	if !cfg.NoAuth {
-		handler = newBasicAuth(cfg.User, cfg.Pass, devices, handler)
+		handler = newBasicAuth(cfg.User, cfg.Pass, devices, sessions, handler)
 	}
 	handler = writeGuard(allowed, handler)
 	// Inside hostGuard: the policy names the request's Host, so only an
@@ -715,9 +746,9 @@ func isPWAPublicPath(p string) bool {
 const (
 	sessionCookieName = "termote_session"
 	sessionTTL        = 24 * time.Hour
-	// maxSessions caps live sessions: each login without a valid cookie
-	// makes one, and past the cap the least recently used is dropped (its
-	// device logs in again with the saved credentials).
+	// maxSessions caps live sessions: each browser login without a valid
+	// cookie makes one, and past the cap the least recently used is dropped
+	// (its browser signs in again).
 	maxSessions = 256
 )
 
@@ -727,16 +758,18 @@ const (
 // Note: uses r.RemoteAddr for rate limiting. Behind a reverse proxy, all clients
 // may share one IP — consider the proxy's own rate limiting in that setup.
 func basicAuth(user, pass string, next http.Handler) http.Handler {
-	return newBasicAuth(user, pass, nil, next)
+	return newBasicAuth(user, pass, nil, nil, next)
 }
 
 // newBasicAuth is basicAuth that also signs paired devices in (dev, nil
 // without a usable device store): their cookie, the /pair form, and Log out
-// revoking the device.
-func newBasicAuth(user, pass string, dev *deviceAuth, next http.Handler) http.Handler {
+// revoking the device. sessions holds the password sessions (nil: a store of
+// its own, which ends no stream).
+func newBasicAuth(user, pass string, dev *deviceAuth, sessions *sessionAuth, next http.Handler) http.Handler {
 	limiter := newAuthRateLimiter()
-	sessions := newTokenStore(sessionTTL, false)
-	sessions.max = maxSessions
+	if sessions == nil {
+		sessions = newSessionAuth(nil, nil)
+	}
 	// Bounded like hostGuard's rejects, so a password guesser cannot flood
 	// the log. The credentials sent are never logged.
 	failedLogins := &rateLimitedLog{every: rejectLogEvery}
@@ -751,8 +784,8 @@ func newBasicAuth(user, pass string, dev *deviceAuth, next http.Handler) http.Ha
 			subtle.ConstantTimeCompare([]byte(p), []byte(pass)) == 1
 	}
 	// Set session cookie to avoid re-prompting on mobile reloads
-	startSession := func(w http.ResponseWriter, r *http.Request) {
-		sessionToken, err := sessions.generate()
+	startSession := func(w http.ResponseWriter, r *http.Request, via string) {
+		sessionToken, err := sessions.start(r, via)
 		if err != nil {
 			log.Printf("session token generation failed: %v", err)
 			return
@@ -767,9 +800,17 @@ func newBasicAuth(user, pass string, dev *deviceAuth, next http.Handler) http.Ha
 			Secure:   requestIsHTTPS(r),
 		})
 	}
-	hasSession := func(r *http.Request) bool {
+	// session returns the id of the request's session, or ok false.
+	session := func(r *http.Request) (string, bool) {
 		cookie, err := r.Cookie(sessionCookieName)
-		return err == nil && sessions.validate(cookie.Value)
+		if err != nil {
+			return "", false
+		}
+		return sessions.lookup(cookie.Value)
+	}
+	hasSession := func(r *http.Request) bool {
+		_, ok := session(r)
+		return ok
 	}
 	// challenge asks for credentials. A browser gets the sign-in form on a
 	// page load and no Basic auth challenge: its prompt would sit on top of
@@ -839,7 +880,7 @@ func newBasicAuth(user, pass string, dev *deviceAuth, next http.Handler) http.Ha
 			return
 		}
 		limiter.refund(ip)
-		startSession(w, r)
+		startSession(w, r, sessionViaForm)
 		// Basic auth is not logged: the CLI and its health polls sign in
 		// on every request.
 		auditf("login", "via", "form", "user", username, "ip", ip)
@@ -942,8 +983,9 @@ func newBasicAuth(user, pass string, dev *deviceAuth, next http.Handler) http.Ha
 			jsonError(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
+		// The session's streams close with it.
 		if cookie, err := r.Cookie(sessionCookieName); err == nil {
-			sessions.revoke(cookie.Value)
+			sessions.revokeToken(cookie.Value)
 		}
 		if dev != nil {
 			if dev.hasDeviceCookie(r) {
@@ -998,8 +1040,8 @@ func newBasicAuth(user, pass string, dev *deviceAuth, next http.Handler) http.Ha
 		}
 
 		// Check session cookie first (mobile browsers drop basic auth)
-		if hasSession(r) {
-			serveSignedIn(w, r, authInfo{Kind: authSession, Role: roleFull})
+		if id, ok := session(r); ok {
+			serveSignedIn(w, r, authInfo{Kind: authSession, Role: roleFull, SessionID: id})
 			return
 		}
 		if dev != nil {
@@ -1033,7 +1075,11 @@ func newBasicAuth(user, pass string, dev *deviceAuth, next http.Handler) http.Ha
 			return
 		}
 		limiter.refund(ip)
-		startSession(w, r)
+		// Only a browser keeps the cookie: a session made for every request
+		// of the CLI or curl would push the real ones out of maxSessions.
+		if isBrowser(r) {
+			startSession(w, r, sessionViaBasic)
+		}
 		serveSignedIn(w, r, authInfo{Kind: authBasic, Role: roleFull})
 	})
 }
@@ -1068,6 +1114,20 @@ func spaHandler(files fs.FS) http.Handler {
 	})
 }
 
+// isBrowser reports whether r comes from a browser: one that sends
+// Sec-Fetch-Mode, a page load, or one that holds a session cookie, even a
+// dead one (the CLI and curl never keep it). Over plain HTTP to a LAN
+// address a browser sends no Sec-Fetch-* header; its page load still asks
+// for text/html, and once its session ends, its app (served by the service
+// worker) sends only API reads, with the cookie and the saved Basic auth.
+func isBrowser(r *http.Request) bool {
+	if r.Header.Get("Sec-Fetch-Mode") != "" || isNavigation(r) {
+		return true
+	}
+	_, err := r.Cookie(sessionCookieName)
+	return err == nil
+}
+
 func isWebSocket(r *http.Request) bool {
 	return strings.EqualFold(r.Header.Get("Upgrade"), "websocket")
 }
@@ -1100,7 +1160,7 @@ func handleTerminalToken(tokens *tokenStore) http.HandlerFunc {
 			return
 		}
 		a, _ := authFrom(r.Context())
-		token, err := tokens.generateFor(requestRole(r.Context()), a.DeviceID)
+		token, err := tokens.generateGrant(requestRole(r.Context()), a.DeviceID, a.SessionID)
 		if errors.Is(err, errTokensBusy) {
 			jsonErrorCode(w, errTokensBusy.code, errTokensBusy.msg, errTokensBusy.status)
 			return

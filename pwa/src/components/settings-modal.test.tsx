@@ -38,6 +38,14 @@ vi.mock('./updates-section', () => ({
 vi.mock('./devices-section', () => ({
   DevicesSection: () => <div data-testid="devices-section" />,
 }))
+// And the Signed-in browsers group's in signins-section.test.tsx.
+vi.mock('./signins-section', () => ({
+  SigninsSection: ({ logOut }: { logOut?: () => void }) => (
+    <button type="button" data-testid="signins-section" onClick={logOut}>
+      SignOutThisBrowser
+    </button>
+  ),
+}))
 
 const DEFAULT_SETTINGS: Settings = {
   imeSendBehavior: 'send-only',
@@ -799,6 +807,20 @@ describe('SettingsModal for a view-only device or with devices', () => {
     renderWith({ devices: true })
     fireEvent.click(screen.getByRole('button', { name: 'Devices' }))
     expect(screen.getByTestId('devices-section')).toBeInTheDocument()
+  })
+
+  it('shows the Signed-in browsers group only when the server offers it', () => {
+    const { unmount } = renderWith({})
+    expect(
+      screen.queryByRole('button', { name: 'Signed-in browsers' }),
+    ).toBeNull()
+    unmount()
+    const onLogout = vi.fn()
+    renderWith({ signins: true, onLogout })
+    fireEvent.click(screen.getByRole('button', { name: 'Signed-in browsers' }))
+    // Signing this browser out is the app's Log out
+    fireEvent.click(screen.getByTestId('signins-section'))
+    expect(onLogout).toHaveBeenCalledTimes(1)
   })
 
   it('offers notifications to a full device', async () => {

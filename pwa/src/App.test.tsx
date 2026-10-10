@@ -483,6 +483,7 @@ vi.mock('./components/settings-modal', () => ({
     onShowGestureHints,
     pasteBufferLabel,
     devices,
+    signins,
     readOnly,
   }: {
     isOpen: boolean
@@ -491,6 +492,7 @@ vi.mock('./components/settings-modal', () => ({
     updates?: { onReload: () => void }
     onShowGestureHints?: () => void
     devices?: boolean
+    signins?: boolean
     readOnly?: boolean
   }) =>
     isOpen ? (
@@ -498,6 +500,7 @@ vi.mock('./components/settings-modal', () => ({
         data-testid="settings-modal"
         data-paste-label={pasteBufferLabel}
         data-devices={String(!!devices)}
+        data-signins={String(!!signins)}
         data-read-only={String(!!readOnly)}
       >
         <button onClick={onClose}>CloseSettings</button>
@@ -3698,6 +3701,7 @@ describe('App views, view-only and deep links', () => {
         viewStream: true,
         scroll: true,
         devices: true,
+        signins: true,
       })
       render(<App />)
       await screen.findByTestId('terminal-view')
@@ -3705,6 +3709,10 @@ describe('App views, view-only and deep links', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
       expect(screen.getByTestId('settings-modal')).toHaveAttribute(
         'data-devices',
+        'false',
+      )
+      expect(screen.getByTestId('settings-modal')).toHaveAttribute(
+        'data-signins',
         'false',
       )
       expect(screen.getByTestId('settings-modal')).toHaveAttribute(
@@ -3720,6 +3728,7 @@ describe('App views, view-only and deep links', () => {
         role: 'full',
         scroll: true,
         devices: true,
+        signins: true,
       })
       render(<App />)
       await screen.findByTestId('terminal-view')
@@ -3728,6 +3737,10 @@ describe('App views, view-only and deep links', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
       expect(screen.getByTestId('settings-modal')).toHaveAttribute(
         'data-devices',
+        'true',
+      )
+      expect(screen.getByTestId('settings-modal')).toHaveAttribute(
+        'data-signins',
         'true',
       )
       expect(screen.getByTestId('settings-modal')).toHaveAttribute(
