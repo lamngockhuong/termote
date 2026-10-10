@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -24,6 +25,9 @@ type fakeMux struct {
 	// context; moveID is MoveTab's id (else the id given).
 	move   func(ctx context.Context) error
 	moveID string
+	// text is what ReadText writes; more what it reports.
+	text string
+	more bool
 }
 
 func (f *fakeMux) Name() string { return "fake" }
@@ -105,6 +109,14 @@ func (f *fakeMux) SendKeys(_ context.Context, id, keys string) error {
 func (f *fakeMux) Scroll(_ context.Context, id string, lines int) error {
 	f.calls = append(f.calls, fmt.Sprintf("scroll %s=%d", id, lines))
 	return f.err
+}
+func (f *fakeMux) ReadText(_ context.Context, id string, lines int, w io.Writer) (bool, error) {
+	f.calls = append(f.calls, fmt.Sprintf("text %s=%d", id, lines))
+	if f.err != nil {
+		return false, f.err
+	}
+	_, err := io.WriteString(w, f.text)
+	return f.more, err
 }
 func (f *fakeMux) Attach(_ context.Context, pane string, size Size) (TermStream, error) {
 	if f.attach == nil {

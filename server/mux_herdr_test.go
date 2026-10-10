@@ -54,6 +54,8 @@ type fakeHerdr struct {
 	agent     string         // pane.get agent
 	paneExtra map[string]any // more pane.get fields (agent_session, agent_status)
 	readText  string         // pane.read text
+	readFail  string         // pane.read fails with this code when set
+	getFail   string         // pane.get fails with this code when set
 	createID  string         // workspace.create workspace_id, "wNEW" when empty
 	// pane.process_info: the process_info per pane (a bash shell when
 	// missing), a delay per pane, and an error code for every call.
@@ -289,6 +291,11 @@ func (f *fakeHerdr) handle(c net.Conn) {
 			"tab": map[string]any{"tab_id": "wNEW:t1"}, "root_pane": map[string]any{"pane_id": "wNEW:p1"}})
 	case "pane.get", "pane.scroll":
 		f.mu.Lock()
+		if getFail := f.getFail; getFail != "" && req.Method == "pane.get" {
+			f.mu.Unlock()
+			fail(getFail)
+			return
+		}
 		if req.Method == "pane.scroll" {
 			f.scroll = max(0, min(int(p["offset_from_bottom"].(float64)), f.scrollMax))
 		}
@@ -305,8 +312,12 @@ func (f *fakeHerdr) handle(c net.Conn) {
 		reply(map[string]any{"type": "pane_info", "pane": pane})
 	case "pane.read":
 		f.mu.Lock()
-		text := f.readText
+		text, readFail := f.readText, f.readFail
 		f.mu.Unlock()
+		if readFail != "" {
+			fail(readFail)
+			return
+		}
 		reply(map[string]any{"type": "pane_read", "read": map[string]any{"pane_id": p["pane_id"], "text": text, "revision": 0}})
 	case "pane.send_text":
 		f.mu.Lock()
