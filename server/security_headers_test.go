@@ -97,11 +97,41 @@ func TestServeSecurityHeaders(t *testing.T) {
 		if hd.Get("X-Content-Type-Options") != "nosniff" || hd.Get("Referrer-Policy") != "no-referrer" || hd.Get("X-Frame-Options") != "DENY" {
 			t.Errorf("GET %s (%d): headers = %v", path, rec.Code, hd)
 		}
+		checkIsolationHeaders(t, "GET "+path, rec.Header())
 	}
-	// A Host off the allowlist is refused before the policy would name it.
+	// A Host off the allowlist is refused before the policy would name it,
+	// yet the refusal still carries the headers that do not name it.
 	req := httptest.NewRequest("GET", "http://evil.example/", nil)
 	req.Host = "evil.example"
-	if rec := serve(h, req); rec.Code != http.StatusForbidden || strings.Contains(rec.Header().Get("Content-Security-Policy"), "evil.example") {
+	rec := serve(h, req)
+	if rec.Code != http.StatusForbidden || strings.Contains(rec.Header().Get("Content-Security-Policy"), "evil.example") {
 		t.Errorf("foreign Host = %d %q", rec.Code, rec.Header().Get("Content-Security-Policy"))
+	}
+	checkIsolationHeaders(t, "foreign Host", rec.Header())
+	// The sign-in and pairing pages a browser without a session gets.
+	for _, path := range []string{"/login", "/pair"} {
+		req := httptest.NewRequest("GET", "http://localhost:7680"+path, nil)
+		req.Host = "localhost:7680"
+		req.Header.Set("Sec-Fetch-Mode", "navigate")
+		checkIsolationHeaders(t, "GET "+path, serve(h, req).Header())
+	}
+}
+
+func checkIsolationHeaders(t *testing.T, what string, hd http.Header) {
+	t.Helper()
+	if hd.Get("Cross-Origin-Opener-Policy") != "same-origin" || hd.Get("Cross-Origin-Resource-Policy") != "same-origin" || hd.Get("Permissions-Policy") != permissionsPolicy {
+		t.Errorf("%s: isolation headers = %v", what, hd)
+	}
+}
+
+// The policy never turns off the clipboard: paste and copy on select use it.
+func TestPermissionsPolicyKeepsClipboard(t *testing.T) {
+	if strings.Contains(permissionsPolicy, "clipboard") {
+		t.Errorf("policy names the clipboard: %s", permissionsPolicy)
+	}
+	for _, f := range []string{"camera=()", "microphone=()", "geolocation=()", "display-capture=()"} {
+		if !strings.Contains(permissionsPolicy, f) {
+			t.Errorf("policy lacks %s", f)
+		}
 	}
 }

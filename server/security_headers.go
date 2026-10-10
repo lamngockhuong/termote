@@ -78,3 +78,23 @@ func securityHeaders(files fs.FS, next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
+
+// permissionsPolicy turns off the device features the app never uses, so a
+// script that ever ran in a Termote page could not ask for them. Clipboard
+// access stays allowed: paste and copy on select read and write it.
+const permissionsPolicy = "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), hid=(), bluetooth=(), midi=(), display-capture=()"
+
+// isolationHeaders sets the headers that do not depend on the Host on every
+// response, a refusal of hostGuard included, so it wraps hostGuard: no other
+// site keeps a reference to a Termote window it opened (COOP), reads any
+// response as a resource of its own (CORP), or reaches a device feature
+// through a Termote page.
+func isolationHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("Cross-Origin-Opener-Policy", "same-origin")
+		h.Set("Cross-Origin-Resource-Policy", "same-origin")
+		h.Set("Permissions-Policy", permissionsPolicy)
+		next.ServeHTTP(w, r)
+	})
+}

@@ -31,6 +31,14 @@ type startOptions struct {
 	user        string   // Basic auth username, shared with the container
 	allowHosts  []string // user-added names, persisted
 	removeHosts []string
+	// allowLocalUsers are the OS users, besides the server's own and
+	// root/SYSTEM, whose connections from this machine are served.
+	allowLocalUsers  []string
+	removeLocalUsers []string
+	// newLocalUsers are the --allow-local-user names of this command line,
+	// the only ones checked to exist: a saved user deleted from the OS
+	// since must not stop a plain start (the server skips it).
+	newLocalUsers []string
 }
 
 // serverStartWait bounds the wait for a started server to answer.
@@ -38,7 +46,7 @@ var serverStartWait = 15 * time.Second
 
 func (c *cli) parseStartArgs(args []string) (startOptions, map[string]bool, error) {
 	var o startOptions
-	var hosts, remove stringList
+	var hosts, remove, localUsers, removeLocalUsers stringList
 	fs := c.newFlagSet("start")
 	fs.BoolVar(&o.lan, "lan", false, "")
 	fs.BoolVar(&o.noAuth, "no-auth", false, "")
@@ -51,6 +59,8 @@ func (c *cli) parseStartArgs(args []string) (startOptions, map[string]bool, erro
 	fs.StringVar(&o.user, "user", "", "")
 	fs.Var(&hosts, "allow-host", "")
 	fs.Var(&remove, "remove-host", "")
+	fs.Var(&localUsers, "allow-local-user", "")
+	fs.Var(&removeLocalUsers, "remove-local-user", "")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return o, nil, flagErr(err)
@@ -64,6 +74,8 @@ func (c *cli) parseStartArgs(args []string) (startOptions, map[string]bool, erro
 		return o, nil, usageError("--tailscale and --no-tailscale cannot be combined")
 	}
 	o.allowHosts, o.removeHosts = hosts, remove
+	o.allowLocalUsers, o.removeLocalUsers = localUsers, removeLocalUsers
+	o.newLocalUsers = slices.Clone(localUsers)
 	return o, set, nil
 }
 
@@ -104,7 +116,19 @@ func mergeSaved(o *startOptions, set map[string]bool, s *savedConfig) {
 		return slices.ContainsFunc(o.removeHosts, func(r string) bool { return strings.EqualFold(r, h) })
 	})
 	slices.Sort(o.allowHosts)
+	for _, u := range s.AllowLocalUsers {
+		if !slices.Contains(o.allowLocalUsers, u) {
+			o.allowLocalUsers = append(o.allowLocalUsers, u)
+		}
+	}
+	o.allowLocalUsers = slices.DeleteFunc(o.allowLocalUsers, func(u string) bool {
+		return slices.Contains(o.removeLocalUsers, u)
+	})
+	slices.Sort(o.allowLocalUsers)
 }
+
+// lookupLocalUserFunc resolves a --allow-local-user name; tests replace it.
+var lookupLocalUserFunc = lookupLocalUser
 
 func (c *cli) validateStart(o *startOptions) error {
 	if o.port == 0 {
@@ -121,6 +145,13 @@ func (c *cli) validateStart(o *startOptions) error {
 	}
 	for _, h := range append(slices.Clone(o.allowHosts), o.removeHosts...) {
 		if err := validateHostName(h); err != nil {
+			return usageError("%v", err)
+		}
+	}
+	// Only the names being added: a saved one whose user was removed since
+	// is dropped with --remove-local-user, and the server skips it.
+	for _, u := range o.newLocalUsers {
+		if err := validateLocalUserName(u); err != nil {
 			return usageError("%v", err)
 		}
 	}
@@ -307,6 +338,7 @@ func (c *cli) cmdStart(args []string) error {
 		Tailscale:        o.tailscale,
 		Mux:              o.mux,
 		AllowHosts:       o.allowHosts,
+		AllowLocalUsers:  o.allowLocalUsers,
 		HerdrAllowNoAuth: o.herdrNoAuth,
 		User:             o.user,
 		Password:         c.keptPassword(pass, saved),
@@ -334,6 +366,7 @@ func (c *cli) cmdStart(args []string) error {
 	}
 	c.lanLingerWarning(o.lan, o.port, sup)
 	c.showAccessInfo(o, pass, reused)
+	c.showLocalUsers(o)
 	if saved != nil && saved.Container != nil && o.user != saved.authUser() {
 		c.infof("The container shares this username; it takes it at its next 'termote container up'")
 	}
@@ -730,6 +763,24 @@ func (c *cli) warnExposure(o startOptions) {
 	case o.lan:
 		c.warnf("LAN access is on: every device on this network can reach the login page (turn it off: --lan=false)")
 	}
+}
+
+// showLocalUsers says which other OS users may connect from this machine,
+// so a reverse proxy refused after an update (or a rollback that dropped
+// the list) is easy to see.
+func (c *cli) showLocalUsers(o startOptions) {
+	if c.goos == "darwin" {
+		if len(o.allowLocalUsers) > 0 {
+			c.infof("macOS does not check which local user makes a connection; --allow-local-user has no effect here")
+		}
+		return
+	}
+	users := "none"
+	if len(o.allowLocalUsers) > 0 {
+		users = strings.Join(o.allowLocalUsers, ", ")
+	}
+	fmt.Fprintf(c.out, "Other local users allowed: %s\n", users)
+	fmt.Fprintf(c.out, "%s\n", c.paint(ansiDim, "  (connections from this machine by any other user are refused; a reverse proxy running as one: termote start --allow-local-user <name>)"))
 }
 
 func (c *cli) showAccessInfo(o startOptions, pass string, reused bool) {

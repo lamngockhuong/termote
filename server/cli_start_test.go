@@ -30,6 +30,10 @@ func TestParseStartArgs(t *testing.T) {
 	if o, set, err := tc.parseStartArgs([]string{"--user", "bob"}); err != nil || o.user != "bob" || !set["user"] {
 		t.Fatalf("--user: %+v %v %v", o, set, err)
 	}
+	if o, _, err := tc.parseStartArgs([]string{"--allow-local-user", "www-data", "--allow-local-user", "caddy", "--remove-local-user", "old"}); err != nil ||
+		strings.Join(o.allowLocalUsers, ",") != "www-data,caddy" || strings.Join(o.removeLocalUsers, ",") != "old" {
+		t.Fatalf("--allow-local-user: %+v %v", o, err)
+	}
 	for _, bad := range [][]string{{"native"}, {"--bogus"}, {"--tailscale", "x.ts.net", "--no-tailscale"}, {"--user"}} {
 		if _, _, err := tc.parseStartArgs(bad); err == nil {
 			t.Errorf("%v accepted", bad)
@@ -73,6 +77,74 @@ func TestMergeSaved(t *testing.T) {
 	mergeSaved(&o, map[string]bool{}, nil)
 	if o.port != 0 || o.lan || o.user != adminUser {
 		t.Fatalf("nil saved config changed options: %+v", o)
+	}
+	// --allow-local-user adds to the saved users, --remove-local-user drops one.
+	o = startOptions{allowLocalUsers: []string{"nginx"}, removeLocalUsers: []string{"old"}}
+	mergeSaved(&o, map[string]bool{}, &savedConfig{AllowLocalUsers: []string{"caddy", "old", "nginx"}})
+	if strings.Join(o.allowLocalUsers, ",") != "caddy,nginx" {
+		t.Fatalf("local users: %v", o.allowLocalUsers)
+	}
+}
+
+func TestValidateStartLocalUsers(t *testing.T) {
+	tc := newTestCLI(t, "linux")
+	prev := lookupLocalUserFunc
+	t.Cleanup(func() { lookupLocalUserFunc = prev })
+	lookupLocalUserFunc = func(name string) (string, error) {
+		if name == "caddy" || name == `HOST\proxy svc` {
+			return "1001", nil
+		}
+		return "", errors.New("unknown user")
+	}
+	for _, users := range [][]string{{"caddy"}, {`HOST\proxy svc`}} {
+		if err := tc.validateStart(&startOptions{user: adminUser, newLocalUsers: users}); err != nil {
+			t.Errorf("%v: %v", users, err)
+		}
+	}
+	// A user that does not exist is refused, never saved; so is a name that
+	// would break the config line or its list.
+	for _, bad := range []string{"nobody-here", "a,b", `a"b`, "a\nb", " caddy", "-x"} {
+		if err := tc.validateStart(&startOptions{user: adminUser, newLocalUsers: []string{bad}}); err == nil {
+			t.Errorf("%q accepted", bad)
+		}
+	}
+	// A saved user deleted from the OS since does not stop a plain start;
+	// non-ASCII names (a Windows account) are names too.
+	if err := tc.validateStart(&startOptions{user: adminUser, allowLocalUsers: []string{"gone"}}); err != nil {
+		t.Errorf("saved user no longer present: %v", err)
+	}
+	if !localUserNameRe.MatchString("Lâm Khương") || localUserNameRe.MatchString("a,b") {
+		t.Error("local user name pattern")
+	}
+	if o, _, _ := tc.parseStartArgs([]string{"--allow-local-user", "caddy"}); strings.Join(o.newLocalUsers, ",") != "caddy" {
+		t.Errorf("new local users: %v", o.newLocalUsers)
+	}
+	// A saved user to remove need not exist any more.
+	if err := tc.validateStart(&startOptions{user: adminUser, removeLocalUsers: []string{"gone"}}); err != nil {
+		t.Errorf("--remove-local-user of a removed user: %v", err)
+	}
+}
+
+func TestShowLocalUsers(t *testing.T) {
+	tc := newTestCLI(t, "linux")
+	tc.showLocalUsers(startOptions{allowLocalUsers: []string{"caddy", "nginx"}})
+	if got := tc.stdout.String(); !strings.Contains(got, "Other local users allowed: caddy, nginx") {
+		t.Errorf("linux: %q", got)
+	}
+	tc = newTestCLI(t, "windows")
+	tc.showLocalUsers(startOptions{})
+	if got := tc.stdout.String(); !strings.Contains(got, "Other local users allowed: none") || !strings.Contains(got, "--allow-local-user") {
+		t.Errorf("windows: %q", got)
+	}
+	// macOS checks nothing: no list, and a note only when one was given.
+	tc = newTestCLI(t, "darwin")
+	tc.showLocalUsers(startOptions{})
+	if got := tc.stdout.String() + tc.stderr.String(); got != "" {
+		t.Errorf("darwin without users: %q", got)
+	}
+	tc.showLocalUsers(startOptions{allowLocalUsers: []string{"caddy"}})
+	if got := tc.stdout.String() + tc.stderr.String(); !strings.Contains(got, "macOS does not check") {
+		t.Errorf("darwin with users: %q", got)
 	}
 }
 
@@ -269,10 +341,14 @@ func TestServeConfigIgnoresEnvWhenConfigExists(t *testing.T) {
 	t.Setenv("TERMOTE_NO_AUTH", "true")
 	t.Setenv("TERMOTE_PORT", "9999")
 	t.Setenv("TERMOTE_PWA_DIR", "/tmp")
-	tc.saveConfig(savedConfig{Password: "pw", AllowHosts: []string{"box.lan"}, Tailscale: "Box.ts.net:8443"})
+	tc.saveConfig(savedConfig{Password: "pw", AllowHosts: []string{"box.lan"}, Tailscale: "Box.ts.net:8443", AllowLocalUsers: []string{"caddy"}})
 	cfg, err := tc.loadServeConfig()
 	if err != nil {
 		t.Fatal(err)
+	}
+	// Only a server run from the saved config (native) checks local users.
+	if !cfg.CheckLocalUsers || strings.Join(cfg.AllowLocalUsers, ",") != "caddy" {
+		t.Fatalf("local users: %+v", cfg)
 	}
 	if cfg.Bind != "127.0.0.1" || cfg.NoAuth || cfg.Pass != "pw" || cfg.Port != "7680" || cfg.PWADir != "" ||
 		cfg.AllowLocalAddr || cfg.MuxBackend != "tmux" || cfg.AllowedHosts != "box.ts.net,box.lan" || cfg.Tailscale != "Box.ts.net:8443" ||
@@ -287,7 +363,7 @@ func TestServeConfigIgnoresEnvWhenConfigExists(t *testing.T) {
 	// No config: the environment configures the server (the container).
 	os.Remove(tc.configFile())
 	t.Setenv("TERMOTE_NO_AUTH", "true")
-	if cfg, _ = tc.loadServeConfig(); cfg.Bind != "0.0.0.0" || !cfg.NoAuth || cfg.Port != "9999" {
+	if cfg, _ = tc.loadServeConfig(); cfg.Bind != "0.0.0.0" || !cfg.NoAuth || cfg.Port != "9999" || cfg.CheckLocalUsers {
 		t.Fatalf("env serve config %+v", cfg)
 	}
 }

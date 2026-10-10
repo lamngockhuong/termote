@@ -48,6 +48,12 @@ type serveConfig struct {
 	// Tailscale is "host[:port]" to publish over Tailscale HTTPS once
 	// listening; empty publishes nothing.
 	Tailscale string
+	// CheckLocalUsers refuses a connection made from this machine by a
+	// process of another OS user (see localPeerCheck); set only for a
+	// server run from the saved config (native). AllowLocalUsers names the
+	// users trusted besides the server's own and root/SYSTEM.
+	CheckLocalUsers bool
+	AllowLocalUsers []string
 	// FilesDenyDirs are never served by the files routes, even inside a
 	// pane's root: the config and state dirs (the secret and the encrypted
 	// password).
@@ -405,6 +411,7 @@ func buildServer(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushStore, 
 	// allowed one.
 	handler = securityHeaders(pwa, handler)
 	handler = hostGuard(allowed, handler)
+	handler = isolationHeaders(handler)
 	return readDeadline(noCacheMiddleware(handler)), hub, push, nil
 }
 
@@ -461,6 +468,13 @@ func startServeMode(cfg serveConfig) {
 	ln, err := net.Listen("tcp", net.JoinHostPort(cfg.Bind, cfg.Port))
 	if err != nil {
 		log.Fatal(err)
+	}
+	if cfg.CheckLocalUsers {
+		if check := newLocalPeerCheck(cfg.AllowLocalUsers); check != nil {
+			ln = check.listener(ln)
+		} else {
+			log.Printf("connections from other local users are not checked on this OS")
+		}
 	}
 	if cfg.OnListen != nil {
 		cfg.OnListen()

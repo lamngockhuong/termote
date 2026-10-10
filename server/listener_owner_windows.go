@@ -50,12 +50,17 @@ func listenerOwnedLocally(port int) listenerOwner {
 // tcpListenerTable returns the listening sockets of family with their PIDs
 // (MIB_TCPTABLE_OWNER_PID or MIB_TCP6TABLE_OWNER_PID).
 func tcpListenerTable(family uint32) ([]byte, bool) {
+	return tcpTable(family, tcpTableOwnerPIDListener)
+}
+
+// tcpTable returns the TCP table of family of the given class.
+func tcpTable(family, class uint32) ([]byte, bool) {
 	var size uint32
 	for range 3 {
 		buf := make([]byte, max(size, 4))
 		size = uint32(len(buf))
 		r, _, _ := procGetExtendedTcpTable.Call(uintptr(unsafe.Pointer(&buf[0])), uintptr(unsafe.Pointer(&size)),
-			0, uintptr(family), tcpTableOwnerPIDListener, 0)
+			0, uintptr(family), uintptr(class), 0)
 		switch windows.Errno(r) {
 		case 0:
 			return buf[:size], true

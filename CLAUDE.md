@@ -1067,6 +1067,10 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   name or IPv4) + `https://api.github.com`, `worker-src`/`manifest-src 'self'`,
   `object-src 'none'`, `base-uri`/`form-action 'self'`, `frame-ancestors 'none'`; plus
   `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`.
+  `isolationHeaders`, wrapped outside `hostGuard` so its 403 carries them too, adds
+  `Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Resource-Policy: same-origin` and a
+  `Permissions-Policy` turning off camera, microphone, geolocation, payment, USB, serial, HID,
+  Bluetooth, MIDI and display capture (never the clipboard: paste and copy on select use it).
   Every E2E spec imports `test` from `pwa/e2e/fixtures.ts`, which fails a test on any CSP
   violation
 - **Release integrity**: `release.yml`'s release job runs in the `release` environment (the
