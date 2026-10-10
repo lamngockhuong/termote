@@ -595,34 +595,32 @@ Test trên thiết bị di động thật:
 
 ## Bàn Phím Ảo
 
-### Chế Độ Thu Gọn (Mặc Định)
+### Hàng Dưới Cùng
 
 - [ ] Thanh công cụ hiển thị trên bàn phím hệ thống
 - [ ] Nút bật/tắt bàn phím hoạt động
 - [ ] Nút bật/tắt IME hoạt động
-- [ ] Nút Lịch sử mở dropdown lịch sử lệnh
-- [ ] Phím Tab gửi Tab
-- [ ] Phím Esc gửi Escape
+- [ ] Phím Esc gửi Escape (tắt Ctrl/Shift nếu đang bật)
+- [ ] Phím bổ trợ Ctrl bật/tắt (có chỉ báo khi đang bật)
+- [ ] Phím mũi tên lên/xuống hoạt động
 - [ ] Phím Enter gửi Enter
-- [ ] Phím bổ trợ Ctrl bật/tắt (chỉ báo màu xanh khi đang bật)
-- [ ] Phím bổ trợ Shift bật/tắt (chỉ báo màu cam khi đang bật)
-- [ ] Phím mũi tên (←↑↓→) hoạt động
-- [ ] Nút mở rộng hiển thị
+- [ ] Phím Tab gửi Tab
+- [ ] Nút ⋯ (Extra keys) ghim ở mép phải, nằm ngoài phần cuộn
 - [ ] Các nút dùng icon (kích thước đọc được, không dùng ký hiệu chữ)
 - [ ] Nhấn giữ nút KHÔNG hiện context menu
 
-### Chế Độ Mở Rộng
+### Các Hàng Mở Rộng
 
-- [ ] Nút mở rộng chuyển sang view đầy đủ
-- [ ] Phím Home hoạt động
-- [ ] Phím End hoạt động
-- [ ] Phím Delete hoạt động
-- [ ] Phím Backspace hoạt động
-- [ ] Phím Page Up/Down hoạt động
-- [ ] Phím Insert hoạt động
-- [ ] Nút thu gọn quay về chế độ tối giản
+- [ ] Nút ⋯ hiện các hàng (Actions trên mobile, Text · Scroll, Navigate) và ẩn lại được
+- [ ] Nút Lịch sử mở dropdown lịch sử lệnh và đóng các hàng mở rộng
+- [ ] Trên điện thoại, chạm vào ô tìm kiếm lịch sử: ô vẫn nằm trên màn hình, phía trên bàn phím
+- [ ] Bật bàn phím ảo thì các hàng mở rộng tự đóng; nhấn ⋯ vẫn mở lại được khi bàn phím đang bật
+- [ ] Phím bổ trợ Shift bật/tắt (có chỉ báo khi đang bật); đóng các hàng thì Shift tắt
+- [ ] Phím ⇧Tab gửi Shift+Tab
+- [ ] Phím mũi tên trái/phải hoạt động
+- [ ] Các phím Home, End, Delete, Backspace, Page Up/Down và Insert hoạt động
 
-### Tổ Hợp Ctrl (Thu Gọn)
+### Tổ Hợp Ctrl (nổi phía trên thanh công cụ)
 
 - [ ] Ctrl+C (ngắt) hoạt động
 - [ ] Ctrl+D (EOF) hoạt động
@@ -630,9 +628,6 @@ Test trên thiết bị di động thật:
 - [ ] Ctrl+L (xóa màn hình) hoạt động
 - [ ] Ctrl+A (đầu dòng) hoạt động
 - [ ] Ctrl+E (cuối dòng) hoạt động
-
-### Tổ Hợp Ctrl (Mở Rộng)
-
 - [ ] Ctrl+B (lùi 1 ký tự) hoạt động
 - [ ] Ctrl+X (cắt) hoạt động
 - [ ] Ctrl+K (xóa đến cuối) hoạt động
@@ -650,7 +645,7 @@ Test trên thiết bị di động thật:
 - [ ] Ctrl+Shift+Z (làm lại) hoạt động
 - [ ] Ctrl+Shift+X (cắt) hoạt động
 
-### Phím Tiện Ích
+### Hàng Text · Scroll (hàng mở rộng)
 
 - [ ] Nút bật/tắt tmux copy mode hoạt động
 - [ ] Phím chọn chữ: đứng cạnh phím copy mode với tmux, nằm vào chỗ của nó với Herdr
@@ -672,14 +667,17 @@ Test trên thiết bị di động thật:
 
 ## Thao Tác Nhanh (Mobile)
 
-- [ ] Phím Quick actions (⚡) hiện trên thanh công cụ bàn phím ở mobile, không còn nút nổi
-- [ ] Nhấn phím này mở bảng Quick actions
+- [ ] Không còn phím ⚡ và bảng Quick actions; nút ⋯ (Extra keys) ghim ở mép phải thanh công cụ
+- [ ] Trên mobile, nhấn ⋯ thì hàng Actions (Clear, Cancel, Clear line, Exit) hiện đầu tiên trong các hàng mở rộng
 - [ ] Thao tác Clear (gửi 'clear' + Enter)
 - [ ] Thao tác Cancel (gửi Ctrl+C)
 - [ ] Thao tác `Clear line` (gửi Ctrl+U)
 - [ ] Thao tác Exit (gửi Ctrl+D)
-- [ ] Thao tác `Attach image` (khi server nhận ảnh tải lên) mở bảng chọn ảnh
 - [ ] Phản hồi rung khi thao tác
+- [ ] Hàng dưới ở màn 390px: ⌨, 文, Esc, Ctrl, ↑, ↓, Enter, Tab; hàng cuộn ngang được và ⋯ luôn nằm trên màn hình
+- [ ] Mép hàng dưới còn phím bị khuất thì mờ dần; đủ chỗ cho mọi phím thì không mờ
+- [ ] Bật Ctrl (thu gọn hay mở rộng): các tổ hợp nổi phía trên thanh công cụ, terminal giữ nguyên kích thước
+- [ ] ⇧Tab ở hàng Navigate gửi Shift+Tab
 
 ---
 

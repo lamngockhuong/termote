@@ -283,7 +283,8 @@ The `update` command:
 | `pwa/src/components/session-tabs.tsx`             | Session tab bar for window switching                          |
 | `pwa/src/components/connection-indicator.tsx`     | Connection status indicator with retry                        |
 | `pwa/src/components/command-history-dropdown.tsx` | Command search/recall UI                                      |
-| `pwa/src/components/quick-actions-menu.tsx`       | Quick actions sheet (opened from a toolbar key on mobile)     |
+| `pwa/src/components/quick-actions-menu.tsx`       | Quick actions (Actions row of the expanded toolbar, mobile)   |
+| `pwa/src/hooks/use-scroll-edges.ts`               | Which ends of a scroller hide content, the fading mask        |
 | `pwa/src/components/select-text-sheet.tsx`        | Select text: the pane's text to select and copy (phone)       |
 | `pwa/src/hooks/use-pane-text.ts`                  | Pane text for the sheet: server history, else xterm buffer    |
 | `pwa/src/utils/copy-text.ts`                      | Clipboard write, `execCommand('copy')` fallback over HTTP     |

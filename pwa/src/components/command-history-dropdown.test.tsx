@@ -243,4 +243,13 @@ describe('CommandHistoryDropdown', () => {
     const input = screen.getByLabelText('Search command history')
     expect(input).not.toHaveAttribute('aria-activedescendant')
   })
+
+  it('caps its height at a share of the app, not the screen, and clips', () => {
+    render(<CommandHistoryDropdown {...defaultProps} />)
+    const panel = screen
+      .getByLabelText('Search command history')
+      .closest('.absolute') as HTMLElement
+    expect(panel.className).toContain('max-h-[60cqh]')
+    expect(panel.className).toContain('overflow-hidden')
+  })
 })

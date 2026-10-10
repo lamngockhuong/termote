@@ -728,34 +728,32 @@ Test on real mobile device:
 
 ## Virtual Keyboard Toolbar
 
-### Minimal Mode (Default)
+### Bottom Row
 
 - [ ] Toolbar visible above system keyboard
 - [ ] Keyboard toggle button works (show/hide system keyboard)
 - [ ] IME toggle button works (switch IME mode)
-- [ ] History button opens command history dropdown
-- [ ] Tab key sends Tab
-- [ ] Esc key sends Escape
+- [ ] Esc key sends Escape (clears Ctrl/Shift when one is on)
+- [ ] Ctrl modifier toggles (visual indicator when active)
+- [ ] Up/Down arrows work
 - [ ] Enter key sends Enter
-- [ ] Ctrl modifier toggles (visual indicator, blue when active)
-- [ ] Shift modifier toggles (visual indicator, orange when active)
-- [ ] Arrow keys (←↑↓→) work
-- [ ] Expand button visible
+- [ ] Tab key sends Tab
+- [ ] ⋯ (Extra keys) pinned at the right, outside the scrolling part
 - [ ] Buttons use icons (readable size, not symbols)
 - [ ] Long press on buttons does NOT trigger context menu
 
-### Expanded Mode
+### Expanded Rows
 
-- [ ] Expand button toggles to expanded view
-- [ ] Home key sends Home
-- [ ] End key sends End
-- [ ] Delete key sends Delete
-- [ ] Backspace key sends Backspace
-- [ ] Page Up/Down keys work
-- [ ] Insert key works
-- [ ] Collapse button returns to minimal mode
+- [ ] ⋯ shows the rows (Actions on mobile, Text · Scroll, Navigate) and hides them again
+- [ ] History button opens command history dropdown and closes the expanded rows
+- [ ] Tapping the history search box on a phone: the box stays on screen above the keyboard
+- [ ] Opening the on-screen keyboard closes the expanded rows; ⋯ opens them again while it is up
+- [ ] Shift modifier toggles (visual indicator when active); closing the rows turns it off
+- [ ] ⇧Tab sends Shift+Tab
+- [ ] Left/Right arrows work
+- [ ] Home, End, Delete, Backspace, Page Up/Down and Insert keys work
 
-### Ctrl Combos (Minimal)
+### Ctrl Combos (float above the toolbar)
 
 - [ ] Ctrl+C (interrupt) works
 - [ ] Ctrl+D (EOF) works
@@ -763,9 +761,6 @@ Test on real mobile device:
 - [ ] Ctrl+L (clear) works
 - [ ] Ctrl+A (beginning of line) works
 - [ ] Ctrl+E (end of line) works
-
-### Ctrl Combos (Expanded)
-
 - [ ] Ctrl+B (back one char) works
 - [ ] Ctrl+X (cut) works
 - [ ] Ctrl+K (kill to end) works
@@ -783,7 +778,7 @@ Test on real mobile device:
 - [ ] Ctrl+Shift+Z (redo) works
 - [ ] Ctrl+Shift+X (cut) works
 
-### Utility Keys
+### Text · Scroll Row (expanded rows)
 
 - [ ] tmux copy mode toggle works
 - [ ] Select text key: next to copy mode on tmux, in its place on Herdr
@@ -805,14 +800,17 @@ Test on real mobile device:
 
 ## Quick Actions (Mobile)
 
-- [ ] Quick actions key (⚡) visible in the keyboard toolbar on mobile, no floating button
-- [ ] Tap the key opens the Quick actions sheet
+- [ ] No ⚡ key and no Quick actions sheet; the ⋯ (Extra keys) button sits pinned at the right end of the toolbar
+- [ ] Tap ⋯ on mobile shows the Actions row (Clear, Cancel, Clear line, Exit) at the top of the expanded rows
 - [ ] Clear action (sends 'clear' + Enter)
 - [ ] Cancel action (sends Ctrl+C)
 - [ ] Clear line action (sends Ctrl+U)
 - [ ] Exit action (sends Ctrl+D)
-- [ ] Attach image action (when the server takes uploads) opens the image picker
 - [ ] Haptic feedback on actions
+- [ ] Bottom row at 390px: ⌨, 文, Esc, Ctrl, ↑, ↓, Enter, Tab; it scrolls sideways and ⋯ stays on screen
+- [ ] The edge of the bottom row that still hides keys fades; no fade when every key fits
+- [ ] Ctrl on (collapsed or expanded): its combos float above the toolbar, the terminal keeps its size
+- [ ] ⇧Tab in the Navigate row sends Shift+Tab
 
 ---
 

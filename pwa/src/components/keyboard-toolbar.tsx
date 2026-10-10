@@ -11,16 +11,14 @@ import {
   Clock,
   CornerDownLeft,
   Delete,
-  Expand,
+  Ellipsis,
   History,
   ImagePlus,
   Keyboard,
   Languages,
-  Minimize2,
   Send,
   TextSelect,
   X,
-  Zap,
 } from 'lucide-react'
 import {
   type ComponentProps,
@@ -32,9 +30,11 @@ import {
   useState,
 } from 'react'
 import { useHaptic } from '../hooks/use-haptic'
+import { scrollEdgeMask, useScrollEdges } from '../hooks/use-scroll-edges'
 import {
+  QUICK_ACTIONS,
   type QuickActionHandlers,
-  QuickActionsSheet,
+  runAction,
 } from './quick-actions-menu'
 import { FOCUS_RING } from './ui/button'
 
@@ -63,7 +63,10 @@ interface Props {
   defaultExpanded?: boolean
   onHistoryToggle?: () => void
   historyOpen?: boolean
-  // Adds a Quick actions key that opens a sheet of common actions
+  // The on-screen keyboard is open: the expanded rows close when it opens,
+  // so the two together do not cover the whole terminal
+  keyboardVisible?: boolean
+  // Adds an Actions row (Clear, Cancel, Clear line, Exit) to the expanded keys
   quickActions?: QuickActionHandlers
   // View-only session: no input controls at all
   readOnly?: boolean
@@ -72,8 +75,10 @@ interface Props {
 interface KeyConfig {
   label: ReactNode
   key: string
+  ariaLabel?: string
   isCtrlModifier?: boolean
   isShiftModifier?: boolean
+  isShiftTab?: boolean
   isScroll?: boolean
   scrollDir?: 'up' | 'down'
   isTmuxCopy?: boolean
@@ -82,14 +87,14 @@ interface KeyConfig {
   isAttach?: boolean
   isKeyboardToggle?: boolean
   isImeToggle?: boolean
-  isExpandToggle?: boolean
   isHistoryToggle?: boolean
 }
 
 const ICON_SIZE = 18
 
-// Minimal mode keys (essential for terminal use)
-const MINIMAL_KEYS: KeyConfig[] = [
+// The bottom row: the keys used most, in this order. It scrolls when it does
+// not fit; the More key stays pinned at its right end.
+const MAIN_KEYS: KeyConfig[] = [
   {
     label: <Keyboard size={ICON_SIZE} />,
     key: 'Keyboard',
@@ -100,48 +105,53 @@ const MINIMAL_KEYS: KeyConfig[] = [
     key: 'ImeToggle',
     isImeToggle: true,
   },
+  { label: 'Esc', key: 'Escape' },
+  { label: 'Ctrl', key: 'Control', isCtrlModifier: true },
+  { label: <ArrowUp size={ICON_SIZE} />, key: 'ArrowUp' },
+  { label: <ArrowDown size={ICON_SIZE} />, key: 'ArrowDown' },
+  { label: <CornerDownLeft size={ICON_SIZE} />, key: 'Enter' },
+  { label: 'Tab', key: 'Tab' },
+]
+
+// Expanded rows, below the Actions row. Text and scroll keys share one row
+// (TEXT_KEYS then SCROLL_KEYS), so the rows stay three on a phone.
+const TEXT_KEYS: KeyConfig[] = [
   {
     label: <Clock size={ICON_SIZE} />,
     key: 'HistoryToggle',
     isHistoryToggle: true,
   },
-  { label: 'Tab', key: 'Tab' },
-  { label: 'Esc', key: 'Escape' },
-  { label: <CornerDownLeft size={ICON_SIZE} />, key: 'Enter' },
-  { label: 'Ctrl', key: 'Control', isCtrlModifier: true },
-  { label: 'Shift', key: 'Shift', isShiftModifier: true },
-  { label: <ArrowUp size={ICON_SIZE} />, key: 'ArrowUp' },
-  { label: <ArrowDown size={ICON_SIZE} />, key: 'ArrowDown' },
-  { label: <ArrowLeft size={ICON_SIZE} />, key: 'ArrowLeft' },
-  { label: <ArrowRight size={ICON_SIZE} />, key: 'ArrowRight' },
-]
-
-// Extra keys for full mode
-const EXTRA_KEYS: KeyConfig[] = [
-  { label: <ChevronFirst size={ICON_SIZE} />, key: 'Home' },
-  { label: <ChevronLast size={ICON_SIZE} />, key: 'End' },
-  { label: <Delete size={ICON_SIZE} />, key: 'Delete' },
-  { label: 'Bksp', key: 'Backspace' },
-  { label: 'PgUp', key: 'PageUp' },
-  { label: 'PgDn', key: 'PageDown' },
-  { label: 'Ins', key: 'Insert' },
-]
-
-// Utility keys (always at end)
-const UTILITY_KEYS: KeyConfig[] = [
-  { label: <History size={ICON_SIZE} />, key: 'TmuxCopy', isTmuxCopy: true },
-  // Where copy mode sits without it (Herdr), next to it on tmux
+  { label: <Clipboard size={ICON_SIZE} />, key: 'TmuxPaste', isPaste: true },
+  {
+    label: <ImagePlus size={ICON_SIZE} />,
+    key: 'Attach',
+    ariaLabel: 'Attach image',
+    isAttach: true,
+  },
   {
     label: <TextSelect size={ICON_SIZE} />,
     key: 'SelectText',
+    ariaLabel: 'Select text',
     isSelectText: true,
   },
-  {
-    label: <Clipboard size={ICON_SIZE} />,
-    key: 'TmuxPaste',
-    isPaste: true,
-  },
-  { label: <ImagePlus size={ICON_SIZE} />, key: 'Attach', isAttach: true },
+]
+
+const NAVIGATE_KEYS: KeyConfig[] = [
+  { label: 'Shift', key: 'Shift', isShiftModifier: true },
+  { label: '⇧Tab', key: 'ShiftTab', ariaLabel: 'Shift+Tab', isShiftTab: true },
+  { label: <ArrowLeft size={ICON_SIZE} />, key: 'ArrowLeft' },
+  { label: <ArrowRight size={ICON_SIZE} />, key: 'ArrowRight' },
+  { label: <ChevronFirst size={ICON_SIZE} />, key: 'Home' },
+  { label: <ChevronLast size={ICON_SIZE} />, key: 'End' },
+  { label: 'PgUp', key: 'PageUp' },
+  { label: 'PgDn', key: 'PageDown' },
+  { label: <Delete size={ICON_SIZE} />, key: 'Delete' },
+  { label: 'Bksp', key: 'Backspace' },
+  { label: 'Ins', key: 'Insert' },
+]
+
+const SCROLL_KEYS: KeyConfig[] = [
+  { label: <History size={ICON_SIZE} />, key: 'TmuxCopy', isTmuxCopy: true },
   {
     label: <ChevronsUp size={ICON_SIZE} />,
     key: 'ScrollUp',
@@ -156,25 +166,13 @@ const UTILITY_KEYS: KeyConfig[] = [
   },
 ]
 
-// Expand/collapse toggle key (position: after arrow/extra keys, before utility keys)
-const EXPAND_TOGGLE_KEY: KeyConfig = {
-  label: <Expand size={ICON_SIZE} />,
-  key: 'Expand',
-  isExpandToggle: true,
-}
-
-// Minimal Ctrl combos (most used)
-const CTRL_COMBOS_MINIMAL = [
+const CTRL_COMBOS = [
   { label: 'C', combo: 'c' },
   { label: 'D', combo: 'd' },
   { label: 'Z', combo: 'z' },
   { label: 'L', combo: 'l' },
   { label: 'A', combo: 'a' },
   { label: 'E', combo: 'e' },
-]
-
-// Extra Ctrl combos for full mode
-const CTRL_COMBOS_EXTRA = [
   { label: 'B', combo: 'b' },
   { label: 'X', combo: 'x' },
   { label: 'K', combo: 'k' },
@@ -184,9 +182,6 @@ const CTRL_COMBOS_EXTRA = [
   { label: 'P', combo: 'p' },
   { label: 'N', combo: 'n' },
 ]
-
-// Pre-computed full Ctrl combos to avoid spread on render
-const CTRL_COMBOS_FULL = [...CTRL_COMBOS_MINIMAL, ...CTRL_COMBOS_EXTRA]
 
 const CTRL_SHIFT_COMBOS = [
   { label: 'C', combo: 'c' },
@@ -283,10 +278,10 @@ export function KeyboardToolbar({
   defaultExpanded = false,
   onHistoryToggle,
   historyOpen,
+  keyboardVisible = false,
   quickActions,
   readOnly = false,
 }: Props) {
-  const [quickOpen, setQuickOpen] = useState(false)
   const [internalCtrlActive, setInternalCtrlActive] = useState(false)
   const [internalShiftActive, setInternalShiftActive] = useState(false)
   const [expanded, setExpanded] = useState(defaultExpanded)
@@ -298,6 +293,7 @@ export function KeyboardToolbar({
   const ctrlActive = externalCtrlActive ?? internalCtrlActive
   const shiftActive = externalShiftActive ?? internalShiftActive
   const { trigger: haptic } = useHaptic()
+  const [scroller, setScroller] = useState<HTMLDivElement | null>(null)
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -306,28 +302,29 @@ export function KeyboardToolbar({
     }
   }, [])
 
-  // Keys of the main row (before the Quick actions / expand keys) and the
-  // utility keys, filtered by the handlers and capabilities available
-  const baseKeys = useMemo(() => {
-    let keys = onSendText
-      ? MINIMAL_KEYS
-      : MINIMAL_KEYS.filter((k) => !k.isImeToggle)
-    // Only show history toggle if handler provided
-    if (!onHistoryToggle) {
-      keys = keys.filter((k) => !k.isHistoryToggle)
-    }
-    return keys
-  }, [onSendText, onHistoryToggle])
-  const utilityKeys = useMemo(
-    () =>
-      UTILITY_KEYS.filter(
-        (k) =>
-          (showTmuxCopy || !k.isTmuxCopy) &&
-          (!!onAttachImage || !k.isAttach) &&
-          (!!onSelectText || !k.isSelectText),
-      ),
-    [showTmuxCopy, onAttachImage, onSelectText],
+  // Keys filtered by the handlers and capabilities available
+  // The main keys apart: their identity tells useScrollEdges the scroller's
+  // children changed, so it must not follow the other handlers (App passes
+  // some inline)
+  const mainKeys = useMemo(
+    () => MAIN_KEYS.filter((k) => !!onSendText || !k.isImeToggle),
+    [onSendText],
   )
+  const { toolKeys, navigateKeys } = useMemo(
+    () => ({
+      toolKeys: [...TEXT_KEYS, ...SCROLL_KEYS].filter(
+        (k) =>
+          (!!onHistoryToggle || !k.isHistoryToggle) &&
+          (!!onAttachImage || !k.isAttach) &&
+          (!!onSelectText || !k.isSelectText) &&
+          (showTmuxCopy || !k.isTmuxCopy),
+      ),
+      navigateKeys: NAVIGATE_KEYS.filter((k) => !!onShiftKey || !k.isShiftTab),
+    }),
+    [onHistoryToggle, onAttachImage, onSelectText, onShiftKey, showTmuxCopy],
+  )
+  const edges = useScrollEdges(scroller, mainKeys)
+  const mask = scrollEdgeMask(edges)
 
   const setCtrlActive = useCallback(
     (value: boolean | ((prev: boolean) => boolean)) => {
@@ -387,10 +384,26 @@ export function KeyboardToolbar({
     [handleImeSend],
   )
 
+  // Shift lives in the expanded rows: closing them turns it off, so no
+  // modifier stays on with nothing on screen showing it
+  const collapse = useCallback(() => {
+    if (shiftActive) setShiftActive(false)
+    setExpanded(false)
+  }, [shiftActive, setShiftActive])
+
   const toggleExpanded = useCallback(() => {
     haptic('medium')
-    setExpanded((prev) => !prev)
-  }, [haptic])
+    if (expanded) collapse()
+    else setExpanded(true)
+  }, [haptic, expanded, collapse])
+
+  // Close the expanded rows when the on-screen keyboard opens (only then:
+  // opening them again while it is up stays possible)
+  const keyboardWasVisible = useRef(keyboardVisible)
+  useEffect(() => {
+    if (keyboardVisible && !keyboardWasVisible.current && expanded) collapse()
+    keyboardWasVisible.current = keyboardVisible
+  }, [keyboardVisible, expanded, collapse])
 
   const handleKey = useCallback(
     (
@@ -398,7 +411,7 @@ export function KeyboardToolbar({
       opts?: {
         isCtrlModifier?: boolean
         isShiftModifier?: boolean
-        isExpandToggle?: boolean
+        isShiftTab?: boolean
         scrollDir?: 'up' | 'down'
         isTmuxCopy?: boolean
         isSelectText?: boolean
@@ -410,16 +423,15 @@ export function KeyboardToolbar({
       },
     ) => {
       haptic('light')
-      if (opts?.isExpandToggle) {
-        toggleExpanded()
-        return
-      }
       if (opts?.isImeToggle) {
         toggleImeMode()
         return
       }
+      // The history list opens above the toolbar: the expanded rows close
+      // so the two do not stack over the whole terminal
       if (opts?.isHistoryToggle && onHistoryToggle) {
         onHistoryToggle()
+        collapse()
         return
       }
       if (opts?.isKeyboardToggle && onToggleKeyboard) {
@@ -452,6 +464,13 @@ export function KeyboardToolbar({
       }
       if (opts?.isShiftModifier) {
         setShiftActive((prev) => !prev)
+        return
+      }
+      // Always Shift+Tab, whatever modifier is on; the modifiers then clear
+      if (opts?.isShiftTab) {
+        onShiftKey?.('Tab')
+        if (ctrlActive) setCtrlActive(false)
+        if (shiftActive) setShiftActive(false)
         return
       }
       // Escape clears active modifiers instead of sending Escape key
@@ -491,8 +510,8 @@ export function KeyboardToolbar({
       onAttachImage,
       onToggleKeyboard,
       onHistoryToggle,
+      collapse,
       toggleImeMode,
-      toggleExpanded,
       haptic,
       setShiftActive,
       setCtrlActive,
@@ -561,7 +580,7 @@ export function KeyboardToolbar({
         handleKey(keyConfig.key, {
           isCtrlModifier: keyConfig.isCtrlModifier,
           isShiftModifier: keyConfig.isShiftModifier,
-          isExpandToggle: keyConfig.isExpandToggle,
+          isShiftTab: keyConfig.isShiftTab,
           scrollDir: keyConfig.scrollDir,
           isTmuxCopy: keyConfig.isTmuxCopy,
           isSelectText: keyConfig.isSelectText,
@@ -572,44 +591,40 @@ export function KeyboardToolbar({
           isHistoryToggle: keyConfig.isHistoryToggle,
         })
       }
-      aria-label={
-        keyConfig.isExpandToggle
-          ? expanded
-            ? 'Collapse keyboard'
-            : 'Expand keyboard'
-          : keyConfig.isAttach
-            ? 'Attach image'
-            : keyConfig.isSelectText
-              ? 'Select text'
-              : undefined
-      }
+      aria-label={keyConfig.ariaLabel}
     >
-      {keyConfig.isExpandToggle ? (
-        expanded ? (
-          <Minimize2 size={ICON_SIZE} />
-        ) : (
-          <Expand size={ICON_SIZE} />
-        )
-      ) : (
-        keyConfig.label
-      )}
+      {keyConfig.label}
     </Keycap>
   )
 
+  // Combos float above the toolbar instead of taking a row or a place in the
+  // scroller: a row that comes and goes with Ctrl would resize the terminal
+  // (and make the running TUI redraw) on every Ctrl press, and the end of the
+  // scroller is usually off screen.
   const renderCombos = (
+    label: string,
+    testId: string,
     combos: { label: string; combo: string }[],
     prefix: string,
-  ) =>
-    combos.map(({ label, combo }) => (
-      <Keycap
-        key={combo}
-        onClick={() => handleKey(combo)}
-        className={KEYCAP_COMBO}
-      >
-        {prefix}
-        {label}
-      </Keycap>
-    ))
+  ) => (
+    <div
+      data-testid={testId}
+      className="absolute inset-x-0 bottom-full z-10 border-t border-border bg-surface px-3 shadow-lg ui-terminal:bg-bg"
+    >
+      <KeyGroup label={label}>
+        {combos.map(({ label, combo }) => (
+          <Keycap
+            key={combo}
+            onClick={() => handleKey(combo)}
+            className={KEYCAP_COMBO}
+          >
+            {prefix}
+            {label}
+          </Keycap>
+        ))}
+      </KeyGroup>
+    </div>
+  )
 
   return (
     <div
@@ -618,70 +633,68 @@ export function KeyboardToolbar({
     >
       {expanded && (
         <>
-          <KeyGroup label="Navigate">{EXTRA_KEYS.map(renderKey)}</KeyGroup>
-          <KeyGroup label={showTmuxCopy ? 'Scroll · copy mode' : 'Scroll'}>
-            {utilityKeys.map(renderKey)}
-          </KeyGroup>
-          {/* Only while Ctrl is on; Ctrl+Shift shows its own combos inline.
-              It floats above the toolbar instead of taking a row: a row that
-              comes and goes with Ctrl would resize the terminal (and make the
-              running TUI redraw) on every Ctrl press. */}
-          {ctrlActive && !shiftActive && (
-            <div
-              data-testid="ctrl-combos-overlay"
-              className="absolute inset-x-0 bottom-full z-10 border-t border-border bg-surface px-3 shadow-lg ui-terminal:bg-bg"
-            >
-              <KeyGroup label="Ctrl +">
-                {renderCombos(CTRL_COMBOS_FULL, '^')}
-              </KeyGroup>
-            </div>
+          {quickActions && (
+            <KeyGroup label="Actions">
+              {QUICK_ACTIONS.map((action) => (
+                <Keycap
+                  key={action.label}
+                  data-key={`Action-${action.label}`}
+                  onClick={() => {
+                    haptic('light')
+                    runAction(action, quickActions)
+                  }}
+                  className="gap-1.5"
+                >
+                  <span aria-hidden="true" className="text-fg-muted">
+                    {action.icon}
+                  </span>
+                  {action.label}
+                </Keycap>
+              ))}
+            </KeyGroup>
           )}
+          <KeyGroup label="Text · Scroll">{toolKeys.map(renderKey)}</KeyGroup>
+          <KeyGroup label="Navigate">{navigateKeys.map(renderKey)}</KeyGroup>
         </>
       )}
 
-      {/* A horizontal scroller clips vertically too: the native keycap's 1px
-          bottom shadow needs room below it. Only there, so the other styles
-          keep their height (the terminal would resize). */}
-      <div className="flex items-center gap-2 overflow-x-auto ui-native:pb-0.5">
-        {baseKeys.map(renderKey)}
-        {quickActions && (
+      {ctrlActive &&
+        !shiftActive &&
+        renderCombos('Ctrl +', 'ctrl-combos-overlay', CTRL_COMBOS, '^')}
+      {ctrlActive &&
+        shiftActive &&
+        renderCombos(
+          'Ctrl + Shift +',
+          'ctrl-shift-combos-overlay',
+          CTRL_SHIFT_COMBOS,
+          '^⇧',
+        )}
+
+      <div className="flex items-center gap-2">
+        {/* A horizontal scroller clips vertically too: the native keycap's 1px
+            bottom shadow needs room below it. Only there, so the other styles
+            keep their height (the terminal would resize). The mask fades an
+            end that still hides keys. */}
+        <div
+          ref={setScroller}
+          data-testid="toolbar-scroller"
+          className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto ui-native:pb-0.5"
+          style={{ maskImage: mask, WebkitMaskImage: mask }}
+        >
+          {mainKeys.map(renderKey)}
+        </div>
+        {/* Pinned outside the scroller, so it is always on screen */}
+        <div className="shrink-0 border-l border-border pl-2 ui-native:pb-0.5">
           <Keycap
-            data-key="QuickActions"
-            aria-label="Quick actions"
-            aria-haspopup="dialog"
-            onClick={() => {
-              haptic('light')
-              setQuickOpen(true)
-            }}
+            data-key="More"
+            aria-label="Extra keys"
+            aria-expanded={expanded}
+            onClick={toggleExpanded}
           >
-            <Zap size={ICON_SIZE} />
+            <Ellipsis size={ICON_SIZE} />
           </Keycap>
-        )}
-        {renderKey(EXPAND_TOGGLE_KEY)}
-        {!expanded && utilityKeys.map(renderKey)}
-
-        {/* Ctrl+Shift combos */}
-        {ctrlActive && shiftActive && (
-          <div className="flex shrink-0 gap-1 border-l border-border pl-2 ml-1">
-            {renderCombos(CTRL_SHIFT_COMBOS, '^⇧')}
-          </div>
-        )}
-
-        {/* Ctrl only combos: inline when collapsed, own row when expanded */}
-        {ctrlActive && !shiftActive && !expanded && (
-          <div className="flex shrink-0 gap-1 border-l border-border pl-2 ml-1">
-            {renderCombos(CTRL_COMBOS_MINIMAL, '^')}
-          </div>
-        )}
+        </div>
       </div>
-
-      {quickActions && (
-        <QuickActionsSheet
-          isOpen={quickOpen}
-          onClose={() => setQuickOpen(false)}
-          {...quickActions}
-        />
-      )}
     </div>
   )
 }

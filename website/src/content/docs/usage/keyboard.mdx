@@ -5,64 +5,60 @@ description: Virtual keyboard for mobile terminal control
 
 import { Aside } from "@astrojs/starlight/components";
 
-The keyboard toolbar provides touch-friendly buttons for common terminal keys. It has two modes: **minimal** (default) and **expanded** (full keyboard). Additional tools include command history and a Quick actions key (mobile).
+The keyboard toolbar provides touch-friendly buttons for common terminal keys. Its bottom row holds
+the keys used most; the **Extra keys** button (⋯), pinned at its right end, shows the expanded rows
+with every other key.
 
-## Toolbar Features
+## Bottom Row
 
-| Feature         | Icon    | Description                                    |
-| --------------- | ------- | ---------------------------------------------- |
-| Minimal mode    | —       | Default, shows essential keys                  |
-| Expanded mode   | Expand  | Tap to show all keys (Home, End, Delete, etc.) |
-| Keyboard toggle | ⌨️      | Show/hide the virtual keyboard                 |
-| Command history | 🕐      | View and search recent commands (see below)    |
-| Quick actions   | ⚡      | Mobile only: opens the Quick actions sheet (see below) |
-| Text input      | 🌐      | Switch to IME mode for non-Latin scripts       |
+| Button | Key / action                                        |
+| ------ | --------------------------------------------------- |
+| ⌨️     | Show/hide the virtual keyboard                      |
+| 🌐     | Text input mode (IME) for non-Latin scripts         |
+| Esc    | Escape (clears Ctrl/Shift when one is on)           |
+| Ctrl   | Ctrl modifier (sticky)                              |
+| ↑ ↓    | Up/Down arrows                                      |
+| Enter  | Submit command                                      |
+| Tab    | Autocomplete                                        |
+| ⋯      | Extra keys: show or hide the expanded rows           |
 
-## Modes
+When the row does not fit the screen it scrolls sideways, and the edge that still hides keys fades
+out. The ⋯ button stays at the right end, outside the scrolling part, so it is always on screen.
 
-| Mode     | Toggle          | Keys Available                             |
-| -------- | --------------- | ------------------------------------------ |
-| Minimal  | Default         | Essential keys for terminal use            |
-| Expanded | Tap expand icon | All keys including Home, End, Delete, etc. |
+## Expanded Rows
 
-In expanded mode the extra keys sit in labelled rows: **Navigate** (Home, End, Delete, and so on)
-and **Scroll · copy mode** (just **Scroll** without tmux copy mode). While Ctrl is on, its combos
-float above the toolbar instead of adding a row, so the terminal keeps its size and a running
-full-screen program does not redraw.
+Tap ⋯ (or turn on **Toolbar default expanded** in [Settings](/usage/settings/)) to show labelled
+rows above the bottom row:
+
+| Row                  | Keys                                                                           |
+| -------------------- | ------------------------------------------------------------------------------ |
+| Actions (mobile)     | Clear, Cancel, Clear line, Exit: see [Actions row](#actions-row-mobile-only) |
+| Text · Scroll        | Command history, Paste, Attach image, Select text, tmux copy mode, scroll up/down |
+| Navigate             | Shift, Shift+Tab, ←, →, Home, End, PgUp, PgDn, Del, Bksp, Ins                  |
+
+The rows close by themselves when the on-screen keyboard opens and when you open the command
+history, so they never cover the whole terminal together; tap ⋯ to show them again.
+
+While Ctrl is on, its combos float above the toolbar instead of adding a row, so the terminal keeps
+its size and a running full-screen program does not redraw. Ctrl+Shift combos float the same way.
 
 ## Modifiers
 
-| Button | Key     |
-| ------ | ------- |
-| Ctrl   | Control |
-| Shift  | Shift   |
+| Button | Key     | Where        |
+| ------ | ------- | ------------ |
+| Ctrl   | Control | Bottom row   |
+| Shift  | Shift   | Navigate row |
 
 ### Modifier Combinations
 
 - **Ctrl only**: Shows Ctrl combos (^C, ^D, etc.)
-- **Shift only**: Modifies next key (Shift+Tab = backtab)
+- **Shift only**: Modifies next key; the **⇧Tab** key sends Shift+Tab in one tap. Closing the
+  expanded rows turns Shift off, since its key is no longer on screen
 - **Ctrl+Shift**: Shows Ctrl+Shift combos (^⇧C, ^⇧V, etc.)
 
-## Minimal Mode Keys
+## Keys
 
-### Basic Keys
-
-| Button | Key    | Use Case           |
-| ------ | ------ | ------------------ |
-| Tab    | Tab    | Autocomplete       |
-| Esc    | Escape | Exit modes, cancel |
-| Enter  | Enter  | Submit command     |
-
-### Arrow Keys
-
-| Button | Key         |
-| ------ | ----------- |
-| ↑      | Up Arrow    |
-| ↓      | Down Arrow  |
-| ←      | Left Arrow  |
-| →      | Right Arrow |
-
-### Ctrl Combos (Minimal)
+### Ctrl Combos
 
 | Button | Combo  | Use Case         |
 | ------ | ------ | ---------------- |
@@ -72,6 +68,14 @@ full-screen program does not redraw.
 | L      | Ctrl+L | Clear screen     |
 | A      | Ctrl+A | Line start       |
 | E      | Ctrl+E | Line end         |
+| B      | Ctrl+B | tmux prefix      |
+| X      | Ctrl+X | Cut/prefix       |
+| K      | Ctrl+K | Delete to end    |
+| U      | Ctrl+U | Delete to start  |
+| W      | Ctrl+W | Delete word      |
+| R      | Ctrl+R | Reverse search   |
+| P      | Ctrl+P | Previous command |
+| N      | Ctrl+N | Next command     |
 
 ### Ctrl+Shift Combos
 
@@ -82,7 +86,7 @@ full-screen program does not redraw.
 | Z      | Ctrl+Shift+Z | Redo            |
 | X      | Ctrl+Shift+X | Cut             |
 
-### Utility Keys
+### Text · Scroll Keys
 
 | Button                   | Action                                                                           |
 | ------------------------ | -------------------------------------------------------------------------------- |
@@ -135,30 +139,19 @@ set-option -g mode-keys vi
 Container mode has this pre-configured.
 :::
 
-## Expanded Mode (Additional Keys)
+### Navigate Keys
 
-| Button | Key       | Use Case           |
-| ------ | --------- | ------------------ |
-| Home   | Home      | Jump to line start |
-| End    | End       | Jump to line end   |
-| Del    | Delete    | Delete forward     |
-| Bksp   | Backspace | Delete backward    |
-| PgUp   | Page Up   | Scroll up          |
-| PgDn   | Page Down | Scroll down        |
-| Ins    | Insert    | Toggle insert mode |
-
-### Extra Ctrl Combos
-
-| Button | Combo  | Use Case         |
-| ------ | ------ | ---------------- |
-| B      | Ctrl+B | tmux prefix      |
-| X      | Ctrl+X | Cut/prefix       |
-| K      | Ctrl+K | Delete to end    |
-| U      | Ctrl+U | Delete to start  |
-| W      | Ctrl+W | Delete word      |
-| R      | Ctrl+R | Reverse search   |
-| P      | Ctrl+P | Previous command |
-| N      | Ctrl+N | Next command     |
+| Button | Key       | Use Case                                  |
+| ------ | --------- | ----------------------------------------- |
+| ⇧Tab   | Shift+Tab | Back in menus; switch mode in Claude Code |
+| ←  →   | Arrows    | Move the cursor                           |
+| Home   | Home      | Jump to line start                        |
+| End    | End       | Jump to line end                          |
+| Del    | Delete    | Delete forward                            |
+| Bksp   | Backspace | Delete backward                           |
+| PgUp   | Page Up   | Scroll up                                 |
+| PgDn   | Page Down | Scroll down                               |
+| Ins    | Insert    | Toggle insert mode                        |
 
 ## Text Input Mode (Non-Latin)
 
@@ -178,7 +171,7 @@ Tap the **Languages icon** to switch to text input mode. This is designed for ty
 
 ## Command History
 
-Tap the **clock icon** (🕐) in the toolbar to open the command history dropdown. View, search, and reuse previously sent commands.
+Tap the **clock icon** (🕐) in the Text · Scroll row of the expanded toolbar to open the command history dropdown. View, search, and reuse previously sent commands.
 
 ### Features
 
@@ -201,21 +194,20 @@ Tap the **clock icon** (🕐) in the toolbar to open the command history dropdow
 Commands sent via keyboard toolbar buttons (Ctrl+C, etc.) are not added to history — only IME text submissions are captured.
 </Aside>
 
-## Quick Actions (Mobile Only)
+## Actions Row (Mobile Only)
 
-The **Quick actions** key (⚡) in the keyboard toolbar opens a sheet with common terminal actions.
-There is no floating button over the terminal.
+On a phone the expanded toolbar starts with an **Actions** row of common terminal actions. Tap ⋯
+to show it.
 
-| Action       | Function              | Sends                |
-| ------------ | --------------------- | -------------------- |
-| Clear        | Clear terminal        | `clear` command      |
-| Cancel       | Interrupt process     | Ctrl+C               |
-| Clear line   | Delete current line   | Ctrl+U               |
-| Exit         | Logout/EOF            | Ctrl+D               |
-| Attach image | Attach an image       | The image's path     |
+| Action     | Function            | Sends           |
+| ---------- | ------------------- | --------------- |
+| Clear      | Clear terminal      | `clear` command |
+| Cancel     | Interrupt process   | Ctrl+C          |
+| Clear line | Delete current line | Ctrl+U          |
+| Exit       | Logout/EOF          | Ctrl+D          |
 
 <Aside>
-The Quick actions key appears on mobile devices only. On desktop, use the keyboard toolbar keys instead.
+The Actions row appears on mobile devices only. On desktop, use the keyboard toolbar keys instead.
 </Aside>
 
 ## Attach an Image
@@ -225,8 +217,8 @@ is empty when the image is on your phone. Termote uploads the image to that mach
 types its path into the terminal, followed by a space; Claude Code (or Codex) turns the path into
 an attachment.
 
-- **Image key** on the toolbar, or **Attach image** in Quick actions: pick a photo, or take one
-  with the camera.
+- **Image key** in the Text · Scroll row of the expanded toolbar: pick a photo, or take one with the
+  camera.
 - **Paste**: paste an image into the terminal (Ctrl+V on desktop), or tap the Paste key, long
   press the terminal or press Ctrl+Shift+V with an image on the clipboard. When the clipboard holds
   text too, the text is pasted, not the image.
@@ -245,9 +237,9 @@ for a view-only session.
 
 1. **Modifiers are sticky**: Tap Ctrl or Shift once, then tap another key
 2. **Combine modifiers**: Tap both Ctrl and Shift for Ctrl+Shift combos
-3. **Shift+Tab**: Navigate backwards in completion/menus
+3. **Shift+Tab**: The ⇧Tab key navigates backwards in completion/menus
 4. **Copy mode** (tmux): Enable to select text, disable to resume typing; to copy to the device,
    use [Select text](#copy-text)
-5. **Expand for more**: Tap expand icon for full keyboard with Home, End, etc.
+5. **Extra keys**: Tap ⋯ for the expanded rows with Shift, Home, End, etc.
 6. **Command history**: Use 🕐 clock icon to quickly reuse previous commands
-7. **Quick actions**: Tap ⚡ for Clear, Cancel, Clear line and Exit in one sheet
+7. **Actions**: On a phone, the Actions row has Clear, Cancel, Clear line and Exit

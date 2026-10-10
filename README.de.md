@@ -46,7 +46,7 @@ CLI-Tools (Claude Code, GitHub Copilot, jedes Terminal) per PWA von Mobilgeräte
 - **Mobilfreundlich**: Virtuelle Tastatur-Toolbar (Tab/Ctrl/Shift/Pfeiltasten, erweiterbar)
 - **Gestenunterstützung**: Wischen für Ctrl+C, Tab, Scrollen
 - **Befehlsverlauf**: Zuvor gesendete Befehle mit Suche abrufen
-- **Schnellaktionen**: Eine ⚡-Taste in der mobilen Leiste öffnet ein Sheet mit häufigen Operationen (clear, cancel, exit)
+- **Schnellaktionen**: Die am Ende der mobilen Leiste fixierte ⋯-Taste zeigt eine Actions-Zeile mit häufigen Operationen (clear, cancel, exit)
 - **Oberflächenstile**: Neutral, Terminal oder Native, in den Einstellungen gewählt, unabhängig vom hellen/dunklen Theme
 - **Verbindungsanzeige**: Echtzeit-Serverstatus mit automatischer Trennungserkennung
 - **Update-Prüfung**: Automatische Benachrichtigung über neue Versionen von GitHub Releases

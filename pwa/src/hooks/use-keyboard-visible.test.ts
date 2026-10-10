@@ -6,6 +6,7 @@ describe('useKeyboardVisible', () => {
   let visualViewportListeners: Record<string, Array<() => void>>
   let mockViewport: {
     height: number
+    offsetTop: number
     addEventListener: ReturnType<typeof vi.fn>
     removeEventListener: ReturnType<typeof vi.fn>
   }
@@ -15,6 +16,7 @@ describe('useKeyboardVisible', () => {
     visualViewportListeners = { resize: [], scroll: [] }
     mockViewport = {
       height: 800,
+      offsetTop: 0,
       addEventListener: vi.fn((event: string, cb: () => void) => {
         visualViewportListeners[event]?.push(cb)
       }),
@@ -94,6 +96,26 @@ describe('useKeyboardVisible', () => {
 
     expect(result.current.isVisible).toBe(true)
     expect(result.current.keyboardHeight).toBe(400)
+  })
+
+  it('reports how far iOS panned the visible part while the keyboard is up', () => {
+    const { result } = renderHook(() => useKeyboardVisible())
+    expect(result.current.viewportOffsetTop).toBe(0)
+
+    act(() => {
+      mockViewport.height = 400
+      mockViewport.offsetTop = 120
+      for (const cb of visualViewportListeners.scroll) cb()
+    })
+    expect(result.current.viewportOffsetTop).toBe(120)
+
+    // Keyboard closed: a pinch zoom's pan is not followed
+    act(() => {
+      mockViewport.height = 800
+      mockViewport.offsetTop = 40
+      for (const cb of visualViewportListeners.resize) cb()
+    })
+    expect(result.current.viewportOffsetTop).toBe(0)
   })
 
   it('removes event listeners on unmount', () => {

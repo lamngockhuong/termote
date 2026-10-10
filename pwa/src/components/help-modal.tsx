@@ -8,13 +8,12 @@ import {
   Clipboard,
   Clock,
   CornerDownLeft,
-  Expand,
+  Ellipsis,
   History,
+  ImagePlus,
   Keyboard,
   Languages,
-  Minimize2,
   TextSelect,
-  Zap,
 } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
 import { AgentStatusBadge } from './agent-status-badge'
@@ -57,16 +56,15 @@ const GESTURES_GUIDE: GuideSection[] = [
   },
 ]
 
-const ExpandCollapseIcon = () => (
-  <span className="inline-flex items-center gap-0.5">
-    <Expand size={ICON_SIZE} />/<Minimize2 size={ICON_SIZE} />
-  </span>
-)
-
-const ArrowKeysIcon = () => (
+const UpDownIcon = () => (
   <span className="inline-flex items-center gap-0.5">
     <ArrowUp size={ICON_SIZE} />
     <ArrowDown size={ICON_SIZE} />
+  </span>
+)
+
+const LeftRightIcon = () => (
+  <span className="inline-flex items-center gap-0.5">
     <ArrowLeft size={ICON_SIZE} />
     <ArrowRight size={ICON_SIZE} />
   </span>
@@ -85,30 +83,24 @@ const TOOLBAR_GUIDE: GuideSection[] = [
     items: [
       { key: <Keyboard size={ICON_SIZE} />, desc: 'Toggle virtual keyboard' },
       { key: <Languages size={ICON_SIZE} />, desc: 'Text input mode (IME)' },
-      { key: <Clock size={ICON_SIZE} />, desc: 'Command history search' },
-      { key: 'Tab', desc: 'Tab key / autocomplete' },
       { key: 'Esc', desc: 'Escape key (clears modifiers if active)' },
+      { key: 'Ctrl', desc: 'Toggle Ctrl modifier (sticky)' },
+      { key: <UpDownIcon />, desc: 'Up/Down arrows' },
       {
         key: <CornerDownLeft size={ICON_SIZE} />,
         desc: 'Enter / Submit command',
       },
-      { key: 'Ctrl', desc: 'Toggle Ctrl modifier (sticky)' },
-      { key: 'Shift', desc: 'Toggle Shift modifier (sticky)' },
-      { key: <ArrowKeysIcon />, desc: 'Arrow keys' },
-      { key: <ExpandCollapseIcon />, desc: 'Expand/collapse keyboard' },
+      { key: 'Tab', desc: 'Tab key / autocomplete' },
       {
-        key: <Zap size={ICON_SIZE} />,
-        desc: 'Quick actions: Clear, Cancel, Clear line, Exit (mobile)',
+        key: <Ellipsis size={ICON_SIZE} />,
+        desc: 'Extra keys: show or hide the expanded rows (pinned at the right)',
       },
-      {
-        key: <History size={ICON_SIZE} />,
-        desc: 'Toggle tmux copy mode',
-        tmux: true,
-      },
-      {
-        key: <TextSelect size={ICON_SIZE} />,
-        desc: "Select text: the pane's text, to select and copy",
-      },
+    ],
+  },
+  {
+    title: 'Expanded Keys',
+    items: [
+      { key: <Clock size={ICON_SIZE} />, desc: 'Command history search' },
       {
         key: <Clipboard size={ICON_SIZE} />,
         desc: 'Paste (source configurable in Settings)',
@@ -118,6 +110,19 @@ const TOOLBAR_GUIDE: GuideSection[] = [
         key: <Clipboard size={ICON_SIZE} />,
         desc: 'Paste from the system clipboard',
         tmux: false,
+      },
+      { key: <ImagePlus size={ICON_SIZE} />, desc: 'Attach an image' },
+      {
+        key: <TextSelect size={ICON_SIZE} />,
+        desc: "Select text: the pane's text, to select and copy",
+      },
+      { key: 'Shift', desc: 'Toggle Shift modifier (sticky)' },
+      { key: '⇧Tab', desc: 'Shift+Tab (e.g. switch mode in Claude Code)' },
+      { key: <LeftRightIcon />, desc: 'Left/Right arrows' },
+      {
+        key: <History size={ICON_SIZE} />,
+        desc: 'Toggle tmux copy mode',
+        tmux: true,
       },
       { key: <ScrollIcon />, desc: 'Page up/down in copy mode', tmux: true },
       { key: <ScrollIcon />, desc: 'Scroll history', tmux: false },
@@ -132,8 +137,8 @@ const TOOLBAR_GUIDE: GuideSection[] = [
       { key: '^L', desc: 'Clear screen' },
       { key: '^A', desc: 'Move to line start' },
       { key: '^E', desc: 'Move to line end' },
-      { key: '^B', desc: 'tmux prefix (expanded mode)', tmux: true },
-      { key: '^B', desc: 'Move cursor back (expanded mode)', tmux: false },
+      { key: '^B', desc: 'tmux prefix', tmux: true },
+      { key: '^B', desc: 'Move cursor back', tmux: false },
     ],
   },
   {
@@ -148,16 +153,20 @@ const TOOLBAR_GUIDE: GuideSection[] = [
   {
     title: 'Expanded Toolbar Rows',
     items: [
-      { key: 'Navigate', desc: 'Home/End, Del/Bksp, PgUp/PgDn, Insert' },
+      { key: 'Actions', desc: 'Clear, Cancel, Clear line, Exit (mobile)' },
       {
-        key: 'Scroll',
-        desc: 'Copy mode, select text, paste and page up/down',
+        key: 'Text · Scroll',
+        desc: 'History, paste, attach image, select text, copy mode, page up/down',
         tmux: true,
       },
       {
-        key: 'Scroll',
-        desc: 'Select text, paste and scroll history',
+        key: 'Text · Scroll',
+        desc: 'History, paste, attach image, select text, scroll up/down',
         tmux: false,
+      },
+      {
+        key: 'Navigate',
+        desc: 'Shift, Shift+Tab, Left/Right, Home/End, PgUp/PgDn, Del/Bksp, Insert',
       },
       {
         key: 'Ctrl +',

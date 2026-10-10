@@ -66,6 +66,8 @@ test.describe('Select text on a phone', () => {
     await run(page, `clear; seq -f 'line-%g' 1 200; echo ${word.replace('-', '""-')}`)
     await expect(rows(page)).toContainText(word, { timeout: 10000 })
 
+    // Select text sits in the expanded rows
+    await page.getByRole('button', { name: 'Extra keys' }).click()
     await page.getByRole('button', { name: 'Select text' }).click()
     const sheet = page.getByRole('dialog', { name: 'Select text' })
     const text = sheet.getByTestId('select-text')
@@ -93,6 +95,8 @@ test.describe('Select text on a phone', () => {
     await run(page, `clear; echo ${word.replace('-', '""-')}`)
     await expect(rows(page)).toContainText(word, { timeout: 10000 })
 
+    // Select text sits in the expanded rows
+    await page.getByRole('button', { name: 'Extra keys' }).click()
     await page.getByRole('button', { name: 'Select text' }).click()
     const sheet = page.getByRole('dialog', { name: 'Select text' })
     await expect(sheet.getByTestId('select-text')).toContainText(word, { timeout: 10000 })

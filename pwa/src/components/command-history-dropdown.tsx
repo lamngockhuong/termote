@@ -73,9 +73,13 @@ export function CommandHistoryDropdown({
     }
   }, [selectedIndex])
 
+  // 60cqh: 60% of the app's own height (App makes it a size container), not
+  // of the screen. iOS keeps 60vh at the full screen's height with the
+  // keyboard up while the app shrinks above it, which pushed the search box
+  // off the top; overflow-hidden keeps the list off the toolbar regardless.
   return (
     <div
-      className="absolute bottom-full left-0 right-0 z-40 mb-2 mx-2 flex max-h-[60vh] flex-col rounded-panel border border-border bg-surface-raised text-fg shadow-xl transition-[opacity,translate] duration-(--duration-fast) ease-standard starting:translate-y-1 starting:opacity-0 ui-native:border-0"
+      className="absolute bottom-full left-0 right-0 z-40 mb-2 mx-2 flex max-h-[60vh] supports-[height:1cqh]:max-h-[60cqh] flex-col overflow-hidden rounded-panel border border-border bg-surface-raised text-fg shadow-xl transition-[opacity,translate] duration-(--duration-fast) ease-standard starting:translate-y-1 starting:opacity-0 ui-native:border-0"
       onKeyDown={handleKeyDown}
     >
       {/* Header */}

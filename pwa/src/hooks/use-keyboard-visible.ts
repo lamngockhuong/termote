@@ -5,6 +5,9 @@ export function useKeyboardVisible() {
   const [keyboardHeight, setKeyboardHeight] = useState(0)
   // Height of the part of the page the keyboard leaves visible
   const [viewportHeight, setViewportHeight] = useState(0)
+  // How far iOS has panned the visible part down the page: focusing a field
+  // with the keyboard up moves what is visible, not the page
+  const [viewportOffsetTop, setViewportOffsetTop] = useState(0)
 
   useEffect(() => {
     const viewport = window.visualViewport
@@ -17,6 +20,7 @@ export function useKeyboardVisible() {
       setIsVisible(isKeyboardOpen)
       setKeyboardHeight(isKeyboardOpen ? heightDiff : 0)
       setViewportHeight(viewport.height)
+      setViewportOffsetTop(isKeyboardOpen ? viewport.offsetTop : 0)
     }
 
     viewport.addEventListener('resize', handleResize)
@@ -28,5 +32,5 @@ export function useKeyboardVisible() {
     }
   }, [])
 
-  return { isVisible, keyboardHeight, viewportHeight }
+  return { isVisible, keyboardHeight, viewportHeight, viewportOffsetTop }
 }

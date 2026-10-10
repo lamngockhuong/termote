@@ -108,15 +108,15 @@ describe('HelpModal', () => {
     expect(screen.queryByText('tmux')).not.toBeInTheDocument()
     fireEvent.click(screen.getByText('Toolbar'))
     expect(screen.queryByText('Toggle tmux copy mode')).not.toBeInTheDocument()
-    expect(
-      screen.queryByText('tmux prefix (expanded mode)'),
-    ).not.toBeInTheDocument()
+    expect(screen.queryByText('tmux prefix')).not.toBeInTheDocument()
     expect(screen.getByText('Scroll history')).toBeInTheDocument()
     expect(
       screen.getByText('Paste from the system clipboard'),
     ).toBeInTheDocument()
     expect(
-      screen.getByText('Select text, paste and scroll history'),
+      screen.getByText(
+        'History, paste, attach image, select text, scroll up/down',
+      ),
     ).toBeInTheDocument()
   })
 
@@ -129,20 +129,27 @@ describe('HelpModal', () => {
     expect(screen.getByText('Touch Gestures')).toBeInTheDocument()
   })
 
-  it('describes the Quick actions key and the expanded rows', () => {
+  it('describes the More key and the expanded rows', () => {
     render(<HelpModal isOpen={true} onClose={vi.fn()} />)
     fireEvent.click(screen.getByText('Toolbar'))
     expect(
       screen.getByText(
-        'Quick actions: Clear, Cancel, Clear line, Exit (mobile)',
+        'Extra keys: show or hide the expanded rows (pinned at the right)',
       ),
     ).toBeInTheDocument()
     expect(screen.getByText('Expanded Toolbar Rows')).toBeInTheDocument()
     expect(
-      screen.getByText('Copy mode, select text, paste and page up/down'),
+      screen.getByText('Clear, Cancel, Clear line, Exit (mobile)'),
     ).toBeInTheDocument()
     expect(
-      screen.queryByText('Select text, paste and scroll history'),
+      screen.getByText(
+        'History, paste, attach image, select text, copy mode, page up/down',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText(
+        'History, paste, attach image, select text, scroll up/down',
+      ),
     ).not.toBeInTheDocument()
   })
 

@@ -46,7 +46,7 @@ Contrôlez à distance des outils CLI (Claude Code, GitHub Copilot, n'importe qu
 - **Adapté au mobile** : Barre d'outils clavier virtuel (Tab/Ctrl/Shift/flèches, extensible)
 - **Support des gestes** : Balayage pour Ctrl+C, Tab, défilement
 - **Historique des commandes** : Rappel des commandes envoyées avec recherche
-- **Actions rapides** : Une touche ⚡ dans la barre mobile ouvre une feuille d'opérations courantes (clear, cancel, exit)
+- **Actions rapides** : La touche ⋯ épinglée au bout de la barre mobile affiche une ligne Actions d'opérations courantes (clear, cancel, exit)
 - **Styles d'interface** : Neutral, Terminal ou Native, choisis dans les Réglages, indépendants du thème clair/sombre
 - **Indicateur de connexion** : Statut du serveur en temps réel avec détection automatique de déconnexion
 - **Vérification des mises à jour** : Notification automatique de nouvelle version depuis les releases GitHub

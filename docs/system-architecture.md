@@ -65,7 +65,7 @@ React SPA with:
 - **Session Poll Interval**: Configurable sync frequency (3s-5m, default 5s) to control snapshot polling rate
 - **Connection Indicator**: Real-time auto-detection of server status (connecting/connected/disconnected/error), clickable to retry
 - **Command History**: Search/recall previously sent commands (mobile-friendly delete buttons), persisted in localStorage
-- **Quick Actions**: A key in the mobile keyboard toolbar opens a sheet of preset commands (clear, cancel, clear line, exit)
+- **Quick Actions**: On mobile, the keyboard toolbar's expanded rows (the ⋯ key pinned at the end of its bottom row) start with an Actions row of preset commands (clear, cancel, clear line, exit)
 - **Files and Changes**: views of the pane's directory (`caps.files`), where a text file can also be edited and saved: a tree with a highlighted file viewer, and `git status` with per-file diffs. Files keeps each open file in a tab (`pwa/src/utils/file-tabs.ts`: a preview tab, pinned tabs, at most 10, the least recently used clean one closed past that), in memory only; only the tab shown has a viewer, the others keep their scroll offset, link trail and Show. Changes keeps its diffs as tabs of its own with the same rules (`use-git-changes.ts`: one tab per side of a file, keyed `staged:orig:path`, holding its editor, Show and scroll; a side git status stops listing closes its tab unless it is being edited). A tab bar on desktop (`file-tab-bar.tsx`), a sheet of open files on mobile (`open-files-sheet.tsx`). A side panel next to the terminal on desktop (header toggles), views of the header's view menu on mobile. Shiki runs in a module worker (`pwa/src/utils/highlight-worker.ts`); the worker, its themes and grammars are built under `assets/shiki/`, left out of the precache and cached on first use
 - **Deep Links**: `#/s/<group>/<tab>[/<pane>][?view=]` selects a session (never sends input); the address bar follows the current session via `replaceState`
 - **Context Menu Control**: Block/unblock right-click on the terminal
@@ -253,7 +253,7 @@ POST   /api/mux/uploads            body: raw image (image/png|jpeg|gif|webp) →
 `/uploads` (`caps.uploads`) saves an image on the host so an agent can read it by path: the
 host clipboard is empty when the image sits on a phone. The PWA types `insert` (the path,
 double-quoted when it holds a space) plus a space into the pane it was picked for, from the
-toolbar's Attach key, the Quick actions sheet, an image pasted into the terminal, the Paste
+toolbar's Attach key, an image pasted into the terminal, the Paste
 key, a long press or Ctrl+Shift+V (each only for an image without text; with text, the text is
 pasted). If the user moved to another
 pane while it uploaded, nothing is typed: a toast offers to insert it into the current one.

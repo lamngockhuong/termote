@@ -1,114 +1,40 @@
-import { fireEvent, render, screen } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { QuickActionsSheet } from './quick-actions-menu'
+import { describe, expect, it, vi } from 'vitest'
+import { QUICK_ACTIONS, runAction } from './quick-actions-menu'
 
-vi.mock('../hooks/use-haptic', () => ({
-  useHaptic: () => ({ trigger: vi.fn(), isSupported: false }),
-}))
+const action = (label: string) => {
+  const found = QUICK_ACTIONS.find((a) => a.label === label)
+  if (!found) throw new Error(`no action ${label}`)
+  return found
+}
 
-describe('QuickActionsSheet', () => {
-  beforeEach(() => {
-    // jsdom has no <dialog> modal support
-    HTMLDialogElement.prototype.showModal = vi.fn(function (
-      this: HTMLDialogElement,
-    ) {
-      this.setAttribute('open', '')
-    })
-    HTMLDialogElement.prototype.close = vi.fn()
-  })
-
-  it('renders nothing while closed', () => {
-    render(
-      <QuickActionsSheet
-        isOpen={false}
-        onClose={vi.fn()}
-        onSendKey={vi.fn()}
-        onSendText={vi.fn()}
-      />,
-    )
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-  })
-
-  it('lists every quick action', () => {
-    render(
-      <QuickActionsSheet
-        isOpen
-        onClose={vi.fn()}
-        onSendKey={vi.fn()}
-        onSendText={vi.fn()}
-      />,
-    )
-    for (const name of ['Clear', 'Cancel', 'Clear line', 'Exit']) {
-      expect(screen.getByRole('button', { name })).toBeInTheDocument()
-    }
-    expect(
-      screen.queryByRole('button', { name: 'Attach image' }),
-    ).not.toBeInTheDocument()
-  })
-
-  it('Attach image closes the sheet, then opens the picker', () => {
-    const calls: string[] = []
-    render(
-      <QuickActionsSheet
-        isOpen
-        onClose={() => calls.push('close')}
-        onSendKey={vi.fn()}
-        onSendText={vi.fn()}
-        onAttachImage={() => calls.push('attach')}
-      />,
-    )
-    fireEvent.click(screen.getByRole('button', { name: 'Attach image' }))
-    expect(calls).toEqual(['close', 'attach'])
-  })
-
-  it('Select text closes the sheet, then opens the text', () => {
-    const calls: string[] = []
-    render(
-      <QuickActionsSheet
-        isOpen
-        onClose={() => calls.push('close')}
-        onSendKey={vi.fn()}
-        onSendText={vi.fn()}
-        onSelectText={() => calls.push('select')}
-      />,
-    )
-    fireEvent.click(screen.getByRole('button', { name: 'Select text' }))
-    expect(calls).toEqual(['close', 'select'])
+describe('QUICK_ACTIONS', () => {
+  it('lists every quick action in order', () => {
+    expect(QUICK_ACTIONS.map((a) => a.label)).toEqual([
+      'Clear',
+      'Cancel',
+      'Clear line',
+      'Exit',
+    ])
   })
 
   it.each([
     ['Cancel', 'c'],
     ['Clear line', 'u'],
     ['Exit', 'd'],
-  ])('%s sends Ctrl+%s and closes the sheet', (name, key) => {
+  ])('%s sends Ctrl+%s', (label, key) => {
     const onSendKey = vi.fn()
-    const onClose = vi.fn()
-    render(
-      <QuickActionsSheet
-        isOpen
-        onClose={onClose}
-        onSendKey={onSendKey}
-        onSendText={vi.fn()}
-      />,
-    )
-    fireEvent.click(screen.getByRole('button', { name }))
+    const onSendText = vi.fn()
+    runAction(action(label), { onSendKey, onSendText })
     expect(onSendKey).toHaveBeenCalledWith(key, { ctrl: true })
-    expect(onClose).toHaveBeenCalled()
+    expect(onSendText).not.toHaveBeenCalled()
   })
 
   it('the text action sends the text then Enter', () => {
-    const onSendKey = vi.fn()
-    const onSendText = vi.fn()
-    render(
-      <QuickActionsSheet
-        isOpen
-        onClose={vi.fn()}
-        onSendKey={onSendKey}
-        onSendText={onSendText}
-      />,
-    )
-    fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
-    expect(onSendText).toHaveBeenCalledWith('clear')
-    expect(onSendKey).toHaveBeenCalledWith('Enter')
+    const calls: string[] = []
+    runAction(action('Clear'), {
+      onSendKey: (key) => calls.push(`key:${key}`),
+      onSendText: (text) => calls.push(`text:${text}`),
+    })
+    expect(calls).toEqual(['text:clear', 'key:Enter'])
   })
 })
