@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.0.0](https://github.com/lamngockhuong/termote/compare/v1.20.0...v2.0.0) (2026-10-10)
+
+
+### ⚠ BREAKING CHANGES
+
+* **server:** isolation headers, refuse local connections of other OS users ([#440](https://github.com/lamngockhuong/termote/issues/440))
+
+### Features
+
+* **server:** isolation headers, refuse local connections of other OS users ([#440](https://github.com/lamngockhuong/termote/issues/440)) ([fb3f16d](https://github.com/lamngockhuong/termote/commit/fb3f16d855d4616288e53e69a2455730f3263f32))
+
 ## [1.20.0](https://github.com/lamngockhuong/termote/compare/v1.19.0...v1.20.0) (2026-10-10)
 
 
