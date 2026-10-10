@@ -10,9 +10,59 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
+	"strings"
 	"text/tabwriter"
 	"time"
 )
+
+// defaultPairValidity is how long a device `termote pair` makes stays
+// signed in, unless --expires says otherwise.
+const defaultPairValidity = "30d"
+
+var validityRe = regexp.MustCompile(`^([0-9]{1,6})([hdw])$`)
+
+// parseValidity reads --expires: a count of hours, days or weeks (12h, 7d,
+// 2w), 1 hour to 400 days, or never (0).
+func parseValidity(s string) (time.Duration, error) {
+	if s == "never" {
+		return 0, nil
+	}
+	m := validityRe.FindStringSubmatch(s)
+	if m == nil {
+		return 0, usageError("--expires takes a count and h, d or w (12h, 7d, 2w), or never")
+	}
+	n, _ := strconv.Atoi(m[1])
+	unit := map[string]time.Duration{"h": time.Hour, "d": 24 * time.Hour, "w": 7 * 24 * time.Hour}[m[2]]
+	// Compared before multiplying: a large count would wrap around.
+	if n > int(maxDeviceValidity/unit) {
+		return 0, usageError("--expires must be 1h to 400d, or never")
+	}
+	d := time.Duration(n) * unit
+	if d < minDeviceValidity {
+		return 0, usageError("--expires must be 1h to 400d, or never")
+	}
+	return d, nil
+}
+
+// validityLabel names how long a device stays signed in.
+func validityLabel(secs int64) string {
+	d := time.Duration(secs) * time.Second
+	switch {
+	case secs <= 0:
+		return "never expires"
+	case d%(24*time.Hour) == 0:
+		return "valid for " + plural(int(d/(24*time.Hour)), "day") + " once used"
+	}
+	return "valid for " + plural(int((d+time.Hour-1)/time.Hour), "hour") + " once used"
+}
+
+func plural(n int, unit string) string {
+	if n == 1 {
+		return "1 " + unit
+	}
+	return strconv.Itoa(n) + " " + unit + "s"
+}
 
 // deviceTarget is the running server the device commands talk to: the
 // native one, or the container when only that is set up. The link a code
@@ -115,10 +165,11 @@ func roleLabel(r role) string {
 // cmdPair makes a pairing code on the running server and shows it with a
 // link and a QR code that pair the new device.
 func (c *cli) cmdPair(args []string) error {
-	var r, name string
+	var r, name, expires string
 	fs := c.newFlagSet("pair")
 	fs.StringVar(&r, "role", string(roleView), "")
 	fs.StringVar(&name, "name", "", "")
+	fs.StringVar(&expires, "expires", defaultPairValidity, "")
 	if pos, err := parseArgs(fs, args); err != nil {
 		return flagErr(err)
 	} else if len(pos) > 0 {
@@ -130,12 +181,21 @@ func (c *cli) cmdPair(args []string) error {
 	if name != "" && !validDeviceName(name) {
 		return usageError("--name must be 1-%d bytes, without control characters or spaces around it", maxDeviceName)
 	}
+	validFor, err := parseValidity(expires)
+	if err != nil {
+		return err
+	}
 	t := c.deviceTarget()
 	var res struct {
 		Code      string    `json:"code"`
 		ExpiresAt time.Time `json:"expiresAt"`
+		ValidFor  int64     `json:"validFor"`
 	}
-	if err := c.deviceCall(t, http.MethodPost, "/api/mux/devices/pair", map[string]string{"role": r, "name": name}, &res); err != nil {
+	body := map[string]any{"role": r, "name": name}
+	if validFor > 0 {
+		body["validFor"] = int64(validFor / time.Second)
+	}
+	if err := c.deviceCall(t, http.MethodPost, "/api/mux/devices/pair", body, &res); err != nil {
 		return err
 	}
 	if !shownPairCodeRe.MatchString(res.Code) {
@@ -145,6 +205,7 @@ func (c *cli) cmdPair(args []string) error {
 	link := base + "?" + url.Values{"code": {res.Code}}.Encode()
 	c.heading("Pair a device")
 	fmt.Fprintf(c.out, "  Code: %s (%s, works once, until %s)\n", c.paint(ansiBold, res.Code), roleLabel(role(r)), res.ExpiresAt.Local().Format("15:04"))
+	fmt.Fprintf(c.out, "  The device: %s.\n", validityLabel(res.ValidFor))
 	fmt.Fprintf(c.out, "  Open on the new device: %s\n", link)
 	fmt.Fprintf(c.out, "  Or open %s and type the code.\n\n", base)
 	fmt.Fprint(c.out, qrText(link))
@@ -183,14 +244,21 @@ func (c *cli) listDevices() error {
 	}
 	const day = "2006-01-02 15:04"
 	tw := tabwriter.NewWriter(c.out, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "  ID\tNAME\tROLE\tPAIRED\tLAST USED")
+	fmt.Fprintln(tw, "  ID\tNAME\tROLE\tPAIRED\tLAST USED\tVALID UNTIL\tPAIRED BY")
 	for _, d := range res.Devices {
 		if !deviceIDRe.MatchString(d.ID) {
 			return errors.New("unexpected answer from the server: a device id is malformed")
 		}
-		// The name came from a person; never let it drive the terminal.
-		fmt.Fprintf(tw, "  %s\t%s\t%s\t%s\t%s\n", d.ID, cleanDeviceName(d.Name), roleLabel(d.Role),
-			d.CreatedAt.Local().Format(day), d.LastUsedAt.Local().Format(day))
+		until := "never"
+		switch {
+		case d.Expired:
+			until = "expired"
+		case d.ValidUntil != nil:
+			until = d.ValidUntil.Local().Format(day)
+		}
+		// The names came from a person; never let them drive the terminal.
+		fmt.Fprintf(tw, "  %s\t%s\t%s\t%s\t%s\t%s\t%s\n", d.ID, cleanDeviceName(d.Name), roleLabel(d.Role),
+			d.CreatedAt.Local().Format(day), d.LastUsedAt.Local().Format(day), until, pairedByLabel(d))
 	}
 	tw.Flush()
 	fmt.Fprintln(c.out, "\n  Revoke one: termote devices revoke <id>")
@@ -198,19 +266,62 @@ func (c *cli) listDevices() error {
 	return nil
 }
 
-// revokeDevice asks the running server to revoke id, so its sessions and
-// open streams end at once; the file is never edited behind its back.
+// pairedByLabel says where a listed device came from.
+func pairedByLabel(d deviceView) string {
+	switch {
+	case d.PairedBy == pairedByPassword:
+		return "not by a device"
+	case d.PairedBy == "unknown" || d.PairedBy == "":
+		return "unknown"
+	case d.PairedByName != "":
+		return cleanDeviceName(d.PairedByName)
+	}
+	return "a removed device"
+}
+
+// revokeDevice asks the running server to revoke id, and with it every
+// device it paired, so their sessions and open streams end at once; the file
+// is never edited behind its back.
 func (c *cli) revokeDevice(id string) error {
 	if !deviceIDRe.MatchString(id) {
 		return usageError("a device id is 16 hex characters (list them: termote devices)")
 	}
-	var res struct {
-		OK bool `json:"ok"`
+	t := c.deviceTarget()
+	// Read first only to say what was revoked: a failure leaves the
+	// names and the role unsaid.
+	var list struct {
+		Devices []deviceView `json:"devices"`
 	}
-	if err := c.deviceCall(c.deviceTarget(), http.MethodDelete, "/api/mux/devices/"+url.PathEscape(id), nil, &res); err != nil {
+	_ = c.deviceCall(t, http.MethodGet, "/api/mux/devices", nil, &list)
+	var res struct {
+		OK      bool     `json:"ok"`
+		Revoked []string `json:"revoked"`
+	}
+	if err := c.deviceCall(t, http.MethodDelete, "/api/mux/devices/"+url.PathEscape(id), nil, &res); err != nil {
 		return err
 	}
 	c.infof("Revoked device %s: it is signed out and its open terminals are closed", id)
+	var also []string
+	for _, g := range res.Revoked {
+		if g == id || !deviceIDRe.MatchString(g) {
+			continue
+		}
+		label := g
+		for _, d := range list.Devices {
+			if d.ID == g {
+				label = g + " (" + cleanDeviceName(d.Name) + ")"
+			}
+		}
+		also = append(also, label)
+	}
+	if len(also) > 0 {
+		c.infof("Also revoked, as it paired them: %s", strings.Join(also, ", "))
+	}
+	for _, d := range list.Devices {
+		if d.ID == id && d.Role == roleFull {
+			c.warnf("A full device could open a terminal; to be sure, run `termote start --fresh`.")
+		}
+	}
 	return nil
 }
 

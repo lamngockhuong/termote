@@ -32,8 +32,20 @@ const (
 	maxDeviceName  = 64
 	deviceTokenTag = "tmd_"
 	// deviceCookieMaxAge is fixed: the cookie is never issued again, and a
-	// device is ended by revoking it, not by time.
+	// device is ended by revoking it or by its validUntil, never by the
+	// cookie's own age.
 	deviceCookieMaxAge = 400 * 24 * time.Hour
+	// minDeviceValidity and maxDeviceValidity bound the validFor a pairing
+	// code may ask for (0 is no limit).
+	minDeviceValidity = time.Hour
+	maxDeviceValidity = 400 * 24 * time.Hour
+	// pairedByPassword is the pairedBy of a device a password session, Basic
+	// auth (the CLI) or a terminal paired.
+	pairedByPassword = "password"
+	// expiringHashTag marks the hash of a device with a validUntil. An older
+	// release compares the hash as it is and never matches it, so it cannot
+	// sign in a device whose limit it would ignore.
+	expiringHashTag = "v2:"
 	// deviceTouchEvery bounds how often lastUsedAt reaches the disk.
 	deviceTouchEvery = 5 * time.Minute
 	// deviceReloadEvery bounds how often a lookup checks the file for a
@@ -46,6 +58,9 @@ var (
 	errUnknownDevice  = &codedError{code: "unknown_device", msg: "unknown device", status: http.StatusNotFound}
 	errInvalidRole    = &codedError{code: "invalid_role", msg: "role must be full or view", status: http.StatusBadRequest}
 	errInvalidName    = &codedError{code: "invalid_name", msg: "invalid device name", status: http.StatusBadRequest}
+	// errCreatorGone: the device that made a code was revoked or expired
+	// before the code was used, so the code pairs nothing.
+	errCreatorGone = &codedError{code: "creator_gone", msg: "this code is no longer valid", status: http.StatusConflict}
 
 	// devicePartRe matches the store's temporary files, left behind by a crash.
 	devicePartRe = regexp.MustCompile(`^\.(devices|key)-[0-9a-f]{16}\.part$`)
@@ -53,15 +68,38 @@ var (
 )
 
 // deviceRecord is one paired device on disk. Hash is the SHA-256 of its
-// token; the token itself is never stored.
+// token (behind expiringHashTag when ValidUntil is set); the token itself is
+// never stored. ValidUntil nil is no limit. PairedBy is pairedByPassword, the
+// id of the device that paired it, or "" for a record from before it was
+// kept.
 type deviceRecord struct {
-	ID         string    `json:"id"`
-	Name       string    `json:"name"`
-	Role       role      `json:"role"`
-	Hash       string    `json:"hash"`
-	Gen        string    `json:"gen"`
-	CreatedAt  time.Time `json:"createdAt"`
-	LastUsedAt time.Time `json:"lastUsedAt"`
+	ID         string     `json:"id"`
+	Name       string     `json:"name"`
+	Role       role       `json:"role"`
+	Hash       string     `json:"hash"`
+	Gen        string     `json:"gen"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	LastUsedAt time.Time  `json:"lastUsedAt"`
+	ValidUntil *time.Time `json:"validUntil,omitempty"`
+	PairedBy   string     `json:"pairedBy,omitempty"`
+}
+
+// expired reports whether r can no longer sign in at now. A tagged hash
+// without a validUntil is a record an older release wrote back, dropping the
+// field it does not know: it never comes back as a device without a limit.
+func (r deviceRecord) expired(now time.Time) bool {
+	if r.ValidUntil == nil {
+		return strings.HasPrefix(r.Hash, expiringHashTag)
+	}
+	return !now.Before(*r.ValidUntil)
+}
+
+// deviceAddOpts is where a new device comes from and how long it is valid.
+type deviceAddOpts struct {
+	// PairedBy is pairedByPassword or the id of the device that made the code.
+	PairedBy string
+	// ValidFor counts from the pairing; 0 is no limit.
+	ValidFor time.Duration
 }
 
 // deviceStore keeps the paired devices in <stateDir>/devices. It exists only
@@ -81,6 +119,9 @@ type deviceStore struct {
 	// otherwise read and clear each other's.
 	cookie string
 	now    func() time.Time
+	// onReload, when set, is told the next validUntil (zero: none) each
+	// time the records change, under mu: it must not call the store.
+	onReload func(next time.Time)
 
 	mu      sync.Mutex
 	recs    []deviceRecord // the file as last read or written, every gen
@@ -197,6 +238,26 @@ func (s *deviceStore) reloadLocked() error {
 	return nil
 }
 
+// changedLocked tells onReload the records changed.
+func (s *deviceStore) changedLocked() {
+	if s.onReload != nil {
+		s.onReload(s.nextExpiryLocked())
+	}
+}
+
+// nextExpiryLocked is the earliest validUntil of a live device still valid,
+// or zero when there is none.
+func (s *deviceStore) nextExpiryLocked() time.Time {
+	now := s.now()
+	var next time.Time
+	for _, r := range s.recs {
+		if s.live(r) && r.ValidUntil != nil && !r.expired(now) && (next.IsZero() || r.ValidUntil.Before(next)) {
+			next = *r.ValidUntil
+		}
+	}
+	return next
+}
+
 // maybeReloadLocked reads the file again when it changed since it was last
 // read, checking at most every deviceReloadEvery: another process revoked a
 // device. A file that cannot be read keeps what is in memory.
@@ -218,7 +279,9 @@ func (s *deviceStore) maybeReloadLocked() {
 	}
 	if err := s.reloadLocked(); err != nil {
 		log.Printf("devices: %v", err)
+		return
 	}
+	s.changedLocked()
 }
 
 // changeLocked reads the file again, applies op to its records and writes
@@ -251,6 +314,7 @@ func (s *deviceStore) changeLocked(op func([]deviceRecord) ([]deviceRecord, erro
 		log.Printf("devices: read back: %v", err)
 		s.recs = next
 	}
+	s.changedLocked()
 	return nil
 }
 
@@ -270,24 +334,46 @@ func hashDeviceToken(token string) string {
 }
 
 // add pairs a new device and returns its token, the only time it exists in
-// the clear.
-func (s *deviceStore) add(name string, r role) (string, deviceRecord, error) {
+// the clear. A device paired by another one needs that device live and
+// valid in the file as read for this very write, so a revoke racing the
+// pairing never leaves a device whose parent is gone; it is valid no longer
+// than its parent.
+func (s *deviceStore) add(name string, r role, opts deviceAddOpts) (string, deviceRecord, error) {
 	if r != roleFull && r != roleView {
 		return "", deviceRecord{}, errInvalidRole
 	}
 	if !validDeviceName(name) {
 		return "", deviceRecord{}, errInvalidName
 	}
+	if opts.PairedBy == "" {
+		opts.PairedBy = pairedByPassword
+	}
 	token, hash := newDeviceToken()
 	var idb [8]byte
 	rand.Read(idb[:])
 	now := s.now().UTC()
-	rec := deviceRecord{ID: hex.EncodeToString(idb[:]), Name: name, Role: r, Hash: hash, Gen: s.gen, CreatedAt: now, LastUsedAt: now}
+	rec := deviceRecord{ID: hex.EncodeToString(idb[:]), Name: name, Role: r, Gen: s.gen, CreatedAt: now, LastUsedAt: now, PairedBy: opts.PairedBy}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	err := s.changeLocked(func(recs []deviceRecord) ([]deviceRecord, error) {
+		validFor := opts.ValidFor
+		if opts.PairedBy != pairedByPassword {
+			i := slices.IndexFunc(recs, func(p deviceRecord) bool { return p.ID == opts.PairedBy && s.live(p) })
+			if i < 0 || recs[i].expired(now) {
+				return nil, errCreatorGone
+			}
+			if p := recs[i].ValidUntil; p != nil && (validFor <= 0 || p.Sub(now) < validFor) {
+				validFor = p.Sub(now)
+			}
+		}
 		if countFunc(recs, s.live) >= maxDevices {
 			return nil, errTooManyDevices
+		}
+		rec.Hash = hash
+		if validFor > 0 {
+			until := now.Add(validFor)
+			rec.ValidUntil = &until
+			rec.Hash = expiringHashTag + hash
 		}
 		return append(recs, rec), nil
 	})
@@ -307,20 +393,49 @@ func countFunc[T any](s []T, f func(T) bool) int {
 	return n
 }
 
-// revoke removes a device of the current password.
+// revoke removes a device of the current password, and only it (Log out,
+// a device paired again): the devices it paired stay.
 func (s *deviceStore) revoke(id string) error {
+	_, err := s.remove(id, false)
+	return err
+}
+
+// revokeCascade removes a device of the current password and every live
+// device it paired, in one write, and returns their ids (id first). One
+// level is enough: only a full device pairs, and what it pairs is view-only.
+func (s *deviceStore) revokeCascade(id string) ([]string, error) {
+	return s.remove(id, true)
+}
+
+func (s *deviceStore) remove(id string, cascade bool) ([]string, error) {
 	if !deviceIDRe.MatchString(id) {
-		return errUnknownDevice
+		return nil, errUnknownDevice
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.changeLocked(func(recs []deviceRecord) ([]deviceRecord, error) {
-		i := slices.IndexFunc(recs, func(r deviceRecord) bool { return r.ID == id && s.live(r) })
-		if i < 0 {
+	var gone []string
+	err := s.changeLocked(func(recs []deviceRecord) ([]deviceRecord, error) {
+		if !slices.ContainsFunc(recs, func(r deviceRecord) bool { return r.ID == id && s.live(r) }) {
 			return nil, errUnknownDevice
 		}
-		return slices.Delete(recs, i, i+1), nil
+		gone = []string{id}
+		return slices.DeleteFunc(recs, func(r deviceRecord) bool {
+			switch {
+			case !s.live(r):
+				return false
+			case r.ID == id:
+				return true
+			case cascade && r.PairedBy == id:
+				gone = append(gone, r.ID)
+				return true
+			}
+			return false
+		}), nil
 	})
+	if err != nil {
+		return nil, err
+	}
+	return gone, nil
 }
 
 // pruneStale removes the records of another password from the disk: what
@@ -339,7 +454,9 @@ func (s *deviceStore) pruneStale() (int, error) {
 
 // lookup returns the live device whose token this is, and records its use.
 // stale reports a token of a device of another password: it is kept, never
-// to be cleared from its browser, since the password may come back.
+// to be cleared from its browser, since the password may come back. A live
+// device past its validUntil is not ok, and is returned (with its id) so the
+// caller can end what it holds; its cookie is cleared like a revoked one's.
 func (s *deviceStore) lookup(token string) (rec deviceRecord, ok, stale bool) {
 	if !strings.HasPrefix(token, deviceTokenTag) {
 		return deviceRecord{}, false, false
@@ -350,7 +467,7 @@ func (s *deviceStore) lookup(token string) (rec deviceRecord, ok, stale bool) {
 	s.maybeReloadLocked()
 	found := -1
 	for i, r := range s.recs {
-		if subtle.ConstantTimeCompare(hash, []byte(r.Hash)) == 1 {
+		if subtle.ConstantTimeCompare(hash, []byte(strings.TrimPrefix(r.Hash, expiringHashTag))) == 1 {
 			if s.live(r) {
 				found = i
 			} else {
@@ -360,6 +477,9 @@ func (s *deviceStore) lookup(token string) (rec deviceRecord, ok, stale bool) {
 	}
 	if found < 0 {
 		return deviceRecord{}, false, stale
+	}
+	if s.recs[found].expired(s.now()) {
+		return s.recs[found], false, false
 	}
 	now := s.now().UTC()
 	s.touched[s.recs[found].ID] = now
@@ -395,13 +515,39 @@ func (s *deviceStore) flush() {
 	s.flushLocked()
 }
 
-// alive reports whether a live device has this id. It reads memory only (the
-// stream hub asks it under its lock); a revoke updates memory before the hub
-// closes the device's streams.
+// alive reports whether a live device still valid has this id. It reads
+// memory only (the stream hub asks it under its lock); a revoke updates
+// memory before the hub closes the device's streams.
 func (s *deviceStore) alive(id string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return slices.ContainsFunc(s.recs, func(r deviceRecord) bool { return r.ID == id && s.live(r) })
+	now := s.now()
+	return slices.ContainsFunc(s.recs, func(r deviceRecord) bool { return r.ID == id && s.live(r) && !r.expired(now) })
+}
+
+// get returns the live device with this id, from memory.
+func (s *deviceStore) get(id string) (deviceRecord, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	i := slices.IndexFunc(s.recs, func(r deviceRecord) bool { return r.ID == id && s.live(r) })
+	if i < 0 {
+		return deviceRecord{}, false
+	}
+	return s.recs[i], true
+}
+
+// expiredNow returns the ids of the live devices that can no longer sign in
+// for their validUntil.
+func (s *deviceStore) expiredNow() (ids []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := s.now()
+	for _, r := range s.recs {
+		if s.live(r) && r.expired(now) {
+			ids = append(ids, r.ID)
+		}
+	}
+	return ids
 }
 
 // list returns the live devices, oldest first.

@@ -826,6 +826,9 @@ func newBasicAuth(user, pass string, dev *deviceAuth, next http.Handler) http.Ha
 		}
 		limiter.refund(ip)
 		startSession(w, r)
+		// Basic auth is not logged: the CLI and its health polls sign in
+		// on every request.
+		auditf("login", "via", "form", "user", username, "ip", ip)
 		http.Redirect(w, r, next, http.StatusSeeOther)
 	}
 
@@ -888,20 +891,28 @@ func newBasicAuth(user, pass string, dev *deviceAuth, next http.Handler) http.Ha
 			return
 		}
 		dev.limiter.refund(ip)
-		token, _, err := dev.store.add(pairName(p, name, r), p.role)
+		token, rec, err := dev.store.add(pairName(p, name, r), p.role, deviceAddOpts{PairedBy: p.creator, ValidFor: p.validFor})
 		if err != nil {
 			msg := "Pairing failed. Ask for a new code."
-			if errors.Is(err, errTooManyDevices) {
+			switch {
+			case errors.Is(err, errTooManyDevices):
 				msg = "Too many paired devices. Revoke one, then ask for a new code."
-			} else {
+			case errors.Is(err, errCreatorGone):
+				// The device that made the code was revoked or expired: not
+				// a wrong code, so not counted.
+				msg = "This code is no longer valid. Ask for a new code."
+			default:
 				log.Printf("auth: pairing failed: %v", err)
 			}
 			writePairPage(w, http.StatusConflict, pairForm{Error: msg, Closed: true})
 			return
 		}
+		auditf("pair", "id", rec.ID, "name", rec.Name, "role", rec.Role, "validUntil", auditUntil(rec.ValidUntil), "pairedBy", rec.PairedBy, "ip", ip)
 		if prevOK {
 			if err := dev.revoke(prev.ID); err != nil {
 				log.Printf("auth: revoke the device paired again: %v", err)
+			} else {
+				auditf("revoke", "id", prev.ID, "by", "device:"+prev.ID, "via", "repair", "cascade", []string{})
 			}
 		}
 		dev.setCookie(w, r, token)
@@ -924,10 +935,14 @@ func newBasicAuth(user, pass string, dev *deviceAuth, next http.Handler) http.Ha
 			if dev.hasDeviceCookie(r) {
 				if rec, ok, _ := dev.deviceCookie(r); ok {
 					// Revoked meanwhile: logged out all the same.
-					if err := dev.revoke(rec.ID); err != nil && !errors.Is(err, errUnknownDevice) {
+					err := dev.revoke(rec.ID)
+					if err != nil && !errors.Is(err, errUnknownDevice) {
 						log.Printf("auth: revoke on log out: %v", err)
 						jsonError(w, "internal error", http.StatusInternalServerError)
 						return
+					}
+					if err == nil {
+						auditf("revoke", "id", rec.ID, "by", "device:"+rec.ID, "via", "logout", "cascade", []string{})
 					}
 				}
 				dev.clearCookie(w, r)
@@ -954,11 +969,7 @@ func newBasicAuth(user, pass string, dev *deviceAuth, next http.Handler) http.Ha
 			return
 		}
 
-		// Extract client IP (strip port)
-		ip, _, _ := net.SplitHostPort(r.RemoteAddr)
-		if ip == "" {
-			ip = r.RemoteAddr
-		}
+		ip := requestIP(r)
 		if r.URL.Path == loginPath {
 			login(w, r, ip)
 			return

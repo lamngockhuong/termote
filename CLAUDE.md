@@ -237,8 +237,8 @@ uninstall [--purge]  Remove the service, the command, the install and uploads (-
 logs [service]       View logs (server, all, follow, clean)
 link / unlink        Create or remove the 'termote' command in ~/.local/bin
 show-password        Show the saved username and password
-pair [options]       Make a one-time code (5 min) that signs a new device in; --role <view|full> (default view), --name <name>
-devices              List the paired devices; `devices revoke <id>` signs one out
+pair [options]       Make a one-time code (5 min) that signs a new device in; --role <view|full> (default view), --name <name>, --expires <12h|7d|2w|never> (default 30d)
+devices              List the paired devices; `devices revoke <id>` signs one out with every device it paired
 version              Show version
 serve                Run the server in the foreground (what the service runs)
 (no command)         Interactive menu
@@ -402,6 +402,7 @@ The `update` command:
 | `server/device_routes.go`                         | `/api/mux/devices*` routes, device cookie, revoke             |
 | `server/pair_page.go`                             | `/pair`: the form a new device types its code into            |
 | `server/cli_devices.go`                           | `pair`, `devices`, `devices revoke`                           |
+| `server/audit_log.go`                             | `audit:` lines of pairing, revoke, expiry and form sign-in    |
 | `pwa/src/components/devices-section.tsx`          | Settings > Devices: list, revoke, Pair a device               |
 | `pwa/src/components/pair-device-sheet.tsx`        | Pair a device: role, name, the code and its QR                |
 | `pwa/src/hooks/use-devices.ts`                    | Paired devices list, pair and revoke calls                    |
@@ -527,7 +528,26 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   it): record written first, then its stream tokens dropped and its streams closed (a stream
   mid-handshake rechecks `alive`); a running request finishes. Container: the state dir is the
   volume `termote-state-<uid>` (kept by `container down`, removed by `uninstall --purge`);
-  `container status` says when pairing is off
+  `container status` says when pairing is off. Time limit: `{validFor}` on the pair route (seconds,
+  3600 to 400 days, absent or 0 = none, else 400 `invalid_validity`) becomes the record's
+  `validUntil`, counted from the pairing; a maker with a limit must give one (400) and gets it cut
+  to what it has left, and `add` cuts it again, so a device never outlasts its maker. Such a record
+  stores its hash as `v2:<sha256>`: an older release never matches it (downgrade fails closed), and
+  a `v2:` hash without `validUntil` is expired. Past it (`now >= validUntil`) `lookup` refuses and the
+  cookie is cleared, `alive` is false, and one `time.AfterFunc` per process (re-armed through the
+  store's `onReload` after each change or reload) closes its streams, stream tokens and codes; expired
+  records stay listed (`expired`) until revoked; the cookie's `MaxAge` stays 400 days. Lineage:
+  `pairedBy` (`password` or the maker's id; absent in older records, listed `unknown`); only the
+  password (session, Basic: the CLI) makes a `full` code, a device gets 403 `full_needs_password`
+  (also with Basic credentials as well: the device cookie is tried first). The maker must be live
+  and valid in the very write that adds the device (`errCreatorGone`; `/pair` says "This code is no
+  longer valid", not counted), and `codes.create` refuses a maker no longer `alive`. The DELETE
+  route revokes the device and every live record it paired in one write (`revokeCascade`, one
+  level) and answers `{ok, revoked}`; Log out and a view device paired again revoke only it. Audit:
+  `auditf` (`server/audit_log.go`) logs `audit: <event> k="v"` (values `strconv.Quote`d, never a
+  token, code, password or cookie) for `pair-code`, `pair`, `revoke` (`by`, `via`, `cascade`),
+  `device-expired` (once per id and process) and `login via=form`; Basic sign-ins are not logged.
+  What this does and does not protect: `docs/security-model.md`
 - **Pane text** (`GET /api/mux/panes/{id}/text?lines=N` → `{text, lines, truncated, more}`,
   `server/mux_pane_text.go`, `caps.paneText`: tmux, never psmux, and Herdr): a same-site read
   (`crossSiteRejection`, `Sec-Fetch-Site: none` included, as the snapshot), `requireMethod(GET)`,
