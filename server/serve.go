@@ -405,6 +405,7 @@ func buildServer(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushStore, 
 	// allowed one.
 	handler = securityHeaders(pwa, handler)
 	handler = hostGuard(allowed, handler)
+	handler = isolationHeaders(handler)
 	return readDeadline(noCacheMiddleware(handler)), hub, push, nil
 }
 
