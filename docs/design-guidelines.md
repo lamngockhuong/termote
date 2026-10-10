@@ -121,7 +121,9 @@ There is no bottom navigation: the terminal takes that height.
 Views of a pane are listed in `pwa/src/app-views.ts`: Terminal, Chat (Claude Code in the pane),
 Files and Changes (when the server reports the pane's directory). Below two available views the
 switcher stays hidden. Another view covers the terminal (invisible, inert) instead of unmounting
-it, so the stream and the multiplexer window size are kept.
+it, so the stream and the multiplexer window size are kept. Each pane comes back on the view and
+desktop side panel it was left on (`pwa/src/utils/pane-view.ts`, sessionStorage, following a tmux
+id shift); a pane never shown opens on the terminal without a panel.
 
 ## Gestures (Mobile)
 

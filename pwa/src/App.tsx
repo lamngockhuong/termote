@@ -82,6 +82,7 @@ import {
   LARGE_PACKET_HELP_URL,
   onLargePacketLoss,
 } from './utils/large-packet-loss'
+import { loadPaneView, savePaneView } from './utils/pane-view'
 import { formatRunning, uniqueNames } from './utils/running-commands'
 import { matchesFilter } from './utils/session-filter'
 import {
@@ -472,6 +473,21 @@ export default function App({
   const isTerminalView = currentView.id === TERMINAL_VIEW_ID
   // A view's content in the desktop side panel, next to the terminal
   const [sidePanelId, setSidePanelId] = useState<string | null>(null)
+  // Each pane comes back on the view (and side panel) it was left on; one
+  // never shown opens on the terminal. Before paint, so the previous pane's
+  // view never flashes on the new one.
+  const viewPaneId = activeSession.paneId ?? activeSession.id
+  const viewPaneRef = useRef(viewPaneId)
+  useLayoutEffect(() => {
+    if (viewPaneRef.current !== viewPaneId) {
+      viewPaneRef.current = viewPaneId
+      const saved = loadPaneView(viewPaneId)
+      setViewId(saved?.view ?? TERMINAL_VIEW_ID)
+      setSidePanelId(saved?.panel ?? null)
+      return
+    }
+    savePaneView(viewPaneId, { view: viewId, panel: sidePanelId })
+  }, [viewPaneId, viewId, sidePanelId])
   // A panel view follows the layout: to the side panel when the screen
   // grows to desktop (or a link opens one there), back to the main area when
   // it shrinks to mobile.
@@ -965,7 +981,20 @@ export default function App({
       showToast('Pane in link not found', 'warning')
     }
     void selectSession(target.id, link.pane)
-    if (link.view) setViewId(link.view)
+    if (link.view) {
+      // Kept for the pane too: switching to it restores its saved view.
+      const paneId =
+        link.pane && target.panes?.some((p) => p.id === link.pane)
+          ? link.pane
+          : (target.paneId ?? target.id)
+      savePaneView(paneId, {
+        view: link.view,
+        panel: loadPaneView(paneId)?.panel ?? null,
+      })
+      // Another pane picks it up from there once selected; setting it now
+      // would save it for the pane being left.
+      if (paneId === viewPaneRef.current) setViewId(link.view)
+    }
   }, [linkRequest, sessionsLoaded, sessions, selectSession, showToast])
 
   // The address bar follows what is on screen, without adding history

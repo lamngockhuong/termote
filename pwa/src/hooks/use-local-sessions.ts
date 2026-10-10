@@ -18,6 +18,7 @@ import {
   remapPanes,
   shiftedIds,
 } from '../utils/pane-remap'
+import { remapPaneViews } from '../utils/pane-view'
 import { uniqueNames } from '../utils/running-commands'
 import {
   closeGroup as apiCloseGroup,
@@ -296,6 +297,7 @@ export function useLocalSessions(pollInterval = 5) {
       if (shift.stale.size) {
         remapPanes(shift)
         remapChatDrafts(shift)
+        remapPaneViews(shift)
         // Only a snapshot with tabs can shift ids, and applying one stores
         // a selection: this is a guard, never reached in practice.
         /* v8 ignore next */

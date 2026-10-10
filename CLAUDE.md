@@ -293,6 +293,7 @@ The `update` command:
 | `pwa/src/utils/reorder.ts`                        | Move up/down and drop indexes, groups that can move           |
 | `pwa/src/utils/pane-remap.ts`                     | Tab keys: state by pane id follows a shifted tmux id          |
 | `pwa/src/utils/chat-draft.ts`                     | Chat view drafts per pane (sessionStorage), remapped          |
+| `pwa/src/utils/pane-view.ts`                      | View and side panel each pane was left on, remapped           |
 | `pwa/src/components/ui/`                          | Shared UI primitives (Button, Sheet, Menu, Switch, ...)       |
 | `pwa/src/app-views.ts`                            | Views of a pane (terminal, chat, files, changes)              |
 | `pwa/src/ui-style.ts`                             | Interface styles (neutral, terminal, native)                  |
