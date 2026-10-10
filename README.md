@@ -395,6 +395,7 @@ termote start --fresh      # If the saved password can no longer be read
 - **Service files hold no secrets**: the systemd unit, launchd agent and Scheduled Task never contain the password
 - Use HTTPS (Tailscale) for production
 - Restrict to trusted networks/VPN
+- What a signed-in or paired device can do, and what to do when one is lost: [Security model](docs/security-model.md)
 
 ## Other Projects
 

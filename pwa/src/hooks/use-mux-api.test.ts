@@ -1054,6 +1054,20 @@ describe('view-only refusals and paired devices', () => {
     })
   })
 
+  it('sends validFor only when the device gets a limit', async () => {
+    const { calls } = mockFetch({ body: { code: 'ABCDE-FGHIJ' } })
+    await createPairingCode('view', '', 86400)
+    expect(JSON.parse(calls[0].init?.body as string)).toEqual({
+      role: 'view',
+      name: '',
+      validFor: 86400,
+    })
+    await createPairingCode('view', '', null)
+    expect(JSON.parse(calls[1].init?.body as string)).not.toHaveProperty(
+      'validFor',
+    )
+  })
+
   it('a refused pairing code carries the server code', async () => {
     mockFetch({
       body: { error: 'too many', code: 'too_many_codes' },
@@ -1065,11 +1079,19 @@ describe('view-only refusals and paired devices', () => {
     })
   })
 
-  it('revokes a device by its id', async () => {
-    const { calls } = mockFetch({ body: { ok: true } })
-    await revokeDevice('a/b')
+  it('revokes a device by its id, answering every id revoked', async () => {
+    const { calls } = mockFetch({ body: { ok: true, revoked: ['a/b', 'c'] } })
+    expect(await revokeDevice('a/b')).toEqual(['a/b', 'c'])
     expect(calls[0].url).toBe('/api/mux/devices/a%2Fb')
     expect(calls[0].init?.method).toBe('DELETE')
+    // An older server answers no list: the device alone
+    mockFetch({ body: { ok: true } })
+    expect(await revokeDevice('x')).toEqual(['x'])
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('not json', { status: 200 })),
+    )
+    expect(await revokeDevice('y')).toEqual(['y'])
   })
 
   it('a device not revoked throws the server code', async () => {

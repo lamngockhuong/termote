@@ -23,19 +23,26 @@ const (
 var errTooManyCodes = &codedError{code: "too_many_codes", msg: "too many pairing codes waiting; use one or wait 5 minutes", status: http.StatusConflict}
 
 // pendingPair is what a code pairs: the role, the name its maker gave (may
-// be empty) and the device that made it ("" for a password session or the
-// CLI), whose revoke drops the code.
+// be empty), the device that made it ("" for a password session or the
+// CLI), whose revoke drops the code, and how long the new device is valid
+// once paired (0: no limit).
 type pendingPair struct {
-	role    role
-	name    string
-	creator string
-	exp     time.Time
+	role     role
+	name     string
+	creator  string
+	validFor time.Duration
+	exp      time.Time
 }
 
 type pairCodes struct {
 	mu    sync.Mutex
 	codes map[string]pendingPair // hash of the normalized code → pending
 	now   func() time.Time
+	// alive, when set, reports whether a device can still make codes. It
+	// is asked under mu, and a revoke marks the device gone before
+	// dropCreator takes mu, so a code made while its maker is revoked is
+	// either refused or dropped.
+	alive func(id string) bool
 }
 
 func newPairCodes() *pairCodes {
@@ -58,13 +65,17 @@ func (p *pairCodes) sweepLocked() {
 }
 
 // create makes a code for a device of role r named name (checked by the
-// caller) and returns it as shown (XXXXX-XXXXX) with its expiry.
-func (p *pairCodes) create(r role, name, creator string) (string, time.Time, error) {
+// caller), valid for validFor once paired, and returns it as shown
+// (XXXXX-XXXXX) with its expiry.
+func (p *pairCodes) create(r role, name, creator string, validFor time.Duration) (string, time.Time, error) {
 	if r != roleFull && r != roleView {
 		return "", time.Time{}, errInvalidRole
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if creator != "" && p.alive != nil && !p.alive(creator) {
+		return "", time.Time{}, errCreatorGone
+	}
 	p.sweepLocked()
 	if len(p.codes) >= maxPairCodes {
 		return "", time.Time{}, errTooManyCodes
@@ -76,7 +87,7 @@ func (p *pairCodes) create(r role, name, creator string) (string, time.Time, err
 		code[i] = pairAlphabet[v&31]
 	}
 	exp := p.now().Add(pairCodeTTL)
-	p.codes[hashPairCode(string(code))] = pendingPair{role: r, name: name, creator: creator, exp: exp}
+	p.codes[hashPairCode(string(code))] = pendingPair{role: r, name: name, creator: creator, validFor: validFor, exp: exp}
 	return string(code[:pairCodeGroup]) + "-" + string(code[pairCodeGroup:]), exp, nil
 }
 

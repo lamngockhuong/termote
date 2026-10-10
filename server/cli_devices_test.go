@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 )
 
 // listen serves h on 127.0.0.1 and returns the port.
@@ -182,6 +183,10 @@ func TestDevicesUsage(t *testing.T) {
 		{"devices", "revoke", "a", "b"},
 		{"devices", "revoke", ".."},
 		{"devices", "--bogus"},
+		{"pair", "--expires", "5m"},
+		{"pair", "--expires", "0d"},
+		{"pair", "--expires", "401d"},
+		{"pair", "--expires", "forever"},
 	} {
 		if code, _, _ := runDevCLI(tc, args...); code != 2 {
 			t.Errorf("%v: exit %d, want 2", args, code)
@@ -202,7 +207,7 @@ func TestPruneDevices(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := old.add("Phone", roleView); err != nil {
+	if _, _, err := old.add("Phone", roleView, deviceAddOpts{}); err != nil {
 		t.Fatal(err)
 	}
 	tc.pruneDevices("admin", "new")
@@ -250,8 +255,92 @@ func TestDevicesWithoutPasswordAndCleanOutput(t *testing.T) {
 	if code, _, errOut := runDevCLI(tc, "devices"); code != 1 || strings.Contains(errOut, "\x1b") || !strings.Contains(errOut, "bad[2J") {
 		t.Errorf("error not cleaned: %d %q", code, errOut)
 	}
+	status, body = http.StatusOK, `{"devices":[{"id":"0123456789abcdef","name":"a","role":"view","expired":true,"validUntil":"2026-01-01T00:00:00Z","pairedBy":"fedcba9876543210"}]}`
+	if code, out, _ := runDevCLI(tc, "devices"); code != 0 || !strings.Contains(out, "expired") || !strings.Contains(out, "a removed device") {
+		t.Errorf("expired device: %d %q", code, out)
+	}
 	status, body = http.StatusOK, `{"devices":[{"id":"../x","name":"a","role":"view"}]}`
 	if code, _, errOut := runDevCLI(tc, "devices"); code != 1 || !strings.Contains(errOut, "malformed") {
 		t.Errorf("bad id: %d %q", code, errOut)
+	}
+}
+
+func TestParseValidity(t *testing.T) {
+	for in, want := range map[string]time.Duration{
+		"never": 0, "1h": time.Hour, "12h": 12 * time.Hour, "7d": 7 * 24 * time.Hour,
+		"2w": 14 * 24 * time.Hour, "30d": 30 * 24 * time.Hour, "400d": maxDeviceValidity,
+	} {
+		if got, err := parseValidity(in); err != nil || got != want {
+			t.Errorf("%s: %v %v", in, got, err)
+		}
+	}
+	for _, in := range []string{"", "0h", "59m", "401d", "58w", "7", "d", "7D", "1.5d", "-1d", "9999999d", "213505d", "30501w", "999999h", "401d"} {
+		if _, err := parseValidity(in); err == nil {
+			t.Errorf("%q accepted", in)
+		}
+	}
+	for secs, want := range map[int64]string{0: "never expires", 3600: "valid for 1 hour once used", 7200: "valid for 2 hours once used",
+		86400: "valid for 1 day once used", 30 * 86400: "valid for 30 days once used", 7000: "valid for 2 hours once used"} {
+		if got := validityLabel(secs); got != want {
+			t.Errorf("validityLabel(%d) = %q", secs, got)
+		}
+	}
+	for d, want := range map[deviceView]string{
+		{PairedBy: "password"}: "not by a device",
+		{PairedBy: "unknown"}:  "unknown",
+		{PairedBy: "0123456789abcdef", PairedByName: "Lap\x1btop"}: "Laptop",
+		{PairedBy: "0123456789abcdef"}:                             "a removed device",
+	} {
+		if got := pairedByLabel(d); got != want {
+			t.Errorf("pairedByLabel(%+v) = %q", d, got)
+		}
+	}
+}
+
+// pair --expires reaches the server and is shown; the list shows the limit
+// and the origin; a revoke names the devices it took too and, for a full
+// device, says to change the password.
+func TestPairExpiresAndCascade(t *testing.T) {
+	h, _, _, _ := newDeviceServer(t)
+	port := listen(t, h)
+	tc := newTestCLI(t, "linux")
+	tc.saveConfig(savedConfig{Port: port, Password: "secret"})
+
+	code, out, errOut := runDevCLI(tc, "pair")
+	if code != 0 || !strings.Contains(out, "valid for 30 days once used") {
+		t.Fatalf("default: %d\n%s%s", code, out, errOut)
+	}
+	postPair(h, url.Values{"code": {pairCodeRe.FindStringSubmatch(out)[1]}, "name": {"Month"}}, nil)
+	if code, out, _ = runDevCLI(tc, "pair", "--expires", "never", "--role", "full", "--name", "Laptop"); code != 0 || !strings.Contains(out, "never expires") {
+		t.Fatalf("never: %d\n%s", code, out)
+	}
+	postPair(h, url.Values{"code": {pairCodeRe.FindStringSubmatch(out)[1]}}, nil)
+	// A full device with a limit pairs a phone, which the revoke takes too.
+	if code, out, _ = runDevCLI(tc, "pair", "--expires", "7d", "--role", "full", "--name", "Tablet"); code != 0 || !strings.Contains(out, "valid for 7 days once used") {
+		t.Fatalf("7d: %d\n%s", code, out)
+	}
+	tabletCookie := deviceCookieOf(postPair(h, url.Values{"code": {pairCodeRe.FindStringSubmatch(out)[1]}}, nil))
+	child := pairWith(t, h, asDevice("POST", "/api/mux/devices/pair", `{"role":"view","name":"Phone","validFor":3600}`, tabletCookie))
+	tablet := deviceIDOf(t, h, "Tablet")
+
+	code, out, _ = runDevCLI(tc, "devices")
+	for _, want := range []string{"VALID UNTIL", "PAIRED BY", "never", "not by a device", "Tablet"} {
+		if code != 0 || !strings.Contains(out, want) {
+			t.Errorf("list lacks %q:\n%s", want, out)
+		}
+	}
+	if !regexp.MustCompile(`Phone .* Tablet`).MatchString(out) {
+		t.Errorf("Phone's origin not shown:\n%s", out)
+	}
+	code, out, errOut = runDevCLI(tc, "devices", "revoke", tablet)
+	if code != 0 || !strings.Contains(out, "Also revoked, as it paired them: ") || !strings.Contains(out, "(Phone)") || !strings.Contains(out, "termote start --fresh") {
+		t.Errorf("revoke a full device with a child: %d\n%s%s", code, out, errOut)
+	}
+	if c, _ := snapshotRole(t, h, child); c != http.StatusUnauthorized {
+		t.Errorf("child after the cascade: %d", c)
+	}
+	month := deviceIDOf(t, h, "Month")
+	if code, out, _ = runDevCLI(tc, "devices", "revoke", month); code != 0 || strings.Contains(out, "Also revoked") || strings.Contains(out, "--fresh") {
+		t.Errorf("revoke a view device: %d\n%s", code, out)
 	}
 }

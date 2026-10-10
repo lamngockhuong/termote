@@ -14,10 +14,16 @@ export interface DevicesState {
   // Why the last read failed; cleared by the next one that works
   error: string | null
   refresh: () => Promise<void>
-  // Resolves once the device is gone from the list; throws RequestError
-  revoke: (id: string) => Promise<void>
-  // Throws RequestError (too_many_codes, invalid_name)
-  pair: (role: 'full' | 'view', name: string) => Promise<PairingCode>
+  // Resolves to the ids revoked (the device and those it paired) once they
+  // are gone from the list; throws RequestError
+  revoke: (id: string) => Promise<string[]>
+  // Throws RequestError (too_many_codes, invalid_name, invalid_validity,
+  // full_needs_password)
+  pair: (
+    role: 'full' | 'view',
+    name: string,
+    validFor: number | null,
+  ) => Promise<PairingCode>
 }
 
 // The paired devices, read when enabled (Settings shows the section) and
@@ -47,22 +53,25 @@ export function useDevices(enabled: boolean): DevicesState {
 
   const revoke = useCallback(
     async (id: string) => {
+      let gone = [id]
       try {
-        await revokeDevice(id)
+        gone = await revokeDevice(id)
       } catch (err) {
         // Revoked meanwhile (another device, the CLI): gone all the same.
         if (!(err instanceof RequestError && err.code === 'unknown_device')) {
           throw err
         }
       }
-      setDevices((list) => list?.filter((d) => d.id !== id) ?? null)
+      setDevices((list) => list?.filter((d) => !gone.includes(d.id)) ?? null)
       void refresh()
+      return gone
     },
     [refresh],
   )
 
   const pair = useCallback(
-    (role: 'full' | 'view', name: string) => createPairingCode(role, name),
+    (role: 'full' | 'view', name: string, validFor: number | null) =>
+      createPairingCode(role, name, validFor),
     [],
   )
 

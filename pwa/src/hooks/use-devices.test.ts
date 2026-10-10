@@ -25,6 +25,9 @@ const device = (id: string, current = false): PairedDevice => ({
   createdAt: '2026-10-01T00:00:00Z',
   lastUsedAt: '2026-10-02T00:00:00Z',
   current,
+  validUntil: null,
+  expired: false,
+  pairedBy: 'password',
 })
 
 beforeEach(() => {
@@ -91,13 +94,32 @@ describe('useDevices', () => {
 
   it('removes a revoked device at once and reads the list again', async () => {
     mocks.fetchDevices.mockResolvedValueOnce([device('a'), device('b')])
-    mocks.revokeDevice.mockResolvedValue(undefined)
+    mocks.revokeDevice.mockResolvedValue(['a'])
     const { result } = renderHook(() => useDevices(true))
     await waitFor(() => expect(result.current.devices).toHaveLength(2))
     mocks.fetchDevices.mockResolvedValueOnce([device('b')])
     await act(() => result.current.revoke('a'))
     expect(mocks.revokeDevice).toHaveBeenCalledWith('a')
     expect(mocks.fetchDevices).toHaveBeenCalledTimes(2)
+    expect(result.current.devices!.map((d) => d.id)).toEqual(['b'])
+  })
+
+  it('removes every device the server revoked, and returns their ids', async () => {
+    mocks.fetchDevices.mockResolvedValueOnce([
+      device('a'),
+      device('b'),
+      device('c'),
+    ])
+    mocks.revokeDevice.mockResolvedValue(['a', 'c'])
+    const { result } = renderHook(() => useDevices(true))
+    await waitFor(() => expect(result.current.devices).toHaveLength(3))
+    // The read after the revoke has not answered yet
+    mocks.fetchDevices.mockReturnValue(new Promise(() => {}))
+    let gone: string[] = []
+    await act(async () => {
+      gone = await result.current.revoke('a')
+    })
+    expect(gone).toEqual(['a', 'c'])
     expect(result.current.devices!.map((d) => d.id)).toEqual(['b'])
   })
 
@@ -125,7 +147,7 @@ describe('useDevices', () => {
   })
 
   it('a revoke before the first read leaves the list unread', async () => {
-    mocks.revokeDevice.mockResolvedValue(undefined)
+    mocks.revokeDevice.mockResolvedValue(['a'])
     // The read after the revoke has not answered yet
     mocks.fetchDevices.mockReturnValue(new Promise(() => {}))
     const { result } = renderHook(() => useDevices(false))
@@ -133,11 +155,11 @@ describe('useDevices', () => {
     expect(result.current.devices).toBeNull()
   })
 
-  it('pairs through the API, passing role and name on', async () => {
+  it('pairs through the API, passing role, name and validity on', async () => {
     const code = { code: 'ABCDE-FGHIJ', expiresAt: 'x', url: 'u' }
     mocks.createPairingCode.mockResolvedValue(code)
     const { result } = renderHook(() => useDevices(false))
-    await expect(result.current.pair('view', 'Phone')).resolves.toBe(code)
-    expect(mocks.createPairingCode).toHaveBeenCalledWith('view', 'Phone')
+    await expect(result.current.pair('view', 'Phone', 3600)).resolves.toBe(code)
+    expect(mocks.createPairingCode).toHaveBeenCalledWith('view', 'Phone', 3600)
   })
 })

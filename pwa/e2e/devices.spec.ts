@@ -51,6 +51,19 @@ async function stranger(browser: Browser, baseURL: string | undefined): Promise<
   return context.newPage()
 }
 
+// Pairs a new browser with code, from the link the QR code carries.
+async function pairStranger(browser: Browser, baseURL: string | undefined, code: string) {
+  const page = await stranger(browser, baseURL)
+  await page.goto(`/pair?code=${encodeURIComponent(code)}`)
+  await page.getByRole('button', { name: 'Pair' }).click()
+  await expect(page).toHaveURL(/\/(#.*)?$/)
+  return page
+}
+
+// A same-site JSON write from page's browser (its device cookie).
+const writeAs = (page: Page, baseURL: string | undefined, path: string, data: object) =>
+  page.request.post(path, { data, headers: { Origin: baseURL as string } })
+
 test.describe('paired devices and the view-only role', () => {
   test.skip(!enabled, 'needs TERMOTE_E2E_AUTH=1 and a server with sign-in on (TERMOTE_PASS)')
 
@@ -155,5 +168,83 @@ test.describe('paired devices and the view-only role', () => {
     const { devices } = (await res.json()) as { devices: { name: string }[] }
     expect(devices.map((d) => d.name)).not.toContain(name)
     await page.context().close()
+  })
+
+  test('a paired full device pairs view devices only, which go when it is revoked', async ({
+    browser,
+    baseURL,
+    request,
+  }) => {
+    const tag = Math.random().toString(36).slice(2, 8)
+    const fullName = `e2e-full-${tag}`
+    const childName = `e2e-child-${tag}`
+    made.push(fullName, childName)
+    // The password (Basic auth, as the CLI) pairs a full device.
+    const full = await pairStranger(browser, baseURL, (await makeCode(request, 'full', fullName)).code)
+    await full.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 15000 })
+
+    // Its Pair a device offers view only and says where full devices come from.
+    await full.getByRole('button', { name: 'More' }).click()
+    await full.getByRole('menuitem', { name: 'Settings' }).click()
+    await full
+      .getByRole('navigation', { name: 'Settings groups' })
+      .getByRole('button', { name: 'Devices' })
+      .click()
+    await full.getByRole('button', { name: 'Pair a device' }).click()
+    await expect(full.getByText('termote pair --role full')).toBeVisible()
+    await expect(full.getByRole('radiogroup', { name: 'Role' })).toHaveCount(0)
+    await expect(full.getByLabel('Stays signed in for')).toHaveValue(String(30 * 86400))
+    await full.getByRole('button', { name: 'Cancel' }).click()
+
+    // The server refuses a full code to it all the same.
+    const refused = await writeAs(full, baseURL, '/api/mux/devices/pair', { role: 'full' })
+    expect(refused.status()).toBe(403)
+    expect((await refused.json()).code).toBe('full_needs_password')
+
+    const res = await writeAs(full, baseURL, '/api/mux/devices/pair', {
+      role: 'view',
+      name: childName,
+      validFor: 86400,
+    })
+    expect(res.status(), await res.text()).toBe(200)
+    const child = await pairStranger(browser, baseURL, ((await res.json()) as Code).code)
+    await expect(child.getByText('View only: you can watch this terminal but not type')).toBeVisible({
+      timeout: 15000,
+    })
+
+    // Revoking the full device takes its child: the child is sent to sign in.
+    const fullId = await deviceId(request, fullName)
+    const childId = await deviceId(request, childName)
+    const del = await request.delete(`/api/mux/devices/${fullId}`, {
+      headers: { 'Content-Type': 'application/json' },
+    })
+    expect(del.status()).toBe(200)
+    expect((await del.json()).revoked).toEqual([fullId, childId])
+    await expect(child).toHaveURL(/\/login/, { timeout: 20000 })
+    await full.context().close()
+    await child.context().close()
+  })
+
+  test('logging out a full device leaves the devices it paired', async ({ browser, baseURL, request }) => {
+    const tag = Math.random().toString(36).slice(2, 8)
+    const fullName = `e2e-full-${tag}`
+    const childName = `e2e-child-${tag}`
+    made.push(fullName, childName)
+    const full = await pairStranger(browser, baseURL, (await makeCode(request, 'full', fullName)).code)
+    const res = await writeAs(full, baseURL, '/api/mux/devices/pair', { role: 'view', name: childName })
+    const child = await pairStranger(browser, baseURL, ((await res.json()) as Code).code)
+    const fullId = await deviceId(request, fullName)
+
+    const out = await writeAs(full, baseURL, '/api/mux/logout', {})
+    expect(out.status()).toBe(204)
+    expect((await child.request.get('/api/mux/snapshot')).status()).toBe(200)
+    const { devices } = (await (await request.get('/api/mux/devices')).json()) as {
+      devices: { name: string; pairedBy: string; pairedByName?: string }[]
+    }
+    const kept = devices.find((d) => d.name === childName)
+    expect(kept?.pairedBy).toBe(fullId)
+    expect(kept?.pairedByName).toBeUndefined()
+    await full.context().close()
+    await child.context().close()
   })
 })

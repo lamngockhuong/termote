@@ -22,7 +22,7 @@ func newTestDeviceStore(t *testing.T, dir, pass string) *deviceStore {
 func TestDeviceStoreAddLookupRevoke(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "devices")
 	s := newTestDeviceStore(t, dir, "pw")
-	token, rec, err := s.add("iPhone Safari", roleView)
+	token, rec, err := s.add("iPhone Safari", roleView, deviceAddOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,11 +75,11 @@ func TestDeviceStoreAddLookupRevoke(t *testing.T) {
 
 func TestDeviceStoreValidation(t *testing.T) {
 	s := newTestDeviceStore(t, t.TempDir(), "pw")
-	if _, _, err := s.add("x", "admin"); !errors.Is(err, errInvalidRole) {
+	if _, _, err := s.add("x", "admin", deviceAddOpts{}); !errors.Is(err, errInvalidRole) {
 		t.Errorf("bad role = %v", err)
 	}
 	for _, n := range []string{"", " pad", strings.Repeat("a", 65), "a\x00b", "a‮b", "a​b", "\xff"} {
-		if _, _, err := s.add(n, roleView); !errors.Is(err, errInvalidName) {
+		if _, _, err := s.add(n, roleView, deviceAddOpts{}); !errors.Is(err, errInvalidName) {
 			t.Errorf("name %q = %v", n, err)
 		}
 	}
@@ -94,11 +94,11 @@ func TestDeviceStoreValidation(t *testing.T) {
 func TestDeviceStoreCap(t *testing.T) {
 	s := newTestDeviceStore(t, t.TempDir(), "pw")
 	for i := range maxDevices {
-		if _, _, err := s.add("d", roleView); err != nil {
+		if _, _, err := s.add("d", roleView, deviceAddOpts{}); err != nil {
 			t.Fatalf("add %d: %v", i, err)
 		}
 	}
-	if _, _, err := s.add("d", roleView); !errors.Is(err, errTooManyDevices) {
+	if _, _, err := s.add("d", roleView, deviceAddOpts{}); !errors.Is(err, errTooManyDevices) {
 		t.Errorf("past the cap = %v", err)
 	}
 }
@@ -108,12 +108,12 @@ func TestDeviceStoreCap(t *testing.T) {
 func TestDeviceStoreOtherPassword(t *testing.T) {
 	dir := t.TempDir()
 	old := newTestDeviceStore(t, dir, "old")
-	token, _, _ := old.add("d", roleFull)
+	token, _, _ := old.add("d", roleFull, deviceAddOpts{})
 	s := newTestDeviceStore(t, dir, "new")
 	if _, ok, stale := s.lookup(token); ok || !stale || len(s.list()) != 0 {
 		t.Fatal("a device of another password signs in, or is not known as stale")
 	}
-	s.add("e", roleView) // a write keeps the other password's record
+	s.add("e", roleView, deviceAddOpts{}) // a write keeps the other password's record
 	if again := newTestDeviceStore(t, dir, "old"); len(again.list()) != 1 {
 		t.Error("a write under another password deleted the device")
 	}
@@ -131,7 +131,7 @@ func TestDeviceStoreTwoProcesses(t *testing.T) {
 	dir := t.TempDir()
 	a := newTestDeviceStore(t, dir, "pw")
 	b := newTestDeviceStore(t, dir, "pw")
-	token, rec, _ := a.add("d", roleView)
+	token, rec, _ := a.add("d", roleView, deviceAddOpts{})
 	clock := time.Now()
 	b.now = func() time.Time { return clock }
 	clock = clock.Add(2 * deviceReloadEvery)
@@ -145,7 +145,7 @@ func TestDeviceStoreTwoProcesses(t *testing.T) {
 	if _, ok, _ := b.lookup(token); ok {
 		t.Error("b still signs in a device a revoked")
 	}
-	b.add("other", roleView)
+	b.add("other", roleView, deviceAddOpts{})
 	if _, ok, _ := newTestDeviceStore(t, dir, "pw").lookup(token); ok {
 		t.Error("b's write brought the revoked device back")
 	}
@@ -158,10 +158,10 @@ func TestDeviceStoreWriteFailure(t *testing.T) {
 	}
 	dir := t.TempDir()
 	s := newTestDeviceStore(t, dir, "pw")
-	token, rec, _ := s.add("d", roleView)
+	token, rec, _ := s.add("d", roleView, deviceAddOpts{})
 	os.Chmod(dir, 0o500)
 	defer os.Chmod(dir, 0o700)
-	if _, _, err := s.add("e", roleView); err == nil {
+	if _, _, err := s.add("e", roleView, deviceAddOpts{}); err == nil {
 		t.Fatal("add into a read-only dir succeeded")
 	}
 	if err := s.revoke(rec.ID); err == nil {
@@ -190,7 +190,7 @@ func TestDeviceStoreCorruptFile(t *testing.T) {
 func TestDeviceStoreLastUsed(t *testing.T) {
 	dir := t.TempDir()
 	s := newTestDeviceStore(t, dir, "pw")
-	token, rec, _ := s.add("d", roleView)
+	token, rec, _ := s.add("d", roleView, deviceAddOpts{})
 	clock := time.Now().Add(time.Minute)
 	s.now = func() time.Time { return clock }
 	s.lookup(token)
@@ -213,7 +213,7 @@ func TestPairCodes(t *testing.T) {
 	if p.waiting() {
 		t.Error("waiting with no code")
 	}
-	code, exp, err := p.create(roleView, "Phone", "")
+	code, exp, err := p.create(roleView, "Phone", "", 0)
 	if err != nil || len(code) != pairCodeLen+1 || code[pairCodeGroup] != '-' || !exp.Equal(clock.Add(pairCodeTTL)) {
 		t.Fatalf("create = %q %v %v", code, exp, err)
 	}
@@ -230,25 +230,25 @@ func TestPairCodes(t *testing.T) {
 		t.Error("code used twice")
 	}
 	// Expiry.
-	code, _, _ = p.create(roleFull, "", "")
+	code, _, _ = p.create(roleFull, "", "", 0)
 	clock = clock.Add(pairCodeTTL)
 	if _, ok := p.redeem(code); ok || p.waiting() {
 		t.Error("expired code redeemed")
 	}
 	// Cap, and the codes of a revoked device go.
 	for i := range maxPairCodes {
-		if _, _, err := p.create(roleView, "", "dev1"); err != nil {
+		if _, _, err := p.create(roleView, "", "dev1", 0); err != nil {
 			t.Fatalf("create %d: %v", i, err)
 		}
 	}
-	if _, _, err := p.create(roleView, "", ""); !errors.Is(err, errTooManyCodes) {
+	if _, _, err := p.create(roleView, "", "", 0); !errors.Is(err, errTooManyCodes) {
 		t.Errorf("past the cap = %v", err)
 	}
 	p.dropCreator("dev1")
 	if p.waiting() {
 		t.Error("codes of a revoked device kept")
 	}
-	if _, _, err := p.create("root", "", ""); !errors.Is(err, errInvalidRole) {
+	if _, _, err := p.create("root", "", "", 0); !errors.Is(err, errInvalidRole) {
 		t.Errorf("bad role = %v", err)
 	}
 	for _, bad := range []string{"", "ABCDE", "ABCDE-FGHJKM", "ABCDE-FGHJ!", "ABCDE-FGHJU"} {
@@ -321,7 +321,7 @@ func TestDeviceStoreReloadCases(t *testing.T) {
 	if len(s.list()) != 0 {
 		t.Fatal("empty store lists a device")
 	}
-	token, _, _ := s.add("d", roleView)
+	token, _, _ := s.add("d", roleView, deviceAddOpts{})
 	// Removed by hand: the device is gone.
 	os.Remove(filepath.Join(dir, devicesFile))
 	tick()
@@ -329,13 +329,13 @@ func TestDeviceStoreReloadCases(t *testing.T) {
 		t.Error("device kept after its file was removed")
 	}
 	// Corrupt: what is in memory stays, and changes fail.
-	token, _, _ = s.add("d", roleView)
+	token, _, _ = s.add("d", roleView, deviceAddOpts{})
 	os.WriteFile(filepath.Join(dir, devicesFile), []byte("{nope, longer than before"), 0o600)
 	tick()
 	if _, ok, _ := s.lookup(token); !ok {
 		t.Error("a corrupt file dropped the devices in memory")
 	}
-	if _, _, err := s.add("e", roleView); err == nil {
+	if _, _, err := s.add("e", roleView, deviceAddOpts{}); err == nil {
 		t.Error("add over a corrupt file succeeded")
 	}
 	if runtime.GOOS != "windows" && os.Getuid() != 0 {
@@ -352,7 +352,7 @@ func TestDeviceStoreReloadCases(t *testing.T) {
 func TestDeviceStoreTouchFlush(t *testing.T) {
 	dir := t.TempDir()
 	s := newTestDeviceStore(t, dir, "pw")
-	token, _, _ := s.add("d", roleView)
+	token, _, _ := s.add("d", roleView, deviceAddOpts{})
 	clock := time.Now().Add(deviceTouchEvery + time.Second)
 	s.now = func() time.Time { return clock }
 	s.lookup(token)
@@ -379,7 +379,7 @@ func TestPairCodeNormalizeAndDrop(t *testing.T) {
 	if _, ok := p.redeem("not a code"); ok {
 		t.Error("redeemed a non-code")
 	}
-	p.create(roleView, "", "")
+	p.create(roleView, "", "", 0)
 	p.dropCreator("") // a code made by a password session is never dropped this way
 	if !p.waiting() {
 		t.Error("dropCreator(\"\") dropped a code")

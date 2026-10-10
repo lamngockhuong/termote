@@ -1194,6 +1194,15 @@ export interface PairedDevice {
   lastUsedAt: string
   // The device this page runs on
   current: boolean
+  // When it stops signing in (RFC 3339), null without a limit
+  validUntil: string | null
+  // Past validUntil: refused until revoked
+  expired: boolean
+  // "password" (a password sign-in, the CLI or a terminal), "unknown" (paired
+  // before this was kept) or the id of the device that paired it
+  pairedBy: string
+  // That device's name, while it is still paired
+  pairedByName?: string
 }
 
 // A pairing code: shown once, spent by the first device that enters it.
@@ -1208,6 +1217,9 @@ export interface PairingCode {
   url: string
   // The link as a QR code (data:image/png), drawn by the server
   qr?: string
+  // How long the new device stays signed in once paired, in seconds, as the
+  // server accepted it (cut to this device's own limit); 0 is no limit
+  validFor?: number
 }
 
 // Lists the paired devices. Throws RequestError when refused (view_only,
@@ -1223,28 +1235,35 @@ export async function fetchDevices(
 }
 
 // Makes a code another device signs in with, for 5 minutes. An empty name
-// lets that device name itself. Throws RequestError (too_many_codes,
-// invalid_name, invalid_role).
+// lets that device name itself; validFor (seconds, null: no limit) is how
+// long that device stays signed in. Throws RequestError (too_many_codes,
+// invalid_name, invalid_role, invalid_validity, full_needs_password).
 export async function createPairingCode(
   role: 'full' | 'view',
   name: string,
+  validFor: number | null = null,
 ): Promise<PairingCode> {
   const res = await fetch(`${API_BASE}/devices/pair`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ role, name }),
+    body: JSON.stringify(
+      validFor === null ? { role, name } : { role, name, validFor },
+    ),
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   })
   if (!res.ok) throw await requestError(res)
   return res.json()
 }
 
-// Revokes a device: its next request is refused and its streams close.
-export async function revokeDevice(id: string): Promise<void> {
+// Revokes a device and every device it paired: their next requests are
+// refused and their streams close. Resolves to the ids revoked, id first.
+export async function revokeDevice(id: string): Promise<string[]> {
   const res = await fetch(`${API_BASE}/devices/${encodeURIComponent(id)}`, {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json' },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   })
   if (!res.ok) throw await requestError(res)
+  const body = await res.json().catch(() => ({}))
+  return Array.isArray(body.revoked) ? body.revoked : [id]
 }

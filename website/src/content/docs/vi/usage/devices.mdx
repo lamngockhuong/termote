@@ -8,24 +8,33 @@ import { Aside } from "@astrojs/starlight/components";
 Mọi người đăng nhập bằng một mật khẩu đã lưu. Muốn cho thiết bị khác vào mà không đưa mật khẩu đó, hãy
 ghép thiết bị: bạn tạo một mã dùng một lần, thiết bị mới nhập mã, và từ đó nó tự đăng nhập. Mỗi thiết bị
 ghép có tên và vai trò, và bạn đăng xuất riêng từng thiết bị mà không phải đổi mật khẩu. Ghép thiết bị cần
-đăng nhập, nên bị tắt khi chạy với `--no-auth`.
+đăng nhập, nên bị tắt khi chạy với `--no-auth`. Thiết bị đã ghép được tin tới đâu thì xem trang
+[Mô hình bảo mật](/vi/usage/security/).
 
 ## Ghép từ terminal
 
 ```bash
-termote pair                      # thiết bị chỉ xem (mặc định)
+termote pair                      # thiết bị chỉ xem (mặc định), đăng nhập trong 30 ngày
 termote pair --role full --name "Work phone"
+termote pair --expires 7d         # 12h, 7d, 2w: từ 1 giờ tới 400 ngày
+termote pair --expires never      # không giới hạn thời gian
 ```
 
 Lệnh in ra một mã dạng `ABCDE-FGHJK`, một đường dẫn và một mã QR. Mã chỉ dùng được một lần và hết hạn
-sau 5 phút. Trên thiết bị mới, quét mã QR, mở đường dẫn, hoặc mở `/pair` trên địa chỉ Termote rồi gõ mã.
+sau 5 phút. Thiết bị được ghép giữ đăng nhập trong 30 ngày, trừ khi `--expires` nói khác; quá hạn thì nó
+bị đăng xuất và phải ghép lại. Trên thiết bị mới, quét mã QR, mở đường dẫn, hoặc mở `/pair` trên địa chỉ Termote rồi gõ mã.
 Nếu bạn không đặt `--name`, thiết bị mới được hỏi tên, không thì tên lấy theo trình duyệt của nó.
 
 ## Ghép từ một thiết bị đã đăng nhập
 
 Trên thiết bị có toàn quyền, mở **Settings > Devices > Pair a device**, chọn **View only** hoặc toàn
-quyền, đặt tên nếu muốn, rồi cho thiết bị mới xem mã hoặc mã QR. Cũng trong danh sách đó, mỗi thiết bị
-đã ghép hiện kèm vai trò, lần dùng cuối và nút **Revoke**.
+quyền, chọn thời gian **Stays signed in for** (30 ngày nếu bạn không chọn khác, hoặc **Never**), đặt tên
+nếu muốn, rồi cho thiết bị mới xem mã hoặc mã QR. Cũng trong danh sách đó, mỗi thiết bị đã ghép hiện kèm
+vai trò, lần dùng cuối, ai đã ghép nó, hạn dùng và nút **Revoke**.
+
+Chỉ mật khẩu mới ghép được thiết bị toàn quyền: đăng nhập bằng mật khẩu, hoặc chạy `termote pair` trên
+server. Thiết bị đã ghép chỉ ghép được thiết bị chỉ xem, và thiết bị có hạn không ghép được thiết bị nào
+sống lâu hơn nó (không có **Never**).
 
 <Aside>
   Ứng dụng iOS cài ra màn hình chính không dùng chung cookie với Safari, nên quét QR không đăng nhập được
@@ -35,13 +44,18 @@ quyền, đặt tên nếu muốn, rồi cho thiết bị mới xem mã hoặc m
 ## Liệt kê và thu hồi
 
 ```bash
-termote devices                   # id, tên, vai trò, ngày ghép, lần dùng cuối
+termote devices                   # id, tên, vai trò, ngày ghép, lần dùng cuối, hạn dùng, ai ghép
 termote devices revoke <id>       # đăng xuất thiết bị và đóng các terminal đang mở của nó
 ```
 
-Thu hồi có hiệu lực ngay. Đăng xuất trên một thiết bị đã ghép cũng là thu hồi chính thiết bị đó. Mật khẩu
-mới (`termote start --fresh`) đăng xuất mọi thiết bị đã ghép. Thiết bị còn đăng nhập 400 ngày nếu bạn
-không thu hồi, nên hãy cho Termote một tên máy riêng: cookie được mọi dịch vụ cùng tên máy nhận chung.
+Thu hồi có hiệu lực ngay, và thu hồi luôn mọi thiết bị mà thiết bị đó đã ghép. Đăng xuất trên một thiết
+bị đã ghép chỉ thu hồi chính thiết bị đó: các thiết bị nó đã ghép vẫn còn, hiện là do một thiết bị đã gỡ
+ghép. Mật khẩu mới (`termote start --fresh`) đăng xuất mọi thiết bị đã ghép. Sau khi thu hồi một thiết bị
+toàn quyền, hãy chạy thêm `termote start --fresh`: nó từng có shell (xem
+[Mô hình bảo mật](/vi/usage/security/#khi-mất-một-thiết-bị)).
+
+Thiết bị ghép với **Never** giữ đăng nhập tới khi bạn thu hồi, nên hãy cho Termote một tên máy riêng:
+cookie được mọi dịch vụ cùng tên máy nhận chung.
 
 ## Chỉ xem
 

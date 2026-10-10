@@ -162,9 +162,9 @@ The toolbar at the bottom provides modifier keys:
 ### Give Another Device Access
 
 Run `termote pair` for a one-time code (5 minutes) and open `/pair` on the new device; the device
-gets its own sign-in, view only unless `--role full`. List or sign out devices with
+gets its own sign-in for 30 days (`--expires`), view only unless `--role full`. List or sign out devices with
 `termote devices` and `termote devices revoke <id>`, or in Settings > Devices. Needs sign-in
-(not `--no-auth`). The model and limits: [`system-architecture.md`](system-architecture.md).
+(not `--no-auth`). What a paired device can be trusted with: [`security-model.md`](security-model.md).
 
 ### Terminal Not Rendering Properly
 

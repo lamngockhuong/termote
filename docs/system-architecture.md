@@ -223,9 +223,9 @@ POST   /api/mux/panes/{id}/scroll  body: {lines}                → {ok}   (caps
 GET    /api/mux/panes/{id}/text?lines=N                         → {text, lines, truncated, more} | {error, code}   (caps.paneText; full only)
 GET    /api/mux/health             → {status, apiVersion, backend, version, pid, install}
 POST   /api/mux/logout             body: {}                      → 204   (sign-in on only, else 404)
-POST   /api/mux/devices/pair       body: {role, name?}           → {code, expiresAt, url, qr} | {error, code}   (full only; sign-in on, else 501)
-GET    /api/mux/devices                                          → {devices:[{id,name,role,createdAt,lastUsedAt,current}]}   (full only)
-DELETE /api/mux/devices/{id}                                     → {ok} | 404 unknown_device   (full only)
+POST   /api/mux/devices/pair       body: {role, name?, validFor?}  → {code, expiresAt, expiresIn, url, qr, validFor} | {error, code}   (full only; sign-in on, else 501; 400 invalid_validity, 403 full_needs_password)
+GET    /api/mux/devices                                          → {devices:[{id,name,role,createdAt,lastUsedAt,current,validUntil,expired,pairedBy,pairedByName?}]}   (full only)
+DELETE /api/mux/devices/{id}                                     → {ok, revoked:[ids]} | 404 unknown_device   (full only)
 GET    /api/mux/push/key                                        → {publicKey} | 503 push_unavailable   (caps.push)
 POST   /api/mux/push/subscribe     body: {endpoint, keys:{p256dh, auth}}  → {ok} | {error, code}
 DELETE /api/mux/push/subscribe     body: {endpoint}             → {ok}   (unknown endpoint too)
@@ -981,7 +981,30 @@ The code is `server/auth_role.go` (roles, the default refusal), `server/device_s
   token; at most 50 devices. Records of another password are ignored, not deleted; `start --fresh`
   deletes them. The container keeps the directory in the volume `termote-state-<uid>`.
 - **Pairing**: a 10-character code (`XXXXX-XXXXX`), 5 minutes, once, at most 5 waiting, redeemed by
-  `POST /pair` under its own rate limiter. A browser already signed in is refused (409).
+  `POST /pair` under its own rate limiter. A browser already signed in is refused (409). Only the
+  password (a session, Basic auth: the CLI) makes a `full` code; a device asking gets 403
+  `full_needs_password`, also when it sends Basic credentials too (the device cookie is tried first).
+  A code is refused once its maker is revoked, and redeeming one whose maker went meanwhile pairs
+  nothing ("This code is no longer valid", `creator_gone`, not counted as a wrong code): the maker is
+  checked live and valid in the same write that adds the device.
+- **Time limit**: `validFor` (seconds, `[3600, 400 days]`, absent or 0: none; else 400
+  `invalid_validity`) becomes the record's `validUntil`, counted from the pairing. A maker with a
+  limit must give one and gets it cut to what it has left, and the store cuts it again at the
+  pairing, so a device never outlasts its maker. A record with a limit stores its hash as
+  `v2:<sha256>`: a release before this one never matches it (a downgrade fails closed), and a `v2:`
+  hash without `validUntil` (an older release wrote the file back) is expired. Past `validUntil`
+  (`now >= validUntil`) the cookie is refused and cleared and `alive` is false; one timer per
+  process, set to the nearest `validUntil` after every change or reload of the file, closes the
+  device's streams, stream tokens and codes when it is reached. Expired records stay listed
+  (`expired`) and count towards the 50 until revoked. The cookie's `MaxAge` stays 400 days.
+- **Lineage**: each record has `pairedBy` (`password`, or the maker's id; absent in older records,
+  listed as `unknown`). A full device pairs view devices only and a view device pairs nothing, so
+  the tree is one level deep under a device.
+- **Audit**: one `audit:` line in the server log per `pair-code`, `pair`, `revoke` (`by`, `via`:
+  `devices`, `cli`, `logout`, `repair`; `cascade`), `device-expired` (once per device and process)
+  and `login via=form`; every value quoted (`strconv.Quote`), never a token, code, password or
+  cookie. Basic sign-ins are not logged (the CLI and its health polls sign in on every request).
+  Behind a proxy `ip` is the proxy's. See [`security-model.md`](security-model.md).
 - **View-only**: `basicAuth` refuses every write method with 403 `view_only` before any handler
   (except logout); handlers repeat the check with `requireWriteRole`. Reads that change state have
   a view branch: the snapshot does not recreate sessions, a tmux stream attaches read-only to the
@@ -989,7 +1012,11 @@ The code is `server/auth_role.go` (roles, the default refusal), `server/device_s
   input frame, resize and `drive` is dropped. Files only in a git repo, no `reveal=1`, no
   `content?hash=1`; `agent/prompt` carries no `promptId`.
 - **Revoke**: removes the record, drops its stream tokens, closes its open streams and the codes it
-  made; a running request finishes.
+  made; a running request finishes. `DELETE /api/mux/devices/{id}` (Settings > Devices, `termote
+  devices revoke`) also removes every live record whose `pairedBy` is the id, in the same write, and
+  answers their ids; Log out and a view device paired again revoke only the device itself. A second
+  process sharing the state dir refuses the revoked devices once it reads the file again (at most
+  each second), but does not close the streams it has open.
 
 ## Deployment Modes
 

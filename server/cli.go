@@ -509,6 +509,8 @@ Options of url (the Herdr plugin runs: url --herdr --open):
 Options of pair (the code works once, for 5 minutes):
   --role <view|full>         What the device may do (default: view, which only watches)
   --name <name>              The device's name (default: asked on it, else its browser)
+  --expires <12h|7d|2w|never>  How long the device stays signed in once paired
+                             (1h to 400d, default: 30d)
 
 Options of update:
   --version <X.Y.Z>          Update to a specific version

@@ -887,6 +887,25 @@ Test on real mobile device:
 - [ ] Request body size limited (8KB on `/api/mux/*` writes)
 - [ ] Internal errors logged server-side only, generic messages to clients
 
+### Paired Devices
+
+- [ ] `termote pair --expires 7d`: the code's output says "valid for 7 days once used"; after pairing,
+      `termote devices` shows the date under VALID UNTIL and "not by a device" under PAIRED BY
+- [ ] `termote pair` (no `--expires`) and Settings > Devices > Pair a device default to 30 days;
+      `--expires never` / **Never** pairs a device without a limit
+- [ ] A view device paired with a limit, its `validUntil` set in the past in `devices.json` and the
+      server restarted: the device is sent to `/login`, the list says "Expired", the log has one
+      `audit: device-expired` line
+- [ ] On a paired full device, Pair a device offers view only (no Role choice) and names
+      `termote pair --role full`; a device with a limit offers no **Never**
+- [ ] Revoke a full device that paired a view device: the confirmation names the view device and
+      `termote start --fresh`; afterwards both are sent to `/login`, and `termote devices revoke`
+      prints "Also revoked"
+- [ ] Log out on a full device that paired a view device: the view device keeps working, listed as
+      "Paired by a removed device"
+- [ ] `termote logs`: `audit:` lines for each code, pairing, revoke and form sign-in, none for
+      `termote status` polls, and no code, token or password in them
+
 ### No Auth Mode
 
 - [ ] `--no-auth` flag bypasses auth prompt
