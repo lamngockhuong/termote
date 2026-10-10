@@ -40,6 +40,7 @@ type fakeWriter struct {
 	found    bool
 	sessions []AgentSession // successive AgentSessionNow answers; the last repeats
 	screen   string
+	screens  []string // captured first, one each, before screen
 	pasted   []string
 	keys     [][]string
 	keyErr   error
@@ -74,6 +75,11 @@ func (f *fakeWriter) AgentSessionNow(context.Context, string) (AgentSession, boo
 func (f *fakeWriter) Capture(context.Context, string) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if len(f.screens) > 0 {
+		s := f.screens[0]
+		f.screens = f.screens[1:]
+		return s, nil
+	}
 	return f.screen, nil
 }
 
@@ -176,6 +182,58 @@ func TestMessageSendsVerbatimAndSubmits(t *testing.T) {
 	}
 	if len(f.keys) != 1 || f.keys[0][0] != "Enter" {
 		t.Errorf("keys = %v", f.keys)
+	}
+}
+
+// A message sent while the agent redraws (the screen cleared after an
+// answer, the box not back yet) goes once the empty box shows.
+func TestMessageWaitsForRedraw(t *testing.T) {
+	shortConfirm(t)
+	f := newFakeWriter()
+	f.screens = []string{"", ""}
+	code, body := postJSON(t, agentMux(f), "/api/mux/panes/0/agent/message", map[string]string{"text": "hello", "cursor": cursorFor(testSessionID)})
+	if code != http.StatusNoContent {
+		t.Fatalf("POST = %d %v", code, body)
+	}
+	if len(f.pasted) != 1 || f.pasted[0] != "hello" || len(f.keys) != 1 {
+		t.Errorf("pasted %q keys %v", f.pasted, f.keys)
+	}
+}
+
+// What a redraw settles into is checked as before, and the session is read
+// again after the wait: nothing is pasted unless the same agent is idle.
+func TestMessageRedrawRefusals(t *testing.T) {
+	shortConfirm(t)
+	working := labSession
+	working.Status = "working"
+	moved := labSession
+	moved.Target = "%9"
+	dialog := fixtureScreen(t, "2.1.286-permission-bash")
+	tests := []struct {
+		name     string
+		settled  string
+		sessions []AgentSession
+		code     string
+		msg      string
+	}{
+		{"settles into a dialog", dialog, nil, "input_not_ready", "a dialog is open"},
+		{"pane changed during the redraw", boxScreen(""), []AgentSession{labSession, moved}, "session_changed", "the pane runs another session now"},
+		{"agent started working during the redraw", boxScreen(""), []AgentSession{labSession, working}, "input_not_ready", "the agent is working"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFakeWriter()
+			f.screens = []string{"", ""}
+			f.screen = tt.settled
+			f.sessions = tt.sessions
+			code, body := postJSON(t, agentMux(f), "/api/mux/panes/0/agent/message", map[string]string{"text": "hello", "cursor": cursorFor(testSessionID)})
+			if code != http.StatusConflict || body["code"] != tt.code || body["error"] != tt.msg {
+				t.Errorf("POST = %d %v, want 409 %s %q", code, body, tt.code, tt.msg)
+			}
+			if len(f.pasted) != 0 || len(f.keys) != 0 {
+				t.Errorf("pasted=%v keys=%v", f.pasted, f.keys)
+			}
+		})
 	}
 }
 
@@ -929,7 +987,7 @@ func TestMessageFiveSlowImages(t *testing.T) {
 }
 
 func TestMessageBudget(t *testing.T) {
-	if got := messageBudget(0); got != 3*agentConfirmWait+muxTimeout {
+	if got := messageBudget(0); got != 4*agentConfirmWait+muxTimeout {
 		t.Errorf("no images = %v", got)
 	}
 	if got := messageBudget(5); got != 8*agentImageWait+muxTimeout {
@@ -1115,6 +1173,26 @@ func TestMessageRechecksBeforeText(t *testing.T) {
 		t.Errorf("POST = %d %v", code, body)
 	}
 	if len(f.pasted) != 1 || f.pasted[0] != paths[0] || len(f.keys) != 0 {
+		t.Errorf("pasted %q keys %v", f.pasted, f.keys)
+	}
+}
+
+// With images, the session read after a redraw is the only check before the
+// first paste: an agent that started working meanwhile gets nothing.
+func TestMessageImagesRecheckAfterRedraw(t *testing.T) {
+	shortImageWait(t)
+	working := labSession
+	working.Status = "working"
+	f := newFakeWriter()
+	imageAgent(f, 0)
+	f.screens = []string{"", ""}
+	f.sessions = []AgentSession{labSession, working}
+	mux, ids, _ := imageMux(t, f, 1)
+	code, body := postMessage(t, mux, "hello", ids)
+	if code != http.StatusConflict || body["code"] != "input_not_ready" {
+		t.Errorf("POST = %d %v", code, body)
+	}
+	if len(f.pasted) != 0 || len(f.keys) != 0 {
 		t.Errorf("pasted %q keys %v", f.pasted, f.keys)
 	}
 }
