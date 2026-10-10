@@ -612,7 +612,8 @@ Test trên thiết bị di động thật:
 ### Các Hàng Mở Rộng
 
 - [ ] Nút ⋯ hiện các hàng (Actions trên mobile, Text, Navigate, Scroll) và ẩn lại được
-- [ ] Nút Lịch sử mở dropdown lịch sử lệnh
+- [ ] Nút Lịch sử mở dropdown lịch sử lệnh và đóng các hàng mở rộng
+- [ ] Bật bàn phím ảo thì các hàng mở rộng tự đóng; nhấn ⋯ vẫn mở lại được khi bàn phím đang bật
 - [ ] Phím bổ trợ Shift bật/tắt (có chỉ báo khi đang bật); đóng các hàng thì Shift tắt
 - [ ] Phím ⇧Tab gửi Shift+Tab
 - [ ] Phím mũi tên trái/phải hoạt động

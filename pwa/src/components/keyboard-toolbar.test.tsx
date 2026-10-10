@@ -912,4 +912,58 @@ describe('KeyboardToolbar', () => {
       }
     })
   })
+
+  describe('Expanded rows close for the history list and the keyboard', () => {
+    it('opening the history list closes the expanded rows (and Shift)', () => {
+      renderToolbar({ onShiftChange })
+      fireEvent.click(screen.getByRole('button', { name: 'Extra keys' }))
+      fireEvent.click(screen.getByText('Shift'))
+      fireEvent.click(
+        document.querySelector('[data-key="HistoryToggle"]') as HTMLElement,
+      )
+      expect(onHistoryToggle).toHaveBeenCalled()
+      expect(onShiftChange).toHaveBeenLastCalledWith(false)
+      expect(
+        screen.getByRole('button', { name: 'Extra keys' }),
+      ).toHaveAttribute('aria-expanded', 'false')
+    })
+
+    it('the on-screen keyboard opening closes them', () => {
+      const { rerender } = renderToolbar({ keyboardVisible: false })
+      fireEvent.click(screen.getByRole('button', { name: 'Extra keys' }))
+      rerender(
+        <KeyboardToolbar onKey={onKey} onCtrlKey={onCtrlKey} keyboardVisible />,
+      )
+      expect(
+        screen.getByRole('button', { name: 'Extra keys' }),
+      ).toHaveAttribute('aria-expanded', 'false')
+    })
+
+    it('they can be opened again while the keyboard stays up', () => {
+      renderToolbar({ keyboardVisible: true })
+      fireEvent.click(screen.getByRole('button', { name: 'Extra keys' }))
+      expect(
+        screen.getByRole('button', { name: 'Extra keys' }),
+      ).toHaveAttribute('aria-expanded', 'true')
+    })
+
+    it('the keyboard opening with the rows closed changes nothing', () => {
+      const { rerender } = renderToolbar({
+        keyboardVisible: false,
+        onShiftChange,
+      })
+      rerender(
+        <KeyboardToolbar
+          onKey={onKey}
+          onCtrlKey={onCtrlKey}
+          onShiftChange={onShiftChange}
+          keyboardVisible
+        />,
+      )
+      expect(
+        screen.getByRole('button', { name: 'Extra keys' }),
+      ).toHaveAttribute('aria-expanded', 'false')
+      expect(onShiftChange).not.toHaveBeenCalled()
+    })
+  })
 })

@@ -152,6 +152,8 @@ it, so the stream and the multiplexer window size are kept.
    **Text** (command history, paste, attach image, select text); **Navigate** (Shift, ⇧Tab,
    ←/→, Home/End, PgUp/PgDn, Del/Bksp, Ins); **Scroll · copy mode** ("Scroll" without tmux copy
    mode)
+   They close when the on-screen keyboard opens and when the command history opens, so neither
+   stacks with them over the whole terminal
 3. **Ctrl and Ctrl+Shift combos**: float above the toolbar while the modifier is on, in both
    modes, so pressing Ctrl does not resize the terminal and make a running TUI redraw
 

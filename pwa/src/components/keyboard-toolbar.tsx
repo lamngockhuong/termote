@@ -63,6 +63,9 @@ interface Props {
   defaultExpanded?: boolean
   onHistoryToggle?: () => void
   historyOpen?: boolean
+  // The on-screen keyboard is open: the expanded rows close when it opens,
+  // so the two together do not cover the whole terminal
+  keyboardVisible?: boolean
   // Adds an Actions row (Clear, Cancel, Clear line, Exit) to the expanded keys
   quickActions?: QuickActionHandlers
   // View-only session: no input controls at all
@@ -274,6 +277,7 @@ export function KeyboardToolbar({
   defaultExpanded = false,
   onHistoryToggle,
   historyOpen,
+  keyboardVisible = false,
   quickActions,
   readOnly = false,
 }: Props) {
@@ -381,11 +385,24 @@ export function KeyboardToolbar({
 
   // Shift lives in the expanded rows: closing them turns it off, so no
   // modifier stays on with nothing on screen showing it
+  const collapse = useCallback(() => {
+    if (shiftActive) setShiftActive(false)
+    setExpanded(false)
+  }, [shiftActive, setShiftActive])
+
   const toggleExpanded = useCallback(() => {
     haptic('medium')
-    if (expanded && shiftActive) setShiftActive(false)
-    setExpanded(!expanded)
-  }, [haptic, expanded, shiftActive, setShiftActive])
+    if (expanded) collapse()
+    else setExpanded(true)
+  }, [haptic, expanded, collapse])
+
+  // Close the expanded rows when the on-screen keyboard opens (only then:
+  // opening them again while it is up stays possible)
+  const keyboardWasVisible = useRef(keyboardVisible)
+  useEffect(() => {
+    if (keyboardVisible && !keyboardWasVisible.current && expanded) collapse()
+    keyboardWasVisible.current = keyboardVisible
+  }, [keyboardVisible, expanded, collapse])
 
   const handleKey = useCallback(
     (
@@ -409,8 +426,11 @@ export function KeyboardToolbar({
         toggleImeMode()
         return
       }
+      // The history list opens above the toolbar: the expanded rows close
+      // so the two do not stack over the whole terminal
       if (opts?.isHistoryToggle && onHistoryToggle) {
         onHistoryToggle()
+        collapse()
         return
       }
       if (opts?.isKeyboardToggle && onToggleKeyboard) {
@@ -489,6 +509,7 @@ export function KeyboardToolbar({
       onAttachImage,
       onToggleKeyboard,
       onHistoryToggle,
+      collapse,
       toggleImeMode,
       haptic,
       setShiftActive,

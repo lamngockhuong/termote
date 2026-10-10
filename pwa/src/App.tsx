@@ -1301,6 +1301,7 @@ export default function App({
             defaultExpanded={settings.toolbarDefaultExpanded}
             onHistoryToggle={() => setHistoryOpen((prev) => !prev)}
             historyOpen={historyOpen}
+            keyboardVisible={keyboardVisible}
             quickActions={isMobile ? quickActions : undefined}
           />
         </div>
