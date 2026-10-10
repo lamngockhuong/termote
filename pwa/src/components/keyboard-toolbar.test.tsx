@@ -476,6 +476,28 @@ describe('KeyboardToolbar', () => {
     expect(onTmuxCopy).toHaveBeenCalled()
   })
 
+  // Select text: after copy mode (tmux), in its place without it (Herdr)
+  it('offers Select text only with a handler, where copy mode sits', () => {
+    const { unmount } = renderToolbar()
+    expect(document.querySelector('[data-key="SelectText"]')).toBeNull()
+    unmount()
+    const onSelectText = vi.fn()
+    const { unmount: unmount2 } = renderToolbar({ onSelectText })
+    const keys = [...document.querySelectorAll('[data-key]')].map(
+      (el) => (el as HTMLElement).dataset.key,
+    )
+    expect(keys.indexOf('SelectText')).toBe(keys.indexOf('TmuxCopy') + 1)
+    fireEvent.click(screen.getByRole('button', { name: 'Select text' }))
+    expect(onSelectText).toHaveBeenCalled()
+    unmount2()
+    renderToolbar({ onSelectText, showTmuxCopy: false })
+    const herdr = [...document.querySelectorAll('[data-key]')].map(
+      (el) => (el as HTMLElement).dataset.key,
+    )
+    expect(herdr).not.toContain('TmuxCopy')
+    expect(herdr.indexOf('SelectText')).toBe(keys.indexOf('TmuxCopy'))
+  })
+
   // Paste
   it('calls onPaste when paste button clicked', () => {
     renderToolbar()

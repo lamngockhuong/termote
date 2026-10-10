@@ -21,6 +21,7 @@ import {
   fetchFilesTree,
   fetchGitChanges,
   fetchHealth,
+  fetchPaneText,
   fetchSnapshot,
   fetchTerminalToken,
   fetchTranscript,
@@ -338,6 +339,22 @@ describe('mux API client', () => {
     expect(calls[0].init?.method).toBe('POST')
     expect(calls[0].init?.headers).toEqual(JSON_HEADERS)
     expect(JSON.parse(calls[0].init?.body as string)).toEqual({ lines: -5 })
+  })
+
+  it('fetchPaneText reads the pane text route, and throws its refusal', async () => {
+    const reply = { text: 'a\nb', lines: 2, truncated: false }
+    const { calls } = mockFetch(
+      { body: reply },
+      { body: { error: 'view only', code: 'view_only' }, status: 403 },
+    )
+    const ctrl = new AbortController()
+    expect(await fetchPaneText('w1:p2', 1000, ctrl.signal)).toEqual(reply)
+    expect(calls[0].url).toBe('/api/mux/panes/w1%3Ap2/text?lines=1000')
+    expect(calls[0].init?.signal).toBe(ctrl.signal)
+    await expect(fetchPaneText('w1:p2', 5)).rejects.toMatchObject({
+      status: 403,
+      code: 'view_only',
+    })
   })
 
   it('fetchTerminalToken uses the stream-token route', async () => {

@@ -539,6 +539,16 @@ export function SettingsModal({
               onChange={(v) => onUpdateSetting('disableContextMenu', v)}
             />
           </SettingsRow>
+          <SettingsRow
+            title="Copy on select"
+            desc="Copy the text you select with the mouse as soon as you release the button"
+          >
+            <Switch
+              label="Copy on select"
+              checked={settings.copyOnSelect}
+              onChange={(v) => onUpdateSetting('copyOnSelect', v)}
+            />
+          </SettingsRow>
           {driveSizeSupported && (
             <SettingsRow
               title="Fit herdr pane to this device"

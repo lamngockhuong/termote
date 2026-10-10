@@ -18,6 +18,7 @@ import {
   Languages,
   Minimize2,
   Send,
+  TextSelect,
   X,
   Zap,
 } from 'lucide-react'
@@ -44,6 +45,8 @@ interface Props {
   onCtrlShiftKey?: (key: string) => void
   onScroll?: (direction: 'up' | 'down', pages?: boolean) => void
   onTmuxCopy?: () => void
+  // Adds a Select text key that opens the pane's text to select and copy
+  onSelectText?: () => void
   // Hide the tmux copy-mode key (backend without copy mode)
   showTmuxCopy?: boolean
   onPaste?: () => void
@@ -74,6 +77,7 @@ interface KeyConfig {
   isScroll?: boolean
   scrollDir?: 'up' | 'down'
   isTmuxCopy?: boolean
+  isSelectText?: boolean
   isPaste?: boolean
   isAttach?: boolean
   isKeyboardToggle?: boolean
@@ -126,6 +130,12 @@ const EXTRA_KEYS: KeyConfig[] = [
 // Utility keys (always at end)
 const UTILITY_KEYS: KeyConfig[] = [
   { label: <History size={ICON_SIZE} />, key: 'TmuxCopy', isTmuxCopy: true },
+  // Where copy mode sits without it (Herdr), next to it on tmux
+  {
+    label: <TextSelect size={ICON_SIZE} />,
+    key: 'SelectText',
+    isSelectText: true,
+  },
   {
     label: <Clipboard size={ICON_SIZE} />,
     key: 'TmuxPaste',
@@ -258,6 +268,7 @@ export function KeyboardToolbar({
   onCtrlShiftKey,
   onScroll,
   onTmuxCopy,
+  onSelectText,
   showTmuxCopy = true,
   onPaste,
   onAttachImage,
@@ -311,9 +322,11 @@ export function KeyboardToolbar({
     () =>
       UTILITY_KEYS.filter(
         (k) =>
-          (showTmuxCopy || !k.isTmuxCopy) && (!!onAttachImage || !k.isAttach),
+          (showTmuxCopy || !k.isTmuxCopy) &&
+          (!!onAttachImage || !k.isAttach) &&
+          (!!onSelectText || !k.isSelectText),
       ),
-    [showTmuxCopy, onAttachImage],
+    [showTmuxCopy, onAttachImage, onSelectText],
   )
 
   const setCtrlActive = useCallback(
@@ -388,6 +401,7 @@ export function KeyboardToolbar({
         isExpandToggle?: boolean
         scrollDir?: 'up' | 'down'
         isTmuxCopy?: boolean
+        isSelectText?: boolean
         isPaste?: boolean
         isAttach?: boolean
         isKeyboardToggle?: boolean
@@ -414,6 +428,10 @@ export function KeyboardToolbar({
       }
       if (opts?.isTmuxCopy && onTmuxCopy) {
         onTmuxCopy()
+        return
+      }
+      if (opts?.isSelectText && onSelectText) {
+        onSelectText()
         return
       }
       if (opts?.isPaste && onPaste) {
@@ -468,6 +486,7 @@ export function KeyboardToolbar({
       onCtrlShiftKey,
       onScroll,
       onTmuxCopy,
+      onSelectText,
       onPaste,
       onAttachImage,
       onToggleKeyboard,
@@ -545,6 +564,7 @@ export function KeyboardToolbar({
           isExpandToggle: keyConfig.isExpandToggle,
           scrollDir: keyConfig.scrollDir,
           isTmuxCopy: keyConfig.isTmuxCopy,
+          isSelectText: keyConfig.isSelectText,
           isPaste: keyConfig.isPaste,
           isAttach: keyConfig.isAttach,
           isKeyboardToggle: keyConfig.isKeyboardToggle,
@@ -559,7 +579,9 @@ export function KeyboardToolbar({
             : 'Expand keyboard'
           : keyConfig.isAttach
             ? 'Attach image'
-            : undefined
+            : keyConfig.isSelectText
+              ? 'Select text'
+              : undefined
       }
     >
       {keyConfig.isExpandToggle ? (

@@ -319,7 +319,8 @@ jobs:
   # Worktree workspaces against a real Herdr (#355): a headless Herdr 0.9.3 on
   # its own socket, HOME and XDG dirs, a throwaway repo, and the server with
   # --mux herdr. worktrees.spec.ts runs only with TERMOTE_E2E_HERDR=1, and
-  # fails there (never skips) when caps.worktrees is off.
+  # fails there (never skips) when caps.worktrees is off; terminal-copy.spec.ts
+  # reads a Herdr pane's history into the Select text sheet.
   e2e-herdr:
     name: E2E (Herdr worktrees)
     runs-on: ubuntu-latest
@@ -411,7 +412,7 @@ jobs:
         working-directory: pwa
         env:
           TERMOTE_E2E_HERDR: "1"
-        run: pnpm exec playwright test worktrees --workers=1
+        run: pnpm exec playwright test worktrees terminal-copy --workers=1
 
       - name: Stop Herdr
         if: always()

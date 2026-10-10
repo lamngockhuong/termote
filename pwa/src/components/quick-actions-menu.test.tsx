@@ -61,6 +61,21 @@ describe('QuickActionsSheet', () => {
     expect(calls).toEqual(['close', 'attach'])
   })
 
+  it('Select text closes the sheet, then opens the text', () => {
+    const calls: string[] = []
+    render(
+      <QuickActionsSheet
+        isOpen
+        onClose={() => calls.push('close')}
+        onSendKey={vi.fn()}
+        onSendText={vi.fn()}
+        onSelectText={() => calls.push('select')}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Select text' }))
+    expect(calls).toEqual(['close', 'select'])
+  })
+
   it.each([
     ['Cancel', 'c'],
     ['Clear line', 'u'],

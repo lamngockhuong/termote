@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { UNSAFE_CHARS, visibleUnsafe } from './unsafe-chars'
+import { splitUnsafe, UNSAFE_CHARS, visibleUnsafe } from './unsafe-chars'
 
 describe('UNSAFE_CHARS', () => {
   it.each([
@@ -44,5 +44,19 @@ describe('visibleUnsafe', () => {
 
   it('keeps line breaks across lines, CRLF as one', () => {
     expect(visibleUnsafe('a\nb\r\nc\rd', true)).toBe('a\nb\nc⟨U+000D⟩d')
+  })
+})
+
+describe('splitUnsafe', () => {
+  it('cuts the text around each unsafe character, tab and newline kept', () => {
+    expect(splitUnsafe('a\u202eb\tc\n\u200b\u200b')).toEqual([
+      { text: 'a' },
+      { text: '\u202e', mark: '⟨U+202E⟩' },
+      { text: 'b\tc\n' },
+      { text: '\u200b', mark: '⟨U+200B⟩' },
+      { text: '\u200b', mark: '⟨U+200B⟩' },
+    ])
+    expect(splitUnsafe('plain')).toEqual([{ text: 'plain' }])
+    expect(splitUnsafe('')).toEqual([])
   })
 })

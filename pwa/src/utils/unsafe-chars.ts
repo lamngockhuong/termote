@@ -30,3 +30,20 @@ export function visibleUnsafe(value: string, multiline = false): string {
     : value.replace(/\r?\n/g, '↵')
   return lines.replace(SHOWN, mark)
 }
+
+// value cut into plain runs and the unsafe characters between them (tab and
+// line feed count as plain), each with its ⟨U+XXXX⟩ mark, so a view can show
+// the mark and still copy the character itself
+export function splitUnsafe(
+  value: string,
+): Array<{ text: string; mark?: string }> {
+  const parts: Array<{ text: string; mark?: string }> = []
+  let last = 0
+  for (const m of value.matchAll(SHOWN)) {
+    if (m.index > last) parts.push({ text: value.slice(last, m.index) })
+    parts.push({ text: m[0], mark: mark(m[0]) })
+    last = m.index + m[0].length
+  }
+  if (last < value.length) parts.push({ text: value.slice(last) })
+  return parts
+}
