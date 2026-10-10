@@ -1018,7 +1018,9 @@ export default function App({
 
   return (
     <div
-      className="flex flex-col overflow-hidden bg-bg font-ui text-fg"
+      // A size container: the history list caps its height at a share of
+      // the app's (cqh), which follows the keyboard, unlike vh
+      className="flex flex-col overflow-hidden bg-bg font-ui text-fg [container-type:size]"
       // With the keyboard open the app takes the visible height itself:
       // iOS can shrink 100dvh before innerHeight, and subtracting the
       // keyboard from an already shrunk 100dvh left the app near 0px tall.

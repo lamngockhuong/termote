@@ -568,6 +568,32 @@ test.describe('mobile layout', () => {
   })
 })
 
+test.describe('history list on a short screen', () => {
+  // About what stays visible above an iPhone keyboard
+  test.use({ viewport: { width: 390, height: 420 }, isMobile: true, hasTouch: true })
+
+  test('fits between the top of the app and the toolbar', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('termote-settings', JSON.stringify({ hasSeenGestureHints: true }))
+      localStorage.setItem(
+        'termote-command-history',
+        JSON.stringify(Array.from({ length: 30 }, (_, i) => ({ id: `${i}`, text: `cmd ${i}`, timestamp: i }))),
+      )
+    })
+    await page.goto('/')
+    await waitForTerminal(page)
+    await page.getByRole('button', { name: 'Extra keys' }).click()
+    await page.locator('[data-key="HistoryToggle"]').click()
+    const search = page.getByRole('textbox', { name: 'Search command history' })
+    await expect(search).toBeVisible()
+    const box = (await search.boundingBox())!
+    expect(box.y).toBeGreaterThanOrEqual(0)
+    const toolbarTop = (await page.getByTestId('toolbar-scroller').boundingBox())!.y
+    const list = (await page.getByRole('listbox').boundingBox())!
+    expect(list.y + list.height).toBeLessThanOrEqual(toolbarTop)
+  })
+})
+
 test.describe('desktop toolbar', () => {
   test.use({ viewport: { width: 1280, height: 800 } })
 

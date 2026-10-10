@@ -1,5 +1,5 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { fireEvent, render, screen } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { HistoryCommand } from '../hooks/use-command-history'
 import { CommandHistoryDropdown } from './command-history-dropdown'
 
@@ -244,88 +244,12 @@ describe('CommandHistoryDropdown', () => {
     expect(input).not.toHaveAttribute('aria-activedescendant')
   })
 
-  describe('height cap from the visual viewport', () => {
-    // A fake visualViewport whose resize/scroll handlers the test can fire
-    function fakeViewport(height: number, offsetTop = 0) {
-      const listeners: Record<string, () => void> = {}
-      const viewport = {
-        height,
-        offsetTop,
-        addEventListener: vi.fn((type: string, fn: () => void) => {
-          listeners[type] = fn
-        }),
-        removeEventListener: vi.fn(),
-      }
-      vi.stubGlobal('visualViewport', viewport)
-      // Run the next frame at once
-      vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
-        cb(0)
-        return 1
-      })
-      vi.stubGlobal('cancelAnimationFrame', vi.fn())
-      return { viewport, listeners }
-    }
-    const panelOf = () =>
-      screen
-        .getByLabelText('Search command history')
-        .closest('.absolute') as HTMLElement
-
-    afterEach(() => {
-      vi.unstubAllGlobals()
-      vi.restoreAllMocks()
-    })
-
-    it('caps the height at 60% of what is visible', () => {
-      fakeViewport(800)
-      vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({
-        bottom: 700,
-      } as DOMRect)
-      render(<CommandHistoryDropdown {...defaultProps} />)
-      expect(panelOf().style.maxHeight).toBe('480px')
-    })
-
-    it('keeps the search box on screen above the on-screen keyboard', () => {
-      const { viewport, listeners } = fakeViewport(800)
-      const rect = vi
-        .spyOn(Element.prototype, 'getBoundingClientRect')
-        .mockReturnValue({ bottom: 700 } as DOMRect)
-      render(<CommandHistoryDropdown {...defaultProps} />)
-      // The keyboard opens: 400px visible, the page scrolled by 20px, the
-      // toolbar (the list's bottom) now at 330px
-      viewport.height = 400
-      viewport.offsetTop = 20
-      rect.mockReturnValue({ bottom: 330 } as DOMRect)
-      act(() => listeners.resize())
-      expect(panelOf().style.maxHeight).toBe('240px')
-      rect.mockReturnValue({ bottom: 200 } as DOMRect)
-      act(() => listeners.scroll())
-      expect(panelOf().style.maxHeight).toBe('172px')
-    })
-
-    it('never goes below zero, and stops listening once closed', () => {
-      const { viewport } = fakeViewport(400, 50)
-      vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({
-        bottom: 10,
-      } as DOMRect)
-      const { unmount } = render(<CommandHistoryDropdown {...defaultProps} />)
-      expect(panelOf().style.maxHeight).toBe('0px')
-      unmount()
-      expect(cancelAnimationFrame).toHaveBeenCalled()
-      expect(viewport.removeEventListener).toHaveBeenCalledWith(
-        'resize',
-        expect.any(Function),
-      )
-      expect(viewport.removeEventListener).toHaveBeenCalledWith(
-        'scroll',
-        expect.any(Function),
-      )
-    })
-
-    it('keeps the 60vh class cap without a visual viewport', () => {
-      vi.stubGlobal('visualViewport', undefined)
-      render(<CommandHistoryDropdown {...defaultProps} />)
-      expect(panelOf().style.maxHeight).toBe('')
-      expect(panelOf().className).toContain('max-h-[60vh]')
-    })
+  it('caps its height at a share of the app, not the screen, and clips', () => {
+    render(<CommandHistoryDropdown {...defaultProps} />)
+    const panel = screen
+      .getByLabelText('Search command history')
+      .closest('.absolute') as HTMLElement
+    expect(panel.className).toContain('max-h-[60cqh]')
+    expect(panel.className).toContain('overflow-hidden')
   })
 })

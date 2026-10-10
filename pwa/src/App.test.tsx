@@ -2128,6 +2128,8 @@ describe('App', () => {
     const app = container.firstChild as HTMLElement
     expect(app.style.height).toBe('412px')
     expect(app.style.transform).toBe('translateY(210px)')
+    // The history list sizes itself against the app (cqh)
+    expect(app.className).toContain('[container-type:size]')
   })
 
   it('does not move the app while nothing is panned', async () => {

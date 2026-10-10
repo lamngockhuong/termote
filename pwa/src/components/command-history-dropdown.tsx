@@ -1,16 +1,7 @@
 import { Clock, Search, Trash2, X } from 'lucide-react'
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { HistoryCommand } from '../hooks/use-command-history'
 import { FOCUS_RING } from './ui/button'
-
-// Gap kept between the list's top and the top of what is visible
-const TOP_GAP_PX = 8
 
 interface Props {
   history: HistoryCommand[]
@@ -31,37 +22,6 @@ export function CommandHistoryDropdown({
   const [selectedIndex, setSelectedIndex] = useState(-1)
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
-  const panelRef = useRef<HTMLDivElement>(null)
-  // Height cap from the visual viewport: with the on-screen keyboard up (iOS
-  // keeps the layout viewport, so 60vh stays the full screen's) the list
-  // must fit above the toolbar, or its search box ends up off screen
-  const [maxHeight, setMaxHeight] = useState<number>()
-
-  useLayoutEffect(() => {
-    const viewport = window.visualViewport
-    const panel = panelRef.current
-    if (!viewport || !panel) return
-    const fitHeight = () => {
-      const above =
-        panel.getBoundingClientRect().bottom - viewport.offsetTop - TOP_GAP_PX
-      setMaxHeight(Math.max(0, Math.min(viewport.height * 0.6, above)))
-    }
-    fitHeight()
-    // Measured a frame later: the app moves with the same viewport events
-    // (it follows the pan), and its new place must be laid out first
-    let frame = 0
-    const scheduleFit = () => {
-      cancelAnimationFrame(frame)
-      frame = requestAnimationFrame(fitHeight)
-    }
-    viewport.addEventListener('resize', scheduleFit)
-    viewport.addEventListener('scroll', scheduleFit)
-    return () => {
-      cancelAnimationFrame(frame)
-      viewport.removeEventListener('resize', scheduleFit)
-      viewport.removeEventListener('scroll', scheduleFit)
-    }
-  }, [])
 
   useEffect(() => {
     inputRef.current?.focus()
@@ -113,11 +73,13 @@ export function CommandHistoryDropdown({
     }
   }, [selectedIndex])
 
+  // 60cqh: 60% of the app's own height (App makes it a size container), not
+  // of the screen. iOS keeps 60vh at the full screen's height with the
+  // keyboard up while the app shrinks above it, which pushed the search box
+  // off the top; overflow-hidden keeps the list off the toolbar regardless.
   return (
     <div
-      ref={panelRef}
-      style={{ maxHeight }}
-      className="absolute bottom-full left-0 right-0 z-40 mb-2 mx-2 flex max-h-[60vh] flex-col rounded-panel border border-border bg-surface-raised text-fg shadow-xl transition-[opacity,translate] duration-(--duration-fast) ease-standard starting:translate-y-1 starting:opacity-0 ui-native:border-0"
+      className="absolute bottom-full left-0 right-0 z-40 mb-2 mx-2 flex max-h-[60vh] supports-[height:1cqh]:max-h-[60cqh] flex-col overflow-hidden rounded-panel border border-border bg-surface-raised text-fg shadow-xl transition-[opacity,translate] duration-(--duration-fast) ease-standard starting:translate-y-1 starting:opacity-0 ui-native:border-0"
       onKeyDown={handleKeyDown}
     >
       {/* Header */}
