@@ -16,15 +16,26 @@ vi.mock('../hooks/use-devices', () => ({
   useDevices: () => hook.state,
 }))
 
-vi.mock('./pair-device-sheet', () => ({
-  PairDeviceSheet: (p: { isOpen: boolean; onClose: () => void }) =>
-    p.isOpen ? (
+const sheetProps = vi.hoisted(() => ({
+  last: null as null | { canPairFull?: boolean; validityLeft?: number },
+}))
+vi.mock('./pair-device-sheet', async (orig) => ({
+  ...(await orig<typeof import('./pair-device-sheet')>()),
+  PairDeviceSheet: (p: {
+    isOpen: boolean
+    onClose: () => void
+    canPairFull?: boolean
+    validityLeft?: number
+  }) => {
+    sheetProps.last = p
+    return p.isOpen ? (
       <div data-testid="pair-sheet">
         <button type="button" onClick={p.onClose}>
           ClosePair
         </button>
       </div>
-    ) : null,
+    ) : null
+  },
 }))
 
 const ago = (ms: number) => new Date(Date.now() - ms).toISOString()
@@ -36,6 +47,9 @@ const device = (over: Partial<PairedDevice> = {}): PairedDevice => ({
   createdAt: ago(3 * 3600_000),
   lastUsedAt: ago(3 * 60_000),
   current: false,
+  validUntil: null,
+  expired: false,
+  pairedBy: 'password',
   ...over,
 })
 
@@ -44,7 +58,7 @@ function setState(over: Partial<DevicesState> = {}) {
     devices: [],
     error: null,
     refresh: vi.fn(async () => {}),
-    revoke: vi.fn(async () => {}),
+    revoke: vi.fn(async (id: string) => [id]),
     pair: vi.fn(),
     ...over,
   }
@@ -73,6 +87,8 @@ describe('DevicesSection', () => {
   it('shows nothing about devices until the first read answers', () => {
     setState({ devices: null })
     render(<DevicesSection />)
+    // What the sheet offers depends on this device's row
+    expect(screen.getByRole('button', { name: 'Pair a device' })).toBeDisabled()
     expect(screen.queryByText('No device is paired yet.')).toBeNull()
     expect(screen.queryByRole('list')).toBeNull()
   })
@@ -120,7 +136,7 @@ describe('DevicesSection', () => {
   })
 
   it('revokes another device after confirming, and keeps this page', async () => {
-    const revoke = vi.fn(async () => {})
+    const revoke = vi.fn(async (id: string) => [id])
     setState({ devices: [device({ id: 'b', name: 'Tablet' })], revoke })
     const onSignedOut = vi.fn()
     render(<DevicesSection onSignedOut={onSignedOut} />)
@@ -135,10 +151,73 @@ describe('DevicesSection', () => {
     await vi.waitFor(() => expect(revoke).toHaveBeenCalledWith('b'))
     expect(mockRevokeDevice).not.toHaveBeenCalled()
     expect(onSignedOut).not.toHaveBeenCalled()
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Revoked Tablet',
+    )
+  })
+
+  it('shows where each device came from and its time limit', () => {
+    setState({
+      devices: [
+        device({ id: 'a', name: 'Laptop' }),
+        device({
+          id: 'b',
+          name: 'Phone',
+          role: 'view',
+          pairedBy: 'a',
+          pairedByName: 'Laptop',
+          validUntil: '2026-11-09T03:00:00Z',
+        }),
+        device({ id: 'c', name: 'Old', pairedBy: 'unknown', expired: true }),
+        device({ id: 'd', name: 'Orphan', pairedBy: 'ffffffffffffffff' }),
+        device({ id: 'e', name: 'Odd', validUntil: 'not a date' }),
+      ],
+    })
+    render(<DevicesSection />)
+    const [laptop, phone, old, orphan, odd] = screen.getAllByRole('listitem')
+    expect(laptop).toHaveTextContent('Not paired by a device')
+    expect(laptop).not.toHaveTextContent('Valid until')
+    expect(phone).toHaveTextContent('Paired by Laptop · Valid until')
+    expect(old).toHaveTextContent('Unknown origin · Expired')
+    expect(orphan).toHaveTextContent('Paired by a removed device')
+    expect(odd).not.toHaveTextContent('Valid until')
+  })
+
+  it('warns that a revoke takes the devices it paired, and a full device needs --fresh', async () => {
+    const revoke = vi.fn(async () => ['a', 'b', 'gone'])
+    setState({
+      devices: [
+        device({ id: 'a', name: 'Laptop' }),
+        device({ id: 'b', name: 'Phone', role: 'view', pairedBy: 'a' }),
+        device({ id: 'c', name: 'Watch', role: 'view' }),
+      ],
+      revoke,
+    })
+    render(<DevicesSection />)
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke Laptop' }))
+    expect(
+      screen.getByText(/The devices it paired are revoked with it: Phone/),
+    ).toBeInTheDocument()
+    expect(screen.getByText('termote start --fresh')).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: 'Security model' }),
+    ).toHaveAttribute('href', 'https://termote.ohnice.app/usage/security/')
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke' }))
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Revoked Laptop, and the devices it paired: Phone, gone',
+    )
+  })
+
+  it('says nothing of paired devices or --fresh for a view device', () => {
+    setState({ devices: [device({ id: 'c', name: 'Watch', role: 'view' })] })
+    render(<DevicesSection />)
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke Watch' }))
+    expect(screen.queryByText(/revoked with it/)).toBeNull()
+    expect(screen.queryByText('termote start --fresh')).toBeNull()
   })
 
   it('signs this page out when it revokes its own device, without reading the list', async () => {
-    const revoke = vi.fn(async () => {})
+    const revoke = vi.fn(async (id: string) => [id])
     const state = setState({
       devices: [device({ id: 'a', name: 'Phone', current: true })],
       revoke,
@@ -221,5 +300,30 @@ describe('DevicesSection', () => {
     fireEvent.click(screen.getByRole('button', { name: 'ClosePair' }))
     expect(screen.queryByTestId('pair-sheet')).toBeNull()
     expect(refresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('a password sign-in may pair a full device with no limit', () => {
+    setState({ devices: [device({ id: 'a' })] })
+    render(<DevicesSection />)
+    expect(sheetProps.last).toMatchObject({
+      canPairFull: true,
+      validityLeft: undefined,
+    })
+  })
+
+  it('a paired device with a limit pairs view devices that cannot outlast it', () => {
+    setState({
+      devices: [
+        device({
+          id: 'a',
+          current: true,
+          validUntil: new Date(Date.now() + 3 * 86400_000).toISOString(),
+        }),
+      ],
+    })
+    render(<DevicesSection />)
+    expect(sheetProps.last?.canPairFull).toBe(false)
+    expect(sheetProps.last?.validityLeft).toBeGreaterThan(3 * 86400 - 60)
+    expect(sheetProps.last?.validityLeft).toBeLessThanOrEqual(3 * 86400)
   })
 })

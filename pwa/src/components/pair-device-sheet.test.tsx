@@ -1,7 +1,13 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { type PairingCode, RequestError } from '../hooks/use-mux-api'
-import { formatLeft, PairDeviceSheet, pairProblem } from './pair-device-sheet'
+import {
+  formatLeft,
+  PairDeviceSheet,
+  pairProblem,
+  validityChoices,
+  validityNote,
+} from './pair-device-sheet'
 
 beforeEach(() => {
   HTMLDialogElement.prototype.showModal = vi.fn().mockImplementation(function (
@@ -29,16 +35,22 @@ const made = (over: Partial<PairingCode> = {}): PairingCode => ({
 })
 
 function renderSheet(
-  onPair: (role: 'view' | 'full', name: string) => Promise<PairingCode> = vi.fn(
-    async () => made(),
-  ),
+  onPair: (
+    role: 'view' | 'full',
+    name: string,
+    validFor: number | null,
+  ) => Promise<PairingCode> = vi.fn(async () => made()),
   onClose = vi.fn(),
+  extra: { canPairFull?: boolean; validityLeft?: number } = {},
 ) {
   const view = render(
-    <PairDeviceSheet isOpen onClose={onClose} onPair={onPair} />,
+    <PairDeviceSheet isOpen onClose={onClose} onPair={onPair} {...extra} />,
   )
   return { ...view, onClose, onPair }
 }
+
+const validityField = () =>
+  screen.getByLabelText('Stays signed in for') as HTMLSelectElement
 
 const nameField = () => screen.getByRole('textbox') as HTMLInputElement
 
@@ -54,12 +66,62 @@ describe('pairProblem', () => {
     ],
     [new RequestError(403, 'view_only', 'x'), 'This device is view-only'],
     [
+      new RequestError(403, 'full_needs_password', 'x'),
+      'A full device is paired from a password sign-in or the CLI',
+    ],
+    [
+      new RequestError(409, 'creator_gone', 'x'),
+      'This device can no longer pair devices',
+    ],
+    [
+      new RequestError(400, 'invalid_validity', 'x'),
+      'Pick how long the new device stays signed in',
+    ],
+    [
       new RequestError(500, 'internal', 'x'),
       'Could not make a pairing code. Try again',
     ],
     [new Error('offline'), 'Could not make a pairing code. Try again'],
   ])('%s', (err, want) => {
     expect(pairProblem(err)).toBe(want)
+  })
+})
+
+describe('validityChoices', () => {
+  it('offers every choice, Never included, without a limit of its own', () => {
+    expect(validityChoices().map((o) => [o.label, o.disabled])).toEqual([
+      ['1 day', false],
+      ['7 days', false],
+      ['30 days', false],
+      ['90 days', false],
+      ['Never', false],
+    ])
+  })
+
+  it('a limited device gets no Never and nothing longer than it has left', () => {
+    expect(
+      validityChoices(10 * 86400).map((o) => [o.label, o.disabled]),
+    ).toEqual([
+      ['1 day', false],
+      ['7 days', false],
+      ['30 days', true],
+      ['90 days', true],
+    ])
+    // Less than a day left: the shortest stays, the server cuts it.
+    expect(validityChoices(3600).filter((o) => !o.disabled)).toHaveLength(1)
+  })
+})
+
+describe('validityNote', () => {
+  it.each([
+    [undefined, 'stays signed in with no time limit'],
+    [0, 'stays signed in with no time limit'],
+    [86400, 'stays signed in for 1 day'],
+    [30 * 86400, 'stays signed in for 30 days'],
+    [3600, 'stays signed in for 1 hour'],
+    [7000, 'stays signed in for 2 hours'],
+  ])('%s', (secs, want) => {
+    expect(validityNote(secs)).toBe(want)
   })
 })
 
@@ -110,7 +172,7 @@ describe('PairDeviceSheet', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Full' }))
     fireEvent.change(nameField(), { target: { value: '  Phone  ' } })
     fireEvent.click(screen.getByRole('button', { name: 'Make code' }))
-    expect(onPair).toHaveBeenCalledWith('full', 'Phone')
+    expect(onPair).toHaveBeenCalledWith('full', 'Phone', 30 * 86400)
     expect(await screen.findByLabelText('Pairing code')).toHaveTextContent(
       'ABCDE-FGHIJ',
     )
@@ -136,7 +198,7 @@ describe('PairDeviceSheet', () => {
     fireEvent.change(nameField(), { target: { value: 'a'.repeat(64) } })
     fireEvent.click(screen.getByRole('button', { name: 'Make code' }))
     await waitFor(() =>
-      expect(onPair).toHaveBeenCalledWith('view', 'a'.repeat(64)),
+      expect(onPair).toHaveBeenCalledWith('view', 'a'.repeat(64), 30 * 86400),
     )
   })
 
@@ -293,5 +355,46 @@ describe('PairDeviceSheet', () => {
     )
     await act(async () => refuse(new RequestError(500, '', 'x')))
     expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('defaults to 30 days, sends Never as no limit and says how long once made', async () => {
+    const { onPair } = renderSheet(vi.fn(async () => made({ validFor: 0 })))
+    expect(validityField().value).toBe(String(30 * 86400))
+    fireEvent.change(validityField(), { target: { value: 'never' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Make code' }))
+    await waitFor(() => expect(onPair).toHaveBeenCalledWith('view', '', null))
+    expect(
+      await screen.findByText(
+        'The new device stays signed in with no time limit.',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('sends the chosen limit', async () => {
+    const { onPair } = renderSheet()
+    fireEvent.change(validityField(), { target: { value: String(86400) } })
+    fireEvent.click(screen.getByRole('button', { name: 'Make code' }))
+    await waitFor(() => expect(onPair).toHaveBeenCalledWith('view', '', 86400))
+  })
+
+  it('on a paired device, offers view only, says why, and links the security model', async () => {
+    const { onPair } = renderSheet(undefined, undefined, { canPairFull: false })
+    expect(screen.queryByRole('radiogroup')).toBeNull()
+    expect(screen.getByText('termote pair --role full')).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: 'Security model' }),
+    ).toHaveAttribute('href', 'https://termote.ohnice.app/usage/security/')
+    fireEvent.click(screen.getByRole('button', { name: 'Make code' }))
+    await waitFor(() =>
+      expect(onPair).toHaveBeenCalledWith('view', '', 30 * 86400),
+    )
+  })
+
+  it('a device with a limit cannot outlast it: no Never, the longest it may pick', () => {
+    renderSheet(undefined, undefined, { validityLeft: 10 * 86400 })
+    const labels = [...validityField().options].map((o) => o.textContent)
+    expect(labels).not.toContain('Never')
+    expect(validityField().value).toBe(String(7 * 86400))
+    expect(screen.getByText("Can't outlast this device")).toBeInTheDocument()
   })
 })
