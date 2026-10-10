@@ -844,7 +844,7 @@ export default function App({
     [settings.imeSendBehavior, addCommand, getTerminal],
   )
 
-  // The toolbar's Quick actions key (mobile only) opens a sheet of these.
+  // The Actions row of the toolbar's expanded keys (mobile only).
   // Reads the ref directly so the object stays the same across renders.
   const quickActions = useMemo(
     () => ({
@@ -855,10 +855,8 @@ export default function App({
       },
       onSendText: (text: string) =>
         sendTextToTerminal(terminalRef.current, text),
-      onAttachImage: uploadsOn ? handleAttachImage : undefined,
-      onSelectText: openSelectText,
     }),
-    [uploadsOn, handleAttachImage, openSelectText],
+    [],
   )
 
   const handleHistorySelect = useCallback(

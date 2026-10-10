@@ -49,7 +49,7 @@ straight into an xterm.js terminal in the page, with:
 | Session Poll Interval  | Configurable sync frequency (3s-5m) to reduce server spam            |
 | Connection Indicator   | Real-time server status with auto-detection of disconnects           |
 | Command History        | Search and recall previously sent commands                           |
-| Quick Actions          | Toolbar key opening a sheet of preset commands (clear, cancel, exit) |
+| Quick Actions          | Actions row, expanded toolbar: preset commands (clear, cancel, exit) |
 | Interface Styles       | Neutral, Terminal or Native, independent of light/dark theme         |
 | Deep Links             | Shareable `#/s/<group>/<tab>` addresses that select a session        |
 | Update Checker         | Auto-detect new releases via GitHub, show notifications              |

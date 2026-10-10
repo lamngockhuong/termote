@@ -86,6 +86,8 @@ test.describe('image uploads', () => {
       await expect(page.getByTestId('terminal-view')).toBeVisible()
 
       const chooser = page.waitForEvent('filechooser')
+      // Attach image sits in the expanded rows
+      await page.getByRole('button', { name: 'Extra keys' }).click()
       await page.getByRole('button', { name: 'Attach image' }).click()
       await (await chooser).setFiles({ name: 'shot.png', mimeType: 'image/png', buffer: PNG })
 

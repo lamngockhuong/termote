@@ -530,16 +530,59 @@ test.describe('mobile layout', () => {
     })
   }
 
-  test('Quick actions sit in the toolbar and open a sheet', async ({ page }) => {
+  test('the Extra keys button is pinned and opens the expanded rows with Actions', async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem('termote-settings', JSON.stringify({ hasSeenGestureHints: true }))
     })
     await page.goto('/')
     await waitForTerminal(page)
-    await page.getByRole('button', { name: 'Quick actions' }).click()
-    const sheet = page.getByRole('dialog', { name: 'Quick actions' })
-    await expect(sheet.getByRole('button', { name: 'Clear line' })).toBeVisible()
-    await sheet.getByRole('button', { name: 'Close' }).click()
-    await expect(sheet).toBeHidden()
+
+    const more = page.getByRole('button', { name: 'Extra keys' })
+    await expect(more).toHaveAttribute('aria-expanded', 'false')
+    await more.click()
+    await expect(more).toHaveAttribute('aria-expanded', 'true')
+    const actions = page.getByRole('group', { name: 'Actions' })
+    await expect(actions.getByRole('button', { name: 'Clear line' })).toBeVisible()
+    await more.click()
+    await expect(actions).toBeHidden()
+
+    // The bottom row scrolls under a pinned button that stays on screen; the
+    // end still hiding keys fades
+    const scroller = page.getByTestId('toolbar-scroller')
+    const mask = () =>
+      scroller.evaluate((el) => {
+        const style = getComputedStyle(el)
+        return style.maskImage || style.webkitMaskImage
+      })
+    // Browsers report transparent as rgba(0, 0, 0, 0)
+    const clear = 'rgba\\(0, 0, 0, 0\\)'
+    await expect.poll(mask).toMatch(new RegExp(`^linear-gradient\\(to right, rgb\\(0, 0, 0\\).*${clear}\\)$`))
+    const before = await more.boundingBox()
+    await scroller.evaluate((el) => {
+      el.scrollLeft = el.scrollWidth
+    })
+    const after = await more.boundingBox()
+    expect(after).toEqual(before)
+    expect(after!.x + after!.width).toBeLessThanOrEqual(390)
+    await expect.poll(mask).toMatch(new RegExp(`^linear-gradient\\(to right, ${clear}.*rgb\\(0, 0, 0\\)\\)$`))
+  })
+})
+
+test.describe('desktop toolbar', () => {
+  test.use({ viewport: { width: 1280, height: 800 } })
+
+  test('the bottom row fits, so it does not fade', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('termote-settings', JSON.stringify({ hasSeenGestureHints: true }))
+    })
+    await page.goto('/')
+    await waitForTerminal(page)
+    const scroller = page.getByTestId('toolbar-scroller')
+    await expect(scroller).toBeVisible()
+    const mask = await scroller.evaluate((el) => {
+      const style = getComputedStyle(el)
+      return style.maskImage || style.webkitMaskImage
+    })
+    expect(mask).toBe('none')
   })
 })

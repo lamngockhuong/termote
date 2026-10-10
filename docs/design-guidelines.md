@@ -145,15 +145,17 @@ it, so the stream and the multiplexer window size are kept.
 
 ### Button Groups
 
-1. **Main row**: Tab, Esc, Enter, Ctrl, Shift, arrows, plus the keyboard, text input, command
-   history, Quick actions (⚡, mobile) and expand keys
-2. **Expanded rows**, labelled: **Navigate**; **Scroll · copy mode** ("Scroll" without tmux copy
+1. **Bottom row**: keyboard, text input (IME), Esc, Ctrl, ↑, ↓, Enter, Tab, in a sideways
+   scroller whose edge fades (`mask-image`) while it hides keys; the **Extra keys** button (⋯) is
+   pinned at the right, outside the scroller, so it is always on screen
+2. **Expanded rows** (⋯), labelled: **Actions** (mobile: Clear, Cancel, Clear line, Exit);
+   **Text** (command history, paste, attach image, select text); **Navigate** (Shift, ⇧Tab,
+   ←/→, Home/End, PgUp/PgDn, Del/Bksp, Ins); **Scroll · copy mode** ("Scroll" without tmux copy
    mode)
-3. **Ctrl combos**: float above the toolbar while Ctrl is on, so pressing Ctrl does not resize the
-   terminal and make a running TUI redraw
+3. **Ctrl and Ctrl+Shift combos**: float above the toolbar while the modifier is on, in both
+   modes, so pressing Ctrl does not resize the terminal and make a running TUI redraw
 
-The Quick actions key opens a sheet (Clear, Cancel, Clear line, Exit). There is no floating
-button.
+There is no Quick actions sheet and no floating button.
 
 ### Button Style
 

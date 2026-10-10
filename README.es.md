@@ -46,7 +46,7 @@ Controla remotamente herramientas CLI (Claude Code, GitHub Copilot, cualquier te
 - **Optimizado para movil**: Teclado virtual (Tab/Ctrl/Shift/flechas, expandible)
 - **Soporte de gestos**: Deslizar para Ctrl+C, Tab, desplazamiento
 - **Historial de comandos**: Recuperar comandos enviados previamente con busqueda
-- **Acciones rapidas**: Una tecla ⚡ en la barra movil abre una hoja con operaciones comunes (clear, cancel, exit)
+- **Acciones rapidas**: La tecla ⋯ fijada al final de la barra movil muestra una fila Actions con operaciones comunes (clear, cancel, exit)
 - **Estilos de interfaz**: Neutral, Terminal o Native, elegidos en Ajustes, independientes del tema claro/oscuro
 - **Indicador de conexion**: Estado del servidor en tiempo real con deteccion automatica de desconexion
 - **Verificador de actualizaciones**: Notificacion automatica de nuevas versiones desde GitHub releases

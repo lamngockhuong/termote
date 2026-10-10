@@ -278,18 +278,13 @@ vi.mock('./components/select-text-sheet', () => ({
   },
 }))
 
-// Stands in for the toolbar's Quick actions sheet
-function QuickActionsMock({
-  onSendKey,
-  onSendText,
-  onAttachImage,
-}: QuickActionHandlers) {
+// Stands in for the expanded toolbar's Actions row
+function QuickActionsMock({ onSendKey, onSendText }: QuickActionHandlers) {
   return (
     <div data-testid="quick-actions">
       <button onClick={() => onSendKey('c', { ctrl: true })}>QACtrlKey</button>
       <button onClick={() => onSendKey('Tab')}>QAKey</button>
       <button onClick={() => onSendText('hello')}>QAText</button>
-      {onAttachImage && <button onClick={onAttachImage}>QAAttach</button>}
     </div>
   )
 }
@@ -1425,7 +1420,6 @@ describe('App', () => {
     expect(vi.mocked(KeyboardToolbar).mock.lastCall![0].quickActions).toEqual({
       onSendKey: expect.any(Function),
       onSendText: expect.any(Function),
-      onSelectText: expect.any(Function),
     })
   })
 
@@ -2220,7 +2214,6 @@ describe('App', () => {
       render(<App />)
       await screen.findByTestId('quick-actions')
       expect(screen.queryByRole('button', { name: 'Attach' })).toBeNull()
-      expect(screen.queryByRole('button', { name: 'QAAttach' })).toBeNull()
       expect(pasteImage).toBeUndefined()
       fireEvent.click(screen.getByRole('button', { name: 'Paste' }))
       await waitFor(() =>
@@ -2267,13 +2260,12 @@ describe('App', () => {
       expect(mockAttachImageToTerminal).not.toHaveBeenCalled()
     })
 
-    it('quick actions and an image paste attach too', async () => {
+    it('the Attach key and an image paste attach too', async () => {
       withUploads()
-      mockIsMobile.mockReturnValue(true)
       mockPickImageFile.mockResolvedValue(image)
       mockAttachImageToTerminal.mockResolvedValue({ status: 'inserted' })
       render(<App />)
-      fireEvent.click(await screen.findByRole('button', { name: 'QAAttach' }))
+      fireEvent.click(await screen.findByRole('button', { name: 'Attach' }))
       await waitFor(() =>
         expect(mockAttachImageToTerminal).toHaveBeenCalledTimes(1),
       )

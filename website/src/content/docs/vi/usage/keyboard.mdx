@@ -5,64 +5,59 @@ description: Bàn phím ảo cho điều khiển terminal di động
 
 import { Aside } from "@astrojs/starlight/components";
 
-Thanh công cụ bàn phím cung cấp các nút thân thiện cảm ứng cho các phím terminal phổ biến. Có hai chế độ: **tối giản** (mặc định) và **mở rộng** (đầy đủ). Ngoài ra còn có lịch sử lệnh và phím Quick actions (trên di động).
+Thanh công cụ bàn phím có các nút cảm ứng cho những phím terminal hay dùng. Hàng dưới cùng giữ các
+phím dùng nhiều nhất. Nút **Extra keys** (⋯) ghim ở cuối hàng mở ra các hàng mở rộng chứa mọi phím
+còn lại.
 
-## Tính năng Toolbar
+## Hàng dưới cùng
 
-| Tính năng     | Icon    | Mô tả                                          |
-| ------------- | ------- | ----------------------------------------------- |
-| Chế độ tối giản | —       | Mặc định, hiện phím cần thiết                  |
-| Chế độ mở rộng  | Expand  | Nhấn để hiện tất cả phím (Home, End, Delete, v.v.) |
-| Bật/tắt bàn phím | ⌨️      | Hiện/ẩn bàn phím ảo                            |
-| Lịch sử lệnh    | 🕐      | Xem và tìm lệnh đã dùng (xem bên dưới)        |
-| Quick actions   | ⚡      | Chỉ trên di động: mở bảng Quick actions (xem bên dưới) |
-| Nhập text        | 🌐      | Chuyển sang chế độ IME cho ngôn ngữ ngoài Latin |
+| Nút   | Phím / hành động                                   |
+| ----- | -------------------------------------------------- |
+| ⌨️    | Hiện/ẩn bàn phím ảo                                |
+| 🌐    | Chế độ nhập text (IME) cho ngôn ngữ ngoài Latin    |
+| Esc   | Escape (tắt Ctrl/Shift nếu đang bật)               |
+| Ctrl  | Bộ điều chỉnh Ctrl (dính)                          |
+| ↑ ↓   | Phím lên/xuống                                     |
+| Enter | Gửi lệnh                                           |
+| Tab   | Tự động hoàn thành                                 |
+| ⋯     | Extra keys: hiện hoặc ẩn các hàng mở rộng           |
 
-## Chế độ
+Màn hình hẹp không đủ chỗ thì hàng này cuộn ngang được, và mép nào còn phím bị khuất sẽ mờ dần. Nút ⋯
+nằm ngoài phần cuộn, luôn ở mép phải nên lúc nào cũng bấm được.
 
-| Chế độ   | Chuyển đổi        | Phím có sẵn                                 |
-| -------- | ----------------- | ------------------------------------------- |
-| Tối giản | Mặc định          | Phím cần thiết cho terminal                 |
-| Mở rộng  | Chạm icon mở rộng | Tất cả phím bao gồm Home, End, Delete, v.v. |
+## Các hàng mở rộng
 
-Ở chế độ mở rộng, các phím thêm được xếp theo hàng có nhãn: **Navigate** (Home, End, Delete, v.v.)
-và **Scroll · copy mode** (chỉ còn **Scroll** khi không có copy mode của tmux). Khi Ctrl đang bật,
-các combo của nó nổi phía trên toolbar thay vì thêm một hàng, nên terminal giữ nguyên kích thước
-và chương trình toàn màn hình đang chạy không phải vẽ lại.
+Nhấn ⋯ (hoặc bật **Toolbar default expanded** trong [Cài đặt](/vi/usage/settings/)) để hiện các hàng
+có nhãn phía trên hàng dưới cùng:
+
+| Hàng                 | Phím                                                                             |
+| -------------------- | -------------------------------------------------------------------------------- |
+| Actions (di động)    | Clear, Cancel, Clear line, Exit: xem [Hàng Actions](#hàng-actions-chỉ-di-động)   |
+| Text                 | Lịch sử lệnh, Paste, đính kèm ảnh, chọn chữ                                      |
+| Navigate             | Shift, Shift+Tab, ←, →, Home, End, PgUp, PgDn, Del, Bksp, Ins                    |
+| Scroll · copy mode   | Chế độ sao chép tmux, cuộn lên, cuộn xuống (chỉ còn **Scroll** khi không có copy mode) |
+
+Khi Ctrl đang bật, các tổ hợp phím của nó nổi phía trên toolbar chứ không thêm hàng, nên terminal
+giữ nguyên kích thước và chương trình toàn màn hình đang chạy không phải vẽ lại. Tổ hợp Ctrl+Shift
+cũng nổi như vậy.
 
 ## Bộ điều chỉnh
 
-| Nút   | Phím    | Hành vi                                 |
-| ----- | ------- | --------------------------------------- |
-| Ctrl  | Control | Dính - chạm một lần, rồi chạm phím khác |
-| Shift | Shift   | Dính - chạm một lần, rồi chạm phím khác |
+| Nút   | Phím    | Vị trí        | Hành vi                                 |
+| ----- | ------- | ------------- | --------------------------------------- |
+| Ctrl  | Control | Hàng dưới cùng | Dính - chạm một lần, rồi chạm phím khác |
+| Shift | Shift   | Hàng Navigate | Dính - chạm một lần, rồi chạm phím khác |
 
 ### Kết hợp bộ điều chỉnh
 
 - **Chỉ Ctrl**: Hiện combo Ctrl (^C, ^D, v.v.)
-- **Chỉ Shift**: Điều chỉnh phím tiếp theo (Shift+Tab = backtab)
+- **Chỉ Shift**: Điều chỉnh phím tiếp theo; phím **⇧Tab** gửi Shift+Tab chỉ với một lần chạm. Đóng
+  các hàng mở rộng thì Shift tắt, vì phím Shift không còn trên màn hình
 - **Ctrl+Shift**: Hiện combo Ctrl+Shift (^⇧C, ^⇧V, v.v.)
 
-## Phím chế độ tối giản
+## Các phím
 
-### Phím cơ bản
-
-| Nút   | Phím   | Trường hợp         |
-| ----- | ------ | ------------------ |
-| Tab   | Tab    | Tự động hoàn thành |
-| Esc   | Escape | Thoát chế độ, hủy  |
-| Enter | Enter  | Gửi lệnh           |
-
-### Phím mũi tên
-
-| Nút | Phím       |
-| --- | ---------- |
-| ↑   | Phím lên   |
-| ↓   | Phím xuống |
-| ←   | Phím trái  |
-| →   | Phím phải  |
-
-### Combo Ctrl (Tối giản)
+### Combo Ctrl
 
 | Nút | Combo  | Trường hợp   |
 | --- | ------ | ------------ |
@@ -72,6 +67,14 @@ và chương trình toàn màn hình đang chạy không phải vẽ lại.
 | L   | Ctrl+L | Xóa màn hình |
 | A   | Ctrl+A | Đầu dòng     |
 | E   | Ctrl+E | Cuối dòng    |
+| B   | Ctrl+B | Tiền tố tmux   |
+| X   | Ctrl+X | Cắt/tiền tố    |
+| K   | Ctrl+K | Xóa đến cuối   |
+| U   | Ctrl+U | Xóa đến đầu    |
+| W   | Ctrl+W | Xóa từ         |
+| R   | Ctrl+R | Tìm kiếm ngược |
+| P   | Ctrl+P | Lệnh trước     |
+| N   | Ctrl+N | Lệnh sau       |
 
 ### Combo Ctrl+Shift
 
@@ -82,7 +85,7 @@ và chương trình toàn màn hình đang chạy không phải vẽ lại.
 | Z   | Ctrl+Shift+Z | Làm lại             |
 | X   | Ctrl+Shift+X | Cắt                 |
 
-### Phím tiện ích
+### Phím ở hàng Text và Scroll
 
 | Nút                            | Hành động                                                                            |
 | ------------------------------ | ------------------------------------------------------------------------------------ |
@@ -135,30 +138,19 @@ set-option -g mode-keys vi
 Container mode đã được cấu hình sẵn.
 :::
 
-## Chế độ mở rộng (Phím bổ sung)
+### Phím ở hàng Navigate
 
-| Nút  | Phím      | Trường hợp          |
-| ---- | --------- | ------------------- |
-| Home | Home      | Nhảy đến đầu dòng   |
-| End  | End       | Nhảy đến cuối dòng  |
-| Del  | Delete    | Xóa tiến            |
-| Bksp | Backspace | Xóa lùi             |
-| PgUp | Page Up   | Cuộn lên            |
-| PgDn | Page Down | Cuộn xuống          |
-| Ins  | Insert    | Bật/tắt chế độ chèn |
-
-### Combo Ctrl bổ sung
-
-| Nút | Combo  | Trường hợp     |
-| --- | ------ | -------------- |
-| B   | Ctrl+B | Tiền tố tmux   |
-| X   | Ctrl+X | Cắt/tiền tố    |
-| K   | Ctrl+K | Xóa đến cuối   |
-| U   | Ctrl+U | Xóa đến đầu    |
-| W   | Ctrl+W | Xóa từ         |
-| R   | Ctrl+R | Tìm kiếm ngược |
-| P   | Ctrl+P | Lệnh trước     |
-| N   | Ctrl+N | Lệnh sau       |
+| Nút  | Phím      | Trường hợp                                         |
+| ---- | --------- | -------------------------------------------------- |
+| ⇧Tab | Shift+Tab | Lùi trong menu; đổi chế độ trong Claude Code       |
+| ← →  | Mũi tên   | Di chuyển con trỏ                                  |
+| Home | Home      | Nhảy đến đầu dòng                                  |
+| End  | End       | Nhảy đến cuối dòng                                 |
+| Del  | Delete    | Xóa tiến                                           |
+| Bksp | Backspace | Xóa lùi                                            |
+| PgUp | Page Up   | Cuộn lên                                           |
+| PgDn | Page Down | Cuộn xuống                                         |
+| Ins  | Insert    | Bật/tắt chế độ chèn                                |
 
 ## Chế độ nhập text (ngoài Latin)
 
@@ -178,7 +170,7 @@ Nhấn **Languages icon** để chuyển sang chế độ nhập text. Chế đ�
 
 ## Lịch sử lệnh
 
-Nhấn **icon đồng hồ** (🕐) trên toolbar để mở dropdown lịch sử lệnh. Xem, tìm kiếm và tái sử dụng các lệnh đã gửi trước đó.
+Nhấn **icon đồng hồ** (🕐) ở hàng Text của toolbar mở rộng để mở dropdown lịch sử lệnh. Xem, tìm kiếm và tái sử dụng các lệnh đã gửi trước đó.
 
 ### Tính năng
 
@@ -201,21 +193,20 @@ Nhấn **icon đồng hồ** (🕐) trên toolbar để mở dropdown lịch s�
 Lệnh gửi qua nút toolbar bàn phím (Ctrl+C, v.v.) không được thêm vào lịch sử — chỉ text gửi qua IME mới được lưu.
 </Aside>
 
-## Quick actions (Chỉ di động)
+## Hàng Actions (Chỉ di động)
 
-Phím **Quick actions** (⚡) trên thanh công cụ bàn phím mở một bảng chứa các thao tác terminal
-phổ biến. Không có nút nổi nào nằm đè lên terminal.
+Trên điện thoại, hàng đầu tiên của toolbar mở rộng là hàng **Actions**, gồm các thao tác terminal
+phổ biến. Nhấn ⋯ để hiện hàng này.
 
-| Thao tác   | Chức năng            | Gửi            |
-| ---------- | -------------------- | -------------- |
-| Clear      | Xóa terminal         | Lệnh `clear`  |
-| Cancel     | Ngắt tiến trình      | Ctrl+C         |
-| Clear line | Xóa dòng hiện tại    | Ctrl+U         |
-| Exit       | Logout/EOF           | Ctrl+D         |
-| Attach image | Đính kèm ảnh       | Đường dẫn ảnh  |
+| Thao tác   | Chức năng         | Gửi          |
+| ---------- | ----------------- | ------------ |
+| Clear      | Xóa terminal      | Lệnh `clear` |
+| Cancel     | Ngắt tiến trình   | Ctrl+C       |
+| Clear line | Xóa dòng hiện tại | Ctrl+U       |
+| Exit       | Logout/EOF        | Ctrl+D       |
 
 <Aside>
-Phím Quick actions chỉ hiện trên thiết bị di động. Trên desktop, dùng các phím trên thanh công cụ bàn phím.
+Hàng Actions chỉ có trên thiết bị di động. Trên desktop, dùng các phím trên thanh công cụ bàn phím.
 </Aside>
 
 ## Đính kèm ảnh
@@ -225,8 +216,7 @@ nằm trên điện thoại, bộ nhớ tạm đó trống. Vì vậy Termote t�
 ảnh vào terminal, kèm một dấu cách; Claude Code (hoặc Codex) sẽ biến đường dẫn này thành tệp đính
 kèm.
 
-- **Phím ảnh** trên thanh công cụ, hoặc **Attach image** trong Quick actions: chọn ảnh có sẵn hoặc
-  chụp bằng camera.
+- **Phím ảnh** ở hàng Text của toolbar mở rộng: chọn ảnh có sẵn hoặc chụp bằng camera.
 - **Dán**: dán ảnh vào terminal (Ctrl+V trên desktop); hoặc khi bộ nhớ tạm đang chứa ảnh, chạm
   phím Paste, nhấn giữ terminal hay bấm Ctrl+Shift+V. Nếu bộ nhớ tạm có cả chữ, Termote dán chữ
   chứ không dán ảnh.
@@ -245,9 +235,9 @@ phiên chỉ xem.
 
 1. **Bộ điều chỉnh dính**: Chạm Ctrl hoặc Shift một lần, rồi chạm phím khác
 2. **Kết hợp bộ điều chỉnh**: Chạm cả Ctrl và Shift cho combo Ctrl+Shift
-3. **Shift+Tab**: Điều hướng lùi trong hoàn thành/menu
+3. **Shift+Tab**: Phím ⇧Tab điều hướng lùi trong hoàn thành/menu
 4. **Chế độ sao chép** (tmux): Bật để chọn văn bản, tắt để tiếp tục gõ; muốn chép vào thiết bị thì
    dùng [phím chọn chữ](#sao-chép-chữ)
-5. **Mở rộng thêm**: Chạm icon mở rộng để có đầy đủ bàn phím với Home, End, v.v.
+5. **Thêm phím**: Chạm ⋯ để hiện các hàng mở rộng có Shift, Home, End, v.v.
 6. **Lịch sử lệnh**: Dùng icon 🕐 đồng hồ để tái sử dụng lệnh đã dùng
-7. **Quick actions**: Chạm ⚡ để có Clear, Cancel, Clear line và Exit trong một bảng
+7. **Actions**: Trên điện thoại, hàng Actions có sẵn Clear, Cancel, Clear line và Exit
