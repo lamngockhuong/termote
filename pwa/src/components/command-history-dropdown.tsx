@@ -47,11 +47,19 @@ export function CommandHistoryDropdown({
       setMaxHeight(Math.max(0, Math.min(viewport.height * 0.6, above)))
     }
     fitHeight()
-    viewport.addEventListener('resize', fitHeight)
-    viewport.addEventListener('scroll', fitHeight)
+    // Measured a frame later: the app moves with the same viewport events
+    // (it follows the pan), and its new place must be laid out first
+    let frame = 0
+    const scheduleFit = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(fitHeight)
+    }
+    viewport.addEventListener('resize', scheduleFit)
+    viewport.addEventListener('scroll', scheduleFit)
     return () => {
-      viewport.removeEventListener('resize', fitHeight)
-      viewport.removeEventListener('scroll', fitHeight)
+      cancelAnimationFrame(frame)
+      viewport.removeEventListener('resize', scheduleFit)
+      viewport.removeEventListener('scroll', scheduleFit)
     }
   }, [])
 

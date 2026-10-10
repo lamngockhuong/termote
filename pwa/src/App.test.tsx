@@ -102,11 +102,18 @@ vi.mock('./hooks/use-media-query', () => ({
   useMediaQuery: () => false,
 }))
 
-const mockUseKeyboardVisible = vi.fn(() => ({
-  isVisible: false,
-  keyboardHeight: 0,
-  viewportHeight: 0,
-}))
+const mockUseKeyboardVisible = vi.fn(
+  (): {
+    isVisible: boolean
+    keyboardHeight: number
+    viewportHeight: number
+    viewportOffsetTop?: number
+  } => ({
+    isVisible: false,
+    keyboardHeight: 0,
+    viewportHeight: 0,
+  }),
+)
 vi.mock('./hooks/use-keyboard-visible', () => ({
   useKeyboardVisible: () => mockUseKeyboardVisible(),
 }))
@@ -2107,6 +2114,32 @@ describe('App', () => {
     const { container } = render(<App />)
     await waitFor(() => screen.getByTestId('terminal-view'))
     expect((container.firstChild as HTMLElement).style.height).toBe('412px')
+  })
+
+  it('follows the visible part when iOS pans it to a focused field', async () => {
+    mockUseKeyboardVisible.mockReturnValue({
+      isVisible: true,
+      keyboardHeight: 300,
+      viewportHeight: 412,
+      viewportOffsetTop: 210,
+    })
+    const { container } = render(<App />)
+    await waitFor(() => screen.getByTestId('terminal-view'))
+    const app = container.firstChild as HTMLElement
+    expect(app.style.height).toBe('412px')
+    expect(app.style.transform).toBe('translateY(210px)')
+  })
+
+  it('does not move the app while nothing is panned', async () => {
+    mockUseKeyboardVisible.mockReturnValue({
+      isVisible: true,
+      keyboardHeight: 300,
+      viewportHeight: 412,
+      viewportOffsetTop: 0,
+    })
+    const { container } = render(<App />)
+    await waitFor(() => screen.getByTestId('terminal-view'))
+    expect((container.firstChild as HTMLElement).style.transform).toBe('')
   })
 
   it('gesture swipes scroll the history while the keyboard is open', async () => {

@@ -257,6 +257,12 @@ describe('CommandHistoryDropdown', () => {
         removeEventListener: vi.fn(),
       }
       vi.stubGlobal('visualViewport', viewport)
+      // Run the next frame at once
+      vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+        cb(0)
+        return 1
+      })
+      vi.stubGlobal('cancelAnimationFrame', vi.fn())
       return { viewport, listeners }
     }
     const panelOf = () =>
@@ -304,6 +310,7 @@ describe('CommandHistoryDropdown', () => {
       const { unmount } = render(<CommandHistoryDropdown {...defaultProps} />)
       expect(panelOf().style.maxHeight).toBe('0px')
       unmount()
+      expect(cancelAnimationFrame).toHaveBeenCalled()
       expect(viewport.removeEventListener).toHaveBeenCalledWith(
         'resize',
         expect.any(Function),

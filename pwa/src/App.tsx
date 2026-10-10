@@ -219,6 +219,7 @@ export default function App({
     isVisible: keyboardVisible,
     keyboardHeight,
     viewportHeight,
+    viewportOffsetTop,
   } = useKeyboardVisible()
   const {
     activeSession,
@@ -1021,9 +1022,16 @@ export default function App({
       // With the keyboard open the app takes the visible height itself:
       // iOS can shrink 100dvh before innerHeight, and subtracting the
       // keyboard from an already shrunk 100dvh left the app near 0px tall.
+      // It also follows the visible part down when iOS pans it to a focused
+      // field (the history search), or the header went off the top and a
+      // blank band sat between the toolbar and the keyboard.
       style={{
         height:
           keyboardHeight > 0 ? `${viewportHeight}px` : 'var(--app-height)',
+        transform:
+          viewportOffsetTop > 0
+            ? `translateY(${viewportOffsetTop}px)`
+            : undefined,
       }}
     >
       <div className="flex flex-1 min-h-0">
