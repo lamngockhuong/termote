@@ -613,6 +613,7 @@ Test trên thiết bị di động thật:
 
 - [ ] Nút ⋯ hiện các hàng (Actions trên mobile, Text · Scroll, Navigate) và ẩn lại được
 - [ ] Nút Lịch sử mở dropdown lịch sử lệnh và đóng các hàng mở rộng
+- [ ] Trên điện thoại, chạm vào ô tìm kiếm lịch sử: ô vẫn nằm trên màn hình, phía trên bàn phím
 - [ ] Bật bàn phím ảo thì các hàng mở rộng tự đóng; nhấn ⋯ vẫn mở lại được khi bàn phím đang bật
 - [ ] Phím bổ trợ Shift bật/tắt (có chỉ báo khi đang bật); đóng các hàng thì Shift tắt
 - [ ] Phím ⇧Tab gửi Shift+Tab

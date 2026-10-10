@@ -746,6 +746,7 @@ Test on real mobile device:
 
 - [ ] ⋯ shows the rows (Actions on mobile, Text · Scroll, Navigate) and hides them again
 - [ ] History button opens command history dropdown and closes the expanded rows
+- [ ] Tapping the history search box on a phone: the box stays on screen above the keyboard
 - [ ] Opening the on-screen keyboard closes the expanded rows; ⋯ opens them again while it is up
 - [ ] Shift modifier toggles (visual indicator when active); closing the rows turns it off
 - [ ] ⇧Tab sends Shift+Tab
