@@ -3394,6 +3394,89 @@ describe('App views, view-only and deep links', () => {
     })
   })
 
+  describe('per pane', () => {
+    beforeEach(() => sessionStorage.clear())
+
+    const showTab = (i: number) => {
+      const base = mockUseLocalSessions()
+      mockUseLocalSessions.mockReturnValue({
+        ...base,
+        activeSession: base.sessions[i],
+      } as any)
+    }
+
+    it('each pane comes back on its view and side panel', async () => {
+      const { rerender } = render(<App views={PANEL_VIEWS} />)
+      fireEvent.click(await screen.findByRole('tab', { name: 'Chat' }))
+      fireEvent.click(filesToggle())
+      expect(screen.getByTestId('chat-main')).toBeInTheDocument()
+      expect(screen.getByTestId('files-panel')).toBeInTheDocument()
+      // A pane never shown opens on the terminal, without a panel
+      showTab(1)
+      rerender(<App views={PANEL_VIEWS} />)
+      expect(screen.queryByTestId('chat-main')).toBeNull()
+      expect(screen.queryByTestId('files-panel')).toBeNull()
+      expect(screen.getByTestId('keyboard-toolbar')).toBeInTheDocument()
+      showTab(0)
+      rerender(<App views={PANEL_VIEWS} />)
+      expect(screen.getByTestId('chat-main')).toBeInTheDocument()
+      expect(screen.getByTestId('files-panel')).toBeInTheDocument()
+    })
+
+    it('a link to another pane keeps its view for it, not for the one on screen', async () => {
+      window.history.replaceState(
+        null,
+        '',
+        '/#/s/w1/w1%3At1/w1%3At1%3Ap2?view=chat',
+      )
+      render(<App views={VIEWS} />)
+      await waitFor(() =>
+        expect(switchSession).toHaveBeenCalledWith('w1:t1', 'w1:t1:p2'),
+      )
+      expect(screen.queryByTestId('chat-main')).toBeNull()
+      expect(sessionStorage.getItem('termote-pane-view:w1:t1:p2')).toBe(
+        '{"view":"chat","panel":null}',
+      )
+      expect(sessionStorage.getItem('termote-pane-view:w1:t1:p1')).toBe(
+        '{"view":"terminal","panel":null}',
+      )
+    })
+
+    it('a link to a tab keeps its view for the tab’s pane', async () => {
+      window.history.replaceState(null, '', '/#/s/w2/w2%3At1?view=chat')
+      const { rerender } = render(<App views={VIEWS} />)
+      await waitFor(() =>
+        expect(switchSession).toHaveBeenCalledWith('w2:t1', undefined),
+      )
+      showTab(1)
+      rerender(<App views={VIEWS} />)
+      expect(screen.getByTestId('chat-main')).toBeInTheDocument()
+    })
+
+    it('a tab without a pane id keeps it under the tab id', async () => {
+      const base = mockUseLocalSessions()
+      const sessions = base.sessions.map((s: any) => ({
+        ...s,
+        paneId: undefined,
+      }))
+      mockUseLocalSessions.mockReturnValue({
+        ...base,
+        sessions,
+        activeSession: sessions[0],
+      } as any)
+      window.history.replaceState(null, '', '/#/s/w2/w2%3At1?view=chat')
+      render(<App views={VIEWS} />)
+      await waitFor(() =>
+        expect(sessionStorage.getItem('termote-pane-view:w2:t1')).toBe(
+          '{"view":"chat","panel":null}',
+        ),
+      )
+      expect(sessionStorage.getItem('termote-pane-view:w1:t1')).toBe(
+        '{"view":"terminal","panel":null}',
+      )
+    })
+  })
+
   it('a view can show a notice', async () => {
     render(<App views={VIEWS} />)
     fireEvent.click(await screen.findByRole('tab', { name: 'Chat' }))
