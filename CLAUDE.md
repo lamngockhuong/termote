@@ -54,9 +54,11 @@ termote/
 │   ├── cli_container.go    # `container up|down|logs|status` (podman/docker)
 │   └── cli*.go             # Remaining CLI subcommands (update, logs, link, show-password, ...)
 ├── herdr-plugin/           # Herdr plugin manifest (every command runs `termote ...`)
+├── assets/branding/termote/ # Prompt Owl brand sources (SVG); docs/brand-identity.md
 ├── scripts/
 │   ├── install.sh          # Unix release installer (curl | sh): downloads, verifies, lays out
 │   ├── install.ps1         # Windows release installer (irm | iex), same job
+│   ├── build-brand-assets.sh # `make brand-assets`: icons, favicons, social PNG from assets/branding
 │   ├── termote.sh          # Checkout-only dev shim: builds/runs server/termote-dev
 │   └── termote.ps1         # Checkout-only dev shim (Windows), same job
 ├── tests/                  # Test suite
@@ -127,6 +129,7 @@ make test           # Run all tests
 make start          # Start the server as a native service (through the dev shim)
 make container-up   # Run the server in a container (podman/docker, through the dev shim)
 make health         # Check service health
+make brand-assets   # Regenerate icons/favicons/social images from assets/branding
 
 # Workspace commands (run from repo root)
 pnpm install                          # Install ALL packages (single lockfile)
@@ -289,6 +292,7 @@ The `update` command:
 | `pwa/src/hooks/use-pane-text.ts`                  | Pane text for the sheet: server history, else xterm buffer    |
 | `pwa/src/utils/copy-text.ts`                      | Clipboard write, `execCommand('copy')` fallback over HTTP     |
 | `pwa/src/components/app-header.tsx`               | Header: session chip / tabs, More menu                        |
+| `pwa/src/components/brand-mark.tsx`               | Prompt Owl symbol inline (sidebar, header when collapsed)     |
 | `pwa/src/components/session-switcher-chip.tsx`    | Mobile header chip that opens the sessions sheet              |
 | `pwa/src/utils/reorder.ts`                        | Move up/down and drop indexes, groups that can move           |
 | `pwa/src/utils/pane-remap.ts`                     | Tab keys: state by pane id follows a shifted tmux id          |
@@ -409,6 +413,7 @@ The `update` command:
 | `pwa/src/hooks/use-devices.ts`                    | Paired devices list, pair and revoke calls                    |
 | `server/guard.go`                                 | Host allowlist + Origin/Content-Type write guard              |
 | `server/login.go`                                 | Sign-in form for browsers (iOS home-screen app has no prompt) |
+| `server/brand.go`                                 | Inline owl mark and favicon of the `/login` and `/pair` pages |
 | `server/uploads.go`                               | `/api/mux/uploads`: image store (naming, quota, retention)    |
 | `server/security_headers.go`                      | Content-Security-Policy and other security headers            |
 | `server/serve_config.go`                          | Server config from the saved config, else the environment     |

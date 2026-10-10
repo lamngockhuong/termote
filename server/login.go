@@ -30,6 +30,7 @@ var loginPage = template.Must(template.New("login").Parse(`<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="theme-color" content="#09090b">
 <title>Termote — Sign in</title>
+` + brandHead + `
 <style>
   :root { color-scheme: dark; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   * { box-sizing: border-box; }
@@ -53,11 +54,11 @@ var loginPage = template.Must(template.New("login").Parse(`<!doctype html>
   }
   .error { margin: 0; padding: 8px 12px; border-radius: 8px; background: #450a0a; color: #fecaca; font-size: 14px; }
   a { color: #a1a1aa; font-size: 14px; }
-</style>
+` + brandMarkCSS + `</style>
 </head>
 <body>
 <form method="post" action="/login">
-  <h1>Termote</h1>
+  <div class="brand">` + brandMark + `<h1>Termote</h1></div>
   {{if .Error}}<p class="error" role="alert">{{.Error}}</p>{{end}}
   <label>Username
     <input name="username" value="{{.Username}}" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required{{if not .Username}} autofocus{{end}}>

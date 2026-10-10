@@ -18,6 +18,22 @@ export default defineConfig({
       },
       title: "Termote",
       description: "Remote control CLI tools from mobile/desktop via PWA",
+      // Prompt Owl, generated from assets/branding by `make brand-assets`
+      logo: {
+        light: "./src/assets/brand/symbol-light.svg",
+        dark: "./src/assets/brand/symbol-dark.svg",
+        alt: "",
+      },
+      favicon: "/favicon.svg",
+      head: [
+        { tag: "link", attrs: { rel: "apple-touch-icon", href: "/apple-touch-icon.png" } },
+        { tag: "meta", attrs: { property: "og:image", content: "https://termote.ohnice.app/og-image.png" } },
+        { tag: "meta", attrs: { property: "og:image:width", content: "1280" } },
+        { tag: "meta", attrs: { property: "og:image:height", content: "640" } },
+        { tag: "meta", attrs: { property: "og:image:alt", content: "Termote: Your Terminal, Anywhere." } },
+        { tag: "meta", attrs: { name: "twitter:card", content: "summary_large_image" } },
+        { tag: "meta", attrs: { name: "twitter:image", content: "https://termote.ohnice.app/og-image.png" } },
+      ],
       social: [
         {
           icon: "github",

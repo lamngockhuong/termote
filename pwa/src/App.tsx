@@ -1114,6 +1114,7 @@ export default function App({
             groupSessions={groupSessions}
             groupName={groupName}
             blockedElsewhere={blockedElsewhere}
+            showBrand={sidebarCollapsed}
             showSessionTabs={settings.showSessionTabs}
             canRemoveTab={!readOnly && sessions.length > 1}
             onSelectTab={selectSession}

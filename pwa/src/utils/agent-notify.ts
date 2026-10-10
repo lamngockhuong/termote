@@ -119,6 +119,7 @@ export function notificationContent(
       tag: event.paneId,
       renotify: true,
       icon: '/pwa-192x192.png',
+      badge: '/badge-96x96.png',
       data: { hash },
     },
   }

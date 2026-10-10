@@ -46,6 +46,8 @@
   // src/utils/agent-notify.ts does (the tests hold both to one vector).
   const TITLES = { blocked: 'Agent needs you', done: 'Agent finished' }
   const ICON = '/pwa-192x192.png'
+  // Monochrome mark Android shows in the status bar
+  const BADGE = '/badge-96x96.png'
   const NAME_MAX = 64
   const UNSAFE_CHARS =
     /[\u0000-\u001f\u007f-\u009f\u200b\u200e\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]/g
@@ -108,6 +110,7 @@
       await self.registration.showNotification('Termote', {
         body: 'An agent may need you',
         icon: ICON,
+        badge: BADGE,
       })
       return
     }
@@ -116,6 +119,7 @@
       tag: ev.paneId,
       renotify: true,
       icon: ICON,
+      badge: BADGE,
       data: { hash: deepLink(ev) },
     }
     if (names) {
