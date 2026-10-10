@@ -113,7 +113,11 @@ describe('HelpModal', () => {
     expect(
       screen.getByText('Paste from the system clipboard'),
     ).toBeInTheDocument()
-    expect(screen.getByText('Scroll history up/down')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'History, paste, attach image, select text, scroll up/down',
+      ),
+    ).toBeInTheDocument()
   })
 
   it('falls back to Gestures when the open tmux tab goes away', () => {
@@ -137,8 +141,16 @@ describe('HelpModal', () => {
     expect(
       screen.getByText('Clear, Cancel, Clear line, Exit (mobile)'),
     ).toBeInTheDocument()
-    expect(screen.getByText('Copy mode and page up/down')).toBeInTheDocument()
-    expect(screen.queryByText('Scroll history up/down')).not.toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'History, paste, attach image, select text, copy mode, page up/down',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText(
+        'History, paste, attach image, select text, scroll up/down',
+      ),
+    ).not.toBeInTheDocument()
   })
 
   it('shows the tmux-only toolbar rows with copy mode', () => {

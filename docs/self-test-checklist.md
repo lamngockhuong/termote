@@ -744,7 +744,7 @@ Test on real mobile device:
 
 ### Expanded Rows
 
-- [ ] ⋯ shows the rows (Actions on mobile, Text, Navigate, Scroll) and hides them again
+- [ ] ⋯ shows the rows (Actions on mobile, Text · Scroll, Navigate) and hides them again
 - [ ] History button opens command history dropdown and closes the expanded rows
 - [ ] Opening the on-screen keyboard closes the expanded rows; ⋯ opens them again while it is up
 - [ ] Shift modifier toggles (visual indicator when active); closing the rows turns it off
@@ -777,7 +777,7 @@ Test on real mobile device:
 - [ ] Ctrl+Shift+Z (redo) works
 - [ ] Ctrl+Shift+X (cut) works
 
-### Text and Scroll Keys (expanded rows)
+### Text · Scroll Row (expanded rows)
 
 - [ ] tmux copy mode toggle works
 - [ ] Select text key: next to copy mode on tmux, in its place on Herdr

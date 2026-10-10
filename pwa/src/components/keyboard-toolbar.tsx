@@ -113,7 +113,8 @@ const MAIN_KEYS: KeyConfig[] = [
   { label: 'Tab', key: 'Tab' },
 ]
 
-// Expanded rows, below the Actions row
+// Expanded rows, below the Actions row. Text and scroll keys share one row
+// (TEXT_KEYS then SCROLL_KEYS), so the rows stay three on a phone.
 const TEXT_KEYS: KeyConfig[] = [
   {
     label: <Clock size={ICON_SIZE} />,
@@ -309,16 +310,16 @@ export function KeyboardToolbar({
     () => MAIN_KEYS.filter((k) => !!onSendText || !k.isImeToggle),
     [onSendText],
   )
-  const { textKeys, navigateKeys, scrollKeys } = useMemo(
+  const { toolKeys, navigateKeys } = useMemo(
     () => ({
-      textKeys: TEXT_KEYS.filter(
+      toolKeys: [...TEXT_KEYS, ...SCROLL_KEYS].filter(
         (k) =>
           (!!onHistoryToggle || !k.isHistoryToggle) &&
           (!!onAttachImage || !k.isAttach) &&
-          (!!onSelectText || !k.isSelectText),
+          (!!onSelectText || !k.isSelectText) &&
+          (showTmuxCopy || !k.isTmuxCopy),
       ),
       navigateKeys: NAVIGATE_KEYS.filter((k) => !!onShiftKey || !k.isShiftTab),
-      scrollKeys: SCROLL_KEYS.filter((k) => showTmuxCopy || !k.isTmuxCopy),
     }),
     [onHistoryToggle, onAttachImage, onSelectText, onShiftKey, showTmuxCopy],
   )
@@ -652,13 +653,8 @@ export function KeyboardToolbar({
               ))}
             </KeyGroup>
           )}
-          {textKeys.length > 0 && (
-            <KeyGroup label="Text">{textKeys.map(renderKey)}</KeyGroup>
-          )}
+          <KeyGroup label="Text · Scroll">{toolKeys.map(renderKey)}</KeyGroup>
           <KeyGroup label="Navigate">{navigateKeys.map(renderKey)}</KeyGroup>
-          <KeyGroup label={showTmuxCopy ? 'Scroll · copy mode' : 'Scroll'}>
-            {scrollKeys.map(renderKey)}
-          </KeyGroup>
         </>
       )}
 

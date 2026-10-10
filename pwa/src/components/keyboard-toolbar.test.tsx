@@ -203,9 +203,9 @@ describe('KeyboardToolbar', () => {
       fireEvent.click(moreKey)
       expect(screen.getByText('Actions')).toBeInTheDocument()
       expect(screen.getByText('Navigate')).toBeInTheDocument()
-      expect(screen.getByText('Text')).toBeInTheDocument()
-      // When showTmuxCopy=false, the label is just 'Scroll'
-      expect(screen.getByText(/^Scroll/)).toBeInTheDocument()
+      expect(screen.getByText('Text · Scroll')).toBeInTheDocument()
+      // Three rows: Actions, Text · Scroll, Navigate
+      expect(document.querySelectorAll('fieldset')).toHaveLength(3)
     })
 
     it('hides expanded panel when More key clicked again', () => {
@@ -281,55 +281,49 @@ describe('KeyboardToolbar', () => {
     })
   })
 
-  describe('Panel: Text row', () => {
-    it('shows Text row when expanded', () => {
-      renderToolbar({ defaultExpanded: true })
-      expect(screen.getByText('Text')).toBeInTheDocument()
+  describe('Panel: Text · Scroll row', () => {
+    const keysOf = () =>
+      Array.from(
+        screen
+          .getByRole('group', { name: 'Text · Scroll' })
+          .querySelectorAll('[data-key]'),
+      ).map((el) => el.getAttribute('data-key'))
+
+    it('holds the text keys, then copy mode and the scroll keys', () => {
+      renderToolbar({ defaultExpanded: true, showTmuxCopy: true })
+      expect(keysOf()).toEqual([
+        'HistoryToggle',
+        'TmuxPaste',
+        'Attach',
+        'SelectText',
+        'TmuxCopy',
+        'ScrollUp',
+        'ScrollDown',
+      ])
     })
 
-    it('Text row always includes Paste button', () => {
-      renderToolbar({ defaultExpanded: true, onPaste })
-      const textGroup = screen.getByText('Text').closest('fieldset')
-      // Text group should have at least one button (Paste)
-      const buttons = within(textGroup!).getAllByRole('button')
-      expect(buttons.length).toBeGreaterThanOrEqual(1)
-    })
-
-    it('Text row includes History toggle when onHistoryToggle provided', () => {
-      renderToolbar({ defaultExpanded: true, onHistoryToggle })
-      const textGroup = screen.getByText('Text').closest('fieldset')
-      // History toggle is represented by a Clock icon
-      expect(within(textGroup!).getAllByRole('button').length).toBeGreaterThan(
-        0,
+    it('leaves out the keys whose handler or capability is missing', () => {
+      render(
+        <KeyboardToolbar
+          onKey={onKey}
+          onCtrlKey={onCtrlKey}
+          defaultExpanded
+          showTmuxCopy={false}
+        />,
       )
+      expect(keysOf()).toEqual(['TmuxPaste', 'ScrollUp', 'ScrollDown'])
     })
 
-    it('Text row includes Attach image when onAttachImage provided', () => {
-      renderToolbar({
-        defaultExpanded: true,
-        onAttachImage,
-      })
-      const textGroup = screen.getByText('Text').closest('fieldset')
-      expect(
-        within(textGroup!).getByLabelText('Attach image'),
-      ).toBeInTheDocument()
-    })
-
-    it('Text row includes Select text when onSelectText provided', () => {
-      renderToolbar({
-        defaultExpanded: true,
-        onSelectText,
-      })
-      const textGroup = screen.getByText('Text').closest('fieldset')
-      expect(
-        within(textGroup!).getByLabelText('Select text'),
-      ).toBeInTheDocument()
-    })
-
-    it('Text row is empty when no handlers provided (but still shown with Paste)', () => {
-      // Without onHistoryToggle, onAttachImage, onSelectText - but Paste is always there
+    it('scroll keys call onScroll', () => {
       renderToolbar({ defaultExpanded: true })
-      expect(screen.getByText('Text')).toBeInTheDocument()
+      fireEvent.click(
+        document.querySelector('[data-key="ScrollUp"]') as HTMLElement,
+      )
+      fireEvent.click(
+        document.querySelector('[data-key="ScrollDown"]') as HTMLElement,
+      )
+      expect(onScroll).toHaveBeenNthCalledWith(1, 'up')
+      expect(onScroll).toHaveBeenNthCalledWith(2, 'down')
     })
   })
 
@@ -370,49 +364,6 @@ describe('KeyboardToolbar', () => {
       const shiftTabButton = within(navGroup!).getByLabelText('Shift+Tab')
       fireEvent.click(shiftTabButton)
       expect(onShiftChange).toHaveBeenCalledWith(false)
-    })
-  })
-
-  describe('Panel: Scroll row', () => {
-    it('shows Scroll row with correct label when showTmuxCopy=false', () => {
-      renderToolbar({ defaultExpanded: true, showTmuxCopy: false })
-      expect(screen.getByText('Scroll')).toBeInTheDocument()
-      expect(screen.queryByText('Scroll · copy mode')).not.toBeInTheDocument()
-    })
-
-    it('shows "Scroll · copy mode" label when showTmuxCopy=true', () => {
-      renderToolbar({ defaultExpanded: true, showTmuxCopy: true, onTmuxCopy })
-      expect(screen.getByText('Scroll · copy mode')).toBeInTheDocument()
-    })
-
-    it('includes tmux copy key when showTmuxCopy=true', () => {
-      renderToolbar({ defaultExpanded: true, showTmuxCopy: true, onTmuxCopy })
-      const scrollGroup = screen
-        .getByText('Scroll · copy mode')
-        .closest('fieldset')
-      expect(within(scrollGroup!).getAllByRole('button').length).toBe(3) // copy mode, scroll up, scroll down
-    })
-
-    it('omits tmux copy key when showTmuxCopy=false', () => {
-      renderToolbar({ defaultExpanded: true, showTmuxCopy: false })
-      const scrollGroup = screen.getByText('Scroll').closest('fieldset')
-      expect(within(scrollGroup!).getAllByRole('button').length).toBe(2) // scroll up, scroll down
-    })
-
-    it('scroll up calls onScroll with up', () => {
-      renderToolbar({ defaultExpanded: true, onScroll, showTmuxCopy: false })
-      const scrollGroup = screen.getByText('Scroll').closest('fieldset')
-      const buttons = within(scrollGroup!).getAllByRole('button')
-      fireEvent.click(buttons[0]) // First one should be scroll up
-      expect(onScroll).toHaveBeenCalledWith('up')
-    })
-
-    it('scroll down calls onScroll with down', () => {
-      renderToolbar({ defaultExpanded: true, onScroll, showTmuxCopy: false })
-      const scrollGroup = screen.getByText('Scroll').closest('fieldset')
-      const buttons = within(scrollGroup!).getAllByRole('button')
-      fireEvent.click(buttons[1]) // Second one should be scroll down
-      expect(onScroll).toHaveBeenCalledWith('down')
     })
   })
 
@@ -599,7 +550,7 @@ describe('KeyboardToolbar', () => {
   describe('History button', () => {
     it('shows History toggle when onHistoryToggle provided', () => {
       renderToolbar({ defaultExpanded: true, onHistoryToggle })
-      const textGroup = screen.getByText('Text').closest('fieldset')
+      const textGroup = screen.getByText('Text · Scroll').closest('fieldset')
       const historyButtons = within(textGroup!).getAllByRole('button')
       expect(historyButtons.length).toBeGreaterThan(0)
     })
@@ -610,7 +561,7 @@ describe('KeyboardToolbar', () => {
         defaultExpanded: true,
         onHistoryToggle: onHistoryToggleMock,
       })
-      const textGroup = screen.getByText('Text').closest('fieldset')
+      const textGroup = screen.getByText('Text · Scroll').closest('fieldset')
       const historyButton = within(textGroup!).getAllByRole('button')[0]
       fireEvent.click(historyButton)
       expect(onHistoryToggleMock).toHaveBeenCalled()
@@ -622,7 +573,7 @@ describe('KeyboardToolbar', () => {
         onHistoryToggle,
         historyOpen: true,
       })
-      const textGroup = screen.getByText('Text').closest('fieldset')
+      const textGroup = screen.getByText('Text · Scroll').closest('fieldset')
       const historyButton = within(textGroup!).getAllByRole('button')[0]
       expect(historyButton).toHaveAttribute('aria-pressed', 'true')
     })
@@ -750,13 +701,13 @@ describe('KeyboardToolbar', () => {
       expect(mockAttachImage).toHaveBeenCalled()
     })
 
-    it('Select text only appears once (in Text row, not duplicated)', () => {
+    it('Select text only appears once (in the Text · Scroll row, not duplicated)', () => {
       renderToolbar({ defaultExpanded: true, onSelectText })
       const selectTextButtons = screen.getAllByLabelText('Select text')
       expect(selectTextButtons).toHaveLength(1)
     })
 
-    it('Attach image only appears once (in Text row, not duplicated)', () => {
+    it('Attach image only appears once (in the Text · Scroll row, not duplicated)', () => {
       renderToolbar({ defaultExpanded: true, onAttachImage })
       const attachButtons = screen.getAllByLabelText('Attach image')
       expect(attachButtons).toHaveLength(1)
@@ -771,10 +722,9 @@ describe('KeyboardToolbar', () => {
         showTmuxCopy: true,
         onTmuxCopy: mockTmuxCopy,
       })
-      const scrollGroup = screen.getByText(/^Scroll/).closest('fieldset')
-      const buttons = within(scrollGroup!).getAllByRole('button')
-      // First button should be tmux copy when showTmuxCopy=true
-      fireEvent.click(buttons[0])
+      fireEvent.click(
+        document.querySelector('[data-key="TmuxCopy"]') as HTMLElement,
+      )
       expect(mockTmuxCopy).toHaveBeenCalled()
     })
   })

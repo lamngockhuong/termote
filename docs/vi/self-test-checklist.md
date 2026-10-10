@@ -611,7 +611,7 @@ Test trên thiết bị di động thật:
 
 ### Các Hàng Mở Rộng
 
-- [ ] Nút ⋯ hiện các hàng (Actions trên mobile, Text, Navigate, Scroll) và ẩn lại được
+- [ ] Nút ⋯ hiện các hàng (Actions trên mobile, Text · Scroll, Navigate) và ẩn lại được
 - [ ] Nút Lịch sử mở dropdown lịch sử lệnh và đóng các hàng mở rộng
 - [ ] Bật bàn phím ảo thì các hàng mở rộng tự đóng; nhấn ⋯ vẫn mở lại được khi bàn phím đang bật
 - [ ] Phím bổ trợ Shift bật/tắt (có chỉ báo khi đang bật); đóng các hàng thì Shift tắt
@@ -644,7 +644,7 @@ Test trên thiết bị di động thật:
 - [ ] Ctrl+Shift+Z (làm lại) hoạt động
 - [ ] Ctrl+Shift+X (cắt) hoạt động
 
-### Phím Text Và Scroll (hàng mở rộng)
+### Hàng Text · Scroll (hàng mở rộng)
 
 - [ ] Nút bật/tắt tmux copy mode hoạt động
 - [ ] Phím chọn chữ: đứng cạnh phím copy mode với tmux, nằm vào chỗ của nó với Herdr

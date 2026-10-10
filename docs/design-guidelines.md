@@ -148,10 +148,9 @@ it, so the stream and the multiplexer window size are kept.
 1. **Bottom row**: keyboard, text input (IME), Esc, Ctrl, ↑, ↓, Enter, Tab, in a sideways
    scroller whose edge fades (`mask-image`) while it hides keys; the **Extra keys** button (⋯) is
    pinned at the right, outside the scroller, so it is always on screen
-2. **Expanded rows** (⋯), labelled: **Actions** (mobile: Clear, Cancel, Clear line, Exit);
-   **Text** (command history, paste, attach image, select text); **Navigate** (Shift, ⇧Tab,
-   ←/→, Home/End, PgUp/PgDn, Del/Bksp, Ins); **Scroll · copy mode** ("Scroll" without tmux copy
-   mode)
+2. **Expanded rows** (⋯), at most three, labelled: **Actions** (mobile: Clear, Cancel, Clear
+   line, Exit); **Text · Scroll** (command history, paste, attach image, select text, tmux copy
+   mode, scroll up/down); **Navigate** (Shift, ⇧Tab, ←/→, Home/End, PgUp/PgDn, Del/Bksp, Ins).
    They close when the on-screen keyboard opens and when the command history opens, so neither
    stacks with them over the whole terminal
 3. **Ctrl and Ctrl+Shift combos**: float above the toolbar while the modifier is on, in both

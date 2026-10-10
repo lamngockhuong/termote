@@ -155,15 +155,19 @@ const TOOLBAR_GUIDE: GuideSection[] = [
     items: [
       { key: 'Actions', desc: 'Clear, Cancel, Clear line, Exit (mobile)' },
       {
-        key: 'Text',
-        desc: 'Command history, paste, attach image, select text',
+        key: 'Text · Scroll',
+        desc: 'History, paste, attach image, select text, copy mode, page up/down',
+        tmux: true,
+      },
+      {
+        key: 'Text · Scroll',
+        desc: 'History, paste, attach image, select text, scroll up/down',
+        tmux: false,
       },
       {
         key: 'Navigate',
         desc: 'Shift, Shift+Tab, Left/Right, Home/End, PgUp/PgDn, Del/Bksp, Insert',
       },
-      { key: 'Scroll', desc: 'Copy mode and page up/down', tmux: true },
-      { key: 'Scroll', desc: 'Scroll history up/down', tmux: false },
       {
         key: 'Ctrl +',
         desc: 'Every Ctrl combo, above the toolbar while Ctrl is on',
