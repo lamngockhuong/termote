@@ -9,16 +9,20 @@ import {
   attachImageToTerminal,
   blockContextMenu,
   blurTerminal,
+  copyTerminalSelection,
   dragTerminal,
   enterTmuxCopyMode,
   exitTmuxCopyMode,
   focusTerminal,
+  isApplePlatform,
+  isCopyShortcut,
   isInCopyMode,
   isTerminalDisconnected,
   isTerminalReady,
   overflowsHorizontally,
   pasteTmuxBuffer,
   pasteToTerminal,
+  readTerminalBufferText,
   resetCopyModeState,
   scrollTerminal,
   scrollTerminalViewport,
@@ -29,9 +33,13 @@ import {
   setTerminalFontFamily,
   setTerminalFontSize,
   setTerminalTheme,
+  terminalSelection,
   toggleTmuxCopyMode,
   unblockContextMenu,
 } from './terminal-bridge'
+
+const mockCopyText = vi.hoisted(() => vi.fn(async (_t: string) => 'ok'))
+vi.mock('./copy-text', () => ({ copyText: mockCopyText }))
 
 function createMockTerminal() {
   return {
@@ -1061,5 +1069,120 @@ describe('dragTerminal', () => {
     )
     dragTerminal(createMockHandle(), 0, 50, true)
     dragTerminal(null, 0, 50, true)
+  })
+})
+
+describe('terminal selection', () => {
+  function withSelection(text: string) {
+    const term = createMockTerminal()
+    term.hasSelection = () => text !== ''
+    term.getSelection = () => text
+    return createMockHandle({ term })
+  }
+
+  it('reads the selection, or nothing', () => {
+    expect(terminalSelection(withSelection('abc'))).toBe('abc')
+    expect(terminalSelection(withSelection(''))).toBe('')
+    expect(terminalSelection(null)).toBe('')
+  })
+
+  it('copies the selection, or reports there is none', async () => {
+    expect(await copyTerminalSelection(withSelection('abc'))).toBe('ok')
+    expect(mockCopyText).toHaveBeenCalledWith('abc')
+    mockCopyText.mockClear()
+    expect(await copyTerminalSelection(withSelection(''))).toBe('empty')
+    expect(mockCopyText).not.toHaveBeenCalled()
+  })
+})
+
+describe('readTerminalBufferText', () => {
+  function withRows(rows: Array<[string, boolean]>) {
+    const term = createMockTerminal()
+    term.buffer = {
+      active: {
+        length: rows.length,
+        getLine: (y: number) => ({
+          isWrapped: rows[y][1],
+          translateToString: (trim: boolean) =>
+            trim ? rows[y][0].trimEnd() : rows[y][0],
+        }),
+      },
+    }
+    return createMockHandle({ term })
+  }
+
+  it('joins wrapped rows and drops the blank rows at the bottom', () => {
+    const handle = withRows([
+      ['$ echo aaaa', false],
+      ['bbbb', true],
+      ['out\x1b[31m\x07 ', false],
+      ['\tx\u200e', false],
+      ['', false],
+      ['   ', false],
+    ])
+    expect(readTerminalBufferText(handle)).toBe(
+      '$ echo aaaabbbb\nout[31m\n\tx\u200e',
+    )
+  })
+
+  it('reads a wrapped first row as a line, and nothing without a terminal', () => {
+    expect(readTerminalBufferText(withRows([['x', true]]))).toBe('x')
+    expect(readTerminalBufferText(withRows([]))).toBe('')
+    expect(readTerminalBufferText(null)).toBe('')
+    expect(readTerminalBufferText(createMockHandle({ term: null }))).toBe('')
+  })
+})
+
+describe('isCopyShortcut', () => {
+  const ev = (o: Partial<KeyboardEvent>) =>
+    ({
+      type: 'keydown',
+      ctrlKey: true,
+      shiftKey: true,
+      altKey: false,
+      metaKey: false,
+      code: 'KeyC',
+      key: 'C',
+      ...o,
+    }) as KeyboardEvent
+
+  it('matches Ctrl+Shift+C on keydown off Apple platforms', () => {
+    expect(isCopyShortcut(ev({}), false)).toBe(true)
+    // Another layout: the key is still C
+    expect(isCopyShortcut(ev({ code: 'KeyI' }), false)).toBe(true)
+    expect(isCopyShortcut(ev({ code: 'KeyX', key: 'X' }), false)).toBe(false)
+    expect(isCopyShortcut(ev({ type: 'keyup' }), false)).toBe(false)
+    expect(isCopyShortcut(ev({ shiftKey: false }), false)).toBe(false)
+    expect(isCopyShortcut(ev({ ctrlKey: false }), false)).toBe(false)
+    expect(isCopyShortcut(ev({ altKey: true }), false)).toBe(false)
+    expect(isCopyShortcut(ev({ metaKey: true }), false)).toBe(false)
+    expect(isCopyShortcut(ev({}), true)).toBe(false)
+  })
+
+  it('detects Apple platforms', () => {
+    const nav = navigator as Navigator & { userAgentData?: unknown }
+    const set = (platform: string, uaData?: unknown) => {
+      Object.defineProperty(navigator, 'platform', {
+        configurable: true,
+        value: platform,
+      })
+      Object.defineProperty(nav, 'userAgentData', {
+        configurable: true,
+        value: uaData,
+      })
+    }
+    set('MacIntel')
+    expect(isApplePlatform()).toBe(true)
+    expect(isCopyShortcut(ev({}))).toBe(false)
+    set('iPhone')
+    expect(isApplePlatform()).toBe(true)
+    set('Linux x86_64')
+    expect(isApplePlatform()).toBe(false)
+    set('', { platform: 'macOS' })
+    expect(isApplePlatform()).toBe(true)
+    set('', { platform: 'Windows' })
+    expect(isApplePlatform()).toBe(false)
+    set('')
+    expect(isApplePlatform()).toBe(false)
   })
 })

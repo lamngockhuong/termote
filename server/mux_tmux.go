@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -264,7 +265,7 @@ func (tmuxMux) Caps() Caps {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	return Caps{CopyMode: true, AgentChat: agentProcSupported, Files: tmuxFilesSupported, Groups: true,
-		ReorderTabs: tmuxCanReorder(ctx)}
+		ReorderTabs: tmuxCanReorder(ctx), PaneText: !tmuxIsPsmux}
 }
 
 // tmuxReorderMin is the first tmux whose move-window takes -b (insert
@@ -1127,6 +1128,41 @@ func (tmuxMux) ClosePane(context.Context, string) error { return errUnsupported 
 
 // Scroll is not offered: tmux history is scrolled in copy mode.
 func (tmuxMux) Scroll(context.Context, string, int) error { return errUnsupported }
+
+// ReadText captures the window's active pane: -J joins wrapped rows, -S
+// starts lines rows into the history; without -e no escape sequence is
+// written. The target is exact ("=" before the index), so a missing window
+// fails instead of capturing another. Not on psmux: it never matches a
+// window exactly, and its capture-pane flags are unchecked. more compares
+// the pane's history rows with lines: -S counts rows, not joined lines.
+func (tmuxMux) ReadText(ctx context.Context, paneID string, lines int, w io.Writer) (bool, error) {
+	if tmuxIsPsmux {
+		return false, errUnsupported
+	}
+	win, ok := parseTmuxID(paneID)
+	if !ok {
+		return false, inputError("invalid pane id")
+	}
+	out, err := tmuxCmd(ctx, "display-message", "-p", "-t", win.target(), "#{history_size}").Output()
+	if err != nil {
+		if tmuxMissing(err) {
+			return false, inputError("unknown pane")
+		}
+		return false, fmt.Errorf("history size: %w", err)
+	}
+	history, _ := strconv.Atoi(strings.TrimSpace(string(out)))
+	cmd := tmuxCmd(ctx, "capture-pane", "-p", "-J", "-S", "-"+strconv.Itoa(lines), "-t", win.target())
+	cmd.Stdout = w
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		if strings.Contains(stderr.String(), "can't find") {
+			return false, inputError("unknown pane")
+		}
+		return false, fmt.Errorf("capture-pane: %w: %s", err, strings.TrimSpace(stderr.String()))
+	}
+	return history > lines, nil
+}
 
 // SendKeys passes keys as one tmux send-keys argument, so key names such as
 // "Enter" or "C-c" are interpreted by tmux.

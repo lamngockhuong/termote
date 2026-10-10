@@ -13,6 +13,7 @@ import {
   Keyboard,
   Languages,
   Minimize2,
+  TextSelect,
   Zap,
 } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
@@ -105,6 +106,10 @@ const TOOLBAR_GUIDE: GuideSection[] = [
         tmux: true,
       },
       {
+        key: <TextSelect size={ICON_SIZE} />,
+        desc: "Select text: the pane's text, to select and copy",
+      },
+      {
         key: <Clipboard size={ICON_SIZE} />,
         desc: 'Paste (source configurable in Settings)',
         tmux: true,
@@ -134,7 +139,7 @@ const TOOLBAR_GUIDE: GuideSection[] = [
   {
     title: 'Ctrl+Shift Combos',
     items: [
-      { key: '^⇧C', desc: 'Copy (terminal)' },
+      { key: '^⇧C', desc: 'Copy the selection, else send ^⇧C' },
       { key: '^⇧V', desc: 'Paste from clipboard' },
       { key: '^⇧Z', desc: 'Redo' },
       { key: '^⇧X', desc: 'Cut' },
@@ -146,10 +151,14 @@ const TOOLBAR_GUIDE: GuideSection[] = [
       { key: 'Navigate', desc: 'Home/End, Del/Bksp, PgUp/PgDn, Insert' },
       {
         key: 'Scroll',
-        desc: 'Copy mode, paste and page up/down',
+        desc: 'Copy mode, select text, paste and page up/down',
         tmux: true,
       },
-      { key: 'Scroll', desc: 'Paste and scroll history', tmux: false },
+      {
+        key: 'Scroll',
+        desc: 'Select text, paste and scroll history',
+        tmux: false,
+      },
       {
         key: 'Ctrl +',
         desc: 'Every Ctrl combo, above the toolbar while Ctrl is on',

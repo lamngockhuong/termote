@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -62,6 +63,10 @@ type Mux interface {
 	// Scroll moves paneID's view lines rows back into its history (negative:
 	// toward the live screen), clamped to what the pane holds.
 	Scroll(ctx context.Context, paneID string, lines int) error
+	// ReadText writes paneID's plain text to w: up to lines rows of history
+	// and the screen, wrapped rows joined, no escape sequences. more: the
+	// pane holds history past what was read.
+	ReadText(ctx context.Context, paneID string, lines int, w io.Writer) (more bool, err error)
 	// Attach opens a terminal on paneID. ctx bounds only the setup; the
 	// stream lives until it is closed.
 	Attach(ctx context.Context, paneID string, size Size) (TermStream, error)
@@ -78,6 +83,9 @@ type Caps struct {
 	// Scroll: the stream only carries screen renders, so history is scrolled
 	// by the backend through /api/mux/panes/{id}/scroll (herdr).
 	Scroll bool `json:"scroll"`
+	// PaneText: a pane's history and screen can be read as plain text
+	// (/api/mux/panes/{id}/text).
+	PaneText bool `json:"paneText"`
 	// DriveSize: the client can take over the pane size while it shows the
 	// pane (the stream's drive message, herdr's control mode).
 	DriveSize bool `json:"driveSize"`
@@ -449,6 +457,8 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *u
 	mux.HandleFunc("/api/mux/uploads", handleUpload(uploads))
 
 	agent = registerAgentRoutes(mux, m, uploads)
+
+	mux.HandleFunc("/api/mux/panes/{id}/text", handlePaneText(m, agent))
 
 	// Only reachable via fetch/XHR from the PWA, not by direct navigation.
 	mux.HandleFunc("/api/mux/stream-token", handleTerminalToken(tokens))

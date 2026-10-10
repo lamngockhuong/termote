@@ -4,6 +4,7 @@
  */
 import type { Terminal } from '@xterm/xterm'
 import type { TerminalHandle } from '../components/terminal-view'
+import { copyText } from './copy-text'
 import { type UploadErrorReason, uploadImage } from './upload-image'
 
 // Key mappings for special keys (xterm escape sequences)
@@ -397,4 +398,72 @@ export function unblockContextMenu(handle: TerminalHandle | null): boolean {
   el.removeEventListener('contextmenu', handler)
   contextMenuHandlers.delete(el)
   return true
+}
+
+// Text selected in the terminal (mouse drag), or '' without a selection
+export function terminalSelection(handle: TerminalHandle | null): string {
+  const term = handle?.term
+  if (!term?.hasSelection()) return ''
+  return term.getSelection()
+}
+
+// Copies the terminal's selection: 'empty' when nothing is selected
+export async function copyTerminalSelection(
+  handle: TerminalHandle | null,
+): Promise<'ok' | 'failed' | 'empty'> {
+  const text = terminalSelection(handle)
+  if (!text) return 'empty'
+  return copyText(text)
+}
+
+// Control characters other than tab and line feed (the stream's text, so an
+// escape sequence never reaches the clipboard)
+// biome-ignore lint/suspicious/noControlCharactersInRegex: matches control characters
+const BUFFER_CONTROLS = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g
+
+// The terminal's buffer as plain text: what it holds of the pane (its
+// scrollback and screen; Herdr's stream carries the screen only), rows that
+// wrapped joined into one line, trailing spaces and the blank rows at the
+// bottom dropped.
+export function readTerminalBufferText(handle: TerminalHandle | null): string {
+  const buffer = handle?.term?.buffer.active
+  if (!buffer) return ''
+  const lines: string[] = []
+  for (let y = 0; y < buffer.length; y++) {
+    const row = buffer.getLine(y)
+    /* v8 ignore next */
+    if (!row) continue
+    const text = row.translateToString(true)
+    if (row.isWrapped && lines.length) lines[lines.length - 1] += text
+    else lines.push(text)
+  }
+  while (lines.length && lines[lines.length - 1].trim() === '') lines.pop()
+  return lines.map((l) => l.replace(BUFFER_CONTROLS, '').trimEnd()).join('\n')
+}
+
+// Apple keyboards copy with Cmd+C, which xterm leaves to the browser; there
+// Ctrl+Shift+C stays a terminal key.
+export function isApplePlatform(): boolean {
+  const nav = navigator as Navigator & { userAgentData?: { platform?: string } }
+  const platform = nav.userAgentData?.platform || navigator.platform || ''
+  return /mac|iphone|ipad|ipod/i.test(platform)
+}
+
+// Ctrl+Shift+C pressed (not on an Apple platform)
+export function isCopyShortcut(
+  e: Pick<
+    KeyboardEvent,
+    'type' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'metaKey' | 'code' | 'key'
+  >,
+  apple = isApplePlatform(),
+): boolean {
+  return (
+    !apple &&
+    e.type === 'keydown' &&
+    e.ctrlKey &&
+    e.shiftKey &&
+    !e.altKey &&
+    !e.metaKey &&
+    (e.code === 'KeyC' || e.key.toLowerCase() === 'c')
+  )
 }

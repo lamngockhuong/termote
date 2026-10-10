@@ -261,6 +261,17 @@ describe('useSettings', () => {
     expect(saved.notifyAgents).toBe(true)
   })
 
+  it('copies on select only once turned on', () => {
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ copyOnSelect: 1 }),
+    )
+    const { result } = renderHook(() => useSettings())
+    expect(result.current.settings.copyOnSelect).toBe(false)
+    act(() => result.current.updateSetting('copyOnSelect', true))
+    expect(result.current.settings.copyOnSelect).toBe(true)
+  })
+
   it('shows tables by default, also for a config saved before the setting', () => {
     localStorage.setItem(
       'termote-settings',

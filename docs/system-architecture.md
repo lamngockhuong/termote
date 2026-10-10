@@ -220,6 +220,7 @@ POST   /api/mux/worktrees/open     body: {groupId, branch}      → {ok, id, alr
 DELETE /api/mux/worktrees/{id}     body: {force, path, branch}  → {ok} | {error, code}
 POST   /api/mux/panes/{id}/keys    body: {keys}                 → {ok}
 POST   /api/mux/panes/{id}/scroll  body: {lines}                → {ok}   (caps.scroll only, else 501)
+GET    /api/mux/panes/{id}/text?lines=N                         → {text, lines, truncated, more} | {error, code}   (caps.paneText; full only)
 GET    /api/mux/health             → {status, apiVersion, backend, version, pid, install}
 POST   /api/mux/logout             body: {}                      → 204   (sign-in on only, else 404)
 POST   /api/mux/devices/pair       body: {role, name?}           → {code, expiresAt, url, qr} | {error, code}   (full only; sign-in on, else 501)
@@ -366,6 +367,19 @@ Herdr desktop scrolls with it; typing in the PWA returns it to the live screen f
 An agent that leaves no history in Herdr (Claude Code in fullscreen mode draws on the alternate
 screen) gets SGR wheel reports instead, one per row and at most 50 per call; returning to the
 live screen sends Claude Code's Ctrl+End. A pane without an agent is never sent wheel reports.
+
+`caps.paneText` (tmux, not psmux; Herdr): `GET /text` returns the pane's plain text, `lines`
+(1–5000, default 1000; else 400 `invalid_lines`) rows of history and the screen, wrapped rows
+joined (tmux `capture-pane -p -J -S -N` on the exact window target, Herdr `pane.read` with
+`source: recent_unwrapped`, `format: text`; an older Herdr's `invalid_request` → 501). A same-site
+read (`crossSiteRejection`, as the snapshot) refused to a view-only client (403 `view_only`): its
+role shows the screen, never the history. At most 2 MiB, the oldest lines dropped first at a line
+boundary (`truncated`). `more`: the pane holds history rows past `lines` (tmux
+`#{history_size}`, Herdr `pane.get`'s `max_offset_from_bottom`; `-S` counts rows, not joined
+lines, so the line count cannot tell), never with `truncated`. Control characters other than tab and line feed removed, format
+characters (bidi, zero-width) kept; `Cache-Control: no-store`. The PWA's Select text sheet reads
+it, and falls back to the xterm.js buffer (the screen only on Herdr) on a view-only device or any
+refusal.
 
 `apiVersion` is bumped on every breaking change to this API; the PWA compares it with its own
 build and reloads on mismatch. A health `version` other than the PWA's own (or a new service

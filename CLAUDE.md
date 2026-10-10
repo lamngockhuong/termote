@@ -284,6 +284,9 @@ The `update` command:
 | `pwa/src/components/connection-indicator.tsx`     | Connection status indicator with retry                        |
 | `pwa/src/components/command-history-dropdown.tsx` | Command search/recall UI                                      |
 | `pwa/src/components/quick-actions-menu.tsx`       | Quick actions sheet (opened from a toolbar key on mobile)     |
+| `pwa/src/components/select-text-sheet.tsx`        | Select text: the pane's text to select and copy (phone)       |
+| `pwa/src/hooks/use-pane-text.ts`                  | Pane text for the sheet: server history, else xterm buffer    |
+| `pwa/src/utils/copy-text.ts`                      | Clipboard write, `execCommand('copy')` fallback over HTTP     |
 | `pwa/src/components/app-header.tsx`               | Header: session chip / tabs, More menu                        |
 | `pwa/src/components/session-switcher-chip.tsx`    | Mobile header chip that opens the sessions sheet              |
 | `pwa/src/utils/reorder.ts`                        | Move up/down and drop indexes, groups that can move           |
@@ -368,6 +371,7 @@ The `update` command:
 | `server/mux_worktrees.go`                         | `/api/mux/worktrees*`: list, create, open, remove; name check |
 | `server/herdr_worktree_branches.go`               | Each worktree workspace's branch, read in the background      |
 | `server/stream.go`                                | Terminal WebSocket (`/api/mux/stream`)                        |
+| `server/mux_pane_text.go`                         | `GET panes/{id}/text`: pane history as plain text, capped     |
 | `server/agent.go`                                 | `/api/mux/panes/{id}/agent/*` routes, transcript reads        |
 | `server/agent_claude.go`                          | Claude Code transcript (JSONL) and session file               |
 | `server/agent_claude_prompt.go`                   | Reads a Claude Code screen: input box, dialogs                |
@@ -523,6 +527,22 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   mid-handshake rechecks `alive`); a running request finishes. Container: the state dir is the
   volume `termote-state-<uid>` (kept by `container down`, removed by `uninstall --purge`);
   `container status` says when pairing is off
+- **Pane text** (`GET /api/mux/panes/{id}/text?lines=N` → `{text, lines, truncated, more}`,
+  `server/mux_pane_text.go`, `caps.paneText`: tmux, never psmux, and Herdr): a same-site read
+  (`crossSiteRejection`, `Sec-Fetch-Site: none` included, as the snapshot), `requireMethod(GET)`,
+  then `requireWriteRole` (a view-only client gets 403 `view_only`: its role shows the screen,
+  never the history; the PWA copies it from the xterm.js buffer). `lines` 1–5000, default 1000,
+  else 400 `invalid_lines`, checked before the backend is called. tmux: `capture-pane -p -J -S
+  -<lines> -t` the exact window target (no `-e`, so no escapes), a missing window → 400; psmux →
+  501 `unsupported` (its targets never match exactly). Herdr: `pane.read` `{pane_id, source:
+  recent_unwrapped, lines, format: text}` after `requirePane`, `invalid_request` (an older Herdr)
+  → 501. `more` (history rows past `lines`: tmux `#{history_size}`, Herdr `pane.get`) offers Load
+  more. The output is kept to its last 2 MiB while read (`tailBuffer`; Herdr's reply itself is
+  bounded by `herdrMaxReply`), cut after a line break (`truncated`, then never `more`); control characters other than tab and line feed, CR and invalid UTF-8 are
+  removed, trailing spaces and the blank rows at the bottom dropped; format characters (bidi,
+  zero-width) stay, and the Select text sheet shows them as `⟨U+XXXX⟩` while copying the
+  character itself. `Cache-Control: no-store`, `muxTimeout`, internal errors logged only. The
+  history can hold secrets a program printed: the same a signed-in user saw on the stream
 - **View-only role** (`server/auth_role.go`, `caps.role` = `full|view`, `caps.viewStream`): Basic,
   session and `--no-auth` are always `full`; a device carries its role. `basicAuth` refuses every
   non-GET/HEAD/OPTIONS method of a view-only client on any path (403 `{"error", "code":

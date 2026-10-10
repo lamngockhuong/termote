@@ -1,4 +1,11 @@
-import { Ban, Eraser, ImagePlus, LogOut, Sparkles } from 'lucide-react'
+import {
+  Ban,
+  Eraser,
+  ImagePlus,
+  LogOut,
+  Sparkles,
+  TextSelect,
+} from 'lucide-react'
 import { useHaptic } from '../hooks/use-haptic'
 import { FOCUS_RING } from './ui/button'
 import { Sheet } from './ui/sheet'
@@ -35,6 +42,8 @@ export interface QuickActionHandlers {
   onSendText: (text: string) => void
   // Adds an Attach image item (the server takes uploads)
   onAttachImage?: () => void
+  // Adds a Select text item (the pane's text to select and copy)
+  onSelectText?: () => void
 }
 
 function runAction(
@@ -58,6 +67,7 @@ export function QuickActionsSheet({
   onSendKey,
   onSendText,
   onAttachImage,
+  onSelectText,
 }: QuickActionHandlers & { isOpen: boolean; onClose: () => void }) {
   const { trigger: haptic } = useHaptic()
   return (
@@ -94,6 +104,22 @@ export function QuickActionsSheet({
               <ImagePlus size={ICON_SIZE} />
             </span>
             Attach image
+          </button>
+        )}
+        {onSelectText && (
+          <button
+            type="button"
+            onClick={() => {
+              haptic('medium')
+              onClose()
+              onSelectText()
+            }}
+            className={ITEM_CLASS}
+          >
+            <span aria-hidden="true" className="text-fg-muted">
+              <TextSelect size={ICON_SIZE} />
+            </span>
+            Select text
           </button>
         )}
       </div>

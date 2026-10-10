@@ -44,6 +44,7 @@ const DEFAULT_SETTINGS: Settings = {
   pasteSource: 'clipboard',
   toolbarDefaultExpanded: false,
   disableContextMenu: true,
+  copyOnSelect: false,
   showSessionTabs: false,
   pollInterval: 5,
   hasSeenGestureHints: false,
@@ -254,6 +255,12 @@ describe('SettingsModal', () => {
       screen.getByRole('switch', { name: 'Disable right-click menu' }),
     )
     expect(onUpdateSetting).toHaveBeenCalledWith('disableContextMenu', false)
+  })
+
+  it('toggles copyOnSelect', () => {
+    const { onUpdateSetting } = renderModal()
+    fireEvent.click(screen.getByRole('switch', { name: 'Copy on select' }))
+    expect(onUpdateSetting).toHaveBeenCalledWith('copyOnSelect', true)
   })
 
   it('offers the herdr drive switch only when the backend supports it', () => {

@@ -26,6 +26,7 @@ import { HelpModal } from './components/help-modal'
 import { KeyboardToolbar } from './components/keyboard-toolbar'
 import { PaneStrip } from './components/pane-strip'
 import { ReadOnlyBar } from './components/read-only-bar'
+import { SelectTextSheet } from './components/select-text-sheet'
 import {
   type GroupActions,
   moveProblem,
@@ -86,6 +87,7 @@ import { matchesFilter } from './utils/session-filter'
 import {
   attachImageToTerminal,
   blurTerminal,
+  copyTerminalSelection,
   dragTerminal,
   focusTerminal,
   isTerminalDisconnected,
@@ -94,6 +96,7 @@ import {
   type PasteResult,
   pasteTmuxBuffer,
   pasteToTerminal,
+  readTerminalBufferText,
   scrollTerminal,
   scrollTmux,
   sendKeyToTerminal,
@@ -207,6 +210,8 @@ export default function App({
   const [ctrlActive, setCtrlActive] = useState(false)
   const [imeMode, setImeMode] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
+  // The Select text sheet: the pane's text to select and copy
+  const [selectTextOpen, setSelectTextOpen] = useState(false)
   const { history, addCommand, removeCommand, clearHistory } =
     useCommandHistory()
   const isMobile = useIsMobile()
@@ -782,15 +787,37 @@ export default function App({
     [getTerminal],
   )
 
+  const onTerminalCopy = useCallback(
+    (result: 'ok' | 'failed') => {
+      if (result === 'ok') showToast('Copied', 'success', undefined, 1500)
+      else showToast('Could not copy', 'danger')
+    },
+    [showToast],
+  )
+
   const handleCtrlShiftKey = useCallback(
     async (key: string) => {
       if (key === 'v') {
         await pasteClipboard()
         return
       }
+      // ^⇧C with a selection copies it, as the keyboard shortcut does
+      if (key === 'c') {
+        const result = await copyTerminalSelection(getTerminal())
+        if (result !== 'empty') {
+          onTerminalCopy(result)
+          return
+        }
+      }
       sendKeyToTerminal(getTerminal(), key, { ctrl: true, shift: true })
     },
-    [getTerminal, pasteClipboard],
+    [getTerminal, pasteClipboard, onTerminalCopy],
+  )
+
+  const openSelectText = useCallback(() => setSelectTextOpen(true), [])
+  const readBufferText = useCallback(
+    () => readTerminalBufferText(getTerminal()),
+    [getTerminal],
   )
 
   const handleTmuxCopy = useCallback(() => {
@@ -829,8 +856,9 @@ export default function App({
       onSendText: (text: string) =>
         sendTextToTerminal(terminalRef.current, text),
       onAttachImage: uploadsOn ? handleAttachImage : undefined,
+      onSelectText: openSelectText,
     }),
-    [uploadsOn, handleAttachImage],
+    [uploadsOn, handleAttachImage, openSelectText],
   )
 
   const handleHistorySelect = useCallback(
@@ -1170,6 +1198,8 @@ export default function App({
                     theme={resolvedTheme}
                     uiStyle={settings.uiStyle}
                     disableContextMenu={settings.disableContextMenu}
+                    copyOnSelect={settings.copyOnSelect}
+                    onCopy={onTerminalCopy}
                     readOnly={readOnly}
                     // Only while the terminal shows: under another view the
                     // pane keeps the desktop's size, so a Claude Code dialog
@@ -1232,7 +1262,16 @@ export default function App({
       {/* The bottom input area belongs to the view: the key toolbar for the
           terminal. View-only has no input at all. */}
       {readOnly ? (
-        <ReadOnlyBar label="View only" />
+        <ReadOnlyBar
+          label="View only"
+          action={
+            isTerminalView && (
+              <Button size="sm" onClick={openSelectText}>
+                Select text
+              </Button>
+            )
+          }
+        />
       ) : isTerminalView ? (
         <div className="relative">
           {historyOpen && (
@@ -1252,6 +1291,7 @@ export default function App({
             onScroll={handleScroll}
             onTmuxCopy={handleTmuxCopy}
             showTmuxCopy={copyModeSupported}
+            onSelectText={openSelectText}
             onPaste={handlePaste}
             onAttachImage={uploadsOn ? handleAttachImage : undefined}
             onToggleKeyboard={toggleKeyboard}
@@ -1429,6 +1469,18 @@ export default function App({
         <GestureHintsOverlay
           isOpen={gestureHintsOpen}
           onDismiss={dismissGestureHints}
+        />
+      )}
+      {selectTextOpen && (
+        <SelectTextSheet
+          // Another pane is another text: read afresh
+          key={activeSession.paneId}
+          onClose={() => setSelectTextOpen(false)}
+          paneId={activeSession.paneId}
+          // A view-only device sees the screen only, never the history
+          useServer={!!mux.caps.paneText && !readOnly}
+          readBuffer={readBufferText}
+          onCopied={onTerminalCopy}
         />
       )}
       {toast && (

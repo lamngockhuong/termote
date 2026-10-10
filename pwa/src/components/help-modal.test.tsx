@@ -115,7 +115,9 @@ describe('HelpModal', () => {
     expect(
       screen.getByText('Paste from the system clipboard'),
     ).toBeInTheDocument()
-    expect(screen.getByText('Paste and scroll history')).toBeInTheDocument()
+    expect(
+      screen.getByText('Select text, paste and scroll history'),
+    ).toBeInTheDocument()
   })
 
   it('falls back to Gestures when the open tmux tab goes away', () => {
@@ -137,10 +139,10 @@ describe('HelpModal', () => {
     ).toBeInTheDocument()
     expect(screen.getByText('Expanded Toolbar Rows')).toBeInTheDocument()
     expect(
-      screen.getByText('Copy mode, paste and page up/down'),
+      screen.getByText('Copy mode, select text, paste and page up/down'),
     ).toBeInTheDocument()
     expect(
-      screen.queryByText('Paste and scroll history'),
+      screen.queryByText('Select text, paste and scroll history'),
     ).not.toBeInTheDocument()
   })
 

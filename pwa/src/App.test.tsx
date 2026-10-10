@@ -163,6 +163,10 @@ const mockScrollTerminal = vi.fn()
 const mockOverflowsHorizontally = vi.fn(() => false)
 const mockDragTerminal = vi.fn()
 const mockToggleTmuxCopyMode = vi.fn()
+const mockReadTerminalBufferText = vi.fn((..._args: unknown[]) => 'buffer')
+const mockCopyTerminalSelection = vi.fn(
+  async (..._args: unknown[]): Promise<'ok' | 'failed' | 'empty'> => 'empty',
+)
 const mockPasteTmuxBuffer = vi.fn()
 const mockFocusTerminal = vi.fn()
 const mockBlurTerminal = vi.fn()
@@ -202,6 +206,11 @@ vi.mock('./utils/terminal-bridge', () => ({
 
   toggleTmuxCopyMode: (...args: any[]) => mockToggleTmuxCopyMode(...args),
 
+  copyTerminalSelection: (...args: any[]) => mockCopyTerminalSelection(...args),
+
+  readTerminalBufferText: (...args: any[]) =>
+    mockReadTerminalBufferText(...args),
+
   sendTextToTerminal: (...args: any[]) => mockSendTextToTerminal(...args),
 }))
 
@@ -225,6 +234,8 @@ vi.mock('./utils/app-update', () => ({
 // Lets tests report stream state changes the way TerminalView does.
 let reportStreamState: (state: string) => void = () => {}
 let pasteImage: ((image: File) => void) | undefined
+let terminalCopy: ((result: 'ok' | 'failed') => void) | undefined
+let terminalCopyOnSelect: boolean | undefined
 // The handle the mocked terminal hands App through its ref; none by default.
 let terminalHandle: { paste: (text: string) => boolean } | null = null
 vi.mock('./components/terminal-view', () => ({
@@ -232,14 +243,39 @@ vi.mock('./components/terminal-view', () => ({
     (props: {
       onConnectionStateChange: (s: string) => void
       onPasteImage?: (image: File) => void
+      onCopy?: (result: 'ok' | 'failed') => void
+      copyOnSelect?: boolean
       ref?: { current: unknown }
     }) => {
       reportStreamState = props.onConnectionStateChange
       pasteImage = props.onPasteImage
+      terminalCopy = props.onCopy
+      terminalCopyOnSelect = props.copyOnSelect
       if (props.ref) props.ref.current = terminalHandle
       return <div data-testid="terminal-view">Terminal</div>
     },
   ),
+}))
+
+// The Select text sheet's props, while it is open
+let selectTextProps:
+  | {
+      paneId?: string
+      useServer: boolean
+      readBuffer: () => string
+      onClose: () => void
+      onCopied: (r: 'ok' | 'failed') => void
+    }
+  | undefined
+vi.mock('./components/select-text-sheet', () => ({
+  SelectTextSheet: (props: NonNullable<typeof selectTextProps>) => {
+    selectTextProps = props
+    return (
+      <div data-testid="select-text-sheet">
+        <button onClick={props.onClose}>CloseSelectText</button>
+      </div>
+    )
+  },
 }))
 
 // Stands in for the toolbar's Quick actions sheet
@@ -290,6 +326,9 @@ vi.mock('./components/keyboard-toolbar', () => ({
       </button>
       <button onClick={() => (props.onTmuxCopy as () => void)?.()}>
         TmuxCopy
+      </button>
+      <button onClick={() => (props.onSelectText as () => void)?.()}>
+        SelectText
       </button>
       <button onClick={() => (props.onPaste as () => void)?.()}>Paste</button>
       {props.onAttachImage ? (
@@ -1164,10 +1203,46 @@ describe('App', () => {
     render(<App />)
     await waitFor(() => screen.getByRole('button', { name: 'CtrlShiftC' }))
     fireEvent.click(screen.getByRole('button', { name: 'CtrlShiftC' }))
-    expect(mockSendKeyToTerminal).toHaveBeenCalledWith(null, 'c', {
+    // Nothing selected: the keys go to the pane
+    await waitFor(() =>
+      expect(mockSendKeyToTerminal).toHaveBeenCalledWith(null, 'c', {
+        ctrl: true,
+        shift: true,
+      }),
+    )
+  })
+
+  it('handleCtrlShiftKey for another key never copies', async () => {
+    render(<App />)
+    await waitFor(() => screen.getByRole('button', { name: 'CtrlShiftC' }))
+    const props = vi.mocked(KeyboardToolbar).mock.lastCall![0]
+    await act(async () => props.onCtrlShiftKey?.('z'))
+    expect(mockCopyTerminalSelection).not.toHaveBeenCalled()
+    expect(mockSendKeyToTerminal).toHaveBeenCalledWith(null, 'z', {
       ctrl: true,
       shift: true,
     })
+  })
+
+  it('handleCtrlShiftKey for c copies a selection instead', async () => {
+    mockCopyTerminalSelection.mockResolvedValueOnce('ok')
+    render(<App />)
+    await waitFor(() => screen.getByRole('button', { name: 'CtrlShiftC' }))
+    fireEvent.click(screen.getByRole('button', { name: 'CtrlShiftC' }))
+    const toast = await screen.findByTestId('toast')
+    expect(toast).toHaveTextContent('Copied')
+    expect(toast).toHaveAttribute('data-variant', 'success')
+    expect(mockSendKeyToTerminal).not.toHaveBeenCalled()
+  })
+
+  it('a failed terminal copy shows an error toast', async () => {
+    render(<App />)
+    await waitFor(() => expect(terminalCopy).toBeDefined())
+    expect(terminalCopyOnSelect).toBeFalsy()
+    act(() => terminalCopy!('failed'))
+    const toast = await screen.findByTestId('toast')
+    expect(toast).toHaveTextContent('Could not copy')
+    expect(toast).toHaveAttribute('data-variant', 'danger')
   })
 
   it('handleScroll calls scrollTmux', async () => {
@@ -1350,6 +1425,7 @@ describe('App', () => {
     expect(vi.mocked(KeyboardToolbar).mock.lastCall![0].quickActions).toEqual({
       onSendKey: expect.any(Function),
       onSendText: expect.any(Function),
+      onSelectText: expect.any(Function),
     })
   })
 
@@ -3355,6 +3431,52 @@ describe('App views, view-only and deep links', () => {
     // Switching to a view other than the terminal never reselects either
     act(() => showViewFrom.current!('chat'))
     expect(mockSelectTab).not.toHaveBeenCalled()
+  })
+
+  describe('select text', () => {
+    it('opens from the toolbar, reading the buffer without paneText', async () => {
+      render(<App />)
+      fireEvent.click(await screen.findByRole('button', { name: 'SelectText' }))
+      expect(screen.getByTestId('select-text-sheet')).toBeInTheDocument()
+      expect(selectTextProps?.useServer).toBe(false)
+      expect(selectTextProps?.readBuffer()).toBe('buffer')
+      expect(mockReadTerminalBufferText).toHaveBeenCalledWith(null)
+      act(() => selectTextProps?.onCopied('ok'))
+      expect(await screen.findByTestId('toast')).toHaveTextContent('Copied')
+      fireEvent.click(screen.getByRole('button', { name: 'CloseSelectText' }))
+      expect(screen.queryByTestId('select-text-sheet')).toBeNull()
+    })
+
+    it('reads the history from the server with paneText', async () => {
+      const base = mockUseLocalSessions()
+      mockUseLocalSessions.mockReturnValue({
+        ...base,
+        mux: {
+          backend: 'herdr',
+          caps: { clientSideSelect: true, copyMode: false, paneText: true },
+        },
+      } as typeof base)
+      render(<App />)
+      fireEvent.click(await screen.findByRole('button', { name: 'SelectText' }))
+      expect(selectTextProps?.useServer).toBe(true)
+    })
+
+    it('opens view-only from the bottom bar, never reading the history', async () => {
+      const base = mockUseLocalSessions()
+      mockUseLocalSessions.mockReturnValue({
+        ...base,
+        mux: {
+          backend: 'herdr',
+          caps: { clientSideSelect: true, copyMode: false, paneText: true },
+        },
+      } as typeof base)
+      render(<App readOnly />)
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Select text' }),
+      )
+      expect(screen.getByTestId('select-text-sheet')).toBeInTheDocument()
+      expect(selectTextProps?.useServer).toBe(false)
+    })
   })
 
   describe('view-only', () => {

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"regexp"
 	"runtime"
@@ -133,7 +134,7 @@ func (m *herdrMux) Caps() Caps {
 	v, _ := m.version.Load().(string)
 	start := herdrCanStartAgents(v)
 	reorder := herdrCanReorder(v, herdrStartGOOS)
-	return Caps{ClientSideSelect: true, Scroll: true, DriveSize: true, AgentChat: true, Files: true, Groups: true,
+	return Caps{ClientSideSelect: true, Scroll: true, PaneText: true, DriveSize: true, AgentChat: true, Files: true, Groups: true,
 		AgentStart: start, AgentStartCodex: start && agentStartKind("codex"),
 		Worktrees: herdrCanWorktrees(v, herdrStartGOOS), ReorderTabs: reorder, ReorderGroups: reorder}
 }
@@ -1399,6 +1400,43 @@ func (m *herdrMux) Scroll(ctx context.Context, paneID string, lines int) error {
 	}
 	err = m.rpc.call(ctx, "pane.scroll", map[string]any{"pane_id": paneID, "offset_from_bottom": next}, nil)
 	return herdrInputError(err)
+}
+
+// ReadText reads the pane's recent lines as herdr keeps them unwrapped
+// (history and screen). An older herdr without that source answers
+// invalid_request: the parameters are the server's own, so that can only
+// mean it lacks the source. more: the pane's history rows (pane.get) pass
+// lines.
+func (m *herdrMux) ReadText(ctx context.Context, paneID string, lines int, w io.Writer) (bool, error) {
+	if _, err := m.requirePane(ctx, paneID); err != nil {
+		return false, err
+	}
+	var info struct {
+		Pane struct {
+			Scroll herdrScroll `json:"scroll"`
+		} `json:"pane"`
+	}
+	if err := m.rpc.call(ctx, "pane.get", map[string]string{"pane_id": paneID}, &info); err != nil {
+		return false, herdrInputError(err)
+	}
+	var res struct {
+		Read struct {
+			Text string `json:"text"`
+		} `json:"read"`
+	}
+	err := m.rpc.call(ctx, "pane.read", map[string]any{"pane_id": paneID, "source": "recent_unwrapped", "lines": lines, "format": "text"}, &res)
+	var he *herdrError
+	if errors.As(err, &he) && he.Code == "invalid_request" {
+		log.Printf("herdr pane.read recent_unwrapped: %s", he.Message)
+		return false, errUnsupported
+	}
+	if err != nil {
+		return false, herdrInputError(err)
+	}
+	if _, err := io.WriteString(w, res.Read.Text); err != nil {
+		return false, err
+	}
+	return info.Pane.Scroll.Max > uint64(lines), nil
 }
 
 // sendWheel types SGR wheel reports (button 64 up, 65 down) at the middle of

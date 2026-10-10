@@ -569,6 +569,16 @@ Test trên thiết bị di động thật:
 - [ ] Terminal vừa khoảng phía trên thanh công cụ trong chế độ gõ tiếng Việt (IME)
 - [ ] Scroll vẫn hoạt động (không bị cử chỉ vuốt chặn mất)
 
+### Sao Chép Chữ (bảng Select text)
+
+- [ ] Android Chrome: nhấn giữ trong bảng thì hiện tay nắm; Copy đưa vùng chọn vào clipboard
+- [ ] iOS Safari (PWA): nhấn giữ trong bảng thì hiện tay nắm và menu hệ thống; Copy chạy đúng
+- [ ] Bảng có lịch sử (tmux và Herdr), Load more đọc thêm, Copy all chép hết
+- [ ] Ký tự đổi chiều chữ hoặc khoảng trắng độ rộng 0 hiện thành `⟨U+XXXX⟩`, dán ra lại đúng ký tự gốc
+- [ ] Thiết bị chỉ xem: mở bảng từ thanh View only, chỉ có phần màn hình, không gửi request `/text`
+- [ ] Cài đặt > Copy on select: nhả chuột sau khi kéo thì chữ được chép, có toast ngắn; mặc định tắt
+- [ ] Mở trang qua HTTP thường trong LAN (không phải secure context): vẫn chép được, hoặc có toast báo lỗi rõ ràng
+
 ### Hướng Dẫn Cử Chỉ
 
 - [ ] Người dùng mobile lần đầu thấy overlay hướng dẫn cử chỉ
@@ -634,7 +644,8 @@ Test trên thiết bị di động thật:
 
 ### Tổ Hợp Ctrl+Shift
 
-- [ ] Ctrl+Shift+C (sao chép) hoạt động
+- [ ] Bôi đen bằng chuột rồi nhấn Ctrl+Shift+C thì chữ vào clipboard và terminal không nhận gì (Chrome, Firefox, Edge trên Linux/Windows); chưa bôi đen thì phím tới chương trình như cũ
+- [ ] Cmd+C trên macOS chép vùng bôi đen bằng chuột
 - [ ] Ctrl+Shift+V (dán) hoạt động
 - [ ] Ctrl+Shift+Z (làm lại) hoạt động
 - [ ] Ctrl+Shift+X (cắt) hoạt động
@@ -642,6 +653,7 @@ Test trên thiết bị di động thật:
 ### Phím Tiện Ích
 
 - [ ] Nút bật/tắt tmux copy mode hoạt động
+- [ ] Phím chọn chữ: đứng cạnh phím copy mode với tmux, nằm vào chỗ của nó với Herdr
 - [ ] Nút Dán hoạt động (từ nguồn đã cấu hình)
 - [ ] Nút Scroll lên/xuống hoạt động
 

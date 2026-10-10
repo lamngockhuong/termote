@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { createRef } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StreamControl, TermSize } from '../hooks/use-term-socket'
@@ -42,6 +42,16 @@ const { FakeTerminal, FakeFit } = vi.hoisted(() => {
         this.wheelCb = cb
       },
     )
+    keyCb: (ev: KeyboardEvent) => boolean = () => true
+    attachCustomKeyEventHandler = vi.fn(
+      (cb: (ev: KeyboardEvent) => boolean) => {
+        this.keyCb = cb
+      },
+    )
+    selection = ''
+    hasSelection = () => this.selection !== ''
+    getSelection = () => this.selection
+    selectionCb: Listener<void> = () => {}
     resizeCb: Listener<TermSize> = () => {}
     disposables: Array<{ dispose: ReturnType<typeof vi.fn> }> = []
     write = vi.fn()
@@ -76,6 +86,7 @@ const { FakeTerminal, FakeFit } = vi.hoisted(() => {
     onData = this.sub<string>((cb) => (this.dataCb = cb))
     onBinary = this.sub<string>((cb) => (this.binaryCb = cb))
     onResize = this.sub<TermSize>((cb) => (this.resizeCb = cb))
+    onSelectionChange = this.sub<void>((cb) => (this.selectionCb = cb))
   }
 
   class FakeFit {
@@ -151,6 +162,11 @@ const bridge = vi.hoisted(() => ({
   setTerminalTheme: vi.fn(),
   terminalRowHeight: (term: { options: { fontSize?: number } }) =>
     (term.options.fontSize ?? 14) * 1.2,
+  isCopyShortcut: (ev: KeyboardEvent) =>
+    ev.type === 'keydown' && ev.ctrlKey && ev.shiftKey && ev.code === 'KeyC',
+  copyTerminalSelection: vi.fn(
+    async (): Promise<'ok' | 'failed' | 'empty'> => 'ok',
+  ),
 }))
 vi.mock('../utils/terminal-bridge', () => bridge)
 
@@ -1179,6 +1195,89 @@ describe('TerminalView', () => {
     } finally {
       root.style.removeProperty('--tm-term-bg')
     }
+  })
+
+  describe('copy', () => {
+    const key = (init: KeyboardEventInit) =>
+      new KeyboardEvent('keydown', { code: 'KeyC', key: 'C', ...init })
+
+    it('Ctrl+Shift+C copies a selection and sends nothing', async () => {
+      const onCopy = vi.fn()
+      const { term } = renderView({ onCopy, readOnly: true })
+      term.selection = 'hello'
+      const ev = key({ ctrlKey: true, shiftKey: true, cancelable: true })
+      expect(term.keyCb(ev)).toBe(false)
+      expect(ev.defaultPrevented).toBe(true)
+      await waitFor(() => expect(onCopy).toHaveBeenCalledWith('ok', 'key'))
+      expect(socket.send).not.toHaveBeenCalled()
+    })
+
+    it('Ctrl+Shift+C without a selection, or another key, goes to the pane', () => {
+      const { term } = renderView()
+      expect(term.keyCb(key({ ctrlKey: true, shiftKey: true }))).toBe(true)
+      term.selection = 'x'
+      expect(term.keyCb(key({ ctrlKey: true }))).toBe(true)
+      expect(bridge.copyTerminalSelection).not.toHaveBeenCalled()
+    })
+
+    it('reports a failed copy, and nothing when the selection vanished', async () => {
+      const onCopy = vi.fn()
+      const { term } = renderView({ onCopy })
+      term.selection = 'x'
+      bridge.copyTerminalSelection.mockResolvedValueOnce('failed')
+      term.keyCb(key({ ctrlKey: true, shiftKey: true }))
+      await waitFor(() => expect(onCopy).toHaveBeenCalledWith('failed', 'key'))
+      bridge.copyTerminalSelection.mockResolvedValueOnce('empty')
+      term.keyCb(key({ ctrlKey: true, shiftKey: true }))
+      await waitFor(() =>
+        expect(bridge.copyTerminalSelection).toHaveBeenCalledTimes(2),
+      )
+      expect(onCopy).toHaveBeenCalledTimes(1)
+    })
+
+    it('copies at the end of a drag only with copyOnSelect, once per selection', async () => {
+      const onCopy = vi.fn()
+      const { term, rerender, ref } = renderView({ onCopy })
+      const el = screen.getByTestId('terminal-view')
+      // A drag that starts in the terminal, ending at target
+      const drag = (target: Element = el, button = 0) => {
+        fireEvent.mouseDown(el, { button })
+        fireEvent.mouseUp(target, { button })
+      }
+      term.selection = 'abc'
+      drag()
+      expect(bridge.copyTerminalSelection).not.toHaveBeenCalled()
+
+      rerender(
+        <TerminalView ref={ref} paneId="0" onCopy={onCopy} copyOnSelect />,
+      )
+      drag(el, 2)
+      // A mouseup that no drag in the terminal started
+      fireEvent.mouseUp(document.body)
+      expect(bridge.copyTerminalSelection).not.toHaveBeenCalled()
+      // Released outside the terminal (the toolbar)
+      drag(document.body)
+      await waitFor(() => expect(onCopy).toHaveBeenCalledWith('ok', 'select'))
+      // The same selection again: nothing new to copy.
+      drag()
+      expect(bridge.copyTerminalSelection).toHaveBeenCalledTimes(1)
+      // Cleared, then the same text selected again: copied again.
+      term.selection = ''
+      term.selectionCb()
+      drag()
+      term.selection = 'abc'
+      term.selectionCb()
+      bridge.copyTerminalSelection.mockResolvedValueOnce('empty')
+      drag()
+      expect(bridge.copyTerminalSelection).toHaveBeenCalledTimes(2)
+      await Promise.resolve()
+      expect(onCopy).toHaveBeenCalledTimes(1)
+
+      rerender(<TerminalView ref={ref} paneId="0" onCopy={onCopy} />)
+      term.selection = 'new'
+      drag()
+      expect(bridge.copyTerminalSelection).toHaveBeenCalledTimes(2)
+    })
   })
 
   it('disposes the terminal and its listeners on unmount', () => {

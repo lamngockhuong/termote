@@ -15,6 +15,8 @@ import { readToken, type UiStyle } from '../ui-style'
 import { safeUrl } from '../utils/markdown-safety'
 import {
   blockContextMenu,
+  copyTerminalSelection,
+  isCopyShortcut,
   setTerminalFontFamily,
   setTerminalFontSize,
   setTerminalTheme,
@@ -89,6 +91,11 @@ interface Props {
   // A paste that carries an image and no text goes here instead of the
   // terminal (the server has uploads); unset, every paste is text.
   onPasteImage?: (image: File) => void
+  // Copy the selection when a mouse drag ends (the setting).
+  copyOnSelect?: boolean
+  // A selection was copied: by Ctrl+Shift+C ('key') or a drag ending with
+  // copyOnSelect ('select').
+  onCopy?: (result: 'ok' | 'failed', how: 'key' | 'select') => void
 }
 
 // Foreground colours reach WCAG AA (4.5:1) on the terminal background of every
@@ -260,6 +267,8 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       covered = false,
       onConnectionStateChange,
       onPasteImage,
+      copyOnSelect = false,
+      onCopy,
     },
     ref,
   ) => {
@@ -295,6 +304,8 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
     readOnlyRef.current = readOnly
     const onPasteImageRef = useRef(onPasteImage)
     onPasteImageRef.current = onPasteImage
+    const onCopyRef = useRef(onCopy)
+    onCopyRef.current = onCopy
     const driveSizeRef = useRef(driveSize)
     driveSizeRef.current = driveSize
     const onDriveLostRef = useRef(onDriveLost)
@@ -575,6 +586,18 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
         return false
       })
 
+      // Ctrl+Shift+C with a selection copies it and sends nothing; without
+      // one the keys go to the pane as before. Allowed view-only too: it
+      // only reads what the screen shows.
+      term.attachCustomKeyEventHandler((ev) => {
+        if (!isCopyShortcut(ev) || !term.hasSelection()) return true
+        ev.preventDefault()
+        void copyTerminalSelection(handleRef.current).then((result) => {
+          if (result !== 'empty') onCopyRef.current?.(result, 'key')
+        })
+        return false
+      })
+
       const subs = [
         term.onData((data) => {
           if (readOnlyRef.current) return
@@ -697,6 +720,42 @@ export const TerminalView = forwardRef<TerminalHandle, Props>(
       container.addEventListener('paste', onPaste, true)
       return () => container.removeEventListener('paste', onPaste, true)
     }, [])
+
+    // With copyOnSelect, the end of a mouse drag copies what it selected,
+    // inside the mouseup gesture (Safari and Firefox let a page write the
+    // clipboard only then), once per selection. A drag that starts in the
+    // terminal may end anywhere on the page.
+    useEffect(() => {
+      const container = containerRef.current
+      const term = termRef.current
+      /* v8 ignore next */
+      if (!copyOnSelect || !container || !term) return
+      let copied = ''
+      let dragging = false
+      const onMouseDown = (e: MouseEvent) => {
+        if (e.button === 0) dragging = true
+      }
+      const onMouseUp = (e: MouseEvent) => {
+        if (e.button !== 0 || !dragging) return
+        dragging = false
+        const text = term.hasSelection() ? term.getSelection() : ''
+        if (!text || text === copied) return
+        copied = text
+        void copyTerminalSelection(handleRef.current).then((result) => {
+          if (result !== 'empty') onCopyRef.current?.(result, 'select')
+        })
+      }
+      const sub = term.onSelectionChange(() => {
+        if (!term.hasSelection()) copied = ''
+      })
+      container.addEventListener('mousedown', onMouseDown, true)
+      document.addEventListener('mouseup', onMouseUp, true)
+      return () => {
+        container.removeEventListener('mousedown', onMouseDown, true)
+        document.removeEventListener('mouseup', onMouseUp, true)
+        sub.dispose()
+      }
+    }, [copyOnSelect])
 
     // No cursor or keyboard focus for input that would go nowhere.
     useEffect(() => {

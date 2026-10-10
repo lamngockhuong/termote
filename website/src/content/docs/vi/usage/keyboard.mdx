@@ -77,7 +77,7 @@ và chương trình toàn màn hình đang chạy không phải vẽ lại.
 
 | Nút | Combo        | Trường hợp          |
 | --- | ------------ | ------------------- |
-| C   | Ctrl+Shift+C | Sao chép (terminal) |
+| C   | Ctrl+Shift+C | Sao chép vùng đang chọn; không có vùng chọn thì gửi Ctrl+Shift+C |
 | V   | Ctrl+Shift+V | Dán                 |
 | Z   | Ctrl+Shift+Z | Làm lại             |
 | X   | Ctrl+Shift+X | Cắt                 |
@@ -87,6 +87,7 @@ và chương trình toàn màn hình đang chạy không phải vẽ lại.
 | Nút                            | Hành động                                                                            |
 | ------------------------------ | ------------------------------------------------------------------------------------ |
 | Icon chế độ sao chép (lịch sử) | Bật/tắt chế độ sao chép tmux (ẩn khi dùng backend Herdr)                             |
+| Icon chọn chữ                  | Mở chữ của pane để chọn và sao chép: xem [Sao chép chữ](#sao-chép-chữ)               |
 | Icon Paste (clipboard)         | Dán từ nguồn đã chọn trong [Cài đặt](/vi/usage/settings/) (mặc định: clipboard)      |
 | Icon ảnh                       | Đính kèm ảnh: xem [Đính kèm ảnh](#đính-kèm-ảnh)                                      |
 | ⇈                              | Cuộn lên: một trang lịch sử tmux, hoặc phần scrollback của terminal khi dùng Herdr   |
@@ -102,9 +103,29 @@ và chương trình toàn màn hình đang chạy không phải vẽ lại.
 6. Nhấn **Icon Paste** để dán (khi nguồn dán trong [Cài đặt](/vi/usage/settings/) là bộ nhớ tmux)
 
 :::note[Backend Herdr]
-Herdr không có chế độ sao chép hay bộ nhớ dán của tmux, nên phím chế độ sao chép bị ẩn và Icon Paste
-luôn dán từ clipboard hệ thống.
+Herdr không có chế độ sao chép hay bộ nhớ dán của tmux, nên phím chế độ sao chép bị ẩn, phím chọn chữ
+nằm vào chỗ của nó, và Icon Paste luôn dán từ clipboard hệ thống.
 :::
+
+### Sao chép chữ
+
+Quy trình tmux ở trên chỉ chép vào bộ nhớ của tmux. Muốn đưa chữ trong terminal vào clipboard của
+thiết bị thì dùng một trong ba cách sau:
+
+- **Phím chọn chữ** (nhãn trong ứng dụng: **Select text**; điện thoại và máy tính, tmux và Herdr): mở
+  một bảng chứa chữ của pane, có cả lịch sử (1000 dòng gần nhất; **Load more** đọc tới 5000 dòng).
+  Trên điện thoại, nhấn giữ rồi kéo hai tay nắm để chọn; với chuột thì kéo để chọn. Sau đó nhấn
+  **Copy**, còn **Copy all** chép toàn bộ. Ký tự ẩn (dấu đổi chiều chữ, khoảng trắng độ rộng 0) hiện thành
+  `⟨U+XXXX⟩` và được chép đúng như gốc. Trên thiết bị chỉ xem, hoặc khi server không đọc được lịch sử
+  (psmux), bảng chỉ có phần terminal trên trang đang giữ và có ghi chú cho biết điều đó.
+- **Ctrl+Shift+C** (máy tính, trừ macOS): khi đã bôi đen bằng chuột, tổ hợp này chép vùng chọn và không
+  gửi gì vào terminal; chưa bôi đen thì phím vẫn tới chương trình như trước. Combo ^⇧C trên thanh công
+  cụ cũng vậy. Trên macOS, Cmd+C chép vùng chọn.
+- **Copy on select** trong [Cài đặt](/vi/usage/settings/): chép ngay khi nhả nút chuột.
+
+Trang mở bằng HTTP thường (địa chỉ LAN) không có Clipboard API. Khi đó trình duyệt chép bằng lệnh copy
+của chính nó, và báo lỗi nếu lệnh này cũng bị từ chối. Terminal Herdr vẽ lại cả màn hình mỗi khi luồng
+nối lại, nên vùng bôi đen bằng chuột sẽ mất.
 
 :::note[Cài đặt Native Mode]
 Cho native mode, thêm dòng này vào `~/.tmux.conf`:
@@ -225,7 +246,8 @@ phiên chỉ xem.
 1. **Bộ điều chỉnh dính**: Chạm Ctrl hoặc Shift một lần, rồi chạm phím khác
 2. **Kết hợp bộ điều chỉnh**: Chạm cả Ctrl và Shift cho combo Ctrl+Shift
 3. **Shift+Tab**: Điều hướng lùi trong hoàn thành/menu
-4. **Chế độ sao chép** (tmux): Bật để chọn văn bản, tắt để tiếp tục gõ
+4. **Chế độ sao chép** (tmux): Bật để chọn văn bản, tắt để tiếp tục gõ; muốn chép vào thiết bị thì
+   dùng [phím chọn chữ](#sao-chép-chữ)
 5. **Mở rộng thêm**: Chạm icon mở rộng để có đầy đủ bàn phím với Home, End, v.v.
 6. **Lịch sử lệnh**: Dùng icon 🕐 đồng hồ để tái sử dụng lệnh đã dùng
 7. **Quick actions**: Chạm ⚡ để có Clear, Cancel, Clear line và Exit trong một bảng

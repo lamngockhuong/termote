@@ -65,6 +65,9 @@ export interface MuxSnapshot {
     clientSideSelect: boolean
     copyMode: boolean
     scroll?: boolean
+    // A pane's history and screen can be read as plain text (/panes/{id}/text);
+    // not for a view-only client.
+    paneText?: boolean
     // The client can take over the pane size (herdr's control mode).
     driveSize?: boolean
     // The agent routes (/agent/*) work: transcript, message, prompt.
@@ -488,6 +491,33 @@ export async function scrollPane(
     { lines },
   )
   return data.ok === true
+}
+
+// Default and largest history a pane text read asks for (server/mux_pane_text.go)
+export const PANE_TEXT_LINES = 1000
+export const PANE_TEXT_MAX_LINES = 5000
+
+export interface PaneText {
+  text: string
+  lines: number
+  // The oldest lines were cut at the server's size limit
+  truncated: boolean
+  // The pane holds history past what was read
+  more?: boolean
+}
+
+// A pane's plain text: lines rows of history and its screen
+export async function fetchPaneText(
+  paneId: string,
+  lines: number,
+  signal?: AbortSignal,
+): Promise<PaneText> {
+  const res = await fetch(
+    `${API_BASE}/panes/${encodeURIComponent(paneId)}/text?lines=${lines}`,
+    { signal },
+  )
+  if (!res.ok) throw await requestError(res, true)
+  return res.json()
 }
 
 export async function fetchTerminalToken(): Promise<string> {

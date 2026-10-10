@@ -61,6 +61,7 @@ export interface Settings {
   imeSendBehavior: ImeSendBehavior
   toolbarDefaultExpanded: boolean
   disableContextMenu: boolean
+  copyOnSelect: boolean // copy the terminal selection when a mouse drag ends
   pollInterval: number // seconds between session list refreshes
   hasSeenGestureHints: boolean // first-time gesture hints overlay
   pasteSource: PasteSource // paste button source: system clipboard or tmux buffer
@@ -84,6 +85,7 @@ const DEFAULTS: Settings = {
   imeSendBehavior: 'send-only',
   toolbarDefaultExpanded: false,
   disableContextMenu: true,
+  copyOnSelect: false,
   pollInterval: 5,
   hasSeenGestureHints: false,
   pasteSource: 'clipboard',
@@ -134,6 +136,7 @@ function getSnapshot(): Settings {
         findIncludeIgnored: merged.findIncludeIgnored === true,
         findExcludes: resolveFindExcludes(merged.findExcludes),
         notifyAgents: merged.notifyAgents === true,
+        copyOnSelect: merged.copyOnSelect === true,
       }
     } catch {
       cachedSettings = DEFAULTS

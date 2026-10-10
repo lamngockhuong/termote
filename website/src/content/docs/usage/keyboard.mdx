@@ -77,7 +77,7 @@ full-screen program does not redraw.
 
 | Button | Combo        | Use Case        |
 | ------ | ------------ | --------------- |
-| C      | Ctrl+Shift+C | Copy (terminal) |
+| C      | Ctrl+Shift+C | Copy the selection, else send Ctrl+Shift+C |
 | V      | Ctrl+Shift+V | Paste           |
 | Z      | Ctrl+Shift+Z | Redo            |
 | X      | Ctrl+Shift+X | Cut             |
@@ -87,6 +87,7 @@ full-screen program does not redraw.
 | Button                   | Action                                                                           |
 | ------------------------ | -------------------------------------------------------------------------------- |
 | Copy mode icon (history) | Toggle tmux copy mode (hidden with the Herdr backend)                            |
+| Select text icon         | Open the pane's text to select and copy: see [Copy text](#copy-text)              |
 | Paste icon (clipboard)   | Paste from the source chosen in [Settings](/usage/settings/) (default: clipboard) |
 | Image icon               | Attach an image: see [Attach an image](#attach-an-image)                          |
 | ⇈                        | Scroll up: a page of tmux history, or the terminal scrollback with Herdr         |
@@ -102,9 +103,29 @@ full-screen program does not redraw.
 6. Tap the **Paste icon** to paste (with the paste source set to tmux buffer in [Settings](/usage/settings/))
 
 :::note[Herdr backend]
-Herdr has no tmux copy mode or paste buffer, so the copy mode key is hidden and the Paste icon always
-uses the system clipboard.
+Herdr has no tmux copy mode or paste buffer, so the copy mode key is hidden, the Select text key
+takes its place, and the Paste icon always uses the system clipboard.
 :::
+
+### Copy text
+
+The tmux workflow above copies into the tmux buffer only. To put terminal text on the device's own
+clipboard:
+
+- **Select text key** (phone and desktop, tmux and Herdr): opens a sheet with the pane's text, its
+  history included (the last 1000 lines; **Load more** reads up to 5000). Select with a long press
+  and the selection handles, or drag with a mouse, then tap **Copy**; **Copy all** copies everything.
+  Hidden characters (bidi marks, zero-width spaces) show as `⟨U+XXXX⟩` and are copied as they are.
+  On a view-only device, or where the server cannot read the history (psmux), the sheet shows what
+  the terminal on the page holds, and says so.
+- **Ctrl+Shift+C** (desktop, not on a Mac): with text selected by the mouse, copies it and sends
+  nothing to the terminal; without a selection the keys reach the program as before. The ^⇧C toolbar
+  combo does the same. On a Mac, Cmd+C copies the selection.
+- **Copy on select** in [Settings](/usage/settings/): copies as soon as you release the mouse button.
+
+A page opened over plain HTTP (a LAN address) has no Clipboard API; copying falls back to the
+browser's copy command and shows an error when that is refused too. The Herdr terminal redraws its
+whole screen when its stream starts again, which clears a mouse selection.
 
 :::note[Native Mode Setup]
 For native mode, add this to your `~/.tmux.conf`:
@@ -225,7 +246,8 @@ for a view-only session.
 1. **Modifiers are sticky**: Tap Ctrl or Shift once, then tap another key
 2. **Combine modifiers**: Tap both Ctrl and Shift for Ctrl+Shift combos
 3. **Shift+Tab**: Navigate backwards in completion/menus
-4. **Copy mode** (tmux): Enable to select text, disable to resume typing
+4. **Copy mode** (tmux): Enable to select text, disable to resume typing; to copy to the device,
+   use [Select text](#copy-text)
 5. **Expand for more**: Tap expand icon for full keyboard with Home, End, etc.
 6. **Command history**: Use 🕐 clock icon to quickly reuse previous commands
 7. **Quick actions**: Tap ⚡ for Clear, Cancel, Clear line and Exit in one sheet
