@@ -30,6 +30,8 @@ type authInfo struct {
 	Kind     authKind
 	Role     role
 	DeviceID string
+	// SessionID: the password session's id (authSession only).
+	SessionID string
 }
 
 // authCtxKey holds the authInfo of a request basicAuth let through.

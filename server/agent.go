@@ -287,6 +287,9 @@ type agentAPI struct {
 	// devices: devices can be paired (the snapshot's caps.devices); set by
 	// buildServer.
 	devices bool
+	// signins: password sessions can be listed and revoked (the
+	// snapshot's caps.signins); set by buildServer.
+	signins bool
 }
 
 type agentLookup struct {

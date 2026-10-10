@@ -106,12 +106,13 @@ type streamControl struct {
 	Reason string `json:"reason,omitempty"`
 }
 
-// errStreamEvicted, errServerShutdown and errDeviceRevoked end a stream from
-// outside; errTooManyViewers refuses a view-only stream.
+// errStreamEvicted, errServerShutdown, errDeviceRevoked and errSessionRevoked
+// end a stream from outside; errTooManyViewers refuses a view-only stream.
 var (
 	errStreamEvicted  = errors.New("closed: too many open streams")
 	errServerShutdown = errors.New("server shutting down")
 	errDeviceRevoked  = errors.New("closed: device revoked")
+	errSessionRevoked = errors.New("closed: signed out")
 	errTooManyViewers = errors.New("too many viewers")
 )
 
@@ -131,15 +132,19 @@ type streamHub struct {
 	// gone before closeDevice takes mu, so a stream that was opening while
 	// its device was revoked is closed either way.
 	alive func(deviceID string) bool
+	// sessionAlive reports whether a password session still exists; nil
+	// without sign-in. Asked and ordered against a revoke like alive.
+	sessionAlive func(sessionID string) bool
 	// onShutdown runs once shutdown has closed every stream (it writes what
 	// the device store holds in memory).
 	onShutdown func()
 }
 
 type hubEntry struct {
-	cancel   context.CancelCauseFunc
-	role     role
-	deviceID string
+	cancel    context.CancelCauseFunc
+	role      role
+	deviceID  string
+	sessionID string
 }
 
 func newStreamHub(max int) *streamHub {
@@ -155,6 +160,12 @@ func newStreamHub(max int) *streamHub {
 // shutdown has started (errServerShutdown) and for a revoked device
 // (errDeviceRevoked).
 func (h *streamHub) add(cancel context.CancelCauseFunc, r role, deviceID string) (*hubEntry, error) {
+	return h.addFor(cancel, r, deviceID, "")
+}
+
+// addFor is add for a stream that also belongs to the password session
+// sessionID ("" for none); a revoked session gets errSessionRevoked.
+func (h *streamHub) addFor(cancel context.CancelCauseFunc, r role, deviceID, sessionID string) (*hubEntry, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.closing {
@@ -162,6 +173,9 @@ func (h *streamHub) add(cancel context.CancelCauseFunc, r role, deviceID string)
 	}
 	if deviceID != "" && h.alive != nil && !h.alive(deviceID) {
 		return nil, errDeviceRevoked
+	}
+	if sessionID != "" && h.sessionAlive != nil && !h.sessionAlive(sessionID) {
+		return nil, errSessionRevoked
 	}
 	if r == roleView && deviceID != "" {
 		mine := 0
@@ -184,7 +198,7 @@ func (h *streamHub) add(cancel context.CancelCauseFunc, r role, deviceID string)
 		}
 		h.evict(i)
 	}
-	e := &hubEntry{cancel: cancel, role: r, deviceID: deviceID}
+	e := &hubEntry{cancel: cancel, role: r, deviceID: deviceID, sessionID: sessionID}
 	h.streams = append(h.streams, e)
 	h.wg.Add(1)
 	return e, nil
@@ -207,6 +221,22 @@ func (h *streamHub) closeDevice(deviceID string) {
 	for _, s := range h.streams {
 		if s.deviceID == deviceID {
 			s.cancel(errDeviceRevoked)
+		}
+	}
+}
+
+// closeSession ends every stream of the password session sessionID (a
+// revoked session, Log out). Each stays in the hub until its cleanup removes
+// it.
+func (h *streamHub) closeSession(sessionID string) {
+	if sessionID == "" {
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for _, s := range h.streams {
+		if s.sessionID == sessionID {
+			s.cancel(errSessionRevoked)
 		}
 	}
 }
@@ -286,9 +316,14 @@ func handleStream(w http.ResponseWriter, r *http.Request, m Mux, tokens *tokenSt
 	// The token's grant, and the request's own: either one view-only makes
 	// the stream view-only.
 	view := grant.role == roleView || isViewOnly(r)
-	deviceID := grant.deviceID
-	if a, ok := authFrom(r.Context()); ok && a.DeviceID != "" {
-		deviceID = a.DeviceID
+	deviceID, sessionID := grant.deviceID, grant.sessionID
+	if a, ok := authFrom(r.Context()); ok {
+		if a.DeviceID != "" {
+			deviceID = a.DeviceID
+		}
+		if a.SessionID != "" {
+			sessionID = a.SessionID
+		}
 	}
 	var va viewAttacher
 	if view {
@@ -349,7 +384,7 @@ func handleStream(w http.ResponseWriter, r *http.Request, m Mux, tokens *tokenSt
 	if view {
 		streamRole = roleView
 	}
-	entry, err := hub.add(scancel, streamRole, deviceID)
+	entry, err := hub.addFor(scancel, streamRole, deviceID, sessionID)
 	if err != nil {
 		scancel(err)
 		switch {
@@ -358,6 +393,8 @@ func handleStream(w http.ResponseWriter, r *http.Request, m Mux, tokens *tokenSt
 			go conn.Close(websocket.StatusTryAgainLater, "too many viewers")
 		case errors.Is(err, errDeviceRevoked):
 			go conn.Close(websocket.StatusPolicyViolation, "device revoked")
+		case errors.Is(err, errSessionRevoked):
+			go conn.Close(websocket.StatusPolicyViolation, "signed out")
 		default:
 			go conn.Close(websocket.StatusGoingAway, "server shutting down")
 		}
@@ -559,6 +596,8 @@ func runStream(ctx context.Context, cancel context.CancelCauseFunc, conn *websoc
 			go conn.Close(closeEvicted, "too many streams")
 		case errors.Is(cause, errDeviceRevoked):
 			go conn.Close(websocket.StatusPolicyViolation, "device revoked")
+		case errors.Is(cause, errSessionRevoked):
+			go conn.Close(websocket.StatusPolicyViolation, "signed out")
 		case errors.Is(cause, errServerShutdown):
 			go conn.Close(websocket.StatusGoingAway, "server shutting down")
 		default:

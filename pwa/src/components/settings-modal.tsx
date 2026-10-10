@@ -17,6 +17,7 @@ import {
   requestNotify,
 } from '../utils/notify-permission'
 import { DevicesSection } from './devices-section'
+import { SigninsSection } from './signins-section'
 import { Button, FOCUS_RING, IconButton } from './ui/button'
 import { SegmentedControl } from './ui/segmented-control'
 import { Sheet } from './ui/sheet'
@@ -58,6 +59,11 @@ interface Props {
   readOnly?: boolean
   // The Devices group: pair, list and revoke devices (caps.devices, full)
   devices?: boolean
+  // The Signed-in browsers group: list and sign out the browsers signed in
+  // with the password (caps.signins, full)
+  signins?: boolean
+  // Log out, for Signed-in browsers to sign this browser out with
+  onLogout?: () => Promise<void> | void
 }
 
 const CONTROL =
@@ -442,6 +448,8 @@ export function SettingsModal({
   onDisableNotify,
   readOnly = false,
   devices = false,
+  signins = false,
+  onLogout,
 }: Props) {
   const [activeGroup, setActiveGroup] = useState('appearance')
 
@@ -638,6 +646,14 @@ export function SettingsModal({
       id: 'devices',
       title: 'Devices',
       rows: <DevicesSection />,
+    })
+  }
+
+  if (signins) {
+    groups.push({
+      id: 'signins',
+      title: 'Signed-in browsers',
+      rows: <SigninsSection logOut={onLogout} />,
     })
   }
 

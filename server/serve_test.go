@@ -660,6 +660,7 @@ func TestBasicAuthSessionCookie(t *testing.T) {
 	t.Run("sets session cookie on successful auth", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/api/test", nil)
 		req.SetBasicAuth("admin", "secret")
+		req.Header.Set("Sec-Fetch-Mode", "cors")
 		rec := httptest.NewRecorder()
 
 		handler.ServeHTTP(rec, req)
@@ -691,6 +692,7 @@ func TestBasicAuthSessionCookie(t *testing.T) {
 		// First request: authenticate and get cookie
 		req1 := httptest.NewRequest("GET", "/api/test", nil)
 		req1.SetBasicAuth("admin", "secret")
+		req1.Header.Set("Sec-Fetch-Mode", "cors")
 		rec1 := httptest.NewRecorder()
 		handler.ServeHTTP(rec1, req1)
 
@@ -897,13 +899,14 @@ func TestBasicAuthLogsFailures(t *testing.T) {
 	}
 }
 
-// Logins without a cookie cannot grow the session store past its cap: the
-// oldest session is dropped, the newest still works.
+// Browser logins without a cookie cannot grow the session store past its
+// cap: the oldest session is dropped, the newest still works.
 func TestBasicAuthSessionsBounded(t *testing.T) {
 	h := basicAuth("admin", "secret", http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 	login := func() *http.Cookie {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		req.SetBasicAuth("admin", "secret")
+		req.Header.Set("Sec-Fetch-Mode", "navigate")
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
 		for _, c := range rec.Result().Cookies() {
