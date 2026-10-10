@@ -8,25 +8,34 @@ import { Aside } from "@astrojs/starlight/components";
 Everyone signs in with the one saved password. To let another device in without handing that password
 over, pair it: you make a one-time code, the new device types it, and from then on that device signs in
 by itself. Each paired device has a name and a role, and you can sign it out on its own without
-changing the password. Pairing needs sign-in, so it is off with `--no-auth`.
+changing the password. Pairing needs sign-in, so it is off with `--no-auth`. What a paired device can
+and cannot be trusted with is on [Security Model](/usage/security/).
 
 ## Pair from the terminal
 
 ```bash
-termote pair                      # a view-only device (the default)
+termote pair                      # a view-only device (the default), signed in for 30 days
 termote pair --role full --name "Work phone"
+termote pair --expires 7d         # 12h, 7d, 2w: 1 hour to 400 days
+termote pair --expires never      # no time limit
 ```
 
 It prints a code like `ABCDE-FGHJK`, a link and a QR code. The code works once and expires after 5
-minutes. On the new device, scan the QR code, open the link, or open `/pair` on your Termote address and
+minutes. The device it pairs stays signed in for 30 days unless `--expires` says otherwise; past that it
+is signed out and has to be paired again. On the new device, scan the QR code, open the link, or open `/pair` on your Termote address and
 type the code. If you gave no `--name`, the new device is asked for one, else it is named after its
 browser.
 
 ## Pair from a signed-in device
 
 On a device with full access, open **Settings > Devices > Pair a device**, pick **View only** or full
-access, optionally name it, and show the code or QR code to the new device. The same list shows each
-paired device with its role and when it was last used, with a **Revoke** button.
+access, how long it **Stays signed in for** (30 days unless you pick another, or **Never**), optionally
+name it, and show the code or QR code to the new device. The same list shows each paired device with its
+role, when it was last used, who paired it and until when it is valid, with a **Revoke** button.
+
+Only the password pairs a full device: signed in with it, or `termote pair` on the server. A paired
+device pairs view-only devices only, and a device with a time limit pairs none that outlasts it (no
+**Never**).
 
 <Aside>
   An iOS home-screen app does not share cookies with Safari, so a scanned QR code cannot sign it in. Open
@@ -36,14 +45,17 @@ paired device with its role and when it was last used, with a **Revoke** button.
 ## List and revoke
 
 ```bash
-termote devices                   # id, name, role, when paired and last used
+termote devices                   # id, name, role, paired, last used, valid until, paired by
 termote devices revoke <id>       # sign it out and close its open terminals
 ```
 
-Revoking takes effect at once. Logging out on a paired device revokes that device. A new password
-(`termote start --fresh`) signs out every paired device. A device stays signed in for 400 days unless
-you revoke it, so give Termote a host name of its own: a cookie is shared by every service on the same
-host name.
+Revoking takes effect at once, and also revokes every device the revoked one paired. Logging out on a
+paired device revokes only that device: the devices it paired stay, listed as paired by a removed
+device. A new password (`termote start --fresh`) signs out every paired device. After revoking a full
+device, also run `termote start --fresh`: it had a shell (see [Security Model](/usage/security/#if-a-device-is-lost)).
+
+A device paired with **Never** stays signed in until you revoke it, so give Termote a host name of its
+own: a cookie is shared by every service on the same host name.
 
 ## View only
 

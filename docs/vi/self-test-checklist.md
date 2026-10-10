@@ -757,6 +757,25 @@ Test trên thiết bị di động thật:
 - [ ] Giới hạn kích thước thân request (8KB cho các request ghi tới `/api/mux/*`)
 - [ ] Lỗi nội bộ chỉ ghi log phía server, client chỉ nhận thông báo chung
 
+### Thiết Bị Đã Ghép
+
+- [ ] `termote pair --expires 7d`: kết quả in ra có "valid for 7 days once used"; sau khi ghép,
+      `termote devices` hiện ngày ở cột VALID UNTIL và "not by a device" ở cột PAIRED BY
+- [ ] `termote pair` (không có `--expires`) và Settings > Devices > Pair a device mặc định 30 ngày;
+      `--expires never` / **Never** ghép thiết bị không giới hạn thời gian
+- [ ] Thiết bị chỉ xem ghép có hạn, sửa `validUntil` của nó trong `devices.json` về quá khứ rồi khởi
+      động lại server: thiết bị bị đưa về `/login`, danh sách ghi "Expired", log có đúng một dòng
+      `audit: device-expired`
+- [ ] Trên thiết bị toàn quyền đã ghép, Pair a device chỉ cho chế độ chỉ xem (không có lựa chọn Role)
+      và nhắc `termote pair --role full`; thiết bị có hạn không có lựa chọn **Never**
+- [ ] Thu hồi một thiết bị toàn quyền đã ghép ra thiết bị chỉ xem: hộp xác nhận nêu tên thiết bị chỉ
+      xem và `termote start --fresh`; sau đó cả hai bị đưa về `/login`, còn `termote devices revoke`
+      in ra "Also revoked"
+- [ ] Đăng xuất trên thiết bị toàn quyền đã ghép ra thiết bị chỉ xem: thiết bị chỉ xem vẫn dùng được,
+      hiện là "Paired by a removed device"
+- [ ] `termote logs`: mỗi lần tạo mã, ghép, thu hồi và đăng nhập bằng trang đăng nhập có một dòng
+      `audit:`, các lần `termote status` thì không, và không dòng nào chứa mã, token hay mật khẩu
+
 ### Chế Độ Không Auth
 
 - [ ] Cờ `--no-auth` bỏ qua yêu cầu đăng nhập

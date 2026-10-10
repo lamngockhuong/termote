@@ -137,9 +137,9 @@ Thanh công cụ ở dưới cùng cung cấp các phím bổ trợ:
 ### Cho thiết bị khác truy cập
 
 Chạy `termote pair` để lấy mã dùng một lần (hiệu lực 5 phút) rồi mở `/pair` trên thiết bị mới; thiết bị
-có đăng nhập riêng, chỉ xem trừ khi dùng `--role full`. Xem hoặc đăng xuất thiết bị bằng `termote devices`
+có đăng nhập riêng trong 30 ngày (`--expires`), chỉ xem trừ khi dùng `--role full`. Xem hoặc đăng xuất thiết bị bằng `termote devices`
 và `termote devices revoke <id>`, hoặc trong Settings > Devices. Cần đăng nhập (không dùng với `--no-auth`).
-Mô hình và giới hạn: [`system-architecture.md`](../system-architecture.md).
+Thiết bị đã ghép được tin tới đâu: [`security-model.md`](../security-model.md).
 
 ### Quên mật khẩu
 

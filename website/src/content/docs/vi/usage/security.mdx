@@ -1,0 +1,80 @@
+---
+title: Mô hình bảo mật
+description: Termote bảo vệ được gì, không chặn được gì, và cần làm gì khi mất một thiết bị
+---
+
+Trang này nói Termote bảo vệ được gì, không chặn được gì, và cần làm gì khi mất một thiết bị. Cách ghép
+thiết bị nằm ở trang [Ghép thiết bị](/vi/usage/devices/).
+
+## Termote là một shell từ xa, theo thiết kế
+
+Ai đăng nhập với toàn quyền thì có mọi quyền của tài khoản hệ điều hành đang chạy server: chạy lệnh, đọc và
+sửa file, đọc mật khẩu đã lưu (`termote show-password`), đổi cấu hình (`termote start --no-auth`) và ghép
+thêm thiết bị, từ giao diện hoặc bằng cách gõ `termote pair` trong terminal. Thiết bị ghép từ terminal
+hiện là **Not paired by a device**, giống thiết bị ghép bằng mật khẩu.
+
+Không có cài đặt nào hạ một client toàn quyền xuống thấp hơn. Ranh giới thật là tài khoản hệ điều hành: muốn
+giới hạn những gì Termote chạm tới, hãy chạy nó dưới một tài khoản khác có ít quyền hơn.
+
+## Ai được làm gì
+
+| Đăng nhập bằng             | Được làm                                                                                                                                         |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Mật khẩu                   | Mọi thứ (toàn quyền).                                                                                                                            |
+| Thiết bị toàn quyền        | Mọi thứ mật khẩu làm được, trừ việc ghép thêm thiết bị toàn quyền: nó chỉ ghép được thiết bị chỉ xem.                                           |
+| Thiết bị chỉ xem           | Xem terminal, đọc Chat và Files/Changes trong một git repository. Không gõ được, không sửa được gì, nhưng đọc được mọi thứ đã in ra.            |
+| Bất kỳ ai, với `--no-auth` | Mọi thứ, chỉ cần tới được cổng.                                                                                                                  |
+
+## Server chặn những gì
+
+- Server chỉ lắng nghe trên `127.0.0.1`, trừ khi chạy với `--lan`.
+- Request ghi tên máy lạ bị từ chối; thao tác ghi và stream terminal phải đến từ chính trang Termote, và
+  stream cần một token chỉ dùng một lần.
+- Đăng nhập sai và mã ghép sai bị giới hạn tần suất.
+- Thiết bị chỉ xem bị server từ chối mọi thao tác ghi, chứ không chỉ bị ẩn nút trong giao diện.
+- Content-Security-Policy ngăn trang tải hay chạy code từ nơi khác.
+- Thiết bị đã ghép có thể có hạn dùng (mặc định 30 ngày khi ghép): quá hạn, thiết bị bị từ chối và các
+  terminal đang mở của nó bị đóng. Thiết bị do một thiết bị có hạn ghép ra không bao giờ sống lâu hơn nó.
+- Thu hồi một thiết bị thì thu hồi luôn mọi thiết bị nó đã ghép. Đăng xuất trên một thiết bị chỉ thu hồi
+  chính thiết bị đó.
+- Chỉ mật khẩu (đăng nhập bằng mật khẩu, hoặc `termote pair` trên server) mới ghép được thiết bị toàn
+  quyền.
+- Ghép, thu hồi, thiết bị tới hạn và đăng nhập bằng trang đăng nhập đều để lại một dòng `audit:` trong log server.
+
+## Những gì không chặn được
+
+- **Thiết bị toàn quyền bị dùng có chủ đích.** Nó có shell: đọc được mật khẩu, ghép thiết bị từ terminal,
+  sửa file danh sách thiết bị hoặc tắt đăng nhập. Các giới hạn ở trên chặn nhầm lẫn và thao tác bấm trong
+  giao diện, không chặn được người cố ý.
+- **Bí mật đã in ra terminal.** Thiết bị chỉ xem đọc được mọi thứ agent hay một lệnh đã in.
+- **Dịch vụ khác cùng tên máy.** Cookie không gắn với cổng: mọi dịch vụ dưới tên máy đó đều nhận cookie của
+  Termote. Hãy cho Termote một tên máy riêng.
+- **Chương trình khác của cùng tài khoản hệ điều hành.** Chúng đọc được đúng những file Termote đọc.
+- **HTTP không mã hoá.** Không có HTTPS (Tailscale, hoặc proxy có chứng chỉ) thì mật khẩu và cookie đi
+  qua mạng ở dạng đọc được.
+- **Dòng audit không phải bằng chứng.** `termote logs clean`, hay bất kỳ thiết bị toàn quyền nào, xoá được
+  chúng. Sau proxy (`tailscale serve`), địa chỉ ghi trong đó là của proxy, tức loopback.
+- **Hai server dùng chung thư mục trạng thái** (dịch vụ và một `termote serve` chạy tay). Thu hồi ở server
+  này không đóng terminal đang mở ở server kia; server kia từ chối thiết bị từ request kế tiếp.
+
+## Khuyến nghị
+
+- Dùng HTTPS: `termote start --tailscale <host>` (xem [Tailscale](/vi/installation/tailscale/)), hoặc
+  proxy có chứng chỉ.
+- Cho Termote một tên máy không dịch vụ nào khác dùng.
+- Ghép thiết bị ở chế độ chỉ xem, trừ khi nó cần gõ.
+- Giữ hạn mặc định 30 ngày; chỉ chọn Never cho máy của chính bạn.
+- Thỉnh thoảng xem `termote devices` và thu hồi những thiết bị không còn dùng.
+- Đọc các dòng `audit:` bằng `termote logs` (native) hoặc `termote container logs` (container).
+
+## Khi mất một thiết bị
+
+- **Chỉ xem:** thu hồi nó trong Settings > Devices hoặc bằng `termote devices revoke <id>`.
+- **Toàn quyền:** thu hồi nó, rồi chạy `termote start --fresh`: lệnh này đặt mật khẩu mới, đăng xuất mọi
+  thiết bị và mọi phiên. Thiết bị toàn quyền từng có shell, nên hãy kiểm tra cả những gì nó có thể để lại:
+  `~/.ssh/authorized_keys`, `crontab -l`, các unit dịch vụ và script đăng nhập của tài khoản bạn.
+
+## Báo lỗ hổng
+
+Hãy báo riêng qua [GitHub Security Advisories](https://github.com/lamngockhuong/termote/security/advisories/new),
+đừng mở issue công khai.

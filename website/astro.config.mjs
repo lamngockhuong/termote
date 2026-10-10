@@ -49,6 +49,7 @@ export default defineConfig({
             { label: "Herdr Plugin", link: "/usage/herdr-plugin/" },
             { label: "Keyboard", link: "/usage/keyboard/" },
             { label: "Pair a Device", link: "/usage/devices/" },
+            { label: "Security Model", link: "/usage/security/", translations: { vi: "Mô hình bảo mật" } },
             { label: "Sessions", link: "/usage/sessions/" },
             { label: "Settings", link: "/usage/settings/" },
           ],
