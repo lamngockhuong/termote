@@ -381,11 +381,12 @@ func (a *agentAPI) handleMessage(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// messageBudget is how long a message with n images may take: each paste
-// and the Enter wait for the screen, and the backend calls around them.
+// messageBudget is how long a message with n images may take: a redraw to
+// settle, each paste and the Enter wait for the screen, and the backend
+// calls around them.
 func messageBudget(n int) time.Duration {
 	if n == 0 {
-		return 3*agentConfirmWait + muxTimeout
+		return 4*agentConfirmWait + muxTimeout
 	}
 	return time.Duration(n+3)*max(agentConfirmWait, agentImageWait) + muxTimeout
 }
@@ -438,6 +439,25 @@ func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, sess
 		return err
 	}
 	sc := readAgentScreen(s.Agent, screen)
+	// Neither the box nor a dialog: the agent may be redrawing (an answer
+	// returns as soon as its dialog leaves the screen, before the box is
+	// back). Wait for the screen to settle, then read the session again.
+	if sc.input == inputNone && sc.prompt == nil {
+		pollScreen(ctx, wr, s.Agent, s.Target, func(now agentScreen) bool {
+			sc = now
+			return now.input != inputNone || now.prompt != nil
+		})
+		now, err := sessionNow(ctx, wr, paneID)
+		if err != nil {
+			return err
+		}
+		if !sameAgent(now, s) {
+			return errSessionChanged
+		}
+		if err := inputReady(now); err != nil {
+			return err
+		}
+	}
 	switch sc.input {
 	case inputEmpty:
 	case inputDraft:
