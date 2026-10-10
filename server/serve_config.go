@@ -40,6 +40,8 @@ func serveConfigFromSaved(s savedConfig, defaultPort int) serveConfig {
 		MuxBackend:       mux,
 		HerdrAllowNoAuth: s.HerdrAllowNoAuth,
 		Tailscale:        s.Tailscale,
+		CheckLocalUsers:  true,
+		AllowLocalUsers:  s.AllowLocalUsers,
 	}
 }
 

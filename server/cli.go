@@ -489,6 +489,9 @@ Options of start (saved; a flag not given keeps its saved value):
   --mux <tmux|herdr>         Terminal backend (default: herdr when it runs, else tmux)
   --allow-host <name>        Allow another Host name (repeatable)
   --remove-host <name>       Remove an allowed Host name (repeatable)
+  --allow-local-user <name>  Serve connections of another OS user of this machine, e.g.
+                             a reverse proxy (repeatable; Linux and Windows)
+  --remove-local-user <name> Stop serving that user's connections (repeatable)
   --allow-herdr-no-auth      Allow herdr without auth
   --user <name>              Login username (default: admin; shared with the container)
   --fresh                    Set a new password

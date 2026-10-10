@@ -32,6 +32,7 @@ type savedConfig struct {
 	Tailscale        string
 	Mux              string
 	AllowHosts       []string // hosts added with --allow-host only
+	AllowLocalUsers  []string // OS users added with --allow-local-user
 	HerdrAllowNoAuth bool
 	// User is the Basic auth username, shared by native and container like
 	// the password; "" (a config saved before it existed) means admin.
@@ -191,6 +192,7 @@ const (
 	keyAllowedHosts     = "TERMOTE_ALLOWED_HOSTS"
 	keyHerdrAllowNoAuth = "TERMOTE_HERDR_ALLOW_NO_AUTH"
 	keyUser             = "TERMOTE_USER"
+	keyAllowLocalUsers  = "TERMOTE_ALLOWED_LOCAL_USERS"
 
 	// The container's keys; present once `container up` ran.
 	keyContainerLAN         = "TERMOTE_CONTAINER_LAN"
@@ -227,6 +229,7 @@ func parseUnixConfig(data []byte, key func() string) (*savedConfig, error) {
 		Tailscale:        kv[keyTailscale],
 		Mux:              kv[keyMux],
 		AllowHosts:       splitHosts(kv[keyAllowedHosts]),
+		AllowLocalUsers:  splitHosts(kv[keyAllowLocalUsers]),
 		HerdrAllowNoAuth: kv[keyHerdrAllowNoAuth] == "true",
 		User:             kv[keyUser],
 	}
@@ -264,7 +267,7 @@ func formatUnixConfig(cfg savedConfig, key string) ([]byte, error) {
 		}
 		mac = passwordMAC(enc, key)
 	}
-	values := []string{cfg.Tailscale, cfg.Mux, strings.Join(cfg.AllowHosts, ","), cfg.User}
+	values := []string{cfg.Tailscale, cfg.Mux, strings.Join(cfg.AllowHosts, ","), strings.Join(cfg.AllowLocalUsers, ","), cfg.User}
 	if cc := cfg.Container; cc != nil {
 		values = append(values, cc.Tailscale, strings.Join(cc.AllowHosts, ","), cc.Workspace, cc.Mux)
 	}
@@ -286,6 +289,9 @@ func formatUnixConfig(cfg savedConfig, key string) ([]byte, error) {
 	w(keyAllowedHosts, strings.Join(cfg.AllowHosts, ","))
 	w(keyHerdrAllowNoAuth, strconv.FormatBool(cfg.HerdrAllowNoAuth))
 	w(keyUser, cfg.User)
+	if len(cfg.AllowLocalUsers) > 0 {
+		w(keyAllowLocalUsers, strings.Join(cfg.AllowLocalUsers, ","))
+	}
 	if cc := cfg.Container; cc != nil {
 		w(keyContainerLAN, strconv.FormatBool(cc.LAN))
 		w(keyContainerNoAuth, strconv.FormatBool(cc.NoAuth))
@@ -309,6 +315,7 @@ type windowsConfigFile struct {
 	EncryptedPass    string               `json:"EncryptedPass"`
 	Mux              string               `json:"Mux,omitempty"`
 	AllowHost        []string             `json:"AllowHost,omitempty"`
+	AllowLocalUser   []string             `json:"AllowLocalUser,omitempty"`
 	HerdrAllowNoAuth bool                 `json:"HerdrAllowNoAuth,omitempty"`
 	User             string               `json:"User,omitempty"`
 	Container        *windowsContainerCfg `json:"Container,omitempty"`
@@ -347,6 +354,7 @@ func parseWindowsConfig(data []byte) (*savedConfig, error) {
 		Tailscale:        f.Tailscale,
 		Mux:              f.Mux,
 		AllowHosts:       f.AllowHost,
+		AllowLocalUsers:  f.AllowLocalUser,
 		HerdrAllowNoAuth: f.HerdrAllowNoAuth,
 		User:             f.User,
 	}
@@ -377,6 +385,7 @@ func formatWindowsConfig(cfg savedConfig, now time.Time) ([]byte, error) {
 		Tailscale:        cfg.Tailscale,
 		Mux:              cfg.Mux,
 		AllowHost:        cfg.AllowHosts,
+		AllowLocalUser:   cfg.AllowLocalUsers,
 		HerdrAllowNoAuth: cfg.HerdrAllowNoAuth,
 		User:             cfg.User,
 		SavedAt:          now.Format(time.RFC3339),
@@ -514,6 +523,23 @@ func validateHostName(h string) error {
 	}
 	if !hostNameRe.MatchString(h) {
 		return fmt.Errorf("invalid host name %q", h)
+	}
+	return nil
+}
+
+// localUserNameRe is an OS user name --allow-local-user accepts: a Unix
+// name or uid, or a Windows one with its domain (DOMAIN\\user); nothing that
+// could break the config line or its comma-separated list.
+var localUserNameRe = regexp.MustCompile(`^[\p{L}\p{N}_][\p{L}\p{N}._@\\ $-]{0,255}$`)
+
+// validateLocalUserName checks a --allow-local-user name and that the user
+// exists, so a typo is refused instead of saved.
+func validateLocalUserName(u string) error {
+	if !localUserNameRe.MatchString(u) || strings.TrimSpace(u) != u {
+		return fmt.Errorf("invalid local user name %q", u)
+	}
+	if _, err := lookupLocalUserFunc(u); err != nil {
+		return fmt.Errorf("no local user %q on this machine", u)
 	}
 	return nil
 }

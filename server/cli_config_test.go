@@ -71,7 +71,7 @@ func TestParsePlainBase64AndEmptyPassword(t *testing.T) {
 func TestUnixConfigRoundTrip(t *testing.T) {
 	key := strings.Repeat("ab", 32)
 	in := savedConfig{LAN: true, Port: 7700, Tailscale: "a.ts.net", Mux: "herdr",
-		AllowHosts: []string{"mybox.local", "proxy.lan"}, HerdrAllowNoAuth: true, User: "bob.smith", Password: `p@ss w0rd$!`,
+		AllowHosts: []string{"mybox.local", "proxy.lan"}, AllowLocalUsers: []string{"caddy", "www-data"}, HerdrAllowNoAuth: true, User: "bob.smith", Password: `p@ss w0rd$!`,
 		Container: &containerConfig{LAN: true, Port: 7681, Tailscale: "c.ts.net:8443", AllowHosts: []string{"c.lan"}, Workspace: "/work", Mux: "herdr", HerdrAllowNoAuth: true}}
 	data, err := formatUnixConfig(in, key)
 	if err != nil {
@@ -83,8 +83,13 @@ func TestUnixConfigRoundTrip(t *testing.T) {
 	}
 	if out.LAN != in.LAN || out.Port != in.Port || out.Tailscale != in.Tailscale ||
 		out.Mux != in.Mux || strings.Join(out.AllowHosts, ",") != "mybox.local,proxy.lan" ||
-		!out.HerdrAllowNoAuth || out.Password != in.Password || out.User != "bob.smith" || out.authUser() != "bob.smith" {
+		!out.HerdrAllowNoAuth || out.Password != in.Password || out.User != "bob.smith" || out.authUser() != "bob.smith" ||
+		strings.Join(out.AllowLocalUsers, ",") != "caddy,www-data" {
 		t.Fatalf("round trip: got %+v, want %+v", *out, in)
+	}
+	// None allowed writes no key, so older configs stay byte for byte.
+	if b, _ := formatUnixConfig(savedConfig{}, key); strings.Contains(string(b), "LOCAL_USERS") {
+		t.Fatalf("empty local users written:\n%s", b)
 	}
 	if !strings.Contains(string(data), "\nTERMOTE_USER=\"bob.smith\"\n") {
 		t.Fatalf("username not written:\n%s", data)
@@ -197,7 +202,7 @@ func TestParseWindowsConfig(t *testing.T) {
 
 func TestWindowsConfigRoundTrip(t *testing.T) {
 	fakeDPAPI(t)
-	in := savedConfig{Port: 7690, Mux: "tmux", AllowHosts: []string{"pc.lan"}, User: "bob", Password: "pw", Container: &containerConfig{Port: 7680, NoAuth: true, Mux: "herdr", HerdrAllowNoAuth: true}}
+	in := savedConfig{Port: 7690, Mux: "tmux", AllowHosts: []string{"pc.lan"}, AllowLocalUsers: []string{`PC\proxy`}, User: "bob", Password: "pw", Container: &containerConfig{Port: 7680, NoAuth: true, Mux: "herdr", HerdrAllowNoAuth: true}}
 	data, err := formatWindowsConfig(in, time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC))
 	if err != nil {
 		t.Fatal(err)
@@ -207,7 +212,7 @@ func TestWindowsConfigRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	if out.Container == nil || out.Container.Port != 7680 || !out.Container.NoAuth || out.Password != "pw" || out.Mux != "tmux" || strings.Join(out.AllowHosts, ",") != "pc.lan" ||
-		out.Container.Mux != "herdr" || !out.Container.HerdrAllowNoAuth || out.User != "bob" {
+		out.Container.Mux != "herdr" || !out.Container.HerdrAllowNoAuth || out.User != "bob" || strings.Join(out.AllowLocalUsers, ",") != `PC\proxy` {
 		t.Fatalf("round trip got %+v", *out)
 	}
 	// A config saved before the container had a backend reads as none chosen.
