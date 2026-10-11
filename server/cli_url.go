@@ -260,7 +260,16 @@ func (c *cli) cmdURL(args []string) error {
 		fmt.Fprintf(c.errOut, "%s Copied the link (%s)\n", c.paint(ansiGreen, "[INFO]"), via)
 	}
 	if open {
-		return c.openURL(info.url)
+		unsigned, err := c.openApp(info)
+		// stderr, as the notes: stdout carries the link alone.
+		if err == nil && unsigned != "" {
+			fmt.Fprintf(c.errOut, "%s Opened the link without signing in: %s\n", c.paint(ansiYellow, "[WARN]"), unsigned)
+		} else if err == nil {
+			// A sign-in link file opens in the app the system gives .html
+			// files, which may be an editor.
+			fmt.Fprintf(c.errOut, "%s If no browser opened, open the link above\n", c.paint(ansiGreen, "[INFO]"))
+		}
+		return err
 	}
 	return nil
 }

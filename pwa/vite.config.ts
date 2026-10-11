@@ -103,11 +103,13 @@ export default defineConfig({
         ],
         // /login and /pair are the server's sign-in and pairing forms: the
         // cached app shell in their place would leave a signed-out device
-        // with no way to sign in.
+        // with no way to sign in. /login/link takes the CLI's sign-in link
+        // (a POST); a GET that lands there gets the server's page too.
         navigateFallbackDenylist: [
           /^\/api\//,
           /^\/login(\?|$)/,
           /^\/pair(\?|$)/,
+          /^\/login\/link(\?|$)/,
         ],
       },
     }),

@@ -79,6 +79,9 @@ func runServe(args []string) int {
 	// view, and which does not roam on Windows (a private key).
 	cfg.PushDir = filepath.Join(c.stateDir(), "push")
 	cfg.DevicesDir = filepath.Join(c.stateDir(), "devices")
+	if cfg.LocalSocketDir != "" {
+		sweepLoginFiles(cfg.LocalSocketDir)
+	}
 	cfg.OnListen = func() {
 		if err := c.writePIDFile(); err != nil {
 			fmt.Fprintf(os.Stderr, "[WARN] cannot write %s: %v\n", c.pidFile(), err)

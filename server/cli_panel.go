@@ -37,7 +37,11 @@ func (c *cli) cmdPanel(args []string) error {
 			return nil
 		case 'o', 'O':
 			if running {
-				msg = c.panelResult("Opened the link in the browser", c.openURL(info.url))
+				unsigned, err := c.openApp(info)
+				msg = c.panelResult("Opened the link in the browser", err)
+				if err == nil && unsigned != "" {
+					msg = c.paint(ansiYellow, "Opened the link in the browser, without signing in: "+unsigned)
+				}
 			}
 		case 'c', 'C':
 			if running {

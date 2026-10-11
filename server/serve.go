@@ -408,6 +408,7 @@ func buildServer(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushStore, 
 	agent.signins = sessions != nil
 	registerDeviceRoutes(mux, devices, allowed)
 	registerSigninRoutes(mux, sessions, allowed)
+	registerLoginLinkRoutes(mux, sessions)
 	registerPushRoutes(mux, push)
 	registerStreamRoutes(mux, m, tokenStore, allowed, hub)
 	// The upload store and the trash are never read through the Files view
@@ -924,6 +925,53 @@ func newBasicAuth(user, pass string, dev *deviceAuth, sessions *sessionAuth, nex
 		http.Redirect(w, r, next, http.StatusSeeOther)
 	}
 
+	// loginLink redeems a sign-in link token the CLI's file POSTs (see
+	// login_link.go). A wrong or expired token is not counted against the
+	// password: every local and tailnet client shares one address, and a
+	// few slow browsers would lock the sign-in of all of them; a token is
+	// 128 random bits.
+	loginLink := func(w http.ResponseWriter, r *http.Request, ip string) {
+		switch r.Method {
+		case http.MethodGet:
+			// Back from the app to this address, or a stray load: the app
+			// when signed in, else the sign-in form.
+			if hasSession(r) {
+				http.Redirect(w, r, "/", http.StatusSeeOther)
+				return
+			}
+			writeLoginPage(w, http.StatusUnauthorized, loginForm{Next: "/", Error: linkExpiredMsg, Pairing: dev != nil})
+			return
+		case http.MethodPost:
+		default:
+			w.Header().Set("Allow", "GET, POST")
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if linkCrossSiteRejected(r) {
+			http.Error(w, "cross-site request rejected", http.StatusForbidden)
+			return
+		}
+		if !isFormPost(r) {
+			http.Error(w, "Unsupported Media Type", http.StatusUnsupportedMediaType)
+			return
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, maxLoginBody)
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+		if _, ok := sessions.links.consume(r.PostForm.Get("t")); !ok {
+			writeLoginPage(w, http.StatusUnauthorized, loginForm{Next: "/", Error: linkExpiredMsg, Pairing: dev != nil})
+			return
+		}
+		// A session this browser already has is not seen (its Strict cookie
+		// does not come with a cross-site POST): the new cookie replaces it,
+		// and the old session stays listed until it expires or is revoked.
+		startSession(w, r, sessionViaLink)
+		auditf("login", "via", "link", "user", user, "ip", ip)
+		writeLinkDonePage(w, safeLinkHash(r.PostForm.Get("hash")))
+	}
+
 	// pair serves the pairing form (GET) and redeems the code it posts, under
 	// a rate limit of its own. A browser already signed in with full rights
 	// is never paired: that would trade its rights for the code's. One that
@@ -1069,6 +1117,10 @@ func newBasicAuth(user, pass string, dev *deviceAuth, sessions *sessionAuth, nex
 		}
 		if r.URL.Path == pairPath {
 			pair(w, r, ip)
+			return
+		}
+		if r.URL.Path == loginLinkPath {
+			loginLink(w, r, ip)
 			return
 		}
 		if r.URL.Path == logoutPath {
