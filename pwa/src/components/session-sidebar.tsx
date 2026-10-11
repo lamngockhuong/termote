@@ -755,7 +755,10 @@ export function SessionSidebar({
               ) : (
                 <ChevronDown size={12} aria-hidden="true" />
               )}
-              <span className="min-w-0 flex-1 truncate text-left">
+              {/* relative: the branch's sr-only label is absolute; without a
+                  containing block here it escapes the truncation and widens
+                  the list into a horizontal scroll past a long name */}
+              <span className="relative min-w-0 flex-1 truncate text-left">
                 {name}
                 {group.worktree?.branch && (
                   <span

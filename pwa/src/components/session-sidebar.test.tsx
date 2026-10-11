@@ -1587,6 +1587,17 @@ describe('SessionSidebar — worktree actions', () => {
     expect(branch.className).toContain('normal-case')
     expect(screen.getByTitle('main')).toHaveTextContent('main')
   })
+
+  it('keeps the branch sr-only label inside the truncated name', () => {
+    renderWith(actions())
+    // An absolute sr-only label with no positioned ancestor inside the
+    // truncation escapes its overflow and scrolls the list sideways.
+    const label = screen
+      .getByTitle('feat/Very-Long-Name')
+      .querySelector('.sr-only')!
+    const name = label.closest('.truncate')!
+    expect(name.className).toContain('relative')
+  })
 })
 
 describe('SessionSidebar — reorder', () => {
