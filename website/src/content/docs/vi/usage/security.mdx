@@ -21,13 +21,34 @@ giới hạn những gì Termote chạm tới, hãy chạy nó dưới một tà
 | Đăng nhập bằng             | Được làm                                                                                                                                         |
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Mật khẩu                   | Mọi thứ (toàn quyền).                                                                                                                            |
-| Thiết bị toàn quyền        | Mọi thứ mật khẩu làm được, trừ việc ghép thêm thiết bị toàn quyền: nó chỉ ghép được thiết bị chỉ xem.                                           |
+| Thiết bị toàn quyền        | Mọi thứ mật khẩu làm được, trừ hai việc: ghép thêm thiết bị toàn quyền (nó chỉ ghép được thiết bị chỉ xem) và đăng xuất một trình duyệt dùng mật khẩu (nó chỉ xem được danh sách). |
 | Thiết bị chỉ xem           | Xem terminal, đọc Chat và Files/Changes trong một git repository. Không gõ được, không sửa được gì, nhưng đọc được mọi thứ đã in ra.            |
 | Bất kỳ ai, với `--no-auth` | Mọi thứ, chỉ cần tới được cổng.                                                                                                                  |
 
 ## Server chặn những gì
 
 - Server chỉ lắng nghe trên `127.0.0.1`, trừ khi chạy với `--lan`.
+- Trên Linux và Windows (native), server kiểm tra mọi kết nối xuất phát từ chính máy này: mọi địa chỉ nội bộ
+  như `127.0.0.1`, `::1`, hoặc địa chỉ LAN của máy khi có `--lan`. Kết nối bị đóng trước khi server đọc byte đầu
+  tiên, trừ khi tiến trình ở đầu bên kia chạy dưới tài khoản của server, root/SYSTEM, hoặc một tài khoản có tên
+  trong `--allow-local-user` (một proxy đứng trước Termote). Không tìm được chủ của kết nối, hoặc kết nối không còn
+  ở trạng thái thiết lập, cũng bị từ chối. Tính năng này bật sẵn; các lần từ chối để lại dòng audit
+  `local-user-refused` (mỗi tài khoản tối đa một dòng trong 10 giây).
+- CLI nói chuyện với server native qua một socket chỉ tài khoản của nó mở được (Unix socket `0600` trong thư
+  mục `0700`, hoặc named pipe có ACL chỉ ghi tài khoản đó và SYSTEM), sau khi đã kiểm tra đầu server chạy dưới
+  chính tài khoản đó hoặc root/SYSTEM. Qua đường này CLI không gửi mật khẩu; `termote status` ghi `Via: socket`.
+  Khi không có socket (container, server bản cũ), CLI quay về TCP cùng mật khẩu.
+- Settings > Signed-in browsers và `termote signins` liệt kê các trình duyệt đăng nhập bằng mật khẩu (trang
+  đăng nhập, Basic auth, link từ CLI); có thể đăng xuất từng trình duyệt, hoặc mọi trình duyệt trừ trình duyệt
+  đang dùng. Đăng xuất một trình duyệt thì đóng luôn các terminal nó đang mở, kể cả terminal đang mở dở. Thiết
+  bị toàn quyền xem được danh sách nhưng không đăng xuất được ai.
+- `termote url --open` (và Herdr panel) mở ứng dụng đã đăng nhập sẵn: CLI xin server một token dùng một lần
+  (30 giây), ghi nó vào một trang HTML chỉ tài khoản đó đọc được (`0600` trong thư mục `0700`; trên Windows là ACL chỉ cho chủ file), rồi mở trang đó; trang tự gửi
+  token đi. Token không bao giờ nằm trong dòng lệnh, URL, đầu ra của lệnh hay lịch sử trình duyệt; chỉ client đăng nhập trực tiếp bằng
+  mật khẩu (Basic auth, như CLI) hoặc qua socket cục bộ mới xin được token, cookie phiên hay thiết bị thì không.
+- Mọi response, kể cả lỗi từ chối tên máy lạ, đều có thêm `Cross-Origin-Opener-Policy`,
+  `Cross-Origin-Resource-Policy` và một `Permissions-Policy` tắt `camera`, `microphone`, `geolocation` cùng các
+  tính năng thiết bị khác mà ứng dụng không dùng.
 - Request ghi tên máy lạ bị từ chối; thao tác ghi và stream terminal phải đến từ chính trang Termote, và
   stream cần một token chỉ dùng một lần.
 - Đăng nhập sai và mã ghép sai bị giới hạn tần suất.
@@ -39,7 +60,8 @@ giới hạn những gì Termote chạm tới, hãy chạy nó dưới một tà
   chính thiết bị đó.
 - Chỉ mật khẩu (đăng nhập bằng mật khẩu, hoặc `termote pair` trên server) mới ghép được thiết bị toàn
   quyền.
-- Ghép, thu hồi, thiết bị tới hạn và đăng nhập bằng trang đăng nhập đều để lại một dòng `audit:` trong log server.
+- Ghép thiết bị, thu hồi thiết bị hay phiên đăng nhập, thiết bị tới hạn, đăng nhập bằng trang đăng nhập hoặc
+  bằng link từ CLI, và kết nối cục bộ bị từ chối đều để lại một dòng `audit:` trong log server.
 
 ## Những gì không chặn được
 
@@ -53,12 +75,34 @@ giới hạn những gì Termote chạm tới, hãy chạy nó dưới một tà
 - **HTTP không mã hoá.** Không có HTTPS (Tailscale, hoặc proxy có chứng chỉ) thì mật khẩu và cookie đi
   qua mạng ở dạng đọc được.
 - **Dòng audit không phải bằng chứng.** `termote logs clean`, hay bất kỳ thiết bị toàn quyền nào, xoá được
-  chúng. Sau proxy (`tailscale serve`), địa chỉ ghi trong đó là của proxy, tức loopback.
+  chúng. Sau proxy (`tailscale serve`), địa chỉ ghi trong đó là của proxy, tức một địa chỉ nội bộ như `127.0.0.1`.
+- **Extension của trình duyệt.** Extension được phép chạy trên trang thì đọc được trang và gõ vào đó thay
+  bạn. Termote không phân biệt được thao tác của nó với của bạn.
+- **Công cụ chuyển tiếp cổng.** VS Code Remote và Dev Tunnels, `ngrok` hay Cloudflare Tunnel chuyển tiếp cổng
+  từ một tiến trình của chính tài khoản bạn: ai tới được địa chỉ mà công cụ đó mở ra là tới được Termote, chỉ còn mật khẩu chặn.
+- **Proxy chạy dưới root hoặc SYSTEM.** `tailscale serve`, `docker-proxy` và các proxy chạy dưới root khác
+  được tin (root vốn đọc được cấu hình đã lưu), nên mọi tài khoản trên máy đều đi qua chúng được. Trên Windows,
+  dịch vụ của session 0 mà tài khoản chạy server không đọc được token cũng vậy.
+- **WSL 2.** Mọi tài khoản Windows đều tới được server chạy trong WSL 2: chế độ NAT đi qua một tiến trình chuyển tiếp
+  chạy dưới root, chế độ `mirrored` đi qua địa chỉ nội bộ dùng chung mà WSL không thấy được đầu client, và loại kết nối này được
+  cho qua.
+- **macOS.** Server không kiểm tra kết nối là của tài khoản nào (mỗi kết nối phải chạy `lsof`): tài khoản
+  khác trên máy macOS chỉ còn bị mật khẩu chặn.
+- **Container và `termote serve` cấu hình bằng biến môi trường.** Cả hai không kiểm tra tài khoản cục bộ của
+  kết nối, và container không có socket cho CLI.
+- **Phiên đăng nhập chỉ nằm trong bộ nhớ.** Khởi động lại server là đăng xuất mọi trình duyệt (thiết bị vẫn
+  giữ nguyên).
+- **Đăng xuất chỉ cắt cookie, không đổi mật khẩu.** Client gửi mật khẩu kèm mọi request (Basic auth) được đăng
+  nhập lại ngay; muốn chặn nó thì phải đổi mật khẩu.
 - **Hai server dùng chung thư mục trạng thái** (dịch vụ và một `termote serve` chạy tay). Thu hồi ở server
   này không đóng terminal đang mở ở server kia; server kia từ chối thiết bị từ request kế tiếp.
 
 ## Khuyến nghị
 
+- Dùng Termote từ PWA đã cài, hoặc một profile trình duyệt không có extension.
+- Proxy đứng trước Termote mà chạy dưới tài khoản khác cần `termote start --allow-local-user <name>`; trước đó kết nối của nó
+  bị từ chối và log ghi rõ điều này.
+- Thỉnh thoảng xem Settings > Signed-in browsers (hoặc `termote signins`).
 - Dùng HTTPS: `termote start --tailscale <host>` (xem [Tailscale](/vi/installation/tailscale/)), hoặc
   proxy có chứng chỉ.
 - Cho Termote một tên máy không dịch vụ nào khác dùng.
@@ -69,6 +113,9 @@ giới hạn những gì Termote chạm tới, hãy chạy nó dưới một tà
 
 ## Khi mất một thiết bị
 
+- **Trình duyệt đăng nhập bằng mật khẩu:** đăng xuất nó trong Settings > Signed-in browsers, hoặc chạy
+  `termote signins` rồi `termote signins revoke <id>`. Nếu bản thân mật khẩu có thể đã lộ (trình duyệt đó lưu nó
+  cho Basic auth, hoặc nó được ghi ra đâu đó), hãy chạy `termote start --fresh`.
 - **Chỉ xem:** thu hồi nó trong Settings > Devices hoặc bằng `termote devices revoke <id>`.
 - **Toàn quyền:** thu hồi nó, rồi chạy `termote start --fresh`: lệnh này đặt mật khẩu mới, đăng xuất mọi
   thiết bị và mọi phiên. Thiết bị toàn quyền từng có shell, nên hãy kiểm tra cả những gì nó có thể để lại:

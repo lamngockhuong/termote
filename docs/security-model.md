@@ -16,16 +16,37 @@ what Termote can reach, run it as another user with less access.
 
 ## Who can do what
 
-| Signed in as             | Can                                                                                                                                                   |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The password             | Everything (full).                                                                                                                                    |
-| A full device            | Everything the password can, except pairing another full device: it pairs view-only devices only.                                                     |
-| A view-only device       | Watch the terminal, read the Chat view and Files/Changes inside a git repository. It types nothing and changes nothing, but reads everything printed. |
-| Anyone, with `--no-auth` | Everything, as soon as they reach the port.                                                                                                           |
+| Signed in as             | Can                                                                                                                                                        |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The password             | Everything (full).                                                                                                                                         |
+| A full device            | Everything the password can, except pairing another full device (it pairs view-only devices only) and signing a password browser out (it only lists them). |
+| A view-only device       | Watch the terminal, read the Chat view and Files/Changes inside a git repository. It types nothing and changes nothing, but reads everything printed.      |
+| Anyone, with `--no-auth` | Everything, as soon as they reach the port.                                                                                                                |
 
 ## What the server enforces
 
 - It listens on `127.0.0.1` unless started with `--lan`.
+- On Linux and Windows (native), a connection made from this machine (any loopback address, or the
+  machine's own LAN address with `--lan`) is closed before its first byte is read unless the process at
+  the other end runs as the server's OS user, root/SYSTEM, or a user named with
+  `--allow-local-user` (a reverse proxy). A connection whose owner cannot be found, or that is no longer
+  established, is refused too. On by default; refusals leave `local-user-refused` audit lines (at most one per user every 10 s).
+- The CLI reaches the native server over a socket only its own OS user can open (a `0600` Unix socket in
+  a `0700` dir, or a named pipe whose ACL names that user and SYSTEM), after checking the server end
+  runs as that user or root/SYSTEM. It sends no password there; `termote status` says `Via: socket`.
+  Without the socket (the container, an older server) it falls back to TCP and the password.
+- Settings > Signed-in browsers and `termote signins` list the browsers signed in with the password (the
+  sign-in form, Basic auth, a CLI link); each can be signed out, or every one but the current. A
+  sign-out closes that browser's open terminals, one still opening included. A full device sees the list
+  but signs no one out.
+- `termote url --open` (and the Herdr panel) opens the app already signed in: the CLI asks the server
+  for a single-use token (30 s), writes it into an HTML page only its user can read (`0600` in a `0700` dir; an owner-only ACL on Windows), and opens that
+  page, which posts the token. The token is never in a command line, a URL, the output or the history;
+  only a client signed in with the password itself (Basic auth, as the CLI) or over the local socket gets
+  one, never a session cookie or a device.
+- Every response, a refusal for an unknown host included, also carries `Cross-Origin-Opener-Policy`,
+  `Cross-Origin-Resource-Policy` and a `Permissions-Policy` that turns off camera, microphone, location
+  and the other device features the app never uses.
 - Requests naming an unknown host are refused; writes and the terminal stream must come from the
   Termote page itself, and the stream needs a single-use token.
 - Failed sign-ins and wrong pairing codes are rate limited.
@@ -36,8 +57,8 @@ what Termote can reach, run it as another user with less access.
 - Revoking a device also revokes every device it paired. Logging out on a device revokes only that
   device.
 - Only the password (a password sign-in, or `termote pair` on the server) pairs a full device.
-- Pairing, revoking, a device reaching its limit and signing in on the sign-in form each leave an
-  `audit:` line in the server log.
+- Pairing, revoking a device or a sign-in, a device reaching its limit, signing in on the sign-in form or
+  with a CLI link, and a refused local connection each leave an `audit:` line in the server log.
 
 ## What it cannot prevent
 
@@ -52,11 +73,32 @@ what Termote can reach, run it as another user with less access.
   the network in clear text.
 - **The audit lines are not proof.** `termote logs clean`, or any full device, deletes them. Behind a
   proxy (`tailscale serve`) the address they name is the proxy's, loopback.
+- **Browser extensions.** An extension allowed on the page reads it and types into it as you. Termote
+  cannot tell its input from yours.
+- **Port forwarding tools.** VS Code Remote and Dev Tunnels, ngrok or Cloudflare Tunnel forward the port
+  from a process of your own user: whoever reaches the tunnel reaches Termote, with only the password in
+  the way.
+- **Proxies running as root or SYSTEM.** `tailscale serve`, `docker-proxy` and other root proxies are
+  trusted (root reads the saved config anyway), so every local user can go through them. On Windows the
+  same holds for a session 0 service whose token the server's user cannot read.
+- **WSL 2.** Every Windows user reaches a server in WSL 2: in NAT mode through a relay running as root,
+  in mirrored mode through a loopback whose client end WSL cannot see, which is let through.
+- **macOS.** It does not check which local user makes a connection (that takes `lsof` for each one):
+  another user of the Mac has only the password in the way.
+- **The container and `termote serve` configured from the environment.** Neither checks the local user
+  of a connection, and the container has no CLI socket.
+- **Sessions live in memory.** Restarting the server signs every browser out (devices stay paired).
+- **A sign-out ends the cookie, not the password.** A client that sends the password with every request
+  (Basic auth) is signed in again at once; change the password for that.
 - **Two servers on one state dir** (the service and a `termote serve` started by hand). A revoke in one
   does not close the terminals open in the other; the other refuses the device from its next request.
 
 ## Recommendations
 
+- Use Termote from the installed PWA, or a browser profile without extensions.
+- A reverse proxy running as another OS user needs `termote start --allow-local-user <name>`; until then
+  its connections are refused and the log says so.
+- Look at Settings > Signed-in browsers (or `termote signins`) from time to time.
 - Use HTTPS: `termote start --tailscale <host>`, or a proxy with a certificate.
 - Give Termote a host name no other service uses.
 - Pair a device view-only unless it must type.
@@ -66,6 +108,9 @@ what Termote can reach, run it as another user with less access.
 
 ## If a device is lost
 
+- **A browser signed in with the password:** sign it out in Settings > Signed-in browsers, or
+  `termote signins` then `termote signins revoke <id>`. If the password itself may be known (saved in that
+  browser for Basic auth, written down), run `termote start --fresh` instead.
 - **View-only:** revoke it in Settings > Devices or with `termote devices revoke <id>`.
 - **Full:** revoke it, then run `termote start --fresh`: it sets a new password, which signs out every
   device and every session. A full device had a shell, so also check what it could have left behind:

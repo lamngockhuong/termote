@@ -1134,7 +1134,9 @@ termote update --force           # Force reinstall current version
    Log out (`POST /api/mux/logout`, a JSON write under the same guard) removes the session on
    the server and expires the cookie, so a copied cookie stops working too. Cookies are not
    bound to a port: any service on the same host name receives this one, so Termote needs a host
-   name of its own (accepted, see the deployment guide)
+   name of its own (accepted, see the deployment guide). Only a browser gets a session from Basic
+   auth (`Sec-Fetch-Mode`, a page load, or a session cookie it already holds), so curl and the CLI
+   never push real sessions out of the 256 kept; see item 18 for the list and revoke
 4. **Host allowlist**: every request's `Host` header must match loopback, the address the
    request arrived on when `--lan` is set, the Tailscale name (`--tailscale`), or a name added
    with `--allow-host`; there is no wildcard, so DNS rebinding from an attacker-controlled page
@@ -1192,7 +1194,11 @@ termote update --force           # Force reinstall current version
     `worker-src`/`manifest-src 'self'`;
     `object-src 'none'`, `base-uri`/`form-action 'self'`, `frame-ancestors 'none'`. With it go
     `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` and
-    `X-Frame-Options: DENY`. Every E2E spec fails on a CSP violation (`pwa/e2e/fixtures.ts`)
+    `X-Frame-Options: DENY`. Every E2E spec fails on a CSP violation (`pwa/e2e/fixtures.ts`).
+    `isolationHeaders` wraps `hostGuard`, so every response, its 403 included, also carries
+    `Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Resource-Policy: same-origin` and a
+    `Permissions-Policy` turning off camera, microphone, geolocation, payment, USB, serial, HID,
+    Bluetooth, MIDI and display capture (never the clipboard)
 14. **Web Push**: only the public key leaves the server; subscriptions are never returned.
     Endpoints must be HTTPS on 443 at a known push service (`fcm.googleapis.com`,
     `updates.push.services.mozilla.com`, `web.push.apple.com`, `*.push.apple.com`,
@@ -1208,6 +1214,59 @@ termote update --force           # Force reinstall current version
     messages (git's stderr, with paths) are logged, never returned. A remove is bound to the
     path and branch the user confirmed. Create and remove run git with the user's own config,
     hooks and filters included, as typing the command would; a remove deletes ignored files.
+16. **Connections from other local users** (`server/peer_user_*.go`): a native server (run from
+    the saved config, `CheckLocalUsers`) wraps its listener so each connection is checked on its
+    own goroutine before its first read or write, never in `Accept`. A client address that is
+    loopback or one of the machine's own (`net.InterfaceAddrs`, kept 30 s, re-read at most once a
+    second on a miss) is looked up; another machine's is not. Linux asks `sock_diag` for the exact
+    socket (client end local, server end remote), falling back to `/proc/net/tcp*` where netlink is
+    refused; only an ESTABLISHED socket with an inode counts, since the kernel reports a closed one
+    (TIME_WAIT) as uid 0. Windows reads the owner PID from `GetExtendedTcpTable` (IPv4 and IPv6
+    tables, ESTABLISHED rows) and that process's token SID; a process whose token cannot be read
+    but that runs in session 0 counts as a service. Trusted: the server's own uid/SID, root
+    (`0`) or SYSTEM (`S-1-5-18`), session 0 services on Windows, and each `--allow-local-user`
+    name (resolved at start, a missing one skipped with a log line). Under WSL 2 mirrored
+    networking (`wslinfo --networking-mode`), a loopback client absent from the tables whose
+    server end stays established, looked at twice 10 ms apart, is Windows and is let through.
+    No owner found, a closed socket, more than 4 lookups waiting past 2 s: refused. A refusal
+    closes the connection and logs `audit: local-user-refused uid|sid=... user=... reason=...
+    from=...`, at most once per 10 s per user (64 users, the rest share one limit), the first one
+    of a user with the `--allow-local-user` hint. macOS checks nothing (`peerOwner` is nil)
+17. **The CLI's local socket** (`server/local_socket*.go`): `runServer` serves the same handler
+    on `<stateDir>/run/<port>.sock` (dir 0700 checked owned and not a symlink, socket chmod 0600
+    and checked again) or the named pipe `\\.\pipe\termote-<SID>-<port>` (ACL: the user and
+    SYSTEM, remote clients refused, first instance exclusive). Connections accepted there carry a
+    context mark set from the connection type only (`localSocketConnContext`), and `basicAuth`
+    signs them in as `authLocal`, full, with no password; `hostGuard` accepts the Host
+    `termote.local-socket` on that socket only, and audit lines name `ip=local`. The CLI checks
+    the dir, then the server end's owner (`SO_PEERCRED`, `LOCAL_PEERCRED`, or the pipe server's
+    process token) is itself or root/SYSTEM, and sends one request on that very connection. A
+    missing or untrusted socket, or a read that got no answer, falls back to TCP with the password
+    (`authedRequest`); a write that was sent but got no answer is never sent again. A stale socket is replaced at start; the
+    cleanup at exit removes it only while it is the one made there and nothing answers on it
+18. **Password sessions** (`server/sessions.go`, `server/signin_routes.go`, `caps.signins`): each
+    session keeps its id (first 16 hex of the token's SHA-256, never the token), creation, last
+    use (moved at most once a minute), how it signed in (`form`, `basic`, `link`), address and a
+    cleaned User-Agent (200 bytes). `GET /api/mux/signins` → `{sessions, canRevoke}` (same-site
+    read, full only), `DELETE /api/mux/signins` revokes every session but the caller's (the CLI
+    has none, so all), `DELETE /api/mux/signins/{id}` one (404 `unknown_session`). A paired device
+    lists them but gets 403 `full_needs_password` on a revoke. A revoke removes the session, then
+    its stream tokens, then closes its streams; a stream still opening asks `sessionAlive` under
+    the hub's lock and is refused. `audit: revoke-session id=... by=... via=cli|settings`.
+    `termote signins [revoke <id>|--all]` calls the same routes
+19. **Sign-in link** (`server/login_link.go`, `server/cli_login_link.go`): `POST
+    /api/mux/login-links` answers `{token, expiresIn}` only to the CLI (Basic auth or the local
+    socket; a session or device gets 403 `full_needs_password`), a single-use token valid 30 s, at
+    most 5 waiting. When another user's listener holds the port the CLI asks for no token and opens the
+    plain link with a warning; otherwise it writes the token
+    into `<stateDir>/run/login-<16 hex>.html` (0600, `O_EXCL`) and opens that path; the page posts
+    `t` and the deep link `hash` to `/login/link`, on `127.0.0.1` when the link names `localhost`
+    (`linkPostHost`: a browser may try `::1` first, which another user could hold unseen on macOS). That POST is urlencoded, 8 KB, and its only
+    cross-site exception is `Origin: null` (a `file://` page); a valid token starts a `link`
+    session and answers 200 with a script-free page whose `meta refresh` goes on to `/#<hash>`,
+    so the `SameSite=Strict` cookie is sent (a 303 would still be cross-site). A dead token shows
+    the sign-in form, not counted by the rate limiter. `next` never names `/login/link`. Files
+    older than 2 minutes are swept by the CLI before writing one and by `serve` at start
 
 ## Scalability Notes
 
