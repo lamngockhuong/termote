@@ -615,7 +615,12 @@ func serveLocalSocket(srv *http.Server, cfg serveConfig, ln net.Listener) func()
 			log.Printf("local socket: %v", err)
 		}
 	}()
-	return cleanup
+	// Closed here too: srv.Close may run before Serve has taken the
+	// listener, and the cleanup leaves a socket something answers on.
+	return func() {
+		sock.Close()
+		cleanup()
+	}
 }
 
 // authRateLimiter tracks failed auth attempts per IP, and per /64 for IPv6, to

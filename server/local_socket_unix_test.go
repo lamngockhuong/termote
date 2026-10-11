@@ -184,12 +184,15 @@ func TestLocalSocketCleanupKeepsNewServersSocket(t *testing.T) {
 			c.Close()
 		}
 	}()
+	// Its socket can even take the old one's inode number (tmpfs reuses
+	// them): the cleanup still leaves a socket a server answers on.
 	oldCleanup()
 	c, err := net.Dial("unix", filepath.Join(dir, "7680.sock"))
 	if err != nil {
 		t.Fatalf("the old server's cleanup removed the new socket: %v", err)
 	}
 	c.Close()
+	newLn.Close()
 	newCleanup()
 	if _, err := os.Lstat(filepath.Join(dir, "7680.sock")); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("the new server's cleanup left its socket: %v", err)

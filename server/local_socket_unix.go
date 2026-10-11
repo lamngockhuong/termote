@@ -71,9 +71,10 @@ func ensureSocketDir(dir string) error {
 // once the listener is closed. dir is made 0700 and checked; the socket is
 // chmod 0600 right after it is made, and checked again. A socket left by a
 // server that died is replaced; one a live server answers on is not
-// (errLocalSocketBusy). The cleanup removes the socket only while it is the
-// one made here: during an update or restart the old server, still shutting
-// down, must not remove the socket the new one has made.
+// (errLocalSocketBusy). The cleanup, run once the listener is closed,
+// removes the socket only while it is the one made here and nothing answers
+// on it: during an update or restart the old server, still shutting down,
+// must not remove the socket the new one has made.
 func openLocalSocket(dir, port string) (net.Listener, func(), error) {
 	path := localSocketPath(dir, port)
 	if len(path) > maxSocketPath {
@@ -118,9 +119,18 @@ func openLocalSocket(dir, port string) (net.Listener, func(), error) {
 		return fail(fmt.Errorf("%s did not get mode 0600 for the current user", path))
 	}
 	cleanup := func() {
-		if cur, err := os.Lstat(path); err == nil && os.SameFile(made, cur) {
-			os.Remove(path)
+		cur, err := os.Lstat(path)
+		if err != nil || !os.SameFile(made, cur) {
+			return
 		}
+		// The same inode is not proof enough: a filesystem can give a new
+		// socket the number of the one just removed (tmpfs does), so one a
+		// server answers on is another server's.
+		if c, err := net.DialTimeout("unix", path, localDialTimeout); err == nil {
+			c.Close()
+			return
+		}
+		os.Remove(path)
 	}
 	return ln, cleanup, nil
 }
