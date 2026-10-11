@@ -80,8 +80,9 @@ func TestURLOpenSignsIn(t *testing.T) {
 			t.Errorf("the token is in %s", name)
 		}
 	}
-	// The link's own host, so the cookie lands where the app opens.
-	link := "http://localhost:" + strconv.Itoa(port)
+	// localhost is posted to 127.0.0.1 (never ::1, which another user could
+	// hold); the done page's relative refresh opens the app there, with the cookie.
+	link := "http://127.0.0.1:" + strconv.Itoa(port)
 	if !strings.Contains(string(page), `action="`+link+`/login/link"`) || !strings.Contains(string(page), `name="hash" value="#/s/main/0"`) {
 		t.Errorf("file form:\n%s", page)
 	}
@@ -163,7 +164,7 @@ func TestURLOpenOlderServer(t *testing.T) {
 	if !strings.Contains(tc.stderr.String(), "Opened the link without signing in: the running server cannot make sign-in links") {
 		t.Errorf("url --open does not say it opened without signing in:\n%s", tc.stderr)
 	}
-	if !tc.runner.called("xdg-open http://localhost:" + strconv.Itoa(port) + "/") {
+	if !tc.runner.called("xdg-open http://127.0.0.1:" + strconv.Itoa(port) + "/") {
 		t.Errorf("plain link not opened: %v", tc.runner.calls)
 	}
 }

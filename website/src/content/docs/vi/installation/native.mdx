@@ -138,6 +138,8 @@ sẽ khởi động server y như lần trước. Tùy chọn kiểu bật/tắt
 | `--mux <tmux\|herdr>`       | Backend terminal (mặc định: dò tìm ở lần đầu)                          |
 | `--allow-host <name>`       | Cho phép thêm một tên trong header `Host` (lặp được, không có ký tự đại diện) |
 | `--remove-host <name>`      | Bỏ một tên đã cho phép (lặp được)                                      |
+| `--allow-local-user <name>` | Cho một OS user khác trên máy này kết nối, ví dụ proxy đứng trước      |
+| `--remove-local-user <name>`| Thôi cho user đó kết nối (lặp được)                                    |
 | `--allow-herdr-no-auth`     | Bắt buộc khi dùng `--mux herdr --no-auth`                              |
 | `--user <name>`             | Tên đăng nhập (mặc định `admin`; dùng chung với container)             |
 | `--fresh`                   | Đặt mật khẩu mới                                                       |
@@ -155,6 +157,21 @@ termote start --user alice           # log in as alice instead of admin
 Các tên host luôn được phép gồm địa chỉ nội bộ của máy (`localhost`, `127.0.0.1`), tên Tailscale, các tên trong `--allow-host`, và khi có `--lan` thì cả
 địa chỉ mà request đi tới (nhờ vậy vẫn chạy khi IP LAN đổi). Request tới tên khác nhận lỗi 403, trong đó ghi sẵn
 lệnh `termote start --allow-host <name>` cần chạy.
+
+### Các user khác trên máy này
+
+Trên Linux và Windows, server từ chối mọi kết nối xuất phát từ chính máy này của một OS user khác, dù kết nối tới
+`127.0.0.1` hay tới địa chỉ LAN của máy. Chỉ user của bạn, root/SYSTEM và các user bạn cho phép được vào. Proxy
+đứng trước Termote mà chạy dưới user riêng (`nginx` dưới `www-data`, `caddy` dưới `caddy`) cần được cho phép; khi từ chối, log của
+server ghi sẵn lệnh cần chạy:
+
+```bash
+termote start --allow-local-user www-data
+termote start --remove-local-user www-data
+```
+
+macOS không kiểm tra user của kết nối, còn WSL 2 để mọi user Windows đi qua. Những rủi ro còn lại:
+[Mô hình bảo mật](/vi/usage/security/).
 
 <Aside type="caution" title="Dùng một host name riêng cho Termote">
   Trình duyệt gửi cookie của một trang tới mọi cổng của cùng host name. Vì vậy một dịch vụ web khác trên cùng tên
@@ -189,7 +206,8 @@ termote start --mux herdr
 ## Quản lý server
 
 ```bash
-termote status          # what the running server reports (version, backend, pid)
+termote status          # what the running server reports (version, backend, pid, Via)
+termote signins         # browsers signed in with the password; signins revoke <id>|--all
 termote stop            # stop it; it starts again at the next login
 termote restart         # stop and start with the saved options
 termote logs            # recent lines of every log
@@ -198,6 +216,10 @@ termote logs follow     # tail live (Ctrl+C to stop)
 termote logs clean      # delete the log files
 termote show-password   # print the saved username and password
 ```
+
+CLI nói chuyện với server qua một socket chỉ user của bạn mở được (`~/.local/state/termote/run/<port>.sock`,
+trên Windows là named pipe) và không gửi mật khẩu; `termote status` ghi `Via: socket`. Với container hoặc server
+bản cũ, CLI dùng `127.0.0.1` cùng mật khẩu đã lưu (`Via: TCP`).
 
 Dịch vụ chạy `termote serve`, lệnh này đọc cấu hình đã lưu. Khi đã có file cấu hình, các biến môi trường
 `TERMOTE_*` bị bỏ qua, và `serve` xóa chúng khỏi môi trường của mình để không terminal nào thừa hưởng chúng.
@@ -276,6 +298,7 @@ termote logs server     # last server log lines
 | Không tìm thấy backend terminal          | Cài tmux (Windows: `winget install psmux`) hoặc khởi động Herdr, rồi chạy `termote start`    |
 | Cổng đang bị dùng                        | `start` báo tên cổng; dừng chương trình kia hoặc chọn `termote start --port <port>`         |
 | Host bị từ chối (403)                    | Chạy lệnh `termote start --allow-host <name>` mà thông báo lỗi ghi                           |
+| Proxy không nhận được phản hồi           | Log có dòng `local-user-refused`: chạy lệnh `termote start --allow-local-user <name>` mà log ghi |
 | Không giải mã được mật khẩu đã lưu       | File `secret` đã bị xóa hoặc thay: `termote start --fresh`                                   |
 | Dừng khi bạn đăng xuất (Linux)           | `loginctl enable-linger $USER`                                                               |
 | Không chạy sau khi khởi động lại (WSL2)  | Ở đó không có user systemd: chạy lại `termote start`, hoặc bật systemd trong WSL             |

@@ -242,6 +242,7 @@ link / unlink        Create or remove the 'termote' command in ~/.local/bin
 show-password        Show the saved username and password
 pair [options]       Make a one-time code (5 min) that signs a new device in; --role <view|full> (default view), --name <name>, --expires <12h|7d|2w|never> (default 30d)
 devices              List the paired devices; `devices revoke <id>` signs one out with every device it paired
+signins              List the browsers signed in with the password; `signins revoke <id>|--all` signs them out
 version              Show version
 serve                Run the server in the foreground (what the service runs)
 (no command)         Interactive menu
@@ -253,9 +254,11 @@ There is no `install` command in 1.0 (it prints the replacement above).
 turned off with `=false`): `--port <port>` (default 7680, Windows 7690), `--lan[=false]`,
 `--tailscale <host[:port]>`, `--no-tailscale`, `--no-auth[=false]`, `--mux <tmux|herdr>`,
 `--allow-host <name>` (repeatable), `--remove-host <name>` (repeatable),
+`--allow-local-user <name>`/`--remove-local-user <name>` (repeatable; native Linux and Windows),
 `--allow-herdr-no-auth`, `--user <name>` (default `admin`, shared with the container like the
 password), `--fresh`. `update` takes `--version <X.Y.Z>` and `--force`.
-`container up` additionally takes `--workspace <dir>` and `--build`. `url` takes `--herdr` (ids from
+`container up` additionally takes `--workspace <dir>` and `--build`. `url` prints `http://127.0.0.1:<port>` for this machine (never `localhost`, whose `::1` another
+user could hold), and takes `--herdr` (ids from
 the Herdr plugin context) or `--group/--tab/--pane`, `--view`, and `--open`/`--copy`/`--qr`; only
 the link goes to stdout. There is no `--ttyd` flag
 and no PowerShell `-Flag` variants in 1.0.
@@ -426,6 +429,15 @@ The `update` command:
 | `server/cli_url.go`                               | `status --json`, `url` (deep link, open, copy, QR)            |
 | `server/cli_panel.go`                             | `panel`: the Herdr plugin's popup                             |
 | `server/listener_owner*.go`                       | Saved password sent only to the current user's listener       |
+| `server/peer_user_listener.go`                    | Refuses connections from other local OS users (`peer_user_*`) |
+| `server/local_socket*.go`                         | CLI ↔ native server over a Unix socket / named pipe           |
+| `server/sessions.go`                              | Password sessions: metadata, list, revoke, `sessionAlive`     |
+| `server/signin_routes.go`                         | `/api/mux/signins*`: list, revoke one or all others           |
+| `server/cli_signins.go`                           | `signins`, `signins revoke <id>\|--all`                       |
+| `server/login_link.go`                            | `/api/mux/login-links`, `/login/link`: CLI sign-in link       |
+| `server/cli_login_link.go`                        | `url --open`: token into a 0600 file that posts it            |
+| `pwa/src/components/signins-section.tsx`          | Settings > Signed-in browsers: list, sign out                 |
+| `pwa/src/hooks/use-signins.ts`                    | Signed-in browsers list and revoke calls                      |
 | `server/push_routes.go`                           | `/api/mux/push/key`, `/api/mux/push/subscribe`                |
 | `server/push_store.go`                            | VAPID key + subscriptions (`<stateDir>/push`, allowlist)      |
 | `server/push_watch.go`                            | Agent status transitions → Web Push (queue, back-off)         |
@@ -518,7 +530,8 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   Codes (`POST /api/mux/devices/pair` `{role, name?}`, full only, `writeGuard`) are 10 Crockford
   base32 characters shown `XXXXX-XXXXX` (typed `O`/`I`/`L` read as `0`/`1`), 5 minutes, once, in
   memory only, at most 5 waiting (409 `too_many_codes`); a revoked device's waiting codes go with
-  it. `termote pair` calls the same route with the saved password through the listener-owner check
+  it. `termote pair` calls the same route over the local socket (else with the saved password through
+  the listener-owner check)
   and builds the link and QR as `url` does; `--role` defaults to `view`. `GET /pair[?code=]` only
   shows a script-free form; `POST /pair` (urlencoded, 8 KB) is checked like `/login`
   (`isCrossSiteLogin`, `writeGuard`'s `loginPath || pairPath`), with no code waiting → 401 at once
@@ -1050,7 +1063,53 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   extends it to 5 minutes (a slow mobile link), at most 256 sessions (the
   least recently used is dropped), request
   body size limits (8KB on `/api/mux/*`, 64KB on `agent/message`)
-- **CLI and the saved password**: `status`, `url`, `panel`, `container status` and the health
+- **Connections from other local users** (`server/peer_user_*.go`, native only: `CheckLocalUsers`
+  is set from the saved config, never for the container or an env-configured `serve`): a
+  connection whose client address is loopback or one of the machine's own (`net.InterfaceAddrs`,
+  30 s cache) is checked on its first read/write, never in `Accept` (4 lookups at once, 2 s, else
+  refused). Linux: `sock_diag` exact lookup, `/proc/net/tcp*` fallback, only ESTABLISHED with an
+  inode (a TIME_WAIT row reads uid 0). Windows: `GetExtendedTcpTable` owner PID → token SID; an
+  unreadable token in session 0 is a service. Trusted: own uid/SID, root/SYSTEM, session 0
+  services, `--allow-local-user` names (checked to exist when given; a vanished one skipped at
+  start). WSL 2 mirrored: an absent loopback client with an established server end (two looks,
+  10 ms) is Windows, let through; NAT goes through root's relay (accepted: every Windows user).
+  Not found, closed or timed out → refused, `audit: local-user-refused` (10 s per user, 64 users),
+  the first naming `--allow-local-user`. macOS: no check (accepted). On by default (breaking for
+  a reverse proxy under another user); a rollback's `start` drops the saved names
+- **CLI local socket** (`server/local_socket*.go`): the native server also serves on
+  `<stateDir>/run/<port>.sock` (dir 0700 owned, not a symlink; socket 0600) or the pipe
+  `\\.\pipe\termote-<SID>-<port>` (ACL user + SYSTEM, remote refused, first instance exclusive).
+  A connection there gets a context mark from its type only and is `authLocal` (full, no
+  password); `hostGuard` takes `termote.local-socket` only there; audit `ip=local`. The CLI checks
+  the server end's owner (`SO_PEERCRED`/`LOCAL_PEERCRED`/pipe server token) is itself or
+  root/SYSTEM before writing, uses that one connection, falls back to TCP + password when the
+  socket is missing or untrusted or a read got no answer, and never resends a write that was sent. `status` prints `Via: socket`
+  or `Via: TCP` (`--json`: `via`). The exit cleanup removes the socket only while it is its own and
+  nothing answers on it (an update's new server keeps its socket)
+- **Signed-in browsers** (`server/sessions.go`, `server/signin_routes.go`, `caps.signins`): each
+  password session (memory, 24 h, 256, LRU) keeps id (16 hex of the token's SHA-256), created,
+  last used (1 min), `via` (`form|basic|link`), IP and a cleaned User-Agent (200 B). Basic auth
+  makes a session only for a browser (`Sec-Fetch-Mode`, a navigation, or a session cookie held).
+  `GET /api/mux/signins` (same-site read, not view) → `{sessions, canRevoke}`; `DELETE
+  /api/mux/signins` revokes all but the caller's (the CLI: all); `DELETE /api/mux/signins/{id}`
+  (404 `unknown_session`). A device gets 403 `full_needs_password` on revokes. Revoke: store
+  first, then stream tokens (`sessionID`), then streams; one mid-handshake is refused by
+  `sessionAlive` under the hub lock. `audit: revoke-session ... via=cli|settings`. A revoke ends the
+  cookie only: a client sending Basic every request is back at once (accepted; `--fresh`)
+- **Sign-in link** (`server/login_link.go`, `server/cli_login_link.go`): `url --open` and the
+  panel's open key. `POST /api/mux/login-links` → `{token, expiresIn}` for the CLI only (Basic or
+  local socket, else 403 `full_needs_password`), single use, 30 s, 5 waiting. When another user's listener
+  holds the port the CLI makes no token and opens the plain link with a warning; otherwise it writes `<stateDir>/run/login-<16 hex>.html` (0600,
+  `O_EXCL`, `no-referrer`) and opens the path; the page posts `t`/`hash` to `/login/link` (a `localhost` link posts to
+  `127.0.0.1`: `::1` could be another user's listener, unseen by `lsof` on macOS)
+  (urlencoded, 8 KB; the only cross-site exception is `Origin: null`). A valid token starts a
+  `link` session and answers 200 + `meta refresh` (no script; a 303 would keep the navigation
+  cross-site and drop the Strict cookie); a dead one shows the form, not rate limited. `safeNext`
+  never returns `/login/link`; `hash` only `#` + URI-safe bytes, 512. Files older than 2 min are
+  swept by the CLI and by `serve` at start. With `--no-auth` the plain link opens; with an old
+  server or no password it opens with a warning saying why
+- **CLI and the saved password**: without the local socket (the container, an older server),
+  `status`, `url`, `panel`, `container status` and the health
   wait of `start`/`restart`/`update` send the saved password to `127.0.0.1:<port>` only when
   every socket listening on it runs as the current user or root/SYSTEM (`server/listener_owner*.go`:
   `/proc/net/tcp*` on Linux, `lsof` on macOS, the TCP table and process SID on Windows), checked

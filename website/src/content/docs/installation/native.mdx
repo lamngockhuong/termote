@@ -138,6 +138,8 @@ server exactly as last time. A boolean option is turned off with `=false`.
 | `--mux <tmux\|herdr>`       | Terminal backend (default: detected the first time)                    |
 | `--allow-host <name>`       | Allow another `Host` header name (repeatable, no wildcard)             |
 | `--remove-host <name>`      | Remove an allowed name (repeatable)                                    |
+| `--allow-local-user <name>` | Let another OS user of this machine connect, e.g. a reverse proxy      |
+| `--remove-local-user <name>`| Stop letting that user connect (repeatable)                            |
 | `--allow-herdr-no-auth`     | Required together with `--mux herdr --no-auth`                         |
 | `--user <name>`             | Login username (default `admin`; shared with the container)            |
 | `--fresh`                   | Set a new password                                                     |
@@ -155,6 +157,21 @@ termote start --user alice           # log in as alice instead of admin
 The allowed host names are always loopback, the Tailscale name, the `--allow-host` names, and with `--lan` the
 address a request arrived on (so it keeps working when the LAN IP changes). A request for any other name gets a
 403 that names the `termote start --allow-host <name>` to run.
+
+### Other users of this machine
+
+On Linux and Windows the server refuses every connection made from this machine by another OS user,
+whether it goes to `127.0.0.1` or to the machine's LAN address: your own user, root/SYSTEM and the users you
+allow are let in. A reverse proxy that runs as its own user (nginx as `www-data`, Caddy as `caddy`) needs
+allowing; the server log names the command when it refuses one:
+
+```bash
+termote start --allow-local-user www-data
+termote start --remove-local-user www-data
+```
+
+macOS does not check the user of a connection, and WSL 2 lets every Windows user in. What else is left open:
+[Security Model](/usage/security/).
 
 <Aside type="caution" title="Give Termote a host name of its own">
   Browsers send a site's cookies to every port of its host name, so another web service on the same name (another
@@ -188,7 +205,8 @@ termote start --mux herdr
 ## Managing the Server
 
 ```bash
-termote status          # what the running server reports (version, backend, pid)
+termote status          # what the running server reports (version, backend, pid, Via)
+termote signins         # browsers signed in with the password; signins revoke <id>|--all
 termote stop            # stop it; it starts again at the next login
 termote restart         # stop and start with the saved options
 termote logs            # recent lines of every log
@@ -197,6 +215,10 @@ termote logs follow     # tail live (Ctrl+C to stop)
 termote logs clean      # delete the log files
 termote show-password   # print the saved username and password
 ```
+
+The CLI talks to the server over a socket only your user can open (`~/.local/state/termote/run/<port>.sock`,
+a named pipe on Windows), without sending the password; `termote status` shows `Via: socket`. Against the
+container or an older server it uses `127.0.0.1` and the saved password (`Via: TCP`).
 
 The service runs `termote serve`, which reads the saved config. Once a config file exists, `TERMOTE_*`
 environment variables are ignored, and `serve` removes them from its environment so no terminal inherits one.
@@ -275,6 +297,7 @@ termote logs server     # last server log lines
 | No terminal backend found                | Install tmux (Windows: `winget install psmux`) or start Herdr, then `termote start`          |
 | Port in use                              | `start` names the port; stop the other program or choose `termote start --port <port>`      |
 | Host rejected (403)                      | Run the `termote start --allow-host <name>` the error names                                  |
+| Reverse proxy gets no answer             | The log shows `local-user-refused`: run the `termote start --allow-local-user <name>` it names |
 | Saved password cannot be decrypted       | The `secret` file was removed or replaced: `termote start --fresh`                           |
 | Stops when you log out (Linux)           | `loginctl enable-linger $USER`                                                               |
 | Not running after a reboot (WSL2)        | No user systemd there: `termote start` again, or enable systemd in WSL                       |

@@ -6,11 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -126,7 +128,7 @@ func (c *cli) loginLinkFile(info linkInfo) (string, error) {
 		return "", err
 	}
 	data := struct{ Action, Token, Hash string }{
-		Action: u.Scheme + "://" + u.Host + loginLinkPath, Token: res.Token, Hash: hash,
+		Action: u.Scheme + "://" + linkPostHost(u) + loginLinkPath, Token: res.Token, Hash: hash,
 	}
 	if err := loginFilePage.Execute(f, data); err != nil {
 		f.Close()
@@ -138,6 +140,21 @@ func (c *cli) loginLinkFile(info linkInfo) (string, error) {
 		return "", err
 	}
 	return path, nil
+}
+
+// linkPostHost is the host the file posts its token to: the link's own,
+// except that localhost becomes 127.0.0.1, where the server listens. A
+// browser may try ::1 first for localhost, and another OS user can listen
+// there on the same port; on macOS the listener check cannot see that
+// user's socket, so the token would reach it.
+func linkPostHost(u *url.URL) string {
+	if !strings.EqualFold(u.Hostname(), "localhost") {
+		return u.Host
+	}
+	if p := u.Port(); p != "" {
+		return net.JoinHostPort("127.0.0.1", p)
+	}
+	return "127.0.0.1"
 }
 
 // sweepLoginFiles removes the sign-in link files in dir older than

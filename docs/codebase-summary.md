@@ -33,6 +33,9 @@ termote/
 │   ├── uploads*.go             # `/api/mux/uploads` image store
 │   ├── cli*.go                 # CLI subcommands (start/stop, service, container, update, url, panel, ...)
 │   ├── listener_owner*.go      # CLI sends the saved password only to the current user's listener
+│   ├── local_socket*.go        # CLI ↔ native server over a Unix socket / named pipe, no password
+│   ├── peer_user_*.go          # Refuses connections from other local OS users (Linux, Windows)
+│   ├── sessions.go, signin_routes.go, login_link.go # Password sessions list/revoke, CLI sign-in link
 │   ├── install_layout.go, release_tags.go, tailscale.go # Install layout, release tags, tailscale serve
 │   ├── testdata/               # Recorded agent screens and transcript fixtures
 │   └── webui/                  # Embeds the built PWA into the binary

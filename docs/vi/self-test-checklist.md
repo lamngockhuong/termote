@@ -898,6 +898,10 @@ Test trên thiết bị di động thật:
 - [ ] ReadHeaderTimeout đã set (chống Slowloris)
 - [ ] Giới hạn kích thước thân request (8KB cho các request ghi tới `/api/mux/*`)
 - [ ] Lỗi nội bộ chỉ ghi log phía server, client chỉ nhận thông báo chung
+- [ ] `curl -sI -H 'Host: evil.example' http://127.0.0.1:7680/` (nhận 403) và `curl -sI
+      http://127.0.0.1:7680/` đều có `Cross-Origin-Opener-Policy: same-origin`,
+      `Cross-Origin-Resource-Policy: same-origin` và `Permissions-Policy: camera=(), ...`; chọn để copy
+      và dán vẫn chạy
 
 ### Thiết Bị Đã Ghép
 
@@ -917,6 +921,42 @@ Test trên thiết bị di động thật:
       hiện là "Paired by a removed device"
 - [ ] `termote logs`: mỗi lần tạo mã, ghép, thu hồi và đăng nhập bằng trang đăng nhập có một dòng
       `audit:`, các lần `termote status` thì không, và không dòng nào chứa mã, token hay mật khẩu
+
+### Tài Khoản Cục Bộ Khác (native Linux/Windows)
+
+- [ ] `termote start` in "Other local users allowed: none"
+- [ ] Linux, một OS user thứ hai: `curl http://127.0.0.1:<port>/api/mux/health`, cùng lệnh đó với
+      `--interface 127.0.0.2`, và (khi có `--lan`) tới IP LAN của máy đều thất bại (kết nối bị đóng,
+      không có phản hồi HTTP); `termote logs` có một dòng `audit: local-user-refused uid="<uid>"
+      user="<name>"` và đúng một lần gợi ý `--allow-local-user`
+- [ ] User thứ hai gửi request rồi đóng ngay (`printf 'GET / HTTP/1.0\r\n\r\n' | nc -q0
+      127.0.0.1 <port>`, lặp lại): không lần nào được trả lời
+- [ ] `termote start --allow-local-user <user thứ hai>`: `curl` của user đó nhận 401; `start` liệt kê
+      user này; `--remove-local-user` chặn lại; tên gõ sai bị `start` từ chối
+- [ ] Root (`sudo curl`) và chính user của server được trả lời; máy khác trong LAN được trả lời
+- [ ] Proxy đứng trước Termote (`nginx` dưới `www-data`) bị chặn cho tới khi có
+      `--allow-local-user www-data`
+- [ ] `tailscale serve` (Linux và Windows): URL Tailscale chạy mà không cần cho phép gì
+- [ ] Windows, một user thứ hai (`runas /user:other cmd`): `curl` tới `127.0.0.1` và `[::1]` bị chặn,
+      log ghi SID của user đó
+- [ ] WSL 2 (NAT và mirrored): trình duyệt trên Windows tới được server trong WSL
+- [ ] macOS: `--allow-local-user` in ra rằng macOS không kiểm tra; log ghi "not checked on this OS";
+      không kết nối nào bị chặn
+- [ ] Chế độ container và `termote-dev serve` không có cấu hình đã lưu: không kết nối nào bị chặn
+
+### Trình Duyệt Đã Đăng Nhập
+
+- [ ] Settings > Signed-in browsers liệt kê trình duyệt này ("This browser"), cách đăng nhập, địa chỉ,
+      trình duyệt và lần dùng gần nhất; `termote signins` liệt kê đúng các id đó
+- [ ] Đăng xuất một trình duyệt khác từ Settings: terminal nó đang mở bị đóng, lần tải trang sau bị
+      đưa về `/login`; `termote logs` có `audit: revoke-session ... via="settings"`
+- [ ] Sign out all others giữ lại trình duyệt này; `termote signins revoke --all` đăng xuất mọi trình
+      duyệt
+- [ ] Đăng xuất "This browser" thì về `/login`
+- [ ] Trên thiết bị toàn quyền đã ghép, danh sách vẫn hiện nhưng không có nút Sign out; thiết bị chỉ
+      xem không có mục này
+- [ ] Lặp lại `curl -u admin:<pw> http://127.0.0.1:<port>/api/mux/health` không thêm dòng nào
+- [ ] Khởi động lại server: mọi trình duyệt bị đăng xuất, thiết bị đã ghép vẫn đăng nhập
 
 ### CLI Qua Socket Cục Bộ (native)
 

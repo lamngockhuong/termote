@@ -887,6 +887,10 @@ Test on real mobile device:
 - [ ] ReadHeaderTimeout set (Slowloris protection)
 - [ ] Request body size limited (8KB on `/api/mux/*` writes)
 - [ ] Internal errors logged server-side only, generic messages to clients
+- [ ] `curl -sI -H 'Host: evil.example' http://127.0.0.1:7680/` (a 403) and `curl -sI
+      http://127.0.0.1:7680/` both carry `Cross-Origin-Opener-Policy: same-origin`,
+      `Cross-Origin-Resource-Policy: same-origin` and `Permissions-Policy: camera=(), ...`; copy on
+      select and paste still work
 
 ### Paired Devices
 
@@ -906,6 +910,39 @@ Test on real mobile device:
       "Paired by a removed device"
 - [ ] `termote logs`: `audit:` lines for each code, pairing, revoke and form sign-in, none for
       `termote status` polls, and no code, token or password in them
+
+### Other Local Users (native Linux/Windows)
+
+- [ ] `termote start` prints "Other local users allowed: none"
+- [ ] Linux, a second OS user: `curl http://127.0.0.1:<port>/api/mux/health`, the same from
+      `--interface 127.0.0.2`, and (with `--lan`) to the machine's LAN IP each fail (connection
+      closed, no HTTP answer); `termote logs` has one `audit: local-user-refused uid="<uid>"
+      user="<name>"` line and the `--allow-local-user` hint once
+- [ ] Second user sends a request and closes at once (`printf 'GET / HTTP/1.0\r\n\r\n' | nc -q0
+      127.0.0.1 <port>`, repeated): never answered
+- [ ] `termote start --allow-local-user <second user>`: that user's `curl` now gets 401; `start`
+      lists it; `--remove-local-user` refuses it again; a misspelled name is refused by `start`
+- [ ] Root (`sudo curl`) and the server's own user are answered; another machine on the LAN is answered
+- [ ] A reverse proxy (nginx as `www-data`) is refused until `--allow-local-user www-data`
+- [ ] `tailscale serve` (Linux and Windows): the Tailscale URL works without any allow
+- [ ] Windows, a second user (`runas /user:other cmd`): `curl` to `127.0.0.1` and `[::1]` refused,
+      log names its SID
+- [ ] WSL 2 (NAT and mirrored): the Windows browser reaches the server in WSL
+- [ ] macOS: `--allow-local-user` prints that macOS does not check; the log says "not checked on this
+      OS"; nothing is refused
+- [ ] Container mode and `termote-dev serve` without a saved config: nothing is refused
+
+### Signed-in Browsers
+
+- [ ] Settings > Signed-in browsers lists this browser ("This browser"), how it signed in, the address,
+      the browser and the last use; `termote signins` lists the same ids
+- [ ] Sign out another browser from Settings: its open terminal closes and its next load goes to
+      `/login`; `termote logs` has `audit: revoke-session ... via="settings"`
+- [ ] Sign out all others keeps this browser; `termote signins revoke --all` signs out every browser
+- [ ] Sign out "This browser" goes to `/login`
+- [ ] On a paired full device the list shows, with no Sign out buttons; a view device gets no section
+- [ ] `curl -u admin:<pw> http://127.0.0.1:<port>/api/mux/health` repeated adds no row
+- [ ] Restart the server: every browser is signed out, paired devices stay signed in
 
 ### CLI Local Socket (native)
 

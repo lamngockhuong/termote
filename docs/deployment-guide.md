@@ -173,21 +173,23 @@ it rather than resizing the pane.
 `start` and `container up` share the same flag syntax on every OS in 1.0 (`--lan`, not
 `-Lan`); a flag not given keeps its saved value, and a boolean is turned off with `=false`.
 
-| Flag                        | Description                                                | `start` | `container up` |
-| --------------------------- | ---------------------------------------------------------- | ------- | -------------- |
-| `--lan[=false]`             | Listen on `0.0.0.0` instead of `127.0.0.1`                 | ✓       | ✓              |
-| `--tailscale <host[:port]>` | Publish over Tailscale HTTPS (default port 443)            | ✓       | ✓              |
-| `--no-tailscale`            | Stop publishing over Tailscale                             | ✓       | ✓              |
-| `--no-auth[=false]`         | Disable basic authentication                               | ✓       | ✓              |
-| `--port <port>`             | Listen port (default 7680, Windows 7690 for `start`)       | ✓       | ✓              |
-| `--mux <tmux\|herdr>`       | Terminal backend (`start`: detected; container: asked)     | ✓       | ✓              |
-| `--allow-host <name>`       | Allow an extra Host header value (repeatable, no wildcard) | ✓       | ✓              |
-| `--remove-host <name>`      | Remove a previously allowed name (repeatable)              | ✓       | ✓              |
-| `--allow-herdr-no-auth`     | Required together with `--mux herdr --no-auth`             | ✓       | ✓              |
-| `--user <name>`             | Login username (default `admin`; shared by both)           | ✓       | ✓              |
-| `--fresh`                   | Set a new password (ignore the saved one)                  | ✓       | ✓              |
-| `--workspace <dir>`         | Mounted directory (default `~/termote-workspace`)          | -       | ✓              |
-| `--build`                   | Build `termote:local` from a checkout instead of pulling   | -       | ✓              |
+| Flag                         | Description                                                | `start` | `container up` |
+| ---------------------------- | ---------------------------------------------------------- | ------- | -------------- |
+| `--lan[=false]`              | Listen on `0.0.0.0` instead of `127.0.0.1`                 | ✓       | ✓              |
+| `--tailscale <host[:port]>`  | Publish over Tailscale HTTPS (default port 443)            | ✓       | ✓              |
+| `--no-tailscale`             | Stop publishing over Tailscale                             | ✓       | ✓              |
+| `--no-auth[=false]`          | Disable basic authentication                               | ✓       | ✓              |
+| `--port <port>`              | Listen port (default 7680, Windows 7690 for `start`)       | ✓       | ✓              |
+| `--mux <tmux\|herdr>`        | Terminal backend (`start`: detected; container: asked)     | ✓       | ✓              |
+| `--allow-host <name>`        | Allow an extra Host header value (repeatable, no wildcard) | ✓       | ✓              |
+| `--remove-host <name>`       | Remove a previously allowed name (repeatable)              | ✓       | ✓              |
+| `--allow-local-user <name>`  | Serve connections of another local OS user (repeatable)    | ✓       | -              |
+| `--remove-local-user <name>` | Stop serving that user's connections (repeatable)          | ✓       | -              |
+| `--allow-herdr-no-auth`      | Required together with `--mux herdr --no-auth`             | ✓       | ✓              |
+| `--user <name>`              | Login username (default `admin`; shared by both)           | ✓       | ✓              |
+| `--fresh`                    | Set a new password (ignore the saved one)                  | ✓       | ✓              |
+| `--workspace <dir>`          | Mounted directory (default `~/termote-workspace`)          | -       | ✓              |
+| `--build`                    | Build `termote:local` from a checkout instead of pulling   | -       | ✓              |
 
 `update` takes `--version <X.Y.Z>` and `--force` instead. There is no `--ttyd` flag and no
 PowerShell `-Flag` parameter names in 1.0.
@@ -203,7 +205,12 @@ PowerShell `-Flag` parameter names in 1.0.
 
 Saved settings include the port, network flags (`--lan`, `--tailscale`), auth setting
 (`--no-auth`), mux backend, the Host allowlist, the workspace (container only), the login
-username (`--user`, default `admin`) and the encrypted password.
+username (`--user`, default `admin`), the local users allowed with `--allow-local-user` (native
+only) and the encrypted password.
+
+Running `start` from 1.20.0 or older (a rollback) saves the config
+without those names; after updating again, give them back with `termote start --allow-local-user
+<name>` (`start` prints the list it keeps).
 
 **Reusing saved config:**
 
@@ -309,6 +316,63 @@ kept by `container down` and removed by `uninstall --purge`. Design, limits and 
 
 See [`system-architecture.md`](system-architecture.md#security-model) for the full model.
 
+### Connections from other local users
+
+**Breaking change** (from the first release after 1.20.0): on Linux and Windows a native server refuses every
+connection made from the machine itself (any loopback address, or its own LAN address with `--lan`)
+by a process of another OS user. The server's own user and root/SYSTEM (and on Windows a session 0
+service whose token the server's user cannot read) are always let in. A connection whose owner cannot be found, or that is already closing,
+is refused as well. The check runs on the connection's first read, at most 4 lookups at once, each
+within 2 seconds.
+
+A reverse proxy running as its own user (nginx as `www-data`, Caddy as `caddy`) is refused until it is
+allowed; the log then shows an `audit: local-user-refused` line and, once per user:
+
+```text
+a connection of local user www-data was refused; if it is a reverse proxy you run, allow it with: termote start --allow-local-user www-data
+```
+
+```bash
+termote start --allow-local-user www-data      # also a uid; DOMAIN\user on Windows
+termote start --remove-local-user www-data
+```
+
+A name is checked when given (a user that does not exist is refused); a saved one whose user was
+removed since is skipped by the server with a log line. Not covered: macOS (no check, `--allow-local-user`
+has no effect there), the container and `termote serve` configured from the environment. WSL 2 lets
+every Windows user in (a root relay in NAT mode, an unseen loopback client in mirrored mode). What is
+left open: [`security-model.md`](security-model.md#what-it-cannot-prevent).
+
+### The CLI's local socket
+
+A native server also listens on a socket only its own OS user can open, and the CLI uses it for
+`status`, `url`, `panel`, `pair`, `devices`, `signins` and the health wait of
+`start`/`restart`/`update`, without sending the password:
+
+- **Linux, macOS:** `<stateDir>/run/<port>.sock` (`~/.local/state/termote/run/7680.sock`; the dir
+  `0700`, the socket `0600`). A socket left by a server that died is replaced; the old server removes
+  its socket at exit only while it is its own and nothing else answers on it, so an update or restart
+  never removes the new server's.
+- **Windows:** the named pipe `\\.\pipe\termote-<SID>-<port>`, whose ACL names the user and SYSTEM;
+  remote clients are refused.
+
+Before sending a request the CLI checks that the server end runs as its own user or root/SYSTEM; a
+socket another user made is never used. Without a socket (the container, an older server, a socket
+that cannot be opened: the server logs why) the CLI falls back to `127.0.0.1:<port>` with the saved
+password, which goes only to a listener of the same user or root/SYSTEM; a read sent on the socket that got no
+answer is retried that way, a write never. `termote status` prints `Via: socket (no
+password sent)` or `Via: TCP`, and `status --json` has `"via": "socket"|"tcp"` (both only when the server answered).
+
+### Signed-in browsers
+
+Every browser signed in with the password (the sign-in form, Basic auth, a CLI link) is listed in
+Settings > Signed-in browsers and by `termote signins` (id, how it signed in, address, browser, last
+use). `termote signins revoke <id>` or the row's button signs one out and closes its terminals;
+`termote signins revoke --all` signs every browser out, and "Sign out all others" keeps the current
+one. A full paired device sees the list but cannot sign anyone out. Sessions live in memory for 24
+hours, at most 256 (the least recently used goes first), so a restart signs every browser out. curl
+and the CLI sending Basic auth make no session.
+
 ### Network Isolation
 
 ```bash
@@ -348,10 +412,19 @@ curl http://localhost:7680/api/mux/health
 ## Links and the Herdr Plugin
 
 `termote url` prints the address to open, on Tailscale, else the first LAN address, else
-`localhost` (never with the password): `--group/--tab/--pane` (the ids of
+`127.0.0.1` (never with the password): `--group/--tab/--pane` (the ids of
 `/api/mux/snapshot`) and `--view` make it a deep link, `--herdr` takes them from a Herdr plugin
 context, and `--open`, `--copy`, `--qr` open it, copy it or print a QR code. Only the link goes to
 stdout.
+
+`--open` (and the panel's open key) opens the app already signed in: the CLI asks the server for a
+single-use token valid 30 seconds, writes it into an owner-only (`0600`; an owner-only ACL on Windows) page `<stateDir>/run/login-<random>.html`
+and opens that file, which posts the token to `/login/link` (a `localhost` link given by hand is posted to `127.0.0.1`: a browser may try `::1` first, where another
+user could listen). The token never appears in a command
+line, a URL, the output or the browser history; files older than 2 minutes are removed by the next
+`--open` or when the server starts. With `--no-auth` the plain link opens; with an older server, no saved
+password or another user's listener on the port, the plain link opens with a warning saying why. Each such link makes a new session, listed under
+Signed-in browsers.
 
 The Herdr plugin in [`herdr-plugin/`](../herdr-plugin/README.md)
 (`herdr plugin install lamngockhuong/termote/herdr-plugin`, Herdr 0.7.4+) runs these commands:
