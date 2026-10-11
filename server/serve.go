@@ -19,6 +19,7 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -72,6 +73,10 @@ type serveConfig struct {
 	// DevicesDir holds the paired devices; empty disables pairing. Never
 	// read or written with NoAuth.
 	DevicesDir string
+	// LocalSocketDir holds the local socket the CLI reaches a native
+	// server on without the password (<stateDir>/run; Windows uses a named
+	// pipe and ignores it); empty opens none (the container, tests).
+	LocalSocketDir string
 	// OnListen runs once the port is bound (serve records its PID then, so
 	// a server that cannot bind never replaces the running one's PID file).
 	OnListen func()
@@ -403,6 +408,7 @@ func buildServer(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushStore, 
 	agent.signins = sessions != nil
 	registerDeviceRoutes(mux, devices, allowed)
 	registerSigninRoutes(mux, sessions, allowed)
+	registerLoginLinkRoutes(mux, sessions)
 	registerPushRoutes(mux, push)
 	registerStreamRoutes(mux, m, tokenStore, allowed, hub)
 	// The upload store and the trash are never read through the Files view
@@ -559,11 +565,15 @@ func runServer(ctx context.Context, cfg serveConfig, m Mux, ln net.Listener) err
 		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
+		ConnContext:       localSocketConnContext,
 	}
 	errCh := make(chan error, 1)
 	go func() { errCh <- srv.Serve(ln) }()
+	cleanupSocket := serveLocalSocket(srv, cfg, ln)
 	select {
 	case err := <-errCh:
+		srv.Close()
+		cleanupSocket()
 		return err
 	case <-ctx.Done():
 	}
@@ -574,10 +584,43 @@ func runServer(ctx context.Context, cfg serveConfig, m Mux, ln net.Listener) err
 	if err := srv.Shutdown(sctx); err != nil {
 		log.Printf("http shutdown: %v", err)
 	}
+	// Shutdown has closed the socket's listener: the CLI finds no socket
+	// rather than one nothing answers on.
+	cleanupSocket()
 	if err := hub.shutdown(sctx); err != nil {
 		log.Printf("terminal streams still open at exit: %v", err)
 	}
 	return nil
+}
+
+// serveLocalSocket serves srv on the local socket too when cfg names one,
+// and returns what removes it once srv is shut down. Without the socket the
+// server runs all the same: the CLI then uses TCP and the password.
+func serveLocalSocket(srv *http.Server, cfg serveConfig, ln net.Listener) func() {
+	if cfg.LocalSocketDir == "" {
+		return func() {}
+	}
+	port := cfg.Port
+	if a, ok := ln.Addr().(*net.TCPAddr); ok {
+		port = strconv.Itoa(a.Port)
+	}
+	sock, cleanup, err := openLocalSocket(cfg.LocalSocketDir, port)
+	if err != nil {
+		log.Printf("local socket for the CLI not opened (the CLI uses TCP and the password): %v", err)
+		return func() {}
+	}
+	log.Printf("local socket for the CLI: %s", sock.Addr())
+	go func() {
+		if err := srv.Serve(localSocketListener{sock}); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Printf("local socket: %v", err)
+		}
+	}()
+	// Closed here too: srv.Close may run before Serve has taken the
+	// listener, and the cleanup leaves a socket something answers on.
+	return func() {
+		sock.Close()
+		cleanup()
+	}
 }
 
 // authRateLimiter tracks failed auth attempts per IP, and per /64 for IPv6, to
@@ -887,6 +930,53 @@ func newBasicAuth(user, pass string, dev *deviceAuth, sessions *sessionAuth, nex
 		http.Redirect(w, r, next, http.StatusSeeOther)
 	}
 
+	// loginLink redeems a sign-in link token the CLI's file POSTs (see
+	// login_link.go). A wrong or expired token is not counted against the
+	// password: every local and tailnet client shares one address, and a
+	// few slow browsers would lock the sign-in of all of them; a token is
+	// 128 random bits.
+	loginLink := func(w http.ResponseWriter, r *http.Request, ip string) {
+		switch r.Method {
+		case http.MethodGet:
+			// Back from the app to this address, or a stray load: the app
+			// when signed in, else the sign-in form.
+			if hasSession(r) {
+				http.Redirect(w, r, "/", http.StatusSeeOther)
+				return
+			}
+			writeLoginPage(w, http.StatusUnauthorized, loginForm{Next: "/", Error: linkExpiredMsg, Pairing: dev != nil})
+			return
+		case http.MethodPost:
+		default:
+			w.Header().Set("Allow", "GET, POST")
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if linkCrossSiteRejected(r) {
+			http.Error(w, "cross-site request rejected", http.StatusForbidden)
+			return
+		}
+		if !isFormPost(r) {
+			http.Error(w, "Unsupported Media Type", http.StatusUnsupportedMediaType)
+			return
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, maxLoginBody)
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+		if _, ok := sessions.links.consume(r.PostForm.Get("t")); !ok {
+			writeLoginPage(w, http.StatusUnauthorized, loginForm{Next: "/", Error: linkExpiredMsg, Pairing: dev != nil})
+			return
+		}
+		// A session this browser already has is not seen (its Strict cookie
+		// does not come with a cross-site POST): the new cookie replaces it,
+		// and the old session stays listed until it expires or is revoked.
+		startSession(w, r, sessionViaLink)
+		auditf("login", "via", "link", "user", user, "ip", ip)
+		writeLinkDonePage(w, safeLinkHash(r.PostForm.Get("hash")))
+	}
+
 	// pair serves the pairing form (GET) and redeems the code it posts, under
 	// a rate limit of its own. A browser already signed in with full rights
 	// is never paired: that would trade its rights for the code's. One that
@@ -1034,8 +1124,19 @@ func newBasicAuth(user, pass string, dev *deviceAuth, sessions *sessionAuth, nex
 			pair(w, r, ip)
 			return
 		}
+		if r.URL.Path == loginLinkPath {
+			loginLink(w, r, ip)
+			return
+		}
 		if r.URL.Path == logoutPath {
 			logout(w, r)
+			return
+		}
+
+		// The CLI over the local socket, which only the server's own OS
+		// user can open: no password needed.
+		if isLocalSocket(r.Context()) {
+			serveSignedIn(w, r, authInfo{Kind: authLocal, Role: roleFull})
 			return
 		}
 

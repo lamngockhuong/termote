@@ -31,9 +31,9 @@ func registerSigninRoutes(mux *http.ServeMux, s *sessionAuth, allowed hostAllowl
 		return true
 	}
 	// via names where a revoke came from: the CLI signs in with Basic
-	// auth, a browser has a session by then.
+	// auth or over the local socket, a browser has a session by then.
 	via := func(a authInfo) string {
-		if a.Kind == authBasic {
+		if isCLI(a) {
 			return "cli"
 		}
 		return "settings"

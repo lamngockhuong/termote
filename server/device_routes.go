@@ -248,8 +248,12 @@ func deviceViews(recs []deviceRecord, current string, now time.Time) []deviceVie
 }
 
 // requestIP is the address a request came from, without its port. Behind a
-// proxy (tailscale serve) it is the proxy's, loopback.
+// proxy (tailscale serve) it is the proxy's, loopback; over the local socket
+// it is "local".
 func requestIP(r *http.Request) string {
+	if isLocalSocket(r.Context()) {
+		return "local"
+	}
 	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
 	if ip == "" {
 		ip = r.RemoteAddr
@@ -364,9 +368,10 @@ func registerDeviceRoutes(mux *http.ServeMux, d *deviceAuth, allowed hostAllowli
 			return
 		}
 		a, _ := authFrom(r.Context())
-		// The CLI signs in with Basic auth; a browser has a session by then.
+		// The CLI signs in with Basic auth or over the local socket; a
+		// browser has a session by then.
 		via := "devices"
-		if a.Kind == authBasic {
+		if isCLI(a) {
 			via = "cli"
 		}
 		auditf("revoke", "id", ids[0], "by", auditBy(a), "via", via, "cascade", ids[1:])

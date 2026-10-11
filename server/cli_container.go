@@ -521,6 +521,7 @@ func (c *cli) containerStatus(args []string) error {
 	if !saved.Container.NoAuth {
 		pass = saved.Password
 	}
+	// Over TCP: the container's server has no local socket of this user.
 	h, code := fetchHealth(port, saved.authUser(), pass)
 	if code == 200 {
 		fmt.Fprintf(c.out, "  %s server :%d - %s (v%s)\n", c.paint(ansiGreen, "[OK]"), port, h.Status, h.Version)

@@ -367,6 +367,9 @@ func (c *cli) stateDir() string {
 	return filepath.Join(c.envDir("XDG_STATE_HOME", filepath.Join(c.home, ".local", "state")), "termote")
 }
 
+// localSocketDir holds the native server's local socket (local_socket.go).
+func (c *cli) localSocketDir() string { return filepath.Join(c.stateDir(), "run") }
+
 func (c *cli) logDir() string  { return c.stateDir() }
 func (c *cli) pidFile() string { return filepath.Join(c.stateDir(), "termote.pid") }
 

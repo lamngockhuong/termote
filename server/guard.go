@@ -63,6 +63,11 @@ func (a hostAllowlist) allows(r *http.Request, hostport string) bool {
 	if h == "" {
 		return false
 	}
+	// The local socket's fixed name, on that socket only: a TCP request
+	// naming it is refused even when --allow-host lists it.
+	if h == localSocketHost {
+		return isLocalSocket(r.Context())
+	}
 	if _, ok := a.names[h]; ok {
 		return true
 	}
@@ -137,10 +142,10 @@ func isWriteMethod(method string) bool {
 // required JSON Content-Type forces a CORS preflight that we never answer.
 func writeGuard(allowed hostAllowlist, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// The sign-in and pairing forms are not JSON; only their Origin is
-		// checked here, where the allowlist is, before a rate limiter counts
-		// the POST.
-		if (r.URL.Path == loginPath || r.URL.Path == pairPath) && r.Method == http.MethodPost && foreignLoginOrigin(allowed, r) {
+		// The sign-in, pairing and sign-in link forms are not JSON; only
+		// their Origin is checked here, where the allowlist is, before a
+		// rate limiter counts the POST.
+		if (r.URL.Path == loginPath || r.URL.Path == pairPath || r.URL.Path == loginLinkPath) && r.Method == http.MethodPost && foreignLoginOrigin(allowed, r) {
 			http.Error(w, "cross-site request rejected", http.StatusForbidden)
 			return
 		}

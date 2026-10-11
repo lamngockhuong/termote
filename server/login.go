@@ -104,13 +104,14 @@ func isNavigation(r *http.Request) bool {
 
 // safeNext returns p when it is a path on this server to go back to after
 // signing in, else "/": never another host ("//evil", "/\evil"), a scheme,
-// the sign-in page itself, or the pairing page (a code never rides in next).
+// the sign-in page itself, the pairing page (a code never rides in next) or
+// the sign-in link.
 func safeNext(p string) string {
 	if !strings.HasPrefix(p, "/") || strings.HasPrefix(p, "//") || strings.ContainsAny(p, "\\\x00\r\n\t") {
 		return "/"
 	}
 	u, err := url.Parse(p)
-	if err != nil || u.Scheme != "" || u.Host != "" || u.Path == loginPath || u.Path == pairPath {
+	if err != nil || u.Scheme != "" || u.Host != "" || u.Path == loginPath || u.Path == pairPath || u.Path == loginLinkPath {
 		return "/"
 	}
 	return p

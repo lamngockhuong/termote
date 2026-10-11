@@ -907,6 +907,40 @@ Test on real mobile device:
 - [ ] `termote logs`: `audit:` lines for each code, pairing, revoke and form sign-in, none for
       `termote status` polls, and no code, token or password in them
 
+### CLI Local Socket (native)
+
+- [ ] `termote start`, then `termote status` says `Via: socket (no password sent)` and
+      `termote status --json` has `"via": "socket"`; `~/.local/state/termote/run` is `drwx------`
+      and `<port>.sock` is `srw-------` (Windows: no file, a named pipe)
+- [ ] `termote update` (or `update --version X.Y.Z --force`), then `termote status` still says
+      `Via: socket` — on systemd (Linux), launchd (macOS) and the Scheduled Task (Windows)
+- [ ] `termote restart`, then `termote status` still says `Via: socket` — same three supervisors
+- [ ] `termote stop`: the `.sock` file is gone; `kill -9` of the server leaves it, and the next start
+      replaces it (`Via: socket` again)
+- [ ] `termote pair`, `termote devices`, `termote signins` work; `termote logs` shows `ip="local"`
+      and, for a revoke, `by="password" via="cli"`
+- [ ] Container mode: `termote container status` and `termote status` keep working (over TCP)
+- [ ] Two OS users on one machine: the second user cannot open the first one's socket (Linux/macOS:
+      `nc -U` / `curl --unix-socket` gets "Permission denied"); its own `termote status` never says
+      `Via: socket` for the first user's server
+
+### Sign-in Link from the CLI
+
+- [ ] `termote url --open` in a browser that is not signed in opens the app signed in, with no
+      password prompt; Settings > Signed-in browsers lists it as "Link from the CLI"
+- [ ] `termote url --open --group <g> --tab <t>` lands on that session (deep link kept)
+- [ ] Opening the same `~/.local/state/termote/run/login-*.html` again (or after 30 s) shows "This
+      sign-in link has expired", and the password sign-in still works right after (not locked)
+- [ ] `ps`/Task Manager while it opens: the opener's and the browser's command line hold only the
+      file path, never a token; stdout of `termote url --open` is the plain link
+- [ ] macOS (`open`), Windows (`rundll32`, with a user name that has a space), WSL (`wslview`, the
+      Windows browser opens the file), Linux (`xdg-open`)
+- [ ] Firefox and Safari as the default browser: signed in at the app, never the sign-in page
+- [ ] With the Tailscale URL as the primary link: signed in on the Tailscale name
+- [ ] `.html` files set to open in an editor: no sign-in happens, `url --open` printed "If no browser
+      opened, open the link above"
+- [ ] `termote url --copy` / `--qr` print the plain link and write no `login-*.html`
+
 ### No Auth Mode
 
 - [ ] `--no-auth` flag bypasses auth prompt

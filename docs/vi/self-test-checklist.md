@@ -274,6 +274,53 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 - [ ] Herdr: đóng workspace có worktree liên kết thì hiện thông báo "close it in Herdr"
 - [ ] tmux: session tạo ngoài Termote (`tmux new -s x`) hiện thành group và đóng được
 
+### Sắp Xếp Lại (tmux 3.2+, Herdr 0.8.0+ trên Linux/macOS)
+
+Chạy Herdr trên một socket và `HOME` riêng để thử, đừng dùng Herdr đang làm việc.
+
+- [ ] Máy tính: kéo một dòng tab lên trên hoặc xuống dưới một tab khác cùng group; vạch 2 px chỉ
+      chỗ tab sẽ nằm; `tmux list-windows` (hoặc thanh tab của Herdr) hiện thứ tự mới; nhấn vào
+      tab vẫn chọn được nó
+- [ ] Máy tính: Alt+↑/Alt+↓ trên dòng tab đang focus di chuyển tab đó; focus vẫn ở dòng ấy
+- [ ] Điện thoại (390×844): ↑/↓ trên dòng "Current session" di chuyển tab đang hiện, bị tắt khi tab
+      đã ở đầu hoặc cuối group; vuốt vẫn hiện nút Sửa/Xóa
+- [ ] Herdr: Move up/Move down trong menu ⋯ của workspace (tắt ở hai đầu) và kéo header của nó đều
+      di chuyển workspace; sidebar của Herdr cũng đổi theo
+- [ ] Herdr: tab được sắp lại ngay trong Herdr hiện cùng thứ tự trong Termote
+- [ ] Group worktree của Herdr: workspace của repository di chuyển cùng các worktree của nó;
+      worktree liên kết không có Move, route của nó trả 409 `linked_worktree`
+- [ ] Khởi động lại Herdr: thứ tự vẫn giữ nguyên
+- [ ] Không có nút sắp xếp khi đang bật bộ lọc agent hay "blocked first", cũng không có trên tmux
+      cũ hơn 3.2, psmux (Windows), Herdr cũ hơn 0.8.0 hay Herdr trên Windows; session tmux không có
+      Move
+- [ ] Khi đang bật bộ lọc agent hay "blocked first": dòng "Current session" (điện thoại) và menu ⋯
+      của group nói cần tắt gì để sắp xếp; ở backend không sắp xếp được thì không nói gì
+- [ ] tmux: bản nháp Chat và ảnh đính kèm của một window vẫn đi theo window đó khi window khác được
+      kéo qua nó, cả trên thiết bị thứ hai đang mở; form Sửa đang mở vẫn ở đúng window của nó
+- [ ] tmux: đóng một tab mà id của nó đã bị lệch do thiết bị khác vừa di chuyển: báo "The tab
+      changed; try again" và không đóng gì
+- [ ] psmux: ghi lại ở đây `tmux display-message -p '#{window_id}'` có in ra `@N` hay không
+
+### Worktree (Herdr 0.9.2+, Linux/macOS)
+
+Chạy với một Herdr riêng (`HERDR_SOCKET_PATH`, `HOME` và các thư mục XDG nằm trong thư mục tạm),
+hoặc trên một repo có thể bỏ đi.
+
+- [ ] Menu ⋯ của workspace có New worktree và Open worktree; tmux, Windows và Herdr 0.9.1 không có
+      cả hai (`caps.worktrees` là false)
+- [ ] New worktree từ Current HEAD và từ một base khác: workspace hiện ra, được chọn, và header của
+      nó ghi tên nhánh, trên cả điện thoại (390×844) lẫn máy tính
+- [ ] Gõ tên một nhánh đã có thì ô base ẩn đi ("Checks out the existing branch") và nhánh đó được
+      checkout; tên không hợp lệ (`-x`, có ký tự bidi hay zero-width) bị chỉ ra trước khi gửi
+- [ ] Open worktree chỉ liệt kê worktree liên kết; worktree đang đóng thì mở ra, đang mở thì được
+      chọn
+- [ ] Remove worktree (chỉ với worktree liên kết) nêu tên nhánh và đường dẫn; worktree sạch thì bị
+      gỡ, worktree còn thay đổi thì hỏi thêm lần nữa và Cancel giữ lại file; nhánh vẫn còn
+- [ ] Remove sau khi client khác đã đổi worktree đó: báo "This worktree changed; look again" và
+      không gỡ gì
+- [ ] Sau khi server Herdr khởi động lại, nhãn nhánh và Remove vẫn còn
+- [ ] Repo chậm (`strace -e inject`, ổ mạng) không làm sidebar chậm theo
+
 ### Session Tabs (Desktop)
 
 - [ ] Thanh tab hiện khi cài đặt bật
@@ -297,22 +344,50 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 - [ ] Chuyển session/tab/pane thì thanh địa chỉ cập nhật, không thêm mục lịch sử
 - [ ] "Copy link" trong menu More sao chép liên kết hiện tại
 
+### Thông Báo Từ Agent
+
+Dùng bản production build (`pnpm dev` tắt service worker) và một pane đang chạy Claude Code.
+
+- [ ] Settings → Sessions → "Notify when an agent needs me": bật lên thì trình duyệt xin quyền; bị
+      từ chối thì ghi "Blocked in browser settings" và công tắc vẫn tắt
+- [ ] Chrome trên máy tính, tab ở chế độ nền: một hộp thoại xin quyền tạo đúng một thông báo
+      "Agent needs you"; nhấn vào thì tab được focus đúng pane đó
+- [ ] Một lượt làm việc xong tạo thông báo "Agent finished"; không có push (server cũ hơn) thì pane
+      đang hiện trong cửa sổ đang focus không tạo thông báo nào; có push thì tạo một thông báo, thay
+      cho thông báo trước đó của pane ấy
+- [ ] Android Chrome (app đã cài), PWA đang đóng: một hộp thoại tạo push; nhấn vào thì mở pane đó
+- [ ] Chrome và Firefox trên máy tính, đã đóng mọi tab Termote: push vẫn tới
+- [ ] App trên Home Screen của iPhone/iPad (iOS 16.4+): bật lên thì đăng ký push, push tới khi app
+      đang đóng; trong Safari thì hiện gợi ý thêm vào Home Screen
+- [ ] Gỡ đăng ký trong trình duyệt: push tiếp theo nhận 410 và server bỏ đăng ký đó
+- [ ] `termote start --fresh`: không thiết bị nào nhận push cho tới khi đăng nhập lại
+- [ ] Đăng xuất: thiết bị đó không nhận push nữa
+- [ ] Có đăng ký push mà không mở trang nào, chạy `tmux kill-session -t main`: `main` không bị tạo
+      lại
+- [ ] `ls -l ~/.local/state/termote/push`: các file 0600 trong thư mục 0700
+
 ### Fullscreen (Desktop)
 
 - [ ] Nút fullscreen hiện trên header (chỉ trên máy tính)
 - [ ] Nhấn bật/tắt chế độ toàn màn hình
 - [ ] Icon đổi giữa Maximize/Minimize
 - [ ] Esc/F11 thoát fullscreen và đồng bộ trạng thái nút
+- [ ] Nút ẩn đi ở nơi không vào được fullscreen (iPhone xoay ngang, hoặc
+      `document.fullscreenEnabled` là false)
 
 ### Thao Tác Session (Mobile)
 
 - [ ] Nút Sửa/Xóa ẩn mặc định
 - [ ] Vuốt trái/phải trên session item hiện nút Sửa/Xóa
+- [ ] Khi có `caps.reorderTabs`: dòng "Current session" có nút Move up/Move down
 
 ### Session Qua API
 
 - [ ] Liệt kê session qua API: `curl localhost:7680/api/mux/snapshot`
 - [ ] Chuyển session qua API hoạt động
+- [ ] `POST /api/mux/tabs/<id>/move {"index":0}` trả `{ok, id}` (trên tmux là id mới);
+      `{"index":99}` → 400 `invalid_index`; di chuyển group trên tmux → 501 `unsupported`
+- [ ] `DELETE /api/mux/tabs/<id>?key=<@N của một window khác>` → 409 `changed`, không đóng gì
 - [ ] Trạng thái session giữ nguyên sau khi terminal kết nối lại
 
 ---
@@ -417,16 +492,17 @@ Trên psmux, gửi tin từ Chat view chưa được cho đến khi xong #408.
 
 ### Khởi động agent (Herdr)
 
-Herdr 0.8.2 trở lên, `termote-dev serve --mux herdr` (hoặc `termote start --mux herdr`).
+Linux, Herdr 0.8.2 trở lên, `termote-dev serve --mux herdr` (hoặc `termote start --mux herdr`).
 
 - [ ] Pane đang rảnh có view Chat với hai nút "Claude Code" và "Codex"; pane đang chạy `vim` thì
       không; tmux không có nút nào và `POST …/agent/start` trả 501
-- [ ] Claude Code chạy, trạng thái đi từ `starting` sang `ready`, hội thoại hiện ra; tin đầu tiên
-      gửi từ view Chat tới nơi
-- [ ] Codex chạy bằng `codex --no-daemon`; view Chat nhắc gõ tin đầu tiên trong terminal, sau đó
-      hội thoại hiện ra
-- [ ] Gõ dở `echo hi` rồi khởi động: chỉ agent chạy. Tương tự ở dấu nhắc tiếp dòng và trong
-      `cat <<EOF`
+- [ ] Claude Code: `claude` chạy, trạng thái đi từ `starting` sang `ready`, hội thoại hiện ra; tin
+      đầu tiên gửi từ view Chat tới nơi (ghi lại Herdr mất bao lâu mới báo session, trong lúc đó
+      view ghi "Claude Code is starting…")
+- [ ] Codex: tiến trình chạy bằng `codex --no-daemon`; view Chat nhắc gõ tin đầu tiên trong
+      terminal; gõ xong một tin ở đó thì view Chat hiện hội thoại
+- [ ] Gõ dở `echo hi` rồi khởi động: chỉ agent chạy. Tương tự ở dấu nhắc `PS2` (`echo \` rồi Enter)
+      và trong `cat <<EOF`
 - [ ] Thư mục mới mà Claude Code hỏi tin cậy: PWA mở Terminal kèm dòng "Claude Code is asking
       something in the terminal."
 - [ ] `PATH` không có `codex`: sau vài giây trạng thái `exited` và có cảnh báo kèm Open terminal;
@@ -435,7 +511,13 @@ Herdr 0.8.2 trở lên, `termote-dev serve --mux herdr` (hoặc `termote start -
 - [ ] `curl` POST tới pane đang chạy `vim` → 409 `pane_busy`, không gõ gì (màn hình không đổi)
 - [ ] Hai thiết bị cùng khởi động: một bên nhận 200, bên kia 409 `starting` và theo dõi cùng lần
       khởi động
-- [ ] `curl` với `{"kind":"bash"}` → 400 `invalid_kind`
+- [ ] `curl` với `{"kind":"bash"}` → 400 `invalid_kind`;
+      `{"kind":"claude","args":["--help"],"name":"x"}` → agent khởi động mà bỏ qua hai trường đó,
+      `herdr agent list` hiện alias `termote-claude-…`
+- [ ] Tắt một Claude Code đang làm việc (`C-c C-c`) rồi khởi động cái mới: không có thông báo
+      "Agent finished"
+- [ ] `/exit` trong agent khi đang mở view Chat của nó: view vẫn ở Chat và lại hiện các nút khởi
+      động (không còn quay về Terminal)
 
 Windows, Herdr 0.8.2 trở lên, shell của pane là pwsh, `termote start --mux herdr`.
 
@@ -467,9 +549,27 @@ Chạy trên tmux (Linux/macOS) và Herdr; psmux (Windows) không có hai view n
       về cây thư mục
 - [ ] File nhị phân hoặc lớn hơn 1 MiB hiện
       `Not previewable (binary, special file or larger than 1 MiB)`
-- [ ] `.env` (có icon ổ khóa trên cây) hỏi `Show this file?` trước: Cancel quay lại, Show hiện nội
-      dung; mở lại thì hỏi lại
+- [ ] `.env` (có icon ổ khóa trên cây) hỏi `Show this file?` trước: Cancel đóng tab của nó, Show
+      hiện nội dung; chuyển sang tab khác rồi quay lại thì vẫn hiện, đóng tab rồi mở lại thì hỏi lại
 - [ ] `.git` không mở được ("This directory can't be shown")
+
+### Mở File Thành Tab
+
+- [ ] Máy tính: nhấn vào file thì mở nó ở tab xem trước (tên in nghiêng), nhấn file khác thì thay
+      chỗ; nhấn đúp (trên cây hay trên tab), Edit hoặc "Keep open" thì giữ tab lại; file đã mở thì
+      hiện tab của nó
+- [ ] Chuyển tab thì vị trí cuộn (code, Markdown, bảng, trình sửa) và bản nháp được giữ nguyên
+- [ ] Đóng tab còn thay đổi chưa lưu thì hỏi "Discard changes?"; nhấn chuột giữa hoặc Delete thì
+      đóng tab; mở file thứ 11 thì tab sạch lâu không dùng nhất bị đóng, không bao giờ là tab có bản
+      nháp
+- [ ] Ctrl/Cmd+nhấn hoặc nhấn chuột giữa vào link Markdown thì mở tab mới; nhấn thường thì đi tiếp
+      trong cùng tab và Back quay lại
+- [ ] Điện thoại: không có thanh tab; "Open files (N)" trên thanh của file và phía trên cây mở một
+      bảng để chuyển, giữ lại và đóng tab; nhấn giữ link Markdown thì mở tab mới; ở bề ngang 360 px
+      không có gì cuộn ngang
+- [ ] File bị xóa bên ngoài Termote vẫn giữ tab, ghi "File not found" kèm "Close tab"; khi pane
+      chuyển sang thư mục khác, tab sạch tự đóng còn tab có bản nháp thì hỏi (Discard and close /
+      Keep)
 - [ ] `cd` ra ngoài thư mục gốc trong pane rồi bấm Refresh: hiện toast "The pane's directory
       changed" và cây chuyển sang thư mục gốc mới
 
@@ -482,8 +582,16 @@ Chạy trên tmux (Linux/macOS) và Herdr; psmux (Windows) không có hai view n
       `old → new`
 - [ ] Điện thoại có một cột số dòng, máy tính có hai
 - [ ] `.env` có thay đổi thì hỏi `Show this file?` trước khi hiện diff
-- [ ] Thay đổi làm trong terminal hiện trong vòng 5 giây; commit file đang mở thì hiện `No longer changed`
+- [ ] Thay đổi làm trong terminal hiện trong vòng 5 giây; commit (hoặc stage) phía đang mở thì tab
+      của nó đóng lại kèm "No changes left in <file>"; tab đang sửa thì vẫn ở lại
 - [ ] Ngoài repo git: "Not a git repository: <dir>"; không có thay đổi: "No changes"
+- [ ] Máy tính: diff mở thành tab, đứng sau tab "Changes": nhấn một lần mở tab xem trước, nhấn đúp
+      (trong danh sách hay trên tab) hoặc Edit thì giữ lại; phía staged và phía chưa staged của
+      cùng một file là hai tab, tab staged ghi "(staged)"
+- [ ] Sửa ở một tab, chuyển sang tab khác rồi quay lại: trình sửa và bản nháp vẫn còn; chuyển tab
+      thì vị trí cuộn của diff được giữ; đóng tab đang sửa thì hỏi "Discard changes?"
+- [ ] Điện thoại: không có thanh tab; "Open files (N)" phía trên danh sách và trên thanh của diff
+      mở bảng danh sách tab
 
 ### Sửa File
 
@@ -511,13 +619,47 @@ Chạy trên tmux (Linux/macOS) và Herdr; psmux (Windows) không có hai view n
 
 - [ ] File `.md` mở ra ở dạng xem trước; nút "Preview" (hình con mắt) chuyển sang mã nguồn và
       ngược lại, lựa chọn này giữ cho file Markdown tiếp theo và sau khi tải lại
-- [ ] Link tương đối mở file đó (nút quay lại về file vừa rời); link `#heading` cuộn tới tiêu đề
+- [ ] Link tương đối mở file đó trong cùng tab (nút quay lại về file vừa rời); link `#heading` cuộn tới tiêu đề
       đó; link `http(s)` mở trong tab mới; link ra ngoài thư mục gốc của pane chỉ là chữ thường
 - [ ] Khối code được tô màu cú pháp, ghi tên ngôn ngữ và có nút "Copy code"
 - [ ] HTML thô (`<b>`, `<script>`) hiện nguyên dạng chữ; ảnh hiện thành link "image: ..." và không
       tải gì
 - [ ] File Markdown lớn hơn 256 KiB hiện `Too large to preview: shown as source`
 - [ ] Changes: nút "Preview" của file `.md` có thay đổi hiện bản hiện tại ở dạng xem trước
+
+### Bảng CSV và TSV
+
+- [ ] File `.csv` mở thành bảng; nút "Preview" (hình con mắt) chuyển sang mã nguồn và ngược lại,
+      lựa chọn này giữ cho file CSV tiếp theo và sau khi tải lại, tách riêng với lựa chọn của
+      Markdown
+- [ ] CSV dùng `;` và file `.tsv` đều đọc đúng; giá trị trong ngoặc kép có dấu phẩy hay xuống dòng
+      vẫn là một ô; BOM không bao giờ hiện ở tiêu đề đầu tiên
+- [ ] Sắp xếp, "Filter rows", "Delimiter" và "Header row" chỉ đổi cách hiển thị (`git status`
+      không thấy gì)
+- [ ] iPhone (Safari và app trên màn hình chính): hàng tiêu đề nằm yên ở trên, số dòng nằm yên bên
+      trái khi cuộn theo cả hai chiều; "Records" hiện từng dòng một và trang không bao giờ cuộn
+      ngang
+- [ ] CSV 1 MiB mở ra và cuộn mượt; dấu ngoặc kép không được đóng thì hiện "Unclosed quote on
+      line N: shown as source"
+- [ ] Edit trên bảng: chạm vào một ô, sửa, Apply, Save; `git diff` chỉ thấy đúng ô đó (file CRLF
+      vẫn là CRLF); "Add row below", "Add a row at the end" và "Delete row" hoạt động, Undo/Redo
+      (Ctrl+Z, Ctrl+Shift+Z) đi tới đi lui được
+- [ ] Sửa file từ terminal trong lúc đang sửa bảng (thêm một dòng phía trên dòng đang sửa): Save
+      báo file đã đổi; "Reload and reapply" đặt thay đổi vào đúng dòng; dòng đã bị xóa được liệt kê
+- [ ] iPhone: bảng sửa ô mở phía trên bàn phím và bấm được Apply; trang không bao giờ cuộn ngang
+      khi đang sửa
+- [ ] Kéo vạch ở mép phải tên cột bằng chuột: chỉ cột đó đổi độ rộng, không sắp xếp gì; nhấn đúp
+      vạch thì cột vừa với nội dung; Tab tới vạch, Left/Right đổi từng nấc, Enter cho cột vừa nội
+      dung
+- [ ] iPhone: kéo vạch bằng ngón tay (bảng không cuộn trong lúc kéo), chạm đúp để cột vừa nội
+      dung, và cột không bao giờ bị sắp xếp
+- [ ] "Columns": "Fit columns", "Reset widths", và "Wrap" trên một cột có giá trị dài hoặc nhiều
+      dòng: mỗi ô tối đa ba dòng, giữ `↵`, mọi dòng cao lên, PageDown và phím mũi tên vẫn tới đúng
+      dòng; tắt đi thì các dòng trở lại chiều cao cũ
+- [ ] Độ rộng và wrap trở về mặc định khi đổi "Delimiter" hay "Header row", giữ nguyên sau khi sửa
+      một ô, và giữ nguyên khi sang tab khác rồi quay lại (cùng dòng đầu)
+- [ ] Nhấn số dòng: Records mở đúng dòng đó (cả sau khi sắp xếp); tắt Records thì bảng hiện lại ở
+      chỗ cũ
 
 ### Ảnh
 
@@ -776,6 +918,41 @@ Test trên thiết bị di động thật:
 - [ ] `termote logs`: mỗi lần tạo mã, ghép, thu hồi và đăng nhập bằng trang đăng nhập có một dòng
       `audit:`, các lần `termote status` thì không, và không dòng nào chứa mã, token hay mật khẩu
 
+### CLI Qua Socket Cục Bộ (native)
+
+- [ ] Sau `termote start`, `termote status` in `Via: socket (no password sent)` và
+      `termote status --json` có `"via": "socket"`; `~/.local/state/termote/run` là `drwx------`,
+      `<port>.sock` là `srw-------` (Windows không có file này mà dùng named pipe)
+- [ ] Chạy `termote update` (hoặc `update --version X.Y.Z --force`) rồi `termote status`: vẫn in
+      `Via: socket`, trên cả systemd (Linux), launchd (macOS) lẫn Scheduled Task (Windows)
+- [ ] Chạy `termote restart` rồi `termote status`: vẫn in `Via: socket`, trên cả ba trình quản lý trên
+- [ ] Sau `termote stop` không còn file `.sock`; `kill -9` server thì file còn lại, và lần khởi động
+      sau thay file đó (lại in `Via: socket`)
+- [ ] `termote pair`, `termote devices`, `termote signins` chạy được; `termote logs` ghi `ip="local"`,
+      còn lệnh thu hồi ghi `by="password" via="cli"`
+- [ ] Chế độ container: `termote container status` và `termote status` vẫn chạy (qua TCP)
+- [ ] Hai OS user trên cùng máy: user thứ hai không mở được socket của user đầu (Linux/macOS:
+      `nc -U` hay `curl --unix-socket` báo "Permission denied"); `termote status` của user thứ hai
+      không bao giờ in `Via: socket` với server của user đầu
+
+### Đăng Nhập Bằng Link Từ CLI
+
+- [ ] Chạy `termote url --open` khi trình duyệt chưa đăng nhập: app mở ra đã đăng nhập, không hỏi
+      mật khẩu; Settings > Signed-in browsers ghi trình duyệt đó là "Link from the CLI"
+- [ ] `termote url --open --group <g> --tab <t>` mở đúng phiên đó (giữ deep link)
+- [ ] Mở lại file `~/.local/state/termote/run/login-*.html` (hoặc mở sau 30 giây): trang báo "This
+      sign-in link has expired", và ngay sau đó đăng nhập bằng mật khẩu vẫn được (không bị khoá)
+- [ ] Xem `ps` hay Task Manager lúc đang mở: dòng lệnh của trình mở file và của trình duyệt chỉ có
+      đường dẫn file, không có token; stdout của `termote url --open` chỉ là link thường
+- [ ] Thử trên macOS (`open`), Windows (`rundll32`, với tên user có dấu cách), WSL (`wslview`, trình
+      duyệt Windows mở được file), Linux (`xdg-open`)
+- [ ] Đặt Firefox, rồi Safari, làm trình duyệt mặc định: vào app đã đăng nhập, không gặp trang đăng
+      nhập
+- [ ] Link chính là URL Tailscale: đăng nhập được trên tên Tailscale
+- [ ] File `.html` đặt mở bằng trình soạn thảo: không đăng nhập gì cả, và `url --open` đã in "If no
+      browser opened, open the link above"
+- [ ] `termote url --copy` / `--qr` in link thường và không tạo file `login-*.html` nào
+
 ### Chế Độ Không Auth
 
 - [ ] Cờ `--no-auth` bỏ qua yêu cầu đăng nhập
@@ -810,6 +987,10 @@ curl -X PATCH http://localhost:7680/api/mux/tabs/<id> \
 
 # Đóng tab
 curl -X DELETE http://localhost:7680/api/mux/tabs/<id> \
+  -H 'Content-Type: application/json'
+
+# Đóng một pane (chỉ Herdr)
+curl -X DELETE http://localhost:7680/api/mux/panes/<id> \
   -H 'Content-Type: application/json'
 
 # Gửi phím tới một pane

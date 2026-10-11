@@ -74,6 +74,9 @@ type statusReport struct {
 	Tailscale  string     `json:"tailscale"`
 	URLs       accessURLs `json:"urls"`
 	Supervisor string     `json:"supervisor"`
+	// Via is how the CLI reached the server: "socket" (the local socket,
+	// no password sent) or "tcp"; "" when nothing answered.
+	Via string `json:"via,omitempty"`
 }
 
 func (c *cli) statusReport(saved *savedConfig, port int) statusReport {
@@ -83,7 +86,10 @@ func (c *cli) statusReport(saved *savedConfig, port int) statusReport {
 		pass = saved.Password
 		r.LAN, r.Auth, r.Tailscale = saved.LAN, !saved.NoAuth, saved.Tailscale
 	}
-	h, code := fetchHealth(port, saved.authUser(), pass)
+	h, code, via := c.fetchHealthVia(port, saved.authUser(), pass)
+	if code != 0 {
+		r.Via = via
+	}
 	switch {
 	case code == http.StatusOK:
 		r.Running, r.Status, r.Version, r.Backend, r.PID = true, h.Status, h.Version, h.Backend, h.PID
@@ -254,7 +260,16 @@ func (c *cli) cmdURL(args []string) error {
 		fmt.Fprintf(c.errOut, "%s Copied the link (%s)\n", c.paint(ansiGreen, "[INFO]"), via)
 	}
 	if open {
-		return c.openURL(info.url)
+		unsigned, err := c.openApp(info)
+		// stderr, as the notes: stdout carries the link alone.
+		if err == nil && unsigned != "" {
+			fmt.Fprintf(c.errOut, "%s Opened the link without signing in: %s\n", c.paint(ansiYellow, "[WARN]"), unsigned)
+		} else if err == nil {
+			// A sign-in link file opens in the app the system gives .html
+			// files, which may be an editor.
+			fmt.Fprintf(c.errOut, "%s If no browser opened, open the link above\n", c.paint(ansiGreen, "[INFO]"))
+		}
+		return err
 	}
 	return nil
 }

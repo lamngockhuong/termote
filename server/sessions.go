@@ -12,6 +12,7 @@ import (
 const (
 	sessionViaForm  = "form"
 	sessionViaBasic = "basic"
+	sessionViaLink  = "link"
 )
 
 const (
@@ -52,14 +53,16 @@ func cleanUserAgent(ua string) string {
 type sessionAuth struct {
 	store  *tokenStore
 	tokens *tokenStore // stream tokens
-	hub    *streamHub
-	now    func() time.Time
+	// links holds the sign-in link tokens the CLI asked for (login_link.go).
+	links *tokenStore
+	hub   *streamHub
+	now   func() time.Time
 }
 
 func newSessionAuth(tokens *tokenStore, hub *streamHub) *sessionAuth {
 	store := newTokenStore(sessionTTL, false)
 	store.max = maxSessions
-	s := &sessionAuth{store: store, tokens: tokens, hub: hub, now: time.Now}
+	s := &sessionAuth{store: store, tokens: tokens, links: newLoginLinkStore(), hub: hub, now: time.Now}
 	if hub != nil {
 		hub.sessionAlive = s.alive
 	}
