@@ -11,8 +11,8 @@ import (
 
 // Reading a Codex screen: whether its composer is at the bottom and empty,
 // and which approval dialog is open. Pure functions over a capture with SGR
-// escapes, checked against screens recorded from Codex 0.159.3 and 0.160.0
-// on tmux and herdr (testdata/codex/screens). Codex draws no frame: the composer is a "›" row at
+// escapes, checked against screens recorded from Codex 0.159.3, 0.160.0 and
+// 0.162.0 on tmux and herdr (testdata/codex/screens). Codex draws no frame: the composer is a "›" row at
 // column 0 with the model and shortcut hints under it, and an approval dialog
 // replaces the composer with its title, its fields, numbered options (the one
 // under the pointer drawn in reverse video) and a footer as the last row.

@@ -1,0 +1,40 @@
+[2m╭───────────────────────────────────────────────────────────────╮[0m
+[2m│ [0;1m[38;2;99;168;248m✨ Update available![0m [1m0.162.0 -> 0.162.1[0;2m                       │[0m
+[2m│ [0mSee [4m[38;2;99;168;248m]8;;https://github.com/openai/codex\https://github.com/openai/codex[0m]8;;\ for installation options.[2m │[0m
+[2m│                                                               │[0m
+[2m│ [0mSee full release notes:[2m                                       │[0m
+[2m│ [0;4m[38;2;99;168;248m]8;;https://github.com/openai/codex/releases/latest\https://github.com/openai/codex/releases/latest[0;2m]8;;\               │[0m
+[2m╰───────────────────────────────────────────────────────────────╯[0m
+
+
+  [38;2;99;168;248m>_ [1m[39mOpenAI Codex[0;2m (v0.162.0)[0m
+     [2m/home/user/proj[0m
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;7m› /model  [0;7mchoose what model and reasoning effort to use[1m
+
+[0;1m›[0m /mo
+
+  [38;2;246;226;183mGPT-6.1-Sol default[39m · [38;2;171;223;167m/home/user/proj
+[39m

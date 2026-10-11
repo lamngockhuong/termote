@@ -1,0 +1,40 @@
+[2m╭───────────────────────────────────────────────────────────────╮[0m
+[2m│ [0;1m[38;2;99;168;248m✨ Update available![0m [1m0.162.0 -> 0.162.1[0;2m                       │[0m
+[2m│ [0mSee [4m[38;2;99;168;248m]8;;https://github.com/openai/codex\https://github.com/openai/codex[0m]8;;\ for installation options.[2m │[0m
+[2m│                                                               │[0m
+[2m│ [0mSee full release notes:[2m                                       │[0m
+[2m│ [0;4m[38;2;99;168;248m]8;;https://github.com/openai/codex/releases/latest\https://github.com/openai/codex/releases/latest[0;2m]8;;\               │[0m
+[2m╰───────────────────────────────────────────────────────────────╯[0m
+
+
+  [38;2;99;168;248m>_ [1m[39mOpenAI Codex[0;2m (v0.162.0)[0m
+     [2m/home/user/proj[0m
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;7m› debug (ak)                  [0;7m[Skill] Debug systematically with root cause analysis before fixes. Use for bugs, test fa…
+[0m  [1mde[0mep-swe (ak)               [2m[Skill] Benchmark a coding model on DeepSWE through Pier and OpenRouter. Use when users a…
+[0m  [1mde[0mmo-skill                  [2m[Skill] Demo skill for testing; greets the user.[0m
+  [1mde[0mploy (ak)                 [2m[Skill] Deploy projects to any platform with auto-detection. Use when user says "deploy",…
+[0m  [1mde[0msign (ak)                 [2m[Skill] Design brand identity, logos, banners, posters, and visual assets. Use for brand …
+[0m  [1mde[0mvops (ak)                 [2m[Skill] Deploy to Cloudflare (Workers, R2, D1), Docker, GCP (Cloud Run, GKE), Kubernetes …
+[0m  [1md[0mocum[1me[0mnt-skills (ak)        [2m[Skill] Read, create, and edit Office documents (docx, pdf, pptx, xlsx). Use for tables, …
+[0m  [1md[0mocs-s[1me[0meker (ak)            [2m[Skill] Search library/framework documentation via llms.txt (context7.com). Use for API d…
+[0m[38;2;99;168;248m↓[39m
+  [1menter[0;2m insert · [0;1mesc[0;2m close[0m
+
+[1m›[0m $de
+
+  [38;2;246;226;183mGPT-6.1-Sol default[39m · [38;2;171;223;167m/home/user/proj
+[39m

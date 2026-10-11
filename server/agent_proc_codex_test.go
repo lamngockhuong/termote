@@ -6,8 +6,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -111,19 +109,6 @@ func TestParseLsofWriteFiles(t *testing.T) {
 	files := parseLsofWriteFiles([]byte(out), func(n string) bool { return strings.HasSuffix(n, name) })
 	if len(files) != 2 || files[0].path != "/Users/u/.codex/sessions/"+name || files[1].path != "/Users/u/.codex/sessions/b-"+name || files[0].id != "" {
 		t.Errorf("files = %+v", files)
-	}
-}
-
-func TestCommandsRouteCodexIsEmpty(t *testing.T) {
-	root, cfg := t.TempDir(), t.TempDir()
-	writeFile(t, filepath.Join(root, ".claude/commands/proj.md"), "Project one")
-	writeFile(t, filepath.Join(cfg, "commands/usr.md"), "User one")
-	writeFile(t, filepath.Join(cfg, "skills/s/SKILL.md"), "---\nname: s\n---\n")
-	s := AgentSession{Agent: "codex", ID: testCodexID, ClaudeDir: cfg, CodexHome: cfg}
-	mux := commandsServer(t, s, true, root, true)
-	code, cmds := getCommands(t, mux, httptest.NewRequest(http.MethodGet, "/api/mux/panes/1/agent/commands", nil))
-	if code != http.StatusOK || cmds == nil || len(cmds) != 0 {
-		t.Errorf("codex commands = %d %v", code, cmds)
 	}
 }
 

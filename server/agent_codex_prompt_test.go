@@ -38,6 +38,10 @@ func TestReadCodexScreenRecorded(t *testing.T) {
 	}{
 		{screen: "0.159.3-input-empty", input: inputEmpty},
 		{screen: "0.159.3-input-draft", input: inputDraft, draft: "draft text not sent"},
+		// The "/" and "$" popups sit above the composer, their selected row
+		// at column 0 in reverse video: the draft under them still reads.
+		{screen: "0.162.0-slash-popup", input: inputDraft, draft: "/mo"},
+		{screen: "0.162.0-skill-popup", input: inputDraft, draft: "$de"},
 		// Working with the composer empty: not ready.
 		{screen: "0.159.3-working-empty", input: inputNone},
 		// The model's reply reads like a dialog; the composer under it is empty.
