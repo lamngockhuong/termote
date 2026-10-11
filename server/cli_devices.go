@@ -98,15 +98,39 @@ func (c *cli) deviceTarget() deviceTarget {
 	return t
 }
 
-// deviceCall sends method path (body as JSON when not nil) to the running
+// callErrs is what serverCall says, in a feature's words, for the outcomes
+// that depend on it.
+type callErrs struct {
+	noAuth      string // the target runs with --no-auth
+	unsupported string // 501
+	unknownCode string // the error code of an id the server does not know
+	unknownID   string // what to say for it
+	oldServer   string // 404 otherwise: a server without the route
+}
+
+var deviceCallErrs = callErrs{
+	noAuth:      "pairing devices needs sign-in, and the server runs with --no-auth (turn it on: termote start --no-auth=false)",
+	unsupported: "pairing devices needs sign-in and a usable state dir: the server runs with --no-auth, or cannot use its devices dir (see: termote logs)",
+	unknownCode: "unknown_device",
+	unknownID:   "no paired device has this id (list them: termote devices)",
+	oldServer:   "the running server cannot pair devices; update it: termote update",
+}
+
+// deviceCall is serverCall for the device commands.
+func (c *cli) deviceCall(t deviceTarget, method, path string, body, out any) error {
+	return c.serverCall(t, method, path, body, out, deviceCallErrs)
+}
+
+// serverCall sends method path (body as JSON when not nil) to the running
 // server and decodes a 200 answer into out. Every other outcome is an error
 // saying why, and the password never goes to a listener it cannot trust.
-// Without a password nothing is asked: a server without sign-in cannot
-// pair, and a listener whose owner was not checked could print anything.
-func (c *cli) deviceCall(t deviceTarget, method, path string, body, out any) error {
+// Without a password nothing is asked: a server without sign-in has none
+// of these routes, and a listener whose owner was not checked could print
+// anything.
+func (c *cli) serverCall(t deviceTarget, method, path string, body, out any, errs callErrs) error {
 	switch {
 	case t.noAuth:
-		return errors.New("pairing devices needs sign-in, and the server runs with --no-auth (turn it on: termote start --no-auth=false)")
+		return errors.New(errs.noAuth)
 	case t.pass == "":
 		return errors.New("no saved password to sign in with; set one: termote start --fresh")
 	}
@@ -140,11 +164,11 @@ func (c *cli) deviceCall(t deviceTarget, method, path string, body, out any) err
 	case code == http.StatusUnauthorized:
 		return errors.New("the server did not accept the saved password; restart it with it: termote restart")
 	case code == http.StatusNotImplemented:
-		return errors.New("pairing devices needs sign-in and a usable state dir: the server runs with --no-auth, or cannot use its devices dir (see: termote logs)")
-	case e.Code == "unknown_device":
-		return errors.New("no paired device has this id (list them: termote devices)")
+		return errors.New(errs.unsupported)
+	case e.Code != "" && e.Code == errs.unknownCode:
+		return errors.New(errs.unknownID)
 	case code == http.StatusNotFound:
-		return errors.New("the running server cannot pair devices; update it: termote update")
+		return errors.New(errs.oldServer)
 	case e.Error != "":
 		return fmt.Errorf("the server refused: %s", cleanDeviceName(e.Error))
 	}

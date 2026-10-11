@@ -239,6 +239,8 @@ func (c *cli) dispatch(cmd string, args []string) error {
 		return c.cmdPair(args)
 	case "devices":
 		return c.cmdDevices(args)
+	case "signins":
+		return c.cmdSignins(args)
 	case "container":
 		return c.cmdContainer(args)
 	case "uninstall":
@@ -469,6 +471,8 @@ Commands:
   panel                Status, links and a QR code; keys open, copy, start, stop, restart
   pair [options]       Make a code that signs a new device in without the password
   devices              List the paired devices; devices revoke <id> signs one out
+  signins              List the browsers signed in with the password;
+                       signins revoke <id> | --all signs them out
   container <cmd>      Run the server in a container: up, down, logs [-f], status
   update               Update to the latest release
   uninstall [--purge]  Remove the service, the command, the install and uploaded images

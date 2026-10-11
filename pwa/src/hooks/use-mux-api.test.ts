@@ -22,6 +22,7 @@ import {
   fetchGitChanges,
   fetchHealth,
   fetchPaneText,
+  fetchSignins,
   fetchSnapshot,
   fetchTerminalToken,
   fetchTranscript,
@@ -40,6 +41,8 @@ import {
   renameTab,
   restoreFile,
   revokeDevice,
+  revokeOtherSignins,
+  revokeSignin,
   SAVE_TIMEOUT_MS,
   saveFileContent,
   scrollPane,
@@ -1102,6 +1105,61 @@ describe('view-only refusals and paired devices', () => {
     await expect(revokeDevice('x')).rejects.toMatchObject({
       status: 404,
       code: 'unknown_device',
+    })
+  })
+
+  it('lists the signed-in browsers and whether this client signs them out', async () => {
+    const sessions = [
+      {
+        id: '0123456789abcdef',
+        createdAt: '2026-10-01T00:00:00Z',
+        lastUsedAt: '2026-10-02T00:00:00Z',
+        expiresAt: '2026-10-02T00:00:00Z',
+        via: 'form',
+        ip: '192.0.2.9',
+        userAgent: 'Firefox',
+        current: true,
+      },
+    ]
+    const { calls } = mockFetch({ body: { sessions, canRevoke: true } })
+    expect(await fetchSignins()).toEqual({ sessions, canRevoke: true })
+    expect(calls[0].url).toBe('/api/mux/signins')
+    mockFetch({ body: {} })
+    expect(await fetchSignins()).toEqual({ sessions: [], canRevoke: false })
+    mockFetch({ body: { error: 'view only', code: 'view_only' }, status: 403 })
+    await expect(fetchSignins()).rejects.toMatchObject({ code: 'view_only' })
+  })
+
+  it('signs one browser out by its id', async () => {
+    const { calls } = mockFetch({ body: { ok: true } })
+    await revokeSignin('a/b')
+    expect(calls[0].url).toBe('/api/mux/signins/a%2Fb')
+    expect(calls[0].init?.method).toBe('DELETE')
+    mockFetch({
+      body: { error: 'no such sign-in', code: 'unknown_session' },
+      status: 404,
+    })
+    await expect(revokeSignin('x')).rejects.toMatchObject({
+      code: 'unknown_session',
+    })
+  })
+
+  it('signs the other browsers out, answering how many went', async () => {
+    const { calls } = mockFetch({ body: { ok: true, revoked: 3 } })
+    expect(await revokeOtherSignins()).toBe(3)
+    expect(calls[0].url).toBe('/api/mux/signins')
+    expect(calls[0].init?.method).toBe('DELETE')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('not json', { status: 200 })),
+    )
+    expect(await revokeOtherSignins()).toBe(0)
+    mockFetch({
+      body: { error: 'x', code: 'full_needs_password' },
+      status: 403,
+    })
+    await expect(revokeOtherSignins()).rejects.toMatchObject({
+      code: 'full_needs_password',
     })
   })
 })

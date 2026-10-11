@@ -1492,6 +1492,8 @@ export default function App({
         pushAvailable={!!mux.caps.push}
         readOnly={readOnly}
         devices={!!mux.caps.devices && !readOnly}
+        signins={!!mux.caps.signins && !readOnly}
+        onLogout={handleLogout}
         onEnableNotify={push.enable}
         onDisableNotify={push.disable}
         onShowGestureHints={isMobile ? showGestureHints : undefined}

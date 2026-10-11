@@ -103,6 +103,9 @@ export interface MuxSnapshot {
     role?: 'full' | 'view'
     // Devices can be paired, listed and revoked (/api/mux/devices*).
     devices?: boolean
+    // The browsers signed in with the password can be listed and signed
+    // out (/api/mux/signins*): sign-in is on.
+    signins?: boolean
     // View-only role: the backend can stream a pane to it (tmux 3.2 or
     // later, Herdr); off, the stream is refused.
     viewStream?: boolean
@@ -1253,6 +1256,66 @@ export async function createPairingCode(
   })
   if (!res.ok) throw await requestError(res)
   return res.json()
+}
+
+// A browser signed in with the password, as /api/mux/signins lists it
+// (never its token or cookie).
+export interface SignedInBrowser {
+  // 16 hex characters
+  id: string
+  createdAt: string
+  lastUsedAt: string
+  expiresAt: string
+  // How it signed in: the sign-in form, Basic auth or a link from the CLI
+  via: 'form' | 'basic' | 'link'
+  // The address it signed in from (behind tailscale serve: loopback)
+  ip: string
+  // Cleaned by the server: no control or format characters, 200 bytes
+  userAgent: string
+  // The browser this page runs in
+  current: boolean
+}
+
+export interface SignedInBrowsers {
+  sessions: SignedInBrowser[]
+  // This client may sign browsers out: a paired device only lists them
+  canRevoke: boolean
+}
+
+// Lists the browsers signed in with the password. Throws RequestError when
+// refused (view_only, unsupported without sign-in).
+export async function fetchSignins(
+  signal?: AbortSignal,
+): Promise<SignedInBrowsers> {
+  const res = await fetch(`${API_BASE}/signins`, {
+    signal: signal ?? AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  })
+  if (!res.ok) throw await requestError(res)
+  const body = await res.json()
+  return { sessions: body.sessions ?? [], canRevoke: body.canRevoke === true }
+}
+
+// Signs one browser out: its next request is refused and its streams close.
+// Throws RequestError (unknown_session, full_needs_password).
+export async function revokeSignin(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/signins/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  })
+  if (!res.ok) throw await requestError(res)
+}
+
+// Signs out every browser but this one. Resolves to how many went.
+export async function revokeOtherSignins(): Promise<number> {
+  const res = await fetch(`${API_BASE}/signins`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  })
+  if (!res.ok) throw await requestError(res)
+  const body = await res.json().catch(() => ({}))
+  return typeof body.revoked === 'number' ? body.revoked : 0
 }
 
 // Revokes a device and every device it paired: their next requests are
