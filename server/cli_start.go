@@ -10,6 +10,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptrace"
 	"os"
 	"slices"
 	"strconv"
@@ -441,18 +442,131 @@ type serverHealth struct {
 	Devices *bool `json:"devices"`
 }
 
-// fetchHealth asks the server on port for its health (see authedRequest).
+// How the CLI reached the server.
+const (
+	transportSocket = "socket" // the local socket, without the password
+	transportTCP    = "tcp"    // 127.0.0.1:port, with the password
+)
+
+// fetchHealth asks the server on port for its health over TCP (see
+// authedRequest). The container's status uses it: its server has no local
+// socket for this user.
 func fetchHealth(port int, user, pass string) (serverHealth, int) {
-	var h serverHealth
 	resp, code := authedRequest(port, user, pass, http.MethodGet, "/api/mux/health", nil)
+	return decodeHealth(resp, code), code
+}
+
+// fetchHealth asks the native server on port for its health, over the local
+// socket when it can (see localRequest).
+func (c *cli) fetchHealth(port int, user, pass string) (serverHealth, int) {
+	h, code, _ := c.fetchHealthVia(port, user, pass)
+	return h, code
+}
+
+// fetchHealthVia is fetchHealth that also says how the server was reached
+// (transportSocket or transportTCP).
+func (c *cli) fetchHealthVia(port int, user, pass string) (serverHealth, int, string) {
+	resp, code, via := c.localRequest(port, user, pass, http.MethodGet, "/api/mux/health", nil)
+	return decodeHealth(resp, code), code, via
+}
+
+// decodeHealth reads a health answer and closes it (resp nil: none).
+func decodeHealth(resp *http.Response, code int) serverHealth {
+	var h serverHealth
 	if resp == nil {
-		return h, code
+		return h
 	}
 	defer resp.Body.Close()
 	if code == http.StatusOK {
 		json.NewDecoder(resp.Body).Decode(&h)
 	}
-	return h, code
+	return h
+}
+
+// localRequest sends method path to the native server on port: over its
+// local socket when one answers and its server end belongs to this user or
+// root, without the password; else over TCP with it (authedRequest), for
+// the container and a server from before the socket. via says which. A
+// write that may have reached the server over the socket is never sent again
+// over TCP: code is socketNoAnswer then.
+func (c *cli) localRequest(port int, user, pass, method, path string, body []byte) (resp *http.Response, code int, via string) {
+	switch resp, out := c.socketRequest(port, method, path, body); out {
+	case socketAnswered:
+		return resp, resp.StatusCode, transportSocket
+	case socketMaybeSent:
+		return nil, socketNoAnswer, transportSocket
+	}
+	resp, code = authedRequest(port, user, pass, method, path, body)
+	return resp, code, transportTCP
+}
+
+// socketOutcome is how a request over the local socket went.
+type socketOutcome int
+
+const (
+	// socketUnused: nothing reached the server (no socket, its server end
+	// not trusted, or a read that failed and can be sent again); the
+	// caller may use TCP.
+	socketUnused socketOutcome = iota
+	// socketAnswered: the server answered.
+	socketAnswered
+	// socketMaybeSent: a write was sent but no answer came; the server
+	// may have applied it, so it must not be sent again.
+	socketMaybeSent
+)
+
+// socketNoAnswer is localRequest's code for socketMaybeSent.
+const socketNoAnswer = -3
+
+// socketNoAnswerMsg explains socketNoAnswer.
+const socketNoAnswerMsg = "the server did not answer over the local socket; the change may have been made (check, then try again)"
+
+// socketRequest sends method path over the local socket for port.
+func (c *cli) socketRequest(port int, method, path string, body []byte) (*http.Response, socketOutcome) {
+	conn, err := dialLocalServer(c.localSocketDir(), port)
+	if err != nil {
+		return nil, socketUnused
+	}
+	var used atomic.Bool
+	tr := &http.Transport{DisableKeepAlives: true,
+		// The connection already checked, once: never a new one.
+		DialContext: func(context.Context, string, string) (net.Conn, error) {
+			if used.Swap(true) {
+				return nil, errors.New("local socket connection already used")
+			}
+			return conn, nil
+		}}
+	defer func() {
+		if !used.Load() {
+			conn.Close()
+		}
+	}()
+	var rd io.Reader
+	if body != nil {
+		rd = bytes.NewReader(body)
+	}
+	req, err := http.NewRequest(method, "http://"+localSocketHost+path, rd)
+	if err != nil {
+		return nil, socketUnused
+	}
+	if body != nil || isWriteMethod(method) {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	// Any byte written may be the whole request: the server can act on it.
+	var wrote atomic.Bool
+	req = req.WithContext(httptrace.WithClientTrace(req.Context(), &httptrace.ClientTrace{
+		WroteHeaders: func() { wrote.Store(true) },
+	}))
+	client := &http.Client{Timeout: 2 * time.Second, Transport: tr,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	resp, err := client.Do(req)
+	switch {
+	case err == nil:
+		return resp, socketAnswered
+	case wrote.Load() && isWriteMethod(method):
+		return nil, socketMaybeSent
+	}
+	return nil, socketUnused
 }
 
 // authedRequest sends method path to the server on 127.0.0.1:port, logging
@@ -522,7 +636,7 @@ func (c *cli) waitForServer(port int, user, pass, version string, timeout time.D
 	grace := min(degradedGrace, timeout/2)
 	var degradedSince time.Time
 	for time.Now().Before(deadline) {
-		h, code := fetchHealth(port, user, pass)
+		h, code := c.fetchHealth(port, user, pass)
 		answered := code == http.StatusOK && (version == "" || h.Version == version)
 		switch {
 		case answered && h.Status == "ok":
@@ -648,7 +762,7 @@ func (c *cli) cmdStatus(args []string) error {
 		pass = saved.Password
 	}
 	c.heading("Termote Status")
-	h, code := fetchHealth(port, saved.authUser(), pass)
+	h, code, via := c.fetchHealthVia(port, saved.authUser(), pass)
 	running := code == http.StatusOK
 	switch {
 	case running:
@@ -665,6 +779,12 @@ func (c *cli) cmdStatus(args []string) error {
 		fmt.Fprintf(c.out, "  %s server :%d - HTTP %d\n", c.paint(ansiRed, "[--]"), port, code)
 	default:
 		fmt.Fprintf(c.out, "  %s server :%d - not running\n", c.paint(ansiRed, "[--]"), port)
+	}
+	switch {
+	case code != 0 && via == transportSocket:
+		fmt.Fprintf(c.out, "  Via: socket (no password sent)\n")
+	case code != 0:
+		fmt.Fprintf(c.out, "  Via: TCP\n")
 	}
 	if saved != nil {
 		bind, auth := "127.0.0.1 (this machine only)", "on"

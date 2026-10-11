@@ -19,6 +19,7 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -72,6 +73,10 @@ type serveConfig struct {
 	// DevicesDir holds the paired devices; empty disables pairing. Never
 	// read or written with NoAuth.
 	DevicesDir string
+	// LocalSocketDir holds the local socket the CLI reaches a native
+	// server on without the password (<stateDir>/run; Windows uses a named
+	// pipe and ignores it); empty opens none (the container, tests).
+	LocalSocketDir string
 	// OnListen runs once the port is bound (serve records its PID then, so
 	// a server that cannot bind never replaces the running one's PID file).
 	OnListen func()
@@ -559,11 +564,15 @@ func runServer(ctx context.Context, cfg serveConfig, m Mux, ln net.Listener) err
 		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
+		ConnContext:       localSocketConnContext,
 	}
 	errCh := make(chan error, 1)
 	go func() { errCh <- srv.Serve(ln) }()
+	cleanupSocket := serveLocalSocket(srv, cfg, ln)
 	select {
 	case err := <-errCh:
+		srv.Close()
+		cleanupSocket()
 		return err
 	case <-ctx.Done():
 	}
@@ -574,10 +583,38 @@ func runServer(ctx context.Context, cfg serveConfig, m Mux, ln net.Listener) err
 	if err := srv.Shutdown(sctx); err != nil {
 		log.Printf("http shutdown: %v", err)
 	}
+	// Shutdown has closed the socket's listener: the CLI finds no socket
+	// rather than one nothing answers on.
+	cleanupSocket()
 	if err := hub.shutdown(sctx); err != nil {
 		log.Printf("terminal streams still open at exit: %v", err)
 	}
 	return nil
+}
+
+// serveLocalSocket serves srv on the local socket too when cfg names one,
+// and returns what removes it once srv is shut down. Without the socket the
+// server runs all the same: the CLI then uses TCP and the password.
+func serveLocalSocket(srv *http.Server, cfg serveConfig, ln net.Listener) func() {
+	if cfg.LocalSocketDir == "" {
+		return func() {}
+	}
+	port := cfg.Port
+	if a, ok := ln.Addr().(*net.TCPAddr); ok {
+		port = strconv.Itoa(a.Port)
+	}
+	sock, cleanup, err := openLocalSocket(cfg.LocalSocketDir, port)
+	if err != nil {
+		log.Printf("local socket for the CLI not opened (the CLI uses TCP and the password): %v", err)
+		return func() {}
+	}
+	log.Printf("local socket for the CLI: %s", sock.Addr())
+	go func() {
+		if err := srv.Serve(localSocketListener{sock}); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Printf("local socket: %v", err)
+		}
+	}()
+	return cleanup
 }
 
 // authRateLimiter tracks failed auth attempts per IP, and per /64 for IPv6, to
@@ -1036,6 +1073,13 @@ func newBasicAuth(user, pass string, dev *deviceAuth, sessions *sessionAuth, nex
 		}
 		if r.URL.Path == logoutPath {
 			logout(w, r)
+			return
+		}
+
+		// The CLI over the local socket, which only the server's own OS
+		// user can open: no password needed.
+		if isLocalSocket(r.Context()) {
+			serveSignedIn(w, r, authInfo{Kind: authLocal, Role: roleFull})
 			return
 		}
 

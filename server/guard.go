@@ -63,6 +63,11 @@ func (a hostAllowlist) allows(r *http.Request, hostport string) bool {
 	if h == "" {
 		return false
 	}
+	// The local socket's fixed name, on that socket only: a TCP request
+	// naming it is refused even when --allow-host lists it.
+	if h == localSocketHost {
+		return isLocalSocket(r.Context())
+	}
 	if _, ok := a.names[h]; ok {
 		return true
 	}

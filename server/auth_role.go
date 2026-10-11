@@ -22,10 +22,17 @@ const (
 	authBasic authKind = iota + 1
 	authSession
 	authDevice
+	// authLocal: the CLI over the native server's local socket, which only
+	// the server's own OS user can open (see local_socket.go).
+	authLocal
 )
 
-// authInfo is who basicAuth let a request through as. Basic auth and the
-// sign-in session are always full; a paired device carries its own role.
+// isCLI reports whether a signed in as the CLI does: Basic auth (with the
+// saved password) or the local socket.
+func isCLI(a authInfo) bool { return a.Kind == authBasic || a.Kind == authLocal }
+
+// authInfo is who basicAuth let a request through as. Basic auth, the
+// sign-in session and the local socket are always full; a paired device carries its own role.
 type authInfo struct {
 	Kind     authKind
 	Role     role

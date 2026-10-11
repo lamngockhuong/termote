@@ -74,6 +74,9 @@ type statusReport struct {
 	Tailscale  string     `json:"tailscale"`
 	URLs       accessURLs `json:"urls"`
 	Supervisor string     `json:"supervisor"`
+	// Via is how the CLI reached the server: "socket" (the local socket,
+	// no password sent) or "tcp"; "" when nothing answered.
+	Via string `json:"via,omitempty"`
 }
 
 func (c *cli) statusReport(saved *savedConfig, port int) statusReport {
@@ -83,7 +86,10 @@ func (c *cli) statusReport(saved *savedConfig, port int) statusReport {
 		pass = saved.Password
 		r.LAN, r.Auth, r.Tailscale = saved.LAN, !saved.NoAuth, saved.Tailscale
 	}
-	h, code := fetchHealth(port, saved.authUser(), pass)
+	h, code, via := c.fetchHealthVia(port, saved.authUser(), pass)
+	if code != 0 {
+		r.Via = via
+	}
 	switch {
 	case code == http.StatusOK:
 		r.Running, r.Status, r.Version, r.Backend, r.PID = true, h.Status, h.Version, h.Backend, h.PID

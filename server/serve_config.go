@@ -67,5 +67,8 @@ func (c *cli) loadServeConfig() (serveConfig, error) {
 		}
 		return serveConfig{}, fmt.Errorf("%w: %s %s; set a new one with: termote start --fresh", errConfigUnusable, c.configFile(), why)
 	}
-	return serveConfigFromSaved(*saved, c.defaultPort()), nil
+	cfg := serveConfigFromSaved(*saved, c.defaultPort())
+	// Native only: the container runs from the environment.
+	cfg.LocalSocketDir = c.localSocketDir()
+	return cfg, nil
 }

@@ -34,7 +34,8 @@ func auditLine(event string, kv ...any) string {
 }
 
 // auditBy names who did something in an audit line: a paired device by its
-// id, anyone else signed in with the password.
+// id, anyone else signed in with the password (the CLI over the local socket
+// included: only the server's own OS user, who can read it, opens that).
 func auditBy(a authInfo) string {
 	if a.Kind == authDevice {
 		return "device:" + a.DeviceID

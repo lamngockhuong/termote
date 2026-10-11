@@ -123,22 +123,32 @@ func (c *cli) deviceCall(t deviceTarget, method, path string, body, out any) err
 
 // serverCall sends method path (body as JSON when not nil) to the running
 // server and decodes a 200 answer into out. Every other outcome is an error
-// saying why, and the password never goes to a listener it cannot trust.
-// Without a password nothing is asked: a server without sign-in has none
-// of these routes, and a listener whose owner was not checked could print
+// saying why. It goes over the local socket when the server has one
+// (localRequest), else over TCP with the password, which never goes to a
+// listener it cannot trust. A server without sign-in has none of these
+// routes, so nothing is asked of it; without a password only the local
+// socket is tried: a listener whose owner was not checked could print
 // anything.
 func (c *cli) serverCall(t deviceTarget, method, path string, body, out any, errs callErrs) error {
-	switch {
-	case t.noAuth:
+	if t.noAuth {
 		return errors.New(errs.noAuth)
-	case t.pass == "":
-		return errors.New("no saved password to sign in with; set one: termote start --fresh")
 	}
 	var data []byte
 	if body != nil {
 		data, _ = json.Marshal(body)
 	}
-	resp, code := authedRequest(t.port, t.user, t.pass, method, path, data)
+	var resp *http.Response
+	var code int
+	switch r, out := c.socketRequest(t.port, method, path, data); {
+	case out == socketAnswered:
+		resp, code = r, r.StatusCode
+	case out == socketMaybeSent:
+		return errors.New(socketNoAnswerMsg)
+	case t.pass == "":
+		return errors.New("no saved password to sign in with; set one: termote start --fresh")
+	default:
+		resp, code = authedRequest(t.port, t.user, t.pass, method, path, data)
+	}
 	if resp != nil {
 		defer resp.Body.Close()
 	}
