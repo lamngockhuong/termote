@@ -776,6 +776,41 @@ Test trên thiết bị di động thật:
 - [ ] `termote logs`: mỗi lần tạo mã, ghép, thu hồi và đăng nhập bằng trang đăng nhập có một dòng
       `audit:`, các lần `termote status` thì không, và không dòng nào chứa mã, token hay mật khẩu
 
+### CLI Qua Socket Cục Bộ (native)
+
+- [ ] Sau `termote start`, `termote status` in `Via: socket (no password sent)` và
+      `termote status --json` có `"via": "socket"`; `~/.local/state/termote/run` là `drwx------`,
+      `<port>.sock` là `srw-------` (Windows không có file này mà dùng named pipe)
+- [ ] Chạy `termote update` (hoặc `update --version X.Y.Z --force`) rồi `termote status`: vẫn in
+      `Via: socket`, trên cả systemd (Linux), launchd (macOS) lẫn Scheduled Task (Windows)
+- [ ] Chạy `termote restart` rồi `termote status`: vẫn in `Via: socket`, trên cả ba trình quản lý trên
+- [ ] Sau `termote stop` không còn file `.sock`; `kill -9` server thì file còn lại, và lần khởi động
+      sau thay file đó (lại in `Via: socket`)
+- [ ] `termote pair`, `termote devices`, `termote signins` chạy được; `termote logs` ghi `ip="local"`,
+      còn lệnh thu hồi ghi `by="password" via="cli"`
+- [ ] Chế độ container: `termote container status` và `termote status` vẫn chạy (qua TCP)
+- [ ] Hai OS user trên cùng máy: user thứ hai không mở được socket của user đầu (Linux/macOS:
+      `nc -U` hay `curl --unix-socket` báo "Permission denied"); `termote status` của user thứ hai
+      không bao giờ in `Via: socket` với server của user đầu
+
+### Đăng Nhập Bằng Link Từ CLI
+
+- [ ] Chạy `termote url --open` khi trình duyệt chưa đăng nhập: app mở ra đã đăng nhập, không hỏi
+      mật khẩu; Settings > Signed-in browsers ghi trình duyệt đó là "Link from the CLI"
+- [ ] `termote url --open --group <g> --tab <t>` mở đúng phiên đó (giữ deep link)
+- [ ] Mở lại file `~/.local/state/termote/run/login-*.html` (hoặc mở sau 30 giây): trang báo "This
+      sign-in link has expired", và ngay sau đó đăng nhập bằng mật khẩu vẫn được (không bị khoá)
+- [ ] Xem `ps` hay Task Manager lúc đang mở: dòng lệnh của trình mở file và của trình duyệt chỉ có
+      đường dẫn file, không có token; stdout của `termote url --open` chỉ là link thường
+- [ ] Thử trên macOS (`open`), Windows (`rundll32`, với tên user có dấu cách), WSL (`wslview`, trình
+      duyệt Windows mở được file), Linux (`xdg-open`)
+- [ ] Đặt Firefox, rồi Safari, làm trình duyệt mặc định: vào app đã đăng nhập, không gặp trang đăng
+      nhập
+- [ ] Link chính là URL Tailscale: đăng nhập được trên tên Tailscale
+- [ ] File `.html` đặt mở bằng trình soạn thảo: không đăng nhập gì cả, và `url --open` đã in "If no
+      browser opened, open the link above"
+- [ ] `termote url --copy` / `--qr` in link thường và không tạo file `login-*.html` nào
+
 ### Chế Độ Không Auth
 
 - [ ] Cờ `--no-auth` bỏ qua yêu cầu đăng nhập
