@@ -523,6 +523,48 @@ describe('SettingsModal', () => {
     expect(screen.getByRole('button', { name: 'Updates' })).toBeInTheDocument()
   })
 
+  it('opens at the group it is given: picked in the rail, scrolled to', () => {
+    const scrollIntoView = vi.fn()
+    const original = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = scrollIntoView
+    const raf = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((cb) => {
+        cb(0)
+        return 1
+      })
+    try {
+      renderModal({
+        initialGroup: 'updates',
+        updates: {
+          server: null,
+          stale: false,
+          reloading: false,
+          onReload: vi.fn(),
+        },
+      })
+      expect(screen.getByRole('button', { name: 'Updates' })).toHaveAttribute(
+        'aria-current',
+        'true',
+      )
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start' })
+      expect(
+        (scrollIntoView.mock.contexts[0] as Element).getAttribute('data-group'),
+      ).toBe('updates')
+    } finally {
+      raf.mockRestore()
+      Element.prototype.scrollIntoView = original
+    }
+  })
+
+  it('opens at Appearance without a group', () => {
+    renderModal()
+    expect(screen.getByRole('button', { name: 'Appearance' })).toHaveAttribute(
+      'aria-current',
+      'true',
+    )
+  })
+
   it('renders Clear Command History button when handler provided', () => {
     const onClearHistory = vi.fn()
     renderModal({ onClearHistory, historyCount: 5 })

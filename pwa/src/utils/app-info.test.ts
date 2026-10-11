@@ -7,6 +7,10 @@ describe('APP_INFO', () => {
     expect(APP_INFO.name.length).toBeGreaterThan(0)
   })
 
+  it('has the wordmark as its display name', () => {
+    expect(APP_INFO.displayName).toBe('Termote')
+  })
+
   it('has a version', () => {
     expect(typeof APP_INFO.version).toBe('string')
     expect(APP_INFO.version.length).toBeGreaterThan(0)
@@ -14,7 +18,7 @@ describe('APP_INFO', () => {
 
   it('has description', () => {
     expect(APP_INFO.description).toBe(
-      'Terminal + Remote - Control CLI tools from anywhere',
+      'Terminal + Remote — control CLI tools from anywhere',
     )
   })
 

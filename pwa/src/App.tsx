@@ -165,6 +165,8 @@ export default function App({
   const [aboutOpen, setAboutOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  // Group Settings opens at; About's "Check for updates" asks for Updates
+  const [settingsGroup, setSettingsGroup] = useState<string>()
   const [gestureHintsOpen, setGestureHintsOpen] = useState(false)
   const [toast, setToast] = useState<{
     id: number
@@ -1145,7 +1147,10 @@ export default function App({
             menu={{
               onOpenAbout: () => setAboutOpen(true),
               onOpenHelp: () => setHelpOpen(true),
-              onOpenSettings: () => setSettingsOpen(true),
+              onOpenSettings: () => {
+                setSettingsGroup(undefined)
+                setSettingsOpen(true)
+              },
               onCopyLink: currentLink ? copyLink : undefined,
               onLogout: mux.caps.auth ? handleLogout : undefined,
             }}
@@ -1477,7 +1482,15 @@ export default function App({
           names={pendingPane?.command ? [pendingPane.command] : []}
         />
       </ConfirmDialog>
-      <AboutModal isOpen={aboutOpen} onClose={() => setAboutOpen(false)} />
+      <AboutModal
+        isOpen={aboutOpen}
+        onClose={() => setAboutOpen(false)}
+        onCheckUpdates={() => {
+          setAboutOpen(false)
+          setSettingsGroup('updates')
+          setSettingsOpen(true)
+        }}
+      />
       <HelpModal
         isOpen={helpOpen}
         onClose={() => setHelpOpen(false)}
@@ -1486,6 +1499,7 @@ export default function App({
       <SettingsModal
         isOpen={settingsOpen}
         onClose={() => setSettingsOpen(false)}
+        initialGroup={settingsGroup}
         settings={settings}
         onUpdateSetting={updateSetting}
         tmuxBufferSupported={copyModeSupported}
