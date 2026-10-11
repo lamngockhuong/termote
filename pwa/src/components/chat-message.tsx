@@ -46,7 +46,9 @@ function MdImage({ src, alt }: ComponentProps<'img'>) {
   )
 }
 
-// A code block with a copy button over its corner
+// A code block with a copy button over its corner. On a touch screen the
+// button grows to 44px, so MarkdownText pads the block to hold it even when
+// the code is one line.
 function MdPre({
   children,
   node: _node,
@@ -75,7 +77,7 @@ const MD_COMPONENTS = { a: MdLink, img: MdImage, pre: MdPre }
 
 export function MarkdownText({ text }: { text: string }) {
   return (
-    <div className="min-w-0 break-words leading-relaxed [&_:not(pre)>code]:rounded [&_:not(pre)>code]:box-decoration-clone [&_:not(pre)>code]:border [&_:not(pre)>code]:border-border [&_:not(pre)>code]:bg-surface-raised [&_:not(pre)>code]:px-1 [&_:not(pre)>code]:font-mono [&_:not(pre)>code]:text-[0.88em] [&_h1]:mt-3 [&_h1]:font-semibold [&_h2]:mt-3 [&_h2]:font-semibold [&_h3]:mt-2 [&_h3]:font-semibold [&_li]:ml-5 [&_li+li]:mt-1 [&_ol]:my-2 [&_ol]:list-decimal [&_p+p]:mt-2 [&_pre]:my-2 [&_pre]:overflow-x-auto [&_pre]:rounded-control [&_pre]:border [&_pre]:border-border [&_pre]:bg-surface-raised [&_pre]:p-2 [&_pre]:pr-10 [&_pre]:font-mono [&_pre]:text-[12px] [&_pre]:leading-[1.6] [&_ul]:my-2 [&_table]:block [&_table]:overflow-x-auto [&_td]:border [&_td]:border-border [&_td]:px-1.5 [&_th]:border [&_th]:border-border [&_th]:px-1.5 [&_ul]:list-disc">
+    <div className="min-w-0 break-words leading-relaxed [&_:not(pre)>code]:rounded [&_:not(pre)>code]:box-decoration-clone [&_:not(pre)>code]:border [&_:not(pre)>code]:border-border [&_:not(pre)>code]:bg-surface-raised [&_:not(pre)>code]:px-1 [&_:not(pre)>code]:font-mono [&_:not(pre)>code]:text-[0.88em] [&_h1]:mt-3 [&_h1]:font-semibold [&_h2]:mt-3 [&_h2]:font-semibold [&_h3]:mt-2 [&_h3]:font-semibold [&_li]:ml-5 [&_li+li]:mt-1 [&_ol]:my-2 [&_ol]:list-decimal [&_p+p]:mt-2 [&_pre]:my-2 [&_pre]:overflow-x-auto [&_pre]:rounded-control [&_pre]:border [&_pre]:border-border [&_pre]:bg-surface-raised [&_pre]:p-2 [&_pre]:pr-10 pointer-coarse:[&_pre]:py-3.5 pointer-coarse:[&_pre]:pr-12 [&_pre]:font-mono [&_pre]:text-[12px] [&_pre]:leading-[1.6] [&_ul]:my-2 [&_table]:block [&_table]:overflow-x-auto [&_td]:border [&_td]:border-border [&_td]:px-1.5 [&_th]:border [&_th]:border-border [&_th]:px-1.5 [&_ul]:list-disc">
       <Markdown
         remarkPlugins={[remarkGfm, htmlAsText]}
         components={MD_COMPONENTS}
