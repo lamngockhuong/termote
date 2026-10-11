@@ -371,6 +371,7 @@ Use a production build (the service worker is off in `pnpm dev`) and a pane runn
 - [ ] Click toggles fullscreen mode
 - [ ] Icon changes between Maximize/Minimize
 - [ ] Esc/F11 exits fullscreen and syncs button state
+- [ ] Button hidden where fullscreen is unavailable (iPhone landscape, or `document.fullscreenEnabled` false)
 
 ### Session Actions (Mobile)
 

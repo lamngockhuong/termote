@@ -131,6 +131,7 @@ vi.mock('./hooks/use-font-size', () => ({
 
 const mockUseFullscreen = vi.fn(() => ({
   isFullscreen: false,
+  isSupported: true,
   toggleFullscreen: vi.fn(),
 }))
 vi.mock('./hooks/use-fullscreen', () => ({
@@ -784,6 +785,7 @@ describe('App', () => {
     })
     mockUseFullscreen.mockReturnValue({
       isFullscreen: false,
+      isSupported: true,
       toggleFullscreen: vi.fn(),
     })
     mockUseSettings.mockReturnValue({
@@ -1549,6 +1551,7 @@ describe('App', () => {
   it('fullscreen button shows Exit fullscreen when isFullscreen=true (branches 415-419)', async () => {
     mockUseFullscreen.mockReturnValue({
       isFullscreen: true,
+      isSupported: true,
       toggleFullscreen: vi.fn(),
     })
     render(<App />)
@@ -1557,6 +1560,23 @@ describe('App', () => {
         screen.getByRole('button', { name: 'Exit fullscreen' }),
       ).toBeInTheDocument()
     })
+  })
+
+  it('fullscreen button hidden when the browser cannot go fullscreen', async () => {
+    mockUseFullscreen.mockReturnValue({
+      isFullscreen: false,
+      isSupported: false,
+      toggleFullscreen: vi.fn(),
+    })
+    render(<App />)
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Increase font size' }),
+      ).toBeInTheDocument()
+    })
+    expect(
+      screen.queryByRole('button', { name: 'Enter fullscreen' }),
+    ).not.toBeInTheDocument()
   })
 
   it('title omits description when activeSession.description is empty (branch 354)', async () => {

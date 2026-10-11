@@ -130,6 +130,14 @@ describe('AppHeader — desktop', () => {
     ).toBeVisible()
   })
 
+  it('has no fullscreen button without onToggleFullscreen', () => {
+    renderHeader({ onToggleFullscreen: undefined })
+    expect(
+      screen.queryByRole('button', { name: 'Enter fullscreen' }),
+    ).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Exit fullscreen' })).toBeNull()
+  })
+
   it('keeps the touch-size view and font buttons level with the tabs', () => {
     renderHeader({ views: TWO_VIEWS })
     for (const name of ['Chat', 'Decrease font size', 'Increase font size']) {

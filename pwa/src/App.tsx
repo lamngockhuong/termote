@@ -531,7 +531,11 @@ export default function App({
   useLayoutEffect(() => applyUiStyle(settings.uiStyle), [settings.uiStyle])
   // biome-ignore lint/correctness/useExhaustiveDependencies: the tokens it reads change with both
   useEffect(() => syncThemeColor(), [settings.uiStyle, resolvedTheme])
-  const { isFullscreen, toggleFullscreen } = useFullscreen()
+  const {
+    isFullscreen,
+    isSupported: canFullscreen,
+    toggleFullscreen,
+  } = useFullscreen()
   const appUpdate = useAppUpdate()
 
   // The indicator follows the stream; a failing session poll can only mark
@@ -1130,7 +1134,7 @@ export default function App({
             onDecreaseFont={decrease}
             onIncreaseFont={increase}
             isFullscreen={isFullscreen}
-            onToggleFullscreen={toggleFullscreen}
+            onToggleFullscreen={canFullscreen ? toggleFullscreen : undefined}
             views={switcherViews}
             viewId={currentView.id}
             onViewChange={setViewId}
