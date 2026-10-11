@@ -41,7 +41,7 @@ const (
 type agentCommand struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
-	Source      string `json:"source"` // project | user | plugin
+	Source      string `json:"source"` // project | user | plugin | system
 	Kind        string `json:"kind"`   // command | skill
 }
 
@@ -77,27 +77,43 @@ func (a *agentAPI) handleCommands(w http.ResponseWriter, r *http.Request) {
 		a.agentError(w, "agent session", err)
 		return
 	}
-	if s.Agent != "claude" {
-		// The commands and skills listed are Claude Code's; another agent's
-		// config dir is never read here.
-		jsonOK(w, commandsResponse{Commands: []agentCommand{}})
-		return
-	}
-	// Without a pane root (a backend without one, a directory gone) the
-	// user's commands are still listed.
-	root := ""
-	if f := a.files; f != nil && f.dirs != nil && f.m.Caps().Files {
-		ctx, cancel := context.WithTimeout(r.Context(), filesTimeout)
-		if pr, err := f.roots.paneRoot(ctx, f.dirs, paneID); err == nil &&
-			!f.denied(pr.Root, ".claude") {
-			root = pr.Root
+	var res commandsResponse
+	switch s.Agent {
+	case "claude":
+		root := a.paneRoot(r, paneID)
+		if root != "" && a.files.denied(root, ".claude") {
+			root = ""
 		}
-		cancel()
+		res, _ = a.commands.do(root+"\x00"+s.ClaudeDir, func() (commandsResponse, error) {
+			return listAgentCommands(root, s.ClaudeDir, a.home, a.commandSkip), nil
+		})
+	case "codex":
+		root := a.paneRoot(r, paneID)
+		res, _ = a.commands.do("codex\x00"+root+"\x00"+s.CodexHome, func() (commandsResponse, error) {
+			return listCodexSkills(root, s.CodexHome, a.home, a.commandSkip), nil
+		})
+	default:
+		// Only the dirs of an agent read here are ever opened.
+		res = commandsResponse{Commands: []agentCommand{}}
 	}
-	res, _ := a.commands.do(root+"\x00"+s.ClaudeDir, func() (commandsResponse, error) {
-		return listAgentCommands(root, s.ClaudeDir, a.home, a.commandSkip), nil
-	})
 	jsonOK(w, res)
+}
+
+// paneRoot returns the pane's root as the files routes find it (its git
+// toplevel), or "" without one (a backend without pane directories, a
+// directory gone): the user's commands are still listed then.
+func (a *agentAPI) paneRoot(r *http.Request, paneID string) string {
+	f := a.files
+	if f == nil || f.dirs == nil || !f.m.Caps().Files {
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), filesTimeout)
+	defer cancel()
+	pr, err := f.roots.paneRoot(ctx, f.dirs, paneID)
+	if err != nil {
+		return ""
+	}
+	return pr.Root
 }
 
 // commandSkip refuses a file the files routes would not show either: under
@@ -188,9 +204,21 @@ func readCommandDir(dir, base string, opts commandOpts) []agentCommand {
 	defer rt.Close()
 	r := &commandReader{commandOpts: opts, rt: rt, dir: dir}
 	r.walkCommands(path.Join(base, "commands"), "", 1)
-	commands := len(r.out)
-	r.visited = 0
-	r.readSkills(path.Join(base, "skills"), commands)
+	return append(r.out, readSkillDir(dir, path.Join(base, "skills"), opts)...)
+}
+
+// readSkillDir lists dir/<rel>/*/SKILL.md, dir opened as an os.Root.
+func readSkillDir(dir, rel string, opts commandOpts) []agentCommand {
+	if !filepath.IsAbs(dir) {
+		return nil
+	}
+	rt, err := os.OpenRoot(dir)
+	if err != nil {
+		return nil
+	}
+	defer rt.Close()
+	r := &commandReader{commandOpts: opts, rt: rt, dir: dir}
+	r.readSkills(rel)
 	return r.out
 }
 
@@ -211,14 +239,14 @@ func (r *commandReader) readDir(dir string) []fs.DirEntry {
 	return entries
 }
 
-// full reports whether this source has its commandsMaxPerSource entries.
-func (r *commandReader) full(start int) bool { return len(r.out)-start >= commandsMaxPerSource }
+// full reports whether this reader has its commandsMaxPerSource entries.
+func (r *commandReader) full() bool { return len(r.out) >= commandsMaxPerSource }
 
 // walkCommands lists *.md under dir: commands/a/b.md is /a:b. Symlinked
 // dirs are not followed, and the walk stops commandsMaxDepth levels down.
 func (r *commandReader) walkCommands(dir, prefix string, depth int) {
 	for _, e := range r.readDir(dir) {
-		if r.full(0) {
+		if r.full() {
 			return
 		}
 		name := e.Name()
@@ -245,9 +273,9 @@ func (r *commandReader) walkCommands(dir, prefix string, depth int) {
 // name, else its directory. A skill hidden from the / menu
 // (user-invocable: false) is left out. A symlinked skill dir is followed
 // when it leads into an allowed dir; its SKILL.md must be a file of its own.
-func (r *commandReader) readSkills(dir string, start int) {
+func (r *commandReader) readSkills(dir string) {
 	for _, e := range r.readDir(dir) {
-		if r.full(start) {
+		if r.full() {
 			return
 		}
 		if strings.HasPrefix(e.Name(), ".") {

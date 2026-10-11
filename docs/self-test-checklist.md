@@ -476,7 +476,13 @@ On psmux, sending from the Chat view fails until #408.
       (Codex shows `[Pasted Content N chars]` before Enter)
 - [ ] While Codex works or its composer holds a draft, sending is refused (`Not sent: ...`) and the
       pane gets no key
-- [ ] `/` at the start of the message lists no commands
+- [ ] `/` at the start of the message lists Codex's built-ins (`/exit` first, no skill);
+      `/model` is marked `opens in Terminal` and switches to the terminal; `/exit` and `/logout`
+      ask first
+- [ ] `$` at the start of a word, at the start of the message or after other text, lists the
+      skills of `.codex/skills` (`project`), `~/.codex/skills` and `~/.agents/skills` (`user`)
+      and Codex's bundled ones (`system`); a pick replaces only that word with `$name`
+- [ ] A message `use $<skill> to ...` sent from the Chat view runs the skill in Codex
 - [ ] tmux: `/new` in the terminal removes the Chat view until Codex is restarted
 - [ ] tmux: an approval dialog (run a command, make edits) shows a read-only card with "Answer
       this dialog in the terminal."

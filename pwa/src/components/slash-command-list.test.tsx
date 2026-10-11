@@ -25,6 +25,7 @@ describe('SlashCommandList', () => {
     render(
       <SlashCommandList
         id="l"
+        trigger="/"
         commands={commands}
         active={1}
         onPick={vi.fn()}
@@ -52,6 +53,7 @@ describe('SlashCommandList', () => {
     render(
       <SlashCommandList
         id="l"
+        trigger="/"
         commands={commands}
         active={0}
         onPick={onPick}
@@ -75,6 +77,7 @@ describe('SlashCommandList', () => {
     const { rerender } = render(
       <SlashCommandList
         id="l"
+        trigger="/"
         commands={commands}
         active={0}
         onPick={vi.fn()}
@@ -84,6 +87,7 @@ describe('SlashCommandList', () => {
     rerender(
       <SlashCommandList
         id="l"
+        trigger="/"
         commands={commands}
         active={2}
         onPick={vi.fn()}
@@ -99,6 +103,7 @@ describe('SlashCommandList', () => {
     render(
       <SlashCommandList
         id="l"
+        trigger="/"
         commands={[]}
         active={0}
         onPick={vi.fn()}
@@ -107,5 +112,35 @@ describe('SlashCommandList', () => {
     )
     expect(screen.queryByRole('listbox')).toBeNull()
     expect(screen.getByText('No matching command')).toBeTruthy()
+  })
+
+  it('shows skills after "$", with the system source', () => {
+    const { rerender } = render(
+      <SlashCommandList
+        id="l"
+        trigger="$"
+        commands={[{ name: 'imagegen', source: 'system', kind: 'skill' }]}
+        active={0}
+        onPick={vi.fn()}
+        onActive={vi.fn()}
+      />,
+    )
+    expect(screen.getByRole('listbox').getAttribute('aria-label')).toBe(
+      'Skills',
+    )
+    const [row] = screen.getAllByRole('option')
+    expect(row.textContent).toContain('$imagegen')
+    expect(row.textContent).toContain('system')
+    rerender(
+      <SlashCommandList
+        id="l"
+        trigger="$"
+        commands={[]}
+        active={0}
+        onPick={vi.fn()}
+        onActive={vi.fn()}
+      />,
+    )
+    expect(screen.getByText('No matching skill')).toBeTruthy()
   })
 })

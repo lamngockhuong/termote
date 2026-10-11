@@ -138,8 +138,7 @@ option. The preview itself is only shown in the terminal.
 A pane running Codex gets the Chat view with its conversation: your messages, replies rendered
 as markdown, commands with their output, file changes as diffs. You send a message from the box
 at the bottom, under the same rules as for Claude Code: Termote only sends when the screen shows
-Codex at an empty input box with nothing running, and a refusal leaves the pane untouched. The
-`/` suggestions do not apply to Codex; type a command in full if you need one.
+Codex at an empty input box with nothing running, and a refusal leaves the pane untouched.
 
 Approval dialogs (run a command, make file edits) depend on the backend:
 
@@ -151,6 +150,39 @@ Approval dialogs (run a command, make file edits) depend on the backend:
 
 Other Codex dialogs (model picker, rate-limit prompt, and so on) are always shown read only, on
 either backend.
+
+### Codex Commands and Skills
+
+Type `/` at the start of a message for Codex's own commands (checked against Codex 0.162.0), with
+`/exit` first. They work as for Claude Code: a pick becomes `/name ` for its arguments, commands
+that open a screen of their own (`/model`, `/new`, `/resume`, `/status`, `/diff` and others) are
+marked `opens in Terminal`, and `/exit` and `/logout` ask before they are sent, since both end
+Codex. Typed in full, the aliases `/quit`, `/cwd`, `/clean` and `/pet` behave as `/exit`, `/pwd`,
+`/stop` and `/pets`. Codex has no custom `/` commands: its custom prompts are gone, replaced by
+skills.
+
+Skills come after `$`, where Codex itself looks for them, anywhere in a message: type `$` at the
+start of a word and a list of skills opens above the box, narrowed by what you type after it. A
+pick replaces that word with `$name ` and leaves the rest of the message as it was; the skill runs
+when you send the message. A message that ends with `$name` is sent with a space after it: Codex's
+own list would otherwise open on that word and take the Enter that submits it. Each row shows where the skill comes from:
+
+- `project`: `.codex/skills/` and `.agents/skills/` in the pane's project.
+- `user`: `skills/` in Codex's home (`~/.codex`, or the `CODEX_HOME` of the Codex in the pane),
+  then `~/.agents/skills`.
+- `system`: the skills Codex ships with (`skills/.system/` in its home), then
+  `/etc/codex/skills` on Linux and macOS.
+
+A name found twice keeps the first one. The same rules as for Claude Code apply: only names and
+descriptions are read, a skill installed as a symlink is listed only when it leads into one of
+these folders or the project, and a skill marked `user-invocable: false` is left out.
+
+Codex may still run a different set than the list shows:
+
+- Skills of Codex plugins, and skills turned off in Codex's `config.toml`, are not looked at.
+- Codex reads a project's `.codex/skills/` only in a project you have trusted; the list shows
+  them either way.
+- Only `skills/<name>/SKILL.md` one level down is read; Codex also finds skills nested deeper.
 
 Requirements:
 

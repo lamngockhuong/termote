@@ -772,7 +772,7 @@ export async function fetchAgentPrompt(
 export interface AgentCommand {
   name: string
   description?: string
-  source: 'project' | 'user' | 'plugin'
+  source: 'project' | 'user' | 'plugin' | 'system'
   kind: 'command' | 'skill'
 }
 

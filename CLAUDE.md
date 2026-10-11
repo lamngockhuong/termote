@@ -385,7 +385,7 @@ The `update` command:
 | `server/agent_claude.go`                          | Claude Code transcript (JSONL) and session file               |
 | `server/agent_claude_prompt.go`                   | Reads a Claude Code screen: input box, dialogs                |
 | `server/agent_input.go`                           | Sends a message, answers a dialog (checks before each write)  |
-| `server/agent_commands*.go`                       | `agent/commands`: custom commands, skills, plugin commands    |
+| `server/agent_commands*.go`                       | `agent/commands`: custom commands, skills (Codex: `$` skills) |
 | `server/agent_start.go`                           | `agent/start`: starts Claude Code/Codex in an idle Herdr pane |
 | `server/agent_codex.go`                           | Codex rollout (JSONL): locate, parse, turn status             |
 | `server/agent_codex_prompt.go`                    | Reads a Codex screen: composer, approval dialogs              |
@@ -743,8 +743,9 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   A tool call carries `detail` for its card: the model's description, a Bash/Codex command whole
   (8 KiB) and an Edit/MultiEdit/Write's old and new text (16 KiB per call); the edits of a file
   `isSensitive` names are left out (`hidden`), as its diff is in Changes.
-  `agent/commands` (the composer's `/` suggestions) returns only names, descriptions, sources
-  and kinds of `.claude/commands`/`.claude/skills` under the pane root and `commands`/`skills`
+  `agent/commands` (the composer's `/` suggestions; Codex: its skills, see Codex chat) returns
+  only names, descriptions, sources and kinds of `.claude/commands`/`.claude/skills` under the
+  pane root and `commands`/`skills`
   in that config dir, read through `os.Root` (first 8 KB per file; a file that is a symlink, under
   a denied dir or with a sensitive name is never read), with the same
   `Sec-Fetch-Site`/`Origin` check as the files routes. A symlinked skill dir is followed only
@@ -822,8 +823,16 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   approval request, so `prompt` answers `unsupported` with no options or `promptId`
   (`AgentSession.DialogsReadOnly`), as it does for any other Codex dialog. The screen reader
   (`server/agent_codex_prompt.go`) never takes text the model printed above the composer for a
-  dialog, and reads a card as read only when two approval titles sit in its stretch. `commands`
-  is empty
+  dialog, and reads a card as read only when two approval titles sit in its stretch.
+  `commands` (`server/agent_commands_codex.go`) lists skills only, suggested after `$` at the
+  start of any word (`/` offers Codex 0.162.0's built-ins from the PWA's static list, `/exit` and
+  `/logout` confirmed; a message ending with `$name` is sent with a trailing space, else Codex's
+  own list takes the Enter): `.codex/skills`/`.agents/skills` under the pane root (`project`),
+  `CODEX_HOME/skills` and `~/.agents/skills` (`user`), `CODEX_HOME/skills/.system` and
+  `/etc/codex/skills` (`system`), each through `readSkillDir` under the Claude Code rules
+  (`os.Root`, 8 KB, no file symlink, the files routes' skip); a symlinked skill dir is followed
+  only into those dirs or the root. Custom prompts (gone from Codex), plugin skills,
+  `config.toml` toggles, project trust and nested skill dirs are not read
 - **Files/Changes** (`/api/mux/panes/{id}/files/*`): GETs that also check
   `Sec-Fetch-Site`/`Origin` (and one write, `PUT files/content`, below); every path is opened through `os.Root` under the pane's root (its
   git toplevel when a `.git` sits at it, else its directory); termote's config/state dirs, the
