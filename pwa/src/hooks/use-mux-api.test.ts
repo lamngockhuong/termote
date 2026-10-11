@@ -37,6 +37,7 @@ import {
   REQUEST_TIMEOUT_MS,
   RequestError,
   removeWorktree,
+  renameFile,
   renameGroup,
   renameTab,
   restoreFile,
@@ -873,6 +874,38 @@ describe('files API client', () => {
     })
     expect(timeout).toHaveBeenCalledWith(SAVE_TIMEOUT_MS)
     timeout.mockRestore()
+  })
+
+  it('renames with POST, the root in the query, with a timeout', async () => {
+    const { calls } = mockFetch({ body: { root: '/r', path: 'x/b' } })
+    const timeout = vi.spyOn(AbortSignal, 'timeout')
+    expect(
+      await renameFile('%1', {
+        root: '/r',
+        path: 'a',
+        newPath: 'x/b',
+        reveal: true,
+      }),
+    ).toEqual({ root: '/r', path: 'x/b' })
+    expect(calls[0].url).toBe('/api/mux/panes/%251/files/rename?root=%2Fr')
+    expect(calls[0].init?.method).toBe('POST')
+    expect(JSON.parse(calls[0].init?.body as string)).toEqual({
+      path: 'a',
+      newPath: 'x/b',
+      reveal: true,
+    })
+    expect(timeout).toHaveBeenCalledWith(SAVE_TIMEOUT_MS)
+    timeout.mockRestore()
+  })
+
+  it('a refused rename throws its code and the path it names', async () => {
+    mockFetch({
+      body: { error: 'x', code: 'exists', path: 'b' },
+      status: 409,
+    })
+    await expect(
+      renameFile('%1', { root: '/r', path: 'a', newPath: 'b', reveal: false }),
+    ).rejects.toMatchObject({ status: 409, code: 'exists', path: 'b' })
   })
 
   it('a refused delete or restore throws its code and a kept trashId', async () => {

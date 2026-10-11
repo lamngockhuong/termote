@@ -4,8 +4,10 @@ import { remapPanes } from '../utils/pane-remap'
 import {
   dropDraft,
   type FileDraft,
+  fileRenamed,
   filesError,
   followInFiles,
+  hasDirtyDraftAt,
   isDraftDirty,
   isOpenable,
   resetFilesStores,
@@ -1064,5 +1066,156 @@ describe('useFileDraft', () => {
     expect(unload()).toBe(true)
     act(() => resetFilesStores())
     expect(unload()).toBe(false)
+  })
+})
+
+describe('a renamed file', () => {
+  const listing: Record<string, FileEntry[]> = {
+    '': [dir('x'), file('a.md'), file('b.md')],
+    x: [],
+  }
+  beforeEach(() => {
+    mockTree.mockImplementation(async (_p, path: string) =>
+      tree(path, listing[path] ?? []),
+    )
+  })
+
+  const draft = (path: string, text = 'y', root = '/r'): FileDraft => ({
+    root,
+    path,
+    baseHash: 'h',
+    base: 'x',
+    crlf: false,
+    text,
+    reveal: false,
+  })
+
+  async function loaded(pane = '%1') {
+    const h = renderHook(() => useFiles(pane))
+    act(() => h.result.current.load())
+    await waitFor(() => expect(h.result.current.root).toBe('/r'))
+    return h
+  }
+
+  it('its tab follows, keeping its place and pinned state', async () => {
+    const { result } = await loaded()
+    act(() => result.current.open('b.md', { pin: true }))
+    act(() => result.current.open('a.md'))
+    const id = result.current.activeId
+    mockTree.mockClear()
+    act(() => fileRenamed('/r', 'a.md', 'x/c.md', true))
+    expect(result.current.tabs.map((t) => [t.path, t.pinned])).toEqual([
+      ['b.md', true],
+      ['x/c.md', false],
+    ])
+    expect(result.current.activeId).toBe(id)
+    expect(result.current.tabs[1]).toMatchObject({ id, reveal: true })
+    await waitFor(() =>
+      expect(mockTree.mock.calls.map((c) => c[1]).sort()).toEqual([
+        '',
+        '',
+        'x',
+      ]),
+    )
+    expect(result.current.expanded).toEqual({ x: true })
+  })
+
+  it('Back of another tab goes to the new path', async () => {
+    const { result } = await loaded()
+    act(() => result.current.open('a.md'))
+    await act(() => result.current.follow({ path: 'b.md' }, 7))
+    await act(() => result.current.follow({ path: 'a.md' }, 8))
+    act(() => fileRenamed('/r', 'b.md', 'c.md', false))
+    expect(result.current.active?.path).toBe('a.md')
+    expect(result.current.active?.history).toEqual([
+      { path: 'a.md', scrollTop: 7 },
+      { path: 'c.md', scrollTop: 8 },
+    ])
+  })
+
+  it('a tab already on the new path closes; the moved one shows', async () => {
+    const { result } = await loaded()
+    act(() => result.current.open('a.md', { pin: true }))
+    act(() => result.current.open('b.md', { pin: true }))
+    const kept = result.current.tabs[0].id
+    act(() => fileRenamed('/r', 'a.md', 'b.md', false))
+    expect(result.current.tabs.map((t) => [t.id, t.path])).toEqual([
+      [kept, 'b.md'],
+    ])
+    expect(result.current.activeId).toBe(kept)
+  })
+
+  it('its draft follows in every pane of the root, never another root', async () => {
+    const one = await loaded('%1')
+    const two = await loaded('%2')
+    act(() => one.result.current.open('a.md'))
+    act(() => two.result.current.open('a.md'))
+    renderHook(() => useFileDraft('%1', 'a.md')).result.current[1](
+      draft('a.md'),
+    )
+    renderHook(() => useFileDraft('%2', 'a.md')).result.current[1](
+      draft('a.md'),
+    )
+    renderHook(() => useFileDraft('%3', 'a.md')).result.current[1](
+      draft('a.md', 'y', '/other'),
+    )
+    const moved = renderHook(() => useFileDraft('%2', 'c.md'))
+    act(() => fileRenamed('/r', 'a.md', 'c.md', true))
+    expect(moved.result.current[0]).toMatchObject({
+      path: 'c.md',
+      reveal: true,
+    })
+    expect(isDraftDirty('%1', 'c.md')).toBe(true)
+    expect(isDraftDirty('%1', 'a.md')).toBe(false)
+    expect(isDraftDirty('%3', 'a.md')).toBe(true)
+    expect(two.result.current.tabs[0].path).toBe('c.md')
+  })
+
+  it('a tab kept from another root is another file: it stays', async () => {
+    const { result } = await loaded()
+    act(() => result.current.open('a.md'))
+    renderHook(() => useFileDraft('%1', 'a.md')).result.current[1](
+      draft('a.md'),
+    )
+    // The pane moved: the edited tab is kept, asked about
+    mockTree.mockImplementation(async (_p, path: string) =>
+      tree(path, listing[path] ?? [], '/s'),
+    )
+    act(() => result.current.rootChanged('/s'))
+    await waitFor(() => expect(result.current.root).toBe('/s'))
+    act(() => result.current.open('b.md', { pin: true }))
+    // Another pane, still on /r, is not touched
+    mockTree.mockImplementation(async (_p, path: string) =>
+      tree(path, listing[path] ?? []),
+    )
+    const other = await loaded('%9')
+    act(() => other.result.current.open('a.md'))
+    act(() => fileRenamed('/s', 'a.md', 'b.md', false))
+    expect(other.result.current.tabs[0].path).toBe('a.md')
+    expect(result.current.tabs.map((t) => [t.root, t.path])).toEqual([
+      ['/r', 'a.md'],
+      ['/s', 'b.md'],
+    ])
+  })
+
+  it('the same path, or no tab and no draft: nothing changes', async () => {
+    const { result } = await loaded()
+    act(() => result.current.open('a.md'))
+    const before = result.current.tabs
+    act(() => fileRenamed('/r', 'a.md', 'a.md', false))
+    act(() => fileRenamed('/r', 'z.md', 'y.md', false))
+    expect(result.current.tabs).toEqual(before)
+  })
+
+  it('hasDirtyDraftAt sees unsaved changes of any pane of the root', () => {
+    renderHook(() => useFileDraft('%1', 'a.md')).result.current[1](
+      draft('a.md', 'x'),
+    )
+    expect(hasDirtyDraftAt('/r', 'a.md')).toBe(false)
+    renderHook(() => useFileDraft('%2', 'a.md')).result.current[1](
+      draft('a.md'),
+    )
+    expect(hasDirtyDraftAt('/r', 'a.md')).toBe(true)
+    expect(hasDirtyDraftAt('/other', 'a.md')).toBe(false)
   })
 })

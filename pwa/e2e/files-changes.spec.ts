@@ -350,6 +350,105 @@ test.describe('files and changes views', () => {
     }
   })
 
+  test('desktop: renames and moves a file; its tab and draft follow; Undo', async ({ page }) => {
+    const dir = path.join(repo, 'e2e-rename')
+    try {
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(path.join(dir, 'draft.md'), 'one\n')
+      writeFileSync(path.join(dir, 'taken.md'), 'taken\n')
+      await page.setViewportSize({ width: 1280, height: 800 })
+      await page.goto(`${link}?view=files`)
+      const panel = page.getByRole('complementary', { name: 'Files' })
+      const dialog = page.getByRole('dialog', { name: 'Rename' })
+      const rowMenu = async (name: string) => {
+        const row = panel.getByRole('treeitem', { name })
+        await row.hover()
+        await row.getByRole('button', { name: `Actions for ${name}` }).click()
+        await page.getByRole('menuitem', { name: 'Rename' }).click()
+      }
+      const renameTo = async (p: string) => {
+        await dialog.getByRole('textbox').fill(p)
+        await dialog.getByRole('button', { name: 'Rename' }).click()
+      }
+      await panel.getByRole('treeitem', { name: 'e2e-rename' }).click()
+
+      // Unsaved changes, then a move from the tree: Save writes the new path
+      await panel.getByRole('treeitem', { name: 'draft.md' }).click()
+      await panel.getByRole('button', { name: 'Edit', exact: true }).click()
+      await panel.getByRole('textbox', { name: 'Text of e2e-rename/draft.md' }).fill('two\n')
+      // The tree, the editor kept in its tab
+      await panel.getByRole('tab', { name: 'Files', exact: true }).click()
+      await rowMenu('draft.md')
+      // The base name is selected without its extension
+      await expect(dialog.getByRole('textbox')).toHaveValue('e2e-rename/draft.md')
+      await renameTo('e2e-rename/sub/moved.md')
+      await expect(page.getByText('Moved moved.md to e2e-rename/sub')).toBeVisible()
+      expect(existsSync(path.join(dir, 'draft.md'))).toBe(false)
+      expect(readFileSync(path.join(dir, 'sub/moved.md'), 'utf-8')).toBe('one\n')
+      await page.getByRole('tab', { name: /moved\.md/ }).click()
+      const box = panel.getByRole('textbox', { name: 'Text of e2e-rename/sub/moved.md' })
+      await expect(box).toHaveValue('two\n')
+      await panel.getByRole('button', { name: 'Save', exact: true }).click()
+      await expect(page.getByText('Saved', { exact: true })).toBeVisible()
+      expect(readFileSync(path.join(dir, 'sub/moved.md'), 'utf-8')).toBe('two\n')
+      expect(existsSync(path.join(dir, 'draft.md'))).toBe(false)
+
+      // From the header: a name taken is refused, with the way to open it
+      await panel.getByRole('button', { name: 'Rename' }).click()
+      await renameTo('e2e-rename/taken.md')
+      await expect(dialog.getByRole('alert')).toContainText('already exists')
+      expect(readFileSync(path.join(dir, 'taken.md'), 'utf-8')).toBe('taken\n')
+      await dialog.getByRole('button', { name: 'Cancel' }).click()
+
+      // A rename in place, then Undo puts the old name back
+      await panel.getByRole('button', { name: 'Rename' }).click()
+      await renameTo('e2e-rename/sub/final.md')
+      const toast = page.getByText('Renamed moved.md to final.md')
+      await expect(toast).toBeVisible()
+      expect(existsSync(path.join(dir, 'sub/final.md'))).toBe(true)
+      await expect(panel.getByRole('textbox', { name: /final\.md/ }).or(panel.getByText('two'))).toBeVisible()
+      await page.getByRole('button', { name: 'Undo' }).click()
+      await expect(page.getByText('Renamed back to moved.md')).toBeVisible()
+      expect(existsSync(path.join(dir, 'sub/final.md'))).toBe(false)
+      expect(readFileSync(path.join(dir, 'sub/moved.md'), 'utf-8')).toBe('two\n')
+      await expect(page.getByRole('tab', { name: /moved\.md/ })).toBeVisible()
+    } finally {
+      // The Changes tests must never see it as untracked
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('mobile: a finger resting on a row offers Rename; the box fits the screen', async ({ page }) => {
+    const dir = path.join(repo, 'e2e-rename-phone')
+    try {
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(path.join(dir, 'a.txt'), 'a\n')
+      await page.setViewportSize({ width: 375, height: 800 })
+      await page.addInitScript(() =>
+        localStorage.setItem('termote-settings', JSON.stringify({ hasSeenGestureHints: true })),
+      )
+      await page.goto(`${link}?view=files`)
+      await page.getByRole('treeitem', { name: 'e2e-rename-phone' }).click()
+      const row = page.getByRole('treeitem', { name: 'a.txt' })
+      const box = await row.boundingBox()
+      const at = { pointerType: 'touch', isPrimary: true, clientX: box!.x + 20, clientY: box!.y + 10 }
+      await row.dispatchEvent('pointerdown', at)
+      await page.waitForTimeout(700)
+      await row.dispatchEvent('pointerup', at)
+      await page.getByRole('menuitem', { name: 'Rename' }).click()
+      const dialog = page.getByRole('dialog', { name: 'Rename' })
+      await expect(dialog.getByRole('textbox')).toBeVisible()
+      expect(await noPageScroll(page)).toBe(true)
+      await dialog.getByRole('textbox').fill('e2e-rename-phone/b.txt')
+      await dialog.getByRole('button', { name: 'Rename' }).click()
+      await expect(page.getByText('Renamed a.txt to b.txt')).toBeVisible()
+      expect(readFileSync(path.join(dir, 'b.txt'), 'utf-8')).toBe('a\n')
+      await expect(page.getByRole('treeitem', { name: 'b.txt' })).toBeVisible()
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   // CSV files go under csv/ and are removed by the test that wrote them: the
   // Changes tests must never see them as untracked
   const csvDir = () => path.join(repo, 'csv')

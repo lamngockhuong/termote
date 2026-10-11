@@ -5,6 +5,7 @@ import {
   MAX_TABS,
   openTab,
   pinTab,
+  retargetTabs,
   type TabBase,
 } from './file-tabs'
 
@@ -165,5 +166,51 @@ describe('enforceCap', () => {
     const r = enforceCap(tabs, 'a', (t) => t.path !== 'a', 1)
     expect(r.tabs).toBe(tabs)
     expect(r.closed).toEqual([])
+  })
+})
+
+describe('retargetTabs', () => {
+  it('a renamed file keeps its tab, place and pinned state', () => {
+    const tabs = [tab('a'), tab('b', false, 3), tab('c')]
+    const r = retargetTabs(tabs, 'b', 'x/b')
+    expect(paths(r.tabs)).toEqual(['a', 'x/b', 'c'])
+    expect(r.tabs[1]).toMatchObject({ id: 'b', pinned: false, lastUsed: 3 })
+    expect(r.dropped).toEqual([])
+  })
+
+  it('a tab already on the new path closes, so no two show one file', () => {
+    const r = retargetTabs([tab('a'), tab('b')], 'a', 'b')
+    expect(r.tabs.map((t) => [t.id, t.path])).toEqual([['a', 'b']])
+    expect(paths(r.dropped)).toEqual(['b'])
+  })
+
+  it('patches the fields of its own the caller names', () => {
+    const r = retargetTabs([tab('a')], 'a', 'b', () => ({ lastUsed: 9 }))
+    expect(r.tabs[0]).toMatchObject({ path: 'b', lastUsed: 9 })
+  })
+
+  it('tabs out of scope are another file, left alone', () => {
+    const out = (t: Tab) => t.id !== 'old'
+    const tabs = [{ ...tab('a'), id: 'old' }, tab('b')]
+    const r = retargetTabs(tabs, 'a', 'b', undefined, out)
+    expect(r.tabs).toBe(tabs)
+    const moved = retargetTabs(
+      [tab('a'), { ...tab('b'), id: 'old' }],
+      'a',
+      'b',
+      undefined,
+      out,
+    )
+    expect(moved.tabs.map((t) => [t.id, t.path])).toEqual([
+      ['a', 'b'],
+      ['old', 'b'],
+    ])
+    expect(moved.dropped).toEqual([])
+  })
+
+  it('no tab of the file, or the same path: nothing changes', () => {
+    const tabs = [tab('a'), tab('b')]
+    expect(retargetTabs(tabs, 'z', 'b').tabs).toBe(tabs)
+    expect(retargetTabs(tabs, 'a', 'a').tabs).toBe(tabs)
   })
 })

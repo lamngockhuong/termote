@@ -15,9 +15,10 @@ keyboard and read the output in a terminal. Termote has two views for this:
 
 A file can be found by name in Files (see [Finding a File](#finding-a-file)). A text file can be
 edited and saved from either view (see [Editing a File](#editing-a-file)), a new one created in
-Files (see [Creating a File](#creating-a-file)), and a file or an empty folder deleted there (see
-[Deleting a File](#deleting-a-file)). Nothing else changes from them: no file is renamed, and
-nothing is staged, discarded or committed.
+Files (see [Creating a File](#creating-a-file)), a file or an empty folder deleted there (see
+[Deleting a File](#deleting-a-file)), and a file renamed or moved there (see
+[Renaming or Moving a File](#renaming-or-moving-a-file)). Nothing else changes from them: no
+folder is renamed, and nothing is staged, discarded or committed.
 
 ## Where to Find Them
 
@@ -96,8 +97,9 @@ where you were in that file and its unsaved changes.
 - **On a phone** there is no tab bar. The button with the number of open files
   (`Open files (N)`), in the file's bar and above the tree, lists them in a sheet: tap one to show
   it, or keep it open, or close it.
-- A file deleted in Termote closes its tab. A file deleted or renamed by something else keeps its
-  tab, which shows `File not found` with **Close tab**.
+- A file deleted in Termote closes its tab, and a file renamed in Termote keeps its tab under the
+  new name. A file deleted or renamed by something else keeps its tab, which shows
+  `File not found` with **Close tab**.
 - When the pane moves to another directory, the tabs opened in the old one close. Tabs with
   unsaved changes ask first: **Discard and close** drops the changes, **Keep** leaves them open
   so you can copy their text (they can no longer be saved).
@@ -262,6 +264,40 @@ roles, it is only hidden in the app.
   `termote uninstall` keeps the trash and prints its path; `termote uninstall --purge` removes it
   too. See [Uninstall](/installation/native/#uninstall).
 </Aside>
+
+## Renaming or Moving a File
+
+A file can be renamed from Files: **Rename** in the **⋯** menu of its row in the tree, or the
+**Rename** button in the header of an open file (not while it is being edited; a file with unsaved
+changes is renamed from its row). On a phone, a finger resting on a row opens the same menu. The
+dialog shows the path from the pane's directory with the name, without its extension, selected.
+
+- Change the folders in the path to move the file. A folder that does not exist yet is created.
+- Nothing is ever replaced: if a file or folder of the new name exists, the dialog says so and
+  offers **Open it**.
+- The file's open tab, its unsaved changes and its editor in Changes follow it to the new path,
+  in every pane showing the same directory. Saving afterwards writes the new path.
+- A toast says `Renamed <old> to <new>` (or `Moved <name> to <folder>`) with **Undo**, which
+  renames it back. Folders made for the move stay. A file whose old name the server would not
+  accept as a new one (one ending in a dot or a space) has no Undo.
+- Changes then shows a deleted file and an untracked one, as after `mv`, until you stage them;
+  Termote does not run `git mv`.
+- Only files are renamed, not folders or links.
+- A file whose name usually holds secrets, before or after, is renamed after a second ask.
+
+| Shown                                                   | Why                                                                        |
+| ------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `A file or directory of that name already exists`       | The new path is taken; nothing was replaced                                |
+| `This file no longer exists`                            | Something removed or moved the file after the tree was read                |
+| `<path> has unsaved changes. Save or discard them first` | The file at the new path is being edited                                   |
+| `The file changed while it was being renamed`           | Something replaced the file during the rename; nothing was moved           |
+| `Can't move a file to another file system`              | The new folder is on another disk or mount; a file is never copied         |
+| `The file is open in another program on the host`       | Windows: another program holds the file open                               |
+| `Part of this path is a symbolic link`                  | Nothing is renamed through a link                                          |
+| `The server can't rename this file`                     | The file or its folder belongs to another user, or the folder is protected |
+| `The file system there is read-only`                    | The file is on a read-only disk or mount                                   |
+
+A view-only session has no Rename.
 
 ## Markdown Preview
 

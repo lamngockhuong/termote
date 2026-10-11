@@ -15,9 +15,10 @@ Muốn biết agent đã sửa gì, thường bạn phải gõ `ls`, `cat`, `git
 
 Trong Files, bạn tìm được file theo tên (xem [Tìm file](#tìm-file)). Ở cả hai view đều sửa và lưu
 được file văn bản (xem [Sửa file](#sửa-file)); riêng trong Files thì tạo được file mới (xem
-[Tạo file mới](#tạo-file-mới)) và xoá được file hoặc thư mục rỗng (xem [Xoá file](#xoá-file)).
-Ngoài ra không đổi được gì khác: không đổi tên file, không đưa thay đổi vào index, không bỏ thay
-đổi và không commit.
+[Tạo file mới](#tạo-file-mới)), xoá được file hoặc thư mục rỗng (xem [Xoá file](#xoá-file)), và
+đổi tên hay chuyển được file (xem [Đổi tên hoặc chuyển file](#đổi-tên-hoặc-chuyển-file)). Ngoài
+ra không đổi được gì khác: không đổi tên thư mục, không đưa thay đổi vào index, không bỏ thay đổi
+và không commit.
 
 ## Mở ở đâu
 
@@ -92,8 +93,9 @@ Mở thêm file thì các file đang mở vẫn còn: mỗi file một tab, quay
 - **Trên điện thoại** không có thanh tab. Nút ghi số file đang mở (`Open files (N)`), nằm trên thanh
   của file và trên cây thư mục, mở ra danh sách các file: chạm một file để xem, giữ nó lại, hoặc
   đóng nó.
-- Xoá file trong Termote thì tab của file đó đóng theo. File bị thứ khác xoá hay đổi tên thì tab vẫn
-  ở lại, hiện `File not found` kèm nút **Close tab**.
+- Xoá file trong Termote thì tab của file đó đóng theo; đổi tên file trong Termote thì tab vẫn giữ,
+  mang tên mới. File bị thứ khác xoá hay đổi tên thì tab vẫn ở lại, hiện `File not found` kèm nút
+  **Close tab**.
 - Pane chuyển sang thư mục khác thì các tab mở ở thư mục cũ đóng lại. Tab nào còn thay đổi chưa
   lưu thì app hỏi trước: **Discard and close** bỏ các thay đổi, **Keep** giữ tab lại để bạn chép văn
   bản ra (không lưu được nữa).
@@ -256,6 +258,41 @@ bị ẩn trong ứng dụng.
   `termote uninstall` giữ lại thùng rác và in ra đường dẫn của nó; `termote uninstall --purge`
   xoá cả thùng rác. Xem [Gỡ cài đặt](/vi/installation/native/#gỡ-cài-đặt).
 </Aside>
+
+## Đổi tên hoặc chuyển file
+
+Trong Files, đổi tên một file bằng **Rename** trong menu **⋯** của dòng file đó ở cây thư mục,
+hoặc bằng nút **Rename** trên đầu file đang mở (nút này không hiện khi đang sửa; file còn thay đổi
+chưa lưu thì đổi tên từ dòng của nó trên cây). Trên điện thoại, đặt ngón tay giữ yên trên một dòng
+cũng mở menu đó. Hộp thoại hiện đường dẫn tính từ thư mục của pane, phần tên (không kèm đuôi) được
+chọn sẵn.
+
+- Sửa phần thư mục trong đường dẫn là chuyển file sang chỗ khác. Thư mục chưa có sẽ được tạo.
+- Không bao giờ ghi đè: nếu đã có file hay thư mục mang tên mới, hộp thoại báo và cho nút
+  **Open it**.
+- Tab đang mở, các thay đổi chưa lưu và trình sửa trong Changes của file đều đi theo đường dẫn mới,
+  ở mọi pane đang xem cùng thư mục. Lưu sau đó là ghi vào đường dẫn mới.
+- Một toast ghi `Renamed <old> to <new>` (hoặc `Moved <name> to <folder>`) kèm nút **Undo** để đổi
+  lại tên cũ. Thư mục đã tạo cho lần chuyển vẫn còn. Nếu server không nhận tên cũ làm tên file mới
+  (tên kết thúc bằng dấu chấm hay khoảng trắng) thì không có Undo.
+- Sau đó Changes hiện một file bị xoá và một file chưa được git theo dõi, giống như sau `mv`, cho
+  tới khi bạn đưa chúng vào index; Termote không chạy `git mv`.
+- Chỉ đổi tên được file, không đổi tên thư mục hay link.
+- Tên cũ hoặc tên mới là tên thường dùng để chứa bí mật thì app hỏi thêm một lần trước khi đổi.
+
+| Hiện                                                     | Vì sao                                                                      |
+| -------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `A file or directory of that name already exists`        | Đường dẫn mới đã có thứ khác; không có gì bị ghi đè                         |
+| `This file no longer exists`                             | Có thứ đã xoá hoặc chuyển file sau khi cây thư mục được đọc                 |
+| `<path> has unsaved changes. Save or discard them first` | File ở đường dẫn mới đang được sửa                                          |
+| `The file changed while it was being renamed`            | Có thứ đã thay file trong lúc đổi tên; không có gì bị chuyển                |
+| `Can't move a file to another file system`               | Thư mục mới nằm trên đĩa hoặc mount khác; file không bao giờ bị chép        |
+| `The file is open in another program on the host`        | Windows: một chương trình khác đang giữ file mở                             |
+| `Part of this path is a symbolic link`                   | Không đổi tên gì qua link                                                   |
+| `The server can't rename this file`                      | File hoặc thư mục của nó thuộc người dùng khác, hoặc thư mục không ghi được |
+| `The file system there is read-only`                     | File nằm trên đĩa hoặc mount chỉ đọc                                        |
+
+Phiên chỉ xem không có nút Rename.
 
 ## Xem trước Markdown
 

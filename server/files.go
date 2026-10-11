@@ -44,8 +44,8 @@ func (e *rootChangedError) Error() string { return "root changed" }
 // filesAPI serves /api/mux/panes/{id}/files/*: views of the files under a
 // pane's root (its git toplevel, else its directory), saves of a text file's
 // whole contents (PUT files/content), creates of an empty file (POST
-// files/create), and deletes into a trash and back (POST files/delete,
-// files/restore).
+// files/create), renames (POST files/rename) and deletes into a trash and
+// back (POST files/delete, files/restore).
 type filesAPI struct {
 	m        Mux
 	dirs     PaneDirer // nil when the backend has none
@@ -105,6 +105,7 @@ func registerFilesRoutes(mux *http.ServeMux, m Mux, allowed hostAllowlist, denyD
 	mux.HandleFunc("/api/mux/panes/{id}/files/create", f.handleCreateFile)
 	mux.HandleFunc("/api/mux/panes/{id}/files/delete", f.handleDeleteFile)
 	mux.HandleFunc("/api/mux/panes/{id}/files/restore", f.handleRestoreFile)
+	mux.HandleFunc("/api/mux/panes/{id}/files/rename", f.handleRenameFile)
 	mux.HandleFunc("/api/mux/panes/{id}/files/find", f.handleFind)
 	mux.HandleFunc("/api/mux/panes/{id}/files/changes", f.handleChanges)
 	mux.HandleFunc("/api/mux/panes/{id}/files/diff", f.handleDiff)
@@ -526,6 +527,7 @@ func (f *filesAPI) error(w http.ResponseWriter, op string, err error) {
 	var ne *notEditableError
 	var ee *createExistsError
 	var dc *deleteChangedError
+	var mc *renameChangedError
 	switch {
 	case errors.As(err, &ee):
 		// The name taken, cleaned, so the client opens what is there.
@@ -534,6 +536,10 @@ func (f *filesAPI) error(w http.ResponseWriter, op string, err error) {
 		// The file was swapped while it was deleted, and what was moved
 		// could not go back: the client can still undo it.
 		jsonCodeBody(w, errEditChanged.status, map[string]string{"error": errEditChanged.msg, "code": errEditChanged.code, "trashId": dc.trashID})
+	case errors.As(err, &mc):
+		// The file was swapped while it was renamed, and what was moved
+		// could not go back: where it is now, so the client follows it.
+		jsonCodeBody(w, errEditChanged.status, map[string]string{"error": errEditChanged.msg, "code": errEditChanged.code, "path": mc.path})
 	case errors.As(err, &re):
 		jsonErrorCode(w, re.code, re.msg, re.status)
 	case errors.As(err, &ne):
