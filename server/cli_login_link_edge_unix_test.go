@@ -149,7 +149,7 @@ var hashInput = regexp.MustCompile(`name="hash" value="([^"]*)"`)
 var actionInput = regexp.MustCompile(`action="([^"]*)"`)
 
 // The deep link survives the file: the CLI writes its escapes and the view
-// unchanged, and the form posts them to the link's own host.
+// unchanged, and the form posts them to the server's loopback address.
 func TestLoginLinkFileKeepsDeepLinkEscapes(t *testing.T) {
 	tc, dir := socketCLI(t)
 	port, _ := linkServer(t, http.StatusOK, tokenBody(strings.Repeat("c", 32)))
@@ -171,7 +171,8 @@ func TestLoginLinkFileKeepsDeepLinkEscapes(t *testing.T) {
 	if got := html.UnescapeString(string(m[1])); got != "#/s/w1/w1%3At1/w1%3Ap2?view=chat" {
 		t.Errorf("hash in file %q", got)
 	}
-	if got := html.UnescapeString(string(a[1])); got != "http://localhost:"+strconv.Itoa(port)+"/login/link" {
+	// localhost is posted to 127.0.0.1, never to ::1 another user could hold.
+	if got := html.UnescapeString(string(a[1])); got != "http://127.0.0.1:"+strconv.Itoa(port)+"/login/link" {
 		t.Errorf("action %q", got)
 	}
 }
@@ -244,7 +245,7 @@ func TestURLOpenStdoutIsLinkOnly(t *testing.T) {
 	if err := tc.cmdURL([]string{"--open", "--group", "main", "--tab", "0"}); err != nil {
 		t.Fatal(err)
 	}
-	want := "http://localhost:" + strconv.Itoa(port) + "/#/s/main/0\n"
+	want := "http://127.0.0.1:" + strconv.Itoa(port) + "/#/s/main/0\n"
 	if tc.stdout.String() != want {
 		t.Errorf("stdout %q, want %q", tc.stdout.String(), want)
 	}
@@ -262,7 +263,7 @@ func TestURLCopyAndQRNeverMintToken(t *testing.T) {
 	if err := tc.cmdURL([]string{"--group", "main", "--tab", "0", "--copy", "--qr"}); err != nil {
 		t.Fatal(err)
 	}
-	link := "http://localhost:" + strconv.Itoa(port) + "/#/s/main/0"
+	link := "http://127.0.0.1:" + strconv.Itoa(port) + "/#/s/main/0"
 	if !strings.HasPrefix(tc.stdout.String(), link+"\n") || !strings.ContainsAny(tc.stdout.String(), "█▀▄") {
 		t.Errorf("stdout: %q", tc.stdout.String())
 	}
@@ -284,7 +285,7 @@ func TestPanelOpenWithoutSignIn(t *testing.T) {
 	if code := tc.main([]string{"panel"}); code != 0 {
 		t.Fatalf("code %d", code)
 	}
-	plain := "http://localhost:" + strconv.Itoa(port) + "/"
+	plain := "http://127.0.0.1:" + strconv.Itoa(port) + "/"
 	if !tc.runner.called("xdg-open " + plain) {
 		t.Errorf("plain link not opened: %v", tc.runner.calls)
 	}
@@ -312,5 +313,21 @@ func TestPanelOpenSignedIn(t *testing.T) {
 	}
 	if out := tc.stdout.String(); strings.Contains(out, "without signing in") || !strings.Contains(out, "Opened the link in the browser") {
 		t.Errorf("panel message:\n%s", out)
+	}
+}
+
+func TestLinkPostHost(t *testing.T) {
+	for in, want := range map[string]string{
+		"http://localhost:7680/":            "127.0.0.1:7680",
+		"http://LocalHost:7680/":            "127.0.0.1:7680",
+		"http://localhost/":                 "127.0.0.1",
+		"http://192.168.1.5:7680/":          "192.168.1.5:7680",
+		"https://box.tail1234.ts.net/":      "box.tail1234.ts.net",
+		"https://box.tail1234.ts.net:8443/": "box.tail1234.ts.net:8443",
+	} {
+		u, _ := url.Parse(in)
+		if got := linkPostHost(u); got != want {
+			t.Errorf("linkPostHost(%s) = %q, want %q", in, got, want)
+		}
 	}
 }

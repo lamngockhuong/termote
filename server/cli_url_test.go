@@ -41,15 +41,15 @@ func TestAccessURLs(t *testing.T) {
 		primary, tsURL string
 		lan            int
 	}{
-		{nil, "http://localhost:7680", "", 0},
-		{&savedConfig{}, "http://localhost:7680", "", 0},
+		{nil, "http://127.0.0.1:7680", "", 0},
+		{&savedConfig{}, "http://127.0.0.1:7680", "", 0},
 		{&savedConfig{LAN: true}, "http://192.168.1.20:7680", "", 2},
 		{&savedConfig{LAN: true, Tailscale: "box.ts.net"}, "https://box.ts.net", "https://box.ts.net", 2},
 		{&savedConfig{Tailscale: "box.ts.net:8443"}, "https://box.ts.net:8443", "https://box.ts.net:8443", 0},
 	}
 	for i, c := range cases {
 		u := tc.accessURLs(c.saved, 7680)
-		if u.primary() != c.primary || u.Tailscale != c.tsURL || len(u.LAN) != c.lan || u.Local != "http://localhost:7680" {
+		if u.primary() != c.primary || u.Tailscale != c.tsURL || len(u.LAN) != c.lan || u.Local != "http://127.0.0.1:7680" {
 			t.Errorf("case %d: %+v primary %q", i, u, u.primary())
 		}
 	}
@@ -219,7 +219,7 @@ func TestURLOnTmuxBackend(t *testing.T) {
 	port, _ := serveHealth(t, "p", `{"status":"ok","version":"1.0.0","backend":"tmux","pid":1}`)
 	tc.saveConfig(savedConfig{Port: port, Password: "p"})
 	tc.env["HERDR_PLUGIN_CONTEXT_JSON"] = `{"workspace_id":"w2","tab_id":"w2:t1"}`
-	if code := tc.main([]string{"url", "--herdr"}); code != 0 || tc.stdout.String() != fmt.Sprintf("http://localhost:%d/\n", port) ||
+	if code := tc.main([]string{"url", "--herdr"}); code != 0 || tc.stdout.String() != fmt.Sprintf("http://127.0.0.1:%d/\n", port) ||
 		!strings.Contains(tc.stderr.String(), "tmux backend") {
 		t.Fatalf("code %d out %q err %q", code, tc.stdout.String(), tc.stderr.String())
 	}
@@ -234,7 +234,7 @@ func TestURLOpenAndCopy(t *testing.T) {
 	tc := newTestCLI(t, "linux")
 	port, _ := serveHealth(t, "p", herdrHealth)
 	tc.saveConfig(savedConfig{Port: port, Password: "p"})
-	base := fmt.Sprintf("http://localhost:%d/", port)
+	base := fmt.Sprintf("http://127.0.0.1:%d/", port)
 
 	tc.runner.paths["xdg-open"], tc.runner.paths["xclip"] = true, true
 	tc.runner.outputs["xdg-open "+base] = ""

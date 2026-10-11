@@ -33,7 +33,7 @@ func (u accessURLs) primary() string {
 }
 
 func (c *cli) accessURLs(saved *savedConfig, port int) accessURLs {
-	u := accessURLs{Local: fmt.Sprintf("http://localhost:%d", port), LAN: []string{}}
+	u := accessURLs{Local: fmt.Sprintf("http://127.0.0.1:%d", port), LAN: []string{}}
 	if saved == nil {
 		return u
 	}

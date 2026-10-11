@@ -56,7 +56,7 @@ func TestPairAndDevices(t *testing.T) {
 		t.Fatalf("pair: %d\n%s%s", code, out, errOut)
 	}
 	// The link is the one `termote url` gives, never the server's 127.0.0.1.
-	link := fmt.Sprintf("http://localhost:%d/pair?code=%s", port, m[1])
+	link := fmt.Sprintf("http://127.0.0.1:%d/pair?code=%s", port, m[1])
 	if !strings.Contains(out, link) || !strings.Contains(out, "█") {
 		t.Errorf("pair output lacks %s or a QR code:\n%s", link, out)
 	}

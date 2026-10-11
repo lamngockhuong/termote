@@ -32,7 +32,7 @@ func TestPanelRunning(t *testing.T) {
 	}
 	out := tc.stdout.String()
 	for _, want := range []string{"v1.0.0 · herdr · ok", "https://box.ts.net/#/s/w1/w1%3At1/w1%3Ap2", "█",
-		fmt.Sprintf("Local: http://localhost:%d", port), "LAN: http://192.168.1.20:", "Tailscale: https://box.ts.net", "o open  c copy"} {
+		fmt.Sprintf("Local: http://127.0.0.1:%d", port), "LAN: http://192.168.1.20:", "Tailscale: https://box.ts.net", "o open  c copy"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("panel misses %q:\n%s", want, out)
 		}
@@ -128,7 +128,7 @@ func TestPanelOutsideHerdrAndTmux(t *testing.T) {
 	port, _ := serveHealth(t, "p", `{"status":"ok","version":"1.0.0","backend":"tmux","pid":1}`)
 	tc.saveConfig(savedConfig{Port: port, Password: "p"})
 	tc.main([]string{"panel"})
-	if out := tc.stdout.String(); !strings.Contains(out, "Not opened from Herdr") || !strings.Contains(out, fmt.Sprintf("http://localhost:%d/\n", port)) {
+	if out := tc.stdout.String(); !strings.Contains(out, "Not opened from Herdr") || !strings.Contains(out, fmt.Sprintf("http://127.0.0.1:%d/\n", port)) {
 		t.Fatalf("outside Herdr:\n%s", out)
 	}
 	tc.stdout.Reset()

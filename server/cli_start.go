@@ -909,7 +909,7 @@ func (c *cli) showAccessInfo(o startOptions, pass string, reused bool) {
 		host, port := splitTailscale(o.tailscale)
 		fmt.Fprintf(c.out, "Tailscale: %s\n", c.paint(ansiCyan, "https://"+host+":"+port))
 	}
-	fmt.Fprintf(c.out, "Local: %s\n", c.paint(ansiCyan, fmt.Sprintf("http://localhost:%d", o.port)))
+	fmt.Fprintf(c.out, "Local: %s\n", c.paint(ansiCyan, fmt.Sprintf("http://127.0.0.1:%d", o.port)))
 	if o.lan {
 		for _, ip := range c.localIPv4s() {
 			fmt.Fprintf(c.out, "LAN: %s\n", c.paint(ansiCyan, fmt.Sprintf("http://%s:%d", ip, o.port)))
