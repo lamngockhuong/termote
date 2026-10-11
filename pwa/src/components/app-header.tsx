@@ -44,7 +44,8 @@ interface Props {
   onDecreaseFont: () => void
   onIncreaseFont: () => void
   isFullscreen: boolean
-  onToggleFullscreen: () => void
+  // Unset (the browser cannot go fullscreen, e.g. iPhone): no button
+  onToggleFullscreen?: () => void
   // Views of the pane; the switcher shows once there are two
   views: ViewOption<string>[]
   viewId: string
@@ -193,18 +194,20 @@ function DesktopHeader(p: Props) {
             </button>
           </div>
         )}
-        <IconButton
-          size="sm"
-          onClick={p.onToggleFullscreen}
-          aria-label={p.isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-          title={p.isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-        >
-          {p.isFullscreen ? (
-            <Minimize size={16} aria-hidden="true" />
-          ) : (
-            <Maximize size={16} aria-hidden="true" />
-          )}
-        </IconButton>
+        {p.onToggleFullscreen && (
+          <IconButton
+            size="sm"
+            onClick={p.onToggleFullscreen}
+            aria-label={p.isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+            title={p.isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+          >
+            {p.isFullscreen ? (
+              <Minimize size={16} aria-hidden="true" />
+            ) : (
+              <Maximize size={16} aria-hidden="true" />
+            )}
+          </IconButton>
+        )}
         <ConnectionIndicator state={p.connectionState} onRetry={p.onRetry} />
         <SettingsMenu {...p.menu} />
       </div>
