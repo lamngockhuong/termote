@@ -135,8 +135,7 @@ khung xem trước chỉ hiện trong terminal.
 Pane chạy Codex cũng có view Chat với hội thoại của phiên: tin nhắn của bạn, câu trả lời dạng
 markdown, lệnh đã chạy kèm kết quả, các thay đổi file dạng diff. Bạn gửi tin từ ô ở dưới cùng,
 theo cùng quy tắc như với Claude Code: Termote chỉ gửi khi màn hình cho thấy Codex đang ở ô nhập
-trống và không chạy gì, còn bị từ chối thì pane không nhận phím nào. Danh sách gợi ý `/` không
-áp dụng cho Codex; cần lệnh nào thì gõ đầy đủ.
+trống và không chạy gì, còn bị từ chối thì pane không nhận phím nào.
 
 Hộp thoại xin duyệt (chạy lệnh, sửa file) khác nhau tuỳ bộ quản lý phiên:
 
@@ -148,6 +147,39 @@ Hộp thoại xin duyệt (chạy lệnh, sửa file) khác nhau tuỳ bộ qu�
 
 Các hộp thoại khác của Codex (chọn model, nhắc về giới hạn lượt dùng, v.v.) luôn chỉ để xem, trên
 cả hai bộ quản lý phiên.
+
+### Lệnh và skill của Codex
+
+Gõ `/` ở đầu tin nhắn để thấy lệnh sẵn có của Codex (đối chiếu với Codex 0.162.0), `/exit` đứng
+đầu. Danh sách dùng như với Claude Code: chọn một lệnh thì ô nhập thành `/name ` để gõ tham số;
+lệnh mở màn hình riêng của Codex (`/model`, `/new`, `/resume`, `/status`, `/diff` và vài lệnh
+khác) có nhãn `opens in Terminal`; `/exit` và `/logout` hỏi lại trước khi gửi vì cả hai đều tắt
+Codex. Gõ đầy đủ thì `/quit`, `/cwd`, `/clean` và `/pet` chạy như `/exit`, `/pwd`, `/stop` và
+`/pets`. Codex không có lệnh `/` tự tạo: Codex đã bỏ prompt tự tạo và dùng skill thay vào.
+
+Skill được gọi bằng `$`, đúng như Codex tự nhận, ở bất kỳ đâu trong tin nhắn: gõ `$` ở đầu một từ,
+danh sách skill mở ra phía trên ô nhập và thu hẹp dần theo chữ gõ sau `$`. Chọn một skill thì từ
+đang gõ được thay bằng `$name `, phần còn lại của tin nhắn giữ nguyên; skill chạy khi bạn gửi tin.
+Tin nhắn kết thúc bằng `$name` được gửi kèm một dấu cách phía sau: thiếu nó, danh sách của chính
+Codex sẽ mở ra ở từ đó và lấy mất phím Enter dùng để gửi.
+Mỗi dòng ghi skill lấy từ đâu:
+
+- `project`: `.codex/skills/` và `.agents/skills/` trong dự án của pane.
+- `user`: `skills/` trong thư mục của Codex (`~/.codex`, hoặc `CODEX_HOME` của tiến trình Codex
+  trong pane), rồi tới `~/.agents/skills`.
+- `system`: skill đi kèm Codex (`skills/.system/` trong thư mục của Codex), rồi tới
+  `/etc/codex/skills` trên Linux và macOS.
+
+Hai skill trùng tên thì giữ cái gặp trước. Quy tắc đọc giống Claude Code: Termote chỉ đọc tên và
+mô tả; skill cài dưới dạng liên kết tượng trưng chỉ được liệt kê khi liên kết trỏ vào một trong
+các thư mục trên hoặc vào dự án; skill có `user-invocable: false` bị bỏ qua.
+
+Bộ skill Codex thực sự chạy có thể khác danh sách:
+
+- Termote không xét skill của plugin Codex, cũng không xét skill bị tắt trong `config.toml` của
+  Codex.
+- Codex chỉ nạp `.codex/skills/` của dự án bạn đã tin cậy; danh sách thì vẫn hiện chúng.
+- Termote chỉ đọc `skills/<name>/SKILL.md` ở một tầng; Codex tìm được cả skill nằm sâu hơn.
 
 Yêu cầu:
 

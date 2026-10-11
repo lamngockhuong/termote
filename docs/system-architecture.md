@@ -396,8 +396,8 @@ when the snapshot reports `caps.agentChat` and the pane's `agent.name` is `claud
 (`pwa/src/chat-agents.ts`). It is the same session as the terminal, not a session of its own:
 nothing runs headless. Both agents take a message and a dialog answer under the rules in
 "Writes" below, each with its own screen reader
-(`agentScreenReaders`: `agent_claude_prompt.go`, `agent_codex_prompt.go`); `commands` is an
-empty list for Codex, whose composer offers no built-in `/` commands either.
+(`agentScreenReaders`: `agent_claude_prompt.go`, `agent_codex_prompt.go`); `commands` lists
+Claude Code's custom commands and skills, or Codex's skills (see Custom commands below).
 
 **Finding the session.** Herdr reports the session id itself (`agent_session` on the pane;
 `herdr integration install claude` must have been run). Herdr does not expose the pane's
@@ -504,6 +504,22 @@ At most 500 entries per dir and 5000 dir entries looked at, `commands/` walked 4
 name met twice keeps the first (project, then user, then plugin). It is a GET, so it checks
 `Sec-Fetch-Site`/`Origin` itself like the files routes, and answers 404 without an agent session.
 Results are cached 5 s per root and config dir.
+
+For a Codex pane (`server/agent_commands_codex.go`) `commands` lists skills only, which the
+composer suggests after `$` at the start of any word (Codex runs `$name` anywhere in a message;
+`/` there offers Codex 0.162.0's built-ins, a static list next to Claude Code's). The dirs follow
+Codex 0.162.0's own (`codex-rs/ext/skills/src/host_roots.rs`): `project` from `.codex/skills` and
+`.agents/skills` under the pane's root, `user` from `skills/` in the session's `CODEX_HOME` and
+the server user's `~/.agents/skills`, `system` from `CODEX_HOME/skills/.system` (bundled with
+Codex) and `/etc/codex/skills` (never opened on Windows, where it is not an absolute path). Each
+is read by the same `readSkillDir` as `.claude/skills` (an `os.Root`, 8 KB, no file symlink,
+the files routes' skip, a name met twice keeps the first); a symlinked skill dir is followed only
+into `CODEX_HOME`, the root, `~/.agents/skills` or `/etc/codex/skills`, and a project dir the
+files routes deny is not opened. Codex's custom prompts (`CODEX_HOME/prompts`) are not read:
+Codex 0.162.0 no longer has them. Not looked at either, so the list can differ from what Codex
+runs: plugin skills, skills turned off in `config.toml`, whether Codex trusts the project (it
+loads `.codex/skills` only then) and skills nested deeper than `skills/<name>/SKILL.md`. Cached
+5 s per root and `CODEX_HOME`, apart from Claude Code's.
 
 **Writes: only on positive evidence.** The two POST routes pass the Host allowlist, auth and
 `writeGuard` like every other write. Each then takes a lock on the pane, re-reads the session
