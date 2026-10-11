@@ -1,11 +1,16 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { APP_INFO } from '../utils/app-info'
 import { AboutModal } from './about-modal'
 
 describe('AboutModal', () => {
   beforeEach(() => {
-    HTMLDialogElement.prototype.showModal = vi.fn()
+    // Open it as the browser does, so role queries see its content
+    HTMLDialogElement.prototype.showModal = vi
+      .fn()
+      .mockImplementation(function (this: HTMLDialogElement) {
+        this.setAttribute('open', '')
+      })
     HTMLDialogElement.prototype.close = vi.fn()
   })
 
@@ -16,7 +21,7 @@ describe('AboutModal', () => {
 
   it('renders modal content when open', () => {
     render(<AboutModal isOpen={true} onClose={vi.fn()} />)
-    expect(screen.getByText(`About ${APP_INFO.name}`)).toBeInTheDocument()
+    expect(screen.getByText('About Termote')).toBeInTheDocument()
   })
 
   it('calls showModal when isOpen is true', () => {
@@ -26,9 +31,9 @@ describe('AboutModal', () => {
 
   it('unmounts dialog content when isOpen becomes false', () => {
     const { rerender } = render(<AboutModal isOpen={true} onClose={vi.fn()} />)
-    expect(screen.getByText(`About ${APP_INFO.name}`)).toBeInTheDocument()
+    expect(screen.getByText('About Termote')).toBeInTheDocument()
     rerender(<AboutModal isOpen={false} onClose={vi.fn()} />)
-    expect(screen.queryByText(`About ${APP_INFO.name}`)).not.toBeInTheDocument()
+    expect(screen.queryByText('About Termote')).not.toBeInTheDocument()
   })
 
   it('calls onClose when close button clicked', () => {
@@ -61,30 +66,69 @@ describe('AboutModal', () => {
     const onClose = vi.fn()
     render(<AboutModal isOpen={true} onClose={onClose} />)
     // Click on the heading inside (target !== currentTarget)
-    fireEvent.click(screen.getByText(`About ${APP_INFO.name}`))
+    fireEvent.click(screen.getByText('About Termote'))
     expect(onClose).not.toHaveBeenCalled()
   })
 
   it('shows app version', () => {
     render(<AboutModal isOpen={true} onClose={vi.fn()} />)
-    expect(screen.getByText(APP_INFO.version)).toBeInTheDocument()
+    expect(
+      screen.getByText(`v${APP_INFO.version} · ${APP_INFO.license}`),
+    ).toBeInTheDocument()
   })
 
-  it('shows author name as link', () => {
+  it('shows the owl and the wordmark', () => {
     render(<AboutModal isOpen={true} onClose={vi.fn()} />)
-    expect(screen.getByText(APP_INFO.author.name)).toBeInTheDocument()
+    expect(screen.getByTestId('brand-mark')).toBeInTheDocument()
+    expect(screen.getByText('Termote', { selector: 'p' })).toBeInTheDocument()
   })
 
-  it('shows license', () => {
+  it('links the author in a new tab', () => {
     render(<AboutModal isOpen={true} onClose={vi.fn()} />)
-    expect(screen.getByText(APP_INFO.license)).toBeInTheDocument()
+    const link = screen.getByRole('link', { name: /Author/ })
+    expect(link).toHaveTextContent(APP_INFO.author.name)
+    expect(within(link).getByText('(opens in a new tab)')).toHaveClass(
+      'sr-only',
+    )
+    expect(link).toHaveAttribute('href', APP_INFO.author.url)
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer')
   })
 
-  it('shows GitHub, Changelog, Report Issue links', () => {
+  it.each([
+    ['GitHub', APP_INFO.repository],
+    ['Changelog', APP_INFO.links.changelog],
+    ['Report an issue', APP_INFO.links.issues],
+  ])('links %s in a new tab', (name, href) => {
     render(<AboutModal isOpen={true} onClose={vi.fn()} />)
-    expect(screen.getByText('GitHub')).toBeInTheDocument()
-    expect(screen.getByText('Changelog')).toBeInTheDocument()
-    expect(screen.getByText('Report Issue')).toBeInTheDocument()
+    // jsdom joins the name without the spaces a browser adds
+    const link = screen.getByRole('link', { name: new RegExp(`^${name}`) })
+    expect(within(link).getByText('(opens in a new tab)')).toHaveClass(
+      'sr-only',
+    )
+    expect(link).toHaveAttribute('href', href)
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+  })
+
+  it('opens the updates through onCheckUpdates', () => {
+    const onCheckUpdates = vi.fn()
+    render(
+      <AboutModal
+        isOpen={true}
+        onClose={vi.fn()}
+        onCheckUpdates={onCheckUpdates}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Check for updates' }))
+    expect(onCheckUpdates).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves out Check for updates without a handler', () => {
+    render(<AboutModal isOpen={true} onClose={vi.fn()} />)
+    expect(
+      screen.queryByRole('button', { name: 'Check for updates' }),
+    ).not.toBeInTheDocument()
   })
 
   it('shows sponsor links', () => {
@@ -92,6 +136,9 @@ describe('AboutModal', () => {
     expect(screen.getByTitle('MoMo')).toBeInTheDocument()
     expect(screen.getByTitle('GitHub Sponsors')).toBeInTheDocument()
     expect(screen.getByTitle('Buy Me a Coffee')).toBeInTheDocument()
+    expect(
+      screen.getByRole('region', { name: 'Support this project' }),
+    ).toBeInTheDocument()
   })
 
   it('shows app description', () => {

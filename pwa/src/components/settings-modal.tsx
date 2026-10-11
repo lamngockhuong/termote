@@ -64,6 +64,8 @@ interface Props {
   signins?: boolean
   // Log out, for Signed-in browsers to sign this browser out with
   onLogout?: () => Promise<void> | void
+  // Group to show when the sheet opens (About's "Check for updates")
+  initialGroup?: string
 }
 
 const CONTROL =
@@ -450,8 +452,23 @@ export function SettingsModal({
   devices = false,
   signins = false,
   onLogout,
+  initialGroup,
 }: Props) {
   const [activeGroup, setActiveGroup] = useState('appearance')
+
+  // Opened for one group: pick it in the desktop rail, and on a phone, where
+  // every group stacks, scroll it to the top once the sheet has mounted.
+  useEffect(() => {
+    if (!isOpen || !initialGroup) return
+    setActiveGroup(initialGroup)
+    const frame = requestAnimationFrame(() => {
+      document
+        .querySelector(`[data-group="${initialGroup}"]`)
+        // jsdom has no scrollIntoView
+        ?.scrollIntoView?.({ block: 'start' })
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [isOpen, initialGroup])
 
   const imeOption = IME_SEND_OPTIONS.find(
     (o) => o.value === settings.imeSendBehavior,

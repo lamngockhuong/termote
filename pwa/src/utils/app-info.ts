@@ -6,7 +6,9 @@ export const APP_INFO = {
   name: __APP_NAME__ ?? 'Termote',
   version: __APP_VERSION__ ?? '0.0.0',
   /* v8 ignore stop */
-  description: 'Terminal + Remote - Control CLI tools from anywhere',
+  // The wordmark as people read it; `name` is the npm package name
+  displayName: 'Termote',
+  description: 'Terminal + Remote — control CLI tools from anywhere',
   author: {
     name: 'Lam Ngoc Khuong',
     url: 'https://khuong.dev',

@@ -319,8 +319,11 @@ test.describe('about sheet', () => {
   test('opens from the menu', async ({ page }) => {
     const dialog = page.getByRole('dialog', { name: 'About Termote' })
     await expect(dialog).toBeVisible()
-    await expect(dialog).toContainText('Version')
+    await expect(dialog).toContainText(/v\d+\.\d+\.\d+ · MIT/)
     await expect(dialog).toContainText('Author')
+    await expect(
+      dialog.getByRole('button', { name: 'Check for updates' }),
+    ).toBeVisible()
   })
 
   test('closes on the close button', async ({ page }) => {
@@ -336,7 +339,7 @@ test.describe('about sheet', () => {
 
   test('contains the expected links', async ({ page }) => {
     const dialog = page.getByRole('dialog')
-    for (const name of ['GitHub', 'Changelog', 'Report Issue']) {
+    for (const name of ['GitHub', 'Changelog', 'Report an issue']) {
       await expect(dialog.getByRole('link', { name })).toBeVisible()
     }
   })

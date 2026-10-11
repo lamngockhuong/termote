@@ -486,8 +486,10 @@ vi.mock('./components/settings-modal', () => ({
     devices,
     signins,
     readOnly,
+    initialGroup,
   }: {
     isOpen: boolean
+    initialGroup?: string
     pasteBufferLabel?: string
     onClose: () => void
     updates?: { onReload: () => void }
@@ -503,6 +505,7 @@ vi.mock('./components/settings-modal', () => ({
         data-devices={String(!!devices)}
         data-signins={String(!!signins)}
         data-read-only={String(!!readOnly)}
+        data-initial-group={initialGroup ?? ''}
       >
         <button onClick={onClose}>CloseSettings</button>
         {updates && (
@@ -519,13 +522,16 @@ vi.mock('./components/about-modal', () => ({
   AboutModal: ({
     isOpen,
     onClose,
+    onCheckUpdates,
   }: {
     isOpen: boolean
     onClose: () => void
+    onCheckUpdates?: () => void
   }) =>
     isOpen ? (
       <div data-testid="about-modal">
         <button onClick={onClose}>CloseAbout</button>
+        <button onClick={onCheckUpdates}>CheckUpdates</button>
       </div>
     ) : null,
 }))
@@ -1080,6 +1086,23 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'About' }))
     fireEvent.click(screen.getByRole('button', { name: 'CloseAbout' }))
     expect(screen.queryByTestId('about-modal')).not.toBeInTheDocument()
+  })
+
+  it('opens Settings at Updates from About, and plainly from the menu', async () => {
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'About' }))
+    fireEvent.click(screen.getByRole('button', { name: 'CheckUpdates' }))
+    expect(screen.queryByTestId('about-modal')).not.toBeInTheDocument()
+    expect(screen.getByTestId('settings-modal')).toHaveAttribute(
+      'data-initial-group',
+      'updates',
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'CloseSettings' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+    expect(screen.getByTestId('settings-modal')).toHaveAttribute(
+      'data-initial-group',
+      '',
+    )
   })
 
   it('opens help modal', async () => {
