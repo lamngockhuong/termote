@@ -1,8 +1,10 @@
 import { useEffect, useRef } from 'react'
-import type { SlashCommand } from '../utils/slash-commands'
+import type { CommandTrigger, SlashCommand } from '../utils/slash-commands'
 
 interface Props {
   id: string
+  // What the rows are typed after: "/" commands or "$" skills
+  trigger: CommandTrigger
   commands: SlashCommand[]
   // Index of the highlighted row
   active: number
@@ -18,6 +20,7 @@ const SOURCE_LABEL: Record<SlashCommand['source'], string> = {
   project: 'project',
   user: 'user',
   plugin: 'plugin',
+  system: 'system',
 }
 
 function Tag({ children }: { children: string }) {
@@ -28,12 +31,14 @@ function Tag({ children }: { children: string }) {
   )
 }
 
-// The suggestions shown while a message is only "/name": a listbox the
+// The suggestions shown while a message is only "/name", or while a "$name"
+// word is typed for a Codex skill: a listbox the
 // textarea drives (aria-activedescendant), so focus stays in the composer.
 // Rows keep a 44px touch target; the list scrolls past a few rows so it fits
 // above a phone's keyboard.
 export function SlashCommandList({
   id,
+  trigger,
   commands,
   active,
   onPick,
@@ -52,7 +57,7 @@ export function SlashCommandList({
   if (commands.length === 0) {
     return (
       <p className="border-b border-border px-3 py-2 text-[13px] text-fg-muted">
-        No matching command
+        {trigger === '$' ? 'No matching skill' : 'No matching command'}
       </p>
     )
   }
@@ -61,7 +66,7 @@ export function SlashCommandList({
       ref={listRef}
       id={id}
       role="listbox"
-      aria-label="Commands"
+      aria-label={trigger === '$' ? 'Skills' : 'Commands'}
       className="max-h-56 overflow-y-auto border-b border-border bg-surface-raised py-1"
     >
       {commands.map((c, i) => (
@@ -80,7 +85,8 @@ export function SlashCommandList({
         >
           <span className="min-w-0 flex-1">
             <span className="block truncate font-term text-[14px] text-fg">
-              /{c.name}
+              {trigger}
+              {c.name}
             </span>
             {c.description && (
               <span className="block truncate text-[12px] text-fg-muted">

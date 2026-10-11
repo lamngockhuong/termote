@@ -1,7 +1,9 @@
 import { ImagePlus, SendHorizontal } from 'lucide-react'
 import {
+  type ChangeEvent,
   type ClipboardEvent,
   type KeyboardEvent,
+  type SyntheticEvent,
   useCallback,
   useEffect,
   useId,
@@ -19,12 +21,16 @@ import { AgentRequestError, sendAgentMessage } from '../hooks/use-mux-api'
 import { toAgentStatus } from '../types/session'
 import { loadDraft, saveDraft } from '../utils/chat-draft'
 import {
+  applyPick,
   BUILTIN_COMMANDS,
+  COMMAND_ALIASES,
+  CUSTOM_TRIGGER,
+  closeTrailingSkill,
   commandOf,
+  commandQuery,
   filterSlashCommands,
   mergeSlashCommands,
   type SlashCommand,
-  slashQuery,
 } from '../utils/slash-commands'
 import { imageFromClipboard, pickImageFile } from '../utils/upload-image'
 import { TERMINAL_VIEW_ID } from '../view-ids'
@@ -153,31 +159,53 @@ export function ChatComposer({
   const latest = useRef({ paneId, images })
   latest.current = { paneId, images }
 
-  // Command suggestions: open while the message is only "/name", until
-  // Escape; the highlighted row resets as the list changes.
-  const query = slashQuery(text)
+  // Command suggestions: open while the message is only "/name" or, for an
+  // agent whose skills follow "$", while the caret ends a "$name" word; until
+  // Escape. The highlighted row resets as the list changes.
+  const agentName = session.agentName ?? ''
+  const trigger = CUSTOM_TRIGGER[agentName] ?? '/'
+  const dollar = trigger === '$'
+  // The caret, null while text is selected: followed for every agent, so it
+  // is current when the pane's agent changes to one using "$"
+  const [caret, setCaret] = useState<number | null>(() => text.length)
+  const q = commandQuery(text, caret, dollar)
+  const query = q?.query ?? null
+  // The word being typed: another one opens the list again after Escape
+  const word = q ? `${q.trigger}${q.start}` : null
   const [dismissed, setDismissed] = useState(false)
   const [active, setActive] = useState(0)
-  const listOpen = query !== null && !dismissed
-  const custom = useAgentCommands(paneId, listOpen)
-  const builtins = BUILTIN_COMMANDS[session.agentName ?? ''] ?? NO_COMMANDS
+  const listOpen = q !== null && !dismissed
+  const custom = useAgentCommands(paneId, listOpen && q?.trigger === trigger)
+  const builtins = BUILTIN_COMMANDS[agentName] ?? NO_COMMANDS
   const commands = useMemo(
-    () => mergeSlashCommands(builtins, custom),
-    [builtins, custom],
+    () =>
+      mergeSlashCommands(
+        builtins,
+        custom.map((c) => ({ ...c, trigger })),
+      ),
+    [builtins, custom, trigger],
   )
+  const listTrigger = q?.trigger ?? '/'
   const matches = useMemo(
-    () => (listOpen ? filterSlashCommands(commands, query) : []),
-    [listOpen, commands, query],
+    () =>
+      listOpen && query !== null
+        ? filterSlashCommands(
+            commands.filter((c) => (c.trigger ?? '/') === listTrigger),
+            query,
+          )
+        : [],
+    [listOpen, commands, query, listTrigger],
   )
   // biome-ignore lint/correctness/useExhaustiveDependencies: a new query or list starts at the top
   useEffect(() => setActive(0), [query, matches.length])
-  useEffect(() => {
-    if (query === null) setDismissed(false)
-  }, [query])
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Escape holds for one word
+  useEffect(() => setDismissed(false), [word])
 
   // Each pane keeps its own draft.
   useEffect(() => {
-    setText(loadDraft(paneId))
+    const draft = loadDraft(paneId)
+    setText(draft)
+    setCaret(draft.length)
     setNotice(null)
     setConfirming(null)
   }, [paneId])
@@ -185,6 +213,18 @@ export function ChatComposer({
   const update = (value: string) => {
     setText(value)
     saveDraft(paneId, value)
+  }
+
+  // Follows the caret from the event itself: a phone keyboard can report it
+  // a frame late through a ref read after rendering.
+  const track = (e: SyntheticEvent<HTMLTextAreaElement>) => {
+    const { selectionStart, selectionEnd } = e.currentTarget
+    setCaret(selectionStart === selectionEnd ? selectionStart : null)
+  }
+
+  const onChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
+    update(e.target.value)
+    track(e)
   }
 
   const bytes = byteLength(text)
@@ -210,7 +250,9 @@ export function ChatComposer({
     if (sending || !t.cursor) return
     // With images the agent receives "[Image #1] /cmd": text, not a command.
     const plain = imageIds.length > 0
-    const cmd = plain ? undefined : commandOf(message, commands)
+    const cmd = plain
+      ? undefined
+      : commandOf(message, commands, COMMAND_ALIASES[agentName])
     if (cmd?.confirm && !confirmed) {
       setConfirming(message)
       return
@@ -228,6 +270,7 @@ export function ChatComposer({
     try {
       await sendAgentMessage(paneId, message, t.cursor, imageIds)
       setText('')
+      setCaret(0)
       saveDraft(latest.current.paneId, '')
       if (imageIds.length > 0) latest.current.images.clear()
       t.refresh()
@@ -248,7 +291,8 @@ export function ChatComposer({
   }
 
   const send = () => {
-    if (canSend) submit(text, false, images.ids)
+    if (!canSend) return
+    submit(dollar ? closeTrailingSkill(text) : text, false, images.ids)
   }
 
   const attach = async () => {
@@ -265,22 +309,25 @@ export function ChatComposer({
     images.add(file)
   }
 
-  // A picked command is typed in for its arguments; one that opens an
-  // interactive screen or ends the agent is sent right away (after asking).
+  // A picked command is typed in for its arguments, a picked skill in place
+  // of the word being typed; a command that opens an interactive screen or
+  // ends the agent is sent right away (after asking).
   const pick = (c: SlashCommand) => {
     if (c.terminal || c.confirm) {
       submit(`/${c.name}`)
       return
     }
-    const value = `/${c.name} `
-    update(value)
+    // Only called from the open list, which has a query
+    const next = applyPick(text, q as NonNullable<typeof q>, c)
+    update(next.text)
+    setCaret(next.caret)
     const box = boxRef.current
     box?.focus()
     // After React writes the value, unless typing already began: a late frame
     // would pull the caret back into the middle of what was typed
     requestAnimationFrame(() => {
-      if (box?.value === value)
-        box.setSelectionRange(value.length, value.length)
+      if (box?.value === next.text)
+        box.setSelectionRange(next.caret, next.caret)
     })
   }
 
@@ -398,6 +445,7 @@ export function ChatComposer({
       {listOpen && (
         <SlashCommandList
           id={listId}
+          trigger={listTrigger}
           commands={matches}
           active={active}
           onActive={setActive}
@@ -440,7 +488,8 @@ export function ChatComposer({
           rows={rows}
           readOnly={sending}
           aria-busy={sending}
-          onChange={(e) => update(e.target.value)}
+          onChange={onChange}
+          onSelect={track}
           onKeyDown={onKeyDown}
           onPaste={onPaste}
           placeholder={isMobile ? 'Message' : 'Message (Ctrl+Enter to send)'}

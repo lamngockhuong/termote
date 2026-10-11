@@ -923,17 +923,16 @@ describe('ChatComposer', () => {
       expect(box()).toHaveValue('/compact ')
     })
 
-    it('another agent gets no Claude Code built-ins', () => {
+    it('an agent without built-ins lists only its "/" commands', () => {
       commandsStore.list = [{ name: 'mine', source: 'user', kind: 'command' }]
       const p = props()
       render(
-        <ChatComposer {...p} session={{ ...p.session, agentName: 'codex' }} />,
+        <ChatComposer {...p} session={{ ...p.session, agentName: 'other' }} />,
       )
-      expect(
-        screen.getByRole('textbox', { name: 'Message to Codex' }),
-      ).toBeInTheDocument()
       type('/')
       expect(names()).toEqual(['/mine'])
+      type('$')
+      expect(screen.queryByRole('listbox')).toBeNull()
     })
 
     it('a session without an agent name gets no built-ins either', () => {
@@ -995,6 +994,182 @@ describe('ChatComposer', () => {
       })
       expect(mockSend).toHaveBeenCalledWith('%3', '/quit', 'cur1', [])
       expect(box()).toHaveValue('')
+    })
+
+    describe('Codex', () => {
+      const codex = (over: Partial<ViewProps> = {}) => {
+        const p = props(over)
+        return render(
+          <ChatComposer
+            {...p}
+            session={{ ...p.session, agentName: 'codex' }}
+          />,
+        )
+      }
+      const raf = () =>
+        vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
+          cb(0)
+          return 0
+        })
+      // Moves the caret (or selects) as a tap or the arrow keys would
+      const select = (start: number, end = start) => {
+        ;(box() as HTMLTextAreaElement).setSelectionRange(start, end)
+        fireEvent.select(box())
+      }
+
+      beforeEach(() => {
+        commandsStore.list = [
+          {
+            name: 'skill-a',
+            description: 'First',
+            source: 'user',
+            kind: 'skill',
+          },
+          { name: 'imagegen', source: 'system', kind: 'skill' },
+          { name: 'review', source: 'project', kind: 'skill' },
+        ]
+      })
+
+      it('"/" lists the Codex built-ins only', () => {
+        codex()
+        expect(
+          screen.getByRole('textbox', { name: 'Message to Codex' }),
+        ).toBeInTheDocument()
+        type('/')
+        expect(names()[0]).toBe('/exit')
+        expect(commandsStore.enabled).toBe(false)
+        // The skill named review is not a "/" command
+        type('/rev')
+        expect(names()).toEqual(['/review', '/approve'])
+        expect(options()[0].textContent).toContain('built-in')
+        type('/mod')
+        expect(options()[0].textContent).toContain('opens in Terminal')
+      })
+
+      it('"$" at the start lists the skills and picks one', () => {
+        codex()
+        type('$')
+        expect(commandsStore.enabled).toBe(true)
+        expect(screen.getByRole('listbox')).toHaveAttribute(
+          'aria-label',
+          'Skills',
+        )
+        expect(names()).toEqual(['$skill-a', '$imagegen', '$review'])
+        expect(options()[1].textContent).toContain('system')
+        type('$zz')
+        expect(screen.getByText('No matching skill')).toBeTruthy()
+        type('$ima')
+        const r = raf()
+        key('Tab')
+        r.mockRestore()
+        expect(box()).toHaveValue('$imagegen ')
+        expect((box() as HTMLTextAreaElement).selectionStart).toBe(10)
+        expect(screen.queryByRole('listbox')).toBeNull()
+        expect(mockSend).not.toHaveBeenCalled()
+      })
+
+      it('"$" in the middle of a message replaces only that word', () => {
+        codex()
+        type('xem $sk')
+        expect(names()).toEqual(['$skill-a'])
+        const r = raf()
+        key('Enter')
+        r.mockRestore()
+        expect(box()).toHaveValue('xem $skill-a ')
+        expect((box() as HTMLTextAreaElement).selectionStart).toBe(13)
+        expect(sessionStorage.length).toBeGreaterThan(0)
+      })
+
+      it('follows the caret: inside a word, out of it, a selection', () => {
+        codex()
+        type('xem $sk ngay')
+        expect(screen.queryByRole('listbox')).toBeNull()
+        select(7)
+        expect(names()).toEqual(['$skill-a'])
+        select(4, 7)
+        expect(screen.queryByRole('listbox')).toBeNull()
+        select(6)
+        fireEvent.click(options()[0])
+        expect(box()).toHaveValue('xem $skill-a ngay')
+      })
+
+      it('Escape closes it for that word only', () => {
+        codex()
+        type('$sk')
+        key('Escape')
+        expect(screen.queryByRole('listbox')).toBeNull()
+        type('$ski')
+        expect(screen.queryByRole('listbox')).toBeNull()
+        type('$ski $')
+        expect(screen.getByRole('listbox')).toBeTruthy()
+      })
+
+      it('a message with a skill is sent without asking', async () => {
+        codex()
+        type('dùng $skill-a đi')
+        await send()
+        expect(mockSend).toHaveBeenCalledWith(
+          '%3',
+          'dùng $skill-a đi',
+          'cur1',
+          [],
+        )
+        expect(box()).toHaveValue('')
+        expect(screen.queryByRole('listbox')).toBeNull()
+        // Ending with a skill name: a space keeps Codex's list from taking Enter
+        type('dùng $skill-a')
+        await send()
+        expect(mockSend).toHaveBeenLastCalledWith(
+          '%3',
+          'dùng $skill-a ',
+          'cur1',
+          [],
+        )
+      })
+
+      it('/quit and /logout ask first; /cwd goes as it is', async () => {
+        HTMLDialogElement.prototype.showModal = vi.fn(function (
+          this: HTMLDialogElement,
+        ) {
+          this.setAttribute('open', '')
+        })
+        HTMLDialogElement.prototype.close = vi.fn()
+        codex()
+        type('/quit')
+        await send()
+        expect(screen.getByText('Exit Codex?')).toBeTruthy()
+        fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+        type('/logout')
+        await send()
+        expect(mockSend).not.toHaveBeenCalled()
+        fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+        type('/cwd')
+        await send()
+        expect(mockSend).toHaveBeenCalledWith('%3', '/cwd', 'cur1', [])
+      })
+
+      it('Claude Code opens nothing on "$", and sends it as typed', async () => {
+        render(<ChatComposer {...props()} />)
+        type('$sk')
+        expect(screen.queryByRole('listbox')).toBeNull()
+        await send()
+        expect(mockSend).toHaveBeenCalledWith('%3', '$sk', 'cur1', [])
+      })
+
+      it('follows the caret before the agent turns to Codex', () => {
+        const p = props()
+        const { rerender } = render(<ChatComposer {...p} />)
+        type('$sk and more')
+        ;(box() as HTMLTextAreaElement).setSelectionRange(3, 3)
+        fireEvent.select(box())
+        rerender(
+          <ChatComposer
+            {...p}
+            session={{ ...p.session, agentName: 'codex' }}
+          />,
+        )
+        expect(names()).toEqual(['$skill-a'])
+      })
     })
 
     it('nothing is sent before the conversation is read or while too long', async () => {

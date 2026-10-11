@@ -5,6 +5,7 @@ import {
   mkdtempSync,
   readdirSync,
   rmSync,
+  writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -94,6 +95,13 @@ test.describe('chat view of a Codex pane', () => {
     tmp = mkdtempSync(path.join(tmpdir(), 'termote-e2e-codex-'))
     const home = path.join(tmp, 'codex-home')
     mkdirSync(home)
+    // A user skill, offered after "$"
+    const skillDir = path.join(home, 'skills', 'e2e-skill')
+    mkdirSync(skillDir, { recursive: true })
+    writeFileSync(
+      path.join(skillDir, 'SKILL.md'),
+      '---\nname: e2e-skill\ndescription: Skill from e2e\n---\nNever shown\n',
+    )
     // termote takes a process for Codex by its executable's name
     const bin = path.join(tmp, 'bin')
     mkdirSync(bin)
@@ -198,6 +206,55 @@ test.describe('chat view of a Codex pane', () => {
     await page.keyboard.press('Enter')
     await viewTab(page, 'Chat').click()
     await expect(conversation).toContainText('You said: typed in the terminal')
+  })
+
+  test('suggests Codex built-ins after "/" and its skills after "$"', async ({
+    page,
+  }) => {
+    await page.goto('/')
+    await page.getByRole('tab', { name: new RegExp(codexWindow) }).click()
+    await viewTab(page, 'Chat').click({ timeout: 15000 })
+    const conversation = page.getByRole('region', { name: 'Conversation' })
+    const composer = page.getByRole('textbox', { name: 'Message to Codex' })
+    const send = page.getByRole('button', { name: 'Send', exact: true })
+
+    // "/" lists Codex's own built-ins, never a skill
+    await composer.fill('/mod')
+    const commands = page.getByRole('listbox', { name: 'Commands' })
+    await expect(commands.getByRole('option').first()).toContainText('/model')
+    await expect(commands.getByRole('option').first()).toContainText(
+      'opens in Terminal',
+    )
+    await composer.fill('/e2e')
+    await expect(page.getByText('No matching command')).toBeVisible()
+
+    // /exit is confirmed first; Cancel sends nothing
+    await composer.fill('/exi')
+    await composer.press('Enter')
+    const confirmExit = page.getByRole('dialog', { name: 'Exit Codex?' })
+    await expect(confirmExit).toBeVisible()
+    await confirmExit.getByRole('button', { name: 'Cancel' }).click()
+    await expect(confirmExit).toBeHidden()
+    await expect(composer).toHaveValue('/exi')
+
+    // "$" at the start lists the skills of CODEX_HOME; a pick is typed in
+    await composer.fill('$e2e')
+    const skills = page.getByRole('listbox', { name: 'Skills' })
+    const skill = skills.getByRole('option', { name: /\$e2e-skill/ })
+    await expect(skill).toContainText('Skill from e2e')
+    await expect(skill).toContainText('user')
+    await expect(skills).not.toContainText('Never shown')
+    await skill.click()
+    await expect(composer).toHaveValue('$e2e-skill ')
+    await expect(skills).toBeHidden()
+
+    // ... and in the middle of a message, replacing only the word typed
+    await composer.fill('hãy dùng $e2')
+    await skills.getByRole('option', { name: /\$e2e-skill/ }).click()
+    await expect(composer).toHaveValue('hãy dùng $e2e-skill ')
+    await composer.pressSequentially('now')
+    await send.click()
+    await expect(conversation).toContainText('You said: hãy dùng $e2e-skill now')
   })
 
   test('a pane that only reads the rollout has no Chat view', async ({
