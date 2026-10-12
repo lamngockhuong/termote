@@ -269,6 +269,28 @@ func TestWarnExposure(t *testing.T) {
 	}
 }
 
+func TestNoAuthReach(t *testing.T) {
+	names := []string{"caddy", "bob"}
+	for _, tt := range []struct {
+		goos    string
+		wsl     bool
+		allowed []string
+		want    string
+	}{
+		{"linux", false, nil, "any program you run and root"},
+		{"linux", false, names, "any program you run, root and the users caddy, bob"},
+		{"windows", false, nil, "any program you run, SYSTEM and services"},
+		{"windows", false, names, "any program you run, SYSTEM, services and the users caddy, bob"},
+		{"linux", true, names, "any program on this machine or on Windows"},
+		{"darwin", false, names, "any program on this machine"},
+		{"freebsd", false, nil, "any program on this machine"},
+	} {
+		if got := noAuthReach(tt.goos, tt.wsl, tt.allowed); got != tt.want {
+			t.Errorf("%s wsl=%v %v: %q, want %q", tt.goos, tt.wsl, tt.allowed, got, tt.want)
+		}
+	}
+}
+
 func TestStartRejectsBeforeTouchingServices(t *testing.T) {
 	tc := newTestCLI(t, "linux")
 	tc.procs = func() ([]procInfo, error) { t.Fatal("services touched"); return nil, nil }
