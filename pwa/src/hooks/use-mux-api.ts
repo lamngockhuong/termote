@@ -1211,6 +1211,55 @@ export async function fetchFileImage(
   return res.blob()
 }
 
+// Which file files/download sends (server/files_download.go).
+export interface DownloadQuery {
+  root?: string
+  reveal?: boolean
+}
+
+// What files/download?check=1 found: the download would send size bytes.
+export interface DownloadCheck {
+  root: string
+  path: string
+  size: number
+}
+
+export function fileDownloadUrl(
+  paneId: string,
+  path: string,
+  opts: DownloadQuery = {},
+): string {
+  return filesUrl(paneId, 'download', {
+    path,
+    reveal: opts.reveal ? '1' : undefined,
+    root: opts.root,
+  })
+}
+
+// The download's checks without its bytes, so a refusal can be told: a link
+// that downloads never tells the page why it failed. A refusal is a
+// RequestError with the server's code (sensitive, not_allowed, symlink,
+// not_file, too_large, busy, view_only, changed), a 404, or a 409 with root.
+export async function checkFileDownload(
+  paneId: string,
+  path: string,
+  opts: DownloadQuery = {},
+): Promise<DownloadCheck> {
+  const res = await fetch(`${fileDownloadUrl(paneId, path, opts)}&check=1`)
+  if (!res.ok) throw await requestError(res, true)
+  return res.json()
+}
+
+// The file's bytes, for the iOS home-screen app's share sheet.
+export async function fetchFileDownload(
+  url: string,
+  signal?: AbortSignal,
+): Promise<Blob> {
+  const res = await fetch(url, { signal })
+  if (!res.ok) throw await requestError(res, true)
+  return res.blob()
+}
+
 // A paired device as /api/mux/devices lists it (never its token).
 export interface PairedDevice {
   id: string

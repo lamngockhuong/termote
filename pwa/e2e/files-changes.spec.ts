@@ -449,6 +449,69 @@ test.describe('files and changes views', () => {
     }
   })
 
+  test('downloads a file byte for byte, from the tree and the header', async ({ page }) => {
+    const dir = path.join(repo, 'e2e-download')
+    // Every byte value, under a name a browser would render: it must be saved
+    const bytes = Buffer.from(Array.from({ length: 1024 }, (_, i) => i % 256))
+    try {
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(path.join(dir, 'page.html'), bytes)
+      writeFileSync(path.join(dir, '.env'), 'TOKEN=e2e-download\n')
+      await page.setViewportSize({ width: 1280, height: 800 })
+      await page.goto(`${link}?view=files`)
+      const panel = page.getByRole('complementary', { name: 'Files' })
+      // Nothing navigated to the file: the page is still the app (the app
+      // itself drops ?view from the address once it has read it)
+      const stillApp = async () => {
+        expect(new URL(page.url()).pathname).toBe('/')
+        await expect(panel).toBeVisible()
+      }
+      // Rows inside e2e-download only: the repo's top folder can hold a .env
+      // of another test
+      const rowMenu = async (name: string | RegExp) => {
+        const row = panel.getByRole('treeitem', { name }).and(page.locator('[aria-level="2"]'))
+        await row.hover()
+        await row.getByRole('button', { name: /^Actions for / }).click()
+        await page.getByRole('menuitem', { name: 'Download' }).click()
+      }
+      const saved = async (start: () => Promise<void>, name: string | RegExp) => {
+        const [download] = await Promise.all([page.waitForEvent('download'), start()])
+        expect(download.suggestedFilename()).toMatch(name)
+        return readFileSync((await download.path()) as string)
+      }
+      await panel.getByRole('treeitem', { name: 'e2e-download' }).click()
+
+      expect(await saved(() => rowMenu('page.html'), 'page.html')).toEqual(bytes)
+      await stillApp()
+
+      // Opened (not previewable), then from the header
+      await panel.getByRole('treeitem', { name: 'page.html' }).click()
+      await expect(panel.getByText(/Not previewable/)).toBeVisible()
+      expect(
+        await saved(() => panel.getByRole('button', { name: 'Download' }).click(), 'page.html'),
+      ).toEqual(bytes)
+      await stillApp()
+
+      // A sensitive name asks first: Cancel starts nothing
+      await panel.getByRole('tab', { name: 'Files', exact: true }).click()
+      const ask = page.getByRole('dialog', { name: 'Download a file that may contain secrets?' })
+      let downloads = 0
+      page.on('download', () => downloads++)
+      await rowMenu(/^\.env/)
+      await ask.getByRole('button', { name: 'Cancel' }).click()
+      await page.waitForTimeout(500)
+      expect(downloads).toBe(0)
+      await rowMenu(/^\.env/)
+      expect(
+        // Chromium drops a name's leading dot (it would save a hidden file)
+        (await saved(() => ask.getByRole('button', { name: 'Download' }).click(), /^\.?env$/)).toString(),
+      ).toBe('TOKEN=e2e-download\n')
+    } finally {
+      // The Changes tests must never see it as untracked
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   // CSV files go under csv/ and are removed by the test that wrote them: the
   // Changes tests must never see them as untracked
   const csvDir = () => path.join(repo, 'csv')

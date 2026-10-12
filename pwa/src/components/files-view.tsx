@@ -1,5 +1,6 @@
 import {
   ChevronRight,
+  Download,
   Ellipsis,
   File,
   FilePlus,
@@ -40,6 +41,7 @@ import {
   renameFile,
   restoreFile,
 } from '../hooks/use-mux-api'
+import { downloadFile } from '../utils/download-file'
 import { fileNameProblem } from '../utils/file-name'
 import { splitPath } from '../utils/files-format'
 import type { LinkPath } from '../utils/markdown-links'
@@ -54,6 +56,7 @@ import { PaneDirHeader, ViewMessage } from './pane-dir-header'
 import { RenameFileDialog } from './rename-file-dialog'
 import { DiscardTabDialog, RootCloseDialog } from './tab-close-dialogs'
 import { FOCUS_RING, IconButton } from './ui/button'
+import { ConfirmDialog } from './ui/confirm-dialog'
 import { Menu, MenuItem } from './ui/menu'
 
 const ERRORS: Record<FilesError, string> = {
@@ -147,6 +150,8 @@ export function FilesView({
       canDelete={!readOnly && !!mux.caps.trash}
       // and its renames, which need no trash
       canRename={!readOnly}
+      // and its downloads
+      canDownload={!readOnly}
     />
   )
 }
@@ -175,10 +180,13 @@ function PaneFiles({
   readOnly,
   canDelete,
   canRename,
-}: { paneId: string; canDelete: boolean; canRename: boolean } & Pick<
-  ViewProps,
-  'isMobile' | 'notify' | 'readOnly'
->) {
+  canDownload,
+}: {
+  paneId: string
+  canDelete: boolean
+  canRename: boolean
+  canDownload: boolean
+} & Pick<ViewProps, 'isMobile' | 'notify' | 'readOnly'>) {
   const f = useFiles(paneId)
   const { load, rootChanges, follow } = f
   const isDirty = useDirtyCheck(paneId)
@@ -205,6 +213,11 @@ function PaneFiles({
   const [creating, setCreating] = useState<string>()
   const [deleting, setDeleting] = useState<Deleting>()
   const [renaming, setRenaming] = useState<Renaming>()
+  // The sensitive file the download confirmation is open for
+  const [downloading, setDownloading] = useState<{
+    root: string
+    path: string
+  }>()
   // The search box's text: kept while a result is open, so Back returns
   // to the results
   const [query, setQuery] = useState('')
@@ -349,6 +362,17 @@ function PaneFiles({
     if (query.trim()) setRefreshTick((n) => n + 1)
   }
 
+  // A file of the tree, or the one shown, to download. A sensitive one not
+  // shown is asked about first.
+  const askDownload = (path: string, sensitive: boolean, revealed: boolean) => {
+    // The tree and a file show once the root is read
+    const root = f.root as string
+    if (sensitive && !revealed) setDownloading({ root, path })
+    else download(root, path, revealed)
+  }
+  const download = (root: string, path: string, reveal: boolean) =>
+    downloadFile({ paneId, root, path, reveal }, notify, f.rootChanged)
+
   // A file of the tree, or the one shown, to rename
   const askRename = (path: string, revealed: boolean) =>
     // The tree and a file show once the root is read
@@ -488,6 +512,21 @@ function PaneFiles({
           onRefresh={f.refresh}
         />
       )}
+      {downloading && (
+        <ConfirmDialog
+          isOpen
+          title="Download a file that may contain secrets?"
+          confirmLabel="Download"
+          onConfirm={() => {
+            setDownloading(undefined)
+            download(downloading.root, downloading.path, true)
+          }}
+          onCancel={() => setDownloading(undefined)}
+        >
+          {visibleUnsafe(baseName(downloading.path))} usually holds keys or
+          passwords. A copy will be saved on this device.
+        </ConfirmDialog>
+      )}
       {deleting && (
         <DeleteFileDialog
           paneId={paneId}
@@ -560,6 +599,13 @@ function PaneFiles({
                 ? ({ revealed }) => askRename(tab.path, revealed)
                 : undefined
             }
+            // A sensitive file offers it only once shown. Never through a
+            // link the tree knows of: the server refuses it
+            onDownload={
+              canDownload && !throughLink(f, tab.path)
+                ? ({ revealed }) => askDownload(tab.path, false, revealed)
+                : undefined
+            }
             onDelete={
               canDelete
                 ? ({ hash, sensitive }) =>
@@ -599,6 +645,11 @@ function PaneFiles({
                 onToggle={f.toggle}
                 onOpen={openFromTree}
                 onDelete={canDelete ? askDelete : undefined}
+                onDownload={
+                  canDownload
+                    ? (path, entry) => askDownload(path, entry.sensitive, false)
+                    : undefined
+                }
                 onRename={
                   canRename
                     ? // A sensitive name is asked about: renaming it to an
@@ -615,6 +666,18 @@ function PaneFiles({
   )
 }
 
+// Whether a component of path is a symbolic link, as far as the tree has read
+// the directories on it
+function throughLink(f: FilesState, path: string): boolean {
+  const parts = path.split('/')
+  return parts.some((name, i) => {
+    const dir = parts.slice(0, i).join('/')
+    return f.dirs[dir]?.entries?.some(
+      (e) => e.name === name && e.type === 'symlink',
+    )
+  })
+}
+
 function FileTree({
   state,
   focused,
@@ -623,6 +686,7 @@ function FileTree({
   onOpen,
   onDelete,
   onRename,
+  onDownload,
 }: {
   state: FilesState
   focused?: string
@@ -634,6 +698,9 @@ function FileTree({
   onDelete?: (path: string, entry: FileEntry) => void
   // Offered on each file's row when renaming is allowed
   onRename?: (path: string, entry: FileEntry) => void
+  // Offered on each regular file's row when downloading is allowed (the
+  // server refuses a symlink)
+  onDownload?: (path: string, entry: FileEntry) => void
 }) {
   const rows = visibleRows(state)
   const entries = rows.filter((r) => r.kind === 'entry')
@@ -736,6 +803,11 @@ function FileTree({
                 ? () => onRename(r.path, r.entry)
                 : undefined
             }
+            onDownload={
+              onDownload && r.entry.type === 'file'
+                ? () => onDownload(r.path, r.entry)
+                : undefined
+            }
           />
         ),
       )}
@@ -752,6 +824,7 @@ function TreeItem({
   onClick,
   onDelete,
   onRename,
+  onDownload,
 }: {
   row: EntryRow
   expanded?: boolean
@@ -761,9 +834,10 @@ function TreeItem({
   onClick: () => void
   onDelete?: () => void
   onRename?: () => void
+  onDownload?: () => void
 }) {
   const { entry, level } = row
-  const hasMenu = !!(onDelete || onRename)
+  const hasMenu = !!(onDelete || onRename || onDownload)
   const [menuOpen, setMenuOpen] = useState(false)
   // A finger resting on a row with a menu opens it, as the … button does
   const press = useLongPress(() => setMenuOpen(true))
@@ -827,6 +901,11 @@ function TreeItem({
             open={menuOpen}
             onOpenChange={setMenuOpen}
           >
+            {onDownload && (
+              <MenuItem icon={<Download size={16} />} onSelect={onDownload}>
+                Download
+              </MenuItem>
+            )}
             {onRename && (
               <MenuItem
                 icon={<TextCursorInput size={16} />}

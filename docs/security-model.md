@@ -16,12 +16,12 @@ what Termote can reach, run it as another user with less access.
 
 ## Who can do what
 
-| Signed in as             | Can                                                                                                                                                        |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The password             | Everything (full).                                                                                                                                         |
-| A full device            | Everything the password can, except pairing another full device (it pairs view-only devices only) and signing a password browser out (it only lists them). |
-| A view-only device       | Watch the terminal, read the Chat view and Files/Changes inside a git repository. It types nothing and changes nothing, but reads everything printed.      |
-| Anyone, with `--no-auth` | Everything, as soon as they reach the port.                                                                                                                |
+| Signed in as             | Can                                                                                                                                                                      |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| The password             | Everything (full).                                                                                                                                                       |
+| A full device            | Everything the password can, except pairing another full device (it pairs view-only devices only) and signing a password browser out (it only lists them).               |
+| A view-only device       | Watch the terminal, read the Chat view and Files/Changes inside a git repository. It types nothing, changes nothing and downloads no file, but reads everything printed. |
+| Anyone, with `--no-auth` | Everything, as soon as they reach the port.                                                                                                                              |
 
 ## What the server enforces
 
