@@ -5,6 +5,9 @@ packages:
 # Package builds that are allowed to run install scripts (pnpm 10+ security default)
 allowBuilds:
   esbuild: true
+  # Off: the root `prepare` script installs the git hooks on every install, while this
+  # postinstall would be skipped once its result sits in pnpm's side-effects cache.
+  lefthook: false
   sharp: true
 
 # Advisories reviewed and accepted until a patched release exists.

@@ -59,6 +59,8 @@ termote/
 │   ├── install.sh          # Unix release installer (curl | sh): downloads, verifies, lays out
 │   ├── install.ps1         # Windows release installer (irm | iex), same job
 │   ├── build-brand-assets.sh # `make brand-assets`: icons, favicons, social PNG from assets/branding
+│   ├── check-gofmt.sh      # pre-commit gofmt check (lefthook.yml)
+│   ├── install-git-hooks.mjs # Root `prepare`: installs the lefthook git hooks (not in CI)
 │   ├── termote.sh          # Checkout-only dev shim: builds/runs server/termote-dev
 │   └── termote.ps1         # Checkout-only dev shim (Windows), same job
 ├── tests/                  # Test suite
@@ -68,9 +70,11 @@ termote/
 │   ├── test-termote.ps1    # Windows dev shim tests
 │   ├── test-install.sh     # install.sh tests (fake curl)
 │   ├── test-install.ps1    # install.ps1 tests
+│   ├── test-git-hooks.sh   # install-git-hooks.mjs tests (fake pnpm)
 │   └── test-entrypoints.sh # Docker entrypoint tests
 ├── website/                # Documentation site (Astro Starlight)
 │   └── src/content/docs/   # MDX docs (EN + VI)
+├── lefthook.yml            # Git hooks: pre-commit and pre-push checks
 └── Makefile                # Build/test/deploy commands
 ```
 
@@ -1202,6 +1206,13 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
 
 **IMPORTANT:** Always run lint/format checks locally before committing to avoid CI failures.
 
+`pnpm install` installs git hooks (lefthook, [`lefthook.yml`](lefthook.yml)) that run most of them
+for you, checking only and never rewriting a file: `pre-commit` runs biome (`pwa/src`), `gofmt -l`
+(`server/`) and dprint (markdown/mdx) on the staged files; `pre-push` runs `tsc --noEmit` when
+`pwa/**` changed and `go vet ./...` for linux, windows and darwin when `server/**` changed. They never
+run `go test` or the E2E suite. Skip them once with `LEFTHOOK=0 git commit ...` or `--no-verify`. CI
+installs no hooks (`CI` is set).
+
 ```bash
 # PWA (required before commit)
 pnpm --filter termote lint
@@ -1209,7 +1220,7 @@ pnpm --filter termote lint
 # server (Go)
 cd server && go build . && go vet ./...
 
-# Formatting (markdown, JSON, YAML via dprint)
+# Formatting (markdown/mdx via dprint)
 make fmt-check
 ```
 
@@ -1221,6 +1232,7 @@ make test-go          # go test ./... in server/
 make test-cli         # Test the termote.sh dev shim
 make test-install     # Test install.sh (fake curl)
 make test-entrypoints # Test Docker entrypoints
+make test-git-hooks   # Test the git hooks installer (prepare)
 
 # Manual checks
 pnpm --filter termote exec tsc --noEmit     # Type check

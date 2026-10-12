@@ -149,6 +149,26 @@ import type { Session } from "./types/session";
 - Interface comments for API documentation
 - No redundant comments
 
+## Git Hooks
+
+`pnpm install` at the repo root installs [lefthook](https://github.com/evilmartians/lefthook) hooks
+through `scripts/install-git-hooks.mjs` (the root `prepare` script); it skips them when `CI` is set,
+with `LEFTHOOK=0`, or outside a git worktree. [`lefthook.yml`](../lefthook.yml) holds the commands:
+
+| Hook         | Runs when                        | Checks                                                                                        |
+| ------------ | -------------------------------- | --------------------------------------------------------------------------------------------- |
+| `pre-commit` | a matching file is staged        | `biome check` (`pwa/src/**/*.{ts,tsx}`), `gofmt -l` (`server/**/*.go`), dprint (markdown/mdx) |
+| `pre-push`   | the pushed commits touch the dir | `tsc --noEmit` (`pwa/**`); `go vet ./...` with `GOOS` linux, windows, darwin (`server/**`)    |
+
+- Hooks only check; fix with `pnpm lint`, `gofmt -w` or `make fmt`, then stage again.
+- `pre-commit` checks what is staged: lefthook sets unstaged changes aside while it runs.
+- `go test ./...` and the E2E suite stay in CI: minutes long, and they need tmux.
+- Skip once with `LEFTHOOK=0 git commit ...` (or `git push`), or `--no-verify`.
+- `pre-push` picks its commands from the files the pushed commits change, but checks the working
+  tree: uncommitted changes count, and a push that only deletes files runs nothing.
+- Git worktrees share one hooks directory, so the hooks apply to every worktree of the clone; in a
+  worktree without `pnpm install` lefthook prints `Can't find lefthook in PATH` and checks nothing.
+
 ## Go Standards
 
 File layout is flat `package main` in `server/`: server code (`serve.go`, `guard.go`,
@@ -236,6 +256,7 @@ manual `readlink` loop to resolve their own directory through a symlink.
 ```bash
 make test-cli      # tests/test-termote.sh (dev shim behavior)
 make test-install   # tests/test-install.sh (install.sh, fake curl)
+make test-git-hooks # tests/test-git-hooks.sh (git hooks installer, fake pnpm)
 ```
 
 Test patterns: fake `termote`/`curl` executables, capture output with command substitution,

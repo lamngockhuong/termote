@@ -5,6 +5,7 @@
   "description": "Termote monorepo root (pwa + website)",
   "license": "MIT",
   "scripts": {
+    "prepare": "node scripts/install-git-hooks.mjs",
     "dev": "pnpm --filter termote dev",
     "dev:web": "pnpm --filter @termote/website dev",
     "build": "pnpm -r build",
@@ -15,5 +16,8 @@
     "test": "pnpm --filter termote test",
     "test:coverage": "pnpm --filter termote test:coverage",
     "test:e2e": "pnpm --filter termote test:e2e"
+  },
+  "devDependencies": {
+    "lefthook": "2.2.1"
   }
 }
