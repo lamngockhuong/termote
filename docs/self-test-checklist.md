@@ -467,7 +467,7 @@ Run on tmux (Linux/macOS), psmux (Windows) and Herdr (`herdr integration install
 ### Codex
 
 Run on tmux (Linux/macOS), psmux (Windows) and Herdr (`herdr integration install codex` done).
-On psmux, sending from the Chat view fails until #408.
+On psmux, Chat messages work; a long one may take seconds to show (the paste is typed in chunks).
 
 - [ ] A tab running `codex --no-daemon` shows the Terminal/Chat switcher; plain `codex` (shared
       daemon) does not

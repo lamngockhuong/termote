@@ -517,7 +517,10 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   bytes, control and format characters (zero-width, bidi) removed; argv and the environment never
   leave the server. tmux: one `list-panes -a`, read by `#{n:}` byte lengths keyed by session id and
   window index (a path can hold `\n` or `:`; psmux numbers panes per session), with `-u` on
-  tmux. Herdr: `pane.process_info`, decoding only pids and names (never `argv`, `argv0`,
+  tmux. psmux expands no `#{n:}`: it gets `psmuxPaneFormat`, one pane a line,
+  `#{session_id}|#{window_index}|#{pane_index}|#{pane_active}|#{pane_current_command}|#{pane_current_path}`
+  (a Windows file name never holds `|`; a line without 6 fields or with a control character stops
+  the read, as a bad length does on tmux). Herdr: `pane.process_info`, decoding only pids and names (never `argv`, `argv0`,
   `cmdline`), through a 5 s cache with one refresher, 4 calls at once within 1.5 s, never under
   `fetchMu` and never into the cached view; a name whose reads failed for 15 s, or any while an
   `invalid_request` turned the calls off for 5 minutes, is not served. macOS names are the kernel's short name. The
@@ -824,11 +827,20 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   gives nothing (logged once; no other starts while one is stuck). The argv comes from
   `NtQueryInformationProcess` (command line class) and `CODEX_HOME` is the server user's
   `%USERPROFILE%\.codex` only (no PEB read), so a pane-only `CODEX_HOME` or another user's Codex
-  has no Chat view, nor (expected, not checked live) an elevated one. psmux sends no Chat message yet (#408). `message` and `answer` write under the Claude Code rules: the
+  has no Chat view, nor (expected, not checked live) an elevated one. `message` and `answer` write under the Claude Code rules: the
   pane lock (keyed by the pane address alone), then the process, session, rollout (path and
   dev:inode) and screen read again right before each write. A message is pasted (bracketed)
   only onto an empty composer with no working line and status idle/done, and must show in the
-  composer (`[Pasted Content N chars]` over 1000 characters) before Enter. An approval dialog
+  composer (`[Pasted Content N chars]` over 1000 characters) before Enter. psmux sends Chat
+  messages: its `paste-buffer -b` finds no buffer (3.3.8), so `Paste` there types the bracketed
+  paste (`ESC[200~` … `ESC[201~`, LF sent as CR) as hex bytes through `send-keys -H -t <exact
+  target>`, in chunks of at most 4096 bytes cut at rune starts (`send-keys -l` turns a line break
+  into the text `\n`); a chunk failing after the first, or the first cut short by the deadline,
+  is followed by a best-effort end marker, never split across chunks. Accepted gap: unlike tmux's
+  single paste-buffer write, psmux types the paste in up to 5 `send-keys` calls (about 0.2 s
+  each), so stream input from another device can land inside it, and an agent exiting between
+  chunks leaves the rest typed into the shell.
+  An approval dialog
   (run a command, make edits) is answerable only on Herdr, where Herdr reports the agent
   blocked: the option goes as its digit, Cancel as Escape. On tmux the rollout records no
   approval request, so `prompt` answers `unsupported` with no options or `promptId`

@@ -157,7 +157,10 @@ environment never leave the server. tmux fills it from one `list-panes -a` call
 with `-u` on tmux so the lengths match without a UTF-8 locale), read as a stream keyed by session
 id and window index, never split into lines; a parse that stops drops the window it stopped in,
 a window missing from a reply keeps its last names for 10 s (psmux sometimes prints nothing),
-and a failure never fails the snapshot. Herdr fills it from
+and a failure never fails the snapshot. psmux expands no `#{n:}`, so it gets a one-line-per-pane
+format of its own (`psmuxPaneFormat`), `#{session_id}|#{window_index}|#{pane_index}|#{pane_active}|#{pane_current_command}|#{pane_current_path}`,
+split on `|` (a Windows file name never holds one); a line without 6 fields or with a control
+character stops the parse like a bad length. Herdr fills it from
 `pane.process_info` (the foreground group leader's `name`; `argv`/`cmdline` are not decoded)
 through a cache apart from the snapshot cache: a name is fresh for 5 s, one refresh runs at a
 time, 4 calls at once within 1.5 s (not cut short when the request that started it leaves), a
@@ -546,7 +549,15 @@ else is refused and sends nothing:
 
 `message` pastes the text (bracketed paste, through a named tmux buffer or Herdr's writer) only
 when the screen shows an empty input box, waits until the text shows in it, checks the session
-again, then sends Enter. The text is at most 16 KB (UTF-8 bytes; the body 64 KB), with control
+again, then sends Enter. On psmux `paste-buffer -b` finds no buffer (3.3.8), so `Paste` types the
+bracketed paste (`ESC[200~` … `ESC[201~`, LF sent as CR) as hex bytes through `send-keys -H -t
+<exact target>`, in chunks of at most 4096 bytes cut at rune starts (`send-keys -l` turns a line
+break into the text `\n`); a chunk failing after the first, or the first cut short by the
+deadline, is followed by a best-effort end marker (never split across chunks), so the program does
+not stay in paste mode. Accepted gap: unlike tmux's single paste-buffer write, psmux types the
+paste in up to 5 `send-keys` calls (about 0.2 s each), so stream input from another device can land
+inside it, and an agent exiting between chunks leaves the rest typed into the shell.
+The text is at most 16 KB (UTF-8 bytes; the body 64 KB), with control
 characters other than newline and tab removed, so it cannot end the paste early.
 
 **Codex writes.** The same routes, with these differences. The pane lock is keyed by the pane's
