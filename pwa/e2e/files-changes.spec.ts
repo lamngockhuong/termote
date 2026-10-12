@@ -466,8 +466,10 @@ test.describe('files and changes views', () => {
         expect(new URL(page.url()).pathname).toBe('/')
         await expect(panel).toBeVisible()
       }
+      // Rows inside e2e-download only: the repo's top folder can hold a .env
+      // of another test
       const rowMenu = async (name: string | RegExp) => {
-        const row = panel.getByRole('treeitem', { name })
+        const row = panel.getByRole('treeitem', { name }).and(page.locator('[aria-level="2"]'))
         await row.hover()
         await row.getByRole('button', { name: /^Actions for / }).click()
         await page.getByRole('menuitem', { name: 'Download' }).click()
