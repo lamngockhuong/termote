@@ -1,0 +1,32 @@
+---
+// The one-minute feature intro with its sound, played only when asked. Made by
+// video/ (`TermoteIntro`, poster `TermotePoster`).
+interface Props {
+  label: string;
+}
+const { label } = Astro.props;
+---
+
+<video
+  class="intro-video"
+  src="/video/termote-intro.mp4"
+  poster="/video/termote-intro.jpg"
+  width="1920"
+  height="1080"
+  controls
+  playsinline
+  preload="none"
+  aria-label={label}
+>
+</video>
+
+<style>
+  .intro-video {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 0.75rem;
+    border: 1px solid var(--sl-color-gray-5);
+    background: #101316;
+  }
+</style>

@@ -37,6 +37,10 @@ Controla remotamente herramientas CLI (Claude Code, GitHub Copilot, cualquier te
 >
 > 🇬🇧 [English](README.md) | 🇻🇳 [Tiếng Việt](README.vi.md) | 🇨🇳 [简体中文](README.zh-CN.md) | 🇯🇵 [日本語](README.ja.md) | 🇰🇷 [한국어](README.ko.md) | 🇧🇷 [Português (BR)](README.pt-BR.md) | 🇫🇷 [Français](README.fr.md) | 🇩🇪 [Deutsch](README.de.md) | 🇷🇺 [Русский](README.ru.md) | 🇮🇩 [Bahasa Indonesia](README.id.md)
 
+<p align="center">
+  <a href="https://termote.ohnice.app/#see-it-in-a-minute"><img src="website/public/video/termote-intro.jpg" alt="Mira Termote en un minuto (vídeo)" width="720" /></a>
+</p>
+
 ## Caracteristicas
 
 - **Cambio de sesiones**: Multiples sesiones tmux con crear/editar/eliminar
