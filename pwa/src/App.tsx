@@ -970,6 +970,14 @@ export default function App({
     return () => window.removeEventListener('hashchange', onHashChange)
   }, [])
   const sessionsLoaded = isReady && isServerReachable && sessions.length > 0
+  // The address of the pane on screen when a link was opened: what is shown
+  // only changes in the next render, so until then the address keeps the
+  // link (a reload meanwhile would open the old pane). A pick that showed
+  // nothing new (refused, view only, or the tab already on screen) writes
+  // the pane on screen back, unless another link took the address since.
+  const linkLeftRef = useRef<string | null>(null)
+  const settledHashRef = useRef<string | null>(null)
+  const [linkSettled, setLinkSettled] = useState(0)
   // biome-ignore lint/correctness/useExhaustiveDependencies: linkRequest re-runs it for a new link
   useEffect(() => {
     const link = pendingLinkRef.current
@@ -986,7 +994,15 @@ export default function App({
     if (link.pane && !target.panes?.some((p) => p.id === link.pane)) {
       showToast('Pane in link not found', 'warning')
     }
-    void selectSession(target.id, link.pane)
+    const left = currentLinkRef.current
+    const hash = window.location.hash
+    linkLeftRef.current = left
+    void selectSession(target.id, link.pane).then((shown) => {
+      linkLeftRef.current = null
+      if (shown && currentLinkRef.current !== left) return
+      settledHashRef.current = hash
+      setLinkSettled((n) => n + 1)
+    })
     if (link.view) {
       // Kept for the pane too: switching to it restores its saved view.
       const paneId =
@@ -1013,6 +1029,8 @@ export default function App({
         view: currentView.id,
       })
     : null
+  const currentLinkRef = useRef(currentLink)
+  currentLinkRef.current = currentLink
   // Not while a viewer's history entry is on top: Back would land on an
   // entry of another link and its hashchange would open the old pane. Done
   // once that entry is gone instead.
@@ -1028,14 +1046,19 @@ export default function App({
       off()
     }
   }, [])
-  // biome-ignore lint/correctness/useExhaustiveDependencies: viewerGone re-runs it once a viewer's entry is gone
+  // biome-ignore lint/correctness/useExhaustiveDependencies: viewerGone and linkSettled re-run it once a viewer's entry is gone or a link's pick showed nothing new
   useEffect(() => {
     if (!sessionsLoaded || !currentLink || pendingLinkRef.current) return
+    if (currentLink === linkLeftRef.current) return
+    linkLeftRef.current = null
+    const settledHash = settledHashRef.current
+    settledHashRef.current = null
+    if (settledHash !== null && window.location.hash !== settledHash) return
     if (viewerOnTop()) return
     if (window.location.hash !== currentLink) {
       window.history.replaceState(window.history.state, '', currentLink)
     }
-  }, [sessionsLoaded, currentLink, viewerGone])
+  }, [sessionsLoaded, currentLink, viewerGone, linkSettled])
 
   // Built from what is on screen, not read from the address bar, which may
   // still hold a link that did not open.

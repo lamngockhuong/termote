@@ -84,16 +84,12 @@ export function RenameFileDialog({
     }
   }, [])
 
-  // After the sheet focuses itself on open: the name without its extension
-  // selected, ready to type over
-  useEffect(() => {
-    const id = requestAnimationFrame(() => {
-      const el = input.current
-      el?.focus()
-      el?.setSelectionRange(...baseNameSelection(el.value))
-    })
-    return () => cancelAnimationFrame(id)
-  }, [])
+  // On open: the name without its extension selected, ready to type over
+  const focusOnOpen = () => {
+    const el = input.current
+    el?.focus()
+    el?.setSelectionRange(...baseNameSelection(el.value))
+  }
 
   const send = async (withReveal: boolean) => {
     setSending(true)
@@ -176,7 +172,7 @@ export function RenameFileDialog({
   const action = problem?.action
   return (
     <>
-      <Sheet isOpen onClose={close} title="Rename">
+      <Sheet isOpen onClose={close} title="Rename" focusOnOpen={focusOnOpen}>
         <form onSubmit={submit} className="flex flex-col gap-3 p-4">
           <label htmlFor={inputId} className="text-sm text-fg-muted">
             New path from the pane's directory. Change the directories to move

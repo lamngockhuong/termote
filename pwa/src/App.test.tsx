@@ -3922,6 +3922,67 @@ describe('App views, view-only and deep links', () => {
       )
     })
 
+    it('keeps the link in the address while its pick is made', async () => {
+      window.history.replaceState(null, '', '/#/s/w2/w2%3At1')
+      mockSessions({ isReady: false })
+      let refuse = () => {}
+      switchSession.mockReturnValueOnce(
+        new Promise((ok) => {
+          refuse = () => ok('view-only')
+        }),
+      )
+      const { rerender } = render(<App />)
+      await screen.findByTestId('terminal-view')
+      mockSessions()
+      rerender(<App />)
+      await waitFor(() =>
+        expect(switchSession).toHaveBeenCalledWith('w2:t1', undefined),
+      )
+      // The pane on screen before the pick is never written over the link
+      expect(window.location.hash).toBe('#/s/w2/w2%3At1')
+      // Refused: the address goes back to the pane on screen
+      await act(async () => refuse())
+      await waitFor(() =>
+        expect(window.location.hash).toBe('#/s/w1/w1%3At1/w1%3At1%3Ap1'),
+      )
+    })
+
+    it('a refused link to the pane on screen leaves the address as it is', async () => {
+      window.history.replaceState(null, '', '/#/s/w1/w1%3At1/w1%3At1%3Ap1')
+      const replace = vi.spyOn(window.history, 'replaceState')
+      switchSession.mockResolvedValueOnce('view-only')
+      render(<App />)
+      await waitFor(() => expect(switchSession).toHaveBeenCalled())
+      await act(async () => {})
+      expect(window.location.hash).toBe('#/s/w1/w1%3At1/w1%3At1%3Ap1')
+      expect(replace).not.toHaveBeenCalled()
+      replace.mockRestore()
+    })
+
+    it('a link to the tab on screen writes the pane it shows', async () => {
+      window.history.replaceState(null, '', '/#/s/w1/w1%3At1/gone')
+      render(<App />)
+      await waitFor(() =>
+        expect(window.location.hash).toBe('#/s/w1/w1%3At1/w1%3At1%3Ap1'),
+      )
+    })
+
+    it('a link typed while a pick settles is not written over', async () => {
+      window.history.replaceState(null, '', '/#/s/w1/w1%3At1/gone')
+      let settle = () => {}
+      switchSession.mockReturnValueOnce(
+        new Promise<void>((ok) => {
+          settle = ok
+        }),
+      )
+      render(<App />)
+      await waitFor(() => expect(switchSession).toHaveBeenCalled())
+      // Its popstate came, its hashchange not yet
+      window.history.pushState(null, '', '/#/s/w2/w2%3At1')
+      await act(async () => settle())
+      expect(window.location.hash).toBe('#/s/w2/w2%3At1')
+    })
+
     it('an unknown session only shows a toast', async () => {
       window.history.replaceState(null, '', '/#/s/w9/nope')
       render(<App />)

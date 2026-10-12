@@ -34,7 +34,9 @@ export default defineConfig({
   use: {
     baseURL: `http://localhost:${process.env.TERMOTE_PORT || '7680'}`,
     ...(credentials ? { httpCredentials: credentials } : {}),
-    trace: 'on-first-retry',
+    // There are no retries: a trace kept on failure is the only record of
+    // what the page saw when a test fails now and then on CI
+    trace: 'retain-on-failure',
     video: 'on-first-retry',
   },
 })

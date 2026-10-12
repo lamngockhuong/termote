@@ -68,15 +68,12 @@ export function NewFileDialog({
     }
   }, [])
 
-  // After the sheet focuses itself on open
-  useEffect(() => {
-    const id = requestAnimationFrame(() => {
-      const el = input.current
-      el?.focus()
-      el?.setSelectionRange(el.value.length, el.value.length)
-    })
-    return () => cancelAnimationFrame(id)
-  }, [])
+  // On open: the caret after the directory already filled in
+  const focusOnOpen = () => {
+    const el = input.current
+    el?.focus()
+    el?.setSelectionRange(el.value.length, el.value.length)
+  }
 
   const send = async (reveal: boolean) => {
     setSending(true)
@@ -136,7 +133,7 @@ export function NewFileDialog({
   const action = problem?.action
   return (
     <>
-      <Sheet isOpen onClose={close} title="New file">
+      <Sheet isOpen onClose={close} title="New file" focusOnOpen={focusOnOpen}>
         <form onSubmit={submit} className="flex flex-col gap-3 p-4">
           <label htmlFor={inputId} className="text-sm text-fg-muted">
             Path from the pane's directory. Missing directories are created.

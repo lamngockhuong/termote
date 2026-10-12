@@ -814,14 +814,7 @@ describe('ChatComposer', () => {
       expect(box()).toHaveAttribute('aria-activedescendant', options()[0].id)
       type('/comp')
       expect(names()).toEqual(['/compact'])
-      const raf = vi
-        .spyOn(window, 'requestAnimationFrame')
-        .mockImplementation((cb) => {
-          cb(0)
-          return 0
-        })
       key('Enter')
-      raf.mockRestore()
       expect(box()).toHaveValue('/compact ')
       expect((box() as HTMLTextAreaElement).selectionStart).toBe(9)
       expect(screen.queryByRole('listbox')).toBeNull()
@@ -1006,11 +999,6 @@ describe('ChatComposer', () => {
           />,
         )
       }
-      const raf = () =>
-        vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
-          cb(0)
-          return 0
-        })
       // Moves the caret (or selects) as a tap or the arrow keys would
       const select = (start: number, end = start) => {
         ;(box() as HTMLTextAreaElement).setSelectionRange(start, end)
@@ -1059,9 +1047,7 @@ describe('ChatComposer', () => {
         type('$zz')
         expect(screen.getByText('No matching skill')).toBeTruthy()
         type('$ima')
-        const r = raf()
         key('Tab')
-        r.mockRestore()
         expect(box()).toHaveValue('$imagegen ')
         expect((box() as HTMLTextAreaElement).selectionStart).toBe(10)
         expect(screen.queryByRole('listbox')).toBeNull()
@@ -1072,12 +1058,33 @@ describe('ChatComposer', () => {
         codex()
         type('xem $sk')
         expect(names()).toEqual(['$skill-a'])
-        const r = raf()
         key('Enter')
-        r.mockRestore()
         expect(box()).toHaveValue('xem $skill-a ')
         expect((box() as HTMLTextAreaElement).selectionStart).toBe(13)
         expect(sessionStorage.length).toBeGreaterThan(0)
+      })
+
+      it('a pick that changes nothing leaves later typing alone', () => {
+        codex()
+        type('$skill-a\nfoo')
+        select(8)
+        key('Enter')
+        const el = box() as HTMLTextAreaElement
+        expect(el).toHaveValue('$skill-a\nfoo')
+        type('$skill-a\nfoox')
+        expect(el.selectionStart).toBe(13)
+      })
+
+      it('a select-all right after a pick is not undone a frame later', async () => {
+        codex()
+        type('$sk')
+        key('Enter')
+        const el = box() as HTMLTextAreaElement
+        expect(el).toHaveValue('$skill-a ')
+        // What replacing the whole text starts with, before its typing
+        el.setSelectionRange(0, el.value.length)
+        await act(() => new Promise((ok) => setTimeout(ok, 50)))
+        expect([el.selectionStart, el.selectionEnd]).toEqual([0, 9])
       })
 
       it('follows the caret: inside a word, out of it, a selection', () => {

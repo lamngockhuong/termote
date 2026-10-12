@@ -15,6 +15,10 @@ interface Props {
   // Extra controls in the header, before the close button
   actions?: ReactNode
   className?: string
+  // Focuses a control of the content once the sheet is open, instead of the
+  // dialog itself. Called in the same commit as the opening, so nothing typed
+  // into the control can land between the focus and a selection it sets.
+  focusOnOpen?: () => void
 }
 
 // A modal <dialog>: a bottom sheet on phones, a centred dialog on desktop.
@@ -32,6 +36,7 @@ function OpenSheet({
   closeLabel = 'Close',
   actions,
   className = '',
+  focusOnOpen,
 }: Omit<Props, 'isOpen'>) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const titleId = useId()
@@ -47,8 +52,10 @@ function OpenSheet({
   // showModal focuses the first control, and on a phone that draws a focus
   // ring round the header's first button the moment the sheet opens. Focus
   // the dialog itself instead; a screen reader still announces its title.
+  const focusOnOpenRef = useRef(focusOnOpen)
   useEffect(() => {
-    dialogRef.current?.focus()
+    if (focusOnOpenRef.current) focusOnOpenRef.current()
+    else dialogRef.current?.focus()
   }, [])
   // Only a press that starts and ends on the scrim closes the sheet; a text
   // selection dragged out of the content ends with a click on the dialog too.

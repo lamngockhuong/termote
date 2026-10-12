@@ -69,10 +69,12 @@ const refused = (status: number, code: string, root?: string, path?: string) =>
   )
 
 describe('RenameFileDialog', () => {
-  it('starts with the path, the name without its extension selected', async () => {
+  it('starts with the path, the name without its extension selected', () => {
     show()
     expect(box()).toHaveValue('docs/report.final.md')
-    await act(() => new Promise((r) => requestAnimationFrame(() => r(null))))
+    // At once, not a frame later: typing over the whole path meanwhile
+    // would be cut down to the name
+    expect(box()).toHaveFocus()
     expect([box().selectionStart, box().selectionEnd]).toEqual([5, 17])
   })
 

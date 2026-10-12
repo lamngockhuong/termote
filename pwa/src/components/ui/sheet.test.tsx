@@ -128,6 +128,17 @@ describe('Sheet', () => {
     expect(screen.getByRole('dialog')).toHaveFocus()
   })
 
+  it('focusOnOpen focuses a control of its own instead, on open', () => {
+    const focusOnOpen = vi.fn(() => screen.getByRole('textbox').focus())
+    render(
+      <Sheet isOpen onClose={vi.fn()} title="Name" focusOnOpen={focusOnOpen}>
+        <input aria-label="Name" />
+      </Sheet>,
+    )
+    expect(focusOnOpen).toHaveBeenCalledOnce()
+    expect(screen.getByRole('textbox')).toHaveFocus()
+  })
+
   it('returns focus to the opener when it closes', () => {
     const opener = document.createElement('button')
     document.body.append(opener)

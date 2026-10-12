@@ -4,7 +4,6 @@ import {
   render,
   renderHook,
   screen,
-  waitFor,
   within,
 } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -86,7 +85,7 @@ describe('NewFileDialog', () => {
     mockCreate.mockResolvedValue({ root: '/r', path: 'docs/a.md' })
     const p = show()
     expect(box()).toHaveValue('docs/')
-    await waitFor(() => expect(box()).toHaveFocus())
+    expect(box()).toHaveFocus()
     expect((box() as HTMLInputElement).selectionStart).toBe(5)
     type('docs/a.md')
     await create()
