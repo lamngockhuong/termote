@@ -353,6 +353,24 @@ func TestClassifyClaudeUserText(t *testing.T) {
 	}
 }
 
+// A message sent with images is a list of blocks; its text block carries
+// the same paste tags as a plain string message.
+func TestParseClaudeRowPastedWithImages(t *testing.T) {
+	line := []byte(`{"type":"user","uuid":"u1","message":{"role":"user","content":[` +
+		`{"type":"text","text":"[Image #8] [Image #9]\n\n<pasted_content id=\"aa38\">\n- one\n- two\n</pasted_content id=\"aa38\">\n"},` +
+		`{"type":"image","source":{"type":"base64","media_type":"image/png","data":""}}]}}`)
+	e, ok := parseClaudeRow(line, 0)
+	if !ok || len(e.Parts) != 2 {
+		t.Fatalf("parts = %+v %v", e.Parts, ok)
+	}
+	if got := e.Parts[0].Text; got != "[Image #8] [Image #9]\n\n- one\n- two" {
+		t.Errorf("text = %q", got)
+	}
+	if e.Parts[1].Kind != "image" {
+		t.Errorf("second part = %+v", e.Parts[1])
+	}
+}
+
 func TestDefaultClaudeDir(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", "/custom/claude")
 	if got := defaultClaudeDir(); got != "/custom/claude" {

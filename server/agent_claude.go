@@ -194,7 +194,13 @@ func parseClaudeRow(line []byte, off int64) (TranscriptEntry, bool) {
 			case "image":
 				e.Parts = append(e.Parts, TranscriptPart{Kind: "image"})
 			case "text":
-				if t := jsonStr(b["text"]); strings.TrimSpace(t) != "" {
+				t := jsonStr(b["text"])
+				if row.Type == "user" {
+					// A message sent with images arrives as blocks, its
+					// text block carrying the same paste tags.
+					t = stripPastedTags(t)
+				}
+				if strings.TrimSpace(t) != "" {
 					e.Parts = append(e.Parts, textPart("text", t, claudeMaxText))
 				}
 			case "thinking":
@@ -269,10 +275,17 @@ func classifyClaudeUserText(text string) (role, out string, ok bool) {
 		s := xmlInner(t, "summary")
 		return "note", s, s != ""
 	}
-	if strings.Contains(text, "<pasted_content id=") {
-		text = strings.Trim(pastedTagRe.ReplaceAllString(text, ""), "\r\n")
-	}
+	text = stripPastedTags(text)
 	return "user", text, strings.TrimSpace(text) != ""
+}
+
+// stripPastedTags removes the tags around an expanded paste, and the line
+// breaks left at either end of the message.
+func stripPastedTags(text string) string {
+	if !strings.Contains(text, "<pasted_content id=") {
+		return text
+	}
+	return strings.Trim(pastedTagRe.ReplaceAllString(text, ""), "\r\n")
 }
 
 // pastedTagRe matches the tags Claude Code wraps a long paste in when it
