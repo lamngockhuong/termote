@@ -763,7 +763,17 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   in that config dir, read through `os.Root` (first 8 KB per file; a file that is a symlink, under
   a denied dir or with a sensitive name is never read), with the same
   `Sec-Fetch-Site`/`Origin` check as the files routes. A symlinked skill dir is followed only
-  into that config dir, the pane root or `~/.agents/skills`. Plugin commands come from the
+  into that config dir, the pane root or `~/.agents/skills`. On Windows a directory junction
+  (mount-point reparse point) there is followed like a symlinked skill dir, and every containment
+  check here (allowed dirs, linked skill dirs, plugin base, `installPath`, `projectPath`) compares
+  real paths from `GetFinalPathNameByHandle` (`resolveLinkedDir`; `filepath.EvalSymlinks` no longer
+  resolves junctions since Go 1.23); other reparse tags are never followed, and a junction's own
+  target must be a drive-letter path (not UNC, `\\?\`, `\\.\`, a volume GUID) before anything follows it.
+  A resolved path not on a drive letter is refused, so an allowed dir on a UNC share or a mapped
+  network drive (it resolves to UNC) no longer follows links into it. Accepted gap: a chain
+  through a real symlink to a UNC path is opened by Windows before that refusal (an SMB
+  connection, as the symlink path already did); creating such a symlink needs symlink privilege
+  or Developer Mode. Plugin commands come from the
   plugins `installed_plugins.json` lists and `enabledPlugins` (user, project, local settings)
   turns on; an `installPath` is read only when it resolves inside `<config dir>/plugins/`
   (at most 50 plugins, JSON files capped at 1 MB)
@@ -860,7 +870,7 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   `CODEX_HOME/skills` and `~/.agents/skills` (`user`), `CODEX_HOME/skills/.system` and
   `/etc/codex/skills` (`system`), each through `readSkillDir` under the Claude Code rules
   (`os.Root`, 8 KB, no file symlink, the files routes' skip); a symlinked skill dir is followed
-  only into those dirs or the root. Custom prompts (gone from Codex), plugin skills,
+  only into those dirs or the root (a Windows junction too, with the Windows rules above). Custom prompts (gone from Codex), plugin skills,
   `config.toml` toggles, project trust and nested skill dirs are not read
 - **Files/Changes** (`/api/mux/panes/{id}/files/*`): GETs that also check
   `Sec-Fetch-Site`/`Origin` (and one write, `PUT files/content`, below); every path is opened through `os.Root` under the pane's root (its

@@ -160,13 +160,15 @@ func listAgentCommands(root, claudeDir, home string, skip func(dir, rel string) 
 	return commandsResponse{Commands: cmds}
 }
 
-// resolvedDir returns dir with its symlinks resolved, or "" when it is
-// empty, relative or cannot be resolved.
+// resolvedDir returns dir with its links resolved (resolveLinkedDir: on
+// Windows junctions too, which filepath.EvalSymlinks leaves as they are, and
+// only a directory on a drive letter), or "" when it is empty, relative or
+// cannot be resolved. Every containment check here compares such paths.
 func resolvedDir(dir string) string {
 	if dir == "" || !filepath.IsAbs(dir) {
 		return ""
 	}
-	real, err := filepath.EvalSymlinks(dir)
+	real, err := resolveLinkedDir(dir)
 	if err != nil {
 		return ""
 	}
@@ -288,6 +290,10 @@ func (r *commandReader) readSkills(dir string) {
 			meta, ok = r.readHead(path.Join(dir, e.Name(), "SKILL.md"))
 		case e.Type()&fs.ModeSymlink != 0:
 			meta, ok = r.readLinkedSkill(path.Join(dir, e.Name()))
+		case e.Type()&fs.ModeIrregular != 0 && isJunction(filepath.Join(r.dir, filepath.FromSlash(path.Join(dir, e.Name())))):
+			// A Windows directory junction gets a symlink's rules; any
+			// other irregular entry is skipped.
+			meta, ok = r.readLinkedSkill(path.Join(dir, e.Name()))
 		}
 		if !ok || meta.hidden {
 			continue
@@ -304,12 +310,15 @@ func (r *commandReader) readSkills(dir string) {
 	}
 }
 
-// readLinkedSkill reads the SKILL.md of the skill dir the symlink p leads to,
-// when that dir is inside one of the allowed dirs. The target is opened as an
-// os.Root of its own, so a read cannot leave it either.
+// readLinkedSkill reads the SKILL.md of the skill dir the symlink (or Windows
+// junction) p leads to, when that dir is inside one of the allowed dirs. The
+// target is opened as an os.Root of its own, so a read cannot leave it either.
 func (r *commandReader) readLinkedSkill(p string) (commandMeta, bool) {
-	target, err := filepath.EvalSymlinks(filepath.Join(r.dir, filepath.FromSlash(p)))
-	if err != nil || !slices.ContainsFunc(r.allow, func(d string) bool { return pathWithin(d, target) }) {
+	target, err := resolveLinkedDir(filepath.Join(r.dir, filepath.FromSlash(p)))
+	if err != nil {
+		return commandMeta{}, false
+	}
+	if !slices.ContainsFunc(r.allow, func(d string) bool { return pathWithin(d, target) }) {
 		return commandMeta{}, false
 	}
 	rt, err := os.OpenRoot(target)

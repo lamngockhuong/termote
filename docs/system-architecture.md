@@ -493,6 +493,18 @@ a dir is followed when its target resolves inside the config dir, the pane's roo
 user's `~/.agents/skills` (where skill managers install): the target is opened as an `os.Root`
 of its own and only its `SKILL.md` is read, a regular file and not a symlink.
 
+On Windows a directory junction (a mount-point reparse point, which Go reports as irregular, not
+as a symlink) in `skills/` is followed under the same rules. Every containment check of these
+routes (the allowed dirs, linked skill dirs, the plugins base, `installPath` and `projectPath`)
+compares real paths from `GetFinalPathNameByHandle` (`resolveLinkedDir`), because since Go 1.23
+`filepath.EvalSymlinks` leaves a junction unresolved. Other reparse tags are never followed; a
+junction's own target must be a drive-letter path (not UNC, `\\?\`, `\\.\`, a volume GUID) before
+anything follows it. A resolved path not on a drive letter is refused, so an allowed dir on a UNC
+share or a mapped network drive (it resolves to UNC) no longer follows links into it. Accepted
+gap: a chain through a real symlink to a UNC path is opened by Windows before that refusal (an
+SMB connection, as the symlink path already did); creating such a symlink needs symlink privilege
+or Developer Mode.
+
 Plugins add a third source, `plugin`, after the user's. `<config dir>/plugins/installed_plugins.json`
 gives each `<name>@<marketplace>` its installs; `enabledPlugins` in the config dir's
 `settings.json`, then the project's `.claude/settings.json` and `.claude/settings.local.json`,
