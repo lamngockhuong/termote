@@ -35,6 +35,10 @@
 >
 > 🇬🇧 [English](README.md) | 🇻🇳 [Tiếng Việt](README.vi.md) | 🇨🇳 [简体中文](README.zh-CN.md) | 🇯🇵 [日本語](README.ja.md) | 🇪🇸 [Español](README.es.md) | 🇧🇷 [Português (BR)](README.pt-BR.md) | 🇫🇷 [Français](README.fr.md) | 🇩🇪 [Deutsch](README.de.md) | 🇷🇺 [Русский](README.ru.md) | 🇮🇩 [Bahasa Indonesia](README.id.md)
 
+<p align="center">
+  <a href="https://termote.ohnice.app/#see-it-in-a-minute"><img src="website/public/video/termote-intro.jpg" alt="1분 만에 보는 Termote (동영상)" width="720" /></a>
+</p>
+
 ## 기능
 
 - **세션 전환**: 생성/편집/삭제가 가능한 여러 tmux 세션
@@ -61,17 +65,15 @@
 ## 스크린샷
 
 <p align="center">
-  <img src="docs/images/screenshots/mobile-terminal.png" alt="모바일 터미널" width="280" />
-  &nbsp;&nbsp;
-  <img src="docs/images/screenshots/mobile-sidebar.png" alt="세션 사이드바" width="280" />
+  <img src="docs/images/screenshots/phones.png" alt="휴대폰의 터미널, Chat, Changes" width="720" />
 </p>
 
 <p align="center">
-  <img src="docs/images/screenshots/desktop-terminal.png" alt="Desktop Terminal" width="600" />
+  <img src="docs/images/screenshots/desktop.png" alt="Desktop: Chat and Changes on Herdr" width="720" />
 </p>
 
 <p align="center">
-  <img src="docs/images/screenshots/ui-styles.png" alt="Interface Styles" width="600" />
+  <img src="docs/images/screenshots/ui-styles.png" alt="Interface Styles" width="720" />
 </p>
 
 ## 아키텍처

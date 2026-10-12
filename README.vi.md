@@ -37,6 +37,10 @@
 >
 > 🇬🇧 [English](README.md) | 🇨🇳 [简体中文](README.zh-CN.md) | 🇯🇵 [日本語](README.ja.md) | 🇰🇷 [한국어](README.ko.md) | 🇪🇸 [Español](README.es.md) | 🇧🇷 [Português (BR)](README.pt-BR.md) | 🇫🇷 [Français](README.fr.md) | 🇩🇪 [Deutsch](README.de.md) | 🇷🇺 [Русский](README.ru.md) | 🇮🇩 [Bahasa Indonesia](README.id.md)
 
+<p align="center">
+  <a href="https://termote.ohnice.app/vi/#xem-trong-một-phút"><img src="website/public/video/termote-intro.jpg" alt="Xem video Termote trong một phút" width="720" /></a>
+</p>
+
 ## Tính Năng
 
 - **Chuyển đổi session**: Nhiều tmux sessions với tạo/sửa/xóa
@@ -63,17 +67,15 @@
 ## Ảnh Chụp Màn Hình
 
 <p align="center">
-  <img src="docs/images/screenshots/mobile-terminal.png" alt="Mobile Terminal" width="280" />
-  &nbsp;&nbsp;
-  <img src="docs/images/screenshots/mobile-sidebar.png" alt="Session Sidebar" width="280" />
+  <img src="docs/images/screenshots/phones.png" alt="Terminal, Chat và Changes trên điện thoại" width="720" />
 </p>
 
 <p align="center">
-  <img src="docs/images/screenshots/desktop-terminal.png" alt="Terminal trên desktop" width="600" />
+  <img src="docs/images/screenshots/desktop.png" alt="Desktop: Chat and Changes on Herdr" width="720" />
 </p>
 
 <p align="center">
-  <img src="docs/images/screenshots/ui-styles.png" alt="Ba kiểu giao diện" width="600" />
+  <img src="docs/images/screenshots/ui-styles.png" alt="Interface Styles" width="720" />
 </p>
 
 ## Kiến Trúc

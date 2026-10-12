@@ -37,6 +37,10 @@
 >
 > 🇬🇧 [English](README.md) | 🇻🇳 [Tiếng Việt](README.vi.md) | 🇨🇳 [简体中文](README.zh-CN.md) | 🇯🇵 [日本語](README.ja.md) | 🇰🇷 [한국어](README.ko.md) | 🇪🇸 [Español](README.es.md) | 🇧🇷 [Português (BR)](README.pt-BR.md) | 🇫🇷 [Français](README.fr.md) | 🇩🇪 [Deutsch](README.de.md) | 🇮🇩 [Bahasa Indonesia](README.id.md)
 
+<p align="center">
+  <a href="https://termote.ohnice.app/#see-it-in-a-minute"><img src="website/public/video/termote-intro.jpg" alt="Termote за минуту (видео)" width="720" /></a>
+</p>
+
 ## Возможности
 
 - **Переключение сессий**: Множество tmux-сессий с созданием/редактированием/удалением
@@ -63,17 +67,15 @@
 ## Скриншоты
 
 <p align="center">
-  <img src="docs/images/screenshots/mobile-terminal.png" alt="Mobile Terminal" width="280" />
-  &nbsp;&nbsp;
-  <img src="docs/images/screenshots/mobile-sidebar.png" alt="Session Sidebar" width="280" />
+  <img src="docs/images/screenshots/phones.png" alt="Терминал, Chat и Changes на телефоне" width="720" />
 </p>
 
 <p align="center">
-  <img src="docs/images/screenshots/desktop-terminal.png" alt="Desktop Terminal" width="600" />
+  <img src="docs/images/screenshots/desktop.png" alt="Desktop: Chat and Changes on Herdr" width="720" />
 </p>
 
 <p align="center">
-  <img src="docs/images/screenshots/ui-styles.png" alt="Interface Styles" width="600" />
+  <img src="docs/images/screenshots/ui-styles.png" alt="Interface Styles" width="720" />
 </p>
 
 ## Архитектура

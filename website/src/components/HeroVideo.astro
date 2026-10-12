@@ -1,0 +1,39 @@
+---
+// The homepage's loop under the hero: 15 s, no sound, no words (the page has
+// them). Made by video/ (`TermoteHero`); paused for reduced motion.
+---
+
+<video
+  class="hero-video"
+  src="/video/termote-hero.mp4"
+  poster="/video/termote-hero.jpg"
+  width="1920"
+  height="1080"
+  autoplay
+  muted
+  loop
+  playsinline
+  preload="metadata"
+  aria-hidden="true"
+>
+</video>
+
+<script>
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    for (const v of document.querySelectorAll<HTMLVideoElement>(".hero-video")) {
+      v.autoplay = false;
+      v.pause();
+    }
+  }
+</script>
+
+<style>
+  .hero-video {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 0.75rem;
+    border: 1px solid var(--sl-color-gray-5);
+    background: #101316;
+  }
+</style>
