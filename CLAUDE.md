@@ -517,7 +517,10 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   bytes, control and format characters (zero-width, bidi) removed; argv and the environment never
   leave the server. tmux: one `list-panes -a`, read by `#{n:}` byte lengths keyed by session id and
   window index (a path can hold `\n` or `:`; psmux numbers panes per session), with `-u` on
-  tmux. Herdr: `pane.process_info`, decoding only pids and names (never `argv`, `argv0`,
+  tmux. psmux expands no `#{n:}`: it gets `psmuxPaneFormat`, one pane a line,
+  `#{session_id}|#{window_index}|#{pane_index}|#{pane_active}|#{pane_current_command}|#{pane_current_path}`
+  (a Windows file name never holds `|`; a line without 6 fields or with a control character stops
+  the read, as a bad length does on tmux). Herdr: `pane.process_info`, decoding only pids and names (never `argv`, `argv0`,
   `cmdline`), through a 5 s cache with one refresher, 4 calls at once within 1.5 s, never under
   `fetchMu` and never into the cached view; a name whose reads failed for 15 s, or any while an
   `invalid_request` turned the calls off for 5 minutes, is not served. macOS names are the kernel's short name. The
@@ -760,7 +763,17 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   in that config dir, read through `os.Root` (first 8 KB per file; a file that is a symlink, under
   a denied dir or with a sensitive name is never read), with the same
   `Sec-Fetch-Site`/`Origin` check as the files routes. A symlinked skill dir is followed only
-  into that config dir, the pane root or `~/.agents/skills`. Plugin commands come from the
+  into that config dir, the pane root or `~/.agents/skills`. On Windows a directory junction
+  (mount-point reparse point) there is followed like a symlinked skill dir, and every containment
+  check here (allowed dirs, linked skill dirs, plugin base, `installPath`, `projectPath`) compares
+  real paths from `GetFinalPathNameByHandle` (`resolveLinkedDir`; `filepath.EvalSymlinks` no longer
+  resolves junctions since Go 1.23); other reparse tags are never followed, and a junction's own
+  target must be a drive-letter path (not UNC, `\\?\`, `\\.\`, a volume GUID) before anything follows it.
+  A resolved path not on a drive letter is refused, so an allowed dir on a UNC share or a mapped
+  network drive (it resolves to UNC) no longer follows links into it. Accepted gap: a chain
+  through a real symlink to a UNC path is opened by Windows before that refusal (an SMB
+  connection, as the symlink path already did); creating such a symlink needs symlink privilege
+  or Developer Mode. Plugin commands come from the
   plugins `installed_plugins.json` lists and `enabledPlugins` (user, project, local settings)
   turns on; an `installPath` is read only when it resolves inside `<config dir>/plugins/`
   (at most 50 plugins, JSON files capped at 1 MB)
@@ -824,17 +837,32 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   gives nothing (logged once; no other starts while one is stuck). The argv comes from
   `NtQueryInformationProcess` (command line class) and `CODEX_HOME` is the server user's
   `%USERPROFILE%\.codex` only (no PEB read), so a pane-only `CODEX_HOME` or another user's Codex
-  has no Chat view, nor (expected, not checked live) an elevated one. psmux sends no Chat message yet (#408). `message` and `answer` write under the Claude Code rules: the
+  has no Chat view, nor (expected, not checked live) an elevated one. `message` and `answer` write under the Claude Code rules: the
   pane lock (keyed by the pane address alone), then the process, session, rollout (path and
   dev:inode) and screen read again right before each write. A message is pasted (bracketed)
   only onto an empty composer with no working line and status idle/done, and must show in the
-  composer (`[Pasted Content N chars]` over 1000 characters) before Enter. An approval dialog
+  composer (`[Pasted Content N chars]` over 1000 characters) before Enter. psmux sends Chat
+  messages: its `paste-buffer -b` finds no buffer (3.3.8), so `Paste` there types the bracketed
+  paste (`ESC[200~` … `ESC[201~`, LF sent as CR) as hex bytes through `send-keys -H -t <exact
+  target>`, in chunks of at most 4096 bytes cut at rune starts (`send-keys -l` turns a line break
+  into the text `\n`); a chunk failing after the first, or the first cut short by the deadline,
+  is followed by a best-effort end marker, never split across chunks. Accepted gap: unlike tmux's
+  single paste-buffer write, psmux types the paste in up to 5 `send-keys` calls (about 0.2 s
+  each), so stream input from another device can land inside it, and an agent exiting between
+  chunks leaves the rest typed into the shell.
+  The wait for the text to show after its paste is 2 s + 6 ms a character, at most 30 s, for
+  Codex and for every agent on psmux (Claude Code on tmux and Herdr: 2 s), still polling; the
+  message route's budget and read deadline grow with it. An approval dialog
   (run a command, make edits) is answerable only on Herdr, where Herdr reports the agent
   blocked: the option goes as its digit, Cancel as Escape. On tmux the rollout records no
   approval request, so `prompt` answers `unsupported` with no options or `promptId`
   (`AgentSession.DialogsReadOnly`), as it does for any other Codex dialog. The screen reader
   (`server/agent_codex_prompt.go`) never takes text the model printed above the composer for a
-  dialog, and reads a card as read only when two approval titles sit in its stretch.
+  dialog, and reads a card as read only when two approval titles sit in its stretch. A list or
+  picker screen (`/model` and its effort step: a selected numbered `› N.` row, a footer like
+  `enter select · esc back` as the last row or two; herdr draws the row in colours, not reverse video)
+  reads as a read-only dialog, never as a composer draft, so `/model` is confirmed submitted and
+  a message onto an open picker gets 409 `input_not_ready`.
   `commands` (`server/agent_commands_codex.go`) lists skills only, suggested after `$` at the
   start of any word (`/` offers Codex 0.162.0's built-ins from the PWA's static list, `/exit` and
   `/logout` confirmed; a message ending with `$name` is sent with a trailing space, else Codex's
@@ -842,7 +870,7 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   `CODEX_HOME/skills` and `~/.agents/skills` (`user`), `CODEX_HOME/skills/.system` and
   `/etc/codex/skills` (`system`), each through `readSkillDir` under the Claude Code rules
   (`os.Root`, 8 KB, no file symlink, the files routes' skip); a symlinked skill dir is followed
-  only into those dirs or the root. Custom prompts (gone from Codex), plugin skills,
+  only into those dirs or the root (a Windows junction too, with the Windows rules above). Custom prompts (gone from Codex), plugin skills,
   `config.toml` toggles, project trust and nested skill dirs are not read
 - **Files/Changes** (`/api/mux/panes/{id}/files/*`): GETs that also check
   `Sec-Fetch-Site`/`Origin` (and one write, `PUT files/content`, below); every path is opened through `os.Root` under the pane's root (its

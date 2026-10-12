@@ -157,7 +157,10 @@ environment never leave the server. tmux fills it from one `list-panes -a` call
 with `-u` on tmux so the lengths match without a UTF-8 locale), read as a stream keyed by session
 id and window index, never split into lines; a parse that stops drops the window it stopped in,
 a window missing from a reply keeps its last names for 10 s (psmux sometimes prints nothing),
-and a failure never fails the snapshot. Herdr fills it from
+and a failure never fails the snapshot. psmux expands no `#{n:}`, so it gets a one-line-per-pane
+format of its own (`psmuxPaneFormat`), `#{session_id}|#{window_index}|#{pane_index}|#{pane_active}|#{pane_current_command}|#{pane_current_path}`,
+split on `|` (a Windows file name never holds one); a line without 6 fields or with a control
+character stops the parse like a bad length. Herdr fills it from
 `pane.process_info` (the foreground group leader's `name`; `argv`/`cmdline` are not decoded)
 through a cache apart from the snapshot cache: a name is fresh for 5 s, one refresh runs at a
 time, 4 calls at once within 1.5 s (not cut short when the request that started it leaves), a
@@ -490,6 +493,18 @@ a dir is followed when its target resolves inside the config dir, the pane's roo
 user's `~/.agents/skills` (where skill managers install): the target is opened as an `os.Root`
 of its own and only its `SKILL.md` is read, a regular file and not a symlink.
 
+On Windows a directory junction (a mount-point reparse point, which Go reports as irregular, not
+as a symlink) in `skills/` is followed under the same rules. Every containment check of these
+routes (the allowed dirs, linked skill dirs, the plugins base, `installPath` and `projectPath`)
+compares real paths from `GetFinalPathNameByHandle` (`resolveLinkedDir`), because since Go 1.23
+`filepath.EvalSymlinks` leaves a junction unresolved. Other reparse tags are never followed; a
+junction's own target must be a drive-letter path (not UNC, `\\?\`, `\\.\`, a volume GUID) before
+anything follows it. A resolved path not on a drive letter is refused, so an allowed dir on a UNC
+share or a mapped network drive (it resolves to UNC) no longer follows links into it. Accepted
+gap: a chain through a real symlink to a UNC path is opened by Windows before that refusal (an
+SMB connection, as the symlink path already did); creating such a symlink needs symlink privilege
+or Developer Mode.
+
 Plugins add a third source, `plugin`, after the user's. `<config dir>/plugins/installed_plugins.json`
 gives each `<name>@<marketplace>` its installs; `enabledPlugins` in the config dir's
 `settings.json`, then the project's `.claude/settings.json` and `.claude/settings.local.json`,
@@ -546,7 +561,18 @@ else is refused and sends nothing:
 
 `message` pastes the text (bracketed paste, through a named tmux buffer or Herdr's writer) only
 when the screen shows an empty input box, waits until the text shows in it, checks the session
-again, then sends Enter. The text is at most 16 KB (UTF-8 bytes; the body 64 KB), with control
+again, then sends Enter. On psmux `paste-buffer -b` finds no buffer (3.3.8), so `Paste` types the
+bracketed paste (`ESC[200~` … `ESC[201~`, LF sent as CR) as hex bytes through `send-keys -H -t
+<exact target>`, in chunks of at most 4096 bytes cut at rune starts (`send-keys -l` turns a line
+break into the text `\n`); a chunk failing after the first, or the first cut short by the
+deadline, is followed by a best-effort end marker (never split across chunks), so the program does
+not stay in paste mode. Accepted gap: unlike tmux's single paste-buffer write, psmux types the
+paste in up to 5 `send-keys` calls (about 0.2 s each), so stream input from another device can land
+inside it, and an agent exiting between chunks leaves the rest typed into the shell.
+The wait for the text to show is 2 s plus 6 ms a character, at most 30 s, for Codex and for every
+agent on psmux (Claude Code on tmux and Herdr keeps 2 s), polled as before; the route's time budget
+and read deadline grow with it.
+The text is at most 16 KB (UTF-8 bytes; the body 64 KB), with control
 characters other than newline and tab removed, so it cannot end the paste early.
 
 **Codex writes.** The same routes, with these differences. The pane lock is keyed by the pane's
@@ -574,7 +600,11 @@ On Herdr it reports `blocked`, so an approval card has options and a single-use 
 approval request, so the status is never `blocked`: `AgentSession.DialogsReadOnly` makes
 `prompt` answer `unsupported` with no options and no `promptId` (the PWA shows "Answer this
 dialog in the terminal."), and `answer` has nothing to consume. Other Codex dialogs (model
-picker, rate-limit prompt, …) are always read only, on either backend.
+picker, rate-limit prompt, …) are always read only, on either backend. A list or picker screen
+(`/model` and its effort step) has a selected numbered `› N.` row and a footer such as `enter
+select · esc back` as the last row or two; herdr draws that row in colours, not reverse video. It reads
+as a read-only dialog, never as a composer draft, so `/model` is confirmed submitted and a message
+onto an open picker gets 409 `input_not_ready`.
 
 `prompt` reads the screen and recognises the dialog anchored at its bottom: `permission`, a
 single-choice `select` (at most 9 options), a `multiselect` tab, or `unsupported` for anything

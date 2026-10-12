@@ -10,7 +10,9 @@ import (
 // Screens under testdata/codex/screens were recorded with paths sanitised:
 // "0.159.3-*" and "0.160.0-approval-exec" in tmux (capture-pane -p -e,
 // 120x40), "0.160.0-herdr-*" through herdr pane.read ansi, where Codex draws
-// its composer on a background.
+// its composer on a background, "0.162.1-model-picker" and
+// "0.162.1-effort-picker" (/model and its effort step) in psmux (capture-pane
+// -p -e, 160 columns).
 func codexCapture(t *testing.T, name string) string {
 	t.Helper()
 	b, err := os.ReadFile(filepath.Join("testdata", "codex", "screens", name+".txt"))
@@ -57,6 +59,9 @@ func TestReadCodexScreenRecorded(t *testing.T) {
 			pointer: 1,
 		},
 		{screen: "0.159.3-dialog-rate-limit-model", kind: "unsupported", title: "Approaching rate limits"},
+		// /model's pickers: a dialog read only, never a draft.
+		{screen: "0.162.1-model-picker", kind: "unsupported", title: "Select Model and Effort"},
+		{screen: "0.162.1-effort-picker", kind: "unsupported", title: "Select Reasoning Level for GPT-6-Astra"},
 		{
 			screen: "0.160.0-approval-exec", kind: "permission", title: "Would you like to run the following command?",
 			options: "1:Yes, proceed|2:Yes, and don't ask again for commands that start with `sleep 8`|3:No, and tell Codex what to do differently",
@@ -172,6 +177,49 @@ func TestCodexDialogLookalikes(t *testing.T) {
 		"  Would you like to run the following command?", "", "  $ touch c.txt", "", codexPointerRow, "  2. No (esc)")
 	if sc := readCodexScreen(bare); sc.prompt == nil || sc.prompt.Kind != "unsupported" || len(sc.prompt.Options) != 0 {
 		t.Fatalf("no footer: %+v", sc.prompt)
+	}
+}
+
+// herdr draws the selected row of a picker in colours, not reverse video:
+// the picker's footer still makes it a dialog, never a draft "2. GPT-…".
+func TestReadCodexScreenPickerWithoutReverse(t *testing.T) {
+	for _, name := range []string{"0.162.1-model-picker", "0.162.1-effort-picker"} {
+		recorded := codexCapture(t, name)
+		colours := strings.NewReplacer("\x1b[0;1;7m", "\x1b[0;1;38;2;0;0;46;48;2;99;168;248m", "\x1b[0;7m", "\x1b[0;48;2;99;168;248m").Replace(recorded)
+		if colours == recorded {
+			t.Fatalf("%s: no reverse video replaced", name)
+		}
+		want, sc := readCodexScreen(recorded), readCodexScreen(colours)
+		if sc.input != inputNone || sc.prompt == nil || sc.prompt.Kind != "unsupported" || sc.prompt.Title != want.prompt.Title || sc.sig != want.sig {
+			t.Fatalf("%s: input %q draft %q prompt %+v", name, sc.input, sc.draft, sc.prompt)
+		}
+	}
+	// A narrow pane wraps the picker's footer onto two rows.
+	for _, name := range []string{"0.162.1-model-picker", "0.162.1-effort-picker"} {
+		lines := strings.Split(strings.TrimRight(codexCapture(t, name), "\r\n"), "\n")
+		footer := strings.TrimSpace(parseScreen(lines[len(lines)-1])[0].text)
+		head, tail, ok := strings.Cut(footer, " · esc")
+		if !ok {
+			t.Fatalf("%s: footer %q", name, footer)
+		}
+		narrow := codexRows(append(lines[:len(lines)-1], "  "+head+" ·", "  esc"+tail)...)
+		narrow = strings.NewReplacer("\x1b[0;1;7m", "\x1b[0;1;48;2;99;168;248m", "\x1b[0;7m", "\x1b[0;48;2;99;168;248m").Replace(narrow)
+		want := readCodexScreen(codexCapture(t, name))
+		if sc := readCodexScreen(narrow); sc.input != inputNone || sc.prompt == nil || sc.prompt.Kind != "unsupported" || sc.prompt.Title != want.prompt.Title {
+			t.Fatalf("%s narrow: input %q draft %q prompt %+v", name, sc.input, sc.draft, sc.prompt)
+		}
+	}
+	// A numbered draft over the composer's own footer stays a draft, a
+	// wrapped one whose text reads like a picker's footer too, and a
+	// picker's footer under a row that is no option is no picker.
+	for _, tt := range []struct{ name, capture, input, draft string }{
+		{"draft", codexRows("› 2. GPT-6-Astra", "", codexModelRow, codexHintsRow), inputDraft, "2. GPT-6-Astra"},
+		{"wrapped draft", codexRows("› 2. GPT-6-Astra", "  enter select ·", "  esc back", "", codexModelRow, codexHintsRow), inputDraft, "2. GPT-6-Astra enter select · esc back"},
+		{"no option", codexRows("› GPT-6-Astra", "", "  enter select · esc back"), inputDraft, "GPT-6-Astra"},
+	} {
+		if sc := readCodexScreen(tt.capture); sc.input != tt.input || sc.draft != tt.draft || sc.prompt != nil {
+			t.Fatalf("%s: input %q draft %q prompt %+v", tt.name, sc.input, sc.draft, sc.prompt)
+		}
 	}
 }
 

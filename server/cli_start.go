@@ -879,10 +879,44 @@ func (c *cli) warnExposure(o startOptions) {
 	case o.noAuth && (o.lan || o.tailscale != ""):
 		c.warnf("Auth is OFF and other machines can reach this server: anyone on that network gets a shell. Drop it with --no-auth=false.")
 	case o.noAuth:
-		c.warnf("Auth is off: any program on this machine can open a shell through the server (turn it on: --no-auth=false)")
+		c.warnf("Auth is off: %s can open a shell through the server (turn it on: --no-auth=false)", noAuthReach(c.goos, onWSL(c.goos), o.allowLocalUsers))
 	case o.lan:
 		c.warnf("LAN access is on: every device on this network can reach the login page (turn it off: --lan=false)")
 	}
+}
+
+// noAuthReach says who can reach a server without auth that listens on this
+// machine only. Linux and Windows refuse connections from other OS users
+// (see peer_user_*.go); under WSL 2 a Windows user's program still gets
+// through (NAT: root's relay; mirrored: the foreign peer is let in), and
+// other systems (macOS) have no check.
+func noAuthReach(goos string, wsl bool, allowed []string) string {
+	if goos != "linux" && goos != "windows" {
+		return "any program on this machine"
+	}
+	if wsl {
+		return "any program on this machine or on Windows"
+	}
+	// Linux trusts only root besides this user; Windows also SYSTEM and
+	// session 0 services (peer_user_*.go).
+	who := []string{"any program you run", "root"}
+	if goos == "windows" {
+		who = []string{"any program you run", "SYSTEM", "services"}
+	}
+	if len(allowed) > 0 {
+		who = append(who, "the users "+strings.Join(allowed, ", "))
+	}
+	return strings.Join(who[:len(who)-1], ", ") + " and " + who[len(who)-1]
+}
+
+// onWSL reports whether this Linux runs under WSL (the kernel release names
+// Microsoft, as isWSLRelease in peer_user_linux.go reads it).
+func onWSL(goos string) bool {
+	if goos != "linux" {
+		return false
+	}
+	b, err := os.ReadFile("/proc/sys/kernel/osrelease")
+	return err == nil && strings.Contains(strings.ToLower(string(b)), "microsoft")
 }
 
 // showLocalUsers says which other OS users may connect from this machine,

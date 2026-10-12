@@ -19,6 +19,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 var tmuxSocket = os.Getenv("TMUX_SOCKET")
@@ -552,19 +553,25 @@ type tmuxPaneProc struct {
 	proc   ProcessInfo
 }
 
-// parseTmuxPanes reads tmuxPaneFormat output into each window's panes, in
-// pane order. It stops at the first entry it cannot read (a psmux that does
-// not expand #{n:}, a length that does not match), keeping the windows
-// before it but not the one it was in, which would be missing panes; a pane
-// listed twice is dropped altogether.
-func parseTmuxPanes(out []byte) map[tmuxWindowKey][]tmuxPaneProc {
-	type paneKey struct {
-		w     tmuxWindowKey
-		index int
-	}
-	seen := map[paneKey]int{}
-	var order []paneKey
-	procs := map[paneKey]tmuxPaneProc{}
+// psmuxPaneFormat is tmuxPaneFormat for psmux, which expands #{n:} to
+// nothing: one pane a line, its fields split by '|'. A Windows file name
+// and an image name never hold '|', a line break or a control character.
+const psmuxPaneFormat = "#{session_id}|#{window_index}|#{pane_index}|#{pane_active}|" +
+	"#{pane_current_command}|#{pane_current_path}"
+
+// tmuxPaneEntry is one pane of a list-panes reply, its fields unchecked
+// beyond what reading them needed. w is set once its window was read.
+type tmuxPaneEntry struct {
+	w                      tmuxWindowKey
+	idx, active, cmd, path string
+}
+
+// tmuxPaneReader reads the entry at the start of b, returning what follows
+// it; ok is false when the entry cannot be read.
+type tmuxPaneReader func(b []byte) (e tmuxPaneEntry, rest []byte, ok bool)
+
+// readTmuxPaneSized reads one tmuxPaneFormat entry.
+func readTmuxPaneSized(b []byte) (e tmuxPaneEntry, rest []byte, ok bool) {
 	field := func(b []byte) (string, []byte, bool) {
 		i := bytes.IndexByte(b, ':')
 		if i < 0 || i > 16 {
@@ -580,6 +587,83 @@ func parseTmuxPanes(out []byte) map[tmuxWindowKey][]tmuxPaneProc {
 		}
 		return string(rest[:size]), rest[size:], true
 	}
+	var sid, win string
+	if sid, b, ok = field(b); !ok || !tmuxSessionIDRe.MatchString(sid) {
+		return e, nil, false
+	}
+	if win, b, ok = field(b); !ok || !tmuxIndexRe.MatchString(win) {
+		return e, nil, false
+	}
+	e.w = tmuxWindowKey{sid, win}
+	if e.idx, b, ok = field(b); !ok {
+		return e, nil, false
+	}
+	if e.active, b, ok = field(b); !ok {
+		return e, nil, false
+	}
+	if e.cmd, b, ok = sized(b); !ok {
+		return e, nil, false
+	}
+	if e.path, b, ok = sized(b); !ok {
+		return e, nil, false
+	}
+	b = bytes.TrimPrefix(b, []byte("\r"))
+	if len(b) > 0 {
+		if b[0] != '\n' {
+			return e, nil, false
+		}
+		b = b[1:]
+	}
+	return e, b, true
+}
+
+// readPsmuxPaneLine reads one psmuxPaneFormat line (its "\r\n" or "\n" end,
+// or the end of the reply). A line of more or fewer than 6 fields, or one
+// holding a control character, cannot be read.
+func readPsmuxPaneLine(b []byte) (e tmuxPaneEntry, rest []byte, ok bool) {
+	line := b
+	if i := bytes.IndexByte(b, '\n'); i >= 0 {
+		line, rest = b[:i], b[i+1:]
+	}
+	line = bytes.TrimSuffix(line, []byte("\r"))
+	f := strings.Split(string(line), "|")
+	if len(f) != 6 || !tmuxSessionIDRe.MatchString(f[0]) || !tmuxIndexRe.MatchString(f[1]) {
+		return e, nil, false
+	}
+	e.w = tmuxWindowKey{f[0], f[1]}
+	for _, c := range line {
+		if c < 0x20 || c == 0x7f {
+			return e, nil, false
+		}
+	}
+	e.idx, e.active, e.cmd, e.path = f[2], f[3], f[4], f[5]
+	return e, rest, true
+}
+
+// parseTmuxPanes reads tmuxPaneFormat output into each window's panes, in
+// pane order (see collectTmuxPanes).
+func parseTmuxPanes(out []byte) map[tmuxWindowKey][]tmuxPaneProc {
+	return collectTmuxPanes(out, readTmuxPaneSized)
+}
+
+// parsePsmuxPanes reads psmuxPaneFormat output, as parseTmuxPanes does.
+func parsePsmuxPanes(out []byte) map[tmuxWindowKey][]tmuxPaneProc {
+	return collectTmuxPanes(out, readPsmuxPaneLine)
+}
+
+// collectTmuxPanes reads every entry with read into each window's panes, in
+// pane order. It stops at the first entry it cannot read (a psmux that does
+// not expand #{n:}, a length that does not match), keeping the windows
+// before it but not the one it was in, which would be missing panes; a pane
+// listed twice is dropped altogether.
+func collectTmuxPanes(out []byte, read tmuxPaneReader) map[tmuxWindowKey][]tmuxPaneProc {
+	type paneKey struct {
+		w     tmuxWindowKey
+		index int
+	}
+	seen := map[paneKey]int{}
+	var order []paneKey
+	procs := map[paneKey]tmuxPaneProc{}
 	// broken is the window of the entry that could not be read: the one it
 	// names, else (its window unreadable) the last one read, to be safe.
 	var broken *tmuxWindowKey
@@ -589,41 +673,21 @@ func parseTmuxPanes(out []byte) map[tmuxWindowKey][]tmuxPaneProc {
 			complete = true
 			break
 		}
-		var sid, win, idx, active, cmd, path string
-		var ok bool
-		if sid, b, ok = field(b); !ok || !tmuxSessionIDRe.MatchString(sid) {
+		e, rest, ok := read(b)
+		if e.w.sessionID != "" {
+			broken = &e.w
+		}
+		if !ok || !tmuxIndexRe.MatchString(e.idx) || (e.active != "0" && e.active != "1") {
 			break
 		}
-		if win, b, ok = field(b); !ok || !tmuxIndexRe.MatchString(win) {
-			break
-		}
-		broken = &tmuxWindowKey{sid, win}
-		if idx, b, ok = field(b); !ok || !tmuxIndexRe.MatchString(idx) {
-			break
-		}
-		if active, b, ok = field(b); !ok || (active != "0" && active != "1") {
-			break
-		}
-		if cmd, b, ok = sized(b); !ok {
-			break
-		}
-		if path, b, ok = sized(b); !ok {
-			break
-		}
-		b = bytes.TrimPrefix(b, []byte("\r"))
-		if len(b) > 0 {
-			if b[0] != '\n' {
-				break
-			}
-			b = b[1:]
-		}
-		n, _ := strconv.Atoi(idx)
-		k := paneKey{tmuxWindowKey{sid, win}, n}
+		b = rest
+		n, _ := strconv.Atoi(e.idx)
+		k := paneKey{e.w, n}
 		if seen[k]++; seen[k] == 1 {
 			order = append(order, k)
 		}
-		if name := processName(cmd); name != "" {
-			procs[k] = tmuxPaneProc{index: n, active: active == "1", proc: ProcessInfo{Name: name, Cwd: processCwd(path)}}
+		if name := processName(e.cmd); name != "" {
+			procs[k] = tmuxPaneProc{index: n, active: e.active == "1", proc: ProcessInfo{Name: name, Cwd: processCwd(e.path)}}
 		}
 	}
 	windows := map[tmuxWindowKey][]tmuxPaneProc{}
@@ -661,21 +725,28 @@ type tmuxProcWindow struct {
 	at    time.Time
 }
 
+// tmuxPaneListing is the list-panes command of this server and the parser of
+// its reply: psmux expands #{n:} to nothing, so it gets psmuxPaneFormat.
+func tmuxPaneListing() ([]string, func([]byte) map[tmuxWindowKey][]tmuxPaneProc) {
+	if tmuxIsPsmux {
+		// psmux (Windows) is not known to take -u.
+		return []string{"list-panes", "-a", "-F", psmuxPaneFormat}, parsePsmuxPanes
+	}
+	// Without a UTF-8 locale (a service, env -i) tmux prints each multibyte
+	// character as '_', and the lengths no longer match; -u makes it send
+	// UTF-8 whatever the locale.
+	return []string{"-u", "list-panes", "-a", "-F", tmuxPaneFormat}, parseTmuxPanes
+}
+
 // tmuxPaneProcesses lists every pane's process. A window missing from the
 // reply keeps what was read for it in the last tmuxProcKeep, so names do not
 // blink between polls; a failure never fails the snapshot.
 func tmuxPaneProcesses(ctx context.Context) map[tmuxWindowKey][]tmuxPaneProc {
-	args := []string{"list-panes", "-a", "-F", tmuxPaneFormat}
-	// Without a UTF-8 locale (a service, env -i) tmux prints each multibyte
-	// character as '_', and the lengths no longer match; -u makes it send
-	// UTF-8 whatever the locale. psmux (Windows) is not known to take it.
-	if !tmuxIsPsmux {
-		args = append([]string{"-u"}, args...)
-	}
+	args, parse := tmuxPaneListing()
 	out, err := tmuxCmd(ctx, args...).Output()
 	var got map[tmuxWindowKey][]tmuxPaneProc
 	if err == nil {
-		got = parseTmuxPanes(out)
+		got = parse(out)
 	}
 	now := time.Now()
 	tmuxProcs.Lock()
@@ -1358,10 +1429,13 @@ func (tmuxMux) Capture(ctx context.Context, target string) (string, error) {
 
 // Paste loads text into a buffer of its own name and pastes it bracketed
 // (-p), deleting the buffer (-d): the user's own buffers, and a concurrent
-// paste, are never touched.
+// paste, are never touched. psmux types the paste instead (psmuxPaste).
 func (tmuxMux) Paste(ctx context.Context, target, text string) error {
 	if !validAgentTarget(target) {
 		return inputError("invalid pane")
+	}
+	if tmuxIsPsmux {
+		return psmuxPaste(ctx, target, text)
 	}
 	b := make([]byte, 8)
 	if _, err := rand.Read(b); err != nil {
@@ -1376,6 +1450,72 @@ func (tmuxMux) Paste(ctx context.Context, target, text string) error {
 	if err := tmuxCmd(ctx, "paste-buffer", "-b", name, "-p", "-d", "-t", target).Run(); err != nil {
 		tmuxCmd(context.Background(), "delete-buffer", "-b", name).Run()
 		return err
+	}
+	return nil
+}
+
+const (
+	pasteStart = "\x1b[200~"
+	pasteEnd   = "\x1b[201~"
+	// psmuxPasteChunk is the most bytes one send-keys -H call carries.
+	psmuxPasteChunk = 4096
+)
+
+// psmuxPasteChunks is text as a bracketed paste, line feeds sent as carriage
+// returns (as tmux's paste-buffer without -r sends them), cut into pieces of
+// at most limit bytes, each cut at the start of a UTF-8 rune.
+func psmuxPasteChunks(text string, limit int) []string {
+	s := pasteStart + strings.ReplaceAll(text, "\n", "\r") + pasteEnd
+	var chunks []string
+	for len(s) > 0 {
+		n := min(limit, len(s))
+		if n < len(s) {
+			// The end marker goes whole in the last piece: a piece failing
+			// halfway through it would leave the program in paste mode.
+			if end := len(s) - len(pasteEnd); n > end && end > 0 {
+				n = end
+			}
+			cut := n
+			for k := 0; k < utf8.UTFMax-1 && cut > 0 && !utf8.RuneStart(s[cut]); k++ {
+				cut--
+			}
+			if cut > 0 && utf8.RuneStart(s[cut]) {
+				n = cut // else not UTF-8 there: cut at limit, the bytes go as they are
+			}
+		}
+		chunks = append(chunks, s[:n])
+		s = s[n:]
+	}
+	return chunks
+}
+
+// psmuxHexArgs is send-keys -H for the exact target with each byte of s.
+func psmuxHexArgs(target, s string) []string {
+	args := make([]string, 0, 4+len(s))
+	args = append(args, "send-keys", "-H", "-t", target)
+	for i := 0; i < len(s); i++ {
+		args = append(args, hex.EncodeToString([]byte{s[i]}))
+	}
+	return args
+}
+
+// psmuxPaste types the paste into the target as raw bytes: psmux 3.3.8's
+// paste-buffer -b answers "no buffer", and send-keys -l turns a line break
+// into the two characters "\n". No client or buffer is touched. If a piece
+// fails once the start marker may have gone out (a later piece, or the
+// first one cut short by the context), the end marker is still sent, so the
+// program does not stay in paste mode; a first piece refused outright (a
+// missing window) sends nothing more.
+func psmuxPaste(ctx context.Context, target, text string) error {
+	for i, chunk := range psmuxPasteChunks(text, psmuxPasteChunk) {
+		if err := tmuxCmd(ctx, psmuxHexArgs(target, chunk)...).Run(); err != nil {
+			if i > 0 || ctx.Err() != nil {
+				end, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+				tmuxCmd(end, psmuxHexArgs(target, pasteEnd)...).Run()
+				cancel()
+			}
+			return err
+		}
 	}
 	return nil
 }

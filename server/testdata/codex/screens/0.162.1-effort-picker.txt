@@ -1,0 +1,40 @@
+[0m
+[0m  [0;38;2;99;168;248m>_ [0;1mOpenAI Codex[0;2m (v0.162.1)[0m
+[0m     [0;2m/home/user/proj[0m
+[0m
+[0m
+[0m
+[0m
+[0m
+[0m
+[0m
+[0m
+[0m
+[0m
+[0m
+[0m
+[0m
+[0m
+[0m
+[0m
+[0m
+[0m
+[0m
+[0m
+[0m
+[0m
+[0m
+[0m
+[0m
+[0m
+[0m
+[0m  [0;1mSelect Reasoning Level for GPT-6-Astra[0m
+[0m
+[0m
+[0;1;7m› 1. Low (default) (current)  [0;7mFast responses with lighter reasoning[0m
+[0m  2. Medium                   [0;2mBalances speed and reasoning depth for everyday tasks[0m
+[0m  3. High                     [0;2mGreater reasoning depth for complex problems[0m
+[0m  4. Extra high               [0;2mExtra high reasoning depth for complex problems[0m
+[0m  5. More reasoning…          [0;2mMax and Ultra consume usage limits faster[0m
+[0m
+[0m  [0;1menter[0;2m default · [0;1ms[0;2m session · [0;1mesc[0;2m back[0m
