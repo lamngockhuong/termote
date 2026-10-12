@@ -474,9 +474,9 @@ test.describe('files and changes views', () => {
         await row.getByRole('button', { name: /^Actions for / }).click()
         await page.getByRole('menuitem', { name: 'Download' }).click()
       }
-      const saved = async (start: () => Promise<void>, name: string) => {
+      const saved = async (start: () => Promise<void>, name: string | RegExp) => {
         const [download] = await Promise.all([page.waitForEvent('download'), start()])
-        expect(download.suggestedFilename()).toBe(name)
+        expect(download.suggestedFilename()).toMatch(name)
         return readFileSync((await download.path()) as string)
       }
       await panel.getByRole('treeitem', { name: 'e2e-download' }).click()
@@ -503,7 +503,8 @@ test.describe('files and changes views', () => {
       expect(downloads).toBe(0)
       await rowMenu(/^\.env/)
       expect(
-        (await saved(() => ask.getByRole('button', { name: 'Download' }).click(), '.env')).toString(),
+        // Chromium drops a name's leading dot (it would save a hidden file)
+        (await saved(() => ask.getByRole('button', { name: 'Download' }).click(), /^\.?env$/)).toString(),
       ).toBe('TOKEN=e2e-download\n')
     } finally {
       // The Changes tests must never see it as untracked
