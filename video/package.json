@@ -8,7 +8,8 @@
     "audio": "node audio/make-audio.mjs",
     "dev": "node audio/make-audio.mjs && remotion studio",
     "render": "node audio/make-audio.mjs && remotion render TermoteIntro ../website/public/video/termote-intro.mp4 --crf=23 && remotion render TermoteHero ../website/public/video/termote-hero.mp4 --muted --crf=23 && remotion still TermotePoster ../website/public/video/termote-intro.jpg --image-format=jpeg --jpeg-quality=85 && remotion still TermoteHero ../website/public/video/termote-hero.jpg --frame=0 --image-format=jpeg --jpeg-quality=85 && remotion render TermoteIntroVertical out/termote-intro-vertical.mp4",
-    "lint": "eslint src && tsc"
+    "lint": "eslint src && tsc",
+    "screenshots": "remotion still ReadmePhones ../docs/images/screenshots/phones.png && remotion still ReadmeDesktop ../docs/images/screenshots/desktop.png && remotion still ReadmeStyles ../docs/images/screenshots/ui-styles.png"
   },
   "devDependencies": {
     "@remotion/cli": "4.0.534",

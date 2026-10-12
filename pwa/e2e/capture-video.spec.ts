@@ -6,9 +6,10 @@ import { type Browser, expect, type Page, type TestInfo, test } from './fixtures
 
 // Screens of the intro video (video/), taken against the demo server that
 // video/capture/demo-env.sh starts; see video/README.md for the commands.
-// DEMO_MUX=herdr (the default) takes every screen but one, DEMO_MUX=tmux
-// that one (the desktop on tmux, shown beside Herdr's); tmux also needs
-// TMUX_SOCKET. The title starts with "Capture screenshots", which CI's run
+// DEMO_MUX=herdr (the default) takes most screens, DEMO_MUX=tmux the
+// desktop on tmux (shown beside Herdr's) and the phone's terminal, since tmux
+// sizes the window to the phone (a headless Herdr's pane keeps its own width,
+// so its text is drawn tiny); tmux also needs TMUX_SOCKET. The title starts with "Capture screenshots", which CI's run
 // leaves out.
 const mux = process.env.DEMO_MUX === 'tmux' ? 'tmux' : 'herdr'
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -51,15 +52,16 @@ async function open(
   browser: Browser,
   context: ReturnType<typeof phone> | ReturnType<typeof desktop>,
   path: string,
+  uiStyle: 'neutral' | 'terminal' | 'native' = 'neutral',
 ): Promise<Page> {
   const ctx = await browser.newContext(context)
-  await ctx.addInitScript(() => {
+  await ctx.addInitScript((style) => {
     localStorage.setItem('termote-theme', 'dark')
     localStorage.setItem(
       'termote-settings',
-      JSON.stringify({ uiStyle: 'neutral', hasSeenGestureHints: true }),
+      JSON.stringify({ uiStyle: style, hasSeenGestureHints: true }),
     )
-  })
+  }, uiStyle)
   const page = await ctx.newPage()
   // A browser page gets the sign-in form, never a Basic challenge
   await page.goto('/login')
@@ -99,17 +101,22 @@ test.describe('Capture screenshots for the intro video', () => {
     await page.context().close()
   })
 
-  test.describe('on Herdr', () => {
-    test.skip(mux !== 'herdr', 'every other screen is taken on Herdr')
-
-    test('phone terminal', async ({ browser }, testInfo) => {
-      const page = await open(browser, phone(testInfo), link('shell'))
+  // The terminal on a phone, in each interface style (the README's picture of
+  // them; neutral is the video's)
+  test('phone terminal on tmux', async ({ browser }, testInfo) => {
+    test.skip(mux !== 'tmux', 'tmux fits the window to the phone')
+    for (const style of ['neutral', 'terminal', 'native'] as const) {
+      const page = await open(browser, phone(testInfo), link('shell'), style)
       await waitTerminal(page)
       await expect(page.locator('.xterm-rows')).toContainText('dev@laptop', { timeout: 15000 })
       await page.waitForTimeout(500)
-      await shot(page, 'phone-terminal')
+      await shot(page, style === 'neutral' ? 'phone-terminal' : `phone-style-${style}`)
       await page.context().close()
-    })
+    }
+  })
+
+  test.describe('on Herdr', () => {
+    test.skip(mux !== 'herdr', 'every other screen is taken on Herdr')
 
     test('phone sessions', async ({ browser }, testInfo) => {
       const page = await open(browser, phone(testInfo), link('claude'))

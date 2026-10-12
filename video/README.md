@@ -3,12 +3,13 @@
 The feature intro of Termote, made with [Remotion](https://www.remotion.dev/). Three
 compositions share the same scenes (`src/scenes/`):
 
-| Composition            | Size      | Length | For                                        |
-| ---------------------- | --------- | ------ | ------------------------------------------ |
-| `TermoteIntro`         | 1920×1080 | ~61 s  | README, website                            |
-| `TermoteHero`          | 1920×1080 | 15 s   | Website hero: no words, loops              |
-| `TermoteIntroVertical` | 1080×1920 | ~31 s  | Social: the phone scenes with big captions |
-| `TermotePoster`        | 1920×1080 | still  | README and website: the intro's picture    |
+| Composition            | Size      | Length | For                                          |
+| ---------------------- | --------- | ------ | -------------------------------------------- |
+| `TermoteIntro`         | 1920×1080 | ~61 s  | README, website                              |
+| `TermoteHero`          | 1920×1080 | 15 s   | Website hero: no words, loops                |
+| `TermoteIntroVertical` | 1080×1920 | ~31 s  | Social: the phone scenes with big captions   |
+| `TermotePoster`        | 1920×1080 | still  | README and website: the intro's picture      |
+| `Readme*`              | 1800×1260 | stills | README screenshots (phones, desktop, styles) |
 
 `render` writes the intro, the hero and their pictures (`.jpg`) into
 `website/public/video/`, which is committed: the homepage plays them
@@ -41,6 +42,7 @@ pnpm install
 pnpm --filter @termote/video dev      # Remotion Studio
 pnpm --filter @termote/video render   # website/public/video/*, out/*.mp4
 pnpm --filter @termote/video audio    # public/audio/*.wav only
+pnpm --filter @termote/video screenshots  # docs/images/screenshots/*.png
 pnpm --filter @termote/video lint     # eslint + tsc
 ```
 
@@ -49,9 +51,13 @@ pnpm --filter @termote/video lint     # eslint + tsc
 `public/ui/*.png` are captures of the real PWA, taken against a throwaway
 server with demo content: a git repo `acme-api` with uncommitted edits, three
 workspaces (or tmux sessions), and the Claude Code stand-in
-(`tests/fixtures/fake-claude.sh`) holding a finished conversation. Every
-screen is taken on Herdr but `desktop-tmux.png`, shown beside it to say both
-backends work. Under Herdr the stand-in reports its state and session id to
+(`tests/fixtures/fake-claude.sh`) holding a finished conversation. Most
+screens are taken on Herdr; tmux takes `desktop-tmux.png`, shown beside
+Herdr's to say both backends work, and the phone's terminal in each interface
+style (`phone-terminal.png`, `phone-style-*.png`), since tmux sizes the window
+to the phone while a headless Herdr's pane keeps its own width and its text
+comes out tiny. The README's screenshots are stills of these captures
+(`src/readme-shots.tsx`, `pnpm screenshots`). Under Herdr the stand-in reports its state and session id to
 Herdr (`herdr pane report-agent`), which is what gives its pane a Chat view.
 Nothing in them is mocked up, and no real user, host or project name appears.
 Linux only; needs `herdr`, `tmux` and `jq`. To take them again after the UI
@@ -60,12 +66,12 @@ changed:
 ```sh
 make build
 cd pwa
-# Every screen but one, on Herdr (port 7686)
+# Most screens, on Herdr (port 7686)
 ../video/capture/demo-env.sh start /tmp/dev herdr   # the path shows in Files/Changes
 DEMO_MUX=herdr TERMOTE_PORT=7686 TERMOTE_PASS="$(cat /tmp/dev/pass)" \
   pnpm exec playwright test capture-video --workers=1
 ../video/capture/demo-env.sh stop /tmp/dev
-# desktop-tmux.png, on tmux (port 7685)
+# desktop-tmux.png and the phone's terminals, on tmux (port 7685)
 ../video/capture/demo-env.sh start /tmp/dev tmux
 DEMO_MUX=tmux TMUX_SOCKET=/tmp/termote-demo-$(id -u)-7685.sock TERMOTE_PORT=7685 \
   TERMOTE_PASS="$(cat /tmp/dev/pass)" pnpm exec playwright test capture-video --workers=1

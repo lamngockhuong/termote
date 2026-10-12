@@ -375,7 +375,7 @@ if [ "$mux" = herdr ]; then
   run "$api_pane" "clear; exec $work/bin/api-log.sh"
   run "$claude_pane" "$fake_claude"
   shell_pane=$(h tab create --workspace "$ws" --cwd "$repo" --label shell --no-focus | jq -r '.. | .pane_id? // empty' | head -1)
-  run "$shell_pane" "clear && git status --short && go test ./auth/..."
+  run "$shell_pane" "clear && git status --short && git --no-pager diff --stat && go test -v ./auth/..."
   # Workspace web: another Claude Code, busy; infra: a shell
   web=$(h workspace create --cwd "$home/web" --label web --no-focus | jq -r .result.workspace.workspace_id)
   web_pane=$(h pane list | jq -r --arg w "$web" '.result.panes[] | select(.workspace_id == $w) | .pane_id')
@@ -396,7 +396,7 @@ else
   t set -g status off
   # acme-api: a shell, the dev server, Claude Code
   t rename-window -t '=acme-api:=0' shell
-  t send-keys -t '=acme-api:=0' "cd ~/acme-api && clear && git status --short && go test ./auth/..." Enter
+  t send-keys -t '=acme-api:=0' "cd ~/acme-api && clear && git status --short && git --no-pager diff --stat && go test -v ./auth/..." Enter
   t new-window -d -t 'acme-api:' -n api -c "$repo" "$work/bin/api-log.sh"
   t new-window -t 'acme-api:' -n claude -c "$repo" bash -c "$fake_claude"
   # Two more groups for the sessions list

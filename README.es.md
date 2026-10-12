@@ -67,17 +67,15 @@ Controla remotamente herramientas CLI (Claude Code, GitHub Copilot, cualquier te
 ## Capturas de Pantalla
 
 <p align="center">
-  <img src="docs/images/screenshots/mobile-terminal.png" alt="Terminal Movil" width="280" />
-  &nbsp;&nbsp;
-  <img src="docs/images/screenshots/mobile-sidebar.png" alt="Barra Lateral de Sesiones" width="280" />
+  <img src="docs/images/screenshots/phones.png" alt="Terminal, Chat y Changes en el móvil" width="720" />
 </p>
 
 <p align="center">
-  <img src="docs/images/screenshots/desktop-terminal.png" alt="Desktop Terminal" width="600" />
+  <img src="docs/images/screenshots/desktop.png" alt="Desktop: Chat and Changes on Herdr" width="720" />
 </p>
 
 <p align="center">
-  <img src="docs/images/screenshots/ui-styles.png" alt="Interface Styles" width="600" />
+  <img src="docs/images/screenshots/ui-styles.png" alt="Interface Styles" width="720" />
 </p>
 
 ## Arquitectura

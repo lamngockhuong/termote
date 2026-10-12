@@ -67,17 +67,15 @@
 ## Ảnh Chụp Màn Hình
 
 <p align="center">
-  <img src="docs/images/screenshots/mobile-terminal.png" alt="Mobile Terminal" width="280" />
-  &nbsp;&nbsp;
-  <img src="docs/images/screenshots/mobile-sidebar.png" alt="Session Sidebar" width="280" />
+  <img src="docs/images/screenshots/phones.png" alt="Terminal, Chat và Changes trên điện thoại" width="720" />
 </p>
 
 <p align="center">
-  <img src="docs/images/screenshots/desktop-terminal.png" alt="Terminal trên desktop" width="600" />
+  <img src="docs/images/screenshots/desktop.png" alt="Desktop: Chat and Changes on Herdr" width="720" />
 </p>
 
 <p align="center">
-  <img src="docs/images/screenshots/ui-styles.png" alt="Ba kiểu giao diện" width="600" />
+  <img src="docs/images/screenshots/ui-styles.png" alt="Interface Styles" width="720" />
 </p>
 
 ## Kiến Trúc

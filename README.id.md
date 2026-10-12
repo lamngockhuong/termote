@@ -67,17 +67,15 @@ Kendalikan alat CLI (Claude Code, GitHub Copilot, terminal apa pun) dari jarak j
 ## Tangkapan Layar
 
 <p align="center">
-  <img src="docs/images/screenshots/mobile-terminal.png" alt="Mobile Terminal" width="280" />
-  &nbsp;&nbsp;
-  <img src="docs/images/screenshots/mobile-sidebar.png" alt="Session Sidebar" width="280" />
+  <img src="docs/images/screenshots/phones.png" alt="Terminal, Chat, dan Changes di ponsel" width="720" />
 </p>
 
 <p align="center">
-  <img src="docs/images/screenshots/desktop-terminal.png" alt="Desktop Terminal" width="600" />
+  <img src="docs/images/screenshots/desktop.png" alt="Desktop: Chat and Changes on Herdr" width="720" />
 </p>
 
 <p align="center">
-  <img src="docs/images/screenshots/ui-styles.png" alt="Interface Styles" width="600" />
+  <img src="docs/images/screenshots/ui-styles.png" alt="Interface Styles" width="720" />
 </p>
 
 ## Arsitektur

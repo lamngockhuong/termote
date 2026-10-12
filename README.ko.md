@@ -65,17 +65,15 @@
 ## 스크린샷
 
 <p align="center">
-  <img src="docs/images/screenshots/mobile-terminal.png" alt="모바일 터미널" width="280" />
-  &nbsp;&nbsp;
-  <img src="docs/images/screenshots/mobile-sidebar.png" alt="세션 사이드바" width="280" />
+  <img src="docs/images/screenshots/phones.png" alt="휴대폰의 터미널, Chat, Changes" width="720" />
 </p>
 
 <p align="center">
-  <img src="docs/images/screenshots/desktop-terminal.png" alt="Desktop Terminal" width="600" />
+  <img src="docs/images/screenshots/desktop.png" alt="Desktop: Chat and Changes on Herdr" width="720" />
 </p>
 
 <p align="center">
-  <img src="docs/images/screenshots/ui-styles.png" alt="Interface Styles" width="600" />
+  <img src="docs/images/screenshots/ui-styles.png" alt="Interface Styles" width="720" />
 </p>
 
 ## 아키텍처
