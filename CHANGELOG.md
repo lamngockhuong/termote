@@ -1,5 +1,35 @@
 # Changelog
 
+## [2.0.0](https://github.com/lamngockhuong/termote/compare/v1.20.0...v2.0.0) (2026-10-12)
+
+
+### ⚠ BREAKING CHANGES
+
+* **server:** isolation headers, refuse local connections of other OS users ([#440](https://github.com/lamngockhuong/termote/issues/440))
+
+### Features
+
+* CLI over a local socket, and sign the browser in from `termote url --open` ([#446](https://github.com/lamngockhuong/termote/issues/446)) ([3134064](https://github.com/lamngockhuong/termote/commit/31340644146cceffadde40501cd537a8fffaf71f))
+* Codex built-ins after / and skills after $ in the Chat view ([#291](https://github.com/lamngockhuong/termote/issues/291)) ([#451](https://github.com/lamngockhuong/termote/issues/451)) ([4f5df25](https://github.com/lamngockhuong/termote/commit/4f5df25f517231cd5b93f438ef2e8cb03948a34b))
+* download a file from the Files view ([#457](https://github.com/lamngockhuong/termote/issues/457)) ([#463](https://github.com/lamngockhuong/termote/issues/463)) ([eb73658](https://github.com/lamngockhuong/termote/commit/eb736584f62b5ce8f6a01dd4573d0bc88a98370e))
+* list and sign out the browsers signed in with the password ([#443](https://github.com/lamngockhuong/termote/issues/443)) ([c90aaee](https://github.com/lamngockhuong/termote/commit/c90aaeee0b363dc160d35a50cb069b5155b11751))
+* **pwa:** redesign the About sheet, with a shortcut to Updates ([#449](https://github.com/lamngockhuong/termote/issues/449)) ([58b6bb0](https://github.com/lamngockhuong/termote/commit/58b6bb053ab4be662c24cf56fa630c21c505a904))
+* rename or move a file in the Files view ([#456](https://github.com/lamngockhuong/termote/issues/456)) ([#458](https://github.com/lamngockhuong/termote/issues/458)) ([17d3f5f](https://github.com/lamngockhuong/termote/commit/17d3f5ffe8d3f19276c5ece83f911bd1d7424455))
+* run lint, format and vet in git hooks before commit and push ([#459](https://github.com/lamngockhuong/termote/issues/459)) ([#460](https://github.com/lamngockhuong/termote/issues/460)) ([55b2b67](https://github.com/lamngockhuong/termote/commit/55b2b67890e4c5ac1536a2d71a0080ba59363f65))
+* **server:** isolation headers, refuse local connections of other OS users ([#440](https://github.com/lamngockhuong/termote/issues/440)) ([fb3f16d](https://github.com/lamngockhuong/termote/commit/fb3f16d855d4616288e53e69a2455730f3263f32))
+* **video:** feature intro video, on the homepage and in the READMEs ([#461](https://github.com/lamngockhuong/termote/issues/461)) ([b4e64bf](https://github.com/lamngockhuong/termote/commit/b4e64bf14d8744e8b4a11f8e535ea1e22c65012b))
+
+
+### Bug Fixes
+
+* E2E tests that fail now and then on CI (rename, $skill, deep link reload) ([#462](https://github.com/lamngockhuong/termote/issues/462)) ([046d4be](https://github.com/lamngockhuong/termote/commit/046d4bec1f687a137e0ac49524d672c24f9f94a8))
+* hide paste tags in a Chat message sent with images ([#464](https://github.com/lamngockhuong/termote/issues/464)) ([882e32b](https://github.com/lamngockhuong/termote/commit/882e32b0d9270209f540e6b012836605f04e3c4d))
+* **pwa:** keep a long workspace name from scrolling the sidebar sideways ([#445](https://github.com/lamngockhuong/termote/issues/445)) ([821f69a](https://github.com/lamngockhuong/termote/commit/821f69a263a5bdb1d978cce483430723b66aeafd))
+* **pwa:** keep the Chat view's copy button inside a one-line code block on touch screens ([#450](https://github.com/lamngockhuong/termote/issues/450)) ([bba9808](https://github.com/lamngockhuong/termote/commit/bba9808b4e46e44ca88ba9e5d99ebdfc33871366))
+* **pwa:** show the fullscreen button only where the browser can go fullscreen ([#444](https://github.com/lamngockhuong/termote/issues/444)) ([9798401](https://github.com/lamngockhuong/termote/commit/97984012286b360afa33f15671a6cbf6eb1f4ca8))
+* show a Chat message sent with many images ([#466](https://github.com/lamngockhuong/termote/issues/466)) ([3724341](https://github.com/lamngockhuong/termote/commit/3724341267fd65f265d8d33c919c7725da57ced2))
+* Windows test findings (psmux names and Chat paste, Codex /model and long pastes, junction skills, --no-auth warning) ([#465](https://github.com/lamngockhuong/termote/issues/465)) ([85691d1](https://github.com/lamngockhuong/termote/commit/85691d1a6d0c1886520c8235dbb90c6a999367a0)), closes [#448](https://github.com/lamngockhuong/termote/issues/448)
+
 ## [1.20.0](https://github.com/lamngockhuong/termote/compare/v1.19.0...v1.20.0) (2026-10-10)
 
 
