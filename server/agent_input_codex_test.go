@@ -304,3 +304,26 @@ func TestWriteLockIsThePanes(t *testing.T) {
 		t.Fatal("the lock was not released")
 	}
 }
+
+// "/model" opens Codex's picker: the message was taken, though the picker's
+// selected row starts with "›" (herdr draws it in colours, not reverse
+// video). A message onto the open picker is refused.
+func TestCodexMessageOpensPicker(t *testing.T) {
+	shortConfirm(t)
+	picker := strings.NewReplacer("\x1b[0;1;7m", "\x1b[0;1;48;2;99;168;248m", "\x1b[0;7m", "\x1b[0;48;2;99;168;248m").
+		Replace(codexCapture(t, "0.162.1-model-picker"))
+	f := newCodexWriter()
+	f.onKeys = func(f *fakeWriter, keys []string) {
+		if keys[0] == "Enter" {
+			f.setScreen(picker)
+		}
+	}
+	mux := agentMux(f)
+	if code, body := postJSON(t, mux, "/api/mux/panes/0/agent/message", map[string]string{"text": "/model", "cursor": codexCursor()}); code != http.StatusNoContent {
+		t.Fatalf("POST = %d %v", code, body)
+	}
+	code, body := postJSON(t, mux, "/api/mux/panes/0/agent/message", map[string]string{"text": "hello", "cursor": codexCursor()})
+	if code != http.StatusConflict || body["code"] != "input_not_ready" || len(f.pasted) != 1 {
+		t.Fatalf("onto the picker = %d %v, pasted %q", code, body, f.pasted)
+	}
+}

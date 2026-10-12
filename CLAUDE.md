@@ -840,13 +840,19 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   single paste-buffer write, psmux types the paste in up to 5 `send-keys` calls (about 0.2 s
   each), so stream input from another device can land inside it, and an agent exiting between
   chunks leaves the rest typed into the shell.
-  An approval dialog
+  The wait for the text to show after its paste is 2 s + 6 ms a character, at most 30 s, for
+  Codex and for every agent on psmux (Claude Code on tmux and Herdr: 2 s), still polling; the
+  message route's budget and read deadline grow with it. An approval dialog
   (run a command, make edits) is answerable only on Herdr, where Herdr reports the agent
   blocked: the option goes as its digit, Cancel as Escape. On tmux the rollout records no
   approval request, so `prompt` answers `unsupported` with no options or `promptId`
   (`AgentSession.DialogsReadOnly`), as it does for any other Codex dialog. The screen reader
   (`server/agent_codex_prompt.go`) never takes text the model printed above the composer for a
-  dialog, and reads a card as read only when two approval titles sit in its stretch.
+  dialog, and reads a card as read only when two approval titles sit in its stretch. A list or
+  picker screen (`/model` and its effort step: a selected numbered `› N.` row, a footer like
+  `enter select · esc back` as the last row or two; herdr draws the row in colours, not reverse video)
+  reads as a read-only dialog, never as a composer draft, so `/model` is confirmed submitted and
+  a message onto an open picker gets 409 `input_not_ready`.
   `commands` (`server/agent_commands_codex.go`) lists skills only, suggested after `$` at the
   start of any word (`/` offers Codex 0.162.0's built-ins from the PWA's static list, `/exit` and
   `/logout` confirmed; a message ending with `$name` is sent with a trailing space, else Codex's

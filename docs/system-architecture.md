@@ -557,6 +557,9 @@ deadline, is followed by a best-effort end marker (never split across chunks), s
 not stay in paste mode. Accepted gap: unlike tmux's single paste-buffer write, psmux types the
 paste in up to 5 `send-keys` calls (about 0.2 s each), so stream input from another device can land
 inside it, and an agent exiting between chunks leaves the rest typed into the shell.
+The wait for the text to show is 2 s plus 6 ms a character, at most 30 s, for Codex and for every
+agent on psmux (Claude Code on tmux and Herdr keeps 2 s), polled as before; the route's time budget
+and read deadline grow with it.
 The text is at most 16 KB (UTF-8 bytes; the body 64 KB), with control
 characters other than newline and tab removed, so it cannot end the paste early.
 
@@ -585,7 +588,11 @@ On Herdr it reports `blocked`, so an approval card has options and a single-use 
 approval request, so the status is never `blocked`: `AgentSession.DialogsReadOnly` makes
 `prompt` answer `unsupported` with no options and no `promptId` (the PWA shows "Answer this
 dialog in the terminal."), and `answer` has nothing to consume. Other Codex dialogs (model
-picker, rate-limit prompt, …) are always read only, on either backend.
+picker, rate-limit prompt, …) are always read only, on either backend. A list or picker screen
+(`/model` and its effort step) has a selected numbered `› N.` row and a footer such as `enter
+select · esc back` as the last row or two; herdr draws that row in colours, not reverse video. It reads
+as a read-only dialog, never as a composer draft, so `/model` is confirmed submitted and a message
+onto an open picker gets 409 `input_not_ready`.
 
 `prompt` reads the screen and recognises the dialog anchored at its bottom: `permission`, a
 single-choice `select` (at most 9 options), a `multiselect` tab, or `unsupported` for anything

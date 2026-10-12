@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 	"unicode"
+	"unicode/utf8"
 )
 
 // The write half of the agent routes: send a message into the pane's input
@@ -46,7 +47,42 @@ var (
 	agentConfirmWait = 2 * time.Second
 	agentImageWait   = 11 * time.Second
 	agentPollEvery   = 100 * time.Millisecond
+	// agentPasteWaitPerChar and agentPasteWaitMax scale the wait for a
+	// message's text to show (pasteConfirmWait): Codex takes a paste at
+	// about 4.5 ms a character on Windows (3000 characters: 9 s on psmux,
+	// 13.8 s on herdr), and Claude Code on psmux shows its token 2.7 s
+	// after a 10 000-character paste returns. Tests shorten them.
+	agentPasteWaitPerChar = 6 * time.Millisecond
+	agentPasteWaitMax     = 30 * time.Second
 )
+
+// textConfirmWait is the scaled wait for text to show once pasted:
+// agentConfirmWait plus agentPasteWaitPerChar a character, at most
+// agentPasteWaitMax.
+func textConfirmWait(text string) time.Duration {
+	wait := agentConfirmWait + time.Duration(utf8.RuneCountInString(text))*agentPasteWaitPerChar
+	return max(agentConfirmWait, min(wait, agentPasteWaitMax))
+}
+
+// pasteConfirmWait is how long a message's pasted text may take to show in
+// the agent's input box: scaled for Codex and for any agent on psmux, which
+// take a long paste slowly; agentConfirmWait for Claude Code elsewhere. The
+// poll still returns as soon as the text shows.
+func pasteConfirmWait(wr agentWriter, agent, text string) time.Duration {
+	if agent == "codex" || writerIsPsmux(wr) {
+		return textConfirmWait(text)
+	}
+	return agentConfirmWait
+}
+
+// writerIsPsmux: the pane is psmux's (Windows), not a real tmux or herdr.
+func writerIsPsmux(wr agentWriter) bool {
+	switch wr.(type) {
+	case tmuxMux, *tmuxMux:
+		return tmuxIsPsmux
+	}
+	return false
+}
 
 // agentWriter is implemented by backends that can write to an agent's pane.
 // target is AgentSession.Target, never client input.
@@ -365,12 +401,15 @@ func (a *agentAPI) handleMessage(w http.ResponseWriter, r *http.Request) {
 	defer unlock()
 	// Once text is pasted, the Enter must follow even if the client goes
 	// away, or the text stays stranded in the input box.
-	budget := messageBudget(len(paths))
-	if len(paths) > 0 {
+	// The text's wait as scaled for any agent: an upper bound of what
+	// sendMessage waits for it.
+	budget := messageBudget(len(paths), textConfirmWait(text))
+	if len(paths) > 0 || budget > messageBudget(0, agentConfirmWait) {
 		// The body is read: the read deadline only has to outlast the
-		// pastes, which may pass requestReadTimeout with several images.
+		// pastes, which may pass requestReadTimeout with several images
+		// or a long text. Never earlier than readDeadline set it.
 		// Fails only on a writer without a connection (tests).
-		_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(budget + muxTimeout))
+		_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(max(budget+muxTimeout, requestReadTimeout)))
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), budget)
 	defer cancel()
@@ -383,12 +422,14 @@ func (a *agentAPI) handleMessage(w http.ResponseWriter, r *http.Request) {
 
 // messageBudget is how long a message with n images may take: a redraw to
 // settle, each paste and the Enter wait for the screen, and the backend
-// calls around them.
-func messageBudget(n int) time.Duration {
+// calls around them. textWait is the wait for the text to show
+// (pasteConfirmWait).
+func messageBudget(n int, textWait time.Duration) time.Duration {
 	if n == 0 {
-		return 4*agentConfirmWait + muxTimeout
+		return 3*agentConfirmWait + max(agentConfirmWait, textWait) + muxTimeout
 	}
-	return time.Duration(n+3)*max(agentConfirmWait, agentImageWait) + muxTimeout
+	step := max(agentConfirmWait, agentImageWait)
+	return time.Duration(n+2)*step + max(step, textWait) + muxTimeout
 }
 
 // imagePaths resolves a message's upload ids to their files. A client never
@@ -529,7 +570,7 @@ func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, sess
 		}
 		return sc.input == inputDraft && draftShowsImages(sc.draft, n, pasted)
 	}
-	if !pollScreen(ctx, wr, s.Agent, s.Target, shows) {
+	if !pollScreenFor(ctx, wr, s.Agent, s.Target, pasteConfirmWait(wr, s.Agent, pasted), shows) {
 		notShown := fail(http.StatusConflict, "paste_not_confirmed", "the pasted text did not show in the input box")
 		if n > 0 {
 			return a.abandon(ctx, wr, paneID, s, n, pasted, notShown)

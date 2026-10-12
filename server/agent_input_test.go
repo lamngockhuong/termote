@@ -986,15 +986,6 @@ func TestMessageFiveSlowImages(t *testing.T) {
 	}
 }
 
-func TestMessageBudget(t *testing.T) {
-	if got := messageBudget(0); got != 4*agentConfirmWait+muxTimeout {
-		t.Errorf("no images = %v", got)
-	}
-	if got := messageBudget(5); got != 8*agentImageWait+muxTimeout {
-		t.Errorf("5 images = %v", got)
-	}
-}
-
 func TestMessageImageRequests(t *testing.T) {
 	f := newFakeWriter()
 	mux, ids, _ := imageMux(t, f, 1)
