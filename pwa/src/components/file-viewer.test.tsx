@@ -1653,3 +1653,43 @@ describe('FileViewer for a view-only device', () => {
     expect(screen.queryByText('A view-only device cannot show it')).toBeNull()
   })
 })
+
+describe('FileViewer download', () => {
+  it('is offered with onDownload, for a file it cannot preview too', async () => {
+    mockContent.mockResolvedValue({
+      root: '/r',
+      path: 'a.bin',
+      size: 9,
+      previewable: false,
+      reason: 'binary',
+    })
+    const onDownload = vi.fn()
+    show({ path: 'a.bin', onDownload })
+    await screen.findByText(
+      'Not previewable (binary, special file or larger than 1 MiB)',
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Download' }))
+    expect(onDownload).toHaveBeenCalledWith({ revealed: false })
+  })
+
+  it('is not offered without onDownload', async () => {
+    mockContent.mockResolvedValue({ root: '/r', path: 'a', size: 1, text: 'x' })
+    show()
+    await screen.findByTestId('code-block')
+    expect(screen.queryByRole('button', { name: 'Download' })).toBeNull()
+  })
+
+  it('waits until a sensitive file is shown, then says it was', async () => {
+    mockContent
+      .mockResolvedValueOnce({ root: '/r', path: '.env', sensitive: true })
+      .mockResolvedValueOnce({ root: '/r', path: '.env', size: 3, text: 'A=1' })
+    const onDownload = vi.fn()
+    show({ path: '.env', onDownload })
+    await screen.findByText('This file may contain secrets. Show its contents?')
+    expect(screen.queryByRole('button', { name: 'Download' })).toBeNull()
+    fireEvent.click(await screen.findByRole('button', { name: 'Show' }))
+    await screen.findByTestId('code-block')
+    fireEvent.click(screen.getByRole('button', { name: 'Download' }))
+    expect(onDownload).toHaveBeenCalledWith({ revealed: true })
+  })
+})

@@ -248,6 +248,7 @@ GET    /api/mux/panes/{id}/files/find?q=&root=&ignored=1&exclude=&fresh=1 → {r
 GET    /api/mux/panes/{id}/files/changes?root=                  → {root, isRepo, branch, entries, truncated}
 GET    /api/mux/panes/{id}/files/diff?path=&orig=&staged=&root=&reveal= → {root, path, binary, conflict, truncated, sensitive, reason, hunks}
 GET    /api/mux/panes/{id}/files/raw?path=&root=&reveal=[&side=old|new&staged=&orig=] → image bytes | {error, code}
+GET    /api/mux/panes/{id}/files/download?path=&root=&reveal=[&check=1] → file bytes (attachment) | {root, path, size} (check=1) | {error, code}
 POST   /api/mux/uploads            body: raw image (image/png|jpeg|gif|webp) → {id, path, insert}
 ```
 
@@ -668,11 +669,12 @@ The PWA's Files and Changes views read a pane's directory, offered when the snap
 `caps.files`: tmux on Linux and macOS (`#{pane_current_path}` of the window's active pane) and
 Herdr (`foreground_cwd`, else `cwd`, of the pane; a Herdr that reports neither answers 501).
 psmux does not report the directory, so `caps.files` is off on Windows tmux. Every route is
-registered for every backend and answers 501 where it is off. Six are read-only GETs (`find`
+registered for every backend and answers 501 where it is off. Seven are read-only GETs (`find` and `download`
 included); `PUT files/content` saves a text file, `POST files/create` creates an empty one and
 `POST files/delete` / `files/restore` remove a file and put it back, `POST files/rename` moves a
-file to a new path, never replacing anything (see Saving a file, Creating a file, Finding a file,
-Deleting a file, Renaming a file).
+file to a new path, never replacing anything, and `GET files/download` sends a file as an
+attachment (see Saving a file, Creating a file, Finding a file, Deleting a file, Renaming a file,
+Downloading a file).
 
 **Root.** The pane's directory, raised to `git rev-parse --show-toplevel` when it is in a
 repository and a `.git` sits at that toplevel (a `core.worktree` naming another directory, even
@@ -893,6 +895,36 @@ never replacing a file, and never losing one a step fails on.
 - The PWA moves every tab, unsaved draft and Changes editor of the old path to the new one, in
   every pane of the root, refuses a new path whose file has unsaved changes, and offers Undo, a
   second rename back. Changes shows a deleted and an untracked file until the user stages.
+
+**Downloading a file (`GET download`).** `server/files_download.go`. Any regular file under the
+root, up to 100 MiB, goes to the device as a download the browser never renders.
+
+- `requireWriteRole` first (a view-only client gets 403 `view_only`, also for `check=1`), then
+  the GET guards of the other reads (`begin`: cross-site check, `nosniff`, the `root` query, 409
+  once it moved).
+- The path is checked as a delete checks it, read only: `createDenied` (the deny dirs, `.git`
+  and the git dir, plus the install's data dir and the upload store, so a file Files can show
+  there is still 403 `not_allowed`), parents opened by `walkParents` (a symlink, junction or
+  swapped directory is 403 `symlink`, a missing one 404), then `Lstat` of the file: a symlink is
+  403 `symlink`, a directory, FIFO, socket or device 400 `not_file` (never opened). A sensitive
+  name needs `reveal=1` (403 `sensitive`, checked after the `Lstat`, so a missing one is 404).
+  The handle opened must be the file checked (`SameFile`, else 409 `changed`); its size from
+  `Stat` must be at most 100 MiB (413 `too_large`).
+- It shares the 4 `files/raw` slots, taken without waiting (429 `busy`). The answer is
+  `application/octet-stream`, `Content-Disposition: attachment; filename*=UTF-8''<name>` (the
+  base name without control or format characters), `Cache-Control: no-store`, CORP
+  `same-origin`, and a second CSP `sandbox; default-src 'none'` on every answer of the route.
+  Exactly the size from `Stat` is sent (`CopyN` in 256 KiB chunks), each chunk with a 2-minute
+  write deadline and the whole within 30 minutes, so a client that stops reading frees its slot.
+- One `audit: download path=<relative> size by via` line right before the bytes, none for a
+  refusal or a `check=1`.
+- `check=1` runs every check without sending bytes or taking a slot (a full pool is still 429)
+  and answers `{root, path, size}`; the PWA calls it first so each refusal gets a message, then
+  clicks a link with `download`. In the iOS home-screen app, where such a link does nothing, it
+  skips the check (the read answers the same codes and the tap's activation is kept for the
+  sheet), reads the bytes and hands them to `navigator.share({files})`; when the activation ran
+  out a toast's Save shares from a new tap, and a `blob:` link is used only when the sheet takes
+  no file.
 
 **Guards.** Basic auth and the Host allowlist like every route; GETs pass `writeGuard`, so the
 handlers check `Sec-Fetch-Site`/`Origin` themselves (403 cross-site), which keeps another page

@@ -348,6 +348,7 @@ The `update` command:
 | `pwa/src/components/delete-file-dialog.tsx`       | Files: asks before a delete, second ask for a permanent one   |
 | `pwa/src/components/rename-file-dialog.tsx`       | Files: a file's new path, renames/moves it, says why not      |
 | `pwa/src/utils/file-name.ts`                      | Name checks of New file and Rename, the base name selected    |
+| `pwa/src/utils/download-file.ts`                  | Download: preflight, refusal messages, iOS share sheet        |
 | `pwa/src/components/markdown-preview.tsx`         | Markdown file rendered in Files/Changes (links, code blocks)  |
 | `pwa/src/components/mermaid-block.tsx`            | A mermaid block: the diagram image, Show source, fallback     |
 | `pwa/src/utils/mermaid-render.ts`                 | Mermaid → `data:` SVG image: locked config, queue, cache      |
@@ -408,6 +409,7 @@ The `update` command:
 | `server/files_find*.go`                           | `GET files/find`: file lists (git, walk), cache, ranking      |
 | `server/files_delete.go`                          | `POST files/delete`/`restore`, `content?hash=1`               |
 | `server/files_rename.go`                          | `POST files/rename`: a file moved, never replacing anything   |
+| `server/files_download.go`                        | `GET files/download`: a file as an attachment, `check=1`      |
 | `server/files_trash*.go`                          | Trash store, sweep, no-replace rename/rmdir by descriptor     |
 | `server/agent_proc*.go`                           | Finds Claude Code (or Codex) under a tmux/psmux pane          |
 | `server/agent_proc_handles_windows.go`            | Windows: write handles of every process (handle table, 1 s)   |
@@ -1053,6 +1055,39 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   editor of the old path, in every pane of the root, to the new one, never onto a draft with
   unsaved changes (refused before sending), and offers Undo (a second rename, not offered when
   the old name fails those name rules)
+- **Downloading a file** (`GET files/download?root=&path=&reveal=[&check=1]`,
+  `server/files_download.go`): any regular file under the pane root, at most 100 MiB, as a download
+  the browser never renders. `requireWriteRole` first (a view-only client gets 403 `view_only`,
+  `check=1` too), then `begin` (`requireMethod(GET)`, the files routes' cross-site check, `nosniff`,
+  `root` 409 once it moved). The path: `cleanRelPath` (`.` → 400 `not_file`), `createDenied` (the
+  read deny list plus the install's data dir and the upload store → 403 `not_allowed`: such a file
+  shows in Files but is not downloaded), parents through `walkParents` (a symlink, junction or
+  swapped directory → 403 `symlink`, missing → 404), the file's `Lstat` (symlink/junction → 403
+  `symlink`, directory, FIFO, socket or device → 400 `not_file`, never opened), a sensitive name
+  without `reveal=1` → 403 `sensitive` (after the `Lstat`: a missing one stays 404), opened
+  `O_NONBLOCK`, `SameFile` with the `Lstat` (409 `changed`), size from `Stat` over 100 MiB → 413
+  `too_large`. It shares the 4 `files/raw` slots (429 `busy`, no wait). Headers:
+  `application/octet-stream`, `Content-Disposition: attachment; filename*=UTF-8''<name>` (RFC 5987
+  escaped, the base name without control or format characters, `download` when nothing is left),
+  `Content-Length`, `Cache-Control: no-store`, CORP `same-origin`, and a second CSP `sandbox;
+  default-src 'none'` on every answer of the route. Exactly the `Stat` size is sent (`CopyN`, 256
+  KiB chunks; a file that grew sends no more), each chunk under a 2-minute write deadline and the
+  whole within 30 minutes, so a client that stops reading frees its slot. One `audit: download
+  path="<relative>" size by via` line (`by`: `password`, `device:<id>` or `none`; `via`:
+  `session|device|basic|local|none`) right before the bytes, none for a refusal or `check=1`.
+  `check=1` runs every check, takes no slot (a full pool still answers 429), sends no bytes and
+  answers `{root, path, size}` (`no-store`): the PWA calls it first so each refusal gets a toast (a
+  link with `download` never tells the page why it failed), then clicks a same-origin `<a
+  download>`; between the check and the download a change shows as the browser's own failed
+  download. In the iOS home-screen app (`isIos` and `isStandalone`), where such a link does nothing,
+  the PWA skips `check=1` (the read of the bytes answers the same codes, and the tap's activation,
+  about 5 s, is kept for the sheet), reads the bytes and calls `navigator.share({files})`; a
+  `NotAllowedError` (the activation ran out) shows a toast whose Save shares from a new tap, closing
+  the sheet is silent, and a `blob:` link revoked after 60 s is used only when `canShare` refuses
+  the file. Download is in the open file's header (not for a sensitive file not shown, nor for a
+  path through a link the tree has read) and on each regular file's row menu (a sensitive one asks
+  first); never on a directory or a symlink row, never for a view-only client. Out of scope:
+  directories, git versions, ranges
 - **Image uploads** (`POST /api/mux/uploads`): the PWA sends an image so an agent can read it by
   path (the host clipboard is empty when the image sits on a phone). Same auth, Host allowlist,
   `Sec-Fetch-Site`/`Origin` check and `requireWriteRole` as every write; the body is a raw

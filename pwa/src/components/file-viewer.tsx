@@ -2,6 +2,7 @@ import {
   ArrowLeft,
   Check,
   Copy,
+  Download,
   Ellipsis,
   Eye,
   Image as ImageIcon,
@@ -272,6 +273,9 @@ interface Props {
   // Offered in the header's menu when renaming is allowed (revealed: the
   // user chose to show this sensitive file)
   onRename?: (file: { revealed: boolean }) => void
+  // Offered in the header's menu when downloading is allowed, for any file
+  // but a sensitive one not shown (revealed: the user chose to show it)
+  onDownload?: (file: { revealed: boolean }) => void
   // The file's tab is the preview one: Keep open (and editing) pins it
   pinned?: boolean
   onPin?: () => void
@@ -330,6 +334,7 @@ export function FileViewer({
   onSaved,
   onDelete,
   onRename,
+  onDownload,
   pinned = true,
   onPin,
   onRevealed,
@@ -622,6 +627,14 @@ export function FileViewer({
       label: 'Rename',
       icon: <TextCursorInput size={15} />,
       onClick: () => onRename({ revealed: reveal }),
+    })
+  // Binary, too large to show or not a regular file alike: the server
+  // says when it cannot send one
+  if (!mine && onDownload && !sensitive)
+    extras.push({
+      label: 'Download',
+      icon: <Download size={15} />,
+      onClick: () => onDownload({ revealed: reveal }),
     })
   if (!mine && onDelete)
     extras.push({

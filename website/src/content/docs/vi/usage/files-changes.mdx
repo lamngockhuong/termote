@@ -294,6 +294,35 @@ chọn sẵn.
 
 Phiên chỉ xem không có nút Rename.
 
+## Tải file về máy
+
+Có thể lưu một bản sao của file về thiết bị đang dùng: **Download** trong menu **⋯** của dòng file
+đó ở cây thư mục (trên điện thoại, đặt ngón tay giữ yên trên dòng để mở menu), hoặc nút
+**Download** trên đầu file đang mở (trên điện thoại nằm trong menu của phần đầu). Trình duyệt lưu
+file như mọi lần tải khác, dưới tên của file; không có gì được mở hay hiện ra, dù file chứa gì.
+
+- Tải được mọi file thường, kể cả file Termote không xem trước được (nhị phân, lớn hơn 1 MiB), tối
+  đa **100 MiB**.
+- File có tên thường dùng để chứa bí mật thì app hỏi thêm một lần; file đang mở mà bạn đã chọn
+  hiện thì tải ngay.
+- Chỉ tải được file, không tải thư mục hay link, và không tải qua một thư mục là link.
+- Trong app iOS đã thêm vào Màn hình chính, file mở trong bảng chia sẻ: chọn **Lưu vào Tệp**
+  (Save to Files). Đóng bảng thì không lưu gì.
+- Mỗi lần tải được ghi vào log của server thành một dòng `audit: download` (đường dẫn trong thư
+  mục của pane, kích thước và ai tải).
+
+| Hiện                                                   | Vì sao                                                              |
+| ------------------------------------------------------ | ------------------------------------------------------------------- |
+| `<name> is larger than 100 MiB, too large to download` | File vượt giới hạn                                                  |
+| `Too many files at once; try again`                    | Đang đọc các lần tải hoặc ảnh khác; thử lại sau chốc lát            |
+| `<name> is gone`                                       | Có thứ đã xoá hoặc chuyển file sau khi cây thư mục được đọc         |
+| `<name> is not a regular file; not downloaded`         | FIFO, socket hoặc thiết bị                                          |
+| `A link on that path; not downloaded`                  | File hoặc một thư mục trên đường dẫn là symbolic link               |
+| `<name> can't be downloaded from here`                 | Thư mục của chính Termote, dữ liệu cài đặt, `.git` và kho ảnh tải lên |
+| `<name> changed; try again`                            | Có thứ đã thay file trong lúc kiểm tra                              |
+
+Phiên chỉ xem không có nút Download.
+
 ## Xem trước Markdown
 
 File Markdown (`.md`, `.markdown`, `.mdx`) mở ra ở dạng đã hiển thị: tiêu đề, danh sách, bảng

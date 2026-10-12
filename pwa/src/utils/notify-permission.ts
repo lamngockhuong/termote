@@ -15,18 +15,28 @@ export function notificationSupport(): NotifySupport {
   return Notification.permission
 }
 
-// iPhone and iPad notify only from the app added to the Home Screen (iOS
-// 16.4+); in Safari, Notification does not exist at all.
-export function needsHomeScreenApp(
-  nav: Navigator & { standalone?: boolean } = navigator,
-): boolean {
-  const ios =
+type IosNavigator = Navigator & { standalone?: boolean }
+
+// An iPhone or iPad (an iPad's Safari says Macintosh, with touch).
+export function isIos(nav: IosNavigator = navigator): boolean {
+  return (
     /iPhone|iPad|iPod/.test(nav.userAgent) ||
     (/Macintosh/.test(nav.userAgent) && nav.maxTouchPoints > 1)
-  const standalone =
+  )
+}
+
+// Running as the app added to the Home Screen.
+export function isStandalone(nav: IosNavigator = navigator): boolean {
+  return (
     nav.standalone === true ||
     window.matchMedia?.('(display-mode: standalone)').matches === true
-  return ios && !standalone
+  )
+}
+
+// iPhone and iPad notify only from the app added to the Home Screen (iOS
+// 16.4+); in Safari, Notification does not exist at all.
+export function needsHomeScreenApp(nav: IosNavigator = navigator): boolean {
+  return isIos(nav) && !isStandalone(nav)
 }
 
 // Called first thing in a click: Safari asks only from a user gesture.

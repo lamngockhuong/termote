@@ -34,6 +34,10 @@ vi.mock('../hooks/use-mux-api', async (orig) => ({
   restoreFile: (...a: unknown[]) => mockRestore(...a),
   renameFile: (...a: unknown[]) => mockRename(...a),
 }))
+const mockDownload = vi.fn()
+vi.mock('../utils/download-file', () => ({
+  downloadFile: (...a: unknown[]) => mockDownload(...a),
+}))
 vi.mock('../utils/highlight', async (orig) => ({
   ...(await orig<typeof import('../utils/highlight')>()),
   highlight: async () => null,
@@ -1599,5 +1603,123 @@ describe('FilesView tabs', () => {
     expect(
       screen.getByRole('dialog', { name: 'Open files' }),
     ).toBeInTheDocument()
+  })
+})
+
+describe('FilesView download', () => {
+  const ROOT = '/home/kim/app'
+  const trashCaps = {
+    backend: 'tmux',
+    caps: { clientSideSelect: false, copyMode: true, files: true, trash: true },
+  }
+  beforeEach(() => {
+    mockDownload.mockReset()
+    HTMLDialogElement.prototype.showModal = vi.fn(function (
+      this: HTMLDialogElement,
+    ) {
+      this.setAttribute('open', '')
+    })
+    HTMLDialogElement.prototype.close = vi.fn()
+  })
+  const actions = (name: string) =>
+    within(item(name)).getByRole('button', { name: `Actions for ${name}` })
+
+  it('is offered first on a file row, never on a folder or a link', async () => {
+    await show({ mux: trashCaps })
+    fireEvent.click(actions('README.md'))
+    expect(screen.getAllByRole('menuitem').map((m) => m.textContent)).toEqual([
+      'Download',
+      'Rename',
+      'Delete',
+    ])
+    fireEvent.keyDown(document.activeElement ?? document.body, {
+      key: 'Escape',
+    })
+    for (const name of ['src', 'link']) {
+      fireEvent.click(actions(name))
+      expect(screen.queryByRole('menuitem', { name: 'Download' })).toBeNull()
+      fireEvent.keyDown(document.activeElement ?? document.body, {
+        key: 'Escape',
+      })
+    }
+  })
+
+  it('is not offered to a view-only client', async () => {
+    await show({ readOnly: true })
+    expect(
+      within(item('README.md')).queryByRole('button', { name: /Actions/ }),
+    ).toBeNull()
+  })
+
+  it('downloads a file of the tree', async () => {
+    const p = await show()
+    fireEvent.click(actions('README.md'))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Download' }))
+    expect(mockDownload).toHaveBeenCalledWith(
+      { paneId: '%1', root: ROOT, path: 'README.md', reveal: false },
+      p.notify,
+      expect.any(Function),
+    )
+  })
+
+  it('asks before a sensitive file, then downloads it revealed', async () => {
+    await show()
+    fireEvent.click(actions('.env'))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Download' }))
+    const box = () =>
+      within(
+        screen.getByRole('dialog', {
+          name: 'Download a file that may contain secrets?',
+        }),
+      )
+    fireEvent.click(box().getByRole('button', { name: 'Cancel' }))
+    expect(mockDownload).not.toHaveBeenCalled()
+    fireEvent.click(actions('.env'))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Download' }))
+    fireEvent.click(box().getByRole('button', { name: 'Download' }))
+    expect(mockDownload).toHaveBeenCalledTimes(1)
+    expect(mockDownload.mock.calls[0][0]).toEqual({
+      paneId: '%1',
+      root: ROOT,
+      path: '.env',
+      reveal: true,
+    })
+  })
+
+  it('is not offered in the header of a file opened through a link', async () => {
+    mockContent.mockResolvedValue({
+      root: ROOT,
+      path: 'link/x',
+      size: 1,
+      text: 'x',
+      hash: 'h',
+      editable: false,
+    })
+    await show()
+    fireEvent.click(item('link'))
+    fireEvent.click(await screen.findByRole('treeitem', { name: /^x/ }))
+    await screen.findByTestId('code-block')
+    expect(screen.queryByRole('button', { name: 'Download' })).toBeNull()
+  })
+
+  it('downloads the open file from its header', async () => {
+    mockContent.mockResolvedValue({
+      root: ROOT,
+      path: 'README.md',
+      size: 2,
+      text: 'hi',
+      hash: 'h',
+      editable: true,
+    })
+    await show()
+    fireEvent.click(item('README.md'))
+    await screen.findByTestId('markdown-preview')
+    fireEvent.click(screen.getByRole('button', { name: 'Download' }))
+    expect(mockDownload.mock.calls[0][0]).toEqual({
+      paneId: '%1',
+      root: ROOT,
+      path: 'README.md',
+      reveal: false,
+    })
   })
 })

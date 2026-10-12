@@ -299,6 +299,35 @@ dialog shows the path from the pane's directory with the name, without its exten
 
 A view-only session has no Rename.
 
+## Downloading a File
+
+A copy of a file can be saved on the device you are using: **Download** in the **⋯** menu of its
+row in the tree (on a phone, a finger resting on the row opens it), or the **Download** button in
+the header of an open file (in the header's menu on a phone). The browser saves it as it saves any
+download, under the file's name; nothing is opened or shown, whatever the file holds.
+
+- Any regular file can be downloaded, also one Termote cannot preview (binary, larger than 1 MiB),
+  up to **100 MiB**.
+- A file whose name usually holds secrets is downloaded after a second ask; an open one you chose
+  to show is downloaded at once.
+- Only files are downloaded, not folders or links, and never through a folder that is a link.
+- In the iOS app added to the Home Screen, the file opens in the share sheet: pick **Save to
+  Files**. Closing the sheet saves nothing.
+- Every download is written to the server log as an `audit: download` line (the path inside the
+  pane's directory, the size and who asked).
+
+| Shown                                                | Why                                                                  |
+| ---------------------------------------------------- | -------------------------------------------------------------------- |
+| `<name> is larger than 100 MiB, too large to download` | The file is over the limit                                           |
+| `Too many files at once; try again`                  | Other downloads or images are being read; try again in a moment      |
+| `<name> is gone`                                     | Something removed or moved the file after the tree was read          |
+| `<name> is not a regular file; not downloaded`       | A FIFO, a socket or a device                                         |
+| `A link on that path; not downloaded`                | The file or a folder on its path is a symbolic link                  |
+| `<name> can't be downloaded from here`               | Termote's own folders, the install's data, `.git` and the upload store |
+| `<name> changed; try again`                          | Something replaced the file while it was checked                     |
+
+A view-only session has no Download.
+
 ## Markdown Preview
 
 A Markdown file (`.md`, `.markdown`, `.mdx`) opens rendered: headings, lists, tables (they
