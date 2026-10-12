@@ -3,7 +3,7 @@ import { Caption } from "../components/caption";
 import { OwlMark } from "../components/owl-mark";
 import { appear, color, sans } from "../theme";
 
-// Only what the server does (CLAUDE.md, Security Notes)
+// Only what the server does (docs/security-invariants.md)
 const CHIPS = [
   "Listens on 127.0.0.1 by default",
   "Password or paired devices",
