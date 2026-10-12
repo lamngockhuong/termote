@@ -1114,6 +1114,29 @@ export async function deleteFile(
   return res.json()
 }
 
+// Moves the file path to newPath under root (a rename, or a move to another
+// directory, made when missing), never replacing anything there. The answer
+// is the new path as the server cleaned it. A refusal is a RequestError with
+// the server's code (exists with path, changed with path when the file
+// stayed elsewhere, cross_device, in_use, not_file, symlink, not_directory,
+// not_allowed, sensitive, permission, read_only, storage_full, invalid_name,
+// invalid_path, busy), a 404 once the file is gone, or a 409 with the root
+// once it moved.
+export async function renameFile(
+  paneId: string,
+  rename: { root: string; path: string; newPath: string; reveal: boolean },
+): Promise<CreatedFile> {
+  const { root, ...body } = rename
+  const res = await fetch(filesUrl(paneId, 'rename', { root }), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(SAVE_TIMEOUT_MS),
+  })
+  if (!res.ok) throw await requestError(res)
+  return res.json()
+}
+
 // Puts a deleted file (or directory) back at its path, never replacing
 // anything there (409 exists).
 export async function restoreFile(

@@ -243,6 +243,7 @@ PUT    /api/mux/panes/{id}/files/content?root=  body: {path, baseHash, text, rev
 POST   /api/mux/panes/{id}/files/create?root=   body: {path, reveal}           → 201 {root, path} | {error, code[, path]}
 POST   /api/mux/panes/{id}/files/delete?root=   body: {path, kind, baseHash, reveal, permanent} → {root, path[, trashId, size, permanent]} | {error, code}
 POST   /api/mux/panes/{id}/files/restore?root=  body: {trashId, reveal}         → {root, path} | {error, code}
+POST   /api/mux/panes/{id}/files/rename?root=   body: {path, newPath, reveal}  → {root, path} | {error, code[, path]}
 GET    /api/mux/panes/{id}/files/find?q=&root=&ignored=1&exclude=&fresh=1 → {root, isRepo, results, truncated, incomplete} | {error, code}
 GET    /api/mux/panes/{id}/files/changes?root=                  → {root, isRepo, branch, entries, truncated}
 GET    /api/mux/panes/{id}/files/diff?path=&orig=&staged=&root=&reveal= → {root, path, binary, conflict, truncated, sensitive, reason, hunks}
@@ -669,8 +670,9 @@ Herdr (`foreground_cwd`, else `cwd`, of the pane; a Herdr that reports neither a
 psmux does not report the directory, so `caps.files` is off on Windows tmux. Every route is
 registered for every backend and answers 501 where it is off. Six are read-only GETs (`find`
 included); `PUT files/content` saves a text file, `POST files/create` creates an empty one and
-`POST files/delete` / `files/restore` remove a file and put it back (see Saving a file, Creating
-a file, Finding a file, Deleting a file).
+`POST files/delete` / `files/restore` remove a file and put it back, `POST files/rename` moves a
+file to a new path, never replacing anything (see Saving a file, Creating a file, Finding a file,
+Deleting a file, Renaming a file).
 
 **Root.** The pane's directory, raised to `git rev-parse --show-toplevel` when it is in a
 repository and a `.git` sits at that toplevel (a `core.worktree` naming another directory, even
@@ -870,9 +872,31 @@ a change an agent just made and never touching what the reads refuse.
   trash: the PWA has no trash browser, only the Undo of the delete that made the entry.
   `uninstall` keeps it (see Uninstall).
 
+**Renaming a file (`POST rename`).** `server/files_rename.go`. A regular file goes to a new path
+under the same root: a rename, or a move whose missing directories are made. What this guards is
+never replacing a file, and never losing one a step fails on.
+
+- Same guards as create and delete; body `{path, newPath, reveal}` → `{root, path}`, the new
+  path as the server cleaned it. No trash is involved, so renames work with `Caps.trash` off.
+- The source is checked as a delete checks it (deny dirs, parents opened without making any, no
+  symlink or junction, a regular file of the server user's) but is never opened or hashed. The
+  new path takes a create's rules for its base name and for each directory it makes; a sensitive
+  name on either side needs `reveal: true`.
+- The move never replaces anything: `RENAME_NOREPLACE` (Linux), `RENAME_EXCL` (macOS),
+  `MoveFileEx` without the replace flag (Windows); a name already there is 409 `exists` with its
+  path. Where the file system lacks the flag, a hard link is made and the old name removed only
+  while it is still the file checked. A new name differing only in case from the file itself
+  goes through a temporary `.termote-rename-<16 hex>` name, both moves never replacing. What
+  landed must be the file checked, or it goes back (409 `changed`, with `path` when it cannot).
+- `cross_device` (a mount inside the root) moves nothing, never a copy; on Windows a file held
+  open by another program is 409 `in_use`.
+- The PWA moves every tab, unsaved draft and Changes editor of the old path to the new one, in
+  every pane of the root, refuses a new path whose file has unsaved changes, and offers Undo, a
+  second rename back. Changes shows a deleted and an untracked file until the user stages.
+
 **Guards.** Basic auth and the Host allowlist like every route; GETs pass `writeGuard`, so the
 handlers check `Sec-Fetch-Site`/`Origin` themselves (403 cross-site), which keeps another page
-from making a `--no-auth` server run git. `PUT content`, `POST create`, `POST delete` and `POST restore` go through
+from making a `--no-auth` server run git. `PUT content`, `POST create`, `POST delete`, `POST restore` and `POST rename` go through
 `writeGuard` like every write (same-site, `application/json`) and their handlers check again.
 Other methods get 405.
 `requireFilesRead` and `requireFilesWrite` are where a view-only role (#236) will be enforced;

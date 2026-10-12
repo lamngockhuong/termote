@@ -66,6 +66,30 @@ export function openTab<T extends TabBase>(
   }
 }
 
+// The tabs after the file from moved to to: each tab of from shows to,
+// patched by patch (fields of its own that name the path); order, pinned
+// state and the tab shown stay. A tab already on to closes first, so no two
+// tabs show one file; dropped lists it. Only tabs inScope take part (those
+// of the root the file moved in).
+export function retargetTabs<T extends TabBase & { path: string }>(
+  tabs: T[],
+  from: string,
+  to: string,
+  patch: (t: T) => Partial<T> = () => ({}),
+  inScope: (t: T) => boolean = () => true,
+): { tabs: T[]; dropped: T[] } {
+  const is = (t: T, path: string) => t.path === path && inScope(t)
+  if (from === to || !tabs.some((t) => is(t, from)))
+    return { tabs, dropped: [] }
+  const dropped = tabs.filter((t) => is(t, to))
+  return {
+    tabs: tabs
+      .filter((t) => !is(t, to))
+      .map((t) => (is(t, from) ? { ...t, ...patch(t), path: to } : t)),
+    dropped,
+  }
+}
+
 // Closes tab id. When it was the one shown, the tab to its right shows,
 // else the one to its left, else none (activeId null).
 export function closeTab<T extends TabBase>(

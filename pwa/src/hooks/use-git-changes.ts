@@ -112,6 +112,9 @@ interface Store {
   get: () => ChangesState
   subscribe: (fn: () => void) => () => void
   refresh: () => void
+  // The file from was renamed to to: its editors follow it (as an untracked
+  // file), its other tabs close; then the status is read again
+  moved: (from: string, to: string, reveal: boolean) => void
   // The pane's id changed (a tmux window move): polls go to the new one
   moveTo: (paneId: string) => void
   rootChanged: (root: string) => void
@@ -313,6 +316,44 @@ function createStore(id: string): Store {
     if (listeners.size > 0 && visible()) timer = setTimeout(poll, delay)
   }
 
+  function moved(from: string, to: string, reveal: boolean) {
+    if (from === to) return
+    // Closed without a word: the user renamed the file. Never an editor,
+    // whose draft (moved already) is the file's.
+    for (const t of state.tabs)
+      if (t.path === from && !t.editing && t.root === state.root) close(t.id)
+    const tabs = state.tabs.map((t) =>
+      t.path === from && t.editing && t.root === state.root
+        ? {
+            ...t,
+            path: to,
+            orig: undefined,
+            staged: false,
+            revealed: t.revealed || reveal,
+          }
+        : t,
+    )
+    // Editors of both sides of from are one side of to now: the one shown
+    // (else the latest shown) stays. Dropped without close(), which would
+    // drop the draft the kept one edits.
+    const keep = new Map<string, ChangeTab>()
+    for (const t of tabs) {
+      const k = `${t.root}\u0000${changeKey(t)}`
+      const had = keep.get(k)
+      if (
+        !had ||
+        t.id === state.activeId ||
+        (had.id !== state.activeId && t.lastUsed > had.lastUsed)
+      )
+        keep.set(k, t)
+    }
+    // The one shown is always kept, and tabs of another root (all that
+    // pendingRootClose lists) are never merged
+    const kept = new Set([...keep.values()].map((t) => t.id))
+    set({ tabs: tabs.filter((t) => kept.has(t.id)) })
+    refresh()
+  }
+
   // The list starts again from the new root. Tabs opened under another
   // root close, except editors with unsaved changes: the user is asked
   // about them (pendingRootClose), and kept ones show the old root's text.
@@ -424,6 +465,7 @@ function createStore(id: string): Store {
       else tab.scrollTop = top
     },
     saved,
+    moved,
     resolveRootClose(closing) {
       const ids = state.pendingRootClose ?? []
       set({ pendingRootClose: undefined })
@@ -475,6 +517,18 @@ export function useGitChanges(paneId: string) {
       [store],
     ),
   }
+}
+
+// The file from under root was renamed to to: the Changes tabs of every
+// pane showing root follow it.
+export function changesMoved(
+  root: string,
+  from: string,
+  to: string,
+  reveal: boolean,
+) {
+  for (const s of stores.values())
+    if (s.get().root === root) s.moved(from, to, reveal)
 }
 
 // A store follows its pane to the id it has now, so its open tabs stay; a

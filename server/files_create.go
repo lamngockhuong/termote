@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"unicode"
@@ -161,6 +162,17 @@ func (f *filesAPI) createDenied(root filesRoot, rel string) bool {
 // takes rt: every directory but the one returned (which may be rt)
 // is closed, and the caller closes that one.
 func (f *filesAPI) walkParents(rt *os.Root, root filesRoot, parent string, create bool) (*os.Root, error) {
+	var validNew func(string) bool
+	if create {
+		validNew = func(string) bool { return true }
+	}
+	return f.walkParentsNew(rt, root, parent, validNew)
+}
+
+// walkParentsNew is walkParents where validNew, when set, both allows a
+// missing directory to be made and checks its name first: a rename checks
+// only the names it makes, not those of directories already there.
+func (f *filesAPI) walkParentsNew(rt *os.Root, root filesRoot, parent string, validNew func(string) bool) (*os.Root, error) {
 	cur, walked := rt, "."
 	var parts []string
 	if parent != "." {
@@ -171,7 +183,7 @@ func (f *filesAPI) walkParents(rt *os.Root, root filesRoot, parent string, creat
 			cur.Close()
 			return nil, errCreateNotAllowed
 		}
-		next, err := openChildDir(cur, part, create)
+		next, err := openChildDir(cur, part, validNew)
 		cur.Close()
 		if err != nil {
 			return nil, err
@@ -186,12 +198,15 @@ func (f *filesAPI) walkParents(rt *os.Root, root filesRoot, parent string, creat
 }
 
 // openChildDir opens the directory name in cur, making it when missing and
-// create is set. A
+// validNew is set and accepts the name (errCreateInvalidName otherwise). A
 // symlink is refused, and so is a directory swapped after its checks: the
 // one opened must be the one checked.
-func openChildDir(cur *os.Root, name string, create bool) (*os.Root, error) {
+func openChildDir(cur *os.Root, name string, validNew func(string) bool) (*os.Root, error) {
 	fi, err := cur.Lstat(name)
-	if create && errors.Is(err, fs.ErrNotExist) {
+	if validNew != nil && errors.Is(err, fs.ErrNotExist) {
+		if !validNew(name) {
+			return nil, errCreateInvalidName
+		}
 		// Made in between by another process: use it like one found.
 		if err = cur.Mkdir(name, 0o777); err == nil || errors.Is(err, fs.ErrExist) {
 			fi, err = cur.Lstat(name)
@@ -250,26 +265,61 @@ func createError(err error) error {
 }
 
 // validCreateName checks the path a create takes before anything touches the
-// disk: no empty component (a leading, doubled or trailing separator), at
-// most createMaxParts components and createMaxPath bytes, no component longer
-// than createMaxName or ending in a dot or a space (Windows drops those, so
-// "a." would open "a"), no control character (files/raw refuses a name with
-// a line break), none of the characters the OS refuses, and never a name a
-// save uses for its temporary file.
+// disk: its shape (validPathShape), and every component a name that may be
+// made (validNamePart), since a create makes each missing one; never a name
+// a save or a rename uses for its temporary file.
 func validCreateName(p string) bool {
-	if p == "" || len(p) > createMaxPath || strings.ContainsRune(p, 0) || strings.HasSuffix(p, `\`) {
-		return false
-	}
-	parts := strings.Split(filepath.ToSlash(p), "/")
-	if len(parts) > createMaxParts {
+	parts, ok := validPathShape(p)
+	if !ok {
 		return false
 	}
 	for _, part := range parts {
-		if part == "" || len(part) > createMaxName || strings.HasSuffix(part, ".") ||
-			strings.HasSuffix(part, " ") || strings.ContainsFunc(part, unicode.IsControl) ||
-			strings.ContainsAny(part, createBadChars) {
+		if !validNamePart(part) {
 			return false
 		}
 	}
-	return !editTempRe.MatchString(parts[len(parts)-1])
+	return !tempName(parts[len(parts)-1])
+}
+
+// validRenameTarget checks the new path of a rename: its shape, and its base
+// name one that may be made. The directories above it are checked only when
+// the rename has to make them (walkParentsNew), so a file in an existing
+// directory a create could not name ("notes ") can still be renamed.
+func validRenameTarget(p string) bool {
+	parts, ok := validPathShape(p)
+	if !ok {
+		return false
+	}
+	base := parts[len(parts)-1]
+	return validNamePart(base) && !tempName(base)
+}
+
+// validPathShape splits p into its components: no empty component (a
+// leading, doubled or trailing separator), at most createMaxParts components
+// and createMaxPath bytes, no NUL.
+func validPathShape(p string) ([]string, bool) {
+	if p == "" || len(p) > createMaxPath || strings.ContainsRune(p, 0) || strings.HasSuffix(p, `\`) {
+		return nil, false
+	}
+	parts := strings.Split(filepath.ToSlash(p), "/")
+	if len(parts) > createMaxParts || slices.Contains(parts, "") {
+		return nil, false
+	}
+	return parts, true
+}
+
+// validNamePart checks one component of a name to be made: no longer than
+// createMaxName, not ending in a dot or a space (Windows drops those, so "a."
+// would open "a"), no control character (files/raw refuses a name with a
+// line break), none of the characters the OS refuses.
+func validNamePart(part string) bool {
+	return len(part) <= createMaxName && !strings.HasSuffix(part, ".") &&
+		!strings.HasSuffix(part, " ") && !strings.ContainsFunc(part, unicode.IsControl) &&
+		!strings.ContainsAny(part, createBadChars)
+}
+
+// tempName reports whether name is one a save or a rename gives its
+// temporary file: never a name a client may ask for.
+func tempName(name string) bool {
+	return editTempRe.MatchString(name) || renameTempRe.MatchString(name)
 }

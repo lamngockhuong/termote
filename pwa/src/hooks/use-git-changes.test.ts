@@ -11,6 +11,7 @@ import {
   CHANGES_POLL,
   type ChangeSide,
   changeKey,
+  changesMoved,
   findEntry,
   resetGitChangesStores,
   useGitChanges,
@@ -379,6 +380,74 @@ describe('Changes tabs', () => {
     edit('b')
     act(() => result.current.close(result.current.tabs[0].id))
     expect(isDraftDirty('%1', 'b')).toBe(true)
+  })
+
+  it('a renamed file: its editors follow as untracked, its diffs close', async () => {
+    const { result } = await loaded()
+    act(() => result.current.open(side('a'), { pin: true }))
+    act(() => result.current.open(side('a', true), { pin: true }))
+    act(() => result.current.open(side('b'), { pin: true }))
+    const [un, st] = result.current.tabs
+    act(() => result.current.setEditing(un.id, true))
+    act(() => result.current.setEditing(st.id, true))
+    act(() => result.current.activate(st.id))
+    edit('a')
+    mockChanges.mockClear()
+    act(() => changesMoved('/r', 'a', 'x/a', true))
+    // Both editors are one side of x/a now: the one shown stays
+    expect(result.current.tabs.map((t) => [t.id, changeKey(t)])).toEqual([
+      [st.id, 'false:undefined:x/a'],
+      [result.current.tabs[1].id, changeKey(side('b'))],
+    ])
+    expect(result.current.active).toMatchObject({
+      editing: true,
+      revealed: true,
+    })
+    // The draft stays: moving it is the Files store's
+    expect(isDraftDirty('%1', 'a')).toBe(true)
+    expect(result.current.gone.count).toBe(0)
+    await tick()
+    expect(mockChanges).toHaveBeenCalled()
+  })
+
+  it('a renamed file with a diff only: the diff closes, nothing else', async () => {
+    const { result } = await loaded()
+    act(() => result.current.open(side('b'), { pin: true }))
+    act(() => result.current.open(side('a'), { pin: true }))
+    act(() => changesMoved('/r', 'a', 'z', false))
+    act(() => changesMoved('/other', 'b', 'z', false))
+    act(() => changesMoved('/r', 'b', 'b', false))
+    expect(keys(result.current.tabs)).toEqual([changeKey(side('b'))])
+    expect(result.current.gone.count).toBe(0)
+  })
+
+  it('of the editors of a renamed file, the latest shown stays', async () => {
+    const { result } = await loaded()
+    act(() => result.current.open(side('a'), { pin: true }))
+    act(() => result.current.open(side('a', true), { pin: true }))
+    act(() => result.current.open(side('b'), { pin: true }))
+    const [un, st] = result.current.tabs
+    act(() => result.current.setEditing(un.id, true))
+    act(() => result.current.setEditing(st.id, true))
+    act(() => result.current.activate(st.id))
+    act(() => result.current.activate(result.current.tabs[2].id))
+    act(() => changesMoved('/r', 'a', 'c', false))
+    expect(result.current.tabs.map((t) => t.id)).toEqual([
+      st.id,
+      result.current.tabs[1].id,
+    ])
+    expect(result.current.active?.path).toBe('b')
+    // The first one shown last stays as well
+    act(() => result.current.open(side('d', true), { pin: true }))
+    act(() => result.current.open(side('d'), { pin: true }))
+    const [, , st2, un2] = [...result.current.tabs]
+    act(() => result.current.setEditing(st2.id, true))
+    act(() => result.current.setEditing(un2.id, true))
+    act(() => result.current.activate(st2.id))
+    act(() => result.current.activate(result.current.tabs[1].id))
+    act(() => changesMoved('/r', 'd', 'e', false))
+    expect(result.current.tabs.map((t) => t.id)).toContain(st2.id)
+    expect(result.current.tabs.map((t) => t.id)).not.toContain(un2.id)
   })
 
   it('past 10 tabs the least recently used clean one closes', async () => {

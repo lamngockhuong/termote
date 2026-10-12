@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -31,6 +32,17 @@ func renameNoReplace(from *os.Root, fromName string, to *os.Root, toName string)
 		return &os.LinkError{Op: "rename", Old: src, New: dst, Err: err}
 	}
 	return nil
+}
+
+// renameNoReplaceChecked: MoveFileEx never takes a hard link fallback.
+func renameNoReplaceChecked(from *os.Root, fromName string, to *os.Root, toName string, _ fs.FileInfo) error {
+	return renameNoReplace(from, fromName, to, toName)
+}
+
+// isInUse reports whether err is a move refused because another program
+// holds the file open (without sharing delete access).
+func isInUse(err error) bool {
+	return errors.Is(err, windows.ERROR_SHARING_VIOLATION) || errors.Is(err, windows.ERROR_LOCK_VIOLATION)
 }
 
 // renameIntoTrash: MoveFileEx without a replace flag never replaces, as

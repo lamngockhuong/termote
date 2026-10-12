@@ -26,6 +26,10 @@ interface MenuProps {
   triggerTabIndex?: number
   // The trigger's size (a tree row's is small)
   triggerSize?: 'sm' | 'md'
+  // Opened and closed from outside as well (a long press on a tree row);
+  // left out, the menu keeps its own state
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
 // menuitem and menuitemradio
@@ -49,8 +53,18 @@ export function Menu({
   className = '',
   triggerTabIndex,
   triggerSize,
+  open,
+  onOpenChange,
 }: MenuProps) {
-  const [isOpen, setIsOpen] = useState(false)
+  const [ownOpen, setOwnOpen] = useState(false)
+  const isOpen = open ?? ownOpen
+  const setIsOpen = (next: boolean) => {
+    if (open === undefined) setOwnOpen(next)
+    onOpenChange?.(next)
+  }
+  // For the listener below, which lives as long as the menu is open
+  const setIsOpenRef = useRef(setIsOpen)
+  setIsOpenRef.current = setIsOpen
   const rootRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -82,7 +96,8 @@ export function Menu({
   useEffect(() => {
     if (!isOpen) return
     const handler = (e: PointerEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setIsOpen(false)
+      if (!rootRef.current?.contains(e.target as Node))
+        setIsOpenRef.current(false)
     }
     document.addEventListener('pointerdown', handler)
     return () => document.removeEventListener('pointerdown', handler)

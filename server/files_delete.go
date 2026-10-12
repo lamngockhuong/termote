@@ -77,9 +77,24 @@ type restoreResponse struct {
 }
 
 // startWrite runs the checks every write of the trash routes starts with:
-// POST, the root query, the files guards, the JSON body (read before any
-// slot is taken) and a usable trash.
+// startJSONWrite's, and a usable trash.
 func (f *filesAPI) startWrite(w http.ResponseWriter, r *http.Request, op string, in any) (*filesRequest, func(), bool) {
+	req, cancel, ok := f.startJSONWrite(w, r, op, in)
+	if !ok {
+		return nil, nil, false
+	}
+	if f.trash == nil {
+		cancel()
+		f.error(w, op, errTrashUnavailable)
+		return nil, nil, false
+	}
+	return req, cancel, true
+}
+
+// startJSONWrite runs the checks a write with a JSON body starts with: POST,
+// the root query, the files guards and the body (read before any slot is
+// taken).
+func (f *filesAPI) startJSONWrite(w http.ResponseWriter, r *http.Request, op string, in any) (*filesRequest, func(), bool) {
 	if !requireMethod(w, r, http.MethodPost) {
 		return nil, nil, false
 	}
@@ -95,11 +110,6 @@ func (f *filesAPI) startWrite(w http.ResponseWriter, r *http.Request, op string,
 	}
 	if !decodeJSON(w, r, in) {
 		cancel()
-		return nil, nil, false
-	}
-	if f.trash == nil {
-		cancel()
-		f.error(w, op, errTrashUnavailable)
 		return nil, nil, false
 	}
 	return req, cancel, true

@@ -7,6 +7,7 @@ import {
   Folder,
   FolderOpen,
   Lock,
+  TextCursorInput,
   Trash2,
 } from 'lucide-react'
 import {
@@ -23,13 +24,23 @@ import {
   type FilesError,
   type FilesState,
   FOLLOW_NOTICES,
+  fileRenamed,
+  hasDirtyDraftAt,
   isDir,
   isOpenable,
   joinPath,
   useDirtyCheck,
   useFiles,
 } from '../hooks/use-files'
-import { type FileEntry, RequestError, restoreFile } from '../hooks/use-mux-api'
+import { changesMoved } from '../hooks/use-git-changes'
+import { useLongPress } from '../hooks/use-long-press'
+import {
+  type FileEntry,
+  RequestError,
+  renameFile,
+  restoreFile,
+} from '../hooks/use-mux-api'
+import { fileNameProblem } from '../utils/file-name'
 import { splitPath } from '../utils/files-format'
 import type { LinkPath } from '../utils/markdown-links'
 import { visibleUnsafe } from '../utils/unsafe-chars'
@@ -40,6 +51,7 @@ import { FileViewer } from './file-viewer'
 import { NewFileDialog } from './new-file-dialog'
 import { OpenFilesButton, OpenFilesSheet } from './open-files-sheet'
 import { PaneDirHeader, ViewMessage } from './pane-dir-header'
+import { RenameFileDialog } from './rename-file-dialog'
 import { DiscardTabDialog, RootCloseDialog } from './tab-close-dialogs'
 import { FOCUS_RING, IconButton } from './ui/button'
 import { Menu, MenuItem } from './ui/menu'
@@ -133,8 +145,18 @@ export function FilesView({
       readOnly={readOnly}
       // The server refuses a view-only client's deletes as well
       canDelete={!readOnly && !!mux.caps.trash}
+      // and its renames, which need no trash
+      canRename={!readOnly}
     />
   )
+}
+
+// What the Rename box is open for
+interface Renaming {
+  root: string
+  path: string
+  // The user chose to show this sensitive file: no second ask
+  revealed: boolean
 }
 
 // What the Delete box is open for
@@ -152,7 +174,8 @@ function PaneFiles({
   notify,
   readOnly,
   canDelete,
-}: { paneId: string; canDelete: boolean } & Pick<
+  canRename,
+}: { paneId: string; canDelete: boolean; canRename: boolean } & Pick<
   ViewProps,
   'isMobile' | 'notify' | 'readOnly'
 >) {
@@ -181,6 +204,7 @@ function PaneFiles({
   // The root the New file box was opened under, while it is open
   const [creating, setCreating] = useState<string>()
   const [deleting, setDeleting] = useState<Deleting>()
+  const [renaming, setRenaming] = useState<Renaming>()
   // The search box's text: kept while a result is open, so Back returns
   // to the results
   const [query, setQuery] = useState('')
@@ -312,6 +336,99 @@ function PaneFiles({
     })
   }
 
+  // Everything showing from under root follows it to to: the tabs and
+  // drafts of every pane of the root, the Changes tabs, the search results
+  const followRename = (
+    root: string,
+    from: string,
+    to: string,
+    reveal: boolean,
+  ) => {
+    fileRenamed(root, from, to, reveal)
+    changesMoved(root, from, to, reveal)
+    if (query.trim()) setRefreshTick((n) => n + 1)
+  }
+
+  // A file of the tree, or the one shown, to rename
+  const askRename = (path: string, revealed: boolean) =>
+    // The tree and a file show once the root is read
+    setRenaming({ root: f.root as string, path, revealed })
+
+  const undoRename = async (r: Renaming, to: string, reveal: boolean) => {
+    const name = visibleUnsafe(baseName(r.path))
+    if (hasDirtyDraftAt(r.root, r.path)) {
+      notify(`${name} has unsaved changes; not renamed back`, {
+        variant: 'warning',
+      })
+      return
+    }
+    try {
+      const res = await renameFile(paneId, {
+        root: r.root,
+        path: to,
+        newPath: r.path,
+        reveal,
+      })
+      followRename(r.root, to, res.path, reveal)
+      notify(`Renamed back to ${name}`, { variant: 'success' })
+    } catch (err) {
+      if (err instanceof RequestError && err.status === 409 && err.root) {
+        f.rootChanged(err.root)
+        notify(`The pane's directory changed; ${name} was not renamed back`, {
+          variant: 'warning',
+        })
+      } else if (err instanceof RequestError && err.code === 'exists') {
+        notify(
+          `A file now exists at ${visibleUnsafe(err.path ?? r.path)}; not renamed back`,
+          { variant: 'warning' },
+        )
+      } else if (
+        err instanceof RequestError &&
+        err.code === 'changed' &&
+        err.path
+      ) {
+        followRename(r.root, to, err.path, reveal)
+        notify(
+          `The file changed while it was renamed; it is at ${visibleUnsafe(err.path)}`,
+          { variant: 'warning' },
+        )
+      } else {
+        notify('Could not undo the rename', { variant: 'danger' })
+      }
+    }
+  }
+
+  const onRenamed = (
+    r: Renaming,
+    to: string,
+    reveal: boolean,
+    changed: boolean,
+  ) => {
+    if (to === r.path) return
+    followRename(r.root, r.path, to, reveal)
+    if (changed) {
+      notify(
+        `The file changed while it was renamed; it is at ${visibleUnsafe(to)}`,
+        { variant: 'warning' },
+      )
+      return
+    }
+    const [fromDir, fromName] = splitPath(r.path)
+    const [toDir, toName] = splitPath(to)
+    const text =
+      fromDir === toDir
+        ? `Renamed ${visibleUnsafe(fromName)} to ${visibleUnsafe(toName)}`
+        : `Moved ${visibleUnsafe(toName)} to ${toDir ? visibleUnsafe(toDir.slice(0, -1)) : "the pane's directory"}`
+    // The old name must be one the server takes as a new name
+    if (fileNameProblem(fromName)) {
+      notify(`${text}. Undo isn't available for this name`)
+      return
+    }
+    notify(text, {
+      action: { label: 'Undo', onClick: () => undoRename(r, to, reveal) },
+    })
+  }
+
   const root = f.dirs['']
   // Once the root is read, from the tree only. Never for a view-only client,
   // whose creates the server refuses as well
@@ -352,6 +469,21 @@ function PaneFiles({
           initialPath={focusedDir(f, focused)}
           onClose={() => setCreating(undefined)}
           onCreated={f.created}
+          onRootChanged={f.rootChanged}
+          onRefresh={f.refresh}
+        />
+      )}
+      {renaming && (
+        <RenameFileDialog
+          paneId={paneId}
+          root={renaming.root}
+          path={renaming.path}
+          reveal={renaming.revealed}
+          onClose={() => setRenaming(undefined)}
+          onRenamed={(to, reveal, changed) =>
+            onRenamed(renaming, to, reveal, changed)
+          }
+          onOpen={(p) => f.open(p, { pin: true })}
           onRootChanged={f.rootChanged}
           onRefresh={f.refresh}
         />
@@ -423,6 +555,11 @@ function PaneFiles({
             onScroll={(top) => f.setScroll(tab.id, top)}
             onCloseTab={() => requestClose(tab.id)}
             headerExtra={openFiles}
+            onRename={
+              canRename
+                ? ({ revealed }) => askRename(tab.path, revealed)
+                : undefined
+            }
             onDelete={
               canDelete
                 ? ({ hash, sensitive }) =>
@@ -462,6 +599,13 @@ function PaneFiles({
                 onToggle={f.toggle}
                 onOpen={openFromTree}
                 onDelete={canDelete ? askDelete : undefined}
+                onRename={
+                  canRename
+                    ? // A sensitive name is asked about: renaming it to an
+                      // ordinary one would show what it holds
+                      (path) => askRename(path, false)
+                    : undefined
+                }
               />
             )}
           </FileSearch>
@@ -478,6 +622,7 @@ function FileTree({
   onToggle,
   onOpen,
   onDelete,
+  onRename,
 }: {
   state: FilesState
   focused?: string
@@ -487,6 +632,8 @@ function FileTree({
   onOpen: (path: string) => void
   // Offered on each row (its menu, the Delete key) when deleting is allowed
   onDelete?: (path: string, entry: FileEntry) => void
+  // Offered on each file's row when renaming is allowed
+  onRename?: (path: string, entry: FileEntry) => void
 }) {
   const rows = visibleRows(state)
   const entries = rows.filter((r) => r.kind === 'entry')
@@ -584,6 +731,11 @@ function FileTree({
               activate(r)
             }}
             onDelete={onDelete && (() => onDelete(r.path, r.entry))}
+            onRename={
+              onRename && r.entry.type === 'file'
+                ? () => onRename(r.path, r.entry)
+                : undefined
+            }
           />
         ),
       )}
@@ -599,6 +751,7 @@ function TreeItem({
   itemRef,
   onClick,
   onDelete,
+  onRename,
 }: {
   row: EntryRow
   expanded?: boolean
@@ -607,8 +760,13 @@ function TreeItem({
   itemRef: (el: HTMLElement | null) => void
   onClick: () => void
   onDelete?: () => void
+  onRename?: () => void
 }) {
   const { entry, level } = row
+  const hasMenu = !!(onDelete || onRename)
+  const [menuOpen, setMenuOpen] = useState(false)
+  // A finger resting on a row with a menu opens it, as the … button does
+  const press = useLongPress(() => setMenuOpen(true))
   const dir = isDir(entry)
   const can = isOpenable(entry)
   const Icon = dir
@@ -628,7 +786,8 @@ function TreeItem({
       aria-disabled={can ? undefined : true}
       tabIndex={tabbable ? 0 : -1}
       onClick={onClick}
-      className={`group flex min-h-9 cursor-default items-center gap-1.5 pr-1 text-[13px] hover:bg-surface pointer-coarse:min-h-touch ${FOCUS_RING} focus-visible:-outline-offset-2 ${can ? 'text-fg' : 'text-fg-subtle'}`}
+      {...(hasMenu && press)}
+      className={`group flex min-h-9 [-webkit-touch-callout:none] cursor-default items-center gap-1.5 pr-1 text-[13px] hover:bg-surface pointer-coarse:min-h-touch ${FOCUS_RING} focus-visible:-outline-offset-2 ${can ? 'text-fg' : 'text-fg-subtle'}`}
       style={{ paddingLeft: `${(level - 1) * 16 + 8}px` }}
     >
       <ChevronRight
@@ -651,7 +810,7 @@ function TreeItem({
           <span className="sr-only">Sensitive</span>
         </span>
       )}
-      {onDelete && (
+      {hasMenu && (
         // Its own clicks and keys never reach the row (open, toggle, the
         // tree's keys). Shown on hover or focus with a mouse, always on a
         // touch screen.
@@ -665,15 +824,27 @@ function TreeItem({
             trigger={<Ellipsis size={14} aria-hidden="true" />}
             triggerTabIndex={-1}
             triggerSize="sm"
+            open={menuOpen}
+            onOpenChange={setMenuOpen}
           >
-            <MenuItem
-              icon={<Trash2 size={16} />}
-              danger
-              disabled={dir && notEmpty}
-              onSelect={onDelete}
-            >
-              {dir && notEmpty ? 'Delete (not empty)' : 'Delete'}
-            </MenuItem>
+            {onRename && (
+              <MenuItem
+                icon={<TextCursorInput size={16} />}
+                onSelect={onRename}
+              >
+                Rename
+              </MenuItem>
+            )}
+            {onDelete && (
+              <MenuItem
+                icon={<Trash2 size={16} />}
+                danger
+                disabled={dir && notEmpty}
+                onSelect={onDelete}
+              >
+                {dir && notEmpty ? 'Delete (not empty)' : 'Delete'}
+              </MenuItem>
+            )}
           </Menu>
         </div>
       )}

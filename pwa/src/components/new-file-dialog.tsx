@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useId, useRef, useState } from 'react'
 import { createFile, RequestError } from '../hooks/use-mux-api'
+import { nameProblem } from '../utils/file-name'
 import { Button } from './ui/button'
 import { ConfirmDialog } from './ui/confirm-dialog'
 import { Sheet } from './ui/sheet'
@@ -14,13 +15,6 @@ const REFUSED: Record<string, string> = {
   busy: 'Too many writes at once. Try again',
   storage_full: "The host's disk or quota is full",
   read_only: 'The file system there is read-only',
-}
-
-// Caught before sending; the server checks the name again
-function nameProblem(path: string): string | undefined {
-  if (!path) return 'Enter a file name'
-  if (path.endsWith('/')) return 'Enter a file name after the last /'
-  if (path.split('/').includes('..')) return "A path can't go up with .."
 }
 
 type Problem = {

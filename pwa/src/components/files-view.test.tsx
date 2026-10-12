@@ -1,5 +1,6 @@
 import {
   act,
+  cleanup,
   fireEvent,
   render,
   renderHook,
@@ -21,6 +22,7 @@ const mockFind = vi.fn()
 const mockHash = vi.fn()
 const mockDelete = vi.fn()
 const mockRestore = vi.fn()
+const mockRename = vi.fn()
 vi.mock('../hooks/use-mux-api', async (orig) => ({
   ...(await orig<typeof import('../hooks/use-mux-api')>()),
   fetchFilesTree: (...a: unknown[]) => mockTree(...a),
@@ -30,6 +32,7 @@ vi.mock('../hooks/use-mux-api', async (orig) => ({
   fetchFileHash: (...a: unknown[]) => mockHash(...a),
   deleteFile: (...a: unknown[]) => mockDelete(...a),
   restoreFile: (...a: unknown[]) => mockRestore(...a),
+  renameFile: (...a: unknown[]) => mockRename(...a),
 }))
 vi.mock('../utils/highlight', async (orig) => ({
   ...(await orig<typeof import('../utils/highlight')>()),
@@ -651,9 +654,10 @@ describe('FilesView delete', () => {
 
   it('is offered only with a trash and to a client that may write', async () => {
     const { unmount } = await show()
-    expect(
-      within(item('README.md')).queryByRole('button', { name: /Actions/ }),
-    ).toBeNull()
+    // Without a trash the row's menu holds Rename only
+    fireEvent.click(actions('README.md'))
+    expect(screen.getByRole('menuitem', { name: 'Rename' })).toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: /^Delete/ })).toBeNull()
     unmount()
     const second = await withTrash({ readOnly: true })
     expect(
@@ -966,6 +970,338 @@ describe('FilesView delete', () => {
     await choose('README.md')
     await confirm()
     expect(draft.result.current[0]).toEqual(other)
+  })
+})
+
+describe('FilesView rename', () => {
+  const ROOT = '/home/kim/app'
+  beforeEach(() => {
+    mockRename.mockReset()
+    HTMLDialogElement.prototype.showModal = vi.fn(function (
+      this: HTMLDialogElement,
+    ) {
+      this.setAttribute('open', '')
+    })
+    HTMLDialogElement.prototype.close = vi.fn()
+  })
+  const actions = (name: string) =>
+    within(item(name)).getByRole('button', { name: `Actions for ${name}` })
+  const ask = (name: string) => {
+    fireEvent.click(actions(name))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }))
+  }
+  const send = async (to: string) => {
+    const box = within(screen.getByRole('dialog', { name: 'Rename' }))
+    fireEvent.change(box.getByRole('textbox'), { target: { value: to } })
+    await act(async () => {
+      fireEvent.click(box.getByRole('button', { name: 'Rename' }))
+    })
+  }
+  const toast = (notify: ViewProps['notify']) => {
+    const calls = vi.mocked(notify).mock.calls
+    return calls[calls.length - 1]
+  }
+
+  it('renames from the tree, and Undo renames it back', async () => {
+    mockRename
+      .mockResolvedValueOnce({ root: ROOT, path: 'NOTES.md' })
+      .mockResolvedValueOnce({ root: ROOT, path: 'README.md' })
+    const p = await show()
+    ask('README.md')
+    await send('NOTES.md')
+    expect(mockRename.mock.calls[0]).toEqual([
+      '%1',
+      { root: ROOT, path: 'README.md', newPath: 'NOTES.md', reveal: false },
+    ])
+    expect(toast(p.notify)[0]).toBe('Renamed README.md to NOTES.md')
+    await act(async () => lastAction(p.notify).onClick())
+    expect(mockRename.mock.calls[1][1]).toEqual({
+      root: ROOT,
+      path: 'NOTES.md',
+      newPath: 'README.md',
+      reveal: false,
+    })
+    expect(toast(p.notify)).toEqual([
+      'Renamed back to README.md',
+      { variant: 'success' },
+    ])
+  })
+
+  it('a sensitive file from the tree is asked about, then renamed with reveal', async () => {
+    mockRename
+      .mockRejectedValueOnce(new RequestError(403, 'sensitive', 'x'))
+      .mockResolvedValueOnce({ root: ROOT, path: 'src/.env' })
+    const p = await show()
+    ask('.env')
+    await send('src/.env')
+    expect(mockRename.mock.calls[0][1].reveal).toBe(false)
+    await act(async () => {
+      fireEvent.click(
+        within(
+          screen.getByRole('dialog', { name: 'Rename this file?' }),
+        ).getByRole('button', { name: 'Rename' }),
+      )
+    })
+    expect(mockRename.mock.calls[1][1].reveal).toBe(true)
+    expect(toast(p.notify)[0]).toBe('Moved .env to src')
+  })
+
+  it('moves a file to the top folder', async () => {
+    mockRename.mockResolvedValue({ root: ROOT, path: 'a.ts' })
+    const p = await show()
+    fireEvent.click(item('src'))
+    await screen.findByRole('treeitem', { name: /^a\.ts/ })
+    ask('a.ts')
+    await send('a.ts')
+    expect(toast(p.notify)[0]).toBe("Moved a.ts to the pane's directory")
+  })
+
+  it('renames the open file from its header; the tab follows', async () => {
+    mockContent.mockResolvedValue({
+      root: ROOT,
+      path: 'README.md',
+      size: 2,
+      text: 'hi',
+      hash: 'h',
+      editable: true,
+    })
+    mockRename.mockResolvedValue({ root: ROOT, path: 'docs/README.md' })
+    await show()
+    fireEvent.click(item('README.md'))
+    await screen.findByTestId('markdown-preview')
+    mockContent.mockClear()
+    fireEvent.click(screen.getByRole('button', { name: 'Rename' }))
+    await send('docs/README.md')
+    await waitFor(() =>
+      expect(mockContent).toHaveBeenCalledWith(
+        '%1',
+        'docs/README.md',
+        expect.anything(),
+      ),
+    )
+  })
+
+  it('a refused Undo says why', async () => {
+    const p = await show()
+    const undo = async (err: unknown) => {
+      mockRename
+        .mockResolvedValueOnce({ root: ROOT, path: 'B.md' })
+        .mockRejectedValueOnce(err)
+      ask('README.md')
+      await send('B.md')
+      await act(async () => lastAction(p.notify).onClick())
+      return toast(p.notify)
+    }
+    const refused = (
+      status: number,
+      code: string,
+      root?: string,
+      path?: string,
+    ) =>
+      new RequestError(
+        status,
+        code,
+        'x',
+        undefined,
+        undefined,
+        root,
+        undefined,
+        path,
+      )
+    expect(
+      (await undo(refused(409, 'exists', undefined, 'README.md')))[0],
+    ).toBe('A file now exists at README.md; not renamed back')
+    expect((await undo(refused(409, 'exists')))[0]).toBe(
+      'A file now exists at README.md; not renamed back',
+    )
+    expect((await undo(refused(409, 'changed', undefined, 'C.md')))[0]).toBe(
+      'The file changed while it was renamed; it is at C.md',
+    )
+    expect((await undo(new TypeError('offline')))[0]).toBe(
+      'Could not undo the rename',
+    )
+    await undo(refused(409, '', '/other'))
+    expect(p.notify).toHaveBeenCalledWith(
+      "The pane's directory changed; README.md was not renamed back",
+      { variant: 'warning' },
+    )
+  })
+
+  it('Undo is not sent over unsaved changes at the old path', async () => {
+    mockRename.mockResolvedValueOnce({ root: ROOT, path: 'B.md' })
+    const p = await show()
+    ask('README.md')
+    await send('B.md')
+    const draft = renderHook(() => useFileDraft('%1', 'README.md'))
+    act(() =>
+      draft.result.current[1]({
+        root: ROOT,
+        path: 'README.md',
+        baseHash: 'h',
+        base: 'a',
+        crlf: false,
+        text: 'b',
+        reveal: false,
+      }),
+    )
+    await act(async () => lastAction(p.notify).onClick())
+    expect(mockRename).toHaveBeenCalledTimes(1)
+    expect(toast(p.notify)[0]).toBe(
+      'README.md has unsaved changes; not renamed back',
+    )
+  })
+
+  it('an old name the server would refuse has no Undo', async () => {
+    mockTree.mockImplementation(async (_p: string, path: string) => ({
+      root: ROOT,
+      isRepo: true,
+      path,
+      entries: [e('notes.')],
+      truncated: false,
+    }))
+    mockRename.mockResolvedValue({ root: ROOT, path: 'notes.md' })
+    const p = await show()
+    ask('notes.')
+    await send('notes.md')
+    expect(toast(p.notify)).toEqual([
+      "Renamed notes. to notes.md. Undo isn't available for this name",
+    ])
+  })
+
+  it('a name taken: Open it opens that file in a tab', async () => {
+    mockRename.mockRejectedValue(
+      new RequestError(
+        409,
+        'exists',
+        'x',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'src/a.ts',
+      ),
+    )
+    mockContent.mockResolvedValue({
+      root: ROOT,
+      path: 'src/a.ts',
+      size: 1,
+      text: 'a',
+      hash: 'h',
+      editable: true,
+    })
+    await show()
+    ask('README.md')
+    await send('src/a.ts')
+    fireEvent.click(screen.getByRole('button', { name: 'Open it' }))
+    await waitFor(() =>
+      expect(mockContent).toHaveBeenCalledWith(
+        '%1',
+        'src/a.ts',
+        expect.anything(),
+      ),
+    )
+  })
+
+  it('a file swapped while renamed: told where it is', async () => {
+    mockRename.mockRejectedValue(
+      new RequestError(
+        409,
+        'changed',
+        'x',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'X.md',
+      ),
+    )
+    const p = await show()
+    ask('README.md')
+    await send('B.md')
+    expect(toast(p.notify)).toEqual([
+      'The file changed while it was renamed; it is at X.md',
+      { variant: 'warning' },
+    ])
+  })
+
+  it('the same path answered: nothing follows, nothing is said', async () => {
+    mockRename.mockResolvedValue({ root: ROOT, path: 'README.md' })
+    const p = await show()
+    ask('README.md')
+    await send('./README.md')
+    expect(p.notify).not.toHaveBeenCalled()
+  })
+
+  it('renaming the file a search result opened reads the results again', async () => {
+    mockFind.mockResolvedValue({
+      root: ROOT,
+      isRepo: true,
+      results: [{ path: 'README.md', ignored: false, sensitive: false }],
+      truncated: false,
+      incomplete: false,
+    })
+    mockContent.mockResolvedValue({
+      root: ROOT,
+      path: 'README.md',
+      size: 2,
+      text: 'hi',
+      hash: 'h',
+      editable: true,
+    })
+    mockRename.mockResolvedValue({ root: ROOT, path: 'B.md' })
+    await show()
+    fireEvent.change(screen.getByRole('searchbox'), {
+      target: { value: 'read' },
+    })
+    fireEvent.click(await screen.findByRole('button', { name: /README/ }))
+    await screen.findByTestId('markdown-preview')
+    const before = mockFind.mock.calls.length
+    fireEvent.click(screen.getByRole('button', { name: 'Rename' }))
+    await send('B.md')
+    fireEvent.click(screen.getByRole('button', { name: 'Back to files' }))
+    await waitFor(() =>
+      expect(mockFind.mock.calls.length).toBeGreaterThan(before),
+    )
+  })
+
+  it('never offered to a view-only client, nor on a link', async () => {
+    await show({ readOnly: true })
+    expect(
+      within(item('README.md')).queryByRole('button', { name: /Actions/ }),
+    ).toBeNull()
+    // Nor does a finger resting on a row open anything
+    vi.useFakeTimers()
+    try {
+      fireEvent.pointerDown(item('README.md'), { pointerType: 'touch' })
+      act(() => vi.advanceTimersByTime(600))
+    } finally {
+      vi.useRealTimers()
+    }
+    expect(screen.queryByRole('menu')).toBeNull()
+    cleanup()
+    await show()
+    expect(
+      within(item('link')).queryByRole('button', { name: /Actions/ }),
+    ).toBeNull()
+  })
+
+  it('a finger resting on a row opens its menu', async () => {
+    await show()
+    vi.useFakeTimers()
+    try {
+      fireEvent.pointerDown(item('README.md'), {
+        pointerType: 'touch',
+        clientX: 1,
+        clientY: 1,
+      })
+      act(() => vi.advanceTimersByTime(600))
+    } finally {
+      vi.useRealTimers()
+    }
+    expect(screen.getByRole('menuitem', { name: 'Rename' })).toBeInTheDocument()
+    // The click ending the press opens nothing
+    fireEvent.click(item('README.md'))
+    expect(screen.getByRole('tree')).toBeInTheDocument()
   })
 })
 

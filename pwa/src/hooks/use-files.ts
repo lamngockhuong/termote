@@ -1,7 +1,13 @@
 import { useCallback, useSyncExternalStore } from 'react'
 import type { TableOp } from '../utils/csv-edits'
 import type { Delimiter } from '../utils/csv-parse'
-import { closeTab, openTab, pinTab, type TabBase } from '../utils/file-tabs'
+import {
+  closeTab,
+  openTab,
+  pinTab,
+  retargetTabs,
+  type TabBase,
+} from '../utils/file-tabs'
 import type { LinkPath } from '../utils/markdown-links'
 import { onPaneRemap, remapEntries } from '../utils/pane-remap'
 import type { TableLayout } from '../utils/table-columns'
@@ -186,6 +192,8 @@ interface Store {
   // path was put back: the tree opened down to it, read again; what is
   // open stays open
   restored: (path: string) => Promise<void>
+  // from was renamed to to: its tabs show to, the tree is read again
+  renamed: (from: string, to: string, reveal: boolean) => void
 }
 
 function createStore(id: string): Store {
@@ -446,6 +454,44 @@ function createStore(id: string): Store {
     await readDown(parent)
   }
 
+  // The file from was renamed to to (reveal: shown as sensitive): its tabs
+  // show to, keeping their place and pinned state (a tab already on to
+  // closes), Back goes to to, and the tree reads both directories again.
+  // Tabs kept from another root (pendingRootClose) are another file.
+  function renamed(from: string, to: string, reveal: boolean) {
+    const mine = (t: FileTab) => t.root === state.root
+    const follow = (t: FileTab) =>
+      mine(t) && t.history.some((e) => e.path === from)
+        ? t.history.map((e) => (e.path === from ? { ...e, path: to } : e))
+        : t.history
+    const r = retargetTabs(
+      state.tabs,
+      from,
+      to,
+      (t) => ({ reveal: t.reveal || reveal }),
+      mine,
+    )
+    const gone = new Set(r.dropped.map((t) => t.id))
+    set({
+      tabs: r.tabs.map((t) => {
+        const history = follow(t)
+        return history === t.history ? t : { ...t, history }
+      }),
+      // A tab dropped for being on to: the moved one shows in its place
+      activeId:
+        state.activeId && gone.has(state.activeId)
+          ? r.tabs.find((t) => t.path === to && mine(t))!.id
+          : state.activeId,
+    })
+    const parentOf = (p: string) => {
+      const at = p.lastIndexOf('/')
+      return at < 0 ? '' : p.slice(0, at)
+    }
+    set({ expanded: expandTo(parentOf(to)) })
+    read(parentOf(from))
+    if (parentOf(to) !== parentOf(from)) readDown(parentOf(to))
+  }
+
   function deleted(path: string) {
     const at = path.lastIndexOf('/')
     const parent = at < 0 ? '' : path.slice(0, at)
@@ -572,6 +618,7 @@ function createStore(id: string): Store {
     list,
     deleted,
     restored,
+    renamed,
   }
 }
 
@@ -636,6 +683,21 @@ export function useFiles(paneId: string) {
     deleted: useCallback((p: string) => store.deleted(p), [store]),
     restored: useCallback((p: string) => store.restored(p), [store]),
   }
+}
+
+// The file from under root was renamed to to: the tabs and drafts of every
+// pane showing root follow it (reveal: the user chose to show it as
+// sensitive). Run once the server moved it, with the paths it answered.
+export function fileRenamed(
+  root: string,
+  from: string,
+  to: string,
+  reveal: boolean,
+) {
+  if (from === to) return
+  moveDrafts(root, from, to, reveal)
+  for (const s of stores.values())
+    if (s.get().root === root) s.renamed(from, to, reveal)
 }
 
 // Follows a link into the Files view of paneId from elsewhere (the Changes
@@ -728,6 +790,35 @@ export function isDraftDirty(paneId: string, path: string) {
 
 export function dropDraft(paneId: string, path: string) {
   setDraftOf(paneId, path, undefined)
+}
+
+// Whether any pane has unsaved changes of path under root: a rename onto it
+// would lose them
+export function hasDirtyDraftAt(root: string, path: string) {
+  for (const d of drafts.values())
+    if (d.root === root && d.path === path && d.text !== d.base) return true
+  return false
+}
+
+// Every pane's draft of from under root becomes the draft of to (a clean
+// one there is replaced: its file is gone), shown as sensitive when reveal
+function moveDrafts(root: string, from: string, to: string, reveal: boolean) {
+  let moved = false
+  for (const [key, d] of [...drafts]) {
+    if (d.root !== root || d.path !== from) continue
+    drafts.delete(key)
+    const paneId = key.slice(0, key.indexOf('\u0000'))
+    drafts.set(draftKey(paneId, to), {
+      ...d,
+      path: to,
+      reveal: d.reveal || reveal,
+    })
+    moved = true
+  }
+  if (!moved) return
+  draftsVersion++
+  guardUnload()
+  for (const fn of draftListeners) fn()
 }
 
 // Whether a path of paneId has unsaved changes, read again whenever a

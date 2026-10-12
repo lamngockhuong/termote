@@ -340,6 +340,8 @@ The `update` command:
 | `pwa/src/utils/git-ref.ts`                        | Branch names the server accepts (validBranchName)             |
 | `pwa/src/components/file-search.tsx`              | Files: find a file by name under the root, results, switch    |
 | `pwa/src/components/delete-file-dialog.tsx`       | Files: asks before a delete, second ask for a permanent one   |
+| `pwa/src/components/rename-file-dialog.tsx`       | Files: a file's new path, renames/moves it, says why not      |
+| `pwa/src/utils/file-name.ts`                      | Name checks of New file and Rename, the base name selected    |
 | `pwa/src/components/markdown-preview.tsx`         | Markdown file rendered in Files/Changes (links, code blocks)  |
 | `pwa/src/components/mermaid-block.tsx`            | A mermaid block: the diagram image, Show source, fallback     |
 | `pwa/src/utils/mermaid-render.ts`                 | Mermaid → `data:` SVG image: locked config, queue, cache      |
@@ -399,6 +401,7 @@ The `update` command:
 | `server/files_create.go`                          | `POST files/create`: an empty file, never replacing anything  |
 | `server/files_find*.go`                           | `GET files/find`: file lists (git, walk), cache, ranking      |
 | `server/files_delete.go`                          | `POST files/delete`/`restore`, `content?hash=1`               |
+| `server/files_rename.go`                          | `POST files/rename`: a file moved, never replacing anything   |
 | `server/files_trash*.go`                          | Trash store, sweep, no-replace rename/rmdir by descriptor     |
 | `server/agent_proc*.go`                           | Finds Claude Code (or Codex) under a tmux/psmux pane          |
 | `server/agent_proc_handles_windows.go`            | Windows: write handles of every process (handle table, 1 s)   |
@@ -1006,6 +1009,44 @@ Both Docker Desktop and Podman work on all platforms (macOS, Linux).
   it takes one of the 4 `files/raw` slots (429 `busy`). `termote uninstall` keeps the trash
   (the user's files) and says where; `--purge` removes it. A view-only client gets 403 `view_only`
   for deletes and restores, and `content?hash=1`
+- **Renaming a file** (`POST files/rename?root=`, `server/files_rename.go`): a regular file moved
+  to a new path under the same root (a rename, or a move whose missing directories are made, and
+  stay if a later step fails, as with `mkdir -p`); never a directory. The guards of a create
+  (`writeGuard`, the handler's cross-site check, `requireWriteRole`: a view-only client gets 403
+  `view_only`; `root` required: 400, 409 once it moved), body `{path, newPath, reveal}` read
+  first (8 KB) → 200 `{root, path}` (the cleaned new path); no trash needed (`caps.trash` off
+  still renames). The source is checked as a delete's: `.`/`""` → 400 `invalid_path`, the deny
+  lists → 403 `not_allowed`, parents opened one at a time without making any (a symlink, a
+  junction or a swapped directory → 403 `symlink`, missing → 404), a regular file (409
+  `not_file`, a symlink 403 `symlink`) owned by the server user (`fileOwnedByServer`, Unix; 403
+  `permission`); never opened, never hashed, any number of hard links. The new path:
+  `validRenameTarget` (a create's shape rules; its per-name rules only for the new base name and
+  for each directory the walk has to make, so a file inside an existing directory whose name ends in a space can
+  still be renamed; never a `.termote-edit-`/`.termote-rename-<16 hex>` name) → 400
+  `invalid_name`, the deny lists → 403 `not_allowed`, missing parents made and checked again as
+  a create's. A sensitive name on either side needs `reveal: true` (403 `sensitive`). Locks: the
+  root's lock, both files' locks (shared with saves) in the order of their keys, one write slot
+  without waiting (429 `busy`). The same path → 200, nothing done (after the source is checked);
+  only the directories' case differing on a file system that ignores it → 200 with the source
+  path. Never replaces: `renameat2 RENAME_NOREPLACE` / `renameatx_np RENAME_EXCL` /
+  `MoveFileEx` without `MOVEFILE_REPLACE_EXISTING`; anything at the new path, a dangling symlink
+  included, → 409 `exists` with `path`. A file system without the flag takes
+  `linkCheckUnlink`: `linkat`, then the old name is unlinked only while it is still the file
+  checked (an agent's write-then-rename over it in between is kept: the new link is removed, 409
+  `changed`; accepted gap: a replacement between that check and the unlink). A new name differing
+  only in case from the file itself (`SameFile` and `strings.EqualFold`) moves in two no-replace
+  steps through `.termote-rename-<16 hex>` (never swept, a sensitive name); `SameFile` otherwise
+  (another hard link, a name differing only in Unicode normalization) → 409 `exists`, nothing
+  moved. What landed must be the file checked, or it goes back (never replacing) and 409
+  `changed`; if it cannot go back, 409 `changed` with `path` (where it is now). `EXDEV` /
+  `ERROR_NOT_SAME_DEVICE` → 409 `cross_device`, nothing moved, never a copy. Windows: a file
+  another program holds open (`ERROR_SHARING_VIOLATION`/`ERROR_LOCK_VIOLATION`) → 409 `in_use`.
+  OS errors as a create's (403 `permission`, 403 `read_only`, 507 `storage_full`). A rename drops
+  the root's cached git status and file lists (`forgetRoot`); Changes shows a deleted and an
+  untracked file until the user stages, as with `mv`. The PWA moves every tab, draft and Changes
+  editor of the old path, in every pane of the root, to the new one, never onto a draft with
+  unsaved changes (refused before sending), and offers Undo (a second rename, not offered when
+  the old name fails those name rules)
 - **Image uploads** (`POST /api/mux/uploads`): the PWA sends an image so an agent can read it by
   path (the host clipboard is empty when the image sits on a phone). Same auth, Host allowlist,
   `Sec-Fetch-Site`/`Origin` check and `requireWriteRole` as every write; the body is a raw

@@ -4,6 +4,8 @@ package main
 
 import (
 	"errors"
+	"io/fs"
+	"log"
 	"os"
 	"syscall"
 
@@ -22,6 +24,55 @@ func renameNoReplace(from *os.Root, fromName string, to *os.Root, toName string)
 		return nil
 	})
 }
+
+// renameNoReplaceChecked is renameNoReplace for a rename of the file fi
+// describes: where the file system has no flag for it, the hard link
+// fallback unlinks fromName only while it is still that file
+// (linkCheckUnlink).
+func renameNoReplaceChecked(from *os.Root, fromName string, to *os.Root, toName string, fi fs.FileInfo) error {
+	return withDirFds(from, to, func(ofd, nfd int) error {
+		err := renameatExcl(ofd, fromName, nfd, toName, func(ofd int, old string, nfd int, new string) error {
+			return linkCheckUnlink(ofd, old, nfd, new, fi)
+		})
+		if err != nil {
+			return &os.LinkError{Op: "rename", Old: fromName, New: toName, Err: err}
+		}
+		return nil
+	})
+}
+
+// linkBeforeCheck runs between the hard link of linkCheckUnlink and its
+// check; only tests set it, to replace the old name in between.
+var linkBeforeCheck = func() {}
+
+// linkCheckUnlink links old to new, then unlinks old only while it is still
+// the file fi describes. A file put at old in between (an agent writing a
+// temporary file and renaming it over old) is kept: the new link is removed
+// and errEditChanged returned, since the file the client renamed was
+// replaced. Accepted risk: old can still be replaced between the check and
+// the unlink. When old is gone by then, the new link is the file: kept.
+func linkCheckUnlink(ofd int, old string, nfd int, new string, fi fs.FileInfo) error {
+	if err := unix.Linkat(ofd, old, nfd, new, 0); err != nil {
+		return err
+	}
+	linkBeforeCheck()
+	var st unix.Stat_t
+	err := unix.Fstatat(ofd, old, &st, unix.AT_SYMLINK_NOFOLLOW)
+	if errors.Is(err, unix.ENOENT) {
+		return nil
+	}
+	if want := fi.Sys().(*syscall.Stat_t); err != nil || uint64(st.Dev) != uint64(want.Dev) || uint64(st.Ino) != uint64(want.Ino) {
+		if err := unix.Unlinkat(nfd, new, 0); err != nil {
+			log.Printf("files rename: removing the link %s: %v", new, err)
+		}
+		return errEditChanged
+	}
+	return unix.Unlinkat(ofd, old, 0)
+}
+
+// isInUse reports whether err is a move refused because another program
+// holds the file open: never on Unix.
+func isInUse(error) bool { return false }
 
 // renameIntoTrash moves fromName in from to toName in to with a plain
 // rename: toName is a new random name, and a hard link fallback could

@@ -12,9 +12,15 @@ var renameat2 = unix.Renameat2
 // renameatNoReplace renames with RENAME_NOREPLACE, or through a hard link
 // on a file system without it.
 func renameatNoReplace(ofd int, old string, nfd int, new string) error {
+	return renameatExcl(ofd, old, nfd, new, linkUnlink)
+}
+
+// renameatExcl renames with RENAME_NOREPLACE, or with fallback on a file
+// system without it.
+func renameatExcl(ofd int, old string, nfd int, new string, fallback func(int, string, int, string) error) error {
 	err := renameat2(ofd, old, nfd, new, unix.RENAME_NOREPLACE)
 	if errors.Is(err, unix.EINVAL) || errors.Is(err, unix.ENOSYS) {
-		return linkUnlink(ofd, old, nfd, new)
+		return fallback(ofd, old, nfd, new)
 	}
 	return err
 }

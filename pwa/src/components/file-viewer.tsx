@@ -8,6 +8,7 @@ import {
   Lock,
   Pencil,
   Pin,
+  TextCursorInput,
   Trash2,
   WrapText,
   X,
@@ -268,6 +269,9 @@ interface Props {
   // the hash of the text shown, when it is shown, and whether the file
   // usually holds secrets
   onDelete?: (file: { hash?: string; sensitive: boolean }) => void
+  // Offered in the header's menu when renaming is allowed (revealed: the
+  // user chose to show this sensitive file)
+  onRename?: (file: { revealed: boolean }) => void
   // The file's tab is the preview one: Keep open (and editing) pins it
   pinned?: boolean
   onPin?: () => void
@@ -325,6 +329,7 @@ export function FileViewer({
   initialReveal = false,
   onSaved,
   onDelete,
+  onRename,
   pinned = true,
   onPin,
   onRevealed,
@@ -611,6 +616,12 @@ export function FileViewer({
       label: 'Keep open',
       icon: <Pin size={15} />,
       onClick: onPin,
+    })
+  if (!mine && onRename)
+    extras.push({
+      label: 'Rename',
+      icon: <TextCursorInput size={15} />,
+      onClick: () => onRename({ revealed: reveal }),
     })
   if (!mine && onDelete)
     extras.push({
