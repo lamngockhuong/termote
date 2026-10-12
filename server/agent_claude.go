@@ -120,8 +120,10 @@ type claudeRow struct {
 }
 
 // Parse reads rows until the last complete line. A line longer than
-// agentMaxLine is skipped without being held in memory, and leaves a clipped
-// note in its place. A tool result is returned as its own orphan part;
+// agentMaxLine is read through a longLineClipper, which cuts every long
+// string in it (the base64 of an image sent with a message), and parsed
+// from what is left; when even that does not fit, it leaves a clipped note in
+// its place. A tool result is returned as its own orphan part;
 // foldToolResults attaches it to its call.
 func (claudeJournal) Parse(r io.Reader, start int64) ([]TranscriptEntry, int64) {
 	br := lineReaders.Get().(*bufio.Reader)
@@ -136,14 +138,23 @@ func (claudeJournal) Parse(r io.Reader, start int64) ([]TranscriptEntry, int64) 
 		line, err := br.ReadSlice('\n')
 		if errors.Is(err, bufio.ErrBufferFull) {
 			lineStart, n := off, int64(len(line))
+			var clip longLineClipper
+			clip.write(line)
 			for errors.Is(err, bufio.ErrBufferFull) {
 				line, err = br.ReadSlice('\n')
 				n += int64(len(line))
+				clip.write(line)
 			}
 			if err != nil {
 				return entries, off // the long line is not complete yet
 			}
 			off = lineStart + n
+			if !clip.overflow {
+				if e, ok := parseClaudeRow(clip.out, lineStart); ok {
+					entries = append(entries, e)
+				}
+				continue
+			}
 			entries = append(entries, TranscriptEntry{
 				ID: fmt.Sprintf("clipped-%d", lineStart), Role: "note", off: lineStart,
 				Parts: []TranscriptPart{{Kind: "text", Clipped: true}},
@@ -162,6 +173,64 @@ func (claudeJournal) Parse(r io.Reader, start int64) ([]TranscriptEntry, int64) 
 		if e, ok := parseClaudeRow(line, lineStart); ok {
 			entries = append(entries, e)
 		}
+	}
+}
+
+// longLineKeep is how many bytes of each JSON string a longLineClipper
+// keeps. Even a string made only of \uXXXX escapes still decodes past
+// claudeMaxText, so a text cut here is still reported clipped.
+const longLineKeep = 6 * claudeMaxText
+
+// longLineClipper copies a JSON line too long to hold, keeping at most
+// longLineKeep bytes of each string. A string is cut only before a complete
+// character or escape, so what is left still decodes. Past agentMaxLine of
+// output (a line made of many short strings) it sets overflow and keeps
+// nothing more.
+type longLineClipper struct {
+	out      []byte
+	overflow bool
+	inString bool
+	escape   bool
+	hexLeft  int // hex digits of a \uXXXX escape still to come
+	strLen   int
+	dropping bool
+}
+
+func (c *longLineClipper) write(p []byte) {
+	for _, b := range p {
+		keep := true
+		switch {
+		case !c.inString:
+			if b == '"' {
+				c.inString, c.strLen, c.dropping = true, 0, false
+			}
+		case c.escape:
+			c.escape = false
+			if b == 'u' {
+				c.hexLeft = 4
+			}
+			keep = !c.dropping
+		case c.hexLeft > 0:
+			c.hexLeft--
+			keep = !c.dropping
+		case b == '"':
+			c.inString = false
+		default:
+			if !c.dropping && c.strLen >= longLineKeep && utf8.RuneStart(b) {
+				c.dropping = true
+			}
+			c.escape = b == '\\'
+			keep = !c.dropping
+			c.strLen++
+		}
+		if !keep || c.overflow {
+			continue
+		}
+		if len(c.out) >= agentMaxLine {
+			c.overflow, c.out = true, nil
+			continue
+		}
+		c.out = append(c.out, b)
 	}
 }
 

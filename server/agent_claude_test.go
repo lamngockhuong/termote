@@ -137,6 +137,67 @@ func TestClaudeParseResultInLaterRead(t *testing.T) {
 	}
 }
 
+func TestClaudeParseKeepsImagesOfALongLine(t *testing.T) {
+	// Claude Code writes each image's base64 into the message's row, so four
+	// photos make a line far past agentMaxLine.
+	img := map[string]any{"type": "image", "source": map[string]any{
+		"type": "base64", "media_type": "image/png", "data": strings.Repeat("QUJD", 1<<18),
+	}}
+	line, _ := json.Marshal(map[string]any{"type": "user", "uuid": "u4", "message": map[string]any{
+		"content": []any{img, img, img, img, map[string]any{"type": "text", "text": "four images"}},
+	}})
+	if len(line) <= agentMaxLine {
+		t.Fatalf("line is %d bytes, want past agentMaxLine", len(line))
+	}
+	entries, end := claudeJournal{}.Parse(bytes.NewReader(append(line, '\n')), 0)
+	if end != int64(len(line)+1) || len(entries) != 1 {
+		t.Fatalf("end = %d, entries = %+v", end, entries)
+	}
+	e := entries[0]
+	if e.ID != "u4" || e.Role != "user" || len(e.Parts) != 5 {
+		t.Fatalf("entry = %+v", e)
+	}
+	for _, p := range e.Parts[:4] {
+		if p.Kind != "image" {
+			t.Errorf("part = %+v, want image", p)
+		}
+	}
+	if e.Parts[4].Text != "four images" {
+		t.Errorf("text = %+v", e.Parts[4])
+	}
+}
+
+func TestLongLineClipperCutsOnlyWholeEscapes(t *testing.T) {
+	// A string of escapes cut anywhere must still decode, and decode past
+	// claudeMaxText so the text is reported clipped.
+	for _, unit := range []string{`\u00e9`, `\"`, "é", `\uD83D\uDE00`} {
+		text := strings.Repeat(unit, 3*longLineKeep/len(unit))
+		line := []byte(`{"type":"assistant","uuid":"a","message":{"content":[{"type":"text","text":"` + text + `"}]}}` + "\n")
+		var c longLineClipper
+		for i := 0; i < len(line); i += 4096 {
+			c.write(line[i:min(i+4096, len(line))])
+		}
+		e, ok := parseClaudeRow(c.out, 0)
+		if c.overflow || !ok || !e.Parts[0].Clipped {
+			t.Errorf("%s: overflow=%v ok=%v entry=%+v", unit, c.overflow, ok, e)
+		}
+	}
+}
+
+func TestLongLineClipperOverflow(t *testing.T) {
+	// Short strings are never cut, so a line of many still does not fit.
+	var b strings.Builder
+	b.WriteString(`{"type":"user","uuid":"m","message":{"content":[`)
+	for b.Len() < agentMaxLine+1024 {
+		b.WriteString(`{"type":"text","text":"x"},`)
+	}
+	b.WriteString(`{"type":"text","text":"x"}]}}` + "\n")
+	entries, _ := claudeJournal{}.Parse(strings.NewReader(b.String()), 0)
+	if len(entries) != 1 || entries[0].Role != "note" || !entries[0].Parts[0].Clipped {
+		t.Fatalf("entries = %+v", entries)
+	}
+}
+
 func TestClaudeParseClipsLongLineWithoutHoldingIt(t *testing.T) {
 	head := `{"type":"user","uuid":"u1","message":{"content":"hi"}}` + "\n"
 	long := `{"type":"user","uuid":"big","message":{"content":"` + strings.Repeat("x", 3<<20) + `"}}` + "\n"
@@ -154,7 +215,7 @@ func TestClaudeParseClipsLongLineWithoutHoldingIt(t *testing.T) {
 	if end != int64(len(data)) {
 		t.Errorf("end = %d, want %d", end, len(data))
 	}
-	if len(entries) != 3 || entries[1].Role != "note" || !entries[1].Parts[0].Clipped || entries[1].off != int64(len(head)) {
+	if len(entries) != 3 || entries[1].ID != "big" || entries[1].Role != "user" || !entries[1].Parts[0].Clipped || entries[1].off != int64(len(head)) {
 		t.Fatalf("entries = %+v", entries)
 	}
 	if entries[2].Parts[0].Text != "after" {
