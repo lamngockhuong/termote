@@ -7,6 +7,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -309,6 +310,20 @@ export function ChatComposer({
     images.add(file)
   }
 
+  // The caret after a pick, set in the commit that writes the picked text:
+  // a frame later, typing or a select-all could already have begun, and the
+  // caret moved then would split what is typed.
+  // A pick that changed nothing renders nothing: the next render (typing
+  // elsewhere) finds other text and leaves the caret where it is.
+  const caretAfterPick = useRef<{ text: string; caret: number } | null>(null)
+  useLayoutEffect(() => {
+    const want = caretAfterPick.current
+    const box = boxRef.current
+    if (!want || !box) return
+    caretAfterPick.current = null
+    if (box.value === want.text) box.setSelectionRange(want.caret, want.caret)
+  })
+
   // A picked command is typed in for its arguments, a picked skill in place
   // of the word being typed; a command that opens an interactive screen or
   // ends the agent is sent right away (after asking).
@@ -319,16 +334,10 @@ export function ChatComposer({
     }
     // Only called from the open list, which has a query
     const next = applyPick(text, q as NonNullable<typeof q>, c)
+    caretAfterPick.current = next
     update(next.text)
     setCaret(next.caret)
-    const box = boxRef.current
-    box?.focus()
-    // After React writes the value, unless typing already began: a late frame
-    // would pull the caret back into the middle of what was typed
-    requestAnimationFrame(() => {
-      if (box?.value === next.text)
-        box.setSelectionRange(next.caret, next.caret)
-    })
+    boxRef.current?.focus()
   }
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
