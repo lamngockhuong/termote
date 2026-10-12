@@ -24,7 +24,7 @@ This repo is a **pnpm workspace** (`pwa` + `website`) with a single root `pnpm-l
 Install everything once from the repo root:
 
 ```bash
-pnpm install      # Installs all workspace packages
+pnpm install      # Installs all workspace packages and the git hooks (lefthook)
 ```
 
 ### PWA Development
@@ -71,6 +71,10 @@ See [docs/code-standards.md](docs/code-standards.md) for details.
 make fmt         # Format markdown/mdx files
 make fmt-check   # Check formatting (CI)
 ```
+
+The git hooks check formatting, lint and types before a commit or a push (see
+[docs/code-standards.md](docs/code-standards.md#git-hooks)). Skip them once with `LEFTHOOK=0` or
+`--no-verify`.
 
 **MDX Caveat:** When editing MDX files with Astro components (`<Steps>`, `<Tabs>`), ensure closing tags are NOT indented:
 

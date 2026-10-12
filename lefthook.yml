@@ -1,0 +1,51 @@
+# Git hooks (lefthook), installed by `pnpm install` through scripts/install-git-hooks.mjs.
+# They only check, never rewrite a file. Skip them once with LEFTHOOK=0 or `git commit --no-verify`.
+# The E2E suite and `go test ./...` take minutes and need tmux: CI runs them, not a hook.
+# A glob is matched from the repo root; with `root`, {staged_files} are relative to it.
+# No double quote in a `run`: lefthook on Windows hands it to sh without escaping them.
+glob_matcher: doublestar
+
+pre-commit:
+  parallel: true
+  commands:
+    # Read-only, like `pnpm lint:ci` (`pnpm lint` writes)
+    biome:
+      root: pwa/
+      glob: "pwa/src/**/*.{ts,tsx}"
+      run: pnpm exec biome check --no-errors-on-unmatched --files-ignore-unknown=true {staged_files}
+    # gofmt -l exits 0 even when it lists files; the script fails then
+    gofmt:
+      root: server/
+      glob: "server/**/*.go"
+      run: sh ../scripts/check-gofmt.sh {staged_files}
+    # Same pinned version as `make fmt-check`; dprint.json formats only markdown/mdx
+    dprint:
+      glob: "**/*.{md,mdx}"
+      run: npx --yes dprint@0.60.1 check --allow-no-files {staged_files}
+
+pre-push:
+  parallel: true
+  commands:
+    tsc:
+      root: pwa/
+      glob: "pwa/**"
+      run: pnpm exec tsc --noEmit
+    # CI vets each OS on its own runner; cross-vetting catches the OS-specific files here
+    vet-linux:
+      root: server/
+      glob: "server/**"
+      env:
+        GOOS: linux
+      run: go vet ./...
+    vet-windows:
+      root: server/
+      glob: "server/**"
+      env:
+        GOOS: windows
+      run: go vet ./...
+    vet-darwin:
+      root: server/
+      glob: "server/**"
+      env:
+        GOOS: darwin
+      run: go vet ./...
