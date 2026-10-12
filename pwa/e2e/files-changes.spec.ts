@@ -459,8 +459,13 @@ test.describe('files and changes views', () => {
       writeFileSync(path.join(dir, '.env'), 'TOKEN=e2e-download\n')
       await page.setViewportSize({ width: 1280, height: 800 })
       await page.goto(`${link}?view=files`)
-      const url = page.url()
       const panel = page.getByRole('complementary', { name: 'Files' })
+      // Nothing navigated to the file: the page is still the app (the app
+      // itself drops ?view from the address once it has read it)
+      const stillApp = async () => {
+        expect(new URL(page.url()).pathname).toBe('/')
+        await expect(panel).toBeVisible()
+      }
       const rowMenu = async (name: string | RegExp) => {
         const row = panel.getByRole('treeitem', { name })
         await row.hover()
@@ -475,7 +480,7 @@ test.describe('files and changes views', () => {
       await panel.getByRole('treeitem', { name: 'e2e-download' }).click()
 
       expect(await saved(() => rowMenu('page.html'), 'page.html')).toEqual(bytes)
-      expect(page.url()).toBe(url)
+      await stillApp()
 
       // Opened (not previewable), then from the header
       await panel.getByRole('treeitem', { name: 'page.html' }).click()
@@ -483,7 +488,7 @@ test.describe('files and changes views', () => {
       expect(
         await saved(() => panel.getByRole('button', { name: 'Download' }).click(), 'page.html'),
       ).toEqual(bytes)
-      expect(page.url()).toBe(url)
+      await stillApp()
 
       // A sensitive name asks first: Cancel starts nothing
       await panel.getByRole('tab', { name: 'Files', exact: true }).click()

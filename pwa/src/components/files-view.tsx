@@ -512,23 +512,21 @@ function PaneFiles({
           onRefresh={f.refresh}
         />
       )}
-      <ConfirmDialog
-        isOpen={!!downloading}
-        title="Download a file that may contain secrets?"
-        confirmLabel="Download"
-        onConfirm={() => {
-          setDownloading(undefined)
-          if (downloading) download(downloading.root, downloading.path, true)
-        }}
-        onCancel={() => setDownloading(undefined)}
-      >
-        {downloading && (
-          <>
-            {visibleUnsafe(baseName(downloading.path))} usually holds keys or
-            passwords. A copy will be saved on this device.
-          </>
-        )}
-      </ConfirmDialog>
+      {downloading && (
+        <ConfirmDialog
+          isOpen
+          title="Download a file that may contain secrets?"
+          confirmLabel="Download"
+          onConfirm={() => {
+            setDownloading(undefined)
+            download(downloading.root, downloading.path, true)
+          }}
+          onCancel={() => setDownloading(undefined)}
+        >
+          {visibleUnsafe(baseName(downloading.path))} usually holds keys or
+          passwords. A copy will be saved on this device.
+        </ConfirmDialog>
+      )}
       {deleting && (
         <DeleteFileDialog
           paneId={paneId}

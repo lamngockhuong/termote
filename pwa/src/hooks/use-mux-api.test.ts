@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AgentRequestError,
   answerAgentPrompt,
+  checkFileDownload,
   closeGroup,
   closePane,
   closeTab,
@@ -16,6 +17,7 @@ import {
   fetchDevices,
   fetchFileContent,
   fetchFileDiff,
+  fetchFileDownload,
   fetchFileHash,
   fetchFileImage,
   fetchFilesTree,
@@ -965,6 +967,40 @@ describe('files API client', () => {
         { signal: ctl.signal },
       ],
     ])
+  })
+
+  it('checks a download, then reads its bytes', async () => {
+    const spy = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ root: '/r', path: 'a', size: 1 })),
+    )
+    vi.stubGlobal('fetch', spy)
+    const ctl = new AbortController()
+    expect(
+      await checkFileDownload('1', 'd/a b', { root: '/r', reveal: true }),
+    ).toEqual({ root: '/r', path: 'a', size: 1 })
+    await checkFileDownload('1', 'a')
+    expect(await (await fetchFileDownload('/x', ctl.signal)).text()).toContain(
+      'root',
+    )
+    expect(spy.mock.calls).toEqual([
+      [
+        '/api/mux/panes/1/files/download?path=d%2Fa+b&reveal=1&root=%2Fr&check=1',
+      ],
+      ['/api/mux/panes/1/files/download?path=a&check=1'],
+      ['/x', { signal: ctl.signal }],
+    ])
+  })
+
+  it.each([
+    ['check', () => checkFileDownload('1', 'a')],
+    ['read', () => fetchFileDownload('/x')],
+  ])('a refused download %s carries the server code', async (_, call) => {
+    mockFetch({ body: { error: 'too large', code: 'too_large' }, status: 413 })
+    await expect(call()).rejects.toMatchObject({
+      status: 413,
+      code: 'too_large',
+    })
   })
 
   it('a refused image carries the server code', async () => {

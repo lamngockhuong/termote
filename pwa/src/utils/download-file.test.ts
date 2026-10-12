@@ -151,6 +151,11 @@ describe('startDownload', () => {
     expect(onShareBlocked).toHaveBeenCalledTimes(1)
     onShareBlocked.mock.calls[0][0]()
     expect(share).toHaveBeenCalledTimes(2)
+    // A refusal from the new tap is ignored
+    share.mockRejectedValueOnce(new TypeError('bad'))
+    onShareBlocked.mock.calls[0][0]()
+    await Promise.resolve()
+    expect(share).toHaveBeenCalledTimes(3)
     expect(share.mock.calls[1][0].files[0]).toBe(
       share.mock.calls[0][0].files[0],
     )
@@ -200,6 +205,28 @@ describe('downloadFile', () => {
       { variant: 'danger' },
     )
     expect(clicks).toEqual([])
+  })
+
+  it('reads the bytes through the API by default (iOS)', async () => {
+    const fetchSpy = vi.fn(async (_url: string) => new Response('x'))
+    vi.stubGlobal('fetch', fetchSpy)
+    const share = vi.fn()
+    await downloadFile(file, vi.fn(), undefined, {
+      iosStandalone: true,
+      nav: { share, canShare: () => true },
+    })
+    expect(fetchSpy.mock.calls[0][0]).toBe(
+      '/api/mux/panes/%251/files/download?path=dir%2Fa+b.bin&reveal=1&root=%2Fr',
+    )
+    expect(share).toHaveBeenCalled()
+    vi.unstubAllGlobals()
+  })
+
+  it('outside the iOS app, a link (the browser tells it apart)', async () => {
+    const clicks = watchLinks()
+    mockCheck.mockResolvedValue({ root: '/r', path: 'dir/a b.bin', size: 1 })
+    await downloadFile(file, vi.fn())
+    expect(clicks).toHaveLength(1)
   })
 
   it('a moved root is handed on', async () => {

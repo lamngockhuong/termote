@@ -105,9 +105,10 @@ export async function startDownload(
   const file = new File([blob], name, { type: 'application/octet-stream' })
   if (deps.nav.canShare?.({ files: [file] })) {
     if ((await shareFile(deps.nav, file)) === 'blocked')
-      deps.onShareBlocked?.(() => {
-        shareFile(deps.nav, file).catch(() => {})
-      })
+      // Another refusal from the new tap is the sheet's own to show
+      deps.onShareBlocked?.(
+        () => void shareFile(deps.nav, file).catch(() => {}),
+      )
     return
   }
   const href = URL.createObjectURL(file)
@@ -141,7 +142,7 @@ export async function downloadFile(
     if (!iosStandalone) await checkFileDownload(t.paneId, t.path, opts)
     await startDownload(fileDownloadUrl(t.paneId, t.path, opts), base, {
       iosStandalone,
-      fetchBlob: deps.fetchBlob ?? ((url) => fetchFileDownload(url)),
+      fetchBlob: deps.fetchBlob ?? fetchFileDownload,
       nav: deps.nav ?? navigator,
       onFetching: () => notify(`Downloading ${shown}`),
       onShareBlocked: (share) =>
