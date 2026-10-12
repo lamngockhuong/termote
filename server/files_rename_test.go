@@ -240,7 +240,11 @@ func TestFilesRenameChanged(t *testing.T) {
 	fx.write(t, "a.txt", "a\n")
 	swap := func(dir *os.Root, base string) {
 		p := filepath.Join(fx.root, base)
-		os.Remove(p)
+		// Kept under another name: a removed file's inode can be given to
+		// the new one, which would then pass for the file checked
+		if err := os.Rename(p, filepath.Join(fx.root, "old.txt")); err != nil {
+			t.Fatal(err)
+		}
 		writeFile(t, p, "swapped\n")
 	}
 	setFindHook(t, &renameBeforeMove, swap)
