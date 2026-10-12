@@ -1,5 +1,6 @@
 packages:
   - pwa
+  - video
   - website
 
 # Package builds that are allowed to run install scripts (pnpm 10+ security default)

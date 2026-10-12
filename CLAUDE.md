@@ -69,6 +69,7 @@ termote/
 │   ├── test-install.sh     # install.sh tests (fake curl)
 │   ├── test-install.ps1    # install.ps1 tests
 │   └── test-entrypoints.sh # Docker entrypoint tests
+├── video/                  # Feature intro video (Remotion); capture/ takes its screens
 ├── website/                # Documentation site (Astro Starlight)
 │   └── src/content/docs/   # MDX docs (EN + VI)
 └── Makefile                # Build/test/deploy commands
@@ -118,8 +119,9 @@ binary, then print `termote start` — they never start anything themselves.
 
 ## Development Commands
 
-This is a **pnpm workspace** (`pnpm-workspace.yaml` at repo root). `pwa` (`termote`) and
-`website` (`@termote/website`) share a single root `pnpm-lock.yaml`. Install once from the
+This is a **pnpm workspace** (`pnpm-workspace.yaml` at repo root). `pwa` (`termote`),
+`website` (`@termote/website`) and `video` (`@termote/video`, dev dependencies only, see
+`video/README.md`) share a single root `pnpm-lock.yaml`. Install once from the
 root — no need to `cd` into each package.
 
 ```bash

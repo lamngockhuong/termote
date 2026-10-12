@@ -1,0 +1,29 @@
+{
+  "name": "@termote/video",
+  "version": "0.0.0",
+  "description": "Termote's feature intro video (Remotion)",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "audio": "node audio/make-audio.mjs",
+    "dev": "node audio/make-audio.mjs && remotion studio",
+    "render": "node audio/make-audio.mjs && remotion render TermoteIntro ../website/public/video/termote-intro.mp4 --crf=23 && remotion render TermoteHero ../website/public/video/termote-hero.mp4 --muted --crf=23 && remotion still TermotePoster ../website/public/video/termote-intro.jpg --image-format=jpeg --jpeg-quality=85 && remotion still TermoteHero ../website/public/video/termote-hero.jpg --frame=0 --image-format=jpeg --jpeg-quality=85 && remotion render TermoteIntroVertical out/termote-intro-vertical.mp4",
+    "lint": "eslint src && tsc"
+  },
+  "devDependencies": {
+    "@remotion/cli": "4.0.534",
+    "@remotion/eslint-config-flat": "4.0.534",
+    "@remotion/google-fonts": "4.0.534",
+    "@remotion/media": "4.0.534",
+    "@remotion/transitions": "4.0.534",
+    "@types/qrcode": "1.5.6",
+    "@types/react": "19.2.7",
+    "@types/web": "0.0.166",
+    "eslint": "9.39.5",
+    "qrcode": "1.5.4",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "remotion": "4.0.534",
+    "typescript": "5.9.3"
+  }
+}
