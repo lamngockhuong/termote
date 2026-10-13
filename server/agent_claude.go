@@ -104,9 +104,9 @@ func pathWithin(dir, p string) bool {
 
 // claudeRow is the part of a transcript row the parser reads. encoding/json
 // spends nearly all of its time scanning, so each line is decoded exactly
-// once: fields not listed here (toolUseResult repeats every tool output) are
-// skipped, and content is decoded generically since it is a string or a list
-// of blocks.
+// once: fields not listed here are skipped, toolUseResult (which repeats
+// every tool output) is only searched for its file path, and content is
+// decoded generically since it is a string or a list of blocks.
 type claudeRow struct {
 	Type             string `json:"type"`
 	UUID             string `json:"uuid"`
@@ -117,6 +117,75 @@ type claudeRow struct {
 	Message          *struct {
 		Content any `json:"content"`
 	} `json:"message"`
+	// ToolUseResult: Claude Code's own record of a tool result, naming the
+	// file a Read (file.filePath) or an Edit/Write (filePath) touched
+	ToolUseResult claudeToolUseResult `json:"toolUseResult"`
+}
+
+// claudeToolUseResult is the file path a toolUseResult names: filePath (an
+// Edit or Write) or file.filePath (a Read).
+type claudeToolUseResult struct{ FilePath string }
+
+// UnmarshalJSON reads only up to the path, which Claude Code writes before
+// the file's text (a Read's content, an Edit's originalFile), so the row's
+// largest value is not scanned a second time; a value naming no path (a
+// Bash output, an error string) is passed over at memchr speed.
+func (r *claudeToolUseResult) UnmarshalJSON(b []byte) error {
+	if bytes.Contains(b, []byte(`"filePath"`)) {
+		r.FilePath = findFilePath(json.NewDecoder(bytes.NewReader(b)), 0)
+	}
+	return nil
+}
+
+// findFilePath returns the first filePath string of the object dec is at,
+// looking into its "file" object; "" when there is none or the JSON is not
+// an object.
+func findFilePath(dec *json.Decoder, depth int) string {
+	if t, err := dec.Token(); err != nil || t != json.Delim('{') {
+		return ""
+	}
+	for dec.More() {
+		k, err := dec.Token()
+		if err != nil {
+			return ""
+		}
+		switch {
+		case k == "filePath":
+			var p string
+			if dec.Decode(&p) != nil {
+				return ""
+			}
+			return p
+		case k == "file" && depth == 0:
+			if p := findFilePath(dec, 1); p != "" {
+				return p
+			}
+			return ""
+		default:
+			var skip json.RawMessage
+			if dec.Decode(&skip) != nil {
+				return ""
+			}
+		}
+	}
+	return ""
+}
+
+// anySensitive reports whether one of paths names a sensitive file.
+func anySensitive(paths ...string) bool {
+	for _, p := range paths {
+		if p != "" && isSensitive(p) {
+			return true
+		}
+	}
+	return false
+}
+
+// claudeInputSensitive reports whether a tool call's input names a sensitive
+// file: whatever its result shows (a Read's text, the lines an Edit quotes,
+// the lines a Grep of that one file matched) comes from that file.
+func claudeInputSensitive(in map[string]any) bool {
+	return anySensitive(jsonStr(in["file_path"]), jsonStr(in["notebook_path"]), jsonStr(in["path"]))
 }
 
 // Parse reads rows until the last complete line. A line longer than
@@ -282,13 +351,16 @@ func parseClaudeRow(line []byte, off int64) (TranscriptEntry, bool) {
 					name = "tool"
 				}
 				in, _ := b["input"].(map[string]any)
-				e.Parts = append(e.Parts, TranscriptPart{Kind: "tool", Tool: name, ToolID: jsonStr(b["id"]), Input: summarizeToolInput(in), Detail: claudeToolDetail(name, in)})
+				e.Parts = append(e.Parts, TranscriptPart{
+					Kind: "tool", Tool: name, ToolID: jsonStr(b["id"]), Input: summarizeToolInput(in),
+					Detail: claudeToolDetail(name, in), sensitive: claudeInputSensitive(in),
+				})
 			case "tool_result":
 				result, clipped := clampText(stripANSI(toolResultText(b["content"])), claudeMaxResult)
 				isErr, _ := b["is_error"].(bool)
 				e.Parts = append(e.Parts, TranscriptPart{
 					Kind: "tool", Tool: "result", ToolID: jsonStr(b["tool_use_id"]), Result: result,
-					IsError: isErr, Orphan: true, Clipped: clipped,
+					IsError: isErr, Orphan: true, Clipped: clipped, sensitive: anySensitive(row.ToolUseResult.FilePath),
 				})
 			}
 		}
@@ -457,7 +529,7 @@ func claudeToolDetail(tool string, in map[string]any) *ToolDetail {
 		edits = []ToolEdit{{New: jsonStr(in["content"])}}
 	}
 	if len(edits) > 0 {
-		if p := jsonStr(in["file_path"]); p != "" && isSensitive(p) {
+		if claudeInputSensitive(in) {
 			d.Hidden = true
 		} else {
 			var clipped bool

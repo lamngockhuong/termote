@@ -76,6 +76,11 @@ The git hooks check formatting, lint and types before a commit or a push (see
 [docs/code-standards.md](docs/code-standards.md#git-hooks)). Skip them once with `LEFTHOOK=0` or
 `--no-verify`.
 
+The hooks run the `lefthook.yml` and the scripts of the branch checked out, so a contributor's
+branch runs its own code on your machine at your next commit or push. On a branch you do not
+trust, commit with `LEFTHOOK=0`, or read its diff of `lefthook.yml`, `scripts/` and the
+`package.json` scripts first.
+
 **MDX Caveat:** When editing MDX files with Astro components (`<Steps>`, `<Tabs>`), ensure closing tags are NOT indented:
 
 ```mdx

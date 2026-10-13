@@ -130,7 +130,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   character itself. `Cache-Control: no-store`, `muxTimeout`, internal errors logged only. The
   history can hold secrets a program printed: the same a signed-in user saw on the stream
 - **View-only role** (`server/auth_role.go`, `caps.role` = `full|view`, `caps.viewStream`): Basic,
-  session and `--no-auth` are always `full`; a device carries its role. `basicAuth` refuses every
+  session and `--no-auth` are always `full`; a device carries its role, and a role other than
+  `full` (empty, unknown) reads as `view`. `basicAuth` refuses every
   non-GET/HEAD/OPTIONS method of a view-only client on any path (403 `{"error", "code":
   "view_only"}`) before a handler runs, except `POST /api/mux/logout`; handlers repeat it with
   `requireWriteRole`, so a route added later is closed without remembering to. Reads: transcript,
@@ -145,7 +146,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   hub with no view stream to evict → "too many viewers"). The PWA hides every write control and
   shows "View only" (`caps.role`); tmux follows each session's active window, Herdr selects tabs
   client-side but cannot scroll history. No Web Push. A view client reads whatever the agent
-  printed (accepted)
+  printed (accepted), except a sensitive file's tool results in the transcript (see Agent chat)
 - **Groups** (`POST /api/mux/groups` `{name, cwd}` → `{ok, id}`, `PATCH /api/mux/groups/{id}`
   `{name}`, `DELETE /api/mux/groups/{id}`; `server/mux_groups.go`, `caps.groups`): auth,
   `hostGuard`, `writeGuard` (same-site JSON), 8 KB body, `requireWriteRole` first (a view-only
@@ -288,7 +289,12 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   Markdown images in the Chat view never load (shown as links), and raw HTML is not rendered.
   A tool call carries `detail` for its card: the model's description, a Bash/Codex command whole
   (8 KiB) and an Edit/MultiEdit/Write's old and new text (16 KiB per call); the edits of a file
-  `isSensitive` names are left out (`hidden`), as its diff is in Changes.
+  `isSensitive` names are left out (`hidden`), as its diff is in Changes. A view-only client also
+  gets no result of a Claude Code tool call on such a file (the call's `file_path`/`notebook_path`/
+  `path`, or the result row's `toolUseResult` file path; a result read after its call, whose id the
+  server keeps, last 4096, since a failed edit's row names no file but quotes its `old_string`):
+  `Result` emptied and `hidden` set, on a copy of the cached read; a Grep over a directory, Bash and
+  Codex output that prints one is not keyed (accepted).
   `agent/commands` (the composer's `/` suggestions; Codex: its skills, see Codex chat) returns
   only names, descriptions, sources and kinds of `.claude/commands`/`.claude/skills` under the
   pane root and `commands`/`skills`

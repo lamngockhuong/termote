@@ -158,6 +158,11 @@ func TestRequestRole(t *testing.T) {
 	if requestRole(v) != roleView || !authenticated(v) {
 		t.Error("view device")
 	}
+	for _, r := range []role{"", "admin"} {
+		if requestRole(withAuth(ctx, authInfo{Kind: authDevice, Role: r, DeviceID: "d"})) != roleView {
+			t.Errorf("role %q must read as view", r)
+		}
+	}
 }
 
 // Every write route refuses a view-only client in its own handler too

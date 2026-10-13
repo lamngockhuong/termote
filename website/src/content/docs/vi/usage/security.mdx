@@ -22,7 +22,7 @@ giới hạn những gì Termote chạm tới, hãy chạy nó dưới một tà
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Mật khẩu                   | Mọi thứ (toàn quyền).                                                                                                                            |
 | Thiết bị toàn quyền        | Mọi thứ mật khẩu làm được, trừ hai việc: ghép thêm thiết bị toàn quyền (nó chỉ ghép được thiết bị chỉ xem) và đăng xuất một trình duyệt dùng mật khẩu (nó chỉ xem được danh sách). |
-| Thiết bị chỉ xem           | Xem terminal, đọc Chat và Files/Changes trong một git repository. Không gõ được, không sửa được gì, nhưng đọc được mọi thứ đã in ra.            |
+| Thiết bị chỉ xem           | Xem terminal, đọc Chat và Files/Changes trong một git repository. Không gõ được, không sửa được gì, nhưng đọc được mọi thứ đã in ra, trừ kết quả tool trong Chat của một file nhạy cảm (`.env`, khóa). |
 | Bất kỳ ai, với `--no-auth` | Mọi thứ, chỉ cần tới được cổng.                                                                                                                  |
 
 ## Server chặn những gì
@@ -69,6 +69,8 @@ giới hạn những gì Termote chạm tới, hãy chạy nó dưới một tà
   sửa file danh sách thiết bị hoặc tắt đăng nhập. Các giới hạn ở trên chặn nhầm lẫn và thao tác bấm trong
   giao diện, không chặn được người cố ý.
 - **Bí mật đã in ra terminal.** Thiết bị chỉ xem đọc được mọi thứ agent hay một lệnh đã in.
+  Chat bỏ kết quả của một tool Claude Code khi tool đó nêu một file nhạy cảm, nhưng không bỏ một Grep
+  trên cả thư mục, một lệnh shell hay một lượt Codex in file đó ra.
 - **Dịch vụ khác cùng tên máy.** Cookie không gắn với cổng: mọi dịch vụ dưới tên máy đó đều nhận cookie của
   Termote. Hãy cho Termote một tên máy riêng.
 - **Chương trình khác của cùng tài khoản hệ điều hành.** Chúng đọc được đúng những file Termote đọc.

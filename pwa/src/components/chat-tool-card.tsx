@@ -1,4 +1,5 @@
 import { type ReactNode, useLayoutEffect, useRef, useState } from 'react'
+import { EDIT_TOOLS } from '../hooks/use-agent-transcript'
 import type { TranscriptPart } from '../hooks/use-mux-api'
 import {
   type DiffRow,
@@ -15,8 +16,6 @@ import {
 // Lines a block shows before "Show all"
 const IO_LINES = 6
 const DIFF_LINES = 12
-
-const EDIT_TOOLS = new Set(['Edit', 'MultiEdit', 'Write'])
 
 const ROW: Record<DiffRow['kind'], string> = {
   ctx: '',
@@ -225,7 +224,9 @@ export function ToolCard({ part }: { part: TranscriptPart }) {
       )}
       {d?.hidden && (
         <p className="text-[12px] text-fg-subtle">
-          The edit of a sensitive file is not shown.
+          {edit
+            ? 'The edit of a sensitive file is not shown.'
+            : 'The contents of a sensitive file are not shown.'}
         </p>
       )}
       {(command || out) && (

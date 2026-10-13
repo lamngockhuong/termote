@@ -1077,8 +1077,10 @@ The code is `server/auth_role.go` (roles, the default refusal), `server/device_s
 
 - **Identity**: `basicAuth` tries the session cookie, then the device cookie
   `termote_device_<store id>`, then Basic. Session and Basic are always `full`; a device carries its
-  role; `--no-auth` has no identity and is `full`. The snapshot reports `caps.role`, `caps.devices`
-  and `caps.viewStream`.
+  role, and a role other than `full` (empty, unknown) reads as `view`; `--no-auth` has no identity and
+  is `full`. The snapshot reports `caps.role`, `caps.devices` and `caps.viewStream`. A view-only
+  client's Chat transcript leaves out the result of a Claude Code tool call that names a sensitive
+  file (marked `hidden`).
 - **Store**: `<stateDir>/devices/` (`key.json`, `devices.json`, 0700/0600), only the SHA-256 of each
   token; at most 50 devices. Records of another password are ignored, not deleted; `start --fresh`
   deletes them. The container keeps the directory in the volume `termote-state-<uid>`.

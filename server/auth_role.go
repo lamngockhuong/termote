@@ -60,9 +60,11 @@ func authenticated(ctx context.Context) bool {
 }
 
 // requestRole is the request's role: full without an identity (--no-auth,
-// where whoever reaches the port has a shell anyway).
+// where whoever reaches the port has a shell anyway). An identity is full only
+// when it says so: a role left empty or unknown reads as view, so a record that
+// lost its role never gains every write.
 func requestRole(ctx context.Context) role {
-	if a, ok := authFrom(ctx); ok && a.Role == roleView {
+	if a, ok := authFrom(ctx); ok && a.Role != roleFull {
 		return roleView
 	}
 	return roleFull
@@ -90,7 +92,9 @@ func requireWriteRole(w http.ResponseWriter, r *http.Request) bool {
 
 // requireAgentRead lets every role read a pane's agent: the transcript shows
 // what the screen showed (commands, tool output), which a view-only client
-// watches in the terminal anyway.
+// watches in the terminal anyway, except the results of tool calls that name a
+// sensitive file, which handleTranscript leaves out for that role as the
+// Files view does (a command printing one is not caught).
 func requireAgentRead(http.ResponseWriter, *http.Request) bool { return true }
 
 // requireFilesRead refuses a view-only client reveal=1 (content, diff and raw
