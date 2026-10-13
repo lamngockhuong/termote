@@ -270,6 +270,12 @@ describe('mux API client', () => {
     expect(err.message).toBe('open this Zellij session first')
   })
 
+  it('createTab names the refusal itself when the server gives no message', async () => {
+    mockFetch({ status: 409, body: { code: 'no_client' } })
+    const err = await createTab('t').catch((e) => e)
+    expect(err.message).toBe('no client attached')
+  })
+
   it('closeTab sends JSON DELETE', async () => {
     const { calls } = mockFetch({ body: { ok: true } })
     expect(await closeTab('2')).toBe(true)

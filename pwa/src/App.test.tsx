@@ -1897,6 +1897,27 @@ describe('App', () => {
     mockIsMobile.mockReturnValue(false)
   })
 
+  it('says a tab could not be added when the failure carries no message', async () => {
+    mockIsMobile.mockReturnValue(true)
+    mockUseLocalSessions.mockReturnValue({
+      ...mockUseLocalSessions(),
+      addSession: vi.fn(async () => {
+        throw new Error('network')
+      }),
+    })
+    render(<App />)
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Open sessions menu' }),
+    )
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'MobileAdd' }))
+    })
+    expect(await screen.findByTestId('toast')).toHaveTextContent(
+      'Could not add a tab',
+    )
+    mockIsMobile.mockReturnValue(false)
+  })
+
   it('herdr: drives the pane size when the setting and backend allow it', async () => {
     const base = mockUseLocalSessions()
     mockUseLocalSessions.mockReturnValue({

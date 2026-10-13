@@ -161,6 +161,26 @@ describe('useLocalSessions', () => {
     expect(result.current.sessions[0].name).toBe('shell')
   })
 
+  it('waits without a first tab when the server refuses one (Zellij: no client)', async () => {
+    mockFetchTabs.mockResolvedValue([])
+    mockCreateTab.mockRejectedValueOnce(
+      new RequestError(409, 'no_client', 'open it first'),
+    )
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    expect(mockCreateTab).toHaveBeenCalledWith('shell')
+    expect(result.current.isServerReachable).toBe(true)
+    expect(result.current.isReady).toBe(true)
+  })
+
+  it('treats a first tab failing for another reason as the API being down', async () => {
+    mockFetchTabs.mockResolvedValue([])
+    mockCreateTab.mockRejectedValueOnce(new Error('network'))
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    expect(result.current.isServerReachable).toBe(false)
+  })
+
   it('uses fallback session when API throws on first load', async () => {
     mockFetchTabs.mockRejectedValue(new Error('API down'))
     const { result } = renderHook(() => useLocalSessions(1))
