@@ -2041,6 +2041,66 @@ describe('useLocalSessions with zellij', () => {
     expect(sessionStorage.getItem('termote-chat-draft:zb3Bz:p0')).toBeNull()
   })
 
+  it('a tab without a key keeps its metadata under its id', async () => {
+    const { key: _, ...keyless } = tab('zZGV2', 0, 0)
+    mockSnapshot.extra = zellij('zZGV2', [keyless as ReturnType<typeof tab>])
+    const { result } = await render()
+    await act(async () => {
+      await result.current.updateSession('zZGV2:t0', { icon: '⭐' })
+    })
+    expect(meta()).toEqual({
+      'zellij:zZGV2:t0': { icon: '⭐', description: '' },
+    })
+  })
+
+  it("renaming a session leaves the other sessions' metadata alone", async () => {
+    localStorage.setItem(
+      'termote-sessions',
+      JSON.stringify({
+        'zellij:zbWFpbg/terminal_0': { icon: '📺', description: 'main' },
+        'zellij:zZGV2/terminal_0': { icon: '⭐', description: 'dev' },
+      }),
+    )
+    const { result } = await render()
+    mockSnapshot.extra = zellij('zb3Bz', [tab('zb3Bz', 0, 0)])
+    await act(async () => {
+      await result.current.renameGroup('zZGV2', 'ops')
+    })
+    expect(meta()).toEqual({
+      'zellij:zbWFpbg/terminal_0': { icon: '📺', description: 'main' },
+      'zellij:zb3Bz/terminal_0': { icon: '⭐', description: 'dev' },
+    })
+  })
+
+  it('a rename refused after a later one started keeps the later remap', async () => {
+    const { result } = await render()
+    await act(async () => {
+      await result.current.switchSession('zZGV2:t0')
+    })
+    sessionStorage.setItem('termote-chat-draft:zZGV2:p0', 'hello dev')
+    let refuse: (err: unknown) => void = () => {}
+    mockRenameGroup.mockImplementationOnce(
+      () => new Promise((_, reject) => (refuse = reject)),
+    )
+    let first: Promise<unknown> = Promise.resolve()
+    await act(async () => {
+      first = result.current.renameGroup('zZGV2', 'ops').catch((e) => e)
+      await result.current.renameGroup('zZGV2', 'web')
+    })
+    await act(async () => {
+      refuse(new RequestError(409, 'exists', ''))
+      await first
+    })
+    // "web" is zd2Vi: the snapshot shows it, and the draft follows
+    mockSnapshot.extra = zellij('zd2Vi', [tab('zd2Vi', 0, 0)])
+    await act(async () => {
+      await result.current.refreshSessions()
+    })
+    expect(sessionStorage.getItem('termote-chat-draft:zd2Vi:p0')).toBe(
+      'hello dev',
+    )
+  })
+
   it('renaming a session to its own name remaps nothing', async () => {
     const { result } = await render()
     const shifts: unknown[] = []
