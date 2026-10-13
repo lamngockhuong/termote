@@ -185,6 +185,9 @@ func TestAgentStartWindowsBusyChild(t *testing.T) {
 func TestAgentStartWindowsPromptChildAfterClear(t *testing.T) {
 	f := newFakeHerdr(t)
 	h, _ := startHandler(t, f)
+	// Room for the read after the busy one however slow the runner is:
+	// shortStart's 60 ms can pass in one read, leaving no second poll.
+	agentStartIdleWait = 5 * time.Second
 	children := herdrProcChildren
 	t.Cleanup(func() { herdrProcChildren = children })
 	herdrStartGOOS = "windows"
