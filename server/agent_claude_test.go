@@ -140,7 +140,7 @@ func TestClaudeParseResultInLaterRead(t *testing.T) {
 // A tool call or result naming a sensitive file is marked, and the mark
 // follows a result folded onto its call.
 func TestClaudeParseMarksSensitiveResults(t *testing.T) {
-	rows := `{"type":"assistant","uuid":"a","message":{"content":[{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"/r/.env"}},{"type":"tool_use","id":"t2","name":"Read","input":{"file_path":"/r/a.go"}}]}}
+	rows := `{"type":"assistant","uuid":"a","message":{"content":[{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"/r/.env"}},{"type":"tool_use","id":"t2","name":"Read","input":{"file_path":"/r/a.go"}},{"type":"tool_use","id":"t6","name":"Grep","input":{"pattern":"K","path":"/r/.env"}},{"type":"tool_use","id":"t7","name":"Grep","input":{"pattern":"K","path":"/r"}}]}}
 {"type":"user","uuid":"b","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"K=1"}]}}
 {"type":"user","uuid":"c","message":{"content":[{"type":"tool_result","tool_use_id":"t2","content":"package a"}]}}
 {"type":"user","uuid":"d","message":{"content":[{"type":"tool_result","tool_use_id":"t3","content":"K=1"}]},"toolUseResult":{"type":"text","file":{"filePath":"/r/.env","content":"K=1"}}}
@@ -149,7 +149,7 @@ func TestClaudeParseMarksSensitiveResults(t *testing.T) {
 `
 	es, _ := claudeJournal{}.Parse(strings.NewReader(rows), 0)
 	f := foldToolResults(es)
-	if len(f) != 4 || len(f[0].Parts) != 2 {
+	if len(f) != 4 || len(f[0].Parts) != 4 {
 		t.Fatalf("folded = %+v", f)
 	}
 	for _, c := range []struct {
@@ -159,6 +159,8 @@ func TestClaudeParseMarksSensitiveResults(t *testing.T) {
 	}{
 		{"read of .env", f[0].Parts[0], true},
 		{"read of a.go", f[0].Parts[1], false},
+		{"grep of .env", f[0].Parts[2], true},
+		{"grep of the repo", f[0].Parts[3], false},
 		{"orphan read result", f[1].Parts[0], true},
 		{"orphan edit result", f[2].Parts[0], true},
 		{"error result", f[3].Parts[0], false},

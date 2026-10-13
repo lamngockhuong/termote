@@ -182,10 +182,10 @@ func anySensitive(paths ...string) bool {
 }
 
 // claudeInputSensitive reports whether a tool call's input names a sensitive
-// file: whatever its result shows (a Read's text, the lines an Edit quotes)
-// comes from that file.
+// file: whatever its result shows (a Read's text, the lines an Edit quotes,
+// the lines a Grep of that one file matched) comes from that file.
 func claudeInputSensitive(in map[string]any) bool {
-	return anySensitive(jsonStr(in["file_path"]), jsonStr(in["notebook_path"]))
+	return anySensitive(jsonStr(in["file_path"]), jsonStr(in["notebook_path"]), jsonStr(in["path"]))
 }
 
 // Parse reads rows until the last complete line. A line longer than

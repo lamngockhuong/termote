@@ -290,9 +290,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   A tool call carries `detail` for its card: the model's description, a Bash/Codex command whole
   (8 KiB) and an Edit/MultiEdit/Write's old and new text (16 KiB per call); the edits of a file
   `isSensitive` names are left out (`hidden`), as its diff is in Changes. A view-only client also
-  gets no result of a Claude Code tool call on such a file (the call's `file_path`/`notebook_path`,
-  or the result row's `toolUseResult` file path): `Result` emptied and `hidden` set, on a copy of
-  the cached read; Grep, Bash and Codex output that prints one is not keyed (accepted).
+  gets no result of a Claude Code tool call on such a file (the call's `file_path`/`notebook_path`/
+  `path`, or the result row's `toolUseResult` file path): `Result` emptied and `hidden` set, on a copy of
+  the cached read; a Grep over a directory, Bash and Codex output that prints one is not keyed (accepted).
   `agent/commands` (the composer's `/` suggestions; Codex: its skills, see Codex chat) returns
   only names, descriptions, sources and kinds of `.claude/commands`/`.claude/skills` under the
   pane root and `commands`/`skills`
