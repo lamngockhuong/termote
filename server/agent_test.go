@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -431,6 +432,86 @@ func TestTranscriptRouteHidesSensitiveResultsFromView(t *testing.T) {
 	}
 	if n := loc.calls.Load(); n != 1 {
 		t.Errorf("reads made %d lookups, want 1 (one cached read)", n)
+	}
+}
+
+func TestTranscriptRouteHidesALaterResultOfASensitiveCallFromView(t *testing.T) {
+	// A failed edit's result row names no file, but its error quotes the
+	// text the edit looked for; it can come in the poll after its call.
+	dir := t.TempDir()
+	p := writeTranscript(t, dir, testSessionID, `{"type":"assistant","uuid":"a","message":{"content":[{"type":"tool_use","id":"t1","name":"Edit","input":{"file_path":"/r/.env","old_string":"SECRET=1","new_string":"X"}},{"type":"tool_use","id":"t2","name":"Edit","input":{"file_path":"/r/a.go","old_string":"package a","new_string":"X"}}]}}
+`)
+	loc := &fakeLocator{s: AgentSession{Agent: "claude", ID: testSessionID, ClaudeDir: dir}, found: true}
+	mux := http.NewServeMux()
+	registerMuxRoutes(mux, loc, newStreamTokenStore(), nil, nil)
+	h := asRole(mux, false)
+	get := func(view bool, cursor string) transcriptResponse {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, "/api/mux/panes/1/agent/transcript?cursor="+url.QueryEscape(cursor), nil)
+		if view {
+			req.Header.Set(viewDeviceHeader, "d1")
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		var res transcriptResponse
+		if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &res) != nil {
+			t.Fatalf("GET = %d %s", rec.Code, rec.Body)
+		}
+		return res
+	}
+	first := get(true, "")
+	f, err := os.OpenFile(p, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = f.WriteString(`{"type":"user","uuid":"b","message":{"content":[{"type":"tool_result","tool_use_id":"t1","is_error":true,"content":"String to replace not found in file.\nString: SECRET=1"}]},"toolUseResult":"Error: String to replace not found in file.\nString: SECRET=1"}
+{"type":"user","uuid":"c","message":{"content":[{"type":"tool_result","tool_use_id":"t2","is_error":true,"content":"String to replace not found in file.\nString: package a"}]},"toolUseResult":"Error: String to replace not found in file.\nString: package a"}
+`)
+	f.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	view := get(true, first.Cursor)
+	if len(view.Entries) != 2 || view.Reset {
+		t.Fatalf("view forward read = %+v", view)
+	}
+	if p := view.Entries[0].Parts[0]; !p.Orphan || p.Result != "" || p.Detail == nil || !p.Detail.Hidden || strings.Contains(fmt.Sprint(view), "SECRET") {
+		t.Errorf("view later result of the .env edit = %+v", p)
+	}
+	if p := view.Entries[1].Parts[0]; p.Result == "" || p.Detail != nil {
+		t.Errorf("view later result of the a.go edit = %+v", p)
+	}
+	if full := get(false, first.Cursor); !strings.Contains(full.Entries[0].Parts[0].Result, "SECRET=1") {
+		t.Errorf("full later result of the .env edit = %+v", full.Entries[0].Parts[0])
+	}
+}
+
+func TestReadTranscriptNamesSensitiveCallsCutOffThePage(t *testing.T) {
+	// The page starts at the edit's result; its call, one row older, is cut off.
+	dir := t.TempDir()
+	call := `{"type":"assistant","uuid":"c","message":{"content":[{"type":"tool_use","id":"t1","name":"Edit","input":{"file_path":"/r/.env","old_string":"SECRET=1","new_string":"X"}}]}}` + "\n"
+	result := `{"type":"user","uuid":"r","message":{"content":[{"type":"tool_result","tool_use_id":"t1","is_error":true,"content":"String: SECRET=1"}]},"toolUseResult":"Error: String: SECRET=1"}` + "\n"
+	writeTranscript(t, dir, testSessionID, call+line(0, "a")+result+lines(1, agentMaxEntries))
+	r, err := readTranscript(AgentSession{Agent: "claude", ID: testSessionID, ClaudeDir: dir}, "", "")
+	if err != nil || len(r.Entries) != agentMaxEntries {
+		t.Fatalf("read = %d entries, %v", len(r.Entries), err)
+	}
+	if p := r.Entries[0].Parts[0]; !p.Orphan || p.ToolID != "t1" || !slices.Equal(r.sensitiveCalls, []string{"t1"}) {
+		t.Errorf("first part = %+v, sensitiveCalls = %v", p, r.sensitiveCalls)
+	}
+	if h := hideSensitiveResults(r, func(id string) bool { return id == "t1" }); h.Entries[0].Parts[0].Result != "" {
+		t.Errorf("hidden = %+v", h.Entries[0].Parts[0])
+	}
+}
+
+func TestSensitiveCallsDropsTheOldest(t *testing.T) {
+	c := &sensitiveCalls{ids: map[string]struct{}{}}
+	c.add([]string{"t0", "t0"})
+	for i := 1; i <= sensitiveCallsMax; i++ {
+		c.add([]string{fmt.Sprint("t", i)})
+	}
+	if c.has("t0") || !c.has("t1") || !c.has(fmt.Sprint("t", sensitiveCallsMax)) || len(c.order) != sensitiveCallsMax {
+		t.Errorf("kept %d ids, t0 %v, t1 %v", len(c.order), c.has("t0"), c.has("t1"))
 	}
 }
 
