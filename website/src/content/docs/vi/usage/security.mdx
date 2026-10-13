@@ -12,8 +12,8 @@ Ai đăng nhập với toàn quyền thì có mọi quyền của tài khoản h
 sửa file, đọc mật khẩu đã lưu (`termote show-password`), đổi cấu hình (`termote start --no-auth`) và ghép
 thêm thiết bị, từ giao diện hoặc bằng cách gõ `termote pair` trong terminal. Thiết bị ghép từ terminal
 hiện là **Not paired by a device**, giống thiết bị ghép bằng mật khẩu qua CLI. Thiết bị ghép từ một trình
-duyệt đăng nhập bằng mật khẩu hiện là **Paired from a signed-in browser** (`termote devices`: "a signed-in
-browser (<id>)").
+duyệt đăng nhập bằng mật khẩu hiện là **Paired from a signed-in browser** (`termote devices`: `a signed-in browser (<id>)`
+).
 
 Không có cài đặt nào hạ một client toàn quyền xuống thấp hơn. Ranh giới thật là tài khoản hệ điều hành: muốn
 giới hạn những gì Termote chạm tới, hãy chạy nó dưới một tài khoản khác có ít quyền hơn.
@@ -127,7 +127,7 @@ giới hạn những gì Termote chạm tới, hãy chạy nó dưới một tà
 - **Trình duyệt đăng nhập bằng mật khẩu:** đăng xuất nó trong Settings > Signed-in browsers, hoặc chạy
   `termote signins` rồi `termote signins revoke <id>`. Việc này thu hồi luôn mọi thiết bị nó đã ghép. Nếu
   trình duyệt không còn trong danh sách (server đã khởi động lại, nó đã log out), hãy tìm id của nó trong
-  `termote devices` ("a signed-in browser (<id>)") hoặc Settings > Devices: `termote signins revoke <id>`
+  `termote devices` (`a signed-in browser (<id>)`) hoặc Settings > Devices: `termote signins revoke <id>`
   vẫn thu hồi các thiết bị đó; nếu có cái toàn quyền, hãy kiểm tra những gì nó có thể để lại như bên dưới.
   Nếu bản thân mật khẩu có thể đã lộ (trình duyệt đó lưu nó
   cho Basic auth, hoặc nó được ghi ra đâu đó), hãy chạy `termote start --fresh`.

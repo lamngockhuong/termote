@@ -210,6 +210,40 @@ describe('SigninsSection', () => {
     expect(revoke).not.toHaveBeenCalled()
   })
 
+  it('stays when signing this browser out is refused', async () => {
+    mockRevokeSignin.mockRejectedValue(
+      new RequestError(403, 'full_needs_password', 'no'),
+    )
+    setState({ sessions: [browser({ id: 'me', current: true })] })
+    const onSignedOut = vi.fn()
+    render(<SigninsSection onSignedOut={onSignedOut} />)
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Sign out Firefox on Linux (this browser)',
+      }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not sign Firefox on Linux out. Try again',
+    )
+    expect(onSignedOut).not.toHaveBeenCalled()
+  })
+
+  it('says when the other browsers are signed out but their devices stay', async () => {
+    setState({
+      sessions: [browser({ id: 'me', current: true }), browser({ id: 'b' })],
+      revokeOthers: vi.fn(async () => {
+        throw new RequestError(500, 'devices_not_revoked', 'kept')
+      }),
+    })
+    render(<SigninsSection />)
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out all others' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Signed out the other browsers, but the devices paired from them could not be revoked. Revoke them in Devices',
+    )
+  })
+
   it('leaves the page when this browser is signed out but its devices stay', async () => {
     mockRevokeSignin.mockRejectedValue(
       new RequestError(500, 'devices_not_revoked', 'kept'),
