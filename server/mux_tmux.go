@@ -1298,6 +1298,14 @@ var lastAgents = struct {
 // notifications). The lookup keeps running and fills the caches for the
 // next one.
 func lookupAgents(ctx context.Context, panes []agentPane) []*AgentInfo {
+	return lookupAgentsWith(ctx, panes, func(p agentPane) (AgentSession, bool) {
+		return tmuxPaneAgent(p.paneID, p.panePID)
+	})
+}
+
+// lookupAgentsWith is lookupAgents with the backend's lookup of one pane
+// (tmux: its %N and shell pid; Zellij: its shell found through the server).
+func lookupAgentsWith(ctx context.Context, panes []agentPane, find func(agentPane) (AgentSession, bool)) []*AgentInfo {
 	lastAgents.Lock()
 	lastAgents.next++
 	seq := lastAgents.next
@@ -1307,7 +1315,7 @@ func lookupAgents(ctx context.Context, panes []agentPane) []*AgentInfo {
 		out := make([]*AgentInfo, len(panes))
 		found := map[string]AgentInfo{}
 		for i, p := range panes {
-			if s, ok := tmuxPaneAgent(p.paneID, p.panePID); ok {
+			if s, ok := find(p); ok {
 				out[i] = &AgentInfo{Name: s.Agent, Status: s.Status}
 				found[p.paneID] = *out[i]
 			}
@@ -1325,7 +1333,7 @@ func lookupAgents(ctx context.Context, panes []agentPane) []*AgentInfo {
 	case <-ctx.Done():
 	case <-time.After(agentLookupWait):
 	}
-	log.Printf("tmux snapshot: agent lookup took longer than %s, skipped", agentLookupWait)
+	log.Printf("snapshot: agent lookup took longer than %s, skipped", agentLookupWait)
 	out := make([]*AgentInfo, len(panes))
 	lastAgents.Lock()
 	defer lastAgents.Unlock()

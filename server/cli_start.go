@@ -141,6 +141,9 @@ func (c *cli) validateStart(o *startOptions) error {
 	if err := validateMux(o.mux, o.noAuth, o.herdrNoAuth); err != nil {
 		return err
 	}
+	if o.mux == "zellij" && c.goos == "windows" {
+		return usageError("%v", errZellijWindows)
+	}
 	if err := validateUserName(o.user); err != nil {
 		return usageError("%v", err)
 	}
@@ -165,16 +168,18 @@ func (c *cli) validateStart(o *startOptions) error {
 }
 
 // validateMux checks a --mux value ("" is not chosen yet) and refuses herdr
-// without auth unless allowNoAuth accepts it; start and container up share it.
+// without auth unless allowNoAuth accepts it; start and container up share it
+// (so zellij is refused on Windows by start alone: the container runs it on
+// any host).
 func validateMux(mux string, noAuth, allowNoAuth bool) error {
 	switch mux {
-	case "tmux", "":
+	case "tmux", "", "zellij":
 	case "herdr":
 		if noAuth && !allowNoAuth {
 			return usageError("--mux herdr --no-auth would expose every herdr workspace without a password; add --allow-herdr-no-auth to accept that")
 		}
 	default:
-		return usageError("unknown --mux %q (use: tmux, herdr)", mux)
+		return usageError("unknown --mux %q (use: tmux, herdr, zellij)", mux)
 	}
 	return nil
 }
@@ -237,6 +242,19 @@ func (c *cli) preflight(mux string) error {
 	case "herdr":
 		if _, err := c.run.LookPath("herdr"); err != nil {
 			return errors.New("herdr not found in PATH; install herdr or use --mux tmux")
+		}
+	case "zellij":
+		const install = "install Zellij 0.45 or later (brew install zellij, or https://zellij.dev/documentation/installation) or use --mux tmux"
+		if _, err := c.run.LookPath("zellij"); err != nil {
+			return errors.New("zellij not found in PATH; " + install)
+		}
+		out, err := c.run.Output("", nil, "zellij", "--version")
+		v, ok := parseZellijVersion(string(out))
+		if err != nil || !ok {
+			return errors.New("could not read the zellij version; " + install)
+		}
+		if !versionAtLeast(v, zellijMinVersion) {
+			return fmt.Errorf("zellij %d.%d.%d is too old; %s", v[0], v[1], v[2], install)
 		}
 	}
 	return nil
@@ -714,6 +732,9 @@ func (c *cli) cmdRestart(args []string) error {
 	sup := c.installedSupervisor()
 	if saved == nil || sup == nil {
 		return errors.New("Termote is not set up yet; run: termote start")
+	}
+	if saved.Mux == "zellij" && c.goos == "windows" {
+		return errZellijWindows
 	}
 	port := c.savedPort(saved)
 	if err := sup.Stop(); err != nil {

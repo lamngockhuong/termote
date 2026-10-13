@@ -185,7 +185,7 @@ func (c *cli) mergeContainer(o *containerOptions, set map[string]bool, s *contai
 }
 
 // chooseContainerMux picks the container's backend the first time. The image
-// has both, so there is nothing to detect: a terminal is asked (tmux first),
+// has all three, so there is nothing to detect: a terminal is asked (tmux first),
 // otherwise it is tmux. The choice is saved; later ups keep it unless --mux
 // is given.
 func (c *cli) chooseContainerMux() string {
@@ -193,11 +193,13 @@ func (c *cli) chooseContainerMux() string {
 		c.infof("Backend: tmux (switch with: termote container up --mux herdr)")
 		return "tmux"
 	}
-	if strings.HasPrefix(c.choose("Terminal backend of the container:", []string{
+	choice, _, _ := strings.Cut(c.choose("Terminal backend of the container:", []string{
 		"tmux - one tmux session",
 		"herdr - Herdr workspaces, with agent status",
-	}), "herdr") {
-		return "herdr"
+		"zellij - Zellij sessions",
+	}), " ")
+	if choice == "herdr" || choice == "zellij" {
+		return choice
 	}
 	return "tmux"
 }

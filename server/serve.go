@@ -18,6 +18,7 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -361,8 +362,13 @@ func newMux(ctx context.Context, backend string) (Mux, error) {
 		return tmuxMux{}, nil
 	case "herdr":
 		return newHerdrMux(ctx, herdrSocketPath())
+	case "zellij":
+		if runtime.GOOS == "windows" {
+			return nil, errZellijWindows
+		}
+		return newZellijMux(ctx)
 	}
-	return nil, fmt.Errorf("unsupported TERMOTE_MUX %q (supported: tmux, herdr)", backend)
+	return nil, fmt.Errorf("unsupported TERMOTE_MUX %q (supported: tmux, herdr, zellij)", backend)
 }
 
 // newServeHandler builds the full handler chain: PWA static files,
@@ -516,6 +522,9 @@ func startServeMode(cfg serveConfig) {
 		scrubTmuxSecrets(ctx)
 	case "herdr":
 		reapOrphanTerminals(isHerdrStreamCmdline)
+	case "zellij":
+		reapOrphanTerminals(isZellijStreamCmdline)
+		warnZellijTermoteEnv()
 	}
 	ln, err := net.Listen("tcp", net.JoinHostPort(cfg.Bind, cfg.Port))
 	if err != nil {

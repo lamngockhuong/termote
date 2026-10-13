@@ -439,7 +439,7 @@ type viewAttacher interface {
 // viewSnapshot reads m's panes for a view-only client: without making
 // anything (tmux's default session) where the snapshot would.
 func viewSnapshot(ctx context.Context, m Mux) (Snapshot, error) {
-	if m.Caps().ClientSideSelect {
+	if _, ok := m.(*herdrMux); ok {
 		// Herdr's snapshot makes nothing, and its peek leaves out the
 		// worktree branches.
 		return m.Snapshot(ctx)

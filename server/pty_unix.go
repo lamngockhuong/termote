@@ -87,17 +87,24 @@ func (s *ptyStream) Close() error {
 }
 
 // terminalEnv is the server environment with TERM set for xterm.js, TMUX
-// removed so `tmux attach` works when the server itself runs inside tmux, and
-// no secrets.
+// removed so `tmux attach` works when the server itself runs inside tmux, a
+// Zellij pane's identity removed for the same reason (ZELLIJ_SOCKET_DIR stays:
+// it is where zellij finds the sessions), and no secrets.
 func terminalEnv() []string {
 	env := []string{"TERM=xterm-256color"}
 	for _, kv := range os.Environ() {
-		if hasEnvKey(kv, "TERM") || hasEnvKey(kv, "TMUX") || hasEnvKey(kv, "TMUX_PANE") || isTermoteEnv(kv) {
+		if hasEnvKey(kv, "TERM") || hasEnvKey(kv, "TMUX") || hasEnvKey(kv, "TMUX_PANE") ||
+			isZellijPaneEnv(kv) || isTermoteEnv(kv) {
 			continue
 		}
 		env = append(env, kv)
 	}
 	return env
+}
+
+// isZellijPaneEnv matches the variables Zellij sets in each pane.
+func isZellijPaneEnv(kv string) bool {
+	return hasEnvKey(kv, "ZELLIJ") || hasEnvKey(kv, "ZELLIJ_SESSION_NAME") || hasEnvKey(kv, "ZELLIJ_PANE_ID")
 }
 
 func hasEnvKey(kv, key string) bool {

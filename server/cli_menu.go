@@ -77,6 +77,7 @@ func (c *cli) menuStart() error {
 		"auto - herdr when it runs, else tmux",
 		"tmux - tmux (psmux on Windows)",
 		"herdr - Herdr workspaces",
+		"zellij - Zellij sessions (Linux, macOS)",
 	}), " ")
 	if backend == "" {
 		return errors.New("cancelled")
