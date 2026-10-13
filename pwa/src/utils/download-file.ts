@@ -6,7 +6,7 @@ import {
   RequestError,
 } from '../hooks/use-mux-api'
 import { isIos, isStandalone } from './notify-permission'
-import { visibleUnsafe } from './unsafe-chars'
+import { UNSAFE_CHARS, visibleUnsafe } from './unsafe-chars'
 
 // How long a blob: URL stays alive after its link was clicked: the browser
 // reads it by then, and revoking it at once can cancel the save.
@@ -136,11 +136,16 @@ export async function downloadFile(
 ): Promise<void> {
   const base = t.path.slice(t.path.lastIndexOf('/') + 1)
   const shown = visibleUnsafe(base)
+  // The name the file is saved as, cleaned as the server's
+  // Content-Disposition is (downloadName): a bidi mark could make one name
+  // pose as another in the share sheet or the downloads list.
+  const saveAs = base.replace(UNSAFE_CHARS, '') || 'download'
+
   const opts = { root: t.root, reveal: t.reveal }
   const iosStandalone = deps.iosStandalone ?? isIosStandalone()
   try {
     if (!iosStandalone) await checkFileDownload(t.paneId, t.path, opts)
-    await startDownload(fileDownloadUrl(t.paneId, t.path, opts), base, {
+    await startDownload(fileDownloadUrl(t.paneId, t.path, opts), saveAs, {
       iosStandalone,
       fetchBlob: deps.fetchBlob ?? fetchFileDownload,
       nav: deps.nav ?? navigator,

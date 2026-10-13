@@ -195,6 +195,40 @@ describe('downloadFile', () => {
     expect(notify).not.toHaveBeenCalled()
   })
 
+  it('saves under the name without unsafe characters, else download', async () => {
+    const clicks = watchLinks()
+    mockCheck.mockResolvedValue({ root: '/r', path: 'x', size: 1 })
+    await downloadFile(
+      { ...file, path: 'dir/evil\u202egpj.exe' },
+      vi.fn(),
+      undefined,
+      {
+        iosStandalone: false,
+      },
+    )
+    await downloadFile(
+      { ...file, path: 'dir/\u200b\u0007' },
+      vi.fn(),
+      undefined,
+      {
+        iosStandalone: false,
+      },
+    )
+    expect(clicks.map((c) => c.download)).toEqual(['evilgpj.exe', 'download'])
+    const share = vi.fn()
+    await downloadFile(
+      { ...file, path: 'dir/evil\u202egpj.exe' },
+      vi.fn(),
+      undefined,
+      {
+        iosStandalone: true,
+        fetchBlob: async () => new Blob(['x']),
+        nav: { share, canShare: () => true },
+      },
+    )
+    expect(share.mock.calls[0][0].files[0].name).toBe('evilgpj.exe')
+  })
+
   it('a refusal is told and starts nothing', async () => {
     const clicks = watchLinks()
     mockCheck.mockRejectedValue(err(413, 'too_large'))
