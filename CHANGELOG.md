@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.0.1](https://github.com/lamngockhuong/termote/compare/v2.0.0...v2.0.1) (2026-10-13)
+
+
+### Bug Fixes
+
+* harden view-only Files, session pairing, the devices store and the local-user check ([#473](https://github.com/lamngockhuong/termote/issues/473)) ([bf9f870](https://github.com/lamngockhuong/termote/commit/bf9f8706294fdd6b967a1746d59ebf6a1fdc94b5))
+* hide sensitive files' tool results from view-only clients, and three smaller security fixes ([#470](https://github.com/lamngockhuong/termote/issues/470)) ([4e0e539](https://github.com/lamngockhuong/termote/commit/4e0e5395145d5938bf05290d882e2399a0b7dfbe))
+
 ## [2.0.0](https://github.com/lamngockhuong/termote/compare/v1.20.0...v2.0.0) (2026-10-12)
 
 
