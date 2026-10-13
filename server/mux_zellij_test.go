@@ -58,8 +58,14 @@ exit "$code"
 	orig := zellijBin
 	zellijBin = script
 	resetZellijVersion()
-	t.Setenv("ZELLIJ_SOCKET_DIR", filepath.Join(dir, "sock"))
-	t.Cleanup(func() { zellijBin = orig; resetZellijVersion() })
+	// A short socket dir: under t.TempDir() on macOS the socket path alone
+	// fills sun_path (104), leaving no room for any session name.
+	sock, err := os.MkdirTemp("/tmp", "zs")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("ZELLIJ_SOCKET_DIR", sock)
+	t.Cleanup(func() { zellijBin = orig; resetZellijVersion(); os.RemoveAll(sock) })
 	return func() string {
 		b, _ := os.ReadFile(logPath)
 		return string(b)
@@ -188,6 +194,9 @@ func TestParseZellijSessions(t *testing.T) {
 }
 
 func TestZellijEnvDropsPaneIdentity(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("zellij is refused natively on Windows")
+	}
 	t.Setenv("ZELLIJ", "0")
 	t.Setenv("ZELLIJ_PANE_ID", "4")
 	t.Setenv("ZELLIJ_SESSION_NAME", "outer")
