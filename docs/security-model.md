@@ -16,12 +16,12 @@ what Termote can reach, run it as another user with less access.
 
 ## Who can do what
 
-| Signed in as             | Can                                                                                                                                                                      |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| The password             | Everything (full).                                                                                                                                                       |
-| A full device            | Everything the password can, except pairing another full device (it pairs view-only devices only) and signing a password browser out (it only lists them).               |
-| A view-only device       | Watch the terminal, read the Chat view and Files/Changes inside a git repository. It types nothing, changes nothing and downloads no file, but reads everything printed. |
-| Anyone, with `--no-auth` | Everything, as soon as they reach the port.                                                                                                                              |
+| Signed in as             | Can                                                                                                                                                                                                                                              |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| The password             | Everything (full).                                                                                                                                                                                                                               |
+| A full device            | Everything the password can, except pairing another full device (it pairs view-only devices only) and signing a password browser out (it only lists them).                                                                                       |
+| A view-only device       | Watch the terminal, read the Chat view and Files/Changes inside a git repository. It types nothing, changes nothing and downloads no file, but reads everything printed, except the Chat view's tool results of a sensitive file (`.env`, keys). |
+| Anyone, with `--no-auth` | Everything, as soon as they reach the port.                                                                                                                                                                                                      |
 
 ## What the server enforces
 
@@ -66,6 +66,8 @@ what Termote can reach, run it as another user with less access.
   terminal, edit the devices file or turn sign-in off. The limits above stop mistakes and clicks in the
   interface, not someone who means it.
 - **Secrets printed in a terminal.** A view-only device reads whatever an agent or a command printed.
+  The Chat view leaves out a Claude Code tool's result when the tool named a sensitive file, but not
+  a Grep, a shell command or a Codex turn that prints one.
 - **Other services on the same host name.** A cookie is not bound to a port: every service on that name
   receives Termote's cookies. Give Termote a host name of its own.
 - **Programs of the same OS user.** Anything else running as that user reads the same files Termote does.

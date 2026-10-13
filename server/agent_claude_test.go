@@ -137,6 +137,41 @@ func TestClaudeParseResultInLaterRead(t *testing.T) {
 	}
 }
 
+// A tool call or result naming a sensitive file is marked, and the mark
+// follows a result folded onto its call.
+func TestClaudeParseMarksSensitiveResults(t *testing.T) {
+	rows := `{"type":"assistant","uuid":"a","message":{"content":[{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"/r/.env"}},{"type":"tool_use","id":"t2","name":"Read","input":{"file_path":"/r/a.go"}}]}}
+{"type":"user","uuid":"b","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"K=1"}]}}
+{"type":"user","uuid":"c","message":{"content":[{"type":"tool_result","tool_use_id":"t2","content":"package a"}]}}
+{"type":"user","uuid":"d","message":{"content":[{"type":"tool_result","tool_use_id":"t3","content":"K=1"}]},"toolUseResult":{"type":"text","file":{"filePath":"/r/.env","content":"K=1"}}}
+{"type":"user","uuid":"e","message":{"content":[{"type":"tool_result","tool_use_id":"t4","content":"1\tK=2"}]},"toolUseResult":{"type":"update","filePath":"/r/.env.local"}}
+{"type":"user","uuid":"f","message":{"content":[{"type":"tool_result","tool_use_id":"t5","content":"Error"}]},"toolUseResult":"Error: no such file"}
+`
+	es, _ := claudeJournal{}.Parse(strings.NewReader(rows), 0)
+	f := foldToolResults(es)
+	if len(f) != 4 || len(f[0].Parts) != 2 {
+		t.Fatalf("folded = %+v", f)
+	}
+	for _, c := range []struct {
+		name string
+		p    TranscriptPart
+		want bool
+	}{
+		{"read of .env", f[0].Parts[0], true},
+		{"read of a.go", f[0].Parts[1], false},
+		{"orphan read result", f[1].Parts[0], true},
+		{"orphan edit result", f[2].Parts[0], true},
+		{"error result", f[3].Parts[0], false},
+	} {
+		if c.p.sensitive != c.want {
+			t.Errorf("%s: sensitive = %v", c.name, c.p.sensitive)
+		}
+	}
+	if f[0].Parts[0].Result != "K=1" {
+		t.Errorf("parse already hid a result: %+v", f[0].Parts[0])
+	}
+}
+
 func TestClaudeParseKeepsImagesOfALongLine(t *testing.T) {
 	// Claude Code writes each image's base64 into the message's row, so four
 	// photos make a line far past agentMaxLine.

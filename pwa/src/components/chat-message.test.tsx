@@ -361,6 +361,32 @@ describe('ChatMessage', () => {
     expect(screen.getByText('String not found')).toHaveClass('text-danger')
   })
 
+  it('a read of a sensitive file, hidden from a view-only client, says so', () => {
+    render(
+      <ChatMessage
+        entry={{
+          id: 't',
+          role: 'assistant',
+          parts: [
+            {
+              kind: 'tool',
+              tool: 'Read',
+              toolId: '1',
+              input: '/r/.env',
+              detail: { hidden: true },
+            },
+          ],
+        }}
+      />,
+    )
+    expect(
+      screen.getByText('The contents of a sensitive file are not shown.'),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText('The edit of a sensitive file is not shown.'),
+    ).not.toBeInTheDocument()
+  })
+
   it('a Codex file change shows its unified diff', () => {
     const { container } = render(
       <ChatMessage

@@ -389,6 +389,51 @@ func TestTranscriptRoute(t *testing.T) {
 	}
 }
 
+// A view-only client gets no result of a tool call on a sensitive file, the
+// part marked hidden; a full client still gets it, from the same cached read.
+func TestTranscriptRouteHidesSensitiveResultsFromView(t *testing.T) {
+	dir := t.TempDir()
+	writeTranscript(t, dir, testSessionID, `{"type":"assistant","uuid":"a","message":{"content":[{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"/r/.env"}},{"type":"tool_use","id":"t2","name":"Read","input":{"file_path":"/r/a.go"}}]}}
+{"type":"user","uuid":"b","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"SECRET=1"},{"type":"tool_result","tool_use_id":"t2","content":"package a"}]}}
+{"type":"user","uuid":"c","message":{"content":[{"type":"tool_result","tool_use_id":"t9","content":"SECRET=2"}]},"toolUseResult":{"file":{"filePath":"/r/.env"}}}
+`)
+	loc := &fakeLocator{s: AgentSession{Agent: "claude", ID: testSessionID, ClaudeDir: dir}, found: true}
+	mux := http.NewServeMux()
+	registerMuxRoutes(mux, loc, newStreamTokenStore(), nil, nil)
+	h := asRole(mux, false)
+	get := func(view bool) []TranscriptEntry {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, "/api/mux/panes/1/agent/transcript", nil)
+		if view {
+			req.Header.Set(viewDeviceHeader, "d1")
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		var res transcriptResponse
+		if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &res) != nil || len(res.Entries) != 2 {
+			t.Fatalf("GET = %d %s", rec.Code, rec.Body)
+		}
+		return res.Entries
+	}
+	view := get(true)
+	if p := view[0].Parts[0]; p.Result != "" || p.Detail == nil || !p.Detail.Hidden || strings.Contains(fmt.Sprint(view), "SECRET") {
+		t.Errorf("view read of .env = %+v", view)
+	}
+	if p := view[0].Parts[1]; p.Result != "package a" || p.Detail != nil {
+		t.Errorf("view read of a.go = %+v", p)
+	}
+	if p := view[1].Parts[0]; !p.Orphan || p.Result != "" || p.Detail == nil || !p.Detail.Hidden {
+		t.Errorf("view orphan result = %+v", p)
+	}
+	full := get(false)
+	if full[0].Parts[0].Result != "SECRET=1" || full[0].Parts[0].Detail != nil || full[1].Parts[0].Result != "SECRET=2" {
+		t.Errorf("full read after a view read = %+v", full)
+	}
+	if n := loc.calls.Load(); n != 1 {
+		t.Errorf("reads made %d lookups, want 1 (one cached read)", n)
+	}
+}
+
 func TestTranscriptRouteWithoutLocator(t *testing.T) {
 	mux := http.NewServeMux()
 	registerMuxRoutes(mux, &fakeMux{}, newStreamTokenStore(), nil, nil)

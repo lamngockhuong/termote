@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -109,6 +110,9 @@ type TranscriptPart struct {
 	// Detail: what the Chat view's card of a tool call shows beyond the
 	// one-line Input; absent when the call has nothing more.
 	Detail *ToolDetail `json:"detail,omitempty"`
+	// sensitive: the call or its result names a file isSensitive names, so a
+	// view-only client gets no Result (hideSensitiveResults)
+	sensitive bool
 }
 
 // ToolDetail is a tool call's own description, its whole command and the
@@ -376,7 +380,41 @@ func (a *agentAPI) handleTranscript(w http.ResponseWriter, r *http.Request) {
 		a.agentError(w, "transcript", err)
 		return
 	}
+	if isViewOnly(r) {
+		res = hideSensitiveResults(res)
+	}
 	jsonOK(w, res)
+}
+
+// hideSensitiveResults returns res without the result of any tool call on a
+// sensitive file, each such part marked hidden, as the Files view hides the
+// file from a view-only client. res is shared by every client through the
+// read cache, so the entries changed are copies.
+func hideSensitiveResults(res transcriptResponse) transcriptResponse {
+	cloned := false
+	for i, e := range res.Entries {
+		if !slices.ContainsFunc(e.Parts, func(p TranscriptPart) bool { return p.sensitive }) {
+			continue
+		}
+		if !cloned {
+			res.Entries, cloned = slices.Clone(res.Entries), true
+		}
+		parts := slices.Clone(e.Parts)
+		for j := range parts {
+			p := &parts[j]
+			if !p.sensitive {
+				continue
+			}
+			d := ToolDetail{Hidden: true}
+			if p.Detail != nil {
+				d = *p.Detail
+				d.Hidden = true
+			}
+			p.Result, p.Clipped, p.Detail = "", false, &d
+		}
+		res.Entries[i].Parts = parts
+	}
+	return res
 }
 
 // agentError answers like muxError, plus 404 for a pane without an agent.
@@ -577,6 +615,7 @@ func foldToolResults(entries []TranscriptEntry) []TranscriptEntry {
 			}
 			call := &parts[r.part]
 			call.Result, call.IsError, call.Clipped = p.Result, p.IsError, call.Clipped || p.Clipped
+			call.sensitive = call.sensitive || p.sensitive
 		}
 		if len(kept) > 0 {
 			e.Parts = kept

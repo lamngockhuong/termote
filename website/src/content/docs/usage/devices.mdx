@@ -68,7 +68,8 @@ refuses every write, and the interface hides the controls that would write, unde
   device and the banner says so. Chat and Files still work.
 - **Files:** only for a pane inside a git repository, and never a file marked as sensitive (`.env`,
   keys, and so on).
-- **Chat:** it reads the conversation and any open dialog, but cannot answer it.
+- **Chat:** it reads the conversation and any open dialog, but cannot answer it. A Claude Code tool's
+  result is left out when the tool named a sensitive file (`.env`, keys, and so on).
 - **Everything the agent printed is readable.** Pair a view-only device only with someone you would let
   look over your shoulder.
 - No push notifications, and at most 2 open terminals per view-only device.

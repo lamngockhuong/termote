@@ -40,6 +40,9 @@ const INITIAL: TranscriptState = {
   loadingOlder: false,
 }
 
+// Tools whose card shows the edit itself (its result only repeats the file)
+export const EDIT_TOOLS = new Set(['Edit', 'MultiEdit', 'Write'])
+
 // Moves each orphan tool result onto the call with its toolId earlier in the
 // list, dropping entries left empty. The input is left as is, and an entry
 // nothing changed in is returned as the same object, so a poll that brings
@@ -73,11 +76,20 @@ export function foldToolResults(entries: TranscriptEntry[]): TranscriptEntry[] {
         parts = out[at[0]].parts
       }
       const call = parts[at[1]]
+      // A call the server hid (a sensitive file, view only) keeps no result,
+      // even one that came in a later read naming no file; an edit is hidden
+      // for every role and still shows why it failed
+      if (call.detail?.hidden && !EDIT_TOOLS.has(call.tool ?? '')) continue
       parts[at[1]] = {
         ...call,
         result: p.result,
         isError: p.isError,
         clipped: call.clipped || p.clipped,
+        // A result the server hid (a sensitive file, view only) hides it
+        // on its call too
+        ...(p.detail?.hidden && {
+          detail: { ...call.detail, hidden: true },
+        }),
       }
     }
     if (kept.length > 0) out.push(changed ? { ...e, parts: kept } : e)

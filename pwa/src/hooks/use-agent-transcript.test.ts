@@ -137,6 +137,92 @@ describe('foldToolResults', () => {
       { kind: 'tool', tool: 'Grep' },
     ])
   })
+
+  it('a hidden call keeps no result from a later read; a hidden edit does', () => {
+    const out = foldToolResults([
+      {
+        id: 'a',
+        role: 'assistant',
+        parts: [
+          {
+            kind: 'tool',
+            tool: 'NotebookEdit',
+            toolId: 't1',
+            detail: { hidden: true },
+          },
+          { kind: 'tool', toolId: 't3', detail: { hidden: true } },
+          {
+            kind: 'tool',
+            tool: 'Edit',
+            toolId: 't2',
+            detail: { hidden: true },
+          },
+        ],
+      },
+      {
+        id: 'b',
+        role: 'user',
+        parts: [
+          { kind: 'tool', toolId: 't1', result: 'secret', orphan: true },
+          { kind: 'tool', toolId: 't3', result: 'secret', orphan: true },
+          {
+            kind: 'tool',
+            toolId: 't2',
+            result: 'not found',
+            isError: true,
+            orphan: true,
+          },
+        ],
+      },
+    ])
+    expect(out).toHaveLength(1)
+    expect(out[0].parts[0].result).toBeUndefined()
+    expect(out[0].parts[1].result).toBeUndefined()
+    expect(out[0].parts[2]).toMatchObject({
+      result: 'not found',
+      isError: true,
+    })
+  })
+
+  it('a hidden result marks its call hidden, keeping its detail', () => {
+    const out = foldToolResults([
+      {
+        id: 'a',
+        role: 'assistant',
+        parts: [
+          {
+            kind: 'tool',
+            tool: 'Read',
+            toolId: 't1',
+            detail: { description: 'Read env' },
+          },
+          { kind: 'tool', tool: 'Read', toolId: 't2' },
+        ],
+      },
+      {
+        id: 'b',
+        role: 'user',
+        parts: [
+          {
+            kind: 'tool',
+            toolId: 't1',
+            orphan: true,
+            detail: { hidden: true },
+          },
+          { kind: 'tool', toolId: 't2', result: 'ok', orphan: true },
+        ],
+      },
+    ])
+    expect(out[0].parts).toEqual([
+      {
+        kind: 'tool',
+        tool: 'Read',
+        toolId: 't1',
+        detail: { description: 'Read env', hidden: true },
+      },
+      { kind: 'tool', tool: 'Read', toolId: 't2', result: 'ok' },
+    ])
+  })
 })
 
 describe('useAgentTranscript', () => {
