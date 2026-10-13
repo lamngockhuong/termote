@@ -51,7 +51,9 @@ termote devices revoke <id>       # sign it out and close its open terminals
 
 Revoking takes effect at once, and also revokes every device the revoked one paired. Logging out on a
 paired device revokes only that device: the devices it paired stay, listed as paired by a removed
-device. A new password (`termote start --fresh`) signs out every paired device. After revoking a full
+device. Signing out a browser in Settings > Signed-in browsers (or `termote signins revoke`) revokes the
+devices it paired, listed as paired by a signed-in browser. A new password (`termote start --fresh`)
+signs out every paired device. After revoking a full
 device, also run `termote start --fresh`: it had a shell (see [Security Model](/usage/security/#if-a-device-is-lost)).
 
 A device paired with **Never** stays signed in until you revoke it, so give Termote a host name of its
@@ -66,8 +68,9 @@ refuses every write, and the interface hides the controls that would write, unde
   active window; with Herdr it picks tabs on its own device but cannot scroll the history.
 - **Needs tmux 3.2 or later:** with an older tmux, or psmux, the terminal is not available to a view-only
   device and the banner says so. Chat and Files still work.
-- **Files:** only for a pane inside a git repository, and never a file marked as sensitive (`.env`,
-  keys, and so on).
+- **Files:** only for a pane inside a git repository that is not your home dir (or above it), only the
+  files git tracks or would add (never one it ignores, such as a `.env.local` or a log, and a new file
+  shows up to 30 seconds late), and never a file marked as sensitive (`.env`, keys, and so on).
 - **Chat:** it reads the conversation and any open dialog, but cannot answer it. A Claude Code tool's
   result is left out when the tool named a sensitive file (`.env`, keys, and so on).
 - **Everything the agent printed is readable.** Pair a view-only device only with someone you would let

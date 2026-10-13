@@ -171,16 +171,21 @@ describe('DevicesSection', () => {
         device({ id: 'c', name: 'Old', pairedBy: 'unknown', expired: true }),
         device({ id: 'd', name: 'Orphan', pairedBy: 'ffffffffffffffff' }),
         device({ id: 'e', name: 'Odd', validUntil: 'not a date' }),
+        device({ id: 'f', name: 'Tab', pairedBy: 'session:0123456789abcdef' }),
       ],
     })
     render(<DevicesSection />)
-    const [laptop, phone, old, orphan, odd] = screen.getAllByRole('listitem')
+    const [laptop, phone, old, orphan, odd, tab] =
+      screen.getAllByRole('listitem')
     expect(laptop).toHaveTextContent('Not paired by a device')
     expect(laptop).not.toHaveTextContent('Valid until')
     expect(phone).toHaveTextContent('Paired by Laptop · Valid until')
     expect(old).toHaveTextContent('Unknown origin · Expired')
     expect(orphan).toHaveTextContent('Paired by a removed device')
     expect(odd).not.toHaveTextContent('Valid until')
+    expect(tab).toHaveTextContent(
+      'Paired from a signed-in browser (0123456789abcdef)',
+    )
   })
 
   it('warns that a revoke takes the devices it paired, and a full device needs --fresh', async () => {

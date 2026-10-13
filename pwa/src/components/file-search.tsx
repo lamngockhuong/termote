@@ -47,6 +47,9 @@ interface Props {
   refreshTick: number
   onPick: (path: string) => void
   onRootChanged: (root: string) => void
+  // The server never lists ignored files to this client (view-only): no
+  // switch for them
+  hideIgnored?: boolean
   // Shown without a query: the tree
   children: ReactNode
 }
@@ -63,10 +66,12 @@ export function FileSearch({
   refreshTick,
   onPick,
   onRootChanged,
+  hideIgnored = false,
   children,
 }: Props) {
   const { settings, updateSetting } = useSettings()
-  const ignored = isRepo && settings.findIncludeIgnored
+  const canIncludeIgnored = isRepo && !hideIgnored
+  const ignored = canIncludeIgnored && settings.findIncludeIgnored
   const excludes = settings.findExcludes
   const [found, setFound] = useState<Found>({ status: 'idle' })
   const input = useRef<HTMLInputElement>(null)
@@ -235,7 +240,7 @@ export function FileSearch({
             className="h-8 w-full min-w-0 rounded-control border border-border bg-bg pr-2 pl-7 text-base text-fg outline-none placeholder:text-fg-subtle focus:border-accent md:text-[13px] pointer-coarse:h-touch"
           />
         </div>
-        {isRepo && (
+        {canIncludeIgnored && (
           <div className="flex shrink-0 items-center gap-2">
             <span id={switchLabel} className="text-[12px] text-fg-muted">
               Include ignored

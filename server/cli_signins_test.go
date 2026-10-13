@@ -108,3 +108,21 @@ func TestSigninsUsage(t *testing.T) {
 		}
 	}
 }
+
+// signins revoke says how many devices the browser paired went with it.
+func TestSigninsCLIRevokesPairedDevices(t *testing.T) {
+	h, _ := newSigninServer(t, true)
+	port := listen(t, h)
+	tc := newTestCLI(t, "linux")
+	tc.saveConfig(savedConfig{Port: port, Password: "secret"})
+	b := signIn(t, h, "Safari")
+	redeemCode(t, h, sessionPairCode(t, h, b, `{"role":"view"}`))
+	code, out, errOut := runDevCLI(tc, "signins", "revoke", sessionIDOf(t, h, b))
+	if code != 0 || !strings.Contains(out+errOut, "1 device it paired revoked too") {
+		t.Fatalf("revoke: %d\n%s%s", code, out, errOut)
+	}
+	code, out, errOut = runDevCLI(tc, "devices")
+	if code != 0 || strings.Contains(out, "a signed-in browser") {
+		t.Errorf("devices after the revoke: %d\n%s%s", code, out, errOut)
+	}
+}

@@ -11,7 +11,9 @@ thiết bị nằm ở trang [Ghép thiết bị](/vi/usage/devices/).
 Ai đăng nhập với toàn quyền thì có mọi quyền của tài khoản hệ điều hành đang chạy server: chạy lệnh, đọc và
 sửa file, đọc mật khẩu đã lưu (`termote show-password`), đổi cấu hình (`termote start --no-auth`) và ghép
 thêm thiết bị, từ giao diện hoặc bằng cách gõ `termote pair` trong terminal. Thiết bị ghép từ terminal
-hiện là **Not paired by a device**, giống thiết bị ghép bằng mật khẩu.
+hiện là **Not paired by a device**, giống thiết bị ghép bằng mật khẩu qua CLI. Thiết bị ghép từ một trình
+duyệt đăng nhập bằng mật khẩu hiện là **Paired from a signed-in browser** (`termote devices`: `a signed-in browser (<id>)`
+).
 
 Không có cài đặt nào hạ một client toàn quyền xuống thấp hơn. Ranh giới thật là tài khoản hệ điều hành: muốn
 giới hạn những gì Termote chạm tới, hãy chạy nó dưới một tài khoản khác có ít quyền hơn.
@@ -22,7 +24,7 @@ giới hạn những gì Termote chạm tới, hãy chạy nó dưới một tà
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Mật khẩu                   | Mọi thứ (toàn quyền).                                                                                                                            |
 | Thiết bị toàn quyền        | Mọi thứ mật khẩu làm được, trừ hai việc: ghép thêm thiết bị toàn quyền (nó chỉ ghép được thiết bị chỉ xem) và đăng xuất một trình duyệt dùng mật khẩu (nó chỉ xem được danh sách). |
-| Thiết bị chỉ xem           | Xem terminal, đọc Chat và Files/Changes trong một git repository. Không gõ được, không sửa được gì, nhưng đọc được mọi thứ đã in ra, trừ kết quả tool trong Chat của một file nhạy cảm (`.env`, khóa). |
+| Thiết bị chỉ xem           | Xem terminal, đọc Chat và Files/Changes trong một git repository (không phải thư mục home, không bao giờ file git bỏ qua). Không gõ được, không sửa được gì, nhưng đọc được mọi thứ đã in ra, trừ kết quả tool trong Chat của một file nhạy cảm (`.env`, khóa). |
 | Bất kỳ ai, với `--no-auth` | Mọi thứ, chỉ cần tới được cổng.                                                                                                                  |
 
 ## Server chặn những gì
@@ -40,8 +42,9 @@ giới hạn những gì Termote chạm tới, hãy chạy nó dưới một tà
   Khi không có socket (container, server bản cũ), CLI quay về TCP cùng mật khẩu.
 - Settings > Signed-in browsers và `termote signins` liệt kê các trình duyệt đăng nhập bằng mật khẩu (trang
   đăng nhập, Basic auth, link từ CLI); có thể đăng xuất từng trình duyệt, hoặc mọi trình duyệt trừ trình duyệt
-  đang dùng. Đăng xuất một trình duyệt thì đóng luôn các terminal nó đang mở, kể cả terminal đang mở dở. Thiết
-  bị toàn quyền xem được danh sách nhưng không đăng xuất được ai.
+  đang dùng. Đăng xuất một trình duyệt thì đóng luôn các terminal nó đang mở, kể cả terminal đang mở dở, bỏ các
+  mã ghép nó đã tạo, và thu hồi các thiết bị nó đã ghép (cùng các thiết bị mà chúng đã ghép). Log out trên
+  chính trình duyệt đó chỉ bỏ mã ghép. Thiết bị toàn quyền xem được danh sách nhưng không đăng xuất được ai.
 - `termote url --open` (và Herdr panel) mở ứng dụng đã đăng nhập sẵn: CLI xin server một token dùng một lần
   (30 giây), ghi nó vào một trang HTML chỉ tài khoản đó đọc được (`0600` trong thư mục `0700`; trên Windows là ACL chỉ cho chủ file), rồi mở trang đó; trang tự gửi
   token đi. Token không bao giờ nằm trong dòng lệnh, URL, đầu ra của lệnh hay lịch sử trình duyệt; chỉ client đăng nhập trực tiếp bằng
@@ -90,6 +93,10 @@ giới hạn những gì Termote chạm tới, hãy chạy nó dưới một tà
   cho qua.
 - **macOS.** Server không kiểm tra kết nối là của tài khoản nào (mỗi kết nối phải chạy `lsof`): tài khoản
   khác trên máy macOS chỉ còn bị mật khẩu chặn.
+- **Tài khoản cục bộ khác làm chậm server.** Việc tra xem kết nối thuộc tài khoản nào đọc bảng socket của
+  máy một lần cho mọi kết nối đang chờ, nên dồn dập kết nối từ tài khoản khác không nhân công việc đó lên.
+  Nó vẫn làm chậm được server bằng cách khác (vét port, CPU); Termote không hứa chặn mọi kiểu từ chối dịch
+  vụ cục bộ.
 - **Container và `termote serve` cấu hình bằng biến môi trường.** Cả hai không kiểm tra tài khoản cục bộ của
   kết nối, và container không có socket cho CLI.
 - **Phiên đăng nhập chỉ nằm trong bộ nhớ.** Khởi động lại server là đăng xuất mọi trình duyệt (thiết bị vẫn
@@ -97,7 +104,9 @@ giới hạn những gì Termote chạm tới, hãy chạy nó dưới một tà
 - **Đăng xuất chỉ cắt cookie, không đổi mật khẩu.** Client gửi mật khẩu kèm mọi request (Basic auth) được đăng
   nhập lại ngay; muốn chặn nó thì phải đổi mật khẩu.
 - **Hai server dùng chung thư mục trạng thái** (dịch vụ và một `termote serve` chạy tay). Thu hồi ở server
-  này không đóng terminal đang mở ở server kia; server kia từ chối thiết bị từ request kế tiếp.
+  này không đóng terminal đang mở ở server kia; server kia từ chối thiết bị từ request kế tiếp. Mọi lần ghi
+  danh sách thiết bị đều lấy khóa trước, nên server này không làm sống lại thiết bị server kia đã thu hồi
+  (một bản cũ chạy song song thì không lấy khóa).
 
 ## Khuyến nghị
 
@@ -116,7 +125,11 @@ giới hạn những gì Termote chạm tới, hãy chạy nó dưới một tà
 ## Khi mất một thiết bị
 
 - **Trình duyệt đăng nhập bằng mật khẩu:** đăng xuất nó trong Settings > Signed-in browsers, hoặc chạy
-  `termote signins` rồi `termote signins revoke <id>`. Nếu bản thân mật khẩu có thể đã lộ (trình duyệt đó lưu nó
+  `termote signins` rồi `termote signins revoke <id>`. Việc này thu hồi luôn mọi thiết bị nó đã ghép. Nếu
+  trình duyệt không còn trong danh sách (server đã khởi động lại, nó đã log out), hãy tìm id của nó trong
+  `termote devices` (`a signed-in browser (<id>)`) hoặc Settings > Devices: `termote signins revoke <id>`
+  vẫn thu hồi các thiết bị đó; nếu có cái toàn quyền, hãy kiểm tra những gì nó có thể để lại như bên dưới.
+  Nếu bản thân mật khẩu có thể đã lộ (trình duyệt đó lưu nó
   cho Basic auth, hoặc nó được ghi ra đâu đó), hãy chạy `termote start --fresh`.
 - **Chỉ xem:** thu hồi nó trong Settings > Devices hoặc bằng `termote devices revoke <id>`.
 - **Toàn quyền:** thu hồi nó, rồi chạy `termote start --fresh`: lệnh này đặt mật khẩu mới, đăng xuất mọi

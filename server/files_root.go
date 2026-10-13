@@ -526,7 +526,7 @@ func (rr *rootResolver) trustRepo(path string) bool {
 	if !rr.inContainer() {
 		return false
 	}
-	rel, err := filepath.Rel("/workspace", path)
+	rel, err := filepath.Rel(containerWorkspace, path)
 	return err == nil && filepath.IsLocal(rel)
 }
 

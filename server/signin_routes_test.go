@@ -195,7 +195,7 @@ func TestSigninRoutes(t *testing.T) {
 	if code := signedInCode(h, a); code != http.StatusOK {
 		t.Errorf("caller's session after revoking another: %d", code)
 	}
-	if want := `audit: revoke-session id="` + ids["Browser B"].ID + `" by="password" via="settings"`; !strings.Contains(buf.String(), want) {
+	if want := `audit: revoke-session id="` + ids["Browser B"].ID + `" by="session:` + ids["Browser A"].ID + `" via="settings" signedOut="true" devices=""`; !strings.Contains(buf.String(), want) {
 		t.Errorf("audit line missing %q:\n%s", want, buf.String())
 	}
 
@@ -219,7 +219,7 @@ func TestSigninRoutes(t *testing.T) {
 	if code := signedInCode(h, a); code != http.StatusOK {
 		t.Errorf("caller after revoke others: %d", code)
 	}
-	if !strings.Contains(buf.String(), `audit: revoke-session id="all" by="password" via="settings" revoked=`) {
+	if !strings.Contains(buf.String(), `audit: revoke-session id="all" by="session:`+ids["Browser A"].ID+`" via="settings" revoked=`) {
 		t.Errorf("bulk audit line missing:\n%s", buf.String())
 	}
 

@@ -55,6 +55,9 @@ type serveConfig struct {
 	// users trusted besides the server's own and root/SYSTEM.
 	CheckLocalUsers bool
 	AllowLocalUsers []string
+	// ViewHomeDirs count as the server user's home dir for a view-only
+	// client of the files routes (filesAPI.homeDirs).
+	ViewHomeDirs []string
 	// FilesDenyDirs are never served by the files routes, even inside a
 	// pane's root: the config and state dirs (the secret and the encrypted
 	// password).
@@ -84,7 +87,7 @@ type serveConfig struct {
 
 // newServeConfigFromEnv creates config from environment variables with defaults
 func newServeConfigFromEnv() serveConfig {
-	return serveConfig{
+	cfg := serveConfig{
 		Port:   envOr("TERMOTE_PORT", "7680"),
 		PWADir: os.Getenv("TERMOTE_PWA_DIR"),
 		User:   envOr("TERMOTE_USER", "admin"),
@@ -97,6 +100,12 @@ func newServeConfigFromEnv() serveConfig {
 
 		HerdrAllowNoAuth: os.Getenv("TERMOTE_HERDR_ALLOW_NO_AUTH") == "true",
 	}
+	// Where the host user's home dir sits in the container's workspace, when
+	// the workspace holds it ("." for the workspace itself).
+	if rel := os.Getenv("TERMOTE_WORKSPACE_HOME"); rel != "" && filepath.IsLocal(rel) {
+		cfg.ViewHomeDirs = []string{path.Join(containerWorkspace, filepath.ToSlash(rel))}
+	}
+	return cfg
 }
 
 // No TERMOTE_* variable may reach a terminal: any tmux command may start the
@@ -106,7 +115,7 @@ func newServeConfigFromEnv() serveConfig {
 var termoteEnvKeys = []string{
 	"TERMOTE_PASS", "TERMOTE_USER", "TERMOTE_PORT", "TERMOTE_BIND", "TERMOTE_NO_AUTH",
 	"TERMOTE_PWA_DIR", "TERMOTE_ALLOWED_HOSTS", "TERMOTE_MUX", "TERMOTE_HERDR_ALLOW_NO_AUTH",
-	"TERMOTE_PROJECT_DIR",
+	"TERMOTE_PROJECT_DIR", "TERMOTE_WORKSPACE_HOME",
 }
 
 // scrubTermoteEnv removes every TERMOTE_* variable from the process
@@ -403,11 +412,16 @@ func buildServer(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushStore, 
 			hub.onShutdown = store.flush
 		}
 	}
+	if sessions != nil && devices != nil {
+		// A revoked or signed out session's waiting codes pair nothing.
+		devices.store.sessionAlive = sessions.alive
+		sessions.onEnd = func(id string) { devices.codes.dropCreator(sessionCreator(id)) }
+	}
 	agent := registerMuxRoutes(mux, m, tokenStore, uploads, push)
 	agent.devices = devices != nil
 	agent.signins = sessions != nil
 	registerDeviceRoutes(mux, devices, allowed)
-	registerSigninRoutes(mux, sessions, allowed)
+	registerSigninRoutes(mux, sessions, devices, allowed)
 	registerLoginLinkRoutes(mux, sessions)
 	registerPushRoutes(mux, push)
 	registerStreamRoutes(mux, m, tokenStore, allowed, hub)
@@ -416,6 +430,7 @@ func buildServer(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushStore, 
 	// be served under its random name, and the records name other repos.
 	files := registerFilesRoutes(mux, m, allowed, append(slices.Clone(cfg.FilesDenyDirs), cfg.UploadDir, cfg.TrashDir))
 	files.writeDeny = filesDenyDirs(append(cfg.FilesWriteDenyDirs, cfg.UploadDir, cfg.TrashDir)...)
+	files.homeDirs = cfg.ViewHomeDirs
 	if cfg.TrashDir != "" {
 		var err error
 		if files.trash, err = newTrashStore(cfg.TrashDir); err != nil {
@@ -1043,8 +1058,8 @@ func newBasicAuth(user, pass string, dev *deviceAuth, sessions *sessionAuth, nex
 			case errors.Is(err, errTooManyDevices):
 				msg = "Too many paired devices. Revoke one, then ask for a new code."
 			case errors.Is(err, errCreatorGone):
-				// The device that made the code was revoked or expired: not
-				// a wrong code, so not counted.
+				// The device or session that made the code was revoked (or
+				// the device expired): not a wrong code, so not counted.
 				msg = "This code is no longer valid. Ask for a new code."
 			default:
 				log.Printf("auth: pairing failed: %v", err)

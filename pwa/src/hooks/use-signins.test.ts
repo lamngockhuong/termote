@@ -127,6 +127,38 @@ describe('useSignins', () => {
     expect(result.current.sessions!.map((s) => s.id)).toEqual(['a'])
   })
 
+  it('a browser signed out whose devices stay leaves the list and throws', async () => {
+    mocks.fetchSignins.mockResolvedValueOnce(
+      answer([browser('a'), browser('me', true)]),
+    )
+    const kept = new RequestError(500, 'devices_not_revoked', 'x')
+    mocks.revokeSignin.mockRejectedValue(kept)
+    mocks.revokeOtherSignins.mockRejectedValue(kept)
+    const { result } = renderHook(() => useSignins(true))
+    await waitFor(() => expect(result.current.sessions).toHaveLength(2))
+    mocks.fetchSignins.mockReturnValue(new Promise(() => {}))
+    await act(async () => {
+      await expect(result.current.revoke('a')).rejects.toBe(kept)
+    })
+    expect(result.current.sessions!.map((s) => s.id)).toEqual(['me'])
+    await act(async () => {
+      await expect(result.current.revokeOthers()).rejects.toBe(kept)
+    })
+    expect(result.current.sessions!.map((s) => s.id)).toEqual(['me'])
+  })
+
+  it('signing the others out refused throws and keeps the list', async () => {
+    mocks.fetchSignins.mockResolvedValueOnce(
+      answer([browser('a'), browser('me', true)]),
+    )
+    const refused = new RequestError(403, 'full_needs_password', 'x')
+    mocks.revokeOtherSignins.mockRejectedValue(refused)
+    const { result } = renderHook(() => useSignins(true))
+    await waitFor(() => expect(result.current.sessions).toHaveLength(2))
+    await expect(result.current.revokeOthers()).rejects.toBe(refused)
+    expect(result.current.sessions!.map((s) => s.id)).toEqual(['a', 'me'])
+  })
+
   it('signing the others out keeps only this browser, and says how many went', async () => {
     mocks.fetchSignins.mockResolvedValueOnce(
       answer([browser('a'), browser('me', true), browser('c')]),

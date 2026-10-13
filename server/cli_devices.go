@@ -179,6 +179,8 @@ func (c *cli) serverCall(t deviceTarget, method, path string, body, out any, err
 		return errors.New(errs.unknownID)
 	case code == http.StatusNotFound:
 		return errors.New(errs.oldServer)
+	case e.Code == errSessionDevicesKept.code:
+		return errDevicesKept
 	case e.Error != "":
 		return fmt.Errorf("the server refused: %s", cleanDeviceName(e.Error))
 	}
@@ -302,11 +304,14 @@ func (c *cli) listDevices() error {
 
 // pairedByLabel says where a listed device came from.
 func pairedByLabel(d deviceView) string {
+	session, isSession := sessionOf(d.PairedBy)
 	switch {
 	case d.PairedBy == pairedByPassword:
 		return "not by a device"
 	case d.PairedBy == "unknown" || d.PairedBy == "":
 		return "unknown"
+	case isSession:
+		return "a signed-in browser (" + cleanDeviceName(session) + ")"
 	case d.PairedByName != "":
 		return cleanDeviceName(d.PairedByName)
 	}

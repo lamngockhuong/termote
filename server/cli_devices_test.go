@@ -290,6 +290,7 @@ func TestParseValidity(t *testing.T) {
 		{PairedBy: "unknown"}:  "unknown",
 		{PairedBy: "0123456789abcdef", PairedByName: "Lap\x1btop"}: "Laptop",
 		{PairedBy: "0123456789abcdef"}:                             "a removed device",
+		{PairedBy: "session:0123456789abcdef"}:                     "a signed-in browser (0123456789abcdef)",
 	} {
 		if got := pairedByLabel(d); got != want {
 			t.Errorf("pairedByLabel(%+v) = %q", d, got)

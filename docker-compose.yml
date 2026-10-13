@@ -22,4 +22,7 @@ services:
       - TERMOTE_ALLOWED_HOSTS=${TERMOTE_ALLOWED_HOSTS:-}
       - TERMOTE_MUX=${TERMOTE_MUX:-tmux}
       - TERMOTE_HERDR_ALLOW_NO_AUTH=${TERMOTE_HERDR_ALLOW_NO_AUTH:-false}
+      # With WORKSPACE at your home dir (or above it), where the home dir sits
+      # in it ("." for WORKSPACE itself): view-only devices read nothing there
+      - TERMOTE_WORKSPACE_HOME=${TERMOTE_WORKSPACE_HOME:-}
     restart: unless-stopped

@@ -28,6 +28,7 @@ import (
 const (
 	deviceKeyFile  = "key.json"
 	devicesFile    = "devices.json"
+	devicesLock    = "devices.lock"
 	maxDevices     = 50
 	maxDeviceName  = 64
 	deviceTokenTag = "tmd_"
@@ -39,9 +40,13 @@ const (
 	// code may ask for (0 is no limit).
 	minDeviceValidity = time.Hour
 	maxDeviceValidity = 400 * 24 * time.Hour
-	// pairedByPassword is the pairedBy of a device a password session, Basic
-	// auth (the CLI) or a terminal paired.
+	// pairedByPassword is the pairedBy of a device Basic auth (the CLI) or
+	// the local socket paired.
 	pairedByPassword = "password"
+	// pairedBySession prefixes the pairedBy of a device a browser signed in
+	// with the password paired: session:<its session id>. Revoking that
+	// session revokes the device.
+	pairedBySession = "session:"
 	// expiringHashTag marks the hash of a device with a validUntil. An older
 	// release compares the hash as it is and never matches it, so it cannot
 	// sign in a device whose limit it would ignore.
@@ -53,6 +58,10 @@ const (
 	deviceReloadEvery = time.Second
 )
 
+// devicesLockWait bounds the wait for another process's write; a variable
+// so tests can shorten it.
+var devicesLockWait = 2 * time.Second
+
 var (
 	errTooManyDevices = &codedError{code: "too_many_devices", msg: "too many paired devices; revoke one first", status: http.StatusConflict}
 	errUnknownDevice  = &codedError{code: "unknown_device", msg: "unknown device", status: http.StatusNotFound}
@@ -61,17 +70,35 @@ var (
 	// errCreatorGone: the device that made a code was revoked or expired
 	// before the code was used, so the code pairs nothing.
 	errCreatorGone = &codedError{code: "creator_gone", msg: "this code is no longer valid", status: http.StatusConflict}
+	// errNothingToChange stops a change that would write the file as it is.
+	errNothingToChange = errors.New("nothing to change")
 
 	// devicePartRe matches the store's temporary files, left behind by a crash.
 	devicePartRe = regexp.MustCompile(`^\.(devices|key)-[0-9a-f]{16}\.part$`)
 	deviceIDRe   = regexp.MustCompile(`^[0-9a-f]{16}$`)
 )
 
+// sessionCreator is what a code and a device made by password session id
+// carry as their creator.
+func sessionCreator(id string) string { return pairedBySession + id }
+
+// sessionOf is the password session a creator names, if it names one.
+func sessionOf(creator string) (id string, ok bool) {
+	return strings.CutPrefix(creator, pairedBySession)
+}
+
+// pairedByDevice reports whether pairedBy names the device that paired a
+// record (not the password, a session, or nothing).
+func pairedByDevice(pairedBy string) bool {
+	_, session := sessionOf(pairedBy)
+	return pairedBy != "" && pairedBy != pairedByPassword && !session
+}
+
 // deviceRecord is one paired device on disk. Hash is the SHA-256 of its
 // token (behind expiringHashTag when ValidUntil is set); the token itself is
-// never stored. ValidUntil nil is no limit. PairedBy is pairedByPassword, the
-// id of the device that paired it, or "" for a record from before it was
-// kept.
+// never stored. ValidUntil nil is no limit. PairedBy is pairedByPassword,
+// session:<id> of the password session that paired it, the id of the device
+// that paired it, or "" for a record from before it was kept.
 type deviceRecord struct {
 	ID         string     `json:"id"`
 	Name       string     `json:"name"`
@@ -96,7 +123,8 @@ func (r deviceRecord) expired(now time.Time) bool {
 
 // deviceAddOpts is where a new device comes from and how long it is valid.
 type deviceAddOpts struct {
-	// PairedBy is pairedByPassword or the id of the device that made the code.
+	// PairedBy is pairedByPassword, session:<id>, or the id of the device
+	// that made the code.
 	PairedBy string
 	// ValidFor counts from the pairing; 0 is no limit.
 	ValidFor time.Duration
@@ -122,6 +150,18 @@ type deviceStore struct {
 	// onReload, when set, is told the next validUntil (zero: none) each
 	// time the records change, under mu: it must not call the store.
 	onReload func(next time.Time)
+	// beforeWrite, when set, runs in a change between its read and its
+	// write; only tests set it.
+	beforeWrite func()
+	// writeMu queues this process's changes, so they never wait for one
+	// another on devices.lock, whose timeout is for other processes. Taken
+	// before devices.lock, which is taken before mu.
+	writeMu sync.Mutex
+	// sessionAlive reports whether a password session still exists (nil:
+	// sessions are not tracked); set before serving. A session's revoke
+	// drops it before revokePairedBy takes the file lock, so add, asking
+	// under that lock, either refuses or is revoked by it.
+	sessionAlive func(id string) bool
 
 	mu      sync.Mutex
 	recs    []deviceRecord // the file as last read or written, every gen
@@ -284,8 +324,39 @@ func (s *deviceStore) maybeReloadLocked() {
 	s.changedLocked()
 }
 
+// lockFile takes devices.lock, waiting at most wait for another process
+// (the CLI, a second serve) to finish its change. Taken before mu, so a
+// lookup never waits behind another process.
+func (s *deviceStore) lockFile(wait time.Duration) (func(), error) {
+	unlock, err := lockStateFile(filepath.Join(s.dir, devicesLock), wait)
+	if err != nil {
+		if errors.Is(err, errStateLockTimeout) {
+			log.Printf("devices: %s still locked after %s", devicesLock, wait)
+		}
+		return nil, fmt.Errorf("lock %s: %w", devicesFile, err)
+	}
+	return unlock, nil
+}
+
+// change runs changeLocked holding writeMu, devices.lock, then mu.
+func (s *deviceStore) change(op func([]deviceRecord) ([]deviceRecord, error)) error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	unlock, err := s.lockFile(devicesLockWait)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.changeLocked(op)
+}
+
 // changeLocked reads the file again, applies op to its records and writes
-// them. On any failure nothing changes, in memory or on disk.
+// them. The caller holds devices.lock across the three, so another process
+// never writes back what it read before this write (which would bring a
+// revoked device back), and mu. On any failure nothing changes, in memory or
+// on disk.
 func (s *deviceStore) changeLocked(op func([]deviceRecord) ([]deviceRecord, error)) error {
 	recs, _, err := s.readLocked()
 	if err != nil {
@@ -303,6 +374,9 @@ func (s *deviceStore) changeLocked(op func([]deviceRecord) ([]deviceRecord, erro
 	data, err := json.Marshal(next)
 	if err != nil {
 		return err
+	}
+	if s.beforeWrite != nil {
+		s.beforeWrite()
 	}
 	if err := writeStateFile("devices", s.dir, "devices", filepath.Join(s.dir, devicesFile), data, true); err != nil {
 		return fmt.Errorf("write %s: %w", devicesFile, err)
@@ -353,11 +427,12 @@ func (s *deviceStore) add(name string, r role, opts deviceAddOpts) (string, devi
 	rand.Read(idb[:])
 	now := s.now().UTC()
 	rec := deviceRecord{ID: hex.EncodeToString(idb[:]), Name: name, Role: r, Gen: s.gen, CreatedAt: now, LastUsedAt: now, PairedBy: opts.PairedBy}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	err := s.changeLocked(func(recs []deviceRecord) ([]deviceRecord, error) {
+	err := s.change(func(recs []deviceRecord) ([]deviceRecord, error) {
 		validFor := opts.ValidFor
-		if opts.PairedBy != pairedByPassword {
+		if id, ok := sessionOf(opts.PairedBy); ok && s.sessionAlive != nil && !s.sessionAlive(id) {
+			return nil, errCreatorGone
+		}
+		if pairedByDevice(opts.PairedBy) {
 			i := slices.IndexFunc(recs, func(p deviceRecord) bool { return p.ID == opts.PairedBy && s.live(p) })
 			if i < 0 || recs[i].expired(now) {
 				return nil, errCreatorGone
@@ -411,10 +486,8 @@ func (s *deviceStore) remove(id string, cascade bool) ([]string, error) {
 	if !deviceIDRe.MatchString(id) {
 		return nil, errUnknownDevice
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	var gone []string
-	err := s.changeLocked(func(recs []deviceRecord) ([]deviceRecord, error) {
+	err := s.change(func(recs []deviceRecord) ([]deviceRecord, error) {
 		if !slices.ContainsFunc(recs, func(r deviceRecord) bool { return r.ID == id && s.live(r) }) {
 			return nil, errUnknownDevice
 		}
@@ -438,13 +511,50 @@ func (s *deviceStore) remove(id string, cascade bool) ([]string, error) {
 	return gone, nil
 }
 
+// revokePairedBy removes, in one write, every live device whose pairedBy is
+// one of creators (password sessions), and every live device those paired,
+// and returns their ids. Nothing matching writes nothing.
+func (s *deviceStore) revokePairedBy(creators []string) ([]string, error) {
+	if len(creators) == 0 {
+		return nil, nil
+	}
+	var gone []string
+	err := s.change(func(recs []deviceRecord) ([]deviceRecord, error) {
+		gone = nil
+		removed := map[string]bool{}
+		// One level below the sessions' devices, as revokeCascade: a
+		// device a session paired may be full, and what a full device
+		// pairs is view-only.
+		for _, paired := range []func(deviceRecord) bool{
+			func(r deviceRecord) bool { return slices.Contains(creators, r.PairedBy) },
+			func(r deviceRecord) bool { return removed[r.PairedBy] },
+		} {
+			for _, r := range recs {
+				if s.live(r) && !removed[r.ID] && paired(r) {
+					removed[r.ID] = true
+					gone = append(gone, r.ID)
+				}
+			}
+		}
+		if len(gone) == 0 {
+			return nil, errNothingToChange
+		}
+		return slices.DeleteFunc(recs, func(r deviceRecord) bool { return s.live(r) && removed[r.ID] }), nil
+	})
+	if errors.Is(err, errNothingToChange) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return gone, nil
+}
+
 // pruneStale removes the records of another password from the disk: what
 // `start --fresh` asks for.
 func (s *deviceStore) pruneStale() (int, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	n := 0
-	err := s.changeLocked(func(recs []deviceRecord) ([]deviceRecord, error) {
+	err := s.change(func(recs []deviceRecord) ([]deviceRecord, error) {
 		kept := slices.DeleteFunc(recs, func(r deviceRecord) bool { return !s.live(r) })
 		n = len(recs) - len(kept)
 		return kept, nil
@@ -497,22 +607,42 @@ func (s *deviceStore) withTouchLocked(r deviceRecord) deviceRecord {
 }
 
 // flushLocked writes the recorded uses to the disk; a failure is logged and
-// retried at the next flush.
+// retried at the next flush. It runs under mu (a lookup), so it waits for
+// nothing: a change of this process or another one in progress makes it
+// leave the uses for the next flush.
 func (s *deviceStore) flushLocked() {
 	if len(s.touched) == 0 {
 		return
 	}
 	s.flushed = s.now()
-	if err := s.changeLocked(func(recs []deviceRecord) ([]deviceRecord, error) { return recs, nil }); err != nil {
+	if !s.writeMu.TryLock() {
+		return
+	}
+	defer s.writeMu.Unlock()
+	unlock, err := lockStateFile(filepath.Join(s.dir, devicesLock), 0)
+	if errors.Is(err, errStateLockTimeout) {
+		return
+	}
+	if err == nil {
+		defer unlock()
+		err = s.changeLocked(func(recs []deviceRecord) ([]deviceRecord, error) { return recs, nil })
+	}
+	if err != nil {
 		log.Printf("devices: record last use: %v", err)
 	}
 }
 
-// flush writes the recorded uses (on shutdown).
+// flush writes the recorded uses (on shutdown), waiting for a change in
+// progress rather than leaving them.
 func (s *deviceStore) flush() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.flushLocked()
+	if err := s.change(func(recs []deviceRecord) ([]deviceRecord, error) {
+		if len(s.touched) == 0 {
+			return nil, errNothingToChange
+		}
+		return recs, nil
+	}); err != nil && !errors.Is(err, errNothingToChange) {
+		log.Printf("devices: record last use: %v", err)
+	}
 }
 
 // alive reports whether a live device still valid has this id. It reads

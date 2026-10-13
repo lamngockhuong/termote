@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -287,6 +288,12 @@ func (f *filesAPI) handleDiff(w http.ResponseWriter, r *http.Request) {
 	}
 	defer cancel()
 	q := r.URL.Query()
+	// The path is checked against git status by diff; where a symlink in
+	// the worktree leads is not.
+	if f.viewHides(req, q.Get("path"), false, true) {
+		f.error(w, "git diff", fs.ErrNotExist)
+		return
+	}
 	res, err := f.diff(req.ctx, req.root, q.Get("path"), q.Get("orig"), q.Get("staged") == "1", q.Get("reveal") == "1")
 	if err != nil {
 		f.error(w, "git diff", err)

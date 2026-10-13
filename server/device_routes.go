@@ -42,12 +42,30 @@ type deviceAuth struct {
 
 func newDeviceAuth(store *deviceStore, tokens *tokenStore, hub *streamHub) *deviceAuth {
 	d := &deviceAuth{store: store, codes: newPairCodes(), limiter: newAuthRateLimiter(), tokens: tokens, hub: hub, ended: map[string]bool{}}
-	d.codes.alive = store.alive
+	d.codes.alive = d.creatorAlive
 	store.mu.Lock()
 	store.onReload = d.arm
 	d.arm(store.nextExpiryLocked())
 	store.mu.Unlock()
 	return d
+}
+
+// creatorAlive reports whether the maker of a code can still make one: a
+// live device, or a password session not revoked.
+func (d *deviceAuth) creatorAlive(creator string) bool {
+	if id, ok := sessionOf(creator); ok {
+		return d.store.sessionAlive == nil || d.store.sessionAlive(id)
+	}
+	return d.store.alive(creator)
+}
+
+// pairCreator is who a code made by a counts as made by: the device, the
+// password session, or "" for the CLI (Basic auth, the local socket).
+func pairCreator(a authInfo) string {
+	if a.Kind == authSession && a.SessionID != "" {
+		return sessionCreator(a.SessionID)
+	}
+	return a.DeviceID
 }
 
 // arm sets the expiry timer to next (zero: none). The store calls it each
@@ -124,6 +142,24 @@ func (d *deviceAuth) revokeCascade(id string) ([]string, error) {
 		d.end(g)
 	}
 	return ids, nil
+}
+
+// revokeSessions removes the devices the password sessions ids paired, and
+// every device those paired, ends what each holds and returns their ids.
+// The sessions are already gone: their waiting codes went with them.
+func (d *deviceAuth) revokeSessions(ids []string) ([]string, error) {
+	creators := make([]string, len(ids))
+	for i, id := range ids {
+		creators[i] = sessionCreator(id)
+	}
+	gone, err := d.store.revokePairedBy(creators)
+	if err != nil {
+		return nil, err
+	}
+	for _, g := range gone {
+		d.end(g)
+	}
+	return gone, nil
 }
 
 // pairValidity checks the validFor a code asks for (seconds, nil or 0: no
@@ -319,7 +355,7 @@ func registerDeviceRoutes(mux *http.ServeMux, d *deviceAuth, allowed hostAllowli
 			fail(w, "pair", err)
 			return
 		}
-		code, exp, err := d.codes.create(role(body.Role), body.Name, a.DeviceID, validFor)
+		code, exp, err := d.codes.create(role(body.Role), body.Name, pairCreator(a), validFor)
 		if err != nil {
 			fail(w, "pair", err)
 			return

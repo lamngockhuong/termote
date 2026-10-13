@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
+  devicesKept,
   fetchSignins,
   RequestError,
   revokeOtherSignins,
@@ -16,9 +17,10 @@ export interface SigninsState {
   error: string | null
   refresh: () => Promise<void>
   // Resolves once the browser is gone from the list; throws RequestError
+  // (devices_not_revoked: signed out, but the devices it paired stay)
   revoke: (id: string) => Promise<void>
   // Signs out every browser but this one and resolves to how many went;
-  // throws RequestError
+  // throws RequestError, devices_not_revoked as revoke
   revokeOthers: () => Promise<number>
 }
 
@@ -51,26 +53,38 @@ export function useSignins(enabled: boolean): SigninsState {
 
   const revoke = useCallback(
     async (id: string) => {
+      let kept: unknown
       try {
         await revokeSignin(id)
       } catch (err) {
         // Signed out meanwhile (another browser, the CLI, its 24 hours):
-        // gone all the same.
-        if (!(err instanceof RequestError && err.code === 'unknown_session')) {
+        // gone all the same. devices_not_revoked: gone too.
+        if (devicesKept(err)) kept = err
+        else if (
+          !(err instanceof RequestError && err.code === 'unknown_session')
+        )
           throw err
-        }
       }
       setSessions((list) => list?.filter((s) => s.id !== id) ?? null)
       void refresh()
+      if (kept) throw kept
     },
     [refresh],
   )
 
   const revokeOthers = useCallback(async () => {
-    const n = await revokeOtherSignins()
-    setSessions((list) => list?.filter((s) => s.current) ?? null)
-    void refresh()
-    return n
+    const gone = () => {
+      setSessions((list) => list?.filter((s) => s.current) ?? null)
+      void refresh()
+    }
+    try {
+      const n = await revokeOtherSignins()
+      gone()
+      return n
+    } catch (err) {
+      if (devicesKept(err)) gone()
+      throw err
+    }
   }, [refresh])
 
   return { sessions, canRevoke, error, refresh, revoke, revokeOthers }

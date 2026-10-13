@@ -310,6 +310,16 @@ func TestNewServeConfigFromEnv(t *testing.T) {
 	if !newServeConfigFromEnv().HerdrAllowNoAuth {
 		t.Error("TERMOTE_HERDR_ALLOW_NO_AUTH=true not read")
 	}
+	if dirs := newServeConfigFromEnv().ViewHomeDirs; len(dirs) != 0 {
+		t.Errorf("ViewHomeDirs = %v by default", dirs)
+	}
+	for rel, want := range map[string]string{".": containerWorkspace, "kim": containerWorkspace + "/kim", "../etc": "", "/etc": ""} {
+		t.Setenv("TERMOTE_WORKSPACE_HOME", rel)
+		dirs := newServeConfigFromEnv().ViewHomeDirs
+		if want == "" && len(dirs) != 0 || want != "" && (len(dirs) != 1 || dirs[0] != want) {
+			t.Errorf("ViewHomeDirs = %v with TERMOTE_WORKSPACE_HOME=%q, want %q", dirs, rel, want)
+		}
+	}
 }
 
 func TestTerminalTokenStore(t *testing.T) {

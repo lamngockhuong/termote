@@ -70,7 +70,7 @@ func TestContainerUpRunsTheReleaseImage(t *testing.T) {
 	}
 	args := strings.Join(cc.runArgs, " ")
 	wants := []string{"--name termote", "--restart unless-stopped", fmt.Sprintf("-p 0.0.0.0:%d:7680", port),
-		"--mount type=bind,src=" + ws + ",dst=/workspace", "-e TERMOTE_PASS", "ghcr.io/lamngockhuong/termote:1.0.0",
+		"--mount type=bind,src=" + ws + ",dst=/workspace", "-e TERMOTE_PASS", "-e TERMOTE_WORKSPACE_HOME", "ghcr.io/lamngockhuong/termote:1.0.0",
 		"--mount type=volume,src=" + containerStateVolume() + ",dst=/home/termote/.local/state"}
 	if os.Getuid() >= 0 { // no uid on Windows, so no --user
 		wants = append(wants, "--user "+strconv.Itoa(os.Getuid())+":")
@@ -89,6 +89,9 @@ func TestContainerUpRunsTheReleaseImage(t *testing.T) {
 	}
 	if !isDir(ws) {
 		t.Fatal("workspace not created")
+	}
+	if cc.runEnv["TERMOTE_WORKSPACE_HOME"] != "" {
+		t.Errorf("TERMOTE_WORKSPACE_HOME = %q for a workspace below no home", cc.runEnv["TERMOTE_WORKSPACE_HOME"])
 	}
 	// The container settings are saved apart; the native ones and the
 	// shared password stay.
@@ -373,5 +376,21 @@ func TestContainerUpAsksForMux(t *testing.T) {
 	cc.saveConfig(savedConfig{Password: "p", Container: &containerConfig{Port: freePort(t), Mux: "herdr"}})
 	if code := cc.main([]string{"container", "up"}); code != 0 || strings.Contains(cc.stdout.String(), "Select") || cc.runEnv["TERMOTE_MUX"] != "herdr" {
 		t.Fatalf("saved backend asked again: %d %v\n%s", code, cc.runEnv, cc.stdout.String())
+	}
+}
+
+// A workspace that is the host home dir, or holds it, tells the container
+// where the home dir sits in it; one below it, or beside it, tells nothing.
+func TestWorkspaceHome(t *testing.T) {
+	cc := newContainerCLI(t)
+	for ws, want := range map[string]string{
+		cc.home:                       ".",
+		filepath.Dir(cc.home):         filepath.Base(cc.home),
+		filepath.Join(cc.home, "src"): "",
+		t.TempDir():                   "",
+	} {
+		if got := cc.workspaceHome(ws); got != want {
+			t.Errorf("workspaceHome(%s) = %q, want %q", ws, got, want)
+		}
 	}
 }

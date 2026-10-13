@@ -72,12 +72,7 @@ func deviceCookieOf(rec *httptest.ResponseRecorder) *http.Cookie {
 // pairDevice pairs a device of role r and returns its cookie.
 func pairDevice(t *testing.T, h http.Handler, r string) *http.Cookie {
 	t.Helper()
-	code := makePairCode(t, h, `{"role":"`+r+`","name":"Test `+r+`"}`)["code"].(string)
-	rec := postPair(h, url.Values{"code": {code}}, nil)
-	c := deviceCookieOf(rec)
-	if rec.Code != http.StatusSeeOther || c == nil || c.Value == "" {
-		t.Fatalf("pair: %d %v %s", rec.Code, c, rec.Body)
-	}
+	c := redeemCode(t, h, makePairCode(t, h, `{"role":"`+r+`","name":"Test `+r+`"}`)["code"].(string))
 	if !c.HttpOnly || c.SameSite != http.SameSiteStrictMode || c.MaxAge != int(deviceCookieMaxAge.Seconds()) {
 		t.Errorf("cookie attributes: %+v", c)
 	}

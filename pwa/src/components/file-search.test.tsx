@@ -30,7 +30,9 @@ function Harness({
   tick = 0,
   onPick = vi.fn(),
   onRootChanged = vi.fn(),
+  hideIgnored = false,
 }: {
+  hideIgnored?: boolean
   isRepo?: boolean
   initial?: string
   tick?: number
@@ -48,6 +50,7 @@ function Harness({
       refreshTick={tick}
       onPick={onPick}
       onRootChanged={onRootChanged}
+      hideIgnored={hideIgnored}
     >
       <p>the tree</p>
     </FileSearch>
@@ -188,6 +191,21 @@ describe('FileSearch', () => {
     expect(
       JSON.parse(localStorage.getItem('termote-settings')!).findIncludeIgnored,
     ).toBe(true)
+  })
+
+  it('a view-only client gets no switch and never asks for ignored files', async () => {
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ findIncludeIgnored: true }),
+    )
+    render(<Harness hideIgnored />)
+    expect(screen.queryByRole('switch')).toBeNull()
+    await type('p')
+    expect(mockFind).toHaveBeenLastCalledWith(
+      '%1',
+      expect.objectContaining({ ignored: false }),
+      expect.any(AbortSignal),
+    )
   })
 
   it('reads the files again after a refresh', async () => {

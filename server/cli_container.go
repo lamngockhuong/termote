@@ -31,6 +31,10 @@ const containerImage = "ghcr.io/lamngockhuong/termote"
 // checkout.
 const localImage = "termote:local"
 
+// containerWorkspace is where the container mounts the workspace, and its
+// working directory.
+const containerWorkspace = "/workspace"
+
 // containerStartWait bounds the wait for a freshly started container (an
 // image pull happens before it, so this is only the server's start).
 var containerStartWait = 30 * time.Second
@@ -355,14 +359,15 @@ func (c *cli) runContainer(rt, image, bind string, o containerOptions, pass stri
 		"TERMOTE_ALLOWED_HOSTS":       strings.Join(hosts, ","),
 		"TERMOTE_MUX":                 o.mux,
 		"TERMOTE_HERDR_ALLOW_NO_AUTH": strconv.FormatBool(o.herdrNoAuth),
+		"TERMOTE_WORKSPACE_HOME":      c.workspaceHome(o.workspace),
 	})
 	args := []string{"run", "-d", "--name", containerName, "--restart", "unless-stopped",
 		"-p", fmt.Sprintf("%s:%d:%d", bind, o.port, containerPort),
-		"--mount", "type=bind,src=" + o.workspace + ",dst=/workspace", "-w", "/workspace",
+		"--mount", "type=bind,src=" + o.workspace + ",dst=" + containerWorkspace, "-w", containerWorkspace,
 		// Paired devices and push subscriptions outlive the container.
 		"--mount", "type=volume,src=" + containerStateVolume() + ",dst=/home/termote/.local/state",
 		"-e", "NO_AUTH", "-e", "TERMOTE_USER", "-e", "TERMOTE_PASS", "-e", "TERMOTE_ALLOWED_HOSTS",
-		"-e", "TERMOTE_MUX", "-e", "TERMOTE_HERDR_ALLOW_NO_AUTH"}
+		"-e", "TERMOTE_MUX", "-e", "TERMOTE_HERDR_ALLOW_NO_AUTH", "-e", "TERMOTE_WORKSPACE_HOME"}
 	args = append(args, c.containerUserArgs(rt)...)
 	if _, err := c.run.Output("", env, rt, append(args, image)...); err != nil {
 		return fmt.Errorf("%s run %s: %w", rt, image, err)
@@ -654,6 +659,28 @@ func (c *cli) containerRuntime() string {
 		}
 	}
 	return ""
+}
+
+// workspaceHome is where the host user's home dir sits inside the workspace,
+// '/'-separated ("." for the workspace itself), through symlinks, or "" when
+// the workspace does not hold it: the server in the container then shows a
+// view-only client nothing of that dir (TERMOTE_WORKSPACE_HOME).
+func (c *cli) workspaceHome(workspace string) string {
+	home := c.home
+	if real, err := filepath.EvalSymlinks(home); err == nil {
+		home = real
+	}
+	if real, err := filepath.EvalSymlinks(workspace); err == nil {
+		workspace = real
+	}
+	if !underDir(workspace, home) {
+		return ""
+	}
+	rel, err := filepath.Rel(workspace, home)
+	if err != nil {
+		return "."
+	}
+	return filepath.ToSlash(rel)
 }
 
 func (c *cli) warnSensitiveDirs(workspace string) {

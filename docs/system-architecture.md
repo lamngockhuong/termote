@@ -91,17 +91,18 @@ that and ignores every `TERMOTE_*` variable, then strips them from its own envir
 nothing it opens inherits one. Only without a saved config (the container image, a manual
 `go run`/`termote-dev serve` from a checkout) does the environment configure it:
 
-| Variable                      | Default      | Description                                                                     |
-| ----------------------------- | ------------ | ------------------------------------------------------------------------------- |
-| `TERMOTE_PORT`                | `7680`       | Server listen port                                                              |
-| `TERMOTE_BIND`                | `0.0.0.0`    | Server bind address                                                             |
-| `TERMOTE_PWA_DIR`             | `./pwa/dist` | Path to PWA static files                                                        |
-| `TERMOTE_USER`                | `admin`      | HTTP basic auth username                                                        |
-| `TERMOTE_PASS`                | (empty)      | HTTP basic auth password                                                        |
-| `TERMOTE_NO_AUTH`             | `false`      | Disable basic auth                                                              |
-| `TERMOTE_MUX`                 | `tmux`       | Backend: `tmux` or `herdr`; in the image, also picks what starts                |
-| `TERMOTE_ALLOWED_HOSTS`       | (empty)      | Extra `Host` header values allowed, comma-separated; loopback is always allowed |
-| `TERMOTE_HERDR_ALLOW_NO_AUTH` | `false`      | Required together with `TERMOTE_MUX=herdr` and `TERMOTE_NO_AUTH=true`           |
+| Variable                      | Default      | Description                                                                                                                                    |
+| ----------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TERMOTE_PORT`                | `7680`       | Server listen port                                                                                                                             |
+| `TERMOTE_BIND`                | `0.0.0.0`    | Server bind address                                                                                                                            |
+| `TERMOTE_PWA_DIR`             | `./pwa/dist` | Path to PWA static files                                                                                                                       |
+| `TERMOTE_USER`                | `admin`      | HTTP basic auth username                                                                                                                       |
+| `TERMOTE_PASS`                | (empty)      | HTTP basic auth password                                                                                                                       |
+| `TERMOTE_NO_AUTH`             | `false`      | Disable basic auth                                                                                                                             |
+| `TERMOTE_MUX`                 | `tmux`       | Backend: `tmux` or `herdr`; in the image, also picks what starts                                                                               |
+| `TERMOTE_ALLOWED_HOSTS`       | (empty)      | Extra `Host` header values allowed, comma-separated; loopback is always allowed                                                                |
+| `TERMOTE_HERDR_ALLOW_NO_AUTH` | `false`      | Required together with `TERMOTE_MUX=herdr` and `TERMOTE_NO_AUTH=true`                                                                          |
+| `TERMOTE_WORKSPACE_HOME`      | (empty)      | The host home dir's place in `/workspace` (`.`: the workspace) when the workspace holds it: view-only Files refuse it (`container up` sets it) |
 
 For a native install, `termote start` computes the equivalent of `TERMOTE_ALLOWED_HOSTS` from
 `--lan`/`--tailscale`/`--allow-host` and saves it in the config; see `serveConfigFromSaved` in
@@ -1101,10 +1102,14 @@ The code is `server/auth_role.go` (roles, the default refusal), `server/device_s
   process, set to the nearest `validUntil` after every change or reload of the file, closes the
   device's streams, stream tokens and codes when it is reached. Expired records stay listed
   (`expired`) and count towards the 50 until revoked. The cookie's `MaxAge` stays 400 days.
-- **Lineage**: each record has `pairedBy` (`password`, or the maker's id; absent in older records,
-  listed as `unknown`). A full device pairs view devices only and a view device pairs nothing, so
-  the tree is one level deep under a device.
-- **Audit**: one `audit:` line in the server log per `pair-code`, `pair`, `revoke` (`by`, `via`:
+- **Lineage**: each record has `pairedBy` (`password` for the CLI over Basic auth or the local
+  socket, `session:<id>` for a browser signed in with the password, or the maker's device id;
+  absent in older records, listed as `unknown`). A full device pairs view devices only and a view
+  device pairs nothing, so the tree is one level deep under a device or a session. A code carries
+  the same creator; a session's end (revoke, Log out) drops its waiting codes, and `add` refuses a
+  code whose session is gone (409 `creator_gone`), asked under the devices lock.
+- **Audit**: one `audit:` line in the server log per `pair-code`, `pair`, `revoke` (`by`:
+  `password`, `session:<id>` or `device:<id>`; `via`:
   `devices`, `cli`, `logout`, `repair`; `cascade`), `device-expired` (once per device and process)
   and `login via=form`; every value quoted (`strconv.Quote`), never a token, code, password or
   cookie. Basic sign-ins are not logged (the CLI and its health polls sign in on every request).
@@ -1113,8 +1118,10 @@ The code is `server/auth_role.go` (roles, the default refusal), `server/device_s
   (except logout); handlers repeat the check with `requireWriteRole`. Reads that change state have
   a view branch: the snapshot does not recreate sessions, a tmux stream attaches read-only to the
   active window (tmux 3.2+; older tmux and psmux: 501), a Herdr stream is `observe` only, and every
-  input frame, resize and `drive` is dropped. Files only in a git repo, no `reveal=1`, no
-  `content?hash=1`; `agent/prompt` carries no `promptId`.
+  input frame, resize and `drive` is dropped. Files only in a git repo that is neither the server
+  user's home dir nor above it (nor the container's `/workspace` when it holds the host home), and
+  only the paths `git ls-files -co --exclude-standard` lists (Find's 30 s cache), anything else 404;
+  no `reveal=1`, no `content?hash=1`, no `find?ignored=1`; `agent/prompt` carries no `promptId`.
 - **Revoke**: removes the record, drops its stream tokens, closes its open streams and the codes it
   made; a running request finishes. `DELETE /api/mux/devices/{id}` (Settings > Devices, `termote
   devices revoke`) also removes every live record whose `pairedBy` is the id, in the same write, and
@@ -1321,18 +1328,21 @@ termote update --force           # Force reinstall current version
 16. **Connections from other local users** (`server/peer_user_*.go`): a native server (run from
     the saved config, `CheckLocalUsers`) wraps its listener so each connection is checked on its
     own goroutine before its first read or write, never in `Accept`. A client address that is
-    loopback or one of the machine's own (`net.InterfaceAddrs`, kept 30 s, re-read at most once a
-    second on a miss) is looked up; another machine's is not. Linux asks `sock_diag` for the exact
+    loopback or one of the machine's own (`net.InterfaceAddrs`, kept 30 s; a miss re-reads it at
+    once unless a read is less than 100 ms old, and an address a read missed is taken as another
+    machine's for 30 s, at most 1024 of them) is looked up; another machine's is not. Linux asks `sock_diag` for the exact
     socket (client end local, server end remote), falling back to `/proc/net/tcp*` where netlink is
     refused; only an ESTABLISHED socket with an inode counts, since the kernel reports a closed one
-    (TIME_WAIT) as uid 0. Windows reads the owner PID from `GetExtendedTcpTable` (IPv4 and IPv6
+    (TIME_WAIT) as uid 0. A whole-table read (`/proc`, Windows) is shared by every lookup waiting
+    for it (`tableSnapshots`), each waiting for a read that started after it asked. Windows reads the owner PID from `GetExtendedTcpTable` (IPv4 and IPv6
     tables, ESTABLISHED rows) and that process's token SID; a process whose token cannot be read
     but that runs in session 0 counts as a service. Trusted: the server's own uid/SID, root
     (`0`) or SYSTEM (`S-1-5-18`), session 0 services on Windows, and each `--allow-local-user`
     name (resolved at start, a missing one skipped with a log line). Under WSL 2 mirrored
     networking (`wslinfo --networking-mode`), a loopback client absent from the tables whose
     server end stays established, looked at twice 10 ms apart, is Windows and is let through.
-    No owner found, a closed socket, more than 4 lookups waiting past 2 s: refused. A refusal
+    At most 64 lookups run at once, 4 `sock_diag` queries among them. No owner found, a closed
+    socket, a lookup not done within 2 s: refused. A refusal
     closes the connection and logs `audit: local-user-refused uid|sid=... user=... reason=...
     from=...`, at most once per 10 s per user (64 users, the rest share one limit), the first one
     of a user with the `--allow-local-user` hint. macOS checks nothing (`peerOwner` is nil)
@@ -1353,11 +1363,16 @@ termote update --force           # Force reinstall current version
     use (moved at most once a minute), how it signed in (`form`, `basic`, `link`), address and a
     cleaned User-Agent (200 bytes). `GET /api/mux/signins` → `{sessions, canRevoke}` (same-site
     read, full only), `DELETE /api/mux/signins` revokes every session but the caller's (the CLI
-    has none, so all), `DELETE /api/mux/signins/{id}` one (404 `unknown_session`). A paired device
-    lists them but gets 403 `full_needs_password` on a revoke. A revoke removes the session, then
-    its stream tokens, then closes its streams; a stream still opening asks `sessionAlive` under
-    the hub's lock and is refused. `audit: revoke-session id=... by=... via=cli|settings`.
-    `termote signins [revoke <id>|--all]` calls the same routes
+    has none, so all) → `{ok, revoked, devices}`, `DELETE /api/mux/signins/{id}` one →
+    `{ok, signedOut, devices}` (404 `unknown_session`). A paired device lists them but gets 403
+    `full_needs_password` on a revoke. A revoke removes the session, then its stream tokens, then
+    closes its streams (a stream still opening asks `sessionAlive` under the hub's lock and is
+    refused), then removes in one locked write the devices the session paired and those they paired
+    (`devices`: how many); a failed write leaves the session revoked and answers 500
+    `devices_not_revoked`. An id whose session is gone (a restart, Log out, a revoke whose write
+    failed) still revokes its devices (`signedOut: false`); with none it is 404. Log out drops only
+    the session's waiting codes. `audit: revoke-session id=... by=... via=cli|settings
+    signedOut=... devices=<ids>`. `termote signins [revoke <id>|--all]` calls the same routes
 19. **Sign-in link** (`server/login_link.go`, `server/cli_login_link.go`): `POST
     /api/mux/login-links` answers `{token, expiresIn}` only to the CLI (Basic auth or the local
     socket; a session or device gets 403 `full_needs_password`), a single-use token valid 30 s, at

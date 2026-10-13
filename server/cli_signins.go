@@ -81,19 +81,47 @@ func (c *cli) warnPasswordKnown() {
 	c.warnf("If the password may be known, run `termote start --fresh`: a browser that has it signs in again.")
 }
 
+// devicesRevokedNote says how many paired devices a sign-out revoked with it
+// (a browser's revoke takes the devices it paired), or nothing.
+func devicesRevokedNote(n int) string {
+	if n == 0 {
+		return ""
+	}
+	return fmt.Sprintf("; %s it paired revoked too", plural(n, "device"))
+}
+
+// errDevicesKept: the browsers are signed out, but the devices they paired
+// could not be removed (the server's 500 devices_not_revoked).
+var errDevicesKept = errors.New("the devices it paired are still paired: list them with termote devices, and revoke each with termote devices revoke <id>")
+
 // revokeSignin asks the running server to sign the browser id out, so its
-// open terminals close at once.
+// open terminals close at once, and to revoke the devices it paired. A
+// browser no longer signed in (a restart, Log out) still has its devices
+// revoked.
 func (c *cli) revokeSignin(id string) error {
 	if !signinIDRe.MatchString(id) {
 		return usageError("a sign-in id is 16 hex characters (list them: termote signins)")
 	}
 	var res struct {
 		OK bool `json:"ok"`
+		// SignedOut is missing from an older server, which only answers
+		// for a browser still signed in.
+		SignedOut *bool `json:"signedOut"`
+		Devices   int   `json:"devices"`
 	}
-	if err := c.serverCall(c.deviceTarget(), http.MethodDelete, "/api/mux/signins/"+url.PathEscape(id), nil, &res, signinCallErrs); err != nil {
+	err := c.serverCall(c.deviceTarget(), http.MethodDelete, "/api/mux/signins/"+url.PathEscape(id), nil, &res, signinCallErrs)
+	switch {
+	case errors.Is(err, errDevicesKept):
+		c.infof("Signed out browser %s: its open terminals are closed", id)
+		c.warnPasswordKnown()
 		return err
+	case err != nil:
+		return err
+	case res.SignedOut != nil && !*res.SignedOut:
+		c.infof("Browser %s was no longer signed in%s", id, devicesRevokedNote(res.Devices))
+	default:
+		c.infof("Signed out browser %s: its open terminals are closed%s", id, devicesRevokedNote(res.Devices))
 	}
-	c.infof("Signed out browser %s: its open terminals are closed", id)
 	c.warnPasswordKnown()
 	return nil
 }
@@ -104,11 +132,18 @@ func (c *cli) revokeAllSignins() error {
 	var res struct {
 		OK      bool `json:"ok"`
 		Revoked int  `json:"revoked"`
+		Devices int  `json:"devices"`
 	}
-	if err := c.serverCall(c.deviceTarget(), http.MethodDelete, "/api/mux/signins", nil, &res, signinCallErrs); err != nil {
+	err := c.serverCall(c.deviceTarget(), http.MethodDelete, "/api/mux/signins", nil, &res, signinCallErrs)
+	if errors.Is(err, errDevicesKept) {
+		c.infof("Signed out the browsers: their open terminals are closed")
+		c.warnPasswordKnown()
 		return err
 	}
-	c.infof("Signed out %s: their open terminals are closed", plural(res.Revoked, "browser"))
+	if err != nil {
+		return err
+	}
+	c.infof("Signed out %s: their open terminals are closed%s", plural(res.Revoked, "browser"), devicesRevokedNote(res.Devices))
 	c.warnPasswordKnown()
 	return nil
 }

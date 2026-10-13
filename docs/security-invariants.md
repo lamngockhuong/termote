@@ -68,8 +68,14 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   50 devices (409 `too_many_devices`), name 1–64 bytes. Each record carries `gen` = HMAC(store key,
   user + password): another password makes a record ignored in memory, never deleted (a manual
   `serve` with another password must not end every device); only `start --fresh` removes them from
-  disk. Every write rereads the file and applies one operation; a lookup stats it at most each
-  second, so a second process sees a revoke; `lastUsedAt` reaches disk each 5 minutes. `--no-auth`
+  disk. Every write rereads the file and applies one operation, holding an exclusive lock on
+  `devices.lock` (0600, not a symlink; `flock`, `LockFileEx` on Windows) from the read to the rename,
+  waiting at most 2 s (then the write fails and is logged), so another process (the CLI, a second
+  `serve`) never writes back a revoked device. The process's own writes queue on `writeMu` before
+  it, and the `lastUsedAt` flush made under `mu` by a lookup only tries both, leaving the uses for
+  the next flush (shutdown waits). A file system that cannot lock (`ENOLCK`, `ENOTSUP`) writes
+  unlocked and logs it once. A lookup stats the file at most each second, so a second process sees
+  a revoke; `lastUsedAt` reaches disk each 5 minutes. `--no-auth`
   or an unusable dir: the store is not loaded, the routes answer 501 `unsupported`, `caps.devices`
   false. `basicAuth` order: public → `/login` → `/pair` → `/logout` → session cookie → device
   cookie → Basic; a session wins over a device cookie, and a cookie naming no record is cleared.
@@ -102,7 +108,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   cookie is cleared, `alive` is false, and one `time.AfterFunc` per process (re-armed through the
   store's `onReload` after each change or reload) closes its streams, stream tokens and codes; expired
   records stay listed (`expired`) until revoked; the cookie's `MaxAge` stays 400 days. Lineage:
-  `pairedBy` (`password` or the maker's id; absent in older records, listed `unknown`); only the
+  `pairedBy` (`password`, `session:<id>` or the maker's id; absent in older records, listed `unknown`); only the
   password (session, Basic: the CLI) makes a `full` code, a device gets 403 `full_needs_password`
   (also with Basic credentials as well: the device cookie is tried first). The maker must be live
   and valid in the very write that adds the device (`errCreatorGone`; `/pair` says "This code is no
@@ -137,8 +143,18 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `requireWriteRole`, so a route added later is closed without remembering to. Reads: transcript,
   commands, snapshot, push key and `worktrees` GET are allowed; `agent/prompt` carries no
   `promptId`; `GET agent/start` and `files/content?hash=1` are 403; Files/Changes routes only when
-  the pane root is a git toplevel, never with `reveal=1` (`requireFilesRead`), and `files/find`
-  ignores `fresh=1`. The snapshot uses `peekSnapshot` (tmux does not recreate the default session).
+  the pane root is a git toplevel that is neither the server user's home dir nor above it (through
+  symlinks; `$HOME`, else the user database, else every root counts as one; in the container also
+  `/workspace/<TERMOTE_WORKSPACE_HOME>` (a local relative path, `.` for `/workspace`), which
+  `container up` sets to where the host home sits in a workspace at or above it), never with `reveal=1` (`requireFilesRead`), and `files/find` ignores `fresh=1` and
+  `ignored=1`. Tree, content, raw and diff serve a view-only client only the paths of the root's
+  tracked list (`git ls-files -co --exclude-standard`, Find's 30 s cache: a new file shows up to
+  30 s late) and the directories above them, by the path and by where its symlinks lead (a diff or
+  a version from git status: where it leads only, so a deleted file's diff shows); names match
+  exactly as git lists them (never folded: a case-sensitive volume on macOS keeps an ignored
+  `notes.md` beside a tracked `Notes.md` hidden); anything else is 404 as if missing, a list cut
+  short (`findMaxPaths`, git's output cap) refuses what it lacks, and a list that cannot be read
+  refuses the request. The snapshot uses `peekSnapshot` (tmux does not recreate the default session).
   A view stream drops every input frame, `resize` and `drive`; tmux attaches `-E -r` to the
   session's active window only (another `pane` → 403; tmux ≥ 3.2, older tmux and psmux → 501,
   `caps.viewStream` false), Herdr only `observe`s. Limits: 2 streams and 4 waiting stream tokens
@@ -639,7 +655,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   default-src 'none'` on every answer of the route. Exactly the `Stat` size is sent (`CopyN`, 256
   KiB chunks; a file that grew sends no more), each chunk under a 2-minute write deadline and the
   whole within 30 minutes, so a client that stops reading frees its slot. One `audit: download
-  path="<relative>" size by via` line (`by`: `password`, `device:<id>` or `none`; `via`:
+  path="<relative>" size by via` line (`by`: `password`, `session:<id>`, `device:<id>` or `none`; `via`:
   `session|device|basic|local|none`) right before the bytes, none for a refusal or `check=1`.
   `check=1` runs every check, takes no slot (a full pool still answers 429), sends no bytes and
   answers `{root, path, size}` (`no-store`): the PWA calls it first so each refusal gets a toast (a
@@ -723,10 +739,17 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
 - **Connections from other local users** (`server/peer_user_*.go`, native only: `CheckLocalUsers`
   is set from the saved config, never for the container or an env-configured `serve`): a
   connection whose client address is loopback or one of the machine's own (`net.InterfaceAddrs`,
-  30 s cache) is checked on its first read/write, never in `Accept` (4 lookups at once, 2 s, else
-  refused). Linux: `sock_diag` exact lookup, `/proc/net/tcp*` fallback, only ESTABLISHED with an
+  30 s cache; an address not in it lists them again, so one added a moment ago is checked, unless
+  a list in the last 30 s already missed it, or a list is less than 100 ms old (shared by every
+  miss, so a client cycling source addresses lists them at most that often; such a miss is not
+  remembered): at most 1024 remote addresses, expired ones dropped first, a list holding a new
+  address forgets them) is checked on its first read/write, never in `Accept` (64 lookups at once, at most 4
+  `sock_diag` queries of them, 2 s, else refused). Linux: `sock_diag` exact lookup, `/proc/net/tcp*` fallback, only ESTABLISHED with an
   inode (a TIME_WAIT row reads uid 0). Windows: `GetExtendedTcpTable` owner PID → token SID; an
-  unreadable token in session 0 is a service. Trusted: own uid/SID, root/SYSTEM, session 0
+  unreadable token in session 0 is a service. A whole-table read (`/proc`, Windows' tables) is
+  shared (`tableSnapshots`): a lookup waits for the first read that starts after it asked, and
+  every lookup waiting then uses that read, so a flood costs about one read per batch, not one
+  per connection. Trusted: own uid/SID, root/SYSTEM, session 0
   services, `--allow-local-user` names (checked to exist when given; a vanished one skipped at
   start). WSL 2 mirrored: an absent loopback client with an established server end (two looks,
   10 ms) is Windows, let through; NAT goes through root's relay (accepted: every Windows user).
@@ -751,8 +774,20 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   /api/mux/signins` revokes all but the caller's (the CLI: all); `DELETE /api/mux/signins/{id}`
   (404 `unknown_session`). A device gets 403 `full_needs_password` on revokes. Revoke: store
   first, then stream tokens (`sessionID`), then streams; one mid-handshake is refused by
-  `sessionAlive` under the hub lock. `audit: revoke-session ... via=cli|settings`. A revoke ends the
-  cookie only: a client sending Basic every request is back at once (accepted; `--fresh`)
+  `sessionAlive` under the hub lock. `audit: revoke-session ... via=cli|settings devices=<ids>`. A
+  revoke ends the cookie only: a client sending Basic every request is back at once (accepted;
+  `--fresh`). A code a session makes carries `session:<id>` as its creator (`pair-code by=`, the
+  device's `pairedBy`); the CLI's (Basic, local socket) stays `password`. Every end of a session
+  (revoke, Log out) drops its waiting codes (`onEnd`, after the session left the store; `create`
+  asks `sessionAlive` under the codes' lock). A revoke (not Log out) then removes, in one locked
+  write, every live device whose `pairedBy` is one of the revoked sessions and every device those
+  paired, ending their tokens, streams and codes; the response adds `devices` (a count). A failed
+  write still leaves the session revoked and answers 500 `devices_not_revoked`. A code redeemed
+  while its session is revoked pairs nothing: `add` asks `sessionAlive` under the file lock, which
+  the revoke takes only after dropping the session (409 `creator_gone`, not counted).
+  Session ids live in memory: an id whose session is gone (a restart, Log out, a revoke whose write
+  failed) still revokes its devices on `DELETE /api/mux/signins/{id}` (`signedOut: false`, audit
+  `signedOut="false"`), 404 `unknown_session` when it paired none
 - **Sign-in link** (`server/login_link.go`, `server/cli_login_link.go`): `url --open` and the
   panel's open key. `POST /api/mux/login-links` → `{token, expiresIn}` for the CLI only (Basic or
   local socket, else 403 `full_needs_password`), single use, 30 s, 5 waiting. When another user's listener

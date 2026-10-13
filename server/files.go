@@ -10,8 +10,11 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/user"
+	"path"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -59,7 +62,10 @@ type filesAPI struct {
 	// writeDeny are directories a save never writes to, on top of deny:
 	// the install's data dir (its current pointer picks the binary the
 	// service runs) and the upload store.
-	writeDeny  []string
+	writeDeny []string
+	// homeDirs count as a home dir besides the server user's: no view-only
+	// client reads a root at or above one (holdsHome).
+	homeDirs   []string
 	writeSlots chan struct{} // saves running, server-wide
 	writeLocks *writeLocks
 	// trash keeps what files/delete removed, for files/restore; nil when
@@ -118,6 +124,9 @@ func registerFilesRoutes(mux *http.ServeMux, m Mux, allowed hostAllowlist, denyD
 type filesRequest struct {
 	ctx  context.Context
 	root filesRoot
+	// view is the root's tracked list for a view-only client (nil for a
+	// full one): it reads nothing else (viewHides).
+	view *findList
 }
 
 // begin checks a GET and resolves the pane's root.
@@ -157,16 +166,96 @@ func (f *filesAPI) start(w http.ResponseWriter, r *http.Request, allow func(http
 		f.error(w, "files root", err)
 		return nil, nil, false
 	}
+	req := &filesRequest{ctx: ctx, root: root}
 	// The sensitive names are no boundary for a client with a shell, but a
 	// view-only client has none: a pane in the home dir would show it
 	// shell histories and tool configs holding keys under ordinary names.
-	// It reads files in a git repo only.
-	if isViewOnly(r) && !root.IsRepo {
-		cancel()
-		writeViewOnly(w)
-		return nil, nil, false
+	// It reads files in a git repo only, never the home dir or one above it
+	// (`git init ~` makes every dotfile an untracked file), and only what git
+	// lists as tracked or untracked and not ignored.
+	if isViewOnly(r) {
+		if !root.IsRepo || f.holdsHome(root.Root) {
+			cancel()
+			writeViewOnly(w)
+			return nil, nil, false
+		}
+		lists, err := f.findLists(ctx, root, findQuery{})
+		if err != nil {
+			cancel()
+			f.error(w, "files view list", err)
+			return nil, nil, false
+		}
+		req.view = &lists[0]
 	}
-	return &filesRequest{ctx: ctx, root: root}, cancel, true
+	return req, cancel, true
+}
+
+// holdsHome reports whether dir is a home dir or one above it, through
+// symlinks: the server user's (from the environment, else the user
+// database; with neither, every dir counts as holding it) or one of
+// f.homeDirs (the container's /workspace when the host mounted its home).
+func (f *filesAPI) holdsHome(dir string) bool {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		u, uerr := user.Current()
+		if uerr != nil || u.HomeDir == "" {
+			return true
+		}
+		home = u.HomeDir
+	}
+	if real, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = real
+	}
+	for _, h := range append([]string{home}, f.homeDirs...) {
+		if real, err := filepath.EvalSymlinks(h); err == nil {
+			h = real
+		}
+		if underDir(dir, h) {
+			return true
+		}
+	}
+	return false
+}
+
+// viewHides reports whether a view-only request may not read p (dir: as a
+// directory): p is not in the root's tracked list (git ignores it, or the
+// list was cut short), or its symlinks lead to a path that is not. listed:
+// p is vouched for already (a git status entry), only where it leads is
+// checked. A full request is never hidden anything.
+func (f *filesAPI) viewHides(req *filesRequest, p string, dir, listed bool) bool {
+	if req.view == nil {
+		return false
+	}
+	rel, err := cleanRelPath(p)
+	if err != nil {
+		return false // refused by the handler's own check
+	}
+	slash := filepath.ToSlash(rel)
+	if !listed && !req.view.listed(slash, dir) {
+		return true
+	}
+	to, ok := realRel(req.root.Root, rel)
+	if !ok {
+		return true
+	}
+	// Vouched for and no symlink on the way (a deleted file included): seen.
+	return !(listed && to == slash) && !req.view.listed(to, dir)
+}
+
+// realRel is where rel under root (resolved, as rootResolver returns it)
+// leads through its symlinks, '/'-separated and relative to root; ok false
+// when that is outside root. A path that does not resolve (gone) is itself.
+func realRel(root, rel string) (string, bool) {
+	abs := filepath.Join(root, rel)
+	real, err := filepath.EvalSymlinks(abs)
+	if err != nil || real == abs {
+		return filepath.ToSlash(rel), true
+	}
+	to, err := filepath.Rel(root, real)
+	if err != nil || !filepath.IsLocal(to) {
+		return "", false
+	}
+	return filepath.ToSlash(to), true
 }
 
 // cleanRelPath turns a client path into a local one ("" is the root). Paths
@@ -292,10 +381,23 @@ func (f *filesAPI) handleTree(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer cancel()
-	res, err := f.tree(req.root, r.URL.Query().Get("path"))
+	p := r.URL.Query().Get("path")
+	if f.viewHides(req, p, true, false) {
+		f.error(w, "files tree", fs.ErrNotExist)
+		return
+	}
+	res, err := f.tree(req.root, p)
 	if err != nil {
 		f.error(w, "files tree", err)
 		return
+	}
+	if req.view != nil {
+		// Listed under where the directory leads: git lists nothing below
+		// a symlink.
+		base, _ := realRel(req.root.Root, filepath.FromSlash(res.Path))
+		res.Entries = slices.DeleteFunc(res.Entries, func(e fileEntry) bool {
+			return !req.view.listed(path.Join(base, e.Name), true)
+		})
 	}
 	jsonOK(w, res)
 }
@@ -440,6 +542,10 @@ func (f *filesAPI) handleContent(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		jsonOK(w, res)
+		return
+	}
+	if f.viewHides(req, q.Get("path"), false, false) {
+		f.error(w, "files content", fs.ErrNotExist)
 		return
 	}
 	res, err := f.content(req.root, q.Get("path"), q.Get("reveal") == "1")

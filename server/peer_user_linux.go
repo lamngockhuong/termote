@@ -65,20 +65,29 @@ func isWSLRelease(release string) bool {
 	return strings.Contains(strings.ToLower(release), "microsoft")
 }
 
-func procNetOwner(client, server netip.AddrPort) (string, error) {
-	sawClosed := false
+// procNetTables reads /proc/net/tcp and tcp6 once for every lookup waiting
+// at the time: each read lists every socket of the machine, and a flood of
+// connections from another user would otherwise make one read per
+// connection of a table that grows with the flood.
+var procNetTables = newTableSnapshots(readProcNet)
+
+// readProcNet indexes /proc/net/tcp and tcp6.
+func readProcNet() procNetIndex {
+	x := procNetIndex{}
 	for _, f := range []string{"/proc/net/tcp", "/proc/net/tcp6"} {
-		b, err := os.ReadFile(f)
-		if err != nil {
-			continue
+		if b, err := os.ReadFile(f); err == nil {
+			x.add(string(b))
 		}
-		uid, found, closed := procNetConnOwner(string(b), client, server)
-		if found {
-			return uid, nil
-		}
-		sawClosed = sawClosed || closed
 	}
-	if sawClosed {
+	return x
+}
+
+func procNetOwner(client, server netip.AddrPort) (string, error) {
+	uid, found, closed := procNetTables.get().owner(client, server)
+	switch {
+	case found:
+		return uid, nil
+	case closed:
 		return "", errPeerNotFound
 	}
 	return "", errPeerAbsent
@@ -96,9 +105,15 @@ const (
 	inetDiagNoCookie = 0xffffffff
 )
 
+// sockDiagSlots bounds the sock_diag queries running at once: each holds a
+// netlink socket.
+var sockDiagSlots = make(chan struct{}, 4)
+
 // sockDiagOwner asks the kernel for the socket whose local end is client and
 // remote end server (inet_diag_dump_one: an exact lookup, not a dump).
 func sockDiagOwner(client, server netip.AddrPort) (string, error) {
+	sockDiagSlots <- struct{}{}
+	defer func() { <-sockDiagSlots }()
 	family := byte(unix.AF_INET)
 	if client.Addr().Is6() || server.Addr().Is6() {
 		family = unix.AF_INET6
