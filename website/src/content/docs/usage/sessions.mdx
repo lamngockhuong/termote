@@ -1,13 +1,13 @@
 ---
 title: Session Management
-description: Managing terminal sessions with tmux or Herdr
+description: Managing terminal sessions with tmux, Herdr or Zellij
 ---
 
 import { Aside, Steps } from "@astrojs/starlight/components";
 
 Termote models terminals as three levels — **group → tab → pane** — regardless of backend.
 With the default tmux backend a group is a tmux session and a tab is a tmux window; panes are
-only used by the Herdr backend.
+only used by the Herdr and Zellij backends.
 
 With tmux, every session on the tmux server appears as a group, including sessions you started
 yourself outside Termote (`tmux new -s work`): anyone signed in to Termote can switch to them and
@@ -51,26 +51,28 @@ arguments. The confirmations to close a session, a pane or a group add what will
 (`Running: bash, vim.`), as the last poll saw it, so a command started a few seconds earlier may
 be missing. An idle pane shows its shell (`bash`).
 
-### Groups: tmux sessions and Herdr workspaces
+### Groups: tmux sessions, Herdr workspaces and Zellij sessions
 
 When the server can manage groups, every group has a header with a **⋯** menu, even a single
 tmux session:
 
-- **New**: **New tmux session** (tmux) or **New workspace** (Herdr), under **New session** in the
+- **New**: **New tmux session** (tmux), **New workspace** (Herdr) or **New Zellij session** (Zellij), under **New session** in the
   sidebar or at the top of the mobile sheet, asks for a name and a directory: an absolute path on
   the host, or empty for your home directory. Its first tab opens once it is created. A name
   already taken, a relative or missing directory, or a file is refused with the reason, and what
   you typed stays.
 - **Rename**: in the **⋯** menu; the name is edited in place. Termote's own tmux session (`main`)
-  cannot be renamed.
+  and the Zellij session `main` cannot be renamed.
 - **Close**: in the **⋯** menu; it asks first and says how many tabs end with it. Closing
   Termote's own tmux session starts a new, empty one right away, and every device viewing it
-  reconnects to that. A Herdr workspace with worktrees is closed in Herdr, or after removing
-  them.
+  reconnects to that (the same holds for the Zellij session `main`). Closing a Zellij session
+  deletes it: Zellij cannot resurrect it. A Herdr workspace with worktrees is closed in Herdr, or
+  after removing them.
 
 The directory check only catches mistakes: the shell that opens can still `cd` anywhere. On
 Windows, the directory must be on a drive letter (`C:\work`), and psmux names and directories
-cannot contain `#`.
+cannot contain `#`. A Zellij session name cannot contain `/`, start with `-`, be `help` or
+`options`, or be too long for Zellij's socket path.
 
 ### Reordering tabs and workspaces
 
@@ -87,7 +89,7 @@ backend keeps, so Herdr's own tab bar and sidebar agree with it.
 
 The controls are hidden while the agent filter or "blocked first" sorting is on, since the list on
 screen is then not the real order; a line in their place (the **Current session** row, a
-workspace's **⋯** menu) says what to turn off to get them back. Not supported: tmux sessions (tmux has no session order), tmux
+workspace's **⋯** menu) says what to turn off to get them back. Not supported: tmux and Zellij sessions (neither has a session order), tmux
 older than 3.2, psmux on Windows, Herdr older than 0.8.0, and Herdr on Windows for now.
 
 <Aside type="caution">
@@ -128,7 +130,7 @@ the desktop sidebar and in the mobile sessions sheet):
 | Custom icons        | Choose emoji icon for each session               |
 | Rename              | Change session name anytime                      |
 | Auto-sync           | Groups/tabs/panes sync from the server (configurable interval) |
-| Persistence         | Sessions backed by tmux windows, or Herdr tabs   |
+| Persistence         | Sessions backed by tmux windows, Herdr tabs or Zellij tabs |
 | Connection status   | Real-time indicator in header (see below)        |
 
 ## Deep Links
@@ -143,7 +145,8 @@ Every screen has an address you can copy and open later or on another device:
   session, `group` is the session name and `tab` the window index (`#/s/main/0`); another session
   uses tmux's session id, `group` `$3` and `tab` `$3:1` (URI-encoded), which stays the same when
   the session is renamed but changes when the tmux server restarts. There is no `pane`. With Herdr they are the IDs
-  Herdr assigns to the workspace, tab and pane.
+  Herdr assigns to the workspace, tab and pane. With Zellij they come from the session name, so
+  renaming a session outside Termote changes them (renaming it in Termote keeps your selection).
 - Opening a link selects that group, tab and pane once the session list has loaded. An unknown ID
   keeps the current session and shows a toast.
 - `view` is used only when that view is available; otherwise the terminal opens.
@@ -174,6 +177,35 @@ It changes the session model in two ways:
   Selecting a tab or pane in the PWA never changes what is shown on the Herdr desktop — it only
   changes which pane this client streams. There is no "show on desktop" action. In the container,
   Herdr runs inside it and sees only the container's terminals.
+</Aside>
+
+## Zellij Backend
+
+Native installs on Linux and macOS ([`termote start --mux zellij`](/installation/native/#zellij-backend))
+and the container ([`termote container up --mux zellij`](/installation/docker/#terminal-backend)) can use
+Zellij 0.45.0 or later instead of tmux. A group is a Zellij session, a tab a Zellij tab and a pane a terminal
+pane (plugin panes are not shown). Every running session of yours is listed, as with tmux; sessions kept only
+for resurrection (EXITED) are not. When no session runs, Termote starts `main`.
+
+- **Tabs**: each device selects its own tab, as with Herdr; your own Zellij client never moves. A tab with
+  more than one pane shows the **pane strip**. Tabs can be renamed, closed and reordered; sessions cannot be
+  reordered.
+- **New tab**: Zellij lays a tab out only when a client is attached to the session, so adding a tab to a
+  session nobody has open (no terminal and no Termote on it) says "open this Zellij session in a terminal
+  (or in Termote) before adding a tab".
+- **Terminal**: Termote's terminal is a real Zellij client, so Zellij's tab bar and status bar show, and a
+  tab takes the size of the smallest client viewing it. It is in Zellij's locked mode, so the toolbar's Ctrl
+  keys reach the pane; your own locked-mode bindings still act (the default config's Ctrl g unlocks). A click
+  on another pane or tab inside the terminal closes the stream, and Termote reopens it on its pane.
+- **Scrolling**: there is no server-side scrolling. The mouse wheel scrolls through Zellij itself, for every
+  client viewing that pane; Select text still shows the pane's history.
+- **View-only devices** see the pane's screen, without history scrolling or input.
+- **Chat view** (Claude Code, Codex) and **Files/Changes** work on Linux and macOS. On macOS a session
+  renamed after it started has no Chat view until it is restarted.
+
+<Aside type="caution">
+  After upgrading Zellij, Termote refuses to create sessions while sessions of the old version still run;
+  restart those sessions (or Termote).
 </Aside>
 
 ## Connection Indicator
@@ -239,12 +271,12 @@ Sessions are managed via termote's `/api/mux/*` endpoints:
 | ------------------------------- | ----------- | ------------------- |
 | `/api/mux/snapshot`             | GET         | List all groups/tabs/panes |
 | `/api/mux/tabs`                 | POST        | Create tab (body: `{groupId, name}`) |
-| `/api/mux/tabs/{id}/select`     | POST        | Switch tab (or, for Herdr, the streamed pane) |
+| `/api/mux/tabs/{id}/select`     | POST        | Switch tab (tmux; Herdr and Zellij select client-side and answer 501) |
 | `/api/mux/tabs/{id}`            | PATCH       | Rename tab (body: `{name, key}`; the tab's `key` refuses a stale id with 409) |
 | `/api/mux/tabs/{id}?key=`       | DELETE      | Remove tab (same `key` check) |
 | `/api/mux/tabs/{id}/move`       | POST        | Move a tab within its group (body: `{index}`; answers its new `id`) |
 | `/api/mux/groups/{id}/move`     | POST        | Move a Herdr workspace (body: `{index}`) |
-| `/api/mux/panes/{id}`           | DELETE      | Close a pane (Herdr only, else 501) |
+| `/api/mux/panes/{id}`           | DELETE      | Close a pane (Herdr and Zellij, else 501) |
 | `/api/mux/groups`               | POST        | Create a group (body: `{name, cwd}`) |
 | `/api/mux/groups/{id}`          | PATCH       | Rename a group (body: `{name}`) |
 | `/api/mux/groups/{id}`          | DELETE      | Close a group and everything in it |

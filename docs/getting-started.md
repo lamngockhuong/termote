@@ -103,6 +103,13 @@ You can use [Herdr](https://herdr.dev/#install) instead of tmux with `termote st
 and each pane shows a badge with the status of the coding agent running in it. In the
 container, Herdr runs inside it and sees only the container's terminals.
 
+On Linux and macOS you can also use [Zellij](https://zellij.dev/documentation/installation)
+0.45.0 or later with `termote start --mux zellij`, or `termote container up --mux zellij` on
+any host (the image ships Zellij). A group is then a Zellij session (every running session of
+yours is listed), a tab a Zellij tab and a pane a terminal pane. Zellij is never picked
+automatically: choose it with `--mux zellij`, the menu (`termote` with no command) or the
+container's first-run question.
+
 ### Touch Gestures
 
 | Gesture     | Action                             |

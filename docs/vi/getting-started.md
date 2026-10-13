@@ -83,6 +83,8 @@ Mỗi phiên độc lập — chạy Claude Code trong phiên này, tiến trìn
 
 Bạn có thể dùng [Herdr](https://herdr.dev/#install) thay cho tmux bằng `termote start --mux herdr` (native) hoặc `termote container up --mux herdr` (container). Khi đó một tab có thể có nhiều pane, và mỗi pane hiện huy hiệu trạng thái của agent lập trình đang chạy trong đó. Trong container, Herdr chạy ngay bên trong nên chỉ thấy các terminal của container.
 
+Trên Linux và macOS bạn cũng có thể dùng [Zellij](https://zellij.dev/documentation/installation) 0.45.0 trở lên bằng `termote start --mux zellij`, hoặc `termote container up --mux zellij` trên mọi máy (image đã có sẵn Zellij). Khi đó một nhóm là một phiên Zellij (mọi phiên đang chạy của bạn đều được liệt kê), một tab là một tab Zellij và một pane là một pane terminal. Zellij không bao giờ được tự chọn: hãy chọn bằng `--mux zellij`, menu (`termote` không kèm lệnh) hoặc câu hỏi lần chạy đầu của container.
+
 ### Cử chỉ cảm ứng
 
 | Cử chỉ     | Hành động                               |

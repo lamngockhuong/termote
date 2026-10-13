@@ -2,15 +2,20 @@
 
 ## Prerequisites
 
-| Dependency    | Native (Unix)                        | Native (Windows)      | Container Mode |
-| ------------- | ------------------------------------ | --------------------- | -------------- |
-| tmux          | One of tmux or herdr (`--mux tmux`)  | -                     | -              |
-| herdr         | One of tmux or herdr (`--mux herdr`) | One of psmux or herdr | -              |
-| psmux         | -                                    | One of psmux or herdr | -              |
-| Docker/Podman | -                                    | -                     | Required       |
+| Dependency    | Native (Unix)                                 | Native (Windows)      | Container Mode |
+| ------------- | --------------------------------------------- | --------------------- | -------------- |
+| tmux          | One of tmux, herdr or zellij (`--mux tmux`)   | -                     | -              |
+| herdr         | One of tmux, herdr or zellij (`--mux herdr`)  | One of psmux or herdr | -              |
+| zellij 0.45+  | One of tmux, herdr or zellij (`--mux zellij`) | -                     | -              |
+| psmux         | -                                             | One of psmux or herdr | -              |
+| Docker/Podman | -                                             | -                     | Required       |
 
 Native mode needs one terminal backend, not both: tmux (psmux on Windows), or a running
-[Herdr](https://herdr.dev/#install) server. The first `termote start` detects which one is there, and asks when it finds both.
+[Herdr](https://herdr.dev/#install) server. The first `termote start` detects which one is there, and asks when it finds both. On Linux and
+macOS, [Zellij](https://zellij.dev/documentation/installation) 0.45.0 or later (tested with
+0.45.1) is a third choice; it is never detected: pick it with `--mux zellij` or the menu
+(`termote` with no command). `start --mux zellij` checks that `zellij` is on `PATH` and its
+version; on Windows it is refused before anything is saved.
 
 > **Windows Support**: native mode requires psmux or a running Herdr server; container mode
 > requires Docker Desktop or Podman Desktop. Report any issues on GitHub.
@@ -105,6 +110,7 @@ sudo apt install tmux
 termote start
 termote start --lan
 termote start --mux herdr   # Herdr backend instead of tmux
+termote start --mux zellij  # Zellij sessions instead of tmux
 ```
 
 **macOS:**
@@ -114,6 +120,7 @@ brew install tmux
 
 termote start
 termote start --lan
+termote start --mux zellij  # Zellij sessions instead of tmux (brew install zellij)
 ```
 
 **Windows (PowerShell):**
@@ -132,7 +139,14 @@ WSL2), a launchd agent on macOS, a Scheduled Task on Windows (no admin needed). 
 the registration — it starts again at the next login; `uninstall` removes it.
 
 **When to use:** need host tool access (claude, git, node), no container overhead, or the
-Herdr backend.
+Herdr or Zellij backend.
+
+**Zellij and the service:** `termote start` passes `ZELLIJ_SOCKET_DIR`, `XDG_RUNTIME_DIR` and, on
+macOS, `TMPDIR` from the shell that runs it to the service (systemd, launchd or detached), so the
+service finds the same Zellij sessions as that shell (Zellij looks in `ZELLIJ_SOCKET_DIR`, else
+`$XDG_RUNTIME_DIR/zellij` on Linux, else `$TMPDIR/zellij-<uid>`). Every process Termote starts
+drops `ZELLIJ`, `ZELLIJ_SESSION_NAME` and `ZELLIJ_PANE_ID` (a server started inside a Zellij pane
+does not act as that pane) and keeps `ZELLIJ_SOCKET_DIR`.
 
 ### Container Mode (All-in-one)
 
@@ -142,7 +156,7 @@ termote container up --no-auth      # localhost without auth
 termote container up --lan          # LAN accessible
 ```
 
-Single container with termote + tmux or Herdr (no ttyd), published at `-p <bind>:<port>:7680`. Runs
+Single container with termote + tmux, Herdr or Zellij (no ttyd), published at `-p <bind>:<port>:7680`. Runs
 `ghcr.io/lamngockhuong/termote:<version of the installed binary>` with podman (preferred) or
 docker (from 1.10.0 by the digest the release's signed `image-digest.txt` names, never by the
 tag, which can be moved); from a git checkout (or `--build`) it builds `termote:local` from the `Dockerfile`
@@ -166,6 +180,11 @@ container, so it sees only the container's terminals, never the host's Herdr or 
 Herdr client is attached there, so panes keep Herdr's own size and the PWA fits the terminal to
 it rather than resizing the pane.
 
+The image also ships Zellij 0.45.1 (the static build without Zellij's web server, pinned by version
+and sha256 per arch), so `--mux zellij` works on any host, Windows included. The entrypoint uses
+`ZELLIJ_SOCKET_DIR=/tmp/zellij`, writes the container's own Zellij config when there is none (no
+setup wizard, tips or release notes) and starts the session `main`.
+
 **When to use:** Simple setup, isolated environment.
 
 ## Command Options
@@ -173,23 +192,23 @@ it rather than resizing the pane.
 `start` and `container up` share the same flag syntax on every OS in 1.0 (`--lan`, not
 `-Lan`); a flag not given keeps its saved value, and a boolean is turned off with `=false`.
 
-| Flag                         | Description                                                | `start` | `container up` |
-| ---------------------------- | ---------------------------------------------------------- | ------- | -------------- |
-| `--lan[=false]`              | Listen on `0.0.0.0` instead of `127.0.0.1`                 | ✓       | ✓              |
-| `--tailscale <host[:port]>`  | Publish over Tailscale HTTPS (default port 443)            | ✓       | ✓              |
-| `--no-tailscale`             | Stop publishing over Tailscale                             | ✓       | ✓              |
-| `--no-auth[=false]`          | Disable basic authentication                               | ✓       | ✓              |
-| `--port <port>`              | Listen port (default 7680, Windows 7690 for `start`)       | ✓       | ✓              |
-| `--mux <tmux\|herdr>`        | Terminal backend (`start`: detected; container: asked)     | ✓       | ✓              |
-| `--allow-host <name>`        | Allow an extra Host header value (repeatable, no wildcard) | ✓       | ✓              |
-| `--remove-host <name>`       | Remove a previously allowed name (repeatable)              | ✓       | ✓              |
-| `--allow-local-user <name>`  | Serve connections of another local OS user (repeatable)    | ✓       | -              |
-| `--remove-local-user <name>` | Stop serving that user's connections (repeatable)          | ✓       | -              |
-| `--allow-herdr-no-auth`      | Required together with `--mux herdr --no-auth`             | ✓       | ✓              |
-| `--user <name>`              | Login username (default `admin`; shared by both)           | ✓       | ✓              |
-| `--fresh`                    | Set a new password (ignore the saved one)                  | ✓       | ✓              |
-| `--workspace <dir>`          | Mounted directory (default `~/termote-workspace`)          | -       | ✓              |
-| `--build`                    | Build `termote:local` from a checkout instead of pulling   | -       | ✓              |
+| Flag                          | Description                                                          | `start` | `container up` |
+| ----------------------------- | -------------------------------------------------------------------- | ------- | -------------- |
+| `--lan[=false]`               | Listen on `0.0.0.0` instead of `127.0.0.1`                           | ✓       | ✓              |
+| `--tailscale <host[:port]>`   | Publish over Tailscale HTTPS (default port 443)                      | ✓       | ✓              |
+| `--no-tailscale`              | Stop publishing over Tailscale                                       | ✓       | ✓              |
+| `--no-auth[=false]`           | Disable basic authentication                                         | ✓       | ✓              |
+| `--port <port>`               | Listen port (default 7680, Windows 7690 for `start`)                 | ✓       | ✓              |
+| `--mux <tmux\|herdr\|zellij>` | Terminal backend (`start`: detected, zellij never; container: asked) | ✓       | ✓              |
+| `--allow-host <name>`         | Allow an extra Host header value (repeatable, no wildcard)           | ✓       | ✓              |
+| `--remove-host <name>`        | Remove a previously allowed name (repeatable)                        | ✓       | ✓              |
+| `--allow-local-user <name>`   | Serve connections of another local OS user (repeatable)              | ✓       | -              |
+| `--remove-local-user <name>`  | Stop serving that user's connections (repeatable)                    | ✓       | -              |
+| `--allow-herdr-no-auth`       | Required together with `--mux herdr --no-auth`                       | ✓       | ✓              |
+| `--user <name>`               | Login username (default `admin`; shared by both)                     | ✓       | ✓              |
+| `--fresh`                     | Set a new password (ignore the saved one)                            | ✓       | ✓              |
+| `--workspace <dir>`           | Mounted directory (default `~/termote-workspace`)                    | -       | ✓              |
+| `--build`                     | Build `termote:local` from a checkout instead of pulling             | -       | ✓              |
 
 `update` takes `--version <X.Y.Z>` and `--force` instead. There is no `--ttyd` flag and no
 PowerShell `-Flag` parameter names in 1.0.
@@ -268,7 +287,7 @@ manual `go run`/`termote-dev serve` from a checkout:
 | `TERMOTE_USER`                | `admin`      | HTTP basic auth username                                                                                                                                                        |
 | `TERMOTE_PASS`                | (empty)      | HTTP basic auth password                                                                                                                                                        |
 | `TERMOTE_NO_AUTH`             | `false`      | Disable basic auth                                                                                                                                                              |
-| `TERMOTE_MUX`                 | `tmux`       | Backend: `tmux` or `herdr`; in the image, also picks what starts                                                                                                                |
+| `TERMOTE_MUX`                 | `tmux`       | Backend: `tmux`, `herdr` or `zellij`; in the image, also picks what starts                                                                                                      |
 | `TERMOTE_ALLOWED_HOSTS`       | (empty)      | Extra `Host` header values, comma-separated; loopback always allowed                                                                                                            |
 | `TERMOTE_HERDR_ALLOW_NO_AUTH` | `false`      | Required with `TERMOTE_MUX=herdr` and `TERMOTE_NO_AUTH=true`                                                                                                                    |
 | `TERMOTE_WORKSPACE_HOME`      | (empty)      | Where your home dir sits in `/workspace` (`.`: the workspace itself) when the mounted workspace is it or holds it; view-only devices read nothing there. `container up` sets it |
@@ -393,7 +412,8 @@ termote start --tailscale myhost.ts.net
 2. **LAN**: Ensure network is trusted, consider VPN
 3. **Never expose to public internet** without additional security
 4. **Herdr backend**: only use `--allow-herdr-no-auth` when you understand it exposes every
-   Herdr workspace on the host, not just the pane the PWA is showing
+   Herdr workspace on the host, not just the pane the PWA is showing. Zellij has no such extra
+   guard: like tmux it exposes your running sessions, and `--no-auth` is for local development only
 5. **A host name of its own**: browsers send cookies to every port of a host name, so any other
    web service on the same name (another port, another app on the same domain) receives the
    session cookie when the user opens it. On a server that runs anything else, reach Termote
@@ -568,6 +588,26 @@ which herdr
 # Check the server picked the right backend
 curl http://localhost:7680/api/mux/health   # {"backend":"herdr",...}
 ```
+
+#### Zellij backend issues
+
+```bash
+# zellij 0.45.0 or later must be on PATH before `termote start --mux zellij`
+zellij --version
+
+# The sessions the service sees: run from the shell that ran `termote start`
+zellij list-sessions
+```
+
+- **A session is missing**: sessions kept only for resurrection (EXITED) are not listed, nor one
+  whose name starts with `-` or is `help`/`options` (logged once). A service that sees no session
+  you started was given another socket dir: run `termote start` again from that shell.
+- **New tab fails with `no_client`**: Zellij lays a tab out only with a client attached (upstream
+  issue #5594); open the session in a terminal, or in Termote, then add the tab.
+- **503 `zellij_version_mismatch`**: sessions of another Zellij version still run after an upgrade;
+  restart those sessions (or Termote) before creating one.
+- **A `TERMOTE_*` variable warned about in the log**: it is in a running Zellij server's
+  environment, which its panes inherit and Zellij cannot unset; restart that session.
 
 ---
 

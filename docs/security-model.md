@@ -51,6 +51,9 @@ what Termote can reach, run it as another user with less access.
   Termote page itself, and the stream needs a single-use token.
 - Failed sign-ins and wrong pairing codes are rate limited.
 - A view-only device is refused every write on the server, not only hidden buttons in the interface.
+- With Zellij (`--mux zellij`), what you type and Chat messages reach a pane only through the terminal
+  of a Termote Zellij client, never through process arguments, which other local users could read. A
+  view-only device watches a Zellij pane through `zellij subscribe`, which cannot type.
 - A Content-Security-Policy keeps the page from loading or running code from elsewhere.
 - A paired device can carry a time limit (30 days by default when pairing): past it, the device is
   refused and its open terminals close. A device paired by one with a limit never outlasts it.

@@ -12,7 +12,9 @@ terminal process to install.
 ## Prerequisites
 
 termote needs one terminal backend: **tmux** (on Windows, **psmux**) or a running
-**[Herdr](https://herdr.dev/#install)** server (see [Herdr Backend](#herdr-backend)); you do not need both.
+**[Herdr](https://herdr.dev/#install)** server (see [Herdr Backend](#herdr-backend)); you do not need both. On Linux and macOS,
+**[Zellij](https://zellij.dev/documentation/installation)** 0.45.0 or later is a third choice (see
+[Zellij Backend](#zellij-backend)).
 
 <Tabs>
   <TabItem label="Linux">
@@ -21,6 +23,7 @@ termote needs one terminal backend: **tmux** (on Windows, **psmux**) or a runnin
     # tmux
     sudo apt install tmux
     # or Herdr instead: see https://herdr.dev/#install
+    # or Zellij 0.45+: see https://zellij.dev/documentation/installation
     ```
   </TabItem>
   <TabItem label="macOS">
@@ -29,6 +32,7 @@ termote needs one terminal backend: **tmux** (on Windows, **psmux**) or a runnin
     # tmux
     brew install tmux
     # or Herdr instead: see https://herdr.dev/#install
+    # or Zellij 0.45+: brew install zellij
     ```
   </TabItem>
   <TabItem label="Windows">
@@ -95,7 +99,8 @@ covered in [Getting Started](/getting-started/).
    `herdr.sock` in Herdr's config directory: `$XDG_CONFIG_HOME/herdr`, or `~/.config/herdr`; on Windows
    `%APPDATA%\herdr`, reached as a named pipe), tmux (psmux on Windows) when it is installed. When both are there it asks, or, without a
    terminal to ask in, picks tmux and prints how to switch. When neither is there it stops with install hints.
-   The choice is saved and not detected again unless you pass `--mux`.
+   The choice is saved and not detected again unless you pass `--mux`. Zellij is never detected: choose it
+   with `--mux zellij` or the menu (`termote` with no command).
 
 2. **Creates the admin password** the first time (or with `--fresh`): type one, or press Enter to generate
    one. It is printed once; `termote show-password` shows it again later.
@@ -135,7 +140,7 @@ server exactly as last time. A boolean option is turned off with `=false`.
 | `--tailscale <host[:port]>` | Publish over [Tailscale HTTPS](/installation/tailscale/) (default 443) |
 | `--no-tailscale`            | Stop publishing over Tailscale                                         |
 | `--no-auth[=false]`         | Disable the login                                                      |
-| `--mux <tmux\|herdr>`       | Terminal backend (default: detected the first time)                    |
+| `--mux <tmux\|herdr\|zellij>` | Terminal backend (default: detected the first time; zellij: Linux, macOS) |
 | `--allow-host <name>`       | Allow another `Host` header name (repeatable, no wildcard)             |
 | `--remove-host <name>`      | Remove an allowed name (repeatable)                                    |
 | `--allow-local-user <name>` | Let another OS user of this machine connect, e.g. a reverse proxy      |
@@ -200,6 +205,36 @@ termote start --mux herdr
   - `--mux herdr --no-auth` is refused unless `--allow-herdr-no-auth` is also given: Herdr
   exposes every workspace on the host, not just the pane the PWA is showing, so running it
   without a password needs an explicit opt-in.
+</Aside>
+
+## Zellij Backend
+
+Linux and macOS can drive your [Zellij](https://zellij.dev/documentation/installation) sessions instead of tmux.
+It needs Zellij 0.45.0 or later (tested with 0.45.1); `start` checks that `zellij` is on your PATH and its version.
+Zellij is never picked for you:
+
+```bash
+termote start --mux zellij
+```
+
+A group is a Zellij session, a tab a Zellij tab and a pane a terminal pane (plugin panes are not shown). Every
+running session of yours is listed, as with tmux. `start` passes `ZELLIJ_SOCKET_DIR`, `XDG_RUNTIME_DIR` and, on
+macOS, `TMPDIR` from your shell to the service, so it sees the same sessions as that shell; run `termote start`
+from the shell whose sessions you want.
+
+<Aside type="caution" title="Zellij behavior differs from tmux">
+  - The terminal is a real Zellij client: Zellij draws its own tab bar and status bar, and a tab takes the size
+  of the smallest client viewing it.
+  - Selecting a tab on the PWA does **not** move your own Zellij client; each device selects its own tab.
+  - Termote's client is in Zellij's locked mode, so the toolbar's Ctrl keys (Ctrl B, P, N, T, O, Q...) reach the
+  pane. Your own locked-mode bindings still act (the default config's Ctrl g unlocks).
+  - There is no server-side scrolling: the mouse wheel scrolls through Zellij itself, for every client viewing
+  that pane. Select text still shows the pane's history.
+  - A new tab needs a client attached to the session (a terminal, or Termote showing it); otherwise you see
+  "open this Zellij session in a terminal (or in Termote) before adding a tab".
+  - Closing a session from Termote deletes it: Zellij cannot resurrect it.
+  - On Windows, native `--mux zellij` is refused; use `termote container up --mux zellij`, see
+  [Container Installation](/installation/docker/#terminal-backend).
 </Aside>
 
 ## Managing the Server
@@ -295,6 +330,9 @@ termote logs server     # last server log lines
 | ---------------------------------------- | ------------------------------------------------------------------------------------------- |
 | `termote: command not found`             | Open a new terminal, or add `~/.local/bin` to your PATH as the installer printed             |
 | No terminal backend found                | Install tmux (Windows: `winget install psmux`) or start Herdr, then `termote start`          |
+| `zellij not found` / `is too old`        | Install Zellij 0.45.0 or later, then `termote start --mux zellij`                            |
+| Zellij sessions missing                  | Run `termote start` from the shell that sees them (`zellij list-sessions`); EXITED ones are not listed |
+| `zellij_version_mismatch` after an upgrade | Restart the Zellij sessions of the old version (or Termote)                                |
 | Port in use                              | `start` names the port; stop the other program or choose `termote start --port <port>`      |
 | Host rejected (403)                      | Run the `termote start --allow-host <name>` the error names                                  |
 | Reverse proxy gets no answer             | The log shows `local-user-refused`: run the `termote start --allow-local-user <name>` it names |

@@ -7,6 +7,7 @@ Manual testing checklist for Termote features before release.
 - [ ] tmux installed (macOS/Linux)
 - [ ] psmux installed (Windows)
 - [ ] herdr installed (only for Herdr backend testing, native; the container image has its own)
+- [ ] zellij 0.45.0+ installed (only for Zellij backend testing, native Linux/macOS; the container image has its own)
 - [ ] Go 1.26.9+ (for native build; an older Go downloads it when `GOTOOLCHAIN` is `auto`)
 - [ ] Node.js 22.22+ or 24.15+ & pnpm (for PWA build)
 - [ ] Docker or Podman (for container mode)
@@ -83,13 +84,33 @@ Manual testing checklist for Termote features before release.
       or `terminal session control`
 - [ ] Stopping a stream that drives the pane size returns the desktop to its size
 
+### Native Mode + Zellij (Linux/macOS)
+
+- [ ] `termote start --mux zellij` completes without error (zellij 0.45.0+ on `PATH`); on Windows
+      it is refused before anything is saved
+- [ ] `curl localhost:7680/api/mux/health` reports `"backend":"zellij"`
+- [ ] PWA lists the same sessions/tabs/panes as `zellij list-sessions` and Zellij's own tab bar
+      (no plugin panes, no EXITED sessions)
+- [ ] Typing in a pane from the PWA lands in that pane
+- [ ] With a desktop Zellij client attached, switching tabs on the phone does not move the desktop
+      client
+- [ ] Toolbar Ctrl P recalls shell history (Termote's client is in locked mode)
+- [ ] New tab in a session a terminal (or Termote) has open works; in a session nobody has open it
+      shows "open this Zellij session in a terminal (or in Termote) before adding a tab"
+- [ ] Rename and close a non-default session; `main` cannot be renamed
+- [ ] Select text shows the pane's history
+- [ ] Files opens on the pane's directory
+- [ ] Chat view works with Claude Code running in a Zellij pane
+- [ ] A view-only device sees the pane's screen renders, with no input
+
 ### Container Mode
 
 - [ ] `termote container up` completes without error
 - [ ] Container running: `docker ps | grep termote` (or `podman ps`)
 - [ ] PWA accessible at <http://localhost:7680>
-- [ ] First `container up` without `--mux`: asks tmux/herdr in a terminal, uses tmux without one
+- [ ] First `container up` without `--mux`: asks tmux/herdr/zellij in a terminal, uses tmux without one
 - [ ] `container up --mux herdr`: PWA shows workspace `main`; typing, resize, create/rename/close tab work
+- [ ] `container up --mux zellij`: PWA shows session `main`; typing, create/rename/close tab work
 - [ ] `container up` without a flag keeps the saved backend; `--mux tmux` switches back
 - [ ] `container up --mux herdr --no-auth` is refused unless `--allow-herdr-no-auth` is also given
 - [ ] Claude Code running in a container pane changes its agent status badge

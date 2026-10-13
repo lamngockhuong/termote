@@ -103,6 +103,12 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/mux_groups.go`                            | `/api/mux/groups*`: create, rename, close a group; cwd check  |
 | `server/mux_reorder.go`                           | `tabs/{id}/move`, `groups/{id}/move`: one slot, coded errors  |
 | `server/mux_herdr.go`                             | Herdr backend                                                 |
+| `server/mux_zellij.go`                            | Zellij backend: snapshot, tabs, sessions, input, text, attach |
+| `server/mux_zellij_cmd.go`                        | zellij runner (gate, retries), ids, names, version, sockets   |
+| `server/mux_zellij_agent.go`                      | Zellij Chat view and Files (pane dir, capture, paste, keys)   |
+| `server/zellij_client.go`                         | Termote's Zellij clients: placed on a pane, input, stream     |
+| `server/zellij_view.go`                           | Zellij view-only stream: `subscribe` renders, size frames     |
+| `server/zellij_pane_pid*.go`                      | A pane's shell: socket owner (sock_diag / lsof), PANE_ID      |
 | `server/mux_worktrees.go`                         | `/api/mux/worktrees*`: list, create, open, remove; name check |
 | `server/herdr_worktree_branches.go`               | Each worktree workspace's branch, read in the background      |
 | `server/stream.go`                                | Terminal WebSocket (`/api/mux/stream`)                        |

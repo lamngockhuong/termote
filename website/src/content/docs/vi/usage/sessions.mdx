@@ -1,13 +1,13 @@
 ---
 title: Quản lý phiên
-description: Quản lý phiên terminal với tmux hoặc Herdr
+description: Quản lý phiên terminal với tmux, Herdr hoặc Zellij
 ---
 
 import { Aside, Steps } from "@astrojs/starlight/components";
 
-Dù chạy trên tmux hay Herdr, Termote cũng tổ chức terminal theo ba cấp: **group → tab → pane**.
-Với tmux (mặc định), mỗi group là một tmux session và mỗi tab là một tmux window; chỉ Herdr mới
-dùng đến pane.
+Dù chạy trên tmux, Herdr hay Zellij, Termote cũng tổ chức terminal theo ba cấp: **group → tab → pane**.
+Với tmux (mặc định), mỗi group là một tmux session và mỗi tab là một tmux window; chỉ Herdr và
+Zellij mới dùng đến pane.
 
 Trên tmux, mọi session của tmux server đều hiện thành group, kể cả session bạn tự tạo ngoài
 Termote (`tmux new -s work`): ai đăng nhập Termote cũng chuyển sang và gõ vào được. Session riêng
@@ -51,23 +51,25 @@ số. Hộp xác nhận đóng phiên, pane hay group có thêm một dòng nói
 (`Running: bash, vim.`), theo lần đọc gần nhất, nên một lệnh vừa chạy vài giây trước có thể chưa
 có. Pane đang rảnh hiện tên shell của nó (`bash`).
 
-### Group: session tmux và workspace Herdr
+### Group: session tmux, workspace Herdr và phiên Zellij
 
 Khi server quản lý được group, group nào cũng có header kèm menu **⋯**, kể cả khi tmux chỉ có một
 session:
 
-- **Tạo**: **New tmux session** (tmux) hoặc **New workspace** (Herdr), nằm dưới **New session** trong
+- **Tạo**: **New tmux session** (tmux), **New workspace** (Herdr) hoặc **New Zellij session** (Zellij), nằm dưới **New session** trong
   sidebar hoặc ở đầu bảng trên mobile, hỏi tên và thư mục: đường dẫn tuyệt đối trên máy chủ, hoặc
   để trống thì dùng thư mục home. Tạo xong, tab đầu của group được mở. Tên đã có, thư mục tương đối
   hoặc không tồn tại, hay một file đều bị từ chối kèm lý do, và nội dung bạn đã gõ được giữ nguyên.
-- **Đổi tên**: trong menu **⋯**, sửa tên ngay tại chỗ. Session tmux riêng của Termote (`main`) không
-  đổi tên được.
+- **Đổi tên**: trong menu **⋯**, sửa tên ngay tại chỗ. Session tmux riêng của Termote (`main`) và
+  phiên Zellij `main` không đổi tên được.
 - **Đóng**: trong menu **⋯**, hỏi trước và nói bao nhiêu tab sẽ kết thúc theo. Đóng session tmux
   riêng của Termote thì một session mới, rỗng được tạo ngay, và mọi thiết bị đang xem nó tự kết nối
-  lại vào đó. Workspace Herdr có worktree thì đóng trong Herdr, hoặc sau khi đã gỡ hết worktree.
+  lại vào đó (phiên Zellij `main` cũng vậy). Đóng một phiên Zellij sẽ xóa nó: Zellij không thể khôi
+  phục lại. Workspace Herdr có worktree thì đóng trong Herdr, hoặc sau khi đã gỡ hết worktree.
 
 Bước kiểm tra thư mục chỉ để bắt lỗi gõ nhầm: terminal mở ra vẫn `cd` đi đâu cũng được. Trên Windows,
-thư mục phải nằm trên một ổ đĩa (`C:\work`), và tên lẫn thư mục trên psmux không được chứa `#`.
+thư mục phải nằm trên một ổ đĩa (`C:\work`), và tên lẫn thư mục trên psmux không được chứa `#`. Tên phiên Zellij không được chứa `/`, bắt đầu bằng
+`-`, là `help` hay `options`, hoặc dài quá mức đường dẫn socket của Zellij cho phép.
 
 ### Sắp xếp lại tab và workspace
 
@@ -84,7 +86,7 @@ Tab giữ thứ tự lúc được tạo cho tới khi bạn di chuyển nó, v�
 
 Các nút này bị ẩn khi đang bật lọc agent hoặc sắp xếp "blocked first", vì lúc đó danh sách trên màn
 hình không phải thứ tự thật; thay vào chỗ của chúng (hàng **Current session**, menu **⋯** của
-workspace) là một dòng cho biết cần tắt gì để các nút hiện lại. Không hỗ trợ: session tmux (tmux không có thứ tự session), tmux cũ hơn
+workspace) là một dòng cho biết cần tắt gì để các nút hiện lại. Không hỗ trợ: session tmux và phiên Zellij (cả hai đều không có thứ tự phiên), tmux cũ hơn
 3.2, psmux trên Windows, Herdr cũ hơn 0.8.0, và tạm thời Herdr trên Windows.
 
 <Aside type="caution">
@@ -125,7 +127,7 @@ phiên trên mobile) có thêm thanh lọc:
 | Icon tùy chỉnh    | Chọn biểu tượng cảm xúc làm icon cho mỗi phiên |
 | Đổi tên           | Đổi tên phiên bất cứ lúc nào                  |
 | Tự động đồng bộ   | Group/tab/pane được đồng bộ từ server (chu kỳ tùy chỉnh được) |
-| Lưu trữ           | Phiên được lưu bởi tmux windows hoặc tab của Herdr |
+| Lưu trữ           | Phiên được lưu bởi tmux windows, tab của Herdr hoặc tab của Zellij |
 | Trạng thái kết nối | Chỉ báo thời gian thực trên header (xem bên dưới) |
 
 ## Liên kết trực tiếp
@@ -140,7 +142,8 @@ Mỗi màn hình có một địa chỉ để bạn sao chép, rồi mở lại 
   Termote có `group` là tên session và `tab` là chỉ số window (`#/s/main/0`); session khác dùng ID
   session của tmux, `group` là `$3` và `tab` là `$3:1` (đã mã hoá URI). ID này giữ nguyên khi đổi
   tên session nhưng đổi khi tmux server khởi động lại. Không có `pane`. Với Herdr, đó là các ID mà Herdr cấp cho workspace,
-  tab và pane.
+  tab và pane. Với Zellij, ID được tạo từ tên phiên, nên đổi tên phiên bên ngoài Termote sẽ làm ID đổi
+  theo (đổi tên ngay trong Termote thì lựa chọn của bạn được giữ).
 - Mở liên kết sẽ chọn đúng group, tab và pane sau khi danh sách phiên tải xong. Nếu ID không tồn
   tại, phiên hiện tại được giữ nguyên và một toast báo lại.
 - `view` chỉ được dùng khi view đó có sẵn; nếu không thì terminal được mở.
@@ -172,6 +175,36 @@ tmux. Mô hình phiên khi đó khác ở hai điểm:
   Chọn tab hoặc pane trong PWA không bao giờ thay đổi nội dung đang hiện trên desktop của Herdr,
   mà chỉ đổi pane mà client này đang nhận luồng. Không có thao tác "hiện trên desktop". Trong
   container, Herdr chạy ngay bên trong nên chỉ thấy các terminal của container.
+</Aside>
+
+## Backend Zellij
+
+Bản cài native trên Linux và macOS ([`termote start --mux zellij`](/vi/installation/native/#backend-zellij))
+lẫn container ([`termote container up --mux zellij`](/vi/installation/docker/#backend-terminal)) đều có thể dùng
+Zellij 0.45.0 trở lên thay cho tmux. Một group là một phiên Zellij, một tab là một tab Zellij và một pane là một
+pane terminal (pane plugin không hiện). Mọi phiên đang chạy của bạn đều được liệt kê, giống tmux; phiên chỉ còn
+được giữ để khôi phục (EXITED) thì không. Khi không có phiên nào chạy, Termote khởi động `main`.
+
+- **Tab**: mỗi thiết bị tự chọn tab của mình, giống Herdr; client Zellij của bạn không bao giờ bị di chuyển.
+  Tab có nhiều pane sẽ hiện **dải pane**. Tab đổi tên, đóng và sắp xếp lại được; phiên thì không sắp xếp lại
+  được.
+- **Tab mới**: Zellij chỉ dựng bố cục tab khi có một client đang gắn vào phiên, nên thêm tab vào một phiên không
+  ai mở (không có terminal và không có Termote nào đang xem) sẽ báo "open this Zellij session in a terminal (or
+  in Termote) before adding a tab".
+- **Terminal**: terminal của Termote là một client Zellij thật, nên thanh tab và thanh trạng thái của Zellij
+  vẫn hiện, và một tab lấy kích thước của client nhỏ nhất đang xem nó. Client này ở chế độ locked của Zellij,
+  nên các phím Ctrl trên thanh công cụ tới được pane; các phím tắt chế độ locked của riêng bạn vẫn có tác dụng
+  (Ctrl g của cấu hình mặc định mở khóa). Bấm vào một pane hay tab khác ngay trong terminal sẽ đóng luồng, và
+  Termote mở lại nó trên đúng pane.
+- **Cuộn**: không có cuộn phía server. Con lăn chuột cuộn qua chính Zellij, cho mọi client đang xem pane đó;
+  Select text vẫn hiện lịch sử của pane.
+- **Thiết bị chỉ xem** thấy màn hình của pane, không cuộn lịch sử và không gõ được.
+- **Chat view** (Claude Code, Codex) và **Files/Changes** chạy trên Linux và macOS. Trên macOS, một phiên bị đổi
+  tên sau khi đã chạy sẽ không có Chat view cho tới khi được khởi động lại.
+
+<Aside type="caution">
+  Sau khi nâng cấp Zellij, Termote từ chối tạo phiên khi các phiên của bản cũ vẫn đang chạy; hãy khởi động lại
+  các phiên đó (hoặc Termote).
 </Aside>
 
 ## Chỉ báo kết nối
@@ -237,12 +270,12 @@ Phiên được quản lý qua các endpoint `/api/mux/*` của termote:
 | --------------------------- | ------ | ------------------------------------------------ |
 | `/api/mux/snapshot`         | GET    | Liệt kê tất cả group/tab/pane                    |
 | `/api/mux/tabs`             | POST   | Tạo tab (nội dung gửi: `{groupId, name}`)                |
-| `/api/mux/tabs/{id}/select` | POST   | Chuyển tab (với Herdr là chuyển pane đang nhận luồng) |
+| `/api/mux/tabs/{id}/select` | POST   | Chuyển tab (tmux; Herdr và Zellij chọn phía client và trả 501) |
 | `/api/mux/tabs/{id}`        | PATCH  | Đổi tên tab (nội dung gửi: `{name, key}`; `key` của tab khiến id đã cũ bị từ chối với 409) |
 | `/api/mux/tabs/{id}?key=`   | DELETE | Xóa tab (cùng kiểm tra `key`)                    |
 | `/api/mux/tabs/{id}/move`   | POST   | Di chuyển tab trong group (nội dung `{index}`; trả về `id` mới) |
 | `/api/mux/groups/{id}/move` | POST   | Di chuyển workspace Herdr (nội dung `{index}`)   |
-| `/api/mux/panes/{id}`       | DELETE | Đóng một pane (chỉ Herdr, backend khác trả 501)  |
+| `/api/mux/panes/{id}`       | DELETE | Đóng một pane (Herdr và Zellij, backend khác trả 501) |
 | `/api/mux/groups`           | POST   | Tạo group (nội dung `{name, cwd}`)               |
 | `/api/mux/groups/{id}`      | PATCH  | Đổi tên group (nội dung `{name}`)                |
 | `/api/mux/groups/{id}`      | DELETE | Đóng group cùng mọi thứ đang chạy trong đó       |
