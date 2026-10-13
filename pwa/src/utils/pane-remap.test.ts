@@ -6,6 +6,7 @@ import {
   paneKeys,
   remapEntries,
   remapPanes,
+  renameGroupKeys,
   shiftedIds,
 } from './pane-remap'
 
@@ -55,6 +56,56 @@ describe('shiftedIds', () => {
       ['1', '2'],
       ['2', '1'],
     ])
+  })
+})
+
+describe('Zellij', () => {
+  it("reused tab ids: a new tab never takes a closed tab's state", () => {
+    // Tab 1 closed, a new tab got its id: its key (its first terminal) differs
+    const s = shiftedIds(
+      keys(['zA:t1', 'zA/terminal_2'], ['zA:p2', 'zA:p2']),
+      keys(['zA:t1', 'zA/terminal_5'], ['zA:p5', 'zA:p5']),
+    )
+    expect(destination(s, 'zA:t1')).toBeNull()
+    expect(destination(s, 'zA:p2')).toBeNull()
+  })
+
+  it('two sessions whose first tabs are both terminal_0 stay apart', () => {
+    const prev = keys(
+      ['zA:t0', 'zA/terminal_0'],
+      ['zA:p0', 'zA:p0'],
+      ['zB:t0', 'zB/terminal_0'],
+      ['zB:p0', 'zB:p0'],
+    )
+    expect(shiftedIds(prev, prev).stale.size).toBe(0)
+  })
+
+  it('a session rename moves every id of that session, by prefix', () => {
+    const prev = keys(
+      ['zA:t0', 'zA/terminal_0'],
+      ['zA:p0', 'zA:p0'],
+      ['zA:p3', 'zA:p3'],
+      ['zAB:t0', 'zAB/terminal_0'],
+      ['zAB:p0', 'zAB:p0'],
+    )
+    const next = keys(
+      ['zN:t0', 'zN/terminal_0'],
+      ['zN:p0', 'zN:p0'],
+      ['zN:p3', 'zN:p3'],
+      ['zAB:t0', 'zAB/terminal_0'],
+      ['zAB:p0', 'zAB:p0'],
+    )
+    // Without the rename the old ids are only gone
+    expect(shiftedIds(prev, next).moved.size).toBe(0)
+    const s = shiftedIds(renameGroupKeys(prev, 'zA', 'zN'), next)
+    expect([...s.moved]).toEqual([
+      ['zA:t0', 'zN:t0'],
+      ['zA:p0', 'zN:p0'],
+      ['zA:p3', 'zN:p3'],
+    ])
+    // A session whose id only starts with the same letters is left alone
+    expect(destination(s, 'zAB:t0')).toBe('zAB:t0')
+    expect(destination(s, 'zAB:p0')).toBe('zAB:p0')
   })
 })
 

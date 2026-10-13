@@ -1,4 +1,4 @@
-# All-in-one: tmux or herdr + termote (serve mode, streams the terminal itself)
+# All-in-one: tmux, herdr or zellij + termote (serve mode, streams the terminal itself)
 # Debian, not Alpine: entrypoint.sh needs bash and locales. Pinned by digest.
 FROM debian:stable-slim@sha256:5bc3287b25407c965a30f38e32603dc253a3869e1b12a21ac09bfc27fd8b13ce
 
@@ -52,6 +52,23 @@ RUN arch="${TARGETARCH:-$(dpkg --print-architecture)}" && \
     echo "$sum  /tmp/herdr" | sha256sum -c - && \
     install -m 755 /tmp/herdr /usr/local/bin/herdr && rm -f /tmp/herdr && \
     herdr --version
+
+# zellij, the third backend (TERMOTE_MUX=zellij): the static (musl) build
+# without the web server, pinned with the checksum of each arch's archive.
+ARG ZELLIJ_VERSION=0.45.1
+ARG ZELLIJ_SHA256_AMD64=d7bda1e18c30a688833ae7627f1d6a253bbba5349a4bc48e4f0ec008aaf75ed1
+ARG ZELLIJ_SHA256_ARM64=7c0725cd433299eaf171d673df3b8e7ceceae1b06f8265ba552ff3b9c3c82ea0
+RUN arch="${TARGETARCH:-$(dpkg --print-architecture)}" && \
+    case "$arch" in \
+      amd64) t=x86_64;  sum=$ZELLIJ_SHA256_AMD64 ;; \
+      arm64) t=aarch64; sum=$ZELLIJ_SHA256_ARM64 ;; \
+      *) echo "zellij: unsupported arch $arch" >&2; exit 1 ;; \
+    esac && \
+    curl -fsSL --retry 3 -o /tmp/zellij.tar.gz "https://github.com/zellij-org/zellij/releases/download/v${ZELLIJ_VERSION}/zellij-no-web-$t-unknown-linux-musl.tar.gz" && \
+    echo "$sum  /tmp/zellij.tar.gz" | sha256sum -c - && \
+    tar -xzf /tmp/zellij.tar.gz -C /tmp zellij && \
+    install -m 755 /tmp/zellij /usr/local/bin/zellij && rm -f /tmp/zellij /tmp/zellij.tar.gz && \
+    zellij --version
 
 # The termote binary, built with the PWA embedded, for the image's arch:
 # server/termote-linux-<arch> (`container up --build` in a checkout, CI, release)

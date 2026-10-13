@@ -86,13 +86,19 @@ func (c *cli) preferredSupervisor() supervisor {
 
 // serviceEnv is the environment the service runs with: the PATH of the shell
 // running `start` (so tmux, Homebrew, nvm and ~/.local/bin are found and
-// every pane inherits them), the herdr socket, the XDG dirs that locate the
-// config and the install (update run from a pane must find it), and the
-// locale tmux needs for UTF-8. Never a TERMOTE_* variable:
-// serve reads its settings from the config file.
+// every pane inherits them), the herdr socket, where zellij keeps its sockets
+// (ZELLIJ_SOCKET_DIR, XDG_RUNTIME_DIR, and on macOS TMPDIR: launchd gives a
+// job another one, so zellij would look elsewhere than the user's shell), the
+// XDG dirs that locate the config and the install (update run from a pane
+// must find it), and the locale tmux needs for UTF-8. Never a TERMOTE_*
+// variable: serve reads its settings from the config file.
 func (c *cli) serviceEnv() map[string]string {
 	env := map[string]string{}
-	for _, k := range []string{"PATH", "HERDR_SOCKET_PATH", "XDG_CONFIG_HOME", "XDG_STATE_HOME", "XDG_DATA_HOME", "LANG", "LC_ALL"} {
+	keys := []string{"PATH", "HERDR_SOCKET_PATH", "ZELLIJ_SOCKET_DIR", "XDG_RUNTIME_DIR", "XDG_CONFIG_HOME", "XDG_STATE_HOME", "XDG_DATA_HOME", "LANG", "LC_ALL"}
+	if c.goos == "darwin" {
+		keys = append(keys, "TMPDIR")
+	}
+	for _, k := range keys {
 		if v := c.getenv(k); v != "" {
 			env[k] = v
 		}

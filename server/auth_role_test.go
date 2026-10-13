@@ -238,13 +238,14 @@ func TestViewSnapshotMakesNothing(t *testing.T) {
 	if !snap.Caps.ViewStream {
 		t.Errorf("caps = %+v, want a view stream", snap.Caps)
 	}
-	// Herdr (client-side select) makes nothing in its snapshot, and its peek
-	// would drop the worktree branches.
+	// A client-side select backend peeks too (Zellij's snapshot makes the
+	// default session); only Herdr's own snapshot runs, its peek would drop
+	// the worktree branches.
 	m.calls = nil
 	m.caps = &Caps{ClientSideSelect: true}
 	h.ServeHTTP(httptest.NewRecorder(), viewRequest("GET", "/api/mux/snapshot", ""))
-	if !slices.Equal(m.calls, []string{"snapshot"}) {
-		t.Errorf("herdr calls = %v", m.calls)
+	if !slices.Equal(m.calls, []string{"peek"}) {
+		t.Errorf("client-side select calls = %v", m.calls)
 	}
 	// A full client still gets the snapshot that makes the default session.
 	m.calls, m.caps = nil, nil

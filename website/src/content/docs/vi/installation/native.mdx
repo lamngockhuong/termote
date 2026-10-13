@@ -12,7 +12,9 @@ nên không phải cài thêm tiến trình terminal nào khác.
 ## Yêu cầu
 
 termote cần một backend terminal: **tmux** (trên Windows là **psmux**) hoặc một server
-**[Herdr](https://herdr.dev/#install)** đang chạy (xem [Backend Herdr](#backend-herdr)); chỉ cần một trong hai.
+**[Herdr](https://herdr.dev/#install)** đang chạy (xem [Backend Herdr](#backend-herdr)); chỉ cần một trong hai. Trên Linux và macOS,
+**[Zellij](https://zellij.dev/documentation/installation)** 0.45.0 trở lên là lựa chọn thứ ba (xem
+[Backend Zellij](#backend-zellij)).
 
 <Tabs>
   <TabItem label="Linux">
@@ -21,6 +23,7 @@ termote cần một backend terminal: **tmux** (trên Windows là **psmux**) ho�
     # tmux
     sudo apt install tmux
     # hoặc dùng Herdr: xem https://herdr.dev/#install
+    # hoặc Zellij 0.45+: xem https://zellij.dev/documentation/installation
     ```
   </TabItem>
   <TabItem label="macOS">
@@ -29,6 +32,7 @@ termote cần một backend terminal: **tmux** (trên Windows là **psmux**) ho�
     # tmux
     brew install tmux
     # hoặc dùng Herdr: xem https://herdr.dev/#install
+    # hoặc Zellij 0.45+: brew install zellij
     ```
   </TabItem>
   <TabItem label="Windows">
@@ -95,7 +99,8 @@ trang [Bắt đầu](/vi/getting-started/).
    thì `herdr.sock` trong thư mục config của Herdr: `$XDG_CONFIG_HOME/herdr` hoặc `~/.config/herdr`; trên Windows
    là `%APPDATA%\herdr`, kết nối tới `\\.\pipe\` cộng đường dẫn đó), tmux (trên Windows là psmux) nếu đã được cài. Khi có cả hai, nó hỏi bạn; nếu không có terminal để
    hỏi, nó chọn tmux và in ra cách đổi. Khi không có cái nào, nó dừng lại và gợi ý cách cài. Lựa chọn được lưu
-   lại và không dò lại nữa, trừ khi bạn truyền `--mux`.
+   lại và không dò lại nữa, trừ khi bạn truyền `--mux`. Zellij không bao giờ được dò: hãy chọn bằng
+   `--mux zellij` hoặc menu (`termote` không kèm lệnh).
 
 2. **Tạo mật khẩu admin** ở lần đầu (hoặc khi có `--fresh`): gõ một mật khẩu, hoặc nhấn Enter để tự sinh. Mật
    khẩu chỉ được in ra một lần; về sau `termote show-password` sẽ hiện lại.
@@ -135,7 +140,7 @@ sẽ khởi động server y như lần trước. Tùy chọn kiểu bật/tắt
 | `--tailscale <host[:port]>` | Công khai qua [Tailscale HTTPS](/vi/installation/tailscale/) (mặc định 443) |
 | `--no-tailscale`            | Ngừng công khai qua Tailscale                                          |
 | `--no-auth[=false]`         | Tắt đăng nhập                                                          |
-| `--mux <tmux\|herdr>`       | Backend terminal (mặc định: dò tìm ở lần đầu)                          |
+| `--mux <tmux\|herdr\|zellij>` | Backend terminal (mặc định: dò tìm ở lần đầu; zellij: Linux, macOS)  |
 | `--allow-host <name>`       | Cho phép thêm một tên trong header `Host` (lặp được, không có ký tự đại diện) |
 | `--remove-host <name>`      | Bỏ một tên đã cho phép (lặp được)                                      |
 | `--allow-local-user <name>` | Cho một OS user khác trên máy này kết nối, ví dụ proxy đứng trước      |
@@ -201,6 +206,36 @@ termote start --mux herdr
   - `--mux herdr --no-auth` bị từ chối nếu không kèm `--allow-herdr-no-auth`. Herdr để lộ mọi
   workspace trên máy chứ không riêng pane mà PWA đang hiện, nên muốn chạy không mật khẩu thì
   phải chủ động bật tùy chọn này.
+</Aside>
+
+## Backend Zellij
+
+Linux và macOS có thể điều khiển các phiên [Zellij](https://zellij.dev/documentation/installation) của bạn thay
+cho tmux. Cần Zellij 0.45.0 trở lên (đã thử với 0.45.1); `start` kiểm tra `zellij` có trong PATH và phiên bản của
+nó. Zellij không bao giờ được chọn tự động:
+
+```bash
+termote start --mux zellij
+```
+
+Một nhóm là một phiên Zellij, một tab là một tab Zellij và một pane là một pane terminal (pane plugin không hiện).
+Mọi phiên đang chạy của bạn đều được liệt kê, giống tmux. `start` chuyển `ZELLIJ_SOCKET_DIR`, `XDG_RUNTIME_DIR`
+và, trên macOS, `TMPDIR` từ shell của bạn sang service, để service thấy đúng các phiên mà shell đó thấy; hãy chạy
+`termote start` từ shell có các phiên bạn muốn dùng.
+
+<Aside type="caution" title="Zellij hoạt động khác tmux">
+  - Terminal là một client Zellij thật: Zellij vẽ thanh tab và thanh trạng thái của nó, và một tab lấy kích
+  thước của client nhỏ nhất đang xem nó.
+  - Chọn tab trên PWA **không** làm client Zellij của bạn di chuyển; mỗi thiết bị tự chọn tab của mình.
+  - Client của Termote ở chế độ locked của Zellij, nên các phím Ctrl trên thanh công cụ (Ctrl B, P, N, T, O, Q...)
+  tới được pane. Các phím tắt chế độ locked của riêng bạn vẫn có tác dụng (Ctrl g của cấu hình mặc định mở khóa).
+  - Không có cuộn phía server: con lăn chuột cuộn qua chính Zellij, cho mọi client đang xem pane đó. Select
+  text vẫn hiện lịch sử của pane.
+  - Tab mới cần một client đang gắn vào phiên (một terminal, hoặc Termote đang hiện nó); nếu không bạn sẽ thấy
+  "open this Zellij session in a terminal (or in Termote) before adding a tab".
+  - Đóng một phiên từ Termote sẽ xóa nó: Zellij không thể khôi phục lại.
+  - Trên Windows, `--mux zellij` ở chế độ native bị từ chối; hãy dùng `termote container up --mux zellij`, xem
+  [Cài đặt Container](/vi/installation/docker/#backend-terminal).
 </Aside>
 
 ## Quản lý server
@@ -296,6 +331,9 @@ termote logs server     # last server log lines
 | ---------------------------------------- | ------------------------------------------------------------------------------------------- |
 | `termote: command not found`             | Mở terminal mới, hoặc thêm `~/.local/bin` vào PATH như trình cài đặt đã in ra                |
 | Không tìm thấy backend terminal          | Cài tmux (Windows: `winget install psmux`) hoặc khởi động Herdr, rồi chạy `termote start`    |
+| `zellij not found` / `is too old`        | Cài Zellij 0.45.0 trở lên, rồi chạy `termote start --mux zellij`                             |
+| Thiếu phiên Zellij                       | Chạy `termote start` từ shell thấy các phiên đó (`zellij list-sessions`); phiên EXITED không được liệt kê |
+| `zellij_version_mismatch` sau khi nâng cấp | Khởi động lại các phiên Zellij của bản cũ (hoặc Termote)                                   |
 | Cổng đang bị dùng                        | `start` báo tên cổng; dừng chương trình kia hoặc chọn `termote start --port <port>`         |
 | Host bị từ chối (403)                    | Chạy lệnh `termote start --allow-host <name>` mà thông báo lỗi ghi                           |
 | Proxy không nhận được phản hồi           | Log có dòng `local-user-refused`: chạy lệnh `termote start --allow-local-user <name>` mà log ghi |

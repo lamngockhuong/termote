@@ -1,0 +1,5 @@
+{"event":"pane_update","is_initial":true,"pane_id":"terminal_3","scrollback":null,"viewport":["first","row 2"]}
+not json
+{"event":"something_else"}
+{"event":"pane_update","is_initial":false,"pane_id":"terminal_3","scrollback":null,"viewport":["second","r2","r3","r4","r5"]}
+{"event":"pane_closed","pane_id":"terminal_3"}

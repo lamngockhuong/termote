@@ -27,10 +27,11 @@
                          │
                          ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│              Mux backend (tmux/psmux, or Herdr)                 │
+│              Mux backend (tmux/psmux, Herdr or Zellij)          │
 │  termote opens the terminal itself: a PTY on Unix, ConPTY on     │
 │  Windows, attached to `tmux attach` (or, with Herdr, an          │
-│  `observe`/`pane.send_text` session over Herdr's socket)         │
+│  `observe`/`pane.send_text` session over Herdr's socket, or,    │
+│  with Zellij, a `zellij attach` client of Termote's own)        │
 └────────────────────────┬────────────────────────────────────────┘
                          ▼
 ┌─────────────────────────────────────────────────────────────────┐
@@ -53,10 +54,10 @@ React SPA with:
 
 - **Terminal View**: xterm.js terminal fed directly by the `/api/mux/stream` WebSocket, in-place theme switching (no reload)
 - **Hammer.js**: Touch gesture recognition (mobile only)
-- **Session Sidebar**: Switch between groups (tmux sessions, or Herdr workspaces), add/edit/remove (collapsible on desktop)
+- **Session Sidebar**: Switch between groups (tmux sessions, Herdr workspaces or Zellij sessions), add/edit/remove (collapsible on desktop)
 - **Session Tabs**: Browser-like tabs in the header row for tab switching (hidden/shown via setting), add/remove via UI
 - **Session Chip** (mobile): Header chip that opens the sessions list as a bottom sheet; there is no bottom navigation
-- **Pane Strip**: Second-level switcher shown only when a tab has more than one pane (Herdr split panes)
+- **Pane Strip**: Second-level switcher shown only when a tab has more than one pane (Herdr and Zellij split panes)
 - **Agent Status Badge**: Per-pane coding-agent status (idle/working/blocked/done) shown next to the pane, only ever set by the Herdr backend
 - **Keyboard Toolbar**: Virtual keys, Ctrl combos, scroll controls (respects default expanded setting)
 - **More Menu**: Font size (mobile), theme (light/dark/system), Settings, Help & gestures, About, Copy link, Clear cache & reload
@@ -99,7 +100,7 @@ nothing it opens inherits one. Only without a saved config (the container image,
 | `TERMOTE_USER`                | `admin`      | HTTP basic auth username                                                                                                                       |
 | `TERMOTE_PASS`                | (empty)      | HTTP basic auth password                                                                                                                       |
 | `TERMOTE_NO_AUTH`             | `false`      | Disable basic auth                                                                                                                             |
-| `TERMOTE_MUX`                 | `tmux`       | Backend: `tmux` or `herdr`; in the image, also picks what starts                                                                               |
+| `TERMOTE_MUX`                 | `tmux`       | Backend: `tmux`, `herdr` or `zellij`; in the image, also picks what starts                                                                     |
 | `TERMOTE_ALLOWED_HOSTS`       | (empty)      | Extra `Host` header values allowed, comma-separated; loopback is always allowed                                                                |
 | `TERMOTE_HERDR_ALLOW_NO_AUTH` | `false`      | Required together with `TERMOTE_MUX=herdr` and `TERMOTE_NO_AUTH=true`                                                                          |
 | `TERMOTE_WORKSPACE_HOME`      | (empty)      | The host home dir's place in `/workspace` (`.`: the workspace) when the workspace holds it: view-only Files refuse it (`container up` sets it) |
@@ -111,7 +112,7 @@ For a native install, `termote start` computes the equivalent of `TERMOTE_ALLOWE
 ### Mux Backend
 
 `server/mux.go` defines a `Mux` interface (snapshot, select/new/rename/close tab, send-keys,
-attach a terminal, health) with two implementations:
+attach a terminal, health) with three implementations:
 
 - **`mux_tmux.go`** (tmux on Unix, psmux on Windows): every session on the tmux server is a
   group (sessions made outside Termote too), a window is a tab, and a tab shows its window's
@@ -147,6 +148,41 @@ attach a terminal, health) with two implementations:
   `KILL_ON_JOB_CLOSE` Job Object on Windows, so it dies with the server as a ConPTY terminal
   does). On macOS a `control` left behind by a server killed with `kill -9` keeps the pane at
   the client's size until the next `termote serve` reaps it.
+- **`mux_zellij.go`** (`TERMOTE_MUX=zellij`, Linux and macOS, or the container; Zellij 0.45.0 or
+  later, tested with 0.45.1; never auto-detected): a Zellij session is a group, a Zellij tab is a
+  tab, a terminal pane is a pane (plugin panes are not shown). Every running session of the user
+  is listed, as with tmux; sessions kept only for resurrection (EXITED) are not, and a name that
+  starts with `-` or is `help`/`options` is left out (logged once). Ids derive from the session
+  name, so a rename outside Termote changes them (the PWA's selection falls back to another tab);
+  a rename from Termote keeps the selection and drafts. The default session `main` is created when
+  none runs (only by a full client, never by `peekSnapshot`), cannot be renamed, and closing it
+  deletes it (the next load recreates it empty); closing any session from Termote deletes it, with
+  no resurrection entry. Tabs can be reordered (`move-tab`, one step at a time); sessions cannot
+  (501). Zellij lays out a new tab only with a client attached (upstream issue #5594), so a new
+  tab in a session with no terminal and no Termote stream on it is 409 `no_client`. Selecting a
+  tab is client-side, as on Herdr. `mux_zellij_cmd.go` runs the `zellij` CLI (ids, name checks,
+  version, socket dir: `ZELLIJ_SOCKET_DIR`, else `$XDG_RUNTIME_DIR/zellij` on Linux, else
+  `$TMPDIR/zellij-<uid>`); while sessions of another Zellij contract version run, creating a
+  session is 503 `zellij_version_mismatch`. `zellij_client.go` holds Termote's own clients: a full
+  stream is a `zellij attach` client in a PTY (Zellij draws its tab and status bars; a tab takes the
+  size of the smallest client viewing it). A new client lands on another client's tab, so it is
+  placed under a per-session slot by a keystroke bound to nothing (it becomes the client CLI
+  actions act on), `focus-pane-id`, and a check that every other client stayed put; a user typing
+  at that moment who got moved is moved back and the placement retried (503 `busy` after
+  repeated tries; the PWA reconnects). The client is then switched to locked mode, so Zellij's
+  mode keys do not act and the toolbar's Ctrl combos reach the pane (the user's own locked-mode
+  bindings, such as the default Ctrl g, still do). A stream whose client leaves its pane (a click
+  on another pane or tab inside it) is closed, and the PWA reopens it on its pane. Typed keys and
+  Chat messages reach a pane only through such a client's PTY (the stream's, else a hidden one
+  kept about 5 s), never through argv. `zellij_view.go` is the view-only stream (`zellij
+  subscribe` on one pane: screen renders, no input). `mux_zellij_agent.go` finds the Chat view's
+  agent and the Files root; `zellij_pane_pid*.go` finds a pane's shell only among the children of
+  the process listening on the session's socket, by an exact `ZELLIJ_PANE_ID` (anything ambiguous:
+  no Chat view). On macOS `lsof` names the socket by the path it was bound to, so a session
+  renamed after it started has no Chat view until restarted; Linux follows a rename. At start
+  `serve` warns in the log about a running Zellij server whose environment holds a `TERMOTE_*`
+  variable (its panes inherit it; Zellij cannot unset it), and every process it starts drops
+  `ZELLIJ`, `ZELLIJ_SESSION_NAME` and `ZELLIJ_PANE_ID` (keeping `ZELLIJ_SOCKET_DIR`).
 
 **Foreground process** (`server/mux_process.go`): each pane of the snapshot carries
 `process: {name, cwd?}` when the backend can tell, and a tmux tab also carries `processes` for
@@ -167,7 +203,8 @@ through a cache apart from the snapshot cache: a name is fresh for 5 s, one refr
 time, 4 calls at once within 1.5 s (not cut short when the request that started it leaves), a
 name whose reads have failed for 15 s is dropped, and an `invalid_request` (a Herdr without the
 method; a closed pane answers `pane_not_found`) stops the calls, and serving names, for 5
-minutes. The cwd comes from the pane's `foreground_cwd` in `session.snapshot`.
+minutes. The cwd comes from the pane's `foreground_cwd` in `session.snapshot`. Zellij fills it
+from its pane list (the command's first word and the pane's cwd).
 The snapshot route refuses cross-site reads (`crossSiteRejection`), as the other pane reads do.
 The PWA shows the names in the sessions list and the pane strip, and the close confirmations
 add "Running: …"; the cwd is not shown.
@@ -214,7 +251,7 @@ DELETE /api/mux/tabs/{id}?key=                                  → {ok} | 409 c
 POST   /api/mux/tabs/{id}/select                                 → {ok}
 POST   /api/mux/tabs/{id}/move     body: {index}               → {ok, id} | {error, code}   (caps.reorderTabs)
 POST   /api/mux/groups/{id}/move   body: {index}               → {ok, id} | {error, code}   (caps.reorderGroups)
-DELETE /api/mux/panes/{id}                                      → {ok}   (herdr only, else 501)
+DELETE /api/mux/panes/{id}                                      → {ok}   (herdr, zellij; else 501)
 POST   /api/mux/groups             body: {name, cwd}            → {ok, id} | {error, code}   (caps.groups)
 PATCH  /api/mux/groups/{id}        body: {name}                 → {ok} | {error, code}
 DELETE /api/mux/groups/{id}                                     → {ok} | {error, code}
@@ -344,6 +381,8 @@ into the backend's call:
   one `move-window -b -t <window at index>` moving up, `-a` moving down, with `-d` only when the
   window is not the current one, so the current window stays current. tmux has no session order:
   the group route answers 501 `unsupported`.
+- Zellij (`caps.reorderTabs`): `move-tab` one step at a time, the position read again after each;
+  the tab keeps its id. Sessions have no order: the group route answers 501 `unsupported`.
 
 A tmux tab id is a window index, and tmux shifts every window from the target to the first free
 index: the moved window and that run get new ids, and the route answers the moved tab's new
@@ -374,7 +413,10 @@ An agent that leaves no history in Herdr (Claude Code in fullscreen mode draws o
 screen) gets SGR wheel reports instead, one per row and at most 50 per call; returning to the
 live screen sends Claude Code's Ctrl+End. A pane without an agent is never sent wheel reports.
 
-`caps.paneText` (tmux, not psmux; Herdr): `GET /text` returns the pane's plain text, `lines`
+Zellij has no `caps.scroll`: a Zellij pane's viewport is shared by every client, so the mouse
+wheel in the full stream scrolls through Zellij itself, for every client viewing that pane.
+
+`caps.paneText` (tmux, not psmux; Herdr; Zellij `dump-screen --full`): `GET /text` returns the pane's plain text, `lines`
 (1–5000, default 1000; else 400 `invalid_lines`) rows of history and the screen, wrapped rows
 joined (tmux `capture-pane -p -J -S -N` on the exact window target, Herdr `pane.read` with
 `source: recent_unwrapped`, `format: text`; an older Herdr's `invalid_request` → 501). A same-site
@@ -409,8 +451,8 @@ Claude Code's custom commands and skills, or Codex's skills (see Custom commands
 `herdr integration install claude` must have been run). Herdr does not expose the pane's
 process, so there is no start-time check, and the transcript is looked up in the config dir of
 a Claude Code started by the server's user (the server's own `CLAUDE_CONFIG_DIR`, else
-`~/.claude`). On tmux and psmux the server walks the
-process tree under the pane's shell (at most 6 levels, 256 processes) and takes the first
+`~/.claude`). On tmux, psmux and Zellij (whose pane shell is found as in Mux Backend) the
+server walks the process tree under the pane's shell (at most 6 levels, 256 processes) and takes the first
 process with a session file `<claudeDir>/sessions/<pid>.json` in its **own** Claude config dir
 (`CLAUDE_CONFIG_DIR`, else `~/.claude`, read from `/proc/<pid>/environ` on Linux) whose
 `procStart` matches the process's real start time, and on Linux whose `pidDomain` matches this
@@ -698,7 +740,8 @@ the PWA's `readOnly` mode already hides the composer and the answer buttons.
 
 The PWA's Files and Changes views read a pane's directory, offered when the snapshot reports
 `caps.files`: tmux on Linux and macOS (`#{pane_current_path}` of the window's active pane) and
-Herdr (`foreground_cwd`, else `cwd`, of the pane; a Herdr that reports neither answers 501).
+Herdr (`foreground_cwd`, else `cwd`, of the pane; a Herdr that reports neither answers 501) and
+Zellij on Linux and macOS (the pane's cwd as Zellij lists it).
 psmux does not report the directory, so `caps.files` is off on Windows tmux. Every route is
 registered for every backend and answers 501 where it is off. Seven are read-only GETs (`find` and `download`
 included); `PUT files/content` saves a text file, `POST files/create` creates an empty one and
@@ -1117,7 +1160,8 @@ The code is `server/auth_role.go` (roles, the default refusal), `server/device_s
 - **View-only**: `basicAuth` refuses every write method with 403 `view_only` before any handler
   (except logout); handlers repeat the check with `requireWriteRole`. Reads that change state have
   a view branch: the snapshot does not recreate sessions, a tmux stream attaches read-only to the
-  active window (tmux 3.2+; older tmux and psmux: 501), a Herdr stream is `observe` only, and every
+  active window (tmux 3.2+; older tmux and psmux: 501), a Herdr stream is `observe` only, a Zellij stream is `zellij subscribe`
+  on one pane (read-only by construction, no history scrolling), and every
   input frame, resize and `drive` is dropped. Files only in a git repo that is neither the server
   user's home dir nor above it (nor the container's `/workspace` when it holds the host home), and
   only the paths `git ls-files -co --exclude-standard` lists (Find's 30 s cache), anything else 404;
@@ -1137,7 +1181,7 @@ The code is `server/auth_role.go` (roles, the default refusal), `server/device_s
 termote container up
 ```
 
-Single container with termote + tmux or Herdr (no ttyd).
+Single container with termote + tmux, Herdr or Zellij (no ttyd).
 Uses `Dockerfile` (`debian:stable-slim`, pinned by digest, `tini -s` as PID 1) and `entrypoint.sh`.
 Runs `ghcr.io/lamngockhuong/termote:<version>` (from 1.10.0 by the digest in the release's
 signed `image-digest.txt`) with podman (preferred) or docker; from a git
@@ -1153,6 +1197,11 @@ the world-writable `/tmp`). A server that does not answer within 10s
 stops the container. The Herdr binary is pinned by version and sha256 per arch in the
 `Dockerfile`. This Herdr sees only the container's terminals.
 
+`container up --mux zellij` sets `TERMOTE_MUX=zellij`: `entrypoint.sh` uses
+`ZELLIJ_SOCKET_DIR=/tmp/zellij`, writes the container's own Zellij config when none exists (no setup
+wizard, tips or release notes) and starts the session `main`. The image ships Zellij 0.45.1, the
+static build without Zellij's web server, pinned by version and sha256 per arch.
+
 The container runs as the host uid, which cannot create directories in the root-owned
 `/home/termote`; the image creates `/home/termote/.cache` mode 1777 (sticky, like `/tmp`) so
 `termote serve` can create its upload dir `~/.cache/termote/uploads` (0700, its own). The
@@ -1165,15 +1214,19 @@ is 1777 too, so a password the entrypoint generates (no `TERMOTE_PASS`) goes to
 ```bash
 termote start
 termote start --mux herdr   # Herdr backend instead of tmux
+termote start --mux zellij  # Zellij backend (Linux, macOS)
 ```
 
 All services run natively (no container): termote on port 7680 (7690 on Windows) serving the
 PWA, the terminal stream and the API. `start` detects the backend the first time (herdr if its
-socket answers, else tmux), registers the server with the OS supervisor (systemd user unit,
+socket answers, else tmux; Zellij only with `--mux zellij` or the menu, after checking `zellij` is
+on `PATH` and 0.45.0 or later), registers the server with the OS supervisor (systemd user unit,
 launchd agent, or a Windows Scheduled Task) and starts it.
 
 Auto-detects OS via `runtime.GOOS`. Works on macOS, Linux and Windows (with psmux instead of tmux,
-or Herdr on every OS).
+or Herdr on every OS; Zellij on Linux and macOS, native `--mux zellij` is refused on Windows
+before anything is saved). `start` passes `ZELLIJ_SOCKET_DIR`, `XDG_RUNTIME_DIR` and, on macOS,
+`TMPDIR` from its shell to the service, so it sees the same Zellij sessions as that shell.
 
 ### With Tailscale
 
@@ -1266,7 +1319,10 @@ termote update --force           # Force reinstall current version
    given, since Herdr exposes every workspace on the host, not just this session's pane. tmux
    likewise lists every session on its server, the user's own included (accepted): ids and
    targets are exact (`$N`, `=name`), so no request reaches a session by a prefix of its name
-8. **Session**: tmux isolates terminal processes; Herdr sessions are isolated by Herdr itself
+8. **Session**: tmux isolates terminal processes; Herdr sessions are isolated by Herdr itself.
+   Zellij, like tmux, exposes every running session of the user and has no extra `--no-auth`
+   guard; keys and Chat messages reach a Zellij pane only through a Termote client's PTY, never
+   argv, which other local users could read
 9. **Rate limiting**: 5 failed basic-auth attempts/min per IP, and 20/min per IPv6 /64 → 429
    (expired entries swept at most every 10s, so many source addresses cannot make each failure
    scan the whole table);

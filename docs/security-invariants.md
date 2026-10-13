@@ -42,6 +42,55 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   tab and line breaks removed, since xterm brackets a paste without removing a marker inside it
 - **Herdr guard**: `--mux herdr --no-auth` is refused unless `--allow-herdr-no-auth` is also
   given, since Herdr exposes every workspace on the host
+- **Zellij sessions** (`server/mux_zellij*.go`, `server/zellij_*.go`; Zellij 0.45 or later,
+  `newMux` and `start` check it; Linux and macOS natively, refused on Windows by `start`/`restart`
+  and `newMux`, never by the shared `validateMux`, so `container up --mux zellij` works on any
+  host): every running session of the server's user is a group (as tmux; no extra no-auth guard).
+  Every `zellij` call is argv only, never a shell; a positional value goes after `--` (`attach`
+  takes none: there `--` starts a command, so a session name is passed only when
+  `zellijPassableName` holds: no leading `-`, not `help`/`options` in any case, no control or
+  format character); names Termote creates or renames also refuse `/`, a trailing `;` and a
+  length past sun_path (108 Linux, 104 macOS) less the socket dir (400 `invalid_name`); tab names
+  refuse control and format characters (Zellij stores them verbatim). Ids: group `z` +
+  base64url(name), tab `<gid>:t<id>`, pane `<gid>:p<N>` (`terminal_N`), `Tab.key`
+  `<gid>/terminal_<first N seen>`, kept while the tab id lives (Zellij reuses tab ids). Zellij
+  0.45 gives a CLI call the lowest free client id and removes it twice when the call exits, so
+  a call or client connecting in between is dropped: every call holds `zellijGate`'s read side,
+  a client attaching holds the write side from 150 ms before it starts until it has drawn 1 KiB,
+  and Termote's actions on one session run one at a time (two at once can swap outputs);
+  listings are retried (empty, failed, or not the listing's shape: tabs need `tab_id`/`position`,
+  panes `id`/`is_plugin`/`tab_id`) and never answered empty; `Capture` (the screen an agent write
+  is checked against) is read twice and must match;
+  repeatable actions are retried (`zellijRepeat`), others checked by listing (new tab, move,
+  rename and delete session). Typed keys, pastes and Chat messages go only through a Termote
+  client's PTY (the stream's, else a hidden one kept 5 s), never argv (`write-chars`, `paste`,
+  `send-keys`, `write` are never run, a test checks). A client is placed on its pane (Zellij has
+  no per-client CLI target; an action runs as the client that last sent a key): under the
+  session's slot, the kitty key Ctrl+Alt+Shift+Pause (`ESC[57362;8u`, unbound, written to no pane
+  outside kitty keyboard mode) into its PTY, then `focus-pane-id`; every other client is
+  checked on every try, success included, and one moved by a user's key in that window is moved
+  back and the try repeated (5, then 503 `busy`); then the no-op key again and at once
+  `switch-mode locked` (only that client: the PWA's Ctrl combos reach the pane; the user's own
+  locked-mode bindings still act). Dropped clients, empty listings and a session gone mid-write
+  answer 503 `busy`. A stream whose client left its pane is
+  closed at the next snapshot. The view role runs `subscribe --pane-id terminal_N --ansi -f json`
+  (lines ≤ 1 MiB, rows ≤ 64 KiB, size from `list-panes` sent before renders at it; decoding that
+  stops early kills it, an exit without `pane_closed` is code -1), never a
+  client, and a view-only client's snapshot only peeks (`main` is made only for a full one).
+  `SelectTab` and `MoveGroup` are `errUnsupported`, `Caps.Scroll` false (the viewport is shared
+  by every client). New tabs need an attached client (409 `no_client`, upstream #5594); sessions
+  of another `contract_version_*` running → 503 `zellij_version_mismatch` before creating.
+  Closing a session runs `delete-session --force` (no resurrection entry). Children lose
+  `ZELLIJ`, `ZELLIJ_SESSION_NAME`, `ZELLIJ_PANE_ID` (`terminalEnv`); `ZELLIJ_SOCKET_DIR` stays,
+  and `serviceEnv` passes it with `XDG_RUNTIME_DIR` (and `TMPDIR` on macOS). A `TERMOTE_*`
+  variable in a Zellij server's environment is logged at start (it cannot be unset). The Chat
+  view finds a pane's shell only among the children of the one same-uid `zellij --server`
+  holding the session socket (Linux: `sock_diag` `UNIX_DIAG_VFS` matches the socket file's
+  inode, so a rename keeps it; macOS: `lsof -U` by the bound path, so a renamed session is not
+  found) with exactly one `ZELLIJ_PANE_ID=<N>`, failing closed; the pane command is cut to its
+  first word. The reaper matches only `zellij attach <name> options --show-startup-tips false
+  --show-release-notes false` and the exact `subscribe` argv. New sessions get their floating
+  plugin panes (setup wizard, release notes, tips) closed for 1.2 s after `attach -b`
 - **Pane processes** (`server/mux_process.go`): the snapshot carries each pane's foreground
   process `{name, cwd}`; tmux tabs also carry every pane's in `processes` (the snapshot holds
   only the window's active pane). The name is the first word of what the OS reports (cut at

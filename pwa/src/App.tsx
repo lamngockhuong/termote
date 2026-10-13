@@ -109,6 +109,7 @@ import {
   UPLOAD_TIMEOUT_MS,
   uploadErrorMessage,
 } from './utils/upload-image'
+import { ZELLIJ_DEFAULT_GROUP_ID } from './utils/zellij-group'
 
 // Check if paste result should show an error toast
 const shouldShowPasteError = (
@@ -329,11 +330,18 @@ export default function App({
     setPendingPaneId(null)
   }, [pendingPaneId, removePane])
   const isHerdr = mux.backend === 'herdr'
-  // Groups (tmux sessions, Herdr workspaces) made, renamed and closed here.
-  // tmux's default session (its id is its name; the others are "$N") cannot
-  // be renamed, and closing it starts a new, empty one at once.
-  const groupNoun = isHerdr ? 'workspace' : 'tmux session'
-  const isDefaultTmuxGroup = (id: string) => !isHerdr && !id.startsWith('$')
+  const isZellij = mux.backend === 'zellij'
+  // Groups (tmux and Zellij sessions, Herdr workspaces) made, renamed and
+  // closed here. The default session (tmux: its id is its name, the others
+  // are "$N"; Zellij: the one named "main") cannot be renamed, and closing
+  // it starts a new, empty one at once.
+  const groupNoun = isHerdr
+    ? 'workspace'
+    : isZellij
+      ? 'Zellij session'
+      : 'tmux session'
+  const isDefaultGroup = (id: string) =>
+    isZellij ? id === ZELLIJ_DEFAULT_GROUP_ID : !isHerdr && !id.startsWith('$')
   const [newGroupOpen, setNewGroupOpen] = useState(false)
   const [pendingGroupCloseId, setPendingGroupCloseId] = useState<string | null>(
     null,
@@ -386,7 +394,7 @@ export default function App({
           onNew: () => setNewGroupOpen(true),
           onRename: renameGroup,
           onClose: setPendingGroupCloseId,
-          canRename: (id) => !isDefaultTmuxGroup(id),
+          canRename: (id) => !isDefaultGroup(id),
           ...worktreeActions,
         }
       : undefined
@@ -691,6 +699,10 @@ export default function App({
   // scrolls by pages (keys), so a swipe there scrolls one page.
   const dragsHistory = !(copyModeSupported && !readOnly)
 
+  // The pane keeps the backend's size: Herdr, and Zellij's view-only stream
+  // (screen renders, like Herdr's).
+  const fixedSize = isHerdr || (isZellij && readOnly)
+
   // Swipes and long press send input; while view-only only scrolling and
   // zooming remain.
   const gestureHandlers = useMemo(
@@ -698,17 +710,17 @@ export default function App({
       // A herdr pane wider than the screen is dragged sideways instead; it
       // also keeps a stray swipe from interrupting an agent with Ctrl+C.
       onSwipeLeft: () => {
-        if (isHerdr && overflowsHorizontally(getTerminal())) return
+        if (fixedSize && overflowsHorizontally(getTerminal())) return
         if (!readOnly) sendKeyToTerminal(getTerminal(), 'c', { ctrl: true })
       },
       onSwipeRight: () => {
-        if (isHerdr && overflowsHorizontally(getTerminal())) return
+        if (fixedSize && overflowsHorizontally(getTerminal())) return
         if (!readOnly) sendKeyToTerminal(getTerminal(), 'Tab')
       },
       // A zoomed herdr pane larger than the screen moves with the finger,
       // then the history does.
       onPan: (dx: number, dy: number) =>
-        dragTerminal(getTerminal(), isHerdr ? dx : 0, dy, dragsHistory),
+        dragTerminal(getTerminal(), fixedSize ? dx : 0, dy, dragsHistory),
       onSwipeUp: () => {
         if (!dragsHistory) handleScroll('down')
       },
@@ -725,7 +737,7 @@ export default function App({
       decrease,
       dragsHistory,
       increase,
-      isHerdr,
+      fixedSize,
       getTerminal,
       handleScroll,
       readOnly,
@@ -948,13 +960,30 @@ export default function App({
     })
   }
 
+  // A refusal the user can act on (Zellij: no client attached to the
+  // session) is told in a toast; resolves to whether the tab was asked for.
+  const addTab = useCallback(
+    async (...args: Parameters<typeof addSession>) => {
+      try {
+        await addSession(...args)
+        return true
+      } catch (err) {
+        showToast(
+          err instanceof RequestError ? err.message : 'Could not add a tab',
+          'warning',
+        )
+        return false
+      }
+    },
+    [addSession, showToast],
+  )
+
   const handleMobileAdd = async (
     name: string,
     icon?: string,
     description?: string,
   ) => {
-    await addSession(name, icon, description)
-    setSidebarOpen(false)
+    if (await addTab(name, icon, description)) setSidebarOpen(false)
   }
 
   // Deep link: opened once the first snapshot is in, and again on each
@@ -1102,7 +1131,7 @@ export default function App({
             groups={groups}
             activeId={activeSession.id}
             onSelect={selectSession}
-            onAdd={readOnly ? undefined : addSession}
+            onAdd={readOnly ? undefined : addTab}
             onRemove={readOnly ? undefined : requestRemove}
             onUpdate={readOnly ? undefined : updateSession}
             isCollapsed={sidebarCollapsed}
@@ -1147,7 +1176,7 @@ export default function App({
             showSessionTabs={settings.showSessionTabs}
             canRemoveTab={!readOnly && sessions.length > 1}
             onSelectTab={selectSession}
-            onAddTab={readOnly ? undefined : () => addSession('New')}
+            onAddTab={readOnly ? undefined : () => addTab('New')}
             onRemoveTab={requestRemove}
             connectionState={connectionState}
             onRetry={() => terminalRef.current?.reconnect()}
@@ -1261,7 +1290,7 @@ export default function App({
                     // the pane (Herdr scrolls it for every client)
                     serverScroll={!!mux.caps.scroll && !readOnly}
                     bracketedPaste={
-                      mux.backend === 'herdr' && !!activeSession.hasAgent
+                      (isHerdr || isZellij) && !!activeSession.hasAgent
                     }
                     fontSize={fontSize}
                     fontFamily={settings.terminalFont}
@@ -1428,7 +1457,10 @@ export default function App({
           </span>
           ? Its {pendingGroupTabs} {pendingGroupTabs === 1 ? 'tab' : 'tabs'} and
           everything running in them will end.
-          {pendingGroupClose && isDefaultTmuxGroup(pendingGroupClose.id) && (
+          {pendingGroupClose && isZellij && (
+            <> The session is deleted: Zellij cannot resurrect it.</>
+          )}
+          {pendingGroupClose && isDefaultGroup(pendingGroupClose.id) && (
             <>
               {' '}
               Termote starts a new, empty "{pendingGroupClose.name}" right away,

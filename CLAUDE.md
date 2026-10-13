@@ -16,7 +16,7 @@ A PWA for remotely controlling CLI tools (Claude Code, GitHub Copilot, any termi
 | PWA             | vite-plugin-pwa + Workbox                                                |
 | Terminal        | xterm.js over WebSocket (termote streams the PTY/ConPTY itself, no ttyd) |
 | Server          | Go (termote serve mode)                                                  |
-| Sessions        | tmux/psmux, or Herdr workspaces (native or in the container)             |
+| Sessions        | tmux/psmux, Herdr workspaces or Zellij sessions (native or container)    |
 | Package Manager | pnpm                                                                     |
 
 ## Project Structure
@@ -43,10 +43,12 @@ termote start --no-auth                    # native, without auth (local dev onl
 termote start --tailscale host             # native, Tailscale HTTPS
 termote start --fresh                      # native, force a new password
 termote start --mux herdr                  # native, Herdr backend instead of tmux
+termote start --mux zellij                 # native, Zellij backend (Linux, macOS)
 termote start --allow-host box.local       # native, add a Host allowlist entry
 termote container up                       # container mode (podman/docker)
 termote container up --lan --port 7681     # container, LAN + custom port
 termote container up --mux herdr           # container, Herdr inside it instead of tmux
+termote container up --mux zellij          # container, Zellij inside it (any host)
 termote start --user alice                 # native, log in as alice instead of admin
 termote show-password                      # print the saved username and password
 termote link / unlink                      # create/remove the 'termote' global command
@@ -116,8 +118,8 @@ cd server && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o 
 
 termote is the single server in every mode (PWA + terminal stream + API + auth). It opens the terminal itself
 (PTY on Unix, ConPTY on Windows) and streams it to xterm.js over `/api/mux/stream`; there is no ttyd or proxy.
-Default port 7680 (Windows 7690). Mux backend: tmux (psmux on Windows) or Herdr (`--mux herdr`; a named pipe on
-Windows). Container mode auto-detects podman, then docker. Full model, including the Host allowlist, Origin and
+Default port 7680 (Windows 7690). Mux backend: tmux (psmux on Windows), Herdr (`--mux herdr`; a named pipe on
+Windows) or Zellij (`--mux zellij`; Linux and macOS natively, any host in the container). Container mode auto-detects podman, then docker. Full model, including the Host allowlist, Origin and
 stream-token checks: [`docs/system-architecture.md`](docs/system-architecture.md).
 
 ## Code Conventions
@@ -172,7 +174,7 @@ There is no `install` command in 1.0 (it prints the replacement above).
 
 `start` options (saved in the config; a flag not given keeps its saved value; a boolean is
 turned off with `=false`): `--port <port>` (default 7680, Windows 7690), `--lan[=false]`,
-`--tailscale <host[:port]>`, `--no-tailscale`, `--no-auth[=false]`, `--mux <tmux|herdr>`,
+`--tailscale <host[:port]>`, `--no-tailscale`, `--no-auth[=false]`, `--mux <tmux|herdr|zellij>` (zellij refused natively on Windows),
 `--allow-host <name>` (repeatable), `--remove-host <name>` (repeatable),
 `--allow-local-user <name>`/`--remove-local-user <name>` (repeatable; native Linux and Windows),
 `--allow-herdr-no-auth`, `--user <name>` (default `admin`, shared with the container like the

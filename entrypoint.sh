@@ -59,7 +59,7 @@ export TERMOTE_BIND="${TERMOTE_BIND:-0.0.0.0}"
 
 # Start the backend and its shared "main" session every client attaches to
 # (the tmux backend would create it on first use too; doing it here keeps it
-# alive from container start). The tmux or herdr server keeps this
+# alive from container start). The tmux, herdr or zellij server keeps this
 # environment for every shell, so no TERMOTE_* variable (the password above
 # all) goes in; the termote server reads them and removes them from its own env.
 unset_termote=()
@@ -100,8 +100,40 @@ herdr)
             { echo "cannot create the herdr workspace 'main'" >&2; exit 1; }
     fi
     ;;
+zellij)
+    # A short socket dir under /tmp, as for herdr: any uid can write it and
+    # a session's socket path must fit in sun_path. Exported, so termote
+    # serve finds the sessions there.
+    export ZELLIJ_SOCKET_DIR=/tmp/zellij
+    mkdir -p "$ZELLIJ_SOCKET_DIR" && chmod 700 "$ZELLIJ_SOCKET_DIR"
+    # The container's own Zellij config (never the host's): without one,
+    # Zellij opens its setup wizard in the first session; no release notes
+    # or tips either.
+    zellij_config="${XDG_CONFIG_HOME:-$HOME/.config}/zellij/config.kdl"
+    if [[ ! -e "$zellij_config" ]]; then
+        mkdir -p "$(dirname "$zellij_config")"
+        { zellij setup --dump-config && printf 'show_startup_tips false\nshow_release_notes false\n'; } >"$zellij_config"
+    fi
+    zellij_main_live() { zellij list-sessions --no-formatting 2>/dev/null | grep -qE '^main \[Created [^]]*\] *$'; }
+    if ! zellij_main_live; then
+        env "${unset_termote[@]}" zellij attach --create-background main ||
+            { echo "cannot create the zellij session 'main'" >&2; exit 1; }
+    fi
+    up=false
+    for _ in $(seq 1 50); do
+        if zellij_main_live; then
+            up=true
+            break
+        fi
+        sleep 0.2
+    done
+    if [[ "$up" != true ]]; then
+        echo "zellij session 'main' did not start within 10s" >&2
+        exit 1
+    fi
+    ;;
 *)
-    echo "unknown TERMOTE_MUX '$TERMOTE_MUX' (use: tmux, herdr)" >&2
+    echo "unknown TERMOTE_MUX '$TERMOTE_MUX' (use: tmux, herdr, zellij)" >&2
     exit 1
     ;;
 esac

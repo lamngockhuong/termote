@@ -332,8 +332,14 @@ func TestContainerUpMux(t *testing.T) {
 		t.Fatalf("--mux tmux: %d %v", code, cc.runEnv)
 	}
 
-	if code := up("--mux", "zellij"); code != 2 || !strings.Contains(cc.stderr.String(), `unknown --mux "zellij" (use: tmux, herdr)`) {
-		t.Fatalf("--mux zellij: %d %s", code, cc.stderr.String())
+	if code := up("--mux", "screen"); code != 2 || !strings.Contains(cc.stderr.String(), `unknown --mux "screen" (use: tmux, herdr, zellij)`) {
+		t.Fatalf("--mux screen: %d %s", code, cc.stderr.String())
+	}
+	if code := up("--mux", "zellij"); code != 0 || cc.runEnv["TERMOTE_MUX"] != "zellij" || containerMux() != "zellij" {
+		t.Fatalf("--mux zellij: %d %v %s", code, cc.runEnv, cc.stderr.String())
+	}
+	if code := up("--mux", "tmux"); code != 0 {
+		t.Fatalf("back to tmux: %s", cc.stderr.String())
 	}
 	// herdr without auth needs --allow-herdr-no-auth, also when no-auth is saved.
 	if code := up("--mux", "herdr", "--no-auth"); code != 2 || !strings.Contains(cc.stderr.String(), "--allow-herdr-no-auth") || cc.runArgs != nil {

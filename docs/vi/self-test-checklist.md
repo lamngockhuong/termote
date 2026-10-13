@@ -7,6 +7,7 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 - [ ] Đã cài tmux (macOS/Linux)
 - [ ] Đã cài `psmux` (Windows)
 - [ ] Đã cài herdr (chỉ cần khi test backend Herdr, chế độ native; container đã có sẵn herdr)
+- [ ] Đã cài zellij 0.45.0+ (chỉ cần khi test backend Zellij, chế độ native Linux/macOS; container đã có sẵn zellij)
 - [ ] Go 1.26.9+ (để build native; Go cũ hơn tự tải bản này khi `GOTOOLCHAIN` là `auto`)
 - [ ] Node.js 22.22+ hoặc 24.15+ & pnpm (để build PWA)
 - [ ] Docker hoặc Podman (cho container mode)
@@ -80,13 +81,33 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
       hay `terminal session control`
 - [ ] Dừng một stream đang giữ khổ pane thì desktop lấy lại khổ của mình
 
+### Chế Độ Native + Zellij (Linux/macOS)
+
+- [ ] `termote start --mux zellij` hoàn thành không lỗi (có zellij 0.45.0+ trong `PATH`); trên
+      Windows lệnh bị từ chối trước khi lưu bất cứ gì
+- [ ] `curl localhost:7680/api/mux/health` trả về `"backend":"zellij"`
+- [ ] PWA liệt kê đúng các phiên/tab/pane như `zellij list-sessions` và thanh tab của Zellij
+      (không có pane plugin, không có phiên EXITED)
+- [ ] Gõ vào một pane từ PWA thì chữ đến đúng pane đó
+- [ ] Khi có một client Zellij trên desktop đang attach, đổi tab trên điện thoại không làm client
+      desktop di chuyển
+- [ ] Ctrl P trên thanh công cụ gọi lại lịch sử shell (client của Termote ở chế độ locked)
+- [ ] Tạo tab mới trong một phiên đang mở ở terminal (hoặc Termote) thì được; trong phiên không ai
+      mở thì hiện "open this Zellij session in a terminal (or in Termote) before adding a tab"
+- [ ] Đổi tên và đóng một phiên không phải mặc định; không đổi tên được `main`
+- [ ] Select text hiện lịch sử của pane
+- [ ] Files mở đúng thư mục của pane
+- [ ] Chat view chạy với Claude Code trong một pane Zellij
+- [ ] Thiết bị chỉ xem thấy màn hình của pane được vẽ, không gõ được
+
 ### Chế Độ Container
 
 - [ ] `termote container up` hoàn thành không lỗi
 - [ ] Container đang chạy: `docker ps | grep termote` (hoặc `podman ps`)
 - [ ] PWA truy cập được tại <http://localhost:7680>
-- [ ] Lần `container up` đầu tiên không có `--mux`: có terminal thì hỏi tmux/herdr, không có thì dùng tmux
+- [ ] Lần `container up` đầu tiên không có `--mux`: có terminal thì hỏi tmux/herdr/zellij, không có thì dùng tmux
 - [ ] `container up --mux herdr`: PWA hiện workspace `main`; gõ phím, đổi kích thước, tạo/đổi tên/đóng tab đều chạy
+- [ ] `container up --mux zellij`: PWA hiện phiên `main`; gõ phím, tạo/đổi tên/đóng tab đều chạy
 - [ ] `container up` không kèm flag giữ backend đã lưu; `--mux tmux` chuyển lại tmux
 - [ ] `container up --mux herdr --no-auth` bị từ chối nếu không kèm `--allow-herdr-no-auth`
 - [ ] Khi Claude Code chạy trong một pane của container, huy hiệu trạng thái agent đổi theo

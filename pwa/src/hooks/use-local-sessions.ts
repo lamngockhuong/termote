@@ -16,10 +16,12 @@ import {
   type PaneShift,
   paneKeys,
   remapPanes,
+  renameGroupKeys,
   shiftedIds,
 } from '../utils/pane-remap'
 import { remapPaneViews } from '../utils/pane-view'
 import { uniqueNames } from '../utils/running-commands'
+import { zellijGroupId } from '../utils/zellij-group'
 import {
   closeGroup as apiCloseGroup,
   createGroup as apiCreateGroup,
@@ -71,15 +73,20 @@ const DEFAULT_META: SessionMeta = { icon: '📺', description: '' }
 // other than the default one (group id "$N", which a rename keeps) is keyed
 // by that id too, so two "shell" windows in two sessions keep their own; the
 // default session (whose group id never starts with '$') keeps the 0.x key.
+// Zellij gives a closed tab's id to the next tab, so its metadata is keyed by
+// the tab's key, which is never reused.
 const TMUX_META_PREFIX = 'tmux:name:'
 const HERDR_META_PREFIX = 'herdr:'
+const ZELLIJ_META_PREFIX = 'zellij:'
 
 function metaKey(
   backend: string,
   tabId: string,
   tabName: string,
   groupId?: string,
+  tabKey?: string,
 ): string {
+  if (backend === 'zellij') return `${ZELLIJ_META_PREFIX}${tabKey ?? tabId}`
   if (backend !== 'tmux') return `${backend}:${tabId}`
   return groupId?.startsWith('$')
     ? `${TMUX_META_PREFIX}${groupId}\u0000${tabName}`
@@ -92,7 +99,11 @@ function migrateMeta(meta: Record<string, SessionMeta>) {
   let changed = false
   const out: Record<string, SessionMeta> = {}
   for (const [key, value] of Object.entries(meta)) {
-    if (key.startsWith(TMUX_META_PREFIX) || key.startsWith(HERDR_META_PREFIX)) {
+    if (
+      key.startsWith(TMUX_META_PREFIX) ||
+      key.startsWith(HERDR_META_PREFIX) ||
+      key.startsWith(ZELLIJ_META_PREFIX)
+    ) {
       out[key] = value
     } else {
       out[`${TMUX_META_PREFIX}${key}`] ??= value
@@ -100,6 +111,23 @@ function migrateMeta(meta: Record<string, SessionMeta>) {
     }
   }
   return { meta: out, changed }
+}
+
+// Moves the metadata of a renamed Zellij group's tabs to their new keys.
+function renameGroupMeta(
+  meta: Record<string, SessionMeta>,
+  from: string,
+  to: string,
+) {
+  const prefix = `${ZELLIJ_META_PREFIX}${from}/`
+  let changed = false
+  for (const [key, value] of Object.entries(meta)) {
+    if (!key.startsWith(prefix)) continue
+    delete meta[key]
+    meta[`${ZELLIJ_META_PREFIX}${to}/${key.slice(prefix.length)}`] = value
+    changed = true
+  }
+  if (changed) saveMeta(meta)
 }
 
 function saveMeta(meta: Record<string, SessionMeta>) {
@@ -189,7 +217,8 @@ export function buildSessions(
     const groupTabs: Session[] = []
     for (const tab of g.tabs) {
       const m =
-        meta[metaKey(snap.backend, tab.id, tab.name, g.id)] || DEFAULT_META
+        meta[metaKey(snap.backend, tab.id, tab.name, g.id, tab.key)] ||
+        DEFAULT_META
       const panes: SessionPane[] = tab.panes.map((p, i) => ({
         id: p.id,
         label: p.agent?.name || p.title || `Pane ${i + 1}`,
@@ -268,6 +297,9 @@ export function useLocalSessions(pollInterval = 5) {
   // one meanwhile would be computed on the old order.
   const movingRef = useRef(false)
   const [moving, setMoving] = useState(false)
+  // A Zellij group renamed here, until a snapshot without its old id is
+  // applied: that one's ids are compared as if the old snapshot had them.
+  const renamedGroupRef = useRef<{ from: string; to: string } | null>(null)
 
   const storeSelection = useCallback((sel: Selection) => {
     selectionRef.current = sel
@@ -290,9 +322,18 @@ export function useLocalSessions(pollInterval = 5) {
   const applySnapshot = useCallback(
     (snap: MuxSnapshot, version: number) => {
       // State kept by tab or pane id follows its tab when a move shifted
-      // the ids (tmux), before anything renders with the new ones.
+      // the ids (tmux), or a rename gave its group another id (Zellij),
+      // before anything renders with the new ones.
       const keys = paneKeys(snap)
-      const shift = shiftedIds(keysRef.current, keys)
+      let prevKeys = keysRef.current
+      const renamed = renamedGroupRef.current
+      // A snapshot read before the rename still has the old id: not yet.
+      if (renamed && !snap.groups?.some((g) => g.id === renamed.from)) {
+        renamedGroupRef.current = null
+        prevKeys = renameGroupKeys(prevKeys, renamed.from, renamed.to)
+        renameGroupMeta(metaRef.current, renamed.from, renamed.to)
+      }
+      const shift = shiftedIds(prevKeys, keys)
       keysRef.current = keys
       if (shift.stale.size) {
         remapPanes(shift)
@@ -370,7 +411,10 @@ export function useLocalSessions(pollInterval = 5) {
         (s.groups || []).some((g) => g.tabs.length > 0)
       // A view-only device makes nothing: it waits for a tab to exist.
       if (!hasTabs(snap) && snap.caps.role !== 'view') {
-        await createTab('shell')
+        // A Zellij session no client is attached to gets no tab (no_client)
+        await createTab('shell').catch((err) => {
+          if (!(err instanceof RequestError)) throw err
+        })
         snap = await fetchSnapshot()
       }
       if (seq < appliedSeqRef.current) return
@@ -475,6 +519,9 @@ export function useLocalSessions(pollInterval = 5) {
     [activeSession, select],
   )
 
+  // A refusal the user can act on (RequestError 'no_client': Zellij needs a
+  // client attached to the session) reaches the caller, after the refresh;
+  // other failures show on the next snapshot.
   const addSession = useCallback(
     async (name: string, icon = '📺', description = '') => {
       const { backend, caps } = muxRef.current
@@ -488,8 +535,14 @@ export function useLocalSessions(pollInterval = 5) {
       }
 
       // Create mux tab in the current group
-      const id = await createTab(name, activeSession?.groupId).catch(() => null)
-      if (id && backend !== 'tmux') {
+      let refusal: RequestError | null = null
+      const id = await createTab(name, activeSession?.groupId).catch((err) => {
+        if (err instanceof RequestError && err.code === 'no_client') {
+          refusal = err
+        }
+        return null
+      })
+      if (id && backend !== 'tmux' && backend !== 'zellij') {
         metaRef.current[metaKey(backend, id, name)] = { icon, description }
         saveMeta(metaRef.current)
       }
@@ -501,6 +554,21 @@ export function useLocalSessions(pollInterval = 5) {
 
       // Refresh to get new tab
       await refreshSessions()
+      if (refusal) throw refusal
+      // A Zellij tab's key, which its metadata is kept by, comes with the
+      // snapshot: saved now and shown at once.
+      const key = id && backend === 'zellij' && keysRef.current.get(id)
+      if (key) {
+        metaRef.current[metaKey(backend, id, name, undefined, key)] = {
+          icon,
+          description,
+        }
+        saveMeta(metaRef.current)
+        const withMeta = (s: Session) =>
+          s.id === id ? { ...s, icon, description } : s
+        setSessions((prev) => prev.map(withMeta))
+        setActiveSession((prev) => prev && withMeta(prev))
+      }
     },
     [refreshSessions, activeSession?.groupId, storeSelection],
   )
@@ -531,6 +599,7 @@ export function useLocalSessions(pollInterval = 5) {
           session.id,
           session.name,
           session.groupId,
+          session.key,
         )
       ]
       saveMeta(metaRef.current)
@@ -560,12 +629,19 @@ export function useLocalSessions(pollInterval = 5) {
       if (!session) return
 
       const { backend } = muxRef.current
-      const oldKey = metaKey(backend, sessionId, session.name, session.groupId)
+      const oldKey = metaKey(
+        backend,
+        sessionId,
+        session.name,
+        session.groupId,
+        session.key,
+      )
       const newKey = metaKey(
         backend,
         sessionId,
         updates.name ?? session.name,
         session.groupId,
+        session.key,
       )
       const oldMeta = metaRef.current[oldKey] || DEFAULT_META
 
@@ -626,9 +702,24 @@ export function useLocalSessions(pollInterval = 5) {
     [showNewGroup],
   )
 
+  // A Zellij group's id is made from its name (zellijGroupId), so a rename
+  // gives it, and every tab and pane id in it, another id: the state kept by
+  // those ids follows them once the snapshot shows the new one. Noted before
+  // the request, so a poll answered right after the rename follows it too.
   const renameGroup = useCallback(
     async (id: string, name: string) => {
-      await apiRenameGroup(id, name)
+      const to = zellijGroupId(name)
+      const renamed =
+        muxRef.current.backend === 'zellij' && to !== id
+          ? { from: id, to }
+          : null
+      if (renamed) renamedGroupRef.current = renamed
+      try {
+        await apiRenameGroup(id, name)
+      } catch (err) {
+        if (renamedGroupRef.current === renamed) renamedGroupRef.current = null
+        throw err
+      }
       await refreshSessions()
     },
     [refreshSessions],
@@ -682,7 +773,9 @@ export function useLocalSessions(pollInterval = 5) {
       const { backend } = muxRef.current
       for (const s of sessions) {
         if (s.groupId === id) {
-          delete metaRef.current[metaKey(backend, s.id, s.name, s.groupId)]
+          delete metaRef.current[
+            metaKey(backend, s.id, s.name, s.groupId, s.key)
+          ]
         }
       }
       saveMeta(metaRef.current)

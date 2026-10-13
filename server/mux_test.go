@@ -358,7 +358,7 @@ func TestNewMux(t *testing.T) {
 	if m, err := newMux(context.Background(), "tmux"); err != nil || m.Name() != "tmux" {
 		t.Errorf("newMux(tmux) = %v, %v", m, err)
 	}
-	if _, err := newMux(context.Background(), "zellij"); err == nil {
-		t.Error("newMux(zellij) should fail")
+	if _, err := newMux(context.Background(), "screen"); err == nil {
+		t.Error("newMux(screen) should fail")
 	}
 }

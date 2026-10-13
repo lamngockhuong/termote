@@ -142,6 +142,18 @@ test_services() {
     else
         pass "XDG_CONFIG_HOME is set for herdr only, not for termote serve"
     fi
+    if grep -q '^zellij)$' "$PROJECT_DIR/entrypoint.sh" &&
+        grep -q 'env "${unset_termote\[@\]}" zellij attach --create-background main' "$PROJECT_DIR/entrypoint.sh"; then
+        pass "TERMOTE_MUX=zellij creates session 'main' without any TERMOTE_* variable"
+    else
+        fail "zellij branch" "zellij) ... attach --create-background main" "not found"
+    fi
+    # termote serve and zellij must agree on the socket dir
+    if grep -q '^    export ZELLIJ_SOCKET_DIR=/tmp/zellij$' "$PROJECT_DIR/entrypoint.sh"; then
+        pass "exports ZELLIJ_SOCKET_DIR for termote serve"
+    else
+        fail "zellij socket dir" "export ZELLIJ_SOCKET_DIR" "not found"
+    fi
     if grep -q 'unknown TERMOTE_MUX' "$PROJECT_DIR/entrypoint.sh"; then
         pass "rejects an unknown TERMOTE_MUX"
     else
@@ -204,6 +216,14 @@ test_dockerfile() {
     else
         fail "herdr pin" "HERDR_VERSION + sha256 per arch" "not found"
     fi
+    if grep -qE '^ARG ZELLIJ_VERSION=[0-9]+\.[0-9]+\.[0-9]+$' "$df" &&
+        grep -qE '^ARG ZELLIJ_SHA256_AMD64=[0-9a-f]{64}$' "$df" &&
+        grep -qE '^ARG ZELLIJ_SHA256_ARM64=[0-9a-f]{64}$' "$df" &&
+        grep -q 'zellij.tar.gz" | sha256sum -c -' "$df"; then
+        pass "zellij pinned by version and sha256"
+    else
+        fail "zellij pin" "ZELLIJ_VERSION + sha256 per arch" "not found"
+    fi
 }
 
 # Runs the built image; set TERMOTE_TEST_IMAGE (CI builds termote:test).
@@ -222,6 +242,7 @@ test_container_runtime() {
     fi
     runtime_backend "$image" tmux
     runtime_backend "$image" herdr
+    runtime_backend "$image" zellij
     runtime_unknown_mux "$image"
     runtime_generated_password "$image"
 }
@@ -287,6 +308,23 @@ runtime_backend() {
         fi
         # Killing the tmux server orphans its shells; tini must reap them.
         "$rt" exec "$name" tmux kill-server >/dev/null 2>&1
+    elif [[ "$mux" == zellij ]]; then
+        local zellij_env='ZELLIJ_SOCKET_DIR=/tmp/zellij'
+        if "$rt" exec "$name" sh -c "$zellij_env zellij list-sessions --no-formatting" | grep -qE '^main \[Created [^]]*\] *$'; then
+            pass "[zellij] session 'main' exists at start"
+        else
+            fail "[zellij] session main" "exists" "missing"
+        fi
+        local zpid leaked
+        zpid=$("$rt" exec "$name" sh -c 'for p in /proc/[0-9]*; do case "$(tr "\0" " " <$p/cmdline 2>/dev/null)" in *"zellij --server "*) basename $p;; esac; done' | head -1)
+        if [[ -z "$zpid" ]]; then
+            fail "[zellij] zellij server pid" "found" "none"
+        else
+            leaked=$("$rt" exec "$name" sh -c "tr '\0' '\n' </proc/$zpid/environ | grep -c '^TERMOTE_'" || true)
+            if [[ "${leaked:-0}" == "0" ]]; then pass "[zellij] zellij server has no TERMOTE_* variable"; else fail "[zellij] zellij env" "0" "$leaked"; fi
+        fi
+        # Killing the session orphans its shells; tini must reap them.
+        "$rt" exec "$name" sh -c "$zellij_env zellij kill-all-sessions --yes" >/dev/null 2>&1
     else
         local herdr_env='XDG_CONFIG_HOME=/tmp HERDR_SOCKET_PATH=/tmp/herdr/herdr.sock'
         if "$rt" exec "$name" sh -c "$herdr_env herdr status server" | grep -q '^status: running'; then
@@ -329,11 +367,11 @@ runtime_backend() {
 runtime_unknown_mux() {
     local image="$1" rt="$RT" out code
     echo ""
-    echo "--- backend: zellij (unknown) ---"
-    out=$("$rt" run --rm --user 1000:1000 -e TERMOTE_PASS=test-pass -e TERMOTE_MUX=zellij "$image" 2>&1)
+    echo "--- backend: screen (unknown) ---"
+    out=$("$rt" run --rm --user 1000:1000 -e TERMOTE_PASS=test-pass -e TERMOTE_MUX=screen "$image" 2>&1)
     code=$?
-    if [[ $code -ne 0 && "$out" == *"unknown TERMOTE_MUX 'zellij'"* ]]; then
-        pass "TERMOTE_MUX=zellij exits $code with an error"
+    if [[ $code -ne 0 && "$out" == *"unknown TERMOTE_MUX 'screen'"* ]]; then
+        pass "TERMOTE_MUX=screen exits $code with an error"
     else
         fail "unknown mux" "exit != 0 + error" "exit $code: $(echo "$out" | tail -1)"
     fi
@@ -346,7 +384,7 @@ runtime_generated_password() {
     local image="$1" rt="$RT" out
     echo ""
     echo "--- generated password, host uid ---"
-    out=$("$rt" run --rm --user 1000:1000 -e TERMOTE_MUX=zellij "$image" 2>&1)
+    out=$("$rt" run --rm --user 1000:1000 -e TERMOTE_MUX=screen "$image" 2>&1)
     if [[ "$out" == *"Password: in /home/termote/.config/termote/password"* ]] &&
         ! grep -qE 'Password: [A-Za-z0-9]{12}$' <<<"$out"; then
         pass "generated password kept out of the log"

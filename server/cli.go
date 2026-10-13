@@ -493,7 +493,8 @@ Options of start (saved; a flag not given keeps its saved value):
   --tailscale <host[:port]>  Publish over Tailscale HTTPS (default port 443)
   --no-tailscale             Stop publishing over Tailscale
   --no-auth[=false]          Disable authentication
-  --mux <tmux|herdr>         Terminal backend (default: herdr when it runs, else tmux)
+  --mux <tmux|herdr|zellij>  Terminal backend (default: herdr when it runs, else tmux;
+                             zellij: Linux and macOS)
   --allow-host <name>        Allow another Host name (repeatable)
   --remove-host <name>       Remove an allowed Host name (repeatable)
   --allow-local-user <name>  Serve connections of another OS user of this machine, e.g.
@@ -506,7 +507,7 @@ Options of start (saved; a flag not given keeps its saved value):
 Options of container up (saved apart from start's; the username and password are shared):
   --port --lan --tailscale --no-tailscale --no-auth --allow-host --remove-host --user --fresh
   --workspace <dir>          Directory mounted at /workspace (default: ~/termote-workspace)
-  --mux <tmux|herdr>         Backend inside the container (asked the first time, else tmux)
+  --mux <tmux|herdr|zellij>  Backend inside the container (asked the first time, else tmux)
   --allow-herdr-no-auth      Allow herdr without auth
   --build                    Build the image from a checkout instead of pulling it
 

@@ -119,7 +119,7 @@ async function write(
   method: 'POST' | 'PATCH' | 'DELETE',
   path: string,
   body?: unknown,
-): Promise<{ ok?: boolean; id?: string }> {
+): Promise<{ ok?: boolean; id?: string; code?: string; error?: string }> {
   const res = await fetch(`${API_BASE}${path}`, {
     method,
     headers: { 'Content-Type': 'application/json' },
@@ -263,12 +263,17 @@ export async function selectTab(id: string): Promise<boolean> {
   return data.ok === true
 }
 
-// Resolves to the new tab's id, or null when the server refused.
+// Resolves to the new tab's id, or null when the server refused. Zellij
+// cannot lay out a tab in a session no client is attached to: that refusal
+// throws RequestError 'no_client', whose message tells the user what to do.
 export async function createTab(
   name?: string,
   groupId?: string,
 ): Promise<string | null> {
   const data = await write('POST', '/tabs', { groupId, name })
+  if (data.code === 'no_client') {
+    throw new RequestError(409, data.code, data.error ?? 'no client attached')
+  }
   return data.ok === true ? (data.id ?? '') : null
 }
 

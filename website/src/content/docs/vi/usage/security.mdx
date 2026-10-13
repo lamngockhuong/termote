@@ -56,6 +56,9 @@ giới hạn những gì Termote chạm tới, hãy chạy nó dưới một tà
   stream cần một token chỉ dùng một lần.
 - Đăng nhập sai và mã ghép sai bị giới hạn tần suất.
 - Thiết bị chỉ xem bị server từ chối mọi thao tác ghi, chứ không chỉ bị ẩn nút trong giao diện.
+- Với Zellij (`--mux zellij`), phím bạn gõ và tin nhắn Chat chỉ tới pane qua terminal của một client Zellij
+  của Termote, không bao giờ qua tham số tiến trình, thứ mà người dùng cục bộ khác có thể đọc. Thiết bị chỉ
+  xem theo dõi pane Zellij qua `zellij subscribe`, vốn không gõ được.
 - Content-Security-Policy ngăn trang tải hay chạy code từ nơi khác.
 - Thiết bị đã ghép có thể có hạn dùng (mặc định 30 ngày khi ghép): quá hạn, thiết bị bị từ chối và các
   terminal đang mở của nó bị đóng. Thiết bị do một thiết bị có hạn ghép ra không bao giờ sống lâu hơn nó.

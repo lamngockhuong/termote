@@ -49,6 +49,7 @@ Remote control CLI tools (Claude Code, GitHub Copilot, any terminal) from mobile
 - **Chat view**: read and answer a pane running Claude Code (or Codex started with `--no-daemon`) as a chat, with slash command suggestions and dialog answers — see [Agent Chat](https://termote.ohnice.app/usage/agent-chat/)
 - **Files and Changes views**: browse a pane's directory and its git changes, with a Markdown preview — see [Files and Changes](https://termote.ohnice.app/usage/files-changes/)
 - **Image attachments**: send an image from the phone to the terminal or to a Chat view message, so the agent can read it by path
+- **Zellij backend** (Linux, macOS, or the container): drive your Zellij sessions, tabs and panes instead of tmux (Zellij 0.45.0 or later), chosen with `--mux zellij` — see [Native Installation](https://termote.ohnice.app/installation/native/)
 - **Herdr plugin**: open the focused Herdr pane in Termote, show its link as a QR code for a phone, start or stop the server, without leaving Herdr — see [Herdr Plugin](https://termote.ohnice.app/usage/herdr-plugin/)
 - **Mobile-friendly**: Virtual keyboard toolbar (Tab/Ctrl/Shift/arrows, expandable)
 - **Gesture support**: Swipe for Ctrl+C, Tab, scrolling
@@ -96,10 +97,11 @@ flowchart TB
         Auth["Basic Auth"]
     end
 
-    subgraph Backend["Mux Backend (tmux/psmux or Herdr)"]
+    subgraph Backend["Mux Backend (tmux/psmux, Herdr or Zellij)"]
         Mux["Mux interface"]
         tmux["tmux/psmux (PTY)"]
         herdr["Herdr"]
+        zellij["Zellij"]
         Shell["Shell"]
         Tools["CLI Tools"]
     end
@@ -113,7 +115,7 @@ flowchart TB
     Auth -.-> Static & Stream & API
     Stream --> Mux
     API --> Mux
-    Mux --> tmux & herdr
+    Mux --> tmux & herdr & zellij
     tmux --> Shell --> Tools
 ```
 
@@ -139,7 +141,7 @@ termote start
 
 The installer needs only `curl`, `tar` and `sha256sum`/`shasum` (PowerShell on Windows), no sudo or admin rights. It verifies the checksum of the archive, installs the `termote` command, and starts nothing. `termote start` saves the options, creates a password the first time (printed once; `termote show-password` shows it again), registers the service and starts it. Open `http://localhost:7680` (Windows: `http://localhost:7690`).
 
-A terminal backend must be installed first: tmux (`sudo apt install tmux`, `brew install tmux`), psmux on Windows (`winget install psmux`), or [Herdr](https://termote.ohnice.app/installation/native/). The first `start` detects which one to use.
+A terminal backend must be installed first: tmux (`sudo apt install tmux`, `brew install tmux`), psmux on Windows (`winget install psmux`), or [Herdr](https://termote.ohnice.app/installation/native/). The first `start` detects which one to use. [Zellij](https://zellij.dev/documentation/installation) 0.45.0 or later (Linux, macOS) is never detected: choose it with `--mux zellij`.
 
 ### Common options
 
@@ -147,6 +149,7 @@ A terminal backend must be installed first: tmux (`sudo apt install tmux`, `brew
 termote start --lan                  # Listen on the LAN, not only this machine
 termote start --tailscale myhost.ts.net  # Publish over Tailscale HTTPS
 termote start --mux herdr            # Drive Herdr workspaces instead of tmux
+termote start --mux zellij           # Drive Zellij sessions instead of tmux (Linux, macOS)
 termote start --no-auth              # Disable basic auth (local use only)
 ```
 
@@ -236,12 +239,12 @@ There is no upgrade from 0.x: 1.0 installs in a new place and does not read the 
 flowchart LR
     subgraph Container["Container Mode"]
         direction TB
-        C1["Docker/Podman"] --> C2["termote :7680 (streams terminal itself)"] --> C3["tmux / Herdr"]
+        C1["Docker/Podman"] --> C2["termote :7680 (streams terminal itself)"] --> C3["tmux / Herdr / Zellij"]
     end
 
     subgraph Native["Native Mode"]
         direction TB
-        N1["Host System"] --> N2["termote :7680 (streams terminal itself)"] --> N3["tmux/psmux or Herdr + Host Tools"]
+        N1["Host System"] --> N2["termote :7680 (streams terminal itself)"] --> N3["tmux/psmux, Herdr or Zellij + Host Tools"]
     end
 
     User["User"] --> Container & Native
@@ -256,19 +259,19 @@ The native server runs as a user service: a systemd user unit on Linux (a detach
 
 ### Options of `start`
 
-| Flag                        | Description                                                                    |
-| --------------------------- | ------------------------------------------------------------------------------ |
-| `--port <port>`             | Port (default: 7680, Windows: 7690)                                            |
-| `--lan[=false]`             | Listen on every interface (default: localhost only)                            |
-| `--tailscale <host[:port]>` | Publish over Tailscale HTTPS (default port 443)                                |
-| `--no-tailscale`            | Stop publishing over Tailscale                                                 |
-| `--no-auth[=false]`         | Disable basic authentication                                                   |
-| `--mux <tmux\|herdr>`       | Terminal backend (default: herdr when it runs, else tmux)                      |
-| `--allow-host <name>`       | Allow an extra Host header value (repeatable; no wildcard, see security notes) |
-| `--remove-host <name>`      | Remove an allowed Host name (repeatable)                                       |
-| `--allow-herdr-no-auth`     | Required together with `--mux herdr --no-auth`                                 |
-| `--user <name>`             | Login username (default: `admin`; shared with the container)                   |
-| `--fresh`                   | Set a new password                                                             |
+| Flag                          | Description                                                                     |
+| ----------------------------- | ------------------------------------------------------------------------------- |
+| `--port <port>`               | Port (default: 7680, Windows: 7690)                                             |
+| `--lan[=false]`               | Listen on every interface (default: localhost only)                             |
+| `--tailscale <host[:port]>`   | Publish over Tailscale HTTPS (default port 443)                                 |
+| `--no-tailscale`              | Stop publishing over Tailscale                                                  |
+| `--no-auth[=false]`           | Disable basic authentication                                                    |
+| `--mux <tmux\|herdr\|zellij>` | Terminal backend (default: herdr when it runs, else tmux; zellij: Linux, macOS) |
+| `--allow-host <name>`         | Allow an extra Host header value (repeatable; no wildcard, see security notes)  |
+| `--remove-host <name>`        | Remove an allowed Host name (repeatable)                                        |
+| `--allow-herdr-no-auth`       | Required together with `--mux herdr --no-auth`                                  |
+| `--user <name>`               | Login username (default: `admin`; shared with the container)                    |
+| `--fresh`                     | Set a new password                                                              |
 
 ### With Tailscale HTTPS
 
@@ -311,7 +314,7 @@ Virtual toolbar provides: Tab, Esc, Ctrl, Shift, Arrow keys, and common key comb
 ```
 termote/
 ├── Makefile                # Build/test/run commands
-├── Dockerfile              # Container image (termote + tmux + herdr)
+├── Dockerfile              # Container image (termote + tmux + herdr + zellij)
 ├── docker-compose.yml      # Development from a checkout only
 ├── entrypoint.sh           # Container entrypoint
 ├── docs/                   # Documentation
@@ -329,6 +332,8 @@ termote/
 │   ├── mux.go              # Mux interface + /api/mux/* routes
 │   ├── mux_tmux.go         # tmux/psmux backend
 │   ├── mux_herdr.go        # Herdr backend
+│   ├── mux_zellij*.go      # Zellij backend (commands, Chat view and Files)
+│   ├── zellij_*.go         # Termote's Zellij clients, view-only stream, a pane's shell
 │   ├── stream.go           # Terminal WebSocket (xterm.js stream)
 │   ├── cli*.go             # start/stop/update/container/logs/menu subcommands
 │   └── webui/              # PWA embedded in the binary (filled by make build)
@@ -397,6 +402,7 @@ termote start --fresh      # If the saved password can no longer be read
 - **Origin/CSRF guards**: state-changing `/api/mux/*` requests and the `/api/mux/stream` WebSocket reject cross-site `Sec-Fetch-Site`/`Origin` and require a same-origin, single-use stream token
 - **Built-in brute-force protection** - rate limiting (5 failed attempts/min per IP, 20/min per IPv6 /64)
 - **Herdr backend**: exposes every Herdr workspace on the host, so `--mux herdr --no-auth` is refused unless `--allow-herdr-no-auth` is also given
+- **Zellij backend**: exposes every running Zellij session of the user, as tmux does (no extra `--no-auth` guard); keys and Chat messages reach a pane only through a Termote Zellij client's terminal, never through process arguments other local users could read
 - **Service files hold no secrets**: the systemd unit, launchd agent and Scheduled Task never contain the password
 - Use HTTPS (Tailscale) for production
 - Restrict to trusted networks/VPN
