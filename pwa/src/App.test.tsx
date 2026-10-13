@@ -447,6 +447,16 @@ vi.mock('./components/session-sidebar', () => ({
           <button onClick={() => groupActions.onClose('$3')}>
             GroupCloseWork
           </button>
+          <span>
+            zellij rename main {String(groupActions.canRename('zbWFpbg'))},
+            rename dev {String(groupActions.canRename('zZGV2'))}
+          </span>
+          <button onClick={() => groupActions.onClose('zbWFpbg')}>
+            GroupCloseZellijMain
+          </button>
+          <button onClick={() => groupActions.onClose('zZGV2')}>
+            GroupCloseZellijDev
+          </button>
           {groupActions.onNewWorktree && (
             <button onClick={() => groupActions.onNewWorktree?.('$3')}>
               WorktreeNew
@@ -1836,6 +1846,55 @@ describe('App', () => {
     capturedGestureHandlers.onSwipeDown()
     expect(mockScrollTerminal).not.toHaveBeenCalled()
     expect(mockScrollTmux).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['tmux', false],
+    ['herdr', true],
+    ['zellij', true],
+  ])(
+    '%s: pastes bracketed into a pane with an agent: %s',
+    async (backend, bracketed) => {
+      const base = mockUseLocalSessions()
+      mockUseLocalSessions.mockReturnValue({
+        ...base,
+        activeSession: { ...base.activeSession, hasAgent: true },
+        mux: { backend, caps: { clientSideSelect: backend !== 'tmux' } },
+      } as any)
+      render(<App />)
+      await screen.findByTestId('terminal-view')
+      expect(vi.mocked(TerminalView).mock.lastCall![0]).toMatchObject({
+        bracketedPaste: bracketed,
+      })
+    },
+  )
+
+  it('tells why a tab could not be added (Zellij: no client attached)', async () => {
+    const { RequestError } = await import('./hooks/use-mux-api')
+    mockIsMobile.mockReturnValue(true)
+    const addSession = vi.fn(async () => {
+      throw new RequestError(409, 'no_client', 'open this Zellij session first')
+    })
+    mockUseLocalSessions.mockReturnValue({
+      ...mockUseLocalSessions(),
+      addSession,
+    })
+    render(<App />)
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Open sessions menu' }),
+    )
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'MobileAdd' }))
+    })
+    expect(await screen.findByTestId('toast')).toHaveTextContent(
+      'open this Zellij session first',
+    )
+    // The sheet stays open on a refusal
+    expect(screen.getByTestId('session-sidebar')).toHaveAttribute(
+      'data-open',
+      'true',
+    )
+    mockIsMobile.mockReturnValue(false)
   })
 
   it('herdr: drives the pane size when the setting and backend allow it', async () => {
@@ -4342,6 +4401,60 @@ describe('App — group actions', () => {
     fireEvent.click(await screen.findByText('GroupCloseMain'))
     expect(screen.getByTestId('confirm-dialog')).toHaveTextContent(
       'Running: bash, vim, top.',
+    )
+  })
+
+  // Zellij: "main" (zbWFpbg) is the default session, "dev" (zZGV2) another.
+  const withZellij = () => {
+    withGroups('zellij')
+    const base = mockUseLocalSessions()
+    const tabs = [tab('zbWFpbg:t0', 'zbWFpbg'), tab('zZGV2:t0', 'zZGV2')]
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      activeSession: tabs[0],
+      sessions: tabs,
+      groups: [
+        { id: 'zbWFpbg', name: 'main' },
+        { id: 'zZGV2', name: 'dev' },
+      ],
+    } as any)
+  }
+
+  it('Zellij: names its sessions, and only "main" cannot be renamed', async () => {
+    withZellij()
+    render(<App />)
+    expect(
+      await screen.findByText(
+        'Zellij session: rename main true, rename $3 true',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('zellij rename main false, rename dev true'),
+    ).toBeInTheDocument()
+  })
+
+  it('Zellij: closing a session says it is deleted', async () => {
+    withZellij()
+    render(<App />)
+    fireEvent.click(await screen.findByText('GroupCloseZellijDev'))
+    const dialog = screen.getByTestId('confirm-dialog')
+    expect(dialog).toHaveTextContent('Close Zellij session?')
+    expect(dialog).toHaveTextContent(
+      'Close Zellij session "dev"? Its 1 tab and everything running in them will end. The session is deleted: Zellij cannot resurrect it.',
+    )
+    expect(dialog).not.toHaveTextContent('starts a new')
+    fireEvent.click(within(dialog).getByText('ConfirmYes'))
+    expect(closeGroup).toHaveBeenCalledWith('zZGV2')
+  })
+
+  it('Zellij: closing "main" says it comes back empty', async () => {
+    withZellij()
+    render(<App />)
+    fireEvent.click(await screen.findByText('GroupCloseZellijMain'))
+    const dialog = screen.getByTestId('confirm-dialog')
+    expect(dialog).toHaveTextContent('The session is deleted')
+    expect(dialog).toHaveTextContent(
+      'Termote starts a new, empty "main" right away, and every device viewing it is disconnected.',
     )
   })
 

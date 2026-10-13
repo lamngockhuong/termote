@@ -25,6 +25,27 @@ export function paneKeys(snap: MuxSnapshot): Map<string, string> {
   return keys
 }
 
+// keys (from paneKeys) as if group from had been called to all along. A
+// Zellij group's id is its session's name, and every tab id, pane id and tab
+// key in it starts with the group id (`<gid>:`, `<gid>/`): comparing the
+// result with the snapshot read after a rename moves each id to its new one.
+export function renameGroupKeys(
+  keys: Map<string, string>,
+  from: string,
+  to: string,
+): Map<string, string> {
+  const out = new Map<string, string>()
+  for (const [id, key] of keys) {
+    const sep = key[from.length]
+    const renamed =
+      key.startsWith(from) && (sep === ':' || sep === '/')
+        ? to + key.slice(from.length)
+        : key
+    out.set(id, renamed)
+  }
+  return out
+}
+
 // What changed between two snapshots' keys.
 export function shiftedIds(
   prev: Map<string, string>,

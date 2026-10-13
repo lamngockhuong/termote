@@ -1838,3 +1838,197 @@ describe('useLocalSessions with no tab yet', () => {
     expect(mockCreateTab).toHaveBeenCalledWith('shell')
   })
 })
+
+describe('useLocalSessions with zellij', () => {
+  // Session "dev" (zZGV2) and "ops" (zb3Bz): Zellij numbers each session's
+  // tabs and panes from 0, so both first tabs are terminal_0.
+  const tab = (gid: string, n: number, pane: number, name = `t${n}`) => ({
+    id: `${gid}:t${n}`,
+    key: `${gid}/terminal_${pane}`,
+    name,
+    active: n === 0,
+    panes: [{ id: `${gid}:p${pane}`, active: true }],
+  })
+  const zellij = (devId = 'zZGV2', devTabs = [tab(devId, 0, 0)]) => ({
+    backend: 'zellij',
+    caps: { clientSideSelect: true, copyMode: false, groups: true },
+    groups: [
+      { id: 'zbWFpbg', name: 'main', tabs: [tab('zbWFpbg', 0, 0)] },
+      { id: devId, name: devId === 'zZGV2' ? 'dev' : 'ops', tabs: devTabs },
+    ],
+  })
+  const meta = () =>
+    JSON.parse(localStorage.getItem('termote-sessions') || '{}')
+
+  beforeEach(() => {
+    localStorage.clear()
+    sessionStorage.clear()
+    vi.clearAllMocks()
+    mockSnapshot.extra = zellij()
+    mockRenameGroup.mockResolvedValue(undefined)
+  })
+
+  const render = async () => {
+    const hook = renderHook(() => useLocalSessions(1000))
+    await act(async () => {})
+    return hook
+  }
+
+  it('two sessions both starting at terminal_0 keep their own ids and metadata', async () => {
+    const { result } = await render()
+    expect(result.current.sessions.map((s) => [s.id, s.key])).toEqual([
+      ['zbWFpbg:t0', 'zbWFpbg/terminal_0'],
+      ['zZGV2:t0', 'zZGV2/terminal_0'],
+    ])
+    await act(async () => {
+      await result.current.updateSession('zZGV2:t0', { icon: '⭐' })
+    })
+    expect(meta()).toEqual({
+      'zellij:zZGV2/terminal_0': { icon: '⭐', description: '' },
+    })
+    expect(result.current.sessions.map((s) => s.icon)).toEqual(['📺', '⭐'])
+    // Saved metadata survives a reload under its prefix (no 0.x migration)
+    const again = await render()
+    expect(again.result.current.sessions.map((s) => s.icon)).toEqual([
+      '📺',
+      '⭐',
+    ])
+  })
+
+  it("a new tab that took a closed tab's id does not take its metadata", async () => {
+    localStorage.setItem(
+      'termote-sessions',
+      JSON.stringify({
+        'zellij:zZGV2/terminal_0': { icon: '⭐', description: '' },
+      }),
+    )
+    // Tab 0 closed; Zellij gave id 0 to a new tab whose first pane is 4
+    mockSnapshot.extra = zellij('zZGV2', [tab('zZGV2', 0, 4)])
+    const { result } = await render()
+    expect(result.current.sessions[1].icon).toBe('📺')
+  })
+
+  it("addSession saves metadata under the new tab's key", async () => {
+    const { result } = await render()
+    await act(async () => {
+      await result.current.switchSession('zZGV2:t0')
+    })
+    mockCreateTab.mockResolvedValue('zZGV2:t1')
+    mockSnapshot.extra = zellij('zZGV2', [
+      tab('zZGV2', 0, 0),
+      tab('zZGV2', 1, 3, 'new'),
+    ])
+    await act(async () => {
+      await result.current.addSession('new', '🚀', 'Fresh')
+    })
+    expect(mockCreateTab).toHaveBeenCalledWith('new', 'zZGV2')
+    expect(meta()).toEqual({
+      'zellij:zZGV2/terminal_3': { icon: '🚀', description: 'Fresh' },
+    })
+    expect(result.current.activeSession.id).toBe('zZGV2:t1')
+    expect(result.current.activeSession.icon).toBe('🚀')
+  })
+
+  it('a tab refused for want of a client reaches the caller, after a refresh', async () => {
+    const { result } = await render()
+    const refusal = new RequestError(409, 'no_client', 'open it first')
+    mockCreateTab.mockRejectedValue(refusal)
+    const before = mockSnapshot.extra
+    let caught: unknown
+    await act(async () => {
+      caught = await result.current.addSession('new').catch((e) => e)
+    })
+    expect(caught).toBe(refusal)
+    expect(mockSnapshot.extra).toBe(before)
+    expect(result.current.isServerReachable).toBe(true)
+  })
+
+  it('renaming a session moves its ids, selection, drafts and metadata', async () => {
+    const { result } = await render()
+    await act(async () => {
+      await result.current.switchSession('zZGV2:t0')
+    })
+    await act(async () => {
+      await result.current.updateSession('zZGV2:t0', { icon: '⭐' })
+    })
+    sessionStorage.setItem('termote-chat-draft:zZGV2:p0', 'hello dev')
+    sessionStorage.setItem('termote-chat-draft:zbWFpbg:p0', 'hello main')
+    // "dev" → "ops": the server answers with the new id from then on
+    mockSnapshot.extra = zellij('zb3Bz', [tab('zb3Bz', 0, 0)])
+    await act(async () => {
+      await result.current.renameGroup('zZGV2', 'ops')
+    })
+    expect(mockRenameGroup).toHaveBeenCalledWith('zZGV2', 'ops')
+    expect(result.current.activeSession.id).toBe('zb3Bz:t0')
+    expect(result.current.activeSession.paneId).toBe('zb3Bz:p0')
+    expect(result.current.activeSession.groupId).toBe('zb3Bz')
+    expect(result.current.activeSession.icon).toBe('⭐')
+    expect(
+      JSON.parse(localStorage.getItem('termote-selection-zellij')!),
+    ).toEqual({ tabId: 'zb3Bz:t0', groupId: 'zb3Bz', paneId: 'zb3Bz:p0' })
+    expect(sessionStorage.getItem('termote-chat-draft:zb3Bz:p0')).toBe(
+      'hello dev',
+    )
+    expect(sessionStorage.getItem('termote-chat-draft:zZGV2:p0')).toBeNull()
+    // The other session is left alone
+    expect(sessionStorage.getItem('termote-chat-draft:zbWFpbg:p0')).toBe(
+      'hello main',
+    )
+    expect(meta()).toEqual({
+      'zellij:zb3Bz/terminal_0': { icon: '⭐', description: '' },
+    })
+  })
+
+  it('a snapshot read before the rename leaves the remap for the next one', async () => {
+    const { result } = await render()
+    await act(async () => {
+      await result.current.switchSession('zZGV2:t0')
+    })
+    sessionStorage.setItem('termote-chat-draft:zZGV2:p0', 'hello dev')
+    // The refresh after the rename still sees the old session
+    await act(async () => {
+      await result.current.renameGroup('zZGV2', 'ops')
+    })
+    expect(result.current.activeSession.id).toBe('zZGV2:t0')
+    expect(sessionStorage.getItem('termote-chat-draft:zZGV2:p0')).toBe(
+      'hello dev',
+    )
+    mockSnapshot.extra = zellij('zb3Bz', [tab('zb3Bz', 0, 0)])
+    await act(async () => {
+      await result.current.refreshSessions()
+    })
+    expect(result.current.activeSession.id).toBe('zb3Bz:t0')
+    expect(sessionStorage.getItem('termote-chat-draft:zb3Bz:p0')).toBe(
+      'hello dev',
+    )
+  })
+
+  it('a refused rename forgets the remap', async () => {
+    const { result } = await render()
+    await act(async () => {
+      await result.current.switchSession('zZGV2:t0')
+    })
+    sessionStorage.setItem('termote-chat-draft:zZGV2:p0', 'hello dev')
+    mockRenameGroup.mockRejectedValueOnce(new RequestError(409, 'exists', ''))
+    await act(async () => {
+      await expect(result.current.renameGroup('zZGV2', 'ops')).rejects.toThrow()
+    })
+    // The session is closed elsewhere and another one takes the name
+    mockSnapshot.extra = zellij('zb3Bz', [tab('zb3Bz', 0, 0)])
+    await act(async () => {
+      await result.current.refreshSessions()
+    })
+    expect(sessionStorage.getItem('termote-chat-draft:zb3Bz:p0')).toBeNull()
+  })
+
+  it('renaming a session to its own name remaps nothing', async () => {
+    const { result } = await render()
+    const shifts: unknown[] = []
+    const off = onPaneRemap((s) => shifts.push(s))
+    await act(async () => {
+      await result.current.renameGroup('zZGV2', 'dev')
+    })
+    expect(shifts).toHaveLength(0)
+    off()
+  })
+})
