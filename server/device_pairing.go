@@ -23,9 +23,9 @@ const (
 var errTooManyCodes = &codedError{code: "too_many_codes", msg: "too many pairing codes waiting; use one or wait 5 minutes", status: http.StatusConflict}
 
 // pendingPair is what a code pairs: the role, the name its maker gave (may
-// be empty), the device that made it ("" for a password session or the
-// CLI), whose revoke drops the code, and how long the new device is valid
-// once paired (0: no limit).
+// be empty), who made it (the device's id, session:<id> for a browser
+// signed in with the password, "" for the CLI), whose revoke drops the code,
+// and how long the new device is valid once paired (0: no limit).
 type pendingPair struct {
 	role     role
 	name     string
@@ -38,10 +38,10 @@ type pairCodes struct {
 	mu    sync.Mutex
 	codes map[string]pendingPair // hash of the normalized code → pending
 	now   func() time.Time
-	// alive, when set, reports whether a device can still make codes. It
-	// is asked under mu, and a revoke marks the device gone before
-	// dropCreator takes mu, so a code made while its maker is revoked is
-	// either refused or dropped.
+	// alive, when set, reports whether a creator (a device, a session) can
+	// still make codes. It is asked under mu, and a revoke marks the creator
+	// gone before dropCreator takes mu, so a code made while its maker is
+	// revoked is either refused or dropped.
 	alive func(id string) bool
 }
 
@@ -118,7 +118,7 @@ func (p *pairCodes) redeem(code string) (pendingPair, bool) {
 	return v, ok
 }
 
-// dropCreator forgets the codes a device made (it was revoked).
+// dropCreator forgets the codes a device or a session made (it was revoked).
 func (p *pairCodes) dropCreator(id string) {
 	if id == "" {
 		return

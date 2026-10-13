@@ -1378,6 +1378,12 @@ export async function revokeSignin(id: string): Promise<void> {
   if (!res.ok) throw await requestError(res)
 }
 
+// devicesKept: a sign-out signed the browsers out, but the devices they
+// paired could not be revoked.
+export function devicesKept(err: unknown): boolean {
+  return err instanceof RequestError && err.code === 'devices_not_revoked'
+}
+
 // Signs out every browser but this one. Resolves to how many went.
 export async function revokeOtherSignins(): Promise<number> {
   const res = await fetch(`${API_BASE}/signins`, {

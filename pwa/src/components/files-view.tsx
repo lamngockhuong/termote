@@ -634,6 +634,7 @@ function PaneFiles({
             refreshTick={refreshTick}
             onPick={(p) => f.reveal(p)}
             onRootChanged={f.rootChanged}
+            hideIgnored={readOnly}
           >
             {root.entries.length === 0 ? (
               <ViewMessage>This directory is empty</ViewMessage>

@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"os"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -191,5 +192,31 @@ func TestPeerCheckSendThenClose(t *testing.T) {
 	waitClose.Store(false)
 	if got := peerTestGet(t, addr); hits.Load() != 1 {
 		t.Fatalf("open connection: %q", got)
+	}
+}
+
+// procNetOwner reads the tables through the shared snapshots: lookups at
+// once cost about one read, not one each.
+func TestProcNetOwnerSharesReads(t *testing.T) {
+	var reads atomic.Int32
+	release := make(chan struct{})
+	old := procNetTables
+	procNetTables = newTableSnapshots(func() procNetIndex {
+		reads.Add(1)
+		<-release
+		return procNetIndex{}
+	})
+	t.Cleanup(func() { procNetTables = old })
+	client, server := netip.MustParseAddrPort("127.0.0.1:50000"), netip.MustParseAddrPort("127.0.0.1:7680")
+	var wg sync.WaitGroup
+	for range 20 {
+		wg.Add(1)
+		go func() { defer wg.Done(); procNetOwner(client, server) }()
+	}
+	time.Sleep(50 * time.Millisecond)
+	close(release)
+	wg.Wait()
+	if n := reads.Load(); n > 2 {
+		t.Errorf("20 lookups at once read the tables %d times", n)
 	}
 }

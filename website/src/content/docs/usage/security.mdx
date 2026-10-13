@@ -12,7 +12,8 @@ Whoever signs in with full access has the rights of the OS user that runs the se
 read and change files, read the saved password (`termote show-password`), change the configuration
 (`termote start --no-auth`) and pair more devices, from the interface or by typing `termote pair` in a
 terminal. A device paired from a terminal shows as "Not paired by a device", like one paired with the
-password.
+password from the CLI. One paired from a browser signed in with the password shows as "Paired from a
+signed-in browser" (`termote devices`: "a signed-in browser (<id>)").
 
 No setting turns a full-access client into something less. The real boundary is the OS user: to limit
 what Termote can reach, run it as another user with less access.
@@ -23,7 +24,7 @@ what Termote can reach, run it as another user with less access.
 | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | The password                | Everything (full).                                                                                                                                   |
 | A full device               | Everything the password can, except pairing another full device (it pairs view-only devices only) and signing a password browser out (it only lists them). |
-| A view-only device          | Watch the terminal, read the Chat view and Files/Changes inside a git repository. It types nothing and changes nothing, but reads everything printed, except the Chat view's tool results of a sensitive file (`.env`, keys). |
+| A view-only device          | Watch the terminal, read the Chat view and Files/Changes inside a git repository (not the home dir, never a file git ignores). It types nothing and changes nothing, but reads everything printed, except the Chat view's tool results of a sensitive file (`.env`, keys). |
 | Anyone, with `--no-auth`    | Everything, as soon as they reach the port.                                                                                                         |
 
 ## What the server enforces
@@ -40,8 +41,9 @@ what Termote can reach, run it as another user with less access.
   Without the socket (the container, an older server) it falls back to TCP and the password.
 - Settings > Signed-in browsers and `termote signins` list the browsers signed in with the password (the
   sign-in form, Basic auth, a CLI link); each can be signed out, or every one but the current. A
-  sign-out closes that browser's open terminals, one still opening included. A full device sees the list
-  but signs no one out.
+  sign-out closes that browser's open terminals, one still opening included, drops the pairing codes it
+  made, and revokes the devices it paired (and the devices those paired). Logging out of a browser only
+  drops its codes. A full device sees the list but signs no one out.
 - `termote url --open` (and the Herdr panel) opens the app already signed in: the CLI asks the server
   for a single-use token (30 s), writes it into an HTML page only its user can read (`0600` in a `0700` dir; an owner-only ACL on Windows), and opens that
   page, which posts the token. The token is never in a command line, a URL, the output or the history;
@@ -90,6 +92,10 @@ what Termote can reach, run it as another user with less access.
   in mirrored mode through a loopback whose client end WSL cannot see, which is let through.
 - **macOS.** It does not check which local user makes a connection (that takes `lsof` for each one):
   another user of the Mac has only the password in the way.
+- **Another local user slowing the server down.** Looking up who owns a connection reads the
+  machine's socket tables once for all the connections waiting, so a flood of connections from
+  another user does not multiply that work. It can still slow the server through other means (using
+  up ports, CPU); Termote does not promise to stop a local denial of service.
 - **The container and `termote serve` configured from the environment.** Neither checks the local user
   of a connection, and the container has no CLI socket.
 - **Sessions live in memory.** Restarting the server signs every browser out (devices stay paired).
@@ -97,6 +103,8 @@ what Termote can reach, run it as another user with less access.
   (Basic auth) is signed in again at once; change the password for that.
 - **Two servers on one state dir** (the service and a `termote serve` started by hand). A revoke in one
   does not close the terminals open in the other; the other refuses the device from its next request.
+  Writes to the paired devices take a lock first, so neither brings back a device the other revoked
+  (an older release running beside it does not take the lock).
 
 ## Recommendations
 
@@ -115,8 +123,11 @@ what Termote can reach, run it as another user with less access.
 ## If a device is lost
 
 - **A browser signed in with the password:** sign it out in Settings > Signed-in browsers, or
-  `termote signins` then `termote signins revoke <id>`. If the password itself may be known (saved in that
-  browser for Basic auth, written down), run `termote start --fresh` instead.
+  `termote signins` then `termote signins revoke <id>`. That also revokes every device it paired. If the
+  browser is no longer listed (the server restarted, it logged out), find its id in `termote devices`
+  ("a signed-in browser (<id>)") or Settings > Devices, and `termote signins revoke <id>` still revokes
+  those devices; if one was full, check what it could have left behind, as below. If the password itself
+  may be known (saved in that browser for Basic auth, written down), run `termote start --fresh` instead.
 - **View-only:** revoke it in Settings > Devices or with `termote devices revoke <id>`.
 - **Full:** revoke it, then run `termote start --fresh`: it sets a new password, which signs out every
   device and every session. A full device had a shell, so also check what it could have left behind:

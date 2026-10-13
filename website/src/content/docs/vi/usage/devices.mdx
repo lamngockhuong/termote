@@ -50,7 +50,9 @@ termote devices revoke <id>       # đăng xuất thiết bị và đóng các t
 
 Thu hồi có hiệu lực ngay, và thu hồi luôn mọi thiết bị mà thiết bị đó đã ghép. Đăng xuất trên một thiết
 bị đã ghép chỉ thu hồi chính thiết bị đó: các thiết bị nó đã ghép vẫn còn, hiện là do một thiết bị đã gỡ
-ghép. Mật khẩu mới (`termote start --fresh`) đăng xuất mọi thiết bị đã ghép. Sau khi thu hồi một thiết bị
+ghép. Đăng xuất một trình duyệt trong Settings > Signed-in browsers (hoặc `termote signins revoke`) thu hồi
+các thiết bị nó đã ghép, hiện là do một trình duyệt đã đăng nhập ghép. Mật khẩu mới
+(`termote start --fresh`) đăng xuất mọi thiết bị đã ghép. Sau khi thu hồi một thiết bị
 toàn quyền, hãy chạy thêm `termote start --fresh`: nó từng có shell (xem
 [Mô hình bảo mật](/vi/usage/security/#khi-mất-một-thiết-bị)).
 
@@ -67,8 +69,9 @@ tác ghi, còn giao diện ẩn các nút ghi và hiện biểu ngữ **View onl
   sử.
 - **Cần tmux 3.2 trở lên:** với tmux cũ hơn hoặc psmux, thiết bị chỉ xem không dùng được terminal và biểu
   ngữ nói rõ điều đó. Chat và Files vẫn dùng được.
-- **Files:** chỉ với pane nằm trong một git repository, và không bao giờ mở file thuộc loại nhạy cảm
-  (`.env`, khóa, v.v.).
+- **Files:** chỉ với pane nằm trong một git repository không phải thư mục home của bạn (hay thư mục chứa
+  nó), chỉ những file git theo dõi hoặc sẽ thêm (không bao giờ file git bỏ qua, như `.env.local` hay log,
+  và file mới hiện chậm tối đa 30 giây), và không bao giờ mở file thuộc loại nhạy cảm (`.env`, khóa, v.v.).
 - **Chat:** đọc được hội thoại và hộp thoại đang mở, nhưng không trả lời được. Kết quả của một tool
   Claude Code bị bỏ đi khi tool đó nêu một file nhạy cảm (`.env`, khóa, v.v.).
 - **Mọi thứ agent đã in ra đều đọc được.** Chỉ ghép thiết bị chỉ xem cho người bạn chấp nhận để họ nhìn

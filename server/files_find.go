@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -68,6 +69,23 @@ type findList struct {
 	// incomplete: reading stopped early (a limit, or git's output cut), so
 	// some files are missing.
 	incomplete bool
+	// files and dirs index the entries of a repo's tracked list, exactly as
+	// git names them, and every directory above them: what a view-only
+	// client may read (viewHides). Nil for the other lists. Never folded: on
+	// a case-sensitive volume of a system that usually ignores case, an
+	// ignored notes.md beside a tracked Notes.md stays hidden; a path that
+	// differs from git's in case only is hidden too.
+	files, dirs map[string]bool
+}
+
+// listed reports whether rel ('/'-separated, "." the root) is a file of the
+// list, or with dir a directory holding one. A tracked symlink to a
+// directory is a file of the list, and opens as a directory.
+func (l findList) listed(rel string, dir bool) bool {
+	if dir {
+		return rel == "." || l.dirs[rel] || l.files[rel]
+	}
+	return l.files[rel]
 }
 
 type findResult struct {
@@ -307,7 +325,7 @@ func (f *filesAPI) findTracked(ctx context.Context, root filesRoot) (findList, e
 		deleted[p] = true
 	}
 	ff := f.newFindFilter(root)
-	l := findList{incomplete: cut}
+	l := findList{incomplete: cut, files: map[string]bool{}, dirs: map[string]bool{}}
 	for _, p := range splitNul(out) {
 		if p == "" || strings.HasSuffix(p, "/") || deleted[p] || ff.skip(p) {
 			continue
@@ -317,6 +335,10 @@ func (f *filesAPI) findTracked(ctx context.Context, root filesRoot) (findList, e
 			break
 		}
 		l.entries = append(l.entries, newFindEntry(p, false))
+		l.files[p] = true
+		for d := path.Dir(p); d != "." && !l.dirs[d]; d = path.Dir(d) {
+			l.dirs[d] = true
+		}
 	}
 	return l, nil
 }
@@ -420,9 +442,10 @@ func (f *filesAPI) handleFind(w http.ResponseWriter, r *http.Request) {
 	}
 	defer cancel()
 	in, err := parseFindQuery(r.URL.Query())
-	// A view-only client never makes the server drop and rebuild a list.
+	// A view-only client never makes the server drop and rebuild a list,
+	// and never sees what git ignores.
 	if isViewOnly(r) {
-		in.fresh = false
+		in.fresh, in.ignored = false, false
 	}
 	if err != nil {
 		f.error(w, "files find", err)

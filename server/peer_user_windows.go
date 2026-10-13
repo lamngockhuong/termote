@@ -23,29 +23,35 @@ const mibTCPStateEstab = 5
 // reach, and installing a service takes an administrator anyway.
 const serviceSessionID = "session-0"
 
-// peerOwner reads the client end's PID from the TCP table, then the user
+// peerOwner reads the client end's PID from the TCP tables, then the user
 // that process runs as.
 var peerOwner = func(client, server netip.AddrPort) (string, error) {
-	// An IPv4 connection can sit in the IPv6 table too (a dual-stack socket
-	// connected to an IPv4 address), as IPv4-mapped addresses.
-	families := []uint32{windows.AF_INET6}
-	if client.Addr().Is4() && server.Addr().Is4() {
-		families = []uint32{windows.AF_INET, windows.AF_INET6}
-	}
-	var pid uint32
-	found := false
-	for _, family := range families {
-		if table, ok := tcpTable(family, tcpTableOwnerPIDConnections); ok {
-			if pid, found = tcpConnPID(table, family, client, server); found {
-				break
-			}
-		}
-	}
+	pid, found := tcpConnTables.get()[[2]netip.AddrPort{client, server}]
 	if !found {
 		return "", errPeerNotFound
 	}
 	return connProcessUser(pid)
 }
+
+// tcpConnTables copies both TCP tables once for every lookup waiting at the
+// time: a copy holds every connection of the machine, and a flood of
+// connections from another user would otherwise make one copy per
+// connection of tables that grow with the flood. An IPv4 connection can sit
+// in the IPv6 table too (a dual-stack socket connected to an IPv4 address),
+// as IPv4-mapped addresses, unmapped in the index.
+var tcpConnTables = newTableSnapshots(func() tcpConnIndex {
+	x := tcpConnIndex{}
+	for _, family := range []uint32{windows.AF_INET, windows.AF_INET6} {
+		if table, ok := tcpTable(family, tcpTableOwnerPIDConnections); ok {
+			x.add(table, family)
+		}
+	}
+	return x
+})
+
+// tcpConnIndex holds the owner PID of each established connection by its
+// local and remote ends.
+type tcpConnIndex map[[2]netip.AddrPort]uint32
 
 // connProcessUser returns the SID process pid runs as. A process this user
 // may open but whose token it may not read, in session 0, is a service
@@ -91,13 +97,12 @@ func trustedPeerIDs() []string { return []string{"S-1-5-18", serviceSessionID} }
 // in Windows' own tables.
 func foreignLoopbackPossible() bool { return false }
 
-// tcpConnPID returns the owner of the established row of table whose local
-// end is local and remote end remote (MIB_TCPROW_OWNER_PID, 24 bytes, or
-// MIB_TCP6ROW_OWNER_PID, 56 bytes). Addresses are in network order, ports
-// in network order in the low 16 bits of their DWORD.
-func tcpConnPID(table []byte, family uint32, local, remote netip.AddrPort) (uint32, bool) {
+// add indexes the established rows of table (MIB_TCPROW_OWNER_PID, 24
+// bytes, or MIB_TCP6ROW_OWNER_PID, 56 bytes). Addresses are in network
+// order, ports in network order in the low 16 bits of their DWORD.
+func (x tcpConnIndex) add(table []byte, family uint32) {
 	if len(table) < 4 {
-		return 0, false
+		return
 	}
 	n := binary.LittleEndian.Uint32(table)
 	rowSize := tcpRowOwnerPIDSize
@@ -122,9 +127,8 @@ func tcpConnPID(table []byte, family uint32, local, remote netip.AddrPort) (uint
 			r = netip.AddrPortFrom(netip.AddrFrom4([4]byte(row[12:16])), binary.BigEndian.Uint16(row[16:18]))
 			pid = binary.LittleEndian.Uint32(row[20:])
 		}
-		if state == mibTCPStateEstab && l == local && r == remote {
-			return pid, true
+		if state == mibTCPStateEstab {
+			x[[2]netip.AddrPort{l, r}] = pid
 		}
 	}
-	return 0, false
 }

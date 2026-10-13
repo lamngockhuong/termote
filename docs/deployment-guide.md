@@ -260,17 +260,18 @@ exists; these variables only configure the server when there is no saved config 
 container image (the CLI passes them as `-e NAME` from its own environment, never on the command line), or a
 manual `go run`/`termote-dev serve` from a checkout:
 
-| Variable                      | Default      | Description                                                          |
-| ----------------------------- | ------------ | -------------------------------------------------------------------- |
-| `TERMOTE_PORT`                | `7680`       | Server listen port                                                   |
-| `TERMOTE_BIND`                | `0.0.0.0`    | Server bind address                                                  |
-| `TERMOTE_PWA_DIR`             | `./pwa/dist` | Path to PWA static files                                             |
-| `TERMOTE_USER`                | `admin`      | HTTP basic auth username                                             |
-| `TERMOTE_PASS`                | (empty)      | HTTP basic auth password                                             |
-| `TERMOTE_NO_AUTH`             | `false`      | Disable basic auth                                                   |
-| `TERMOTE_MUX`                 | `tmux`       | Backend: `tmux` or `herdr`; in the image, also picks what starts     |
-| `TERMOTE_ALLOWED_HOSTS`       | (empty)      | Extra `Host` header values, comma-separated; loopback always allowed |
-| `TERMOTE_HERDR_ALLOW_NO_AUTH` | `false`      | Required with `TERMOTE_MUX=herdr` and `TERMOTE_NO_AUTH=true`         |
+| Variable                      | Default      | Description                                                                                                                                                                     |
+| ----------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TERMOTE_PORT`                | `7680`       | Server listen port                                                                                                                                                              |
+| `TERMOTE_BIND`                | `0.0.0.0`    | Server bind address                                                                                                                                                             |
+| `TERMOTE_PWA_DIR`             | `./pwa/dist` | Path to PWA static files                                                                                                                                                        |
+| `TERMOTE_USER`                | `admin`      | HTTP basic auth username                                                                                                                                                        |
+| `TERMOTE_PASS`                | (empty)      | HTTP basic auth password                                                                                                                                                        |
+| `TERMOTE_NO_AUTH`             | `false`      | Disable basic auth                                                                                                                                                              |
+| `TERMOTE_MUX`                 | `tmux`       | Backend: `tmux` or `herdr`; in the image, also picks what starts                                                                                                                |
+| `TERMOTE_ALLOWED_HOSTS`       | (empty)      | Extra `Host` header values, comma-separated; loopback always allowed                                                                                                            |
+| `TERMOTE_HERDR_ALLOW_NO_AUTH` | `false`      | Required with `TERMOTE_MUX=herdr` and `TERMOTE_NO_AUTH=true`                                                                                                                    |
+| `TERMOTE_WORKSPACE_HOME`      | (empty)      | Where your home dir sits in `/workspace` (`.`: the workspace itself) when the mounted workspace is it or holds it; view-only devices read nothing there. `container up` sets it |
 
 You do not set these by hand for a normal install: `termote start`/`container up` compute and
 save the equivalent settings from their flags.

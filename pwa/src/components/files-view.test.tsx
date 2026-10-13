@@ -561,6 +561,16 @@ describe('FilesView', () => {
 })
 
 describe('FilesView search', () => {
+  it('offers no ignored files to a view-only client', async () => {
+    const { unmount } = await show({ readOnly: true })
+    expect(screen.queryByRole('switch', { name: 'Include ignored' })).toBeNull()
+    unmount()
+    await show()
+    expect(
+      screen.getByRole('switch', { name: 'Include ignored' }),
+    ).toBeInTheDocument()
+  })
+
   it('finds a file anywhere, opens it, and Back returns to the results', async () => {
     mockFind.mockResolvedValue({
       root: '/home/kim/app',

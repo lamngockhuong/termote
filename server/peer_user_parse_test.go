@@ -107,3 +107,10 @@ func TestProcNetConnOwner(t *testing.T) {
 		}
 	}
 }
+
+// procNetConnOwner looks one connection up in a /proc/net/tcp listing.
+func procNetConnOwner(table string, client, server netip.AddrPort) (uid string, found, closed bool) {
+	x := procNetIndex{}
+	x.add(table)
+	return x.owner(client, server)
+}

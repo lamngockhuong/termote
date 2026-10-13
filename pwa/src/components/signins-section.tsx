@@ -1,5 +1,9 @@
 import { useState } from 'react'
-import { revokeSignin, type SignedInBrowser } from '../hooks/use-mux-api'
+import {
+  devicesKept,
+  revokeSignin,
+  type SignedInBrowser,
+} from '../hooks/use-mux-api'
 import { useSignins } from '../hooks/use-signins'
 import { Button } from './ui/button'
 import { ConfirmDialog } from './ui/confirm-dialog'
@@ -92,17 +96,26 @@ export function SigninsSection({
           await logOut()
           return
         }
-        await revokeSignin(p.session.id)
+        try {
+          await revokeSignin(p.session.id)
+        } catch (err) {
+          // Signed out all the same: only its devices stay
+          if (!devicesKept(err)) throw err
+        }
         onSignedOut()
         return
       }
       await revoke(p.session.id)
       setDone(`Signed out ${label}`)
-    } catch {
+    } catch (err) {
+      const others = p.kind === 'others'
+      const who = others
+        ? 'the other browsers'
+        : browserLabel(p.session.userAgent)
       setProblem(
-        p.kind === 'others'
-          ? 'Could not sign the other browsers out. Try again'
-          : `Could not sign ${browserLabel(p.session.userAgent)} out. Try again`,
+        devicesKept(err)
+          ? `Signed out ${who}, but the devices paired from ${others ? 'them' : 'it'} could not be revoked. Revoke them in Devices`
+          : `Could not sign ${who} out. Try again`,
       )
     }
   }
@@ -200,10 +213,10 @@ export function SigninsSection({
       >
         <p className="m-0">
           {pending?.kind === 'others'
-            ? `${others.length === 1 ? '1 browser is' : `${others.length} browsers are`} signed out at the next request, and their open terminals close. This browser stays signed in.`
+            ? `${others.length === 1 ? '1 browser is' : `${others.length} browsers are`} signed out at the next request, and their open terminals close. The devices paired from them are revoked too. This browser stays signed in.`
             : pending?.session.current
-              ? 'This is the browser you are using: it is signed out at once.'
-              : `${pending ? browserLabel(pending.session.userAgent) : ''} is signed out at its next request, and its open terminals close.`}
+              ? `This is the browser you are using: it is signed out at once.${logOut ? '' : ' The devices paired from it are revoked too.'}`
+              : `${pending ? browserLabel(pending.session.userAgent) : ''} is signed out at its next request, and its open terminals close. The devices paired from it are revoked too.`}
         </p>
       </ConfirmDialog>
     </div>

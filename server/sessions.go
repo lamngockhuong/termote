@@ -57,6 +57,9 @@ type sessionAuth struct {
 	links *tokenStore
 	hub   *streamHub
 	now   func() time.Time
+	// onEnd, when set, is told each session that ended (revoked, signed
+	// out): the pairing codes it made go with it. Set before serving.
+	onEnd func(id string)
 }
 
 func newSessionAuth(tokens *tokenStore, hub *streamHub) *sessionAuth {
@@ -191,10 +194,13 @@ func (s *sessionAuth) remove(match func(*sessionMeta) bool) []string {
 	return ids
 }
 
-// end drops the stream tokens of the sessions ids and closes their streams
-// (one still opening is refused by the hub's sessionAlive check).
+// end drops the stream tokens of the sessions ids, closes their streams (one
+// still opening is refused by the hub's sessionAlive check) and tells onEnd.
 func (s *sessionAuth) end(ids []string) {
 	for _, id := range ids {
+		if s.onEnd != nil {
+			s.onEnd(id)
+		}
 		if s.tokens != nil {
 			s.tokens.revokeSession(id)
 		}

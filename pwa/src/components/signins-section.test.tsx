@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SignedInBrowser } from '../hooks/use-mux-api'
+import { RequestError, type SignedInBrowser } from '../hooks/use-mux-api'
 import type { SigninsState } from '../hooks/use-signins'
 import { browserLabel, SigninsSection } from './signins-section'
 
@@ -177,7 +177,7 @@ describe('SigninsSection', () => {
     expect(screen.getByText('Sign out this browser?')).toBeInTheDocument()
     expect(
       screen.getByText(
-        'Safari on iOS is signed out at its next request, and its open terminals close.',
+        'Safari on iOS is signed out at its next request, and its open terminals close. The devices paired from it are revoked too.',
       ),
     ).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
@@ -201,13 +201,29 @@ describe('SigninsSection', () => {
     )
     expect(
       screen.getByText(
-        'This is the browser you are using: it is signed out at once.',
+        'This is the browser you are using: it is signed out at once. The devices paired from it are revoked too.',
       ),
     ).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
     await vi.waitFor(() => expect(onSignedOut).toHaveBeenCalled())
     expect(mockRevokeSignin).toHaveBeenCalledWith('me')
     expect(revoke).not.toHaveBeenCalled()
+  })
+
+  it('leaves the page when this browser is signed out but its devices stay', async () => {
+    mockRevokeSignin.mockRejectedValue(
+      new RequestError(500, 'devices_not_revoked', 'kept'),
+    )
+    setState({ sessions: [browser({ id: 'me', current: true })] })
+    const onSignedOut = vi.fn()
+    render(<SigninsSection onSignedOut={onSignedOut} />)
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Sign out Firefox on Linux (this browser)',
+      }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
+    await vi.waitFor(() => expect(onSignedOut).toHaveBeenCalled())
   })
 
   it('goes to the sign-in page by default once this browser is signed out', async () => {
@@ -272,6 +288,23 @@ describe('SigninsSection', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Could not sign Firefox on Linux out. Try again',
+    )
+  })
+
+  it('says when the browser is signed out but its devices stay', async () => {
+    setState({
+      sessions: [browser({ id: 'b' })],
+      revoke: vi.fn(async () => {
+        throw new RequestError(500, 'devices_not_revoked', 'kept')
+      }),
+    })
+    render(<SigninsSection />)
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Sign out Firefox on Linux' }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Signed out Firefox on Linux, but the devices paired from it could not be revoked. Revoke them in Devices',
     )
   })
 

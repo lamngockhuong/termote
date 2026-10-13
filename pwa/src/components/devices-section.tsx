@@ -24,6 +24,9 @@ function lastUse(d: PairedDevice, now: number): string {
 export function originLabel(d: PairedDevice): string {
   if (d.pairedBy === 'password') return 'Not paired by a device'
   if (d.pairedBy === 'unknown' || !d.pairedBy) return 'Unknown origin'
+  // The session's id, as `termote devices` and `termote signins` show it
+  if (d.pairedBy.startsWith('session:'))
+    return `Paired from a signed-in browser (${d.pairedBy.slice('session:'.length)})`
   if (d.pairedByName) return `Paired by ${d.pairedByName}`
   return 'Paired by a removed device'
 }

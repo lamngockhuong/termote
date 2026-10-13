@@ -1,10 +1,16 @@
 package main
 
 import (
+	"log"
 	"net/http"
 )
 
-var errUnknownSession = &codedError{code: "unknown_session", msg: "no such sign-in", status: http.StatusNotFound}
+var (
+	errUnknownSession = &codedError{code: "unknown_session", msg: "no such sign-in", status: http.StatusNotFound}
+	// errSessionDevicesKept: the browser is signed out, but the devices it
+	// paired could not be removed from the disk.
+	errSessionDevicesKept = &codedError{code: "devices_not_revoked", msg: "signed out, but the devices it paired are still paired; revoke them with termote devices revoke <id>", status: http.StatusInternalServerError}
+)
 
 // registerSigninRoutes mounts /api/mux/signins*: the password sessions
 // (browsers signed in with the sign-in form or Basic auth), listed and
@@ -14,7 +20,11 @@ var errUnknownSession = &codedError{code: "unknown_session", msg: "no such sign-
 // A full device lists them but revokes none: only the password (a session,
 // Basic auth: the CLI) does, so a device lent for a while cannot sign its
 // owner's browsers out. A view-only client gets 403 view_only.
-func registerSigninRoutes(mux *http.ServeMux, s *sessionAuth, allowed hostAllowlist) {
+//
+// Revoking a session revokes the devices it paired too (and the devices
+// those paired): dev is nil without a device store. Signing out (/logout)
+// does not.
+func registerSigninRoutes(mux *http.ServeMux, s *sessionAuth, dev *deviceAuth, allowed hostAllowlist) {
 	unsupported := func(w http.ResponseWriter) bool {
 		if s == nil {
 			jsonErrorCode(w, "unsupported", "sign-ins need sign-in to be on", http.StatusNotImplemented)
@@ -37,6 +47,18 @@ func registerSigninRoutes(mux *http.ServeMux, s *sessionAuth, allowed hostAllowl
 			return "cli"
 		}
 		return "settings"
+	}
+	// revokeDevices revokes what the sessions ids paired, once they are
+	// gone; a failure is logged, and answered after the audit line.
+	revokeDevices := func(ids []string) ([]string, error) {
+		if dev == nil {
+			return nil, nil
+		}
+		gone, err := dev.revokeSessions(ids)
+		if err != nil {
+			log.Printf("revoke the devices of signed out sessions: %v", err)
+		}
+		return gone, err
 	}
 
 	mux.HandleFunc("/api/mux/signins", func(w http.ResponseWriter, r *http.Request) {
@@ -67,8 +89,13 @@ func registerSigninRoutes(mux *http.ServeMux, s *sessionAuth, allowed hostAllowl
 		// Every session but the caller's own; the CLI (Basic auth) has
 		// none, so it signs every browser out.
 		ids := s.revokeOthers(a.SessionID)
-		auditf("revoke-session", "id", "all", "by", auditBy(a), "via", via(a), "revoked", ids)
-		jsonOK(w, map[string]any{"ok": true, "revoked": len(ids)})
+		gone, err := revokeDevices(ids)
+		auditf("revoke-session", "id", "all", "by", auditBy(a), "via", via(a), "revoked", ids, "devices", gone)
+		if err != nil {
+			jsonErrorCode(w, errSessionDevicesKept.code, errSessionDevicesKept.msg, errSessionDevicesKept.status)
+			return
+		}
+		jsonOK(w, map[string]any{"ok": true, "revoked": len(ids), "devices": len(gone)})
 	})
 
 	mux.HandleFunc("/api/mux/signins/{id}", func(w http.ResponseWriter, r *http.Request) {
@@ -80,11 +107,24 @@ func registerSigninRoutes(mux *http.ServeMux, s *sessionAuth, allowed hostAllowl
 			return
 		}
 		id := r.PathValue("id")
-		if !s.revoke(id) {
+		// A session gone already (a restart, Log out, its 24 hours, a
+		// revoke whose devices could not be removed) still revokes the
+		// devices it paired; with none it is unknown.
+		signedOut := s.revoke(id)
+		if !signedOut && (dev == nil || !deviceIDRe.MatchString(id)) {
 			jsonErrorCode(w, errUnknownSession.code, errUnknownSession.msg, errUnknownSession.status)
 			return
 		}
-		auditf("revoke-session", "id", id, "by", auditBy(a), "via", via(a))
-		jsonOK(w, map[string]any{"ok": true})
+		gone, err := revokeDevices([]string{id})
+		if !signedOut && err == nil && len(gone) == 0 {
+			jsonErrorCode(w, errUnknownSession.code, errUnknownSession.msg, errUnknownSession.status)
+			return
+		}
+		auditf("revoke-session", "id", id, "by", auditBy(a), "via", via(a), "signedOut", signedOut, "devices", gone)
+		if err != nil {
+			jsonErrorCode(w, errSessionDevicesKept.code, errSessionDevicesKept.msg, errSessionDevicesKept.status)
+			return
+		}
+		jsonOK(w, map[string]any{"ok": true, "signedOut": signedOut, "devices": len(gone)})
 	})
 }

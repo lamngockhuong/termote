@@ -151,6 +151,133 @@ func TestDeviceStoreTwoProcesses(t *testing.T) {
 	}
 }
 
+// A change in one process waits for another's to be written: a revoke made
+// while the other has read the file but not written it yet stays revoked.
+func TestDeviceStoreTwoProcessesLock(t *testing.T) {
+	dir := t.TempDir()
+	a := newTestDeviceStore(t, dir, "pw")
+	b := newTestDeviceStore(t, dir, "pw")
+	token, rec, err := b.add("d", roleView, deviceAddOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	read, release := make(chan struct{}), make(chan struct{})
+	a.beforeWrite = func() { close(read); <-release }
+	added := make(chan error, 1)
+	go func() {
+		_, _, err := a.add("other", roleView, deviceAddOpts{})
+		added <- err
+	}()
+	<-read
+	revoked := make(chan error, 1)
+	go func() { revoked <- b.revoke(rec.ID) }()
+	select {
+	case err := <-revoked:
+		t.Fatalf("the revoke did not wait for the other write: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(release)
+	if err := <-added; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-revoked; err != nil {
+		t.Fatal(err)
+	}
+	s := newTestDeviceStore(t, dir, "pw")
+	if _, ok, _ := s.lookup(token); ok {
+		t.Error("the other write brought the revoked device back")
+	}
+	if len(s.list()) != 1 {
+		t.Errorf("devices = %d, want the one the other process added", len(s.list()))
+	}
+}
+
+// A change gives up when another process holds the lock past the wait.
+func TestDeviceStoreLockTimeout(t *testing.T) {
+	dir := t.TempDir()
+	s := newTestDeviceStore(t, dir, "pw")
+	unlock, err := lockStateFile(filepath.Join(dir, devicesLock), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unlock()
+	start := time.Now()
+	if _, _, err := s.add("d", roleView, deviceAddOpts{}); !errors.Is(err, errStateLockTimeout) {
+		t.Fatalf("add = %v, want a lock timeout", err)
+	}
+	if time.Since(start) < devicesLockWait {
+		t.Error("gave up before the wait")
+	}
+	if len(s.list()) != 0 {
+		t.Error("a failed change kept its device")
+	}
+}
+
+// Changes of one process queue for each other, never for the lock's wait:
+// a slow write does not make the next one time out.
+func TestDeviceStoreSameProcessWaits(t *testing.T) {
+	old := devicesLockWait
+	devicesLockWait = 20 * time.Millisecond
+	t.Cleanup(func() { devicesLockWait = old })
+	s := newTestDeviceStore(t, t.TempDir(), "pw")
+	_, rec, err := s.add("d", roleView, deviceAddOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	read, release := make(chan struct{}), make(chan struct{})
+	s.beforeWrite = func() { close(read); <-release }
+	added := make(chan error, 1)
+	go func() { _, _, err := s.add("other", roleView, deviceAddOpts{}); added <- err }()
+	<-read
+	s.beforeWrite = nil
+	revoked := make(chan error, 1)
+	go func() { revoked <- s.revoke(rec.ID) }()
+	time.Sleep(5 * devicesLockWait)
+	close(release)
+	if err := <-added; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-revoked; err != nil {
+		t.Errorf("a change queued behind a slow one: %v", err)
+	}
+}
+
+// A use recorded while another process holds the lock is not waited for:
+// the lookup answers at once, the flush leaves the use for the next one,
+// and the shutdown flush writes it.
+func TestDeviceStoreFlushSkipsHeldLock(t *testing.T) {
+	dir := t.TempDir()
+	s := newTestDeviceStore(t, dir, "pw")
+	token, _, err := s.add("d", roleView, deviceAddOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	unlock, err := lockStateFile(filepath.Join(dir, devicesLock), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clock := time.Now().Add(2 * deviceTouchEvery)
+	s.now = func() time.Time { return clock }
+	start := time.Now()
+	if _, ok, _ := s.lookup(token); !ok {
+		t.Fatal("lookup")
+	}
+	if d := time.Since(start); d > devicesLockWait/2 {
+		t.Errorf("lookup waited %s for another process's lock", d)
+	}
+	if len(s.touched) != 1 {
+		t.Fatal("the use was dropped")
+	}
+	unlock()
+	s.flush()
+	if len(s.touched) != 0 {
+		t.Error("the shutdown flush left the use")
+	}
+	if rec := newTestDeviceStore(t, dir, "pw").list()[0]; !rec.LastUsedAt.Equal(clock.UTC()) {
+		t.Errorf("lastUsedAt = %s, want %s", rec.LastUsedAt, clock.UTC())
+	}
+}
+
 // A write that fails changes nothing, in memory or on disk.
 func TestDeviceStoreWriteFailure(t *testing.T) {
 	if runtime.GOOS == "windows" || os.Getuid() == 0 {

@@ -100,3 +100,11 @@ func TestPeerOwnerWindows(t *testing.T) {
 		t.Errorf("own connection: %q %v, want %s", id, err, self.User.Sid)
 	}
 }
+
+// tcpConnPID looks one connection up in a TCP table of family.
+func tcpConnPID(table []byte, family uint32, local, remote netip.AddrPort) (uint32, bool) {
+	x := tcpConnIndex{}
+	x.add(table, family)
+	pid, ok := x[[2]netip.AddrPort{local, remote}]
+	return pid, ok
+}

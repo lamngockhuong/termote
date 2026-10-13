@@ -8,6 +8,7 @@ import (
 	"image/jpeg"
 	"image/png"
 	"io"
+	"io/fs"
 	"log"
 	"net/http"
 	"net/url"
@@ -213,6 +214,11 @@ func (f *filesAPI) handleRaw(w http.ResponseWriter, r *http.Request) {
 // of a git status entry (Changes). It returns an error only before writing.
 func (f *filesAPI) raw(w http.ResponseWriter, req *filesRequest, q url.Values) error {
 	reveal := q.Get("reveal") == "1"
+	// A version of a change is vouched for by git status; where a symlink
+	// in the worktree leads still counts.
+	if f.viewHides(req, q.Get("path"), false, q.Get("side") != "") {
+		return fs.ErrNotExist
+	}
 	switch side := q.Get("side"); side {
 	case "":
 		return f.serveWorktreeImage(w, req.root, q.Get("path"), reveal)
