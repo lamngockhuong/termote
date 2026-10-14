@@ -133,6 +133,46 @@ describe('PromptCard', () => {
     expect(onChanged).toHaveBeenCalledWith(null)
   })
 
+  it('tells onSent only of an answer that reached the pane', async () => {
+    const onSent = vi.fn()
+    const { unmount } = render(
+      <PromptCard
+        paneId="%3"
+        prompt={permission}
+        showView={showView}
+        onAnswered={onAnswered}
+        onSent={onSent}
+        onChanged={onChanged}
+      />,
+    )
+    await click(/1\.\s*Yes$/)
+    expect(onSent).toHaveBeenCalledTimes(1)
+    unmount()
+    mockAnswer.mockRejectedValue(new AgentRequestError(500, '', 'x'))
+    render(
+      <PromptCard
+        paneId="%3"
+        prompt={permission}
+        showView={showView}
+        onAnswered={onAnswered}
+        onSent={onSent}
+        onChanged={onChanged}
+      />,
+    )
+    await click(/1\.\s*Yes$/)
+    expect(onSent).toHaveBeenCalledTimes(1)
+  })
+
+  it('Zellij busy: nothing was sent, the buttons stay to try again', async () => {
+    mockAnswer.mockRejectedValue(new AgentRequestError(503, 'busy', 'x'))
+    renderCard(permission)
+    await click(/1\.\s*Yes$/)
+    expect(screen.getByText('Zellij is busy; try again.')).toBeInTheDocument()
+    // Part of it may have gone in: the dialog is read again
+    expect(onAnswered).toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: /1\.\s*Yes$/ })).toBeEnabled()
+  })
+
   it('an id already used (another device answered) polls again', async () => {
     mockAnswer.mockRejectedValue(
       new AgentRequestError(409, 'prompt_expired', 'x'),

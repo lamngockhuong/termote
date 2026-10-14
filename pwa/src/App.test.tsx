@@ -57,12 +57,17 @@ const mockUseLocalSessions = vi.fn(() => ({
   },
 }))
 const mockSelectTab = vi.fn(async (_id: string) => true)
+const mockFetchOverview = vi.fn(async () => ({
+  serverNow: '2026-10-13T09:00:00.000Z',
+  panes: [] as object[],
+}))
 const mockLogout = vi.fn(async () => true)
 // The listener the App registers for a write refused as view-only
 let viewOnlyListener: (() => void) | undefined
 vi.mock('./hooks/use-mux-api', async (orig) => ({
   ...(await orig<typeof import('./hooks/use-mux-api')>()),
   selectTab: (id: string) => mockSelectTab(id),
+  fetchOverview: () => mockFetchOverview(),
   logout: () => mockLogout(),
   onViewOnlyRefusal: (listener: () => void) => {
     viewOnlyListener = listener
@@ -379,7 +384,9 @@ vi.mock('./components/session-sidebar', () => ({
     onAdd,
     groupActions,
     reorder,
+    onOpenOverview,
   }: {
+    onOpenOverview?: () => void
     reorder?: {
       tabs: boolean
       groups: boolean
@@ -425,6 +432,12 @@ vi.mock('./components/session-sidebar', () => ({
       )}
       {isMobile && onSelect && (
         <button onClick={() => onSelect('2')}>MobileSelect</button>
+      )}
+      {!isMobile && onOpenOverview && (
+        <button onClick={onOpenOverview}>SBOverview</button>
+      )}
+      {!isMobile && onSelect && (
+        <button onClick={() => onSelect('w2:t1')}>SBSelectW2</button>
       )}
       {isMobile && onClose && <button onClick={onClose}>MobileClose</button>}
       {isMobile && onAdd && (
@@ -4255,6 +4268,224 @@ describe('App views, view-only and deep links', () => {
       const toast = await screen.findByTestId('toast')
       expect(toast).toHaveTextContent('Could not copy the link')
       expect(toast).toHaveAttribute('data-variant', 'danger')
+    })
+  })
+
+  describe('agent overview', () => {
+    afterEach(() => {
+      window.history.replaceState(null, '', '/')
+      mockIsMobile.mockReturnValue(false)
+    })
+    const overview = () => screen.queryByRole('region', { name: 'Agents' })
+
+    it('a reload on #/overview opens it over the panes, address kept', async () => {
+      window.history.replaceState(null, '', '/#/overview')
+      render(<App />)
+      expect(
+        await screen.findByRole('region', { name: 'Agents' }),
+      ).toBeInTheDocument()
+      await act(async () => {})
+      expect(window.location.hash).toBe('#/overview')
+      // The panes stay mounted, out of reach, and the toolbar goes
+      expect(terminalPanel().parentElement).toHaveAttribute('inert')
+      expect(screen.queryByTestId('keyboard-toolbar')).toBeNull()
+      expect(switchSession).not.toHaveBeenCalled()
+      // One card, for the pane running an agent
+      expect(
+        screen.getByRole('button', { name: /^Open terminal: Agent/ }),
+      ).toBeInTheDocument()
+      expect(mockFetchOverview).toHaveBeenCalled()
+    })
+
+    it('opens from the sidebar and Esc goes back to the pane', async () => {
+      render(<App />)
+      fireEvent.click(await screen.findByRole('button', { name: 'SBOverview' }))
+      await screen.findByRole('region', { name: 'Agents' })
+      expect(window.location.hash).toBe('#/overview')
+      fireEvent.keyDown(window, { key: 'Escape' })
+      await waitFor(() => expect(overview()).toBeNull())
+      expect(window.location.hash).toBe('#/s/w1/w1%3At1/w1%3At1%3Ap1')
+    })
+
+    it('Esc in a dialog or menu is theirs', async () => {
+      window.history.replaceState(null, '', '/#/overview')
+      render(<App />)
+      await screen.findByRole('region', { name: 'Agents' })
+      for (const html of [
+        '<dialog open><button>in</button></dialog>',
+        '<div role="menu"><button>in</button></div>',
+      ]) {
+        const host = document.createElement('div')
+        host.innerHTML = html
+        document.body.append(host)
+        fireEvent.keyDown(host.querySelector('button')!, { key: 'Escape' })
+        host.remove()
+      }
+      expect(overview()).toBeInTheDocument()
+    })
+
+    it('picking a view leaves it for that view, in place', async () => {
+      window.history.replaceState(null, '', '/#/overview')
+      render(<App views={VIEWS} />)
+      await screen.findByRole('region', { name: 'Agents' })
+      fireEvent.click(screen.getByRole('tab', { name: 'Chat' }))
+      await waitFor(() => expect(overview()).toBeNull())
+      expect(screen.getByTestId('chat-main')).toBeInTheDocument()
+      await waitFor(() =>
+        expect(window.location.hash).toBe(
+          '#/s/w1/w1%3At1/w1%3At1%3Ap1?view=chat',
+        ),
+      )
+    })
+
+    it('a card opens its pane, the close button the pane on screen', async () => {
+      window.history.replaceState(null, '', '/#/overview')
+      render(<App />)
+      fireEvent.click(
+        await screen.findByRole('button', { name: /^Open terminal: Agent/ }),
+      )
+      await waitFor(() => expect(overview()).toBeNull())
+      await waitFor(() =>
+        expect(switchSession).toHaveBeenCalledWith('w1:t1', 'w1:t1:p1'),
+      )
+      window.history.replaceState(null, '', '/#/overview')
+      await act(async () => {
+        window.dispatchEvent(new HashChangeEvent('hashchange'))
+      })
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Close the agent overview' }),
+      )
+      await waitFor(() => expect(overview()).toBeNull())
+    })
+
+    it('picking a session leaves it', async () => {
+      window.history.replaceState(null, '', '/#/overview')
+      render(<App />)
+      await screen.findByRole('region', { name: 'Agents' })
+      fireEvent.click(screen.getByRole('button', { name: 'SBSelectW2' }))
+      await waitFor(() => expect(overview()).toBeNull())
+      expect(switchSession).toHaveBeenCalledWith('w2:t1', undefined)
+    })
+
+    it('Copy link copies the overview while it shows', async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined)
+      Object.defineProperty(navigator, 'clipboard', {
+        value: { writeText },
+        configurable: true,
+      })
+      window.history.replaceState(null, '', '/#/overview')
+      render(<App />)
+      fireEvent.click(await screen.findByRole('button', { name: 'CopyLink' }))
+      await waitFor(() =>
+        expect(writeText).toHaveBeenCalledWith(
+          `${window.location.origin}/#/overview`,
+        ),
+      )
+    })
+
+    it('closes in place when no link names the pane on screen', async () => {
+      mockSessions({ grouped: false })
+      render(<App />)
+      fireEvent.click(await screen.findByRole('button', { name: 'SBOverview' }))
+      await screen.findByRole('region', { name: 'Agents' })
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Close the agent overview' }),
+      )
+      await waitFor(() => expect(overview()).toBeNull())
+    })
+
+    it('without an agent, starts one from the Chat view of the pane', async () => {
+      // The sessions of mockSessions, with no agent in any pane
+      const value = (mockUseLocalSessions as any)() as any
+      const noAgents = value.sessions.map((t: any) => ({
+        ...t,
+        panes: t.panes?.map((p: any) => ({ ...p, hasAgent: false })),
+      }))
+      mockUseLocalSessions.mockReturnValue({
+        ...value,
+        sessions: noAgents,
+        activeSession: noAgents[0],
+      })
+      // The pane was left on Files: its address names that view
+      window.history.replaceState(
+        null,
+        '',
+        '/#/s/w1/w1%3At1/w1%3At1%3Ap1?view=files',
+      )
+      render(<App views={PANEL_VIEWS} />)
+      mockIsMobile.mockReturnValue(false)
+      fireEvent.click(await screen.findByRole('button', { name: 'SBOverview' }))
+      fireEvent.click(
+        await screen.findByRole('button', {
+          name: 'Start an agent in this pane',
+        }),
+      )
+      expect(await screen.findByTestId('chat-main')).toBeInTheDocument()
+      await waitFor(() => expect(overview()).toBeNull())
+    })
+
+    it('tmux: a card opens the chat of its tab, other keys stay put', async () => {
+      mockSessions({ backend: 'tmux' })
+      const value = (mockUseLocalSessions as any)() as any
+      const sessions = value.sessions.map((t: any) => ({
+        ...t,
+        panes: t.panes?.map((p: any) =>
+          p.hasAgent
+            ? { ...p, agentName: 'claude', agentStatus: 'blocked' }
+            : p,
+        ),
+      }))
+      mockUseLocalSessions.mockReturnValue({
+        ...value,
+        sessions,
+        activeSession: sessions[0],
+        mux: { ...value.mux, caps: { ...value.mux.caps, agentChat: true } },
+      })
+      window.history.replaceState(null, '', '/#/overview')
+      render(<App views={VIEWS} />)
+      await screen.findByRole('region', { name: 'Agents' })
+      // Its dialog waits on top
+      expect(
+        screen.getByRole('heading', { name: /^Needs you: Claude Code/ }),
+      ).toBeInTheDocument()
+      // Opening it again changes nothing
+      fireEvent.click(screen.getByRole('button', { name: 'SBOverview' }))
+      fireEvent.keyDown(window, { key: 'a' })
+      const prevented = new KeyboardEvent('keydown', {
+        key: 'Escape',
+        cancelable: true,
+      })
+      prevented.preventDefault()
+      window.dispatchEvent(prevented)
+      expect(overview()).toBeInTheDocument()
+      expect(window.location.hash).toBe('#/overview')
+      fireEvent.click(
+        screen.getByRole('button', { name: /^Open chat: Claude Code/ }),
+      )
+      await waitFor(() =>
+        expect(window.location.hash).toBe('#/s/w1/w1%3At1?view=chat'),
+      )
+    })
+
+    it('a card of a tab without a group is picked in place', async () => {
+      mockSessions({ grouped: false })
+      render(<App />)
+      fireEvent.click(await screen.findByRole('button', { name: 'SBOverview' }))
+      fireEvent.click(
+        await screen.findByRole('button', { name: /^Open terminal: Agent/ }),
+      )
+      await waitFor(() => expect(overview()).toBeNull())
+      expect(switchSession).toHaveBeenCalledWith('w1:t1', 'w1:t1:p1')
+    })
+
+    it('mobile: opens from the view menu', async () => {
+      mockIsMobile.mockReturnValue(true)
+      render(<App />)
+      fireEvent.click(await screen.findByRole('button', { name: /^View:/ }))
+      fireEvent.click(
+        await screen.findByRole('menuitem', { name: 'Agent overview' }),
+      )
+      await screen.findByRole('region', { name: 'Agents' })
     })
   })
 })

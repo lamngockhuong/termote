@@ -12,6 +12,7 @@ import {
   createTab,
   createWorktree,
   deleteFile,
+  fetchActivity,
   fetchAgentCommands,
   fetchAgentPrompt,
   fetchDevices,
@@ -23,6 +24,7 @@ import {
   fetchFilesTree,
   fetchGitChanges,
   fetchHealth,
+  fetchOverview,
   fetchPaneText,
   fetchSignins,
   fetchSnapshot,
@@ -463,6 +465,55 @@ describe('group API client', () => {
     const err = await closeGroup('w1').catch((e) => e)
     expect(err).toBeInstanceOf(RequestError)
     expect(err.code).toBe('')
+  })
+})
+
+describe('fetchActivity', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  it('reads every kept event, then the ones after a cursor', async () => {
+    const page = { events: [], latest: 4, oldest: 1, serverNow: 'now' }
+    const { calls } = mockFetch({ body: page }, { body: page })
+    expect(await fetchActivity()).toEqual(page)
+    await fetchActivity(4)
+    expect(calls.map((c) => c.url)).toEqual([
+      '/api/mux/activity',
+      '/api/mux/activity?after=4',
+    ])
+  })
+
+  it('throws the coded error of a refused read', async () => {
+    mockFetch({
+      body: { error: 'after must be…', code: 'invalid_after' },
+      status: 400,
+    })
+    const err = await fetchActivity(-1).catch((e) => e)
+    expect(err).toBeInstanceOf(RequestError)
+    expect(err.code).toBe('invalid_after')
+  })
+})
+
+describe('fetchOverview', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  it('reads every agent summary at once', async () => {
+    const body = { serverNow: 'now', panes: [{ paneId: 'p', key: 'k' }] }
+    const { calls } = mockFetch({ body })
+    expect(await fetchOverview()).toEqual(body)
+    expect(calls[0].url).toBe('/api/mux/overview')
+  })
+
+  it('throws on a refused read', async () => {
+    mockFetch({ body: { error: 'cross-site request rejected' }, status: 403 })
+    const err = await fetchOverview().catch((e) => e)
+    expect(err).toBeInstanceOf(RequestError)
+    expect(err.status).toBe(403)
   })
 })
 

@@ -140,6 +140,33 @@ describe('SessionSidebar — desktop expanded (default)', () => {
     expect(mark.parentElement).toHaveTextContent(/^Termote$/)
   })
 
+  it('opens the agent overview from its button, pressed while open', () => {
+    const onOpenOverview = vi.fn()
+    const { rerender } = renderDesktop(SESSIONS, { onOpenOverview })
+    const button = screen.getByRole('button', { name: 'Agent overview' })
+    expect(button).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.click(button)
+    expect(onOpenOverview).toHaveBeenCalled()
+    rerender(
+      <SessionSidebar
+        sessions={SESSIONS}
+        activeId="1"
+        onSelect={onSelect}
+        onOpenOverview={onOpenOverview}
+        overviewOpen
+        isCollapsed
+      />,
+    )
+    expect(
+      screen.getByRole('button', { name: 'Agent overview' }),
+    ).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('has no overview button without the overview', () => {
+    renderDesktop()
+    expect(screen.queryByRole('button', { name: 'Agent overview' })).toBeNull()
+  })
+
   it('calls onToggleCollapse when collapse button clicked', () => {
     renderDesktop()
     fireEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }))

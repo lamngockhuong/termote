@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -163,6 +164,9 @@ type Snapshot struct {
 	Backend    string  `json:"backend"`
 	Caps       Caps    `json:"caps"`
 	Groups     []Group `json:"groups"`
+	// ServerNow is the server's time when it answered (RFC 3339, UTC): the
+	// client measures its own clock's offset with it, for each Since.
+	ServerNow string `json:"serverNow,omitempty"`
 }
 
 // Group is a tmux session or a herdr workspace.
@@ -228,6 +232,11 @@ type ProcessInfo struct {
 type AgentInfo struct {
 	Name   string `json:"name"`
 	Status string `json:"status"`
+	// Since is when the agent's status began (RFC 3339, UTC), set by the
+	// activity tracker; SinceFirstSeen: it is when the server first saw the
+	// agent, which was already in that status.
+	Since          string `json:"since,omitempty"`
+	SinceFirstSeen bool   `json:"sinceFirstSeen,omitempty"`
 }
 
 // inputError is a client mistake; its message is safe to return verbatim.
@@ -294,6 +303,7 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *u
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), muxTimeout)
 		defer cancel()
+		gen := agent.activity.begin()
 		// peek=1 (the service worker naming a push) creates nothing: no
 		// page is open, so a closed default session stays closed.
 		read := m.Snapshot
@@ -310,6 +320,7 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *u
 			muxError(w, m, "snapshot", err)
 			return
 		}
+		snap = agent.activity.observe(gen, snap)
 		snap.APIVersion = apiVersion
 		snap.Backend = m.Name()
 		snap.Caps = m.Caps()
@@ -461,6 +472,30 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *u
 	mux.HandleFunc("/api/mux/uploads", handleUpload(uploads))
 
 	agent = registerAgentRoutes(mux, m, uploads)
+
+	// The status changes the snapshots showed since the server started:
+	// ids, keys, agent names and statuses, which the snapshot gives a
+	// view-only client too.
+	mux.HandleFunc("/api/mux/activity", func(w http.ResponseWriter, r *http.Request) {
+		if !requireMethod(w, r, http.MethodGet) {
+			return
+		}
+		if msg := crossSiteRejection(agent.allowed, r); msg != "" {
+			jsonError(w, msg, http.StatusForbidden)
+			return
+		}
+		var after uint64
+		q := r.URL.Query().Get("after")
+		if q != "" {
+			n, err := strconv.ParseUint(q, 10, 64)
+			if err != nil {
+				jsonErrorCode(w, "invalid_after", "after must be a non-negative integer", http.StatusBadRequest)
+				return
+			}
+			after = n
+		}
+		jsonOK(w, agent.activity.eventsAfter(after, q != ""))
+	})
 
 	mux.HandleFunc("/api/mux/panes/{id}/text", handlePaneText(m, agent))
 

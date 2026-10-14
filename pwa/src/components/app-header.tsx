@@ -50,6 +50,9 @@ interface Props {
   views: ViewOption<string>[]
   viewId: string
   onViewChange: (id: string) => void
+  // Opens the overview of every agent (mobile: from the view menu; the
+  // desktop has it in the sidebar)
+  onOpenOverview?: () => void
   viewPanelId: (id: string) => string
   // Desktop: views shown in the side panel, the one open, and its toggle
   panelViews?: ViewOption<string>[]
@@ -94,7 +97,12 @@ function MobileHeader(p: Props) {
       {down && (
         <ConnectionIndicator state={p.connectionState} onRetry={p.onRetry} />
       )}
-      <ViewMenu views={p.views} value={p.viewId} onChange={p.onViewChange} />
+      <ViewMenu
+        views={p.views}
+        value={p.viewId}
+        onChange={p.onViewChange}
+        onOpenOverview={p.onOpenOverview}
+      />
       <SettingsMenu
         {...p.menu}
         fontSize={

@@ -2,10 +2,10 @@ import { Plus } from 'lucide-react'
 import { useState } from 'react'
 import { useDevices } from '../hooks/use-devices'
 import { type PairedDevice, revokeDevice } from '../hooks/use-mux-api'
+import { formatAgo } from '../utils/format-ago'
 import { PairDeviceSheet, SECURITY_MODEL_URL } from './pair-device-sheet'
 import { Button, FOCUS_RING } from './ui/button'
 import { ConfirmDialog } from './ui/confirm-dialog'
-import { formatAgo } from './updates-section'
 
 // The server keeps names free of control and format characters.
 const ROLE_LABEL: Record<PairedDevice['role'], string> = {

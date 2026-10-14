@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { formatDeepLink, parseDeepLink } from './deep-link'
+import {
+  formatDeepLink,
+  OVERVIEW_HASH,
+  parseDeepLink,
+  parseScreenLink,
+} from './deep-link'
 
 describe('parseDeepLink', () => {
   it('reads group and tab', () => {
@@ -65,5 +70,18 @@ describe('formatDeepLink', () => {
   it('round-trips ids with special characters', () => {
     const link = { group: 'a b/c?', tab: '#1', pane: '..x%', view: 'chat' }
     expect(parseDeepLink(formatDeepLink(link))).toEqual(link)
+  })
+})
+
+describe('parseScreenLink', () => {
+  it('names the overview, with or without a trailing slash', () => {
+    expect(parseScreenLink(OVERVIEW_HASH)).toBe('overview')
+    expect(parseScreenLink('#/overview/')).toBe('overview')
+  })
+  it('is null for a pane link or anything else', () => {
+    expect(parseScreenLink('#/s/main/0')).toBeNull()
+    expect(parseScreenLink('#/overviews')).toBeNull()
+    expect(parseScreenLink('')).toBeNull()
+    expect(parseDeepLink(OVERVIEW_HASH)).toBeNull()
   })
 })

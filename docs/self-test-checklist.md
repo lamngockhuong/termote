@@ -386,6 +386,31 @@ Use a production build (the service worker is off in `pnpm dev`) and a pane runn
 - [ ] With a subscription and no page open, `tmux kill-session -t main`: `main` is not recreated
 - [ ] `ls -l ~/.local/state/termote/push`: 0600 files in a 0700 dir
 
+### Agent Overview
+
+Open it from the sidebar's grid button (desktop) or the view menu's "Agent overview" (phone).
+
+- [ ] `#/overview` opens it over the panes; a reload keeps it; Esc, its close button, Back or
+      picking a session leaves it; Copy link copies `#/overview`
+- [ ] One card per pane running an agent, in every group: blocked first, then working, done, idle,
+      the longest in its state first; the time matches on two devices with clocks set apart
+- [ ] A Claude card shows its last message, branch and changed files, and its context tokens and
+      model; a Codex card has no tokens; psmux shows no branch or changed files, and no error
+- [ ] tmux/psmux: the note "Only the active pane of each window is tracked"; Herdr and Zellij: none
+- [ ] A Claude card opens its Chat view (also in another group); its terminal button opens the
+      terminal; a card of an agent without Chat opens the terminal
+- [ ] The filter counts agents and does not change the sidebar's
+- [ ] Two Claude Code sessions asking for permission: "Needs you" shows the one waiting longest;
+      tapping "Yes" twice in a row answers only it; "Answered" waits for Next, which shows the other
+- [ ] A wizard (several tabs): answering a tab is no answer yet; Submit is
+- [ ] Skip moves on; "Show again" brings skipped dialogs back
+- [ ] View only: the dialog shows without buttons and says why
+- [ ] Zellij: a dialog of a pane with no stream open is answered; the tab the terminal shows keeps
+      its size
+- [ ] A working agent quiet past Settings → "Stuck agent" (default 10 min) gets the hourglass line;
+      it goes once the agent writes again; never while a subagent of it still writes
+- [ ] Opening the overview leaves the Changes view as fast as before (20 repos open)
+
 ### Fullscreen (Desktop)
 
 - [ ] Fullscreen button visible in header (desktop only)

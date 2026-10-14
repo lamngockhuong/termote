@@ -116,10 +116,21 @@ type claudeRow struct {
 	IsCompactSummary bool   `json:"isCompactSummary"`
 	Message          *struct {
 		Content any `json:"content"`
+		// Model and Usage are on assistant rows; every row of one
+		// message repeats the same usage.
+		Model string       `json:"model"`
+		Usage *claudeUsage `json:"usage"`
 	} `json:"message"`
 	// ToolUseResult: Claude Code's own record of a tool result, naming the
 	// file a Read (file.filePath) or an Edit/Write (filePath) touched
 	ToolUseResult claudeToolUseResult `json:"toolUseResult"`
+}
+
+// claudeUsage is the token counts of an assistant row's request.
+type claudeUsage struct {
+	InputTokens              int64 `json:"input_tokens"`
+	CacheReadInputTokens     int64 `json:"cache_read_input_tokens"`
+	CacheCreationInputTokens int64 `json:"cache_creation_input_tokens"`
 }
 
 // claudeToolUseResult is the file path a toolUseResult names: filePath (an
@@ -370,6 +381,15 @@ func parseClaudeRow(line []byte, off int64) (TranscriptEntry, bool) {
 	}
 	if row.IsCompactSummary {
 		e.Role = "summary"
+	}
+	// Claude Code writes an error or an interruption as an assistant row of
+	// model <synthetic> with zero usage: it filled no context.
+	if u := row.Message.Usage; u != nil && row.Type == "assistant" && row.Message.Model != "<synthetic>" {
+		// The whole prompt of the request: what fills the context.
+		e.usage = &entryUsage{
+			contextTokens: u.InputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens,
+			model:         row.Message.Model,
+		}
 	}
 	return e, true
 }

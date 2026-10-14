@@ -68,6 +68,7 @@ const DEFAULT_SETTINGS: Settings = {
   findIncludeIgnored: false,
   findExcludes: FIND_EXCLUDES_DEFAULT,
   notifyAgents: false,
+  stuckMinutes: 10,
 }
 
 describe('SettingsModal', () => {
@@ -458,6 +459,15 @@ describe('SettingsModal', () => {
     expect(onUpdateSetting).toHaveBeenCalledWith('terminalFont', '')
   })
 
+  it('sets when a quiet working agent counts as stuck', () => {
+    const { onUpdateSetting } = renderModal()
+    expect(document.body.textContent).toContain('quiet for 10 min')
+    fireEvent.change(screen.getByLabelText('Stuck agent after'), {
+      target: { value: '30' },
+    })
+    expect(onUpdateSetting).toHaveBeenCalledWith('stuckMinutes', 30)
+  })
+
   it('updates pollInterval via select', () => {
     const { onUpdateSetting } = renderModal()
     const select = screen.getByLabelText('Session poll interval')
@@ -629,7 +639,9 @@ describe('SettingsModal', () => {
 
   it('poll interval select has correct options', () => {
     renderModal()
-    const select = document.querySelector('select') as HTMLSelectElement
+    const select = screen.getByLabelText(
+      'Session poll interval',
+    ) as HTMLSelectElement
     const options = Array.from(select.options).map((o) => o.value)
     expect(options).toContain('3')
     expect(options).toContain('60')

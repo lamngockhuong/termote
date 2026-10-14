@@ -355,7 +355,7 @@ func TestPushWatcherPrunesHostState(t *testing.T) {
 
 func TestPushWatcherStopsWithContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	startPushWatcher(ctx, &fakeMux{}, nil) // no store: nothing runs
+	startPushWatcher(ctx, &fakeMux{}, nil, nil) // no store: nothing runs
 	w, _, _ := newTestWatcher(t, nil)
 	done := make(chan struct{})
 	go func() { w.run(ctx); w.deliver(ctx); close(done) }()

@@ -35,6 +35,9 @@ type zellijMux struct {
 
 	// groupMu runs session creates, renames and closes one at a time.
 	groupMu sync.Mutex
+	// onRename is told a group's old and new id after a rename (set before
+	// serving; may be nil).
+	onRename func(from, to string)
 }
 
 // zellijReadKeep is how long a session's last good read stands in for a
@@ -722,6 +725,9 @@ func (m *zellijMux) RenameGroup(ctx context.Context, groupID, name string) error
 	}
 	if n := countZellijSessions(after, name); n != 1 {
 		log.Printf("zellij: after renaming a session, %d sessions answer to the new name", n)
+	}
+	if m.onRename != nil {
+		m.onRename(groupID, zellijGroupID(name))
 	}
 	return nil
 }

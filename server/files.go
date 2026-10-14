@@ -150,12 +150,8 @@ func (f *filesAPI) start(w http.ResponseWriter, r *http.Request, allow func(http
 		return nil, nil, false
 	}
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	if f.dirs == nil || !f.m.Caps().Files {
-		f.error(w, "files", errUnsupported)
-		return nil, nil, false
-	}
 	ctx, cancel := context.WithTimeout(r.Context(), filesTimeout)
-	root, err := f.roots.paneRoot(ctx, f.dirs, r.PathValue("id"))
+	root, err := f.paneRootForRead(ctx, r.PathValue("id"))
 	if err == nil {
 		if seen := r.URL.Query().Get("root"); seen != "" && seen != root.Root {
 			err = &rootChangedError{root.Root}
@@ -174,7 +170,7 @@ func (f *filesAPI) start(w http.ResponseWriter, r *http.Request, allow func(http
 	// (`git init ~` makes every dotfile an untracked file), and only what git
 	// lists as tracked or untracked and not ignored.
 	if isViewOnly(r) {
-		if !root.IsRepo || f.holdsHome(root.Root) {
+		if f.viewHidesRoot(root) {
 			cancel()
 			writeViewOnly(w)
 			return nil, nil, false
@@ -188,6 +184,22 @@ func (f *filesAPI) start(w http.ResponseWriter, r *http.Request, allow func(http
 		req.view = &lists[0]
 	}
 	return req, cancel, true
+}
+
+// paneRootForRead resolves the root of paneID's directory for a read, when
+// the backend offers files (errUnsupported otherwise). Files and the
+// overview's changes both read through it.
+func (f *filesAPI) paneRootForRead(ctx context.Context, paneID string) (filesRoot, error) {
+	if f.dirs == nil || !f.m.Caps().Files {
+		return filesRoot{}, errUnsupported
+	}
+	return f.roots.paneRoot(ctx, f.dirs, paneID)
+}
+
+// viewHidesRoot reports whether a view-only client may read nothing of
+// root: it is no git repo, or it is a home dir or one above it.
+func (f *filesAPI) viewHidesRoot(root filesRoot) bool {
+	return !root.IsRepo || f.holdsHome(root.Root)
 }
 
 // holdsHome reports whether dir is a home dir or one above it, through

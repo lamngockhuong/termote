@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import type { Session } from '../types/session'
+import type { Session, SessionPane } from '../types/session'
 import {
   blockedFirst,
   DEFAULT_SIDEBAR_FILTER,
   effectiveFilter,
   matchesFilter,
+  matchesPaneFilter,
   resolveSidebarFilter,
+  summarizePanes,
   summarizeSessions,
 } from './session-filter'
 
@@ -355,5 +357,24 @@ describe('blockedFirst', () => {
   it('handles single session', () => {
     expect(blockedFirst([blocked1])).toEqual([blocked1])
     expect(blockedFirst([working])).toEqual([working])
+  })
+})
+
+describe('summarizePanes', () => {
+  const pane = (agentStatus?: SessionPane['agentStatus']): SessionPane => ({
+    id: 'p',
+    label: 'claude',
+    hasAgent: true,
+    agentStatus,
+  })
+  it('counts panes, each one with an agent', () => {
+    const panes = [pane('blocked'), pane('blocked'), pane('working'), pane()]
+    expect(summarizePanes(panes)).toEqual({ blocked: 2, working: 1, agents: 4 })
+  })
+  it('filters one pane by its own status', () => {
+    expect(matchesPaneFilter(pane('blocked'), 'needs-you')).toBe(true)
+    expect(matchesPaneFilter(pane('working'), 'needs-you')).toBe(false)
+    expect(matchesPaneFilter(pane('working'), 'working')).toBe(true)
+    expect(matchesPaneFilter(pane('idle'), 'all')).toBe(true)
   })
 })

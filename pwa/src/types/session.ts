@@ -30,6 +30,10 @@ export interface SessionPane {
   // Which agent ("claude"), when it runs one
   agentName?: string
   agentStatus?: AgentStatus
+  // When agentStatus began (server time, RFC 3339); agentSinceFirstSeen:
+  // when the server first saw the agent, already in it.
+  agentSince?: string
+  agentSinceFirstSeen?: boolean
   // Name of its foreground process ("vim"), when the server tells.
   command?: string
 }

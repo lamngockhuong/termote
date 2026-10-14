@@ -47,6 +47,13 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/utils/agent-start.ts`                    | Whether an agent can be started in the pane on screen         |
 | `pwa/src/components/read-only-bar.tsx`            | Bottom bar without input (View only, a read-only chat)        |
 | `pwa/src/components/prompt-card.tsx`              | Claude Code dialog as a card (answer buttons or read-only)    |
+| `pwa/src/components/overview-screen.tsx`          | Agent overview: every agent's card, own filter, by status     |
+| `pwa/src/components/agent-card.tsx`               | One agent: status age, last text, branch, changes, tokens     |
+| `pwa/src/components/needs-me-queue.tsx`           | Overview: dialogs waiting on the user, answered one at a time |
+| `pwa/src/utils/needs-me-queue.ts`                 | The queue's rules: card on top pinned, answers never move on  |
+| `pwa/src/utils/agent-stuck.ts`                    | A working agent quiet past the setting (stuck hint)           |
+| `pwa/src/hooks/use-agent-overview.ts`             | Polls `/api/mux/overview` while the overview shows            |
+| `pwa/src/utils/overview-order.ts`                 | Overview order: blocked, working, done, idle; oldest first    |
 | `pwa/src/hooks/use-agent-transcript.ts`           | Polls a pane's transcript, one store per pane                 |
 | `pwa/src/hooks/use-agent-prompt.ts`               | Polls a pane's open dialog, one store per pane                |
 | `pwa/src/components/files-view.tsx`               | Files view: the pane's directory as a tree, opens a file      |
@@ -114,6 +121,8 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/stream.go`                                | Terminal WebSocket (`/api/mux/stream`)                        |
 | `server/mux_pane_text.go`                         | `GET panes/{id}/text`: pane history as plain text, capped     |
 | `server/agent.go`                                 | `/api/mux/panes/{id}/agent/*` routes, transcript reads        |
+| `server/agent_activity.go`                        | Status since and change log of every agent (`/activity`)      |
+| `server/agent_overview.go`                        | `/overview`: each agent's last text, tokens, git changes      |
 | `server/agent_claude.go`                          | Claude Code transcript (JSONL) and session file               |
 | `server/agent_claude_prompt.go`                   | Reads a Claude Code screen: input box, dialogs                |
 | `server/agent_input.go`                           | Sends a message, answers a dialog (checks before each write)  |

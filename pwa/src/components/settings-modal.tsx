@@ -9,6 +9,7 @@ import {
   type Settings,
 } from '../hooks/use-settings'
 import { UI_STYLES, type UiStyle } from '../ui-style'
+import { STUCK_MINUTES_OPTIONS } from '../utils/agent-stuck'
 import type { ServerInfo } from '../utils/app-update'
 import {
   needsHomeScreenApp,
@@ -623,6 +624,25 @@ export function SettingsModal({
               onDisable={onDisableNotify}
             />
           )}
+          <SettingsRow
+            title="Stuck agent"
+            desc={`Mark a working agent quiet for ${settings.stuckMinutes} min in the overview`}
+          >
+            <select
+              aria-label="Stuck agent after"
+              value={settings.stuckMinutes}
+              onChange={(e) =>
+                onUpdateSetting('stuckMinutes', Number(e.target.value))
+              }
+              className={`px-2 ${CONTROL} ${FOCUS_RING}`}
+            >
+              {STUCK_MINUTES_OPTIONS.map((v) => (
+                <option key={v} value={v}>
+                  {v} min
+                </option>
+              ))}
+            </select>
+          </SettingsRow>
           <SettingsRow
             title="Session poll interval"
             desc={`How often to sync session list (${formatSeconds(settings.pollInterval)})`}

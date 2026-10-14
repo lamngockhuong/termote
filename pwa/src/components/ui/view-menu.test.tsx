@@ -105,4 +105,19 @@ describe('ViewMenu', () => {
     fireEvent.click(button('View: Terminal'))
     expect(option('Terminal')).toHaveAttribute('aria-checked', 'true')
   })
+
+  it('adds the agent overview below the views, even with one view', () => {
+    const onOpenOverview = vi.fn()
+    render(
+      <ViewMenu
+        views={VIEWS.slice(0, 1)}
+        value={'terminal' as View}
+        onChange={vi.fn()}
+        onOpenOverview={onOpenOverview}
+      />,
+    )
+    fireEvent.click(button('View: Terminal'))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Agent overview' }))
+    expect(onOpenOverview).toHaveBeenCalled()
+  })
 })

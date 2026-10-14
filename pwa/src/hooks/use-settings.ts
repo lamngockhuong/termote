@@ -1,6 +1,10 @@
 import { useCallback, useSyncExternalStore } from 'react'
 import { DEFAULT_UI_STYLE, resolveUiStyle, type UiStyle } from '../ui-style'
 import {
+  DEFAULT_STUCK_MINUTES,
+  resolveStuckMinutes,
+} from '../utils/agent-stuck'
+import {
   DEFAULT_SIDEBAR_FILTER,
   resolveSidebarFilter,
   type SidebarFilter,
@@ -79,6 +83,7 @@ export interface Settings {
   findIncludeIgnored: boolean // Files search: a repo's ignored files too
   findExcludes: string[] // Files search: folder names never searched (above)
   notifyAgents: boolean // notify when an agent is blocked or ends a turn
+  stuckMinutes: number // overview: a working agent quiet this long may be stuck
 }
 
 const DEFAULTS: Settings = {
@@ -102,6 +107,7 @@ const DEFAULTS: Settings = {
   findIncludeIgnored: false,
   findExcludes: FIND_EXCLUDES_DEFAULT,
   notifyAgents: false,
+  stuckMinutes: DEFAULT_STUCK_MINUTES,
 }
 
 // Listeners for useSyncExternalStore
@@ -136,6 +142,7 @@ function getSnapshot(): Settings {
         findIncludeIgnored: merged.findIncludeIgnored === true,
         findExcludes: resolveFindExcludes(merged.findExcludes),
         notifyAgents: merged.notifyAgents === true,
+        stuckMinutes: resolveStuckMinutes(merged.stuckMinutes),
         copyOnSelect: merged.copyOnSelect === true,
       }
     } catch {

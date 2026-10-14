@@ -382,8 +382,15 @@ func newServeHandler(cfg serveConfig, m Mux) (http.Handler, error) {
 // which the caller must shut down, and the Web Push store (nil without one),
 // whose watcher the caller starts.
 func buildServer(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushStore, error) {
+	h, hub, push, _, err := buildServerWith(cfg, m)
+	return h, hub, push, err
+}
+
+// buildServerWith is buildServer that also returns the activity tracker, for
+// the push watcher to feed.
+func buildServerWith(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushStore, *activityTracker, error) {
 	if err := validateConfig(cfg); err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	mux := http.NewServeMux()
 	tokenStore := newStreamTokenStore()
@@ -430,7 +437,11 @@ func buildServer(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushStore, 
 	registerSigninRoutes(mux, sessions, devices, allowed)
 	registerLoginLinkRoutes(mux, sessions)
 	registerPushRoutes(mux, push)
-	registerStreamRoutes(mux, m, tokenStore, allowed, hub)
+	registerStreamRoutes(mux, m, tokenStore, allowed, hub, agent.activity)
+	if z, ok := m.(*zellijMux); ok {
+		// A Zellij group's ids change with its session's name.
+		z.onRename = agent.activity.renameGroup
+	}
 	// The upload store and the trash are never read through the Files view
 	// either: with a pane in the home dir, a deleted .env would otherwise
 	// be served under its random name, and the records name other repos.
@@ -470,7 +481,7 @@ func buildServer(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushStore, 
 	handler = securityHeaders(pwa, handler)
 	handler = hostGuard(allowed, handler)
 	handler = isolationHeaders(handler)
-	return readDeadline(noCacheMiddleware(handler)), hub, push, nil
+	return readDeadline(noCacheMiddleware(handler)), hub, push, agent.activity, nil
 }
 
 // requestReadTimeout bounds reading one request, its body included:
@@ -571,13 +582,13 @@ func serveAndPublish(ctx context.Context, cfg serveConfig, m Mux, ln net.Listene
 // runServer serves on ln until ctx is cancelled, then stops accepting
 // requests, closes every terminal stream and waits for their processes.
 func runServer(ctx context.Context, cfg serveConfig, m Mux, ln net.Listener) error {
-	handler, hub, push, err := buildServer(cfg, m)
+	handler, hub, push, activity, err := buildServerWith(cfg, m)
 	if err != nil {
 		ln.Close()
 		return err
 	}
 	// Here, not in buildServer: a handler built for a test sends nothing.
-	startPushWatcher(ctx, m, push)
+	startPushWatcher(ctx, m, push, activity)
 	pwa := "embedded"
 	if cfg.PWADir != "" {
 		pwa, _ = filepath.Abs(cfg.PWADir)

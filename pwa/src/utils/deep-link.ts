@@ -49,3 +49,13 @@ export function formatDeepLink({ group, tab, pane, view }: DeepLink): string {
     view && view !== 'terminal' ? `?view=${encodeURIComponent(view)}` : ''
   return `${PREFIX}${path}${query}`
 }
+
+// Screens that are no pane's: the overview of every agent.
+export type Screen = 'overview'
+
+export const OVERVIEW_HASH = '#/overview'
+
+// The screen a location.hash names, or null for a pane (or nothing).
+export function parseScreenLink(hash: string): Screen | null {
+  return hash.replace(/\/$/, '') === OVERVIEW_HASH ? 'overview' : null
+}

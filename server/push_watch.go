@@ -46,9 +46,11 @@ type pushSendFunc func(ctx context.Context, sub pushSub, payload []byte, topic s
 type pushWatcher struct {
 	peek  func(ctx context.Context) (Snapshot, error)
 	store *pushStore
-	send  pushSendFunc
-	now   func() time.Time
-	queue chan pushEvent
+	// activity is told every snapshot the tick reads (may be nil).
+	activity *activityTracker
+	send     pushSendFunc
+	now      func() time.Time
+	queue    chan pushEvent
 
 	// prev is the last known status of each pane; only the tick reads it.
 	prev map[string]string
@@ -73,8 +75,8 @@ func newPushWatcher(peek func(context.Context) (Snapshot, error), store *pushSto
 }
 
 // startPushWatcher runs the watcher until ctx is done; nothing without a
-// store.
-func startPushWatcher(ctx context.Context, m Mux, store *pushStore) {
+// store. Its reads feed activity too.
+func startPushWatcher(ctx context.Context, m Mux, store *pushStore, activity *activityTracker) {
 	if store == nil {
 		return
 	}
@@ -86,6 +88,7 @@ func startPushWatcher(ctx context.Context, m Mux, store *pushStore) {
 			return sendPush(ctx, client, store, sub, payload, topic)
 		},
 	)
+	w.activity = activity
 	go w.run(ctx)
 	go w.deliver(ctx)
 }
@@ -108,13 +111,27 @@ func pushTransitionKind(prev, next string) string {
 	return ""
 }
 
+// foldPaneStatus is the status to remember for a pane whose agent is a,
+// given the last known one: "" forgets the pane. A pane listed without an
+// agent is forgotten, so the next agent there is a first sighting; an agent
+// with no status (none, "unknown") keeps the last known one. The push watcher
+// and the activity tracker both fold this way.
+func foldPaneStatus(last string, a *AgentInfo) string {
+	if a == nil {
+		return ""
+	}
+	if pushStatuses[a.Status] {
+		return a.Status
+	}
+	return last
+}
+
 // transitions returns the last known status of every pane in snap and the
 // events since prev. A pane no longer listed, or listed without an agent, is
-// forgotten: the next agent there is a first sighting, so a killed working
-// agent and a new one's first idle raise no finished turn. An agent with no
-// status keeps its last known one. Panes are known by their key (paneKey),
-// so a tmux pane whose id a window move shifted is still the same pane, and
-// never takes the status of the one that had the id before.
+// forgotten (foldPaneStatus): a killed working agent and a new one's first
+// idle raise no finished turn. Panes are known by their key (paneKey), so a
+// tmux pane whose id a window move shifted is still the same pane, and never
+// takes the status of the one that had the id before.
 func transitions(prev map[string]string, snap Snapshot) (map[string]string, []pushEvent) {
 	next := map[string]string{}
 	var events []pushEvent
@@ -123,14 +140,8 @@ func transitions(prev map[string]string, snap Snapshot) (map[string]string, []pu
 			for _, p := range t.Panes {
 				key := paneKey(p)
 				last := prev[key]
-				status := ""
-				if p.Agent != nil && pushStatuses[p.Agent.Status] {
-					status = p.Agent.Status
-				}
+				status := foldPaneStatus(last, p.Agent)
 				if status == "" {
-					if p.Agent != nil && last != "" {
-						next[key] = last
-					}
 					continue
 				}
 				next[key] = status
@@ -164,6 +175,7 @@ func (w *pushWatcher) tick(ctx context.Context) {
 		clear(w.prev)
 		return
 	}
+	gen := w.activity.begin()
 	pctx, cancel := context.WithTimeout(ctx, muxTimeout)
 	snap, err := w.peek(pctx)
 	cancel()
@@ -171,6 +183,7 @@ func (w *pushWatcher) tick(ctx context.Context) {
 		w.logf("peek", "push: reading the panes: %v", err)
 		return
 	}
+	w.activity.observe(gen, snap)
 	next, events := transitions(w.prev, snap)
 	w.prev = next
 	for _, e := range events {

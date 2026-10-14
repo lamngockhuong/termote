@@ -1,0 +1,64 @@
+---
+title: Agent Overview
+description: Every coding agent in every session at a glance, with the dialogs waiting on you answered in one place
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+The agent overview shows every pane running a coding agent (Claude Code, Codex, any agent your
+backend reports), in every session, on one screen. It is for checking on several agents at once:
+which one waits on you, which is still working, which has finished.
+
+## Open it
+
+- **Desktop**: the grid button at the top of the sidebar.
+- **Phone**: the view menu in the header, then **Agent overview**.
+- **Address**: `#/overview` after your Termote address. A reload keeps it, and **Copy link** copies it.
+
+It covers the panes without closing them: leave with its close button, `Esc`, the browser's Back
+button, or by picking a session. Back and Forward move between the overview and the pane you came from.
+
+## The cards
+
+One card per agent, sorted by what needs you first: blocked, then working, done and idle. Within one
+state, the agent that has been in it longest comes first. Each card shows:
+
+- the agent's state and how long it has been in it. "≥ 5 min ago" means the server found the agent
+  already in that state when it started watching (after a restart, for example);
+- the session and tab it runs in, and **worktree** for a Herdr worktree;
+- its last message;
+- the branch and the number of changed files of its directory (not on Windows with psmux);
+- Claude Code only: the tokens its context holds now, and the model.
+
+Tap a card to open the agent: its Chat view for Claude Code and Codex, else its terminal. A Chat card
+also has a terminal button. The filter above the cards counts agents and is the overview's own: it
+does not change the sidebar's.
+
+<Aside>
+With tmux and psmux, only the active pane of each window is watched: an agent in another split of the
+same window has no card. Herdr and Zellij watch every pane.
+</Aside>
+
+## Needs you
+
+When an agent waits on a dialog (a permission, a question), the overview shows it at the top, one at
+a time, with the same buttons as the Chat view. The dialog on top stays until you answer it or press
+**Skip**: an agent that starts waiting later joins the end, never in front of it. After an answer the
+card says **Answered**, and only **Next** shows the next dialog, so a second tap never answers another
+agent. **Show again** brings back the dialogs you skipped.
+
+A view-only device sees the dialogs without buttons. An agent whose dialogs Termote cannot read or
+answer gets an **Open terminal** button instead. With Zellij, if the answer cannot reach the pane at
+that moment, the card says so and you can try again.
+
+## Stuck agents
+
+An agent that says it is working but has written nothing for a while gets an hourglass line: "May be
+stuck: no new activity for 14 min". Set how long in **Settings > Sessions > Stuck agent** (3 to 60
+minutes, 10 by default). Writes of its running subagents count as activity. It is only a hint on the
+card: no notification is sent.
+
+<Aside type="caution">
+The times come from the server. They start when the server first sees an agent, and they are recorded
+only while a page is open or a device has notifications on.
+</Aside>

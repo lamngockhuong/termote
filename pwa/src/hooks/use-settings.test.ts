@@ -261,6 +261,17 @@ describe('useSettings', () => {
     expect(saved.notifyAgents).toBe(true)
   })
 
+  it('keeps a stuck threshold from 3 to 60 minutes, else 10', () => {
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ stuckMinutes: 600 }),
+    )
+    const { result } = renderHook(() => useSettings())
+    expect(result.current.settings.stuckMinutes).toBe(10)
+    act(() => result.current.updateSetting('stuckMinutes', 30))
+    expect(result.current.settings.stuckMinutes).toBe(30)
+  })
+
   it('copies on select only once turned on', () => {
     localStorage.setItem(
       'termote-settings',
