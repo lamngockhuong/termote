@@ -39,6 +39,26 @@ async function open(page: Page, hash = '') {
 
 const overview = (page: Page) => page.getByRole('region', { name: 'Agents' })
 
+test.describe('agent overview activity log', () => {
+  test('opens beside the cards or in a sheet, and closes', async ({ page }) => {
+    await open(page, '#/overview')
+    const button = overview(page).getByRole('button', { name: 'Activity' })
+    await button.click()
+    await expect(button).toHaveAttribute('aria-pressed', 'true')
+    const wide = (page.viewportSize()?.width ?? 0) >= 1280
+    const log = wide
+      ? page.getByRole('complementary', { name: 'Activity' })
+      : page.getByRole('dialog', { name: 'Activity' })
+    await expect(log).toBeVisible()
+    await expect(log.getByRole('radiogroup', { name: 'Show changes to' })).toBeVisible()
+    if (wide) await button.click()
+    else await log.getByRole('button', { name: 'Close the activity' }).click()
+    await expect(log).toBeHidden()
+    // The log's sheet took Esc; the overview is still open.
+    await expect(overview(page)).toBeVisible()
+  })
+})
+
 test.describe('agent overview', () => {
   test('opens from its address, stays on reload, Esc goes to the pane', async ({
     page,
@@ -115,7 +135,15 @@ test.describe('agent overview', () => {
     expect(bad.status()).toBe(400)
     expect((await bad.json()).code).toBe('invalid_after')
 
-    for (const path of ['/api/mux/overview', '/api/mux/activity']) {
+    // A pane that does not exist has no subagents to read
+    const missing = await request.get('/api/mux/panes/nope/agent/subagents')
+    expect(missing.ok()).toBe(false)
+
+    for (const path of [
+      '/api/mux/overview',
+      '/api/mux/activity',
+      '/api/mux/panes/nope/agent/subagents',
+    ]) {
       const cross = await request.get(path, { headers: { 'Sec-Fetch-Site': 'cross-site' } })
       expect(cross.status()).toBe(403)
     }
@@ -193,6 +221,27 @@ test.describe('agent overview with an agent', () => {
     await expect(overview(page)).toBeHidden()
     await expect.poll(() => decodeURIComponent(new URL(page.url()).hash)).toContain('?view=chat')
     await expect(page.getByRole('region', { name: 'Conversation' })).toBeVisible()
+  })
+
+  test("a card's history: the status strip and its subagents", async ({ page }) => {
+    await open(page, '#/overview')
+    const card = page.locator('[data-status]', {
+      has: page.getByRole('button', { name: new RegExp(`, (.* / )?${windowName}$`) }),
+    })
+    await expect(card).toBeVisible({ timeout: 20000 })
+    say('start the subagents')
+    const history = card.getByRole('button', { name: /^(Hide history|History)/ })
+    await history.click()
+    await expect(history).toHaveAttribute('aria-expanded', 'true')
+    await expect(card.getByRole('img', { name: /^Last 60 min/ })).toBeVisible()
+    const tree = card.getByRole('list', { name: 'Subagents' })
+    await expect(tree.getByRole('listitem')).toHaveCount(2, { timeout: 20000 })
+    await expect(tree.locator('[data-status="done"]')).toHaveCount(1)
+    await expect(tree.locator('[data-status="running"]')).toContainText('Grep')
+    await history.click()
+    await expect(
+      card.getByRole('button', { name: 'History · 2 subagents, 1 running' }),
+    ).toBeVisible()
   })
 
   test('a dialog is answered from the queue, never moving on by itself', async ({ page }) => {
