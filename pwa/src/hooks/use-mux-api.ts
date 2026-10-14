@@ -11,6 +11,11 @@ export const REQUEST_TIMEOUT_MS = 10_000
 export interface MuxAgent {
   name: string
   status: string
+  // When the status began (server time, RFC 3339); sinceFirstSeen: when
+  // the server first saw the agent, already in it. Absent from an older
+  // server.
+  since?: string
+  sinceFirstSeen?: boolean
 }
 
 // A pane's foreground process: the first word of its name (never its
@@ -111,6 +116,9 @@ export interface MuxSnapshot {
     viewStream?: boolean
   }
   groups: MuxGroup[]
+  // The server's time when it answered (RFC 3339), for the client's clock
+  // offset. Absent from an older server.
+  serverNow?: string
 }
 
 // State-changing calls always send JSON: the server rejects any other
@@ -182,6 +190,70 @@ export async function fetchSnapshot(signIn = openSignIn): Promise<MuxSnapshot> {
     }),
     signIn,
   )
+}
+
+// One status change of a pane's agent: from '' when it appeared, to ''
+// when it went. The ids are the ones it had then (pane-remap moves them);
+// key names the pane as paneKeys does.
+export interface ActivityEvent {
+  seq: number
+  ts: string
+  key: string
+  groupId: string
+  tabId: string
+  paneId: string
+  agent: string
+  from: string
+  to: string
+}
+
+// reset: the events start at the oldest the server keeps, not after the
+// cursor (some were dropped, or the server restarted).
+export interface ActivityPage {
+  events: ActivityEvent[]
+  latest: number
+  oldest: number
+  reset?: boolean
+  serverNow: string
+}
+
+// The status changes since seq after (every kept one without it).
+export async function fetchActivity(after?: number): Promise<ActivityPage> {
+  const q = after === undefined ? '' : `?after=${after}`
+  const res = await fetch(`${API_BASE}/activity${q}`, {
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  })
+  if (!res.ok) throw await requestError(res)
+  return res.json()
+}
+
+// One overview card's data beyond the snapshot. lastTs: when the agent last
+// wrote (server time). usage: Claude's context size. unavailable: what
+// could not be read this time ('transcript', 'changes'), shown as pending.
+export interface OverviewPane {
+  paneId: string
+  key: string
+  lastText?: string
+  lastTs?: string
+  branch?: string
+  changed?: number
+  changedTruncated?: boolean
+  usage?: { contextTokens: number; model?: string }
+  unavailable?: string[]
+}
+
+export interface Overview {
+  serverNow: string
+  panes: OverviewPane[]
+}
+
+// Every agent's summary, in one read for all the overview's cards.
+export async function fetchOverview(): Promise<Overview> {
+  const res = await fetch(`${API_BASE}/overview`, {
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  })
+  if (!res.ok) throw await requestError(res)
+  return res.json()
 }
 
 // How the server was installed, which names the way to update it.

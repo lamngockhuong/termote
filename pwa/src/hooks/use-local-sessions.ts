@@ -225,6 +225,8 @@ export function buildSessions(
         hasAgent: !!p.agent,
         agentName: p.agent?.name,
         agentStatus: toAgentStatus(p.agent?.status),
+        agentSince: p.agent?.since,
+        agentSinceFirstSeen: p.agent?.sinceFirstSeen,
         command: p.process?.name,
       }))
       const pane = tab.panes.find((p) => p.active) ?? tab.panes[0]
@@ -263,6 +265,20 @@ export function buildSessions(
   return { sessions, groups, serverActive, activeByGroup }
 }
 
+// The server clock's offset from this device's (ms), from a snapshot's
+// serverNow read at now; a change under a second (the reply's way over the
+// network) keeps prev, so the state does not change on every poll.
+export function nextClockOffset(
+  prev: number,
+  serverNow: string | undefined,
+  now: number,
+): number {
+  const server = serverNow ? Date.parse(serverNow) : Number.NaN
+  if (!Number.isFinite(server)) return prev
+  const offset = server - now
+  return Math.abs(offset - prev) < 1000 ? prev : offset
+}
+
 export function useLocalSessions(pollInterval = 5) {
   const [sessions, setSessions] = useState<Session[]>([])
   const [groups, setGroups] = useState<SessionGroup[]>([])
@@ -270,6 +286,9 @@ export function useLocalSessions(pollInterval = 5) {
   const [isReady, setIsReady] = useState(false)
   const [isServerReachable, setIsServerReachable] = useState(true)
   const [mux, setMux] = useState<MuxInfo>(DEFAULT_MUX)
+  // Server time minus this device's (ms): add it to Date.now() to compare
+  // with the server's times (an agent's since).
+  const [clockOffset, setClockOffset] = useState(0)
   const metaRef = useRef<Record<string, SessionMeta>>(loadMeta())
   const muxRef = useRef<MuxInfo>(DEFAULT_MUX)
   const selectionRef = useRef<Selection | null>(null)
@@ -422,6 +441,8 @@ export function useLocalSessions(pollInterval = 5) {
       const next: MuxInfo = { backend: snap.backend, caps: snap.caps }
       muxRef.current = next
       setMux((prev) => (sameMux(prev, next) ? prev : next))
+      const now = Date.now()
+      setClockOffset((prev) => nextClockOffset(prev, snap.serverNow, now))
       applySnapshot(snap, version)
       setIsReady(true)
       isReadyRef.current = true
@@ -867,5 +888,6 @@ export function useLocalSessions(pollInterval = 5) {
     isServerReachable,
     refreshSessions,
     mux,
+    clockOffset,
   }
 }

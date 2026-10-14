@@ -277,16 +277,17 @@ func (h *streamHub) shutdown(ctx context.Context) error {
 }
 
 // registerStreamRoutes mounts the terminal WebSocket.
-func registerStreamRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, allowed hostAllowlist, hub *streamHub) {
+// Its snapshot read feeds activity (may be nil).
+func registerStreamRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, allowed hostAllowlist, hub *streamHub, activity *activityTracker) {
 	mux.HandleFunc("/api/mux/stream", func(w http.ResponseWriter, r *http.Request) {
-		handleStream(w, r, m, tokens, allowed, hub)
+		handleStream(w, r, m, tokens, allowed, hub, activity)
 	})
 }
 
 // handleStream upgrades to a WebSocket and pipes it to a terminal on the
 // requested pane. Auth and the Host allowlist are enforced by the middleware.
 // The token travels in the query; nothing here logs the URL.
-func handleStream(w http.ResponseWriter, r *http.Request, m Mux, tokens *tokenStore, allowed hostAllowlist, hub *streamHub) {
+func handleStream(w http.ResponseWriter, r *http.Request, m Mux, tokens *tokenStore, allowed hostAllowlist, hub *streamHub, activity *activityTracker) {
 	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
@@ -351,12 +352,14 @@ func handleStream(w http.ResponseWriter, r *http.Request, m Mux, tokens *tokenSt
 	if view {
 		read = func(ctx context.Context) (Snapshot, error) { return viewSnapshot(ctx, m) }
 	}
+	gen := activity.begin()
 	snap, err := read(ctx)
 	cancel()
 	if err != nil {
 		muxError(w, m, "stream snapshot", err)
 		return
 	}
+	activity.observe(gen, snap)
 	if !snapshotHasPane(snap, pane) {
 		jsonError(w, "unknown pane", http.StatusBadRequest)
 		return

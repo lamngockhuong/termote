@@ -370,7 +370,7 @@ func TestStreamTokenExpired(t *testing.T) {
 	tokens := newStreamTokenStore()
 	hub := newStreamHub(maxStreams)
 	mux := http.NewServeMux()
-	registerStreamRoutes(mux, &fakeMux{snap: oneTabSnapshot()}, tokens, parseAllowedHosts("", false), hub)
+	registerStreamRoutes(mux, &fakeMux{snap: oneTabSnapshot()}, tokens, parseAllowedHosts("", false), hub, nil)
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 	tok, _ := tokens.generate()

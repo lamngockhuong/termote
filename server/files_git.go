@@ -239,14 +239,20 @@ func wholeFileHunk(text string) []diffHunk {
 	return []diffHunk{h}
 }
 
+// gitStatusArgs is the status every reader of a root's changes runs.
+var gitStatusArgs = []string{"status", "--porcelain=v2", "-z", "--branch", "--untracked-files=all",
+	"--ignore-submodules=all", "--find-renames"}
+
+// statusKey names root in f.statuses.
+func statusKey(root filesRoot) string { return root.Root + "\x00" + root.SafeDir }
+
 // status runs git status for the root, shared by every client for
 // filesRootTTL. A timeout makes the root back off (gitRunner).
 func (f *filesAPI) status(ctx context.Context, root filesRoot) (gitStatus, error) {
 	ctx = context.WithoutCancel(ctx) // shared by every client of the root
-	return f.statuses.do(root.Root+"\x00"+root.SafeDir, func() (gitStatus, error) {
+	return f.statuses.do(statusKey(root), func() (gitStatus, error) {
 		out, cut, err := f.git.output(ctx, gitCall{root: root.Root, safeDir: root.SafeDir, noFilters: true, heavy: true, limit: maxStatusOutput},
-			"status", "--porcelain=v2", "-z", "--branch", "--untracked-files=all",
-			"--ignore-submodules=all", "--find-renames")
+			gitStatusArgs...)
 		if err != nil {
 			return gitStatus{}, err
 		}

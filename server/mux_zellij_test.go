@@ -379,6 +379,8 @@ func TestZellijGroupGuards(t *testing.T) {
 		"list-sessions": "0\nwork [Created 1m ago] \nspare [Created 1m ago] (EXITED - attach to resurrect)\n",
 	})
 	m := newTestZellijMux()
+	var renamed []string
+	m.onRename = func(from, to string) { renamed = append(renamed, from+">"+to) }
 	ctx := t.Context()
 	if err := m.RenameGroup(ctx, zellijGroupID("work"), "spare"); !errors.Is(err, errGroupExists) {
 		t.Errorf("rename onto a kept name = %v", err)
@@ -406,6 +408,10 @@ func TestZellijGroupGuards(t *testing.T) {
 	}
 	if !strings.Contains(log(), "--session work action rename-session -- next") {
 		t.Fatalf("rename argv:\n%s", log())
+	}
+	// Only the rename that ran tells the activity tracker.
+	if want := zellijGroupID("work") + ">" + zellijGroupID("next"); len(renamed) != 1 || renamed[0] != want {
+		t.Errorf("onRename = %v, want [%s]", renamed, want)
 	}
 }
 

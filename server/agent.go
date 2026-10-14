@@ -93,6 +93,15 @@ type TranscriptEntry struct {
 	Role  string           `json:"role"` // user | assistant | summary | note
 	Parts []TranscriptPart `json:"parts"`
 	off   int64            // offset of the line the entry came from
+	// usage: the context the row's request filled (Claude assistant rows),
+	// for the overview; never sent with the transcript.
+	usage *entryUsage
+}
+
+// entryUsage is an assistant row's context size in tokens and its model.
+type entryUsage struct {
+	contextTokens int64
+	model         string
 }
 
 type TranscriptPart struct {
@@ -252,6 +261,24 @@ func (c *ttlCache[V]) do(key string, fn func() (V, error)) (V, error) {
 	return e.val, e.err
 }
 
+// peek is key's value when a call finished without error within ttl,
+// without running anything.
+func (c *ttlCache[V]) peek(key string) (V, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if e, ok := c.entries[key]; ok {
+		select {
+		case <-e.done:
+			if e.err == nil && time.Since(e.at) < c.ttl {
+				return e.val, true
+			}
+		default:
+		}
+	}
+	var zero V
+	return zero, false
+}
+
 // forgetPrefix drops every entry whose key starts with prefix, so the next
 // do reads again. A read in flight still answers its own waiters.
 func (c *ttlCache[V]) forgetPrefix(prefix string) {
@@ -294,6 +321,12 @@ type agentAPI struct {
 	home     string
 	// uploads resolves image ids in a message; nil when the server has none.
 	uploads *uploadStore
+	// activity records each agent's status changes from the snapshots read.
+	activity *activityTracker
+	// overview shares one summary of every agent between clients; changes
+	// holds their directories' changes, read in the background.
+	overview *ttlCache[[]overviewPane]
+	changes  *overviewChanges
 	// devices: devices can be paired (the snapshot's caps.devices); set by
 	// buildServer.
 	devices bool
@@ -317,6 +350,9 @@ func newAgentAPI(m Mux) *agentAPI {
 		sensitive: &sensitiveCalls{ids: map[string]struct{}{}},
 		input:     newAgentInput(),
 		starts:    newAgentStarts(),
+		activity:  newActivityTracker(time.Now),
+		overview:  newTTLCache[[]overviewPane](overviewTTL),
+		changes:   newOverviewChanges(),
 	}
 }
 
@@ -324,6 +360,7 @@ func registerAgentRoutes(mux *http.ServeMux, m Mux, uploads *uploadStore) *agent
 	a := newAgentAPI(m)
 	a.uploads = uploads
 	mux.HandleFunc("/api/mux/panes/{id}/agent/transcript", a.handleTranscript)
+	mux.HandleFunc("/api/mux/overview", a.handleOverview)
 	a.registerInputRoutes(mux)
 	return a
 }
@@ -379,12 +416,7 @@ func (a *agentAPI) handleTranscript(w http.ResponseWriter, r *http.Request) {
 		a.agentError(w, "transcript", errInvalidBefore)
 		return
 	}
-	key := strings.Join([]string{s.Agent, s.ID, s.ClaudeDir, s.CodexHome, s.Rollout, s.RolloutID, cursor, before}, "\x00")
-	res, err := a.reads.do(key, func() (transcriptResponse, error) {
-		res, err := readTranscript(s, cursor, before)
-		a.sensitive.add(res.sensitiveCalls)
-		return res, err
-	})
+	res, err := a.readCached(s, cursor, before)
 	if err != nil {
 		a.agentError(w, "transcript", err)
 		return
@@ -393,6 +425,18 @@ func (a *agentAPI) handleTranscript(w http.ResponseWriter, r *http.Request) {
 		res = hideSensitiveResults(res, a.sensitive.has)
 	}
 	jsonOK(w, res)
+}
+
+// readCached is readTranscript shared by every client asking for the same
+// read within agentCacheTTL (the overview reads the tail, as the Chat view's
+// first read does).
+func (a *agentAPI) readCached(s AgentSession, cursor, before string) (transcriptResponse, error) {
+	key := strings.Join([]string{s.Agent, s.ID, s.ClaudeDir, s.CodexHome, s.Rollout, s.RolloutID, cursor, before}, "\x00")
+	return a.reads.do(key, func() (transcriptResponse, error) {
+		res, err := readTranscript(s, cursor, before)
+		a.sensitive.add(res.sensitiveCalls)
+		return res, err
+	})
 }
 
 // hideSensitiveResults returns res without the result of any tool call on a

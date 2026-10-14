@@ -73,7 +73,7 @@ vi.mock('../utils/large-packet-loss', async (orig) => ({
 }))
 
 import { onPaneRemap } from '../utils/pane-remap'
-import { useLocalSessions } from './use-local-sessions'
+import { nextClockOffset, useLocalSessions } from './use-local-sessions'
 import { RequestError } from './use-mux-api'
 
 const WIN_SHELL = { id: '0', name: 'shell', active: true, panes: [] }
@@ -96,6 +96,36 @@ describe('useLocalSessions', () => {
     await act(async () => {})
     expect(result.current.sessions).toHaveLength(1)
     expect(result.current.sessions[0].name).toBe('shell')
+  })
+
+  it("copies each pane agent's since and keeps the server clock offset", async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-10-13T09:00:00Z'))
+    mockSnapshot.extra = { serverNow: '2026-10-13T09:00:30.000Z' }
+    mockFetchTabs.mockResolvedValue([
+      {
+        ...WIN_SHELL,
+        panes: [
+          {
+            id: '0',
+            active: true,
+            agent: {
+              name: 'claude',
+              status: 'working',
+              since: '2026-10-13T08:59:00.000Z',
+              sinceFirstSeen: true,
+            },
+          },
+        ],
+      },
+    ])
+    const { result } = renderHook(() => useLocalSessions(1))
+    await act(async () => {})
+    expect(result.current.sessions[0].panes?.[0]).toMatchObject({
+      agentSince: '2026-10-13T08:59:00.000Z',
+      agentSinceFirstSeen: true,
+    })
+    expect(result.current.clockOffset).toBe(30_000)
+    vi.restoreAllMocks()
   })
 
   it('sets isReady=true after first fetch', async () => {
@@ -2110,5 +2140,19 @@ describe('useLocalSessions with zellij', () => {
     })
     expect(shifts).toHaveLength(0)
     off()
+  })
+})
+
+describe('nextClockOffset', () => {
+  const at = Date.parse('2026-10-13T09:00:00Z')
+  it('measures the server clock against this one', () => {
+    expect(nextClockOffset(0, '2026-10-13T08:59:55Z', at)).toBe(-5000)
+  })
+  it('keeps the offset through network jitter', () => {
+    expect(nextClockOffset(-5000, '2026-10-13T08:59:55.400Z', at)).toBe(-5000)
+  })
+  it('keeps it without a usable server time', () => {
+    expect(nextClockOffset(7, undefined, at)).toBe(7)
+    expect(nextClockOffset(7, 'not a time', at)).toBe(7)
   })
 })

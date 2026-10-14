@@ -48,7 +48,9 @@ const (
 )
 
 var (
-	errGitTimeout       = errors.New("git timed out")
+	errGitTimeout = errors.New("git timed out")
+	// errGitBusy: a tryOnly command found every slot taken.
+	errGitBusy          = errors.New("git busy")
 	errDirNotAvailable  = inputError("directory not available")
 	errUnsafeRepoConfig = errors.New("repository config defines a filter driver that cannot be disabled")
 )
@@ -105,6 +107,10 @@ type gitCall struct {
 	// noBackoff: a heavy command whose timeout does not back the root off
 	// (find lists files, and a huge untracked tree must not fail Changes).
 	noBackoff bool
+	// tryOnly: a heavy command that runs only when a slot stays free after
+	// it takes one, and never waits (errGitBusy), so a background read
+	// never holds up a client's.
+	tryOnly bool
 	// stdin is fed to git (cat-file --batch); nil gives it none.
 	stdin []byte
 }
@@ -238,7 +244,19 @@ func (g *gitRunner) backingOff(root string) bool {
 }
 
 func (g *gitRunner) exec(ctx context.Context, c gitCall, filters []string, args ...string) ([]byte, bool, error) {
-	if c.heavy {
+	if c.heavy && c.tryOnly {
+		// It takes a slot only when another stays free for a client, and
+		// never waits for one.
+		if len(g.sem) >= cap(g.sem)-1 {
+			return nil, false, errGitBusy
+		}
+		select {
+		case g.sem <- struct{}{}:
+		default:
+			return nil, false, errGitBusy
+		}
+		defer func() { <-g.sem }()
+	} else if c.heavy {
 		wait, cancelWait := context.WithTimeout(ctx, g.timeout)
 		defer cancelWait()
 		select {
