@@ -1,0 +1,3 @@
+{"parentUuid":null,"isSidechain":true,"agentId":"aaa1","type":"user","timestamp":"2026-10-13T10:00:02.500Z","message":{"role":"user","content":"SECRET-PROMPT-ONE"}}
+{"parentUuid":"x","isSidechain":true,"agentId":"aaa1","type":"assistant","timestamp":"2026-10-13T10:01:00.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_a1","name":"Read","input":{"file_path":"/work/SECRET-INPUT.go"}}]}}
+{"parentUuid":"y","isSidechain":true,"agentId":"aaa1","type":"user","timestamp":"2026-10-13T10:01:01.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_a1","content":"SECRET-TOOL-RESULT"}]}}

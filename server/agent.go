@@ -327,6 +327,12 @@ type agentAPI struct {
 	// holds their directories' changes, read in the background.
 	overview *ttlCache[[]overviewPane]
 	changes  *overviewChanges
+	// subagents shares one read of a session's subagent tree between
+	// clients; subagentState keeps how far each transcript was read.
+	subagents     *ttlCache[subagentsResponse]
+	subagentState *subagentStore
+	// subagentWrites: the overview's read of when running subagents wrote
+	subagentWrites *ttlCache[time.Time]
 	// devices: devices can be paired (the snapshot's caps.devices); set by
 	// buildServer.
 	devices bool
@@ -353,6 +359,10 @@ func newAgentAPI(m Mux) *agentAPI {
 		activity:  newActivityTracker(time.Now),
 		overview:  newTTLCache[[]overviewPane](overviewTTL),
 		changes:   newOverviewChanges(),
+
+		subagents:      newTTLCache[subagentsResponse](subagentsTTL),
+		subagentState:  newSubagentStore(time.Now),
+		subagentWrites: newTTLCache[time.Time](subagentsTTL),
 	}
 }
 
@@ -360,6 +370,7 @@ func registerAgentRoutes(mux *http.ServeMux, m Mux, uploads *uploadStore) *agent
 	a := newAgentAPI(m)
 	a.uploads = uploads
 	mux.HandleFunc("/api/mux/panes/{id}/agent/transcript", a.handleTranscript)
+	mux.HandleFunc("/api/mux/panes/{id}/agent/subagents", a.handleSubagents)
 	mux.HandleFunc("/api/mux/overview", a.handleOverview)
 	a.registerInputRoutes(mux)
 	return a
