@@ -535,7 +535,7 @@ jobs:
         working-directory: pwa
         env:
           TERMOTE_E2E_ZELLIJ: "1"
-        run: pnpm exec playwright test e2e/zellij.spec.ts --workers=1
+        run: pnpm exec playwright test e2e/zellij.spec.ts e2e/overview.spec.ts --workers=1
 
       - name: Stop Zellij
         if: always()
