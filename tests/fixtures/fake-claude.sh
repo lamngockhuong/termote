@@ -23,6 +23,9 @@
 #               pointer, Enter picks),
 #               "color" a single question whose free-text option (4) takes
 #               a pasted answer, Enter submitting it,
+#               "subagents" starts two background subagents (their meta and
+#               conversation files): one ends at once with the transcript's
+#               queue-operation notification, the other keeps running,
 #               anything else gets an echo reply
 #   1/2/3, Esc  answer or cancel an open dialog (on a wizard, a digit answers
 #               the tab open and moves to the next one)
@@ -76,6 +79,25 @@ entry() { # type, content JSON
     "$1" "${sid:0:31}" "$seq_n" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" >>"$journal"
 }
 say() { entry assistant "[{\"type\":\"text\",\"text\":$(json_str "$1")}]"; }
+
+# Two background subagents as Claude Code keeps them, beside the transcript:
+# e2esub1 ends (the queue-operation row Claude Code writes when one does),
+# e2esub2 keeps running with its last tool a Grep.
+subagents() {
+  local subs="$project/$sid/subagents" now id
+  now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  mkdir -p "$subs"
+  for id in e2esub1 e2esub2; do
+    printf '{"agentType":"code-reviewer","description":"Review %s","toolUseId":"toolu_%s","spawnDepth":1,"requestShape":"background"}\n' \
+      "$id" "$id" >"$subs/agent-$id.meta.json"
+    printf '{"isSidechain":true,"agentId":"%s","type":"user","timestamp":"%s","message":{"role":"user","content":"Review it"}}\n' \
+      "$id" "$now" >"$subs/agent-$id.jsonl"
+    printf '{"isSidechain":true,"agentId":"%s","type":"assistant","timestamp":"%s","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_g_%s","name":"Grep","input":{"pattern":"x"}}]}}\n' \
+      "$id" "$now" "$id" >>"$subs/agent-$id.jsonl"
+  done
+  printf '{"type":"queue-operation","operation":"enqueue","timestamp":"%s","sessionId":"%s","content":"<task-notification>\\n<task-id>e2esub1</task-id>\\n<status>completed</status>\\n</task-notification>"}\n' \
+    "$now" "$sid" >>"$journal"
+}
 
 # A conversation to show before anything is sent.
 if [ ! -s "$journal" ]; then
@@ -221,6 +243,11 @@ submit() {
       state=color
       typed=""
       set_status waiting
+      ;;
+    *subagents*)
+      subagents
+      say 'Two reviewers started; one is done.'
+      set_status idle
       ;;
     *)
       if [ "$n" -gt 0 ]; then say "You said: $text (images: $n)"; else say "You said: $text"; fi

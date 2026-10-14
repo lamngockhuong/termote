@@ -147,6 +147,16 @@ device sees it without buttons; an agent the server cannot answer gets only Open
 minutes, its running subagents' writes count) is marked with an hourglass and a line, never colour
 alone, and never notified.
 
+A card's **History** button (`aria-expanded`) opens its last hour as a strip of statuses, cut from the
+activity log by the pane's key so a moved tmux window or a renamed Zellij session keeps its own; the
+time before the first event, or after the agent went, stays blank. Blocked is striped and idle hollow,
+and the legend names each with its status icon. A Claude card also lists its subagents (read every 3 s,
+only while open): an icon per status, a running one glowing by opacity under `motion-safe:` only, a
+guess marked "(guessed)", 20 at most; closed, the button keeps the count. The header's **Activity**
+button opens every status change, newest first, filtered by the status changed to: a column beside the
+cards from 1280 px, a sheet below. A row opens its pane under its current id, found by key; a pane that
+has gone is plain text.
+
 ## Gestures (Mobile)
 
 | Gesture     | Action           | Terminal Command |

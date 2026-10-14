@@ -22,6 +22,7 @@ import {
 import { remapPaneViews } from '../utils/pane-view'
 import { uniqueNames } from '../utils/running-commands'
 import { zellijGroupId } from '../utils/zellij-group'
+import { renameActivityGroup } from './use-activity-log'
 import {
   closeGroup as apiCloseGroup,
   createGroup as apiCreateGroup,
@@ -351,6 +352,7 @@ export function useLocalSessions(pollInterval = 5) {
         renamedGroupRef.current = null
         prevKeys = renameGroupKeys(prevKeys, renamed.from, renamed.to)
         renameGroupMeta(metaRef.current, renamed.from, renamed.to)
+        renameActivityGroup(renamed.from, renamed.to)
       }
       const shift = shiftedIds(prevKeys, keys)
       keysRef.current = keys

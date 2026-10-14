@@ -1,0 +1,4 @@
+{"parentUuid":null,"isSidechain":true,"agentId":"aaa2","type":"user","timestamp":"2026-10-13T10:00:05.000Z","message":{"role":"user","content":"SECRET-PROMPT-TWO"}}
+{"parentUuid":"x","isSidechain":true,"agentId":"aaa2","type":"assistant","timestamp":"2026-10-13T10:02:00.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_a2","name":"Grep","input":{"pattern":"SECRET-INPUT"}}]}}
+{"parentUuid":"y","isSidechain":true,"agentId":"aaa2","type":"assistant","timestamp":"2026-10-13T10:03:00.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Next."},{"type":"tool_use","id":"toolu_a3","name":"Agent","input":{"description":"Nested look","prompt":"SECRET-PROMPT-NESTED"}}]}}
+{"parentUuid":"z","isSidechain":true,"agentId":"aaa2","type":"user","timestamp":"2026-10-13T10:03:01.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_a3","content":"launched"}]}}

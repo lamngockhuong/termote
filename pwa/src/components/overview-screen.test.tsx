@@ -2,12 +2,17 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Session, SessionGroup } from '../types/session'
 
-const { mockFetchOverview } = vi.hoisted(() => ({ mockFetchOverview: vi.fn() }))
+const { mockFetchOverview, mockFetchActivity } = vi.hoisted(() => ({
+  mockFetchOverview: vi.fn(),
+  mockFetchActivity: vi.fn(),
+}))
 vi.mock('../hooks/use-mux-api', async (orig) => ({
   ...(await orig<typeof import('../hooks/use-mux-api')>()),
   fetchOverview: () => mockFetchOverview(),
+  fetchActivity: (after?: number) => mockFetchActivity(after),
 }))
 
+import { resetActivityLog } from '../hooks/use-activity-log'
 import { resetAgentOverview } from '../hooks/use-agent-overview'
 import { agentCards, OVERVIEW_TICK, OverviewScreen } from './overview-screen'
 
@@ -108,6 +113,37 @@ describe('OverviewScreen', () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     vi.setSystemTime(NOW)
     resetAgentOverview()
+    resetActivityLog()
+    mockFetchActivity.mockResolvedValue({
+      events: [
+        {
+          seq: 0,
+          ts: '2026-10-13T09:00:00Z',
+          key: 'p-new',
+          groupId: 'g2',
+          tabId: 't2',
+          paneId: 'p-new',
+          agent: 'codex',
+          from: '',
+          to: 'working',
+        },
+        {
+          seq: 1,
+          ts: '2026-10-13T09:01:00Z',
+          key: 'p-blocked',
+          groupId: 'g2',
+          tabId: 't3',
+          paneId: 'p-blocked',
+          agent: 'claude',
+          from: 'working',
+          to: 'blocked',
+        },
+      ],
+      latest: 1,
+      oldest: 1,
+      reset: true,
+      serverNow: '2026-10-13T09:10:00Z',
+    })
     mockFetchOverview.mockResolvedValue({
       serverNow: '2026-10-13T09:10:00Z',
       panes: [
@@ -121,6 +157,67 @@ describe('OverviewScreen', () => {
   })
   afterEach(() => {
     vi.useRealTimers()
+  })
+
+  it('opens the activity log as a sheet, and a row opens its pane', async () => {
+    HTMLDialogElement.prototype.showModal = vi.fn(function (
+      this: HTMLDialogElement,
+    ) {
+      this.setAttribute('open', '')
+    })
+    HTMLDialogElement.prototype.close = vi.fn()
+    const { onOpen } = renderScreen()
+    await act(async () => {})
+    const button = screen.getByRole('button', { name: 'Activity' })
+    expect(button).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.click(button)
+    expect(button).toHaveAttribute('aria-pressed', 'true')
+    const sheet = screen.getByRole('dialog', { name: 'Activity' })
+    const row = within(sheet).getByRole('button', { name: /Claude Code/ })
+    fireEvent.click(row)
+    expect(onOpen).toHaveBeenCalledWith(
+      SESSIONS[2],
+      SESSIONS[2].panes![1],
+      'chat',
+    )
+    expect(screen.queryByRole('dialog', { name: 'Activity' })).toBeNull()
+    // A pane without a Chat view opens on its terminal.
+    fireEvent.click(button)
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: /Codex/ }),
+    )
+    expect(onOpen).toHaveBeenLastCalledWith(
+      SESSIONS[1],
+      SESSIONS[1].panes![0],
+      'terminal',
+    )
+    // Its close button closes it too.
+    fireEvent.click(button)
+    fireEvent.click(screen.getByRole('button', { name: 'Close the activity' }))
+    expect(screen.queryByRole('dialog', { name: 'Activity' })).toBeNull()
+  })
+
+  it('shows the activity log beside the cards on a wide screen', async () => {
+    const orig = window.matchMedia
+    window.matchMedia = ((query: string) => ({
+      ...orig(query),
+      matches: query === '(min-width: 1280px)',
+    })) as typeof window.matchMedia
+    try {
+      renderScreen()
+      await act(async () => {})
+      fireEvent.click(screen.getByRole('button', { name: 'Activity' }))
+      expect(screen.queryByRole('dialog')).toBeNull()
+      const aside = screen.getByRole('complementary', { name: 'Activity' })
+      expect(within(aside).getAllByRole('listitem')).toHaveLength(2)
+      // The card's strip reads the same events.
+      fireEvent.click(screen.getAllByRole('button', { name: 'History' })[0])
+      expect(
+        screen.getByRole('img', { name: /^Last 60 min: needs you 9 min/ }),
+      ).toBeInTheDocument()
+    } finally {
+      window.matchMedia = orig
+    }
   })
 
   it('lists every agent, the ones waiting on the user first', async () => {

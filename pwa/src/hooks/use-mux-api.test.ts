@@ -28,6 +28,7 @@ import {
   fetchPaneText,
   fetchSignins,
   fetchSnapshot,
+  fetchSubagents,
   fetchTerminalToken,
   fetchTranscript,
   findFiles,
@@ -514,6 +515,29 @@ describe('fetchOverview', () => {
     const err = await fetchOverview().catch((e) => e)
     expect(err).toBeInstanceOf(RequestError)
     expect(err.status).toBe(403)
+  })
+})
+
+describe('fetchSubagents', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  it("reads the pane's subagent tree", async () => {
+    const body = {
+      nodes: [{ id: 'a1', type: 't', status: 'done', depth: 1, children: [] }],
+    }
+    const { calls } = mockFetch({ body })
+    expect(await fetchSubagents('%3')).toEqual(body)
+    expect(calls[0].url).toBe('/api/mux/panes/%253/agent/subagents')
+  })
+
+  it('throws on a pane without an agent', async () => {
+    mockFetch({ body: { error: 'no agent session in this pane' }, status: 404 })
+    const err = await fetchSubagents('p').catch((e) => e)
+    expect(err).toBeInstanceOf(RequestError)
+    expect(err.status).toBe(404)
   })
 })
 

@@ -411,6 +411,15 @@ Mở bằng nút lưới trên sidebar (máy tính) hoặc mục "Agent overview
 - [ ] Agent working mà không ghi gì quá Settings → "Stuck agent" (mặc định 10 phút) thì thẻ có dòng
       đồng hồ cát; dòng đó mất khi agent ghi lại; không bao giờ hiện khi agent con của nó còn ghi
 - [ ] Mở Overview khi có 20 repo, Changes view vẫn nhanh như trước
+- [ ] History trên thẻ: dải một giờ khớp với các dòng của agent đó trong Activity; di chuyển window
+      tmux (hoặc đổi tên session Zellij từ Termote) xong, dải vẫn là của đúng agent đó
+- [ ] Một phiên Claude Code chạy 2-3 agent con nền: History hiện chúng là `running` tới khi từng cái
+      xong, rồi chuyển sang `done` trong vòng 3 giây; agent con lồng trong agent con khác thì thụt vào
+      dưới nó; thu gọn lại, nút ghi `2 subagents, 1 running`
+- [ ] Bật giảm chuyển động trong cài đặt hệ điều hành: không có gì trong History chuyển động
+- [ ] Activity: mới nhất ở trên, bộ lọc chỉ giữ các lần chuyển sang trạng thái đã chọn; bấm một dòng
+      mở pane của nó, dòng của window đã đóng thì bấm không có tác dụng; màn hình rộng hiện thành cột
+      bên cạnh các thẻ, điện thoại hiện thành sheet (360 px, không cuộn ngang)
 
 ### Fullscreen (Desktop)
 

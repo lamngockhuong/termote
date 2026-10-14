@@ -410,6 +410,15 @@ Open it from the sidebar's grid button (desktop) or the view menu's "Agent overv
 - [ ] A working agent quiet past Settings → "Stuck agent" (default 10 min) gets the hourglass line;
       it goes once the agent writes again; never while a subagent of it still writes
 - [ ] Opening the overview leaves the Changes view as fast as before (20 repos open)
+- [ ] History on a card: the strip of the last hour matches the Activity log for that agent; after
+      moving its tmux window (or renaming its Zellij session from Termote) the strip is still its own
+- [ ] A Claude Code session running 2-3 background subagents: History lists them `running` until each
+      ends, then `done` within 3 s; one inside another is indented under it; closed, the button says
+      "2 subagents, 1 running"
+- [ ] With reduced motion on (OS setting), nothing in History moves
+- [ ] Activity: newest first, the filter keeps only changes to that status; a row opens its pane, a row
+      of a closed window does nothing; a column beside the cards on a wide screen, a sheet on a phone
+      (360 px, no sideways scroll)
 
 ### Fullscreen (Desktop)
 

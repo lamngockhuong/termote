@@ -52,7 +52,7 @@ straight into an xterm.js terminal in the page, with:
 | Quick Actions          | Actions row, expanded toolbar: preset commands (clear, cancel, exit) |
 | Interface Styles       | Neutral, Terminal or Native, independent of light/dark theme         |
 | Deep Links             | Shareable `#/s/<group>/<tab>` addresses that select a session        |
-| Agent Overview         | Every agent at once (`#/overview`), dialogs answered from a queue    |
+| Agent Overview         | Every agent (`#/overview`): dialog queue, history, subagents, log    |
 | Update Checker         | Auto-detect new releases via GitHub, show notifications              |
 | Session Cookie Auth    | Prevents double basic auth prompt on mobile                          |
 | iOS Safe Area          | Respects status bar safe area inset                                  |

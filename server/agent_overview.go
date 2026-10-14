@@ -181,7 +181,15 @@ func (a *agentAPI) summarizePane(paneID string) (transcriptSummary, error) {
 	if err != nil {
 		return transcriptSummary{}, err
 	}
-	return summarizeTranscript(res.Entries), nil
+	sum := summarizeTranscript(res.Entries)
+	// An agent waiting on its subagents writes nothing itself: when one of
+	// them wrote later, that is the agent's last activity.
+	if w, err := a.subagentLastWrite(s); err == nil && !w.IsZero() {
+		if last, err := time.Parse(time.RFC3339Nano, sum.lastTS); err != nil || w.After(last) {
+			sum.lastTS = w.UTC().Format(activityTimeFormat)
+		}
+	}
+	return sum, nil
 }
 
 // transcriptSummary is what a card shows of a transcript.

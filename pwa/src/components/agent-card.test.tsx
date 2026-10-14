@@ -1,5 +1,14 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+
+const { mockFetchSubagents } = vi.hoisted(() => ({
+  mockFetchSubagents: vi.fn(),
+}))
+vi.mock('../hooks/use-mux-api', async (orig) => ({
+  ...(await orig<typeof import('../hooks/use-mux-api')>()),
+  fetchSubagents: (id: string) => mockFetchSubagents(id),
+}))
+
 import type { Session, SessionPane } from '../types/session'
 import { AgentCard, formatTokens, statusAge } from './agent-card'
 
@@ -23,6 +32,8 @@ function renderCard(props: Partial<Parameters<typeof AgentCard>[0]> = {}) {
       pane={pane()}
       where="api / build"
       now={NOW}
+      paneKey="w1:p1"
+      events={[]}
       opensChat
       onOpen={onOpen}
       {...props}
@@ -108,6 +119,8 @@ describe('AgentCard', () => {
         pane={pane()}
         where="w"
         now={NOW}
+        paneKey="w1:p1"
+        events={[]}
         opensChat={false}
         overviewFailed
         onOpen={() => {}}
@@ -144,11 +157,9 @@ describe('AgentCard', () => {
       overview: { paneId: 'w1:p1', key: 'w1:p1', branch: '', changed: 0 },
     })
     expect(container.querySelector('[class*="animate-pulse"]')).toBeNull()
-    expect(screen.getByRole('button')).toHaveTextContent('0 changed')
+    const open = screen.getByRole('button', { name: /^Open terminal: Agent,/ })
+    expect(open).toHaveTextContent('0 changed')
     expect(screen.getByTitle(/first saw it/)).toHaveTextContent('≥ 5 min ago')
-    expect(screen.getByRole('button')).toHaveAccessibleName(
-      /^Open terminal: Agent,/,
-    )
   })
 
   it('marks an agent that may be stuck, not by colour alone', () => {
@@ -160,5 +171,63 @@ describe('AgentCard', () => {
     expect(
       screen.getByRole('button', { name: /^Open chat/ }),
     ).toHaveAccessibleDescription(/May be stuck: no new activity for 14 min/)
+  })
+})
+
+describe('AgentCard history', () => {
+  it('opens on the strip and, for Claude, the subagent tree', async () => {
+    mockFetchSubagents.mockResolvedValue({
+      nodes: [
+        {
+          id: 'a1',
+          type: 'Explore',
+          status: 'running',
+          depth: 1,
+          children: [],
+        },
+      ],
+    })
+    renderCard({
+      events: [
+        {
+          seq: 1,
+          ts: '2026-10-13T09:05:00Z',
+          key: 'w1:p1',
+          groupId: 'w1',
+          tabId: 'w1:t1',
+          paneId: 'w1:p1',
+          agent: 'claude',
+          from: '',
+          to: 'blocked',
+        },
+      ],
+    })
+    const toggle = screen.getByRole('button', { name: 'History' })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(mockFetchSubagents).not.toHaveBeenCalled()
+    await act(async () => fireEvent.click(toggle))
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    expect(
+      screen.getByRole('img', { name: 'Last 60 min: needs you 5 min' }),
+    ).toBeInTheDocument()
+    expect(mockFetchSubagents).toHaveBeenCalledWith('w1:p1')
+    expect(screen.getByRole('list', { name: 'Subagents' })).toBeInTheDocument()
+    // Closed again, it still counts the subagents it read.
+    await act(async () => fireEvent.click(toggle))
+    expect(
+      screen.getByRole('button', { name: 'History · 1 subagent, 1 running' }),
+    ).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByRole('list', { name: 'Subagents' })).toBeNull()
+  })
+
+  it('has no subagent tree for another agent', async () => {
+    mockFetchSubagents.mockClear()
+    renderCard({ pane: pane({ id: 'w1:p9', agentName: 'codex' }) })
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'History' })),
+    )
+    expect(mockFetchSubagents).not.toHaveBeenCalled()
+    expect(screen.queryByRole('list', { name: 'Subagents' })).toBeNull()
+    expect(screen.getByText('No data yet')).toBeInTheDocument()
   })
 })

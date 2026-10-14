@@ -51,6 +51,20 @@ A view-only device sees the dialogs without buttons. An agent whose dialogs Term
 answer gets an **Open terminal** button instead. With Zellij, if the answer cannot reach the pane at
 that moment, the card says so and you can try again.
 
+## History and activity
+
+**History** at the bottom of a card opens its last hour as a strip, one colour and mark per state
+(blocked is striped, idle hollow), with the minutes of each underneath. The part before the first
+change the server recorded stays blank: it is unknown, not idle. For Claude Code it also lists the
+session's subagents: each one's type, description, state, the last tool it called and how long it ran
+or has been running. One started by another is indented under it. "(guessed)" marks a subagent taken as
+done because its file has not changed for 10 minutes, when the transcript cannot tell. Closed, the
+button still says "2 subagents, 1 running".
+
+**Activity** in the overview's header lists every change of state of every agent since the server
+started (the last 500), newest first. Filter it by the state changed to. A row opens that agent's pane,
+even after its tmux window moved; a row of a pane that has closed cannot be opened.
+
 ## Stuck agents
 
 An agent that says it is working but has written nothing for a while gets an hourglass line: "May be

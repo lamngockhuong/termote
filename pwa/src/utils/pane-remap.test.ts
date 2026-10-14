@@ -6,7 +6,9 @@ import {
   paneKeys,
   remapEntries,
   remapPanes,
+  renamedGroupId,
   renameGroupKeys,
+  sessionPaneKey,
   shiftedIds,
 } from './pane-remap'
 
@@ -188,5 +190,23 @@ describe('remapPanes', () => {
     off()
     remapPanes(shift)
     expect(fn).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('renamedGroupId', () => {
+  it('moves the group, its tabs, panes and keys, nothing else', () => {
+    expect(renamedGroupId('zA', 'zA', 'zN')).toBe('zN')
+    expect(renamedGroupId('zA:p1', 'zA', 'zN')).toBe('zN:p1')
+    expect(renamedGroupId('zA/terminal_0', 'zA', 'zN')).toBe('zN/terminal_0')
+    expect(renamedGroupId('zAB:p1', 'zA', 'zN')).toBe('zAB:p1')
+    expect(renamedGroupId('%3', 'zA', 'zN')).toBe('%3')
+  })
+})
+
+describe('sessionPaneKey', () => {
+  it("is the tab's key for its own pane, the pane id for any other", () => {
+    expect(sessionPaneKey({ id: '2', key: '@7' }, '2')).toBe('@7')
+    expect(sessionPaneKey({ id: '2' }, '2')).toBe('2')
+    expect(sessionPaneKey({ id: 'w:t1', key: 'w:t1' }, 'w:p3')).toBe('w:p3')
   })
 })
