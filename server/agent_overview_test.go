@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -301,8 +302,9 @@ func TestOverviewChangesNeverWait(t *testing.T) {
 	if v, ok := c.refresh(filesFor(filepath.Join(plain, "gone")), job); !ok || !v.failed {
 		t.Errorf("gone dir = %+v", v)
 	}
-	// A status git fails on (the repo became unreadable).
-	if os.Geteuid() != 0 {
+	// A status git fails on (the repo became unreadable). Windows has no
+	// mode bits to take the reading away, and root reads anyway.
+	if runtime.GOOS != "windows" && os.Geteuid() != 0 {
 		broken := newTestRepo(t)
 		fb := filesFor(broken)
 		fb.paneRootForRead(context.Background(), "p")
