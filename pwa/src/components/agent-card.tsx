@@ -1,10 +1,13 @@
-import { GitBranch, Hourglass, SquareTerminal } from 'lucide-react'
-import { memo, useId } from 'react'
+import { ChevronDown, GitBranch, Hourglass, SquareTerminal } from 'lucide-react'
+import { memo, useId, useState } from 'react'
 import { agentLabel } from '../chat-agents'
-import type { OverviewPane } from '../hooks/use-mux-api'
+import type { ActivityEvent, OverviewPane } from '../hooks/use-mux-api'
+import { useSubagents } from '../hooks/use-subagents'
 import type { AgentStatus, Session, SessionPane } from '../types/session'
 import { formatAgo } from '../utils/format-ago'
 import { AgentStatusBadge } from './agent-status-badge'
+import { StatusTimeline } from './status-timeline'
+import { SubagentTree, subagentSummary } from './subagent-tree'
 import { FOCUS_RING, IconButton } from './ui/button'
 
 const STATUS_WORDS: Record<AgentStatus, string> = {
@@ -50,6 +53,10 @@ interface Props {
   overviewFailed?: boolean
   // Server time (ms), updated every 30 s
   now: number
+  // The pane's key (paneKeys) and the status changes the server kept, for
+  // its strip of the last hour
+  paneKey: string
+  events: readonly ActivityEvent[]
   // Minutes a working agent has written nothing, past the stuck threshold
   stuckFor?: number
   // A tap on the card opens the Chat view (else the terminal); the chat's
@@ -74,11 +81,19 @@ export const AgentCard = memo(function AgentCard({
   overview,
   overviewFailed,
   now,
+  paneKey,
+  events,
   stuckFor,
   opensChat,
   onOpen,
 }: Props) {
   const detailsId = useId()
+  const moreId = useId()
+  const [expanded, setExpanded] = useState(false)
+  // Only Claude Code's sessions have a subagent tree to read.
+  const claude = pane.agentName === 'claude'
+  const subagents = useSubagents(pane.id, expanded && claude)
+  const subagentCount = claude ? subagentSummary(subagents.tree) : undefined
   const label = agentLabel(pane.agentName)
   const name = label === 'agent' ? pane.agentName || 'Agent' : label
   const openLabel = opensChat ? 'Open chat' : 'Open terminal'
@@ -191,6 +206,37 @@ export const AgentCard = memo(function AgentCard({
           )}
         </span>
       </button>
+      <div className="border-t border-border px-3 py-1">
+        <button
+          type="button"
+          aria-expanded={expanded}
+          aria-controls={moreId}
+          onClick={() => setExpanded((v) => !v)}
+          className={`flex min-h-touch w-full items-center gap-1.5 rounded-control text-left text-[12px] text-fg-muted hover:text-fg ${FOCUS_RING}`}
+        >
+          <ChevronDown
+            size={14}
+            aria-hidden="true"
+            className={`shrink-0 transition-transform duration-(--duration-fast) ease-standard ${expanded ? 'rotate-180' : ''}`}
+          />
+          <span className="truncate">
+            {expanded ? 'Hide history' : 'History'}
+            {subagentCount && ` · ${subagentCount}`}
+          </span>
+        </button>
+        {expanded && (
+          <div id={moreId} className="flex flex-col gap-3 pb-2 pt-1">
+            <StatusTimeline events={events} paneKey={paneKey} now={now} />
+            {claude && (
+              <SubagentTree
+                tree={subagents.tree}
+                error={subagents.error}
+                now={now}
+              />
+            )}
+          </div>
+        )}
+      </div>
       {opensChat && (
         <IconButton
           size="sm"

@@ -1,18 +1,23 @@
-import { X } from 'lucide-react'
+import { History, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useActivityLog } from '../hooks/use-activity-log'
 import { useAgentOverview } from '../hooks/use-agent-overview'
+import { useMediaQuery } from '../hooks/use-media-query'
 import type { Session, SessionGroup, SessionPane } from '../types/session'
 import { stuckFor } from '../utils/agent-stuck'
 import { overviewOrder } from '../utils/overview-order'
+import { sessionPaneKey } from '../utils/pane-remap'
 import {
   matchesPaneFilter,
   type SidebarFilter,
   summarizePanes,
 } from '../utils/session-filter'
+import { ActivityLog } from './activity-log'
 import { AgentCard } from './agent-card'
 import { AgentFilterBar } from './agent-filter-bar'
 import { NeedsMeQueue } from './needs-me-queue'
 import { Button, IconButton } from './ui/button'
+import { Sheet } from './ui/sheet'
 
 // The card's time is a coarse "3 min ago": a tick every 30 s keeps it right
 // without rendering the list every second.
@@ -90,6 +95,11 @@ export function OverviewScreen({
   onStartAgent,
 }: Props) {
   const overview = useAgentOverview(pollInterval)
+  const activity = useActivityLog(pollInterval)
+  // The activity log: a column beside the cards on a wide screen, a sheet
+  // anywhere else.
+  const [logOpen, setLogOpen] = useState(false)
+  const wide = useMediaQuery('(min-width: 1280px)')
   // Focus moves into the overview and back to where it was when it closes.
   const titleRef = useRef<HTMLHeadingElement>(null)
   useEffect(() => {
@@ -132,6 +142,22 @@ export function OverviewScreen({
     [cards, placeOf],
   )
 
+  // Opening a pane from the log leaves the overview, as a card does.
+  const log = (
+    <ActivityLog
+      events={activity.events}
+      sessions={sessions}
+      groups={groups}
+      clockOffset={clockOffset}
+      loaded={activity.loaded}
+      error={activity.error}
+      onOpen={(session, pane) => {
+        setLogOpen(false)
+        onOpen(session, pane, opensChat(pane) ? 'chat' : 'terminal')
+      }}
+    />
+  )
+
   return (
     <section
       aria-labelledby="overview-title"
@@ -147,6 +173,14 @@ export function OverviewScreen({
           Agents
         </h2>
         <IconButton
+          onClick={() => setLogOpen((v) => !v)}
+          aria-label="Activity"
+          aria-pressed={logOpen}
+          title="Status changes of every agent"
+        >
+          <History size={18} aria-hidden="true" />
+        </IconButton>
+        <IconButton
           onClick={onClose}
           aria-label="Close the agent overview"
           title="Close (Esc)"
@@ -154,89 +188,115 @@ export function OverviewScreen({
           <X size={18} aria-hidden="true" />
         </IconButton>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-        {overview.error && (
-          <p role="status" className="mb-3 text-[12px] text-fg-muted">
-            Could not read the agents' details; retrying.
-          </p>
-        )}
-        {!ready ? null : cards.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 py-10 text-center text-[13px] text-fg-muted">
-            <p>No agent is running in any session.</p>
-            {onStartAgent && (
-              <Button onClick={onStartAgent}>
-                Start an agent in this pane
-              </Button>
-            )}
-          </div>
-        ) : (
-          <>
-            <NeedsMeQueue
-              cards={queueCards}
-              readOnly={readOnly}
-              canAnswer={canAnswer}
-              onOpen={onOpen}
-            />
-            <div className="mb-3 max-w-md">
-              <AgentFilterBar
-                summary={summary}
-                filter={filter}
-                onChange={setFilter}
-                unit="agent"
-              />
-            </div>
-            {shown.length === 0 ? (
-              <div className="flex flex-col items-center gap-2 py-6 text-center text-[13px] text-fg-muted">
-                No agents match
-                <Button size="sm" onClick={() => setFilter('all')}>
-                  Show all
+      <div className="flex min-h-0 flex-1">
+        <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+          {overview.error && (
+            <p role="status" className="mb-3 text-[12px] text-fg-muted">
+              Could not read the agents' details; retrying.
+            </p>
+          )}
+          {!ready ? null : cards.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 py-10 text-center text-[13px] text-fg-muted">
+              <p>No agent is running in any session.</p>
+              {onStartAgent && (
+                <Button onClick={onStartAgent}>
+                  Start an agent in this pane
                 </Button>
+              )}
+            </div>
+          ) : (
+            <>
+              <NeedsMeQueue
+                cards={queueCards}
+                readOnly={readOnly}
+                canAnswer={canAnswer}
+                onOpen={onOpen}
+              />
+              <div className="mb-3 max-w-md">
+                <AgentFilterBar
+                  summary={summary}
+                  filter={filter}
+                  onChange={setFilter}
+                  unit="agent"
+                />
               </div>
-            ) : (
-              <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {shown.map(({ session, pane }) => {
-                  const group = session.groupId
-                    ? groupOf.get(session.groupId)
-                    : undefined
-                  const named = showGroups && group
-                  const where = named
-                    ? `${group.name} / ${session.name}`
-                    : session.name
-                  return (
-                    <li key={pane.id}>
-                      <AgentCard
-                        session={session}
-                        pane={pane}
-                        where={where}
-                        groupTitle={
-                          named ? `${groupNoun} ${group.name}` : undefined
-                        }
-                        worktree={group?.worktree?.linked}
-                        overview={overview.panes.get(pane.id)}
-                        overviewFailed={overview.error}
-                        now={now}
-                        stuckFor={stuckFor(
-                          pane.agentStatus,
-                          overview.panes.get(pane.id)?.lastTs,
-                          now,
-                          stuckMinutes,
-                        )}
-                        opensChat={opensChat(pane)}
-                        onOpen={onOpen}
-                      />
-                    </li>
-                  )
-                })}
-              </ul>
-            )}
-            {activePaneOnly && (
-              <p className="mt-4 text-[12px] text-fg-subtle">
-                Only the active pane of each window is tracked.
-              </p>
-            )}
-          </>
+              {shown.length === 0 ? (
+                <div className="flex flex-col items-center gap-2 py-6 text-center text-[13px] text-fg-muted">
+                  No agents match
+                  <Button size="sm" onClick={() => setFilter('all')}>
+                    Show all
+                  </Button>
+                </div>
+              ) : (
+                <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {shown.map(({ session, pane }) => {
+                    const group = session.groupId
+                      ? groupOf.get(session.groupId)
+                      : undefined
+                    const named = showGroups && group
+                    const where = named
+                      ? `${group.name} / ${session.name}`
+                      : session.name
+                    return (
+                      <li key={pane.id}>
+                        <AgentCard
+                          session={session}
+                          pane={pane}
+                          where={where}
+                          groupTitle={
+                            named ? `${groupNoun} ${group.name}` : undefined
+                          }
+                          worktree={group?.worktree?.linked}
+                          overview={overview.panes.get(pane.id)}
+                          overviewFailed={overview.error}
+                          now={now}
+                          paneKey={sessionPaneKey(session, pane.id)}
+                          events={activity.events}
+                          stuckFor={stuckFor(
+                            pane.agentStatus,
+                            overview.panes.get(pane.id)?.lastTs,
+                            now,
+                            stuckMinutes,
+                          )}
+                          opensChat={opensChat(pane)}
+                          onOpen={onOpen}
+                        />
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+              {activePaneOnly && (
+                <p className="mt-4 text-[12px] text-fg-subtle">
+                  Only the active pane of each window is tracked.
+                </p>
+              )}
+            </>
+          )}
+        </div>
+        {logOpen && wide && (
+          <aside
+            aria-labelledby="overview-activity-title"
+            className="flex w-80 shrink-0 flex-col gap-2 overflow-y-auto border-l border-border px-3 py-3"
+          >
+            <h3
+              id="overview-activity-title"
+              className="text-[13px] font-semibold"
+            >
+              Activity
+            </h3>
+            {log}
+          </aside>
         )}
       </div>
+      <Sheet
+        isOpen={logOpen && !wide}
+        onClose={() => setLogOpen(false)}
+        title="Activity"
+        closeLabel="Close the activity"
+      >
+        <div className="overflow-y-auto px-4 pb-4">{log}</div>
+      </Sheet>
     </section>
   )
 }

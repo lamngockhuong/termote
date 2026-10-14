@@ -35,15 +35,18 @@ export function renameGroupKeys(
   to: string,
 ): Map<string, string> {
   const out = new Map<string, string>()
-  for (const [id, key] of keys) {
-    const sep = key[from.length]
-    const renamed =
-      key.startsWith(from) && (sep === ':' || sep === '/')
-        ? to + key.slice(from.length)
-        : key
-    out.set(id, renamed)
-  }
+  for (const [id, key] of keys) out.set(id, renamedGroupId(key, from, to))
   return out
+}
+
+// id (a group, tab or pane id, or a key) with group from's prefix changed
+// to to's, as the server's renamedGroupID does.
+export function renamedGroupId(id: string, from: string, to: string): string {
+  if (id === from) return to
+  const sep = id[from.length]
+  return id.startsWith(from) && (sep === ':' || sep === '/')
+    ? to + id.slice(from.length)
+    : id
 }
 
 // What changed between two snapshots' keys.
@@ -110,4 +113,13 @@ export function onPaneRemap(fn: Handler): () => void {
 export function remapPanes(shift: PaneShift) {
   if (shift.stale.size === 0) return
   for (const fn of handlers) fn(shift)
+}
+
+// The key paneKeys gives a pane of a built session: its tab's key when the
+// pane has the tab's id (tmux), else its own id.
+export function sessionPaneKey(
+  session: { id: string; key?: string },
+  paneId: string,
+): string {
+  return paneId === session.id ? (session.key ?? session.id) : paneId
 }

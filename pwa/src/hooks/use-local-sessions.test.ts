@@ -73,6 +73,15 @@ vi.mock('../utils/large-packet-loss', async (orig) => ({
 }))
 
 import { onPaneRemap } from '../utils/pane-remap'
+
+const { mockRenameActivity } = vi.hoisted(() => ({
+  mockRenameActivity: vi.fn(),
+}))
+vi.mock('./use-activity-log', async (orig) => ({
+  ...(await orig<typeof import('./use-activity-log')>()),
+  renameActivityGroup: mockRenameActivity,
+}))
+
 import { nextClockOffset, useLocalSessions } from './use-local-sessions'
 import { RequestError } from './use-mux-api'
 
@@ -2009,6 +2018,8 @@ describe('useLocalSessions with zellij', () => {
       await result.current.renameGroup('zZGV2', 'ops')
     })
     expect(mockRenameGroup).toHaveBeenCalledWith('zZGV2', 'ops')
+    // The activity log's events follow the session to its new id.
+    expect(mockRenameActivity).toHaveBeenCalledWith('zZGV2', 'zb3Bz')
     expect(result.current.activeSession.id).toBe('zb3Bz:t0')
     expect(result.current.activeSession.paneId).toBe('zb3Bz:p0')
     expect(result.current.activeSession.groupId).toBe('zb3Bz')

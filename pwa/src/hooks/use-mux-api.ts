@@ -256,6 +256,38 @@ export async function fetchOverview(): Promise<Overview> {
   return res.json()
 }
 
+// One subagent of a Claude session. status is running until the transcript
+// reports its end; statusGuessed: done is a guess from how long its file
+// has been quiet. depth is 1 for a subagent of the session itself.
+export interface SubagentNode {
+  id: string
+  type: string
+  description?: string
+  status: 'running' | 'done' | 'error'
+  statusGuessed?: boolean
+  startTs?: string
+  endTs?: string
+  lastTool?: string
+  depth: number
+  children: SubagentNode[]
+}
+
+// truncated: more subagents (or deeper ones) than the server lists.
+export interface Subagents {
+  nodes: SubagentNode[]
+  truncated?: boolean
+}
+
+// The subagents of the pane's Claude session (none for another agent).
+export async function fetchSubagents(paneId: string): Promise<Subagents> {
+  const res = await fetch(
+    `${API_BASE}/panes/${encodeURIComponent(paneId)}/agent/subagents`,
+    { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) },
+  )
+  if (!res.ok) throw await requestError(res)
+  return res.json()
+}
+
 // How the server was installed, which names the way to update it.
 export type InstallKind = 'release' | 'checkout' | 'container' | 'unknown'
 
