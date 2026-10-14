@@ -387,6 +387,31 @@ Dùng bản production build (`pnpm dev` tắt service worker) và một pane đ
       lại
 - [ ] `ls -l ~/.local/state/termote/push`: các file 0600 trong thư mục 0700
 
+### Tổng Quan Agent
+
+Mở bằng nút lưới trên sidebar (máy tính) hoặc mục "Agent overview" trong menu view (điện thoại).
+
+- [ ] `#/overview` mở màn hình này phủ lên các pane; tải lại trang vẫn giữ nó; Esc, nút đóng, Back
+      hoặc chọn một session thì thoát; Copy link chép ra `#/overview`
+- [ ] Mỗi pane đang chạy agent có một thẻ, ở mọi group: blocked đứng đầu, rồi working, done, idle;
+      cùng trạng thái thì agent ở lâu hơn đứng trước; hai thiết bị lệch giờ vẫn hiện cùng thời gian
+- [ ] Thẻ Claude có tin nhắn cuối, branch, số file đổi, số context token và model; thẻ Codex không
+      có token; psmux không có branch hay số file và không báo lỗi
+- [ ] tmux/psmux có dòng `Only the active pane of each window is tracked`; Herdr và Zellij thì không
+- [ ] Bấm thẻ Claude mở Chat view của đúng pane, kể cả ở group khác; nút terminal trên thẻ mở
+      terminal; agent không có Chat thì bấm thẻ mở terminal
+- [ ] Bộ lọc đếm theo agent và không làm đổi bộ lọc của sidebar
+- [ ] Hai phiên Claude Code cùng xin quyền: "Needs you" hiện phiên chờ lâu nhất; chạm "Yes" hai lần
+      liền chỉ trả lời phiên đó; "Answered" đứng yên cho tới khi bấm Next, Next mới hiện phiên kia
+- [ ] Wizard nhiều tab: trả lời một tab chưa tính là đã trả lời, chỉ Submit mới tính
+- [ ] Skip chuyển sang hộp kế; "Show again" đưa các hộp đã bỏ qua trở lại
+- [ ] View only: hộp thoại hiện ra nhưng không có nút, kèm lời giải thích
+- [ ] Zellij: trả lời được hộp thoại của pane chưa mở stream nào; tab đang xem trong terminal giữ
+      nguyên kích thước
+- [ ] Agent working mà không ghi gì quá Settings → "Stuck agent" (mặc định 10 phút) thì thẻ có dòng
+      đồng hồ cát; dòng đó mất khi agent ghi lại; không bao giờ hiện khi agent con của nó còn ghi
+- [ ] Mở Overview khi có 20 repo, Changes view vẫn nhanh như trước
+
 ### Fullscreen (Desktop)
 
 - [ ] Nút fullscreen hiện trên header (chỉ trên máy tính)

@@ -108,6 +108,37 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   snapshot is a same-site read (`crossSiteRejection`, `Sec-Fetch-Site: none` included). The PWA
   shows names in the sessions list and pane strip and adds "Running: …" to the close
   confirmations; the cwd is not shown
+- **Agent activity** (`server/agent_activity.go`, `GET /api/mux/activity`): the tracker is fed
+  only by snapshot reads that already run (the snapshot route, a stream attaching, the push
+  watcher's tick); it never reads tmux, Herdr or Zellij itself and never runs a command, so
+  `/activity` costs no mux call. Each read takes a generation number before it starts and a read
+  that finishes after a newer one changes nothing (no false change). `observe` copies the
+  snapshot and gives every agent a new `AgentInfo` before setting `since`/`sinceFirstSeen`, so
+  Herdr's cached view (shared with streams) is never written; the snapshot gains `serverNow`.
+  Statuses are folded with the push watcher's rule (`foldPaneStatus`) and keyed by `paneKey`;
+  a group keyed by tab index (psmux, tmux without window ids) is forgotten, without events, when
+  its tabs change, and a Zellij rename from Termote moves the group's prefix (`onRename`).
+  Memory: 500 events, one state per pane with an agent. The route: `requireMethod(GET)`,
+  `crossSiteRejection` (`Sec-Fetch-Site: none` included, as the snapshot), `after` a
+  non-negative integer (else 400 `invalid_after`); a cursor past the latest or before the
+  oldest kept event answers the whole ring with `reset`. It returns ids, keys, agent names and
+  statuses with times, which the snapshot already gives a view-only client, so view-only may
+  read it; nothing from a transcript or a screen
+- **Agent overview** (`server/agent_overview.go`, `GET /api/mux/overview`): `requireMethod(GET)`,
+  `crossSiteRejection`, `requireAgentRead`; internal errors are logged only. It summarizes the
+  panes with an agent in the activity tracker's last snapshot (64 at most) and never reads the
+  panes itself: per pane only `AgentSession` and the transcript's tail, through the Chat view's
+  read cache (`readCached`), 4 at a time within 3 s (late ones answer `unavailable:
+  ["transcript"]`); the whole read is shared for 2 s. It returns ids, the last assistant text
+  (280 runes, never a tool result, never a sidechain row), the last row's time, Claude's context
+  size and model, and a branch and changed-file count; never a cwd, a root, a transcript path or
+  a file name. Changes never run git in the request: a background worker reads one pane at a time
+  through `paneRootForRead` (the Files gate: `Caps().Files`, `f.dirs`, `paneRoot`), uses a status
+  the Changes view just read, else runs `gitStatusArgs` as a `tryOnly`, `noBackoff` heavy call,
+  which returns `errGitBusy` instead of waiting for a slot and never backs the root off; results
+  live 30 s, unasked ones 5 minutes. That worker calls `PaneDir` on the backend. A view-only client
+  gets the same summary (the snapshot already names the agents) but no branch or count for a
+  root `viewHidesRoot` refuses (no repo, a home dir or one above), as Files
 - **Paired devices** (`server/device_*.go`, `server/pair_page.go`, `server/cli_devices.go`,
   `caps.devices`): a device signs in with a one-time code instead of the password and gets its own
   cookie `termote_device_<8 hex of the store id>` (`HttpOnly`, `SameSite=Strict`, `Secure` on HTTPS,

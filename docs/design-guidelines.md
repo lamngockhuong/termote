@@ -127,6 +127,26 @@ it, so the stream and the multiplexer window size are kept. Each pane comes back
 desktop side panel it was left on (`pwa/src/utils/pane-view.ts`, sessionStorage, following a tmux
 id shift); a pane never shown opens on the terminal without a panel.
 
+The agent overview (`#/overview`) is a screen of its own, not a view of a pane: it covers the panes
+(left mounted and inert, as a view covers the terminal) and hides the bottom bar. It opens from the
+sidebar's button (desktop) or the view menu (mobile), closes with its button, `Esc`, Back or by
+picking a session, and survives a reload. Cards are sorted blocked, working, done, idle, the longest
+in its state first; a card opens its pane on the Chat view (an agent with one) or the terminal. Its
+filter is its own and counts agents, not sessions. Times are server time (`clockOffset`), shown
+coarse and refreshed every 30 s; "≥" marks a state the server found the agent already in.
+
+Above the cards, "Needs you" shows one waiting dialog at a time, answered with the Chat view's
+dialog card. The card on top is pinned: a newcomer joins the end. An answer never moves on by
+itself: once the dialog has closed the card says "Answered", Next stays disabled for a moment, and
+Next (or Skip) shows the next one with its title focused, so a repeated tap never answers another
+agent's dialog. A wait is known by its pane and `since`: a skipped one stays out while it lasts
+(and can be shown again), an answered one for 10 s, the time the snapshot may lag the answer; a pane
+still blocked after that waits on a new dialog and comes back in. Only that card's dialog is polled. A view-only
+device sees it without buttons; an agent the server cannot answer gets only Open terminal; Zellij's
+`busy` keeps the card to try again. A working agent quiet for the "Stuck agent" setting (default 10
+minutes, its running subagents' writes count) is marked with an hourglass and a line, never colour
+alone, and never notified.
+
 ## Gestures (Mobile)
 
 | Gesture     | Action           | Terminal Command |

@@ -244,7 +244,9 @@ existing pane from the last snapshot.
 ### Mux API (REST, JSON)
 
 ```bash
-GET    /api/mux/snapshot          → {apiVersion, backend, caps, groups:[{id,name,worktree?:{linked,branch?},tabs:[{id,key,name,active,processes?,panes:[{id,active,title,agent,process?}]}]}]}
+GET    /api/mux/snapshot          → {apiVersion, backend, caps, serverNow, groups:[{id,name,worktree?:{linked,branch?},tabs:[{id,key,name,active,processes?,panes:[{id,active,title,agent?:{name,status,since?,sinceFirstSeen?},process?}]}]}]}
+GET    /api/mux/overview          → {serverNow, panes:[{paneId,key,lastText?,lastTs?,branch?,changed?,changedTruncated?,usage?:{contextTokens,model?},unavailable?:["transcript"|"changes"]}]}
+GET    /api/mux/activity?after=   → {events:[{seq,ts,key,groupId,tabId,paneId,agent,from,to}], latest, oldest, reset?, serverNow} | 400 invalid_after
 POST   /api/mux/tabs               body: {groupId, name}       → {ok, id}
 PATCH  /api/mux/tabs/{id}          body: {name, key?}          → {ok} | 409 changed
 DELETE /api/mux/tabs/{id}?key=                                  → {ok} | 409 changed
@@ -1068,6 +1070,40 @@ into a `blob:` URL (an SVG into a `data:` URL: opened in a tab of its own, a `bl
 a document of termote's origin without the server's `sandbox` policy, while a `data:` one has an
 opaque origin), keeps the previous image while reading again, and revokes every `blob:` URL once
 replaced or unmounted; Changes reads again on a refresh or a new status, not on every poll.
+
+### Agent activity (`/api/mux/activity`)
+
+`server/agent_activity.go` records, for each pane with an agent, its status and when it began,
+and keeps the last 500 status changes (an agent appearing has `from: ""`, going `to: ""`).
+It is fed only by the snapshot reads that already run: the snapshot route, a stream
+attaching and the push watcher's tick. With no page open and no push subscription nothing
+is recorded, and a restart starts over: every agent is then first seen (`sinceFirstSeen`,
+shown as "≥"). Each read takes a generation before it starts; one finishing after a newer one
+changes nothing. The snapshot carries each agent's `since` and the server's `serverNow`, from
+which the PWA keeps its clock offset (`useLocalSessions().clockOffset`), so two devices show
+the same time in a status.
+
+An event's `key` is the pane's as `pwa/src/utils/pane-remap.ts` `paneKeys` gives it (a tmux
+tab's window id, any other pane's id) and its ids are the ones it had then. Limits:
+
+- tmux: only the active pane of each window is a pane, so an agent in another split is not
+  tracked, and a change of the active pane makes the old agent go and the new one first seen.
+- psmux (and a tmux without window ids) keys a pane by window index: when a session's tabs
+  change, its panes are forgotten without events and first seen again.
+- Zellij: renaming a session from Termote moves its history to the new group id; a rename
+  outside Termote starts it again. Herdr and Zellij track every pane.
+
+### Agent overview (`/api/mux/overview`)
+
+`server/agent_overview.go` answers, in one read for every card, what the snapshot lacks: the
+last assistant text, when the agent last wrote (`lastTs`, the newest transcript row with a
+timestamp), Claude's context size (`input + cache_read + cache_creation` tokens of the last
+assistant row, which every row of one message repeats, so never summed) and model, and the
+branch and number of changed files. The panes are those of the activity tracker's last snapshot;
+the transcript tail comes through the Chat view's read cache. Branch and changes are read in the
+background, one `git status` at a time, only when a git slot is free and without backing the
+root off, so the Changes view always comes first; until read, a pane answers `unavailable:
+["changes"]` (always on psmux, which has no Files).
 
 ### Agent notifications (`/api/mux/push/*`)
 

@@ -1,0 +1,65 @@
+---
+title: Tổng quan agent
+description: Xem mọi agent lập trình ở mọi session trên một màn hình, trả lời các hộp thoại đang chờ bạn ở cùng một chỗ
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+Màn hình tổng quan agent gom mọi pane đang chạy agent lập trình (Claude Code, Codex, hoặc agent nào
+tmux, Herdr hay Zellij nhận ra) ở mọi session lên một màn hình. Khi cùng lúc chạy nhiều agent, bạn nhìn vào đây để biết
+agent nào đang đợi mình, agent nào còn làm, agent nào đã xong.
+
+## Mở màn hình
+
+- **Máy tính**: nút hình lưới ở đầu sidebar.
+- **Điện thoại**: menu view trên header, chọn **Agent overview**.
+- **Địa chỉ**: thêm `#/overview` sau địa chỉ Termote. Tải lại trang vẫn giữ màn hình này, và
+  **Copy link** chép ra đúng địa chỉ đó.
+
+Màn hình này phủ lên các pane chứ không đóng chúng. Muốn thoát, bấm nút đóng, nhấn `Esc`, bấm Back
+của trình duyệt, hoặc chọn một session. Back và Forward đưa bạn qua lại giữa tổng quan và pane vừa rời.
+
+## Các thẻ
+
+Mỗi agent có một thẻ. Thẻ cần bạn nhất đứng đầu: blocked, rồi working, done và idle. Cùng trạng thái
+thì agent ở lâu hơn đứng trước. Mỗi thẻ cho biết:
+
+- trạng thái của agent và đã ở trạng thái đó bao lâu. `≥ 5 min ago` nghĩa là lúc server bắt đầu theo
+  dõi (chẳng hạn sau khi khởi động lại), agent đã ở sẵn trạng thái đó;
+- session và tab nơi agent chạy, kèm nhãn **worktree** nếu là worktree của Herdr;
+- tin nhắn cuối của agent;
+- branch và số file thay đổi trong thư mục của agent (không có trên Windows dùng psmux);
+- riêng Claude Code: số token context hiện đang chiếm, và model.
+
+Chạm vào thẻ để mở agent: Claude Code và Codex mở ở Chat view, agent khác mở terminal. Thẻ có Chat view
+còn có thêm nút mở terminal. Bộ lọc phía trên đếm theo agent và là bộ lọc riêng của màn hình này, không
+làm thay đổi bộ lọc của sidebar.
+
+<Aside>
+Với tmux và psmux, Termote chỉ theo dõi pane đang active của mỗi window: agent nằm ở split khác cùng
+window sẽ không có thẻ. Herdr và Zellij theo dõi mọi pane.
+</Aside>
+
+## Cần bạn xử lý
+
+Khi agent dừng lại chờ một hộp thoại (xin quyền, đặt câu hỏi), màn hình hiện hộp thoại đó ở trên cùng,
+lần lượt từng cái, với các nút giống trong Chat view. Hộp thoại trên cùng đứng yên cho tới khi bạn trả
+lời hoặc bấm **Skip**; agent nào bắt đầu chờ sau thì xếp vào cuối, không bao giờ chen lên trước. Trả lời
+xong, thẻ ghi **Answered**, và phải bấm **Next** thì hộp thoại kế mới hiện ra, nên chạm thêm một lần
+cũng không vô tình trả lời agent khác. Nút `Show again` đưa các hộp thoại đã bỏ qua trở lại.
+
+Thiết bị chỉ xem thấy hộp thoại nhưng không có nút. Agent mà Termote không đọc hay trả lời được hộp thoại
+thì chỉ có nút **Open terminal**. Với Zellij, nếu lúc đó câu trả lời chưa tới được pane, thẻ sẽ báo và
+bạn thử lại.
+
+## Agent có thể bị treo
+
+Agent báo đang chạy nhưng đã lâu không ghi thêm gì thì thẻ có một dòng kèm đồng hồ cát:
+`May be stuck: no new activity for 14 min`. Thời gian chờ chỉnh ở **Settings > Sessions > Stuck agent** (3 tới 60
+phút, mặc định 10). Những gì agent con đang chạy của nó ghi ra cũng được tính là có hoạt động. Đây chỉ là
+gợi ý trên thẻ, không có thông báo nào được gửi.
+
+<Aside type="caution">
+Thời gian lấy theo đồng hồ của server, tính từ lúc server thấy agent lần đầu, và chỉ được ghi lại khi có
+trang đang mở hoặc có thiết bị bật thông báo.
+</Aside>
