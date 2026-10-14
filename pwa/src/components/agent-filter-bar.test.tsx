@@ -175,4 +175,28 @@ describe('AgentFilterBar', () => {
     const titleSpan = needsYouBtn.querySelector('span[title]')
     expect(titleSpan).toHaveAttribute('title', 'Needs you, 2 sessions')
   })
+
+  it('counts agents, without an Agents segment, for the overview', () => {
+    render(
+      <AgentFilterBar
+        summary={{ blocked: 1, working: 2, agents: 3 }}
+        filter="all"
+        onChange={() => {}}
+        unit="agent"
+      />,
+    )
+    expect(
+      screen.getByRole('radiogroup', { name: 'Filter agents' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('radio', { name: 'All agents' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('radio', { name: 'Needs you, 1 agent' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('radio', { name: 'Working, 2 agents' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('radio', { name: /^Agents/ })).toBeNull()
+  })
 })

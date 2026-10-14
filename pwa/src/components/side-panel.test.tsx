@@ -260,4 +260,23 @@ describe('SidePanel', () => {
     render(<PanelMaximizeButton />)
     expect(screen.queryByRole('button')).toBeNull()
   })
+
+  it('takes no focus while covered', () => {
+    render(
+      <SidePanel
+        label="Files"
+        width={440}
+        maximized={false}
+        onWidthChange={vi.fn()}
+        onMaximizedChange={vi.fn()}
+        onResizingChange={vi.fn()}
+        inert
+      >
+        x
+      </SidePanel>,
+    )
+    expect(
+      screen.getByRole('complementary', { name: 'Files' }),
+    ).toHaveAttribute('inert')
+  })
 })

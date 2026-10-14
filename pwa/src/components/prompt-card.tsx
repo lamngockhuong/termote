@@ -31,6 +31,8 @@ interface Props {
   showView: ViewProps['showView']
   // The dialog was answered: poll again now
   onAnswered: () => void
+  // The answer reached the pane (onAnswered also follows a doubtful one)
+  onSent?: () => void
   // The server refused with the dialog now on screen (or none)
   onChanged: (prompt: AgentPrompt | null) => void
 }
@@ -42,6 +44,7 @@ export function PromptCard({
   readOnly,
   showView,
   onAnswered,
+  onSent,
   onChanged,
 }: Props) {
   const [busy, setBusy] = useState(false)
@@ -91,6 +94,7 @@ export function PromptCard({
       setSent(true)
       setText(null)
       onAnswered()
+      onSent?.()
     } catch (err) {
       if (err instanceof AgentRequestError && err.code === 'invalid_text') {
         // Nothing was sent and the dialog is the same: fix the text
@@ -122,6 +126,11 @@ export function PromptCard({
       ) {
         setNotice('That tab did not open; check the dialog.')
         onChanged(err.prompt ?? null)
+      } else if (err instanceof AgentRequestError && err.code === 'busy') {
+        // Zellij could not place a client on the pane, maybe after a step
+        // of the answer went in: read the dialog again before a retry
+        setNotice('Zellij is busy; try again.')
+        onAnswered()
       } else if (
         err instanceof AgentRequestError &&
         err.code === 'prompt_expired'

@@ -38,6 +38,8 @@ interface Props {
   // True while the handle is dragged: the terminal next to the panel keeps
   // its size until the drag ends, so the tmux pane is resized once.
   onResizingChange: (resizing: boolean) => void
+  // Covered (the agent overview): nothing in it takes focus
+  inert?: boolean
   children: ReactNode
 }
 
@@ -51,6 +53,7 @@ export function SidePanel({
   maximized,
   onMaximizedChange,
   onResizingChange,
+  inert,
   children,
 }: Props) {
   const asideRef = useRef<HTMLElement>(null)
@@ -145,6 +148,7 @@ export function SidePanel({
   return (
     <aside
       ref={asideRef}
+      inert={inert}
       aria-label={label}
       style={maximized ? undefined : { width: shown }}
       className={`flex flex-col bg-bg ${

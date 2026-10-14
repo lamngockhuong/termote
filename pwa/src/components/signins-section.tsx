@@ -5,9 +5,9 @@ import {
   type SignedInBrowser,
 } from '../hooks/use-mux-api'
 import { useSignins } from '../hooks/use-signins'
+import { formatAgo } from '../utils/format-ago'
 import { Button } from './ui/button'
 import { ConfirmDialog } from './ui/confirm-dialog'
-import { formatAgo } from './updates-section'
 
 const VIA_LABEL: Record<SignedInBrowser['via'], string> = {
   form: 'Sign-in form',

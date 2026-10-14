@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LatestRelease } from '../hooks/use-update-check'
-import { formatAgo, UpdatesSection } from './updates-section'
+import { UpdatesSection } from './updates-section'
 
 const mockCheck = vi.fn()
 let mockState: {
@@ -189,11 +189,5 @@ describe('UpdatesSection', () => {
       reloading: true,
     })
     expect(screen.getByRole('button', { name: 'Reloading…' })).toBeDisabled()
-  })
-
-  it('formats how long ago it checked', () => {
-    expect(formatAgo(30_000)).toBe('just now')
-    expect(formatAgo(5 * 60_000)).toBe('5 min ago')
-    expect(formatAgo(3 * 3_600_000)).toBe('3 h ago')
   })
 })

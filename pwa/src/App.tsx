@@ -11,11 +11,13 @@ import {
   APP_VIEWS,
   type AppView,
   availableViews,
+  CHAT_VIEW_ID,
   type NotifyOptions,
   TERMINAL_VIEW_ID,
   type ViewContext,
   viewPanelId,
 } from './app-views'
+import { chatAgent, chatInputAgent } from './chat-agents'
 import { AboutModal } from './components/about-modal'
 import { AppHeader } from './components/app-header'
 import { CommandHistoryDropdown } from './components/command-history-dropdown'
@@ -24,6 +26,7 @@ import { GestureHintsOverlay } from './components/gesture-hints-overlay'
 import { GroupDialog } from './components/group-dialog'
 import { HelpModal } from './components/help-modal'
 import { KeyboardToolbar } from './components/keyboard-toolbar'
+import { OverviewScreen } from './components/overview-screen'
 import { PaneStrip } from './components/pane-strip'
 import { ReadOnlyBar } from './components/read-only-bar'
 import { SelectTextSheet } from './components/select-text-sheet'
@@ -69,6 +72,7 @@ import { usePushSubscription } from './hooks/use-push-subscription'
 import { useSettings } from './hooks/use-settings'
 import { useSidebarCollapsed } from './hooks/use-sidebar-collapsed'
 import { useStartAgent } from './hooks/use-start-agent'
+import type { Session, SessionPane } from './types/session'
 import { applyUiStyle, syncThemeColor } from './ui-style'
 import { APP_INFO } from './utils/app-info'
 import {
@@ -77,7 +81,12 @@ import {
   reloadToNewVersion,
   useAppUpdate,
 } from './utils/app-update'
-import { formatDeepLink, parseDeepLink } from './utils/deep-link'
+import {
+  formatDeepLink,
+  OVERVIEW_HASH,
+  parseDeepLink,
+  parseScreenLink,
+} from './utils/deep-link'
 import {
   LARGE_PACKET_HELP_URL,
   onLargePacketLoss,
@@ -249,6 +258,7 @@ export default function App({
     isServerReachable,
     refreshSessions,
     mux,
+    clockOffset,
   } = useLocalSessions(settings.pollInterval)
   // The server refuses every write of a view-only device; the UI hides them.
   const readOnly = readOnlyProp || mux.caps.role === 'view'
@@ -916,6 +926,7 @@ export default function App({
 
   // The sheet stays open on a tab a view-only device cannot watch.
   const handleMobileSelect = async (id: string) => {
+    setOverviewOpen(false)
     if (await selectSession(id)) setSidebarOpen(false)
   }
 
@@ -990,8 +1001,16 @@ export default function App({
   // hashchange. It only selects a tab, pane and view.
   const pendingLinkRef = useRef(parseDeepLink(window.location.hash))
   const [linkRequest, setLinkRequest] = useState(0)
+  // The agent overview covers the panes while its address (#/overview) is
+  // on: a reload keeps it, Back and Forward go between it and a pane.
+  const [overviewOpen, setOverviewOpen] = useState(
+    () => parseScreenLink(window.location.hash) === 'overview',
+  )
   useEffect(() => {
     const onHashChange = () => {
+      const overview = parseScreenLink(window.location.hash) === 'overview'
+      setOverviewOpen(overview)
+      if (overview) return
       pendingLinkRef.current = parseDeepLink(window.location.hash)
       setLinkRequest((n) => n + 1)
     }
@@ -1078,6 +1097,8 @@ export default function App({
   // biome-ignore lint/correctness/useExhaustiveDependencies: viewerGone and linkSettled re-run it once a viewer's entry is gone or a link's pick showed nothing new
   useEffect(() => {
     if (!sessionsLoaded || !currentLink || pendingLinkRef.current) return
+    // The overview's address stays while it shows.
+    if (overviewOpen) return
     if (currentLink === linkLeftRef.current) return
     linkLeftRef.current = null
     const settledHash = settledHashRef.current
@@ -1087,21 +1108,112 @@ export default function App({
     if (window.location.hash !== currentLink) {
       window.history.replaceState(window.history.state, '', currentLink)
     }
-  }, [sessionsLoaded, currentLink, viewerGone, linkSettled])
+  }, [sessionsLoaded, currentLink, viewerGone, linkSettled, overviewOpen])
 
   // Built from what is on screen, not read from the address bar, which may
   // still hold a link that did not open.
+  const shownLink = overviewOpen ? OVERVIEW_HASH : currentLink
   const copyLink = useCallback(async () => {
     const { origin, pathname, search } = window.location
     try {
       await navigator.clipboard.writeText(
-        `${origin}${pathname}${search}${currentLink}`,
+        `${origin}${pathname}${search}${shownLink}`,
       )
       showToast('Link copied', 'success')
     } catch {
       showToast('Could not copy the link', 'danger')
     }
-  }, [currentLink, showToast])
+  }, [shownLink, showToast])
+
+  // Opening and closing go through the address, so each is a history entry.
+  const openOverview = useCallback(() => {
+    if (window.location.hash !== OVERVIEW_HASH) {
+      window.location.hash = OVERVIEW_HASH
+    }
+  }, [])
+  const closeOverview = useCallback(() => {
+    if (currentLink) {
+      window.location.hash = currentLink
+      return
+    }
+    // No link names the pane: the address drops the overview's
+    setOverviewOpen(false)
+    const { pathname, search } = window.location
+    window.history.replaceState(window.history.state, '', pathname + search)
+  }, [currentLink])
+  // Leaves the overview for the pane on screen in place (its entry becomes
+  // the pane's), without a hashchange that would restore the view saved in
+  // the address.
+  const leaveOverview = useCallback(() => setOverviewOpen(false), [])
+  // A card opens its pane, on the Chat view or the terminal, as a link does.
+  const openFromOverview = useCallback(
+    (session: Session, pane: SessionPane, view: 'chat' | 'terminal') => {
+      if (!session.groupId) {
+        // No link names it: picked in place
+        setOverviewOpen(false)
+        setViewId(view)
+        void selectSession(session.id, pane.id)
+        return
+      }
+      window.location.hash = formatDeepLink({
+        group: session.groupId,
+        tab: session.id,
+        pane: mux.caps.clientSideSelect ? pane.id : undefined,
+        view,
+      })
+    },
+    [mux.caps.clientSideSelect, selectSession],
+  )
+  const overviewOpensChat = useCallback(
+    (pane: SessionPane) => !!mux.caps.agentChat && chatAgent(pane.agentName),
+    [mux.caps.agentChat],
+  )
+  const overviewCanAnswer = useCallback(
+    (pane: SessionPane) =>
+      !!mux.caps.agentChat && chatInputAgent(pane.agentName),
+    [mux.caps.agentChat],
+  )
+  const chatOffered = switcherViews.some((v) => v.id === CHAT_VIEW_ID)
+  const startFromOverview = useCallback(() => {
+    leaveOverview()
+    setViewId(CHAT_VIEW_ID)
+  }, [leaveOverview])
+  // A view or side panel picked in the header shows at once.
+  const changeView = useCallback(
+    (id: string) => {
+      leaveOverview()
+      setViewId(id)
+    },
+    [leaveOverview],
+  )
+  const togglePanel = useCallback(
+    (id: string | null) => {
+      leaveOverview()
+      setSidePanelId(id)
+    },
+    [leaveOverview],
+  )
+  // Esc leaves the overview, unless a dialog or menu takes it.
+  useEffect(() => {
+    if (!overviewOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return
+      const t = e.target as Element | null
+      if (t?.closest?.('dialog,[role="dialog"],[role="menu"],[role="listbox"]'))
+        return
+      closeOverview()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [overviewOpen, closeOverview])
+  // Picking a session anywhere leaves the overview for it.
+  const selectFromList = useCallback(
+    (id: string) => {
+      setOverviewOpen(false)
+      return selectSession(id)
+    },
+    [selectSession],
+  )
 
   return (
     <div
@@ -1130,12 +1242,14 @@ export default function App({
             sessions={sessions}
             groups={groups}
             activeId={activeSession.id}
-            onSelect={selectSession}
+            onSelect={selectFromList}
             onAdd={readOnly ? undefined : addTab}
             onRemove={readOnly ? undefined : requestRemove}
             onUpdate={readOnly ? undefined : updateSession}
             isCollapsed={sidebarCollapsed}
             onToggleCollapse={toggleSidebarCollapsed}
+            overviewOpen={overviewOpen}
+            onOpenOverview={openOverview}
             filter={settings.sidebarFilter}
             onFilterChange={(f) => updateSetting('sidebarFilter', f)}
             sortBlockedFirst={settings.sortBlockedFirst}
@@ -1175,7 +1289,7 @@ export default function App({
             showBrand={sidebarCollapsed}
             showSessionTabs={settings.showSessionTabs}
             canRemoveTab={!readOnly && sessions.length > 1}
-            onSelectTab={selectSession}
+            onSelectTab={selectFromList}
             onAddTab={readOnly ? undefined : () => addTab('New')}
             onRemoveTab={requestRemove}
             connectionState={connectionState}
@@ -1191,11 +1305,12 @@ export default function App({
             onToggleFullscreen={canFullscreen ? toggleFullscreen : undefined}
             views={switcherViews}
             viewId={currentView.id}
-            onViewChange={setViewId}
+            onViewChange={changeView}
+            onOpenOverview={openOverview}
             viewPanelId={viewPanelId}
             panelViews={panelViews}
             sidePanelId={sidePanelView ? sidePanelId : null}
-            onTogglePanel={setSidePanelId}
+            onTogglePanel={togglePanel}
             menu={{
               onOpenAbout: () => setAboutOpen(true),
               onOpenHelp: () => setHelpOpen(true),
@@ -1203,7 +1318,7 @@ export default function App({
                 setSettingsGroup(undefined)
                 setSettingsOpen(true)
               },
-              onCopyLink: currentLink ? copyLink : undefined,
+              onCopyLink: shownLink ? copyLink : undefined,
               onLogout: mux.caps.auth ? handleLogout : undefined,
             }}
           />
@@ -1242,21 +1357,24 @@ export default function App({
               </Banner>
             ))}
           {/* Split tab: pick the pane to stream (herdr) */}
-          {mux.caps.clientSideSelect && activeSession.panes && (
-            <PaneStrip
-              panes={activeSession.panes}
-              activePaneId={activeSession.paneId}
-              onSelect={selectPane}
-              onClose={readOnly ? undefined : setPendingPaneId}
-            />
-          )}
+          {mux.caps.clientSideSelect &&
+            activeSession.panes &&
+            !overviewOpen && (
+              <PaneStrip
+                panes={activeSession.panes}
+                activePaneId={activeSession.paneId}
+                onSelect={selectPane}
+                onClose={readOnly ? undefined : setPendingPaneId}
+              />
+            )}
           {/* isolate: the maximized side panel stays under the header's menus */}
           <div className="relative isolate flex min-h-0 flex-1">
             {/* The terminal fits the space left above the toolbar, so an open
                 keyboard shrinks it rather than hiding its bottom rows. */}
             <div
-              // Under the maximized side panel nothing here takes focus
-              inert={hasSidePanel && panelMaximized}
+              // Under the maximized side panel or the overview nothing here
+              // takes focus
+              inert={overviewOpen || (hasSidePanel && panelMaximized)}
               className="relative min-w-0 flex-1 bg-term"
             >
               {/* Another view covers the terminal instead of unmounting or
@@ -1340,6 +1458,7 @@ export default function App({
             </div>
             {sidePanelView?.Panel && (
               <SidePanel
+                inert={overviewOpen}
                 label={sidePanelView.label}
                 width={settings.sidePanelWidth}
                 onWidthChange={setSidePanelWidth}
@@ -1354,13 +1473,38 @@ export default function App({
                 </Suspense>
               </SidePanel>
             )}
+            {/* Covers the panes without unmounting them, as a view covers
+                the terminal */}
+            {overviewOpen && (
+              <div className="absolute inset-0 z-20">
+                <OverviewScreen
+                  sessions={sessions}
+                  groups={groups}
+                  groupNoun={groupNoun}
+                  ready={sessionsLoaded}
+                  pollInterval={settings.pollInterval * 1000}
+                  clockOffset={clockOffset}
+                  // psmux reports itself as tmux
+                  activePaneOnly={mux.backend === 'tmux'}
+                  opensChat={overviewOpensChat}
+                  canAnswer={overviewCanAnswer}
+                  readOnly={readOnly}
+                  stuckMinutes={settings.stuckMinutes}
+                  onOpen={openFromOverview}
+                  onClose={closeOverview}
+                  onStartAgent={
+                    !readOnly && chatOffered ? startFromOverview : undefined
+                  }
+                />
+              </div>
+            )}
           </div>
         </main>
       </div>
 
       {/* The bottom input area belongs to the view: the key toolbar for the
           terminal. View-only has no input at all. */}
-      {readOnly ? (
+      {overviewOpen ? null : readOnly ? (
         <ReadOnlyBar
           label="View only"
           action={

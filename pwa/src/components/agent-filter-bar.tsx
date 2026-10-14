@@ -6,11 +6,14 @@ interface Props {
   summary: SessionSummary
   filter: SidebarFilter
   onChange: (filter: SidebarFilter) => void
+  // What is counted: sessions (the sidebar) or agents (the overview, which
+  // lists only agents, so it has no Agents segment)
+  unit?: 'session' | 'agent'
 }
 
 type Icon = typeof Bot
 
-const sessionCount = (n: number) => `${n} ${n === 1 ? 'session' : 'sessions'}`
+const count = (n: number, unit: string) => `${n} ${unit}${n === 1 ? '' : 's'}`
 
 function segment(
   value: SidebarFilter,
@@ -18,8 +21,9 @@ function segment(
   Icon: Icon,
   active: string,
   n: number,
+  unit: string,
 ): SegmentOption<SidebarFilter> {
-  const label = `${name}, ${sessionCount(n)}`
+  const label = `${name}, ${count(n, unit)}`
   return { value, label, content: countContent(Icon, active, n, label) }
 }
 
@@ -40,17 +44,23 @@ function countContent(Icon: Icon, active: string, n: number, label: string) {
   )
 }
 
-// Counts of sessions by agent state above the session list; picking one
-// lists only those sessions.
-export function AgentFilterBar({ summary, filter, onChange }: Props) {
+// Counts of sessions (or agents) by agent state above the list; picking one
+// lists only those.
+export function AgentFilterBar({
+  summary,
+  filter,
+  onChange,
+  unit = 'session',
+}: Props) {
   const options: SegmentOption<SidebarFilter>[] = [
-    { value: 'all', content: 'All', label: 'All sessions' },
+    { value: 'all', content: 'All', label: `All ${unit}s` },
     segment(
       'needs-you',
       'Needs you',
       CircleAlert,
       'text-danger',
       summary.blocked,
+      unit,
     ),
     segment(
       'working',
@@ -58,12 +68,17 @@ export function AgentFilterBar({ summary, filter, onChange }: Props) {
       LoaderCircle,
       'text-warning motion-safe:animate-spin',
       summary.working,
+      unit,
     ),
-    segment('agents', 'Agents', Bot, 'text-fg-muted', summary.agents),
   ]
+  if (unit === 'session') {
+    options.push(
+      segment('agents', 'Agents', Bot, 'text-fg-muted', summary.agents, unit),
+    )
+  }
   return (
     <SegmentedControl
-      label="Filter sessions"
+      label={`Filter ${unit}s`}
       options={options}
       value={filter}
       onChange={onChange}

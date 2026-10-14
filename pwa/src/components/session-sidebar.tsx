@@ -8,6 +8,7 @@ import {
   FolderOpen,
   FolderPlus,
   GitBranch,
+  LayoutDashboard,
   MoreHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
@@ -81,6 +82,10 @@ interface Props {
   isMobile?: boolean
   isCollapsed?: boolean
   onToggleCollapse?: () => void
+  // Desktop: the button that opens the overview of every agent, and whether
+  // it is open
+  onOpenOverview?: () => void
+  overviewOpen?: boolean
   // Which sessions to list; the filter bar shows only with onFilterChange.
   filter?: SidebarFilter
   onFilterChange?: (filter: SidebarFilter) => void
@@ -199,6 +204,8 @@ export function SessionSidebar({
   isMobile = false,
   isCollapsed = false,
   onToggleCollapse,
+  onOpenOverview,
+  overviewOpen,
   filter = 'all',
   onFilterChange,
   sortBlockedFirst = false,
@@ -822,6 +829,19 @@ export function SessionSidebar({
     </div>
   )
 
+  // Desktop: every agent at a glance
+  const overviewButton = onOpenOverview && (
+    <IconButton
+      onClick={onOpenOverview}
+      title="Agent overview"
+      aria-label="Agent overview"
+      aria-pressed={!!overviewOpen}
+      className={overviewOpen ? 'bg-surface text-fg' : ''}
+    >
+      <LayoutDashboard size={18} aria-hidden="true" />
+    </IconButton>
+  )
+
   const filterBar = showFilterBar && (
     <AgentFilterBar
       summary={summary}
@@ -987,6 +1007,7 @@ export function SessionSidebar({
               />
             )}
           </IconButton>
+          {overviewButton}
           {canAdd && (
             <IconButton
               variant="primary"
@@ -1043,13 +1064,16 @@ export function SessionSidebar({
             <BrandMark className="size-6 shrink-0" />
             Termote
           </span>
-          <IconButton
-            onClick={() => onToggleCollapse?.()}
-            title="Collapse sidebar"
-            aria-label="Collapse sidebar"
-          >
-            <PanelLeftClose size={18} aria-hidden="true" />
-          </IconButton>
+          <span className="flex items-center">
+            {overviewButton}
+            <IconButton
+              onClick={() => onToggleCollapse?.()}
+              title="Collapse sidebar"
+              aria-label="Collapse sidebar"
+            >
+              <PanelLeftClose size={18} aria-hidden="true" />
+            </IconButton>
+          </span>
         </div>
         <div className="shrink-0 px-3 pb-2">
           {showAddForm

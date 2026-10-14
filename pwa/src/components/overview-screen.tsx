@@ -1,0 +1,242 @@
+import { X } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useAgentOverview } from '../hooks/use-agent-overview'
+import type { Session, SessionGroup, SessionPane } from '../types/session'
+import { stuckFor } from '../utils/agent-stuck'
+import { overviewOrder } from '../utils/overview-order'
+import {
+  matchesPaneFilter,
+  type SidebarFilter,
+  summarizePanes,
+} from '../utils/session-filter'
+import { AgentCard } from './agent-card'
+import { AgentFilterBar } from './agent-filter-bar'
+import { NeedsMeQueue } from './needs-me-queue'
+import { Button, IconButton } from './ui/button'
+
+// The card's time is a coarse "3 min ago": a tick every 30 s keeps it right
+// without rendering the list every second.
+export const OVERVIEW_TICK = 30_000
+
+export interface OverviewCard {
+  session: Session
+  pane: SessionPane
+  status?: SessionPane['agentStatus']
+  since?: string
+}
+
+// Every pane running an agent, with its tab, in the sidebar's order.
+export function agentCards(sessions: Session[]): OverviewCard[] {
+  return sessions.flatMap((session) =>
+    (session.panes ?? [])
+      .filter((p) => p.hasAgent)
+      .map((pane) => ({
+        session,
+        pane,
+        status: pane.agentStatus,
+        since: pane.agentSince,
+      })),
+  )
+}
+
+interface Props {
+  sessions: Session[]
+  groups: SessionGroup[]
+  // What a group is called here ("workspace", "tmux session")
+  groupNoun: string
+  // The first snapshot is in: until then nothing says "no agent"
+  ready: boolean
+  // Milliseconds between reads (the session list's period)
+  pollInterval: number
+  // Server time minus this device's (ms)
+  clockOffset: number
+  // tmux and psmux track only the active pane of each window
+  activePaneOnly: boolean
+  // Whether a card opens the Chat view of an agent (else its terminal)
+  opensChat: (pane: SessionPane) => boolean
+  // Whether the server answers the agent's dialogs (else the terminal)
+  canAnswer: (pane: SessionPane) => boolean
+  // View-only: dialogs are shown, never answered
+  readOnly: boolean
+  // A working agent quiet this many minutes is marked stuck
+  stuckMinutes: number
+  onOpen: (
+    session: Session,
+    pane: SessionPane,
+    view: 'chat' | 'terminal',
+  ) => void
+  onClose: () => void
+  // Unset (view-only, or nowhere to start one): no button when empty
+  onStartAgent?: () => void
+}
+
+// Every agent the server sees, in every group: those waiting on the user
+// first, then working, done and idle, the longest in its state first. A card
+// opens its pane; the filter is the overview's own, not the sidebar's.
+export function OverviewScreen({
+  sessions,
+  groups,
+  groupNoun,
+  ready,
+  pollInterval,
+  clockOffset,
+  activePaneOnly,
+  opensChat,
+  canAnswer,
+  readOnly,
+  stuckMinutes,
+  onOpen,
+  onClose,
+  onStartAgent,
+}: Props) {
+  const overview = useAgentOverview(pollInterval)
+  // Focus moves into the overview and back to where it was when it closes.
+  const titleRef = useRef<HTMLHeadingElement>(null)
+  useEffect(() => {
+    const before = document.activeElement as HTMLElement | null
+    titleRef.current?.focus()
+    return () => {
+      if (before?.isConnected) before.focus()
+    }
+  }, [])
+  const [filter, setFilter] = useState<SidebarFilter>('all')
+  const [now, setNow] = useState(() => Date.now() + clockOffset)
+  useEffect(() => {
+    setNow(Date.now() + clockOffset)
+    const id = setInterval(
+      () => setNow(Date.now() + clockOffset),
+      OVERVIEW_TICK,
+    )
+    return () => clearInterval(id)
+  }, [clockOffset])
+
+  const cards = useMemo(() => overviewOrder(agentCards(sessions)), [sessions])
+  const summary = useMemo(
+    () => summarizePanes(cards.map((c) => c.pane)),
+    [cards],
+  )
+  const shown = cards.filter((c) => matchesPaneFilter(c.pane, filter))
+  const groupOf = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups])
+  const showGroups = groups.length > 1
+  const placeOf = useCallback(
+    (session: Session) => {
+      const group = session.groupId ? groupOf.get(session.groupId) : undefined
+      return showGroups && group
+        ? `${group.name} / ${session.name}`
+        : session.name
+    },
+    [groupOf, showGroups],
+  )
+  const queueCards = useMemo(
+    () => cards.map((c) => ({ ...c, where: placeOf(c.session) })),
+    [cards, placeOf],
+  )
+
+  return (
+    <section
+      aria-labelledby="overview-title"
+      className="flex h-full flex-col bg-bg"
+    >
+      <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2">
+        <h2
+          id="overview-title"
+          ref={titleRef}
+          tabIndex={-1}
+          className="flex-1 text-[15px] font-semibold outline-none"
+        >
+          Agents
+        </h2>
+        <IconButton
+          onClick={onClose}
+          aria-label="Close the agent overview"
+          title="Close (Esc)"
+        >
+          <X size={18} aria-hidden="true" />
+        </IconButton>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+        {overview.error && (
+          <p role="status" className="mb-3 text-[12px] text-fg-muted">
+            Could not read the agents' details; retrying.
+          </p>
+        )}
+        {!ready ? null : cards.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 py-10 text-center text-[13px] text-fg-muted">
+            <p>No agent is running in any session.</p>
+            {onStartAgent && (
+              <Button onClick={onStartAgent}>
+                Start an agent in this pane
+              </Button>
+            )}
+          </div>
+        ) : (
+          <>
+            <NeedsMeQueue
+              cards={queueCards}
+              readOnly={readOnly}
+              canAnswer={canAnswer}
+              onOpen={onOpen}
+            />
+            <div className="mb-3 max-w-md">
+              <AgentFilterBar
+                summary={summary}
+                filter={filter}
+                onChange={setFilter}
+                unit="agent"
+              />
+            </div>
+            {shown.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 py-6 text-center text-[13px] text-fg-muted">
+                No agents match
+                <Button size="sm" onClick={() => setFilter('all')}>
+                  Show all
+                </Button>
+              </div>
+            ) : (
+              <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {shown.map(({ session, pane }) => {
+                  const group = session.groupId
+                    ? groupOf.get(session.groupId)
+                    : undefined
+                  const named = showGroups && group
+                  const where = named
+                    ? `${group.name} / ${session.name}`
+                    : session.name
+                  return (
+                    <li key={pane.id}>
+                      <AgentCard
+                        session={session}
+                        pane={pane}
+                        where={where}
+                        groupTitle={
+                          named ? `${groupNoun} ${group.name}` : undefined
+                        }
+                        worktree={group?.worktree?.linked}
+                        overview={overview.panes.get(pane.id)}
+                        overviewFailed={overview.error}
+                        now={now}
+                        stuckFor={stuckFor(
+                          pane.agentStatus,
+                          overview.panes.get(pane.id)?.lastTs,
+                          now,
+                          stuckMinutes,
+                        )}
+                        opensChat={opensChat(pane)}
+                        onOpen={onOpen}
+                      />
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+            {activePaneOnly && (
+              <p className="mt-4 text-[12px] text-fg-subtle">
+                Only the active pane of each window is tracked.
+              </p>
+            )}
+          </>
+        )}
+      </div>
+    </section>
+  )
+}

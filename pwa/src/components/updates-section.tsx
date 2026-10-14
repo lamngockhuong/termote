@@ -4,6 +4,7 @@ import type { InstallKind } from '../hooks/use-mux-api'
 import { compareVersions, useUpdateCheck } from '../hooks/use-update-check'
 import { APP_INFO } from '../utils/app-info'
 import type { ServerInfo } from '../utils/app-update'
+import { formatAgo } from '../utils/format-ago'
 import { Button, FOCUS_RING } from './ui/button'
 
 // How to update each kind of install. The container's image comes from the
@@ -27,13 +28,6 @@ const UPDATE_HOW: Record<InstallKind, { where: string; command?: string }> = {
   unknown: {
     where: 'Update it the way it was installed.',
   },
-}
-
-export function formatAgo(ms: number): string {
-  const min = Math.floor(ms / 60_000)
-  if (min < 1) return 'just now'
-  if (min < 60) return `${min} min ago`
-  return `${Math.floor(min / 60)} h ago`
 }
 
 interface Props {

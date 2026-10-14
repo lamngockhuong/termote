@@ -1,4 +1,4 @@
-import type { AgentStatus, Session } from '../types/session'
+import type { AgentStatus, Session, SessionPane } from '../types/session'
 
 // Which sessions the sidebar lists: every one, those with a pane waiting on
 // the user, those running any agent, or those with a pane at work.
@@ -77,4 +77,29 @@ export function blockedFirst(sessions: Session[]): Session[] {
   const blocked = sessions.filter((s) => matchesFilter(s, 'needs-you'))
   if (blocked.length === 0) return sessions
   return [...blocked, ...sessions.filter((s) => !matchesFilter(s, 'needs-you'))]
+}
+
+// Whether one pane with an agent matches filter (the overview lists panes,
+// each of which runs an agent).
+export function matchesPaneFilter(
+  pane: SessionPane,
+  filter: SidebarFilter,
+): boolean {
+  switch (filter) {
+    case 'needs-you':
+      return pane.agentStatus === 'blocked'
+    case 'working':
+      return pane.agentStatus === 'working'
+    default:
+      return true
+  }
+}
+
+// Counts panes (not sessions) for the overview's filter bar.
+export function summarizePanes(panes: SessionPane[]): SessionSummary {
+  return {
+    blocked: panes.filter((p) => matchesPaneFilter(p, 'needs-you')).length,
+    working: panes.filter((p) => matchesPaneFilter(p, 'working')).length,
+    agents: panes.length,
+  }
 }
