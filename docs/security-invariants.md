@@ -139,6 +139,27 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   live 30 s, unasked ones 5 minutes. That worker calls `PaneDir` on the backend. A view-only client
   gets the same summary (the snapshot already names the agents) but no branch or count for a
   root `viewHidesRoot` refuses (no repo, a home dir or one above), as Files
+- **Agent subagents** (`server/agent_subagents.go`, `GET /api/mux/panes/{id}/agent/subagents`):
+  `requireMethod(GET)`, `crossSiteRejection`, `requireAgentRead`; internal errors are logged only.
+  Only the pane's own Claude session (`AgentSession`, as the transcript): another agent, no
+  transcript or no subagents directory answers `{nodes: []}`. Nothing comes from the client but the
+  pane id. The directory is `projects/<proj>/<sessionId>/subagents` under the resolved `claudeDir`,
+  only when `Locate` resolved the transcript to `projects/<proj>/<sessionId>.jsonl` there; it is opened
+  through `os.Root` with every step checked by `Lstat` to be a plain directory (a symlink or a junction
+  is refused even when it stays inside), and the opened root must be the directory checked. A file is
+  read only when its name matches `^agent-[a-z0-9]{1,64}\.(jsonl|meta\.json)$`, the listing says it is
+  a plain file and the opened file is the one listed; meta files over 64 KiB are not read. Ends come
+  from the transcript's `queue-operation` rows: the first read takes its last `agentTailMax` bytes,
+  later ones go on from the offset kept per session (the same file identity, at most
+  `agentForwardMax` behind), so the whole file is never read again; only the first 64 KiB of a line is
+  kept, matched by pattern, never decoded. A subagent's own file is read for its first line (1 MiB at
+  most) and its last 256 KiB, and a meta file is read, again only when its size or mtime changed;
+  every file is opened nonblocking. The overview reads only the new transcript rows and the listing.
+  Memory: per session asked for in the last 10 minutes, the ends, meta and file facts of the subagents
+  listed. Limits: 200 nodes (the newest), 4 levels, a parent loop dropped, `truncated` set. It
+  returns agent ids, the type, the description (200 runes), status, times and the last tool's name;
+  never a prompt, a tool input or result, a path or a file name, so view-only may read it. The
+  newest write of a running subagent becomes the overview's `lastTs`
 - **Paired devices** (`server/device_*.go`, `server/pair_page.go`, `server/cli_devices.go`,
   `caps.devices`): a device signs in with a one-time code instead of the password and gets its own
   cookie `termote_device_<8 hex of the store id>` (`HttpOnly`, `SameSite=Strict`, `Secure` on HTTPS,

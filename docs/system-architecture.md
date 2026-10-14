@@ -247,6 +247,7 @@ existing pane from the last snapshot.
 GET    /api/mux/snapshot          → {apiVersion, backend, caps, serverNow, groups:[{id,name,worktree?:{linked,branch?},tabs:[{id,key,name,active,processes?,panes:[{id,active,title,agent?:{name,status,since?,sinceFirstSeen?},process?}]}]}]}
 GET    /api/mux/overview          → {serverNow, panes:[{paneId,key,lastText?,lastTs?,branch?,changed?,changedTruncated?,usage?:{contextTokens,model?},unavailable?:["transcript"|"changes"]}]}
 GET    /api/mux/activity?after=   → {events:[{seq,ts,key,groupId,tabId,paneId,agent,from,to}], latest, oldest, reset?, serverNow} | 400 invalid_after
+GET    /api/mux/panes/{id}/agent/subagents → {nodes:[{id,type,description?,status:running|done|error,statusGuessed?,startTs?,endTs?,lastTool?,depth,children}], truncated?} | 404
 POST   /api/mux/tabs               body: {groupId, name}       → {ok, id}
 PATCH  /api/mux/tabs/{id}          body: {name, key?}          → {ok} | 409 changed
 DELETE /api/mux/tabs/{id}?key=                                  → {ok} | 409 changed
@@ -1104,6 +1105,27 @@ the transcript tail comes through the Chat view's read cache. Branch and changes
 background, one `git status` at a time, only when a git slot is free and without backing the
 root off, so the Changes view always comes first; until read, a pane answers `unavailable:
 ["changes"]` (always on psmux, which has no Files).
+
+When a Claude session has running subagents, `lastTs` is the newest of the transcript's last row
+and those subagents' files, so an agent waiting on its subagents is not taken as stuck. That read
+only takes the transcript's new rows and the directory listing (shared for 2 s), never a meta or
+subagent file.
+
+### Agent subagents (`/api/mux/panes/{id}/agent/subagents`)
+
+`server/agent_subagents.go` lists the subagents of a pane's Claude session from
+`<claudeDir>/projects/<proj>/<sessionId>/subagents`: each `agent-<id>.meta.json` gives the type,
+description and `parentAgentId` (nesting), and each `agent-<id>.jsonl` its start (first line) and
+last tool (its tail). Subagents run in the background, so the Agent call's tool result says
+nothing about the end; the end is a `queue-operation` row of the session's transcript whose
+`<task-notification>` names the agent id and a `<status>` (`completed` is `done`, anything else
+`error`). Background shell commands write the same rows with ids that match no file and are
+dropped. The first read takes the transcript's last `agentTailMax` bytes, later ones go on from
+the offset kept per session, so it is never read whole again. When that read found no
+`queue-operation` row or did not start at the beginning of the file, a subagent whose file has
+been quiet for 10 minutes is taken as done (`statusGuessed`). One read is shared for 2 s; at most
+200 nodes and 4 levels (`truncated`). Every step of the directory path must be a plain directory
+(no symlink or junction) and only plain files with the expected names are read.
 
 ### Agent notifications (`/api/mux/push/*`)
 

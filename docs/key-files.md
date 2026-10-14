@@ -54,6 +54,12 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/utils/agent-stuck.ts`                    | A working agent quiet past the setting (stuck hint)           |
 | `pwa/src/hooks/use-agent-overview.ts`             | Polls `/api/mux/overview` while the overview shows            |
 | `pwa/src/utils/overview-order.ts`                 | Overview order: blocked, working, done, idle; oldest first    |
+| `pwa/src/components/status-timeline.tsx`          | A card's last hour by status, from the activity log           |
+| `pwa/src/utils/timeline-segments.ts`              | Cuts a pane's events (by key) into the strip's segments       |
+| `pwa/src/components/subagent-tree.tsx`            | A Claude card's subagents: status, type, last tool, time      |
+| `pwa/src/hooks/use-subagents.ts`                  | Polls a pane's subagent tree while its card is open (3 s)     |
+| `pwa/src/components/activity-log.tsx`             | Overview: every status change, newest first, opens its pane   |
+| `pwa/src/hooks/use-activity-log.ts`               | Polls `/api/mux/activity` for new events while shown          |
 | `pwa/src/hooks/use-agent-transcript.ts`           | Polls a pane's transcript, one store per pane                 |
 | `pwa/src/hooks/use-agent-prompt.ts`               | Polls a pane's open dialog, one store per pane                |
 | `pwa/src/components/files-view.tsx`               | Files view: the pane's directory as a tree, opens a file      |
@@ -123,6 +129,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/agent.go`                                 | `/api/mux/panes/{id}/agent/*` routes, transcript reads        |
 | `server/agent_activity.go`                        | Status since and change log of every agent (`/activity`)      |
 | `server/agent_overview.go`                        | `/overview`: each agent's last text, tokens, git changes      |
+| `server/agent_subagents.go`                       | `agent/subagents`: a Claude session's subagent tree           |
 | `server/agent_claude.go`                          | Claude Code transcript (JSONL) and session file               |
 | `server/agent_claude_prompt.go`                   | Reads a Claude Code screen: input box, dialogs                |
 | `server/agent_input.go`                           | Sends a message, answers a dialog (checks before each write)  |

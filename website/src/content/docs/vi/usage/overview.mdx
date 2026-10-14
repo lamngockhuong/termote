@@ -52,6 +52,24 @@ Thiết bị chỉ xem thấy hộp thoại nhưng không có nút. Agent mà Te
 thì chỉ có nút **Open terminal**. Với Zellij, nếu lúc đó câu trả lời chưa tới được pane, thẻ sẽ báo và
 bạn thử lại.
 
+## Lịch sử và nhật ký
+
+Nút **History** ở cuối thẻ mở ra một dải ghi lại một giờ vừa qua của agent. Mỗi trạng thái có màu và
+dấu riêng: blocked có sọc chéo, idle chỉ có viền. Bên dưới dải ghi mỗi trạng thái kéo dài bao nhiêu
+phút. Khoảng trước lần đổi trạng thái đầu tiên mà server ghi được để trống, vì không biết lúc đó agent
+làm gì, chứ không phải agent đang idle.
+
+Với Claude Code, phần này còn liệt kê các agent con của phiên. Mỗi agent con có loại, mô tả, trạng thái,
+tool gọi gần nhất và thời gian đã chạy. Agent con do một agent con khác tạo ra thì thụt vào dưới agent
+đó. Khi transcript không cho biết agent con đã xong hay chưa, Termote coi nó là xong nếu file của nó
+không đổi trong 10 phút và ghi thêm `(guessed)`. Thu gọn lại, nút vẫn ghi số lượng, ví dụ
+`2 subagents, 1 running`.
+
+Nút **Activity** trên đầu màn hình liệt kê mọi lần đổi trạng thái của mọi agent từ lúc server khởi động
+(tối đa 500 lần gần nhất), mới nhất ở trên. Có thể lọc theo trạng thái mà agent chuyển sang. Bấm một dòng
+để mở pane của agent đó, kể cả khi window tmux của nó đã bị di chuyển. Dòng của pane đã đóng thì không
+bấm được.
+
 ## Agent có thể bị treo
 
 Agent báo đang chạy nhưng đã lâu không ghi thêm gì thì thẻ có một dòng kèm đồng hồ cát:
