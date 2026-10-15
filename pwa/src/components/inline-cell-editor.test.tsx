@@ -38,6 +38,42 @@ describe('InlineCellEditor', () => {
       height = 900
       type(box, 'many\nlines')
       expect(box.style.height).toBe('332px')
+      // and shrinks back as lines go
+      height = 24
+      type(box, 'one')
+      expect(box.style.height).toBe('24px')
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('keeps the grid where it was scrolled while it fits the value', () => {
+    let grid: HTMLElement | null = null
+    // Measured shrunk, the field pulls the grid's scroll up, as on the
+    // last rows of a table
+    const spy = vi
+      .spyOn(HTMLTextAreaElement.prototype, 'scrollHeight', 'get')
+      .mockImplementation(() => {
+        if (grid) grid.scrollTop = 0
+        return 40
+      })
+    try {
+      render(
+        // biome-ignore lint/a11y/useSemanticElements: a grid's frame, as in table-grid.tsx
+        <div role="grid" tabIndex={-1}>
+          <InlineCellEditor
+            value="v"
+            label="Edit"
+            onCommit={vi.fn()}
+            onCancel={vi.fn()}
+            onExpand={vi.fn()}
+          />
+        </div>,
+      )
+      grid = screen.getByRole('grid')
+      grid.scrollTop = 500
+      type(screen.getByRole('textbox', { name: 'Edit' }), 'w')
+      expect(grid.scrollTop).toBe(500)
     } finally {
       spy.mockRestore()
     }

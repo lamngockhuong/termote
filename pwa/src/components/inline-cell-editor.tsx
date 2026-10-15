@@ -7,11 +7,12 @@ import {
   useRef,
   useState,
 } from 'react'
+import { WRAP_LINE_HEIGHT, WRAP_PAD_Y } from '../utils/table-columns'
 import { FOCUS_RING } from './ui/button'
 
-// Tallest the field grows to as it fits its value: 20 lines of 16px
-// (leading-4) between 6px of padding (py-1.5); past it, it scrolls
-const MAX_HEIGHT = 20 * 16 + 2 * 6
+// Tallest the field grows to as it fits its value: 20 lines, as a wrapped
+// cell's (leading-4, py-1.5); past it, it scrolls
+const MAX_HEIGHT = 20 * WRAP_LINE_HEIGHT + 2 * WRAP_PAD_Y
 
 // Where Tab takes the editing after a value is set
 export type CellMove = 'next' | 'prev'
@@ -34,7 +35,9 @@ interface Props {
 // Tab sets it and goes to the next cell. Leaving it any other way sets it,
 // scrolled away (unmounted) included, as a spreadsheet does. It lies over
 // the cell and the rows below, as tall as its value (MAX_HEIGHT at most),
-// and never narrower than the cell: its parent is the cell, positioned.
+// and never narrower than the cell: its parent is the cell, positioned (a
+// group named edit, data-last in the last column, where it grows leftward
+// so as not to widen the table).
 export function InlineCellEditor({
   value,
   label,
@@ -51,12 +54,17 @@ export function InlineCellEditor({
   last.current = { input, onCommit }
 
   // Fits the field to the value typed: back to its least height, then as
-  // tall as its lines (the cell's height at least, from min-h-full)
+  // tall as its lines (the cell's height at least, from min-h-full). On
+  // the last rows the field reaches past the table: shrunk for a moment, it
+  // would pull the grid's scroll up, so that scroll is put back.
   // biome-ignore lint/correctness/useExhaustiveDependencies: input changes the lines
   useLayoutEffect(() => {
     const field = box.current as HTMLTextAreaElement
+    const grid = field.closest<HTMLElement>('[role="grid"]')
+    const top = grid?.scrollTop ?? 0
     field.style.height = 'auto'
     field.style.height = `${Math.min(field.scrollHeight, MAX_HEIGHT)}px`
+    if (grid) grid.scrollTop = top
   }, [input])
 
   useEffect(() => {
@@ -103,7 +111,7 @@ export function InlineCellEditor({
   }
 
   return (
-    <div className="absolute left-0 top-0 flex min-h-full w-full min-w-48 flex-col shadow-lg">
+    <div className="absolute left-0 top-0 flex group-data-[last]/edit:left-auto group-data-[last]/edit:right-0 min-h-full w-full min-w-48 flex-col shadow-lg">
       <textarea
         ref={box}
         rows={1}

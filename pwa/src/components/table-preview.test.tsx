@@ -937,10 +937,14 @@ describe('TablePreview editing in a cell (a fine pointer)', () => {
   it('Tab sets the value and goes along the row, then on to the next; Shift+Tab goes back', () => {
     const p = edit('a,b\n1,2\n3,4\n')
     fireEvent.click(cellButton('1'))
+    // Only the last column's field grows leftward
+    const cell = (box: HTMLElement) => box.closest('[role="gridcell"]')
+    expect(cell(field('Edit a, row 2'))).not.toHaveAttribute('data-last')
     fireEvent.change(field('Edit a, row 2'), { target: { value: 'x' } })
     key(field('Edit a, row 2'), 'Tab')
     expect(p.text()).toBe('a,b\nx,2\n3,4\n')
     expect(field('Edit b, row 2')).toHaveValue('2')
+    expect(cell(field('Edit b, row 2'))).toHaveAttribute('data-last', 'true')
     expect(field('Edit b, row 2')).toHaveFocus()
     key(field('Edit b, row 2'), 'Tab')
     expect(field('Edit a, row 3')).toHaveValue('3')

@@ -954,6 +954,9 @@ test.describe('files and changes views', () => {
         await row(2).getByRole('gridcell').nth(2).click()
         await expect(field('Edit tag, row 2')).toBeFocused()
         await expect(field('Edit tag, row 2')).toHaveValue('a')
+        // The last column's field grows leftward: the table gets no wider
+        expect(await field('Edit tag, row 2').evaluate((el) => (el.closest('[role="gridcell"]') as Element).getBoundingClientRect().right - el.getBoundingClientRect().right)).toBe(0)
+        expect(await grid.evaluate((el) => el.scrollLeft)).toBe(0)
         await page.keyboard.type('x')
         await page.keyboard.press('Enter')
         await expect(grid.getByRole('gridcell', { name: 'x', exact: true })).toBeFocused()

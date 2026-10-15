@@ -547,7 +547,8 @@ export function TableGrid({
                 role="rowheader"
                 aria-label={label}
                 title={odd ? label : undefined}
-                className={`sticky left-0 bg-bg tabular-nums ${odd ? 'text-warning' : 'text-fg-subtle'}`}
+                // Above a cell edited on a row before, growing over it
+                className={`sticky left-0 z-[6] bg-bg tabular-nums ${odd ? 'text-warning' : 'text-fg-subtle'}`}
               >
                 <button
                   type="button"
@@ -567,7 +568,9 @@ export function TableGrid({
                       // biome-ignore lint/suspicious/noArrayIndexKey: a cell is its column
                       key={c}
                       role="gridcell"
-                      className="relative min-w-0"
+                      // The editor's group: in the last column it grows leftward
+                      data-last={c === names.length - 1 || undefined}
+                      className="group/edit relative min-w-0"
                     >
                       {editor}
                     </div>
