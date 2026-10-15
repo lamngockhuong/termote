@@ -41,9 +41,11 @@ vi.mock('../utils/highlight', async (orig) => ({
   highlight: async () => null,
   highlightLang: async () => null,
 }))
+// A fine pointer (a mouse) when set; no pointer the query names otherwise
+const pointer = vi.hoisted(() => ({ fine: false }))
 vi.mock('../hooks/use-media-query', () => ({
   useIsMobile: () => false,
-  useMediaQuery: () => false,
+  useMediaQuery: (query: string) => query === '(pointer: fine)' && pointer.fine,
 }))
 
 function show(over: Partial<Parameters<typeof FileViewer>[0]> = {}) {
@@ -1045,6 +1047,73 @@ describe('FileViewer in a tab', () => {
     expect(
       await screen.findByRole('button', { name: 'extra' }),
     ).toBeInTheDocument()
+  })
+})
+
+describe('FileViewer: a click on a cell of a table viewed', () => {
+  const csvFile = (text: string) => editable(text, { path: 'd.csv' })
+  const field = (name: string) => screen.getByRole('textbox', { name })
+
+  beforeEach(() => {
+    pointer.fine = true
+  })
+  afterEach(() => {
+    pointer.fine = false
+  })
+
+  it('starts editing, pins the tab and edits that cell where it is', async () => {
+    mockContent.mockResolvedValue(csvFile('name,price\r\npear,2\r\n'))
+    const onPin = vi.fn()
+    show({ canEdit: true, path: 'd.csv', pinned: false, onPin })
+    await screen.findByRole('grid')
+    fireEvent.click(screen.getByRole('gridcell', { name: '2' }))
+    expect(onPin).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument()
+    const box = field('Edit price, row 2')
+    expect(box).toHaveValue('2')
+    fireEvent.change(box, { target: { value: '2.5' } })
+    fireEvent.keyDown(box, { key: 'Enter' })
+    expect(screen.getByRole('gridcell', { name: '2.5' })).toBeInTheDocument()
+    expect(saveButton()).toBeEnabled()
+    // Escape on a field left as it was stays in editing
+    fireEvent.click(screen.getByRole('gridcell', { name: 'pear' }))
+    fireEvent.keyDown(field('Edit name, row 2'), { key: 'Escape' })
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument()
+  })
+
+  it('asks first about another delimiter, then opens no cell', async () => {
+    mockContent.mockResolvedValue(csvFile('a,b;c\n1,2;3\n'))
+    show({ canEdit: true, path: 'd.csv' })
+    await screen.findByRole('grid')
+    fireEvent.change(screen.getByRole('combobox', { name: 'Delimiter' }), {
+      target: { value: ';' },
+    })
+    fireEvent.click(screen.getByRole('gridcell', { name: '3' }))
+    expect(screen.getByRole('dialog')).toHaveTextContent(
+      'Edit with another delimiter?',
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Edit anyway' }))
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: /^Edit / })).toBeNull()
+  })
+
+  it('a file that cannot be edited shows the cell in its sheet', async () => {
+    mockContent.mockResolvedValue(csvFile('a\n1\n'))
+    show({ path: 'd.csv' })
+    await screen.findByRole('grid')
+    fireEvent.click(screen.getByRole('gridcell', { name: '1' }))
+    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull()
+    expect(screen.getByRole('dialog')).toHaveTextContent('1')
+  })
+
+  it('a coarse pointer shows the cell in its sheet, still viewing', async () => {
+    pointer.fine = false
+    mockContent.mockResolvedValue(csvFile('a\n1\n'))
+    show({ canEdit: true, path: 'd.csv' })
+    await screen.findByRole('grid')
+    fireEvent.click(screen.getByRole('gridcell', { name: '1' }))
+    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull()
+    expect(screen.getByRole('dialog')).toHaveTextContent('1')
   })
 })
 

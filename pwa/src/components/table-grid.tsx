@@ -5,6 +5,7 @@ import {
   type KeyboardEvent,
   type MouseEvent,
   type PointerEvent,
+  type ReactNode,
   type RefObject,
   useEffect,
   useLayoutEffect,
@@ -28,6 +29,8 @@ import {
   scrollTopFor,
   TOUCH_ROW_HEIGHT,
   WIDTH_STEP,
+  WRAP_LINES,
+  type WrapLines,
   wrapLines,
 } from '../utils/table-columns'
 import { visibleUnsafe } from '../utils/unsafe-chars'
@@ -69,8 +72,14 @@ const FALLBACK_CH_PX = 7
 const TOUCH_CLICK_MS = 500
 
 const CELL = `truncate px-2 text-left ${FOCUS_RING} focus-visible:-outline-offset-2`
-// A wrapped cell: up to WRAP_LINES lines from the top, never past its row
+// A wrapped cell: up to its table's lines from the top, never past its row
 const WRAP_CELL = `flex items-start overflow-hidden px-2 py-1.5 text-left leading-4 ${FOCUS_RING} focus-visible:-outline-offset-2`
+// Whole class names, so Tailwind finds each one in the source
+const CLAMP: Record<WrapLines, string> = {
+  3: 'line-clamp-3',
+  6: 'line-clamp-6',
+  10: 'line-clamp-10',
+}
 
 interface Props {
   text: string
@@ -80,14 +89,21 @@ interface Props {
   // Columns rendered, their names and widths (in ch)
   names: string[]
   widths: number[]
-  // Columns whose cells show several lines; with any, every row is taller
+  // Columns whose cells show several lines, up to lines; with any, every
+  // row is taller
   wrapped: ReadonlySet<number>
+  lines?: WrapLines
   header: boolean
   // Cells a row should have; any other count is flagged
   expected: number
   sort: ViewOptions['sort']
   onSort: (col: number) => void
+  // A cell was clicked, or asked for with Enter or F2
   onOpen: (row: number, col: number) => void
+  // The cell edited where it is (file row, column) and its editor, shown
+  // in place of the cell
+  editingCell?: { row: number; col: number }
+  editor?: ReactNode
   // A file row's number was chosen: show that row as a record
   onOpenRow: (row: number) => void
   // A column's width set by a drag or a key (ch), or asked to fit its
@@ -126,11 +142,14 @@ export function TableGrid({
   names,
   widths,
   wrapped,
+  lines = WRAP_LINES,
   header,
   expected,
   sort,
   onSort,
   onOpen,
+  editingCell,
+  editor,
   onOpenRow,
   onResize,
   onFit,
@@ -146,7 +165,7 @@ export function TableGrid({
   const coarse = useMediaQuery('(pointer: coarse)')
   const headerHeight = coarse ? TOUCH_ROW_HEIGHT : ROW_HEIGHT
   // One height for every row, taller while a column wraps
-  const rowHeight = rowHeightFor(coarse, wrapped.size > 0)
+  const rowHeight = rowHeightFor(coarse, wrapped.size > 0, lines)
   const [view, setView] = useState({ top: 0, height: 0 })
   // The cell keyboard focus moves from: its place in rows, and its column
   const [active, setActive] = useState({ pos: 0, col: 0 })
@@ -256,15 +275,25 @@ export function TableGrid({
       PageUp: [-pageRows(height, rowHeight), 0],
       PageDown: [pageRows(height, rowHeight), 0],
     }
+    if (e.key === 'F2' && onCell && col >= 0) {
+      e.preventDefault()
+      onOpen(rows[pos], col)
+      return
+    }
     const key = moves[e.key]
     if (!key) return
     const move = onCell ? key : [0, 0]
     e.preventDefault()
-    const next = {
+    focusing.current = true
+    reveal({
       pos: Math.max(0, Math.min(rows.length - 1, pos + move[0])),
       col: Math.max(-1, Math.min(names.length - 1, col + move[1])),
-    }
-    // Scroll the row into view below the sticky header
+    })
+  }
+
+  // Makes the cell active, its row scrolled into view below the sticky
+  // header
+  const reveal = (next: { pos: number; col: number }) => {
     const el = frame.current as HTMLDivElement
     const y = next.pos * rowHeight
     const now = el.scrollTop * scale
@@ -272,10 +301,30 @@ export function TableGrid({
     else if (y + headerHeight + rowHeight > now + height) {
       el.scrollTop = (y + headerHeight + rowHeight - height) / scale
     }
-    focusing.current = true
     setActive(next)
     setView({ top: el.scrollTop, height: el.clientHeight })
   }
+
+  // The cell edited becomes the active one, scrolled into view (Tab may
+  // reach a row out of it). Once the editing ends by a key (Enter, Escape),
+  // the editor leaves the focus on the grid and it goes back to its cell;
+  // never from where a click put it, which the browser may move only after
+  // this runs.
+  const edited = useRef(editingCell)
+  useEffect(() => {
+    const was = edited.current
+    edited.current = editingCell
+    if (was?.row === editingCell?.row && was?.col === editingCell?.col) return
+    const cell = (editingCell ?? was) as { row: number; col: number }
+    // Filtered out meanwhile
+    const at = rows.indexOf(cell.row)
+    if (at < 0) return
+    if (editingCell) reveal({ pos: at, col: cell.col })
+    else if (document.activeElement === frame.current) {
+      focusing.current = true
+      setActive({ pos: at, col: cell.col })
+    }
+  })
 
   const onClick = (e: MouseEvent<HTMLDivElement>) => {
     const cell = (e.target as HTMLElement).closest<HTMLElement>('[data-pos]')
@@ -511,6 +560,18 @@ export function TableGrid({
                 </button>
               </div>
               {names.map((_, c) => {
+                if (editingCell?.row === r && editingCell.col === c) {
+                  return (
+                    <div
+                      // biome-ignore lint/suspicious/noArrayIndexKey: a cell is its column
+                      key={c}
+                      role="gridcell"
+                      className="min-w-0"
+                    >
+                      {editor}
+                    </div>
+                  )
+                }
                 const wrap = wrapped.has(c)
                 const shown = shownAt(text, table, r, c, wrap)
                 return (
@@ -526,7 +587,9 @@ export function TableGrid({
                     className={wrap ? WRAP_CELL : CELL}
                   >
                     {wrap ? (
-                      <span className="line-clamp-3 min-w-0 whitespace-pre-wrap break-words">
+                      <span
+                        className={`${CLAMP[lines]} min-w-0 whitespace-pre-wrap break-words`}
+                      >
                         <bdi>{wrapLines(shown)}</bdi>
                       </span>
                     ) : (

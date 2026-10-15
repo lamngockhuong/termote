@@ -402,21 +402,24 @@ it for changes). A deleted file has no table.
   A column is 4 to 120 characters wide.
 - The **Columns** button in the bar has **Fit columns**, which fits every column to the rows on
   screen (up to 1000, from the first one in view), **Reset widths**, back to the widths the table
-  opened with, and **Wrap**, a list of the columns. A wrapped column shows up to three lines of
-  each value (a line break still ends with `↵`) and its name has a wrap icon; while any column
-  wraps, every row is three lines tall. A longer value is whole in its cell's sheet.
+  opened with, **Wrap**, a list of the columns, and **Lines**: 3, 6 or 10 (3 at first). A wrapped
+  column shows up to that many lines of each value (a line break still ends with `↵`) and its name
+  has a wrap icon; while any column wraps, every row is that many lines tall, and a longer value
+  is cut. The whole value is in its cell's sheet, or its field while editing.
 - **Records** shows one row at a time as `column: value`, with **Previous** and **Next**, for a
   phone where a row is wider than the screen. Press or tap a row number to open that row in
   Records; turned off, Records goes back to the table where you left it.
 - Tap a cell (or press Enter on it) to see its whole value, with a button to copy it. A cell
-  shows at most 1024 characters; the full value is only in that sheet.
+  shows at most 1024 characters; the full value is only in that sheet. With a mouse, a click on a
+  cell of a file you can edit starts editing that cell instead (see below); a value opened from
+  Records still shows in its sheet.
 - A row with another number of cells than the header has its number in orange; hovering or a
   screen reader says how many cells it has.
 
 Sorting, filtering, the delimiter, the header row, column widths and wrapped columns only change
 what is shown. Nothing is written to the file, and they are forgotten when the file is closed.
-Widths and wrapped columns also stay while you show another tab and come back, and go back to the
-defaults when the delimiter or the header row changes.
+Widths, wrapped columns and their lines also stay while you show another tab and come back, and go
+back to the defaults when the delimiter or the header row changes.
 
 | Shown                                                   | Why                                                                     |
 | ------------------------------------------------------- | ----------------------------------------------------------------------- |
@@ -441,12 +444,21 @@ edited as text instead.
 - Tap a cell to change its value in a sheet: the value can hold several lines, and characters
   that hide or reorder text show below it as `⟨U+XXXX⟩`. **Apply** puts it in the table; a cell
   a short row does not have can be set too.
+- With a mouse, a click on a cell, or F2 or Enter on the cell in focus, edits the value in the
+  cell itself; a click while only viewing a file you can edit starts editing first. Enter sets
+  it, Shift+Enter or Alt+Enter breaks the line, and Escape drops what you typed: the table stays
+  in editing, **Cancel** leaves it. Tab and Shift+Tab set it and go to the next or previous cell,
+  from the end of a row onto the next one. Clicking elsewhere, or scrolling the cell out of view,
+  sets it too. The ⤢ button in the cell takes what you typed to the cell's sheet, for more room
+  and for **Add row below** and **Delete row**. A value longer than 1024 characters, or one that
+  holds characters which hide or reorder text, opens in the sheet.
 - **Add row below** (in that sheet) and the **Add a row at the end** button add an empty row and
   open its first cell. **Delete row** asks first, and says when the row is the file's first one,
   which is the header when **Header row** is on. To rename a column or delete the header, turn
   **Header row** off first: the header row is then a row you can open.
 - **Undo** and **Redo**, or Ctrl+Z and Ctrl+Shift+Z (Cmd on a Mac) on the table, walk through
-  your changes; Ctrl+S saves. Typed in the sheet or the filter, these keys belong to that box.
+  your changes; Ctrl+S saves. Typed in the sheet, a cell or the filter, Ctrl+Z and Ctrl+Shift+Z
+  belong to that box; Ctrl+S in a cell sets it, then saves.
 - Saving changes only the characters of the cells you set: a value that needs quotes (it holds
   the delimiter, a quote, a line break, or a space at either end) gets them, a cell that had
   quotes keeps them, and a new row uses the file's delimiter and line breaks. Every other byte

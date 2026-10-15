@@ -719,6 +719,17 @@ Run on tmux (Linux/macOS) and Herdr; psmux (Windows) offers neither view.
 - [ ] "Columns": "Fit columns", "Reset widths", and "Wrap" on a column with long or multiline
       values: up to three lines per cell, `↵` kept, every row taller, PageDown and the arrow keys
       still land on the right row; off again, rows go back to their height
+- [ ] "Columns" → "Lines" 6 on a wrapped cell of six lines shows all six; 10 on one of twelve shows
+      ten, then cuts; the first row in view stays on top; the choice stays after showing another
+      tab and coming back
+- [ ] Desktop (mouse), a file you can edit, only viewing it: click a cell → editing starts, a
+      field opens in that cell; Enter sets it, Shift+Enter breaks the line, Escape drops the typing
+      and stays in editing, Tab and Shift+Tab move along the row and onto the next one, Ctrl+Z on
+      the table undoes, Ctrl+S in the field saves; F2 on a cell in focus opens its field
+- [ ] Desktop: type in a cell's field, then scroll it out of view or click elsewhere: the value is
+      set; ⤢ opens the sheet with the typed value, "Add row below" and "Delete row" work; a value
+      over 1024 characters or with `⟨U+202E⟩` opens the sheet
+- [ ] iPhone: a tap on a cell still opens the sheet, viewing or editing, never a field
 - [ ] Widths and wraps go back to the defaults on another "Delimiter" or "Header row", stay after
       editing a cell, and stay after showing another tab and coming back (same first row)
 - [ ] Press a row number: Records opens on that row (also after sorting); turning Records off

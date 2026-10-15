@@ -13,6 +13,7 @@ import {
   useCsvRows,
   useCsvTable,
 } from '../hooks/use-csv-table'
+import { useMediaQuery } from '../hooks/use-media-query'
 import {
   makeOp,
   redoOp,
@@ -37,10 +38,14 @@ import {
   initialWidths,
   type ReadCell,
   type TableLayout,
+  WRAP_LINE_CHOICES,
+  WRAP_LINES,
 } from '../utils/table-columns'
+import { visibleUnsafe } from '../utils/unsafe-chars'
 import { CellEditSheet } from './cell-edit-sheet'
 import { CellSheet } from './cell-sheet'
 import { CodeBlock } from './code-block'
+import { type CellMove, InlineCellEditor } from './inline-cell-editor'
 import { ViewMessage } from './pane-dir-header'
 import { cellText, MAX_CELL_CHARS, shownAt, TableGrid } from './table-grid'
 import { TableRecords } from './table-records'
@@ -52,6 +57,7 @@ import {
   MenuGroup,
   MenuItem,
   MenuItemCheckbox,
+  MenuItemRadio,
   MenuSeparator,
 } from './ui/menu'
 
@@ -94,16 +100,36 @@ interface Props {
   // under the same delimiter and header row; told each time they change
   layout?: TableLayout
   onLayout?: (layout: TableLayout) => void
+  // A table only viewed, of a file that can be edited: a cell clicked with
+  // a fine pointer asks for editing. True when it started (it may ask about
+  // the delimiter first), and the cell opens in its field once it can.
+  onRequestEdit?: () => boolean
 }
 
 const layoutKey = (delimiter: Delimiter, header: boolean) =>
   `${delimiter}|${header ? 1 : 0}`
 
+// A cell opened (file row, column) on the text it was opened on: another
+// text closes it, its row may have moved
+interface OpenCell {
+  row: number
+  col: number
+  text: string
+}
+
+// A value a cell's own field can take: whole, and with no character the
+// field would hide, reorder, or change (\r\n read back as \n). Any other
+// opens in the sheet, which shows them.
+const editableInline = (value: string) =>
+  value.length <= MAX_CELL_CHARS &&
+  !value.includes('\r') &&
+  visibleUnsafe(value, true) === value
+
 // A CSV/TSV file as a table: a virtual grid, or one record at a time.
 // Sorting, filtering, the delimiter and the header row change only what is
 // shown, never the file. While editing, a cell opens in a sheet that sets
-// it; every edit is a patch of the text (csv-edits.ts), made only on the
-// parse of that very text.
+// it, or with a fine pointer in its own field; every edit is a patch of the
+// text (csv-edits.ts), made only on the parse of that very text.
 export default function TablePreview({
   text,
   path,
@@ -114,6 +140,7 @@ export default function TablePreview({
   scrollTop,
   layout: kept,
   onLayout,
+  onRequestEdit,
 }: Props) {
   const [chosen, setDelimiter] = useState(() => delimiterFor(path, text))
   const delimiter = editing?.delimiter ?? chosen
@@ -146,8 +173,20 @@ export default function TablePreview({
     focusRecords.current = false
     recordsBox.current?.focus()
   }, [records])
-  // The cell opened, and the text it was opened on: another text closes it
-  const [open, setOpen] = useState<{ row: number; col: number; text: string }>()
+  // The cell opened in a sheet, with what was typed in its own field
+  // before, if any
+  const [open, setOpen] = useState<OpenCell & { input?: string }>()
+  // The cell edited where it is (a fine pointer)
+  const [inline, setInline] = useState<OpenCell>()
+  const fine = useMediaQuery('(pointer: fine)')
+  // The cell clicked as editing was asked for, opened once it can be
+  const [pending, setPending] = useState<{ row: number; col: number }>()
+  // Ctrl+S in a cell's field: the file is saved once the value is in it
+  const saveNext = useRef(false)
+  // The text now: a field unmounted by another text sets its value with
+  // the callback of the render before, whose text is the old one
+  const textNow = useRef(text)
+  textNow.current = text
   // The row a delete asks about, and the text it was asked on: another
   // text (an edit made elsewhere) may have moved that row
   const [deleting, setDeleting] = useState<{ row: number; text: string }>()
@@ -166,6 +205,12 @@ export default function TablePreview({
   const computed = useCsvRows(parsed, client, sort, filter, header)
 
   useEffect(() => {
+    if (!saveNext.current) return
+    saveNext.current = false
+    if (editing?.canSave && !editing.saving) editing.onSave()
+  })
+
+  useEffect(() => {
     onTableState?.(
       current.status === 'parsing'
         ? undefined
@@ -175,6 +220,7 @@ export default function TablePreview({
 
   useEffect(() => {
     setOpen((o) => (o && o.text !== text ? undefined : o))
+    setInline((i) => (i && i.text !== text ? undefined : i))
     setDeleting((d) => (d && d.text !== text ? undefined : d))
   }, [text])
 
@@ -215,6 +261,7 @@ export default function TablePreview({
     () => new Set(layout.wrapped.filter((c) => c < names.length)),
     [layout.wrapped, names.length],
   )
+  const lines = layout.lines ?? WRAP_LINES
   // Edits are taken only on the current parse of text, outside a save
   const live =
     editing && !editing.saving && !stale && table ? editing : undefined
@@ -243,9 +290,89 @@ export default function TablePreview({
     const next = act({ kind: 'insert', after })
     if (next !== undefined) setOpen({ row: after + 1, col: 0, text: next })
   }
-  const openCell = (row: number, col: number) => {
+  const openSheet = (row: number, col: number) => {
     if (!editing || live) setOpen({ row, col, text })
   }
+  // A cell of the grid: in its own field when it can take the value
+  const openCell = (row: number, col: number) => {
+    if (!editing && fine && onRequestEdit) {
+      if (onRequestEdit()) setPending({ row, col })
+      return
+    }
+    if (
+      live &&
+      fine &&
+      editableInline(
+        valueAt(text, table as CsvTable, row, col, MAX_CELL_CHARS + 1),
+      )
+    ) {
+      setInline({ row, col, text })
+    } else openSheet(row, col)
+  }
+  // The cell after (or before) at in the order shown: on along its row,
+  // then from the start of the next one; none past the last cell. Only
+  // from a field on screen, so with the rows it is in.
+  const neighbour = (at: OpenCell, move: CellMove) => {
+    const order = computed as Int32Array
+    const pos = order.indexOf(at.row)
+    if (move === 'next') {
+      if (at.col + 1 < names.length) return { row: at.row, col: at.col + 1 }
+      return pos + 1 < order.length
+        ? { row: order[pos + 1], col: 0 }
+        : undefined
+    }
+    if (at.col > 0) return { row: at.row, col: at.col - 1 }
+    return pos > 0 ? { row: order[pos - 1], col: names.length - 1 } : undefined
+  }
+  // Sets the cell at to value (when it changed), then goes on to the cell
+  // move reaches, if its value can be edited there; save: the file is saved
+  // after it
+  const commitInline = (
+    at: OpenCell,
+    value: string,
+    move?: CellMove,
+    save?: boolean,
+  ) => {
+    // A field shows only on a table of its text; on another, the effect
+    // on text closes it
+    if (at.text !== textNow.current) return
+    setInline(undefined)
+    const t = table as CsvTable
+    const target = move && neighbour(at, move)
+    const next =
+      value === valueAt(text, t, at.row, at.col)
+        ? text
+        : act({
+            kind: 'cell',
+            row: at.row,
+            col: at.col,
+            name: names[at.col],
+            value,
+          })
+    if (next === undefined) return
+    if (save) saveNext.current = true
+    if (
+      target &&
+      editableInline(
+        valueAt(text, t, target.row, target.col, MAX_CELL_CHARS + 1),
+      )
+    ) {
+      setInline({ ...target, text: next })
+    }
+  }
+
+  // Editing asked for by a click: the cell opens on the draft's first
+  // parse (rows are the same, its text may differ: \r\n read as \n).
+  // Editing given up before that drops it.
+  const wasEditing = useRef(!!editing)
+  useEffect(() => {
+    const was = wasEditing.current
+    wasEditing.current = !!editing
+    if (was && !editing) setPending(undefined)
+    if (!pending || !live) return
+    setPending(undefined)
+    openCell(pending.row, pending.col)
+  })
 
   // The table's own keys; never one typed in a field or in a sheet (a
   // <dialog> in this tree, so its keys bubble here)
@@ -343,8 +470,12 @@ export default function TablePreview({
     !stale && {
       row: open.row,
       name: names[open.col],
-      value: valueAt(shown, t, open.row, open.col),
+      value: open.input ?? valueAt(shown, t, open.row, open.col),
     }
+  // The same for a cell's own field, and not while the rows are worked
+  // out (their order on screen is the old one); while a save runs it
+  // stays, and whatever it sets is dropped (act)
+  const field = inline?.text === text && !stale && computed ? inline : undefined
 
   return (
     // isolate: the grid's sticky header and the record overlay stack inside
@@ -475,6 +606,21 @@ export default function TablePreview({
               </MenuItemCheckbox>
             ))}
           </MenuGroup>
+          <MenuSeparator />
+          {/* One height for every row: the lines any wrapped cell shows */}
+          <MenuGroup label="Lines">
+            {WRAP_LINE_CHOICES.map((n) => (
+              <MenuItemRadio
+                key={n}
+                keepOpen
+                disabled={!wrapped.size}
+                checked={lines === n}
+                onSelect={() => setLayout({ ...layout, lines: n })}
+              >
+                {n} lines
+              </MenuItemRadio>
+            ))}
+          </MenuGroup>
         </Menu>
       </div>
       {t.columnCount > MAX_COLUMNS && (
@@ -492,11 +638,29 @@ export default function TablePreview({
           names={names}
           widths={widths}
           wrapped={wrapped}
+          lines={lines}
           header={header}
           expected={expected}
           sort={sort}
           onSort={toggleSort}
           onOpen={openCell}
+          editingCell={field}
+          editor={
+            field && (
+              <InlineCellEditor
+                value={valueAt(shown, t, field.row, field.col)}
+                label={`Edit ${cellText(names[field.col])}, row ${field.row + 1}`}
+                onCommit={(value, move, save) =>
+                  commitInline(field, value, move, save)
+                }
+                onCancel={() => setInline(undefined)}
+                onExpand={(input) => {
+                  setInline(undefined)
+                  setOpen({ ...field, input })
+                }}
+              />
+            )
+          }
           onOpenRow={openRecord}
           onResize={resize}
           onFit={(col, pos) => fitColumns([col], pos)}
@@ -519,7 +683,8 @@ export default function TablePreview({
                 names={names}
                 row={recordRow}
                 onRow={setRecordRow}
-                onOpen={openCell}
+                // The grid, covered, cannot show a cell's own field
+                onOpen={openSheet}
               />
             ) : (
               <ViewMessage>Sorting and filtering…</ViewMessage>

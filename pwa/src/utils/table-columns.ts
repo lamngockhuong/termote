@@ -22,14 +22,18 @@ export const DOUBLE_TAP_SLOP = 4
 // its 1px bottom border)
 export const ROW_HEIGHT = 32
 export const TOUCH_ROW_HEIGHT = 44
-// A wrapped cell shows up to WRAP_LINES lines of 16px (leading-4) between
-// 6px of padding (py-1.5); + 1 for the row's bottom border, or the third
-// line loses its descenders
-export const WRAP_LINES = 3
+// A wrapped cell shows up to `lines` lines of 16px (leading-4) between 6px
+// of padding (py-1.5); + 1 for the row's bottom border, or the last line
+// loses its descenders. The lines are chosen per table, among these.
+export const WRAP_LINE_CHOICES = [3, 6, 10] as const
+export type WrapLines = (typeof WRAP_LINE_CHOICES)[number]
+export const WRAP_LINES: WrapLines = 3
 export const WRAP_LINE_HEIGHT = 16
 export const WRAP_PAD_Y = 6
-export const WRAP_ROW_HEIGHT =
-  WRAP_LINES * WRAP_LINE_HEIGHT + 2 * WRAP_PAD_Y + 1
+
+export function wrapRowHeight(lines: WrapLines): number {
+  return lines * WRAP_LINE_HEIGHT + 2 * WRAP_PAD_Y + 1
+}
 
 // Tallest scroll height used: browsers cap an element's height (Firefox near
 // 17.9 million px), and a 1 MiB file of empty lines is a million rows. Past
@@ -37,12 +41,15 @@ export const WRAP_ROW_HEIGHT =
 export const MAX_SCROLL_HEIGHT = 8_000_000
 
 // What a table shows beyond its parse, kept per open file (a tab): widths
-// set by hand (ch, by column) and the wrapped columns. key is the delimiter
-// and header row they were set under: under others they mean nothing.
+// set by hand (ch, by column), the wrapped columns and the lines a wrapped
+// cell shows (WRAP_LINES when unset, as a tab kept before there was a
+// choice). key is the delimiter and header row they were set under: under
+// others they mean nothing.
 export interface TableLayout {
   key: string
   widths: Record<number, number>
   wrapped: number[]
+  lines?: WrapLines
 }
 
 export function emptyLayout(key: string): TableLayout {
@@ -134,9 +141,13 @@ export function initialWidths(
   })
 }
 
-export function rowHeightFor(coarse: boolean, wrapping: boolean): number {
+export function rowHeightFor(
+  coarse: boolean,
+  wrapping: boolean,
+  lines: WrapLines = WRAP_LINES,
+): number {
   const base = coarse ? TOUCH_ROW_HEIGHT : ROW_HEIGHT
-  return wrapping ? Math.max(base, WRAP_ROW_HEIGHT) : base
+  return wrapping ? Math.max(base, wrapRowHeight(lines)) : base
 }
 
 // Content pixels per scroll pixel of count rows in a frame `height` tall:
