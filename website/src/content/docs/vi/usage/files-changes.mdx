@@ -394,23 +394,26 @@ thì không có bảng.
   giá trị của nó. Với bàn phím, nhấn Tab tới vạch, rồi phím mũi tên trái và phải đổi độ rộng mỗi
   lần 2 ký tự, Home và End đưa cột về hẹp nhất và rộng nhất, Enter cho cột vừa nội dung. Mỗi cột
   rộng từ 4 tới 120 ký tự.
-- Nút **Columns** trên thanh có ba phần. **Fit columns** cho mọi cột vừa với các dòng đang hiện
+- Nút **Columns** trên thanh có bốn phần. **Fit columns** cho mọi cột vừa với các dòng đang hiện
   (tối đa 1000 dòng, tính từ dòng đầu tiên trên màn hình). **Reset widths** trả mọi cột về độ rộng
-  lúc bảng mới mở. **Wrap** liệt kê các cột: cột được bật hiện tối đa ba dòng của mỗi giá trị (chỗ
-  xuống dòng vẫn có `↵`) và tên cột có biểu tượng xuống dòng; chỉ cần một cột được bật là mọi dòng
-  cao bằng ba dòng chữ. Giá trị dài hơn vẫn xem đủ trong bảng nhỏ của ô đó.
+  lúc bảng mới mở. **Wrap** liệt kê các cột, còn **Lines** chọn 3, 6 hay 10 dòng (mặc định 3): cột
+  được bật Wrap hiện tối đa ngần ấy dòng của mỗi giá trị (chỗ xuống dòng vẫn có `↵`) và tên cột có
+  biểu tượng xuống dòng; chỉ cần một cột được bật là mọi dòng cao bằng ngần ấy dòng chữ, giá trị
+  dài hơn bị cắt bớt. Giá trị đầy đủ nằm trong bảng nhỏ của ô đó, hoặc trong ô sửa khi đang sửa.
 - **Records** hiện từng dòng một dưới dạng `cột: giá trị`, có nút trước và sau, dành cho điện
   thoại khi một dòng rộng hơn màn hình. Bấm hoặc chạm số dòng để mở đúng dòng đó trong Records;
   tắt Records thì bảng vẫn ở đúng chỗ bạn đã rời đi.
 - Chạm vào một ô (hoặc nhấn Enter trên ô đó) để xem đủ giá trị, kèm nút chép. Mỗi ô hiện tối đa
-  1024 ký tự; giá trị đầy đủ chỉ có trong bảng hiện ra khi chạm.
+  1024 ký tự; giá trị đầy đủ chỉ có trong bảng hiện ra khi chạm. Dùng chuột thì khác: với file sửa
+  được, bấm vào một ô là bắt đầu sửa ngay ô đó (xem mục dưới); giá trị mở từ Records vẫn hiện trong
+  bảng nhỏ.
 - Dòng có số ô khác với dòng tiêu đề thì số dòng chuyển màu cam; rê chuột lên số dòng, hoặc trình
   đọc màn hình, sẽ cho biết dòng đó có bao nhiêu ô.
 
 Sắp xếp, lọc, đổi dấu phân cách, bật tắt dòng tiêu đề, độ rộng cột và các cột bật Wrap chỉ đổi
-cách hiển thị. Không có gì được ghi vào file, và các lựa chọn này mất khi đóng file. Riêng độ rộng
-và Wrap vẫn còn khi bạn sang tab khác rồi quay lại, và về mặc định khi đổi dấu phân cách hay bật
-tắt dòng tiêu đề.
+cách hiển thị. Không có gì được ghi vào file, và các lựa chọn này mất khi đóng file. Riêng độ rộng,
+Wrap và số dòng Lines vẫn còn khi bạn sang tab khác rồi quay lại, và về mặc định khi đổi dấu phân
+cách hay bật tắt dòng tiêu đề.
 
 | Thông báo                                               | Lý do                                                                   |
 | ------------------------------------------------------- | ----------------------------------------------------------------------- |
@@ -435,13 +438,22 @@ file được sửa dạng văn bản.
 - Chạm một ô để đổi giá trị của nó trong một bảng nhỏ hiện lên: giá trị có thể nhiều dòng, và
   những ký tự làm chữ bị ẩn hay đảo thứ tự hiện bên dưới dưới dạng `⟨U+XXXX⟩`. **Apply** đưa giá
   trị vào bảng; ô mà một dòng thiếu cũng đặt được giá trị.
+- Dùng chuột thì giá trị được sửa ngay trong ô: bấm vào ô, hoặc nhấn F2 hay Enter trên ô đang chọn.
+  Ô đang sửa cao dần theo nội dung, phủ lên các hàng bên dưới, hiện được tới 20 dòng (dài hơn thì
+  cuộn bên trong) và rộng ít nhất 12rem.
+  Đang chỉ xem một file sửa được mà bấm vào ô thì bảng chuyển sang sửa trước. Enter ghi giá trị,
+  Shift+Enter hay Alt+Enter xuống dòng, Esc bỏ những gì vừa gõ; bảng vẫn ở chế độ sửa, muốn thoát
+  thì bấm **Cancel**. Tab và Shift+Tab ghi rồi sang ô kế tiếp hay ô trước, hết dòng thì sang dòng
+  sau. Bấm ra chỗ khác, hoặc cuộn ô ra khỏi màn hình, cũng ghi giá trị. Nút ⤢ trong ô mở bảng nhỏ
+  của ô với những gì bạn đang gõ, rộng chỗ hơn và có **Add row below**, **Delete row**. Giá trị
+  dài hơn 1024 ký tự, hoặc có ký tự làm chữ bị ẩn hay đảo thứ tự, thì mở thẳng trong bảng nhỏ.
 - **Add row below** (trong bảng nhỏ đó) và nút **Add a row at the end** thêm một dòng trống rồi
   mở ô đầu tiên của nó. **Delete row** hỏi trước khi xoá, và nói rõ khi đó là dòng đầu của file,
   tức dòng tiêu đề lúc **Header row** đang bật. Muốn đổi tên cột hay xoá dòng tiêu đề, hãy tắt
   **Header row** trước: khi đó dòng tiêu đề thành một dòng mở được như mọi dòng khác.
 - **Undo** và **Redo**, hoặc Ctrl+Z và Ctrl+Shift+Z (Cmd trên macOS) khi đang ở bảng, lùi và tiến
-  qua các thay đổi của bạn; Ctrl+S để lưu. Gõ trong bảng nhỏ hay ô lọc thì các phím này thuộc về
-  ô đó.
+  qua các thay đổi của bạn; Ctrl+S để lưu. Gõ trong bảng nhỏ, trong ô hay ô lọc thì Ctrl+Z và
+  Ctrl+Shift+Z thuộc về chỗ đang gõ; Ctrl+S trong ô thì ghi giá trị rồi lưu file.
 - Khi lưu, chỉ ký tự của những ô bạn đã đặt là đổi: giá trị cần ngoặc kép (chứa dấu phân cách,
   dấu ngoặc kép, xuống dòng, hay khoảng trắng ở đầu hoặc cuối) được bọc ngoặc, ô vốn có ngoặc vẫn
   giữ ngoặc, dòng mới dùng dấu phân cách và kiểu xuống dòng của file. Mọi byte khác giữ nguyên.

@@ -737,14 +737,15 @@ test.describe('files and changes views', () => {
     }
   })
 
-  // Edits a cell of the table open in the Files panel
+  // Edits a cell of the table open in the Files panel, where it is (a
+  // mouse is a fine pointer)
   const setCell = async (page: Page, shown: string, value: string) => {
-    const panel = page.getByRole('complementary', { name: 'Files' })
-    await panel.getByRole('grid').getByRole('gridcell', { name: shown, exact: true }).click()
-    const sheet = page.getByRole('dialog')
-    await sheet.getByRole('textbox', { name: 'Value' }).fill(value)
-    await sheet.getByRole('button', { name: 'Apply' }).click()
-    await expect(sheet).toHaveCount(0)
+    const grid = page.getByRole('complementary', { name: 'Files' }).getByRole('grid')
+    await grid.getByRole('gridcell', { name: shown, exact: true }).click()
+    const field = grid.getByRole('textbox', { name: /^Edit / })
+    await field.fill(value)
+    await field.press('Enter')
+    await expect(field).toHaveCount(0)
   }
 
   test('editing a cell saves only its bytes, keeping CRLF and the BOM', async ({ page }) => {
@@ -888,19 +889,115 @@ test.describe('files and changes views', () => {
         for (let i = 0; i < 400; i++) await page.keyboard.press('PageDown')
         await expect(page.locator(':focus')).toHaveAttribute('data-pos', '3001')
         await expect(grid.getByRole('rowheader', { name: 'Row 3003' })).toBeInViewport()
-        // The whole value is in the sheet
+        // The whole value is in the cell's field (a click starts editing)
         await page.keyboard.press('PageUp')
         await grid.evaluate((el) => {
           el.scrollTop = 0
         })
         await row(3).getByRole('gridcell').nth(1).click()
-        await expect(page.getByRole('dialog').locator('pre')).toHaveText('one\ntwo\nthree\nfour')
+        await expect(grid.getByRole('textbox', { name: 'Edit note, row 3' })).toHaveValue('one\ntwo\nthree\nfour')
         await page.keyboard.press('Escape')
-        await expect(page.getByRole('dialog')).toHaveCount(0)
+        await expect(grid.getByRole('textbox', { name: /^Edit / })).toHaveCount(0)
+        await panel.getByRole('button', { name: 'Cancel editing' }).click()
         await panel.getByRole('button', { name: 'Columns' }).click()
         await page.getByRole('menuitemcheckbox', { name: '2 · note' }).click()
         await page.keyboard.press('Escape')
         expect(await height(2)).toBe(32)
+      } finally {
+        rmSync(csvDir(), { recursive: true, force: true })
+      }
+    })
+
+    test('a wrapped cell shows the lines chosen; a click edits a cell where it is', async ({ page }) => {
+      const f = path.join(csvDir(), 'lines.csv')
+      const lines = (n: number, word: string) => Array.from({ length: n }, (_, i) => `${word} ${i}`).join('\n')
+      const text = `id,note,tag\n1,"${lines(6, 'six')}",a\n2,"${lines(12, 'twelve')}",b\n`
+      try {
+        mkdirSync(csvDir(), { recursive: true })
+        writeFileSync(f, text)
+        await openCsv(page, 'lines.csv')
+        const panel = page.getByRole('complementary', { name: 'Files' })
+        const grid = panel.getByRole('grid')
+        await expect(grid).toHaveAttribute('aria-busy', 'false')
+        const row = (n: number) => grid.getByRole('row').filter({ has: page.getByRole('rowheader', { name: `Row ${n}`, exact: true }) })
+        const height = (n: number) => row(n).evaluate((el) => el.getBoundingClientRect().height)
+        // Lines of a wrapped note drawn, and whether more are cut off
+        const drawn = (n: number) =>
+          row(n)
+            .getByRole('gridcell')
+            .nth(1)
+            .locator('span')
+            .evaluate((el) => ({ lines: Math.round(el.clientHeight / 16), cut: el.scrollHeight > el.clientHeight }))
+        const choose = async (item: string, role: 'menuitemcheckbox' | 'menuitemradio') => {
+          await panel.getByRole('button', { name: 'Columns' }).click()
+          await page.getByRole(role, { name: item }).click()
+          await page.keyboard.press('Escape')
+        }
+        await choose('2 · note', 'menuitemcheckbox')
+        expect(await drawn(2)).toEqual({ lines: 3, cut: true })
+        await choose('6 lines', 'menuitemradio')
+        expect(await height(2)).toBe(109)
+        expect(await drawn(2)).toEqual({ lines: 6, cut: false })
+        await choose('10 lines', 'menuitemradio')
+        expect(await height(2)).toBe(173)
+        expect(await drawn(3)).toEqual({ lines: 10, cut: true })
+        expect(readFileSync(f, 'utf-8')).toBe(text)
+
+        // A click on a cell of the table viewed edits it where it is, the
+        // field as tall as its lines (12 of 16px, 6px padding), over the
+        // rows below
+        const field = (name: string) => grid.getByRole('textbox', { name })
+        await row(3).getByRole('gridcell').nth(1).click()
+        await expect(field('Edit note, row 3')).toBeFocused()
+        expect(await field('Edit note, row 3').evaluate((el) => el.getBoundingClientRect().height)).toBe(204)
+        await page.keyboard.press('Escape')
+        await row(2).getByRole('gridcell').nth(2).click()
+        await expect(field('Edit tag, row 2')).toBeFocused()
+        await expect(field('Edit tag, row 2')).toHaveValue('a')
+        // The last column's field grows leftward: the table gets no wider
+        expect(await field('Edit tag, row 2').evaluate((el) => (el.closest('[role="gridcell"]') as Element).getBoundingClientRect().right - el.getBoundingClientRect().right)).toBe(0)
+        expect(await grid.evaluate((el) => el.scrollLeft)).toBe(0)
+        await page.keyboard.type('x')
+        await page.keyboard.press('Enter')
+        await expect(grid.getByRole('gridcell', { name: 'x', exact: true })).toBeFocused()
+        await expect(panel.getByRole('button', { name: 'Save' })).toBeEnabled()
+        await page.keyboard.press('Control+z')
+        await expect(grid.getByRole('gridcell', { name: 'a', exact: true })).toBeFocused()
+        // F2 edits the cell in focus; Escape drops what was typed
+        await page.keyboard.press('F2')
+        await page.keyboard.type('zzz')
+        await page.keyboard.press('Escape')
+        await expect(grid.getByRole('gridcell', { name: 'a', exact: true })).toBeFocused()
+        // Shift+Enter breaks the line; Tab sets it and goes on, past the
+        // row's end onto the next one
+        await page.keyboard.press('Enter')
+        await page.keyboard.type('p')
+        await page.keyboard.press('Shift+Enter')
+        await page.keyboard.type('q')
+        await page.keyboard.press('Tab')
+        await expect(field('Edit id, row 3')).toBeFocused()
+        // A click elsewhere sets the value and keeps the focus there
+        await page.keyboard.type('3')
+        const filter = panel.getByRole('searchbox', { name: 'Filter rows' })
+        await filter.click()
+        await expect(filter).toBeFocused()
+        await expect(grid.getByRole('gridcell', { name: '3', exact: true })).toBeVisible()
+        await page.waitForTimeout(100)
+        await expect(filter).toBeFocused()
+        // ⤢ goes on in the sheet, with the row's actions
+        await row(3).getByRole('gridcell').nth(2).click()
+        await field('Edit tag, row 3').fill('c')
+        await grid.getByRole('button', { name: 'Open in sheet' }).click()
+        const sheet = page.getByRole('dialog', { name: /Row 3 · tag/ })
+        await expect(sheet.getByRole('textbox', { name: 'Value' })).toHaveValue('c')
+        await expect(sheet.getByRole('button', { name: 'Add row below' })).toBeVisible()
+        await expect(sheet.getByRole('button', { name: 'Delete row' })).toBeVisible()
+        await sheet.getByRole('button', { name: 'Cancel' }).click()
+        // Ctrl+S in a field sets it and saves the file
+        await row(3).getByRole('gridcell').nth(0).click()
+        await page.keyboard.press('Control+s')
+        await expect(page.getByText('Saved', { exact: true })).toBeVisible()
+        expect(readFileSync(f, 'utf-8')).toBe(text.replace(',a\n', ',"p\nq"\n').replace('\n2,', '\n3,'))
       } finally {
         rmSync(csvDir(), { recursive: true, force: true })
       }
@@ -990,6 +1087,12 @@ test.describe('files and changes views', () => {
           // The column grew under the finger: its click sorts nothing
           await expect(grid.getByRole('columnheader', { name: 'note', exact: true })).toHaveAttribute('aria-sort', 'none')
           expect(await noPageScroll(page)).toBe(true)
+          // A tap on a cell shows it in its sheet: no field, no editing
+          await grid.getByRole('gridcell', { name: 'n0', exact: true }).tap()
+          await expect(page.getByRole('dialog', { name: /Row 4 · note/ })).toBeVisible()
+          await expect(page.getByRole('textbox', { name: /^Edit / })).toHaveCount(0)
+          await expect(page.getByRole('button', { name: 'Undo' })).toHaveCount(0)
+          await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click()
           // A tap on a row number opens its record
           await page.getByRole('button', { name: 'Open row 4 as a record' }).tap()
           await expect(page.getByText('Record 3 / 7 · row 4')).toBeVisible()

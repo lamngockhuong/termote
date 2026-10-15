@@ -20,10 +20,13 @@ vi.mock('../utils/highlight', async (orig) => ({
   ...(await orig<typeof import('../utils/highlight')>()),
   highlight: async () => null,
 }))
-const coarse = vi.hoisted(() => ({ value: false }))
+// A coarse pointer (value), or a fine one (fine): off, neither, as on a
+// device with no pointer
+const coarse = vi.hoisted(() => ({ value: false, fine: false }))
 vi.mock('../hooks/use-media-query', () => ({
   useIsMobile: () => false,
-  useMediaQuery: () => coarse.value,
+  useMediaQuery: (query: string) =>
+    query === '(pointer: fine)' ? coarse.fine : coarse.value,
 }))
 
 function show(text: string, over: Record<string, unknown> = {}) {
@@ -62,6 +65,7 @@ const people = 'name,age,city\nBình,30,Huế\nan,4,"Hà Nội, VN"\nCuong,100\n
 
 beforeEach(() => {
   coarse.value = false
+  coarse.fine = false
   HTMLDialogElement.prototype.showModal = vi.fn(function (
     this: HTMLDialogElement,
   ) {
@@ -889,6 +893,370 @@ describe('TablePreview editing', () => {
   })
 })
 
+describe('TablePreview editing in a cell (a fine pointer)', () => {
+  const field = (name: string) => screen.getByRole('textbox', { name })
+  const noField = () =>
+    expect(screen.queryByRole('textbox', { name: /^Edit / })).toBeNull()
+  const key = (target: Element, k: string, over: object = {}) =>
+    fireEvent.keyDown(target, { key: k, ...over })
+
+  beforeEach(() => {
+    coarse.fine = true
+  })
+
+  it('a click edits the cell where it is: Enter sets it, its cell takes the focus back, Ctrl+Z undoes', () => {
+    const p = edit(people)
+    fireEvent.click(cellButton('30'))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    const box = field('Edit age, row 2')
+    expect(box).toHaveValue('30')
+    expect(box).toHaveFocus()
+    expect(box.closest('[role="gridcell"]')).not.toBeNull()
+    fireEvent.change(box, { target: { value: '31, or so' } })
+    key(box, 'Enter')
+    expect(p.text()).toBe(people.replace('30', '"31, or so"'))
+    noField()
+    expect(cellButton('31, or so')).toHaveFocus()
+    press(cellButton('31, or so'), 'z')
+    expect(p.text()).toBe(people)
+  })
+
+  it('Escape drops what was typed and stays in editing; a value unchanged sets nothing', () => {
+    const p = edit(people)
+    fireEvent.click(cellButton('30'))
+    fireEvent.change(field('Edit age, row 2'), { target: { value: 'x' } })
+    key(field('Edit age, row 2'), 'Escape')
+    noField()
+    expect(cellButton('30')).toHaveFocus()
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument()
+    fireEvent.click(cellButton('30'))
+    key(field('Edit age, row 2'), 'Enter')
+    expect(p.onChange).not.toHaveBeenCalled()
+  })
+
+  it('Tab sets the value and goes along the row, then on to the next; Shift+Tab goes back', () => {
+    const p = edit('a,b\n1,2\n3,4\n')
+    fireEvent.click(cellButton('1'))
+    // Only the last column's field grows leftward
+    const cell = (box: HTMLElement) => box.closest('[role="gridcell"]')
+    expect(cell(field('Edit a, row 2'))).not.toHaveAttribute('data-last')
+    fireEvent.change(field('Edit a, row 2'), { target: { value: 'x' } })
+    key(field('Edit a, row 2'), 'Tab')
+    expect(p.text()).toBe('a,b\nx,2\n3,4\n')
+    expect(field('Edit b, row 2')).toHaveValue('2')
+    expect(cell(field('Edit b, row 2'))).toHaveAttribute('data-last', 'true')
+    expect(field('Edit b, row 2')).toHaveFocus()
+    key(field('Edit b, row 2'), 'Tab')
+    expect(field('Edit a, row 3')).toHaveValue('3')
+    key(field('Edit a, row 3'), 'Tab', { shiftKey: true })
+    expect(field('Edit b, row 2')).toHaveFocus()
+    key(field('Edit b, row 2'), 'Tab', { shiftKey: true })
+    key(field('Edit a, row 2'), 'Tab', { shiftKey: true })
+    // Before the first cell: set, and no further
+    noField()
+    expect(cellButton('x')).toHaveFocus()
+    fireEvent.click(cellButton('4'))
+    fireEvent.change(field('Edit b, row 3'), { target: { value: 'y' } })
+    key(field('Edit b, row 3'), 'Tab')
+    expect(p.text()).toBe('a,b\nx,2\n3,y\n')
+    noField()
+    expect(cellButton('y')).toHaveFocus()
+  })
+
+  it('Tab follows the rows in the order shown', () => {
+    edit('a,b\n1,2\n3,4\n')
+    const a = screen.getByRole('button', { name: 'a' })
+    fireEvent.click(a)
+    fireEvent.click(a)
+    fireEvent.click(cellButton('4'))
+    key(field('Edit b, row 3'), 'Tab')
+    expect(field('Edit a, row 2')).toHaveValue('1')
+  })
+
+  it('Tab onto a value the field cannot take sets the value and stops', () => {
+    const p = edit('a,b\n1,"x\r\ny"\n')
+    fireEvent.click(cellButton('1'))
+    fireEvent.change(field('Edit a, row 2'), { target: { value: '0' } })
+    key(field('Edit a, row 2'), 'Tab')
+    expect(p.text()).toBe('a,b\n0,"x\r\ny"\n')
+    noField()
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(cellButton('0')).toHaveFocus()
+  })
+
+  it('a value the field would cut, hide or change opens in the sheet', () => {
+    const long = 'h'.repeat(MAX_CELL_CHARS + 1)
+    edit(`a,b,c\n${long},"x‮y","1\r\n2"\n`)
+    const cells = screen.getAllByRole('gridcell')
+    for (const [i, value] of [long, 'x‮y', '1\r\n2'].entries()) {
+      fireEvent.click(cells[i])
+      noField()
+      expect(valueBox()).toHaveValue(value.replace('\r\n', '\n'))
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    }
+  })
+
+  it('⤢ goes on in the sheet with the value typed, and its row actions', () => {
+    const p = edit('a,b\n1,2\n')
+    fireEvent.click(cellButton('1'))
+    fireEvent.change(field('Edit a, row 2'), { target: { value: 'typed' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Open in sheet' }))
+    noField()
+    expect(screen.getByRole('dialog')).toHaveTextContent('Row 2 · a')
+    expect(valueBox()).toHaveValue('typed')
+    expect(screen.getByRole('button', { name: 'Delete row' })).toBeEnabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    expect(p.text()).toBe('a,b\ntyped,2\n')
+    fireEvent.click(cellButton('typed'))
+    fireEvent.click(screen.getByRole('button', { name: 'Open in sheet' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add row below' }))
+    expect(p.text()).toBe('a,b\ntyped,2\n,\n')
+  })
+
+  it('F2 edits the cell in focus, never a row number; keys in the field stay there', () => {
+    edit(people)
+    const grid = screen.getByRole('grid')
+    cellButton('Bình').focus()
+    key(cellButton('Bình'), 'F2')
+    const box = field('Edit name, row 2')
+    key(box, 'ArrowDown')
+    key(box, 'PageDown')
+    key(box, 'Escape')
+    // The grid did not move: back on the cell it was on
+    expect(cellButton('Bình')).toHaveFocus()
+    key(cellButton('Bình'), 'ArrowLeft')
+    expect(document.activeElement).toHaveAttribute('data-col', '-1')
+    key(document.activeElement as Element, 'F2')
+    noField()
+    // Nor on the grid itself
+    key(grid, 'F2')
+    noField()
+  })
+
+  it('leaving the field sets it, and leaves the focus where it went', () => {
+    const p = edit(people)
+    fireEvent.click(cellButton('30'))
+    fireEvent.change(field('Edit age, row 2'), { target: { value: '33' } })
+    act(() => screen.getByRole('searchbox').focus())
+    expect(p.text()).toBe(people.replace('30', '33'))
+    noField()
+    expect(screen.getByRole('searchbox')).toHaveFocus()
+  })
+
+  it('a field left with the focus on nothing yet takes it nowhere', () => {
+    // A browser blurs the field before it focuses what was clicked:
+    // meanwhile the page has the focus, and the cell must not take it
+    const p = edit(people)
+    fireEvent.click(cellButton('30'))
+    fireEvent.change(field('Edit age, row 2'), { target: { value: '34' } })
+    act(() => field('Edit age, row 2').blur())
+    expect(p.text()).toBe(people.replace('30', '34'))
+    noField()
+    expect(document.body).toHaveFocus()
+  })
+
+  it('a field whose row goes out of the grid sets its value', async () => {
+    const p = edit(people)
+    fireEvent.click(cellButton('Huế'))
+    fireEvent.change(field('Edit city, row 2'), { target: { value: 'Hue' } })
+    fireEvent.change(screen.getByRole('searchbox'), {
+      target: { value: 'Cuong' },
+    })
+    await waitFor(() => expect(p.text()).toBe(people.replace('Huế', 'Hue')))
+    noField()
+  })
+
+  it('Ctrl+S in the field sets the value, then saves the file if it can', () => {
+    const p = edit('a\n1\n')
+    fireEvent.click(cellButton('1'))
+    fireEvent.change(field('Edit a, row 2'), { target: { value: '2' } })
+    key(field('Edit a, row 2'), 's', { ctrlKey: true })
+    expect(p.text()).toBe('a\n2\n')
+    expect(p.onSave).toHaveBeenCalledTimes(1)
+    p.unmount()
+    const q = edit('a\n1\n', { canSave: false })
+    fireEvent.click(cellButton('1'))
+    key(field('Edit a, row 2'), 's', { ctrlKey: true })
+    expect(q.onSave).not.toHaveBeenCalled()
+  })
+
+  it('another view changing the text closes the field, setting nothing', () => {
+    const p = edit('a\n1\n2\n')
+    fireEvent.click(cellButton('2'))
+    fireEvent.change(field('Edit a, row 3'), { target: { value: 'z' } })
+    p.rerender(<Draft {...p} elsewhere={'a\n0\n1\n2\n'} />)
+    noField()
+    expect(p.onChange).not.toHaveBeenCalled()
+  })
+
+  it('while saving, a click opens nothing, and a field open as it starts sets nothing', () => {
+    const one = edit('a\n1\n', { saving: true })
+    fireEvent.click(cellButton('1'))
+    noField()
+    expect(screen.queryByRole('dialog')).toBeNull()
+    one.unmount()
+    const p = edit('a\n1\n')
+    fireEvent.click(cellButton('1'))
+    fireEvent.change(field('Edit a, row 2'), { target: { value: '2' } })
+    p.rerender(<Draft {...p} saving />)
+    key(field('Edit a, row 2'), 'Tab')
+    noField()
+    expect(p.onChange).not.toHaveBeenCalled()
+  })
+
+  it('Records open a cell in the sheet, the grid being under them', () => {
+    edit('a,b\n1,2\n')
+    fireEvent.click(screen.getByRole('button', { name: 'Records' }))
+    fireEvent.click(screen.getByRole('button', { name: '2' }))
+    expect(valueBox()).toHaveValue('2')
+    noField()
+  })
+
+  it('a table only viewed opens a cell in the sheet that shows it', () => {
+    show(people)
+    fireEvent.click(cellButton('30'))
+    noField()
+    expect(screen.getByRole('dialog')).toHaveTextContent('30')
+  })
+})
+
+// A table viewed until a click asks for editing: given at once (start),
+// with saving set to hold the cell back
+function Viewer(props: {
+  initial: string
+  start: boolean
+  saving?: boolean
+  onRequest: () => void
+  // Editing given up (Cancel editing), set from outside
+  stop?: boolean
+}) {
+  const [on, setOn] = useState(false)
+  const editing: TableEditing | undefined =
+    on && !props.stop
+      ? {
+          delimiter: ',',
+          ops: [],
+          redo: [],
+          saving: props.saving ?? false,
+          canSave: false,
+          onChange: () => {},
+          onSave: () => {},
+        }
+      : undefined
+  return (
+    <ThemeProvider>
+      <TablePreview
+        text={props.initial}
+        path="data.csv"
+        wrap={false}
+        notify={() => {}}
+        editing={editing}
+        onRequestEdit={() => {
+          props.onRequest()
+          if (props.start) setOn(true)
+          return props.start
+        }}
+      />
+    </ThemeProvider>
+  )
+}
+
+describe('TablePreview: a click on a table viewed starts editing', () => {
+  beforeEach(() => {
+    coarse.fine = true
+  })
+
+  it('opens the cell clicked in its field once editing starts', () => {
+    const onRequest = vi.fn()
+    render(<Viewer initial={people} start onRequest={onRequest} />)
+    fireEvent.click(cellButton('30'))
+    expect(onRequest).toHaveBeenCalledTimes(1)
+    expect(
+      screen.getByRole('textbox', { name: 'Edit age, row 2' }),
+    ).toHaveFocus()
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('a value the field cannot take opens in the sheet that sets it', () => {
+    render(<Viewer initial={'a\n"1\r\n2"\n'} start onRequest={() => {}} />)
+    fireEvent.click(screen.getAllByRole('gridcell')[0])
+    expect(screen.getByRole('button', { name: 'Apply' })).toBeInTheDocument()
+  })
+
+  it('nothing opens while editing was not started (a delimiter to confirm)', () => {
+    render(<Viewer initial={people} start={false} onRequest={() => {}} />)
+    fireEvent.click(cellButton('30'))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.queryByRole('textbox', { name: /^Edit / })).toBeNull()
+  })
+
+  it('editing given up before the cell could open drops it', () => {
+    const v = render(
+      <Viewer initial={people} start saving onRequest={() => {}} />,
+    )
+    fireEvent.click(cellButton('30'))
+    expect(screen.queryByRole('textbox', { name: /^Edit / })).toBeNull()
+    v.rerender(
+      <Viewer initial={people} start saving stop onRequest={() => {}} />,
+    )
+    v.rerender(<Viewer initial={people} start onRequest={() => {}} />)
+    expect(screen.queryByRole('textbox', { name: /^Edit / })).toBeNull()
+  })
+
+  it('a coarse pointer views the cell in its sheet, asking nothing', () => {
+    coarse.fine = false
+    const onRequest = vi.fn()
+    render(<Viewer initial={people} start onRequest={onRequest} />)
+    fireEvent.click(cellButton('30'))
+    expect(onRequest).not.toHaveBeenCalled()
+    expect(screen.getByRole('dialog')).toHaveTextContent('30')
+  })
+})
+
+describe('TablePreview editing a large file in a cell', () => {
+  const rows = Math.ceil(CSV_WORKER_MIN / 8) + 10
+  const big = `id,name\n${Array.from({ length: rows }, (_, i) => `${i},n${i}`).join('\n')}\n`
+
+  beforeEach(() => {
+    coarse.fine = true
+    FakeWorker.all = []
+    FakeWorker.hold = false
+    vi.stubGlobal('Worker', FakeWorker)
+  })
+
+  it('Tab reaches the next field once the new text is on screen', async () => {
+    FakeWorker.hold = true
+    const p = edit(big)
+    const w = FakeWorker.all[0]
+    await act(() => w.flush())
+    fireEvent.click(cellButton('n0'))
+    const box = screen.getByRole('textbox', { name: 'Edit name, row 2' })
+    fireEvent.change(box, { target: { value: 'first' } })
+    fireEvent.keyDown(box, { key: 'Tab' })
+    expect(p.onChange).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('textbox', { name: /^Edit / })).toBeNull()
+    await act(() => w.flush())
+    expect(screen.getByRole('textbox', { name: 'Edit id, row 3' })).toHaveValue(
+      '1',
+    )
+  }, 15000)
+
+  it('a sort worked out in the worker takes the field away, its value set', async () => {
+    FakeWorker.hold = true
+    const p = edit(big)
+    const w = FakeWorker.all[0]
+    await act(() => w.flush())
+    fireEvent.click(cellButton('n1'))
+    fireEvent.change(
+      screen.getByRole('textbox', { name: 'Edit name, row 3' }),
+      { target: { value: 'x' } },
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'id' }))
+    expect(p.text()).toBe(big.replace('1,n1\n', '1,x\n'))
+    await act(() => w.flush())
+  }, 15000)
+})
+
 describe('TablePreview editing a large file', () => {
   const rows = Math.ceil(CSV_WORKER_MIN / 8) + 10
   const big = `id,name\n${Array.from({ length: rows }, (_, i) => `${i},n${i}`).join('\n')}\n`
@@ -1265,6 +1633,62 @@ describe('TablePreview wrapped columns', () => {
     ).toBeNull()
     fireEvent.click(wrapItem('2 · note'))
     expect(bodyRow()).toHaveStyle({ height: '32px' })
+  })
+
+  it('shows 3, 6 or 10 lines of a wrapped cell, the first row in view kept on top', () => {
+    vi.useFakeTimers({ toFake: ['requestAnimationFrame'] })
+    try {
+      const six = Array.from({ length: 6 }, (_, i) => `l${i}`).join('\n')
+      const text = `n\n${Array.from({ length: 2000 }, () => `"${six}"`).join('\n')}\n`
+      const onLayout = vi.fn()
+      show(text, { onLayout })
+      const grid = screen.getByRole('grid')
+      columnsMenu()
+      const radio = (n: number) =>
+        screen.getByRole('menuitemradio', { name: `${n} lines` })
+      // Lines mean nothing until a column wraps
+      expect(radio(3)).toBeDisabled()
+      expect(radio(3)).toHaveAttribute('aria-checked', 'true')
+      fireEvent.click(wrapItem('1 · n'))
+      expect(radio(6)).toBeEnabled()
+      grid.scrollTop = 61 * 500
+      fireEvent.scroll(grid)
+      act(() => vi.advanceTimersToNextFrame())
+      fireEvent.click(radio(6))
+      // The menu stays open for another choice
+      expect(radio(6)).toHaveAttribute('aria-checked', 'true')
+      expect(radio(3)).toHaveAttribute('aria-checked', 'false')
+      expect(bodyRow()).toHaveStyle({ height: '109px' })
+      expect(grid.scrollTop).toBe(109 * 500)
+      const cell = screen.getAllByRole('gridcell')[0]
+      expect(cell.querySelector('.line-clamp-6')?.textContent).toBe(
+        Array.from({ length: 6 }, (_, i) => `l${i}`).join('↵\n'),
+      )
+      expect(onLayout).toHaveBeenLastCalledWith({
+        key: ',|1',
+        widths: {},
+        wrapped: [0],
+        lines: 6,
+      })
+      fireEvent.click(radio(10))
+      expect(bodyRow()).toHaveStyle({ height: '173px' })
+      expect(
+        screen.getAllByRole('gridcell')[0].querySelector('.line-clamp-10'),
+      ).not.toBeNull()
+      expect(grid.scrollTop).toBe(173 * 500)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('takes the lines a tab kept, and 3 from a tab kept before them', () => {
+    const p = show(lines, {
+      layout: { key: ',|1', widths: {}, wrapped: [1], lines: 10 },
+    })
+    expect(bodyRow()).toHaveStyle({ height: '173px' })
+    p.unmount()
+    show(lines, { layout: { key: ',|1', widths: {}, wrapped: [1] } })
+    expect(bodyRow()).toHaveStyle({ height: '61px' })
   })
 
   it('a value longer than three lines opens whole in the sheet', () => {

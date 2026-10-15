@@ -98,6 +98,18 @@ describe('restoreFilesState', () => {
     expect(restoreFilesState(JSON.parse(JSON.stringify(kept)))).toEqual(kept)
   })
 
+  it('reads the lines of wrapped cells, or none from a tab kept before them', () => {
+    const tabs = [
+      fileTab('t1', { table: { key: 'k', widths: {}, wrapped: [0] } }),
+      fileTab('t2', {
+        table: { key: 'k', widths: {}, wrapped: [0], lines: 10 },
+      }),
+    ]
+    const kept = persistedFilesState({ tabs, activeId: 't2' })
+    const back = restoreFilesState(JSON.parse(JSON.stringify(kept)))
+    expect(back?.tabs.map((t) => t.table?.lines)).toEqual([undefined, 10])
+  })
+
   it('leaves out tabs that are not ones, keeps the rest', () => {
     const r = restoreFilesState({
       root: 3,
@@ -113,6 +125,10 @@ describe('restoreFilesState', () => {
         { ...fileTab('t8'), table: { key: 'k', widths: [], wrapped: [] } },
         { ...fileTab('t9'), table: { key: 'k', widths: {}, wrapped: 'x' } },
         { ...fileTab('t10'), table: { key: 'k', widths: {}, wrapped: ['x'] } },
+        {
+          ...fileTab('t11'),
+          table: { key: 'k', widths: {}, wrapped: [], lines: 7 },
+        },
         null,
         [],
       ],

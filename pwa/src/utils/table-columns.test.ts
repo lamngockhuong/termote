@@ -14,8 +14,8 @@ import {
   type ReadCell,
   rowHeightFor,
   scrollTopFor,
-  WRAP_ROW_HEIGHT,
   wrapLines,
+  wrapRowHeight,
 } from './table-columns'
 
 // Cells as shown: multiline keeps line breaks, one line shows them as ↵
@@ -146,9 +146,27 @@ describe('row heights and scrolling', () => {
   it('is one height for every row, taller while a column wraps', () => {
     expect(rowHeightFor(false, false)).toBe(32)
     expect(rowHeightFor(true, false)).toBe(44)
-    expect(WRAP_ROW_HEIGHT).toBe(61)
+    expect(wrapRowHeight(3)).toBe(61)
     expect(rowHeightFor(false, true)).toBe(61)
     expect(rowHeightFor(true, true)).toBe(61)
+  })
+
+  it('a wrapped row is as tall as the lines chosen', () => {
+    expect(wrapRowHeight(6)).toBe(109)
+    expect(wrapRowHeight(10)).toBe(173)
+    expect(rowHeightFor(false, true, 6)).toBe(109)
+    expect(rowHeightFor(true, true, 10)).toBe(173)
+    // Lines mean nothing while no column wraps
+    expect(rowHeightFor(false, false, 10)).toBe(32)
+  })
+
+  it('scales the tallest wrapped rows past the scroll height cap', () => {
+    const h = wrapRowHeight(10)
+    const count = Math.ceil(MAX_SCROLL_HEIGHT / h) * 2
+    const scale = gridScale(count, h, 600)
+    expect(scale).toBeCloseTo((count * h - 600) / (MAX_SCROLL_HEIGHT - 600))
+    const top = scrollTopFor(count / 2, h, scale)
+    expect(Math.floor((top * scale) / h)).toBe(count / 2)
   })
 
   it('scales only rows taller than the scroll height cap', () => {

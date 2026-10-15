@@ -1,4 +1,4 @@
-import type { TableLayout } from './table-columns'
+import { type TableLayout, WRAP_LINE_CHOICES } from './table-columns'
 
 // What of a pane's Files and Changes tabs is kept on the device
 // (files-persist.ts), and reading it back. Kept: the tabs, their order,
@@ -65,7 +65,9 @@ function isTable(v: unknown): v is TableLayout {
     isObject(v.widths) &&
     Object.values(v.widths).every(isNumber) &&
     Array.isArray(v.wrapped) &&
-    v.wrapped.every(isNumber)
+    v.wrapped.every(isNumber) &&
+    (v.lines === undefined ||
+      (WRAP_LINE_CHOICES as readonly unknown[]).includes(v.lines))
   )
 }
 

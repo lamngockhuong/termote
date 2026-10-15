@@ -97,6 +97,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/build/precache-split.ts`                     | Keeps Mermaid's chunks out of the service worker precache     |
 | `pwa/src/components/table-preview.tsx`            | CSV/TSV as a table: delimiter, header, filter, sort, Records  |
 | `pwa/src/components/table-grid.tsx`               | Virtual grid of a table (sticky header and row numbers)       |
+| `pwa/src/components/inline-cell-editor.tsx`       | A table cell edited in place (fine pointer): Enter, Esc, Tab  |
 | `pwa/src/utils/table-columns.ts`                  | Column widths (fit, clamp) and row heights while wrapping     |
 | `pwa/src/components/cell-sheet.tsx`               | One cell's whole value, unsafe characters shown, Copy         |
 | `pwa/src/components/cell-edit-sheet.tsx`          | A cell being edited: its value, add/delete row, Apply         |

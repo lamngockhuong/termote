@@ -721,6 +721,17 @@ Chạy trên tmux (Linux/macOS) và Herdr; psmux (Windows) không có hai view n
 - [ ] "Columns": "Fit columns", "Reset widths", và "Wrap" trên một cột có giá trị dài hoặc nhiều
       dòng: mỗi ô tối đa ba dòng, giữ `↵`, mọi dòng cao lên, PageDown và phím mũi tên vẫn tới đúng
       dòng; tắt đi thì các dòng trở lại chiều cao cũ
+- [ ] "Columns" → "Lines" chọn 6 với ô wrap sáu dòng thì thấy đủ sáu dòng; chọn 10 với ô mười hai
+      dòng thì thấy mười dòng rồi bị cắt; dòng đầu đang xem vẫn nằm trên cùng; sang tab khác rồi quay
+      lại vẫn giữ lựa chọn
+- [ ] Máy tính (chuột), file sửa được, đang chỉ xem: bấm một ô thì bảng chuyển sang sửa và ô sửa
+      mở ngay tại ô đó; Enter ghi, Shift+Enter xuống dòng, Esc bỏ phần vừa gõ và vẫn ở chế độ sửa,
+      Tab và Shift+Tab đi dọc dòng rồi sang dòng sau, Ctrl+Z trên bảng hoàn tác, Ctrl+S trong ô sửa
+      thì lưu file; F2 trên ô đang chọn mở ô sửa
+- [ ] Máy tính: gõ trong ô sửa rồi cuộn ô ra khỏi màn hình hoặc bấm ra chỗ khác thì giá trị vẫn
+      được ghi; ⤢ mở bảng nhỏ với giá trị đang gõ, "Add row below" và "Delete row" dùng được; giá
+      trị dài hơn 1024 ký tự hoặc có `⟨U+202E⟩` thì mở bảng nhỏ
+- [ ] iPhone: chạm vào ô vẫn mở bảng nhỏ, dù đang xem hay đang sửa, không bao giờ mở ô sửa
 - [ ] Độ rộng và wrap trở về mặc định khi đổi "Delimiter" hay "Header row", giữ nguyên sau khi sửa
       một ô, và giữ nguyên khi sang tab khác rồi quay lại (cùng dòng đầu)
 - [ ] Nhấn số dòng: Records mở đúng dòng đó (cả sau khi sắp xếp); tắt Records thì bảng hiện lại ở

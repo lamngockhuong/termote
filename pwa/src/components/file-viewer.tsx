@@ -497,12 +497,16 @@ export function FileViewer({
   }
 
   // Into the table editor with delimiter, after asking when the file reads
-  // as another one: edits written with the wrong one shift the columns
+  // as another one: edits written with the wrong one shift the columns.
+  // True when editing started now, not asked about.
   const editWith = (file: TextLoaded, delimiter?: Delimiter) => {
     const detected = delimiter && delimiterFor(path, file.text)
     if (delimiter && detected !== delimiter) {
       setAsking({ file, delimiter, detected: detected as Delimiter })
-    } else beginEdit(file, delimiter)
+      return false
+    }
+    beginEdit(file, delimiter)
+    return true
   }
 
   // Changes view: into editing once, as soon as the file can be; not again
@@ -923,6 +927,13 @@ export function FileViewer({
             tableKept.current = l
             onTableLayout?.(l)
           }}
+          // A cell clicked is on a table read: with the delimiter it was
+          // read with
+          onRequestEdit={
+            editable && !mine
+              ? () => editWith(editable, (tableState as TableState).delimiter)
+              : undefined
+          }
           editing={
             cells && {
               delimiter: cells.delimiter,
