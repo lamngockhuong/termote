@@ -8,8 +8,25 @@ import {
   retargetTabs,
   type TabBase,
 } from '../utils/file-tabs'
+import {
+  clearDrafts,
+  loadDrafts,
+  loadTabs,
+  onDraftChangedElsewhere,
+  onSignedOutElsewhere,
+  onSignedOutHere,
+  persistKey,
+  removeDraft,
+  saveTabs,
+  writeDraft,
+} from '../utils/files-persist'
 import type { LinkPath } from '../utils/markdown-links'
 import { onPaneRemap, remapEntries } from '../utils/pane-remap'
+import {
+  persistedFilesState,
+  restoredCounters,
+  restoreFilesState,
+} from '../utils/persisted-tabs'
 import type { TableLayout } from '../utils/table-columns'
 import {
   type FileEntry,
@@ -64,8 +81,9 @@ export interface FileTab extends TabBase {
   // offset they were left at; another path starts over
   table?: TableLayout
   // Files of this tab left by following a link, the latest last: Back
-  // returns to them
-  history: { path: string; scrollTop: number }[]
+  // returns to them. reveal: a sensitive file the user had chosen to show,
+  // never kept on the device
+  history: { path: string; scrollTop: number; reveal?: boolean }[]
   // A sensitive file the user chose to show; starts over with another path
   reveal: boolean
   // Opens straight into editing: a file this view just created. Dropped
@@ -198,17 +216,42 @@ interface Store {
 
 function createStore(id: string): Store {
   let paneId = id
-  let state = INITIAL
+  // The tabs kept on the device for the pane, as it was left: the first
+  // read sends their root, and a pane that moved meanwhile answers 409
+  // (rootChanged)
+  const fromDevice = restoreFilesState(loadTabs('files', paneId))
+  let state: FilesState = fromDevice
+    ? {
+        ...INITIAL,
+        root: fromDevice.root,
+        tabs: fromDevice.tabs.map((t) => ({ ...t, reveal: false })),
+        activeId: fromDevice.activeId,
+        pendingRootClose: fromDevice.pendingRootClose,
+      }
+    : INITIAL
   const listeners = new Set<() => void>()
   // Bumped when the root moves: a read sent for the old one is dropped.
   let generation = 0
   // When each tab was last shown, and the ids of new ones
-  let clock = 0
-  let ids = 0
+  let { clock, ids } = restoredCounters(state.tabs)
   const isDirty = (t: FileTab) => isDraftDirty(paneId, t.path)
 
+  // Kept on the device after every change of the tabs (and of where they
+  // are scrolled to, which renders nothing)
+  const persist = () => saveTabs('files', paneId, persistedFilesState(state))
+  // Written again once opened: tabs left as they are never expire
+  if (fromDevice) persist()
+
   const set = (next: Partial<FilesState>) => {
+    const prev = state
     state = { ...state, ...next }
+    if (
+      state.tabs !== prev.tabs ||
+      state.activeId !== prev.activeId ||
+      state.root !== prev.root ||
+      state.pendingRootClose !== prev.pendingRootClose
+    )
+      persist()
     for (const fn of listeners) fn()
   }
   const setDir = (path: string, dir: DirState) =>
@@ -414,7 +457,14 @@ function createStore(id: string): Store {
       history:
         current.path === target.path
           ? current.history
-          : [...current.history, { path: current.path, scrollTop }],
+          : [
+              ...current.history,
+              {
+                path: current.path,
+                scrollTop,
+                ...(current.reveal && { reveal: true }),
+              },
+            ],
     })
     return 'opened'
   }
@@ -462,7 +512,11 @@ function createStore(id: string): Store {
     const mine = (t: FileTab) => t.root === state.root
     const follow = (t: FileTab) =>
       mine(t) && t.history.some((e) => e.path === from)
-        ? t.history.map((e) => (e.path === from ? { ...e, path: to } : e))
+        ? t.history.map((e) =>
+            e.path === from
+              ? { ...e, path: to, ...(reveal && { reveal: true }) }
+              : e,
+          )
         : t.history
     const r = retargetTabs(
       state.tabs,
@@ -601,10 +655,13 @@ function createStore(id: string): Store {
       tab.scrollTop = top
       // Scrolled away from the heading it opened at: shown again here
       tab.anchor = undefined
+      persist()
     },
     setTableLayout(id, layout) {
       const tab = state.tabs.find((t) => t.id === id)
-      if (tab) tab.table = layout
+      if (!tab) return
+      tab.table = layout
+      persist()
     },
     setReveal: (id) => patchTab(id, { reveal: true }),
     resolveRootClose(closing) {
@@ -708,7 +765,9 @@ export function followInFiles(paneId: string, target: LinkPath) {
 
 // A file being edited in a pane. It is kept here, out of the viewer, so a
 // remount (another view, the desktop panel, a move of the root) never loses
-// it; only in memory, since the text may be a .env file's.
+// it. One with unsaved changes is kept on the device too (files-persist.ts),
+// to come back when the app opens again, except a sensitive file's (reveal):
+// that one stays in memory only, and leaving the page asks first.
 export interface FileDraft {
   // The root and the bytes (their sha256) the text was read from
   root: string
@@ -742,13 +801,105 @@ let draftsVersion = 0
 
 const draftKey = (paneId: string, path: string) => `${paneId}\u0000${path}`
 
-// Leaving the page asks first while any file has unsaved changes, whether
-// or not its editor is on screen
+// When each draft's text last changed: a draft kept on the device expires
+// 14 days after it, however often it is written again (a move, a rename)
+const editedAt = new WeakMap<FileDraft, number>()
+// Drafts kept on the device as they are now
+let kept = new WeakSet<FileDraft>()
+// Drafts are kept on the device only for a client that may write: a
+// snapshot naming a view-only one turns this off
+let keepDrafts = true
+// The panes (instance and key) whose kept drafts were read back
+const hydrated = new Set<string>()
+
+const isDirty = (d: FileDraft) => d.text !== d.base
+
+// Leaving the page asks first while a file has unsaved changes the device
+// does not keep (a sensitive file's, one too big, storage full), whether or
+// not its editor is on screen
 const askBeforeUnload = (e: BeforeUnloadEvent) => e.preventDefault()
 function guardUnload() {
-  const dirty = [...drafts.values()].some((d) => d.text !== d.base)
-  if (dirty) window.addEventListener('beforeunload', askBeforeUnload)
+  const lost = [...drafts.values()].some((d) => isDirty(d) && !kept.has(d))
+  if (lost) window.addEventListener('beforeunload', askBeforeUnload)
   else window.removeEventListener('beforeunload', askBeforeUnload)
+}
+
+// Keeps next, paneId's draft of path, on the device at once (prev: the draft
+// it replaces), or removes what is kept: a draft without changes, a
+// sensitive file's, none at all. Never delayed, so a save or a discard just
+// before the app closes never brings the old text back.
+function keepDraft(
+  paneId: string,
+  path: string,
+  prev: FileDraft | undefined,
+  next: FileDraft | undefined,
+) {
+  if (next) {
+    const same = prev && prev.text === next.text && editedAt.get(prev)
+    editedAt.set(next, same || Date.now())
+  }
+  if (!next || next.reveal || !isDirty(next) || !keepDrafts) {
+    removeDraft(paneId, path)
+    return
+  }
+  const { reveal: _, ...stored } = next
+  if (writeDraft(paneId, stored, editedAt.get(next)!)) kept.add(next)
+}
+
+const isString = (v: unknown) => typeof v === 'string'
+// A draft read back from the device, checked: the fields of FileDraft
+// without reveal
+function isStoredDraft(d: unknown): d is Omit<FileDraft, 'reveal'> {
+  const o = d as Record<string, unknown>
+  return (
+    isString(o.root) &&
+    isString(o.path) &&
+    isString(o.baseHash) &&
+    isString(o.base) &&
+    isString(o.text) &&
+    typeof o.crlf === 'boolean' &&
+    (o.cells === undefined ||
+      (typeof o.cells === 'object' &&
+        o.cells !== null &&
+        Array.isArray((o.cells as { ops?: unknown }).ops) &&
+        Array.isArray((o.cells as { redo?: unknown }).redo)))
+  )
+}
+
+// The drafts kept on the device for paneIds (a snapshot's panes) come back,
+// once per pane, before any view of theirs reads its files: a store that
+// finds its pane moved (409) then asks about the tabs with changes instead
+// of closing them. A draft in memory is never replaced. A view-only client
+// (role 'view') keeps none, and those kept are removed.
+export function hydrateDrafts(paneIds: Iterable<string>, role?: string) {
+  keepDrafts = role !== 'view'
+  if (!keepDrafts) {
+    clearDrafts()
+    return
+  }
+  let changed = false
+  for (const paneId of paneIds) {
+    const pane = persistKey('drafts', paneId)
+    if (!pane || hydrated.has(pane)) continue
+    hydrated.add(pane)
+    for (const { draft, editedAt: at } of loadDrafts<unknown>(paneId)) {
+      if (!isStoredDraft(draft)) continue
+      const key = draftKey(paneId, draft.path)
+      if (drafts.has(key)) continue
+      const d: FileDraft = { ...draft, reveal: false }
+      drafts.set(key, d)
+      editedAt.set(d, at)
+      kept.add(d)
+      changed = true
+    }
+  }
+  if (changed) draftsChanged()
+}
+
+function draftsChanged() {
+  draftsVersion++
+  guardUnload()
+  for (const fn of draftListeners) fn()
 }
 
 function subscribeDrafts(fn: () => void) {
@@ -760,13 +911,13 @@ function subscribeDrafts(fn: () => void) {
 
 function setDraftOf(paneId: string, path: string, update: DraftUpdate) {
   const key = draftKey(paneId, path)
-  const next = typeof update === 'function' ? update(drafts.get(key)) : update
-  if (next === drafts.get(key)) return
+  const prev = drafts.get(key)
+  const next = typeof update === 'function' ? update(prev) : update
+  if (next === prev) return
   if (next) drafts.set(key, next)
   else drafts.delete(key)
-  draftsVersion++
-  guardUnload()
-  for (const fn of draftListeners) fn()
+  keepDraft(paneId, path, prev, next)
+  draftsChanged()
 }
 
 // The draft of path in paneId, and a setter that replaces it, or with
@@ -808,17 +959,15 @@ function moveDrafts(root: string, from: string, to: string, reveal: boolean) {
     if (d.root !== root || d.path !== from) continue
     drafts.delete(key)
     const paneId = key.slice(0, key.indexOf('\u0000'))
-    drafts.set(draftKey(paneId, to), {
-      ...d,
-      path: to,
-      reveal: d.reveal || reveal,
-    })
+    removeDraft(paneId, from)
+    const next = { ...d, path: to, reveal: d.reveal || reveal }
+    const toKey = draftKey(paneId, to)
+    drafts.set(toKey, next)
+    keepDraft(paneId, to, d, next)
     moved = true
   }
   if (!moved) return
-  draftsVersion++
-  guardUnload()
-  for (const fn of draftListeners) fn()
+  draftsChanged()
 }
 
 // Whether a path of paneId has unsaved changes, read again whenever a
@@ -838,20 +987,53 @@ export function useDirtyCheck(paneId: string) {
 onPaneRemap((shift) => {
   remapEntries(stores, shift)
   for (const to of shift.moved.values()) stores.get(to)?.moveTo(to)
+  // What is kept on the device is under the pane's key, which a shift
+  // leaves as it is
   remapEntries(
     drafts,
     shift,
     (k) => k.slice(0, k.indexOf('\u0000')),
     (k, id) => id + k.slice(k.indexOf('\u0000')),
   )
-  draftsVersion++
-  guardUnload()
-  for (const fn of draftListeners) fn()
+  draftsChanged()
 })
 
-// For tests: forget every store and draft.
-export function resetFilesStores() {
+// Another tab of the app signed out: this one forgets the tabs and drafts
+// it holds too
+onSignedOutElsewhere(forgetAll)
+// This tab signed out: what was kept is gone, so leaving asks about every
+// draft with changes again
+onSignedOutHere(unkeepAll)
+// Another tab of the app wrote or removed a draft this one keeps (the same
+// file of the same pane): this one's text may no longer be what is kept
+onDraftChangedElsewhere(unkeepDraft)
+
+function unkeepAll() {
+  kept = new WeakSet()
+  guardUnload()
+}
+
+function unkeepDraft(key: string) {
+  for (const [k, d] of drafts) {
+    const paneId = k.slice(0, k.indexOf('\u0000'))
+    if (persistKey('drafts', paneId, d.path) === key) kept.delete(d)
+  }
+  guardUnload()
+}
+
+function forgetAll() {
   stores.clear()
   drafts.clear()
-  guardUnload()
+  draftsChanged()
+}
+
+// For tests: forget every store and draft, and which panes' kept drafts
+// were read back (what is kept stays: the app opening again).
+export function resetFilesStores() {
+  forgetAll()
+  hydrated.clear()
+  keepDrafts = true
+  onSignedOutElsewhere(forgetAll)
+  onSignedOutHere(unkeepAll)
+  onDraftChangedElsewhere(unkeepDraft)
 }

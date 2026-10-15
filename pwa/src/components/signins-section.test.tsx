@@ -265,6 +265,7 @@ describe('SigninsSection', () => {
     vi.stubGlobal('location', { ...window.location, assign })
     try {
       setState({ sessions: [browser({ id: 'me', current: true })] })
+      localStorage.setItem('termote-file-drafts:i1:@1:a', '{}')
       render(<SigninsSection />)
       fireEvent.click(
         screen.getByRole('button', {
@@ -273,6 +274,8 @@ describe('SigninsSection', () => {
       )
       fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
       await vi.waitFor(() => expect(assign).toHaveBeenCalledWith('/login'))
+      expect(localStorage.getItem('termote-file-drafts:i1:@1:a')).toBeNull()
+      expect(localStorage.getItem('termote-signed-out')).not.toBeNull()
     } finally {
       vi.unstubAllGlobals()
     }

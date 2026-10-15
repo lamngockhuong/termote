@@ -23,7 +23,9 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/utils/reorder.ts`                        | Move up/down and drop indexes, groups that can move           |
 | `pwa/src/utils/pane-remap.ts`                     | Tab keys: state by pane id follows a shifted tmux id          |
 | `pwa/src/utils/chat-draft.ts`                     | Chat view drafts per pane (sessionStorage), remapped          |
-| `pwa/src/utils/pane-view.ts`                      | View and side panel each pane was left on, remapped           |
+| `pwa/src/utils/pane-view.ts`                      | View and side panel each pane was left on, kept on the device |
+| `pwa/src/utils/files-persist.ts`                  | Files/Changes tabs, drafts, pane views kept on the device     |
+| `pwa/src/utils/persisted-tabs.ts`                 | Which tab fields are kept, checked when read back             |
 | `pwa/src/components/ui/`                          | Shared UI primitives (Button, Sheet, Menu, Switch, ...)       |
 | `pwa/src/app-views.ts`                            | Views of a pane (terminal, chat, files, changes)              |
 | `pwa/src/ui-style.ts`                             | Interface styles (neutral, terminal, native)                  |
@@ -190,6 +192,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/hooks/use-signins.ts`                    | Signed-in browsers list and revoke calls                      |
 | `server/push_routes.go`                           | `/api/mux/push/key`, `/api/mux/push/subscribe`                |
 | `server/push_store.go`                            | VAPID key + subscriptions (`<stateDir>/push`, allowlist)      |
+| `server/instance_id.go`                           | The snapshot's `instanceId` (`<stateDir>/instance-id`)        |
 | `server/push_watch.go`                            | Agent status transitions → Web Push (queue, back-off)         |
 | `server/webpush.go`                               | aes128gcm + VAPID sender, hardened HTTP client                |
 | `server/testdata/agent-transitions.json`          | Transition cases shared by the PWA and the server             |

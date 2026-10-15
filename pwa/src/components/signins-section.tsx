@@ -5,6 +5,7 @@ import {
   type SignedInBrowser,
 } from '../hooks/use-mux-api'
 import { useSignins } from '../hooks/use-signins'
+import { signOutPage } from '../utils/files-persist'
 import { formatAgo } from '../utils/format-ago'
 import { Button } from './ui/button'
 import { ConfirmDialog } from './ui/confirm-dialog'
@@ -63,10 +64,7 @@ type Pending = { kind: 'one'; session: SignedInBrowser } | { kind: 'others' }
 // signed out one at a time or all but this one. A paired device sees the
 // list without the buttons (only the password signs browsers out); a
 // view-only one never sees the section.
-export function SigninsSection({
-  logOut,
-  onSignedOut = () => window.location.assign('/login'),
-}: Props) {
+export function SigninsSection({ logOut, onSignedOut = signOutPage }: Props) {
   const { sessions, canRevoke, error, revoke, revokeOthers } = useSignins(true)
   const [pending, setPending] = useState<Pending | null>(null)
   const [problem, setProblem] = useState<string>()

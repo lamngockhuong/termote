@@ -104,6 +104,11 @@ what Termote can reach, run it as another user with less access.
 - **Sessions live in memory.** Restarting the server signs every browser out (devices stay paired).
 - **A sign-out ends the cookie, not the password.** A client that sends the password with every request
   (Basic auth) is signed in again at once; change the password for that.
+- **What the app keeps on the device.** So that closing the app loses nothing, it keeps in the browser's
+  storage the files open in Files and Changes and the unsaved text of files being edited, never a file
+  shown as sensitive. Log out removes it, in every tab. A device revoked from elsewhere, or whose session
+  ended, still holds it until the app is opened there again or 14 days pass: a file not marked
+  sensitive can still hold a secret.
 - **Two servers on one state dir** (the service and a `termote serve` started by hand). A revoke in one
   does not close the terminals open in the other; the other refuses the device from its next request.
   Writes to the paired devices take a lock first, so neither brings back a device the other revoked
@@ -131,6 +136,10 @@ what Termote can reach, run it as another user with less access.
   (`a signed-in browser (<id>)`) or Settings > Devices, and `termote signins revoke <id>` still revokes
   those devices; if one was full, check what it could have left behind, as below. If the password itself
   may be known (saved in that browser for Basic auth, written down), run `termote start --fresh` instead.
+- **Unsaved text of files.** A full device keeps the files it had open and their unsaved text in its
+  browser storage (never a file shown as sensitive), for 14 days after the last edit. Revoking it does
+  not remove them: if you get the device back, open the app there and Log out, or clear the site's data
+  in the browser.
 - **View-only:** revoke it in Settings > Devices or with `termote devices revoke <id>`.
 - **Full:** revoke it, then run `termote start --fresh`: it sets a new password, which signs out every
   device and every session. A full device had a shell, so also check what it could have left behind:

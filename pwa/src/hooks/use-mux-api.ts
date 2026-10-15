@@ -119,6 +119,9 @@ export interface MuxSnapshot {
   // The server's time when it answered (RFC 3339), for the client's clock
   // offset. Absent from an older server.
   serverNow?: string
+  // Names this server (kept in its state dir): what the PWA keeps on the
+  // device for a pane is stored under it. Absent from an older server.
+  instanceId?: string
 }
 
 // State-changing calls always send JSON: the server rejects any other

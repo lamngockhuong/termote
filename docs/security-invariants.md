@@ -605,8 +605,46 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   the file read again, then renamed over it; the temporary file goes on any failure, ones older
   than 10 minutes are swept (only names of that exact form), every `.termote-edit-*` name is
   sensitive, and a save drops the root's cached git status. Saves of one file are serialised; an agent writing between the last read and the rename still loses its change (no
-  compare-and-swap), and the rename drops ACLs/xattrs. A view-only client gets 403 `view_only`. The draft stays in the PWA's memory, never in
-  browser storage
+  compare-and-swap), and the rename drops ACLs/xattrs. A view-only client gets 403 `view_only`. The draft is kept in browser storage only as
+  "Files/Changes state kept on the device" allows, never a sensitive file's
+- **Files/Changes state kept on the device** (`pwa/src/utils/files-persist.ts`,
+  `persisted-tabs.ts`, `pane-view.ts`; server `server/instance_id.go`): the snapshot's
+  `instanceId` (16 random hex digits made once with `crypto/rand`, kept in `<stateDir>/instance-id`
+  0600 through `writeStateFile`, made again when unreadable as one; not a secret, never logged;
+  the state dir is in `FilesDenyDirs`) names the server. The PWA keeps in `localStorage`, under
+  `termote-{files-tabs,changes-tabs,file-drafts,pane-view}:<instanceId>:<pane key>[:<path>]`
+  with the pane's key and group name in each record: the open Files and Changes tabs (paths,
+  scroll offsets, history, table layout), each pane's last view, and the unsaved draft of a file
+  (`root, path, baseHash, base, crlf, text, cells`). Never kept: a tab or draft of a sensitive
+  file the user chose to show (`reveal`/`revealed`: neither its name nor its text), nor such a
+  file in a tab's Back history (an entry marked `reveal`, set by a link or a rename), `intent`,
+  the tree's open directories. A draft is written at once (never delayed) while it differs from
+  the text read, removed at once on Save, Discard or back to that text; at most 1,000,000
+  characters each and 1,500,000 for all, measured as stored JSON; too big, no room or a
+  sensitive file's → in memory only, and `beforeunload` asks (it asks only for such drafts, for
+  one another tab of the browser wrote or removed since, and for every one once this tab signed
+  out).
+  Drafts are written and read back only for a client that may write: a snapshot with
+  `caps.role` `view` removes every kept draft. They come back once per pane in `applySnapshot`
+  (`hydrateDrafts`), before any view reads a file, never over a draft in memory; a record of
+  another instance, or whose group name differs (a tmux `@N` used again after tmux restarted),
+  is not read (a tab or view record is removed, a draft left to expire). A group renamed while
+  the PWA is open (tmux, Herdr: the keys stay; Zellij: they move with it) takes its records
+  along. Reading the file again: equal to the draft → the draft
+  goes; another `hash` than `baseHash` → the `changed` banner (Save still never overwrites;
+  Reload asks before dropping the draft); now sensitive → the draft goes; gone → a banner to
+  copy or discard it. Restored tabs send their saved `root`: a pane that moved answers 409 and
+  `rootChanged` closes clean tabs and asks about those with drafts. Records expire 14 days after
+  they were written (a draft: after its text last changed), swept when the PWA loads. Log out,
+  revoking this device in Devices and signing this browser out in Signed-in browsers remove
+  every record, stop every later write in this tab (pending ones included) and set
+  `termote-signed-out`, on which every other tab of the origin does the same and forgets its
+  tabs and drafts; each write first checks that key, so a tab not yet told writes nothing back. Accepted gaps: a 401 (session expired, revoked from another device, server
+  restarted) removes nothing, and `/login` runs no script, so a revoked device keeps its drafts
+  until the PWA opens there again or 14 days pass; a non-sensitive file can still hold a secret;
+  psmux keys panes by window index, so after windows are renumbered tabs and drafts may not come
+  back; a group renamed while the PWA is closed (tmux, Herdr) leaves its records unread; another
+  tab of the browser editing the same file: the last write wins
 - **Creating a file** (`POST files/create?root=`, `server/files_create.go`): an empty file and
   the directories missing above it (0666/0777 under the umask; directories made before a later
   failure stay, as with `mkdir -p`); the text then goes through `PUT files/content`. Same guards

@@ -661,7 +661,13 @@ describe('FileViewer editing', () => {
     )
     expect(writeText).toHaveBeenCalledWith('mine')
     expect(p.notify).toHaveBeenLastCalledWith('Text copied')
+    // Asked first: the text would be lost
     fireEvent.click(screen.getByRole('button', { name: 'Reload' }))
+    expect(screen.getByText('Discard changes?')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(textarea()).toHaveValue('mine')
+    fireEvent.click(screen.getByRole('button', { name: 'Reload' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
     expect(await screen.findByTestId('code-block')).toHaveTextContent('agent')
     expect(mockContent).toHaveBeenCalledTimes(2)
   })
@@ -1691,5 +1697,165 @@ describe('FileViewer download', () => {
     await screen.findByTestId('code-block')
     fireEvent.click(screen.getByRole('button', { name: 'Download' }))
     expect(onDownload).toHaveBeenCalledWith({ revealed: true })
+  })
+})
+
+describe('a draft found when the file is read', () => {
+  // A draft of src/a.ts read from "old", edited to "mine" (as kept on the
+  // device before the app closed)
+  const keep = (over: Partial<FileDraft> = {}) => {
+    const d: FileDraft = {
+      root: '/r',
+      path: 'src/a.ts',
+      baseHash: 'h:old',
+      base: 'old',
+      crlf: false,
+      text: 'mine',
+      reveal: false,
+      ...over,
+    }
+    renderHook(() => useFileDraft('%1', 'src/a.ts')).result.current[1](d)
+  }
+  const draftNow = () =>
+    renderHook(() => useFileDraft('%1', 'src/a.ts')).result.current[0]
+
+  it('of a file unchanged opens in the editor, unsaved', async () => {
+    keep()
+    mockContent.mockResolvedValue(editable('old'))
+    show({ canEdit: true })
+    await waitFor(() => expect(mockContent).toHaveBeenCalled())
+    expect(textarea()).toHaveValue('mine')
+    expect(saveButton()).toBeEnabled()
+    expect(
+      screen.queryByText('The file changed on the host since you opened it'),
+    ).toBeNull()
+  })
+
+  it('of a file changed on the host says so; Reload asks first', async () => {
+    keep()
+    mockContent
+      .mockResolvedValueOnce(editable('agent'))
+      .mockResolvedValueOnce(editable('agent'))
+    show({ canEdit: true })
+    expect(
+      await screen.findByText(
+        'The file changed on the host since you opened it',
+      ),
+    ).toBeInTheDocument()
+    expect(textarea()).toHaveValue('mine')
+    fireEvent.click(screen.getByRole('button', { name: 'Reload' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
+    expect(await screen.findByTestId('code-block')).toHaveTextContent('agent')
+    expect(draftNow()).toBeUndefined()
+  })
+
+  it('the file already holds is done with', async () => {
+    keep()
+    mockContent.mockResolvedValue(editable('mine'))
+    show({ canEdit: true })
+    expect(await screen.findByTestId('code-block')).toHaveTextContent('mine')
+    expect(draftNow()).toBeUndefined()
+    // CRLF on the host is the same text
+    keep({ text: 'a\nb' })
+    cleanup()
+    mockContent.mockResolvedValue(editable('a\r\nb'))
+    show({ canEdit: true })
+    await waitFor(() => expect(draftNow()).toBeUndefined())
+  })
+
+  it('without changes stays, even with the file unchanged', async () => {
+    keep({ text: 'old' })
+    mockContent.mockResolvedValue(editable('old'))
+    show({ canEdit: true })
+    await waitFor(() => expect(mockContent).toHaveBeenCalled())
+    expect(textarea()).toHaveValue('old')
+    // Reload of a draft without changes needs no asking
+    mockContent.mockResolvedValue(editable('old', { hash: 'h:new' }))
+    cleanup()
+    show({ canEdit: true })
+    fireEvent.click(await screen.findByRole('button', { name: 'Reload' }))
+    expect(await screen.findByTestId('code-block')).toHaveTextContent('old')
+  })
+
+  it('of a file now sensitive goes, and the file is asked about', async () => {
+    keep()
+    mockContent.mockResolvedValue({
+      root: '/r',
+      path: 'src/a.ts',
+      sensitive: true,
+    })
+    show({ canEdit: true })
+    expect(await screen.findByText('Show this file?')).toBeInTheDocument()
+    expect(draftNow()).toBeUndefined()
+  })
+
+  it('shown as sensitive stays when the file reads so', async () => {
+    keep({ reveal: true })
+    mockContent.mockResolvedValue(editable('old'))
+    show({ canEdit: true })
+    await waitFor(() => expect(mockContent).toHaveBeenCalled())
+    expect(mockContent).toHaveBeenCalledWith('%1', 'src/a.ts', {
+      root: '/r',
+      reveal: true,
+    })
+    expect(draftNow()?.text).toBe('mine')
+  })
+
+  it('of another root, or of a file not text, is left as it is', async () => {
+    keep({ root: '/old' })
+    mockContent.mockResolvedValue(editable('mine'))
+    show({ canEdit: true })
+    await waitFor(() => expect(mockContent).toHaveBeenCalled())
+    expect(draftNow()?.text).toBe('mine')
+    cleanup()
+    keep()
+    mockContent.mockResolvedValue({ root: '/r', size: 9, previewable: false })
+    show({ canEdit: true })
+    await waitFor(() => expect(mockContent).toHaveBeenCalledTimes(2))
+    expect(draftNow()?.text).toBe('mine')
+  })
+
+  it('of a file gone from the host can be copied or discarded', async () => {
+    keep()
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    mockContent.mockRejectedValue(new RequestError(404, '', 'not found'))
+    show({ canEdit: true })
+    expect(
+      await screen.findByText('This file is no longer on the host'),
+    ).toBeInTheDocument()
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Copy my text' })),
+    )
+    expect(writeText).toHaveBeenCalledWith('mine')
+    // Discard asks first: the text would be lost
+    const banner = screen
+      .getByText('This file is no longer on the host')
+      .closest('[role]') as HTMLElement
+    fireEvent.click(within(banner).getByRole('button', { name: 'Discard' }))
+    expect(screen.getByText('Discard changes?')).toBeInTheDocument()
+  })
+
+  it('of a file that cannot be read now shows no banner', async () => {
+    keep()
+    mockContent.mockRejectedValue(new Error('offline'))
+    show({ canEdit: true })
+    await waitFor(() => expect(mockContent).toHaveBeenCalled())
+    expect(screen.queryByText('This file is no longer on the host')).toBeNull()
+    expect(textarea()).toHaveValue('mine')
+  })
+
+  it('a read answering after the draft went changes nothing', async () => {
+    keep()
+    let answer!: (v: unknown) => void
+    mockContent.mockImplementation(() => new Promise((r) => (answer = r)))
+    show({ canEdit: true })
+    const setDraft = renderHook(() => useFileDraft('%1', 'src/a.ts')).result
+      .current[1]
+    act(() => setDraft(undefined))
+    await act(async () => answer(editable('agent')))
+    expect(
+      screen.queryByText('The file changed on the host since you opened it'),
+    ).toBeNull()
   })
 })
