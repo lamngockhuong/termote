@@ -130,7 +130,11 @@ attach a terminal, health) with three implementations:
 - **`mux_herdr.go`** (native mode only, `TERMOTE_MUX=herdr`): drives a Herdr server over its
   socket. A Herdr workspace is a group, a Herdr tab is a tab, a Herdr pane is a pane. Selecting
   a tab in the PWA only changes which pane the client streams (`Caps.ClientSideSelect`); it
-  never changes what is shown on the Herdr desktop. By default the stream follows the pane's
+  never changes what is shown on the Herdr desktop. When nothing listens on Herdr's socket, a full client's `GET /api/mux/snapshot` makes serve start `herdr server` detached in the
+  background (`herdr_autostart*.go`; rules and limits in `security-invariants.md`, Herdr autostart): the request answers its old
+  error, the PWA's 5 s poll finds Herdr. Peek, view-only snapshots, the stream and the event subscription never start it. It outlives
+  `termote stop`, like a tmux server, and a full PWA tab starts one stopped with `herdr server stop` again, as tmux recreates its default
+  session. By default the stream follows the pane's
   real size (`terminal session observe`) and sends keys with `pane.send_text` through a single
   serialising writer. A pane is one PTY with one size, so the PWA cannot have its own size next
   to the desktop's; when the client asks to drive it (`Caps.DriveSize`, see the stream protocol
@@ -1189,7 +1193,7 @@ Agent status (Herdr event / Claude session file)
 - **Watcher**: started by `runServer` only. tmux's `peekSnapshot` reads the sessions there
   without `ensureSession`, so a closed default session is not recreated, and the others still
   notify; `snapshot?peek=1` (the service worker naming a push) reads the same way; Herdr's `Snapshot` is cached
-  and has no side effects. Reads and sends run apart, so a slow push service never delays a
+  and has no side effects (only a full client's snapshot route may start Herdr, never the watcher). Reads and sends run apart, so a slow push service never delays a
   read. A 404/410 drops the subscription; 401/403 is logged and kept; 429 backs that push
   service off for its `Retry-After` (at most 1 h), a timeout for 1 minute.
 - **Payload**: `{groupId, tabId, paneId, kind}`, aes128gcm (RFC 8291), VAPID (RFC 8292,

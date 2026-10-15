@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -29,6 +30,11 @@ import (
 const helperEnv = "TEST_TERMOTE_HELPER"
 
 func TestMain(m *testing.M) {
+	// No test ever starts a real herdr server; the autostart tests replace
+	// this with a fake.
+	herdrStartServer = func(string, []string, string) (herdrServerProc, error) {
+		return herdrServerProc{}, errors.New("tests never start herdr")
+	}
 	switch os.Getenv(helperEnv) {
 	case "":
 		os.Exit(m.Run())
@@ -44,6 +50,10 @@ func TestMain(m *testing.M) {
 		helperServeHerdr()
 	case "codex-rollout":
 		helperCodexRollout()
+	case "herdr-server":
+		// What startHerdrServer runs: prints its arguments and fails.
+		fmt.Println("herdr-server", os.Args[1:])
+		os.Exit(3)
 	}
 	os.Exit(0)
 }

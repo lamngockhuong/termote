@@ -123,6 +123,8 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/mux_groups.go`                            | `/api/mux/groups*`: create, rename, close a group; cwd check  |
 | `server/mux_reorder.go`                           | `tabs/{id}/move`, `groups/{id}/move`: one slot, coded errors  |
 | `server/mux_herdr.go`                             | Herdr backend                                                 |
+| `server/herdr_autostart.go`                       | Starts `herdr server` from a full client's snapshot           |
+| `server/herdr_autostart_{unix,windows}.go`        | Per-OS detach flags and not-listening check                   |
 | `server/mux_zellij.go`                            | Zellij backend: snapshot, tabs, sessions, input, text, attach |
 | `server/mux_zellij_cmd.go`                        | zellij runner (gate, retries), ids, names, version, sockets   |
 | `server/mux_zellij_agent.go`                      | Zellij Chat view and Files (pane dir, capture, paste, keys)   |

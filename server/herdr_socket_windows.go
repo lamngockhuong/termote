@@ -20,28 +20,32 @@ import (
 const herdrPipePrefix = `\\.\pipe\`
 
 // herdrSocketPath returns $HERDR_SOCKET_PATH, else herdr.sock in herdr's
-// config directory, found in the order herdr itself uses: $XDG_CONFIG_HOME,
-// %APPDATA%, %USERPROFILE%\AppData\Roaming, $HOME\.config, then the temp
-// directory. The pipe is named after the path string, so it is joined the way
-// herdr joins it (Rust's PathBuf::join), without cleaning.
+// config directory. The pipe is named after the path string, so it is joined
+// the way herdr joins it (Rust's PathBuf::join), without cleaning.
 func herdrSocketPath() string {
 	if p := os.Getenv("HERDR_SOCKET_PATH"); p != "" {
 		return p
 	}
-	var dir string
+	return herdrJoin(herdrConfigDir(), "herdr.sock")
+}
+
+// herdrConfigDir is herdr's config directory, where it keeps its session
+// file whatever socket it serves, found in the order herdr itself uses:
+// $XDG_CONFIG_HOME, %APPDATA%, %USERPROFILE%\AppData\Roaming, $HOME\.config,
+// then the temp directory.
+func herdrConfigDir() string {
 	switch {
 	case os.Getenv("XDG_CONFIG_HOME") != "":
-		dir = herdrJoin(os.Getenv("XDG_CONFIG_HOME"), "herdr")
+		return herdrJoin(os.Getenv("XDG_CONFIG_HOME"), "herdr")
 	case os.Getenv("APPDATA") != "":
-		dir = herdrJoin(os.Getenv("APPDATA"), "herdr")
+		return herdrJoin(os.Getenv("APPDATA"), "herdr")
 	case os.Getenv("USERPROFILE") != "":
-		dir = herdrJoin(herdrJoin(herdrJoin(os.Getenv("USERPROFILE"), "AppData"), "Roaming"), "herdr")
+		return herdrJoin(herdrJoin(herdrJoin(os.Getenv("USERPROFILE"), "AppData"), "Roaming"), "herdr")
 	case os.Getenv("HOME") != "":
-		dir = herdrJoin(os.Getenv("HOME"), ".config/herdr")
+		return herdrJoin(os.Getenv("HOME"), ".config/herdr")
 	default:
-		dir = herdrJoin(os.TempDir(), "herdr")
+		return herdrJoin(os.TempDir(), "herdr")
 	}
-	return herdrJoin(dir, "herdr.sock")
 }
 
 // herdrJoin appends elem to dir with a backslash unless dir already ends in a
@@ -76,7 +80,7 @@ func dialHerdr(ctx context.Context, path string) (net.Conn, error) {
 	}
 	if err := checkPipeServerUser(conn); err != nil {
 		conn.Close()
-		return nil, err
+		return nil, &herdrPipeUserError{err}
 	}
 	return conn, nil
 }

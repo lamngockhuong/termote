@@ -48,6 +48,10 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 
 - [ ] `termote start --mux herdr` hoàn thành không lỗi (có herdr trong `PATH`)
 - [ ] `curl localhost:7680/api/mux/health` trả về `"backend":"herdr"`
+- [ ] Sau khi khởi động lại máy (hoặc `herdr server stop`), lúc Herdr chưa chạy: mở PWA ở một tab quyền full;
+      sau khoảng 15 s (thời gian chờ đầu) cộng một chu kỳ poll 5 s, các workspace hiện lại và không có tab thừa,
+      `herdr status server` báo running, `termote logs all` có `herdr-autostart.log`; `termote stop` không tắt
+      Herdr; thiết bị chỉ xem (ghép bằng `--role view`) không bao giờ làm Herdr lên
 - [ ] `--mux herdr --no-auth` bị từ chối nếu không kèm `--allow-herdr-no-auth`
 - [ ] PWA liệt kê đúng các workspace/tab/pane như `herdr pane list`
 - [ ] Chọn tab/pane trên PWA không làm đổi tab đang focus trong giao diện Herdr trên máy host
@@ -72,6 +76,7 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 
 - [ ] `termote start --mux herdr` hoàn thành không lỗi (có `herdr.exe` trong `PATH`)
 - [ ] `curl localhost:7690/api/mux/health` trả về `"backend":"herdr"` (kết nối tới `\\.\pipe\` cộng đường dẫn `%APPDATA%\herdr\herdr.sock`)
+- [ ] Lúc Herdr chưa chạy, mở PWA ở một tab quyền full thì `herdr server` lên mà không mở cửa sổ dòng lệnh nào; nó vẫn sống sau `schtasks /End /tn Termote` và `termote stop` (cờ tạo tiến trình chưa được kiểm trên máy Windows thật)
 - [ ] Khi có cả psmux và Herdr, lần `termote start` đầu tiên nhận ra Herdr và hỏi chọn (không có terminal để hỏi thì chọn psmux)
 - [ ] Stream, gõ phím, dán, cuộn và huy hiệu trạng thái agent chạy như trên Linux
 - [ ] Đổi kích thước pane trong Herdr (chia đôi hoặc phóng to pane) thì `observe` chạy lại theo kích thước mới

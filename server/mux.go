@@ -315,8 +315,14 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *u
 			read = func(ctx context.Context) (Snapshot, error) { return peekSnapshot(ctx, m) }
 		case isViewOnly(r):
 			// A view-only client makes nothing either (tmux's default
-			// session).
+			// session), nor starts herdr.
 			read = func(ctx context.Context) (Snapshot, error) { return viewSnapshot(ctx, m) }
+		default:
+			// A full client opening the page starts herdr when it is not
+			// running, like tmux makes its default session.
+			if h, ok := m.(*herdrMux); ok {
+				read = h.startingSnapshot
+			}
 		}
 		snap, err := read(ctx)
 		if err != nil {

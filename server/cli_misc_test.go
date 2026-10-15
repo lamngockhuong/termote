@@ -43,6 +43,36 @@ func TestLogsTailAndClean(t *testing.T) {
 	}
 }
 
+// The output of a herdr server termote starts is one more log: shown by
+// "logs all", not by "logs server", and removed by "logs clean".
+func TestLogsHerdrAutostart(t *testing.T) {
+	tc := newTestCLI(t, "linux")
+	writeFile(t, filepath.Join(tc.logDir(), "termote.log"), "server line\n")
+	writeFile(t, filepath.Join(tc.logDir(), "herdr-autostart.log"), "herdr line\n")
+	tc.main([]string{"logs", "server"})
+	if out := tc.stdout.String(); strings.Contains(out, "herdr line") {
+		t.Fatalf("logs server shows herdr's output:\n%s", out)
+	}
+	tc.stdout.Reset()
+	tc.main([]string{"logs", "all"})
+	if out := tc.stdout.String(); !strings.Contains(out, "herdr line") || !strings.Contains(out, "server line") {
+		t.Fatalf("logs all:\n%s", out)
+	}
+	tc.main([]string{"logs", "clean"})
+	if files := tc.logFiles("*.log"); len(files) != 0 {
+		t.Fatalf("logs left after clean: %v", files)
+	}
+}
+
+func TestDegradedBackendMsg(t *testing.T) {
+	if msg := degradedBackendMsg("herdr"); !strings.Contains(msg, "termote starts it when you open the page") {
+		t.Error(msg)
+	}
+	if msg := degradedBackendMsg("zellij"); !strings.Contains(msg, "its zellij backend does not answer yet; it connects once that runs") {
+		t.Error(msg)
+	}
+}
+
 // syncBuffer is a goroutine-safe writer for followLogs output.
 type syncBuffer struct {
 	mu sync.Mutex
