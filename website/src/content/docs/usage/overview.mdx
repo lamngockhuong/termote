@@ -42,9 +42,10 @@ same window has no card. Herdr and Zellij watch every pane.
 
 ## Context and limits
 
-For Claude Code the window is 1M when it was started with `--model <model>[1m]`, 200k for any other
-`--model`. Started without `--model` (the model comes from its settings or `/model`), or under Herdr,
-the window is assumed to be 200k and the share is marked `~`, until the context grows past 200k. For
+For Claude Code the window follows the model it runs, as its transcript records it at start and on
+each `/model` switch: 1M for the models that have it of their own (every model from Claude 5 on, Opus
+from 4.7) and for a `[1m]` model, 200k for any other. When no model can be read, the window is assumed
+to be 200k and the share is marked `~`, until the context grows past 200k. For
 Codex the share is the one Codex reports itself ("% context left", turned into the share used).
 
 With a Codex pane signed in to a ChatGPT plan, an **Accounts** strip above the cards shows that
@@ -54,7 +55,7 @@ elsewhere since. There is no such line for Claude Code: its limits are not writt
 reads.
 
 The header also shows a small chip for the pane you have open, such as `ctx 72% · 7d 95%` (the limit
-only for Codex). On a phone it shows only the higher of the two. Tap it to open the overview. Turn it
+only for Codex). On a phone it shows only the higher of the two. Tap it to open the overview on that pane's card. Turn it
 off in **Settings > Sessions > Agent usage in the header**.
 
 ## Needs you

@@ -136,7 +136,8 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/agent.go`                                 | `/api/mux/panes/{id}/agent/*` routes, transcript reads        |
 | `server/agent_activity.go`                        | Status since and change log of every agent (`/activity`)      |
 | `server/agent_overview.go`                        | `/overview`: each agent's last text, context, git changes     |
-| `server/agent_context_window.go`                  | Context window from argv, context share, Codex account key    |
+| `server/agent_context_window.go`                  | Window of a model id, context share, Codex account key        |
+| `server/agent_claude_model.go`                    | Last model a Claude Code transcript names                     |
 | `server/agent_subagents.go`                       | `agent/subagents`: a Claude session's subagent tree           |
 | `server/agent_claude.go`                          | Claude Code transcript (JSONL) and session file               |
 | `server/agent_claude_prompt.go`                   | Reads a Claude Code screen: input box, dialogs                |

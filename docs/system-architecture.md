@@ -1115,11 +1115,20 @@ root off, so the Changes view always comes first; until read, a pane answers `un
 ["changes"]` (always on psmux, which has no Files).
 
 How full the context is (`server/agent_context_window.go`): Claude's transcript records the
-tokens of each request but never the window. The window is 1M when the Claude Code process was
-started with `--model <x>[1m]`, 200k for any other `--model` (both `exact`), read from its argv on
-Linux, macOS and Windows; without `--model` (the model came from `settings.json` or `/model`) or
-without a process (Herdr) it is assumed 200k (`exact: false`, shown with `~`), unless the tokens
-already exceed 200k, which only the 1M window holds. Codex writes an `event_msg`/`token_count` row
+tokens of each request but never the window. Claude Code (from 2.1.270) writes the model it runs as
+an `attachment` row of type `model` when the session starts and on each `/model` switch
+(`identity.modelId`, e.g. `claude-opus-5[1m]`); `claudeModels` (`server/agent_claude_model.go`)
+keeps the last one per transcript, scanning only what was appended since its last scan; a read
+that finds a scan still running does without it (`TryLock`) instead of waiting on a first scan of a
+large transcript.
+`claudeWindowOfModel` tells the window from the id as Claude Code's own model table does
+(`context.native_1m`, 2.1.300): 1M for an id ending in `[1m]`, for every model from the 5 family on
+and for Opus from 4.7; 200k for any other (all `exact`). Without a model row (an older Claude Code)
+the `--model` of its argv decides (read on Linux, macOS and Windows; an alias such as `opus` tells
+nothing), then the model of the request's own row, which never carries the `[1m]` of an opt-in and
+so only proves a 1M model of its own. Otherwise it is assumed 200k (`exact: false`, shown with `~`),
+unless the tokens already exceed 200k, which only the 1M window
+holds. `CLAUDE_CODE_DISABLE_1M_CONTEXT` in the agent's environment is not read. Codex writes an `event_msg`/`token_count` row
 after each request: `last_token_usage.total_tokens` in `model_context_window`; the share leaves out
 Codex's 12k baseline on both sides, as Codex's own "% context left" does
 (`TokenUsage::percent_of_context_window_remaining`, checked against 0.162.1). The parser puts that

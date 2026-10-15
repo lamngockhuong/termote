@@ -133,12 +133,15 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   (280 runes, never a tool result, never a sidechain row), the last row's time, the context size,
   window and share (Claude: tokens and model; Codex: its `token_count` rows), and a branch and
   changed-file count; never a cwd, a root, a transcript path or a file name. The Claude window comes
-  from the agent process's argv (`--model …[1m]`), read with the process during the walk that finds
-  it (`claudeProcOf`); only the window is kept, argv is never returned or logged. `accounts` are the
+  from the transcript's last model row (`claudeModels`: the same file `Locate` found, opened
+  nonblocking, scanned forward from where the last scan ended, lines over 64 KiB skipped
+  undecoded; only the model id is kept), else from the agent process's argv (`--model`),
+  read with the process during the walk that finds it (`claudeProcOf`); only the window is kept,
+  argv is never returned or logged. `accounts` are the
   Codex rate limits (`primary`/`secondary`, `plan_type`) of the `token_count` rows already read,
   keyed by an HMAC of the `CODEX_HOME` with the process-lifetime cursor key (`accountKey`, 12 hex),
-  never the path; `limit_id`, `credits` and the rest are not sent. No file beyond the transcript
-  tail is read for any of it, and nothing is written. `?pane=<id>` (the header's usage chip) reads
+  never the path; `limit_id`, `credits` and the rest are not sent. No file beyond the transcript is
+  read for any of it, and nothing is written. `?pane=<id>` (the header's usage chip) reads
   that pane alone and queues no changes for it; only an id the last snapshot shows with an agent
   gets a read and a cache entry, any other answers `panes: []`, so an arbitrary id costs nothing. Changes never run git in the request: a background worker reads one pane at a time
   through `paneRootForRead` (the Files gate: `Caps().Files`, `f.dirs`, `paneRoot`), uses a status

@@ -148,16 +148,17 @@ minutes, its running subagents' writes count) is marked with an hourglass and a 
 alone, and never notified.
 
 A card shows how full the agent's context is as a thin bar (`UsageMeter`, `role="meter"`), the share
-and the tokens of the window (`72% 144k/200k`); `~` marks a window assumed (Claude Code without
-`--model`), explained in its title. Bars and their numbers stay neutral below 70%, turn `warning`
+and the tokens of the window (`72% 144k/200k`); `~` marks a window assumed (Claude Code whose
+transcript, argv and request rows show no model with a window of its own), explained in its title. Bars and their numbers stay neutral below 70%, turn `warning`
 from 70% and `danger` from 90%. Above "Needs you", a strip lists each Codex account the agents use:
 a bar per rate limit window (`5h`, `7d`), its share, when it resets ("resets 14:30", "resets Mon
 09:00", "resets 28/10") and how old the numbers are; numbers older than 30 minutes are dimmed. It
 wraps instead of scrolling sideways and is absent without a Codex account.
 
 The header shows a small chip for the open pane's agent: `ctx 72% · 7d 95%` (the limit only for
-Codex, the fullest window), its border and text coloured by the fuller part; on a phone only the
-fuller part. It opens the overview and reads only its own pane (`/api/mux/overview?pane=`, never
+Codex, the fullest window), its border and text coloured by the fuller part (the text only in the native
+style, which draws no border), framed and sized like the view switcher beside it; on a phone only the fuller part. It opens the overview with focus on its pane's card, bordered in accent until focus leaves
+the card, and reads only its own pane (`/api/mux/overview?pane=`, never
 while it is off or the pane has no agent). Limits older than 30 minutes, or of a window past its
 reset, are left out. It is turned off in Settings → Sessions → "Agent usage in the header".
 

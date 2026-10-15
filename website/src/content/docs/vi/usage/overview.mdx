@@ -43,9 +43,10 @@ window sẽ không có thẻ. Herdr và Zellij theo dõi mọi pane.
 
 ## Context và hạn mức
 
-Với Claude Code, cửa sổ là 1M khi nó được chạy với `--model <model>[1m]`, là 200k với mọi `--model`
-khác. Chạy không có `--model` (model lấy từ settings hoặc `/model`) hoặc chạy trong Herdr thì Termote
-đoán cửa sổ là 200k và ghi thêm `~` trước phần trăm, cho tới khi context vượt quá 200k. Với Codex, phần
+Với Claude Code, cửa sổ theo model đang chạy, đúng như transcript ghi lúc bắt đầu và mỗi lần đổi bằng
+`/model`: 1M với các model vốn có sẵn 1M (mọi model từ Claude 5 trở đi, Opus từ 4.7) và với model
+`[1m]`, 200k với mọi model khác. Khi không đọc được model, Termote đoán cửa sổ là 200k và ghi thêm `~`
+trước phần trăm, cho tới khi context vượt quá 200k. Với Codex, phần
 trăm lấy đúng con số Codex tự báo ("% context left", đổi sang phần đã dùng).
 
 Khi có pane Codex đăng nhập bằng gói ChatGPT, phía trên các thẻ có dải **Accounts** cho biết hạn mức của
@@ -54,7 +55,7 @@ Codex ghi lại các số này. Số đã cũ hơn 30 phút thì mờ đi, vì t
 nơi khác. Claude Code không có dòng như vậy: hạn mức của nó không được ghi ở chỗ nào Termote đọc.
 
 Header cũng có một chip nhỏ cho pane đang mở, ví dụ `ctx 72% · 7d 95%` (phần hạn mức chỉ có với
-Codex). Trên điện thoại chip chỉ hiện số lớn hơn. Bấm vào chip để mở màn hình tổng quan. Muốn tắt chip,
+Codex). Trên điện thoại chip chỉ hiện số lớn hơn. Bấm vào chip để mở màn hình tổng quan, đúng ở thẻ của pane đó. Muốn tắt chip,
 vào **Settings > Sessions > Agent usage in the header**.
 
 ## Cần bạn xử lý
