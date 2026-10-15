@@ -230,9 +230,39 @@ export async function fetchActivity(after?: number): Promise<ActivityPage> {
   return res.json()
 }
 
+// How full an agent's context is. contextWindow and contextPercent come
+// from a server that knows the window; exact is false when it is assumed
+// (Claude Code started without --model).
+export interface OverviewUsage {
+  contextTokens: number
+  model?: string
+  contextWindow?: number
+  contextPercent?: number
+  exact?: boolean
+}
+
+// One rate limit window of an account: the share used, its length and when
+// it resets (RFC 3339).
+export interface UsageWindow {
+  usedPercent: number
+  windowMinutes: number
+  resetsAt?: string
+}
+
+// A Codex account's rate limits, as its newest token_count row recorded
+// them at updatedAt. key groups the panes using it; it names no path.
+export interface OverviewAccount {
+  key: string
+  agent: 'codex'
+  plan?: string
+  windows: UsageWindow[]
+  updatedAt: string
+}
+
 // One overview card's data beyond the snapshot. lastTs: when the agent last
-// wrote (server time). usage: Claude's context size. unavailable: what
-// could not be read this time ('transcript', 'changes'), shown as pending.
+// wrote (server time). usage: how full its context is. accountKey: the
+// Codex account it uses. unavailable: what could not be read this time
+// ('transcript', 'changes'), shown as pending.
 export interface OverviewPane {
   paneId: string
   key: string
@@ -241,18 +271,22 @@ export interface OverviewPane {
   branch?: string
   changed?: number
   changedTruncated?: boolean
-  usage?: { contextTokens: number; model?: string }
+  usage?: OverviewUsage
+  accountKey?: string
   unavailable?: string[]
 }
 
 export interface Overview {
   serverNow: string
   panes: OverviewPane[]
+  accounts?: OverviewAccount[]
 }
 
-// Every agent's summary, in one read for all the overview's cards.
-export async function fetchOverview(): Promise<Overview> {
-  const res = await fetch(`${API_BASE}/overview`, {
+// Every agent's summary, in one read for all the overview's cards; with
+// pane, that pane's alone and without its changes (the header's chip).
+export async function fetchOverview(pane?: string): Promise<Overview> {
+  const q = pane === undefined ? '' : `?pane=${encodeURIComponent(pane)}`
+  const res = await fetch(`${API_BASE}/overview${q}`, {
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   })
   if (!res.ok) throw await requestError(res)

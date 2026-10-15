@@ -644,6 +644,16 @@ export function SettingsModal({
             </select>
           </SettingsRow>
           <SettingsRow
+            title="Agent usage in the header"
+            desc="Show how full the open pane's agent context is, and its Codex limits"
+          >
+            <Switch
+              label="Agent usage in the header"
+              checked={settings.showUsageChip}
+              onChange={(v) => onUpdateSetting('showUsageChip', v)}
+            />
+          </SettingsRow>
+          <SettingsRow
             title="Session poll interval"
             desc={`How often to sync session list (${formatSeconds(settings.pollInterval)})`}
           >

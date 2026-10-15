@@ -84,6 +84,7 @@ export interface Settings {
   findExcludes: string[] // Files search: folder names never searched (above)
   notifyAgents: boolean // notify when an agent is blocked or ends a turn
   stuckMinutes: number // overview: a working agent quiet this long may be stuck
+  showUsageChip: boolean // header: the open pane's agent's context and limits
 }
 
 const DEFAULTS: Settings = {
@@ -108,6 +109,7 @@ const DEFAULTS: Settings = {
   findExcludes: FIND_EXCLUDES_DEFAULT,
   notifyAgents: false,
   stuckMinutes: DEFAULT_STUCK_MINUTES,
+  showUsageChip: true,
 }
 
 // Listeners for useSyncExternalStore
@@ -144,6 +146,7 @@ function getSnapshot(): Settings {
         notifyAgents: merged.notifyAgents === true,
         stuckMinutes: resolveStuckMinutes(merged.stuckMinutes),
         copyOnSelect: merged.copyOnSelect === true,
+        showUsageChip: merged.showUsageChip !== false,
       }
     } catch {
       cachedSettings = DEFAULTS

@@ -368,6 +368,27 @@ describe('OverviewScreen, loading and failing', () => {
     mockFetchOverview.mockResolvedValue({ serverNow: 'x', panes: [] })
   })
 
+  it('shows the Codex accounts above the cards', async () => {
+    mockFetchOverview.mockResolvedValue({
+      serverNow: 'x',
+      panes: [],
+      accounts: [
+        {
+          key: 'k1',
+          agent: 'codex',
+          plan: 'team',
+          windows: [{ usedPercent: 12, windowMinutes: 300 }],
+          updatedAt: new Date().toISOString(),
+        },
+      ],
+    })
+    renderScreen()
+    await act(async () => {})
+    expect(screen.getByRole('region', { name: 'Accounts' })).toHaveTextContent(
+      'Codex · team5h12%updated just now',
+    )
+  })
+
   it('says nothing about agents before the first snapshot', () => {
     renderScreen({ sessions: [], ready: false })
     expect(screen.queryByText(/No agent is running/)).toBeNull()

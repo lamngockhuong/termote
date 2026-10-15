@@ -14,7 +14,17 @@ const SESSIONS: Session[] = [
 type Props = ComponentProps<typeof AppHeader>
 
 function renderHeader(overrides: Partial<Props> = {}) {
-  const props: Props = {
+  const props = headerProps(overrides)
+  render(
+    <ThemeProvider>
+      <AppHeader {...props} />
+    </ThemeProvider>,
+  )
+  return props
+}
+
+function headerProps(overrides: Partial<Props> = {}): Props {
+  return {
     isMobile: false,
     session: SESSIONS[0],
     groupSessions: SESSIONS,
@@ -45,18 +55,29 @@ function renderHeader(overrides: Partial<Props> = {}) {
     },
     ...overrides,
   }
-  render(
-    <ThemeProvider>
-      <AppHeader {...props} />
-    </ThemeProvider>,
-  )
-  return props
 }
 
 const TWO_VIEWS = [
   { id: 'terminal', label: 'Terminal', Icon: SquareTerminal },
   { id: 'chat', label: 'Chat', Icon: MessageSquare },
 ]
+
+describe('AppHeader — usage chip', () => {
+  it('shows the chip it is given, on desktop and mobile', () => {
+    for (const isMobile of [false, true]) {
+      const { unmount } = render(
+        <ThemeProvider>
+          <AppHeader
+            {...headerProps({ isMobile })}
+            usageChip={<span>ctx 72%</span>}
+          />
+        </ThemeProvider>,
+      )
+      expect(screen.getByText('ctx 72%')).toBeInTheDocument()
+      unmount()
+    }
+  })
+})
 
 describe('AppHeader — desktop', () => {
   beforeEach(() => {

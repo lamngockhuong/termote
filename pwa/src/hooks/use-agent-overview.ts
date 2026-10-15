@@ -1,5 +1,9 @@
 import { useSyncExternalStore } from 'react'
-import { fetchOverview, type OverviewPane } from './use-mux-api'
+import {
+  fetchOverview,
+  type OverviewAccount,
+  type OverviewPane,
+} from './use-mux-api'
 
 // Every agent's summary (/api/mux/overview), polled while the overview is
 // shown and the page is visible: one read for every card, shared by every
@@ -13,12 +17,19 @@ let period = OVERVIEW_POLL
 export interface OverviewState {
   // By pane id
   panes: ReadonlyMap<string, OverviewPane>
+  // The rate limits of every Codex account a pane uses
+  accounts: readonly OverviewAccount[]
   loaded: boolean
   // The last read failed; the panes are the last ones read
   error: boolean
 }
 
-const INITIAL: OverviewState = { panes: new Map(), loaded: false, error: false }
+const INITIAL: OverviewState = {
+  panes: new Map(),
+  accounts: [],
+  loaded: false,
+  error: false,
+}
 
 let state = INITIAL
 const listeners = new Set<() => void>()
@@ -42,6 +53,7 @@ async function read() {
     const o = await fetchOverview()
     state = {
       panes: new Map(o.panes.map((p) => [p.paneId, p])),
+      accounts: o.accounts ?? [],
       loaded: true,
       error: false,
     }

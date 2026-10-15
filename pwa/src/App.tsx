@@ -43,6 +43,7 @@ import { Toast, type ToastAction, type ToastVariant } from './components/toast'
 import { Banner } from './components/ui/banner'
 import { Button } from './components/ui/button'
 import { ConfirmDialog } from './components/ui/confirm-dialog'
+import { HeaderUsageChip } from './components/usage-chip'
 import {
   WorktreeDialog,
   WorktreeRemoveDialog,
@@ -1308,6 +1309,16 @@ export default function App({
             viewId={currentView.id}
             onViewChange={changeView}
             onOpenOverview={openOverview}
+            usageChip={
+              <HeaderUsageChip
+                paneId={activeSession.paneId}
+                hasAgent={activeSession.hasAgent}
+                enabled={settings.showUsageChip}
+                pollInterval={settings.pollInterval * 1000}
+                isMobile={isMobile}
+                onOpen={openOverview}
+              />
+            }
             viewPanelId={viewPanelId}
             panelViews={panelViews}
             sidePanelId={sidePanelView ? sidePanelId : null}

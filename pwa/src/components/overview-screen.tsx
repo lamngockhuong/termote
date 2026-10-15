@@ -12,6 +12,7 @@ import {
   type SidebarFilter,
   summarizePanes,
 } from '../utils/session-filter'
+import { AccountUsageStrip } from './account-usage-strip'
 import { ActivityLog } from './activity-log'
 import { AgentCard } from './agent-card'
 import { AgentFilterBar } from './agent-filter-bar'
@@ -206,6 +207,7 @@ export function OverviewScreen({
             </div>
           ) : (
             <>
+              <AccountUsageStrip accounts={overview.accounts} now={now} />
               <NeedsMeQueue
                 cards={queueCards}
                 readOnly={readOnly}

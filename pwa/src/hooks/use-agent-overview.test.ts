@@ -60,6 +60,26 @@ describe('useAgentOverview', () => {
     expect(mockFetchOverview).toHaveBeenCalledTimes(2)
   })
 
+  it('keeps the accounts, none when the server sends none', async () => {
+    const account = {
+      key: 'k1',
+      agent: 'codex' as const,
+      windows: [{ usedPercent: 2, windowMinutes: 300 }],
+      updatedAt: '2026-10-14T01:00:00.000Z',
+    }
+    mockFetchOverview
+      .mockResolvedValueOnce({ ...page('one'), accounts: [account] })
+      .mockResolvedValue(page('two'))
+    const { result } = renderHook(() => useAgentOverview())
+    expect(result.current.accounts).toEqual([])
+    await act(async () => {})
+    expect(result.current.accounts).toEqual([account])
+    await act(async () => {
+      vi.advanceTimersByTime(OVERVIEW_POLL)
+    })
+    expect(result.current.accounts).toEqual([])
+  })
+
   it('keeps the last read through a failure', async () => {
     mockFetchOverview
       .mockResolvedValueOnce(page('one'))
