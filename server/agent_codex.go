@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Codex writes every thread to <CODEX_HOME>/sessions/<Y>/<M>/<D>/
@@ -168,6 +169,11 @@ func (codexJournal) Parse(r io.Reader, start int64) ([]TranscriptEntry, int64) {
 		case bytes.Contains(line, []byte(`"item_completed"`)),
 			bytes.Contains(line, []byte(`"user_message"`)),
 			bytes.Contains(line, []byte(`"agent_message"`)):
+		case bytes.Contains(line, []byte(`"token_count"`)):
+			// Context and rate limits of the request just answered: they
+			// go on the entry before, so no entry is added.
+			addCodexTokenCount(entries, line)
+			continue
 		case bytes.Contains(line, []byte(`"task_started"`)):
 			turnStart, turnKnown = lineStart, false
 			continue
@@ -190,6 +196,92 @@ func (codexJournal) Parse(r io.Reader, start int64) ([]TranscriptEntry, int64) {
 			entries = append(entries, e)
 		}
 	}
+}
+
+// codexTokenCountRow is a token_count event: the context the last request
+// filled (last_token_usage) in the model's window, and the account's rate
+// limits. Read for the overview only.
+type codexTokenCountRow struct {
+	Timestamp string `json:"timestamp"`
+	Type      string `json:"type"`
+	Payload   struct {
+		Type string `json:"type"`
+		Info *struct {
+			LastTokenUsage *struct {
+				TotalTokens int64 `json:"total_tokens"`
+			} `json:"last_token_usage"`
+			ModelContextWindow int64 `json:"model_context_window"`
+		} `json:"info"`
+		RateLimits *struct {
+			Primary   *codexLimitWindow `json:"primary"`
+			Secondary *codexLimitWindow `json:"secondary"`
+			PlanType  string            `json:"plan_type"`
+		} `json:"rate_limits"`
+	} `json:"payload"`
+}
+
+type codexLimitWindow struct {
+	UsedPercent   float64 `json:"used_percent"`
+	WindowMinutes int     `json:"window_minutes"`
+	ResetsAt      int64   `json:"resets_at"` // Unix seconds
+}
+
+// addCodexTokenCount puts a token_count row's context and rate limits on the
+// last assistant entry of entries; a later row replaces what an earlier one
+// put. A row that cannot be read, or with no assistant entry before it in
+// this read, is skipped: when a tail chunk starts between an entry and its
+// row, the overview shows the turn before until the next row.
+func addCodexTokenCount(entries []TranscriptEntry, line []byte) {
+	i := len(entries) - 1
+	for i >= 0 && entries[i].Role != "assistant" {
+		i--
+	}
+	if i < 0 {
+		return
+	}
+	var row codexTokenCountRow
+	if json.Unmarshal(line, &row) != nil || row.Type != "event_msg" || row.Payload.Type != "token_count" {
+		return
+	}
+	u := entryUsage{noContext: true}
+	if old := entries[i].usage; old != nil {
+		u = *old
+	}
+	if in := row.Payload.Info; in != nil && in.LastTokenUsage != nil && in.ModelContextWindow > 0 {
+		u.contextTokens, u.window, u.noContext = in.LastTokenUsage.TotalTokens, in.ModelContextWindow, false
+	}
+	if l := codexLimitsOf(row); l != nil {
+		u.limits = l
+	}
+	if u.noContext && u.limits == nil {
+		return
+	}
+	entries[i].usage = &u
+}
+
+// codexLimitsOf is the row's rate limits, primary window first; nil when it
+// has none (an API key login) or no readable time.
+func codexLimitsOf(row codexTokenCountRow) *codexLimits {
+	rl := row.Payload.RateLimits
+	ts, err := time.Parse(time.RFC3339Nano, row.Timestamp)
+	if rl == nil || err != nil {
+		return nil
+	}
+	l := codexLimits{plan: rl.PlanType, ts: ts.UTC().Format(activityTimeFormat)}
+	for _, w := range []*codexLimitWindow{rl.Primary, rl.Secondary} {
+		if w == nil || w.WindowMinutes <= 0 {
+			continue
+		}
+		uw := usageWindow{UsedPercent: min(max(w.UsedPercent, 0), 100), WindowMinutes: w.WindowMinutes}
+		if w.ResetsAt > 0 {
+			uw.ResetsAt = time.Unix(w.ResetsAt, 0).UTC().Format(time.RFC3339)
+		}
+		l.windows = append(l.windows, uw)
+	}
+	if len(l.windows) == 0 {
+		return nil
+	}
+	return &l
 }
 
 // codexClippedEntry stands for a completed item too long to decode: a

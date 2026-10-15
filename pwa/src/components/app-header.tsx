@@ -1,5 +1,5 @@
 import { Maximize, Minimize } from 'lucide-react'
-import type { ComponentProps } from 'react'
+import type { ComponentProps, ReactNode } from 'react'
 import type { Session } from '../types/session'
 import { BrandMark } from './brand-mark'
 import {
@@ -53,6 +53,9 @@ interface Props {
   // Opens the overview of every agent (mobile: from the view menu; the
   // desktop has it in the sidebar)
   onOpenOverview?: () => void
+  // How full the open pane's agent is (HeaderUsageChip); renders nothing
+  // when it has nothing to show
+  usageChip?: ReactNode
   viewPanelId: (id: string) => string
   // Desktop: views shown in the side panel, the one open, and its toggle
   panelViews?: ViewOption<string>[]
@@ -97,6 +100,7 @@ function MobileHeader(p: Props) {
       {down && (
         <ConnectionIndicator state={p.connectionState} onRetry={p.onRetry} />
       )}
+      {p.usageChip}
       <ViewMenu
         views={p.views}
         value={p.viewId}
@@ -163,6 +167,7 @@ function DesktopHeader(p: Props) {
       {/* 2px above the border: the controls' middle then sits between the
           middle of the active tab (on the border) and of the others (4px up) */}
       <div className="mb-0.5 flex shrink-0 items-center gap-1">
+        {p.usageChip}
         <ViewSwitcher
           views={p.views}
           value={p.viewId}

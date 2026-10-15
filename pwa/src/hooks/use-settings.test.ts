@@ -272,6 +272,19 @@ describe('useSettings', () => {
     expect(result.current.settings.stuckMinutes).toBe(30)
   })
 
+  it('shows the usage chip unless turned off', () => {
+    const { result } = renderHook(() => useSettings())
+    expect(result.current.settings.showUsageChip).toBe(true)
+    act(() => result.current.updateSetting('showUsageChip', false))
+    expect(result.current.settings.showUsageChip).toBe(false)
+    localStorage.setItem(
+      'termote-settings',
+      JSON.stringify({ showUsageChip: 0 }),
+    )
+    const again = renderHook(() => useSettings())
+    expect(again.result.current.settings.showUsageChip).toBe(true)
+  })
+
   it('copies on select only once turned on', () => {
     localStorage.setItem(
       'termote-settings',

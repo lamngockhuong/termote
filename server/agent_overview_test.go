@@ -26,11 +26,23 @@ func parseUsageFixture(t *testing.T) []TranscriptEntry {
 }
 
 func TestSummarizeClaudeTranscript(t *testing.T) {
-	sum := summarizeTranscript(parseUsageFixture(t))
+	claude := AgentSession{Agent: "claude"}
+	sum := summarizeTranscript(parseUsageFixture(t), claude)
 	// The last message's rows repeat one usage: it is taken once; neither
 	// the sidechain's nor the <synthetic> error row's is read.
 	if sum.usage == nil || sum.usage.ContextTokens != 250 || sum.usage.Model != "claude-model-b" {
 		t.Errorf("usage = %+v", sum.usage)
+	}
+	// No --model seen: 200k assumed, not exact.
+	if u := sum.usage; u.ContextWindow != claudeWindowDefault || u.ContextPercent == nil || *u.ContextPercent != 0.1 || u.Exact {
+		t.Errorf("share = %+v", u)
+	}
+	claude.ClaudeWindow = claudeWindowLarge
+	if u := summarizeTranscript(parseUsageFixture(t), claude).usage; u.ContextWindow != claudeWindowLarge || !u.Exact {
+		t.Errorf("share with --model [1m] = %+v", u)
+	}
+	if sum.limits != nil {
+		t.Errorf("claude limits = %+v", sum.limits)
 	}
 	// The error is what the agent last showed.
 	if sum.lastText != "API Error: overloaded" {
@@ -40,7 +52,7 @@ func TestSummarizeClaudeTranscript(t *testing.T) {
 	if sum.lastTS != "2026-10-13T09:00:07.500Z" {
 		t.Errorf("lastTs = %q", sum.lastTS)
 	}
-	if empty := summarizeTranscript(nil); empty != (transcriptSummary{}) {
+	if empty := summarizeTranscript(nil, claude); empty != (transcriptSummary{}) {
 		t.Errorf("empty = %+v", empty)
 	}
 }
@@ -51,9 +63,89 @@ func TestSummarizeCodexTranscript(t *testing.T) {
 		t.Fatal(err)
 	}
 	entries, _ := codexJournal{}.Parse(bytes.NewReader(b), 0)
-	sum := summarizeTranscript(entries)
-	if sum.usage != nil || sum.lastTS == "" || sum.lastText == "" {
+	sum := summarizeTranscript(entries, AgentSession{Agent: "codex"})
+	if sum.usage != nil || sum.limits != nil || sum.lastTS == "" || sum.lastText == "" {
 		t.Errorf("codex = %+v", sum)
+	}
+}
+
+func TestSummarizeCodexUsage(t *testing.T) {
+	sum := summarizeTranscript(parseCodexUsageFixture(t), AgentSession{Agent: "codex"})
+	u := sum.usage
+	if u == nil || u.ContextTokens != 50_307 || u.ContextWindow != 258_400 || u.ContextPercent == nil ||
+		*u.ContextPercent != 15.5 || !u.Exact || u.Model != "" {
+		t.Errorf("usage = %+v", u)
+	}
+	if sum.limits == nil || sum.limits.windows[0].UsedPercent != 3.5 {
+		t.Errorf("limits = %+v", sum.limits)
+	}
+	// A limits-only row on the last entry: the context comes from the one
+	// before it.
+	entries := []TranscriptEntry{
+		{Role: "assistant", usage: &entryUsage{contextTokens: 40_000, window: 100_000}},
+		{Role: "assistant", usage: &entryUsage{noContext: true, limits: &codexLimits{ts: "t"}}},
+	}
+	sum = summarizeTranscript(entries, AgentSession{Agent: "codex"})
+	if sum.usage == nil || sum.usage.ContextTokens != 40_000 || sum.limits == nil || sum.limits.ts != "t" {
+		t.Errorf("limits only last = %+v, %+v", sum.usage, sum.limits)
+	}
+}
+
+func TestGatherAccounts(t *testing.T) {
+	older := &codexLimits{plan: "plus", ts: "2026-10-14T01:00:00.000Z", windows: []usageWindow{{UsedPercent: 1, WindowMinutes: 300}}}
+	newer := &codexLimits{plan: "plus", ts: "2026-10-14T02:00:00.000Z", windows: []usageWindow{{UsedPercent: 9, WindowMinutes: 300}}}
+	other := &codexLimits{plan: "pro", ts: "2026-10-14T00:00:00.000Z", windows: []usageWindow{{UsedPercent: 5, WindowMinutes: 10080}}}
+	if got := gatherAccounts(nil); got != nil {
+		t.Errorf("none = %+v", got)
+	}
+	got := gatherAccounts([]paneLimits{{"a", older}, {"b", other}, {"a", newer}, {"a", older}})
+	if len(got) != 2 || got[0].Key != "a" || got[0].UpdatedAt != newer.ts || got[0].Windows[0].UsedPercent != 9 ||
+		got[0].Agent != "codex" || got[1].Key != "b" || got[1].Plan != "pro" {
+		t.Errorf("accounts = %+v", got)
+	}
+}
+
+func TestOverviewCodexAccounts(t *testing.T) {
+	home := t.TempDir()
+	b, _ := os.ReadFile("testdata/codex/rollout-usage-0.162.1.jsonl")
+	rollout := writeRollout(t, home, testCodexID, string(b))
+	m := &overviewFakeMux{filesFakeMux: filesFakeMux{fakeMux: fakeMux{snap: agentPanes(2)}},
+		s: AgentSession{Agent: "codex", ID: testCodexID, CodexHome: home, Rollout: rollout}, found: true}
+	mux, _ := newOverviewServer(t, m)
+	serve(mux, httptest.NewRequest(http.MethodGet, "/api/mux/snapshot", nil))
+
+	rec := serve(mux, httptest.NewRequest(http.MethodGet, "/api/mux/overview", nil))
+	var res overviewResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
+		t.Fatal(err)
+	}
+	// Two panes on one CODEX_HOME: one account, named by both.
+	key := accountKey(home)
+	if len(res.Accounts) != 1 || res.Accounts[0].Key != key || res.Accounts[0].Plan != "team" ||
+		res.Accounts[0].UpdatedAt != "2026-10-14T01:06:10.000Z" || len(res.Accounts[0].Windows) != 2 {
+		t.Fatalf("accounts = %+v", res.Accounts)
+	}
+	for _, p := range res.Panes {
+		if p.AccountKey != key || p.Usage == nil || p.Usage.ContextPercent == nil || *p.Usage.ContextPercent != 15.5 {
+			t.Errorf("pane = %+v", p)
+		}
+	}
+	// Neither the CODEX_HOME, the rollout nor the fields left out are sent.
+	for _, s := range []string{home, filepath.Base(rollout), "limit_id", "credits", "plan_type"} {
+		if strings.Contains(rec.Body.String(), s) {
+			t.Errorf("overview names %s: %s", s, rec.Body)
+		}
+	}
+
+	// A Claude pane has no account, and with no Codex pane the field is
+	// left out.
+	dir := t.TempDir()
+	cb, _ := os.ReadFile("testdata/claude/transcript-usage.jsonl")
+	writeTranscript(t, dir, testSessionID, string(cb))
+	m.s = AgentSession{Agent: "claude", ID: testSessionID, ClaudeDir: dir}
+	rec = serve(mux, httptest.NewRequest(http.MethodGet, "/api/mux/overview", nil))
+	if strings.Contains(rec.Body.String(), "accounts") || strings.Contains(rec.Body.String(), "accountKey") {
+		t.Errorf("claude only = %s", rec.Body)
 	}
 }
 
@@ -103,7 +195,7 @@ func newOverviewServer(t *testing.T, m *overviewFakeMux) (*http.ServeMux, *agent
 	mux := http.NewServeMux()
 	agent := registerMuxRoutes(mux, m, newStreamTokenStore(), nil, nil)
 	agent.files = registerFilesRoutes(mux, m, parseAllowedHosts("", false), nil)
-	agent.overview = newTTLCache[[]overviewPane](0)
+	agent.overview = newTTLCache[overviewRead](0)
 	agent.sessions = newTTLCache[agentLookup](0)
 	return mux, agent
 }
@@ -155,6 +247,35 @@ func TestOverviewRoute(t *testing.T) {
 	serve(mux, httptest.NewRequest(http.MethodGet, "/api/mux/snapshot", nil))
 	snapCalls := len(m.calls)
 
+	// One pane (the header's chip): its summary, no changes asked for.
+	var one overviewResponse
+	rec := serve(mux, httptest.NewRequest(http.MethodGet, "/api/mux/overview?pane=w1:pa", nil))
+	if err := json.Unmarshal(rec.Body.Bytes(), &one); err != nil {
+		t.Fatal(err)
+	}
+	if len(one.Panes) != 1 || one.Panes[0].Usage == nil || len(one.Panes[0].Unavailable) != 0 {
+		t.Errorf("one pane = %+v", one.Panes)
+	}
+	agent.changes.mu.Lock()
+	queued := len(agent.changes.queued) + len(agent.changes.byKey)
+	agent.changes.mu.Unlock()
+	if queued != 0 {
+		t.Errorf("a one-pane read queued changes: %d", queued)
+	}
+	// A pane with no agent, or none at all: nothing, and nothing cached.
+	for _, id := range []string{"w1:shell", "nope"} {
+		rec := serve(mux, httptest.NewRequest(http.MethodGet, "/api/mux/overview?pane="+id, nil))
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"panes":[]`) {
+			t.Errorf("pane %s = %d %s", id, rec.Code, rec.Body)
+		}
+	}
+	agent.overview.mu.Lock()
+	_, cached := agent.overview.entries["pane\x00nope"]
+	agent.overview.mu.Unlock()
+	if cached {
+		t.Error("an unknown pane was cached")
+	}
+
 	first := getOverview(t, mux, false).Panes
 	if len(first) != 1 || first[0].PaneID != "w1:pa" || first[0].Key != "w1:pa" {
 		t.Fatalf("panes = %+v", first)
@@ -174,7 +295,7 @@ func TestOverviewRoute(t *testing.T) {
 	}
 
 	// Neither the repo, the transcript nor its dir is ever named.
-	rec := serve(mux, httptest.NewRequest(http.MethodGet, "/api/mux/overview", nil))
+	rec = serve(mux, httptest.NewRequest(http.MethodGet, "/api/mux/overview", nil))
 	for _, path := range []string{repo, dir} {
 		if strings.Contains(rec.Body.String(), path) {
 			t.Errorf("overview names %s: %s", path, rec.Body)
@@ -360,5 +481,14 @@ func TestOverviewChangesQueue(t *testing.T) {
 	})
 	if _, ok := c.byKey["a"]; ok {
 		t.Error("changes of a pane nobody asked for were kept")
+	}
+}
+
+func TestPaneLimitsOfKeepsPaneOrder(t *testing.T) {
+	a, b := &codexLimits{ts: "a"}, &codexLimits{ts: "b"}
+	panes := []overviewPane{{AccountKey: "k2"}, {}, {AccountKey: "k1"}}
+	got := paneLimitsOf(panes, []*codexLimits{b, nil, a})
+	if len(got) != 2 || got[0].key != "k2" || got[0].limits != b || got[1].key != "k1" || got[1].limits != a {
+		t.Errorf("paneLimitsOf = %+v", got)
 	}
 }

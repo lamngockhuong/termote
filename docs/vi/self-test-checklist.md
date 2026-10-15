@@ -411,6 +411,16 @@ Mở bằng nút lưới trên sidebar (máy tính) hoặc mục "Agent overview
 - [ ] Agent working mà không ghi gì quá Settings → "Stuck agent" (mặc định 10 phút) thì thẻ có dòng
       đồng hồ cát; dòng đó mất khi agent ghi lại; không bao giờ hiện khi agent con của nó còn ghi
 - [ ] Mở Overview khi có 20 repo, Changes view vẫn nhanh như trước
+- [ ] Thẻ Claude hiện % context, số token và model; Claude Code chạy Opus 5.5 không có `--model` thì cửa
+      sổ là 1M, không có `~`; sau `/model claude-sonnet-4-6` thì đổi thành 200k, sau
+      `/model claude-sonnet-4-6[1m]` thì lại là 1M; % khớp statusline và `/context`
+- [ ] % context của thẻ Codex khớp số "% context left" Codex tự báo (100 trừ đi số đó, lệch tối đa 1%)
+- [ ] Có pane Codex dùng gói ChatGPT: dải Accounts hiện cửa sổ 5h và 7d, giờ reset và
+      "updated N min ago"; quá 30 phút thì mờ đi; không còn pane Codex thì dải biến mất
+- [ ] Chip trên header hiện `ctx N%` khi pane đang chạy agent (cộng cửa sổ Codex đầy nhất), trên điện
+      thoại chỉ hiện số lớn hơn, shell thường thì không có; bấm vào thì mở overview, focus nằm ở thẻ của pane đó và thẻ có viền accent cho tới khi focus
+      rời đi; tắt Settings →
+      "Agent usage in the header" thì chip ẩn
 - [ ] History trên thẻ: dải một giờ khớp với các dòng của agent đó trong Activity; di chuyển window
       tmux (hoặc đổi tên session Zellij từ Termote) xong, dải vẫn là của đúng agent đó
 - [ ] Một phiên Claude Code chạy 2-3 agent con nền: History hiện chúng là `running` tới khi từng cái

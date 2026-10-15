@@ -245,7 +245,7 @@ existing pane from the last snapshot.
 
 ```bash
 GET    /api/mux/snapshot          → {apiVersion, backend, caps, serverNow, groups:[{id,name,worktree?:{linked,branch?},tabs:[{id,key,name,active,processes?,panes:[{id,active,title,agent?:{name,status,since?,sinceFirstSeen?},process?}]}]}]}
-GET    /api/mux/overview          → {serverNow, panes:[{paneId,key,lastText?,lastTs?,branch?,changed?,changedTruncated?,usage?:{contextTokens,model?},unavailable?:["transcript"|"changes"]}]}
+GET    /api/mux/overview[?pane=]  → {serverNow, panes:[{paneId,key,lastText?,lastTs?,branch?,changed?,changedTruncated?,usage?:{contextTokens,model?,contextWindow?,contextPercent?,exact},accountKey?,unavailable?:["transcript"|"changes"]}], accounts?:[{key,agent:"codex",plan?,windows:[{usedPercent,windowMinutes,resetsAt?}],updatedAt}]}
 GET    /api/mux/activity?after=   → {events:[{seq,ts,key,groupId,tabId,paneId,agent,from,to}], latest, oldest, reset?, serverNow} | 400 invalid_after
 GET    /api/mux/panes/{id}/agent/subagents → {nodes:[{id,type,description?,status:running|done|error,statusGuessed?,startTs?,endTs?,lastTool?,depth,children}], truncated?} | 404
 POST   /api/mux/tabs               body: {groupId, name}       → {ok, id}
@@ -1113,6 +1113,35 @@ the transcript tail comes through the Chat view's read cache. Branch and changes
 background, one `git status` at a time, only when a git slot is free and without backing the
 root off, so the Changes view always comes first; until read, a pane answers `unavailable:
 ["changes"]` (always on psmux, which has no Files).
+
+How full the context is (`server/agent_context_window.go`): Claude's transcript records the
+tokens of each request but never the window. Claude Code (from 2.1.270) writes the model it runs as
+an `attachment` row of type `model` when the session starts and on each `/model` switch
+(`identity.modelId`, e.g. `claude-opus-5[1m]`); `claudeModels` (`server/agent_claude_model.go`)
+keeps the last one per transcript, scanning only what was appended since its last scan; a read
+that finds a scan still running does without it (`TryLock`) instead of waiting on a first scan of a
+large transcript.
+`claudeWindowOfModel` tells the window from the id as Claude Code's own model table does
+(`context.native_1m`, 2.1.300): 1M for an id ending in `[1m]`, for every model from the 5 family on
+and for Opus from 4.7; 200k for any other (all `exact`). Without a model row (an older Claude Code)
+the `--model` of its argv decides (read on Linux, macOS and Windows; an alias such as `opus` tells
+nothing), then the model of the request's own row, which never carries the `[1m]` of an opt-in and
+so only proves a 1M model of its own. Otherwise it is assumed 200k (`exact: false`, shown with `~`),
+unless the tokens already exceed 200k, which only the 1M window
+holds. `CLAUDE_CODE_DISABLE_1M_CONTEXT` in the agent's environment is not read. Codex writes an `event_msg`/`token_count` row
+after each request: `last_token_usage.total_tokens` in `model_context_window`; the share leaves out
+Codex's 12k baseline on both sides, as Codex's own "% context left" does
+(`TokenUsage::percent_of_context_window_remaining`, checked against 0.162.1). The parser puts that
+row on the last assistant entry before it and adds no entry, so the transcript is unchanged.
+
+The same rows carry the account's rate limits (5 h and 7 d windows for a ChatGPT plan), returned
+once per `CODEX_HOME` as `accounts`, the newest row of any pane using it winning; panes name theirs
+by `accountKey`. An API-key login records none, and there is no line. `?pane=<id>`, which the
+header's usage chip polls, reads that pane alone and never queues its changes, so the chip costs
+what one card does; the overview screen keeps its own full read. Claude's 5 h and weekly
+limits are not shown: Claude Code writes them nowhere termote reads (only its status line input and
+an undocumented OAuth endpoint have them, and termote neither edits `settings.json` nor reads
+credentials).
 
 When a Claude session has running subagents, `lastTs` is the newest of the transcript's last row
 and those subagents' files, so an agent waiting on its subagents is not taken as stuck. That read

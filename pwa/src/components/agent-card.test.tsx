@@ -63,6 +63,57 @@ describe('statusAge', () => {
 })
 
 describe('AgentCard', () => {
+  it('shows how full the context is, ~ when the window is assumed', () => {
+    const usage = {
+      contextTokens: 144_000,
+      contextWindow: 200_000,
+      contextPercent: 72,
+      model: 'claude-model',
+    }
+    const { rerender } = renderCard({
+      overview: {
+        paneId: 'w1:p1',
+        key: 'w1:p1',
+        usage: { ...usage, exact: true },
+      },
+    })
+    const open = screen.getByRole('button', { name: /^Open chat/ })
+    expect(open).toHaveTextContent('72%144k/200k· claude-model')
+    expect(screen.getByText('72%')).toHaveClass('text-warning')
+    expect(screen.getByText('72%')).not.toHaveAttribute('title')
+    expect(
+      screen.getByRole('meter', { hidden: true, name: 'Context' }),
+    ).toHaveAttribute('aria-valuetext', '72%, 144k of 200k tokens')
+    rerender(
+      <AgentCard
+        session={SESSION}
+        pane={pane()}
+        where="build"
+        now={NOW}
+        paneKey="w1:p1"
+        events={[]}
+        opensChat
+        onOpen={vi.fn()}
+        overview={{
+          paneId: 'w1:p1',
+          key: 'w1:p1',
+          usage: {
+            contextTokens: 190_000,
+            contextWindow: 200_000,
+            contextPercent: 95,
+            exact: false,
+          },
+        }}
+      />,
+    )
+    expect(screen.getByText('~95%')).toHaveClass('text-danger')
+    expect(screen.getByText('~95%')).toHaveAttribute(
+      'title',
+      'Window assumed: the agent was not started with --model',
+    )
+    expect(open).not.toHaveTextContent('claude-model')
+  })
+
   it('shows the status, place, last words, changes and context', () => {
     const { onOpen } = renderCard({
       worktree: true,

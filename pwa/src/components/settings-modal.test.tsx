@@ -69,6 +69,7 @@ const DEFAULT_SETTINGS: Settings = {
   findExcludes: FIND_EXCLUDES_DEFAULT,
   notifyAgents: false,
   stuckMinutes: 10,
+  showUsageChip: true,
 }
 
 describe('SettingsModal', () => {
@@ -683,6 +684,14 @@ describe('SettingsModal', () => {
     expect(
       screen.getByText('List sessions waiting on you at the top of each group'),
     ).toBeInTheDocument()
+  })
+
+  it('toggles the usage chip, on by default', () => {
+    const { onUpdateSetting } = renderModal()
+    const sw = screen.getByRole('switch', { name: 'Agent usage in the header' })
+    expect(sw).toHaveAttribute('aria-checked', 'true')
+    fireEvent.click(sw)
+    expect(onUpdateSetting).toHaveBeenCalledWith('showUsageChip', false)
   })
 
   it('reflects stored sortBlockedFirst state', () => {

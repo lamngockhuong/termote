@@ -394,8 +394,18 @@ Open it from the sidebar's grid button (desktop) or the view menu's "Agent overv
       picking a session leaves it; Copy link copies `#/overview`
 - [ ] One card per pane running an agent, in every group: blocked first, then working, done, idle,
       the longest in its state first; the time matches on two devices with clocks set apart
-- [ ] A Claude card shows its last message, branch and changed files, and its context tokens and
-      model; a Codex card has no tokens; psmux shows no branch or changed files, and no error
+- [ ] A Claude card shows its last message, branch and changed files, and its context share, tokens
+      and model; psmux shows no branch or changed files, and no error
+- [ ] Claude Code on Opus 5.5 with no `--model`: the card's window is 1M, no `~`; after
+      `/model claude-sonnet-4-6` it turns 200k, after `/model claude-sonnet-4-6[1m]` 1M again; the
+      share matches the status line and `/context`
+- [ ] A Codex card's share matches Codex's own "% context left" (100 minus it, within 1%)
+- [ ] With a Codex pane on a ChatGPT plan, the Accounts strip shows its 5h and 7d windows, when each
+      resets and "updated N min ago"; dimmed after 30 minutes; gone with no Codex pane
+- [ ] The header chip shows `ctx N%` for a pane running an agent (and the fullest Codex window), only
+      the fuller part on a phone, nothing on a plain shell; it opens the overview with focus on that pane's card, bordered in
+      accent until focus leaves it; Settings →
+      "Agent usage in the header" off hides it
 - [ ] tmux/psmux: the note "Only the active pane of each window is tracked"; Herdr and Zellij: none
 - [ ] A Claude card opens its Chat view (also in another group); its terminal button opens the
       terminal; a card of an agent without Chat opens the terminal

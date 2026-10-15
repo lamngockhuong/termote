@@ -244,6 +244,67 @@ test.describe('agent overview with an agent', () => {
     ).toBeVisible()
   })
 
+  test('context share, the Codex account strip and the header chip', async ({ page }) => {
+    // The stand-in writes no usage: the server's answer gets a Claude
+    // window share and a Codex account on top.
+    // Both reads: the overview's, and the header chip's ?pane=
+    await page.route(/\/api\/mux\/overview(\?|$)/, async (route) => {
+      const res = await route.fetch()
+      const body = await res.json()
+      for (const p of body.panes) {
+        p.usage = {
+          contextTokens: 144000,
+          contextWindow: 200000,
+          contextPercent: 72,
+          exact: false,
+          model: 'claude-model',
+        }
+        p.accountKey = 'e2e-account'
+      }
+      body.accounts = [{
+        key: 'e2e-account',
+        agent: 'codex',
+        plan: 'plus',
+        windows: [
+          {
+            usedPercent: 40,
+            windowMinutes: 300,
+            resetsAt: new Date(Date.now() + 3_600_000).toISOString(),
+          },
+          { usedPercent: 95, windowMinutes: 10080 },
+        ],
+        updatedAt: new Date().toISOString(),
+      }]
+      await route.fulfill({ response: res, json: body })
+    })
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await open(page, '#/overview')
+    const strip = page.getByRole('region', { name: 'Accounts' })
+    await expect(strip).toContainText('Codex · plus', { timeout: 20000 })
+    await expect(strip).toContainText('updated just now')
+    await expect(strip.getByRole('meter', { name: 'Codex 7d limit' })).toHaveAttribute(
+      'data-level',
+      'danger',
+    )
+    const card = page.locator('[data-status]', {
+      has: page.getByRole('button', { name: new RegExp(`, (.* / )?${windowName}$`) }),
+    })
+    await expect(card).toContainText('~72%144k/200k')
+
+    // In the pane, the header chip says the same and opens the overview
+    await card.getByRole('button', { name: /^Open terminal: / }).click()
+    await expect(overview(page)).toBeHidden()
+    const chip = page.getByRole('button', {
+      name: 'Agent usage: context ~72%, Codex 7d limit 95%. Open the agent overview',
+    })
+    await expect(chip).toHaveText('ctx ~72% · 7d 95%', { timeout: 20000 })
+    await chip.click()
+    await expect(overview(page)).toBeVisible()
+    // ...on its own card, which takes the focus and an accent border
+    await expect(card.getByRole('button', { name: /^Open chat: / })).toBeFocused()
+    await expect(card).toHaveAttribute('data-highlighted', 'true')
+  })
+
   test('a dialog is answered from the queue, never moving on by itself', async ({ page }) => {
     test.setTimeout(90000)
     await open(page, '#/overview')

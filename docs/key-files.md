@@ -55,6 +55,11 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/utils/needs-me-queue.ts`                 | The queue's rules: card on top pinned, answers never move on  |
 | `pwa/src/utils/agent-stuck.ts`                    | A working agent quiet past the setting (stuck hint)           |
 | `pwa/src/hooks/use-agent-overview.ts`             | Polls `/api/mux/overview` while the overview shows            |
+| `pwa/src/hooks/use-pane-overview.ts`              | Header chip: polls `/api/mux/overview?pane=` for one pane     |
+| `pwa/src/components/account-usage-strip.tsx`      | Overview: each Codex account's rate limit windows             |
+| `pwa/src/components/usage-meter.tsx`              | Thin usage bar (`role="meter"`), coloured by level            |
+| `pwa/src/components/usage-chip.tsx`               | Header chip: the open pane's context share and Codex limit    |
+| `pwa/src/utils/usage-format.ts`                   | Usage labels: level, `~72%`, `5h`/`7d`, "resets 14:30"        |
 | `pwa/src/utils/overview-order.ts`                 | Overview order: blocked, working, done, idle; oldest first    |
 | `pwa/src/components/status-timeline.tsx`          | A card's last hour by status, from the activity log           |
 | `pwa/src/utils/timeline-segments.ts`              | Cuts a pane's events (by key) into the strip's segments       |
@@ -130,7 +135,9 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/mux_pane_text.go`                         | `GET panes/{id}/text`: pane history as plain text, capped     |
 | `server/agent.go`                                 | `/api/mux/panes/{id}/agent/*` routes, transcript reads        |
 | `server/agent_activity.go`                        | Status since and change log of every agent (`/activity`)      |
-| `server/agent_overview.go`                        | `/overview`: each agent's last text, tokens, git changes      |
+| `server/agent_overview.go`                        | `/overview`: each agent's last text, context, git changes     |
+| `server/agent_context_window.go`                  | Window of a model id, context share, Codex account key        |
+| `server/agent_claude_model.go`                    | Last model a Claude Code transcript names                     |
 | `server/agent_subagents.go`                       | `agent/subagents`: a Claude session's subagent tree           |
 | `server/agent_claude.go`                          | Claude Code transcript (JSONL) and session file               |
 | `server/agent_claude_prompt.go`                   | Reads a Claude Code screen: input box, dialogs                |

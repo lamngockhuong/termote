@@ -28,7 +28,8 @@ state, the agent that has been in it longest comes first. Each card shows:
 - the session and tab it runs in, and **worktree** for a Herdr worktree;
 - its last message;
 - the branch and the number of changed files of its directory (not on Windows with psmux);
-- Claude Code only: the tokens its context holds now, and the model.
+- how full its context is: a bar, the share of the context window and the tokens, for example
+  `72% 144k/200k`, and the model for Claude Code. Bars turn yellow from 70% and red from 90%.
 
 Tap a card to open the agent: its Chat view for Claude Code and Codex, else its terminal. A Chat card
 also has a terminal button. The filter above the cards counts agents and is the overview's own: it
@@ -38,6 +39,24 @@ does not change the sidebar's.
 With tmux and psmux, only the active pane of each window is watched: an agent in another split of the
 same window has no card. Herdr and Zellij watch every pane.
 </Aside>
+
+## Context and limits
+
+For Claude Code the window follows the model it runs, as its transcript records it at start and on
+each `/model` switch: 1M for the models that have it of their own (every model from Claude 5 on, Opus
+from 4.7) and for a `[1m]` model, 200k for any other. When no model can be read, the window is assumed
+to be 200k and the share is marked `~`, until the context grows past 200k. For
+Codex the share is the one Codex reports itself ("% context left", turned into the share used).
+
+With a Codex pane signed in to a ChatGPT plan, an **Accounts** strip above the cards shows that
+account's limits: a bar for the 5-hour and the weekly window, when each resets, and when Codex last
+recorded them. Numbers older than 30 minutes are dimmed, since the account may have been used
+elsewhere since. There is no such line for Claude Code: its limits are not written anywhere Termote
+reads.
+
+The header also shows a small chip for the pane you have open, such as `ctx 72% · 7d 95%` (the limit
+only for Codex). On a phone it shows only the higher of the two. Tap it to open the overview on that pane's card. Turn it
+off in **Settings > Sessions > Agent usage in the header**.
 
 ## Needs you
 

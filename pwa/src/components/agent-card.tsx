@@ -1,14 +1,20 @@
 import { ChevronDown, GitBranch, Hourglass, SquareTerminal } from 'lucide-react'
-import { memo, useId, useState } from 'react'
+import { memo, type Ref, useId, useState } from 'react'
 import { agentLabel } from '../chat-agents'
-import type { ActivityEvent, OverviewPane } from '../hooks/use-mux-api'
+import type {
+  ActivityEvent,
+  OverviewPane,
+  OverviewUsage,
+} from '../hooks/use-mux-api'
 import { useSubagents } from '../hooks/use-subagents'
 import type { AgentStatus, Session, SessionPane } from '../types/session'
 import { formatAgo } from '../utils/format-ago'
+import { percentLabel, usageLevel } from '../utils/usage-format'
 import { AgentStatusBadge } from './agent-status-badge'
 import { StatusTimeline } from './status-timeline'
 import { SubagentTree, subagentSummary } from './subagent-tree'
 import { FOCUS_RING, IconButton } from './ui/button'
+import { UsageMeter } from './usage-meter'
 
 const STATUS_WORDS: Record<AgentStatus, string> = {
   blocked: 'Needs you',
@@ -23,6 +29,52 @@ export function formatTokens(n: number): string {
   if (n < 10_000) return `${(n / 1000).toFixed(1)}k`
   if (n < 1_000_000) return `${Math.round(n / 1000)}k`
   return `${(n / 1_000_000).toFixed(1)}M`
+}
+
+const LEVEL_TEXT = {
+  normal: 'text-fg-muted',
+  warning: 'text-warning',
+  danger: 'text-danger',
+}
+
+// How full the agent's context is: a bar, the share ("~" when the window is
+// assumed) and the tokens of the window; only the tokens from a server that
+// does not know the window.
+function ContextUsage({ usage }: { usage: OverviewUsage }) {
+  const { contextTokens, contextWindow, contextPercent, exact, model } = usage
+  const known = !!contextWindow && contextPercent !== undefined
+  return (
+    <span className="flex min-w-0 items-center gap-1.5">
+      {known ? (
+        <>
+          <UsageMeter
+            percent={contextPercent}
+            label="Context"
+            valueText={`${percentLabel(contextPercent, exact)}, ${formatTokens(contextTokens)} of ${formatTokens(contextWindow)} tokens`}
+            className="w-12 shrink-0"
+          />
+          <span
+            className={`shrink-0 tabular-nums ${LEVEL_TEXT[usageLevel(contextPercent)]}`}
+            title={
+              exact
+                ? undefined
+                : 'Window assumed: the agent was not started with --model'
+            }
+          >
+            {percentLabel(contextPercent, exact)}
+          </span>
+          <span className="shrink-0 tabular-nums">
+            {formatTokens(contextTokens)}/{formatTokens(contextWindow)}
+          </span>
+        </>
+      ) : (
+        <span className="shrink-0 tabular-nums">
+          {formatTokens(contextTokens)} tokens
+        </span>
+      )}
+      {model && <span className="truncate">· {model}</span>}
+    </span>
+  )
 }
 
 // How long the agent has been in its status: "≥" when the server saw it
@@ -67,11 +119,15 @@ interface Props {
     pane: SessionPane,
     view: 'chat' | 'terminal',
   ) => void
+  // The card the overview was opened on: its open button, and an accent
+  // border until focus leaves it
+  openRef?: Ref<HTMLButtonElement>
+  highlighted?: boolean
 }
 
 // One agent of the overview: its status and how long it has been in it,
 // where it runs, its last message, its branch and changed files, and how
-// full Claude's context is. The whole card opens the pane.
+// full its context is. The whole card opens the pane.
 export const AgentCard = memo(function AgentCard({
   session,
   pane,
@@ -86,6 +142,8 @@ export const AgentCard = memo(function AgentCard({
   stuckFor,
   opensChat,
   onOpen,
+  openRef,
+  highlighted,
 }: Props) {
   const detailsId = useId()
   const moreId = useId()
@@ -106,15 +164,19 @@ export const AgentCard = memo(function AgentCard({
     <div
       data-status={status}
       data-stuck={stuckFor !== undefined || undefined}
+      data-highlighted={highlighted || undefined}
       className={`relative rounded-panel border bg-surface ui-terminal:bg-bg ${
-        status === 'blocked'
-          ? 'border-danger/60'
-          : stuckFor !== undefined
-            ? 'border-warning/60'
-            : 'border-border'
+        highlighted
+          ? 'border-accent ring-1 ring-accent'
+          : status === 'blocked'
+            ? 'border-danger/60'
+            : stuckFor !== undefined
+              ? 'border-warning/60'
+              : 'border-border'
       }`}
     >
       <button
+        ref={openRef}
         type="button"
         onClick={() => onOpen(session, pane, opensChat ? 'chat' : 'terminal')}
         aria-label={`${openLabel}: ${name}, ${status ? STATUS_WORDS[status] : 'status unknown'}, ${where}`}
@@ -192,16 +254,7 @@ export const AgentCard = memo(function AgentCard({
                   </span>
                 </span>
               )}
-              {overview?.usage && (
-                <span className="flex min-w-0 items-center gap-1">
-                  <span className="shrink-0 tabular-nums">
-                    {formatTokens(overview.usage.contextTokens)} tokens
-                  </span>
-                  {overview.usage.model && (
-                    <span className="truncate">· {overview.usage.model}</span>
-                  )}
-                </span>
-              )}
+              {overview?.usage && <ContextUsage usage={overview.usage} />}
             </span>
           )}
         </span>

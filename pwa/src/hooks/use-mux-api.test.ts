@@ -510,6 +510,12 @@ describe('fetchOverview', () => {
     expect(calls[0].url).toBe('/api/mux/overview')
   })
 
+  it('reads one pane alone', async () => {
+    const { calls } = mockFetch({ body: { serverNow: 'now', panes: [] } })
+    await fetchOverview('%3 x')
+    expect(calls[0].url).toBe('/api/mux/overview?pane=%253%20x')
+  })
+
   it('throws on a refused read', async () => {
     mockFetch({ body: { error: 'cross-site request rejected' }, status: 403 })
     const err = await fetchOverview().catch((e) => e)

@@ -12,6 +12,7 @@ import {
   type SidebarFilter,
   summarizePanes,
 } from '../utils/session-filter'
+import { AccountUsageStrip } from './account-usage-strip'
 import { ActivityLog } from './activity-log'
 import { AgentCard } from './agent-card'
 import { AgentFilterBar } from './agent-filter-bar'
@@ -73,6 +74,9 @@ interface Props {
   onClose: () => void
   // Unset (view-only, or nowhere to start one): no button when empty
   onStartAgent?: () => void
+  // The pane whose card takes focus (the header's usage chip); a new
+  // object asks again
+  focusPane?: { paneId: string }
 }
 
 // Every agent the server sees, in every group: those waiting on the user
@@ -93,6 +97,7 @@ export function OverviewScreen({
   onOpen,
   onClose,
   onStartAgent,
+  focusPane,
 }: Props) {
   const overview = useAgentOverview(pollInterval)
   const activity = useActivityLog(pollInterval)
@@ -126,6 +131,25 @@ export function OverviewScreen({
     [cards],
   )
   const shown = cards.filter((c) => matchesPaneFilter(c.pane, filter))
+  // The card asked for takes focus once it is shown (the cards are drawn
+  // only when ready), over the title, and keeps an accent border until focus
+  // leaves it. A card shown after the user moved on takes nothing.
+  const targetRef = useRef<HTMLButtonElement>(null)
+  const focused = useRef<object>(undefined)
+  const [highlighted, setHighlighted] = useState<string>()
+  const target =
+    ready && focusPane && shown.some((c) => c.pane.id === focusPane.paneId)
+      ? focusPane
+      : undefined
+  useEffect(() => {
+    if (!target || focused.current === target) return
+    focused.current = target
+    const at = document.activeElement
+    if (at !== titleRef.current && at !== document.body) return
+    // The target is shown, so its card holds the ref
+    targetRef.current!.focus()
+    setHighlighted(target.paneId)
+  }, [target])
   const groupOf = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups])
   const showGroups = groups.length > 1
   const placeOf = useCallback(
@@ -206,6 +230,7 @@ export function OverviewScreen({
             </div>
           ) : (
             <>
+              <AccountUsageStrip accounts={overview.accounts} now={now} />
               <NeedsMeQueue
                 cards={queueCards}
                 readOnly={readOnly}
@@ -238,7 +263,16 @@ export function OverviewScreen({
                       ? `${group.name} / ${session.name}`
                       : session.name
                     return (
-                      <li key={pane.id}>
+                      <li
+                        key={pane.id}
+                        onBlur={(e) => {
+                          if (!e.currentTarget.contains(e.relatedTarget)) {
+                            setHighlighted((h) =>
+                              h === pane.id ? undefined : h,
+                            )
+                          }
+                        }}
+                      >
                         <AgentCard
                           session={session}
                           pane={pane}
@@ -260,6 +294,10 @@ export function OverviewScreen({
                           )}
                           opensChat={opensChat(pane)}
                           onOpen={onOpen}
+                          openRef={
+                            pane.id === target?.paneId ? targetRef : undefined
+                          }
+                          highlighted={pane.id === highlighted}
                         />
                       </li>
                     )

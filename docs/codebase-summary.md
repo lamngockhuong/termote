@@ -73,6 +73,7 @@ described in [`system-architecture.md`](system-architecture.md), conventions in
 | Chat view (server)                           | `server/agent.go`, then `agent_claude*.go` / `agent_codex*.go`, `agent_input.go`                        |
 | Agent overview (server)                      | `server/agent_activity.go` (status since, log), `agent_overview.go`, `agent_subagents.go`               |
 | Agent overview (PWA)                         | `components/overview-screen.tsx`, `agent-card.tsx`, `needs-me-queue.tsx`, `hooks/use-agent-overview.ts` |
+| Agent usage (context share, Codex limits)    | `server/agent_context_window.go`, `agent_claude_model.go`; PWA `usage-*.tsx`, `account-usage-strip.tsx` |
 | Agent history (PWA)                          | `components/status-timeline.tsx`, `subagent-tree.tsx`, `activity-log.tsx`, `hooks/use-activity-log.ts`  |
 | Starting an agent in a Herdr pane            | `server/agent_start.go`, `pwa/src/hooks/use-start-agent.ts`, `components/start-agent-panel.tsx`         |
 | Files and Changes (server)                   | `server/files.go`, `files_root.go`, `files_git.go`, `files_raw.go`, `files_write.go`, `files_create.go` |

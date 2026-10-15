@@ -29,6 +29,8 @@ type claudeProc struct {
 	procStart string
 	claudeDir string
 	codexHome string
+	// window: the context window Claude Code's argv chose (0: unknown).
+	window int64
 }
 
 // agentTrees caches walks keyed by pane and root pid.
@@ -94,7 +96,7 @@ func sessionOfProc(p claudeProc) (AgentSession, bool) {
 	}
 	return AgentSession{
 		Agent: "claude", ID: f.SessionID, Status: claudeStatus(f.Status),
-		ClaudeDir: p.claudeDir, PID: p.pid, ProcStart: p.procStart,
+		ClaudeDir: p.claudeDir, ClaudeWindow: p.window, PID: p.pid, ProcStart: p.procStart,
 	}, true
 }
 
@@ -146,7 +148,10 @@ func claudeProcOf(pid int, domain string) (claudeProc, bool) {
 	if !ok || start != f.procStart() {
 		return claudeProc{}, false
 	}
-	return claudeProc{agent: "claude", pid: pid, procStart: start, claudeDir: dir}, true
+	// argv is read with the process, once per walk; only the window it
+	// names is kept.
+	return claudeProc{agent: "claude", pid: pid, procStart: start, claudeDir: dir,
+		window: claudeWindowFromArgs(procArgs(pid))}, true
 }
 
 // claudeProcAlive reports whether pid still runs with the start time the
