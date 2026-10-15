@@ -29,7 +29,8 @@ thì agent ở lâu hơn đứng trước. Mỗi thẻ cho biết:
 - session và tab nơi agent chạy, kèm nhãn **worktree** nếu là worktree của Herdr;
 - tin nhắn cuối của agent;
 - branch và số file thay đổi trong thư mục của agent (không có trên Windows dùng psmux);
-- riêng Claude Code: số token context hiện đang chiếm, và model.
+- context đã đầy tới đâu: một thanh, phần trăm cửa sổ context đã dùng và số token, ví dụ
+  `72% 144k/200k`, kèm model với Claude Code. Thanh chuyển vàng từ 70% và đỏ từ 90%.
 
 Chạm vào thẻ để mở agent: Claude Code và Codex mở ở Chat view, agent khác mở terminal. Thẻ có Chat view
 còn có thêm nút mở terminal. Bộ lọc phía trên đếm theo agent và là bộ lọc riêng của màn hình này, không
@@ -39,6 +40,22 @@ làm thay đổi bộ lọc của sidebar.
 Với tmux và psmux, Termote chỉ theo dõi pane đang active của mỗi window: agent nằm ở split khác cùng
 window sẽ không có thẻ. Herdr và Zellij theo dõi mọi pane.
 </Aside>
+
+## Context và hạn mức
+
+Với Claude Code, cửa sổ là 1M khi nó được chạy với `--model <model>[1m]`, là 200k với mọi `--model`
+khác. Chạy không có `--model` (model lấy từ settings hoặc `/model`) hoặc chạy trong Herdr thì Termote
+đoán cửa sổ là 200k và ghi thêm `~` trước phần trăm, cho tới khi context vượt quá 200k. Với Codex, phần
+trăm lấy đúng con số Codex tự báo ("% context left", đổi sang phần đã dùng).
+
+Khi có pane Codex đăng nhập bằng gói ChatGPT, phía trên các thẻ có dải **Accounts** cho biết hạn mức của
+tài khoản đó: một thanh cho cửa sổ 5 giờ và một thanh cho cửa sổ tuần, giờ mỗi cửa sổ reset, và lần cuối
+Codex ghi lại các số này. Số đã cũ hơn 30 phút thì mờ đi, vì từ lúc đó tài khoản có thể đã được dùng ở
+nơi khác. Claude Code không có dòng như vậy: hạn mức của nó không được ghi ở chỗ nào Termote đọc.
+
+Header cũng có một chip nhỏ cho pane đang mở, ví dụ `ctx 72% · 7d 95%` (phần hạn mức chỉ có với
+Codex). Trên điện thoại chip chỉ hiện số lớn hơn. Bấm vào chip để mở màn hình tổng quan. Muốn tắt chip,
+vào **Settings > Sessions > Agent usage in the header**.
 
 ## Cần bạn xử lý
 

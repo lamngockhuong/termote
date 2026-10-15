@@ -245,7 +245,7 @@ existing pane from the last snapshot.
 
 ```bash
 GET    /api/mux/snapshot          → {apiVersion, backend, caps, serverNow, groups:[{id,name,worktree?:{linked,branch?},tabs:[{id,key,name,active,processes?,panes:[{id,active,title,agent?:{name,status,since?,sinceFirstSeen?},process?}]}]}]}
-GET    /api/mux/overview          → {serverNow, panes:[{paneId,key,lastText?,lastTs?,branch?,changed?,changedTruncated?,usage?:{contextTokens,model?},unavailable?:["transcript"|"changes"]}]}
+GET    /api/mux/overview[?pane=]  → {serverNow, panes:[{paneId,key,lastText?,lastTs?,branch?,changed?,changedTruncated?,usage?:{contextTokens,model?,contextWindow?,contextPercent?,exact},accountKey?,unavailable?:["transcript"|"changes"]}], accounts?:[{key,agent:"codex",plan?,windows:[{usedPercent,windowMinutes,resetsAt?}],updatedAt}]}
 GET    /api/mux/activity?after=   → {events:[{seq,ts,key,groupId,tabId,paneId,agent,from,to}], latest, oldest, reset?, serverNow} | 400 invalid_after
 GET    /api/mux/panes/{id}/agent/subagents → {nodes:[{id,type,description?,status:running|done|error,statusGuessed?,startTs?,endTs?,lastTool?,depth,children}], truncated?} | 404
 POST   /api/mux/tabs               body: {groupId, name}       → {ok, id}
@@ -1113,6 +1113,26 @@ the transcript tail comes through the Chat view's read cache. Branch and changes
 background, one `git status` at a time, only when a git slot is free and without backing the
 root off, so the Changes view always comes first; until read, a pane answers `unavailable:
 ["changes"]` (always on psmux, which has no Files).
+
+How full the context is (`server/agent_context_window.go`): Claude's transcript records the
+tokens of each request but never the window. The window is 1M when the Claude Code process was
+started with `--model <x>[1m]`, 200k for any other `--model` (both `exact`), read from its argv on
+Linux, macOS and Windows; without `--model` (the model came from `settings.json` or `/model`) or
+without a process (Herdr) it is assumed 200k (`exact: false`, shown with `~`), unless the tokens
+already exceed 200k, which only the 1M window holds. Codex writes an `event_msg`/`token_count` row
+after each request: `last_token_usage.total_tokens` in `model_context_window`; the share leaves out
+Codex's 12k baseline on both sides, as Codex's own "% context left" does
+(`TokenUsage::percent_of_context_window_remaining`, checked against 0.162.1). The parser puts that
+row on the last assistant entry before it and adds no entry, so the transcript is unchanged.
+
+The same rows carry the account's rate limits (5 h and 7 d windows for a ChatGPT plan), returned
+once per `CODEX_HOME` as `accounts`, the newest row of any pane using it winning; panes name theirs
+by `accountKey`. An API-key login records none, and there is no line. `?pane=<id>`, which the
+header's usage chip polls, reads that pane alone and never queues its changes, so the chip costs
+what one card does; the overview screen keeps its own full read. Claude's 5 h and weekly
+limits are not shown: Claude Code writes them nowhere termote reads (only its status line input and
+an undocumented OAuth endpoint have them, and termote neither edits `settings.json` nor reads
+credentials).
 
 When a Claude session has running subagents, `lastTs` is the newest of the transcript's last row
 and those subagents' files, so an agent waiting on its subagents is not taken as stuck. That read

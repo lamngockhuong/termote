@@ -130,9 +130,17 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   panes itself: per pane only `AgentSession` and the transcript's tail, through the Chat view's
   read cache (`readCached`), 4 at a time within 3 s (late ones answer `unavailable:
   ["transcript"]`); the whole read is shared for 2 s. It returns ids, the last assistant text
-  (280 runes, never a tool result, never a sidechain row), the last row's time, Claude's context
-  size and model, and a branch and changed-file count; never a cwd, a root, a transcript path or
-  a file name. Changes never run git in the request: a background worker reads one pane at a time
+  (280 runes, never a tool result, never a sidechain row), the last row's time, the context size,
+  window and share (Claude: tokens and model; Codex: its `token_count` rows), and a branch and
+  changed-file count; never a cwd, a root, a transcript path or a file name. The Claude window comes
+  from the agent process's argv (`--model …[1m]`), read with the process during the walk that finds
+  it (`claudeProcOf`); only the window is kept, argv is never returned or logged. `accounts` are the
+  Codex rate limits (`primary`/`secondary`, `plan_type`) of the `token_count` rows already read,
+  keyed by an HMAC of the `CODEX_HOME` with the process-lifetime cursor key (`accountKey`, 12 hex),
+  never the path; `limit_id`, `credits` and the rest are not sent. No file beyond the transcript
+  tail is read for any of it, and nothing is written. `?pane=<id>` (the header's usage chip) reads
+  that pane alone and queues no changes for it; only an id the last snapshot shows with an agent
+  gets a read and a cache entry, any other answers `panes: []`, so an arbitrary id costs nothing. Changes never run git in the request: a background worker reads one pane at a time
   through `paneRootForRead` (the Files gate: `Caps().Files`, `f.dirs`, `paneRoot`), uses a status
   the Changes view just read, else runs `gitStatusArgs` as a `tryOnly`, `noBackoff` heavy call,
   which returns `errGitBusy` instead of waiting for a slot and never backs the root off; results
