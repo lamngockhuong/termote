@@ -17,11 +17,13 @@ import type { QuickActionHandlers } from './components/quick-actions-menu'
 import { PanelMaximizeButton } from './components/side-panel'
 import { TerminalView } from './components/terminal-view'
 import { useHistoryClose } from './hooks/use-history-close'
+import type { MuxSnapshot } from './hooks/use-mux-api'
 import { usePushSubscription } from './hooks/use-push-subscription'
 import {
   LARGE_PACKET_HELP_URL,
   reportLargePacketLoss,
 } from './utils/large-packet-loss'
+import { setPaneKeys } from './utils/pane-remap'
 
 // ─── Mock all hooks ───────────────────────────────────────────────────────────
 
@@ -1075,10 +1077,13 @@ describe('App', () => {
     it('ends the session, then opens the sign-in page', async () => {
       withAuth()
       mockLogout.mockResolvedValueOnce(true)
+      localStorage.setItem('termote-file-drafts:i1:@1:a', '{}')
       render(<App />)
       fireEvent.click(await screen.findByRole('button', { name: 'LogOut' }))
       await waitFor(() => expect(assign).toHaveBeenCalledWith('/login'))
       expect(mockLogout).toHaveBeenCalledTimes(1)
+      // What the PWA kept on the device goes with the session
+      expect(localStorage.getItem('termote-file-drafts:i1:@1:a')).toBeNull()
     })
 
     it.each([
@@ -3534,7 +3539,17 @@ describe('App views, view-only and deep links', () => {
   })
 
   describe('per pane', () => {
-    beforeEach(() => sessionStorage.clear())
+    // Views are kept under each pane's key, known once a snapshot came
+    beforeEach(() => {
+      const ids = ['w1:t1', 'w1:t1:p1', 'w1:t1:p2', 'w2:t1', 'w2:t1:p1']
+      setPaneKeys(
+        { instanceId: 'i1', groups: [] } as unknown as MuxSnapshot,
+        new Map(ids.map((id) => [id, id])),
+      )
+    })
+    const viewOf = (paneId: string) =>
+      JSON.parse(localStorage.getItem(`termote-pane-view:i1:${paneId}`)!).view
+        .view as string
 
     const showTab = (i: number) => {
       const base = mockUseLocalSessions()
@@ -3573,12 +3588,8 @@ describe('App views, view-only and deep links', () => {
         expect(switchSession).toHaveBeenCalledWith('w1:t1', 'w1:t1:p2'),
       )
       expect(screen.queryByTestId('chat-main')).toBeNull()
-      expect(sessionStorage.getItem('termote-pane-view:w1:t1:p2')).toBe(
-        '{"view":"chat","panel":null}',
-      )
-      expect(sessionStorage.getItem('termote-pane-view:w1:t1:p1')).toBe(
-        '{"view":"terminal","panel":null}',
-      )
+      expect(viewOf('w1:t1:p2')).toBe('chat')
+      expect(viewOf('w1:t1:p1')).toBe('terminal')
     })
 
     it('a link to a tab keeps its view for the tab’s pane', async () => {
@@ -3605,14 +3616,8 @@ describe('App views, view-only and deep links', () => {
       } as any)
       window.history.replaceState(null, '', '/#/s/w2/w2%3At1?view=chat')
       render(<App views={VIEWS} />)
-      await waitFor(() =>
-        expect(sessionStorage.getItem('termote-pane-view:w2:t1')).toBe(
-          '{"view":"chat","panel":null}',
-        ),
-      )
-      expect(sessionStorage.getItem('termote-pane-view:w1:t1')).toBe(
-        '{"view":"terminal","panel":null}',
-      )
+      await waitFor(() => expect(viewOf('w2:t1')).toBe('chat'))
+      expect(viewOf('w1:t1')).toBe('terminal')
     })
   })
 

@@ -25,6 +25,64 @@ export function paneKeys(snap: MuxSnapshot): Map<string, string> {
   return keys
 }
 
+// The keys of the latest snapshot, with the server's instance id and each
+// pane's group name: what is kept on the device for a pane (its open tabs,
+// its drafts, its view) is stored under the instance and the pane's key,
+// which outlive the id (a tmux window move) and the page.
+let instance: string | null = null
+let keyOf = new Map<string, string>()
+let groupOf = new Map<string, string>()
+
+// Records snap's keys (from paneKeys) for paneKeyOf and paneGroupOf.
+// Returns the keys of the panes whose group was renamed since the last
+// snapshot of the same server (the key stays, the group's name changes),
+// each with the new name.
+export function setPaneKeys(
+  snap: MuxSnapshot,
+  keys: Map<string, string>,
+): Map<string, string | null> {
+  const sameServer = instance !== null && instance === (snap.instanceId || null)
+  const prevKey = keyOf
+  const prevGroup = groupOf
+  instance = snap.instanceId || null
+  keyOf = keys
+  groupOf = new Map()
+  for (const g of snap.groups ?? []) {
+    for (const t of g.tabs) {
+      groupOf.set(t.id, g.name)
+      for (const p of t.panes) groupOf.set(p.id, g.name)
+    }
+  }
+  const renamed = new Map<string, string | null>()
+  if (!sameServer) return renamed
+  for (const [id, key] of keys) {
+    const was = prevGroup.get(id)
+    const now = groupOf.get(id)
+    if (prevKey.get(id) === key && was !== undefined && was !== now)
+      renamed.set(key, now ?? null)
+  }
+  return renamed
+}
+
+// The server's instance id, null before a snapshot (or from an older server)
+export const paneInstance = () => instance
+
+// paneId's key, null before a snapshot, from an older server, or for an id
+// the snapshot does not list (the placeholder session '0')
+export function paneKeyOf(paneId: string): string | null {
+  return (instance && keyOf.get(paneId)) || null
+}
+
+// The name of the group paneId is in, null when the snapshot does not list it
+export const paneGroupOf = (paneId: string) => groupOf.get(paneId) ?? null
+
+// For tests: forget the snapshot's keys.
+export function resetPaneKeys() {
+  instance = null
+  keyOf = new Map()
+  groupOf = new Map()
+}
+
 // keys (from paneKeys) as if group from had been called to all along. A
 // Zellij group's id is its session's name, and every tab id, pane id and tab
 // key in it starts with the group id (`<gid>:`, `<gid>/`): comparing the

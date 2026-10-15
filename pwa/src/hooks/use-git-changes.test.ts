@@ -1,8 +1,10 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { remapPanes } from '../utils/pane-remap'
+import { flushAll } from '../utils/files-persist'
+import { remapPanes, setPaneKeys } from '../utils/pane-remap'
 import {
   type FileDraft,
+  hydrateDrafts,
   isDraftDirty,
   resetFilesStores,
   useFileDraft,
@@ -16,7 +18,12 @@ import {
   resetGitChangesStores,
   useGitChanges,
 } from './use-git-changes'
-import { type ChangeEntry, type GitChanges, RequestError } from './use-mux-api'
+import {
+  type ChangeEntry,
+  type GitChanges,
+  type MuxSnapshot,
+  RequestError,
+} from './use-mux-api'
 
 const mockChanges = vi.fn()
 vi.mock('./use-mux-api', async (orig) => ({
@@ -669,5 +676,113 @@ describe('useGitChanges and shifted ids', () => {
     expect(mockChanges).toHaveBeenLastCalledWith('%2', '/r')
     a.unmount()
     b.unmount()
+  })
+})
+
+describe('tabs kept on the device', () => {
+  beforeEach(() =>
+    setPaneKeys(
+      {
+        instanceId: 'i1',
+        groups: [{ id: '$0', name: 'main', tabs: [{ id: '%1', panes: [] }] }],
+      } as unknown as MuxSnapshot,
+      new Map([['%1', '@1']]),
+    ),
+  )
+  const reopen = () => {
+    flushAll()
+    resetGitChangesStores()
+    resetFilesStores()
+  }
+
+  it('open again as they were left, the editor included', async () => {
+    mockChanges.mockResolvedValue(
+      changes({
+        entries: [
+          { path: 'a', staged: '', unstaged: 'M', sensitive: false },
+          { path: 'b', staged: 'M', unstaged: '', sensitive: false },
+        ],
+      }),
+    )
+    const first = renderHook(() => useGitChanges('%1'))
+    await tick()
+    act(() => first.result.current.open({ path: 'a', staged: false }))
+    const a = first.result.current.activeId!
+    act(() => first.result.current.setScroll(a, 40))
+    act(() => first.result.current.setEditing(a, true))
+    act(() => first.result.current.setScroll(a, 7))
+    act(() =>
+      first.result.current.open({ path: 'b', staged: true }, { pin: true }),
+    )
+    act(() => first.result.current.setReveal(first.result.current.activeId!))
+    act(() => first.result.current.activate(a))
+    const before = first.result.current.tabs.filter((t) => !t.revealed)
+    first.unmount()
+    reopen()
+    const { result } = renderHook(() => useGitChanges('%1'))
+    expect(result.current.root).toBe('/r')
+    expect(result.current.tabs).toEqual(before)
+    expect(result.current.active).toMatchObject({
+      editing: true,
+      scrollTop: 40,
+      editScrollTop: 7,
+    })
+    await tick()
+    expect(mockChanges).toHaveBeenLastCalledWith('%1', '/r')
+    act(() => result.current.open({ path: 'b', staged: true }))
+    const ids = result.current.tabs.map((t) => t.id)
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  it('of a pane that moved meanwhile close, but an editor with changes is asked about', async () => {
+    const first = renderHook(() => useGitChanges('%1'))
+    await tick()
+    act(() => first.result.current.open({ path: 'a', staged: false }))
+    act(() =>
+      first.result.current.setEditing(first.result.current.activeId!, true),
+    )
+    const draft: FileDraft = {
+      root: '/r',
+      path: 'a',
+      baseHash: 'h',
+      base: 'x',
+      crlf: false,
+      text: 'y',
+      reveal: false,
+    }
+    const setDraft = renderHook(() => useFileDraft('%1', 'a')).result.current[1]
+    act(() => setDraft(draft))
+    first.unmount()
+    reopen()
+    // The app opens again: the snapshot brings the draft back before the
+    // Changes view (shown first, the Files view never) reads anything
+    act(() => hydrateDrafts(['%1']))
+    mockChanges
+      .mockRejectedValueOnce(
+        new RequestError(409, '', 'root changed', undefined, undefined, '/n'),
+      )
+      .mockResolvedValue(changes({ root: '/n', entries: [] }))
+    const { result } = renderHook(() => useGitChanges('%1'))
+    await tick()
+    expect(result.current.root).toBe('/n')
+    expect(result.current.tabs).toHaveLength(1)
+    expect(result.current.pendingRootClose).toEqual([result.current.tabs[0].id])
+    expect(isDraftDirty('%1', 'a')).toBe(true)
+  })
+
+  it('are forgotten when another tab of the app signs out', async () => {
+    const first = renderHook(() => useGitChanges('%1'))
+    await tick()
+    act(() => first.result.current.open({ path: 'a', staged: false }))
+    first.unmount()
+    window.dispatchEvent(
+      new StorageEvent('storage', {
+        key: 'termote-signed-out',
+        newValue: '1',
+      }),
+    )
+    expect(renderHook(() => useGitChanges('%1')).result.current.tabs).toEqual(
+      [],
+    )
   })
 })

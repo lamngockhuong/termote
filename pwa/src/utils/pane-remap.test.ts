@@ -3,12 +3,17 @@ import type { MuxSnapshot } from '../hooks/use-mux-api'
 import {
   destination,
   onPaneRemap,
+  paneGroupOf,
+  paneInstance,
+  paneKeyOf,
   paneKeys,
   remapEntries,
   remapPanes,
   renamedGroupId,
   renameGroupKeys,
+  resetPaneKeys,
   sessionPaneKey,
+  setPaneKeys,
   shiftedIds,
 } from './pane-remap'
 
@@ -208,5 +213,83 @@ describe('sessionPaneKey', () => {
     expect(sessionPaneKey({ id: '2', key: '@7' }, '2')).toBe('@7')
     expect(sessionPaneKey({ id: '2' }, '2')).toBe('2')
     expect(sessionPaneKey({ id: 'w:t1', key: 'w:t1' }, 'w:p3')).toBe('w:p3')
+  })
+})
+
+describe('setPaneKeys', () => {
+  const snap = (instanceId?: string, groups?: object[]) =>
+    ({ instanceId, groups }) as unknown as MuxSnapshot
+
+  it('names each pane by its key, instance and group', () => {
+    setPaneKeys(
+      snap('i1', [
+        {
+          id: '$0',
+          name: 'main',
+          tabs: [{ id: '1', key: '@1', panes: [{ id: '1' }, { id: '%5' }] }],
+        },
+      ]),
+      new Map([
+        ['1', '@1'],
+        ['%5', '%5'],
+      ]),
+    )
+    expect(paneInstance()).toBe('i1')
+    expect(paneKeyOf('1')).toBe('@1')
+    expect(paneKeyOf('%5')).toBe('%5')
+    expect(paneKeyOf('0')).toBeNull()
+    expect(paneGroupOf('%5')).toBe('main')
+    expect(paneGroupOf('0')).toBeNull()
+    resetPaneKeys()
+    expect(paneInstance()).toBeNull()
+    expect(paneKeyOf('1')).toBeNull()
+    expect(paneGroupOf('1')).toBeNull()
+  })
+
+  it('gives no key without an instance id (an older server)', () => {
+    setPaneKeys(snap(undefined, undefined), new Map([['1', '@1']]))
+    expect(paneInstance()).toBeNull()
+    expect(paneKeyOf('1')).toBeNull()
+  })
+})
+
+describe('setPaneKeys renames', () => {
+  const snap = (instanceId: string, name: string) =>
+    ({
+      instanceId,
+      groups: [{ id: '$0', name, tabs: [{ id: '1', panes: [{ id: '%5' }] }] }],
+    }) as unknown as MuxSnapshot
+  const keys = new Map([
+    ['1', '@1'],
+    ['%5', '%5'],
+  ])
+
+  it('names the panes whose group was renamed, on the same server', () => {
+    resetPaneKeys()
+    expect(setPaneKeys(snap('i1', 'a'), keys).size).toBe(0)
+    expect(setPaneKeys(snap('i1', 'a'), keys).size).toBe(0)
+    expect([...setPaneKeys(snap('i1', 'b'), keys)]).toEqual([
+      ['@1', 'b'],
+      ['%5', 'b'],
+    ])
+    // Another server: nothing is renamed
+    expect(setPaneKeys(snap('i2', 'c'), keys).size).toBe(0)
+    // An older server (no instance id): nothing either
+    setPaneKeys(snap('i2', 'c'), keys)
+    expect(
+      setPaneKeys({ groups: [] } as unknown as MuxSnapshot, keys).size,
+    ).toBe(0)
+    setPaneKeys(snap('i2', 'c'), keys)
+    // A pane gone from its group (not listed) has no name
+    expect([
+      ...setPaneKeys(
+        { instanceId: 'i2', groups: [] } as unknown as MuxSnapshot,
+        keys,
+      ),
+    ]).toEqual([
+      ['@1', null],
+      ['%5', null],
+    ])
+    resetPaneKeys()
   })
 })

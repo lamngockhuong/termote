@@ -106,6 +106,11 @@ giới hạn những gì Termote chạm tới, hãy chạy nó dưới một tà
   giữ nguyên).
 - **Đăng xuất chỉ cắt cookie, không đổi mật khẩu.** Client gửi mật khẩu kèm mọi request (Basic auth) được đăng
   nhập lại ngay; muốn chặn nó thì phải đổi mật khẩu.
+- **Những gì ứng dụng giữ trên thiết bị.** Để đóng ứng dụng mà không mất gì, ứng dụng giữ trong kho lưu
+  trữ của trình duyệt các file đang mở ở Files và Changes cùng phần chữ chưa lưu của file đang sửa, không
+  bao giờ giữ file đã hiện dưới dạng nhạy cảm. Log out xoá hết, ở mọi tab. Thiết bị bị thu hồi từ nơi khác,
+  hoặc đã hết phiên, vẫn còn giữ chúng cho tới khi ứng dụng được mở lại trên đó hoặc sau 14 ngày: file
+  không bị đánh dấu nhạy cảm vẫn có thể chứa bí mật.
 - **Hai server dùng chung thư mục trạng thái** (dịch vụ và một `termote serve` chạy tay). Thu hồi ở server
   này không đóng terminal đang mở ở server kia; server kia từ chối thiết bị từ request kế tiếp. Mọi lần ghi
   danh sách thiết bị đều lấy khóa trước, nên server này không làm sống lại thiết bị server kia đã thu hồi
@@ -134,6 +139,10 @@ giới hạn những gì Termote chạm tới, hãy chạy nó dưới một tà
   vẫn thu hồi các thiết bị đó; nếu có cái toàn quyền, hãy kiểm tra những gì nó có thể để lại như bên dưới.
   Nếu bản thân mật khẩu có thể đã lộ (trình duyệt đó lưu nó
   cho Basic auth, hoặc nó được ghi ra đâu đó), hãy chạy `termote start --fresh`.
+- **Chữ chưa lưu của file.** Thiết bị toàn quyền giữ trong kho lưu trữ của trình duyệt các file đang mở và
+  phần chữ chưa lưu của chúng (không bao giờ giữ file đã hiện dưới dạng nhạy cảm), tới 14 ngày sau lần sửa
+  cuối. Thu hồi thiết bị không xoá chúng: nếu lấy lại được thiết bị, hãy mở ứng dụng trên đó rồi Log out,
+  hoặc xoá dữ liệu của trang trong trình duyệt.
 - **Chỉ xem:** thu hồi nó trong Settings > Devices hoặc bằng `termote devices revoke <id>`.
 - **Toàn quyền:** thu hồi nó, rồi chạy `termote start --fresh`: lệnh này đặt mật khẩu mới, đăng xuất mọi
   thiết bị và mọi phiên. Thiết bị toàn quyền từng có shell, nên hãy kiểm tra cả những gì nó có thể để lại:

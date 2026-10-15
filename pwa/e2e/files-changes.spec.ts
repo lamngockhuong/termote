@@ -241,8 +241,144 @@ test.describe('files and changes views', () => {
     await expect(panel.getByText('The file changed on the host since you opened it')).toBeVisible()
     await expect(box).toHaveValue('mine\n')
     expect(readFileSync(f, 'utf-8')).toBe('agent\n')
+    // Reload drops the text: asked first
     await panel.getByRole('button', { name: 'Reload' }).click()
+    await page.getByRole('dialog', { name: 'Discard changes?' }).getByRole('button', { name: 'Discard' }).click()
     await expect(panel.getByTestId('code-block')).toContainText('agent')
+  })
+
+  test.describe('kept on the device', () => {
+    // What the PWA keeps on the device for the panes (tabs, drafts, views)
+    // The page loaded again on the window: tmux shows every client its
+    // session's current window, which another test may have changed
+    const reopen = async (page: Page) => {
+      tmux('select-window', '-t', windowId)
+      await page.reload()
+      await page.goto(`${link}?view=files`)
+    }
+    const kept = (page: Page) =>
+      page.evaluate(() =>
+        Object.keys(localStorage)
+          .filter((k) => /^termote-(files-tabs|changes-tabs|file-drafts|pane-view):/.test(k))
+          .map((k) => `${k}=${localStorage.getItem(k)}`)
+          .join('\n'),
+      )
+
+    test('tabs open again as they were left, after a reload', async ({ page }) => {
+      mkdirSync(path.join(repo, 'keep'), { recursive: true })
+      writeFileSync(path.join(repo, 'keep/one.ts'), Array.from({ length: 200 }, (_, i) => `// ${i}`).join('\n'))
+      writeFileSync(path.join(repo, 'keep/two.ts'), 'export const two = 2\n')
+      await page.setViewportSize({ width: 1280, height: 800 })
+      await page.goto(`${link}?view=files`)
+      const panel = page.getByRole('complementary', { name: 'Files' })
+      await panel.getByRole('treeitem', { name: 'keep' }).click()
+      await panel.getByRole('treeitem', { name: 'one.ts' }).click()
+      await panel.getByRole('button', { name: 'Keep open' }).click()
+      await expect(panel.getByTestId('code-block')).toContainText('// 0')
+      await panel.getByRole('tab', { name: 'Files', exact: true }).click()
+      await panel.getByRole('treeitem', { name: 'two.ts' }).click()
+      await expect(panel.getByTestId('code-block')).toContainText('two = 2')
+      // Written within half a second
+      await expect.poll(() => kept(page)).toContain('two.ts')
+
+      await reopen(page)
+      const again = page.getByRole('complementary', { name: 'Files' })
+      const bar = again.getByRole('tablist', { name: 'Open files' })
+      await expect(bar.getByRole('tab', { name: /^one\.ts/ })).toBeVisible()
+      await expect(bar.getByRole('tab', { name: /^two\.ts/ })).toHaveAttribute('aria-selected', 'true')
+      await expect(again.getByTestId('code-block')).toContainText('two = 2')
+    })
+
+    test('an unsaved edit comes back when the app opens again, and saves', async ({ browser, page }, testInfo) => {
+      const f = path.join(repo, 'keep/notes.md')
+      writeFileSync(f, '# Notes\n')
+      await page.setViewportSize({ width: 1280, height: 800 })
+      await page.goto(`${link}?view=files`)
+      const panel = page.getByRole('complementary', { name: 'Files' })
+      await panel.getByRole('treeitem', { name: 'keep' }).click()
+      await panel.getByRole('treeitem', { name: 'notes.md' }).click()
+      await panel.getByRole('button', { name: 'Edit', exact: true }).click()
+      await panel.getByRole('textbox', { name: 'Text of keep/notes.md' }).fill('# Notes\n\nunsaved line\n')
+      await expect.poll(() => kept(page)).toContain('unsaved line')
+      // The tab is written within half a second (at once when the page hides)
+      await expect.poll(() => kept(page)).toMatch(/termote-files-tabs:[^\n]*notes\.md/)
+      // The app closed (the OS killed it) and opened again: a new context
+      // with the same storage
+      const storageState = await page.context().storageState()
+      await page.context().close()
+      const context = await browser.newContext({
+        storageState,
+        httpCredentials: testInfo.project.use.httpCredentials,
+      })
+      try {
+        const reopened = await context.newPage()
+        await reopened.setViewportSize({ width: 1280, height: 800 })
+        await reopened.goto(`${link}?view=files`)
+        const p2 = reopened.getByRole('complementary', { name: 'Files' })
+        const box = p2.getByRole('textbox', { name: 'Text of keep/notes.md' })
+        await expect(box).toHaveValue('# Notes\n\nunsaved line\n')
+        await p2.getByRole('button', { name: 'Save', exact: true }).click()
+        await expect(reopened.getByText('Saved', { exact: true })).toBeVisible()
+        expect(readFileSync(f, 'utf-8')).toBe('# Notes\n\nunsaved line\n')
+        // Saved: nothing of it is kept any more
+        expect(await kept(reopened)).not.toContain('unsaved line')
+      } finally {
+        await context.close()
+      }
+    })
+
+    test('a kept edit of a file changed on the host is a conflict; Reload asks', async ({ page }) => {
+      const f = path.join(repo, 'keep/clash.txt')
+      writeFileSync(f, 'one\n')
+      await page.setViewportSize({ width: 1280, height: 800 })
+      await page.goto(`${link}?view=files`)
+      const panel = page.getByRole('complementary', { name: 'Files' })
+      await panel.getByRole('treeitem', { name: 'keep' }).click()
+      await panel.getByRole('treeitem', { name: 'clash.txt' }).click()
+      await panel.getByRole('button', { name: 'Edit', exact: true }).click()
+      await panel.getByRole('textbox', { name: 'Text of keep/clash.txt' }).fill('mine\n')
+      await expect.poll(() => kept(page)).toContain('mine')
+      writeFileSync(f, 'agent\n')
+      await reopen(page)
+      const again = page.getByRole('complementary', { name: 'Files' })
+      await expect(again.getByText('The file changed on the host since you opened it')).toBeVisible()
+      await expect(again.getByRole('textbox', { name: 'Text of keep/clash.txt' })).toHaveValue('mine\n')
+      expect(readFileSync(f, 'utf-8')).toBe('agent\n')
+      await again.getByRole('button', { name: 'Reload' }).click()
+      const ask = page.getByRole('dialog', { name: 'Discard changes?' })
+      await expect(ask).toBeVisible()
+      await ask.getByRole('button', { name: 'Discard' }).click()
+      await expect(again.getByTestId('code-block')).toContainText('agent')
+    })
+
+    test('a sensitive file shown and edited is never kept on the device', async ({ page }) => {
+      writeFileSync(path.join(repo, '.env'), 'TOKEN=e2e-secret\n')
+      await page.setViewportSize({ width: 1280, height: 800 })
+      await page.goto(`${link}?view=files`)
+      const panel = page.getByRole('complementary', { name: 'Files' })
+      await panel.getByRole('treeitem', { name: /^\.env/ }).click()
+      await page.getByRole('button', { name: 'Show', exact: true }).click()
+      await panel.getByRole('button', { name: 'Edit', exact: true }).click()
+      await panel.getByRole('textbox', { name: 'Text of .env' }).fill('TOKEN=typed-e2e\n')
+      // Leaving still asks: the text is only in memory
+      let asked = false
+      page.on('dialog', (d) => {
+        asked = d.type() === 'beforeunload'
+        return d.accept()
+      })
+      await page.waitForTimeout(700)
+      const before = await kept(page)
+      expect(before).not.toContain('typed-e2e')
+      expect(before).not.toContain('.env')
+      await reopen(page)
+      expect(asked).toBe(true)
+      const after = await kept(page)
+      expect(after).not.toContain('typed-e2e')
+      expect(after).not.toContain('.env')
+      await expect(
+        page.getByRole('complementary', { name: 'Files' }).getByRole('tab', { name: /^\.env/ }),
+      ).toHaveCount(0)
+    })
   })
 
   test('no Edit for mixed line breaks or a symlink', async ({ page }) => {

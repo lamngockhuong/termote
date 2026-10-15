@@ -8,6 +8,7 @@ import {
   worstAgentStatus,
 } from '../types/session'
 import { remapChatDrafts } from '../utils/chat-draft'
+import { regroupPersisted, renamePersistedGroup } from '../utils/files-persist'
 import {
   isTimeoutError,
   reportLargePacketLoss,
@@ -17,12 +18,13 @@ import {
   paneKeys,
   remapPanes,
   renameGroupKeys,
+  setPaneKeys,
   shiftedIds,
 } from '../utils/pane-remap'
-import { remapPaneViews } from '../utils/pane-view'
 import { uniqueNames } from '../utils/running-commands'
 import { zellijGroupId } from '../utils/zellij-group'
 import { renameActivityGroup } from './use-activity-log'
+import { hydrateDrafts } from './use-files'
 import {
   closeGroup as apiCloseGroup,
   createGroup as apiCreateGroup,
@@ -353,13 +355,20 @@ export function useLocalSessions(pollInterval = 5) {
         prevKeys = renameGroupKeys(prevKeys, renamed.from, renamed.to)
         renameGroupMeta(metaRef.current, renamed.from, renamed.to)
         renameActivityGroup(renamed.from, renamed.to)
+        renamePersistedGroup(
+          renamed.from,
+          renamed.to,
+          snap.groups?.find((g) => g.id === renamed.to)?.name ?? null,
+        )
       }
       const shift = shiftedIds(prevKeys, keys)
       keysRef.current = keys
+      // Records kept on the device follow a group renamed elsewhere (tmux,
+      // Herdr: the panes' keys stay)
+      regroupPersisted(setPaneKeys(snap, keys))
       if (shift.stale.size) {
         remapPanes(shift)
         remapChatDrafts(shift)
-        remapPaneViews(shift)
         // Only a snapshot with tabs can shift ids, and applying one stores
         // a selection: this is a guard, never reached in practice.
         /* v8 ignore next */
@@ -367,6 +376,8 @@ export function useLocalSessions(pollInterval = 5) {
           storeSelection(shiftSelection(selectionRef.current, shift))
         }
       }
+      // The drafts kept on the device come back before any view reads
+      hydrateDrafts(keys.keys(), snap.caps.role)
       const built = buildSessions(snap, metaRef.current)
       currentTabsRef.current = new Set(
         [...built.activeByGroup.values()].map((s) => s.id),

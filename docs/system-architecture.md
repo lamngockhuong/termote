@@ -753,6 +753,14 @@ file to a new path, never replacing anything, and `GET files/download` sends a f
 attachment (see Saving a file, Creating a file, Finding a file, Deleting a file, Renaming a file,
 Downloading a file).
 
+**Kept on the device.** The open Files and Changes tabs, each pane's last view and the unsaved
+drafts of files not shown as sensitive are kept in the browser's `localStorage`
+(`pwa/src/utils/files-persist.ts`) under the snapshot's `instanceId` (made once, kept in
+`<stateDir>/instance-id`) and the pane's key, so they come back when the app opens again on the same
+server. Drafts come back in `applySnapshot`, before any view reads a file; restored tabs send their
+saved root, so a pane that moved answers 409 as usual. Log out clears them in every tab; the rules
+are in [`security-invariants.md`](security-invariants.md) (Files/Changes state kept on the device).
+
 **Root.** The pane's directory, raised to `git rev-parse --show-toplevel` when it is in a
 repository and a `.git` sits at that toplevel (a `core.worktree` naming another directory, even
 `/`, leaves the pane's directory as the root); resolutions are cached for 2 s. A directory a foreground command only passes

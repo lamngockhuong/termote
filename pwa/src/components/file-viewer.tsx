@@ -349,7 +349,10 @@ export function FileViewer({
   const [reveal, setReveal] = useState(initialReveal || !!mine?.reveal)
   const [saving, setSaving] = useState(false)
   // What a confirmed Discard goes on to do
-  const [discarding, setDiscarding] = useState<'cancel' | 'back'>()
+  const [discarding, setDiscarding] = useState<'cancel' | 'back' | 'reload'>()
+  // The draft as it is now, for a read that answers after it changed
+  const mineRef = useRef(mine)
+  mineRef.current = mine
   // Where the text is scrolled to: the next view of it (source, editor)
   // starts there
   const scrolled = useRef(scrollTop)
@@ -440,7 +443,12 @@ export function FileViewer({
     let live = true
     setState({ kind: 'loading' })
     fetchFileContent(paneId, path, { root, reveal }).then(
-      (c) => live && setState(loaded(c)),
+      (c) => {
+        if (!live) return
+        const file = loaded(c)
+        setState(file)
+        checkDraft(file)
+      },
       (err) => {
         if (!live) return
         if (err instanceof RequestError && err.status === 409 && err.root) {
@@ -455,6 +463,30 @@ export function FileViewer({
       live = false
     }
   }, [paneId, root, path, reveal, asImage, onRootChanged, reload])
+
+  // A draft found when the file is read (one kept from before the app
+  // closed, or from before a remount) is checked against the file: one the
+  // file already holds is done with; one of a file that changed since it
+  // was read is told so (Save never overwrites it); one of a file now shown
+  // as sensitive goes, its gate shows.
+  const checkDraft = (file: Loaded) => {
+    const d = mineRef.current
+    if (!d) return
+    // Another view of the pane may have replaced it since the last render:
+    // then that one stays (a guard; the read answers between renders)
+    /* v8 ignore next */
+    const done = () => setDraft((now) => (now === d ? undefined : now))
+    if (file.kind === 'sensitive' && !d.reveal) {
+      done()
+      return
+    }
+    if (file.kind !== 'text' || file.root !== d.root) return
+    if (d.text !== d.base && file.text.replace(/\r\n/g, '\n') === d.text) {
+      done()
+      return
+    }
+    if (file.hash !== d.baseHash) setSaveError({ kind: 'changed' })
+  }
 
   const beginEdit = (file: TextLoaded, delimiter?: Delimiter) => {
     setSaveError(undefined)
@@ -489,6 +521,12 @@ export function FileViewer({
     // The save saw the root move: now the file is read from the new one
     if (saveError?.kind === 'root' && saveError.root)
       onRootChanged(saveError.root)
+  }
+
+  // The draft dropped for the file as it is on the host now
+  const reloadFile = () => {
+    discard()
+    setReload((n) => n + 1)
   }
 
   const cancel = () => (dirty ? setDiscarding('cancel') : discard())
@@ -796,6 +834,32 @@ export function FileViewer({
             ))}
         {headerExtra}
       </div>
+      {mine &&
+        !asImage &&
+        state.kind === 'error' &&
+        state.error === 'not-found' && (
+          // The file of a draft is gone from the host (deleted or renamed
+          // elsewhere while the app was closed): the text can still be copied
+          <Banner
+            variant="warning"
+            action={
+              <span className="flex gap-1.5">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => copyText(mine.text)}
+                >
+                  Copy my text
+                </Button>
+                <Button size="sm" variant="secondary" onClick={cancel}>
+                  Discard
+                </Button>
+              </span>
+            }
+          >
+            This file is no longer on the host
+          </Banner>
+        )}
       {mine && !cells && (
         <FileEditor
           path={path}
@@ -807,10 +871,7 @@ export function FileViewer({
           rootMoved={rootMoved}
           dirty={dirty}
           onSave={() => save(mine)}
-          onReload={() => {
-            discard()
-            setReload((n) => n + 1)
-          }}
+          onReload={() => (dirty ? setDiscarding('reload') : reloadFile())}
           onCopy={() => copyText(mine.text)}
           scrollTop={scrolled.current}
         />
@@ -932,6 +993,10 @@ export function FileViewer({
         onConfirm={() => {
           const then = discarding
           setDiscarding(undefined)
+          if (then === 'reload') {
+            reloadFile()
+            return
+          }
           discard()
           if (then === 'back') onClose()
         }}

@@ -1,6 +1,8 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { remapPanes } from '../utils/pane-remap'
+import { flushAll, signedOut } from '../utils/files-persist'
+import { remapPanes, setPaneKeys } from '../utils/pane-remap'
+import { emptyLayout } from '../utils/table-columns'
 import {
   dropDraft,
   type FileDraft,
@@ -8,6 +10,7 @@ import {
   filesError,
   followInFiles,
   hasDirtyDraftAt,
+  hydrateDrafts,
   isDraftDirty,
   isOpenable,
   resetFilesStores,
@@ -15,7 +18,7 @@ import {
   useFileDraft,
   useFiles,
 } from './use-files'
-import { type FileEntry, RequestError } from './use-mux-api'
+import { type FileEntry, type MuxSnapshot, RequestError } from './use-mux-api'
 
 const mockTree = vi.fn()
 vi.mock('./use-mux-api', async (orig) => ({
@@ -1217,5 +1220,414 @@ describe('a renamed file', () => {
     )
     expect(hasDirtyDraftAt('/r', 'a.md')).toBe(true)
     expect(hasDirtyDraftAt('/other', 'a.md')).toBe(false)
+  })
+})
+
+describe('tabs kept on the device', () => {
+  // Server i1, pane %1 of window @1 in session main
+  const snapshot = (instanceId = 'i1', group = 'main') =>
+    setPaneKeys(
+      {
+        instanceId,
+        groups: [{ id: '$0', name: group, tabs: [{ id: '%1', panes: [] }] }],
+      } as unknown as MuxSnapshot,
+      new Map([['%1', '@1']]),
+    )
+  const edit = (path: string) =>
+    renderHook(() => useFileDraft('%1', path)).result.current[1]({
+      root: '/r',
+      path,
+      baseHash: 'h',
+      base: 'a',
+      crlf: false,
+      text: 'b',
+      reveal: false,
+    })
+  // The app closed and opened again: the stores start over, storage stays
+  const reopen = () => {
+    flushAll()
+    resetFilesStores()
+  }
+
+  beforeEach(() => snapshot())
+
+  it('open again as they were left', async () => {
+    mockTree.mockResolvedValue(tree('', [file('a.md')]))
+    const first = renderHook(() => useFiles('%1'))
+    act(() => first.result.current.load())
+    await waitFor(() => expect(first.result.current.root).toBe('/r'))
+    act(() => first.result.current.open('a.md', { pin: true }))
+    act(() => first.result.current.open('b.md'))
+    act(() => first.result.current.open('s.env'))
+    const sensitive = first.result.current.activeId!
+    act(() => first.result.current.setReveal(sensitive))
+    act(() => first.result.current.open('b.md'))
+    const b = first.result.current.activeId!
+    act(() => first.result.current.setScroll(b, 120))
+    act(() =>
+      first.result.current.setTableLayout(b, {
+        key: 'k',
+        widths: {},
+        wrapped: [],
+      }),
+    )
+    // Not a tab: ignored
+    act(() => first.result.current.setTableLayout('nope', emptyLayout('k')))
+    const before = first.result.current.tabs.filter((t) => !t.reveal)
+    first.unmount()
+    reopen()
+    expect(localStorage.getItem('termote-files-tabs:i1:@1')).not.toContain(
+      's.env',
+    )
+    const { result } = renderHook(() => useFiles('%1'))
+    expect(result.current.root).toBe('/r')
+    expect(result.current.tabs).toEqual(
+      before.map((t) => ({ ...t, intent: undefined })),
+    )
+    expect(result.current.activeId).toBe(b)
+    expect(result.current.active?.scrollTop).toBe(120)
+    // The first read names the root the tabs were opened under
+    act(() => result.current.load())
+    expect(mockTree).toHaveBeenLastCalledWith('%1', '', '/r')
+    // A tab opened now takes an id of its own
+    act(() => result.current.open('c.md', { pin: true }))
+    const ids = result.current.tabs.map((t) => t.id)
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  it('of a pane that moved meanwhile close, unless they have changes', async () => {
+    mockTree.mockResolvedValue(tree('', []))
+    const first = renderHook(() => useFiles('%1'))
+    act(() => first.result.current.load())
+    await waitFor(() => expect(first.result.current.root).toBe('/r'))
+    act(() => first.result.current.open('a.md', { pin: true }))
+    act(() => first.result.current.open('b.md', { pin: true }))
+    reopen()
+    // The draft of b.md came back with the snapshot
+    edit('b.md')
+    mockTree
+      .mockRejectedValueOnce(
+        new RequestError(409, '', 'root changed', undefined, undefined, '/n'),
+      )
+      .mockResolvedValue(tree('', [], '/n'))
+    const { result } = renderHook(() => useFiles('%1'))
+    act(() => result.current.load())
+    await waitFor(() => expect(result.current.root).toBe('/n'))
+    expect(result.current.tabs.map((t) => t.path)).toEqual(['b.md'])
+    expect(result.current.pendingRootClose).toEqual([result.current.tabs[0].id])
+    // Closed again with the question open: it is asked again
+    reopen()
+    edit('b.md')
+    const again = renderHook(() => useFiles('%1'))
+    expect(again.result.current.pendingRootClose).toHaveLength(1)
+    // None left: nothing is kept
+    act(() => again.result.current.resolveRootClose(true))
+    flushAll()
+    expect(localStorage.getItem('termote-files-tabs:i1:@1')).toBeNull()
+  })
+
+  it('never keep the name of a sensitive file left by a link', async () => {
+    mockTree.mockImplementation(async (_p, path) =>
+      tree(path, [file('secrets.md'), file('next.md')]),
+    )
+    const first = renderHook(() => useFiles('%1'))
+    act(() => first.result.current.load())
+    await waitFor(() => expect(first.result.current.root).toBe('/r'))
+    act(() => first.result.current.open('secrets.md', { pin: true }))
+    act(() => first.result.current.setReveal(first.result.current.activeId!))
+    await act(() => first.result.current.follow({ path: 'next.md' }, 10))
+    expect(first.result.current.active?.history).toEqual([
+      { path: 'secrets.md', scrollTop: 10, reveal: true },
+    ])
+    // Renamed as sensitive: the entry is then a sensitive file's too
+    act(() => fileRenamed('/r', 'next.md', 'n.md', false))
+    act(() => first.result.current.back())
+    await act(() => first.result.current.follow({ path: 'next.md' }, 0))
+    act(() => fileRenamed('/r', 'secrets.md', 'x.env', true))
+    flushAll()
+    expect(localStorage.getItem('termote-files-tabs:i1:@1')).not.toContain(
+      'secrets',
+    )
+    expect(localStorage.getItem('termote-files-tabs:i1:@1')).not.toContain(
+      'x.env',
+    )
+  })
+
+  it('opened again are written again, so they never expire while used', () => {
+    const first = renderHook(() => useFiles('%1'))
+    act(() => first.result.current.open('a.md'))
+    reopen()
+    localStorage.setItem(
+      'termote-files-tabs:i1:@1',
+      localStorage
+        .getItem('termote-files-tabs:i1:@1')!
+        .replace(/"savedAt":\d+/, '"savedAt":1'),
+    )
+    // A page loaded days later (this one remembers its last write a day)
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 2 * 86400000 })
+    try {
+      renderHook(() => useFiles('%1'))
+      flushAll()
+    } finally {
+      vi.useRealTimers()
+    }
+    expect(
+      JSON.parse(localStorage.getItem('termote-files-tabs:i1:@1')!).savedAt,
+    ).toBeGreaterThan(1)
+  })
+
+  it('of another server or another session are not opened', () => {
+    const first = renderHook(() => useFiles('%1'))
+    act(() => first.result.current.open('a.md'))
+    reopen()
+    snapshot('i2')
+    expect(renderHook(() => useFiles('%1')).result.current.tabs).toEqual([])
+    resetFilesStores()
+    snapshot('i1', 'other')
+    expect(renderHook(() => useFiles('%1')).result.current.tabs).toEqual([])
+    expect(localStorage.getItem('termote-files-tabs:i1:@1')).toBeNull()
+  })
+})
+
+describe('drafts kept on the device', () => {
+  const snapshot = (instanceId = 'i1') =>
+    setPaneKeys(
+      {
+        instanceId,
+        groups: [
+          {
+            id: '$0',
+            name: 'main',
+            tabs: [
+              { id: '%1', panes: [] },
+              { id: '%2', panes: [] },
+            ],
+          },
+        ],
+      } as unknown as MuxSnapshot,
+      new Map([
+        ['%1', '@1'],
+        ['%2', '@2'],
+      ]),
+    )
+  const draft = (path: string, text = 'mine'): FileDraft => ({
+    root: '/r',
+    path,
+    baseHash: 'h',
+    base: 'old',
+    crlf: false,
+    text,
+    reveal: false,
+  })
+  const set = (paneId: string, path: string, d: FileDraft | undefined) => {
+    const setDraft = renderHook(() => useFileDraft(paneId, path)).result
+      .current[1]
+    act(() => setDraft(d))
+  }
+  const key = (path: string, pane = '@1') =>
+    `termote-file-drafts:i1:${pane}:${path}`
+  const stored = (path: string, pane = '@1') =>
+    JSON.parse(localStorage.getItem(key(path, pane)) ?? 'null')
+  const unload = () => {
+    const ev = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(ev)
+    return ev.defaultPrevented
+  }
+  // The app closed and opened again on the same server
+  const reopen = () => {
+    resetFilesStores()
+    snapshot()
+  }
+
+  beforeEach(() => snapshot())
+
+  it('are written at once while they have changes, and go at once', () => {
+    set('%1', 'a.md', draft('a.md'))
+    expect(stored('a.md')).toMatchObject({
+      role: 'full',
+      draft: { path: 'a.md', text: 'mine', base: 'old' },
+    })
+    expect(stored('a.md').draft.reveal).toBeUndefined()
+    // Kept: closing the app loses nothing, so it does not ask
+    expect(unload()).toBe(false)
+    // Back to the text read: nothing to keep
+    set('%1', 'a.md', draft('a.md', 'old'))
+    expect(stored('a.md')).toBeNull()
+    set('%1', 'a.md', draft('a.md'))
+    // Saved (or discarded): gone at once, no timer
+    act(() => dropDraft('%1', 'a.md'))
+    expect(stored('a.md')).toBeNull()
+  })
+
+  it('of a sensitive file are never written, and leaving asks', () => {
+    set('%1', '.env', { ...draft('.env'), reveal: true })
+    expect(Object.keys(localStorage).join()).not.toContain('.env')
+    expect(JSON.stringify(localStorage)).not.toContain('mine')
+    expect(unload()).toBe(true)
+    act(() => dropDraft('%1', '.env'))
+    expect(unload()).toBe(false)
+  })
+
+  it('that cannot be written are not lost silently', () => {
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('full', 'QuotaExceededError')
+    })
+    expect(() => set('%1', 'a.md', draft('a.md'))).not.toThrow()
+    expect(unload()).toBe(true)
+    vi.restoreAllMocks()
+    // Written once there is room: no longer asked about
+    set('%1', 'a.md', draft('a.md', 'more'))
+    expect(unload()).toBe(false)
+    act(() => dropDraft('%1', 'a.md'))
+  })
+
+  it('keep when they were last edited, not last written', () => {
+    vi.useFakeTimers({ now: 1000 })
+    try {
+      set('%1', 'a.md', draft('a.md'))
+      vi.setSystemTime(5000)
+      // The same text again (a cell layout, a move): still edited at 1000
+      set('%1', 'a.md', { ...draft('a.md'), baseHash: 'h2' })
+      expect(stored('a.md').editedAt).toBe(1000)
+      set('%1', 'a.md', draft('a.md', 'other'))
+      expect(stored('a.md').editedAt).toBe(5000)
+      // Renamed: the time moves with it
+      act(() => fileRenamed('/r', 'a.md', 'b.md', false))
+      expect(stored('a.md')).toBeNull()
+      expect(stored('b.md')).toMatchObject({
+        editedAt: 5000,
+        draft: { path: 'b.md' },
+      })
+      // Renamed as sensitive: kept no more
+      act(() => fileRenamed('/r', 'b.md', 'c.env', true))
+      expect(stored('c.env')).toBeNull()
+      expect(unload()).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('come back once per pane, never over a draft in memory', () => {
+    set('%1', 'a.md', draft('a.md'))
+    set('%1', 'b.md', draft('b.md'))
+    set('%2', 'c.md', draft('c.md'))
+    reopen()
+    // Newer, made before the snapshot was applied
+    set('%1', 'b.md', draft('b.md', 'newer'))
+    act(() => hydrateDrafts(['%1', '%2', 'nope']))
+    const read = (p: string, f: string) =>
+      renderHook(() => useFileDraft(p, f)).result.current[0]
+    expect(read('%1', 'a.md')).toEqual(draft('a.md'))
+    expect(read('%1', 'b.md')?.text).toBe('newer')
+    expect(read('%2', 'c.md')).toEqual(draft('c.md'))
+    expect(isDraftDirty('%1', 'a.md')).toBe(true)
+    // Kept on the device: no need to ask
+    expect(unload()).toBe(false)
+    // Read once: a draft dropped since does not come back
+    act(() => dropDraft('%1', 'a.md'))
+    act(() => hydrateDrafts(['%1']))
+    expect(read('%1', 'a.md')).toBeUndefined()
+  })
+
+  it('that are not drafts are left out', () => {
+    const put = (path: string, d: object) =>
+      localStorage.setItem(
+        key(path),
+        JSON.stringify({
+          v: 1,
+          pane: '@1',
+          group: 'main',
+          editedAt: Date.now(),
+          role: 'full',
+          draft: d,
+        }),
+      )
+    localStorage.clear()
+    put('a', { ...draft('a'), crlf: 'no' })
+    put('b', { ...draft('b'), cells: 'x' })
+    put('c', { ...draft('c'), cells: null })
+    put('d', { ...draft('d'), cells: { ops: [], redo: 'x' } })
+    put('e', { ...draft('e'), text: 3 })
+    put('f', {
+      ...draft('f'),
+      cells: { delimiter: ',', ops: [{ kind: 'cell' }], redo: [] },
+    })
+    act(() => hydrateDrafts(['%1']))
+    expect(isDraftDirty('%1', 'f')).toBe(true)
+    for (const p of ['a', 'b', 'c', 'd', 'e'])
+      expect(isDraftDirty('%1', p)).toBe(false)
+  })
+
+  it('of another server do not come back; a view-only client keeps none', () => {
+    set('%1', 'a.md', draft('a.md'))
+    resetFilesStores()
+    snapshot('i2')
+    act(() => hydrateDrafts(['%1']))
+    expect(isDraftDirty('%1', 'a.md')).toBe(false)
+    reopen()
+    act(() => hydrateDrafts(['%1'], 'view'))
+    expect(isDraftDirty('%1', 'a.md')).toBe(false)
+    expect(stored('a.md')).toBeNull()
+    // Nor writes any
+    set('%1', 'b.md', draft('b.md'))
+    expect(stored('b.md')).toBeNull()
+  })
+
+  it('of one tab of the app never bring back what another saved', () => {
+    // Tab A edited a.md, tab B (the same storage) b.md
+    set('%1', 'a.md', draft('a.md'))
+    set('%1', 'b.md', draft('b.md'))
+    // A saves a.md; B goes on editing b.md
+    act(() => dropDraft('%1', 'a.md'))
+    set('%1', 'b.md', draft('b.md', 'more'))
+    reopen()
+    act(() => hydrateDrafts(['%1']))
+    expect(isDraftDirty('%1', 'a.md')).toBe(false)
+    expect(isDraftDirty('%1', 'b.md')).toBe(true)
+  })
+
+  it('go from memory when another tab signs out', () => {
+    set('%1', 'a.md', draft('a.md'))
+    window.dispatchEvent(
+      new StorageEvent('storage', {
+        key: 'termote-signed-out',
+        newValue: '1',
+      }),
+    )
+    expect(isDraftDirty('%1', 'a.md')).toBe(false)
+    expect(localStorage.getItem(key('a.md'))).toBeNull()
+  })
+
+  it('signing out here makes leaving ask again', () => {
+    set('%1', 'a.md', draft('a.md'))
+    expect(unload()).toBe(false)
+    act(() => signedOut())
+    expect(unload()).toBe(true)
+  })
+
+  it('a draft another tab changes is no longer taken as kept', () => {
+    set('%1', 'a.md', draft('a.md'))
+    set('%1', 'b.md', draft('b.md'))
+    expect(unload()).toBe(false)
+    // The other tab saved a.md: its key went
+    localStorage.removeItem(key('a.md'))
+    window.dispatchEvent(
+      new StorageEvent('storage', { key: key('a.md'), newValue: null }),
+    )
+    expect(unload()).toBe(true)
+  })
+
+  it('a table draft comes back with its edits', () => {
+    const cells = {
+      delimiter: ',' as const,
+      ops: [{ kind: 'cell', row: 0, col: 0, name: 'a', from: 'x', to: 'y' }],
+      redo: [],
+    } as unknown as FileDraft['cells']
+    set('%1', 't.csv', { ...draft('t.csv'), cells })
+    reopen()
+    act(() => hydrateDrafts(['%1']))
+    expect(
+      renderHook(() => useFileDraft('%1', 't.csv')).result.current[0]?.cells,
+    ).toEqual(cells)
   })
 })

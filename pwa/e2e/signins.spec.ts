@@ -143,4 +143,37 @@ test.describe('signed-in browsers', () => {
     expect(del.status()).toBe(200)
     expect((await signins(request)).some((s) => s.id === mine?.id)).toBe(false)
   })
+
+  test('Log out removes what the app kept on the device, in every tab', async ({ browser, baseURL }) => {
+    const a = await browserNamed(browser, baseURL, tagOf('keep'))
+    opened.push(a)
+    await signIn(a)
+    // A second tab of the same browser
+    const b = await a.context().newPage()
+    await b.goto('/')
+    await b.waitForSelector('[data-testid="terminal-view"] .xterm', { timeout: 15000 })
+    // Tabs, a draft and a view kept for a pane, as the Files view writes them
+    await a.evaluate(() => {
+      const r = (more: object) => JSON.stringify({ v: 1, pane: '@1', group: 'main', savedAt: Date.now(), ...more })
+      localStorage.setItem('termote-files-tabs:i:@1', r({ state: { tabs: [] } }))
+      localStorage.setItem('termote-changes-tabs:i:@1', r({ state: { tabs: [] } }))
+      localStorage.setItem('termote-file-drafts:i:@1:a.md', r({ editedAt: Date.now(), draft: {} }))
+      localStorage.setItem('termote-pane-view:i:@1', r({ view: { view: 'files' } }))
+    })
+    await a.getByRole('button', { name: 'More' }).click()
+    await a.getByRole('menuitem', { name: 'Log out' }).click()
+    await a.waitForURL(/\/login/)
+    const keptIn = (p: Page) =>
+      p.evaluate(() =>
+        Object.keys(localStorage).filter((k) =>
+          /^termote-(files-tabs|changes-tabs|file-drafts|pane-view):/.test(k),
+        ),
+      )
+    expect(await keptIn(a)).toEqual([])
+    // The other tab was told: it writes nothing back
+    await b.waitForTimeout(700)
+    await b.evaluate(() => window.dispatchEvent(new Event('pagehide')))
+    expect(await keptIn(b)).toEqual([])
+    expect(await b.evaluate(() => localStorage.getItem('termote-signed-out'))).not.toBeNull()
+  })
 })

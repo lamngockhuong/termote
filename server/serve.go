@@ -77,6 +77,9 @@ type serveConfig struct {
 	// DevicesDir holds the paired devices; empty disables pairing. Never
 	// read or written with NoAuth.
 	DevicesDir string
+	// InstanceDir keeps the server's instance id (the snapshot's
+	// instanceId); empty gives one that lasts until the server stops.
+	InstanceDir string
 	// LocalSocketDir holds the local socket the CLI reaches a native
 	// server on without the password (<stateDir>/run; Windows uses a named
 	// pipe and ignores it); empty opens none (the container, tests).
@@ -431,6 +434,7 @@ func buildServerWith(cfg serveConfig, m Mux) (http.Handler, *streamHub, *pushSto
 		sessions.onEnd = func(id string) { devices.codes.dropCreator(sessionCreator(id)) }
 	}
 	agent := registerMuxRoutes(mux, m, tokenStore, uploads, push)
+	agent.instanceID = loadInstanceID(cfg.InstanceDir)
 	agent.devices = devices != nil
 	agent.signins = sessions != nil
 	registerDeviceRoutes(mux, devices, allowed)

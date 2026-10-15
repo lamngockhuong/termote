@@ -87,6 +87,7 @@ import {
   parseDeepLink,
   parseScreenLink,
 } from './utils/deep-link'
+import { signOutPage } from './utils/files-persist'
 import {
   LARGE_PACKET_HELP_URL,
   onLargePacketLoss,
@@ -285,7 +286,7 @@ export default function App({
     await disablePush()
     try {
       if (await logout()) {
-        window.location.assign('/login')
+        signOutPage()
         return
       }
     } catch {

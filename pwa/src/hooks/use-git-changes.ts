@@ -1,6 +1,16 @@
 import { useCallback, useSyncExternalStore } from 'react'
 import { closeTab, openTab, pinTab, type TabBase } from '../utils/file-tabs'
+import {
+  loadTabs,
+  onSignedOutElsewhere,
+  saveTabs,
+} from '../utils/files-persist'
 import { onPaneRemap, remapEntries } from '../utils/pane-remap'
+import {
+  persistedChangesState,
+  restoreChangesState,
+  restoredCounters,
+} from '../utils/persisted-tabs'
 import {
   dropDraft,
   type FilesError,
@@ -145,7 +155,19 @@ interface Store {
 
 function createStore(id: string): Store {
   let paneId = id
-  let state = INITIAL
+  // The tabs kept on the device for the pane, as it was left: the first
+  // poll sends their root, and a pane that moved meanwhile answers 409
+  // (rootChanged)
+  const fromDevice = restoreChangesState(loadTabs('changes', paneId))
+  let state: ChangesState = fromDevice
+    ? {
+        ...INITIAL,
+        root: fromDevice.root,
+        tabs: fromDevice.tabs.map((t) => ({ ...t, revealed: false })),
+        activeId: fromDevice.activeId,
+        pendingRootClose: fromDevice.pendingRootClose,
+      }
+    : INITIAL
   const listeners = new Set<() => void>()
   let timer: ReturnType<typeof setTimeout> | undefined
   let inFlight = false
@@ -155,15 +177,29 @@ function createStore(id: string): Store {
   // dropped, so the list never flips back to the previous repo.
   let generation = 0
   // When each tab was last shown, and the ids of new ones
-  let clock = 0
-  let ids = 0
+  let { clock, ids } = restoredCounters(state.tabs)
   // Only an editor holds unsaved changes
   const isDirty = (t: ChangeTab) => t.editing && isDraftDirty(paneId, t.path)
   // No list at all once nothing waits for the user
   const pendingOf = (ids?: string[]) => (ids?.length ? ids : undefined)
 
+  // Kept on the device after every change of the tabs (and of where they
+  // are scrolled to, which renders nothing)
+  const persist = () =>
+    saveTabs('changes', paneId, persistedChangesState(state))
+  // Written again once opened: tabs left as they are never expire
+  if (fromDevice) persist()
+
   const set = (next: Partial<ChangesState>) => {
+    const prev = state
     state = { ...state, ...next }
+    if (
+      state.tabs !== prev.tabs ||
+      state.activeId !== prev.activeId ||
+      state.root !== prev.root ||
+      state.pendingRootClose !== prev.pendingRootClose
+    )
+      persist()
     for (const fn of listeners) fn()
   }
 
@@ -463,6 +499,7 @@ function createStore(id: string): Store {
       if (!tab) return
       if (tab.editing) tab.editScrollTop = top
       else tab.scrollTop = top
+      persist()
     },
     saved,
     moved,
@@ -538,7 +575,12 @@ onPaneRemap((shift) => {
   for (const to of shift.moved.values()) stores.get(to)?.moveTo(to)
 })
 
+// Another tab of the app signed out: this one forgets the tabs it holds too
+const forgetStores = () => stores.clear()
+onSignedOutElsewhere(forgetStores)
+
 // For tests: forget every store.
 export function resetGitChangesStores() {
   stores.clear()
+  onSignedOutElsewhere(forgetStores)
 }

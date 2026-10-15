@@ -167,6 +167,9 @@ type Snapshot struct {
 	// ServerNow is the server's time when it answered (RFC 3339, UTC): the
 	// client measures its own clock's offset with it, for each Since.
 	ServerNow string `json:"serverNow,omitempty"`
+	// InstanceID names this server (kept in its state dir): the PWA keeps
+	// open tabs and drafts on the device under it.
+	InstanceID string `json:"instanceId,omitempty"`
 }
 
 // Group is a tmux session or a herdr workspace.
@@ -337,6 +340,7 @@ func registerMuxRoutes(mux *http.ServeMux, m Mux, tokens *tokenStore, uploads *u
 		snap.Caps.Push = push != nil
 		snap.Caps.Devices = agent.devices
 		snap.Caps.Signins = agent.signins
+		snap.InstanceID = agent.instanceID
 		if snap.Groups == nil {
 			snap.Groups = []Group{}
 		}

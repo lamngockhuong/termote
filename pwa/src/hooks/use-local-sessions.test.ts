@@ -72,7 +72,15 @@ vi.mock('../utils/large-packet-loss', async (orig) => ({
   reportLargePacketLoss: mockReportLargePacketLoss,
 }))
 
-import { onPaneRemap } from '../utils/pane-remap'
+import { onPaneRemap, paneGroupOf, paneKeyOf } from '../utils/pane-remap'
+
+const { mockRenamePersisted } = vi.hoisted(() => ({
+  mockRenamePersisted: vi.fn(),
+}))
+vi.mock('../utils/files-persist', async (orig) => ({
+  ...(await orig<typeof import('../utils/files-persist')>()),
+  renamePersistedGroup: mockRenamePersisted,
+}))
 
 const { mockRenameActivity } = vi.hoisted(() => ({
   mockRenameActivity: vi.fn(),
@@ -82,6 +90,7 @@ vi.mock('./use-activity-log', async (orig) => ({
   renameActivityGroup: mockRenameActivity,
 }))
 
+import { isDraftDirty, resetFilesStores } from './use-files'
 import { nextClockOffset, useLocalSessions } from './use-local-sessions'
 import { RequestError } from './use-mux-api'
 
@@ -2002,6 +2011,75 @@ describe('useLocalSessions with zellij', () => {
     expect(result.current.isServerReachable).toBe(true)
   })
 
+  it('a snapshot names each pane for what is kept on the device', async () => {
+    mockSnapshot.extra = { ...zellij(), instanceId: 'i1' }
+    await render()
+    expect(paneKeyOf('zZGV2:p0')).toBe('zZGV2:p0')
+    expect(paneGroupOf('zZGV2:p0')).toBe('dev')
+  })
+
+  it('a snapshot brings back the drafts kept for its panes; view-only, none', async () => {
+    const kept = JSON.stringify({
+      v: 1,
+      pane: 'zZGV2:p0',
+      group: 'dev',
+      editedAt: Date.now(),
+      role: 'full',
+      draft: {
+        root: '/r',
+        path: 'a.md',
+        baseHash: 'h',
+        base: 'x',
+        crlf: false,
+        text: 'y',
+      },
+    })
+    const key = 'termote-file-drafts:i1:zZGV2:p0:a.md'
+    localStorage.setItem(key, kept)
+    // As if the app had just opened
+    resetFilesStores()
+    mockSnapshot.extra = { ...zellij(), instanceId: 'i1' }
+    const first = await render()
+    expect(isDraftDirty('zZGV2:p0', 'a.md')).toBe(true)
+    first.unmount()
+    resetFilesStores()
+    mockSnapshot.extra = {
+      ...zellij(),
+      instanceId: 'i1',
+      caps: { ...zellij().caps, role: 'view' },
+    }
+    await render()
+    expect(isDraftDirty('zZGV2:p0', 'a.md')).toBe(false)
+    expect(localStorage.getItem(key)).toBeNull()
+  })
+
+  it('a session renamed and gone at once keeps its records without a name', async () => {
+    const { result } = await render()
+    mockSnapshot.extra = { ...zellij(), groups: [zellij().groups[0]] }
+    await act(async () => {
+      await result.current.renameGroup('zZGV2', 'ops')
+    })
+    expect(mockRenamePersisted).toHaveBeenCalledWith('zZGV2', 'zb3Bz', null)
+  })
+
+  it('a group renamed elsewhere, its keys kept, takes its records along', async () => {
+    resetFilesStores()
+    mockSnapshot.extra = { ...zellij(), instanceId: 'i1' }
+    const { result } = await render()
+    const key = 'termote-pane-view:i1:zZGV2:p0'
+    localStorage.setItem(
+      key,
+      JSON.stringify({ v: 1, pane: 'zZGV2:p0', group: 'dev', savedAt: 1 }),
+    )
+    const renamed = zellij()
+    renamed.groups[1] = { ...renamed.groups[1], name: 'ops' }
+    mockSnapshot.extra = { ...renamed, instanceId: 'i1' }
+    await act(async () => {
+      await result.current.refreshSessions()
+    })
+    expect(JSON.parse(localStorage.getItem(key)!).group).toBe('ops')
+  })
+
   it('renaming a session moves its ids, selection, drafts and metadata', async () => {
     const { result } = await render()
     await act(async () => {
@@ -2020,6 +2098,8 @@ describe('useLocalSessions with zellij', () => {
     expect(mockRenameGroup).toHaveBeenCalledWith('zZGV2', 'ops')
     // The activity log's events follow the session to its new id.
     expect(mockRenameActivity).toHaveBeenCalledWith('zZGV2', 'zb3Bz')
+    // So do the tabs, drafts and views kept on the device
+    expect(mockRenamePersisted).toHaveBeenCalledWith('zZGV2', 'zb3Bz', 'ops')
     expect(result.current.activeSession.id).toBe('zb3Bz:t0')
     expect(result.current.activeSession.paneId).toBe('zb3Bz:p0')
     expect(result.current.activeSession.groupId).toBe('zb3Bz')

@@ -339,6 +339,9 @@ type agentAPI struct {
 	// signins: password sessions can be listed and revoked (the
 	// snapshot's caps.signins); set by buildServer.
 	signins bool
+	// instanceID: this server's id (the snapshot's instanceId); set by
+	// buildServer.
+	instanceID string
 }
 
 type agentLookup struct {

@@ -2,6 +2,7 @@ import { Plus } from 'lucide-react'
 import { useState } from 'react'
 import { useDevices } from '../hooks/use-devices'
 import { type PairedDevice, revokeDevice } from '../hooks/use-mux-api'
+import { signOutPage } from '../utils/files-persist'
 import { formatAgo } from '../utils/format-ago'
 import { PairDeviceSheet, SECURITY_MODEL_URL } from './pair-device-sheet'
 import { Button, FOCUS_RING } from './ui/button'
@@ -48,9 +49,7 @@ interface Props {
 // Settings > Devices: the devices paired with this server, revoked one at a
 // time, and the pairing of a new one. Shown to a full client only; the
 // server refuses every route here to a view-only one.
-export function DevicesSection({
-  onSignedOut = () => window.location.assign('/login'),
-}: Props) {
+export function DevicesSection({ onSignedOut = signOutPage }: Props) {
   const { devices, error, refresh, revoke, pair } = useDevices(true)
   const [pairing, setPairing] = useState(false)
   const [pending, setPending] = useState<PairedDevice | null>(null)

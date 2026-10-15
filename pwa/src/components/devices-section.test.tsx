@@ -262,10 +262,14 @@ describe('DevicesSection', () => {
       setState({
         devices: [device({ id: 'a', name: 'Phone', current: true })],
       })
+      localStorage.setItem('termote-file-drafts:i1:@1:a', '{}')
       render(<DevicesSection />)
       fireEvent.click(screen.getByRole('button', { name: 'Revoke Phone' }))
       fireEvent.click(screen.getByRole('button', { name: 'Revoke' }))
       await vi.waitFor(() => expect(assign).toHaveBeenCalledWith('/login'))
+      // What the PWA kept on the device goes with the session
+      expect(localStorage.getItem('termote-file-drafts:i1:@1:a')).toBeNull()
+      expect(localStorage.getItem('termote-signed-out')).not.toBeNull()
     } finally {
       vi.unstubAllGlobals()
     }
