@@ -106,7 +106,7 @@ func TestFindClaudeSessionReadsWindowFromArgv(t *testing.T) {
 		want  int64
 	}{
 		"1m":       {`--model 'opus[1m]'`, claudeWindowLarge},
-		"200k":     {`--model=sonnet`, claudeWindowDefault},
+		"200k":     {`--model=claude-sonnet-4-6`, claudeWindowDefault},
 		"no model": {`--resume x`, 0},
 	} {
 		t.Run(name, func(t *testing.T) {

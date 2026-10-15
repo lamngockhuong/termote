@@ -6,14 +6,17 @@ import (
 	"encoding/hex"
 	"math"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 )
 
 // How full an agent's context is, for the overview. Claude Code's transcript
-// records the tokens of each request but never the size of the window they
-// went into: 200k unless the model was started with the 1M context
-// ("--model opus[1m]"), which only its argv shows. Codex records both in its
-// token_count rows.
+// records the tokens of each request and the model they went to, never the
+// window: claudeWindowOfModel tells it from the model id. The id comes from
+// the transcript's last model row (agent_claude_model.go), which carries the
+// [1m] of a 1M opt-in, else from --model in argv, else from the request's
+// own row. Codex records both in its token_count rows.
 
 const (
 	claudeWindowDefault int64 = 200_000
@@ -25,10 +28,9 @@ const (
 	codexBaselineTokens int64 = 12_000
 )
 
-// claudeWindowFromArgs is the context window Claude Code's command line
-// chose: 1M for a --model ending in [1m], 200k for any other --model, 0 when
-// there is no --model (the model then comes from settings or /model, which
-// argv does not show).
+// claudeWindowFromArgs is the context window of the --model Claude Code's
+// command line chose, 0 when there is none or it is an alias ("opus") whose
+// model argv does not tell.
 func claudeWindowFromArgs(args []string) int64 {
 	for i, a := range args {
 		if a == "--" {
@@ -46,23 +48,48 @@ func claudeWindowFromArgs(args []string) int64 {
 			continue
 		}
 		model = strings.TrimSpace(model)
-		switch {
-		case model == "" || strings.HasPrefix(model, "-"):
+		if strings.HasPrefix(model, "-") {
 			return 0
-		case strings.HasSuffix(strings.ToLower(model), "[1m]"):
-			return claudeWindowLarge
-		default:
-			return claudeWindowDefault
 		}
+		w, _ := claudeWindowOfModel(model)
+		return w
 	}
 	return 0
 }
 
+// claudeModelRe finds the family and version in a Claude model id, also
+// inside a provider's spelling ("us.anthropic.claude-opus-4-1-20250805-v1:0");
+// a date after the version is not a minor version.
+var claudeModelRe = regexp.MustCompile(`claude-(opus|sonnet|haiku|fable|mythos)-(\d+)(?:-(\d{1,2})\b)?`)
+
+// claudeWindowOfModel is the context window of a Claude model id, and
+// whether the id tells it. As Claude Code's model table has it (2.1.300,
+// context.native_1m): a [1m] model is 1M; so is every model from the 5
+// family on, and Opus from 4.7; any other is 200k. An alias or a name it
+// cannot read tells nothing.
+func claudeWindowOfModel(model string) (int64, bool) {
+	m := strings.ToLower(strings.TrimSpace(model))
+	if strings.HasSuffix(m, "[1m]") {
+		return claudeWindowLarge, true
+	}
+	g := claudeModelRe.FindStringSubmatch(m)
+	if g == nil {
+		return 0, false
+	}
+	major, _ := strconv.Atoi(g[2])
+	minor, _ := strconv.Atoi(g[3])
+	if major >= 5 || g[1] == "opus" && major == 4 && minor >= 7 {
+		return claudeWindowLarge, true
+	}
+	return claudeWindowDefault, true
+}
+
 // contextShare is the window an agent's context goes into, the share of it
 // used in percent (one decimal) and whether the window is known rather than
-// assumed. sessionWindow is what Claude Code's argv chose (0: unknown),
-// entryWindow what a Codex row names. window 0 means no share can be told.
-func contextShare(agent string, tokens, sessionWindow, entryWindow int64) (window int64, pct float64, exact bool) {
+// assumed. sessionWindow is the Claude session's window (0: unknown), model
+// the model the request went to, entryWindow what a Codex row names. window
+// 0 means no share can be told.
+func contextShare(agent string, tokens int64, model string, sessionWindow, entryWindow int64) (window int64, pct float64, exact bool) {
 	if agent == "codex" {
 		if entryWindow <= 0 {
 			return 0, 0, false
@@ -78,10 +105,16 @@ func contextShare(agent string, tokens, sessionWindow, entryWindow int64) (windo
 	}
 	window, exact = sessionWindow, sessionWindow > 0
 	if !exact {
-		window = claudeWindowDefault
+		// The request's model never carries the [1m] of an opt-in: it
+		// proves a 1M window of its own, never a 200k one.
+		if w, ok := claudeWindowOfModel(model); ok && w == claudeWindowLarge {
+			window, exact = w, true
+		} else {
+			window = claudeWindowDefault
+		}
 	}
-	// Only the 1M window holds more than 200k: a /model switch after start
-	// is not in argv, yet the tokens prove it.
+	// Only the 1M window holds more than 200k: an opt-in nothing showed
+	// is proven by the tokens.
 	if tokens > window {
 		window, exact = claudeWindowLarge, true
 	}

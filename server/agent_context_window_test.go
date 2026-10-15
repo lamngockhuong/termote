@@ -16,9 +16,10 @@ func TestClaudeWindowFromArgs(t *testing.T) {
 	}{
 		{[]string{"node", "/usr/bin/claude", "--model", "opus[1m]"}, claudeWindowLarge},
 		{[]string{"claude", "--model=sonnet[1M]"}, claudeWindowLarge},
-		{[]string{"claude", "--model=sonnet"}, claudeWindowDefault},
 		{[]string{"claude", "--model", "claude-opus-4-1"}, claudeWindowDefault},
-		{[]string{"claude", "--model", " haiku "}, claudeWindowDefault},
+		{[]string{"claude", "--model", " claude-opus-5-5 "}, claudeWindowLarge},
+		// An alias names no model
+		{[]string{"claude", "--model=sonnet"}, 0},
 		{[]string{"claude", "--resume", "x"}, 0},
 		{[]string{"claude", "--model"}, 0},
 		{[]string{"claude", "--model="}, 0},
@@ -35,33 +36,36 @@ func TestClaudeWindowFromArgs(t *testing.T) {
 func TestContextShare(t *testing.T) {
 	for _, c := range []struct {
 		name                         string
-		agent                        string
+		agent, model                 string
 		tokens, sessionWin, entryWin int64
 		window                       int64
 		pct                          float64
 		exact                        bool
 	}{
-		{"claude argv 200k", "claude", 144_000, claudeWindowDefault, 0, claudeWindowDefault, 72, true},
-		{"claude argv 1m", "claude", 144_000, claudeWindowLarge, 0, claudeWindowLarge, 14.4, true},
-		{"claude unknown", "claude", 144_000, 0, 0, claudeWindowDefault, 72, false},
-		{"claude unknown past 200k", "claude", 300_000, 0, 0, claudeWindowLarge, 30, true},
-		{"claude argv 200k then /model 1m", "claude", 250_000, claudeWindowDefault, 0, claudeWindowLarge, 25, true},
-		{"claude rounding", "claude", 1, claudeWindowDefault, 0, claudeWindowDefault, 0, true},
-		{"claude full", "claude", claudeWindowLarge * 2, claudeWindowLarge, 0, claudeWindowLarge, 100, true},
-		{"codex", "codex", 50_307, 0, 258_400, 258_400, 15.5, true},
-		{"codex under baseline", "codex", 9_000, 0, 258_400, 258_400, 0, true},
-		{"codex over window", "codex", 300_000, 0, 258_400, 258_400, 100, true},
-		{"codex tiny window", "codex", 5_000, 0, codexBaselineTokens, codexBaselineTokens, 100, true},
-		{"codex no window", "codex", 50_000, 0, 0, 0, 0, false},
+		{"claude session 200k", "claude", "", 144_000, claudeWindowDefault, 0, claudeWindowDefault, 72, true},
+		{"claude session 1m", "claude", "claude-sonnet-4-6", 144_000, claudeWindowLarge, 0, claudeWindowLarge, 14.4, true},
+		{"claude model 1m of its own", "claude", "claude-opus-5-5", 144_000, 0, 0, claudeWindowLarge, 14.4, true},
+		// Its row drops the [1m] of an opt-in: 200k stays assumed
+		{"claude model 200k", "claude", "claude-sonnet-4-6", 144_000, 0, 0, claudeWindowDefault, 72, false},
+		{"claude unknown", "claude", "claude-model-b", 144_000, 0, 0, claudeWindowDefault, 72, false},
+		{"claude unknown past 200k", "claude", "", 300_000, 0, 0, claudeWindowLarge, 30, true},
+		{"claude 200k then /model 1m", "claude", "", 250_000, claudeWindowDefault, 0, claudeWindowLarge, 25, true},
+		{"claude rounding", "claude", "", 1, claudeWindowDefault, 0, claudeWindowDefault, 0, true},
+		{"claude full", "claude", "", claudeWindowLarge * 2, claudeWindowLarge, 0, claudeWindowLarge, 100, true},
+		{"codex", "codex", "", 50_307, 0, 258_400, 258_400, 15.5, true},
+		{"codex under baseline", "codex", "", 9_000, 0, 258_400, 258_400, 0, true},
+		{"codex over window", "codex", "", 300_000, 0, 258_400, 258_400, 100, true},
+		{"codex tiny window", "codex", "", 5_000, 0, codexBaselineTokens, codexBaselineTokens, 100, true},
+		{"codex no window", "codex", "", 50_000, 0, 0, 0, 0, false},
 	} {
-		w, pct, exact := contextShare(c.agent, c.tokens, c.sessionWin, c.entryWin)
+		w, pct, exact := contextShare(c.agent, c.tokens, c.model, c.sessionWin, c.entryWin)
 		if w != c.window || pct != c.pct || exact != c.exact {
 			t.Errorf("%s: = %d, %v, %v; want %d, %v, %v", c.name, w, pct, exact, c.window, c.pct, c.exact)
 		}
 	}
 	// Codex shows round(100 - used) as "% context left": 84% for the
 	// fixture's last request, within 1 of what the overview sends.
-	if _, pct, _ := contextShare("codex", 50_307, 0, 258_400); 100-pct < 83.5 || 100-pct > 84.5 {
+	if _, pct, _ := contextShare("codex", 50_307, "", 0, 258_400); 100-pct < 83.5 || 100-pct > 84.5 {
 		t.Errorf("codex left = %v, want 84", 100-pct)
 	}
 }

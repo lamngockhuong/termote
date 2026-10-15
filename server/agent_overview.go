@@ -293,6 +293,9 @@ func (a *agentAPI) summarizePane(paneID string) (transcriptSummary, error) {
 	if err != nil {
 		return transcriptSummary{}, err
 	}
+	if s.Agent == "claude" {
+		s.ClaudeWindow = a.claudeWindow(s)
+	}
 	sum := summarizeTranscript(res.Entries, s)
 	if sum.limits != nil {
 		sum.codexHome = codexAccountHome(s, os.Getenv, a.home)
@@ -305,6 +308,26 @@ func (a *agentAPI) summarizePane(paneID string) (transcriptSummary, error) {
 		}
 	}
 	return sum, nil
+}
+
+// claudeWindow is the context window of s's model: the one its transcript
+// last names, else the one its argv chose (0: neither tells).
+func (a *agentAPI) claudeWindow(s AgentSession) int64 {
+	path, err := claudeJournal{}.Locate(s)
+	if err != nil {
+		return s.ClaudeWindow
+	}
+	model, err := a.claudeModels.model(path)
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) && !errors.Is(err, errClaudeModelBusy) {
+			log.Printf("overview: claude model: %v", err)
+		}
+		return s.ClaudeWindow
+	}
+	if w, ok := claudeWindowOfModel(model); ok {
+		return w
+	}
+	return s.ClaudeWindow
 }
 
 // transcriptSummary is what a card shows of a transcript, and the rate
@@ -322,7 +345,7 @@ type transcriptSummary struct {
 // (never a tool result), the usage of the last assistant row that has one,
 // and the last rate limits. Every row of one message repeats its usage, so
 // the last one is the message's, never a sum. s gives the agent and the
-// window Claude Code's argv chose.
+// session's Claude window.
 func summarizeTranscript(entries []TranscriptEntry, s AgentSession) transcriptSummary {
 	var sum transcriptSummary
 	for i := len(entries) - 1; i >= 0; i-- {
@@ -336,7 +359,7 @@ func summarizeTranscript(entries []TranscriptEntry, s AgentSession) transcriptSu
 		if u := e.usage; u != nil {
 			if sum.usage == nil && !u.noContext {
 				sum.usage = &overviewUsage{ContextTokens: u.contextTokens, Model: u.model}
-				window, pct, exact := contextShare(s.Agent, u.contextTokens, s.ClaudeWindow, u.window)
+				window, pct, exact := contextShare(s.Agent, u.contextTokens, u.model, s.ClaudeWindow, u.window)
 				if window > 0 {
 					sum.usage.ContextWindow, sum.usage.ContextPercent, sum.usage.Exact = window, &pct, exact
 				}

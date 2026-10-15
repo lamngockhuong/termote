@@ -46,7 +46,8 @@ type AgentSession struct {
 	Status    string // working | idle | blocked | done | unknown
 	ClaudeDir string // Claude Code: its config dir, where its transcripts live
 	// ClaudeWindow: the context window Claude Code's argv chose (--model),
-	// 0 when unknown (no --model, or no process to read: Herdr).
+	// 0 when unknown (no --model, or no process to read: Herdr). The
+	// overview prefers the model its transcript names (claudeModels).
 	ClaudeWindow int64
 	// Codex: CODEX_HOME of the Codex process holding the rollout, the
 	// resolved rollout path it holds open for writing, and the rollout's
@@ -350,6 +351,9 @@ type agentAPI struct {
 	subagentState *subagentStore
 	// subagentWrites: the overview's read of when running subagents wrote
 	subagentWrites *ttlCache[time.Time]
+	// claudeModels: the model each Claude transcript last names, for the
+	// overview's context window.
+	claudeModels *claudeModels
 	// devices: devices can be paired (the snapshot's caps.devices); set by
 	// buildServer.
 	devices bool
@@ -383,6 +387,7 @@ func newAgentAPI(m Mux) *agentAPI {
 		subagents:      newTTLCache[subagentsResponse](subagentsTTL),
 		subagentState:  newSubagentStore(time.Now),
 		subagentWrites: newTTLCache[time.Time](subagentsTTL),
+		claudeModels:   newClaudeModels(),
 	}
 }
 
