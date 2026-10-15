@@ -15,7 +15,14 @@ import (
 // sleep has CLAUDE_CONFIG_DIR=dir, and returns the root (sh) and leaf pids.
 func startFakeClaude(t *testing.T, env ...string) (root, leaf int) {
 	t.Helper()
-	cmd := exec.Command("sh", "-c", "sleep 30 & wait")
+	return startFakeClaudeScript(t, "sleep 30 & wait", env...)
+}
+
+// startFakeClaudeScript is startFakeClaude running script, which must start
+// exactly one child.
+func startFakeClaudeScript(t *testing.T, script string, env ...string) (root, leaf int) {
+	t.Helper()
+	cmd := exec.Command("sh", "-c", script)
 	cmd.Env = append(os.Environ(), env...)
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
@@ -86,6 +93,34 @@ func TestFindClaudeSessionUnderPane(t *testing.T) {
 	}
 	if !claudeProcAlive(leaf, start) || claudeProcAlive(leaf, start+"1") {
 		t.Error("claudeProcAlive")
+	}
+}
+
+func TestFindClaudeSessionReadsWindowFromArgv(t *testing.T) {
+	domain := claudePIDDomain()
+	if domain == "" {
+		t.Skip("no machine-id")
+	}
+	for name, c := range map[string]struct {
+		model string
+		want  int64
+	}{
+		"1m":       {`--model 'opus[1m]'`, claudeWindowLarge},
+		"200k":     {`--model=sonnet`, claudeWindowDefault},
+		"no model": {`--resume x`, 0},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			// The child is a shell whose argv carries the flags; "; :"
+			// keeps it from exec'ing sleep in its place.
+			root, leaf := startFakeClaudeScript(t, `sh -c 'sleep 30; :' claude `+c.model+` & wait`, "CLAUDE_CONFIG_DIR="+dir)
+			start, _ := procStartTime(leaf)
+			writeSessionFile(t, dir, leaf, start, domain, "busy")
+			s, ok := findClaudeSession("argv-"+name, root)
+			if !ok || s.PID != leaf || s.ClaudeWindow != c.want {
+				t.Errorf("session = %+v, %v; want window %d", s, ok, c.want)
+			}
+		})
 	}
 }
 

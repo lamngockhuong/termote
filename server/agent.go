@@ -45,6 +45,9 @@ type AgentSession struct {
 	ID        string // the agent's session id (a UUID)
 	Status    string // working | idle | blocked | done | unknown
 	ClaudeDir string // Claude Code: its config dir, where its transcripts live
+	// ClaudeWindow: the context window Claude Code's argv chose (--model),
+	// 0 when unknown (no --model, or no process to read: Herdr).
+	ClaudeWindow int64
 	// Codex: CODEX_HOME of the Codex process holding the rollout, the
 	// resolved rollout path it holds open for writing, and the rollout's
 	// rolloutIdentity when the process was found.
@@ -93,15 +96,29 @@ type TranscriptEntry struct {
 	Role  string           `json:"role"` // user | assistant | summary | note
 	Parts []TranscriptPart `json:"parts"`
 	off   int64            // offset of the line the entry came from
-	// usage: the context the row's request filled (Claude assistant rows),
-	// for the overview; never sent with the transcript.
+	// usage: the context the row's request filled (Claude assistant rows,
+	// the last Codex assistant entry before a token_count row), for the
+	// overview; never sent with the transcript.
 	usage *entryUsage
 }
 
 // entryUsage is an assistant row's context size in tokens and its model.
+// Codex also names its context window and the account's rate limits; a
+// Codex row that carries only limits has noContext set.
 type entryUsage struct {
 	contextTokens int64
 	model         string
+	window        int64
+	noContext     bool
+	limits        *codexLimits
+}
+
+// codexLimits is an account's rate limits as a token_count row recorded
+// them at ts.
+type codexLimits struct {
+	plan    string
+	windows []usageWindow
+	ts      string
 }
 
 type TranscriptPart struct {
@@ -325,7 +342,7 @@ type agentAPI struct {
 	activity *activityTracker
 	// overview shares one summary of every agent between clients; changes
 	// holds their directories' changes, read in the background.
-	overview *ttlCache[[]overviewPane]
+	overview *ttlCache[overviewRead]
 	changes  *overviewChanges
 	// subagents shares one read of a session's subagent tree between
 	// clients; subagentState keeps how far each transcript was read.
@@ -360,7 +377,7 @@ func newAgentAPI(m Mux) *agentAPI {
 		input:     newAgentInput(),
 		starts:    newAgentStarts(),
 		activity:  newActivityTracker(time.Now),
-		overview:  newTTLCache[[]overviewPane](overviewTTL),
+		overview:  newTTLCache[overviewRead](overviewTTL),
 		changes:   newOverviewChanges(),
 
 		subagents:      newTTLCache[subagentsResponse](subagentsTTL),
