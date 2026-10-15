@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.1.0](https://github.com/lamngockhuong/termote/compare/v2.0.1...v2.1.0) (2026-10-15)
+
+
+### Features
+
+* add a Zellij backend (--mux zellij) ([#472](https://github.com/lamngockhuong/termote/issues/472)) ([ebfc000](https://github.com/lamngockhuong/termote/commit/ebfc0002dc56dbafd38ce25ea590dfe3d97d696e))
+* add an agent overview with a queue of waiting dialogs ([#475](https://github.com/lamngockhuong/termote/issues/475)) ([fb69f1a](https://github.com/lamngockhuong/termote/commit/fb69f1abbf2361f75808ba1cd7a72e15bcdede34))
+* keep Files and Changes tabs and unsaved drafts when the app closes ([#477](https://github.com/lamngockhuong/termote/issues/477)) ([186b27b](https://github.com/lamngockhuong/termote/commit/186b27beb37a2490421e5dc386a0844131d9c2e5))
+* show each agent's history, its subagents and a log of status changes in the overview ([#476](https://github.com/lamngockhuong/termote/issues/476)) ([d6ef508](https://github.com/lamngockhuong/termote/commit/d6ef5081ffb32e560d99ee6d73505abbcda26231))
+
 ## [2.0.1](https://github.com/lamngockhuong/termote/compare/v2.0.0...v2.0.1) (2026-10-13)
 
 
