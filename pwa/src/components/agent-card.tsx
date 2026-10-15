@@ -1,5 +1,5 @@
 import { ChevronDown, GitBranch, Hourglass, SquareTerminal } from 'lucide-react'
-import { memo, useId, useState } from 'react'
+import { memo, type Ref, useId, useState } from 'react'
 import { agentLabel } from '../chat-agents'
 import type {
   ActivityEvent,
@@ -119,6 +119,10 @@ interface Props {
     pane: SessionPane,
     view: 'chat' | 'terminal',
   ) => void
+  // The card the overview was opened on: its open button, and an accent
+  // border until focus leaves it
+  openRef?: Ref<HTMLButtonElement>
+  highlighted?: boolean
 }
 
 // One agent of the overview: its status and how long it has been in it,
@@ -138,6 +142,8 @@ export const AgentCard = memo(function AgentCard({
   stuckFor,
   opensChat,
   onOpen,
+  openRef,
+  highlighted,
 }: Props) {
   const detailsId = useId()
   const moreId = useId()
@@ -158,15 +164,19 @@ export const AgentCard = memo(function AgentCard({
     <div
       data-status={status}
       data-stuck={stuckFor !== undefined || undefined}
+      data-highlighted={highlighted || undefined}
       className={`relative rounded-panel border bg-surface ui-terminal:bg-bg ${
-        status === 'blocked'
-          ? 'border-danger/60'
-          : stuckFor !== undefined
-            ? 'border-warning/60'
-            : 'border-border'
+        highlighted
+          ? 'border-accent ring-1 ring-accent'
+          : status === 'blocked'
+            ? 'border-danger/60'
+            : stuckFor !== undefined
+              ? 'border-warning/60'
+              : 'border-border'
       }`}
     >
       <button
+        ref={openRef}
         type="button"
         onClick={() => onOpen(session, pane, opensChat ? 'chat' : 'terminal')}
         aria-label={`${openLabel}: ${name}, ${status ? STATUS_WORDS[status] : 'status unknown'}, ${where}`}

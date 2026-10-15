@@ -90,7 +90,10 @@ export function UsageChip({ pane, accounts, isMobile, onOpen }: Props) {
   const spoken = parts
     .map((p) => `${p.spoken} ${percentLabel(p.percent, p.exact)}`)
     .join(', ')
-  const className = `flex h-7 shrink-0 items-center rounded-control border px-2 font-label text-[11px] tabular-nums ${LEVEL_CHIP[level]}`
+  // The frame and size of the view switcher beside it, so both line up
+  const frame = `flex shrink-0 rounded-control border bg-surface p-0.5 ui-native:rounded-full ui-native:border-0 ${LEVEL_CHIP[level]}`
+  const inner =
+    'flex h-7 items-center rounded-[calc(var(--radius-control)-2px)] px-2.5 text-[12px] tabular-nums pointer-coarse:h-9 ui-native:rounded-full ui-terminal:font-label'
   return onOpen ? (
     <button
       type="button"
@@ -98,18 +101,18 @@ export function UsageChip({ pane, accounts, isMobile, onOpen }: Props) {
       aria-label={`Agent usage: ${spoken}. Open the agent overview`}
       title="Agent usage: open the overview"
       data-level={level}
-      className={`${className} hover:bg-surface-raised ${FOCUS_RING}`}
+      className={`group ${frame} ${FOCUS_RING}`}
     >
-      {text}
+      <span className={`${inner} group-hover:bg-surface-raised`}>{text}</span>
     </button>
   ) : (
     <span
       role="note"
       aria-label={`Agent usage: ${spoken}`}
       data-level={level}
-      className={className}
+      className={frame}
     >
-      {text}
+      <span className={inner}>{text}</span>
     </span>
   )
 }
@@ -123,7 +126,8 @@ interface HeaderProps {
   // Milliseconds between reads of the overview
   pollInterval: number
   isMobile: boolean
-  onOpen?: () => void
+  // Opens the overview on this pane's card
+  onOpen?: (paneId: string) => void
 }
 
 // The chip for the header: reads its pane's overview only while it is on
@@ -144,7 +148,7 @@ export function HeaderUsageChip({
       pane={overview.panes.find((p) => p.paneId === paneId)}
       accounts={overview.accounts ?? []}
       isMobile={isMobile}
-      onOpen={onOpen}
+      onOpen={onOpen && paneId ? () => onOpen(paneId) : undefined}
     />
   )
 }

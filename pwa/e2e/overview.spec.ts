@@ -300,6 +300,9 @@ test.describe('agent overview with an agent', () => {
     await expect(chip).toHaveText('ctx ~72% · 7d 95%', { timeout: 20000 })
     await chip.click()
     await expect(overview(page)).toBeVisible()
+    // ...on its own card, which takes the focus and an accent border
+    await expect(card.getByRole('button', { name: /^Open chat: / })).toBeFocused()
+    await expect(card).toHaveAttribute('data-highlighted', 'true')
   })
 
   test('a dialog is answered from the queue, never moving on by itself', async ({ page }) => {

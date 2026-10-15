@@ -161,6 +161,13 @@ interface AppProps {
   readOnly?: boolean
 }
 
+// The overview's address; the hash change opens it.
+function showOverviewAddress() {
+  if (window.location.hash !== OVERVIEW_HASH) {
+    window.location.hash = OVERVIEW_HASH
+  }
+}
+
 export default function App({
   views = APP_VIEWS,
   readOnly: readOnlyProp = false,
@@ -1128,10 +1135,21 @@ export default function App({
   }, [shownLink, showToast])
 
   // Opening and closing go through the address, so each is a history entry.
+  // The usage chip opens it on its pane's card.
+  const [overviewFocus, setOverviewFocus] = useState<{ paneId: string }>()
+  // Closed, it forgets the card: Back to it again opens on the title.
+  const [focusWhileOpen, setFocusWhileOpen] = useState(overviewOpen)
+  if (focusWhileOpen !== overviewOpen) {
+    setFocusWhileOpen(overviewOpen)
+    if (!overviewOpen) setOverviewFocus(undefined)
+  }
   const openOverview = useCallback(() => {
-    if (window.location.hash !== OVERVIEW_HASH) {
-      window.location.hash = OVERVIEW_HASH
-    }
+    setOverviewFocus(undefined)
+    showOverviewAddress()
+  }, [])
+  const openOverviewOn = useCallback((paneId: string) => {
+    setOverviewFocus({ paneId })
+    showOverviewAddress()
   }, [])
   const closeOverview = useCallback(() => {
     if (currentLink) {
@@ -1316,7 +1334,7 @@ export default function App({
                 enabled={settings.showUsageChip}
                 pollInterval={settings.pollInterval * 1000}
                 isMobile={isMobile}
-                onOpen={openOverview}
+                onOpen={openOverviewOn}
               />
             }
             viewPanelId={viewPanelId}
@@ -1507,6 +1525,7 @@ export default function App({
                   onStartAgent={
                     !readOnly && chatOffered ? startFromOverview : undefined
                   }
+                  focusPane={overviewFocus}
                 />
               </div>
             )}

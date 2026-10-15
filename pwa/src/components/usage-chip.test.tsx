@@ -212,6 +212,14 @@ describe('HeaderUsageChip', () => {
     expect(screen.getByRole('note')).toHaveTextContent('ctx 72% · 7d 95%')
   })
 
+  it('opens the overview on its pane', async () => {
+    const onOpen = vi.fn()
+    render(chip({ onOpen }))
+    await act(async () => {})
+    fireEvent.click(screen.getByRole('button', { name: /^Agent usage:/ }))
+    expect(onOpen).toHaveBeenCalledExactlyOnceWith('p1')
+  })
+
   it('shows nothing when the read has no such pane, or no accounts', async () => {
     mockFetchOverview.mockResolvedValue({ serverNow: 'x', panes: [] })
     const { container } = render(chip())

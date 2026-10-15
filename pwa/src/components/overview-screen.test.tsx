@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Session, SessionGroup } from '../types/session'
+import type { Session, SessionGroup, SessionPane } from '../types/session'
 
 const { mockFetchOverview, mockFetchActivity } = vi.hoisted(() => ({
   mockFetchOverview: vi.fn(),
@@ -412,6 +412,84 @@ describe('OverviewScreen, loading and failing', () => {
     unmount()
     expect(opener).toHaveFocus()
     opener.remove()
+  })
+
+  it('focuses the card it was opened on, marked until focus leaves it', () => {
+    const { rerender, onOpen, onClose } = renderScreen({
+      focusPane: { paneId: 'p-new' },
+    })
+    const card = screen.getByRole('button', { name: /^Open terminal: Codex,/ })
+    const frame = () => card.parentElement as HTMLElement
+    expect(card).toHaveFocus()
+    expect(frame()).toHaveAttribute('data-highlighted', 'true')
+    // Within the card the mark stays; out of it, it goes.
+    const inside = within(frame()).getAllByRole('button')[1]
+    act(() => inside.focus())
+    expect(frame()).toHaveAttribute('data-highlighted', 'true')
+    act(() => screen.getByRole('heading', { name: 'Agents' }).focus())
+    expect(frame()).not.toHaveAttribute('data-highlighted')
+    // Another card losing focus leaves the mark as it is.
+    act(() =>
+      screen.getAllByRole('button', { name: /^Open chat: / })[0].focus(),
+    )
+    act(() => screen.getByRole('heading', { name: 'Agents' }).focus())
+    expect(document.querySelector('[data-highlighted]')).toBeNull()
+
+    const props = {
+      sessions: SESSIONS,
+      groups: GROUPS,
+      groupNoun: 'workspace',
+      ready: true,
+      pollInterval: 5000,
+      clockOffset: 0,
+      activePaneOnly: false,
+      opensChat: (p: SessionPane) => p.agentName === 'claude',
+      canAnswer: (p: SessionPane) => p.agentName === 'claude',
+      readOnly: false,
+      stuckMinutes: 10,
+      onOpen,
+      onClose,
+    }
+    // A new request focuses again; the same one again does nothing.
+    const same = { paneId: 'p-new' }
+    rerender(<OverviewScreen {...props} focusPane={same} />)
+    expect(card).toHaveFocus()
+    act(() => screen.getByRole('heading', { name: 'Agents' }).focus())
+    rerender(<OverviewScreen {...props} focusPane={same} />)
+    expect(screen.getByRole('heading', { name: 'Agents' })).toHaveFocus()
+  })
+
+  it('focuses no card before the snapshot is in, nor after the user moved on', () => {
+    const props = {
+      sessions: SESSIONS,
+      groups: GROUPS,
+      groupNoun: 'workspace',
+      pollInterval: 5000,
+      clockOffset: 0,
+      activePaneOnly: false,
+      opensChat: (p: SessionPane) => p.agentName === 'claude',
+      canAnswer: (p: SessionPane) => p.agentName === 'claude',
+      readOnly: false,
+      stuckMinutes: 10,
+      onOpen: vi.fn(),
+      onClose: vi.fn(),
+      focusPane: { paneId: 'p-new' },
+    }
+    // The server out of reach: its sessions are kept, no card is drawn
+    const { rerender } = render(<OverviewScreen {...props} ready={false} />)
+    const close = screen.getByRole('button', {
+      name: 'Close the agent overview',
+    })
+    act(() => close.focus())
+    rerender(<OverviewScreen {...props} ready />)
+    expect(close).toHaveFocus()
+    expect(document.querySelector('[data-highlighted]')).toBeNull()
+  })
+
+  it('keeps the focus on the title for a pane without a card', () => {
+    renderScreen({ focusPane: { paneId: 'p-shell' } })
+    expect(screen.getByRole('heading', { name: 'Agents' })).toHaveFocus()
+    expect(document.querySelector('[data-highlighted]')).toBeNull()
   })
 })
 

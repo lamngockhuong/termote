@@ -4302,6 +4302,57 @@ describe('App views, view-only and deep links', () => {
       expect(mockFetchOverview).toHaveBeenCalled()
     })
 
+    it("the usage chip opens it on its pane's card", async () => {
+      const base = mockUseLocalSessions()
+      mockUseLocalSessions.mockReturnValue({
+        ...base,
+        activeSession: { ...base.activeSession, hasAgent: true },
+      } as any)
+      const settings = mockUseSettings()
+      mockUseSettings.mockReturnValue({
+        ...settings,
+        settings: { ...settings.settings, showUsageChip: true },
+      } as any)
+      mockFetchOverview.mockResolvedValueOnce({
+        serverNow: '2026-10-13T09:00:00.000Z',
+        panes: [
+          {
+            paneId: base.activeSession.paneId,
+            key: 'k',
+            usage: {
+              contextTokens: 20_000,
+              contextWindow: 200_000,
+              contextPercent: 10,
+              exact: true,
+            },
+          },
+        ],
+      })
+      render(<App />)
+      fireEvent.click(
+        await screen.findByRole('button', {
+          name: /^Agent usage: context 10%/,
+        }),
+      )
+      await screen.findByRole('region', { name: 'Agents' })
+      expect(window.location.hash).toBe('#/overview')
+      await waitFor(() =>
+        expect(
+          screen.getByRole('button', { name: /^Open terminal: Agent/ }),
+        ).toHaveFocus(),
+      )
+      // Closed, then back to it: the title, not the card again
+      fireEvent.keyDown(window, { key: 'Escape' })
+      await waitFor(() => expect(overview()).toBeNull())
+      act(() => {
+        window.history.replaceState(null, '', '/#/overview')
+        window.dispatchEvent(new HashChangeEvent('hashchange'))
+      })
+      await waitFor(() =>
+        expect(screen.getByRole('heading', { name: 'Agents' })).toHaveFocus(),
+      )
+    })
+
     it('opens from the sidebar and Esc goes back to the pane', async () => {
       render(<App />)
       fireEvent.click(await screen.findByRole('button', { name: 'SBOverview' }))
