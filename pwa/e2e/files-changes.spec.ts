@@ -943,9 +943,15 @@ test.describe('files and changes views', () => {
         expect(await drawn(3)).toEqual({ lines: 10, cut: true })
         expect(readFileSync(f, 'utf-8')).toBe(text)
 
-        // A click on a cell of the table viewed edits it where it is
-        await row(2).getByRole('gridcell').nth(2).click()
+        // A click on a cell of the table viewed edits it where it is, the
+        // field as tall as its lines (12 of 16px, 6px padding), over the
+        // rows below
         const field = (name: string) => grid.getByRole('textbox', { name })
+        await row(3).getByRole('gridcell').nth(1).click()
+        await expect(field('Edit note, row 3')).toBeFocused()
+        expect(await field('Edit note, row 3').evaluate((el) => el.getBoundingClientRect().height)).toBe(204)
+        await page.keyboard.press('Escape')
+        await row(2).getByRole('gridcell').nth(2).click()
         await expect(field('Edit tag, row 2')).toBeFocused()
         await expect(field('Edit tag, row 2')).toHaveValue('a')
         await page.keyboard.type('x')

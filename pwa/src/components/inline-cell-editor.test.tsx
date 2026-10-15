@@ -27,6 +27,22 @@ describe('InlineCellEditor', () => {
     expect([field.selectionStart, field.selectionEnd]).toEqual([0, 5])
   })
 
+  it('grows as tall as its lines, up to 20, then scrolls', () => {
+    let height = 40
+    const spy = vi
+      .spyOn(HTMLTextAreaElement.prototype, 'scrollHeight', 'get')
+      .mockImplementation(() => height)
+    try {
+      const { box } = mount()
+      expect(box.style.height).toBe('40px')
+      height = 900
+      type(box, 'many\nlines')
+      expect(box.style.height).toBe('332px')
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
   it('Enter sets the value, once', () => {
     const p = mount()
     type(p.box, 'new')

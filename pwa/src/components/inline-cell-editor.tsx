@@ -3,10 +3,15 @@ import {
   type FocusEvent,
   type KeyboardEvent,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from 'react'
 import { FOCUS_RING } from './ui/button'
+
+// Tallest the field grows to as it fits its value: 20 lines of 16px
+// (leading-4) between 6px of padding (py-1.5); past it, it scrolls
+const MAX_HEIGHT = 20 * 16 + 2 * 6
 
 // Where Tab takes the editing after a value is set
 export type CellMove = 'next' | 'prev'
@@ -27,7 +32,9 @@ interface Props {
 // A cell of the table edited where it is (a fine pointer): Enter sets it,
 // Shift+Enter or Alt+Enter breaks the line, Escape drops what was typed,
 // Tab sets it and goes to the next cell. Leaving it any other way sets it,
-// scrolled away (unmounted) included, as a spreadsheet does.
+// scrolled away (unmounted) included, as a spreadsheet does. It lies over
+// the cell and the rows below, as tall as its value (MAX_HEIGHT at most),
+// and never narrower than the cell: its parent is the cell, positioned.
 export function InlineCellEditor({
   value,
   label,
@@ -42,6 +49,15 @@ export function InlineCellEditor({
   // What unmounting sets: the last value typed, with the last onCommit
   const last = useRef({ input, onCommit })
   last.current = { input, onCommit }
+
+  // Fits the field to the value typed: back to its least height, then as
+  // tall as its lines (the cell's height at least, from min-h-full)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: input changes the lines
+  useLayoutEffect(() => {
+    const field = box.current as HTMLTextAreaElement
+    field.style.height = 'auto'
+    field.style.height = `${Math.min(field.scrollHeight, MAX_HEIGHT)}px`
+  }, [input])
 
   useEffect(() => {
     box.current?.select()
@@ -87,9 +103,10 @@ export function InlineCellEditor({
   }
 
   return (
-    <div className="relative h-full w-full">
+    <div className="absolute left-0 top-0 flex min-h-full w-full min-w-48 flex-col shadow-lg">
       <textarea
         ref={box}
+        rows={1}
         aria-label={label}
         value={input}
         onChange={(e) => setInput(e.target.value)}
@@ -100,7 +117,7 @@ export function InlineCellEditor({
         autoCapitalize="off"
         autoCorrect="off"
         autoComplete="off"
-        className="block h-full w-full resize-none border-0 bg-surface py-1.5 pl-2 pr-7 font-term text-[12px] leading-4 text-fg outline-2 outline-accent -outline-offset-2"
+        className="block min-h-0 w-full grow resize-none border-0 bg-surface py-1.5 pl-2 pr-7 font-term text-[12px] leading-4 text-fg outline-2 outline-accent -outline-offset-2"
       />
       <button
         type="button"

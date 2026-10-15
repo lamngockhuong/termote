@@ -539,7 +539,8 @@ export function TableGrid({
               key={r}
               role="row"
               aria-rowindex={ariaRow(r)}
-              className="grid overflow-hidden border-b border-border/50"
+              // The row edited lets its editor grow over the rows below
+              className={`grid border-b border-border/50 ${editingCell?.row === r ? 'relative z-[5]' : 'overflow-hidden'}`}
               style={{ gridTemplateColumns: template, height: rowHeight }}
             >
               <div
@@ -566,7 +567,7 @@ export function TableGrid({
                       // biome-ignore lint/suspicious/noArrayIndexKey: a cell is its column
                       key={c}
                       role="gridcell"
-                      className="min-w-0"
+                      className="relative min-w-0"
                     >
                       {editor}
                     </div>
