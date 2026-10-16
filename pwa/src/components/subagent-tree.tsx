@@ -1,5 +1,6 @@
 import { CircleAlert, CircleCheck, LoaderCircle } from 'lucide-react'
 import type { SubagentNode, Subagents } from '../hooks/use-mux-api'
+import { visibleUnsafe } from '../utils/unsafe-chars'
 
 // At most this many subagents are drawn; the rest are counted.
 export const SUBAGENT_TREE_MAX = 20
@@ -110,12 +111,12 @@ export function SubagentTree({ tree, error, now }: Props) {
                 </span>
                 {n.description && (
                   <span className="truncate text-fg-muted">
-                    {n.description}
+                    {visibleUnsafe(n.description)}
                   </span>
                 )}
                 {n.lastTool && (
                   <span className="truncate font-mono text-[11px] text-fg-subtle">
-                    {n.lastTool}
+                    {visibleUnsafe(n.lastTool)}
                   </span>
                 )}
               </span>

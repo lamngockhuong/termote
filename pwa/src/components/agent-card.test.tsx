@@ -114,6 +114,17 @@ describe('AgentCard', () => {
     expect(open).not.toHaveTextContent('claude-model')
   })
 
+  it('shows the hidden characters of the last words', () => {
+    renderCard({
+      overview: {
+        paneId: 'w1:p1',
+        key: 'w1:p1',
+        lastText: 'run \u202egnp.exe\u061c',
+      },
+    })
+    expect(screen.getByText('run ⟨U+202E⟩gnp.exe⟨U+061C⟩')).toBeInTheDocument()
+  })
+
   it('shows the status, place, last words, changes and context', () => {
     const { onOpen } = renderCard({
       worktree: true,

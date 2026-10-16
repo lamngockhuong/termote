@@ -9,6 +9,7 @@ describe('UNSAFE_CHARS', () => {
     '\u001f',
     '\u007f',
     '\u0085',
+    '\u061c',
     '\u009f',
     '\u200b',
     '\u200e',
