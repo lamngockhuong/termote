@@ -50,6 +50,29 @@ const TREE = {
   ],
 }
 
+describe('SubagentTree text', () => {
+  it('shows the hidden characters of a description and a tool', () => {
+    render(
+      <SubagentTree
+        tree={{
+          nodes: [
+            node({
+              type: 'Ex\u202eplore',
+              description: 'fix \u202etxt.exe',
+              lastTool: 'Read\u061c',
+            }),
+          ],
+        }}
+        error={false}
+        now={NOW}
+      />,
+    )
+    expect(screen.getByText('fix ⟨U+202E⟩txt.exe')).toBeInTheDocument()
+    expect(screen.getByText('Read⟨U+061C⟩')).toBeInTheDocument()
+    expect(screen.getByText('Ex⟨U+202E⟩plore')).toBeInTheDocument()
+  })
+})
+
 describe('subagent helpers', () => {
   it('counts and times subagents', () => {
     expect(flattenSubagents(TREE.nodes).map((n) => n.id)).toEqual([

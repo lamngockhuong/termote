@@ -50,7 +50,7 @@
   const BADGE = '/badge-96x96.png'
   const NAME_MAX = 64
   const UNSAFE_CHARS =
-    /[\u0000-\u001f\u007f-\u009f\u200b\u200e\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]/g
+    /[\u0000-\u001f\u007f-\u009f\u061c\u200b\u200e\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]/g
   const SNAPSHOT_TIMEOUT_MS = 3000
 
   function cleanName(name) {

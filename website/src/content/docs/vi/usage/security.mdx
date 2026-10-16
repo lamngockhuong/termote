@@ -11,7 +11,7 @@ thiết bị nằm ở trang [Ghép thiết bị](/vi/usage/devices/).
 Ai đăng nhập với toàn quyền thì có mọi quyền của tài khoản hệ điều hành đang chạy server: chạy lệnh, đọc và
 sửa file, đọc mật khẩu đã lưu (`termote show-password`), đổi cấu hình (`termote start --no-auth`) và ghép
 thêm thiết bị, từ giao diện hoặc bằng cách gõ `termote pair` trong terminal. Thiết bị ghép từ terminal
-hiện là **Not paired by a device**, giống thiết bị ghép bằng mật khẩu qua CLI. Thiết bị ghép từ một trình
+hiện là **Paired with the password, kept when a browser signs out**, giống thiết bị ghép bằng mật khẩu qua CLI. Thiết bị ghép từ một trình
 duyệt đăng nhập bằng mật khẩu hiện là **Paired from a signed-in browser** (`termote devices`: `a signed-in browser (<id>)`
 ).
 
@@ -75,8 +75,8 @@ giới hạn những gì Termote chạm tới, hãy chạy nó dưới một tà
   sửa file danh sách thiết bị hoặc tắt đăng nhập. Các giới hạn ở trên chặn nhầm lẫn và thao tác bấm trong
   giao diện, không chặn được người cố ý.
 - **Bí mật đã in ra terminal.** Thiết bị chỉ xem đọc được mọi thứ agent hay một lệnh đã in.
-  Chat bỏ kết quả của một tool Claude Code khi tool đó nêu một file nhạy cảm, nhưng không bỏ một Grep
-  trên cả thư mục, một lệnh shell hay một lượt Codex in file đó ra.
+  Chat bỏ kết quả của một tool Claude Code và diff của một lần Codex sửa file khi chúng nêu một file
+  nhạy cảm, nhưng không bỏ một Grep trên cả thư mục, một lệnh shell hay một lệnh Codex in file đó ra.
 - **Dịch vụ khác cùng tên máy.** Cookie không gắn với cổng: mọi dịch vụ dưới tên máy đó đều nhận cookie của
   Termote. Hãy cho Termote một tên máy riêng.
 - **Chương trình khác của cùng tài khoản hệ điều hành.** Chúng đọc được đúng những file Termote đọc.
@@ -108,7 +108,7 @@ giới hạn những gì Termote chạm tới, hãy chạy nó dưới một tà
   nhập lại ngay; muốn chặn nó thì phải đổi mật khẩu.
 - **Những gì ứng dụng giữ trên thiết bị.** Để đóng ứng dụng mà không mất gì, ứng dụng giữ trong kho lưu
   trữ của trình duyệt các file đang mở ở Files và Changes cùng phần chữ chưa lưu của file đang sửa, không
-  bao giờ giữ file đã hiện dưới dạng nhạy cảm. Log out xoá hết, ở mọi tab. Thiết bị bị thu hồi từ nơi khác,
+  bao giờ giữ file đã hiện dưới dạng nhạy cảm. Log out và Clear cache & reload xoá hết, ở mọi tab (cả chữ chưa lưu). Thiết bị bị thu hồi từ nơi khác,
   hoặc đã hết phiên, vẫn còn giữ chúng cho tới khi ứng dụng được mở lại trên đó hoặc sau 14 ngày: file
   không bị đánh dấu nhạy cảm vẫn có thể chứa bí mật.
 - **Hai server dùng chung thư mục trạng thái** (dịch vụ và một `termote serve` chạy tay). Thu hồi ở server
@@ -137,6 +137,8 @@ giới hạn những gì Termote chạm tới, hãy chạy nó dưới một tà
   trình duyệt không còn trong danh sách (server đã khởi động lại, nó đã log out), hãy tìm id của nó trong
   `termote devices` (`a signed-in browser (<id>)`) hoặc Settings > Devices: `termote signins revoke <id>`
   vẫn thu hồi các thiết bị đó; nếu có cái toàn quyền, hãy kiểm tra những gì nó có thể để lại như bên dưới.
+  Thiết bị do một trình duyệt ghép trước 2.0.1 hiện là ghép bằng mật khẩu, và đăng xuất trình duyệt đó
+  không thu hồi nó: hãy thu hồi bằng tay trong Settings > Devices hoặc bằng `termote devices revoke`.
   Nếu bản thân mật khẩu có thể đã lộ (trình duyệt đó lưu nó
   cho Basic auth, hoặc nó được ghi ra đâu đó), hãy chạy `termote start --fresh`.
 - **Chữ chưa lưu của file.** Thiết bị toàn quyền giữ trong kho lưu trữ của trình duyệt các file đang mở và

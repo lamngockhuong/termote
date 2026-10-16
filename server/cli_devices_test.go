@@ -286,7 +286,7 @@ func TestParseValidity(t *testing.T) {
 		}
 	}
 	for d, want := range map[deviceView]string{
-		{PairedBy: "password"}: "not by a device",
+		{PairedBy: "password"}: "the password (kept when a browser signs out)",
 		{PairedBy: "unknown"}:  "unknown",
 		{PairedBy: "0123456789abcdef", PairedByName: "Lap\x1btop"}: "Laptop",
 		{PairedBy: "0123456789abcdef"}:                             "a removed device",
@@ -325,7 +325,7 @@ func TestPairExpiresAndCascade(t *testing.T) {
 	tablet := deviceIDOf(t, h, "Tablet")
 
 	code, out, _ = runDevCLI(tc, "devices")
-	for _, want := range []string{"VALID UNTIL", "PAIRED BY", "never", "not by a device", "Tablet"} {
+	for _, want := range []string{"VALID UNTIL", "PAIRED BY", "never", "the password (kept when a browser signs out)", "Tablet"} {
 		if code != 0 || !strings.Contains(out, want) {
 			t.Errorf("list lacks %q:\n%s", want, out)
 		}

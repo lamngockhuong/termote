@@ -177,7 +177,9 @@ describe('DevicesSection', () => {
     render(<DevicesSection />)
     const [laptop, phone, old, orphan, odd, tab] =
       screen.getAllByRole('listitem')
-    expect(laptop).toHaveTextContent('Not paired by a device')
+    expect(laptop).toHaveTextContent(
+      'Paired with the password, kept when a browser signs out',
+    )
     expect(laptop).not.toHaveTextContent('Valid until')
     expect(phone).toHaveTextContent('Paired by Laptop · Valid until')
     expect(old).toHaveTextContent('Unknown origin · Expired')

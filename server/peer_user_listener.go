@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"log"
-	"maps"
 	"net"
 	"net/netip"
 	"os/user"
@@ -60,18 +59,14 @@ const (
 	// the connection is refused.
 	peerLookupTimeout = 2 * time.Second
 	// machineAddrsMaxAge is how long the list of this machine's addresses
-	// is kept. An address not in it lists them again (one just added is
-	// this machine's), unless a list made in the last machineRemoteFor did
-	// not hold it: connections from another machine list the interfaces
-	// once per address and period, not at every accept. Misses share a list
-	// made less than machineAddrsMissFloor ago, so a client cycling through
-	// source addresses lists them at most that often; such a miss is not
-	// remembered as remote. At most machineRemoteMax remote addresses are
-	// kept: the expired ones go first, then the rest.
+	// is kept. An address not in it is another machine's only by a list
+	// read after the connection arrived (one just added is this
+	// machine's): lists are read at most once per machineAddrsMissFloor,
+	// so a miss waits for the next one, which every miss waiting by then
+	// shares, and a client cycling through source addresses lists them at
+	// most that often.
 	machineAddrsMaxAge    = 30 * time.Second
 	machineAddrsMissFloor = 100 * time.Millisecond
-	machineRemoteFor      = 30 * time.Second
-	machineRemoteMax      = 1024
 	// peerLogUsers bounds the users that get their own log rate limit; the
 	// rest share one.
 	peerLogUsers = 64
@@ -96,9 +91,6 @@ type localPeerCheck struct {
 	addrMu    sync.Mutex
 	addrs     map[netip.Addr]bool
 	addrsRead time.Time
-	// remote holds the addresses a list did not hold, until when they are
-	// taken as another machine's without listing again.
-	remote map[netip.Addr]time.Time
 
 	logMu sync.Mutex
 	logs  map[string]*peerLog
@@ -298,59 +290,38 @@ func (p *localPeerCheck) fromForeignStack(client, server netip.AddrPort) bool {
 
 // fromThisMachine reports whether ip is a loopback address or one of this
 // machine's own: a connection from another local user to the LAN address
-// is as local as one to 127.0.0.1.
+// is as local as one to 127.0.0.1. An address that just became this
+// machine's is never taken for another's: a miss holds only on a list whose
+// read started after the call did.
 func (p *localPeerCheck) fromThisMachine(ip netip.Addr) bool {
 	if ip.IsLoopback() {
 		return true
 	}
+	asked := time.Now()
 	p.addrMu.Lock()
 	defer p.addrMu.Unlock()
-	now := time.Now()
+	// read: this call read the list itself, which a coarse clock cannot
+	// tell from a read at the same tick before the call
 	read := false
-	if p.addrs == nil || now.Sub(p.addrsRead) > machineAddrsMaxAge {
+	if p.addrs == nil || asked.Sub(p.addrsRead) > machineAddrsMaxAge {
 		p.readAddrsLocked()
 		read = true
 	}
-	if p.addrs[ip] {
-		return true
-	}
-	if until, ok := p.remote[ip]; ok && now.Before(until) {
-		return false
-	}
-	if !read {
-		// A list this recent is shared: the address is taken as another
-		// machine's this time, and asked again at its next connection.
-		if now.Sub(p.addrsRead) < machineAddrsMissFloor {
-			return false
+	for !p.addrs[ip] && !read && !p.addrsRead.After(asked) {
+		if wait := machineAddrsMissFloor - time.Since(p.addrsRead); wait > 0 {
+			// Another call may read the list meanwhile.
+			p.addrMu.Unlock()
+			time.Sleep(wait)
+			p.addrMu.Lock()
+			continue
 		}
 		p.readAddrsLocked()
-		if p.addrs[ip] {
-			return true
-		}
+		read = true
 	}
-	p.rememberRemoteLocked(ip, now)
-	return false
+	return p.addrs[ip]
 }
 
-// rememberRemoteLocked keeps ip as another machine's until machineRemoteFor
-// from now, making room at machineRemoteMax: expired addresses first, every
-// one when none has expired.
-func (p *localPeerCheck) rememberRemoteLocked(ip netip.Addr, now time.Time) {
-	if p.remote == nil {
-		p.remote = map[netip.Addr]time.Time{}
-	}
-	if len(p.remote) >= machineRemoteMax {
-		maps.DeleteFunc(p.remote, func(_ netip.Addr, until time.Time) bool { return !now.Before(until) })
-		if len(p.remote) >= machineRemoteMax {
-			clear(p.remote)
-		}
-	}
-	p.remote[ip] = now.Add(machineRemoteFor)
-}
-
-// readAddrsLocked lists this machine's addresses. A list holding an address
-// the last one did not forgets the remote ones: one of them may be this
-// machine's now.
+// readAddrsLocked lists this machine's addresses.
 func (p *localPeerCheck) readAddrsLocked() {
 	p.addrsRead = time.Now()
 	list, err := p.interfaceAddrs()
@@ -369,12 +340,6 @@ func (p *localPeerCheck) readAddrsLocked() {
 			if ip, ok := netip.AddrFromSlice(n.IP); ok {
 				addrs[ip.Unmap()] = true
 			}
-		}
-	}
-	for a := range addrs {
-		if !p.addrs[a] {
-			clear(p.remote)
-			break
 		}
 	}
 	p.addrs = addrs

@@ -51,7 +51,8 @@ termote devices revoke <id>       # đăng xuất thiết bị và đóng các t
 Thu hồi có hiệu lực ngay, và thu hồi luôn mọi thiết bị mà thiết bị đó đã ghép. Đăng xuất trên một thiết
 bị đã ghép chỉ thu hồi chính thiết bị đó: các thiết bị nó đã ghép vẫn còn, hiện là do một thiết bị đã gỡ
 ghép. Đăng xuất một trình duyệt trong Settings > Signed-in browsers (hoặc `termote signins revoke`) thu hồi
-các thiết bị nó đã ghép, hiện là do một trình duyệt đã đăng nhập ghép. Mật khẩu mới
+các thiết bị nó đã ghép, hiện là do một trình duyệt đã đăng nhập ghép. Thiết bị do một trình duyệt ghép
+trước 2.0.1 hiện là ghép bằng mật khẩu và vẫn còn khi trình duyệt đó đăng xuất: hãy thu hồi nó bằng tay. Mật khẩu mới
 (`termote start --fresh`) đăng xuất mọi thiết bị đã ghép. Sau khi thu hồi một thiết bị
 toàn quyền, hãy chạy thêm `termote start --fresh`: nó từng có shell (xem
 [Mô hình bảo mật](/vi/usage/security/#khi-mất-một-thiết-bị)).

@@ -302,12 +302,14 @@ func (c *cli) listDevices() error {
 	return nil
 }
 
-// pairedByLabel says where a listed device came from.
+// pairedByLabel says where a listed device came from. A device paired with
+// the password stays when a browser signs out: the CLI pairs that way, and
+// so did a signed-in browser before 2.0.1.
 func pairedByLabel(d deviceView) string {
 	session, isSession := sessionOf(d.PairedBy)
 	switch {
 	case d.PairedBy == pairedByPassword:
-		return "not by a device"
+		return "the password (kept when a browser signs out)"
 	case d.PairedBy == "unknown" || d.PairedBy == "":
 		return "unknown"
 	case isSession:

@@ -72,18 +72,28 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `newMux` and `start` check it; Linux and macOS natively, refused on Windows by `start`/`restart`
   and `newMux`, never by the shared `validateMux`, so `container up --mux zellij` works on any
   host): every running session of the server's user is a group (as tmux; no extra no-auth guard).
+  Before every `zellij` command (listing, action, `attach`, `subscribe`) the socket dir
+  (`ZELLIJ_SOCKET_DIR`, else `$XDG_RUNTIME_DIR/zellij` on Linux, else `$TMPDIR/zellij-<uid>`) is
+  checked (`zellijCheckSocketDir`): made 0700 when missing, it must be a directory (not a
+  symlink) of the server's uid that others cannot write, and its `contract_version_1`, where the
+  sockets are, when there, one of that uid with no group or other access (Zellij makes it 0700);
+  else no command runs, 503 `zellij_socket_dir`, the reason logged once.
   Every `zellij` call is argv only, never a shell; a positional value goes after `--` (`attach`
   takes none: there `--` starts a command, so a session name is passed only when
   `zellijPassableName` holds: no leading `-`, not `help`/`options` in any case, no control or
-  format character); names Termote creates or renames also refuse `/`, a trailing `;` and a
-  length past sun_path (108 Linux, 104 macOS) less the socket dir (400 `invalid_name`); tab names
+  format character, no `/`, not `.` or `..`, no longer than sun_path (108 Linux, 104 macOS) less
+  the socket dir; the same for a name decoded from a client's id, else 400); names Termote
+  creates or renames also refuse a trailing `;` (400 `invalid_name`); tab names
   refuse control and format characters (Zellij stores them verbatim). Ids: group `z` +
   base64url(name), tab `<gid>:t<id>`, pane `<gid>:p<N>` (`terminal_N`), `Tab.key`
   `<gid>/terminal_<first N seen>`, kept while the tab id lives (Zellij reuses tab ids). Zellij
   0.45 gives a CLI call the lowest free client id and removes it twice when the call exits, so
   a call or client connecting in between is dropped: every call holds `zellijGate`'s read side,
   a client attaching holds the write side from 150 ms before it starts until it has drawn 1 KiB,
-  and Termote's actions on one session run one at a time (two at once can swap outputs);
+  and Termote's actions on one session run one at a time (two at once can swap outputs), under
+  a per-session lock taken only for a session the last `list-sessions` showed running, else
+  after one more listing finds it (a session nobody runs: no action, no retry, no lock kept; a
+  session `attach -b` just started is waited for, up to 6 listings);
   listings are retried (empty, failed, or not the listing's shape: tabs need `tab_id`/`position`,
   panes `id`/`is_plugin`/`tab_id`) and never answered empty; `Capture` (the screen an agent write
   is checked against) is read twice and must match;
@@ -175,7 +185,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   which returns `errGitBusy` instead of waiting for a slot and never backs the root off; results
   live 30 s, unasked ones 5 minutes. That worker calls `PaneDir` on the backend. A view-only client
   gets the same summary (the snapshot already names the agents) but no branch or count for a
-  root `viewHidesRoot` refuses (no repo, a home dir or one above), as Files
+  root `viewHidesRoot` refuses (no repo, a home dir or one above), as Files. The PWA shows the
+  last text, the branch and a Codex plan with every C0/C1, bidi (U+061C included) and zero-width space
+  character as `⟨U+XXXX⟩` (`visibleUnsafe`, `pwa/src/utils/unsafe-chars.ts`)
 - **Agent subagents** (`server/agent_subagents.go`, `GET /api/mux/panes/{id}/agent/subagents`):
   `requireMethod(GET)`, `crossSiteRejection`, `requireAgentRead`; internal errors are logged only.
   Only the pane's own Claude session (`AgentSession`, as the transcript): another agent, no
@@ -195,7 +207,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   Memory: per session asked for in the last 10 minutes, the ends, meta and file facts of the subagents
   listed. Limits: 200 nodes (the newest), 4 levels, a parent loop dropped, `truncated` set. It
   returns agent ids, the type, the description (200 runes), status, times and the last tool's name;
-  never a prompt, a tool input or result, a path or a file name, so view-only may read it. The
+  never a prompt, a tool input or result, a path or a file name, so view-only may read it; the PWA
+  shows the type, the description and the tool's name through `visibleUnsafe`, as the overview's text. The
   newest write of a running subagent becomes the overview's `lastTs`
 - **Paired devices** (`server/device_*.go`, `server/pair_page.go`, `server/cli_devices.go`,
   `caps.devices`): a device signs in with a one-time code instead of the password and gets its own
@@ -447,8 +460,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   gets no result of a Claude Code tool call on such a file (the call's `file_path`/`notebook_path`/
   `path`, or the result row's `toolUseResult` file path; a result read after its call, whose id the
   server keeps, last 4096, since a failed edit's row names no file but quotes its `old_string`):
-  `Result` emptied and `hidden` set, on a copy of the cached read; a Grep over a directory, Bash and
-  Codex output that prints one is not keyed (accepted).
+  `Result` emptied and `hidden` set, on a copy of the cached read; the same for a Codex
+  `FileChange` part (its diff) whose path or move path is such a file. A Grep over a directory,
+  Bash and a Codex command's output that prints one is not keyed (accepted).
   `agent/commands` (the composer's `/` suggestions; Codex: its skills, see Codex chat) returns
   only names, descriptions, sources and kinds of `.claude/commands`/`.claude/skills` under the
   pane root and `commands`/`skills`
@@ -673,7 +687,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   copy or discard it. Restored tabs send their saved `root`: a pane that moved answers 409 and
   `rootChanged` closes clean tabs and asks about those with drafts. Records expire 14 days after
   they were written (a draft: after its text last changed), swept when the PWA loads. Log out,
-  revoking this device in Devices and signing this browser out in Signed-in browsers remove
+  Clear cache & reload (before it ends the session, also when sign-in is off or the request
+  fails), revoking this device in Devices and signing this browser out in Signed-in browsers remove
   every record, stop every later write in this tab (pending ones included) and set
   `termote-signed-out`, on which every other tab of the origin does the same and forgets its
   tabs and drafts; each write first checks that key, so a tab not yet told writes nothing back. Accepted gaps: a 401 (session expired, revoked from another device, server
@@ -883,7 +898,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   VAPID ES256 with `sub` `https://termote.ohnice.app` and 12 h tokens, stdlib only); `Topic` is an
   HMAC of pane and kind under a random key and `Urgency` is `high` for both kinds, so the push
   service learns neither. The service worker reads the names from the snapshot (3 s) and strips
-  C0/C1, bidi and zero-width space characters (64 characters max); `Pane.Title` is never used; every push shows a
+  C0/C1, bidi (U+061C included) and zero-width space characters (64 characters max); `Pane.Title` is never used; every push shows a
   notification (Safari revokes silent ones). State: `<stateDir>/push` (0700; `vapid.json` and
   `subscriptions.json` 0600, owner-only ACL on Windows, `%LOCALAPPDATA%` so it does not roam, no
   DPAPI), already on the Files deny list; at most 20 subscriptions, the least recently subscribed
@@ -915,11 +930,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
 - **Connections from other local users** (`server/peer_user_*.go`, native only: `CheckLocalUsers`
   is set from the saved config, never for the container or an env-configured `serve`): a
   connection whose client address is loopback or one of the machine's own (`net.InterfaceAddrs`,
-  30 s cache; an address not in it lists them again, so one added a moment ago is checked, unless
-  a list in the last 30 s already missed it, or a list is less than 100 ms old (shared by every
-  miss, so a client cycling source addresses lists them at most that often; such a miss is not
-  remembered): at most 1024 remote addresses, expired ones dropped first, a list holding a new
-  address forgets them) is checked on its first read/write, never in `Accept` (64 lookups at once, at most 4
+  30 s cache; an address not in it is another machine's only by a list whose read started after
+  the connection arrived, so one added a moment ago is checked; lists are read at most once per
+  100 ms, a miss waits for the next one and every miss waiting by then shares it, so a client
+  cycling source addresses lists them at most that often; no address is remembered as
+  remote) is checked on its first read/write, never in `Accept` (64 lookups at once, at most 4
   `sock_diag` queries of them, 2 s, else refused). Linux: `sock_diag` exact lookup, `/proc/net/tcp*` fallback, only ESTABLISHED with an
   inode (a TIME_WAIT row reads uid 0). Windows: `GetExtendedTcpTable` owner PID → token SID; an
   unreadable token in session 0 is a service. A whole-table read (`/proc`, Windows' tables) is
@@ -953,7 +968,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `sessionAlive` under the hub lock. `audit: revoke-session ... via=cli|settings devices=<ids>`. A
   revoke ends the cookie only: a client sending Basic every request is back at once (accepted;
   `--fresh`). A code a session makes carries `session:<id>` as its creator (`pair-code by=`, the
-  device's `pairedBy`); the CLI's (Basic, local socket) stays `password`. Every end of a session
+  device's `pairedBy`); the CLI's (Basic, local socket) stays `password`, as did a session's before
+  2.0.1 (no migration: such a device is not revoked with its session, and Devices and
+  `termote devices` list every `password` device as kept when a browser signs out). Every end of a session
   (revoke, Log out) drops its waiting codes (`onEnd`, after the session left the store; `create`
   asks `sessionAlive` under the codes' lock). A revoke (not Log out) then removes, in one locked
   write, every live device whose `pairedBy` is one of the revoked sessions and every device those
@@ -1008,6 +1025,19 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   Immutable releases are on for the repo, so assets and tags cannot change after publishing.
   `release-please.yml` starts `release.yml` with `workflow_dispatch` on the tag, never as a
   called workflow: a `workflow_call` job does not get the environment's secret (actions/runner#1490)
+- **Git hooks** (`scripts/install-git-hooks.mjs`, `lefthook.yml`): `pnpm install` writes the
+  `pre-commit` and `pre-push` hooks itself (`lefthook install` is never run, and `lefthook run` gets
+  `--no-auto-install`, so lefthook never rewrites them; a hook that is not lefthook's is left; with
+  `core.hooksPath` set nothing is written). A hook runs lefthook, with `LEFTHOOK_CONFIG` set to the
+  checked-out `lefthook.yml`, only when `git diff` finds no change against `origin/HEAD`, else
+  `main`, in any `lefthook*`, `.lefthook*`, `.config/lefthook*`, `scripts/check-gofmt.sh`, any
+  `dprint.json*`/`.dprint.json*` (dprint plugins can be programs), any `.npmrc`, any
+  `pnpm-workspace.yaml`, any `.pnpmfile.*`, `package.json`, `pwa/package.json` (what `pnpm exec` and
+  `npx` read) or any tracked `node_modules` (a symlink too) or file under one (git replaces an
+  ignored file with a branch's tracked one, so a branch could bring its own
+  `node_modules/.bin/lefthook`); otherwise, or with no such branch, it names the files on stderr and
+  exits 0 without running anything. `pnpm install` itself runs the branch's `package.json` scripts
+  (accepted: a maintainer reads that diff first, `CONTRIBUTING.md`)
 - **Tailscale mapping**: `serve` removes its `tailscale serve` mapping when it stops (only while
   it still proxies to its port), so the name never leads to a free port another user could take;
   `start --lan` warns when lingering is off (the port is free while the user is logged out)

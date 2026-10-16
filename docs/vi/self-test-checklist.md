@@ -206,7 +206,7 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 - [ ] Máy tính: Danh sách icon hiển thị đúng (không vỡ bố cục)
 - [ ] Trang About hiển thị đẹp ở giao diện tối
 - [ ] Menu "More" (⋯) mở được từ header trên mobile và máy tính
-- [ ] Mục `Clear cache & reload` trong menu More hoạt động (hủy SW, xóa cache, kết thúc phiên trên server, tải lại trang)
+- [ ] Mục `Clear cache & reload` trong menu More hoạt động (hủy SW, xóa cache, xóa tab và bản nháp Files/Changes lưu trên thiết bị, kết thúc phiên trên server, tải lại trang)
 - [ ] Khi bật đăng nhập, mục `Log out` trong menu More mở trang đăng nhập, và phiên cũ không còn dùng được nữa (tải lại trang thì phải đăng nhập lại); khi tắt đăng nhập (`--no-auth`) thì mục này không hiện
 
 ### Chỉ Báo Kết Nối
@@ -987,7 +987,7 @@ Test trên thiết bị di động thật:
 ### Thiết Bị Đã Ghép
 
 - [ ] `termote pair --expires 7d`: kết quả in ra có "valid for 7 days once used"; sau khi ghép,
-      `termote devices` hiện ngày ở cột VALID UNTIL và "not by a device" ở cột PAIRED BY
+      `termote devices` hiện ngày ở cột VALID UNTIL và "the password (kept when a browser signs out)" ở cột PAIRED BY
 - [ ] `termote pair` (không có `--expires`) và Settings > Devices > Pair a device mặc định 30 ngày;
       `--expires never` / **Never** ghép thiết bị không giới hạn thời gian
 - [ ] Thiết bị chỉ xem ghép có hạn, sửa `validUntil` của nó trong `devices.json` về quá khứ rồi khởi

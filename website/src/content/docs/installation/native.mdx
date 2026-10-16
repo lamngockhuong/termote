@@ -345,6 +345,7 @@ termote logs server     # last server log lines
 | `zellij not found` / `is too old`        | Install Zellij 0.45.0 or later, then `termote start --mux zellij`                            |
 | Zellij sessions missing                  | Run `termote start` from the shell that sees them (`zellij list-sessions`); EXITED ones are not listed |
 | `zellij_version_mismatch` after an upgrade | Restart the Zellij sessions of the old version (or Termote)                                |
+| `zellij_socket_dir`                      | The Zellij socket dir is not private to you (the log says why): `chmod 700` it, or set `ZELLIJ_SOCKET_DIR` to a private dir |
 | Port in use                              | `start` names the port; stop the other program or choose `termote start --port <port>`      |
 | Host rejected (403)                      | Run the `termote start --allow-host <name>` the error names                                  |
 | Reverse proxy gets no answer             | The log shows `local-user-refused`: run the `termote start --allow-local-user <name>` it names |
@@ -352,7 +353,7 @@ termote logs server     # last server log lines
 | Stops when you log out (Linux)           | `loginctl enable-linger $USER`                                                               |
 | Not running after a reboot (WSL2)        | No user systemd there: `termote start` again, or enable systemd in WSL                       |
 | No sessions, `mux command failed` (Windows) | `psmux list-windows -t main` prints nothing while `psmux ls` lists it: a filter is intercepting localhost traffic. In AdGuard, turn off "Filter localhost" |
-| Stale PWA cache                          | More (⋯) menu → "Clear cache & reload" to refresh                                                |
+| Stale PWA cache                          | More (⋯) menu → "Clear cache & reload" to refresh (it also signs out and drops unsaved file text)                                                |
 
 ### tmux / psmux Session
 

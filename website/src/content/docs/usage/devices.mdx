@@ -52,7 +52,8 @@ termote devices revoke <id>       # sign it out and close its open terminals
 Revoking takes effect at once, and also revokes every device the revoked one paired. Logging out on a
 paired device revokes only that device: the devices it paired stay, listed as paired by a removed
 device. Signing out a browser in Settings > Signed-in browsers (or `termote signins revoke`) revokes the
-devices it paired, listed as paired by a signed-in browser. A new password (`termote start --fresh`)
+devices it paired, listed as paired by a signed-in browser. A device a browser paired before 2.0.1 is
+listed as paired with the password, and stays when that browser signs out: revoke it by hand. A new password (`termote start --fresh`)
 signs out every paired device. After revoking a full
 device, also run `termote start --fresh`: it had a shell (see [Security Model](/usage/security/#if-a-device-is-lost)).
 

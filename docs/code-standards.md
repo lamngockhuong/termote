@@ -153,7 +153,15 @@ import type { Session } from "./types/session";
 
 `pnpm install` at the repo root installs [lefthook](https://github.com/evilmartians/lefthook) hooks
 through `scripts/install-git-hooks.mjs` (the root `prepare` script); it skips them when `CI` is set,
-with `LEFTHOOK=0`, or outside a git worktree. [`lefthook.yml`](../lefthook.yml) holds the commands:
+with `LEFTHOOK=0`, outside a git worktree, or with `core.hooksPath` set (it warns). It writes the
+`pre-commit` and `pre-push` hooks itself (never over a hook that is not lefthook's) instead of
+`lefthook install`, and each runs lefthook only while the files that decide what it runs (any
+`lefthook*`, `.lefthook*` or `.config/lefthook*`, `scripts/check-gofmt.sh`, any `dprint.json*` or
+`.dprint.json*`, any `.npmrc`, any `pnpm-workspace.yaml`, any `.pnpmfile.*`, `package.json` and
+`pwa/package.json`, and any tracked `node_modules` or file under one) match `origin/HEAD`, else
+`main`; otherwise it names the files, skips without failing the commit or push, and says how to run
+the checks by hand. A branch changing `package.json` therefore runs no hooks.
+[`lefthook.yml`](../lefthook.yml) holds the commands:
 
 | Hook         | Runs when                        | Checks                                                                                        |
 | ------------ | -------------------------------- | --------------------------------------------------------------------------------------------- |
@@ -167,7 +175,7 @@ with `LEFTHOOK=0`, or outside a git worktree. [`lefthook.yml`](../lefthook.yml) 
 - `pre-push` picks its commands from the files the pushed commits change, but checks the working
   tree: uncommitted changes count, and a push that only deletes files runs nothing.
 - Git worktrees share one hooks directory, so the hooks apply to every worktree of the clone; in a
-  worktree without `pnpm install` lefthook prints `Can't find lefthook in PATH` and checks nothing.
+  worktree without `pnpm install` the hook prints `lefthook is not installed here` and checks nothing.
 
 ## Go Standards
 
@@ -256,7 +264,7 @@ manual `readlink` loop to resolve their own directory through a symlink.
 ```bash
 make test-cli      # tests/test-termote.sh (dev shim behavior)
 make test-install   # tests/test-install.sh (install.sh, fake curl)
-make test-git-hooks # tests/test-git-hooks.sh (git hooks installer, fake pnpm)
+make test-git-hooks # tests/test-git-hooks.sh (git hooks installer and hooks, fake lefthook)
 ```
 
 Test patterns: fake `termote`/`curl` executables, capture output with command substitution,

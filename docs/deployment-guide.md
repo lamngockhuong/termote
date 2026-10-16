@@ -624,6 +624,10 @@ zellij list-sessions
   issue #5594); open the session in a terminal, or in Termote, then add the tab.
 - **503 `zellij_version_mismatch`**: sessions of another Zellij version still run after an upgrade;
   restart those sessions (or Termote) before creating one.
+- **503 `zellij_socket_dir`**: the Zellij socket dir (`ZELLIJ_SOCKET_DIR`, else
+  `$XDG_RUNTIME_DIR/zellij`, else `$TMPDIR/zellij-<uid>`) is not this user's, others can write it,
+  or its `contract_version_1` is open to group or others; the server log says which. Fix the dir's
+  owner or mode (`chmod 700`), or point `ZELLIJ_SOCKET_DIR` at a private dir.
 - **A `TERMOTE_*` variable warned about in the log**: it is in a running Zellij server's
   environment, which its panes inherit and Zellij cannot unset; restart that session.
 

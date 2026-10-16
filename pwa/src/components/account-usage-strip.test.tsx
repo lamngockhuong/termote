@@ -26,6 +26,18 @@ describe('AccountUsageStrip', () => {
     expect(container).toBeEmptyDOMElement()
   })
 
+  it('shows the hidden characters of a plan', () => {
+    render(
+      <AccountUsageStrip
+        accounts={[account({ plan: 'pro\u202e' })]}
+        now={NOW}
+      />,
+    )
+    expect(screen.getByRole('region', { name: 'Accounts' })).toHaveTextContent(
+      'Codex · pro⟨U+202E⟩',
+    )
+  })
+
   it('shows each window, its reset and how old the numbers are', () => {
     render(<AccountUsageStrip accounts={[account()]} now={NOW} />)
     const strip = screen.getByRole('region', { name: 'Accounts' })

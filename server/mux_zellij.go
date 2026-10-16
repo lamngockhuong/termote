@@ -391,6 +391,9 @@ func (m *zellijMux) startSession(ctx context.Context, session, dir string) error
 		log.Printf("zellij attach -b: %v: %s", err, capBytes(strings.TrimSpace(stderr.String()), 512))
 		return fmt.Errorf("zellij attach -b: %w", err)
 	}
+	if err := zellijWaitListed(ctx, session); err != nil {
+		return err
+	}
 	// The popup is loaded after the session starts: watch for it a moment.
 	deadline := time.Now().Add(zellijPopupWait)
 	for time.Now().Before(deadline) {

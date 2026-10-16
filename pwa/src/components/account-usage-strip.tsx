@@ -1,5 +1,6 @@
 import type { OverviewAccount } from '../hooks/use-mux-api'
 import { formatAgo } from '../utils/format-ago'
+import { visibleUnsafe } from '../utils/unsafe-chars'
 import {
   percentLabel,
   resetLabel,
@@ -39,7 +40,10 @@ export function AccountUsageStrip({ accounts, now }: Props) {
             <span className="shrink-0 font-semibold text-fg">
               Codex
               {a.plan && (
-                <span className="font-normal text-fg-muted"> · {a.plan}</span>
+                <span className="font-normal text-fg-muted">
+                  {' '}
+                  · {visibleUnsafe(a.plan)}
+                </span>
               )}
             </span>
             {a.windows.map((w, i) => {

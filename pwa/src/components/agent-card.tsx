@@ -9,6 +9,7 @@ import type {
 import { useSubagents } from '../hooks/use-subagents'
 import type { AgentStatus, Session, SessionPane } from '../types/session'
 import { formatAgo } from '../utils/format-ago'
+import { visibleUnsafe } from '../utils/unsafe-chars'
 import { percentLabel, usageLevel } from '../utils/usage-format'
 import { AgentStatusBadge } from './agent-status-badge'
 import { StatusTimeline } from './status-timeline'
@@ -224,7 +225,7 @@ export const AgentCard = memo(function AgentCard({
           )}
           {overview?.lastText ? (
             <span className="line-clamp-2 text-[13px] text-fg">
-              {overview.lastText}
+              {visibleUnsafe(overview.lastText)}
             </span>
           ) : (
             (pending('transcript') || (!overview && !overviewFailed)) && (
@@ -245,7 +246,7 @@ export const AgentCard = memo(function AgentCard({
                   />
                   {overview.branch && (
                     <span className="truncate font-mono">
-                      {overview.branch}
+                      {visibleUnsafe(overview.branch)}
                     </span>
                   )}
                   <span className="shrink-0">

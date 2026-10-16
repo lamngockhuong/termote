@@ -291,6 +291,9 @@ func (m *zellijMux) attachClient(ctx context.Context, session string, n int, siz
 	if err != nil {
 		return nil, err
 	}
+	if err := zellijCheckSocketDir(); err != nil {
+		return nil, err
+	}
 	zellijGate.Lock()
 	// A command that just ended may still have its second removal queued in
 	// the server.

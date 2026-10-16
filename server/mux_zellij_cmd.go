@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -102,6 +103,9 @@ func zellijRun(ctx context.Context, args ...string) ([]byte, error) {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	err := runZellijGated(cmd)
+	if errors.Is(err, errZellijSocketDir) {
+		return nil, err
+	}
 	if err != nil {
 		msg := strings.TrimSpace(stderr.String() + " " + stdout.String())
 		if strings.Contains(msg, zellijNoSession) {
@@ -138,8 +142,22 @@ func zellijFailedWith(err error, text string) bool {
 	return errors.As(err, &ce) && strings.Contains(ce.msg, text)
 }
 
-// runZellijGated runs cmd under the read side of zellijGate.
+// errZellijSocketDir refuses every zellij command while the socket dir
+// could be another user's (zellijCheckSocketDir); the reason is logged.
+var errZellijSocketDir = &codedError{code: "zellij_socket_dir",
+	msg: "the zellij socket directory is not private to this user", status: 503}
+
+// zellijFinal reports whether err is a failure a retry cannot change.
+func zellijFinal(err error) bool {
+	return errors.Is(err, errZellijNotListed) || errors.Is(err, errZellijSocketDir)
+}
+
+// runZellijGated runs cmd under the read side of zellijGate, once the
+// socket dir is checked.
 func runZellijGated(cmd *exec.Cmd) error {
+	if err := zellijCheckSocketDir(); err != nil {
+		return err
+	}
 	zellijGate.RLock()
 	defer zellijGate.RUnlock()
 	return cmd.Run()
@@ -163,13 +181,83 @@ func zellijArgSummary(args []string) string {
 // session run one at a time: two at once can swap their outputs (see
 // zellijGate).
 func zellijAction(ctx context.Context, session string, args ...string) ([]byte, error) {
+	if err := zellijRequireListed(ctx, session); err != nil {
+		return nil, err
+	}
 	mu := zellijSessionLock(session)
 	mu.Lock()
 	defer mu.Unlock()
 	return zellijRun(ctx, zellijActionArgs(session, args...)...)
 }
 
+// zellijSessionLocks holds a lock for each session a listing found, so a
+// name nobody runs, from a client's id, never adds one.
 var zellijSessionLocks sync.Map // session name → *sync.Mutex
+
+// zellijListed is the running sessions the last listing found.
+var zellijListed struct {
+	sync.Mutex
+	names map[string]struct{}
+}
+
+// errZellijNotListed: the session is not in a listing taken now. It is
+// errZellijNoSession for the callers, and never retried.
+var errZellijNotListed = fmt.Errorf("%w: not listed", errZellijNoSession)
+
+// zellijRememberListed keeps the running sessions of a listing.
+func zellijRememberListed(list []zellijSession) {
+	names := make(map[string]struct{}, len(list))
+	for _, s := range list {
+		if !s.exited {
+			names[s.name] = struct{}{}
+		}
+	}
+	zellijListed.Lock()
+	zellijListed.names = names
+	zellijListed.Unlock()
+}
+
+// zellijRequireListed fails unless session runs: known from the last
+// listing, else found by listing the sessions again (one started since).
+// The new listing itself decides: another one, read earlier, may have
+// replaced the remembered names since.
+func zellijRequireListed(ctx context.Context, session string) error {
+	if zellijIsListed(session) {
+		return nil
+	}
+	list, err := zellijListSessions(ctx)
+	if err != nil {
+		return err
+	}
+	if slices.ContainsFunc(list, func(s zellijSession) bool { return s.name == session && !s.exited }) {
+		return nil
+	}
+	return errZellijNotListed
+}
+
+// zellijWaitListed waits until a listing shows session, as one `attach -b`
+// just started may not be listed at once.
+func zellijWaitListed(ctx context.Context, session string) error {
+	for i := 0; ; i++ {
+		err := zellijRequireListed(ctx, session)
+		if !errors.Is(err, errZellijNotListed) || i+1 >= zellijQueryAttempts {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Duration(i+1) * zellijQueryBackoff):
+		}
+	}
+}
+
+// zellijIsListed reports whether the last listing found session running.
+func zellijIsListed(session string) bool {
+	zellijListed.Lock()
+	defer zellijListed.Unlock()
+	_, ok := zellijListed.names[session]
+	return ok
+}
 
 func zellijSessionLock(session string) *sync.Mutex {
 	mu, _ := zellijSessionLocks.LoadOrStore(session, &sync.Mutex{})
@@ -188,7 +276,7 @@ func zellijQuery(ctx context.Context, session string, valid func([]byte) bool, a
 		switch {
 		case err == nil && len(bytes.TrimSpace(out)) > 0 && valid(out):
 			return out, nil
-		case err != nil && (ctx.Err() != nil || i+1 >= zellijQueryAttempts):
+		case err != nil && (ctx.Err() != nil || i+1 >= zellijQueryAttempts || zellijFinal(err)):
 			return nil, err
 		case i+1 >= zellijQueryAttempts:
 			return nil, errZellijEmpty
@@ -211,7 +299,7 @@ func zellijRepeat(ctx context.Context, session string, args ...string) error {
 		if _, err = zellijAction(ctx, session, args...); err == nil || zellijFailedWith(err, "is already focused") {
 			return nil
 		}
-		if ctx.Err() != nil || errors.Is(err, errZellijNoSession) && i > 1 {
+		if ctx.Err() != nil || zellijFinal(err) || errors.Is(err, errZellijNoSession) && i > 1 {
 			return err
 		}
 		select {
@@ -256,10 +344,14 @@ var zellijReserved = []string{"help", "options"}
 
 // zellijPassableName reports whether an existing session's name can be
 // passed to zellij safely: not empty, no leading '-' (clap would read it as
-// a flag, and after `--` it starts a command), not a reserved word, and no
-// control, format or line-break character (a listing line would break).
+// a flag, and after `--` it starts a command), not a reserved word, no
+// control, format or line-break character (a listing line would break), no
+// '/' and not '.' or '..' (zellij joins the name to its socket dir, and
+// refuses a '/' itself), and short enough for the socket path. A name taken
+// from a client's id is held to the same rule as one Termote creates.
 func zellijPassableName(name string) bool {
-	if name == "" || strings.HasPrefix(name, "-") || !utf8.ValidString(name) {
+	if name == "" || strings.HasPrefix(name, "-") || !utf8.ValidString(name) ||
+		strings.Contains(name, "/") || name == "." || name == ".." || len(name) > zellijMaxNameLen() {
 		return false
 	}
 	for _, r := range zellijReserved {
@@ -276,11 +368,9 @@ func zellijPassableName(name string) bool {
 }
 
 // validZellijName accepts a name Termote creates or renames a session to:
-// passable, no '/' (zellij refuses it), no trailing ';', and short enough for
-// the socket path.
+// passable and no trailing ';'.
 func validZellijName(name string) bool {
-	return zellijPassableName(name) && !strings.Contains(name, "/") && name != "." && name != ".." &&
-		!strings.HasSuffix(name, ";") && len(name) <= zellijMaxNameLen()
+	return zellijPassableName(name) && !strings.HasSuffix(name, ";")
 }
 
 // validZellijTabName accepts a tab name: Zellij stores names verbatim, so
@@ -356,8 +446,8 @@ var errZellijVersionMismatch = &codedError{code: "zellij_version_mismatch",
 	msg:    "zellij was upgraded while sessions were running: restart your Zellij sessions or Termote",
 	status: 503}
 
-// Ids. A group is "z" + the session name in unpadded base64url (a name can
-// hold any character but '/'); a tab is <group>:t<tab_id> and a pane
+// Ids. A group is "z" + the session name in unpadded base64url (a name
+// zellijPassableName accepts; any other id is refused); a tab is <group>:t<tab_id> and a pane
 // <group>:p<N> for terminal_N, so the two never collide, and none starts
 // with '-'.
 
@@ -556,7 +646,11 @@ func zellijListSessions(ctx context.Context) ([]zellijSession, error) {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	err := runZellijGated(cmd)
+	if errors.Is(err, errZellijSocketDir) {
+		return nil, err
+	}
 	if strings.Contains(stdout.String()+stderr.String(), zellijNoSessions) {
+		zellijRememberListed(nil)
 		return nil, nil
 	}
 	if err != nil {
@@ -566,5 +660,7 @@ func zellijListSessions(ctx context.Context) ([]zellijSession, error) {
 		log.Printf("zellij list-sessions: %v: %s", err, capBytes(strings.TrimSpace(stderr.String()), 512))
 		return nil, fmt.Errorf("zellij list-sessions: %w", err)
 	}
-	return parseZellijSessions(stdout.String()), nil
+	list := parseZellijSessions(stdout.String())
+	zellijRememberListed(list)
+	return list, nil
 }

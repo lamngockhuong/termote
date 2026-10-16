@@ -512,3 +512,30 @@ func TestReadTranscriptCodex(t *testing.T) {
 		t.Errorf("replaced rollout = %v", err)
 	}
 }
+
+// A Codex edit of a sensitive file, or a move onto one, shows its diff to no
+// view-only client, as a Claude Code edit of the same file does not.
+func TestCodexFileChangeOnSensitiveFileHidden(t *testing.T) {
+	entries, _ := parseCodex(codexItemRow(map[string]any{"type": "FileChange", "id": "c1", "status": "completed", "changes": map[string]any{
+		"/p/.env":    map[string]any{"type": "update", "unified_diff": "-KEY=old\n+KEY=new\n"},
+		"/p/a.txt":   map[string]any{"type": "update", "unified_diff": "-a\n+b\n"},
+		"/p/key.txt": map[string]any{"type": "update", "move_path": "/p/.ssh/id_ed25519", "unified_diff": "-k\n+k2\n"},
+	}}))
+	if len(entries) != 1 || len(entries[0].Parts) != 3 {
+		t.Fatalf("entries = %+v", entries)
+	}
+	res := hideSensitiveResults(transcriptResponse{Entries: entries}, func(string) bool { return false })
+	want := map[string]bool{"/p/.env": true, "/p/a.txt": false, "/p/key.txt → /p/.ssh/id_ed25519": true}
+	for _, p := range res.Entries[0].Parts {
+		hidden, ok := want[p.Input]
+		if !ok {
+			t.Fatalf("unexpected part %+v", p)
+		}
+		if hidden != (p.Result == "" && p.Detail != nil && p.Detail.Hidden) {
+			t.Errorf("%s: result %q, detail %+v; want hidden %v", p.Input, p.Result, p.Detail, hidden)
+		}
+	}
+	if entries[0].Parts[0].Result == "" {
+		t.Error("the cached entries were changed")
+	}
+}
