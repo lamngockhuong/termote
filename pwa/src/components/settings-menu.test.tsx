@@ -219,6 +219,18 @@ describe('SettingsMenu', () => {
     resetFilesPersist()
   })
 
+  it('clear cache removes the kept drafts even when the service worker cannot be listed', async () => {
+    localStorage.setItem('termote-file-drafts:i1:@1:a', '{"v":1,"pane":"@1"}')
+    vi.mocked(navigator.serviceWorker.getRegistrations).mockRejectedValueOnce(
+      new Error('SecurityError'),
+    )
+    renderWithTheme()
+    open()
+    fireEvent.click(item('Clear cache & reload'))
+    await waitFor(() => expect(window.location.reload).toHaveBeenCalled())
+    expect(localStorage.getItem('termote-file-drafts:i1:@1:a')).toBeNull()
+  })
+
   it('clear cache still reloads when the logout fails', async () => {
     mockLogout.mockRejectedValueOnce(new Error('offline'))
     renderWithTheme()

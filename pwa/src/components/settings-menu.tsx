@@ -48,6 +48,9 @@ const THEMES = [
 
 async function clearCacheAndReload() {
   try {
+    // Signs out as logging out does, first, so a failed step below cannot
+    // keep them: the drafts and tabs kept on this device go too.
+    signedOut()
     if ('serviceWorker' in navigator) {
       const registrations = await navigator.serviceWorker.getRegistrations()
       await Promise.all(registrations.map((r) => r.unregister()))
@@ -56,11 +59,8 @@ async function clearCacheAndReload() {
       const cacheNames = await caches.keys()
       await Promise.all(cacheNames.map((name) => caches.delete(name)))
     }
-    // Signs out as logging out does: the drafts and tabs kept on this
-    // device go too. Then the session ends on the server: the cookie is
-    // HttpOnly, so the page cannot clear it itself. Without sign-in there is
-    // none to end.
-    signedOut()
+    // End the session on the server: the cookie is HttpOnly, so the page
+    // cannot clear it itself. Without sign-in there is none to end.
     await logout().catch(() => false)
   } finally {
     window.location.reload()
