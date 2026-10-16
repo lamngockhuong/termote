@@ -106,7 +106,7 @@ what Termote can reach, run it as another user with less access.
   (Basic auth) is signed in again at once; change the password for that.
 - **What the app keeps on the device.** So that closing the app loses nothing, it keeps in the browser's
   storage the files open in Files and Changes and the unsaved text of files being edited, never a file
-  shown as sensitive. Log out removes it, in every tab. A device revoked from elsewhere, or whose session
+  shown as sensitive. Log out and Clear cache & reload remove it, in every tab (unsaved text included). A device revoked from elsewhere, or whose session
   ended, still holds it until the app is opened there again or 14 days pass: a file not marked
   sensitive can still hold a secret.
 - **Two servers on one state dir** (the service and a `termote serve` started by hand). A revoke in one

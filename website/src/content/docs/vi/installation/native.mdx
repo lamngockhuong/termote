@@ -346,6 +346,7 @@ termote logs server     # last server log lines
 | `zellij not found` / `is too old`        | Cài Zellij 0.45.0 trở lên, rồi chạy `termote start --mux zellij`                             |
 | Thiếu phiên Zellij                       | Chạy `termote start` từ shell thấy các phiên đó (`zellij list-sessions`); phiên EXITED không được liệt kê |
 | `zellij_version_mismatch` sau khi nâng cấp | Khởi động lại các phiên Zellij của bản cũ (hoặc Termote)                                   |
+| `zellij_socket_dir`                      | Thư mục socket Zellij không riêng của bạn (log ghi lý do): `chmod 700` nó, hoặc đặt `ZELLIJ_SOCKET_DIR` tới một thư mục riêng |
 | Cổng đang bị dùng                        | `start` báo tên cổng; dừng chương trình kia hoặc chọn `termote start --port <port>`         |
 | Host bị từ chối (403)                    | Chạy lệnh `termote start --allow-host <name>` mà thông báo lỗi ghi                           |
 | Proxy không nhận được phản hồi           | Log có dòng `local-user-refused`: chạy lệnh `termote start --allow-local-user <name>` mà log ghi |
@@ -353,7 +354,7 @@ termote logs server     # last server log lines
 | Dừng khi bạn đăng xuất (Linux)           | `loginctl enable-linger $USER`                                                               |
 | Không chạy sau khi khởi động lại (WSL2)  | Ở đó không có user systemd: chạy lại `termote start`, hoặc bật systemd trong WSL             |
 | Không có phiên nào, `mux command failed` (Windows) | `psmux list-windows -t main` không in gì dù `psmux ls` vẫn liệt kê phiên: có phần mềm đang lọc lưu lượng localhost. Với AdGuard, tắt "Filter localhost" |
-| PWA cache cũ                             | menu More (⋯) → `Clear cache & reload` để làm mới                                                |
+| PWA cache cũ                             | menu More (⋯) → `Clear cache & reload` để làm mới (việc này cũng đăng xuất và bỏ chữ chưa lưu của file)                                                |
 
 ### Phiên tmux / psmux
 

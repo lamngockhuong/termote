@@ -987,7 +987,7 @@ Test trên thiết bị di động thật:
 ### Thiết Bị Đã Ghép
 
 - [ ] `termote pair --expires 7d`: kết quả in ra có "valid for 7 days once used"; sau khi ghép,
-      `termote devices` hiện ngày ở cột VALID UNTIL và "not by a device" ở cột PAIRED BY
+      `termote devices` hiện ngày ở cột VALID UNTIL và "the password (kept when a browser signs out)" ở cột PAIRED BY
 - [ ] `termote pair` (không có `--expires`) và Settings > Devices > Pair a device mặc định 30 ngày;
       `--expires never` / **Never** ghép thiết bị không giới hạn thời gian
 - [ ] Thiết bị chỉ xem ghép có hạn, sửa `validUntil` của nó trong `devices.json` về quá khứ rồi khởi
