@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -18,12 +19,22 @@ import (
 // answers from replies: the key is the action name (after `action`), else
 // the first argument. A reply is "<exit code>\n<stdout>"; key.N answers the
 // Nth call of key when it exists, else key answers every call. A key without
-// a reply prints nothing and exits 0. It returns a function reading the log.
+// a reply prints nothing and exits 0, but list-sessions lists "main" unless
+// replies say otherwise (an action runs only on a listed session). It
+// returns a function reading the log.
 func useFakeZellij(t *testing.T, replies map[string]string) func() string {
 	t.Helper()
 	if runtime.GOOS == "windows" {
 		t.Skip("fake zellij is a shell script")
 	}
+	if _, ok := replies["list-sessions"]; !ok {
+		replies = maps.Clone(replies)
+		if replies == nil {
+			replies = map[string]string{}
+		}
+		replies["list-sessions"] = "0\nmain [Created 1m ago] \n"
+	}
+	zellijRememberListed(nil)
 	dir := t.TempDir()
 	rdir := filepath.Join(dir, "replies")
 	os.Mkdir(rdir, 0o755)
@@ -104,10 +115,18 @@ func TestZellijNames(t *testing.T) {
 	if validZellijName(strings.Repeat("a", zellijMaxNameLen()+1)) || !validZellijName(strings.Repeat("a", zellijMaxNameLen())) {
 		t.Error("the length limit is off by one")
 	}
-	// An existing name can be passed when it holds a '/'-free... any text
-	// zellij takes after `--session`.
-	if !zellijPassableName("x/y") || zellijPassableName("-x") || zellijPassableName("options") {
+	// An existing name, or one decoded from a client's id, can be passed
+	// only when it is no path: no '/', not '.' or '..', and it fits the
+	// socket path.
+	if !zellijPassableName("x;y") || zellijPassableName("x/y") || zellijPassableName("../x") ||
+		zellijPassableName(".") || zellijPassableName("..") || zellijPassableName("-x") || zellijPassableName("options") ||
+		zellijPassableName(strings.Repeat("a", zellijMaxNameLen()+1)) {
 		t.Error("zellijPassableName")
+	}
+	for _, name := range []string{"../../x", "a/b", ".", "..", strings.Repeat("a", zellijMaxNameLen()+1)} {
+		if _, ok := parseZellijGroupID(zellijGroupID(name)); ok {
+			t.Errorf("the group id of %q parsed", name)
+		}
 	}
 }
 
@@ -562,5 +581,29 @@ func TestZellijEnvValue(t *testing.T) {
 		zellijEnvValue([]string{"ZELLIJ_PANE_ID=3", "ZELLIJ_PANE_ID=4"}, "ZELLIJ_PANE_ID") != "" ||
 		zellijEnvValue([]string{"ZELLIJ_PANE_ID_X=3"}, "ZELLIJ_PANE_ID") != "" {
 		t.Error("zellijEnvValue")
+	}
+}
+
+// A pane id naming a session nobody runs costs one listing: no action runs,
+// none is retried, and no lock is kept for the name.
+func TestZellijUnlistedSessionTakesNoLock(t *testing.T) {
+	log := useFakeZellij(t, nil)
+	m := newTestZellijMux()
+	name := strings.Repeat("n", 40)
+	if _, _, err := m.requirePane(t.Context(), zellijPaneID(name, 0)); err == nil {
+		t.Fatal("a pane of an unlisted session was found")
+	}
+	if _, ok := zellijSessionLocks.Load(name); ok {
+		t.Error("a lock was kept for an unlisted session")
+	}
+	if got := log(); strings.Count(got, "list-sessions") != 1 || strings.Contains(got, "action") {
+		t.Errorf("commands:\n%s", got)
+	}
+	// A session started since the last listing is found by listing again.
+	if _, err := zellijAction(t.Context(), "main", "list-tabs"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := zellijSessionLocks.Load("main"); !ok {
+		t.Error("no lock for a listed session")
 	}
 }

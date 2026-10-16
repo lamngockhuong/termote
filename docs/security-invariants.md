@@ -75,15 +75,18 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   Every `zellij` call is argv only, never a shell; a positional value goes after `--` (`attach`
   takes none: there `--` starts a command, so a session name is passed only when
   `zellijPassableName` holds: no leading `-`, not `help`/`options` in any case, no control or
-  format character); names Termote creates or renames also refuse `/`, a trailing `;` and a
-  length past sun_path (108 Linux, 104 macOS) less the socket dir (400 `invalid_name`); tab names
+  format character, no `/`, not `.` or `..`, no longer than sun_path (108 Linux, 104 macOS) less
+  the socket dir; the same for a name decoded from a client's id, else 400); names Termote
+  creates or renames also refuse a trailing `;` (400 `invalid_name`); tab names
   refuse control and format characters (Zellij stores them verbatim). Ids: group `z` +
   base64url(name), tab `<gid>:t<id>`, pane `<gid>:p<N>` (`terminal_N`), `Tab.key`
   `<gid>/terminal_<first N seen>`, kept while the tab id lives (Zellij reuses tab ids). Zellij
   0.45 gives a CLI call the lowest free client id and removes it twice when the call exits, so
   a call or client connecting in between is dropped: every call holds `zellijGate`'s read side,
   a client attaching holds the write side from 150 ms before it starts until it has drawn 1 KiB,
-  and Termote's actions on one session run one at a time (two at once can swap outputs);
+  and Termote's actions on one session run one at a time (two at once can swap outputs), under
+  a per-session lock taken only for a session the last `list-sessions` showed running, else
+  after one more listing finds it (a session nobody runs: no action, no retry, no lock kept);
   listings are retried (empty, failed, or not the listing's shape: tabs need `tab_id`/`position`,
   panes `id`/`is_plugin`/`tab_id`) and never answered empty; `Capture` (the screen an agent write
   is checked against) is read twice and must match;
