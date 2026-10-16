@@ -34,6 +34,13 @@ type herdrError struct {
 
 func (e *herdrError) Error() string { return "herdr " + e.Code + ": " + e.Message }
 
+// herdrPipeUserError is a herdr pipe served by a process that is not the
+// server's user (Windows): never mistaken for a missing herdr.
+type herdrPipeUserError struct{ Err error }
+
+func (e *herdrPipeUserError) Error() string { return e.Err.Error() }
+func (e *herdrPipeUserError) Unwrap() error { return e.Err }
+
 // herdrRPC talks to the herdr server socket (a named pipe on Windows). The
 // server answers one request per connection, except events.subscribe which
 // keeps it open.

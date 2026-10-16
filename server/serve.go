@@ -537,6 +537,11 @@ func startServeMode(cfg serveConfig) {
 		scrubTmuxSecrets(ctx)
 	case "herdr":
 		reapOrphanTerminals(isHerdrStreamCmdline)
+		// The container's entrypoint starts herdr with a config dir of its
+		// own, which serve does not know: serve never starts it there.
+		if h, ok := m.(*herdrMux); ok && cfg.InstanceDir != "" {
+			h.setAutostart(filepath.Join(cfg.InstanceDir, "herdr-autostart.log"), !runningInContainer())
+		}
 	case "zellij":
 		reapOrphanTerminals(isZellijStreamCmdline)
 		warnZellijTermoteEnv()

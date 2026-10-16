@@ -42,6 +42,32 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   tab and line breaks removed, since xterm brackets a paste without removing a marker inside it
 - **Herdr guard**: `--mux herdr --no-auth` is refused unless `--allow-herdr-no-auth` is also
   given, since Herdr exposes every workspace on the host
+- **Herdr autostart** (`server/herdr_autostart*.go`; the only place serve starts `herdr`): `GET
+  /api/mux/snapshot` of a full client (not a view-only device, not `peek=1`) starts `herdr server`
+  when nothing listens on Herdr's socket (Unix: `ENOENT` or `ECONNREFUSED`; Windows: pipe not
+  found). Never from the stream route, `viewSnapshot`, `peekSnapshot`, the event subscription or a
+  write route, never in a container (the entrypoint starts Herdr with a config dir serve does not
+  know), and no flag turns it off. The request answers its old error at once; the start runs
+  in the background, one at a time. argv is `[herdr|herdr.exe resolved through PATH, "server"]`,
+  never a shell; Windows runs only an `.exe`, and a match through `.` in `PATH` (`exec.ErrDot`) is
+  refused. Env is `terminalEnv()` (no `TERMOTE_*`) without any `HERDR_*` variable, plus
+  `HERDR_SOCKET_PATH` = the socket serve dials. A Windows pipe served by another user is never
+  treated as missing: it writes an `audit: herdr pipe refused` line (once per reason) and never
+  starts Herdr. Not
+  within `herdrStartGrace` (15 s) after serve starts; a failed start (not started, no ping within
+  `herdrStartWait` (10 s), exited before answering, exited within `herdrStableAfter` (1 min) after
+  answering) backs the next one off 30 s, doubling to 10 minutes, reset by an answer only once the
+  Herdr termote started has run `herdrStableAfter`; a Herdr that never answers is killed before the
+  backoff, so tries never pile up; a Herdr that exits because another took the socket is not a
+  failure. If `<herdr config dir>/session.json` existed before the start, snapshots answer
+  "starting" until a workspace is back or `herdrStartWait` passes; the server creates no
+  workspace. The process is detached (Unix `Setsid`; Windows `CREATE_NO_WINDOW |
+  CREATE_NEW_PROCESS_GROUP`, first with `CREATE_BREAKAWAY_FROM_JOB`, again without it on
+  `ERROR_ACCESS_DENIED`), so it outlives `stop`, `restart` and `update`. Its output goes to
+  `<stateDir>/herdr-autostart.log` (0600; on Windows opened with `FILE_SHARE_DELETE`, so `logs clean`
+  and `uninstall --purge` delete it while Herdr runs; a log that cannot be opened discards the output,
+  Herdr still starts); errors are logged only, never returned. Windows flags are
+  not yet verified on a real machine
 - **Zellij sessions** (`server/mux_zellij*.go`, `server/zellij_*.go`; Zellij 0.45 or later,
   `newMux` and `start` check it; Linux and macOS natively, refused on Windows by `start`/`restart`
   and `newMux`, never by the shared `validateMux`, so `container up --mux zellij` works on any
@@ -253,7 +279,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   non-GET/HEAD/OPTIONS method of a view-only client on any path (403 `{"error", "code":
   "view_only"}`) before a handler runs, except `POST /api/mux/logout`; handlers repeat it with
   `requireWriteRole`, so a route added later is closed without remembering to. Reads: transcript,
-  commands, snapshot, push key and `worktrees` GET are allowed; `agent/prompt` carries no
+  commands, snapshot (`viewSnapshot`: no tmux default session, and Herdr is not started), push key and `worktrees` GET are allowed; `agent/prompt` carries no
   `promptId`; `GET agent/start` and `files/content?hash=1` are 403; Files/Changes routes only when
   the pane root is a git toplevel that is neither the server user's home dir nor above it (through
   symlinks; `$HOME`, else the user database, else every root counts as one; in the container also

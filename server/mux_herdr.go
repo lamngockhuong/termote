@@ -89,6 +89,10 @@ type herdrMux struct {
 	branches *herdrBranchCache // each worktree workspace's branch
 
 	version atomic.Value // string: the Herdr version the last ping reported
+
+	starter *herdrStarter // starts herdr when a full client opens the page
+	// woken ends subscribeLoop's backoff once termote has started herdr.
+	woken chan struct{}
 }
 
 // herdrView is a mapped snapshot plus the pane sizes streams need, each
@@ -119,13 +123,29 @@ func newHerdrMux(ctx context.Context, socket string) (*herdrMux, error) {
 		watchers: map[string]map[chan Size]struct{}{},
 		writers:  map[string]*paneWriter{},
 		procs:    newHerdrProcCache(),
+		woken:    make(chan struct{}, 1),
 	}
 	m.branches = newHerdrBranchCache(m.worktreeBranches)
+	m.starter = newHerdrStarter(m)
 	go m.subscribeLoop(ctx)
 	return m, nil
 }
 
 func (*herdrMux) Name() string { return "herdr" }
+
+// setAutostart sends the output of a herdr server termote starts to logPath,
+// or turns starting herdr off. Called before the server serves any request.
+func (m *herdrMux) setAutostart(logPath string, enabled bool) {
+	m.starter.logPath, m.starter.disabled = logPath, !enabled
+}
+
+// wake retries the event subscription now instead of after its backoff.
+func (m *herdrMux) wake() {
+	select {
+	case m.woken <- struct{}{}:
+	default:
+	}
+}
 
 // herdrCodexSession is findCodexSession; tests replace it.
 var herdrCodexSession = findCodexSession
@@ -574,8 +594,10 @@ func (m *herdrMux) subscribeLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-time.After(backoff):
+			backoff = min(backoff*2, herdrBackoffMax)
+		case <-m.woken:
+			backoff = herdrBackoffMin
 		}
-		backoff = min(backoff*2, herdrBackoffMax)
 	}
 }
 

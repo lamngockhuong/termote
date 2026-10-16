@@ -48,6 +48,10 @@ Manual testing checklist for Termote features before release.
 
 - [ ] `termote start --mux herdr` completes without error (herdr on `PATH`)
 - [ ] `curl localhost:7680/api/mux/health` reports `"backend":"herdr"`
+- [ ] After a reboot (or `herdr server stop`) with Herdr not running: open the PWA in a full tab; within about 15 s
+      (the start grace) plus the 5 s poll, the workspaces are back with no extra tab created, `herdr status server`
+      is running, and `herdr-autostart.log` shows in `termote logs all`; `termote stop` leaves Herdr running;
+      a view-only device (paired with `--role view`) never starts it
 - [ ] `--mux herdr --no-auth` is refused unless `--allow-herdr-no-auth` is also given
 - [ ] PWA lists the same workspaces/tabs/panes as `herdr pane list`
 - [ ] Selecting a tab/pane on the PWA does not change the Herdr desktop's focused tab
@@ -75,6 +79,7 @@ Manual testing checklist for Termote features before release.
 
 - [ ] `termote start --mux herdr` completes without error (`herdr.exe` on `PATH`)
 - [ ] `curl localhost:7690/api/mux/health` reports `"backend":"herdr"` (named pipe of `%APPDATA%\herdr\herdr.sock`)
+- [ ] With Herdr not running, opening the PWA in a full tab starts `herdr server` with no console window; it survives `schtasks /End /tn Termote` and `termote stop` (creation flags not yet verified on a real machine)
 - [ ] With psmux and Herdr both present, the first `termote start` detects Herdr and asks (or picks psmux without a terminal)
 - [ ] Stream, typing, paste, scroll and agent status badge work as on Linux
 - [ ] Resizing the pane in Herdr (split, zoom) restarts `observe` at the new size

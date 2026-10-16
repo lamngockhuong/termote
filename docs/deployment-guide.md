@@ -10,14 +10,14 @@
 | psmux         | -                                             | One of psmux or herdr | -              |
 | Docker/Podman | -                                             | -                     | Required       |
 
-Native mode needs one terminal backend, not both: tmux (psmux on Windows), or a running
-[Herdr](https://herdr.dev/#install) server. The first `termote start` detects which one is there, and asks when it finds both. On Linux and
+Native mode needs one terminal backend, not both: tmux (psmux on Windows), or
+[Herdr](https://herdr.dev/#install). Herdr need not be running: termote starts its server when a page opens (see [Herdr backend issues](#herdr-backend-issues)). The first `termote start` detects which one is there (a Herdr that answers, or tmux/psmux installed), and asks when it finds both. On Linux and
 macOS, [Zellij](https://zellij.dev/documentation/installation) 0.45.0 or later (tested with
 0.45.1) is a third choice; it is never detected: pick it with `--mux zellij` or the menu
 (`termote` with no command). `start --mux zellij` checks that `zellij` is on `PATH` and its
 version; on Windows it is refused before anything is saved.
 
-> **Windows Support**: native mode requires psmux or a running Herdr server; container mode
+> **Windows Support**: native mode requires psmux or Herdr; container mode
 > requires Docker Desktop or Podman Desktop. Report any issues on GitHub.
 
 ttyd is not used anywhere in 1.0: termote streams the terminal itself (PTY on Unix, ConPTY on
@@ -126,7 +126,7 @@ termote start --mux zellij  # Zellij sessions instead of tmux (brew install zell
 **Windows (PowerShell):**
 
 ```powershell
-winget install psmux   # tmux-compatible backend for Windows (or run Herdr instead)
+winget install psmux   # tmux-compatible backend for Windows (or use Herdr instead)
 
 termote start
 termote start --lan
@@ -537,7 +537,8 @@ termote logs clean      # Delete log files
 ```
 
 Logs and the PID file live in `~/.local/state/termote/` (`$XDG_STATE_HOME`) on Unix,
-`%LOCALAPPDATA%\termote\state` on Windows. Running the server binary directly in the
+`%LOCALAPPDATA%\termote\state` on Windows. The output of a Herdr that termote started goes to
+`herdr-autostart.log` there: `logs all` and `follow` show it, `logs server` does not, `logs clean` removes it. Running the server binary directly in the
 foreground prints to stdout/stderr instead:
 
 ```bash
@@ -581,8 +582,25 @@ tmux new-session -d -s main
 
 #### Herdr backend issues
 
+With `--mux herdr` in native mode, termote starts `herdr server` itself, detached, when a full PWA tab
+opens and nothing answers on Herdr's socket (in a container the entrypoint starts Herdr; serve never
+does). It does not start it earlier than 15 s after the server starts, and after a failed start (or a
+Herdr that dies within a minute) waits 30 s, doubling to 10 minutes. Herdr outlives `termote
+stop`, `restart` and `update` (as tmux does), so `termote stop` does not stop it; a Herdr stopped with
+`herdr server stop` comes back while a full PWA tab is open. View-only devices never start it. There is
+no opt-out flag. Rules: [`security-invariants.md`](security-invariants.md), Herdr autostart.
+
+Panes of a Herdr started this way get the service's environment, as the tmux and psmux sessions serve
+creates do: variables a login session or terminal sets (`SSH_AUTH_SOCK`, `DISPLAY`/`WAYLAND_DISPLAY`,
+sometimes `DBUS_SESSION_BUS_ADDRESS`, `COLORTERM`) may be missing, while variables from the shell's rc
+files come back because the pane shell reads them. Start Herdr yourself from that session to keep them.
+
+Known gap: the first `termote start` on a machine with Herdr installed but not running, and without
+tmux or psmux, still reports that no backend was found; run `termote start --mux herdr`.
+
 ```bash
-# herdr must be on PATH before `termote start --mux herdr`
+# herdr must be on PATH (termote starts `herdr server` itself when a full PWA tab opens
+# and nothing answers; its output is in herdr-autostart.log, see `termote logs`)
 which herdr
 
 # Check the server picked the right backend

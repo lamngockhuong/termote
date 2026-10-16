@@ -921,7 +921,7 @@ func TestWaitForServerDegraded(t *testing.T) {
 	if err := tc.waitForServer(port, "", "", "1.0.0", 400*time.Millisecond, nil); err != nil {
 		t.Fatalf("degraded server, short wait: %v", err)
 	}
-	if out := tc.stderr.String() + tc.stdout.String(); strings.Count(out, "herdr backend does not answer") != 1 {
+	if out := tc.stderr.String() + tc.stdout.String(); strings.Count(out, "herdr does not answer yet; termote starts it") != 1 {
 		t.Errorf("want one warning about the backend: %q", out)
 	}
 	if err := tc.waitForServer(port, "", "", "2.0.0", time.Second, nil); err == nil {

@@ -188,8 +188,8 @@ macOS không kiểm tra user của kết nối, còn WSL 2 để mọi user Wind
 
 ## Backend Herdr
 
-Linux, macOS và Windows đều có thể điều khiển workspace của Herdr thay cho tmux (trên Windows là psmux). Herdr phải đang chạy sẵn trên máy này
-([cài Herdr](https://herdr.dev/#install)); Termote chỉ giao tiếp với socket của nó. Nếu Herdr đang chạy ở lần
+Linux, macOS và Windows đều có thể điều khiển workspace của Herdr thay cho tmux (trên Windows là psmux). Herdr phải được cài trên máy này
+([cài Herdr](https://herdr.dev/#install)); Termote giao tiếp với socket của nó và tự chạy `herdr server` khi nó chưa chạy. Nếu Herdr đang chạy ở lần
 `start` đầu tiên, nó được chọn tự động; nếu không thì chạy:
 
 ```bash
@@ -201,6 +201,18 @@ termote start --mux herdr
   mà chỉ đổi pane mà client đang nhận luồng. Không có nút "hiện trên desktop".
   - Mỗi pane có một huy hiệu trạng thái agent (`idle`/`working`/`blocked`/`done`), được làm mới
   tối đa một lần trong mỗi khoảng làm mới đã cấu hình; trạng thái không được đẩy về ngay lập tức.
+  - Herdr không cần chạy sẵn. Khi bạn mở trang mà không có gì trả lời trên socket của Herdr, Termote chạy `herdr server`
+  ở nền; trang kết nối được sau vài giây (15 giây đầu sau khi server khởi động dành cho bạn hoặc cho một dịch vụ
+  khởi động Herdr, và sau một lần khởi động thất bại Termote chờ 30 giây, tăng gấp đôi mỗi lần đến tối đa 10 phút). Thiết bị chỉ xem
+  không bao giờ khởi động Herdr. Không có tùy chọn nào để tắt tính năng này.
+  - Herdr chạy theo cách này vẫn chạy sau `termote stop`, `restart` và `update`, giống tmux, và `termote stop` không dừng nó.
+  Khi còn một trang đầy đủ quyền đang mở, Herdr đã dừng bằng `herdr server stop` sẽ được chạy lại. Đầu ra của nó nằm trong `herdr-autostart.log`,
+  hiện qua `termote logs` và `termote logs follow`, không hiện qua `termote logs server`.
+  - Các pane của nó nhận môi trường của dịch vụ: biến do phiên đăng nhập hoặc terminal đặt (`SSH_AUTH_SOCK`,
+  `DISPLAY`/`WAYLAND_DISPLAY`, đôi khi `DBUS_SESSION_BUS_ADDRESS`, `COLORTERM`) có thể thiếu, còn biến trong file rc của shell vẫn có.
+  Hãy tự chạy Herdr từ phiên đó nếu cần giữ chúng.
+  - Trên máy đã cài Herdr nhưng chưa chạy và không có tmux hay psmux, lần `termote start` đầu tiên vẫn báo không tìm thấy backend:
+  hãy chạy `termote start --mux herdr`.
   - Đây là Herdr trên máy của bạn. Container chạy Herdr riêng của nó, xem
   [Cài đặt Container](/vi/installation/docker/#backend-terminal).
   - `--mux herdr --no-auth` bị từ chối nếu không kèm `--allow-herdr-no-auth`. Herdr để lộ mọi
@@ -330,7 +342,7 @@ termote logs server     # last server log lines
 | Sự cố                                    | Cách xử lý                                                                                  |
 | ---------------------------------------- | ------------------------------------------------------------------------------------------- |
 | `termote: command not found`             | Mở terminal mới, hoặc thêm `~/.local/bin` vào PATH như trình cài đặt đã in ra                |
-| Không tìm thấy backend terminal          | Cài tmux (Windows: `winget install psmux`) hoặc khởi động Herdr, rồi chạy `termote start`    |
+| Không tìm thấy backend terminal          | Cài tmux (Windows: `winget install psmux`) hoặc Herdr, rồi chạy `termote start --mux herdr`   |
 | `zellij not found` / `is too old`        | Cài Zellij 0.45.0 trở lên, rồi chạy `termote start --mux zellij`                             |
 | Thiếu phiên Zellij                       | Chạy `termote start` từ shell thấy các phiên đó (`zellij list-sessions`); phiên EXITED không được liệt kê |
 | `zellij_version_mismatch` sau khi nâng cấp | Khởi động lại các phiên Zellij của bản cũ (hoặc Termote)                                   |

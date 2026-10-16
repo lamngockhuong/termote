@@ -443,7 +443,8 @@ type viewAttacher interface {
 // anything (tmux's default session) where the snapshot would.
 func viewSnapshot(ctx context.Context, m Mux) (Snapshot, error) {
 	if _, ok := m.(*herdrMux); ok {
-		// Herdr's snapshot makes nothing, and its peek leaves out the
+		// Herdr's snapshot makes nothing and never starts herdr (only the
+		// snapshot route does, for a full client); its peek leaves out the
 		// worktree branches.
 		return m.Snapshot(ctx)
 	}

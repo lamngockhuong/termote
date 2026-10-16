@@ -643,6 +643,15 @@ func authedRequest(port int, user, pass, method, path string, body []byte) (resp
 // taken as running anyway.
 var degradedGrace = 3 * time.Second
 
+// degradedBackendMsg is the warning for a server whose backend does not
+// answer: termote starts herdr itself once a page opens.
+func degradedBackendMsg(backend string) string {
+	if backend == "herdr" {
+		return "The server runs, but herdr does not answer yet; termote starts it when you open the page (see: termote logs)"
+	}
+	return fmt.Sprintf("The server runs, but its %s backend does not answer yet; it connects once that runs (see: termote logs)", backend)
+}
+
 // waitForServer waits until the health endpoint reports ok for version (any
 // version when empty), the process exits (exited closes) or the timeout
 // passes. A server of that version still degraded degradedGrace (at most
@@ -666,7 +675,7 @@ func (c *cli) waitForServer(port int, user, pass, version string, timeout time.D
 			if time.Since(degradedSince) >= grace {
 				if !c.degradedWarned {
 					c.degradedWarned = true
-					c.warnf("The server runs, but its %s backend does not answer yet; it connects once that runs (see: termote logs)", h.Backend)
+					c.warnf("%s", degradedBackendMsg(h.Backend))
 				}
 				return nil
 			}

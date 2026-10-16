@@ -432,13 +432,22 @@ jobs:
           TERMOTE_E2E_HERDR: "1"
         run: pnpm exec playwright test worktrees terminal-copy --workers=1
 
+      # Stops the job's Herdr and opens the page: termote starts Herdr again
+      # (HOME and XDG of the server's own environment) and it restores the
+      # e2e-repo workspace.
+      - name: Run Playwright (Herdr autostart)
+        working-directory: pwa
+        env:
+          TERMOTE_E2E_HERDR: "1"
+        run: pnpm exec playwright test herdr-autostart --workers=1
+
       - name: Stop Herdr
         if: always()
         run: herdr server stop || true
 
       - name: Logs
         if: failure()
-        run: cat "$RUNNER_TEMP/herdr/serve.log" "$RUNNER_TEMP/herdr/herdr.log"
+        run: cat "$RUNNER_TEMP/herdr/serve.log" "$RUNNER_TEMP/herdr/herdr.log" "$RUNNER_TEMP/herdr/state/termote/herdr-autostart.log" || true
 
       - name: Upload Playwright report
         if: failure()

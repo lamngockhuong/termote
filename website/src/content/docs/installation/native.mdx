@@ -188,8 +188,8 @@ macOS does not check the user of a connection, and WSL 2 lets every Windows user
 
 ## Herdr Backend
 
-Linux, macOS and Windows can drive Herdr workspaces instead of tmux (psmux on Windows). Herdr must already be running on this host
-([install Herdr](https://herdr.dev/#install)); Termote only talks to its socket. When Herdr is running at the first `start` it is picked for you; otherwise:
+Linux, macOS and Windows can drive Herdr workspaces instead of tmux (psmux on Windows). Herdr must be installed on this host
+([install Herdr](https://herdr.dev/#install)); Termote talks to its socket, and starts `herdr server` itself when it is not running. When Herdr is running at the first `start` it is picked for you; otherwise:
 
 ```bash
 termote start --mux herdr
@@ -200,6 +200,18 @@ termote start --mux herdr
   — it only changes which pane the client streams. There is no "show on desktop" button.
   - Each pane gets an agent-status badge (idle/working/blocked/done) refreshed at most once
   per the configured poll interval; it is not pushed instantly.
+  - Herdr need not be running. When you open the page and nothing answers on its socket, Termote starts `herdr server` in
+  the background; the page connects within a few seconds (the first 15 s after the server starts are left to you or to a service
+  that starts Herdr, and after a failed start Termote waits 30 s, doubling to 10 minutes). Devices that can only view never
+  start it. There is no option to turn this off.
+  - A Herdr started this way keeps running after `termote stop`, `restart` and `update`, like tmux, and `termote stop` does not stop it.
+  While a full page is open, a Herdr stopped with `herdr server stop` is started again. Its output goes to `herdr-autostart.log`,
+  shown by `termote logs` and `termote logs follow`, not by `termote logs server`.
+  - Its panes get the service's environment: variables set by a login session or terminal (`SSH_AUTH_SOCK`,
+  `DISPLAY`/`WAYLAND_DISPLAY`, sometimes `DBUS_SESSION_BUS_ADDRESS`, `COLORTERM`) may be missing, while variables from your shell's rc
+  files are there. Start Herdr yourself from that session to keep them.
+  - On a machine where Herdr is installed but not running, with no tmux or psmux, the first `termote start` still says no backend is found:
+  run `termote start --mux herdr`.
   - This is the Herdr on your host. The container runs its own Herdr instead, see
   [Container Installation](/installation/docker/#terminal-backend).
   - `--mux herdr --no-auth` is refused unless `--allow-herdr-no-auth` is also given: Herdr
@@ -329,7 +341,7 @@ termote logs server     # last server log lines
 | Issue                                    | Solution                                                                                    |
 | ---------------------------------------- | ------------------------------------------------------------------------------------------- |
 | `termote: command not found`             | Open a new terminal, or add `~/.local/bin` to your PATH as the installer printed             |
-| No terminal backend found                | Install tmux (Windows: `winget install psmux`) or start Herdr, then `termote start`          |
+| No terminal backend found                | Install tmux (Windows: `winget install psmux`) or Herdr, then `termote start --mux herdr`     |
 | `zellij not found` / `is too old`        | Install Zellij 0.45.0 or later, then `termote start --mux zellij`                            |
 | Zellij sessions missing                  | Run `termote start` from the shell that sees them (`zellij list-sessions`); EXITED ones are not listed |
 | `zellij_version_mismatch` after an upgrade | Restart the Zellij sessions of the old version (or Termote)                                |
