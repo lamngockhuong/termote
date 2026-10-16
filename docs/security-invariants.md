@@ -967,7 +967,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `sessionAlive` under the hub lock. `audit: revoke-session ... via=cli|settings devices=<ids>`. A
   revoke ends the cookie only: a client sending Basic every request is back at once (accepted;
   `--fresh`). A code a session makes carries `session:<id>` as its creator (`pair-code by=`, the
-  device's `pairedBy`); the CLI's (Basic, local socket) stays `password`. Every end of a session
+  device's `pairedBy`); the CLI's (Basic, local socket) stays `password`, as did a session's before
+  2.0.1 (no migration: such a device is not revoked with its session, and Devices and
+  `termote devices` list every `password` device as kept when a browser signs out). Every end of a session
   (revoke, Log out) drops its waiting codes (`onEnd`, after the session left the store; `create`
   asks `sessionAlive` under the codes' lock). A revoke (not Log out) then removes, in one locked
   write, every live device whose `pairedBy` is one of the revoked sessions and every device those

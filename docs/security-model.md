@@ -8,8 +8,8 @@ behind each point is in [`system-architecture.md`](system-architecture.md).
 Whoever signs in with full access has the rights of the OS user that runs the server: they run commands,
 read and change files, read the saved password (`termote show-password`), change the configuration
 (`termote start --no-auth`) and pair more devices, from the interface or by typing `termote pair` in a
-terminal. A device paired from a terminal shows as "Not paired by a device", like one paired with the
-password.
+terminal. A device paired from a terminal shows as "Paired with the password, kept when a browser signs
+out", like one paired with the password.
 
 No setting turns a full-access client into something less. The real boundary is the OS user: to limit
 what Termote can reach, run it as another user with less access.
@@ -129,7 +129,8 @@ what Termote can reach, run it as another user with less access.
   devices those paired), whose list entries say "a signed-in browser (<id>)". If the browser is no longer
   listed (the server restarted, it logged out), `termote signins revoke <id>` with the id from those
   entries still revokes its devices. If one of them was full, check what it could have left behind, as
-  below. If the
+  below. A device a browser paired before 2.0.1 is listed as paired with the password instead, and
+  signing that browser out leaves it: revoke it by hand in Devices or with `termote devices revoke`. If the
   password itself may be known (saved in that browser for Basic auth, written down), run
   `termote start --fresh` instead.
 - **Unsaved text of files.** A full device keeps the files it had open and their unsaved text in its

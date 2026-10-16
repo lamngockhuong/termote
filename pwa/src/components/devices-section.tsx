@@ -21,9 +21,12 @@ function lastUse(d: PairedDevice, now: number): string {
   return `paired ${formatAgo(now - Date.parse(d.createdAt))}`
 }
 
-// Where a device came from.
+// Where a device came from. One paired with the password stays when a
+// browser signs out: the CLI pairs that way, and so did a signed-in browser
+// before 2.0.1.
 export function originLabel(d: PairedDevice): string {
-  if (d.pairedBy === 'password') return 'Not paired by a device'
+  if (d.pairedBy === 'password')
+    return 'Paired with the password, kept when a browser signs out'
   if (d.pairedBy === 'unknown' || !d.pairedBy) return 'Unknown origin'
   // The session's id, as `termote devices` and `termote signins` show it
   if (d.pairedBy.startsWith('session:'))
