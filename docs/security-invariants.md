@@ -185,7 +185,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   live 30 s, unasked ones 5 minutes. That worker calls `PaneDir` on the backend. A view-only client
   gets the same summary (the snapshot already names the agents) but no branch or count for a
   root `viewHidesRoot` refuses (no repo, a home dir or one above), as Files. The PWA shows the
-  last text and a Codex plan with every C0/C1, bidi (U+061C included) and zero-width space
+  last text, the branch and a Codex plan with every C0/C1, bidi (U+061C included) and zero-width space
   character as `⟨U+XXXX⟩` (`visibleUnsafe`, `pwa/src/utils/unsafe-chars.ts`)
 - **Agent subagents** (`server/agent_subagents.go`, `GET /api/mux/panes/{id}/agent/subagents`):
   `requireMethod(GET)`, `crossSiteRejection`, `requireAgentRead`; internal errors are logged only.
@@ -207,7 +207,7 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   listed. Limits: 200 nodes (the newest), 4 levels, a parent loop dropped, `truncated` set. It
   returns agent ids, the type, the description (200 runes), status, times and the last tool's name;
   never a prompt, a tool input or result, a path or a file name, so view-only may read it; the PWA
-  shows the description and the tool's name through `visibleUnsafe`, as the overview's text. The
+  shows the type, the description and the tool's name through `visibleUnsafe`, as the overview's text. The
   newest write of a running subagent becomes the overview's `lastTs`
 - **Paired devices** (`server/device_*.go`, `server/pair_page.go`, `server/cli_devices.go`,
   `caps.devices`): a device signs in with a one-time code instead of the password and gets its own

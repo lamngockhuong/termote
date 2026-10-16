@@ -56,7 +56,11 @@ describe('SubagentTree text', () => {
       <SubagentTree
         tree={{
           nodes: [
-            node({ description: 'fix \u202etxt.exe', lastTool: 'Read\u061c' }),
+            node({
+              type: 'Ex\u202eplore',
+              description: 'fix \u202etxt.exe',
+              lastTool: 'Read\u061c',
+            }),
           ],
         }}
         error={false}
@@ -65,6 +69,7 @@ describe('SubagentTree text', () => {
     )
     expect(screen.getByText('fix ⟨U+202E⟩txt.exe')).toBeInTheDocument()
     expect(screen.getByText('Read⟨U+061C⟩')).toBeInTheDocument()
+    expect(screen.getByText('Ex⟨U+202E⟩plore')).toBeInTheDocument()
   })
 })
 

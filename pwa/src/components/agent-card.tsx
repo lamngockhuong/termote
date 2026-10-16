@@ -246,7 +246,7 @@ export const AgentCard = memo(function AgentCard({
                   />
                   {overview.branch && (
                     <span className="truncate font-mono">
-                      {overview.branch}
+                      {visibleUnsafe(overview.branch)}
                     </span>
                   )}
                   <span className="shrink-0">

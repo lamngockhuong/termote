@@ -101,7 +101,7 @@ export function SubagentTree({ tree, error, now }: Props) {
               <span className="flex min-w-0 flex-col">
                 <span className="flex min-w-0 items-center gap-1">
                   <span className="truncate font-semibold text-fg">
-                    {n.type}
+                    {visibleUnsafe(n.type)}
                   </span>
                   <span className="shrink-0 text-fg-muted">
                     · {word}
