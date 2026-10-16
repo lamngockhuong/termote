@@ -56,8 +56,8 @@ if [ -z "$ref" ]; then
 fi
 changed=$(git -C "$top" diff --name-only "$ref" -- ':(glob)lefthook*' ':(glob).lefthook*' \\
   ':(glob).config/lefthook*' scripts/check-gofmt.sh ':(glob)**/dprint.json*' ':(glob)**/.dprint.json*' \\
-  .npmrc pwa/.npmrc pnpm-workspace.yaml ':(glob)**/.pnpmfile.*' package.json pwa/package.json \\
-  ':(glob)**/node_modules/**') || {
+  ':(glob)**/.npmrc' ':(glob)**/pnpm-workspace.yaml' ':(glob)**/.pnpmfile.*' package.json \\
+  pwa/package.json ':(glob)**/node_modules' ':(glob)**/node_modules/**') || {
   echo "git hooks: ${hook} skipped: cannot compare the hook files with \${ref#refs/*/}" >&2
   exit 0
 }

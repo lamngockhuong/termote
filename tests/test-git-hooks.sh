@@ -139,8 +139,8 @@ check "LEFTHOOK=0 runs nothing" "" "$CALLS"
 # A branch that changes a hook file runs none of them
 n=0
 for f in lefthook.yml scripts/check-gofmt.sh dprint.json docs/dprint.json .lefthook.toml lefthook-local.yml \
-    .config/lefthook.yaml .npmrc pwa/.npmrc pnpm-workspace.yaml .pnpmfile.cjs package.json pwa/package.json \
-    node_modules/x/evil pwa/node_modules/.bin/biome; do
+    .config/lefthook.yaml .npmrc pwa/.npmrc docs/.npmrc pnpm-workspace.yaml pwa/pnpm-workspace.yaml \
+    .pnpmfile.cjs package.json pwa/package.json node_modules/x/evil pwa/node_modules/.bin/biome; do
     n=$((n + 1))
     g checkout -q -b "contrib-$n" main
     mkdir -p "$REPO/$(dirname "$f")"
@@ -153,6 +153,15 @@ for f in lefthook.yml scripts/check-gofmt.sh dprint.json docs/dprint.json .lefth
     check "the skip lets the commit go on" "0" "$HOOK_STATUS"
     g checkout -q main
 done
+# A node_modules that is itself a tracked symlink, to a dir the branch tracks
+g checkout -q -b contrib-link main
+mkdir -p "$REPO/web/bin" && printf 'x\n' >"$REPO/web/bin/lefthook"
+ln -s bin "$REPO/web/node_modules"
+g add -f -- web/bin/lefthook web/node_modules && g commit --no-verify -qm "link node_modules"
+hook pre-commit
+check "a branch tracking a node_modules symlink runs no lefthook" "" "$CALLS"
+has "the skip names the symlink" "$TMP/hook-stderr" "^  web/node_modules\$"
+g checkout -q main
 # An uncommitted change counts too
 printf 'changed\n' >>"$REPO/lefthook.yml"
 hook pre-push

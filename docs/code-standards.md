@@ -157,8 +157,8 @@ with `LEFTHOOK=0`, outside a git worktree, or with `core.hooksPath` set (it warn
 `pre-commit` and `pre-push` hooks itself (never over a hook that is not lefthook's) instead of
 `lefthook install`, and each runs lefthook only while the files that decide what it runs (any
 `lefthook*`, `.lefthook*` or `.config/lefthook*`, `scripts/check-gofmt.sh`, any `dprint.json*` or
-`.dprint.json*`, `.npmrc` and `pwa/.npmrc`, `pnpm-workspace.yaml`, any `.pnpmfile.*`, `package.json`
-and `pwa/package.json`, and any tracked file under a `node_modules`) match `origin/HEAD`, else
+`.dprint.json*`, any `.npmrc`, any `pnpm-workspace.yaml`, any `.pnpmfile.*`, `package.json` and
+`pwa/package.json`, and any tracked `node_modules` or file under one) match `origin/HEAD`, else
 `main`; otherwise it names the files, skips without failing the commit or push, and says how to run
 the checks by hand. A branch changing `package.json` therefore runs no hooks.
 [`lefthook.yml`](../lefthook.yml) holds the commands:
