@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ThemeProvider } from '../contexts/theme-context'
+import { resetFilesPersist } from '../utils/files-persist'
 import { SettingsMenu } from './settings-menu'
 
 const mockLogout = vi.fn(async () => true)
@@ -201,6 +202,21 @@ describe('SettingsMenu', () => {
     fireEvent.click(item('Clear cache & reload'))
     await waitFor(() => expect(window.location.reload).toHaveBeenCalled())
     expect(mockLogout).toHaveBeenCalledTimes(1)
+  })
+
+  it('clear cache removes the drafts and tabs kept on this device, as logging out does', async () => {
+    localStorage.setItem('termote-file-drafts:i1:@1:a', '{"v":1,"pane":"@1"}')
+    localStorage.setItem('termote-files-tabs:i1:@1', '{"v":1,"pane":"@1"}')
+    localStorage.setItem('termote-settings', '{}')
+    renderWithTheme()
+    open()
+    fireEvent.click(item('Clear cache & reload'))
+    await waitFor(() => expect(window.location.reload).toHaveBeenCalled())
+    expect(localStorage.getItem('termote-file-drafts:i1:@1:a')).toBeNull()
+    expect(localStorage.getItem('termote-files-tabs:i1:@1')).toBeNull()
+    expect(localStorage.getItem('termote-settings')).toBe('{}')
+    localStorage.clear()
+    resetFilesPersist()
   })
 
   it('clear cache still reloads when the logout fails', async () => {

@@ -674,7 +674,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   copy or discard it. Restored tabs send their saved `root`: a pane that moved answers 409 and
   `rootChanged` closes clean tabs and asks about those with drafts. Records expire 14 days after
   they were written (a draft: after its text last changed), swept when the PWA loads. Log out,
-  revoking this device in Devices and signing this browser out in Signed-in browsers remove
+  Clear cache & reload (before it ends the session, also when sign-in is off or the request
+  fails), revoking this device in Devices and signing this browser out in Signed-in browsers remove
   every record, stop every later write in this tab (pending ones included) and set
   `termote-signed-out`, on which every other tab of the origin does the same and forgets its
   tabs and drafts; each write first checks that key, so a tab not yet told writes nothing back. Accepted gaps: a 401 (session expired, revoked from another device, server

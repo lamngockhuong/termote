@@ -13,6 +13,7 @@ import {
 import { useState } from 'react'
 import { useTheme } from '../contexts/theme-context'
 import { logout } from '../hooks/use-mux-api'
+import { signedOut } from '../utils/files-persist'
 import {
   Menu,
   MenuGroup,
@@ -55,8 +56,11 @@ async function clearCacheAndReload() {
       const cacheNames = await caches.keys()
       await Promise.all(cacheNames.map((name) => caches.delete(name)))
     }
-    // End the session on the server: the cookie is HttpOnly, so the page
-    // cannot clear it itself. Without sign-in there is none to end.
+    // Signs out as logging out does: the drafts and tabs kept on this
+    // device go too. Then the session ends on the server: the cookie is
+    // HttpOnly, so the page cannot clear it itself. Without sign-in there is
+    // none to end.
+    signedOut()
     await logout().catch(() => false)
   } finally {
     window.location.reload()

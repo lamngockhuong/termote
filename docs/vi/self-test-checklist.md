@@ -206,7 +206,7 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 - [ ] Máy tính: Danh sách icon hiển thị đúng (không vỡ bố cục)
 - [ ] Trang About hiển thị đẹp ở giao diện tối
 - [ ] Menu "More" (⋯) mở được từ header trên mobile và máy tính
-- [ ] Mục `Clear cache & reload` trong menu More hoạt động (hủy SW, xóa cache, kết thúc phiên trên server, tải lại trang)
+- [ ] Mục `Clear cache & reload` trong menu More hoạt động (hủy SW, xóa cache, xóa tab và bản nháp Files/Changes lưu trên thiết bị, kết thúc phiên trên server, tải lại trang)
 - [ ] Khi bật đăng nhập, mục `Log out` trong menu More mở trang đăng nhập, và phiên cũ không còn dùng được nữa (tải lại trang thì phải đăng nhập lại); khi tắt đăng nhập (`--no-auth`) thì mục này không hiện
 
 ### Chỉ Báo Kết Nối
