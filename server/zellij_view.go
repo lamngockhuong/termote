@@ -67,6 +67,9 @@ func (m *zellijMux) AttachView(ctx context.Context, paneID string, _ Size) (Term
 	if err != nil {
 		return nil, err
 	}
+	if err := zellijCheckSocketDir(); err != nil {
+		return nil, err
+	}
 	argv := zellijSubscribeArgv(session, n)
 	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.Env = zellijEnv()

@@ -72,6 +72,12 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `newMux` and `start` check it; Linux and macOS natively, refused on Windows by `start`/`restart`
   and `newMux`, never by the shared `validateMux`, so `container up --mux zellij` works on any
   host): every running session of the server's user is a group (as tmux; no extra no-auth guard).
+  Before every `zellij` command (listing, action, `attach`, `subscribe`) the socket dir
+  (`ZELLIJ_SOCKET_DIR`, else `$XDG_RUNTIME_DIR/zellij` on Linux, else `$TMPDIR/zellij-<uid>`) is
+  checked (`zellijCheckSocketDir`): made 0700 when missing, it must be a directory (not a
+  symlink) of the server's uid that others cannot write, and its `contract_version_1`, where the
+  sockets are, when there, one of that uid with no group or other access (Zellij makes it 0700);
+  else no command runs, 503 `zellij_socket_dir`, the reason logged once.
   Every `zellij` call is argv only, never a shell; a positional value goes after `--` (`attach`
   takes none: there `--` starts a command, so a session name is passed only when
   `zellijPassableName` holds: no leading `-`, not `help`/`options` in any case, no control or

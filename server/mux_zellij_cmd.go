@@ -102,6 +102,9 @@ func zellijRun(ctx context.Context, args ...string) ([]byte, error) {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	err := runZellijGated(cmd)
+	if errors.Is(err, errZellijSocketDir) {
+		return nil, err
+	}
 	if err != nil {
 		msg := strings.TrimSpace(stderr.String() + " " + stdout.String())
 		if strings.Contains(msg, zellijNoSession) {
@@ -138,8 +141,22 @@ func zellijFailedWith(err error, text string) bool {
 	return errors.As(err, &ce) && strings.Contains(ce.msg, text)
 }
 
-// runZellijGated runs cmd under the read side of zellijGate.
+// errZellijSocketDir refuses every zellij command while the socket dir
+// could be another user's (zellijCheckSocketDir); the reason is logged.
+var errZellijSocketDir = &codedError{code: "zellij_socket_dir",
+	msg: "the zellij socket directory is not private to this user", status: 503}
+
+// zellijFinal reports whether err is a failure a retry cannot change.
+func zellijFinal(err error) bool {
+	return errors.Is(err, errZellijNotListed) || errors.Is(err, errZellijSocketDir)
+}
+
+// runZellijGated runs cmd under the read side of zellijGate, once the
+// socket dir is checked.
 func runZellijGated(cmd *exec.Cmd) error {
+	if err := zellijCheckSocketDir(); err != nil {
+		return err
+	}
 	zellijGate.RLock()
 	defer zellijGate.RUnlock()
 	return cmd.Run()
@@ -237,7 +254,7 @@ func zellijQuery(ctx context.Context, session string, valid func([]byte) bool, a
 		switch {
 		case err == nil && len(bytes.TrimSpace(out)) > 0 && valid(out):
 			return out, nil
-		case err != nil && (ctx.Err() != nil || i+1 >= zellijQueryAttempts || errors.Is(err, errZellijNotListed)):
+		case err != nil && (ctx.Err() != nil || i+1 >= zellijQueryAttempts || zellijFinal(err)):
 			return nil, err
 		case i+1 >= zellijQueryAttempts:
 			return nil, errZellijEmpty
@@ -260,7 +277,7 @@ func zellijRepeat(ctx context.Context, session string, args ...string) error {
 		if _, err = zellijAction(ctx, session, args...); err == nil || zellijFailedWith(err, "is already focused") {
 			return nil
 		}
-		if ctx.Err() != nil || errors.Is(err, errZellijNotListed) || errors.Is(err, errZellijNoSession) && i > 1 {
+		if ctx.Err() != nil || zellijFinal(err) || errors.Is(err, errZellijNoSession) && i > 1 {
 			return err
 		}
 		select {
@@ -607,6 +624,9 @@ func zellijListSessions(ctx context.Context) ([]zellijSession, error) {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	err := runZellijGated(cmd)
+	if errors.Is(err, errZellijSocketDir) {
+		return nil, err
+	}
 	if strings.Contains(stdout.String()+stderr.String(), zellijNoSessions) {
 		zellijRememberListed(nil)
 		return nil, nil
