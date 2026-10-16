@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.2.0](https://github.com/lamngockhuong/termote/compare/v2.1.0...v2.2.0) (2026-10-16)
+
+
+### Features
+
+* choose the lines a wrapped table cell shows and edit cells in place ([#481](https://github.com/lamngockhuong/termote/issues/481)) ([735d402](https://github.com/lamngockhuong/termote/commit/735d4027025cdf780c6cbc947677a5b47173f687))
+* show each agent's context share and its Codex account's rate limits ([#478](https://github.com/lamngockhuong/termote/issues/478)) ([8c4538d](https://github.com/lamngockhuong/termote/commit/8c4538d5d32b5449877e2468c4184ac90f410523))
+* start the Herdr server when a page opens and nothing answers its socket ([#480](https://github.com/lamngockhuong/termote/issues/480)) ([f3a0334](https://github.com/lamngockhuong/termote/commit/f3a03347f4fc1d611943652bd588c558c7f8ca80))
+
+
+### Bug Fixes
+
+* close nine security gaps in Zellij, the peer check, git hooks and the PWA ([#483](https://github.com/lamngockhuong/termote/issues/483)) ([432d5c5](https://github.com/lamngockhuong/termote/commit/432d5c5fa7bd53577217b04d663c3b333bcbafe9))
+
 ## [2.1.0](https://github.com/lamngockhuong/termote/compare/v2.0.1...v2.1.0) (2026-10-15)
 
 
