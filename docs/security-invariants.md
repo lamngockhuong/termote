@@ -936,12 +936,19 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   cycling source addresses lists them at most that often; no address is remembered as
   remote) is checked on its first read/write, never in `Accept` (64 lookups at once, at most 4
   `sock_diag` queries of them, 2 s, else refused). Linux: `sock_diag` exact lookup, `/proc/net/tcp*` fallback, only ESTABLISHED with an
-  inode (a TIME_WAIT row reads uid 0). Windows: `GetExtendedTcpTable` owner PID → token SID; an
-  unreadable token in session 0 is a service. A whole-table read (`/proc`, Windows' tables) is
+  inode (a TIME_WAIT row reads uid 0). Windows: `GetExtendedTcpTable`
+  (`TCP_TABLE_OWNER_MODULE_CONNECTIONS`) owner PID and bind time; the process opened at that PID
+  must be created no later than the socket was bound (else the PID went to another process: refused,
+  as is a row with no bind time), then its token SID. An unreadable token is trusted only for a
+  running service's own PID, from the Service Control Manager (`EnumServicesStatusEx`, read after
+  the process is opened, so the PID cannot change hands; a per-user service, type bit 0x40 or 0x80,
+  is not one, as it runs as whoever logged on), never for being in session 0 (an SSH logon is too)
+  or a service's child (sshd's session processes are). Both times are wall-clock FILETIMEs: a clock
+  stepped back between a process's start and its bind refuses that process (fails closed). A whole-table read (`/proc`, Windows' tables and service list) is
   shared (`tableSnapshots`): a lookup waits for the first read that starts after it asked, and
   every lookup waiting then uses that read, so a flood costs about one read per batch, not one
-  per connection. Trusted: own uid/SID, root/SYSTEM, session 0
-  services, `--allow-local-user` names (checked to exist when given; a vanished one skipped at
+  per connection. Trusted: own uid/SID, root/SYSTEM (on Windows only
+  with a token the server's user can read), running Windows services as above, `--allow-local-user` names (checked to exist when given; a vanished one skipped at
   start). WSL 2 mirrored: an absent loopback client with an established server end (two looks,
   10 ms) is Windows, let through; NAT goes through root's relay (accepted: every Windows user).
   Not found, closed or timed out → refused, `audit: local-user-refused` (10 s per user, 64 users),
@@ -949,11 +956,13 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   a reverse proxy under another user); a rollback's `start` drops the saved names
 - **CLI local socket** (`server/local_socket*.go`): the native server also serves on
   `<stateDir>/run/<port>.sock` (dir 0700 owned, not a symlink; socket 0600) or the pipe
-  `\\.\pipe\termote-<SID>-<port>` (ACL user + SYSTEM, remote refused, first instance exclusive).
+  `\\.\pipe\termote-<SID>-<port>` (owner the user, named in its SDDL; ACL user + SYSTEM, remote
+  refused, first instance exclusive).
   A connection there gets a context mark from its type only and is `authLocal` (full, no
   password); `hostGuard` takes `termote.local-socket` only there; audit `ip=local`. The CLI checks
-  the server end's owner (`SO_PEERCRED`/`LOCAL_PEERCRED`/pipe server token) is itself or
-  root/SYSTEM before writing, uses that one connection, falls back to TCP + password when the
+  the server end's owner (`SO_PEERCRED`/`LOCAL_PEERCRED`; on Windows the owner of the pipe object
+  itself, `GetSecurityInfo`, never the user of the serving PID) is itself or root/SYSTEM before
+  writing, uses that one connection, falls back to TCP + password when the
   socket is missing or untrusted or a read got no answer, and never resends a write that was sent. `status` prints `Via: socket`
   or `Via: TCP` (`--json`: `via`). The exit cleanup removes the socket only while it is its own and
   nothing answers on it (an update's new server keeps its socket)
@@ -1030,13 +1039,21 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `--no-auto-install`, so lefthook never rewrites them; a hook that is not lefthook's is left; with
   `core.hooksPath` set nothing is written). A hook runs lefthook, with `LEFTHOOK_CONFIG` set to the
   checked-out `lefthook.yml`, only when `git diff` finds no change against `origin/HEAD`, else
-  `main`, in any `lefthook*`, `.lefthook*`, `.config/lefthook*`, `scripts/check-gofmt.sh`, any
+  `main`, in any `lefthook*`, `.lefthook*`, `.config/lefthook*`, `scripts/check-gofmt.sh`,
+  `scripts/staged-files.sh`, any
   `dprint.json*`/`.dprint.json*` (dprint plugins can be programs), any `.npmrc`, any
   `pnpm-workspace.yaml`, any `.pnpmfile.*`, `package.json`, `pwa/package.json` (what `pnpm exec` and
   `npx` read) or any tracked `node_modules` (a symlink too) or file under one (git replaces an
   ignored file with a branch's tracked one, so a branch could bring its own
   `node_modules/.bin/lefthook`); otherwise, or with no such branch, it names the files on stderr and
-  exits 0 without running anything. `pnpm install` itself runs the branch's `package.json` scripts
+  exits 0 without running anything. A pre-commit command gets its files from
+  `scripts/staged-files.sh` (`git diff --cached`, each name one argument starting with `./`), never
+  from a lefthook file template (`{staged_files}`): lefthook on Windows puts `run` into a
+  double-quoted `sh -c` command line without escaping, and its quoting of a name holding a `'` adds
+  double quotes that end it, so the rest of the name would run as shell code (a test refuses any
+  file template in `lefthook.yml`). A name git has to quote (a `"`, a `\` or a control character) is
+  refused, not passed on as a path that matches nothing; names go in batches of at most 7000 bytes
+  (a longer single name runs alone), as lefthook split its own. `pnpm install` itself runs the branch's `package.json` scripts
   (accepted: a maintainer reads that diff first, `CONTRIBUTING.md`)
 - **Tailscale mapping**: `serve` removes its `tailscale serve` mapping when it stops (only while
   it still proxies to its port), so the name never leads to a free port another user could take;

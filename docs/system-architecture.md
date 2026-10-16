@@ -1489,10 +1489,12 @@ termote update --force           # Force reinstall current version
     socket (client end local, server end remote), falling back to `/proc/net/tcp*` where netlink is
     refused; only an ESTABLISHED socket with an inode counts, since the kernel reports a closed one
     (TIME_WAIT) as uid 0. A whole-table read (`/proc`, Windows) is shared by every lookup waiting
-    for it (`tableSnapshots`), each waiting for a read that started after it asked. Windows reads the owner PID from `GetExtendedTcpTable` (IPv4 and IPv6
-    tables, ESTABLISHED rows) and that process's token SID; a process whose token cannot be read
-    but that runs in session 0 counts as a service. Trusted: the server's own uid/SID, root
-    (`0`) or SYSTEM (`S-1-5-18`), session 0 services on Windows, and each `--allow-local-user`
+    for it (`tableSnapshots`), each waiting for a read that started after it asked. Windows reads the owner PID and bind time from `GetExtendedTcpTable` (IPv4 and IPv6
+    tables, ESTABLISHED rows), refuses a PID whose process was created after the socket was bound
+    (the PID went to another process), and reads that process's token SID; a process whose token
+    cannot be read counts as a service only when the Service Control Manager lists its PID as a
+    running service's, not a per-user service's (those run as whoever logged on). Trusted: the server's own uid/SID, root
+    (`0`) or SYSTEM (`S-1-5-18`), running services on Windows, and each `--allow-local-user`
     name (resolved at start, a missing one skipped with a log line). Under WSL 2 mirrored
     networking (`wslinfo --networking-mode`), a loopback client absent from the tables whose
     server end stays established, looked at twice 10 ms apart, is Windows and is let through.
@@ -1503,13 +1505,13 @@ termote update --force           # Force reinstall current version
     of a user with the `--allow-local-user` hint. macOS checks nothing (`peerOwner` is nil)
 17. **The CLI's local socket** (`server/local_socket*.go`): `runServer` serves the same handler
     on `<stateDir>/run/<port>.sock` (dir 0700 checked owned and not a symlink, socket chmod 0600
-    and checked again) or the named pipe `\\.\pipe\termote-<SID>-<port>` (ACL: the user and
-    SYSTEM, remote clients refused, first instance exclusive). Connections accepted there carry a
+    and checked again) or the named pipe `\\.\pipe\termote-<SID>-<port>` (owner the user, named in its SDDL; ACL:
+    the user and SYSTEM, remote clients refused, first instance exclusive). Connections accepted there carry a
     context mark set from the connection type only (`localSocketConnContext`), and `basicAuth`
     signs them in as `authLocal`, full, with no password; `hostGuard` accepts the Host
     `termote.local-socket` on that socket only, and audit lines name `ip=local`. The CLI checks
-    the dir, then the server end's owner (`SO_PEERCRED`, `LOCAL_PEERCRED`, or the pipe server's
-    process token) is itself or root/SYSTEM, and sends one request on that very connection. A
+    the dir, then the server end's owner (`SO_PEERCRED`, `LOCAL_PEERCRED`, or on Windows the owner
+    of the pipe object, `GetSecurityInfo`, never the serving process) is itself or root/SYSTEM, and sends one request on that very connection. A
     missing or untrusted socket, or a read that got no answer, falls back to TCP with the password
     (`authedRequest`); a write that was sent but got no answer is never sent again. A stale socket is replaced at start; the
     cleanup at exit removes it only while it is the one made there and nothing answers on it

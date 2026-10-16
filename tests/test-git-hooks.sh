@@ -42,6 +42,7 @@ g init -q -b main
 printf 'pre-commit:\n' >"$REPO/lefthook.yml"
 mkdir -p "$REPO/scripts"
 printf '#!/bin/sh\n' >"$REPO/scripts/check-gofmt.sh"
+printf '#!/bin/sh\n' >"$REPO/scripts/staged-files.sh"
 printf '{}\n' >"$REPO/dprint.json"
 printf 'node_modules/\n' >"$REPO/.gitignore"
 g add -A && g commit --no-verify -qm base
@@ -138,7 +139,7 @@ check "LEFTHOOK=0 runs nothing" "" "$CALLS"
 
 # A branch that changes a hook file runs none of them
 n=0
-for f in lefthook.yml scripts/check-gofmt.sh dprint.json docs/dprint.json .lefthook.toml lefthook-local.yml \
+for f in lefthook.yml scripts/check-gofmt.sh scripts/staged-files.sh dprint.json docs/dprint.json .lefthook.toml lefthook-local.yml \
     .config/lefthook.yaml .npmrc pwa/.npmrc docs/.npmrc pnpm-workspace.yaml pwa/pnpm-workspace.yaml \
     .pnpmfile.cjs package.json pwa/package.json node_modules/x/evil pwa/node_modules/.bin/biome; do
     n=$((n + 1))
@@ -189,6 +190,64 @@ g branch -q main
 rm "$BIN/lefthook"
 hook pre-commit
 has "no lefthook says so" "$TMP/hook-stderr" "lefthook is not installed"
+
+# scripts/staged-files.sh hands the staged names to the command as arguments, never to a shell
+HELPER="$PROJECT_DIR/scripts/staged-files.sh"
+STAGED="$TMP/staged"
+mkdir -p "$STAGED/sub"
+s() { git -C "$STAGED" -c user.name=t -c user.email=t@t -c commit.gpgsign=false "$@"; }
+s init -q -b main
+printf 'x\n' >"$STAGED/gone.md" && s add gone.md && s commit --no-verify -qm base
+s rm -q gone.md
+for f in "x'\$(touch PWNED)'.md" "--config=evil.md" "sub/a b.md" "sub/c.mdx" "notes.txt"; do
+    printf 'x\n' >"$STAGED/$f"
+done
+s add -- . && printf 'x\n' >"$STAGED/unstaged.md"
+printf '#!/bin/sh\nfor a; do echo "$a"; done >"$ARGS_OUT"\n' >"$TMP/args"
+chmod +x "$TMP/args"
+export ARGS_OUT="$TMP/args-out"
+staged() {
+    rm -f "$ARGS_OUT"
+    (cd "$1" && shift && sh "$HELPER" "$@")
+    STAGED_STATUS=$?
+}
+staged "$STAGED" --glob '**/*.md' --glob '**/*.mdx' "$TMP/args"
+check "staged-files passes the matching staged names" "./--config=evil.md
+./sub/a b.md
+./sub/c.mdx
+./x'\$(touch PWNED)'.md" "$(cat "$ARGS_OUT")"
+check "staged-files runs no name as code" "no" "$([[ -e "$STAGED/PWNED" ]] && echo yes || echo no)"
+staged "$STAGED/sub" --glob '*.md' "$TMP/args"
+check "staged-files names are relative to the current directory" "./a b.md" "$(cat "$ARGS_OUT")"
+staged "$STAGED" --glob '**/*.go' "$TMP/args"
+check "staged-files runs nothing without a match" "no 0" \
+    "$([[ -e "$ARGS_OUT" ]] && echo yes || echo no) $STAGED_STATUS"
+staged "$STAGED" "$TMP/args" 2>/dev/null
+check "staged-files without a pathspec is a usage error" "2" "$STAGED_STATUS"
+# A name git has to quote is refused rather than passed on as a path that matches nothing
+QUOTED="$TMP/quoted"
+mkdir -p "$QUOTED"
+git -C "$QUOTED" init -q -b main
+printf 'x\n' >"$QUOTED/a\tb.md"
+git -C "$QUOTED" add -- .
+staged "$QUOTED" --glob '**/*.md' "$TMP/args" 2>"$TMP/quoted-err"
+check "staged-files refuses a name git quotes" "1 no" \
+    "$STAGED_STATUS $([[ -e "$ARGS_OUT" ]] && echo yes || echo no)"
+has "staged-files says which name" "$TMP/quoted-err" 'cannot check "a\\tb.md"'
+# Many names go in batches under the command-line limit, every name once
+MANY="$TMP/many"
+mkdir -p "$MANY"
+git -C "$MANY" init -q -b main
+long=$(printf '%0100d' 0)
+for i in $(seq 1 150); do printf 'x\n' >"$MANY/$i-$long.md"; done
+git -C "$MANY" add -- .
+printf '#!/bin/sh\necho call >>"$ARGS_OUT"\nfor a; do echo "$a"; done >>"$ARGS_OUT"\n' >"$TMP/args-append"
+chmod +x "$TMP/args-append"
+staged "$MANY" --glob '*.md' "$TMP/args-append"
+check "staged-files splits a long list" "3 150 0" \
+    "$(grep -c '^call$' "$ARGS_OUT") $(grep -c '^\./' "$ARGS_OUT") $STAGED_STATUS"
+check "lefthook.yml hands no file template to a command" "" \
+    "$(grep -E '\{(staged_files|all_files|files|push_files)\}' "$PROJECT_DIR/lefthook.yml" | grep -v '^ *#')"
 
 echo ""
 echo -e "Passed: ${GREEN}$PASSED${NC}"

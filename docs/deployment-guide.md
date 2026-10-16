@@ -340,8 +340,17 @@ See [`system-architecture.md`](system-architecture.md#security-model) for the fu
 
 **Breaking change** (from the first release after 1.20.0): on Linux and Windows a native server refuses every
 connection made from the machine itself (any loopback address, or its own LAN address with `--lan`)
-by a process of another OS user. The server's own user and root/SYSTEM (and on Windows a session 0
-service whose token the server's user cannot read) are always let in. A connection whose owner cannot be found, or that is already closing,
+by a process of another OS user. The server's own user and root/SYSTEM are always let in (on Windows,
+a process created no later than its socket was bound: a reused PID, a row with no bind time and a clock
+stepped back are refused for every user). On Windows a
+SYSTEM process counts as SYSTEM only when the server's user can read its token; otherwise a process the
+server's user can open but whose token it cannot read is let in only when it is a running service's
+own process (per-user services excepted), and refused otherwise.
+
+From the release after 2.1.0, on Windows: a process in session 0 is no longer let in for being there.
+A proxy that a wrapper such as NSSM or WinSW, or IIS (ARR in `w3wp`), starts as a child process under an
+account whose token the server's user cannot read is refused; register the proxy itself as the service,
+or run it as the server's user. A connection whose owner cannot be found, or that is already closing,
 is refused as well. The check runs on the connection's first read, at most 4 lookups at once, each
 within 2 seconds.
 
@@ -376,8 +385,8 @@ A native server also listens on a socket only its own OS user can open, and the 
 - **Windows:** the named pipe `\\.\pipe\termote-<SID>-<port>`, whose ACL names the user and SYSTEM;
   remote clients are refused.
 
-Before sending a request the CLI checks that the server end runs as its own user or root/SYSTEM; a
-socket another user made is never used. Without a socket (the container, an older server, a socket
+Before sending a request the CLI checks that the server end runs as its own user or root/SYSTEM (on
+Windows, that the pipe is owned by its own user or SYSTEM); a socket another user made is never used. Without a socket (the container, an older server, a socket
 that cannot be opened: the server logs why) the CLI falls back to `127.0.0.1:<port>` with the saved
 password, which goes only to a listener of the same user or root/SYSTEM; a read sent on the socket that got no
 answer is retried that way, a write never. `termote status` prints `Via: socket (no
