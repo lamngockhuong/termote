@@ -76,8 +76,10 @@ The git hooks check formatting, lint and types before a commit or a push (see
 [docs/code-standards.md](docs/code-standards.md#git-hooks)). Skip them once with `LEFTHOOK=0` or
 `--no-verify`.
 
-The hooks run only while the branch checked out has the hook files of `origin/main` (the lefthook
-config, `scripts/check-gofmt.sh`, `dprint.json`): on a branch that changed one, they name it and
+The hooks run only while the branch checked out has the hook files of `origin/HEAD`, else `main`
+(the lefthook config, `scripts/check-gofmt.sh`, the dprint, npm and pnpm config, the root and `pwa/`
+`package.json`, anything tracked under `node_modules`; the full list is in
+[docs/code-standards.md](docs/code-standards.md#git-hooks)): on a branch that changed one, they name it and
 skip, so a contributor's branch does not run its own hook code at your next commit or push. Read
 that diff before running the checks by hand (`pnpm exec lefthook run pre-commit`). `pnpm install`
 on a branch still runs that branch's `package.json` scripts: on a branch you do not trust, read its

@@ -3,10 +3,14 @@
 // worktree (a tarball, an extracted archive), and it never makes `pnpm install` fail.
 //
 // The hooks are written here rather than by `lefthook install`: each runs lefthook only while
-// the files that decide what it runs (the lefthook config, scripts/check-gofmt.sh, dprint.json,
-// whose plugins can be programs) match the trusted branch, origin/HEAD or else main. On a branch
-// that changed one of them, the hook says which and skips, so a contributor's branch does not
-// run its own hook code on a maintainer's machine at the next commit or push.
+// the files that decide what it runs match the trusted branch, origin/HEAD or else main: the
+// lefthook config, scripts/check-gofmt.sh, the dprint config (its plugins can be programs), the
+// npm and pnpm config and package.json files `pnpm exec` and `npx` read, and any tracked file
+// under node_modules (git replaces an ignored file with a branch's tracked one, so a branch could
+// bring its own node_modules/.bin/lefthook). On a branch that changed one of them, the hook says
+// which and skips, so a contributor's branch does not run its own hook code on a maintainer's
+// machine at the next commit or push. With core.hooksPath set (often one dir shared by every
+// repository) nothing is installed.
 import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
@@ -25,6 +29,12 @@ if (inside.status !== 0 || inside.stdout.trim() !== "true") {
 
 // The hooks lefthook.yml defines
 const HOOKS = ["pre-commit", "pre-push"];
+
+const hooksPath = git("config", "core.hooksPath").stdout.trim();
+if (hooksPath) {
+  console.warn(`[WARN] core.hooksPath is set (${hooksPath}); git hooks not installed.`);
+  process.exit(0);
+}
 
 const hookScript = (hook) => `#!/bin/sh
 # termote: installed by scripts/install-git-hooks.mjs (pnpm install); edit that file, not this one.
@@ -45,7 +55,9 @@ if [ -z "$ref" ]; then
   exit 0
 fi
 changed=$(git -C "$top" diff --name-only "$ref" -- ':(glob)lefthook*' ':(glob).lefthook*' \\
-  ':(glob).config/lefthook*' scripts/check-gofmt.sh dprint.json) || {
+  ':(glob).config/lefthook*' scripts/check-gofmt.sh ':(glob)**/dprint.json*' ':(glob)**/.dprint.json*' \\
+  .npmrc pwa/.npmrc pnpm-workspace.yaml ':(glob)**/.pnpmfile.*' package.json pwa/package.json \\
+  ':(glob)**/node_modules/**') || {
   echo "git hooks: ${hook} skipped: cannot compare the hook files with \${ref#refs/*/}" >&2
   exit 0
 }

@@ -114,13 +114,19 @@ printf '#!/bin/sh\ncall_lefthook run "pre-push"\n' >"$HOOKS/pre-push"
 (cd "$REPO" && env -u CI -u LEFTHOOK "$NODE" "$SCRIPT" 2>"$TMP/stderr")
 has "a lefthook hook is replaced" "$HOOKS/pre-push" 'install-git-hooks.mjs'
 
+# core.hooksPath (often one dir for every repository) gets nothing
+g config core.hooksPath "$TMP/shared-hooks"
+(cd "$REPO" && env -u CI -u LEFTHOOK "$NODE" "$SCRIPT" 2>"$TMP/stderr")
+check "core.hooksPath gets no hooks" "no" "$([[ -e "$TMP/shared-hooks/pre-commit" ]] && echo yes || echo no)"
+has "core.hooksPath warns" "$TMP/stderr" '\[WARN\] core.hooksPath is set'
+g config --unset core.hooksPath
+
 # A hooks dir that cannot be made: the install warns and still exits 0
-printf 'x' >"$TMP/file"
-g config core.hooksPath "$TMP/file/hooks"
+mv "$HOOKS" "$TMP/hooks.kept" && printf 'x' >"$HOOKS"
 (cd "$REPO" && env -u CI -u LEFTHOOK "$NODE" "$SCRIPT" 2>"$TMP/stderr")
 check "a failed install still exits 0" "0" "$?"
 has "a failed install warns" "$TMP/stderr" '\[WARN\] git hooks not installed'
-g config --unset core.hooksPath
+rm "$HOOKS" && mv "$TMP/hooks.kept" "$HOOKS"
 
 # While the hook files match main, a hook runs lefthook with the checked config
 hook pre-commit
@@ -132,12 +138,15 @@ check "LEFTHOOK=0 runs nothing" "" "$CALLS"
 
 # A branch that changes a hook file runs none of them
 n=0
-for f in lefthook.yml scripts/check-gofmt.sh dprint.json .lefthook.toml lefthook-local.yml .config/lefthook.yaml; do
+for f in lefthook.yml scripts/check-gofmt.sh dprint.json docs/dprint.json .lefthook.toml lefthook-local.yml \
+    .config/lefthook.yaml .npmrc pwa/.npmrc pnpm-workspace.yaml .pnpmfile.cjs package.json pwa/package.json \
+    node_modules/x/evil pwa/node_modules/.bin/biome; do
     n=$((n + 1))
     g checkout -q -b "contrib-$n" main
     mkdir -p "$REPO/$(dirname "$f")"
     printf 'changed\n' >>"$REPO/$f"
-    g add -A && g commit --no-verify -qm "change $f"
+    # -f: a branch can track a file under the ignored node_modules
+    g add -f -- "$f" && g commit --no-verify -qm "change $f"
     hook pre-commit
     check "a branch changing $f runs no lefthook" "" "$CALLS"
     has "the skip names $f" "$TMP/hook-stderr" "^  $f\$"
