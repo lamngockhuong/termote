@@ -153,7 +153,12 @@ import type { Session } from "./types/session";
 
 `pnpm install` at the repo root installs [lefthook](https://github.com/evilmartians/lefthook) hooks
 through `scripts/install-git-hooks.mjs` (the root `prepare` script); it skips them when `CI` is set,
-with `LEFTHOOK=0`, or outside a git worktree. [`lefthook.yml`](../lefthook.yml) holds the commands:
+with `LEFTHOOK=0`, or outside a git worktree. It writes the `pre-commit` and `pre-push` hooks itself
+(never over a hook that is not lefthook's) instead of `lefthook install`, and each runs lefthook only
+while the files that decide what it runs (any `lefthook*`, `.lefthook*` or `.config/lefthook*`,
+`scripts/check-gofmt.sh`, `dprint.json`) match `origin/HEAD`, else `main`; otherwise it names the
+files, skips without failing the commit or push, and says how to run the checks by hand.
+[`lefthook.yml`](../lefthook.yml) holds the commands:
 
 | Hook         | Runs when                        | Checks                                                                                        |
 | ------------ | -------------------------------- | --------------------------------------------------------------------------------------------- |

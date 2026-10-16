@@ -1024,6 +1024,15 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   Immutable releases are on for the repo, so assets and tags cannot change after publishing.
   `release-please.yml` starts `release.yml` with `workflow_dispatch` on the tag, never as a
   called workflow: a `workflow_call` job does not get the environment's secret (actions/runner#1490)
+- **Git hooks** (`scripts/install-git-hooks.mjs`, `lefthook.yml`): `pnpm install` writes the
+  `pre-commit` and `pre-push` hooks itself (`lefthook install` is never run, and `lefthook run`
+  gets `--no-auto-install`, so lefthook never rewrites them; a hook that is not lefthook's is left).
+  A hook runs lefthook, with `LEFTHOOK_CONFIG` set to the checked-out `lefthook.yml`, only when
+  `git diff` finds no change against `origin/HEAD`, else `main`, in any `lefthook*`, `.lefthook*`,
+  `.config/lefthook*`, `scripts/check-gofmt.sh` or `dprint.json` (dprint plugins can be programs);
+  otherwise, or with no such branch, it names the files on stderr and exits 0 without running
+  anything. `pnpm install` itself runs the branch's `package.json` scripts (accepted: a maintainer
+  reads that diff first, `CONTRIBUTING.md`)
 - **Tailscale mapping**: `serve` removes its `tailscale serve` mapping when it stops (only while
   it still proxies to its port), so the name never leads to a free port another user could take;
   `start --lan` warns when lingering is off (the port is free while the user is logged out)
