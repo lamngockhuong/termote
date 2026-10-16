@@ -46,25 +46,30 @@ const THEMES = [
   { value: 'system', label: 'System', Icon: Monitor },
 ] as const
 
+// Each step runs whatever the one before did: a browser that refuses the
+// service worker or cache API still signs out.
 async function clearCacheAndReload() {
-  try {
-    // Signs out as logging out does, first, so a failed step below cannot
-    // keep them: the drafts and tabs kept on this device go too.
-    signedOut()
-    if ('serviceWorker' in navigator) {
-      const registrations = await navigator.serviceWorker.getRegistrations()
-      await Promise.all(registrations.map((r) => r.unregister()))
-    }
-    if ('caches' in window) {
-      const cacheNames = await caches.keys()
-      await Promise.all(cacheNames.map((name) => caches.delete(name)))
-    }
-    // End the session on the server: the cookie is HttpOnly, so the page
-    // cannot clear it itself. Without sign-in there is none to end.
-    await logout().catch(() => false)
-  } finally {
-    window.location.reload()
+  // Signs out as logging out does: the drafts and tabs kept on this device
+  // go too.
+  signedOut()
+  if ('serviceWorker' in navigator) {
+    await navigator.serviceWorker
+      .getRegistrations()
+      .then((registrations) =>
+        Promise.all(registrations.map((r) => r.unregister())),
+      )
+      .catch(() => undefined)
   }
+  if ('caches' in window) {
+    await caches
+      .keys()
+      .then((names) => Promise.all(names.map((name) => caches.delete(name))))
+      .catch(() => undefined)
+  }
+  // End the session on the server: the cookie is HttpOnly, so the page
+  // cannot clear it itself. Without sign-in there is none to end.
+  await logout().catch(() => false)
+  window.location.reload()
 }
 
 // The header's overflow menu: font size (mobile), theme, and the dialogs.

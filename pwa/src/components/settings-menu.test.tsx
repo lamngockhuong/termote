@@ -229,6 +229,16 @@ describe('SettingsMenu', () => {
     fireEvent.click(item('Clear cache & reload'))
     await waitFor(() => expect(window.location.reload).toHaveBeenCalled())
     expect(localStorage.getItem('termote-file-drafts:i1:@1:a')).toBeNull()
+    expect(mockLogout).toHaveBeenCalledTimes(1)
+  })
+
+  it('clear cache still ends the session when the caches cannot be listed', async () => {
+    vi.mocked(caches.keys).mockRejectedValueOnce(new Error('SecurityError'))
+    renderWithTheme()
+    open()
+    fireEvent.click(item('Clear cache & reload'))
+    await waitFor(() => expect(window.location.reload).toHaveBeenCalled())
+    expect(mockLogout).toHaveBeenCalledTimes(1)
   })
 
   it('clear cache still reloads when the logout fails', async () => {
