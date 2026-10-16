@@ -300,10 +300,14 @@ func (p *localPeerCheck) fromThisMachine(ip netip.Addr) bool {
 	asked := time.Now()
 	p.addrMu.Lock()
 	defer p.addrMu.Unlock()
+	// read: this call read the list itself, which a coarse clock cannot
+	// tell from a read at the same tick before the call
+	read := false
 	if p.addrs == nil || asked.Sub(p.addrsRead) > machineAddrsMaxAge {
 		p.readAddrsLocked()
+		read = true
 	}
-	for !p.addrs[ip] && !p.addrsRead.After(asked) {
+	for !p.addrs[ip] && !read && !p.addrsRead.After(asked) {
 		if wait := machineAddrsMissFloor - time.Since(p.addrsRead); wait > 0 {
 			// Another call may read the list meanwhile.
 			p.addrMu.Unlock()
@@ -312,6 +316,7 @@ func (p *localPeerCheck) fromThisMachine(ip netip.Addr) bool {
 			continue
 		}
 		p.readAddrsLocked()
+		read = true
 	}
 	return p.addrs[ip]
 }
