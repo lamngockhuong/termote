@@ -139,28 +139,22 @@ func TestPeerCheckOnlyLocalConnections(t *testing.T) {
 	if !check.fromThisMachine(netip.MustParseAddr("192.168.1.20")) {
 		t.Error("own LAN address not local")
 	}
-	// A miss right after a list shares it, and is not remembered.
-	if check.fromThisMachine(netip.MustParseAddr("192.168.1.30")) || reads != 1 || len(check.remote) != 0 {
-		t.Errorf("miss within the floor: %d reads, remote %v", reads, check.remote)
+	// A miss lists them again, waiting for the miss floor; the same
+	// address again does too: an address is another machine's only by a
+	// list read after its connection arrived.
+	start := time.Now()
+	if check.fromThisMachine(netip.MustParseAddr("192.168.1.30")) || reads != 2 {
+		t.Errorf("miss within the floor: %d reads", reads)
 	}
-	// Past the floor a miss lists them again once; the same address again
-	// does not, until machineRemoteFor has passed.
+	if time.Since(start) < machineAddrsMissFloor/2 {
+		t.Error("a miss right after a list did not wait for the floor")
+	}
 	check.addrsRead = time.Now().Add(-2 * machineAddrsMissFloor)
 	if check.fromThisMachine(netip.MustParseAddr("192.168.1.30")) {
 		t.Error("another machine counted as local")
 	}
-	if reads != 2 {
-		t.Errorf("interfaces read %d times", reads)
-	}
-	check.fromThisMachine(netip.MustParseAddr("192.168.1.30"))
-	if reads != 2 {
-		t.Errorf("a known remote address listed the interfaces again: %d reads", reads)
-	}
-	check.remote[netip.MustParseAddr("192.168.1.30")] = time.Now().Add(-time.Second)
-	check.addrsRead = time.Now().Add(-2 * machineAddrsMissFloor)
-	check.fromThisMachine(netip.MustParseAddr("192.168.1.30"))
 	if reads != 3 {
-		t.Errorf("miss after machineRemoteFor: %d reads", reads)
+		t.Errorf("interfaces read %d times", reads)
 	}
 	// A failed read keeps the last list.
 	check.addrsRead = time.Time{}
@@ -415,44 +409,22 @@ func TestPeerCheckNewLocalAddress(t *testing.T) {
 	if err := c.verify(); !errors.Is(err, errPeerRefused) || lookups.Load() != 1 {
 		t.Errorf("new local address: %v, %d lookups", err, lookups.Load())
 	}
-	// That list held a new address: what was taken as remote is asked again.
-	if len(check.remote) != 0 {
-		t.Errorf("remote addresses kept across a changed list: %v", check.remote)
-	}
-}
-
-// The remote addresses are bounded: past machineRemoteMax the expired ones
-// go, then all of them.
-func TestPeerCheckRemoteBound(t *testing.T) {
-	check := newTestPeerCheck(nil)
-	check.interfaceAddrs = func() ([]net.Addr, error) { return nil, nil }
-	now := time.Now()
-	ip := func(i int) netip.Addr { return netip.AddrFrom4([4]byte{10, 1, byte(i >> 8), byte(i)}) }
-	for i := range machineRemoteMax {
-		check.rememberRemoteLocked(ip(i), now)
-	}
-	check.remote[ip(0)] = now.Add(-time.Second) // expired
-	check.rememberRemoteLocked(ip(machineRemoteMax), now)
-	if len(check.remote) != machineRemoteMax {
-		t.Errorf("remote addresses = %d, want the expired one replaced", len(check.remote))
-	}
-	check.rememberRemoteLocked(ip(machineRemoteMax+1), now)
-	if len(check.remote) != 1 {
-		t.Errorf("remote addresses = %d, want the memory started over", len(check.remote))
-	}
 }
 
 // A client cycling through source addresses lists the interfaces at most
-// once per machineAddrsMissFloor.
+// once per machineAddrsMissFloor: the misses waiting share the next list.
 func TestPeerCheckMissFloor(t *testing.T) {
 	check := newTestPeerCheck(nil)
-	reads := 0
-	check.interfaceAddrs = func() ([]net.Addr, error) { reads++; return nil, nil }
+	var reads atomic.Int32
+	check.interfaceAddrs = func() ([]net.Addr, error) { reads.Add(1); return nil, nil }
+	start := time.Now()
+	var wg sync.WaitGroup
 	for i := range 500 {
-		check.fromThisMachine(netip.AddrFrom4([4]byte{10, 2, byte(i >> 8), byte(i)}))
+		wg.Go(func() { check.fromThisMachine(netip.AddrFrom4([4]byte{10, 2, byte(i >> 8), byte(i)})) })
 	}
-	if reads > 2 {
-		t.Errorf("500 new addresses at once listed the interfaces %d times", reads)
+	wg.Wait()
+	if max := int32(time.Since(start)/machineAddrsMissFloor) + 2; reads.Load() > max {
+		t.Errorf("500 new addresses at once listed the interfaces %d times, want at most %d", reads.Load(), max)
 	}
 }
 
@@ -493,5 +465,30 @@ func TestPeerCheckKeepsAddrsOnReadFailure(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), "cannot list this machine's addresses") {
 		t.Errorf("read failure not logged:\n%s", buf.String())
+	}
+}
+
+// An address that became this machine's is local at once: neither a list
+// that held it as another machine's a moment ago, nor one read just before
+// it was added, answers for a connection made from it.
+func TestPeerCheckAddressThatBecameLocal(t *testing.T) {
+	check := newTestPeerCheck(func(netip.AddrPort, netip.AddrPort) (string, error) { return "1001", nil })
+	own := []net.Addr{&net.IPNet{IP: net.ParseIP("192.168.1.20"), Mask: net.CIDRMask(24, 32)}}
+	check.interfaceAddrs = func() ([]net.Addr, error) { return own, nil }
+	x, y := netip.MustParseAddr("192.168.1.30"), netip.MustParseAddr("192.168.1.31")
+	check.fromThisMachine(netip.MustParseAddr("192.168.1.20"))
+	check.addrsRead = time.Now().Add(-2 * machineAddrsMissFloor)
+	if check.fromThisMachine(x) {
+		t.Fatal("another machine counted as local")
+	}
+	own = append(own, &net.IPNet{IP: net.ParseIP("192.168.1.30"), Mask: net.CIDRMask(24, 32)})
+	if !check.fromThisMachine(x) {
+		t.Error("an address taken as another machine's stayed so once it was this machine's")
+	}
+	// y is added right after a list was read.
+	check.fromThisMachine(netip.MustParseAddr("10.9.9.9"))
+	own = append(own, &net.IPNet{IP: net.ParseIP("192.168.1.31"), Mask: net.CIDRMask(24, 32)})
+	if !check.fromThisMachine(y) {
+		t.Error("an address added right after a list was read counted as another machine's")
 	}
 }

@@ -926,11 +926,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
 - **Connections from other local users** (`server/peer_user_*.go`, native only: `CheckLocalUsers`
   is set from the saved config, never for the container or an env-configured `serve`): a
   connection whose client address is loopback or one of the machine's own (`net.InterfaceAddrs`,
-  30 s cache; an address not in it lists them again, so one added a moment ago is checked, unless
-  a list in the last 30 s already missed it, or a list is less than 100 ms old (shared by every
-  miss, so a client cycling source addresses lists them at most that often; such a miss is not
-  remembered): at most 1024 remote addresses, expired ones dropped first, a list holding a new
-  address forgets them) is checked on its first read/write, never in `Accept` (64 lookups at once, at most 4
+  30 s cache; an address not in it is another machine's only by a list whose read started after
+  the connection arrived, so one added a moment ago is checked; lists are read at most once per
+  100 ms, a miss waits for the next one and every miss waiting by then shares it, so a client
+  cycling source addresses lists them at most that often; no address is remembered as
+  remote) is checked on its first read/write, never in `Accept` (64 lookups at once, at most 4
   `sock_diag` queries of them, 2 s, else refused). Linux: `sock_diag` exact lookup, `/proc/net/tcp*` fallback, only ESTABLISHED with an
   inode (a TIME_WAIT row reads uid 0). Windows: `GetExtendedTcpTable` owner PID → token SID; an
   unreadable token in session 0 is a service. A whole-table read (`/proc`, Windows' tables) is
