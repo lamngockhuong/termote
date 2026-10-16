@@ -381,7 +381,7 @@ func parseCodexRow(line []byte, off int64) (e TranscriptEntry, recognised, ok bo
 			result, clipped := clampText(stripANSI(codexChangeDiff(c)), claudeMaxResult)
 			e.Parts = append(e.Parts, TranscriptPart{
 				Kind: "tool", Tool: codexToolNames["FileChange"], ToolID: it.ID, Input: oneLine(input),
-				Result: result, IsError: it.Status != "completed", Clipped: clipped,
+				Result: result, IsError: it.Status != "completed", Clipped: clipped, sensitive: anySensitive(p, c.MovePath),
 			})
 		}
 	case "McpToolCall":

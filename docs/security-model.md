@@ -69,8 +69,8 @@ what Termote can reach, run it as another user with less access.
   terminal, edit the devices file or turn sign-in off. The limits above stop mistakes and clicks in the
   interface, not someone who means it.
 - **Secrets printed in a terminal.** A view-only device reads whatever an agent or a command printed.
-  The Chat view leaves out a Claude Code tool's result when the tool named a sensitive file, but not
-  a Grep over a directory, a shell command or a Codex turn that prints one.
+  The Chat view leaves out a Claude Code tool's result and a Codex edit's diff when they name a
+  sensitive file, but not a Grep over a directory, a shell command or a Codex command that prints one.
 - **Other services on the same host name.** A cookie is not bound to a port: every service on that name
   receives Termote's cookies. Give Termote a host name of its own.
 - **Programs of the same OS user.** Anything else running as that user reads the same files Termote does.

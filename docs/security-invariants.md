@@ -447,8 +447,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   gets no result of a Claude Code tool call on such a file (the call's `file_path`/`notebook_path`/
   `path`, or the result row's `toolUseResult` file path; a result read after its call, whose id the
   server keeps, last 4096, since a failed edit's row names no file but quotes its `old_string`):
-  `Result` emptied and `hidden` set, on a copy of the cached read; a Grep over a directory, Bash and
-  Codex output that prints one is not keyed (accepted).
+  `Result` emptied and `hidden` set, on a copy of the cached read; the same for a Codex
+  `FileChange` part (its diff) whose path or move path is such a file. A Grep over a directory,
+  Bash and a Codex command's output that prints one is not keyed (accepted).
   `agent/commands` (the composer's `/` suggestions; Codex: its skills, see Codex chat) returns
   only names, descriptions, sources and kinds of `.claude/commands`/`.claude/skills` under the
   pane root and `commands`/`skills`
