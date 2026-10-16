@@ -219,22 +219,24 @@ func zellijRememberListed(list []zellijSession) {
 // zellijRequireListed fails unless session runs: known from the last
 // listing, else found by listing the sessions again (one started since).
 func zellijRequireListed(ctx context.Context, session string) error {
-	zellijListed.Lock()
-	_, ok := zellijListed.names[session]
-	zellijListed.Unlock()
-	if ok {
+	if zellijIsListed(session) {
 		return nil
 	}
-	list, err := zellijListSessions(ctx)
-	if err != nil {
+	if _, err := zellijListSessions(ctx); err != nil {
 		return err
 	}
-	for _, s := range list {
-		if s.name == session && !s.exited {
-			return nil
-		}
+	if zellijIsListed(session) {
+		return nil
 	}
 	return errZellijNotListed
+}
+
+// zellijIsListed reports whether the last listing found session running.
+func zellijIsListed(session string) bool {
+	zellijListed.Lock()
+	defer zellijListed.Unlock()
+	_, ok := zellijListed.names[session]
+	return ok
 }
 
 func zellijSessionLock(session string) *sync.Mutex {

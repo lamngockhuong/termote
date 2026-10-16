@@ -25,11 +25,9 @@ if (inside.status !== 0 || inside.stdout.trim() !== "true") {
 
 // The hooks lefthook.yml defines
 const HOOKS = ["pre-commit", "pre-push"];
-// Marks a hook this script wrote; a hook holding neither it nor "lefthook" is the user's own
-const MARK = "termote: installed by scripts/install-git-hooks.mjs";
 
 const hookScript = (hook) => `#!/bin/sh
-# ${MARK} (pnpm install); edit that file, not this one.
+# termote: installed by scripts/install-git-hooks.mjs (pnpm install); edit that file, not this one.
 # Runs lefthook only while the files that decide what it runs match the trusted branch.
 if [ "$LEFTHOOK" = "0" ] || [ "$LEFTHOOK" = "false" ]; then
   exit 0
@@ -73,7 +71,8 @@ try {
     const path = join(dir, hook);
     if (existsSync(path)) {
       const old = readFileSync(path, "utf8");
-      if (!old.includes(MARK) && !/lefthook/i.test(old)) {
+      // Every hook lefthook or this script writes names lefthook; any other is the user's own
+      if (!/lefthook/i.test(old)) {
         console.warn(`[WARN] ${path} is not a lefthook hook; left as it is.`);
         continue;
       }

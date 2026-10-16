@@ -232,7 +232,7 @@ that entry in the same change. A new feature with a security surface gets an ent
 **IMPORTANT:** Always run lint/format checks locally before committing to avoid CI failures.
 
 `pnpm install` installs git hooks (lefthook, [`lefthook.yml`](lefthook.yml); they skip on a branch whose
-hook files differ from `origin/main`, see `scripts/install-git-hooks.mjs`) that run most of them
+hook files differ from `origin/HEAD`, else `main`, see `scripts/install-git-hooks.mjs`) that run most of them
 for you, checking only and never rewriting a file: `pre-commit` runs biome (`pwa/src`), `gofmt -l`
 (`server/`) and dprint (markdown/mdx) on the staged files; `pre-push` runs `tsc --noEmit` when
 `pwa/**` changed and `go vet ./...` for linux, windows and darwin when `server/**` changed. They never

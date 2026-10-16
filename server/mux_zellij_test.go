@@ -27,13 +27,9 @@ func useFakeZellij(t *testing.T, replies map[string]string) func() string {
 	if runtime.GOOS == "windows" {
 		t.Skip("fake zellij is a shell script")
 	}
-	if _, ok := replies["list-sessions"]; !ok {
-		replies = maps.Clone(replies)
-		if replies == nil {
-			replies = map[string]string{}
-		}
-		replies["list-sessions"] = "0\nmain [Created 1m ago] \n"
-	}
+	all := map[string]string{"list-sessions": "0\nmain [Created 1m ago] \n"}
+	maps.Copy(all, replies)
+	replies = all
 	zellijRememberListed(nil)
 	dir := t.TempDir()
 	rdir := filepath.Join(dir, "replies")
