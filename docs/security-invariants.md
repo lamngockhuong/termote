@@ -1015,7 +1015,12 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `status`, `url`, `panel`, `container status` and the health
   wait of `start`/`restart`/`update` send the saved password to `127.0.0.1:<port>` only when
   every socket listening on it runs as the current user or root/SYSTEM (`server/listener_owner*.go`:
-  `/proc/net/tcp*` on Linux, `lsof` on macOS, the TCP table and process SID on Windows), checked
+  `/proc/net/tcp*` on Linux, `lsof` on macOS, on Windows the listener table
+  `TCP_TABLE_OWNER_MODULE_LISTENER` and the token SID of the process at each owner PID, a process
+  that cannot be opened, created after its socket was bound (the PID may have gone to another
+  process; a clock stepped back between the server's start and its bind does it too, until a
+  restart), with no bind time, or with an unreadable token, a service's included, counting as
+  another user's), checked
   once the connection is made and before the request is written on it; on Linux the server end
   of that connection (its uid in `/proc/net/tcp*`) must be trusted too; otherwise
   the status reads "untrusted listener" (another user's socket seen) or "unverified listener"
