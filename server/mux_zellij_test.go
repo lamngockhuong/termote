@@ -72,7 +72,7 @@ exit "$code"
 		t.Fatal(err)
 	}
 	t.Setenv("ZELLIJ_SOCKET_DIR", sock)
-	t.Cleanup(func() { zellijBin = orig; resetZellijVersion(); os.RemoveAll(sock) })
+	t.Cleanup(func() { zellijBin = orig; resetZellijVersion(); zellijRememberListed(nil); os.RemoveAll(sock) })
 	return func() string {
 		b, _ := os.ReadFile(logPath)
 		return string(b)
@@ -596,10 +596,31 @@ func TestZellijUnlistedSessionTakesNoLock(t *testing.T) {
 		t.Errorf("commands:\n%s", got)
 	}
 	// A session started since the last listing is found by listing again.
+	zellijRememberListed(nil)
+	zellijSessionLocks.Delete("main")
 	if _, err := zellijAction(t.Context(), "main", "list-tabs"); err != nil {
 		t.Fatal(err)
 	}
+	if got := log(); strings.Count(got, "list-sessions") != 2 || !strings.HasSuffix(got, "--session main action list-tabs\n") {
+		t.Errorf("commands:\n%s", got)
+	}
 	if _, ok := zellijSessionLocks.Load("main"); !ok {
 		t.Error("no lock for a listed session")
+	}
+}
+
+// A session attach -b just started is waited for until a listing shows it.
+func TestZellijNewSessionWaitsUntilListed(t *testing.T) {
+	none := "1\n" + zellijNoSessions + "\n"
+	log := useFakeZellij(t, map[string]string{
+		"list-sessions.1": none, "list-sessions.2": none, "list-sessions.3": none,
+		"list-sessions": "0\nnew [Created 0s ago] \n",
+		"list-panes":    "0\n" + `[{"id":0,"is_plugin":false,"tab_id":0}]`,
+	})
+	if err := newTestZellijMux().startSession(t.Context(), "new", t.TempDir()); err != nil {
+		t.Fatalf("startSession = %v\n%s", err, log())
+	}
+	if got := log(); strings.Count(got, "list-sessions") < 4 || !strings.Contains(got, "attach --create-background new") {
+		t.Errorf("commands:\n%s", got)
 	}
 }

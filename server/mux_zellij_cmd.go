@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -218,17 +219,36 @@ func zellijRememberListed(list []zellijSession) {
 
 // zellijRequireListed fails unless session runs: known from the last
 // listing, else found by listing the sessions again (one started since).
+// The new listing itself decides: another one, read earlier, may have
+// replaced the remembered names since.
 func zellijRequireListed(ctx context.Context, session string) error {
 	if zellijIsListed(session) {
 		return nil
 	}
-	if _, err := zellijListSessions(ctx); err != nil {
+	list, err := zellijListSessions(ctx)
+	if err != nil {
 		return err
 	}
-	if zellijIsListed(session) {
+	if slices.ContainsFunc(list, func(s zellijSession) bool { return s.name == session && !s.exited }) {
 		return nil
 	}
 	return errZellijNotListed
+}
+
+// zellijWaitListed waits until a listing shows session, as one `attach -b`
+// just started may not be listed at once.
+func zellijWaitListed(ctx context.Context, session string) error {
+	for i := 0; ; i++ {
+		err := zellijRequireListed(ctx, session)
+		if !errors.Is(err, errZellijNotListed) || i+1 >= zellijQueryAttempts {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Duration(i+1) * zellijQueryBackoff):
+		}
+	}
 }
 
 // zellijIsListed reports whether the last listing found session running.

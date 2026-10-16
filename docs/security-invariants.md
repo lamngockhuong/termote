@@ -92,7 +92,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   a client attaching holds the write side from 150 ms before it starts until it has drawn 1 KiB,
   and Termote's actions on one session run one at a time (two at once can swap outputs), under
   a per-session lock taken only for a session the last `list-sessions` showed running, else
-  after one more listing finds it (a session nobody runs: no action, no retry, no lock kept);
+  after one more listing finds it (a session nobody runs: no action, no retry, no lock kept; a
+  session `attach -b` just started is waited for, up to 6 listings);
   listings are retried (empty, failed, or not the listing's shape: tabs need `tab_id`/`position`,
   panes `id`/`is_plugin`/`tab_id`) and never answered empty; `Capture` (the screen an agent write
   is checked against) is read twice and must match;
