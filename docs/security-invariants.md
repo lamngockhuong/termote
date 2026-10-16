@@ -590,6 +590,15 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `Cache-Control: no-store`; an SVG also gets a second CSP
   (`sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:`) and
   `Content-Disposition: attachment`
+- **`<details>` in a previewed Markdown file** (`detailsBlocks` in
+  `pwa/src/utils/markdown-safety.ts`, Files/Changes only): raw HTML is never parsed or passed to
+  React. A remark plugin, run before `htmlAsText`, folds an html node that is exactly a
+  `<details …>` (optionally with `<summary …>…</summary>`) up to its matching `</details>`, at
+  block level only, into a `details` node built from markdown nodes: no attribute but `open` is
+  kept, the summary is a text node (its inline tags dropped), the body stays markdown under the
+  same link and image rules. Tags are paired in one pass per level and nesting past 32 levels
+  stays text, so a crafted file cannot stall the page. Anything else, an unclosed `<details>`
+  included, stays text.
 - **Mermaid diagrams** (`pwa/src/utils/mermaid-render.ts`, `mermaid-block.tsx`): a `mermaid`
   fenced block of a previewed Markdown file is drawn in the PWA only, as an `<img>` whose `src` is
   a `data:image/svg+xml` URL, so no script runs, no link navigates and nothing it names loads;

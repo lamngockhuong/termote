@@ -694,6 +694,8 @@ Chạy trên tmux (Linux/macOS) và Herdr; psmux (Windows) không có hai view n
 - [ ] Khối code được tô màu cú pháp, ghi tên ngôn ngữ và có nút "Copy code"
 - [ ] HTML thô (`<b>`, `<script>`) hiện nguyên dạng chữ; ảnh hiện thành link "image: ..." và không
       tải gì
+- [ ] Khối `<details><summary>...</summary>` ... `</details>` mở ra khi chạm và hiển thị phần
+      Markdown bên trong; `<details>` thiếu `</details>` hiện dạng chữ
 - [ ] File Markdown lớn hơn 256 KiB hiện `Too large to preview: shown as source`
 - [ ] Changes: nút "Preview" của file `.md` có thay đổi hiện bản hiện tại ở dạng xem trước
 

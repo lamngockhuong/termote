@@ -92,6 +92,59 @@ describe('MarkdownPreview: rendering', () => {
     expect(container).toHaveTextContent('<Tabs items={[1]} />')
   })
 
+  it('folds <details> blocks into disclosures whose body is still markdown', () => {
+    const { container } = show(
+      [
+        '1. Question?',
+        '',
+        '   <details><summary>Reference answer</summary>',
+        '',
+        '   Uses `code` and **bold**.',
+        '',
+        '   </details>',
+        '',
+        '<details open class="x" onclick="alert(1)">',
+        '<summary>Outer</summary>',
+        '',
+        '<details>',
+        '',
+        'Inner',
+        '',
+        '</details>',
+        '</details>',
+        '',
+        '<details><summary>One line</summary>Hidden</details>',
+      ].join('\n'),
+    )
+    const all = container.querySelectorAll('details')
+    expect(all).toHaveLength(4)
+    const [answer, outer, inner, line] = Array.from(all)
+    expect(answer.querySelector('summary')).toHaveTextContent(
+      'Reference answer',
+    )
+    expect(answer.querySelector('code')).toHaveTextContent('code')
+    expect(answer.querySelector('strong')).toHaveTextContent('bold')
+    expect(answer.open).toBe(false)
+    expect(outer.open).toBe(true)
+    expect(outer.getAttribute('class')).toBeNull()
+    expect(outer.getAttribute('onclick')).toBeNull()
+    expect(outer.contains(inner)).toBe(true)
+    expect(inner.querySelector('summary')).toBeNull()
+    expect(inner).toHaveTextContent('Inner')
+    expect(line).toHaveTextContent('Hidden')
+    expect(container).not.toHaveTextContent('<details')
+    expect(container).not.toHaveTextContent('</summary>')
+  })
+
+  it('leaves an unclosed <details> and the HTML around it as text', () => {
+    const { container } = show(
+      '<details><summary>Open</summary>\n\nBody <b>x</b>',
+    )
+    expect(container.querySelector('details')).toBeNull()
+    expect(container.querySelector('b')).toBeNull()
+    expect(container).toHaveTextContent('<details><summary>Open</summary>')
+  })
+
   it('gives headings GitHub ids', () => {
     show('# Getting Started\n\n## Getting Started')
     const [h1, h2] = screen.getAllByRole('heading')
@@ -238,6 +291,17 @@ describe('MarkdownPreview: links', () => {
     fireEvent.click(screen.getByRole('button', { name: 'top' }))
     expect(box.scrollTop).toBe(0)
     expect(p.onFollow).not.toHaveBeenCalled()
+  })
+
+  it('opens the closed disclosures around a heading it scrolls to', () => {
+    const { container } = show(
+      '[go](#deep)\n\n<details>\n\n<details>\n\n## Deep\n\n</details>\n\n</details>',
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'go' }))
+    const all = Array.from(container.querySelectorAll('details'))
+    expect(all).toHaveLength(2)
+    expect(all.every((d) => d.open)).toBe(true)
+    expect(scrollIntoView).toHaveBeenCalled()
   })
 
   it('says when a heading is missing', () => {

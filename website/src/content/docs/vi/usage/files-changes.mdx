@@ -344,7 +344,10 @@ chọn đó. File Markdown lớn hơn 256 KiB mở ở dạng mã nguồn, kèm 
   mà chưa tải lần nào, sơ đồ hiện dạng mã nguồn kèm dòng `Could not load the diagram renderer`.
   Sơ đồ rất lớn có thể làm trang đứng vài giây trong lúc vẽ.
 - **Khối `---` ở đầu file** (thường gặp ở trang tài liệu và trang MDX) hiện thành một khối code.
-- **HTML thô và component MDX** hiện nguyên văn bản, không bao giờ được chạy.
+- **HTML thô và component MDX** hiện nguyên văn bản, không bao giờ được chạy. Ngoại lệ duy nhất
+  là khối `<details>` cùng `<summary>` của nó: khối hiện thành một mục chạm vào để mở ra, phần
+  Markdown bên trong vẫn hiển thị như thường. Trong các thuộc tính của thẻ, chỉ `open` được giữ;
+  `<details>` không có `</details>` đi kèm vẫn hiện dạng văn bản.
 - **Ảnh không bao giờ được tải.** Ảnh nằm trong thư mục gốc hiện thành link mở file đó trong
   Files; ảnh trên web hiện thành link tới trang chứa nó.
 
