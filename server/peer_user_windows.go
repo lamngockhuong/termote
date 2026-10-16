@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/binary"
 	"errors"
 	"net/netip"
 	"unsafe"
@@ -16,14 +15,6 @@ const peerIDKey = "sid"
 // every socket but the listeners, with its owner's PID and the time it was
 // bound.
 const tcpTableOwnerModuleConnections = 7
-
-const (
-	tcpRowOwnerModuleSize  = 160 // MIB_TCPROW_OWNER_MODULE
-	tcp6RowOwnerModuleSize = 192 // MIB_TCP6ROW_OWNER_MODULE
-	// tcpModuleRowsOffset is where the rows start: after dwNumEntries,
-	// padded to the 8-byte alignment of their liCreateTimestamp.
-	tcpModuleRowsOffset = 8
-)
 
 // mibTCPStateEstab is MIB_TCP_STATE_ESTAB.
 const mibTCPStateEstab = 5
@@ -102,10 +93,10 @@ var openPeerProcess = func(pid uint32) (peerProcess, error) {
 // after it was called. Tests replace it.
 var runningServicePIDs = func() map[uint32]bool { return serviceTables.get() }
 
-// connProcessUser returns the SID of the process that owns a connection's
-// socket. The process holding the PID must have been created no later than
-// the socket was bound, else the PID is another process's now. A process
-// whose token this user may not read is trusted only as a running service's
+// connProcessUser returns the SID of the process that owns a socket. The
+// process holding the PID must have been created no later than the socket
+// was bound, else the PID is another process's now. A process whose token
+// this user may not read is serviceProcessID only as a running service's
 // process, by a list read after the process was opened, so with its PID
 // pinned: another user's process is never one, even in session 0 (an SSH
 // logon, a scheduled task) or with its DACL opened to everyone.
@@ -223,44 +214,17 @@ func selfPeerID() string {
 
 // trustedPeerIDs are trusted besides the server's own user: SYSTEM and the
 // running services.
-func trustedPeerIDs() []string { return []string{"S-1-5-18", serviceProcessID} }
+func trustedPeerIDs() []string { return []string{localSystemSID, serviceProcessID} }
 
 // foreignLoopbackPossible is false: every loopback connection has both ends
 // in Windows' own tables.
 func foreignLoopbackPossible() bool { return false }
 
-// add indexes the established rows of table (MIB_TCPROW_OWNER_MODULE, 160
-// bytes, or MIB_TCP6ROW_OWNER_MODULE, 192 bytes). Addresses are in network
-// order, ports in network order in the low 16 bits of their DWORD.
+// add indexes the established rows of table.
 func (x tcpConnIndex) add(table []byte, family uint32) {
-	if len(table) < tcpModuleRowsOffset {
-		return
-	}
-	n := binary.LittleEndian.Uint32(table)
-	rowSize, boundOff := tcpRowOwnerModuleSize, 24
-	if family == windows.AF_INET6 {
-		rowSize, boundOff = tcp6RowOwnerModuleSize, 56
-	}
-	for i := range int(n) {
-		off := tcpModuleRowsOffset + i*rowSize
-		if off+rowSize > len(table) {
-			break
-		}
-		row := table[off : off+rowSize]
-		var state, pid uint32
-		var l, r netip.AddrPort
-		if family == windows.AF_INET6 {
-			l = netip.AddrPortFrom(netip.AddrFrom16([16]byte(row[0:16])).Unmap(), binary.BigEndian.Uint16(row[20:22]))
-			r = netip.AddrPortFrom(netip.AddrFrom16([16]byte(row[24:40])).Unmap(), binary.BigEndian.Uint16(row[44:46]))
-			state, pid = binary.LittleEndian.Uint32(row[48:]), binary.LittleEndian.Uint32(row[52:])
-		} else {
-			state = binary.LittleEndian.Uint32(row[0:])
-			l = netip.AddrPortFrom(netip.AddrFrom4([4]byte(row[4:8])), binary.BigEndian.Uint16(row[8:10]))
-			r = netip.AddrPortFrom(netip.AddrFrom4([4]byte(row[12:16])), binary.BigEndian.Uint16(row[16:18]))
-			pid = binary.LittleEndian.Uint32(row[20:])
-		}
+	tcpModuleRows(table, family, func(state uint32, l, r netip.AddrPort, o tcpConnOwner) {
 		if state == mibTCPStateEstab {
-			x[[2]netip.AddrPort{l, r}] = tcpConnOwner{pid, binary.LittleEndian.Uint64(row[boundOff:])}
+			x[[2]netip.AddrPort{l, r}] = o
 		}
-	}
+	})
 }
