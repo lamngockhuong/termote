@@ -77,7 +77,7 @@ The git hooks check formatting, lint and types before a commit or a push (see
 `--no-verify`.
 
 The hooks run only while the branch checked out has the hook files of `origin/HEAD`, else `main`
-(the lefthook config, `scripts/check-gofmt.sh`, the dprint, npm and pnpm config, the root and `pwa/`
+(the lefthook config, `scripts/check-gofmt.sh`, `scripts/staged-files.sh`, the dprint, npm and pnpm config, the root and `pwa/`
 `package.json`, anything tracked under `node_modules`; the full list is in
 [docs/code-standards.md](docs/code-standards.md#git-hooks)): on a branch that changed one, they name it and
 skip, so a contributor's branch does not run its own hook code at your next commit or push. Read

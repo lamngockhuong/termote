@@ -156,7 +156,7 @@ through `scripts/install-git-hooks.mjs` (the root `prepare` script); it skips th
 with `LEFTHOOK=0`, outside a git worktree, or with `core.hooksPath` set (it warns). It writes the
 `pre-commit` and `pre-push` hooks itself (never over a hook that is not lefthook's) instead of
 `lefthook install`, and each runs lefthook only while the files that decide what it runs (any
-`lefthook*`, `.lefthook*` or `.config/lefthook*`, `scripts/check-gofmt.sh`, any `dprint.json*` or
+`lefthook*`, `.lefthook*` or `.config/lefthook*`, `scripts/check-gofmt.sh`, `scripts/staged-files.sh`, any `dprint.json*` or
 `.dprint.json*`, any `.npmrc`, any `pnpm-workspace.yaml`, any `.pnpmfile.*`, `package.json` and
 `pwa/package.json`, and any tracked `node_modules` or file under one) match `origin/HEAD`, else
 `main`; otherwise it names the files, skips without failing the commit or push, and says how to run
@@ -170,6 +170,9 @@ the checks by hand. A branch changing `package.json` therefore runs no hooks.
 
 - Hooks only check; fix with `pnpm lint`, `gofmt -w` or `make fmt`, then stage again.
 - `pre-commit` checks what is staged: lefthook sets unstaged changes aside while it runs.
+- A `pre-commit` command gets its files from `scripts/staged-files.sh --glob <pathspec>`, never from
+  `{staged_files}`: lefthook on Windows passes `run` to `sh -c` in double quotes without escaping, and
+  a staged name holding a `'` would end them and run as shell code.
 - `go test ./...` and the E2E suite stay in CI: minutes long, and they need tmux.
 - Skip once with `LEFTHOOK=0 git commit ...` (or `git push`), or `--no-verify`.
 - `pre-push` picks its commands from the files the pushed commits change, but checks the working

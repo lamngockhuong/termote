@@ -38,7 +38,7 @@ giới hạn những gì Termote chạm tới, hãy chạy nó dưới một tà
   `local-user-refused` (mỗi tài khoản tối đa một dòng trong 10 giây).
 - CLI nói chuyện với server native qua một socket chỉ tài khoản của nó mở được (Unix socket `0600` trong thư
   mục `0700`, hoặc named pipe có ACL chỉ ghi tài khoản đó và SYSTEM), sau khi đã kiểm tra đầu server chạy dưới
-  chính tài khoản đó hoặc root/SYSTEM. Qua đường này CLI không gửi mật khẩu; `termote status` ghi `Via: socket`.
+  chính tài khoản đó hoặc root/SYSTEM (trên Windows: pipe thuộc sở hữu của tài khoản đó hoặc SYSTEM). Qua đường này CLI không gửi mật khẩu; `termote status` ghi `Via: socket`.
   Khi không có socket (container, server bản cũ), CLI quay về TCP cùng mật khẩu.
 - Settings > Signed-in browsers và `termote signins` liệt kê các trình duyệt đăng nhập bằng mật khẩu (trang
   đăng nhập, Basic auth, link từ CLI); có thể đăng xuất từng trình duyệt, hoặc mọi trình duyệt trừ trình duyệt
@@ -90,7 +90,10 @@ giới hạn những gì Termote chạm tới, hãy chạy nó dưới một tà
   từ một tiến trình của chính tài khoản bạn: ai tới được địa chỉ mà công cụ đó mở ra là tới được Termote, chỉ còn mật khẩu chặn.
 - **Proxy chạy dưới root hoặc SYSTEM.** `tailscale serve`, `docker-proxy` và các proxy chạy dưới root khác
   được tin (root vốn đọc được cấu hình đã lưu), nên mọi tài khoản trên máy đều đi qua chúng được. Trên Windows,
-  dịch vụ của session 0 mà tài khoản chạy server không đọc được token cũng vậy.
+  một dịch vụ đang chạy mà tài khoản chạy server mở được tiến trình nhưng không đọc được token cũng vậy: chỉ
+  tiến trình do Service Control Manager chạy, không phải tiến trình nó khởi động tiếp (proxy chạy dưới NSSM
+  hay WinSW bị từ chối) và không phải dịch vụ theo từng người dùng. Các dịch vụ tải URL cho bất kỳ ai yêu cầu,
+  như BITS và WebClient (WebDAV), nằm trong số đó: mọi tài khoản trên máy đều gửi được request qua chúng.
 - **WSL 2.** Mọi tài khoản Windows đều tới được server chạy trong WSL 2: chế độ NAT đi qua một tiến trình chuyển tiếp
   chạy dưới root, chế độ `mirrored` đi qua địa chỉ nội bộ dùng chung mà WSL không thấy được đầu client, và loại kết nối này được
   cho qua.
