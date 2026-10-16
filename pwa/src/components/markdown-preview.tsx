@@ -26,13 +26,14 @@ import {
   splitFrontMatter,
   textOf,
 } from '../utils/markdown-links'
-import { htmlAsText } from '../utils/markdown-safety'
+import { detailsBlocks, htmlAsText } from '../utils/markdown-safety'
 import { codeText, splitLines, tokenStyle } from './code-block'
 import { type FrameParts, MermaidBlock } from './mermaid-block'
 import { IconButton } from './ui/button'
 
 // A Markdown file of the Files (or Changes) view, rendered. The file is
-// untrusted like an agent's text: raw HTML and MDX JSX show as text, no image
+// untrusted like an agent's text: raw HTML and MDX JSX show as text (only a
+// <details> block folds, rebuilt from markdown nodes), no image
 // ever loads, only http(s) links leave the app. Relative links stay inside
 // the pane's root and open in the Files view.
 
@@ -339,6 +340,8 @@ const PROSE = [
   '[&_.contains-task-list]:list-none [&_.task-list-item]:ml-0 [&_.task-list-item_input]:mr-1.5 [&_.task-list-item_input]:align-middle',
   '[&_blockquote]:my-3 [&_blockquote]:border-l-4 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:text-fg-muted',
   '[&_hr]:my-6 [&_hr]:border-border',
+  '[&_details]:my-3 [&_details]:rounded-control [&_details]:border [&_details]:border-border [&_details]:px-3 [&_details]:py-1.5',
+  '[&_summary]:cursor-pointer [&_summary]:font-medium [&_details[open]>summary]:mb-2',
   '[&_:not(pre)>code]:rounded [&_:not(pre)>code]:bg-surface-raised [&_:not(pre)>code]:px-1 [&_:not(pre)>code]:font-term [&_:not(pre)>code]:text-[0.9em]',
   '[&_table]:border-collapse [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:border-border [&_th]:bg-surface [&_th]:px-2 [&_th]:py-1 [&_th]:text-left',
   '[&_.footnotes]:mt-8 [&_.footnotes]:border-t [&_.footnotes]:border-border [&_.footnotes]:pt-2 [&_.footnotes]:text-[13px] [&_sup]:text-[0.75em]',
@@ -360,6 +363,14 @@ export default function MarkdownPreview({
   const box = () => ref.current as HTMLDivElement
   const scrollTo = (a: string) => {
     const el = findAnchor(box(), a)
+    // A heading inside closed disclosures: open them first
+    for (
+      let d = el?.closest('details');
+      d;
+      d = d.parentElement?.closest('details')
+    ) {
+      d.open = true
+    }
     if (el) el.scrollIntoView({ block: 'start' })
     else notify('Heading not found')
   }
@@ -424,7 +435,7 @@ export default function MarkdownPreview({
             <FencedCode text={frontMatter} lang="yaml" label="front matter" />
           )}
           <Markdown
-            remarkPlugins={[remarkGfm, htmlAsText]}
+            remarkPlugins={[remarkGfm, detailsBlocks, htmlAsText]}
             rehypePlugins={[rehypeHeadingIds, rehypeMermaidIndex]}
             components={COMPONENTS}
           >

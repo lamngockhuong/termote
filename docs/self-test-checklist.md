@@ -693,6 +693,8 @@ Run on tmux (Linux/macOS) and Herdr; psmux (Windows) offers neither view.
 - [ ] Fenced code blocks are highlighted, labelled with their language and have "Copy code"
 - [ ] Raw HTML (`<b>`, `<script>`) shows as text; an image shows as an "image: ..." link and loads
       nothing
+- [ ] A `<details><summary>...</summary>` ... `</details>` block expands on tap and renders the
+      Markdown inside; a `<details>` without `</details>` shows as text
 - [ ] A Markdown file over 256 KiB shows "Too large to preview: shown as source"
 - [ ] Changes: a changed `.md` file's "Preview" shows the current version rendered
 
