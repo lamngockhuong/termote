@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.3.0](https://github.com/lamngockhuong/termote/compare/v2.2.0...v2.3.0) (2026-10-17)
+
+
+### Features
+
+* fold &lt;details&gt; and &lt;summary&gt; blocks in the Markdown preview ([#485](https://github.com/lamngockhuong/termote/issues/485)) ([5b9e785](https://github.com/lamngockhuong/termote/commit/5b9e7857c7e7807666acaa5889aec631e55a1b7b))
+* make the owl logo blink like the intro video's ([#487](https://github.com/lamngockhuong/termote/issues/487)) ([a971bb3](https://github.com/lamngockhuong/termote/commit/a971bb39151421d44c7617a3e65cc9aa62d8ebe4))
+
 ## [2.2.0](https://github.com/lamngockhuong/termote/compare/v2.1.0...v2.2.0) (2026-10-16)
 
 
