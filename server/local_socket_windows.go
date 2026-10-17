@@ -29,13 +29,15 @@ func ensureSocketDir(dir string) error {
 	return restrictToOwner(dir)
 }
 
-// openLocalSocket listens on the named pipe for port (dir is unused). Its
-// ACL lets only the current user and SYSTEM open it, and go-winio refuses
-// remote clients (FILE_PIPE_REJECT_REMOTE_CLIENTS). The first instance is
-// created exclusively, so a pipe of the same name already there (another
-// server on the port, or one another user made first) fails it, and the
-// CLI then refuses that pipe as untrusted or uses it for the server that
-// owns it. A pipe goes away with its last handle: there is nothing to clean.
+// openLocalSocket listens on the named pipe for port (dir is unused). The
+// pipe is owned by the current user (named, not the default owner, which is
+// the Administrators group for an elevated process) and its ACL lets only
+// that user and SYSTEM open it; go-winio refuses remote clients
+// (FILE_PIPE_REJECT_REMOTE_CLIENTS). The first instance is created
+// exclusively, so a pipe of the same name already there (another server on
+// the port, or one another user made first) fails it, and the CLI then
+// refuses that pipe as untrusted or uses it for the server that owns it. A
+// pipe goes away with its last handle: there is nothing to clean.
 func openLocalSocket(_, port string) (net.Listener, func(), error) {
 	name, err := localPipeName(port)
 	if err != nil {
@@ -45,7 +47,8 @@ func openLocalSocket(_, port string) (net.Listener, func(), error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	sddl := "D:P(A;;GA;;;" + u.User.Sid.String() + ")(A;;GA;;;SY)"
+	sid := u.User.Sid.String()
+	sddl := "O:" + sid + "D:P(A;;GA;;;" + sid + ")(A;;GA;;;SY)"
 	ln, err := winio.ListenPipe(name, &winio.PipeConfig{SecurityDescriptor: sddl})
 	if err != nil {
 		return nil, nil, err
@@ -53,14 +56,26 @@ func openLocalSocket(_, port string) (net.Listener, func(), error) {
 	return ln, func() {}, nil
 }
 
-// pipeServerTrusted reports whether the process at the server end of pipe
-// handle h runs as the current user or SYSTEM. Tests replace it.
-var pipeServerTrusted = func(h windows.Handle) bool {
-	var pid uint32
-	if err := windows.GetNamedPipeServerProcessId(h, &pid); err != nil {
-		return false
+// pipeOwner returns the owner of the pipe object behind handle h. Only an
+// administrator can make another user, or SYSTEM, the owner of an object it
+// creates. Tests replace it.
+var pipeOwner = func(h windows.Handle) (*windows.SID, error) {
+	sd, err := windows.GetSecurityInfo(h, windows.SE_KERNEL_OBJECT, windows.OWNER_SECURITY_INFORMATION)
+	if err != nil {
+		return nil, err
 	}
-	sid, err := processUser(pid)
+	owner, _, err := sd.Owner()
+	if err != nil || owner == nil {
+		return nil, errLocalServerUntrusted
+	}
+	return owner.Copy()
+}
+
+// pipeServerTrusted reports whether the pipe behind handle h is owned by the
+// current user or SYSTEM: the pipe object itself, not the process serving
+// it, whose PID another process may hold by the time it is looked up.
+func pipeServerTrusted(h windows.Handle) bool {
+	owner, err := pipeOwner(h)
 	if err != nil {
 		return false
 	}
@@ -72,12 +87,12 @@ var pipeServerTrusted = func(h windows.Handle) bool {
 	if err != nil {
 		return false
 	}
-	return windows.EqualSid(sid, self.User.Sid) || windows.EqualSid(sid, system)
+	return windows.EqualSid(owner, self.User.Sid) || windows.EqualSid(owner, system)
 }
 
 // dialLocalServerOS connects to the named pipe for port (dir is unused) and
-// checks the process serving it runs as the current user or SYSTEM: any
-// user can create a pipe of any free name.
+// checks the pipe is owned by the current user or SYSTEM: any user can
+// create a pipe of any free name.
 func dialLocalServerOS(_ string, port int) (net.Conn, error) {
 	name, err := localPipeName(strconv.Itoa(port))
 	if err != nil {

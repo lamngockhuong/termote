@@ -33,7 +33,7 @@ what Termote can reach, run it as another user with less access.
   established, is refused too. On by default; refusals leave `local-user-refused` audit lines (at most one per user every 10 s).
 - The CLI reaches the native server over a socket only its own OS user can open (a `0600` Unix socket in
   a `0700` dir, or a named pipe whose ACL names that user and SYSTEM), after checking the server end
-  runs as that user or root/SYSTEM. It sends no password there; `termote status` says `Via: socket`.
+  runs as that user or root/SYSTEM (on Windows, that the pipe is owned by that user or SYSTEM). It sends no password there; `termote status` says `Via: socket`.
   Without the socket (the container, an older server) it falls back to TCP and the password.
 - Settings > Signed-in browsers and `termote signins` list the browsers signed in with the password (the
   sign-in form, Basic auth, a CLI link); each can be signed out, or every one but the current. A
@@ -85,7 +85,10 @@ what Termote can reach, run it as another user with less access.
   the way.
 - **Proxies running as root or SYSTEM.** `tailscale serve`, `docker-proxy` and other root proxies are
   trusted (root reads the saved config anyway), so every local user can go through them. On Windows the
-  same holds for a session 0 service whose token the server's user cannot read.
+  same holds for a running service whose process the server's user can open but whose token it cannot
+  read: the process the Service Control Manager runs, not one it starts in turn (a proxy under NSSM or
+  WinSW is refused) and not a per-user service. Services that fetch a URL for whoever asks, such as BITS
+  and WebClient (WebDAV), are among them: any local user can send a request through them.
 - **WSL 2.** Every Windows user reaches a server in WSL 2: in NAT mode through a relay running as root,
   in mirrored mode through a loopback whose client end WSL cannot see, which is let through.
 - **macOS.** It does not check which local user makes a connection (that takes `lsof` for each one):

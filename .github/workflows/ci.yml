@@ -54,6 +54,7 @@ jobs:
             scripts:
               - 'scripts/**'
               - 'tests/**'
+              - 'lefthook.yml'
               - 'herdr-plugin/**'
               - 'Makefile'
               - 'entrypoint.sh'

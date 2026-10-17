@@ -1,8 +1,9 @@
 # Git hooks (lefthook), installed by `pnpm install` through scripts/install-git-hooks.mjs.
 # They only check, never rewrite a file. Skip them once with LEFTHOOK=0 or `git commit --no-verify`.
 # The E2E suite and `go test ./...` take minutes and need tmux: CI runs them, not a hook.
-# A glob is matched from the repo root; with `root`, {staged_files} are relative to it.
-# No double quote in a `run`: lefthook on Windows hands it to sh without escaping them.
+# A glob is matched from the repo root and decides whether a command runs at all. The files come
+# from scripts/staged-files.sh (why not {staged_files}: its header), its --glob pathspecs and the
+# names relative to `root`. No double quote in a `run`: lefthook on Windows does not escape them.
 glob_matcher: doublestar
 
 pre-commit:
@@ -12,16 +13,16 @@ pre-commit:
     biome:
       root: pwa/
       glob: "pwa/src/**/*.{ts,tsx}"
-      run: pnpm exec biome check --no-errors-on-unmatched --files-ignore-unknown=true {staged_files}
+      run: sh ../scripts/staged-files.sh --glob 'src/**/*.ts' --glob 'src/**/*.tsx' pnpm exec biome check --no-errors-on-unmatched --files-ignore-unknown=true
     # gofmt -l exits 0 even when it lists files; the script fails then
     gofmt:
       root: server/
       glob: "server/**/*.go"
-      run: sh ../scripts/check-gofmt.sh {staged_files}
+      run: sh ../scripts/staged-files.sh --glob '**/*.go' sh ../scripts/check-gofmt.sh
     # Same pinned version as `make fmt-check`; dprint.json formats only markdown/mdx
     dprint:
       glob: "**/*.{md,mdx}"
-      run: npx --yes dprint@0.60.1 check --allow-no-files {staged_files}
+      run: sh scripts/staged-files.sh --glob '**/*.md' --glob '**/*.mdx' npx --yes dprint@0.60.1 check --allow-no-files
 
 pre-push:
   parallel: true
