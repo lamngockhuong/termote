@@ -308,7 +308,9 @@ body {
    open, so a blink cut short below leaves the eyes as they were. The squash
    is about y=135 in the symbol's own coordinates, moved there by translate
    rather than with transform-origin: Firefox resolves a fill-box origin in a
-   mask against the wrong box and squashes the eyes towards the brow. */
+   mask against the wrong box and squashes the eyes towards the brow. The
+   idle blink comes first in its cycle, so the owl blinks as soon as it shows
+   (about 0.3-0.6 s in), then every 7 s. */
 .owl-eyes {
   transform-box: view-box;
   transform-origin: 0 0;
@@ -324,8 +326,8 @@ body {
 }
 
 @keyframes owl-blink-idle {
-  0%, 96%, 100% { transform: translateY(135px) scaleY(1) translateY(-135px); }
-  97.5% { transform: translateY(135px) scaleY(0.12) translateY(-135px); }
+  0%, 4%, 8%, 100% { transform: translateY(135px) scaleY(1) translateY(-135px); }
+  6% { transform: translateY(135px) scaleY(0.12) translateY(-135px); }
 }
 
 @keyframes owl-blink-once {

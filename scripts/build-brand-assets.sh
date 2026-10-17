@@ -73,7 +73,7 @@ blink_svg() {
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 332 298" role="img" aria-label="Termote">
   <style>
     .owl-eyes { transform-box: view-box; transform-origin: 0 0; animation: owl-blink 7s ease-in-out infinite; }
-    @keyframes owl-blink { 0%, 96%, 100% { transform: translateY(135px) scaleY(1) translateY(-135px); } 97.5% { transform: translateY(135px) scaleY(0.12) translateY(-135px); } }
+    @keyframes owl-blink { 0%, 4%, 8%, 100% { transform: translateY(135px) scaleY(1) translateY(-135px); } 6% { transform: translateY(135px) scaleY(0.12) translateY(-135px); } }
     @media (prefers-reduced-motion: reduce) { .owl-eyes { animation: none; } }
   </style>
   <defs>
