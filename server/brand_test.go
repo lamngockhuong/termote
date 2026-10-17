@@ -42,12 +42,39 @@ func TestBrandOnServerPages(t *testing.T) {
 		if err != nil || !strings.Contains(string(svg), brandOwlPath) {
 			t.Errorf("%s: favicon is not the owl: %v", name, err)
 		}
-		if !strings.Contains(body, `<div class="brand"><svg class="mark"`) || !strings.Contains(body, brandOwlPath) {
+		if !strings.Contains(body, `<div class="brand"><svg class="mark"`) || !strings.Contains(body, brandMark) {
 			t.Errorf("%s: no mark beside the name", name)
+		}
+		// One mask per page, so its fixed id stays unique
+		if n := strings.Count(body, `id="owl-eyes-mask"`); n != 1 {
+			t.Errorf("%s: %d eye masks, want 1", name, n)
+		}
+		if !strings.Contains(body, "prefers-reduced-motion") {
+			t.Errorf("%s: the blink ignores reduced motion", name)
 		}
 		// Both pages stay script-free (they load before any sign-in)
 		if strings.Contains(body, "<script") {
 			t.Errorf("%s: has a script", name)
+		}
+	}
+}
+
+// The blinking mark is the source path cut in two, not a redraw: the face
+// with the beak keeps the outline, the eyes go through the mask.
+func TestBrandMarkSplitsTheSource(t *testing.T) {
+	parts := strings.SplitAfter(brandOwlPath, "Z")
+	if len(parts) != 5 || parts[4] != "" {
+		t.Fatalf("brandOwlPath has %d subpaths, want face, two eyes and the beak", len(parts)-1)
+	}
+	if brandOwlFace != parts[0]+parts[3] || brandOwlEyes != parts[1]+parts[2] {
+		t.Fatalf("face %q, eyes %q", brandOwlFace, brandOwlEyes)
+	}
+	for _, want := range []string{
+		`<path class="owl-eyes" fill="#000" d="` + brandOwlEyes + `"/>`,
+		`d="` + brandOwlFace + `" mask="url(#owl-eyes-mask)"`,
+	} {
+		if !strings.Contains(brandMark, want) {
+			t.Errorf("brandMark lacks %s", want)
 		}
 	}
 }

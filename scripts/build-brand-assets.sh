@@ -51,6 +51,44 @@ sed 's/currentColor/#101316/' "$SRC/logo/symbol-knockout.svg" >"$ROOT/website/sr
 sed 's/currentColor/#F0F3F6/' "$SRC/logo/symbol-knockout.svg" >"$ROOT/website/src/assets/brand/symbol-dark.svg"
 cp "$PWA/apple-touch-icon.png" "$WEB/apple-touch-icon.png"
 
+# The homepage hero's owl blinks now and then, as the intro video's does:
+# the same path cut at each Z, the eyes cut out through a mask whose eyes
+# squash on their centre line. Its own style runs inside an <img>, and stops
+# for reduced motion. Keyframes match the PWA's (pwa/src/index.css).
+D="$(sed -nE 's/.* d="([^"]+)".*/\1/p' "$SRC/logo/symbol-knockout.svg")"
+FACE="${D%%Z*}Z"
+REST="${D#*Z}"
+EYES="${REST%%Z*}Z"
+REST="${REST#*Z}"
+EYES="$EYES${REST%%Z*}Z"
+BEAK="${REST#*Z}"
+# One path of exactly four subpaths (face, two eyes, beak), on one line
+if [ "$(printf %s "$D" | tr -cd Z | wc -c)" -ne 4 ] || [ "$D" != "${D%%$'\n'*}" ] || [ "$FACE$EYES$BEAK" != "$D" ]; then
+  echo "error: symbol-knockout.svg is no longer a face, two eyes and a beak" >&2
+  exit 1
+fi
+# blink_svg <fill> <output.svg>
+blink_svg() {
+  cat >"$2" <<SVG
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 332 298" role="img" aria-label="Termote">
+  <style>
+    .owl-eyes { transform-box: view-box; transform-origin: 0 0; animation: owl-blink 7s ease-in-out infinite; }
+    @keyframes owl-blink { 0%, 4%, 8%, 100% { transform: translateY(135px) scaleY(1) translateY(-135px); } 6% { transform: translateY(135px) scaleY(0.12) translateY(-135px); } }
+    @media (prefers-reduced-motion: reduce) { .owl-eyes { animation: none; } }
+  </style>
+  <defs>
+    <mask id="owl-eyes-mask">
+      <rect width="332" height="298" fill="#fff"/>
+      <path class="owl-eyes" fill="#000" d="$EYES"/>
+    </mask>
+  </defs>
+  <path fill="$1" fill-rule="evenodd" d="$FACE$BEAK" mask="url(#owl-eyes-mask)"/>
+</svg>
+SVG
+}
+blink_svg "#101316" "$ROOT/website/src/assets/brand/symbol-blink-light.svg"
+blink_svg "#F0F3F6" "$ROOT/website/src/assets/brand/symbol-blink-dark.svg"
+
 png "$SRC/social/banner-github.svg" 1280x640 "$SRC/social/banner-github.png"
 cp "$SRC/social/banner-github.png" "$WEB/og-image.png"
 

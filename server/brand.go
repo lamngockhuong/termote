@@ -1,6 +1,9 @@
 package main
 
-import "encoding/base64"
+import (
+	"encoding/base64"
+	"strings"
+)
 
 // brandOwlPath is the Prompt Owl symbol as one path whose eyes and beak are
 // holes (assets/branding/termote/logo/symbol-knockout.svg; a test keeps the
@@ -20,15 +23,35 @@ var brandHead = `<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;
 			`<path transform="translate(.4 3) scale(.19)" fill="#fff" fill-rule="evenodd" d="`+brandOwlPath+`"/></svg>`)) +
 	`">`
 
+// brandOwlFace and brandOwlEyes are brandOwlPath cut at each Z: the face
+// with the beak, and the two eyes, so the mark can blink as the PWA's does.
+var brandOwlFace, brandOwlEyes = splitOwl(brandOwlPath)
+
+// splitOwl splits the owl's path into its face and beak, and its two eyes
+// (the path's four subpaths, in that order: face, left eye, right eye, beak).
+func splitOwl(d string) (face, eyes string) {
+	parts := strings.SplitAfter(d, "Z")
+	return parts[0] + parts[3], parts[1] + parts[2]
+}
+
 // brandMark is the decorative symbol, in the text colour. It sits beside
-// the name, as the horizontal lockup and the app's sidebar have it.
-const brandMark = `<svg class="mark" viewBox="28 20 276 260" width="30" height="28" aria-hidden="true" focusable="false">` +
-	`<path fill="currentColor" fill-rule="evenodd" d="` + brandOwlPath + `"/></svg>`
+// the name, as the horizontal lockup and the app's sidebar have it. The eyes
+// are cut out through a mask, which brandMarkCSS squashes now and then (a
+// blink). Each page draws one mark, so the mask's id is fixed.
+var brandMark = `<svg class="mark" viewBox="28 20 276 260" width="30" height="28" aria-hidden="true" focusable="false">` +
+	`<defs><mask id="owl-eyes-mask"><rect x="28" y="20" width="276" height="260" fill="#fff"/>` +
+	`<path class="owl-eyes" fill="#000" d="` + brandOwlEyes + `"/></mask></defs>` +
+	`<path fill="currentColor" fill-rule="evenodd" d="` + brandOwlFace + `" mask="url(#owl-eyes-mask)"/></svg>`
 
 // brandMarkCSS lays out the mark and the name in one row; shared by both
 // pages' style blocks. The row's h1 or name keeps the page's heading size.
+// The blink matches the PWA's idle one (pwa/src/index.css), and stops for
+// reduced motion.
 const brandMarkCSS = `  .brand { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; }
   .brand .mark { flex: none; }
   .brand h1 { margin: 0; }
   .brand .name { font-size: 22px; font-weight: 600; }
+  .owl-eyes { transform-box: view-box; transform-origin: 0 0; animation: owl-blink 7s ease-in-out infinite; }
+  @keyframes owl-blink { 0%, 4%, 8%, 100% { transform: translateY(135px) scaleY(1) translateY(-135px); } 6% { transform: translateY(135px) scaleY(0.12) translateY(-135px); } }
+  @media (prefers-reduced-motion: reduce) { .owl-eyes { animation: none; } }
 `

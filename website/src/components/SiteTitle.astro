@@ -1,0 +1,96 @@
+---
+// Starlight's SiteTitle (@astrojs/starlight 0.42.5), with the owl drawn
+// inline instead of as an <img>, so it can blink when the title is pointed
+// at, as the intro video's owl does. The path is the generated symbol's
+// (`make brand-assets`), cut at each Z: the face with the beak, and the eyes,
+// which a mask cuts out and squashes on their centre line. One SVG for both
+// themes, in the colours of symbol-light.svg and symbol-dark.svg. It ignores
+// the `logo` option in astro.config.mjs and logo.replacesTitle.
+import symbol from "../assets/brand/symbol-light.svg?raw";
+
+const { siteTitle, siteTitleHref } = Astro.locals.starlightRoute;
+const d = symbol.match(/ d="([^"]+)"/)?.[1] ?? "";
+const parts = d
+  .split("Z")
+  .filter(Boolean)
+  .map((part) => `${part}Z`);
+// Fail the build rather than ship a header without its owl
+if (parts.length !== 4) {
+  throw new Error("symbol-light.svg is no longer a face, two eyes and a beak");
+}
+const [face, eyeLeft, eyeRight, beak] = parts;
+---
+
+<a href={siteTitleHref} class="site-title sl-flex">
+  <svg class="owl" viewBox="0 0 332 298" aria-hidden="true" focusable="false">
+    <defs>
+      <mask id="site-title-owl-eyes">
+        <rect width="332" height="298" fill="#fff"></rect>
+        <path class="owl-eyes" fill="#000" d={eyeLeft + eyeRight}></path>
+      </mask>
+    </defs>
+    <path fill-rule="evenodd" d={face + beak} mask="url(#site-title-owl-eyes)"></path>
+  </svg>
+  <span translate="no">{siteTitle}</span>
+</a>
+
+<style>
+  @layer starlight.core {
+    .site-title {
+      align-items: center;
+      gap: var(--sl-nav-gap);
+      font-size: var(--sl-text-h4);
+      font-weight: 600;
+      color: var(--sl-color-text-accent);
+      text-decoration: none;
+      white-space: nowrap;
+      min-width: 0;
+    }
+    span {
+      overflow: hidden;
+    }
+    .owl {
+      height: calc(var(--sl-nav-height) - 2 * var(--sl-nav-pad-y));
+      width: auto;
+      flex: none;
+      fill: #f0f3f6;
+    }
+  }
+
+  :global([data-theme="light"]) .owl {
+    fill: #101316;
+  }
+
+  .owl-eyes {
+    transform-box: view-box;
+    transform-origin: 0 0;
+  }
+
+  .site-title:hover .owl-eyes,
+  .site-title:focus-visible .owl-eyes,
+  .site-title:active .owl-eyes {
+    animation: owl-blink 220ms ease-in-out;
+  }
+
+  @keyframes owl-blink {
+    0%,
+    100% {
+      transform: translateY(135px) scaleY(1) translateY(-135px);
+    }
+    50% {
+      transform: translateY(135px) scaleY(0.12) translateY(-135px);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .owl-eyes {
+      animation: none !important;
+    }
+  }
+
+  @media print {
+    .owl {
+      fill: #101316;
+    }
+  }
+</style>

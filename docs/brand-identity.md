@@ -34,12 +34,20 @@ Edit a source under `assets/branding/termote/`, then run `make brand-assets`
 | `icons/app-icon-maskable.svg`   | `pwa/public/pwa-maskable-512x512.png` (manifest `maskable`), `apple-touch-icon.png` (PWA and website) |
 | `icons/app-icon-monochrome.svg` | `pwa/public/pwa-monochrome-512x512.png` (manifest `monochrome`)                                       |
 | `icons/notification-badge.svg`  | `pwa/public/badge-96x96.png` (notification `badge`)                                                   |
-| `logo/symbol-knockout.svg`      | `website/src/assets/brand/symbol-{light,dark}.svg` (site logo and hero)                               |
+| `logo/symbol-knockout.svg`      | `website/src/assets/brand/symbol-{light,dark}.svg`, `symbol-blink-{light,dark}.svg` (hero, blinking)  |
 | `social/banner-github.svg`      | `social/banner-github.png`, `website/public/og-image.png`                                             |
 
 Some copies are inline rather than generated, and a test holds each to the source path:
-`pwa/src/components/brand-mark.tsx` (sidebar and header) and `server/brand.go` (the `/login` and
-`/pair` pages and their favicon, served before sign-in while every icon file sits behind it).
+`pwa/src/components/brand-mark.tsx` (sidebar, header and About) and `server/brand.go` (the `/login`
+and `/pair` pages and their favicon, served before sign-in while every icon file sits behind it).
+The website header draws the owl inline too, read from `symbol-light.svg` at build time by
+`website/src/components/SiteTitle.astro`.
+
+Wherever the owl blinks (About, `/login`, `/pair` and the website hero on their own; the sidebar,
+the app header and the website header when pointed at), the path is cut at each `Z` into the face,
+the two eyes and the beak; the eyes are cut out through a mask and squash on their centre line, and
+reduced motion stops it. The tests above hold the cut pieces to the source, and the generator and
+`SiteTitle.astro` refuse a path that is not exactly those four pieces.
 
 The README shows `social/banner-readme-light.svg` or `-dark.svg` through `<picture>`. GitHub's
 social preview is uploaded by hand: Settings → Social preview → `social/banner-github.png`.

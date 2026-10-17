@@ -100,6 +100,7 @@ describe('AppHeader — desktop', () => {
     expect(screen.getByRole('banner').firstElementChild).toBe(
       screen.getByTestId('brand-mark'),
     )
+    expect(screen.getByTestId('brand-mark')).toHaveClass('owl-blink-hover')
   })
 
   it('leaves the brand to the expanded sidebar', () => {
