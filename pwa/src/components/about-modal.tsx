@@ -67,7 +67,7 @@ export function AboutModal({ isOpen, onClose, onCheckUpdates }: Props) {
     >
       <div className="flex flex-col gap-5 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <div className="flex flex-col items-center gap-1 pt-2 text-center">
-          <BrandMark className="mb-1 size-12 text-fg" />
+          <BrandMark className="mb-1 size-12 text-fg" blink="idle" />
           <p className="m-0 text-xl font-semibold text-fg ui-terminal:font-label">
             {APP_INFO.displayName}
           </p>

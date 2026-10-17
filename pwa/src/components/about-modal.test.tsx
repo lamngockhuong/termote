@@ -79,7 +79,8 @@ describe('AboutModal', () => {
 
   it('shows the owl and the wordmark', () => {
     render(<AboutModal isOpen={true} onClose={vi.fn()} />)
-    expect(screen.getByTestId('brand-mark')).toBeInTheDocument()
+    // The one place the owl blinks on its own: a sheet the user opened
+    expect(screen.getByTestId('brand-mark')).toHaveClass('owl-blink-idle')
     expect(screen.getByText('Termote', { selector: 'p' })).toBeInTheDocument()
   })
 

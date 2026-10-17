@@ -15,10 +15,15 @@ export default defineConfig({
       ],
       components: {
         Footer: "./src/components/Footer.astro",
+        // The owl drawn inline, to blink on hover
+        SiteTitle: "./src/components/SiteTitle.astro",
       },
       title: "Termote",
       description: "Remote control CLI tools from mobile/desktop via PWA",
-      // Prompt Owl, generated from assets/branding by `make brand-assets`
+      // Prompt Owl, generated from assets/branding by `make brand-assets`.
+      // The header draws it inline (src/components/SiteTitle.astro), which
+      // does not read this option; kept so dropping the override brings the
+      // image logo back.
       logo: {
         light: "./src/assets/brand/symbol-light.svg",
         dark: "./src/assets/brand/symbol-dark.svg",

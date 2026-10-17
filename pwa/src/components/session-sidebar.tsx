@@ -1061,7 +1061,7 @@ export function SessionSidebar({
       <div className={`w-64 ${SIDEBAR_CONTENT_CLASSES}`}>
         <div className="flex h-12 shrink-0 items-center justify-between pl-3 pr-1.5">
           <span className="flex items-center gap-2 text-[15px] font-semibold text-fg ui-terminal:font-label">
-            <BrandMark className="size-6 shrink-0" />
+            <BrandMark className="size-6 shrink-0" blink="hover" />
             Termote
           </span>
           <span className="flex items-center">

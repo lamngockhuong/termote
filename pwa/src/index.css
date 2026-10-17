@@ -303,6 +303,42 @@ body {
   display: none;
 }
 
+/* The brand mark's blink (brand-mark.tsx): the eyes, cut out through a mask,
+   squash on their centre line, as the intro video's owl does. Keyframes end
+   open, so a blink cut short below leaves the eyes as they were. The squash
+   is about y=135 in the symbol's own coordinates, moved there by translate
+   rather than with transform-origin: Firefox resolves a fill-box origin in a
+   mask against the wrong box and squashes the eyes towards the brow. */
+.owl-eyes {
+  transform-box: view-box;
+  transform-origin: 0 0;
+}
+
+.owl-blink-idle .owl-eyes {
+  animation: owl-blink-idle 7s ease-in-out infinite;
+}
+
+.owl-blink-hover:hover .owl-eyes,
+.owl-blink-hover:active .owl-eyes {
+  animation: owl-blink-once 220ms ease-in-out;
+}
+
+@keyframes owl-blink-idle {
+  0%, 96%, 100% { transform: translateY(135px) scaleY(1) translateY(-135px); }
+  97.5% { transform: translateY(135px) scaleY(0.12) translateY(-135px); }
+}
+
+@keyframes owl-blink-once {
+  0%, 100% { transform: translateY(135px) scaleY(1) translateY(-135px); }
+  50% { transform: translateY(135px) scaleY(0.12) translateY(-135px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .owl-eyes {
+    animation: none !important;
+  }
+}
+
 /* Users who ask for less motion get none: transitions and animations finish at once. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

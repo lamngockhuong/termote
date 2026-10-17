@@ -138,6 +138,8 @@ describe('SessionSidebar — desktop expanded (default)', () => {
     renderDesktop()
     const mark = screen.getByTestId('brand-mark')
     expect(mark.parentElement).toHaveTextContent(/^Termote$/)
+    // Beside the work, it blinks only when pointed at
+    expect(mark).toHaveClass('owl-blink-hover')
   })
 
   it('opens the agent overview from its button, pressed while open', () => {

@@ -137,7 +137,10 @@ function DesktopHeader(p: Props) {
       {/* The expanded sidebar carries the brand; the phone header has no
           room to spare */}
       {p.showBrand && (
-        <BrandMark className="mb-2.5 ml-1 size-5 shrink-0 text-fg" />
+        <BrandMark
+          className="mb-2.5 ml-1 size-5 shrink-0 text-fg"
+          blink="hover"
+        />
       )}
       {p.showSessionTabs ? (
         <SessionTabs
