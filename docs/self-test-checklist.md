@@ -310,8 +310,8 @@ Run Herdr on a throwaway socket and `HOME`, never your live Herdr.
 - [ ] Desktop: drag a tab row above or below another of its group; a 2 px line shows where it
       lands; `tmux list-windows` (or Herdr's tab bar) shows the new order; a click still selects
 - [ ] Desktop: Alt+↑/Alt+↓ on a focused tab row moves it; focus stays on the same row
-- [ ] Phone (390×844): ↑/↓ on the "Current session" row move the tab on screen, disabled at the
-      ends of its group; swipe still reveals Edit/Delete
+- [ ] Phone (390×844): Move up/Move down in the "Current session" ⋯ menu move the tab on screen,
+      disabled at the ends of its group; swipe still reveals Edit/Delete
 - [ ] Herdr: Move up/Move down in a workspace's ⋯ menu (disabled at the ends) and dragging its
       header move it; Herdr's sidebar agrees
 - [ ] Herdr: a tab reordered in Herdr itself shows in the same order in Termote
@@ -459,7 +459,9 @@ Open it from the sidebar's grid button (desktop) or the view menu's "Agent overv
 
 - [ ] Edit/Delete buttons hidden by default
 - [ ] Swipe left/right on session item reveals Edit/Delete buttons
-- [ ] With `caps.reorderTabs`: Move up/Move down buttons on the "Current session" row
+- [ ] With `caps.reorderTabs`: Move up/Move down in the "Current session" ⋯ menu
+- [ ] Phone: the "Current session" row and the agent filter stay pinned under the title while the
+      list scrolls
 
 ### Sessions via API
 

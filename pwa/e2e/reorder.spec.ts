@@ -144,13 +144,14 @@ test.describe('reordering tmux windows', () => {
   test.describe('on a phone', () => {
     test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
 
-    test('Move down on the current session row', async ({ page }) => {
+    test('Move down in the current session menu', async ({ page }) => {
       const [a, b, c] = names
       await page.goto('/')
       const tab = await tabNamed(page, a)
       await open(page, `#/s/${encodeURIComponent(sid)}/${encodeURIComponent(tab.id)}`)
       await page.getByRole('button', { name: 'Open sessions menu' }).click()
-      await page.getByRole('button', { name: `Move ${a} down` }).click()
+      await page.getByRole('button', { name: `Actions for ${a}` }).click()
+      await page.getByRole('menuitem', { name: 'Move down' }).click()
       await expect.poll(order).toEqual([b, a, c])
     })
   })

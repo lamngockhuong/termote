@@ -654,7 +654,15 @@ describe('SessionSidebar — mobile mode', () => {
     expect(onUpdate).toHaveBeenCalledWith('1', { name: 'Updated', icon: '💻' })
   })
 
-  // The sheet's scroller spans 0-400 with the sticky current session over
+  // Opens the current session's menu and picks Edit
+  const editCurrent = (current: HTMLElement) => {
+    fireEvent.click(
+      within(current).getByRole('button', { name: /^Actions for/ }),
+    )
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Edit' }))
+  }
+
+  // The sheet's scroller spans 0-400 with the pinned current session over
   // 0-100; the active row sits at rowTop
   const openOnRow = (rowTop: number) => {
     const rect = Element.prototype.getBoundingClientRect
@@ -662,7 +670,7 @@ describe('SessionSidebar — mobile mode', () => {
       const [top, height] =
         this.getAttribute('data-testid') === 'swipeable-2'
           ? [rowTop, 40]
-          : this.getAttribute('aria-label') === 'Current session'
+          : this.getAttribute('data-testid') === 'sheet-pinned'
             ? [0, 100]
             : [0, 400]
       return { top, height, bottom: top + height } as DOMRect
@@ -705,19 +713,43 @@ describe('SessionSidebar — mobile mode', () => {
     expect(scroller.scrollTop).toBe(-170)
   })
 
-  it('shows the current session with visible Edit and Delete', () => {
+  it('shows the current session on one line with Edit and Delete in its menu', () => {
     renderMobile()
     const current = screen.getByRole('region', { name: 'Current session' })
     expect(current).toHaveTextContent('💻')
     expect(current).toHaveTextContent('Shell')
-    fireEvent.click(within(current).getByRole('button', { name: 'Delete' }))
+    fireEvent.click(
+      within(current).getByRole('button', { name: 'Actions for Shell' }),
+    )
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }))
     expect(onRemove).toHaveBeenCalledWith('1')
+  })
+
+  it('pins the agent filter under the current session', () => {
+    render(
+      <SessionSidebar
+        sessions={[{ ...SESSIONS[0], hasAgent: true }, SESSIONS[1]]}
+        activeId="1"
+        onSelect={onSelect}
+        onFilterChange={vi.fn()}
+        isMobile
+        isOpen
+      />,
+    )
+    const pinned = screen.getByTestId('sheet-pinned')
+    expect(pinned).toHaveClass('sticky')
+    expect(
+      within(pinned).getByRole('region', { name: 'Current session' }),
+    ).toBeInTheDocument()
+    expect(
+      within(pinned).getByRole('radiogroup', { name: 'Filter sessions' }),
+    ).toBeInTheDocument()
   })
 
   it('edits the current session in its row, not in the list', () => {
     renderMobile()
     const current = screen.getByRole('region', { name: 'Current session' })
-    fireEvent.click(within(current).getByRole('button', { name: 'Edit' }))
+    editCurrent(current)
     // One form, in the row; the list keeps the session's item.
     expect(within(current).getByDisplayValue('Shell')).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: 'Save' })).toHaveLength(1)
@@ -728,14 +760,13 @@ describe('SessionSidebar — mobile mode', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     expect(onUpdate).toHaveBeenCalledWith('1', { name: 'Renamed', icon: '💻' })
     expect(
-      within(current).getByRole('button', { name: 'Edit' }),
+      within(current).getByRole('button', { name: 'Actions for Shell' }),
     ).toBeInTheDocument()
   })
 
   it('drops an open edit when the sheet closes', () => {
     const { rerender } = renderMobile()
-    const current = screen.getByRole('region', { name: 'Current session' })
-    fireEvent.click(within(current).getByRole('button', { name: 'Edit' }))
+    editCurrent(screen.getByRole('region', { name: 'Current session' }))
     expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument()
     const props = {
       sessions: SESSIONS,
@@ -751,15 +782,15 @@ describe('SessionSidebar — mobile mode', () => {
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
   })
 
-  it('keeps its forms clear of the sticky current session row', () => {
+  it('keeps its forms clear of the pinned current session and filter', () => {
     renderMobile()
     fireEvent.click(screen.getByTitle('Add new session'))
     expect(
-      screen.getByPlaceholderText('Session name').closest('.scroll-mt-24'),
+      screen.getByPlaceholderText('Session name').closest('.scroll-mt-28'),
     ).toBeInTheDocument()
   })
 
-  it('hides Delete with one session and Edit without onUpdate', () => {
+  it('has no actions menu with one session and without onUpdate', () => {
     render(
       <SessionSidebar
         sessions={SINGLE_SESSION}
@@ -771,8 +802,7 @@ describe('SessionSidebar — mobile mode', () => {
       />,
     )
     const current = screen.getByRole('region', { name: 'Current session' })
-    expect(within(current).queryByRole('button', { name: 'Delete' })).toBeNull()
-    expect(within(current).queryByRole('button', { name: 'Edit' })).toBeNull()
+    expect(within(current).queryByRole('button')).toBeNull()
   })
 
   it('has no current session row when the active id is unknown', () => {
@@ -1827,7 +1857,8 @@ describe('SessionSidebar — reorder', () => {
       screen.getByRole('region', { name: 'Current session' }),
     )
     expect(current.getByText(hint)).toBeInTheDocument()
-    expect(current.queryByRole('button', { name: 'Move b up' })).toBeNull()
+    fireEvent.click(current.getByRole('button', { name: 'Actions for b' }))
+    expect(screen.queryByRole('menuitem', { name: 'Move up' })).toBeNull()
     // Nothing to undo when the server cannot move anything here
     rerender(
       <SessionSidebar
@@ -1900,40 +1931,35 @@ describe('SessionSidebar — reorder', () => {
     expect(r.onMoveGroup).toHaveBeenCalledWith('$3', 0)
   })
 
-  it('mobile: Move up and down on the current session row', () => {
+  it('mobile: Move up and down in the current session menu', () => {
     const r = reorderOf()
     const { rerender } = render(
       <SessionSidebar {...props({ reorder: r, isMobile: true })} />,
     )
-    const current = within(
-      screen.getByRole('region', { name: 'Current session' }),
-    )
-    fireEvent.click(current.getByRole('button', { name: 'Move b up' }))
+    const pick = (name: string, item: string) => {
+      fireEvent.click(
+        within(
+          screen.getByRole('region', { name: 'Current session' }),
+        ).getByRole('button', { name: `Actions for ${name}` }),
+      )
+      return screen.getByRole('menuitem', { name: item })
+    }
+    fireEvent.click(pick('b', 'Move up'))
     expect(r.onMoveTab).toHaveBeenCalledWith('2', 0)
-    fireEvent.click(current.getByRole('button', { name: 'Move b down' }))
+    fireEvent.click(pick('b', 'Move down'))
     expect(r.onMoveTab).toHaveBeenLastCalledWith('2', 2)
     rerender(
       <SessionSidebar
         {...props({ reorder: r, isMobile: true, activeId: '1' })}
       />,
     )
-    expect(
-      within(screen.getByRole('region', { name: 'Current session' })).getByRole(
-        'button',
-        { name: 'Move a up' },
-      ),
-    ).toBeDisabled()
+    expect(pick('a', 'Move up')).toBeDisabled()
     rerender(
       <SessionSidebar
         {...props({ reorder: r, isMobile: true, activeId: '4' })}
       />,
     )
-    expect(
-      within(screen.getByRole('region', { name: 'Current session' })).getByRole(
-        'button',
-        { name: 'Move c down' },
-      ),
-    ).toBeDisabled()
+    expect(pick('c', 'Move down')).toBeDisabled()
     // Group headers are not dragged on a phone
     expect(
       screen.getByRole('region', { name: 'main' }).firstElementChild,
