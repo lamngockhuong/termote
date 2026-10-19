@@ -68,8 +68,9 @@ func zellijOwnInfo(dir string, fi fs.FileInfo, deny fs.FileMode) error {
 
 // zellijOwnSocketDir is zellijOwnDir(dir, 0o002) that also takes the
 // group's write permission off dir, keeping its other bits (a setgid bit
-// too). It checks and changes the dir it opened, never following a symlink,
-// so a dir swapped for a link after the check is not what gets the mode.
+// too), and fails when the group can still write it afterwards. It checks
+// and changes the dir it opened, never following a symlink, so a dir
+// swapped for a link after the check is not what gets the mode.
 func zellijOwnSocketDir(dir string) error {
 	f, err := os.OpenFile(dir, os.O_RDONLY|unix.O_NOFOLLOW|unix.O_DIRECTORY, 0)
 	if err != nil {
@@ -84,12 +85,22 @@ func zellijOwnSocketDir(dir string) error {
 		return err
 	}
 	mode := fi.Mode() & (fs.ModePerm | fs.ModeSetgid | fs.ModeSticky) &^ 0o020
-	if err := f.Chmod(mode); err != nil {
+	if err := zellijChmodDir(f, mode); err != nil {
 		return err
+	}
+	// A mount can take the chmod and keep the mode (some FUSE, SMB, vfat)
+	if fi, err = f.Stat(); err != nil {
+		return err
+	}
+	if fi.Mode().Perm()&0o020 != 0 {
+		return fmt.Errorf("%s keeps mode %#o after chmod", dir, fi.Mode().Perm())
 	}
 	log.Printf("zellij: socket dir %s made %#o: no write for its group", dir, mode.Perm())
 	return nil
 }
+
+// zellijChmodDir changes the mode of the open dir f; a test replaces it.
+var zellijChmodDir = func(f *os.File, mode fs.FileMode) error { return f.Chmod(mode) }
 
 // zellijSocketDirRefusal is the last reason logged, so each reason is
 // logged once, not once per zellij command.

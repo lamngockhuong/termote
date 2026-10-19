@@ -77,10 +77,14 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   checked (`zellijCheckSocketDir`): made 0700 when missing, it must be a directory (not a
   symlink) of the server's uid that others cannot write; its group write (Zellij makes it 0775
   under umask 002) is then taken away (`zellijOwnSocketDir`: checked and changed through one
-  descriptor opened with `O_NOFOLLOW`, logged), so another member of its group cannot swap the
-  contract dir after the check; and its `contract_version_1`, where the
+  descriptor opened with `O_NOFOLLOW`, then stat'ed again through it: a mount that takes the
+  chmod but keeps the mode, some FUSE, SMB or vfat, is refused; logged), so another member of its
+  group cannot swap the contract dir after the check; and its `contract_version_1`, where the
   sockets are, when there, must be one of that uid with no group or other access (Zellij makes it
-  0700); else no command runs, 503 `zellij_socket_dir`, the reason logged once.
+  0700); else no command runs, 503 `zellij_socket_dir`, the reason logged once. Zellij 0.45 makes
+  the socket dir only when it is missing and never loosens an existing one (it sets the contract
+  dir and `$TMPDIR/zellij-<uid>` to 0700); a dir removed and made again by Zellij is caught by the
+  check before the next command.
   Every `zellij` call is argv only, never a shell; a positional value goes after `--` (`attach`
   takes none: there `--` starts a command, so a session name is passed only when
   `zellijPassableName` holds: no leading `-`, not `help`/`options` in any case, no control or
