@@ -1,4 +1,5 @@
 import { act, render, screen } from '@testing-library/react'
+import type { RefObject } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useImageViewer, type ViewerImage } from './use-image-viewer'
 
@@ -6,13 +7,21 @@ const h = vi.hoisted(() => ({
   loaded: vi.fn(),
   closing: false,
   onClose: (() => {}) as () => void,
+  returnFocus: undefined as RefObject<HTMLElement | null> | undefined,
 }))
 
 vi.mock('../components/image-viewer', () => {
   h.loaded()
   return {
-    default: (p: ViewerImage & { stale: boolean; onClose: () => void }) => {
+    default: (
+      p: ViewerImage & {
+        stale: boolean
+        returnFocus?: RefObject<HTMLElement | null>
+        onClose: () => void
+      },
+    ) => {
       h.onClose = p.onClose
+      h.returnFocus = p.returnFocus
       return (
         <div
           data-testid="viewer"
@@ -27,8 +36,9 @@ vi.mock('../components/image-viewer', () => {
 vi.mock('./use-history-close', () => ({ viewerClosing: () => h.closing }))
 
 let open: (image: ViewerImage) => void = () => {}
+const home: RefObject<HTMLElement | null> = { current: null }
 function Host({ src }: { src?: string }) {
-  const v = useImageViewer(src)
+  const v = useImageViewer(src, home)
   open = v.open
   return <>{v.viewer}</>
 }
@@ -49,6 +59,7 @@ describe('useImageViewer', () => {
     expect(h.loaded).toHaveBeenCalledTimes(1)
     expect(viewer).toHaveAttribute('data-alt', 'logo.png')
     expect(viewer).toHaveAttribute('data-stale', 'false')
+    expect(h.returnFocus).toBe(home)
     act(() => h.onClose())
     expect(screen.queryByTestId('viewer')).toBeNull()
   })

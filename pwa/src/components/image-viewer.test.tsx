@@ -201,6 +201,17 @@ describe('ImageViewer', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
+  it('returns focus to returnFocus when its opener is gone', () => {
+    const home = document.createElement('div')
+    home.tabIndex = -1
+    document.body.append(home)
+    const { opener, unmount } = show({ returnFocus: { current: home } })
+    opener.remove()
+    unmount()
+    expect(document.activeElement).toBe(home)
+    home.remove()
+  })
+
   it('Back closes it', async () => {
     const { onClose } = show()
     const pop = popped()
