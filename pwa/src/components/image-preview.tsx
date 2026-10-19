@@ -95,17 +95,20 @@ export function ImagePreview({ state, alt, label, missing, onRetry }: Props) {
       <div className="p-2">
         <button
           type="button"
-          // Decoded only: a broken or loading image has nothing to show
-          disabled={!seen}
+          // Decoded only: a broken or loading image has nothing to show. Not
+          // disabled, which takes no focus: a viewer that closes because a
+          // new image replaced this one returns focus here before it decodes
+          aria-disabled={seen ? undefined : true}
           aria-label={`Open ${title} full screen`}
-          className="block w-full cursor-zoom-in text-left disabled:cursor-default"
+          className="block w-full cursor-zoom-in text-left aria-disabled:cursor-default"
           onClick={() =>
+            seen &&
             open({
               src: state.url,
               alt: title,
               // An SVG with only a viewBox reports none: the viewer measures
-              width: seen?.width || undefined,
-              height: seen?.height || undefined,
+              width: seen.width || undefined,
+              height: seen.height || undefined,
               isSvg: state.type === SVG_TYPE,
             })
           }
