@@ -322,6 +322,15 @@ Run Herdr on a throwaway socket and `HOME`, never your live Herdr.
       3.2, psmux (Windows), Herdr older than 0.8.0 or Herdr on Windows; tmux sessions have no Move
 - [ ] With the agent filter or "blocked first" on: the "Current session" row (phone) and a group's
       ⋯ menu say what to turn off to reorder; nothing said where the backend cannot reorder
+- [ ] Search (desktop sidebar, phone sheet): the magnifier opens a focused box (no magnifier with a
+      single session); typing part of a name, a description, a group, an agent or a process keeps
+      the matches, any case and without diacritics; a collapsed group with a match opens and folds
+      again once cleared; dragging and Move are off while searching and the ⋯ menu says "Clear the
+      search…"; Enter opens the first match, ↓ moves to it (desktop); Esc clears, then closes
+- [ ] Search with the agent filter on: a session must match both; "No sessions match" → Show all
+      clears both
+- [ ] Phone: the sessions sheet opens without the box and never raises the keyboard by itself; it
+      opens on the whole list after a search
 - [ ] tmux: a Chat draft and an attached image in one window stay with it when another window is
       moved across it, on a second open device too; an open Edit form stays on its window
 - [ ] tmux: closing a tab whose id another device's move shifted says "The tab changed; try
@@ -415,6 +424,9 @@ Open it from the sidebar's grid button (desktop) or the view menu's "Agent overv
 - [ ] A Claude card opens its Chat view (also in another group); its terminal button opens the
       terminal; a card of an agent without Chat opens the terminal
 - [ ] The filter counts agents and does not change the sidebar's
+- [ ] The overview's magnifier narrows the cards (tab, group, pane, agent, process) with the filter;
+      Enter opens the first card, Esc clears the box and the overview stays; the Needs you queue
+      is not searched
 - [ ] Two Claude Code sessions asking for permission: "Needs you" shows the one waiting longest;
       tapping "Yes" twice in a row answers only it; "Answered" waits for Next, which shows the other
 - [ ] A wizard (several tabs): answering a tab is no answer yet; Submit is

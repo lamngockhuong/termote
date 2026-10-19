@@ -321,6 +321,16 @@ Chạy Herdr trên một socket và `HOME` riêng để thử, đừng dùng Her
       Move
 - [ ] Khi đang bật bộ lọc agent hay "blocked first": dòng "Current session" (điện thoại) và menu ⋯
       của group nói cần tắt gì để sắp xếp; ở backend không sắp xếp được thì không nói gì
+- [ ] Tìm phiên (sidebar desktop, bảng phiên trên điện thoại): nút kính lúp mở ô tìm và đặt focus
+      vào đó (chỉ một phiên thì không có nút); gõ một phần tên, mô tả, group, agent hay tiến trình
+      thì chỉ còn phiên khớp, không phân biệt hoa thường và dấu; group đang thu gọn có phiên khớp
+      thì mở ra, xoá chuỗi thì thu lại; khi đang tìm không kéo thả hay Move được và menu ⋯ ghi
+      "Clear the search…"; Enter mở phiên đầu, ↓ chuyển xuống phiên đó (desktop); Esc xoá chữ rồi
+      đóng ô
+- [ ] Tìm khi đang bật bộ lọc agent: phiên phải khớp cả hai; "No sessions match" → Show all xoá cả
+      hai
+- [ ] Điện thoại: bảng phiên mở ra không có ô tìm và không tự bật bàn phím; sau khi tìm, mở lại
+      bảng thì thấy đủ danh sách
 - [ ] tmux: bản nháp Chat và ảnh đính kèm của một window vẫn đi theo window đó khi window khác được
       kéo qua nó, cả trên thiết bị thứ hai đang mở; form Sửa đang mở vẫn ở đúng window của nó
 - [ ] tmux: đóng một tab mà id của nó đã bị lệch do thiết bị khác vừa di chuyển: báo "The tab
@@ -406,6 +416,8 @@ Mở bằng nút lưới trên sidebar (máy tính) hoặc mục "Agent overview
 - [ ] Bấm thẻ Claude mở Chat view của đúng pane, kể cả ở group khác; nút terminal trên thẻ mở
       terminal; agent không có Chat thì bấm thẻ mở terminal
 - [ ] Bộ lọc đếm theo agent và không làm đổi bộ lọc của sidebar
+- [ ] Nút kính lúp của overview lọc thẻ (tab, group, pane, agent, tiến trình) cùng với bộ lọc;
+      Enter mở thẻ đầu, Esc xoá chữ và overview vẫn mở; hàng đợi Needs you không bị lọc
 - [ ] Hai phiên Claude Code cùng xin quyền: "Needs you" hiện phiên chờ lâu nhất; chạm "Yes" hai lần
       liền chỉ trả lời phiên đó; "Answered" đứng yên cho tới khi bấm Next, Next mới hiện phiên kia
 - [ ] Wizard nhiều tab: trả lời một tab chưa tính là đã trả lời, chỉ Submit mới tính

@@ -87,7 +87,7 @@ backend keeps, so Herdr's own tab bar and sidebar agree with it.
   header on desktop. A repository's workspace moves together with its worktrees, as in Herdr; a
   linked worktree cannot be moved on its own.
 
-The controls are hidden while the agent filter or "blocked first" sorting is on, since the list on
+The controls are hidden while a search, the agent filter or "blocked first" sorting is on, since the list on
 screen is then not the real order; a line in their place (the **Current session** row, a
 workspace's **⋯** menu) says what to turn off to get them back. Not supported: tmux and Zellij sessions (neither has a session order), tmux
 older than 3.2, psmux on Windows, Herdr older than 0.8.0, and Herdr on Windows for now.
@@ -98,6 +98,24 @@ Termote keeps your unsent Chat message, attached images and unsaved file edits w
 but a link to a tab (or another device's saved selection) that named a renumbered window opens
 another tab afterwards.
 </Aside>
+
+### Searching Sessions
+
+With more than one session, a magnifier in the desktop sidebar's header (and in the mobile sessions
+sheet's header, next to **New session**) opens a search box above the list. Type part of a name and
+the list keeps only the sessions that match.
+
+- A session matches on its name, its description, its group's name and branch, the agents it runs,
+  the processes in its panes and their labels. Case and Vietnamese diacritics do not matter, and
+  with several words each must match.
+- The search narrows the [agent filter](#filtering-by-agent-status): a session must match both.
+  Groups with no match are hidden and groups with one are shown open, as with the filter.
+- **Enter** opens the first session in the list and **↓** moves to it (desktop). **Esc** clears
+  the box, and on an empty box closes it.
+- On desktop the search stays after you pick a session, so you can move between the matches. The
+  sessions sheet opens on the whole list each time.
+- The search is not saved, and it never takes keys away from the terminal: it reads keys only
+  while its box has focus.
 
 ### Filtering by Agent Status
 

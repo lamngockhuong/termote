@@ -35,6 +35,11 @@ Tap a card to open the agent: its Chat view for Claude Code and Codex, else its 
 also has a terminal button. The filter above the cards counts agents and is the overview's own: it
 does not change the sidebar's.
 
+The magnifier in the overview's header opens a search box over the cards: it keeps the agents whose
+tab, group, pane, agent or process matches, together with the filter. **Enter** opens the first one,
+**↓** moves to it, and **Esc** clears the box without leaving the overview. The **Needs you** queue
+and the activity log are not searched.
+
 <Aside>
 With tmux and psmux, only the active pane of each window is watched: an agent in another split of the
 same window has no card. Herdr and Zellij watch every pane.

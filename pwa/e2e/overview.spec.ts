@@ -223,6 +223,34 @@ test.describe('agent overview with an agent', () => {
     await expect(page.getByRole('region', { name: 'Conversation' })).toBeVisible()
   })
 
+  test('the search narrows the cards; Esc clears it, not the overview', async ({
+    page,
+  }) => {
+    await open(page, '#/overview')
+    const card = page.getByRole('button', {
+      name: new RegExp(`^Open chat: Claude Code, .*${windowName}$`),
+    })
+    await expect(card).toBeVisible({ timeout: 20000 })
+    await overview(page).getByRole('button', { name: 'Search agents' }).click()
+    const box = page.getByRole('searchbox', { name: 'Find an agent' })
+    await expect(box).toBeFocused()
+    await box.fill(windowName.toUpperCase())
+    await expect(card).toBeVisible()
+    await box.fill('no-such-agent-here')
+    await expect(page.getByText('No agents match')).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(box).toHaveValue('')
+    await expect(card).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(box).toBeHidden()
+    await expect(overview(page)).toBeVisible()
+    // Enter opens the first match, as a click on it would
+    await overview(page).getByRole('button', { name: 'Search agents' }).click()
+    await box.fill(windowName)
+    await page.keyboard.press('Enter')
+    await expect(overview(page)).toBeHidden()
+  })
+
   test("a card's history: the status strip and its subagents", async ({ page }) => {
     await open(page, '#/overview')
     const card = page.locator('[data-status]', {

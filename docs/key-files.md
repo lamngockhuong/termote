@@ -21,6 +21,8 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/components/brand-mark.tsx`               | Prompt Owl symbol inline (sidebar, header when collapsed)     |
 | `pwa/src/components/session-switcher-chip.tsx`    | Mobile header chip that opens the sessions sheet              |
 | `pwa/src/utils/reorder.ts`                        | Move up/down and drop indexes, groups that can move           |
+| `pwa/src/utils/session-search.ts`                 | Search terms; which sessions and agent cards a search matches |
+| `pwa/src/components/session-search-field.tsx`     | Search box and magnifier (sidebar, sessions sheet, overview)  |
 | `pwa/src/utils/pane-remap.ts`                     | Tab keys: state by pane id follows a shifted tmux id          |
 | `pwa/src/utils/chat-draft.ts`                     | Chat view drafts per pane (sessionStorage), remapped          |
 | `pwa/src/utils/pane-view.ts`                      | View and side panel each pane was left on, kept on the device |
