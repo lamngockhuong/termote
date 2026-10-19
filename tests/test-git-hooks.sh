@@ -272,6 +272,24 @@ check "staged-files splits a long list" "3 150 0" \
     "$(grep -c '^call$' "$ARGS_OUT") $(grep -c '^\./' "$ARGS_OUT") $STAGED_STATUS"
 check "lefthook.yml hands no file template to a command" "" \
     "$(grep -E '\{(staged_files|all_files|files|push_files)\}' "$PROJECT_DIR/lefthook.yml" | grep -v '^ *#')"
+# A command that runs go builds without cgo, so it compiles no C code a branch brings.
+# cgo_missing <file>: the commands of a lefthook config that run go without CGO_ENABLED "0"
+# (POSIX awk: mawk and BSD awk have no \<)
+cgo_missing() {
+    awk '
+        function done() { if (name != "" && go && !nocgo) print name }
+        /^    [A-Za-z0-9_-]+:$/ { done(); name = $1; go = 0; nocgo = 0; next }
+        /^  [^ ]/ || /^[^ ]/ { done(); name = "" }
+        name != "" && !/^ *#/ && /(^|[^A-Za-z0-9_])go[ \t]/ { go = 1 }
+        name != "" && /^        CGO_ENABLED: "0"$/ { nocgo = 1 }
+        END { done() }
+    ' "$1"
+}
+check "lefthook.yml runs go only with CGO_ENABLED=0" "" "$(cgo_missing "$PROJECT_DIR/lefthook.yml")"
+grep -v 'CGO_ENABLED' "$PROJECT_DIR/lefthook.yml" >"$TMP/lefthook-cgo.yml"
+printf '    vet2:\n      run: |\n        go vet ./...\n' >>"$TMP/lefthook-cgo.yml"
+check "the cgo check finds a go command without it" "vet-linux: vet-windows: vet-darwin: vet2:" \
+    "$(cgo_missing "$TMP/lefthook-cgo.yml" | tr '\n' ' ' | sed 's/ $//')"
 
 echo ""
 echo -e "Passed: ${GREEN}$PASSED${NC}"

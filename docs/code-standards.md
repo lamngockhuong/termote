@@ -163,10 +163,10 @@ match `origin/HEAD`, else `main`; otherwise it names the files, skips without fa
 the checks by hand. A branch changing `package.json` therefore runs no hooks.
 [`lefthook.yml`](../lefthook.yml) holds the commands:
 
-| Hook         | Runs when                        | Checks                                                                                        |
-| ------------ | -------------------------------- | --------------------------------------------------------------------------------------------- |
-| `pre-commit` | a matching file is staged        | `biome check` (`pwa/src/**/*.{ts,tsx}`), `gofmt -l` (`server/**/*.go`), dprint (markdown/mdx) |
-| `pre-push`   | the pushed commits touch the dir | `tsc --noEmit` (`pwa/**`); `go vet ./...` with `GOOS` linux, windows, darwin (`server/**`)    |
+| Hook         | Runs when                        | Checks                                                                                                      |
+| ------------ | -------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `pre-commit` | a matching file is staged        | `biome check` (`pwa/src/**/*.{ts,tsx}`), `gofmt -l` (`server/**/*.go`), dprint (markdown/mdx)               |
+| `pre-push`   | the pushed commits touch the dir | `tsc --noEmit` (`pwa/**`); `go vet ./...` with `GOOS` linux, windows, darwin, `CGO_ENABLED=0` (`server/**`) |
 
 - Hooks only check; fix with `pnpm lint`, `gofmt -w` or `make fmt`, then stage again.
 - `pre-commit` checks what is staged: lefthook sets unstaged changes aside while it runs.

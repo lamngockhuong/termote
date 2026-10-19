@@ -1076,7 +1076,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   double quotes that end it, so the rest of the name would run as shell code (a test refuses any
   file template in `lefthook.yml`). A name git has to quote (a `"`, a `\` or a control character) is
   refused, not passed on as a path that matches nothing; names go in batches of at most 7000 bytes
-  (a longer single name runs alone), as lefthook split its own. `pnpm install` itself runs the branch's `package.json` scripts
+  (a longer single name runs alone), as lefthook split its own. `go vet` runs with
+  `CGO_ENABLED=0` (as releases build; `server/` has no cgo), so it compiles no C code from
+  `server/*.go`, which are not hook files (a test refuses a `go` command without it).
+  `pnpm install` itself runs the branch's `package.json` scripts
   (accepted: a maintainer reads that diff first, `CONTRIBUTING.md`)
 - **Tailscale mapping**: `serve` removes its `tailscale serve` mapping when it stops (only while
   it still proxies to its port), so the name never leads to a free port another user could take;
