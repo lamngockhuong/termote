@@ -297,7 +297,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   the pane root is a git toplevel that is neither the server user's home dir nor above it (through
   symlinks; `$HOME`, else the user database, else every root counts as one; in the container also
   `/workspace/<TERMOTE_WORKSPACE_HOME>` (a local relative path, `.` for `/workspace`), which
-  `container up` sets to where the host home sits in a workspace at or above it), never with `reveal=1` (`requireFilesRead`), and `files/find` ignores `fresh=1` and
+  `container up` sets to where the host home sits in a workspace at or above it, matching names as
+  `underDir` does: without case on macOS and Windows, and on Linux when the folded path is the same
+  directory (WSL `/mnt/c`, casefold, vfat), so `--workspace /users/a` with the home
+  `/Users/a` sets `.`, and a path that only matches without case keeps the home's own spelling), never with `reveal=1` (`requireFilesRead`), and `files/find` ignores `fresh=1` and
   `ignored=1`. Tree, content, raw and diff serve a view-only client only the paths of the root's
   tracked list (`git ls-files -co --exclude-standard`, Find's 30 s cache: a new file shows up to
   30 s late) and the directories above them, by the path and by where its symlinks lead (a diff or

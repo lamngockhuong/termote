@@ -678,11 +678,18 @@ func (c *cli) workspaceHome(workspace string) string {
 	if !underDir(workspace, home) {
 		return ""
 	}
-	rel, err := filepath.Rel(workspace, home)
-	if err != nil {
+	if rel, err := filepath.Rel(workspace, home); err == nil && filepath.IsLocal(rel) {
+		return filepath.ToSlash(rel)
+	}
+	// underDir matched without case (/users/a holds /Users/a on macOS): as
+	// many of home's own trailing names as the folded path has below it.
+	rel, err := filepath.Rel(strings.ToLower(workspace), strings.ToLower(home))
+	if err != nil || rel == "." {
 		return "."
 	}
-	return filepath.ToSlash(rel)
+	n := len(strings.Split(rel, string(filepath.Separator)))
+	names := strings.Split(filepath.Clean(home), string(filepath.Separator))
+	return strings.Join(names[len(names)-n:], "/")
 }
 
 func (c *cli) warnSensitiveDirs(workspace string) {

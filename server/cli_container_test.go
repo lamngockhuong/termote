@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -394,6 +395,57 @@ func TestWorkspaceHome(t *testing.T) {
 		filepath.Dir(cc.home):         filepath.Base(cc.home),
 		filepath.Join(cc.home, "src"): "",
 		t.TempDir():                   "",
+	} {
+		if got := cc.workspaceHome(ws); got != want {
+			t.Errorf("workspaceHome(%s) = %q, want %q", ws, got, want)
+		}
+	}
+}
+
+// Where file names are compared without case, a workspace spelled with
+// another case still holds the home dir, and the path keeps home's spelling.
+func TestWorkspaceHomeIgnoresCase(t *testing.T) {
+	if runtime.GOOS != "darwin" && runtime.GOOS != "windows" {
+		t.Skip("file names keep their case here")
+	}
+	// Windows has a real C:\Users, which would resolve to its own spelling.
+	root := "/"
+	if runtime.GOOS == "windows" {
+		root = `\termote-no-such-dir\`
+	}
+	cc := newContainerCLI(t)
+	cc.home = root + "Users/a"
+	for ws, want := range map[string]string{
+		root + "users/a": ".",
+		root + "USERS":   "a",
+		root + "users/b": "",
+	} {
+		if got := cc.workspaceHome(ws); got != want {
+			t.Errorf("workspaceHome(%s) = %q, want %q", ws, got, want)
+		}
+	}
+}
+
+// On Linux a workspace differing from the home only in case holds it when
+// the folded path is the same directory (a mount that ignores case, stood in
+// for here by a symlink).
+func TestWorkspaceHomeCaseFoldedMount(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("darwin and windows compare names without case")
+	}
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "users"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("users", filepath.Join(root, "Users")); err != nil {
+		t.Fatal(err)
+	}
+	cc := newContainerCLI(t)
+	// The leaf is missing, so the symlink is not resolved away.
+	cc.home = filepath.Join(root, "Users", "a")
+	for ws, want := range map[string]string{
+		filepath.Join(root, "users"): "a",
+		filepath.Join(root, "USERS"): "",
 	} {
 		if got := cc.workspaceHome(ws); got != want {
 			t.Errorf("workspaceHome(%s) = %q, want %q", ws, got, want)
