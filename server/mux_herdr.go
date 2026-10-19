@@ -159,9 +159,9 @@ func (m *herdrMux) Caps() Caps {
 		Worktrees: herdrCanWorktrees(v, herdrStartGOOS), ReorderTabs: reorder, ReorderGroups: reorder}
 }
 
-// herdrStartGOOS is the OS the worktree gate and a start's idle check
-// (paneIdleShell) use; tests of those routes set it so they run on Windows
-// too.
+// herdrStartGOOS is the OS the worktree gate, a start's idle check
+// (paneIdleShell) and pane process names (paneProcessName) use; tests set it
+// so they run on Windows too.
 var herdrStartGOOS = runtime.GOOS
 
 // herdrProcChildren lists each process's children (paneIdleShell on
@@ -337,13 +337,17 @@ func (m *herdrMux) paneProcess(ctx context.Context, paneID string) (herdrProcess
 }
 
 // paneProcessName is the name of the pane's foreground group leader, "" when
-// the pane has no foreground process.
+// the pane has no foreground process. Herdr on Windows reports the image
+// name ("pwsh.exe"); its ".exe" is dropped, as tmux and psmux show none.
 func (m *herdrMux) paneProcessName(ctx context.Context, paneID string) (string, error) {
 	info, err := m.paneProcess(ctx, paneID)
 	if err != nil {
 		return "", err
 	}
 	_, name, _ := info.leader()
+	if herdrStartGOOS == "windows" && len(name) > 4 && strings.EqualFold(name[len(name)-4:], ".exe") {
+		name = name[:len(name)-4]
+	}
 	return processName(name), nil
 }
 
