@@ -928,7 +928,7 @@ func noAuthReach(goos string, wsl bool, allowed []string) string {
 		return "any program on this machine or on Windows"
 	}
 	// Linux trusts only root besides this user; Windows also SYSTEM and
-	// session 0 services (peer_user_*.go).
+	// running services (peer_user_*.go).
 	who := []string{"any program you run", "root"}
 	if goos == "windows" {
 		who = []string{"any program you run", "SYSTEM", "services"}

@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/Microsoft/go-winio"
 	"golang.org/x/sys/windows"
 )
 
@@ -42,10 +43,60 @@ func TestLocalPipe(t *testing.T) {
 		t.Fatalf("health over the pipe: %d %s %+v", code, via, h)
 	}
 
-	old := pipeServerTrusted
-	pipeServerTrusted = func(windows.Handle) bool { return false }
-	defer func() { pipeServerTrusted = old }()
+	old := pipeOwner
+	defer func() { pipeOwner = old }()
+	everyone, _ := windows.CreateWellKnownSid(windows.WinWorldSid)
+	pipeOwner = func(windows.Handle) (*windows.SID, error) { return everyone, nil }
 	if _, err := dialLocalServerOS("", port); !errors.Is(err, errLocalServerUntrusted) {
 		t.Errorf("pipe of another user: %v, want errLocalServerUntrusted", err)
+	}
+	pipeOwner = func(windows.Handle) (*windows.SID, error) { return nil, windows.ERROR_ACCESS_DENIED }
+	if _, err := dialLocalServerOS("", port); !errors.Is(err, errLocalServerUntrusted) {
+		t.Errorf("pipe whose owner cannot be read: %v, want errLocalServerUntrusted", err)
+	}
+	system, _ := windows.CreateWellKnownSid(windows.WinLocalSystemSid)
+	pipeOwner = func(windows.Handle) (*windows.SID, error) { return system, nil }
+	c, err = dialLocalServerOS("", port)
+	if err != nil {
+		t.Errorf("pipe owned by SYSTEM: %v", err)
+	} else {
+		c.Close()
+	}
+}
+
+// A pipe of the server's name and ACL, served by a process of the current
+// user but owned by someone else (the Administrators group, which only an
+// elevated process can name), is refused: the owner of the pipe object
+// decides, not the user of the process serving it.
+func TestLocalPipeOwnedByAnother(t *testing.T) {
+	const port = 47914
+	name, err := localPipeName(strconv.Itoa(port))
+	if err != nil {
+		t.Fatal(err)
+	}
+	u, err := windows.GetCurrentProcessToken().GetTokenUser()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sid := u.User.Sid.String()
+	ln, err := winio.ListenPipe(name, &winio.PipeConfig{SecurityDescriptor: "O:BAD:P(A;;GA;;;" + sid + ")(A;;GA;;;SY)"})
+	if err != nil {
+		t.Skipf("cannot make a pipe owned by Administrators (not elevated): %v", err)
+	}
+	defer ln.Close()
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			c.Close()
+		}
+	}()
+	if c, err := dialLocalServerOS("", port); !errors.Is(err, errLocalServerUntrusted) {
+		if c != nil {
+			c.Close()
+		}
+		t.Errorf("pipe owned by Administrators: %v, want errLocalServerUntrusted", err)
 	}
 }

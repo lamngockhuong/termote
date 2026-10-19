@@ -4,13 +4,13 @@
 //
 // The hooks are written here rather than by `lefthook install`: each runs lefthook only while
 // the files that decide what it runs match the trusted branch, origin/HEAD or else main: the
-// lefthook config, scripts/check-gofmt.sh, the dprint config (its plugins can be programs), the
-// npm and pnpm config and package.json files `pnpm exec` and `npx` read, and any tracked file
-// under node_modules (git replaces an ignored file with a branch's tracked one, so a branch could
-// bring its own node_modules/.bin/lefthook). On a branch that changed one of them, the hook says
-// which and skips, so a contributor's branch does not run its own hook code on a maintainer's
-// machine at the next commit or push. With core.hooksPath set (often one dir shared by every
-// repository) nothing is installed.
+// lefthook config, scripts/check-gofmt.sh and scripts/staged-files.sh, the dprint config (its
+// plugins can be programs), the npm and pnpm config and package.json files `pnpm exec` and `npx`
+// read, and any tracked file under node_modules (git replaces an ignored file with a branch's
+// tracked one, so a branch could bring its own node_modules/.bin/lefthook). On a branch that
+// changed one of them, the hook says which and skips, so a contributor's branch does not run its
+// own hook code on a maintainer's machine at the next commit or push. With core.hooksPath set
+// (often one dir shared by every repository) nothing is installed.
 import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
@@ -55,8 +55,8 @@ if [ -z "$ref" ]; then
   exit 0
 fi
 changed=$(git -C "$top" diff --name-only "$ref" -- ':(glob)lefthook*' ':(glob).lefthook*' \\
-  ':(glob).config/lefthook*' scripts/check-gofmt.sh ':(glob)**/dprint.json*' ':(glob)**/.dprint.json*' \\
-  ':(glob)**/.npmrc' ':(glob)**/pnpm-workspace.yaml' ':(glob)**/.pnpmfile.*' package.json \\
+  ':(glob).config/lefthook*' scripts/check-gofmt.sh scripts/staged-files.sh ':(glob)**/dprint.json*' \\
+  ':(glob)**/.dprint.json*' ':(glob)**/.npmrc' ':(glob)**/pnpm-workspace.yaml' ':(glob)**/.pnpmfile.*' package.json \\
   pwa/package.json ':(glob)**/node_modules' ':(glob)**/node_modules/**') || {
   echo "git hooks: ${hook} skipped: cannot compare the hook files with \${ref#refs/*/}" >&2
   exit 0

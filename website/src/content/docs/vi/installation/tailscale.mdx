@@ -20,6 +20,9 @@ phần này.
 
   Nếu bỏ qua bước này, `termote start --tailscale` dừng lại trước khi đụng tới server đang chạy và in ra dòng trên.
 
+- **Windows native:** chưa dùng được với tài khoản thường (không phải quản trị viên). Tài khoản đó không mở được
+  tiến trình `tailscaled`, nên server từ chối các kết nối do `tailscale serve` tạo ra và trang trả về 502.
+
 ## Thiết lập
 
 <Steps>

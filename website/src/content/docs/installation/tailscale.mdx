@@ -19,6 +19,9 @@ Automatic HTTPS using `tailscale serve`. No manual certificate management, and T
 
   If you skip this, `termote start --tailscale` stops before touching the running server and prints this line.
 
+- **Native Windows:** not supported for a standard (non-administrator) user. That user cannot open the
+  `tailscaled` process, so the server refuses the connections `tailscale serve` makes and the page answers 502.
+
 ## Setup
 
 <Steps>
