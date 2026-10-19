@@ -1079,7 +1079,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   double-quoted `sh -c` command line without escaping, and its quoting of a name holding a `'` adds
   double quotes that end it, so the rest of the name would run as shell code (a test refuses any
   file template in `lefthook.yml`). A name git has to quote (a `"`, a `\` or a control character) is
-  refused, not passed on as a path that matches nothing; names go in batches of at most 7000 bytes
+  refused, not passed on as a path that matches nothing; on Windows (`uname -s` `MINGW*`, `MSYS*`,
+  `CYGWIN*`) so is a name holding a character cmd.exe reads (`& % ^ ! | < >`), since `pnpm exec`
+  and `npx` can run the command through a `.cmd` shim whose escaping depends on the npm and
+  cross-spawn versions; names go in batches of at most 7000 bytes
   (a longer single name runs alone), as lefthook split its own. `go vet` runs with
   `CGO_ENABLED=0` (as releases build; `server/` has no cgo), so it compiles no C code from
   `server/*.go`, which are not hook files (a test refuses a `go` command without it). A clone whose
