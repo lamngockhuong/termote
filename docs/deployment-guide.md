@@ -315,7 +315,10 @@ termote:7680 → /api/mux/stream (terminal WebSocket, xterm.js)
 - Enabled by default for all modes
 - Credentials auto-generated on first run; an empty saved password no longer disables auth —
   `start`/`container up` generate and save a new one instead
-- Use `--no-auth` only for local development
+- Use `--no-auth` only for local development. On Windows, with `--no-auth` on the native server,
+  another user signed in to the same machine is kept out only by the check of which process owns a loopback connection, which
+  rests on the PID the system's TCP table names; if it is passed, that user gets a shell as you (see
+  [`security-model.md`](security-model.md))
 
 ### Paired devices and the view-only role
 
