@@ -102,8 +102,12 @@ func TestListCodexSkillsSkip(t *testing.T) {
 
 func TestListCodexSkillsSymlinks(t *testing.T) {
 	root, codexHome, home, outside := t.TempDir(), t.TempDir(), t.TempDir(), t.TempDir()
-	// Windows needs admin or Developer Mode (CI's runner has both).
+	// Windows needs admin or Developer Mode; CI's runners have it, so the
+	// case never goes unchecked there.
 	if err := os.Symlink(outside, filepath.Join(root, "probe")); err != nil {
+		if os.Getenv("CI") != "" {
+			t.Fatalf("cannot make a symlink in CI: %v", err)
+		}
 		t.Skipf("cannot make a symlink: %v", err)
 	}
 	os.Remove(filepath.Join(root, "probe"))
