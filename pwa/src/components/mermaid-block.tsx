@@ -2,6 +2,7 @@ import { Code } from 'lucide-react'
 import {
   type ReactNode,
   type RefObject,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -101,7 +102,19 @@ export function MermaidBlock({ text, index, scrollRoot, frame }: Props) {
   }, [text, resolvedTheme, near])
 
   const result = state.text === text ? state.result : null
-  const { open, viewer } = useImageViewer(result?.ok ? result.url : undefined)
+  // The block takes focus when the image button goes (the diagram is drawn
+  // again and fails, or the text changed), whether it had focus then or the
+  // viewer it opened returns focus later
+  const { open, viewer } = useImageViewer(
+    result?.ok ? result.url : undefined,
+    ref,
+  )
+  const keepFocus = useCallback(
+    (el: HTMLButtonElement | null) => () => {
+      if (document.activeElement === el) ref.current?.focus()
+    },
+    [],
+  )
   const alt = `Mermaid diagram ${index}`
   let parts: FrameParts
   if (!result) {
@@ -127,6 +140,7 @@ export function MermaidBlock({ text, index, scrollRoot, frame }: Props) {
           body: (
             <div className="overflow-x-auto p-3">
               <button
+                ref={keepFocus}
                 type="button"
                 aria-label={`Open ${alt} full screen`}
                 className="mx-auto block cursor-zoom-in"
@@ -162,7 +176,12 @@ export function MermaidBlock({ text, index, scrollRoot, frame }: Props) {
   }
 
   return (
-    <div ref={ref} data-testid="mermaid-block">
+    <div
+      ref={ref}
+      tabIndex={-1}
+      className="outline-none"
+      data-testid="mermaid-block"
+    >
       {frame(parts)}
       {viewer}
     </div>

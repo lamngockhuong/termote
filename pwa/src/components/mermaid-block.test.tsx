@@ -172,6 +172,72 @@ describe('MermaidBlock', () => {
     )
   })
 
+  const fullScreen = () =>
+    screen.findByRole('button', { name: 'Open Mermaid diagram 1 full screen' })
+
+  it('keeps focus in the block when the image cannot be decoded', async () => {
+    show(md(GRAPH))
+    ;(await fullScreen()).focus()
+    fireEvent.error(screen.getByAltText('Mermaid diagram 1'))
+    expect(screen.getByText(MERMAID_REASONS.render_failed)).toBeInTheDocument()
+    expect(document.activeElement).toBe(screen.getByTestId('mermaid-block'))
+  })
+
+  it('keeps focus in the block when the new theme cannot be drawn', async () => {
+    show(md(GRAPH))
+    ;(await fullScreen()).focus()
+    mockRender.mockResolvedValueOnce({ ok: false, reason: 'render_failed' })
+    await act(async () => setTheme('dark'))
+    expect(screen.getByText(MERMAID_REASONS.render_failed)).toBeInTheDocument()
+    expect(document.activeElement).toBe(screen.getByTestId('mermaid-block'))
+  })
+
+  it('keeps focus in the block while an edited block renders', async () => {
+    const p = show(md('graph TD\n  Old'))
+    ;(await fullScreen()).focus()
+    mockRender.mockReturnValueOnce(new Promise(() => {}))
+    p.again(md('graph TD\n  New'))
+    expect(screen.getByText('Rendering diagram…')).toBeInTheDocument()
+    expect(document.activeElement).toBe(screen.getByTestId('mermaid-block'))
+  })
+
+  it('leaves focus elsewhere alone when the diagram goes', async () => {
+    show(md(GRAPH))
+    await fullScreen()
+    const copy = screen.getByRole('button', { name: 'Copy code' })
+    copy.focus()
+    fireEvent.error(screen.getByAltText('Mermaid diagram 1'))
+    expect(document.activeElement).toBe(copy)
+  })
+
+  it('returns focus to the block when the viewer closes after the diagram failed', async () => {
+    HTMLDialogElement.prototype.showModal = vi.fn(function (
+      this: HTMLDialogElement,
+    ) {
+      this.setAttribute('open', '')
+    })
+    show(md(GRAPH))
+    const button = await fullScreen()
+    button.focus()
+    fireEvent.click(button)
+    await screen.findByRole(
+      'dialog',
+      { hidden: true, name: 'Mermaid diagram 1' },
+      { timeout: 5000 },
+    )
+    // Focus is in the viewer, not on the button, when the button goes
+    screen.getByRole('button', { name: 'Close', hidden: true }).focus()
+    const popped = new Promise((r) =>
+      window.addEventListener('popstate', r, { once: true }),
+    )
+    fireEvent.error(button.querySelector('img') as HTMLImageElement)
+    await popped
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { hidden: true })).toBeNull(),
+    )
+    expect(document.activeElement).toBe(screen.getByTestId('mermaid-block'))
+  })
+
   it('switches between the diagram and its source', async () => {
     show(md(GRAPH))
     await screen.findByAltText('Mermaid diagram 1')
