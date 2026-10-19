@@ -137,11 +137,14 @@ check "pre-push runs lefthook on main" "$REPO/lefthook.yml run --no-auto-install
 hook pre-push LEFTHOOK=0
 check "LEFTHOOK=0 runs nothing" "" "$CALLS"
 
-# A branch that changes a hook file runs none of them
+# A branch that changes a hook file runs none of them, in any case (none of these names is one
+# main has in another case, so the cases hold on a case-insensitive file system too)
 n=0
 for f in lefthook.yml scripts/check-gofmt.sh scripts/staged-files.sh dprint.json docs/dprint.json .lefthook.toml lefthook-local.yml \
     .config/lefthook.yaml .npmrc pwa/.npmrc docs/.npmrc pnpm-workspace.yaml pwa/pnpm-workspace.yaml \
-    .pnpmfile.cjs package.json pwa/package.json node_modules/x/evil pwa/node_modules/.bin/biome; do
+    .pnpmfile.cjs package.json pwa/package.json node_modules/x/evil pwa/node_modules/.bin/biome \
+    .NPMRC Package.json PWA/Package.json LEFTHOOK-local.yml .Lefthook.toml .Config/Lefthook.yaml Docs/DPrint.json \
+    Pnpm-Workspace.yaml .PnpmFile.cjs pwa/Node_Modules/x/evil web/NODE_MODULES/.bin/biome; do
     n=$((n + 1))
     g checkout -q -b "contrib-$n" main
     mkdir -p "$REPO/$(dirname "$f")"
@@ -154,6 +157,24 @@ for f in lefthook.yml scripts/check-gofmt.sh scripts/staged-files.sh dprint.json
     check "the skip lets the commit go on" "0" "$HOOK_STATUS"
     g checkout -q main
 done
+# A name that is not plain ASCII: a case-insensitive file system can fold a Kelvin sign onto a k
+g checkout -q -b contrib-unicode main
+printf 'x\n' >"$REPO/lefthoo$(printf '\342\204\252')-local.yml"
+g add -A && g commit --no-verify -qm "non-ASCII name"
+hook pre-commit
+check "a branch adding a non-ASCII name runs no lefthook" "" "$CALLS"
+has "the skip names it as git quotes it" "$TMP/hook-stderr" '^  "lefthoo\\342\\204\\252-local.yml"$'
+g checkout -q main
+# A hook file under a non-ASCII name is in both lists: named once, quoted, even with quoting off
+g checkout -q -b contrib-unicode-npmrc main
+mkdir -p "$REPO/d$(printf '\303\251')" && printf 'x\n' >"$REPO/d$(printf '\303\251')/.npmrc"
+g add -A && g commit --no-verify -qm "non-ASCII dir"
+g config core.quotePath false
+hook pre-commit
+check "a hook file under a non-ASCII name is named once, quoted" "1 1" \
+    "$(grep -c -- '/.npmrc' "$TMP/hook-stderr") $(grep -c '^  "d\\303\\251/.npmrc"$' "$TMP/hook-stderr")"
+g config --unset core.quotePath
+g checkout -q main
 # A node_modules that is itself a tracked symlink, to a dir the branch tracks
 g checkout -q -b contrib-link main
 mkdir -p "$REPO/web/bin" && printf 'x\n' >"$REPO/web/bin/lefthook"

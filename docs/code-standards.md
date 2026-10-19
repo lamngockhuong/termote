@@ -158,8 +158,8 @@ with `LEFTHOOK=0`, outside a git worktree, or with `core.hooksPath` set (it warn
 `lefthook install`, and each runs lefthook only while the files that decide what it runs (any
 `lefthook*`, `.lefthook*` or `.config/lefthook*`, `scripts/check-gofmt.sh`, `scripts/staged-files.sh`, any `dprint.json*` or
 `.dprint.json*`, any `.npmrc`, any `pnpm-workspace.yaml`, any `.pnpmfile.*`, `package.json` and
-`pwa/package.json`, and any tracked `node_modules` or file under one) match `origin/HEAD`, else
-`main`; otherwise it names the files, skips without failing the commit or push, and says how to run
+`pwa/package.json`, and any tracked `node_modules` or file under one, in any case: `.NPMRC` counts; and any name git quotes: a non-ASCII byte, a `"`, a `\` or a control character)
+match `origin/HEAD`, else `main`; otherwise it names the files, skips without failing the commit or push, and says how to run
 the checks by hand. A branch changing `package.json` therefore runs no hooks.
 [`lefthook.yml`](../lefthook.yml) holds the commands:
 

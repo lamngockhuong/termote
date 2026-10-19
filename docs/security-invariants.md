@@ -1059,8 +1059,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `pre-commit` and `pre-push` hooks itself (`lefthook install` is never run, and `lefthook run` gets
   `--no-auto-install`, so lefthook never rewrites them; a hook that is not lefthook's is left; with
   `core.hooksPath` set nothing is written). A hook runs lefthook, with `LEFTHOOK_CONFIG` set to the
-  checked-out `lefthook.yml`, only when `git diff` finds no change against `origin/HEAD`, else
-  `main`, in any `lefthook*`, `.lefthook*`, `.config/lefthook*`, `scripts/check-gofmt.sh`,
+  checked-out `lefthook.yml`, only when `git diff` (`--icase-pathspecs`: on a case-insensitive file
+  system npm reads a `.NPMRC` as `.npmrc`) finds no change against `origin/HEAD`, else `main`, to a
+  name git quotes (`core.quotePath=true`: a non-ASCII byte, a `"`, a `\` or a control character;
+  case folds only in ASCII, and such a file system can fold a Kelvin sign onto a `k`) or to any `lefthook*`, `.lefthook*`, `.config/lefthook*`, `scripts/check-gofmt.sh`,
   `scripts/staged-files.sh`, any
   `dprint.json*`/`.dprint.json*` (dprint plugins can be programs), any `.npmrc`, any
   `pnpm-workspace.yaml`, any `.pnpmfile.*`, `package.json`, `pwa/package.json` (what `pnpm exec` and
