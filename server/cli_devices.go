@@ -74,7 +74,10 @@ type deviceTarget struct {
 	pass string // empty with --no-auth or no saved password
 	// noAuth: the target runs without sign-in, so it cannot pair devices.
 	noAuth bool
-	urls   accessURLs
+	// pipeOnly: the native server on Windows, which gets the password over
+	// its local socket only (cli.pipeOnly).
+	pipeOnly bool
+	urls     accessURLs
 }
 
 func (c *cli) deviceTarget() deviceTarget {
@@ -88,7 +91,7 @@ func (c *cli) deviceTarget() deviceTarget {
 		t.urls = c.accessURLs(&savedConfig{LAN: ct.LAN, Tailscale: ct.Tailscale}, ct.Port)
 		return t
 	}
-	t := deviceTarget{port: c.savedPort(saved), user: saved.authUser(), urls: c.accessURLs(saved, c.savedPort(saved))}
+	t := deviceTarget{port: c.savedPort(saved), user: saved.authUser(), pipeOnly: c.goos == "windows", urls: c.accessURLs(saved, c.savedPort(saved))}
 	if saved != nil {
 		t.noAuth = saved.NoAuth
 		if !saved.NoAuth {
@@ -125,7 +128,8 @@ func (c *cli) deviceCall(t deviceTarget, method, path string, body, out any) err
 // server and decodes a 200 answer into out. Every other outcome is an error
 // saying why. It goes over the local socket when the server has one
 // (localRequest), else over TCP with the password, which never goes to a
-// listener it cannot trust. A server without sign-in has none of these
+// listener it cannot trust, nor at all to the native server on Windows
+// (pipeOnly). A server without sign-in has none of these
 // routes, so nothing is asked of it; without a password only the local
 // socket is tried: a listener whose owner was not checked could print
 // anything.
@@ -146,6 +150,12 @@ func (c *cli) serverCall(t deviceTarget, method, path string, body, out any, err
 		return errors.New(socketNoAnswerMsg)
 	case t.pass == "":
 		return errors.New("no saved password to sign in with; set one: termote start --fresh")
+	case t.pipeOnly:
+		// Nothing TCP answers is used: it only tells a stopped server from
+		// one whose local socket did not answer.
+		if _, code = fetchHealth(t.port, t.user, ""); code != 0 {
+			code = healthPipeOnly
+		}
 	default:
 		resp, code = authedRequest(t.port, t.user, t.pass, method, path, data)
 	}
@@ -171,6 +181,8 @@ func (c *cli) serverCall(t deviceTarget, method, path string, body, out any, err
 		return errors.New(untrustedListenerMsg)
 	case code == healthUnverified:
 		return errors.New(unverifiedListenerMsg)
+	case code == healthPipeOnly:
+		return errors.New(pipeOnlyMsg)
 	case code == http.StatusUnauthorized:
 		return errors.New("the server did not accept the saved password; restart it with it: termote restart")
 	case code == http.StatusNotImplemented:

@@ -8,7 +8,9 @@
 # a single quote end that line's quoting, and the rest of the name then runs as shell code. Each
 # name starts with ./ so one starting with - is not taken for an option. The names go in batches
 # of at most maxlen bytes (a longer single name alone), as lefthook splits its own (Windows limits a
-# command line to 8191).
+# command line to 8191). On Windows (Git for Windows' sh, MSYS2, Cygwin) a name holding a character
+# cmd.exe reads (& % ^ ! | < >) is refused too: pnpm exec and npx can run the command through a .cmd
+# shim, and how its arguments are escaped for cmd.exe depends on the npm and cross-spawn versions.
 set -f
 nl='
 '
@@ -24,6 +26,10 @@ while [ "$1" = --glob ]; do
   shift 2
 done
 [ -n "$specs" ] && [ $# -gt 0 ] || usage
+case $(uname -s) in
+  MINGW* | MSYS* | CYGWIN*) windows=1 ;;
+  *) windows= ;;
+esac
 # git exports GIT_DIR to a hook in a linked worktree; with it set, git takes the current directory
 # for the top of the work tree and --relative strips nothing. Find the repository from here instead
 # (git then gives the hook an absolute GIT_INDEX_FILE, which still holds).
@@ -57,6 +63,12 @@ for f in $files; do
       # file and the check would pass without reading it.
       echo "staged-files: cannot check $f (rename it, or commit with LEFTHOOK=0)" >&2
       exit 1
+      ;;
+    *[%'&|<>^!']*)
+      if [ -n "$windows" ]; then
+        echo "staged-files: cannot check $f on Windows, cmd.exe would read & % ^ ! | < > in it (rename it, or commit with LEFTHOOK=0)" >&2
+        exit 1
+      fi
       ;;
   esac
   # Bytes, not characters: bash counts characters in a UTF-8 locale.

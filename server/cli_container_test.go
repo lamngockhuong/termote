@@ -22,6 +22,8 @@ type containerCLI struct {
 	runArgs []string
 	runEnv  map[string]string
 	srv     *http.Server
+	// needPass, when set, is the password the health endpoint asks for.
+	needPass string
 }
 
 func newContainerCLI(t *testing.T) *containerCLI {
@@ -45,6 +47,10 @@ func newContainerCLI(t *testing.T) *containerCLI {
 			return "", false
 		}
 		cc.srv = &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if _, p, _ := r.BasicAuth(); cc.needPass != "" && p != cc.needPass {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
 			fmt.Fprintf(w, `{"status":"ok","version":%q}`, cc.version)
 		})}
 		go cc.srv.Serve(ln)

@@ -957,14 +957,22 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `sock_diag` queries of them, 2 s, else refused). Linux: `sock_diag` exact lookup, `/proc/net/tcp*` fallback, only ESTABLISHED with an
   inode (a TIME_WAIT row reads uid 0). Windows: `GetExtendedTcpTable`
   (`TCP_TABLE_OWNER_MODULE_CONNECTIONS`) owner PID and bind time; the process opened at that PID
-  must be created no later than the socket was bound (else the PID went to another process: refused,
-  as is a row with no bind time), then its token SID. An unreadable token is trusted only for a
+  must be created strictly before the socket was bound (else the PID may have gone to another
+  process: refused, as are equal times, both read from a clock that ticks coarsely, and a row with no
+  bind time), then its token SID. This holds only if the table's PID is the process that bound the
+  socket: Microsoft documents it as the process that "issued a context bind", and says nothing of a
+  socket created in one process and bound or connected in another after its handle passed on, so a
+  socket handed on that way before its bind is not proven to be caught (accepted residual risk, see
+  `docs/security-model.md`). An unreadable token is trusted only for a
   running service's own PID, from the Service Control Manager (`EnumServicesStatusEx`, read after
   the process is opened, so the PID cannot change hands; a per-user service, type bit 0x40 or 0x80,
   is not one, as it runs as whoever logged on), never for being in session 0 (an SSH logon is too)
   or a service's child (sshd's session processes are). A process that cannot be opened is refused,
-  service or not: a standard user cannot open `tailscaled`, so `tailscale serve` is refused. Both times are wall-clock FILETIMEs: a clock
-  stepped back between a process's start and its bind refuses that process (fails closed). A whole-table read (`/proc`, Windows' tables and service list) is
+  service or not: a standard user cannot open `tailscaled`, so `tailscale serve` is refused. Both times are wall-clock FILETIMEs, so the
+  comparison fails closed in one direction only: a clock stepped back between a process's start and
+  its bind refuses that process until it binds again, but a clock stepped back between a socket's bind
+  and the start of the process that later takes its PID lets that process pass for the socket's owner
+  (an administrator's or the time service's change; recorded in `docs/security-model.md`). A whole-table read (`/proc`, Windows' tables and service list) is
   shared (`tableSnapshots`): a lookup waits for the first read that starts after it asked, and
   every lookup waiting then uses that read, so a flood costs about one read per batch, not one
   per connection. Trusted: own uid/SID, root/SYSTEM (on Windows only
@@ -983,7 +991,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   the server end's owner (`SO_PEERCRED`/`LOCAL_PEERCRED`; on Windows the owner of the pipe object
   itself, `GetSecurityInfo`, never the user of the serving PID) is itself or root/SYSTEM before
   writing, uses that one connection, falls back to TCP + password when the
-  socket is missing or untrusted or a read got no answer, and never resends a write that was sent. `status` prints `Via: socket`
+  socket is missing or untrusted or a read got no answer (on Windows without the password: see the
+  CLI entry below), and never resends a write that was sent. `status` prints `Via: socket`
   or `Via: TCP` (`--json`: `via`). The exit cleanup removes the socket only while it is its own and
   nothing answers on it (an update's new server keeps its socket)
 - **Signed-in browsers** (`server/sessions.go`, `server/signin_routes.go`, `caps.signins`): each
@@ -1022,16 +1031,27 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   never returns `/login/link`; `hash` only `#` + URI-safe bytes, 512. Files older than 2 min are
   swept by the CLI and by `serve` at start. With `--no-auth` the plain link opens; with an old
   server or no password it opens with a warning saying why
-- **CLI and the saved password**: without the local socket (the container, an older server),
-  `status`, `url`, `panel`, `container status` and the health
-  wait of `start`/`restart`/`update` send the saved password to `127.0.0.1:<port>` only when
+- **CLI and the saved password**: on Windows the native server (any port but the saved
+  container's while no native service is registered, `installedSupervisor`, as `deviceTarget` tells
+  them apart) gets the saved password over its pipe only (`cli.pipeOnly`, `server/cli_start.go`): without the
+  pipe, `status`, `url`, `panel` and the health wait of `start`/`restart`/`update` ask over TCP
+  without it, still only on a connection whose listeners pass the owner check below (else
+  "untrusted listener" or "unverified listener", never running), and a server that answers 401
+  there reads as "pipe only" (`healthPipeOnly`); `pair`, `devices`, `signins` and the sign-in link
+  send nothing but a health probe without it, whose answer only tells a stopped server from a pipe
+  that did not answer. A server older than the pipe (2.0.0) is reached that way, and an `update` back
+  to one fails its health wait and rolls back. Otherwise, without the local socket (the container,
+  on every OS; an older native server on Linux and macOS), `status`, `url`, `panel`,
+  `container status`, the health wait of `start`/`restart`/`update`/`container up` and the device
+  commands against the container send the saved password to `127.0.0.1:<port>` only when
   every socket listening on it runs as the current user or root/SYSTEM (`server/listener_owner*.go`:
   `/proc/net/tcp*` on Linux, `lsof` on macOS, on Windows the listener table
   `TCP_TABLE_OWNER_MODULE_LISTENER` and the token SID of the process at each owner PID, a process
-  that cannot be opened, created after its socket was bound (the PID may have gone to another
-  process; a clock stepped back between the server's start and its bind does it too, until a
+  that cannot be opened, not created strictly before its socket was bound (the PID may have gone to
+  another process; a clock stepped back between the server's start and its bind does it too, until a
   restart), with no bind time, or with an unreadable token, a service's included, counting as
-  another user's), checked
+  another user's; for the container on Windows this rests on the same reading of the table's PID as
+  the local-peer check above, an accepted residual risk), checked
   once the connection is made and before the request is written on it; on Linux the server end
   of that connection (its uid in `/proc/net/tcp*`) must be trusted too; otherwise
   the status reads "untrusted listener" (another user's socket seen) or "unverified listener"
@@ -1079,7 +1099,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   double-quoted `sh -c` command line without escaping, and its quoting of a name holding a `'` adds
   double quotes that end it, so the rest of the name would run as shell code (a test refuses any
   file template in `lefthook.yml`). A name git has to quote (a `"`, a `\` or a control character) is
-  refused, not passed on as a path that matches nothing; names go in batches of at most 7000 bytes
+  refused, not passed on as a path that matches nothing; on Windows (`uname -s` `MINGW*`, `MSYS*`,
+  `CYGWIN*`) so is a name holding a character cmd.exe reads (`& % ^ ! | < >`), since `pnpm exec`
+  and `npx` can run the command through a `.cmd` shim whose escaping depends on the npm and
+  cross-spawn versions; names go in batches of at most 7000 bytes
   (a longer single name runs alone), as lefthook split its own. `go vet` runs with
   `CGO_ENABLED=0` (as releases build; `server/` has no cgo), so it compiles no C code from
   `server/*.go`, which are not hook files (a test refuses a `go` command without it). A clone whose

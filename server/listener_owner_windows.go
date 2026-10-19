@@ -28,8 +28,8 @@ const localSystemSID = "S-1-5-18"
 // listenerOwnedLocally finds the sockets listening on port in the TCP
 // tables, then the user each one's process runs as. A process that cannot
 // be opened, whose token cannot be read (another user's, usually) or that
-// was created after the socket was bound (its PID now another process's)
-// counts as another user's.
+// was not created before the socket was bound (its PID maybe another
+// process's now) counts as another user's.
 func listenerOwnedLocally(port int) listenerOwner {
 	var owners []tcpConnOwner
 	for _, family := range []uint32{windows.AF_INET, windows.AF_INET6} {

@@ -362,6 +362,9 @@ func TestUpdateRollsBack(t *testing.T) {
 // still serves admin, which counts too, with a warning, instead of rolling
 // back.
 func TestUpdateUsesSavedUser(t *testing.T) {
+	if updateGOOS() == "windows" {
+		t.Skip("on Windows the native server's health goes over its pipe only, which takes no username or password")
+	}
 	for _, tt := range []struct{ serves, warn string }{{"bob", ""}, {adminUser, "ignores the saved username"}} {
 		t.Run(tt.serves, func(t *testing.T) {
 			tc, _, svc := setupUpdate(t)

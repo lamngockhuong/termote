@@ -172,7 +172,8 @@ the checks by hand. A branch changing `package.json` therefore runs no hooks.
 - `pre-commit` checks what is staged: lefthook sets unstaged changes aside while it runs.
 - A `pre-commit` command gets its files from `scripts/staged-files.sh --glob <pathspec>`, never from
   `{staged_files}`: lefthook on Windows passes `run` to `sh -c` in double quotes without escaping, and
-  a staged name holding a `'` would end them and run as shell code.
+  a staged name holding a `'` would end them and run as shell code. On Windows it refuses a name holding
+  `& % ^ ! | < >`, which cmd.exe would read in a `.cmd` shim that `pnpm exec` or `npx` runs.
 - `go test ./...` and the E2E suite stay in CI: minutes long, and they need tmux.
 - Skip once with `LEFTHOOK=0 git commit ...` (or `git push`), or `--no-verify`.
 - `pre-push` picks its commands from the files the pushed commits change, but checks the working

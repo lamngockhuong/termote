@@ -258,6 +258,27 @@ staged "$QUOTED" --glob '**/*.md' "$TMP/args" 2>"$TMP/quoted-err"
 check "staged-files refuses a name git quotes" "1 no" \
     "$STAGED_STATUS $([[ -e "$ARGS_OUT" ]] && echo yes || echo no)"
 has "staged-files says which name" "$TMP/quoted-err" 'cannot check "a\\tb.md"'
+# On Windows a name holding a character cmd.exe reads is refused: pnpm exec and npx can run the
+# command through a .cmd shim. Elsewhere it is passed on like any other.
+WINBIN="$TMP/winbin"
+mkdir -p "$WINBIN"
+printf '#!/bin/sh\necho MINGW64_NT-10.0-26100\n' >"$WINBIN/uname"
+chmod +x "$WINBIN/uname"
+CMDMETA="$TMP/cmdmeta"
+for c in '&' '%' '^' '!' '|' '<' '>'; do
+    rm -rf "$CMDMETA" && mkdir -p "$CMDMETA"
+    git -C "$CMDMETA" init -q -b main
+    printf 'x\n' >"$CMDMETA/a${c}b.md"
+    git -C "$CMDMETA" add -- .
+    PATH="$WINBIN:$PATH" staged "$CMDMETA" --glob '**/*.md' "$TMP/args" 2>"$TMP/cmdmeta-err"
+    check "staged-files on Windows refuses a name holding $c" "1 no" \
+        "$STAGED_STATUS $([[ -e "$ARGS_OUT" ]] && echo yes || echo no)"
+    staged "$CMDMETA" --glob '**/*.md' "$TMP/args"
+    check "staged-files elsewhere passes a name holding $c" "0 ./a${c}b.md" "$STAGED_STATUS $(cat "$ARGS_OUT")"
+done
+has "staged-files on Windows says which name" "$TMP/cmdmeta-err" 'cannot check a>b.md on Windows'
+PATH="$WINBIN:$PATH" staged "$STAGED" --glob '**/*.md' --glob '**/*.mdx' "$TMP/args"
+check "staged-files on Windows passes plain names" "0 4" "$STAGED_STATUS $(grep -c '^\./' "$ARGS_OUT")"
 # Many names go in batches under the command-line limit, every name once
 MANY="$TMP/many"
 mkdir -p "$MANY"

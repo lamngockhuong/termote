@@ -271,7 +271,8 @@ termote show-password   # print the saved username and password
 
 CLI nói chuyện với server qua một socket chỉ user của bạn mở được (`~/.local/state/termote/run/<port>.sock`,
 trên Windows là named pipe) và không gửi mật khẩu; `termote status` ghi `Via: socket`. Với container hoặc server
-bản cũ, CLI dùng `127.0.0.1` cùng mật khẩu đã lưu (`Via: TCP`).
+bản cũ, CLI dùng `127.0.0.1` cùng mật khẩu đã lưu (`Via: TCP`), trừ server native trên Windows: mật khẩu chỉ đi qua
+pipe của nó (khi đó `termote status` báo pipe không trả lời).
 
 Dịch vụ chạy `termote serve`, lệnh này đọc cấu hình đã lưu. Khi đã có file cấu hình, các biến môi trường
 `TERMOTE_*` bị bỏ qua, và `serve` xóa chúng khỏi môi trường của mình để không terminal nào thừa hưởng chúng.

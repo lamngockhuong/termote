@@ -39,7 +39,8 @@ giới hạn những gì Termote chạm tới, hãy chạy nó dưới một tà
 - CLI nói chuyện với server native qua một socket chỉ tài khoản của nó mở được (Unix socket `0600` trong thư
   mục `0700`, hoặc named pipe có ACL chỉ ghi tài khoản đó và SYSTEM), sau khi đã kiểm tra đầu server chạy dưới
   chính tài khoản đó hoặc root/SYSTEM (trên Windows: pipe thuộc sở hữu của tài khoản đó hoặc SYSTEM). Qua đường này CLI không gửi mật khẩu; `termote status` ghi `Via: socket`.
-  Khi không có socket (container, server bản cũ), CLI quay về TCP cùng mật khẩu.
+  Khi không có socket (container, server bản cũ), CLI quay về TCP cùng mật khẩu, trừ server native trên
+  Windows: mật khẩu chỉ đi qua pipe của nó.
 - Settings > Signed-in browsers và `termote signins` liệt kê các trình duyệt đăng nhập bằng mật khẩu (trang
   đăng nhập, Basic auth, link từ CLI); có thể đăng xuất từng trình duyệt, hoặc mọi trình duyệt trừ trình duyệt
   đang dùng. Đăng xuất một trình duyệt thì đóng luôn các terminal nó đang mở, kể cả terminal đang mở dở, bỏ các
@@ -95,6 +96,13 @@ giới hạn những gì Termote chạm tới, hãy chạy nó dưới một tà
   hay WinSW bị từ chối) và không phải dịch vụ theo từng người dùng. Các dịch vụ tải URL cho bất kỳ ai yêu cầu,
   như BITS và WebClient (WebDAV), nằm trong số đó: mọi tài khoản trên máy đều gửi được request qua chúng.
   `tailscale serve` thì không: tài khoản thường không mở được tiến trình `tailscaled`, nên kết nối của nó bị từ chối.
+- **Socket trên Windows thuộc tiến trình nào.** Trên Windows, chủ của một kết nối loopback, và tiến trình
+  đang listen trên cổng của container trước khi CLI gửi mật khẩu, được đọc từ PID mà bảng TCP của hệ
+  thống ghi, rồi so với thời điểm tiến trình đó khởi động. Microsoft không ghi rõ PID đó là của tiến trình
+  nào khi socket được chuyển từ tiến trình này sang tiến trình khác trước khi bind, nên chưa chứng minh
+  được socket như vậy bị chặn. CLI của server native không dựa vào điều này (nó chỉ gửi mật khẩu qua pipe).
+- **Đồng hồ hệ thống trên Windows.** Phép kiểm tra đó so hai lần đọc giờ hệ thống: chỉnh giờ lùi (cần
+  quyền quản trị hoặc dịch vụ đồng bộ giờ) đúng lúc có thể khiến nó cho qua.
 - **WSL 2.** Mọi tài khoản Windows đều tới được server chạy trong WSL 2: chế độ NAT đi qua một tiến trình chuyển tiếp
   chạy dưới root, chế độ `mirrored` đi qua địa chỉ nội bộ dùng chung mà WSL không thấy được đầu client, và loại kết nối này được
   cho qua.

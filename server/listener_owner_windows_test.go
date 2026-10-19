@@ -36,7 +36,7 @@ func TestTCPListenerOwners(t *testing.T) {
 }
 
 // A listener counts as trusted only when every owner runs as this user or
-// SYSTEM and was created no later than its socket was bound; a service
+// SYSTEM and was created before its socket was bound; a service
 // whose token cannot be read is not trusted here.
 func TestListenerOwnersTrusted(t *testing.T) {
 	oldOpen, oldServices := openPeerProcess, runningServicePIDs
@@ -70,6 +70,7 @@ func TestListenerOwnersTrusted(t *testing.T) {
 		{"another user", []tcpConnOwner{{1, 200}, {3, 200}}, listenerOtherOwner},
 		{"unreadable service", []tcpConnOwner{{4, 200}}, listenerOtherOwner},
 		{"SYSTEM younger than the socket", []tcpConnOwner{{5, 200}}, listenerOtherOwner},
+		{"own, as old as the socket", []tcpConnOwner{{1, 100}}, listenerOtherOwner},
 		{"no bind time", []tcpConnOwner{{1, 0}}, listenerOtherOwner},
 		{"cannot be opened", []tcpConnOwner{{6, 200}}, listenerOtherOwner},
 	} {
