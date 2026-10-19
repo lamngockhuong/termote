@@ -620,8 +620,10 @@ not stay in paste mode. Accepted gap: unlike tmux's single paste-buffer write, p
 paste in up to 5 `send-keys` calls (about 0.2 s each), so stream input from another device can land
 inside it, and an agent exiting between chunks leaves the rest typed into the shell.
 The wait for the text to show is 2 s plus 6 ms a character, at most 30 s, for Codex and for every
-agent on psmux (Claude Code on tmux and Herdr keeps 2 s), polled as before; the route's time budget
-and read deadline grow with it.
+agent on psmux (Claude Code on tmux and Herdr keeps 2 s), polled as before. For those agents the
+poll then goes on while the draft in the box keeps changing (a change within the last 2 s), up to
+2 s plus 20 ms a character, so a long paste or a loaded machine is waited for and a stalled paste
+still fails closed (#410); the route's time budget and read deadline grow with that limit.
 The text is at most 16 KB (UTF-8 bytes; the body 64 KB), with control
 characters other than newline and tab removed, so it cannot end the paste early.
 

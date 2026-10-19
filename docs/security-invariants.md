@@ -560,8 +560,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   each), so stream input from another device can land inside it, and an agent exiting between
   chunks leaves the rest typed into the shell.
   The wait for the text to show after its paste is 2 s + 6 ms a character, at most 30 s, for
-  Codex and for every agent on psmux (Claude Code on tmux and Herdr: 2 s), still polling; the
-  message route's budget and read deadline grow with it. An approval dialog
+  Codex and for every agent on psmux (Claude Code on tmux and Herdr: 2 s), still polling. Past
+  it, the poll goes on only while the box's draft changed within the last 2 s, up to 2 s + 20 ms
+  a character (16 KB: about 330 s): a paste still arriving is waited for, the pane lock held, and a
+  stalled one is refused 409 `paste_not_confirmed` as before (#410). The message route's budget
+  and read deadline grow with that limit. An approval dialog
   (run a command, make edits) is answerable only on Herdr, where Herdr reports the agent
   blocked: the option goes as its digit, Cancel as Escape. On tmux the rollout records no
   approval request, so `prompt` answers `unsupported` with no options or `promptId`

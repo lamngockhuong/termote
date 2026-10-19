@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -68,9 +69,17 @@ func TestMessageBudgetCoversTextWait(t *testing.T) {
 	if got := messageBudget(1, agentPasteWaitMax); got != 3*agentImageWait+agentPasteWaitMax+muxTimeout {
 		t.Errorf("1 image and a long text = %v", got)
 	}
-	// Bounded: the longest message still ends within the read timeout.
-	if got := messageBudget(0, textConfirmWait(strings.Repeat("a", agentMaxText))); got+muxTimeout > requestReadTimeout {
-		t.Errorf("longest text = %v", got)
+	// The longest text may keep arriving at the rate Codex took under load
+	// (17 ms a character), and the route's budget covers that wait.
+	longest := strings.Repeat("a", agentMaxText)
+	if got := pasteGrowMost(longest); got < time.Duration(agentMaxText)*17*time.Millisecond {
+		t.Errorf("longest text grows for %v", got)
+	}
+	if got := messageBudget(0, pasteGrowMost(longest)); got < pasteGrowMost(longest)+3*agentConfirmWait {
+		t.Errorf("longest text budget = %v", got)
+	}
+	if got := pasteGrowMost("hi"); got != textConfirmWait("hi")+2*agentPasteGrowPerChar-2*agentPasteWaitPerChar {
+		t.Errorf("short text grows for %v", got)
 	}
 }
 
@@ -102,4 +111,54 @@ func TestMessageSlowPasteShows(t *testing.T) {
 		t.Fatalf("claude POST = %d %v keys %v", code, body, claude.keys)
 	}
 	time.Sleep(delay) // the late redraw lands before the test ends
+}
+
+// growingPaste makes Codex's box show text a step characters at a time,
+// every 20 ms, the way Codex on Windows takes a long paste, then fold it
+// into its token; stopAt > 0 stalls the growth after that many characters.
+func growingPaste(f *fakeWriter, text string, step, stopAt int) {
+	runes := []rune(text)
+	go func() {
+		for n := step; ; n += step {
+			if stopAt > 0 && n > stopAt {
+				return
+			}
+			if n >= len(runes) {
+				f.setScreen(codexBox("[Pasted Content " + strconv.Itoa(len(runes)) + " chars]"))
+				return
+			}
+			f.setScreen(codexBox(string(runes[:n])))
+			time.Sleep(20 * time.Millisecond)
+		}
+	}()
+}
+
+// A paste still arriving past the scaled wait is waited for while the box
+// keeps growing (#410: a long message to Codex on Windows, or under load),
+// and refused once the box stalls.
+func TestMessagePasteWaitsWhileGrowing(t *testing.T) {
+	shortConfirm(t)
+	shortPasteWait(t, time.Millisecond, 300*time.Millisecond)
+	withPsmux(t, false)
+	text := strings.Repeat("a", 1200) // 40 steps of 30: about 800 ms
+
+	f := newCodexWriter()
+	f.onPaste = func(f *fakeWriter, text string) { growingPaste(f, text, 30, 0) }
+	if code, body := postJSON(t, agentMux(f), "/api/mux/panes/0/agent/message", map[string]string{"text": text, "cursor": codexCursor()}); code != http.StatusNoContent {
+		t.Fatalf("growing POST = %d %v", code, body)
+	}
+	if len(f.keys) != 1 || f.keys[0][0] != "Enter" {
+		t.Errorf("keys %v", f.keys)
+	}
+
+	stalled := newCodexWriter()
+	stalled.onPaste = func(f *fakeWriter, text string) { growingPaste(f, text, 30, 600) }
+	start := time.Now()
+	code, body := postJSON(t, agentMux(stalled), "/api/mux/panes/0/agent/message", map[string]string{"text": text, "cursor": codexCursor()})
+	if code != http.StatusConflict || body["code"] != "paste_not_confirmed" || len(stalled.keys) != 0 {
+		t.Fatalf("stalled POST = %d %v keys %v", code, body, stalled.keys)
+	}
+	if took := time.Since(start); took > 2*time.Second {
+		t.Errorf("stalled paste refused after %v, want soon after it stalls", took)
+	}
 }

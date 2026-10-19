@@ -54,6 +54,11 @@ var (
 	// after a 10 000-character paste returns. Tests shorten them.
 	agentPasteWaitPerChar = 6 * time.Millisecond
 	agentPasteWaitMax     = 30 * time.Second
+	// agentPasteGrowPerChar bounds how long a paste still showing in the
+	// box may keep arriving past that wait (pasteGrowMost): Codex took
+	// about 17 ms a character under load, and 16 KB needs about 100 s
+	// even unloaded (#410).
+	agentPasteGrowPerChar = 20 * time.Millisecond
 )
 
 // textConfirmWait is the scaled wait for text to show once pasted:
@@ -64,12 +69,26 @@ func textConfirmWait(text string) time.Duration {
 	return max(agentConfirmWait, min(wait, agentPasteWaitMax))
 }
 
+// pasteGrowMost is the longest a pasted text may take to show while the box
+// keeps growing: agentConfirmWait plus agentPasteGrowPerChar a character,
+// never less than textConfirmWait.
+func pasteGrowMost(text string) time.Duration {
+	most := agentConfirmWait + time.Duration(utf8.RuneCountInString(text))*agentPasteGrowPerChar
+	return max(most, textConfirmWait(text))
+}
+
+// slowPaste: the agent takes a long paste slowly, Codex anywhere and any
+// agent on psmux.
+func slowPaste(wr agentWriter, agent string) bool {
+	return agent == "codex" || writerIsPsmux(wr)
+}
+
 // pasteConfirmWait is how long a message's pasted text may take to show in
-// the agent's input box: scaled for Codex and for any agent on psmux, which
-// take a long paste slowly; agentConfirmWait for Claude Code elsewhere. The
-// poll still returns as soon as the text shows.
+// the agent's input box: scaled for a slow paste (slowPaste),
+// agentConfirmWait for Claude Code elsewhere. The poll still returns as soon
+// as the text shows.
 func pasteConfirmWait(wr agentWriter, agent, text string) time.Duration {
-	if agent == "codex" || writerIsPsmux(wr) {
+	if slowPaste(wr, agent) {
 		return textConfirmWait(text)
 	}
 	return agentConfirmWait
@@ -401,9 +420,9 @@ func (a *agentAPI) handleMessage(w http.ResponseWriter, r *http.Request) {
 	defer unlock()
 	// Once text is pasted, the Enter must follow even if the client goes
 	// away, or the text stays stranded in the input box.
-	// The text's wait as scaled for any agent: an upper bound of what
+	// The text's longest wait for any agent: an upper bound of what
 	// sendMessage waits for it.
-	budget := messageBudget(len(paths), textConfirmWait(text))
+	budget := messageBudget(len(paths), pasteGrowMost(text))
 	if len(paths) > 0 || budget > messageBudget(0, agentConfirmWait) {
 		// The body is read: the read deadline only has to outlast the
 		// pastes, which may pass requestReadTimeout with several images
@@ -570,7 +589,12 @@ func (a *agentAPI) sendMessage(ctx context.Context, wr agentWriter, paneID, sess
 		}
 		return sc.input == inputDraft && draftShowsImages(sc.draft, n, pasted)
 	}
-	if !pollScreenFor(ctx, wr, s.Agent, s.Target, pasteConfirmWait(wr, s.Agent, pasted), shows) {
+	wait := pasteConfirmWait(wr, s.Agent, pasted)
+	most := wait
+	if slowPaste(wr, s.Agent) {
+		most = pasteGrowMost(pasted)
+	}
+	if !pollPaste(ctx, wr, s.Agent, s.Target, wait, most, shows) {
 		notShown := fail(http.StatusConflict, "paste_not_confirmed", "the pasted text did not show in the input box")
 		if n > 0 {
 			return a.abandon(ctx, wr, paneID, s, n, pasted, notShown)
@@ -671,10 +695,31 @@ func pollScreen(ctx context.Context, wr agentWriter, agent, target string, ok fu
 
 // pollScreenFor captures until ok holds or wait passes.
 func pollScreenFor(ctx context.Context, wr agentWriter, agent, target string, wait time.Duration, ok func(agentScreen) bool) bool {
-	deadline := time.Now().Add(wait)
+	return pollPaste(ctx, wr, agent, target, wait, wait, ok)
+}
+
+// pollPaste captures until ok holds or wait passes, and past wait for as
+// long as the box's draft changed within agentConfirmWait, at most until
+// most: a paste still arriving is waited for, a stalled one is not.
+func pollPaste(ctx context.Context, wr agentWriter, agent, target string, wait, most time.Duration, ok func(agentScreen) bool) bool {
+	start := time.Now()
+	deadline, last := start.Add(wait), ""
 	for {
-		if screen, err := wr.Capture(ctx, target); err == nil && ok(readAgentScreen(agent, screen)) {
-			return true
+		if screen, err := wr.Capture(ctx, target); err == nil {
+			sc := readAgentScreen(agent, screen)
+			if ok(sc) {
+				return true
+			}
+			if sc.draft != last {
+				last = sc.draft
+				grown := time.Now().Add(agentConfirmWait)
+				if limit := start.Add(most); grown.After(limit) {
+					grown = limit
+				}
+				if grown.After(deadline) {
+					deadline = grown
+				}
+			}
 		}
 		if time.Now().After(deadline) {
 			return false
