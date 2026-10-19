@@ -106,6 +106,11 @@ describe('ActivityLog', () => {
     expect(rows()[0]).toHaveTextContent('g1 / build')
   })
 
+  it("shows the hidden characters of an agent's name", () => {
+    renderLog({ events: [ev(1, '@7', '', 'working', 'aid\u202eer')] })
+    expect(rows()[0]).toHaveTextContent('aid⟨U+202E⟩er')
+  })
+
   it('says when there is nothing yet, or the read failed', () => {
     renderLog({ events: [], error: true })
     expect(

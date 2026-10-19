@@ -186,8 +186,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   live 30 s, unasked ones 5 minutes. That worker calls `PaneDir` on the backend. A view-only client
   gets the same summary (the snapshot already names the agents) but no branch or count for a
   root `viewHidesRoot` refuses (no repo, a home dir or one above), as Files. The PWA shows the
-  last text, the branch and a Codex plan with every C0/C1, bidi (U+061C included) and zero-width space
-  character as `⟨U+XXXX⟩` (`visibleUnsafe`, `pwa/src/utils/unsafe-chars.ts`)
+  last text, the branch, the model, a Codex plan and an agent name it does not know (Herdr reports
+  its own; the card and the activity log) with every C0/C1, bidi (U+061C included) and zero-width
+  space character as `⟨U+XXXX⟩` (`visibleUnsafe`, `pwa/src/utils/unsafe-chars.ts`)
 - **Agent subagents** (`server/agent_subagents.go`, `GET /api/mux/panes/{id}/agent/subagents`):
   `requireMethod(GET)`, `crossSiteRejection`, `requireAgentRead`; internal errors are logged only.
   Only the pane's own Claude session (`AgentSession`, as the transcript): another agent, no

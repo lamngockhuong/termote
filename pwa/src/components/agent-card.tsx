@@ -73,7 +73,7 @@ function ContextUsage({ usage }: { usage: OverviewUsage }) {
           {formatTokens(contextTokens)} tokens
         </span>
       )}
-      {model && <span className="truncate">· {model}</span>}
+      {model && <span className="truncate">· {visibleUnsafe(model)}</span>}
     </span>
   )
 }
@@ -154,7 +154,8 @@ export const AgentCard = memo(function AgentCard({
   const subagents = useSubagents(pane.id, expanded && claude)
   const subagentCount = claude ? subagentSummary(subagents.tree) : undefined
   const label = agentLabel(pane.agentName)
-  const name = label === 'agent' ? pane.agentName || 'Agent' : label
+  const name =
+    label === 'agent' ? visibleUnsafe(pane.agentName || 'Agent') : label
   const openLabel = opensChat ? 'Open chat' : 'Open terminal'
   const status = pane.agentStatus
   const age = statusAge(pane.agentSince, pane.agentSinceFirstSeen, now)
