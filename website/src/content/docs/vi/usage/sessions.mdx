@@ -84,7 +84,7 @@ Tab giữ thứ tự lúc được tạo cho tới khi bạn di chuyển nó, v�
   của nó trên desktop. Workspace của một repository di chuyển cùng các worktree của nó, như trong
   Herdr; một linked worktree không di chuyển riêng được.
 
-Các nút này bị ẩn khi đang bật lọc agent hoặc sắp xếp "blocked first", vì lúc đó danh sách trên màn
+Các nút này bị ẩn khi đang tìm kiếm, bật lọc agent hoặc sắp xếp "blocked first", vì lúc đó danh sách trên màn
 hình không phải thứ tự thật; thay vào chỗ của chúng (hàng **Current session**, menu **⋯** của
 workspace) là một dòng cho biết cần tắt gì để các nút hiện lại. Không hỗ trợ: session tmux và phiên Zellij (cả hai đều không có thứ tự phiên), tmux cũ hơn
 3.2, psmux trên Windows, Herdr cũ hơn 0.8.0, và tạm thời Herdr trên Windows.
@@ -95,6 +95,24 @@ qua. Termote giữ tin nhắn Chat chưa gửi, ảnh đính kèm và chỉnh s�
 của chúng, nhưng một liên kết tới tab (hoặc lựa chọn đã lưu trên thiết bị khác) trỏ tới window bị
 đánh số lại sẽ mở một tab khác sau đó.
 </Aside>
+
+### Tìm phiên
+
+Khi có từ hai phiên trở lên, header của sidebar desktop (và header của bảng phiên trên mobile, cạnh
+nút **New session**) có nút kính lúp. Bấm vào là ô tìm hiện ra phía trên danh sách; gõ một phần tên
+thì danh sách chỉ còn những phiên khớp.
+
+- Termote so với tên phiên, mô tả, tên group và nhánh của nó, agent đang chạy, tiến trình và nhãn
+  của các pane. Chữ hoa, chữ thường hay dấu tiếng Việt đều không ảnh hưởng; gõ nhiều từ thì phiên
+  phải khớp tất cả.
+- Tìm kiếm thu hẹp thêm kết quả của [bộ lọc agent](#lọc-theo-trạng-thái-agent): phiên phải khớp cả
+  hai. Giống khi lọc, nhóm không có phiên khớp bị ẩn, nhóm có phiên khớp luôn mở.
+- **Enter** mở phiên đầu tiên trong danh sách, **↓** chuyển focus xuống phiên đó (desktop). **Esc**
+  xoá chữ trong ô; ô đã trống thì **Esc** đóng ô.
+- Trên desktop, chọn một phiên xong chuỗi tìm vẫn còn, tiện chuyển qua lại giữa các phiên khớp.
+  Bảng phiên trên mobile thì mỗi lần mở lại đều hiện đủ danh sách.
+- Chuỗi tìm không được lưu, và ô tìm không giành phím của terminal: nó chỉ đọc phím khi đang có
+  focus.
 
 ### Lọc theo trạng thái agent
 

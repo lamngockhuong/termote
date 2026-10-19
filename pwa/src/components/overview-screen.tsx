@@ -1,5 +1,5 @@
 import { History, X } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useActivityLog } from '../hooks/use-activity-log'
 import { useAgentOverview } from '../hooks/use-agent-overview'
 import { useMediaQuery } from '../hooks/use-media-query'
@@ -12,11 +12,13 @@ import {
   type SidebarFilter,
   summarizePanes,
 } from '../utils/session-filter'
+import { matchesPaneQuery, searchTerms } from '../utils/session-search'
 import { AccountUsageStrip } from './account-usage-strip'
 import { ActivityLog } from './activity-log'
 import { AgentCard } from './agent-card'
 import { AgentFilterBar } from './agent-filter-bar'
 import { NeedsMeQueue } from './needs-me-queue'
+import { SearchToggle, SessionSearchField } from './session-search-field'
 import { Button, IconButton } from './ui/button'
 import { Sheet } from './ui/sheet'
 
@@ -115,6 +117,15 @@ export function OverviewScreen({
     }
   }, [])
   const [filter, setFilter] = useState<SidebarFilter>('all')
+  // The search box: the cards only, not the queue or the activity log
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const searchId = useId()
+  const listRef = useRef<HTMLUListElement>(null)
+  const closeSearch = () => {
+    setQuery('')
+    setSearchOpen(false)
+  }
   const [now, setNow] = useState(() => Date.now() + clockOffset)
   useEffect(() => {
     setNow(Date.now() + clockOffset)
@@ -130,7 +141,18 @@ export function OverviewScreen({
     () => summarizePanes(cards.map((c) => c.pane)),
     [cards],
   )
-  const shown = cards.filter((c) => matchesPaneFilter(c.pane, filter))
+  const groupOf = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups])
+  const terms = searchTerms(query)
+  const shown = cards.filter(
+    (c) =>
+      matchesPaneFilter(c.pane, filter) &&
+      matchesPaneQuery(
+        c.session,
+        c.pane,
+        terms,
+        groupOf.get(c.session.groupId ?? '')?.name,
+      ),
+  )
   // The card asked for takes focus once it is shown (the cards are drawn
   // only when ready), over the title, and keeps an accent border until focus
   // leaves it. A card shown after the user moved on takes nothing.
@@ -150,7 +172,6 @@ export function OverviewScreen({
     targetRef.current!.focus()
     setHighlighted(target.paneId)
   }, [target])
-  const groupOf = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups])
   const showGroups = groups.length > 1
   const placeOf = useCallback(
     (session: Session) => {
@@ -196,6 +217,14 @@ export function OverviewScreen({
         >
           Agents
         </h2>
+        {cards.length > 0 && (
+          <SearchToggle
+            controls={searchId}
+            noun="agents"
+            open={searchOpen}
+            onToggle={() => (searchOpen ? closeSearch() : setSearchOpen(true))}
+          />
+        )}
         <IconButton
           onClick={() => setLogOpen((v) => !v)}
           aria-label="Activity"
@@ -237,7 +266,28 @@ export function OverviewScreen({
                 canAnswer={canAnswer}
                 onOpen={onOpen}
               />
-              <div className="mb-3 max-w-md">
+              <div className="mb-3 flex max-w-md flex-col gap-2">
+                {searchOpen && (
+                  <SessionSearchField
+                    id={searchId}
+                    label="Find an agent"
+                    value={query}
+                    onChange={setQuery}
+                    onClose={closeSearch}
+                    onSubmit={() =>
+                      shown[0] &&
+                      onOpen(
+                        shown[0].session,
+                        shown[0].pane,
+                        opensChat(shown[0].pane) ? 'chat' : 'terminal',
+                      )
+                    }
+                    // A card's first button opens it
+                    onArrowDown={() =>
+                      listRef.current?.querySelector('button')?.focus()
+                    }
+                  />
+                )}
                 <AgentFilterBar
                   summary={summary}
                   filter={filter}
@@ -248,12 +298,21 @@ export function OverviewScreen({
               {shown.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 py-6 text-center text-[13px] text-fg-muted">
                   No agents match
-                  <Button size="sm" onClick={() => setFilter('all')}>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setFilter('all')
+                      setQuery('')
+                    }}
+                  >
                     Show all
                   </Button>
                 </div>
               ) : (
-                <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                <ul
+                  ref={listRef}
+                  className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3"
+                >
                   {shown.map(({ session, pane }) => {
                     const group = session.groupId
                       ? groupOf.get(session.groupId)

@@ -252,6 +252,124 @@ describe('OverviewScreen', () => {
     expect(cardNames()).toHaveLength(1)
   })
 
+  describe('search', () => {
+    const openSearch = () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Search agents' }))
+    const type = (q: string) =>
+      fireEvent.change(screen.getByRole('searchbox'), { target: { value: q } })
+
+    it('narrows the cards by tab, group, agent and pane', () => {
+      renderScreen()
+      expect(screen.queryByRole('searchbox')).toBeNull()
+      openSearch()
+      expect(
+        screen.getByRole('searchbox', { name: 'Find an agent' }),
+      ).toHaveFocus()
+      type('t1')
+      expect(cardNames()).toEqual(['Open chat: Claude Code, Idle, api / t1'])
+      type('web')
+      expect(cardNames()).toHaveLength(3)
+      type('codex')
+      expect(cardNames()).toHaveLength(1)
+      type('WEB claude')
+      expect(cardNames()).toHaveLength(2)
+    })
+
+    it('leaves the Needs you queue whole', () => {
+      renderScreen()
+      openSearch()
+      type('t1')
+      expect(
+        screen.getByRole('heading', {
+          name: /^Needs you: Claude Code, web \/ t3/,
+        }),
+      ).toBeInTheDocument()
+    })
+
+    it('narrows the status filter, and Show all clears both', () => {
+      renderScreen()
+      fireEvent.click(screen.getByRole('radio', { name: 'Needs you, 1 agent' }))
+      openSearch()
+      type('t1')
+      expect(screen.getByText('No agents match')).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Show all' }))
+      expect(cardNames()).toHaveLength(4)
+      expect(screen.getByRole('searchbox')).toHaveValue('')
+    })
+
+    it('Enter opens the first card on its view, ArrowDown focuses it', () => {
+      const { onOpen } = renderScreen()
+      openSearch()
+      type('codex')
+      const box = screen.getByRole('searchbox')
+      fireEvent.keyDown(box, { key: 'Enter' })
+      expect(onOpen).toHaveBeenCalledWith(
+        SESSIONS[1],
+        SESSIONS[1].panes![0],
+        'terminal',
+      )
+      fireEvent.keyDown(box, { key: 'ArrowDown' })
+      expect(
+        screen.getByRole('button', { name: /^Open terminal: Codex/ }),
+      ).toHaveFocus()
+      // A Claude card opens its chat
+      type('t1')
+      fireEvent.keyDown(box, { key: 'Enter' })
+      expect(onOpen).toHaveBeenLastCalledWith(
+        SESSIONS[0],
+        SESSIONS[0].panes![0],
+        'chat',
+      )
+    })
+
+    it('Enter and ArrowDown do nothing without a match', () => {
+      const { onOpen } = renderScreen()
+      openSearch()
+      type('zzz')
+      const box = screen.getByRole('searchbox')
+      fireEvent.keyDown(box, { key: 'Enter' })
+      fireEvent.keyDown(box, { key: 'ArrowDown' })
+      expect(onOpen).not.toHaveBeenCalled()
+      expect(box).toHaveFocus()
+    })
+
+    it('Esc clears the box and does not close the overview', () => {
+      const { onClose } = renderScreen()
+      openSearch()
+      type('t1')
+      const box = screen.getByRole('searchbox')
+      const esc = new KeyboardEvent('keydown', {
+        key: 'Escape',
+        bubbles: true,
+        cancelable: true,
+      })
+      act(() => {
+        box.dispatchEvent(esc)
+      })
+      expect(esc.defaultPrevented).toBe(true)
+      expect(box).toHaveValue('')
+      fireEvent.keyDown(box, { key: 'Escape' })
+      expect(screen.queryByRole('searchbox')).toBeNull()
+      expect(onClose).not.toHaveBeenCalled()
+    })
+
+    it('the magnifier closes the box, cleared', () => {
+      renderScreen()
+      openSearch()
+      type('t1')
+      fireEvent.click(
+        screen.getAllByRole('button', { name: 'Close the search' })[0],
+      )
+      expect(screen.queryByRole('searchbox')).toBeNull()
+      expect(cardNames()).toHaveLength(4)
+    })
+
+    it('has no magnifier with no agent', () => {
+      renderScreen({ sessions: [SESSIONS[3]] })
+      expect(screen.queryByRole('button', { name: 'Search agents' })).toBeNull()
+    })
+  })
+
   it('opens a card on its chat or terminal, and closes', () => {
     const { onOpen, onClose } = renderScreen()
     fireEvent.click(

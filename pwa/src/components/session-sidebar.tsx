@@ -36,6 +36,7 @@ import {
   type SidebarFilter,
   summarizeSessions,
 } from '../utils/session-filter'
+import { matchesQuery, searchTerms } from '../utils/session-search'
 import { AgentFilterBar } from './agent-filter-bar'
 import { AgentStatusBadge } from './agent-status-badge'
 import { BrandMark } from './brand-mark'
@@ -45,6 +46,7 @@ import {
   nameTooLong,
 } from './group-dialog'
 import { IconPicker } from './icon-picker'
+import { SearchToggle, SessionSearchField } from './session-search-field'
 import { SwipeableSessionItem } from './swipeable-session-item'
 import { Button, FOCUS_RING, IconButton } from './ui/button'
 import { Menu, MenuItem } from './ui/menu'
@@ -129,12 +131,24 @@ export function moveProblem(err: unknown): string {
 export function reorderPausedHint(
   filtering: boolean,
   sortBlockedFirst: boolean,
+  searching = false,
 ): string {
-  if (filtering && sortBlockedFirst)
-    return 'Show All and turn off Blocked sessions first to reorder'
-  if (sortBlockedFirst)
-    return 'Turn off Blocked sessions first in Settings to reorder'
-  return 'Show All to reorder'
+  const steps: string[] = []
+  if (searching) steps.push('clear the search')
+  if (filtering) steps.push('Show All')
+  if (sortBlockedFirst) {
+    // Alone, it says where the setting is
+    steps.push(
+      steps.length
+        ? 'turn off Blocked sessions first'
+        : 'turn off Blocked sessions first in Settings',
+    )
+  }
+  const text =
+    steps.length > 1
+      ? `${steps.slice(0, -1).join(', ')} and ${steps[steps.length - 1]}`
+      : steps.join('')
+  return `${text.charAt(0).toUpperCase()}${text.slice(1)} to reorder`
 }
 
 // The key a tab keeps when its id changes
@@ -248,6 +262,28 @@ export function SessionSidebar({
     ? effectiveFilter(sessions, filter)
     : 'all'
   const filtering = activeFilter !== 'all'
+  // The search box: opened from its magnifier, never saved; a phone's sheet
+  // closing clears it.
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  // Set by the toggle until the box has taken focus: the box mounted again
+  // by expanding the sidebar leaves focus where it is.
+  const [focusSearch, setFocusSearch] = useState(false)
+  useEffect(() => {
+    if (focusSearch) setFocusSearch(false)
+  }, [focusSearch])
+  const searchId = useId()
+  const terms = searchTerms(query)
+  const searching = terms.length > 0
+  // The list on screen is a part of the sessions
+  const narrowed = filtering || searching
+  // Nothing to look for in a single session
+  const canSearch = sessions.length > 1
+  const closeSearch = () => {
+    setQuery('')
+    setSearchOpen(false)
+  }
+  const groupById = new Map(groups.map((g) => [g.id, g]))
   const summary = summarizeSessions(sessions)
   // Hidden with no agent anywhere: there is nothing to filter by.
   const showFilterBar = !!onFilterChange && summary.agents > 0
@@ -255,7 +291,10 @@ export function SessionSidebar({
   // not take the form away mid-edit.
   const arrange = (list: Session[]) => {
     const matching = list.filter(
-      (s) => s.id === editingId || matchesFilter(s, activeFilter),
+      (s) =>
+        s.id === editingId ||
+        (matchesFilter(s, activeFilter) &&
+          matchesQuery(s, terms, groupById.get(s.groupId ?? ''))),
     )
     return sortBlockedFirst ? blockedFirst(matching) : matching
   }
@@ -264,7 +303,7 @@ export function SessionSidebar({
 
   // Reordering works on the list in the server's order: hidden while the
   // list on screen is filtered or sorted, with a hint saying what to undo.
-  const canReorder = !!reorder && !filtering && !sortBlockedFirst
+  const canReorder = !!reorder && !narrowed && !sortBlockedFirst
   const reorderPaused = !!reorder && !canReorder
   const groupTabIds = (groupId?: string) =>
     sessions.filter((s) => s.groupId === groupId).map((s) => s.id)
@@ -277,7 +316,7 @@ export function SessionSidebar({
     !!reorder?.groups && movableIds.length > 1 && movableIds.includes(group.id)
   const canMoveGroup = (group: SessionGroup) =>
     canReorder && groupMovable(group)
-  const pausedHint = reorderPausedHint(filtering, sortBlockedFirst)
+  const pausedHint = reorderPausedHint(filtering, sortBlockedFirst, searching)
 
   // Move a tab one place up or down in its group; nothing at an end.
   const stepTab = (session: Session, delta: -1 | 1) => {
@@ -292,6 +331,13 @@ export function SessionSidebar({
       group.id,
       targetIndex(movableIds, group.id, delta) as number,
     )
+
+  // A phone's sheet opens again on the whole list.
+  useEffect(() => {
+    if (isOpen) return
+    setQuery('')
+    setSearchOpen(false)
+  }, [isOpen])
 
   // Focus follows a row moved from the keyboard to its new place.
   // biome-ignore lint/correctness/useExhaustiveDependencies: a new list may hold the moved row
@@ -383,8 +429,10 @@ export function SessionSidebar({
 
   const handleAdd = () => {
     if (onAdd && newName.trim()) {
-      // The new session has no agent yet: clear the filter so it shows.
+      // The new session has no agent yet: clear the filter so it shows,
+      // and the search, which it may not match.
       if (filtering) onFilterChange?.('all')
+      setQuery('')
       onAdd(newName.trim(), newIcon)
       setNewName('')
       setNewIcon('💻')
@@ -710,12 +758,14 @@ export function SessionSidebar({
       </Menu>
     )
 
-  // Opens the New group dialog; a filter would hide the new group's tab
+  // Opens the New group dialog; a filter or a search would hide the new
+  // group's tab
   const newGroupButton = groupActions && (
     <Button
       size="sm"
       onClick={() => {
         if (filtering) onFilterChange?.('all')
+        setQuery('')
         groupActions.onNew()
       }}
       className="w-full"
@@ -726,12 +776,12 @@ export function SessionSidebar({
   )
 
   // A single group (tmux) keeps the flat 0.x list without a header.
-  // While filtering, a group with no match is hidden and one with a match is
-  // open; the saved collapsed state is left as it was.
+  // While filtering or searching, a group with no match is hidden and one
+  // with a match is open; the saved collapsed state is left as it was.
   const renderGroup = (group: SessionGroup) => {
     const tabs = arrange(sessions.filter((s) => s.groupId === group.id))
-    if (filtering && tabs.length === 0) return null
-    const collapsed = !filtering && isGroupCollapsed(group.id)
+    if (narrowed && tabs.length === 0) return null
+    const collapsed = !narrowed && isGroupCollapsed(group.id)
     const name = group.name || group.id
     return (
       <section key={group.id} aria-label={name} className="pb-2">
@@ -753,7 +803,7 @@ export function SessionSidebar({
               onClick={() => toggleGroup(group.id)}
               // While filtering the group is held open; toggling would change
               // the saved state without showing it.
-              disabled={filtering}
+              disabled={narrowed}
               aria-expanded={!collapsed}
               className={`flex w-full min-w-0 items-center gap-1.5 rounded-control px-2 pb-1 pt-2 font-label text-[11px] uppercase tracking-wider text-fg-subtle hover:text-fg disabled:hover:text-fg-subtle ${FOCUS_RING}`}
             >
@@ -850,12 +900,58 @@ export function SessionSidebar({
     />
   )
 
+  // The rows in the order on screen: by group when there are headers
+  const shownSessions = showGroups
+    ? groups.flatMap((g) => arrange(sessions.filter((s) => s.groupId === g.id)))
+    : visibleSessions
+
+  const searchToggle = canSearch && (
+    <SearchToggle
+      controls={searchId}
+      noun="sessions"
+      open={searchOpen}
+      onToggle={() => {
+        if (searchOpen) closeSearch()
+        else {
+          setSearchOpen(true)
+          setFocusSearch(true)
+        }
+      }}
+    />
+  )
+  // Enter opens the first match, ArrowDown moves to it (the desktop rows; a
+  // phone's rows are swiped, not focused). Only with a query: an empty box
+  // leaves collapsed groups closed. The row being edited is no match.
+  const firstMatch = searching
+    ? shownSessions.find((s) => s.id !== editingId)
+    : undefined
+  const searchField = searchOpen && (
+    <SessionSearchField
+      id={searchId}
+      label="Find a session"
+      value={query}
+      onChange={setQuery}
+      onClose={closeSearch}
+      onSubmit={() => firstMatch && onSelect(firstMatch.id)}
+      onArrowDown={() =>
+        firstMatch && rowButtons.current.get(keyOf(firstMatch))?.focus()
+      }
+      autoFocus={focusSearch}
+    />
+  )
+
   // Session list content (shared between mobile and desktop)
   const sessionList =
-    filtering && visibleSessions.length === 0 ? (
+    narrowed && visibleSessions.length === 0 ? (
       <div className="flex flex-col items-center gap-2 px-2 py-6 text-center text-[13px] text-fg-muted">
         No sessions match
-        <Button size="sm" onClick={() => onFilterChange?.('all')}>
+        <Button
+          size="sm"
+          onClick={() => {
+            onFilterChange?.('all')
+            setQuery('')
+          }}
+        >
           Show all
         </Button>
       </div>
@@ -952,25 +1048,28 @@ export function SessionSidebar({
         title="Sessions"
         closeLabel="Close sessions"
         actions={
-          canAdd &&
-          !showAddForm && (
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setShowAddForm(true)}
-              title="Add new session"
-              className="ui-native:rounded-full"
-            >
-              <Plus size={16} aria-hidden="true" />
-              New session
-            </Button>
-          )
+          <>
+            {searchToggle}
+            {canAdd && !showAddForm && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setShowAddForm(true)}
+                title="Add new session"
+                className="ui-native:rounded-full"
+              >
+                <Plus size={16} aria-hidden="true" />
+                New session
+              </Button>
+            )}
+          </>
         }
       >
         {currentRow}
         <div ref={sheetListRef} className="flex flex-col gap-2 px-2 pb-3 pt-1">
           {showAddForm && addForm}
           {newGroupButton}
+          {searchField}
           {filterBar}
           {sessionList}
         </div>
@@ -980,12 +1079,6 @@ export function SessionSidebar({
 
   // Desktop: collapsible sidebar
   if (isCollapsed) {
-    // Sorted within each group, as in the expanded list.
-    const railSessions = showGroups
-      ? groups.flatMap((g) =>
-          arrange(sessions.filter((s) => s.groupId === g.id)),
-        )
-      : visibleSessions
     return (
       <aside className={`w-14 ${SIDEBAR_BASE_CLASSES}`}>
         <div
@@ -993,14 +1086,14 @@ export function SessionSidebar({
         >
           <IconButton
             onClick={() => onToggleCollapse?.()}
-            title={filtering ? 'Expand sidebar (filtered)' : 'Expand sidebar'}
+            title={narrowed ? 'Expand sidebar (filtered)' : 'Expand sidebar'}
             aria-label={
-              filtering ? 'Expand sidebar, filtered' : 'Expand sidebar'
+              narrowed ? 'Expand sidebar, filtered' : 'Expand sidebar'
             }
             className="relative"
           >
             <PanelLeftOpen size={18} aria-hidden="true" />
-            {filtering && (
+            {narrowed && (
               <span
                 aria-hidden="true"
                 className="absolute right-1.5 top-1.5 size-2 rounded-full bg-accent"
@@ -1022,7 +1115,7 @@ export function SessionSidebar({
             </IconButton>
           )}
           <div className="flex min-h-0 w-full flex-1 flex-col items-center gap-0.5 overflow-y-auto pt-1">
-            {railSessions.map((session) => {
+            {shownSessions.map((session) => {
               const active = activeId === session.id
               return (
                 <button
@@ -1065,6 +1158,7 @@ export function SessionSidebar({
             Termote
           </span>
           <span className="flex items-center">
+            {searchToggle}
             {overviewButton}
             <IconButton
               onClick={() => onToggleCollapse?.()}
@@ -1090,6 +1184,7 @@ export function SessionSidebar({
                 </Button>
               )}
           {newGroupButton && <div className="mt-2">{newGroupButton}</div>}
+          {searchField && <div className="mt-2">{searchField}</div>}
           {filterBar && <div className="mt-2">{filterBar}</div>}
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">

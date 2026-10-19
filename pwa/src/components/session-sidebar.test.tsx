@@ -1966,3 +1966,308 @@ describe('SessionSidebar — reorder', () => {
     expect(screen.queryByRole('textbox', { name: 'Session name' })).toBeNull()
   })
 })
+
+describe('SessionSidebar — search', () => {
+  const tab = (
+    id: string,
+    name: string,
+    groupId: string,
+    over: Partial<Session> = {},
+  ): Session => ({
+    id,
+    key: `@${name}`,
+    name,
+    icon: '💻',
+    description: '',
+    groupId,
+    ...over,
+  })
+  const TABS: Session[] = [
+    tab('1', 'api', 'g1', { commands: ['vim'] }),
+    tab('2', 'web', 'g1', {
+      description: 'Frontend',
+      hasAgent: true,
+      agentStatus: 'blocked',
+    }),
+    tab('3', 'docs', 'g2'),
+    tab('4', 'notes', 'g2'),
+  ]
+  const GROUPS: SessionGroup[] = [
+    { id: 'g1', name: 'shop' },
+    { id: 'g2', name: 'blog' },
+  ]
+  const props = (over = {}) => ({
+    sessions: TABS,
+    groups: GROUPS,
+    activeId: '1',
+    onSelect: vi.fn(),
+    onAdd: vi.fn(),
+    ...over,
+  })
+  const rowNames = () =>
+    TABS.map((t) => t.name).filter((n) =>
+      screen.queryByText(n, { selector: 'span' }),
+    )
+  const open = () =>
+    fireEvent.click(screen.getByRole('button', { name: 'Search sessions' }))
+  const type = (q: string) =>
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: q } })
+
+  beforeEach(() => localStorage.clear())
+
+  it('has no search for a single session', () => {
+    render(<SessionSidebar {...props({ sessions: [TABS[0]], groups: [] })} />)
+    expect(screen.queryByRole('button', { name: 'Search sessions' })).toBeNull()
+  })
+
+  it('opens a focused box from the magnifier, and closes it cleared', () => {
+    render(<SessionSidebar {...props()} />)
+    expect(screen.queryByRole('searchbox')).toBeNull()
+    open()
+    const box = screen.getByRole('searchbox', { name: 'Find a session' })
+    expect(box).toHaveFocus()
+    type('api')
+    expect(rowNames()).toEqual(['api'])
+    fireEvent.click(screen.getByRole('button', { name: 'Close the search' }))
+    expect(screen.queryByRole('searchbox')).toBeNull()
+    expect(rowNames()).toEqual(['api', 'web', 'docs', 'notes'])
+    open()
+    expect(screen.getByRole('searchbox')).toHaveValue('')
+  })
+
+  it('matches descriptions, processes and group names', () => {
+    render(<SessionSidebar {...props()} />)
+    open()
+    type('frontend')
+    expect(rowNames()).toEqual(['web'])
+    type('VIM')
+    expect(rowNames()).toEqual(['api'])
+    type('blog')
+    expect(rowNames()).toEqual(['docs', 'notes'])
+    expect(screen.queryByRole('region', { name: 'shop' })).toBeNull()
+  })
+
+  it('narrows the status filter, and Show all clears both', () => {
+    const onFilterChange = vi.fn()
+    render(
+      <SessionSidebar {...props({ filter: 'needs-you', onFilterChange })} />,
+    )
+    expect(rowNames()).toEqual(['web'])
+    open()
+    type('api')
+    expect(screen.getByText('No sessions match')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Show all' }))
+    expect(onFilterChange).toHaveBeenCalledWith('all')
+    expect(screen.getByRole('searchbox')).toHaveValue('')
+  })
+
+  it('shows the empty state with no filter bar', () => {
+    render(<SessionSidebar {...props()} />)
+    open()
+    type('zzz')
+    fireEvent.click(screen.getByRole('button', { name: 'Show all' }))
+    expect(rowNames()).toHaveLength(4)
+  })
+
+  it('opens a collapsed group holding a match, and leaves it collapsed after', () => {
+    localStorage.setItem(
+      'termote-group-collapsed',
+      JSON.stringify({ g2: true }),
+    )
+    render(<SessionSidebar {...props()} />)
+    expect(rowNames()).toEqual(['api', 'web'])
+    open()
+    type('docs')
+    expect(rowNames()).toEqual(['docs'])
+    const header = within(
+      screen.getByRole('region', { name: 'blog' }),
+    ).getByRole('button', { expanded: true })
+    expect(header).toBeDisabled()
+    type('')
+    expect(rowNames()).toEqual(['api', 'web'])
+  })
+
+  it('pauses reordering while searching', () => {
+    const reorder = {
+      tabs: true,
+      groups: true,
+      moving: false,
+      onMoveTab: vi.fn(),
+      onMoveGroup: vi.fn(),
+    }
+    render(<SessionSidebar {...props({ reorder })} />)
+    const rowOf = (n: string) =>
+      screen.getByText(n, { selector: 'span' }).closest('button')!
+        .parentElement!
+    expect(rowOf('api')).toHaveAttribute('draggable', 'true')
+    open()
+    type('a')
+    expect(rowOf('api')).not.toHaveAttribute('draggable')
+    type('')
+    expect(rowOf('api')).toHaveAttribute('draggable', 'true')
+  })
+
+  it('says what to undo, the search included', () => {
+    expect(reorderPausedHint(false, false, true)).toBe(
+      'Clear the search to reorder',
+    )
+    expect(reorderPausedHint(true, false, true)).toBe(
+      'Clear the search and Show All to reorder',
+    )
+    expect(reorderPausedHint(false, true, true)).toBe(
+      'Clear the search and turn off Blocked sessions first to reorder',
+    )
+    expect(reorderPausedHint(true, true, true)).toBe(
+      'Clear the search, Show All and turn off Blocked sessions first to reorder',
+    )
+  })
+
+  it('Enter opens the first row on screen and keeps the search', () => {
+    const onSelect = vi.fn()
+    render(<SessionSidebar {...props({ onSelect })} />)
+    open()
+    // docs and notes, the group's name
+    type('blog')
+    fireEvent.keyDown(screen.getByRole('searchbox'), { key: 'Enter' })
+    expect(onSelect).toHaveBeenCalledWith('3')
+    expect(screen.getByRole('searchbox')).toHaveValue('blog')
+  })
+
+  it('ArrowDown moves to the first row', () => {
+    render(<SessionSidebar {...props()} />)
+    open()
+    type('notes')
+    fireEvent.keyDown(screen.getByRole('searchbox'), { key: 'ArrowDown' })
+    expect(
+      screen.getByText('notes', { selector: 'span' }).closest('button'),
+    ).toHaveFocus()
+  })
+
+  it('Enter does nothing in an empty box', () => {
+    const onSelect = vi.fn()
+    render(<SessionSidebar {...props({ onSelect })} />)
+    open()
+    fireEvent.keyDown(screen.getByRole('searchbox'), { key: 'Enter' })
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+
+  it('Enter skips the row being edited', () => {
+    const onSelect = vi.fn()
+    render(<SessionSidebar {...props({ onSelect, onUpdate: vi.fn() })} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit docs' }))
+    open()
+    type('notes')
+    fireEvent.keyDown(screen.getByRole('searchbox'), { key: 'Enter' })
+    expect(onSelect).toHaveBeenCalledWith('4')
+  })
+
+  it('the box shown again by expanding the sidebar leaves focus alone', () => {
+    const { rerender } = render(<SessionSidebar {...props()} />)
+    open()
+    type('docs')
+    rerender(<SessionSidebar {...props({ isCollapsed: true })} />)
+    rerender(<SessionSidebar {...props()} />)
+    expect(screen.getByRole('searchbox')).toHaveValue('docs')
+    expect(screen.getByRole('searchbox')).not.toHaveFocus()
+  })
+
+  it('Enter and ArrowDown do nothing without a match', () => {
+    const onSelect = vi.fn()
+    render(<SessionSidebar {...props({ onSelect })} />)
+    open()
+    type('zzz')
+    const box = screen.getByRole('searchbox')
+    fireEvent.keyDown(box, { key: 'Enter' })
+    fireEvent.keyDown(box, { key: 'ArrowDown' })
+    expect(onSelect).not.toHaveBeenCalled()
+    expect(box).toHaveFocus()
+  })
+
+  it('a flat list (no groups) is searched too', () => {
+    render(<SessionSidebar {...props({ groups: [] })} />)
+    open()
+    type('web')
+    expect(rowNames()).toEqual(['web'])
+  })
+
+  it('the collapsed rail lists the matches and says it is filtered', () => {
+    const { rerender } = render(<SessionSidebar {...props()} />)
+    open()
+    type('docs')
+    rerender(<SessionSidebar {...props({ isCollapsed: true })} />)
+    expect(
+      screen.getByRole('button', { name: 'Expand sidebar, filtered' }),
+    ).toBeInTheDocument()
+    expect(screen.getByTitle('docs')).toBeInTheDocument()
+    expect(screen.queryByTitle('api')).toBeNull()
+  })
+
+  it('adding a session clears the search', () => {
+    render(<SessionSidebar {...props()} />)
+    open()
+    type('zzz')
+    fireEvent.click(screen.getByTitle('Add new session'))
+    const input = screen.getByPlaceholderText('Session name')
+    fireEvent.change(input, { target: { value: 'new' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(screen.getByRole('searchbox')).toHaveValue('')
+  })
+
+  it('a new group clears the search', () => {
+    const onNew = vi.fn()
+    render(
+      <SessionSidebar
+        {...props({
+          groupActions: {
+            noun: 'workspace',
+            onNew,
+            onRename: vi.fn(async () => {}),
+            onClose: vi.fn(),
+            canRename: () => true,
+          },
+        })}
+      />,
+    )
+    open()
+    type('zzz')
+    fireEvent.click(screen.getByRole('button', { name: 'New workspace' }))
+    expect(onNew).toHaveBeenCalled()
+    expect(screen.getByRole('searchbox')).toHaveValue('')
+  })
+
+  describe('mobile sheet', () => {
+    const mobile = (over = {}) =>
+      props({ isMobile: true, isOpen: true, onClose: vi.fn(), ...over })
+    const names = () =>
+      TABS.map((t) => t.id).filter((id) =>
+        screen.queryByTestId(`swipeable-${id}`),
+      )
+
+    it('opens without a box; the magnifier sits in the header', () => {
+      render(<SessionSidebar {...mobile()} />)
+      expect(screen.queryByRole('searchbox')).toBeNull()
+      open()
+      expect(screen.getByRole('searchbox')).toHaveFocus()
+      type('web')
+      expect(names()).toEqual(['2'])
+    })
+
+    it('closing the sheet clears the search', () => {
+      const { rerender } = render(<SessionSidebar {...mobile()} />)
+      open()
+      type('web')
+      rerender(<SessionSidebar {...mobile({ isOpen: false })} />)
+      rerender(<SessionSidebar {...mobile()} />)
+      expect(screen.queryByRole('searchbox')).toBeNull()
+      expect(names()).toEqual(['1', '2', '3', '4'])
+    })
+
+    it('ArrowDown has no row to focus', () => {
+      render(<SessionSidebar {...mobile()} />)
+      open()
+      type('web')
+      fireEvent.keyDown(screen.getByRole('searchbox'), { key: 'ArrowDown' })
+      expect(screen.getByRole('searchbox')).toHaveFocus()
+    })
+  })
+})
