@@ -85,7 +85,7 @@ func (c *cli) loginLinkFile(info linkInfo) (string, error) {
 		return "", errNoSignIn
 	}
 	saved, _ := c.loadConfig()
-	t := deviceTarget{port: info.report.Port, user: saved.authUser()}
+	t := deviceTarget{port: info.report.Port, user: saved.authUser(), pipeOnly: c.pipeOnly(info.report.Port)}
 	if saved != nil {
 		t.pass = saved.Password
 	}

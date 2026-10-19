@@ -959,7 +959,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   (`TCP_TABLE_OWNER_MODULE_CONNECTIONS`) owner PID and bind time; the process opened at that PID
   must be created strictly before the socket was bound (else the PID may have gone to another
   process: refused, as are equal times, both read from a clock that ticks coarsely, and a row with no
-  bind time), then its token SID. An unreadable token is trusted only for a
+  bind time), then its token SID. This holds only if the table's PID is the process that bound the
+  socket: Microsoft documents it as the process that "issued a context bind", and says nothing of a
+  socket created in one process and bound or connected in another after its handle passed on, so a
+  socket handed on that way before its bind is not proven to be caught (accepted residual risk, see
+  `docs/security-model.md`). An unreadable token is trusted only for a
   running service's own PID, from the Service Control Manager (`EnumServicesStatusEx`, read after
   the process is opened, so the PID cannot change hands; a per-user service, type bit 0x40 or 0x80,
   is not one, as it runs as whoever logged on), never for being in session 0 (an SSH logon is too)
@@ -987,7 +991,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   the server end's owner (`SO_PEERCRED`/`LOCAL_PEERCRED`; on Windows the owner of the pipe object
   itself, `GetSecurityInfo`, never the user of the serving PID) is itself or root/SYSTEM before
   writing, uses that one connection, falls back to TCP + password when the
-  socket is missing or untrusted or a read got no answer, and never resends a write that was sent. `status` prints `Via: socket`
+  socket is missing or untrusted or a read got no answer (on Windows without the password: see the
+  CLI entry below), and never resends a write that was sent. `status` prints `Via: socket`
   or `Via: TCP` (`--json`: `via`). The exit cleanup removes the socket only while it is its own and
   nothing answers on it (an update's new server keeps its socket)
 - **Signed-in browsers** (`server/sessions.go`, `server/signin_routes.go`, `caps.signins`): each
@@ -1026,16 +1031,27 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   never returns `/login/link`; `hash` only `#` + URI-safe bytes, 512. Files older than 2 min are
   swept by the CLI and by `serve` at start. With `--no-auth` the plain link opens; with an old
   server or no password it opens with a warning saying why
-- **CLI and the saved password**: without the local socket (the container, an older server),
-  `status`, `url`, `panel`, `container status` and the health
-  wait of `start`/`restart`/`update` send the saved password to `127.0.0.1:<port>` only when
+- **CLI and the saved password**: on Windows the native server (any port but the saved
+  container's while no native service is registered, `installedSupervisor`, as `deviceTarget` tells
+  them apart) gets the saved password over its pipe only (`cli.pipeOnly`, `server/cli_start.go`): without the
+  pipe, `status`, `url`, `panel` and the health wait of `start`/`restart`/`update` ask over TCP
+  without it, still only on a connection whose listeners pass the owner check below (else
+  "untrusted listener" or "unverified listener", never running), and a server that answers 401
+  there reads as "pipe only" (`healthPipeOnly`); `pair`, `devices`, `signins` and the sign-in link
+  send nothing but a health probe without it, whose answer only tells a stopped server from a pipe
+  that did not answer. A server older than the pipe (2.0.0) is reached that way, and an `update` back
+  to one fails its health wait and rolls back. Otherwise, without the local socket (the container,
+  on every OS; an older native server on Linux and macOS), `status`, `url`, `panel`,
+  `container status`, the health wait of `start`/`restart`/`update`/`container up` and the device
+  commands against the container send the saved password to `127.0.0.1:<port>` only when
   every socket listening on it runs as the current user or root/SYSTEM (`server/listener_owner*.go`:
   `/proc/net/tcp*` on Linux, `lsof` on macOS, on Windows the listener table
   `TCP_TABLE_OWNER_MODULE_LISTENER` and the token SID of the process at each owner PID, a process
   that cannot be opened, not created strictly before its socket was bound (the PID may have gone to
   another process; a clock stepped back between the server's start and its bind does it too, until a
   restart), with no bind time, or with an unreadable token, a service's included, counting as
-  another user's), checked
+  another user's; for the container on Windows this rests on the same reading of the table's PID as
+  the local-peer check above, an accepted residual risk), checked
   once the connection is made and before the request is written on it; on Linux the server end
   of that connection (its uid in `/proc/net/tcp*`) must be trusted too; otherwise
   the status reads "untrusted listener" (another user's socket seen) or "unverified listener"

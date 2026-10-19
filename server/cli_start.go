@@ -503,10 +503,12 @@ func decodeHealth(resp *http.Response, code int) serverHealth {
 
 // localRequest sends method path to the native server on port: over its
 // local socket when one answers and its server end belongs to this user or
-// root, without the password; else over TCP with it (authedRequest), for
-// the container and a server from before the socket. via says which. A
-// write that may have reached the server over the socket is never sent again
-// over TCP: code is socketNoAnswer then.
+// root, without the password; else over TCP with it (authedRequest), for a
+// server from before the socket. via says which. A write that may have
+// reached the server over the socket is never sent again over TCP: code is
+// socketNoAnswer then. On Windows the native server's password never goes
+// over TCP (pipeOnly): the request goes without it, still only to a trusted
+// listener, and a server that asks for it there gives healthPipeOnly.
 func (c *cli) localRequest(port int, user, pass, method, path string, body []byte) (resp *http.Response, code int, via string) {
 	switch resp, out := c.socketRequest(port, method, path, body); out {
 	case socketAnswered:
@@ -514,9 +516,41 @@ func (c *cli) localRequest(port int, user, pass, method, path string, body []byt
 	case socketMaybeSent:
 		return nil, socketNoAnswer, transportSocket
 	}
+	if pass != "" && c.pipeOnly(port) {
+		resp, code = checkedRequest(port, user, "", method, path, body, true)
+		if code == http.StatusUnauthorized {
+			resp.Body.Close()
+			resp, code = nil, healthPipeOnly
+		}
+		return resp, code, transportTCP
+	}
 	resp, code = authedRequest(port, user, pass, method, path, body)
 	return resp, code, transportTCP
 }
+
+// pipeOnly says the saved password goes to the native server on port over
+// its local socket only, never over TCP: on Windows the owner of a TCP
+// listener is read from the PID the TCP table names, and Microsoft does not
+// document which process that is for a socket handed from one process to
+// another. The saved container's port, while no native server is
+// registered (as deviceTarget tells them apart), is not the native server's:
+// the container's server, which has no pipe for this user, still gets the
+// password over TCP.
+func (c *cli) pipeOnly(port int) bool {
+	if c.goos != "windows" {
+		return false
+	}
+	saved, _ := c.loadConfig()
+	return saved == nil || saved.Container == nil || saved.Container.Port != port || c.installedSupervisor() != nil
+}
+
+// healthPipeOnly is localRequest's code when the native server did not
+// answer over the local socket and asks for the password over TCP, where
+// pipeOnly keeps it from going.
+const healthPipeOnly = -4
+
+// pipeOnlyMsg explains healthPipeOnly.
+const pipeOnlyMsg = "the server did not answer over the local pipe, and on Windows the saved password goes over nothing else; the saved password was not sent"
 
 // socketOutcome is how a request over the local socket went.
 type socketOutcome int
@@ -596,9 +630,16 @@ func (c *cli) socketRequest(port int, method, path string, body []byte) (*http.R
 // connection is made, and the request goes over that connection: a listener
 // that takes the port after the check never gets it.
 func authedRequest(port int, user, pass, method, path string, body []byte) (resp *http.Response, code int) {
+	return checkedRequest(port, user, pass, method, path, body, pass != "")
+}
+
+// checkedRequest is authedRequest that checks the listener's owner when
+// check is set, a password or not: an answer pipeOnly asked for without the
+// password is believed only from a listener authedRequest would send it to.
+func checkedRequest(port int, user, pass, method, path string, body []byte, check bool) (resp *http.Response, code int) {
 	var refused atomic.Int32
 	tr := &http.Transport{DisableKeepAlives: true}
-	if pass != "" {
+	if check {
 		tr.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
 			conn, err := (&net.Dialer{}).DialContext(ctx, network, addr)
 			if err != nil {
@@ -686,6 +727,8 @@ func (c *cli) waitForServer(port int, user, pass, version string, timeout time.D
 			last = untrustedListenerMsg
 		case code == healthUnverified:
 			last = unverifiedListenerMsg
+		case code == healthPipeOnly:
+			last = pipeOnlyMsg
 		case code != 0:
 			last = fmt.Sprintf("HTTP %d, status %q", code, h.Status)
 		}
@@ -805,6 +848,8 @@ func (c *cli) cmdStatus(args []string) error {
 		fmt.Fprintf(c.out, "  %s server :%d - %s\n", c.paint(ansiRed, "[--]"), port, untrustedListenerMsg)
 	case code == healthUnverified:
 		fmt.Fprintf(c.out, "  %s server :%d - %s\n", c.paint(ansiYellow, "[??]"), port, unverifiedListenerMsg)
+	case code == healthPipeOnly:
+		fmt.Fprintf(c.out, "  %s server :%d - %s\n", c.paint(ansiYellow, "[??]"), port, pipeOnlyMsg)
 	case code != 0:
 		fmt.Fprintf(c.out, "  %s server :%d - HTTP %d\n", c.paint(ansiRed, "[--]"), port, code)
 	default:

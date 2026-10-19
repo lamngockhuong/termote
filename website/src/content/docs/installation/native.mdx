@@ -270,7 +270,8 @@ termote show-password   # print the saved username and password
 
 The CLI talks to the server over a socket only your user can open (`~/.local/state/termote/run/<port>.sock`,
 a named pipe on Windows), without sending the password; `termote status` shows `Via: socket`. Against the
-container or an older server it uses `127.0.0.1` and the saved password (`Via: TCP`).
+container or an older server it uses `127.0.0.1` and the saved password (`Via: TCP`), except the native server
+on Windows, which gets the password over its pipe only (`termote status` then says the pipe did not answer).
 
 The service runs `termote serve`, which reads the saved config. Once a config file exists, `TERMOTE_*`
 environment variables are ignored, and `serve` removes them from its environment so no terminal inherits one.

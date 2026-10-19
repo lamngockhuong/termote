@@ -1516,7 +1516,8 @@ termote update --force           # Force reinstall current version
     the dir, then the server end's owner (`SO_PEERCRED`, `LOCAL_PEERCRED`, or on Windows the owner
     of the pipe object, `GetSecurityInfo`, never the serving process) is itself or root/SYSTEM, and sends one request on that very connection. A
     missing or untrusted socket, or a read that got no answer, falls back to TCP with the password
-    (`authedRequest`); a write that was sent but got no answer is never sent again. A stale socket is replaced at start; the
+    (`authedRequest`), except on Windows, where the native server's password goes over its pipe only
+    (`cli.pipeOnly`, `healthPipeOnly`); a write that was sent but got no answer is never sent again. A stale socket is replaced at start; the
     cleanup at exit removes it only while it is the one made there and nothing answers on it
 18. **Password sessions** (`server/sessions.go`, `server/signin_routes.go`, `caps.signins`): each
     session keeps its id (first 16 hex of the token's SHA-256, never the token), creation, last

@@ -393,7 +393,8 @@ A native server also listens on a socket only its own OS user can open, and the 
 Before sending a request the CLI checks that the server end runs as its own user or root/SYSTEM (on
 Windows, that the pipe is owned by its own user or SYSTEM); a socket another user made is never used. Without a socket (the container, an older server, a socket
 that cannot be opened: the server logs why) the CLI falls back to `127.0.0.1:<port>` with the saved
-password, which goes only to a listener of the same user or root/SYSTEM; a read sent on the socket that got no
+password, which goes only to a listener of the same user or root/SYSTEM; on Windows the native server
+never gets it that way, and `termote status` says the pipe did not answer instead; a read sent on the socket that got no
 answer is retried that way, a write never. `termote status` prints `Via: socket (no
 password sent)` or `Via: TCP`, and `status --json` has `"via": "socket"|"tcp"` (both only when the server answered).
 

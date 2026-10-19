@@ -99,6 +99,8 @@ func (c *cli) statusReport(saved *savedConfig, port int) statusReport {
 		r.Status = "untrusted listener"
 	case code == healthUnverified:
 		r.Status = "unverified listener"
+	case code == healthPipeOnly:
+		r.Status = "pipe only"
 	case code != 0:
 		r.Status = "http " + strconv.Itoa(code)
 	default:

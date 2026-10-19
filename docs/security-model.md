@@ -34,7 +34,9 @@ what Termote can reach, run it as another user with less access.
 - The CLI reaches the native server over a socket only its own OS user can open (a `0600` Unix socket in
   a `0700` dir, or a named pipe whose ACL names that user and SYSTEM), after checking the server end
   runs as that user or root/SYSTEM (on Windows, that the pipe is owned by that user or SYSTEM). It sends no password there; `termote status` says `Via: socket`.
-  Without the socket (the container, an older server) it falls back to TCP and the password.
+  Without the socket (the container, an older server) it falls back to TCP and the password, except to
+  the native server on Windows, which gets the password over its pipe only: without the pipe the CLI
+  reports that it did not send it.
 - Settings > Signed-in browsers and `termote signins` list the browsers signed in with the password (the
   sign-in form, Basic auth, a CLI link); each can be signed out, or every one but the current. A
   sign-out closes that browser's open terminals, one still opening included. A full device sees the list
@@ -90,13 +92,19 @@ what Termote can reach, run it as another user with less access.
   WinSW is refused) and not a per-user service. Services that fetch a URL for whoever asks, such as BITS
   and WebClient (WebDAV), are among them: any local user can send a request through them. `tailscale serve`
   is not: a standard user cannot open the `tailscaled` process, so its connections are refused.
-- **The system clock on Windows.** On Windows, who owns a loopback connection is read from the PID
-  the system's TCP table names, checked against that process's start time: two readings of the wall
-  clock. Setting the clock back, which takes an administrator or the time service, between a socket's
-  bind and the start of the process that later takes its PID lets the check pass; setting it back
-  between a process's start and its bind only refuses that process until it binds again. Equal times
-  are refused, so a process of your own that connects within one clock tick (about 15 ms) of starting
-  is refused too; its next connection passes.
+- **Which process a Windows socket belongs to.** On Windows, who owns a loopback connection, and who
+  listens on the container's port before the CLI sends it the password, is read from the PID the
+  system's TCP table names, checked against that process's start time. Microsoft does not document
+  which process that PID is for a socket made in one process and bound in another after its handle was
+  passed on, so a socket handed on that way, kept after its first process exited and bound once that
+  PID went to another user's process, is not proven to be caught. The native server's CLI does not
+  depend on it (it sends the password over its pipe only).
+- **The system clock on Windows.** That check compares two readings of the wall clock. Setting the
+  clock back, which takes an administrator or the time service, between a socket's bind and the start
+  of the process that later takes its PID lets the check pass; setting it back between a process's
+  start and its bind only refuses that process until it binds again. Equal times are refused, so a
+  process of your own that connects within one clock tick (about 15 ms) of starting is refused too;
+  its next connection passes.
 - **WSL 2.** Every Windows user reaches a server in WSL 2: in NAT mode through a relay running as root,
   in mirrored mode through a loopback whose client end WSL cannot see, which is let through.
 - **macOS.** It does not check which local user makes a connection (that takes `lsof` for each one):

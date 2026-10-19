@@ -97,6 +97,8 @@ func (c *cli) drawPanel(info linkInfo, fromHerdr bool, msg string) {
 			state, keys = untrustedListenerMsg, "q close"
 		case "unverified listener":
 			state, keys = unverifiedListenerMsg, "q close"
+		case "pipe only":
+			state, keys = pipeOnlyMsg, "q close"
 		}
 		fmt.Fprintf(c.out, "  %s\n\n", c.paint(ansiRed, state))
 		fmt.Fprintf(c.out, "%s\n", c.paint(ansiDim, keys))
