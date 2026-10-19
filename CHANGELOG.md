@@ -1,5 +1,24 @@
 # Changelog
 
+## [2.4.0](https://github.com/lamngockhuong/termote/compare/v2.3.0...v2.4.0) (2026-10-19)
+
+
+### Features
+
+* pin the agent filter under a one-line current session in the phone's sessions sheet ([#493](https://github.com/lamngockhuong/termote/issues/493)) ([ccff514](https://github.com/lamngockhuong/termote/commit/ccff51454ef295c7734b17bcbe9dc1a7f777c914))
+* search sessions in the sidebar, sessions sheet and agent overview ([#492](https://github.com/lamngockhuong/termote/issues/492)) ([172ebcf](https://github.com/lamngockhuong/termote/commit/172ebcf5154fde6ce8b47aea116a8ca4125b43c0))
+
+
+### Bug Fixes
+
+* **herdr:** strip .exe from pane process names on Windows ([#468](https://github.com/lamngockhuong/termote/issues/468)) ([#494](https://github.com/lamngockhuong/termote/issues/494)) ([9807e86](https://github.com/lamngockhuong/termote/commit/9807e8665204fcab91c9bddb0a036fbb91e3a233))
+* keep the home dir's place when --workspace differs from it only in case ([#495](https://github.com/lamngockhuong/termote/issues/495)) ([c6a9fea](https://github.com/lamngockhuong/termote/commit/c6a9fea6fb315c5f2850f889e0126f6da973fede))
+* **pwa:** image viewer keeps its place on resize and returns focus on a new URL ([#498](https://github.com/lamngockhuong/termote/issues/498)) ([caebe23](https://github.com/lamngockhuong/termote/commit/caebe234873410d2f45082baae488f3b19209399)), closes [#422](https://github.com/lamngockhuong/termote/issues/422)
+* **pwa:** keep focus in a Mermaid block when its diagram can no longer show ([#502](https://github.com/lamngockhuong/termote/issues/502)) ([9b782ec](https://github.com/lamngockhuong/termote/commit/9b782ec43744f869857418183e61636024b5213d)), closes [#501](https://github.com/lamngockhuong/termote/issues/501)
+* **pwa:** keep focus in the image preview when a new image fails to decode ([#500](https://github.com/lamngockhuong/termote/issues/500)) ([66a0af7](https://github.com/lamngockhuong/termote/commit/66a0af7fd00979f8ac515d8b1319954e8d4eca8b)), closes [#422](https://github.com/lamngockhuong/termote/issues/422)
+* **server:** keep waiting for a Codex paste while it is still arriving ([#410](https://github.com/lamngockhuong/termote/issues/410)) ([#503](https://github.com/lamngockhuong/termote/issues/503)) ([4aa1c46](https://github.com/lamngockhuong/termote/commit/4aa1c46f3647ca28a696cc024ebb28635105e89d))
+* trust Windows local peers and the CLI pipe by identity, not by a PID or session ([#484](https://github.com/lamngockhuong/termote/issues/484)) ([f731729](https://github.com/lamngockhuong/termote/commit/f7317299468ef774fddad8a462533e8705c660ff))
+
 ## [2.3.0](https://github.com/lamngockhuong/termote/compare/v2.2.0...v2.3.0) (2026-10-17)
 
 
