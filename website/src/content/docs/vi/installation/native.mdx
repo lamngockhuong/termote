@@ -171,7 +171,9 @@ Trên Linux và Windows, server từ chối mọi kết nối xuất phát từ 
 server ghi sẵn lệnh cần chạy. Trên Windows, proxy chạy như một service được vào khi chính nó là tiến trình
 của service và user của bạn không đọc được token của nó (nếu đọc được, nó được tính là account của nó, cần
 cho phép như mọi user khác); proxy do một wrapper như NSSM hay WinSW khởi động thì bị từ chối: hãy đăng ký chính proxy làm
-service, hoặc chạy nó dưới user của bạn.
+service, hoặc chạy nó dưới user của bạn. Service mà user của bạn không mở được tiến trình cũng bị từ chối: với
+tài khoản thường, `tailscaled` là một trong số đó, nên [`--tailscale`](/vi/installation/tailscale/) không chạy
+được trên Windows native.
 
 ```bash
 termote start --allow-local-user www-data

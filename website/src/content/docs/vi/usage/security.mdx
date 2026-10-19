@@ -94,6 +94,7 @@ giới hạn những gì Termote chạm tới, hãy chạy nó dưới một tà
   tiến trình do Service Control Manager chạy, không phải tiến trình nó khởi động tiếp (proxy chạy dưới NSSM
   hay WinSW bị từ chối) và không phải dịch vụ theo từng người dùng. Các dịch vụ tải URL cho bất kỳ ai yêu cầu,
   như BITS và WebClient (WebDAV), nằm trong số đó: mọi tài khoản trên máy đều gửi được request qua chúng.
+  `tailscale serve` thì không: tài khoản thường không mở được tiến trình `tailscaled`, nên kết nối của nó bị từ chối.
 - **WSL 2.** Mọi tài khoản Windows đều tới được server chạy trong WSL 2: chế độ NAT đi qua một tiến trình chuyển tiếp
   chạy dưới root, chế độ `mirrored` đi qua địa chỉ nội bộ dùng chung mà WSL không thấy được đầu client, và loại kết nối này được
   cho qua.

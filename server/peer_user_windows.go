@@ -20,10 +20,12 @@ const tcpTableOwnerModuleConnections = 7
 const mibTCPStateEstab = 5
 
 // serviceProcessID stands for a process whose token this user cannot read
-// but that the Service Control Manager runs as a service (tailscaled, a
-// reverse proxy installed as a service): their token is out of a normal
-// user's reach, and registering a service takes an administrator. A
-// per-user service is not one: it runs as whoever logged on.
+// but that the Service Control Manager runs as a service (a reverse proxy
+// installed as a service): their token is out of a normal user's reach, and
+// registering a service takes an administrator. A per-user service is not
+// one: it runs as whoever logged on. A service this user cannot open at all
+// is refused before this: tailscaled, for a standard user, so `tailscale
+// serve` does not reach its server.
 const serviceProcessID = "service"
 
 // errPeerPIDReused means the process now holding the PID the TCP table

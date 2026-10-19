@@ -88,7 +88,8 @@ what Termote can reach, run it as another user with less access.
   same holds for a running service whose process the server's user can open but whose token it cannot
   read: the process the Service Control Manager runs, not one it starts in turn (a proxy under NSSM or
   WinSW is refused) and not a per-user service. Services that fetch a URL for whoever asks, such as BITS
-  and WebClient (WebDAV), are among them: any local user can send a request through them.
+  and WebClient (WebDAV), are among them: any local user can send a request through them. `tailscale serve`
+  is not: a standard user cannot open the `tailscaled` process, so its connections are refused.
 - **WSL 2.** Every Windows user reaches a server in WSL 2: in NAT mode through a relay running as root,
   in mirrored mode through a loopback whose client end WSL cannot see, which is let through.
 - **macOS.** It does not check which local user makes a connection (that takes `lsof` for each one):

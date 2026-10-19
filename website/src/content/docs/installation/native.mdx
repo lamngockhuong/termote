@@ -171,7 +171,9 @@ allow are let in. A reverse proxy that runs as its own user (nginx as `www-data`
 allowing; the server log names the command when it refuses one. On Windows a proxy that runs as a service
 is let in when it is the service's own process and your user cannot read its token (one whose token your
 user can read counts as its account, to allow like any other user); one that a wrapper such as NSSM or
-WinSW starts is refused: register the proxy itself as the service, or run it as your user.
+WinSW starts is refused: register the proxy itself as the service, or run it as your user. A service
+your user cannot open at all is refused too: for a standard user that includes `tailscaled`, so
+[`--tailscale`](/installation/tailscale/) does not work on native Windows.
 
 ```bash
 termote start --allow-local-user www-data

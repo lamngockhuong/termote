@@ -272,6 +272,11 @@ never leads to a port it no longer holds (a crash leaves it until the service re
 (`tailscale serve --https=<port> off`), never `tailscale serve reset`, which would drop
 mappings that are not Termote's.
 
+On native Windows a standard (non-administrator) user cannot open the `tailscaled` process, so the
+server's local-user check refuses every connection `tailscale serve` makes
+(`local-user-refused ... reason="Access is denied."` in the log, a 502 in the browser) and
+`--tailscale` does not work there; `--allow-local-user` cannot help, as the account is never read.
+
 ## Environment Variables (no saved config only)
 
 `termote serve` reads the saved config and ignores every `TERMOTE_*` variable whenever one

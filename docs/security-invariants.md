@@ -952,7 +952,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   running service's own PID, from the Service Control Manager (`EnumServicesStatusEx`, read after
   the process is opened, so the PID cannot change hands; a per-user service, type bit 0x40 or 0x80,
   is not one, as it runs as whoever logged on), never for being in session 0 (an SSH logon is too)
-  or a service's child (sshd's session processes are). Both times are wall-clock FILETIMEs: a clock
+  or a service's child (sshd's session processes are). A process that cannot be opened is refused,
+  service or not: a standard user cannot open `tailscaled`, so `tailscale serve` is refused. Both times are wall-clock FILETIMEs: a clock
   stepped back between a process's start and its bind refuses that process (fails closed). A whole-table read (`/proc`, Windows' tables and service list) is
   shared (`tableSnapshots`): a lookup waits for the first read that starts after it asked, and
   every lookup waiting then uses that read, so a flood costs about one read per batch, not one
