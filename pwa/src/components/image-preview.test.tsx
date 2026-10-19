@@ -74,9 +74,11 @@ describe('ImagePreview', () => {
     render(<ImagePreview state={ready()} alt={'a\u202e.png'} />)
     const button = screen.getByRole('button', { name: /full screen/ })
     // Not decoded yet: nothing to open
-    expect(button).toBeDisabled()
+    expect(button).toHaveAttribute('aria-disabled', 'true')
+    fireEvent.click(button)
+    expect(opened).not.toHaveBeenCalled()
     loadAs(screen.getByRole('img'), 640, 480)
-    expect(button).toBeEnabled()
+    expect(button).not.toHaveAttribute('aria-disabled')
     // The bidi override is shown, never applied
     expect(button.getAttribute('aria-label')).not.toContain('\u202e')
     fireEvent.click(button)
@@ -87,6 +89,17 @@ describe('ImagePreview', () => {
       height: 480,
       isSvg: false,
     } satisfies ViewerImage)
+  })
+
+  it('keeps focus on the button while a new image decodes', () => {
+    const { rerender } = render(<ImagePreview state={ready()} alt="a.png" />)
+    loadAs(screen.getByRole('img'), 640, 480)
+    const button = screen.getByRole('button', { name: /full screen/ })
+    rerender(<ImagePreview state={ready('blob:u2')} alt="a.png" />)
+    // What a viewer closing on the old URL does: focus its opener
+    button.focus()
+    expect(document.activeElement).toBe(button)
+    expect(button).toHaveAttribute('aria-disabled', 'true')
   })
 
   it('opens an SVG without a size of its own for the viewer to measure', () => {
