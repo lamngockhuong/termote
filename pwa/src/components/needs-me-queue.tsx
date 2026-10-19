@@ -13,6 +13,7 @@ import {
   unskip,
   updateQueue,
 } from '../utils/needs-me-queue'
+import { visibleUnsafe } from '../utils/unsafe-chars'
 import { PromptCard, WaitingCard } from './prompt-card'
 import { ReadOnlyBar } from './read-only-bar'
 import { Button } from './ui/button'
@@ -121,7 +122,8 @@ export function NeedsMeQueue({ cards, readOnly, canAnswer, onOpen }: Props) {
           tabIndex={-1}
           className="min-w-0 flex-1 truncate text-[14px] font-semibold outline-none"
         >
-          Needs you: {agentLabel(card.pane.agentName)}, {card.where}
+          Needs you: {agentLabel(card.pane.agentName)},{' '}
+          {visibleUnsafe(card.where)}
         </h3>
         <span className="shrink-0 text-[12px] text-fg-muted">
           {left > 0 ? `${left} more waiting` : 'last one'}

@@ -156,6 +156,7 @@ export const AgentCard = memo(function AgentCard({
   const label = agentLabel(pane.agentName)
   const name =
     label === 'agent' ? visibleUnsafe(pane.agentName || 'Agent') : label
+  const place = visibleUnsafe(where)
   const openLabel = opensChat ? 'Open chat' : 'Open terminal'
   const status = pane.agentStatus
   const age = statusAge(pane.agentSince, pane.agentSinceFirstSeen, now)
@@ -181,7 +182,7 @@ export const AgentCard = memo(function AgentCard({
         ref={openRef}
         type="button"
         onClick={() => onOpen(session, pane, opensChat ? 'chat' : 'terminal')}
-        aria-label={`${openLabel}: ${name}, ${status ? STATUS_WORDS[status] : 'status unknown'}, ${where}`}
+        aria-label={`${openLabel}: ${name}, ${status ? STATUS_WORDS[status] : 'status unknown'}, ${place}`}
         aria-describedby={detailsId}
         className={`flex w-full min-h-touch flex-col gap-1.5 rounded-panel p-3 pr-12 text-left transition-colors duration-(--duration-fast) ease-standard hover:bg-surface-raised ${FOCUS_RING}`}
       >
@@ -207,8 +208,11 @@ export const AgentCard = memo(function AgentCard({
           )}
         </span>
         <span className="flex min-w-0 items-center gap-1.5 text-[12px] text-fg-muted">
-          <span className="truncate" title={groupTitle}>
-            {where}
+          <span
+            className="truncate"
+            title={groupTitle && visibleUnsafe(groupTitle)}
+          >
+            {place}
           </span>
           {worktree && (
             <span className="shrink-0 rounded-control border border-border px-1 text-[11px]">
@@ -296,7 +300,7 @@ export const AgentCard = memo(function AgentCard({
         <IconButton
           size="sm"
           onClick={() => onOpen(session, pane, 'terminal')}
-          aria-label={`Open terminal: ${name}, ${where}`}
+          aria-label={`Open terminal: ${name}, ${place}`}
           title="Open terminal"
           className="absolute right-2 top-2"
         >

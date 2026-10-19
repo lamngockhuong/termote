@@ -125,9 +125,11 @@ export function ActivityLog({
           {rows.map((e) => {
             const found = byKey.get(e.key)
             const where = found
-              ? groups.length > 1 && found.session.groupId
-                ? `${groupName.get(found.session.groupId) ?? found.session.groupId} / ${found.session.name}`
-                : found.session.name
+              ? visibleUnsafe(
+                  groups.length > 1 && found.session.groupId
+                    ? `${groupName.get(found.session.groupId) ?? found.session.groupId} / ${found.session.name}`
+                    : found.session.name,
+                )
               : 'closed'
             const name =
               agentLabel(e.agent) === 'agent'

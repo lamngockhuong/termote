@@ -123,6 +123,17 @@ describe('ChatView', () => {
     expect(screen.getByText('Reconnecting…')).toBeInTheDocument()
   })
 
+  it('shows the hidden characters of the session name', () => {
+    set({ entries: entries(1) })
+    render(
+      <ChatView
+        {...props}
+        session={{ ...props.session!, name: 'cla\u202eude' }}
+      />,
+    )
+    expect(screen.getByText('Claude Code · cla⟨U+202E⟩ude')).toBeInTheDocument()
+  })
+
   it('an empty conversation says so', () => {
     render(<ChatView {...props} />)
     expect(screen.getByText('No messages yet.')).toBeInTheDocument()

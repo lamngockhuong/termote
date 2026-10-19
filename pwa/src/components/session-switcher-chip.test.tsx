@@ -42,6 +42,15 @@ describe('SessionSwitcherChip', () => {
     expect(screen.getByRole('img', { name: 'Agent working' })).toBeVisible()
   })
 
+  it('shows the hidden characters of the session and group names', () => {
+    const { chip } = renderChip({
+      session: { ...SESSION, name: 'cla\u202eude' },
+      groupName: 'ter\u202emote',
+    })
+    expect(chip).toHaveTextContent('cla⟨U+202E⟩ude')
+    expect(chip).toHaveTextContent('ter⟨U+202E⟩mote · 3 sessions')
+  })
+
   it('leaves out a missing group and counts one session', () => {
     const { chip } = renderChip({ sessionCount: 1 })
     expect(chip).toHaveTextContent(/^🤖claude1 session$/)

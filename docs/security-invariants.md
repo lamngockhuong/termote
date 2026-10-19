@@ -195,7 +195,12 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   root `viewHidesRoot` refuses (no repo, a home dir or one above), as Files. The PWA shows the
   last text, the branch, the model, a Codex plan and an agent name it does not know (Herdr reports
   its own; the card and the activity log) with every C0/C1, bidi (U+061C included) and zero-width
-  space character as `⟨U+XXXX⟩` (`visibleUnsafe`, `pwa/src/utils/unsafe-chars.ts`)
+  space character as `⟨U+XXXX⟩` (`visibleUnsafe`, `pwa/src/utils/unsafe-chars.ts`). Group, tab
+  and session names, which any process in a pane can change (`tmux rename-window`), are shown the
+  same way wherever they appear as text or a tooltip: the overview's cards, its queue and the
+  activity log, the sidebar (rows, group headers, the collapsed rail, the current session), the
+  session tabs, the header, the session chip, the Chat view's header and the confirmations that
+  close a session or a group; a rename field keeps the name as it is
 - **Agent subagents** (`server/agent_subagents.go`, `GET /api/mux/panes/{id}/agent/subagents`):
   `requireMethod(GET)`, `crossSiteRejection`, `requireAgentRead`; internal errors are logged only.
   Only the pane's own Claude session (`AgentSession`, as the transcript): another agent, no

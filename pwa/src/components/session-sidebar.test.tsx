@@ -212,6 +212,12 @@ describe('SessionSidebar — desktop expanded (default)', () => {
     expect(screen.getByTitle('Shell - Terminal')).toBeInTheDocument()
   })
 
+  it('shows the hidden characters of a session name', () => {
+    renderDesktop([{ ...SESSIONS[0], name: 'Sh\u202eell' }, SESSIONS[1]])
+    expect(screen.getByText('Sh⟨U+202E⟩ell')).toBeInTheDocument()
+    expect(screen.getByTitle('Sh⟨U+202E⟩ell - Terminal')).toBeInTheDocument()
+  })
+
   it('names the hover actions after the session', () => {
     renderDesktop()
     expect(screen.getByRole('button', { name: 'Edit Dev' })).toBeInTheDocument()
@@ -430,6 +436,11 @@ describe('SessionSidebar — desktop collapsed', () => {
       />,
     )
   }
+
+  it('shows the hidden characters of a session name in its title', () => {
+    renderCollapsed([{ ...SESSIONS[0], name: 'Sh\u202eell' }, SESSIONS[1]])
+    expect(screen.getByTitle('Sh⟨U+202E⟩ell')).toBeInTheDocument()
+  })
 
   it('renders expand button in collapsed mode', () => {
     renderCollapsed()
@@ -713,6 +724,12 @@ describe('SessionSidebar — mobile mode', () => {
     expect(scroller.scrollTop).toBe(-170)
   })
 
+  it('shows the hidden characters of the current session name', () => {
+    renderMobile(true, [{ ...SESSIONS[0], name: 'Sh\u202eell' }, SESSIONS[1]])
+    const current = screen.getByRole('region', { name: 'Current session' })
+    expect(current).toHaveTextContent('Sh⟨U+202E⟩ell')
+  })
+
   it('shows the current session on one line with Edit and Delete in its menu', () => {
     renderMobile()
     const current = screen.getByRole('region', { name: 'Current session' })
@@ -854,6 +871,14 @@ describe('SessionSidebar — groups', () => {
       />,
     )
   }
+
+  it('shows the hidden characters of a group name', () => {
+    renderGroups({ groups: [{ ...GROUPS[0], name: 'a\u202epi' }, GROUPS[1]] })
+    expect(
+      screen.getByRole('region', { name: 'a⟨U+202E⟩pi' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('a⟨U+202E⟩pi')).toBeInTheDocument()
+  })
 
   it('hides the header for a single group', () => {
     render(

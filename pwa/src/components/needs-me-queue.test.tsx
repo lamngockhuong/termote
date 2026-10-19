@@ -109,6 +109,15 @@ describe('NeedsMeQueue', () => {
     expect(container).toBeEmptyDOMElement()
   })
 
+  it('shows the hidden characters of the group and tab names', () => {
+    setup([{ ...card('a', 1), where: 'w\u202e / a' }])
+    expect(
+      screen.getByRole('heading', {
+        name: 'Needs you: Claude Code, w⟨U+202E⟩ / a',
+      }),
+    ).toBeInTheDocument()
+  })
+
   it('shows the one waiting longest, and reads only its dialog', async () => {
     setup([card('new', 5), card('old', 1), card('busy', 2, 'working')])
     expect(

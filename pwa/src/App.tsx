@@ -115,6 +115,7 @@ import {
   sendTextToTerminal,
   toggleTmuxCopyMode,
 } from './utils/terminal-bridge'
+import { visibleUnsafe } from './utils/unsafe-chars'
 import {
   pickImageFile,
   UPLOAD_TIMEOUT_MS,
@@ -1612,7 +1613,9 @@ export default function App({
         onCancel={cancelRemove}
       >
         <p className="m-0">
-          <span className="font-medium text-fg">{pendingRemove?.name}</span>{' '}
+          <span className="font-medium text-fg">
+            {visibleUnsafe(pendingRemove?.name ?? '')}
+          </span>{' '}
           will be closed, along with anything still running in it.
         </p>
         <RunningLine names={pendingRemove?.commands ?? []} />
@@ -1628,7 +1631,7 @@ export default function App({
         <p className="m-0">
           Close {groupNoun}{' '}
           <span className="font-medium text-fg">
-            "{pendingGroupClose?.name}"
+            "{visibleUnsafe(pendingGroupClose?.name ?? '')}"
           </span>
           ? Its {pendingGroupTabs} {pendingGroupTabs === 1 ? 'tab' : 'tabs'} and
           everything running in them will end.
@@ -1638,8 +1641,9 @@ export default function App({
           {pendingGroupClose && isDefaultGroup(pendingGroupClose.id) && (
             <>
               {' '}
-              Termote starts a new, empty "{pendingGroupClose.name}" right away,
-              and every device viewing it is disconnected.
+              Termote starts a new, empty "
+              {visibleUnsafe(pendingGroupClose.name)}" right away, and every
+              device viewing it is disconnected.
             </>
           )}
         </p>

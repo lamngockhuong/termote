@@ -14,6 +14,7 @@ import type { TranscriptEntry } from '../hooks/use-mux-api'
 import type { StartRecord } from '../hooks/use-start-agent'
 import { toAgentStatus } from '../types/session'
 import { canStartAgent } from '../utils/agent-start'
+import { visibleUnsafe } from '../utils/unsafe-chars'
 import { AgentStatusBadge } from './agent-status-badge'
 import { ChatMessage, chatSide } from './chat-message'
 import { OpenTerminalButton } from './open-terminal-button'
@@ -257,7 +258,7 @@ function AgentChat({ session, showView, readOnly, agentStart }: ViewProps) {
       <header className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2 text-[13px]">
         <AgentStatusBadge status={status} />
         <span className="min-w-0 flex-1 truncate font-medium">
-          {agent} · {session.name}
+          {agent} · {visibleUnsafe(session.name)}
           {paneLabel && ` · ${paneLabel}`}
         </span>
         {t.error && <span className="text-warning">Reconnecting…</span>}

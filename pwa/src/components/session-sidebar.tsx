@@ -37,6 +37,7 @@ import {
   summarizeSessions,
 } from '../utils/session-filter'
 import { matchesQuery, searchTerms } from '../utils/session-search'
+import { visibleUnsafe } from '../utils/unsafe-chars'
 import { AgentFilterBar } from './agent-filter-bar'
 import { AgentStatusBadge } from './agent-status-badge'
 import { BrandMark } from './brand-mark'
@@ -532,7 +533,7 @@ export function SessionSidebar({
           onDoubleClick={() => onUpdate && startEdit(session)}
           title={
             session.description
-              ? `${session.name} - ${session.description}`
+              ? `${visibleUnsafe(session.name)} - ${session.description}`
               : undefined
           }
           className={`flex min-w-0 flex-1 items-center gap-2.5 rounded-control px-2 text-left text-[14px] ${
@@ -544,7 +545,7 @@ export function SessionSidebar({
           </span>
           <span className="min-w-0 flex-1">
             <span className="block truncate ui-terminal:font-label ui-terminal:text-[13px]">
-              {session.name}
+              {visibleUnsafe(session.name)}
             </span>
             {session.commands && (
               <span className="block truncate text-[11px] font-normal text-fg-subtle">
@@ -833,7 +834,7 @@ export function SessionSidebar({
     const tabs = arrange(sessions.filter((s) => s.groupId === group.id))
     if (narrowed && tabs.length === 0) return null
     const collapsed = !narrowed && isGroupCollapsed(group.id)
-    const name = group.name || group.id
+    const name = visibleUnsafe(group.name || group.id)
     return (
       <section key={group.id} aria-label={name} className="pb-2">
         {groupActions && renamingGroup === group.id ? (
@@ -1029,7 +1030,7 @@ export function SessionSidebar({
             {activeSession.icon}
           </span>
           <span className="min-w-0 truncate text-[15px] font-semibold ui-terminal:font-label ui-terminal:text-[14px]">
-            {activeSession.name}
+            {visibleUnsafe(activeSession.name)}
           </span>
           <span className="shrink-0 font-label text-[11px] uppercase tracking-wider text-fg-subtle">
             Current
@@ -1144,7 +1145,7 @@ export function SessionSidebar({
                   className={`flex size-10 shrink-0 items-center justify-center rounded-control ${FOCUS_RING} ${
                     active ? ACTIVE_ROW_CLASSES : ROW_CLASSES
                   }`}
-                  title={session.name}
+                  title={visibleUnsafe(session.name)}
                 >
                   <span className="relative text-lg leading-none">
                     {session.icon}
