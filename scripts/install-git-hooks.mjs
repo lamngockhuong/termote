@@ -72,7 +72,7 @@ changed=$(printf '%s\\n%s\\n' "$changed" "$quoted" | grep -v '^$' | sort -u)
 if [ -n "$changed" ]; then
   echo "git hooks: ${hook} skipped: these files differ from \${ref#refs/*/}:" >&2
   printf '%s\\n' "$changed" | sed 's/^/  /' >&2
-  echo "Read their diff, then run the checks with: pnpm exec lefthook run ${hook}" >&2
+  echo "Read their diff, then run the checks with: pnpm exec lefthook run --no-auto-install ${hook}" >&2
   exit 0
 fi
 bin="$top/node_modules/.bin/lefthook"

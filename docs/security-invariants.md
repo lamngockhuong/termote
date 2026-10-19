@@ -1081,7 +1081,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   called workflow: a `workflow_call` job does not get the environment's secret (actions/runner#1490)
 - **Git hooks** (`scripts/install-git-hooks.mjs`, `lefthook.yml`): `pnpm install` writes the
   `pre-commit` and `pre-push` hooks itself (`lefthook install` is never run, and `lefthook run` gets
-  `--no-auto-install`, so lefthook never rewrites them; a hook that is not lefthook's is left; with
+  `--no-auto-install`, so lefthook never rewrites them; the command the skip message and
+  `CONTRIBUTING.md` give for running the checks by hand carries it too; a hook that is not lefthook's is left; with
   `core.hooksPath` set nothing is written). A hook runs lefthook, with `LEFTHOOK_CONFIG` set to the
   checked-out `lefthook.yml`, only when `git diff` (`--icase-pathspecs`: on a case-insensitive file
   system npm reads a `.NPMRC` as `.npmrc`) finds no change against `origin/HEAD`, else `main`, to a
