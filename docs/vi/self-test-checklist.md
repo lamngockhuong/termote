@@ -308,8 +308,8 @@ Chạy Herdr trên một socket và `HOME` riêng để thử, đừng dùng Her
       chỗ tab sẽ nằm; `tmux list-windows` (hoặc thanh tab của Herdr) hiện thứ tự mới; nhấn vào
       tab vẫn chọn được nó
 - [ ] Máy tính: Alt+↑/Alt+↓ trên dòng tab đang focus di chuyển tab đó; focus vẫn ở dòng ấy
-- [ ] Điện thoại (390×844): ↑/↓ trên dòng "Current session" di chuyển tab đang hiện, bị tắt khi tab
-      đã ở đầu hoặc cuối group; vuốt vẫn hiện nút Sửa/Xóa
+- [ ] Điện thoại (390×844): Move up/Move down trong menu ⋯ của dòng "Current session" di chuyển tab
+      đang hiện, bị tắt khi tab đã ở đầu hoặc cuối group; vuốt vẫn hiện nút Sửa/Xóa
 - [ ] Herdr: Move up/Move down trong menu ⋯ của workspace (tắt ở hai đầu) và kéo header của nó đều
       di chuyển workspace; sidebar của Herdr cũng đổi theo
 - [ ] Herdr: tab được sắp lại ngay trong Herdr hiện cùng thứ tự trong Termote
@@ -461,7 +461,9 @@ Mở bằng nút lưới trên sidebar (máy tính) hoặc mục "Agent overview
 
 - [ ] Nút Sửa/Xóa ẩn mặc định
 - [ ] Vuốt trái/phải trên session item hiện nút Sửa/Xóa
-- [ ] Khi có `caps.reorderTabs`: dòng "Current session" có nút Move up/Move down
+- [ ] Khi có `caps.reorderTabs`: menu ⋯ của dòng "Current session" có Move up/Move down
+- [ ] Điện thoại: dòng "Current session" và bộ lọc agent luôn nằm ngay dưới tiêu đề khi cuộn danh
+      sách
 
 ### Session Qua API
 

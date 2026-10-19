@@ -98,8 +98,9 @@ There is no bottom navigation: the terminal takes that height.
 ```
 
 - The session chip (name, agent badge, connection dot; "Open sessions menu") opens the sessions
-  list as a bottom sheet with "New session", scrolled to the current session. A sticky "Current
-  session" row under the title shows it with visible Edit and Delete; the other rows keep swipe.
+  list as a bottom sheet with "New session", scrolled to the current session. Pinned under the title while the list scrolls: the
+  current session on one line (Edit, Move up/down and Delete in its ⋯ menu) and the agent filter
+  (All, Needs you, Working, Agents); the other rows keep swipe.
   Creating a session closes the sheet.
 - The "More" menu holds font size, theme, Settings, Help & gestures, About, Copy link and Clear
   cache & reload.

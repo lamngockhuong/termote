@@ -411,7 +411,7 @@ export function SessionSidebar({
     // Only the sheet's scroller moves: scrollIntoView would also scroll the
     // dialog itself when the row cannot be centred (the last one), pushing
     // the title and the current session off screen above an empty gap. A row
-    // already in sight (below the sticky current session) keeps the list at
+    // already in sight (below the pinned current session) keeps the list at
     // its top: centring a row near the end would scroll to the bottom and
     // show only the padding and the home indicator's inset under it.
     const list = sheetListRef.current
@@ -420,7 +420,7 @@ export function SessionSidebar({
     if (!row || !scroller) return
     const r = row.getBoundingClientRect()
     const s = scroller.getBoundingClientRect()
-    // A current row means an active session, so the sticky current session
+    // A current row means an active session, so the pinned block holding it
     // sits right above the list
     const top = list.previousElementSibling!.getBoundingClientRect().bottom
     if (r.top >= top && r.bottom <= s.bottom) return
@@ -440,9 +440,9 @@ export function SessionSidebar({
     }
   }
 
-  // Mobile: a form the browser scrolls to on focus clears the sticky
-  // current session row.
-  const formClasses = `flex flex-col gap-2 rounded-control border border-border bg-bg p-2 ${isMobile ? 'scroll-mt-24' : ''}`
+  // Mobile: a form the browser scrolls to on focus clears the pinned current
+  // session and agent filter.
+  const formClasses = `flex flex-col gap-2 rounded-control border border-border bg-bg p-2 ${isMobile ? 'scroll-mt-28' : ''}`
 
   const startEdit = (session: Session, inCurrent = false) => {
     setEditingInCurrent(inCurrent)
@@ -758,6 +758,57 @@ export function SessionSidebar({
       </Menu>
     )
 
+  // Mobile: Edit, Move up/down and Delete of the current session
+  const renderCurrentMenu = (session: Session) => {
+    const movable = canMoveTabs(session.groupId)
+    if (!onUpdate && !movable && !canRemove) return null
+    const ids = groupTabIds(session.groupId)
+    // Keyed by the session: another one becoming current closes the menu
+    return (
+      <Menu
+        key={session.id}
+        label={`Actions for ${session.name}`}
+        trigger={<MoreHorizontal size={18} aria-hidden="true" />}
+      >
+        {onUpdate && (
+          <MenuItem
+            icon={<Pencil size={16} />}
+            onSelect={() => startEdit(session, true)}
+          >
+            Edit
+          </MenuItem>
+        )}
+        {movable && (
+          <>
+            <MenuItem
+              icon={<ArrowUp size={16} />}
+              disabled={ids[0] === session.id}
+              onSelect={() => stepTab(session, -1)}
+            >
+              Move up
+            </MenuItem>
+            <MenuItem
+              icon={<ArrowDown size={16} />}
+              disabled={ids[ids.length - 1] === session.id}
+              onSelect={() => stepTab(session, 1)}
+            >
+              Move down
+            </MenuItem>
+          </>
+        )}
+        {canRemove && (
+          <MenuItem
+            icon={<Trash2 size={16} />}
+            danger
+            onSelect={() => onRemove?.(session.id)}
+          >
+            Delete
+          </MenuItem>
+        )}
+      </Menu>
+    )
+  }
+
   // Opens the New group dialog; a filter or a search would hide the new
   // group's tab
   const newGroupButton = groupActions && (
@@ -965,69 +1016,26 @@ export function SessionSidebar({
       </div>
     )
 
-  // Mobile: the session on screen with its actions in sight, so they need
-  // neither a scroll nor a swipe. Held at the top while the list scrolls.
+  // Mobile: the session on screen on one line, its actions behind a menu, so
+  // the agent filter fits under it and both stay in sight while the list
+  // scrolls.
   const currentRow = activeSession && (
-    <section
-      aria-label="Current session"
-      className="sticky top-0 z-20 flex flex-col gap-1 border-b border-border bg-bg px-4 pb-2 pt-2 ui-native:border-0 ui-native:bg-surface"
-    >
-      <div className="font-label text-[11px] uppercase tracking-wider text-fg-subtle">
-        Current session
-      </div>
+    <section aria-label="Current session" className="flex flex-col gap-1">
       {editingInCurrent && editingId === activeSession.id ? (
         renderEditForm()
       ) : (
         <div className="flex min-w-0 items-center gap-2">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-control bg-surface text-[18px] ui-native:bg-bg">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-control bg-surface text-[16px] ui-native:bg-bg">
             {activeSession.icon}
           </span>
-          <span className="min-w-0 flex-1 truncate text-[15px] font-semibold ui-terminal:font-label ui-terminal:text-[14px]">
+          <span className="min-w-0 truncate text-[15px] font-semibold ui-terminal:font-label ui-terminal:text-[14px]">
             {activeSession.name}
           </span>
-          {canMoveTabs(activeSession.groupId) && (
-            <>
-              <IconButton
-                size="sm"
-                onClick={() => stepTab(activeSession, -1)}
-                disabled={
-                  groupTabIds(activeSession.groupId)[0] === activeSession.id
-                }
-                aria-label={`Move ${activeSession.name} up`}
-                title="Move up"
-              >
-                <ArrowUp size={16} aria-hidden="true" />
-              </IconButton>
-              <IconButton
-                size="sm"
-                onClick={() => stepTab(activeSession, 1)}
-                disabled={
-                  groupTabIds(activeSession.groupId).slice(-1)[0] ===
-                  activeSession.id
-                }
-                aria-label={`Move ${activeSession.name} down`}
-                title="Move down"
-              >
-                <ArrowDown size={16} aria-hidden="true" />
-              </IconButton>
-            </>
-          )}
-          {onUpdate && (
-            <Button size="sm" onClick={() => startEdit(activeSession, true)}>
-              <Pencil size={14} aria-hidden="true" />
-              Edit
-            </Button>
-          )}
-          {canRemove && (
-            <Button
-              size="sm"
-              variant="danger"
-              onClick={() => onRemove?.(activeSession.id)}
-            >
-              <Trash2 size={14} aria-hidden="true" />
-              Delete
-            </Button>
-          )}
+          <span className="shrink-0 font-label text-[11px] uppercase tracking-wider text-fg-subtle">
+            Current
+          </span>
+          <span className="flex-1" />
+          {renderCurrentMenu(activeSession)}
         </div>
       )}
       {reorderPaused && tabsMovable(activeSession.groupId) && (
@@ -1037,6 +1045,17 @@ export function SessionSidebar({
         </p>
       )}
     </section>
+  )
+
+  // Mobile: what stays at the top of the sheet while the list scrolls
+  const pinned = (currentRow || filterBar) && (
+    <div
+      data-testid="sheet-pinned"
+      className="sticky top-0 z-20 flex flex-col gap-2 border-b border-border bg-bg px-4 py-2 ui-native:border-0 ui-native:bg-surface"
+    >
+      {currentRow}
+      {filterBar}
+    </div>
   )
 
   // Mobile: bottom sheet; adding a session starts from its header
@@ -1065,12 +1084,11 @@ export function SessionSidebar({
           </>
         }
       >
-        {currentRow}
+        {pinned}
         <div ref={sheetListRef} className="flex flex-col gap-2 px-2 pb-3 pt-1">
           {showAddForm && addForm}
           {newGroupButton}
           {searchField}
-          {filterBar}
           {sessionList}
         </div>
       </Sheet>
