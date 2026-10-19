@@ -1,5 +1,11 @@
 import { Maximize, Minus, Plus, X } from 'lucide-react'
-import { type CSSProperties, useEffect, useRef, useState } from 'react'
+import {
+  type CSSProperties,
+  type RefObject,
+  useEffect,
+  useRef,
+  useState,
+} from 'react'
 import { useDialogModal } from '../hooks/use-dialog-modal'
 import { useHistoryClose } from '../hooks/use-history-close'
 import { useRestoreFocus } from '../hooks/use-restore-focus'
@@ -30,6 +36,8 @@ interface Props {
   // The image where it was opened shows another URL now (this one may be
   // revoked): closes, as X does
   stale?: boolean
+  // Takes focus on close when what opened the viewer is gone
+  returnFocus?: RefObject<HTMLElement | null>
   onClose: () => void
 }
 
@@ -44,11 +52,12 @@ export default function ImageViewer({
   height,
   isSvg,
   stale = false,
+  returnFocus,
   onClose,
 }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
-  useRestoreFocus()
+  useRestoreFocus(returnFocus)
   const close = useHistoryClose(onClose)
   useDialogModal(dialogRef, true, close)
   useEffect(() => {

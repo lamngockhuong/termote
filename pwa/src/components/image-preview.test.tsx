@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react'
+import type { RefObject } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import type { ImageState } from '../hooks/use-image-blob'
 import type { ViewerImage } from '../hooks/use-image-viewer'
@@ -6,8 +7,13 @@ import { RequestError } from '../hooks/use-mux-api'
 import { ImagePreview, imageErrorText } from './image-preview'
 
 const opened = vi.fn()
+// Where the viewer returns focus when its opener is gone
+const returned: { ref?: RefObject<HTMLElement | null> } = {}
 vi.mock('../hooks/use-image-viewer', () => ({
-  useImageViewer: () => ({ open: opened, viewer: null }),
+  useImageViewer: (_src: string, ref: RefObject<HTMLElement | null>) => {
+    returned.ref = ref
+    return { open: opened, viewer: null }
+  },
 }))
 
 const refused = (status: number, code: string): ImageState => ({
@@ -100,6 +106,36 @@ describe('ImagePreview', () => {
     button.focus()
     expect(document.activeElement).toBe(button)
     expect(button).toHaveAttribute('aria-disabled', 'true')
+  })
+
+  it('keeps focus in the preview when the new image cannot be decoded', () => {
+    const { rerender } = render(<ImagePreview state={ready()} alt="a.png" />)
+    loadAs(screen.getByRole('img'), 640, 480)
+    screen.getByRole('button', { name: /full screen/ }).focus()
+    rerender(<ImagePreview state={ready('blob:u2')} alt="a.png" />)
+    fireEvent.error(screen.getByRole('img'))
+    expect(
+      screen.getByText('The image could not be decoded'),
+    ).toBeInTheDocument()
+    expect(document.activeElement).toBe(screen.getByTestId('image-preview'))
+  })
+
+  it('leaves focus elsewhere alone when the image cannot be decoded', () => {
+    render(
+      <>
+        <input aria-label="other" />
+        <ImagePreview state={ready()} alt="a.png" />
+      </>,
+    )
+    const other = screen.getByRole('textbox', { name: 'other' })
+    other.focus()
+    fireEvent.error(screen.getByRole('img'))
+    expect(document.activeElement).toBe(other)
+  })
+
+  it('has the viewer return focus to the preview once the button is gone', () => {
+    render(<ImagePreview state={ready()} alt="a.png" />)
+    expect(returned.ref?.current).toBe(screen.getByTestId('image-preview'))
   })
 
   it('opens an SVG without a size of its own for the viewer to measure', () => {

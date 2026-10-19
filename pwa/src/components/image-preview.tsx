@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from 'react'
+import { type ReactNode, useCallback, useRef, useState } from 'react'
 import { filesError } from '../hooks/use-files'
 import { type ImageState, imageErrorCode } from '../hooks/use-image-blob'
 import { useImageViewer } from '../hooks/use-image-viewer'
@@ -66,7 +66,17 @@ export function ImagePreview({ state, alt, label, missing, onRetry }: Props) {
   }>()
   const url = state.status === 'ready' ? state.url : undefined
   const seen = decoded?.url === url ? decoded : undefined
-  const { open, viewer } = useImageViewer(url)
+  // Takes focus when the image button goes (the new image could not be
+  // decoded), whether it had focus then or the viewer it opened returns
+  // focus later
+  const rootRef = useRef<HTMLDivElement>(null)
+  const { open, viewer } = useImageViewer(url, rootRef)
+  const keepFocus = useCallback(
+    (el: HTMLButtonElement | null) => () => {
+      if (document.activeElement === el) rootRef.current?.focus()
+    },
+    [],
+  )
   // A path can hold control or bidi characters: shown, never applied
   const title = visibleUnsafe(alt)
 
@@ -94,6 +104,7 @@ export function ImagePreview({ state, alt, label, missing, onRetry }: Props) {
       // fills the width, and a small bitmap keeps its own size
       <div className="p-2">
         <button
+          ref={keepFocus}
           type="button"
           // Decoded only: a broken or loading image has nothing to show. Not
           // disabled, which takes no focus: a viewer that closes because a
@@ -141,7 +152,12 @@ export function ImagePreview({ state, alt, label, missing, onRetry }: Props) {
     )
 
   return (
-    <div className="flex min-w-0 flex-col" data-testid="image-preview">
+    <div
+      ref={rootRef}
+      tabIndex={-1}
+      className="flex min-w-0 flex-col outline-none"
+      data-testid="image-preview"
+    >
       {label && (
         <div className="border-b border-border px-2 py-1 text-[11px] text-fg-muted">
           {label}
