@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
@@ -529,7 +530,10 @@ func (c *cli) containerStatus(args []string) error {
 		pass = saved.Password
 	}
 	// Over TCP: the container's server has no local socket of this user.
-	h, code := fetchHealth(port, saved.authUser(), pass)
+	// The password still stays home on a port pipeOnly gives the native
+	// server.
+	resp, code := c.tcpRequest(port, saved.authUser(), pass, http.MethodGet, "/api/mux/health", nil)
+	h := decodeHealth(resp, code)
 	if code == 200 {
 		fmt.Fprintf(c.out, "  %s server :%d - %s (v%s)\n", c.paint(ansiGreen, "[OK]"), port, h.Status, h.Version)
 		if h.Devices != nil && !*h.Devices {
@@ -538,9 +542,18 @@ func (c *cli) containerStatus(args []string) error {
 		fmt.Fprintln(c.out)
 		return nil
 	}
-	fmt.Fprintf(c.out, "  %s server :%d - %s\n\n", c.paint(ansiRed, "[--]"), port, describeCode(code))
+	msg := describeCode(code)
+	if code == healthPipeOnly {
+		msg = sharedPortMsg
+	}
+	fmt.Fprintf(c.out, "  %s server :%d - %s\n\n", c.paint(ansiRed, "[--]"), port, msg)
 	return &exitError{code: 1}
 }
+
+// sharedPortMsg is container status on a port the registered native server
+// is saved on too, where a server that asks for the password over TCP may
+// be the native one.
+const sharedPortMsg = "the registered native server is saved on this port too, and on Windows it gets the saved password over its pipe only; the saved password was not sent"
 
 // describeCode names an HTTP status from fetchHealth.
 func describeCode(code int) string {

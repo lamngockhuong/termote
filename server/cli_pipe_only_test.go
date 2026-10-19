@@ -251,3 +251,43 @@ func TestNativeWindowsLoginLinkNotAskedOverTCP(t *testing.T) {
 		t.Error("the password went over TCP on Windows")
 	}
 }
+
+// container up on Windows waits for the container's server with the
+// password even while a native server is registered: the container's port
+// is not the native server's.
+func TestWindowsContainerUpWithNativeServiceSendsPassword(t *testing.T) {
+	noLocalSocket(t)
+	cc := newContainerCLI(t)
+	cc.goos = "windows"
+	cc.needPass = "shared-pass"
+	cc.runner.outputs["schtasks /Query /TN Termote"] = "Termote"
+	cc.saveConfig(savedConfig{Port: deadPort(t), Password: "shared-pass"})
+	if code := cc.main([]string{"container", "up", "--port", strconv.Itoa(freePort(t))}); code != 0 {
+		t.Fatalf("up: %d\n%s%s", code, cc.stdout.String(), cc.stderr.String())
+	}
+}
+
+// container status follows the same rule as the native commands: on the
+// port of a registered native server the password stays home, and on the
+// container's own port it goes, to a trusted listener.
+func TestWindowsContainerStatus(t *testing.T) {
+	noLocalSocket(t)
+	srv := newPasswordServer(t, false, `{"status":"ok","version":"1.0.0"}`)
+	cc := newContainerCLI(t)
+	cc.goos = "windows"
+	cc.runner.outputs["docker ps -a --filter name=^termote$ --format {{.Status}}\t{{.Image}}"] = "Up 1 minute\ttermote:1.0.0"
+	cc.runner.outputs["schtasks /Query /TN Termote"] = "Termote"
+	cc.saveConfig(savedConfig{Port: srv.port, Password: "secret", Container: &containerConfig{Port: srv.port}})
+	if code := cc.main([]string{"container", "status"}); code != 1 || !strings.Contains(cc.stdout.String(), sharedPortMsg) {
+		t.Errorf("shared port: code %d\n%s", code, cc.stdout.String())
+	}
+	if srv.gotPassword() {
+		t.Fatal("the password went over TCP to the native server's port")
+	}
+
+	cc.stdout.Reset()
+	cc.saveConfig(savedConfig{Port: deadPort(t), Password: "secret", Container: &containerConfig{Port: srv.port}})
+	if code := cc.main([]string{"container", "status"}); code != 0 || !srv.gotPassword() {
+		t.Errorf("container's own port: code %d, password sent %v\n%s", code, srv.gotPassword(), cc.stdout.String())
+	}
+}

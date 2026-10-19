@@ -1045,15 +1045,18 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   swept by the CLI and by `serve` at start. With `--no-auth` the plain link opens; with an old
   server or no password it opens with a warning saying why
 - **CLI and the saved password**: on Windows the native server (any port but the saved
-  container's while no native service is registered, `installedSupervisor`, as `deviceTarget` tells
-  them apart) gets the saved password over its pipe only (`cli.pipeOnly`, `server/cli_start.go`): without the
-  pipe, `status`, `url`, `panel` and the health wait of `start`/`restart`/`update` ask over TCP
+  container's; a port both are saved on is the native server's while a native service is registered,
+  `installedSupervisor`) gets the saved password over its pipe only (`cli.pipeOnly`, `server/cli_start.go`;
+  `cli.tcpRequest` for `container status`): without the
+  pipe, `status`, `url`, `panel` and the health wait of `start`/`restart`/`update`/`container up` ask over TCP
   without it, still only on a connection whose listeners pass the owner check below (else
   "untrusted listener" or "unverified listener", never running), and a server that answers 401
   there reads as "pipe only" (`healthPipeOnly`); `pair`, `devices`, `signins` and the sign-in link
   send nothing but a health probe without it, whose answer only tells a stopped server from a pipe
-  that did not answer. A server older than the pipe (2.0.0) is reached that way, and an `update` back
-  to one fails its health wait and rolls back. Otherwise, without the local socket (the container,
+  that did not answer; `container status` on such a port tries no pipe, asks over TCP without the
+  password and, on a 401, says the native server is saved there too. A server older than the pipe (2.0.0) is reached that way, and an `update` back
+  to one fails its health wait and rolls back (and a `container up` on the native server's saved port
+  while its service is registered fails its own). Otherwise, without the local socket (the container,
   on every OS; an older native server on Linux and macOS), `status`, `url`, `panel`,
   `container status`, the health wait of `start`/`restart`/`update`/`container up` and the device
   commands against the container send the saved password to `127.0.0.1:<port>` only when
