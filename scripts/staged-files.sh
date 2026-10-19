@@ -8,9 +8,11 @@
 # a single quote end that line's quoting, and the rest of the name then runs as shell code. Each
 # name starts with ./ so one starting with - is not taken for an option. The names go in batches
 # of at most maxlen bytes (a longer single name alone), as lefthook splits its own (Windows limits a
-# command line to 8191). On Windows (Git for Windows' sh, MSYS2, Cygwin) a name holding a character
-# cmd.exe reads (& % ^ ! | < >) is refused too: pnpm exec and npx can run the command through a .cmd
-# shim, and how its arguments are escaped for cmd.exe depends on the npm and cross-spawn versions.
+# command line to 8191). On Windows (Git for Windows' sh, MSYS2, Cygwin, busybox-w32) a name holding a
+# character cmd.exe reads (& % ^ ! | < > ( )) is refused too: pnpm exec and npx can run the command
+# through a .cmd shim, which puts its arguments inside an IF ( ... ) ELSE ( ... ) block, and how
+# they are escaped for cmd.exe depends on the npm and cross-spawn versions. When uname fails or
+# prints nothing, the system counts as Windows.
 set -f
 nl='
 '
@@ -26,10 +28,12 @@ while [ "$1" = --glob ]; do
   shift 2
 done
 [ -n "$specs" ] && [ $# -gt 0 ] || usage
-case $(uname -s) in
-  MINGW* | MSYS* | CYGWIN*) windows=1 ;;
+os=$(uname -s 2>/dev/null) || os=
+case $os in
+  MINGW* | MSYS* | CYGWIN* | Windows_NT* | '') windows=1 ;;
   *) windows= ;;
 esac
+[ "${OS-}" = Windows_NT ] && windows=1
 # git exports GIT_DIR to a hook in a linked worktree; with it set, git takes the current directory
 # for the top of the work tree and --relative strips nothing. Find the repository from here instead
 # (git then gives the hook an absolute GIT_INDEX_FILE, which still holds).
@@ -64,9 +68,9 @@ for f in $files; do
       echo "staged-files: cannot check $f (rename it, or commit with LEFTHOOK=0)" >&2
       exit 1
       ;;
-    *[%'&|<>^!']*)
+    *[%'&|<>^!()']*)
       if [ -n "$windows" ]; then
-        echo "staged-files: cannot check $f on Windows, cmd.exe would read & % ^ ! | < > in it (rename it, or commit with LEFTHOOK=0)" >&2
+        echo "staged-files: cannot check $f on Windows, cmd.exe would read & % ^ ! | < > ( ) in it (rename it, or commit with LEFTHOOK=0)" >&2
         exit 1
       fi
       ;;

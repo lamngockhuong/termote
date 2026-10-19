@@ -267,7 +267,7 @@ mkdir -p "$WINBIN"
 printf '#!/bin/sh\necho MINGW64_NT-10.0-26100\n' >"$WINBIN/uname"
 chmod +x "$WINBIN/uname"
 CMDMETA="$TMP/cmdmeta"
-for c in '&' '%' '^' '!' '|' '<' '>'; do
+for c in '&' '%' '^' '!' '|' '<' '>' '(' ')'; do
     rm -rf "$CMDMETA" && mkdir -p "$CMDMETA"
     git -C "$CMDMETA" init -q -b main
     printf 'x\n' >"$CMDMETA/a${c}b.md"
@@ -278,9 +278,28 @@ for c in '&' '%' '^' '!' '|' '<' '>'; do
     staged "$CMDMETA" --glob '**/*.md' "$TMP/args"
     check "staged-files elsewhere passes a name holding $c" "0 ./a${c}b.md" "$STAGED_STATUS $(cat "$ARGS_OUT")"
 done
-has "staged-files on Windows says which name" "$TMP/cmdmeta-err" 'cannot check a>b.md on Windows'
-PATH="$WINBIN:$PATH" staged "$STAGED" --glob '**/*.md' --glob '**/*.mdx' "$TMP/args"
-check "staged-files on Windows passes plain names" "0 4" "$STAGED_STATUS $(grep -c '^\./' "$ARGS_OUT")"
+has "staged-files on Windows says which name" "$TMP/cmdmeta-err" 'cannot check a)b.md on Windows'
+# (the names under sub/: the name at the top holding $( ) is refused there)
+PATH="$WINBIN:$PATH" staged "$STAGED/sub" --glob '*.md' --glob '*.mdx' "$TMP/args"
+check "staged-files on Windows passes plain names" "0 2" "$STAGED_STATUS $(grep -c '^\./' "$ARGS_OUT")"
+# Windows is also told by OS=Windows_NT and by busybox-w32's uname; a uname that fails or prints
+# nothing counts as Windows rather than letting the name through.
+rm -rf "$CMDMETA" && mkdir -p "$CMDMETA"
+git -C "$CMDMETA" init -q -b main
+printf 'x\n' >"$CMDMETA/a(b.md"
+git -C "$CMDMETA" add -- .
+OS=Windows_NT staged "$CMDMETA" --glob '**/*.md' "$TMP/args"
+check "staged-files with OS=Windows_NT refuses a name holding (" "1 no" \
+    "$STAGED_STATUS $([[ -e "$ARGS_OUT" ]] && echo yes || echo no)"
+for u in 'echo Windows_NT' 'exit 1' 'true'; do
+    UNAMEBIN="$TMP/unamebin"
+    rm -rf "$UNAMEBIN" && mkdir -p "$UNAMEBIN"
+    printf '#!/bin/sh\n%s\n' "$u" >"$UNAMEBIN/uname"
+    chmod +x "$UNAMEBIN/uname"
+    PATH="$UNAMEBIN:$PATH" staged "$CMDMETA" --glob '**/*.md' "$TMP/args"
+    check "staged-files with a uname that runs '$u' refuses a name holding (" "1 no" \
+        "$STAGED_STATUS $([[ -e "$ARGS_OUT" ]] && echo yes || echo no)"
+done
 # Many names go in batches under the command-line limit, every name once
 MANY="$TMP/many"
 mkdir -p "$MANY"
