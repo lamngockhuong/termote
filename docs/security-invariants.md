@@ -957,14 +957,18 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `sock_diag` queries of them, 2 s, else refused). Linux: `sock_diag` exact lookup, `/proc/net/tcp*` fallback, only ESTABLISHED with an
   inode (a TIME_WAIT row reads uid 0). Windows: `GetExtendedTcpTable`
   (`TCP_TABLE_OWNER_MODULE_CONNECTIONS`) owner PID and bind time; the process opened at that PID
-  must be created no later than the socket was bound (else the PID went to another process: refused,
-  as is a row with no bind time), then its token SID. An unreadable token is trusted only for a
+  must be created strictly before the socket was bound (else the PID may have gone to another
+  process: refused, as are equal times, both read from a clock that ticks coarsely, and a row with no
+  bind time), then its token SID. An unreadable token is trusted only for a
   running service's own PID, from the Service Control Manager (`EnumServicesStatusEx`, read after
   the process is opened, so the PID cannot change hands; a per-user service, type bit 0x40 or 0x80,
   is not one, as it runs as whoever logged on), never for being in session 0 (an SSH logon is too)
   or a service's child (sshd's session processes are). A process that cannot be opened is refused,
-  service or not: a standard user cannot open `tailscaled`, so `tailscale serve` is refused. Both times are wall-clock FILETIMEs: a clock
-  stepped back between a process's start and its bind refuses that process (fails closed). A whole-table read (`/proc`, Windows' tables and service list) is
+  service or not: a standard user cannot open `tailscaled`, so `tailscale serve` is refused. Both times are wall-clock FILETIMEs, so the
+  comparison fails closed in one direction only: a clock stepped back between a process's start and
+  its bind refuses that process until it binds again, but a clock stepped back between a socket's bind
+  and the start of the process that later takes its PID lets that process pass for the socket's owner
+  (an administrator's or the time service's change; recorded in `docs/security-model.md`). A whole-table read (`/proc`, Windows' tables and service list) is
   shared (`tableSnapshots`): a lookup waits for the first read that starts after it asked, and
   every lookup waiting then uses that read, so a flood costs about one read per batch, not one
   per connection. Trusted: own uid/SID, root/SYSTEM (on Windows only
@@ -1028,8 +1032,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   every socket listening on it runs as the current user or root/SYSTEM (`server/listener_owner*.go`:
   `/proc/net/tcp*` on Linux, `lsof` on macOS, on Windows the listener table
   `TCP_TABLE_OWNER_MODULE_LISTENER` and the token SID of the process at each owner PID, a process
-  that cannot be opened, created after its socket was bound (the PID may have gone to another
-  process; a clock stepped back between the server's start and its bind does it too, until a
+  that cannot be opened, not created strictly before its socket was bound (the PID may have gone to
+  another process; a clock stepped back between the server's start and its bind does it too, until a
   restart), with no bind time, or with an unreadable token, a service's included, counting as
   another user's), checked
   once the connection is made and before the request is written on it; on Linux the server end

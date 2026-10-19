@@ -88,8 +88,8 @@ func TestTCPConnPID(t *testing.T) {
 	}
 }
 
-// The real table finds this process's own client end, with a bind time no
-// earlier than this process was created, and it runs as the current user.
+// The real table finds this process's own client end, with a bind time
+// later than this process was created, and it runs as the current user.
 func TestPeerOwnerWindows(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -144,7 +144,7 @@ func (p fakePeerProcess) user() (string, error) {
 
 func (p fakePeerProcess) close() { *p.open = false }
 
-// The process holding the PID must not be younger than the socket, and a
+// The process holding the PID must be older than the socket, and a
 // token that cannot be read is trusted only for a running service's PID,
 // listed while the process is open.
 func TestConnProcessUser(t *testing.T) {
@@ -178,8 +178,8 @@ func TestConnProcessUser(t *testing.T) {
 		return id, err
 	}
 
-	if id, err := user(100, "S-1-5-21-1", 100); err != nil || id != "S-1-5-21-1" {
-		t.Errorf("process as old as its socket: %q %v", id, err)
+	if _, err := user(100, "S-1-5-21-1", 100); !errors.Is(err, errPeerPIDReused) {
+		t.Errorf("process as old as its socket: %v, want errPeerPIDReused", err)
 	}
 	if id, err := user(100, "S-1-5-21-1", 200); err != nil || id != "S-1-5-21-1" {
 		t.Errorf("process older than its socket: %q %v", id, err)

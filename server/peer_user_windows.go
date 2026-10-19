@@ -29,10 +29,12 @@ const mibTCPStateEstab = 5
 const serviceProcessID = "service"
 
 // errPeerPIDReused means the process now holding the PID the TCP table
-// names for the client end was created after that socket was bound: the
-// socket outlived the process that made it (its handle passed on) and the
-// PID went to another process.
-var errPeerPIDReused = errors.New("the process at the connection's PID started after its socket")
+// names for the client end was not created before that socket was bound:
+// the socket outlived the process that made it (its handle passed on) and
+// the PID went to another process. Equal times are refused too: both are
+// read from the system clock, whose tick is coarse enough that a process
+// created after the bind can carry the same time.
+var errPeerPIDReused = errors.New("the process at the connection's PID did not start before its socket")
 
 // peerOwner reads the client end's PID and bind time from the TCP tables,
 // then the user the process holding that PID runs as.
@@ -96,8 +98,8 @@ var openPeerProcess = func(pid uint32) (peerProcess, error) {
 var runningServicePIDs = func() map[uint32]bool { return serviceTables.get() }
 
 // connProcessUser returns the SID of the process that owns a socket. The
-// process holding the PID must have been created no later than the socket
-// was bound, else the PID is another process's now. A process whose token
+// process holding the PID must have been created before the socket was
+// bound, else the PID may be another process's now. A process whose token
 // this user may not read is serviceProcessID only as a running service's
 // process, by a list read after the process was opened, so with its PID
 // pinned: another user's process is never one, even in session 0 (an SSH
@@ -112,7 +114,7 @@ func connProcessUser(row tcpConnOwner) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if row.bound == 0 || created > row.bound {
+	if row.bound == 0 || created >= row.bound {
 		return "", errPeerPIDReused
 	}
 	sid, err := proc.user()

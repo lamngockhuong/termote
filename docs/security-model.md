@@ -90,6 +90,13 @@ what Termote can reach, run it as another user with less access.
   WinSW is refused) and not a per-user service. Services that fetch a URL for whoever asks, such as BITS
   and WebClient (WebDAV), are among them: any local user can send a request through them. `tailscale serve`
   is not: a standard user cannot open the `tailscaled` process, so its connections are refused.
+- **The system clock on Windows.** On Windows, who owns a loopback connection is read from the PID
+  the system's TCP table names, checked against that process's start time: two readings of the wall
+  clock. Setting the clock back, which takes an administrator or the time service, between a socket's
+  bind and the start of the process that later takes its PID lets the check pass; setting it back
+  between a process's start and its bind only refuses that process until it binds again. Equal times
+  are refused, so a process of your own that connects within one clock tick (about 15 ms) of starting
+  is refused too; its next connection passes.
 - **WSL 2.** Every Windows user reaches a server in WSL 2: in NAT mode through a relay running as root,
   in mirrored mode through a loopback whose client end WSL cannot see, which is let through.
 - **macOS.** It does not check which local user makes a connection (that takes `lsof` for each one):
