@@ -6,7 +6,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -102,10 +101,12 @@ func TestListCodexSkillsSkip(t *testing.T) {
 }
 
 func TestListCodexSkillsSymlinks(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("symlinks need privileges on Windows")
-	}
 	root, codexHome, home, outside := t.TempDir(), t.TempDir(), t.TempDir(), t.TempDir()
+	// Windows needs admin or Developer Mode (CI's runner has both).
+	if err := os.Symlink(outside, filepath.Join(root, "probe")); err != nil {
+		t.Skipf("cannot make a symlink: %v", err)
+	}
+	os.Remove(filepath.Join(root, "probe"))
 	useAdminSkills(t, "")
 	writeFile(t, filepath.Join(outside, "out/SKILL.md"), skill("out", "outside"))
 	writeFile(t, filepath.Join(home, ".agents/skills/managed/SKILL.md"), skill("managed", "installed by a manager"))
