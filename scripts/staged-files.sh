@@ -24,6 +24,10 @@ while [ "$1" = --glob ]; do
   shift 2
 done
 [ -n "$specs" ] && [ $# -gt 0 ] || usage
+# git exports GIT_DIR to a hook in a linked worktree; with it set, git takes the current directory
+# for the top of the work tree and --relative strips nothing. Find the repository from here instead
+# (git then gives the hook an absolute GIT_INDEX_FILE, which still holds).
+unset GIT_DIR GIT_WORK_TREE
 IFS=$nl
 # shellcheck disable=SC2086 # one pathspec per line, globbing off
 files=$(git -c core.quotePath=false diff --cached --name-only --diff-filter=ACMR --relative -- $specs) || exit 1

@@ -219,6 +219,9 @@ check "staged-files passes the matching staged names" "./--config=evil.md
 check "staged-files runs no name as code" "no" "$([[ -e "$STAGED/PWNED" ]] && echo yes || echo no)"
 staged "$STAGED/sub" --glob '*.md' "$TMP/args"
 check "staged-files names are relative to the current directory" "./a b.md" "$(cat "$ARGS_OUT")"
+# git exports GIT_DIR to a hook in a linked worktree; the names stay relative to the current directory
+GIT_DIR="$(s rev-parse --absolute-git-dir)" staged "$STAGED/sub" --glob '*.md' "$TMP/args"
+check "staged-files names are relative with GIT_DIR set" "./a b.md" "$(cat "$ARGS_OUT" 2>/dev/null)"
 staged "$STAGED" --glob '**/*.go' "$TMP/args"
 check "staged-files runs nothing without a match" "no 0" \
     "$([[ -e "$ARGS_OUT" ]] && echo yes || echo no) $STAGED_STATUS"
