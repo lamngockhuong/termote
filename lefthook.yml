@@ -5,6 +5,9 @@
 # from scripts/staged-files.sh (why not {staged_files}: its header), its --glob pathspecs and the
 # names relative to `root`. No double quote in a `run`: lefthook on Windows does not escape them.
 glob_matcher: doublestar
+# A bare `lefthook run` would otherwise replace the hooks install-git-hooks.mjs wrote, and their
+# trusted-branch check, with its own.
+no_auto_install: true
 
 pre-commit:
   parallel: true
