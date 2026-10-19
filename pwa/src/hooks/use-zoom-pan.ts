@@ -10,6 +10,7 @@ import {
   clampView,
   fitView,
   type Point,
+  resizeView,
   type Size,
   toggleDoubleTap,
   type View,
@@ -64,20 +65,21 @@ export function useZoomPan(stage: RefObject<HTMLElement | null>, size: Size) {
     }
   }, [])
 
-  // The box, and a new size keeps the zoom relative to fit
+  // The box, and a new size keeps the zoom relative to fit and the point at
+  // the middle. The view belongs to img only once this effect has measured:
+  // before, it was of another image (the placeholder size before the real
+  // one is read), so that one starts fitted.
   useEffect(() => {
     const el = stage.current as HTMLElement
+    let mine = false
     const measure = () => {
       const b = { width: el.clientWidth, height: el.clientHeight }
       if (!b.width || !b.height) return
       const old = boxRef.current
       const v = viewRef.current
-      let next = fitView(img, b)
-      if (old && v) {
-        const k = v.scale / fitView(img, old).scale
-        const c = { x: b.width / 2, y: b.height / 2 }
-        next = clampView(zoomAt(next, k, c, zoomLimits(img, b)), img, b)
-      }
+      const next =
+        mine && old && v ? resizeView(v, img, old, b) : fitView(img, b)
+      mine = true
       boxRef.current = b
       viewRef.current = next
       setBox(b)

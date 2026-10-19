@@ -262,6 +262,46 @@ describe('useZoomPan', () => {
     expect(api.view?.scale).toBeCloseTo(1)
   })
 
+  it('a new stage size keeps the image point at the middle there', () => {
+    const { stage } = setup()
+    act(() => api.zoomBy(4))
+    down(stage, 100, 100)
+    move(stage, 200, 140)
+    up(stage, 200, 140)
+    const v0 = api.view as NonNullable<Api['view']>
+    // The image point at the middle of the old box
+    const px = (200 - v0.x) / v0.scale
+    const py = (150 - v0.y) / v0.scale
+    stageSize = { width: 600, height: 400 }
+    act(() => resize?.())
+    const v = api.view as NonNullable<Api['view']>
+    expect(api.zoom).toBeCloseTo(4)
+    expect(v.x + px * v.scale).toBeCloseTo(300)
+    expect(v.y + py * v.scale).toBeCloseTo(200)
+  })
+
+  it('a new stage size still keeps the image on screen', () => {
+    const { stage } = setup()
+    act(() => api.zoomBy(4))
+    // To the right edge: x is 400 - 1600
+    down(stage, 300, 150)
+    move(stage, -5000, 150)
+    up(stage, -5000, 150)
+    // Wider and fitted by its height: the old middle point at the new middle
+    // would leave a band on the right, so the edge is pulled in
+    stageSize = { width: 800, height: 150 }
+    act(() => resize?.())
+    expect(api.zoom).toBeCloseTo(4)
+    expect(api.view?.x).toBeCloseTo(800 - 1600)
+  })
+
+  it('an image of another size starts fitted', () => {
+    const view = setup({ width: 1, height: 1 })
+    view.rerender(<Stage img={big} />)
+    expect(api.zoom).toBe(1)
+    expect(api.view).toEqual({ scale: 0.25, x: 0, y: 75 })
+  })
+
   it('a new object of the same size changes nothing', () => {
     const view = setup()
     act(() => api.zoomBy(2))

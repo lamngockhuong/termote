@@ -5,6 +5,7 @@ import {
   fitView,
   MAX_ZOOM,
   MIN_ZOOM,
+  resizeView,
   toggleDoubleTap,
   type View,
   wheelFactor,
@@ -78,6 +79,40 @@ describe('clampView', () => {
       x: 150,
       y: 125,
     })
+  })
+})
+
+describe('resizeView', () => {
+  it('keeps the zoom relative to fit and the point at the middle', () => {
+    const v = { scale: 1, x: -500, y: -110 }
+    const to = { width: 600, height: 400 }
+    const r = resizeView(v, big, box, to)
+    expect(r.scale / fitView(big, to).scale).toBeCloseTo(4)
+    // (700, 260) was at the middle of the old box
+    expect(onScreen(r, 700, 260).x).toBeCloseTo(300)
+    expect(onScreen(r, 700, 260).y).toBeCloseTo(200)
+  })
+
+  it('stays within the limits of the new box', () => {
+    // 10× fit in the old box (fit 0.25); fit is 1 in a box its own size
+    expect(
+      resizeView({ scale: 2.5, x: -1200, y: 0 }, big, box, big).scale,
+    ).toBe(MAX_ZOOM)
+    expect(resizeView(fitView(small, box), small, box, box)).toEqual(
+      fitView(small, box),
+    )
+  })
+
+  it('keeps the image on screen', () => {
+    // At the right edge, then a wider box fitted by its height: the old
+    // middle point at the new middle would leave a band on the right
+    const r = resizeView({ scale: 1, x: -1200, y: -150 }, big, box, {
+      width: 800,
+      height: 150,
+    })
+    expect(r.scale).toBe(1)
+    expect(r.x).toBe(800 - 1600)
+    expect(r.y).toBe(75 - 300)
   })
 })
 

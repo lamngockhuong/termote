@@ -65,6 +65,22 @@ export function clampView(v: View, img: Size, box: Size): View {
   }
 }
 
+// The box changed from one size to another: the same zoom relative to fit,
+// with the image point at the middle of the old box at the middle of the new
+// one, then kept on screen
+export function resizeView(v: View, img: Size, from: Size, to: Size): View {
+  const k = v.scale / fitView(img, from).scale
+  const lim = zoomLimits(img, to)
+  const scale = Math.min(lim.max, Math.max(lim.min, fitView(img, to).scale * k))
+  const px = (from.width / 2 - v.x) / v.scale
+  const py = (from.height / 2 - v.y) / v.scale
+  return clampView(
+    { scale, x: to.width / 2 - px * scale, y: to.height / 2 - py * scale },
+    img,
+    to,
+  )
+}
+
 // Zoomed in past fit: back to fit; else to DOUBLE_TAP_ZOOM around p
 export function toggleDoubleTap(v: View, p: Point, img: Size, box: Size): View {
   const fit = fitView(img, box)
