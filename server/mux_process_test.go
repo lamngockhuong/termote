@@ -300,6 +300,32 @@ func TestHerdrSnapshotProcesses(t *testing.T) {
 	}
 }
 
+// Herdr on Windows names a pane's process by its image, "pwsh.exe"; it shows
+// as tmux and psmux show it, without ".exe" (#468).
+func TestHerdrPaneProcessNameWindowsExe(t *testing.T) {
+	f := newFakeHerdr(t)
+	f.procs = map[string]any{
+		"wN:p1": fakeProcessInfo("wN:p1", 6268, 6268, fakeProc(6268, "pwsh.exe", "pwsh.exe")),
+		"wJ:p2": fakeProcessInfo("wJ:p2", 22616, 23464, fakeProc(23464, "CLAUDE.EXE", "claude.exe")),
+		"wX:p1": fakeProcessInfo("wX:p1", 10, 10, fakeProc(10, ".exe", ".exe")),
+	}
+	m := newTestHerdrMux(t, f)
+	goos := herdrStartGOOS
+	t.Cleanup(func() { herdrStartGOOS = goos })
+	ctx := context.Background()
+	for _, c := range []struct{ goos, pane, want string }{
+		{"windows", "wN:p1", "pwsh"},
+		{"windows", "wJ:p2", "CLAUDE"},
+		{"windows", "wX:p1", ".exe"},
+		{"linux", "wN:p1", "pwsh.exe"},
+	} {
+		herdrStartGOOS = c.goos
+		if got, err := m.paneProcessName(ctx, c.pane); err != nil || got != c.want {
+			t.Errorf("%s %s: name = %q, %v, want %q", c.goos, c.pane, got, err, c.want)
+		}
+	}
+}
+
 func TestHerdrSnapshotWithoutProcessInfo(t *testing.T) {
 	f := newFakeHerdr(t)
 	f.procFail = "invalid_request"
