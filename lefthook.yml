@@ -31,22 +31,26 @@ pre-push:
       root: pwa/
       glob: "pwa/**"
       run: pnpm exec tsc --noEmit
-    # CI vets each OS on its own runner; cross-vetting catches the OS-specific files here
+    # CI vets each OS on its own runner; cross-vetting catches the OS-specific files here.
+    # CGO_ENABLED=0, as releases build: vet compiles no C a branch brings (server/ has no cgo).
     vet-linux:
       root: server/
       glob: "server/**"
       env:
         GOOS: linux
+        CGO_ENABLED: "0"
       run: go vet ./...
     vet-windows:
       root: server/
       glob: "server/**"
       env:
         GOOS: windows
+        CGO_ENABLED: "0"
       run: go vet ./...
     vet-darwin:
       root: server/
       glob: "server/**"
       env:
         GOOS: darwin
+        CGO_ENABLED: "0"
       run: go vet ./...

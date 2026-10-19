@@ -9,6 +9,7 @@ import type {
   SessionPane,
 } from '../types/session'
 import { sessionPaneKey } from '../utils/pane-remap'
+import { visibleUnsafe } from '../utils/unsafe-chars'
 import { AgentStatusBadge } from './agent-status-badge'
 import { FOCUS_RING } from './ui/button'
 import { SegmentedControl } from './ui/segmented-control'
@@ -130,7 +131,7 @@ export function ActivityLog({
               : 'closed'
             const name =
               agentLabel(e.agent) === 'agent'
-                ? e.agent || 'Agent'
+                ? visibleUnsafe(e.agent || 'Agent')
                 : agentLabel(e.agent)
             const body = (
               <>

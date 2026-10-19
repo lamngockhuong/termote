@@ -81,7 +81,11 @@ The hooks run only while the branch checked out has the hook files of `origin/HE
 `package.json`, anything tracked under `node_modules`; the full list is in
 [docs/code-standards.md](docs/code-standards.md#git-hooks)): on a branch that changed one, they name it and
 skip, so a contributor's branch does not run its own hook code at your next commit or push. Read
-that diff before running the checks by hand (`pnpm exec lefthook run pre-commit`). `pnpm install`
+that diff before running the checks by hand (`pnpm exec lefthook run pre-commit`). A clone set up
+before 2.2.0 still has the hooks `lefthook install` wrote, which run any branch's hook files: run
+`pnpm install` once, with `main` checked out (on another branch it runs that branch's scripts), to
+replace them (`.git/hooks/pre-commit` then has a line naming
+`scripts/install-git-hooks.mjs`). `pnpm install`
 on a branch still runs that branch's `package.json` scripts: on a branch you do not trust, read its
 diff of `package.json` and `scripts/` first.
 

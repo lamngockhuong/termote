@@ -10,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+
+	"golang.org/x/sys/unix"
 )
 
 // zellijCheckSocketDir fails unless the dirs zellij keeps its sockets in can
@@ -20,11 +22,14 @@ import (
 // A socket dir that is missing is made 0700 first, so no other user makes
 // it before zellij does. Otherwise another user who made the dir in a shared
 // /tmp could serve a session termote would list, attach to and type into.
+// Zellij makes the socket dir group-writable under umask 002: its group
+// write is taken away before the contract dir is checked, so another member
+// of the group cannot swap the contract dir between the check and a command.
 func zellijCheckSocketDir() error {
 	dir := zellijSocketDir()
 	err := os.MkdirAll(dir, 0o700)
 	if err == nil {
-		err = zellijOwnDir(dir, 0o002)
+		err = zellijOwnSocketDir(dir)
 	}
 	if err == nil {
 		if err = zellijOwnDir(filepath.Join(dir, zellijContractDir), 0o077); errors.Is(err, fs.ErrNotExist) {
@@ -45,6 +50,10 @@ func zellijOwnDir(dir string, deny fs.FileMode) error {
 	if err != nil {
 		return err
 	}
+	return zellijOwnInfo(dir, fi, deny)
+}
+
+func zellijOwnInfo(dir string, fi fs.FileInfo, deny fs.FileMode) error {
 	if !fi.IsDir() {
 		return fmt.Errorf("%s is not a directory", dir)
 	}
@@ -54,6 +63,31 @@ func zellijOwnDir(dir string, deny fs.FileMode) error {
 	if fi.Mode().Perm()&deny != 0 {
 		return fmt.Errorf("%s has mode %#o", dir, fi.Mode().Perm())
 	}
+	return nil
+}
+
+// zellijOwnSocketDir is zellijOwnDir(dir, 0o002) that also takes the
+// group's write permission off dir, keeping its other bits (a setgid bit
+// too). It checks and changes the dir it opened, never following a symlink,
+// so a dir swapped for a link after the check is not what gets the mode.
+func zellijOwnSocketDir(dir string) error {
+	f, err := os.OpenFile(dir, os.O_RDONLY|unix.O_NOFOLLOW|unix.O_DIRECTORY, 0)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	if err := zellijOwnInfo(dir, fi, 0o002); err != nil || fi.Mode().Perm()&0o020 == 0 {
+		return err
+	}
+	mode := fi.Mode() & (fs.ModePerm | fs.ModeSetgid | fs.ModeSticky) &^ 0o020
+	if err := f.Chmod(mode); err != nil {
+		return err
+	}
+	log.Printf("zellij: socket dir %s made %#o: no write for its group", dir, mode.Perm())
 	return nil
 }
 

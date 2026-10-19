@@ -7,10 +7,12 @@
 // lefthook config, scripts/check-gofmt.sh and scripts/staged-files.sh, the dprint config (its
 // plugins can be programs), the npm and pnpm config and package.json files `pnpm exec` and `npx`
 // read, and any tracked file under node_modules (git replaces an ignored file with a branch's
-// tracked one, so a branch could bring its own node_modules/.bin/lefthook). On a branch that
-// changed one of them, the hook says which and skips, so a contributor's branch does not run its
-// own hook code on a maintainer's machine at the next commit or push. With core.hooksPath set
-// (often one dir shared by every repository) nothing is installed.
+// tracked one, so a branch could bring its own node_modules/.bin/lefthook). Names match in any
+// case (on a case-insensitive file system npm reads a tracked .NPMRC as .npmrc), and any changed
+// name git has to quote (a non-ASCII byte, a '"', a '\' or a control character) counts as one of
+// them. On a branch that changed one of them, the hook says which and skips, so a contributor's branch does not
+// run its own hook code on a maintainer's machine at the next commit or push. With
+// core.hooksPath set (often one dir shared by every repository) nothing is installed.
 import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
@@ -54,16 +56,22 @@ if [ -z "$ref" ]; then
   echo "git hooks: ${hook} skipped: no origin/HEAD or main to compare the hook files with" >&2
   exit 0
 fi
-changed=$(git -C "$top" diff --name-only "$ref" -- ':(glob)lefthook*' ':(glob).lefthook*' \\
+changed=$(git --icase-pathspecs -C "$top" -c core.quotePath=true diff --name-only "$ref" -- ':(glob)lefthook*' ':(glob).lefthook*' \\
   ':(glob).config/lefthook*' scripts/check-gofmt.sh scripts/staged-files.sh ':(glob)**/dprint.json*' \\
   ':(glob)**/.dprint.json*' ':(glob)**/.npmrc' ':(glob)**/pnpm-workspace.yaml' ':(glob)**/.pnpmfile.*' package.json \\
-  pwa/package.json ':(glob)**/node_modules' ':(glob)**/node_modules/**') || {
+  pwa/package.json ':(glob)**/node_modules' ':(glob)**/node_modules/**') &&
+  # Case matches only in ASCII: a name git quotes (a non-ASCII byte, a '"', a '\' or a control
+  # character) counts as a hook file, since a case-insensitive file system can fold a non-ASCII
+  # one (a Kelvin sign for a k) onto a hook file's name. Quoted in both lists, so it shows once
+  all=$(git -C "$top" -c core.quotePath=true diff --name-only "$ref") || {
   echo "git hooks: ${hook} skipped: cannot compare the hook files with \${ref#refs/*/}" >&2
   exit 0
 }
+quoted=$(printf '%s\\n' "$all" | grep '^"')
+changed=$(printf '%s\\n%s\\n' "$changed" "$quoted" | grep -v '^$' | sort -u)
 if [ -n "$changed" ]; then
   echo "git hooks: ${hook} skipped: these files differ from \${ref#refs/*/}:" >&2
-  echo "$changed" | sed 's/^/  /' >&2
+  printf '%s\\n' "$changed" | sed 's/^/  /' >&2
   echo "Read their diff, then run the checks with: pnpm exec lefthook run ${hook}" >&2
   exit 0
 fi

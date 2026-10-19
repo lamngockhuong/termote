@@ -114,18 +114,25 @@ describe('AgentCard', () => {
     expect(open).not.toHaveTextContent('claude-model')
   })
 
-  it('shows the hidden characters of the last words and the branch', () => {
+  it('shows the hidden characters of the last words, the branch, the model and the name', () => {
     renderCard({
+      pane: pane({ agentName: 'aid\u202eer' }),
       overview: {
         paneId: 'w1:p1',
         key: 'w1:p1',
         lastText: 'run \u202egnp.exe\u061c',
         branch: 'feat/\u202ex',
         changed: 1,
+        usage: { contextTokens: 950, model: 'opus\u202e-1' },
       },
     })
     expect(screen.getByText('run ⟨U+202E⟩gnp.exe⟨U+061C⟩')).toBeInTheDocument()
     expect(screen.getByText(/feat\/⟨U\+202E⟩x/)).toBeInTheDocument()
+    expect(screen.getByText('· opus⟨U+202E⟩-1')).toBeInTheDocument()
+    expect(screen.getByText('aid⟨U+202E⟩er')).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /^Open chat: aid⟨U\+202E⟩er,/ }),
+    ).toBeInTheDocument()
   })
 
   it('shows the status, place, last words, changes and context', () => {

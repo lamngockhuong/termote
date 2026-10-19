@@ -75,9 +75,12 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   Before every `zellij` command (listing, action, `attach`, `subscribe`) the socket dir
   (`ZELLIJ_SOCKET_DIR`, else `$XDG_RUNTIME_DIR/zellij` on Linux, else `$TMPDIR/zellij-<uid>`) is
   checked (`zellijCheckSocketDir`): made 0700 when missing, it must be a directory (not a
-  symlink) of the server's uid that others cannot write, and its `contract_version_1`, where the
-  sockets are, when there, one of that uid with no group or other access (Zellij makes it 0700);
-  else no command runs, 503 `zellij_socket_dir`, the reason logged once.
+  symlink) of the server's uid that others cannot write; its group write (Zellij makes it 0775
+  under umask 002) is then taken away (`zellijOwnSocketDir`: checked and changed through one
+  descriptor opened with `O_NOFOLLOW`, logged), so another member of its group cannot swap the
+  contract dir after the check; and its `contract_version_1`, where the
+  sockets are, when there, must be one of that uid with no group or other access (Zellij makes it
+  0700); else no command runs, 503 `zellij_socket_dir`, the reason logged once.
   Every `zellij` call is argv only, never a shell; a positional value goes after `--` (`attach`
   takes none: there `--` starts a command, so a session name is passed only when
   `zellijPassableName` holds: no leading `-`, not `help`/`options` in any case, no control or
@@ -186,8 +189,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   live 30 s, unasked ones 5 minutes. That worker calls `PaneDir` on the backend. A view-only client
   gets the same summary (the snapshot already names the agents) but no branch or count for a
   root `viewHidesRoot` refuses (no repo, a home dir or one above), as Files. The PWA shows the
-  last text, the branch and a Codex plan with every C0/C1, bidi (U+061C included) and zero-width space
-  character as `⟨U+XXXX⟩` (`visibleUnsafe`, `pwa/src/utils/unsafe-chars.ts`)
+  last text, the branch, the model, a Codex plan and an agent name it does not know (Herdr reports
+  its own; the card and the activity log) with every C0/C1, bidi (U+061C included) and zero-width
+  space character as `⟨U+XXXX⟩` (`visibleUnsafe`, `pwa/src/utils/unsafe-chars.ts`)
 - **Agent subagents** (`server/agent_subagents.go`, `GET /api/mux/panes/{id}/agent/subagents`):
   `requireMethod(GET)`, `crossSiteRejection`, `requireAgentRead`; internal errors are logged only.
   Only the pane's own Claude session (`AgentSession`, as the transcript): another agent, no
@@ -1059,8 +1063,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `pre-commit` and `pre-push` hooks itself (`lefthook install` is never run, and `lefthook run` gets
   `--no-auto-install`, so lefthook never rewrites them; a hook that is not lefthook's is left; with
   `core.hooksPath` set nothing is written). A hook runs lefthook, with `LEFTHOOK_CONFIG` set to the
-  checked-out `lefthook.yml`, only when `git diff` finds no change against `origin/HEAD`, else
-  `main`, in any `lefthook*`, `.lefthook*`, `.config/lefthook*`, `scripts/check-gofmt.sh`,
+  checked-out `lefthook.yml`, only when `git diff` (`--icase-pathspecs`: on a case-insensitive file
+  system npm reads a `.NPMRC` as `.npmrc`) finds no change against `origin/HEAD`, else `main`, to a
+  name git quotes (`core.quotePath=true`: a non-ASCII byte, a `"`, a `\` or a control character;
+  case folds only in ASCII, and such a file system can fold a Kelvin sign onto a `k`) or to any `lefthook*`, `.lefthook*`, `.config/lefthook*`, `scripts/check-gofmt.sh`,
   `scripts/staged-files.sh`, any
   `dprint.json*`/`.dprint.json*` (dprint plugins can be programs), any `.npmrc`, any
   `pnpm-workspace.yaml`, any `.pnpmfile.*`, `package.json`, `pwa/package.json` (what `pnpm exec` and
@@ -1074,7 +1080,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   double quotes that end it, so the rest of the name would run as shell code (a test refuses any
   file template in `lefthook.yml`). A name git has to quote (a `"`, a `\` or a control character) is
   refused, not passed on as a path that matches nothing; names go in batches of at most 7000 bytes
-  (a longer single name runs alone), as lefthook split its own. `pnpm install` itself runs the branch's `package.json` scripts
+  (a longer single name runs alone), as lefthook split its own. `go vet` runs with
+  `CGO_ENABLED=0` (as releases build; `server/` has no cgo), so it compiles no C code from
+  `server/*.go`, which are not hook files (a test refuses a `go` command without it). A clone whose
+  hooks `lefthook install` wrote before 2.2.0 runs them unchecked until `pnpm install` runs once
+  (`CONTRIBUTING.md` says so). `pnpm install` itself runs the branch's `package.json` scripts
   (accepted: a maintainer reads that diff first, `CONTRIBUTING.md`)
 - **Tailscale mapping**: `serve` removes its `tailscale serve` mapping when it stops (only while
   it still proxies to its port), so the name never leads to a free port another user could take;
