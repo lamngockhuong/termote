@@ -1062,8 +1062,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   send nothing but a health probe without it, whose answer only tells a stopped server from a pipe
   that did not answer; `container status` on such a port tries no pipe, asks over TCP without the
   password and, on a 401, says the native server is saved there too. A server older than the pipe (2.0.0) is reached that way, and an `update` back
-  to one fails its health wait and rolls back (and a `container up` on the native server's saved port
-  while its service is registered fails its own). Otherwise, without the local socket (the container,
+  to one fails its health wait and rolls back (`container up` refuses, exit 2, the native server's saved
+  port while its service is registered, where its own health wait could not send the password). Otherwise, without the local socket (the container,
   on every OS; an older native server on Linux and macOS), `status`, `url`, `panel`,
   `container status`, the health wait of `start`/`restart`/`update`/`container up` and the device
   commands against the container send the saved password to `127.0.0.1:<port>` only when

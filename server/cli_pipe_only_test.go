@@ -291,3 +291,23 @@ func TestWindowsContainerStatus(t *testing.T) {
 		t.Errorf("container's own port: code %d, password sent %v\n%s", code, srv.gotPassword(), cc.stdout.String())
 	}
 }
+
+// container up on Windows refuses the port of the registered native
+// server, where the container's server would never get the password.
+func TestWindowsContainerUpRefusesNativeServicePort(t *testing.T) {
+	noLocalSocket(t)
+	cc := newContainerCLI(t)
+	cc.goos = "windows"
+	cc.runner.outputs["schtasks /Query /TN Termote"] = "Termote"
+	port := freePort(t)
+	cc.saveConfig(savedConfig{Port: port, Password: "shared-pass"})
+	if code := cc.main([]string{"container", "up", "--port", strconv.Itoa(port)}); code != 2 || !strings.Contains(cc.stderr.String(), "registered native server's") {
+		t.Fatalf("up: %d\n%s%s", code, cc.stdout.String(), cc.stderr.String())
+	}
+	if cc.runArgs != nil {
+		t.Errorf("the container ran: %v", cc.runArgs)
+	}
+	if saved, _ := cc.loadConfig(); saved.Container != nil {
+		t.Errorf("container settings saved: %+v", saved.Container)
+	}
+}

@@ -230,6 +230,12 @@ func (c *cli) containerUp(args []string) error {
 	if err := validateUserName(o.user); err != nil {
 		return usageError("%v", err)
 	}
+	// On Windows a port the registered native server is saved on is the
+	// native server's (pipeOnly): the container's server there would never
+	// get the password.
+	if c.goos == "windows" && o.port == c.savedPort(saved) && c.installedSupervisor() != nil {
+		return usageError("port %d is the registered native server's; choose another with --port", o.port)
+	}
 	rt := c.containerRuntime()
 	if rt == "" {
 		return errors.New("neither podman nor docker found; install one")
