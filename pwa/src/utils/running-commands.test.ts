@@ -22,6 +22,12 @@ describe('formatRunning', () => {
     expect(formatRunning(['vim', 'npm'])).toBe('Running: vim, npm.')
   })
 
+  it('shows the hidden characters of a command name', () => {
+    expect(formatRunning(['vi\u202em', 'npm'])).toBe(
+      'Running: vi⟨U+202E⟩m, npm.',
+    )
+  })
+
   it('says nothing without commands', () => {
     expect(formatRunning([])).toBe('')
   })

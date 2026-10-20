@@ -83,6 +83,11 @@ describe('SwipeableSessionItem', () => {
     expect(screen.getByText('Terminal · bash, vim')).toBeInTheDocument()
   })
 
+  it('shows the hidden characters of what runs in the session', () => {
+    renderItem({ session: { ...SESSION, commands: ['vi\u202em'] } })
+    expect(screen.getByText('Terminal · vi⟨U+202E⟩m')).toBeInTheDocument()
+  })
+
   it('shows what runs without a description', () => {
     renderItem({
       session: { ...SESSION, description: '', commands: ['top'] },

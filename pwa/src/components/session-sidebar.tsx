@@ -549,7 +549,7 @@ export function SessionSidebar({
             </span>
             {session.commands && (
               <span className="block truncate text-[11px] font-normal text-fg-subtle">
-                {session.commands.join(', ')}
+                {visibleUnsafe(session.commands.join(', '))}
               </span>
             )}
           </span>
@@ -871,7 +871,7 @@ export function SessionSidebar({
                 {name}
                 {group.worktree?.branch && (
                   <span
-                    title={group.worktree.branch}
+                    title={visibleUnsafe(group.worktree.branch)}
                     className="ml-1.5 normal-case tracking-normal text-fg-subtle"
                   >
                     <GitBranch
@@ -880,7 +880,7 @@ export function SessionSidebar({
                       className="mr-0.5 inline align-[-1px]"
                     />
                     <span className="sr-only">branch </span>
-                    {group.worktree.branch}
+                    {visibleUnsafe(group.worktree.branch)}
                   </span>
                 )}
               </span>

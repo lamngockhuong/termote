@@ -26,6 +26,21 @@ describe('PaneStrip', () => {
     expect(screen.getByRole('img', { name: 'Agent working' })).toBeVisible()
   })
 
+  it('shows the hidden characters of a label and a command', () => {
+    render(
+      <PaneStrip
+        panes={[
+          { ...PANES[0], label: 'cla\u202eude' },
+          { ...PANES[1], command: 'vi\u202em' },
+        ]}
+        activePaneId="p1"
+        onSelect={vi.fn()}
+      />,
+    )
+    expect(screen.getByText('cla⟨U+202E⟩ude')).toBeInTheDocument()
+    expect(screen.getByText('vi⟨U+202E⟩m')).toBeInTheDocument()
+  })
+
   it('shows each command under its label, all buttons as tall', () => {
     render(
       <PaneStrip

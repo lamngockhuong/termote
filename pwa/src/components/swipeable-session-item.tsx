@@ -209,7 +209,11 @@ export function SwipeableSessionItem({
             </span>
             {(session.description || session.commands) && (
               <span className="block truncate text-[12px] text-fg-muted">
-                {[session.description, session.commands?.join(', ')]
+                {[
+                  session.description,
+                  session.commands &&
+                    visibleUnsafe(session.commands.join(', ')),
+                ]
                   .filter(Boolean)
                   .join(' · ')}
               </span>

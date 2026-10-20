@@ -207,6 +207,11 @@ describe('SessionSidebar — desktop expanded (default)', () => {
     expect(dev).toHaveClass('h-9')
   })
 
+  it('shows the hidden characters of what runs in a session', () => {
+    renderDesktop([{ ...SESSIONS[0], commands: ['vi\u202em'] }, SESSIONS[1]])
+    expect(screen.getByText('vi⟨U+202E⟩m')).toBeInTheDocument()
+  })
+
   it('shows the description in the session title', () => {
     renderDesktop()
     expect(screen.getByTitle('Shell - Terminal')).toBeInTheDocument()
@@ -1632,6 +1637,29 @@ describe('SessionSidebar — worktree actions', () => {
     fireEvent.click(
       screen.getByRole('button', { name: `Actions for workspace ${name}` }),
     )
+
+  it('shows the hidden characters of a worktree branch', () => {
+    render(
+      <SessionSidebar
+        sessions={[REPO, WT]}
+        groups={[
+          { id: 'w1', name: 'repo' },
+          {
+            id: 'w2',
+            name: 'feature',
+            worktree: { linked: true, branch: 'fe\u202eat' },
+          },
+        ]}
+        activeId="w1:t1"
+        onSelect={vi.fn()}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+      />,
+    )
+    expect(screen.getByTitle('fe⟨U+202E⟩at')).toHaveTextContent(
+      'branch fe⟨U+202E⟩at',
+    )
+  })
 
   it('offers no worktree item without the callbacks', () => {
     renderWith(actions())

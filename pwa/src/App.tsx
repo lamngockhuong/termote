@@ -1708,9 +1708,11 @@ export default function App({
         onCancel={cancelPaneClose}
       >
         <p className="m-0">
-          <span className="font-medium text-fg">{pendingPane?.label}</span> will
-          be closed, along with anything still running in it. The other panes of
-          this session stay open.
+          <span className="font-medium text-fg">
+            {visibleUnsafe(pendingPane?.label ?? '')}
+          </span>{' '}
+          will be closed, along with anything still running in it. The other
+          panes of this session stay open.
         </p>
         <RunningLine
           names={pendingPane?.command ? [pendingPane.command] : []}

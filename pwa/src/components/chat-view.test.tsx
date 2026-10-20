@@ -352,6 +352,26 @@ describe('ChatView older entries', () => {
     expect(transcript.loadOlder).not.toHaveBeenCalled()
   })
 
+  it('shows the hidden characters of the pane label', () => {
+    set({ entries: entries(1) })
+    render(
+      <ChatView
+        {...props}
+        session={{
+          ...props.session,
+          paneId: 'p2',
+          panes: [
+            { id: 'p1', label: 'claude', hasAgent: true },
+            { id: 'p2', label: 'rev\u202eiewer', hasAgent: true },
+          ],
+        }}
+      />,
+    )
+    expect(
+      screen.getByText('Claude Code · claude · rev⟨U+202E⟩iewer'),
+    ).toBeInTheDocument()
+  })
+
   it('a split tab names the pane in the header', () => {
     set({ entries: entries(1) })
     render(

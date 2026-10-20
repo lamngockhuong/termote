@@ -3155,6 +3155,25 @@ describe('App groups and panes', () => {
     expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument()
   })
 
+  it('herdr: shows the hidden characters of the pane it asks to close', async () => {
+    mockMux('herdr')
+    const base = mockUseLocalSessions()
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      activeSession: {
+        ...base.activeSession,
+        panes: [PANES[0], { ...PANES[1], label: 'lo\u202egs' }],
+      },
+    } as any)
+    render(<App />)
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Close pane lo\u202egs' }),
+    )
+    expect(screen.getByTestId('confirm-dialog')).toHaveTextContent(
+      'lo⟨U+202E⟩gs will be closed',
+    )
+  })
+
   it('herdr: names what runs in the pane it asks to close', async () => {
     mockMux('herdr')
     const base = mockUseLocalSessions()

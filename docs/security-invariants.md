@@ -150,7 +150,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `invalid_request` turned the calls off for 5 minutes, is not served. macOS names are the kernel's short name. The
   snapshot is a same-site read (`crossSiteRejection`, `Sec-Fetch-Site: none` included). The PWA
   shows names in the sessions list and pane strip and adds "Running: …" to the close
-  confirmations; the cwd is not shown
+  confirmations, each with its hidden characters as `⟨U+XXXX⟩` (`visibleUnsafe`), since a process
+  names itself; the cwd is not shown
 - **Agent activity** (`server/agent_activity.go`, `GET /api/mux/activity`): the tracker is fed
   only by snapshot reads that already run (the snapshot route, a stream attaching, the push
   watcher's tick); it never reads tmux, Herdr or Zellij itself and never runs a command, so
@@ -200,7 +201,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   same way wherever they appear as text or a tooltip: the overview's cards, its queue and the
   activity log, the sidebar (rows, group headers, the collapsed rail, the current session), the
   session tabs, the header, the session chip, the Chat view's header and the confirmations that
-  close a session or a group; a rename field keeps the name as it is
+  close a session or a group; a rename field keeps the name as it is. So are a pane's label (an
+  agent's name or the pane title, which any program sets with an escape sequence) in the pane
+  strip, the Chat view's header and the close-pane confirmation, and a branch name in a worktree
+  group's header and the Changes header
 - **Agent subagents** (`server/agent_subagents.go`, `GET /api/mux/panes/{id}/agent/subagents`):
   `requireMethod(GET)`, `crossSiteRejection`, `requireAgentRead`; internal errors are logged only.
   Only the pane's own Claude session (`AgentSession`, as the transcript): another agent, no
