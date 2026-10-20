@@ -136,6 +136,8 @@ hook pre-push
 check "pre-push runs lefthook on main" "$REPO/lefthook.yml run --no-auto-install pre-push" "$CALLS"
 hook pre-push LEFTHOOK=0
 check "LEFTHOOK=0 runs nothing" "" "$CALLS"
+# A bare `lefthook run` by hand would replace these hooks with lefthook's own
+has "lefthook.yml turns off lefthook's auto-install" "$PROJECT_DIR/lefthook.yml" '^no_auto_install: true$'
 
 # A branch that changes a hook file runs none of them, in any case (none of these names is one
 # main has in another case, so the cases hold on a case-insensitive file system too)
