@@ -760,6 +760,12 @@ Run on tmux (Linux/macOS) and Herdr; psmux (Windows) offers neither view.
 - [ ] Desktop, editing: Delete and Backspace clear the cell in focus, one Ctrl+Z brings it back;
       Save, then `git diff` shows only that cell
 - [ ] iPhone: a tap on a cell still opens the sheet, viewing or editing, never a field
+- [ ] "Columns" → "Pin first column" on a table wider than the screen: scrolled sideways, the
+      first column and its name stay next to the row numbers (desktop Chrome, Safari); a cell
+      edited in it or in another column shows whole, over the rows below; the choice stays after
+      showing another tab and coming back, and goes on another "Delimiter" or "Header row"
+- [ ] iPhone (375px), a wide first column pinned: it scrolls with the others, the table still
+      scrolls sideways
 - [ ] Widths and wraps go back to the defaults on another "Delimiter" or "Header row", stay after
       editing a cell, and stay after showing another tab and coming back (same first row)
 - [ ] Press a row number: Records opens on that row (also after sorting); turning Records off

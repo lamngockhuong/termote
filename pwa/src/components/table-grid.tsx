@@ -74,6 +74,9 @@ const TOUCH_CLICK_MS = 500
 const CELL = `truncate px-2 text-left ${FOCUS_RING} focus-visible:-outline-offset-2`
 // A wrapped cell: up to its table's lines from the top, never past its row
 const WRAP_CELL = `flex items-start overflow-hidden px-2 py-1.5 text-left leading-4 ${FOCUS_RING} focus-visible:-outline-offset-2`
+// The pinned column's cell: stuck next to the row numbers (level with them,
+// never over them), above the cells scrolled under it
+const PIN = 'sticky z-[6] border-r border-border bg-bg'
 // Whole class names, so Tailwind finds each one in the source
 const CLAMP: Record<WrapLines, string> = {
   3: 'line-clamp-3',
@@ -125,6 +128,9 @@ interface Props {
   covered?: boolean
   // Where it starts scrolled to (a tab shown again), once there are rows
   scrollTop?: number
+  // The first column stays at the left, next to the row numbers, while the
+  // rest scrolls; not while it is wider than half the frame
+  pinned?: boolean
 }
 
 interface Drag {
@@ -165,6 +171,7 @@ export function TableGrid({
   busy,
   covered = false,
   scrollTop,
+  pinned = false,
 }: Props) {
   const frame = useRef<HTMLDivElement>(null)
   // Used up by the first rows: the offset is a scroll offset of this frame,
@@ -175,13 +182,18 @@ export function TableGrid({
   // One height for every row, taller while a column wraps
   const rowHeight = rowHeightFor(coarse, wrapped.size > 0, lines)
   const [view, setView] = useState({ top: 0, height: 0 })
+  // The frame's width, 0 until it has a size
+  const [frameWidth, setFrameWidth] = useState(0)
   // The cell keyboard focus moves from: its place in rows, and its column
   const [active, setActive] = useState({ pos: 0, col: 0 })
   const focusing = useRef(false)
 
   useLayoutEffect(() => {
     const el = frame.current as HTMLDivElement
-    const read = () => setView({ top: el.scrollTop, height: el.clientHeight })
+    const read = () => {
+      setView({ top: el.scrollTop, height: el.clientHeight })
+      setFrameWidth(el.clientWidth)
+    }
     read()
     let raf = 0
     const onScroll = () => {
@@ -473,8 +485,28 @@ export function TableGrid({
   }
 
   const numberWidth = String(table.rowCount).length + 1
+  const numberCol = `calc(${numberWidth}ch + 1rem)`
+  // Pixels the row numbers and the pinned column take, from the header's
+  // first two cells (estimated until they have a size)
+  const corner = useRef<HTMLDivElement>(null)
+  const pinHead = useRef<HTMLDivElement>(null)
+  const [pinnedPx, setPinnedPx] = useState(0)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: measured again as the widths or the frame change
+  useLayoutEffect(() => {
+    if (!pinned) return
+    // Widths, not places: scrolled sideways, an unpinned column has moved
+    const width = (el: HTMLDivElement | null) =>
+      (el as HTMLDivElement).getBoundingClientRect().width
+    setPinnedPx(
+      width(corner.current) + width(pinHead.current) ||
+        (numberWidth + widths[0]) * FALLBACK_CH_PX + 2 * CELL_PAD_X,
+    )
+  }, [pinned, widths[0], numberWidth, frameWidth])
+  // A frame of no size yet (a test, the first frame) is no narrow one
+  const sticky = pinned && (!frameWidth || pinnedPx <= frameWidth / 2)
+  const pinStyle = sticky ? { left: numberCol } : undefined
   const template = [
-    `calc(${numberWidth}ch + 1rem)`,
+    numberCol,
     ...widths.map((w, c) => `calc(var(--w-${c}, ${w}ch) + 1rem)`),
   ].join(' ')
   // Row 0 is the header row when there is one; a synthetic header otherwise
@@ -493,6 +525,13 @@ export function TableGrid({
       aria-hidden={covered || undefined}
       inert={covered}
       className="min-h-0 flex-1 overflow-auto bg-bg font-term text-[12px] text-fg"
+      // A cell given the focus is scrolled out from under the columns that
+      // stick at the left
+      style={{
+        scrollPaddingLeft: sticky
+          ? `calc(${numberWidth + widths[0]}ch + 2rem)`
+          : numberCol,
+      }}
       data-scroll-restore
       onKeyDown={onKeyDown}
       onClick={onClick}
@@ -505,6 +544,7 @@ export function TableGrid({
           style={{ gridTemplateColumns: template }}
         >
           <div
+            ref={corner}
             role="columnheader"
             // Above the resize handles of the columns scrolled under it
             className="sticky left-0 z-30 bg-surface px-2"
@@ -518,6 +558,7 @@ export function TableGrid({
               <div
                 // biome-ignore lint/suspicious/noArrayIndexKey: a column is its index
                 key={c}
+                ref={c === 0 ? pinHead : undefined}
                 role="columnheader"
                 // Its name only, not its resize handle's
                 aria-label={label}
@@ -528,7 +569,10 @@ export function TableGrid({
                       ? 'descending'
                       : 'none'
                 }
-                className="relative flex min-w-0"
+                // Pinned: below the corner, above the resize handles of the
+                // columns scrolled under it
+                className={`flex min-w-0 ${c === 0 && sticky ? 'sticky z-[25] border-r border-border bg-surface' : 'relative'}`}
+                style={c === 0 ? pinStyle : undefined}
               >
                 <button
                   type="button"
@@ -600,8 +644,12 @@ export function TableGrid({
               key={r}
               role="row"
               aria-rowindex={ariaRow(r)}
-              // The row edited lets its editor grow over the rows below
-              className={`grid border-b border-border/50 ${editingCell?.row === r ? 'relative z-[5]' : 'overflow-hidden'}`}
+              // The row edited lets its editor grow over the rows below,
+              // and over their pinned cells when it is in the pinned column.
+              // Clipped, not hidden: overflow hidden would make each row a
+              // scroll box, and its row number and pinned cell would stick
+              // to the row, never to the frame scrolled sideways.
+              className={`grid border-b border-border/50 ${editingCell?.row === r ? `relative ${sticky && editingCell.col === 0 ? 'z-[7]' : 'z-[5]'}` : 'overflow-clip'}`}
               style={{ gridTemplateColumns: template, height: rowHeight }}
             >
               <div
@@ -631,7 +679,10 @@ export function TableGrid({
                       role="gridcell"
                       // The editor's group: in the last column it grows leftward
                       data-last={c === names.length - 1 || undefined}
-                      className="group/edit relative min-w-0"
+                      // Out of the pinned column, still above it: a field
+                      // growing leftward from the last column covers it
+                      className={`group/edit min-w-0 ${c === 0 && sticky ? PIN : 'relative z-[7]'}`}
+                      style={c === 0 ? pinStyle : undefined}
                     >
                       {editor}
                     </div>
@@ -649,7 +700,8 @@ export function TableGrid({
                     data-col={c}
                     tabIndex={p === pos && c === col ? 0 : -1}
                     title={shown}
-                    className={wrap ? WRAP_CELL : CELL}
+                    className={`${wrap ? WRAP_CELL : CELL} ${c === 0 && sticky ? PIN : ''}`}
+                    style={c === 0 ? pinStyle : undefined}
                   >
                     {wrap ? (
                       <span

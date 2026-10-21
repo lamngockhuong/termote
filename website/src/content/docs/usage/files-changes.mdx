@@ -409,6 +409,10 @@ it for changes). A deleted file has no table.
   column shows up to that many lines of each value (a line break still ends with `↵`) and its name
   has a wrap icon; while any column wraps, every row is that many lines tall, and a longer value
   is cut. The whole value is in its cell's sheet, or its field while editing.
+- **Pin first column** in the **Columns** menu keeps the first column at the left, next to the row
+  numbers, while the rest scrolls sideways, its name too. While the row numbers and that column
+  take more than half the table's width (a phone, a very wide first column), it scrolls with the
+  others, so the table can still be read.
 - **Records** shows one row at a time as `column: value`, with **Previous** and **Next**, for a
   phone where a row is wider than the screen. Press or tap a row number to open that row in
   Records; turned off, Records goes back to the table where you left it.
@@ -422,10 +426,11 @@ it for changes). A deleted file has no table.
   the first and last column of the row, and Ctrl+Home and Ctrl+End (Cmd on a Mac) to the first
   and last cell of the table, in the order shown.
 
-Sorting, filtering, the delimiter, the header row, column widths and wrapped columns only change
-what is shown. Nothing is written to the file, and they are forgotten when the file is closed.
-Widths, wrapped columns and their lines also stay while you show another tab and come back, and go
-back to the defaults when the delimiter or the header row changes.
+Sorting, filtering, the delimiter, the header row, column widths, wrapped columns and the pinned
+column only change what is shown. Nothing is written to the file, and they are forgotten when the
+file is closed. Widths, wrapped columns and their lines, and the pinned column, also stay while you
+show another tab and come back, and go back to the defaults when the delimiter or the header row
+changes.
 
 | Shown                                                   | Why                                                                     |
 | ------------------------------------------------------- | ----------------------------------------------------------------------- |

@@ -50,6 +50,8 @@ export interface TableLayout {
   widths: Record<number, number>
   wrapped: number[]
   lines?: WrapLines
+  // The first column shown stays at the left while the rest scrolls
+  pinned?: boolean
 }
 
 export function emptyLayout(key: string): TableLayout {

@@ -611,6 +611,14 @@ export default function TablePreview({
           >
             Reset widths
           </MenuItem>
+          <MenuItemCheckbox
+            keepOpen
+            checked={!!layout.pinned}
+            title="Keeps the first column at the left while the table scrolls sideways, unless it is wider than half the table"
+            onSelect={() => setLayout({ ...layout, pinned: !layout.pinned })}
+          >
+            Pin first column
+          </MenuItemCheckbox>
           <MenuSeparator />
           <MenuGroup label="Wrap">
             {names.map((name, c) => (
@@ -693,6 +701,7 @@ export default function TablePreview({
           busy={!computed || stale}
           covered={records}
           scrollTop={scrollTop}
+          pinned={!!layout.pinned}
         />
         {records && (
           <div

@@ -1810,7 +1810,7 @@ describe('TablePreview wrapped columns', () => {
     // The menu stays open for the next column
     expect(wrapItem('2 · note')).toHaveAttribute('aria-checked', 'true')
     expect(bodyRow()).toHaveStyle({ height: '61px' })
-    expect(bodyRow()).toHaveClass('overflow-hidden')
+    expect(bodyRow()).toHaveClass('overflow-clip')
     const cell = screen.getAllByRole('gridcell')[1]
     expect(cell.querySelector('.line-clamp-3')?.textContent).toBe(
       '↵\n↵\nREJECTED',
@@ -2109,5 +2109,128 @@ describe('TablePreview of a large file, while its rows are worked out', () => {
     expect(screen.queryByText(/^Record /)).toBeNull()
     await act(() => w.flush())
     expect(screen.getByRole('grid')).toHaveAttribute('aria-busy', 'false')
+  })
+})
+
+describe('TablePreview pinned first column', () => {
+  const pinItem = () =>
+    screen.getByRole('menuitemcheckbox', { name: 'Pin first column' })
+  const stuck = (el: Element) => el.classList.contains('sticky')
+  const firstCells = () =>
+    screen
+      .getAllByRole('row')
+      .slice(1)
+      .map((r) => within(r).getAllByRole('gridcell')[0])
+
+  it('pins the first column next to the row numbers, its header too, and tells it', () => {
+    const onLayout = vi.fn()
+    show(notes, { onLayout })
+    const id = screen.getByRole('columnheader', { name: 'id' })
+    expect(stuck(id)).toBe(false)
+    columnsMenu()
+    expect(pinItem()).toHaveAttribute('aria-checked', 'false')
+    expect(pinItem()).toHaveAttribute('title', expect.stringMatching(/half/))
+    fireEvent.click(pinItem())
+    // The menu stays open
+    expect(pinItem()).toHaveAttribute('aria-checked', 'true')
+    expect(onLayout).toHaveBeenLastCalledWith({
+      key: ',|1',
+      widths: {},
+      wrapped: [],
+      pinned: true,
+    })
+    expect(stuck(id)).toBe(true)
+    expect(id.style.left).toBe('calc(2ch + 1rem)')
+    for (const cell of firstCells()) {
+      expect(stuck(cell)).toBe(true)
+      expect(cell.style.left).toBe('calc(2ch + 1rem)')
+    }
+    // Only the first column
+    expect(stuck(screen.getByRole('columnheader', { name: 'note' }))).toBe(
+      false,
+    )
+    expect(stuck(screen.getByRole('gridcell', { name: 'short' }))).toBe(false)
+    fireEvent.click(pinItem())
+    expect(stuck(id)).toBe(false)
+    expect(firstCells().some(stuck)).toBe(false)
+  })
+
+  it('a tab keeps it; another header row or delimiter drops it', () => {
+    const onLayout = vi.fn()
+    show(notes, {
+      layout: { key: ',|1', widths: {}, wrapped: [], pinned: true },
+      onLayout,
+    })
+    expect(stuck(screen.getByRole('columnheader', { name: 'id' }))).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Header row' }))
+    expect(onLayout).toHaveBeenLastCalledWith({
+      key: ',|0',
+      widths: {},
+      wrapped: [],
+    })
+    expect(firstCells().some(stuck)).toBe(false)
+  })
+
+  it('stops sticking while the row numbers and the column take more than half the frame', () => {
+    let frame = 1000
+    let cell = 0
+    const width = vi
+      .spyOn(HTMLElement.prototype, 'clientWidth', 'get')
+      .mockImplementation(() => frame)
+    const rect = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(() => ({ width: cell }) as DOMRect)
+    try {
+      const layout = { key: ',|1', widths: {}, wrapped: [], pinned: true }
+      const p = show(notes, { layout })
+      const id = () => screen.getByRole('columnheader', { name: 'id' })
+      // Not measured: estimated from the widths in ch
+      expect(stuck(id())).toBe(true)
+      p.unmount()
+      frame = 100
+      const q = show(notes, { layout })
+      expect(stuck(id())).toBe(false)
+      expect(firstCells().some(stuck)).toBe(false)
+      q.unmount()
+      // Measured: two cells of 300px in a frame of 1000
+      frame = 1000
+      cell = 300
+      show(notes, { layout })
+      expect(stuck(id())).toBe(false)
+    } finally {
+      width.mockRestore()
+      rect.mockRestore()
+    }
+  })
+
+  it('a cell edited in the pinned column grows over the pinned cells below', () => {
+    coarse.fine = true
+    edit(notes)
+    columnsMenu()
+    fireEvent.click(pinItem())
+    fireEvent.keyDown(document.body, { key: 'Escape' })
+    fireEvent.click(screen.getByRole('gridcell', { name: '1' }))
+    const box = screen.getByRole('textbox', { name: 'Edit id, row 2' })
+    const cell = box.closest('[role="gridcell"]') as HTMLElement
+    expect(stuck(cell)).toBe(true)
+    expect(cell.closest('[role="row"]')).toHaveClass('z-[7]')
+    fireEvent.keyDown(box, { key: 'Tab' })
+    const next = screen.getByRole('textbox', { name: 'Edit note, row 2' })
+    const nextCell = next.closest('[role="gridcell"]') as HTMLElement
+    expect(stuck(nextCell)).toBe(false)
+    // Above the pinned cell of its row, which its field may grow over
+    expect(nextCell).toHaveClass('z-[7]')
+    expect(nextCell.closest('[role="row"]')).toHaveClass('z-[5]')
+  })
+
+  it('scrolls a cell given the focus out from under the columns stuck at the left', () => {
+    const grid = () => screen.getByRole('grid')
+    const v = show(notes)
+    expect(grid().style.scrollPaddingLeft).toBe('calc(2ch + 1rem)')
+    v.unmount()
+    show(notes, {
+      layout: { key: ',|1', widths: { 0: 10 }, wrapped: [], pinned: true },
+    })
+    expect(grid().style.scrollPaddingLeft).toBe('calc(12ch + 2rem)')
   })
 })

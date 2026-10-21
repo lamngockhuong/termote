@@ -761,6 +761,12 @@ Chạy trên tmux (Linux/macOS) và Herdr; psmux (Windows) không có hai view n
 - [ ] Máy tính, đang sửa: Delete và Backspace xoá trắng ô đang chọn, một lần Ctrl+Z trả lại; lưu
       rồi `git diff` chỉ đổi đúng ô đó
 - [ ] iPhone: chạm vào ô vẫn mở bảng nhỏ, dù đang xem hay đang sửa, không bao giờ mở ô sửa
+- [ ] "Columns" → "Pin first column" trên bảng rộng hơn màn hình: cuộn ngang thì cột đầu và tên
+      cột vẫn đứng cạnh số dòng (Chrome, Safari trên máy tính); ô đang sửa ở cột đó hay cột khác
+      hiện đủ, phủ lên các dòng dưới; sang tab khác rồi quay lại vẫn giữ, đổi "Delimiter" hay
+      "Header row" thì mất
+- [ ] iPhone (375px), ghim một cột đầu rộng: cột đó cuộn theo các cột khác, bảng vẫn cuộn ngang
+      được
 - [ ] Độ rộng và wrap trở về mặc định khi đổi "Delimiter" hay "Header row", giữ nguyên sau khi sửa
       một ô, và giữ nguyên khi sang tab khác rồi quay lại (cùng dòng đầu)
 - [ ] Nhấn số dòng: Records mở đúng dòng đó (cả sau khi sắp xếp); tắt Records thì bảng hiện lại ở
