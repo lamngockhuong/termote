@@ -2,10 +2,12 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -456,5 +458,78 @@ func TestWorkspaceHomeCaseFoldedMount(t *testing.T) {
 		if got := cc.workspaceHome(ws); got != want {
 			t.Errorf("workspaceHome(%s) = %q, want %q", ws, got, want)
 		}
+	}
+}
+
+// Each existing name takes the spelling its directory lists; an exact name,
+// a missing one and the names after it are kept.
+func TestDiskSpelling(t *testing.T) {
+	base := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(base, "Ws", "sub"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	cases := map[string]string{
+		filepath.Join(base, "Ws", "sub"):                       filepath.Join(base, "Ws", "sub"),
+		filepath.Join(base, "Ws", "nope", "Deep"):              filepath.Join(base, "Ws", "nope", "Deep"),
+		filepath.Join(base, "Ws") + string(filepath.Separator): filepath.Join(base, "Ws"),
+	}
+	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+		cases[filepath.Join(base, "wS", "SUB")] = filepath.Join(base, "Ws", "sub")
+		cases[filepath.Join(base, "WS", "nope", "Deep")] = filepath.Join(base, "Ws", "nope", "Deep")
+	} else {
+		// Names keep their case here: another spelling is another (missing) name.
+		cases[filepath.Join(base, "wS", "SUB")] = filepath.Join(base, "wS", "SUB")
+		// Two entries equal without case: the exact one is kept.
+		if err := os.Mkdir(filepath.Join(base, "WS"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		cases[filepath.Join(base, "WS")] = filepath.Join(base, "WS")
+	}
+	for in, want := range cases {
+		if got := diskSpelling(in); got != want {
+			t.Errorf("diskSpelling(%s) = %s, want %s", in, got, want)
+		}
+	}
+}
+
+// A workspace typed in another case is mounted, saved and matched against
+// the home by its own spelling.
+func TestContainerUpWorkspaceSpelledInAnotherCase(t *testing.T) {
+	if runtime.GOOS != "darwin" && runtime.GOOS != "windows" {
+		t.Skip("file names keep their case here")
+	}
+	cc := newContainerCLI(t)
+	cc.home = filepath.Join(t.TempDir(), "Home")
+	if err := os.Mkdir(cc.home, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	typed := filepath.Join(filepath.Dir(cc.home), "hOME")
+	if code := cc.main([]string{"container", "up", "--port", strconv.Itoa(freePort(t)), "--workspace", typed}); code != 0 {
+		t.Fatalf("code %d\n%s%s", code, cc.stdout.String(), cc.stderr.String())
+	}
+	if args := strings.Join(cc.runArgs, " "); !strings.Contains(args, "--mount type=bind,src="+cc.home+",dst=/workspace") {
+		t.Errorf("mount not by the dir's own name: %s", args)
+	}
+	if got := cc.runEnv["TERMOTE_WORKSPACE_HOME"]; got != "." {
+		t.Errorf("TERMOTE_WORKSPACE_HOME = %q, want .", got)
+	}
+	if cfg, _ := cc.loadConfig(); cfg.Container == nil || cfg.Container.Workspace != cc.home {
+		t.Errorf("saved workspace %+v", cfg.Container)
+	}
+}
+
+// A runtime that refuses to run says why on stderr; the error carries it.
+func TestWithStderr(t *testing.T) {
+	cmd := exec.Command(os.Args[0])
+	cmd.Env = append(os.Environ(), helperEnv+"=exit-stderr")
+	_, err := cmd.Output()
+	got := withStderr(err)
+	var ee *exec.ExitError
+	if !errors.As(got, &ee) || !strings.Contains(got.Error(), "statfs /users/a: no such file or directory") {
+		t.Fatalf("withStderr = %v", got)
+	}
+	plain := errors.New("fake")
+	if withStderr(plain) != plain {
+		t.Fatal("an error without stderr changed")
 	}
 }

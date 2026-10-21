@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -174,6 +175,7 @@ func (c *cli) mergeContainer(o *containerOptions, set map[string]bool, s *contai
 		}
 		o.workspace = abs
 	}
+	o.workspace = diskSpelling(o.workspace)
 	// The path goes in --mount's comma-separated value.
 	if strings.ContainsAny(o.workspace, "\"\n\r,") {
 		return usageError("invalid --workspace %q", o.workspace)
@@ -379,9 +381,59 @@ func (c *cli) runContainer(rt, image, bind string, o containerOptions, pass stri
 		"-e", "TERMOTE_MUX", "-e", "TERMOTE_HERDR_ALLOW_NO_AUTH", "-e", "TERMOTE_WORKSPACE_HOME"}
 	args = append(args, c.containerUserArgs(rt)...)
 	if _, err := c.run.Output("", env, rt, append(args, image)...); err != nil {
-		return fmt.Errorf("%s run %s: %w", rt, image, err)
+		return fmt.Errorf("%s run %s: %w", rt, image, withStderr(err))
 	}
 	return nil
+}
+
+// withStderr adds what a command that exited with an error wrote to stderr:
+// its exit status alone does not say why (podman: "statfs /users/a: no such
+// file or directory").
+func withStderr(err error) error {
+	var ee *exec.ExitError
+	if errors.As(err, &ee) {
+		if msg := strings.TrimSpace(string(ee.Stderr)); msg != "" {
+			return fmt.Errorf("%w: %s", err, msg)
+		}
+	}
+	return err
+}
+
+// diskSpelling is p with each name spelled as its directory lists it, so a
+// workspace typed in another case (/users/a for /Users/a on macOS) is mounted
+// by its own name: a container runtime's VM shares /Users and compares names
+// with case. A name the directory does not list exactly takes the one entry
+// equal to it without case; with none or several, or a directory that cannot
+// be read, it is kept. The first name that does not exist ends the walk.
+func diskSpelling(p string) string {
+	p = filepath.Clean(p)
+	vol := filepath.VolumeName(p)
+	sep := string(filepath.Separator)
+	out := vol + sep
+	rest := strings.TrimPrefix(p[len(vol):], sep)
+	if rest == "" {
+		return p
+	}
+	names := strings.Split(rest, sep)
+	for i, name := range names {
+		if _, err := os.Lstat(filepath.Join(out, name)); err != nil {
+			return filepath.Join(append([]string{out}, names[i:]...)...)
+		}
+		if entries, err := os.ReadDir(out); err == nil &&
+			!slices.ContainsFunc(entries, func(e os.DirEntry) bool { return e.Name() == name }) {
+			var folded []string
+			for _, e := range entries {
+				if strings.EqualFold(e.Name(), name) {
+					folded = append(folded, e.Name())
+				}
+			}
+			if len(folded) == 1 {
+				name = folded[0]
+			}
+		}
+		out = filepath.Join(out, name)
+	}
+	return out
 }
 
 // containerStateVolume names the volume holding the container's state dir
