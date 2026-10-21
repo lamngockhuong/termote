@@ -949,9 +949,9 @@ describe('TablePreview editing in a cell (a fine pointer)', () => {
     coarse.fine = true
   })
 
-  it('a click edits the cell where it is: Enter sets it, its cell takes the focus back, Ctrl+Z undoes', () => {
+  it('a double click edits the cell where it is: Enter sets it, its cell takes the focus back, Ctrl+Z undoes', () => {
     const p = edit(people)
-    fireEvent.click(cellButton('30'))
+    fireEvent.doubleClick(cellButton('30'))
     expect(screen.queryByRole('dialog')).toBeNull()
     const box = field('Edit age, row 2')
     expect(box).toHaveValue('30')
@@ -968,20 +968,20 @@ describe('TablePreview editing in a cell (a fine pointer)', () => {
 
   it('Escape drops what was typed and stays in editing; a value unchanged sets nothing', () => {
     const p = edit(people)
-    fireEvent.click(cellButton('30'))
+    fireEvent.doubleClick(cellButton('30'))
     fireEvent.change(field('Edit age, row 2'), { target: { value: 'x' } })
     key(field('Edit age, row 2'), 'Escape')
     noField()
     expect(cellButton('30')).toHaveFocus()
     expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument()
-    fireEvent.click(cellButton('30'))
+    fireEvent.doubleClick(cellButton('30'))
     key(field('Edit age, row 2'), 'Enter')
     expect(p.onChange).not.toHaveBeenCalled()
   })
 
   it('Tab sets the value and goes along the row, then on to the next; Shift+Tab goes back', () => {
     const p = edit('a,b\n1,2\n3,4\n')
-    fireEvent.click(cellButton('1'))
+    fireEvent.doubleClick(cellButton('1'))
     // Only the last column's field grows leftward
     const cell = (box: HTMLElement) => box.closest('[role="gridcell"]')
     expect(cell(field('Edit a, row 2'))).not.toHaveAttribute('data-last')
@@ -1000,7 +1000,7 @@ describe('TablePreview editing in a cell (a fine pointer)', () => {
     // Before the first cell: set, and no further
     noField()
     expect(cellButton('x')).toHaveFocus()
-    fireEvent.click(cellButton('4'))
+    fireEvent.doubleClick(cellButton('4'))
     fireEvent.change(field('Edit b, row 3'), { target: { value: 'y' } })
     key(field('Edit b, row 3'), 'Tab')
     expect(p.text()).toBe('a,b\nx,2\n3,y\n')
@@ -1013,14 +1013,14 @@ describe('TablePreview editing in a cell (a fine pointer)', () => {
     const a = screen.getByRole('button', { name: 'a' })
     fireEvent.click(a)
     fireEvent.click(a)
-    fireEvent.click(cellButton('4'))
+    fireEvent.doubleClick(cellButton('4'))
     key(field('Edit b, row 3'), 'Tab')
     expect(field('Edit a, row 2')).toHaveValue('1')
   })
 
   it('Tab onto a value the field cannot take sets the value and stops', () => {
     const p = edit('a,b\n1,"x\r\ny"\n')
-    fireEvent.click(cellButton('1'))
+    fireEvent.doubleClick(cellButton('1'))
     fireEvent.change(field('Edit a, row 2'), { target: { value: '0' } })
     key(field('Edit a, row 2'), 'Tab')
     expect(p.text()).toBe('a,b\n0,"x\r\ny"\n')
@@ -1043,7 +1043,7 @@ describe('TablePreview editing in a cell (a fine pointer)', () => {
 
   it('⤢ goes on in the sheet with the value typed, and its row actions', () => {
     const p = edit('a,b\n1,2\n')
-    fireEvent.click(cellButton('1'))
+    fireEvent.doubleClick(cellButton('1'))
     fireEvent.change(field('Edit a, row 2'), { target: { value: 'typed' } })
     fireEvent.click(screen.getByRole('button', { name: 'Open in sheet' }))
     noField()
@@ -1052,7 +1052,7 @@ describe('TablePreview editing in a cell (a fine pointer)', () => {
     expect(screen.getByRole('button', { name: 'Delete row' })).toBeEnabled()
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
     expect(p.text()).toBe('a,b\ntyped,2\n')
-    fireEvent.click(cellButton('typed'))
+    fireEvent.doubleClick(cellButton('typed'))
     fireEvent.click(screen.getByRole('button', { name: 'Open in sheet' }))
     fireEvent.click(screen.getByRole('button', { name: 'Add row below' }))
     expect(p.text()).toBe('a,b\ntyped,2\n,\n')
@@ -1177,7 +1177,7 @@ describe('TablePreview editing in a cell (a fine pointer)', () => {
 
   it('leaving the field sets it, and leaves the focus where it went', () => {
     const p = edit(people)
-    fireEvent.click(cellButton('30'))
+    fireEvent.doubleClick(cellButton('30'))
     fireEvent.change(field('Edit age, row 2'), { target: { value: '33' } })
     act(() => screen.getByRole('searchbox').focus())
     expect(p.text()).toBe(people.replace('30', '33'))
@@ -1189,7 +1189,7 @@ describe('TablePreview editing in a cell (a fine pointer)', () => {
     // A browser blurs the field before it focuses what was clicked:
     // meanwhile the page has the focus, and the cell must not take it
     const p = edit(people)
-    fireEvent.click(cellButton('30'))
+    fireEvent.doubleClick(cellButton('30'))
     fireEvent.change(field('Edit age, row 2'), { target: { value: '34' } })
     act(() => field('Edit age, row 2').blur())
     expect(p.text()).toBe(people.replace('30', '34'))
@@ -1199,7 +1199,7 @@ describe('TablePreview editing in a cell (a fine pointer)', () => {
 
   it('a field whose row goes out of the grid sets its value', async () => {
     const p = edit(people)
-    fireEvent.click(cellButton('Huế'))
+    fireEvent.doubleClick(cellButton('Huế'))
     fireEvent.change(field('Edit city, row 2'), { target: { value: 'Hue' } })
     fireEvent.change(screen.getByRole('searchbox'), {
       target: { value: 'Cuong' },
@@ -1210,21 +1210,21 @@ describe('TablePreview editing in a cell (a fine pointer)', () => {
 
   it('Ctrl+S in the field sets the value, then saves the file if it can', () => {
     const p = edit('a\n1\n')
-    fireEvent.click(cellButton('1'))
+    fireEvent.doubleClick(cellButton('1'))
     fireEvent.change(field('Edit a, row 2'), { target: { value: '2' } })
     key(field('Edit a, row 2'), 's', { ctrlKey: true })
     expect(p.text()).toBe('a\n2\n')
     expect(p.onSave).toHaveBeenCalledTimes(1)
     p.unmount()
     const q = edit('a\n1\n', { canSave: false })
-    fireEvent.click(cellButton('1'))
+    fireEvent.doubleClick(cellButton('1'))
     key(field('Edit a, row 2'), 's', { ctrlKey: true })
     expect(q.onSave).not.toHaveBeenCalled()
   })
 
   it('another view changing the text closes the field, setting nothing', () => {
     const p = edit('a\n1\n2\n')
-    fireEvent.click(cellButton('2'))
+    fireEvent.doubleClick(cellButton('2'))
     fireEvent.change(field('Edit a, row 3'), { target: { value: 'z' } })
     p.rerender(<Draft {...p} elsewhere={'a\n0\n1\n2\n'} />)
     noField()
@@ -1233,12 +1233,12 @@ describe('TablePreview editing in a cell (a fine pointer)', () => {
 
   it('while saving, a click opens nothing, and a field open as it starts sets nothing', () => {
     const one = edit('a\n1\n', { saving: true })
-    fireEvent.click(cellButton('1'))
+    fireEvent.doubleClick(cellButton('1'))
     noField()
     expect(screen.queryByRole('dialog')).toBeNull()
     one.unmount()
     const p = edit('a\n1\n')
-    fireEvent.click(cellButton('1'))
+    fireEvent.doubleClick(cellButton('1'))
     fireEvent.change(field('Edit a, row 2'), { target: { value: '2' } })
     p.rerender(<Draft {...p} saving />)
     key(field('Edit a, row 2'), 'Tab')
@@ -1256,7 +1256,7 @@ describe('TablePreview editing in a cell (a fine pointer)', () => {
 
   it('a table only viewed opens a cell in the sheet that shows it', () => {
     show(people)
-    fireEvent.click(cellButton('30'))
+    fireEvent.doubleClick(cellButton('30'))
     noField()
     expect(screen.getByRole('dialog')).toHaveTextContent('30')
   })
@@ -1303,15 +1303,15 @@ function Viewer(props: {
   )
 }
 
-describe('TablePreview: a click on a table viewed starts editing', () => {
+describe('TablePreview: a double click on a table viewed starts editing', () => {
   beforeEach(() => {
     coarse.fine = true
   })
 
-  it('opens the cell clicked in its field once editing starts', () => {
+  it('opens the cell double-clicked in its field once editing starts', () => {
     const onRequest = vi.fn()
     render(<Viewer initial={people} start onRequest={onRequest} />)
-    fireEvent.click(cellButton('30'))
+    fireEvent.doubleClick(cellButton('30'))
     expect(onRequest).toHaveBeenCalledTimes(1)
     expect(
       screen.getByRole('textbox', { name: 'Edit age, row 2' }),
@@ -1351,7 +1351,7 @@ describe('TablePreview: a click on a table viewed starts editing', () => {
     const w = render(
       <Viewer initial={people} start saving onRequest={() => {}} />,
     )
-    fireEvent.click(cellButton('30'))
+    fireEvent.doubleClick(cellButton('30'))
     fireEvent.keyDown(cellButton('30'), { key: 'x' })
     w.rerender(<Viewer initial={people} start onRequest={() => {}} />)
     expect(
@@ -1367,7 +1367,7 @@ describe('TablePreview: a click on a table viewed starts editing', () => {
 
   it('nothing opens while editing was not started (a delimiter to confirm)', () => {
     render(<Viewer initial={people} start={false} onRequest={() => {}} />)
-    fireEvent.click(cellButton('30'))
+    fireEvent.doubleClick(cellButton('30'))
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(screen.queryByRole('textbox', { name: /^Edit / })).toBeNull()
   })
@@ -1376,7 +1376,7 @@ describe('TablePreview: a click on a table viewed starts editing', () => {
     const v = render(
       <Viewer initial={people} start saving onRequest={() => {}} />,
     )
-    fireEvent.click(cellButton('30'))
+    fireEvent.doubleClick(cellButton('30'))
     expect(screen.queryByRole('textbox', { name: /^Edit / })).toBeNull()
     v.rerender(
       <Viewer initial={people} start saving stop onRequest={() => {}} />,
@@ -1401,7 +1401,7 @@ describe('TablePreview: a click on a table viewed starts editing', () => {
     coarse.fine = false
     const onRequest = vi.fn()
     render(<Viewer initial={people} start onRequest={onRequest} />)
-    fireEvent.click(cellButton('30'))
+    fireEvent.click(cellButton('30'), { detail: 1 })
     expect(onRequest).not.toHaveBeenCalled()
     expect(screen.getByRole('dialog')).toHaveTextContent('30')
   })
@@ -1423,7 +1423,7 @@ describe('TablePreview editing a large file in a cell', () => {
     const p = edit(big)
     const w = FakeWorker.all[0]
     await act(() => w.flush())
-    fireEvent.click(cellButton('n0'))
+    fireEvent.doubleClick(cellButton('n0'))
     const box = screen.getByRole('textbox', { name: 'Edit name, row 2' })
     fireEvent.change(box, { target: { value: 'first' } })
     fireEvent.keyDown(box, { key: 'Tab' })
@@ -1440,7 +1440,7 @@ describe('TablePreview editing a large file in a cell', () => {
     const p = edit(big)
     const w = FakeWorker.all[0]
     await act(() => w.flush())
-    fireEvent.click(cellButton('n1'))
+    fireEvent.doubleClick(cellButton('n1'))
     fireEvent.change(
       screen.getByRole('textbox', { name: 'Edit name, row 3' }),
       { target: { value: 'x' } },
@@ -2779,7 +2779,7 @@ describe('TablePreview find, editing in a cell (a fine pointer)', () => {
       target: { value: 'beta' },
     })
     expect(await screen.findByText('1 of 2')).toBeInTheDocument()
-    fireEvent.click(cell('1'))
+    fireEvent.doubleClick(cell('1'))
     const box = screen.getByRole('textbox', { name: 'Edit b, row 2' })
     fireEvent.change(box, { target: { value: '9' } })
     fireEvent.keyDown(box, { key: 'F3' })
@@ -3303,12 +3303,10 @@ describe('TablePreview ranges, copy and paste', () => {
     expect(picked()).toEqual([])
     fireEvent.click(at(1, 1), { shiftKey: true })
     expect(picked()).toEqual(['0:0', '0:1', '1:0', '1:1'])
-    // A plain click drops it (and edits that cell)
-    fireEvent.click(at(2, 2))
+    // A plain click drops it, and only makes its cell active
+    fireEvent.click(at(2, 2), { detail: 1 })
     expect(picked()).toEqual([])
-    fireEvent.keyDown(screen.getByRole('textbox', { name: /^Edit/ }), {
-      key: 'Escape',
-    })
+    expect(screen.queryByRole('textbox', { name: /^Edit/ })).toBeNull()
     fireEvent.pointerDown(at(0, 1), { pointerType: 'mouse', button: 0 })
     fireEvent.pointerMove(at(0, 1), {
       pointerType: 'mouse',
@@ -3607,7 +3605,7 @@ describe('TablePreview ranges, copy and paste', () => {
     expect(picked()).toHaveLength(6)
     // Released outside the frame: the next click is a click
     fireEvent.pointerDown(at(0, 2), { pointerType: 'mouse', button: 0 })
-    fireEvent.click(at(0, 2))
+    fireEvent.click(at(0, 2), { detail: 1 })
     expect(picked()).toEqual([])
   })
 
@@ -3618,5 +3616,80 @@ describe('TablePreview ranges, copy and paste', () => {
     expect(picked()).toHaveLength(2)
     fireEvent.click(screen.getByRole('button', { name: 'a' }))
     expect(picked()).toEqual([])
+  })
+})
+
+describe('TablePreview: a click of a fine pointer selects, a double click opens', () => {
+  const abc = 'a,b\n1,2\n'
+  const cell = (name: string) => screen.getByRole('gridcell', { name })
+  const field = () => screen.queryByRole('textbox', { name: /^Edit / })
+
+  it('editing: a click makes the cell active, a double click or Enter edits it', () => {
+    coarse.fine = true
+    const p = edit(abc)
+    fireEvent.click(cell('1'), { detail: 1 })
+    expect(field()).toBeNull()
+    expect(cell('1')).toHaveAttribute('tabindex', '0')
+    // The second click of a double click does not open it either
+    fireEvent.click(cell('2'), { detail: 2 })
+    expect(field()).toBeNull()
+    fireEvent.doubleClick(cell('2'))
+    expect(field()).toHaveAccessibleName('Edit b, row 2')
+    fireEvent.keyDown(field() as HTMLElement, { key: 'Escape' })
+    // Enter on a cell is a click with no detail
+    fireEvent.click(cell('1'), { detail: 0 })
+    expect(field()).toHaveAccessibleName('Edit a, row 2')
+    // A double click on a row number opens nothing more than its click
+    fireEvent.keyDown(field() as HTMLElement, { key: 'Escape' })
+    fireEvent.doubleClick(
+      screen.getByRole('button', { name: 'Open row 2 as a record' }),
+    )
+    expect(field()).toBeNull()
+    expect(p.onChange).not.toHaveBeenCalled()
+  })
+
+  it('viewed: a click asks for nothing, a double click starts editing', () => {
+    coarse.fine = true
+    const onRequestEdit = vi.fn(() => false)
+    show(abc, { onRequestEdit })
+    fireEvent.click(cell('1'), { detail: 1 })
+    expect(onRequestEdit).not.toHaveBeenCalled()
+    fireEvent.doubleClick(cell('1'))
+    expect(onRequestEdit).toHaveBeenCalledTimes(1)
+  })
+
+  it('a touch screen still opens a cell with a tap, and a double tap is no more', () => {
+    coarse.value = true
+    show(abc)
+    fireEvent.click(cell('1'), { detail: 1 })
+    expect(screen.getByRole('dialog')).toHaveTextContent('Row 2 · a')
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    fireEvent.doubleClick(cell('1'))
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('a click puts the focus on its cell, where a browser leaves it on the grid', () => {
+    coarse.fine = true
+    edit(abc)
+    const grid = screen.getByRole('grid')
+    grid.focus()
+    fireEvent.click(cell('2'), { detail: 1 })
+    expect(cell('2')).toHaveFocus()
+    // Shift+click too
+    grid.focus()
+    fireEvent.click(cell('1'), { detail: 1, shiftKey: true })
+    expect(cell('1')).toHaveFocus()
+  })
+
+  it('a tap on a touch screen opens, though a mouse is the main pointer; Shift+double click opens nothing', () => {
+    coarse.fine = true
+    edit(abc)
+    const tap = new MouseEvent('click', { bubbles: true, detail: 1 })
+    Object.defineProperty(tap, 'pointerType', { value: 'touch' })
+    fireEvent(cell('1'), tap)
+    expect(field()).toHaveAccessibleName('Edit a, row 2')
+    fireEvent.keyDown(field() as HTMLElement, { key: 'Escape' })
+    fireEvent.doubleClick(cell('2'), { shiftKey: true })
+    expect(field()).toBeNull()
   })
 })

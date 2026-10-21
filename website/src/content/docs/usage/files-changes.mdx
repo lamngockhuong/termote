@@ -423,9 +423,9 @@ it for changes). A deleted file has no table.
   phone where a row is wider than the screen. Press or tap a row number to open that row in
   Records; turned off, Records goes back to the table where you left it.
 - Tap a cell (or press Enter on it) to see its whole value, with a button to copy it. A cell
-  shows at most 1024 characters; the full value is only in that sheet. With a mouse, a click on a
-  cell of a file you can edit starts editing that cell instead (see below); a value opened from
-  Records still shows in its sheet.
+  shows at most 1024 characters; the full value is only in that sheet. With a mouse, a click only
+  selects the cell, as in a spreadsheet, and a double-click opens it: in the sheet, or on a file you
+  can edit in the cell itself (see below); a value opened from Records still shows in its sheet.
 - A row with another number of cells than the header has its number in orange; hovering or a
   screen reader says how many cells it has.
 - From the keyboard, the arrow keys, Page Up and Page Down move between cells; Home and End go to
@@ -512,15 +512,17 @@ edited as text instead.
 - Tap a cell to change its value in a sheet: the value can hold several lines, and characters
   that hide or reorder text show below it as `⟨U+XXXX⟩`. **Apply** puts it in the table; a cell
   a short row does not have can be set too.
-- With a mouse, a click on a cell, or F2 or Enter on the cell in focus, edits the value in the
-  cell itself, the field growing over the rows below to show up to 20 lines (past them it scrolls), at least 12rem wide; a click while only
-  viewing a file you can edit starts editing first. Enter sets
-  it, Shift+Enter or Alt+Enter breaks the line, and Escape drops what you typed: the table stays
-  in editing, **Cancel** leaves it. Tab and Shift+Tab set it and go to the next or previous cell,
-  from the end of a row onto the next one. Clicking elsewhere, or scrolling the cell out of view,
-  sets it too. The ⤢ button in the cell takes what you typed to the cell's sheet, for more room
-  and for **Add row below** and **Delete row**. A value longer than 1024 characters, or one that
-  holds characters which hide or reorder text, opens in the sheet.
+- With a mouse, a double-click on a cell, or F2 or Enter on the cell in focus, edits the value in
+  the cell itself, the field growing over the rows below to show up to 20 lines (past them it
+  scrolls), at least 12rem wide; a single click only selects the cell, so Ctrl+V on it pastes a
+  block (see above), and a tap on a touch screen, a laptop's too, still opens it. A double-click
+  while only viewing a file you can edit starts editing first. Enter sets it, Shift+Enter or
+  Alt+Enter breaks the line, and Escape drops what you typed: the table stays in editing, **Cancel**
+  leaves it. Tab and Shift+Tab set it and go to the next or previous cell, from the end of a row
+  onto the next one. Clicking elsewhere, or scrolling the cell out of view, sets it too. The ⤢
+  button in the cell takes what you typed to the cell's sheet, for more room and for **Add row
+  below** and **Delete row**. A value longer than 1024 characters, or one that holds characters
+  which hide or reorder text, opens in the sheet.
 - With a keyboard, typing on the cell in focus starts editing it with what you type, which
   replaces its value (Escape keeps the old one); on a file you are only viewing, it starts
   editing first. A value the field cannot take opens in the sheet with what you typed. Delete or

@@ -745,10 +745,11 @@ Chạy trên tmux (Linux/macOS) và Herdr; psmux (Windows) không có hai view n
 - [ ] "Columns" → "Lines" chọn 6 với ô wrap sáu dòng thì thấy đủ sáu dòng; chọn 10 với ô mười hai
       dòng thì thấy mười dòng rồi bị cắt; dòng đầu đang xem vẫn nằm trên cùng; sang tab khác rồi quay
       lại vẫn giữ lựa chọn
-- [ ] Máy tính (chuột), file sửa được, đang chỉ xem: bấm một ô thì bảng chuyển sang sửa và ô sửa
-      mở ngay tại ô đó; Enter ghi, Shift+Enter xuống dòng, Esc bỏ phần vừa gõ và vẫn ở chế độ sửa,
-      Tab và Shift+Tab đi dọc dòng rồi sang dòng sau, Ctrl+Z trên bảng hoàn tác, Ctrl+S trong ô sửa
-      thì lưu file; F2 trên ô đang chọn mở ô sửa
+- [ ] Máy tính (chuột), file sửa được, đang chỉ xem: nhấp một lần vào ô chỉ chọn ô (không mở ô sửa,
+      không hỏi gì); nhấp đúp thì bảng chuyển sang sửa và ô sửa mở ngay tại ô đó; Enter ghi,
+      Shift+Enter xuống dòng, Esc bỏ phần vừa gõ và vẫn ở chế độ sửa, Tab và Shift+Tab đi dọc dòng
+      rồi sang dòng sau, Ctrl+Z trên bảng hoàn tác, Ctrl+S trong ô sửa thì lưu file; F2 trên ô đang
+      chọn mở ô sửa
 - [ ] Máy tính: gõ trong ô sửa rồi cuộn ô ra khỏi màn hình hoặc bấm ra chỗ khác thì giá trị vẫn
       được ghi; ⤢ mở bảng nhỏ với giá trị đang gõ, "Add row below" và "Delete row" dùng được; giá
       trị dài hơn 1024 ký tự hoặc có `⟨U+202E⟩` thì mở bảng nhỏ
