@@ -1,6 +1,6 @@
 // Sorting and filtering of the table view: only which rows show and in what
 // order, never the file. Runs on the main thread for a small file and in
-// csv-parse-worker.ts for a large one.
+// csv-parse-worker.ts for a large one; csv-find.ts reads its values too.
 import { type CsvTable, rowValues, valueAt } from './csv-parse'
 
 export interface ViewOptions {
@@ -28,7 +28,8 @@ const collator = new Intl.Collator(undefined, {
   sensitivity: 'base',
 })
 
-function column(cache: ViewCache, col: number): string[] {
+// Every value of a column, by file row: decoded once per parse
+export function columnValues(cache: ViewCache, col: number): string[] {
   let values = cache.columns.get(col)
   if (!values) {
     const { text, table } = cache
@@ -55,7 +56,7 @@ export function computeView(cache: ViewCache, opts: ViewOptions): Int32Array {
     rows = rows.filter((r) => lower[r].includes(needle))
   }
   if (opts.sort) {
-    const values = column(cache, opts.sort.col)
+    const values = columnValues(cache, opts.sort.col)
     const sign = opts.sort.dir === 'asc' ? 1 : -1
     rows.sort((a, b) => {
       const va = values[a]

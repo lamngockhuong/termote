@@ -2468,3 +2468,356 @@ describe('TablePreview hidden columns', () => {
     })
   })
 })
+
+describe('TablePreview find', () => {
+  // beta: row 2 word, row 3 name, row 4 note
+  const greek =
+    'name,word,note\nalpha,beta,x\nbeta,gamma,y\ngamma,delta,beta\ndelta,alpha,z\n'
+  const findBox = () => screen.getByRole('textbox', { name: 'Find' })
+  const at = (row: number, col: number) =>
+    document.querySelector(
+      `[role="gridcell"][data-pos="${row}"][data-col="${col}"]`,
+    ) as HTMLElement
+  const classes = (el: Element) => el.className.split(/\s+/)
+  // Cells found, and the current one, as "place in rows:column"
+  const found = () =>
+    [...document.querySelectorAll<HTMLElement>('[role="gridcell"]')]
+      .filter((c) => classes(c).includes('from-accent/15'))
+      .map((c) => `${c.dataset.pos}:${c.dataset.col}`)
+  const currentCell = () =>
+    [...document.querySelectorAll<HTMLElement>('[role="gridcell"]')]
+      .filter((c) => classes(c).includes('outline-accent'))
+      .map((c) => `${c.dataset.pos}:${c.dataset.col}`)
+  const openFind = (from: Element = at(0, 0)) =>
+    fireEvent.keyDown(from, { key: 'f', ctrlKey: true })
+  const typeFind = async (query: string, count: string) => {
+    fireEvent.change(findBox(), { target: { value: query } })
+    expect(await screen.findByText(count)).toBeInTheDocument()
+  }
+  const enter = (shiftKey = false) =>
+    fireEvent.keyDown(findBox(), { key: 'Enter', shiftKey })
+  const scrollIntoView = vi.fn()
+
+  beforeEach(() => {
+    scrollIntoView.mockClear()
+    Element.prototype.scrollIntoView = scrollIntoView
+  })
+  afterEach(() => {
+    // jsdom has none
+    delete (Element.prototype as Partial<Element>).scrollIntoView
+  })
+
+  it('Ctrl+F on a table only viewed opens find, the focus in it; every row stays', async () => {
+    show(greek)
+    expect(openFind()).toBe(false)
+    expect(findBox()).toHaveFocus()
+    await typeFind('BETA', '1 of 3')
+    expect(found()).toEqual(['0:1', '1:0', '2:2'])
+    // The first match is current and scrolled to, the focus left in find
+    expect(currentCell()).toEqual(['0:1'])
+    expect(scrollIntoView).toHaveBeenLastCalledWith({
+      block: 'nearest',
+      inline: 'nearest',
+    })
+    expect(findBox()).toHaveFocus()
+    expect(screen.getByText('4 / 4 rows')).toBeInTheDocument()
+    expect(document.querySelector('search')).toBeInTheDocument()
+  })
+
+  it('Enter and Shift+Enter go round the matches; the buttons too', async () => {
+    show(greek)
+    openFind()
+    await typeFind('beta', '1 of 3')
+    enter()
+    expect(screen.getByText('2 of 3')).toBeInTheDocument()
+    expect(currentCell()).toEqual(['1:0'])
+    enter()
+    enter()
+    expect(screen.getByText('1 of 3')).toBeInTheDocument()
+    enter(true)
+    expect(screen.getByText('3 of 3')).toBeInTheDocument()
+    expect(currentCell()).toEqual(['2:2'])
+    fireEvent.click(screen.getByRole('button', { name: 'Next match' }))
+    expect(screen.getByText('1 of 3')).toBeInTheDocument()
+  })
+
+  it('F3 and Shift+F3 on a cell go to the next match and give it the focus', async () => {
+    show(greek)
+    openFind()
+    await typeFind('beta', '1 of 3')
+    at(0, 0).focus()
+    expect(fireEvent.keyDown(at(0, 0), { key: 'F3' })).toBe(false)
+    expect(at(1, 0)).toHaveFocus()
+    fireEvent.keyDown(at(1, 0), { key: 'F3', shiftKey: true })
+    expect(at(0, 1)).toHaveFocus()
+    // F3 in find goes too, leaving the focus there
+    findBox().focus()
+    fireEvent.keyDown(findBox(), { key: 'F3' })
+    expect(screen.getByText('2 of 3')).toBeInTheDocument()
+    expect(findBox()).toHaveFocus()
+  })
+
+  it('Escape closes find onto the current match; F3 opens it again on the next one', async () => {
+    show(greek)
+    openFind()
+    await typeFind('beta', '1 of 3')
+    enter()
+    fireEvent.keyDown(findBox(), { key: 'Escape' })
+    expect(document.querySelector('search')).toBeNull()
+    expect(at(1, 0)).toHaveFocus()
+    // Closed, nothing is marked
+    expect(found()).toEqual([])
+    fireEvent.keyDown(at(1, 0), { key: 'F3' })
+    expect(await screen.findByText('3 of 3')).toBeInTheDocument()
+    expect(at(2, 2)).toHaveFocus()
+    // Ctrl+F again: the query chosen, to type over
+    openFind(at(2, 2))
+    expect(findBox()).toHaveFocus()
+    expect(findBox()).toHaveValue('beta')
+    expect((findBox() as HTMLInputElement).selectionStart).toBe(0)
+    expect((findBox() as HTMLInputElement).selectionEnd).toBe(4)
+  })
+
+  it('with no query, F3 opens find; closed with no match, the focus goes back to the active cell', async () => {
+    show(greek)
+    at(1, 1).focus()
+    fireEvent.click(at(1, 1))
+    fireEvent.keyDown(at(1, 1), { key: 'F3' })
+    expect(findBox()).toHaveFocus()
+    await typeFind('zz', 'No matches')
+    // Nothing to go to
+    enter()
+    fireEvent.click(screen.getByRole('button', { name: 'Close find' }))
+    expect(at(1, 1)).toHaveFocus()
+  })
+
+  it("Ctrl+F typed in the filter or in a sheet is the browser's, F3 in a sheet too", () => {
+    show(greek)
+    expect(
+      fireEvent.keyDown(screen.getByRole('searchbox'), {
+        key: 'f',
+        ctrlKey: true,
+      }),
+    ).toBe(true)
+    expect(screen.queryByRole('textbox', { name: 'Find' })).toBeNull()
+    fireEvent.click(at(0, 0))
+    const sheet = screen.getByRole('dialog')
+    expect(fireEvent.keyDown(sheet, { key: 'F3' })).toBe(true)
+    expect(fireEvent.keyDown(sheet, { key: 'f', ctrlKey: true })).toBe(true)
+    expect(screen.queryByRole('textbox', { name: 'Find' })).toBeNull()
+    // Other keys with Ctrl, on a table only viewed, are left alone
+    expect(fireEvent.keyDown(at(0, 0), { key: 'z', ctrlKey: true })).toBe(true)
+  })
+
+  it('match case, whole cell and a regex; a bad one says so', async () => {
+    show(greek)
+    openFind()
+    await typeFind('Beta', '1 of 3')
+    fireEvent.click(screen.getByRole('button', { name: 'Match case' }))
+    expect(await screen.findByText('No matches')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Match case' }))
+    await typeFind('bet', '1 of 3')
+    fireEvent.click(screen.getByRole('button', { name: 'Whole cell' }))
+    expect(await screen.findByText('No matches')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Whole cell' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Regular expression' }))
+    await typeFind('(', 'Invalid pattern')
+    expect(found()).toEqual([])
+  })
+
+  it('finds only the columns shown, and says so', async () => {
+    show(greek)
+    columnsMenu()
+    fireEvent.click(
+      within(screen.getByRole('group', { name: 'Show' })).getByRole(
+        'menuitemcheckbox',
+        { name: '2 · word' },
+      ),
+    )
+    fireEvent.keyDown(document.activeElement as Element, { key: 'Escape' })
+    openFind()
+    await typeFind('beta', '1 of 2')
+    expect(found()).toEqual(['1:0', '2:2'])
+    expect(screen.getByText('Hidden columns not searched')).toBeInTheDocument()
+  })
+
+  it('a sort keeps the current match, by its row of the file', async () => {
+    show(greek)
+    openFind()
+    await typeFind('beta', '1 of 3')
+    enter()
+    expect(currentCell()).toEqual(['1:0'])
+    // Descending: gamma, delta, beta (row 3), alpha
+    fireEvent.click(screen.getByRole('button', { name: 'name' }))
+    fireEvent.click(screen.getByRole('button', { name: 'name' }))
+    expect(screen.getByText('2 of 3')).toBeInTheDocument()
+    expect(currentCell()).toEqual(['2:0'])
+  })
+
+  it('the current match filtered out, or its column hidden: the next one after it', async () => {
+    show(greek)
+    openFind()
+    await typeFind('beta', '1 of 3')
+    enter()
+    // Rows 4 and 5 left: none after row 3's place, so the first
+    fireEvent.change(screen.getByRole('searchbox'), {
+      target: { value: 'delta' },
+    })
+    expect(await screen.findByText('1 of 1')).toBeInTheDocument()
+    expect(currentCell()).toEqual(['0:2'])
+    // Row 3 back: its match again
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: '' } })
+    expect(await screen.findByText('2 of 3')).toBeInTheDocument()
+    expect(currentCell()).toEqual(['1:0'])
+    // Its column hidden: the next match, on row 4
+    columnsMenu()
+    fireEvent.click(
+      within(screen.getByRole('group', { name: 'Show' })).getByRole(
+        'menuitemcheckbox',
+        { name: '1 · name' },
+      ),
+    )
+    expect(await screen.findByText('2 of 2')).toBeInTheDocument()
+    expect(currentCell()).toEqual(['2:2'])
+  })
+
+  it('an edit that ends the current match moves it to the next, and from the last to the first', async () => {
+    const p = edit(greek)
+    openFind()
+    await typeFind('beta', '1 of 3')
+    enter(true)
+    expect(screen.getByText('3 of 3')).toBeInTheDocument()
+    // The note of row 4 set to another value: back to the first match
+    fireEvent.click(at(2, 2))
+    fireEvent.change(valueBox(), { target: { value: 'nu' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    expect(p.text()).toContain('gamma,delta,nu')
+    expect(await screen.findByText('1 of 2')).toBeInTheDocument()
+    expect(currentCell()).toEqual(['0:1'])
+  })
+
+  it("the current match's column hidden: the next column shown, or the next row", async () => {
+    show(greek)
+    openFind()
+    await typeFind('beta', '1 of 3')
+    // Row 2's match, in word
+    const hide = (name: string) => {
+      columnsMenu()
+      fireEvent.click(
+        within(screen.getByRole('group', { name: 'Show' })).getByRole(
+          'menuitemcheckbox',
+          { name },
+        ),
+      )
+      fireEvent.keyDown(document.activeElement as Element, { key: 'Escape' })
+    }
+    hide('2 · word')
+    // name, note shown: row 2 has none after word; row 3's name is next
+    expect(await screen.findByText('1 of 2')).toBeInTheDocument()
+    expect(currentCell()).toEqual(['1:0'])
+    enter()
+    expect(currentCell()).toEqual(['2:2'])
+    // note hidden too: no column after it, so the next row's match
+    hide('3 · note')
+    expect(await screen.findByText('1 of 1')).toBeInTheDocument()
+    expect(currentCell()).toEqual(['1:0'])
+  })
+
+  it('Enter typed right after the query goes from its own matches', async () => {
+    show(greek)
+    openFind()
+    fireEvent.change(findBox(), { target: { value: 'beta' } })
+    enter()
+    expect(await screen.findByText('2 of 3')).toBeInTheDocument()
+  })
+
+  it('Ctrl+Shift+F, Ctrl+Alt+F and Ctrl+F3 are left alone', () => {
+    show(greek)
+    expect(
+      fireEvent.keyDown(at(0, 0), { key: 'F', ctrlKey: true, shiftKey: true }),
+    ).toBe(true)
+    expect(
+      fireEvent.keyDown(at(0, 0), { key: 'f', ctrlKey: true, altKey: true }),
+    ).toBe(true)
+    expect(fireEvent.keyDown(at(0, 0), { key: 'F3', ctrlKey: true })).toBe(true)
+    expect(screen.queryByRole('textbox', { name: 'Find' })).toBeNull()
+  })
+
+  it('records follow the match gone to; closed, the focus goes back to them', async () => {
+    show(greek)
+    fireEvent.click(screen.getByRole('button', { name: 'Records' }))
+    openFind(screen.getByRole('button', { name: 'Records' }))
+    await typeFind('beta', '1 of 3')
+    enter()
+    expect(screen.getByText(/· row 3$/)).toBeInTheDocument()
+    fireEvent.keyDown(findBox(), { key: 'Escape' })
+    expect(record().parentElement?.closest('[tabindex="-1"]')).toHaveFocus()
+  })
+
+  it('marks only the rows rendered, and goes to a match far below', async () => {
+    const many = `n,v\n${Array.from({ length: 300 }, (_, i) => `${i},${i % 100 === 50 ? 'hit' : 'x'}`).join('\n')}\n`
+    show(many)
+    openFind()
+    await typeFind('hit', '1 of 3')
+    expect(found()).toEqual(['50:1'])
+    enter()
+    expect(found()).toEqual(['150:1'])
+    expect(currentCell()).toEqual(['150:1'])
+  })
+})
+
+describe('TablePreview find, editing in a cell (a fine pointer)', () => {
+  beforeEach(() => {
+    coarse.fine = true
+  })
+
+  it("F3 in a cell's field sets it, then goes to the next match", async () => {
+    const p = edit('a,b\nbeta,1\n2,beta\n')
+    const cell = (name: string) => screen.getByRole('gridcell', { name })
+    fireEvent.keyDown(cell('1'), { key: 'f', ctrlKey: true })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Find' }), {
+      target: { value: 'beta' },
+    })
+    expect(await screen.findByText('1 of 2')).toBeInTheDocument()
+    fireEvent.click(cell('1'))
+    const box = screen.getByRole('textbox', { name: 'Edit b, row 2' })
+    fireEvent.change(box, { target: { value: '9' } })
+    fireEvent.keyDown(box, { key: 'F3' })
+    expect(p.text()).toBe('a,b\nbeta,9\n2,beta\n')
+    expect(await screen.findByText('2 of 2')).toBeInTheDocument()
+  })
+})
+
+describe('TablePreview find in a worker', () => {
+  // Answers a parse or a search through its real handler
+  class AnyWorker {
+    onmessage?: (e: MessageEvent) => void
+    constructor(readonly url: URL) {}
+    async postMessage(req: unknown) {
+      const find = this.url.pathname.includes('csv-find-worker')
+      const [data] = find
+        ? (await import('../utils/csv-find-worker')).handleFind(req as never)
+        : (await import('../utils/csv-parse-worker')).handleRequest(
+            req as never,
+          )
+      this.onmessage?.(new MessageEvent('message', { data }))
+    }
+    terminate() {}
+  }
+
+  beforeEach(() => vi.stubGlobal('Worker', AnyWorker))
+
+  it('a regex is found in the worker, "…" meanwhile', async () => {
+    show('a\nbeta\nbit\nbot\n')
+    fireEvent.keyDown(document.querySelector('[role="gridcell"]') as Element, {
+      key: 'f',
+      ctrlKey: true,
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Regular expression' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Find' }), {
+      target: { value: '^b.t$' },
+    })
+    expect(screen.getByText('…')).toBeInTheDocument()
+    expect(await screen.findByText('1 of 2')).toBeInTheDocument()
+  })
+})

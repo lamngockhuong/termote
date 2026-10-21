@@ -445,6 +445,34 @@ và về mặc định khi đổi dấu phân cách hay bật tắt dòng tiêu 
   tự kể trên, không kèm dấu ngoặc kép bao quanh nó trong file.
 </Aside>
 
+### Tìm trong bảng
+
+Nhấn Ctrl+F (Cmd+F trên macOS) trên bảng, dù đang chỉ xem hay đang sửa, thì một hộp tìm mở ra
+ngay dưới thanh trên cùng; chữ tìm lần trước được chọn sẵn để gõ đè. Khác **Filter rows**, hộp tìm
+không giấu dòng nào: ô khớp được tô nền, ô khớp hiện tại có thêm viền, và hộp đếm số ô khớp
+(`3 of 17`). Nhấn Ctrl+F trong ô lọc, trong ô đang sửa hay trong bảng nhỏ thì vẫn là tìm của
+trình duyệt.
+
+- Enter và Shift+Enter trong hộp, hoặc F3 và Shift+F3 ở bất kỳ đâu trong bảng, đưa tới ô khớp kế
+  tiếp hay ô trước đó, hết cuối thì vòng về đầu, và cuộn ô đó vào tầm nhìn. Bấm từ hộp thì con trỏ
+  vẫn ở trong hộp; bấm từ một ô thì con trỏ sang ô khớp. Hộp đã đóng mà nhấn F3 thì hộp mở lại và
+  đi tới ô khớp kế tiếp. Đang sửa trong ô mà nhấn F3 thì giá trị được ghi trước, như khi rời ô.
+- Thứ tự ô khớp đi theo từng dòng đúng như đang hiện (sau khi sắp xếp và lọc), trong mỗi dòng thì
+  theo các cột đang hiện. Dòng tiêu đề và cột ẩn không được tìm; khi có cột ẩn, hộp ghi rõ điều đó.
+- Mặc định không phân biệt hoa thường và khớp một phần giá trị. **Aa** phân biệt hoa thường,
+  **ab** có khung chỉ khớp khi cả giá trị trùng, còn **.\*** coi chữ gõ vào là biểu thức chính quy
+  (JavaScript, có Unicode); biểu thức sai thì hộp báo `Invalid pattern`. Hộp tìm trên cả giá trị,
+  kể cả phần quá 1024 ký tự mà ô không hiện. Ký tự làm chữ bị ẩn hay đảo thứ tự, nếu gõ vào hộp,
+  hiện ngay bên dưới dưới dạng `⟨U+XXXX⟩`.
+- Sau khi sửa, sắp xếp, lọc hay ẩn cột, bảng tìm lại: ô khớp hiện tại giữ nguyên chỗ nếu ô đó vẫn
+  khớp, không thì chuyển sang ô khớp kế tiếp.
+- Esc hoặc nút đóng tắt hộp tìm và đưa con trỏ về ô khớp hiện tại.
+
+Biểu thức chính quy, và mọi lần tìm trên file lớn hơn 256 KiB, chạy tách khỏi trang nên bảng không
+bao giờ bị treo; lần tìm nào chạy quá 10 giây (lần đầu là 30 giây, trong lúc phần tìm còn đang
+tải) thì bị dừng và hộp báo `Search took too long`; biểu thức lồng quá sâu so với khả năng của
+trình duyệt thì hộp báo `Search failed`. Hộp đếm tối đa 100.000 ô khớp (`100000+`).
+
 ### Sửa trong bảng
 
 Bấm **Edit** khi file đang hiện dạng bảng thì bảng vẫn giữ nguyên và từng ô sửa được; thanh trên

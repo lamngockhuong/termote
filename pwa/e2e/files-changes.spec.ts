@@ -849,6 +849,56 @@ test.describe('files and changes views', () => {
     }
   })
 
+  test('find in a table: every row stays, Enter and F3 go round, a regex finds', async ({ page }) => {
+    const f = path.join(csvDir(), 'find.csv')
+    // beta on rows of id 10, 150 and 290; bat on 200
+    const words = Array.from(
+      { length: 300 },
+      (_, i) => `${i},${[10, 150, 290].includes(i) ? 'beta' : i === 200 ? 'bat' : `w${i}`}`,
+    )
+    const text = `id,word\n${words.join('\n')}\n`
+    try {
+      mkdirSync(csvDir(), { recursive: true })
+      writeFileSync(f, text)
+      await openCsv(page, 'find.csv')
+      const panel = page.getByRole('complementary', { name: 'Files' })
+      const grid = panel.getByRole('grid')
+      await expect(grid).toHaveAttribute('aria-busy', 'false')
+      // data-pos is the place in the rows shown: id i is at i
+      const word = (pos: number) => grid.locator(`[data-pos="${pos}"][data-col="1"]`)
+      await grid.getByRole('gridcell', { name: 'w0', exact: true }).focus()
+      await page.keyboard.press('Control+f')
+      const box = panel.getByRole('textbox', { name: 'Find' })
+      await expect(box).toBeFocused()
+      await box.fill('beta')
+      await expect(panel.getByText('1 of 3')).toBeVisible()
+      await expect(word(10)).toHaveClass(/from-accent\/15/)
+      await expect(panel.getByText('300 / 300 rows')).toBeVisible()
+      // Enter scrolls to the second, the focus left in find
+      await page.keyboard.press('Enter')
+      await expect(panel.getByText('2 of 3')).toBeVisible()
+      await expect(word(150)).toBeInViewport()
+      await expect(box).toBeFocused()
+      await page.keyboard.press('Shift+F3')
+      await expect(panel.getByText('1 of 3')).toBeVisible()
+      await expect(word(10)).toBeInViewport()
+      await panel.getByRole('button', { name: 'Regular expression' }).click()
+      await box.fill('^b.t')
+      await expect(panel.getByText('1 of 4')).toBeVisible()
+      await expect(panel.getByText('300 / 300 rows')).toBeVisible()
+      // Escape: back on the current match
+      await box.press('Escape')
+      await expect(box).toHaveCount(0)
+      await expect(word(10)).toBeFocused()
+      // F3 on the grid, find closed: on to the next match, given the focus
+      await page.keyboard.press('F3')
+      await expect(word(150)).toBeFocused()
+      expect(readFileSync(f, 'utf-8')).toBe(text)
+    } finally {
+      rmSync(csvDir(), { recursive: true, force: true })
+    }
+  })
+
   test.describe('table columns, wraps and row numbers', () => {
     // A long note in row 1, a three-line one in row 2, then short rows
     const notes = (rows: number) =>

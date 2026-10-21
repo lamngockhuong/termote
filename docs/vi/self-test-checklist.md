@@ -771,6 +771,20 @@ Chạy trên tmux (Linux/macOS) và Herdr; psmux (Windows) không có hai view n
       lọc theo một giá trị chỉ cột ẩn có vẫn giữ dòng đó; phím mũi tên và Tab trong ô sửa bỏ qua
       cột ẩn; không bỏ chọn được cột cuối cùng còn hiện; "Show all" hiện lại tất cả; sang tab khác
       rồi quay lại vẫn giữ, đổi "Header row" thì mất
+- [ ] Desktop, bảng đang chỉ xem: Ctrl+F (Cmd+F trên macOS) trên một ô thì hộp "Find" mở, con trỏ
+      nằm trong hộp; gõ một giá trị có ở ba dòng: hiện "1 of 3", ba ô được tô nền, ô đầu có viền,
+      số dòng không đổi; Enter và Shift+Enter đi vòng và cuộn tới ô; F3 và Shift+F3 trên một ô
+      đưa con trỏ sang ô khớp; Esc đóng hộp, con trỏ về ô khớp hiện tại; nhấn F3 lúc đó thì hộp mở
+      lại ở ô khớp kế tiếp
+- [ ] "Find": "Aa", "ab" có khung và ".*" (thử `^b.t`); `(` báo "Invalid pattern"; ẩn một cột thì
+      giá trị của cột đó không được tìm và hộp ghi "Hidden columns not searched"; gõ `U+202E` thì
+      hiện `⟨U+202E⟩` dưới hộp; Ctrl+F trong "Filter rows" hay trong ô đang sửa vẫn là tìm của
+      trình duyệt
+- [ ] "Find" trên file CSV 1 MiB: gõ trong hộp không làm khựng cuộn; bật ".*" rồi gõ `(a+)+$` trên
+      một giá trị dài toàn chữ `a` thì sau 10 giây (lần tìm đầu là 30 giây) hộp báo "Search took
+      too long", trang không bị treo
+- [ ] Đang sửa và hộp "Find" đang mở: đổi một ô khớp để nó hết khớp thì số đếm giảm và viền chuyển
+      sang ô khớp kế tiếp; nhấn F3 trong ô đang sửa thì giá trị được ghi trước rồi mới đi
 - [ ] Độ rộng và wrap trở về mặc định khi đổi "Delimiter" hay "Header row", giữ nguyên sau khi sửa
       một ô, và giữ nguyên khi sang tab khác rồi quay lại (cùng dòng đầu)
 - [ ] Nhấn số dòng: Records mở đúng dòng đó (cả sau khi sắp xếp); tắt Records thì bảng hiện lại ở

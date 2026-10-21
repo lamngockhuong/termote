@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import { useCsvFind } from '../hooks/use-csv-find'
 import {
   type CsvTableState,
   useCsvRows,
@@ -21,6 +22,7 @@ import {
   type TableOp,
   undoOp,
 } from '../utils/csv-edits'
+import { matchFrom } from '../utils/csv-find'
 import {
   type CsvTable,
   cellsIn,
@@ -48,7 +50,14 @@ import { CellSheet } from './cell-sheet'
 import { CodeBlock } from './code-block'
 import { type CellMove, InlineCellEditor } from './inline-cell-editor'
 import { ViewMessage } from './pane-dir-header'
-import { cellText, MAX_CELL_CHARS, shownAt, TableGrid } from './table-grid'
+import { type FindFlags, TableFindBar } from './table-find-bar'
+import {
+  cellText,
+  type GridCell,
+  MAX_CELL_CHARS,
+  shownAt,
+  TableGrid,
+} from './table-grid'
 import { TableRecords } from './table-records'
 import { Banner } from './ui/banner'
 import { Button, FOCUS_RING, IconButton } from './ui/button'
@@ -124,6 +133,8 @@ interface CellAt {
   col: number
   input?: string
 }
+
+const NO_FLAGS: FindFlags = { matchCase: false, wholeCell: false, regex: false }
 
 // A value a cell's own field can take: whole, and with no character the
 // field would hide, reorder, or change (\r\n read back as \n). Any other
@@ -278,6 +289,64 @@ export default function TablePreview({
     [names.length, layout.hidden],
   )
   const hiddenCount = names.length - cols.length
+
+  // Find: open or not, what is typed and how; F3 still finds what was
+  // typed once it closed, opening it again. Nothing is searched while it
+  // is closed.
+  const [finding, setFinding] = useState(false)
+  const [findInput, setFindInput] = useState('')
+  const findQuery = useDeferredValue(findInput)
+  const [findFlags, setFindFlags] = useState(NO_FLAGS)
+  const findOpts = useMemo(
+    () => ({ ...findFlags, query: finding ? findQuery : '' }),
+    [findFlags, finding, findQuery],
+  )
+  const findBox = useRef<HTMLInputElement>(null)
+  const focusFind = useRef(false)
+  const found = useCsvFind(shown, delimiter, table, rows, cols, findOpts)
+  const matchCount = found.matches.length >> 1
+  // The match gone to last: a cell of the file, and its place in rows then
+  const [hit, setHit] = useState<{ row: number; col: number; pos: number }>()
+  // The current match: that cell while it still matches, else the first
+  // match after where it was (from the top when none was gone to)
+  const currentMatch = useMemo(() => {
+    if (!matchCount) return -1
+    if (!hit || !rows) return 0
+    let pos = rows.indexOf(hit.row)
+    let at = cols.indexOf(hit.col)
+    // Filtered out: from its place in the rows of then. Its column hidden:
+    // from the next column shown, in the order of the file.
+    if (pos < 0) pos = hit.pos
+    if (at < 0) at = cols.findIndex((c) => c > hit.col)
+    if (at < 0) {
+      pos++
+      at = 0
+    }
+    const k = matchFrom(found.matches, pos, at)
+    return k < matchCount ? k : 0
+  }, [found.matches, matchCount, hit, rows, cols])
+  const matchAt = (k: number): GridCell => ({
+    pos: found.matches[2 * k],
+    at: found.matches[2 * k + 1],
+  })
+  // A move asked for, made once the matches of now are in: to the next (1)
+  // or previous (-1) match, or to the current one (0)
+  const [move, setMove] = useState<{ step: -1 | 0 | 1 }>()
+  const [goTo, setGoTo] = useState<{
+    seq: number
+    cell?: GridCell
+    focus?: boolean
+  }>()
+  const goSeq = useRef(0)
+  const goToCell = (cell?: GridCell, focus?: boolean) =>
+    setGoTo({ seq: ++goSeq.current, cell, focus })
+  // Another query or option: to the match at the current one or after
+  const lastOpts = useRef(findOpts)
+  useEffect(() => {
+    if (lastOpts.current === findOpts) return
+    lastOpts.current = findOpts
+    if (findOpts.query) setMove((m) => m ?? { step: 0 })
+  })
   // Edits are taken only on the current parse of text, outside a save
   const live =
     editing && !editing.saving && !stale && table ? editing : undefined
@@ -408,14 +477,77 @@ export default function TablePreview({
     openCell(pending.row, pending.col, pending.input)
   })
 
+  useEffect(() => {
+    if (!focusFind.current) return
+    focusFind.current = false
+    findBox.current?.focus()
+    findBox.current?.select()
+  })
+
+  // Not on the rows of an older table, nor before the matches are in
+  useEffect(() => {
+    // Typed just before: the matches are still those of the last query
+    const waiting = found.status === 'busy' || findQuery !== findInput
+    if (!move || waiting || !computed || stale) return
+    setMove(undefined)
+    if (!matchCount) return
+    const k = (currentMatch + move.step + matchCount) % matchCount
+    const cell = matchAt(k)
+    const row = computed[cell.pos]
+    setHit({ row, col: cols[cell.at], pos: cell.pos })
+    if (records) setRecordRow(row)
+    goToCell(cell)
+  })
+
+  // Its query chosen, to type over
+  const openFind = () => {
+    const box = findBox.current
+    if (box) {
+      box.focus()
+      box.select()
+      return
+    }
+    setFinding(true)
+    focusFind.current = true
+  }
+  // Back on the current match, or the active cell
+  const closeFind = () => {
+    setFinding(false)
+    if (records) recordsBox.current?.focus()
+    else goToCell(matchCount ? matchAt(currentMatch) : undefined, true)
+  }
+  const stepFind = (step: 1 | -1) => {
+    setFinding(true)
+    setMove({ step })
+  }
+
   // The table's own keys; never one typed in a field or in a sheet (a
   // <dialog> in this tree, so its keys bubble here)
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (!editing || !(e.ctrlKey || e.metaKey)) return
-    if ((e.target as HTMLElement).closest('dialog, input, textarea, select')) {
+    const target = e.target as HTMLElement
+    const plain = !(e.ctrlKey || e.metaKey || e.altKey)
+    if (e.key === 'F3' && plain && !target.closest('dialog')) {
+      e.preventDefault()
+      if (!findInput) {
+        openFind()
+        return
+      }
+      // A cell's field is set first, as when it is left
+      const grid = target.closest('[role="grid"]') as HTMLElement | null
+      if (grid && target.tagName === 'TEXTAREA') grid.focus()
+      stepFind(e.shiftKey ? -1 : 1)
       return
     }
+    if (!(e.ctrlKey || e.metaKey)) return
+    if (target.closest('dialog, input, textarea, select')) return
     const key = e.key.toLowerCase()
+    // Not with Shift or Alt (AltGr types a character)
+    if (key === 'f' && !e.shiftKey && !e.altKey) {
+      e.preventDefault()
+      openFind()
+      return
+    }
+    if (!editing) return
     if (key === 's') {
       e.preventDefault()
       if (editing.canSave && !editing.saving) editing.onSave()
@@ -707,6 +839,21 @@ export default function TablePreview({
           </MenuGroup>
         </Menu>
       </div>
+      {finding && (
+        <TableFindBar
+          input={findInput}
+          onInput={setFindInput}
+          flags={findFlags}
+          onFlags={setFindFlags}
+          status={found.status}
+          count={matchCount}
+          current={currentMatch}
+          hidden={hiddenCount}
+          onStep={stepFind}
+          onClose={closeFind}
+          inputRef={findBox}
+        />
+      )}
       {t.columnCount > MAX_COLUMNS && (
         <Banner variant="warning">
           Showing {MAX_COLUMNS} of {t.columnCount} columns. See all in Source
@@ -757,6 +904,9 @@ export default function TablePreview({
           covered={records}
           scrollTop={scrollTop}
           pinned={!!layout.pinned}
+          matches={finding ? found.matches : undefined}
+          current={matchCount ? matchAt(currentMatch) : undefined}
+          goTo={goTo}
         />
         {records && (
           <div

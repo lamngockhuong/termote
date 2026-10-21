@@ -13,6 +13,7 @@ import {
   useState,
 } from 'react'
 import { useMediaQuery } from '../hooks/use-media-query'
+import { matchFrom } from '../utils/csv-find'
 import { type CsvTable, cellsIn, valueAt } from '../utils/csv-parse'
 import type { ViewOptions } from '../utils/csv-view'
 import {
@@ -77,6 +78,10 @@ const WRAP_CELL = `flex items-start overflow-hidden px-2 py-1.5 text-left leadin
 // The pinned column's cell: stuck next to the row numbers (level with them,
 // never over them), above the cells scrolled under it
 const PIN = 'sticky z-[6] border-r border-border bg-bg'
+// A cell found: a tint drawn as an image, over a pinned cell's own opaque
+// background too; the current one is outlined as well
+const HIT = 'bg-linear-to-r from-accent/15 to-accent/15'
+const CURRENT = 'outline-2 -outline-offset-2 outline-accent'
 // Whole class names, so Tailwind finds each one in the source
 const CLAMP: Record<WrapLines, string> = {
   3: 'line-clamp-3',
@@ -135,6 +140,20 @@ interface Props {
   // The first column stays at the left, next to the row numbers, while the
   // rest scrolls; not while it is wider than half the frame
   pinned?: boolean
+  // Cells found, as pairs (place in rows, place in cols) in that order, and
+  // the current one
+  matches?: Int32Array
+  current?: GridCell
+  // A cell to go to, once per seq: made active and scrolled into view, and
+  // given the focus when focus is set or the focus is in the grid. With no
+  // cell, the active one.
+  goTo?: { seq: number; cell?: GridCell; focus?: boolean }
+}
+
+// A place in rows, and one in cols
+export interface GridCell {
+  pos: number
+  at: number
 }
 
 interface Drag {
@@ -177,6 +196,9 @@ export function TableGrid({
   covered = false,
   scrollTop,
   pinned = false,
+  matches,
+  current,
+  goTo,
 }: Props) {
   const frame = useRef<HTMLDivElement>(null)
   // Used up by the first rows: the offset is a scroll offset of this frame,
@@ -197,6 +219,9 @@ export function TableGrid({
   // in cols (-1 is the row number)
   const [active, setActive] = useState({ pos: 0, col: 0 })
   const focusing = useRef(false)
+  // The cell made active by a goTo without the focus: scrolled into view
+  // sideways once rendered
+  const showing = useRef(false)
 
   useLayoutEffect(() => {
     const el = frame.current as HTMLDivElement
@@ -284,11 +309,14 @@ export function TableGrid({
 
   // Focus follows the arrow keys onto the cell they reached, once rendered
   useEffect(() => {
-    if (!focusing.current) return
+    if (!focusing.current && !showing.current) return
+    const cell = frame.current?.querySelector<HTMLElement>(
+      `[data-pos="${pos}"][data-at="${col}"]`,
+    )
+    if (focusing.current) cell?.focus()
+    else cell?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
     focusing.current = false
-    frame.current
-      ?.querySelector<HTMLElement>(`[data-pos="${pos}"][data-at="${col}"]`)
-      ?.focus()
+    showing.current = false
   })
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -389,6 +417,17 @@ export function TableGrid({
     setActive(next)
     setView({ top: el.scrollTop, height: el.clientHeight })
   }
+
+  const went = useRef(goTo?.seq)
+  useEffect(() => {
+    if (!goTo || goTo.seq === went.current) return
+    went.current = goTo.seq
+    const el = frame.current as HTMLDivElement
+    const focus = goTo.focus || el.contains(document.activeElement)
+    focusing.current = focus
+    showing.current = !focus
+    reveal(goTo.cell ? { pos: goTo.cell.pos, col: goTo.cell.at } : { pos, col })
+  })
 
   // The cell edited becomes the active one, scrolled into view (Tab may
   // reach a row out of it). Once the editing ends by a key (Enter, Escape),
@@ -524,6 +563,14 @@ export function TableGrid({
   ].join(' ')
   // Row 0 is the header row when there is one; a synthetic header otherwise
   const ariaRow = (r: number) => r + (header ? 1 : 2)
+  // The cells found among the rows rendered, as pos * cols.length + at
+  const hits = new Set<number>()
+  if (matches) {
+    for (let k = 2 * matchFrom(matches, first, 0); k < matches.length; k += 2) {
+      if (matches[k] >= last) break
+      hits.add(matches[k] * cols.length + matches[k + 1])
+    }
+  }
 
   return (
     <div
@@ -537,7 +584,10 @@ export function TableGrid({
       aria-busy={busy}
       aria-hidden={covered || undefined}
       inert={covered}
-      className="min-h-0 flex-1 overflow-auto bg-bg font-term text-[12px] text-fg"
+      // No scroll anchoring: a jump far down shows only the spacer below for
+      // a frame, and the browser, anchored on it, would push the offset down
+      // again by the rows drawn above as they render
+      className="min-h-0 flex-1 overflow-auto bg-bg font-term text-[12px] text-fg [overflow-anchor:none]"
       // A cell given the focus is scrolled out from under the columns that
       // stick at the left
       style={{
@@ -708,6 +758,8 @@ export function TableGrid({
                 }
                 const wrap = wrapped.has(c)
                 const shown = shownAt(text, table, r, c, wrap)
+                const found = hits.has(p * cols.length + i)
+                const now = found && current?.pos === p && current.at === i
                 return (
                   <button
                     key={c}
@@ -719,7 +771,7 @@ export function TableGrid({
                     data-at={i}
                     tabIndex={p === pos && i === col ? 0 : -1}
                     title={shown}
-                    className={`${wrap ? WRAP_CELL : CELL} ${i === 0 && sticky ? PIN : ''}`}
+                    className={`${wrap ? WRAP_CELL : CELL} ${i === 0 && sticky ? PIN : ''} ${found ? HIT : ''} ${now ? CURRENT : ''}`}
                     style={i === 0 ? pinStyle : undefined}
                   >
                     {wrap ? (

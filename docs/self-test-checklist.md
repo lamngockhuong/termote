@@ -770,6 +770,20 @@ Run on tmux (Linux/macOS) and Herdr; psmux (Windows) offers neither view.
       hidden"); filtering on a value only a hidden column has keeps its row; arrow keys and Tab in a
       cell skip them; the last column shown cannot be unticked; "Show all" brings them back; the
       choice stays after showing another tab and coming back, and goes on another "Header row"
+- [ ] Desktop, a table only viewed: Ctrl+F (Cmd+F on a Mac) on a cell opens "Find" with the focus
+      in it; type a value in three rows: "1 of 3", the three cells tinted, the first outlined, the
+      row count unchanged; Enter and Shift+Enter go round, scrolling; F3 and Shift+F3 on a cell
+      move the focus to the match; Escape closes it, the focus on the current match; F3 then opens
+      it again on the next one
+- [ ] "Find": "Aa", the boxed "ab" and ".*" (try `^b.t`); `(` shows "Invalid pattern"; with a column
+      hidden its values are not found and the box says "Hidden columns not searched"; a typed
+      `U+202E` shows as `⟨U+202E⟩` under the box; Ctrl+F in "Filter rows" or a cell's field is the
+      browser's find
+- [ ] "Find" on a 1 MiB CSV: typing in the box never stalls scrolling; `(a+)+$` with ".*" on a
+      long value of `a`s shows "Search took too long" after 10 seconds (30 on the first search) and
+      the page never freezes
+- [ ] Editing with "Find" open: change a matching cell so it no longer matches: the count drops
+      and the outline moves to the next match; F3 in a cell's field sets the value, then moves
 - [ ] Widths and wraps go back to the defaults on another "Delimiter" or "Header row", stay after
       editing a cell, and stay after showing another tab and coming back (same first row)
 - [ ] Press a row number: Records opens on that row (also after sorting); turning Records off
