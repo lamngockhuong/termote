@@ -89,9 +89,13 @@ interface Props {
   table: CsvTable
   // File row indices, in the order shown (the header row is never one)
   rows: Int32Array
-  // Columns rendered, their names and widths (in ch)
+  // Names and widths (in ch) of the columns, by column of the file
   names: string[]
   widths: number[]
+  // The columns shown, in order (columns of the file): the others are
+  // hidden. Keys move along these; data-col is a column of the file,
+  // data-at its place here.
+  cols: number[]
   // Columns whose cells show several lines, up to lines; with any, every
   // row is taller
   wrapped: ReadonlySet<number>
@@ -153,6 +157,7 @@ export function TableGrid({
   rows,
   names,
   widths,
+  cols,
   wrapped,
   lines = WRAP_LINES,
   header,
@@ -179,12 +184,17 @@ export function TableGrid({
   const restore = useRef(scrollTop)
   const coarse = useMediaQuery('(pointer: coarse)')
   const headerHeight = coarse ? TOUCH_ROW_HEIGHT : ROW_HEIGHT
-  // One height for every row, taller while a column wraps
-  const rowHeight = rowHeightFor(coarse, wrapped.size > 0, lines)
+  // One height for every row, taller while a column shown wraps
+  const rowHeight = rowHeightFor(
+    coarse,
+    cols.some((c) => wrapped.has(c)),
+    lines,
+  )
   const [view, setView] = useState({ top: 0, height: 0 })
   // The frame's width, 0 until it has a size
   const [frameWidth, setFrameWidth] = useState(0)
-  // The cell keyboard focus moves from: its place in rows, and its column
+  // The cell keyboard focus moves from: its place in rows, and its place
+  // in cols (-1 is the row number)
   const [active, setActive] = useState({ pos: 0, col: 0 })
   const focusing = useRef(false)
 
@@ -249,7 +259,7 @@ export function TableGrid({
   const after = Math.max(0, total - before - (last - first) * rowHeight)
   const pos = Math.min(active.pos, Math.max(rows.length - 1, 0))
   // -1 is the row number
-  const col = Math.min(active.col, names.length - 1)
+  const col = Math.min(active.col, cols.length - 1)
   // The first row in view
   const top = Math.min(
     Math.max(rows.length - 1, 0),
@@ -277,7 +287,7 @@ export function TableGrid({
     if (!focusing.current) return
     focusing.current = false
     frame.current
-      ?.querySelector<HTMLElement>(`[data-pos="${pos}"][data-col="${col}"]`)
+      ?.querySelector<HTMLElement>(`[data-pos="${pos}"][data-at="${col}"]`)
       ?.focus()
   })
 
@@ -298,9 +308,11 @@ export function TableGrid({
     // The cell the key is on (focused by a script, it may not be the
     // active one yet)
     const from = onCell
-      ? { pos: Number(target.dataset.pos), col: Number(target.dataset.col) }
+      ? { pos: Number(target.dataset.pos), col: Number(target.dataset.at) }
       : { pos, col }
     const row = rows[from.pos]
+    // The column of the file
+    const fileCol = cols[from.col]
     const onValue = onCell && from.col >= 0
     // AltGr (Ctrl and Alt on Windows) types a character, never a shortcut
     const modified =
@@ -308,7 +320,7 @@ export function TableGrid({
       !e.nativeEvent.getModifierState('AltGraph')
     if (e.key === 'F2' && onValue) {
       e.preventDefault()
-      onOpen(row, from.col)
+      onOpen(row, fileCol)
       return
     }
     // The first key of an IME: its default goes on, so the text composed
@@ -318,12 +330,12 @@ export function TableGrid({
       e.key === 'Process' ||
       e.nativeEvent.keyCode === 229
     if (onType && onValue && composing) {
-      onType(row, from.col, '')
+      onType(row, fileCol, '')
       return
     }
     if (onType && onValue && e.key.length === 1 && !modified) {
       e.preventDefault()
-      onType(row, from.col, e.key)
+      onType(row, fileCol, e.key)
       return
     }
     if (
@@ -333,11 +345,11 @@ export function TableGrid({
       !modified
     ) {
       e.preventDefault()
-      onClear(row, from.col)
+      onClear(row, fileCol)
       return
     }
     const lastPos = Math.max(rows.length - 1, 0)
-    const lastCol = names.length - 1
+    const lastCol = cols.length - 1
     let next: { pos: number; col: number }
     if (e.key === 'Home' || e.key === 'End') {
       // The first or last column of the row; with Ctrl (Cmd on a Mac), of
@@ -389,22 +401,23 @@ export function TableGrid({
     edited.current = editingCell
     if (was?.row === editingCell?.row && was?.col === editingCell?.col) return
     const cell = (editingCell ?? was) as { row: number; col: number }
-    // Filtered out meanwhile
+    // Filtered out, or its column hidden, meanwhile
     const at = rows.indexOf(cell.row)
-    if (at < 0) return
-    if (editingCell) reveal({ pos: at, col: cell.col })
+    const place = cols.indexOf(cell.col)
+    if (at < 0 || place < 0) return
+    if (editingCell) reveal({ pos: at, col: place })
     else if (document.activeElement === frame.current) {
       focusing.current = true
-      setActive({ pos: at, col: cell.col })
+      setActive({ pos: at, col: place })
     }
   })
 
   const onClick = (e: MouseEvent<HTMLDivElement>) => {
     const cell = (e.target as HTMLElement).closest<HTMLElement>('[data-pos]')
     if (!cell) return
-    const at = { pos: Number(cell.dataset.pos), col: Number(cell.dataset.col) }
+    const at = { pos: Number(cell.dataset.pos), col: Number(cell.dataset.at) }
     setActive(at)
-    if (at.col >= 0) onOpen(rows[at.pos], at.col)
+    if (at.col >= 0) onOpen(rows[at.pos], Number(cell.dataset.col))
     // While the rows are being worked out, the order on screen is the old
     // one: the number may not be the row under it any more
     else if (!busy) onOpenRow(rows[at.pos])
@@ -499,15 +512,15 @@ export function TableGrid({
       (el as HTMLDivElement).getBoundingClientRect().width
     setPinnedPx(
       width(corner.current) + width(pinHead.current) ||
-        (numberWidth + widths[0]) * FALLBACK_CH_PX + 2 * CELL_PAD_X,
+        (numberWidth + widths[cols[0]]) * FALLBACK_CH_PX + 2 * CELL_PAD_X,
     )
-  }, [pinned, widths[0], numberWidth, frameWidth])
+  }, [pinned, widths[cols[0]], numberWidth, frameWidth])
   // A frame of no size yet (a test, the first frame) is no narrow one
   const sticky = pinned && (!frameWidth || pinnedPx <= frameWidth / 2)
   const pinStyle = sticky ? { left: numberCol } : undefined
   const template = [
     numberCol,
-    ...widths.map((w, c) => `calc(var(--w-${c}, ${w}ch) + 1rem)`),
+    ...cols.map((c) => `calc(var(--w-${c}, ${widths[c]}ch) + 1rem)`),
   ].join(' ')
   // Row 0 is the header row when there is one; a synthetic header otherwise
   const ariaRow = (r: number) => r + (header ? 1 : 2)
@@ -529,7 +542,7 @@ export function TableGrid({
       // stick at the left
       style={{
         scrollPaddingLeft: sticky
-          ? `calc(${numberWidth + widths[0]}ch + 2rem)`
+          ? `calc(${numberWidth + widths[cols[0]]}ch + 2rem)`
           : numberCol,
       }}
       data-scroll-restore
@@ -546,20 +559,23 @@ export function TableGrid({
           <div
             ref={corner}
             role="columnheader"
+            aria-colindex={1}
             // Above the resize handles of the columns scrolled under it
             className="sticky left-0 z-30 bg-surface px-2"
             aria-label="Row"
           />
-          {names.map((name, c) => {
+          {cols.map((c, i) => {
+            const name = names[c]
             const dir = sort?.col === c ? sort.dir : undefined
             const Arrow = dir === 'desc' ? ArrowDown : ArrowUp
             const label = cellText(name)
             return (
               <div
-                // biome-ignore lint/suspicious/noArrayIndexKey: a column is its index
                 key={c}
-                ref={c === 0 ? pinHead : undefined}
+                ref={i === 0 ? pinHead : undefined}
                 role="columnheader"
+                // Hidden columns are left out: a screen reader can tell
+                aria-colindex={c + 2}
                 // Its name only, not its resize handle's
                 aria-label={label}
                 aria-sort={
@@ -571,8 +587,8 @@ export function TableGrid({
                 }
                 // Pinned: below the corner, above the resize handles of the
                 // columns scrolled under it
-                className={`flex min-w-0 ${c === 0 && sticky ? 'sticky z-[25] border-r border-border bg-surface' : 'relative'}`}
-                style={c === 0 ? pinStyle : undefined}
+                className={`flex min-w-0 ${i === 0 && sticky ? 'sticky z-[25] border-r border-border bg-surface' : 'relative'}`}
+                style={i === 0 ? pinStyle : undefined}
               >
                 <button
                   type="button"
@@ -649,11 +665,12 @@ export function TableGrid({
               // Clipped, not hidden: overflow hidden would make each row a
               // scroll box, and its row number and pinned cell would stick
               // to the row, never to the frame scrolled sideways.
-              className={`grid border-b border-border/50 ${editingCell?.row === r ? `relative ${sticky && editingCell.col === 0 ? 'z-[7]' : 'z-[5]'}` : 'overflow-clip'}`}
+              className={`grid border-b border-border/50 ${editingCell?.row === r ? `relative ${sticky && editingCell.col === cols[0] ? 'z-[7]' : 'z-[5]'}` : 'overflow-clip'}`}
               style={{ gridTemplateColumns: template, height: rowHeight }}
             >
               <div
                 role="rowheader"
+                aria-colindex={1}
                 aria-label={label}
                 title={odd ? label : undefined}
                 // Above a cell edited on a row before, growing over it
@@ -663,6 +680,7 @@ export function TableGrid({
                   type="button"
                   data-pos={p}
                   data-col={-1}
+                  data-at={-1}
                   tabIndex={p === pos && col === -1 ? 0 : -1}
                   aria-label={`Open row ${r + 1} as a record`}
                   className={`h-full w-full px-2 text-right ${FOCUS_RING} focus-visible:-outline-offset-2`}
@@ -670,19 +688,19 @@ export function TableGrid({
                   {r + 1}
                 </button>
               </div>
-              {names.map((_, c) => {
+              {cols.map((c, i) => {
                 if (editingCell?.row === r && editingCell.col === c) {
                   return (
                     <div
-                      // biome-ignore lint/suspicious/noArrayIndexKey: a cell is its column
                       key={c}
                       role="gridcell"
+                      aria-colindex={c + 2}
                       // The editor's group: in the last column it grows leftward
-                      data-last={c === names.length - 1 || undefined}
+                      data-last={i === cols.length - 1 || undefined}
                       // Out of the pinned column, still above it: a field
                       // growing leftward from the last column covers it
-                      className={`group/edit min-w-0 ${c === 0 && sticky ? PIN : 'relative z-[7]'}`}
-                      style={c === 0 ? pinStyle : undefined}
+                      className={`group/edit min-w-0 ${i === 0 && sticky ? PIN : 'relative z-[7]'}`}
+                      style={i === 0 ? pinStyle : undefined}
                     >
                       {editor}
                     </div>
@@ -692,16 +710,17 @@ export function TableGrid({
                 const shown = shownAt(text, table, r, c, wrap)
                 return (
                   <button
-                    // biome-ignore lint/suspicious/noArrayIndexKey: a cell is its column
                     key={c}
                     type="button"
                     role="gridcell"
+                    aria-colindex={c + 2}
                     data-pos={p}
                     data-col={c}
-                    tabIndex={p === pos && c === col ? 0 : -1}
+                    data-at={i}
+                    tabIndex={p === pos && i === col ? 0 : -1}
                     title={shown}
-                    className={`${wrap ? WRAP_CELL : CELL} ${c === 0 && sticky ? PIN : ''}`}
-                    style={c === 0 ? pinStyle : undefined}
+                    className={`${wrap ? WRAP_CELL : CELL} ${i === 0 && sticky ? PIN : ''}`}
+                    style={i === 0 ? pinStyle : undefined}
                   >
                     {wrap ? (
                       <span

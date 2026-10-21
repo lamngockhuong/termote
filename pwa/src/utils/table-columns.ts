@@ -52,10 +52,21 @@ export interface TableLayout {
   lines?: WrapLines
   // The first column shown stays at the left while the rest scrolls
   pinned?: boolean
+  // Columns not shown in the grid and in Records
+  hidden?: number[]
 }
 
 export function emptyLayout(key: string): TableLayout {
   return { key, widths: {}, wrapped: [] }
+}
+
+// The columns shown, in order, of count: all but the hidden ones, and never
+// none (the first one when every column is hidden)
+export function shownColumns(count: number, hidden: readonly number[]) {
+  const out = Array.from({ length: count }, (_, c) => c).filter(
+    (c) => !hidden.includes(c),
+  )
+  return out.length || !count ? out : [0]
 }
 
 // A value of a cell as shown: (file row, column, with its line breaks)

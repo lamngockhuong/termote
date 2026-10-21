@@ -923,7 +923,7 @@ test.describe('files and changes views', () => {
         const height = (n: number) => row(n).evaluate((el) => el.getBoundingClientRect().height)
         expect(await height(2)).toBe(32)
         await panel.getByRole('button', { name: 'Columns' }).click()
-        await page.getByRole('menuitemcheckbox', { name: '2 · note' }).click()
+        await page.getByRole('group', { name: 'Wrap' }).getByRole('menuitemcheckbox', { name: '2 · note' }).click()
         await page.keyboard.press('Escape')
         expect(await height(2)).toBe(61)
         const cell = row(3).getByRole('gridcell').nth(1)
@@ -946,7 +946,7 @@ test.describe('files and changes views', () => {
         await expect(grid.getByRole('textbox', { name: /^Edit / })).toHaveCount(0)
         await panel.getByRole('button', { name: 'Cancel editing' }).click()
         await panel.getByRole('button', { name: 'Columns' }).click()
-        await page.getByRole('menuitemcheckbox', { name: '2 · note' }).click()
+        await page.getByRole('group', { name: 'Wrap' }).getByRole('menuitemcheckbox', { name: '2 · note' }).click()
         await page.keyboard.press('Escape')
         expect(await height(2)).toBe(32)
       } finally {
@@ -976,7 +976,8 @@ test.describe('files and changes views', () => {
             .evaluate((el) => ({ lines: Math.round(el.clientHeight / 16), cut: el.scrollHeight > el.clientHeight }))
         const choose = async (item: string, role: 'menuitemcheckbox' | 'menuitemradio') => {
           await panel.getByRole('button', { name: 'Columns' }).click()
-          await page.getByRole(role, { name: item }).click()
+          // A column is named in Show and in Wrap: this is Wrap's
+          await (role === 'menuitemcheckbox' ? page.getByRole('group', { name: 'Wrap' }) : page).getByRole(role, { name: item }).click()
           await page.keyboard.press('Escape')
         }
         await choose('2 · note', 'menuitemcheckbox')
@@ -1090,7 +1091,7 @@ test.describe('files and changes views', () => {
         await handle.focus()
         await page.keyboard.press('End')
         await panel.getByRole('button', { name: 'Columns' }).click()
-        await page.getByRole('menuitemcheckbox', { name: '2 · note' }).click()
+        await page.getByRole('group', { name: 'Wrap' }).getByRole('menuitemcheckbox', { name: '2 · note' }).click()
         await page.keyboard.press('Escape')
         await grid.evaluate((el) => {
           el.scrollTop = 61 * 500
@@ -1168,6 +1169,54 @@ test.describe('files and changes views', () => {
             }),
           )
           .toBe(true)
+      } finally {
+        rmSync(csvDir(), { recursive: true, force: true })
+      }
+    })
+
+    test('hidden columns leave the grid and Records, are still filtered on, and come back', async ({ page }) => {
+      const f = path.join(csvDir(), 'hide.csv')
+      const text = 'name,secret,city,note\npear,alpha,Huế,ripe\nplum,beta,Hà Nội,dry\n'
+      try {
+        mkdirSync(csvDir(), { recursive: true })
+        writeFileSync(f, text)
+        await openCsv(page, 'hide.csv')
+        const panel = page.getByRole('complementary', { name: 'Files' })
+        const grid = panel.getByRole('grid')
+        await expect(grid).toHaveAttribute('aria-busy', 'false')
+        const show = page.getByRole('group', { name: 'Show' })
+        await panel.getByRole('button', { name: 'Columns' }).click()
+        await show.getByRole('menuitemcheckbox', { name: '2 · secret' }).click()
+        await show.getByRole('menuitemcheckbox', { name: '4 · note' }).click()
+        await page.keyboard.press('Escape')
+        await expect(grid.getByRole('columnheader', { name: 'secret', exact: true })).toHaveCount(0)
+        await expect(grid.getByRole('columnheader', { name: 'note', exact: true })).toHaveCount(0)
+        await expect(grid.getByRole('columnheader', { name: 'city', exact: true })).toBeVisible()
+        // The filter still matches a value only a hidden column has
+        await panel.getByRole('searchbox', { name: 'Filter rows' }).fill('beta')
+        await expect(panel.getByText('1 / 2 rows · 2 columns hidden')).toBeVisible()
+        await expect(grid.getByRole('gridcell', { name: 'plum', exact: true })).toBeVisible()
+        await panel.getByRole('searchbox', { name: 'Filter rows' }).fill('')
+        // Keys go past the hidden column
+        await grid.getByRole('gridcell', { name: 'pear', exact: true }).focus()
+        await page.keyboard.press('ArrowRight')
+        await expect(grid.getByRole('gridcell', { name: 'Huế', exact: true })).toBeFocused()
+        await panel.getByRole('button', { name: 'Records' }).click()
+        await expect(page.getByText('Record 1 / 2 · row 2 · 2 columns hidden')).toBeVisible()
+        await expect(page.getByRole('term')).toHaveText(['name', 'city'])
+        await panel.getByRole('button', { name: 'Records' }).click()
+        await panel.getByRole('button', { name: 'Columns' }).click()
+        await page.getByRole('menuitem', { name: 'Show all' }).click()
+        await page.keyboard.press('Escape')
+        await expect(grid.getByRole('columnheader', { name: 'secret', exact: true })).toBeVisible()
+        // Another header row shows every column again
+        await panel.getByRole('button', { name: 'Columns' }).click()
+        await show.getByRole('menuitemcheckbox', { name: '3 · city' }).click()
+        await page.keyboard.press('Escape')
+        await expect(grid.getByRole('columnheader', { name: 'city', exact: true })).toHaveCount(0)
+        await panel.getByRole('button', { name: 'Header row' }).click()
+        await expect(grid.getByRole('columnheader', { name: 'Column 3', exact: true })).toBeVisible()
+        expect(readFileSync(f, 'utf-8')).toBe(text)
       } finally {
         rmSync(csvDir(), { recursive: true, force: true })
       }

@@ -37,6 +37,7 @@ import {
   fitWidths,
   initialWidths,
   type ReadCell,
+  shownColumns,
   type TableLayout,
   WRAP_LINE_CHOICES,
   WRAP_LINES,
@@ -270,6 +271,13 @@ export default function TablePreview({
     [layout.wrapped, names.length],
   )
   const lines = layout.lines ?? WRAP_LINES
+  // The columns shown, in order; a hidden one past the columns read is
+  // nothing
+  const cols = useMemo(
+    () => shownColumns(names.length, layout.hidden ?? []),
+    [names.length, layout.hidden],
+  )
+  const hiddenCount = names.length - cols.length
   // Edits are taken only on the current parse of text, outside a save
   const live =
     editing && !editing.saving && !stale && table ? editing : undefined
@@ -337,14 +345,18 @@ export default function TablePreview({
   const neighbour = (at: OpenCell, move: CellMove) => {
     const order = computed as Int32Array
     const pos = order.indexOf(at.row)
+    // Along the columns shown: a field shows only in one
+    const i = cols.indexOf(at.col)
     if (move === 'next') {
-      if (at.col + 1 < names.length) return { row: at.row, col: at.col + 1 }
+      if (i + 1 < cols.length) return { row: at.row, col: cols[i + 1] }
       return pos + 1 < order.length
-        ? { row: order[pos + 1], col: 0 }
+        ? { row: order[pos + 1], col: cols[0] }
         : undefined
     }
-    if (at.col > 0) return { row: at.row, col: at.col - 1 }
-    return pos > 0 ? { row: order[pos - 1], col: names.length - 1 } : undefined
+    if (i > 0) return { row: at.row, col: cols[i - 1] }
+    return pos > 0
+      ? { row: order[pos - 1], col: cols[cols.length - 1] }
+      : undefined
   }
   // Sets the cell at to value (when it changed), then goes on to the cell
   // move reaches, if its value can be edited there; save: the file is saved
@@ -472,6 +484,18 @@ export default function TablePreview({
         ? layout.wrapped.filter((c) => c !== col)
         : [...layout.wrapped, col],
     })
+  // Only what is shown changes: a hidden column is still filtered on. A
+  // sort by it goes, its arrow being gone with it.
+  const toggleShown = (col: number) => {
+    const hidden = (layout.hidden ?? []).filter((c) => c < names.length)
+    if (!hidden.includes(col) && sort?.col === col) setSort(null)
+    setLayout({
+      ...layout,
+      hidden: hidden.includes(col)
+        ? hidden.filter((c) => c !== col)
+        : [...hidden, col],
+    })
+  }
   const openRecord = (row: number) => {
     setRecordRow(row)
     setRecords(true)
@@ -579,6 +603,12 @@ export default function TablePreview({
         />
         <span className="tabular-nums text-fg-muted" aria-live="polite">
           {rows ? rows.length : '…'} / {total} rows
+          {hiddenCount > 0 && (
+            <span title="Filter rows also searches hidden columns">
+              {' '}
+              · {hiddenCount} {hiddenCount === 1 ? 'column' : 'columns'} hidden
+            </span>
+          )}
         </span>
         <Button
           size="sm"
@@ -596,12 +626,7 @@ export default function TablePreview({
         >
           <MenuItem
             disabled={!canFit}
-            onSelect={() =>
-              fitColumns(
-                names.map((_, c) => c),
-                topRef.current,
-              )
-            }
+            onSelect={() => fitColumns(cols, topRef.current)}
           >
             Fit columns
           </MenuItem>
@@ -614,11 +639,40 @@ export default function TablePreview({
           <MenuItemCheckbox
             keepOpen
             checked={!!layout.pinned}
-            title="Keeps the first column at the left while the table scrolls sideways, unless it is wider than half the table"
+            title="Keeps the first column shown at the left while the table scrolls sideways, unless it is wider than half the table"
             onSelect={() => setLayout({ ...layout, pinned: !layout.pinned })}
           >
             Pin first column
           </MenuItemCheckbox>
+          <MenuSeparator />
+          {/* Disabled once it ran: the menu closes rather than keep a
+              focus that has nowhere to go */}
+          <MenuItem
+            disabled={!hiddenCount}
+            onSelect={() => setLayout({ ...layout, hidden: [] })}
+          >
+            Show all
+          </MenuItem>
+          <MenuGroup label="Show">
+            {names.map((name, c) => {
+              const shownNow = cols.includes(c)
+              return (
+                <MenuItemCheckbox
+                  // biome-ignore lint/suspicious/noArrayIndexKey: a column is its index
+                  key={c}
+                  keepOpen
+                  checked={shownNow}
+                  // The last column shown stays
+                  disabled={shownNow && cols.length === 1}
+                  onSelect={() => toggleShown(c)}
+                >
+                  <span className="block truncate">
+                    {c + 1} · <bdi>{cellText(name)}</bdi>
+                  </span>
+                </MenuItemCheckbox>
+              )
+            })}
+          </MenuGroup>
           <MenuSeparator />
           <MenuGroup label="Wrap">
             {names.map((name, c) => (
@@ -667,6 +721,7 @@ export default function TablePreview({
           rows={rows ?? new Int32Array()}
           names={names}
           widths={widths}
+          cols={cols}
           wrapped={wrapped}
           lines={lines}
           header={header}
@@ -715,6 +770,7 @@ export default function TablePreview({
                 table={t}
                 rows={rows}
                 names={names}
+                cols={cols}
                 row={recordRow}
                 onRow={setRecordRow}
                 // The grid, covered, cannot show a cell's own field

@@ -391,7 +391,8 @@ thì không có bảng.
   trước `item 10`; số thập phân được so từng cụm chữ số, nên `1.5` đứng sau `1.25`). Ô rỗng luôn
   nằm cuối, và dòng tiêu đề không bao giờ bị xếp lẫn.
 - **Filter rows** chỉ giữ những dòng có ô chứa chuỗi bạn gõ, không phân biệt hoa thường, và cho
-  biết còn lại bao nhiêu dòng (`12 / 340 rows`).
+  biết còn lại bao nhiêu dòng (`12 / 340 rows`). Bộ lọc tìm cả trong các cột đang ẩn: khi có cột
+  bị ẩn, số đếm ghi rõ điều đó (`12 / 340 rows · 2 columns hidden`).
 - **Độ rộng cột**: kéo vạch ở mép phải tên cột, bằng chuột hay ngón tay, để cột đó rộng ra hay
   hẹp lại; kéo không bao giờ sắp xếp bảng. Nhấp đúp hoặc chạm hai lần vào vạch thì cột vừa với các
   giá trị của nó. Với bàn phím, nhấn Tab tới vạch, rồi phím mũi tên trái và phải đổi độ rộng mỗi
@@ -406,6 +407,12 @@ thì không có bảng.
 - **Pin first column** trong menu **Columns** giữ cột đầu tiên, cả tên cột, đứng yên ở bên trái
   cạnh số dòng khi phần còn lại cuộn ngang. Khi số dòng và cột đó chiếm quá nửa chiều rộng bảng
   (trên điện thoại, hoặc cột đầu rất rộng), cột đó cuộn theo các cột khác để vẫn đọc được bảng.
+  Khi có cột bị ẩn, cột được ghim là cột đầu tiên còn hiện.
+- **Show** trong menu **Columns** liệt kê các cột, cột nào đang hiện thì có dấu chọn: bỏ dấu chọn
+  để ẩn cột đó khỏi bảng và khỏi Records, nơi cũng ghi có bao nhiêu cột đang ẩn. **Show all** hiện
+  lại tất cả. Không ẩn được cột cuối cùng còn hiện; ẩn cột đang dùng để sắp xếp thì bảng trở về thứ
+  tự trong file. Phím mũi tên, Home, End và Tab trong ô sửa đều
+  bỏ qua cột ẩn, và **Fit columns** chỉ chỉnh các cột đang hiện.
 - **Records** hiện từng dòng một dưới dạng `cột: giá trị`, có nút trước và sau, dành cho điện
   thoại khi một dòng rộng hơn màn hình. Bấm hoặc chạm số dòng để mở đúng dòng đó trong Records;
   tắt Records thì bảng vẫn ở đúng chỗ bạn đã rời đi.
@@ -419,10 +426,10 @@ thì không có bảng.
   cột cuối của dòng, còn Ctrl+Home và Ctrl+End (Cmd trên macOS) tới ô đầu và ô cuối của bảng, theo
   thứ tự đang hiện.
 
-Sắp xếp, lọc, đổi dấu phân cách, bật tắt dòng tiêu đề, độ rộng cột, các cột bật Wrap và cột ghim
-chỉ đổi cách hiển thị. Không có gì được ghi vào file, và các lựa chọn này mất khi đóng file. Riêng
-độ rộng, Wrap, số dòng Lines và cột ghim vẫn còn khi bạn sang tab khác rồi quay lại, và về mặc
-định khi đổi dấu phân cách hay bật tắt dòng tiêu đề.
+Sắp xếp, lọc, đổi dấu phân cách, bật tắt dòng tiêu đề, độ rộng cột, các cột bật Wrap, cột ghim và
+cột ẩn chỉ đổi cách hiển thị. Không có gì được ghi vào file, và các lựa chọn này mất khi đóng file.
+Riêng độ rộng, Wrap, số dòng Lines, cột ghim và cột ẩn vẫn còn khi bạn sang tab khác rồi quay lại,
+và về mặc định khi đổi dấu phân cách hay bật tắt dòng tiêu đề.
 
 | Thông báo                                               | Lý do                                                                   |
 | ------------------------------------------------------- | ----------------------------------------------------------------------- |
