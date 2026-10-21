@@ -32,7 +32,7 @@ has() {
     if grep -q -- "$3" "$2"; then pass "$1"; else fail "$1" "$3 in $2" "$(cat "$2")"; fi
 }
 
-TMP="$(mktemp -d)"
+TMP="$(cd "$(mktemp -d)" && pwd -P)" # macOS: /var is a link to /private/var, git prints the real path
 trap 'rm -rf "$TMP"' EXIT
 REPO="$TMP/repo"
 PLAIN="$TMP/plain" # not a git worktree
