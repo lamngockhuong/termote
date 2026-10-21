@@ -397,7 +397,8 @@ it for changes). A deleted file has no table.
   (`item 2` before `item 10`; decimals are compared digit run by digit run, so `1.5` comes after
   `1.25`). Empty cells go last, and the header row is never sorted.
 - **Filter rows** keeps the rows where any cell contains what you typed, ignoring case, and
-  shows how many are left (`12 / 340 rows`).
+  shows how many are left (`12 / 340 rows`). It searches hidden columns too: while any column is
+  hidden, the count says so (`12 / 340 rows · 2 columns hidden`).
 - **Column widths**: drag the line at the right edge of a column name, with a mouse or a finger,
   to make that column wider or narrower; a drag never sorts. Double-click or double-tap the line
   to fit the column to its values. From the keyboard, Tab to the line, then Left and Right change
@@ -412,7 +413,12 @@ it for changes). A deleted file has no table.
 - **Pin first column** in the **Columns** menu keeps the first column at the left, next to the row
   numbers, while the rest scrolls sideways, its name too. While the row numbers and that column
   take more than half the table's width (a phone, a very wide first column), it scrolls with the
-  others, so the table can still be read.
+  others, so the table can still be read. With columns hidden, the first one shown is pinned.
+- **Show** in the **Columns** menu lists the columns, each ticked while it is shown: untick one to
+  hide it from the table and from Records, which also says how many are hidden. **Show all**
+  brings them back. The last column shown cannot be hidden, and hiding the column the table is
+  sorted by goes back to the file's order. Hidden columns are skipped by the
+  arrow keys, Home and End, and Tab in a cell, and **Fit columns** fits only the ones shown.
 - **Records** shows one row at a time as `column: value`, with **Previous** and **Next**, for a
   phone where a row is wider than the screen. Press or tap a row number to open that row in
   Records; turned off, Records goes back to the table where you left it.
@@ -426,11 +432,11 @@ it for changes). A deleted file has no table.
   the first and last column of the row, and Ctrl+Home and Ctrl+End (Cmd on a Mac) to the first
   and last cell of the table, in the order shown.
 
-Sorting, filtering, the delimiter, the header row, column widths, wrapped columns and the pinned
-column only change what is shown. Nothing is written to the file, and they are forgotten when the
-file is closed. Widths, wrapped columns and their lines, and the pinned column, also stay while you
-show another tab and come back, and go back to the defaults when the delimiter or the header row
-changes.
+Sorting, filtering, the delimiter, the header row, column widths, wrapped columns, the pinned
+column and hidden columns only change what is shown. Nothing is written to the file, and they are
+forgotten when the file is closed. Widths, wrapped columns and their lines, the pinned column and
+hidden columns also stay while you show another tab and come back, and go back to the defaults when
+the delimiter or the header row changes.
 
 | Shown                                                   | Why                                                                     |
 | ------------------------------------------------------- | ----------------------------------------------------------------------- |

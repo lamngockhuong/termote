@@ -14,6 +14,7 @@ import {
   type ReadCell,
   rowHeightFor,
   scrollTopFor,
+  shownColumns,
   wrapLines,
   wrapRowHeight,
 } from './table-columns'
@@ -190,5 +191,19 @@ describe('row heights and scrolling', () => {
     expect(pageRows(600, 32)).toBe(18)
     expect(pageRows(90, 61)).toBe(1)
     expect(pageRows(30, 61)).toBe(1)
+  })
+})
+
+describe('shownColumns', () => {
+  it('shows every column but the hidden ones, in order', () => {
+    expect(shownColumns(4, [])).toEqual([0, 1, 2, 3])
+    expect(shownColumns(4, [2, 0])).toEqual([1, 3])
+    // A column past the count means nothing
+    expect(shownColumns(3, [1, 7])).toEqual([0, 2])
+  })
+
+  it('never shows none: the first one when all are hidden', () => {
+    expect(shownColumns(2, [0, 1])).toEqual([0])
+    expect(shownColumns(0, [])).toEqual([])
   })
 })

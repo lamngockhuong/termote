@@ -1528,7 +1528,10 @@ const columnsMenu = () =>
   fireEvent.click(screen.getByRole('button', { name: 'Columns' }))
 const menuItem = (name: string) => screen.getByRole('menuitem', { name })
 const wrapItem = (name: string) =>
-  screen.getByRole('menuitemcheckbox', { name })
+  within(screen.getByRole('group', { name: 'Wrap' })).getByRole(
+    'menuitemcheckbox',
+    { name },
+  )
 const bodyRow = () => screen.getAllByRole('row')[1] as HTMLElement
 
 const notes = `id,note\n1,${'x'.repeat(60)}\n2,short\n`
@@ -2208,7 +2211,6 @@ describe('TablePreview pinned first column', () => {
     edit(notes)
     columnsMenu()
     fireEvent.click(pinItem())
-    fireEvent.keyDown(document.body, { key: 'Escape' })
     fireEvent.click(screen.getByRole('gridcell', { name: '1' }))
     const box = screen.getByRole('textbox', { name: 'Edit id, row 2' })
     const cell = box.closest('[role="gridcell"]') as HTMLElement
@@ -2232,5 +2234,237 @@ describe('TablePreview pinned first column', () => {
       layout: { key: ',|1', widths: { 0: 10 }, wrapped: [], pinned: true },
     })
     expect(grid().style.scrollPaddingLeft).toBe('calc(12ch + 2rem)')
+  })
+})
+
+describe('TablePreview hidden columns', () => {
+  const abc = 'a,b,c\n1,2,3\n4,5,6\n'
+  const showItem = (name: string) =>
+    within(screen.getByRole('group', { name: 'Show' })).getByRole(
+      'menuitemcheckbox',
+      { name },
+    )
+  const headers = () =>
+    screen
+      .getAllByRole('columnheader')
+      .slice(1)
+      .map((h) => h.getAttribute('aria-label'))
+
+  it('hides a column from the grid, says how many, and Show all brings it back', () => {
+    const onLayout = vi.fn()
+    show(abc, { onLayout })
+    columnsMenu()
+    expect(menuItem('Show all')).toBeDisabled()
+    fireEvent.click(showItem('2 · b'))
+    // The menu stays open
+    expect(showItem('2 · b')).toHaveAttribute('aria-checked', 'false')
+    expect(onLayout).toHaveBeenLastCalledWith({
+      key: ',|1',
+      widths: {},
+      wrapped: [],
+      hidden: [1],
+    })
+    expect(headers()).toEqual(['a', 'c'])
+    expect(shownRows()).toEqual([
+      ['1', '3'],
+      ['4', '6'],
+    ])
+    // A screen reader is told which column a cell is in
+    expect(screen.getByRole('columnheader', { name: 'c' })).toHaveAttribute(
+      'aria-colindex',
+      '4',
+    )
+    expect(screen.getByRole('gridcell', { name: '3' })).toHaveAttribute(
+      'aria-colindex',
+      '4',
+    )
+    expect(screen.getByRole('grid')).toHaveAttribute('aria-colcount', '4')
+    const count = screen.getByText(/1 column hidden/)
+    expect(count).toHaveAttribute(
+      'title',
+      'Filter rows also searches hidden columns',
+    )
+    // The last column shown cannot be hidden
+    fireEvent.click(showItem('1 · a'))
+    expect(screen.getByText(/2 columns hidden/)).toBeInTheDocument()
+    expect(showItem('3 · c')).toBeDisabled()
+    expect(showItem('1 · a')).toBeEnabled()
+    fireEvent.click(showItem('1 · a'))
+    expect(headers()).toEqual(['a', 'c'])
+    fireEvent.click(menuItem('Show all'))
+    expect(headers()).toEqual(['a', 'b', 'c'])
+    expect(screen.queryByText(/hidden/)).toBeNull()
+    // Disabled once it ran, it closes the menu
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
+  it('a hidden wrapped column makes no row taller; a hidden sorted column drops the sort', () => {
+    show('a,b\n2,y\n1,x\n', {
+      layout: { key: ',|1', widths: {}, wrapped: [1], hidden: [1] },
+    })
+    expect(bodyRow()).toHaveStyle({ height: '32px' })
+    columnsMenu()
+    fireEvent.click(showItem('2 · b'))
+    expect(bodyRow()).toHaveStyle({ height: '61px' })
+    // A press outside closes the menu
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'b' }))
+    fireEvent.click(screen.getByRole('button', { name: 'b' }))
+    expect(shownRows().map((r) => r[0])).toEqual(['1', '2'])
+    columnsMenu()
+    fireEvent.click(showItem('1 · a'))
+    // A sort by another column stays
+    expect(shownRows().map((r) => r[0])).toEqual(['x', 'y'])
+    fireEvent.click(showItem('1 · a'))
+    fireEvent.click(showItem('2 · b'))
+    expect(shownRows().map((r) => r[0])).toEqual(['2', '1'])
+    expect(screen.getByRole('columnheader', { name: 'a' })).toHaveAttribute(
+      'aria-sort',
+      'none',
+    )
+  })
+
+  it('the filter still searches hidden columns', async () => {
+    show(abc, {
+      layout: { key: ',|1', widths: {}, wrapped: [], hidden: [1] },
+    })
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: '5' } })
+    await waitFor(() => expect(shownRows()).toEqual([['4', '6']]))
+  })
+
+  it('a hidden column a tab kept past the columns read means nothing; another header row shows all', () => {
+    const onLayout = vi.fn()
+    show(abc, {
+      layout: { key: ',|1', widths: {}, wrapped: [], hidden: [7, 2] },
+      onLayout,
+    })
+    expect(headers()).toEqual(['a', 'b'])
+    expect(screen.getByText(/1 column hidden/)).toBeInTheDocument()
+    columnsMenu()
+    fireEvent.click(showItem('1 · a'))
+    expect(onLayout).toHaveBeenLastCalledWith(
+      expect.objectContaining({ hidden: [2, 0] }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Header row' }))
+    expect(headers()).toEqual(['Column 1', 'Column 2', 'Column 3'])
+  })
+
+  it('keys move along the columns shown; the pinned one is the first shown', () => {
+    show(abc, {
+      layout: {
+        key: ',|1',
+        widths: {},
+        wrapped: [],
+        hidden: [0],
+        pinned: true,
+      },
+    })
+    const key = (k: string, over: object = {}) =>
+      fireEvent.keyDown(document.activeElement as Element, { key: k, ...over })
+    const at = () => document.activeElement?.getAttribute('data-col')
+    const first = screen.getByRole('gridcell', { name: '2' })
+    expect(first).toHaveAttribute('tabindex', '0')
+    expect(first.classList.contains('sticky')).toBe(true)
+    expect(
+      screen
+        .getByRole('columnheader', { name: 'b' })
+        .classList.contains('sticky'),
+    ).toBe(true)
+    first.focus()
+    key('ArrowRight')
+    expect(at()).toBe('2')
+    key('ArrowLeft')
+    expect(at()).toBe('1')
+    key('End')
+    expect(at()).toBe('2')
+    key('Home', { ctrlKey: true })
+    expect(at()).toBe('1')
+  })
+
+  it('Fit columns fits only the columns shown', () => {
+    const onLayout = vi.fn()
+    show(`a,b\n${'x'.repeat(30)},${'y'.repeat(30)}\n`, {
+      layout: { key: ',|1', widths: {}, wrapped: [], hidden: [1] },
+      onLayout,
+    })
+    columnsMenu()
+    fireEvent.click(menuItem('Fit columns'))
+    expect(Object.keys(onLayout.mock.lastCall?.[0].widths)).toEqual(['0'])
+  })
+
+  it('Records show only the columns shown, and say how many are hidden', () => {
+    show(abc, {
+      layout: { key: ',|1', widths: {}, wrapped: [], hidden: [1] },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Records' }))
+    expect(
+      screen.getByText(/Record 1 \/ 2 · row 2 · 1 column hidden/),
+    ).toBeInTheDocument()
+    expect(
+      within(record())
+        .getAllByRole('term')
+        .map((t) => t.textContent),
+    ).toEqual(['a', 'c'])
+  })
+
+  it('Records say "columns" past one', () => {
+    show(abc, {
+      layout: { key: ',|1', widths: {}, wrapped: [], hidden: [0, 1] },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Records' }))
+    expect(
+      screen.getByText(/Record 1 \/ 2 · row 2 · 2 columns hidden/),
+    ).toBeInTheDocument()
+  })
+
+  describe('while editing in a cell', () => {
+    beforeEach(() => {
+      coarse.fine = true
+    })
+    const field = (name: string) => screen.getByRole('textbox', { name })
+
+    it('Tab and Shift+Tab skip a hidden column', () => {
+      edit(abc)
+      columnsMenu()
+      fireEvent.click(showItem('2 · b'))
+      fireEvent.click(screen.getByRole('gridcell', { name: '1' }))
+      fireEvent.keyDown(field('Edit a, row 2'), { key: 'Tab' })
+      fireEvent.keyDown(field('Edit c, row 2'), { key: 'Tab' })
+      expect(field('Edit a, row 3')).toHaveFocus()
+      fireEvent.keyDown(field('Edit a, row 3'), { key: 'Tab', shiftKey: true })
+      expect(field('Edit c, row 2')).toHaveFocus()
+      fireEvent.keyDown(field('Edit c, row 2'), { key: 'Tab', shiftKey: true })
+      expect(field('Edit a, row 2')).toHaveFocus()
+    })
+
+    it('F2, a key typed and Delete act on the column of the cell, past a hidden one', () => {
+      const p = edit(abc)
+      columnsMenu()
+      fireEvent.click(showItem('1 · a'))
+      const two = screen.getByRole('gridcell', { name: '2' })
+      two.focus()
+      fireEvent.keyDown(two, { key: 'F2' })
+      fireEvent.keyDown(field('Edit b, row 2'), { key: 'Escape' })
+      expect(screen.getByRole('gridcell', { name: '2' })).toHaveFocus()
+      fireEvent.keyDown(screen.getByRole('gridcell', { name: '3' }), {
+        key: 'z',
+      })
+      fireEvent.keyDown(field('Edit c, row 2'), { key: 'Enter' })
+      expect(p.text()).toBe('a,b,c\n1,2,z\n4,5,6\n')
+      expect(screen.getByRole('gridcell', { name: 'z' })).toHaveFocus()
+      fireEvent.keyDown(screen.getByRole('gridcell', { name: '5' }), {
+        key: 'Delete',
+      })
+      expect(p.text()).toBe('a,b,c\n1,2,z\n4,,6\n')
+    })
+
+    it('a field whose column is hidden sets its value', () => {
+      const p = edit(abc)
+      fireEvent.click(screen.getByRole('gridcell', { name: '2' }))
+      fireEvent.change(field('Edit b, row 2'), { target: { value: 'two' } })
+      columnsMenu()
+      fireEvent.click(showItem('2 · b'))
+      expect(screen.queryByRole('textbox', { name: /^Edit / })).toBeNull()
+      expect(p.text()).toBe('a,b,c\n1,two,3\n4,5,6\n')
+    })
   })
 })

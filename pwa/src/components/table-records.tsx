@@ -8,6 +8,8 @@ interface Props {
   table: CsvTable
   rows: Int32Array
   names: string[]
+  // The columns shown, as in the grid; the others are hidden here too
+  cols: number[]
   // The file row shown; the first record when unset or not in rows (a
   // filter left it out)
   row: number | undefined
@@ -22,6 +24,7 @@ export function TableRecords({
   table,
   rows,
   names,
+  cols,
   row,
   onRow,
   onOpen,
@@ -49,6 +52,8 @@ export function TableRecords({
           aria-live="polite"
         >
           Record {i + 1} / {rows.length} · row {r + 1}
+          {cols.length < names.length &&
+            ` · ${names.length - cols.length} ${names.length - cols.length === 1 ? 'column' : 'columns'} hidden`}
         </span>
         <IconButton
           size="sm"
@@ -63,11 +68,10 @@ export function TableRecords({
         aria-label={`Row ${r + 1}`}
         className="min-h-0 flex-1 overflow-y-auto px-3 py-2 font-term text-[12px]"
       >
-        {names.map((name, c) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: a field is its column
+        {cols.map((c) => (
           <div key={c} className="border-b border-border/50 py-1.5">
             <dt className="text-fg-muted">
-              <bdi>{cellText(name)}</bdi>
+              <bdi>{cellText(names[c])}</bdi>
             </dt>
             <dd className="m-0">
               <button

@@ -767,6 +767,10 @@ Chạy trên tmux (Linux/macOS) và Herdr; psmux (Windows) không có hai view n
       "Header row" thì mất
 - [ ] iPhone (375px), ghim một cột đầu rộng: cột đó cuộn theo các cột khác, bảng vẫn cuộn ngang
       được
+- [ ] "Columns" → "Show": bỏ chọn hai cột thì chúng biến khỏi bảng và Records ("2 columns hidden");
+      lọc theo một giá trị chỉ cột ẩn có vẫn giữ dòng đó; phím mũi tên và Tab trong ô sửa bỏ qua
+      cột ẩn; không bỏ chọn được cột cuối cùng còn hiện; "Show all" hiện lại tất cả; sang tab khác
+      rồi quay lại vẫn giữ, đổi "Header row" thì mất
 - [ ] Độ rộng và wrap trở về mặc định khi đổi "Delimiter" hay "Header row", giữ nguyên sau khi sửa
       một ô, và giữ nguyên khi sang tab khác rồi quay lại (cùng dòng đầu)
 - [ ] Nhấn số dòng: Records mở đúng dòng đó (cả sau khi sắp xếp); tắt Records thì bảng hiện lại ở

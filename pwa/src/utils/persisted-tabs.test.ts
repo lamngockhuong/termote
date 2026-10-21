@@ -122,6 +122,18 @@ describe('restoreFilesState', () => {
     expect(back?.tabs.map((t) => t.table?.pinned)).toEqual([undefined, true])
   })
 
+  it('reads hidden columns, or none from a tab kept before them', () => {
+    const tabs = [
+      fileTab('t1', { table: { key: 'k', widths: {}, wrapped: [] } }),
+      fileTab('t2', {
+        table: { key: 'k', widths: {}, wrapped: [], hidden: [1, 3] },
+      }),
+    ]
+    const kept = persistedFilesState({ tabs, activeId: 't2' })
+    const back = restoreFilesState(JSON.parse(JSON.stringify(kept)))
+    expect(back?.tabs.map((t) => t.table?.hidden)).toEqual([undefined, [1, 3]])
+  })
+
   it('leaves out tabs that are not ones, keeps the rest', () => {
     const r = restoreFilesState({
       root: 3,
@@ -144,6 +156,14 @@ describe('restoreFilesState', () => {
         {
           ...fileTab('t12'),
           table: { key: 'k', widths: {}, wrapped: [], pinned: 'x' },
+        },
+        {
+          ...fileTab('t13'),
+          table: { key: 'k', widths: {}, wrapped: [], hidden: 'x' },
+        },
+        {
+          ...fileTab('t14'),
+          table: { key: 'k', widths: {}, wrapped: [], hidden: ['x'] },
         },
         null,
         [],

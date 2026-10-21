@@ -766,6 +766,10 @@ Run on tmux (Linux/macOS) and Herdr; psmux (Windows) offers neither view.
       showing another tab and coming back, and goes on another "Delimiter" or "Header row"
 - [ ] iPhone (375px), a wide first column pinned: it scrolls with the others, the table still
       scrolls sideways
+- [ ] "Columns" → "Show": untick two columns: they leave the table and Records ("2 columns
+      hidden"); filtering on a value only a hidden column has keeps its row; arrow keys and Tab in a
+      cell skip them; the last column shown cannot be unticked; "Show all" brings them back; the
+      choice stays after showing another tab and coming back, and goes on another "Header row"
 - [ ] Widths and wraps go back to the defaults on another "Delimiter" or "Header row", stay after
       editing a cell, and stay after showing another tab and coming back (same first row)
 - [ ] Press a row number: Records opens on that row (also after sorting); turning Records off

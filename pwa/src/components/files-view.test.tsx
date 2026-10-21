@@ -1459,7 +1459,12 @@ describe('FilesView tabs', () => {
       { key: 'End' },
     )
     fireEvent.click(screen.getByRole('button', { name: 'Columns' }))
-    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: '2 · note' }))
+    fireEvent.click(
+      within(screen.getByRole('group', { name: 'Wrap' })).getByRole(
+        'menuitemcheckbox',
+        { name: '2 · note' },
+      ),
+    )
     grid.scrollTop = 61 * 500
     fireEvent.scroll(grid)
     fireEvent.click(tab('Files'))
