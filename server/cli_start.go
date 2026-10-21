@@ -467,8 +467,8 @@ const (
 )
 
 // fetchHealth asks the server on port for its health over TCP (see
-// authedRequest). The container's status uses it: its server has no local
-// socket for this user.
+// authedRequest). The device commands use it without the password, to tell a
+// stopped native server on Windows from one whose pipe did not answer.
 func fetchHealth(port int, user, pass string) (serverHealth, int) {
 	resp, code := authedRequest(port, user, pass, http.MethodGet, "/api/mux/health", nil)
 	return decodeHealth(resp, code), code
@@ -516,35 +516,45 @@ func (c *cli) localRequest(port int, user, pass, method, path string, body []byt
 	case socketMaybeSent:
 		return nil, socketNoAnswer, transportSocket
 	}
+	resp, code = c.tcpRequest(port, user, pass, method, path, body)
+	return resp, code, transportTCP
+}
+
+// tcpRequest is authedRequest, except that on the native server's port on
+// Windows (pipeOnly) the request goes without the password, still only to a
+// trusted listener, and a server that asks for it gives healthPipeOnly.
+func (c *cli) tcpRequest(port int, user, pass, method, path string, body []byte) (resp *http.Response, code int) {
 	if pass != "" && c.pipeOnly(port) {
 		resp, code = checkedRequest(port, user, "", method, path, body, true)
 		if code == http.StatusUnauthorized {
 			resp.Body.Close()
 			resp, code = nil, healthPipeOnly
 		}
-		return resp, code, transportTCP
+		return resp, code
 	}
-	resp, code = authedRequest(port, user, pass, method, path, body)
-	return resp, code, transportTCP
+	return authedRequest(port, user, pass, method, path, body)
 }
 
 // pipeOnly says the saved password goes to the native server on port over
 // its local socket only, never over TCP: on Windows the owner of a TCP
 // listener is read from the PID the TCP table names, and Microsoft does not
 // document which process that is for a socket handed from one process to
-// another. The saved container's port, while no native server is
-// registered (as deviceTarget tells them apart), is not the native server's:
-// the container's server, which has no pipe for this user, still gets the
-// password over TCP.
+// another. The saved container's port is not the native server's: the
+// container's server, which has no pipe for this user, still gets the
+// password over TCP. Only when both are saved on one port and a native
+// server is registered is that port taken for the native server's.
 func (c *cli) pipeOnly(port int) bool {
 	if c.goos != "windows" {
 		return false
 	}
 	saved, _ := c.loadConfig()
-	return saved == nil || saved.Container == nil || saved.Container.Port != port || c.installedSupervisor() != nil
+	if saved == nil || saved.Container == nil || saved.Container.Port != port {
+		return true
+	}
+	return port == c.savedPort(saved) && c.installedSupervisor() != nil
 }
 
-// healthPipeOnly is localRequest's code when the native server did not
+// healthPipeOnly is tcpRequest's code when the native server did not
 // answer over the local socket and asks for the password over TCP, where
 // pipeOnly keeps it from going.
 const healthPipeOnly = -4

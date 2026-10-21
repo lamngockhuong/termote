@@ -97,8 +97,20 @@ what Termote can reach, run it as another user with less access.
   system's TCP table names, checked against that process's start time. Microsoft does not document
   which process that PID is for a socket made in one process and bound in another after its handle was
   passed on, so a socket handed on that way, kept after its first process exited and bound once that
-  PID went to another user's process, is not proven to be caught. The native server's CLI does not
-  depend on it (it sends the password over its pipe only).
+  PID went to another user's process, is not proven to be caught. The native server's CLI never sends
+  the password over TCP (only over its pipe), but the single-use token of a sign-in link, which it gets
+  over the pipe, still reaches the server over TCP: the browser posts it to the link's address, to
+  whichever process listens there by then, and the CLI checks that listener by the same PID before it
+  asks for the token. While the server listens, Windows does not let another account bind its port on
+  the same address, nor on any address with `--lan` (the different-account table of Microsoft's
+  [Using SO_REUSEADDR and SO_EXCLUSIVEADDRUSE](https://learn.microsoft.com/en-us/windows/win32/winsock/using-so-reuseaddr-and-so-exclusiveaddruse); `SO_EXCLUSIVEADDRUSE`
+  changes none of its rows, so the server does not set it). What is left is the 30 s the token lives,
+  in which the server would have to stop and another user's listener take the port.
+- **`--no-auth` on Windows.** With `--no-auth` on the native server (`--allow-herdr-no-auth` with
+  Herdr), the check of who
+  owns a loopback connection is all that stands between another user signed in to the same machine
+  and the server; the check rests on the PID above. If a connection passed it, that user would get a
+  shell as the user running the server. Keep the password on a Windows machine anyone else signs in to.
 - **The system clock on Windows.** That check compares two readings of the wall clock. Setting the
   clock back, which takes an administrator or the time service, between a socket's bind and the start
   of the process that later takes its PID lets the check pass; setting it back between a process's

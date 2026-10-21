@@ -100,7 +100,15 @@ giới hạn những gì Termote chạm tới, hãy chạy nó dưới một tà
   đang listen trên cổng của container trước khi CLI gửi mật khẩu, được đọc từ PID mà bảng TCP của hệ
   thống ghi, rồi so với thời điểm tiến trình đó khởi động. Microsoft không ghi rõ PID đó là của tiến trình
   nào khi socket được chuyển từ tiến trình này sang tiến trình khác trước khi bind, nên chưa chứng minh
-  được socket như vậy bị chặn. CLI của server native không dựa vào điều này (nó chỉ gửi mật khẩu qua pipe).
+  được socket như vậy bị chặn. CLI của server native không bao giờ gửi mật khẩu qua TCP (chỉ qua pipe),
+  nhưng token dùng một lần của link đăng nhập, CLI lấy qua pipe, vẫn tới server qua TCP từ trình duyệt:
+  CLI kiểm tra tiến trình đang listen trên cổng bằng chính PID đó trước khi xin token. Khi server đang
+  listen, Windows không cho tài khoản khác bind cổng của nó trên
+  cùng địa chỉ, hay trên mọi địa chỉ khi dùng `--lan`; phần còn lại là 30 giây token còn hiệu lực,
+  trong đó server phải dừng và một tiến trình của user khác chiếm cổng.
+- **`--no-auth` trên Windows.** Với `--no-auth` ở server native, phép kiểm tra chủ của kết nối loopback ở trên là thứ duy
+  nhất chặn giữa server và một user khác đăng nhập cùng máy. Nếu một kết nối vượt qua được nó, user đó có
+  shell dưới tài khoản của bạn. Hãy giữ mật khẩu trên máy Windows mà người khác cũng đăng nhập.
 - **Đồng hồ hệ thống trên Windows.** Phép kiểm tra đó so hai lần đọc giờ hệ thống: chỉnh giờ lùi (cần
   quyền quản trị hoặc dịch vụ đồng bộ giờ) đúng lúc có thể khiến nó cho qua.
 - **WSL 2.** Mọi tài khoản Windows đều tới được server chạy trong WSL 2: chế độ NAT đi qua một tiến trình chuyển tiếp

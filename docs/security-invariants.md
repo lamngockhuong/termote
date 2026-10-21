@@ -976,7 +976,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   socket: Microsoft documents it as the process that "issued a context bind", and says nothing of a
   socket created in one process and bound or connected in another after its handle passed on, so a
   socket handed on that way before its bind is not proven to be caught (accepted residual risk, see
-  `docs/security-model.md`). An unreadable token is trusted only for a
+  `docs/security-model.md`). With `--no-auth` (and `--allow-herdr-no-auth`) on Windows this check is
+  the only boundary against another user signed in to the machine, and one that passed it would get a
+  shell as the server's user (accepted, written in `docs/security-model.md` and the deployment
+  guide). An unreadable token is trusted only for a
   running service's own PID, from the Service Control Manager (`EnumServicesStatusEx`, read after
   the process is opened, so the PID cannot change hands; a per-user service, type bit 0x40 or 0x80,
   is not one, as it runs as whoever logged on), never for being in session 0 (an SSH logon is too)
@@ -1035,7 +1038,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
 - **Sign-in link** (`server/login_link.go`, `server/cli_login_link.go`): `url --open` and the
   panel's open key. `POST /api/mux/login-links` → `{token, expiresIn}` for the CLI only (Basic or
   local socket, else 403 `full_needs_password`), single use, 30 s, 5 waiting. When another user's listener
-  holds the port the CLI makes no token and opens the plain link with a warning; otherwise it writes `<stateDir>/run/login-<16 hex>.html` (0600,
+  holds the port the CLI makes no token and opens the plain link with a warning (on Windows this
+  rests on the table's PID even for the native server, whose token comes over its pipe but is posted
+  by the browser over TCP; while the server listens, another account cannot bind its port on the same
+  address or, with `--lan`, any, by Microsoft's different-account bind table, which
+  `SO_EXCLUSIVEADDRUSE` does not change, so the server does not set it); otherwise it writes `<stateDir>/run/login-<16 hex>.html` (0600,
   `O_EXCL`, `no-referrer`) and opens the path; the page posts `t`/`hash` to `/login/link` (a `localhost` link posts to
   `127.0.0.1`: `::1` could be another user's listener, unseen by `lsof` on macOS)
   (urlencoded, 8 KB; the only cross-site exception is `Origin: null`). A valid token starts a
@@ -1045,15 +1052,18 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   swept by the CLI and by `serve` at start. With `--no-auth` the plain link opens; with an old
   server or no password it opens with a warning saying why
 - **CLI and the saved password**: on Windows the native server (any port but the saved
-  container's while no native service is registered, `installedSupervisor`, as `deviceTarget` tells
-  them apart) gets the saved password over its pipe only (`cli.pipeOnly`, `server/cli_start.go`): without the
-  pipe, `status`, `url`, `panel` and the health wait of `start`/`restart`/`update` ask over TCP
+  container's; a port both are saved on is the native server's while a native service is registered,
+  `installedSupervisor`) gets the saved password over its pipe only (`cli.pipeOnly`, `server/cli_start.go`;
+  `cli.tcpRequest` for `container status`): without the
+  pipe, `status`, `url`, `panel` and the health wait of `start`/`restart`/`update`/`container up` ask over TCP
   without it, still only on a connection whose listeners pass the owner check below (else
   "untrusted listener" or "unverified listener", never running), and a server that answers 401
   there reads as "pipe only" (`healthPipeOnly`); `pair`, `devices`, `signins` and the sign-in link
   send nothing but a health probe without it, whose answer only tells a stopped server from a pipe
-  that did not answer. A server older than the pipe (2.0.0) is reached that way, and an `update` back
-  to one fails its health wait and rolls back. Otherwise, without the local socket (the container,
+  that did not answer; `container status` on such a port tries no pipe, asks over TCP without the
+  password and, on a 401, says the native server is saved there too. A server older than the pipe (2.0.0) is reached that way, and an `update` back
+  to one fails its health wait and rolls back (`container up` refuses, exit 2, the native server's saved
+  port while its service is registered, where its own health wait could not send the password). Otherwise, without the local socket (the container,
   on every OS; an older native server on Linux and macOS), `status`, `url`, `panel`,
   `container status`, the health wait of `start`/`restart`/`update`/`container up` and the device
   commands against the container send the saved password to `127.0.0.1:<port>` only when
@@ -1114,10 +1124,11 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   double-quoted `sh -c` command line without escaping, and its quoting of a name holding a `'` adds
   double quotes that end it, so the rest of the name would run as shell code (a test refuses any
   file template in `lefthook.yml`). A name git has to quote (a `"`, a `\` or a control character) is
-  refused, not passed on as a path that matches nothing; on Windows (`uname -s` `MINGW*`, `MSYS*`,
-  `CYGWIN*`) so is a name holding a character cmd.exe reads (`& % ^ ! | < >`), since `pnpm exec`
-  and `npx` can run the command through a `.cmd` shim whose escaping depends on the npm and
-  cross-spawn versions; names go in batches of at most 7000 bytes
+  refused, not passed on as a path that matches nothing; on Windows (`OS=Windows_NT`, or `uname -s`
+  `MINGW*`, `MSYS*`, `CYGWIN*`, `Windows_NT*`, and a `uname` that fails or prints nothing) so is a
+  name holding a character cmd.exe reads (`& % ^ ! | < > ( )`), since `pnpm exec` and `npx` can run
+  the command through a `.cmd` shim, which puts its arguments in an `IF ( ... ) ELSE ( ... )` block
+  and whose escaping depends on the npm and cross-spawn versions; names go in batches of at most 7000 bytes
   (a longer single name runs alone), as lefthook split its own. `go vet` runs with
   `CGO_ENABLED=0` (as releases build; `server/` has no cgo), so it compiles no C code from
   `server/*.go`, which are not hook files (a test refuses a `go` command without it). A clone whose
