@@ -3233,3 +3233,390 @@ function parsed(text: string): CsvTable {
   if (!r.ok) throw new Error('not a table')
   return r.table
 }
+
+describe('TablePreview ranges, copy and paste', () => {
+  const grid4 = 'a,b,c\n1,2,3\n4,5,6\n7,8,9\n'
+  const at = (pos: number, col: number) =>
+    document.querySelector(
+      `[role="gridcell"][data-pos="${pos}"][data-col="${col}"]`,
+    ) as HTMLElement
+  const picked = () =>
+    [...document.querySelectorAll<HTMLElement>('[aria-selected="true"]')].map(
+      (c) => `${c.dataset.pos}:${c.dataset.col}`,
+    )
+  const key = (target: Element, k: string, over: object = {}) =>
+    fireEvent.keyDown(target, { key: k, ...over })
+  // A copy as the browser sends it after Ctrl+C on the grid
+  const copy = (from: Element) => {
+    key(from, 'c', { ctrlKey: true })
+    let out: string | undefined
+    const ok = fireEvent.copy(document, {
+      clipboardData: { setData: (_: string, v: string) => (out = v) },
+    })
+    return { text: out, prevented: !ok }
+  }
+  const paste = (from: Element, text: string) => {
+    key(from, 'v', { ctrlKey: true })
+    return !fireEvent.paste(document, {
+      clipboardData: { getData: () => text },
+    })
+  }
+
+  beforeEach(() => {
+    coarse.fine = true
+  })
+
+  it('Shift+arrows grow a range from where it began; an arrow alone or Escape drops it', () => {
+    show(grid4)
+    at(0, 0).focus()
+    key(at(0, 0), 'ArrowRight', { shiftKey: true })
+    key(at(0, 1), 'ArrowDown', { shiftKey: true })
+    expect(picked()).toEqual(['0:0', '0:1', '1:0', '1:1'])
+    expect(screen.getByRole('grid')).toHaveAttribute(
+      'aria-multiselectable',
+      'true',
+    )
+    expect(at(1, 1)).toHaveFocus()
+    key(at(1, 1), 'Escape')
+    expect(picked()).toEqual([])
+    key(at(1, 1), 'End', { shiftKey: true, ctrlKey: true })
+    expect(picked()).toEqual(['1:1', '1:2', '2:1', '2:2'])
+    key(at(2, 2), 'ArrowLeft')
+    expect(picked()).toEqual([])
+    // Escape with no range is left alone
+    expect(key(at(2, 1), 'Escape')).toBe(true)
+    // Never onto a row number: from one, Shift moves as an arrow does
+    const number = screen.getByRole('button', {
+      name: 'Open row 2 as a record',
+    })
+    number.focus()
+    key(number, 'ArrowRight', { shiftKey: true })
+    expect(picked()).toEqual([])
+    key(at(0, 0), 'ArrowLeft', { shiftKey: true })
+    expect(picked()).toEqual([])
+  })
+
+  it('Shift+click and a mouse drag select; the click a drag ends with opens nothing', () => {
+    const p = edit(grid4)
+    fireEvent.click(at(0, 0), { shiftKey: true })
+    // From the active cell, the first one
+    expect(picked()).toEqual([])
+    fireEvent.click(at(1, 1), { shiftKey: true })
+    expect(picked()).toEqual(['0:0', '0:1', '1:0', '1:1'])
+    // A plain click drops it (and edits that cell)
+    fireEvent.click(at(2, 2))
+    expect(picked()).toEqual([])
+    fireEvent.keyDown(screen.getByRole('textbox', { name: /^Edit/ }), {
+      key: 'Escape',
+    })
+    fireEvent.pointerDown(at(0, 1), { pointerType: 'mouse', button: 0 })
+    fireEvent.pointerMove(at(0, 1), {
+      pointerType: 'mouse',
+      buttons: 1,
+      clientY: 100,
+    })
+    expect(picked()).toEqual([])
+    fireEvent.pointerMove(at(1, 2), {
+      pointerType: 'mouse',
+      buttons: 1,
+      clientY: 100,
+    })
+    fireEvent.pointerUp(at(1, 2), { pointerType: 'mouse' })
+    expect(picked()).toEqual(['0:1', '0:2', '1:1', '1:2'])
+    fireEvent.click(at(1, 2))
+    expect(screen.queryByRole('textbox', { name: /^Edit/ })).toBeNull()
+    expect(p.onChange).not.toHaveBeenCalled()
+  })
+
+  it("a drag only with the mouse's first button, from a cell; near the edges it scrolls", () => {
+    show(grid4)
+    const grid = screen.getByRole('grid')
+    fireEvent.pointerDown(at(0, 0), { pointerType: 'touch', button: 0 })
+    fireEvent.pointerMove(at(1, 1), { pointerType: 'touch', buttons: 1 })
+    fireEvent.pointerDown(at(0, 0), { pointerType: 'mouse', button: 2 })
+    fireEvent.pointerMove(at(1, 1), { pointerType: 'mouse', buttons: 1 })
+    fireEvent.pointerDown(at(0, 0), {
+      pointerType: 'mouse',
+      button: 0,
+      shiftKey: true,
+    })
+    fireEvent.pointerMove(at(1, 1), { pointerType: 'mouse', buttons: 1 })
+    fireEvent.pointerDown(
+      screen.getByRole('button', { name: 'Open row 2 as a record' }),
+      {
+        pointerType: 'mouse',
+        button: 0,
+      },
+    )
+    fireEvent.pointerMove(at(1, 1), { pointerType: 'mouse', buttons: 1 })
+    expect(picked()).toEqual([])
+    fireEvent.pointerDown(at(0, 0), { pointerType: 'mouse', button: 0 })
+    // Released meanwhile, out of the grid
+    fireEvent.pointerMove(at(1, 1), { pointerType: 'mouse', buttons: 0 })
+    expect(picked()).toEqual([])
+    // Below the frame's bottom (jsdom's box is 0 high): a row down; above
+    // its top: a row up; over a row number nothing is selected
+    fireEvent.pointerMove(
+      screen.getByRole('button', { name: 'Open row 3 as a record' }),
+      { pointerType: 'mouse', buttons: 1, clientY: 100 },
+    )
+    expect(grid.scrollTop).toBeGreaterThan(0)
+    fireEvent.pointerMove(grid, {
+      pointerType: 'mouse',
+      buttons: 1,
+      clientY: -100,
+    })
+    expect(grid.scrollTop).toBe(0)
+    // In between: no scroll
+    vi.spyOn(grid, 'getBoundingClientRect').mockReturnValue({
+      top: 0,
+      bottom: 500,
+    } as DOMRect)
+    fireEvent.pointerMove(grid, {
+      pointerType: 'mouse',
+      buttons: 1,
+      clientY: 200,
+    })
+    expect(grid.scrollTop).toBe(0)
+    expect(picked()).toEqual([])
+  })
+
+  it('Ctrl+C copies the range as tabs, whole values in the order shown, hidden columns left out', () => {
+    show('a,b,c\n1,"x\ny",3\n4,5,6\n')
+    // Sorted by a, descending: 4 first
+    fireEvent.click(screen.getByRole('button', { name: 'a' }))
+    fireEvent.click(screen.getByRole('button', { name: 'a' }))
+    columnsMenu()
+    fireEvent.click(
+      within(screen.getByRole('group', { name: 'Show' })).getByRole(
+        'menuitemcheckbox',
+        { name: '2 · b' },
+      ),
+    )
+    fireEvent.keyDown(document.activeElement as Element, { key: 'Escape' })
+    at(0, 0).focus()
+    key(at(0, 0), 'End', { shiftKey: true, ctrlKey: true })
+    expect(copy(at(1, 2))).toEqual({ text: '4\t6\n1\t3', prevented: true })
+    // No range: the active cell; a row number: its row
+    key(at(1, 2), 'Home')
+    expect(copy(at(1, 0)).text).toBe('1')
+    const number = screen.getByRole('button', {
+      name: 'Open row 2 as a record',
+    })
+    number.focus()
+    fireEvent.click(number)
+    fireEvent.click(screen.getByRole('button', { name: 'Records' }))
+    expect(copy(number).text).toBe('1\t3')
+  })
+
+  it('a value with a line break is quoted; too many cells copy nothing and say so', () => {
+    const p = show('a,b\n"x\ny",2\n')
+    at(0, 0).focus()
+    expect(copy(at(0, 0)).text).toBe('"x\ny"')
+    const many = `a,b,c\n${'1,2,3\n'.repeat(33_334)}`
+    p.rerender(
+      <ThemeProvider>
+        <TablePreview {...p} text={many} />
+      </ThemeProvider>,
+    )
+    at(0, 0).focus()
+    key(at(0, 0), 'End', { shiftKey: true, ctrlKey: true })
+    // The focus went with the range to the last cell
+    expect(copy(document.activeElement as Element)).toEqual({
+      text: undefined,
+      prevented: true,
+    })
+    expect(p.notify).toHaveBeenCalledWith(
+      'Too many cells to copy: 100002, at most 100000',
+    )
+  })
+
+  it('Ctrl+V pastes a block from the active cell as one edit; one Ctrl+Z takes it back', () => {
+    const p = edit(grid4)
+    at(1, 1).focus()
+    expect(paste(at(1, 1), '5\tx\ny\t9\n')).toBe(true)
+    expect(p.text()).toBe('a,b,c\n1,2,3\n4,5,x\n7,y,9\n')
+    expect(p.onChange.mock.lastCall?.[1]).toHaveLength(1)
+    press(at(1, 1), 'z')
+    expect(p.text()).toBe(grid4)
+    // From a range: its top-left cell
+    key(at(1, 1), 'ArrowUp', { shiftKey: true })
+    paste(at(0, 1), 'q')
+    expect(p.text()).toBe('a,b,c\n1,q,3\n4,5,6\n7,8,9\n')
+    // Nothing that changes, or nothing at all: no edit
+    paste(at(0, 1), 'q')
+    paste(at(0, 1), '')
+    expect(p.onChange).toHaveBeenCalledTimes(3)
+  })
+
+  it('a paste on a sorted table goes to the rows shown, along the columns shown', () => {
+    const p = edit(grid4)
+    fireEvent.click(screen.getByRole('button', { name: 'a' }))
+    fireEvent.click(screen.getByRole('button', { name: 'a' }))
+    at(0, 0).focus()
+    paste(at(0, 0), 'x\ny')
+    expect(p.text()).toBe('a,b,c\n1,2,3\ny,5,6\nx,8,9\n')
+  })
+
+  it('wider than the columns left: refused; longer while sorted: refused, saying why', () => {
+    const p = edit(grid4)
+    at(0, 1).focus()
+    paste(at(0, 1), '1\t2\t3')
+    expect(p.notify).toHaveBeenLastCalledWith(
+      'The block is 3 columns wide; 2 columns from here',
+    )
+    at(0, 2).focus()
+    paste(at(0, 2), '1\t2')
+    expect(p.notify).toHaveBeenLastCalledWith(
+      'The block is 2 columns wide; 1 column from here',
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'a' }))
+    at(2, 0).focus()
+    paste(at(2, 0), '1\n2\n3')
+    expect(p.notify).toHaveBeenLastCalledWith(
+      'The block is 3 rows long; 1 row from here, and no row is added while sorted or filtered',
+    )
+    at(1, 0).focus()
+    paste(at(1, 0), '1\n2\n3')
+    expect(p.notify).toHaveBeenLastCalledWith(
+      'The block is 3 rows long; 2 rows from here, and no row is added while sorted or filtered',
+    )
+    expect(p.onChange).not.toHaveBeenCalled()
+  })
+
+  it('longer than the rows left: asks to add them, then pastes as one edit', () => {
+    const p = edit(grid4)
+    at(2, 1).focus()
+    paste(at(2, 1), 'x\ny\nz')
+    expect(screen.getByRole('dialog')).toHaveTextContent(
+      'Add 2 rows at the end?',
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(p.onChange).not.toHaveBeenCalled()
+    paste(at(2, 1), 'x\ny')
+    expect(screen.getByRole('dialog')).toHaveTextContent(
+      'Add 1 row at the end?',
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Add and paste' }))
+    expect(p.text()).toBe('a,b,c\n1,2,3\n4,5,6\n7,x,9\n,y,\n')
+    press(screen.getByRole('grid'), 'z')
+    expect(p.text()).toBe(grid4)
+  })
+
+  it('the question goes when another view changes the text', () => {
+    const p = edit(grid4)
+    at(2, 1).focus()
+    paste(at(2, 1), 'x\ny')
+    p.rerender(<Draft {...p} elsewhere={`${grid4}0,0,0\n`} />)
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('a table only viewed leaves a paste to the browser; a field keeps its own copy and paste', () => {
+    show(grid4)
+    at(0, 0).focus()
+    expect(paste(at(0, 0), 'x')).toBe(false)
+    const p = edit(grid4)
+    fireEvent.click(
+      within(p.container).getAllByRole('gridcell', { name: '1' })[0],
+    )
+    const box = screen.getByRole('textbox', { name: /^Edit/ })
+    key(box, 'v', { ctrlKey: true })
+    expect(
+      fireEvent.paste(document, { clipboardData: { getData: () => 'z' } }),
+    ).toBe(true)
+    expect(p.onChange).not.toHaveBeenCalled()
+  })
+
+  it("the listener is gone once the key's own event had its chance", () => {
+    vi.useFakeTimers()
+    try {
+      const p = edit(grid4)
+      at(0, 0).focus()
+      key(at(0, 0), 'v', { ctrlKey: true })
+      vi.runAllTimers()
+      fireEvent.paste(document, { clipboardData: { getData: () => 'x' } })
+      expect(p.onChange).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('Ctrl+C or V on another layout of letters is the key where C or V is', () => {
+    show(grid4)
+    at(0, 1).focus()
+    key(at(0, 1), 'с', { ctrlKey: true, code: 'KeyC' })
+    let out: string | undefined
+    fireEvent.copy(document, {
+      clipboardData: { setData: (_: string, v: string) => (out = v) },
+    })
+    expect(out).toBe('2')
+    // Another key with Ctrl is not a copy
+    key(at(0, 1), 'ж', { ctrlKey: true, code: 'Semicolon' })
+    expect(
+      fireEvent.copy(document, { clipboardData: { setData: vi.fn() } }),
+    ).toBe(true)
+  })
+
+  it('a grid with no row shown copies nothing, leaving the clipboard alone', async () => {
+    show(grid4)
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'zz' } })
+    await screen.findByText('0 / 3 rows')
+    const grid = screen.getByRole('grid')
+    grid.focus()
+    key(grid, 'c', { ctrlKey: true })
+    expect(
+      fireEvent.copy(document, { clipboardData: { setData: vi.fn() } }),
+    ).toBe(true)
+  })
+
+  it('too many cells to paste: refused, saying so', () => {
+    const p = edit(grid4)
+    at(0, 0).focus()
+    paste(at(0, 0), 'x\n'.repeat(100_001))
+    expect(p.notify).toHaveBeenLastCalledWith(
+      'Too many cells to paste: 100001, at most 100000',
+    )
+    expect(p.onChange).not.toHaveBeenCalled()
+  })
+
+  it('a range of one cell left: Escape goes on to the page', () => {
+    show(grid4)
+    at(0, 0).focus()
+    key(at(0, 0), 'ArrowRight', { shiftKey: true })
+    key(at(0, 1), 'ArrowLeft', { shiftKey: true })
+    expect(picked()).toEqual([])
+    expect(key(at(0, 0), 'Escape')).toBe(true)
+  })
+
+  it('a drag leaves its last cell active, in focus: Shift and an arrow grow the range on', () => {
+    show(grid4)
+    fireEvent.pointerDown(at(0, 0), { pointerType: 'mouse', button: 0 })
+    fireEvent.pointerMove(at(1, 1), {
+      pointerType: 'mouse',
+      buttons: 1,
+      clientY: 100,
+    })
+    // The same cell again changes nothing
+    fireEvent.pointerMove(at(1, 1), {
+      pointerType: 'mouse',
+      buttons: 1,
+      clientY: 100,
+    })
+    expect(at(1, 1)).toHaveFocus()
+    key(at(1, 1), 'ArrowDown', { shiftKey: true })
+    expect(picked()).toHaveLength(6)
+    // Released outside the frame: the next click is a click
+    fireEvent.pointerDown(at(0, 2), { pointerType: 'mouse', button: 0 })
+    fireEvent.click(at(0, 2))
+    expect(picked()).toEqual([])
+  })
+
+  it('a sort drops the range, which would land on other cells', () => {
+    show(grid4)
+    at(0, 0).focus()
+    key(at(0, 0), 'ArrowDown', { shiftKey: true })
+    expect(picked()).toHaveLength(2)
+    fireEvent.click(screen.getByRole('button', { name: 'a' }))
+    expect(picked()).toEqual([])
+  })
+})

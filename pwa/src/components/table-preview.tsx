@@ -47,6 +47,7 @@ import {
   WRAP_LINE_CHOICES,
   WRAP_LINES,
 } from '../utils/table-columns'
+import { fromTsv, toTsv } from '../utils/tsv-clipboard'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { CellEditSheet } from './cell-edit-sheet'
 import { CellSheet } from './cell-sheet'
@@ -58,6 +59,7 @@ import { type FindFlags, TableFindBar } from './table-find-bar'
 import {
   cellText,
   type GridCell,
+  type GridRange,
   MAX_CELL_CHARS,
   shownAt,
   TableGrid,
@@ -77,6 +79,8 @@ import {
 
 // Columns rendered: a 1 MiB file of commas would otherwise be a million
 export const MAX_COLUMNS = 200
+// Cells one copy, or one paste, takes at most
+export const MAX_COPY_CELLS = 100_000
 
 export interface TableState {
   ok: boolean
@@ -231,6 +235,12 @@ export default function TablePreview({
     text: string
   }>()
   const [renaming, setRenaming] = useState<{ col: number; text: string }>()
+  // A block longer than the rows left, asking to add rows at the end
+  const [pasting, setPasting] = useState<{
+    cells: { row: number; col: number; value: string }[]
+    addRows: number
+    text: string
+  }>()
   const { parsed: current, client } = useCsvTable(text, delimiter)
   // While an edit of a large file parses, its last table stays on screen,
   // locked: no edit is made on the ranges of an older text
@@ -265,6 +275,7 @@ export default function TablePreview({
     setDeleting((d) => (d && d.text !== text ? undefined : d))
     setDeletingCol((d) => (d && d.text !== text ? undefined : d))
     setRenaming((r) => (r && r.text !== text ? undefined : r))
+    setPasting((b) => (b && b.text !== text ? undefined : b))
   }, [text])
 
   // While the worker sorts or filters, the last rows of this table stay
@@ -738,6 +749,67 @@ export default function TablePreview({
   // stays, and whatever it sets is dropped (act)
   const field = inline?.text === text && !stale && computed ? inline : undefined
   const headerField = renaming?.text === text && live ? renaming : undefined
+  const shownRows = rows ?? new Int32Array()
+  // A range as text a spreadsheet takes: whole values, in the order shown
+  const copyRange = (r: GridRange) => {
+    const n = (r.bottom - r.top + 1) * (r.right - r.left + 1)
+    if (n > MAX_COPY_CELLS) {
+      notify(`Too many cells to copy: ${n}, at most ${MAX_COPY_CELLS}`)
+      return
+    }
+    const values: string[][] = []
+    for (let p = r.top; p <= r.bottom; p++) {
+      values.push(
+        cols
+          .slice(r.left, r.right + 1)
+          .map((c) => valueAt(shown, t, shownRows[p], c)),
+      )
+    }
+    return toTsv(values)
+  }
+  // A block pasted from at: along the rows and columns shown, as one edit.
+  // Wider than the columns left, it is refused; longer than the rows left,
+  // rows are added at the end, asked first, and only in the file's order.
+  const pasteBlock = (at: GridCell, clip: string) => {
+    const block = fromTsv(clip)
+    if (!block.length) return
+    const order = computed as Int32Array
+    let width = 0
+    let n = 0
+    for (const r of block) {
+      width = Math.max(width, r.length)
+      n += r.length
+    }
+    if (n > MAX_COPY_CELLS) {
+      notify(`Too many cells to paste: ${n}, at most ${MAX_COPY_CELLS}`)
+      return
+    }
+    const room = cols.length - at.at
+    if (width > room) {
+      notify(
+        `The block is ${width} columns wide; ${room} ${room === 1 ? 'column' : 'columns'} from here`,
+      )
+      return
+    }
+    const left = order.length - at.pos
+    const over = block.length - left
+    if (over > 0 && (sort || filter)) {
+      notify(
+        `The block is ${block.length} rows long; ${left} ${left === 1 ? 'row' : 'rows'} from here, and no row is added while sorted or filtered`,
+      )
+      return
+    }
+    const cells = block.flatMap((values, i) =>
+      values.map((value, j) => ({
+        // Past the rows shown (the file's own order): a row added
+        row: i < left ? order[at.pos + i] : t.rowCount + i - left,
+        col: cols[at.at + j],
+        value,
+      })),
+    )
+    if (over > 0) setPasting({ cells, addRows: over, text })
+    else act({ kind: 'cells', cells })
+  }
   // A column's new name, as a cell of the header row; save: the file is
   // saved after it
   const commitName = (
@@ -1032,6 +1104,8 @@ export default function TablePreview({
             ))
           }
           onRename={live && header && fine ? rename : undefined}
+          onCopyRange={copyRange}
+          onPasteBlock={live && computed ? pasteBlock : undefined}
           editingHeader={header ? headerField?.col : undefined}
           headerEditor={
             headerField && (
@@ -1120,6 +1194,25 @@ export default function TablePreview({
           {deleting.row === 0
             ? "This is the file's first row, its header when Header row is on: the next row takes its place."
             : 'The row is removed from the file when you save it.'}
+        </ConfirmDialog>
+      )}
+      {pasting?.text === text && (
+        <ConfirmDialog
+          isOpen
+          title={`Add ${pasting.addRows} ${pasting.addRows === 1 ? 'row' : 'rows'} at the end?`}
+          confirmLabel="Add and paste"
+          onConfirm={() => {
+            setPasting(undefined)
+            act({
+              kind: 'cells',
+              cells: pasting.cells,
+              addRows: pasting.addRows,
+            })
+          }}
+          onCancel={() => setPasting(undefined)}
+        >
+          The block is longer than the rows left: empty rows go in at the end,
+          then it is pasted.
         </ConfirmDialog>
       )}
       {deletingCol?.text === text && (

@@ -795,6 +795,14 @@ Run on tmux (Linux/macOS) and Herdr; psmux (Windows) offers neither view.
 - [ ] Editing, add a column, then change the file from the terminal (add a column at the front and
       a row): Save says it changed; "Reload and reapply" puts the new column next to the same named
       column; rename that column in the terminal instead: the column edit is listed as not applied
+- [ ] Desktop: Shift+arrows, Shift+click and a mouse drag select a range (tinted); Escape or a
+      click drops it; Ctrl+C, then paste into Google Sheets, Excel or LibreOffice: the same cells,
+      a multiline value in one cell; a hidden column is left out
+- [ ] Desktop, editing: copy a 2×2 block from a spreadsheet, Ctrl+V on a cell: the four cells
+      change, one Ctrl+Z takes them back; Save, then `git diff` shows only those cells; a block too
+      wide is refused; one too long asks "Add N rows at the end?"; sorted, it is refused
+- [ ] Over plain HTTP on the LAN (`--lan`, no Tailscale): Ctrl+C and Ctrl+V on the table still
+      work; Safari: say whether a paste reaches the table
 - [ ] Widths and wraps go back to the defaults on another "Delimiter" or "Header row", stay after
       editing a cell, and stay after showing another tab and coming back (same first row)
 - [ ] Press a row number: Records opens on that row (also after sorting); turning Records off

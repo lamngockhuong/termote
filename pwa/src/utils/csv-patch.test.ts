@@ -18,6 +18,7 @@ import {
   type Patch,
   quoteValue,
   replaceCell,
+  replaceCells,
 } from './csv-patch'
 import { randomCsv, rng } from './csv-test-data'
 
@@ -323,3 +324,54 @@ function blankRow(t: CsvTable, r: number): boolean {
   const c = t.rowCells[r]
   return t.rowCells[r + 1] - c === 1 && t.cellStart[c] === t.cellEnd[c]
 }
+
+describe('replaceCells', () => {
+  const set = (
+    text: string,
+    cells: { row: number; col: number; value: string }[],
+  ) => applyPatches(text, replaceCells(text, table(text), cells))
+
+  it('sets cells of several rows in one pass, quotes kept, short rows grown', () => {
+    const text = 'a,"b",c\n1\n2,3,4\n'
+    expect(
+      set(text, [
+        { row: 2, col: 2, value: 'z' },
+        { row: 0, col: 1, value: 'B' },
+        { row: 1, col: 2, value: 'y,1' },
+        { row: 0, col: 0, value: 'A' },
+      ]),
+    ).toBe('A,"B",c\n1,,"y,1"\n2,3,z\n')
+    // A short row: its own cells and the missing ones, one insert at its end
+    expect(
+      set('a,b,c\n1\n', [
+        { row: 1, col: 0, value: 'x' },
+        { row: 1, col: 1, value: 'y' },
+      ]),
+    ).toBe('a,b,c\nx,y\n')
+  })
+
+  it('on any table, cells set are read back, and undone give the text', () => {
+    const rand = rng(5)
+    for (let i = 0; i < 200; i++) {
+      const text = randomCsv(rand)
+      const t = table(text)
+      if (!t.rowCount) continue
+      const cells = Array.from({ length: 4 }, () => ({
+        row: Math.floor(rand() * t.rowCount),
+        col: Math.floor(rand() * (t.columnCount + 2)),
+        value: ['', 'v', 'a,b', 'x\ny', '"'][Math.floor(rand() * 5)],
+      }))
+      const ps = replaceCells(text, t, cells)
+      const out = applyPatches(text, ps)
+      expect(applyPatches(out, invertPatches(ps))).toBe(text)
+      const after = table(out)
+      // The last value given for a cell is the one it holds
+      const want = new Map(cells.map((c) => [`${c.row}:${c.col}`, c.value]))
+      for (const [k, v] of want) {
+        const [r, c] = k.split(':').map(Number)
+        expect(valueAt(out, after, r, c)).toBe(v)
+      }
+      expect(after.rowCount).toBe(t.rowCount)
+    }
+  })
+})

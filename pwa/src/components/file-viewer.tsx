@@ -192,6 +192,12 @@ function describeOp(op: TableOp): string {
       : `The row added after row ${op.after + 1}`
   }
   if (op.kind === 'delete') return `Deleting row ${op.row + 1}`
+  if (op.kind === 'cells') {
+    const n =
+      op.rows.reduce((sum, r) => sum + r.cells.length, 0) +
+      op.added.reduce((sum, r) => sum + r.length, 0)
+    return `Pasted block, ${n} ${n === 1 ? 'cell' : 'cells'}`
+  }
   const column =
     op.name === null ? String(op.col + 1) : `"${visibleUnsafe(op.name)}"`
   if (op.kind === 'delete-col') return `Deleting column ${column}`

@@ -902,6 +902,49 @@ test.describe('files and changes views', () => {
     }
   })
 
+  test('a range copies as tabs; a block pastes as one edit, only its cells saved', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+    const f = path.join(csvDir(), 'paste.csv')
+    const text = 'name,price,note\npear,2,"ripe\nsweet"\nplum,3,\nfig,4,dry\n'
+    try {
+      mkdirSync(csvDir(), { recursive: true })
+      writeFileSync(f, text)
+      await openCsv(page, 'paste.csv')
+      const panel = page.getByRole('complementary', { name: 'Files' })
+      const grid = panel.getByRole('grid')
+      await expect(grid).toHaveAttribute('aria-busy', 'false')
+      const cell = (pos: number, col: number) => grid.locator(`[data-pos="${pos}"][data-col="${col}"]`)
+      // 2 rows × 3 columns with Shift and the arrows, while only viewing
+      await cell(0, 0).focus()
+      await page.keyboard.press('Shift+ArrowRight')
+      await page.keyboard.press('Shift+ArrowRight')
+      await page.keyboard.press('Shift+ArrowDown')
+      await expect(grid.locator('[aria-selected="true"]')).toHaveCount(6)
+      await page.keyboard.press('Control+c')
+      expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('pear\t2\t"ripe\nsweet"\nplum\t3\t')
+      await page.keyboard.press('Escape')
+      await expect(grid.locator('[aria-selected="true"]')).toHaveCount(0)
+      // A 2×2 block from a spreadsheet, pasted on price of plum
+      await panel.getByRole('button', { name: 'Edit' }).click()
+      await page.evaluate(() => navigator.clipboard.writeText('5\tnew\r\n6\t\r\n'))
+      await cell(1, 1).focus()
+      await page.keyboard.press('Control+v')
+      await expect(cell(1, 2)).toHaveText('new')
+      await expect(cell(2, 1)).toHaveText('6')
+      await expect(cell(2, 2)).toHaveText('')
+      // One Ctrl+Z takes the block back, Ctrl+Shift+Z brings it again
+      await page.keyboard.press('Control+z')
+      await expect(cell(1, 2)).toHaveText('')
+      await page.keyboard.press('Control+Shift+z')
+      await expect(cell(1, 2)).toHaveText('new')
+      await panel.getByRole('button', { name: 'Save' }).click()
+      await expect(page.getByText('Saved', { exact: true })).toBeVisible()
+      expect(readFileSync(f, 'utf-8')).toBe('name,price,note\npear,2,"ripe\nsweet"\nplum,5,new\nfig,6,\n')
+    } finally {
+      rmSync(csvDir(), { recursive: true, force: true })
+    }
+  })
+
   test('find in a table: every row stays, Enter and F3 go round, a regex finds', async ({ page }) => {
     const f = path.join(csvDir(), 'find.csv')
     // beta on rows of id 10, 150 and 290; bat on 200

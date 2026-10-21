@@ -473,6 +473,29 @@ bao giờ bị treo; lần tìm nào chạy quá 10 giây (lần đầu là 30 g
 tải) thì bị dừng và hộp báo `Search took too long`; biểu thức lồng quá sâu so với khả năng của
 trình duyệt thì hộp báo `Search failed`. Hộp đếm tối đa 100.000 ô khớp (`100000+`).
 
+### Chọn, chép và dán
+
+Có chuột và bàn phím thì giữ Shift cùng phím mũi tên, Home, End, Page Up hay Page Down (cả
+Ctrl+Home, Ctrl+End) để mở rộng một vùng ô tính từ ô đang chọn; Shift+nhấp, hoặc kéo chuột từ ô
+này sang ô khác, chọn các ô ở giữa, và kéo tới gần mép trên hay mép dưới của bảng thì bảng tự cuộn.
+Nhấn phím mũi tên không kèm Shift, nhấp một ô hay nhấn Esc thì bỏ vùng chọn. Trên điện thoại không
+chọn vùng được.
+
+- Ctrl+C (Cmd+C trên macOS), kể cả khi chỉ xem, chép vùng đang chọn, hoặc ô đang chọn, hoặc cả dòng
+  khi đang ở số dòng, theo kiểu bảng tính: các ô cách nhau bằng tab, mỗi dòng một hàng, đúng thứ tự
+  đang hiện và bỏ qua cột ẩn. Giá trị được chép đầy đủ, kể cả phần quá 1024 ký tự mà ô không hiện;
+  giá trị có tab, xuống dòng hay dấu ngoặc kép được bọc trong ngoặc kép để khi dán vẫn nằm gọn trong
+  một ô. Mỗi lần chép tối đa 100.000 ô.
+- Ctrl+V khi đang sửa dán một khối chép từ bảng tính hay từ bảng khác, bắt đầu từ ô đang chọn (hoặc
+  ô trên cùng bên trái của vùng chọn), theo các dòng và cột đang hiện, thành một thay đổi duy nhất
+  mà một lần Ctrl+Z là lùi lại được; ô nhận đúng giá trị đang có thì giữ nguyên. Khối rộng hơn số
+  cột còn lại thì bị từ chối. Khối dài hơn số dòng còn lại thì, khi bảng không sắp xếp và không
+  lọc, hộp thoại hỏi có thêm số dòng cần thiết vào cuối không; đang sắp xếp hay lọc thì bị từ chối
+  kèm lý do. Khi lưu, chỉ các ô được dán là đổi.
+- Không cần cấp quyền clipboard, nên dùng được cả qua HTTP thường trong mạng LAN. Dán vào ô đang
+  sửa, ô lọc hay hộp tìm thì chữ vào đúng ô đó. Safari có thể không chuyển cả thao tác chép lẫn
+  thao tác dán cho bảng: khi đó hãy dùng Chrome, Edge hay Firefox.
+
 ### Sửa trong bảng
 
 Bấm **Edit** khi file đang hiện dạng bảng thì bảng vẫn giữ nguyên và từng ô sửa được; thanh trên
@@ -533,7 +556,10 @@ và giá trị của ô đó chép được để đặt lại bằng tay. Các 
 không áp được cũng được liệt kê, vì chúng có thể nhắm vào chính dòng đó. Cột được thêm hay xoá
 thì được tìm lại theo tên ở dòng tiêu đề, dù cột đó đã dời đi đâu; khi **Header row** tắt thì
 tìm theo vị trí, miễn file vẫn có đúng số cột như trước. Không còn cột đó, hoặc có hai cột cùng
-tên, thì thay đổi ấy được liệt kê, cùng mọi thay đổi sau nó. Nếu file đọc lại không
+tên, thì thay đổi ấy được liệt kê, cùng mọi thay đổi sau nó. Khối đã dán cũng tìm lại từng dòng
+của nó theo cách đó, và chỉ được áp khi tìm đủ mọi dòng, nên khối có một dòng trùng với dòng khác
+(chẳng hạn hai dòng trống) sẽ được liệt kê; các dòng khối đó đã thêm thì được thêm lại vào cuối
+file mới. Nếu file đọc lại không
 còn là bảng sửa được, không thay đổi nào được áp và Save vẫn tắt. Chưa có gì được lưu cho tới khi
 bạn bấm Save.
 

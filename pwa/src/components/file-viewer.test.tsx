@@ -1581,6 +1581,36 @@ describe('FileViewer: editing a table', () => {
     }
   })
 
+  it('a reload naming pasted blocks it could not apply', async () => {
+    mockContent.mockResolvedValue(csvFile('a,b\n1,2\n3,4\n'))
+    mockSave.mockRejectedValueOnce(changed())
+    await editTable()
+    const pasteAt = (name: string, text: string) => {
+      const cell = screen.getByRole('gridcell', { name })
+      cell.focus()
+      fireEvent.keyDown(cell, { key: 'v', ctrlKey: true })
+      fireEvent.paste(document, { clipboardData: { getData: () => text } })
+    }
+    pasteAt('1', 'q')
+    // Past the last row: one row added, asked first
+    pasteAt('4', 'x\ny')
+    fireEvent.click(screen.getByRole('button', { name: 'Add and paste' }))
+    await act(async () => fireEvent.click(saveButton()))
+    mockContent.mockResolvedValueOnce(csvFile('a,b\n9,9\n'))
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Reload and reapply' }),
+      ),
+    )
+    const list = screen.getByText(/Not applied/)
+    expect(list).toHaveTextContent(
+      'Pasted block, 1 cell: its row is no longer in the file',
+    )
+    expect(list).toHaveTextContent(
+      'Pasted block, 2 cells: its row is no longer in the file',
+    )
+  })
+
   it('a reload keeps a draft another view made meanwhile', async () => {
     mockContent.mockResolvedValue(csvFile('a\n1\n'))
     mockSave.mockRejectedValueOnce(changed())
