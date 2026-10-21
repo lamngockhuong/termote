@@ -418,6 +418,9 @@ it for changes). A deleted file has no table.
   Records still shows in its sheet.
 - A row with another number of cells than the header has its number in orange; hovering or a
   screen reader says how many cells it has.
+- From the keyboard, the arrow keys, Page Up and Page Down move between cells; Home and End go to
+  the first and last column of the row, and Ctrl+Home and Ctrl+End (Cmd on a Mac) to the first
+  and last cell of the table, in the order shown.
 
 Sorting, filtering, the delimiter, the header row, column widths and wrapped columns only change
 what is shown. Nothing is written to the file, and they are forgotten when the file is closed.
@@ -456,6 +459,12 @@ edited as text instead.
   sets it too. The ⤢ button in the cell takes what you typed to the cell's sheet, for more room
   and for **Add row below** and **Delete row**. A value longer than 1024 characters, or one that
   holds characters which hide or reorder text, opens in the sheet.
+- With a keyboard, typing on the cell in focus starts editing it with what you type, which
+  replaces its value (Escape keeps the old one); on a file you are only viewing, it starts
+  editing first. A value the field cannot take opens in the sheet with what you typed. Delete or
+  Backspace clears the cell, and one Ctrl+Z brings the value back. With an input method (IME),
+  the first key opens the field: if the first character you composed does not show in it, type
+  it again there. On a phone, typing on a cell does nothing.
 - **Add row below** (in that sheet) and the **Add a row at the end** button add an empty row and
   open its first cell. **Delete row** asks first, and says when the row is the file's first one,
   which is the header when **Header row** is on. To rename a column or delete the header, turn

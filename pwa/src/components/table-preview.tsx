@@ -117,6 +117,13 @@ interface OpenCell {
   text: string
 }
 
+// A cell asked for by a key typed on it: input replaces its value
+interface CellAt {
+  row: number
+  col: number
+  input?: string
+}
+
 // A value a cell's own field can take: whole, and with no character the
 // field would hide, reorder, or change (\r\n read back as \n). Any other
 // opens in the sheet, which shows them.
@@ -176,11 +183,12 @@ export default function TablePreview({
   // The cell opened in a sheet, with what was typed in its own field
   // before, if any
   const [open, setOpen] = useState<OpenCell & { input?: string }>()
-  // The cell edited where it is (a fine pointer)
-  const [inline, setInline] = useState<OpenCell>()
+  // The cell edited where it is (a fine pointer), with the key typed on it
+  // that it starts from, if any
+  const [inline, setInline] = useState<OpenCell & { input?: string }>()
   const fine = useMediaQuery('(pointer: fine)')
   // The cell clicked as editing was asked for, opened once it can be
-  const [pending, setPending] = useState<{ row: number; col: number }>()
+  const [pending, setPending] = useState<CellAt>()
   // Ctrl+S in a cell's field: the file is saved once the value is in it
   const saveNext = useRef(false)
   // The text now: a field unmounted by another text sets its value with
@@ -290,13 +298,14 @@ export default function TablePreview({
     const next = act({ kind: 'insert', after })
     if (next !== undefined) setOpen({ row: after + 1, col: 0, text: next })
   }
-  const openSheet = (row: number, col: number) => {
-    if (!editing || live) setOpen({ row, col, text })
+  const openSheet = (row: number, col: number, input?: string) => {
+    if (!editing || live) setOpen({ row, col, text, input })
   }
-  // A cell of the grid: in its own field when it can take the value
-  const openCell = (row: number, col: number) => {
+  // A cell of the grid: in its own field when it can take the value;
+  // input, a key typed on it, replaces the value
+  const openCell = (row: number, col: number, input?: string) => {
     if (!editing && fine && onRequestEdit) {
-      if (onRequestEdit()) setPending({ row, col })
+      if (onRequestEdit()) setPending({ row, col, input })
       return
     }
     if (
@@ -306,8 +315,21 @@ export default function TablePreview({
         valueAt(text, table as CsvTable, row, col, MAX_CELL_CHARS + 1),
       )
     ) {
-      setInline({ row, col, text })
-    } else openSheet(row, col)
+      setInline({ row, col, text, input })
+    } else openSheet(row, col, input)
+  }
+  // Keys that edit a cell, as a spreadsheet's: only with a fine pointer
+  // and a keyboard (a touch screen's keyboard types in no cell), on a table
+  // that takes edits now or can be asked for them
+  const canType = fine && (editing ? !!live || !!pending : !!onRequestEdit)
+  // Keys typed while the cell asked for waits for editing go to it too
+  const typeIn = (row: number, col: number, input: string) => {
+    if (pending)
+      setPending({ ...pending, input: (pending.input ?? '') + input })
+    else openCell(row, col, input)
+  }
+  const clearCell = (row: number, col: number) => {
+    act({ kind: 'cell', row, col, name: names[col], value: '' })
   }
   // The cell after (or before) at in the order shown: on along its row,
   // then from the start of the next one; none past the last cell. Only
@@ -371,7 +393,7 @@ export default function TablePreview({
     if (was && !editing) setPending(undefined)
     if (!pending || !live) return
     setPending(undefined)
-    openCell(pending.row, pending.col)
+    openCell(pending.row, pending.col, pending.input)
   })
 
   // The table's own keys; never one typed in a field or in a sheet (a
@@ -644,11 +666,14 @@ export default function TablePreview({
           sort={sort}
           onSort={toggleSort}
           onOpen={openCell}
+          onType={canType ? typeIn : undefined}
+          onClear={fine && live ? clearCell : undefined}
           editingCell={field}
           editor={
             field && (
               <InlineCellEditor
                 value={valueAt(shown, t, field.row, field.col)}
+                initial={field.input}
                 label={`Edit ${cellText(names[field.col])}, row ${field.row + 1}`}
                 onCommit={(value, move, save) =>
                   commitInline(field, value, move, save)

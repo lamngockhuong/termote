@@ -27,6 +27,31 @@ describe('InlineCellEditor', () => {
     expect([field.selectionStart, field.selectionEnd]).toEqual([0, 5])
   })
 
+  it('starts with a key typed instead, the caret at its end; Escape drops it', () => {
+    const p = {
+      onCommit: vi.fn(),
+      onCancel: vi.fn(),
+      onExpand: vi.fn(),
+    }
+    render(
+      <InlineCellEditor
+        value="hello"
+        initial="a"
+        label="Edit note, row 2"
+        {...p}
+      />,
+    )
+    const box = screen.getByRole('textbox', {
+      name: 'Edit note, row 2',
+    }) as HTMLTextAreaElement
+    expect(box).toHaveFocus()
+    expect(box).toHaveValue('a')
+    expect([box.selectionStart, box.selectionEnd]).toEqual([1, 1])
+    fireEvent.keyDown(box, { key: 'Escape' })
+    expect(p.onCancel).toHaveBeenCalledTimes(1)
+    expect(p.onCommit).not.toHaveBeenCalled()
+  })
+
   it('grows as tall as its lines, up to 20, then scrolls', () => {
     let height = 40
     const spy = vi

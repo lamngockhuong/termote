@@ -803,6 +803,52 @@ test.describe('files and changes views', () => {
     }
   })
 
+  test('spreadsheet keys: Home and End move, a key typed edits, Delete clears', async ({ page }) => {
+    const f = path.join(csvDir(), 'keys.csv')
+    try {
+      mkdirSync(csvDir(), { recursive: true })
+      writeFileSync(f, 'name,price,note\npear,2,ripe\nplum,3,\nfig,4,dry\n')
+      await openCsv(page, 'keys.csv')
+      const panel = page.getByRole('complementary', { name: 'Files' })
+      const grid = panel.getByRole('grid')
+      await expect(grid).toHaveAttribute('aria-busy', 'false')
+      const cell = (name: string) => grid.getByRole('gridcell', { name, exact: true })
+      // A click on the table viewed starts editing in the cell; Escape
+      // leaves the focus on it
+      await cell('2').click()
+      await page.keyboard.press('Escape')
+      await expect(cell('2')).toBeFocused()
+      await page.keyboard.press('End')
+      await expect(cell('ripe')).toBeFocused()
+      await page.keyboard.press('Home')
+      await expect(cell('pear')).toBeFocused()
+      await page.keyboard.press('Control+End')
+      await expect(cell('dry')).toBeFocused()
+      await page.keyboard.press('Control+Home')
+      await expect(cell('pear')).toBeFocused()
+      // A key typed replaces the value; Enter sets it
+      await page.keyboard.press('ArrowRight')
+      await page.keyboard.type('x')
+      await expect(grid.getByRole('textbox', { name: 'Edit price, row 2' })).toHaveValue('x')
+      await page.keyboard.press('Enter')
+      await expect(cell('x')).toBeFocused()
+      // Delete clears a cell, one Ctrl+Z brings it back
+      await page.keyboard.press('ArrowRight')
+      await page.keyboard.press('Delete')
+      await expect(cell('ripe')).toHaveCount(0)
+      await page.keyboard.press('Control+z')
+      await expect(cell('ripe')).toBeVisible()
+      await page.keyboard.press('Control+End')
+      await page.keyboard.press('Backspace')
+      await expect(cell('dry')).toHaveCount(0)
+      await panel.getByRole('button', { name: 'Save' }).click()
+      await expect(page.getByText('Saved', { exact: true })).toBeVisible()
+      expect(readFileSync(f, 'utf-8')).toBe('name,price,note\npear,x,ripe\nplum,3,\nfig,4,\n')
+    } finally {
+      rmSync(csvDir(), { recursive: true, force: true })
+    }
+  })
+
   test.describe('table columns, wraps and row numbers', () => {
     // A long note in row 1, a three-line one in row 2, then short rows
     const notes = (rows: number) =>

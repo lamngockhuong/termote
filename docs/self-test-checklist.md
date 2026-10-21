@@ -750,6 +750,15 @@ Run on tmux (Linux/macOS) and Herdr; psmux (Windows) offers neither view.
 - [ ] Desktop: type in a cell's field, then scroll it out of view or click elsewhere: the value is
       set; ⤢ opens the sheet with the typed value, "Add row below" and "Delete row" work; a value
       over 1024 characters or with `⟨U+202E⟩` opens the sheet
+- [ ] Desktop: on a cell in focus, Home and End go to the first and last column of the row,
+      Ctrl+Home and Ctrl+End (Cmd on a Mac) to the first and last cell of the table as sorted and
+      filtered, scrolling it into view
+- [ ] Desktop, a file you can edit: type `a` on a cell → its field opens with `a` (editing starts
+      first when only viewing), Enter sets it, Escape keeps the old value; type with an IME
+      (Vietnamese Telex, Japanese) on a cell: the text goes into the field (the first composed
+      character may need typing again)
+- [ ] Desktop, editing: Delete and Backspace clear the cell in focus, one Ctrl+Z brings it back;
+      Save, then `git diff` shows only that cell
 - [ ] iPhone: a tap on a cell still opens the sheet, viewing or editing, never a field
 - [ ] Widths and wraps go back to the defaults on another "Delimiter" or "Header row", stay after
       editing a cell, and stay after showing another tab and coming back (same first row)
