@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { reapply } from './csv-edits'
+import { makeOp, reapply, type TableOp } from './csv-edits'
 import { parseCsv } from './csv-parse'
 import { handleRequest, resetWorkerState } from './csv-parse-worker'
 
@@ -103,5 +103,27 @@ describe('csv parse worker', () => {
     })
     expect(reply).toMatchObject({ result: { text: 'a\nb\n' } })
     expect(transfer).toEqual([])
+  })
+
+  it('applies a column op again after it crossed to the worker', () => {
+    const text = 'a,b\n1,2\n'
+    const p = parseCsv(text, ',')
+    if (!p.ok) throw new Error('parse')
+    const op = makeOp(
+      text,
+      p.table,
+      { kind: 'insert-col', col: 0, side: 'right' },
+      true,
+    ) as TableOp
+    // What postMessage does to the request on its way
+    const req = structuredClone({
+      type: 'reapply' as const,
+      id: 4,
+      text: 'id,a,b\n0,1,2\n',
+      delimiter: ',' as const,
+      ops: [op],
+    })
+    const [reply] = handleRequest(req)
+    expect(reply).toMatchObject({ result: { text: 'id,a,,b\n0,1,,2\n' } })
   })
 })

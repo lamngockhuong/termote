@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  filledCells,
   findRow,
   makeOp,
   type Reapplied,
@@ -23,11 +24,12 @@ function edit(
   text: string,
   actions: TableAction[],
   delimiter: Delimiter = ',',
+  header = false,
 ) {
   const ops: TableOp[] = []
   let now = text
   for (const a of actions) {
-    const op = makeOp(now, table(now, delimiter), a) as TableOp
+    const op = makeOp(now, table(now, delimiter), a, header) as TableOp
     ops.push(op)
     now = redoOp(now, op)
   }
@@ -270,5 +272,91 @@ describe('reapply', () => {
       ops: [],
       skipped: [],
     })
+  })
+})
+
+describe('column ops', () => {
+  const addCol = (
+    col: number,
+    side: 'left' | 'right' = 'right',
+  ): TableAction => ({
+    kind: 'insert-col',
+    col,
+    side,
+  })
+  const dropCol = (col: number): TableAction => ({ kind: 'delete-col', col })
+
+  it('an added column keeps its side, the name it is next to and the column count', () => {
+    const { text, ops } = edit(people, [addCol(0)], ',', true)
+    expect(text).toBe('name,,price\napple,,1\npear,,2\nplum,,3\n')
+    expect(ops[0]).toMatchObject({
+      kind: 'insert-col',
+      col: 0,
+      side: 'right',
+      name: 'name',
+      columns: 2,
+    })
+    expect(edit(people, [addCol(0, 'left')]).text).toBe(
+      ',name,price\n,apple,1\n,pear,2\n,plum,3\n',
+    )
+    // No header row: no name
+    expect(edit(people, [addCol(1)]).ops[0]).toMatchObject({ name: null })
+  })
+
+  it('a column with no name in the header is found by its place', () => {
+    const { ops } = edit('a,\n1,2\n', [addCol(1)], ',', true)
+    expect(ops[0]).toMatchObject({ name: null, columns: 2 })
+  })
+
+  it('a deleted column counts the values it took, the header not counted', () => {
+    const text = 'a,b\n1,\n2,x\n'
+    const { text: after, ops } = edit(text, [dropCol(1)], ',', true)
+    expect(after).toBe('a\n1\n2\n')
+    expect(ops[0]).toMatchObject({ kind: 'delete-col', name: 'b', values: 1 })
+    expect(filledCells(text, table(text), 1, 0)).toBe(2)
+    expect(filledCells(text, table(text), 1, 1)).toBe(1)
+  })
+
+  it('undo and redo a column op in one step; an older op with one patch still undoes', () => {
+    const { text, ops } = edit(people, [addCol(1), cell(1, 2, 'x'), dropCol(0)])
+    let now = text
+    for (const op of [...ops].reverse()) now = undoOp(now, op)
+    expect(now).toBe(people)
+    for (const op of ops) now = redoOp(now, op)
+    expect(now).toBe(text)
+  })
+
+  it('reapplied by name: at its place, or where the column moved', () => {
+    const { ops } = edit(people, [addCol(1), dropCol(0)], ',', true)
+    // Same columns, a row more
+    expect(ok(reapply(`${people}fig,4\n`, ',', ops)).text).toBe(
+      'price,\n1,\n2,\n3,\n4,\n',
+    )
+    // A column added in front: each op finds its column by name
+    const r = ok(reapply('id,name,price\n1,apple,1\n', ',', ops))
+    expect(r.text).toBe('id,price,\n1,1,\n')
+    expect(r.skipped).toEqual([])
+    expect(r.ops[0]).toMatchObject({ kind: 'insert-col', col: 2 })
+  })
+
+  it('its column gone, or two of that name: skipped, and every op after it', () => {
+    const { ops } = edit(people, [dropCol(1), cell(1, 0, 'x')], ',', true)
+    expect(ok(reapply('name,cost\napple,1\n', ',', ops)).skipped).toEqual([
+      { op: ops[0], reason: 'column' },
+      { op: ops[1], reason: 'depends' },
+    ])
+    expect(
+      ok(reapply('price,name,price\n1,a,2\n', ',', ops)).skipped[0].reason,
+    ).toBe('columns')
+    // An empty file has no columns
+    expect(ok(reapply('', ',', ops)).skipped[0].reason).toBe('column')
+  })
+
+  it('with no header row, applied while the table has as many columns', () => {
+    const { ops } = edit(people, [dropCol(1)])
+    expect(ok(reapply('x,y\n1,2\n', ',', ops)).text).toBe('x\n1\n')
+    expect(ok(reapply('x,y,z\n1,2,3\n', ',', ops)).skipped).toEqual([
+      { op: ops[0], reason: 'column' },
+    ])
   })
 })

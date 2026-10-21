@@ -69,6 +69,41 @@ export function shownColumns(count: number, hidden: readonly number[]) {
   return out.length || !count ? out : [0]
 }
 
+// A column index once a column is added at col (added) or col is removed:
+// undefined for the removed one itself
+export function movedColumn(
+  c: number,
+  col: number,
+  added: boolean,
+): number | undefined {
+  if (added) return c < col ? c : c + 1
+  if (c === col) return undefined
+  return c < col ? c : c - 1
+}
+
+// The layout once a column is added at col or col is removed: the widths,
+// wraps and hidden columns after it move with their columns, the removed
+// one's go, and an added one is shown, unwrapped, at its own width
+export function moveColumns(
+  layout: TableLayout,
+  col: number,
+  added: boolean,
+): TableLayout {
+  const move = (list: readonly number[]) =>
+    list.flatMap((c) => movedColumn(c, col, added) ?? [])
+  const widths: Record<number, number> = {}
+  for (const [c, w] of Object.entries(layout.widths)) {
+    const to = movedColumn(Number(c), col, added)
+    if (to !== undefined) widths[to] = w
+  }
+  return {
+    ...layout,
+    widths,
+    wrapped: move(layout.wrapped),
+    ...(layout.hidden && { hidden: move(layout.hidden) }),
+  }
+}
+
 // A value of a cell as shown: (file row, column, with its line breaks)
 export type ReadCell = (row: number, col: number, multiline: boolean) => string
 

@@ -8,9 +8,13 @@ import {
 } from './csv-parse'
 import {
   applyPatch,
+  applyPatches,
+  deleteColumn,
   deleteRow,
+  insertColumn,
   insertRow,
   invertPatch,
+  invertPatches,
   type Patch,
   quoteValue,
   replaceCell,
@@ -207,3 +211,115 @@ describe('patches on random files', () => {
     }
   })
 })
+
+describe('applyPatches and invertPatches', () => {
+  const ps: Patch[] = [
+    { start: 0, removed: 'a', inserted: 'xyz' },
+    { start: 2, removed: '', inserted: '!' },
+    { start: 3, removed: 'de', inserted: '' },
+  ]
+
+  it('applies patches placed on the text before them, in one pass', () => {
+    expect(applyPatches('abcde', ps)).toBe('xyzb!c')
+    expect(applyPatches('abc', [])).toBe('abc')
+  })
+
+  it('their inverse gives the text back', () => {
+    expect(applyPatches('xyzb!c', invertPatches(ps))).toBe('abcde')
+  })
+
+  it('refuses a patch that does not match, or one before the last', () => {
+    expect(() =>
+      applyPatches('abc', [{ start: 1, removed: 'x', inserted: '' }]),
+    ).toThrow('patch does not match the text')
+    expect(() =>
+      applyPatches('abc', [
+        { start: 1, removed: 'b', inserted: '' },
+        { start: 0, removed: 'a', inserted: '' },
+      ]),
+    ).toThrow('patch does not match the text')
+  })
+})
+
+describe('insertColumn and deleteColumn', () => {
+  const add = (text: string, col: number, d: Delimiter = ',') =>
+    applyPatches(text, insertColumn(table(text, d), col))
+  const drop = (text: string, col: number, d: Delimiter = ',') =>
+    applyPatches(text, deleteColumn(text, table(text, d), col))
+
+  it('adds an empty column at the start, the middle or the end', () => {
+    const text = 'a,b\n1,2\n'
+    expect(add(text, 0)).toBe(',a,b\n,1,2\n')
+    expect(add(text, 1)).toBe('a,,b\n1,,2\n')
+    expect(add(text, 2)).toBe('a,b,\n1,2,\n')
+  })
+
+  it('keeps quotes, CRLF, the BOM, a last row with no line break and the delimiter', () => {
+    expect(add('\uFEFF"a,1";b\r\n"x\ny";z', 1, ';')).toBe(
+      '\uFEFF"a,1";;b\r\n"x\ny";;z',
+    )
+    expect(add('a\tb\n1\t2', 2, '\t')).toBe('a\tb\t\n1\t2\t')
+  })
+
+  it('leaves a shorter row and a blank line as they are', () => {
+    expect(add('a,b,c\n1\n\n4,5,6\n', 2)).toBe('a,b,,c\n1\n\n4,5,,6\n')
+    // A row of exactly col cells gets the cell at its end
+    expect(add('a,b,c\n1,2\n', 2)).toBe('a,b,,c\n1,2,\n')
+  })
+
+  it('deletes the first, a middle or the last column with one delimiter', () => {
+    const text = 'a,"b,1",c\n1,2,3\n'
+    expect(drop(text, 0)).toBe('"b,1",c\n2,3\n')
+    expect(drop(text, 1)).toBe('a,c\n1,3\n')
+    expect(drop(text, 2)).toBe('a,"b,1"\n1,2\n')
+  })
+
+  it('a row left with one empty cell writes it "", a blank line and a short row stay', () => {
+    expect(drop('a,b\nx\n\n""\n1,2\n', 0)).toBe('b\n""\n\n""\n2\n')
+    expect(drop('a,b\nx\n', 1)).toBe('a\nx\n')
+    // The last row, no line break after it: still a row
+    expect(drop('a,b\n,x', 1)).toBe('a\n""')
+    expect(drop('a,b\n"",x', 1)).toBe('a\n""')
+  })
+
+  it('on any table and any column, an add or a delete undone is the text again', () => {
+    const rand = rng(11)
+    for (let i = 0; i < 300; i++) {
+      const delim = (['\t', ',', ';', '|'] as const)[i % 4]
+      const text = randomCsv(rand, delim)
+      const t = table(text, delim)
+      const before = rows(text, delim)
+      for (let col = 0; col <= t.columnCount; col++) {
+        const ins = insertColumn(t, col)
+        const added = applyPatches(text, ins)
+        expect(applyPatches(added, invertPatches(ins))).toBe(text)
+        // Every row long enough, but a blank line, has an empty cell at col
+        expect(rows(added, delim)).toEqual(
+          before.map((v, r) =>
+            v.length < col || blankRow(t, r)
+              ? v
+              : [...v.slice(0, col), '', ...v.slice(col)],
+          ),
+        )
+        if (col === t.columnCount) continue
+        const del = deleteColumn(text, t, col)
+        const dropped = applyPatches(text, del)
+        expect(applyPatches(dropped, invertPatches(del))).toBe(text)
+        // Every row that had it lost cell col; none is gone
+        expect(rows(dropped, delim)).toEqual(
+          before.map((v) => {
+            if (v.length <= col) return v
+            const left = [...v.slice(0, col), ...v.slice(col + 1)]
+            return left.length ? left : ['']
+          }),
+        )
+      }
+    }
+  })
+})
+
+// Row r of t is a blank line: one cell, nothing written in it
+function blankRow(t: CsvTable, r: number): boolean {
+  const c = t.rowCells[r]
+  return t.rowCells[r + 1] - c === 1 && t.cellStart[c] === t.cellEnd[c]
+}

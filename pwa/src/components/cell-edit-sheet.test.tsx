@@ -11,6 +11,7 @@ function show(value: string) {
   const props = {
     cell: { row: 2, name: 'price', value },
     onApply: vi.fn(),
+    onInsertAbove: vi.fn(),
     onInsertBelow: vi.fn(),
     onDelete: vi.fn(),
     onClose: vi.fn(),
@@ -36,6 +37,7 @@ describe('CellEditSheet', () => {
     render(
       <CellEditSheet
         onApply={vi.fn()}
+        onInsertAbove={vi.fn()}
         onInsertBelow={vi.fn()}
         onDelete={vi.fn()}
         onClose={vi.fn()}
@@ -55,14 +57,34 @@ describe('CellEditSheet', () => {
     expect(p.onClose).not.toHaveBeenCalled()
   })
 
-  it('Cancel, Add row below and Delete row hand on', () => {
+  it('Cancel, Insert row above, Add row below and Delete row hand on', () => {
     const p = show('x')
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(p.onClose).toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Insert row above' }))
+    expect(p.onInsertAbove).toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Add row below' }))
     expect(p.onInsertBelow).toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Delete row' }))
     expect(p.onDelete).toHaveBeenCalled()
+  })
+
+  it('the header row adds or deletes no row around it', () => {
+    render(
+      <CellEditSheet
+        cell={{ row: 0, name: 'a', value: 'a' }}
+        headerRow
+        onApply={vi.fn()}
+        onInsertAbove={vi.fn()}
+        onInsertBelow={vi.fn()}
+        onDelete={vi.fn()}
+        onClose={vi.fn()}
+        notify={vi.fn()}
+      />,
+    )
+    for (const name of ['Insert row above', 'Add row below', 'Delete row']) {
+      expect(screen.queryByRole('button', { name })).toBeNull()
+    }
   })
 
   it('shows characters that hide or reorder text', () => {

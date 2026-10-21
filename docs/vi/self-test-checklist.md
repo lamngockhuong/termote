@@ -785,6 +785,17 @@ Chạy trên tmux (Linux/macOS) và Herdr; psmux (Windows) không có hai view n
       too long", trang không bị treo
 - [ ] Đang sửa và hộp "Find" đang mở: đổi một ô khớp để nó hết khớp thì số đếm giảm và viền chuyển
       sang ô khớp kế tiếp; nhấn F3 trong ô đang sửa thì giá trị được ghi trước rồi mới đi
+- [ ] Desktop, đang sửa: bấm ⋯ của một tên cột (hoặc nhấp phải, Shift+F10 trên một ô) → "Insert
+      column right": gõ tên rồi Enter; điền một ô của cột đó; "Delete column" trên một cột khác thì
+      hộp thoại cho biết bao nhiêu giá trị sẽ mất, bấm Delete column; Save rồi `git diff`: mỗi dòng có
+      thêm một dấu phân cách ở chỗ cột mới và mất ô của cột bị xoá, ô có ngoặc kép vẫn giữ ngoặc,
+      CRLF vẫn là CRLF; Ctrl+Z lùi lại từng bước
+- [ ] Desktop, đang sửa: F2 hoặc nhấp đúp vào tên cột thì đổi tên ngay tại chỗ; "Insert row above"
+      trong bảng nhỏ của một ô hoặc trong menu của một ô thêm dòng phía trên; thêm hay xoá cột thì
+      độ rộng, Wrap và cột ẩn vẫn ở đúng cột của chúng
+- [ ] Đang sửa, thêm một cột, rồi sửa file từ terminal (thêm một cột ở đầu và một dòng): Save báo
+      file đã đổi; "Reload and reapply" đặt cột mới cạnh đúng cột cùng tên; nếu đổi tên cột đó trong
+      terminal thì thao tác cột được liệt kê là không áp được
 - [ ] Độ rộng và wrap trở về mặc định khi đổi "Delimiter" hay "Header row", giữ nguyên sau khi sửa
       một ô, và giữ nguyên khi sang tab khác rồi quay lại (cùng dòng đầu)
 - [ ] Nhấn số dòng: Records mở đúng dòng đó (cả sau khi sắp xếp); tắt Records thì bảng hiện lại ở

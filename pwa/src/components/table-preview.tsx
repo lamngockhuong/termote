@@ -16,6 +16,7 @@ import {
 } from '../hooks/use-csv-table'
 import { useMediaQuery } from '../hooks/use-media-query'
 import {
+  filledCells,
   makeOp,
   redoOp,
   type TableAction,
@@ -38,6 +39,8 @@ import {
   FIT_ROWS,
   fitWidths,
   initialWidths,
+  moveColumns,
+  movedColumn,
   type ReadCell,
   shownColumns,
   type TableLayout,
@@ -50,6 +53,7 @@ import { CellSheet } from './cell-sheet'
 import { CodeBlock } from './code-block'
 import { type CellMove, InlineCellEditor } from './inline-cell-editor'
 import { ViewMessage } from './pane-dir-header'
+import { TableColumnMenu } from './table-column-menu'
 import { type FindFlags, TableFindBar } from './table-find-bar'
 import {
   cellText,
@@ -134,6 +138,14 @@ interface CellAt {
   input?: string
 }
 
+// The values a column delete takes with it
+const countText = (n: number) =>
+  n === 0
+    ? 'It has no values.'
+    : `${n} ${n === 1 ? 'cell with a value goes' : 'cells with a value go'} with it.`
+
+type ColumnOp = Extract<TableOp, { kind: 'insert-col' | 'delete-col' }>
+
 const NO_FLAGS: FindFlags = { matchCase: false, wholeCell: false, regex: false }
 
 // A value a cell's own field can take: whole, and with no character the
@@ -210,6 +222,15 @@ export default function TablePreview({
   // The row a delete asks about, and the text it was asked on: another
   // text (an edit made elsewhere) may have moved that row
   const [deleting, setDeleting] = useState<{ row: number; text: string }>()
+  // The same for a column; and the column whose name is edited in its
+  // header, on the text it was opened on
+  const [deletingCol, setDeletingCol] = useState<{
+    // Cells with a value it takes with it
+    values: number
+    col: number
+    text: string
+  }>()
+  const [renaming, setRenaming] = useState<{ col: number; text: string }>()
   const { parsed: current, client } = useCsvTable(text, delimiter)
   // While an edit of a large file parses, its last table stays on screen,
   // locked: no edit is made on the ranges of an older text
@@ -242,6 +263,8 @@ export default function TablePreview({
     setOpen((o) => (o && o.text !== text ? undefined : o))
     setInline((i) => (i && i.text !== text ? undefined : i))
     setDeleting((d) => (d && d.text !== text ? undefined : d))
+    setDeletingCol((d) => (d && d.text !== text ? undefined : d))
+    setRenaming((r) => (r && r.text !== text ? undefined : r))
   }, [text])
 
   // While the worker sorts or filters, the last rows of this table stay
@@ -351,10 +374,54 @@ export default function TablePreview({
   const live =
     editing && !editing.saving && !stale && table ? editing : undefined
 
+  // The layout and the sort follow the draft's column ops: kept for those
+  // it still begins with, moved back for the ones gone (undone, dropped,
+  // or replaced as a reload applied them again), moved on for the new
+  // ones. Out of editing, a text that is the last one edited was saved, and
+  // its ops are the file's now.
+  const followed = useRef<{ ops: ColumnOp[]; all: TableOp[]; text?: string }>({
+    ops: [],
+    all: [],
+  })
+  useEffect(() => {
+    const was = followed.current
+    const all = editing?.ops ?? []
+    const want = all.filter(
+      (op): op is ColumnOp =>
+        op.kind === 'insert-col' || op.kind === 'delete-col',
+    )
+    let have = was.ops
+    // A save that ran while more edits were made: those it saved are the
+    // file's
+    const saved = all.length ? was.all.indexOf(all[0]) : -1
+    if (saved > 0)
+      have = have.filter((op) => !was.all.slice(0, saved).includes(op))
+    if (!editing && was.text === text.replace(/\r\n/g, '\n')) have = []
+    followed.current = { ops: want, all, text: editing && text }
+    let p = 0
+    while (p < have.length && p < want.length && have[p] === want[p]) p++
+    if (p === have.length && p === want.length) return
+    let next = layout
+    let nextSort = sort
+    const move = (op: ColumnOp, undone: boolean) => {
+      const col =
+        op.col + (op.kind === 'insert-col' && op.side === 'right' ? 1 : 0)
+      const added = (op.kind === 'insert-col') !== undone
+      next = moveColumns(next, col, added)
+      if (!nextSort) return
+      const to = movedColumn(nextSort.col, col, added)
+      nextSort = to === undefined ? null : { ...nextSort, col: to }
+    }
+    for (let i = have.length - 1; i >= p; i--) move(have[i], true)
+    for (let i = p; i < want.length; i++) move(want[i], false)
+    setLayout(next)
+    setSort(nextSort)
+  })
+
   // Makes the action an op on text; the text it makes, if any
   const act = (a: TableAction): string | undefined => {
     if (!live) return
-    const op = makeOp(text, table as CsvTable, a)
+    const op = makeOp(text, table as CsvTable, a, header)
     if (!op) return
     const next = redoOp(text, op)
     live.onChange(next, [...live.ops, op], [])
@@ -369,6 +436,22 @@ export default function TablePreview({
     const op = live?.redo[live.redo.length - 1]
     if (!live || !op) return
     live.onChange(redoOp(text, op), [...live.ops, op], live.redo.slice(0, -1))
+  }
+  // A column's name, edited in its header when its field can take it, else
+  // in the sheet of the header row's cell
+  // A touch screen keeps the sheet (as for a cell)
+  const rename = (col: number) => {
+    const name = valueAt(text, table as CsvTable, 0, col, MAX_CELL_CHARS + 1)
+    if (fine && editableInline(name)) setRenaming({ col, text })
+    else openSheet(0, col)
+  }
+  const insertColumn = (col: number, side: 'left' | 'right') => {
+    const next = act({ kind: 'insert-col', col, side })
+    if (next === undefined || !header) return
+    // Its name typed at once, when the table has names
+    const at = { col: col + (side === 'right' ? 1 : 0), text: next }
+    if (fine) setRenaming(at)
+    else setOpen({ ...at, row: 0 })
   }
   // A new empty row after row `after`, its first cell opened
   const addRow = (after: number) => {
@@ -654,6 +737,22 @@ export default function TablePreview({
   // out (their order on screen is the old one); while a save runs it
   // stays, and whatever it sets is dropped (act)
   const field = inline?.text === text && !stale && computed ? inline : undefined
+  const headerField = renaming?.text === text && live ? renaming : undefined
+  // A column's new name, as a cell of the header row; save: the file is
+  // saved after it
+  const commitName = (
+    at: { col: number; text: string },
+    value: string,
+    save?: boolean,
+  ) => {
+    if (at.text !== textNow.current) return
+    setRenaming(undefined)
+    const next =
+      value === valueAt(text, t, 0, at.col)
+        ? text
+        : act({ kind: 'cell', row: 0, col: at.col, name: names[at.col], value })
+    if (next !== undefined && save) saveNext.current = true
+  }
 
   return (
     // isolate: the grid's sticky header and the record overlay stack inside
@@ -907,6 +1006,49 @@ export default function TablePreview({
           matches={finding ? found.matches : undefined}
           current={matchCount ? matchAt(currentMatch) : undefined}
           goTo={goTo}
+          columnMenu={
+            live &&
+            ((col, row, isOpen, onOpenChange) => (
+              <TableColumnMenu
+                name={cellText(names[col])}
+                open={isOpen}
+                onOpenChange={onOpenChange}
+                fromCell={row !== undefined}
+                canDelete={t.columnCount > 1}
+                canRename={header}
+                onInsertRow={(side) =>
+                  addRow((row as number) - (side === 'above' ? 1 : 0))
+                }
+                onInsertColumn={(side) => insertColumn(col, side)}
+                onDeleteColumn={() =>
+                  setDeletingCol({
+                    col,
+                    text,
+                    values: filledCells(text, t, col, header ? 1 : 0),
+                  })
+                }
+                onRename={() => rename(col)}
+              />
+            ))
+          }
+          onRename={live && header && fine ? rename : undefined}
+          editingHeader={header ? headerField?.col : undefined}
+          headerEditor={
+            headerField && (
+              <InlineCellEditor
+                value={valueAt(shown, t, 0, headerField.col)}
+                label={`Rename column ${cellText(names[headerField.col])}`}
+                onCommit={(value, _move, save) =>
+                  commitName(headerField, value, save)
+                }
+                onCancel={() => setRenaming(undefined)}
+                onExpand={(input) => {
+                  setRenaming(undefined)
+                  setOpen({ row: 0, col: headerField.col, text, input })
+                }}
+              />
+            )
+          }
         />
         {records && (
           <div
@@ -945,6 +1087,9 @@ export default function TablePreview({
               value,
             })
           }}
+          // The header row's own: no row is added or deleted around it
+          headerRow={header && cell.row === 0}
+          onInsertAbove={() => addRow(cell.row - 1)}
           onInsertBelow={() => addRow(cell.row)}
           onDelete={() => {
             setOpen(undefined)
@@ -975,6 +1120,22 @@ export default function TablePreview({
           {deleting.row === 0
             ? "This is the file's first row, its header when Header row is on: the next row takes its place."
             : 'The row is removed from the file when you save it.'}
+        </ConfirmDialog>
+      )}
+      {deletingCol?.text === text && (
+        <ConfirmDialog
+          isOpen
+          title={`Delete column ${cellText(names[deletingCol.col])}?`}
+          confirmLabel="Delete column"
+          destructive
+          onConfirm={() => {
+            setDeletingCol(undefined)
+            act({ kind: 'delete-col', col: deletingCol.col })
+          }}
+          onCancel={() => setDeletingCol(undefined)}
+        >
+          {countText(deletingCol.values)} The column is removed from the file
+          when you save it.
         </ConfirmDialog>
       )}
     </div>

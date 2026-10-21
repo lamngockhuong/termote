@@ -849,6 +849,59 @@ test.describe('files and changes views', () => {
     }
   })
 
+  test('columns added, renamed and deleted save only their bytes, undo, and are reapplied', async ({ page }) => {
+    const f = path.join(csvDir(), 'cols.csv')
+    const text = 'name,price,note\r\npear,2,"ripe, sweet"\r\nplum,3,\r\n'
+    try {
+      mkdirSync(csvDir(), { recursive: true })
+      writeFileSync(f, text)
+      await openCsv(page, 'cols.csv')
+      const panel = page.getByRole('complementary', { name: 'Files' })
+      const grid = panel.getByRole('grid')
+      await expect(grid).toHaveAttribute('aria-busy', 'false')
+      await panel.getByRole('button', { name: 'Edit' }).click()
+      const header = (name: string) => grid.getByRole('columnheader', { name, exact: true })
+      const names = () => grid.getByRole('columnheader').evaluateAll((hs) => hs.slice(1).map((h) => h.getAttribute('aria-label')))
+      // A column after name, its name typed at once
+      await header('name').click({ button: 'right' })
+      await page.getByRole('menuitem', { name: 'Insert column right' }).click()
+      const nameBox = grid.getByRole('textbox', { name: /^Rename column/ })
+      await expect(nameBox).toBeFocused()
+      await nameBox.fill('Result')
+      await nameBox.press('Enter')
+      await expect.poll(names).toEqual(['name', 'Result', 'price', 'note'])
+      // Fill a cell of it
+      await grid.locator('[data-pos="0"][data-col="1"]').click()
+      const cellBox = grid.getByRole('textbox', { name: 'Edit Result, row 2' })
+      await cellBox.fill('ok')
+      await cellBox.press('Enter')
+      // Delete price, after being told what goes with it
+      await header('price').click({ button: 'right' })
+      await page.getByRole('menuitem', { name: 'Delete column' }).click()
+      await expect(page.getByRole('dialog')).toContainText('2 cells with a value go with it.')
+      await page.getByRole('dialog').getByRole('button', { name: 'Delete column' }).click()
+      await expect.poll(names).toEqual(['name', 'Result', 'note'])
+      // Four steps back, then forward again
+      for (let i = 0; i < 4; i++) await page.keyboard.press('Control+z')
+      await expect.poll(names).toEqual(['name', 'price', 'note'])
+      for (let i = 0; i < 4; i++) await page.keyboard.press('Control+Shift+z')
+      await expect.poll(names).toEqual(['name', 'Result', 'note'])
+      // The agent adds a row at the top meanwhile
+      writeFileSync(f, 'name,price,note\r\nkiwi,1,\r\npear,2,"ripe, sweet"\r\nplum,3,\r\n')
+      await panel.getByRole('button', { name: 'Save' }).click()
+      await expect(panel.getByText('The file changed on the host since you opened it')).toBeVisible()
+      await panel.getByRole('button', { name: 'Reload and reapply' }).click()
+      await expect(panel.getByText(/Not applied/)).toHaveCount(0)
+      await panel.getByRole('button', { name: 'Save' }).click()
+      await expect(page.getByText('Saved', { exact: true })).toBeVisible()
+      // One more delimiter where the column went in, the deleted cells gone,
+      // quotes and CRLF kept
+      expect(readFileSync(f, 'utf-8')).toBe('name,Result,note\r\nkiwi,,\r\npear,ok,"ripe, sweet"\r\nplum,,\r\n')
+    } finally {
+      rmSync(csvDir(), { recursive: true, force: true })
+    }
+  })
+
   test('find in a table: every row stays, Enter and F3 go round, a regex finds', async ({ page }) => {
     const f = path.join(csvDir(), 'find.csv')
     // beta on rows of id 10, 150 and 290; bat on 200

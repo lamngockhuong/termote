@@ -10,6 +10,8 @@ import {
   MAX_SCROLL_HEIGHT,
   MAX_WIDTH,
   MIN_WIDTH,
+  moveColumns,
+  movedColumn,
   pageRows,
   type ReadCell,
   rowHeightFor,
@@ -205,5 +207,45 @@ describe('shownColumns', () => {
   it('never shows none: the first one when all are hidden', () => {
     expect(shownColumns(2, [0, 1])).toEqual([0])
     expect(shownColumns(0, [])).toEqual([])
+  })
+})
+
+describe('moveColumns', () => {
+  it('moves a column index past an added or removed column', () => {
+    expect(movedColumn(1, 2, true)).toBe(1)
+    expect(movedColumn(2, 2, true)).toBe(3)
+    expect(movedColumn(1, 2, false)).toBe(1)
+    expect(movedColumn(2, 2, false)).toBeUndefined()
+    expect(movedColumn(3, 2, false)).toBe(2)
+  })
+
+  it('widths, wraps and hidden columns follow their columns', () => {
+    const layout = {
+      key: ',|1',
+      widths: { 0: 10, 2: 20, 3: 30 },
+      wrapped: [2, 3],
+      hidden: [0, 2],
+      pinned: true,
+    }
+    expect(moveColumns(layout, 2, true)).toEqual({
+      ...layout,
+      widths: { 0: 10, 3: 20, 4: 30 },
+      wrapped: [3, 4],
+      hidden: [0, 3],
+    })
+    expect(moveColumns(layout, 2, false)).toEqual({
+      ...layout,
+      widths: { 0: 10, 2: 30 },
+      wrapped: [2],
+      hidden: [0],
+    })
+    // A layout kept before hidden columns has none still
+    expect(moveColumns({ key: 'k', widths: {}, wrapped: [] }, 0, true)).toEqual(
+      {
+        key: 'k',
+        widths: {},
+        wrapped: [],
+      },
+    )
   })
 })

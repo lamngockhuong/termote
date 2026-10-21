@@ -1538,6 +1538,49 @@ describe('FileViewer: editing a table', () => {
     )
   })
 
+  it('a reload naming column edits it could not apply', async () => {
+    mockContent.mockResolvedValue(csvFile('a,b\n1,2\n'))
+    mockSave.mockRejectedValueOnce(changed())
+    await editTable()
+    const header = (name: string) =>
+      screen.getByRole('columnheader', { name }) as HTMLElement
+    fireEvent.contextMenu(header('a'))
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: 'Insert column right' }),
+    )
+    // Its name is asked for in the sheet (no fine pointer here): none given
+    expect(screen.getByRole('dialog')).toHaveTextContent('Row 1 · Column 2')
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    fireEvent.contextMenu(header('b'))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete column' }))
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: 'Delete column',
+      }),
+    )
+    // Header row off: a column op names its number
+    fireEvent.click(screen.getByRole('button', { name: 'Header row' }))
+    fireEvent.contextMenu(header('Column 2'))
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: 'Insert column left' }),
+    )
+    await act(async () => fireEvent.click(saveButton()))
+    mockContent.mockResolvedValueOnce(csvFile('x,y\n1,2\n'))
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Reload and reapply' }),
+      ),
+    )
+    const list = screen.getByText(/Not applied to the new file/)
+    for (const line of [
+      'The column added after column "a": its column is no longer in the file',
+      'Deleting column "b": it follows a row or column change that was not applied',
+      'The column added before column 2: it follows',
+    ]) {
+      expect(list).toHaveTextContent(line)
+    }
+  })
+
   it('a reload keeps a draft another view made meanwhile', async () => {
     mockContent.mockResolvedValue(csvFile('a\n1\n'))
     mockSave.mockRejectedValueOnce(changed())

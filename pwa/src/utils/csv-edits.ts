@@ -2,7 +2,8 @@
 // it made (csv-patch.ts) to the text just before it, so undo is the inverse
 // patch and never a parse of the whole file; and the values of the row it
 // touched, so after the file changed on the host the op finds its row again
-// by content, never by an index another writer may have shifted.
+// by content, never by an index another writer may have shifted. A column
+// op keeps a patch per row, and the column's name to find it by.
 import {
   type CsvTable,
   cellsIn,
@@ -13,9 +14,13 @@ import {
 } from './csv-parse'
 import {
   applyPatch,
+  applyPatches,
+  deleteColumn,
   deleteRow,
+  insertColumn,
   insertRow,
   invertPatch,
+  invertPatches,
   type Patch,
   replaceCell,
 } from './csv-patch'
@@ -42,19 +47,77 @@ export type TableOp =
       patch: Patch
     }
   | { kind: 'delete'; row: number; rowValues: string[]; patch: Patch }
+  // name: the header of col when the op was made (null: no header row), to
+  // find the column again; columns: the table's column count then
+  | {
+      kind: 'insert-col'
+      // The column it was added next to, on side
+      col: number
+      side: 'left' | 'right'
+      name: string | null
+      columns: number
+      patches: Patch[]
+    }
+  | {
+      kind: 'delete-col'
+      col: number
+      name: string | null
+      columns: number
+      // Cells with a value that went with it, the header's not counted
+      values: number
+      patches: Patch[]
+    }
 
 export type TableAction =
   | { kind: 'cell'; row: number; col: number; name: string; value: string }
   | { kind: 'insert'; after: number }
   | { kind: 'delete'; row: number }
+  | { kind: 'insert-col'; col: number; side: 'left' | 'right' }
+  | { kind: 'delete-col'; col: number }
+
+// Cells of column col with a value, from row first on
+export function filledCells(
+  text: string,
+  t: CsvTable,
+  col: number,
+  first: number,
+): number {
+  let n = 0
+  for (let r = first; r < t.rowCount; r++) {
+    if (valueAt(text, t, r, col) !== '') n++
+  }
+  return n
+}
 
 // The op an action makes on text (parsed as t); undefined when it changes
-// nothing (a cell set to its own value).
+// nothing (a cell set to its own value). header: row 0 names the columns.
 export function makeOp(
   text: string,
   t: CsvTable,
   a: TableAction,
+  header = false,
 ): TableOp | undefined {
+  if (a.kind === 'insert-col' || a.kind === 'delete-col') {
+    const base = {
+      col: a.col,
+      // An empty name finds no column: by its place instead
+      name: (header && valueAt(text, t, 0, a.col)) || null,
+      columns: t.columnCount,
+    }
+    return a.kind === 'insert-col'
+      ? {
+          kind: 'insert-col',
+          ...base,
+          side: a.side,
+          patches: insertColumn(t, a.col + (a.side === 'right' ? 1 : 0)),
+        }
+      : {
+          kind: 'delete-col',
+          ...base,
+          values: filledCells(text, t, a.col, header ? 1 : 0),
+          patches: deleteColumn(text, t, a.col),
+        }
+  }
   if (a.kind === 'cell') {
     const before = valueAt(text, t, a.row, a.col)
     if (before === a.value) return undefined
@@ -87,12 +150,37 @@ export function makeOp(
   }
 }
 
+// A column op has a patch per row; any other, one
 export function undoOp(text: string, op: TableOp): string {
-  return applyPatch(text, invertPatch(op.patch))
+  return 'patches' in op
+    ? applyPatches(text, invertPatches(op.patches))
+    : applyPatch(text, invertPatch(op.patch))
 }
 
 export function redoOp(text: string, op: TableOp): string {
-  return applyPatch(text, op.patch)
+  return 'patches' in op
+    ? applyPatches(text, op.patches)
+    : applyPatch(text, op.patch)
+}
+
+// The column of t a column op was made on: by its name in the header row
+// (at its place, else the one column of that name), or with no header row
+// at its place while the table has as many columns as then
+function findColumn(
+  text: string,
+  t: CsvTable,
+  op: { col: number; name: string | null; columns: number },
+): number | 'column' | 'columns' {
+  if (op.name === null) return t.columnCount === op.columns ? op.col : 'column'
+  const width = t.rowCount ? cellsIn(t, 0) : 0
+  if (op.col < width && valueAt(text, t, 0, op.col) === op.name) return op.col
+  let found: number | 'column' = 'column'
+  for (let c = 0; c < width; c++) {
+    if (valueAt(text, t, 0, c) !== op.name) continue
+    if (found !== 'column') return 'columns'
+    found = c
+  }
+  return found
 }
 
 // The row of t whose values are exactly values: its index, or none, or many
@@ -116,9 +204,17 @@ export function findRow(
 }
 
 // Why an op was not applied again: its row is gone, several rows match it,
-// it follows a row insert or delete that was not applied (it may target the
-// row that op made), or the new text is no table at all.
-export type SkipReason = 'missing' | 'many' | 'depends' | 'unreadable'
+// its column is gone (or, with no header row, the columns changed), several
+// columns have its name, it follows a row or column insert or delete that
+// was not applied (it may target what that op made), or the new text is no
+// table at all.
+export type SkipReason =
+  | 'missing'
+  | 'many'
+  | 'column'
+  | 'columns'
+  | 'depends'
+  | 'unreadable'
 
 export interface Skipped {
   op: TableOp
@@ -165,7 +261,22 @@ export function reapply(
     }
     let next: TableOp | undefined
     let reason: SkipReason | undefined
-    if (op.kind === 'cell') {
+    if (op.kind === 'insert-col' || op.kind === 'delete-col') {
+      const col = findColumn(text, t, op)
+      if (typeof col === 'number') {
+        next = makeOp(
+          text,
+          t,
+          op.kind === 'insert-col'
+            ? { kind: 'insert-col', col, side: op.side }
+            : { kind: 'delete-col', col },
+          op.name !== null,
+        )
+      } else {
+        reason = col
+        broken = true
+      }
+    } else if (op.kind === 'cell') {
       const row = findRow(text, t, op.rowValues)
       if (typeof row === 'number') {
         // The row holds op.before at col (it matched), never op.after

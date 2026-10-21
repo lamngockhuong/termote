@@ -148,6 +148,21 @@ interface Props {
   // given the focus when focus is set or the focus is in the grid. With no
   // cell, the active one.
   goTo?: { seq: number; cell?: GridCell; focus?: boolean }
+  // A table taking edits: the menu of a column (file column), from its ⋯,
+  // or the context menu (key or click) on its name or on one of its cells,
+  // then with that cell's file row
+  columnMenu?: (
+    col: number,
+    row: number | undefined,
+    open: boolean,
+    onOpenChange: (open: boolean) => void,
+  ) => ReactNode
+  // F2 or a double click on a column's name: rename it. Set, a double click
+  // sorts once, not twice.
+  onRename?: (col: number) => void
+  // The column whose name is edited, and its editor, in place of its name
+  editingHeader?: number
+  headerEditor?: ReactNode
 }
 
 // A place in rows, and one in cols
@@ -165,6 +180,10 @@ interface Drag {
   last: number
   moved: boolean
 }
+
+// Shift+F10 or the context menu key: a menu for where the focus is
+const menuKey = (e: KeyboardEvent) =>
+  e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)
 
 // A virtual grid: one scrolling frame holding a sticky header, a spacer for
 // the rows above, the rows in view and a spacer for the rows below. Each row
@@ -199,6 +218,10 @@ export function TableGrid({
   matches,
   current,
   goTo,
+  columnMenu,
+  onRename,
+  editingHeader,
+  headerEditor,
 }: Props) {
   const frame = useRef<HTMLDivElement>(null)
   // Used up by the first rows: the offset is a scroll offset of this frame,
@@ -219,6 +242,10 @@ export function TableGrid({
   // in cols (-1 is the row number)
   const [active, setActive] = useState({ pos: 0, col: 0 })
   const focusing = useRef(false)
+  // The column whose menu is open, and the file row of the cell it was
+  // asked from
+  const [menu, setMenu] = useState<{ col: number; row?: number }>()
+  const backFromMenu = useRef(false)
   // The cell made active by a goTo without the focus: scrolled into view
   // sideways once rendered
   const showing = useRef(false)
@@ -319,6 +346,16 @@ export function TableGrid({
     showing.current = false
   })
 
+  // The menu gives the focus back to its ⋯ as it closes: from there, back
+  // on the active cell
+  useEffect(() => {
+    if (!backFromMenu.current) return
+    backFromMenu.current = false
+    if (!document.activeElement?.closest('[aria-haspopup="menu"]')) return
+    focusing.current = true
+    reveal({ pos, col })
+  })
+
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement
     const onCell = target.dataset.pos !== undefined
@@ -349,6 +386,12 @@ export function TableGrid({
     if (e.key === 'F2' && onValue) {
       e.preventDefault()
       onOpen(row, fileCol)
+      return
+    }
+    if (columnMenu && onValue && menuKey(e)) {
+      e.preventDefault()
+      setActive(from)
+      setMenu({ col: fileCol, row })
       return
     }
     // The first key of an IME: its default goes on, so the text composed
@@ -450,6 +493,17 @@ export function TableGrid({
       setActive({ pos: at, col: place })
     }
   })
+
+  // The context menu of a cell (a right click; its key too, where the
+  // browser sends no keydown for it)
+  const onContextMenu = (e: MouseEvent<HTMLDivElement>) => {
+    const cell = (e.target as HTMLElement).closest<HTMLElement>('[data-pos]')
+    if (!columnMenu || !cell || cell.dataset.at === '-1') return
+    e.preventDefault()
+    const at = { pos: Number(cell.dataset.pos), col: Number(cell.dataset.at) }
+    setActive(at)
+    setMenu({ col: Number(cell.dataset.col), row: rows[at.pos] })
+  }
 
   const onClick = (e: MouseEvent<HTMLDivElement>) => {
     const cell = (e.target as HTMLElement).closest<HTMLElement>('[data-pos]')
@@ -598,6 +652,7 @@ export function TableGrid({
       data-scroll-restore
       onKeyDown={onKeyDown}
       onClick={onClick}
+      onContextMenu={onContextMenu}
     >
       <div className="w-max min-w-full">
         <div
@@ -637,35 +692,96 @@ export function TableGrid({
                 }
                 // Pinned: below the corner, above the resize handles of the
                 // columns scrolled under it
-                className={`flex min-w-0 ${i === 0 && sticky ? 'sticky z-[25] border-r border-border bg-surface' : 'relative'}`}
+                className={`group/head flex min-w-0 ${i === 0 && sticky ? 'sticky z-[25] border-r border-border bg-surface' : 'relative'}`}
                 style={i === 0 ? pinStyle : undefined}
+                onContextMenu={(e) => {
+                  if (!columnMenu || editingHeader === c) return
+                  e.preventDefault()
+                  // From inside its open menu: it stays as it was opened
+                  if ((e.target as HTMLElement).closest('[role="menu"]')) return
+                  setMenu({ col: c })
+                }}
               >
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (performance.now() - touchUp.current >= TOUCH_CLICK_MS) {
-                      onSort(c)
-                    }
-                  }}
-                  title={label}
-                  className={`${CELL} flex flex-1 items-center gap-1 font-semibold`}
-                >
-                  <bdi className="truncate">{label}</bdi>
-                  {wrapped.has(c) && (
-                    <WrapText
-                      size={12}
-                      aria-hidden="true"
-                      className="shrink-0 text-fg-subtle"
-                    />
-                  )}
-                  {dir && (
-                    <Arrow
-                      size={12}
-                      aria-hidden="true"
-                      className="shrink-0 text-accent"
-                    />
-                  )}
-                </button>
+                {editingHeader === c ? (
+                  // The editor's group: in the last column it grows leftward
+                  <div
+                    className="group/edit relative min-w-0 flex-1"
+                    data-last={i === cols.length - 1 || undefined}
+                  >
+                    {headerEditor}
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      // The second click of a double click renames
+                      if (onRename && e.detail > 1) return
+                      if (
+                        performance.now() - touchUp.current >=
+                        TOUCH_CLICK_MS
+                      ) {
+                        onSort(c)
+                      }
+                    }}
+                    onDoubleClick={() => onRename?.(c)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'F2' && onRename) {
+                        e.preventDefault()
+                        onRename(c)
+                      } else if (columnMenu && menuKey(e)) {
+                        e.preventDefault()
+                        setMenu({ col: c })
+                      }
+                    }}
+                    title={label}
+                    className={`${CELL} flex flex-1 items-center gap-1 font-semibold`}
+                  >
+                    <bdi className="truncate">{label}</bdi>
+                    {wrapped.has(c) && (
+                      <WrapText
+                        size={12}
+                        aria-hidden="true"
+                        className="shrink-0 text-fg-subtle"
+                      />
+                    )}
+                    {dir && (
+                      <Arrow
+                        size={12}
+                        aria-hidden="true"
+                        className="shrink-0 text-accent"
+                      />
+                    )}
+                  </button>
+                )}
+                {columnMenu && editingHeader !== c && (
+                  // Shown on hover, while in focus or open, and always on a
+                  // touch screen
+                  <div
+                    className={`absolute inset-y-0 right-2 z-20 flex items-center focus-within:opacity-100 group-hover/head:opacity-100 pointer-coarse:opacity-100 ${menu?.col === c ? 'opacity-100' : 'opacity-0'}`}
+                  >
+                    {columnMenu(
+                      c,
+                      menu?.col === c ? menu.row : undefined,
+                      menu?.col === c,
+                      // Another column's menu may have opened meanwhile,
+                      // this one closing as the focus leaves it
+                      (open) => {
+                        // Closed after it was asked from a cell: the focus
+                        // goes back to that cell, unless a field took it
+                        if (
+                          !open &&
+                          menu?.col === c &&
+                          menu.row !== undefined
+                        ) {
+                          backFromMenu.current = true
+                        }
+                        setMenu((m) =>
+                          open ? { col: c } : m?.col === c ? undefined : m,
+                        )
+                      },
+                    )}
+                  </div>
+                )}
                 {/* A sibling of the sort button, inside the column's edge:
                     a drag on it never sorts, and the last column grows the
                     scroll width by nothing */}

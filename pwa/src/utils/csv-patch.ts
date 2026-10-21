@@ -23,6 +23,37 @@ export function invertPatch(p: Patch): Patch {
   return { start: p.start, removed: p.inserted, inserted: p.removed }
 }
 
+// Several patches at once: in order of start, none overlapping, each start
+// a place in the text before any of them
+export function applyPatches(text: string, ps: Patch[]): string {
+  const out: string[] = []
+  let at = 0
+  for (const p of ps) {
+    const end = p.start + p.removed.length
+    if (p.start < at || text.slice(p.start, end) !== p.removed) {
+      throw new Error('patch does not match the text')
+    }
+    out.push(text.slice(at, p.start), p.inserted)
+    at = end
+  }
+  out.push(text.slice(at))
+  return out.join('')
+}
+
+// The patches that undo ps, at their places in the text ps made
+export function invertPatches(ps: Patch[]): Patch[] {
+  let shift = 0
+  return ps.map((p) => {
+    const inv = {
+      start: p.start + shift,
+      removed: p.inserted,
+      inserted: p.removed,
+    }
+    shift += p.inserted.length - p.removed.length
+    return inv
+  })
+}
+
 // A value as written in a cell: quoted when the old cell was (the file's own
 // style), or when it holds the delimiter, a quote, a line break, or space at
 // either end; an empty value alone on its row is "" so the row is not an
@@ -115,4 +146,58 @@ export function deleteRow(text: string, t: CsvTable, row: number): Patch {
     }
   }
   return { start, removed: text.slice(start, end), inserted: '' }
+}
+
+// A blank line: one cell, nothing in it. A column added or deleted leaves
+// it as it is, a blank line still.
+function blank(t: CsvTable, row: number): boolean {
+  const cell = t.rowCells[row]
+  return cellsIn(t, row) === 1 && t.cellStart[cell] === t.cellEnd[cell]
+}
+
+// An empty column at col: a delimiter in each row that has at least col
+// cells, before its cell col (or after its last one). A shorter row, or a
+// blank line, stays as it is.
+export function insertColumn(t: CsvTable, col: number): Patch[] {
+  const out: Patch[] = []
+  for (let r = 0; r < t.rowCount; r++) {
+    const n = cellsIn(t, r)
+    if (n < col || blank(t, r)) continue
+    const first = t.rowCells[r]
+    const start = col < n ? t.cellStart[first + col] : t.cellEnd[first + n - 1]
+    out.push({ start, removed: '', inserted: t.delimiter })
+  }
+  return out
+}
+
+// Column col out of each row that has it, with one delimiter next to it
+// (the one before, or after the first cell). A row left with one empty cell
+// or none writes it "", so it does not become a blank line (and a last one,
+// with no line break, no row at all); a blank line stays.
+export function deleteColumn(text: string, t: CsvTable, col: number): Patch[] {
+  const out: Patch[] = []
+  for (let r = 0; r < t.rowCount; r++) {
+    const n = cellsIn(t, r)
+    if (n <= col || blank(t, r)) continue
+    const first = t.rowCells[r]
+    const cell = first + col
+    // The cell left when there are two
+    const other = first + (col === 0 ? 1 : 0)
+    let start: number
+    let end: number
+    let inserted = ''
+    if (n === 1 || (n === 2 && t.cellStart[other] === t.cellEnd[other])) {
+      start = t.cellStart[first]
+      end = t.cellEnd[first + n - 1]
+      inserted = quoteValue('', t.delimiter, false, true)
+    } else if (col > 0) {
+      start = t.cellEnd[cell - 1]
+      end = t.cellEnd[cell]
+    } else {
+      start = t.cellStart[cell]
+      end = t.cellStart[cell + 1]
+    }
+    out.push({ start, removed: text.slice(start, end), inserted })
+  }
+  return out
 }

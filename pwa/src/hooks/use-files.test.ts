@@ -1,5 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { makeOp, redoOp, type TableOp, undoOp } from '../utils/csv-edits'
+import { parseCsv } from '../utils/csv-parse'
 import { flushAll, signedOut } from '../utils/files-persist'
 import { remapPanes, setPaneKeys } from '../utils/pane-remap'
 import { emptyLayout } from '../utils/table-columns'
@@ -1615,6 +1617,28 @@ describe('drafts kept on the device', () => {
       new StorageEvent('storage', { key: key('a.md'), newValue: null }),
     )
     expect(unload()).toBe(true)
+  })
+
+  it('a table draft with a column edit comes back, and undoes', () => {
+    const base = 'a,b\n1,2\n'
+    const p = parseCsv(base, ',')
+    if (!p.ok) throw new Error('parse')
+    const op = makeOp(
+      base,
+      p.table,
+      { kind: 'insert-col', col: 0, side: 'right' },
+      true,
+    ) as TableOp
+    const text = redoOp(base, op)
+    const cells = { delimiter: ',' as const, ops: [op], redo: [] }
+    set('%1', 't.csv', { ...draft('t.csv', text), cells })
+    reopen()
+    act(() => hydrateDrafts(['%1']))
+    const back = renderHook(() => useFileDraft('%1', 't.csv')).result.current[0]
+    expect(back?.cells).toEqual(cells)
+    expect(undoOp(back?.text as string, back?.cells?.ops[0] as TableOp)).toBe(
+      base,
+    )
   })
 
   it('a table draft comes back with its edits', () => {
