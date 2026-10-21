@@ -1111,6 +1111,68 @@ test.describe('files and changes views', () => {
       }
     })
 
+    test('a pinned first column stays next to the row numbers, and its tab keeps it', async ({ page }) => {
+      const head = Array.from({ length: 30 }, (_, i) => `col${i}`).join(',')
+      const row = (n: number) => Array.from({ length: 30 }, (_, i) => `r${n}c${i}`).join(',')
+      try {
+        mkdirSync(csvDir(), { recursive: true })
+        writeFileSync(path.join(csvDir(), 'wide.csv'), `${head}\n${row(1)}\n${row(2)}\n`)
+        writeFileSync(path.join(csvDir(), 'two.csv'), 'a,b\n1,2\n')
+        await openCsv(page, 'wide.csv')
+        const panel = page.getByRole('complementary', { name: 'Files' })
+        const bar = panel.getByRole('tablist', { name: 'Open files' })
+        const grid = panel.getByRole('grid')
+        await expect(grid).toHaveAttribute('aria-busy', 'false')
+        await bar.getByRole('tab', { name: /^wide\.csv/ }).dblclick()
+        await panel.getByRole('button', { name: 'Columns' }).click()
+        await page.getByRole('menuitemcheckbox', { name: 'Pin first column' }).click()
+        await page.keyboard.press('Escape')
+        // Scrolled to the far right, the first column sits next to the row
+        // numbers, its header too
+        const scrolledRight = async () => {
+          const g = panel.getByRole('grid')
+          await g.evaluate((el) => {
+            el.scrollLeft = el.scrollWidth
+          })
+          const number = (await g.getByRole('rowheader', { name: 'Row 2', exact: true }).boundingBox())!
+          const cell = (await g.getByRole('gridcell', { name: 'r1c0', exact: true }).boundingBox())!
+          const header = (await g.getByRole('columnheader', { name: 'col0', exact: true }).boundingBox())!
+          expect(await g.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0)
+          expect(Math.round(cell.x)).toBe(Math.round(number.x + number.width))
+          expect(Math.round(header.x)).toBe(Math.round(cell.x))
+          await expect(g.getByRole('gridcell', { name: 'r1c29', exact: true })).toBeInViewport()
+        }
+        await scrolledRight()
+        await bar.getByRole('tab', { name: 'Files' }).click()
+        await panel.getByRole('treeitem', { name: 'two.csv' }).click()
+        await expect(panel.getByRole('grid').getByRole('columnheader', { name: 'a', exact: true })).toBeVisible()
+        await bar.getByRole('tab', { name: 'wide.csv', exact: true }).click()
+        await panel.getByRole('button', { name: 'Columns' }).click()
+        await expect(page.getByRole('menuitemcheckbox', { name: 'Pin first column' })).toHaveAttribute('aria-checked', 'true')
+        await page.keyboard.press('Escape')
+        await scrolledRight()
+        // Keys back to a column scrolled under the pinned one bring it out
+        // from under it: the cell is what shows at its own centre
+        const g = panel.getByRole('grid')
+        await g.getByRole('gridcell', { name: 'r1c29', exact: true }).focus()
+        await page.keyboard.press('Home')
+        await expect(g.getByRole('gridcell', { name: 'r1c0', exact: true })).toBeFocused()
+        await page.keyboard.press('ArrowRight')
+        const c1 = g.getByRole('gridcell', { name: 'r1c1', exact: true })
+        await expect(c1).toBeFocused()
+        await expect
+          .poll(() =>
+            c1.evaluate((el) => {
+              const r = el.getBoundingClientRect()
+              return el.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2))
+            }),
+          )
+          .toBe(true)
+      } finally {
+        rmSync(csvDir(), { recursive: true, force: true })
+      }
+    })
+
     test.describe('on a phone', () => {
       test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
 

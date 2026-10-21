@@ -189,6 +189,8 @@ interface MenuItemProps {
   disabled?: boolean
   // Keep the menu open after the item runs (e.g. it shows progress itself)
   keepOpen?: boolean
+  // Says more about what the item does, on hover
+  title?: string
 }
 
 function ItemButton({
@@ -198,6 +200,7 @@ function ItemButton({
   danger = false,
   disabled = false,
   keepOpen = false,
+  title,
   checked,
   checkbox = false,
 }: MenuItemProps & { checked?: boolean; checkbox?: boolean }) {
@@ -215,6 +218,7 @@ function ItemButton({
       {...role}
       tabIndex={-1}
       disabled={disabled}
+      title={title}
       onClick={() => {
         onSelect?.()
         if (!keepOpen) close()
