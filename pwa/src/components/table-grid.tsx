@@ -82,6 +82,8 @@ const PIN = 'sticky z-[6] border-r border-border bg-bg'
 // background too; the current one is outlined as well
 const HIT = 'bg-linear-to-r from-accent/15 to-accent/15'
 const CURRENT = 'outline-2 -outline-offset-2 outline-accent'
+// A cell of the range selected, drawn the same way
+const SELECTED = 'bg-linear-to-r from-accent/10 to-accent/10'
 // Whole class names, so Tailwind finds each one in the source
 const CLAMP: Record<WrapLines, string> = {
   3: 'line-clamp-3',
@@ -163,6 +165,38 @@ interface Props {
   // The column whose name is edited, and its editor, in place of its name
   editingHeader?: number
   headerEditor?: ReactNode
+  // Ctrl+C (Cmd+C) on the grid: the text of the range selected, or of the
+  // active cell (its row, from a row number); undefined copies nothing
+  onCopyRange?: (range: GridRange) => string | undefined
+  // Ctrl+V on a grid taking edits: the clipboard's text, to paste from the
+  // top-left cell of the range (or the active cell)
+  onPasteBlock?: (at: GridCell, text: string) => void
+}
+
+// Places in rows and in cols, both ends in
+export interface GridRange {
+  top: number
+  left: number
+  bottom: number
+  right: number
+}
+
+// The clipboard event a key starts, with what it carries: it comes as the
+// key's own action, to the document when no field has the focus, and with
+// no permission asked (no Clipboard API, so on plain HTTP too)
+function onNextClipboard(
+  type: 'copy' | 'paste',
+  handle: (data: DataTransfer) => void,
+) {
+  const listener = (e: Event) => {
+    e.preventDefault()
+    handle((e as ClipboardEvent).clipboardData as DataTransfer)
+  }
+  document.addEventListener(type, listener, { once: true, capture: true })
+  setTimeout(
+    () => document.removeEventListener(type, listener, { capture: true }),
+    0,
+  )
 }
 
 // A place in rows, and one in cols
@@ -222,6 +256,8 @@ export function TableGrid({
   onRename,
   editingHeader,
   headerEditor,
+  onCopyRange,
+  onPasteBlock,
 }: Props) {
   const frame = useRef<HTMLDivElement>(null)
   // Used up by the first rows: the offset is a scroll offset of this frame,
@@ -246,6 +282,12 @@ export function TableGrid({
   // asked from
   const [menu, setMenu] = useState<{ col: number; row?: number }>()
   const backFromMenu = useRef(false)
+  // The range selected (places in rows and cols), from where it began to
+  // where it goes; a mouse drag goes from the cell it started on
+  const [sel, setSel] = useState<{ anchor: GridCell; focus: GridCell }>()
+  const dragFrom = useRef<GridCell>(undefined)
+  // A drag moved off its first cell; the click it ends with opens nothing
+  const dragged = useRef(false)
   // The cell made active by a goTo without the focus: scrolled into view
   // sideways once rendered
   const showing = useRef(false)
@@ -388,6 +430,33 @@ export function TableGrid({
       onOpen(row, fileCol)
       return
     }
+    const ctrlKey = (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey
+    // A layout of other letters (Cyrillic, Greek): the key where C or V is
+    const letter = /^[a-z]$/i.test(e.key)
+      ? e.key.toLowerCase()
+      : { KeyC: 'c', KeyV: 'v' }[e.code]
+    if (ctrlKey && rows.length && (letter === 'c' || letter === 'v')) {
+      const r = rangeOf(from)
+      if (letter === 'c' && onCopyRange) {
+        onNextClipboard('copy', (data) => {
+          const tsv = onCopyRange(r)
+          if (tsv !== undefined) data.setData('text/plain', tsv)
+        })
+      } else if (letter === 'v' && onPasteBlock) {
+        onNextClipboard('paste', (data) =>
+          onPasteBlock({ pos: r.top, at: r.left }, data.getData('text/plain')),
+        )
+      }
+      return
+    }
+    if (e.key === 'Escape' && sel) {
+      setSel(undefined)
+      // A range of one cell shows nothing: Escape goes on (a panel's own)
+      if (range) {
+        e.preventDefault()
+        return
+      }
+    }
     if (columnMenu && onValue && menuKey(e)) {
       e.preventDefault()
       setActive(from)
@@ -443,8 +512,79 @@ export function TableGrid({
       }
     }
     e.preventDefault()
+    // With Shift a range grows from where it began, never onto a row number
+    if (e.shiftKey && onCell && from.col >= 0) {
+      next = { ...next, col: Math.max(0, next.col) }
+      setSel({
+        anchor: sel?.anchor ?? { pos: from.pos, at: from.col },
+        focus: { pos: next.pos, at: next.col },
+      })
+    } else setSel(undefined)
     focusing.current = true
     reveal(next)
+  }
+
+  // The range selected, or the cell at (its row, from a row number), kept
+  // inside the rows and columns shown
+  const rangeOf = (at: { pos: number; col: number }): GridRange => {
+    const lastPos = Math.max(rows.length - 1, 0)
+    const clamp = (c: GridCell) => ({
+      pos: Math.min(c.pos, lastPos),
+      at: Math.min(c.at, cols.length - 1),
+    })
+    if (sel) {
+      const a = clamp(sel.anchor)
+      const b = clamp(sel.focus)
+      return {
+        top: Math.min(a.pos, b.pos),
+        bottom: Math.max(a.pos, b.pos),
+        left: Math.min(a.at, b.at),
+        right: Math.max(a.at, b.at),
+      }
+    }
+    const c = clamp({ pos: at.pos, at: at.col })
+    return c.at < 0
+      ? { top: c.pos, bottom: c.pos, left: 0, right: cols.length - 1 }
+      : { top: c.pos, bottom: c.pos, left: c.at, right: c.at }
+  }
+
+  // A mouse drag from one cell to another selects the cells between; near
+  // the top or the bottom of the frame it scrolls a row at a time
+  const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
+    const cell = (e.target as HTMLElement).closest<HTMLElement>('[data-pos]')
+    dragFrom.current = undefined
+    // A drag released outside the frame left its flag on
+    dragged.current = false
+    if (e.pointerType !== 'mouse' || e.button !== 0 || e.shiftKey) return
+    if (!cell || cell.dataset.at === '-1') return
+    dragFrom.current = {
+      pos: Number(cell.dataset.pos),
+      at: Number(cell.dataset.at),
+    }
+  }
+  const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
+    const start = dragFrom.current
+    if (!start || !(e.buttons & 1)) return
+    const el = frame.current as HTMLDivElement
+    const box = el.getBoundingClientRect()
+    if (e.clientY > box.bottom - rowHeight / 2) el.scrollTop += rowHeight
+    else if (e.clientY < box.top + headerHeight + rowHeight / 2) {
+      el.scrollTop -= rowHeight
+    }
+    const cell = (e.target as HTMLElement).closest<HTMLElement>('[data-pos]')
+    if (!cell || cell.dataset.at === '-1') return
+    const to = { pos: Number(cell.dataset.pos), at: Number(cell.dataset.at) }
+    const was = dragged.current ? sel?.focus : start
+    if (was?.pos === to.pos && was.at === to.at) return
+    dragged.current = true
+    setSel({ anchor: start, focus: to })
+    // The cell reached is the active one, in focus: Shift and a key grow
+    // the range on from there
+    focusing.current = true
+    setActive({ pos: to.pos, col: to.at })
+  }
+  const onPointerUp = () => {
+    dragFrom.current = undefined
   }
 
   // Makes the cell active, its row scrolled into view below the sticky
@@ -506,9 +646,24 @@ export function TableGrid({
   }
 
   const onClick = (e: MouseEvent<HTMLDivElement>) => {
+    // The click a drag ends with selected, and opens nothing
+    if (dragged.current) {
+      dragged.current = false
+      return
+    }
     const cell = (e.target as HTMLElement).closest<HTMLElement>('[data-pos]')
     if (!cell) return
     const at = { pos: Number(cell.dataset.pos), col: Number(cell.dataset.at) }
+    // Shift+click: the range from the active cell to this one
+    if (e.shiftKey && at.col >= 0) {
+      setSel({
+        anchor: sel?.anchor ?? { pos, at: Math.max(col, 0) },
+        focus: { pos: at.pos, at: at.col },
+      })
+      setActive(at)
+      return
+    }
+    setSel(undefined)
     setActive(at)
     if (at.col >= 0) onOpen(rows[at.pos], Number(cell.dataset.col))
     // While the rows are being worked out, the order on screen is the old
@@ -617,6 +772,14 @@ export function TableGrid({
   ].join(' ')
   // Row 0 is the header row when there is one; a synthetic header otherwise
   const ariaRow = (r: number) => r + (header ? 1 : 2)
+  // The range selected, drawn while it has more than one cell
+  const range =
+    sel && (sel.anchor.pos !== sel.focus.pos || sel.anchor.at !== sel.focus.at)
+      ? rangeOf({ pos, col })
+      : undefined
+  // Other rows or columns: a range would land on other cells
+  // biome-ignore lint/correctness/useExhaustiveDependencies: dropped as rows or cols change
+  useEffect(() => setSel(undefined), [rows, cols])
   // The cells found among the rows rendered, as pos * cols.length + at
   const hits = new Set<number>()
   if (matches) {
@@ -636,6 +799,7 @@ export function TableGrid({
       // The grid keeps the Tab stop while the active cell is scrolled away
       tabIndex={pos >= first && pos < last ? -1 : 0}
       aria-busy={busy}
+      aria-multiselectable
       aria-hidden={covered || undefined}
       inert={covered}
       // No scroll anchoring: a jump far down shows only the spacer below for
@@ -653,6 +817,9 @@ export function TableGrid({
       onKeyDown={onKeyDown}
       onClick={onClick}
       onContextMenu={onContextMenu}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
     >
       <div className="w-max min-w-full">
         <div
@@ -876,6 +1043,12 @@ export function TableGrid({
                 const shown = shownAt(text, table, r, c, wrap)
                 const found = hits.has(p * cols.length + i)
                 const now = found && current?.pos === p && current.at === i
+                const picked =
+                  !!range &&
+                  p >= range.top &&
+                  p <= range.bottom &&
+                  i >= range.left &&
+                  i <= range.right
                 return (
                   <button
                     key={c}
@@ -886,8 +1059,9 @@ export function TableGrid({
                     data-col={c}
                     data-at={i}
                     tabIndex={p === pos && i === col ? 0 : -1}
+                    aria-selected={picked || undefined}
                     title={shown}
-                    className={`${wrap ? WRAP_CELL : CELL} ${i === 0 && sticky ? PIN : ''} ${found ? HIT : ''} ${now ? CURRENT : ''}`}
+                    className={`${wrap ? WRAP_CELL : CELL} ${i === 0 && sticky ? PIN : ''} ${found ? HIT : picked ? SELECTED : ''} ${now ? CURRENT : ''}`}
                     style={i === 0 ? pinStyle : undefined}
                   >
                     {wrap ? (

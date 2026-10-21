@@ -796,6 +796,14 @@ Chạy trên tmux (Linux/macOS) và Herdr; psmux (Windows) không có hai view n
 - [ ] Đang sửa, thêm một cột, rồi sửa file từ terminal (thêm một cột ở đầu và một dòng): Save báo
       file đã đổi; "Reload and reapply" đặt cột mới cạnh đúng cột cùng tên; nếu đổi tên cột đó trong
       terminal thì thao tác cột được liệt kê là không áp được
+- [ ] Desktop: Shift+phím mũi tên, Shift+nhấp và kéo chuột chọn được một vùng (có tô nền); Esc
+      hoặc nhấp một ô thì bỏ vùng; Ctrl+C rồi dán vào Google Sheets, Excel hay LibreOffice: ra đúng
+      các ô, giá trị nhiều dòng nằm gọn trong một ô; cột ẩn không bị chép
+- [ ] Desktop, đang sửa: chép một khối 2×2 từ bảng tính, Ctrl+V trên một ô: bốn ô đổi, một lần
+      Ctrl+Z lùi lại cả khối; Save rồi `git diff` chỉ thấy bốn ô đó; khối quá rộng bị từ chối; khối
+      quá dài thì hỏi "Add N rows at the end?"; khi đang sắp xếp thì bị từ chối
+- [ ] Qua HTTP thường trong LAN (`--lan`, không dùng Tailscale): Ctrl+C và Ctrl+V trên bảng vẫn chạy;
+      với Safari, ghi lại thao tác dán có tới được bảng không
 - [ ] Độ rộng và wrap trở về mặc định khi đổi "Delimiter" hay "Header row", giữ nguyên sau khi sửa
       một ô, và giữ nguyên khi sang tab khác rồi quay lại (cùng dòng đầu)
 - [ ] Nhấn số dòng: Records mở đúng dòng đó (cả sau khi sắp xếp); tắt Records thì bảng hiện lại ở

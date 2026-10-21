@@ -480,6 +480,29 @@ table never freezes; one still running after 10 seconds (30 for the first search
 part loads) is stopped and the box says `Search took too long`; one too deep for the browser
 says `Search failed`. At most 100,000 matches are counted (`100000+`).
 
+### Selecting, Copying and Pasting
+
+With a mouse and a keyboard, Shift with the arrow keys, Home, End, Page Up or Page Down (and
+Ctrl+Home or Ctrl+End) grows a range of cells from the cell in focus; Shift+click or a drag from
+one cell to another selects the cells between, and a drag near the top or bottom of the table
+scrolls it. An arrow key alone, a click or Escape drops the range. On a phone nothing is
+selected.
+
+- Ctrl+C (Cmd+C on a Mac), while only viewing too, copies the range, or the cell in focus, or
+  from a row number its row, as a spreadsheet does: tab separated, one line a row, in the order
+  shown, hidden columns left out. Values are copied whole, past the 1024 characters a cell
+  shows; one that holds a tab, a line break or a quote is put in quotes, so it pastes into a
+  single cell. At most 100,000 cells are copied at once.
+- Ctrl+V while editing pastes a block copied from a spreadsheet or another table, from the cell in
+  focus (or the range's top-left cell) along the rows and columns shown, as one change that one
+  Ctrl+Z takes back; a cell given its own value is left as it is. A block wider than the columns
+  left is refused. A longer one, while the table is neither sorted nor filtered, asks to add the
+  rows it needs at the end; sorted or filtered, it is refused, saying why. Saving changes only the
+  cells pasted.
+- No clipboard permission is asked, so this works over plain HTTP on the LAN too. Pasted in a
+  cell's field, the filter or the find box, the text goes into that box. Safari may hand neither
+  a copy nor a paste to the table: use Chrome, Edge or Firefox there.
+
 ### Editing a Table
 
 **Edit** on a file shown as a table keeps the table and makes each cell editable, with **Cancel**
@@ -541,7 +564,9 @@ a cell's value can be copied to set it again by hand; changes after an added or 
 could not be applied are listed too, since they may concern that row. A column added or deleted
 is found again by its name in the header row, wherever that column moved, and with **Header row**
 off at its place while the file has as many columns as before; when its column is gone, or two
-columns have that name, it is listed, and so is every change after it. When the file read again is
+columns have that name, it is listed, and so is every change after it. A pasted block finds each
+of its rows the same way and is applied whole or not at all, so one that set a row matching
+another (two empty rows, say) is listed; rows it added go at the new end of the file. When the file read again is
 no longer a table that can be edited, nothing is applied and Save stays off. Nothing is saved
 until you press Save.
 

@@ -360,3 +360,130 @@ describe('column ops', () => {
     ])
   })
 })
+
+describe('cells ops', () => {
+  const block = (
+    cells: [number, number, string][],
+    addRows?: number,
+  ): TableAction => ({
+    kind: 'cells',
+    cells: cells.map(([row, col, value]) => ({ row, col, value })),
+    addRows,
+  })
+
+  it('a block sets its cells as one op, a value unchanged left out', () => {
+    const { text, ops } = edit(people, [
+      block([
+        [1, 1, '9'],
+        [2, 0, 'pear'],
+        [2, 1, '8'],
+      ]),
+    ])
+    expect(text).toBe('name,price\napple,9\npear,8\nplum,3\n')
+    expect(ops[0]).toMatchObject({
+      kind: 'cells',
+      rows: [
+        {
+          rowValues: ['apple', '1'],
+          cells: [{ col: 1, before: '1', after: '9' }],
+        },
+        {
+          rowValues: ['pear', '2'],
+          cells: [{ col: 1, before: '2', after: '8' }],
+        },
+      ],
+      added: [],
+    })
+    expect(undoOp(text, ops[0])).toBe(people)
+    // Nothing that changes: no op
+    expect(
+      makeOp(people, table(people), block([[1, 0, 'apple']])),
+    ).toBeUndefined()
+  })
+
+  it('rows added at the end take the cells past the last row, with or without a last line break', () => {
+    expect(
+      edit(people, [
+        block(
+          [
+            [3, 1, 'x'],
+            [4, 0, 'fig'],
+            [5, 1, '7'],
+          ],
+          2,
+        ),
+      ]).text,
+    ).toBe('name,price\napple,1\npear,2\nplum,x\nfig,\n,7\n')
+    const { text, ops } = edit('a,b\n1,2', [block([[2, 1, 'z']], 1)])
+    expect(text).toBe('a,b\n1,2\n,z')
+    expect(undoOp(text, ops[0])).toBe('a,b\n1,2')
+  })
+
+  it('reapplied: each row found by its values, rows added go at the new end', () => {
+    const { ops } = edit(people, [
+      block(
+        [
+          [1, 1, '9'],
+          [4, 0, 'fig'],
+        ],
+        1,
+      ),
+    ])
+    const r = ok(reapply('name,price\nkiwi,0\napple,1\npear,2\n', ',', ops))
+    expect(r.text).toBe('name,price\nkiwi,0\napple,9\npear,2\nfig,\n')
+    expect(r.skipped).toEqual([])
+  })
+
+  it('a row already holding its values counts as applied; a block with nothing left is none', () => {
+    const { ops } = edit(people, [
+      block([
+        [1, 1, '9'],
+        [2, 1, '8'],
+      ]),
+    ])
+    const r = ok(reapply('name,price\napple,9\npear,2\n', ',', ops))
+    expect(r.text).toBe('name,price\napple,9\npear,8\n')
+    const done = ok(reapply('name,price\napple,9\npear,8\n', ',', ops))
+    expect(done.ops).toEqual([])
+  })
+
+  it('a row gone or doubled skips the block; one that added rows skips the ops after it', () => {
+    const { ops } = edit(people, [block([[1, 1, '9']]), cell(2, 1, '5')])
+    expect(ok(reapply('name,price\npear,2\n', ',', ops)).skipped).toEqual([
+      { op: ops[0], reason: 'missing' },
+    ])
+    expect(
+      ok(reapply('name,price\napple,1\napple,1\npear,2\n', ',', ops)).skipped[0]
+        .reason,
+    ).toBe('many')
+    const added = edit(people, [
+      block(
+        [
+          [1, 1, '9'],
+          [4, 0, 'x'],
+        ],
+        1,
+      ),
+      cell(4, 1, '5'),
+    ]).ops
+    expect(ok(reapply('name,price\npear,2\n', ',', added)).skipped).toEqual([
+      { op: added[0], reason: 'missing' },
+      { op: added[1], reason: 'depends' },
+    ])
+  })
+
+  it('rows added again on a file with no row yet are rows, one a line', () => {
+    const { ops } = edit('a\n1\n', [
+      block(
+        [
+          [2, 0, 'x'],
+          [3, 0, 'y'],
+        ],
+        2,
+      ),
+    ])
+    const r = ok(reapply('', ',', ops))
+    expect(r.text).toBe('x\ny')
+    expect(undoOp(r.text, r.ops[0])).toBe('')
+  })
+})

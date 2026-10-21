@@ -23,6 +23,7 @@ import {
   invertPatches,
   type Patch,
   replaceCell,
+  replaceCells,
 } from './csv-patch'
 
 // rowValues: every value of the row just before the op, its fingerprint
@@ -67,6 +68,21 @@ export type TableOp =
       values: number
       patches: Patch[]
     }
+  // A block pasted: the rows it set, then rows added at the end, each
+  // with the cells set in it
+  | {
+      kind: 'cells'
+      rows: CellsRow[]
+      added: { col: number; after: string }[][]
+      patches: Patch[]
+    }
+
+// The rows a block of cells set, each with its values before (to find it
+// again) and its cells
+export interface CellsRow {
+  rowValues: string[]
+  cells: { col: number; before: string; after: string }[]
+}
 
 export type TableAction =
   | { kind: 'cell'; row: number; col: number; name: string; value: string }
@@ -74,6 +90,13 @@ export type TableAction =
   | { kind: 'delete'; row: number }
   | { kind: 'insert-col'; col: number; side: 'left' | 'right' }
   | { kind: 'delete-col'; col: number }
+  // Cells set at once: a row past the last one is one of addRows rows
+  // added at the end
+  | {
+      kind: 'cells'
+      cells: { row: number; col: number; value: string }[]
+      addRows?: number
+    }
 
 // Cells of column col with a value, from row first on
 export function filledCells(
@@ -97,6 +120,7 @@ export function makeOp(
   a: TableAction,
   header = false,
 ): TableOp | undefined {
+  if (a.kind === 'cells') return cellsOp(text, t, a.cells, a.addRows ?? 0)
   if (a.kind === 'insert-col' || a.kind === 'delete-col') {
     const base = {
       col: a.col,
@@ -148,6 +172,53 @@ export function makeOp(
     rowValues: rowValues(text, t, a.row),
     patch: deleteRow(text, t, a.row),
   }
+}
+
+// A block of cells: the ones whose value changes in rows of t, then
+// addRows rows at the end with theirs; undefined when nothing changes
+function cellsOp(
+  text: string,
+  t: CsvTable,
+  cells: { row: number; col: number; value: string }[],
+  addRows: number,
+): TableOp | undefined {
+  const rows = new Map<number, CellsRow>()
+  const set: typeof cells = []
+  const added: { col: number; after: string }[][] = Array.from(
+    { length: addRows },
+    () => [],
+  )
+  for (const c of cells) {
+    if (c.row >= t.rowCount) {
+      added[c.row - t.rowCount].push({ col: c.col, after: c.value })
+      continue
+    }
+    const before = valueAt(text, t, c.row, c.col)
+    if (before === c.value) continue
+    const row = rows.get(c.row) ?? {
+      rowValues: rowValues(text, t, c.row),
+      cells: [],
+    }
+    row.cells.push({ col: c.col, before, after: c.value })
+    rows.set(c.row, row)
+    set.push(c)
+  }
+  if (!set.length && !addRows) return undefined
+  const patches = replaceCells(text, t, set)
+  const lines = added.map((row) => {
+    const values: string[] = Array(Math.max(t.columnCount, 1)).fill('')
+    for (const c of row) values[c.col] = c.after
+    return insertRow(text, t, t.rowCount - 1, values)
+  })
+  // No row yet (a reload on an empty file): one insert of every row, as
+  // the inserts there carry no line break
+  if (!t.rowCount && lines.length) {
+    patches.push({
+      ...lines[0],
+      inserted: lines.map((p) => p.inserted).join(t.eol),
+    })
+  } else patches.push(...lines)
+  return { kind: 'cells', rows: [...rows.values()], added, patches }
 }
 
 // A column op has a patch per row; any other, one
@@ -261,7 +332,41 @@ export function reapply(
     }
     let next: TableOp | undefined
     let reason: SkipReason | undefined
-    if (op.kind === 'insert-col' || op.kind === 'delete-col') {
+    if (op.kind === 'cells') {
+      // Every row found once (or already holding its new values), or none
+      const cells: { row: number; col: number; value: string }[] = []
+      for (const row of op.rows) {
+        const now = findRow(text, t, row.rowValues)
+        const done = row.cells.reduce(
+          (v, c) => withCell(v, c.col, c.after),
+          row.rowValues,
+        )
+        const at = now === 'none' ? findRow(text, t, done) : now
+        if (typeof at !== 'number') {
+          reason = now === 'none' ? 'missing' : 'many'
+          break
+        }
+        for (const c of row.cells)
+          cells.push({ row: at, col: c.col, value: c.after })
+      }
+      if (reason) {
+        // Rows it added may be what the ops after it set
+        if (op.added.length) broken = true
+      } else {
+        const end = t.rowCount
+        op.added.forEach((row, i) => {
+          for (const c of row) {
+            cells.push({ row: end + i, col: c.col, value: c.after })
+          }
+        })
+        next = makeOp(text, t, {
+          kind: 'cells',
+          cells,
+          addRows: op.added.length,
+        })
+        if (!next) continue
+      }
+    } else if (op.kind === 'insert-col' || op.kind === 'delete-col') {
       const col = findColumn(text, t, op)
       if (typeof col === 'number') {
         next = makeOp(

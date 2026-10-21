@@ -104,6 +104,43 @@ export function replaceCell(
   }
 }
 
+// Sets several cells at once, as patches in order. The cells a short row
+// does not have go in one insert at its end, with the missing delimiters.
+export function replaceCells(
+  text: string,
+  t: CsvTable,
+  cells: { row: number; col: number; value: string }[],
+): Patch[] {
+  const byRow = new Map<number, Map<number, string>>()
+  for (const c of cells) {
+    const row = byRow.get(c.row) ?? new Map<number, string>()
+    row.set(c.col, c.value)
+    byRow.set(c.row, row)
+  }
+  const out: Patch[] = []
+  for (const r of [...byRow.keys()].sort((a, b) => a - b)) {
+    const row = byRow.get(r) as Map<number, string>
+    const n = cellsIn(t, r)
+    const cols = [...row.keys()].sort((a, b) => a - b)
+    for (const c of cols) {
+      if (c < n) out.push(replaceCell(text, t, r, c, row.get(c) as string))
+    }
+    // Past the row's end: its missing cells up to the last one set
+    const last = cols[cols.length - 1]
+    if (last < n) continue
+    let tail = ''
+    for (let c = n; c <= last; c++) {
+      tail += t.delimiter + quoteValue(row.get(c) ?? '', t.delimiter)
+    }
+    out.push({
+      start: t.cellEnd[t.rowCells[r + 1] - 1],
+      removed: '',
+      inserted: tail,
+    })
+  }
+  return out
+}
+
 // Inserts a row after row `after` (-1: first, after the BOM), with the
 // file's delimiter and line break and max(columnCount, 1) cells.
 export function insertRow(
