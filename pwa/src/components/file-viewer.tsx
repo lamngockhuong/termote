@@ -176,7 +176,9 @@ const separated = (d: Delimiter) =>
 const SKIP_REASONS: Record<Skipped['reason'], string> = {
   missing: 'its row is no longer in the file',
   many: 'more than one row matches it',
-  depends: 'it follows a row change that was not applied',
+  column: 'its column is no longer in the file',
+  columns: 'more than one column has that name',
+  depends: 'it follows a row or column change that was not applied',
   unreadable: 'the file can no longer be edited as a table',
 }
 
@@ -189,7 +191,11 @@ function describeOp(op: TableOp): string {
       ? 'The row added at the top'
       : `The row added after row ${op.after + 1}`
   }
-  return `Deleting row ${op.row + 1}`
+  if (op.kind === 'delete') return `Deleting row ${op.row + 1}`
+  const column =
+    op.name === null ? String(op.col + 1) : `"${visibleUnsafe(op.name)}"`
+  if (op.kind === 'delete-col') return `Deleting column ${column}`
+  return `The column added ${op.side === 'left' ? 'before' : 'after'} column ${column}`
 }
 
 // The edits a reload could not apply again, and why; a cell's value can be

@@ -784,6 +784,17 @@ Run on tmux (Linux/macOS) and Herdr; psmux (Windows) offers neither view.
       the page never freezes
 - [ ] Editing with "Find" open: change a matching cell so it no longer matches: the count drops
       and the outline moves to the next match; F3 in a cell's field sets the value, then moves
+- [ ] Desktop, editing: the ⋯ of a column name (or a right click, Shift+F10 on a cell) → "Insert
+      column right": type its name, Enter; fill a cell of it; "Delete column" on another column says
+      how many values go, Delete column; Save, then `git diff`: each row has one more delimiter where
+      the column went in and lost the deleted cell, quoted cells keep their quotes, CRLF stays; Ctrl+Z
+      walks each step back
+- [ ] Desktop, editing: F2 or a double click on a column name renames it in place; "Insert row
+      above" in a cell's sheet or in the menu of a cell adds the row before it; widths, wraps and
+      hidden columns stay on their columns after a column is added or deleted
+- [ ] Editing, add a column, then change the file from the terminal (add a column at the front and
+      a row): Save says it changed; "Reload and reapply" puts the new column next to the same named
+      column; rename that column in the terminal instead: the column edit is listed as not applied
 - [ ] Widths and wraps go back to the defaults on another "Delimiter" or "Header row", stay after
       editing a cell, and stay after showing another tab and coming back (same first row)
 - [ ] Press a row number: Records opens on that row (also after sorting); turning Records off

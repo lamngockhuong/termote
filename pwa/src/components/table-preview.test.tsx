@@ -9,8 +9,8 @@ import {
 import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ThemeProvider } from '../contexts/theme-context'
-import type { TableOp } from '../utils/csv-edits'
-import type { Delimiter } from '../utils/csv-parse'
+import { makeOp, reapply, redoOp, type TableOp } from '../utils/csv-edits'
+import { type CsvTable, type Delimiter, parseCsv } from '../utils/csv-parse'
 import { CSV_WORKER_MIN } from '../utils/csv-parse-client'
 import { MAX_SCROLL_HEIGHT } from '../utils/table-columns'
 import { MAX_CELL_CHARS } from './table-grid'
@@ -2821,3 +2821,415 @@ describe('TablePreview find in a worker', () => {
     expect(await screen.findByText('1 of 2')).toBeInTheDocument()
   })
 })
+
+describe('TablePreview row and column edits', () => {
+  const abc = 'a,b,c\n1,2,3\n4,,6\n'
+  const header = (name: string) =>
+    screen.getByRole('columnheader', { name }) as HTMLElement
+  const headers = () =>
+    screen
+      .getAllByRole('columnheader')
+      .slice(1)
+      .map((h) => h.getAttribute('aria-label'))
+  const menuOf = (name: string) =>
+    screen.getByRole('button', { name: `Column ${name}` })
+  const choose = (name: string) =>
+    fireEvent.click(screen.getByRole('menuitem', { name }))
+  const nameBox = () => screen.getByRole('textbox', { name: /^Rename column/ })
+  const confirmDelete = () =>
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: 'Delete column',
+      }),
+    )
+
+  beforeEach(() => {
+    coarse.fine = true
+  })
+
+  it("Insert row above in a cell's sheet adds the row before it", () => {
+    coarse.fine = false
+    const p = edit(abc)
+    fireEvent.click(screen.getByRole('gridcell', { name: '4' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Insert row above' }))
+    expect(p.text()).toBe('a,b,c\n1,2,3\n,,\n4,,6\n')
+    // Its first cell opens
+    expect(screen.getByRole('dialog')).toHaveTextContent('Row 3 · a')
+  })
+
+  it('a column added at the right asks for its name; Enter sets it, one undo each', () => {
+    const p = edit(abc)
+    fireEvent.click(menuOf('a'))
+    choose('Insert column right')
+    expect(p.text()).toBe('a,,b,c\n1,,2,3\n4,,,6\n')
+    expect(nameBox()).toHaveFocus()
+    expect(nameBox()).toHaveValue('')
+    fireEvent.change(nameBox(), { target: { value: 'new' } })
+    fireEvent.keyDown(nameBox(), { key: 'Enter' })
+    expect(p.text()).toBe('a,new,b,c\n1,,2,3\n4,,,6\n')
+    expect(headers()).toEqual(['a', 'new', 'b', 'c'])
+    press(screen.getByRole('grid'), 'z')
+    press(screen.getByRole('grid'), 'z')
+    expect(p.text()).toBe(abc)
+    expect(headers()).toEqual(['a', 'b', 'c'])
+    press(screen.getByRole('grid'), 'z', { shiftKey: true })
+    expect(headers()).toEqual(['a', 'Column 2', 'b', 'c'])
+  })
+
+  it('a name left as it was, or dropped with Escape, makes no edit', () => {
+    const p = edit(abc)
+    fireEvent.click(menuOf('b'))
+    choose('Insert column left')
+    expect(p.text()).toBe('a,,b,c\n1,,2,3\n4,,,6\n')
+    fireEvent.keyDown(nameBox(), { key: 'Escape' })
+    expect(screen.queryByRole('textbox', { name: /^Rename/ })).toBeNull()
+    fireEvent.keyDown(header('c').querySelector('button') as Element, {
+      key: 'F2',
+    })
+    fireEvent.keyDown(nameBox(), { key: 'Enter' })
+    expect(p.onChange).toHaveBeenCalledTimes(1)
+  })
+
+  it('a double click renames, sorting once; Ctrl+S in the name saves after it', () => {
+    const p = edit(abc)
+    const button = header('b').querySelector('button') as HTMLElement
+    fireEvent.click(button, { detail: 1 })
+    fireEvent.click(button, { detail: 2 })
+    fireEvent.doubleClick(button)
+    expect(header('b')).toHaveAttribute('aria-sort', 'ascending')
+    fireEvent.change(nameBox(), { target: { value: 'B' } })
+    fireEvent.keyDown(nameBox(), { key: 's', ctrlKey: true })
+    expect(p.text()).toBe('a,B,c\n1,2,3\n4,,6\n')
+    expect(p.onSave).toHaveBeenCalled()
+  })
+
+  it('a name the field cannot take renames in the sheet; ⤢ takes what was typed there', () => {
+    const p = edit('a,x\u202Ey\n1,2\n')
+    fireEvent.contextMenu(header('x⟨U+202E⟩y'))
+    choose('Rename column')
+    expect(screen.getByRole('dialog')).toHaveTextContent('Row 1 · x⟨U+202E⟩y')
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    fireEvent.keyDown(header('a').querySelector('button') as Element, {
+      key: 'F2',
+    })
+    fireEvent.change(nameBox(), { target: { value: 'z' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Open in sheet' }))
+    expect(screen.getByRole('textbox', { name: 'Value' })).toHaveValue('z')
+    expect(p.onChange).not.toHaveBeenCalled()
+  })
+
+  it('a column deleted, after saying what goes with it; widths, wraps, hidden columns and sort follow', () => {
+    const p = edit('a,b,c,d\n1,2,3,4\n5,,7,8\n')
+    // d sorted, c wrapped, a width set
+    fireEvent.click(header('d').querySelector('button') as HTMLElement)
+    columnsMenu()
+    fireEvent.click(
+      within(screen.getByRole('group', { name: 'Wrap' })).getByRole(
+        'menuitemcheckbox',
+        { name: '3 · c' },
+      ),
+    )
+    fireEvent.click(menuItem('Fit columns'))
+    fireEvent.contextMenu(header('b'))
+    choose('Delete column')
+    expect(screen.getByRole('dialog')).toHaveTextContent(
+      'Delete column b?1 cell with a value goes with it. The column is removed from the file when you save it.',
+    )
+    confirmDelete()
+    expect(p.text()).toBe('a,c,d\n1,3,4\n5,7,8\n')
+    expect(header('d')).toHaveAttribute('aria-sort', 'ascending')
+    // The wrap icon of its name
+    const icon = (name: string) =>
+      header(name).querySelector('button[title] svg')
+    expect(icon('c')).not.toBeNull()
+    // Undone, b is back, unwrapped, and the sort with d
+    press(screen.getByRole('grid'), 'z')
+    expect(headers()).toEqual(['a', 'b', 'c', 'd'])
+    expect(header('d')).toHaveAttribute('aria-sort', 'ascending')
+    expect(icon('b')).toBeNull()
+    expect(icon('c')).not.toBeNull()
+  })
+
+  it('deleting the sorted column drops the sort; the count reads right for none or many', () => {
+    edit('a,b\n1,2\n3,4\n')
+    fireEvent.click(header('b').querySelector('button') as HTMLElement)
+    fireEvent.contextMenu(header('b'))
+    choose('Delete column')
+    expect(screen.getByRole('dialog')).toHaveTextContent(
+      '2 cells with a value go with it.',
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(headers()).toEqual(['a', 'b'])
+    fireEvent.contextMenu(header('b'))
+    choose('Delete column')
+    confirmDelete()
+    expect(header('a')).toHaveAttribute('aria-sort', 'none')
+    fireEvent.contextMenu(header('a'))
+    // The last column cannot go
+    expect(
+      screen.getByRole('menuitem', { name: 'Delete column' }),
+    ).toBeDisabled()
+  })
+
+  it('a column with no values says so', () => {
+    edit('a,b\n1,\n')
+    fireEvent.contextMenu(header('b'))
+    choose('Delete column')
+    expect(screen.getByRole('dialog')).toHaveTextContent('It has no values.')
+  })
+
+  it('a hidden column after the one added stays hidden', () => {
+    edit(abc)
+    columnsMenu()
+    fireEvent.click(
+      within(screen.getByRole('group', { name: 'Show' })).getByRole(
+        'menuitemcheckbox',
+        { name: '3 · c' },
+      ),
+    )
+    fireEvent.keyDown(document.activeElement as Element, { key: 'Escape' })
+    fireEvent.contextMenu(header('a'))
+    choose('Insert column left')
+    fireEvent.keyDown(nameBox(), { key: 'Escape' })
+    expect(headers()).toEqual(['Column 1', 'a', 'b'])
+  })
+
+  it('Shift+F10 or the context menu on a cell offers its row too', () => {
+    const p = edit(abc)
+    const cell = screen.getByRole('gridcell', { name: '2' })
+    fireEvent.keyDown(cell, { key: 'F10', shiftKey: true })
+    choose('Insert row above')
+    expect(p.text()).toBe('a,b,c\n,,\n1,2,3\n4,,6\n')
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    fireEvent.contextMenu(screen.getByRole('gridcell', { name: '6' }))
+    choose('Insert row below')
+    expect(p.text()).toBe('a,b,c\n,,\n1,2,3\n4,,6\n,,\n')
+  })
+
+  it('the context menu key on a column name opens its menu; a row number has none', () => {
+    edit(abc)
+    fireEvent.keyDown(header('c').querySelector('button') as Element, {
+      key: 'ContextMenu',
+    })
+    expect(menuOf('c')).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.queryByRole('menuitem', { name: /row/ })).toBeNull()
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
+    expect(
+      fireEvent.contextMenu(
+        screen.getByRole('button', { name: 'Open row 2 as a record' }),
+      ),
+    ).toBe(true)
+    // Other keys on a name are left alone
+    expect(
+      fireEvent.keyDown(header('c').querySelector('button') as Element, {
+        key: 'x',
+      }),
+    ).toBe(true)
+  })
+
+  it('without a header row there is no rename, and an added column asks nothing', () => {
+    const p = edit(abc)
+    fireEvent.click(screen.getByRole('button', { name: 'Header row' }))
+    fireEvent.contextMenu(header('Column 1'))
+    expect(screen.queryByRole('menuitem', { name: 'Rename column' })).toBeNull()
+    choose('Insert column left')
+    expect(p.text()).toBe(',a,b,c\n,1,2,3\n,4,,6\n')
+    expect(screen.queryByRole('textbox', { name: /^Rename/ })).toBeNull()
+    // Every row's value counts, the first one too
+    fireEvent.contextMenu(header('Column 2'))
+    choose('Delete column')
+    expect(screen.getByRole('dialog')).toHaveTextContent(
+      '3 cells with a value go with it.',
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    // F2 on a name does nothing
+    expect(
+      fireEvent.keyDown(header('Column 2').querySelector('button') as Element, {
+        key: 'F2',
+      }),
+    ).toBe(true)
+  })
+
+  it("a table only viewed has no column menu; its context menu is the browser's", () => {
+    show(abc)
+    expect(screen.queryByRole('button', { name: /^Column / })).toBeNull()
+    expect(fireEvent.contextMenu(header('a'))).toBe(true)
+    expect(
+      fireEvent.contextMenu(screen.getByRole('gridcell', { name: '1' })),
+    ).toBe(true)
+    expect(
+      fireEvent.keyDown(screen.getByRole('gridcell', { name: '1' }), {
+        key: 'ContextMenu',
+      }),
+    ).toBe(true)
+  })
+
+  it('another view changing the text closes a name being edited, and a column delete asked, setting nothing', () => {
+    const p = edit(abc)
+    fireEvent.keyDown(header('a').querySelector('button') as Element, {
+      key: 'F2',
+    })
+    // Its context menu is the field's own
+    expect(fireEvent.contextMenu(nameBox())).toBe(true)
+    fireEvent.change(nameBox(), { target: { value: 'z' } })
+    p.rerender(<Draft {...p} elsewhere={`x,y,z\n${abc}`} />)
+    expect(screen.queryByRole('textbox', { name: /^Rename/ })).toBeNull()
+    fireEvent.contextMenu(header('y'))
+    choose('Delete column')
+    p.rerender(<Draft {...p} elsewhere={abc} />)
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(p.onChange).not.toHaveBeenCalled()
+  })
+
+  it('a column added at the right of the last one: its name field grows leftward', () => {
+    edit(abc)
+    fireEvent.click(menuOf('c'))
+    choose('Insert column right')
+    expect(nameBox()).toHaveAccessibleName('Rename column Column 4')
+    expect(nameBox().closest('[data-last]')).not.toBeNull()
+  })
+
+  it("a touch screen renames in the sheet, the header row's: no row added or deleted there", () => {
+    coarse.fine = false
+    coarse.value = true
+    const p = edit(abc)
+    fireEvent.click(menuOf('a'))
+    choose('Insert column right')
+    const sheet = screen.getByRole('dialog')
+    expect(sheet).toHaveTextContent('Row 1 · Column 2')
+    for (const name of ['Insert row above', 'Add row below', 'Delete row']) {
+      expect(within(sheet).queryByRole('button', { name })).toBeNull()
+    }
+    fireEvent.change(screen.getByRole('textbox', { name: 'Value' }), {
+      target: { value: 'new' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    expect(p.text()).toBe('a,new,b,c\n1,,2,3\n4,,,6\n')
+    fireEvent.click(menuOf('b'))
+    choose('Rename column')
+    expect(screen.getByRole('dialog')).toHaveTextContent('Row 1 · b')
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    // No rename on a double tap
+    fireEvent.doubleClick(header('c').querySelector('button') as Element)
+    expect(screen.queryByRole('textbox', { name: /^Rename/ })).toBeNull()
+  })
+
+  it('a menu asked from a cell gives the focus back to it; a field it opens keeps it', () => {
+    edit(abc)
+    const cell = screen.getByRole('gridcell', { name: '2' })
+    cell.focus()
+    fireEvent.keyDown(cell, { key: 'ContextMenu' })
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
+    expect(screen.getByRole('gridcell', { name: '2' })).toHaveFocus()
+    // A right click inside it keeps its row's actions
+    fireEvent.contextMenu(screen.getByRole('gridcell', { name: '3' }))
+    fireEvent.contextMenu(
+      screen.getByRole('menuitem', { name: 'Insert column left' }),
+    )
+    expect(
+      screen.getByRole('menuitem', { name: 'Insert row above' }),
+    ).toBeVisible()
+    choose('Insert column left')
+    expect(nameBox()).toHaveFocus()
+  })
+
+  it('a menu opened from its ⋯ leaves the focus where it closes', () => {
+    edit(abc)
+    fireEvent.click(menuOf('a'))
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
+    expect(menuOf('a')).toHaveFocus()
+  })
+})
+
+describe('TablePreview layout and column edits leaving editing', () => {
+  const abc = 'a,b,c\n1,2,3\n'
+  const headers = () =>
+    screen
+      .getAllByRole('columnheader')
+      .slice(1)
+      .map((h) => h.getAttribute('aria-label'))
+
+  // A table edited by hand: the column op made on abc, as a draft has it
+  function setup() {
+    coarse.fine = true
+    const onChange = vi.fn()
+    const editing = (ops: TableOp[]): TableEditing => ({
+      delimiter: ',',
+      ops,
+      redo: [],
+      saving: false,
+      canSave: true,
+      onChange,
+      onSave: vi.fn(),
+    })
+    const p = show(abc, { editing: editing([]) })
+    const view = (text: string, ed?: TableEditing) =>
+      p.rerender(
+        <ThemeProvider>
+          <TablePreview {...p} text={text} editing={ed} />
+        </ThemeProvider>,
+      )
+    // c hidden, then a column added before a
+    columnsMenu()
+    fireEvent.click(
+      within(screen.getByRole('group', { name: 'Show' })).getByRole(
+        'menuitemcheckbox',
+        { name: '3 · c' },
+      ),
+    )
+    fireEvent.keyDown(document.activeElement as Element, { key: 'Escape' })
+    fireEvent.contextMenu(screen.getByRole('columnheader', { name: 'a' }))
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: 'Insert column left' }),
+    )
+    const [text, ops] = onChange.mock.lastCall as [string, TableOp[]]
+    view(text, editing(ops))
+    fireEvent.keyDown(screen.getByRole('textbox', { name: /^Rename/ }), {
+      key: 'Escape',
+    })
+    expect(headers()).toEqual(['Column 1', 'a', 'b'])
+    return { view, editing, text, ops }
+  }
+
+  it('dropped (Discard), the layout goes back with the text', () => {
+    const { view } = setup()
+    view(abc)
+    expect(headers()).toEqual(['a', 'b'])
+  })
+
+  it("saved, the layout stays: the text is the file's now", () => {
+    const { view, text } = setup()
+    view(text.replace(/\n/g, '\r\n'))
+    expect(headers()).toEqual(['Column 1', 'a', 'b'])
+  })
+
+  it('applied again on another file, the layout follows the new op', () => {
+    const { view, editing, ops } = setup()
+    const r = reapply('x,a,b,c\n0,1,2,3\n', ',', ops)
+    if (!r.ok) throw new Error('not a table')
+    view(r.text, editing(r.ops))
+    // The column went in before a, found second: the layout moved there.
+    // x, the host's own, moves the old places by one, as with no edit
+    expect(headers()).toEqual(['x', 'Column 2', 'a', 'c'])
+    expect(screen.getByText(/1 column hidden/)).toBeInTheDocument()
+  })
+
+  it("a save that ran while more was edited: the ops it saved are the file's", () => {
+    const { view, editing, text, ops } = setup()
+    const later = makeOp(text, parsed(text), {
+      kind: 'insert',
+      after: 0,
+    }) as TableOp
+    const next = redoOp(text, later)
+    view(next, editing([...ops, later]))
+    // The save took the column op: the draft goes on with the row
+    view(next, editing([later]))
+    expect(headers()).toEqual(['Column 1', 'a', 'b'])
+  })
+})
+
+function parsed(text: string): CsvTable {
+  const r = parseCsv(text, ',')
+  if (!r.ok) throw new Error('not a table')
+  return r.table
+}

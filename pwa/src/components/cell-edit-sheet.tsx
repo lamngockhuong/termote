@@ -10,6 +10,9 @@ interface Props {
   cell?: { row: number; name: string; value: string }
   // Sets the cell to value, the same one included (nothing to change)
   onApply: (value: string) => void
+  // The header row: its name is set, no row added or deleted around it
+  headerRow?: boolean
+  onInsertAbove: () => void
   onInsertBelow: () => void
   onDelete: () => void
   onClose: () => void
@@ -47,6 +50,8 @@ export function CellEditSheet({ cell, onClose, ...rest }: Props) {
 function CellForm({
   value: initial,
   onApply,
+  headerRow = false,
+  onInsertAbove,
   onInsertBelow,
   onDelete,
   onClose,
@@ -89,10 +94,15 @@ function CellForm({
         </p>
       )}
       <div className="flex flex-wrap justify-end gap-2">
-        <Button variant="danger" onClick={onDelete} className="mr-auto">
-          Delete row
-        </Button>
-        <Button onClick={onInsertBelow}>Add row below</Button>
+        {!headerRow && (
+          <>
+            <Button variant="danger" onClick={onDelete} className="mr-auto">
+              Delete row
+            </Button>
+            <Button onClick={onInsertAbove}>Insert row above</Button>
+            <Button onClick={onInsertBelow}>Add row below</Button>
+          </>
+        )}
         <Button onClick={onClose}>Cancel</Button>
         <Button variant="primary" onClick={() => onApply(input)}>
           Apply
