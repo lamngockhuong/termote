@@ -82,6 +82,10 @@ const PIN = 'sticky z-[6] border-r border-border bg-bg'
 // background too; the current one is outlined as well
 const HIT = 'bg-linear-to-r from-accent/15 to-accent/15'
 const CURRENT = 'outline-2 -outline-offset-2 outline-accent'
+// A cell in focus is outlined however it got there: a click selects it, and
+// focus-visible draws nothing for a click
+const CELL_FOCUS =
+  'focus:outline-2 focus:-outline-offset-2 focus:outline-accent'
 // A cell of the range selected, drawn the same way
 const SELECTED = 'bg-linear-to-r from-accent/10 to-accent/10'
 // Whole class names, so Tailwind finds each one in the source
@@ -1085,7 +1089,7 @@ export function TableGrid({
                     tabIndex={p === pos && i === col ? 0 : -1}
                     aria-selected={picked || undefined}
                     title={shown}
-                    className={`${wrap ? WRAP_CELL : CELL} ${i === 0 && sticky ? PIN : ''} ${found ? HIT : picked ? SELECTED : ''} ${now ? CURRENT : ''}`}
+                    className={`${wrap ? WRAP_CELL : CELL} ${CELL_FOCUS} ${i === 0 && sticky ? PIN : ''} ${found ? HIT : picked ? SELECTED : ''} ${now ? CURRENT : ''}`}
                     style={i === 0 ? pinStyle : undefined}
                   >
                     {wrap ? (

@@ -3692,4 +3692,12 @@ describe('TablePreview: a click of a fine pointer selects, a double click opens'
     fireEvent.doubleClick(cell('2'), { shiftKey: true })
     expect(field()).toBeNull()
   })
+
+  it("the cell in focus is outlined, a click's too; a column name only from the keyboard", () => {
+    show(abc)
+    expect(cell('1')).toHaveClass('focus:outline-accent')
+    expect(
+      screen.getByRole('button', { name: 'a' }).className.split(/\s+/),
+    ).not.toContain('focus:outline-accent')
+  })
 })

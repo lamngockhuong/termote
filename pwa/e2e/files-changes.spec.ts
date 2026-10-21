@@ -816,6 +816,8 @@ test.describe('files and changes views', () => {
       // A click on the table viewed puts the focus on the cell, nothing more
       await cell('2').click()
       await expect(cell('2')).toBeFocused()
+      // Outlined, though focus-visible draws nothing for a click
+      await expect(cell('2')).toHaveCSS('outline-style', 'solid')
       await expect(grid.getByRole('textbox')).toHaveCount(0)
       await page.keyboard.press('End')
       await expect(cell('ripe')).toBeFocused()
