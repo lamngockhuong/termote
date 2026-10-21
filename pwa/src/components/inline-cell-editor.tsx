@@ -20,6 +20,9 @@ export type CellMove = 'next' | 'prev'
 interface Props {
   // The cell's whole value (short, with no character it would hide)
   value: string
+  // What the field starts with instead, the caret at its end: a key typed
+  // on the cell, which replaces its value
+  initial?: string
   // Names the field: its column and row
   label: string
   // Sets the cell to value, the same one included (nothing to change),
@@ -40,12 +43,13 @@ interface Props {
 // so as not to widen the table).
 export function InlineCellEditor({
   value,
+  initial,
   label,
   onCommit,
   onCancel,
   onExpand,
 }: Props) {
-  const [input, setInput] = useState(value)
+  const [input, setInput] = useState(initial ?? value)
   const box = useRef<HTMLTextAreaElement>(null)
   // Ended: set, dropped or taken to the sheet, never twice
   const done = useRef(false)
@@ -67,8 +71,11 @@ export function InlineCellEditor({
     if (grid) grid.scrollTop = top
   }, [input])
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only as it mounts
   useEffect(() => {
-    box.current?.select()
+    const field = box.current as HTMLTextAreaElement
+    if (initial === undefined) field.select()
+    else field.setSelectionRange(initial.length, initial.length)
     return () => {
       if (done.current) return
       done.current = true

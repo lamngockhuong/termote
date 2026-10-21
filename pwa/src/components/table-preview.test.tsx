@@ -419,6 +419,51 @@ describe('TablePreview', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 
+  it('Home and End go to the ends of the row; with Ctrl or Cmd, of the table shown', () => {
+    const text = `a,b,c\n${Array.from({ length: 100 }, (_, i) => `${i},x,y`).join('\n')}\n`
+    show(text)
+    const grid = screen.getByRole('grid')
+    const at = () => [
+      document.activeElement?.getAttribute('data-pos'),
+      document.activeElement?.getAttribute('data-col'),
+    ]
+    const key = (k: string, over: object = {}) =>
+      fireEvent.keyDown(document.activeElement as Element, { key: k, ...over })
+    screen.getAllByRole('gridcell')[0].focus()
+    key('ArrowDown')
+    key('End')
+    expect(at()).toEqual(['1', '2'])
+    key('Home')
+    expect(at()).toEqual(['1', '0'])
+    // From the row number, Home goes to the first column too
+    key('ArrowLeft')
+    key('Home')
+    expect(at()).toEqual(['1', '0'])
+    key('End', { ctrlKey: true })
+    expect(at()).toEqual(['99', '2'])
+    expect(grid.scrollTop).toBeGreaterThan(0)
+    key('Home', { metaKey: true })
+    expect(at()).toEqual(['0', '0'])
+    expect(grid.scrollTop).toBe(0)
+    key('End', { metaKey: true })
+    expect(at()).toEqual(['99', '2'])
+    // On the grid itself, back to the active cell
+    act(() => grid.focus())
+    fireEvent.keyDown(grid, { key: 'Home', ctrlKey: true })
+    expect(at()).toEqual(['99', '2'])
+  })
+
+  it('a table only viewed takes no key typed, nor Delete', () => {
+    show(people)
+    const cell = screen.getByRole('gridcell', { name: '30' })
+    cell.focus()
+    expect(fireEvent.keyDown(cell, { key: 'a' })).toBe(true)
+    expect(fireEvent.keyDown(cell, { key: ' ' })).toBe(true)
+    expect(fireEvent.keyDown(cell, { key: 'Delete' })).toBe(true)
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.queryByRole('textbox')).toBeNull()
+  })
+
   it('shows one record at a time, with every field', () => {
     show(people)
     fireEvent.click(screen.getByRole('button', { name: 'Records' }))
@@ -1033,6 +1078,103 @@ describe('TablePreview editing in a cell (a fine pointer)', () => {
     noField()
   })
 
+  it('a key typed on a cell edits it from that key: Enter sets it, Escape keeps the value', () => {
+    const p = edit(people)
+    cellButton('30').focus()
+    expect(key(cellButton('30'), 'a')).toBe(false)
+    const box = field('Edit age, row 2') as HTMLTextAreaElement
+    expect(box).toHaveValue('a')
+    expect(box).toHaveFocus()
+    expect([box.selectionStart, box.selectionEnd]).toEqual([1, 1])
+    key(box, 'Enter')
+    expect(p.text()).toBe(people.replace('30', 'a'))
+    expect(cellButton('a')).toHaveFocus()
+    // Shift types a capital; Escape leaves the value as it was
+    key(cellButton('a'), 'B', { shiftKey: true })
+    expect(field('Edit age, row 2')).toHaveValue('B')
+    key(field('Edit age, row 2'), 'Escape')
+    expect(cellButton('a')).toHaveFocus()
+    expect(p.onChange).toHaveBeenCalledTimes(1)
+  })
+
+  it('keys with Ctrl, Cmd or Alt, and keys on a row number, type nothing', () => {
+    edit(people)
+    cellButton('30').focus()
+    key(cellButton('30'), 'c', { ctrlKey: true })
+    key(cellButton('30'), 'c', { metaKey: true })
+    key(cellButton('30'), 'c', { altKey: true })
+    // AltGr types its character
+    key(cellButton('30'), '@', {
+      ctrlKey: true,
+      altKey: true,
+      modifierAltGraph: true,
+    })
+    expect(field('Edit age, row 2')).toHaveValue('@')
+    key(field('Edit age, row 2'), 'Escape')
+    key(cellButton('30'), 'Delete', { ctrlKey: true })
+    noField()
+    key(cellButton('30'), 'Home')
+    key(document.activeElement as Element, 'ArrowLeft')
+    expect(document.activeElement).toHaveAttribute('data-col', '-1')
+    key(document.activeElement as Element, 'x')
+    key(document.activeElement as Element, 'Delete')
+    noField()
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeDisabled()
+  })
+
+  it('the first key of an IME opens the field empty and goes on to it', () => {
+    edit(people)
+    for (const over of [
+      { key: 'Process' },
+      { key: 'a', isComposing: true },
+      { key: 'Unidentified', keyCode: 229 },
+    ]) {
+      cellButton('30').focus()
+      expect(fireEvent.keyDown(cellButton('30'), over)).toBe(true)
+      expect(field('Edit age, row 2')).toHaveValue('')
+      key(field('Edit age, row 2'), 'Escape')
+    }
+  })
+
+  it('Delete and Backspace clear a cell, one undo each; an empty cell makes no edit', () => {
+    const p = edit(people)
+    cellButton('30').focus()
+    expect(key(cellButton('30'), 'Delete')).toBe(false)
+    expect(p.text()).toBe(people.replace('30', ''))
+    expect(p.onChange).toHaveBeenCalledTimes(1)
+    key(document.activeElement as Element, 'Backspace')
+    expect(p.onChange).toHaveBeenCalledTimes(1)
+    press(document.activeElement as Element, 'z')
+    expect(p.text()).toBe(people)
+    key(cellButton('Huế'), 'Backspace')
+    expect(p.text()).toBe(people.replace('Huế', ''))
+    noField()
+  })
+
+  it('a key typed on a value the field cannot take opens the sheet with it; Delete clears it', () => {
+    const p = edit('a,b\n"1\r\n2",x\n')
+    const cell = screen.getAllByRole('gridcell')[0]
+    cell.focus()
+    key(cell, 'z')
+    noField()
+    expect(valueBox()).toHaveValue('z')
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    expect(p.text()).toBe('a,b\n"z",x\n')
+    press(screen.getByRole('grid'), 'z')
+    key(screen.getAllByRole('gridcell')[0], 'Delete')
+    expect(p.text()).toBe('a,b\n"",x\n')
+  })
+
+  it('while saving, a key typed or Delete changes nothing', () => {
+    const p = edit(people, { saving: true })
+    cellButton('30').focus()
+    expect(key(cellButton('30'), 'a')).toBe(true)
+    expect(key(cellButton('30'), 'Delete')).toBe(true)
+    noField()
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(p.onChange).not.toHaveBeenCalled()
+  })
+
   it('leaving the field sets it, and leaves the focus where it went', () => {
     const p = edit(people)
     fireEvent.click(cellButton('30'))
@@ -1177,6 +1319,46 @@ describe('TablePreview: a click on a table viewed starts editing', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 
+  it('a key typed on a cell asks for editing, then opens its field from that key', () => {
+    const onRequest = vi.fn()
+    render(<Viewer initial={people} start onRequest={onRequest} />)
+    cellButton('30').focus()
+    fireEvent.keyDown(cellButton('30'), { key: '7' })
+    expect(onRequest).toHaveBeenCalledTimes(1)
+    const box = screen.getByRole('textbox', { name: 'Edit age, row 2' })
+    expect(box).toHaveValue('7')
+    expect(box).toHaveFocus()
+    fireEvent.keyDown(box, { key: 'Escape' })
+  })
+
+  it('keys typed before the cell can open go to it; Delete asks for nothing', () => {
+    const onRequest = vi.fn()
+    const v = render(
+      <Viewer initial={people} start saving onRequest={onRequest} />,
+    )
+    cellButton('30').focus()
+    fireEvent.keyDown(cellButton('30'), { key: 'Delete' })
+    expect(onRequest).not.toHaveBeenCalled()
+    fireEvent.keyDown(cellButton('30'), { key: '4' })
+    fireEvent.keyDown(cellButton('30'), { key: '2' })
+    expect(onRequest).toHaveBeenCalledTimes(1)
+    v.rerender(<Viewer initial={people} start onRequest={onRequest} />)
+    expect(
+      screen.getByRole('textbox', { name: 'Edit age, row 2' }),
+    ).toHaveValue('42')
+    v.unmount()
+    // A cell clicked, then a key typed before it opens
+    const w = render(
+      <Viewer initial={people} start saving onRequest={() => {}} />,
+    )
+    fireEvent.click(cellButton('30'))
+    fireEvent.keyDown(cellButton('30'), { key: 'x' })
+    w.rerender(<Viewer initial={people} start onRequest={() => {}} />)
+    expect(
+      screen.getByRole('textbox', { name: 'Edit age, row 2' }),
+    ).toHaveValue('x')
+  })
+
   it('a value the field cannot take opens in the sheet that sets it', () => {
     render(<Viewer initial={'a\n"1\r\n2"\n'} start onRequest={() => {}} />)
     fireEvent.click(screen.getAllByRole('gridcell')[0])
@@ -1201,6 +1383,18 @@ describe('TablePreview: a click on a table viewed starts editing', () => {
     )
     v.rerender(<Viewer initial={people} start onRequest={() => {}} />)
     expect(screen.queryByRole('textbox', { name: /^Edit / })).toBeNull()
+  })
+
+  it('a coarse pointer types in no cell', () => {
+    coarse.fine = false
+    coarse.value = true
+    const onRequest = vi.fn()
+    render(<Viewer initial={people} start onRequest={onRequest} />)
+    cellButton('30').focus()
+    expect(fireEvent.keyDown(cellButton('30'), { key: 'a' })).toBe(true)
+    expect(fireEvent.keyDown(cellButton('30'), { key: 'Delete' })).toBe(true)
+    expect(onRequest).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 
   it('a coarse pointer views the cell in its sheet, asking nothing', () => {

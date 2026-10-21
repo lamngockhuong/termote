@@ -752,6 +752,14 @@ Chạy trên tmux (Linux/macOS) và Herdr; psmux (Windows) không có hai view n
 - [ ] Máy tính: gõ trong ô sửa rồi cuộn ô ra khỏi màn hình hoặc bấm ra chỗ khác thì giá trị vẫn
       được ghi; ⤢ mở bảng nhỏ với giá trị đang gõ, "Add row below" và "Delete row" dùng được; giá
       trị dài hơn 1024 ký tự hoặc có `⟨U+202E⟩` thì mở bảng nhỏ
+- [ ] Máy tính: trên ô đang chọn, Home và End tới cột đầu và cột cuối của dòng, Ctrl+Home và
+      Ctrl+End (Cmd trên macOS) tới ô đầu và ô cuối của bảng theo thứ tự đã sort và lọc, cuộn ô
+      vào tầm nhìn
+- [ ] Máy tính, file sửa được: gõ `a` trên một ô thì ô sửa mở với `a` (đang chỉ xem thì bảng
+      chuyển sang sửa trước), Enter ghi, Esc giữ giá trị cũ; gõ bằng bộ gõ (Telex, tiếng Nhật) trên
+      một ô thì chữ vào ô sửa (chữ ghép đầu tiên có thể phải gõ lại)
+- [ ] Máy tính, đang sửa: Delete và Backspace xoá trắng ô đang chọn, một lần Ctrl+Z trả lại; lưu
+      rồi `git diff` chỉ đổi đúng ô đó
 - [ ] iPhone: chạm vào ô vẫn mở bảng nhỏ, dù đang xem hay đang sửa, không bao giờ mở ô sửa
 - [ ] Độ rộng và wrap trở về mặc định khi đổi "Delimiter" hay "Header row", giữ nguyên sau khi sửa
       một ô, và giữ nguyên khi sang tab khác rồi quay lại (cùng dòng đầu)

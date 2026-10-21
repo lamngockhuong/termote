@@ -100,6 +100,12 @@ interface Props {
   onSort: (col: number) => void
   // A cell was clicked, or asked for with Enter or F2
   onOpen: (row: number, col: number) => void
+  // A character typed on a cell (file row, column), to edit it from; ''
+  // for the first key of an IME, whose text goes to the field it opens.
+  // Unset, typing is not taken.
+  onType?: (row: number, col: number, input: string) => void
+  // Delete or Backspace on a cell: its value is cleared. Unset, not taken.
+  onClear?: (row: number, col: number) => void
   // The cell edited where it is (file row, column) and its editor, shown
   // in place of the cell
   editingCell?: { row: number; col: number }
@@ -148,6 +154,8 @@ export function TableGrid({
   sort,
   onSort,
   onOpen,
+  onType,
+  onClear,
   editingCell,
   editor,
   onOpenRow,
@@ -275,20 +283,73 @@ export function TableGrid({
       PageUp: [-pageRows(height, rowHeight), 0],
       PageDown: [pageRows(height, rowHeight), 0],
     }
-    if (e.key === 'F2' && onCell && col >= 0) {
+    // The cell the key is on (focused by a script, it may not be the
+    // active one yet)
+    const from = onCell
+      ? { pos: Number(target.dataset.pos), col: Number(target.dataset.col) }
+      : { pos, col }
+    const row = rows[from.pos]
+    const onValue = onCell && from.col >= 0
+    // AltGr (Ctrl and Alt on Windows) types a character, never a shortcut
+    const modified =
+      (e.ctrlKey || e.metaKey || e.altKey) &&
+      !e.nativeEvent.getModifierState('AltGraph')
+    if (e.key === 'F2' && onValue) {
       e.preventDefault()
-      onOpen(rows[pos], col)
+      onOpen(row, from.col)
       return
     }
-    const key = moves[e.key]
-    if (!key) return
-    const move = onCell ? key : [0, 0]
+    // The first key of an IME: its default goes on, so the text composed
+    // can reach the field opened
+    const composing =
+      e.nativeEvent.isComposing ||
+      e.key === 'Process' ||
+      e.nativeEvent.keyCode === 229
+    if (onType && onValue && composing) {
+      onType(row, from.col, '')
+      return
+    }
+    if (onType && onValue && e.key.length === 1 && !modified) {
+      e.preventDefault()
+      onType(row, from.col, e.key)
+      return
+    }
+    if (
+      onClear &&
+      onValue &&
+      (e.key === 'Delete' || e.key === 'Backspace') &&
+      !modified
+    ) {
+      e.preventDefault()
+      onClear(row, from.col)
+      return
+    }
+    const lastPos = Math.max(rows.length - 1, 0)
+    const lastCol = names.length - 1
+    let next: { pos: number; col: number }
+    if (e.key === 'Home' || e.key === 'End') {
+      // The first or last column of the row; with Ctrl (Cmd on a Mac), of
+      // the first or last row shown
+      const end = e.key === 'End'
+      const whole = e.ctrlKey || e.metaKey
+      next = onCell
+        ? {
+            pos: whole ? (end ? lastPos : 0) : from.pos,
+            col: end ? lastCol : 0,
+          }
+        : from
+    } else {
+      const key = moves[e.key]
+      if (!key) return
+      const move = onCell ? key : [0, 0]
+      next = {
+        pos: Math.max(0, Math.min(lastPos, from.pos + move[0])),
+        col: Math.max(-1, Math.min(lastCol, from.col + move[1])),
+      }
+    }
     e.preventDefault()
     focusing.current = true
-    reveal({
-      pos: Math.max(0, Math.min(rows.length - 1, pos + move[0])),
-      col: Math.max(-1, Math.min(names.length - 1, col + move[1])),
-    })
+    reveal(next)
   }
 
   // Makes the cell active, its row scrolled into view below the sticky
