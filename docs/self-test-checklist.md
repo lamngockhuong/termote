@@ -803,7 +803,10 @@ Run on tmux (Linux/macOS) and Herdr; psmux (Windows) offers neither view.
       change, one Ctrl+Z takes them back; Save, then `git diff` shows only those cells; a block too
       wide is refused; one too long asks "Add N rows at the end?"; sorted, it is refused
 - [ ] Over plain HTTP on the LAN (`--lan`, no Tailscale): Ctrl+C and Ctrl+V on the table still
-      work; Safari: say whether a paste reaches the table
+      work
+- [ ] macOS (Chrome and Safari), no text selected: Cmd+C on a range, then paste into a spreadsheet:
+      the same cells; Cmd+V on a cell while editing pastes the block, and the focus stays on the
+      cell
 - [ ] Widths and wraps go back to the defaults on another "Delimiter" or "Header row", stay after
       editing a cell, and stay after showing another tab and coming back (same first row)
 - [ ] Press a row number: Records opens on that row (also after sorting); turning Records off

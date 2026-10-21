@@ -16,6 +16,9 @@ import { MAX_SCROLL_HEIGHT } from '../utils/table-columns'
 import { MAX_CELL_CHARS } from './table-grid'
 import TablePreview, { MAX_COLUMNS, type TableEditing } from './table-preview'
 
+const copyText = vi.hoisted(() => vi.fn(async (_: string) => 'ok' as const))
+vi.mock('../utils/copy-text', () => ({ copyText }))
+
 vi.mock('../utils/highlight', async (orig) => ({
   ...(await orig<typeof import('../utils/highlight')>()),
   highlight: async () => null,
@@ -3246,18 +3249,17 @@ describe('TablePreview ranges, copy and paste', () => {
     )
   const key = (target: Element, k: string, over: object = {}) =>
     fireEvent.keyDown(target, { key: k, ...over })
-  // A copy as the browser sends it after Ctrl+C on the grid
+  // Ctrl+C on the grid: what it wrote to the clipboard
   const copy = (from: Element) => {
-    key(from, 'c', { ctrlKey: true })
-    let out: string | undefined
-    const ok = fireEvent.copy(document, {
-      clipboardData: { setData: (_: string, v: string) => (out = v) },
-    })
-    return { text: out, prevented: !ok }
+    copyText.mockClear()
+    const ok = key(from, 'c', { ctrlKey: true })
+    return { text: copyText.mock.calls[0]?.[0], prevented: !ok }
   }
+  // Ctrl+V on the grid, then the paste as the browser sends it, to the
+  // field that has the focus then
   const paste = (from: Element, text: string) => {
     key(from, 'v', { ctrlKey: true })
-    return !fireEvent.paste(document, {
+    return !fireEvent.paste(document.activeElement as Element, {
       clipboardData: { getData: () => text },
     })
   }
@@ -3398,6 +3400,10 @@ describe('TablePreview ranges, copy and paste', () => {
     // No range: the active cell; a row number: its row
     key(at(1, 2), 'Home')
     expect(copy(at(1, 0)).text).toBe('1')
+    // Cmd+C on macOS, with no text selected for a copy event to come from
+    copyText.mockClear()
+    expect(key(at(1, 0), 'c', { metaKey: true })).toBe(false)
+    expect(copyText).toHaveBeenLastCalledWith('1')
     const number = screen.getByRole('button', {
       name: 'Open row 2 as a record',
     })
@@ -3525,14 +3531,49 @@ describe('TablePreview ranges, copy and paste', () => {
     expect(p.onChange).not.toHaveBeenCalled()
   })
 
-  it("the listener is gone once the key's own event had its chance", () => {
+  it('Cmd+V takes the paste in a hidden field, which then gives the focus back', () => {
+    const p = edit(grid4)
+    at(0, 1).focus()
+    key(at(0, 1), 'v', { metaKey: true })
+    // A field: the only place macOS lets Cmd+V paste with nothing selected
+    const field = document.activeElement as HTMLTextAreaElement
+    expect(field.tagName).toBe('TEXTAREA')
+    expect(field).toHaveAttribute('aria-hidden', 'true')
+    expect(
+      fireEvent.paste(field, { clipboardData: { getData: () => 'x' } }),
+    ).toBe(false)
+    expect(field.isConnected).toBe(false)
+    expect(document.activeElement).toBe(at(0, 1))
+    expect(p.onChange).toHaveBeenCalledTimes(1)
+    // No text on the clipboard: an empty paste changes nothing
+    key(at(0, 1), 'v', { metaKey: true })
+    fireEvent.paste(document.activeElement as Element)
+    expect(document.activeElement).toBe(at(0, 1))
+    expect(p.onChange).toHaveBeenCalledTimes(1)
+  })
+
+  it('no paste coming (another key, the focus gone, a moment passed): the field goes, the focus comes back', () => {
     vi.useFakeTimers()
     try {
       const p = edit(grid4)
       at(0, 0).focus()
       key(at(0, 0), 'v', { ctrlKey: true })
+      let field = document.activeElement as HTMLElement
       vi.runAllTimers()
-      fireEvent.paste(document, { clipboardData: { getData: () => 'x' } })
+      expect(field.isConnected).toBe(false)
+      expect(document.activeElement).toBe(at(0, 0))
+      // Late, to the field gone: nothing pasted, the focus left alone
+      fireEvent.paste(field, { clipboardData: { getData: () => 'x' } })
+      fireEvent.blur(field)
+      key(at(0, 0), 'v', { ctrlKey: true })
+      field = document.activeElement as HTMLElement
+      key(field, 'ArrowDown')
+      expect(field.isConnected).toBe(false)
+      expect(document.activeElement).toBe(at(0, 0))
+      key(at(0, 0), 'v', { ctrlKey: true })
+      field = document.activeElement as HTMLElement
+      fireEvent.blur(field)
+      expect(field.isConnected).toBe(false)
       expect(p.onChange).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
@@ -3542,17 +3583,13 @@ describe('TablePreview ranges, copy and paste', () => {
   it('Ctrl+C or V on another layout of letters is the key where C or V is', () => {
     show(grid4)
     at(0, 1).focus()
+    copyText.mockClear()
     key(at(0, 1), 'с', { ctrlKey: true, code: 'KeyC' })
-    let out: string | undefined
-    fireEvent.copy(document, {
-      clipboardData: { setData: (_: string, v: string) => (out = v) },
-    })
-    expect(out).toBe('2')
+    expect(copyText).toHaveBeenLastCalledWith('2')
     // Another key with Ctrl is not a copy
+    copyText.mockClear()
     key(at(0, 1), 'ж', { ctrlKey: true, code: 'Semicolon' })
-    expect(
-      fireEvent.copy(document, { clipboardData: { setData: vi.fn() } }),
-    ).toBe(true)
+    expect(copyText).not.toHaveBeenCalled()
   })
 
   it('a grid with no row shown copies nothing, leaving the clipboard alone', async () => {
@@ -3561,10 +3598,9 @@ describe('TablePreview ranges, copy and paste', () => {
     await screen.findByText('0 / 3 rows')
     const grid = screen.getByRole('grid')
     grid.focus()
-    key(grid, 'c', { ctrlKey: true })
-    expect(
-      fireEvent.copy(document, { clipboardData: { setData: vi.fn() } }),
-    ).toBe(true)
+    copyText.mockClear()
+    expect(key(grid, 'c', { ctrlKey: true })).toBe(true)
+    expect(copyText).not.toHaveBeenCalled()
   })
 
   it('too many cells to paste: refused, saying so', () => {
