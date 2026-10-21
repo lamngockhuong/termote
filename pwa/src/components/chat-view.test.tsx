@@ -123,6 +123,17 @@ describe('ChatView', () => {
     expect(screen.getByText('Reconnecting…')).toBeInTheDocument()
   })
 
+  it('shows the hidden characters of the session name', () => {
+    set({ entries: entries(1) })
+    render(
+      <ChatView
+        {...props}
+        session={{ ...props.session!, name: 'cla\u202eude' }}
+      />,
+    )
+    expect(screen.getByText('Claude Code · cla⟨U+202E⟩ude')).toBeInTheDocument()
+  })
+
   it('an empty conversation says so', () => {
     render(<ChatView {...props} />)
     expect(screen.getByText('No messages yet.')).toBeInTheDocument()
@@ -339,6 +350,26 @@ describe('ChatView older entries', () => {
     layout(list, { scrollTop: 0 })
     fireEvent.scroll(list)
     expect(transcript.loadOlder).not.toHaveBeenCalled()
+  })
+
+  it('shows the hidden characters of the pane label', () => {
+    set({ entries: entries(1) })
+    render(
+      <ChatView
+        {...props}
+        session={{
+          ...props.session,
+          paneId: 'p2',
+          panes: [
+            { id: 'p1', label: 'claude', hasAgent: true },
+            { id: 'p2', label: 'rev\u202eiewer', hasAgent: true },
+          ],
+        }}
+      />,
+    )
+    expect(
+      screen.getByText('Claude Code · claude · rev⟨U+202E⟩iewer'),
+    ).toBeInTheDocument()
   })
 
   it('a split tab names the pane in the header', () => {

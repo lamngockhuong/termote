@@ -1,6 +1,7 @@
 import { Pencil, Trash2 } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 import type { Session } from '../types/session'
+import { visibleUnsafe } from '../utils/unsafe-chars'
 import { AgentStatusBadge } from './agent-status-badge'
 
 interface Props {
@@ -204,11 +205,15 @@ export function SwipeableSessionItem({
             <span
               className={`block truncate text-[15px] ui-terminal:font-label ui-terminal:text-[14px] ${isActive ? 'font-semibold' : ''}`}
             >
-              {session.name}
+              {visibleUnsafe(session.name)}
             </span>
             {(session.description || session.commands) && (
               <span className="block truncate text-[12px] text-fg-muted">
-                {[session.description, session.commands?.join(', ')]
+                {[
+                  session.description,
+                  session.commands &&
+                    visibleUnsafe(session.commands.join(', ')),
+                ]
                   .filter(Boolean)
                   .join(' · ')}
               </span>

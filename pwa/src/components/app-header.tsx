@@ -1,6 +1,7 @@
 import { Maximize, Minimize } from 'lucide-react'
 import type { ComponentProps, ReactNode } from 'react'
 import type { Session } from '../types/session'
+import { visibleUnsafe } from '../utils/unsafe-chars'
 import { BrandMark } from './brand-mark'
 import {
   ConnectionIndicator,
@@ -154,11 +155,11 @@ function DesktopHeader(p: Props) {
       ) : (
         <div
           className="mb-2 flex min-w-0 flex-1 items-center gap-2 px-1"
-          title={`${session.name}${session.description ? ` - ${session.description}` : ''}`}
+          title={`${visibleUnsafe(session.name)}${session.description ? ` - ${session.description}` : ''}`}
         >
           <span className="shrink-0 text-lg leading-none">{session.icon}</span>
           <span className="truncate font-medium ui-terminal:font-label">
-            {session.name}
+            {visibleUnsafe(session.name)}
           </span>
           {session.description && (
             <span className="truncate text-sm text-fg-muted">

@@ -33,6 +33,24 @@ describe('SessionTabs', () => {
     expect(screen.getByText('Code')).toBeInTheDocument()
   })
 
+  it('shows the hidden characters of a tab name', () => {
+    render(
+      <SessionTabs
+        {...defaultProps}
+        sessions={[{ ...SESSIONS[0], name: 'Sh\u202eell' }, SESSIONS[1]]}
+      />,
+    )
+    expect(screen.getByText('Sh⟨U+202E⟩ell')).toBeInTheDocument()
+    expect(screen.getByTitle('Sh⟨U+202E⟩ell - Terminal')).toBeInTheDocument()
+    render(
+      <SessionTabs
+        {...defaultProps}
+        sessions={[{ ...SESSIONS[1], name: 'Co\u202ede', description: '' }]}
+      />,
+    )
+    expect(screen.getByTitle('Co⟨U+202E⟩de')).toBeInTheDocument()
+  })
+
   it('renders add button', () => {
     render(<SessionTabs {...defaultProps} />)
     expect(screen.getByLabelText('Add session')).toBeInTheDocument()

@@ -1,6 +1,7 @@
 import { Plus, X } from 'lucide-react'
 import { type KeyboardEvent, useEffect, useRef } from 'react'
 import type { Session } from '../types/session'
+import { visibleUnsafe } from '../utils/unsafe-chars'
 import { AgentStatusBadge } from './agent-status-badge'
 import { FOCUS_RING, IconButton } from './ui/button'
 
@@ -107,14 +108,14 @@ export function SessionTabs({
                 aria-keyshortcuts={canRemove ? 'Delete' : undefined}
                 title={
                   session.description
-                    ? `${session.name} - ${session.description}`
-                    : session.name
+                    ? `${visibleUnsafe(session.name)} - ${session.description}`
+                    : visibleUnsafe(session.name)
                 }
                 className={`flex h-full items-center gap-2 whitespace-nowrap rounded-control pl-3 pr-1 ${FOCUS_RING} focus-visible:-outline-offset-2`}
               >
                 <span className="text-base leading-none">{session.icon}</span>
                 <span className="max-w-[140px] truncate ui-terminal:font-label">
-                  {session.name}
+                  {visibleUnsafe(session.name)}
                 </span>
                 <AgentStatusBadge status={session.agentStatus} size={12} />
               </button>

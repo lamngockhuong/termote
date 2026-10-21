@@ -111,6 +111,18 @@ describe('ActivityLog', () => {
     expect(rows()[0]).toHaveTextContent('aid⟨U+202E⟩er')
   })
 
+  it('shows the hidden characters of the group and tab names', () => {
+    renderLog({
+      events: [ev(1, '@7', '', 'working')],
+      sessions: [{ ...SESSIONS[0], name: 'bu\u202eild' }],
+      groups: [
+        { id: 'g1', name: 'a\u202epi' },
+        { id: 'g9', name: 'other' },
+      ],
+    })
+    expect(rows()[0]).toHaveTextContent('a⟨U+202E⟩pi / bu⟨U+202E⟩ild')
+  })
+
   it('says when there is nothing yet, or the read failed', () => {
     renderLog({ events: [], error: true })
     expect(

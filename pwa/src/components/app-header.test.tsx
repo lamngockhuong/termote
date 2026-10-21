@@ -124,6 +124,16 @@ describe('AppHeader — desktop', () => {
     )
   })
 
+  it('shows the hidden characters of the session name', () => {
+    renderHeader({
+      showSessionTabs: false,
+      session: { ...SESSIONS[0], name: 'Sh\u202eell' },
+    })
+    expect(screen.getByTitle('Sh⟨U+202E⟩ell - Terminal')).toHaveTextContent(
+      '💻Sh⟨U+202E⟩ellTerminal',
+    )
+  })
+
   it('leaves out an empty description from the title', () => {
     renderHeader({ showSessionTabs: false, session: SESSIONS[1] })
     expect(screen.getByTitle('Code')).toHaveTextContent(/^🤖Code$/)

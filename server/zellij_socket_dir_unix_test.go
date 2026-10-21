@@ -98,3 +98,32 @@ func TestZellijSocketDirModes(t *testing.T) {
 		t.Error("an unmakeable socket dir was taken")
 	}
 }
+
+// A chmod that reports success but leaves the mode as it was (some FUSE,
+// SMB or vfat mounts) does not count as the group's write taken away, and
+// no zellij command runs.
+func TestZellijSocketDirChmodWithoutEffectRefused(t *testing.T) {
+	log := useFakeZellij(t, nil)
+	dir := zellijSocketDir()
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	os.Chmod(dir, 0o775)
+	old := zellijChmodDir
+	zellijChmodDir = func(*os.File, fs.FileMode) error { return nil }
+	t.Cleanup(func() { zellijChmodDir = old })
+	if err := zellijCheckSocketDir(); !errors.Is(err, errZellijSocketDir) {
+		t.Fatalf("check = %v, want the socket dir refused", err)
+	}
+	if _, err := zellijListSessions(t.Context()); !errors.Is(err, errZellijSocketDir) {
+		t.Fatalf("list = %v, want the socket dir refused", err)
+	}
+	if got := log(); got != "" {
+		t.Errorf("zellij ran:\n%s", got)
+	}
+	// Once the mode really changes, the next command runs.
+	zellijChmodDir = old
+	if err := zellijCheckSocketDir(); err != nil {
+		t.Fatalf("check after a working chmod = %v", err)
+	}
+}

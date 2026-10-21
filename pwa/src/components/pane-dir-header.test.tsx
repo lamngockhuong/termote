@@ -23,6 +23,13 @@ describe('PaneDirHeader', () => {
     expect(onRefresh).toHaveBeenCalledOnce()
   })
 
+  it('shows the hidden characters of the branch', () => {
+    render(
+      <PaneDirHeader root="/r" branch={'fe\u202eat'} onRefresh={vi.fn()} />,
+    )
+    expect(screen.getByText('fe⟨U+202E⟩at')).toBeInTheDocument()
+  })
+
   it('waits for the root', () => {
     render(<PaneDirHeader onRefresh={vi.fn()} />)
     expect(screen.getByTestId('pane-root')).toHaveTextContent('…')

@@ -1,6 +1,7 @@
 import { GitBranch, RefreshCw } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { keepOrder, shortRoot, TRUNCATE_START } from '../utils/files-format'
+import { visibleUnsafe } from '../utils/unsafe-chars'
 import { PanelMaximizeButton } from './side-panel'
 import { IconButton } from './ui/button'
 
@@ -35,7 +36,7 @@ export function PaneDirHeader({
         {branch && (
           <span className="flex items-center gap-1 text-[11px] text-fg-muted">
             <GitBranch size={11} aria-hidden="true" />
-            <span className="truncate">{branch}</span>
+            <span className="truncate">{visibleUnsafe(branch)}</span>
           </span>
         )}
       </div>

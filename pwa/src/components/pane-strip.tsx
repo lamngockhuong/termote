@@ -1,5 +1,6 @@
 import { X } from 'lucide-react'
 import type { SessionPane } from '../types/session'
+import { visibleUnsafe } from '../utils/unsafe-chars'
 import { AgentStatusBadge } from './agent-status-badge'
 import { FOCUS_RING } from './ui/button'
 
@@ -49,10 +50,12 @@ export function PaneStrip({ panes, activePaneId, onSelect, onClose }: Props) {
             >
               <AgentStatusBadge status={pane.agentStatus} size={12} />
               <span className="flex min-w-0 flex-col text-left leading-tight">
-                <span className="max-w-[140px] truncate">{pane.label}</span>
+                <span className="max-w-[140px] truncate">
+                  {visibleUnsafe(pane.label)}
+                </span>
                 {command && (
                   <span className="max-w-[140px] truncate text-[11px] text-fg-subtle">
-                    {command}
+                    {visibleUnsafe(command)}
                   </span>
                 )}
               </span>

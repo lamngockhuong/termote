@@ -964,6 +964,19 @@ describe('App', () => {
     expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument()
   })
 
+  it('shows the hidden characters of the session it asks to close', async () => {
+    const base = mockUseLocalSessions()
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      sessions: [{ ...base.sessions[0], name: 'Sh\u202eell' }],
+    } as any)
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'SBRemove' }))
+    expect(screen.getByTestId('confirm-dialog')).toHaveTextContent(
+      'Sh⟨U+202E⟩ell will be closed',
+    )
+  })
+
   it('names what runs in the session it asks to close', async () => {
     const base = mockUseLocalSessions()
     mockUseLocalSessions.mockReturnValue({
@@ -3142,6 +3155,25 @@ describe('App groups and panes', () => {
     expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument()
   })
 
+  it('herdr: shows the hidden characters of the pane it asks to close', async () => {
+    mockMux('herdr')
+    const base = mockUseLocalSessions()
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      activeSession: {
+        ...base.activeSession,
+        panes: [PANES[0], { ...PANES[1], label: 'lo\u202egs' }],
+      },
+    } as any)
+    render(<App />)
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Close pane lo\u202egs' }),
+    )
+    expect(screen.getByTestId('confirm-dialog')).toHaveTextContent(
+      'lo⟨U+202E⟩gs will be closed',
+    )
+  })
+
   it('herdr: names what runs in the pane it asks to close', async () => {
     mockMux('herdr')
     const base = mockUseLocalSessions()
@@ -4691,6 +4723,23 @@ describe('App — group actions', () => {
     expect(dialog).not.toHaveTextContent('Running:')
     fireEvent.click(within(dialog).getByText('ConfirmYes'))
     expect(closeGroup).toHaveBeenCalledWith('$3')
+  })
+
+  it('shows the hidden characters of the group it asks to close', async () => {
+    withGroups()
+    const base = mockUseLocalSessions()
+    mockUseLocalSessions.mockReturnValue({
+      ...base,
+      groups: [
+        { id: 'main', name: 'ma\u202ein' },
+        { id: '$3', name: 'work' },
+      ],
+    } as any)
+    render(<App />)
+    fireEvent.click(await screen.findByText('GroupCloseMain'))
+    const dialog = screen.getByTestId('confirm-dialog')
+    expect(dialog).toHaveTextContent('Close tmux session "ma⟨U+202E⟩in"?')
+    expect(dialog).toHaveTextContent('a new, empty "ma⟨U+202E⟩in" right away')
   })
 
   it('names what runs in every tab of the group, once each', async () => {

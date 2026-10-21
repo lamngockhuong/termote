@@ -135,6 +135,20 @@ describe('AgentCard', () => {
     ).toBeInTheDocument()
   })
 
+  it('shows the hidden characters of the group and tab names', () => {
+    renderCard({
+      where: 'a\u202epi / bu\u202eild',
+      groupTitle: 'group a\u202epi',
+    })
+    const place = screen.getByText('a⟨U+202E⟩pi / bu⟨U+202E⟩ild')
+    expect(place).toHaveAttribute('title', 'group a⟨U+202E⟩pi')
+    expect(
+      screen.getByRole('button', {
+        name: /^Open terminal: .*, a⟨U\+202E⟩pi \/ bu⟨U\+202E⟩ild$/,
+      }),
+    ).toBeInTheDocument()
+  })
+
   it('shows the status, place, last words, changes and context', () => {
     const { onOpen } = renderCard({
       worktree: true,

@@ -77,10 +77,14 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   checked (`zellijCheckSocketDir`): made 0700 when missing, it must be a directory (not a
   symlink) of the server's uid that others cannot write; its group write (Zellij makes it 0775
   under umask 002) is then taken away (`zellijOwnSocketDir`: checked and changed through one
-  descriptor opened with `O_NOFOLLOW`, logged), so another member of its group cannot swap the
-  contract dir after the check; and its `contract_version_1`, where the
+  descriptor opened with `O_NOFOLLOW`, then stat'ed again through it: a mount that takes the
+  chmod but keeps the mode, some FUSE, SMB or vfat, is refused; logged), so another member of its
+  group cannot swap the contract dir after the check; and its `contract_version_1`, where the
   sockets are, when there, must be one of that uid with no group or other access (Zellij makes it
-  0700); else no command runs, 503 `zellij_socket_dir`, the reason logged once.
+  0700); else no command runs, 503 `zellij_socket_dir`, the reason logged once. Zellij 0.45 makes
+  the socket dir only when it is missing and never loosens an existing one (it sets the contract
+  dir and `$TMPDIR/zellij-<uid>` to 0700); a dir removed and made again by Zellij is caught by the
+  check before the next command.
   Every `zellij` call is argv only, never a shell; a positional value goes after `--` (`attach`
   takes none: there `--` starts a command, so a session name is passed only when
   `zellijPassableName` holds: no leading `-`, not `help`/`options` in any case, no control or
@@ -146,7 +150,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `invalid_request` turned the calls off for 5 minutes, is not served. macOS names are the kernel's short name. The
   snapshot is a same-site read (`crossSiteRejection`, `Sec-Fetch-Site: none` included). The PWA
   shows names in the sessions list and pane strip and adds "Running: …" to the close
-  confirmations; the cwd is not shown
+  confirmations, each with its hidden characters as `⟨U+XXXX⟩` (`visibleUnsafe`), since a process
+  names itself; the cwd is not shown
 - **Agent activity** (`server/agent_activity.go`, `GET /api/mux/activity`): the tracker is fed
   only by snapshot reads that already run (the snapshot route, a stream attaching, the push
   watcher's tick); it never reads tmux, Herdr or Zellij itself and never runs a command, so
@@ -191,7 +196,15 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   root `viewHidesRoot` refuses (no repo, a home dir or one above), as Files. The PWA shows the
   last text, the branch, the model, a Codex plan and an agent name it does not know (Herdr reports
   its own; the card and the activity log) with every C0/C1, bidi (U+061C included) and zero-width
-  space character as `⟨U+XXXX⟩` (`visibleUnsafe`, `pwa/src/utils/unsafe-chars.ts`)
+  space character as `⟨U+XXXX⟩` (`visibleUnsafe`, `pwa/src/utils/unsafe-chars.ts`). Group, tab
+  and session names, which any process in a pane can change (`tmux rename-window`), are shown the
+  same way wherever they appear as text or a tooltip: the overview's cards, its queue and the
+  activity log, the sidebar (rows, group headers, the collapsed rail, the current session), the
+  session tabs, the header, the session chip, the Chat view's header and the confirmations that
+  close a session or a group; a rename field keeps the name as it is. So are a pane's label (an
+  agent's name or the pane title, which any program sets with an escape sequence) in the pane
+  strip, the Chat view's header and the close-pane confirmation, and a branch name in a worktree
+  group's header and the Changes header
 - **Agent subagents** (`server/agent_subagents.go`, `GET /api/mux/panes/{id}/agent/subagents`):
   `requireMethod(GET)`, `crossSiteRejection`, `requireAgentRead`; internal errors are logged only.
   Only the pane's own Claude session (`AgentSession`, as the transcript): another agent, no

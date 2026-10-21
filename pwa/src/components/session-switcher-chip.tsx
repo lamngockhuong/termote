@@ -1,5 +1,6 @@
 import { ChevronDown } from 'lucide-react'
 import type { Session } from '../types/session'
+import { visibleUnsafe } from '../utils/unsafe-chars'
 import { AgentStatusBadge } from './agent-status-badge'
 import { ConnectionDot, type ConnectionState } from './connection-indicator'
 import { FOCUS_RING } from './ui/button'
@@ -47,14 +48,14 @@ export function SessionSwitcherChip({
       <span className="min-w-0 flex-1">
         <span className="flex min-w-0 items-center gap-1.5">
           <span className="truncate text-[15px] font-semibold leading-tight ui-terminal:font-label ui-terminal:text-[14px]">
-            {session.name}
+            {visibleUnsafe(session.name)}
           </span>
           <AgentStatusBadge status={session.agentStatus} size={14} />
         </span>
         <span className="flex min-w-0 items-center gap-1.5 text-[11px] leading-tight text-fg-muted ui-terminal:font-label">
           <ConnectionDot state={connectionState} />
           <span className="truncate">
-            {groupName ? `${groupName} · ${count}` : count}
+            {groupName ? `${visibleUnsafe(groupName)} · ${count}` : count}
           </span>
         </span>
       </span>
