@@ -318,7 +318,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `container up` sets to where the host home sits in a workspace at or above it, matching names as
   `underDir` does: without case on macOS and Windows, and on Linux when the folded path is the same
   directory (WSL `/mnt/c`, casefold, vfat), so `--workspace /users/a` with the home
-  `/Users/a` sets `.`, and a path that only matches without case keeps the home's own spelling), never with `reveal=1` (`requireFilesRead`), and `files/find` ignores `fresh=1` and
+  `/Users/a` sets `.`, and a path that only matches without case keeps the home's own spelling;
+  `container up` first spells each existing name of `--workspace` as its directory lists it
+  (`diskSpelling`), since a runtime's VM shares `/Users` and compares names with case), never with `reveal=1` (`requireFilesRead`), and `files/find` ignores `fresh=1` and
   `ignored=1`. Tree, content, raw and diff serve a view-only client only the paths of the root's
   tracked list (`git ls-files -co --exclude-standard`, Find's 30 s cache: a new file shows up to
   30 s late) and the directories above them, by the path and by where its symlinks lead (a diff or

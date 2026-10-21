@@ -50,6 +50,10 @@ func TestMain(m *testing.M) {
 		helperServeHerdr()
 	case "codex-rollout":
 		helperCodexRollout()
+	case "exit-stderr":
+		// A container runtime refusing a mount source it cannot see.
+		fmt.Fprintln(os.Stderr, "Error: statfs /users/a: no such file or directory")
+		os.Exit(125)
 	case "herdr-server":
 		// What startHerdrServer runs: prints its arguments and fails.
 		fmt.Println("herdr-server", os.Args[1:])
