@@ -452,6 +452,34 @@ the delimiter or the header row changes.
   without the quotes that wrap it in the file.
 </Aside>
 
+### Finding in a Table
+
+Ctrl+F (Cmd+F on a Mac) on a table, whether you are only viewing it or editing it, opens a find
+box under its bar; what you typed last is selected, ready to type over. Unlike **Filter rows**, it
+hides no row: every cell that matches is tinted, the current one outlined, and the box counts them
+(`3 of 17`). Typed in the filter, a cell's field or a sheet, Ctrl+F is still the browser's own.
+
+- Enter and Shift+Enter in the box, or F3 and Shift+F3 anywhere in the table, go to the next or
+  previous match, round from the last to the first, scrolling it into view. From the box the
+  focus stays in it; from a cell the focus goes to the match. F3 with the box closed opens it
+  again on the next match. In a cell's field, F3 sets the value first, as leaving the cell does.
+- Matches go row by row in the order shown (after sorting and filtering), then along the columns
+  shown. The header row and hidden columns are not searched; while any column is hidden, the box
+  says so.
+- The search ignores case and matches part of a value. **Aa** matches case, the boxed **ab**
+  matches only a whole value, and **.\*** reads what you type as a regular expression (JavaScript,
+  Unicode); one that does not compile shows `Invalid pattern`. Values are searched whole, past the
+  1024 characters a cell shows. Characters that hide or reorder text, typed in the box, show below
+  it as `⟨U+XXXX⟩`.
+- An edit, a sort, a filter or a hidden column finds again: the current match stays on its cell
+  while that still matches, else it moves to the next one.
+- Escape or the close button closes the box and puts the focus back on the current match.
+
+A regular expression, and any search of a file over 256 KiB, runs apart from the page, so the
+table never freezes; one still running after 10 seconds (30 for the first search, while that
+part loads) is stopped and the box says `Search took too long`; one too deep for the browser
+says `Search failed`. At most 100,000 matches are counted (`100000+`).
+
 ### Editing a Table
 
 **Edit** on a file shown as a table keeps the table and makes each cell editable, with **Cancel**

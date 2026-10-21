@@ -108,6 +108,10 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/utils/csv-patch.ts`                      | Edits of a CSV as patches of cell ranges (cell, row)          |
 | `pwa/src/utils/csv-edits.ts`                      | Table edits as ops: undo/redo, reapplied by row values        |
 | `pwa/src/utils/csv-parse-client.ts`               | The table's worker: timeouts, falls back to the main thread   |
+| `pwa/src/components/table-find-bar.tsx`           | Find in a table: query, options, `3 of 17`, Enter and Escape  |
+| `pwa/src/hooks/use-csv-find.ts`                   | Cells that match, here or in the search worker                |
+| `pwa/src/utils/csv-find.ts`                       | Match case, whole cell, regex; matches in the order shown     |
+| `pwa/src/utils/csv-find-client.ts`                | The search worker: ended on a timeout, never the main thread  |
 | `pwa/src/utils/unsafe-chars.ts`                   | Control, bidi and zero-width spaces (strip or show)           |
 | `pwa/src/components/image-preview.tsx`            | One image of Files/Changes (sizes, why it cannot be shown)    |
 | `pwa/src/components/image-compare.tsx`            | Changes: an image's old and new versions side by side         |
