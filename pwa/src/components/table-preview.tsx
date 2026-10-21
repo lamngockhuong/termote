@@ -1104,6 +1104,7 @@ export default function TablePreview({
             ))
           }
           onRename={live && header && fine ? rename : undefined}
+          clickSelects={fine}
           onCopyRange={copyRange}
           onPasteBlock={live && computed ? pasteBlock : undefined}
           editingHeader={header ? headerField?.col : undefined}

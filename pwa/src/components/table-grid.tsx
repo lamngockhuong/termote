@@ -82,6 +82,10 @@ const PIN = 'sticky z-[6] border-r border-border bg-bg'
 // background too; the current one is outlined as well
 const HIT = 'bg-linear-to-r from-accent/15 to-accent/15'
 const CURRENT = 'outline-2 -outline-offset-2 outline-accent'
+// A cell in focus is outlined however it got there: a click selects it, and
+// focus-visible draws nothing for a click
+const CELL_FOCUS =
+  'focus:outline-2 focus:-outline-offset-2 focus:outline-accent'
 // A cell of the range selected, drawn the same way
 const SELECTED = 'bg-linear-to-r from-accent/10 to-accent/10'
 // Whole class names, so Tailwind finds each one in the source
@@ -171,6 +175,9 @@ interface Props {
   // Ctrl+V on a grid taking edits: the clipboard's text, to paste from the
   // top-left cell of the range (or the active cell)
   onPasteBlock?: (at: GridCell, text: string) => void
+  // A click of a fine pointer makes a cell active, as in a spreadsheet: a
+  // double click, Enter or F2 opens it. Unset, a click opens it too.
+  clickSelects?: boolean
 }
 
 // Places in rows and in cols, both ends in
@@ -258,6 +265,7 @@ export function TableGrid({
   headerEditor,
   onCopyRange,
   onPasteBlock,
+  clickSelects = false,
 }: Props) {
   const frame = useRef<HTMLDivElement>(null)
   // Used up by the first rows: the offset is a scroll offset of this frame,
@@ -634,6 +642,13 @@ export function TableGrid({
     }
   })
 
+  const onDoubleClick = (e: MouseEvent<HTMLDivElement>) => {
+    const cell = (e.target as HTMLElement).closest<HTMLElement>('[data-pos]')
+    // Shift: a range grown by two quick clicks, nothing opened
+    if (!clickSelects || e.shiftKey || !cell || cell.dataset.at === '-1') return
+    onOpen(rows[Number(cell.dataset.pos)], Number(cell.dataset.col))
+  }
+
   // The context menu of a cell (a right click; its key too, where the
   // browser sends no keydown for it)
   const onContextMenu = (e: MouseEvent<HTMLDivElement>) => {
@@ -655,6 +670,9 @@ export function TableGrid({
     if (!cell) return
     const at = { pos: Number(cell.dataset.pos), col: Number(cell.dataset.at) }
     // Shift+click: the range from the active cell to this one
+    // Safari and Firefox on a Mac give a clicked button no focus: the cell
+    // takes it, for the keys that act on it (F2, typing, Delete)
+    focusing.current = true
     if (e.shiftKey && at.col >= 0) {
       setSel({
         anchor: sel?.anchor ?? { pos, at: Math.max(col, 0) },
@@ -665,7 +683,16 @@ export function TableGrid({
     }
     setSel(undefined)
     setActive(at)
-    if (at.col >= 0) onOpen(rows[at.pos], Number(cell.dataset.col))
+    // Enter on a cell is a click with no detail, and a touch (a laptop's
+    // screen) a tap: they open; a mouse's click only selects (its double
+    // click opens)
+    const touch =
+      (e.nativeEvent as { pointerType?: string }).pointerType === 'touch'
+    if (at.col >= 0) {
+      if (!clickSelects || e.detail === 0 || touch) {
+        onOpen(rows[at.pos], Number(cell.dataset.col))
+      }
+    }
     // While the rows are being worked out, the order on screen is the old
     // one: the number may not be the row under it any more
     else if (!busy) onOpenRow(rows[at.pos])
@@ -816,6 +843,7 @@ export function TableGrid({
       data-scroll-restore
       onKeyDown={onKeyDown}
       onClick={onClick}
+      onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
@@ -1061,7 +1089,7 @@ export function TableGrid({
                     tabIndex={p === pos && i === col ? 0 : -1}
                     aria-selected={picked || undefined}
                     title={shown}
-                    className={`${wrap ? WRAP_CELL : CELL} ${i === 0 && sticky ? PIN : ''} ${found ? HIT : picked ? SELECTED : ''} ${now ? CURRENT : ''}`}
+                    className={`${wrap ? WRAP_CELL : CELL} ${CELL_FOCUS} ${i === 0 && sticky ? PIN : ''} ${found ? HIT : picked ? SELECTED : ''} ${now ? CURRENT : ''}`}
                     style={i === 0 ? pinStyle : undefined}
                   >
                     {wrap ? (

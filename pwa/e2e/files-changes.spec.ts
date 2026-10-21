@@ -741,7 +741,7 @@ test.describe('files and changes views', () => {
   // mouse is a fine pointer)
   const setCell = async (page: Page, shown: string, value: string) => {
     const grid = page.getByRole('complementary', { name: 'Files' }).getByRole('grid')
-    await grid.getByRole('gridcell', { name: shown, exact: true }).click()
+    await grid.getByRole('gridcell', { name: shown, exact: true }).dblclick()
     const field = grid.getByRole('textbox', { name: /^Edit / })
     await field.fill(value)
     await field.press('Enter')
@@ -813,11 +813,12 @@ test.describe('files and changes views', () => {
       const grid = panel.getByRole('grid')
       await expect(grid).toHaveAttribute('aria-busy', 'false')
       const cell = (name: string) => grid.getByRole('gridcell', { name, exact: true })
-      // A click on the table viewed starts editing in the cell; Escape
-      // leaves the focus on it
+      // A click on the table viewed puts the focus on the cell, nothing more
       await cell('2').click()
-      await page.keyboard.press('Escape')
       await expect(cell('2')).toBeFocused()
+      // Outlined, though focus-visible draws nothing for a click
+      await expect(cell('2')).toHaveCSS('outline-style', 'solid')
+      await expect(grid.getByRole('textbox')).toHaveCount(0)
       await page.keyboard.press('End')
       await expect(cell('ripe')).toBeFocused()
       await page.keyboard.press('Home')
@@ -871,7 +872,7 @@ test.describe('files and changes views', () => {
       await nameBox.press('Enter')
       await expect.poll(names).toEqual(['name', 'Result', 'price', 'note'])
       // Fill a cell of it
-      await grid.locator('[data-pos="0"][data-col="1"]').click()
+      await grid.locator('[data-pos="0"][data-col="1"]').dblclick()
       const cellBox = grid.getByRole('textbox', { name: 'Edit Result, row 2' })
       await cellBox.fill('ok')
       await cellBox.press('Enter')
@@ -927,7 +928,9 @@ test.describe('files and changes views', () => {
       // A 2×2 block from a spreadsheet, pasted on price of plum
       await panel.getByRole('button', { name: 'Edit' }).click()
       await page.evaluate(() => navigator.clipboard.writeText('5\tnew\r\n6\t\r\n'))
-      await cell(1, 1).focus()
+      // A click only selects the cell, so the block pastes there
+      await cell(1, 1).click()
+      await expect(grid.getByRole('textbox')).toHaveCount(0)
       await page.keyboard.press('Control+v')
       await expect(cell(1, 2)).toHaveText('new')
       await expect(cell(2, 1)).toHaveText('6')
@@ -1086,7 +1089,7 @@ test.describe('files and changes views', () => {
         await grid.evaluate((el) => {
           el.scrollTop = 0
         })
-        await row(3).getByRole('gridcell').nth(1).click()
+        await row(3).getByRole('gridcell').nth(1).dblclick()
         await expect(grid.getByRole('textbox', { name: 'Edit note, row 3' })).toHaveValue('one\ntwo\nthree\nfour')
         await page.keyboard.press('Escape')
         await expect(grid.getByRole('textbox', { name: /^Edit / })).toHaveCount(0)
@@ -1140,11 +1143,11 @@ test.describe('files and changes views', () => {
         // field as tall as its lines (12 of 16px, 6px padding), over the
         // rows below
         const field = (name: string) => grid.getByRole('textbox', { name })
-        await row(3).getByRole('gridcell').nth(1).click()
+        await row(3).getByRole('gridcell').nth(1).dblclick()
         await expect(field('Edit note, row 3')).toBeFocused()
         expect(await field('Edit note, row 3').evaluate((el) => el.getBoundingClientRect().height)).toBe(204)
         await page.keyboard.press('Escape')
-        await row(2).getByRole('gridcell').nth(2).click()
+        await row(2).getByRole('gridcell').nth(2).dblclick()
         await expect(field('Edit tag, row 2')).toBeFocused()
         await expect(field('Edit tag, row 2')).toHaveValue('a')
         // The last column's field grows leftward: the table gets no wider
@@ -1178,7 +1181,7 @@ test.describe('files and changes views', () => {
         await page.waitForTimeout(100)
         await expect(filter).toBeFocused()
         // ⤢ goes on in the sheet, with the row's actions
-        await row(3).getByRole('gridcell').nth(2).click()
+        await row(3).getByRole('gridcell').nth(2).dblclick()
         await field('Edit tag, row 3').fill('c')
         await grid.getByRole('button', { name: 'Open in sheet' }).click()
         const sheet = page.getByRole('dialog', { name: /Row 3 · tag/ })
@@ -1187,7 +1190,7 @@ test.describe('files and changes views', () => {
         await expect(sheet.getByRole('button', { name: 'Delete row' })).toBeVisible()
         await sheet.getByRole('button', { name: 'Cancel' }).click()
         // Ctrl+S in a field sets it and saves the file
-        await row(3).getByRole('gridcell').nth(0).click()
+        await row(3).getByRole('gridcell').nth(0).dblclick()
         await page.keyboard.press('Control+s')
         await expect(page.getByText('Saved', { exact: true })).toBeVisible()
         expect(readFileSync(f, 'utf-8')).toBe(text.replace(',a\n', ',"p\nq"\n').replace('\n2,', '\n3,'))

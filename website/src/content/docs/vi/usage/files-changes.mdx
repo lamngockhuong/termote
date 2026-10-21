@@ -417,9 +417,9 @@ thì không có bảng.
   thoại khi một dòng rộng hơn màn hình. Bấm hoặc chạm số dòng để mở đúng dòng đó trong Records;
   tắt Records thì bảng vẫn ở đúng chỗ bạn đã rời đi.
 - Chạm vào một ô (hoặc nhấn Enter trên ô đó) để xem đủ giá trị, kèm nút chép. Mỗi ô hiện tối đa
-  1024 ký tự; giá trị đầy đủ chỉ có trong bảng hiện ra khi chạm. Dùng chuột thì khác: với file sửa
-  được, bấm vào một ô là bắt đầu sửa ngay ô đó (xem mục dưới); giá trị mở từ Records vẫn hiện trong
-  bảng nhỏ.
+  1024 ký tự; giá trị đầy đủ chỉ có trong bảng hiện ra khi chạm. Dùng chuột thì khác: nhấp một lần
+  chỉ chọn ô, như trong bảng tính, còn nhấp đúp mới mở ô: mở trong bảng nhỏ, hoặc với file sửa được
+  thì sửa ngay trong ô (xem mục dưới); giá trị mở từ Records vẫn hiện trong bảng nhỏ.
 - Dòng có số ô khác với dòng tiêu đề thì số dòng chuyển màu cam; rê chuột lên số dòng, hoặc trình
   đọc màn hình, sẽ cho biết dòng đó có bao nhiêu ô.
 - Trên bàn phím, các phím mũi tên, Page Up và Page Down đi giữa các ô; Home và End tới cột đầu và
@@ -505,15 +505,16 @@ file được sửa dạng văn bản.
 - Chạm một ô để đổi giá trị của nó trong một bảng nhỏ hiện lên: giá trị có thể nhiều dòng, và
   những ký tự làm chữ bị ẩn hay đảo thứ tự hiện bên dưới dưới dạng `⟨U+XXXX⟩`. **Apply** đưa giá
   trị vào bảng; ô mà một dòng thiếu cũng đặt được giá trị.
-- Dùng chuột thì giá trị được sửa ngay trong ô: bấm vào ô, hoặc nhấn F2 hay Enter trên ô đang chọn.
-  Ô đang sửa cao dần theo nội dung, phủ lên các hàng bên dưới, hiện được tới 20 dòng (dài hơn thì
-  cuộn bên trong) và rộng ít nhất 12rem.
-  Đang chỉ xem một file sửa được mà bấm vào ô thì bảng chuyển sang sửa trước. Enter ghi giá trị,
-  Shift+Enter hay Alt+Enter xuống dòng, Esc bỏ những gì vừa gõ; bảng vẫn ở chế độ sửa, muốn thoát
-  thì bấm **Cancel**. Tab và Shift+Tab ghi rồi sang ô kế tiếp hay ô trước, hết dòng thì sang dòng
-  sau. Bấm ra chỗ khác, hoặc cuộn ô ra khỏi màn hình, cũng ghi giá trị. Nút ⤢ trong ô mở bảng nhỏ
-  của ô với những gì bạn đang gõ, rộng chỗ hơn và có **Add row below**, **Delete row**. Giá trị
-  dài hơn 1024 ký tự, hoặc có ký tự làm chữ bị ẩn hay đảo thứ tự, thì mở thẳng trong bảng nhỏ.
+- Dùng chuột thì giá trị được sửa ngay trong ô: nhấp đúp vào ô, hoặc nhấn F2 hay Enter trên ô đang
+  chọn. Ô đang sửa cao dần theo nội dung, phủ lên các hàng bên dưới, hiện được tới 20 dòng (dài hơn
+  thì cuộn bên trong) và rộng ít nhất 12rem. Nhấp một lần chỉ chọn ô, nên Ctrl+V khi đó dán cả khối
+  (xem mục trên); chạm trên màn hình cảm ứng, kể cả của laptop, vẫn mở ô. Đang chỉ xem một file sửa
+  được mà nhấp đúp vào ô thì bảng chuyển sang sửa trước. Enter ghi giá trị, Shift+Enter hay
+  Alt+Enter xuống dòng, Esc bỏ những gì vừa gõ; bảng vẫn ở chế độ sửa, muốn thoát thì bấm
+  **Cancel**. Tab và Shift+Tab ghi rồi sang ô kế tiếp hay ô trước, hết dòng thì sang dòng sau. Bấm
+  ra chỗ khác, hoặc cuộn ô ra khỏi màn hình, cũng ghi giá trị. Nút ⤢ trong ô mở bảng nhỏ của ô với
+  những gì bạn đang gõ, rộng chỗ hơn và có **Add row below**, **Delete row**. Giá trị dài hơn 1024
+  ký tự, hoặc có ký tự làm chữ bị ẩn hay đảo thứ tự, thì mở thẳng trong bảng nhỏ.
 - Có bàn phím thì gõ ngay trên ô đang chọn là bắt đầu sửa ô đó, chữ gõ vào thay cho giá trị cũ (Esc
   giữ lại giá trị cũ); đang chỉ xem file thì bảng chuyển sang sửa trước. Giá trị mà ô không sửa tại
   chỗ được thì mở bảng nhỏ với chữ vừa gõ. Delete hay Backspace xoá trắng ô, một lần Ctrl+Z trả lại
