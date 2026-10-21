@@ -1,6 +1,6 @@
 # All-in-one: tmux, herdr or zellij + termote (serve mode, streams the terminal itself)
 # Debian, not Alpine: entrypoint.sh needs bash and locales. Pinned by digest.
-FROM debian:stable-slim@sha256:5bc3287b25407c965a30f38e32603dc253a3869e1b12a21ac09bfc27fd8b13ce
+FROM debian:stable-slim@sha256:a717a33469731894e77e912ea7d714e27c2dc38ee6554fd1a3102e92999cfc66
 
 # Install tools + locale support; tini reaps the tmux processes that daemonize
 RUN apt-get update && apt-get install -y --no-install-recommends \
