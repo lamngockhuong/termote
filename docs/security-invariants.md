@@ -75,8 +75,9 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   Before every `zellij` command (listing, action, `attach`, `subscribe`) the socket dir
   (`ZELLIJ_SOCKET_DIR`, else `$XDG_RUNTIME_DIR/zellij` on Linux, else `$TMPDIR/zellij-<uid>`) is
   checked (`zellijCheckSocketDir`): made 0700 when missing, it must be a directory (not a
-  symlink) of the server's uid that others cannot write; its group write (Zellij makes it 0775
-  under umask 002) is then taken away (`zellijOwnSocketDir`: checked and changed through one
+  symlink) of the server's uid that others cannot write; its group write (Zellij makes
+  `$XDG_RUNTIME_DIR/zellij` 0775 under umask 002; `$TMPDIR/zellij-<uid>`, the socket dir on macOS,
+  it sets to 0700 each time it runs) is then taken away (`zellijOwnSocketDir`: checked and changed through one
   descriptor opened with `O_NOFOLLOW`, then stat'ed again through it: a mount that takes the
   chmod but keeps the mode, some FUSE, SMB or vfat, is refused; logged), so another member of its
   group cannot swap the contract dir after the check; and its `contract_version_1`, where the

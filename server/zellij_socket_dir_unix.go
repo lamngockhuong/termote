@@ -22,9 +22,11 @@ import (
 // A socket dir that is missing is made 0700 first, so no other user makes
 // it before zellij does. Otherwise another user who made the dir in a shared
 // /tmp could serve a session termote would list, attach to and type into.
-// Zellij makes the socket dir group-writable under umask 002: its group
-// write is taken away before the contract dir is checked, so another member
-// of the group cannot swap the contract dir between the check and a command.
+// Zellij makes $XDG_RUNTIME_DIR/zellij group-writable under umask 002 (on
+// macOS the socket dir is $TMPDIR/zellij-<uid>, which Zellij sets to 0700
+// each time it runs): its group write is taken away before the contract dir
+// is checked, so another member of the group cannot swap the contract dir
+// between the check and a command.
 func zellijCheckSocketDir() error {
 	dir := zellijSocketDir()
 	err := os.MkdirAll(dir, 0o700)
