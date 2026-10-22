@@ -186,9 +186,12 @@ The **Include ignored** switch is not here: it sits next to the Find a file box 
 ## Updates
 
 Shows the version the server runs and the newest stable release on GitHub (the one
-`termote update` installs), read when Settings opens and kept for an hour; **Check for updates**
-asks GitHub again. When the server is older, it shows the command for this install with a
-**Copy** button, and a link to the release notes:
+`termote update` installs). The browser asks `api.github.com` itself when the app opens or is
+shown again, at most once an hour (ten minutes after a failed ask); **Check for updates** asks
+again. When the server is older, this group shows the command for this install with a **Copy**
+button and a link to the release notes, About names the version on its **Check for updates** row,
+and a dot marks the header's **⋯** menu, whose **Update to vX.Y.Z** item opens this group (not for
+a view-only device or a git checkout):
 
 | Install                    | Command                                                  |
 | -------------------------- | -------------------------------------------------------- |
@@ -196,7 +199,7 @@ asks GitHub again. When the server is older, it shows the command for this insta
 | Container                  | `termote update && termote container up` (on the host)   |
 
 A git checkout gets a hint instead of a command (pull, rebuild and restart it; the commands differ
-by OS). Termote does not check on its own when the app opens.
+by OS).
 
 ### Reloading after an update
 

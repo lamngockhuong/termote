@@ -125,6 +125,20 @@ describe('AboutModal', () => {
     expect(onCheckUpdates).toHaveBeenCalledTimes(1)
   })
 
+  it('names an available update on the Check for updates row', () => {
+    render(
+      <AboutModal
+        isOpen={true}
+        onClose={vi.fn()}
+        onCheckUpdates={vi.fn()}
+        updateVersion="2.5.0"
+      />,
+    )
+    expect(
+      screen.getByRole('button', { name: /Check for updates/ }),
+    ).toHaveTextContent('v2.5.0 available')
+  })
+
   it('leaves out Check for updates without a handler', () => {
     render(<AboutModal isOpen={true} onClose={vi.fn()} />)
     expect(
