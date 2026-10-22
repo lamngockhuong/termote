@@ -376,6 +376,9 @@ func TestHerdrAutostartAnotherWon(t *testing.T) {
 		}()
 		return exited, nil
 	})
+	// No poll between the listen and the exit: one landing there would take
+	// the other herdr for this one answering, then crashing.
+	herdrStartPoll = time.Minute
 	m := newDeadHerdrMux(t)
 	m.startingSnapshot(context.Background())
 	waitStarted(t, m)
