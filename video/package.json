@@ -12,11 +12,11 @@
     "screenshots": "remotion still ReadmePhones ../docs/images/screenshots/phones.png && remotion still ReadmeDesktop ../docs/images/screenshots/desktop.png && remotion still ReadmeStyles ../docs/images/screenshots/ui-styles.png"
   },
   "devDependencies": {
-    "@remotion/cli": "4.0.534",
-    "@remotion/eslint-config-flat": "4.0.534",
-    "@remotion/google-fonts": "4.0.534",
-    "@remotion/media": "4.0.534",
-    "@remotion/transitions": "4.0.534",
+    "@remotion/cli": "4.0.536",
+    "@remotion/eslint-config-flat": "4.0.536",
+    "@remotion/google-fonts": "4.0.536",
+    "@remotion/media": "4.0.536",
+    "@remotion/transitions": "4.0.536",
     "@types/qrcode": "1.5.6",
     "@types/react": "19.2.7",
     "@types/web": "0.0.166",
@@ -24,7 +24,7 @@
     "qrcode": "1.5.4",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "remotion": "4.0.534",
+    "remotion": "4.0.536",
     "typescript": "5.9.3"
   }
 }
