@@ -101,7 +101,8 @@ export function updateQueue(
   }
 }
 
-// A choice of the dialog on top was sent from here (maybe only a tab).
+// A choice of the dialog on top was sent from here (maybe only a tab), as
+// soon as it is pressed: its keys may reach the pane before the reply.
 export function markSent(state: QueueState): QueueState {
   return state.current === null ? state : { ...state, sent: true }
 }

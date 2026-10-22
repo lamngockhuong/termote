@@ -31,6 +31,9 @@ interface Props {
   showView: ViewProps['showView']
   // The dialog was answered: poll again now
   onAnswered: () => void
+  // A choice is on its way: its keys may reach the pane even when the reply
+  // fails or comes after the agent stopped waiting
+  onSending?: () => void
   // The answer reached the pane (onAnswered also follows a doubtful one)
   onSent?: () => void
   // The server refused with the dialog now on screen (or none)
@@ -44,6 +47,7 @@ export function PromptCard({
   readOnly,
   showView,
   onAnswered,
+  onSending,
   onSent,
   onChanged,
 }: Props) {
@@ -88,6 +92,7 @@ export function PromptCard({
     pressed.current = document.activeElement as HTMLElement | null
     setBusy(true)
     setNotice(null)
+    onSending?.()
     try {
       await answerAgentPrompt(paneId, prompt.promptId, choice)
       trigger('light')

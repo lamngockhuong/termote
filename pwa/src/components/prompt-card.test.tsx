@@ -163,6 +163,27 @@ describe('PromptCard', () => {
     expect(onSent).toHaveBeenCalledTimes(1)
   })
 
+  it('tells onSending of a choice before its reply, whatever the reply', async () => {
+    const onSending = vi.fn()
+    mockAnswer.mockImplementation(async () => {
+      expect(onSending).toHaveBeenCalledTimes(1)
+      throw new AgentRequestError(500, '', 'x')
+    })
+    render(
+      <PromptCard
+        paneId="%3"
+        prompt={permission}
+        showView={showView}
+        onAnswered={onAnswered}
+        onSending={onSending}
+        onChanged={onChanged}
+      />,
+    )
+    await click(/1\.\s*Yes$/)
+    expect(mockAnswer).toHaveBeenCalledTimes(1)
+    expect(onSending).toHaveBeenCalledTimes(1)
+  })
+
   it('Zellij busy: nothing was sent, the buttons stay to try again', async () => {
     mockAnswer.mockRejectedValue(new AgentRequestError(503, 'busy', 'x'))
     renderCard(permission)
