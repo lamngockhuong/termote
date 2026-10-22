@@ -62,7 +62,14 @@ export function TableColumnMenu({
           <MenuSeparator />
         </>
       )}
-      <MenuItem onSelect={onPin}>
+      <MenuItem
+        title={
+          pinned
+            ? undefined
+            : 'Keeps the column at the left once the table scrolls sideways to it, unless it is wider than half the table'
+        }
+        onSelect={onPin}
+      >
         {pinned ? 'Unpin column' : 'Pin column'}
       </MenuItem>
       <MenuItem disabled={!canHide} onSelect={onHide}>

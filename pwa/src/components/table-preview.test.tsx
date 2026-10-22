@@ -2119,7 +2119,11 @@ describe('TablePreview of a large file, while its rows are worked out', () => {
 })
 
 describe('TablePreview pinned column', () => {
-  const pinItem = () => screen.getByRole('menuitemcheckbox', { name: /^Pin/ })
+  const pin = (name: string) => {
+    fireEvent.click(screen.getByRole('button', { name: `Column ${name}` }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Pin column' }))
+  }
+  const unpinItem = () => screen.queryByRole('menuitem', { name: /^Unpin / })
   const stuck = (el: Element) => el.classList.contains('sticky')
   const firstCells = () =>
     screen
@@ -2127,24 +2131,22 @@ describe('TablePreview pinned column', () => {
       .slice(1)
       .map((r) => within(r).getAllByRole('gridcell')[0])
 
-  it('pins the first column next to the row numbers, its header too, and tells it', () => {
+  it('pins the first column next to the row numbers, its header too', () => {
     const onLayout = vi.fn()
     show(notes, { onLayout })
     const id = screen.getByRole('columnheader', { name: 'id' })
     expect(stuck(id)).toBe(false)
+    // Nothing pinned: nothing to unpin in the Columns menu
     columnsMenu()
-    expect(pinItem()).toHaveAttribute('aria-checked', 'false')
-    expect(pinItem()).toHaveAttribute('title', expect.stringMatching(/half/))
-    fireEvent.click(pinItem())
-    // The menu stays open
-    expect(pinItem()).toHaveAttribute('aria-checked', 'true')
+    expect(unpinItem()).toBeNull()
+    fireEvent.keyDown(document.activeElement as Element, { key: 'Escape' })
+    pin('id')
     expect(onLayout).toHaveBeenLastCalledWith({
       key: ',|1',
       widths: {},
       wrapped: [],
       pinned: 0,
     })
-    expect(pinItem()).toHaveAccessibleName('Pinned: id')
     expect(stuck(id)).toBe(true)
     expect(id.style.left).toBe('calc(2ch + 1rem)')
     for (const cell of firstCells()) {
@@ -2156,7 +2158,8 @@ describe('TablePreview pinned column', () => {
       false,
     )
     expect(stuck(screen.getByRole('gridcell', { name: 'short' }))).toBe(false)
-    fireEvent.click(pinItem())
+    columnsMenu()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Unpin id' }))
     expect(stuck(id)).toBe(false)
     expect(firstCells().some(stuck)).toBe(false)
   })
@@ -2212,8 +2215,7 @@ describe('TablePreview pinned column', () => {
   it('a cell edited in the pinned column grows over the pinned cells below', () => {
     coarse.fine = true
     edit(notes)
-    columnsMenu()
-    fireEvent.click(pinItem())
+    pin('id')
     fireEvent.click(screen.getByRole('gridcell', { name: '1' }))
     const box = screen.getByRole('textbox', { name: 'Edit id, row 2' })
     const cell = box.closest('[role="gridcell"]') as HTMLElement
@@ -2242,8 +2244,7 @@ describe('TablePreview pinned column', () => {
   it('pins any column from its ⋯, in its place; the Columns menu unpins it', () => {
     const onLayout = vi.fn()
     show(notes, { onLayout })
-    fireEvent.click(screen.getByRole('button', { name: 'Column note' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Pin column' }))
+    pin('note')
     expect(onLayout).toHaveBeenLastCalledWith({
       key: ',|1',
       widths: {},
@@ -2258,11 +2259,12 @@ describe('TablePreview pinned column', () => {
     expect(stuck(screen.getByRole('columnheader', { name: 'id' }))).toBe(false)
     expect(firstCells().some(stuck)).toBe(false)
     columnsMenu()
-    expect(pinItem()).toHaveAccessibleName('Pinned: note')
-    expect(pinItem()).toHaveAttribute('aria-checked', 'true')
-    fireEvent.click(pinItem())
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Unpin note' }))
     expect(stuck(note)).toBe(false)
-    expect(pinItem()).toHaveAccessibleName('Pin first column')
+    // The menu closes, and has nothing to unpin
+    expect(screen.queryByRole('menu')).toBeNull()
+    columnsMenu()
+    expect(unpinItem()).toBeNull()
   })
 
   it('pinning another column unpins the one before; its ⋯ unpins it', () => {

@@ -67,6 +67,10 @@ describe('TableColumnMenu', () => {
 
   it('pins, unpins and hides the column; the last one shown stays', () => {
     const p = menu()
+    expect(item('Pin column')).toHaveAttribute(
+      'title',
+      expect.stringMatching(/half/),
+    )
     fireEvent.click(item('Pin column'))
     expect(p.onPin).toHaveBeenCalledTimes(1)
     fireEvent.click(item('Hide column'))

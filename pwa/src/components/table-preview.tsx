@@ -985,16 +985,13 @@ export default function TablePreview({
           >
             Reset widths
           </MenuItem>
-          <MenuItemCheckbox
-            keepOpen
-            checked={pinned !== undefined}
-            title="Keeps a column at the left while the table scrolls sideways, unless it is wider than half the table; any column is pinned from its ⋯"
-            onSelect={() => togglePin(pinned ?? cols[0])}
-          >
-            {pinned === undefined
-              ? 'Pin first column'
-              : `Pinned: ${cellText(names[pinned])}`}
-          </MenuItemCheckbox>
+          {/* Pinned from a column's ⋯; undone here too, where a column
+              too wide to stick, its ⋯ scrolled away, still shows */}
+          {pinned !== undefined && (
+            <MenuItem onSelect={() => togglePin(pinned)}>
+              Unpin {cellText(names[pinned])}
+            </MenuItem>
+          )}
           <MenuSeparator />
           {/* Disabled once it ran: the menu closes rather than keep a
               focus that has nowhere to go */}

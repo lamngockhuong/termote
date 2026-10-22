@@ -1275,9 +1275,8 @@ test.describe('files and changes views', () => {
         const grid = panel.getByRole('grid')
         await expect(grid).toHaveAttribute('aria-busy', 'false')
         await bar.getByRole('tab', { name: /^wide\.csv/ }).dblclick()
-        await panel.getByRole('button', { name: 'Columns' }).click()
-        await page.getByRole('menuitemcheckbox', { name: 'Pin first column' }).click()
-        await page.keyboard.press('Escape')
+        await panel.getByRole('grid').getByRole('columnheader', { name: 'col0', exact: true }).click({ button: 'right' })
+        await page.getByRole('menuitem', { name: 'Pin column' }).click()
         // Scrolled to the far right, the first column sits next to the row
         // numbers, its header too
         const scrolledRight = async () => {
@@ -1299,7 +1298,7 @@ test.describe('files and changes views', () => {
         await expect(panel.getByRole('grid').getByRole('columnheader', { name: 'a', exact: true })).toBeVisible()
         await bar.getByRole('tab', { name: 'wide.csv', exact: true }).click()
         await panel.getByRole('button', { name: 'Columns' }).click()
-        await expect(page.getByRole('menuitemcheckbox', { name: 'Pinned: col0' })).toHaveAttribute('aria-checked', 'true')
+        await expect(page.getByRole('menuitem', { name: 'Unpin col0' })).toBeVisible()
         await page.keyboard.press('Escape')
         await scrolledRight()
         // Keys back to a column scrolled under the pinned one bring it out
@@ -1354,7 +1353,8 @@ test.describe('files and changes views', () => {
         const header = (await g.getByRole('columnheader', { name: 'col5', exact: true }).boundingBox())!
         expect(Math.round(header.x)).toBe(Math.round((await pinnedCell()).x))
         await panel.getByRole('button', { name: 'Columns' }).click()
-        await expect(page.getByRole('menuitemcheckbox', { name: 'Pinned: col5' })).toHaveAttribute('aria-checked', 'true')
+        await page.getByRole('menuitem', { name: 'Unpin col5' }).click()
+        expect(Math.round((await pinnedCell()).x)).toBeLessThan(Math.round(m.x + m.width))
       } finally {
         rmSync(csvDir(), { recursive: true, force: true })
       }
