@@ -687,7 +687,8 @@ test.describe('files and changes views', () => {
       await panel.getByRole('searchbox', { name: 'Filter rows' }).fill('cuong')
       await expect(panel.getByText('1 / 3 rows')).toBeVisible()
       await expect(grid.getByRole('row')).toHaveCount(2)
-      await grid.getByRole('button', { name: 'note' }).click()
+      // Left of its ⋯, which a narrow name has over its middle
+      await grid.getByRole('button', { name: 'note', exact: true }).click({ position: { x: 4, y: 4 } })
       expect(readFileSync(f, 'utf-8')).toBe(text)
 
       // Source is remembered: the file opens as source again
@@ -1298,7 +1299,7 @@ test.describe('files and changes views', () => {
         await expect(panel.getByRole('grid').getByRole('columnheader', { name: 'a', exact: true })).toBeVisible()
         await bar.getByRole('tab', { name: 'wide.csv', exact: true }).click()
         await panel.getByRole('button', { name: 'Columns' }).click()
-        await expect(page.getByRole('menuitemcheckbox', { name: 'Pin first column' })).toHaveAttribute('aria-checked', 'true')
+        await expect(page.getByRole('menuitemcheckbox', { name: 'Pinned: col0' })).toHaveAttribute('aria-checked', 'true')
         await page.keyboard.press('Escape')
         await scrolledRight()
         // Keys back to a column scrolled under the pinned one bring it out
@@ -1318,6 +1319,42 @@ test.describe('files and changes views', () => {
             }),
           )
           .toBe(true)
+      } finally {
+        rmSync(csvDir(), { recursive: true, force: true })
+      }
+    })
+
+    test('a column pinned from its menu keeps its place until scrolled to, then sticks', async ({ page }) => {
+      const head = Array.from({ length: 30 }, (_, i) => `col${i}`).join(',')
+      const row = (n: number) => Array.from({ length: 30 }, (_, i) => `r${n}c${i}`).join(',')
+      try {
+        mkdirSync(csvDir(), { recursive: true })
+        writeFileSync(path.join(csvDir(), 'wide.csv'), `${head}\n${row(1)}\n${row(2)}\n`)
+        await openCsv(page, 'wide.csv')
+        const panel = page.getByRole('complementary', { name: 'Files' })
+        const g = panel.getByRole('grid')
+        await expect(g).toHaveAttribute('aria-busy', 'false')
+        await g.getByRole('columnheader', { name: 'col5', exact: true }).click({ button: 'right' })
+        await page.getByRole('menuitem', { name: 'Pin column' }).click()
+        const number = async () => (await g.getByRole('rowheader', { name: 'Row 2', exact: true }).boundingBox())!
+        const pinnedCell = async () => (await g.getByRole('gridcell', { name: 'r1c5', exact: true }).boundingBox())!
+        // Not scrolled (the click may have scrolled to its name): in its own
+        // place, the columns before it shown
+        await g.evaluate((el) => {
+          el.scrollLeft = 0
+        })
+        const n = await number()
+        expect(Math.round((await pinnedCell()).x)).toBeGreaterThan(Math.round(n.x + n.width))
+        await expect(g.getByRole('gridcell', { name: 'r1c0', exact: true })).toBeInViewport()
+        await g.evaluate((el) => {
+          el.scrollLeft = el.scrollWidth
+        })
+        const m = await number()
+        expect(Math.round((await pinnedCell()).x)).toBe(Math.round(m.x + m.width))
+        const header = (await g.getByRole('columnheader', { name: 'col5', exact: true }).boundingBox())!
+        expect(Math.round(header.x)).toBe(Math.round((await pinnedCell()).x))
+        await panel.getByRole('button', { name: 'Columns' }).click()
+        await expect(page.getByRole('menuitemcheckbox', { name: 'Pinned: col5' })).toHaveAttribute('aria-checked', 'true')
       } finally {
         rmSync(csvDir(), { recursive: true, force: true })
       }

@@ -110,16 +110,19 @@ describe('restoreFilesState', () => {
     expect(back?.tabs.map((t) => t.table?.lines)).toEqual([undefined, 10])
   })
 
-  it('reads a pinned first column, or none from a tab kept before it', () => {
+  it('reads a pinned column, a pinned first column, or none', () => {
     const tabs = [
       fileTab('t1', { table: { key: 'k', widths: {}, wrapped: [] } }),
       fileTab('t2', {
         table: { key: 'k', widths: {}, wrapped: [], pinned: true },
       }),
+      fileTab('t3', {
+        table: { key: 'k', widths: {}, wrapped: [], pinned: 2 },
+      }),
     ]
     const kept = persistedFilesState({ tabs, activeId: 't2' })
     const back = restoreFilesState(JSON.parse(JSON.stringify(kept)))
-    expect(back?.tabs.map((t) => t.table?.pinned)).toEqual([undefined, true])
+    expect(back?.tabs.map((t) => t.table?.pinned)).toEqual([undefined, true, 2])
   })
 
   it('reads hidden columns, or none from a tab kept before them', () => {

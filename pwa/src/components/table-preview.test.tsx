@@ -2118,9 +2118,8 @@ describe('TablePreview of a large file, while its rows are worked out', () => {
   })
 })
 
-describe('TablePreview pinned first column', () => {
-  const pinItem = () =>
-    screen.getByRole('menuitemcheckbox', { name: 'Pin first column' })
+describe('TablePreview pinned column', () => {
+  const pinItem = () => screen.getByRole('menuitemcheckbox', { name: /^Pin/ })
   const stuck = (el: Element) => el.classList.contains('sticky')
   const firstCells = () =>
     screen
@@ -2143,8 +2142,9 @@ describe('TablePreview pinned first column', () => {
       key: ',|1',
       widths: {},
       wrapped: [],
-      pinned: true,
+      pinned: 0,
     })
+    expect(pinItem()).toHaveAccessibleName('Pinned: id')
     expect(stuck(id)).toBe(true)
     expect(id.style.left).toBe('calc(2ch + 1rem)')
     for (const cell of firstCells()) {
@@ -2237,6 +2237,110 @@ describe('TablePreview pinned first column', () => {
       layout: { key: ',|1', widths: { 0: 10 }, wrapped: [], pinned: true },
     })
     expect(grid().style.scrollPaddingLeft).toBe('calc(12ch + 2rem)')
+  })
+
+  it('pins any column from its ⋯, in its place; the Columns menu unpins it', () => {
+    const onLayout = vi.fn()
+    show(notes, { onLayout })
+    fireEvent.click(screen.getByRole('button', { name: 'Column note' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Pin column' }))
+    expect(onLayout).toHaveBeenLastCalledWith({
+      key: ',|1',
+      widths: {},
+      wrapped: [],
+      pinned: 1,
+    })
+    const note = screen.getByRole('columnheader', { name: 'note' })
+    expect(stuck(note)).toBe(true)
+    expect(note.style.left).toBe('calc(2ch + 1rem)')
+    expect(stuck(screen.getByRole('gridcell', { name: 'short' }))).toBe(true)
+    // The columns before it keep their place and pass under it
+    expect(stuck(screen.getByRole('columnheader', { name: 'id' }))).toBe(false)
+    expect(firstCells().some(stuck)).toBe(false)
+    columnsMenu()
+    expect(pinItem()).toHaveAccessibleName('Pinned: note')
+    expect(pinItem()).toHaveAttribute('aria-checked', 'true')
+    fireEvent.click(pinItem())
+    expect(stuck(note)).toBe(false)
+    expect(pinItem()).toHaveAccessibleName('Pin first column')
+  })
+
+  it('pinning another column unpins the one before; its ⋯ unpins it', () => {
+    show(notes, {
+      layout: { key: ',|1', widths: {}, wrapped: [], pinned: 0 },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Column note' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Pin column' }))
+    expect(stuck(screen.getByRole('columnheader', { name: 'id' }))).toBe(false)
+    const note = screen.getByRole('columnheader', { name: 'note' })
+    expect(stuck(note)).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Column note' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Unpin column' }))
+    expect(stuck(note)).toBe(false)
+  })
+
+  it('hiding the pinned column from its ⋯ unpins it', () => {
+    const onLayout = vi.fn()
+    show(notes, {
+      layout: { key: ',|1', widths: {}, wrapped: [], pinned: 1 },
+      onLayout,
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Column note' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Hide column' }))
+    expect(onLayout.mock.lastCall?.[0]).toMatchObject({ hidden: [1] })
+    expect(onLayout.mock.lastCall?.[0].pinned).toBeUndefined()
+    expect(screen.queryByRole('columnheader', { name: 'note' })).toBeNull()
+    expect(firstCells().some(stuck)).toBe(false)
+  })
+
+  it('a pinned column hidden in the Columns menu is shown unpinned again', () => {
+    show(notes, {
+      layout: { key: ',|1', widths: {}, wrapped: [], pinned: 1 },
+    })
+    columnsMenu()
+    const note = () =>
+      within(screen.getByRole('group', { name: 'Show' })).getByRole(
+        'menuitemcheckbox',
+        { name: '2 · note' },
+      )
+    fireEvent.click(note())
+    fireEvent.click(note())
+    expect(stuck(screen.getByRole('columnheader', { name: 'note' }))).toBe(
+      false,
+    )
+  })
+
+  it('the last column shown cannot be hidden from its ⋯', () => {
+    show(notes, {
+      layout: { key: ',|1', widths: {}, wrapped: [], hidden: [0] },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Column note' }))
+    expect(screen.getByRole('menuitem', { name: 'Hide column' })).toBeDisabled()
+  })
+
+  it('a pinned column follows a column inserted before it', () => {
+    coarse.fine = true
+    edit(notes)
+    fireEvent.click(screen.getByRole('button', { name: 'Column note' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Pin column' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Column id' }))
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: 'Insert column left' }),
+    )
+    fireEvent.keyDown(screen.getByRole('textbox', { name: /^Rename column/ }), {
+      key: 'Escape',
+    })
+    expect(stuck(screen.getByRole('columnheader', { name: 'note' }))).toBe(true)
+    expect(stuck(screen.getByRole('columnheader', { name: 'id' }))).toBe(false)
+  })
+
+  it('scrolls a cell out from under a pinned column past the first', () => {
+    show(notes, {
+      layout: { key: ',|1', widths: { 1: 10 }, wrapped: [], pinned: 1 },
+    })
+    expect(screen.getByRole('grid').style.scrollPaddingLeft).toBe(
+      'calc(12ch + 2rem)',
+    )
   })
 })
 
@@ -3053,13 +3157,19 @@ describe('TablePreview row and column edits', () => {
     ).toBe(true)
   })
 
-  it("a table only viewed has no column menu; its context menu is the browser's", () => {
+  it("a table only viewed: its column menu only pins and hides; a cell's context menu is the browser's", () => {
     show(abc)
-    expect(screen.queryByRole('button', { name: /^Column / })).toBeNull()
-    expect(fireEvent.contextMenu(header('a'))).toBe(true)
+    fireEvent.click(menuOf('a'))
+    expect(screen.getByRole('menuitem', { name: 'Pin column' })).toBeEnabled()
+    expect(screen.getByRole('menuitem', { name: 'Hide column' })).toBeEnabled()
+    expect(
+      screen.queryByRole('menuitem', { name: /Insert|Rename|Delete/ }),
+    ).toBeNull()
+    fireEvent.keyDown(document.activeElement as Element, { key: 'Escape' })
     expect(
       fireEvent.contextMenu(screen.getByRole('gridcell', { name: '1' })),
     ).toBe(true)
+    expect(screen.queryByRole('menuitem', { name: /row/ })).toBeNull()
     expect(
       fireEvent.keyDown(screen.getByRole('gridcell', { name: '1' }), {
         key: 'ContextMenu',

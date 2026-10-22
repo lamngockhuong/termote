@@ -767,6 +767,10 @@ Run on tmux (Linux/macOS) and Herdr; psmux (Windows) offers neither view.
       showing another tab and coming back, and goes on another "Delimiter" or "Header row"
 - [ ] iPhone (375px), a wide first column pinned: it scrolls with the others, the table still
       scrolls sideways
+- [ ] A table only viewed, a column's ⋯ → "Pin column" on its third column: it stays in place
+      until scrolled to, then sticks next to the row numbers and the columns before it pass under
+      it; "Columns" reads "Pinned: <name>"; pinning another column moves the pin; "Unpin column"
+      and "Hide column" in the ⋯ work, hiding the pinned column unpins it
 - [ ] "Columns" → "Show": untick two columns: they leave the table and Records ("2 columns
       hidden"); filtering on a value only a hidden column has keeps its row; arrow keys and Tab in a
       cell skip them; the last column shown cannot be unticked; "Show all" brings them back; the

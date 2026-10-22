@@ -41,6 +41,7 @@ import {
   initialWidths,
   moveColumns,
   movedColumn,
+  pinnedColumn,
   type ReadCell,
   shownColumns,
   type TableLayout,
@@ -323,6 +324,7 @@ export default function TablePreview({
     [names.length, layout.hidden],
   )
   const hiddenCount = names.length - cols.length
+  const pinned = pinnedColumn(layout.pinned, cols)
 
   // Find: open or not, what is typed and how; F3 still finds what was
   // typed once it closed, opening it again. Nothing is searched while it
@@ -729,6 +731,7 @@ export default function TablePreview({
     })
   // Only what is shown changes: a hidden column is still filtered on. A
   // sort by it goes, its arrow being gone with it.
+  // Hidden, the column pinned is no longer
   const toggleShown = (col: number) => {
     const hidden = (layout.hidden ?? []).filter((c) => c < names.length)
     if (!hidden.includes(col) && sort?.col === col) setSort(null)
@@ -737,8 +740,12 @@ export default function TablePreview({
       hidden: hidden.includes(col)
         ? hidden.filter((c) => c !== col)
         : [...hidden, col],
+      ...(!hidden.includes(col) && pinned === col && { pinned: undefined }),
     })
   }
+  // One column at a time: pinning another unpins the one before
+  const togglePin = (col: number) =>
+    setLayout({ ...layout, pinned: pinned === col ? undefined : col })
   const openRecord = (row: number) => {
     setRecordRow(row)
     setRecords(true)
@@ -980,11 +987,13 @@ export default function TablePreview({
           </MenuItem>
           <MenuItemCheckbox
             keepOpen
-            checked={!!layout.pinned}
-            title="Keeps the first column shown at the left while the table scrolls sideways, unless it is wider than half the table"
-            onSelect={() => setLayout({ ...layout, pinned: !layout.pinned })}
+            checked={pinned !== undefined}
+            title="Keeps a column at the left while the table scrolls sideways, unless it is wider than half the table; any column is pinned from its ⋯"
+            onSelect={() => togglePin(pinned ?? cols[0])}
           >
-            Pin first column
+            {pinned === undefined
+              ? 'Pin first column'
+              : `Pinned: ${cellText(names[pinned])}`}
           </MenuItemCheckbox>
           <MenuSeparator />
           {/* Disabled once it ran: the menu closes rather than keep a
@@ -1114,35 +1123,39 @@ export default function TablePreview({
           busy={!computed || stale}
           covered={records}
           scrollTop={scrollTop}
-          pinned={!!layout.pinned}
+          pinned={pinned}
           matches={finding ? found.matches : undefined}
           current={matchCount ? matchAt(currentMatch) : undefined}
           goTo={goTo}
-          columnMenu={
-            live &&
-            ((col, row, isOpen, onOpenChange) => (
-              <TableColumnMenu
-                name={cellText(names[col])}
-                open={isOpen}
-                onOpenChange={onOpenChange}
-                fromCell={row !== undefined}
-                canDelete={t.columnCount > 1}
-                canRename={header}
-                onInsertRow={(side) =>
-                  addRow((row as number) - (side === 'above' ? 1 : 0))
+          columnMenu={(col, row, isOpen, onOpenChange) => (
+            <TableColumnMenu
+              name={cellText(names[col])}
+              open={isOpen}
+              onOpenChange={onOpenChange}
+              pinned={pinned === col}
+              canHide={cols.length > 1}
+              onPin={() => togglePin(col)}
+              onHide={() => toggleShown(col)}
+              edit={
+                live && {
+                  fromCell: row !== undefined,
+                  canDelete: t.columnCount > 1,
+                  canRename: header,
+                  onInsertRow: (side) =>
+                    addRow((row as number) - (side === 'above' ? 1 : 0)),
+                  onInsertColumn: (side) => insertColumn(col, side),
+                  onDeleteColumn: () =>
+                    setDeletingCol({
+                      col,
+                      text,
+                      values: filledCells(text, t, col, header ? 1 : 0),
+                    }),
+                  onRename: () => rename(col),
                 }
-                onInsertColumn={(side) => insertColumn(col, side)}
-                onDeleteColumn={() =>
-                  setDeletingCol({
-                    col,
-                    text,
-                    values: filledCells(text, t, col, header ? 1 : 0),
-                  })
-                }
-                onRename={() => rename(col)}
-              />
-            ))
-          }
+              }
+            />
+          )}
+          menuFromCells={!!live}
           onRename={live && header && fine ? rename : undefined}
           clickSelects={fine}
           onCopyRange={copyRange}

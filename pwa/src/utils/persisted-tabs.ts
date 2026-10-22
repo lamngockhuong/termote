@@ -68,7 +68,7 @@ function isTable(v: unknown): v is TableLayout {
     v.wrapped.every(isNumber) &&
     (v.lines === undefined ||
       (WRAP_LINE_CHOICES as readonly unknown[]).includes(v.lines)) &&
-    optional(isBool)(v.pinned) &&
+    (v.pinned === undefined || isBool(v.pinned) || isNumber(v.pinned)) &&
     (v.hidden === undefined ||
       (Array.isArray(v.hidden) && v.hidden.every(isNumber)))
   )

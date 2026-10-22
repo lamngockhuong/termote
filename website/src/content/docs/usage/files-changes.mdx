@@ -410,10 +410,15 @@ it for changes). A deleted file has no table.
   column shows up to that many lines of each value (a line break still ends with `↵`) and its name
   has a wrap icon; while any column wraps, every row is that many lines tall, and a longer value
   is cut. The whole value is in its cell's sheet, or its field while editing.
-- **Pin first column** in the **Columns** menu keeps the first column at the left, next to the row
-  numbers, while the rest scrolls sideways, its name too. While the row numbers and that column
-  take more than half the table's width (a phone, a very wide first column), it scrolls with the
-  others, so the table can still be read. With columns hidden, the first one shown is pinned.
+- Each column name has a ⋯ button (shown on hover, or always on a touch screen); right-clicking a
+  name opens the same menu. **Pin column** keeps that column at the left, next to the row numbers,
+  its name too: it stays in its place until the table scrolls sideways to it, then the columns
+  before it pass under it. One column is pinned at a time; **Unpin column** in the same menu
+  unpins it. **Pin first column** in the **Columns** menu pins the first column shown, and while a
+  column is pinned that item reads **Pinned: name** and unpins it. While the row numbers and the
+  pinned column take more than half the table's width (a phone, a very wide column), it scrolls
+  with the others, so the table can still be read. **Hide column** in the ⋯ menu hides that column,
+  as **Show** below does; a pinned column hidden is unpinned.
 - **Show** in the **Columns** menu lists the columns, each ticked while it is shown: untick one to
   hide it from the table and from Records, which also says how many are hidden. **Show all**
   brings them back. The last column shown cannot be hidden, and hiding the column the table is
@@ -540,9 +545,9 @@ edited as text instead.
   button add an empty row and open its first cell. **Delete row** asks first, and says when the
   row is the file's first one, which is the header when **Header row** is on. To delete the
   header, turn **Header row** off first: the header row is then a row you can open.
-- Each column name has a ⋯ button while editing (shown on hover, or always on a touch screen);
-  right-clicking a name or a cell, or pressing Shift+F10 or the context menu key on it, opens the
-  same menu. **Insert column left** and **Insert column right** add an empty column: a delimiter
+- While editing, the ⋯ menu of a column name also has the edits below, and right-clicking a cell,
+  or pressing Shift+F10 or the context menu key on a name or a cell, opens the same menu.
+  **Insert column left** and **Insert column right** add an empty column: a delimiter
   in each row long enough to reach it, nothing else; a shorter row and a blank line stay as they
   are. With **Header row** on, the new column's name is asked for at once (Escape leaves it
   empty). **Delete column** asks first, saying how many cells with a value go with it; the last

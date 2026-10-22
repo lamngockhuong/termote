@@ -50,8 +50,10 @@ export interface TableLayout {
   widths: Record<number, number>
   wrapped: number[]
   lines?: WrapLines
-  // The first column shown stays at the left while the rest scrolls
-  pinned?: boolean
+  // The column that stays at the left while the rest scrolls (a column of
+  // the file); true, from a tab kept before any column could be pinned, is
+  // the first one shown
+  pinned?: boolean | number
   // Columns not shown in the grid and in Records
   hidden?: number[]
 }
@@ -69,6 +71,17 @@ export function shownColumns(count: number, hidden: readonly number[]) {
   return out.length || !count ? out : [0]
 }
 
+// The column pinned among the columns shown: none when it is hidden
+export function pinnedColumn(
+  pinned: TableLayout['pinned'],
+  cols: readonly number[],
+): number | undefined {
+  if (pinned === true) return cols[0]
+  return typeof pinned === 'number' && cols.includes(pinned)
+    ? pinned
+    : undefined
+}
+
 // A column index once a column is added at col (added) or col is removed:
 // undefined for the removed one itself
 export function movedColumn(
@@ -82,8 +95,8 @@ export function movedColumn(
 }
 
 // The layout once a column is added at col or col is removed: the widths,
-// wraps and hidden columns after it move with their columns, the removed
-// one's go, and an added one is shown, unwrapped, at its own width
+// wraps, hidden and pinned columns after it move with their columns, the
+// removed one's go, and an added one is shown, unwrapped, at its own width
 export function moveColumns(
   layout: TableLayout,
   col: number,
@@ -96,11 +109,15 @@ export function moveColumns(
     const to = movedColumn(Number(c), col, added)
     if (to !== undefined) widths[to] = w
   }
+  const { pinned, ...rest } = layout
+  const pin =
+    typeof pinned === 'number' ? movedColumn(pinned, col, added) : pinned
   return {
-    ...layout,
+    ...rest,
     widths,
     wrapped: move(layout.wrapped),
     ...(layout.hidden && { hidden: move(layout.hidden) }),
+    ...(pin !== undefined && { pinned: pin }),
   }
 }
 
