@@ -566,14 +566,12 @@ func TestHerdrAutostartCrashAfterAnswer(t *testing.T) {
 	f.close()
 	mu.Unlock()
 	close(exited)
-	waitUntil(t, "the crash to count", func() bool {
+	// failed logs after it unlocks: wait for the line too, not only the delay.
+	waitUntil(t, "the crash to count and be logged", func() bool {
 		m.starter.mu.Lock()
 		defer m.starter.mu.Unlock()
-		return m.starter.delay == 2*herdrStartBackoffMin
+		return m.starter.delay == 2*herdrStartBackoffMin && strings.Contains(logs.String(), "after it answered")
 	})
-	if !strings.Contains(logs.String(), "after it answered") {
-		t.Errorf("log: %s", logs)
-	}
 	// An answer from a herdr started just now keeps the backoff; one that
 	// has run past herdrStableAfter ends it.
 	m.starter.answered()
