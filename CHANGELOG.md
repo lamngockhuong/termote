@@ -1,5 +1,32 @@
 # Changelog
 
+## [2.5.0](https://github.com/lamngockhuong/termote/compare/v2.4.0...v2.5.0) (2026-10-22)
+
+
+### Features
+
+* **pwa:** a click selects a CSV cell, a double click opens it ([#520](https://github.com/lamngockhuong/termote/issues/520)) ([0ab1af1](https://github.com/lamngockhuong/termote/commit/0ab1af1dfeab7f3b17de720ec3042b26d3388239)), closes [#482](https://github.com/lamngockhuong/termote/issues/482)
+* **pwa:** a paste onto a CSV range fills it with the block, as a spreadsheet does ([#525](https://github.com/lamngockhuong/termote/issues/525)) ([dcb4e0a](https://github.com/lamngockhuong/termote/commit/dcb4e0a87b45d58f2bbb07e20fbeee9dc550ac9b))
+* **pwa:** find in the CSV table ([#516](https://github.com/lamngockhuong/termote/issues/516)) ([f33a95e](https://github.com/lamngockhuong/termote/commit/f33a95e95fca5232fe25a3d40eeb30fbfc5e1ad1)), closes [#482](https://github.com/lamngockhuong/termote/issues/482)
+* **pwa:** hide columns of the CSV table ([#515](https://github.com/lamngockhuong/termote/issues/515)) ([736b27d](https://github.com/lamngockhuong/termote/commit/736b27d75fe2d55d419df4e97ccad0c883a31f38)), closes [#482](https://github.com/lamngockhuong/termote/issues/482)
+* **pwa:** insert, delete and rename columns of the CSV table ([#517](https://github.com/lamngockhuong/termote/issues/517)) ([2d0f203](https://github.com/lamngockhuong/termote/commit/2d0f20335122ac5ae2a115eb7a811232842fbff8)), closes [#482](https://github.com/lamngockhuong/termote/issues/482)
+* **pwa:** pin the first column of the CSV table ([#514](https://github.com/lamngockhuong/termote/issues/514)) ([4e7b354](https://github.com/lamngockhuong/termote/commit/4e7b354f87783a6fe1fbcf6d72a84d6aa91dd415)), closes [#482](https://github.com/lamngockhuong/termote/issues/482)
+* **pwa:** select a range of the CSV table, copy it and paste a block ([#518](https://github.com/lamngockhuong/termote/issues/518)) ([362699e](https://github.com/lamngockhuong/termote/commit/362699e903772232a52629642f9811fa4bb6f8e9)), closes [#482](https://github.com/lamngockhuong/termote/issues/482)
+* **pwa:** spreadsheet keys in the CSV table: Home/End, type to edit, Delete clears ([#513](https://github.com/lamngockhuong/termote/issues/513)) ([8a338e7](https://github.com/lamngockhuong/termote/commit/8a338e7f2ab23a67748d7c64d912321ea362735a)), closes [#482](https://github.com/lamngockhuong/termote/issues/482)
+
+
+### Bug Fixes
+
+* **container:** mount a workspace typed in another case by its own name ([#521](https://github.com/lamngockhuong/termote/issues/521)) ([9421526](https://github.com/lamngockhuong/termote/commit/9421526514e461135d682d7623191c81530a9b44))
+* harden the git hooks, the overview's names and the Zellij socket dir ([#504](https://github.com/lamngockhuong/termote/issues/504)) ([64e5c9c](https://github.com/lamngockhuong/termote/commit/64e5c9cb5f939c622aeafe15dfa42fb9d45445ce))
+* **hooks:** stop a manual lefthook run from replacing the guarded hooks ([#509](https://github.com/lamngockhuong/termote/issues/509)) ([639a4e4](https://github.com/lamngockhuong/termote/commit/639a4e420c3919c63a0a14fa2692b318d61d6dab))
+* **pwa:** Cmd+C and Cmd+V on the CSV table work on macOS ([#522](https://github.com/lamngockhuong/termote/issues/522)) ([c6304bc](https://github.com/lamngockhuong/termote/commit/c6304bccf6fc6840ebf57fe4d3980d0ca3345d35))
+* run the git hooks test on macOS, and say which Zellij socket dir can be group-writable ([#519](https://github.com/lamngockhuong/termote/issues/519)) ([b7cd13b](https://github.com/lamngockhuong/termote/commit/b7cd13b9542fb046d0e6660ee221daaead5532cc))
+* send the saved password to the native Windows server over its pipe only, and harden the Windows checks and hooks ([#507](https://github.com/lamngockhuong/termote/issues/507)) ([34daf64](https://github.com/lamngockhuong/termote/commit/34daf6498b1233a3e480cd5c857485f9f486a26a))
+* show hidden characters in group, tab and session names, and confirm the Zellij socket dir chmod ([#510](https://github.com/lamngockhuong/termote/issues/510)) ([027c36d](https://github.com/lamngockhuong/termote/commit/027c36d37c1c769075350d6fc2921a3c951afccf))
+* tell the container's port from the native server's on Windows, refuse ( ) in hook file names, and document the Windows sign-in link and --no-auth ([#511](https://github.com/lamngockhuong/termote/issues/511)) ([5f2f1d1](https://github.com/lamngockhuong/termote/commit/5f2f1d1eb61ad8c21f954fb9f4bd0d145ba86b97))
+* three flaky tests, one of them a queue card that lost its answer ([#526](https://github.com/lamngockhuong/termote/issues/526)) ([d42b5a7](https://github.com/lamngockhuong/termote/commit/d42b5a7ac120585cc81fc9ef184b2bc86cb66904))
+
 ## [2.4.0](https://github.com/lamngockhuong/termote/compare/v2.3.0...v2.4.0) (2026-10-19)
 
 
