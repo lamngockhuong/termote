@@ -18,6 +18,6 @@
     "test:e2e": "pnpm --filter termote test:e2e"
   },
   "devDependencies": {
-    "lefthook": "2.2.1"
+    "lefthook": "2.2.2"
   }
 }
