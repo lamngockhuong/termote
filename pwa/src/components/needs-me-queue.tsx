@@ -95,7 +95,7 @@ export function NeedsMeQueue({ cards, readOnly, canAnswer, onOpen }: Props) {
     focusNext.current = false
   }, [queue.current])
   const done = useCallback(() => setQueue((q) => markAnswered(q)), [])
-  const sent = useCallback(() => setQueue(markSent), [])
+  const sending = useCallback(() => setQueue(markSent), [])
 
   const titleId = useId()
   if (!card) {
@@ -147,7 +147,7 @@ export function NeedsMeQueue({ cards, readOnly, canAnswer, onOpen }: Props) {
           readOnly={readOnly}
           answerable={canAnswer(card.pane)}
           onOpen={onOpen}
-          onSent={sent}
+          onSending={sending}
           onDone={done}
         />
       )}
@@ -178,15 +178,16 @@ function QueueDialog({
   readOnly,
   answerable,
   onOpen,
-  onSent,
+  onSending,
   onDone,
 }: {
   card: QueueCard
   readOnly: boolean
   answerable: boolean
   onOpen: Props['onOpen']
-  // A choice reached the pane (maybe only a tab of the dialog)
-  onSent: () => void
+  // A choice is on its way to the pane (maybe only a tab of the dialog): a
+  // snapshot may see the agent stop waiting before the answer returns
+  onSending: () => void
   // An answer was sent and the dialog has closed since
   onDone: () => void
 }) {
@@ -224,10 +225,8 @@ function QueueDialog({
         readOnly={readOnly}
         showView={showView}
         onAnswered={p.refresh}
-        onSent={() => {
-          setSent(true)
-          onSent()
-        }}
+        onSending={onSending}
+        onSent={() => setSent(true)}
         onChanged={p.show}
       />
       {readOnly && (

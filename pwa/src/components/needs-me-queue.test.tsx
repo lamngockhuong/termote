@@ -179,6 +179,20 @@ describe('NeedsMeQueue', () => {
     expect(screen.getByText('Answered.')).toBeInTheDocument()
   })
 
+  it('an agent that stops waiting before the answer returns was answered', async () => {
+    let reply = () => {}
+    mockAnswer.mockImplementation(
+      () => new Promise<void>((resolve) => (reply = resolve)),
+    )
+    const { update } = setup([card('a', 1)])
+    await screen.findByText('Run the tests of a?')
+    await act(async () => fireEvent.click(yes()))
+    // The snapshot sees the pane idle while the answer is still confirmed
+    update([card('a', 1, 'idle')])
+    await act(async () => reply())
+    await answered()
+  })
+
   it('skip moves to the next card; skipped ones can be shown again', async () => {
     setup([card('a', 1), card('b', 2)])
     // A queue that appears takes no focus
