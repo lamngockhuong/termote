@@ -802,6 +802,9 @@ Run on tmux (Linux/macOS) and Herdr; psmux (Windows) offers neither view.
 - [ ] Desktop, editing: copy a 2×2 block from a spreadsheet, Ctrl+V on a cell: the four cells
       change, one Ctrl+Z takes them back; Save, then `git diff` shows only those cells; a block too
       wide is refused; one too long asks "Add N rows at the end?"; sorted, it is refused
+- [ ] Desktop, editing: copy one cell, select a 3×2 range, Ctrl+V: all six cells get the value;
+      copy a row of two cells onto a range of 3 rows × 2 columns: every row gets it; onto a range of
+      3 columns the block is pasted once, from the top-left cell
 - [ ] Over plain HTTP on the LAN (`--lan`, no Tailscale): Ctrl+C and Ctrl+V on the table still
       work
 - [ ] macOS (Chrome and Safari), no text selected: Cmd+C on a range, then paste into a spreadsheet:

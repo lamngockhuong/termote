@@ -767,31 +767,44 @@ export default function TablePreview({
     }
     return toTsv(values)
   }
-  // A block pasted from at: along the rows and columns shown, as one edit.
-  // Wider than the columns left, it is refused; longer than the rows left,
-  // rows are added at the end, asked first, and only in the file's order.
-  const pasteBlock = (at: GridCell, clip: string) => {
+  // A block pasted from the range's top-left cell: along the rows and
+  // columns shown, as one edit. A range as many blocks tall and wide as it
+  // holds whole (one cell: any range) gets the block over and over, as a
+  // spreadsheet does. Wider than the columns left, it is refused; longer
+  // than the rows left, rows are added at the end, asked first, and only in
+  // the file's order.
+  const pasteBlock = (r: GridRange, clip: string) => {
     const block = fromTsv(clip)
     if (!block.length) return
     const order = computed as Int32Array
     let width = 0
     let n = 0
-    for (const r of block) {
-      width = Math.max(width, r.length)
-      n += r.length
+    for (const row of block) {
+      width = Math.max(width, row.length)
+      n += row.length
     }
+    const tall = r.bottom - r.top + 1
+    const wide = r.right - r.left + 1
+    // A range the block fits exactly is the same as once
+    const fills = tall % block.length === 0 && wide % width === 0
+    const down = fills ? tall / block.length : 1
+    const across = fills ? wide / width : 1
+    const repeats = down * across
+    if (repeats > 1) n = tall * wide
     if (n > MAX_COPY_CELLS) {
-      notify(`Too many cells to paste: ${n}, at most ${MAX_COPY_CELLS}`)
+      notify(
+        `Too many cells to paste${repeats > 1 ? ' over the range' : ''}: ${n}, at most ${MAX_COPY_CELLS}`,
+      )
       return
     }
-    const room = cols.length - at.at
+    const room = cols.length - r.left
     if (width > room) {
       notify(
         `The block is ${width} columns wide; ${room} ${room === 1 ? 'column' : 'columns'} from here`,
       )
       return
     }
-    const left = order.length - at.pos
+    const left = order.length - r.top
     const over = block.length - left
     if (over > 0 && (sort || filter)) {
       notify(
@@ -799,14 +812,23 @@ export default function TablePreview({
       )
       return
     }
-    const cells = block.flatMap((values, i) =>
-      values.map((value, j) => ({
-        // Past the rows shown (the file's own order): a row added
-        row: i < left ? order[at.pos + i] : t.rowCount + i - left,
-        col: cols[at.at + j],
-        value,
-      })),
-    )
+    const cells: { row: number; col: number; value: string }[] = []
+    for (let i = 0; i < block.length * down; i++) {
+      // Past the rows shown (the file's own order): a row added
+      const row = i < left ? order[r.top + i] : t.rowCount + i - left
+      const values = block[i % block.length]
+      // Repeated, a short line's missing cells are empty, as in a spreadsheet
+      const count = repeats > 1 ? width : values.length
+      for (let k = 0; k < across; k++) {
+        for (let j = 0; j < count; j++) {
+          cells.push({
+            row,
+            col: cols[r.left + k * width + j],
+            value: values[j] ?? '',
+          })
+        }
+      }
+    }
     if (over > 0) setPasting({ cells, addRows: over, text })
     else act({ kind: 'cells', cells })
   }

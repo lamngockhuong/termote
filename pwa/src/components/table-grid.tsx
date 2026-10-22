@@ -173,9 +173,9 @@ interface Props {
   // Ctrl+C (Cmd+C) on the grid: the text of the range selected, or of the
   // active cell (its row, from a row number); undefined copies nothing
   onCopyRange?: (range: GridRange) => string | undefined
-  // Ctrl+V on a grid taking edits: the clipboard's text, to paste from the
-  // top-left cell of the range (or the active cell)
-  onPasteBlock?: (at: GridCell, text: string) => void
+  // Ctrl+V on a grid taking edits: the clipboard's text, to paste into the
+  // range selected (or the active cell, or a row number's first cell)
+  onPasteBlock?: (range: GridRange, text: string) => void
   // A click of a fine pointer makes a cell active, as in a spreadsheet: a
   // double click, Enter or F2 opens it. Unset, a click opens it too.
   clickSelects?: boolean
@@ -483,7 +483,10 @@ export function TableGrid({
         const tsv = onCopyRange(r)
         if (tsv !== undefined) void copyText(tsv)
       } else if (letter === 'v' && onPasteBlock) {
-        catchPaste((text) => onPasteBlock({ pos: r.top, at: r.left }, text))
+        // A row number with no range: the block once from its first cell,
+        // never over the whole row it copies
+        const into = sel ? r : { ...r, right: r.left }
+        catchPaste((text) => onPasteBlock(into, text))
       }
       return
     }
