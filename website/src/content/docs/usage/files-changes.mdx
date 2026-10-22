@@ -499,6 +499,11 @@ selected.
   left is refused. A longer one, while the table is neither sorted nor filtered, asks to add the
   rows it needs at the end; sorted or filtered, it is refused, saying why. Saving changes only the
   cells pasted.
+- A range the block fits into a whole number of times, both down and across, gets the block over
+  and over, as in a spreadsheet: one copied cell fills every cell of the range, a copied row fills
+  every row of a range as wide, and a short line's missing cells are emptied. Any other range, or
+  a row number with no range selected, takes the block once, from its top-left cell. The 100,000
+  cell limit counts the cells of the range filled.
 - No clipboard permission is asked, so this works over plain HTTP on the LAN too, and on a Mac
   with no text selected. Pasted in a cell's field, the filter or the find box, the text goes into
   that box.

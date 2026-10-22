@@ -3264,6 +3264,14 @@ describe('TablePreview ranges, copy and paste', () => {
     })
   }
 
+  // A range from one cell to another, by Shift+arrows
+  const select = (from: [number, number], to: [number, number]) => {
+    at(...from).focus()
+    let [pos, col] = from
+    while (col < to[1]) key(at(pos, col++), 'ArrowRight', { shiftKey: true })
+    while (pos < to[0]) key(at(pos++, col), 'ArrowDown', { shiftKey: true })
+  }
+
   beforeEach(() => {
     coarse.fine = true
   })
@@ -3443,14 +3451,76 @@ describe('TablePreview ranges, copy and paste', () => {
     expect(p.onChange.mock.lastCall?.[1]).toHaveLength(1)
     press(at(1, 1), 'z')
     expect(p.text()).toBe(grid4)
-    // From a range: its top-left cell
+    // From a range the block does not fill whole: its top-left cell
     key(at(1, 1), 'ArrowUp', { shiftKey: true })
-    paste(at(0, 1), 'q')
-    expect(p.text()).toBe('a,b,c\n1,q,3\n4,5,6\n7,8,9\n')
+    paste(at(0, 1), 'q\tr')
+    expect(p.text()).toBe('a,b,c\n1,q,r\n4,5,6\n7,8,9\n')
     // Nothing that changes, or nothing at all: no edit
-    paste(at(0, 1), 'q')
+    paste(at(0, 1), 'q\tr')
     paste(at(0, 1), '')
     expect(p.onChange).toHaveBeenCalledTimes(3)
+  })
+
+  it('a range the block fills whole gets it over and over, as one edit', () => {
+    const p = edit(grid4)
+    // One cell: every cell of the range
+    select([0, 0], [1, 1])
+    paste(at(1, 1), 'q')
+    expect(p.text()).toBe('a,b,c\nq,q,3\nq,q,6\n7,8,9\n')
+    expect(p.onChange).toHaveBeenCalledTimes(1)
+    press(at(1, 1), 'z')
+    expect(p.text()).toBe(grid4)
+    // A row of two cells: every row of a range two columns wide
+    select([0, 0], [2, 1])
+    paste(at(2, 1), 'x\ty')
+    expect(p.text()).toBe('a,b,c\nx,y,3\nx,y,6\nx,y,9\n')
+    press(at(2, 1), 'z')
+    key(at(2, 1), 'Escape')
+    // Three rows: not two blocks whole down, so once, from the top-left cell
+    select([0, 0], [2, 2])
+    paste(at(2, 2), 'x\ny')
+    expect(p.text()).toBe('a,b,c\nx,2,3\ny,5,6\n7,8,9\n')
+    press(at(2, 2), 'z')
+    key(at(2, 2), 'Escape')
+    // A column of two cells: every column of a range two rows tall
+    select([1, 0], [2, 2])
+    paste(at(2, 2), 'x\ny')
+    expect(p.text()).toBe('a,b,c\n1,2,3\nx,x,x\ny,y,y\n')
+  })
+
+  it('repeated, a short line of the block empties its missing cells', () => {
+    const grid = 'a,b\n1,2\n3,4\n5,6\n7,8\n'
+    const p = edit(grid)
+    select([0, 0], [3, 1])
+    paste(at(3, 1), 'x\ty\nz')
+    expect(p.text()).toBe('a,b\nx,y\nz,\nx,y\nz,\n')
+    // Once, it leaves them as they are
+    press(at(3, 1), 'z')
+    key(at(3, 1), 'Escape')
+    at(0, 0).focus()
+    paste(at(0, 0), 'x\ty\nz')
+    expect(p.text()).toBe('a,b\nx,y\nz,4\n5,6\n7,8\n')
+  })
+
+  it('a row number with no range pastes once from its first cell, never over the row', () => {
+    const p = edit(grid4)
+    const number = screen.getByRole('button', {
+      name: 'Open row 3 as a record',
+    })
+    number.focus()
+    paste(number, 'q')
+    expect(p.text()).toBe('a,b,c\n1,2,3\nq,5,6\n7,8,9\n')
+  })
+
+  it('too many cells once repeated over the range: refused, saying so', () => {
+    const p = edit(`a,b,c\n${'1,2,3\n'.repeat(33_334)}`)
+    at(0, 0).focus()
+    key(at(0, 0), 'End', { shiftKey: true, ctrlKey: true })
+    paste(document.activeElement as Element, 'q')
+    expect(p.notify).toHaveBeenLastCalledWith(
+      'Too many cells to paste over the range: 100002, at most 100000',
+    )
+    expect(p.onChange).not.toHaveBeenCalled()
   })
 
   it('a paste on a sorted table goes to the rows shown, along the columns shown', () => {
