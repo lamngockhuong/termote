@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.6.0](https://github.com/lamngockhuong/termote/compare/v2.5.0...v2.6.0) (2026-10-22)
+
+
+### Features
+
+* **pwa:** a newer release marks the header's menu, not only Settings ([#527](https://github.com/lamngockhuong/termote/issues/527)) ([8b8a693](https://github.com/lamngockhuong/termote/commit/8b8a693b896cc0ce1dcfd3efb02c0ced443803ac))
+* **pwa:** Delete on a CSV range clears every cell of it, as one edit ([#528](https://github.com/lamngockhuong/termote/issues/528)) ([9a87b53](https://github.com/lamngockhuong/termote/commit/9a87b5357dffe263678173de83ae7a7e7d4ed5b9))
+
 ## [2.5.0](https://github.com/lamngockhuong/termote/compare/v2.4.0...v2.5.0) (2026-10-22)
 
 
