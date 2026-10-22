@@ -502,6 +502,23 @@ export default function TablePreview({
   const clearCell = (row: number, col: number) => {
     act({ kind: 'cell', row, col, name: names[col], value: '' })
   }
+  // Every cell of a range along the rows and columns shown, as one edit;
+  // the cells already empty change nothing
+  const clearRange = (r: GridRange) => {
+    const n = (r.bottom - r.top + 1) * (r.right - r.left + 1)
+    if (n > MAX_COPY_CELLS) {
+      notify(`Too many cells to clear: ${n}, at most ${MAX_COPY_CELLS}`)
+      return
+    }
+    const order = computed as Int32Array
+    const cells: { row: number; col: number; value: string }[] = []
+    for (let p = r.top; p <= r.bottom; p++) {
+      for (let i = r.left; i <= r.right; i++) {
+        cells.push({ row: order[p], col: cols[i], value: '' })
+      }
+    }
+    act({ kind: 'cells', cells })
+  }
   // The cell after (or before) at in the order shown: on along its row,
   // then from the start of the next one; none past the last cell. Only
   // from a field on screen, so with the rows it is in.
@@ -1071,6 +1088,7 @@ export default function TablePreview({
           onOpen={openCell}
           onType={canType ? typeIn : undefined}
           onClear={fine && live ? clearCell : undefined}
+          onClearRange={fine && live && computed ? clearRange : undefined}
           editingCell={field}
           editor={
             field && (

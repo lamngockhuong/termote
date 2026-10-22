@@ -806,6 +806,9 @@ Chạy trên tmux (Linux/macOS) và Herdr; psmux (Windows) không có hai view n
 - [ ] Desktop, đang sửa: chép một ô, chọn vùng 3×2, Ctrl+V: cả sáu ô nhận giá trị đó; chép một dòng
       hai ô rồi dán vào vùng 3 dòng × 2 cột: dòng nào cũng nhận; dán vào vùng 3 cột thì khối chỉ được
       dán một lần, từ ô trên cùng bên trái
+- [ ] Desktop, đang sửa: chọn vùng 2×3, nhấn Delete: cả sáu ô bị xóa trắng, một lần Ctrl+Z trả lại;
+      khi đang sắp xếp, Backspace trên một vùng xóa đúng các ô đang hiện ở đó; Save rồi `git diff`
+      chỉ thấy các ô đó
 - [ ] Qua HTTP thường trong LAN (`--lan`, không dùng Tailscale): Ctrl+C và Ctrl+V trên bảng vẫn chạy
 - [ ] macOS (Chrome và Safari), không bôi đen chữ nào: Cmd+C trên một vùng rồi dán vào bảng tính: ra
       đúng các ô; đang sửa thì Cmd+V trên một ô dán được cả khối, và ô vẫn giữ focus

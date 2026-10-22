@@ -3502,6 +3502,65 @@ describe('TablePreview ranges, copy and paste', () => {
     expect(p.text()).toBe('a,b\nx,y\nz,4\n5,6\n7,8\n')
   })
 
+  it('Delete and Backspace clear every cell of the range, as one edit', () => {
+    const p = edit(grid4)
+    select([0, 0], [1, 1])
+    expect(key(at(1, 1), 'Delete')).toBe(false)
+    expect(p.text()).toBe('a,b,c\n,,3\n,,6\n7,8,9\n')
+    expect(p.onChange).toHaveBeenCalledTimes(1)
+    // The rows worked out again drop the range, as a paste does; the cell
+    // left in focus, empty now, makes no edit
+    expect(picked()).toEqual([])
+    key(at(1, 1), 'Backspace')
+    expect(p.onChange).toHaveBeenCalledTimes(1)
+    press(at(1, 1), 'z')
+    expect(p.text()).toBe(grid4)
+    key(at(1, 1), 'Escape')
+    // Along the rows shown, sorted
+    fireEvent.click(screen.getByRole('button', { name: 'a' }))
+    fireEvent.click(screen.getByRole('button', { name: 'a' }))
+    select([0, 1], [1, 2])
+    key(at(1, 2), 'Backspace')
+    expect(p.text()).toBe('a,b,c\n1,2,3\n4,,\n7,,\n')
+    expect(screen.queryByRole('textbox', { name: /^Edit / })).toBeNull()
+  })
+
+  it('a range over a hidden column leaves its cells as they are', () => {
+    const p = edit(grid4)
+    columnsMenu()
+    fireEvent.click(
+      within(screen.getByRole('group', { name: 'Show' })).getByRole(
+        'menuitemcheckbox',
+        { name: '2 · b' },
+      ),
+    )
+    fireEvent.keyDown(document.activeElement as Element, { key: 'Escape' })
+    // a and c, side by side now (data-col is the file's column)
+    at(0, 0).focus()
+    key(at(0, 0), 'ArrowRight', { shiftKey: true })
+    key(at(0, 2), 'ArrowDown', { shiftKey: true })
+    key(at(1, 2), 'Delete')
+    expect(p.text()).toBe('a,b,c\n,2,\n,5,\n7,8,9\n')
+  })
+
+  it('a range too large to clear: refused, saying so', () => {
+    const p = edit(`a,b,c\n${'1,2,3\n'.repeat(33_334)}`)
+    at(0, 0).focus()
+    key(at(0, 0), 'End', { shiftKey: true, ctrlKey: true })
+    key(document.activeElement as Element, 'Delete')
+    expect(p.notify).toHaveBeenLastCalledWith(
+      'Too many cells to clear: 100002, at most 100000',
+    )
+    expect(p.onChange).not.toHaveBeenCalled()
+  })
+
+  it('a table only viewed: Delete on a range clears nothing', () => {
+    show(grid4)
+    select([0, 0], [1, 1])
+    expect(key(at(1, 1), 'Delete')).toBe(true)
+    expect(at(0, 0)).toHaveTextContent('1')
+  })
+
   it('a row number with no range pastes once from its first cell, never over the row', () => {
     const p = edit(grid4)
     const number = screen.getByRole('button', {
