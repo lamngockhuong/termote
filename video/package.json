@@ -12,7 +12,7 @@
     "screenshots": "remotion still ReadmePhones ../docs/images/screenshots/phones.png && remotion still ReadmeDesktop ../docs/images/screenshots/desktop.png && remotion still ReadmeStyles ../docs/images/screenshots/ui-styles.png"
   },
   "devDependencies": {
-    "@remotion/cli": "4.0.534",
+    "@remotion/cli": "4.0.536",
     "@remotion/eslint-config-flat": "4.0.534",
     "@remotion/google-fonts": "4.0.534",
     "@remotion/media": "4.0.534",
