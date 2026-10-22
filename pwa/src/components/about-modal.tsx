@@ -11,6 +11,8 @@ interface Props {
   onClose: () => void
   // Opens Settings at its Updates group; without it the row is not shown
   onCheckUpdates?: () => void
+  // A newer release than the server runs, named on that row
+  updateVersion?: string | null
 }
 
 // The frame of a Settings group, so About reads as the same family of lists:
@@ -57,7 +59,12 @@ function ExternalLink({
   )
 }
 
-export function AboutModal({ isOpen, onClose, onCheckUpdates }: Props) {
+export function AboutModal({
+  isOpen,
+  onClose,
+  onCheckUpdates,
+  updateVersion,
+}: Props) {
   const supportId = useId()
   return (
     <Sheet
@@ -105,11 +112,18 @@ export function AboutModal({ isOpen, onClose, onCheckUpdates }: Props) {
             <li>
               <button type="button" onClick={onCheckUpdates} className={ROW}>
                 Check for updates
-                <ChevronRight
-                  size={16}
-                  aria-hidden="true"
-                  className="shrink-0 text-fg-subtle"
-                />
+                <span className="flex min-w-0 items-center gap-1">
+                  {updateVersion && (
+                    <span className="truncate text-[13px] text-accent">
+                      v{updateVersion} available
+                    </span>
+                  )}
+                  <ChevronRight
+                    size={16}
+                    aria-hidden="true"
+                    className="shrink-0 text-fg-subtle"
+                  />
+                </span>
               </button>
             </li>
           )}

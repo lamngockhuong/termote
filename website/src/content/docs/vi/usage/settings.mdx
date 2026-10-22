@@ -197,8 +197,12 @@ Công tắc `Include ignored` không nằm ở đây: nó đặt cạnh ô tìm 
 ## Cập nhật (Updates)
 
 Hiện phiên bản server đang chạy và bản stable mới nhất trên GitHub (đúng bản `termote update`
-cài), đọc khi mở Settings và giữ trong một giờ; nút **Check for updates** hỏi lại GitHub. Khi
-server cũ hơn, mục này hiện lệnh cập nhật đúng với cách cài, kèm nút **Copy** và link release notes:
+cài). Trình duyệt tự hỏi `api.github.com` khi mở app hoặc quay lại app, tối đa một lần mỗi giờ
+(hỏi lỗi thì mười phút sau mới hỏi lại); nút **Check for updates** hỏi lại ngay. Khi server cũ
+hơn, mục này hiện lệnh cập nhật đúng với cách cài, kèm nút **Copy** và link release notes; hộp
+About ghi phiên bản mới ở dòng **Check for updates**; menu **⋯** trên thanh trên cùng có một
+chấm, mục **Update to vX.Y.Z** trong đó mở thẳng mục này (trừ thiết bị chỉ xem và bản git
+checkout):
 
 | Cách cài                   | Lệnh                                                      |
 | -------------------------- | --------------------------------------------------------- |
@@ -206,7 +210,7 @@ server cũ hơn, mục này hiện lệnh cập nhật đúng với cách cài, 
 | Container                  | `termote update && termote container up` (chạy trên host) |
 
 Bản chạy từ git checkout chỉ có gợi ý thay cho lệnh (pull, build lại rồi khởi động lại; lệnh khác
-nhau theo hệ điều hành). Termote không tự kiểm tra khi mở app.
+nhau theo hệ điều hành).
 
 ### Tải lại sau khi cập nhật
 

@@ -73,6 +73,7 @@ import { usePushSubscription } from './hooks/use-push-subscription'
 import { useSettings } from './hooks/use-settings'
 import { useSidebarCollapsed } from './hooks/use-sidebar-collapsed'
 import { useStartAgent } from './hooks/use-start-agent'
+import { availableUpdate, useUpdateCheck } from './hooks/use-update-check'
 import type { Session, SessionPane } from './types/session'
 import { applyUiStyle, syncThemeColor } from './ui-style'
 import { APP_INFO } from './utils/app-info'
@@ -567,6 +568,20 @@ export default function App({
     toggleFullscreen,
   } = useFullscreen()
   const appUpdate = useAppUpdate()
+  // The newest release on GitHub (asked at most once an hour), named in About
+  // while the server runs an older one. The header's menu marks it only for
+  // whoever can act on it: not a viewer, nor a checkout (pulled by hand).
+  const { latest: latestRelease, check: checkRelease } = useUpdateCheck()
+  const updateVersion = availableUpdate(
+    appUpdate.server?.version ?? APP_INFO.version,
+    latestRelease,
+  )
+  const notifyUpdate = !readOnly && appUpdate.server?.install !== 'checkout'
+  const openUpdates = () => {
+    setAboutOpen(false)
+    setSettingsGroup('updates')
+    setSettingsOpen(true)
+  }
 
   // The indicator follows the stream; a failing session poll can only mark
   // it down, never up, so it does not show "connected" while the stream is
@@ -590,12 +605,15 @@ export default function App({
   }, [streamState])
   useEffect(() => {
     checkServerVersion()
+    checkRelease()
     const onVisible = () => {
-      if (document.visibilityState === 'visible') checkOnShow()
+      if (document.visibilityState !== 'visible') return
+      checkOnShow()
+      checkRelease()
     }
     document.addEventListener('visibilitychange', onVisible)
     return () => document.removeEventListener('visibilitychange', onVisible)
-  }, [])
+  }, [checkRelease])
 
   // Shown once per page load: the poll and the stream report it on every
   // retry while the network keeps dropping large replies.
@@ -1351,6 +1369,8 @@ export default function App({
               },
               onCopyLink: shownLink ? copyLink : undefined,
               onLogout: mux.caps.auth ? handleLogout : undefined,
+              updateVersion: notifyUpdate ? updateVersion : null,
+              onOpenUpdates: openUpdates,
             }}
           />
           {/* Mounted before the banner, so the news is announced */}
@@ -1721,11 +1741,8 @@ export default function App({
       <AboutModal
         isOpen={aboutOpen}
         onClose={() => setAboutOpen(false)}
-        onCheckUpdates={() => {
-          setAboutOpen(false)
-          setSettingsGroup('updates')
-          setSettingsOpen(true)
-        }}
+        onCheckUpdates={openUpdates}
+        updateVersion={updateVersion}
       />
       <HelpModal
         isOpen={helpOpen}

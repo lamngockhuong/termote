@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useSyncExternalStore } from 'react'
 
 // The releases list, not releases/latest: `termote update` and the installer
 // pick from it (server/release_tags.go), and releases/latest can name a 0.x.
@@ -6,6 +6,9 @@ const GITHUB_RELEASES =
   'https://api.github.com/repos/lamngockhuong/termote/releases?per_page=30'
 const CACHE_KEY = 'termote-update-check'
 const CACHE_DURATION = 60 * 60 * 1000 // 1 hour
+// After a failed ask (offline, rate limited), the app being shown again does
+// not ask before this
+export const RETRY_GAP = 10 * 60 * 1000
 
 const STABLE_TAG = /^v\d+\.\d+\.\d+$/
 
@@ -57,6 +60,16 @@ export function newestStable(releases: Release[]): Release | null {
   return best
 }
 
+// The newest version when it is above the running one, else null.
+export function availableUpdate(
+  running: string,
+  latest: LatestRelease | null,
+): string | null {
+  return latest && compareVersions(running, latest.version) < 0
+    ? latest.version
+    : null
+}
+
 function readCache(): LatestRelease | null {
   try {
     const json = localStorage.getItem(CACHE_KEY)
@@ -85,43 +98,85 @@ function writeCache(latest: LatestRelease) {
   }
 }
 
+interface UpdateCheckState {
+  latest: LatestRelease | null
+  checking: boolean
+  failed: boolean
+}
+
+// One state for every user of the hook (the header's menu, Settings), read
+// from the kept result on first use.
+let state: UpdateCheckState | null = null
+let inflight: Promise<void> | null = null
+let failedAt = 0
+const listeners = new Set<() => void>()
+
+function snapshot(): UpdateCheckState {
+  state ??= { latest: readCache(), checking: false, failed: false }
+  return state
+}
+
+function setState(next: Partial<UpdateCheckState>) {
+  state = { ...snapshot(), ...next }
+  for (const l of listeners) l()
+}
+
+function subscribe(listener: () => void) {
+  listeners.add(listener)
+  return () => listeners.delete(listener)
+}
+
+// Test seam: back to the state of a fresh page.
+export function resetUpdateCheck() {
+  state = null
+  inflight = null
+  failedAt = 0
+}
+
+async function fetchLatest() {
+  setState({ checking: true })
+  try {
+    const res = await fetch(GITHUB_RELEASES, {
+      headers: { Accept: 'application/vnd.github+json' },
+    })
+    if (!res.ok) throw new Error(`GitHub API error: ${res.status}`)
+    const best = newestStable((await res.json()) as Release[])
+    if (!best) throw new Error('no stable release')
+    const latest = {
+      version: best.tag_name.replace(/^v/, ''),
+      url: best.html_url,
+      checkedAt: Date.now(),
+    }
+    writeCache(latest)
+    setState({ latest, checking: false, failed: false })
+  } catch {
+    failedAt = Date.now()
+    setState({ checking: false, failed: true })
+  } finally {
+    inflight = null
+  }
+}
+
+// Asks GitHub unless a result younger than an hour is kept, or the last ask
+// failed within RETRY_GAP (force: always). A check already running is shared.
+async function check(force = false): Promise<void> {
+  if (inflight) return inflight
+  if (!force) {
+    const cached = readCache()
+    if (cached) {
+      const { latest, failed } = snapshot()
+      // Unchanged: no new state, so nothing renders again.
+      if (latest?.checkedAt !== cached.checkedAt || failed) {
+        setState({ latest: cached, failed: false })
+      }
+      return
+    }
+    if (Date.now() - failedAt < RETRY_GAP) return
+  }
+  inflight = fetchLatest()
+  return inflight
+}
+
 export function useUpdateCheck() {
-  const [latest, setLatest] = useState<LatestRelease | null>(readCache)
-  const [checking, setChecking] = useState(false)
-  const [failed, setFailed] = useState(false)
-
-  // Asks GitHub unless a result younger than an hour is kept (force: always).
-  const check = useCallback(async (force = false) => {
-    if (!force) {
-      const cached = readCache()
-      if (cached) {
-        setLatest(cached)
-        setFailed(false)
-        return
-      }
-    }
-    setChecking(true)
-    try {
-      const res = await fetch(GITHUB_RELEASES, {
-        headers: { Accept: 'application/vnd.github+json' },
-      })
-      if (!res.ok) throw new Error(`GitHub API error: ${res.status}`)
-      const best = newestStable((await res.json()) as Release[])
-      if (!best) throw new Error('no stable release')
-      const next = {
-        version: best.tag_name.replace(/^v/, ''),
-        url: best.html_url,
-        checkedAt: Date.now(),
-      }
-      writeCache(next)
-      setLatest(next)
-      setFailed(false)
-    } catch {
-      setFailed(true)
-    } finally {
-      setChecking(false)
-    }
-  }, [])
-
-  return { latest, checking, failed, check }
+  return { ...useSyncExternalStore(subscribe, snapshot), check }
 }

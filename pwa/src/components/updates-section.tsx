@@ -1,7 +1,7 @@
 import { Check, Copy, RefreshCw } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { InstallKind } from '../hooks/use-mux-api'
-import { compareVersions, useUpdateCheck } from '../hooks/use-update-check'
+import { availableUpdate, useUpdateCheck } from '../hooks/use-update-check'
 import { APP_INFO } from '../utils/app-info'
 import type { ServerInfo } from '../utils/app-update'
 import { formatAgo } from '../utils/format-ago'
@@ -50,7 +50,8 @@ export function UpdatesSection({
   const [copied, setCopied] = useState(false)
   const copiedTimer = useRef<ReturnType<typeof setTimeout>>(null)
 
-  // Opening Settings reads the kept result, or asks GitHub once an hour.
+  // The app checks when it opens or is shown again; a page left open past
+  // the hour asks again here.
   useEffect(() => {
     check()
   }, [check])
@@ -63,7 +64,7 @@ export function UpdatesSection({
 
   // The server is what an update replaces; this page may be older.
   const running = server?.version ?? APP_INFO.version
-  const hasUpdate = !!latest && compareVersions(running, latest.version) < 0
+  const hasUpdate = availableUpdate(running, latest) !== null
   const how = UPDATE_HOW[server?.install ?? 'unknown']
   const command = how.command
 

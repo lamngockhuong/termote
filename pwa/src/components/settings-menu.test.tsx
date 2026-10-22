@@ -175,6 +175,22 @@ describe('SettingsMenu', () => {
     expect(onLogout).toHaveBeenCalledTimes(1)
   })
 
+  it('marks the trigger and offers the update when one is available', () => {
+    const onOpen = vi.fn()
+    renderWithTheme({ updateVersion: '2.5.0', onOpenUpdates: onOpen })
+    fireEvent.click(
+      screen.getByRole('button', { name: 'More, v2.5.0 available' }),
+    )
+    fireEvent.click(item('Update to v2.5.0'))
+    expect(onOpen).toHaveBeenCalledOnce()
+  })
+
+  it('offers no update without one', () => {
+    renderWithTheme()
+    open()
+    expect(screen.queryByRole('menuitem', { name: /Update to/ })).toBeNull()
+  })
+
   it('Copy link calls onCopyLink', () => {
     const onCopyLink = vi.fn()
     renderWithTheme({ onCopyLink })

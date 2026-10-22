@@ -1,4 +1,5 @@
 import {
+  ArrowUpCircle,
   Info,
   LifeBuoy,
   Link,
@@ -38,6 +39,10 @@ interface Props {
   onCopyLink?: () => void
   // Ends the session (only when the server has sign-in on)
   onLogout?: () => void
+  // A newer release than the server runs: a dot on the trigger and an item
+  // that calls onOpenUpdates (Settings at Updates)
+  updateVersion?: string | null
+  onOpenUpdates?: () => void
 }
 
 const THEMES = [
@@ -80,7 +85,10 @@ export function SettingsMenu({
   fontSize,
   onCopyLink,
   onLogout,
+  updateVersion,
+  onOpenUpdates,
 }: Props) {
+  const update = updateVersion && onOpenUpdates
   const { theme, setTheme } = useTheme()
   const [clearing, setClearing] = useState(false)
 
@@ -91,9 +99,30 @@ export function SettingsMenu({
 
   return (
     <Menu
-      label="More"
-      trigger={<MoreHorizontal size={20} aria-hidden="true" />}
+      label={update ? `More, v${updateVersion} available` : 'More'}
+      trigger={
+        <span className="relative inline-flex">
+          <MoreHorizontal size={20} aria-hidden="true" />
+          {update && (
+            <span
+              aria-hidden="true"
+              className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-accent"
+            />
+          )}
+        </span>
+      }
     >
+      {update && (
+        <>
+          <MenuItem
+            icon={<ArrowUpCircle size={17} className="text-accent" />}
+            onSelect={onOpenUpdates}
+          >
+            Update to v{updateVersion}
+          </MenuItem>
+          <MenuSeparator />
+        </>
+      )}
       {fontSize && (
         <>
           <MenuGroup label={`Font size · ${fontSize.value}`}>

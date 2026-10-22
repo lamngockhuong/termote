@@ -1,8 +1,11 @@
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  availableUpdate,
   compareVersions,
   newestStable,
+  RETRY_GAP,
+  resetUpdateCheck,
   useUpdateCheck,
 } from './use-update-check'
 
@@ -58,9 +61,20 @@ describe('newestStable', () => {
   })
 })
 
+describe('availableUpdate', () => {
+  const latest = { version: '2.5.0', url: 'u', checkedAt: 0 }
+  it('is the newest version only while the running one is older', () => {
+    expect(availableUpdate('2.4.0', latest)).toBe('2.5.0')
+    expect(availableUpdate('2.5.0', latest)).toBe(null)
+    expect(availableUpdate('2.6.0', latest)).toBe(null)
+    expect(availableUpdate('2.4.0', null)).toBe(null)
+  })
+})
+
 describe('useUpdateCheck', () => {
   beforeEach(() => {
     localStorage.clear()
+    resetUpdateCheck()
     vi.stubGlobal('fetch', vi.fn())
   })
 
@@ -146,6 +160,54 @@ describe('useUpdateCheck', () => {
     await act(() => result.current.check(true))
     expect(result.current.failed).toBe(true)
     expect(result.current.latest).toBe(null)
+  })
+
+  it('shows a new result in every user of the hook', async () => {
+    respond([release('v1.14.0')])
+    const header = renderHook(() => useUpdateCheck())
+    const settings = renderHook(() => useUpdateCheck())
+    await act(() => settings.result.current.check(true))
+    expect(header.result.current.latest?.version).toBe('1.14.0')
+  })
+
+  it('shares a check already running instead of asking twice', async () => {
+    respond([release('v1.14.0')])
+    const { result } = renderHook(() => useUpdateCheck())
+    await act(() =>
+      Promise.all([result.current.check(), result.current.check(true)]),
+    )
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('waits before asking again after a failure, unless forced', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      vi.mocked(fetch).mockRejectedValue(new Error('offline'))
+      const { result } = renderHook(() => useUpdateCheck())
+      await act(() => result.current.check())
+      await act(() => result.current.check())
+      expect(fetch).toHaveBeenCalledTimes(1)
+      await act(() => result.current.check(true))
+      expect(fetch).toHaveBeenCalledTimes(2)
+      vi.advanceTimersByTime(RETRY_GAP)
+      await act(() => result.current.check())
+      expect(fetch).toHaveBeenCalledTimes(3)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('renders nothing again when the kept result is unchanged', async () => {
+    const kept = { version: '1.14.0', url: 'u', checkedAt: Date.now() }
+    localStorage.setItem(CACHE_KEY, JSON.stringify(kept))
+    let renders = 0
+    const { result } = renderHook(() => {
+      renders++
+      return useUpdateCheck()
+    })
+    const before = renders
+    await act(() => result.current.check())
+    expect(renders).toBe(before)
   })
 
   it('still reports the result when storage cannot keep it', async () => {

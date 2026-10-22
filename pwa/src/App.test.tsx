@@ -244,6 +244,23 @@ vi.mock('./utils/app-update', () => ({
   useAppUpdate: () => mockAppUpdate,
 }))
 
+// The newest release on GitHub as the update check kept it
+let mockLatestRelease: {
+  version: string
+  url: string
+  checkedAt: number
+} | null = null
+const mockCheckRelease = vi.fn()
+vi.mock('./hooks/use-update-check', async (orig) => ({
+  ...(await orig<typeof import('./hooks/use-update-check')>()),
+  useUpdateCheck: () => ({
+    latest: mockLatestRelease,
+    checking: false,
+    failed: false,
+    check: mockCheckRelease,
+  }),
+}))
+
 // ─── Mock all components ──────────────────────────────────────────────────────
 
 // Lets tests report stream state changes the way TerminalView does.
@@ -578,6 +595,8 @@ vi.mock('./components/settings-menu', () => ({
     fontSize,
     onCopyLink,
     onLogout,
+    updateVersion,
+    onOpenUpdates,
   }: {
     onOpenAbout: () => void
     onOpenHelp: () => void
@@ -585,8 +604,13 @@ vi.mock('./components/settings-menu', () => ({
     fontSize?: { value: number; onDecrease: () => void; onIncrease: () => void }
     onCopyLink?: () => void
     onLogout?: () => void
+    updateVersion?: string | null
+    onOpenUpdates?: () => void
   }) => (
     <div>
+      {updateVersion && (
+        <button onClick={onOpenUpdates}>MenuUpdate {updateVersion}</button>
+      )}
       <button onClick={onOpenAbout}>About</button>
       <button onClick={onOpenHelp}>Help</button>
       <button onClick={onOpenSettings}>Settings</button>
@@ -942,6 +966,58 @@ describe('App', () => {
     ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Reloading…' })).toBeDisabled()
     mockAppUpdate = { server: null, stale: false, reloading: false }
+  })
+
+  describe('release check', () => {
+    const serverAt = (version: string, install = 'release') => {
+      mockLatestRelease = { version: '2.5.0', url: 'u', checkedAt: Date.now() }
+      mockAppUpdate = {
+        server: { version, install },
+        stale: false,
+        reloading: false,
+      }
+    }
+    afterEach(() => {
+      mockLatestRelease = null
+      mockAppUpdate = { server: null, stale: false, reloading: false }
+    })
+
+    it('asks GitHub for the newest release on start and when shown again', async () => {
+      render(<App />)
+      await waitFor(() => expect(mockCheckRelease).toHaveBeenCalledTimes(1))
+      const shown = vi
+        .spyOn(document, 'visibilityState', 'get')
+        .mockReturnValue('visible')
+      try {
+        document.dispatchEvent(new Event('visibilitychange'))
+        expect(mockCheckRelease).toHaveBeenCalledTimes(2)
+      } finally {
+        shown.mockRestore()
+      }
+    })
+
+    it('offers a release newer than the server in the menu, opening Updates', async () => {
+      serverAt('2.4.0')
+      render(<App />)
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'MenuUpdate 2.5.0' }),
+      )
+      expect(screen.getByTestId('settings-modal')).toHaveAttribute(
+        'data-initial-group',
+        'updates',
+      )
+    })
+
+    it.each([
+      ['the server runs the newest release', '2.5.0', 'release', false],
+      ['a checkout is pulled by hand', '2.4.0', 'checkout', false],
+      ['a viewer cannot update', '2.4.0', 'release', true],
+    ])('offers no update when %s', async (_, version, install, readOnly) => {
+      serverAt(version, install)
+      render(<App readOnly={readOnly} />)
+      await screen.findByRole('button', { name: 'Settings' })
+      expect(screen.queryByRole('button', { name: /MenuUpdate/ })).toBeNull()
+    })
   })
 
   it('shows no banner on the current version', async () => {
