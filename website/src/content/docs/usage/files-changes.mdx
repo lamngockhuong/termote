@@ -504,6 +504,8 @@ selected.
   every row of a range as wide, and a short line's missing cells are emptied. Any other range, or
   a row number with no range selected, takes the block once, from its top-left cell. The 100,000
   cell limit counts the cells of the range filled.
+- Delete or Backspace while editing clears every cell of the range, along the rows and columns
+  shown, as one change that one Ctrl+Z takes back. At most 100,000 cells are cleared at once.
 - No clipboard permission is asked, so this works over plain HTTP on the LAN too, and on a Mac
   with no text selected. Pasted in a cell's field, the filter or the find box, the text goes into
   that box.

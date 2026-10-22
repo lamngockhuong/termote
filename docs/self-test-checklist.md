@@ -805,6 +805,9 @@ Run on tmux (Linux/macOS) and Herdr; psmux (Windows) offers neither view.
 - [ ] Desktop, editing: copy one cell, select a 3×2 range, Ctrl+V: all six cells get the value;
       copy a row of two cells onto a range of 3 rows × 2 columns: every row gets it; onto a range of
       3 columns the block is pasted once, from the top-left cell
+- [ ] Desktop, editing: select a 2×3 range, Delete: all six cells are emptied, one Ctrl+Z brings
+      them back; sorted, Backspace on a range empties the cells shown there; Save, then `git diff`
+      shows only those cells
 - [ ] Over plain HTTP on the LAN (`--lan`, no Tailscale): Ctrl+C and Ctrl+V on the table still
       work
 - [ ] macOS (Chrome and Safari), no text selected: Cmd+C on a range, then paste into a spreadsheet:

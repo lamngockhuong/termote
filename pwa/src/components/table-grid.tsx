@@ -125,6 +125,8 @@ interface Props {
   onType?: (row: number, col: number, input: string) => void
   // Delete or Backspace on a cell: its value is cleared. Unset, not taken.
   onClear?: (row: number, col: number) => void
+  // The same on a range of more than one cell: every cell of it cleared
+  onClearRange?: (range: GridRange) => void
   // The cell edited where it is (file row, column) and its editor, shown
   // in place of the cell
   editingCell?: { row: number; col: number }
@@ -276,6 +278,7 @@ export function TableGrid({
   onOpen,
   onType,
   onClear,
+  onClearRange,
   editingCell,
   editor,
   onOpenRow,
@@ -519,15 +522,19 @@ export function TableGrid({
       onType(row, fileCol, e.key)
       return
     }
-    if (
-      onClear &&
-      onValue &&
-      (e.key === 'Delete' || e.key === 'Backspace') &&
-      !modified
-    ) {
-      e.preventDefault()
-      onClear(row, fileCol)
-      return
+    if (onValue && (e.key === 'Delete' || e.key === 'Backspace') && !modified) {
+      // A range is cleared whole or not at all, never only its active cell
+      if (range) {
+        if (onClearRange) {
+          e.preventDefault()
+          onClearRange(rangeOf(from))
+          return
+        }
+      } else if (onClear) {
+        e.preventDefault()
+        onClear(row, fileCol)
+        return
+      }
     }
     const lastPos = Math.max(rows.length - 1, 0)
     const lastCol = cols.length - 1
