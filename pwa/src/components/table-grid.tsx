@@ -13,6 +13,7 @@ import {
   useState,
 } from 'react'
 import { useMediaQuery } from '../hooks/use-media-query'
+import { copyText } from '../utils/copy-text'
 import { matchFrom } from '../utils/csv-find'
 import { type CsvTable, cellsIn, valueAt } from '../utils/csv-parse'
 import type { ViewOptions } from '../utils/csv-view'
@@ -188,22 +189,51 @@ export interface GridRange {
   right: number
 }
 
-// The clipboard event a key starts, with what it carries: it comes as the
-// key's own action, to the document when no field has the focus, and with
-// no permission asked (no Clipboard API, so on plain HTTP too)
-function onNextClipboard(
-  type: 'copy' | 'paste',
-  handle: (data: DataTransfer) => void,
-) {
-  const listener = (e: Event) => {
-    e.preventDefault()
-    handle((e as ClipboardEvent).clipboardData as DataTransfer)
+// The text the paste a key starts carries, with no permission asked (no
+// Clipboard API, so on plain HTTP too). That paste goes through the
+// browser's Paste menu item, which macOS greys out unless a field has the
+// focus: a hidden one takes it until the paste comes, or a moment passes
+// with none (nothing on the clipboard), then gives it back
+function catchPaste(handle: (text: string) => void) {
+  const previous = document.activeElement as HTMLElement | null
+  const area = document.createElement('textarea')
+  area.setAttribute('aria-hidden', 'true')
+  area.tabIndex = -1
+  // No on-screen keyboard: the paste came from a key
+  area.inputMode = 'none'
+  // In the page but out of sight, and too small to scroll it on iOS
+  Object.assign(area.style, {
+    position: 'fixed',
+    top: '0',
+    left: '0',
+    width: '1px',
+    height: '1px',
+    opacity: '0',
+    fontSize: '16px',
+  })
+  let done = false
+  const finish = () => {
+    if (done) return
+    done = true
+    clearTimeout(timer)
+    area.remove()
+    previous?.focus({ preventScroll: true })
   }
-  document.addEventListener(type, listener, { once: true, capture: true })
-  setTimeout(
-    () => document.removeEventListener(type, listener, { capture: true }),
-    0,
-  )
+  area.addEventListener('paste', (e) => {
+    e.preventDefault()
+    if (done) return
+    const text = e.clipboardData?.getData('text/plain') ?? ''
+    finish()
+    handle(text)
+  })
+  // Another key, or the focus taken elsewhere: no paste is coming
+  area.addEventListener('keydown', finish)
+  area.addEventListener('blur', finish)
+  // Inside the open modal dialog when there is one: showModal makes the
+  // rest of the page inert, where the field could not take the focus
+  ;(previous?.closest('dialog[open]') ?? document.body).appendChild(area)
+  area.focus({ preventScroll: true })
+  const timer = setTimeout(finish, 1000)
 }
 
 // A place in rows, and one in cols
@@ -446,14 +476,14 @@ export function TableGrid({
     if (ctrlKey && rows.length && (letter === 'c' || letter === 'v')) {
       const r = rangeOf(from)
       if (letter === 'c' && onCopyRange) {
-        onNextClipboard('copy', (data) => {
-          const tsv = onCopyRange(r)
-          if (tsv !== undefined) data.setData('text/plain', tsv)
-        })
+        // Written by the key itself, not on the browser's copy event: with
+        // no text selected, macOS greys out its Copy menu item, which Cmd+C
+        // goes through, so that event never comes
+        e.preventDefault()
+        const tsv = onCopyRange(r)
+        if (tsv !== undefined) void copyText(tsv)
       } else if (letter === 'v' && onPasteBlock) {
-        onNextClipboard('paste', (data) =>
-          onPasteBlock({ pos: r.top, at: r.left }, data.getData('text/plain')),
-        )
+        catchPaste((text) => onPasteBlock({ pos: r.top, at: r.left }, text))
       }
       return
     }

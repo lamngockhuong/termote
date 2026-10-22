@@ -1589,7 +1589,10 @@ describe('FileViewer: editing a table', () => {
       const cell = screen.getByRole('gridcell', { name })
       cell.focus()
       fireEvent.keyDown(cell, { key: 'v', ctrlKey: true })
-      fireEvent.paste(document, { clipboardData: { getData: () => text } })
+      // The paste reaches the hidden field the key gave the focus to
+      fireEvent.paste(document.activeElement as Element, {
+        clipboardData: { getData: () => text },
+      })
     }
     pasteAt('1', 'q')
     // Past the last row: one row added, asked first
