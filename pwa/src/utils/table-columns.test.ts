@@ -13,6 +13,7 @@ import {
   moveColumns,
   movedColumn,
   pageRows,
+  pinnedColumn,
   type ReadCell,
   rowHeightFor,
   scrollTopFor,
@@ -247,5 +248,26 @@ describe('moveColumns', () => {
         wrapped: [],
       },
     )
+  })
+
+  it('a pinned column follows its column, and goes with it', () => {
+    const layout = { key: 'k', widths: {}, wrapped: [], pinned: 3 }
+    expect(moveColumns(layout, 2, true).pinned).toBe(4)
+    expect(moveColumns(layout, 4, true).pinned).toBe(3)
+    expect(moveColumns(layout, 2, false).pinned).toBe(2)
+    expect(moveColumns(layout, 3, false)).not.toHaveProperty('pinned')
+  })
+})
+
+describe('pinnedColumn', () => {
+  it('is the column pinned while it is shown', () => {
+    expect(pinnedColumn(undefined, [0, 1, 2])).toBeUndefined()
+    expect(pinnedColumn(false, [0, 1, 2])).toBeUndefined()
+    expect(pinnedColumn(2, [0, 1, 2])).toBe(2)
+    expect(pinnedColumn(1, [0, 2])).toBeUndefined()
+  })
+
+  it('true, from a tab kept before any column could be pinned, is the first shown', () => {
+    expect(pinnedColumn(true, [1, 2])).toBe(1)
   })
 })

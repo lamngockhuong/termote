@@ -404,10 +404,14 @@ thì không có bảng.
   được bật Wrap hiện tối đa ngần ấy dòng của mỗi giá trị (chỗ xuống dòng vẫn có `↵`) và tên cột có
   biểu tượng xuống dòng; chỉ cần một cột được bật là mọi dòng cao bằng ngần ấy dòng chữ, giá trị
   dài hơn bị cắt bớt. Giá trị đầy đủ nằm trong bảng nhỏ của ô đó, hoặc trong ô sửa khi đang sửa.
-- **Pin first column** trong menu **Columns** giữ cột đầu tiên, cả tên cột, đứng yên ở bên trái
-  cạnh số dòng khi phần còn lại cuộn ngang. Khi số dòng và cột đó chiếm quá nửa chiều rộng bảng
-  (trên điện thoại, hoặc cột đầu rất rộng), cột đó cuộn theo các cột khác để vẫn đọc được bảng.
-  Khi có cột bị ẩn, cột được ghim là cột đầu tiên còn hiện.
+- Mỗi tên cột có nút ⋯ (hiện khi rê chuột, trên màn hình cảm ứng thì luôn hiện); nhấp phải vào tên
+  cột cũng mở đúng menu ấy. **Pin column** ghim cột đó, cả tên cột, ở bên trái cạnh số dòng: cột vẫn
+  đứng đúng chỗ của nó cho tới khi bảng cuộn ngang tới, rồi dừng lại ở đó, các cột phía trước trượt
+  xuống dưới nó. Mỗi lần chỉ ghim được một cột; **Unpin column** trong cùng menu bỏ ghim. Khi đang
+  có cột được ghim, menu **Columns** cũng có mục **Unpin tên cột** để bỏ ghim. Khi số dòng và cột
+  được ghim chiếm quá nửa chiều rộng bảng (trên điện thoại, hoặc cột rất rộng), cột đó cuộn theo các
+  cột khác để vẫn đọc được bảng. **Hide column** trong menu ⋯ ẩn cột đó, giống **Show** bên dưới;
+  cột đang ghim mà bị ẩn thì cũng thôi được ghim.
 - **Show** trong menu **Columns** liệt kê các cột, cột nào đang hiện thì có dấu chọn: bỏ dấu chọn
   để ẩn cột đó khỏi bảng và khỏi Records, nơi cũng ghi có bao nhiêu cột đang ẩn. **Show all** hiện
   lại tất cả. Không ẩn được cột cuối cùng còn hiện; ẩn cột đang dùng để sắp xếp thì bảng trở về thứ
@@ -530,9 +534,9 @@ file được sửa dạng văn bản.
   một dòng trống rồi mở ô đầu tiên của nó. **Delete row** hỏi trước khi xoá, và nói rõ khi đó là
   dòng đầu của file, tức dòng tiêu đề lúc **Header row** đang bật. Muốn xoá dòng tiêu đề, hãy tắt
   **Header row** trước: khi đó dòng tiêu đề thành một dòng mở được như mọi dòng khác.
-- Khi đang sửa, mỗi tên cột có nút ⋯ (hiện khi rê chuột, trên màn hình cảm ứng thì luôn hiện);
-  nhấp phải vào tên cột hay một ô, hoặc nhấn Shift+F10 hay phím menu ngữ cảnh trên đó, cũng mở
-  đúng menu ấy. **Insert column left** và **Insert column right** thêm một cột trống: mỗi dòng đủ
+- Khi đang sửa, menu ⋯ của tên cột có thêm các thao tác sửa dưới đây; nhấp phải vào một ô, hoặc
+  nhấn Shift+F10 hay phím menu ngữ cảnh trên tên cột hay một ô, cũng mở đúng menu ấy.
+  **Insert column left** và **Insert column right** thêm một cột trống: mỗi dòng đủ
   dài để có cột đó nhận thêm một dấu phân cách, ngoài ra không đổi gì; dòng ngắn hơn và dòng trống
   giữ nguyên. Khi **Header row** bật, tên cột mới được hỏi ngay (Esc thì để trống). **Delete
   column** hỏi trước và cho biết bao nhiêu ô có giá trị sẽ mất theo; không xoá được cột cuối cùng.

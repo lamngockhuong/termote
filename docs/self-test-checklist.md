@@ -761,12 +761,16 @@ Run on tmux (Linux/macOS) and Herdr; psmux (Windows) offers neither view.
 - [ ] Desktop, editing: Delete and Backspace clear the cell in focus, one Ctrl+Z brings it back;
       Save, then `git diff` shows only that cell
 - [ ] iPhone: a tap on a cell still opens the sheet, viewing or editing, never a field
-- [ ] "Columns" → "Pin first column" on a table wider than the screen: scrolled sideways, the
-      first column and its name stay next to the row numbers (desktop Chrome, Safari); a cell
-      edited in it or in another column shows whole, over the rows below; the choice stays after
-      showing another tab and coming back, and goes on another "Delimiter" or "Header row"
+- [ ] A column's ⋯ → "Pin column" on the first column of a table wider than the screen: scrolled
+      sideways, the first column and its name stay next to the row numbers (desktop Chrome, Safari);
+      a cell edited in it or in another column shows whole, over the rows below; the choice stays
+      after showing another tab and coming back, and goes on another "Delimiter" or "Header row"
 - [ ] iPhone (375px), a wide first column pinned: it scrolls with the others, the table still
       scrolls sideways
+- [ ] A table only viewed, a column's ⋯ → "Pin column" on its third column: it stays in place until
+      scrolled to, then sticks next to the row numbers and the columns before it pass under it;
+      "Columns" has "Unpin <name>", which unpins it; pinning another column moves the pin; "Unpin
+      column" and "Hide column" in the ⋯ work, hiding the pinned column unpins it
 - [ ] "Columns" → "Show": untick two columns: they leave the table and Records ("2 columns
       hidden"); filtering on a value only a hidden column has keeps its row; arrow keys and Tab in a
       cell skip them; the last column shown cannot be unticked; "Show all" brings them back; the

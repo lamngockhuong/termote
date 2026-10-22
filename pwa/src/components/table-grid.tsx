@@ -146,9 +146,10 @@ interface Props {
   covered?: boolean
   // Where it starts scrolled to (a tab shown again), once there are rows
   scrollTop?: number
-  // The first column stays at the left, next to the row numbers, while the
-  // rest scrolls; not while it is wider than half the frame
-  pinned?: boolean
+  // The column (of the file) that stays at the left, next to the row
+  // numbers, once scrolled to it, the columns before it passing under it;
+  // not while it is wider than half the frame
+  pinned?: number
   // Cells found, as pairs (place in rows, place in cols) in that order, and
   // the current one
   matches?: Int32Array
@@ -166,6 +167,9 @@ interface Props {
     open: boolean,
     onOpenChange: (open: boolean) => void,
   ) => ReactNode
+  // A table taking edits: the context menu of a cell opens its column's
+  // menu, with its row. Unset, only a column's name opens it.
+  menuFromCells?: boolean
   // F2 or a double click on a column's name: rename it. Set, a double click
   // sorts once, not twice.
   onRename?: (col: number) => void
@@ -288,11 +292,12 @@ export function TableGrid({
   busy,
   covered = false,
   scrollTop,
-  pinned = false,
+  pinned,
   matches,
   current,
   goTo,
   columnMenu,
+  menuFromCells = false,
   onRename,
   editingHeader,
   headerEditor,
@@ -501,7 +506,7 @@ export function TableGrid({
         return
       }
     }
-    if (columnMenu && onValue && menuKey(e)) {
+    if (columnMenu && menuFromCells && onValue && menuKey(e)) {
       e.preventDefault()
       setActive(from)
       setMenu({ col: fileCol, row })
@@ -693,7 +698,8 @@ export function TableGrid({
   // browser sends no keydown for it)
   const onContextMenu = (e: MouseEvent<HTMLDivElement>) => {
     const cell = (e.target as HTMLElement).closest<HTMLElement>('[data-pos]')
-    if (!columnMenu || !cell || cell.dataset.at === '-1') return
+    if (!columnMenu || !menuFromCells || !cell || cell.dataset.at === '-1')
+      return
     e.preventDefault()
     const at = { pos: Number(cell.dataset.pos), col: Number(cell.dataset.at) }
     setActive(at)
@@ -819,19 +825,22 @@ export function TableGrid({
   const corner = useRef<HTMLDivElement>(null)
   const pinHead = useRef<HTMLDivElement>(null)
   const [pinnedPx, setPinnedPx] = useState(0)
+  // Its place among the columns shown; -1 when none is pinned
+  const pinAt = pinned === undefined ? -1 : cols.indexOf(pinned)
   // biome-ignore lint/correctness/useExhaustiveDependencies: measured again as the widths or the frame change
   useLayoutEffect(() => {
-    if (!pinned) return
+    if (pinAt < 0) return
     // Widths, not places: scrolled sideways, an unpinned column has moved
     const width = (el: HTMLDivElement | null) =>
       (el as HTMLDivElement).getBoundingClientRect().width
     setPinnedPx(
       width(corner.current) + width(pinHead.current) ||
-        (numberWidth + widths[cols[0]]) * FALLBACK_CH_PX + 2 * CELL_PAD_X,
+        (numberWidth + widths[pinned as number]) * FALLBACK_CH_PX +
+          2 * CELL_PAD_X,
     )
-  }, [pinned, widths[cols[0]], numberWidth, frameWidth])
+  }, [pinAt, widths[pinned ?? -1], numberWidth, frameWidth])
   // A frame of no size yet (a test, the first frame) is no narrow one
-  const sticky = pinned && (!frameWidth || pinnedPx <= frameWidth / 2)
+  const sticky = pinAt >= 0 && (!frameWidth || pinnedPx <= frameWidth / 2)
   const pinStyle = sticky ? { left: numberCol } : undefined
   const template = [
     numberCol,
@@ -877,7 +886,7 @@ export function TableGrid({
       // stick at the left
       style={{
         scrollPaddingLeft: sticky
-          ? `calc(${numberWidth + widths[cols[0]]}ch + 2rem)`
+          ? `calc(${numberWidth + widths[pinned as number]}ch + 2rem)`
           : numberCol,
       }}
       data-scroll-restore
@@ -912,7 +921,7 @@ export function TableGrid({
             return (
               <div
                 key={c}
-                ref={i === 0 ? pinHead : undefined}
+                ref={i === pinAt ? pinHead : undefined}
                 role="columnheader"
                 // Hidden columns are left out: a screen reader can tell
                 aria-colindex={c + 2}
@@ -927,8 +936,8 @@ export function TableGrid({
                 }
                 // Pinned: below the corner, above the resize handles of the
                 // columns scrolled under it
-                className={`group/head flex min-w-0 ${i === 0 && sticky ? 'sticky z-[25] border-r border-border bg-surface' : 'relative'}`}
-                style={i === 0 ? pinStyle : undefined}
+                className={`group/head flex min-w-0 ${i === pinAt && sticky ? 'sticky z-[25] border-r border-border bg-surface' : 'relative'}`}
+                style={i === pinAt ? pinStyle : undefined}
                 onContextMenu={(e) => {
                   if (!columnMenu || editingHeader === c) return
                   e.preventDefault()
@@ -1066,7 +1075,7 @@ export function TableGrid({
               // Clipped, not hidden: overflow hidden would make each row a
               // scroll box, and its row number and pinned cell would stick
               // to the row, never to the frame scrolled sideways.
-              className={`grid border-b border-border/50 ${editingCell?.row === r ? `relative ${sticky && editingCell.col === cols[0] ? 'z-[7]' : 'z-[5]'}` : 'overflow-clip'}`}
+              className={`grid border-b border-border/50 ${editingCell?.row === r ? `relative ${sticky && editingCell.col === pinned ? 'z-[7]' : 'z-[5]'}` : 'overflow-clip'}`}
               style={{ gridTemplateColumns: template, height: rowHeight }}
             >
               <div
@@ -1100,8 +1109,8 @@ export function TableGrid({
                       data-last={i === cols.length - 1 || undefined}
                       // Out of the pinned column, still above it: a field
                       // growing leftward from the last column covers it
-                      className={`group/edit min-w-0 ${i === 0 && sticky ? PIN : 'relative z-[7]'}`}
-                      style={i === 0 ? pinStyle : undefined}
+                      className={`group/edit min-w-0 ${i === pinAt && sticky ? PIN : 'relative z-[7]'}`}
+                      style={i === pinAt ? pinStyle : undefined}
                     >
                       {editor}
                     </div>
@@ -1129,8 +1138,8 @@ export function TableGrid({
                     tabIndex={p === pos && i === col ? 0 : -1}
                     aria-selected={picked || undefined}
                     title={shown}
-                    className={`${wrap ? WRAP_CELL : CELL} ${CELL_FOCUS} ${i === 0 && sticky ? PIN : ''} ${found ? HIT : picked ? SELECTED : ''} ${now ? CURRENT : ''}`}
-                    style={i === 0 ? pinStyle : undefined}
+                    className={`${wrap ? WRAP_CELL : CELL} ${CELL_FOCUS} ${i === pinAt && sticky ? PIN : ''} ${found ? HIT : picked ? SELECTED : ''} ${now ? CURRENT : ''}`}
+                    style={i === pinAt ? pinStyle : undefined}
                   >
                     {wrap ? (
                       <span
