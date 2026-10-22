@@ -197,6 +197,16 @@ describe('useUpdateCheck', () => {
     }
   })
 
+  it('takes a result another tab kept meanwhile', async () => {
+    const { result } = renderHook(() => useUpdateCheck())
+    expect(result.current.latest).toBe(null)
+    const kept = { version: '1.14.0', url: 'u', checkedAt: Date.now() }
+    localStorage.setItem(CACHE_KEY, JSON.stringify(kept))
+    await act(() => result.current.check())
+    expect(result.current.latest).toEqual(kept)
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
   it('renders nothing again when the kept result is unchanged', async () => {
     const kept = { version: '1.14.0', url: 'u', checkedAt: Date.now() }
     localStorage.setItem(CACHE_KEY, JSON.stringify(kept))
