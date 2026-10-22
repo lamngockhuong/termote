@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.7.0](https://github.com/lamngockhuong/termote/compare/v2.6.0...v2.7.0) (2026-10-22)
+
+
+### Features
+
+* **pwa:** pin any CSV column, and hide or pin it from its ⋯ menu ([#532](https://github.com/lamngockhuong/termote/issues/532)) ([1d7e09e](https://github.com/lamngockhuong/termote/commit/1d7e09ee2ec3d5524443e3f9c8d29e2907d1280d))
+
+
+### Bug Fixes
+
+* **deps:** update dependency @astrojs/starlight to v0.42.6 ([#537](https://github.com/lamngockhuong/termote/issues/537)) ([ab775a6](https://github.com/lamngockhuong/termote/commit/ab775a67b3d1bd138ec507dbb72d5605fe98f095))
+* **deps:** update dependency astro to v7.4.0 ([#539](https://github.com/lamngockhuong/termote/issues/539)) ([1dc722e](https://github.com/lamngockhuong/termote/commit/1dc722eb600e20b4c4ef96cd0d53ecd8354c649a))
+* **deps:** update dependency mermaid to v12.2.0 ([#540](https://github.com/lamngockhuong/termote/issues/540)) ([95f8814](https://github.com/lamngockhuong/termote/commit/95f881411a56d84ec4688646a54647c92c75a79b))
+* **deps:** update react monorepo ([#541](https://github.com/lamngockhuong/termote/issues/541)) ([f2c7a4f](https://github.com/lamngockhuong/termote/commit/f2c7a4f2b3b504ce797eea3c63e33af2b09fcd87))
+
 ## [2.6.0](https://github.com/lamngockhuong/termote/compare/v2.5.0...v2.6.0) (2026-10-22)
 
 
