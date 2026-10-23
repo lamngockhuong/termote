@@ -16,7 +16,7 @@
     "@remotion/eslint-config-flat": "4.0.536",
     "@remotion/google-fonts": "4.0.536",
     "@remotion/media": "4.0.536",
-    "@remotion/transitions": "4.0.536",
+    "@remotion/transitions": "4.0.537",
     "@types/qrcode": "1.5.6",
     "@types/react": "19.3.0",
     "@types/web": "0.0.359",
