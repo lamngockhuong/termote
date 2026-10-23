@@ -1,48 +1,49 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  isLoadError,
+  MERMAID_LOAD_TIMEOUT,
   MERMAID_MAX_BYTES,
-  MERMAID_MAX_EDGES,
   MERMAID_TIMEOUT,
-  mermaidConfig,
   peekMermaid,
   renderMermaid,
   resetMermaid,
   svgToDataUrl,
 } from './mermaid-render'
 
-const LOAD_ERROR = 'Failed to fetch dynamically imported module: /assets/x.js'
-
-const h = vi.hoisted(() => {
-  const fns = { initialize: vi.fn(), parse: vi.fn(), render: vi.fn() }
-  const mermaid = {
-    initialize: fns.initialize,
-    render: fns.render,
-    mermaidAPI: { getDiagramFromText: fns.parse },
+// Stands in for the module worker: records requests, replies on demand.
+class FakeWorker {
+  static all: FakeWorker[] = []
+  onmessage?: (e: MessageEvent) => void
+  onerror?: () => void
+  posted: { id: number; source: string; fontFamily: string }[] = []
+  terminated = false
+  constructor(
+    readonly url: URL,
+    readonly opts: WorkerOptions,
+  ) {
+    FakeWorker.all.push(this)
   }
-  return { ...fns, fakeMermaid: () => ({ default: mermaid }) }
-})
-
-vi.mock('mermaid', h.fakeMermaid)
-
-const SVG = (id: string) =>
-  `<svg id="${id}" width="100%" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" style="max-width: 120.5px;" viewBox="0 0 120.5 40"><g><text>A&nbsp;B</text></g></svg>`
-
-// What Mermaid does: draws into the stage, adds its own nodes to <body>
-function drawLikeMermaid(id: string, _src: string, stage: HTMLElement) {
-  const wrap = document.createElement('div')
-  wrap.id = `d${id}`
-  stage.append(wrap)
-  const cy = document.createElement('div')
-  cy.id = 'cy'
-  const tip = document.createElement('div')
-  tip.className = 'mermaidTooltip'
-  const measure = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-  const outer = document.createElement('div')
-  outer.id = `i${id}`
-  document.body.append(cy, tip, measure, outer)
-  return Promise.resolve({ svg: SVG(id) })
+  postMessage(req: { id: number; source: string; fontFamily: string }) {
+    this.posted.push(req)
+  }
+  send(data: unknown) {
+    this.onmessage?.(new MessageEvent('message', { data }))
+  }
+  start(id: number) {
+    this.send({ id, started: true })
+  }
+  draw(id: number, svg = SVG) {
+    this.send({ id, svg })
+  }
+  fail(id: number, error: string) {
+    this.send({ id, error })
+  }
+  terminate() {
+    this.terminated = true
+  }
 }
+
+const SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" class="pele" viewBox="0 0 120.5 40" width="121" height="40" style="max-width:100%;height:auto;--_bg:var(--pele-bg,#fff);color:var(--_fg)"><g><text>A&nbsp;B</text></g></svg>'
 
 function decode(url: string) {
   return decodeURIComponent(
@@ -51,324 +52,279 @@ function decode(url: string) {
 }
 
 const signal = () => new AbortController().signal
+const flush = () => new Promise((r) => setTimeout(r, 0))
+const last = () => FakeWorker.all[FakeWorker.all.length - 1]
 
 beforeEach(() => {
   resetMermaid()
-  h.initialize.mockReset()
-  h.parse.mockReset().mockResolvedValue({ db: {} })
-  h.render.mockReset().mockImplementation(drawLikeMermaid)
-  document.body.innerHTML = '<div id="root"></div>'
+  FakeWorker.all = []
+  vi.stubGlobal('Worker', FakeWorker)
+  document.body.style.fontFamily = 'Inter, sans-serif'
 })
 
 afterEach(() => {
+  resetMermaid()
   vi.useRealTimers()
-})
-
-describe('mermaidConfig', () => {
-  it('locks labels, layout, security and the font', () => {
-    document.body.style.fontFamily = 'Inter, sans-serif'
-    const config = mermaidConfig('dark')
-    expect(config).toMatchObject({
-      startOnLoad: false,
-      securityLevel: 'strict',
-      htmlLabels: false,
-      layout: 'dagre',
-      suppressErrorRendering: true,
-      theme: 'dark',
-      maxTextSize: MERMAID_MAX_BYTES,
-      maxEdges: MERMAID_MAX_EDGES,
-      fontFamily: 'Inter, sans-serif',
-    })
-    expect(config.secure).toEqual(
-      expect.arrayContaining([
-        'secure',
-        'securityLevel',
-        'htmlLabels',
-        'flowchart',
-        'theme',
-        'themeVariables',
-        'themeCSS',
-        'fontFamily',
-        'layout',
-        'dompurifyConfig',
-      ]),
-    )
-    expect(mermaidConfig('light').theme).toBe('default')
-  })
+  vi.unstubAllGlobals()
 })
 
 describe('renderMermaid', () => {
-  it('draws a diagram as a data: URL and leaves nothing in the document', async () => {
-    const r = await renderMermaid('flowchart LR\n A-->B', 'light', signal())
+  it('draws in one module worker as a data: URL, with the page font', async () => {
+    const p = renderMermaid('graph TD; A-->B', 'light', signal())
+    const w = last()
+    expect(FakeWorker.all).toHaveLength(1)
+    expect(w.opts).toEqual({ type: 'module' })
+    expect(w.posted).toEqual([
+      { id: 1, source: 'graph TD; A-->B', fontFamily: 'Inter, sans-serif' },
+    ])
+    w.start(1)
+    w.draw(1)
+    const r = await p
     expect(r).toMatchObject({ ok: true, width: 121, height: 40 })
-    if (!r.ok) throw new Error('not ok')
-    expect(r.url).toMatch(/^data:image\/svg\+xml;charset=utf-8,/)
-    expect(h.initialize).toHaveBeenCalledWith(mermaidConfig('light'))
-    expect(h.render).toHaveBeenCalledWith(
-      'termote-mmd-1',
-      'flowchart LR\n A-->B',
-      expect.any(HTMLDivElement),
-    )
-    const stage = h.render.mock.calls[0][2] as HTMLDivElement
-    expect(stage.getAttribute('aria-hidden')).toBe('true')
-    expect(stage.style.opacity).toBe('0')
-    expect(stage.style.width).toBe('1200px')
-    expect(document.body.innerHTML).toBe('<div id="root"></div>')
+    // Nothing of the diagram in the document
+    expect(document.body.querySelector('svg')).toBeNull()
   })
 
-  it('keeps a node the app added to <body> meanwhile', async () => {
-    h.render.mockImplementation((id, src, stage) => {
-      const toast = document.createElement('div')
-      toast.id = 'toast'
-      document.body.append(toast)
-      return drawLikeMermaid(id, src, stage)
-    })
-    await renderMermaid('flowchart LR\n A-->B', 'light', signal())
-    expect(document.body.innerHTML).toBe(
-      '<div id="root"></div><div id="toast"></div>',
-    )
+  it('reuses the worker, one diagram at a time', async () => {
+    const a = renderMermaid('graph TD; A', 'light', signal())
+    const b = renderMermaid('graph TD; B', 'light', signal())
+    const w = last()
+    expect(w.posted.map((r) => r.id)).toEqual([1])
+    w.draw(1)
+    await a
+    expect(w.posted.map((r) => r.id)).toEqual([1, 2])
+    w.draw(2)
+    expect((await b).ok).toBe(true)
+    expect(FakeWorker.all).toHaveLength(1)
   })
 
   it('answers from the cache next time, then peekMermaid does too', async () => {
-    await renderMermaid('graph TD\n A', 'dark', signal())
-    expect(peekMermaid('graph TD\n A', 'dark')).toMatchObject({ ok: true })
-    expect(peekMermaid('graph TD\n A', 'light')).toBeUndefined()
-    const again = await renderMermaid('graph TD\n A', 'dark', signal())
-    expect(again.ok).toBe(true)
-    expect(h.render).toHaveBeenCalledTimes(1)
+    const p = renderMermaid('graph TD; A-->B', 'dark', signal())
+    last().draw(1)
+    const first = await p
+    expect(await renderMermaid('graph TD; A-->B', 'dark', signal())).toEqual(
+      first,
+    )
+    expect(peekMermaid('graph TD; A-->B', 'dark')).toEqual(first)
+    expect(peekMermaid('graph TD; A-->B', 'light')).toBeUndefined()
+    expect(last().posted).toHaveLength(1)
   })
 
   it('keeps the 50 most recently used diagrams', async () => {
     for (let i = 0; i < 51; i++) {
-      await renderMermaid(`graph TD\n A${i}`, 'light', signal())
-      // Used again: the oldest is then A1, not A0
-      if (i === 1) peekMermaid('graph TD\n A0', 'light')
+      const p = renderMermaid(`graph TD; N${i}`, 'light', signal())
+      last().draw(i + 1)
+      await p
     }
-    expect(peekMermaid('graph TD\n A0', 'light')).toBeDefined()
-    expect(peekMermaid('graph TD\n A1', 'light')).toBeUndefined()
-    expect(peekMermaid('graph TD\n A50', 'light')).toBeDefined()
+    expect(peekMermaid('graph TD; N0', 'light')).toBeUndefined()
+    expect(peekMermaid('graph TD; N1', 'light')).toBeDefined()
+    expect(peekMermaid('graph TD; N50', 'light')).toBeDefined()
   })
 
-  it('never loads Mermaid for a source over the cap', async () => {
-    // 2 bytes each in UTF-8: over the cap in bytes, not in characters
-    const big = 'é'.repeat(MERMAID_MAX_BYTES / 2 + 1)
+  it('never starts the worker for a source over the cap', async () => {
+    const big = `graph TD;${'é'.repeat(MERMAID_MAX_BYTES / 2)}`
     expect(await renderMermaid(big, 'light', signal())).toEqual({
       ok: false,
       reason: 'too_large',
     })
-    expect(h.initialize).not.toHaveBeenCalled()
+    expect(FakeWorker.all).toHaveLength(0)
   })
 
   it.each([
-    'flowchart LR\n A@{ img: "/api/mux/snapshot", h: 60 }',
-    'flowchart LR\n A@{ shape: rect, icon: "fa:user" }',
-    'flowchart LR\n A@{ "img": "https://example.com/x.png" }',
-  ])('never loads Mermaid for a shape that fetches: %s', async (src) => {
-    expect(await renderMermaid(src, 'light', signal())).toEqual({
-      ok: false,
-      reason: 'unsupported',
-    })
-    expect(h.initialize).not.toHaveBeenCalled()
-  })
-
-  it('reports a syntax error from parse', async () => {
-    h.parse.mockRejectedValue(new Error('Parse error on line 1'))
-    expect(await renderMermaid('nope', 'light', signal())).toEqual({
-      ok: false,
-      reason: 'syntax',
-    })
-    expect(h.render).not.toHaveBeenCalled()
-  })
-
-  it.each([
-    ['a Map', new Map([['A', { img: '/x.png' }]])],
-    ['an object', { A: { id: 'A' }, B: { icon: 'fa:user' } }],
-  ])('refuses a parsed node with an image or icon (%s)', async (_, nodes) => {
-    h.parse.mockResolvedValue({ db: { getVertices: () => nodes } })
-    expect(await renderMermaid('flowchart LR\n A', 'light', signal())).toEqual({
-      ok: false,
-      reason: 'unsupported',
-    })
-    expect(h.render).not.toHaveBeenCalled()
-  })
-
-  it('draws a diagram whose nodes fetch nothing', async () => {
-    h.parse.mockResolvedValue({
-      db: { getVertices: () => new Map([['A', { id: 'A' }]]) },
-    })
-    expect(
-      (await renderMermaid('flowchart LR\n A', 'light', signal())).ok,
-    ).toBe(true)
-    h.parse.mockResolvedValue({ db: { getVertices: () => undefined } })
-    expect(
-      (await renderMermaid('flowchart LR\n B', 'light', signal())).ok,
-    ).toBe(true)
-  })
-
-  it('reports a diagram chunk that failed to load from parse', async () => {
-    h.parse.mockRejectedValue(new TypeError(LOAD_ERROR))
-    expect(await renderMermaid('mindmap\n a', 'light', signal())).toEqual({
-      ok: false,
-      reason: 'load_failed',
-    })
-  })
-
-  it.each([
-    ['render_failed', new Error('Cannot read properties of undefined')],
-    ['load_failed', new TypeError('Importing a module script failed.')],
-  ])('reports %s from render and still cleans up', async (reason, error) => {
-    h.render.mockImplementation(async (id, src, stage) => {
-      await drawLikeMermaid(id, src, stage)
-      throw error
-    })
-    expect(await renderMermaid('graph TD\n A', 'light', signal())).toEqual({
-      ok: false,
-      reason,
-    })
-    expect(document.body.innerHTML).toBe('<div id="root"></div>')
-  })
-
-  it('reports render_failed when initialize throws', async () => {
-    h.initialize.mockImplementation(() => {
-      throw new Error('bad config')
-    })
-    expect(await renderMermaid('graph TD\n A', 'light', signal())).toEqual({
-      ok: false,
-      reason: 'render_failed',
-    })
+    'syntax',
+    'too_large',
+    'unsupported',
+    'render_failed',
+    'load_failed',
+  ])('reports %s from the worker and caches nothing', async (error) => {
+    const p = renderMermaid('graph', 'light', signal())
+    last().fail(1, error)
+    expect(await p).toEqual({ ok: false, reason: error })
+    expect(peekMermaid('graph', 'light')).toBeUndefined()
   })
 
   it('reports render_failed for an SVG without a viewBox', async () => {
-    h.render.mockResolvedValue({ svg: '<svg width="10"></svg>' })
-    expect(await renderMermaid('graph TD\n A', 'light', signal())).toEqual({
-      ok: false,
-      reason: 'render_failed',
-    })
-    expect(peekMermaid('graph TD\n A', 'light')).toBeUndefined()
+    const p = renderMermaid('graph', 'light', signal())
+    last().draw(1, '<svg width="10"></svg>')
+    expect(await p).toEqual({ ok: false, reason: 'render_failed' })
   })
 
-  it('drops a diagram aborted before its turn', async () => {
-    let finish: (v: { svg: string }) => void = () => {}
-    h.render.mockImplementationOnce(
-      () => new Promise<{ svg: string }>((r) => (finish = r)),
-    )
-    const first = renderMermaid('graph TD\n A', 'light', signal())
-    const ac = new AbortController()
-    const second = renderMermaid('graph TD\n B', 'light', ac.signal)
-    ac.abort()
-    await vi.waitFor(() => expect(h.render).toHaveBeenCalledTimes(1))
-    finish({ svg: SVG('termote-mmd-1') })
-    await expect(second).rejects.toMatchObject({ name: 'AbortError' })
-    expect((await first).ok).toBe(true)
-    expect(h.render).toHaveBeenCalledTimes(1)
+  it('ignores a reply that is not for the diagram it holds', async () => {
+    const p = renderMermaid('graph', 'light', signal())
+    const w = last()
+    w.draw(7)
+    w.start(7)
+    w.draw(1)
+    expect((await p).ok).toBe(true)
   })
 
-  it('answers a second request for the same diagram from the first render', async () => {
-    const a = renderMermaid('graph TD\n A', 'light', signal())
-    const b = renderMermaid('graph TD\n A', 'light', signal())
-    expect(await a).toMatchObject({ ok: true })
-    expect(await b).toEqual(await a)
-    expect(h.render).toHaveBeenCalledTimes(1)
-  })
-
-  it('times out from the start of its own render, not while it waits', async () => {
-    vi.useFakeTimers()
-    const finishers: ((v: { svg: string }) => void)[] = []
-    h.render.mockImplementation(
-      (id: string) =>
-        new Promise<{ svg: string }>((r) =>
-          finishers.push(() => r({ svg: SVG(id) })),
-        ),
-    )
-    const first = renderMermaid('graph TD\n A', 'light', signal())
-    const second = renderMermaid('graph TD\n B', 'light', signal())
-    await vi.advanceTimersByTimeAsync(0)
-    expect(h.render).toHaveBeenCalledTimes(1)
-
-    // The first takes 9 s: under its limit
-    await vi.advanceTimersByTimeAsync(9000)
-    finishers[0]({ svg: '' })
-    expect((await first).ok).toBe(true)
-    await vi.advanceTimersByTimeAsync(0)
-    expect(h.render).toHaveBeenCalledTimes(2)
-
-    // The second waited 9 s in line: its own 10 s start only now
-    let secondResult: unknown
-    second.then((r) => (secondResult = r))
-    await vi.advanceTimersByTimeAsync(MERMAID_TIMEOUT - 1)
-    expect(secondResult).toBeUndefined()
-    await vi.advanceTimersByTimeAsync(1)
-    expect(secondResult).toEqual({ ok: false, reason: 'timeout' })
-  })
-
-  it('starts the next diagram only once a timed out one has finished', async () => {
-    vi.useFakeTimers()
-    let finish: () => void = () => {}
-    h.render.mockImplementationOnce(
-      (id: string) =>
-        new Promise<{ svg: string }>(
-          (r) => (finish = () => r({ svg: SVG(id) })),
-        ),
-    )
-    const first = renderMermaid('graph TD\n A', 'light', signal())
-    const second = renderMermaid('graph TD\n B', 'light', signal())
-    await vi.advanceTimersByTimeAsync(MERMAID_TIMEOUT)
-    expect(await first).toEqual({ ok: false, reason: 'timeout' })
-    expect(h.initialize).toHaveBeenCalledTimes(1)
-
-    finish()
-    expect((await second).ok).toBe(true)
-    expect(h.initialize).toHaveBeenCalledTimes(2)
-    // The slow one still finished and was kept
-    expect(peekMermaid('graph TD\n A', 'light')).toBeDefined()
-  })
-})
-
-describe('loading Mermaid', () => {
-  it('reports load_failed, then imports again next time', async () => {
-    vi.resetModules()
-    vi.doMock('mermaid', () => {
-      throw new TypeError(LOAD_ERROR)
-    })
-    expect(await renderMermaid('graph TD\n A', 'light', signal())).toEqual({
+  it('reports load_failed without workers', async () => {
+    vi.stubGlobal('Worker', undefined)
+    expect(await renderMermaid('graph', 'light', signal())).toEqual({
       ok: false,
       reason: 'load_failed',
     })
-    vi.resetModules()
-    vi.doMock('mermaid', h.fakeMermaid)
-    expect((await renderMermaid('graph TD\n A', 'light', signal())).ok).toBe(
-      true,
-    )
   })
-})
 
-describe('isLoadError', () => {
-  it.each([
-    [new TypeError(LOAD_ERROR), true],
-    [new TypeError('error loading dynamically imported module: x'), true],
-    [new TypeError('Importing a module script failed.'), true],
-    [new TypeError('x is not a function'), false],
-    ['Failed to fetch dynamically imported module', false],
-  ])('%s → %s', (e, expected) => {
-    expect(isLoadError(e)).toBe(expected)
+  it('drops a diagram aborted before its turn', async () => {
+    const first = renderMermaid('graph TD; A', 'light', signal())
+    const ac = new AbortController()
+    const second = renderMermaid('graph TD; B', 'light', ac.signal)
+    ac.abort(new Error('gone'))
+    await expect(second).rejects.toThrow('gone')
+    last().draw(1)
+    await first
+    expect(last().posted).toHaveLength(1)
+  })
+
+  it('rejects a diagram aborted already', async () => {
+    const ac = new AbortController()
+    ac.abort(new Error('gone'))
+    await expect(renderMermaid('graph', 'light', ac.signal)).rejects.toThrow(
+      'gone',
+    )
+    expect(FakeWorker.all).toHaveLength(0)
+  })
+
+  it('runs an aborted diagram already in the worker to its end', async () => {
+    const ac = new AbortController()
+    const p = renderMermaid('graph', 'light', ac.signal)
+    ac.abort(new Error('gone'))
+    last().draw(1)
+    expect((await p).ok).toBe(true)
+  })
+
+  it('answers a second request for the same diagram from the first render', async () => {
+    const a = renderMermaid('graph', 'light', signal())
+    const b = renderMermaid('graph', 'light', signal())
+    last().draw(1)
+    expect(await b).toEqual(await a)
+    expect(last().posted).toHaveLength(1)
+  })
+
+  it('ends the worker past the timeout from the start of drawing', async () => {
+    vi.useFakeTimers()
+    const p = renderMermaid('graph TD; slow', 'light', signal())
+    const next = renderMermaid('graph TD; next', 'light', signal())
+    const w = last()
+    // Loading does not count against the drawing timeout
+    await vi.advanceTimersByTimeAsync(MERMAID_TIMEOUT * 2)
+    w.start(1)
+    await vi.advanceTimersByTimeAsync(MERMAID_TIMEOUT - 1)
+    expect(w.terminated).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(await p).toEqual({ ok: false, reason: 'timeout' })
+    expect(w.terminated).toBe(true)
+    // The next diagram gets a new worker
+    expect(FakeWorker.all).toHaveLength(2)
+    last().draw(2)
+    expect((await next).ok).toBe(true)
+  })
+
+  it('ends the worker when loading takes too long', async () => {
+    vi.useFakeTimers()
+    const p = renderMermaid('graph', 'light', signal())
+    await vi.advanceTimersByTimeAsync(MERMAID_LOAD_TIMEOUT)
+    expect(await p).toEqual({ ok: false, reason: 'load_failed' })
+    expect(FakeWorker.all[0].terminated).toBe(true)
+  })
+
+  it('reports load_failed when the worker fails, then starts a new one', async () => {
+    const p = renderMermaid('graph TD; A', 'light', signal())
+    FakeWorker.all[0].onerror?.()
+    expect(await p).toEqual({ ok: false, reason: 'load_failed' })
+    expect(FakeWorker.all[0].terminated).toBe(true)
+    const q = renderMermaid('graph TD; B', 'light', signal())
+    expect(FakeWorker.all).toHaveLength(2)
+    last().draw(2)
+    expect((await q).ok).toBe(true)
+  })
+
+  it('ends the worker after a chunk failed to load in it', async () => {
+    const p = renderMermaid('graph TD; A', 'light', signal())
+    const q = renderMermaid('graph TD; B', 'light', signal())
+    const first = last()
+    first.fail(1, 'load_failed')
+    expect(await p).toEqual({ ok: false, reason: 'load_failed' })
+    expect(first.terminated).toBe(true)
+    expect(FakeWorker.all).toHaveLength(2)
+    last().draw(2)
+    expect((await q).ok).toBe(true)
+  })
+
+  it('ignores a late error of a worker already ended', async () => {
+    vi.useFakeTimers()
+    const p = renderMermaid('graph TD; A', 'light', signal())
+    const old = last()
+    old.start(1)
+    await vi.advanceTimersByTimeAsync(MERMAID_TIMEOUT)
+    await p
+    const q = renderMermaid('graph TD; B', 'light', signal())
+    const fresh = last()
+    old.onerror?.()
+    expect(fresh.terminated).toBe(false)
+    fresh.draw(2)
+    expect((await q).ok).toBe(true)
+  })
+
+  it('a worker error with nothing running only ends the worker', async () => {
+    const p = renderMermaid('graph', 'light', signal())
+    const w = last()
+    w.draw(1)
+    await p
+    w.onerror?.()
+    await flush()
+    expect(w.terminated).toBe(true)
   })
 })
 
 describe('svgToDataUrl', () => {
-  it('sizes the SVG by its viewBox and makes it valid XML', () => {
+  it('sizes the SVG by its viewBox, fixes its size and makes it valid XML', () => {
     const r = svgToDataUrl(
-      '<svg id="m" width="100%" height="5" style="max-width: 9px;" viewBox="-8 -8 200.2 99.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><text>a&nbsp;b<br>c</text><use xlink:href="#x"/></svg>',
+      '<svg id="m" width="100%" height="5" style="max-width:100%;height:auto;--_bg:var(--pele-bg,#fff)" viewBox="-8 -8 200.2 99.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><text>a&nbsp;b<br>c</text><use xlink:href="#x"/></svg>',
     )
     expect(r).toMatchObject({ width: 201, height: 100 })
     const xml = decode(r?.url ?? '')
     expect(xml).toBe(
-      '<svg id="m" viewBox="-8 -8 200.2 99.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="201" height="100"><text>a&#160;b<br/>c</text><use xlink:href="#x"/></svg>',
+      '<svg id="m" viewBox="-8 -8 200.2 99.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" style="--_bg:var(--pele-bg,#fff)" width="201" height="100"><text>a&#160;b<br/>c</text><use xlink:href="#x"/></svg>',
     )
     expect(
       new DOMParser()
         .parseFromString(xml, 'image/svg+xml')
         .querySelector('parsererror'),
     ).toBeNull()
+  })
+
+  it('puts the dark palette before the variables that read it', () => {
+    const xml = decode(svgToDataUrl(SVG, 'dark')?.url ?? '')
+    const style = /style="([^"]*)"/.exec(xml)?.[1] ?? ''
+    expect(style.startsWith('--pele-bg:#1a1a1d;')).toBe(true)
+    expect(style).toContain(';--_bg:var(--pele-bg,#fff);color:var(--_fg)')
+    expect(style).not.toContain('max-width')
+    expect(decode(svgToDataUrl(SVG, 'light')?.url ?? '')).not.toContain(
+      '--pele-bg:',
+    )
+  })
+
+  it('keeps a single-quoted style holding double quotes', () => {
+    const xml = decode(
+      svgToDataUrl(
+        `<svg viewBox="0 0 1 1" style='font-family:"A B",sans-serif'></svg>`,
+        'dark',
+      )?.url ?? '',
+    )
+    expect(xml).toContain('font-family:&quot;A B&quot;,sans-serif')
+    const doc = new DOMParser().parseFromString(xml, 'image/svg+xml')
+    expect(doc.querySelector('parsererror')).toBeNull()
+    expect(doc.documentElement.getAttribute('style')).toContain(
+      'font-family:"A B",sans-serif',
+    )
+  })
+
+  it('a dark SVG without a style gets one', () => {
+    expect(
+      decode(svgToDataUrl('<svg viewBox="0 0 1 1"></svg>', 'dark')?.url ?? ''),
+    ).toMatch(/^<svg viewBox="0 0 1 1" style="--pele-bg:#1a1a1d;[^"]*" xmlns=/)
   })
 
   it('adds the namespaces an <img> needs', () => {

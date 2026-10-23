@@ -343,12 +343,13 @@ over 256 KiB opens as its source, with a note that it is too large to preview.
   between the diagram and its source; Copy always copies the source. A wide diagram scrolls
   sideways. The diagram is a picture: nodes and links in it cannot be clicked, and the diagram
   follows the light or dark theme of Termote, whatever its `%%{init}%%` line or front matter
-  asks for. The source is shown instead, with the reason, when the diagram is over 50 KB, has
-  an image or an icon (`@{ img: ... }`, which would load a URL), is not valid Mermaid, takes
+  asks for. A shape with an image or an icon (`@{ img: ... }`) is drawn without it, so nothing
+  is loaded. The source is shown instead, with the reason, when the diagram is too large (over
+  50 KB, or over 500 links), is not valid Mermaid, is of a kind the renderer does not know, takes
   longer than 10 seconds, or the renderer cannot be loaded. The renderer is downloaded the first
   time a diagram is shown, not when the app is installed: offline, until then, diagrams show as
-  their source with "Could not load the diagram renderer". A very large diagram can keep the
-  page busy for a few seconds while it is drawn.
+  their source with "Could not load the diagram renderer". Diagrams are drawn in the background,
+  so even a large one never makes the page stop responding.
 - **Front matter** (the `---` block at the top of docs and MDX pages) is shown as a code block.
 - **Raw HTML and MDX components** are shown as the text they are, never run. The one exception
   is a `<details>` block with its `<summary>`: it shows as a section you tap to expand, and the

@@ -90,13 +90,13 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/utils/download-file.ts`                  | Download: preflight, refusal messages, iOS share sheet        |
 | `pwa/src/components/markdown-preview.tsx`         | Markdown file rendered in Files/Changes (links, code blocks)  |
 | `pwa/src/components/mermaid-block.tsx`            | A mermaid block: the diagram image, Show source, fallback     |
-| `pwa/src/utils/mermaid-render.ts`                 | Mermaid → `data:` SVG image: locked config, queue, cache      |
+| `pwa/src/utils/mermaid-render.ts`                 | Diagram → `data:` SVG image: worker queue, timeouts, cache    |
+| `pwa/src/utils/mermaid-worker.ts`                 | Module worker drawing a diagram with Pele, fixed options      |
 | `pwa/src/components/image-viewer.tsx`             | Full-screen image viewer: zoom, pan, keys, Back closes it     |
 | `pwa/src/hooks/use-zoom-pan.ts`                   | Pinch, drag, double tap, wheel zoom (Pointer Events)          |
 | `pwa/src/utils/zoom-pan.ts`                       | Fit, zoom around a point, pan limits of the viewer            |
 | `pwa/src/hooks/use-history-close.ts`              | Viewer's history entry: Back closes, close pops it            |
 | `pwa/src/hooks/use-image-viewer.tsx`              | Opens the viewer from an image, closes it on a new URL        |
-| `pwa/build/precache-split.ts`                     | Keeps Mermaid's chunks out of the service worker precache     |
 | `pwa/src/components/table-preview.tsx`            | CSV/TSV as a table: delimiter, header, filter, sort, Records  |
 | `pwa/src/components/table-grid.tsx`               | Virtual grid of a table (sticky header and row numbers)       |
 | `pwa/src/components/inline-cell-editor.tsx`       | A table cell edited in place (fine pointer): Enter, Esc, Tab  |
