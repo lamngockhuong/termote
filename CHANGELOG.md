@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.8.0](https://github.com/lamngockhuong/termote/compare/v2.7.0...v2.8.0) (2026-10-23)
+
+
+### Features
+
+* **pwa:** draw Mermaid diagrams with Pele in a worker ([#547](https://github.com/lamngockhuong/termote/issues/547)) ([49c7d1d](https://github.com/lamngockhuong/termote/commit/49c7d1d900cca5d4cf2a9f7b5272c43433140090))
+* **pwa:** share, copy and download a Mermaid diagram ([#555](https://github.com/lamngockhuong/termote/issues/555)) ([cc5b608](https://github.com/lamngockhuong/termote/commit/cc5b6083eee5b3f76454b10416ad87867084bf62))
+
+
+### Bug Fixes
+
+* **server:** require Go 1.26.10 for checkout builds ([#554](https://github.com/lamngockhuong/termote/issues/554)) ([1d46d3e](https://github.com/lamngockhuong/termote/commit/1d46d3e3f04b8ad0f5356d095c23ff0f1105ff30))
+
 ## [2.7.0](https://github.com/lamngockhuong/termote/compare/v2.6.0...v2.7.0) (2026-10-22)
 
 
