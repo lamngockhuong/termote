@@ -8,6 +8,7 @@ const h = vi.hoisted(() => ({
   closing: false,
   onClose: (() => {}) as () => void,
   returnFocus: undefined as RefObject<HTMLElement | null> | undefined,
+  actions: undefined as unknown,
 }))
 
 vi.mock('../components/image-viewer', () => {
@@ -17,11 +18,13 @@ vi.mock('../components/image-viewer', () => {
       p: ViewerImage & {
         stale: boolean
         returnFocus?: RefObject<HTMLElement | null>
+        actions?: unknown
         onClose: () => void
       },
     ) => {
       h.onClose = p.onClose
       h.returnFocus = p.returnFocus
+      h.actions = p.actions
       return (
         <div
           data-testid="viewer"
@@ -37,8 +40,9 @@ vi.mock('./use-history-close', () => ({ viewerClosing: () => h.closing }))
 
 let open: (image: ViewerImage) => void = () => {}
 const home: RefObject<HTMLElement | null> = { current: null }
-function Host({ src }: { src?: string }) {
-  const v = useImageViewer(src, home)
+const actions = () => null
+function Host({ src, withActions }: { src?: string; withActions?: boolean }) {
+  const v = useImageViewer(src, home, withActions ? actions : undefined)
   open = v.open
   return <>{v.viewer}</>
 }
@@ -78,5 +82,12 @@ describe('useImageViewer', () => {
     render(<Host src="blob:a" />)
     act(() => open(IMAGE))
     expect(screen.queryByTestId('viewer')).toBeNull()
+  })
+
+  it('gives the viewer the actions for its bar', async () => {
+    render(<Host src="blob:a" withActions />)
+    act(() => open(IMAGE))
+    await screen.findByTestId('viewer')
+    expect(h.actions).toBe(actions)
   })
 })

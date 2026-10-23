@@ -27,6 +27,7 @@ import {
   textOf,
 } from '../utils/markdown-links'
 import { detailsBlocks, htmlAsText } from '../utils/markdown-safety'
+import { exportName } from '../utils/mermaid-export'
 import { codeText, splitLines, tokenStyle } from './code-block'
 import { type FrameParts, MermaidBlock } from './mermaid-block'
 import { IconButton } from './ui/button'
@@ -281,7 +282,7 @@ interface HastElement {
 // react-markdown hands a code block as <pre><code class="language-x">, the
 // code element always there and always alone
 function MdPre({ node }: { node?: unknown }) {
-  const { scroller } = useContext(PreviewContext)
+  const { scroller, path, notify } = useContext(PreviewContext)
   const code = (node as HastElement).children[0]
   const info =
     (code.properties.className ?? [])
@@ -289,12 +290,15 @@ function MdPre({ node }: { node?: unknown }) {
       ?.slice('language-'.length) ?? ''
   const text = textOf(code).replace(/\n$/, '')
   if (isMermaidInfo(info)) {
+    // Set by rehypeMermaidIndex for every Mermaid block
+    const index = code.properties.dataMermaidIndex as number
     return (
       <MermaidBlock
         text={text}
-        // Set by rehypeMermaidIndex for every Mermaid block
-        index={code.properties.dataMermaidIndex as number}
+        index={index}
         scrollRoot={scroller}
+        name={exportName(path, index)}
+        notify={notify}
         frame={(parts) => (
           <FencedCode
             text={text}

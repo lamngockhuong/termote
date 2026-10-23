@@ -2029,6 +2029,8 @@ test.describe('files and changes views', () => {
       await open.click()
       const viewer = page.getByRole('dialog', { name: 'e2e-viewer/red.png' })
       await expect(viewer.locator('img[src^="blob:"]')).toBeVisible()
+      // The export buttons are a diagram's only
+      await expect(viewer.getByRole('button', { name: /diagram/ })).toHaveCount(0)
       await viewer.getByRole('button', { name: 'Close' }).click()
       await expect(viewer).toBeHidden()
 
@@ -2051,8 +2053,107 @@ test.describe('files and changes views', () => {
       git(repo, 'commit', '-q', '-m', 'drop red')
     })
 
+    test('desktop: a diagram is copied as a PNG in its colors and downloaded as SVG, in place and full screen', async ({
+      page,
+      context,
+      browserName,
+    }) => {
+      test.skip(browserName !== 'chromium', 'reads the clipboard through Chromium permissions')
+      await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+      await page.setViewportSize({ width: 1280, height: 800 })
+      // The PNG on the clipboard: its size and the color of its top-left
+      // pixel; null while it holds none
+      const pasted = () =>
+        page.evaluate(async () => {
+          const [item] = await navigator.clipboard.read()
+          if (!item?.types.includes('image/png')) return null
+          const bitmap = await createImageBitmap(await item.getType('image/png'))
+          const canvas = new OffscreenCanvas(bitmap.width, bitmap.height)
+          const ctx = canvas.getContext('2d') as OffscreenCanvasRenderingContext2D
+          ctx.drawImage(bitmap, 0, 0)
+          const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data
+          return { width: bitmap.width, rgb: [r, g, b] }
+        })
+      const clear = () => page.evaluate(() => navigator.clipboard.writeText(''))
+      const pick = async (name: 'Light' | 'Dark') => {
+        await page.getByRole('button', { name: 'More' }).click()
+        await page.getByRole('menuitemradio', { name }).click()
+        await page.keyboard.press('Escape')
+      }
+
+      const panel = await openFile(page, 'diagram.md')
+      const block = panel.getByTestId('mermaid-block')
+      await block.scrollIntoViewIfNeeded()
+      const img = block.locator('img[src^="data:image/svg+xml"]')
+      for (const [theme, rgb] of [
+        ['Light', [255, 255, 255]],
+        ['Dark', [0x1a, 0x1a, 0x1d]],
+      ] as const) {
+        await pick(theme)
+        await expect
+          .poll(async () => (await img.getAttribute('src'))?.includes('--pele-bg%3A%231a1a1d'), { timeout: 15000 })
+          .toBe(theme === 'Dark')
+        const width = Number(await img.getAttribute('width'))
+        await clear()
+        await block.getByRole('button', { name: 'Copy diagram as image' }).click()
+        await expect.poll(pasted).toEqual({ width: width * 2, rgb })
+      }
+      await expect(page.getByText('Diagram copied').first()).toBeVisible()
+
+      const download = page.waitForEvent('download')
+      await block.getByRole('button', { name: 'Download diagram as SVG' }).click()
+      const file = await download
+      expect(file.suggestedFilename()).toBe('diagram-mermaid-1.svg')
+      const svg = readFileSync(await file.path(), 'utf8')
+      expect(svg).toMatch(/^<svg\b/)
+      expect(svg).not.toContain('<script')
+
+      // Full screen: the same buttons, and their message in the bar
+      await clear()
+      await panel.getByRole('button', { name: 'Open Mermaid diagram 1 full screen' }).click()
+      const viewer = page.getByRole('dialog', { name: 'Mermaid diagram 1' })
+      await expect(viewer.getByRole('button', { name: 'Download diagram as SVG' })).toBeVisible()
+      await viewer.getByRole('button', { name: 'Copy diagram as image' }).click()
+      await expect(viewer.getByRole('status')).toHaveText('Diagram copied')
+      expect((await pasted())?.rgb).toEqual([0x1a, 0x1a, 0x1d])
+      await page.keyboard.press('Escape')
+      await expect(viewer).toBeHidden()
+    })
+
     test.describe('phone', () => {
       test.use({ hasTouch: true, viewport: { width: 390, height: 844 } })
+
+      test('a narrow phone: every bar button fits, and an export says what it did', async ({
+        page,
+        context,
+        browserName,
+      }) => {
+        test.skip(browserName !== 'chromium', 'reads the clipboard through Chromium permissions')
+        await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+        await page.setViewportSize({ width: 360, height: 740 })
+        await page.addInitScript(() => {
+          localStorage.setItem('termote-settings', JSON.stringify({ hasSeenGestureHints: true }))
+          // Share as on a phone (Chromium on Linux has none): all three buttons
+          Object.assign(navigator, { share: async () => {}, canShare: () => true })
+        })
+        await page.goto(`${link}?view=files`)
+        await page.getByRole('treeitem', { name: 'e2e-viewer' }).tap()
+        await page.getByRole('treeitem', { name: 'diagram.md' }).tap()
+        const open = page.getByRole('button', { name: 'Open Mermaid diagram 1 full screen' })
+        await page.getByTestId('mermaid-block').scrollIntoViewIfNeeded()
+        await expect(open).toBeVisible({ timeout: 15000 })
+        await open.tap()
+        const viewer = page.getByRole('dialog', { name: 'Mermaid diagram 1' })
+        await expect(viewer.getByRole('button', { name: 'Share diagram as PNG' })).toBeVisible()
+        for (const name of ['Close', 'Share diagram as PNG', 'Copy diagram as image', 'Download diagram as SVG']) {
+          const box = (await viewer.getByRole('button', { name }).boundingBox())!
+          expect(box.x + box.width, name).toBeLessThanOrEqual(360)
+        }
+        await viewer.getByRole('button', { name: 'Copy diagram as image' }).tap()
+        const status = viewer.getByRole('status')
+        await expect(status).toHaveText('Diagram copied')
+        expect((await status.boundingBox())!.width).toBeGreaterThan(100)
+      })
 
       test('a tap opens the viewer; a double tap zooms; the stage takes every touch', async ({ page }) => {
         // The first-visit gesture tour would cover the view

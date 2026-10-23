@@ -1,4 +1,11 @@
-import { lazy, type RefObject, Suspense, useCallback, useState } from 'react'
+import {
+  lazy,
+  type ReactNode,
+  type RefObject,
+  Suspense,
+  useCallback,
+  useState,
+} from 'react'
 import { viewerClosing } from './use-history-close'
 
 // The viewer's code: loaded the first time an image is opened full screen
@@ -17,10 +24,12 @@ export interface ViewerImage {
 // there now: once it changes (a blob: URL revoked for a new read, a diagram
 // drawn again) a viewer still on the old one closes. viewer is null, so
 // nothing is loaded, until one is opened. returnFocus takes focus on close
-// when what opened the viewer is gone.
+// when what opened the viewer is gone. actions: buttons for the viewer's
+// bar, given the way to tell the user something there.
 export function useImageViewer(
   src: string | undefined,
   returnFocus?: RefObject<HTMLElement | null>,
+  actions?: (say: (message: string) => void) => ReactNode,
 ) {
   const [shown, setShown] = useState<ViewerImage | null>(null)
   const open = useCallback((image: ViewerImage) => {
@@ -34,6 +43,7 @@ export function useImageViewer(
         {...shown}
         stale={shown.src !== src}
         returnFocus={returnFocus}
+        actions={actions}
         onClose={onClose}
       />
     </Suspense>

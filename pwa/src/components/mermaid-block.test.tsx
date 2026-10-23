@@ -1,4 +1,11 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ThemeProvider, useTheme } from '../contexts/theme-context'
 import type { MermaidResult } from '../utils/mermaid-render'
@@ -22,6 +29,7 @@ const ok = (n = 1): MermaidResult => ({
   url: urlOf(n),
   width: 300,
   height: 120,
+  background: '#fff',
 })
 
 const GRAPH = 'graph TD\n  A --> B'
@@ -387,5 +395,174 @@ describe('MermaidBlock: rendering near the screen only', () => {
     show(md(GRAPH))
     expect(screen.getByAltText('Mermaid diagram 1')).toBeInTheDocument()
     expect(mockRender).not.toHaveBeenCalled()
+  })
+})
+
+describe('MermaidBlock: export', () => {
+  const EXPORTS = [
+    'Share diagram as PNG',
+    'Copy diagram as image',
+    'Download diagram as SVG',
+  ]
+  const exportButtons = () =>
+    EXPORTS.map((name) => screen.queryByRole('button', { name }))
+  const clicks: string[] = []
+
+  beforeEach(() => {
+    clicks.length = 0
+    // A browser that shares and copies PNGs, over HTTPS
+    vi.stubGlobal('isSecureContext', true)
+    vi.stubGlobal('ClipboardItem', class {})
+    vi.stubGlobal('navigator', {
+      userAgent: navigator.userAgent,
+      share: vi.fn().mockResolvedValue(undefined),
+      canShare: () => true,
+      clipboard: { write: vi.fn().mockResolvedValue(undefined) },
+    })
+    // The PNG is drawn on a canvas jsdom does not have
+    Object.assign(HTMLImageElement.prototype, {
+      decode: vi.fn().mockResolvedValue(undefined),
+    })
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+      fillRect() {},
+      drawImage() {},
+    } as unknown as CanvasRenderingContext2D)
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation((cb) =>
+      cb(new Blob(['png'], { type: 'image/png' })),
+    )
+    URL.createObjectURL = vi.fn(() => 'blob:svg')
+    URL.revokeObjectURL = vi.fn()
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      clicks.push(this.download)
+    })
+  })
+
+  it('offers share, copy and download beside the source toggle once drawn', async () => {
+    show(md(GRAPH))
+    await screen.findByAltText('Mermaid diagram 1')
+    expect(screen.getByRole('button', { name: 'Show source' })).toBeVisible()
+    for (const button of exportButtons()) expect(button).toBeInTheDocument()
+  })
+
+  it('keeps them in source mode', async () => {
+    show(md(GRAPH))
+    fireEvent.click(await screen.findByRole('button', { name: 'Show source' }))
+    expect(screen.queryByAltText('Mermaid diagram 1')).toBeNull()
+    for (const button of exportButtons()) expect(button).toBeInTheDocument()
+  })
+
+  it('offers none while the diagram renders or once it fails', async () => {
+    mockRender.mockReturnValueOnce(new Promise(() => {}))
+    const p = show(md(GRAPH))
+    expect(exportButtons()).toEqual([null, null, null])
+    p.unmount()
+    mockRender.mockResolvedValueOnce({ ok: false, reason: 'syntax' })
+    show(md(GRAPH))
+    await screen.findByText(MERMAID_REASONS.syntax)
+    expect(exportButtons()).toEqual([null, null, null])
+  })
+
+  it('saves the SVG as the file name and diagram number', async () => {
+    show(md(GRAPH))
+    await screen.findByAltText('Mermaid diagram 1')
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Download diagram as SVG' }),
+    )
+    expect(clicks).toEqual(['a-mermaid-1.svg'])
+  })
+
+  it('tells the user when the SVG cannot be saved', async () => {
+    vi.mocked(HTMLAnchorElement.prototype.click).mockImplementation(() => {
+      throw new Error('blocked')
+    })
+    const p = show(md(GRAPH))
+    await screen.findByAltText('Mermaid diagram 1')
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Download diagram as SVG' }),
+    )
+    await waitFor(() =>
+      expect(p.notify).toHaveBeenCalledWith('Could not download the diagram'),
+    )
+  })
+
+  it('shares the PNG as the file name and diagram number', async () => {
+    const p = show(md(GRAPH))
+    await screen.findByAltText('Mermaid diagram 1')
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Share diagram as PNG' }),
+      ),
+    )
+    const [arg] = vi.mocked(navigator.share).mock.calls[0] as unknown as [
+      { files: File[] },
+    ]
+    expect(arg.files[0].name).toBe('a-mermaid-1.png')
+    expect(p.notify).not.toHaveBeenCalled()
+  })
+
+  it('copies the diagram as an image and tells the user', async () => {
+    const p = show(md(GRAPH))
+    await screen.findByAltText('Mermaid diagram 1')
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Copy diagram as image' }),
+      ),
+    )
+    expect(navigator.clipboard.write).toHaveBeenCalledTimes(1)
+    expect(p.notify).toHaveBeenCalledWith('Diagram copied')
+  })
+
+  it('keeps focus in the block when the export buttons go with the diagram', async () => {
+    show(md(GRAPH))
+    await screen.findByAltText('Mermaid diagram 1')
+    screen.getByRole('button', { name: 'Download diagram as SVG' }).focus()
+    fireEvent.error(screen.getByAltText('Mermaid diagram 1'))
+    expect(screen.getByText(MERMAID_REASONS.render_failed)).toBeInTheDocument()
+    expect(document.activeElement).toBe(screen.getByTestId('mermaid-block'))
+  })
+
+  it('offers the same actions in the full-screen viewer, whose messages show there', async () => {
+    HTMLDialogElement.prototype.showModal = vi.fn(function (
+      this: HTMLDialogElement,
+    ) {
+      this.setAttribute('open', '')
+    })
+    vi.mocked(HTMLAnchorElement.prototype.click).mockImplementation(() => {
+      throw new Error('blocked')
+    })
+    show(md(GRAPH))
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Open Mermaid diagram 1 full screen',
+      }),
+    )
+    const dialog = await screen.findByRole(
+      'dialog',
+      { hidden: true, name: 'Mermaid diagram 1' },
+      { timeout: 5000 },
+    )
+    const save = within(dialog).getByRole('button', {
+      name: 'Download diagram as SVG',
+      hidden: true,
+    })
+    fireEvent.click(save)
+    await waitFor(() =>
+      expect(within(dialog).getByRole('status')).toHaveTextContent(
+        'Could not download the diagram',
+      ),
+    )
+    // Closed again by its own history entry
+    const popped = new Promise((r) =>
+      window.addEventListener('popstate', r, { once: true }),
+    )
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Close', hidden: true }),
+    )
+    await popped
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { hidden: true })).toBeNull(),
+    )
   })
 })

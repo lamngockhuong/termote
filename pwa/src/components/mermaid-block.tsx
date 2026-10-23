@@ -15,6 +15,7 @@ import {
   peekMermaid,
   renderMermaid,
 } from '../utils/mermaid-render'
+import { MermaidExport } from './mermaid-export'
 import { IconButton } from './ui/button'
 
 // What a Mermaid block puts in the frame of a code block (the preview's
@@ -68,12 +69,23 @@ interface Props {
   // The preview's scroll box
   scrollRoot: () => Element | null
   frame: (parts: FrameParts) => ReactNode
+  // The file name an exported diagram is saved as, without its extension
+  name: string
+  notify: (message: string) => void
 }
 
 // A ```mermaid block: the diagram as an image once it nears the screen, the
 // source with the reason whenever it cannot be drawn. Copy always copies the
-// source.
-export function MermaidBlock({ text, index, scrollRoot, frame }: Props) {
+// source; once drawn, the diagram can be shared, copied as an image or
+// downloaded, here and in the full-screen viewer.
+export function MermaidBlock({
+  text,
+  index,
+  scrollRoot,
+  frame,
+  name,
+  notify,
+}: Props) {
   const { resolvedTheme } = useTheme()
   const ref = useRef<HTMLDivElement>(null)
   const near = useNearViewport(ref, scrollRoot)
@@ -109,6 +121,9 @@ export function MermaidBlock({ text, index, scrollRoot, frame }: Props) {
   const { open, viewer } = useImageViewer(
     result?.ok ? result.url : undefined,
     ref,
+    result?.ok
+      ? (say) => <MermaidExport image={result} name={name} notify={say} />
+      : undefined,
   )
   const keepFocus = useCallback(
     (el: HTMLButtonElement | null) => () => {
@@ -134,10 +149,23 @@ export function MermaidBlock({ text, index, scrollRoot, frame }: Props) {
         <Code size={14} aria-hidden="true" />
       </IconButton>
     )
+    // Their buttons go when the diagram does: focus then returns to the block
+    const toolbar = (
+      <>
+        {toggle}
+        <MermaidExport
+          image={result}
+          name={name}
+          notify={notify}
+          size="sm"
+          buttonRef={keepFocus}
+        />
+      </>
+    )
     parts = source
-      ? { toolbar: toggle }
+      ? { toolbar }
       : {
-          toolbar: toggle,
+          toolbar,
           body: (
             <div className="overflow-x-auto p-3">
               <button
