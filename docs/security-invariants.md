@@ -1114,6 +1114,14 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   (the pushed image by digest) into `checksums.txt`, signs it with `openssl pkeyutl` and checks
   the signature with the key `install.sh` pins. `update` and `install.sh` (OpenSSL 3) refuse a
   1.10.0+ release whose signature does not verify; `container up` runs the image by that digest.
+  The `docker` job pushes the image to GHCR by digest only, with no tag; `docker-tags`, which needs
+  the release job, moves `x.y.z`, `x.y` and `latest` on GHCR and Docker Hub to that digest and fails
+  when a tag names another one, and `publish` makes the draft public only after it. So a `v*` tag
+  pushed without the approval moves no tag users pull through this workflow. It does not stop a
+  writer: any workflow run from a ref a writer pushes (a branch or a tag, any workflow file; the
+  `protect` ruleset covers `main` and `release/*` only) gets the repository's `DOCKERHUB_*` secrets
+  and can ask for `packages: write`, so it can move image tags on both registries (residual risk
+  accepted by the Tech Lead, 2026-10-23).
   Immutable releases are on for the repo, so assets and tags cannot change after publishing.
   `release-please.yml` starts `release.yml` with `workflow_dispatch` on the tag, never as a
   called workflow: a `workflow_call` job does not get the environment's secret (actions/runner#1490)
