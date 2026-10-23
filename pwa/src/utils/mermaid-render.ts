@@ -1,19 +1,19 @@
-// Mermaid diagrams of the Markdown preview, drawn as images. Mermaid stays
-// out of the main bundle and the precache: it is fetched the first time a
-// diagram scrolls into view. What it draws never reaches the page: the SVG
-// string becomes a data: URL shown in an <img>, where no script runs, no link
+// Mermaid diagrams of the Markdown preview, drawn by Pele in
+// mermaid-worker.ts and shown as images. The worker and Pele stay out of the
+// main bundle and the precache: they are fetched the first time a diagram
+// scrolls into view. What Pele draws never reaches the page: the SVG string
+// becomes a data: URL shown in an <img>, where no script runs, no link
 // navigates and nothing loads.
-import type { Mermaid, MermaidConfig } from 'mermaid'
+import type {
+  DrawFailure,
+  DrawReply,
+  DrawRequest,
+  DrawStarted,
+} from './mermaid-worker'
 
 export type MermaidTheme = 'light' | 'dark'
 
-export type MermaidFailure =
-  | 'too_large'
-  | 'unsupported'
-  | 'syntax'
-  | 'render_failed'
-  | 'timeout'
-  | 'load_failed'
+export type MermaidFailure = DrawFailure | 'timeout'
 
 export interface MermaidImage {
   url: string
@@ -25,80 +25,29 @@ export type MermaidResult =
   | ({ ok: true } & MermaidImage)
   | { ok: false; reason: MermaidFailure }
 
-// UTF-8 bytes of a diagram's source; past this Mermaid is never called (one
-// large diagram can hold the main thread for seconds).
+// UTF-8 bytes of a diagram's source; past this the worker is never asked
 export const MERMAID_MAX_BYTES = 50_000
-// From the moment a diagram's own render starts, Mermaid loaded (time spent
-// waiting behind another diagram or for the download does not count). Mermaid cannot be stopped: past this the
-// caller stops waiting, and the next diagram still waits for it to finish.
+// From the moment the worker starts drawing a diagram (its type loaded):
+// past this the worker is ended, and the next diagram starts a new one.
 export const MERMAID_TIMEOUT = 10_000
-export const MERMAID_MAX_EDGES = 500
+// Loading the worker and the diagram's type on a slow network
+export const MERMAID_LOAD_TIMEOUT = 30_000
 const CACHE_SIZE = 50
-// Wide enough for a Gantt chart, which takes its width from the parent
-const STAGE_WIDTH = 1200
 
-// Mermaid fetches the URL of an img: or icon: key of a shape (A@{ img: ... })
-// itself, with this origin's cookies when it is this origin. The shape's
-// body is YAML, where a quoted "}" or an escape (\x67) can hide the key from
-// any pattern: a source with a shape is refused when img or icon, or any
-// backslash, follows it anywhere. hasFetchingNode checks what was parsed.
-const FETCHING_SHAPE = /@\{[\s\S]*(?:\b(?:img|icon)\b|\\)/
-
-// Keys a %%{init}%% directive or a frontmatter config: of the file cannot
-// change: Mermaid's own defaults, then what keeps labels as SVG text, the
-// layout off elk and the theme (CSS, colors, font) the one set here.
-const SECURE = [
-  'secure',
-  'securityLevel',
-  'startOnLoad',
-  'maxTextSize',
-  'suppressErrorRendering',
-  'maxEdges',
-  'htmlLabels',
-  'flowchart',
-  'theme',
-  'themeVariables',
-  'themeCSS',
-  'darkMode',
-  'fontFamily',
-  'altFontFamily',
-  'layout',
-  'look',
-  'dompurifyConfig',
-  'deterministicIds',
-]
-
-export function mermaidConfig(theme: MermaidTheme): MermaidConfig {
-  return {
-    startOnLoad: false,
-    securityLevel: 'strict',
-    htmlLabels: false,
-    layout: 'dagre',
-    suppressErrorRendering: true,
-    theme: theme === 'dark' ? 'dark' : 'default',
-    maxTextSize: MERMAID_MAX_BYTES,
-    maxEdges: MERMAID_MAX_EDGES,
-    // The font list itself: a CSS variable means nothing inside an <img>
-    fontFamily: getComputedStyle(document.body).fontFamily,
-    secure: SECURE,
-  }
-}
-
-let lib: Promise<Mermaid> | null = null
-
-// Loaded once; a failed load is forgotten, so the next diagram tries again
-function load(): Promise<Mermaid> {
-  if (!lib) {
-    lib = import('mermaid').then(
-      (m) => m.default,
-      (e) => {
-        lib = null
-        throw e
-      },
-    )
-  }
-  return lib
-}
+// Pele's colors are CSS variables with its light palette as fallbacks; an
+// <img> sees no CSS of the page, so the dark one goes into the SVG itself.
+// The default style's dark tokens (index.css), the border a step lighter
+// than --tm-border so node outlines stay visible.
+const DARK_PALETTE = [
+  '--pele-bg:#1a1a1d',
+  '--pele-fg:#d4d4d8',
+  '--pele-muted:#a1a1aa',
+  '--pele-line:#d4d4d8',
+  '--pele-surface:#29292e',
+  '--pele-surface-alt:#2f2f34',
+  '--pele-border:#71717a',
+  '--pele-accent:#818cf8',
+].join(';')
 
 // Successful renders by theme and source, least recently used first: a
 // preview mounted again (a tab switched back to) shows them at once.
@@ -128,106 +77,100 @@ function remember(key: string, image: MermaidImage) {
   }
 }
 
-// A module that could not be fetched (offline, or a chunk gone after an
-// update), as Chromium, Firefox and Safari word it. Mermaid imports the code
-// of each diagram type itself, so this can come from parse or render too.
-export function isLoadError(e: unknown): boolean {
-  return (
-    e instanceof Error &&
-    /dynamically imported module|Importing a module script failed/i.test(
-      e.message,
-    )
-  )
-}
-
-// One render at a time: Mermaid's configuration is global, so the next
-// diagram initializes only once the one before has really finished.
-let tail: Promise<void> = Promise.resolve()
-let seq = 0
-
-// What Mermaid adds to <body> on its own: the stage below, its wrappers
-// (d/i + id), cytoscape's #cy, the tooltip and the bare <svg> it measures
-// text in. Only these are removed, never a node the app added meanwhile.
-function isMermaidNode(el: Element): boolean {
-  return (
-    /^[di]?termote-mmd/.test(el.id) ||
-    el.id === 'cy' ||
-    el.classList.contains('mermaidTooltip') ||
-    el.tagName.toLowerCase() === 'svg'
-  )
-}
-
-// Off screen, never painted nor focusable, but laid out: Mermaid measures
-// text with getBBox, which needs a rendered box.
-function makeStage(): HTMLDivElement {
-  const stage = document.createElement('div')
-  stage.id = `termote-mmd-stage-${seq}`
-  stage.setAttribute('aria-hidden', 'true')
-  stage.inert = true
-  stage.style.cssText = [
-    `width:${STAGE_WIDTH}px`,
-    'position:fixed',
-    'left:0',
-    'top:0',
-    'transform:translateX(-20000px)',
-    'opacity:0',
-    'pointer-events:none',
-    'contain:strict',
-    'overflow:hidden',
-  ].join(';')
-  return stage
-}
-
 function fail(reason: MermaidFailure): MermaidResult {
   return { ok: false, reason }
 }
 
-interface ShapeNode {
-  img?: string
-  icon?: string
+// One diagram in the worker at a time; the rest wait here, so a block gone
+// meanwhile (its signal aborted) is dropped before the worker sees it.
+interface Job {
+  source: string
+  theme: MermaidTheme
+  done: (result: MermaidResult) => void
+  timer?: ReturnType<typeof setTimeout>
+}
+let worker: Worker | undefined
+let nextId = 0
+let running: { id: number; job: Job } | undefined
+const queue: Job[] = []
+
+function finish(job: Job, result: MermaidResult) {
+  clearTimeout(job.timer)
+  job.done(result)
 }
 
-// A parsed flowchart node with an image or an icon, whatever the source
-// looked like
-function hasFetchingNode(db: unknown): boolean {
-  const nodes = (db as { getVertices?: () => unknown }).getVertices?.()
-  const list = (
-    nodes instanceof Map ? [...nodes.values()] : Object.values(nodes ?? {})
-  ) as ShapeNode[]
-  return list.some((n) => n.img || n.icon)
+// Ends the worker (stuck in a diagram, or broken): the diagram it held
+// fails with reason, and the next one starts a new worker.
+function endWorker(reason: MermaidFailure) {
+  worker?.terminate()
+  worker = undefined
+  const current = running
+  running = undefined
+  if (current) finish(current.job, fail(reason))
+  runNext()
 }
 
-async function draw(
-  mermaid: Mermaid,
-  source: string,
-  theme: MermaidTheme,
-): Promise<MermaidResult> {
-  mermaid.initialize(mermaidConfig(theme))
-  try {
-    const diagram = await mermaid.mermaidAPI.getDiagramFromText(source)
-    if (hasFetchingNode(diagram.db)) return fail('unsupported')
-  } catch (e) {
-    return fail(isLoadError(e) ? 'load_failed' : 'syntax')
-  }
-  seq++
-  const before = new Set(Array.from(document.body.children))
-  const stage = makeStage()
-  document.body.append(stage)
-  let svg: string
-  try {
-    ;({ svg } = await mermaid.render(`termote-mmd-${seq}`, source, stage))
-  } catch (e) {
-    return fail(isLoadError(e) ? 'load_failed' : 'render_failed')
-  } finally {
-    stage.remove()
-    for (const el of Array.from(document.body.children)) {
-      if (!before.has(el) && isMermaidNode(el)) el.remove()
+function getWorker(): Worker {
+  if (!worker) {
+    const w = new Worker(new URL('./mermaid-worker.ts', import.meta.url), {
+      type: 'module',
+    })
+    w.onmessage = (e: MessageEvent<DrawReply | DrawStarted>) => {
+      if (!running || e.data.id !== running.id) return
+      const { job } = running
+      if ('started' in e.data) {
+        clearTimeout(job.timer)
+        job.timer = setTimeout(() => endWorker('timeout'), MERMAID_TIMEOUT)
+        return
+      }
+      // A chunk that failed to load may stay failed in this worker: the
+      // next diagram gets a new one
+      if ('error' in e.data && e.data.error === 'load_failed') {
+        endWorker('load_failed')
+        return
+      }
+      running = undefined
+      finish(job, settle(e.data, job))
+      runNext()
     }
+    // The worker or a chunk it imports could not load (offline, or gone
+    // after an update); a late error of a worker already ended is ignored
+    w.onerror = () => {
+      if (worker === w) endWorker('load_failed')
+    }
+    worker = w
   }
-  const image = svgToDataUrl(svg)
+  return worker
+}
+
+// The worker's answer as a result, cached when it is an image
+function settle(reply: DrawReply, job: Job): MermaidResult {
+  if ('error' in reply) return fail(reply.error)
+  const image = svgToDataUrl(reply.svg, job.theme)
   if (!image) return fail('render_failed')
-  remember(cacheKey(source, theme), image)
+  remember(cacheKey(job.source, job.theme), image)
   return { ok: true, ...image }
+}
+
+function runNext() {
+  while (!running && queue.length) {
+    const job = queue.shift() as Job
+    // Drawn meanwhile by a diagram with the same source
+    const hit = peekMermaid(job.source, job.theme)
+    if (hit) {
+      job.done(hit)
+      continue
+    }
+    const id = ++nextId
+    running = { id, job }
+    job.timer = setTimeout(() => endWorker('load_failed'), MERMAID_LOAD_TIMEOUT)
+    const req: DrawRequest = {
+      id,
+      source: job.source,
+      fontFamily: getComputedStyle(document.body).fontFamily,
+    }
+    getWorker().postMessage(req)
+  }
 }
 
 // The diagram of source as an image, or why it is shown as code. Aborting
@@ -243,45 +186,47 @@ export function renderMermaid(
   if (new TextEncoder().encode(source).length > MERMAID_MAX_BYTES) {
     return Promise.resolve(fail('too_large'))
   }
-  if (FETCHING_SHAPE.test(source)) return Promise.resolve(fail('unsupported'))
+  if (typeof Worker === 'undefined') return Promise.resolve(fail('load_failed'))
+  if (signal.aborted) return Promise.reject(signal.reason)
   return new Promise((resolve, reject) => {
-    tail = tail.then(async () => {
-      if (signal.aborted) return reject(signal.reason)
-      // Drawn meanwhile by a diagram with the same source
-      const again = peekMermaid(source, theme)
-      if (again) return resolve(again)
-      let mermaid: Mermaid
-      try {
-        mermaid = await load()
-      } catch {
-        return resolve(fail('load_failed'))
-      }
-      // Counted once Mermaid is here: a slow network is not a slow diagram
-      const timer = setTimeout(() => resolve(fail('timeout')), MERMAID_TIMEOUT)
-      try {
-        resolve(await draw(mermaid, source, theme))
-      } catch {
-        // Mermaid failing outside parse and render (its initialize)
-        resolve(fail('render_failed'))
-      } finally {
-        clearTimeout(timer)
-      }
-    })
+    const onAbort = () => {
+      const i = queue.indexOf(job)
+      if (i < 0) return
+      queue.splice(i, 1)
+      reject(signal.reason)
+    }
+    const job: Job = {
+      source,
+      theme,
+      done: (result) => {
+        signal.removeEventListener('abort', onAbort)
+        resolve(result)
+      },
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+    queue.push(job)
+    runNext()
   })
 }
 
 const SVG_OPEN = /<svg\b(?:[^>"']|"[^"]*"|'[^']*')*>/i
 const VIEW_BOX =
   /\sviewBox\s*=\s*(["'])\s*[-+\d.eE]+[\s,]+[-+\d.eE]+[\s,]+([-+\d.eE]+)[\s,]+([-+\d.eE]+)\s*\1/i
-const SIZE_ATTR = /\s(?:width|height|style)\s*=\s*(?:"[^"]*"|'[^']*')/gi
+const SIZE_ATTR = /\s(?:width|height)\s*=\s*(?:"[^"]*"|'[^']*')/gi
+const STYLE_ATTR = /\sstyle\s*=\s*(?:"([^"]*)"|'([^']*)')/i
+// What makes the SVG follow its container: an <img> has a fixed size
+const FLUID = /(?:^|;)\s*(?:max-width\s*:\s*100%|height\s*:\s*auto)\s*(?=;|$)/gi
 const VOID_TAG =
   /<(area|base|br|col|embed|hr|img|input|link|meta|source|track|wbr)\b((?:[^>"'/]|"[^"]*"|'[^']*')*)\/?>/gi
 
-// Mermaid's SVG string as a data: URL sized by its viewBox, or null without
-// one. The string is serialized as HTML (by DOMPurify), so it is fixed up
-// as text rather than parsed: an <img> parses SVG as XML, where &nbsp; is no
-// entity and a void element must close itself.
-export function svgToDataUrl(svg: string): MermaidImage | null {
+// Pele's SVG string as a data: URL sized by its viewBox in theme's colors,
+// or null without a viewBox. Fixed up as text rather than parsed: an <img>
+// parses SVG as XML, where &nbsp; is no entity and a void element must close
+// itself.
+export function svgToDataUrl(
+  svg: string,
+  theme: MermaidTheme = 'light',
+): MermaidImage | null {
   const open = SVG_OPEN.exec(svg)
   if (!open) return null
   const box = VIEW_BOX.exec(open[0])
@@ -290,6 +235,15 @@ export function svgToDataUrl(svg: string): MermaidImage | null {
   const height = Math.ceil(Number(box[3]))
   if (!(width > 0 && height > 0)) return null
   let tag = open[0].replace(SIZE_ATTR, '').replace(/\s*>$/, '')
+  // The palette before Pele's own variables, which read it
+  const palette = theme === 'dark' ? DARK_PALETTE : ''
+  const style = STYLE_ATTR.exec(tag)
+  const rest = (style?.[1] ?? style?.[2] ?? '')
+    .replace(FLUID, '')
+    .replace(/^;+/, '')
+  const css = [palette, rest].filter(Boolean).join(';')
+  tag = tag.replace(STYLE_ATTR, '')
+  if (css) tag += ` style="${css.replaceAll('"', '&quot;')}"`
   if (!/\sxmlns\s*=/.test(tag)) tag += ' xmlns="http://www.w3.org/2000/svg"'
   if (!/\sxmlns:xlink\s*=/.test(tag) && svg.includes('xlink:')) {
     tag += ' xmlns:xlink="http://www.w3.org/1999/xlink"'
@@ -309,10 +263,14 @@ export function svgToDataUrl(svg: string): MermaidImage | null {
   }
 }
 
-// For tests: forget the cache, the loaded module and the queue.
+// For tests: end the worker, forget the cache and anything pending.
 export function resetMermaid() {
+  worker?.terminate()
+  worker = undefined
+  // Only the diagram in the worker has a timer
+  clearTimeout(running?.job.timer)
+  running = undefined
+  queue.length = 0
   cache.clear()
-  lib = null
-  tail = Promise.resolve()
-  seq = 0
+  nextId = 0
 }

@@ -1753,18 +1753,17 @@ test.describe('files and changes views', () => {
       const src = (await img.getAttribute('src')) as string
       return decodeURIComponent(src.slice(src.indexOf(',') + 1))
     }
-    // Nodes Mermaid made, anywhere in the document (the Copy icon is an <svg>
-    // too, so never count those)
-    const mermaidNodes = (page: Page) =>
+    // A diagram's own nodes, anywhere in the document: Pele draws in a
+    // worker, so its SVG only ever reaches an <img> (the Copy icon is an
+    // <svg> too, so never count those)
+    const diagramNodes = (page: Page) =>
       page.evaluate(
         () =>
-          document.querySelectorAll(
-            '[id^="termote-mmd"], [id^="dtermote-mmd"], [id^="itermote-mmd"], svg[aria-roledescription], #cy, .mermaidTooltip',
-          ).length +
+          document.querySelectorAll('svg[aria-roledescription], svg.pele').length +
           Array.from(document.body.children).filter((el) => el.tagName.toLowerCase() === 'svg').length,
       )
 
-    test('renders each kind as an image, leaving nothing of Mermaid in the page', async ({ page }) => {
+    test('renders each kind as an image, leaving nothing of the diagram in the page', async ({ page }) => {
       writeFileSync(
         path.join(dir(), 'diagram.md'),
         `# Diagrams\n\n${[FLOW, SEQUENCE, GANTT, CLASS].map(fence).join('\n')}`,
@@ -1779,9 +1778,9 @@ test.describe('files and changes views', () => {
         await expect.poll(() => decodedWidth(img)).toBeGreaterThan(0)
         expect(await svgOf(img)).not.toContain('foreignObject')
       }
-      // The stage is 1200px wide: a Gantt chart takes its width from it
+      // A Gantt chart is drawn at Pele's default width
       expect(await decodedWidth(imgs.nth(2))).toBeGreaterThan(600)
-      expect(await mermaidNodes(page)).toBe(0)
+      expect(await diagramNodes(page)).toBe(0)
     })
 
     test('a hostile diagram runs nothing, loads nothing and changes no locked setting', async ({ page }) => {
@@ -1818,10 +1817,10 @@ test.describe('files and changes views', () => {
       )
       const panel = await open(page, 'evil.md')
       const imgs = diagrams(panel)
-      await expect(imgs).toHaveCount(4, { timeout: 15000 })
-      await expect(panel.getByText('Diagrams with images or icons are not rendered')).toBeVisible()
+      // The shape with an image too: drawn without it, nothing fetched
+      await expect(imgs).toHaveCount(5, { timeout: 15000 })
       await expect(panel.getByRole('heading', { name: 'After' })).toBeVisible()
-      for (let i = 0; i < 4; i++) {
+      for (let i = 0; i < 5; i++) {
         await expect.poll(() => decodedWidth(imgs.nth(i))).toBeGreaterThan(0)
         const svg = await svgOf(imgs.nth(i))
         expect(svg).not.toContain('foreignObject')
@@ -1841,13 +1840,12 @@ test.describe('files and changes views', () => {
       expect(dialogs).toEqual([])
       expect(requests.filter((u) => u.includes(LEAK))).toEqual([])
       expect(requests.filter((u) => !u.startsWith(new URL(url).origin))).toEqual([])
-      expect(await mermaidNodes(page)).toBe(0)
+      expect(await diagramNodes(page)).toBe(0)
     })
 
-    // Mermaid draws $$...$$ through KaTeX only for HTML labels, which the
-    // locked config turns off: the workspace's KaTeX override never reaches a
-    // diagram, and a label with math stays its source text
-    test('a label with math renders as its text, without KaTeX', async ({ page }) => {
+    // Pele draws $$...$$ only through a math typesetter, which the worker
+    // never passes: a label with math stays its source text
+    test('a label with math renders as its text, without a typesetter', async ({ page }) => {
       const requests: string[] = []
       page.on('request', (r) => requests.push(r.url()))
       writeFileSync(path.join(dir(), 'math.md'), `# Math\n\n${fence('flowchart LR\n  A["$$x^2$$"] --> B')}`)
@@ -1856,11 +1854,11 @@ test.describe('files and changes views', () => {
       await expect(img).toHaveCount(1, { timeout: 15000 })
       await expect.poll(() => decodedWidth(img)).toBeGreaterThan(0)
       const svg = await svgOf(img)
-      expect(svg).toContain('>$$x^2$$</tspan>')
+      expect(svg).toContain('>$$x^2$$</text>')
       expect(svg).not.toContain('<math')
       expect(svg).not.toContain('foreignObject')
-      expect(requests.filter((u) => /katex/i.test(u))).toEqual([])
-      expect(await mermaidNodes(page)).toBe(0)
+      expect(requests.filter((u) => /katex|mathjax/i.test(u))).toEqual([])
+      expect(await diagramNodes(page)).toBe(0)
     })
 
     test('a broken diagram falls back to its source; the rest of the file renders', async ({ page }) => {
@@ -1872,10 +1870,10 @@ test.describe('files and changes views', () => {
       await expect(panel.getByText('Not a valid Mermaid diagram')).toBeVisible({ timeout: 15000 })
       await expect(panel.getByTestId('fenced-code')).toContainText('A -->')
       await expect(panel.getByRole('heading', { name: 'After' })).toBeVisible()
-      expect(await mermaidNodes(page)).toBe(0)
+      expect(await diagramNodes(page)).toBe(0)
     })
 
-    test('Mermaid loads only for a file with a diagram', async ({ page }) => {
+    test('the diagram worker loads only for a file with a diagram', async ({ page }) => {
       // Scripts only: the directory's own name is in the API URLs
       const requests: string[] = []
       page.on('request', (r) => {
@@ -1907,10 +1905,10 @@ test.describe('files and changes views', () => {
       await pick('Light')
       const img = diagrams(panel)
       await expect(img).toHaveCount(1, { timeout: 15000 })
-      // The default theme fills nodes with #ECECFF; the dark one does not
-      await expect.poll(async () => (await svgOf(img)).toLowerCase()).toContain('#ececff')
+      // Light is Pele's own palette; dark sets its variables in the SVG
+      await expect.poll(async () => await svgOf(img)).not.toContain('--pele-bg:')
       await pick('Dark')
-      await expect.poll(async () => (await svgOf(img)).toLowerCase()).not.toContain('#ececff')
+      await expect.poll(async () => await svgOf(img)).toContain('--pele-bg:#1a1a1d')
       await page.keyboard.press('Escape')
 
       const toggle = panel.getByRole('button', { name: 'Show source' })
@@ -1929,12 +1927,12 @@ test.describe('files and changes views', () => {
       for (let i = 0; lines.join('\n').length < 48_000; i++) lines.push(`  P${i % 8}->>P${(i + 1) % 8}: message ${i}`)
       writeFileSync(path.join(dir(), 'big.md'), `# Big\n\n${fence(lines.join('\n'))}`)
       const panel = await open(page, 'big.md')
-      // Mermaid runs on the main thread: 8 s for a diagram this large (a
-      // flowchart of 400 edges took 3 s, a 5 KB one under 1 s)
+      // Pele draws this in well under a second, off the main thread; the
+      // rest is loading the worker and the sequence type
       await expect(panel.getByText('Rendering diagram…').or(diagrams(panel))).toBeVisible()
       const started = Date.now()
       await expect(diagrams(panel)).toHaveCount(1, { timeout: 15000 })
-      expect(Date.now() - started).toBeLessThan(8000)
+      expect(Date.now() - started).toBeLessThan(5000)
     })
 
     test('a tab shown again has its diagrams at once and keeps its scroll', async ({ page }) => {

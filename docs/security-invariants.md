@@ -639,27 +639,27 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   same link and image rules. Tags are paired in one pass per level and nesting past 32 levels
   stays text, so a crafted file cannot stall the page. Anything else, an unclosed `<details>`
   included, stays text.
-- **Mermaid diagrams** (`pwa/src/utils/mermaid-render.ts`, `mermaid-block.tsx`): a `mermaid`
-  fenced block of a previewed Markdown file is drawn in the PWA only, as an `<img>` whose `src` is
-  a `data:image/svg+xml` URL, so no script runs, no link navigates and nothing it names loads;
-  the SVG string never enters the DOM. Mermaid itself draws into a stage it needs for text
-  metrics: an off-screen `div` (`opacity:0`, `inert`, `aria-hidden`, `contain:strict`) in `body`,
-  removed after each render with every node Mermaid added to `body` (its measuring `svg`, `#cy`,
-  `.mermaidTooltip`), errors included; DOMPurify only cleans the string it returns. Config:
-  `securityLevel: 'strict'`, `htmlLabels: false`, `layout: 'dagre'`, `suppressErrorRendering`,
-  the app's theme and font, `maxEdges` 500, all listed in `secure` (with `themeCSS`,
-  `themeVariables`, `flowchart`, `look`, `dompurifyConfig`, ...) so a `%%{init}%%` directive or
-  front matter `config:` of the file cannot change them. Never rendered (shown as code with a
-  reason): over 50 KB; a shape with `img:`/`icon:` (Mermaid would fetch that URL with this
-  origin's cookies: a source with `@{` followed anywhere by `img`, `icon` or a backslash is
-  refused, and the parsed nodes are checked again); a syntax error; 10 s past the start of its
-  own render (Mermaid cannot be stopped, the next diagram waits for it); a chunk that fails to
-  load. One render at a time, only near the viewport, 50 results cached by source and theme.
-  Mermaid and every chunk only it reaches stay out of the precache (`pwa/build/precache-split.ts`
-  in `manifestTransforms`, checked both ways, else the build fails; `.vite` is deleted from the
-  build so the server never embeds Vite's manifest); a runtime `CacheFirst` (`lazy-chunks`,
-  same-origin `/assets/*.js`) keeps them once fetched. Accepted: a large diagram holds the main
-  thread for seconds (a 50 KB sequence diagram: about 5 s)
+- **Mermaid diagrams** (`pwa/src/utils/mermaid-render.ts`, `mermaid-worker.ts`,
+  `mermaid-block.tsx`): a `mermaid` fenced block of a previewed Markdown file is drawn in the PWA
+  only, by Pele (pinned to an exact version) in a module worker, and shown as an `<img>` whose
+  `src` is a `data:image/svg+xml` URL, so no script runs, no link navigates and nothing it names
+  loads; the SVG string never enters the DOM, and nothing is added to `body`. The worker gets the
+  source and the page's font list only; its render options are fixed there and never taken from
+  the file: `links: false`, `images: false` (a shape's `img:` is drawn without the image, nothing
+  fetched), no `icons`, `math` or `config` (Pele inserts icon and math markup unfiltered), `limit`
+  50 000 characters, `maxEdges` 500. A `%%{init}%%` directive or front matter `config:` changes
+  only Pele's own layout settings; HTML labels, `click` callbacks and `javascript:` links are not
+  drawn, and a `style`/`classDef` holding `url(...)` or `@import` is refused (a syntax error) or
+  dropped, depending on the diagram type. Only
+  `PeleError.code` leaves the worker, never its message (it quotes the diagram). Dark colors go
+  into the SVG's root `style` as `--pele-*` values (an `<img>` sees no page CSS). Never rendered
+  (shown as code with a reason): over 50 KB (checked before the worker is asked) or over Pele's
+  limits; a syntax error; a diagram type Pele does not know; 10 s past the moment its type
+  finished loading (the worker is terminated, the next diagram starts a new one); the worker or
+  a chunk failing to load, or not loaded within 30 s. One diagram in the worker at a time, only
+  near the viewport, 50 results cached by source and theme. The worker and Pele's chunks are
+  built under `assets/shiki/`, left out of the precache (`globIgnores`) and cached at runtime
+  (`shiki` cache) once fetched
 - **Full-screen image viewer** (`pwa/src/components/image-viewer.tsx`, lazy chunk, mounted only
   while open): a Mermaid diagram, an image in Files and each side of an image in Changes open in
   a modal `<dialog>` showing the same URL already on screen (`data:`/`blob:`; nothing is read

@@ -27,8 +27,9 @@ export interface FrameParts {
 }
 
 export const MERMAID_REASONS: Record<MermaidFailure, string> = {
-  too_large: 'Diagram too large to render (over 50 KB)',
-  unsupported: 'Diagrams with images or icons are not rendered',
+  // Over 50 KB, or over the renderer's limits (500 links, nesting, output)
+  too_large: 'Diagram too large to render',
+  unsupported: 'This kind of diagram is not supported',
   syntax: 'Not a valid Mermaid diagram',
   render_failed: 'Could not render the diagram',
   timeout: 'Diagram took too long to render',

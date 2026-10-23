@@ -67,7 +67,7 @@ React SPA with:
 - **Connection Indicator**: Real-time auto-detection of server status (connecting/connected/disconnected/error), clickable to retry
 - **Command History**: Search/recall previously sent commands (mobile-friendly delete buttons), persisted in localStorage
 - **Quick Actions**: On mobile, the keyboard toolbar's expanded rows (the ⋯ key pinned at the end of its bottom row) start with an Actions row of preset commands (clear, cancel, clear line, exit)
-- **Files and Changes**: views of the pane's directory (`caps.files`), where a text file can also be edited and saved: a tree with a highlighted file viewer, and `git status` with per-file diffs. Files keeps each open file in a tab (`pwa/src/utils/file-tabs.ts`: a preview tab, pinned tabs, at most 10, the least recently used clean one closed past that), in memory only; only the tab shown has a viewer, the others keep their scroll offset, link trail and Show. Changes keeps its diffs as tabs of its own with the same rules (`use-git-changes.ts`: one tab per side of a file, keyed `staged:orig:path`, holding its editor, Show and scroll; a side git status stops listing closes its tab unless it is being edited). A tab bar on desktop (`file-tab-bar.tsx`), a sheet of open files on mobile (`open-files-sheet.tsx`). A side panel next to the terminal on desktop (header toggles), views of the header's view menu on mobile. Shiki runs in a module worker (`pwa/src/utils/highlight-worker.ts`); the worker, its themes and grammars are built under `assets/shiki/`, left out of the precache and cached on first use
+- **Files and Changes**: views of the pane's directory (`caps.files`), where a text file can also be edited and saved: a tree with a highlighted file viewer, and `git status` with per-file diffs. Files keeps each open file in a tab (`pwa/src/utils/file-tabs.ts`: a preview tab, pinned tabs, at most 10, the least recently used clean one closed past that), in memory only; only the tab shown has a viewer, the others keep their scroll offset, link trail and Show. Changes keeps its diffs as tabs of its own with the same rules (`use-git-changes.ts`: one tab per side of a file, keyed `staged:orig:path`, holding its editor, Show and scroll; a side git status stops listing closes its tab unless it is being edited). A tab bar on desktop (`file-tab-bar.tsx`), a sheet of open files on mobile (`open-files-sheet.tsx`). A side panel next to the terminal on desktop (header toggles), views of the header's view menu on mobile. Shiki runs in a module worker (`pwa/src/utils/highlight-worker.ts`); the worker, its themes and grammars are built under `assets/shiki/` (with every other module worker: CSV, Mermaid diagrams), left out of the precache and cached on first use
 - **Deep Links**: `#/s/<group>/<tab>[/<pane>][?view=]` selects a session (never sends input); the address bar follows the current session via `replaceState`
 - **Context Menu Control**: Block/unblock right-click on the terminal
 - **Font Controls**: Adjustable font size (6-24px)
@@ -1070,10 +1070,11 @@ up to 256 KiB) is previewed by `markdown-preview.tsx` (lazy chunk): the Chat vie
 loads; only here, a closed `<details>` block, with its optional `<summary>`, is rebuilt as a
 `details` element from markdown nodes, keeping no attribute but `open`), fenced code through the same worker, and relative links resolved client side by
 `utils/markdown-links.ts` against the file's directory (a leading `/` is the root); a path that
-would leave the root is never built, so never requested. A `mermaid` block is drawn by
-`utils/mermaid-render.ts` as a `data:` SVG image (Mermaid lazily loaded, kept out of the
-precache by `pwa/build/precache-split.ts`, config locked against the file's directives), its
-source shown with a reason whenever it cannot be. A diagram, and an image of Files or Changes,
+would leave the root is never built, so never requested. A `mermaid` block is drawn by Pele in
+a module worker (`utils/mermaid-worker.ts`, built under `assets/shiki/` with each diagram type a
+chunk of its own, out of the precache) and shown by `utils/mermaid-render.ts` as a `data:` SVG
+image (render options fixed in the worker, never taken from the file; a diagram still drawing
+10 s after its type loaded ends the worker), its source shown with a reason whenever it cannot be. A diagram, and an image of Files or Changes,
 opens in `components/image-viewer.tsx` (lazy chunk) with the URL already shown: zoom and pan by
 Pointer Events, one history entry of its own so Back closes it. Following a link reads the target's
 parent directory to tell file from folder; the files store keeps a Back trail with scroll
