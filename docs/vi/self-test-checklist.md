@@ -8,7 +8,7 @@ Kiểm tra thủ công các tính năng Termote trước khi release.
 - [ ] Đã cài `psmux` (Windows)
 - [ ] Đã cài herdr (chỉ cần khi test backend Herdr, chế độ native; container đã có sẵn herdr)
 - [ ] Đã cài zellij 0.45.0+ (chỉ cần khi test backend Zellij, chế độ native Linux/macOS; container đã có sẵn zellij)
-- [ ] Go 1.26.9+ (để build native; Go cũ hơn tự tải bản này khi `GOTOOLCHAIN` là `auto`)
+- [ ] Go 1.26.10+ (để build native; Go cũ hơn tự tải bản này khi `GOTOOLCHAIN` là `auto`)
 - [ ] Node.js 22.22+ hoặc 24.15+ & pnpm (để build PWA)
 - [ ] Docker hoặc Podman (cho container mode)
 - [ ] Thiết bị di động thật (để test gesture)
