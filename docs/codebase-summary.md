@@ -151,12 +151,12 @@ enforce HTTP methods; invalid requests return 400/404/405/413 JSON errors.
 
 ## CI/CD Workflows
 
-| Workflow             | Trigger                            | Purpose                                                                                                                                                                    |
-| -------------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ci.yml`             | Push/PR                            | Build, lint, type check, PWA test, `go test` (Ubuntu/macOS/Windows), Playwright E2E, website build                                                                         |
-| `release-please.yml` | Push to `main` / Manual            | Create/update the release PR (draft release), then start `release.yml` on the new tag (`workflow_dispatch`)                                                                |
-| `release.yml`        | Tag push / Manual / Release Please | Build assets, push Docker images, sign `checksums.txt` (after approval in the `release` environment), upload, publish, then call `deploy-website.yml` for a stable release |
-| `deploy-website.yml` | Called by `release.yml` / Manual   | Build + deploy the docs site to GitHub Pages (only after a stable release, not on every push to `main`)                                                                    |
+| Workflow             | Trigger                            | Purpose                                                                                                                                                                                                             |
+| -------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ci.yml`             | Push/PR                            | Build, lint, type check, PWA test, `go test` (Ubuntu/macOS/Windows), Playwright E2E, website build                                                                                                                  |
+| `release-please.yml` | Push to `main` / Manual            | Create/update the release PR (draft release), then start `release.yml` on the new tag (`workflow_dispatch`)                                                                                                         |
+| `release.yml`        | Tag push / Manual / Release Please | Build assets, push the image by digest, sign `checksums.txt` (after approval in the `release` environment), upload to the draft, move the Docker tags, publish, then call `deploy-website.yml` for a stable release |
+| `deploy-website.yml` | Called by `release.yml` / Manual   | Build + deploy the docs site to GitHub Pages (only after a stable release, not on every push to `main`)                                                                                                             |
 
 ### Release Flow
 
@@ -167,9 +167,9 @@ release-please.yml opens/updates the "chore: release x.y.z" PR (CHANGELOG)
        ↓
 Merge PR → tag created → release-please.yml starts release.yml on the tag
        ↓
-release.yml builds assets, pushes the image, waits for approval in the
-           `release` environment, signs checksums.txt, uploads, then publishes
-           (never public before assets land)
+release.yml builds assets, pushes the image by digest, waits for approval
+           in the `release` environment, signs checksums.txt, uploads to the draft,
+           moves the Docker tags, then publishes (never public before both land)
        ↓
 Stable release published → release.yml calls deploy-website.yml
 ```

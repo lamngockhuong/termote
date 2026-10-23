@@ -3,9 +3,10 @@
 ## Overview
 
 Termote uses automated release workflows with multiple triggers and multi-arch Docker builds.
-A release is never public until every asset is on it: `release.yml` creates (or reuses) the
-GitHub Release as a draft, uploads every archive/checksum, pushes the Docker images, and only
-then publishes the release.
+A release is never public until every asset is on it and its Docker tags exist: `release.yml`
+pushes the image by digest, creates (or reuses) the GitHub Release as a draft, uploads every
+archive/checksum after the approval, moves the Docker tags to the signed digest, and only then
+publishes the release.
 
 ## Triggers
 
@@ -94,16 +95,23 @@ make release VERSION=1.0.0
 ```
 Tag created
     ↓
-┌─────────────────────────────────────────┐
-│ prepare: extract version                │
-├─────────────────────────────────────────┤
-│ build-pwa ──────┐                       │
-│ build (5 OS/arch) ──→ docker ──→ release │
-└─────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│ prepare: extract version, image tags                                 │
+├──────────────────────────────────────────────────────────────────────┤
+│ build-pwa ──────┐                                                    │
+│ build (5 OS/arch) ──→ docker ──→ release ──→ docker-tags ──→ publish │
+└──────────────────────────────────────────────────────────────────────┘
     ↓
-Docker images pushed (GHCR + Docker Hub)
-Release drafted, assets uploaded, then published
+docker:      image pushed to GHCR by digest (no tag), before the approval
+release:     waits for the approval, signs checksums.txt, uploads to the draft
+docker-tags: x.y.z, x.y, latest (GHCR + Docker Hub) moved to the signed digest
+publish:     the draft goes public, then the website deploys
 ```
+
+A `v*` tag pushed without the approval moves no tag anyone pulls through this workflow. A writer is
+not stopped by it: any workflow run from a ref a writer pushes (a branch or a tag, any workflow
+file) gets the repository's `DOCKERHUB_*` secrets and can ask for `packages: write`. That residual
+risk is accepted (Lam Ngoc Khuong, 2026-10-23).
 
 ## Setup
 
@@ -196,10 +204,12 @@ compare against it, so a 0.x patch marked latest would downgrade every 1.x insta
 
 ## Troubleshooting
 
-### Workflow fails at Docker push
+### Workflow fails at Docker push or Docker tags
 
 - Check `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` secrets
 - Verify Docker Hub token has Read & Write permissions
+- A failed `docker-tags` leaves the release a draft: re-run the failed jobs. `release` already
+  succeeded, so it does not run or wait for an approval again
 
 ### Release Please doesn't create a PR
 
