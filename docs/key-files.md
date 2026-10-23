@@ -92,6 +92,8 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/components/mermaid-block.tsx`            | A mermaid block: the diagram image, Show source, fallback     |
 | `pwa/src/utils/mermaid-render.ts`                 | Diagram → `data:` SVG image: worker queue, timeouts, cache    |
 | `pwa/src/utils/mermaid-worker.ts`                 | Module worker drawing a diagram with Pele, fixed options      |
+| `pwa/src/components/mermaid-export.tsx`           | A diagram's Share, Copy image and Download SVG buttons        |
+| `pwa/src/utils/mermaid-export.ts`                 | Diagram → PNG (canvas) for share/clipboard, SVG download      |
 | `pwa/src/components/image-viewer.tsx`             | Full-screen image viewer: zoom, pan, keys, Back closes it     |
 | `pwa/src/hooks/use-zoom-pan.ts`                   | Pinch, drag, double tap, wheel zoom (Pointer Events)          |
 | `pwa/src/utils/zoom-pan.ts`                       | Fit, zoom around a point, pan limits of the viewer            |

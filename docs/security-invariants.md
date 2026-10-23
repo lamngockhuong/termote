@@ -659,7 +659,16 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   a chunk failing to load, or not loaded within 30 s. One diagram in the worker at a time, only
   near the viewport, 50 results cached by source and theme. The worker and Pele's chunks are
   built under `assets/shiki/`, left out of the precache (`globIgnores`) and cached at runtime
-  (`shiki` cache) once fetched
+  (`shiki` cache) once fetched. Export (`utils/mermaid-export.ts`, `mermaid-export.tsx`): the PNG
+  is that same `data:` URL decoded into an `Image` and drawn on a detached canvas (filled with
+  the theme's background, at most 2×, 16 M pixels and 16 384 px a side), the SVG file that URL
+  decoded in JS: Pele's output under the fixed options above as `svgToDataUrl` writes it,
+  plus `background:<theme color>` in its root `style` (opened on its own, outside an `<img>`,
+  it holds no script, link, image or external `url()`); nothing is fetched (`connect-src` has no `data:`), no CSP source added, and the
+  SVG never enters the DOM. Share and Copy image only in a secure context (Web Share,
+  `ClipboardItem`), the SVG download through a `blob:` link revoked after 60 s (the share sheet
+  in the iOS Home Screen app). The saved name is the Markdown file's base name less its extension
+  and `UNSAFE_CHARS`, plus `-mermaid-N`
 - **Full-screen image viewer** (`pwa/src/components/image-viewer.tsx`, lazy chunk, mounted only
   while open): a Mermaid diagram, an image in Files and each side of an image in Changes open in
   a modal `<dialog>` showing the same URL already on screen (`data:`/`blob:`; nothing is read
@@ -671,7 +680,10 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   Events and `transform` (`use-zoom-pan.ts`, `utils/zoom-pan.ts`; 0.5×–8× of fit, panning keeps
   the image on screen), `touch-action: none` on its stage, wheel listener non-passive; an SVG is
   drawn again at its zoomed size once a gesture ends. Its title is the app's name for the image
-  (`visibleUnsafe` path, or "Mermaid diagram N"), never text from the file
+  (`visibleUnsafe` path, or "Mermaid diagram N"), never text from the file. Extra bar buttons
+  (`actions`) are opt-in, given by a Mermaid block only, in a bar below the stage; their
+  messages are the app's own text, in a `role="status"` node there, the dialog's name staying
+  the title
 - **Saving a file** (`PUT files/content?root=`, `server/files_write.go`): replaces the whole text
   of an existing file (a new one comes from `POST files/create`, see Creating a file). `writeGuard` (same-site JSON) plus the handler's own cross-site check and
   `requireWriteRole`; the `root` query is required (400, 409 once it moved). Body

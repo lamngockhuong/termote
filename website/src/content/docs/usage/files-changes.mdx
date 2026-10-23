@@ -350,6 +350,18 @@ over 256 KiB opens as its source, with a note that it is too large to preview.
   time a diagram is shown, not when the app is installed: offline, until then, diagrams show as
   their source with "Could not load the diagram renderer". Diagrams are drawn in the background,
   so even a large one never makes the page stop responding.
+- **Saving a diagram.** Once drawn, a diagram's bar has three more buttons, also in its full
+  screen view: **Share** opens the share sheet with the diagram as a PNG (on an iPad or iPhone:
+  Save Image, Notes, Files or any note app), **Copy image** puts the PNG on the clipboard to
+  paste into a note, and **Download SVG** saves the diagram as an SVG file. The PNG is twice the
+  diagram's size (less for a very large one), in the theme it is shown in, with that theme's
+  background; the SVG file keeps that background too. Named after the file and the diagram's
+  number, as `README-mermaid-1.png`. Share and Copy image show only where the browser offers
+  them (Firefox on a desktop and Chrome on Linux have no Share), and only on a secure page:
+  over HTTPS (such as `termote start --tailscale`) or on `localhost`. Opened over plain HTTP
+  on the LAN, only Download SVG shows. In the app added to the Home Screen on iOS, Download
+  SVG goes through the share sheet (Save to Files). An SVG pasted into a note app usually shows as text: use the PNG
+  there.
 - **Front matter** (the `---` block at the top of docs and MDX pages) is shown as a code block.
 - **Raw HTML and MDX components** are shown as the text they are, never run. The one exception
   is a `<details>` block with its `<summary>`: it shows as a section you tap to expand, and the
@@ -606,6 +618,8 @@ of a Markdown preview to open it full screen:
   new size once you stop, so it stays sharp.
 - The back gesture or button, the close button and Escape close it, leaving the file where it
   was.
+- A diagram has its Share, Copy image and Download SVG buttons in a bar at the bottom; what
+  they did shows there for a few seconds.
 
 In **Changes**, a changed image shows the version before and after, side by side on a desktop
 and one above the other on a phone:

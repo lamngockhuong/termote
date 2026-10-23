@@ -295,6 +295,12 @@ describe('svgToDataUrl', () => {
     ).toBeNull()
   })
 
+  it('names the background the diagram is drawn on, by theme', () => {
+    expect(svgToDataUrl(SVG, 'dark')).toMatchObject({ background: '#1a1a1d' })
+    expect(svgToDataUrl(SVG, 'light')).toMatchObject({ background: '#fff' })
+    expect(svgToDataUrl(SVG)).toMatchObject({ background: '#fff' })
+  })
+
   it('puts the dark palette before the variables that read it', () => {
     const xml = decode(svgToDataUrl(SVG, 'dark')?.url ?? '')
     const style = /style="([^"]*)"/.exec(xml)?.[1] ?? ''

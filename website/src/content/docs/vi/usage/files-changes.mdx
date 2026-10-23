@@ -344,6 +344,17 @@ chọn đó. File Markdown lớn hơn 256 KiB mở ở dạng mã nguồn, kèm 
   Bộ vẽ chỉ được tải về lần đầu có sơ đồ cần hiện, không tải sẵn khi cài app: nếu đang offline
   mà chưa tải lần nào, sơ đồ hiện dạng mã nguồn kèm dòng `Could not load the diagram renderer`.
   Sơ đồ được vẽ ở nền, nên dù lớn cũng không làm trang đứng.
+- **Lưu sơ đồ.** Khi sơ đồ đã vẽ xong, thanh của khối có thêm ba nút, ở chế độ toàn màn hình
+  cũng có: **Share** mở bảng chia sẻ với sơ đồ dạng PNG (trên iPad hay iPhone: Lưu hình ảnh,
+  Ghi chú, Tệp hoặc app ghi chú bất kỳ), **Copy image** đưa ảnh PNG vào bộ nhớ tạm để dán vào
+  ghi chú, còn **Download SVG** lưu sơ đồ thành file SVG. Ảnh PNG lớn gấp đôi cỡ sơ đồ (sơ đồ
+  rất lớn thì nhỏ hơn), theo giao diện sáng hoặc tối đang hiện, kèm màu nền của giao diện đó;
+  file SVG cũng giữ màu nền này. Tên file lấy theo tên file Markdown và số thứ tự sơ đồ, ví dụ
+  `README-mermaid-1.png`. Share và Copy image chỉ hiện khi trình duyệt có hai tính năng này
+  (Firefox trên máy tính và Chrome trên Linux không có Share), và chỉ trên trang an toàn: qua
+  HTTPS (như `termote start --tailscale`) hoặc trên `localhost`. Mở qua HTTP thường trong mạng
+  LAN thì chỉ còn Download SVG. Trong app đã thêm vào Màn hình chính trên iOS, Download SVG đi
+  qua bảng chia sẻ (Lưu vào Tệp). File SVG dán vào app ghi chú thường hiện ra chữ, nên ở đó hãy dùng ảnh PNG.
 - **Khối `---` ở đầu file** (thường gặp ở trang tài liệu và trang MDX) hiện thành một khối code.
 - **HTML thô và component MDX** hiện nguyên văn bản, không bao giờ được chạy. Ngoại lệ duy nhất
   là khối `<details>` cùng `<summary>` của nó: khối hiện thành một mục chạm vào để mở ra, phần
@@ -597,6 +608,8 @@ Changes) hoặc một sơ đồ Mermaid trong bản xem trước Markdown để 
 - Mức phóng đi từ một nửa đến gấp 8 lần cỡ vừa màn hình. Sơ đồ hoặc ảnh SVG được vẽ lại ở cỡ mới
   khi bạn dừng tay, nên vẫn sắc nét.
 - Cử chỉ hay nút quay lại, nút đóng và phím Escape đều đóng nó, file vẫn ở nguyên chỗ cũ.
+- Với sơ đồ, các nút Share, Copy image và Download SVG nằm ở một thanh dưới đáy; kết quả của
+  nút vừa bấm hiện ở đó trong vài giây.
 
 Trong **Changes**, ảnh có thay đổi hiện bản trước và bản sau: trên máy tính đặt cạnh nhau, trên
 điện thoại xếp chồng lên nhau.

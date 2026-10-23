@@ -1,7 +1,9 @@
 import { Maximize, Minus, Plus, X } from 'lucide-react'
 import {
   type CSSProperties,
+  type ReactNode,
   type RefObject,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -22,6 +24,9 @@ const KEY_STEPS: Record<string, number> = {
   '-': 1 / STEP,
   '0': 0,
 }
+// How long a message of an action stays in the bottom bar: a toast would be
+// under this modal dialog
+export const STATUS_MS = 4000
 
 interface Props {
   // The URL already on screen (data: or blob:): never read again
@@ -38,6 +43,10 @@ interface Props {
   stale?: boolean
   // Takes focus on close when what opened the viewer is gone
   returnFocus?: RefObject<HTMLElement | null>
+  // Buttons for a bar at the bottom, given the way to tell the user
+  // something there. Not in the top bar: on a phone its zoom buttons
+  // already take most of the width.
+  actions?: (say: (message: string) => void) => ReactNode
   onClose: () => void
 }
 
@@ -53,6 +62,7 @@ export default function ImageViewer({
   isSvg,
   stale = false,
   returnFocus,
+  actions,
   onClose,
 }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null)
@@ -68,6 +78,14 @@ export default function ImageViewer({
   )
   const size = natural ?? { width: 1, height: 1 }
   const { view, settled, zoom, zoomBy, reset } = useZoomPan(stageRef, size)
+  const [status, setStatus] = useState<string | null>(null)
+  const statusTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  useEffect(() => () => clearTimeout(statusTimer.current), [])
+  const say = useCallback((message: string) => {
+    clearTimeout(statusTimer.current)
+    setStatus(message)
+    statusTimer.current = setTimeout(() => setStatus(null), STATUS_MS)
+  }, [])
 
   let style: CSSProperties = { visibility: 'hidden' }
   if (natural && view) {
@@ -135,7 +153,7 @@ export default function ImageViewer({
       <div
         ref={stageRef}
         data-testid="viewer-stage"
-        className="relative min-h-0 flex-1 cursor-grab touch-none overflow-hidden pb-safe select-none active:cursor-grabbing"
+        className={`relative min-h-0 flex-1 cursor-grab touch-none overflow-hidden select-none active:cursor-grabbing ${actions ? '' : 'pb-safe'}`}
       >
         <img
           src={src}
@@ -155,6 +173,17 @@ export default function ImageViewer({
           }}
         />
       </div>
+      {actions && (
+        <div className="flex shrink-0 items-center gap-1 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] pl-3">
+          <span
+            role="status"
+            className="min-w-0 flex-1 truncate text-[13px] text-fg-muted"
+          >
+            {status}
+          </span>
+          {actions(say)}
+        </div>
+      )}
     </dialog>
   )
 }

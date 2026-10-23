@@ -69,7 +69,7 @@ export interface DownloadDeps {
 }
 
 // The share sheet with file, its closing ignored. Another refusal is thrown.
-async function shareFile(
+export async function shareFile(
   nav: DownloadDeps['nav'],
   file: File,
 ): Promise<'shared' | 'blocked'> {

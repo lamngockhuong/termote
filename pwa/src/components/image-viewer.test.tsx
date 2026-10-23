@@ -1,8 +1,15 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { viewerClosing } from '../hooks/use-history-close'
 import { SETTLE_MS } from '../hooks/use-zoom-pan'
-import ImageViewer from './image-viewer'
+import ImageViewer, { STATUS_MS } from './image-viewer'
 
 const SRC = 'data:image/svg+xml;charset=utf-8,%3Csvg%3E'
 
@@ -218,5 +225,75 @@ describe('ImageViewer', () => {
     window.history.back()
     await pop
     expect(onClose).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('ImageViewer: actions and messages', () => {
+  // The say the actions were given, kept for the test to call
+  let say: (message: string) => void = () => {}
+  const withActions = () =>
+    show({
+      actions: (s) => {
+        say = s
+        return <button type="button">Save</button>
+      },
+    })
+  const message = () => screen.getByRole('status')
+
+  it('has no bottom bar without actions, and keeps the safe area on the stage', () => {
+    show()
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(screen.getByTestId('viewer-stage')).toHaveClass('pb-safe')
+  })
+
+  it('puts its actions in a bottom bar after the stage, the top bar unchanged', () => {
+    withActions()
+    const save = screen.getByRole('button', { name: 'Save' })
+    const close = screen.getByRole('button', { name: 'Close' })
+    const stage = screen.getByTestId('viewer-stage')
+    expect(
+      stage.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(
+      close.compareDocumentPosition(stage) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(stage).not.toHaveClass('pb-safe')
+  })
+
+  it('shows a message in the bottom bar for STATUS_MS, the title staying', () => {
+    vi.useFakeTimers()
+    const { dialog } = withActions()
+    act(() => say('Diagram copied'))
+    expect(message()).toHaveTextContent('Diagram copied')
+    expect(
+      within(dialog).getByText('Mermaid diagram 1', { selector: 'span' }),
+    ).toBeVisible()
+    act(() => vi.advanceTimersByTime(STATUS_MS - 1))
+    expect(message()).toHaveTextContent('Diagram copied')
+    act(() => vi.advanceTimersByTime(1))
+    expect(message()).toBeEmptyDOMElement()
+  })
+
+  it('a new message replaces the one shown and starts its own STATUS_MS', () => {
+    vi.useFakeTimers()
+    withActions()
+    act(() => say('Could not share the diagram'))
+    act(() => vi.advanceTimersByTime(STATUS_MS - 1000))
+    act(() => say('Diagram copied'))
+    act(() => vi.advanceTimersByTime(STATUS_MS - 1))
+    expect(message()).toHaveTextContent('Diagram copied')
+    act(() => vi.advanceTimersByTime(1))
+    expect(message()).toBeEmptyDOMElement()
+  })
+
+  it('drops a pending message timer when the viewer closes', async () => {
+    const { unmount } = withActions()
+    const starts = vi.spyOn(window, 'setTimeout')
+    const stops = vi.spyOn(window, 'clearTimeout')
+    act(() => say('Diagram copied'))
+    const at = starts.mock.calls.findIndex(([, ms]) => ms === STATUS_MS)
+    expect(at).toBeGreaterThanOrEqual(0)
+    unmount()
+    expect(stops).toHaveBeenCalledWith(starts.mock.results[at].value)
   })
 })

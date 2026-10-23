@@ -19,6 +19,9 @@ export interface MermaidImage {
   url: string
   width: number
   height: number
+  // The color behind the diagram (the SVG paints none): an exported PNG is
+  // filled with it, so it looks as it does on screen
+  background: string
 }
 
 export type MermaidResult =
@@ -38,8 +41,11 @@ const CACHE_SIZE = 50
 // <img> sees no CSS of the page, so the dark one goes into the SVG itself.
 // The default style's dark tokens (index.css), the border a step lighter
 // than --tm-border so node outlines stay visible.
+const DARK_BG = '#1a1a1d'
+// Pele's own fallback for --pele-bg
+const LIGHT_BG = '#fff'
 const DARK_PALETTE = [
-  '--pele-bg:#1a1a1d',
+  `--pele-bg:${DARK_BG}`,
   '--pele-fg:#d4d4d8',
   '--pele-muted:#a1a1aa',
   '--pele-line:#d4d4d8',
@@ -260,6 +266,7 @@ export function svgToDataUrl(
     url: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(xml)}`,
     width,
     height,
+    background: theme === 'dark' ? DARK_BG : LIGHT_BG,
   }
 }
 
