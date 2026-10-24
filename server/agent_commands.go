@@ -181,6 +181,9 @@ type commandOpts struct {
 	prefix string   // put before each name: "<plugin>:" for a plugin's
 	allow  []string // resolved dirs a symlinked skill dir may lead into
 	skip   func(dir, rel string) bool
+	// visits, when set, is a commandsMaxVisited budget shared by every
+	// reader given it, instead of one budget per dir.
+	visits *int
 }
 
 // commandReader lists one dir's commands and skills. The dir is opened as an
@@ -220,6 +223,10 @@ func readSkillDir(dir, rel string, opts commandOpts) []agentCommand {
 	}
 	defer rt.Close()
 	r := &commandReader{commandOpts: opts, rt: rt, dir: dir}
+	if opts.visits != nil {
+		r.visited = *opts.visits
+		defer func() { *opts.visits = r.visited }()
+	}
 	r.readSkills(rel)
 	return r.out
 }
@@ -230,8 +237,8 @@ func (r *commandReader) readDir(dir string) []fs.DirEntry {
 	if left <= 0 {
 		return nil
 	}
-	d, err := r.rt.Open(dir)
-	if err != nil {
+	d := openRootDir(r.rt, dir)
+	if d == nil {
 		return nil
 	}
 	defer d.Close()
@@ -239,6 +246,21 @@ func (r *commandReader) readDir(dir string) []fs.DirEntry {
 	r.visited += len(entries)
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
 	return entries
+}
+
+// openRootDir opens dir under rt without blocking (a FIFO in its place would
+// otherwise hold the open until a writer comes), or nil when it is not a
+// directory.
+func openRootDir(rt *os.Root, dir string) *os.File {
+	d, err := rt.OpenFile(dir, os.O_RDONLY|openNonblock, 0)
+	if err != nil {
+		return nil
+	}
+	if fi, err := d.Stat(); err != nil || !fi.IsDir() {
+		d.Close()
+		return nil
+	}
+	return d
 }
 
 // full reports whether this reader has its commandsMaxPerSource entries.
