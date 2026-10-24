@@ -1,7 +1,36 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import {
+  fireEvent,
+  render as renderPlain,
+  screen,
+  waitFor,
+} from '@testing-library/react'
+import type { ReactElement } from 'react'
 import { describe, expect, it, vi } from 'vitest'
+import { ThemeProvider } from '../contexts/theme-context'
 import type { TranscriptEntry } from '../hooks/use-mux-api'
-import { ChatMessage, chatSide } from './chat-message'
+import type { MermaidResult } from '../utils/mermaid-render'
+import { ChatMarkdownContext, ChatMessage, chatSide } from './chat-message'
+import { MERMAID_REASONS } from './mermaid-block'
+
+const mockRender = vi.fn()
+vi.mock('../utils/mermaid-render', () => ({
+  renderMermaid: (...a: unknown[]) => mockRender(...a),
+  peekMermaid: () => undefined,
+}))
+const mockHighlight = vi.fn((..._a: unknown[]) => Promise.resolve(null))
+vi.mock('../utils/highlight', async (orig) => ({
+  ...(await orig<typeof import('../utils/highlight')>()),
+  highlightLang: (...a: unknown[]) => mockHighlight(...a),
+}))
+
+const mockDownload = vi.fn()
+vi.mock('../utils/mermaid-export', async (orig) => ({
+  ...(await orig<typeof import('../utils/mermaid-export')>()),
+  downloadSvg: (...a: unknown[]) => mockDownload(...a),
+}))
+
+// Code blocks highlight in the current theme
+const render = (ui: ReactElement) => renderPlain(ui, { wrapper: ThemeProvider })
 
 const assistant = (text: string): TranscriptEntry => ({
   id: 'a',
@@ -507,7 +536,7 @@ describe('ChatMessage', () => {
     Object.assign(navigator, { clipboard: { writeText } })
     render(<ChatMessage joinsNext entry={assistant('```\nls -la\n```')} />)
     fireEvent.click(screen.getByRole('button', { name: 'Copy code' }))
-    expect(writeText).toHaveBeenCalledWith('ls -la\n')
+    expect(writeText).toHaveBeenCalledWith('ls -la')
     expect(
       await screen.findByRole('button', { name: 'Could not copy' }),
     ).toBeInTheDocument()
@@ -632,5 +661,129 @@ describe('chatSide', () => {
     ).toBe('agent')
     expect(chatSide({ id: '3', role: 'assistant', parts: [] })).toBe('agent')
     expect(chatSide({ id: '4', role: 'note', parts: [] })).toBe('other')
+  })
+})
+
+describe('ChatMessage code blocks', () => {
+  const ok: MermaidResult = {
+    ok: true,
+    url: 'data:image/svg+xml;charset=utf-8,%3Csvg%3E',
+    width: 300,
+    height: 120,
+    background: '#fff',
+  }
+  const GRAPH = 'flowchart LR\n  A --> B'
+
+  it('names the language over the code and highlights in it', async () => {
+    render(
+      <ChatMessage
+        entry={assistant('```ts\nconst x = 1\n```\n\n```\nls\n```')}
+      />,
+    )
+    const [ts, plain] = screen.getAllByTestId('fenced-code')
+    expect(ts).toHaveTextContent('ts')
+    expect(plain).toHaveTextContent('text')
+    await waitFor(() =>
+      expect(mockHighlight).toHaveBeenCalledWith(
+        'const x = 1',
+        'typescript',
+        expect.any(String),
+        expect.any(AbortSignal),
+      ),
+    )
+  })
+
+  it('draws each Mermaid block of a message as a numbered image', async () => {
+    mockRender.mockResolvedValue(ok)
+    render(
+      <ChatMessage
+        entry={assistant(
+          `\`\`\`mermaid\n${GRAPH}\n\`\`\`\n\n\`\`\`mermaid\n${GRAPH}\n\`\`\``,
+        )}
+      />,
+    )
+    expect(await screen.findByAltText('Mermaid diagram 1')).toHaveAttribute(
+      'src',
+      ok.url,
+    )
+    expect(screen.getByAltText('Mermaid diagram 2')).toBeInTheDocument()
+    expect(mockRender).toHaveBeenCalledWith(
+      GRAPH,
+      expect.any(String),
+      expect.any(AbortSignal),
+    )
+  })
+
+  it('shows the source on demand and copies it', async () => {
+    mockRender.mockResolvedValue(ok)
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.assign(navigator, { clipboard: { writeText } })
+    render(<ChatMessage entry={assistant(`\`\`\`mermaid\n${GRAPH}\n\`\`\``)} />)
+    await screen.findByAltText('Mermaid diagram 1')
+    fireEvent.click(screen.getByRole('button', { name: 'Show source' }))
+    expect(screen.queryByAltText('Mermaid diagram 1')).toBeNull()
+    expect(screen.getByText(/A --> B/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Copy code' }))
+    expect(writeText).toHaveBeenCalledWith(GRAPH)
+    expect(
+      await screen.findByRole('button', { name: 'Copied' }),
+    ).toBeInTheDocument()
+  })
+
+  it('a diagram that cannot be drawn stays code, with the reason', async () => {
+    mockRender.mockResolvedValue({ ok: false, reason: 'syntax' })
+    render(<ChatMessage entry={assistant('```mermaid\nnot a diagram\n```')} />)
+    expect(await screen.findByText(MERMAID_REASONS.syntax)).toBeInTheDocument()
+    expect(screen.getByText('not a diagram')).toBeInTheDocument()
+  })
+
+  it('a message outside the view waits for the page, reports nowhere', async () => {
+    let root: Element | null | undefined
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        constructor(
+          private cb: (e: { isIntersecting: boolean }[]) => void,
+          opts: IntersectionObserverInit,
+        ) {
+          root = opts.root as Element | null
+        }
+        observe() {
+          this.cb([{ isIntersecting: true }])
+        }
+        disconnect() {}
+      },
+    )
+    mockRender.mockResolvedValue(ok)
+    mockDownload.mockImplementationOnce(
+      (_i: unknown, _n: unknown, notify: (m: string) => void) => notify('x'),
+    )
+    render(<ChatMessage entry={assistant(`\`\`\`mermaid\n${GRAPH}\n\`\`\``)} />)
+    await screen.findByAltText('Mermaid diagram 1')
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Download diagram as SVG' }),
+    )
+    expect(mockDownload).toHaveBeenCalledWith(
+      ok,
+      'chat-mermaid-1',
+      expect.any(Function),
+    )
+    expect(root).toBeNull()
+    vi.unstubAllGlobals()
+  })
+
+  it('saves a diagram under a chat name and reports through the view', async () => {
+    mockRender.mockResolvedValue(ok)
+    const notify = vi.fn()
+    render(
+      <ChatMarkdownContext.Provider value={{ scrollRoot: () => null, notify }}>
+        <ChatMessage entry={assistant(`\`\`\`mermaid\n${GRAPH}\n\`\`\``)} />
+      </ChatMarkdownContext.Provider>,
+    )
+    await screen.findByAltText('Mermaid diagram 1')
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Download diagram as SVG' }),
+    )
+    expect(mockDownload).toHaveBeenCalledWith(ok, 'chat-mermaid-1', notify)
   })
 })

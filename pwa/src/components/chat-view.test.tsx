@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ViewProps } from '../app-views'
+import { ThemeProvider } from '../contexts/theme-context'
 import type { TranscriptState } from '../hooks/use-agent-transcript'
 import { resetChatAttachments } from '../hooks/use-chat-attachments'
 import type { AgentPrompt, TranscriptEntry } from '../hooks/use-mux-api'
@@ -33,6 +34,11 @@ vi.mock('../hooks/use-agent-transcript', () => ({
     refresh: transcript.refresh,
     loadOlder: transcript.loadOlder,
   }),
+}))
+
+vi.mock('../utils/highlight', async (orig) => ({
+  ...(await orig<typeof import('../utils/highlight')>()),
+  highlightLang: () => Promise.resolve(null),
 }))
 
 const entry = (i: number): TranscriptEntry => ({
@@ -397,19 +403,23 @@ describe('ChatView resizing', () => {
   it('a list that shrinks while at the bottom stays at the bottom', () => {
     let fire: (() => void) | undefined
     const disconnect = vi.fn()
+    const observe = vi.fn()
     vi.stubGlobal(
       'ResizeObserver',
       class {
         constructor(cb: () => void) {
           fire = cb
         }
-        observe() {}
+        observe = observe
         disconnect = disconnect
       },
     )
     set({ entries: entries(3) })
     const { unmount } = render(<ChatView {...props} />)
     const list = screen.getByRole('region', { name: 'Conversation' })
+    // The box, and its content: a diagram drawn late makes it taller
+    expect(observe).toHaveBeenCalledWith(list)
+    expect(observe).toHaveBeenCalledWith(list.firstElementChild)
     layout(list, { scrollTop: 800 })
     fireEvent.scroll(list)
     layout(list, { scrollHeight: 1100, scrollTop: 800 })
@@ -422,6 +432,84 @@ describe('ChatView resizing', () => {
     expect(list.scrollTop).toBe(100)
     unmount()
     expect(disconnect).toHaveBeenCalled()
+    vi.unstubAllGlobals()
+  })
+})
+
+describe('ChatView reading above', () => {
+  it('content growing above the entry being read keeps it in place', () => {
+    let fire: (() => void) | undefined
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(cb: () => void) {
+          fire = cb
+        }
+        observe() {}
+        disconnect() {}
+      },
+    )
+    set({ entries: entries(3) })
+    render(<ChatView {...props} />)
+    const list = screen.getByRole('region', { name: 'Conversation' })
+    const [first, second] = (list.firstElementChild as Element).children
+    // Where each sits in the window: the list from 0, the first entry above it
+    const tops = new Map<Element, number>([
+      [list, 0],
+      [first, -100],
+      [second, 20],
+    ])
+    for (const el of [list, first, second]) {
+      el.getBoundingClientRect = () =>
+        ({ top: tops.get(el), height: 50 }) as DOMRect
+    }
+    layout(list, { scrollTop: 100 })
+    fireEvent.scroll(list)
+    // A diagram above it is drawn: the entry moves down by 40
+    tops.set(second, 60)
+    act(() => fire!())
+    expect(list.scrollTop).toBe(140)
+    // Nothing on screen to hold: the position is left alone
+    tops.set(first, -300)
+    tops.set(second, -200)
+    fireEvent.scroll(list)
+    act(() => fire!())
+    expect(list.scrollTop).toBe(140)
+    vi.unstubAllGlobals()
+  })
+})
+
+describe('ChatView diagrams', () => {
+  it('a diagram waits to come near the conversation, not the page', () => {
+    let root: Element | null | undefined
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        constructor(_cb: unknown, opts: IntersectionObserverInit) {
+          root = opts.root as Element | null
+        }
+        observe() {}
+        disconnect() {}
+      },
+    )
+    set({
+      entries: [
+        {
+          id: 'm',
+          role: 'assistant',
+          parts: [
+            { kind: 'text', text: '```mermaid\nflowchart LR\n  A --> B\n```' },
+          ],
+        },
+      ],
+    })
+    render(
+      <ThemeProvider>
+        <ChatView {...props} />
+      </ThemeProvider>,
+    )
+    expect(root).toBe(screen.getByRole('region', { name: 'Conversation' }))
+    expect(screen.getByText('Rendering diagram…')).toBeInTheDocument()
     vi.unstubAllGlobals()
   })
 })

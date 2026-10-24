@@ -3,6 +3,7 @@ import {
   type ReactNode,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react'
@@ -16,7 +17,7 @@ import { toAgentStatus } from '../types/session'
 import { canStartAgent } from '../utils/agent-start'
 import { visibleUnsafe } from '../utils/unsafe-chars'
 import { AgentStatusBadge } from './agent-status-badge'
-import { ChatMessage, chatSide } from './chat-message'
+import { ChatMarkdownContext, ChatMessage, chatSide } from './chat-message'
 import { OpenTerminalButton } from './open-terminal-button'
 import { PromptCard } from './prompt-card'
 import { StartAgentPanel } from './start-agent-panel'
@@ -46,6 +47,21 @@ export function chatLayout(entries: TranscriptEntry[]) {
       joinsNext: side === 'agent' && !!next && chatSide(next) === 'agent',
     }
   })
+}
+
+// How far below the top of the list an element is
+function offsetIn(list: Element, el: Element) {
+  return el.getBoundingClientRect().top - list.getBoundingClientRect().top
+}
+
+// The first entry of the list still on screen, and where
+function firstOnScreen(list: Element) {
+  const content = list.firstElementChild as Element
+  for (const entry of content.children) {
+    const top = offsetIn(list, entry)
+    if (top + entry.getBoundingClientRect().height > 0) return { entry, top }
+  }
+  return null
 }
 
 export function ChatView(props: ViewProps) {
@@ -108,7 +124,13 @@ function StartedNotice({
   return <Centered>{agentLabel(record.kind)} is starting…</Centered>
 }
 
-function AgentChat({ session, showView, readOnly, agentStart }: ViewProps) {
+function AgentChat({
+  session,
+  showView,
+  readOnly,
+  agentStart,
+  notify,
+}: ViewProps) {
   const t = useAgentTranscript(session.paneId)
   const status = toAgentStatus(t.status)
   // View-only has no composer: the dialog is shown here, without buttons.
@@ -119,6 +141,15 @@ function AgentChat({ session, showView, readOnly, agentStart }: ViewProps) {
   )
   const agent = agentLabel(session.agentName)
   const listRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
+  // The first entry on screen while reading above the bottom, and how far
+  // below the list's top it was
+  const readingRef = useRef<{ entry: Element; top: number } | null>(null)
+  // Stable, so the memoized messages do not draw again
+  const markdown = useMemo(
+    () => ({ scrollRoot: () => listRef.current, notify }),
+    [notify],
+  )
   const [shown, setShown] = useState(RENDER_WINDOW)
   const [atBottom, setAtBottom] = useState(true)
   const atBottomRef = useRef(true)
@@ -175,15 +206,23 @@ function AgentChat({ session, showView, readOnly, agentStart }: ViewProps) {
   }, [shown, t.entries.length, t.loadingOlder])
 
   // The list gets shorter when a notice or a taller composer appears under
-  // it; one that was at the bottom stays there.
+  // it, its content taller when a diagram or highlighted code arrives late:
+  // one that was at the bottom stays there, else the entry being read stays
+  // in place (a browser without scroll anchoring would move it).
   // biome-ignore lint/correctness/useExhaustiveDependencies: the list mounts once loaded
   useEffect(() => {
     const el = listRef.current
     if (!el || typeof ResizeObserver === 'undefined') return
     const ro = new ResizeObserver(() => {
-      if (atBottomRef.current) el.scrollTop = el.scrollHeight
+      if (atBottomRef.current) {
+        el.scrollTop = el.scrollHeight
+        return
+      }
+      const r = readingRef.current
+      if (r?.entry.isConnected) el.scrollTop += offsetIn(el, r.entry) - r.top
     })
     ro.observe(el)
+    ro.observe(contentRef.current as HTMLDivElement)
     return () => ro.disconnect()
   }, [t.loaded, t.error])
 
@@ -195,6 +234,7 @@ function AgentChat({ session, showView, readOnly, agentStart }: ViewProps) {
       el.scrollHeight - el.scrollTop - el.clientHeight < STICK_DISTANCE
     setAtBottom(bottom)
     if (bottom) setUnseen(false)
+    readingRef.current = bottom ? null : firstOnScreen(el)
     if (el.scrollTop === 0) showEarlier()
   }
 
@@ -267,31 +307,35 @@ function AgentChat({ session, showView, readOnly, agentStart }: ViewProps) {
         ref={listRef}
         onScroll={onScroll}
         aria-label="Conversation"
-        className="min-h-0 flex-1 space-y-3 overflow-x-hidden overflow-y-auto px-3 py-3"
+        className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-3"
       >
-        {(hidden > 0 || t.before) && (
-          <div className="flex justify-center">
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={t.loadingOlder}
-              onClick={showEarlier}
-            >
-              {t.loadingOlder ? 'Loading…' : 'Show earlier messages'}
-            </Button>
+        <ChatMarkdownContext.Provider value={markdown}>
+          <div ref={contentRef} className="space-y-3">
+            {(hidden > 0 || t.before) && (
+              <div className="flex justify-center">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={t.loadingOlder}
+                  onClick={showEarlier}
+                >
+                  {t.loadingOlder ? 'Loading…' : 'Show earlier messages'}
+                </Button>
+              </div>
+            )}
+            {visible.length === 0 && (
+              <p className="text-center text-fg-muted">No messages yet.</p>
+            )}
+            {visible.map((e, i) => (
+              <ChatMessage
+                key={e.id}
+                entry={e}
+                showTime={layout[i].showTime}
+                joinsNext={layout[i].joinsNext}
+              />
+            ))}
           </div>
-        )}
-        {visible.length === 0 && (
-          <p className="text-center text-fg-muted">No messages yet.</p>
-        )}
-        {visible.map((e, i) => (
-          <ChatMessage
-            key={e.id}
-            entry={e}
-            showTime={layout[i].showTime}
-            joinsNext={layout[i].joinsNext}
-          />
-        ))}
+        </ChatMarkdownContext.Provider>
       </section>
       {readOnly && p.prompt && (
         <PromptCard

@@ -113,6 +113,24 @@ test.describe('chat view', () => {
     await expect(conversation).toContainText('Fix the build please')
     await expect(conversation.locator('strong')).toHaveText('fixed')
 
+    // A Mermaid block is drawn as its image, opens full screen and saves
+    // under a chat name; other code is framed with its language
+    const block = conversation.getByTestId('mermaid-block')
+    const img = block.locator('img[src^="data:image/svg+xml"]')
+    await expect(img).toHaveAttribute('alt', 'Mermaid diagram 1', { timeout: 15000 })
+    await expect.poll(() => img.evaluate((el) => (el as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
+    const sh = conversation.getByTestId('fenced-code').filter({ hasText: 'npm test' })
+    await expect(sh).toContainText('sh')
+    await expect(sh.locator('code span[style*="color"]').first()).toBeVisible()
+    const download = page.waitForEvent('download')
+    await block.getByRole('button', { name: 'Download diagram as SVG' }).click()
+    expect((await download).suggestedFilename()).toBe('chat-mermaid-1.svg')
+    await block.getByRole('button', { name: 'Open Mermaid diagram 1 full screen' }).click()
+    const viewer = page.getByRole('dialog', { name: 'Mermaid diagram 1' })
+    await expect(viewer.getByRole('button', { name: 'Download diagram as SVG' })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(viewer).toBeHidden()
+
     // A message of two lines arrives as one turn
     const composer = page.getByRole('textbox', {
       name: 'Message to Claude Code',
