@@ -151,6 +151,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `server/agent_claude_model.go`                    | Last model a Claude Code transcript names                     |
 | `server/agent_subagents.go`                       | `agent/subagents`: a Claude session's subagent tree           |
 | `server/agent_claude.go`                          | Claude Code transcript (JSONL) and session file               |
+| `scripts/claude-chat-tags.sh`                     | Tags Claude Code writes that the Chat view would show raw     |
 | `server/agent_claude_prompt.go`                   | Reads a Claude Code screen: input box, dialogs                |
 | `server/agent_input.go`                           | Sends a message, answers a dialog (checks before each write)  |
 | `server/agent_commands*.go`                       | `agent/commands`: custom commands, skills (Codex: `$` skills) |
