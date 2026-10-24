@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.9.0](https://github.com/lamngockhuong/termote/compare/v2.8.0...v2.9.0) (2026-10-24)
+
+
+### Features
+
+* **pwa:** draw Mermaid diagrams and framed code blocks in the chat view ([#563](https://github.com/lamngockhuong/termote/issues/563)) ([204e19a](https://github.com/lamngockhuong/termote/commit/204e19abacbf16f2cc250812d1edecb983bce154))
+* **server:** list the skills of enabled Codex plugins in the $ suggestions ([#564](https://github.com/lamngockhuong/termote/issues/564)) ([d3cd3e5](https://github.com/lamngockhuong/termote/commit/d3cd3e52b370e1c1c5e0d9f4105bfb6576ea52e4))
+
+
+### Bug Fixes
+
+* **ci:** move Docker image tags after the release approval ([#556](https://github.com/lamngockhuong/termote/issues/556)) ([7228a8d](https://github.com/lamngockhuong/termote/commit/7228a8d5bf7d1d2c8086f3dd7dad65657621bb78))
+* **server:** keep failed Codex MCP calls and Claude replies in the chat ([#562](https://github.com/lamngockhuong/termote/issues/562)) ([51a314f](https://github.com/lamngockhuong/termote/commit/51a314faf176e6aff381f3d2e56bd3c852299002))
+* **server:** show ! commands and their output in the chat view ([#558](https://github.com/lamngockhuong/termote/issues/558)) ([9e4609a](https://github.com/lamngockhuong/termote/commit/9e4609a574631fea2ea98f3cd7806c275fc92c44))
+* **server:** show every Claude Code envelope in the chat view ([#560](https://github.com/lamngockhuong/termote/issues/560)) ([56197a9](https://github.com/lamngockhuong/termote/commit/56197a97cf5759e4033c03e872513700bca72626))
+* **server:** show every Codex rollout item in the chat view ([#561](https://github.com/lamngockhuong/termote/issues/561)) ([3d2c20f](https://github.com/lamngockhuong/termote/commit/3d2c20fc422eb8fc8f6dd51ba69a32e073701e46))
+
 ## [2.8.0](https://github.com/lamngockhuong/termote/compare/v2.7.0...v2.8.0) (2026-10-23)
 
 
