@@ -463,6 +463,112 @@ func TestClassifyClaudeUserText(t *testing.T) {
 	}
 }
 
+// The envelopes the VS Code extension's chat recognises, as Claude Code
+// 2.1.292 writes them.
+func TestClassifyClaudeUserTextEnvelopes(t *testing.T) {
+	for _, c := range []struct{ in, role, out string }{
+		{"<local-command-stdout></local-command-stdout><local-command-stderr>Unknown skill: x</local-command-stderr>", "note", "Unknown skill: x"},
+		{"<local-command-stderr>boom</local-command-stderr>", "note", "boom"},
+		{"<bash-stdout>a &lt;b&gt; &amp;amp;</bash-stdout><bash-stderr></bash-stderr>", "note", "a <b> &amp;"},
+		{"<bash-stdout>out</bash-stdout><bash-stderr>err</bash-stderr><bash-exit-code>2</bash-exit-code>", "note", "out\nerr\nExit code 2"},
+		{"<bash-stdout>out</bash-stdout><bash-stderr></bash-stderr><bash-exit-code>0</bash-exit-code>", "note", "out"},
+		{"<task-notification>\n<summary>Background command \"a 2&gt;&amp;1\" completed</summary>\n</task-notification>", "note", `Background command "a 2>&1" completed`},
+		{"<teammate-message teammate_id=\"r1\">Done with phase 2</teammate-message>", "note", "Teammate message: Done with phase 2"},
+		{"<tick>12:00</tick>", "note", "Autonomous prompt: 12:00"},
+		{"<mcp-resource-update server=\"x\"></mcp-resource-update>", "note", "MCP resource update"},
+		{"<channel source=\"slack\">ship it</channel>", "note", "Channel message: ship it"},
+		{"<artifact-file-content path=\"a.html\"><html></html></artifact-file-content>", "note", "Artifact file"},
+		{"[Request interrupted by user]", "note", "Interrupted"},
+		{"[Request interrupted by user for tool use]\n", "note", "Tool interrupted"},
+		{"<unknown-tag>hi</unknown-tag>", "user", "<unknown-tag>hi</unknown-tag>"},
+		{"<command-names>x</command-names>", "user", "<command-names>x</command-names>"},
+	} {
+		if role, s, ok := classifyClaudeUserText(c.in); !ok || role != c.role || s != c.out {
+			t.Errorf("%q = %q %q %v, want %q %q", c.in, role, s, ok, c.role, c.out)
+		}
+	}
+	if _, _, ok := classifyClaudeUserText("<local-command-stdout></local-command-stdout><local-command-stderr></local-command-stderr>"); ok {
+		t.Error("empty command output accepted")
+	}
+	if got := xmlInner(`<a-b>x</a-b><a x="1">y</a>`, "a"); got != "y" {
+		t.Errorf("xmlInner skipped a longer tag wrongly: %q", got)
+	}
+	for _, s := range []string{"<a", `<a x="1"`} {
+		if got := xmlInner(s, "a"); got != "" {
+			t.Errorf("unclosed tag %q = %q", s, got)
+		}
+	}
+}
+
+// An interruption is written as a block list holding one text block.
+func TestParseClaudeRowInterruptBlock(t *testing.T) {
+	line := []byte(`{"type":"user","uuid":"u1","message":{"role":"user","content":[{"type":"text","text":"[Request interrupted by user for tool use]"}]}}`)
+	e, ok := parseClaudeRow(line, 0)
+	if !ok || e.Role != "note" || len(e.Parts) != 1 || e.Parts[0].Text != "Tool interrupted" {
+		t.Fatalf("entry = %+v %v", e, ok)
+	}
+	line = []byte(`{"type":"user","uuid":"u2","message":{"role":"user","content":[{"type":"text","text":"<system-reminder>x</system-reminder>"},{"type":"text","text":"hello"}]}}`)
+	if e, ok := parseClaudeRow(line, 0); !ok || e.Role != "user" || len(e.Parts) != 1 || e.Parts[0].Text != "hello" {
+		t.Fatalf("reminder block kept: %+v %v", e, ok)
+	}
+}
+
+// TestClaudeTranscriptEnvelopes reads real transcripts and fails on any
+// envelope that would show raw as the user's speech. It runs only with
+// TERMOTE_CLAUDE_PROJECTS set to a Claude Code projects directory, for
+// example after a Claude Code update: scripts/claude-chat-tags.sh runs it.
+func TestClaudeTranscriptEnvelopes(t *testing.T) {
+	dir := os.Getenv("TERMOTE_CLAUDE_PROJECTS")
+	if dir == "" {
+		t.Skip("TERMOTE_CLAUDE_PROJECTS not set")
+	}
+	raw := map[string]int{}
+	var rows int
+	check := func(text string) {
+		tag, ok := claudeEnvelope(strings.TrimLeft(text, " \t\r\n"))
+		if !ok {
+			return
+		}
+		if role, s, _ := classifyClaudeUserText(text); role == "user" && strings.HasPrefix(strings.TrimSpace(s), "<"+tag) {
+			raw[tag]++
+		}
+	}
+	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() || filepath.Ext(path) != ".jsonl" {
+			return err
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		for _, line := range bytes.Split(data, []byte("\n")) {
+			var row claudeRow
+			if json.Unmarshal(line, &row) != nil || row.Type != "user" || row.Message == nil || row.IsMeta || row.IsSidechain {
+				continue
+			}
+			rows++
+			switch c := row.Message.Content.(type) {
+			case string:
+				check(c)
+			case []any:
+				for _, item := range c {
+					if b, _ := item.(map[string]any); jsonStr(b["type"]) == "text" {
+						check(jsonStr(b["text"]))
+					}
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("%d user rows read", rows)
+	for tag, n := range raw {
+		t.Errorf("<%s> shows raw in %d rows: add it to classifyClaudeUserText", tag, n)
+	}
+}
+
 // A message sent with images is a list of blocks; its text block carries
 // the same paste tags as a plain string message.
 func TestParseClaudeRowPastedWithImages(t *testing.T) {

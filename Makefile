@@ -1,7 +1,7 @@
 # Termote Makefile
 # Usage: make <target>
 
-.PHONY: help build build-pwa build-api test test-go test-cli test-install test-entrypoints test-herdr-plugin test-git-hooks start container-up container-down uninstall health clean release release-dry fmt fmt-check brand-assets
+.PHONY: help build build-pwa build-api test test-go test-cli test-install test-entrypoints test-herdr-plugin test-git-hooks start container-up container-down uninstall health clean release release-dry fmt fmt-check brand-assets claude-chat-tags
 
 # Default target
 help:
@@ -38,6 +38,7 @@ help:
 	@echo ""
 	@echo "Other:"
 	@echo "  make health         Check service health"
+	@echo "  make claude-chat-tags  Check the Chat view knows every Claude Code tag"
 	@echo "  make clean          Stop and remove containers"
 	@echo "  make uninstall      Uninstall all"
 
@@ -105,6 +106,10 @@ fmt-check:
 # Brand assets (needs rsvg-convert and ImageMagick)
 brand-assets:
 	@./scripts/build-brand-assets.sh
+
+# Claude Code tags the Chat view would show raw (after a Claude Code update)
+claude-chat-tags:
+	@./scripts/claude-chat-tags.sh
 
 # Health check
 health:

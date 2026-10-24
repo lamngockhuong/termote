@@ -337,6 +337,7 @@ func parseClaudeRow(line []byte, off int64) (TranscriptEntry, bool) {
 		}
 		e.Parts = append(e.Parts, textPart("text", text, claudeMaxText))
 	case []any:
+		var blockRole string
 		for _, item := range c {
 			b, _ := item.(map[string]any)
 			switch jsonStr(b["type"]) {
@@ -345,9 +346,16 @@ func parseClaudeRow(line []byte, off int64) (TranscriptEntry, bool) {
 			case "text":
 				t := jsonStr(b["text"])
 				if row.Type == "user" {
-					// A message sent with images arrives as blocks, its
-					// text block carrying the same paste tags.
-					t = stripPastedTags(t)
+					// A message sent with images, or an interruption,
+					// arrives as blocks sorted like a string message.
+					role, s, ok := classifyClaudeUserText(t)
+					if !ok {
+						continue
+					}
+					if role != "user" {
+						blockRole = role
+					}
+					t = s
 				}
 				if strings.TrimSpace(t) != "" {
 					e.Parts = append(e.Parts, textPart("text", t, claudeMaxText))
@@ -374,6 +382,10 @@ func parseClaudeRow(line []byte, off int64) (TranscriptEntry, bool) {
 					IsError: isErr, Orphan: true, Clipped: clipped, sensitive: anySensitive(row.ToolUseResult.FilePath),
 				})
 			}
+		}
+		// A lone notice (an interruption) is a note, not the user's speech.
+		if blockRole != "" && len(e.Parts) == 1 && e.Parts[0].Kind == "text" {
+			e.Role = blockRole
 		}
 	}
 	if len(e.Parts) == 0 {
@@ -416,36 +428,112 @@ func clampText(s string, limit int) (string, bool) {
 	return s[:i], true
 }
 
-// classifyClaudeUserText sorts a string user content. Claude Code also uses
-// the user role to carry plumbing: reminders addressed to the model are
-// dropped, a slash command shows as the command, its output and background
-// task notices become notes.
+// classifyClaudeUserText sorts a user text. Claude Code also uses the user
+// role to carry plumbing: reminders addressed to the model are dropped, a
+// slash command or a ! command shows as typed, their output, background task
+// notices and injected prompts become notes. The envelopes are the ones the
+// VS Code extension's chat recognises; scripts/claude-chat-tags.sh compares
+// the two lists.
 func classifyClaudeUserText(text string) (role, out string, ok bool) {
 	t := strings.TrimLeft(text, " \t\r\n")
-	envelope := func(tag string) bool { return strings.HasPrefix(t, "<"+tag+">") }
-	switch {
-	case envelope("system-reminder"), envelope("local-command-caveat"):
+	if s, ok := claudeInterrupts[strings.TrimSpace(t)]; ok {
+		return "note", s, true
+	}
+	tag, _ := claudeEnvelope(t)
+	switch tag {
+	case "system-reminder", "local-command-caveat":
 		return "", "", false
-	case envelope("command-name"), envelope("command-message"):
+	case "command-name", "command-message":
 		line := strings.TrimSpace(xmlInner(t, "command-name") + " " + xmlInner(t, "command-args"))
 		return "user", line, line != ""
-	case envelope("local-command-stdout"):
-		s := xmlInner(t, "local-command-stdout")
+	case "local-command-stdout", "local-command-stderr":
+		s := joinOutputs(t, "local-command-stdout", "local-command-stderr")
 		return "note", s, s != ""
-	case envelope("bash-input"):
-		// A command run with ! shows as the user typed it.
+	case "bash-input":
 		s := xmlInner(t, "bash-input")
 		return "user", "! " + s, s != ""
-	case envelope("bash-stdout"), envelope("bash-stderr"):
-		s := strings.TrimSpace(xmlInner(t, "bash-stdout") + "\n" + xmlInner(t, "bash-stderr"))
+	case "bash-stdout", "bash-stderr":
+		s := joinOutputs(t, "bash-stdout", "bash-stderr")
+		if code := xmlInner(t, "bash-exit-code"); code != "" && code != "0" {
+			s = strings.TrimSpace(s + "\nExit code " + code)
+		}
 		return "note", s, s != ""
-	case envelope("task-notification"):
-		s := xmlInner(t, "summary")
+	case "task-notification":
+		s := unescapeXML(xmlInner(t, "summary"))
 		return "note", s, s != ""
+	}
+	if label, ok := claudeNoticeLabels[tag]; ok {
+		s := label
+		if body := unescapeXML(xmlInner(t, tag)); body != "" && !strings.HasPrefix(tag, "artifact-") && tag != "cowritten-artifact-html" {
+			s += ": " + body
+		}
+		return "note", s, true
 	}
 	text = stripPastedTags(text)
 	return "user", text, strings.TrimSpace(text) != ""
 }
+
+// claudeInterrupts are the texts Claude Code writes as the user when the
+// user stops a turn, and the note shown instead.
+var claudeInterrupts = map[string]string{
+	"[Request interrupted by user]":              "Interrupted",
+	"[Request interrupted by user for tool use]": "Tool interrupted",
+}
+
+// claudeNoticeLabels are envelopes around a prompt Claude Code injects as the
+// user (a teammate's or another session's message, an autonomous tick, an
+// MCP update, a hook's output): a note with a label, the extension's own
+// where it has one, then the body. An artifact envelope carries a file or
+// instructions for the model, so its note is the label alone.
+var claudeNoticeLabels = map[string]string{
+	"teammate-message":            "Teammate message",
+	"tick":                        "Autonomous prompt",
+	"mcp-resource-update":         "MCP resource update",
+	"mcp-polling-update":          "MCP polling update",
+	"agent-message":               "Agent message",
+	"cross-session-message":       "Message from another session",
+	"coordinator-relay":           "Coordinator message",
+	"channel":                     "Channel message",
+	"remote-review":               "Remote review",
+	"slack-ping":                  "Slack message",
+	"slack-tag-message":           "Slack message",
+	"fetched-web-content":         "Fetched web content",
+	"user-prompt-submit-hook":     "Hook output",
+	"post-tool-use-hook":          "Hook output",
+	"artifact-type-instructions":  "Artifact instructions",
+	"artifact-file-content":       "Artifact file",
+	"artifact-origin-notes":       "Artifact notes",
+	"artifact-stored-declaration": "Artifact saved",
+	"cowritten-artifact-html":     "Artifact page",
+}
+
+// claudeEnvelopeRe matches the opening tag a plumbing text starts with; a
+// tag may carry attributes (<teammate-message teammate_id="…">).
+var claudeEnvelopeRe = regexp.MustCompile(`^<([a-z][a-z0-9_-]*)(?:[ \t][^>\r\n]*)?>`)
+
+// claudeEnvelope returns the name of the tag t starts with, and whether it
+// starts with one.
+func claudeEnvelope(t string) (string, bool) {
+	m := claudeEnvelopeRe.FindStringSubmatch(t)
+	if m == nil {
+		return "", false
+	}
+	return m[1], true
+}
+
+// joinOutputs joins the output and error output of a command, leaving out
+// an empty one, with its XML escapes undone.
+func joinOutputs(t, out, errOut string) string {
+	s := unescapeXML(xmlInner(t, out))
+	if e := unescapeXML(xmlInner(t, errOut)); e != "" {
+		s = strings.TrimSpace(s + "\n" + e)
+	}
+	return s
+}
+
+// unescapeXML undoes the escapes Claude Code applies to text inside its
+// envelopes (a command's output, a task summary).
+var unescapeXML = strings.NewReplacer("&lt;", "<", "&gt;", ">", "&amp;", "&").Replace
 
 // stripPastedTags removes the tags around an expanded paste, and the line
 // breaks left at either end of the message.
@@ -461,9 +549,20 @@ func stripPastedTags(text string) string {
 // <pasted_content id="5edd"> … </pasted_content id="5edd">.
 var pastedTagRe = regexp.MustCompile(`</?pasted_content id="[^"<>]*">\n?`)
 
-// xmlInner returns the trimmed text of the first <tag>…</tag> in s.
+// xmlInner returns the trimmed text of the first <tag>…</tag> in s; the
+// opening tag may carry attributes.
 func xmlInner(s, tag string) string {
-	_, rest, ok := strings.Cut(s, "<"+tag+">")
+	for {
+		i := strings.Index(s, "<"+tag)
+		if i < 0 {
+			return ""
+		}
+		s = s[i+1+len(tag):]
+		if s != "" && (s[0] == '>' || s[0] == ' ' || s[0] == '\t') {
+			break
+		}
+	}
+	_, rest, ok := strings.Cut(s, ">")
 	if !ok {
 		return ""
 	}
