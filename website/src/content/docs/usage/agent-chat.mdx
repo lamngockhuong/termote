@@ -176,17 +176,29 @@ own list would otherwise open on that word and take the Enter that submits it. E
   then `~/.agents/skills`.
 - `system`: the skills Codex ships with (`skills/.system/` in its home), then
   `/etc/codex/skills` on Linux and macOS.
+- `plugin`: the skills of the Codex plugins turned on in `config.toml` in Codex's home and
+  installed under its `plugins/cache/`, named `$<plugin>:<skill>` as Codex names them (for
+  example `$atk:review`). This follows how Codex 0.164.0 loads plugins: an entry with
+  `enabled = false`, `[plugins._default] enabled = false` for an entry that does not say,
+  `[features] plugins = false`, or a `config.toml` Codex cannot read turns them off.
 
-A name found twice keeps the first one. The same rules as for Claude Code apply: only names and
+A name found twice keeps the first one, except a plugin's: another skill with the same name is
+left out. The same rules as for Claude Code apply: only names and
 descriptions are read, a skill installed as a symlink is listed only when it leads into one of
 these folders or the project, and a skill marked `user-invocable: false` is left out.
 
 Codex may still run a different set than the list shows:
 
-- Skills of Codex plugins, and skills turned off in Codex's `config.toml`, are not looked at.
+- Skills turned off in Codex's `config.toml` (`[[skills.config]]`) are not looked at.
+- Plugins from the `openai-*` marketplaces (curated, bundled, remote) are left out, since Codex
+  loads them only for some sign-ins, and so are plugins turned on in a project's
+  `.codex/config.toml` or with `-c`.
+- A plugin or skill whose name has a character other than letters, digits, `_`, `-` and `:`
+  is left out, since it cannot follow `$`.
 - Codex reads a project's `.codex/skills/` only in a project you have trusted; the list shows
   them either way.
-- Only `skills/<name>/SKILL.md` one level down is read; Codex also finds skills nested deeper.
+- Only `skills/<name>/SKILL.md` one level down is read; Codex also finds skills nested deeper,
+  in a plugin's skill folders too.
 
 Requirements:
 

@@ -173,17 +173,27 @@ Mỗi dòng ghi skill lấy từ đâu:
   trong pane), rồi tới `~/.agents/skills`.
 - `system`: skill đi kèm Codex (`skills/.system/` trong thư mục của Codex), rồi tới
   `/etc/codex/skills` trên Linux và macOS.
+- `plugin`: skill của các plugin Codex được bật trong `config.toml` ở thư mục của Codex và đã cài
+  trong `plugins/cache/` của nó, mang tên `$<plugin>:<skill>` như Codex đặt (ví dụ `$atk:review`).
+  Termote làm theo cách Codex 0.164.0 nạp plugin: plugin bị tắt khi mục của nó ghi
+  `enabled = false`, khi mục không ghi gì mà `[plugins._default] enabled = false`, khi có
+  `[features] plugins = false`, hoặc khi Codex không đọc được `config.toml`.
 
-Hai skill trùng tên thì giữ cái gặp trước. Quy tắc đọc giống Claude Code: Termote chỉ đọc tên và
+Hai skill trùng tên thì giữ cái gặp trước, trừ skill của plugin: skill khác cùng tên với nó bị bỏ. Quy tắc đọc giống Claude Code: Termote chỉ đọc tên và
 mô tả; skill cài dưới dạng liên kết tượng trưng chỉ được liệt kê khi liên kết trỏ vào một trong
 các thư mục trên hoặc vào dự án; skill có `user-invocable: false` bị bỏ qua.
 
 Bộ skill Codex thực sự chạy có thể khác danh sách:
 
-- Termote không xét skill của plugin Codex, cũng không xét skill bị tắt trong `config.toml` của
-  Codex.
+- Termote không xét skill bị tắt trong `config.toml` của Codex (`[[skills.config]]`).
+- Plugin từ các kho `openai-*` của OpenAI (kho chọn lọc, plugin đi kèm, plugin tải từ máy chủ)
+  không được liệt kê, vì Codex chỉ nạp chúng với một số kiểu đăng nhập; plugin bật trong
+  `.codex/config.toml` của dự án hoặc bằng `-c` cũng vậy.
+- Plugin hay skill có tên chứa ký tự ngoài chữ, số, `_`, `-` và `:` không được liệt kê, vì tên
+  đó không gõ được sau `$`.
 - Codex chỉ nạp `.codex/skills/` của dự án bạn đã tin cậy; danh sách thì vẫn hiện chúng.
-- Termote chỉ đọc `skills/<name>/SKILL.md` ở một tầng; Codex tìm được cả skill nằm sâu hơn.
+- Termote chỉ đọc `skills/<name>/SKILL.md` ở một tầng; Codex tìm được cả skill nằm sâu hơn, kể cả
+  trong thư mục skill của plugin.
 
 Yêu cầu:
 
