@@ -432,6 +432,13 @@ func classifyClaudeUserText(text string) (role, out string, ok bool) {
 	case envelope("local-command-stdout"):
 		s := xmlInner(t, "local-command-stdout")
 		return "note", s, s != ""
+	case envelope("bash-input"):
+		// A command run with ! shows as the user typed it.
+		s := xmlInner(t, "bash-input")
+		return "user", "! " + s, s != ""
+	case envelope("bash-stdout"), envelope("bash-stderr"):
+		s := strings.TrimSpace(xmlInner(t, "bash-stdout") + "\n" + xmlInner(t, "bash-stderr"))
+		return "note", s, s != ""
 	case envelope("task-notification"):
 		s := xmlInner(t, "summary")
 		return "note", s, s != ""

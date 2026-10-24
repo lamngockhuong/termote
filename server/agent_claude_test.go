@@ -446,6 +446,18 @@ func TestClassifyClaudeUserText(t *testing.T) {
 	if _, s, _ := classifyClaudeUserText("\n\n<pasted_content id=\"5edd\">\nCount these\nrow 1\n</pasted_content id=\"5edd\">\n"); s != "Count these\nrow 1" {
 		t.Errorf("pasted content = %q", s)
 	}
+	if role, s, ok := classifyClaudeUserText("<bash-input>rm -rf build</bash-input>"); !ok || role != "user" || s != "! rm -rf build" {
+		t.Errorf("bash input = %q %q %v", role, s, ok)
+	}
+	if role, s, ok := classifyClaudeUserText("<bash-stdout>(Bash completed with no output)</bash-stdout><bash-stderr></bash-stderr>"); !ok || role != "note" || s != "(Bash completed with no output)" {
+		t.Errorf("bash stdout = %q %q %v", role, s, ok)
+	}
+	if role, s, ok := classifyClaudeUserText("<bash-stdout></bash-stdout><bash-stderr>ls: no such file</bash-stderr>"); !ok || role != "note" || s != "ls: no such file" {
+		t.Errorf("bash stderr = %q %q %v", role, s, ok)
+	}
+	if _, _, ok := classifyClaudeUserText("<bash-input></bash-input>"); ok {
+		t.Error("empty bash input accepted")
+	}
 	if role, s, ok := classifyClaudeUserText("see <system-reminder> in prose"); !ok || role != "user" || s == "" {
 		t.Error("a tag inside prose is speech")
 	}
