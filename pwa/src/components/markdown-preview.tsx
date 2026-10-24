@@ -1,4 +1,4 @@
-import { Copy, ImageIcon } from 'lucide-react'
+import { ImageIcon } from 'lucide-react'
 import {
   type ComponentProps,
   createContext,
@@ -8,29 +8,21 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
-  useState,
 } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { useTheme } from '../contexts/theme-context'
 import { useLongPress } from '../hooks/use-long-press'
-import { highlightLang, type Token } from '../utils/highlight'
-import { type LanguageId, languageForName } from '../utils/highlight-langs'
 import {
   findAnchor,
-  isMermaidInfo,
   type LinkPath,
   rehypeHeadingIds,
   rehypeMermaidIndex,
   resolveLink,
   splitFrontMatter,
-  textOf,
 } from '../utils/markdown-links'
 import { detailsBlocks, htmlAsText } from '../utils/markdown-safety'
 import { exportName } from '../utils/mermaid-export'
-import { codeText, splitLines, tokenStyle } from './code-block'
-import { type FrameParts, MermaidBlock } from './mermaid-block'
-import { IconButton } from './ui/button'
+import { CodeFence, FencedCode } from './fenced-code'
 
 // A Markdown file of the Files (or Changes) view, rendered. The file is
 // untrusted like an agent's text: raw HTML and MDX JSX show as text (only a
@@ -185,136 +177,16 @@ function MdImage({ src, alt }: ComponentProps<'img'>) {
   return <span className="text-fg-muted">[image: {alt || 'unavailable'}]</span>
 }
 
-// A fenced code block: highlighted in its language once the worker answers,
-// plain until then and whenever it does not. A Mermaid block adds its
-// buttons, a line under the bar, and its diagram in place of the code.
-function FencedCode({
-  text,
-  lang,
-  label,
-  toolbar,
-  note,
-  body,
-}: {
-  text: string
-  lang?: LanguageId
-  label: string
-} & FrameParts) {
-  const { wrap, notify } = useContext(PreviewContext)
-  const { resolvedTheme } = useTheme()
-  const lines = useMemo(() => splitLines(text), [text])
-  const [tokens, setTokens] = useState<Token[][] | null>(null)
-
-  useEffect(() => {
-    // Aborted once the block is gone or shows other text: a request still
-    // waiting for the worker is dropped
-    const ac = new AbortController()
-    setTokens(null)
-    highlightLang(text, lang, resolvedTheme, ac.signal).then((t) => {
-      if (!ac.signal.aborted) setTokens(t)
-    })
-    return () => ac.abort()
-  }, [text, lang, resolvedTheme])
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(text)
-      notify('Code copied')
-    } catch {
-      notify('Could not copy the code')
-    }
-  }
-
-  return (
-    <div
-      className="my-3 overflow-hidden rounded-control border border-border bg-bg"
-      data-testid="fenced-code"
-    >
-      <div className="flex items-center justify-between border-b border-border bg-surface pl-3 text-[11px] text-fg-muted">
-        <span className="truncate font-term">{label}</span>
-        <div className="flex shrink-0 items-center">
-          {toolbar}
-          <IconButton
-            size="sm"
-            onClick={copy}
-            aria-label="Copy code"
-            title="Copy code"
-          >
-            <Copy size={14} aria-hidden="true" />
-          </IconButton>
-        </div>
-      </div>
-      {note && (
-        <p className="border-b border-border px-3 py-1.5 text-[12px] text-fg-muted">
-          {note}
-        </p>
-      )}
-      {body ?? (
-        <pre className="overflow-x-auto p-3 font-term text-[12px] leading-[1.6] text-fg">
-          <code className={`block ${codeText(wrap)}`}>
-            {lines.map((line, i) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: a line is its number
-              <span key={i}>
-                {tokens?.[i]
-                  ? tokens[i].map((t, j) => (
-                      // biome-ignore lint/suspicious/noArrayIndexKey: tokens of one line never move
-                      <span key={j} style={tokenStyle(t)}>
-                        {t[0]}
-                      </span>
-                    ))
-                  : line}
-                {i < lines.length - 1 ? '\n' : ''}
-              </span>
-            ))}
-          </code>
-        </pre>
-      )}
-    </div>
-  )
-}
-
-interface HastElement {
-  type: string
-  properties: { className?: string[]; dataMermaidIndex?: number }
-  children: HastElement[]
-}
-
-// react-markdown hands a code block as <pre><code class="language-x">, the
-// code element always there and always alone
+// A code block, or a Mermaid diagram, of the file
 function MdPre({ node }: { node?: unknown }) {
-  const { scroller, path, notify } = useContext(PreviewContext)
-  const code = (node as HastElement).children[0]
-  const info =
-    (code.properties.className ?? [])
-      .find((c) => c.startsWith('language-'))
-      ?.slice('language-'.length) ?? ''
-  const text = textOf(code).replace(/\n$/, '')
-  if (isMermaidInfo(info)) {
-    // Set by rehypeMermaidIndex for every Mermaid block
-    const index = code.properties.dataMermaidIndex as number
-    return (
-      <MermaidBlock
-        text={text}
-        index={index}
-        scrollRoot={scroller}
-        name={exportName(path, index)}
-        notify={notify}
-        frame={(parts) => (
-          <FencedCode
-            text={text}
-            lang={languageForName(info)}
-            label={info}
-            {...parts}
-          />
-        )}
-      />
-    )
-  }
+  const { scroller, path, wrap, notify } = useContext(PreviewContext)
   return (
-    <FencedCode
-      text={text}
-      lang={languageForName(info)}
-      label={info || 'text'}
+    <CodeFence
+      node={node}
+      wrap={wrap}
+      notify={notify}
+      scrollRoot={scroller}
+      exportName={(index) => exportName(path, index)}
     />
   )
 }
@@ -436,7 +308,13 @@ export default function MarkdownPreview({
       >
         <div className={PROSE}>
           {frontMatter !== undefined && (
-            <FencedCode text={frontMatter} lang="yaml" label="front matter" />
+            <FencedCode
+              text={frontMatter}
+              lang="yaml"
+              label="front matter"
+              wrap={wrap}
+              notify={notify}
+            />
           )}
           <Markdown
             remarkPlugins={[remarkGfm, detailsBlocks, htmlAsText]}

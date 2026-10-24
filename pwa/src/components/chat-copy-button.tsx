@@ -9,7 +9,7 @@ export function CopyButton({
   label,
   className = '',
 }: {
-  // Read on click: a code block's text is taken from the rendered element
+  // Read on click
   text: () => string
   label: string
   className?: string

@@ -476,7 +476,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   process and session re-checked between pastes. If a step fails after the first paste, the
   box is cleared with one `C-c` only when the same idle agent shows nothing but what this
   request pasted; otherwise 409 `partial_paste` and nothing is touched.
-  Markdown images in the Chat view never load (shown as links), and raw HTML is not rendered.
+  Markdown images in the Chat view never load (shown as links), and raw HTML is not rendered;
+  its code blocks and Mermaid diagrams use the preview's (see Mermaid diagrams).
   A tool call carries `detail` for its card: the model's description, a Bash/Codex command whole
   (8 KiB) and an Edit/MultiEdit/Write's old and new text (16 KiB per call); the edits of a file
   `isSensitive` names are left out (`hidden`), as its diff is in Changes. A view-only client also
@@ -640,7 +641,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   stays text, so a crafted file cannot stall the page. Anything else, an unclosed `<details>`
   included, stays text.
 - **Mermaid diagrams** (`pwa/src/utils/mermaid-render.ts`, `mermaid-worker.ts`,
-  `mermaid-block.tsx`): a `mermaid` fenced block of a previewed Markdown file is drawn in the PWA
+  `mermaid-block.tsx`, through `fenced-code.tsx`): a `mermaid` fenced block of a previewed Markdown
+  file or of a Chat view message (agent text, as untrusted as a file) is drawn in the PWA
   only, by Pele (pinned to an exact version) in a module worker, and shown as an `<img>` whose
   `src` is a `data:image/svg+xml` URL, so no script runs, no link navigates and nothing it names
   loads; the SVG string never enters the DOM, and nothing is added to `body`. The worker gets the

@@ -1,11 +1,20 @@
 import { ChevronRight, ImageIcon } from 'lucide-react'
-import { type ComponentProps, memo, type ReactNode, useRef } from 'react'
+import {
+  type ComponentProps,
+  createContext,
+  memo,
+  type ReactNode,
+  useContext,
+} from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { TranscriptEntry, TranscriptPart } from '../hooks/use-mux-api'
+import { rehypeMermaidIndex } from '../utils/markdown-links'
 import { htmlAsText, safeUrl } from '../utils/markdown-safety'
+import { exportName } from '../utils/mermaid-export'
 import { CopyButton } from './chat-copy-button'
 import { ToolCard, toolDot } from './chat-tool-card'
+import { CodeFence } from './fenced-code'
 
 // One entry of an agent's transcript. Agent text is untrusted (a prompt
 // injection can write anything), so markdown is rendered without raw HTML,
@@ -46,30 +55,25 @@ function MdImage({ src, alt }: ComponentProps<'img'>) {
   )
 }
 
-// A code block with a copy button over its corner. On a touch screen the
-// button grows to 44px, so MarkdownText pads the block to hold it even when
-// the code is one line.
-function MdPre({
-  children,
-  node: _node,
-  ...rest
-}: ComponentProps<'pre'> & {
-  node?: unknown
-}) {
-  const ref = useRef<HTMLPreElement>(null)
+// What a message's code blocks need from the Chat view around it: where the
+// list scrolls (a diagram is drawn once near it) and its notices
+export const ChatMarkdownContext = createContext<{
+  scrollRoot: () => Element | null
+  notify: (message: string) => void
+}>({ scrollRoot: () => null, notify: () => {} })
+
+// A code block, or a Mermaid diagram. Copy reports on the button itself.
+function MdPre({ node }: { node?: unknown }) {
+  const { scrollRoot, notify } = useContext(ChatMarkdownContext)
   return (
-    <div className="relative">
-      <pre ref={ref} {...rest}>
-        {children}
-      </pre>
-      <CopyButton
-        // The ref is set before any click can reach the button
-        /* v8 ignore next */
-        text={() => ref.current?.textContent ?? ''}
-        label="Copy code"
-        className="absolute top-0.5 right-0.5 bg-surface-raised/80"
-      />
-    </div>
+    <CodeFence
+      node={node}
+      wrap={false}
+      notify={notify}
+      scrollRoot={scrollRoot}
+      exportName={(index) => exportName('chat', index)}
+      copyButton={(text) => <CopyButton text={() => text} label="Copy code" />}
+    />
   )
 }
 
@@ -77,9 +81,10 @@ const MD_COMPONENTS = { a: MdLink, img: MdImage, pre: MdPre }
 
 export function MarkdownText({ text }: { text: string }) {
   return (
-    <div className="min-w-0 break-words leading-relaxed [&_:not(pre)>code]:rounded [&_:not(pre)>code]:box-decoration-clone [&_:not(pre)>code]:border [&_:not(pre)>code]:border-border [&_:not(pre)>code]:bg-surface-raised [&_:not(pre)>code]:px-1 [&_:not(pre)>code]:font-mono [&_:not(pre)>code]:text-[0.88em] [&_h1]:mt-3 [&_h1]:font-semibold [&_h2]:mt-3 [&_h2]:font-semibold [&_h3]:mt-2 [&_h3]:font-semibold [&_li]:ml-5 [&_li+li]:mt-1 [&_ol]:my-2 [&_ol]:list-decimal [&_p+p]:mt-2 [&_pre]:my-2 [&_pre]:overflow-x-auto [&_pre]:rounded-control [&_pre]:border [&_pre]:border-border [&_pre]:bg-surface-raised [&_pre]:p-2 [&_pre]:pr-10 pointer-coarse:[&_pre]:py-3.5 pointer-coarse:[&_pre]:pr-12 [&_pre]:font-mono [&_pre]:text-[12px] [&_pre]:leading-[1.6] [&_ul]:my-2 [&_table]:block [&_table]:overflow-x-auto [&_td]:border [&_td]:border-border [&_td]:px-1.5 [&_th]:border [&_th]:border-border [&_th]:px-1.5 [&_ul]:list-disc">
+    <div className="min-w-0 break-words leading-relaxed [&_:not(pre)>code]:rounded [&_:not(pre)>code]:box-decoration-clone [&_:not(pre)>code]:border [&_:not(pre)>code]:border-border [&_:not(pre)>code]:bg-surface-raised [&_:not(pre)>code]:px-1 [&_:not(pre)>code]:font-mono [&_:not(pre)>code]:text-[0.88em] [&_h1]:mt-3 [&_h1]:font-semibold [&_h2]:mt-3 [&_h2]:font-semibold [&_h3]:mt-2 [&_h3]:font-semibold [&_li]:ml-5 [&_li+li]:mt-1 [&_ol]:my-2 [&_ol]:list-decimal [&_p+p]:mt-2 [&_ul]:my-2 [&_table]:block [&_table]:overflow-x-auto [&_td]:border [&_td]:border-border [&_td]:px-1.5 [&_th]:border [&_th]:border-border [&_th]:px-1.5 [&_ul]:list-disc">
       <Markdown
         remarkPlugins={[remarkGfm, htmlAsText]}
+        rehypePlugins={[rehypeMermaidIndex]}
         components={MD_COMPONENTS}
       >
         {text}

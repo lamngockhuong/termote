@@ -89,6 +89,7 @@ and file families: [`codebase-summary.md`](codebase-summary.md).
 | `pwa/src/utils/file-name.ts`                      | Name checks of New file and Rename, the base name selected    |
 | `pwa/src/utils/download-file.ts`                  | Download: preflight, refusal messages, iOS share sheet        |
 | `pwa/src/components/markdown-preview.tsx`         | Markdown file rendered in Files/Changes (links, code blocks)  |
+| `pwa/src/components/fenced-code.tsx`              | Code block of rendered Markdown (preview, Chat): highlight    |
 | `pwa/src/components/mermaid-block.tsx`            | A mermaid block: the diagram image, Show source, fallback     |
 | `pwa/src/utils/mermaid-render.ts`                 | Diagram → `data:` SVG image: worker queue, timeouts, cache    |
 | `pwa/src/utils/mermaid-worker.ts`                 | Module worker drawing a diagram with Pele, fixed options      |

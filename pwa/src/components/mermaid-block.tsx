@@ -18,8 +18,8 @@ import {
 import { MermaidExport } from './mermaid-export'
 import { IconButton } from './ui/button'
 
-// What a Mermaid block puts in the frame of a code block (the preview's
-// FencedCode): buttons before Copy, a line under the bar, and the diagram in
+// What a Mermaid block puts in the frame of a code block (FencedCode):
+// buttons before Copy, a line under the bar, and the diagram in
 // place of the code.
 export interface FrameParts {
   toolbar?: ReactNode
@@ -64,9 +64,9 @@ function useNearViewport(
 interface Props {
   // The block's source
   text: string
-  // Its number among the file's Mermaid blocks, from 1
+  // Its number among the Mermaid blocks of its file or message, from 1
   index: number
-  // The preview's scroll box
+  // The scroll box it is shown in (the preview, the Chat view's list)
   scrollRoot: () => Element | null
   frame: (parts: FrameParts) => ReactNode
   // The file name an exported diagram is saved as, without its extension

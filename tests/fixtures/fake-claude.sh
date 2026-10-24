@@ -105,6 +105,7 @@ if [ ! -s "$journal" ]; then
   entry assistant '[{"type":"text","text":"Running the tests."},{"type":"tool_use","id":"toolu_seed","name":"Bash","input":{"command":"npm test","description":"run tests"}}]'
   entry user '[{"type":"tool_result","tool_use_id":"toolu_seed","content":"1 passed"}]'
   say $'The build is **fixed**:\n\n- `npm test` passes'
+  say $'How it runs:\n\n```mermaid\nflowchart LR\n  A[Test] --> B[Build]\n```\n\n```sh\nnpm test\n```'
 fi
 
 # Drawing. Rules in the recordings are 100 columns; they are cut or extended
