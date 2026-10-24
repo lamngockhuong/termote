@@ -326,17 +326,12 @@ func parseClaudeRow(line []byte, off int64) (TranscriptEntry, bool) {
 	if e.ID == "" {
 		e.ID = fmt.Sprintf("line-%d", off)
 	}
-	switch c := row.Message.Content.(type) {
-	case string:
-		role, text, ok := classifyClaudeUserText(c)
-		if !ok {
-			return TranscriptEntry{}, false
-		}
-		if row.Type == "user" {
-			e.Role = role
-		}
-		e.Parts = append(e.Parts, textPart("text", text, claudeMaxText))
-	case []any:
+	content := row.Message.Content
+	if s, ok := content.(string); ok {
+		// A string message reads as a single text block.
+		content = []any{map[string]any{"type": "text", "text": s}}
+	}
+	if c, ok := content.([]any); ok {
 		var blockRole string
 		for _, item := range c {
 			b, _ := item.(map[string]any)
@@ -346,8 +341,8 @@ func parseClaudeRow(line []byte, off int64) (TranscriptEntry, bool) {
 			case "text":
 				t := jsonStr(b["text"])
 				if row.Type == "user" {
-					// A message sent with images, or an interruption,
-					// arrives as blocks sorted like a string message.
+					// Only the user role carries Claude Code's envelopes;
+					// the model's own words are shown as written.
 					role, s, ok := classifyClaudeUserText(t)
 					if !ok {
 						continue
@@ -383,7 +378,8 @@ func parseClaudeRow(line []byte, off int64) (TranscriptEntry, bool) {
 				})
 			}
 		}
-		// A lone notice (an interruption) is a note, not the user's speech.
+		// A lone notice (a command's output, an interruption) is a note,
+		// not the user's speech.
 		if blockRole != "" && len(e.Parts) == 1 && e.Parts[0].Kind == "text" {
 			e.Role = blockRole
 		}
@@ -439,7 +435,7 @@ func classifyClaudeUserText(text string) (role, out string, ok bool) {
 	if s, ok := claudeInterrupts[strings.TrimSpace(t)]; ok {
 		return "note", s, true
 	}
-	tag, _ := claudeEnvelope(t)
+	tag := claudeEnvelope(t)
 	switch tag {
 	case "system-reminder", "local-command-caveat":
 		return "", "", false
@@ -462,9 +458,9 @@ func classifyClaudeUserText(text string) (role, out string, ok bool) {
 		s := unescapeXML(xmlInner(t, "summary"))
 		return "note", s, s != ""
 	}
-	if label, ok := claudeNoticeLabels[tag]; ok {
-		s := label
-		if body := unescapeXML(xmlInner(t, tag)); body != "" && !strings.HasPrefix(tag, "artifact-") && tag != "cowritten-artifact-html" {
+	if n, ok := claudeNotices[tag]; ok {
+		s := n.label
+		if body := unescapeXML(xmlInner(t, tag)); body != "" && !n.labelOnly {
 			s += ": " + body
 		}
 		return "note", s, true
@@ -480,45 +476,49 @@ var claudeInterrupts = map[string]string{
 	"[Request interrupted by user for tool use]": "Tool interrupted",
 }
 
-// claudeNoticeLabels are envelopes around a prompt Claude Code injects as the
+// claudeNotices are envelopes around a prompt Claude Code injects as the
 // user (a teammate's or another session's message, an autonomous tick, an
 // MCP update, a hook's output): a note with a label, the extension's own
 // where it has one, then the body. An artifact envelope carries a file or
 // instructions for the model, so its note is the label alone.
-var claudeNoticeLabels = map[string]string{
-	"teammate-message":            "Teammate message",
-	"tick":                        "Autonomous prompt",
-	"mcp-resource-update":         "MCP resource update",
-	"mcp-polling-update":          "MCP polling update",
-	"agent-message":               "Agent message",
-	"cross-session-message":       "Message from another session",
-	"coordinator-relay":           "Coordinator message",
-	"channel":                     "Channel message",
-	"remote-review":               "Remote review",
-	"slack-ping":                  "Slack message",
-	"slack-tag-message":           "Slack message",
-	"fetched-web-content":         "Fetched web content",
-	"user-prompt-submit-hook":     "Hook output",
-	"post-tool-use-hook":          "Hook output",
-	"artifact-type-instructions":  "Artifact instructions",
-	"artifact-file-content":       "Artifact file",
-	"artifact-origin-notes":       "Artifact notes",
-	"artifact-stored-declaration": "Artifact saved",
-	"cowritten-artifact-html":     "Artifact page",
+var claudeNotices = map[string]struct {
+	label     string
+	labelOnly bool
+}{
+	"teammate-message":            {label: "Teammate message"},
+	"tick":                        {label: "Autonomous prompt"},
+	"mcp-resource-update":         {label: "MCP resource update"},
+	"mcp-polling-update":          {label: "MCP polling update"},
+	"agent-message":               {label: "Agent message"},
+	"cross-session-message":       {label: "Message from another session"},
+	"coordinator-relay":           {label: "Coordinator message"},
+	"channel":                     {label: "Channel message"},
+	"remote-review":               {label: "Remote review"},
+	"slack-ping":                  {label: "Slack message"},
+	"slack-tag-message":           {label: "Slack message"},
+	"fetched-web-content":         {label: "Fetched web content"},
+	"user-prompt-submit-hook":     {label: "Hook output"},
+	"post-tool-use-hook":          {label: "Hook output"},
+	"artifact-type-instructions":  {label: "Artifact instructions", labelOnly: true},
+	"artifact-file-content":       {label: "Artifact file", labelOnly: true},
+	"artifact-origin-notes":       {label: "Artifact notes", labelOnly: true},
+	"artifact-stored-declaration": {label: "Artifact saved", labelOnly: true},
+	"cowritten-artifact-html":     {label: "Artifact page", labelOnly: true},
 }
 
 // claudeEnvelopeRe matches the opening tag a plumbing text starts with; a
 // tag may carry attributes (<teammate-message teammate_id="…">).
 var claudeEnvelopeRe = regexp.MustCompile(`^<([a-z][a-z0-9_-]*)(?:[ \t][^>\r\n]*)?>`)
 
-// claudeEnvelope returns the name of the tag t starts with, and whether it
-// starts with one.
-func claudeEnvelope(t string) (string, bool) {
-	m := claudeEnvelopeRe.FindStringSubmatch(t)
-	if m == nil {
-		return "", false
+// claudeEnvelope returns the name of the tag t starts with, or "".
+func claudeEnvelope(t string) string {
+	if !strings.HasPrefix(t, "<") {
+		return "" // speech, the common case: no regexp run
 	}
-	return m[1], true
+	if m := claudeEnvelopeRe.FindStringSubmatch(t); m != nil {
+		return m[1]
+	}
+	return ""
 }
 
 // joinOutputs joins the output and error output of a command, leaving out
@@ -552,12 +552,13 @@ var pastedTagRe = regexp.MustCompile(`</?pasted_content id="[^"<>]*">\n?`)
 // xmlInner returns the trimmed text of the first <tag>…</tag> in s; the
 // opening tag may carry attributes.
 func xmlInner(s, tag string) string {
+	open := "<" + tag
 	for {
-		i := strings.Index(s, "<"+tag)
+		i := strings.Index(s, open)
 		if i < 0 {
 			return ""
 		}
-		s = s[i+1+len(tag):]
+		s = s[i+len(open):]
 		if s != "" && (s[0] == '>' || s[0] == ' ' || s[0] == '\t') {
 			break
 		}
@@ -570,8 +571,9 @@ func xmlInner(s, tag string) string {
 	return strings.TrimSpace(inner)
 }
 
-// toolResultText flattens a tool_result content: a string, or a list of
-// blocks of which only the text ones are kept.
+// toolResultText flattens a tool output: a string, or a list of blocks of
+// which those carrying text are kept (Claude Code's text blocks, Codex's
+// input_text and inputText content items).
 func toolResultText(content any) string {
 	switch c := content.(type) {
 	case string:
@@ -580,7 +582,7 @@ func toolResultText(content any) string {
 		var texts []string
 		for _, item := range c {
 			b, _ := item.(map[string]any)
-			if t := jsonStr(b["text"]); jsonStr(b["type"]) == "text" && t != "" {
+			if t := jsonStr(b["text"]); t != "" {
 				texts = append(texts, t)
 			}
 		}

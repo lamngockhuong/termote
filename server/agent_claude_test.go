@@ -482,6 +482,7 @@ func TestClassifyClaudeUserTextEnvelopes(t *testing.T) {
 		{"[Request interrupted by user for tool use]\n", "note", "Tool interrupted"},
 		{"<unknown-tag>hi</unknown-tag>", "user", "<unknown-tag>hi</unknown-tag>"},
 		{"<command-names>x</command-names>", "user", "<command-names>x</command-names>"},
+		{"<3 you", "user", "<3 you"},
 	} {
 		if role, s, ok := classifyClaudeUserText(c.in); !ok || role != c.role || s != c.out {
 			t.Errorf("%q = %q %q %v, want %q %q", c.in, role, s, ok, c.role, c.out)
@@ -497,6 +498,21 @@ func TestClassifyClaudeUserTextEnvelopes(t *testing.T) {
 		if got := xmlInner(s, "a"); got != "" {
 			t.Errorf("unclosed tag %q = %q", s, got)
 		}
+	}
+}
+
+// The model's own words are shown as written, even when they look like an
+// envelope.
+func TestParseClaudeRowAssistantStringKept(t *testing.T) {
+	for _, text := range []string{"<tick>12:00</tick>", "[Request interrupted by user]", "<system-reminder>x</system-reminder>"} {
+		b, _ := json.Marshal(map[string]any{"type": "assistant", "uuid": "a1", "message": map[string]any{"role": "assistant", "content": text}})
+		if e, ok := parseClaudeRow(b, 0); !ok || e.Role != "assistant" || e.Parts[0].Text != text {
+			t.Errorf("%q = %+v %v", text, e, ok)
+		}
+	}
+	b, _ := json.Marshal(map[string]any{"type": "assistant", "uuid": "a2", "message": map[string]any{"role": "assistant", "content": " "}})
+	if _, ok := parseClaudeRow(b, 0); ok {
+		t.Error("blank assistant text accepted")
 	}
 }
 
@@ -525,22 +541,15 @@ func TestClaudeTranscriptEnvelopes(t *testing.T) {
 	raw := map[string]int{}
 	var rows int
 	check := func(text string) {
-		tag, ok := claudeEnvelope(strings.TrimLeft(text, " \t\r\n"))
-		if !ok {
+		tag := claudeEnvelope(strings.TrimLeft(text, " \t\r\n"))
+		if tag == "" {
 			return
 		}
 		if role, s, _ := classifyClaudeUserText(text); role == "user" && strings.HasPrefix(strings.TrimSpace(s), "<"+tag) {
 			raw[tag]++
 		}
 	}
-	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() || filepath.Ext(path) != ".jsonl" {
-			return err
-		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
+	forEachJSONL(t, dir, func(data []byte) {
 		for _, line := range bytes.Split(data, []byte("\n")) {
 			var row claudeRow
 			if json.Unmarshal(line, &row) != nil || row.Type != "user" || row.Message == nil || row.IsMeta || row.IsSidechain {
@@ -558,14 +567,29 @@ func TestClaudeTranscriptEnvelopes(t *testing.T) {
 				}
 			}
 		}
-		return nil
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
 	t.Logf("%d user rows read", rows)
 	for tag, n := range raw {
 		t.Errorf("<%s> shows raw in %d rows: add it to classifyClaudeUserText", tag, n)
+	}
+}
+
+// forEachJSONL calls fn with each .jsonl file under dir, for the tests that
+// read this machine's transcripts.
+func forEachJSONL(t *testing.T, dir string, fn func(data []byte)) {
+	t.Helper()
+	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() || filepath.Ext(path) != ".jsonl" {
+			return err
+		}
+		data, err := os.ReadFile(path)
+		if err == nil {
+			fn(data)
+		}
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 

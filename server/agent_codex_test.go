@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -160,6 +161,42 @@ func TestCodexParseLongLines(t *testing.T) {
 	}
 	if entries, next := parseCodex(tail + cmd[:len(cmd)-1]); len(entries) != 1 || next != int64(len(tail)) {
 		t.Errorf("incomplete long line = %d entries, next %d", len(entries), next)
+	}
+	// A long legacy event (a generated image, a large patch) is clipped as
+	// the matching item, not dropped.
+	img := `{"type":"event_msg","payload":{"type":"image_generation_end","call_id":"g","result":"` + big + "\"}}\n"
+	if entries, _ := parseCodex(img); len(entries) != 1 || entries[0].Parts[0].Tool != "ImageGeneration" || !entries[0].Parts[0].Clipped {
+		t.Errorf("long legacy event = %+v", entries)
+	}
+}
+
+// An MCP call's error is an object, a dynamic tool's a string; a legacy
+// patch may carry success with no status.
+func TestCodexParseErrorsAndSuccess(t *testing.T) {
+	yes, no := true, false
+	rows := []string{
+		codexItemRow(map[string]any{"type": "McpToolCall", "server": "fs", "tool": "read", "status": "failed", "error": map[string]any{"message": "timed out"}}),
+		codexItemRow(map[string]any{"type": "McpToolCall", "server": "fs", "tool": "read", "status": "completed",
+			"result": map[string]any{"content": []any{map[string]any{"type": "text", "text": "ok"}}}, "error": nil}),
+		codexEvent(map[string]any{"type": "patch_apply_end", "success": yes, "changes": map[string]any{"/p/a": map[string]any{"type": "add", "content": "a"}}}),
+		codexEvent(map[string]any{"type": "patch_apply_end", "success": no, "changes": map[string]any{"/p/b": map[string]any{"type": "add", "content": "b"}}}),
+		codexItemRow(map[string]any{"type": "DynamicToolCall", "tool": "x", "error": 42}),
+	}
+	entries, _ := parseCodex(strings.Join(rows, ""))
+	if len(entries) != 5 {
+		t.Fatalf("got %d entries: %+v", len(entries), entries)
+	}
+	if p := entries[0].Parts[0]; p.Tool != "fs.read" || p.Result != "timed out" || !p.IsError {
+		t.Errorf("mcp error object = %+v", p)
+	}
+	if p := entries[1].Parts[0]; p.Result != "ok" || p.IsError {
+		t.Errorf("mcp null error = %+v", p)
+	}
+	if entries[2].Parts[0].IsError || !entries[3].Parts[0].IsError {
+		t.Errorf("patch success = %+v %+v", entries[2].Parts[0], entries[3].Parts[0])
+	}
+	if p := entries[4].Parts[0]; p.IsError || p.Result != "" {
+		t.Errorf("error of an unknown form = %+v", p)
 	}
 }
 
@@ -380,16 +417,9 @@ func TestCodexRolloutItems(t *testing.T) {
 	if dir == "" {
 		t.Skip("TERMOTE_CODEX_SESSIONS not set")
 	}
-	// The events read, then those with nothing to show: read for the status
-	// or the context, a goal change, and raw reasoning (only its summary is
-	// shown).
-	skipped := map[string]bool{
-		"item_completed": true, "user_message": true, "agent_message": true, "turn_aborted": true, "thread_rolled_back": true,
-		"token_count": true, "task_started": true, "task_complete": true, "thread_settings_applied": true,
-		"thread_goal_updated": true, "agent_reasoning_raw_content": true,
-	}
-	for ev := range codexLegacyItems {
-		skipped[ev] = true
+	handled := map[string]bool{}
+	for _, ev := range append(codexEventNames, codexSkippedEvents...) {
+		handled[ev] = true
 	}
 	known := map[string]bool{}
 	for _, typ := range codexItemTypes {
@@ -397,36 +427,25 @@ func TestCodexRolloutItems(t *testing.T) {
 	}
 	unknown := map[string]int{}
 	var rows int
-	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() || filepath.Ext(path) != ".jsonl" {
-			return err
-		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		codexJournal{}.Parse(strings.NewReader(string(data)), 0) // must not panic on a real rollout
-		for _, line := range strings.Split(string(data), "\n") {
+	forEachJSONL(t, dir, func(data []byte) {
+		codexJournal{}.Parse(bytes.NewReader(data), 0) // must not panic on a real rollout
+		for _, line := range bytes.Split(data, []byte("\n")) {
 			var row codexRow
-			if json.Unmarshal([]byte(line), &row) != nil || row.Type != "event_msg" {
+			if json.Unmarshal(line, &row) != nil || row.Type != "event_msg" {
 				continue
 			}
 			rows++
 			switch {
-			case !skipped[row.Payload.Type]:
+			case !handled[row.Payload.Type]:
 				unknown["event "+row.Payload.Type]++
 			case row.Payload.Item != nil && !known[row.Payload.Item.Type]:
 				unknown["item "+row.Payload.Item.Type]++
 			}
 		}
-		return nil
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
 	t.Logf("%d event rows read", rows)
 	for what, n := range unknown {
-		t.Errorf("%s in %d rows: read it in parseCodexRow or skip it here", what, n)
+		t.Errorf("%s in %d rows: read it in parseCodexRow or list it in codexSkippedEvents", what, n)
 	}
 }
 

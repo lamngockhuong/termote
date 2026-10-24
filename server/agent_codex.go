@@ -8,9 +8,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -73,7 +75,21 @@ type codexRow struct {
 		Item    *codexItem `json:"item"`
 		Reason  string     `json:"reason"`    // turn_aborted
 		Turns   int        `json:"num_turns"` // thread_rolled_back
+		// A legacy event's own fields: the item's, at the payload's top.
+		codexLegacyPayload
 	} `json:"payload"`
+}
+
+// codexLegacyPayload is a legacy event (codexLegacyItems): the fields of
+// the item it stands for, plus the call id and an MCP call's invocation.
+type codexLegacyPayload struct {
+	codexItem
+	CallID     string `json:"call_id"`
+	Invocation *struct {
+		Server    string `json:"server"`
+		Tool      string `json:"tool"`
+		Arguments any    `json:"arguments"`
+	} `json:"invocation"`
 }
 
 type codexItem struct {
@@ -103,13 +119,6 @@ type codexItem struct {
 	Query string `json:"query"`
 	// ImageView
 	Path string `json:"path"`
-	// legacy events: call_id for the id; mcp_tool_call_end's invocation
-	CallID     string `json:"call_id"`
-	Invocation *struct {
-		Server    string `json:"server"`
-		Tool      string `json:"tool"`
-		Arguments any    `json:"arguments"`
-	} `json:"invocation"`
 	// Plan
 	Text string `json:"text"`
 	// HookPrompt
@@ -123,7 +132,9 @@ type codexItem struct {
 	Output       any    `json:"output"`
 	ContentItems any    `json:"content_items"`
 	Success      *bool  `json:"success"`
-	Error        string `json:"error"`
+	// Error is a string (DynamicToolCall) or {"message"} (McpToolCall),
+	// decoded generically so either form keeps the row.
+	Error any `json:"error"`
 	// CollabAgentToolCall
 	Prompt         string `json:"prompt"`
 	ReceiverAgents []struct {
@@ -160,10 +171,7 @@ type codexChange struct {
 
 // codexToolNames maps item types to the tool names the Chat view shows, so a
 // Codex command reads like a Claude Code one.
-var codexToolNames = map[string]string{
-	"CommandExecution": "Bash", "FileChange": "Edit", "ImageView": "ViewImage",
-	"WebSearch": "WebSearch", "ImageGeneration": "ImageGeneration",
-}
+var codexToolNames = map[string]string{"CommandExecution": "Bash", "FileChange": "Edit", "ImageView": "ViewImage"}
 
 // codexItemTypeRe reads the item type from the start of a line too long to
 // decode.
@@ -191,10 +199,14 @@ func (codexJournal) Parse(r io.Reader, start int64) ([]TranscriptEntry, int64) {
 		if errors.Is(err, bufio.ErrBufferFull) {
 			lineStart, n := off, int64(len(line))
 			var itemType string
-			if bytes.Contains(line, []byte(`"event_msg"`)) && bytes.Contains(line, []byte(`"item_completed"`)) {
-				itemType = "item"
-				if m := codexItemTypeRe.FindSubmatch(line); m != nil {
-					itemType = string(m[1])
+			if bytes.Contains(line, []byte(`"event_msg"`)) {
+				ev := codexEventIn(line)
+				itemType = codexLegacyItems[ev]
+				if ev == "item_completed" {
+					itemType = "item"
+					if m := codexItemTypeRe.FindSubmatch(line); m != nil {
+						itemType = string(m[1])
+					}
 				}
 			}
 			for errors.Is(err, bufio.ErrBufferFull) {
@@ -219,22 +231,18 @@ func (codexJournal) Parse(r io.Reader, start int64) ([]TranscriptEntry, int64) {
 		if !bytes.Contains(line, []byte(`"event_msg"`)) {
 			continue
 		}
-		switch {
-		case bytes.Contains(line, []byte(`"item_completed"`)),
-			bytes.Contains(line, []byte(`"user_message"`)),
-			bytes.Contains(line, []byte(`"agent_message"`)),
-			bytes.Contains(line, []byte(`"turn_aborted"`)),
-			bytes.Contains(line, []byte(`"thread_rolled_back"`)),
-			codexLegacyRow(line):
-		case bytes.Contains(line, []byte(`"token_count"`)):
+		switch codexEventIn(line) {
+		case "":
+			continue
+		case "token_count":
 			// Context and rate limits of the request just answered: they
 			// go on the entry before, so no entry is added.
 			addCodexTokenCount(entries, line)
 			continue
-		case bytes.Contains(line, []byte(`"task_started"`)):
+		case "task_started":
 			turnStart, turnKnown = lineStart, false
 			continue
-		case bytes.Contains(line, []byte(`"task_complete"`)):
+		case "task_complete":
 			if turnStart >= 0 && !turnKnown && !noted {
 				noted = true
 				entries = append(entries, TranscriptEntry{
@@ -243,8 +251,6 @@ func (codexJournal) Parse(r io.Reader, start int64) ([]TranscriptEntry, int64) {
 				})
 			}
 			turnStart = -1
-			continue
-		default:
 			continue
 		}
 		e, recognised, ok := parseCodexRow(line, lineStart)
@@ -380,20 +386,18 @@ func parseCodexRow(line []byte, off int64) (e TranscriptEntry, recognised, ok bo
 		}
 		e.Parts = []TranscriptPart{textPart("text", row.Payload.Message, claudeMaxText)}
 		return e, true, true
-	case "turn_aborted":
-		e.Role = "note"
+	case "turn_aborted", "thread_rolled_back":
 		text := "Interrupted"
 		if r := row.Payload.Reason; r != "" && r != "interrupted" {
 			text = "Turn ended: " + strings.ReplaceAll(r, "_", " ")
 		}
-		e.Parts = []TranscriptPart{{Kind: "text", Text: text}}
-		return e, true, true
-	case "thread_rolled_back":
-		e.Role = "note"
-		text := fmt.Sprintf("Rolled back %d turns", row.Payload.Turns)
-		if row.Payload.Turns == 1 {
-			text = "Rolled back 1 turn"
+		if row.Payload.Type == "thread_rolled_back" {
+			text = fmt.Sprintf("Rolled back %d turns", row.Payload.Turns)
+			if row.Payload.Turns == 1 {
+				text = "Rolled back 1 turn"
+			}
 		}
+		e.Role = "note"
 		e.Parts = []TranscriptPart{{Kind: "text", Text: text}}
 		return e, true, true
 	case "item_completed":
@@ -402,33 +406,11 @@ func parseCodexRow(line []byte, off int64) (e TranscriptEntry, recognised, ok bo
 		if !legacy {
 			return e, false, false
 		}
-		// A legacy-mode rollout writes these events instead of the item:
-		// the payload has the item's fields, under the event's type.
-		var lr struct {
-			Payload codexItem `json:"payload"`
-		}
-		if json.Unmarshal(line, &lr) != nil {
-			return e, false, false
-		}
-		row.Payload.Item = &lr.Payload
-		row.Payload.Item.Type = itemType
+		row.Payload.Item = row.Payload.codexLegacyPayload.item(itemType)
 	}
 	it := row.Payload.Item
 	if it == nil {
 		return e, false, false
-	}
-	it.ID = cmp.Or(it.ID, it.CallID)
-	if inv := it.Invocation; inv != nil {
-		// mcp_tool_call_end: the call is nested, the result is a Rust
-		// Result ({"Ok": …} or {"Err": "…"}).
-		it.Server, it.Tool, it.Arguments = inv.Server, inv.Tool, inv.Arguments
-		if r, ok := it.Result.(map[string]any); ok {
-			if errText, isErr := r["Err"].(string); isErr {
-				it.Result = map[string]any{"content": errText, "isError": true}
-			} else if okRes, isOk := r["Ok"]; isOk {
-				it.Result = okRes
-			}
-		}
 	}
 	if it.ID != "" {
 		e.ID = it.ID
@@ -489,12 +471,16 @@ func parseCodexRow(line []byte, off int64) (e TranscriptEntry, recognised, ok bo
 			tool = "mcp"
 		}
 		in, _ := it.Arguments.(map[string]any)
-		p := TranscriptPart{Kind: "tool", Tool: tool, ToolID: it.ID, Input: summarizeToolInput(in), IsError: it.Status == "failed"}
+		errText := codexErrorText(it.Error)
+		p := TranscriptPart{Kind: "tool", Tool: tool, ToolID: it.ID, Input: summarizeToolInput(in), IsError: it.Status == "failed" || errText != ""}
 		if res, ok := it.Result.(map[string]any); ok {
 			p.Result, p.Clipped = clampText(stripANSI(toolResultText(res["content"])), claudeMaxResult)
 			isErr, _ := res["isError"].(bool)
 			isErr2, _ := res["is_error"].(bool)
 			p.IsError = p.IsError || isErr || isErr2
+		}
+		if errText != "" && p.Result == "" {
+			p.Result, p.Clipped = clampText(stripANSI(errText), claudeMaxResult)
 		}
 		e.Parts = append(e.Parts, p)
 	case "Extension":
@@ -516,30 +502,29 @@ func parseCodexRow(line []byte, off int64) (e TranscriptEntry, recognised, ok bo
 			Kind: "tool", Tool: codexToolNames[it.Type], ToolID: it.ID, Input: oneLine(path), sensitive: anySensitive(path),
 		})
 	case "WebSearch":
-		e.Parts = append(e.Parts, TranscriptPart{Kind: "tool", Tool: codexToolNames[it.Type], ToolID: it.ID, Input: oneLine(it.Query)})
+		e.Parts = append(e.Parts, TranscriptPart{Kind: "tool", Tool: it.Type, ToolID: it.ID, Input: oneLine(it.Query)})
 	case "ImageGeneration":
 		// result is the image itself (base64): only where it was saved is shown.
 		e.Parts = append(e.Parts, TranscriptPart{
-			Kind: "tool", Tool: codexToolNames[it.Type], ToolID: it.ID, Input: oneLine(it.RevisedPrompt),
+			Kind: "tool", Tool: it.Type, ToolID: it.ID, Input: oneLine(it.RevisedPrompt),
 			Result: it.SavedPath, IsError: it.Status == "failed",
 		})
 	case "FunctionCallOutput", "DynamicToolCall":
-		tool := strings.Trim(it.Namespace+"."+it.Tool, ".")
+		name := it.Tool
 		if it.Type == "FunctionCallOutput" {
-			tool = strings.Trim(it.Namespace+"."+it.Name, ".")
+			name = it.Name
 		}
-		if tool == "" {
-			tool = "tool"
-		}
+		tool := cmp.Or(strings.Trim(it.Namespace+"."+name, "."), "tool")
 		in, _ := it.Arguments.(map[string]any)
-		out := codexOutputText(it.Output) + codexOutputText(it.ContentItems)
-		if it.Error != "" {
-			out = strings.TrimSpace(out + "\n" + it.Error)
+		out := toolResultText(it.Output) + toolResultText(it.ContentItems)
+		errText := codexErrorText(it.Error)
+		if errText != "" {
+			out = strings.TrimSpace(out + "\n" + errText)
 		}
 		result, clipped := clampText(stripANSI(out), claudeMaxResult)
 		e.Parts = append(e.Parts, TranscriptPart{
 			Kind: "tool", Tool: tool, ToolID: it.ID, Input: summarizeToolInput(in), Result: result, Clipped: clipped,
-			IsError: it.Status == "failed" || it.Error != "" || (it.Success != nil && !*it.Success),
+			IsError: it.Status == "failed" || errText != "" || (it.Success != nil && !*it.Success),
 		})
 	case "CollabAgentToolCall":
 		input := oneLine(it.Prompt)
@@ -603,31 +588,67 @@ var codexLegacyItems = map[string]string{
 	"sub_agent_activity": "SubAgentActivity",
 }
 
-// codexLegacyRow reports whether line may be one of the legacy events.
-func codexLegacyRow(line []byte) bool {
-	for ev := range codexLegacyItems {
-		if bytes.Contains(line, []byte(`"`+ev+`"`)) {
-			return true
+// codexSkippedEvents are persisted events with nothing to show: the
+// status and context the read loop takes from some, a goal change, raw
+// reasoning (its summary is shown). TestCodexRolloutItems and
+// scripts/codex-chat-items.sh count them as handled.
+var codexSkippedEvents = []string{"thread_settings_applied", "thread_goal_updated", "agent_reasoning_raw_content"}
+
+// codexEventNames are the events the read loop acts on, the frequent first:
+// a row is matched against them in this order.
+var codexEventNames = append([]string{
+	"item_completed", "user_message", "agent_message", "token_count", "task_started", "task_complete",
+	"turn_aborted", "thread_rolled_back",
+}, slices.Sorted(maps.Keys(codexLegacyItems))...)
+
+// codexEventQuoted is codexEventNames quoted as a row holds them, built once.
+var codexEventQuoted = func() [][]byte {
+	q := make([][]byte, len(codexEventNames))
+	for i, ev := range codexEventNames {
+		q[i] = []byte(`"` + ev + `"`)
+	}
+	return q
+}()
+
+// codexEventIn returns the first event of codexEventNames line names, or "".
+func codexEventIn(line []byte) string {
+	for i, q := range codexEventQuoted {
+		if bytes.Contains(line, q) {
+			return codexEventNames[i]
 		}
 	}
-	return false
+	return ""
 }
 
-// codexOutputText flattens a tool output: a string, or a list of content
-// items of which the text ones are kept.
-func codexOutputText(v any) string {
-	switch o := v.(type) {
-	case string:
-		return o
-	case []any:
-		var texts []string
-		for _, item := range o {
-			b, _ := item.(map[string]any)
-			if t := jsonStr(b["text"]); t != "" {
-				texts = append(texts, t)
-			}
+// item turns a legacy event into the item it stands for: the call id is
+// the id, an MCP call's invocation is flattened and its Rust Result
+// ({"Ok": …} or {"Err": "…"}) split into result and error, and a patch
+// with no status takes it from success.
+func (p *codexLegacyPayload) item(itemType string) *codexItem {
+	it := &p.codexItem
+	it.Type, it.ID = itemType, cmp.Or(it.ID, p.CallID)
+	if inv := p.Invocation; inv != nil {
+		it.Server, it.Tool, it.Arguments = inv.Server, inv.Tool, inv.Arguments
+		if r, ok := it.Result.(map[string]any); ok {
+			it.Result, it.Error = r["Ok"], r["Err"]
 		}
-		return strings.Join(texts, "\n")
+	}
+	if it.Status == "" && it.Success != nil {
+		it.Status = "failed"
+		if *it.Success {
+			it.Status = "completed"
+		}
+	}
+	return it
+}
+
+// codexErrorText is an item's error: a string or an object's message.
+func codexErrorText(v any) string {
+	switch e := v.(type) {
+	case string:
+		return e
+	case map[string]any:
+		return jsonStr(e["message"])
 	}
 	return ""
 }
