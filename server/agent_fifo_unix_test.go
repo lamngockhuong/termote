@@ -134,3 +134,35 @@ func TestCodexUserThreadReplaced(t *testing.T) {
 		t.Error("replaced file accepted")
 	}
 }
+
+// A Codex config.toml or plugin manifest that is a FIFO: neither read waits
+// for a writer.
+func TestCodexPluginFilesFIFO(t *testing.T) {
+	home := t.TempDir()
+	mkfifo(t, home, "config.toml", false)
+	if returnsSoon(t, func() bool { return len(codexEnabledPlugins(home)) != 0 }) {
+		t.Error("FIFO config accepted")
+	}
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".codex-plugin"), 0o755)
+	mkfifo(t, filepath.Join(dir, ".codex-plugin"), "plugin.json", false)
+	if returnsSoon(t, func() bool { _, _, ok := codexPluginManifest(dir, nil); return ok }) {
+		t.Error("FIFO manifest accepted")
+	}
+}
+
+// A dir that is listed (a plugin's version dir parent, a skill dir) replaced
+// by a FIFO: the open does not wait for a writer either.
+func TestCommandDirsFIFO(t *testing.T) {
+	home := t.TempDir()
+	writeFile(t, filepath.Join(home, "config.toml"), "[plugins.\"a@m\"]\n[plugins.\"b@m\"]\n")
+	os.MkdirAll(filepath.Join(home, "plugins/cache/m"), 0o755)
+	mkfifo(t, filepath.Join(home, "plugins/cache/m"), "a", false)
+	dir := filepath.Join(home, "plugins/cache/m/b/1.0.0")
+	writeFile(t, filepath.Join(dir, ".codex-plugin/plugin.json"), `{"name":"b"}`)
+	mkfifo(t, dir, "skills", false)
+	mkfifo(t, home, "skills", false)
+	if returnsSoon(t, func() bool { return len(listCodexSkills("", home, "", nil).Commands) != 0 }) {
+		t.Error("a FIFO was listed")
+	}
+}

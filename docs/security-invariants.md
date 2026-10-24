@@ -491,7 +491,8 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   only names, descriptions, sources and kinds of `.claude/commands`/`.claude/skills` under the
   pane root and `commands`/`skills`
   in that config dir, read through `os.Root` (first 8 KB per file; a file that is a symlink, under
-  a denied dir or with a sensitive name is never read), with the same
+  a denied dir or with a sensitive name is never read; every file and every dir listed is opened
+  nonblocking, so a FIFO in its place never holds the cached walk), with the same
   `Sec-Fetch-Site`/`Origin` check as the files routes. A symlinked skill dir is followed only
   into that config dir, the pane root or `~/.agents/skills`. On Windows a directory junction
   (mount-point reparse point) there is followed like a symlinked skill dir, and every containment
@@ -603,8 +604,26 @@ protects for a user, and what it does not: [`security-model.md`](security-model.
   `CODEX_HOME/skills` and `~/.agents/skills` (`user`), `CODEX_HOME/skills/.system` and
   `/etc/codex/skills` (`system`), each through `readSkillDir` under the Claude Code rules
   (`os.Root`, 8 KB, no file symlink, the files routes' skip); a symlinked skill dir is followed
-  only into those dirs or the root (a Windows junction too, with the Windows rules above). Custom prompts (gone from Codex), plugin skills,
-  `config.toml` toggles, project trust and nested skill dirs are not read
+  only into those dirs or the root (a Windows junction too, with the Windows rules above). Plugin
+  skills (`plugin`, `server/agent_commands_codex_plugins.go`, as Codex 0.164.0 loads them):
+  only the plugins `CODEX_HOME/config.toml` enables (opened nonblocking, a regular file of at
+  most 1 MB, a symlink allowed, decoded with `BurntSushi/toml`; a file that does not decode,
+  `[features] plugins = false` or an entry of the wrong type → no plugin), keys checked as
+  `validate_plugin_segment`, every `openai-*` marketplace left out; the install is a version dir
+  under the resolved `CODEX_HOME/plugins/cache/<marketplace>/<name>` that is a real directory
+  (no symlink, no junction), resolves inside the cache, and whose listing did not fill the visit
+  budget; its manifest is read through an `os.Root` of it, never through a symlink (a symlinked
+  manifest or manifest dir ends the search: no skill), with the skip and a 1 MB cap and the
+  `SameFile` check, its keys matched exactly (a Legacy manifest naming a key twice is refused);
+  manifest `skills` paths start with `./`, have no `..`, are not absolute and
+  stay inside the plugin (sorted, deduplicated, at most 8); each is read with `readSkillDir`,
+  a symlinked skill dir allowed only into the plugin itself; at most 50 plugins and 500 skills,
+  one 5000-entry visit budget for every plugin's listings; names must be `[A-Za-z0-9_:-]` and
+  pass `validCommandName`; a `project`/`user`/`system` skill named as a plugin's is left out.
+  Nothing from `config.toml` or a manifest but these names and the skills' descriptions leaves
+  the server, and their errors are not returned. Custom prompts (gone from Codex), the project's
+  `.codex/config.toml`, `[[skills.config]]` toggles, project trust and nested skill dirs (also a
+  Legacy plugin's, which Codex walks) are not read
 - **Files/Changes** (`/api/mux/panes/{id}/files/*`): GETs that also check
   `Sec-Fetch-Site`/`Origin` (and one write, `PUT files/content`, below); every path is opened through `os.Root` under the pane's root (its
   git toplevel when a `.git` sits at it, else its directory); termote's config/state dirs, the

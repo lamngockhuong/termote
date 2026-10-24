@@ -580,18 +580,28 @@ Results are cached 5 s per root and config dir.
 For a Codex pane (`server/agent_commands_codex.go`) `commands` lists skills only, which the
 composer suggests after `$` at the start of any word (Codex runs `$name` anywhere in a message;
 `/` there offers Codex 0.162.0's built-ins, a static list next to Claude Code's). The dirs follow
-Codex 0.162.0's own (`codex-rs/ext/skills/src/host_roots.rs`): `project` from `.codex/skills` and
+Codex 0.164.0's own (`codex-rs/ext/skills/src/host_roots.rs`): `project` from `.codex/skills` and
 `.agents/skills` under the pane's root, `user` from `skills/` in the session's `CODEX_HOME` and
 the server user's `~/.agents/skills`, `system` from `CODEX_HOME/skills/.system` (bundled with
 Codex) and `/etc/codex/skills` (never opened on Windows, where it is not an absolute path). Each
 is read by the same `readSkillDir` as `.claude/skills` (an `os.Root`, 8 KB, no file symlink,
 the files routes' skip, a name met twice keeps the first); a symlinked skill dir is followed only
 into `CODEX_HOME`, the root, `~/.agents/skills` or `/etc/codex/skills`, and a project dir the
-files routes deny is not opened. Codex's custom prompts (`CODEX_HOME/prompts`) are not read:
-Codex 0.162.0 no longer has them. Not looked at either, so the list can differ from what Codex
-runs: plugin skills, skills turned off in `config.toml`, whether Codex trusts the project (it
-loads `.codex/skills` only then) and skills nested deeper than `skills/<name>/SKILL.md`. Cached
-5 s per root and `CODEX_HOME`, apart from Claude Code's.
+files routes deny is not opened. Then `plugin` (`server/agent_commands_codex_plugins.go`), as
+Codex 0.164.0 loads plugins (`codex-rs/core-plugins`): the plugins `CODEX_HOME/config.toml`
+enables (decoded with `BurntSushi/toml`; an entry's `enabled`, else `[plugins._default]`, else
+on; `[features] plugins = false`, a file that does not decode or an entry of the wrong type turns
+them all off; the `openai-*` marketplaces are left out), each from its active version under
+`plugins/cache/<marketplace>/<name>/` (`local`, else the highest by semver, else bytewise), with
+the namespace and skill dirs of its manifest (a root `plugin.json` with an Agent Plugins
+`$schema`, then `.codex-plugin/`, `.claude-plugin/`, `.cursor-plugin/`); skills are named
+`<namespace>:<skill>` and a skill from another source with the same name is left out. Codex's
+custom prompts (`CODEX_HOME/prompts`) are not read: Codex 0.162.0 no longer has them. Not looked
+at either, so the list can differ from what Codex runs: skills turned off in `config.toml`
+(`[[skills.config]]`), a project's `.codex/config.toml`, whether Codex trusts the project (it
+loads `.codex/skills` only then) and skills nested deeper than `<dir>/<name>/SKILL.md` (Codex
+walks a Legacy plugin's skill dirs deeper). Cached 5 s per root and `CODEX_HOME`, apart from
+Claude Code's.
 
 **Writes: only on positive evidence.** The two POST routes pass the Host allowlist, auth and
 `writeGuard` like every other write. Each then takes a lock on the pane, re-reads the session

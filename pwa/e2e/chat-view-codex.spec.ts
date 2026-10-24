@@ -102,6 +102,30 @@ test.describe('chat view of a Codex pane', () => {
       path.join(skillDir, 'SKILL.md'),
       '---\nname: e2e-skill\ndescription: Skill from e2e\n---\nNever shown\n',
     )
+    // A plugin's skill, offered as $<plugin>:<skill> once config.toml enables
+    // the plugin and its install sits in plugins/cache
+    writeFileSync(
+      path.join(home, 'config.toml'),
+      '[plugins."e2e-plugin@e2e"]\nenabled = true\n',
+    )
+    const plugin = path.join(
+      home,
+      'plugins',
+      'cache',
+      'e2e',
+      'e2e-plugin',
+      '1.0.0',
+    )
+    mkdirSync(path.join(plugin, '.codex-plugin'), { recursive: true })
+    writeFileSync(
+      path.join(plugin, '.codex-plugin', 'plugin.json'),
+      JSON.stringify({ name: 'e2e-plugin', skills: './skills/' }),
+    )
+    mkdirSync(path.join(plugin, 'skills', 'deploy-check'), { recursive: true })
+    writeFileSync(
+      path.join(plugin, 'skills', 'deploy-check', 'SKILL.md'),
+      '---\nname: deploy-check\ndescription: Plugin skill from fixture\n---\n',
+    )
     // termote takes a process for Codex by its executable's name
     const bin = path.join(tmp, 'bin')
     mkdirSync(bin)
@@ -247,6 +271,15 @@ test.describe('chat view of a Codex pane', () => {
     await skill.click()
     await expect(composer).toHaveValue('$e2e-skill ')
     await expect(skills).toBeHidden()
+
+    // A plugin's skills come under its name, labelled plugin
+    await composer.fill('$e2e-plugin:')
+    const pluginSkill = skills.getByRole('option', {
+      name: /\$e2e-plugin:deploy-check/,
+    })
+    await expect(pluginSkill).toContainText('Plugin skill from fixture')
+    await expect(pluginSkill.getByText('plugin', { exact: true })).toBeVisible()
+    await expect(skills.getByRole('option')).toHaveCount(1)
 
     // ... and in the middle of a message, replacing only the word typed
     await composer.fill('hãy dùng $e2')
