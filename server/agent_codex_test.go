@@ -247,6 +247,189 @@ func TestCodexParseItems(t *testing.T) {
 	}
 }
 
+// The TurnItem variants of codex-rs/protocol (rust-v0.163.0) beyond the
+// first set, turn_aborted and thread_rolled_back.
+func TestCodexParseMoreItems(t *testing.T) {
+	no := false
+	rows := []string{
+		codexItemRow(map[string]any{"type": "ImageView", "id": "v1", "path": "file:///tmp/shot.png"}),
+		codexItemRow(map[string]any{"type": "WebSearch", "query": "go 1.26", "action": map[string]any{"type": "search"}}),
+		codexItemRow(map[string]any{"type": "ImageGeneration", "status": "completed", "revised_prompt": "a cat", "result": "iVBOR", "saved_path": "/tmp/cat.png"}),
+		codexItemRow(map[string]any{"type": "ImageGeneration", "status": "failed"}),
+		codexItemRow(map[string]any{"type": "FunctionCallOutput", "name": "apply", "namespace": "ns", "output": "done"}),
+		codexItemRow(map[string]any{"type": "FunctionCallOutput", "output": []any{map[string]any{"type": "input_text", "text": "a"}, map[string]any{"type": "input_image"}}}),
+		codexItemRow(map[string]any{"type": "DynamicToolCall", "tool": "lookup", "arguments": map[string]any{"q": "x"}, "status": "completed",
+			"content_items": []any{map[string]any{"type": "inputText", "text": "hit"}}, "success": no, "error": "denied"}),
+		codexItemRow(map[string]any{"type": "CollabAgentToolCall", "tool": "spawn_agent", "status": "completed", "prompt": "check the tests"}),
+		codexItemRow(map[string]any{"type": "CollabAgentToolCall", "tool": "wait", "status": "failed", "receiver_agents": []any{
+			map[string]any{"thread_id": "a", "agent_nickname": "Ada"}, map[string]any{"thread_id": "b", "agent_role": "reviewer"}, map[string]any{"thread_id": "c"},
+		}}),
+		codexItemRow(map[string]any{"type": "CollabAgentToolCall"}),
+		codexItemRow(map[string]any{"type": "SubAgentActivity", "kind": "started", "agent_path": "/root/reviewer"}),
+		codexItemRow(map[string]any{"type": "HookPrompt", "fragments": []any{map[string]any{"text": "run lint"}, map[string]any{"text": " "}}}),
+		codexItemRow(map[string]any{"type": "HookPrompt", "fragments": []any{}}),
+		codexItemRow(map[string]any{"type": "Plan", "text": "1. read\n2. fix"}),
+		codexItemRow(map[string]any{"type": "Plan", "text": " "}),
+		codexItemRow(map[string]any{"type": "EnteredReviewMode", "user_facing_hint": "current changes"}),
+		codexItemRow(map[string]any{"type": "ExitedReviewMode", "review_output": map[string]any{
+			"overall_correctness": "patch is incorrect", "overall_explanation": "One bug.",
+			"findings": []any{map[string]any{"title": "Off by one", "body": "i <= n", "priority": 1}},
+		}}),
+		codexItemRow(map[string]any{"type": "ExitedReviewMode"}),
+		codexEvent(map[string]any{"type": "turn_aborted", "reason": "interrupted"}),
+		codexEvent(map[string]any{"type": "turn_aborted", "reason": "budget_limited"}),
+		codexEvent(map[string]any{"type": "thread_rolled_back", "num_turns": 2}),
+		codexEvent(map[string]any{"type": "thread_rolled_back", "num_turns": 1}),
+	}
+	entries, _ := parseCodex(strings.Join(rows, ""))
+	type want struct{ role, tool, input, text, result string }
+	wants := []want{
+		{"assistant", "ViewImage", "/tmp/shot.png", "", ""},
+		{"assistant", "WebSearch", "go 1.26", "", ""},
+		{"assistant", "ImageGeneration", "a cat", "", "/tmp/cat.png"},
+		{"assistant", "ImageGeneration", "", "", ""},
+		{"assistant", "ns.apply", "", "", "done"},
+		{"assistant", "tool", "", "", "a"},
+		{"assistant", "lookup", "x", "", "hit\ndenied"},
+		{"assistant", "Agent spawn_agent", "check the tests", "", ""},
+		{"assistant", "Agent wait", "Ada, reviewer", "", ""},
+		{"assistant", "Agent call", "", "", ""},
+		{"note", "", "", "Subagent /root/reviewer started", ""},
+		{"note", "", "", "Hook: run lint", ""},
+		{"assistant", "", "", "1. read\n2. fix", ""},
+		{"note", "", "", "Review started current changes", ""},
+		{"assistant", "", "", "patch is incorrect\n\nOne bug.\n\n[P1] Off by one\ni <= n", ""},
+		{"note", "", "", "Interrupted", ""},
+		{"note", "", "", "Turn ended: budget limited", ""},
+		{"note", "", "", "Rolled back 2 turns", ""},
+		{"note", "", "", "Rolled back 1 turn", ""},
+	}
+	if len(entries) != len(wants) {
+		t.Fatalf("got %d entries: %+v", len(entries), entries)
+	}
+	for i, w := range wants {
+		e := entries[i]
+		p := e.Parts[0]
+		if e.Role != w.role || p.Tool != w.tool || p.Input != w.input || p.Text != w.text || p.Result != w.result {
+			t.Errorf("entry %d = %s %+v, want %+v", i, e.Role, p, w)
+		}
+	}
+	if !entries[3].Parts[0].IsError || !entries[6].Parts[0].IsError || !entries[8].Parts[0].IsError || entries[4].Parts[0].IsError {
+		t.Error("error flags wrong")
+	}
+	for _, typ := range codexItemTypes {
+		if _, recognised, _ := parseCodexRow([]byte(codexItemRow(map[string]any{"type": typ})), 0); !recognised {
+			t.Errorf("%s listed but not read", typ)
+		}
+	}
+}
+
+// A legacy-mode rollout (Codex 0.147) writes events in place of items.
+func TestCodexParseLegacyEvents(t *testing.T) {
+	rows := []string{
+		codexEvent(map[string]any{"type": "agent_reasoning", "text": "thinking"}),
+		codexEvent(map[string]any{"type": "patch_apply_end", "call_id": "c1", "success": true, "status": "completed",
+			"changes": map[string]any{"/p/a.md": map[string]any{"type": "add", "content": "hi\n"}}}),
+		codexEvent(map[string]any{"type": "patch_apply_end", "call_id": "c2", "status": "declined",
+			"changes": map[string]any{"/p/b.md": map[string]any{"type": "delete", "content": "x\n"}}}),
+		codexEvent(map[string]any{"type": "mcp_tool_call_end", "call_id": "c3",
+			"invocation": map[string]any{"server": "docs", "tool": "search", "arguments": map[string]any{"query": "go"}},
+			"result":     map[string]any{"Ok": map[string]any{"content": []any{map[string]any{"type": "text", "text": "found"}}}}}),
+		codexEvent(map[string]any{"type": "mcp_tool_call_end", "invocation": map[string]any{"server": "fs", "tool": "read"},
+			"result": map[string]any{"Err": "timed out"}}),
+		codexEvent(map[string]any{"type": "web_search_end", "call_id": "c4", "query": "termote"}),
+		codexEvent(map[string]any{"type": "context_compacted"}),
+		codexEvent(map[string]any{"type": "entered_review_mode", "user_facing_hint": "main"}),
+		codexEvent(map[string]any{"type": "sub_agent_activity", "kind": "interacted", "agent_path": "/root/a"}),
+		codexEvent(map[string]any{"type": "thread_goal_updated", "goal": map[string]any{}}),
+		`{"type":"event_msg","payload":{"type":"agent_reasoning","text":1}}` + "\n",
+	}
+	entries, _ := parseCodex(strings.Join(rows, ""))
+	if len(entries) != 9 {
+		t.Fatalf("got %d entries: %+v", len(entries), entries)
+	}
+	if p := entries[0].Parts[0]; p.Kind != "thinking" || p.Text != "thinking" {
+		t.Errorf("reasoning = %+v", p)
+	}
+	if e := entries[1]; e.ID != "c1" || e.Parts[0].Tool != "Edit" || e.Parts[0].Input != "/p/a.md" || e.Parts[0].Result != "+hi\n" || e.Parts[0].IsError {
+		t.Errorf("patch = %+v", e)
+	}
+	if p := entries[2].Parts[0]; !p.IsError {
+		t.Errorf("declined patch = %+v", p)
+	}
+	if p := entries[3].Parts[0]; p.Tool != "docs.search" || p.Input != "go" || p.Result != "found" || p.IsError {
+		t.Errorf("mcp ok = %+v", p)
+	}
+	if p := entries[4].Parts[0]; p.Tool != "fs.read" || p.Result != "timed out" || !p.IsError {
+		t.Errorf("mcp err = %+v", p)
+	}
+	if p := entries[5].Parts[0]; p.Tool != "WebSearch" || p.Input != "termote" {
+		t.Errorf("web search = %+v", p)
+	}
+	if entries[6].Role != "summary" || entries[7].Parts[0].Text != "Review started main" || entries[8].Parts[0].Text != "Subagent /root/a interacted" {
+		t.Errorf("notes = %+v", entries[6:])
+	}
+}
+
+// TestCodexRolloutItems reads real rollouts and fails on an item type or an
+// event type the parser neither reads nor knowingly skips. It runs only with
+// TERMOTE_CODEX_SESSIONS set to a Codex sessions directory, for example
+// after a Codex update: scripts/codex-chat-items.sh runs it.
+func TestCodexRolloutItems(t *testing.T) {
+	dir := os.Getenv("TERMOTE_CODEX_SESSIONS")
+	if dir == "" {
+		t.Skip("TERMOTE_CODEX_SESSIONS not set")
+	}
+	// The events read, then those with nothing to show: read for the status
+	// or the context, a goal change, and raw reasoning (only its summary is
+	// shown).
+	skipped := map[string]bool{
+		"item_completed": true, "user_message": true, "agent_message": true, "turn_aborted": true, "thread_rolled_back": true,
+		"token_count": true, "task_started": true, "task_complete": true, "thread_settings_applied": true,
+		"thread_goal_updated": true, "agent_reasoning_raw_content": true,
+	}
+	for ev := range codexLegacyItems {
+		skipped[ev] = true
+	}
+	known := map[string]bool{}
+	for _, typ := range codexItemTypes {
+		known[typ] = true
+	}
+	unknown := map[string]int{}
+	var rows int
+	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() || filepath.Ext(path) != ".jsonl" {
+			return err
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		codexJournal{}.Parse(strings.NewReader(string(data)), 0) // must not panic on a real rollout
+		for _, line := range strings.Split(string(data), "\n") {
+			var row codexRow
+			if json.Unmarshal([]byte(line), &row) != nil || row.Type != "event_msg" {
+				continue
+			}
+			rows++
+			switch {
+			case !skipped[row.Payload.Type]:
+				unknown["event "+row.Payload.Type]++
+			case row.Payload.Item != nil && !known[row.Payload.Item.Type]:
+				unknown["item "+row.Payload.Item.Type]++
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("%d event rows read", rows)
+	for what, n := range unknown {
+		t.Errorf("%s in %d rows: read it in parseCodexRow or skip it here", what, n)
+	}
+}
+
 func TestCodexParseUnsupportedFormat(t *testing.T) {
 	started := codexEvent(map[string]any{"type": "task_started", "turn_id": "t1"})
 	done := codexEvent(map[string]any{"type": "task_complete", "turn_id": "t1"})
@@ -263,6 +446,11 @@ func TestCodexParseUnsupportedFormat(t *testing.T) {
 	cursorRead := done + codexEvent(map[string]any{"type": "thread_settings_applied"})
 	if entries, _ := (codexJournal{}).Parse(strings.NewReader(cursorRead), int64(len(started+answer))); len(entries) != 0 {
 		t.Errorf("turn cut by the range start = %+v", entries)
+	}
+	// A turn of only an item type the parser does not know is not readable.
+	newItem := codexItemRow(map[string]any{"type": "SomethingNew"})
+	if entries, _ := parseCodex(started + newItem + done); len(entries) != 1 || entries[0].Role != "note" {
+		t.Errorf("unknown item type = %+v", entries)
 	}
 	// An unfinished turn, a turn with a known row that shows nothing, and a
 	// turn with a known row too long to decode: no note.

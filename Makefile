@@ -1,7 +1,7 @@
 # Termote Makefile
 # Usage: make <target>
 
-.PHONY: help build build-pwa build-api test test-go test-cli test-install test-entrypoints test-herdr-plugin test-git-hooks start container-up container-down uninstall health clean release release-dry fmt fmt-check brand-assets claude-chat-tags
+.PHONY: help build build-pwa build-api test test-go test-cli test-install test-entrypoints test-herdr-plugin test-git-hooks start container-up container-down uninstall health clean release release-dry fmt fmt-check brand-assets claude-chat-tags codex-chat-items
 
 # Default target
 help:
@@ -39,6 +39,7 @@ help:
 	@echo "Other:"
 	@echo "  make health         Check service health"
 	@echo "  make claude-chat-tags  Check the Chat view knows every Claude Code tag"
+	@echo "  make codex-chat-items  Check the Chat view reads every Codex rollout item"
 	@echo "  make clean          Stop and remove containers"
 	@echo "  make uninstall      Uninstall all"
 
@@ -110,6 +111,10 @@ brand-assets:
 # Claude Code tags the Chat view would show raw (after a Claude Code update)
 claude-chat-tags:
 	@./scripts/claude-chat-tags.sh
+
+# Codex rollout items and events the Chat view would not show (after a Codex update)
+codex-chat-items:
+	@./scripts/codex-chat-items.sh
 
 # Health check
 health:

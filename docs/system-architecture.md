@@ -510,10 +510,15 @@ on Windows with 0.162.0 (psmux, Herdr).
 
 The rollout read is the file that process holds: its resolved path and file identity
 (dev:inode) are recorded when it is found, and `transcript` refuses a file whose identity
-changed. Entries come from `event_msg` `item_completed` rows (user and agent messages, reasoning
-summaries, commands, file changes, MCP and extension calls, compactions), or `user_message` and
-`agent_message` in a legacy rollout; the messages Codex adds for the model (`response_item`) are
-never shown. The tmux status reads back from the end to the latest of `task_started` (working),
+changed. Entries come from `event_msg` `item_completed` rows, one per `TurnItem` variant of
+`codex-rs/protocol` (`codexItemTypes`: messages, reasoning summaries, plans, commands, file
+changes, MCP, dynamic and extension calls, image views and generations, web searches, subagent
+calls and activity, hook prompts, reviews, compactions). A legacy-mode rollout writes events in
+their place (`user_message`, `agent_message`, `agent_reasoning`, `patch_apply_end`,
+`mcp_tool_call_end`, …: `codexLegacyItems`), read as the matching item. `turn_aborted` and
+`thread_rolled_back` show as notes. The messages Codex adds for the model (`response_item`) are
+never shown. `scripts/codex-chat-items.sh` (`make codex-chat-items`) compares these lists with the
+Codex source at the installed version and with the local rollouts. The tmux status reads back from the end to the latest of `task_started` (working),
 `task_complete` or `turn_aborted` (idle); it is never `blocked`, since the rollout does not record
 an approval request (so a dialog is never answerable on tmux, see Writes). `thread_settings_applied` is skipped: Codex writes it for a model change in
 the middle of a turn as well as for a resume, so a turn killed and then resumed reads as working

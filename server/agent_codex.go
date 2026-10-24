@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -70,6 +71,8 @@ type codexRow struct {
 		Type    string     `json:"type"`
 		Message string     `json:"message"` // legacy user_message / agent_message
 		Item    *codexItem `json:"item"`
+		Reason  string     `json:"reason"`    // turn_aborted
+		Turns   int        `json:"num_turns"` // thread_rolled_back
 	} `json:"payload"`
 }
 
@@ -95,9 +98,57 @@ type codexItem struct {
 	// Result is decoded generically: no real McpToolCall was recorded, so
 	// a field of an unexpected type must not drop the whole row.
 	Result any `json:"result"`
-	// Extension
+	// Extension; SubAgentActivity (kind); WebSearch (query)
 	Kind  string `json:"kind"`
 	Query string `json:"query"`
+	// ImageView
+	Path string `json:"path"`
+	// legacy events: call_id for the id; mcp_tool_call_end's invocation
+	CallID     string `json:"call_id"`
+	Invocation *struct {
+		Server    string `json:"server"`
+		Tool      string `json:"tool"`
+		Arguments any    `json:"arguments"`
+	} `json:"invocation"`
+	// Plan
+	Text string `json:"text"`
+	// HookPrompt
+	Fragments []struct {
+		Text string `json:"text"`
+	} `json:"fragments"`
+	// FunctionCallOutput (name, output); DynamicToolCall (namespace, tool,
+	// arguments, content_items, success, error)
+	Name         string `json:"name"`
+	Namespace    string `json:"namespace"`
+	Output       any    `json:"output"`
+	ContentItems any    `json:"content_items"`
+	Success      *bool  `json:"success"`
+	Error        string `json:"error"`
+	// CollabAgentToolCall
+	Prompt         string `json:"prompt"`
+	ReceiverAgents []struct {
+		AgentNickname string `json:"agent_nickname"`
+		AgentRole     string `json:"agent_role"`
+	} `json:"receiver_agents"`
+	// SubAgentActivity
+	AgentPath string `json:"agent_path"`
+	// ImageGeneration
+	RevisedPrompt string `json:"revised_prompt"`
+	SavedPath     string `json:"saved_path"`
+	// EnteredReviewMode, ExitedReviewMode
+	UserFacingHint string             `json:"user_facing_hint"`
+	ReviewOutput   *codexReviewOutput `json:"review_output"`
+}
+
+// codexReviewOutput is what a /review turn found.
+type codexReviewOutput struct {
+	Findings []struct {
+		Title    string `json:"title"`
+		Body     string `json:"body"`
+		Priority int    `json:"priority"`
+	} `json:"findings"`
+	OverallCorrectness string `json:"overall_correctness"`
+	OverallExplanation string `json:"overall_explanation"`
 }
 
 type codexChange struct {
@@ -109,7 +160,10 @@ type codexChange struct {
 
 // codexToolNames maps item types to the tool names the Chat view shows, so a
 // Codex command reads like a Claude Code one.
-var codexToolNames = map[string]string{"CommandExecution": "Bash", "FileChange": "Edit"}
+var codexToolNames = map[string]string{
+	"CommandExecution": "Bash", "FileChange": "Edit", "ImageView": "ViewImage",
+	"WebSearch": "WebSearch", "ImageGeneration": "ImageGeneration",
+}
 
 // codexItemTypeRe reads the item type from the start of a line too long to
 // decode.
@@ -168,7 +222,10 @@ func (codexJournal) Parse(r io.Reader, start int64) ([]TranscriptEntry, int64) {
 		switch {
 		case bytes.Contains(line, []byte(`"item_completed"`)),
 			bytes.Contains(line, []byte(`"user_message"`)),
-			bytes.Contains(line, []byte(`"agent_message"`)):
+			bytes.Contains(line, []byte(`"agent_message"`)),
+			bytes.Contains(line, []byte(`"turn_aborted"`)),
+			bytes.Contains(line, []byte(`"thread_rolled_back"`)),
+			codexLegacyRow(line):
 		case bytes.Contains(line, []byte(`"token_count"`)):
 			// Context and rate limits of the request just answered: they
 			// go on the entry before, so no entry is added.
@@ -323,13 +380,55 @@ func parseCodexRow(line []byte, off int64) (e TranscriptEntry, recognised, ok bo
 		}
 		e.Parts = []TranscriptPart{textPart("text", row.Payload.Message, claudeMaxText)}
 		return e, true, true
+	case "turn_aborted":
+		e.Role = "note"
+		text := "Interrupted"
+		if r := row.Payload.Reason; r != "" && r != "interrupted" {
+			text = "Turn ended: " + strings.ReplaceAll(r, "_", " ")
+		}
+		e.Parts = []TranscriptPart{{Kind: "text", Text: text}}
+		return e, true, true
+	case "thread_rolled_back":
+		e.Role = "note"
+		text := fmt.Sprintf("Rolled back %d turns", row.Payload.Turns)
+		if row.Payload.Turns == 1 {
+			text = "Rolled back 1 turn"
+		}
+		e.Parts = []TranscriptPart{{Kind: "text", Text: text}}
+		return e, true, true
 	case "item_completed":
 	default:
-		return e, false, false
+		itemType, legacy := codexLegacyItems[row.Payload.Type]
+		if !legacy {
+			return e, false, false
+		}
+		// A legacy-mode rollout writes these events instead of the item:
+		// the payload has the item's fields, under the event's type.
+		var lr struct {
+			Payload codexItem `json:"payload"`
+		}
+		if json.Unmarshal(line, &lr) != nil {
+			return e, false, false
+		}
+		row.Payload.Item = &lr.Payload
+		row.Payload.Item.Type = itemType
 	}
 	it := row.Payload.Item
 	if it == nil {
 		return e, false, false
+	}
+	it.ID = cmp.Or(it.ID, it.CallID)
+	if inv := it.Invocation; inv != nil {
+		// mcp_tool_call_end: the call is nested, the result is a Rust
+		// Result ({"Ok": …} or {"Err": "…"}).
+		it.Server, it.Tool, it.Arguments = inv.Server, inv.Tool, inv.Arguments
+		if r, ok := it.Result.(map[string]any); ok {
+			if errText, isErr := r["Err"].(string); isErr {
+				it.Result = map[string]any{"content": errText, "isError": true}
+			} else if okRes, isOk := r["Ok"]; isOk {
+				it.Result = okRes
+			}
+		}
 	}
 	if it.ID != "" {
 		e.ID = it.ID
@@ -351,7 +450,7 @@ func parseCodexRow(line []byte, off int64) (e TranscriptEntry, recognised, ok bo
 			}
 		}
 	case "Reasoning":
-		if t := strings.Join(it.SummaryText, "\n\n"); strings.TrimSpace(t) != "" {
+		if t := cmp.Or(strings.Join(it.SummaryText, "\n\n"), it.Text); strings.TrimSpace(t) != "" {
 			e.Parts = append(e.Parts, textPart("thinking", t, claudeMaxText))
 		}
 	case "CommandExecution":
@@ -407,10 +506,143 @@ func parseCodexRow(line []byte, off int64) (e TranscriptEntry, recognised, ok bo
 	case "ContextCompaction":
 		e.Role = "summary"
 		e.Parts = append(e.Parts, TranscriptPart{Kind: "text", Text: "Context compacted"})
+	case "Plan":
+		if strings.TrimSpace(it.Text) != "" {
+			e.Parts = append(e.Parts, textPart("text", it.Text, claudeMaxText))
+		}
+	case "ImageView":
+		path := strings.TrimPrefix(it.Path, "file://")
+		e.Parts = append(e.Parts, TranscriptPart{
+			Kind: "tool", Tool: codexToolNames[it.Type], ToolID: it.ID, Input: oneLine(path), sensitive: anySensitive(path),
+		})
+	case "WebSearch":
+		e.Parts = append(e.Parts, TranscriptPart{Kind: "tool", Tool: codexToolNames[it.Type], ToolID: it.ID, Input: oneLine(it.Query)})
+	case "ImageGeneration":
+		// result is the image itself (base64): only where it was saved is shown.
+		e.Parts = append(e.Parts, TranscriptPart{
+			Kind: "tool", Tool: codexToolNames[it.Type], ToolID: it.ID, Input: oneLine(it.RevisedPrompt),
+			Result: it.SavedPath, IsError: it.Status == "failed",
+		})
+	case "FunctionCallOutput", "DynamicToolCall":
+		tool := strings.Trim(it.Namespace+"."+it.Tool, ".")
+		if it.Type == "FunctionCallOutput" {
+			tool = strings.Trim(it.Namespace+"."+it.Name, ".")
+		}
+		if tool == "" {
+			tool = "tool"
+		}
+		in, _ := it.Arguments.(map[string]any)
+		out := codexOutputText(it.Output) + codexOutputText(it.ContentItems)
+		if it.Error != "" {
+			out = strings.TrimSpace(out + "\n" + it.Error)
+		}
+		result, clipped := clampText(stripANSI(out), claudeMaxResult)
+		e.Parts = append(e.Parts, TranscriptPart{
+			Kind: "tool", Tool: tool, ToolID: it.ID, Input: summarizeToolInput(in), Result: result, Clipped: clipped,
+			IsError: it.Status == "failed" || it.Error != "" || (it.Success != nil && !*it.Success),
+		})
+	case "CollabAgentToolCall":
+		input := oneLine(it.Prompt)
+		if input == "" {
+			var names []string
+			for _, a := range it.ReceiverAgents {
+				if n := cmp.Or(a.AgentNickname, a.AgentRole); n != "" {
+					names = append(names, n)
+				}
+			}
+			input = strings.Join(names, ", ")
+		}
+		e.Parts = append(e.Parts, TranscriptPart{
+			Kind: "tool", Tool: "Agent " + cmp.Or(it.Tool, "call"), ToolID: it.ID, Input: input, IsError: it.Status == "failed",
+		})
+	case "SubAgentActivity":
+		e.Role = "note"
+		e.Parts = append(e.Parts, TranscriptPart{Kind: "text", Text: strings.TrimSpace("Subagent " + it.AgentPath + " " + it.Kind)})
+	case "HookPrompt":
+		var texts []string
+		for _, f := range it.Fragments {
+			if t := strings.TrimSpace(f.Text); t != "" {
+				texts = append(texts, t)
+			}
+		}
+		if len(texts) > 0 {
+			e.Role = "note"
+			e.Parts = append(e.Parts, textPart("text", "Hook: "+strings.Join(texts, "\n"), claudeMaxText))
+		}
+	case "EnteredReviewMode":
+		e.Role = "note"
+		e.Parts = append(e.Parts, TranscriptPart{Kind: "text", Text: strings.TrimSpace("Review started " + it.UserFacingHint)})
+	case "ExitedReviewMode":
+		if t := codexReviewText(it.ReviewOutput); t != "" {
+			e.Parts = append(e.Parts, textPart("text", t, claudeMaxText))
+		}
 	default:
-		return e, true, false
+		// An item type this parser does not know: the turn is not judged
+		// readable on its account.
+		return e, false, false
 	}
 	return e, true, len(e.Parts) > 0
+}
+
+// codexItemTypes are the item types parseCodexRow reads; a test checks each
+// is read, and scripts/codex-chat-items.sh compares them with the Codex
+// source.
+var codexItemTypes = []string{
+	"UserMessage", "AgentMessage", "Reasoning", "CommandExecution", "FileChange", "McpToolCall",
+	"Extension", "ContextCompaction", "Plan", "ImageView", "WebSearch", "ImageGeneration",
+	"FunctionCallOutput", "DynamicToolCall", "CollabAgentToolCall", "SubAgentActivity", "HookPrompt",
+	"EnteredReviewMode", "ExitedReviewMode",
+}
+
+// codexLegacyItems maps the events a legacy-mode rollout writes in place of
+// an item_completed row to that item's type (codex-rs/rollout policy.rs).
+var codexLegacyItems = map[string]string{
+	"agent_reasoning": "Reasoning", "patch_apply_end": "FileChange", "mcp_tool_call_end": "McpToolCall",
+	"web_search_end": "WebSearch", "image_generation_end": "ImageGeneration", "context_compacted": "ContextCompaction",
+	"entered_review_mode": "EnteredReviewMode", "exited_review_mode": "ExitedReviewMode",
+	"sub_agent_activity": "SubAgentActivity",
+}
+
+// codexLegacyRow reports whether line may be one of the legacy events.
+func codexLegacyRow(line []byte) bool {
+	for ev := range codexLegacyItems {
+		if bytes.Contains(line, []byte(`"`+ev+`"`)) {
+			return true
+		}
+	}
+	return false
+}
+
+// codexOutputText flattens a tool output: a string, or a list of content
+// items of which the text ones are kept.
+func codexOutputText(v any) string {
+	switch o := v.(type) {
+	case string:
+		return o
+	case []any:
+		var texts []string
+		for _, item := range o {
+			b, _ := item.(map[string]any)
+			if t := jsonStr(b["text"]); t != "" {
+				texts = append(texts, t)
+			}
+		}
+		return strings.Join(texts, "\n")
+	}
+	return ""
+}
+
+// codexReviewText is a /review turn's verdict, then its findings by priority.
+func codexReviewText(r *codexReviewOutput) string {
+	if r == nil {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString(strings.TrimSpace(r.OverallCorrectness + "\n\n" + r.OverallExplanation))
+	for _, f := range r.Findings {
+		fmt.Fprintf(&b, "\n\n[P%d] %s\n%s", f.Priority, f.Title, f.Body)
+	}
+	return strings.TrimSpace(b.String())
 }
 
 // codexCommand returns the script of a command run as [shell, "-lc", script],
