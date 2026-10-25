@@ -104,9 +104,22 @@ test.describe('chat view of a Codex pane', () => {
     )
     // A plugin's skill, offered as $<plugin>:<skill> once config.toml enables
     // the plugin and its install sits in plugins/cache
+    // A skill nested in a group dir, found as Codex walks skill dirs, and one
+    // that [[skills.config]] turns off
+    for (const [dir, name] of [
+      ['group/nested-check', 'nested-check'],
+      ['off-check', 'off-check'],
+    ]) {
+      mkdirSync(path.join(home, 'skills', dir), { recursive: true })
+      writeFileSync(
+        path.join(home, 'skills', dir, 'SKILL.md'),
+        `---\nname: ${name}\ndescription: Fixture ${name}\n---\n`,
+      )
+    }
     writeFileSync(
       path.join(home, 'config.toml'),
-      '[plugins."e2e-plugin@e2e"]\nenabled = true\n',
+      '[plugins."e2e-plugin@e2e"]\nenabled = true\n' +
+        '[[skills.config]]\nname = "off-check"\nenabled = false\n',
     )
     const plugin = path.join(
       home,
@@ -280,6 +293,14 @@ test.describe('chat view of a Codex pane', () => {
     await expect(pluginSkill).toContainText('Plugin skill from fixture')
     await expect(pluginSkill.getByText('plugin', { exact: true })).toBeVisible()
     await expect(skills.getByRole('option')).toHaveCount(1)
+
+    // A nested skill is listed; one config.toml turns off is not
+    await composer.fill('$nested')
+    await expect(
+      skills.getByRole('option', { name: /\$nested-check/ }),
+    ).toContainText('Fixture nested-check')
+    await composer.fill('$off-check')
+    await expect(page.getByText('No matching skill')).toBeVisible()
 
     // ... and in the middle of a message, replacing only the word typed
     await composer.fill('hãy dùng $e2')
