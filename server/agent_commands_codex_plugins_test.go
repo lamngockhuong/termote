@@ -58,7 +58,7 @@ enabled = false
 	// A project skill that names itself as a plugin's does not stand in for it.
 	writeFile(t, filepath.Join(root, ".codex/skills/fake/SKILL.md"), skill("atk:review", "SPOOF"))
 
-	got := listCodexSkills(root, codexHome, "", nil).Commands
+	got := listCodexSkills(filesRoot{Root: root}, codexHome, "", nil).Commands
 	want := []agentCommand{
 		{"mine", "User codex", "user", "skill"},
 		{"sys", "Bundled", "system", "skill"},
@@ -90,13 +90,23 @@ func TestCodexEnabledPlugins(t *testing.T) {
 		{"not a table", "[plugins]\n\"a@m\" = {}\n\"b@m\" = 1\n", ""},
 		{"plugins not a table", "plugins = 1\n", ""},
 		{"bad default", "[plugins._default]\nenabled = 1\n[plugins.\"a@m\"]\n", ""},
-		{"mcp ok", "[plugins.\"a@m\".mcp_servers.x]\nenabled = false\nema_auth = \"any\"\ndefault_tools_approval_mode = \"approve\"\nenabled_tools = [\"t\"]\n[plugins.\"a@m\".mcp_servers.x.tools.t]\napproval_mode = \"prompt\"\noutput_token_limit = 10\n", "a@m"},
+		{"mcp ok", "[plugins.\"a@m\".mcp_servers.x]\nenabled = false\nema_auth = \"any\"\ndefault_tools_approval_mode = \"approve\"\nenabled_tools = [\"t\"]\n[plugins.\"a@m\".mcp_servers.x.tools.t]\napproval_mode = \"prompt\"\noutput_token_limit = 10\n[plugins.\"a@m\".mcp_servers.y]\nenabled = true\n", "a@m"},
 		{"mcp bad mode", "[plugins.\"a@m\".mcp_servers.x]\ndefault_tools_approval_mode = \"always\"\n", ""},
 		{"mcp zero limit", "[plugins.\"a@m\".mcp_servers.x.tools.t]\noutput_token_limit = 0\n", ""},
 		{"mcp tools not strings", "[plugins.\"a@m\".mcp_servers.x]\nenabled_tools = [1]\n", ""},
 		{"remote fields", "[plugins.\"a@m\"]\nremote_plugin_id = \"r\"\nrelease_id = \"x\"\nauto_provision = true\n", "a@m"},
 		// Keys are split at the last "@", and each part is checked.
 		{"keys", "[plugins.\"x@my.mkt\"]\n[plugins.\".x@m\"]\n[plugins.\"a..b@m\"]\n[plugins.\"a@b@c\"]\n[plugins.\"nomkt\"]\n[plugins.\"@m\"]\n[plugins.\"a.b@m\"]\n[plugins.\"a-b_c@m-1\"]\n", "a-b_c@m-1 a.b@m"},
+		// Keys match exactly, as serde matches them.
+		{"key case", "[plugins.\"a@m\"]\nEnabled = false\n[Plugins.\"b@m\"]\n", "a@m"},
+		{"features not a table", "features = 1\n[plugins.\"a@m\"]\n", ""},
+		{"default not a table", "[plugins]\n_default = 1\n[plugins.\"a@m\"]\n", ""},
+		{"mcp not a table", "[plugins.\"a@m\"]\nmcp_servers = 1\n", ""},
+		{"mcp server not a table", "[plugins.\"a@m\".mcp_servers]\nx = 1\n", ""},
+		{"mcp tools not a table", "[plugins.\"a@m\".mcp_servers.x]\ntools = 1\n", ""},
+		{"mcp tool not a table", "[plugins.\"a@m\".mcp_servers.x.tools]\nt = 1\n", ""},
+		{"mcp tools not a list", "[plugins.\"a@m\".mcp_servers.x]\ndisabled_tools = \"t\"\n", ""},
+		{"mcp limit not a number", "[plugins.\"a@m\".mcp_servers.x.tools.t]\noutput_token_limit = \"9\"\n", ""},
 		{"openai", "[plugins.\"a@openai-bundled\"]\n[plugins.\"b@openai-primary-runtime\"]\n[plugins.\"c@openai\"]\n", "c@openai"},
 	}
 	for _, c := range cases {
@@ -106,7 +116,7 @@ func TestCodexEnabledPlugins(t *testing.T) {
 				writeFile(t, filepath.Join(home, "config.toml"), c.config)
 			}
 			var got []string
-			for _, id := range codexEnabledPlugins(home) {
+			for _, id := range codexEnabledPlugins(readCodexConfig(home)) {
 				got = append(got, id.name+"@"+id.marketplace)
 			}
 			if s := strings.Join(got, " "); s != c.want {
@@ -120,20 +130,20 @@ func TestCodexEnabledPluginsFile(t *testing.T) {
 	home := t.TempDir()
 	// Over 1 MB: not read, even though it is valid TOML.
 	writeFile(t, filepath.Join(home, "config.toml"), "[plugins.\"a@m\"]\n#"+strings.Repeat("x", pluginJSONMax))
-	if got := codexEnabledPlugins(home); len(got) != 0 {
+	if got := codexEnabledPlugins(readCodexConfig(home)); len(got) != 0 {
 		t.Errorf("large config = %v", got)
 	}
 	// A directory in its place.
 	dirHome := t.TempDir()
 	os.MkdirAll(filepath.Join(dirHome, "config.toml"), 0o755)
-	if got := codexEnabledPlugins(dirHome); len(got) != 0 {
+	if got := codexEnabledPlugins(readCodexConfig(dirHome)); len(got) != 0 {
 		t.Errorf("dir config = %v", got)
 	}
 	// A symlink to a config elsewhere (a dotfile manager's) is read.
 	linkHome, dotfiles := t.TempDir(), t.TempDir()
 	writeFile(t, filepath.Join(dotfiles, "codex.toml"), "[plugins.\"a@m\"]\n")
 	symlinkOrSkip(t, filepath.Join(dotfiles, "codex.toml"), filepath.Join(linkHome, "config.toml"))
-	if got := codexEnabledPlugins(linkHome); len(got) != 1 {
+	if got := codexEnabledPlugins(readCodexConfig(linkHome)); len(got) != 1 {
 		t.Errorf("linked config = %v", got)
 	}
 }
@@ -301,7 +311,8 @@ func TestCodexPluginManifest(t *testing.T) {
 			for rel, body := range c.files {
 				writeFile(t, filepath.Join(dir, rel), body)
 			}
-			ns, roots, ok := codexPluginManifest(dir, nil)
+			m, ok := codexPluginManifest(dir, nil)
+			ns, roots := m.ns, m.roots
 			got := strings.Join(roots, " ")
 			if c.roots == "" {
 				if ok {
@@ -322,7 +333,8 @@ func TestCodexPluginManifest(t *testing.T) {
 			paths = append(paths, fmt.Sprintf(`"./r%d"`, i%20))
 		}
 		writeFile(t, filepath.Join(dir, ".codex-plugin/plugin.json"), `{"skills":[`+strings.Join(paths, ",")+`]}`)
-		_, roots, ok := codexPluginManifest(dir, nil)
+		m, ok := codexPluginManifest(dir, nil)
+		roots := m.roots
 		if !ok || len(roots) != codexPluginMaxSkillRoots || roots[0] != "r0" {
 			t.Errorf("roots = %v", roots)
 		}
@@ -333,7 +345,7 @@ func TestCodexPluginManifest(t *testing.T) {
 		writeFile(t, filepath.Join(dir, ".codex-plugin/plugin.json"), `{"name":"a"}`)
 		writeFile(t, filepath.Join(dir, ".claude-plugin/plugin.json"), `{"name":"b"}`)
 		skip := func(_, rel string) bool { return strings.HasPrefix(rel, ".codex-plugin") }
-		if _, _, ok := codexPluginManifest(dir, skip); ok {
+		if _, ok := codexPluginManifest(dir, skip); ok {
 			t.Error("a refused manifest was read, or the next one used")
 		}
 	})
@@ -346,16 +358,16 @@ func TestCodexPluginManifest(t *testing.T) {
 			writeFile(t, filepath.Join(dir, ".claude-plugin/plugin.json"), `{"name":"real"}`)
 			os.MkdirAll(filepath.Join(dir, ".codex-plugin"), 0o755)
 			symlinkOrSkip(t, filepath.Join(outside, "plugin.json"), filepath.Join(dir, link))
-			if ns, _, ok := codexPluginManifest(dir, nil); ok {
-				t.Errorf("%s linked: manifest %q", link, ns)
+			if m, ok := codexPluginManifest(dir, nil); ok {
+				t.Errorf("%s linked: manifest %q", link, m.ns)
 			}
 		}
 		// The manifest's dir as a symlink.
 		dir := t.TempDir()
 		writeFile(t, filepath.Join(outside, "m/plugin.json"), `{"name":"leaked"}`)
 		symlinkOrSkip(t, filepath.Join(outside, "m"), filepath.Join(dir, ".codex-plugin"))
-		if ns, _, ok := codexPluginManifest(dir, nil); ok {
-			t.Errorf("linked dir: manifest %q", ns)
+		if m, ok := codexPluginManifest(dir, nil); ok {
+			t.Errorf("linked dir: manifest %q", m.ns)
 		}
 	})
 }
@@ -377,10 +389,10 @@ func TestReadCodexPluginSkillsNames(t *testing.T) {
 	dir = writeCodexPlugin(t, home, "m", "d", "1.0.0", `{"name":"d","skills":["./more","./skills"]}`, "s1")
 	writeFile(t, filepath.Join(dir, "more/s2/SKILL.md"), skill("s2", "x"))
 	writeFile(t, filepath.Join(dir, "more/h/SKILL.md"), "---\nname: h\nuser-invocable: false\n---\n")
-	if got := pluginNames(readCodexPluginSkills(home, nil)); got != "local:x c:ok d:s2 d:s1" {
+	if got := pluginNames(pluginSkills(home, nil)); got != "local:x c:ok d:s2 d:s1" {
 		t.Errorf("skills = %q", got)
 	}
-	for _, c := range readCodexPluginSkills(home, nil) {
+	for _, c := range pluginSkills(home, nil) {
 		if c.Source != "plugin" || c.Kind != "skill" || strings.Contains(c.Description, "SECRET") {
 			t.Errorf("entry = %+v", c)
 		}
@@ -397,24 +409,24 @@ func TestReadCodexPluginSkillsLimits(t *testing.T) {
 	}
 	writeFile(t, filepath.Join(home, "config.toml"), cfg.String())
 	// Enabled, nothing installed.
-	if got := readCodexPluginSkills(t.TempDir(), nil); got != nil {
+	if got := pluginSkills(t.TempDir(), nil); got != nil {
 		t.Errorf("no codex home config = %v", got)
 	}
-	if got := readCodexPluginSkills(home, nil); len(got) != commandsMaxPlugins {
+	if got := pluginSkills(home, nil); len(got) != commandsMaxPlugins {
 		t.Errorf("%d plugins read", len(got))
 	}
 
-	// One budget for every plugin's listing.
+	// Each plugin walks its skill dirs on a budget of its own: a plugin with
+	// a huge tree does not hide the skills of the next one.
 	home = t.TempDir()
 	writeFile(t, filepath.Join(home, "config.toml"), "[plugins.\"a@m\"]\n[plugins.\"b@m\"]\n")
-	dir := writeCodexPlugin(t, home, "m", "a", "1.0.0", `{"name":"a"}`)
-	for i := range commandsMaxVisited - 10 {
+	dir := writeCodexPlugin(t, home, "m", "a", "1.0.0", `{"name":"a"}`, "a-first")
+	for i := range codexSkillMaxDirs + 10 {
 		os.MkdirAll(filepath.Join(dir, "skills", fmt.Sprintf("e%05d", i)), 0o755)
 	}
-	writeCodexPlugin(t, home, "m", "b", "1.0.0", `{"name":"b"}`, "late1", "late2", "late3", "late4", "late5", "late6", "late7", "late8", "late9", "late10", "late11")
-	got := readCodexPluginSkills(home, nil)
-	if len(got) >= 11 {
-		t.Errorf("the second plugin got its own budget: %d skills", len(got))
+	writeCodexPlugin(t, home, "m", "b", "1.0.0", `{"name":"b"}`, "late1", "late2", "late3")
+	if got := pluginNames(pluginSkills(home, nil)); got != "a:a-first b:late1 b:late2 b:late3" {
+		t.Errorf("skills = %s", got)
 	}
 }
 
@@ -433,7 +445,7 @@ func TestReadCodexPluginSkillsSymlinks(t *testing.T) {
 	// CODEX_HOME itself a symlink: followed.
 	link := filepath.Join(t.TempDir(), "codex")
 	symlinkOrSkip(t, real, link)
-	if got := pluginNames(readCodexPluginSkills(link, nil)); got != "a:in a:linked" {
+	if got := pluginNames(pluginSkills(link, nil)); got != "a:in a:linked" {
 		t.Errorf("skills = %q", got)
 	}
 
@@ -442,7 +454,7 @@ func TestReadCodexPluginSkillsSymlinks(t *testing.T) {
 	writeFile(t, filepath.Join(home, "config.toml"), "[plugins.\"a@m\"]\n")
 	os.MkdirAll(filepath.Join(home, "plugins/cache/m/a"), 0o755)
 	symlinkOrSkip(t, filepath.Join(real, "plugins/cache/m/a/1.0.0"), filepath.Join(home, "plugins/cache/m/a/2.0.0"))
-	if got := readCodexPluginSkills(home, nil); len(got) != 0 {
+	if got := pluginSkills(home, nil); len(got) != 0 {
 		t.Errorf("linked version = %v", got)
 	}
 }
@@ -457,7 +469,7 @@ func TestReadCodexPluginSkillsSkip(t *testing.T) {
 		asked = append(asked, rel)
 		return rel == "denied" || strings.Contains(rel, "id_rsa")
 	}
-	if got := pluginNames(readCodexPluginSkills(home, skip)); got != "a:ok" {
+	if got := pluginNames(pluginSkills(home, skip)); got != "a:ok" {
 		t.Errorf("skills = %q", got)
 	}
 	for _, rel := range asked {
@@ -499,16 +511,20 @@ func TestValidCodexNames(t *testing.T) {
 	}
 }
 
-func TestReadCodexPluginSkillsMaxPerSource(t *testing.T) {
+func TestReadCodexPluginSkillsMaxTotal(t *testing.T) {
 	home := t.TempDir()
 	writeFile(t, filepath.Join(home, "config.toml"), "[plugins.\"a@m\"]\n[plugins.\"b@m\"]\n")
-	dir := writeCodexPlugin(t, home, "m", "a", "1.0.0", `{"name":"a"}`)
-	for i := range commandsMaxPerSource + 5 {
-		writeFile(t, filepath.Join(dir, "skills", fmt.Sprintf("s%03d", i), "SKILL.md"), "x")
+	for _, p := range []struct {
+		name string
+		n    int
+	}{{"a", codexSkillMaxTotal - 3}, {"b", 10}} {
+		dir := writeCodexPlugin(t, home, "m", p.name, "1.0.0", `{"name":"`+p.name+`"}`)
+		for i := range p.n {
+			writeFile(t, filepath.Join(dir, "skills", fmt.Sprintf("s%04d", i), "SKILL.md"), skill(fmt.Sprintf("s%04d", i), "x"))
+		}
 	}
-	writeCodexPlugin(t, home, "m", "b", "1.0.0", `{"name":"b"}`, "late")
-	got := readCodexPluginSkills(home, nil)
-	if len(got) != commandsMaxPerSource || got[len(got)-1].Name != fmt.Sprintf("a:s%03d", commandsMaxPerSource-1) {
+	got := pluginSkills(home, nil)
+	if len(got) != codexSkillMaxTotal || got[len(got)-1].Name != "b:s0002" {
 		t.Errorf("%d skills, last %v", len(got), got[len(got)-1])
 	}
 }
@@ -516,10 +532,43 @@ func TestReadCodexPluginSkillsMaxPerSource(t *testing.T) {
 func TestReadCodexPluginSkillsNoCache(t *testing.T) {
 	home := t.TempDir()
 	writeFile(t, filepath.Join(home, "config.toml"), "[plugins.\"a@m\"]\n")
-	if got := readCodexPluginSkills(home, nil); got != nil {
+	if got := pluginSkills(home, nil); got != nil {
 		t.Errorf("no plugins/cache = %v", got)
 	}
-	if got := readCodexPluginSkills("", nil); got != nil {
+	if got := pluginSkills("", nil); got != nil {
 		t.Errorf("no codex home = %v", got)
+	}
+}
+
+// pluginSkills lists the plugin skills codexHome's config.toml enables, as
+// the Chat view gets them.
+func pluginSkills(codexHome string, skip func(dir, rel string) bool) []agentCommand {
+	var out []agentCommand
+	for _, s := range readCodexPluginSkills(readCodexConfig(codexHome), codexHome, skip, codexNow().Add(codexSkillDeadline)) {
+		out = append(out, s.cmd)
+	}
+	return out
+}
+
+// A plugin dir that is a file, a plugins/cache that is a file, a manifest
+// that is not one JSON object, and an Agent Plugin manifest that is not an
+// object: each reads as no plugin.
+func TestCodexUnreadablePluginInputs(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "file")
+	writeFile(t, file, "x")
+	if _, ok := codexPluginManifest(file, nil); ok {
+		t.Error("manifest of a plugin dir that is a file")
+	}
+	home := t.TempDir()
+	writeFile(t, filepath.Join(home, "config.toml"), "[plugins.\"a@m\"]\n")
+	writeFile(t, filepath.Join(home, "plugins", "cache"), "x")
+	if got := pluginSkills(home, nil); got != nil {
+		t.Errorf("plugins/cache is a file = %v", got)
+	}
+	if _, ok := parseAgentPluginManifest([]byte(`["x"]`)); ok {
+		t.Error("agent manifest that is an array")
+	}
+	if _, _, ok := jsonMembers([]byte(`{"a":1 x}`)); ok {
+		t.Error("object with junk after a member decoded")
 	}
 }

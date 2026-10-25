@@ -579,28 +579,56 @@ Results are cached 5 s per root and config dir.
 
 For a Codex pane (`server/agent_commands_codex.go`) `commands` lists skills only, which the
 composer suggests after `$` at the start of any word (Codex runs `$name` anywhere in a message;
-`/` there offers Codex 0.162.0's built-ins, a static list next to Claude Code's). The dirs follow
-Codex 0.164.0's own (`codex-rs/ext/skills/src/host_roots.rs`): `project` from `.codex/skills` and
-`.agents/skills` under the pane's root, `user` from `skills/` in the session's `CODEX_HOME` and
-the server user's `~/.agents/skills`, `system` from `CODEX_HOME/skills/.system` (bundled with
-Codex) and `/etc/codex/skills` (never opened on Windows, where it is not an absolute path). Each
-is read by the same `readSkillDir` as `.claude/skills` (an `os.Root`, 8 KB, no file symlink,
-the files routes' skip, a name met twice keeps the first); a symlinked skill dir is followed only
-into `CODEX_HOME`, the root, `~/.agents/skills` or `/etc/codex/skills`, and a project dir the
-files routes deny is not opened. Then `plugin` (`server/agent_commands_codex_plugins.go`), as
-Codex 0.164.0 loads plugins (`codex-rs/core-plugins`): the plugins `CODEX_HOME/config.toml`
-enables (decoded with `BurntSushi/toml`; an entry's `enabled`, else `[plugins._default]`, else
-on; `[features] plugins = false`, a file that does not decode or an entry of the wrong type turns
-them all off; the `openai-*` marketplaces are left out), each from its active version under
-`plugins/cache/<marketplace>/<name>/` (`local`, else the highest by semver, else bytewise), with
-the namespace and skill dirs of its manifest (a root `plugin.json` with an Agent Plugins
-`$schema`, then `.codex-plugin/`, `.claude-plugin/`, `.cursor-plugin/`); skills are named
-`<namespace>:<skill>` and a skill from another source with the same name is left out. Codex's
-custom prompts (`CODEX_HOME/prompts`) are not read: Codex 0.162.0 no longer has them. Not looked
-at either, so the list can differ from what Codex runs: skills turned off in `config.toml`
-(`[[skills.config]]`), a project's `.codex/config.toml`, whether Codex trusts the project (it
-loads `.codex/skills` only then) and skills nested deeper than `<dir>/<name>/SKILL.md` (Codex
-walks a Legacy plugin's skill dirs deeper). Cached 5 s per root and `CODEX_HOME`, apart from
+`/` there offers Codex 0.162.0's built-ins, a static list next to Claude Code's). It follows
+how Codex 0.164.0 loads skills (`codex-rs/ext/skills`). The roots, in Termote's order:
+
+- `project`: `.codex/skills` and `.agents/skills` of the pane's root, then, when the root is a
+  repo holding the pane's directory (`filesRoot.Dir`, which settles with the root), of each dir
+  down to it, top down (at most 32; none at or below a `.git`). Codex's trust in the project is
+  not looked at: Codex reads these dirs either way, trust only gates its config and hooks.
+- `user`: `skills/` in the session's `CODEX_HOME` and the server user's `~/.agents/skills`.
+- `system`: `CODEX_HOME/skills/.system` (bundled with Codex, unless `[skills.bundled] enabled =
+  false`) and `/etc/codex/skills` (never opened on Windows, where it is not an absolute path).
+- `plugin` (`server/agent_commands_codex_plugins.go`, as Codex loads plugins,
+  `codex-rs/core-plugins`): the plugins `CODEX_HOME/config.toml` enables (an entry's `enabled`,
+  else `[plugins._default]`, else on; `[features] plugins = false`, a file that does not decode or
+  an entry of the wrong type turns them all off; the `openai-*` marketplaces are left out), each
+  from its active version under `plugins/cache/<marketplace>/<name>/` (`local`, else the highest
+  by semver, else bytewise), with the namespace and skill dirs of its manifest (a root
+  `plugin.json` with an Agent Plugins `$schema`, then `.codex-plugin/`, `.claude-plugin/`,
+  `.cursor-plugin/`).
+
+The repo root's dirs come first, then the user's, the system ones, the dirs below the repo root
+and the plugins; a name met twice keeps the first, except that a plugin's skill wins, so a dir
+further down (a vendored dependency) cannot stand in for a skill of the repo or the user. Codex
+itself keeps every skill of a name.
+
+Each root is walked as Codex walks it (`walkCodexSkills`, `server/agent_commands_codex_walk.go`):
+breadth first, each dir read whole and sorted, a `SKILL.md` up to 6 dirs down (the root's own
+too) and on below it, hidden dirs left out; an Agent Plugin's dirs one level only. A symlinked
+dir is followed through an `os.Root` of its target, only into the dirs of its scope and never into
+`CODEX_HOME/plugins` or `.system`; the system root follows none. A skill under a plugin manifest
+(`.codex-plugin`/`.claude-plugin`/`.cursor-plugin/plugin.json`, in the root, below it, or above it
+up to the dir the root belongs to) is named `<plugin>:<skill>`; a plugin's own skills keep the
+plugin's namespace. Each `SKILL.md` is read as Codex parses it (`codexSkillMeta`): front matter
+between `---` lines and a description are required, the body never stands in, names are
+`[A-Za-z0-9_:-]` of at most 64 runes (129 with the namespace), and `user-invocable` is a Claude
+Code field Codex ignores. Each root has 2000 dirs and 20000 entries (every project root sharing
+one budget, each plugin its own), a reply 2000 skills, and the whole listing 2 s, after which
+what was read is returned.
+
+`config.toml` is decoded once (`server/agent_commands_codex_config.go`) into plain values, keys
+matched exactly as serde matches them. Its `[[skills.config]]` rules turn skills off by name or
+by `SKILL.md` path, applied in order before names are deduplicated, as
+`resolve_disabled_paths` does, so another skill of the name still shows; any value of the wrong
+type, or more than 1000 entries, and no rule applies.
+
+Codex's custom prompts (`CODEX_HOME/prompts`) are not read: Codex 0.162.0 no longer has them. Not
+looked at either, so the list can differ from what Codex runs: a project's `.codex/config.toml`,
+profiles, `-c`, `project_root_markers`, a skill's `agents/openai.yaml` (`policy.products`), YAML
+that does not parse beyond a name or description set twice, front matter that closes past
+the first 8 KB, and a namespace manifest that is a symlink or larger than 1 MB (Codex reads
+both). Cached 5 s per root, pane directory and `CODEX_HOME`, apart from
 Claude Code's.
 
 **Writes: only on positive evidence.** The two POST routes pass the Host allowlist, auth and

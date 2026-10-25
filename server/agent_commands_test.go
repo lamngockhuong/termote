@@ -322,3 +322,13 @@ func TestListAgentCommandsOddEntries(t *testing.T) {
 		t.Errorf("missing root = %v", got)
 	}
 }
+
+// readSkillDir lists nothing from a relative dir or one that cannot be opened.
+func TestReadSkillDirUnopenable(t *testing.T) {
+	if got := readSkillDir("relative", "", commandOpts{}); got != nil {
+		t.Errorf("relative dir = %v", got)
+	}
+	if got := readSkillDir(filepath.Join(t.TempDir(), "missing"), "", commandOpts{}); got != nil {
+		t.Errorf("missing dir = %v", got)
+	}
+}

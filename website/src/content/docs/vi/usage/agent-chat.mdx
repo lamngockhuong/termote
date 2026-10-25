@@ -168,32 +168,57 @@ Tin nhắn kết thúc bằng `$name` được gửi kèm một dấu cách phí
 Codex sẽ mở ra ở từ đó và lấy mất phím Enter dùng để gửi.
 Mỗi dòng ghi skill lấy từ đâu:
 
-- `project`: `.codex/skills/` và `.agents/skills/` trong dự án của pane.
+- `project`: `.codex/skills/` và `.agents/skills/` ở gốc dự án của pane. Nếu dự án là một
+  repository git, Termote đọc thêm hai thư mục đó ở mọi thư mục nằm giữa gốc và thư mục hiện tại
+  của pane. Bạn đã tin cậy dự án trong Codex hay chưa cũng vậy, vì Codex đọc chúng trong cả hai
+  trường hợp.
 - `user`: `skills/` trong thư mục của Codex (`~/.codex`, hoặc `CODEX_HOME` của tiến trình Codex
   trong pane), rồi tới `~/.agents/skills`.
 - `system`: skill đi kèm Codex (`skills/.system/` trong thư mục của Codex), rồi tới
-  `/etc/codex/skills` trên Linux và macOS.
+  `/etc/codex/skills` trên Linux và macOS. Ghi `[skills.bundled] enabled = false` trong
+  `config.toml` thì nhóm skill đi kèm bị tắt.
 - `plugin`: skill của các plugin Codex được bật trong `config.toml` ở thư mục của Codex và đã cài
   trong `plugins/cache/` của nó, mang tên `$<plugin>:<skill>` như Codex đặt (ví dụ `$atk:review`).
-  Termote làm theo cách Codex 0.164.0 nạp plugin: plugin bị tắt khi mục của nó ghi
-  `enabled = false`, khi mục không ghi gì mà `[plugins._default] enabled = false`, khi có
-  `[features] plugins = false`, hoặc khi Codex không đọc được `config.toml`.
+  Plugin bị tắt khi mục của nó ghi `enabled = false`, khi mục không ghi gì mà
+  `[plugins._default] enabled = false`, khi có `[features] plugins = false`, hoặc khi Codex không
+  đọc được `config.toml`.
 
-Hai skill trùng tên thì giữ cái gặp trước, trừ skill của plugin: skill khác cùng tên với nó bị bỏ. Quy tắc đọc giống Claude Code: Termote chỉ đọc tên và
-mô tả; skill cài dưới dạng liên kết tượng trưng chỉ được liệt kê khi liên kết trỏ vào một trong
-các thư mục trên hoặc vào dự án; skill có `user-invocable: false` bị bỏ qua.
+Danh sách theo đúng cách Codex 0.164.0 nạp skill:
+
+- Skill nằm trong thư mục con cũng được tìm thấy, sâu tới sáu tầng (ví dụ
+  `~/.agents/skills/group/deploy/SKILL.md`). Thư mục có tên bắt đầu bằng `.` bị bỏ qua.
+- Mỗi skill phải có front matter nằm giữa hai dòng `---` và có `description`. `SKILL.md` thiếu
+  phần này không được liệt kê, giống Codex. Tên lấy từ `name` trong front matter; không có thì
+  lấy tên thư mục. `user-invocable` là trường của Claude Code nên không ẩn skill nào.
+- Skill nằm trong một thư mục có manifest plugin (`.codex-plugin/`, `.claude-plugin/` hoặc
+  `.cursor-plugin/plugin.json`), hay nằm bên dưới thư mục đó, mang tên `$<plugin>:<skill>` như
+  skill của plugin.
+- Các mục `[[skills.config]]` trong `config.toml` tắt skill theo `name` hoặc theo `path` của
+  `SKILL.md`. `path` nhận cả `~` lẫn đường dẫn tương đối tính từ thư mục của Codex. Khi hai mục
+  cùng nói về một skill, mục viết sau thắng.
+
+Hai skill trùng tên thì giữ cái gặp trước, theo thứ tự ở trên, có một điểm khác: các thư mục bên
+dưới gốc dự án được xét sau nhóm `system`. Nhờ vậy một skill nằm sâu trong dự án (chẳng hạn trong
+một thư viện được chép vào repository) không thay chỗ được skill của dự án hay của bạn. Skill của
+plugin thì luôn thắng skill khác cùng tên. Termote chỉ đọc tên và mô tả. Skill cài dưới dạng liên
+kết tượng trưng chỉ được liệt kê khi liên kết trỏ vào thư mục của chính nhóm nó: dự án, hai thư
+mục skill của bạn, `/etc/codex/skills`, hoặc plugin.
 
 Bộ skill Codex thực sự chạy có thể khác danh sách:
 
-- Termote không xét skill bị tắt trong `config.toml` của Codex (`[[skills.config]]`).
 - Plugin từ các kho `openai-*` của OpenAI (kho chọn lọc, plugin đi kèm, plugin tải từ máy chủ)
-  không được liệt kê, vì Codex chỉ nạp chúng với một số kiểu đăng nhập; plugin bật trong
-  `.codex/config.toml` của dự án hoặc bằng `-c` cũng vậy.
-- Plugin hay skill có tên chứa ký tự ngoài chữ, số, `_`, `-` và `:` không được liệt kê, vì tên
-  đó không gõ được sau `$`.
-- Codex chỉ nạp `.codex/skills/` của dự án bạn đã tin cậy; danh sách thì vẫn hiện chúng.
-- Termote chỉ đọc `skills/<name>/SKILL.md` ở một tầng; Codex tìm được cả skill nằm sâu hơn, kể cả
-  trong thư mục skill của plugin.
+  không được liệt kê, vì Codex chỉ nạp chúng với một số kiểu đăng nhập. Plugin hay thiết lập skill
+  ghi trong `.codex/config.toml` của dự án, trong profile hoặc bằng `-c` cũng không được xét.
+- Plugin hay skill có tên chứa ký tự ngoài chữ không dấu, số, `_`, `-` và `:` không được liệt kê,
+  vì tên đó không gõ được sau `$`. Tên có chữ có dấu hay có dấu `.` cũng thuộc trường hợp này.
+- Codex liệt kê mọi skill cùng tên; danh sách chỉ hiện một.
+- Thư mục hiện tại của pane là thư mục của chương trình đang chạy trong pane lúc đó, có thể khác
+  thư mục Codex khởi động. Khi không có git, chính thư mục của pane được coi là gốc dự án.
+- Termote không xét: skill liên kết từ ngoài các thư mục trên, `policy.products` trong
+  `agents/openai.yaml` của skill, front matter kết thúc sau 8 KB đầu, và front matter Codex không
+  phân tích được. Manifest plugin là liên kết tượng trưng hoặc lớn hơn 1 MB thì không đặt tên cho
+  các skill bên dưới nó.
+- Thư mục skill rất lớn chỉ được đọc một phần (2.000 thư mục, trong hai giây).
 
 Yêu cầu:
 

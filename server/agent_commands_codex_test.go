@@ -38,7 +38,7 @@ func TestListCodexSkills(t *testing.T) {
 	writeFile(t, filepath.Join(admin, "org/SKILL.md"), skill("org", "Machine-wide"))
 	writeFile(t, filepath.Join(admin, "imagegen/SKILL.md"), skill("imagegen", "Shadowed"))
 
-	got := listCodexSkills(root, codexHome, home, nil).Commands
+	got := listCodexSkills(filesRoot{Root: root}, codexHome, home, nil).Commands
 	want := []agentCommand{
 		{"proj", "Project codex", "project", "skill"},
 		{"shared", "Project agents", "project", "skill"},
@@ -57,22 +57,22 @@ func TestListCodexSkills(t *testing.T) {
 	}
 
 	// No Codex home, no pane root: home's and the machine's only.
-	got = listCodexSkills("", "", home, nil).Commands
+	got = listCodexSkills(filesRoot{Root: ""}, "", home, nil).Commands
 	if len(got) != 4 || got[0].Name != "ak:debug" || got[3].Name != "org" {
 		t.Errorf("no codex home = %v", got)
 	}
 	// Nothing at all: an empty list, never null.
 	useAdminSkills(t, "")
-	if got := listCodexSkills("", "", "", nil).Commands; got == nil || len(got) != 0 {
+	if got := listCodexSkills(filesRoot{Root: ""}, "", "", nil).Commands; got == nil || len(got) != 0 {
 		t.Errorf("no dirs = %#v", got)
 	}
 	// A Codex home that is gone.
-	if got := listCodexSkills("", filepath.Join(codexHome, "gone"), "", nil).Commands; len(got) != 0 {
+	if got := listCodexSkills(filesRoot{Root: ""}, filepath.Join(codexHome, "gone"), "", nil).Commands; len(got) != 0 {
 		t.Errorf("missing codex home = %v", got)
 	}
 	// A path that is not absolute (the Unix one on Windows) is never opened.
 	useAdminSkills(t, "etc/codex/skills")
-	if got := listCodexSkills("", "relative", "", nil).Commands; len(got) != 0 {
+	if got := listCodexSkills(filesRoot{Root: ""}, "relative", "", nil).Commands; len(got) != 0 {
 		t.Errorf("relative dirs = %v", got)
 	}
 }
@@ -88,7 +88,7 @@ func TestListCodexSkillsSkip(t *testing.T) {
 		asked = append(asked, rel)
 		return rel == filepath.FromSlash(".codex/skills") || strings.Contains(rel, "id_rsa")
 	}
-	got := listCodexSkills(root, codexHome, "", skip).Commands
+	got := listCodexSkills(filesRoot{Root: root}, codexHome, "", skip).Commands
 	if len(got) != 1 || got[0].Name != "ok" {
 		t.Fatalf("skills = %v", got)
 	}
@@ -128,7 +128,7 @@ func TestListCodexSkillsSymlinks(t *testing.T) {
 	// A SKILL.md that is itself a symlink is never read.
 	must(os.Symlink(filepath.Join(root, "shared/real/SKILL.md"), filepath.Join(root, ".codex/skills/linkfile/SKILL.md")))
 
-	got := listCodexSkills(root, codexHome, home, nil).Commands
+	got := listCodexSkills(filesRoot{Root: root}, codexHome, home, nil).Commands
 	want := []agentCommand{{"managed", "installed by a manager", "user", "skill"}}
 	if fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Fatalf("skills = %v, want %v", got, want)
@@ -174,5 +174,28 @@ func TestCommandsRouteCodex(t *testing.T) {
 	code, cmds = getCommands(t, commandsServer(t, other, true, root, true), httptest.NewRequest(http.MethodGet, path, nil))
 	if code != http.StatusOK || cmds == nil || len(cmds) != 0 {
 		t.Errorf("other agent = %d %v", code, cmds)
+	}
+}
+
+// The route reads the skill dirs on the way from the repo root down to the
+// pane's directory.
+func TestCommandsRouteCodexChain(t *testing.T) {
+	requireGit(t)
+	root, codexHome, home := t.TempDir(), t.TempDir(), t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	useAdminSkills(t, "")
+	gitInit(t, root)
+	writeFile(t, filepath.Join(root, ".agents/skills/top/SKILL.md"), skill("top", "At the root"))
+	writeFile(t, filepath.Join(root, "pkg/.agents/skills/sub/SKILL.md"), skill("sub", "Down the way"))
+	s := AgentSession{Agent: "codex", ID: testCodexID, CodexHome: codexHome}
+	req := httptest.NewRequest(http.MethodGet, "/api/mux/panes/1/agent/commands", nil)
+	code, cmds := getCommands(t, commandsServer(t, s, true, filepath.Join(root, "pkg"), true), req)
+	got := ""
+	for _, c := range cmds {
+		got += c.Source + ":" + c.Name + " "
+	}
+	if code != http.StatusOK || got != "project:top project:sub " {
+		t.Errorf("GET = %d %q", code, got)
 	}
 }

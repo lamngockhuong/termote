@@ -65,6 +65,11 @@ type filesRoot struct {
 	// GitDir is the repo's git directory, never served: it is not always a
 	// .git inside Root (--separate-git-dir).
 	GitDir string
+	// Dir is the pane's directory, resolved, set by paneRoot (the agent
+	// commands route reads the skill dirs on the way down to it). It settles
+	// with the root, so a foreground process passing through another dir does
+	// not move it either.
+	Dir string
 }
 
 // gitRunner is the only place the server runs git. Every command gets a
@@ -364,10 +369,29 @@ type rootResolver struct {
 }
 
 type paneRootState struct {
-	cur       filesRoot
-	next      filesRoot
+	root settling[filesRoot]
+	dir  settling[string] // the pane's directory, apart: it moves within a root
+	used time.Time
+}
+
+// settling is a value that changes only once a new one has been seen for
+// rootSettle.
+type settling[T comparable] struct {
+	cur, next T
 	nextSince time.Time // when next was first seen
-	used      time.Time
+}
+
+func (s *settling[T]) see(v T, now time.Time) T {
+	var zero T
+	switch {
+	case v == s.cur:
+		s.next = zero
+	case v != s.next:
+		s.next, s.nextSince = v, now
+	case now.Sub(s.nextSince) >= rootSettle:
+		s.cur, s.next = v, zero
+	}
+	return s.cur
 }
 
 func newRootResolver(git *gitRunner) *rootResolver {
@@ -392,10 +416,17 @@ func (rr *rootResolver) paneRoot(ctx context.Context, d PaneDirer, paneID string
 	if err != nil {
 		return filesRoot{}, err
 	}
-	return rr.settle(key, root), nil
+	real := ""
+	if abs, err := filepath.Abs(dir); err == nil {
+		real, _ = filepath.EvalSymlinks(abs)
+	}
+	return rr.settle(key, root, real), nil
 }
 
-func (rr *rootResolver) settle(key string, root filesRoot) filesRoot {
+// settle returns the pane's settled root, with its settled directory as Dir.
+// The two settle apart, so a move within the new root does not hold the
+// root back.
+func (rr *rootResolver) settle(key string, root filesRoot, dir string) filesRoot {
 	rr.mu.Lock()
 	defer rr.mu.Unlock()
 	now := rr.now()
@@ -406,19 +437,13 @@ func (rr *rootResolver) settle(key string, root filesRoot) filesRoot {
 	}
 	s, ok := rr.panes[key]
 	if !ok {
-		rr.panes[key] = &paneRootState{cur: root, used: now}
-		return root
+		s = &paneRootState{root: settling[filesRoot]{cur: root}, dir: settling[string]{cur: dir}}
+		rr.panes[key] = s
 	}
 	s.used = now
-	switch {
-	case root == s.cur:
-		s.next = filesRoot{}
-	case root != s.next:
-		s.next, s.nextSince = root, now
-	case now.Sub(s.nextSince) >= rootSettle:
-		s.cur, s.next = root, filesRoot{}
-	}
-	return s.cur
+	out := s.root.see(root, now)
+	out.Dir = s.dir.see(dir, now)
+	return out
 }
 
 // resolve returns the git toplevel of dir, or dir itself outside a repo.

@@ -171,34 +171,55 @@ pick replaces that word with `$name ` and leaves the rest of the message as it w
 when you send the message. A message that ends with `$name` is sent with a space after it: Codex's
 own list would otherwise open on that word and take the Enter that submits it. Each row shows where the skill comes from:
 
-- `project`: `.codex/skills/` and `.agents/skills/` in the pane's project.
+- `project`: `.codex/skills/` and `.agents/skills/` at the top of the pane's project and, in a
+  git repository, in each folder from there down to the pane's current folder, whether or not
+  you have trusted the project in Codex (Codex reads them either way).
 - `user`: `skills/` in Codex's home (`~/.codex`, or the `CODEX_HOME` of the Codex in the pane),
   then `~/.agents/skills`.
 - `system`: the skills Codex ships with (`skills/.system/` in its home), then
-  `/etc/codex/skills` on Linux and macOS.
+  `/etc/codex/skills` on Linux and macOS. `[skills.bundled] enabled = false` in `config.toml`
+  turns the first ones off.
 - `plugin`: the skills of the Codex plugins turned on in `config.toml` in Codex's home and
   installed under its `plugins/cache/`, named `$<plugin>:<skill>` as Codex names them (for
-  example `$atk:review`). This follows how Codex 0.164.0 loads plugins: an entry with
-  `enabled = false`, `[plugins._default] enabled = false` for an entry that does not say,
-  `[features] plugins = false`, or a `config.toml` Codex cannot read turns them off.
+  example `$atk:review`). An entry with `enabled = false`, `[plugins._default] enabled = false`
+  for an entry that does not say, `[features] plugins = false`, or a `config.toml` Codex cannot
+  read turns them off.
 
-A name found twice keeps the first one, except a plugin's: another skill with the same name is
-left out. The same rules as for Claude Code apply: only names and
-descriptions are read, a skill installed as a symlink is listed only when it leads into one of
-these folders or the project, and a skill marked `user-invocable: false` is left out.
+The list follows how Codex 0.164.0 loads skills:
+
+- Skills are found in subfolders too, up to six folders down (for example
+  `~/.agents/skills/group/deploy/SKILL.md`); folders whose name starts with `.` are skipped.
+- A skill needs front matter between two `---` lines with a `description`; a `SKILL.md` without
+  one is left out, as Codex leaves it out. The name is the front matter's `name`, else the
+  folder's, and `user-invocable` (a Claude Code field) does not hide a skill.
+- A skill in a folder that holds a plugin manifest (`.codex-plugin/`, `.claude-plugin/` or
+  `.cursor-plugin/plugin.json`), or below one, is named `$<plugin>:<skill>`, as in a plugin.
+- `[[skills.config]]` entries in `config.toml` turn a skill off by `name` or by the `path` of its
+  `SKILL.md` (`~` and paths relative to Codex's home work); a later entry wins.
+
+A name found twice keeps the first one, in the order above but with the folders below the top of
+the project after the `system` ones, so a skill deep in the project (a vendored dependency, say)
+cannot stand in for one of the project's or yours; a plugin's skill wins over any other of its
+name. Only names and descriptions are read, and a skill installed as a symlink is listed only
+when it leads into the folders of its own row (the project, your two skill folders,
+`/etc/codex/skills`, or the plugin).
 
 Codex may still run a different set than the list shows:
 
-- Skills turned off in Codex's `config.toml` (`[[skills.config]]`) are not looked at.
 - Plugins from the `openai-*` marketplaces (curated, bundled, remote) are left out, since Codex
-  loads them only for some sign-ins, and so are plugins turned on in a project's
-  `.codex/config.toml` or with `-c`.
-- A plugin or skill whose name has a character other than letters, digits, `_`, `-` and `:`
-  is left out, since it cannot follow `$`.
-- Codex reads a project's `.codex/skills/` only in a project you have trusted; the list shows
-  them either way.
-- Only `skills/<name>/SKILL.md` one level down is read; Codex also finds skills nested deeper,
-  in a plugin's skill folders too.
+  loads them only for some sign-ins, and so are plugins or skill settings in a project's
+  `.codex/config.toml`, a profile or `-c`.
+- A plugin or skill whose name has a character other than letters, digits, `_`, `-` and `:` is
+  left out, since it cannot follow `$`. This includes names with accented letters or a `.`.
+- Codex lists every skill of a name; the list shows one.
+- The pane's current folder is the folder of whatever runs in it at that moment, which can differ
+  from the folder Codex started in. Without git, the pane's folder counts as the top of the
+  project.
+- Not looked at: a skill symlinked from outside those folders, the `policy.products` of a skill's
+  `agents/openai.yaml`, front matter that ends past the first 8 KB, and front matter Codex cannot
+  parse. A plugin manifest that is a symlink or larger than 1 MB does not name the skills below
+  it.
+- A very large skill folder is read in part (2,000 folders, two seconds).
 
 Requirements:
 

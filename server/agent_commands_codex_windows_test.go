@@ -26,7 +26,7 @@ func TestListCodexSkillsNoAdminDirOnWindows(t *testing.T) {
 	}
 	codexHome := t.TempDir()
 	writeFile(t, filepath.Join(codexHome, "skills/mine/SKILL.md"), skill("mine", "User codex"))
-	got := listCodexSkills("", codexHome, "", nil).Commands
+	got := listCodexSkills(filesRoot{Root: ""}, codexHome, "", nil).Commands
 	if len(got) != 1 || got[0].Name != "mine" {
 		t.Errorf("skills = %v, want only the user's", got)
 	}
