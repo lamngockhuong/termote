@@ -181,6 +181,7 @@ describe('DeleteFileDialog', () => {
     await waitFor(() => expect(del()).toBeEnabled())
     await act(async () => fireEvent.click(del()))
     expect(screen.getByText('Delete permanently?')).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'Cancel' })[1]).toHaveFocus()
     fireEvent.click(screen.getAllByRole('button', { name: 'Cancel' })[1])
     expect(p.onDeleted).not.toHaveBeenCalled()
     await act(async () => fireEvent.click(del()))
