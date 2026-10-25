@@ -103,7 +103,7 @@ test.describe('files content search', () => {
     await expect(results.locator('mark').first()).toHaveText('needleValue')
 
     // The line opens highlighted, scrolled into view
-    await results.getByRole('button', { name: /^150const needleValue = 42/ }).click()
+    await results.getByRole('button', { name: /^150\s*const needleValue = 42/ }).click()
     const code = panel.getByTestId('code-block')
     const row = code.locator('[data-line="150"]')
     await expect(row).toHaveClass(/bg-accent/)
@@ -114,7 +114,7 @@ test.describe('files content search', () => {
     await expect(box).toHaveValue('needleValue')
     await expect(panel.getByText('2 lines in 2 files')).toBeVisible()
     expect(searches).toBe(1)
-    await results.getByRole('button', { name: /^3the needleValue again/ }).click()
+    await results.getByRole('button', { name: /^3\s*the needleValue again/ }).click()
     await expect(code.locator('[data-line="3"]')).toHaveClass(/bg-accent/)
     await expect(panel.getByRole('button', { name: 'Preview' })).toHaveAttribute('aria-pressed', 'false')
   })
