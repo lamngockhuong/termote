@@ -23,6 +23,7 @@ import {
   LARGE_PACKET_HELP_URL,
   reportLargePacketLoss,
 } from './utils/large-packet-loss'
+import { lazyRetry } from './utils/lazy-retry'
 import { setPaneKeys } from './utils/pane-remap'
 
 // ─── Mock all hooks ───────────────────────────────────────────────────────────
@@ -3518,6 +3519,79 @@ describe('App views, view-only and deep links', () => {
       resolve({ default: () => <div data-testid="lazy-panel" /> }),
     )
     expect(await screen.findByTestId('lazy-panel')).toBeInTheDocument()
+  })
+
+  describe('a view whose code fails to load', () => {
+    // The first import fails; the next one works
+    const flaky = (testId: string) => {
+      const load = vi
+        .fn()
+        .mockRejectedValueOnce(new Error('chunk gone'))
+        .mockResolvedValue({ default: () => <div data-testid={testId} /> })
+      return { View: lazyRetry<ViewProps>(load), load }
+    }
+
+    beforeEach(() => {
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+    })
+
+    it('a side panel says so and keeps the terminal, then loads on Try again', async () => {
+      const { View, load } = flaky('lazy-panel')
+      render(<App views={[...APP_VIEWS, { ...FILES, Panel: View }]} />)
+      fireEvent.click(await screen.findByRole('button', { name: 'Files' }))
+      expect(await screen.findByText('Could not load this view')).toBeVisible()
+      expect(screen.getByTestId('terminal-view')).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+      expect(await screen.findByTestId('lazy-panel')).toBeInTheDocument()
+      expect(load).toHaveBeenCalledTimes(2)
+    })
+
+    it('the main area does the same', async () => {
+      const { View } = flaky('lazy-main')
+      render(<App views={[...APP_VIEWS, { ...CHAT, Main: View }]} />)
+      fireEvent.click(await screen.findByRole('tab', { name: 'Chat' }))
+      expect(await screen.findByText('Could not load this view')).toBeVisible()
+      expect(screen.getByTestId('terminal-view')).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+      expect(await screen.findByTestId('lazy-main')).toBeInTheDocument()
+    })
+
+    it('the alert is announced, and Try again moves focus off the removed button', async () => {
+      const { View } = flaky('lazy-panel')
+      render(<App views={[...APP_VIEWS, { ...FILES, Panel: View }]} />)
+      fireEvent.click(await screen.findByRole('button', { name: 'Files' }))
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Could not load this view',
+      )
+      const button = screen.getByRole('button', { name: 'Try again' })
+      button.focus()
+      fireEvent.click(button)
+      await screen.findByTestId('lazy-panel')
+      expect(document.activeElement).not.toBe(document.body)
+    })
+
+    it('another view in the same slot starts clean, and the failed one imports again on return', async () => {
+      const failing = flaky('lazy-files')
+      const CHANGES: AppView = {
+        ...FILES,
+        id: 'changes',
+        label: 'Changes',
+        Panel: () => <div data-testid="lazy-changes" />,
+      }
+      render(
+        <App
+          views={[...APP_VIEWS, { ...FILES, Panel: failing.View }, CHANGES]}
+        />,
+      )
+      fireEvent.click(await screen.findByRole('button', { name: 'Files' }))
+      expect(await screen.findByText('Could not load this view')).toBeVisible()
+      fireEvent.click(screen.getByRole('button', { name: 'Changes' }))
+      expect(await screen.findByTestId('lazy-changes')).toBeInTheDocument()
+      expect(screen.queryByText('Could not load this view')).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: 'Files' }))
+      expect(await screen.findByTestId('lazy-files')).toBeInTheDocument()
+      expect(failing.load).toHaveBeenCalledTimes(2)
+    })
   })
 
   it('mobile: a panel view is in the view menu, without a toggle', async () => {

@@ -70,7 +70,7 @@ export function ImagePreview({ state, alt, label, missing, onRetry }: Props) {
   // decoded), whether it had focus then or the viewer it opened returns
   // focus later
   const rootRef = useRef<HTMLDivElement>(null)
-  const { open, viewer } = useImageViewer(url, rootRef)
+  const { open, viewer, failed } = useImageViewer(url, rootRef)
   const keepFocus = useCallback(
     (el: HTMLButtonElement | null) => () => {
       if (document.activeElement === el) rootRef.current?.focus()
@@ -164,6 +164,11 @@ export function ImagePreview({ state, alt, label, missing, onRetry }: Props) {
         </div>
       )}
       {body}
+      {failed && (
+        <p role="status" className="m-0 px-2 pb-2 text-[11px] text-fg-muted">
+          Could not open the image
+        </p>
+      )}
       {viewer}
     </div>
   )

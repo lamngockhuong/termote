@@ -4,7 +4,7 @@ import {
   MessagesSquare,
   SquareTerminal,
 } from 'lucide-react'
-import { type ComponentType, lazy } from 'react'
+import type { ComponentType } from 'react'
 import { chatAgent } from './chat-agents'
 import { ChatInput } from './components/chat-input'
 import type { ToastAction, ToastVariant } from './components/toast'
@@ -13,6 +13,7 @@ import type { MuxInfo } from './hooks/use-local-sessions'
 import type { AgentStartControl } from './hooks/use-start-agent'
 import type { Session } from './types/session'
 import { canStartAgent } from './utils/agent-start'
+import { lazyRetry, type Retryable } from './utils/lazy-retry'
 import {
   CHANGES_VIEW_ID,
   CHAT_VIEW_ID,
@@ -45,17 +46,21 @@ export interface ViewProps extends ViewContext {
   showView: (id: string) => void
 }
 
+// A view component, or a lazy one with retry() for a chunk that failed to load
+type LazyView = ComponentType<ViewProps> &
+  Partial<Pick<Retryable<ViewProps>, 'retry'>>
+
 // A view of the current pane (terminal, chat, files, changes). Adding one is adding an
 // entry here: the header shows the switcher once two are available.
 export interface AppView extends ViewOption<string> {
   available: (ctx: ViewContext) => boolean
   // Main area. The terminal view has none: App keeps the terminal mounted
   // under every view so switching back does not reconnect the stream.
-  Main?: ComponentType<ViewProps>
+  Main?: LazyView
   // Input area at the bottom (a chat composer). The terminal's is the toolbar.
   Input?: ComponentType<ViewProps>
   // Content of the desktop side panel, next to the terminal (changes, files)
-  Panel?: ComponentType<ViewProps>
+  Panel?: LazyView
   // 'panel': on desktop the view opens in the side panel from a header
   // toggle instead of taking the switcher's place; mobile keeps it in the
   // switcher with its Main.
@@ -65,10 +70,19 @@ export interface AppView extends ViewOption<string> {
 export { CHANGES_VIEW_ID, CHAT_VIEW_ID, FILES_VIEW_ID, TERMINAL_VIEW_ID }
 
 // The chat view carries the markdown renderer: loaded on first use.
-const ChatView = lazy(() => import('./components/chat-view'))
+const ChatView = lazyRetry<ViewProps>(
+  () => import('./components/chat-view'),
+  'ChatView',
+)
 // Files and Changes: loaded the first time one is opened.
-const FilesView = lazy(() => import('./components/files-view'))
-const ChangesView = lazy(() => import('./components/changes-view'))
+const FilesView = lazyRetry<ViewProps>(
+  () => import('./components/files-view'),
+  'FilesView',
+)
+const ChangesView = lazyRetry<ViewProps>(
+  () => import('./components/changes-view'),
+  'ChangesView',
+)
 
 export const APP_VIEWS: AppView[] = [
   {

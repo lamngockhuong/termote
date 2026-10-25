@@ -16,7 +16,6 @@ import {
 } from 'lucide-react'
 import {
   type ComponentProps,
-  lazy,
   type ReactNode,
   Suspense,
   useEffect,
@@ -48,6 +47,7 @@ import { CsvClient } from '../utils/csv-parse-client'
 import { formatSize, keepOrder, TRUNCATE_START } from '../utils/files-format'
 import { HIGHLIGHT_MAX_BYTES } from '../utils/highlight'
 import { isImagePath, isSvgPath } from '../utils/image-path'
+import { lazyRetry } from '../utils/lazy-retry'
 import { isMarkdownPath, type LinkPath } from '../utils/markdown-links'
 import type { TableLayout } from '../utils/table-columns'
 import { visibleUnsafe } from '../utils/unsafe-chars'
@@ -59,6 +59,7 @@ import {
   saveErrorOf,
 } from './file-editor'
 import { ImagePreview } from './image-preview'
+import { LazyBoundary, LoadFailed } from './lazy-boundary'
 import { ViewMessage } from './pane-dir-header'
 import type { TableState } from './table-preview'
 import { Banner } from './ui/banner'
@@ -66,27 +67,54 @@ import { Button, IconButton } from './ui/button'
 import { ConfirmDialog } from './ui/confirm-dialog'
 import { Menu, MenuItem, MenuItemCheckbox } from './ui/menu'
 
+// A preview whose chunk failed to load: said in its place, with a way to retry
+function PreviewBoundary({
+  retry,
+  children,
+}: {
+  retry: () => void
+  children: ReactNode
+}) {
+  return (
+    <LazyBoundary
+      onRetry={retry}
+      fallback={(again) => (
+        <LoadFailed message="Could not load the preview" retry={again} />
+      )}
+    >
+      {children}
+    </LazyBoundary>
+  )
+}
+
 // The markdown renderer: loaded the first time a Markdown file is previewed
-const MarkdownPreview = lazy(() => import('./markdown-preview'))
+const MarkdownPreview = lazyRetry(
+  () => import('./markdown-preview'),
+  'MarkdownPreview',
+)
 
 export function LazyMarkdownPreview(
   props: ComponentProps<typeof MarkdownPreview>,
 ) {
   return (
-    <Suspense fallback={<ViewMessage>Loading…</ViewMessage>}>
-      <MarkdownPreview {...props} />
-    </Suspense>
+    <PreviewBoundary retry={MarkdownPreview.retry}>
+      <Suspense fallback={<ViewMessage>Loading…</ViewMessage>}>
+        <MarkdownPreview {...props} />
+      </Suspense>
+    </PreviewBoundary>
   )
 }
 
 // The table view of a CSV/TSV file: loaded the first time one is shown
-const TablePreview = lazy(() => import('./table-preview'))
+const TablePreview = lazyRetry(() => import('./table-preview'), 'TablePreview')
 
 export function LazyTablePreview(props: ComponentProps<typeof TablePreview>) {
   return (
-    <Suspense fallback={<ViewMessage>Loading…</ViewMessage>}>
-      <TablePreview {...props} />
-    </Suspense>
+    <PreviewBoundary retry={TablePreview.retry}>
+      <Suspense fallback={<ViewMessage>Loading…</ViewMessage>}>
+        <TablePreview {...props} />
+      </Suspense>
+    </PreviewBoundary>
   )
 }
 

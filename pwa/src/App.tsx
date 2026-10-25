@@ -15,6 +15,7 @@ import {
   type NotifyOptions,
   TERMINAL_VIEW_ID,
   type ViewContext,
+  type ViewProps,
   viewPanelId,
 } from './app-views'
 import { chatAgent, chatInputAgent } from './chat-agents'
@@ -26,6 +27,7 @@ import { GestureHintsOverlay } from './components/gesture-hints-overlay'
 import { GroupDialog } from './components/group-dialog'
 import { HelpModal } from './components/help-modal'
 import { KeyboardToolbar } from './components/keyboard-toolbar'
+import { LazyBoundary, LoadFailed } from './components/lazy-boundary'
 import { OverviewScreen } from './components/overview-screen'
 import { PaneStrip } from './components/pane-strip'
 import { ReadOnlyBar } from './components/read-only-bar'
@@ -1501,9 +1503,11 @@ export default function App({
                   role={panelRole}
                   className="absolute inset-0 overflow-auto bg-bg"
                 >
-                  <Suspense fallback={null}>
-                    <currentView.Main {...viewProps} />
-                  </Suspense>
+                  <ViewSlot
+                    key={currentView.id}
+                    View={currentView.Main}
+                    props={viewProps}
+                  />
                 </div>
               )}
             </div>
@@ -1519,9 +1523,11 @@ export default function App({
               >
                 {/* Its own boundary: a lazy panel that suspends must not
                     blank the whole app while it loads */}
-                <Suspense fallback={null}>
-                  <sidePanelView.Panel {...viewProps} />
-                </Suspense>
+                <ViewSlot
+                  key={sidePanelView.id}
+                  View={sidePanelView.Panel}
+                  props={viewProps}
+                />
               </SidePanel>
             )}
             {/* Covers the panes without unmounting them, as a view covers
@@ -1808,6 +1814,30 @@ export default function App({
         />
       )}
     </div>
+  )
+}
+
+// A lazy view: while its chunk loads or after it failed to, the rest of the
+// app (the terminal, the header) stays usable. Another view takes the slot
+// by its key, which leaves this one to import again on the next visit.
+function ViewSlot({
+  View,
+  props,
+}: {
+  View: NonNullable<AppView['Main']>
+  props: ViewProps
+}) {
+  return (
+    <LazyBoundary
+      onRetry={View.retry}
+      fallback={(retry) => (
+        <LoadFailed message="Could not load this view" retry={retry} />
+      )}
+    >
+      <Suspense fallback={null}>
+        <View {...props} />
+      </Suspense>
+    </LazyBoundary>
   )
 }
 
